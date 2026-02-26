@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="80" fill="#3f7d48"/>
+  <!-- 葉形：兩片對稱常春藤葉 -->
+  <ellipse cx="190" cy="256" rx="110" ry="75" fill="#ffffff" opacity="0.95"
+           transform="rotate(-30 190 256)"/>
+  <ellipse cx="322" cy="256" rx="110" ry="75" fill="#ffffff" opacity="0.95"
+           transform="rotate(30 322 256)"/>
+  <!-- 莖 -->
+  <line x1="256" y1="160" x2="256" y2="370"
+        stroke="#ffffff" stroke-width="18" stroke-linecap="round"/>
+</svg>
