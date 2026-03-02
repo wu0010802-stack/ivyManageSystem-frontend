@@ -3,8 +3,9 @@
 import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import axios from 'axios'
 import api from '@/api'
-import { getUserInfo, clearAuth } from '@/utils/auth'
+import { getUserInfo, clearAuth, getToken, setToken, setUserInfo } from '@/utils/auth'
 
 const route = useRoute()
 const router = useRouter()
@@ -98,12 +99,29 @@ const closeSidebar = () => {
 
 // Employee Switcher Logic
 const employeeList = ref([])
-const showSwitcher = computed(() => userInfo.value.role === 'admin')
+
+// 有 adminToken 備份時（impersonate 狀態）或自身是 admin 角色，均顯示切換器
+const showSwitcher = computed(() =>
+  userInfo.value.role === 'admin' || !!localStorage.getItem('adminToken')
+)
+
+// 返回後台：自身是 admin/hr/supervisor，或有 adminToken 備份（impersonate 狀態）
+const showBackToAdmin = computed(() => {
+  const role = userInfo.value.role
+  return ['admin', 'hr', 'supervisor'].includes(role) || !!localStorage.getItem('adminToken')
+})
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
 
 const fetchEmployees = async () => {
-  if (userInfo.value.role !== 'admin') return
+  const adminToken = localStorage.getItem('adminToken')
+  if (userInfo.value.role !== 'admin' && !adminToken) return
   try {
-    const res = await api.get('/employees')
+    const effectiveToken = adminToken || getToken()
+    const res = await axios.get(`${API_BASE}/employees`, {
+      headers: { Authorization: `Bearer ${effectiveToken}` },
+      timeout: 10000,
+    })
     employeeList.value = res.data
   } catch {
     // silent
@@ -112,21 +130,53 @@ const fetchEmployees = async () => {
 
 const handleSwitchUser = async (employeeId) => {
   try {
-    const res = await api.impersonate(employeeId)
-    // Update Auth
+    const adminToken = localStorage.getItem('adminToken')
+
+    // 若尚未 impersonate 但當前角色是 admin，先備份 admin 憑證
+    if (!adminToken && userInfo.value.role === 'admin') {
+      localStorage.setItem('adminToken', getToken())
+      localStorage.setItem('adminUserInfo', localStorage.getItem('userInfo'))
+    }
+
+    const effectiveAdminToken = localStorage.getItem('adminToken') || getToken()
+    const res = await axios.post(
+      `${API_BASE}/auth/impersonate`,
+      { employee_id: employeeId },
+      {
+        headers: {
+          Authorization: `Bearer ${effectiveAdminToken}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 10000,
+      }
+    )
+    // 保持 adminToken 不動（仍在 impersonate 狀態），只替換目標員工 token
     localStorage.setItem('token', res.data.token)
     localStorage.setItem('userInfo', JSON.stringify(res.data.user))
     ElMessage.success(`已切換為：${res.data.user.name}`)
-    // Reload page to apply changes
     window.location.reload()
   } catch (error) {
     ElMessage.error(error.response?.data?.detail || '切換失敗')
   }
 }
 
+const goBackToAdmin = () => {
+  const adminToken = localStorage.getItem('adminToken')
+  const adminUserInfoStr = localStorage.getItem('adminUserInfo')
+  if (adminToken && adminUserInfoStr) {
+    setToken(adminToken)
+    setUserInfo(JSON.parse(adminUserInfoStr))
+    localStorage.removeItem('adminToken')
+    localStorage.removeItem('adminUserInfo')
+  }
+  router.push('/')
+}
+
 const handleCommand = (cmd) => {
-  // ... existing handleCommand logic
   if (cmd === 'logout') {
+    // 登出時一併清除 impersonate 備份
+    localStorage.removeItem('adminToken')
+    localStorage.removeItem('adminUserInfo')
     clearAuth()
     router.push('/portal/login')
     ElMessage.success('已登出')
@@ -235,16 +285,28 @@ const submitPassword = async () => {
             <h3>義華幼兒園 - 教職員考勤系統</h3>
           </div>
           <div class="portal-user">
-            <!-- Employee Switcher (Admin Only) -->
+            <!-- 返回後台按鈕 -->
+            <el-button
+              v-if="showBackToAdmin"
+              type="primary"
+              size="small"
+              plain
+              @click="goBackToAdmin"
+              style="margin-right: 8px"
+            >
+              ← 返回後台
+            </el-button>
+
+            <!-- Employee Switcher (Admin Only or impersonate mode) -->
             <el-dropdown v-if="showSwitcher" @command="handleSwitchUser" style="margin-right: 15px">
               <el-button type="warning" size="small" plain>
                 切換視角 <el-icon class="el-icon--right"><ArrowDown /></el-icon>
               </el-button>
               <template #dropdown>
                 <el-dropdown-menu class="switcher-dropdown">
-                  <el-dropdown-item 
-                    v-for="emp in employeeList" 
-                    :key="emp.id" 
+                  <el-dropdown-item
+                    v-for="emp in employeeList"
+                    :key="emp.id"
                     :command="emp.id"
                   >
                     {{ emp.employee_id }} - {{ emp.name }}
