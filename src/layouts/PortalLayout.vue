@@ -229,7 +229,7 @@ const submitPassword = async () => {
           <el-icon><Calendar /></el-icon>
           <span>我的出勤</span>
         </el-menu-item>
-        <el-menu-item index="/portal/schedule" @click="fetchSwapPendingCount">
+        <el-menu-item index="/portal/schedule">
           <el-icon><Clock /></el-icon>
           <span>我的排班</span>
           <el-badge v-if="swapPendingCount > 0" :value="swapPendingCount" :max="99" class="announcement-badge" />
@@ -241,6 +241,10 @@ const submitPassword = async () => {
         <el-menu-item index="/portal/overtime">
           <el-icon><Clock /></el-icon>
           <span>加班申請</span>
+        </el-menu-item>
+        <el-menu-item index="/portal/punch-correction">
+          <el-icon><Edit /></el-icon>
+          <span>補打卡申請</span>
         </el-menu-item>
         <el-menu-item index="/portal/anomalies">
           <el-icon><Warning /></el-icon>
@@ -258,7 +262,7 @@ const submitPassword = async () => {
           <el-icon><Money /></el-icon>
           <span>薪資查詢</span>
         </el-menu-item>
-        <el-menu-item index="/portal/announcements" @click="fetchUnreadCount">
+        <el-menu-item index="/portal/announcements">
           <el-icon><Bell /></el-icon>
           <span>公告通知</span>
           <el-badge v-if="unreadCount > 0" :value="unreadCount" :max="99" class="announcement-badge" />

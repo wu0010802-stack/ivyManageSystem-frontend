@@ -2,6 +2,7 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import api from '@/api'
+import { LEAVE_TYPES as leaveTypes } from '@/utils/leaves'
 
 const loading = ref(false)
 const submitLoading = ref(false)
@@ -12,23 +13,6 @@ const query = reactive({
   year: now.getFullYear(),
   month: now.getMonth() + 1,
 })
-
-const leaveTypes = [
-  { value: 'annual', label: '特休', deduction: '不扣薪' },
-  { value: 'personal', label: '事假', deduction: '全扣薪' },
-  { value: 'sick', label: '病假', deduction: '扣半薪' },
-  { value: 'menstrual', label: '生理假', deduction: '扣半薪' },
-  { value: 'maternity', label: '產假', deduction: '不扣薪' },
-  { value: 'paternity', label: '陪產假', deduction: '不扣薪' },
-  { value: 'official', label: '公假', deduction: '不扣薪' },
-  { value: 'marriage', label: '婚假', deduction: '不扣薪' },
-  { value: 'bereavement', label: '喪假', deduction: '不扣薪' },
-  { value: 'prenatal', label: '產檢假', deduction: '不扣薪' },
-  { value: 'paternity_new', label: '陪產檢及陪產假', deduction: '不扣薪' },
-  { value: 'miscarriage', label: '流產假', deduction: '不扣薪' },
-  { value: 'family_care', label: '家庭照顧假', deduction: '全扣薪' },
-  { value: 'parental_unpaid', label: '育嬰留職停薪', deduction: '留停無薪' },
-]
 
 const leaveDeductionInfo = {
   annual: '不扣薪',

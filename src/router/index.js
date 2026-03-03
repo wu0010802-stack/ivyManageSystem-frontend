@@ -154,6 +154,11 @@ const router = createRouter({
                     component: () => import('../views/portal/PortalOvertimeView.vue'),
                 },
                 {
+                    path: 'punch-correction',
+                    name: 'portal-punch-correction',
+                    component: () => import('../views/portal/PortalPunchCorrectionView.vue'),
+                },
+                {
                     path: 'schedule',
                     name: 'portal-schedule',
                     component: () => import('../views/portal/PortalScheduleView.vue'),

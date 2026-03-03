@@ -1,28 +1,14 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '@/api'
+import { LEAVE_TYPE_MAP as leaveTypeMap } from '@/utils/leaves'
+import { money, formatTime } from '@/utils/format'
 
 const loading = ref(false)
 const pendingLeaves = ref([])
 const pendingOvertimes = ref([])
-
-const leaveTypeMap = {
-  personal: { label: '事假', type: 'warning' },
-  sick: { label: '病假', type: 'info' },
-  menstrual: { label: '生理假', type: 'info' },
-  annual: { label: '特休', type: 'success' },
-  maternity: { label: '產假', type: 'success' },
-  paternity: { label: '陪產假', type: 'success' },
-  official: { label: '公假', type: 'success' },
-  marriage: { label: '婚假', type: 'success' },
-  bereavement: { label: '喪假', type: 'success' },
-  prenatal: { label: '產檢假', type: 'success' },
-  paternity_new: { label: '陪產檢及陪產假', type: 'success' },
-  miscarriage: { label: '流產假', type: 'success' },
-  family_care: { label: '家庭照顧假', type: 'warning' },
-  parental_unpaid: { label: '育嬰留職停薪', type: 'info' },
-}
+const pendingPunchCorrections = ref([])
 
 const overtimeTypeMap = {
   weekday: { label: '平日', type: '' },
@@ -30,12 +16,15 @@ const overtimeTypeMap = {
   holiday: { label: '國定假日', type: 'danger' },
 }
 
-const money = (val) => {
-  if (!val && val !== 0) return '-'
-  return '$' + Number(val).toLocaleString()
+const correctionTypeMap = {
+  punch_in:  { label: '補上班卡', type: 'warning' },
+  punch_out: { label: '補下班卡', type: 'info' },
+  both:      { label: '補全天',   type: 'danger' },
 }
 
-const totalPending = computed(() => pendingLeaves.value.length + pendingOvertimes.value.length)
+const totalPending = computed(() =>
+  pendingLeaves.value.length + pendingOvertimes.value.length + pendingPunchCorrections.value.length
+)
 
 const fetchPendingLeaves = async () => {
   try {
@@ -55,9 +44,18 @@ const fetchPendingOvertimes = async () => {
   }
 }
 
+const fetchPendingCorrections = async () => {
+  try {
+    const res = await api.get('/punch-corrections', { params: { status: 'pending' } })
+    pendingPunchCorrections.value = Array.isArray(res.data) ? res.data : []
+  } catch {
+    // silent
+  }
+}
+
 const fetchAll = async () => {
   loading.value = true
-  await Promise.all([fetchPendingLeaves(), fetchPendingOvertimes()])
+  await Promise.all([fetchPendingLeaves(), fetchPendingOvertimes(), fetchPendingCorrections()])
   loading.value = false
 }
 
@@ -81,6 +79,30 @@ const approveOvertime = async (row, approved) => {
   }
 }
 
+const approveCorrection = async (row, approved) => {
+  let payload = { approved }
+  if (!approved) {
+    try {
+      const { value } = await ElMessageBox.prompt('請填寫駁回原因', '駁回補打卡申請', {
+        confirmButtonText: '確認駁回',
+        cancelButtonText: '取消',
+        inputPattern: /.+/,
+        inputErrorMessage: '請填寫駁回原因',
+      })
+      payload.rejection_reason = value
+    } catch {
+      return // 用戶取消
+    }
+  }
+  try {
+    await api.put(`/punch-corrections/${row.id}/approve`, payload)
+    ElMessage.success(approved ? '補打卡已核准，考勤已更新' : '補打卡已駁回')
+    fetchPendingCorrections()
+  } catch (error) {
+    ElMessage.error(error.response?.data?.detail || '操作失敗')
+  }
+}
+
 // ── 附件預覽 ──
 const attachDialogVisible = ref(false)
 const attachItems = ref([])
@@ -91,17 +113,16 @@ const viewAttachments = async (row) => {
   attachDialogVisible.value = true
   attachLoading.value = true
   try {
-    for (const filename of row.attachment_paths) {
-      const res = await api.get(`/leaves/${row.id}/attachments/${filename}`, {
-        responseType: 'blob',
-      })
-      const isImage = /\.(jpg|jpeg|png|gif|heic|heif)$/i.test(filename)
-      attachItems.value.push({
-        name: filename,
-        url: URL.createObjectURL(res.data),
-        isImage,
-      })
-    }
+    attachItems.value = await Promise.all(
+      row.attachment_paths.map(filename =>
+        api.get(`/leaves/${row.id}/attachments/${filename}`, { responseType: 'blob' })
+          .then(res => ({
+            name: filename,
+            url: URL.createObjectURL(res.data),
+            isImage: /\.(jpg|jpeg|png|gif|heic|heif)$/i.test(filename),
+          }))
+      )
+    )
   } catch {
     ElMessage.error('載入附件失敗')
   } finally {
@@ -247,6 +268,52 @@ onMounted(fetchAll)
       <el-empty v-else description="沒有待審核的加班申請" :image-size="60" />
     </el-card>
 
+    <!-- Pending Punch Corrections -->
+    <el-card class="section-card correction-card" shadow="hover">
+      <template #header>
+        <div class="card-header">
+          <span>待審補打卡</span>
+          <el-badge :value="pendingPunchCorrections.length" :type="pendingPunchCorrections.length > 0 ? 'warning' : 'success'" />
+        </div>
+      </template>
+
+      <el-table v-if="pendingPunchCorrections.length > 0" :data="pendingPunchCorrections" stripe style="width: 100%">
+        <el-table-column prop="employee_name" label="員工" width="100" />
+        <el-table-column prop="attendance_date" label="申請日期" width="120" />
+        <el-table-column label="補正類型" width="110">
+          <template #default="{ row }">
+            <el-tag :type="correctionTypeMap[row.correction_type]?.type || ''" size="small">
+              {{ correctionTypeMap[row.correction_type]?.label || row.correction_type_label }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="申請上班" width="100">
+          <template #default="{ row }">{{ formatTime(row.requested_punch_in) }}</template>
+        </el-table-column>
+        <el-table-column label="申請下班" width="100">
+          <template #default="{ row }">{{ formatTime(row.requested_punch_out) }}</template>
+        </el-table-column>
+        <el-table-column prop="reason" label="說明原因" min-width="120" show-overflow-tooltip />
+        <el-table-column label="申請時間" width="160">
+          <template #default="{ row }">
+            {{ row.created_at ? row.created_at.replace('T', ' ').slice(0, 16) : '-' }}
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="140" align="center" fixed="right">
+          <template #default="{ row }">
+            <el-button type="success" size="small" circle @click="approveCorrection(row, true)" title="核准">
+              <el-icon><Check /></el-icon>
+            </el-button>
+            <el-button type="danger" size="small" circle @click="approveCorrection(row, false)" title="駁回">
+              <el-icon><Close /></el-icon>
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <el-empty v-else description="沒有待審核的補打卡申請" :image-size="60" />
+    </el-card>
+
     <!-- 附件預覽 Dialog -->
     <el-dialog
       v-model="attachDialogVisible"
@@ -301,6 +368,10 @@ onMounted(fetchAll)
 
 .overtime-card {
   border-left: 4px solid var(--color-warning);
+}
+
+.correction-card {
+  border-left: 4px solid #67c23a;
 }
 
 .card-header {

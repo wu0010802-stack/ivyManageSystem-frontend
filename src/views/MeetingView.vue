@@ -2,6 +2,7 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import api from '@/api'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { money } from '@/utils/format'
 
 const currentYear = new Date().getFullYear()
 const currentMonth = new Date().getMonth() + 1
@@ -219,11 +220,6 @@ const handleDeleteDate = (dateStr) => {
       ElMessage.error('刪除失敗')
     }
   })
-}
-
-const money = (val) => {
-  if (!val && val !== 0) return '-'
-  return '$' + Number(val).toLocaleString()
 }
 
 watch([() => query.year, () => query.month], () => {

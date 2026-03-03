@@ -6,6 +6,12 @@ import { useEmployeeStore } from '@/stores/employee'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
 import { useCrudDialog, useConfirmDelete, useDateQuery } from '@/composables'
 import { downloadFile } from '@/utils/download'
+import { LEAVE_TYPES as leaveTypes } from '@/utils/leaves'
+import { money } from '@/utils/format'
+import LeaveAttachmentDialog from './leave/LeaveAttachmentDialog.vue'
+import LeaveQuotaManager from './leave/LeaveQuotaManager.vue'
+import LeaveRejectDialog from './leave/LeaveRejectDialog.vue'
+import LeaveCalendar from './leave/LeaveCalendar.vue'
 
 const { currentYear, query } = useDateQuery()
 const employeeStore = useEmployeeStore()
@@ -14,22 +20,13 @@ const loading = ref(false)
 const leaveRecords = ref([])
 const formRef = ref(null)
 
-const leaveTypes = [
-  { value: 'personal', label: '事假', color: 'warning', deduction: '全扣' },
-  { value: 'sick', label: '病假', color: 'info', deduction: '扣半薪' },
-  { value: 'menstrual', label: '生理假', color: 'info', deduction: '扣半薪' },
-  { value: 'annual', label: '特休', color: 'success', deduction: '不扣' },
-  { value: 'maternity', label: '產假', color: 'success', deduction: '不扣' },
-  { value: 'paternity', label: '陪產假', color: 'success', deduction: '不扣' },
-  { value: 'official', label: '公假', color: 'success', deduction: '不扣' },
-  { value: 'marriage', label: '婚假', color: 'success', deduction: '不扣' },
-  { value: 'bereavement', label: '喪假', color: 'success', deduction: '不扣' },
-  { value: 'prenatal', label: '產檢假', color: 'success', deduction: '不扣' },
-  { value: 'paternity_new', label: '陪產檢及陪產假', color: 'success', deduction: '不扣' },
-  { value: 'miscarriage', label: '流產假', color: 'success', deduction: '不扣' },
-  { value: 'family_care', label: '家庭照顧假', color: 'warning', deduction: '全扣（併入事假）' },
-  { value: 'parental_unpaid', label: '育嬰留職停薪', color: 'info', deduction: '留停無薪' },
-]
+// 子元件 ref
+const attachRef = ref(null)
+const rejectRef = ref(null)
+
+// 行事曆 / 配額 Dialog 的顯示控制
+const activeTab = ref('list')
+const quotaDialogVisible = ref(false)
 
 const ATTACHMENT_HINTS = {
   sick: '建議上傳：醫院診斷證明書',
@@ -82,14 +79,6 @@ const leaveSingleDate = ref('') // 上午/下午模式用的單一日期
 const QUOTA_TYPES = new Set(['annual', 'sick', 'menstrual', 'personal', 'family_care'])
 const quotaInfo = ref(null)   // { total_hours, used_hours, pending_hours, remaining_hours }
 const quotaLoading = ref(false)
-
-// ── 配額管理 Dialog ──
-const quotaDialogVisible = ref(false)
-const quotaMgrYear = ref(new Date().getFullYear())
-const quotaMgrEmpId = ref(null)
-const quotaRows = ref([])        // 查詢結果
-const quotaMgrLoading = ref(false)
-const quotaSaving = ref(false)
 
 const form = reactive({
   id: null,
@@ -446,54 +435,6 @@ watch(() => form.end_date, (val) => {
   }
 })
 
-// ── 配額管理 Dialog ──
-const loadQuotaMgr = async () => {
-  if (!quotaMgrEmpId.value) return
-  quotaMgrLoading.value = true
-  try {
-    const res = await api.get('/leaves/quotas', {
-      params: { employee_id: quotaMgrEmpId.value, year: quotaMgrYear.value },
-    })
-    quotaRows.value = res.data.map(r => ({ ...r, _editing: false, _newTotal: r.total_hours }))
-  } catch {
-    ElMessage.error('載入配額失敗')
-  } finally {
-    quotaMgrLoading.value = false
-  }
-}
-
-const initQuotas = async () => {
-  if (!quotaMgrEmpId.value) { ElMessage.warning('請先選擇員工'); return }
-  quotaMgrLoading.value = true
-  try {
-    const res = await api.post('/leaves/quotas/init', null, {
-      params: { employee_id: quotaMgrEmpId.value, year: quotaMgrYear.value },
-    })
-    quotaRows.value = res.data.map(r => ({ ...r, _editing: false, _newTotal: r.total_hours }))
-    ElMessage.success('已依勞基法初始化配額')
-  } catch (err) {
-    ElMessage.error('初始化失敗：' + (err.response?.data?.detail || err.message))
-  } finally {
-    quotaMgrLoading.value = false
-  }
-}
-
-const saveQuotaRow = async (row) => {
-  quotaSaving.value = true
-  try {
-    const res = await api.put(`/leaves/quotas/${row.id}`, {
-      total_hours: row._newTotal,
-      note: row.note,
-    })
-    Object.assign(row, res.data, { _editing: false, _newTotal: res.data.total_hours })
-    ElMessage.success('已儲存')
-  } catch (err) {
-    ElMessage.error('儲存失敗：' + (err.response?.data?.detail || err.message))
-  } finally {
-    quotaSaving.value = false
-  }
-}
-
 const fetchLeaves = async () => {
   loading.value = true
   try {
@@ -592,12 +533,6 @@ const { confirmDelete: deleteLeave } = useConfirmDelete({
   successMsg: '已刪除',
 })
 
-// ── 駁回 Dialog ──
-const rejectDialogVisible = ref(false)
-const rejectTarget = ref(null)
-const rejectReason = ref('')
-const rejectLoading = ref(false)
-
 const approveLeave = async (row) => {
   try {
     await api.put(`/leaves/${row.id}/approve`, { approved: true })
@@ -605,33 +540,6 @@ const approveLeave = async (row) => {
     fetchLeaves()
   } catch (error) {
     ElMessage.error('操作失敗：' + (error.response?.data?.detail || error.message))
-  }
-}
-
-const openRejectDialog = (row) => {
-  rejectTarget.value = row
-  rejectReason.value = ''
-  rejectDialogVisible.value = true
-}
-
-const confirmReject = async () => {
-  if (!rejectReason.value.trim()) {
-    ElMessage.warning('請填寫駁回原因')
-    return
-  }
-  rejectLoading.value = true
-  try {
-    await api.put(`/leaves/${rejectTarget.value.id}/approve`, {
-      approved: false,
-      rejection_reason: rejectReason.value.trim(),
-    })
-    ElMessage.success('已駁回')
-    rejectDialogVisible.value = false
-    fetchLeaves()
-  } catch (error) {
-    ElMessage.error('操作失敗：' + (error.response?.data?.detail || error.message))
-  } finally {
-    rejectLoading.value = false
   }
 }
 
@@ -649,186 +557,9 @@ const getLeaveTypeTag = (type) => {
   return leaveTypes.find(t => t.value === type) || { label: type, color: '' }
 }
 
-const money = (val) => {
-  if (!val && val !== 0) return '-'
-  return '$' + Number(val).toLocaleString()
-}
-
-// ── 附件檢視 ──
-const attachDialogVisible = ref(false)
-const attachItems = ref([])
-const attachLoading = ref(false)
-
-const viewAttachments = async (row) => {
-  attachItems.value = []
-  attachDialogVisible.value = true
-  attachLoading.value = true
-  try {
-    for (const filename of row.attachment_paths) {
-      const res = await api.get(`/leaves/${row.id}/attachments/${filename}`, {
-        responseType: 'blob',
-      })
-      const isImage = /\.(jpg|jpeg|png|gif|heic|heif)$/i.test(filename)
-      attachItems.value.push({
-        name: filename,
-        url: URL.createObjectURL(res.data),
-        isImage,
-      })
-    }
-  } catch {
-    ElMessage.error('載入附件失敗')
-  } finally {
-    attachLoading.value = false
-  }
-}
-
-const closeAttachDialog = () => {
-  attachItems.value.forEach(a => URL.revokeObjectURL(a.url))
-  attachItems.value = []
-  attachDialogVisible.value = false
-}
-
 onMounted(() => {
   employeeStore.fetchEmployees()
   fetchLeaves()
-})
-
-// ─────────────────────────────────────────────
-// ── 行事曆 Tab ──
-// ─────────────────────────────────────────────
-const activeTab = ref('list')
-
-const calYear  = ref(new Date().getFullYear())
-const calMonth = ref(new Date().getMonth() + 1)
-const calLoading     = ref(false)
-const calendarLeaves = ref([])
-const calFilterEmp   = ref(null)
-
-// 詳情 Dialog
-const calDetailDate    = ref('')
-const calDetailLeaves  = ref([])
-const calDetailVisible = ref(false)
-
-// 假別顏色對應（左邊框色）
-const LEAVE_COLOR_MAP = {
-  personal:        '#e6a23c',
-  sick:            '#409eff',
-  menstrual:       '#a78bfa',
-  annual:          '#67c23a',
-  maternity:       '#f472b6',
-  paternity:       '#34d399',
-  official:        '#38bdf8',
-  marriage:        '#f59e0b',
-  bereavement:     '#94a3b8',
-  prenatal:        '#c084fc',
-  paternity_new:   '#2dd4bf',
-  miscarriage:     '#fb923c',
-  family_care:     '#fbbf24',
-  parental_unpaid: '#64748b',
-}
-
-const fetchCalendar = async () => {
-  calLoading.value = true
-  try {
-    const params = { year: calYear.value, month: calMonth.value }
-    if (calFilterEmp.value) params.employee_id = calFilterEmp.value
-    const res = await api.get('/leaves', { params })
-    calendarLeaves.value = res.data
-  } catch {
-    ElMessage.error('載入行事曆失敗')
-  } finally {
-    calLoading.value = false
-  }
-}
-
-const calPrevMonth = () => {
-  if (calMonth.value === 1) { calMonth.value = 12; calYear.value-- }
-  else calMonth.value--
-  fetchCalendar()
-}
-
-const calNextMonth = () => {
-  if (calMonth.value === 12) { calMonth.value = 1; calYear.value++ }
-  else calMonth.value++
-  fetchCalendar()
-}
-
-const calGoToday = () => {
-  const now = new Date()
-  calYear.value  = now.getFullYear()
-  calMonth.value = now.getMonth() + 1
-  fetchCalendar()
-}
-
-const calTodayStr = computed(() => {
-  const t = new Date()
-  return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`
-})
-
-// 計算月曆格子（6 週 × 7 天）
-const calendarGrid = computed(() => {
-  const year  = calYear.value
-  const month = calMonth.value
-
-  // 依日期建立 "誰在這天請假" 的 map
-  const byDate = {}
-  for (const lv of calendarLeaves.value) {
-    if (lv.is_approved === false) continue   // 已駁回不顯示
-    const start      = new Date(lv.start_date + 'T00:00:00')
-    const end        = new Date(lv.end_date   + 'T00:00:00')
-    const monthStart = new Date(year, month - 1, 1)
-    const monthEnd   = new Date(year, month, 0)
-
-    const cur   = new Date(Math.max(start.getTime(), monthStart.getTime()))
-    const limit = new Date(Math.min(end.getTime(),   monthEnd.getTime()))
-
-    while (cur <= limit) {
-      const key = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`
-      if (!byDate[key]) byDate[key] = []
-      byDate[key].push(lv)
-      cur.setDate(cur.getDate() + 1)
-    }
-  }
-
-  // 建立格子（前置空白 + 當月天 + 後置補齊）
-  const firstDow    = new Date(year, month - 1, 1).getDay()
-  const daysInMonth = new Date(year, month, 0).getDate()
-
-  const cells = []
-  for (let i = 0; i < firstDow; i++) cells.push({ day: null })
-  for (let d = 1; d <= daysInMonth; d++) {
-    const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-    const dow = new Date(year, month - 1, d).getDay()
-    cells.push({
-      day:       d,
-      date:      dateStr,
-      isWeekend: dow === 0 || dow === 6,
-      isToday:   dateStr === calTodayStr.value,
-      leaves:    byDate[dateStr] || [],
-    })
-  }
-  while (cells.length % 7 !== 0) cells.push({ day: null })
-
-  // 切成週
-  const weeks = []
-  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7))
-  return weeks
-})
-
-// 點擊日期格子 → 開啟詳情 Dialog
-const openCalDetail = (cell) => {
-  if (!cell.day || !cell.leaves.length) return
-  calDetailDate.value   = cell.date
-  calDetailLeaves.value = cell.leaves
-  calDetailVisible.value = true
-}
-
-// 切換到行事曆 Tab 時自動載入
-watch(activeTab, (val) => {
-  if (val === 'calendar') fetchCalendar()
-})
-watch(calFilterEmp, () => {
-  if (activeTab.value === 'calendar') fetchCalendar()
 })
 </script>
 
@@ -903,7 +634,7 @@ watch(calFilterEmp, () => {
               link
               type="primary"
               size="small"
-              @click="viewAttachments(scope.row)"
+              @click="attachRef.open(scope.row)"
             >
               <el-icon><Paperclip /></el-icon>
               {{ scope.row.attachment_paths.length }}
@@ -927,7 +658,7 @@ watch(calFilterEmp, () => {
           <template #default="scope">
             <template v-if="scope.row.is_approved === null">
               <el-button type="success" size="small" link @click="approveLeave(scope.row)">核准</el-button>
-              <el-button type="danger" size="small" link @click="openRejectDialog(scope.row)">駁回</el-button>
+              <el-button type="danger" size="small" link @click="rejectRef.open(scope.row)">駁回</el-button>
             </template>
             <el-button v-if="scope.row.is_approved === true" type="warning" size="small" link @click="cancelApprove(scope.row)">取消核准</el-button>
             <el-button v-if="scope.row.is_approved === false" type="success" size="small" link @click="approveLeave(scope.row)">核准</el-button>
@@ -942,443 +673,178 @@ watch(calFilterEmp, () => {
       <!-- ─── 行事曆 Tab ─── -->
       <el-tab-pane name="calendar">
         <template #label><el-icon><Calendar /></el-icon> 行事曆</template>
-
-        <!-- 工具列 -->
-        <div class="cal-toolbar">
-          <div class="cal-nav">
-            <el-button-group>
-              <el-button @click="calPrevMonth"><el-icon><ArrowLeft /></el-icon></el-button>
-              <el-button @click="calGoToday">今天</el-button>
-              <el-button @click="calNextMonth"><el-icon><ArrowRight /></el-icon></el-button>
-            </el-button-group>
-            <span class="cal-title">{{ calYear }} 年 {{ calMonth }} 月</span>
-          </div>
-
-          <el-select
-            v-model="calFilterEmp"
-            placeholder="全部員工"
-            clearable
-            filterable
-            style="width: 160px;"
-          >
-            <el-option
-              v-for="emp in employeeStore.employees"
-              :key="emp.id"
-              :label="emp.name"
-              :value="emp.id"
-            />
-          </el-select>
-
-          <!-- 圖例 -->
-          <div class="cal-legend">
-            <span class="cal-legend-item"><span class="legend-dot" style="background:#e6a23c"></span>事假</span>
-            <span class="cal-legend-item"><span class="legend-dot" style="background:#409eff"></span>病/生理假</span>
-            <span class="cal-legend-item"><span class="legend-dot" style="background:#67c23a"></span>特休/公假</span>
-            <span class="cal-legend-item"><span class="legend-dot" style="background:#f472b6"></span>產假/陪產</span>
-            <span class="cal-legend-item"><span class="legend-dot pending-dot"></span>待審核</span>
-          </div>
-        </div>
-
-        <!-- 載入中 -->
-        <div v-if="calLoading" class="cal-loading">
-          <el-icon class="is-loading" :size="22"><Loading /></el-icon>
-          載入中…
-        </div>
-
-        <!-- 月曆格子 -->
-        <div v-else class="cal-grid-wrapper">
-          <!-- 週標題列 -->
-          <div class="cal-header-row">
-            <div
-              v-for="(label, i) in ['日', '一', '二', '三', '四', '五', '六']"
-              :key="label"
-              class="cal-header-cell"
-              :class="{ 'is-weekend-header': i === 0 || i === 6 }"
-            >{{ label }}</div>
-          </div>
-
-          <!-- 每一週 -->
-          <div v-for="(week, wi) in calendarGrid" :key="wi" class="cal-week">
-            <div
-              v-for="(cell, ci) in week"
-              :key="ci"
-              class="cal-cell"
-              :class="{
-                'is-empty':    !cell.day,
-                'is-weekend':   cell.isWeekend,
-                'is-today':     cell.isToday,
-                'has-leaves':   cell.leaves && cell.leaves.length > 0,
-              }"
-              @click="openCalDetail(cell)"
-            >
-              <!-- 日期數字 -->
-              <div v-if="cell.day" class="cal-day-num">
-                <span :class="{ 'today-badge': cell.isToday }">{{ cell.day }}</span>
-                <span v-if="cell.leaves.length" class="cal-leave-count">{{ cell.leaves.length }} 人</span>
-              </div>
-
-              <!-- 請假事件 -->
-              <div class="cal-events">
-                <div
-                  v-for="lv in cell.leaves.slice(0, 4)"
-                  :key="lv.id"
-                  class="cal-event"
-                  :class="{ 'is-pending': lv.is_approved === null }"
-                  :style="{ borderLeftColor: LEAVE_COLOR_MAP[lv.leave_type] || '#ccc' }"
-                >
-                  <span class="cal-event-name">{{ lv.employee_name }}</span>
-                  <span class="cal-event-type">{{ lv.leave_type_label }}</span>
-                </div>
-                <div v-if="cell.leaves.length > 4" class="cal-more">+{{ cell.leaves.length - 4 }} 筆</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 請假詳情 Dialog -->
-        <el-dialog
-          v-model="calDetailVisible"
-          :title="`${calDetailDate} 請假一覽`"
-          width="560px"
-          destroy-on-close
-        >
-          <el-table :data="calDetailLeaves" size="small" stripe border>
-            <el-table-column label="員工" prop="employee_name" width="90" />
-            <el-table-column label="假別" width="95">
-              <template #default="{ row }">
-                <el-tag :type="getLeaveTypeTag(row.leave_type).color" size="small">
-                  {{ row.leave_type_label }}
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="時段" min-width="130">
-              <template #default="{ row }">
-                {{ row.start_date }}{{ row.start_time ? ' ' + row.start_time : '' }}
-                ～
-                {{ row.end_date }}{{ row.end_time ? ' ' + row.end_time : '' }}
-              </template>
-            </el-table-column>
-            <el-table-column label="時數" width="65" align="center">
-              <template #default="{ row }">{{ row.leave_hours }}h</template>
-            </el-table-column>
-            <el-table-column label="狀態" width="80" align="center">
-              <template #default="{ row }">
-                <el-tag v-if="row.is_approved === true"  type="success" size="small">已核准</el-tag>
-                <el-tag v-else-if="row.is_approved === false" type="danger" size="small">已駁回</el-tag>
-                <el-tag v-else type="info" size="small">待審核</el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="備註" prop="reason" min-width="100" show-overflow-tooltip />
-          </el-table>
-          <template #footer>
-            <el-button @click="calDetailVisible = false">關閉</el-button>
-          </template>
-        </el-dialog>
-
+        <LeaveCalendar :activeTab="activeTab" />
       </el-tab-pane>
 
     </el-tabs>
 
-      <!-- Reject Dialog -->
-      <el-dialog v-model="rejectDialogVisible" title="駁回請假" width="420px" :close-on-click-modal="false">
-        <p style="margin-bottom: 12px; color: var(--el-text-color-regular);">
-          請填寫駁回原因，員工將能在入口網站看到此說明。
-        </p>
-        <el-input
-          v-model="rejectReason"
-          type="textarea"
-          :rows="3"
-          placeholder="例如：請先補上缺少的日期，再重新申請"
-          maxlength="200"
-          show-word-limit
-        />
-        <template #footer>
-          <el-button @click="rejectDialogVisible = false">取消</el-button>
-          <el-button type="danger" :loading="rejectLoading" @click="confirmReject">確認駁回</el-button>
-        </template>
-      </el-dialog>
+    <!-- 子元件 -->
+    <LeaveRejectDialog ref="rejectRef" @rejected="fetchLeaves()" />
+    <LeaveQuotaManager v-model:visible="quotaDialogVisible" />
+    <LeaveAttachmentDialog ref="attachRef" />
 
-      <!-- Quota Management Dialog -->
-      <el-dialog v-model="quotaDialogVisible" title="假別配額管理" width="720px" destroy-on-close>
-        <div class="quota-toolbar">
-          <el-select
-            v-model="quotaMgrEmpId"
-            filterable
-            placeholder="選擇員工"
-            style="width: 200px;"
-            @change="loadQuotaMgr"
-          >
+    <!-- Create/Edit Dialog -->
+    <el-dialog v-model="dialogVisible" :title="isEdit ? '編輯請假' : '新增請假申請'" width="550px">
+      <el-form ref="formRef" :model="form" :rules="formRules" label-width="100px">
+        <el-form-item label="員工" prop="employee_id">
+          <el-select v-model="form.employee_id" filterable placeholder="選擇員工" :disabled="isEdit" style="width: 100%;">
             <el-option v-for="emp in employeeStore.employees" :key="emp.id" :label="emp.name" :value="emp.id" />
           </el-select>
-          <el-select v-model="quotaMgrYear" style="width: 110px;" @change="loadQuotaMgr">
-            <el-option v-for="y in 5" :key="y" :label="`${currentYear - 2 + y} 年`" :value="currentYear - 2 + y" />
-          </el-select>
-          <el-button
-            type="primary"
-            :loading="quotaMgrLoading"
-            :disabled="!quotaMgrEmpId"
-            @click="initQuotas"
-          >
-            依勞基法初始化
-          </el-button>
-          <el-tooltip content="根據員工到職日自動計算特休時數，並填入各假別法定上限" placement="top">
-            <el-icon style="cursor: help; color: var(--el-color-info);"><QuestionFilled /></el-icon>
-          </el-tooltip>
-        </div>
-
-        <el-table
-          v-loading="quotaMgrLoading"
-          :data="quotaRows"
-          border
-          stripe
-          empty-text="請選擇員工並查詢，或點擊「依勞基法初始化」自動產生"
-          style="margin-top: 16px;"
-        >
-          <el-table-column label="假別" width="130">
-            <template #default="{ row }">
-              <el-tag :type="leaveTypes.find(t => t.value === row.leave_type)?.color || ''" size="small">
-                {{ row.leave_type_label }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="年度配額（h）" width="160" align="center">
-            <template #default="{ row }">
-              <el-input-number
-                v-if="row._editing"
-                v-model="row._newTotal"
-                :min="0"
-                :step="8"
-                size="small"
-                style="width: 110px;"
-              />
-              <span v-else>{{ row.total_hours }}h</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="已核准（h）" prop="used_hours" width="110" align="center" />
-          <el-table-column label="待審（h）" prop="pending_hours" width="90" align="center">
-            <template #default="{ row }">
-              <span :style="row.pending_hours > 0 ? 'color: var(--el-color-warning);' : ''">
-                {{ row.pending_hours }}
-              </span>
-            </template>
-          </el-table-column>
-          <el-table-column label="剩餘（h）" width="90" align="center">
-            <template #default="{ row }">
+        </el-form-item>
+        <el-form-item label="假別" prop="leave_type">
+          <el-select v-model="form.leave_type" style="width: 100%;">
+            <el-option v-for="lt in leaveTypes" :key="lt.value" :label="lt.label" :value="lt.value">
+              <span>{{ lt.label }}</span>
               <el-tag
                 size="small"
-                :type="row.remaining_hours <= 0 ? 'danger' : row.remaining_hours < 16 ? 'warning' : 'success'"
+                :type="lt.deduction.includes('不扣') ? 'success' : lt.deduction.includes('半') ? 'warning' : 'danger'"
+                style="margin-left: 8px; float: right;"
+              >{{ lt.deduction }}</el-tag>
+            </el-option>
+          </el-select>
+          <div style="margin-top: 5px; font-size: 12px; min-height: 20px;">
+            <span v-if="quotaLoading" style="color: var(--el-color-info);">
+              <el-icon class="is-loading" style="vertical-align: middle;"><Loading /></el-icon> 查詢配額…
+            </span>
+            <template v-else-if="quotaInfo">
+              <el-tag
+                size="small"
+                :type="quotaInfo.remaining_hours <= 0 ? 'danger' : quotaInfo.remaining_hours < 16 ? 'warning' : 'success'"
+                style="margin-right: 6px;"
               >
-                {{ row.remaining_hours }}h
+                剩餘 {{ quotaInfo.remaining_hours }}h
               </el-tag>
+              <span style="color: var(--el-text-color-secondary);">
+                已核准 {{ quotaInfo.used_hours }}h
+                <template v-if="quotaInfo.pending_hours > 0">
+                  ／待審 {{ quotaInfo.pending_hours }}h
+                </template>
+                ／總計 {{ quotaInfo.total_hours }}h
+              </span>
             </template>
-          </el-table-column>
-          <el-table-column label="備註" prop="note" min-width="140" show-overflow-tooltip />
-          <el-table-column label="操作" width="120" align="center">
-            <template #default="{ row }">
-              <template v-if="row._editing">
-                <el-button size="small" type="primary" link :loading="quotaSaving" @click="saveQuotaRow(row)">儲存</el-button>
-                <el-button size="small" link @click="row._editing = false; row._newTotal = row.total_hours">取消</el-button>
-              </template>
-              <el-button v-else size="small" link @click="row._editing = true">調整</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-      </el-dialog>
-
-      <!-- Attachment Viewer Dialog -->
-      <el-dialog
-        v-model="attachDialogVisible"
-        title="假單附件"
-        width="660px"
-        :before-close="closeAttachDialog"
-      >
-        <div v-if="attachLoading" style="text-align:center;padding:32px;color:var(--text-secondary)">
-          <el-icon class="is-loading"><Loading /></el-icon> 載入中…
-        </div>
-        <div v-else-if="!attachItems.length" style="text-align:center;padding:32px;color:var(--text-secondary)">
-          無附件
-        </div>
-        <div v-else class="attach-grid">
-          <div v-for="(item, i) in attachItems" :key="i" class="attach-item">
-            <el-image
-              v-if="item.isImage"
-              :src="item.url"
-              :preview-src-list="attachItems.filter(a => a.isImage).map(a => a.url)"
-              :initial-index="attachItems.filter(a => a.isImage).findIndex(a => a.url === item.url)"
-              fit="cover"
-              class="attach-thumb"
-            />
-            <a v-else :href="item.url" :download="item.name" class="attach-file">
-              <el-icon :size="32"><Document /></el-icon>
-              <span class="attach-filename">{{ item.name }}</span>
-              <span style="font-size:12px;color:var(--color-primary)">點擊下載</span>
-            </a>
+            <span v-else-if="form.employee_id && !QUOTA_TYPES.has(form.leave_type)" style="color: var(--el-text-color-placeholder);">
+              此假別無年度上限
+            </span>
           </div>
-        </div>
-      </el-dialog>
-  
-      <!-- Create/Edit Dialog -->
-      <el-dialog v-model="dialogVisible" :title="isEdit ? '編輯請假' : '新增請假申請'" width="550px">
-        <el-form ref="formRef" :model="form" :rules="formRules" label-width="100px">
-          <el-form-item label="員工" prop="employee_id">
-            <el-select v-model="form.employee_id" filterable placeholder="選擇員工" :disabled="isEdit" style="width: 100%;">
-              <el-option v-for="emp in employeeStore.employees" :key="emp.id" :label="emp.name" :value="emp.id" />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="假別" prop="leave_type">
-            <el-select v-model="form.leave_type" style="width: 100%;">
-              <el-option v-for="lt in leaveTypes" :key="lt.value" :label="lt.label" :value="lt.value">
-                <span>{{ lt.label }}</span>
-                <el-tag
-                  size="small"
-                  :type="lt.deduction.includes('不扣') ? 'success' : lt.deduction.includes('半') ? 'warning' : 'danger'"
-                  style="margin-left: 8px; float: right;"
-                >{{ lt.deduction }}</el-tag>
-              </el-option>
-            </el-select>
-            <div style="margin-top: 5px; font-size: 12px; min-height: 20px;">
-              <span v-if="quotaLoading" style="color: var(--el-color-info);">
-                <el-icon class="is-loading" style="vertical-align: middle;"><Loading /></el-icon> 查詢配額…
-              </span>
-              <template v-else-if="quotaInfo">
-                <el-tag
-                  size="small"
-                  :type="quotaInfo.remaining_hours <= 0 ? 'danger' : quotaInfo.remaining_hours < 16 ? 'warning' : 'success'"
-                  style="margin-right: 6px;"
-                >
-                  剩餘 {{ quotaInfo.remaining_hours }}h
-                </el-tag>
-                <span style="color: var(--el-text-color-secondary);">
-                  已核准 {{ quotaInfo.used_hours }}h
-                  <template v-if="quotaInfo.pending_hours > 0">
-                    ／待審 {{ quotaInfo.pending_hours }}h
-                  </template>
-                  ／總計 {{ quotaInfo.total_hours }}h
-                </span>
-              </template>
-              <span v-else-if="form.employee_id && !QUOTA_TYPES.has(form.leave_type)" style="color: var(--el-text-color-placeholder);">
-                此假別無年度上限
-              </span>
-            </div>
-            <div v-if="ATTACHMENT_HINTS[form.leave_type]" style="margin-top: 5px; font-size: 12px; color: var(--el-color-warning); display: flex; align-items: center; gap: 4px;">
-              <el-icon><InfoFilled /></el-icon>
-              {{ ATTACHMENT_HINTS[form.leave_type] }}
-            </div>
-          </el-form-item>
-          <el-form-item label="請假模式">
-            <el-radio-group v-model="leaveMode" size="small">
-              <el-radio-button value="full">整天</el-radio-button>
-              <el-radio-button value="morning">上午</el-radio-button>
-              <el-radio-button value="afternoon">下午</el-radio-button>
-              <el-radio-button value="custom">自訂時段</el-radio-button>
-            </el-radio-group>
-            <div style="margin-top: 4px; font-size: 12px; color: var(--el-text-color-secondary);">
-              <template v-if="leaveMode === 'full'">整天或多日請假，只需選日期</template>
-              <template v-else-if="leaveMode === 'morning'">僅限單日，自動帶入上班至12:00</template>
-              <template v-else-if="leaveMode === 'afternoon'">僅限單日，自動帶入13:00至下班</template>
-              <template v-else>自行填入起訖日期時間</template>
-            </div>
-          </el-form-item>
+          <div v-if="ATTACHMENT_HINTS[form.leave_type]" style="margin-top: 5px; font-size: 12px; color: var(--el-color-warning); display: flex; align-items: center; gap: 4px;">
+            <el-icon><InfoFilled /></el-icon>
+            {{ ATTACHMENT_HINTS[form.leave_type] }}
+          </div>
+        </el-form-item>
+        <el-form-item label="請假模式">
+          <el-radio-group v-model="leaveMode" size="small">
+            <el-radio-button value="full">整天</el-radio-button>
+            <el-radio-button value="morning">上午</el-radio-button>
+            <el-radio-button value="afternoon">下午</el-radio-button>
+            <el-radio-button value="custom">自訂時段</el-radio-button>
+          </el-radio-group>
+          <div style="margin-top: 4px; font-size: 12px; color: var(--el-text-color-secondary);">
+            <template v-if="leaveMode === 'full'">整天或多日請假，只需選日期</template>
+            <template v-else-if="leaveMode === 'morning'">僅限單日，自動帶入上班至12:00</template>
+            <template v-else-if="leaveMode === 'afternoon'">僅限單日，自動帶入13:00至下班</template>
+            <template v-else>自行填入起訖日期時間</template>
+          </div>
+        </el-form-item>
 
-          <!-- 整天模式：只選日期 -->
-          <template v-if="leaveMode === 'full'">
-            <el-form-item label="開始日期" prop="start_date">
-              <el-date-picker v-model="form.start_date" type="date" value-format="YYYY-MM-DD" style="width: 100%;" placeholder="選擇開始日期" />
-            </el-form-item>
-            <el-form-item label="結束日期" prop="end_date">
-              <el-date-picker v-model="form.end_date" type="date" value-format="YYYY-MM-DD" style="width: 100%;" placeholder="選擇結束日期" :disabled-date="disabledEndDate" />
-            </el-form-item>
-          </template>
-
-          <!-- 上午/下午模式：單日 -->
-          <template v-else-if="leaveMode === 'morning' || leaveMode === 'afternoon'">
-            <el-form-item label="請假日期" prop="start_date">
-              <el-date-picker v-model="leaveSingleDate" type="date" value-format="YYYY-MM-DD" style="width: 100%;" placeholder="選擇請假日期" />
-              <div v-if="form.start_date && form.end_date" style="margin-top: 4px; font-size: 12px; color: var(--el-text-color-secondary);">
-                時段：{{ form.start_date.substring(11, 16) }} – {{ form.end_date.substring(11, 16) }}
-                <el-icon v-if="calcLoading" class="is-loading" style="vertical-align: middle; margin-left: 6px;"><Loading /></el-icon>
-              </div>
-            </el-form-item>
-          </template>
-
-          <!-- 自訂時段模式 -->
-          <template v-else>
-            <el-form-item label="開始時間" prop="start_date">
-              <el-date-picker v-model="form.start_date" type="datetime" format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DD HH:mm:ss" style="width: 100%;" placeholder="選擇開始日期時間" />
-            </el-form-item>
-            <el-form-item label="結束時間" prop="end_date">
-              <el-date-picker v-model="form.end_date" type="datetime" format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DD HH:mm:ss" style="width: 100%;" placeholder="選擇結束日期時間" :disabled-date="disabledEndDate" />
-            </el-form-item>
-          </template>
-          <el-form-item label="請假時數" prop="leave_hours">
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <el-input-number v-model="form.leave_hours" :min="0.5" :step="0.5" :max="240" disabled />
-              <el-tooltip v-if="calcTooltipHtml" placement="right" :content="calcTooltipHtml" raw-content>
-                <el-icon style="cursor: help; color: var(--el-color-info); font-size: 16px;"><InfoFilled /></el-icon>
-              </el-tooltip>
-            </div>
-            <div style="margin-top: 6px; font-size: 12px; line-height: 1.5;">
-              <span v-if="calcLoading && leaveMode !== 'morning' && leaveMode !== 'afternoon'" style="color: var(--el-color-info);">
-                <el-icon class="is-loading" style="vertical-align: middle;"><Loading /></el-icon> 查詢排班中…
-              </span>
-              <span v-else-if="calcHint" style="color: var(--el-color-info);">
-                {{ calcHint }}
-              </span>
-            </div>
-            <el-alert
-              v-if="officeHoursWarning"
-              type="warning"
-              :title="officeHoursWarning"
-              show-icon
-              :closable="false"
-              style="margin-top: 6px;"
-            />
-            <el-alert
-              v-if="quotaExceeded"
-              type="warning"
-              :title="`剩餘配額不足：剩餘 ${quotaInfo.remaining_hours}h，本次申請 ${form.leave_hours}h`"
-              show-icon
-              :closable="false"
-              style="margin-top: 6px;"
-            />
+        <!-- 整天模式：只選日期 -->
+        <template v-if="leaveMode === 'full'">
+          <el-form-item label="開始日期" prop="start_date">
+            <el-date-picker v-model="form.start_date" type="date" value-format="YYYY-MM-DD" style="width: 100%;" placeholder="選擇開始日期" />
           </el-form-item>
-
-          <!-- 每日排班明細（≤31 天才展開，以免過長） -->
-          <el-form-item v-if="!calcLoading && calcBreakdown.length && calcBreakdown.length <= 31" label="每日明細">
-            <div class="breakdown-table">
-              <div
-                v-for="day in calcBreakdown"
-                :key="day.date"
-                class="breakdown-row"
-                :class="day.type"
-              >
-                <span class="bd-date">{{ day.date }}</span>
-                <el-tag
-                  size="small"
-                  :type="day.type === 'workday' ? '' : day.type === 'holiday' ? 'danger' : 'info'"
-                  class="bd-tag"
-                >
-                  {{ day.type === 'workday'
-                    ? (day.shift || '預設班') + (day.work_start ? ` ${day.work_start}–${day.work_end}` : '')
-                    : day.type === 'holiday' ? day.holiday_name
-                    : '週末' }}
-                </el-tag>
-                <span class="bd-hours">
-                  {{ day.type === 'workday' ? `${day.hours}h` : '—' }}
-                </span>
-              </div>
-            </div>
+          <el-form-item label="結束日期" prop="end_date">
+            <el-date-picker v-model="form.end_date" type="date" value-format="YYYY-MM-DD" style="width: 100%;" placeholder="選擇結束日期" :disabled-date="disabledEndDate" />
           </el-form-item>
-
-          <el-form-item label="原因">
-            <el-input v-model="form.reason" type="textarea" :rows="2" />
-          </el-form-item>
-        </el-form>
-        <template #footer>
-          <el-button @click="closeDialog">取消</el-button>
-          <el-button type="primary" :disabled="!canSave" @click="saveLeave">儲存</el-button>
         </template>
-      </el-dialog>
+
+        <!-- 上午/下午模式：單日 -->
+        <template v-else-if="leaveMode === 'morning' || leaveMode === 'afternoon'">
+          <el-form-item label="請假日期" prop="start_date">
+            <el-date-picker v-model="leaveSingleDate" type="date" value-format="YYYY-MM-DD" style="width: 100%;" placeholder="選擇請假日期" />
+            <div v-if="form.start_date && form.end_date" style="margin-top: 4px; font-size: 12px; color: var(--el-text-color-secondary);">
+              時段：{{ form.start_date.substring(11, 16) }} – {{ form.end_date.substring(11, 16) }}
+              <el-icon v-if="calcLoading" class="is-loading" style="vertical-align: middle; margin-left: 6px;"><Loading /></el-icon>
+            </div>
+          </el-form-item>
+        </template>
+
+        <!-- 自訂時段模式 -->
+        <template v-else>
+          <el-form-item label="開始時間" prop="start_date">
+            <el-date-picker v-model="form.start_date" type="datetime" format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DD HH:mm:ss" style="width: 100%;" placeholder="選擇開始日期時間" />
+          </el-form-item>
+          <el-form-item label="結束時間" prop="end_date">
+            <el-date-picker v-model="form.end_date" type="datetime" format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DD HH:mm:ss" style="width: 100%;" placeholder="選擇結束日期時間" :disabled-date="disabledEndDate" />
+          </el-form-item>
+        </template>
+        <el-form-item label="請假時數" prop="leave_hours">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <el-input-number v-model="form.leave_hours" :min="0.5" :step="0.5" :max="240" disabled />
+            <el-tooltip v-if="calcTooltipHtml" placement="right" :content="calcTooltipHtml" raw-content>
+              <el-icon style="cursor: help; color: var(--el-color-info); font-size: 16px;"><InfoFilled /></el-icon>
+            </el-tooltip>
+          </div>
+          <div style="margin-top: 6px; font-size: 12px; line-height: 1.5;">
+            <span v-if="calcLoading && leaveMode !== 'morning' && leaveMode !== 'afternoon'" style="color: var(--el-color-info);">
+              <el-icon class="is-loading" style="vertical-align: middle;"><Loading /></el-icon> 查詢排班中…
+            </span>
+            <span v-else-if="calcHint" style="color: var(--el-color-info);">
+              {{ calcHint }}
+            </span>
+          </div>
+          <el-alert
+            v-if="officeHoursWarning"
+            type="warning"
+            :title="officeHoursWarning"
+            show-icon
+            :closable="false"
+            style="margin-top: 6px;"
+          />
+          <el-alert
+            v-if="quotaExceeded"
+            type="warning"
+            :title="`剩餘配額不足：剩餘 ${quotaInfo.remaining_hours}h，本次申請 ${form.leave_hours}h`"
+            show-icon
+            :closable="false"
+            style="margin-top: 6px;"
+          />
+        </el-form-item>
+
+        <!-- 每日排班明細（≤31 天才展開，以免過長） -->
+        <el-form-item v-if="!calcLoading && calcBreakdown.length && calcBreakdown.length <= 31" label="每日明細">
+          <div class="breakdown-table">
+            <div
+              v-for="day in calcBreakdown"
+              :key="day.date"
+              class="breakdown-row"
+              :class="day.type"
+            >
+              <span class="bd-date">{{ day.date }}</span>
+              <el-tag
+                size="small"
+                :type="day.type === 'workday' ? '' : day.type === 'holiday' ? 'danger' : 'info'"
+                class="bd-tag"
+              >
+                {{ day.type === 'workday'
+                  ? (day.shift || '預設班') + (day.work_start ? ` ${day.work_start}–${day.work_end}` : '')
+                  : day.type === 'holiday' ? day.holiday_name
+                  : '週末' }}
+              </el-tag>
+              <span class="bd-hours">
+                {{ day.type === 'workday' ? `${day.hours}h` : '—' }}
+              </span>
+            </div>
+          </div>
+        </el-form-item>
+
+        <el-form-item label="原因">
+          <el-input v-model="form.reason" type="textarea" :rows="2" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="closeDialog">取消</el-button>
+        <el-button type="primary" :disabled="!canSave" @click="saveLeave">儲存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -1387,61 +853,6 @@ watch(calFilterEmp, () => {
   margin-bottom: var(--space-5);
 }
 .controls {
-  display: flex;
-  gap: var(--space-3);
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-/* Attachment viewer */
-.attach-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: var(--space-4);
-}
-
-.attach-item {
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-}
-
-.attach-thumb {
-  width: 100%;
-  height: 150px;
-  display: block;
-}
-
-.attach-file {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: var(--space-5);
-  text-decoration: none;
-  color: var(--text-primary);
-  height: 150px;
-  transition: background-color 0.2s;
-}
-
-.attach-file:hover {
-  background-color: var(--bg-color-soft);
-}
-
-.attach-filename {
-  font-size: 11px;
-  color: var(--text-secondary);
-  text-align: center;
-  word-break: break-all;
-  max-width: 120px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* 配額管理工具列 */
-.quota-toolbar {
   display: flex;
   gap: var(--space-3);
   align-items: center;
@@ -1503,234 +914,8 @@ watch(calFilterEmp, () => {
   font-weight: 400;
 }
 
-/* ───────────────────────────────────────────
-   行事曆 Tab
-─────────────────────────────────────────── */
-
 /* 讓 tab-pane 沒有多餘 top padding */
 .leave-tabs :deep(.el-tabs__content) {
   padding-top: 4px;
-}
-
-/* 工具列 */
-.cal-toolbar {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  flex-wrap: wrap;
-  padding: 12px 0 14px;
-}
-
-.cal-nav {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-
-.cal-title {
-  font-size: 18px;
-  font-weight: 600;
-  min-width: 120px;
-  text-align: center;
-}
-
-/* 圖例 */
-.cal-legend {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  flex-wrap: wrap;
-  margin-left: auto;
-}
-
-.cal-legend-item {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-}
-
-.legend-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  display: inline-block;
-  flex-shrink: 0;
-}
-
-.pending-dot {
-  background: transparent !important;
-  border: 2px dashed var(--el-color-info);
-}
-
-/* 載入中 */
-.cal-loading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 60px 0;
-  color: var(--el-text-color-secondary);
-  font-size: 14px;
-}
-
-/* 月曆外框 */
-.cal-grid-wrapper {
-  border: 1px solid var(--el-border-color);
-  border-radius: var(--el-border-radius-base);
-  overflow: hidden;
-  margin-bottom: var(--space-5);
-}
-
-/* 週標題 */
-.cal-header-row {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  background: var(--el-fill-color-light);
-  border-bottom: 1px solid var(--el-border-color);
-}
-
-.cal-header-cell {
-  padding: 8px 4px;
-  text-align: center;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--el-text-color-regular);
-}
-
-.cal-header-cell.is-weekend-header {
-  color: var(--el-color-danger);
-}
-
-/* 每一週 row */
-.cal-week {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  border-bottom: 1px solid var(--el-border-color-lighter);
-}
-
-.cal-week:last-child {
-  border-bottom: none;
-}
-
-/* 日期格子 */
-.cal-cell {
-  border-right: 1px solid var(--el-border-color-lighter);
-  padding: 4px 5px;
-  min-height: 110px;
-  cursor: pointer;
-  transition: background-color 0.15s;
-  box-sizing: border-box;
-}
-
-.cal-cell:last-child {
-  border-right: none;
-}
-
-.cal-cell.is-empty {
-  background: var(--el-fill-color-extra-light);
-  cursor: default;
-}
-
-.cal-cell.is-weekend:not(.is-empty) {
-  background: #fafbfc;
-}
-
-.cal-cell.is-today:not(.is-empty) {
-  background: var(--el-color-primary-light-9);
-}
-
-.cal-cell.has-leaves:not(.is-empty):hover {
-  background: var(--el-fill-color);
-}
-
-/* 日期數字列 */
-.cal-day-num {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 4px;
-  padding: 0 2px;
-  font-size: 13px;
-}
-
-.cal-cell.is-weekend .cal-day-num {
-  color: var(--el-color-danger);
-}
-
-/* 今天圓圈 badge */
-.today-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: var(--el-color-primary);
-  color: #fff;
-  font-weight: 700;
-  font-size: 13px;
-}
-
-/* 請假人數小標 */
-.cal-leave-count {
-  font-size: 10px;
-  color: var(--el-color-warning);
-  font-weight: 500;
-}
-
-/* 事件容器 */
-.cal-events {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-/* 單筆請假 chip */
-.cal-event {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  padding: 2px 5px;
-  border-radius: 3px;
-  background: var(--el-fill-color-light);
-  border-left: 3px solid #ccc;
-  font-size: 11px;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  cursor: pointer;
-}
-
-/* 待審核用虛線左邊框 + 降低透明度 */
-.cal-event.is-pending {
-  border-left-style: dashed;
-  opacity: 0.75;
-}
-
-.cal-event-name {
-  font-weight: 600;
-  color: var(--el-text-color-primary);
-  max-width: 48px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  flex-shrink: 0;
-}
-
-.cal-event-type {
-  color: var(--el-text-color-secondary);
-  font-size: 10px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* 超過 4 筆的 "more" 提示 */
-.cal-more {
-  font-size: 11px;
-  color: var(--el-color-primary);
-  padding: 1px 5px;
-  text-align: right;
-  cursor: pointer;
 }
 </style>

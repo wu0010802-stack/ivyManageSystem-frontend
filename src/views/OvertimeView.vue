@@ -6,6 +6,7 @@ import { useEmployeeStore } from '@/stores/employee'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
 import { useCrudDialog, useConfirmDelete, useDateQuery } from '@/composables'
 import { downloadFile } from '@/utils/download'
+import { money } from '@/utils/format'
 
 const { currentYear, query } = useDateQuery()
 const employeeStore = useEmployeeStore()
@@ -131,10 +132,6 @@ const approveOvertime = async (row, approved) => {
   }
 }
 
-const money = (val) => {
-  if (!val && val !== 0) return '-'
-  return '$' + Number(val).toLocaleString()
-}
 
 const totalHours = computed(() => {
   return overtimeRecords.value.reduce((sum, r) => sum + (r.hours || 0), 0)

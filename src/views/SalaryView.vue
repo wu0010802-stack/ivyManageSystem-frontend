@@ -8,6 +8,7 @@ import BonusConfigPanel from './salary/BonusConfigPanel.vue'
 import SalaryHistoryPanel from './salary/SalaryHistoryPanel.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import { downloadFile } from '@/utils/download'
+import { money } from '@/utils/format'
 
 const currentYear = new Date().getFullYear()
 const currentMonth = new Date().getMonth() + 1
@@ -87,11 +88,6 @@ const exportPdf = (row) => {
 
 const exportAllExcel = () => {
   downloadFile(`/salaries/export-all?year=${query.year}&month=${query.month}&format=xlsx`, `${query.year}年${query.month}月薪資總表.xlsx`)
-}
-
-const money = (val) => {
-  if (!val && val !== 0) return '-'
-  return '$' + Number(val).toLocaleString()
 }
 
 const pct = (val) => {

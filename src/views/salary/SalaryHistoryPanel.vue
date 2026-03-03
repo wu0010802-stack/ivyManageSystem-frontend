@@ -3,6 +3,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import api from '@/api'
 import { ElMessage } from 'element-plus'
 import { useEmployeeStore } from '@/stores/employee'
+import { money } from '@/utils/format'
 import { Line } from 'vue-chartjs'
 import {
   Chart as ChartJS,
@@ -44,11 +45,6 @@ watch(selectedEmployeeId, () => {
 watch(historyMonths, () => {
   if (selectedEmployeeId.value) fetchHistory()
 })
-
-const money = (val) => {
-  if (!val && val !== 0) return '-'
-  return '$' + Number(val).toLocaleString()
-}
 
 const chartData = computed(() => {
   if (!historyData.value.length) return null
