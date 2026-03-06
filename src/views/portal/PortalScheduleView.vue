@@ -277,6 +277,7 @@ onMounted(() => {
 
       <el-tabs v-model="swapTab">
         <el-tab-pane label="收到的申請" name="received">
+          <div style="overflow-x: auto">
           <el-table :data="receivedRequests" v-loading="swapLoading" empty-text="目前沒有收到的換班申請">
             <el-table-column prop="swap_date" label="換班日期" width="120" />
             <el-table-column prop="requester_name" label="申請人" width="100" />
@@ -302,9 +303,11 @@ onMounted(() => {
               </template>
             </el-table-column>
           </el-table>
+          </div>
         </el-tab-pane>
 
         <el-tab-pane label="我發起的" name="sent">
+          <div style="overflow-x: auto">
           <el-table :data="sentRequests" v-loading="swapLoading" empty-text="目前沒有發起的換班申請">
             <el-table-column prop="swap_date" label="換班日期" width="120" />
             <el-table-column prop="target_name" label="對象" width="100" />
@@ -332,6 +335,7 @@ onMounted(() => {
               </template>
             </el-table-column>
           </el-table>
+          </div>
         </el-tab-pane>
       </el-tabs>
     </el-card>

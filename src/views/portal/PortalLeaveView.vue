@@ -235,6 +235,12 @@ const quotaExceeded = computed(() =>
   !!(quotaInfo.value && form.leave_hours > quotaInfo.value.remaining_hours)
 )
 
+// 申請後剩餘時數預覽（隨 leave_hours 即時更新）
+const afterApplyRemaining = computed(() => {
+  if (!quotaInfo.value || !form.leave_hours) return null
+  return Math.round((quotaInfo.value.remaining_hours - form.leave_hours) * 10) / 10
+})
+
 // 附件是否必填
 const attachmentRequired = computed(() => ATTACHMENT_REQUIRED.has(form.leave_type))
 
@@ -559,6 +565,7 @@ onMounted(() => {
         </el-select>
       </div>
 
+      <div style="overflow-x: auto">
       <el-table :data="leaves" border stripe style="margin-top: 12px;" max-height="600">
         <el-table-column prop="leave_type_label" label="假別" width="100" />
         <el-table-column label="開始時間" width="140">
@@ -607,6 +614,7 @@ onMounted(() => {
         </el-table-column>
       </el-table>
 
+      </div>
       <el-empty v-if="!loading && leaves.length === 0" description="本月無請假記錄" />
     </el-card>
 
@@ -636,6 +644,16 @@ onMounted(() => {
                 <template v-if="quotaInfo.pending_hours > 0">／待審 {{ quotaInfo.pending_hours }}h</template>
                 ／總計 {{ quotaInfo.total_hours }}h
               </span>
+              <!-- 申請後剩餘預覽：隨 leave_hours 即時更新 -->
+              <div v-if="afterApplyRemaining !== null" style="margin-top: 5px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                <span style="color: var(--el-text-color-secondary);">本次申請 {{ form.leave_hours }}h 後剩餘：</span>
+                <el-tag
+                  size="small"
+                  :type="afterApplyRemaining >= 16 ? 'success' : afterApplyRemaining > 0 ? 'warning' : 'danger'"
+                  effect="dark"
+                >{{ afterApplyRemaining }}h</el-tag>
+                <span v-if="afterApplyRemaining <= 0" style="color: var(--el-color-danger); font-weight: 600;">超出 {{ Math.abs(afterApplyRemaining) }}h</span>
+              </div>
             </template>
           </div>
           <div v-if="ATTACHMENT_HINTS[form.leave_type]" style="margin-top: 5px; font-size: 12px; color: var(--el-color-warning); display: flex; align-items: center; gap: 4px;">
@@ -711,8 +729,8 @@ onMounted(() => {
           />
           <el-alert
             v-if="quotaExceeded"
-            type="warning"
-            :title="`剩餘配額不足：剩餘 ${quotaInfo.remaining_hours}h，本次申請 ${form.leave_hours}h`"
+            type="error"
+            :title="`配額不足，無法送出：申請 ${form.leave_hours}h，超出可用額度 ${Math.round((form.leave_hours - quotaInfo.remaining_hours) * 10) / 10}h`"
             show-icon
             :closable="false"
             style="margin-top: 6px;"

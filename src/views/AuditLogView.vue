@@ -32,6 +32,11 @@ const entityTypes = [
   { value: 'calendar', label: '行事曆' },
   { value: 'schedule', label: '班表' },
   { value: 'job_title', label: '職稱' },
+  { value: 'employee_allowance', label: '員工津貼' },
+  { value: 'allowance_type', label: '津貼類型' },
+  { value: 'deduction_type', label: '扣款類型' },
+  { value: 'bonus_type', label: '獎金類型' },
+  { value: 'shift_swap', label: '換班' },
 ]
 
 const actionTypes = [

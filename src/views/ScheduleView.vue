@@ -1,7 +1,8 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import api from '@/api'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { getMonthWeeks } from '@/utils/scheduleUtils'
 
 // --- State ---
 const loading = ref(false)
@@ -133,15 +134,14 @@ const saveAll = async () => {
   }
 }
 
-// --- Copy from previous week ---
-const copyPrevWeek = async () => {
-  const d = new Date(weekStart.value)
-  d.setDate(d.getDate() - 7)
-  const prevWeek = formatDate(d)
+// --- 排班複製 ---
+
+// 複製指定來源週排班到當前週的 local state（需手動儲存）
+const copyFromWeek = async (sourceWeekStart) => {
   try {
-    const res = await api.get('/shifts/assignments', { params: { week_start: prevWeek } })
+    const res = await api.get('/shifts/assignments', { params: { week_start: sourceWeekStart } })
     if (res.data.length === 0) {
-      ElMessage.warning('上週無排班資料')
+      ElMessage.warning('來源週無排班資料')
       return
     }
     const map = {}
@@ -149,9 +149,81 @@ const copyPrevWeek = async () => {
       map[a.employee_id] = { shift_type_id: a.shift_type_id, notes: a.notes }
     }
     assignments.value = map
-    ElMessage.success('已複製上週排班，請確認後儲存')
+    ElMessage.success('已複製，請確認後儲存')
   } catch {
     ElMessage.error('複製失敗')
+  }
+}
+
+// 快捷：複製上週
+const copyPrevWeek = () => {
+  const d = new Date(weekStart.value)
+  d.setDate(d.getDate() - 7)
+  copyFromWeek(formatDate(d))
+}
+
+// 週選擇器狀態
+const copySourceWeek = ref('')
+const copyWeekPickerVisible = ref(false)
+
+const onCopyWeekConfirm = () => {
+  if (!copySourceWeek.value) { ElMessage.warning('請選擇來源週'); return }
+  const d = new Date(copySourceWeek.value)
+  copyFromWeek(formatDate(getMonday(d)))
+  copyWeekPickerVisible.value = false
+}
+
+// 複製上月整月（直接寫入後端各目標週）
+const monthCopyLoading = ref(false)
+
+const copyPrevMonth = async () => {
+  const cur = new Date(weekStart.value)
+  const ty = cur.getFullYear()
+  const tm = cur.getMonth() + 1 // 1-based
+
+  // 上一個月
+  let sy = ty, sm = tm - 1
+  if (sm === 0) { sy -= 1; sm = 12 }
+
+  const sourceWeeks = getMonthWeeks(sy, sm)
+  const targetWeeks = getMonthWeeks(ty, tm)
+  const copyCount = Math.min(sourceWeeks.length, targetWeeks.length)
+
+  const sourceLabel = `${sy}年${sm}月`
+  const targetLabel = `${ty}年${tm}月`
+
+  try {
+    await ElMessageBox.confirm(
+      `確定將 ${sourceLabel} 排班複製到 ${targetLabel}？\n這將覆蓋目標月現有週排班（每日調班不受影響）。`,
+      '複製上月整月',
+      { confirmButtonText: '確認複製', cancelButtonText: '取消', type: 'warning' }
+    )
+  } catch {
+    return // 使用者取消
+  }
+
+  monthCopyLoading.value = true
+  let copied = 0
+  try {
+    for (let i = 0; i < copyCount; i++) {
+      const res = await api.get('/shifts/assignments', { params: { week_start: sourceWeeks[i] } })
+      if (res.data.length === 0) continue // 來源週無資料，跳過不清空目標
+      await api.post('/shifts/assignments', {
+        week_start_date: targetWeeks[i],
+        assignments: res.data.map(a => ({
+          employee_id: a.employee_id,
+          shift_type_id: a.shift_type_id,
+          notes: a.notes,
+        })),
+      })
+      copied++
+    }
+    ElMessage.success(`已複製 ${copied} 週排班`)
+    fetchAssignments() // 重新載入當前週
+  } catch {
+    ElMessage.error('月複製失敗')
+  } finally {
+    monthCopyLoading.value = false
   }
 }
 
@@ -321,7 +393,16 @@ const handleDailyShiftChange = async (dateStr, shiftTypeId) => {
             <el-button @click="changeWeek(1)">下週 <el-icon><ArrowRight /></el-icon></el-button>
             <span class="week-label">{{ weekLabel }}</span>
             <div class="spacer" />
-            <el-button @click="copyPrevWeek">複製上週排班</el-button>
+            <el-dropdown split-button @click="copyPrevWeek" :loading="monthCopyLoading">
+              複製上週排班
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item @click="copyPrevWeek">複製上週排班</el-dropdown-item>
+                  <el-dropdown-item @click="copyWeekPickerVisible = true">複製指定週...</el-dropdown-item>
+                  <el-dropdown-item @click="copyPrevMonth" :disabled="monthCopyLoading">複製上月整月...</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
             <el-button type="primary" @click="saveAll" :loading="saving">儲存排班</el-button>
           </div>
         </el-card>
@@ -422,6 +503,22 @@ const handleDailyShiftChange = async (dateStr, shiftTypeId) => {
         </el-table>
       </el-tab-pane>
     </el-tabs>
+
+    <!-- 複製指定週 Dialog -->
+    <el-dialog v-model="copyWeekPickerVisible" title="複製指定週排班" width="340px">
+      <el-date-picker
+        v-model="copySourceWeek"
+        type="date"
+        placeholder="選擇來源週任一日期"
+        format="YYYY-MM-DD"
+        value-format="YYYY-MM-DD"
+        style="width: 100%;"
+      />
+      <template #footer>
+        <el-button @click="copyWeekPickerVisible = false">取消</el-button>
+        <el-button type="primary" @click="onCopyWeekConfirm">確認複製</el-button>
+      </template>
+    </el-dialog>
 
     <!-- Daily Shift Dialog -->
     <el-dialog

@@ -164,6 +164,16 @@ const submitOvertime = async () => {
   }
 }
 
+const withdrawOvertime = async (id) => {
+  try {
+    await api.delete(`/portal/my-overtimes/${id}`)
+    ElMessage.success('加班申請已撤回')
+    fetchOvertimes()
+  } catch (error) {
+    ElMessage.error(error.response?.data?.detail || '撤回失敗')
+  }
+}
+
 const totalHours = () => overtimes.value.reduce((sum, o) => sum + o.hours, 0)
 const totalPay = () => overtimes.value.reduce((sum, o) => sum + (o.overtime_pay || 0), 0)
 
@@ -202,6 +212,7 @@ onMounted(fetchOvertimes)
         </div>
       </div>
 
+      <div style="overflow-x: auto">
       <el-table :data="overtimes" border stripe style="margin-top: 12px;">
         <el-table-column prop="overtime_date" label="日期" width="120" />
         <el-table-column prop="overtime_type_label" label="類型" width="100" />
@@ -221,8 +232,24 @@ onMounted(fetchOvertimes)
             <el-tag v-else type="warning" size="small">待核准</el-tag>
           </template>
         </el-table-column>
+        <el-table-column label="操作" width="90">
+          <template #default="{ row }">
+            <el-popconfirm
+              v-if="row.is_approved === null || row.is_approved === undefined"
+              title="確定撤回此加班申請？"
+              confirm-button-text="撤回"
+              cancel-button-text="取消"
+              @confirm="withdrawOvertime(row.id)"
+            >
+              <template #reference>
+                <el-button type="danger" size="small" plain>撤回</el-button>
+              </template>
+            </el-popconfirm>
+          </template>
+        </el-table-column>
       </el-table>
 
+      </div>
       <el-empty v-if="!loading && overtimes.length === 0" description="本月無加班記錄" />
     </el-card>
 

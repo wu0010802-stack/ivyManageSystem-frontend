@@ -1,10 +1,15 @@
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import api from '@/api'
 
 const loading = ref(false)
 const salaryData = ref(null)
+
+const isMobile = ref(window.innerWidth < 768)
+const checkMobile = () => { isMobile.value = window.innerWidth < 768 }
+onMounted(() => window.addEventListener('resize', checkMobile))
+onUnmounted(() => window.removeEventListener('resize', checkMobile))
 
 const now = new Date()
 const query = reactive({
@@ -87,7 +92,7 @@ onMounted(fetchSalary)
       <!-- Salary Breakdown -->
       <el-card v-if="salaryData?.salary" class="salary-card">
         <h3>薪資明細</h3>
-        <el-descriptions :column="2" border>
+        <el-descriptions :column="isMobile ? 1 : 2" border>
           <el-descriptions-item label="底薪">
             NT$ {{ salaryData.salary.base_salary?.toLocaleString() || 0 }}
           </el-descriptions-item>
@@ -109,7 +114,7 @@ onMounted(fetchSalary)
         </el-descriptions>
 
         <h4 style="margin-top: 20px;">扣款明細</h4>
-        <el-descriptions :column="2" border>
+        <el-descriptions :column="isMobile ? 1 : 2" border>
           <el-descriptions-item label="勞保費">
             -NT$ {{ salaryData.salary.labor_insurance?.toLocaleString() || 0 }}
           </el-descriptions-item>

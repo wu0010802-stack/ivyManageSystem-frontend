@@ -6,6 +6,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 import api from '@/api'
 import { getUserInfo, clearAuth, getToken, setToken, setUserInfo } from '@/utils/auth'
+import OfflineIndicator from '@/components/OfflineIndicator.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -271,6 +272,8 @@ const submitPassword = async () => {
     </el-aside>
 
     <el-container>
+      <OfflineIndicator />
+
       <!-- PWA 安裝提示（手機首次訪問且瀏覽器支援時才顯示）-->
       <div v-if="showInstallBanner && isMobile" class="install-banner">
         <span>📱 加到桌面，打卡更方便！</span>
@@ -281,11 +284,6 @@ const submitPassword = async () => {
       <el-header height="60px">
         <div class="portal-header">
           <div class="header-left">
-            <button v-if="isMobile" class="hamburger-btn" @click="toggleSidebar">
-              <span class="hamburger-line"></span>
-              <span class="hamburger-line"></span>
-              <span class="hamburger-line"></span>
-            </button>
             <h3>義華幼兒園 - 教職員考勤系統</h3>
           </div>
           <div class="portal-user">
@@ -336,6 +334,36 @@ const submitPassword = async () => {
       <el-main>
         <RouterView />
       </el-main>
+
+      <!-- Bottom Navigation (mobile only) -->
+      <div v-if="isMobile" class="bottom-nav">
+        <div class="bottom-tab" :class="{ active: route.path.startsWith('/portal/attendance') }" @click="router.push('/portal/attendance')">
+          <el-icon><Calendar /></el-icon>
+          <span>出勤</span>
+        </div>
+        <div class="bottom-tab" :class="{ active: route.path.startsWith('/portal/leave') }" @click="router.push('/portal/leave')">
+          <el-icon><Document /></el-icon>
+          <span>請假</span>
+        </div>
+        <div class="bottom-tab" :class="{ active: route.path.startsWith('/portal/schedule') }" @click="router.push('/portal/schedule')">
+          <div class="tab-icon-wrapper">
+            <el-icon><Clock /></el-icon>
+            <el-badge v-if="swapPendingCount > 0" :value="swapPendingCount" :max="99" class="tab-badge" />
+          </div>
+          <span>排班</span>
+        </div>
+        <div class="bottom-tab" :class="{ active: route.path.startsWith('/portal/salary') }" @click="router.push('/portal/salary')">
+          <el-icon><Money /></el-icon>
+          <span>薪資</span>
+        </div>
+        <div class="bottom-tab" @click="toggleSidebar">
+          <div class="tab-icon-wrapper">
+            <el-icon><Menu /></el-icon>
+            <el-badge v-if="unreadCount > 0" :value="unreadCount" :max="99" class="tab-badge" />
+          </div>
+          <span>更多</span>
+        </div>
+      </div>
     </el-container>
 
     <!-- Change Password Dialog -->
@@ -503,28 +531,65 @@ const submitPassword = async () => {
   border: none;
 }
 
-/* Hamburger button */
-.hamburger-btn {
-  display: none;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  gap: 5px;
-  width: 40px;
-  height: 40px;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  padding: 0;
+/* Bottom Navigation */
+.bottom-nav {
+  display: flex;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  background-color: var(--surface-color);
+  border-top: 1px solid var(--border-color);
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.08);
+  z-index: 1000;
 }
 
-.hamburger-line {
-  display: block;
-  width: 20px;
-  height: 2px;
-  background-color: var(--text-primary);
-  border-radius: 2px;
-  transition: all var(--transition-slow);
+.bottom-tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: color var(--transition-base);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.bottom-tab:active {
+  background-color: var(--bg-color-soft);
+}
+
+.bottom-tab.active {
+  color: var(--color-primary);
+}
+
+.bottom-tab .el-icon {
+  font-size: 20px;
+}
+
+.tab-icon-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tab-badge {
+  position: absolute;
+  top: -6px;
+  right: -10px;
+}
+
+.tab-badge :deep(.el-badge__content) {
+  font-size: 10px;
+  height: 16px;
+  line-height: 16px;
+  padding: 0 4px;
+  min-width: 16px;
 }
 
 /* Mobile sidebar overlay */
@@ -532,12 +597,15 @@ const submitPassword = async () => {
   display: none;
 }
 
+/* Desktop: hide bottom-nav */
+@media (min-width: 768px) {
+  .bottom-nav {
+    display: none;
+  }
+}
+
 /* Mobile styles */
 @media (max-width: 767px) {
-  .hamburger-btn {
-    display: flex;
-  }
-
   .portal-header h3 {
     font-size: var(--text-lg);
   }
@@ -548,6 +616,7 @@ const submitPassword = async () => {
 
   .el-main {
     padding: var(--space-4);
+    padding-bottom: calc(60px + env(safe-area-inset-bottom));
   }
 
   .el-aside {

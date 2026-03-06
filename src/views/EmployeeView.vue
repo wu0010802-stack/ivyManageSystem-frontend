@@ -1,5 +1,6 @@
 <script setup>
 import { ref, reactive, onMounted, computed, watch } from 'vue'
+import { Loading } from '@element-plus/icons-vue'
 import api from '@/api'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import EmptyState from '@/components/common/EmptyState.vue'
@@ -34,6 +35,7 @@ const form = reactive({
   phone: '',
   email: '',
   hire_date: '',
+  probation_end_date: '',
   is_office_staff: false,
   classroom_id: null,
   base_salary: 0,
@@ -51,6 +53,83 @@ const form = reactive({
   work_start_time: '08:00',
   work_end_time: '17:00'
 })
+
+// 當 hire_date 變動時，若 probation_end_date 尚未填寫，自動建議 hire_date + 3 個月
+watch(() => form.hire_date, (val) => {
+  if (val && !form.probation_end_date) {
+    const d = new Date(val)
+    d.setMonth(d.getMonth() + 3)
+    form.probation_end_date = d.toISOString().slice(0, 10)
+  }
+})
+
+// ── 辦理離職 ──────────────────────────────────────
+const offboardVisible = ref(false)
+const offboardTarget = ref(null)  // 目標員工資料
+const offboardForm = reactive({ resign_date: '', resign_reason: '' })
+const offboardLoading = ref(false)
+const finalSalaryPreview = ref(null)
+const finalSalaryLoading = ref(false)
+
+const getEmployeeStatus = (emp) => {
+  const today = new Date().toISOString().slice(0, 10)
+  if (!emp.is_active) return { label: '已離職', type: 'info' }
+  if (emp.resign_date && emp.resign_date > today) {
+    return { label: `待離職・${emp.resign_date}`, type: 'warning' }
+  }
+  if (emp.probation_end_date && emp.probation_end_date >= today) {
+    const diff = Math.ceil((new Date(emp.probation_end_date) - new Date(today)) / 86400000)
+    return { label: `試用中・剩 ${diff} 天`, type: 'primary' }
+  }
+  return { label: '在職', type: 'success' }
+}
+
+const openOffboard = (emp) => {
+  offboardTarget.value = emp
+  offboardForm.resign_date = ''
+  offboardForm.resign_reason = ''
+  finalSalaryPreview.value = null
+  offboardVisible.value = true
+}
+
+const fetchFinalSalary = async () => {
+  if (!offboardTarget.value || !offboardForm.resign_date) return
+  const [year, month] = offboardForm.resign_date.split('-')
+  finalSalaryLoading.value = true
+  try {
+    const res = await api.get(`/employees/${offboardTarget.value.id}/final-salary-preview`, {
+      params: { year: parseInt(year), month: parseInt(month) }
+    })
+    finalSalaryPreview.value = res.data
+  } catch {
+    finalSalaryPreview.value = null
+  } finally {
+    finalSalaryLoading.value = false
+  }
+}
+
+watch(() => offboardForm.resign_date, (val) => {
+  if (val) fetchFinalSalary()
+  else finalSalaryPreview.value = null
+})
+
+const submitOffboard = async () => {
+  if (!offboardForm.resign_date) {
+    ElMessage.warning('請選擇離職日期')
+    return
+  }
+  offboardLoading.value = true
+  try {
+    await api.post(`/employees/${offboardTarget.value.id}/offboard`, offboardForm)
+    ElMessage.success('離職資料已更新')
+    offboardVisible.value = false
+    fetchEmployees()
+  } catch (err) {
+    ElMessage.error('辦理離職失敗: ' + (err.response?.data?.detail || err.message))
+  } finally {
+    offboardLoading.value = false
+  }
+}
 
 const searchQuery = ref('')
 const debouncedSearch = ref('')
@@ -97,6 +176,7 @@ const resetForm = () => {
   form.department = 'Teaching'
   form.work_start_time = '08:00'
   form.work_end_time = '17:00'
+  form.probation_end_date = ''
 }
 
 const populateForm = (row) => {
@@ -249,12 +329,28 @@ onMounted(() => {
         <el-table-column prop="name" label="姓名" width="120" sortable />
         <el-table-column prop="title" label="職稱" width="150" sortable />
         <el-table-column prop="position" label="職位" width="120" />
-        <el-table-column prop="department" label="部門" width="120" />
         <el-table-column prop="hire_date" label="到職日" width="120" sortable />
-        <el-table-column fixed="right" label="操作" width="200">
+        <el-table-column label="試用期至" width="130">
+          <template #default="scope">
+            <template v-if="scope.row.probation_end_date">
+              <span v-if="scope.row.probation_end_date < new Date().toISOString().slice(0,10)" style="color:#999">已過試用</span>
+              <span v-else>{{ scope.row.probation_end_date }}</span>
+            </template>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="狀態" width="160">
+          <template #default="scope">
+            <el-tag :type="getEmployeeStatus(scope.row).type" size="small">
+              {{ getEmployeeStatus(scope.row).label }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column fixed="right" label="操作" width="240">
           <template #default="scope">
             <el-button link type="primary" size="small" @click="handleDetail(scope.row)">詳情</el-button>
             <el-button link type="primary" size="small" @click="handleEdit(scope.row)">編輯</el-button>
+            <el-button v-if="scope.row.is_active" link type="warning" size="small" @click="openOffboard(scope.row)">辦理離職</el-button>
             <el-button link type="danger" size="small" @click="handleDelete(scope.row)">刪除</el-button>
           </template>
         </el-table-column>
@@ -313,6 +409,13 @@ onMounted(() => {
               <el-col :span="12">
                 <el-form-item label="到職日期">
                   <el-date-picker v-model="form.hire_date" type="date" placeholder="選擇日期" style="width: 100%" value-format="YYYY-MM-DD" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-row :gutter="20">
+              <el-col :span="12">
+                <el-form-item label="試用期結束日">
+                  <el-date-picker v-model="form.probation_end_date" type="date" placeholder="選擇日期（可自動建議）" style="width: 100%" value-format="YYYY-MM-DD" clearable />
                 </el-form-item>
               </el-col>
             </el-row>
@@ -439,6 +542,14 @@ onMounted(() => {
             <el-descriptions-item label="職稱">{{ currentDetail.job_title_name || currentDetail.title }}</el-descriptions-item>
             <el-descriptions-item label="職位">{{ currentDetail.position }}</el-descriptions-item>
             <el-descriptions-item label="到職日">{{ currentDetail.hire_date }}</el-descriptions-item>
+            <el-descriptions-item label="試用期至">{{ currentDetail.probation_end_date || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="在職狀態">
+              <el-tag :type="getEmployeeStatus(currentDetail).type" size="small">
+                {{ getEmployeeStatus(currentDetail).label }}
+              </el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item v-if="currentDetail.resign_date" label="離職日">{{ currentDetail.resign_date }}</el-descriptions-item>
+            <el-descriptions-item v-if="currentDetail.resign_reason" label="離職原因">{{ currentDetail.resign_reason }}</el-descriptions-item>
             <el-descriptions-item label="基本薪資">{{ currentDetail.base_salary }}</el-descriptions-item>
             <el-descriptions-item label="投保級距">{{ currentDetail.insurance_salary_level }}</el-descriptions-item>
             <el-descriptions-item label="行政人員">
@@ -486,6 +597,63 @@ onMounted(() => {
           </el-table>
         </el-tab-pane>
       </el-tabs>
+    </el-dialog>
+    <!-- Offboard Dialog -->
+    <el-dialog v-model="offboardVisible" title="辦理離職" width="560px">
+      <el-form label-width="100px">
+        <el-form-item label="員工">
+          <strong>{{ offboardTarget?.name }}</strong>（{{ offboardTarget?.employee_id }}）
+        </el-form-item>
+        <el-form-item label="離職日期" required>
+          <el-date-picker
+            v-model="offboardForm.resign_date"
+            type="date"
+            placeholder="選擇離職日期（可為未來日期）"
+            style="width: 100%"
+            value-format="YYYY-MM-DD"
+          />
+        </el-form-item>
+        <el-form-item label="離職原因">
+          <el-input
+            v-model="offboardForm.resign_reason"
+            type="textarea"
+            :rows="3"
+            placeholder="選填"
+            maxlength="200"
+            show-word-limit
+          />
+        </el-form-item>
+
+        <!-- 最終薪資預覽 -->
+        <el-divider content-position="left">最終薪資預覽</el-divider>
+        <div v-if="finalSalaryLoading" style="text-align:center;padding:12px">
+          <el-icon class="is-loading"><Loading /></el-icon> 計算中...
+        </div>
+        <template v-else-if="finalSalaryPreview">
+          <el-descriptions :column="2" border size="small">
+            <el-descriptions-item label="底薪">
+              NT${{ finalSalaryPreview.base_salary?.toLocaleString() }}
+              <span v-if="finalSalaryPreview.proration_note" style="color:#e6a23c;font-size:12px;margin-left:6px">
+                （{{ finalSalaryPreview.proration_note }}）
+              </span>
+            </el-descriptions-item>
+            <el-descriptions-item label="各項津貼">NT${{ finalSalaryPreview.total_allowance?.toLocaleString() }}</el-descriptions-item>
+            <el-descriptions-item label="應發合計">NT${{ finalSalaryPreview.gross_salary?.toLocaleString() }}</el-descriptions-item>
+            <el-descriptions-item label="各項扣款">NT${{ finalSalaryPreview.total_deduction?.toLocaleString() }}</el-descriptions-item>
+            <el-descriptions-item label="預估實發" :span="2">
+              <strong style="color:#67c23a;font-size:16px">NT${{ finalSalaryPreview.net_salary?.toLocaleString() }}</strong>
+            </el-descriptions-item>
+          </el-descriptions>
+        </template>
+        <div v-else-if="offboardForm.resign_date" style="color:#999;font-size:13px;padding:8px 0">
+          薪資預覽無法取得（請確認薪資引擎已啟用）
+        </div>
+        <div v-else style="color:#bbb;font-size:13px;padding:8px 0">請先選擇離職日期以顯示薪資預覽</div>
+      </el-form>
+      <template #footer>
+        <el-button @click="offboardVisible = false">取消</el-button>
+        <el-button type="danger" :loading="offboardLoading" @click="submitOffboard">確認辦理離職</el-button>
+      </template>
     </el-dialog>
   </div>
 </template>

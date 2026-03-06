@@ -82,6 +82,14 @@ const avgMonthlySalary = computed(() => {
   return avgEmployees > 0 ? Math.round(total / data.length / avgEmployees) : 0
 })
 
+const totalBonusExpense = computed(() =>
+  reportData.value.salary_monthly.reduce((s, d) => s + (d.total_bonus || 0), 0)
+)
+
+const totalOvertimePay = computed(() =>
+  reportData.value.salary_monthly.reduce((s, d) => s + (d.total_overtime_pay || 0), 0)
+)
+
 const money = (val) => {
   if (!val && val !== 0) return '$0'
   return '$' + Number(Math.round(val)).toLocaleString()
@@ -95,12 +103,14 @@ const attendanceChartData = computed(() => {
 
   const rates = []
   const lateCounts = []
+  const earlyLeaveCounts = []
   const missingCounts = []
 
   for (let m = 1; m <= 12; m++) {
     const d = monthMap[m]
     rates.push(d ? d.rate : null)
     lateCounts.push(d ? d.late : null)
+    earlyLeaveCounts.push(d ? d.early_leave : null)
     missingCounts.push(d ? d.missing : null)
   }
 
@@ -122,6 +132,15 @@ const attendanceChartData = computed(() => {
         borderColor: '#E6A23C',
         backgroundColor: 'rgba(230, 162, 60, 0.1)',
         borderDash: [5, 5],
+        tension: 0.3,
+        yAxisID: 'y1',
+      },
+      {
+        label: '早退次數',
+        data: earlyLeaveCounts,
+        borderColor: '#9B59B6',
+        backgroundColor: 'rgba(155, 89, 182, 0.1)',
+        borderDash: [4, 4],
         tension: 0.3,
         yAxisID: 'y1',
       },
@@ -252,6 +271,15 @@ const salaryChartData = computed(() => {
     netData.push(d ? d.total_net : null)
   }
 
+  const bonusData = []
+  const overtimeData = []
+
+  for (let m = 1; m <= 12; m++) {
+    const d = monthMap[m]
+    bonusData.push(d ? d.total_bonus : null)
+    overtimeData.push(d ? d.total_overtime_pay : null)
+  }
+
   return {
     labels: monthLabels,
     datasets: [
@@ -262,7 +290,7 @@ const salaryChartData = computed(() => {
         borderColor: '#409EFF',
         borderWidth: 1,
         borderRadius: 4,
-        order: 2,
+        order: 3,
       },
       {
         label: '實發總額',
@@ -274,6 +302,30 @@ const salaryChartData = computed(() => {
         tension: 0.3,
         pointRadius: 4,
         order: 1,
+      },
+      {
+        label: '獎金',
+        data: bonusData,
+        type: 'line',
+        borderColor: '#E6A23C',
+        backgroundColor: 'rgba(230, 162, 60, 0.1)',
+        fill: false,
+        tension: 0.3,
+        borderDash: [5, 5],
+        pointRadius: 3,
+        order: 2,
+      },
+      {
+        label: '加班費',
+        data: overtimeData,
+        type: 'line',
+        borderColor: '#9B59B6',
+        backgroundColor: 'rgba(155, 89, 182, 0.1)',
+        fill: false,
+        tension: 0.3,
+        borderDash: [3, 3],
+        pointRadius: 3,
+        order: 2,
       },
     ],
   }
@@ -317,7 +369,7 @@ const salaryChartOptions = {
 
     <!-- Summary Cards -->
     <el-row :gutter="16" class="summary-row">
-      <el-col :xs="12" :sm="6">
+      <el-col :xs="12" :sm="4">
         <el-card shadow="hover" class="summary-card">
           <div class="summary-label">年度出勤率</div>
           <div class="summary-value" :class="{ 'text-green': avgAttendanceRate >= 95, 'text-orange': avgAttendanceRate >= 90 && avgAttendanceRate < 95, 'text-red': avgAttendanceRate < 90 }">
@@ -325,22 +377,34 @@ const salaryChartOptions = {
           </div>
         </el-card>
       </el-col>
-      <el-col :xs="12" :sm="6">
+      <el-col :xs="12" :sm="4">
         <el-card shadow="hover" class="summary-card">
           <div class="summary-label">年度請假總天數</div>
           <div class="summary-value">{{ totalLeaveDays }} 天</div>
         </el-card>
       </el-col>
-      <el-col :xs="12" :sm="6">
+      <el-col :xs="12" :sm="4">
         <el-card shadow="hover" class="summary-card">
           <div class="summary-label">年度薪資總支出</div>
           <div class="summary-value text-blue">{{ money(totalSalaryExpense) }}</div>
         </el-card>
       </el-col>
-      <el-col :xs="12" :sm="6">
+      <el-col :xs="12" :sm="4">
         <el-card shadow="hover" class="summary-card">
           <div class="summary-label">平均月薪</div>
           <div class="summary-value">{{ money(avgMonthlySalary) }}</div>
+        </el-card>
+      </el-col>
+      <el-col :xs="12" :sm="4">
+        <el-card shadow="hover" class="summary-card">
+          <div class="summary-label">年度獎金總額</div>
+          <div class="summary-value text-orange">{{ money(totalBonusExpense) }}</div>
+        </el-card>
+      </el-col>
+      <el-col :xs="12" :sm="4">
+        <el-card shadow="hover" class="summary-card">
+          <div class="summary-label">年度加班費總額</div>
+          <div class="summary-value" style="color: #9B59B6;">{{ money(totalOvertimePay) }}</div>
         </el-card>
       </el-col>
     </el-row>

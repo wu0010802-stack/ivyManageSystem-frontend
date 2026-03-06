@@ -14,6 +14,7 @@ const loading = ref(false)
 const showAttendance = hasPermission('ATTENDANCE_READ')
 const showApprovals = hasPermission('APPROVALS')
 const showCalendar = hasPermission('CALENDAR')
+const showEmployees = hasPermission('EMPLOYEES_READ')
 
 const stats = computed(() => {
   const total = employeeStore.employees.length
@@ -31,6 +32,8 @@ const studentCount = ref(0)
 const todayStats = ref(null)
 const approvalSummary = ref(null)
 const upcomingEvents = ref([])
+const attendanceAnomalies = ref(null)
+const probationAlerts = ref(null)
 
 const todayDateStr = computed(() => {
   const now = new Date()
@@ -67,6 +70,14 @@ const groupedEvents = computed(() => {
 
 const eventTagType = { meeting: '', activity: 'success', holiday: 'danger', general: 'info' }
 
+const anomalyLabel = (type, minutes) => ({
+  absent: '未打卡', late: `遲到 ${minutes} 分`, missing_punch: '缺打卡'
+}[type] || type)
+
+const anomalyTagType = (type) => ({
+  absent: 'danger', late: 'warning', missing_punch: 'info'
+}[type] || 'info')
+
 const fetchDashboardData = async () => {
   loading.value = true
   await Promise.all([
@@ -82,6 +93,14 @@ const fetchDashboardData = async () => {
       : null,
     showCalendar
       ? api.get('/upcoming-events').then(r => { upcomingEvents.value = r.data }).catch(() => {})
+      : null,
+    showAttendance
+      ? api.get('/attendance/today-anomalies', { params: { late_threshold: 15 } })
+          .then(r => { attendanceAnomalies.value = r.data }).catch(() => {})
+      : null,
+    showEmployees
+      ? api.get('/probation-alerts')
+          .then(r => { probationAlerts.value = r.data }).catch(() => {})
       : null,
   ].filter(Boolean))
   loading.value = false
@@ -207,6 +226,22 @@ onMounted(() => {
                   {{ approvalSummary.pending_overtimes }} 筆
                 </el-tag>
               </div>
+              <template v-if="approvalSummary.this_month_pending_leaves > 0 || approvalSummary.this_month_pending_overtimes > 0">
+                <el-divider style="margin: 4px 0;" />
+                <div class="month-tag">本月</div>
+                <div class="approval-item" v-if="approvalSummary.this_month_pending_leaves > 0">
+                  <span class="approval-item__label">本月請假待審</span>
+                  <el-tag type="danger" effect="plain" size="small">
+                    {{ approvalSummary.this_month_pending_leaves }} 筆
+                  </el-tag>
+                </div>
+                <div class="approval-item" v-if="approvalSummary.this_month_pending_overtimes > 0">
+                  <span class="approval-item__label">本月加班待審</span>
+                  <el-tag type="danger" effect="plain" size="small">
+                    {{ approvalSummary.this_month_pending_overtimes }} 筆
+                  </el-tag>
+                </div>
+              </template>
               <el-button
                 type="primary"
                 plain
@@ -219,6 +254,42 @@ onMounted(() => {
             </div>
           </template>
           <div v-else class="approval-loading text-secondary">載入中…</div>
+        </el-card>
+
+        <!-- 今日打卡異常（需 ATTENDANCE_READ 權限） -->
+        <el-card v-if="showAttendance && attendanceAnomalies" class="no-hover mb-4">
+          <template #header>
+            <div class="card-header-row">
+              <span>今日打卡異常</span>
+              <el-badge
+                v-if="attendanceAnomalies.anomalies.length > 0"
+                :value="attendanceAnomalies.anomalies.length"
+                type="warning"
+              />
+            </div>
+          </template>
+          <div v-if="attendanceAnomalies.anomalies.length === 0" class="approval-done">
+            <el-icon class="approval-done__icon"><CircleCheckFilled /></el-icon>
+            <span>今日無異常紀錄</span>
+          </div>
+          <div v-else class="anomaly-list">
+            <div
+              v-for="(item, idx) in attendanceAnomalies.anomalies"
+              :key="`${item.employee_id}-${item.anomaly_type}-${idx}`"
+              class="anomaly-item"
+            >
+              <span class="anomaly-name">{{ item.employee_name }}</span>
+              <el-tag :type="anomalyTagType(item.anomaly_type)" effect="plain" size="small">
+                {{ anomalyLabel(item.anomaly_type, item.late_minutes) }}
+              </el-tag>
+            </div>
+          </div>
+          <div class="anomaly-hint text-secondary">
+            遲到門檻：{{ attendanceAnomalies.late_threshold }} 分鐘
+            <el-button link size="small" @click="navigateTo('/attendance')" style="margin-left: 8px;">
+              查看出勤記錄 →
+            </el-button>
+          </div>
         </el-card>
 
         <!-- 近期行事曆（需 CALENDAR 權限） -->
@@ -262,6 +333,47 @@ onMounted(() => {
               </div>
             </div>
           </div>
+        </el-card>
+
+        <!-- 試用期即將到期（需 EMPLOYEES_READ 權限） -->
+        <el-card
+          v-if="showEmployees && probationAlerts && probationAlerts.employees.length > 0"
+          class="no-hover mb-4"
+        >
+          <template #header>
+            <div class="card-header-row">
+              <span>試用期即將到期</span>
+              <el-tag type="warning" effect="plain" size="small">{{ probationAlerts.next_month }}</el-tag>
+            </div>
+          </template>
+          <div class="probation-list">
+            <div
+              v-for="emp in probationAlerts.employees"
+              :key="emp.id"
+              class="probation-item"
+            >
+              <div class="probation-name">{{ emp.name }}</div>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span class="probation-date text-secondary">{{ emp.probation_end_date }}</span>
+                <el-tag
+                  :type="emp.days_remaining <= 14 ? 'danger' : 'warning'"
+                  effect="plain"
+                  size="small"
+                >
+                  剩 {{ emp.days_remaining }} 天
+                </el-tag>
+              </div>
+            </div>
+          </div>
+          <el-button
+            type="primary"
+            plain
+            size="small"
+            class="approval-btn"
+            @click="navigateTo('/employees')"
+          >
+            前往員工管理 →
+          </el-button>
         </el-card>
 
         <!-- 系統狀態 -->
@@ -503,5 +615,64 @@ onMounted(() => {
 
 .mb-4 {
   margin-bottom: var(--space-4);
+}
+
+/* Month tag for approval section */
+.month-tag {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary, var(--text-secondary));
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  margin: 2px 0;
+}
+
+/* Anomaly list */
+.anomaly-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.anomaly-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.anomaly-name {
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+}
+
+.anomaly-hint {
+  font-size: var(--text-xs);
+  display: flex;
+  align-items: center;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border-color-light);
+}
+
+/* Probation list */
+.probation-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.probation-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.probation-name {
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+}
+
+.probation-date {
+  font-size: var(--text-xs);
 }
 </style>
