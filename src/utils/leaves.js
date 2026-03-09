@@ -21,6 +21,7 @@ export const LEAVE_TYPES = [
   { value: 'miscarriage',    label: '流產假',          color: 'success', deduction: '不扣' },
   { value: 'family_care',    label: '家庭照顧假',      color: 'warning', deduction: '全扣（併入事假）' },
   { value: 'parental_unpaid',label: '育嬰留職停薪',    color: 'info',    deduction: '留停無薪' },
+  { value: 'compensatory',   label: '補休',            color: 'success', deduction: '不扣' },
 ]
 
 /** 以 value 為 key 的查詢表（type 欄位對應 Element Plus tag 的 type prop）*/

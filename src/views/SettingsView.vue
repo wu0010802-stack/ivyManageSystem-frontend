@@ -27,6 +27,8 @@ const resetPasswordForm = reactive({ user_id: null, username: '', new_password: 
 const resetDialogVisible = ref(false)
 const editUserDialogVisible = ref(false)
 const editUserForm = reactive({ id: null, username: '', role: 'teacher', permissions: -1 })
+const credentialDialogVisible = ref(false)
+const createdCredentials = ref({ username: '', password: '' })
 const permissionDefinition = ref({ permissions: {}, groups: [], roles: {} })
 
 // Attendance Config
@@ -264,12 +266,19 @@ const saveUser = async () => {
       payload.permissions = userForm.permissions
     }
     await createUser(payload)
-    ElMessage.success('帳號建立成功')
     userDialogVisible.value = false
+    createdCredentials.value = { username: userForm.username, password: userForm.password }
+    credentialDialogVisible.value = true
     fetchUsers()
   } catch (error) {
     ElMessage.error(error.response?.data?.detail || '建立失敗')
   }
+}
+
+const copyText = (text) => {
+  navigator.clipboard.writeText(text).then(() => {
+    ElMessage.success('已複製')
+  })
 }
 
 const handleResetPassword = (user) => {
@@ -769,6 +778,32 @@ onMounted(() => {
       <template #footer>
         <el-button @click="editUserDialogVisible = false">取消</el-button>
         <el-button type="primary" @click="saveEditUser">儲存</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- Credential Dialog -->
+    <el-dialog v-model="credentialDialogVisible" title="帳號已建立" width="480px" @closed="createdCredentials = { username: '', password: '' }">
+      <div style="margin-bottom: 16px; color: #67c23a; font-weight: 500;">✅ 帳號建立成功，請將以下資訊提供給員工：</div>
+      <el-descriptions :column="1" border>
+        <el-descriptions-item label="帳號">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span>{{ createdCredentials.username }}</span>
+            <el-button size="small" @click="copyText(createdCredentials.username)">複製</el-button>
+          </div>
+        </el-descriptions-item>
+        <el-descriptions-item label="初始密碼">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span>{{ createdCredentials.password }}</span>
+            <el-button size="small" @click="copyText(createdCredentials.password)">複製</el-button>
+          </div>
+        </el-descriptions-item>
+        <el-descriptions-item label="登入網址">
+          <span>#/portal/login</span>
+        </el-descriptions-item>
+      </el-descriptions>
+      <div style="margin-top: 16px; color: #909399; font-size: 13px;">員工首次登入後將被要求修改密碼。</div>
+      <template #footer>
+        <el-button type="primary" @click="credentialDialogVisible = false">關閉</el-button>
       </template>
     </el-dialog>
   </div>

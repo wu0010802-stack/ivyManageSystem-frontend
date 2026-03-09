@@ -30,6 +30,7 @@ const form = reactive({
   end_time: '',
   hours: 1,
   reason: '',
+  use_comp_leave: false,
 })
 
 const resetForm = () => {
@@ -41,6 +42,7 @@ const resetForm = () => {
   form.end_time = ''
   form.hours = 1
   form.reason = ''
+  form.use_comp_leave = false
 }
 
 const populateForm = (row) => {
@@ -52,6 +54,7 @@ const populateForm = (row) => {
   form.end_time = row.end_time || ''
   form.hours = row.hours
   form.reason = row.reason || ''
+  form.use_comp_leave = row.use_comp_leave || false
 }
 
 const { dialogVisible, isEdit, openCreate, openEdit, closeDialog } = useCrudDialog({ resetForm, populateForm })
@@ -93,6 +96,7 @@ const saveOvertime = async () => {
       end_time: form.end_time || null,
       hours: form.hours,
       reason: form.reason || null,
+      use_comp_leave: form.use_comp_leave,
     }
     if (isEdit.value) {
       const { employee_id, ...updatePayload } = payload
@@ -188,6 +192,12 @@ onMounted(() => {
         <el-table-column prop="hours" label="時數" width="70">
           <template #default="{ row }">{{ row.hours }}h</template>
         </el-table-column>
+        <el-table-column label="方式" width="80">
+          <template #default="{ row }">
+            <el-tag v-if="row.use_comp_leave" type="success" size="small">補休</el-tag>
+            <el-tag v-else size="small">加班費</el-tag>
+          </template>
+        </el-table-column>
         <el-table-column prop="reason" label="原因" show-overflow-tooltip />
         <el-table-column label="操作" width="140" align="right">
           <template #default="{ row }">
@@ -221,9 +231,16 @@ onMounted(() => {
       <el-table-column label="時數" width="80">
         <template #default="scope">{{ scope.row.hours }}h</template>
       </el-table-column>
+      <el-table-column label="方式" width="90">
+        <template #default="scope">
+          <el-tag v-if="scope.row.use_comp_leave" type="success" size="small">補休 {{ scope.row.hours }}h</el-tag>
+          <el-tag v-else size="small">加班費</el-tag>
+        </template>
+      </el-table-column>
       <el-table-column label="加班費" width="110">
         <template #default="scope">
-          <strong>{{ money(scope.row.overtime_pay) }}</strong>
+          <span v-if="scope.row.use_comp_leave" style="color: var(--el-text-color-secondary);">--</span>
+          <strong v-else>{{ money(scope.row.overtime_pay) }}</strong>
         </template>
       </el-table-column>
       <el-table-column prop="reason" label="原因" min-width="120" show-overflow-tooltip />
@@ -276,6 +293,14 @@ onMounted(() => {
         </el-form-item>
         <el-form-item label="加班時數" required>
           <el-input-number v-model="form.hours" :min="0.5" :step="0.5" :max="12" />
+        </el-form-item>
+        <el-form-item label="補休方式">
+          <el-switch
+            v-model="form.use_comp_leave"
+            active-text="補休（加班費為 0）"
+            inactive-text="計薪"
+            active-color="#67c23a"
+          />
         </el-form-item>
         <el-form-item label="原因">
           <el-input v-model="form.reason" type="textarea" :rows="2" />

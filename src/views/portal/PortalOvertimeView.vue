@@ -27,6 +27,7 @@ const form = reactive({
   end_time: '',
   hours: 0,
   reason: '',
+  use_comp_leave: false,
 })
 const typeDetecting = ref(false)
 const typeHint = ref('')   // 顯示偵測結果說明
@@ -61,6 +62,7 @@ const openForm = () => {
   form.end_time = ''
   form.hours = 0
   form.reason = ''
+  form.use_comp_leave = false
   typeHint.value = ''
   showForm.value = true
 }
@@ -145,12 +147,16 @@ const submitOvertime = async () => {
       overtime_type: form.overtime_type,
       hours: form.hours,
       reason: form.reason,
+      use_comp_leave: form.use_comp_leave,
     }
     if (form.start_time) payload.start_time = form.start_time
     if (form.end_time) payload.end_time = form.end_time
 
     const res = await createMyOvertime(payload)
-    ElMessage.success(`加班申請已送出，預估加班費: NT$ ${res.data.overtime_pay}`)
+    const msg = form.use_comp_leave
+      ? `補休申請已送出（${form.hours}h），核准後計入當年度補休配額`
+      : `加班申請已送出，預估加班費: NT$ ${res.data.overtime_pay}`
+    ElMessage.success(msg)
     showForm.value = false
     fetchOvertimes()
   } catch (error) {
@@ -172,6 +178,13 @@ const withdrawOvertime = async (id) => {
 
 const totalHours = () => overtimes.value.reduce((sum, o) => sum + o.hours, 0)
 const totalPay = () => overtimes.value.reduce((sum, o) => sum + (o.overtime_pay || 0), 0)
+
+// 加班費預覽提示：補休模式顯示「-- (改以補休計算)」
+const payPreviewText = computed(() => {
+  if (form.use_comp_leave) return '-- (改以補休計算)'
+  if (!form.hours || form.hours < 0.5) return '--'
+  return '送出後由後端計算'
+})
 
 onMounted(fetchOvertimes)
 </script>
@@ -215,9 +228,16 @@ onMounted(fetchOvertimes)
         <el-table-column prop="start_time" label="開始" width="80" />
         <el-table-column prop="end_time" label="結束" width="80" />
         <el-table-column prop="hours" label="時數" width="80" />
-        <el-table-column prop="overtime_pay" label="加班費" width="100">
+        <el-table-column label="方式" width="80">
           <template #default="{ row }">
-            NT$ {{ row.overtime_pay }}
+            <el-tag v-if="row.use_comp_leave" type="success" size="small">補休</el-tag>
+            <el-tag v-else type="" size="small">加班費</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="加班費" width="110">
+          <template #default="{ row }">
+            <span v-if="row.use_comp_leave" style="color: var(--el-text-color-secondary);">-- (補休)</span>
+            <span v-else>NT$ {{ row.overtime_pay }}</span>
           </template>
         </el-table-column>
         <el-table-column prop="reason" label="原因" />
@@ -278,6 +298,24 @@ onMounted(fetchOvertimes)
           <span v-if="form.hours > 0" style="margin-left: 8px; font-size: 12px; color: var(--el-text-color-secondary);">
             由開始/結束時間自動計算
           </span>
+        </el-form-item>
+        <el-form-item label="預估加班費">
+          <span :style="{ color: form.use_comp_leave ? 'var(--el-text-color-secondary)' : 'var(--el-color-success)', fontWeight: '600' }">
+            {{ payPreviewText }}
+          </span>
+        </el-form-item>
+        <el-form-item label="補休方式">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <el-switch
+              v-model="form.use_comp_leave"
+              active-text="補休"
+              inactive-text="加班費"
+              active-color="#67c23a"
+            />
+            <span style="font-size: 12px; color: var(--el-text-color-secondary);">
+              補休以 1:1 累積，核准後即計入當年度補休時數
+            </span>
+          </div>
         </el-form-item>
         <el-form-item label="原因">
           <el-input v-model="form.reason" type="textarea" :rows="3" placeholder="請輸入加班原因" />

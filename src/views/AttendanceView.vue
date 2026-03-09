@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, computed, watch } from 'vue'
+import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { uploadFile, uploadCsv, getRecords, getSummary, deleteMonthRecords as deleteMonthRecordsApi, getAnomalyList, batchConfirmAnomalies, exportAnomalies } from '@/api/attendance'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { UploadFilled, Search } from '@element-plus/icons-vue'
@@ -242,6 +242,12 @@ const doExportAnomalies = async () => {
   }
 }
 
+// 切換 tab 自動載入資料
+watch(activeTab, (tab) => {
+  if (tab === 'query') queryAttendance()
+  else if (tab === 'anomalies') fetchAnomalies()
+})
+
 // Unique employee filter for records table
 const employeeFilter = ref('')
 const debouncedFilter = ref('')
@@ -371,10 +377,10 @@ const filteredRecords = computed(() => {
       <el-tab-pane label="考勤查詢" name="query">
         <el-card class="control-panel" shadow="never">
           <div class="controls">
-            <el-select v-model="query.year" style="width: 110px;">
+            <el-select v-model="query.year" style="width: 110px;" @change="queryAttendance">
               <el-option v-for="y in 5" :key="y" :label="(currentYear - 2 + y) + ' 年'" :value="currentYear - 2 + y" />
             </el-select>
-            <el-select v-model="query.month" style="width: 90px;">
+            <el-select v-model="query.month" style="width: 90px;" @change="queryAttendance">
               <el-option v-for="m in 12" :key="m" :label="m + ' 月'" :value="m" />
             </el-select>
             <el-button type="primary" :loading="loadingRecords" @click="queryAttendance">查詢</el-button>
@@ -443,13 +449,13 @@ const filteredRecords = computed(() => {
       <el-tab-pane label="異常批次處理" name="anomalies">
         <el-card class="control-panel" shadow="never">
           <div class="controls">
-            <el-select v-model="anomalyQuery.year" style="width: 110px;">
+            <el-select v-model="anomalyQuery.year" style="width: 110px;" @change="fetchAnomalies">
               <el-option v-for="y in 5" :key="y" :label="(currentYear - 2 + y) + ' 年'" :value="currentYear - 2 + y" />
             </el-select>
-            <el-select v-model="anomalyQuery.month" style="width: 90px;">
+            <el-select v-model="anomalyQuery.month" style="width: 90px;" @change="fetchAnomalies">
               <el-option v-for="m in 12" :key="m" :label="m + ' 月'" :value="m" />
             </el-select>
-            <el-select v-model="anomalyQuery.status" style="width: 110px;">
+            <el-select v-model="anomalyQuery.status" style="width: 110px;" @change="fetchAnomalies">
               <el-option label="全部" value="all" />
               <el-option label="未處理" value="pending" />
               <el-option label="已處理" value="confirmed" />
