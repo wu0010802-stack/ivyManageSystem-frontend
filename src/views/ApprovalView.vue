@@ -1,9 +1,14 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import api from '@/api'
+import { getLeaves, approveLeave as approveLeaveApi, getLeaveAttachment } from '@/api/leaves'
+import { getOvertimes, approveOvertime as approveOvertimeApi } from '@/api/overtimes'
+import { getCorrections, approveCorrection as approveCorrectionApi } from '@/api/punchCorrections'
 import { LEAVE_TYPE_MAP as leaveTypeMap } from '@/utils/leaves'
 import { money, formatTime } from '@/utils/format'
+import { useApprovalStore } from '@/stores/approval'
+
+const approvalStore = useApprovalStore()
 
 const loading = ref(false)
 const pendingLeaves = ref([])
@@ -28,7 +33,7 @@ const totalPending = computed(() =>
 
 const fetchPendingLeaves = async () => {
   try {
-    const res = await api.get('/leaves', { params: { status: 'pending' } })
+    const res = await getLeaves({ status: 'pending' })
     pendingLeaves.value = Array.isArray(res.data) ? res.data : []
   } catch {
     // silent
@@ -37,7 +42,7 @@ const fetchPendingLeaves = async () => {
 
 const fetchPendingOvertimes = async () => {
   try {
-    const res = await api.get('/overtimes', { params: { status: 'pending' } })
+    const res = await getOvertimes({ status: 'pending' })
     pendingOvertimes.value = Array.isArray(res.data) ? res.data : []
   } catch {
     // silent
@@ -46,7 +51,7 @@ const fetchPendingOvertimes = async () => {
 
 const fetchPendingCorrections = async () => {
   try {
-    const res = await api.get('/punch-corrections', { params: { status: 'pending' } })
+    const res = await getCorrections({ status: 'pending' })
     pendingPunchCorrections.value = Array.isArray(res.data) ? res.data : []
   } catch {
     // silent
@@ -61,9 +66,10 @@ const fetchAll = async () => {
 
 const approveLeave = async (row, approved) => {
   try {
-    await api.put(`/leaves/${row.id}/approve?approved=${approved}`)
+    await approveLeaveApi(row.id, { approved })
     ElMessage.success(approved ? '請假已核准' : '請假已駁回')
     fetchPendingLeaves()
+    approvalStore.fetchSummary()
   } catch (error) {
     ElMessage.error('操作失敗')
   }
@@ -71,9 +77,10 @@ const approveLeave = async (row, approved) => {
 
 const approveOvertime = async (row, approved) => {
   try {
-    await api.put(`/overtimes/${row.id}/approve?approved=${approved}`)
+    await approveOvertimeApi(row.id, approved)
     ElMessage.success(approved ? '加班已核准' : '加班已駁回')
     fetchPendingOvertimes()
+    approvalStore.fetchSummary()
   } catch (error) {
     ElMessage.error('操作失敗')
   }
@@ -95,9 +102,10 @@ const approveCorrection = async (row, approved) => {
     }
   }
   try {
-    await api.put(`/punch-corrections/${row.id}/approve`, payload)
+    await approveCorrectionApi(row.id, payload)
     ElMessage.success(approved ? '補打卡已核准，考勤已更新' : '補打卡已駁回')
     fetchPendingCorrections()
+    approvalStore.fetchSummary()
   } catch (error) {
     ElMessage.error(error.response?.data?.detail || '操作失敗')
   }
@@ -115,7 +123,7 @@ const viewAttachments = async (row) => {
   try {
     attachItems.value = await Promise.all(
       row.attachment_paths.map(filename =>
-        api.get(`/leaves/${row.id}/attachments/${filename}`, { responseType: 'blob' })
+        getLeaveAttachment(row.id, filename)
           .then(res => ({
             name: filename,
             url: URL.createObjectURL(res.data),

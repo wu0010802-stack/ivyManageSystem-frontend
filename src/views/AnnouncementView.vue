@@ -1,7 +1,7 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import api from '@/api'
+import { getAnnouncements, createAnnouncement, updateAnnouncement, deleteAnnouncement } from '@/api/announcements'
 
 const loading = ref(false)
 const announcements = ref([])
@@ -35,7 +35,7 @@ const resetForm = () => {
 const fetchAnnouncements = async () => {
   loading.value = true
   try {
-    const res = await api.get('/announcements')
+    const res = await getAnnouncements()
     announcements.value = res.data.items || []
   } catch (error) {
     ElMessage.error(error.response?.data?.detail || '載入失敗')
@@ -70,7 +70,7 @@ const handleSubmit = async () => {
   submitLoading.value = true
   try {
     if (isEdit.value) {
-      await api.put(`/announcements/${form.id}`, {
+      await updateAnnouncement(form.id, {
         title: form.title,
         content: form.content,
         priority: form.priority,
@@ -78,7 +78,7 @@ const handleSubmit = async () => {
       })
       ElMessage.success('公告已更新')
     } else {
-      await api.post('/announcements', {
+      await createAnnouncement({
         title: form.title,
         content: form.content,
         priority: form.priority,
@@ -102,7 +102,7 @@ const handleDelete = async (row) => {
       cancelButtonText: '取消',
       type: 'warning',
     })
-    await api.delete(`/announcements/${row.id}`)
+    await deleteAnnouncement(row.id)
     ElMessage.success('公告已刪除')
     fetchAnnouncements()
   } catch (e) {
@@ -114,7 +114,7 @@ const handleDelete = async (row) => {
 
 const togglePin = async (row) => {
   try {
-    await api.put(`/announcements/${row.id}`, { is_pinned: !row.is_pinned })
+    await updateAnnouncement(row.id, { is_pinned: !row.is_pinned })
     ElMessage.success(row.is_pinned ? '已取消置頂' : '已置頂')
     fetchAnnouncements()
   } catch (error) {

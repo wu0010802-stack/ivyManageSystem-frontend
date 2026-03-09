@@ -1,6 +1,6 @@
 <script setup>
 import { ref } from 'vue'
-import api from '@/api'
+import { getLeaveAttachment } from '@/api/leaves'
 import { ElMessage } from 'element-plus'
 
 const attachDialogVisible = ref(false)
@@ -14,7 +14,7 @@ const viewAttachments = async (row) => {
   try {
     attachItems.value = await Promise.all(
       row.attachment_paths.map(filename =>
-        api.get(`/leaves/${row.id}/attachments/${filename}`, { responseType: 'blob' })
+        getLeaveAttachment(row.id, filename)
           .then(res => ({
             name: filename,
             url: URL.createObjectURL(res.data),

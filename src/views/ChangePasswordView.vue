@@ -2,7 +2,7 @@
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import api from '@/api'
+import { changePassword } from '@/api/auth'
 import { clearMustChangePassword, getUserInfo } from '@/utils/auth'
 
 const router = useRouter()
@@ -45,7 +45,7 @@ const handleSubmit = async () => {
 
   loading.value = true
   try {
-    await api.post('/auth/change-password', {
+    await changePassword({
       old_password: form.old_password,
       new_password: form.new_password,
     })

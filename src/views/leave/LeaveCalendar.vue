@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
-import api from '@/api'
+import { getLeaves } from '@/api/leaves'
 import { ElMessage } from 'element-plus'
 import { useEmployeeStore } from '@/stores/employee'
 import { LEAVE_TYPES as leaveTypes } from '@/utils/leaves'
@@ -49,7 +49,7 @@ const fetchCalendar = async () => {
   try {
     const params = { year: calYear.value, month: calMonth.value }
     if (calFilterEmp.value) params.employee_id = calFilterEmp.value
-    const res = await api.get('/leaves', { params })
+    const res = await getLeaves(params)
     calendarLeaves.value = res.data
   } catch {
     ElMessage.error('載入行事曆失敗')

@@ -1,7 +1,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import api from '@/api'
+import { getMyPunchCorrections, createMyPunchCorrection } from '@/api/portal'
 
 const loading = ref(false)
 const submitLoading = ref(false)
@@ -50,9 +50,7 @@ const rules = {
 const fetchCorrections = async () => {
   loading.value = true
   try {
-    const res = await api.get('/portal/my-punch-corrections', {
-      params: { year: query.year, month: query.month },
-    })
+    const res = await getMyPunchCorrections({ year: query.year, month: query.month })
     corrections.value = res.data
   } catch {
     ElMessage.error('載入失敗')
@@ -102,7 +100,7 @@ const submitCorrection = async () => {
       reason: form.reason || null,
     }
 
-    await api.post('/portal/my-punch-corrections', payload)
+    await createMyPunchCorrection(payload)
     ElMessage.success('補打卡申請已送出，待主管核准')
     showForm.value = false
     fetchCorrections()

@@ -1,6 +1,6 @@
 <script setup>
 import { ref, reactive, computed, watch } from 'vue'
-import api from '@/api'
+import { uploadFile, uploadCsv, getRecords, getSummary, deleteMonthRecords as deleteMonthRecordsApi, getAnomalyList, batchConfirmAnomalies, exportAnomalies } from '@/api/attendance'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { UploadFilled, Search } from '@element-plus/icons-vue'
 import { downloadFile } from '@/utils/download'
@@ -21,9 +21,7 @@ const handleExcelUpload = async (options) => {
   try {
     const formData = new FormData()
     formData.append('file', options.file)
-    const response = await api.post('/attendance/upload', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    })
+    const response = await uploadFile(formData)
     uploadResult.value = response.data
     ElMessage.success(response.data.message || '匯入完成')
   } catch (error) {
@@ -76,7 +74,7 @@ const handleCsvImport = async () => {
       return
     }
 
-    const response = await api.post('/attendance/upload-csv', { records })
+    const response = await uploadCsv({ records })
     uploadResult.value = response.data.results || response.data
     ElMessage.success(response.data.message || '匯入完成')
   } catch (error) {
@@ -96,9 +94,7 @@ const summaryData = ref([])
 const fetchRecords = async () => {
   loadingRecords.value = true
   try {
-    const response = await api.get('/attendance/records', {
-      params: { year: query.year, month: query.month }
-    })
+    const response = await getRecords({ year: query.year, month: query.month })
     attendanceRecords.value = response.data
   } catch (error) {
     ElMessage.error('查詢失敗')
@@ -110,9 +106,7 @@ const fetchRecords = async () => {
 const fetchSummary = async () => {
   loadingRecords.value = true
   try {
-    const response = await api.get('/attendance/summary', {
-      params: { year: query.year, month: query.month }
-    })
+    const response = await getSummary({ year: query.year, month: query.month })
     summaryData.value = response.data
   } catch (error) {
     ElMessage.error('統計查詢失敗')
@@ -137,7 +131,7 @@ const deleteMonthRecords = () => {
     { type: 'warning', confirmButtonText: '刪除', cancelButtonText: '取消' }
   ).then(async () => {
     try {
-      await api.delete(`/attendance/records/${query.year}/${query.month}`)
+      await deleteMonthRecordsApi(query.year, query.month)
       ElMessage.success('已刪除')
       attendanceRecords.value = []
       summaryData.value = []
@@ -160,6 +154,92 @@ const getStatusLabel = (row) => {
   if (row.is_missing_punch_in) parts.push('未打卡(上)')
   if (row.is_missing_punch_out) parts.push('未打卡(下)')
   return parts.length ? parts.join(', ') : '正常'
+}
+
+// ---- Anomaly Batch ----
+const anomalyQuery = reactive({ year: currentYear, month: currentMonth, status: 'all' })
+const loadingAnomalies = ref(false)
+const anomalyData = ref({ total: 0, pending: 0, confirmed: 0, items: [] })
+const selectedAnomalies = ref([])
+const anomalyTable = ref(null)
+
+const ACTION_LABELS = {
+  accept: '接受扣款',
+  admin_accept: '接受扣款',
+  use_pto: '特休抵銷',
+  dispute: '申訴中',
+  admin_waive: '管理員豁免',
+}
+
+const getActionTagType = (action) => {
+  if (!action) return 'warning'
+  if (action === 'admin_waive' || action === 'use_pto') return 'success'
+  if (action === 'dispute') return 'danger'
+  return 'info'
+}
+
+const getActionLabel = (action) => {
+  return action ? (ACTION_LABELS[action] || action) : '待處理'
+}
+
+const fetchAnomalies = async () => {
+  loadingAnomalies.value = true
+  try {
+    const res = await getAnomalyList({
+      year: anomalyQuery.year,
+      month: anomalyQuery.month,
+      status: anomalyQuery.status,
+    })
+    anomalyData.value = res.data
+    selectedAnomalies.value = []
+  } catch (error) {
+    ElMessage.error('查詢異常清單失敗：' + (error.response?.data?.detail || error.message))
+  } finally {
+    loadingAnomalies.value = false
+  }
+}
+
+const handleAnomalySelectionChange = (selection) => {
+  selectedAnomalies.value = selection
+}
+
+const doBatchConfirm = async (action) => {
+  if (!selectedAnomalies.value.length) {
+    ElMessage.warning('請先勾選要處理的異常記錄')
+    return
+  }
+  const label = action === 'admin_accept' ? '批次接受扣款' : '批次豁免'
+  try {
+    await ElMessageBox.confirm(`確定對選取的 ${selectedAnomalies.value.length} 筆異常執行「${label}」？`, '批次確認', {
+      type: 'warning',
+      confirmButtonText: '確定',
+      cancelButtonText: '取消',
+    })
+  } catch {
+    return
+  }
+  try {
+    const ids = selectedAnomalies.value.map(r => r.id)
+    const res = await batchConfirmAnomalies({ attendance_ids: ids, action })
+    ElMessage.success(`已處理 ${res.data.processed} 筆`)
+    await fetchAnomalies()
+  } catch (error) {
+    ElMessage.error('批次確認失敗：' + (error.response?.data?.detail || error.message))
+  }
+}
+
+const doExportAnomalies = async () => {
+  try {
+    const res = await exportAnomalies(anomalyQuery.year, anomalyQuery.month, anomalyQuery.status)
+    const url = URL.createObjectURL(new Blob([res.data]))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${anomalyQuery.year}年${anomalyQuery.month}月考勤異常.xlsx`
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch (error) {
+    ElMessage.error('匯出失敗：' + (error.response?.data?.detail || error.message))
+  }
 }
 
 // Unique employee filter for records table
@@ -358,6 +438,89 @@ const filteredRecords = computed(() => {
           :description="`${query.year} 年 ${query.month} 月尚無考勤資料，請先匯入打卡記錄`"
         />
       </el-tab-pane>
+
+      <!-- 異常批次處理 -->
+      <el-tab-pane label="異常批次處理" name="anomalies">
+        <el-card class="control-panel" shadow="never">
+          <div class="controls">
+            <el-select v-model="anomalyQuery.year" style="width: 110px;">
+              <el-option v-for="y in 5" :key="y" :label="(currentYear - 2 + y) + ' 年'" :value="currentYear - 2 + y" />
+            </el-select>
+            <el-select v-model="anomalyQuery.month" style="width: 90px;">
+              <el-option v-for="m in 12" :key="m" :label="m + ' 月'" :value="m" />
+            </el-select>
+            <el-select v-model="anomalyQuery.status" style="width: 110px;">
+              <el-option label="全部" value="all" />
+              <el-option label="未處理" value="pending" />
+              <el-option label="已處理" value="confirmed" />
+            </el-select>
+            <el-button type="primary" :loading="loadingAnomalies" @click="fetchAnomalies">查詢</el-button>
+            <el-button type="success" @click="doExportAnomalies">匯出 Excel</el-button>
+          </div>
+        </el-card>
+
+        <!-- 統計摘要 -->
+        <div v-if="anomalyData.total > 0 || anomalyData.items" style="margin: 12px 0; display: flex; gap: 20px;">
+          <el-statistic title="異常總筆數" :value="anomalyData.total" />
+          <el-statistic title="未處理" :value="anomalyData.pending" />
+          <el-statistic title="已處理" :value="anomalyData.confirmed" />
+        </div>
+
+        <!-- 批次操作 -->
+        <div v-if="selectedAnomalies.length > 0" class="batch-actions">
+          <span class="batch-info">已選取 {{ selectedAnomalies.length }} 筆</span>
+          <el-button type="primary" plain size="small" @click="doBatchConfirm('admin_accept')">批次接受扣款</el-button>
+          <el-button type="success" plain size="small" @click="doBatchConfirm('admin_waive')">批次豁免</el-button>
+        </div>
+
+        <!-- 異常清單 -->
+        <el-table
+          ref="anomalyTable"
+          :data="anomalyData.items"
+          border
+          stripe
+          style="width: 100%; margin-top: 12px;"
+          max-height="600"
+          v-loading="loadingAnomalies"
+          @selection-change="handleAnomalySelectionChange"
+        >
+          <el-table-column type="selection" width="50" />
+          <el-table-column prop="employee_number" label="編號" width="80" />
+          <el-table-column prop="employee_name" label="姓名" width="90" sortable />
+          <el-table-column prop="date" label="日期" width="110" sortable />
+          <el-table-column prop="weekday" label="星期" width="60" />
+          <el-table-column prop="type_label" label="異常類型" width="110" />
+          <el-table-column prop="detail" label="明細" min-width="120" />
+          <el-table-column prop="estimated_deduction" label="預估扣款" width="90" sortable>
+            <template #default="scope">
+              <span v-if="scope.row.estimated_deduction > 0" style="color: var(--color-danger);">
+                {{ scope.row.estimated_deduction }}
+              </span>
+              <span v-else>-</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="確認狀態" width="110">
+            <template #default="scope">
+              <el-tag :type="getActionTagType(scope.row.confirmed_action)" size="small">
+                {{ getActionLabel(scope.row.confirmed_action) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="confirmed_by" label="確認人員" width="90">
+            <template #default="scope">{{ scope.row.confirmed_by || '-' }}</template>
+          </el-table-column>
+          <el-table-column prop="confirmed_at" label="確認時間" width="150">
+            <template #default="scope">{{ scope.row.confirmed_at ? scope.row.confirmed_at.replace('T', ' ').slice(0, 16) : '-' }}</template>
+          </el-table-column>
+        </el-table>
+
+        <EmptyState
+          v-if="!loadingAnomalies && anomalyData.items && anomalyData.items.length === 0"
+          :icon="Search"
+          title="查無異常記錄"
+          :description="`${anomalyQuery.year} 年 ${anomalyQuery.month} 月在目前篩選條件下無異常資料`"
+        />
+      </el-tab-pane>
     </el-tabs>
   </div>
 </template>
@@ -396,5 +559,19 @@ const filteredRecords = computed(() => {
 }
 .error-list li {
   margin-bottom: var(--space-1);
+}
+.batch-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-primary-light, #ecf5ff);
+  border-radius: 4px;
+  margin-top: 8px;
+}
+.batch-info {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-primary);
 }
 </style>

@@ -1,6 +1,6 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
-import api from '@/api'
+import { getAuditLogs } from '@/api/audit'
 import { ElMessage } from 'element-plus'
 
 const loading = ref(false)
@@ -58,7 +58,7 @@ const fetchLogs = async () => {
     if (filters.start_date) params.start_date = filters.start_date
     if (filters.end_date) params.end_date = filters.end_date
 
-    const res = await api.get('/audit-logs', { params })
+    const res = await getAuditLogs(params)
     logs.value = res.data.items
     total.value = res.data.total
   } catch (error) {

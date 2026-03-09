@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import api from '@/api'
+import { getClassrooms } from '@/api/classrooms'
 
 const TTL = 5 * 60 * 1000 // 5 分鐘快取
 
@@ -17,7 +17,7 @@ export const useClassroomStore = defineStore('classroom', {
       if (this._pending) return this._pending
 
       this.loading = true
-      this._pending = api.get('/classrooms')
+      this._pending = getClassrooms()
         .then(res => {
           this.classrooms = res.data
           this._fetchedAt = Date.now()

@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import api from '@/api'
+import { getTitles } from '@/api/config'
 
 const TTL = 5 * 60 * 1000 // 5 分鐘快取
 
@@ -17,7 +17,7 @@ export const useConfigStore = defineStore('config', {
       if (this._pending) return this._pending
 
       this.loading = true
-      this._pending = api.get('/config/titles')
+      this._pending = getTitles()
         .then(res => {
           this.jobTitles = res.data
           this._fetchedAt = Date.now()

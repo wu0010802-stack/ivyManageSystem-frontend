@@ -1,6 +1,6 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
-import api from '@/api'
+import { getOvertimes, createOvertime, updateOvertime, approveOvertime as approveOvertimeApi } from '@/api/overtimes'
 import { ElMessage } from 'element-plus'
 import { useEmployeeStore } from '@/stores/employee'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
@@ -61,7 +61,7 @@ const fetchOvertimes = async () => {
   try {
     const params = { year: query.year, month: query.month }
     if (query.employee_id) params.employee_id = query.employee_id
-    const response = await api.get('/overtimes', { params })
+    const response = await getOvertimes(params)
     overtimeRecords.value = Array.isArray(response.data) ? response.data : []
   } catch (error) {
     ElMessage.error('載入加班記錄失敗')
@@ -72,7 +72,7 @@ const fetchOvertimes = async () => {
 
 const fetchPendingOvertimes = async () => {
   try {
-    const response = await api.get('/overtimes', { params: { status: 'pending' } })
+    const response = await getOvertimes({ status: 'pending' })
     pendingRecords.value = Array.isArray(response.data) ? response.data : []
   } catch {
     // silent
@@ -96,10 +96,10 @@ const saveOvertime = async () => {
     }
     if (isEdit.value) {
       const { employee_id, ...updatePayload } = payload
-      const resp = await api.put(`/overtimes/${form.id}`, updatePayload)
+      const resp = await updateOvertime(form.id, updatePayload)
       ElMessage.success(`加班記錄已更新，加班費: $${resp.data.overtime_pay?.toLocaleString() || 0}`)
     } else {
-      const resp = await api.post('/overtimes', payload)
+      const resp = await createOvertime(payload)
       ElMessage.success(`加班記錄已新增，加班費: $${resp.data.overtime_pay?.toLocaleString() || 0}`)
     }
     closeDialog()
@@ -123,7 +123,7 @@ const { confirmDelete: deleteOvertime } = useConfirmDelete({
 
 const approveOvertime = async (row, approved) => {
   try {
-    await api.put(`/overtimes/${row.id}/approve?approved=${approved}`)
+    await approveOvertimeApi(row.id, approved)
     ElMessage.success(approved ? '已核准' : '已駁回')
     fetchOvertimes()
     fetchPendingOvertimes()

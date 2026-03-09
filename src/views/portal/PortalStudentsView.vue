@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import api from '@/api'
+import { getMyStudents } from '@/api/portal'
 
 const loading = ref(false)
 const data = ref({ classrooms: [], total_students: 0, employee_name: '' })
@@ -11,7 +11,7 @@ const searchText = ref('')
 const fetchStudents = async () => {
   loading.value = true
   try {
-    const res = await api.get('/portal/my-students')
+    const res = await getMyStudents()
     data.value = res.data
     if (res.data.classrooms.length > 0) {
       activeClassroom.value = res.data.classrooms[0].classroom_id

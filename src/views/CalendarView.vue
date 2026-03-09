@@ -1,7 +1,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import api from '@/api'
+import { getEvents, createEvent, updateEvent, deleteEvent } from '@/api/events'
 import { downloadFile } from '@/utils/download'
 
 const loading = ref(false)
@@ -57,9 +57,7 @@ const exportCalendar = () => {
 const fetchEvents = async () => {
   loading.value = true
   try {
-    const res = await api.get('/events', {
-      params: { year: currentYear.value, month: currentMonth.value }
-    })
+    const res = await getEvents({ year: currentYear.value, month: currentMonth.value })
     events.value = res.data
   } catch (error) {
     ElMessage.error(error.response?.data?.detail || '載入失敗')
@@ -162,10 +160,10 @@ const saveEvent = async () => {
       location: form.location || null,
     }
     if (isEdit.value) {
-      await api.put(`/events/${form.id}`, payload)
+      await updateEvent(form.id, payload)
       ElMessage.success('事件已更新')
     } else {
-      await api.post('/events', payload)
+      await createEvent(payload)
       ElMessage.success('事件已新增')
     }
     dialogVisible.value = false
@@ -182,7 +180,7 @@ const handleDelete = (ev) => {
     type: 'warning',
   }).then(async () => {
     try {
-      await api.delete(`/events/${ev.id}`)
+      await deleteEvent(ev.id)
       ElMessage.success('事件已刪除')
       fetchEvents()
     } catch (error) {

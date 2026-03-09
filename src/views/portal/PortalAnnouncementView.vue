@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import api from '@/api'
+import { getPortalAnnouncements, markAnnouncementRead } from '@/api/portal'
 
 const loading = ref(false)
 const announcements = ref([])
@@ -21,9 +21,7 @@ const fetchAnnouncements = async (append = false) => {
   loading.value = true
   try {
     const skip = append ? announcements.value.length : 0
-    const res = await api.get('/portal/announcements', {
-      params: { skip, limit: pageSize },
-    })
+    const res = await getPortalAnnouncements({ skip, limit: pageSize })
     const { items, total } = res.data
     totalAnnouncements.value = total
     if (append) {
@@ -54,7 +52,7 @@ const toggleExpand = async (ann) => {
 
   if (!ann.is_read) {
     try {
-      await api.post(`/portal/announcements/${ann.id}/read`)
+      await markAnnouncementRead(ann.id)
       ann.is_read = true
     } catch (e) {
       // Silent fail for read tracking

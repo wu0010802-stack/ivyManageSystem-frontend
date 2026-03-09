@@ -4,7 +4,8 @@ import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
-import api from '@/api'
+import { getUnreadCount, getSwapPendingCount } from '@/api/portal'
+import { changePassword } from '@/api/auth'
 import { getUserInfo, clearAuth, getToken, setToken, setUserInfo } from '@/utils/auth'
 import OfflineIndicator from '@/components/OfflineIndicator.vue'
 
@@ -34,7 +35,7 @@ const swapPendingCount = ref(0)
 
 const fetchUnreadCount = async () => {
   try {
-    const res = await api.get('/portal/unread-count')
+    const res = await getUnreadCount()
     unreadCount.value = res.data.unread_count || 0
   } catch (e) {
     // Silent fail
@@ -43,7 +44,7 @@ const fetchUnreadCount = async () => {
 
 const fetchSwapPendingCount = async () => {
   try {
-    const res = await api.get('/portal/swap-pending-count')
+    const res = await getSwapPendingCount()
     swapPendingCount.value = res.data.pending_count || 0
   } catch (e) {
     // Silent fail
@@ -198,7 +199,7 @@ const submitPassword = async () => {
   }
   passwordLoading.value = true
   try {
-    await api.post('/auth/change-password', {
+    await changePassword({
       old_password: passwordForm.value.old_password,
       new_password: passwordForm.value.new_password,
     })

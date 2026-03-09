@@ -1,7 +1,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import api from '@/api'
+import { getMyLeaves, createMyLeave, uploadMyLeaveAttachments, getMyLeaveAttachment, getMyQuotas, getMyLeaveStats, getMyWorkdayHours } from '@/api/portal'
 import { LEAVE_TYPES as leaveTypes } from '@/utils/leaves'
 
 const loading = ref(false)
@@ -99,9 +99,7 @@ const fetchCalc = async (start, end) => {
   calcLoading.value = true; calcBreakdown.value = []; calcHint.value = ''
   try {
     const sd = start.substring(0, 10)
-    const res = await api.get('/portal/my-workday-hours', {
-      params: { start_date: sd, end_date: end.substring(0, 10) }
-    })
+    const res = await getMyWorkdayHours({ start_date: sd, end_date: end.substring(0, 10) })
     const { total_hours, breakdown } = res.data
     calcBreakdown.value = breakdown
 
@@ -224,7 +222,7 @@ const fetchQuota = async () => {
   if (!form.leave_type || !QUOTA_TYPES.has(form.leave_type)) { quotaInfo.value = null; return }
   quotaLoading.value = true
   try {
-    const res = await api.get('/portal/my-quotas')
+    const res = await getMyQuotas()
     quotaInfo.value = res.data.find(q => q.leave_type === form.leave_type) || null
   } catch { quotaInfo.value = null }
   finally { quotaLoading.value = false }
@@ -365,9 +363,7 @@ const formRef = ref(null)
 const fetchLeaves = async () => {
   loading.value = true
   try {
-    const res = await api.get('/portal/my-leaves', {
-      params: { year: query.year, month: query.month },
-    })
+    const res = await getMyLeaves({ year: query.year, month: query.month })
     leaves.value = res.data
   } catch {
     ElMessage.error('載入失敗')
@@ -395,18 +391,66 @@ const handleExceed = () => {
   ElMessage.warning(`最多上傳 5 個附件`)
 }
 
-const beforeUpload = (file) => {
+const handleAttachChange = (file, newFileList) => {
   const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/heic', 'application/pdf']
   const maxSize = 5 * 1024 * 1024
-  if (!allowed.includes(file.type) && !file.name.match(/\.(heic|heif)$/i)) {
-    ElMessage.error('僅支援 JPG、PNG、GIF、HEIC、PDF 格式')
-    return false
+  if (!allowed.includes(file.raw?.type) && !file.name.match(/\.(heic|heif)$/i)) {
+    ElMessage.error(`${file.name}：僅支援 JPG、PNG、GIF、HEIC、PDF 格式`)
+    fileList.value = newFileList.filter(f => f.uid !== file.uid)
+    return
   }
-  if (file.size > maxSize) {
+  if ((file.raw?.size ?? 0) > maxSize) {
     ElMessage.error(`${file.name} 超過 5 MB 限制`)
-    return false
+    fileList.value = newFileList.filter(f => f.uid !== file.uid)
   }
-  return true
+}
+
+// ── 補充附件（待審假單補件）──
+const supplementDialogVisible = ref(false)
+const supplementLeave = ref(null)
+const supplementFileList = ref([])
+const supplementLoading = ref(false)
+
+const openSupplement = (row) => {
+  supplementLeave.value = row
+  supplementFileList.value = []
+  supplementDialogVisible.value = true
+}
+
+const handleSupplementChange = (file, newList) => {
+  const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/heic', 'application/pdf']
+  const maxSize = 5 * 1024 * 1024
+  if (!allowed.includes(file.raw?.type) && !file.name.match(/\.(heic|heif)$/i)) {
+    ElMessage.error(`${file.name}：僅支援 JPG、PNG、GIF、HEIC、PDF`)
+    supplementFileList.value = newList.filter(f => f.uid !== file.uid)
+    return
+  }
+  if ((file.raw?.size ?? 0) > maxSize) {
+    ElMessage.error(`${file.name} 超過 5 MB 限制`)
+    supplementFileList.value = newList.filter(f => f.uid !== file.uid)
+  }
+}
+
+const handleSupplementExceed = () => {
+  const remaining = 5 - (supplementLeave.value?.attachment_paths?.length ?? 0)
+  ElMessage.warning(`最多再補充 ${remaining} 個附件`)
+}
+
+const submitSupplement = async () => {
+  if (!supplementFileList.value.length) return ElMessage.warning('請先選擇附件')
+  supplementLoading.value = true
+  try {
+    const formData = new FormData()
+    supplementFileList.value.forEach(f => formData.append('files', f.raw))
+    await uploadMyLeaveAttachments(supplementLeave.value.id, formData)
+    ElMessage.success('附件已補充')
+    supplementDialogVisible.value = false
+    fetchLeaves()
+  } catch (e) {
+    ElMessage.error(e.response?.data?.detail || '上傳失敗')
+  } finally {
+    supplementLoading.value = false
+  }
 }
 
 const submitLeave = async () => {
@@ -437,7 +481,7 @@ const submitLeave = async () => {
     const ed = form.end_date ? form.end_date.substring(0, 10) : ''
     const et = form.end_date && form.end_date.length > 10 ? form.end_date.substring(11, 16) : ''
 
-    const res = await api.post('/portal/my-leaves', {
+    const res = await createMyLeave({
       leave_type: form.leave_type,
       start_date: sd,
       start_time: st,
@@ -453,9 +497,7 @@ const submitLeave = async () => {
     if (rawFiles.length > 0) {
       const formData = new FormData()
       rawFiles.forEach(f => formData.append('files', f))
-      await api.post(`/portal/my-leaves/${leaveId}/attachments`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      })
+      await uploadMyLeaveAttachments(leaveId, formData)
     }
 
     ElMessage.success('請假申請已送出，待主管核准')
@@ -479,9 +521,7 @@ const viewAttachments = async (row) => {
   attachLoading.value = true
   try {
     for (const filename of row.attachment_paths) {
-      const res = await api.get(`/portal/my-leaves/${row.id}/attachments/${filename}`, {
-        responseType: 'blob',
-      })
+      const res = await getMyLeaveAttachment(row.id, filename)
       const isImage = /\.(jpg|jpeg|png|gif|heic|heif)$/i.test(filename)
       attachItems.value.push({
         name: filename,
@@ -506,7 +546,7 @@ const leaveStats = ref(null)
 
 const fetchLeaveStats = async () => {
   try {
-    const res = await api.get('/portal/my-leave-stats')
+    const res = await getMyLeaveStats()
     leaveStats.value = res.data
   } catch {
     // silent
@@ -580,7 +620,7 @@ onMounted(() => {
         </el-table-column>
         <el-table-column prop="leave_hours" label="時數" width="80" />
         <el-table-column prop="reason" label="原因" />
-        <el-table-column label="附件" width="70" align="center">
+        <el-table-column label="附件" width="110" align="center">
           <template #default="{ row }">
             <el-button
               v-if="row.attachment_paths && row.attachment_paths.length > 0"
@@ -593,6 +633,13 @@ onMounted(() => {
               {{ row.attachment_paths.length }}
             </el-button>
             <span v-else class="text-secondary" style="font-size: 12px;">—</span>
+            <el-button
+              v-if="row.is_approved === null"
+              link
+              type="primary"
+              size="small"
+              @click="openSupplement(row)"
+            >補件</el-button>
           </template>
         </el-table-column>
         <el-table-column label="狀態" width="120">
@@ -763,7 +810,7 @@ onMounted(() => {
               accept=".jpg,.jpeg,.png,.gif,.heic,.heif,.pdf"
               multiple
               list-type="text"
-              :before-upload="beforeUpload"
+              :on-change="handleAttachChange"
               :on-exceed="handleExceed"
             >
               <el-button size="small" plain>
@@ -817,6 +864,33 @@ onMounted(() => {
           </a>
         </div>
       </div>
+    </el-dialog>
+    <!-- 補充附件 Dialog -->
+    <el-dialog v-model="supplementDialogVisible" title="補充附件" width="480px">
+      <el-alert type="info" :closable="false" style="margin-bottom:12px">
+        目前已有 {{ supplementLeave?.attachment_paths?.length ?? 0 }} 個附件，最多可補充至 5 個
+      </el-alert>
+      <el-upload
+        v-model:file-list="supplementFileList"
+        :auto-upload="false"
+        :limit="5 - (supplementLeave?.attachment_paths?.length ?? 0)"
+        accept=".jpg,.jpeg,.png,.gif,.heic,.heif,.pdf"
+        multiple
+        list-type="text"
+        :on-change="handleSupplementChange"
+        :on-exceed="handleSupplementExceed"
+        drag
+      >
+        <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
+        <div>拖曳或點擊選擇多個檔案</div>
+        <template #tip>
+          <div class="el-upload__tip">支援 JPG、PNG、GIF、HEIC、PDF，單檔 ≤5 MB</div>
+        </template>
+      </el-upload>
+      <template #footer>
+        <el-button @click="supplementDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="supplementLoading" @click="submitSupplement">上傳</el-button>
+      </template>
     </el-dialog>
   </div>
 </template>

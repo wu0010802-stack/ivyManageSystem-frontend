@@ -76,7 +76,8 @@ import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Monitor } from '@element-plus/icons-vue'
-import api from '@/api'
+import { getEmployees } from '@/api/employees'
+import { impersonate } from '@/api/auth'
 import { getUserInfo, clearAuth, getToken, setToken, setUserInfo } from '@/utils/auth'
 
 defineProps({
@@ -121,7 +122,7 @@ const goToPortal = async () => {
   } else {
     // 最高管理員：先載入員工清單再彈 dialog
     try {
-      const res = await api.get('/employees')
+      const res = await getEmployees()
       employeeList.value = res.data
     } catch {
       // silent
@@ -133,7 +134,7 @@ const goToPortal = async () => {
 
 const doImpersonate = async (employeeId) => {
   try {
-    const res = await api.impersonate(employeeId)
+    const res = await impersonate(employeeId)
     // 備份管理員 token（用於返回後台 & 在前台再次切換員工）
     localStorage.setItem('adminToken', getToken())
     localStorage.setItem('adminUserInfo', localStorage.getItem('userInfo'))

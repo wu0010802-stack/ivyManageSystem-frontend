@@ -1,6 +1,6 @@
 <script setup>
 import { reactive, ref, onMounted } from 'vue'
-import api from '@/api'
+import { getBonusConfig, updateBonusConfig, getGradeTargets, updateGradeTargets } from '@/api/config'
 import { ElMessage } from 'element-plus'
 
 const loadingBonus = ref(false)
@@ -33,7 +33,7 @@ const gradeTargets = ref([])
 const fetchBonusConfig = async () => {
   loadingBonus.value = true
   try {
-    const response = await api.get('/config/bonus')
+    const response = await getBonusConfig()
     Object.assign(bonusConfig, response.data)
   } catch (error) {
     ElMessage.error('獎金設定載入失敗')
@@ -44,7 +44,7 @@ const fetchBonusConfig = async () => {
 
 const fetchGradeTargets = async () => {
   try {
-    const response = await api.get('/config/grade-targets')
+    const response = await getGradeTargets()
     gradeTargets.value = Object.entries(response.data).map(([name, data]) => ({
       name,
       ...data
@@ -57,7 +57,7 @@ const fetchGradeTargets = async () => {
 const saveBonusConfig = async () => {
   loadingBonus.value = true
   try {
-    await api.put('/config/bonus', bonusConfig)
+    await updateBonusConfig(bonusConfig)
     ElMessage.success('獎金設定已儲存')
   } catch (error) {
     ElMessage.error('獎金設定儲存失敗')
@@ -78,7 +78,7 @@ const saveGradeTargets = async () => {
         overtime_one_teacher: grade.overtime_one_teacher,
         overtime_shared: grade.overtime_shared
       }
-      return api.put('/config/grade-targets', payload)
+      return updateGradeTargets(payload)
     })
     await Promise.all(updatePromises)
   } catch (error) {

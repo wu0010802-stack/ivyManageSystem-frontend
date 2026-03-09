@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
-import api from '@/api'
+import { getHistory } from '@/api/salary'
 import { ElMessage } from 'element-plus'
 import { useEmployeeStore } from '@/stores/employee'
 import { money } from '@/utils/format'
@@ -29,7 +29,7 @@ const fetchHistory = async () => {
   if (!selectedEmployeeId.value) return
   historyLoading.value = true
   try {
-    const response = await api.get(`/salaries/history?employee_id=${selectedEmployeeId.value}&months=${historyMonths.value}`)
+    const response = await getHistory({ employee_id: selectedEmployeeId.value, months: historyMonths.value })
     historyData.value = response.data.reverse()
   } catch (error) {
     ElMessage.error('載入歷史資料失敗')

@@ -1,7 +1,8 @@
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
-import api from '@/api'
+import { getSalaryLogic, getEmployeeSalaryDebug } from '@/api/dev'
+import { getEmployees } from '@/api/employees'
 
 const loading = ref(false)
 const logicData = ref(null)
@@ -21,7 +22,7 @@ const activeTab = ref('logic')
 const fetchLogic = async () => {
   loading.value = true
   try {
-    const res = await api.get('/dev/salary-logic')
+    const res = await getSalaryLogic()
     logicData.value = res.data
   } catch (e) {
     ElMessage.error('載入失敗: ' + (e.response?.data?.detail || e.message))
@@ -32,7 +33,7 @@ const fetchLogic = async () => {
 
 const fetchEmployees = async () => {
   try {
-    const res = await api.get('/employees')
+    const res = await getEmployees()
     employees.value = res.data.filter(e => e.is_active)
   } catch { /* ignore */ }
 }
@@ -45,12 +46,10 @@ const runDebug = async () => {
   debugLoading.value = true
   debugResult.value = null
   try {
-    const res = await api.get('/dev/employee-salary-debug', {
-      params: {
-        employee_id: debugForm.employee_id,
-        year: debugForm.year,
-        month: debugForm.month,
-      },
+    const res = await getEmployeeSalaryDebug({
+      employee_id: debugForm.employee_id,
+      year: debugForm.year,
+      month: debugForm.month,
     })
     debugResult.value = res.data
   } catch (e) {

@@ -2,7 +2,7 @@
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import api from '@/api'
+import { login } from '@/api/auth'
 import { setToken, setUserInfo } from '@/utils/auth'
 
 const router = useRouter()
@@ -28,10 +28,7 @@ const handleLogin = async () => {
 
   loading.value = true
   try {
-    const res = await api.post('/auth/login', {
-      username: form.username,
-      password: form.password,
-    })
+    const res = await login(form.username, form.password)
 
     if (res.data.user.role !== 'admin') {
       ElMessage.error('權限不足，僅管理員可登入後台')

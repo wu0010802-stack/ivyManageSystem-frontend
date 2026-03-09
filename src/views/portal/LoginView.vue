@@ -2,7 +2,7 @@
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import api from '@/api'
+import { login } from '@/api/auth'
 import { setToken, setUserInfo } from '@/utils/auth'
 
 const router = useRouter()
@@ -28,10 +28,7 @@ const handleLogin = async () => {
 
   loading.value = true
   try {
-    const res = await api.post('/auth/login', {
-      username: form.username,
-      password: form.password,
-    })
+    const res = await login(form.username, form.password)
     setToken(res.data.token)
     setUserInfo({ ...res.data.user, must_change_password: !!res.data.must_change_password })
     ElMessage.success(`歡迎回來，${res.data.user.name}`)

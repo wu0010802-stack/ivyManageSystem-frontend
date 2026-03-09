@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import api from '@/api'
+import { getCalendar } from '@/api/portal'
 
 const loading = ref(false)
 const events = ref([])
@@ -24,9 +24,7 @@ const monthLabel = computed(() => `${currentYear.value} 年 ${currentMonth.value
 const fetchEvents = async () => {
   loading.value = true
   try {
-    const res = await api.get('/portal/calendar', {
-      params: { year: currentYear.value, month: currentMonth.value }
-    })
+    const res = await getCalendar({ year: currentYear.value, month: currentMonth.value })
     events.value = res.data
   } catch (error) {
     ElMessage.error(error.response?.data?.detail || '載入失敗')

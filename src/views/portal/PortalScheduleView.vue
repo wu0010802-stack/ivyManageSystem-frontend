@@ -1,7 +1,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import api from '@/api'
+import { getMySchedule, getSwapRequests, getSwapCandidates, createSwapRequest, respondToSwap, cancelSwapRequest } from '@/api/portal'
 import { getUserInfo } from '@/utils/auth'
 
 const loading = ref(false)
@@ -37,9 +37,7 @@ const WEEKDAY_NAMES = ['日', '一', '二', '三', '四', '五', '六']
 const fetchSchedule = async () => {
   loading.value = true
   try {
-    const res = await api.get('/portal/my-schedule', {
-      params: { year: query.year, month: query.month },
-    })
+    const res = await getMySchedule({ year: query.year, month: query.month })
     scheduleData.value = res.data
   } catch (error) {
     ElMessage.error('載入排班失敗')
@@ -89,7 +87,7 @@ const isFutureDate = (dateStr) => {
 const fetchSwapRequests = async () => {
   swapLoading.value = true
   try {
-    const res = await api.get('/portal/swap-requests')
+    const res = await getSwapRequests()
     swapRequests.value = res.data
   } catch {
     ElMessage.error('載入換班申請失敗')
@@ -128,7 +126,7 @@ const openSwapDialog = (dateStr) => {
 const fetchCandidates = async (dateStr) => {
   candidatesLoading.value = true
   try {
-    const res = await api.get('/portal/swap-candidates', { params: { date: dateStr } })
+    const res = await getSwapCandidates({ date: dateStr })
     candidates.value = res.data
   } catch {
     ElMessage.error('載入候選老師失敗')
@@ -149,7 +147,7 @@ const submitSwap = async () => {
     return
   }
   try {
-    await api.post('/portal/swap-requests', {
+    await createSwapRequest({
       target_id: swapForm.target_id,
       swap_date: swapForm.date,
       reason: swapForm.reason,
@@ -167,7 +165,7 @@ const respondSwap = async (id, action) => {
   const label = action === 'accept' ? '接受' : '拒絕'
   try {
     await ElMessageBox.confirm(`確定要${label}此換班申請？`, '確認', { type: 'warning' })
-    await api.post(`/portal/swap-requests/${id}/respond`, { action })
+    await respondToSwap(id, action)
     ElMessage.success(`已${label}換班申請`)
     fetchSwapRequests()
     fetchSchedule()
@@ -181,7 +179,7 @@ const respondSwap = async (id, action) => {
 const cancelSwap = async (id) => {
   try {
     await ElMessageBox.confirm('確定要撤銷此換班申請？', '確認', { type: 'warning' })
-    await api.post(`/portal/swap-requests/${id}/cancel`)
+    await cancelSwapRequest(id)
     ElMessage.success('已撤銷')
     fetchSwapRequests()
   } catch (e) {

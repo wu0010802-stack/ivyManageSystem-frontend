@@ -5,7 +5,7 @@
     <div v-if="isMobile && sidebarOpen" class="sidebar-overlay" @click="closeSidebar"></div>
 
     <AdminSidebar
-      :pending-approvals="pendingTotal"
+      :pending-approvals="approvalStore.pendingTotal"
       :is-mobile="isMobile"
       :mobile-open="sidebarOpen"
       @close-sidebar="closeSidebar"
@@ -32,11 +32,11 @@ import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
 import AdminSidebar from '../components/layout/AdminSidebar.vue'
 import AdminHeader from '../components/layout/AdminHeader.vue'
-import api from '@/api'
 import { isLoggedIn } from '@/utils/auth'
+import { useApprovalStore } from '@/stores/approval'
 
 const route = useRoute()
-const pendingTotal = ref(0)
+const approvalStore = useApprovalStore()
 const isMobile = ref(false)
 const sidebarOpen = ref(false)
 
@@ -53,20 +53,10 @@ const closeSidebar = () => {
   sidebarOpen.value = false
 }
 
-const fetchApprovalSummary = async () => {
-  if (!isLoggedIn()) return
-  try {
-    const res = await api.get('/approval-summary')
-    pendingTotal.value = res.data.total || 0
-  } catch {
-    // silent
-  }
-}
-
 onMounted(() => {
   checkMobile()
   window.addEventListener('resize', checkMobile)
-  fetchApprovalSummary()
+  if (isLoggedIn()) approvalStore.fetchSummary()
 })
 
 onUnmounted(() => {
@@ -74,7 +64,7 @@ onUnmounted(() => {
 })
 
 watch(() => route.path, () => {
-  fetchApprovalSummary()
+  if (isLoggedIn()) approvalStore.fetchSummary()
 })
 </script>
 

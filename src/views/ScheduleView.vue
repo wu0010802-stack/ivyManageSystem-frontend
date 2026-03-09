@@ -1,14 +1,19 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
-import api from '@/api'
+import { getAssignments, saveAssignments, getDaily, saveDaily, deleteDaily, getSwapHistory } from '@/api/shifts'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getMonthWeeks } from '@/utils/scheduleUtils'
+import { useEmployeeStore } from '@/stores/employee'
+import { useShiftStore } from '@/stores/shift'
 
 // --- State ---
 const loading = ref(false)
 const saving = ref(false)
-const employees = ref([])
-const shiftTypes = ref([])
+const employeeStore = useEmployeeStore()
+const shiftStore = useShiftStore()
+// computed 別名：template 不需改動
+const employees = computed(() => employeeStore.employees)
+const shiftTypes = computed(() => shiftStore.activeShiftTypes)
 const assignments = ref({}) // { employee_id: { shift_type_id, notes } }
 
 // Week selector - default to current week's Monday
@@ -42,29 +47,10 @@ const teacherEmployees = computed(() => {
   return employees.value.filter(e => e.is_active && e.classroom_id)
 })
 
-// --- Data Fetch ---
-const fetchEmployees = async () => {
-  try {
-    const res = await api.get('/employees')
-    employees.value = res.data
-  } catch {
-    ElMessage.error('載入員工失敗')
-  }
-}
-
-const fetchShiftTypes = async () => {
-  try {
-    const res = await api.get('/shifts/types')
-    shiftTypes.value = res.data.filter(t => t.is_active)
-  } catch {
-    ElMessage.error('載入班別失敗')
-  }
-}
-
 const fetchAssignments = async () => {
   loading.value = true
   try {
-    const res = await api.get('/shifts/assignments', { params: { week_start: weekStart.value } })
+    const res = await getAssignments({ week_start: weekStart.value })
     // Build map: employee_id -> assignment
     const map = {}
     for (const a of res.data) {
@@ -122,7 +108,7 @@ const saveAll = async () => {
         notes: a?.notes || null,
       })
     }
-    await api.post('/shifts/assignments', {
+    await saveAssignments({
       week_start_date: weekStart.value,
       assignments: items,
     })
@@ -139,7 +125,7 @@ const saveAll = async () => {
 // 複製指定來源週排班到當前週的 local state（需手動儲存）
 const copyFromWeek = async (sourceWeekStart) => {
   try {
-    const res = await api.get('/shifts/assignments', { params: { week_start: sourceWeekStart } })
+    const res = await getAssignments({ week_start: sourceWeekStart })
     if (res.data.length === 0) {
       ElMessage.warning('來源週無排班資料')
       return
@@ -206,9 +192,9 @@ const copyPrevMonth = async () => {
   let copied = 0
   try {
     for (let i = 0; i < copyCount; i++) {
-      const res = await api.get('/shifts/assignments', { params: { week_start: sourceWeeks[i] } })
+      const res = await getAssignments({ week_start: sourceWeeks[i] })
       if (res.data.length === 0) continue // 來源週無資料，跳過不清空目標
-      await api.post('/shifts/assignments', {
+      await saveAssignments({
         week_start_date: targetWeeks[i],
         assignments: res.data.map(a => ({
           employee_id: a.employee_id,
@@ -228,7 +214,7 @@ const copyPrevMonth = async () => {
 }
 
 onMounted(async () => {
-  await Promise.all([fetchEmployees(), fetchShiftTypes()])
+  await Promise.all([employeeStore.fetchEmployees(), shiftStore.fetchShiftTypes()])
   fetchAssignments()
 })
 
@@ -273,12 +259,10 @@ const fetchDailyShiftsForDialog = async () => {
   end.setDate(end.getDate() + 4)
   
   try {
-    const res = await api.get('/shifts/daily', {
-      params: {
-        start_date: weekStart.value,
-        end_date: formatDate(end),
-        employee_id: currentEmployee.value.id
-      }
+    const res = await getDaily({
+      start_date: weekStart.value,
+      end_date: formatDate(end),
+      employee_id: currentEmployee.value.id
     })
     
     dailyShifts.value = res.data
@@ -320,7 +304,7 @@ const fetchSwapHistory = async () => {
     if (swapFilter.start_date) params.start_date = swapFilter.start_date
     if (swapFilter.end_date) params.end_date = swapFilter.end_date
     if (swapFilter.status) params.status = swapFilter.status
-    const res = await api.get('/shifts/swap-history', { params })
+    const res = await getSwapHistory(params)
     swapHistory.value = res.data
   } catch {
     ElMessage.error('載入換班紀錄失敗')
@@ -349,7 +333,7 @@ const handleDailyShiftChange = async (dateStr, shiftTypeId) => {
   try {
     if (shiftTypeId) {
       // Upsert
-      await api.post('/shifts/daily', {
+      await saveDaily({
         employee_id: currentEmployee.value.id,
         shift_type_id: shiftTypeId,
         date: dateStr
@@ -359,7 +343,7 @@ const handleDailyShiftChange = async (dateStr, shiftTypeId) => {
       // Delete if exists
       const recordId = getDailyShiftRecordId(dateStr)
       if (recordId) {
-        await api.delete(`/shifts/daily/${recordId}`)
+        await deleteDaily(recordId)
         ElMessage.success('已清除每日排班 (恢復預設)')
       }
     }

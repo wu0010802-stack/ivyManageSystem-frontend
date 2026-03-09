@@ -1,6 +1,6 @@
 <script setup>
 import { ref } from 'vue'
-import api from '@/api'
+import { approveLeave } from '@/api/leaves'
 import { ElMessage } from 'element-plus'
 
 const emit = defineEmits(['rejected'])
@@ -23,7 +23,7 @@ const confirmReject = async () => {
   }
   rejectLoading.value = true
   try {
-    await api.put(`/leaves/${rejectTarget.value.id}/approve`, {
+    await approveLeave(rejectTarget.value.id, {
       approved: false,
       rejection_reason: rejectReason.value.trim(),
     })

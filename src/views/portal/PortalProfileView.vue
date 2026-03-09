@@ -1,7 +1,7 @@
 <script setup>
 import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import api from '@/api'
+import { getProfile, updateProfile } from '@/api/portal'
 
 const loading = ref(false)
 const saving = ref(false)
@@ -27,7 +27,7 @@ const form = reactive({
 const fetchProfile = async () => {
   loading.value = true
   try {
-    const res = await api.get('/portal/profile')
+    const res = await getProfile()
     profile.value = res.data
     syncForm(res.data)
   } catch (error) {
@@ -60,7 +60,7 @@ const cancelEdit = () => {
 const saveProfile = async () => {
   saving.value = true
   try {
-    await api.put('/portal/profile', {
+    await updateProfile({
       phone: form.phone || null,
       address: form.address || null,
       emergency_contact_name: form.emergency_contact_name || null,

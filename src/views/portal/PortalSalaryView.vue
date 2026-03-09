@@ -1,7 +1,7 @@
 <script setup>
 import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import api from '@/api'
+import { getSalaryPreview } from '@/api/portal'
 
 const loading = ref(false)
 const salaryData = ref(null)
@@ -20,9 +20,7 @@ const query = reactive({
 const fetchSalary = async () => {
   loading.value = true
   try {
-    const res = await api.get('/portal/salary-preview', {
-      params: { year: query.year, month: query.month },
-    })
+    const res = await getSalaryPreview({ year: query.year, month: query.month })
     salaryData.value = res.data
   } catch (error) {
     ElMessage.error('載入失敗')

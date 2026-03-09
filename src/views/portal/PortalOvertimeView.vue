@@ -1,7 +1,7 @@
 <script setup>
 import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import api from '@/api'
+import { getMyOvertimes, createMyOvertime, deleteMyOvertime, getMyWorkdayHours } from '@/api/portal'
 
 const loading = ref(false)
 const submitLoading = ref(false)
@@ -45,9 +45,7 @@ const formRef = ref(null)
 const fetchOvertimes = async () => {
   loading.value = true
   try {
-    const res = await api.get('/portal/my-overtimes', {
-      params: { year: query.year, month: query.month },
-    })
+    const res = await getMyOvertimes({ year: query.year, month: query.month })
     overtimes.value = res.data
   } catch (error) {
     ElMessage.error('載入失敗')
@@ -73,9 +71,7 @@ watch(() => form.overtime_date, async (dateStr) => {
   typeDetecting.value = true
   try {
     // 用 workday-hours API 查詢該日的 type
-    const res = await api.get('/portal/my-workday-hours', {
-      params: { start_date: dateStr, end_date: dateStr },
-    })
+    const res = await getMyWorkdayHours({ start_date: dateStr, end_date: dateStr })
     const bd = res.data.breakdown
     if (bd && bd.length > 0) {
       const day = bd[0]
@@ -153,7 +149,7 @@ const submitOvertime = async () => {
     if (form.start_time) payload.start_time = form.start_time
     if (form.end_time) payload.end_time = form.end_time
 
-    const res = await api.post('/portal/my-overtimes', payload)
+    const res = await createMyOvertime(payload)
     ElMessage.success(`加班申請已送出，預估加班費: NT$ ${res.data.overtime_pay}`)
     showForm.value = false
     fetchOvertimes()
@@ -166,7 +162,7 @@ const submitOvertime = async () => {
 
 const withdrawOvertime = async (id) => {
   try {
-    await api.delete(`/portal/my-overtimes/${id}`)
+    await deleteMyOvertime(id)
     ElMessage.success('加班申請已撤回')
     fetchOvertimes()
   } catch (error) {

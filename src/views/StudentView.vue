@@ -1,6 +1,6 @@
 <script setup>
 import { ref, reactive, onMounted, computed, watch } from 'vue'
-import api from '@/api'
+import { getStudents, createStudent, updateStudent } from '@/api/students'
 import { ElMessage } from 'element-plus'
 import { Search, Plus, Edit, Delete } from '@element-plus/icons-vue'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
@@ -56,9 +56,7 @@ const fetchStudents = async () => {
   loading.value = true
   try {
     const skip = (currentPage.value - 1) * pageSize.value
-    const response = await api.get('/students', {
-      params: { skip, limit: pageSize.value },
-    })
+    const response = await getStudents({ skip, limit: pageSize.value })
     students.value = response.data.items
     totalStudents.value = response.data.total
   } catch (error) {
@@ -110,9 +108,9 @@ const submitForm = async () => {
     if (valid) {
       try {
         if (isEdit.value) {
-          await api.put(`/students/${form.id}`, form)
+          await updateStudent(form.id, form)
         } else {
-          await api.post('/students', form)
+          await createStudent(form)
         }
         ElMessage.success(isEdit.value ? '更新成功' : '新增成功')
         closeDialog()

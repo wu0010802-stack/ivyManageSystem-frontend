@@ -1,6 +1,6 @@
 <script setup>
 import { ref, reactive, computed, onMounted, watch } from 'vue'
-import api from '@/api'
+import { getLeaves, createLeave, updateLeave, approveLeave as approveLeaveApi, getWorkdayHours, getLeaveQuotas } from '@/api/leaves'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useEmployeeStore } from '@/stores/employee'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
@@ -161,9 +161,7 @@ const fetchWorkdayHours = async (employeeId, start, end) => {
   try {
     const sd = start.substring(0, 10)
     const ed = end.substring(0, 10)
-    const res = await api.get('/leaves/workday-hours', {
-      params: { employee_id: employeeId, start_date: sd, end_date: ed },
-    })
+    const res = await getWorkdayHours({ employee_id: employeeId, start_date: sd, end_date: ed })
     const { total_hours, breakdown } = res.data
     calcBreakdown.value = breakdown
 
@@ -324,9 +322,7 @@ const fetchQuotaInfo = async () => {
   quotaLoading.value = true
   try {
     const year = new Date().getFullYear()
-    const res = await api.get('/leaves/quotas', {
-      params: { employee_id: form.employee_id, year, leave_type: form.leave_type },
-    })
+    const res = await getLeaveQuotas({ employee_id: form.employee_id, year, leave_type: form.leave_type })
     quotaInfo.value = res.data[0] || null
   } catch {
     quotaInfo.value = null
@@ -441,7 +437,7 @@ const fetchLeaves = async () => {
     const params = { year: query.year, month: query.month }
     if (query.employee_id) params.employee_id = query.employee_id
     if (statusFilter.value) params.status = statusFilter.value
-    const response = await api.get('/leaves', { params })
+    const response = await getLeaves(params)
     leaveRecords.value = response.data
   } catch (error) {
     ElMessage.error('載入請假記錄失敗')
@@ -497,7 +493,7 @@ const saveLeave = async () => {
     const et = form.end_date && form.end_date.length > 10 ? form.end_date.substring(11, 16) : ''
 
     if (isEdit.value) {
-      await api.put(`/leaves/${form.id}`, {
+      await updateLeave(form.id, {
         leave_type: form.leave_type,
         start_date: sd,
         start_time: st,
@@ -508,7 +504,7 @@ const saveLeave = async () => {
       })
       ElMessage.success('請假記錄已更新')
     } else {
-      await api.post('/leaves', {
+      await createLeave({
         employee_id: form.employee_id,
         leave_type: form.leave_type,
         start_date: sd,
@@ -535,7 +531,7 @@ const { confirmDelete: deleteLeave } = useConfirmDelete({
 
 const approveLeave = async (row) => {
   try {
-    await api.put(`/leaves/${row.id}/approve`, { approved: true })
+    await approveLeaveApi(row.id, { approved: true })
     ElMessage.success('已核准')
     fetchLeaves()
   } catch (error) {
@@ -545,7 +541,7 @@ const approveLeave = async (row) => {
 
 const cancelApprove = async (row) => {
   try {
-    await api.put(`/leaves/${row.id}/approve`, { approved: false, rejection_reason: '取消核准' })
+    await approveLeaveApi(row.id, { approved: false, rejection_reason: '取消核准' })
     ElMessage.success('已取消核准')
     fetchLeaves()
   } catch (error) {

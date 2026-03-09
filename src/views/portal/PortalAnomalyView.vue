@@ -1,7 +1,7 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import api from '@/api'
+import { getAnomalies, confirmAnomaly as confirmAnomalyApi } from '@/api/portal'
 
 const loading = ref(false)
 const anomalies = ref([])
@@ -15,9 +15,7 @@ const query = reactive({
 const fetchAnomalies = async () => {
   loading.value = true
   try {
-    const res = await api.get('/portal/anomalies', {
-      params: { year: query.year, month: query.month },
-    })
+    const res = await getAnomalies({ year: query.year, month: query.month })
     anomalies.value = res.data.map(a => ({ ...a, selected_action: '', remark: '', submitting: false }))
   } catch (error) {
     ElMessage.error('載入失敗')
@@ -34,10 +32,7 @@ const confirmAnomaly = async (anomaly) => {
 
   anomaly.submitting = true
   try {
-    const res = await api.post(`/portal/anomalies/${anomaly.id}/confirm`, {
-      action: anomaly.selected_action,
-      remark: anomaly.remark,
-    })
+    const res = await confirmAnomalyApi(anomaly.id, anomaly.selected_action)
     ElMessage.success(res.data.message)
     anomaly.confirmed = true
   } catch (error) {

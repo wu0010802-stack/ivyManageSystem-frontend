@@ -1,7 +1,8 @@
 <script setup>
 import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { Loading } from '@element-plus/icons-vue'
-import api from '@/api'
+import { getEmployee, createEmployee, updateEmployee, offboard, getFinalSalaryPreview } from '@/api/employees'
+import { getRecords as getAttendanceRecords, uploadCsv, deleteEmployeeDateRecord } from '@/api/attendance'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import EmptyState from '@/components/common/EmptyState.vue'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
@@ -97,9 +98,7 @@ const fetchFinalSalary = async () => {
   const [year, month] = offboardForm.resign_date.split('-')
   finalSalaryLoading.value = true
   try {
-    const res = await api.get(`/employees/${offboardTarget.value.id}/final-salary-preview`, {
-      params: { year: parseInt(year), month: parseInt(month) }
-    })
+    const res = await getFinalSalaryPreview(offboardTarget.value.id, { year: parseInt(year), month: parseInt(month) })
     finalSalaryPreview.value = res.data
   } catch {
     finalSalaryPreview.value = null
@@ -120,7 +119,7 @@ const submitOffboard = async () => {
   }
   offboardLoading.value = true
   try {
-    await api.post(`/employees/${offboardTarget.value.id}/offboard`, offboardForm)
+    await offboard(offboardTarget.value.id, offboardForm)
     ElMessage.success('離職資料已更新')
     offboardVisible.value = false
     fetchEmployees()
@@ -201,12 +200,10 @@ const fetchAttendance = async () => {
   if (!currentDetail.value.id || !attendanceMonth.value) return
   const [year, month] = attendanceMonth.value.split('-')
   try {
-    const response = await api.get(`/attendance/records`, {
-      params: {
-        employee_id: currentDetail.value.id,
-        year: parseInt(year),
-        month: parseInt(month)
-      }
+    const response = await getAttendanceRecords({
+      employee_id: currentDetail.value.id,
+      year: parseInt(year),
+      month: parseInt(month)
     })
     attendanceRecords.value = response.data
   } catch (error) {
@@ -245,7 +242,7 @@ const editAttendance = (row) => {
         }]
      }
      try {
-        await api.post('/attendance/upload-csv', payload)
+        await uploadCsv(payload)
         ElMessage.success('出勤已更新')
         fetchAttendance()
      } catch (err) {
@@ -259,7 +256,7 @@ const deleteAttendance = (row) => {
       type: 'warning'
    }).then(async () => {
       try {
-         await api.delete(`/attendance/records/${currentDetail.value.id}/${row.date}`)
+         await deleteEmployeeDateRecord(currentDetail.value.id, row.date)
          ElMessage.success('已刪除')
          fetchAttendance()
       } catch (err) {
@@ -270,7 +267,7 @@ const deleteAttendance = (row) => {
 
 const handleDetail = async (row) => {
   try {
-    const response = await api.get(`/employees/${row.id}`)
+    const response = await getEmployee(row.id)
     currentDetail.value = response.data
     // Default to current month or whatever is set
     attendanceMonth.value = new Date().toISOString().slice(0, 7)
@@ -287,10 +284,10 @@ const saveEmployee = async () => {
     if (valid) {
       try {
         if (isEdit.value) {
-          await api.put(`/employees/${form.id}`, form)
+          await updateEmployee(form.id, form)
           ElMessage.success('員工資料已更新')
         } else {
-          await api.post('/employees', form)
+          await createEmployee(form)
           ElMessage.success('員工已新增')
         }
         closeDialog()

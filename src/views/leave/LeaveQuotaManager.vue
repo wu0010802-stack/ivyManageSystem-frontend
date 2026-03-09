@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue'
-import api from '@/api'
+import { getLeaveQuotas, initLeaveQuotas, updateLeaveQuota } from '@/api/leaves'
 import { ElMessage } from 'element-plus'
 import { useEmployeeStore } from '@/stores/employee'
 import { LEAVE_TYPES as leaveTypes } from '@/utils/leaves'
@@ -28,9 +28,7 @@ const loadQuotaMgr = async () => {
   if (!quotaMgrEmpId.value) return
   quotaMgrLoading.value = true
   try {
-    const res = await api.get('/leaves/quotas', {
-      params: { employee_id: quotaMgrEmpId.value, year: quotaMgrYear.value },
-    })
+    const res = await getLeaveQuotas({ employee_id: quotaMgrEmpId.value, year: quotaMgrYear.value })
     quotaRows.value = res.data.map(r => ({ ...r, _editing: false, _newTotal: r.total_hours }))
   } catch {
     ElMessage.error('載入配額失敗')
@@ -43,9 +41,7 @@ const initQuotas = async () => {
   if (!quotaMgrEmpId.value) { ElMessage.warning('請先選擇員工'); return }
   quotaMgrLoading.value = true
   try {
-    const res = await api.post('/leaves/quotas/init', null, {
-      params: { employee_id: quotaMgrEmpId.value, year: quotaMgrYear.value },
-    })
+    const res = await initLeaveQuotas({ employee_id: quotaMgrEmpId.value, year: quotaMgrYear.value })
     quotaRows.value = res.data.map(r => ({ ...r, _editing: false, _newTotal: r.total_hours }))
     ElMessage.success('已依勞基法初始化配額')
   } catch (err) {
@@ -58,10 +54,7 @@ const initQuotas = async () => {
 const saveQuotaRow = async (row) => {
   quotaSaving.value = true
   try {
-    const res = await api.put(`/leaves/quotas/${row.id}`, {
-      total_hours: row._newTotal,
-      note: row.note,
-    })
+    const res = await updateLeaveQuota(row.id, { total_hours: row._newTotal, note: row.note })
     Object.assign(row, res.data, { _editing: false, _newTotal: res.data.total_hours })
     ElMessage.success('已儲存')
   } catch (err) {

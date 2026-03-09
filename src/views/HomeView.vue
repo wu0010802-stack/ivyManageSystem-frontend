@@ -1,6 +1,8 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
-import api from '@/api'
+import { getStudents } from '@/api/students'
+import { getToday, getTodayAnomalies } from '@/api/attendance'
+import { getApprovalSummary, getUpcomingEvents, getProbationAlerts } from '@/api/home'
 import { useRouter } from 'vue-router'
 import StatCard from '@/components/common/StatCard.vue'
 import { useEmployeeStore } from '@/stores/employee'
@@ -82,24 +84,24 @@ const fetchDashboardData = async () => {
   loading.value = true
   await Promise.all([
     employeeStore.fetchEmployees().catch(() => {}),
-    api.get('/students', { params: { limit: 1 } })
+    getStudents({ limit: 1 })
       .then(r => { studentCount.value = r.data.total })
       .catch(() => {}),
     showAttendance
-      ? api.get('/attendance/today').then(r => { todayStats.value = r.data }).catch(() => {})
+      ? getToday().then(r => { todayStats.value = r.data }).catch(() => {})
       : null,
     showApprovals
-      ? api.get('/approval-summary').then(r => { approvalSummary.value = r.data }).catch(() => {})
+      ? getApprovalSummary().then(r => { approvalSummary.value = r.data }).catch(() => {})
       : null,
     showCalendar
-      ? api.get('/upcoming-events').then(r => { upcomingEvents.value = r.data }).catch(() => {})
+      ? getUpcomingEvents().then(r => { upcomingEvents.value = r.data }).catch(() => {})
       : null,
     showAttendance
-      ? api.get('/attendance/today-anomalies', { params: { late_threshold: 15 } })
+      ? getTodayAnomalies({ late_threshold: 15 })
           .then(r => { attendanceAnomalies.value = r.data }).catch(() => {})
       : null,
     showEmployees
-      ? api.get('/probation-alerts')
+      ? getProbationAlerts()
           .then(r => { probationAlerts.value = r.data }).catch(() => {})
       : null,
   ].filter(Boolean))

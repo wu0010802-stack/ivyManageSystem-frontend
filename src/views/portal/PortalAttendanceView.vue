@@ -1,7 +1,7 @@
 <script setup>
 import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
-import api from '@/api'
+import { getAttendanceSheet } from '@/api/portal'
 import { getUserInfo } from '@/utils/auth'
 
 const loading = ref(false)
@@ -27,9 +27,7 @@ const onResize = () => {
 const fetchSheet = async () => {
   loading.value = true
   try {
-    const res = await api.get('/portal/attendance-sheet', {
-      params: { year: query.year, month: query.month },
-    })
+    const res = await getAttendanceSheet({ year: query.year, month: query.month })
     sheetData.value = res.data
   } catch (error) {
     ElMessage.error('載入失敗: ' + (error.response?.data?.detail || error.message))

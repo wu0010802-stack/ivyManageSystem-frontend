@@ -1,8 +1,9 @@
 <script setup>
 import { ref, reactive, computed, onMounted, watch } from 'vue'
-import api from '@/api'
+import { getMeetings, getMeetingSummary, createBatch, updateMeeting, deleteMeeting } from '@/api/meetings'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { money } from '@/utils/format'
+import { useEmployeeStore } from '@/stores/employee'
 
 const currentYear = new Date().getFullYear()
 const currentMonth = new Date().getMonth() + 1
@@ -17,7 +18,8 @@ const query = reactive({
 
 // Data
 const meetingRecords = ref([])
-const employees = ref([])
+const employeeStore = useEmployeeStore()
+const employees = computed(() => employeeStore.employees.filter(e => e.is_active !== false))
 const summaryData = ref([])
 
 // Batch dialog
@@ -45,9 +47,7 @@ const editForm = reactive({
 const fetchRecords = async () => {
   loading.value = true
   try {
-    const res = await api.get('/meetings', {
-      params: { year: query.year, month: query.month }
-    })
+    const res = await getMeetings({ year: query.year, month: query.month })
     meetingRecords.value = res.data
   } catch (error) {
     ElMessage.error('載入園務會議記錄失敗')
@@ -60,9 +60,7 @@ const fetchRecords = async () => {
 const fetchSummary = async () => {
   loading.value = true
   try {
-    const res = await api.get('/meetings/summary', {
-      params: { year: query.year, month: query.month }
-    })
+    const res = await getMeetingSummary({ year: query.year, month: query.month })
     summaryData.value = res.data
   } catch (error) {
     ElMessage.error('載入統計資料失敗')
@@ -71,15 +69,6 @@ const fetchSummary = async () => {
   }
 }
 
-// Fetch employees
-const fetchEmployees = async () => {
-  try {
-    const res = await api.get('/employees')
-    employees.value = res.data.filter(e => e.is_active !== false)
-  } catch (error) {
-    ElMessage.error('載入員工列表失敗')
-  }
-}
 
 // Group records by date
 const groupedByDate = computed(() => {
@@ -144,7 +133,7 @@ const submitBatch = async () => {
 
   loading.value = true
   try {
-    await api.post('/meetings/batch', {
+    await createBatch({
       meeting_date: batchForm.meeting_date,
       meeting_type: batchForm.meeting_type,
       attendees,
@@ -175,7 +164,7 @@ const handleEdit = (row) => {
 
 const submitEdit = async () => {
   try {
-    await api.put(`/meetings/${editForm.id}`, {
+    await updateMeeting(editForm.id, {
       attended: editForm.attended,
       overtime_hours: editForm.overtime_hours,
       overtime_pay: editForm.overtime_pay,
@@ -196,7 +185,7 @@ const handleDelete = (row) => {
     type: 'warning'
   }).then(async () => {
     try {
-      await api.delete(`/meetings/${row.id}`)
+      await deleteMeeting(row.id)
       ElMessage.success('刪除成功')
       fetchRecords()
       if (activeTab.value === 'summary') fetchSummary()
@@ -213,7 +202,7 @@ const handleDeleteDate = (dateStr) => {
     type: 'warning'
   }).then(async () => {
     try {
-      await Promise.all(records.map(r => api.delete(`/meetings/${r.id}`)))
+      await Promise.all(records.map(r => deleteMeeting(r.id)))
       ElMessage.success('刪除成功')
       fetchRecords()
     } catch (error) {
@@ -232,7 +221,7 @@ watch(activeTab, (val) => {
 })
 
 onMounted(() => {
-  fetchEmployees()
+  employeeStore.fetchEmployees()
   fetchRecords()
 })
 </script>

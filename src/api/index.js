@@ -88,9 +88,4 @@ function _redirectToLogin() {
     }
 }
 
-// Employee Switcher
-api.impersonate = (employeeId) => {
-    return api.post('/auth/impersonate', { employee_id: employeeId })
-}
-
 export default api

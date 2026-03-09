@@ -1,6 +1,6 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
-import api from '@/api'
+import { calculate, getFestivalBonus, getRecords } from '@/api/salary'
 import { ElMessage } from 'element-plus'
 import { useEmployeeStore } from '@/stores/employee'
 import { Search, InfoFilled } from '@element-plus/icons-vue'
@@ -31,7 +31,7 @@ const employeeStore = useEmployeeStore()
 const calculateSalary = async () => {
   loading.value = true
   try {
-    const response = await api.post(`/salaries/calculate?year=${query.year}&month=${query.month}`)
+    const response = await calculate(query.year, query.month)
     salaryResults.value = response.data
     hasCalculated.value = true
     ElMessage.success('薪資計算完成')
@@ -46,7 +46,7 @@ const calculateSalary = async () => {
 const fetchFestivalBonus = async () => {
   loading.value = true
   try {
-    const response = await api.get(`/salaries/festival-bonus?year=${query.year}&month=${query.month}`)
+    const response = await getFestivalBonus(query.year, query.month)
     bonusResults.value = response.data
     showBonusDialog.value = true
   } catch (error) {
@@ -65,7 +65,7 @@ const salaryRecords = ref([])
 
 const fetchSalaryRecords = async () => {
   try {
-    const response = await api.get(`/salaries/records?year=${query.year}&month=${query.month}`)
+    const response = await getRecords(query.year, query.month)
     salaryRecords.value = response.data
   } catch (error) {
     // silent - records may not exist yet
@@ -88,6 +88,10 @@ const exportPdf = (row) => {
 
 const exportAllExcel = () => {
   downloadFile(`/salaries/export-all?year=${query.year}&month=${query.month}&format=xlsx`, `${query.year}年${query.month}月薪資總表.xlsx`)
+}
+
+const exportAllPdf = () => {
+  downloadFile(`/salaries/export-all?year=${query.year}&month=${query.month}&format=pdf`, `${query.year}年${query.month}月薪資總表.pdf`)
 }
 
 const pct = (val) => {
@@ -120,6 +124,7 @@ onMounted(() => {
             <el-button type="success" :loading="loading" @click="calculateSalary">計算薪資</el-button>
             <el-button type="primary" :loading="loading" @click="fetchFestivalBonus">節慶獎金明細</el-button>
             <el-button v-if="salaryRecords.length > 0" type="warning" @click="exportAllExcel">匯出全部 Excel</el-button>
+            <el-button v-if="salaryRecords.length > 0" type="danger" @click="exportAllPdf">匯出全部 PDF</el-button>
           </div>
         </el-card>
 

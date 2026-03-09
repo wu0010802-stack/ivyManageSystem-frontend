@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import api from '@/api'
+import { getEmployees } from '@/api/employees'
 
 const TTL = 5 * 60 * 1000 // 5 分鐘快取
 
@@ -27,7 +27,7 @@ export const useEmployeeStore = defineStore('employee', {
       if (this._pending) return this._pending
 
       this.loading = true
-      this._pending = api.get('/employees')
+      this._pending = getEmployees()
         .then(res => {
           this.employees = res.data
           this._fetchedAt = Date.now()

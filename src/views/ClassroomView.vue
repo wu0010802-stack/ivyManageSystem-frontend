@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted } from 'vue'
-import api from '@/api'
+import { getClassroom, updateClassroom, getTeachers } from '@/api/classrooms'
 import { ElMessage } from 'element-plus'
 import { useClassroomStore } from '@/stores/classroom'
 
@@ -28,7 +28,7 @@ const fetchClassrooms = async () => {
 
 const fetchTeachers = async () => {
   try {
-    const response = await api.get('/teachers')
+    const response = await getTeachers()
     teachers.value = response.data
   } catch {
     ElMessage.error('載入教師資料失敗')
@@ -38,7 +38,7 @@ const fetchTeachers = async () => {
 const handleEdit = async (classroom) => {
   try {
     // Fetch full details
-    const response = await api.get(`/classrooms/${classroom.id}`)
+    const response = await getClassroom(classroom.id)
     currentClassroom.value = response.data
     form.value.head_teacher_id = currentClassroom.value.head_teacher_id
     form.value.assistant_teacher_id = currentClassroom.value.assistant_teacher_id
@@ -63,7 +63,7 @@ const saveClassroom = async () => {
     if (form.value.art_teacher_id) params.append('art_teacher_id', form.value.art_teacher_id)
     else params.append('art_teacher_id', '0')
 
-    await api.put(`/classrooms/${currentClassroom.value.id}?${params.toString()}`)
+    await updateClassroom(currentClassroom.value.id, params.toString())
     
     ElMessage.success('班級更新成功')
     dialogVisible.value = false

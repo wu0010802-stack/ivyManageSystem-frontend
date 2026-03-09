@@ -1,10 +1,16 @@
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
-import api from '@/api'
+import { ref, reactive, computed, onMounted } from 'vue'
+import { getTitles, createTitle, updateTitle, deleteTitle, getAttendancePolicy, updateAttendancePolicy, getInsuranceRates, updateInsuranceRates } from '@/api/config'
+import { createShiftType, updateShiftType, deleteShiftType } from '@/api/shifts'
+import { getUsers, getPermissions, createUser, updateUser, deleteUser, resetPassword } from '@/api/auth'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useConfigStore } from '@/stores/config'
+import { useEmployeeStore } from '@/stores/employee'
+import { useShiftStore } from '@/stores/shift'
 
 const configStore = useConfigStore()
+const employeeStore = useEmployeeStore()
+const shiftStore = useShiftStore()
 
 const activeTab = ref('titles')
 const loadingTitles = ref(false)
@@ -13,7 +19,7 @@ const titleForm = reactive({ id: null, name: '', rank: 0 })
 
 // User Accounts
 const users = ref([])
-const employees = ref([])
+const employees = computed(() => employeeStore.employees)
 const loadingUsers = ref(false)
 const userDialogVisible = ref(false)
 const userForm = reactive({ employee_id: null, username: '', password: '', role: 'teacher', permissions: -1 })
@@ -29,9 +35,9 @@ const attendanceConfig = reactive({
   festival_bonus_months: 3
 })
 
-// Shift Types
-const shiftTypes = ref([])
-const loadingShifts = ref(false)
+// Shift Types（由 shiftStore 管理，computed 別名讓 template 不需改動）
+const shiftTypes = computed(() => shiftStore.shiftTypes)
+const loadingShifts = computed(() => shiftStore.loading)
 const shiftDialogVisible = ref(false)
 const shiftForm = reactive({ id: null, name: '', work_start: '08:00', work_end: '17:00', sort_order: 0 })
 
@@ -81,7 +87,7 @@ const handleDeleteTitle = (row) => {
     type: 'warning'
   }).then(async () => {
     try {
-      await api.delete(`/config/titles/${row.id}`)
+      await deleteTitle(row.id)
       ElMessage.success('已刪除')
       fetchJobTitles()
     } catch (error) {
@@ -93,9 +99,9 @@ const handleDeleteTitle = (row) => {
 const saveTitle = async () => {
   try {
     if (titleForm.id) {
-      await api.put(`/config/titles/${titleForm.id}`, titleForm)
+      await updateTitle(titleForm.id, titleForm)
     } else {
-      await api.post('/config/titles', titleForm)
+      await createTitle(titleForm)
     }
     ElMessage.success('已儲存')
     titleDialogVisible.value = false
@@ -108,7 +114,7 @@ const saveTitle = async () => {
 // ---- Attendance ----
 const fetchAttendanceConfig = async () => {
   try {
-    const response = await api.get('/config/attendance-policy')
+    const response = await getAttendancePolicy()
     if (response.data && response.data.id) {
       Object.assign(attendanceConfig, response.data)
     }
@@ -119,7 +125,7 @@ const fetchAttendanceConfig = async () => {
 
 const saveAttendanceConfig = async () => {
   try {
-    await api.put('/config/attendance-policy', attendanceConfig)
+    await updateAttendancePolicy(attendanceConfig)
     ElMessage.success('考勤規則已儲存')
   } catch (error) {
     ElMessage.error('儲存考勤規則失敗: ' + (error.response?.data?.detail || error.message))
@@ -130,7 +136,7 @@ const saveAttendanceConfig = async () => {
 const fetchInsuranceRates = async () => {
   loadingInsurance.value = true
   try {
-    const response = await api.get('/config/insurance-rates')
+    const response = await getInsuranceRates()
     if (response.data && response.data.id) {
       Object.assign(insuranceConfig, response.data)
     }
@@ -144,7 +150,7 @@ const fetchInsuranceRates = async () => {
 const saveInsuranceRates = async () => {
   loadingInsurance.value = true
   try {
-    await api.put('/config/insurance-rates', insuranceConfig)
+    await updateInsuranceRates(insuranceConfig)
     ElMessage.success('勞健保費率已儲存')
   } catch (error) {
     ElMessage.error('儲存勞健保費率失敗')
@@ -154,18 +160,6 @@ const saveInsuranceRates = async () => {
 }
 
 // ---- Shift Types ----
-const fetchShiftTypes = async () => {
-  loadingShifts.value = true
-  try {
-    const res = await api.get('/shifts/types')
-    shiftTypes.value = res.data
-  } catch (error) {
-    ElMessage.error('載入班別失敗')
-  } finally {
-    loadingShifts.value = false
-  }
-}
-
 const handleAddShift = () => {
   shiftForm.id = null
   shiftForm.name = ''
@@ -188,9 +182,9 @@ const handleDeleteShift = (row) => {
   ElMessageBox.confirm(`確定刪除班別「${row.name}」？`, '警告', { type: 'warning' })
     .then(async () => {
       try {
-        await api.delete(`/shifts/types/${row.id}`)
+        await deleteShiftType(row.id)
         ElMessage.success('已刪除')
-        fetchShiftTypes()
+        shiftStore.refresh()
       } catch (error) {
         ElMessage.error(error.response?.data?.detail || '刪除失敗')
       }
@@ -204,13 +198,13 @@ const saveShift = async () => {
   }
   try {
     if (shiftForm.id) {
-      await api.put(`/shifts/types/${shiftForm.id}`, shiftForm)
+      await updateShiftType(shiftForm.id, shiftForm)
     } else {
-      await api.post('/shifts/types', shiftForm)
+      await createShiftType(shiftForm)
     }
     ElMessage.success('已儲存')
     shiftDialogVisible.value = false
-    fetchShiftTypes()
+    shiftStore.refresh()
   } catch (error) {
     ElMessage.error(error.response?.data?.detail || '儲存失敗')
   }
@@ -220,7 +214,7 @@ const saveShift = async () => {
 const fetchUsers = async () => {
   loadingUsers.value = true
   try {
-    const res = await api.get('/auth/users')
+    const res = await getUsers()
     users.value = res.data
   } catch (error) {
     // Admin token may not be set - silently fail
@@ -231,18 +225,11 @@ const fetchUsers = async () => {
 
 const fetchPermissionDefinition = async () => {
   try {
-    const res = await api.get('/auth/permissions')
+    const res = await getPermissions()
     permissionDefinition.value = res.data
   } catch (error) {
     console.error('載入權限定義失敗', error)
   }
-}
-
-const fetchEmployees = async () => {
-  try {
-    const res = await api.get('/employees')
-    employees.value = res.data
-  } catch {}
 }
 
 const availableEmployees = () => {
@@ -256,7 +243,7 @@ const handleAddUser = () => {
   userForm.password = ''
   userForm.role = 'teacher'
   userForm.permissions = -1
-  fetchEmployees()
+  employeeStore.fetchEmployees()
   userDialogVisible.value = true
 }
 
@@ -276,7 +263,7 @@ const saveUser = async () => {
     if (!isUsingDefaultPermissions(userForm)) {
       payload.permissions = userForm.permissions
     }
-    await api.post('/auth/users', payload)
+    await createUser(payload)
     ElMessage.success('帳號建立成功')
     userDialogVisible.value = false
     fetchUsers()
@@ -298,9 +285,7 @@ const submitResetPassword = async () => {
     return
   }
   try {
-    await api.put(`/auth/users/${resetPasswordForm.user_id}/reset-password`, {
-      new_password: resetPasswordForm.new_password,
-    })
+    await resetPassword(resetPasswordForm.user_id, resetPasswordForm.new_password)
     ElMessage.success('密碼重設成功')
     resetDialogVisible.value = false
   } catch (error) {
@@ -312,7 +297,7 @@ const handleDeleteUser = (user) => {
   ElMessageBox.confirm(`確定刪除帳號 ${user.username}？`, '警告', { type: 'warning' })
     .then(async () => {
       try {
-        await api.delete(`/auth/users/${user.id}`)
+        await deleteUser(user.id)
         ElMessage.success('帳號已刪除')
         fetchUsers()
       } catch (error) {
@@ -345,7 +330,7 @@ const saveEditUser = async () => {
     if (editUserForm.role !== 'teacher' && !isUsingDefaultPermissions(editUserForm)) {
       payload.permissions = editUserForm.permissions
     }
-    await api.put(`/auth/users/${editUserForm.id}`, payload)
+    await updateUser(editUserForm.id, payload)
     ElMessage.success('使用者已更新')
     editUserDialogVisible.value = false
     fetchUsers()
@@ -429,7 +414,7 @@ onMounted(() => {
   fetchJobTitles()
   fetchAttendanceConfig()
   fetchInsuranceRates()
-  fetchShiftTypes()
+  shiftStore.fetchShiftTypes()
   fetchUsers()
   fetchPermissionDefinition()
 })
