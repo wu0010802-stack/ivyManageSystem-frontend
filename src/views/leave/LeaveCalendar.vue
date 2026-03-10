@@ -225,7 +225,7 @@ watch(calFilterEmp, () => {
         </div>
 
         <!-- 請假事件 -->
-        <div class="cal-events">
+        <div v-if="cell.day" class="cal-events">
           <div
             v-for="lv in cell.leaves.slice(0, 4)"
             :key="lv.id"

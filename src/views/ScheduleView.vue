@@ -1,6 +1,6 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
-import { getAssignments, saveAssignments, getDaily, saveDaily, deleteDaily, getSwapHistory } from '@/api/shifts'
+import { getAssignments, saveAssignments, getDaily, saveDaily, deleteDaily, getSwapHistory, getShiftImportTemplate, importShifts, exportShifts } from '@/api/shifts'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getMonthWeeks } from '@/utils/scheduleUtils'
 import { useEmployeeStore } from '@/stores/employee'
@@ -327,6 +327,60 @@ const swapStatusType = (status) => {
   return { pending: 'warning', accepted: 'success', rejected: 'danger', cancelled: 'info' }[status] || 'info'
 }
 
+// --- 排班 Excel 匯入/匯出 ---
+const shiftImportVisible = ref(false)
+const shiftImportLoading = ref(false)
+const shiftImportResult = ref(null)
+
+const downloadShiftTemplate = async () => {
+  try {
+    const res = await getShiftImportTemplate()
+    const url = URL.createObjectURL(new Blob([res.data]))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = '排班匯入範本.xlsx'
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch {
+    ElMessage.error('下載範本失敗')
+  }
+}
+
+const exportCurrentWeekShifts = async () => {
+  try {
+    const res = await exportShifts(weekStart.value)
+    const url = URL.createObjectURL(new Blob([res.data]))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `排班表_${weekStart.value}.xlsx`
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch {
+    ElMessage.error('匯出失敗')
+  }
+}
+
+const handleShiftImportFile = async (file) => {
+  const formData = new FormData()
+  formData.append('file', file.raw)
+  shiftImportLoading.value = true
+  shiftImportResult.value = null
+  try {
+    const res = await importShifts(formData, weekStart.value)
+    shiftImportResult.value = res.data
+    if (res.data.failed === 0) {
+      ElMessage.success(`匯入完成，共 ${res.data.upserted} 筆排班`)
+    } else {
+      ElMessage.warning(`匯入完成，成功 ${res.data.upserted} 筆，失敗 ${res.data.failed} 筆`)
+    }
+    fetchAssignments()
+  } catch (error) {
+    ElMessage.error(error.response?.data?.detail || '匯入失敗')
+  } finally {
+    shiftImportLoading.value = false
+  }
+}
+
 const handleDailyShiftChange = async (dateStr, shiftTypeId) => {
   if (!currentEmployee.value) return
   
@@ -387,6 +441,9 @@ const handleDailyShiftChange = async (dateStr, shiftTypeId) => {
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
+            <el-button @click="exportCurrentWeekShifts">匯出本週班表</el-button>
+            <el-button @click="downloadShiftTemplate">下載範本</el-button>
+            <el-button @click="shiftImportVisible = true">匯入班表</el-button>
             <el-button type="primary" @click="saveAll" :loading="saving">儲存排班</el-button>
           </div>
         </el-card>
@@ -504,6 +561,43 @@ const handleDailyShiftChange = async (dateStr, shiftTypeId) => {
       </template>
     </el-dialog>
 
+    <!-- 排班批次匯入 Dialog -->
+    <el-dialog v-model="shiftImportVisible" title="批次匯入排班" width="500px">
+      <p style="margin-bottom:12px; color: #606266; font-size: 13px;">
+        上傳 Excel 檔，格式：員工編號 | 員工姓名 | 班別名稱。
+        匯入後將覆蓋當週 ({{ weekStart }}) 的週排班設定。
+      </p>
+      <el-upload
+        drag
+        :auto-upload="false"
+        :on-change="handleShiftImportFile"
+        accept=".xlsx"
+        :show-file-list="false"
+        :disabled="shiftImportLoading"
+      >
+        <div style="padding: 20px 0;">
+          <div style="font-size: 28px; margin-bottom: 8px;">📊</div>
+          <div>拖曳或點擊上傳 .xlsx 檔案</div>
+        </div>
+      </el-upload>
+      <div v-if="shiftImportLoading" style="text-align: center; margin-top: 12px;">
+        <el-icon class="is-loading"><Loading /></el-icon> 匯入中...
+      </div>
+      <div v-if="shiftImportResult" style="margin-top: 16px;">
+        <el-alert
+          :type="shiftImportResult.failed === 0 ? 'success' : 'warning'"
+          :title="`共 ${shiftImportResult.total} 筆，成功 ${shiftImportResult.upserted} 筆，失敗 ${shiftImportResult.failed} 筆`"
+          :closable="false"
+        />
+        <div v-if="shiftImportResult.errors?.length" style="margin-top: 8px; max-height: 150px; overflow-y: auto;">
+          <div v-for="(err, i) in shiftImportResult.errors" :key="i" style="color: #f56c6c; font-size: 13px;">{{ err }}</div>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="shiftImportVisible = false">關閉</el-button>
+      </template>
+    </el-dialog>
+
     <!-- Daily Shift Dialog -->
     <el-dialog
       v-model="dailyDialogVisible"
@@ -550,9 +644,9 @@ const handleDailyShiftChange = async (dateStr, shiftTypeId) => {
 </template>
 
 <script>
-import { ArrowRight } from '@element-plus/icons-vue'
+import { ArrowRight, Loading } from '@element-plus/icons-vue'
 export default {
-  components: { ArrowRight }
+  components: { ArrowRight, Loading }
 }
 </script>
 

@@ -3,6 +3,7 @@ import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { Loading } from '@element-plus/icons-vue'
 import { getEmployee, createEmployee, updateEmployee, offboard, getFinalSalaryPreview } from '@/api/employees'
 import { getRecords as getAttendanceRecords, uploadCsv, deleteEmployeeDateRecord } from '@/api/attendance'
+import { getPositionSalary } from '@/api/config'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import EmptyState from '@/components/common/EmptyState.vue'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
@@ -26,12 +27,38 @@ const rules = {
   name: [{ required: true, message: '請輸入姓名', trigger: 'blur' }]
 }
 
+const positionSalaryConfig = ref(null)
+const suggestedSalary = ref(null)
+
+const POSITION_OPTIONS = ['班導', '副班導', '主任', '組長', '副組長', '司機', '美編', '行政', '美語教師']
+
+const TITLE_TO_GRADE = {
+  '幼兒園教師': 'A',
+  '教保員': 'B',
+  '助理教保員': 'C',
+}
+
+const detectRole = (position) => {
+  if (!position) return null
+  if (position.includes('班導') && !position.includes('副')) return 'head'
+  if (position.includes('副班導')) return 'assistant'
+  return null
+}
+
+const titleToGrade = (jobTitleId) => {
+  if (!jobTitleId || !configStore.jobTitles) return null
+  const jt = configStore.jobTitles.find(t => t.id === jobTitleId)
+  if (!jt) return null
+  return TITLE_TO_GRADE[jt.name] || null
+}
+
 const form = reactive({
   id: null,
   employee_id: '',
   name: '',
   job_title_id: null,
   position: '',
+  bonus_grade: null,
   department: 'Teaching',
   phone: '',
   email: '',
@@ -61,6 +88,19 @@ watch(() => form.hire_date, (val) => {
     const d = new Date(val)
     d.setMonth(d.getMonth() + 3)
     form.probation_end_date = d.toISOString().slice(0, 10)
+  }
+})
+
+// 根據職稱 + 職位 + bonus_grade 計算建議底薪
+watch([() => form.job_title_id, () => form.position, () => form.bonus_grade], () => {
+  if (!positionSalaryConfig.value) { suggestedSalary.value = null; return }
+  const role = detectRole(form.position)
+  const grade = (form.bonus_grade || titleToGrade(form.job_title_id) || '').toLowerCase()
+  if (role && grade) {
+    const key = `${role === 'head' ? 'head_teacher' : 'assistant_teacher'}_${grade}`
+    suggestedSalary.value = positionSalaryConfig.value[key] ?? null
+  } else {
+    suggestedSalary.value = null
   }
 })
 
@@ -172,10 +212,12 @@ const resetForm = () => {
   form.id = null
   form.job_title_id = null
   form.classroom_id = null
+  form.bonus_grade = null
   form.department = 'Teaching'
   form.work_start_time = '08:00'
   form.work_end_time = '17:00'
   form.probation_end_date = ''
+  suggestedSalary.value = null
 }
 
 const populateForm = (row) => {
@@ -299,10 +341,14 @@ const saveEmployee = async () => {
   })
 }
 
-onMounted(() => {
+onMounted(async () => {
   fetchEmployees()
   configStore.fetchJobTitles()
   classroomStore.fetchClassrooms()
+  try {
+    const res = await getPositionSalary()
+    positionSalaryConfig.value = res.data
+  } catch {}
 })
 </script>
 
@@ -393,7 +439,36 @@ onMounted(() => {
               </el-col>
               <el-col :span="12">
                 <el-form-item label="職位" prop="position">
-                  <el-input v-model="form.position" placeholder="例: 教師" />
+                  <el-select
+                    v-model="form.position"
+                    filterable
+                    allow-create
+                    default-first-option
+                    placeholder="選擇或輸入職位"
+                    style="width: 100%"
+                  >
+                    <el-option v-for="p in POSITION_OPTIONS" :key="p" :label="p" :value="p" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-row :gutter="20">
+              <el-col :span="12">
+                <el-form-item label="獎金等級覆蓋">
+                  <el-select v-model="form.bonus_grade" clearable placeholder="自動（依職稱）" style="width: 100%">
+                    <el-option label="A 級（幼兒園教師）" value="A" />
+                    <el-option label="B 級（教保員）" value="B" />
+                    <el-option label="C 級（助理教保員）" value="C" />
+                  </el-select>
+                  <div style="font-size:12px;color:#909399;margin-top:4px">C→B 升級時使用；空白表示依職稱自動判斷</div>
+                </el-form-item>
+              </el-col>
+              <el-col :span="12" v-if="suggestedSalary !== null">
+                <el-form-item label="建議底薪">
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <span style="font-size:16px;font-weight:bold;color:#67c23a">${{ suggestedSalary?.toLocaleString() }}</span>
+                    <el-button size="small" @click="form.base_salary = suggestedSalary">套用</el-button>
+                  </div>
                 </el-form-item>
               </el-col>
             </el-row>

@@ -27,3 +27,8 @@ export const updateBonusConfig = (data) => api.put('/config/bonus', data)
 export const getGradeTargets = () => api.get('/config/grade-targets')
 
 export const updateGradeTargets = (payload) => api.put('/config/grade-targets', payload)
+
+// ----- 職位標準底薪 -----
+export const getPositionSalary = () => api.get('/config/position-salary')
+
+export const updatePositionSalary = (data) => api.put('/config/position-salary', data)

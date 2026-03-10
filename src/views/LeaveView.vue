@@ -1,6 +1,8 @@
 <script setup>
 import { ref, reactive, computed, onMounted, watch } from 'vue'
-import { getLeaves, createLeave, updateLeave, approveLeave as approveLeaveApi, getWorkdayHours, getLeaveQuotas } from '@/api/leaves'
+import { getLeaves, createLeave, updateLeave, approveLeave as approveLeaveApi, getWorkdayHours, getLeaveQuotas, batchApproveLeaves, getLeaveImportTemplate, importLeaves } from '@/api/leaves'
+import { getApprovalLogs, getApprovalPolicies } from '@/api/approvalSettings'
+import { getUserInfo } from '@/utils/auth'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useEmployeeStore } from '@/stores/employee'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
@@ -313,6 +315,112 @@ const { dialogVisible, isEdit, openCreate, openEdit, closeDialog } = useCrudDial
 
 const statusFilter = ref('')
 
+// ── 批次審核 ──
+const selectedLeaves = ref([])
+const batchRejectVisible = ref(false)
+const batchRejectReason = ref('')
+const batchLoading = ref(false)
+
+const handleSelectionChange = (selection) => {
+  selectedLeaves.value = selection
+}
+
+const showBatchApproveConfirm = async () => {
+  try {
+    await ElMessageBox.confirm(
+      `確認批次核准選取的 ${selectedLeaves.value.length} 筆請假記錄？`,
+      '批次核准',
+      { type: 'warning', confirmButtonText: '確認核准', cancelButtonText: '取消' }
+    )
+    batchLoading.value = true
+    const ids = selectedLeaves.value.map(r => r.id)
+    const res = await batchApproveLeaves(ids, true)
+    const { succeeded, failed } = res.data
+    if (failed.length === 0) {
+      ElMessage.success(`已成功核准 ${succeeded.length} 筆`)
+    } else {
+      ElMessage.warning(
+        `核准完成：成功 ${succeeded.length} 筆，失敗 ${failed.length} 筆（${failed.map(f => `#${f.id}: ${f.reason}`).join('；')}）`
+      )
+    }
+    fetchLeaves()
+  } catch (err) {
+    if (err !== 'cancel') ElMessage.error('批次核准失敗：' + (err.response?.data?.detail || err.message))
+  } finally {
+    batchLoading.value = false
+  }
+}
+
+const openBatchReject = () => {
+  batchRejectReason.value = ''
+  batchRejectVisible.value = true
+}
+
+const confirmBatchReject = async () => {
+  if (!batchRejectReason.value.trim()) {
+    ElMessage.warning('請填寫駁回原因')
+    return
+  }
+  batchLoading.value = true
+  try {
+    const ids = selectedLeaves.value.map(r => r.id)
+    const res = await batchApproveLeaves(ids, false, batchRejectReason.value.trim())
+    const { succeeded, failed } = res.data
+    batchRejectVisible.value = false
+    if (failed.length === 0) {
+      ElMessage.success(`已成功駁回 ${succeeded.length} 筆`)
+    } else {
+      ElMessage.warning(
+        `駁回完成：成功 ${succeeded.length} 筆，失敗 ${failed.length} 筆`
+      )
+    }
+    fetchLeaves()
+  } catch (err) {
+    ElMessage.error('批次駁回失敗：' + (err.response?.data?.detail || err.message))
+  } finally {
+    batchLoading.value = false
+  }
+}
+
+// ── Excel 匯入 ──
+const importVisible = ref(false)
+const importLoading = ref(false)
+const importResult = ref(null)
+
+const downloadImportTemplate = async () => {
+  try {
+    const res = await getLeaveImportTemplate()
+    const blob = new Blob([res.data])
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(blob)
+    link.download = '請假匯入範本.xlsx'
+    link.click()
+    URL.revokeObjectURL(link.href)
+  } catch {
+    ElMessage.error('下載範本失敗')
+  }
+}
+
+const handleImportFile = async (file) => {
+  importLoading.value = true
+  importResult.value = null
+  try {
+    const formData = new FormData()
+    formData.append('file', file.raw)
+    const res = await importLeaves(formData)
+    importResult.value = res.data
+    if (res.data.failed === 0) {
+      ElMessage.success(`匯入完成，成功建立 ${res.data.created} 筆草稿假單`)
+      fetchLeaves()
+    }
+  } catch (err) {
+    ElMessage.error('匯入失敗：' + (err.response?.data?.detail || err.message))
+  } finally {
+    importLoading.value = false
+  }
+  return false
+}
+
 // ── 表單配額查詢 ──
 const fetchQuotaInfo = async () => {
   if (!form.employee_id || !QUOTA_TYPES.has(form.leave_type)) {
@@ -553,9 +661,54 @@ const getLeaveTypeTag = (type) => {
   return leaveTypes.find(t => t.value === type) || { label: type, color: '' }
 }
 
+// ── 簽核記錄 Drawer ─────────────────────────────────────────────────────────
+const approvalLogDrawerVisible = ref(false)
+const approvalLogs = ref([])
+const approvalLogLoading = ref(false)
+
+const openApprovalLogs = async (row) => {
+  approvalLogDrawerVisible.value = true
+  approvalLogLoading.value = true
+  approvalLogs.value = []
+  try {
+    const res = await getApprovalLogs('leave', row.id)
+    approvalLogs.value = res.data
+  } catch {
+    ElMessage.error('載入簽核記錄失敗')
+  } finally {
+    approvalLogLoading.value = false
+  }
+}
+
+const ACTION_LABELS = { approved: '核准', rejected: '駁回', cancelled: '取消' }
+const ACTION_TAG_TYPES = { approved: 'success', rejected: 'danger', cancelled: 'warning' }
+
+// ── 審核資格判斷 ─────────────────────────────────────────────────────────────
+const approvalPolicies = ref([])
+const currentUserInfo = getUserInfo()
+
+const fetchApprovalPoliciesForView = async () => {
+  try {
+    const res = await getApprovalPolicies()
+    approvalPolicies.value = res.data
+  } catch {
+    // 靜默：載入失敗時 canApprove 退回 false（不影響主功能）
+  }
+}
+
+const canApprove = (row) => {
+  const myRole = currentUserInfo?.role
+  if (!myRole || myRole === 'teacher') return false
+  const submitterRole = row.submitter_role || 'teacher'
+  const policy = approvalPolicies.value.find(p => p.submitter_role === submitterRole)
+  if (!policy) return myRole === 'admin'
+  return policy.approver_roles.split(',').map(r => r.trim()).includes(myRole)
+}
+
 onMounted(() => {
   employeeStore.fetchEmployees()
   fetchLeaves()
+  fetchApprovalPoliciesForView()
 })
 </script>
 
@@ -588,6 +741,20 @@ onMounted(() => {
         <el-button type="primary" @click="fetchLeaves" :loading="loading">查詢</el-button>
         <el-button type="warning" @click="downloadFile(`/exports/leaves?year=${query.year}&month=${query.month}`, `${query.year}年${query.month}月請假記錄.xlsx`)">匯出 Excel</el-button>
         <el-button @click="quotaDialogVisible = true">配額管理</el-button>
+        <el-button @click="downloadImportTemplate">下載範本</el-button>
+        <el-button @click="importVisible = true">匯入 Excel</el-button>
+        <el-button
+          v-if="selectedLeaves.length > 0"
+          type="success"
+          :loading="batchLoading"
+          @click="showBatchApproveConfirm"
+        >批次核准 ({{ selectedLeaves.length }})</el-button>
+        <el-button
+          v-if="selectedLeaves.length > 0"
+          type="danger"
+          :loading="batchLoading"
+          @click="openBatchReject"
+        >批次駁回 ({{ selectedLeaves.length }})</el-button>
         <el-button type="success" @click="openCreate">
           <el-icon><Plus /></el-icon> 新增請假
         </el-button>
@@ -595,7 +762,8 @@ onMounted(() => {
     </el-card>
 
     <TableSkeleton v-if="loading && !leaveRecords.length" :columns="8" />
-    <el-table v-else :data="leaveRecords" border stripe style="width: 100%; margin-top: 20px;" v-loading="loading" max-height="600">
+    <el-table v-else :data="leaveRecords" border stripe style="width: 100%; margin-top: 20px;" v-loading="loading" max-height="600" @selection-change="handleSelectionChange">
+      <el-table-column type="selection" width="45" />
       <el-table-column prop="employee_name" label="員工" width="100" />
       <el-table-column label="假別" width="100">
         <template #default="scope">
@@ -650,16 +818,17 @@ onMounted(() => {
             <el-tag v-else type="info" size="small">待審核</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="220" fixed="right">
+        <el-table-column label="操作" width="260" fixed="right">
           <template #default="scope">
-            <template v-if="scope.row.is_approved === null">
+            <template v-if="scope.row.is_approved === null && canApprove(scope.row)">
               <el-button type="success" size="small" link @click="approveLeave(scope.row)">核准</el-button>
               <el-button type="danger" size="small" link @click="rejectRef.open(scope.row)">駁回</el-button>
             </template>
-            <el-button v-if="scope.row.is_approved === true" type="warning" size="small" link @click="cancelApprove(scope.row)">取消核准</el-button>
-            <el-button v-if="scope.row.is_approved === false" type="success" size="small" link @click="approveLeave(scope.row)">核准</el-button>
+            <el-button v-if="scope.row.is_approved === true && canApprove(scope.row)" type="warning" size="small" link @click="cancelApprove(scope.row)">取消核准</el-button>
+            <el-button v-if="scope.row.is_approved === false && canApprove(scope.row)" type="success" size="small" link @click="approveLeave(scope.row)">核准</el-button>
             <el-button type="primary" size="small" link @click="openEdit(scope.row)">編輯</el-button>
             <el-button type="danger" size="small" link @click="deleteLeave(scope.row)">刪除</el-button>
+            <el-button type="info" size="small" link @click="openApprovalLogs(scope.row)">記錄</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -678,6 +847,61 @@ onMounted(() => {
     <LeaveRejectDialog ref="rejectRef" @rejected="fetchLeaves()" />
     <LeaveQuotaManager v-model:visible="quotaDialogVisible" />
     <LeaveAttachmentDialog ref="attachRef" />
+
+    <!-- 批次駁回 Dialog -->
+    <el-dialog v-model="batchRejectVisible" title="批次駁回" width="420px">
+      <el-form label-width="80px">
+        <el-form-item label="駁回原因" required>
+          <el-input
+            v-model="batchRejectReason"
+            type="textarea"
+            :rows="3"
+            placeholder="必填：請輸入駁回原因（將套用至所有選取假單）"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="batchRejectVisible = false">取消</el-button>
+        <el-button type="danger" :loading="batchLoading" @click="confirmBatchReject">確認駁回</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 匯入 Excel Dialog -->
+    <el-dialog v-model="importVisible" title="批次匯入請假" width="500px">
+      <div style="margin-bottom: 12px;">
+        <el-alert type="info" :closable="false" show-icon>
+          <template #title>上傳 Excel 檔案（.xlsx），系統將批次建立草稿假單，需後續人工審核。</template>
+        </el-alert>
+      </div>
+      <el-upload
+        drag
+        :auto-upload="false"
+        :on-change="handleImportFile"
+        accept=".xlsx"
+        :limit="1"
+        :show-file-list="false"
+      >
+        <el-icon class="el-icon--upload" style="font-size: 48px; color: var(--el-color-primary);"><UploadFilled /></el-icon>
+        <div class="el-upload__text">拖曳 Excel 至此，或 <em>點擊選取</em></div>
+        <template #tip><div class="el-upload__tip">僅支援 .xlsx 格式</div></template>
+      </el-upload>
+      <div v-if="importLoading" style="text-align:center; margin-top: 16px;">
+        <el-icon class="is-loading" style="font-size: 24px;"><Loading /></el-icon> 匯入中…
+      </div>
+      <el-card v-if="importResult" style="margin-top: 16px;" shadow="never">
+        <div style="display: flex; gap: 16px; align-items: center;">
+          <span>共 <strong>{{ importResult.total }}</strong> 筆</span>
+          <el-tag type="success">成功 {{ importResult.created }}</el-tag>
+          <el-tag v-if="importResult.failed > 0" type="danger">失敗 {{ importResult.failed }}</el-tag>
+        </div>
+        <div v-if="importResult.errors?.length" style="margin-top: 8px; max-height: 150px; overflow-y: auto;">
+          <p v-for="e in importResult.errors" :key="e" style="font-size:12px; color:var(--el-color-danger); margin: 2px 0;">{{ e }}</p>
+        </div>
+      </el-card>
+      <template #footer>
+        <el-button @click="importVisible = false">關閉</el-button>
+      </template>
+    </el-dialog>
 
     <!-- Create/Edit Dialog -->
     <el-dialog v-model="dialogVisible" :title="isEdit ? '編輯請假' : '新增請假申請'" width="550px">
@@ -841,6 +1065,34 @@ onMounted(() => {
         <el-button type="primary" :disabled="!canSave" @click="saveLeave">儲存</el-button>
       </template>
     </el-dialog>
+
+    <!-- 簽核記錄 Drawer -->
+    <el-drawer v-model="approvalLogDrawerVisible" title="簽核記錄" direction="rtl" size="420px">
+      <div v-loading="approvalLogLoading">
+        <el-empty v-if="!approvalLogLoading && approvalLogs.length === 0" description="尚無簽核記錄" />
+        <el-timeline v-else>
+          <el-timeline-item
+            v-for="log in approvalLogs"
+            :key="log.id"
+            :timestamp="log.created_at ? new Date(log.created_at).toLocaleString('zh-TW') : ''"
+            placement="top"
+          >
+            <el-card shadow="never" style="padding: 8px 12px;">
+              <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                <el-tag :type="ACTION_TAG_TYPES[log.action] || ''" size="small">
+                  {{ ACTION_LABELS[log.action] || log.action }}
+                </el-tag>
+                <span style="font-weight: 500;">{{ log.approver_username }}</span>
+                <el-tag size="small" type="info">{{ log.approver_role }}</el-tag>
+              </div>
+              <div v-if="log.comment" style="margin-top: 6px; color: #606266; font-size: 13px;">
+                {{ log.comment }}
+              </div>
+            </el-card>
+          </el-timeline-item>
+        </el-timeline>
+      </div>
+    </el-drawer>
   </div>
 </template>
 

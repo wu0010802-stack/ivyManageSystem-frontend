@@ -1,7 +1,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getEvents, createEvent, updateEvent, deleteEvent } from '@/api/events'
+import { getEvents, createEvent, updateEvent, deleteEvent, getHolidayImportTemplate, importHolidays } from '@/api/events'
 import { downloadFile } from '@/utils/download'
 
 const loading = ref(false)
@@ -52,6 +52,47 @@ const currentMonth = computed(() => currentDate.value.getMonth() + 1)
 
 const exportCalendar = () => {
   downloadFile(`/exports/calendar?year=${currentYear.value}&month=${currentMonth.value}`, `${currentYear.value}年${currentMonth.value}月行事曆.xlsx`)
+}
+
+const exportHolidays = () => {
+  downloadFile(`/exports/holidays?year=${currentYear.value}`, `${currentYear.value}年國定假日.xlsx`)
+}
+
+const downloadHolidayTemplate = async () => {
+  try {
+    const res = await getHolidayImportTemplate()
+    const blob = new Blob([res.data])
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(blob)
+    link.download = '假日匯入範本.xlsx'
+    link.click()
+    URL.revokeObjectURL(link.href)
+  } catch {
+    ElMessage.error('下載範本失敗')
+  }
+}
+
+const holidayImportVisible = ref(false)
+const holidayImportLoading = ref(false)
+const holidayImportResult = ref(null)
+
+const handleHolidayImport = async (file) => {
+  holidayImportLoading.value = true
+  holidayImportResult.value = null
+  try {
+    const formData = new FormData()
+    formData.append('file', file.raw)
+    const res = await importHolidays(formData)
+    holidayImportResult.value = res.data
+    if (res.data.failed === 0) {
+      ElMessage.success(`匯入完成，成功建立/更新 ${res.data.upserted} 筆假日`)
+    }
+  } catch (err) {
+    ElMessage.error('匯入失敗：' + (err.response?.data?.detail || err.message))
+  } finally {
+    holidayImportLoading.value = false
+  }
+  return false
 }
 
 const fetchEvents = async () => {
@@ -213,6 +254,9 @@ onMounted(fetchEvents)
       <h2>學校行事曆</h2>
       <div class="header-actions">
         <el-button type="success" @click="exportCalendar">匯出行事曆</el-button>
+        <el-button @click="exportHolidays">匯出假日</el-button>
+        <el-button @click="downloadHolidayTemplate">下載假日範本</el-button>
+        <el-button @click="holidayImportVisible = true">匯入假日</el-button>
         <el-button type="primary" @click="handleAdd(null)">新增事件</el-button>
       </div>
     </div>
@@ -345,6 +389,48 @@ onMounted(fetchEvents)
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
         <el-button type="primary" @click="saveEvent">儲存</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 假日匯入 Dialog -->
+    <el-dialog v-model="holidayImportVisible" title="批次匯入國定假日" width="500px">
+      <div style="margin-bottom: 12px;">
+        <el-alert type="info" :closable="false" show-icon>
+          <template #title>上傳 Excel 檔案，系統將批次新增/更新假日記錄（UPSERT by 日期）。匯入後考勤計算將自動排除這些假日。</template>
+        </el-alert>
+      </div>
+      <div style="margin-bottom: 8px;">
+        <el-button link type="primary" size="small" @click="downloadHolidayTemplate">
+          下載匯入範本
+        </el-button>
+      </div>
+      <el-upload
+        drag
+        :auto-upload="false"
+        :on-change="handleHolidayImport"
+        accept=".xlsx"
+        :limit="1"
+        :show-file-list="false"
+      >
+        <el-icon class="el-icon--upload" style="font-size: 48px; color: var(--el-color-primary);"><UploadFilled /></el-icon>
+        <div class="el-upload__text">拖曳 Excel 至此，或 <em>點擊選取</em></div>
+        <template #tip><div class="el-upload__tip">僅支援 .xlsx 格式</div></template>
+      </el-upload>
+      <div v-if="holidayImportLoading" style="text-align:center; margin-top: 16px;">
+        <el-icon class="is-loading" style="font-size: 24px;"><Loading /></el-icon> 匯入中…
+      </div>
+      <el-card v-if="holidayImportResult" style="margin-top: 16px;" shadow="never">
+        <div style="display: flex; gap: 16px; align-items: center;">
+          <span>共 <strong>{{ holidayImportResult.total }}</strong> 筆</span>
+          <el-tag type="success">成功 {{ holidayImportResult.upserted }}</el-tag>
+          <el-tag v-if="holidayImportResult.failed > 0" type="danger">失敗 {{ holidayImportResult.failed }}</el-tag>
+        </div>
+        <div v-if="holidayImportResult.errors?.length" style="margin-top: 8px; max-height: 150px; overflow-y: auto;">
+          <p v-for="e in holidayImportResult.errors" :key="e" style="font-size:12px; color:var(--el-color-danger); margin: 2px 0;">{{ e }}</p>
+        </div>
+      </el-card>
+      <template #footer>
+        <el-button @click="holidayImportVisible = false">關閉</el-button>
       </template>
     </el-dialog>
   </div>

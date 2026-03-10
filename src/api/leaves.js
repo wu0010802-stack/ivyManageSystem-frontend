@@ -26,3 +26,16 @@ export const initLeaveQuotas = (params) =>
   api.post('/leaves/quotas/init', null, { params })
 
 export const getWorkdayHours = (params) => api.get('/leaves/workday-hours', { params })
+
+// 批次審核
+export const batchApproveLeaves = (ids, approved, rejection_reason) =>
+  api.post('/leaves/batch-approve', { ids, approved, rejection_reason })
+
+// Excel 匯入
+export const getLeaveImportTemplate = () =>
+  api.get('/leaves/import-template', { responseType: 'blob' })
+
+export const importLeaves = (formData) =>
+  api.post('/leaves/import', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })

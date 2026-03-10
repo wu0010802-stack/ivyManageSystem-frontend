@@ -1,6 +1,6 @@
 <script setup>
 import { reactive, ref, onMounted } from 'vue'
-import { getBonusConfig, updateBonusConfig, getGradeTargets, updateGradeTargets } from '@/api/config'
+import { getBonusConfig, updateBonusConfig, getGradeTargets, updateGradeTargets, getPositionSalary, updatePositionSalary } from '@/api/config'
 import { ElMessage } from 'element-plus'
 
 const loadingBonus = ref(false)
@@ -86,6 +86,40 @@ const saveGradeTargets = async () => {
   }
 }
 
+const positionSalary = reactive({
+  head_teacher_a: 39240,
+  head_teacher_b: 37160,
+  head_teacher_c: 33000,
+  assistant_teacher_a: 35240,
+  assistant_teacher_b: 33000,
+  assistant_teacher_c: 29500,
+})
+const loadingPositionSalary = ref(false)
+
+const fetchPositionSalary = async () => {
+  loadingPositionSalary.value = true
+  try {
+    const response = await getPositionSalary()
+    Object.assign(positionSalary, response.data)
+  } catch (error) {
+    ElMessage.error('職位底薪設定載入失敗')
+  } finally {
+    loadingPositionSalary.value = false
+  }
+}
+
+const savePositionSalary = async () => {
+  loadingPositionSalary.value = true
+  try {
+    await updatePositionSalary(positionSalary)
+    ElMessage.success('職位標準底薪設定已儲存')
+  } catch (error) {
+    ElMessage.error('職位底薪設定儲存失敗')
+  } finally {
+    loadingPositionSalary.value = false
+  }
+}
+
 const saveAllBonusSettings = async () => {
   loadingBonus.value = true
   try {
@@ -100,6 +134,7 @@ const saveAllBonusSettings = async () => {
 onMounted(() => {
   fetchBonusConfig()
   fetchGradeTargets()
+  fetchPositionSalary()
 })
 </script>
 
@@ -283,6 +318,49 @@ onMounted(() => {
             </el-card>
           </el-col>
         </el-row>
+      </el-tab-pane>
+
+      <!-- 職位標準底薪 -->
+      <el-tab-pane label="職位標準底薪" name="position_salary">
+        <div v-loading="loadingPositionSalary">
+          <div class="section-title">職位標準底薪設定</div>
+          <p class="desc-text">設定各等級×職位的標準底薪，供新增員工時自動建議。特例可在員工編輯頁手動調整。</p>
+          <el-row :gutter="20">
+            <el-col :span="12">
+              <el-card header="班導師" shadow="never" class="box-card">
+                <el-form label-width="80px">
+                  <el-form-item label="A 級">
+                    <el-input-number v-model="positionSalary.head_teacher_a" :min="0" :step="100" style="width: 100%" />
+                  </el-form-item>
+                  <el-form-item label="B 級">
+                    <el-input-number v-model="positionSalary.head_teacher_b" :min="0" :step="100" style="width: 100%" />
+                  </el-form-item>
+                  <el-form-item label="C 級">
+                    <el-input-number v-model="positionSalary.head_teacher_c" :min="0" :step="100" style="width: 100%" />
+                  </el-form-item>
+                </el-form>
+              </el-card>
+            </el-col>
+            <el-col :span="12">
+              <el-card header="副班導師" shadow="never" class="box-card">
+                <el-form label-width="80px">
+                  <el-form-item label="A 級">
+                    <el-input-number v-model="positionSalary.assistant_teacher_a" :min="0" :step="100" style="width: 100%" />
+                  </el-form-item>
+                  <el-form-item label="B 級">
+                    <el-input-number v-model="positionSalary.assistant_teacher_b" :min="0" :step="100" style="width: 100%" />
+                  </el-form-item>
+                  <el-form-item label="C 級">
+                    <el-input-number v-model="positionSalary.assistant_teacher_c" :min="0" :step="100" style="width: 100%" />
+                  </el-form-item>
+                </el-form>
+              </el-card>
+            </el-col>
+          </el-row>
+          <div class="mt-4" style="text-align: right">
+            <el-button type="primary" @click="savePositionSalary">儲存職位底薪設定</el-button>
+          </div>
+        </div>
       </el-tab-pane>
     </el-tabs>
   </div>

@@ -18,7 +18,7 @@
         <div class="content-container">
           <RouterView v-slot="{ Component }">
             <transition name="fade-transform" mode="out-in">
-              <component :is="Component" />
+              <component v-if="Component" :is="Component" :key="route.path" />
             </transition>
           </RouterView>
         </div>
