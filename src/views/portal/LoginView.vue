@@ -3,7 +3,7 @@ import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { login } from '@/api/auth'
-import { setToken, setUserInfo } from '@/utils/auth'
+import { setUserInfo } from '@/utils/auth'
 
 const router = useRouter()
 const loading = ref(false)
@@ -29,7 +29,7 @@ const handleLogin = async () => {
   loading.value = true
   try {
     const res = await login(form.username, form.password)
-    setToken(res.data.token)
+    // Token 已由後端透過 httpOnly Cookie 設定，前端只需儲存 userInfo
     setUserInfo({ ...res.data.user, must_change_password: !!res.data.must_change_password })
     ElMessage.success(`歡迎回來，${res.data.user.name}`)
     router.push(res.data.must_change_password ? '/portal/change-password' : '/portal/attendance')

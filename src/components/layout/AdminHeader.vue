@@ -78,7 +78,7 @@ import { ElMessage } from 'element-plus'
 import { Monitor } from '@element-plus/icons-vue'
 import { getEmployees } from '@/api/employees'
 import { impersonate } from '@/api/auth'
-import { getUserInfo, clearAuth, getToken, setToken, setUserInfo } from '@/utils/auth'
+import { getUserInfo, clearAuth, setUserInfo } from '@/utils/auth'
 
 defineProps({
   isMobile: { type: Boolean, default: false }
@@ -135,11 +135,7 @@ const goToPortal = async () => {
 const doImpersonate = async (employeeId) => {
   try {
     const res = await impersonate(employeeId)
-    // 備份管理員 token（用於返回後台 & 在前台再次切換員工）
-    localStorage.setItem('adminToken', getToken())
-    localStorage.setItem('adminUserInfo', localStorage.getItem('userInfo'))
-    // 替換為目標員工 token
-    setToken(res.data.token)
+    // 後端已透過 Set-Cookie 設定 access_token + admin_token Cookie
     setUserInfo(res.data.user)
     showEmployeePicker.value = false
     router.push('/portal/attendance')

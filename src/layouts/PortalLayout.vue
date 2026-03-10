@@ -5,8 +5,8 @@ import { RouterView, useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 import { getUnreadCount, getSwapPendingCount } from '@/api/portal'
-import { changePassword } from '@/api/auth'
-import { getUserInfo, clearAuth, getToken, setToken, setUserInfo } from '@/utils/auth'
+import { changePassword, endImpersonate } from '@/api/auth'
+import { getUserInfo, clearAuth, setUserInfo } from '@/utils/auth'
 import OfflineIndicator from '@/components/OfflineIndicator.vue'
 
 const route = useRoute()
@@ -99,29 +99,33 @@ const closeSidebar = () => {
   if (isMobile.value) sidebarOpen.value = false
 }
 
-// Employee Switcher Logic
-const employeeList = ref([])
+// Impersonate tracking: 後端透過 admin_token Cookie 備份管理員應證，
+// 前端只需追蹤狀態旗標來控制 UI 顯示。
+const isImpersonating = ref(false)
 
-// 有 adminToken 備份時（impersonate 狀態）或自身是 admin 角色，均顯示切換器
+// 有 admin 角色或處於冒充狀態時顯示切換器
 const showSwitcher = computed(() =>
-  userInfo.value.role === 'admin' || !!localStorage.getItem('adminToken')
+  userInfo.value.role === 'admin' || isImpersonating.value
 )
 
-// 返回後台：自身是 admin/hr/supervisor，或有 adminToken 備份（impersonate 狀態）
+// 返回後台：自身是 admin/hr/supervisor，或處於冒充狀態
 const showBackToAdmin = computed(() => {
   const role = userInfo.value.role
-  return ['admin', 'hr', 'supervisor'].includes(role) || !!localStorage.getItem('adminToken')
+  return ['admin', 'hr', 'supervisor'].includes(role) || isImpersonating.value
 })
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
 
+const employeeList = ref([])
+
 const fetchEmployees = async () => {
-  const adminToken = localStorage.getItem('adminToken')
-  if (userInfo.value.role !== 'admin' && !adminToken) return
+  if (userInfo.value.role !== 'admin' && !isImpersonating.value) return
   try {
-    const effectiveToken = adminToken || getToken()
+    // 冒充狀態下，後端會使用 admin_token Cookie 驗證
+    // 但當前 access_token 是幫員工的，可能沒有 EMPLOYEES_READ 權限
+    // 所以用後端 end-impersonate 再查，或者直接用 axios 帶 credential
     const res = await axios.get(`${API_BASE}/employees`, {
-      headers: { Authorization: `Bearer ${effectiveToken}` },
+      withCredentials: true,
       timeout: 10000,
     })
     employeeList.value = res.data
@@ -132,29 +136,15 @@ const fetchEmployees = async () => {
 
 const handleSwitchUser = async (employeeId) => {
   try {
-    const adminToken = localStorage.getItem('adminToken')
-
-    // 若尚未 impersonate 但當前角色是 admin，先備份 admin 憑證
-    if (!adminToken && userInfo.value.role === 'admin') {
-      localStorage.setItem('adminToken', getToken())
-      localStorage.setItem('adminUserInfo', localStorage.getItem('userInfo'))
-    }
-
-    const effectiveAdminToken = localStorage.getItem('adminToken') || getToken()
+    // 呼叫 impersonate API，後端會自動設定 access_token + admin_token Cookie
     const res = await axios.post(
       `${API_BASE}/auth/impersonate`,
       { employee_id: employeeId },
-      {
-        headers: {
-          Authorization: `Bearer ${effectiveAdminToken}`,
-          'Content-Type': 'application/json',
-        },
-        timeout: 10000,
-      }
+      { withCredentials: true, timeout: 10000 }
     )
-    // 保持 adminToken 不動（仍在 impersonate 狀態），只替換目標員工 token
-    localStorage.setItem('token', res.data.token)
-    localStorage.setItem('userInfo', JSON.stringify(res.data.user))
+    // 更新前端 userInfo
+    setUserInfo(res.data.user)
+    isImpersonating.value = true
     ElMessage.success(`已切換為：${res.data.user.name}`)
     window.location.reload()
   } catch (error) {
@@ -162,23 +152,24 @@ const handleSwitchUser = async (employeeId) => {
   }
 }
 
-const goBackToAdmin = () => {
-  const adminToken = localStorage.getItem('adminToken')
-  const adminUserInfoStr = localStorage.getItem('adminUserInfo')
-  if (adminToken && adminUserInfoStr) {
-    setToken(adminToken)
-    setUserInfo(JSON.parse(adminUserInfoStr))
-    localStorage.removeItem('adminToken')
-    localStorage.removeItem('adminUserInfo')
+const goBackToAdmin = async () => {
+  try {
+    const res = await endImpersonate()
+    // 後端已清除 admin_token Cookie 並將 access_token 還原為管理員
+    setUserInfo(res.data.user)
+    isImpersonating.value = false
+    router.push('/')
+  } catch (error) {
+    ElMessage.error(error.response?.data?.detail || '返回失敗')
+    // 失敗時強制登出
+    clearAuth()
+    router.push('/login')
   }
-  router.push('/')
 }
 
 const handleCommand = (cmd) => {
   if (cmd === 'logout') {
-    // 登出時一併清除 impersonate 備份
-    localStorage.removeItem('adminToken')
-    localStorage.removeItem('adminUserInfo')
+    isImpersonating.value = false
     clearAuth()
     router.push('/portal/login')
     ElMessage.success('已登出')

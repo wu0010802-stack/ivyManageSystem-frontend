@@ -1,13 +1,15 @@
+// Token 已改由後端 httpOnly Cookie 管理，JS 無法存取。
+// 保留函式簽名供向下相容，但不再操作 localStorage。
 export function getToken() {
-  return localStorage.getItem('token')
+  return null // httpOnly Cookie，JS 無法讀取
 }
 
-export function setToken(token) {
-  localStorage.setItem('token', token)
+export function setToken(_token) {
+  // no-op: Token 由後端 Set-Cookie 管理
 }
 
 export function removeToken() {
-  localStorage.removeItem('token')
+  // no-op: Token 由後端 /api/auth/logout 清除
 }
 
 export function getUserInfo() {
@@ -20,8 +22,15 @@ export function setUserInfo(info) {
 }
 
 export function clearAuth() {
-  removeToken()
   localStorage.removeItem('userInfo')
+  // 通知後端清除 httpOnly Cookie（fire-and-forget）
+  try {
+    const baseURL = import.meta.env?.VITE_API_BASE_URL || '/api'
+    fetch(`${baseURL}/auth/logout`, {
+      method: 'POST',
+      credentials: 'include',
+    }).catch(() => { /* silent */ })
+  } catch { /* silent */ }
 }
 
 export function clearMustChangePassword() {
@@ -33,7 +42,7 @@ export function clearMustChangePassword() {
 }
 
 export function isLoggedIn() {
-  return !!getToken()
+  return !!getUserInfo()
 }
 
 // 權限位元值對照表（讀寫分離版）

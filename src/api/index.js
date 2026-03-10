@@ -1,41 +1,31 @@
 import axios from 'axios'
-import { getToken, setToken, setUserInfo, clearAuth } from '@/utils/auth'
+import { setUserInfo, clearAuth } from '@/utils/auth'
 
 const api = axios.create({
     baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
     timeout: 10000,
+    withCredentials: true, // 自動攜帶 httpOnly Cookie
     headers: {
         'Content-Type': 'application/json'
     }
 })
 
-// Inject JWT token
-api.interceptors.request.use(
-    config => {
-        const token = getToken()
-        if (token) {
-            config.headers['Authorization'] = `Bearer ${token}`
-        }
-        return config
-    },
-    error => Promise.reject(error)
-)
+// 不再需要 request interceptor 注入 Authorization header
+// Token 改由瀏覽器自動攜帶 httpOnly Cookie
 
 // ---------- Token refresh logic ----------
 let _refreshing = null // 單一 refresh promise，避免併發多次刷新
 
 function _doRefresh() {
-    const token = getToken()
-    if (!token) return Promise.reject(new Error('no token'))
-
+    // Cookie 會自動帶出，不需手動設定 header
     return axios.post('/api/auth/refresh', null, {
-        headers: { Authorization: `Bearer ${token}` },
+        withCredentials: true,
         timeout: 10000,
     }).then(res => {
-        const { token: newToken, user } = res.data
-        setToken(newToken)
+        // 後端已透過 Set-Cookie 更新 access_token，前端只需更新 userInfo
+        const { user } = res.data
         if (user) setUserInfo(user)
-        return newToken
+        return true
     })
 }
 
@@ -57,10 +47,9 @@ api.interceptors.response.use(
                 if (!_refreshing) {
                     _refreshing = _doRefresh().finally(() => { _refreshing = null })
                 }
-                const newToken = await _refreshing
+                await _refreshing
 
-                // 用新 token 重試原本的請求
-                originalRequest.headers['Authorization'] = `Bearer ${newToken}`
+                // 用新 Cookie 重試原本的請求（Cookie 自動帶出，不需手動設定 header）
                 return api(originalRequest)
             } catch {
                 // Refresh 也失敗，清除登入狀態並導向登入頁

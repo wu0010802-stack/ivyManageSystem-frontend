@@ -21,3 +21,7 @@ export const deleteUser = (id) => api.delete(`/auth/users/${id}`)
 
 export const resetPassword = (userId, newPassword) =>
   api.put(`/auth/users/${userId}/reset-password`, { new_password: newPassword })
+
+export const endImpersonate = () => api.post('/auth/end-impersonate')
+
+export const logout = () => api.post('/auth/logout')
