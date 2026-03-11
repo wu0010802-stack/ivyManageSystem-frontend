@@ -36,6 +36,24 @@ const router = createRouter({
             meta: { title: '學生管理' }
         },
         {
+            path: '/student-attendance',
+            name: 'student-attendance',
+            component: () => import('../views/StudentAttendanceView.vue'),
+            meta: { title: '學生出席紀錄' }
+        },
+        {
+            path: '/student-incidents',
+            name: 'student-incidents',
+            component: () => import('../views/StudentIncidentView.vue'),
+            meta: { title: '學生事件紀錄' }
+        },
+        {
+            path: '/student-assessments',
+            name: 'student-assessments',
+            component: () => import('../views/StudentAssessmentView.vue'),
+            meta: { title: '學期評量記錄' }
+        },
+        {
             path: '/classrooms',
             name: 'classrooms',
             component: () => import('../views/ClassroomView.vue'),
@@ -172,6 +190,18 @@ const router = createRouter({
                     path: 'students',
                     name: 'portal-students',
                     component: () => import('../views/portal/PortalStudentsView.vue'),
+                },
+                {
+                    path: 'incidents',
+                    name: 'portal-incidents',
+                    component: () => import('../views/portal/PortalIncidentView.vue'),
+                    meta: { title: '事件紀錄' },
+                },
+                {
+                    path: 'assessments',
+                    name: 'portal-assessments',
+                    component: () => import('../views/portal/PortalAssessmentView.vue'),
+                    meta: { title: '學期評量' },
                 },
                 {
                     path: 'calendar',

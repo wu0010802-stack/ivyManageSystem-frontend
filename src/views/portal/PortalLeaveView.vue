@@ -1,12 +1,62 @@
 <script setup>
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { getMyLeaves, createMyLeave, uploadMyLeaveAttachments, getMyLeaveAttachment, getMyQuotas, getMyLeaveStats, getMyWorkdayHours } from '@/api/portal'
+import { getMyLeaves, createMyLeave, uploadMyLeaveAttachments, getMyLeaveAttachment, getMyQuotas, getMyLeaveStats, getMyWorkdayHours, getMySubstituteRequests, respondToSubstitute } from '@/api/portal'
+import { getEmployees } from '@/api/employees'
 import { LEAVE_TYPES as leaveTypes } from '@/utils/leaves'
 
 const loading = ref(false)
 const submitLoading = ref(false)
 const leaves = ref([])
+
+// ── 代理人相關 ──
+const allEmployees = ref([])
+const mySubstituteRequests = ref([])
+const substituteLoading = ref(false)
+const respondLoading = ref(false)
+
+const substituteStatusLabel = (status) => {
+  const map = { not_required: '—', pending: '待回應', accepted: '已接受', rejected: '已拒絕' }
+  return map[status] || status
+}
+const substituteStatusType = (status) => {
+  const map = { not_required: 'info', pending: 'warning', accepted: 'success', rejected: 'danger' }
+  return map[status] || ''
+}
+
+const fetchEmployees = async () => {
+  try {
+    const res = await getEmployees()
+    allEmployees.value = res.data || []
+  } catch {
+    // silent
+  }
+}
+
+const fetchSubstituteRequests = async () => {
+  substituteLoading.value = true
+  try {
+    const res = await getMySubstituteRequests()
+    mySubstituteRequests.value = res.data || []
+  } catch {
+    ElMessage.error('載入代理請求失敗')
+  } finally {
+    substituteLoading.value = false
+  }
+}
+
+const handleSubstituteRespond = async (leaveId, action) => {
+  respondLoading.value = true
+  try {
+    await respondToSubstitute(leaveId, { action })
+    ElMessage.success(action === 'accept' ? '已接受代理請求' : '已拒絕代理請求')
+    fetchSubstituteRequests()
+  } catch (e) {
+    ElMessage.error(e.response?.data?.detail || '操作失敗')
+  } finally {
+    respondLoading.value = false
+  }
+}
 
 const now = new Date()
 const query = reactive({
@@ -54,6 +104,7 @@ const form = reactive({
   end_date: '',
   leave_hours: 8,
   reason: '',
+  substitute_employee_id: null,
 })
 
 // ── 請假模式 ──
@@ -378,6 +429,7 @@ const openForm = () => {
   form.end_date = ''
   form.leave_hours = 8
   form.reason = ''
+  form.substitute_employee_id = null
   fileList.value = []
   calcHint.value = ''
   calcBreakdown.value = []
@@ -489,6 +541,7 @@ const submitLeave = async () => {
       end_time: et,
       leave_hours: form.leave_hours,
       reason: form.reason,
+      substitute_employee_id: form.substitute_employee_id || null,
     })
     const leaveId = res.data.id
 
@@ -556,6 +609,8 @@ const fetchLeaveStats = async () => {
 onMounted(() => {
   fetchLeaves()
   fetchLeaveStats()
+  fetchEmployees()
+  fetchSubstituteRequests()
 })
 </script>
 
@@ -652,6 +707,16 @@ onMounted(() => {
               </el-tooltip>
             </template>
             <el-tag v-else type="warning" size="small">待核准</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="代理狀態" width="100">
+          <template #default="{ row }">
+            <el-tag
+              v-if="row.substitute_status && row.substitute_status !== 'not_required'"
+              :type="substituteStatusType(row.substitute_status)"
+              size="small"
+            >{{ substituteStatusLabel(row.substitute_status) }}</el-tag>
+            <span v-else style="color: var(--el-text-color-secondary); font-size: 12px;">—</span>
           </template>
         </el-table-column>
         <el-table-column prop="approved_by" label="核准人" width="100">
@@ -795,6 +860,25 @@ onMounted(() => {
             </div>
           </div>
         </el-form-item>
+        <el-form-item label="職務代理人">
+          <el-select
+            v-model="form.substitute_employee_id"
+            filterable
+            clearable
+            placeholder="請選擇代理人（選填）"
+            style="width: 100%;"
+          >
+            <el-option
+              v-for="emp in allEmployees"
+              :key="emp.id"
+              :label="emp.name"
+              :value="emp.id"
+            />
+          </el-select>
+          <div style="margin-top: 4px; font-size: 12px; color: var(--el-text-color-secondary);">
+            選填：指定代理人後，需代理人接受後主管才能核准假單
+          </div>
+        </el-form-item>
         <el-form-item label="原因" prop="reason">
           <el-input v-model="form.reason" type="textarea" :rows="3" placeholder="請輸入請假原因" />
         </el-form-item>
@@ -865,6 +949,59 @@ onMounted(() => {
         </div>
       </div>
     </el-dialog>
+    <!-- 待我代理 -->
+    <el-card v-loading="substituteLoading" style="margin-top: var(--space-4);">
+      <template #header>
+        <span>待我代理的假單</span>
+        <el-badge
+          v-if="mySubstituteRequests.filter(r => r.substitute_status === 'pending').length > 0"
+          :value="mySubstituteRequests.filter(r => r.substitute_status === 'pending').length"
+          type="warning"
+          style="margin-left: 8px;"
+        />
+      </template>
+      <div style="overflow-x: auto">
+        <el-table :data="mySubstituteRequests" border stripe style="width: 100%;" max-height="400">
+          <el-table-column prop="requester_name" label="請假人" width="100" />
+          <el-table-column prop="leave_type_label" label="假別" width="100" />
+          <el-table-column label="請假區間" width="200">
+            <template #default="{ row }">
+              {{ row.start_date }} ~ {{ row.end_date }}
+            </template>
+          </el-table-column>
+          <el-table-column prop="leave_hours" label="時數" width="70" />
+          <el-table-column prop="reason" label="原因" show-overflow-tooltip />
+          <el-table-column label="代理狀態" width="100">
+            <template #default="{ row }">
+              <el-tag :type="substituteStatusType(row.substitute_status)" size="small">
+                {{ substituteStatusLabel(row.substitute_status) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="160" fixed="right">
+            <template #default="{ row }">
+              <template v-if="row.substitute_status === 'pending'">
+                <el-button
+                  type="success"
+                  size="small"
+                  :loading="respondLoading"
+                  @click="handleSubstituteRespond(row.id, 'accept')"
+                >接受</el-button>
+                <el-button
+                  type="danger"
+                  size="small"
+                  :loading="respondLoading"
+                  @click="handleSubstituteRespond(row.id, 'reject')"
+                >拒絕</el-button>
+              </template>
+              <span v-else class="text-secondary" style="font-size: 12px;">已回應</span>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+      <el-empty v-if="!substituteLoading && mySubstituteRequests.length === 0" description="目前無待代理的假單" />
+    </el-card>
+
     <!-- 補充附件 Dialog -->
     <el-dialog v-model="supplementDialogVisible" title="補充附件" width="480px">
       <el-alert type="info" :closable="false" style="margin-bottom:12px">

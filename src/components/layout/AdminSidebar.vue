@@ -79,6 +79,18 @@
             <el-icon><School /></el-icon>
             <template #title>學生管理</template>
           </el-menu-item>
+          <el-menu-item v-if="can('STUDENTS_READ')" index="/student-attendance">
+            <el-icon><Calendar /></el-icon>
+            <template #title>學生出席紀錄</template>
+          </el-menu-item>
+          <el-menu-item v-if="can('STUDENTS_READ')" index="/student-incidents">
+            <el-icon><Warning /></el-icon>
+            <template #title>學生事件紀錄</template>
+          </el-menu-item>
+          <el-menu-item v-if="can('STUDENTS_READ')" index="/student-assessments">
+            <el-icon><DataAnalysis /></el-icon>
+            <template #title>學期評量記錄</template>
+          </el-menu-item>
           <el-menu-item v-if="can('CLASSROOMS_READ')" index="/classrooms">
             <el-icon><OfficeBuilding /></el-icon>
             <template #title>班級管理</template>
@@ -134,7 +146,7 @@ import { useRoute } from 'vue-router'
 import {
   DataBoard, Finished, Calendar, Timer, Clock, Document, Watch,
   Money, User, School, OfficeBuilding, Notebook, Bell, TrendCharts, Setting,
-  Expand, Fold, Cpu
+  Expand, Fold, Cpu, Warning, DataAnalysis
 } from '@element-plus/icons-vue'
 import { hasPermission } from '@/utils/auth'
 

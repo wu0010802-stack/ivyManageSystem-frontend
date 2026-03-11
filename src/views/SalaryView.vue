@@ -32,9 +32,15 @@ const calculateSalary = async () => {
   loading.value = true
   try {
     const response = await calculate(query.year, query.month)
-    salaryResults.value = response.data
+    const { results, errors } = response.data
+    salaryResults.value = results
     hasCalculated.value = true
-    ElMessage.success('薪資計算完成')
+    if (errors && errors.length > 0) {
+      const names = errors.map(e => `${e.employee_name}（${e.error}）`).join('、')
+      ElMessage.warning(`部分員工薪資計算失敗，共 ${errors.length} 筆：${names}`)
+    } else {
+      ElMessage.success('薪資計算完成')
+    }
     await fetchSalaryRecords()
   } catch (error) {
     ElMessage.error('計算失敗: ' + (error.response?.data?.detail || error.message))

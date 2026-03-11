@@ -97,7 +97,7 @@ const fetchDashboardData = async () => {
       ? getUpcomingEvents().then(r => { upcomingEvents.value = r.data }).catch(() => {})
       : null,
     showAttendance
-      ? getTodayAnomalies({ late_threshold: 15 })
+      ? getTodayAnomalies()
           .then(r => { attendanceAnomalies.value = r.data }).catch(() => {})
       : null,
     showEmployees

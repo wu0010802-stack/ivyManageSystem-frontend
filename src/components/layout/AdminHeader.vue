@@ -12,6 +12,14 @@
       </div>
 
       <div class="header-right">
+        <!-- 全局搜尋觸發按鈕 -->
+        <button class="search-trigger" @click="openSearch" title="搜尋 (Ctrl+K)">
+          <el-icon><Search /></el-icon>
+          <span class="search-trigger-text">搜尋...</span>
+          <kbd class="search-trigger-kbd">Ctrl K</kbd>
+        </button>
+        <GlobalSearch ref="globalSearchRef" />
+
         <!-- 進入前台按鈕 -->
         <el-button
           v-if="canEnterPortal"
@@ -75,14 +83,18 @@
 import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Monitor } from '@element-plus/icons-vue'
+import { Monitor, Search } from '@element-plus/icons-vue'
 import { getEmployees } from '@/api/employees'
 import { impersonate } from '@/api/auth'
 import { getUserInfo, clearAuth, setUserInfo } from '@/utils/auth'
+import GlobalSearch from '@/components/GlobalSearch.vue'
 
 defineProps({
   isMobile: { type: Boolean, default: false }
 })
+
+const globalSearchRef = ref(null)
+const openSearch = () => globalSearchRef.value?.open()
 defineEmits(['toggle-sidebar'])
 
 const route = useRoute()
@@ -271,6 +283,44 @@ const handleCommand = (command) => {
   color: var(--text-tertiary);
 }
 
+/* ===== 全局搜尋觸發按鈕 ===== */
+.search-trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 140px;
+  padding: 6px 10px;
+  background: var(--bg-color, #f9fafb);
+  border: 1px solid var(--border-color-light, #e5e7eb);
+  border-radius: var(--radius-md, 6px);
+  cursor: pointer;
+  color: var(--text-tertiary, #9ca3af);
+  font-size: var(--text-sm, 13px);
+  transition: border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+.search-trigger:hover {
+  border-color: var(--color-primary, #409eff);
+  color: var(--color-primary, #409eff);
+}
+
+.search-trigger-text {
+  flex: 1;
+  text-align: left;
+}
+
+.search-trigger-kbd {
+  font-size: 11px;
+  padding: 1px 5px;
+  border: 1px solid var(--border-color-light, #d1d5db);
+  border-bottom-width: 2px;
+  border-radius: 3px;
+  background: var(--surface-color, #fff);
+  color: var(--text-tertiary, #9ca3af);
+  font-family: inherit;
+}
+
 @media (max-width: 767px) {
   .admin-header {
     padding: 0 var(--space-4);
@@ -282,6 +332,15 @@ const handleCommand = (command) => {
 
   .user-info {
     display: none;
+  }
+
+  .search-trigger-text,
+  .search-trigger-kbd {
+    display: none;
+  }
+
+  .search-trigger {
+    min-width: unset;
   }
 }
 </style>

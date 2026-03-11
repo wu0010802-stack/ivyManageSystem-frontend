@@ -818,6 +818,31 @@ onMounted(() => {
             <el-tag v-else type="info" size="small">待審核</el-tag>
           </template>
         </el-table-column>
+        <el-table-column label="代理人" width="140">
+          <template #default="scope">
+            <template v-if="scope.row.substitute_employee_name">
+              <span style="font-size:12px;">{{ scope.row.substitute_employee_name }}</span>
+              <el-tag
+                size="small"
+                :type="{ not_required:'info', pending:'warning', accepted:'success', rejected:'danger' }[scope.row.substitute_status] || ''"
+                style="margin-left:4px;"
+              >{{ { not_required:'—', pending:'待回應', accepted:'已接受', rejected:'已拒絕' }[scope.row.substitute_status] || scope.row.substitute_status }}</el-tag>
+            </template>
+            <span v-else style="color:var(--el-text-color-secondary);font-size:12px;">—</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="換班關聯" width="100" align="center">
+          <template #default="scope">
+            <el-tooltip
+              v-if="scope.row.related_swap"
+              placement="top"
+              :content="`換班申請 #${scope.row.related_swap.id}（${scope.row.related_swap.swap_date}，狀態：${scope.row.related_swap.status}）`"
+            >
+              <el-tag type="warning" size="small" effect="plain">換班中</el-tag>
+            </el-tooltip>
+            <span v-else style="color:var(--el-text-color-secondary);font-size:12px;">—</span>
+          </template>
+        </el-table-column>
         <el-table-column label="操作" width="260" fixed="right">
           <template #default="scope">
             <template v-if="scope.row.is_approved === null && canApprove(scope.row)">

@@ -89,3 +89,10 @@ export const respondToSwap = (id, action) =>
 
 export const cancelSwapRequest = (id) =>
   api.post(`/portal/swap-requests/${id}/cancel`)
+
+// ----- 職務代理人 -----
+export const respondToSubstitute = (leaveId, data) =>
+  api.post(`/portal/my-leaves/${leaveId}/substitute-respond`, data)
+
+export const getMySubstituteRequests = (params) =>
+  api.get('/portal/my-substitute-requests', { params })

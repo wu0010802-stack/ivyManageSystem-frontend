@@ -247,6 +247,14 @@ const submitPassword = async () => {
           <el-icon><User /></el-icon>
           <span>班級學生</span>
         </el-menu-item>
+        <el-menu-item index="/portal/incidents">
+          <el-icon><Warning /></el-icon>
+          <span>事件紀錄</span>
+        </el-menu-item>
+        <el-menu-item index="/portal/assessments">
+          <el-icon><DataAnalysis /></el-icon>
+          <span>學期評量</span>
+        </el-menu-item>
         <el-menu-item index="/portal/calendar">
           <el-icon><Calendar /></el-icon>
           <span>學校行事曆</span>
