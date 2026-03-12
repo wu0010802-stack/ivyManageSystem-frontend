@@ -5,6 +5,8 @@ export const getUnreadCount = () => api.get('/portal/unread-count')
 
 export const getSwapPendingCount = () => api.get('/portal/swap-pending-count')
 
+export const getSubstitutePendingCount = () => api.get('/portal/substitute-pending-count')
+
 // ----- 個人資料 -----
 export const getProfile = () => api.get('/portal/profile')
 

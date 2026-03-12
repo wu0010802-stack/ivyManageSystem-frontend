@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { changePassword } from '@/api/auth'
 import { clearMustChangePassword, getUserInfo } from '@/utils/auth'
+import { PASSWORD_RULES, validatePasswordStrength } from '@/utils/passwordRules'
 
 const router = useRouter()
 const loading = ref(false)
@@ -28,7 +29,7 @@ const rules = {
   old_password: [{ required: true, message: '請輸入目前密碼', trigger: 'blur' }],
   new_password: [
     { required: true, message: '請輸入新密碼', trigger: 'blur' },
-    { min: 8, message: '密碼至少 8 個字元', trigger: 'blur' },
+    { validator: validatePasswordStrength, trigger: 'blur' },
   ],
   confirm_password: [
     { required: true, message: '請再次輸入新密碼', trigger: 'blur' },
@@ -78,6 +79,13 @@ const handleSubmit = async () => {
         style="margin-bottom: 24px"
       />
 
+      <div class="password-rules">
+        <div class="password-rules__title">密碼規則</div>
+        <ul class="password-rules__list">
+          <li v-for="rule in PASSWORD_RULES" :key="rule">{{ rule }}</li>
+        </ul>
+      </div>
+
       <el-form ref="formRef" :model="form" :rules="rules" label-position="top">
         <el-form-item label="目前密碼" prop="old_password">
           <el-input
@@ -93,7 +101,7 @@ const handleSubmit = async () => {
           <el-input
             v-model="form.new_password"
             type="password"
-            placeholder="至少 8 個字元"
+            placeholder="請輸入符合規則的新密碼"
             size="large"
             show-password
           />
@@ -172,5 +180,28 @@ const handleSubmit = async () => {
   text-align: center;
   font-size: 13px;
   color: var(--text-tertiary);
+}
+
+.password-rules {
+  margin-bottom: 24px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: var(--bg-color-soft);
+  border: 1px solid var(--border-color);
+}
+
+.password-rules__title {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--text-primary);
+}
+
+.password-rules__list {
+  margin: 0;
+  padding-left: 20px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.7;
 }
 </style>

@@ -4,7 +4,7 @@ import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
-import { getUnreadCount, getSwapPendingCount } from '@/api/portal'
+import { getSubstitutePendingCount, getUnreadCount, getSwapPendingCount } from '@/api/portal'
 import { changePassword, endImpersonate } from '@/api/auth'
 import { getUserInfo, clearAuth, setUserInfo } from '@/utils/auth'
 import OfflineIndicator from '@/components/OfflineIndicator.vue'
@@ -32,6 +32,7 @@ const unreadCount = ref(0)
 
 // Swap pending count
 const swapPendingCount = ref(0)
+const substitutePendingCount = ref(0)
 
 const fetchUnreadCount = async () => {
   try {
@@ -49,6 +50,21 @@ const fetchSwapPendingCount = async () => {
   } catch (e) {
     // Silent fail
   }
+}
+
+const fetchSubstitutePendingCount = async () => {
+  try {
+    const res = await getSubstitutePendingCount()
+    substitutePendingCount.value = res.data.pending_count || 0
+  } catch (e) {
+    // Silent fail
+  }
+}
+
+const refreshPortalCounts = () => {
+  fetchUnreadCount()
+  fetchSwapPendingCount()
+  fetchSubstitutePendingCount()
 }
 
 // PWA 安裝提示
@@ -76,19 +92,19 @@ const dismissInstallBanner = () => {
 onMounted(() => {
   checkMobile()
   window.addEventListener('resize', checkMobile)
+  window.addEventListener('portal-substitute-count-changed', fetchSubstitutePendingCount)
   fetchEmployees()
-  fetchUnreadCount()
-  fetchSwapPendingCount()
+  refreshPortalCounts()
 })
 
 // Refresh counts when navigating
 watch(() => route.path, () => {
-  fetchUnreadCount()
-  fetchSwapPendingCount()
+  refreshPortalCounts()
 })
 
 onUnmounted(() => {
   window.removeEventListener('resize', checkMobile)
+  window.removeEventListener('portal-substitute-count-changed', fetchSubstitutePendingCount)
 })
 
 const toggleSidebar = () => {
@@ -247,6 +263,7 @@ const submitPassword = async () => {
           <el-menu-item index="/portal/leave">
             <el-icon><Document /></el-icon>
             <span>請假申請</span>
+            <el-badge v-if="substitutePendingCount > 0" :value="substitutePendingCount" :max="99" class="announcement-badge" />
           </el-menu-item>
           <el-menu-item index="/portal/overtime">
             <el-icon><Watch /></el-icon>
@@ -385,7 +402,10 @@ const submitPassword = async () => {
           <span>出勤</span>
         </div>
         <div class="bottom-tab" :class="{ active: route.path.startsWith('/portal/leave') }" @click="router.push('/portal/leave')">
-          <el-icon><Document /></el-icon>
+          <div class="tab-icon-wrapper">
+            <el-icon><Document /></el-icon>
+            <el-badge v-if="substitutePendingCount > 0" :value="substitutePendingCount" :max="99" class="tab-badge" />
+          </div>
           <span>請假</span>
         </div>
         <div class="bottom-tab" :class="{ active: route.path.startsWith('/portal/schedule') }" @click="router.push('/portal/schedule')">

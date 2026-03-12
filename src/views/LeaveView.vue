@@ -633,10 +633,23 @@ const { confirmDelete: deleteLeave } = useConfirmDelete({
 
 const approveLeave = async (row) => {
   try {
-    await approveLeaveApi(row.id, { approved: true })
+    const payload = { approved: true }
+    if (['pending', 'rejected'].includes(row.substitute_status)) {
+      const warningText = row.substitute_status === 'pending'
+        ? '代理人尚未接受此代理請求，仍要直接核准嗎？'
+        : '代理人已拒絕此代理請求，仍要直接核准嗎？'
+      await ElMessageBox.confirm(
+        `${warningText} 系統會以「無代理人核准」方式通過此假單。`,
+        '代理人未確認',
+        { type: 'warning', confirmButtonText: '仍要核准', cancelButtonText: '取消' }
+      )
+      payload.force_without_substitute = true
+    }
+    await approveLeaveApi(row.id, payload)
     ElMessage.success('已核准')
     fetchLeaves()
   } catch (error) {
+    if (error === 'cancel' || error === 'close') return
     ElMessage.error('操作失敗：' + (error.response?.data?.detail || error.message))
   }
 }
@@ -818,9 +831,9 @@ onMounted(() => {
               <span style="font-size:12px;">{{ scope.row.substitute_employee_name }}</span>
               <el-tag
                 size="small"
-                :type="{ not_required:'info', pending:'warning', accepted:'success', rejected:'danger' }[scope.row.substitute_status] || 'info'"
+                :type="{ not_required:'info', pending:'warning', accepted:'success', rejected:'danger', waived:'info' }[scope.row.substitute_status] || 'info'"
                 style="margin-left:4px;"
-              >{{ { not_required:'—', pending:'待回應', accepted:'已接受', rejected:'已拒絕' }[scope.row.substitute_status] || scope.row.substitute_status }}</el-tag>
+              >{{ { not_required:'—', pending:'待回應', accepted:'已接受', rejected:'已拒絕', waived:'主管略過' }[scope.row.substitute_status] || scope.row.substitute_status }}</el-tag>
             </template>
             <span v-else style="color:var(--el-text-color-secondary);font-size:12px;">—</span>
           </template>

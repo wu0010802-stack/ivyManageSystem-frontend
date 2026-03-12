@@ -192,9 +192,14 @@ onMounted(() => {
                 <span class="text-danger">{{ money(scope.row.early_leave_deduction) }}</span>
               </template>
             </el-table-column>
-            <el-table-column label="會議缺席" width="100">
+            <el-table-column width="128">
+              <template #header>
+                <el-tooltip content="僅從節慶獎金扣減，不計入總扣款與實領月薪" placement="top">
+                  <span>節慶獎金扣減 <el-icon :size="12"><InfoFilled /></el-icon></span>
+                </el-tooltip>
+              </template>
               <template #default="scope">
-                <span class="text-danger">{{ money(scope.row.meeting_absence_deduction) }}</span>
+                <span class="text-warning">{{ money(scope.row.meeting_absence_deduction) }}</span>
               </template>
             </el-table-column>
             <el-table-column label="曠職扣款" width="100">
@@ -295,5 +300,9 @@ onMounted(() => {
 .bonus-total {
   font-size: var(--text-lg);
   text-align: right;
+}
+.text-warning {
+  color: var(--el-color-warning);
+  font-weight: 600;
 }
 </style>

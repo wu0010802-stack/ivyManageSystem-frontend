@@ -97,7 +97,7 @@ onMounted(fetchSalary)
           <el-descriptions-item label="津貼合計">
             NT$ {{ salaryData.salary.total_allowances?.toLocaleString() || 0 }}
           </el-descriptions-item>
-          <el-descriptions-item label="獎金合計">
+          <el-descriptions-item label="獎金合計（不含主管紅利）">
             NT$ {{ salaryData.salary.total_bonus?.toLocaleString() || 0 }}
           </el-descriptions-item>
           <el-descriptions-item label="主管紅利">
@@ -128,14 +128,27 @@ onMounted(fetchSalary)
           <el-descriptions-item label="請假扣款">
             -NT$ {{ salaryData.salary.leave_deduction?.toLocaleString() || 0 }}
           </el-descriptions-item>
-          <el-descriptions-item label="會議缺席扣款">
-            -NT$ {{ salaryData.salary.meeting_absence_deduction?.toLocaleString() || 0 }}
-          </el-descriptions-item>
           <el-descriptions-item label="其他扣款">
             -NT$ {{ salaryData.salary.other_deduction?.toLocaleString() || 0 }}
           </el-descriptions-item>
           <el-descriptions-item label="扣款合計">
             <span class="text-danger">-NT$ {{ salaryData.salary.total_deduction?.toLocaleString() || 0 }}</span>
+          </el-descriptions-item>
+        </el-descriptions>
+
+        <h4 style="margin-top: 20px;">節慶 / 獨立獎金調整</h4>
+        <el-descriptions :column="isMobile ? 1 : 2" border>
+          <el-descriptions-item label="節慶獎金">
+            NT$ {{ salaryData.salary.festival_bonus?.toLocaleString() || 0 }}
+          </el-descriptions-item>
+          <el-descriptions-item label="超額獎金">
+            NT$ {{ salaryData.salary.overtime_bonus?.toLocaleString() || 0 }}
+          </el-descriptions-item>
+          <el-descriptions-item label="會議缺席扣減">
+            <span class="text-warning">-NT$ {{ salaryData.salary.meeting_absence_deduction?.toLocaleString() || 0 }}</span>
+          </el-descriptions-item>
+          <el-descriptions-item label="獨立獎金淨額">
+            NT$ {{ ((salaryData.salary.festival_bonus || 0) + (salaryData.salary.overtime_bonus || 0) - (salaryData.salary.meeting_absence_deduction || 0)).toLocaleString() }}
           </el-descriptions-item>
         </el-descriptions>
 
@@ -230,6 +243,11 @@ onMounted(fetchSalary)
 
 .text-danger {
   color: var(--color-danger);
+  font-weight: 600;
+}
+
+.text-warning {
+  color: var(--color-warning);
   font-weight: 600;
 }
 

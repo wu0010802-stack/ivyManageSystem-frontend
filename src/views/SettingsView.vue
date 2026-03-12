@@ -1,23 +1,17 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
-import { getTitles, createTitle, updateTitle, deleteTitle } from '@/api/config'
 import { createShiftType, updateShiftType, deleteShiftType } from '@/api/shifts'
 import { getUsers, getPermissions, createUser, updateUser, deleteUser, resetPassword } from '@/api/auth'
 import { getApprovalPolicies, updateApprovalPolicies } from '@/api/approvalSettings'
 import { getLineConfig, updateLineConfig, testLineNotify } from '@/api/lineConfig'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { useConfigStore } from '@/stores/config'
 import { useEmployeeStore } from '@/stores/employee'
 import { useShiftStore } from '@/stores/shift'
 
-const configStore = useConfigStore()
 const employeeStore = useEmployeeStore()
 const shiftStore = useShiftStore()
 
-const activeTab = ref('titles')
-const loadingTitles = ref(false)
-const titleDialogVisible = ref(false)
-const titleForm = reactive({ id: null, name: '', rank: 0 })
+const activeTab = ref('shifts')
 
 // User Accounts
 const users = ref([])
@@ -47,61 +41,6 @@ const loadingApproval = ref(false)
 const ROLE_HIERARCHY = { teacher: 1, supervisor: 2, hr: 3, admin: 4 }
 const ROLE_LABELS_MAP = { teacher: '教師', supervisor: '主管', hr: '人資', admin: '管理員' }
 const ALL_APPROVER_ROLES = ['supervisor', 'hr', 'admin']
-
-// ---- Job Titles ----
-const fetchJobTitles = async () => {
-  loadingTitles.value = true
-  try {
-    await configStore.fetchJobTitles(true)
-  } catch (error) {
-    ElMessage.error('載入職稱失敗')
-  } finally {
-    loadingTitles.value = false
-  }
-}
-
-const handleAddTitle = () => {
-  titleForm.id = null
-  titleForm.name = ''
-  titleForm.rank = configStore.jobTitles.length + 1
-  titleDialogVisible.value = true
-}
-
-const handleEditTitle = (row) => {
-  titleForm.id = row.id
-  titleForm.name = row.name
-  titleForm.rank = row.rank
-  titleDialogVisible.value = true
-}
-
-const handleDeleteTitle = (row) => {
-  ElMessageBox.confirm(`確定刪除職稱「${row.name}」？`, '警告', {
-    type: 'warning'
-  }).then(async () => {
-    try {
-      await deleteTitle(row.id)
-      ElMessage.success('已刪除')
-      fetchJobTitles()
-    } catch (error) {
-      ElMessage.error('刪除失敗')
-    }
-  })
-}
-
-const saveTitle = async () => {
-  try {
-    if (titleForm.id) {
-      await updateTitle(titleForm.id, titleForm)
-    } else {
-      await createTitle(titleForm)
-    }
-    ElMessage.success('已儲存')
-    titleDialogVisible.value = false
-    fetchJobTitles()
-  } catch (error) {
-    ElMessage.error('儲存失敗')
-  }
-}
 
 // ---- Shift Types ----
 const handleAddShift = () => {
@@ -477,7 +416,6 @@ const handleTestLine = async () => {
 }
 
 onMounted(() => {
-  fetchJobTitles()
   shiftStore.fetchShiftTypes()
   fetchUsers()
   fetchPermissionDefinition()
@@ -491,23 +429,6 @@ onMounted(() => {
     <h2>系統設定</h2>
 
     <el-tabs v-model="activeTab" type="card">
-      <!-- Job Titles -->
-      <el-tab-pane label="職稱管理" name="titles">
-        <div class="tab-header">
-          <el-button type="primary" @click="handleAddTitle">新增職稱</el-button>
-        </div>
-        <el-table :data="configStore.jobTitles" v-loading="loadingTitles" style="width: 100%; margin-top: 20px;">
-          <el-table-column prop="rank" label="排序" width="80" sortable />
-          <el-table-column prop="name" label="名稱" />
-          <el-table-column label="操作" width="150">
-            <template #default="scope">
-              <el-button link type="primary" @click="handleEditTitle(scope.row)">編輯</el-button>
-              <el-button link type="danger" @click="handleDeleteTitle(scope.row)">刪除</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-      </el-tab-pane>
-
       <!-- Shift Types -->
       <el-tab-pane label="輪班別管理" name="shifts">
         <div class="tab-header">
@@ -641,21 +562,6 @@ onMounted(() => {
       </el-tab-pane>
     </el-tabs>
 
-    <!-- Title Dialog -->
-    <el-dialog v-model="titleDialogVisible" :title="titleForm.id ? '編輯職稱' : '新增職稱'" width="400px">
-      <el-form :model="titleForm" label-width="80px">
-        <el-form-item label="名稱">
-          <el-input v-model="titleForm.name" />
-        </el-form-item>
-        <el-form-item label="排序">
-          <el-input-number v-model="titleForm.rank" :min="1" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="titleDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="saveTitle">儲存</el-button>
-      </template>
-    </el-dialog>
     <!-- Create User Dialog -->
     <el-dialog v-model="userDialogVisible" title="新增帳號" width="600px">
       <el-form :model="userForm" label-width="80px">

@@ -1,7 +1,7 @@
 <script setup>
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
-import { getMyLeaves, createMyLeave, uploadMyLeaveAttachments, getMyLeaveAttachment, getMyQuotas, getMyLeaveStats, getMyWorkdayHours, getMySubstituteRequests, respondToSubstitute } from '@/api/portal'
+import { getMyLeaves, createMyLeave, uploadMyLeaveAttachments, getMyLeaveAttachment, getMyQuotas, getMyLeaveStats, getMyWorkdayHours, getMySubstituteRequests, respondToSubstitute, getSubstitutePendingCount } from '@/api/portal'
 import { getEmployees } from '@/api/employees'
 import {
   LEAVE_TYPES as leaveTypes,
@@ -19,13 +19,14 @@ const allEmployees = ref([])
 const mySubstituteRequests = ref([])
 const substituteLoading = ref(false)
 const respondLoading = ref(false)
+const substituteSectionRef = ref(null)
 
 const substituteStatusLabel = (status) => {
-  const map = { not_required: '—', pending: '待回應', accepted: '已接受', rejected: '已拒絕' }
+  const map = { not_required: '—', pending: '待回應', accepted: '已接受', rejected: '已拒絕', waived: '主管略過' }
   return map[status] || status
 }
 const substituteStatusType = (status) => {
-  const map = { not_required: 'info', pending: 'warning', accepted: 'success', rejected: 'danger' }
+  const map = { not_required: 'info', pending: 'warning', accepted: 'success', rejected: 'danger', waived: 'info' }
   return map[status] || ''
 }
 
@@ -50,12 +51,48 @@ const fetchSubstituteRequests = async () => {
   }
 }
 
+const pendingSubstituteCount = computed(() =>
+  mySubstituteRequests.value.filter((request) => request.substitute_status === 'pending').length
+)
+
+const sortedSubstituteRequests = computed(() => {
+  const statusRank = { pending: 0, accepted: 1, rejected: 2 }
+  return [...mySubstituteRequests.value].sort((left, right) => {
+    const leftRank = statusRank[left.substitute_status] ?? 99
+    const rightRank = statusRank[right.substitute_status] ?? 99
+    if (leftRank !== rightRank) return leftRank - rightRank
+    return new Date(right.created_at || 0).getTime() - new Date(left.created_at || 0).getTime()
+  })
+})
+
+const emitSubstituteCountChanged = () => {
+  window.dispatchEvent(new Event('portal-substitute-count-changed'))
+}
+
+const fetchSubstituteReminderState = async () => {
+  try {
+    const res = await getSubstitutePendingCount()
+    if ((res.data?.pending_count || 0) !== pendingSubstituteCount.value) {
+      emitSubstituteCountChanged()
+    }
+  } catch {
+    // silent
+  }
+}
+
+const scrollToSubstituteRequests = async () => {
+  await nextTick()
+  const target = substituteSectionRef.value?.$el || substituteSectionRef.value
+  target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
 const handleSubstituteRespond = async (leaveId, action) => {
   respondLoading.value = true
   try {
     await respondToSubstitute(leaveId, { action })
     ElMessage.success(action === 'accept' ? '已接受代理請求' : '已拒絕代理請求')
-    fetchSubstituteRequests()
+    await fetchSubstituteRequests()
+    emitSubstituteCountChanged()
   } catch (e) {
     ElMessage.error(e.response?.data?.detail || '操作失敗')
   } finally {
@@ -611,6 +648,7 @@ onMounted(() => {
   fetchLeaveStats()
   fetchEmployees()
   fetchSubstituteRequests()
+  fetchSubstituteReminderState()
 })
 </script>
 
@@ -620,6 +658,22 @@ onMounted(() => {
       <h2>請假申請</h2>
       <el-button type="primary" @click="openForm">新增請假</el-button>
     </div>
+
+    <el-alert
+      v-if="pendingSubstituteCount > 0"
+      class="substitute-alert"
+      type="warning"
+      show-icon
+      :closable="false"
+    >
+      <template #title>
+        您有 {{ pendingSubstituteCount }} 筆待回應代理請求
+      </template>
+      <template #default>
+        請先確認是否接受代理，以免同事的假單無法繼續送審。
+        <el-button link type="primary" @click="scrollToSubstituteRequests">前往查看</el-button>
+      </template>
+    </el-alert>
 
     <!-- Stats Card -->
     <el-card class="rules-card" v-if="leaveStats">
@@ -950,18 +1004,18 @@ onMounted(() => {
       </div>
     </el-dialog>
     <!-- 待我代理 -->
-    <el-card v-loading="substituteLoading" style="margin-top: var(--space-4);">
+    <el-card ref="substituteSectionRef" v-loading="substituteLoading" style="margin-top: var(--space-4);">
       <template #header>
         <span>待我代理的假單</span>
         <el-badge
-          v-if="mySubstituteRequests.filter(r => r.substitute_status === 'pending').length > 0"
-          :value="mySubstituteRequests.filter(r => r.substitute_status === 'pending').length"
+          v-if="pendingSubstituteCount > 0"
+          :value="pendingSubstituteCount"
           type="warning"
           style="margin-left: 8px;"
         />
       </template>
       <div style="overflow-x: auto">
-        <el-table :data="mySubstituteRequests" border stripe style="width: 100%;" max-height="400">
+        <el-table :data="sortedSubstituteRequests" border stripe style="width: 100%;" max-height="400">
           <el-table-column prop="requester_name" label="請假人" width="100" />
           <el-table-column prop="leave_type_label" label="假別" width="100" />
           <el-table-column label="請假區間" width="200">
@@ -1033,6 +1087,10 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.substitute-alert {
+  margin-bottom: var(--space-4);
+}
+
 .page-header {
   display: flex;
   justify-content: space-between;
