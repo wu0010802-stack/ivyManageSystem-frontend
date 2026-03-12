@@ -20,6 +20,16 @@ export const getCalendar = (params) => api.get('/portal/calendar', { params })
 // ----- 學生 -----
 export const getMyStudents = () => api.get('/portal/my-students')
 
+// ----- 學生點名 -----
+export const getMyClassAttendance = (params) =>
+  api.get('/portal/my-class-attendance', { params })
+
+export const batchSaveClassAttendance = (data) =>
+  api.post('/portal/class-attendance/batch', data)
+
+export const getMyClassAttendanceMonthly = (params) =>
+  api.get('/portal/my-class-attendance/monthly', { params })
+
 // ----- 異常 -----
 export const getAnomalies = (params) => api.get('/portal/anomalies', { params })
 

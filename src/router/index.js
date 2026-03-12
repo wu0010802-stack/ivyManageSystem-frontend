@@ -204,6 +204,12 @@ const router = createRouter({
                     meta: { title: '學期評量' },
                 },
                 {
+                    path: 'student-attendance',
+                    name: 'portal-student-attendance',
+                    component: () => import('../views/portal/PortalStudentAttendanceView.vue'),
+                    meta: { title: '學生點名' },
+                },
+                {
                     path: 'calendar',
                     name: 'portal-calendar',
                     component: () => import('../views/portal/PortalCalendarView.vue'),
@@ -275,8 +281,14 @@ router.beforeEach((to, from, next) => {
         return
     }
 
-    // 權限檢查：admin 路由且已登入
-    if (loggedIn && !to.meta.noAuth && !to.meta.portal && userInfo?.role === 'admin') {
+    // teacher 不可存取管理後台路由，強制導回 portal
+    if (loggedIn && !to.meta.noAuth && !to.meta.portal && userInfo?.role === 'teacher') {
+        next('/portal/attendance')
+        return
+    }
+
+    // 權限檢查：admin 路由且已登入（非 teacher）
+    if (loggedIn && !to.meta.noAuth && !to.meta.portal && userInfo?.role !== 'teacher') {
         if (!canAccessRoute(to.path)) {
             // 無權限，導向第一個有權限的路由
             const allowedRoutes = getAllowedRoutes()

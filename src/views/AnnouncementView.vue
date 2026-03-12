@@ -2,11 +2,13 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getAnnouncements, createAnnouncement, updateAnnouncement, deleteAnnouncement } from '@/api/announcements'
+import { getEmployees } from '@/api/employees'
 
 const loading = ref(false)
 const announcements = ref([])
 const dialogVisible = ref(false)
 const isEdit = ref(false)
+const employeeOptions = ref([])
 
 const priorityOptions = [
   { value: 'normal', label: '一般', type: 'info' },
@@ -22,6 +24,8 @@ const form = reactive({
   content: '',
   priority: 'normal',
   is_pinned: false,
+  restrict_recipients: false,
+  target_employee_ids: [],
 })
 
 const resetForm = () => {
@@ -30,6 +34,20 @@ const resetForm = () => {
   form.content = ''
   form.priority = 'normal'
   form.is_pinned = false
+  form.restrict_recipients = false
+  form.target_employee_ids = []
+}
+
+const fetchEmployees = async () => {
+  try {
+    const res = await getEmployees()
+    employeeOptions.value = (res.data.employees || res.data || []).map(e => ({
+      value: e.id,
+      label: `${e.name}（${e.department || e.job_title || ''}）`,
+    }))
+  } catch {
+    // 非必要，載入失敗不阻斷流程
+  }
 }
 
 const fetchAnnouncements = async () => {
@@ -56,6 +74,8 @@ const openEdit = (row) => {
   form.content = row.content
   form.priority = row.priority
   form.is_pinned = row.is_pinned
+  form.target_employee_ids = row.recipient_ids ? [...row.recipient_ids] : []
+  form.restrict_recipients = form.target_employee_ids.length > 0
   isEdit.value = true
   dialogVisible.value = true
 }
@@ -69,12 +89,14 @@ const handleSubmit = async () => {
   }
   submitLoading.value = true
   try {
+    const recipientIds = form.restrict_recipients ? form.target_employee_ids : []
     if (isEdit.value) {
       await updateAnnouncement(form.id, {
         title: form.title,
         content: form.content,
         priority: form.priority,
         is_pinned: form.is_pinned,
+        target_employee_ids: recipientIds,
       })
       ElMessage.success('公告已更新')
     } else {
@@ -83,6 +105,7 @@ const handleSubmit = async () => {
         content: form.content,
         priority: form.priority,
         is_pinned: form.is_pinned,
+        target_employee_ids: recipientIds.length > 0 ? recipientIds : null,
       })
       ElMessage.success('公告已發佈')
     }
@@ -130,6 +153,7 @@ const formatDate = (isoStr) => {
 
 onMounted(() => {
   fetchAnnouncements()
+  fetchEmployees()
 })
 </script>
 
@@ -177,6 +201,13 @@ onMounted(() => {
 
       <el-table-column label="發佈者" prop="created_by_name" width="100" />
 
+      <el-table-column label="對象" width="100" align="center">
+        <template #default="{ row }">
+          <el-tag v-if="!row.recipient_count" type="primary" size="small">全員</el-tag>
+          <el-tag v-else type="warning" size="small">{{ row.recipient_count }} 位員工</el-tag>
+        </template>
+      </el-table-column>
+
       <el-table-column label="已讀人數" width="90" align="center">
         <template #default="{ row }">
           <el-tag type="success" size="small">{{ row.read_count }}</el-tag>
@@ -220,6 +251,25 @@ onMounted(() => {
         </el-form-item>
         <el-form-item label="置頂">
           <el-switch v-model="form.is_pinned" />
+        </el-form-item>
+        <el-form-item label="限制對象">
+          <el-switch v-model="form.restrict_recipients" active-text="指定員工" inactive-text="全員可見" />
+        </el-form-item>
+        <el-form-item v-if="form.restrict_recipients" label="指定員工">
+          <el-select
+            v-model="form.target_employee_ids"
+            multiple
+            filterable
+            placeholder="請選擇員工"
+            style="width: 100%;"
+          >
+            <el-option
+              v-for="emp in employeeOptions"
+              :key="emp.value"
+              :label="emp.label"
+              :value="emp.value"
+            />
+          </el-select>
         </el-form-item>
         <el-form-item label="內容">
           <el-input

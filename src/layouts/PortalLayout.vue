@@ -153,6 +153,11 @@ const handleSwitchUser = async (employeeId) => {
 }
 
 const goBackToAdmin = async () => {
+  if (!isImpersonating.value) {
+    // hr/supervisor 以自己身份直接進入前台，沒有 impersonation session，直接返回即可
+    router.push('/')
+    return
+  }
   try {
     const res = await endImpersonate()
     // 後端已清除 admin_token Cookie 並將 access_token 還原為管理員
@@ -254,6 +259,10 @@ const submitPassword = async () => {
         <el-menu-item index="/portal/assessments">
           <el-icon><DataAnalysis /></el-icon>
           <span>學期評量</span>
+        </el-menu-item>
+        <el-menu-item index="/portal/student-attendance">
+          <el-icon><Checked /></el-icon>
+          <span>學生點名</span>
         </el-menu-item>
         <el-menu-item index="/portal/calendar">
           <el-icon><Calendar /></el-icon>
