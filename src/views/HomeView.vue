@@ -287,8 +287,7 @@ onMounted(() => {
             </div>
           </div>
           <div class="anomaly-hint text-secondary">
-            遲到門檻：{{ attendanceAnomalies.late_threshold }} 分鐘
-            <el-button link size="small" @click="navigateTo('/attendance')" style="margin-left: 8px;">
+            <el-button link size="small" @click="navigateTo('/attendance')">
               查看出勤記錄 →
             </el-button>
           </div>

@@ -36,7 +36,7 @@ const fetchBonusConfig = async () => {
     const response = await getBonusConfig()
     Object.assign(bonusConfig, response.data)
   } catch (error) {
-    ElMessage.error('獎金設定載入失敗')
+    ElMessage.error('薪資設定載入失敗')
   } finally {
     loadingBonus.value = false
   }
@@ -58,9 +58,9 @@ const saveBonusConfig = async () => {
   loadingBonus.value = true
   try {
     await updateBonusConfig(bonusConfig)
-    ElMessage.success('獎金設定已儲存')
+    ElMessage.success('薪資設定已儲存')
   } catch (error) {
-    ElMessage.error('獎金設定儲存失敗')
+    ElMessage.error('薪資設定儲存失敗')
   } finally {
     loadingBonus.value = false
   }
@@ -93,6 +93,13 @@ const positionSalary = reactive({
   assistant_teacher_a: 35240,
   assistant_teacher_b: 33000,
   assistant_teacher_c: 29500,
+  admin_staff: 37160,
+  english_teacher: 32500,
+  art_teacher: 30000,
+  designer: 30000,
+  nurse: 29800,
+  driver: 30000,
+  kitchen_staff: 29700,
 })
 const loadingPositionSalary = ref(false)
 
@@ -125,7 +132,7 @@ const saveAllBonusSettings = async () => {
   try {
     await saveBonusConfig()
     await saveGradeTargets()
-    ElMessage.success('所有獎金設定已儲存')
+    ElMessage.success('所有薪資設定已儲存')
   } finally {
     loadingBonus.value = false
   }
@@ -141,7 +148,7 @@ onMounted(() => {
 <template>
   <div v-loading="loadingBonus">
     <div class="bonus-actions">
-      <el-button type="primary" size="large" @click="saveAllBonusSettings">儲存所有獎金設定</el-button>
+      <el-button type="primary" size="large" @click="saveAllBonusSettings">儲存所有薪資設定</el-button>
     </div>
 
     <el-tabs v-model="activeBonusTab" type="border-card">
@@ -198,8 +205,75 @@ onMounted(() => {
         </el-table>
       </el-tab-pane>
 
-      <!-- 節慶獎金 -->
+      <!-- 節慶獎金（合併：教師基數 + 主管獎金 + 目標人數） -->
       <el-tab-pane label="節慶獎金" name="festival">
+        <!-- 教師節慶獎金基數 -->
+        <div class="section-title">教師節慶獎金基數</div>
+        <el-row :gutter="20" class="mb-6">
+          <el-col :span="12">
+            <el-card header="班導師" shadow="never" class="box-card">
+              <el-form-item label="A/B 級">
+                <el-input-number v-model="bonusConfig.head_teacher_ab" :min="0" style="width: 100%" />
+              </el-form-item>
+              <el-form-item label="C 級">
+                <el-input-number v-model="bonusConfig.head_teacher_c" :min="0" style="width: 100%" />
+              </el-form-item>
+            </el-card>
+          </el-col>
+          <el-col :span="12">
+            <el-card header="副班導" shadow="never" class="box-card">
+              <el-form-item label="A/B 級">
+                <el-input-number v-model="bonusConfig.assistant_teacher_ab" :min="0" style="width: 100%" />
+              </el-form-item>
+              <el-form-item label="C 級">
+                <el-input-number v-model="bonusConfig.assistant_teacher_c" :min="0" style="width: 100%" />
+              </el-form-item>
+            </el-card>
+          </el-col>
+        </el-row>
+
+        <!-- 主管獎金 -->
+        <div class="section-title">主管節慶獎金基數</div>
+        <el-card class="box-card mb-6" shadow="never">
+          <el-row :gutter="20">
+            <el-col :span="8">
+              <div class="label">園長</div>
+              <el-input-number v-model="bonusConfig.principal_festival" :min="0" style="width: 100%" />
+            </el-col>
+            <el-col :span="8">
+              <div class="label">主任</div>
+              <el-input-number v-model="bonusConfig.director_festival" :min="0" style="width: 100%" />
+            </el-col>
+            <el-col :span="8">
+              <div class="label">組長</div>
+              <el-input-number v-model="bonusConfig.leader_festival" :min="0" style="width: 100%" />
+            </el-col>
+          </el-row>
+        </el-card>
+
+        <div class="section-title">主管紅利</div>
+        <el-card class="box-card mb-6" shadow="never">
+          <el-row :gutter="20">
+            <el-col :span="12">
+              <div class="label">園長</div>
+              <el-input-number v-model="bonusConfig.principal_dividend" :min="0" style="width: 100%" />
+            </el-col>
+            <el-col :span="12">
+              <div class="label">主任</div>
+              <el-input-number v-model="bonusConfig.director_dividend" :min="0" style="width: 100%" />
+            </el-col>
+            <el-col :span="12" class="mt-4">
+              <div class="label">組長</div>
+              <el-input-number v-model="bonusConfig.leader_dividend" :min="0" style="width: 100%" />
+            </el-col>
+            <el-col :span="12" class="mt-4">
+              <div class="label">副組長</div>
+              <el-input-number v-model="bonusConfig.vice_leader_dividend" :min="0" style="width: 100%" />
+            </el-col>
+          </el-row>
+        </el-card>
+
+        <!-- 節慶獎金目標人數 -->
         <div class="section-title">節慶獎金目標人數</div>
         <el-table :data="gradeTargets" border style="width: 100%" stripe class="mb-6">
           <el-table-column prop="name" label="年級" width="100" fixed />
@@ -220,6 +294,7 @@ onMounted(() => {
           </el-table-column>
         </el-table>
 
+        <!-- 辦公室人員設定 -->
         <el-card class="box-card" shadow="never">
           <template #header><div class="card-header"><span>辦公室人員設定</span></div></template>
           <p class="desc-text">
@@ -250,82 +325,14 @@ onMounted(() => {
         </el-card>
       </el-tab-pane>
 
-      <!-- 主管獎金 -->
-      <el-tab-pane label="主管獎金" name="supervisor">
-        <div class="section-title">主管紅利</div>
-        <el-card class="box-card mb-6" shadow="never">
-          <el-row :gutter="20">
-            <el-col :span="12">
-              <div class="label">園長</div>
-              <el-input-number v-model="bonusConfig.principal_dividend" :min="0" style="width: 100%" />
-            </el-col>
-            <el-col :span="12">
-              <div class="label">主任</div>
-              <el-input-number v-model="bonusConfig.director_dividend" :min="0" style="width: 100%" />
-            </el-col>
-            <el-col :span="12" class="mt-4">
-              <div class="label">組長</div>
-              <el-input-number v-model="bonusConfig.leader_dividend" :min="0" style="width: 100%" />
-            </el-col>
-            <el-col :span="12" class="mt-4">
-              <div class="label">副組長</div>
-              <el-input-number v-model="bonusConfig.vice_leader_dividend" :min="0" style="width: 100%" />
-            </el-col>
-          </el-row>
-        </el-card>
-
-        <div class="section-title">主管節慶獎金基數</div>
-        <el-card class="box-card" shadow="never">
-          <el-row :gutter="20">
-            <el-col :span="8">
-              <div class="label">園長</div>
-              <el-input-number v-model="bonusConfig.principal_festival" :min="0" style="width: 100%" />
-            </el-col>
-            <el-col :span="8">
-              <div class="label">主任</div>
-              <el-input-number v-model="bonusConfig.director_festival" :min="0" style="width: 100%" />
-            </el-col>
-            <el-col :span="8">
-              <div class="label">組長</div>
-              <el-input-number v-model="bonusConfig.leader_festival" :min="0" style="width: 100%" />
-            </el-col>
-          </el-row>
-        </el-card>
-      </el-tab-pane>
-
-      <!-- 教師基數 -->
-      <el-tab-pane label="教師基數" name="teacher_base">
-        <div class="section-title">教師節慶獎金基數</div>
-        <el-row :gutter="20">
-          <el-col :span="12">
-            <el-card header="班導師" shadow="never">
-              <el-form-item label="A/B 級">
-                <el-input-number v-model="bonusConfig.head_teacher_ab" :min="0" />
-              </el-form-item>
-              <el-form-item label="C 級">
-                <el-input-number v-model="bonusConfig.head_teacher_c" :min="0" />
-              </el-form-item>
-            </el-card>
-          </el-col>
-          <el-col :span="12">
-            <el-card header="副班導" shadow="never">
-              <el-form-item label="A/B 級">
-                <el-input-number v-model="bonusConfig.assistant_teacher_ab" :min="0" />
-              </el-form-item>
-              <el-form-item label="C 級">
-                <el-input-number v-model="bonusConfig.assistant_teacher_c" :min="0" />
-              </el-form-item>
-            </el-card>
-          </el-col>
-        </el-row>
-      </el-tab-pane>
-
       <!-- 職位標準底薪 -->
       <el-tab-pane label="職位標準底薪" name="position_salary">
         <div v-loading="loadingPositionSalary">
           <div class="section-title">職位標準底薪設定</div>
-          <p class="desc-text">設定各等級×職位的標準底薪，供新增員工時自動建議。特例可在員工編輯頁手動調整。</p>
-          <el-row :gutter="20">
+          <p class="desc-text">設定各職位的標準底薪，供新增員工時自動建議。特例可在員工編輯頁手動調整。</p>
+
+          <!-- 教師職位（分 A/B/C 級） -->
+          <el-row :gutter="20" class="mb-4">
             <el-col :span="12">
               <el-card header="班導師" shadow="never" class="box-card">
                 <el-form label-width="80px">
@@ -357,6 +364,53 @@ onMounted(() => {
               </el-card>
             </el-col>
           </el-row>
+
+          <!-- 其他職位（固定底薪） -->
+          <el-row :gutter="20">
+            <el-col :span="8">
+              <el-card header="行政" shadow="never" class="box-card">
+                <div class="label">基本薪俸</div>
+                <el-input-number v-model="positionSalary.admin_staff" :min="0" :step="100" style="width: 100%" />
+              </el-card>
+            </el-col>
+            <el-col :span="8">
+              <el-card header="美語" shadow="never" class="box-card">
+                <div class="label">基本薪俸</div>
+                <el-input-number v-model="positionSalary.english_teacher" :min="0" :step="100" style="width: 100%" />
+              </el-card>
+            </el-col>
+            <el-col :span="8">
+              <el-card header="藝術" shadow="never" class="box-card">
+                <div class="label">基本薪俸</div>
+                <el-input-number v-model="positionSalary.art_teacher" :min="0" :step="100" style="width: 100%" />
+              </el-card>
+            </el-col>
+            <el-col :span="8" class="mt-4">
+              <el-card header="美編" shadow="never" class="box-card">
+                <div class="label">基本薪俸</div>
+                <el-input-number v-model="positionSalary.designer" :min="0" :step="100" style="width: 100%" />
+              </el-card>
+            </el-col>
+            <el-col :span="8" class="mt-4">
+              <el-card header="護理人員" shadow="never" class="box-card">
+                <div class="label">基本薪俸</div>
+                <el-input-number v-model="positionSalary.nurse" :min="0" :step="100" style="width: 100%" />
+              </el-card>
+            </el-col>
+            <el-col :span="8" class="mt-4">
+              <el-card header="司機" shadow="never" class="box-card">
+                <div class="label">基本薪俸</div>
+                <el-input-number v-model="positionSalary.driver" :min="0" :step="100" style="width: 100%" />
+              </el-card>
+            </el-col>
+            <el-col :span="8" class="mt-4">
+              <el-card header="廚房" shadow="never" class="box-card">
+                <div class="label">基本薪俸</div>
+                <el-input-number v-model="positionSalary.kitchen_staff" :min="0" :step="100" style="width: 100%" />
+              </el-card>
+            </el-col>
+          </el-row>
+
           <div class="mt-4" style="text-align: right">
             <el-button type="primary" @click="savePositionSalary">儲存職位底薪設定</el-button>
           </div>

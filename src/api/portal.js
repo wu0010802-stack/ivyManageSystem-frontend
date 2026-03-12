@@ -30,6 +30,9 @@ export const batchSaveClassAttendance = (data) =>
 export const getMyClassAttendanceMonthly = (params) =>
   api.get('/portal/my-class-attendance/monthly', { params })
 
+export const exportMyClassAttendance = (params) =>
+  api.get('/portal/my-class-attendance/export', { params, responseType: 'blob' })
+
 // ----- 異常 -----
 export const getAnomalies = (params) => api.get('/portal/anomalies', { params })
 

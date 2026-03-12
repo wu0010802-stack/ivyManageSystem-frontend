@@ -33,20 +33,12 @@
           </template>
         </el-menu-item>
 
-        <!-- 考勤管理 -->
-        <el-sub-menu v-if="hasVisibleAttendanceItems" index="group-attendance">
+        <!-- 假勤管理 -->
+        <el-sub-menu v-if="hasVisibleLeaveItems" index="group-leave">
           <template #title>
             <el-icon><Clock /></el-icon>
-            <span>考勤管理</span>
+            <span>假勤管理</span>
           </template>
-          <el-menu-item v-if="can('CALENDAR')" index="/calendar">
-            <el-icon><Calendar /></el-icon>
-            <template #title>行事曆</template>
-          </el-menu-item>
-          <el-menu-item v-if="can('SCHEDULE')" index="/schedule">
-            <el-icon><Timer /></el-icon>
-            <template #title>排班管理</template>
-          </el-menu-item>
           <el-menu-item v-if="can('ATTENDANCE_READ')" index="/attendance">
             <el-icon><Clock /></el-icon>
             <template #title>出勤管理</template>
@@ -59,25 +51,45 @@
             <el-icon><Watch /></el-icon>
             <template #title>加班管理</template>
           </el-menu-item>
-          <el-menu-item v-if="can('MEETINGS')" index="/meetings">
-            <el-icon><Notebook /></el-icon>
-            <template #title>園務會議</template>
+          <el-menu-item v-if="can('SCHEDULE')" index="/schedule">
+            <el-icon><Timer /></el-icon>
+            <template #title>排班管理</template>
+          </el-menu-item>
+          <el-menu-item v-if="can('CALENDAR')" index="/calendar">
+            <el-icon><Calendar /></el-icon>
+            <template #title>行事曆</template>
           </el-menu-item>
         </el-sub-menu>
 
-        <!-- 人事教務 -->
+        <!-- 人事薪資 -->
         <el-sub-menu v-if="hasVisibleHrItems" index="group-hr">
           <template #title>
             <el-icon><User /></el-icon>
-            <span>人事教務</span>
+            <span>人事薪資</span>
           </template>
           <el-menu-item v-if="can('EMPLOYEES_READ')" index="/employees">
             <el-icon><User /></el-icon>
             <template #title>員工管理</template>
           </el-menu-item>
+          <el-menu-item v-if="can('SALARY_READ')" index="/salary">
+            <el-icon><Money /></el-icon>
+            <template #title>薪資管理</template>
+          </el-menu-item>
+        </el-sub-menu>
+
+        <!-- 學生教務 -->
+        <el-sub-menu v-if="hasVisibleStudentItems" index="group-students">
+          <template #title>
+            <el-icon><School /></el-icon>
+            <span>學生教務</span>
+          </template>
           <el-menu-item v-if="can('STUDENTS_READ')" index="/students">
             <el-icon><School /></el-icon>
             <template #title>學生管理</template>
+          </el-menu-item>
+          <el-menu-item v-if="can('CLASSROOMS_READ')" index="/classrooms">
+            <el-icon><OfficeBuilding /></el-icon>
+            <template #title>班級管理</template>
           </el-menu-item>
           <el-menu-item v-if="can('STUDENTS_READ')" index="/student-attendance">
             <el-icon><Calendar /></el-icon>
@@ -91,25 +103,21 @@
             <el-icon><DataAnalysis /></el-icon>
             <template #title>學期評量記錄</template>
           </el-menu-item>
-          <el-menu-item v-if="can('CLASSROOMS_READ')" index="/classrooms">
-            <el-icon><OfficeBuilding /></el-icon>
-            <template #title>班級管理</template>
-          </el-menu-item>
-          <el-menu-item v-if="can('SALARY_READ')" index="/salary">
-            <el-icon><Money /></el-icon>
-            <template #title>薪資管理</template>
-          </el-menu-item>
         </el-sub-menu>
 
         <!-- 園務行政 -->
         <el-sub-menu v-if="hasVisibleAdminItems" index="group-admin">
           <template #title>
-            <el-icon><Notebook /></el-icon>
+            <el-icon><Files /></el-icon>
             <span>園務行政</span>
           </template>
           <el-menu-item v-if="can('ANNOUNCEMENTS_READ')" index="/announcements">
             <el-icon><Bell /></el-icon>
             <template #title>公告管理</template>
+          </el-menu-item>
+          <el-menu-item v-if="can('MEETINGS')" index="/meetings">
+            <el-icon><Notebook /></el-icon>
+            <template #title>園務會議</template>
           </el-menu-item>
           <el-menu-item v-if="can('REPORTS')" index="/reports">
             <el-icon><TrendCharts /></el-icon>
@@ -146,7 +154,7 @@ import { useRoute } from 'vue-router'
 import {
   DataBoard, Finished, Calendar, Timer, Clock, Document, Watch,
   Money, User, School, OfficeBuilding, Notebook, Bell, TrendCharts, Setting,
-  Expand, Fold, Cpu, Warning, DataAnalysis
+  Expand, Fold, Cpu, Warning, DataAnalysis, Files
 } from '@element-plus/icons-vue'
 import { hasPermission } from '@/utils/auth'
 
@@ -175,16 +183,20 @@ const activeMenu = computed(() => route.path)
 const can = (permissionName) => hasPermission(permissionName)
 
 // 檢查子選單是否有任何可見項目
-const hasVisibleAttendanceItems = computed(() =>
-  can('CALENDAR') || can('SCHEDULE') || can('ATTENDANCE_READ') || can('LEAVES_READ') || can('OVERTIME_READ') || can('MEETINGS')
+const hasVisibleLeaveItems = computed(() =>
+  can('ATTENDANCE_READ') || can('LEAVES_READ') || can('OVERTIME_READ') || can('SCHEDULE') || can('CALENDAR')
 )
 
 const hasVisibleHrItems = computed(() =>
-  can('EMPLOYEES_READ') || can('STUDENTS_READ') || can('CLASSROOMS_READ') || can('SALARY_READ')
+  can('EMPLOYEES_READ') || can('SALARY_READ')
+)
+
+const hasVisibleStudentItems = computed(() =>
+  can('STUDENTS_READ') || can('CLASSROOMS_READ')
 )
 
 const hasVisibleAdminItems = computed(() =>
-  can('ANNOUNCEMENTS_READ') || can('REPORTS') || can('AUDIT_LOGS')
+  can('ANNOUNCEMENTS_READ') || can('REPORTS') || can('AUDIT_LOGS') || can('MEETINGS')
 )
 
 const toggleCollapse = () => {

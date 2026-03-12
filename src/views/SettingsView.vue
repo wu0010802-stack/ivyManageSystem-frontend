@@ -1,6 +1,6 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
-import { getTitles, createTitle, updateTitle, deleteTitle, getAttendancePolicy, updateAttendancePolicy, getInsuranceRates, updateInsuranceRates } from '@/api/config'
+import { getTitles, createTitle, updateTitle, deleteTitle } from '@/api/config'
 import { createShiftType, updateShiftType, deleteShiftType } from '@/api/shifts'
 import { getUsers, getPermissions, createUser, updateUser, deleteUser, resetPassword } from '@/api/auth'
 import { getApprovalPolicies, updateApprovalPolicies } from '@/api/approvalSettings'
@@ -33,12 +33,6 @@ const credentialDialogVisible = ref(false)
 const createdCredentials = ref({ username: '', password: '' })
 const permissionDefinition = ref({ permissions: {}, groups: [], roles: {} })
 
-// Attendance Config
-const attendanceConfig = reactive({
-  late_threshold: 2,
-  festival_bonus_months: 3
-})
-
 // Shift Types（由 shiftStore 管理，computed 別名讓 template 不需改動）
 const shiftTypes = computed(() => shiftStore.shiftTypes)
 const loadingShifts = computed(() => shiftStore.loading)
@@ -53,21 +47,6 @@ const loadingApproval = ref(false)
 const ROLE_HIERARCHY = { teacher: 1, supervisor: 2, hr: 3, admin: 4 }
 const ROLE_LABELS_MAP = { teacher: '教師', supervisor: '主管', hr: '人資', admin: '管理員' }
 const ALL_APPROVER_ROLES = ['supervisor', 'hr', 'admin']
-
-// Insurance Config
-const insuranceConfig = reactive({
-  rate_year: new Date().getFullYear(),
-  labor_rate: 0,
-  labor_employee_ratio: 0,
-  labor_employer_ratio: 0,
-  labor_government_ratio: 0,
-  health_rate: 0,
-  health_employee_ratio: 0,
-  health_employer_ratio: 0,
-  pension_employer_rate: 0,
-  average_dependents: 0
-})
-const loadingInsurance = ref(false)
 
 // ---- Job Titles ----
 const fetchJobTitles = async () => {
@@ -121,54 +100,6 @@ const saveTitle = async () => {
     fetchJobTitles()
   } catch (error) {
     ElMessage.error('儲存失敗')
-  }
-}
-
-// ---- Attendance ----
-const fetchAttendanceConfig = async () => {
-  try {
-    const response = await getAttendancePolicy()
-    if (response.data && response.data.id) {
-      Object.assign(attendanceConfig, response.data)
-    }
-  } catch (error) {
-    ElMessage.error('載入考勤規則失敗')
-  }
-}
-
-const saveAttendanceConfig = async () => {
-  try {
-    await updateAttendancePolicy(attendanceConfig)
-    ElMessage.success('考勤規則已儲存')
-  } catch (error) {
-    ElMessage.error('儲存考勤規則失敗: ' + (error.response?.data?.detail || error.message))
-  }
-}
-
-// ---- Insurance ----
-const fetchInsuranceRates = async () => {
-  loadingInsurance.value = true
-  try {
-    const response = await getInsuranceRates()
-    if (response.data && response.data.id) {
-      Object.assign(insuranceConfig, response.data)
-    }
-  } catch (error) {
-    ElMessage.error('載入勞健保費率失敗')
-  } finally {
-    loadingInsurance.value = false
-  }
-}
-
-const saveInsuranceRates = async () => {
-  loadingInsurance.value = true
-  try {
-    await updateInsuranceRates(insuranceConfig)
-    ElMessage.success('勞健保費率已儲存')
-  } catch (error) {
-    ElMessage.error('儲存勞健保費率失敗')
-  } finally {
-    loadingInsurance.value = false
   }
 }
 
@@ -547,8 +478,6 @@ const handleTestLine = async () => {
 
 onMounted(() => {
   fetchJobTitles()
-  fetchAttendanceConfig()
-  fetchInsuranceRates()
   shiftStore.fetchShiftTypes()
   fetchUsers()
   fetchPermissionDefinition()
@@ -579,97 +508,6 @@ onMounted(() => {
         </el-table>
       </el-tab-pane>
 
-      <!-- Attendance Rules -->
-      <el-tab-pane label="考勤規則" name="attendance">
-        <el-alert
-          title="考勤扣款說明"
-          type="info"
-          :closable="false"
-          style="margin: 20px 0;"
-        >
-          <template #default>
-            <p style="margin: 4px 0;">• 遲到 / 早退扣款按底薪比例逐分鐘計算：<strong>底薪 ÷ (30天 × 8小時 × 60分鐘)</strong></p>
-            <p style="margin: 4px 0;">• 無寬限期，遲到或早退即開始計算扣款</p>
-            <p style="margin: 4px 0;">• 遲到超過指定分鐘數，自動轉為事假半天扣款</p>
-            <p style="margin: 4px 0;">• 未打卡僅記錄，不另外扣款</p>
-          </template>
-        </el-alert>
-        <el-form label-width="220px" style="max-width: 600px;">
-          <el-form-item label="自動轉事假門檻 (分鐘)">
-            <el-input-number v-model="attendanceConfig.late_threshold" :min="0" :step="10" />
-            <div style="color: #909399; font-size: 12px; margin-top: 4px;">遲到超過此分鐘數自動轉為事假半天</div>
-          </el-form-item>
-          <el-form-item label="獎金最低在職月數">
-            <el-input-number v-model="attendanceConfig.festival_bonus_months" :min="0" />
-            <div style="color: #909399; font-size: 12px; margin-top: 4px;">員工需在職滿此月數才能領取節慶獎金</div>
-          </el-form-item>
-          <el-form-item>
-            <el-button type="primary" @click="saveAttendanceConfig">儲存考勤規則</el-button>
-          </el-form-item>
-        </el-form>
-      </el-tab-pane>
-
-      <!-- Insurance Rates -->
-      <el-tab-pane label="勞健保費率" name="insurance">
-        <div v-loading="loadingInsurance">
-          <el-form label-width="220px" style="max-width: 700px; margin-top: 20px;">
-            <el-form-item label="費率年度">
-              <el-input-number v-model="insuranceConfig.rate_year" :min="2020" :max="2030" />
-            </el-form-item>
-
-            <el-divider content-position="left">勞保</el-divider>
-            <el-form-item label="勞保費率 (%)">
-              <el-input-number v-model="insuranceConfig.labor_rate" :min="0" :max="100" :precision="4" :step="0.01" />
-            </el-form-item>
-            <el-row :gutter="20">
-              <el-col :span="8">
-                <el-form-item label="員工 (%)">
-                  <el-input-number v-model="insuranceConfig.labor_employee_ratio" :min="0" :max="100" :precision="2" :step="1" style="width: 100%" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item label="雇主 (%)">
-                  <el-input-number v-model="insuranceConfig.labor_employer_ratio" :min="0" :max="100" :precision="2" :step="1" style="width: 100%" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="8">
-                <el-form-item label="政府 (%)">
-                  <el-input-number v-model="insuranceConfig.labor_government_ratio" :min="0" :max="100" :precision="2" :step="1" style="width: 100%" />
-                </el-form-item>
-              </el-col>
-            </el-row>
-
-            <el-divider content-position="left">健保</el-divider>
-            <el-form-item label="健保費率 (%)">
-              <el-input-number v-model="insuranceConfig.health_rate" :min="0" :max="100" :precision="4" :step="0.01" />
-            </el-form-item>
-            <el-row :gutter="20">
-              <el-col :span="12">
-                <el-form-item label="員工 (%)">
-                  <el-input-number v-model="insuranceConfig.health_employee_ratio" :min="0" :max="100" :precision="2" :step="1" style="width: 100%" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="12">
-                <el-form-item label="雇主 (%)">
-                  <el-input-number v-model="insuranceConfig.health_employer_ratio" :min="0" :max="100" :precision="2" :step="1" style="width: 100%" />
-                </el-form-item>
-              </el-col>
-            </el-row>
-
-            <el-divider content-position="left">勞退</el-divider>
-            <el-form-item label="雇主提撥率 (%)">
-              <el-input-number v-model="insuranceConfig.pension_employer_rate" :min="0" :max="100" :precision="2" :step="0.1" />
-            </el-form-item>
-            <el-form-item label="平均眷屬人數">
-              <el-input-number v-model="insuranceConfig.average_dependents" :min="0" :precision="2" :step="0.1" />
-            </el-form-item>
-
-            <el-form-item>
-              <el-button type="primary" @click="saveInsuranceRates">儲存勞健保費率</el-button>
-            </el-form-item>
-          </el-form>
-        </div>
-      </el-tab-pane>
       <!-- Shift Types -->
       <el-tab-pane label="輪班別管理" name="shifts">
         <div class="tab-header">

@@ -30,7 +30,7 @@ const rules = {
 const positionSalaryConfig = ref(null)
 const suggestedSalary = ref(null)
 
-const POSITION_OPTIONS = ['班導', '副班導', '主任', '組長', '副組長', '司機', '美編', '行政', '美語教師']
+const POSITION_OPTIONS = ['班導', '副班導', '主任', '組長', '副組長', '司機', '美編', '行政', '美語教師', '藝術', '護理人員', '廚房']
 
 const TITLE_TO_GRADE = {
   '幼兒園教師': 'A',
@@ -91,18 +91,52 @@ watch(() => form.hire_date, (val) => {
   }
 })
 
-// 根據職稱 + 職位 + bonus_grade 計算建議底薪
+// 其他職位對應設定欄位的對照表
+const POSITION_SALARY_KEY = {
+  '行政': 'admin_staff',
+  '美語教師': 'english_teacher',
+  '藝術': 'art_teacher',
+  '美編': 'designer',
+  '護理人員': 'nurse',
+  '司機': 'driver',
+  '廚房': 'kitchen_staff',
+}
+
+// 根據職稱 + 職位 + bonus_grade 計算並自動套用標準底薪
 watch([() => form.job_title_id, () => form.position, () => form.bonus_grade], () => {
   if (!positionSalaryConfig.value) { suggestedSalary.value = null; return }
   const role = detectRole(form.position)
   const grade = (form.bonus_grade || titleToGrade(form.job_title_id) || '').toLowerCase()
+  let salary = null
   if (role && grade) {
     const key = `${role === 'head' ? 'head_teacher' : 'assistant_teacher'}_${grade}`
-    suggestedSalary.value = positionSalaryConfig.value[key] ?? null
+    salary = positionSalaryConfig.value[key] ?? null
   } else {
-    suggestedSalary.value = null
+    const key = POSITION_SALARY_KEY[form.position]
+    salary = key ? (positionSalaryConfig.value[key] ?? null) : null
   }
+  suggestedSalary.value = salary
+  if (salary !== null) form.base_salary = salary
 })
+
+// 查詢某員工對應的標準薪俸（詳情頁用）
+const standardSalaryFor = (emp) => {
+  if (!positionSalaryConfig.value || !emp) return null
+  const cfg = positionSalaryConfig.value
+  const pos = emp.position || ''
+  const role = detectRole(pos)
+  if (role) {
+    const titleName = emp.job_title_name || emp.title || ''
+    const grade = (emp.bonus_grade || TITLE_TO_GRADE[titleName] || '').toLowerCase()
+    if (grade) {
+      const key = `${role === 'head' ? 'head_teacher' : 'assistant_teacher'}_${grade}`
+      return cfg[key] ?? null
+    }
+    return null
+  }
+  const key = POSITION_SALARY_KEY[pos]
+  return key ? (cfg[key] ?? null) : null
+}
 
 // ── 辦理離職 ──────────────────────────────────────
 const offboardVisible = ref(false)
@@ -464,11 +498,8 @@ onMounted(async () => {
                 </el-form-item>
               </el-col>
               <el-col :span="12" v-if="suggestedSalary !== null">
-                <el-form-item label="建議底薪">
-                  <div style="display:flex;align-items:center;gap:8px">
-                    <span style="font-size:16px;font-weight:bold;color:#67c23a">${{ suggestedSalary?.toLocaleString() }}</span>
-                    <el-button size="small" @click="form.base_salary = suggestedSalary">套用</el-button>
-                  </div>
+                <el-form-item label="標準底薪">
+                  <span style="font-size:14px;color:#909399">{{ suggestedSalary?.toLocaleString() }}（已自動套用）</span>
                 </el-form-item>
               </el-col>
             </el-row>
@@ -622,7 +653,23 @@ onMounted(async () => {
             </el-descriptions-item>
             <el-descriptions-item v-if="currentDetail.resign_date" label="離職日">{{ currentDetail.resign_date }}</el-descriptions-item>
             <el-descriptions-item v-if="currentDetail.resign_reason" label="離職原因">{{ currentDetail.resign_reason }}</el-descriptions-item>
-            <el-descriptions-item label="基本薪資">{{ currentDetail.base_salary }}</el-descriptions-item>
+            <el-descriptions-item label="基本薪資">
+              <span>{{ Number(currentDetail.base_salary).toLocaleString() }}</span>
+              <template v-if="standardSalaryFor(currentDetail) !== null">
+                <span style="color:#909399;font-size:12px;margin-left:8px">
+                  標準：{{ standardSalaryFor(currentDetail).toLocaleString() }}
+                </span>
+                <el-tag
+                  v-if="Number(currentDetail.base_salary) !== standardSalaryFor(currentDetail)"
+                  size="small"
+                  :type="Number(currentDetail.base_salary) > standardSalaryFor(currentDetail) ? 'success' : 'warning'"
+                  style="margin-left:6px"
+                >
+                  {{ Number(currentDetail.base_salary) > standardSalaryFor(currentDetail) ? '↑ 高於標準' : '↓ 低於標準' }}
+                </el-tag>
+                <el-tag v-else size="small" type="info" style="margin-left:6px">符合標準</el-tag>
+              </template>
+            </el-descriptions-item>
             <el-descriptions-item label="投保級距">{{ currentDetail.insurance_salary_level }}</el-descriptions-item>
             <el-descriptions-item label="行政人員">
               <el-tag size="small">{{ currentDetail.is_office_staff ? '是' : '否' }}</el-tag>

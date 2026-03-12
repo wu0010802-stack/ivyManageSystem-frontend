@@ -8,3 +8,6 @@ export const batchSaveAttendance = (data) =>
 
 export const getMonthlySummary = (params) =>
   api.get('/student-attendance/monthly', { params })
+
+export const exportStudentAttendance = (params) =>
+  api.get('/student-attendance/export', { params, responseType: 'blob' })

@@ -1,6 +1,6 @@
 <script setup>
 import { ref, reactive, computed, watch, onMounted } from 'vue'
-import { uploadFile, uploadCsv, getRecords, getSummary, deleteMonthRecords as deleteMonthRecordsApi, getAnomalyList, batchConfirmAnomalies, exportAnomalies } from '@/api/attendance'
+import { uploadFile, uploadCsv, getRecords, getSummary, deleteMonthRecords as deleteMonthRecordsApi, getAnomalyList, batchConfirmAnomalies, exportAnomalies, exportEmployeeAttendance } from '@/api/attendance'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { UploadFilled, Search } from '@element-plus/icons-vue'
 import { downloadFile } from '@/utils/download'
@@ -248,18 +248,43 @@ watch(activeTab, (tab) => {
   else if (tab === 'anomalies') fetchAnomalies()
 })
 
-// Unique employee filter for records table
-const employeeFilter = ref('')
-const debouncedFilter = ref('')
-let _filterTimer = null
-watch(employeeFilter, (val) => {
-  clearTimeout(_filterTimer)
-  _filterTimer = setTimeout(() => { debouncedFilter.value = val }, 300)
+// Employee dropdown filter for records table
+const selectedEmployeeId = ref(null)
+const uniqueEmployees = computed(() => {
+  const seen = new Set()
+  return attendanceRecords.value
+    .filter(r => { if (seen.has(r.employee_id)) return false; seen.add(r.employee_id); return true })
+    .map(r => ({ id: r.employee_id, name: r.employee_name }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'zh-TW'))
 })
 const filteredRecords = computed(() => {
-  if (!debouncedFilter.value) return attendanceRecords.value
-  return attendanceRecords.value.filter(r => r.employee_name.includes(debouncedFilter.value))
+  if (!selectedEmployeeId.value) return attendanceRecords.value
+  return attendanceRecords.value.filter(r => r.employee_id === selectedEmployeeId.value)
 })
+
+const exportPersonalLoading = ref(false)
+const handlePersonalExport = async () => {
+  if (!selectedEmployeeId.value) return
+  exportPersonalLoading.value = true
+  try {
+    const res = await exportEmployeeAttendance({
+      employee_id: selectedEmployeeId.value,
+      year: query.year,
+      month: query.month,
+    })
+    const emp = uniqueEmployees.value.find(e => e.id === selectedEmployeeId.value)
+    const url = URL.createObjectURL(res.data)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${query.year}年${query.month}月_${emp?.name ?? ''}_出勤月報.xlsx`
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch {
+    ElMessage.error('匯出失敗，請稍後再試')
+  } finally {
+    exportPersonalLoading.value = false
+  }
+}
 </script>
 
 <template>
@@ -386,12 +411,26 @@ const filteredRecords = computed(() => {
             <el-button type="primary" :loading="loadingRecords" @click="queryAttendance">查詢</el-button>
             <el-button type="success" @click="exportAttendance">匯出月報</el-button>
             <el-button type="danger" @click="deleteMonthRecords">刪除該月記錄</el-button>
-            <el-input
-              v-model="employeeFilter"
-              placeholder="篩選姓名"
-              style="width: 140px; margin-left: auto;"
+            <el-select
+              v-model="selectedEmployeeId"
+              placeholder="全部員工"
+              style="width: 150px; margin-left: auto;"
               clearable
-            />
+            >
+              <el-option :value="null" label="全部員工" />
+              <el-option
+                v-for="emp in uniqueEmployees"
+                :key="emp.id"
+                :value="emp.id"
+                :label="emp.name"
+              />
+            </el-select>
+            <el-button
+              type="warning"
+              :loading="exportPersonalLoading"
+              :disabled="!selectedEmployeeId"
+              @click="handlePersonalExport"
+            >匯出個人月報</el-button>
           </div>
         </el-card>
 

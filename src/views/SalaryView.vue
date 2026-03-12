@@ -243,8 +243,8 @@ onMounted(() => {
         />
       </el-tab-pane>
 
-      <!-- 獎金設定 -->
-      <el-tab-pane label="獎金設定" name="bonus">
+      <!-- 薪資設定 -->
+      <el-tab-pane label="薪資設定" name="bonus">
         <BonusConfigPanel />
       </el-tab-pane>
 

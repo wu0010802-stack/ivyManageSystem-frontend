@@ -19,6 +19,13 @@ const debugResult = ref(null)
 
 const activeTab = ref('logic')
 
+const formulaVerification = computed(() => logicData.value?.formula_verification || null)
+const officialChecks = computed(() => formulaVerification.value?.official_checks || [])
+const sampleBracketChecks = computed(() => formulaVerification.value?.sample_bracket_checks || [])
+const allOfficialChecksPass = computed(() =>
+  officialChecks.value.every(item => item.match) && sampleBracketChecks.value.every(item => item.match)
+)
+
 const fetchLogic = async () => {
   loading.value = true
   try {
@@ -79,6 +86,17 @@ onMounted(() => {
       <el-tab-pane label="系統參數總覽" name="logic">
         <div v-loading="loading">
           <template v-if="logicData">
+            <el-alert
+              title="考勤規則與勞健保費率已改為只讀顯示"
+              type="info"
+              :closable="false"
+              class="section-card"
+            >
+              <template #default>
+                後台設定頁不再提供這兩項人工調整；此頁面顯示實際薪資邏輯、runtime 常數與 2026 官方資料比對結果。
+              </template>
+            </el-alert>
+
             <!-- 薪資公式 -->
             <el-card class="section-card">
               <template #header><strong>薪資計算公式</strong></template>
@@ -93,13 +111,92 @@ onMounted(() => {
               </el-descriptions>
             </el-card>
 
+            <el-card class="section-card" v-if="formulaVerification">
+              <template #header><strong>考勤公式</strong></template>
+              <el-table :data="formulaVerification.attendance_formulas" border size="small">
+                <el-table-column prop="item" label="項目" width="140" />
+                <el-table-column prop="formula" label="公式" min-width="260">
+                  <template #default="{ row }"><code>{{ row.formula }}</code></template>
+                </el-table-column>
+                <el-table-column prop="note" label="說明" />
+              </el-table>
+            </el-card>
+
+            <el-card class="section-card" v-if="formulaVerification">
+              <template #header><strong>勞健保 / 勞退公式</strong></template>
+              <el-table :data="formulaVerification.insurance_formulas" border size="small">
+                <el-table-column prop="item" label="項目" width="180" />
+                <el-table-column prop="formula" label="公式" min-width="260">
+                  <template #default="{ row }"><code>{{ row.formula }}</code></template>
+                </el-table-column>
+                <el-table-column prop="note" label="說明" />
+              </el-table>
+            </el-card>
+
+            <el-card class="section-card" v-if="logicData.insurance_runtime_config">
+              <template #header><strong>勞健保 Runtime 常數</strong></template>
+              <pre class="json-block">{{ formatJson(logicData.insurance_runtime_config) }}</pre>
+            </el-card>
+
+            <el-card class="section-card" v-if="formulaVerification">
+              <template #header><strong>2026 官方資料比對</strong></template>
+              <div class="mb-3">
+                <el-tag :type="allOfficialChecksPass ? 'success' : 'danger'" size="large">
+                  {{ allOfficialChecksPass ? 'Runtime 數值與 2026 官方資料一致' : '發現需人工確認的差異' }}
+                </el-tag>
+              </div>
+              <div class="logic-note">{{ formulaVerification.runtime_note }}</div>
+              <el-table :data="officialChecks" border size="small" style="margin-top: 12px;">
+                <el-table-column prop="item" label="檢查項目" min-width="200" />
+                <el-table-column prop="system_value" label="系統值" min-width="160" />
+                <el-table-column prop="official_value" label="官方值" min-width="160" />
+                <el-table-column label="結果" width="90" align="center">
+                  <template #default="{ row }">
+                    <el-tag :type="row.match ? 'success' : 'danger'" size="small">
+                      {{ row.match ? '一致' : '不一致' }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
+              </el-table>
+
+              <el-table :data="sampleBracketChecks" border size="small" style="margin-top: 12px;">
+                <el-table-column prop="insured_amount" label="投保級距" width="110" />
+                <el-table-column prop="labor_employee_system" label="勞保員工(系統)" width="120" />
+                <el-table-column prop="labor_employee_official" label="勞保員工(官方)" width="120" />
+                <el-table-column prop="labor_employer_system" label="勞保雇主(系統)" width="120" />
+                <el-table-column prop="labor_employer_official" label="勞保雇主(官方)" width="120" />
+                <el-table-column prop="health_employee_system" label="健保員工(系統)" width="120" />
+                <el-table-column prop="health_employee_official" label="健保員工(官方)" width="120" />
+                <el-table-column prop="health_employer_system" label="健保雇主(系統)" width="120" />
+                <el-table-column prop="health_employer_official" label="健保雇主(官方)" width="120" />
+                <el-table-column label="結果" width="90" align="center">
+                  <template #default="{ row }">
+                    <el-tag :type="row.match ? 'success' : 'danger'" size="small">
+                      {{ row.match ? '一致' : '不一致' }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
+              </el-table>
+
+              <div class="source-links">
+                <a
+                  v-for="source in formulaVerification.official_sources"
+                  :key="source.url"
+                  :href="source.url"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {{ source.label }}
+                </a>
+              </div>
+            </el-card>
+
             <!-- 考勤政策 -->
             <el-card class="section-card">
               <template #header><strong>考勤政策 (DB)</strong></template>
               <el-descriptions :column="2" border size="small" v-if="logicData.attendance_policy_db">
                 <el-descriptions-item label="預設上班">{{ logicData.attendance_policy_db.default_work_start }}</el-descriptions-item>
                 <el-descriptions-item label="預設下班">{{ logicData.attendance_policy_db.default_work_end }}</el-descriptions-item>
-                <el-descriptions-item label="遲到閾值">{{ logicData.attendance_policy_db.late_threshold }}</el-descriptions-item>
                 <el-descriptions-item label="節慶獎金入職月數">{{ logicData.attendance_policy_db.festival_bonus_months }}</el-descriptions-item>
               </el-descriptions>
               <el-empty v-else description="未設定" />
@@ -358,6 +455,31 @@ onMounted(() => {
 
 .section-card {
   margin-bottom: var(--space-4);
+}
+
+.mb-3 {
+  margin-bottom: 12px;
+}
+
+.logic-note {
+  color: var(--text-secondary);
+  font-size: var(--text-sm, 13px);
+}
+
+.source-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.source-links a {
+  color: var(--el-color-primary);
+  text-decoration: none;
+}
+
+.source-links a:hover {
+  text-decoration: underline;
 }
 
 .json-block {

@@ -218,60 +218,94 @@ const submitPassword = async () => {
       <div class="portal-logo">
         <span>教師專區</span>
       </div>
-      <el-menu :default-active="activeIndex" :router="true" class="portal-menu" @select="closeSidebar">
+      <el-menu
+        :default-active="activeIndex"
+        :router="true"
+        class="portal-menu"
+        unique-opened
+        text-color="#94a3b8"
+        active-text-color="#ffffff"
+        background-color="#1e293b"
+        @select="closeSidebar"
+      >
+        <!-- 個人資料 -->
         <el-menu-item index="/portal/profile">
           <el-icon><UserFilled /></el-icon>
           <span>個人資料</span>
         </el-menu-item>
-        <el-menu-item index="/portal/attendance">
-          <el-icon><Calendar /></el-icon>
-          <span>我的出勤</span>
-        </el-menu-item>
+
+        <!-- 假勤申請 -->
+        <el-sub-menu index="group-leave">
+          <template #title>
+            <el-icon><Document /></el-icon>
+            <span>假勤申請</span>
+          </template>
+          <el-menu-item index="/portal/attendance">
+            <el-icon><Calendar /></el-icon>
+            <span>我的出勤</span>
+          </el-menu-item>
+          <el-menu-item index="/portal/leave">
+            <el-icon><Document /></el-icon>
+            <span>請假申請</span>
+          </el-menu-item>
+          <el-menu-item index="/portal/overtime">
+            <el-icon><Watch /></el-icon>
+            <span>加班申請</span>
+          </el-menu-item>
+          <el-menu-item index="/portal/punch-correction">
+            <el-icon><Edit /></el-icon>
+            <span>補打卡申請</span>
+          </el-menu-item>
+          <el-menu-item index="/portal/anomalies">
+            <el-icon><Warning /></el-icon>
+            <span>異常確認</span>
+          </el-menu-item>
+        </el-sub-menu>
+
+        <!-- 我的排班 -->
         <el-menu-item index="/portal/schedule">
-          <el-icon><Clock /></el-icon>
+          <el-icon><Timer /></el-icon>
           <span>我的排班</span>
           <el-badge v-if="swapPendingCount > 0" :value="swapPendingCount" :max="99" class="announcement-badge" />
         </el-menu-item>
-        <el-menu-item index="/portal/leave">
-          <el-icon><Document /></el-icon>
-          <span>請假申請</span>
-        </el-menu-item>
-        <el-menu-item index="/portal/overtime">
-          <el-icon><Clock /></el-icon>
-          <span>加班申請</span>
-        </el-menu-item>
-        <el-menu-item index="/portal/punch-correction">
-          <el-icon><Edit /></el-icon>
-          <span>補打卡申請</span>
-        </el-menu-item>
-        <el-menu-item index="/portal/anomalies">
-          <el-icon><Warning /></el-icon>
-          <span>異常確認</span>
-        </el-menu-item>
-        <el-menu-item index="/portal/students">
-          <el-icon><User /></el-icon>
-          <span>班級學生</span>
-        </el-menu-item>
-        <el-menu-item index="/portal/incidents">
-          <el-icon><Warning /></el-icon>
-          <span>事件紀錄</span>
-        </el-menu-item>
-        <el-menu-item index="/portal/assessments">
-          <el-icon><DataAnalysis /></el-icon>
-          <span>學期評量</span>
-        </el-menu-item>
-        <el-menu-item index="/portal/student-attendance">
-          <el-icon><Checked /></el-icon>
-          <span>學生點名</span>
-        </el-menu-item>
+
+        <!-- 班級教務 -->
+        <el-sub-menu index="group-class">
+          <template #title>
+            <el-icon><School /></el-icon>
+            <span>班級教務</span>
+          </template>
+          <el-menu-item index="/portal/students">
+            <el-icon><User /></el-icon>
+            <span>班級學生</span>
+          </el-menu-item>
+          <el-menu-item index="/portal/student-attendance">
+            <el-icon><Checked /></el-icon>
+            <span>學生點名</span>
+          </el-menu-item>
+          <el-menu-item index="/portal/incidents">
+            <el-icon><Warning /></el-icon>
+            <span>事件紀錄</span>
+          </el-menu-item>
+          <el-menu-item index="/portal/assessments">
+            <el-icon><DataAnalysis /></el-icon>
+            <span>學期評量</span>
+          </el-menu-item>
+        </el-sub-menu>
+
+        <!-- 學校行事曆 -->
         <el-menu-item index="/portal/calendar">
           <el-icon><Calendar /></el-icon>
           <span>學校行事曆</span>
         </el-menu-item>
+
+        <!-- 薪資查詢 -->
         <el-menu-item index="/portal/salary">
           <el-icon><Money /></el-icon>
           <span>薪資查詢</span>
         </el-menu-item>
+
+        <!-- 公告通知 -->
         <el-menu-item index="/portal/announcements">
           <el-icon><Bell /></el-icon>
           <span>公告通知</span>
@@ -455,6 +489,36 @@ const submitPassword = async () => {
 
 :deep(.el-menu-item .el-icon) {
   color: inherit;
+}
+
+/* 子選單樣式 */
+:deep(.el-sub-menu) {
+  margin: 0 var(--space-3);
+  padding: var(--space-1) 0;
+}
+
+:deep(.el-sub-menu .el-sub-menu__title) {
+  height: 50px;
+  line-height: 50px;
+  border-radius: var(--radius-md);
+  color: var(--text-tertiary) !important;
+}
+
+:deep(.el-sub-menu .el-sub-menu__title:hover) {
+  background-color: #334155 !important;
+  color: #fff !important;
+}
+
+:deep(.el-sub-menu.is-opened > .el-sub-menu__title) {
+  color: #fff !important;
+}
+
+:deep(.el-sub-menu .el-menu-item) {
+  margin: 2px 0 2px var(--space-2);
+  height: 44px;
+  line-height: 44px;
+  padding-left: 44px !important;
+  font-size: 13px;
 }
 
 /* Header Styling */

@@ -33,3 +33,6 @@ export const batchConfirmAnomalies = (payload) =>
 
 export const exportAnomalies = (year, month, status = 'all') =>
   api.get('/attendance/anomalies/export', { params: { year, month, status }, responseType: 'blob' })
+
+export const exportEmployeeAttendance = (params) =>
+  api.get('/exports/employee-attendance', { params, responseType: 'blob' })
