@@ -21,7 +21,6 @@ const showEmployees = hasPermission('EMPLOYEES_READ')
 const stats = computed(() => {
   const total = employeeStore.employees.length
   const teachers = employeeStore.employees.filter(e => {
-    if (e.is_office_staff) return false
     const title = e.title || ''
     const position = e.position || ''
     return title.includes('師') || position.includes('師') ||

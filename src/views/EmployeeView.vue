@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, onMounted, computed, watch } from 'vue'
+import { ref, reactive, onMounted, computed, watch, nextTick } from 'vue'
 import { Loading } from '@element-plus/icons-vue'
 import { getEmployee, createEmployee, updateEmployee, offboard, getFinalSalaryPreview } from '@/api/employees'
 import { getRecords as getAttendanceRecords, uploadCsv, deleteEmployeeDateRecord } from '@/api/attendance'
@@ -31,6 +31,8 @@ const positionSalaryConfig = ref(null)
 const suggestedSalary = ref(null)
 
 const POSITION_OPTIONS = ['班導', '副班導', '主任', '組長', '副組長', '司機', '美編', '行政', '美語教師', '藝術', '護理人員', '廚房']
+const SUPERVISOR_ROLE_OPTIONS = ['園長', '主任', '組長', '副組長']
+const OFFICIAL_JOB_TITLE_NAMES = ['園長', '幼兒園教師', '教保員', '助理教保員', '司機', '廚工', '職員']
 
 const TITLE_TO_GRADE = {
   '幼兒園教師': 'A',
@@ -58,13 +60,13 @@ const form = reactive({
   name: '',
   job_title_id: null,
   position: '',
+  supervisor_role: null,
   bonus_grade: null,
   department: 'Teaching',
   phone: '',
   email: '',
   hire_date: '',
   probation_end_date: '',
-  is_office_staff: false,
   classroom_id: null,
   base_salary: 0,
   hourly_rate: 0,
@@ -80,6 +82,21 @@ const form = reactive({
   bank_name: '',
   work_start_time: '08:00',
   work_end_time: '17:00'
+})
+
+const bureauJobTitleOptions = computed(() => {
+  const titles = configStore.jobTitles || []
+  const titleMap = new Map(titles.map(item => [item.name, item]))
+  const official = OFFICIAL_JOB_TITLE_NAMES
+    .map(name => titleMap.get(name))
+    .filter(Boolean)
+
+  const current = titles.find(item => item.id === form.job_title_id)
+  if (current && !official.some(item => item.id === current.id)) {
+    official.push(current)
+  }
+
+  return official
 })
 
 // 當 hire_date 變動時，若 probation_end_date 尚未填寫，自動建議 hire_date + 3 個月
@@ -102,6 +119,9 @@ const POSITION_SALARY_KEY = {
   '廚房': 'kitchen_staff',
 }
 
+// 用於區分「載入舊資料」vs「使用者手動修改」，避免 populateForm 觸發連動
+let _populatingForm = false
+
 // 根據職稱 + 職位 + bonus_grade 計算並自動套用標準底薪
 watch([() => form.job_title_id, () => form.position, () => form.bonus_grade], () => {
   if (!positionSalaryConfig.value) { suggestedSalary.value = null; return }
@@ -117,6 +137,11 @@ watch([() => form.job_title_id, () => form.position, () => form.bonus_grade], ()
   }
   suggestedSalary.value = salary
   if (salary !== null) form.base_salary = salary
+})
+
+// 基本薪資變動時自動連動投保級距（排除 populateForm 載入時的變動）
+watch(() => form.base_salary, (val) => {
+  if (!_populatingForm) form.insurance_salary_level = val
 })
 
 // 查詢某員工對應的標準薪俸（詳情頁用）
@@ -245,6 +270,7 @@ const resetForm = () => {
   })
   form.id = null
   form.job_title_id = null
+  form.supervisor_role = null
   form.classroom_id = null
   form.bonus_grade = null
   form.department = 'Teaching'
@@ -255,9 +281,15 @@ const resetForm = () => {
 }
 
 const populateForm = (row) => {
+  _populatingForm = true
   Object.assign(form, row)
   form.base_salary = Number(row.base_salary)
   form.hourly_rate = Number(row.hourly_rate)
+  // 投保級距若為 0 或與底薪不一致，開啟編輯時自動對齊底薪
+  if (!form.insurance_salary_level || form.insurance_salary_level !== form.base_salary) {
+    form.insurance_salary_level = form.base_salary
+  }
+  nextTick(() => { _populatingForm = false })
 }
 
 const { dialogVisible, isEdit, openCreate: handleAdd, openEdit: handleEdit, closeDialog } = useCrudDialog({ resetForm, populateForm })
@@ -356,6 +388,12 @@ const handleDetail = async (row) => {
 
 const saveEmployee = async () => {
   if (!formRef.value) return
+  form.supervisor_role = form.supervisor_role || null
+  form.bonus_grade = form.bonus_grade ? form.bonus_grade.toUpperCase() : null
+  if (form.bonus_grade && !['A', 'B', 'C'].includes(form.bonus_grade)) {
+    ElMessage.error('獎金等級覆蓋僅接受 A / B / C')
+    return
+  }
   await formRef.value.validate(async (valid) => {
     if (valid) {
       try {
@@ -404,7 +442,7 @@ onMounted(async () => {
       <el-table :data="filteredEmployees" v-loading="loading" stripe style="width: 100%" max-height="600">
         <el-table-column prop="employee_id" label="編號" width="100" sortable />
         <el-table-column prop="name" label="姓名" width="120" sortable />
-        <el-table-column prop="title" label="職稱" width="150" sortable />
+        <el-table-column prop="title" label="教育局系統" width="150" sortable />
         <el-table-column prop="position" label="職位" width="120" />
         <el-table-column prop="hire_date" label="到職日" width="120" sortable />
         <el-table-column label="試用期至" width="130">
@@ -460,10 +498,10 @@ onMounted(async () => {
             </el-row>
             <el-row :gutter="20">
               <el-col :span="12">
-                <el-form-item label="職稱" prop="job_title_id">
-                  <el-select v-model="form.job_title_id" placeholder="請選擇職稱" style="width: 100%">
+                <el-form-item label="教育局系統" prop="job_title_id">
+                  <el-select v-model="form.job_title_id" placeholder="請選擇教育局系統職稱" style="width: 100%">
                     <el-option
-                      v-for="item in configStore.jobTitles"
+                      v-for="item in bureauJobTitleOptions"
                       :key="item.id"
                       :label="item.name"
                       :value="item.id"
@@ -489,12 +527,12 @@ onMounted(async () => {
             <el-row :gutter="20">
               <el-col :span="12">
                 <el-form-item label="獎金等級覆蓋">
-                  <el-select v-model="form.bonus_grade" clearable placeholder="自動（依職稱）" style="width: 100%">
+                  <el-select v-model="form.bonus_grade" clearable filterable allow-create placeholder="自動（依教育局系統）" style="width: 100%">
                     <el-option label="A 級（幼兒園教師）" value="A" />
                     <el-option label="B 級（教保員）" value="B" />
                     <el-option label="C 級（助理教保員）" value="C" />
                   </el-select>
-                  <div style="font-size:12px;color:#909399;margin-top:4px">C→B 升級時使用；空白表示依職稱自動判斷</div>
+                  <div style="font-size:12px;color:#909399;margin-top:4px">保留手動覆蓋用於特例調整；請輸入或選擇 A / B / C，空白表示依教育局系統自動判斷</div>
                 </el-form-item>
               </el-col>
               <el-col :span="12" v-if="suggestedSalary !== null">
@@ -522,8 +560,10 @@ onMounted(async () => {
                 </el-form-item>
               </el-col>
             </el-row>
-            <el-form-item label="行政人員">
-              <el-switch v-model="form.is_office_staff" active-text="是" inactive-text="否" />
+            <el-form-item label="主管職">
+              <el-select v-model="form.supervisor_role" clearable placeholder="無主管職" style="width: 100%">
+                <el-option v-for="item in SUPERVISOR_ROLE_OPTIONS" :key="item" :label="item" :value="item" />
+              </el-select>
             </el-form-item>
             <el-form-item label="班級">
               <el-select v-model="form.classroom_id" placeholder="選擇班級" clearable style="width: 100%">
@@ -642,8 +682,12 @@ onMounted(async () => {
         <el-tab-pane label="基本資料">
           <el-descriptions :title="currentDetail.name" :column="2" border>
             <el-descriptions-item label="編號">{{ currentDetail.employee_id }}</el-descriptions-item>
-            <el-descriptions-item label="職稱">{{ currentDetail.job_title_name || currentDetail.title }}</el-descriptions-item>
+            <el-descriptions-item label="教育局系統">{{ currentDetail.job_title_name || currentDetail.title }}</el-descriptions-item>
             <el-descriptions-item label="職位">{{ currentDetail.position }}</el-descriptions-item>
+            <el-descriptions-item label="主管職">
+              <el-tag v-if="currentDetail.supervisor_role" size="small">{{ currentDetail.supervisor_role }}</el-tag>
+              <span v-else>-</span>
+            </el-descriptions-item>
             <el-descriptions-item label="到職日">{{ currentDetail.hire_date }}</el-descriptions-item>
             <el-descriptions-item label="試用期至">{{ currentDetail.probation_end_date || '-' }}</el-descriptions-item>
             <el-descriptions-item label="在職狀態">
@@ -671,9 +715,6 @@ onMounted(async () => {
               </template>
             </el-descriptions-item>
             <el-descriptions-item label="投保級距">{{ currentDetail.insurance_salary_level }}</el-descriptions-item>
-            <el-descriptions-item label="行政人員">
-              <el-tag size="small">{{ currentDetail.is_office_staff ? '是' : '否' }}</el-tag>
-            </el-descriptions-item>
             <el-descriptions-item label="班級">{{ currentDetail.classroom_name || '-' }}</el-descriptions-item>
             <el-descriptions-item label="銀行資訊">{{ currentDetail.bank_code }} - {{ currentDetail.bank_account }} ({{ currentDetail.bank_name }})</el-descriptions-item>
           </el-descriptions>

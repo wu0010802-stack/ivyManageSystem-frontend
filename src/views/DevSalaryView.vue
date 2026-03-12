@@ -295,11 +295,11 @@ onMounted(() => {
             <el-descriptions :column="3" border size="small">
               <el-descriptions-item label="姓名">{{ debugResult.employee.name }}</el-descriptions-item>
               <el-descriptions-item label="工號">{{ debugResult.employee.employee_id }}</el-descriptions-item>
-              <el-descriptions-item label="職稱">{{ debugResult.employee.title }}</el-descriptions-item>
+              <el-descriptions-item label="教育局系統">{{ debugResult.employee.title }}</el-descriptions-item>
               <el-descriptions-item label="職位">{{ debugResult.employee.position }}</el-descriptions-item>
+              <el-descriptions-item label="主管職">{{ debugResult.employee.supervisor_role || '-' }}</el-descriptions-item>
               <el-descriptions-item label="底薪">{{ debugResult.employee.base_salary?.toLocaleString() }}</el-descriptions-item>
               <el-descriptions-item label="到職日">{{ debugResult.employee.hire_date }}</el-descriptions-item>
-              <el-descriptions-item label="辦公室人員">{{ debugResult.employee.is_office_staff ? 'Y' : 'N' }}</el-descriptions-item>
               <el-descriptions-item label="投保薪資">{{ debugResult.employee.insurance_salary_level?.toLocaleString() }}</el-descriptions-item>
               <el-descriptions-item label="眷屬數">{{ debugResult.employee.dependents }}</el-descriptions-item>
             </el-descriptions>

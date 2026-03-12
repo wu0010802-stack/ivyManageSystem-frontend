@@ -294,17 +294,17 @@ onMounted(() => {
           </el-table-column>
         </el-table>
 
-        <!-- 辦公室人員設定 -->
+        <!-- 非帶班職位設定 -->
         <el-card class="box-card" shadow="never">
-          <template #header><div class="card-header"><span>辦公室人員設定</span></div></template>
+          <template #header><div class="card-header"><span>非帶班職位設定</span></div></template>
           <p class="desc-text">
-            辦公室人員的節慶獎金使用<b>全校比例</b>（在籍人數 / 目標人數）計算。
+            司機、美編、行政等非帶班職位的節慶獎金使用<b>全校比例</b>（在籍人數 / 目標人數）計算。
           </p>
           <el-form-item label="全校目標人數">
             <el-input-number v-model="bonusConfig.school_wide_target" :min="0" size="large" />
           </el-form-item>
           <el-divider />
-          <div class="label mb-2">辦公室人員獎金基數</div>
+          <div class="label mb-2">非帶班職位獎金基數</div>
           <el-row :gutter="20">
             <el-col :span="8">
               <el-form-item label="司機">
