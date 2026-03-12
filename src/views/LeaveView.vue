@@ -8,7 +8,7 @@ import { useEmployeeStore } from '@/stores/employee'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
 import { useCrudDialog, useConfirmDelete, useDateQuery } from '@/composables'
 import { downloadFile } from '@/utils/download'
-import { LEAVE_TYPES as leaveTypes } from '@/utils/leaves'
+import { LEAVE_TYPES as leaveTypes, LEAVE_RULE_HINTS } from '@/utils/leaves'
 import { money } from '@/utils/format'
 import LeaveAttachmentDialog from './leave/LeaveAttachmentDialog.vue'
 import LeaveQuotaManager from './leave/LeaveQuotaManager.vue'
@@ -31,16 +31,8 @@ const activeTab = ref('list')
 const quotaDialogVisible = ref(false)
 
 const ATTACHMENT_HINTS = {
-  sick: '建議上傳：醫院診斷證明書',
-  marriage: '建議上傳：結婚證書或喜帖',
-  bereavement: '建議上傳：訃聞或死亡證明',
-  maternity: '建議上傳：媽媽手冊或出生證明',
-  paternity: '建議上傳：出生證明',
-  prenatal: '建議上傳：產檢相關文件',
-  paternity_new: '建議上傳：出生證明',
-  miscarriage: '建議上傳：醫院證明',
+  default: '請假超過 2 天時，核准前需補上證明附件',
 }
-const ATTACHMENT_SUGGESTED = new Set(Object.keys(ATTACHMENT_HINTS))
 
 const DAILY_WORK_HOURS = 8  // 無排班資料時的降級預設值
 
@@ -91,6 +83,8 @@ const form = reactive({
   leave_hours: 8,
   reason: '',
 })
+
+const selectedLeaveRule = computed(() => LEAVE_RULE_HINTS[form.leave_type] || '')
 
 const formRules = {
   employee_id: [{ required: true, message: '請選擇員工', trigger: 'change' }],
@@ -824,7 +818,7 @@ onMounted(() => {
               <span style="font-size:12px;">{{ scope.row.substitute_employee_name }}</span>
               <el-tag
                 size="small"
-                :type="{ not_required:'info', pending:'warning', accepted:'success', rejected:'danger' }[scope.row.substitute_status] || ''"
+                :type="{ not_required:'info', pending:'warning', accepted:'success', rejected:'danger' }[scope.row.substitute_status] || 'info'"
                 style="margin-left:4px;"
               >{{ { not_required:'—', pending:'待回應', accepted:'已接受', rejected:'已拒絕' }[scope.row.substitute_status] || scope.row.substitute_status }}</el-tag>
             </template>
@@ -971,9 +965,13 @@ onMounted(() => {
               此假別無年度上限
             </span>
           </div>
-          <div v-if="ATTACHMENT_HINTS[form.leave_type]" style="margin-top: 5px; font-size: 12px; color: var(--el-color-warning); display: flex; align-items: center; gap: 4px;">
+          <div v-if="selectedLeaveRule" style="margin-top: 5px; font-size: 12px; color: var(--el-color-primary); display: flex; align-items: center; gap: 4px;">
             <el-icon><InfoFilled /></el-icon>
-            {{ ATTACHMENT_HINTS[form.leave_type] }}
+            {{ selectedLeaveRule }}
+          </div>
+          <div style="margin-top: 5px; font-size: 12px; color: var(--el-color-warning); display: flex; align-items: center; gap: 4px;">
+            <el-icon><InfoFilled /></el-icon>
+            {{ ATTACHMENT_HINTS.default }}
           </div>
         </el-form-item>
         <el-form-item label="請假模式">
@@ -1066,7 +1064,7 @@ onMounted(() => {
               <span class="bd-date">{{ day.date }}</span>
               <el-tag
                 size="small"
-                :type="day.type === 'workday' ? '' : day.type === 'holiday' ? 'danger' : 'info'"
+                :type="day.type === 'workday' ? 'info' : day.type === 'holiday' ? 'danger' : 'info'"
                 class="bd-tag"
               >
                 {{ day.type === 'workday'
@@ -1104,7 +1102,7 @@ onMounted(() => {
           >
             <el-card shadow="never" style="padding: 8px 12px;">
               <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                <el-tag :type="ACTION_TAG_TYPES[log.action] || ''" size="small">
+                <el-tag :type="ACTION_TAG_TYPES[log.action] || 'info'" size="small">
                   {{ ACTION_LABELS[log.action] || log.action }}
                 </el-tag>
                 <span style="font-weight: 500;">{{ log.approver_username }}</span>

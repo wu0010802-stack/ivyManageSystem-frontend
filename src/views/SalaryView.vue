@@ -1,14 +1,14 @@
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { calculate, getFestivalBonus, getRecords } from '@/api/salary'
 import { ElMessage } from 'element-plus'
-import { useEmployeeStore } from '@/stores/employee'
 import { Search, InfoFilled } from '@element-plus/icons-vue'
 import BonusConfigPanel from './salary/BonusConfigPanel.vue'
 import SalaryHistoryPanel from './salary/SalaryHistoryPanel.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import { downloadFile } from '@/utils/download'
 import { money } from '@/utils/format'
+import { hasPermission } from '@/utils/auth'
 
 const currentYear = new Date().getFullYear()
 const currentMonth = new Date().getMonth() + 1
@@ -24,8 +24,8 @@ const salaryResults = ref([])
 const bonusResults = ref([])
 const showBonusDialog = ref(false)
 const activeTab = ref('calculate')
-
-const employeeStore = useEmployeeStore()
+const canReadSalarySettings = hasPermission('SETTINGS_READ')
+const canReadEmployees = hasPermission('EMPLOYEES_READ')
 
 // ---- Salary Calculation ----
 const calculateSalary = async () => {
@@ -61,10 +61,6 @@ const fetchFestivalBonus = async () => {
     loading.value = false
   }
 }
-
-const bonusTotal = computed(() => {
-  return bonusResults.value.reduce((sum, r) => sum + (r.festivalBonus || 0), 0)
-})
 
 // ---- Salary Records (for export) ----
 const salaryRecords = ref([])
@@ -107,7 +103,6 @@ const pct = (val) => {
 
 onMounted(() => {
   fetchSalaryRecords()
-  employeeStore.fetchEmployees()
 })
 </script>
 
@@ -244,13 +239,13 @@ onMounted(() => {
       </el-tab-pane>
 
       <!-- 薪資設定 -->
-      <el-tab-pane label="薪資設定" name="bonus">
-        <BonusConfigPanel />
+      <el-tab-pane v-if="canReadSalarySettings" label="薪資設定" name="bonus">
+        <BonusConfigPanel v-if="activeTab === 'bonus'" />
       </el-tab-pane>
 
       <!-- 薪資歷史 -->
-      <el-tab-pane label="薪資歷史" name="history">
-        <SalaryHistoryPanel />
+      <el-tab-pane v-if="canReadEmployees" label="薪資歷史" name="history">
+        <SalaryHistoryPanel v-if="activeTab === 'history'" />
       </el-tab-pane>
     </el-tabs>
 

@@ -145,7 +145,7 @@ onMounted(() => {
                v-for="s in currentClassroom.students" 
                :key="s.id" 
                class="student-tag"
-               :type="s.gender === 'male' ? '' : 'danger'"
+               :type="s.gender === 'male' ? 'primary' : 'danger'"
                effect="plain"
              >
                {{ s.name }}

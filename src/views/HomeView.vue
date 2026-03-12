@@ -2,21 +2,21 @@
 import { ref, onMounted, computed } from 'vue'
 import { getStudents } from '@/api/students'
 import { getToday, getTodayAnomalies } from '@/api/attendance'
-import { getApprovalSummary, getUpcomingEvents, getProbationAlerts } from '@/api/home'
+import { getApprovalSummary, getUpcomingEvents, getProbationAlerts, getStudentAttendanceSummary } from '@/api/home'
 import { useRouter } from 'vue-router'
 import StatCard from '@/components/common/StatCard.vue'
 import { useEmployeeStore } from '@/stores/employee'
-import { hasPermission } from '@/utils/auth'
+import { hasPermission, getUserInfo } from '@/utils/auth'
 
 const router = useRouter()
 const employeeStore = useEmployeeStore()
 const loading = ref(false)
 
-// 依角色決定是否顯示各區塊
 const showAttendance = hasPermission('ATTENDANCE_READ')
 const showApprovals = hasPermission('APPROVALS')
 const showCalendar = hasPermission('CALENDAR')
 const showEmployees = hasPermission('EMPLOYEES_READ')
+const showStudents = hasPermission('STUDENTS_READ')
 
 const stats = computed(() => {
   const total = employeeStore.employees.length
@@ -35,11 +35,26 @@ const approvalSummary = ref(null)
 const upcomingEvents = ref([])
 const attendanceAnomalies = ref(null)
 const probationAlerts = ref(null)
+const studentAttendanceSummary = ref(null)
+
+const now = new Date()
+const weekDays = ['日', '一', '二', '三', '四', '五', '六']
 
 const todayDateStr = computed(() => {
-  const now = new Date()
-  const weekDays = ['日', '一', '二', '三', '四', '五', '六']
-  return `${now.getMonth() + 1} 月 ${now.getDate()} 日（星期${weekDays[now.getDay()]}）`
+  const n = new Date()
+  return `${n.getMonth() + 1} 月 ${n.getDate()} 日（星期${weekDays[n.getDay()]}）`
+})
+
+const greeting = computed(() => {
+  const h = now.getHours()
+  if (h < 12) return '早安'
+  if (h < 18) return '午安'
+  return '晚安'
+})
+
+const userName = computed(() => {
+  const info = getUserInfo()
+  return info?.display_name || info?.username || '管理員'
 })
 
 const groupedEvents = computed(() => {
@@ -103,6 +118,10 @@ const fetchDashboardData = async () => {
       ? getProbationAlerts()
           .then(r => { probationAlerts.value = r.data }).catch(() => {})
       : null,
+    showStudents
+      ? getStudentAttendanceSummary()
+          .then(r => { studentAttendanceSummary.value = r.data }).catch(() => {})
+      : null,
   ].filter(Boolean))
   loading.value = false
 }
@@ -117,34 +136,47 @@ onMounted(() => {
 <template>
   <div class="dashboard-container" v-loading="loading">
 
-    <!-- 歡迎區塊 -->
-    <div class="welcome-section">
-      <p class="text-secondary">歡迎回來，查看今日概況</p>
+    <!-- 頁首 -->
+    <div class="dashboard-header">
+      <div class="dashboard-header__left">
+        <h1 class="dashboard-header__greeting">{{ greeting }}，{{ userName }}</h1>
+        <p class="dashboard-header__sub">{{ todayDateStr }} &nbsp;·&nbsp; 查看今日學校概況</p>
+      </div>
+      <div class="dashboard-header__date-badge">
+        <el-icon style="margin-right:4px;"><Calendar /></el-icon>
+        {{ todayDateStr }}
+      </div>
     </div>
 
-    <!-- 人員統計卡 -->
-    <el-row :gutter="24" class="stats-row">
+    <!-- 學校概況 -->
+    <div class="section-header section-header--top">
+      <span class="section-title">學校概況</span>
+    </div>
+    <el-row :gutter="20" class="stats-row">
       <el-col :xs="24" :sm="12" :md="6" class="mb-4">
-        <StatCard label="教職員總數" :value="stats.total" icon="User" color="primary" />
+        <StatCard label="教職員總數" :value="stats.total" icon="User" color="primary" variant="filled" />
       </el-col>
       <el-col :xs="24" :sm="12" :md="6" class="mb-4">
-        <StatCard label="教師人數" :value="stats.teachers" icon="Reading" color="success" />
+        <StatCard label="教師人數" :value="stats.teachers" icon="Reading" color="success" variant="filled" />
       </el-col>
       <el-col :xs="24" :sm="12" :md="6" class="mb-4">
-        <StatCard label="全校在籍人數" :value="studentCount" icon="UserFilled" color="warning" />
+        <StatCard label="全校在籍人數" :value="studentCount" icon="UserFilled" color="warning" variant="filled" />
       </el-col>
       <el-col :xs="24" :sm="12" :md="6" class="mb-4">
-        <StatCard label="其他人員" :value="stats.others" icon="More" color="info" />
+        <StatCard label="其他人員" :value="stats.others" icon="More" color="info" variant="filled" />
       </el-col>
     </el-row>
 
-    <!-- 今日出勤狀況（需 ATTENDANCE_READ 權限） -->
+    <!-- 教師出勤狀況 -->
     <template v-if="showAttendance && todayStats">
       <div class="section-header">
-        <span class="section-title">今日出勤狀況</span>
-        <span class="section-date text-secondary">{{ todayDateStr }}</span>
+        <div class="section-title-wrap">
+          <span class="section-dot section-dot--blue"></span>
+          <span class="section-title">教師出勤狀況</span>
+        </div>
+        <span class="section-date-chip">{{ todayDateStr }}</span>
       </div>
-      <el-row :gutter="24" class="stats-row">
+      <el-row :gutter="20" class="stats-row">
         <el-col :xs="24" :sm="12" :md="6" class="mb-4">
           <StatCard label="今日應出勤" :value="todayStats.total_employees" icon="Calendar" color="primary" />
         </el-col>
@@ -160,33 +192,78 @@ onMounted(() => {
       </el-row>
     </template>
 
-    <!-- 主要內容區 -->
-    <el-row :gutter="24">
+    <!-- 學生出勤狀況 -->
+    <template v-if="showStudents && studentAttendanceSummary">
+      <div class="section-header">
+        <div class="section-title-wrap">
+          <span class="section-dot section-dot--green"></span>
+          <span class="section-title">今日學生出勤狀況</span>
+        </div>
+        <span class="section-date-chip">{{ todayDateStr }}</span>
+      </div>
+      <el-row :gutter="20" class="stats-row">
+        <el-col :xs="24" :sm="12" :md="6" class="mb-4">
+          <StatCard label="今日在籍學生" :value="studentAttendanceSummary.total_students" icon="UserFilled" color="primary" />
+        </el-col>
+        <el-col :xs="24" :sm="12" :md="6" class="mb-4">
+          <StatCard label="已點名" :value="studentAttendanceSummary.recorded_count" icon="EditPen" color="success" />
+        </el-col>
+        <el-col :xs="24" :sm="12" :md="6" class="mb-4">
+          <StatCard label="到校" :value="studentAttendanceSummary.on_campus_count" icon="CircleCheck" color="warning" />
+        </el-col>
+        <el-col :xs="24" :sm="12" :md="6" class="mb-4">
+          <StatCard label="未點名" :value="studentAttendanceSummary.unmarked_count" icon="Warning" color="danger" />
+        </el-col>
+      </el-row>
+      <el-card class="no-hover student-summary-bar">
+        <div class="student-summary-bar__inner">
+          <div class="student-summary-bar__stats">
+            <span><strong>{{ studentAttendanceSummary.present_count }}</strong> 出席</span>
+            <span><strong>{{ studentAttendanceSummary.late_count }}</strong> 遲到</span>
+            <span><strong>{{ studentAttendanceSummary.absent_count }}</strong> 缺席</span>
+            <span><strong>{{ studentAttendanceSummary.leave_count }}</strong> 請假</span>
+            <span class="student-summary-bar__rate">點名完成率 <strong>{{ studentAttendanceSummary.record_completion_rate }}%</strong></span>
+          </div>
+          <el-button link size="small" @click="navigateTo('/student-attendance')">
+            前往學生出席紀錄 →
+          </el-button>
+        </div>
+      </el-card>
+    </template>
+
+    <!-- 主要內容 -->
+    <el-row :gutter="20" style="margin-top: 8px;">
+
       <!-- 左欄：快速操作 -->
       <el-col :xs="24" :lg="16" class="mb-4">
-        <el-card class="no-hover" header="快速操作">
-          <div class="action-buttons">
+        <el-card class="no-hover quick-actions-card">
+          <template #header>
+            <div class="card-header-row">
+              <span class="card-header-title">快速操作</span>
+            </div>
+          </template>
+          <div class="action-grid">
             <div class="action-item" @click="navigateTo('/employees')">
-              <div class="action-icon" style="background-color: var(--color-primary-lighter); color: var(--color-primary);">
-                <el-icon><User /></el-icon>
+              <div class="action-circle action-circle--primary">
+                <el-icon :size="22"><User /></el-icon>
               </div>
               <span>員工管理</span>
             </div>
             <div class="action-item" @click="navigateTo('/attendance')">
-              <div class="action-icon" style="background-color: var(--color-success-lighter); color: var(--color-success);">
-                <el-icon><Clock /></el-icon>
+              <div class="action-circle action-circle--success">
+                <el-icon :size="22"><Clock /></el-icon>
               </div>
               <span>出勤查詢</span>
             </div>
             <div class="action-item" @click="navigateTo('/reports')">
-              <div class="action-icon" style="background-color: var(--color-danger-lighter); color: var(--color-danger);">
-                <el-icon><TrendCharts /></el-icon>
+              <div class="action-circle action-circle--danger">
+                <el-icon :size="22"><TrendCharts /></el-icon>
               </div>
               <span>報表統計</span>
             </div>
             <div class="action-item" @click="navigateTo('/settings')">
-              <div class="action-icon" style="background-color: var(--bg-color-soft); color: var(--text-secondary);">
-                <el-icon><Setting /></el-icon>
+              <div class="action-circle action-circle--neutral">
+                <el-icon :size="22"><Setting /></el-icon>
               </div>
               <span>系統設定</span>
             </div>
@@ -194,14 +271,14 @@ onMounted(() => {
         </el-card>
       </el-col>
 
-      <!-- 右欄：動態卡片 -->
+      <!-- 右欄 -->
       <el-col :xs="24" :lg="8">
 
-        <!-- 待審核提醒（需 APPROVALS 權限） -->
-        <el-card v-if="showApprovals" class="no-hover mb-4">
+        <!-- 待審核提醒 -->
+        <el-card v-if="showApprovals" class="no-hover side-card mb-4">
           <template #header>
             <div class="card-header-row">
-              <span>待審核提醒</span>
+              <span class="card-header-title">待審核提醒</span>
               <el-badge
                 v-if="approvalSummary && approvalSummary.total > 0"
                 :value="approvalSummary.total"
@@ -257,11 +334,11 @@ onMounted(() => {
           <div v-else class="approval-loading text-secondary">載入中…</div>
         </el-card>
 
-        <!-- 今日打卡異常（需 ATTENDANCE_READ 權限） -->
-        <el-card v-if="showAttendance && attendanceAnomalies" class="no-hover mb-4">
+        <!-- 今日打卡異常 -->
+        <el-card v-if="showAttendance && attendanceAnomalies" class="no-hover side-card mb-4">
           <template #header>
             <div class="card-header-row">
-              <span>今日打卡異常</span>
+              <span class="card-header-title">今日打卡異常</span>
               <el-badge
                 v-if="attendanceAnomalies.anomalies.length > 0"
                 :value="attendanceAnomalies.anomalies.length"
@@ -292,14 +369,12 @@ onMounted(() => {
           </div>
         </el-card>
 
-        <!-- 近期行事曆（需 CALENDAR 權限） -->
-        <el-card v-if="showCalendar" class="no-hover mb-4">
+        <!-- 近期行事曆 -->
+        <el-card v-if="showCalendar" class="no-hover side-card mb-4">
           <template #header>
             <div class="card-header-row">
-              <span>近期行事曆</span>
-              <el-button link size="small" @click="navigateTo('/calendar')">
-                查看全部
-              </el-button>
+              <span class="card-header-title">近期行事曆</span>
+              <el-button link size="small" @click="navigateTo('/calendar')">查看全部</el-button>
             </div>
           </template>
           <div v-if="groupedEvents.length === 0" class="events-empty text-secondary">
@@ -308,11 +383,7 @@ onMounted(() => {
           <div v-else class="events-list">
             <div v-for="group in groupedEvents" :key="group.label" class="event-group">
               <div class="event-group__date">{{ group.label }}</div>
-              <div
-                v-for="ev in group.events"
-                :key="ev.id"
-                class="event-item"
-              >
+              <div v-for="ev in group.events" :key="ev.id" class="event-item">
                 <el-tag
                   :type="eventTagType[ev.event_type] ?? 'info'"
                   effect="plain"
@@ -335,49 +406,38 @@ onMounted(() => {
           </div>
         </el-card>
 
-        <!-- 試用期即將到期（需 EMPLOYEES_READ 權限） -->
+        <!-- 試用期即將到期 -->
         <el-card
           v-if="showEmployees && probationAlerts && probationAlerts.employees.length > 0"
-          class="no-hover mb-4"
+          class="no-hover side-card mb-4"
         >
           <template #header>
             <div class="card-header-row">
-              <span>試用期即將到期</span>
+              <span class="card-header-title">試用期即將到期</span>
               <el-tag type="warning" effect="plain" size="small">{{ probationAlerts.next_month }}</el-tag>
             </div>
           </template>
           <div class="probation-list">
-            <div
-              v-for="emp in probationAlerts.employees"
-              :key="emp.id"
-              class="probation-item"
-            >
+            <div v-for="emp in probationAlerts.employees" :key="emp.id" class="probation-item">
               <div class="probation-name">{{ emp.name }}</div>
               <div style="display: flex; align-items: center; gap: 6px;">
                 <span class="probation-date text-secondary">{{ emp.probation_end_date }}</span>
-                <el-tag
-                  :type="emp.days_remaining <= 14 ? 'danger' : 'warning'"
-                  effect="plain"
-                  size="small"
-                >
+                <el-tag :type="emp.days_remaining <= 14 ? 'danger' : 'warning'" effect="plain" size="small">
                   剩 {{ emp.days_remaining }} 天
                 </el-tag>
               </div>
             </div>
           </div>
-          <el-button
-            type="primary"
-            plain
-            size="small"
-            class="approval-btn"
-            @click="navigateTo('/employees')"
-          >
+          <el-button type="primary" plain size="small" class="approval-btn" @click="navigateTo('/employees')">
             前往員工管理 →
           </el-button>
         </el-card>
 
         <!-- 系統狀態 -->
-        <el-card class="no-hover" header="系統狀態">
+        <el-card class="no-hover side-card">
+          <template #header>
+            <span class="card-header-title">系統狀態</span>
+          </template>
           <div class="system-status-list">
             <div class="status-item">
               <span>系統運行狀態</span>
@@ -385,9 +445,7 @@ onMounted(() => {
             </div>
             <div class="status-item">
               <span>資料庫連線</span>
-              <span class="status-ok">
-                <span class="dot"></span> 正常
-              </span>
+              <span class="status-ok"><span class="dot"></span> 正常</span>
             </div>
             <div class="status-item">
               <span>上次備份時間</span>
@@ -402,97 +460,203 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.welcome-section {
-  margin-bottom: var(--space-6);
+/* ── 整體容器 ── */
+.dashboard-container {
+  padding-bottom: 32px;
 }
 
-.stats-row {
-  margin-bottom: var(--space-6);
-}
-
-/* Section divider */
-.section-header {
+/* ── 頁首 ── */
+.dashboard-header {
   display: flex;
-  align-items: baseline;
-  gap: var(--space-3);
-  margin-bottom: var(--space-4);
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 28px;
+  gap: 16px;
+  flex-wrap: wrap;
 }
 
-.section-title {
-  font-size: var(--text-base);
-  font-weight: 600;
-  color: var(--text-primary);
+.dashboard-header__greeting {
+  margin: 0 0 4px 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: #1e293b;
+  letter-spacing: -0.3px;
 }
 
-.section-date {
-  font-size: var(--text-sm);
+.dashboard-header__sub {
+  margin: 0;
+  font-size: 13px;
+  color: #64748b;
 }
 
-/* Card header with action */
-.card-header-row {
+.dashboard-header__date-badge {
+  display: none; /* 移除右側重複日期，標題已顯示 */
+}
+
+/* ── Section header ── */
+.section-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  margin-bottom: 14px;
+  margin-top: 4px;
 }
 
-/* Actions */
-.action-buttons {
+.section-header--top {
+  margin-bottom: 14px;
+}
+
+.section-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.section-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.section-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.section-dot--blue  { background: #4f46e5; }
+.section-dot--green { background: #10b981; }
+
+.section-date-chip {
+  display: inline-flex;
+  align-items: center;
+  background: #f1f5f9;
+  color: #64748b;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* ── Stats row ── */
+.stats-row {
+  margin-bottom: 24px;
+}
+
+.mb-4 {
+  margin-bottom: 16px;
+}
+
+/* ── 學生出勤摘要條 ── */
+.student-summary-bar {
+  margin-top: calc(24px * -1 + 8px);
+  margin-bottom: 28px;
+}
+
+.student-summary-bar__inner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.student-summary-bar__stats {
+  display: flex;
+  gap: 20px;
+  font-size: 13px;
+  color: #64748b;
+  flex-wrap: wrap;
+}
+
+.student-summary-bar__rate {
+  color: #4f46e5;
+}
+
+/* ── 快速操作 ── */
+.quick-actions-card :deep(.el-card__body) {
+  padding: 20px 24px 24px;
+}
+
+.action-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-  gap: var(--space-5);
+  grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+  gap: 8px 16px;
 }
 
 .action-item {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--space-2);
+  gap: 10px;
   cursor: pointer;
-  transition: transform var(--transition-base);
+  padding: 16px 8px;
+  border-radius: 12px;
+  transition: background 0.18s ease;
 }
 
 .action-item:hover {
-  transform: translateY(-2px);
-}
-
-.action-item:hover .action-icon {
-  box-shadow: var(--shadow-md);
+  background: #f8fafc;
 }
 
 .action-item span {
-  font-size: var(--text-base);
-  color: var(--text-secondary);
+  font-size: 13px;
+  color: #475569;
+  font-weight: 500;
+  text-align: center;
 }
 
-.action-icon {
-  width: 64px;
-  height: 64px;
-  border-radius: var(--radius-xl);
+.action-circle {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 26px;
-  transition: all var(--transition-slow);
+  transition: all 0.2s ease;
 }
 
-/* Approval */
+.action-circle--primary { background: #e0e7ff; color: #4f46e5; }
+.action-circle--success { background: #dcfce7; color: #10b981; }
+.action-circle--danger  { background: #fee2e2; color: #ef4444; }
+.action-circle--neutral { background: #f1f5f9; color: #64748b; }
+
+.action-item:hover .action-circle--primary { background: #4f46e5; color: #fff; box-shadow: 0 4px 14px rgba(79,70,229,0.3); }
+.action-item:hover .action-circle--success { background: #10b981; color: #fff; box-shadow: 0 4px 14px rgba(16,185,129,0.3); }
+.action-item:hover .action-circle--danger  { background: #ef4444; color: #fff; box-shadow: 0 4px 14px rgba(239,68,68,0.3); }
+.action-item:hover .action-circle--neutral { background: #64748b; color: #fff; box-shadow: 0 4px 14px rgba(100,116,139,0.3); }
+
+/* ── 右欄卡片共用 ── */
+.card-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.card-header-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+/* ── 審核 ── */
 .approval-done {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  color: var(--color-success);
-  font-size: var(--text-sm);
-  padding: var(--space-2) 0;
+  gap: 8px;
+  color: #10b981;
+  font-size: 13px;
+  padding: 4px 0;
 }
 
-.approval-done__icon {
-  font-size: 18px;
-}
+.approval-done__icon { font-size: 18px; }
 
 .approval-list {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: 10px;
 }
 
 .approval-item {
@@ -502,136 +666,34 @@ onMounted(() => {
 }
 
 .approval-item__label {
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
+  font-size: 13px;
+  color: #64748b;
 }
 
 .approval-btn {
   width: 100%;
-  margin-top: var(--space-2);
+  margin-top: 4px;
 }
 
 .approval-loading {
-  font-size: var(--text-sm);
-  padding: var(--space-2) 0;
+  font-size: 13px;
+  padding: 4px 0;
 }
 
-/* Events */
-.events-empty {
-  font-size: var(--text-sm);
-  padding: var(--space-2) 0;
-}
-
-.events-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-}
-
-.event-group__date {
-  font-size: var(--text-xs);
-  font-weight: 600;
-  color: var(--text-tertiary, var(--text-secondary));
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: var(--space-2);
-  padding-bottom: var(--space-1);
-  border-bottom: 1px solid var(--border-color-light);
-}
-
-.event-item {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-2);
-  padding: var(--space-1) 0;
-}
-
-.event-item__tag {
-  flex-shrink: 0;
-  margin-top: 2px;
-}
-
-.event-item__body {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.event-item__title {
-  font-size: var(--text-sm);
-  color: var(--text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.event-item__time,
-.event-item__loc {
-  font-size: var(--text-xs);
-  display: flex;
-  align-items: center;
-  gap: 3px;
-}
-
-/* Status List */
-.system-status-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-}
-
-.status-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding-bottom: var(--space-3);
-  border-bottom: 1px solid var(--border-color-light);
-}
-
-.status-item:last-child {
-  border-bottom: none;
-}
-
-.status-item span:first-child {
-  color: var(--text-secondary);
-  font-size: var(--text-base);
-}
-
-.status-ok {
-  display: flex;
-  align-items: center;
-  color: var(--color-success);
-}
-
-.dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  margin-right: 6px;
-  display: inline-block;
-  background-color: var(--color-success);
-}
-
-.mb-4 {
-  margin-bottom: var(--space-4);
-}
-
-/* Month tag for approval section */
 .month-tag {
-  font-size: var(--text-xs);
-  color: var(--text-tertiary, var(--text-secondary));
+  font-size: 11px;
+  color: #94a3b8;
   font-weight: 600;
   letter-spacing: 0.05em;
   margin: 2px 0;
 }
 
-/* Anomaly list */
+/* ── 異常 ── */
 .anomaly-list {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-  margin-bottom: var(--space-3);
+  gap: 8px;
+  margin-bottom: 10px;
 }
 
 .anomaly-item {
@@ -641,24 +703,79 @@ onMounted(() => {
 }
 
 .anomaly-name {
-  font-size: var(--text-sm);
-  color: var(--text-primary);
+  font-size: 13px;
+  color: #1e293b;
 }
 
 .anomaly-hint {
-  font-size: var(--text-xs);
+  font-size: 12px;
   display: flex;
   align-items: center;
-  padding-top: var(--space-2);
-  border-top: 1px solid var(--border-color-light);
+  padding-top: 8px;
+  border-top: 1px solid #f1f5f9;
 }
 
-/* Probation list */
+/* ── 行事曆 ── */
+.events-empty {
+  font-size: 13px;
+  padding: 4px 0;
+}
+
+.events-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.event-group__date {
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.event-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 3px 0;
+}
+
+.event-item__tag { flex-shrink: 0; margin-top: 2px; }
+
+.event-item__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.event-item__title {
+  font-size: 13px;
+  color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.event-item__time,
+.event-item__loc {
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+/* ── 試用期 ── */
 .probation-list {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
-  margin-bottom: var(--space-3);
+  gap: 10px;
+  margin-bottom: 10px;
 }
 
 .probation-item {
@@ -667,12 +784,42 @@ onMounted(() => {
   align-items: center;
 }
 
-.probation-name {
-  font-size: var(--text-sm);
-  color: var(--text-primary);
+.probation-name { font-size: 13px; color: #1e293b; }
+.probation-date { font-size: 11px; }
+
+/* ── 系統狀態 ── */
+.system-status-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 
-.probation-date {
-  font-size: var(--text-xs);
+.status-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 13px;
+}
+
+.status-item:last-child { border-bottom: none; padding-bottom: 0; }
+
+.status-item span:first-child { color: #64748b; }
+
+.status-ok {
+  display: flex;
+  align-items: center;
+  color: #10b981;
+  font-size: 13px;
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #10b981;
+  margin-right: 6px;
+  display: inline-block;
 }
 </style>

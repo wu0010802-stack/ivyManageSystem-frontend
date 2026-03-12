@@ -1,6 +1,9 @@
 import { defineStore } from 'pinia'
 import { getApprovalSummary } from '@/api/home'
 
+const SUMMARY_TTL_MS = 10_000
+let inflightSummaryRequest = null
+
 /**
  * 審核待辦計數 store
  *
@@ -11,16 +14,34 @@ import { getApprovalSummary } from '@/api/home'
 export const useApprovalStore = defineStore('approval', {
   state: () => ({
     pendingTotal: 0,
+    lastFetchedAt: 0,
   }),
 
   actions: {
-    async fetchSummary() {
-      try {
-        const res = await getApprovalSummary()
-        this.pendingTotal = res.data.total || 0
-      } catch {
-        // silent：badge 數字失效不影響主功能
+    async fetchSummary({ force = false } = {}) {
+      if (!force && this.lastFetchedAt && Date.now() - this.lastFetchedAt < SUMMARY_TTL_MS) {
+        return this.pendingTotal
       }
+
+      if (inflightSummaryRequest) {
+        return inflightSummaryRequest
+      }
+
+      inflightSummaryRequest = getApprovalSummary()
+        .then((res) => {
+          this.pendingTotal = res.data.total || 0
+          this.lastFetchedAt = Date.now()
+          return this.pendingTotal
+        })
+        .catch(() => {
+          // silent：badge 數字失效不影響主功能
+          return this.pendingTotal
+        })
+        .finally(() => {
+          inflightSummaryRequest = null
+        })
+
+      return inflightSummaryRequest
     },
   },
 })

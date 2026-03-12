@@ -18,9 +18,9 @@ const overtimeRecords = ref([])
 const pendingRecords = ref([])
 
 const overtimeTypes = [
-  { value: 'weekday', label: '平日', desc: '前2h 1.34x, 後2h 1.67x' },
-  { value: 'weekend', label: '假日', desc: '全部 2x' },
-  { value: 'holiday', label: '國定假日', desc: '全部 2x' },
+  { value: 'weekday', label: '平日',           desc: '前2h ×1.34，超過2h ×1.67' },
+  { value: 'weekend', label: '休息日',          desc: '前2h ×1.33，3~8h ×1.67，超8h ×2.67（最低計2h）' },
+  { value: 'holiday', label: '例假日/國定假日', desc: '全部 ×2.0' },
 ]
 
 const form = reactive({
@@ -387,7 +387,7 @@ onMounted(() => {
       <el-table-column prop="overtime_date" label="日期" width="120" />
       <el-table-column label="類型" width="100">
         <template #default="scope">
-          <el-tag :type="scope.row.overtime_type === 'weekday' ? '' : 'warning'" size="small">
+          <el-tag :type="scope.row.overtime_type === 'weekday' ? 'info' : 'warning'" size="small">
             {{ scope.row.overtime_type_label }}
           </el-tag>
         </template>
@@ -550,7 +550,7 @@ onMounted(() => {
           >
             <el-card shadow="never" style="padding: 8px 12px;">
               <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                <el-tag :type="ACTION_TAG_TYPES[log.action] || ''" size="small">
+                <el-tag :type="ACTION_TAG_TYPES[log.action] || 'info'" size="small">
                   {{ ACTION_LABELS[log.action] || log.action }}
                 </el-tag>
                 <span style="font-weight: 500;">{{ log.approver_username }}</span>

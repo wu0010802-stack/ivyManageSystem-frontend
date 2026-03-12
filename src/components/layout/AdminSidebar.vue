@@ -21,11 +21,11 @@
         @select="onMenuSelect"
       >
         <!-- 首頁區域 - 不摺疊 -->
-        <el-menu-item v-if="can('DASHBOARD')" index="/">
+        <el-menu-item v-if="canView.DASHBOARD" index="/">
           <el-icon><DataBoard /></el-icon>
           <template #title>儀表板</template>
         </el-menu-item>
-        <el-menu-item v-if="can('APPROVALS')" index="/approvals">
+        <el-menu-item v-if="canView.APPROVALS" index="/approvals">
           <el-icon><Finished /></el-icon>
           <template #title>
             審核工作台
@@ -39,23 +39,23 @@
             <el-icon><Clock /></el-icon>
             <span>假勤管理</span>
           </template>
-          <el-menu-item v-if="can('ATTENDANCE_READ')" index="/attendance">
+          <el-menu-item v-if="canView.ATTENDANCE_READ" index="/attendance">
             <el-icon><Clock /></el-icon>
             <template #title>出勤管理</template>
           </el-menu-item>
-          <el-menu-item v-if="can('LEAVES_READ')" index="/leaves">
+          <el-menu-item v-if="canView.LEAVES_READ" index="/leaves">
             <el-icon><Document /></el-icon>
             <template #title>請假管理</template>
           </el-menu-item>
-          <el-menu-item v-if="can('OVERTIME_READ')" index="/overtime">
+          <el-menu-item v-if="canView.OVERTIME_READ" index="/overtime">
             <el-icon><Watch /></el-icon>
             <template #title>加班管理</template>
           </el-menu-item>
-          <el-menu-item v-if="can('SCHEDULE')" index="/schedule">
+          <el-menu-item v-if="canView.SCHEDULE" index="/schedule">
             <el-icon><Timer /></el-icon>
             <template #title>排班管理</template>
           </el-menu-item>
-          <el-menu-item v-if="can('CALENDAR')" index="/calendar">
+          <el-menu-item v-if="canView.CALENDAR" index="/calendar">
             <el-icon><Calendar /></el-icon>
             <template #title>行事曆</template>
           </el-menu-item>
@@ -67,11 +67,11 @@
             <el-icon><User /></el-icon>
             <span>人事薪資</span>
           </template>
-          <el-menu-item v-if="can('EMPLOYEES_READ')" index="/employees">
+          <el-menu-item v-if="canView.EMPLOYEES_READ" index="/employees">
             <el-icon><User /></el-icon>
             <template #title>員工管理</template>
           </el-menu-item>
-          <el-menu-item v-if="can('SALARY_READ')" index="/salary">
+          <el-menu-item v-if="canView.SALARY_READ" index="/salary">
             <el-icon><Money /></el-icon>
             <template #title>薪資管理</template>
           </el-menu-item>
@@ -83,23 +83,23 @@
             <el-icon><School /></el-icon>
             <span>學生教務</span>
           </template>
-          <el-menu-item v-if="can('STUDENTS_READ')" index="/students">
+          <el-menu-item v-if="canView.STUDENTS_READ" index="/students">
             <el-icon><School /></el-icon>
             <template #title>學生管理</template>
           </el-menu-item>
-          <el-menu-item v-if="can('CLASSROOMS_READ')" index="/classrooms">
+          <el-menu-item v-if="canView.CLASSROOMS_READ" index="/classrooms">
             <el-icon><OfficeBuilding /></el-icon>
             <template #title>班級管理</template>
           </el-menu-item>
-          <el-menu-item v-if="can('STUDENTS_READ')" index="/student-attendance">
+          <el-menu-item v-if="canView.STUDENTS_READ" index="/student-attendance">
             <el-icon><Calendar /></el-icon>
             <template #title>學生出席紀錄</template>
           </el-menu-item>
-          <el-menu-item v-if="can('STUDENTS_READ')" index="/student-incidents">
+          <el-menu-item v-if="canView.STUDENTS_READ" index="/student-incidents">
             <el-icon><Warning /></el-icon>
             <template #title>學生事件紀錄</template>
           </el-menu-item>
-          <el-menu-item v-if="can('STUDENTS_READ')" index="/student-assessments">
+          <el-menu-item v-if="canView.STUDENTS_READ" index="/student-assessments">
             <el-icon><DataAnalysis /></el-icon>
             <template #title>學期評量記錄</template>
           </el-menu-item>
@@ -111,30 +111,30 @@
             <el-icon><Files /></el-icon>
             <span>園務行政</span>
           </template>
-          <el-menu-item v-if="can('ANNOUNCEMENTS_READ')" index="/announcements">
+          <el-menu-item v-if="canView.ANNOUNCEMENTS_READ" index="/announcements">
             <el-icon><Bell /></el-icon>
             <template #title>公告管理</template>
           </el-menu-item>
-          <el-menu-item v-if="can('MEETINGS')" index="/meetings">
+          <el-menu-item v-if="canView.MEETINGS" index="/meetings">
             <el-icon><Notebook /></el-icon>
             <template #title>園務會議</template>
           </el-menu-item>
-          <el-menu-item v-if="can('REPORTS')" index="/reports">
+          <el-menu-item v-if="canView.REPORTS" index="/reports">
             <el-icon><TrendCharts /></el-icon>
             <template #title>報表統計</template>
           </el-menu-item>
-          <el-menu-item v-if="can('AUDIT_LOGS')" index="/audit-logs">
+          <el-menu-item v-if="canView.AUDIT_LOGS" index="/audit-logs">
             <el-icon><Document /></el-icon>
             <template #title>操作紀錄</template>
           </el-menu-item>
         </el-sub-menu>
 
         <!-- 系統設定 - 不摺疊 -->
-        <el-menu-item v-if="can('SETTINGS_READ')" index="/settings">
+        <el-menu-item v-if="canView.SETTINGS_READ" index="/settings">
           <el-icon><Setting /></el-icon>
           <template #title>系統設定</template>
         </el-menu-item>
-        <el-menu-item v-if="can('SALARY_READ')" index="/dev/salary">
+        <el-menu-item v-if="canView.SALARY_READ" index="/dev/salary">
           <el-icon><Cpu /></el-icon>
           <template #title>薪資邏輯 (Dev)</template>
         </el-menu-item>
@@ -156,7 +156,7 @@ import {
   Money, User, School, OfficeBuilding, Notebook, Bell, TrendCharts, Setting,
   Expand, Fold, Cpu, Warning, DataAnalysis, Files
 } from '@element-plus/icons-vue'
-import { hasPermission } from '@/utils/auth'
+import { PERMISSION_VALUES, getUserInfo } from '@/utils/auth'
 
 const props = defineProps({
   pendingApprovals: {
@@ -179,24 +179,39 @@ const route = useRoute()
 const isCollapse = ref(false)
 const activeMenu = computed(() => route.path)
 
-// 權限檢查
-const can = (permissionName) => hasPermission(permissionName)
+const canView = computed(() => {
+  route.path
+
+  const userInfo = getUserInfo()
+  if (!userInfo || userInfo.role === 'teacher') {
+    return {}
+  }
+
+  const permissions = userInfo.permissions
+  if (permissions === -1 || permissions === null || permissions === undefined) {
+    return Object.fromEntries(Object.keys(PERMISSION_VALUES).map((name) => [name, true]))
+  }
+
+  return Object.fromEntries(
+    Object.entries(PERMISSION_VALUES).map(([name, value]) => [name, (permissions & value) === value])
+  )
+})
 
 // 檢查子選單是否有任何可見項目
 const hasVisibleLeaveItems = computed(() =>
-  can('ATTENDANCE_READ') || can('LEAVES_READ') || can('OVERTIME_READ') || can('SCHEDULE') || can('CALENDAR')
+  canView.value.ATTENDANCE_READ || canView.value.LEAVES_READ || canView.value.OVERTIME_READ || canView.value.SCHEDULE || canView.value.CALENDAR
 )
 
 const hasVisibleHrItems = computed(() =>
-  can('EMPLOYEES_READ') || can('SALARY_READ')
+  canView.value.EMPLOYEES_READ || canView.value.SALARY_READ
 )
 
 const hasVisibleStudentItems = computed(() =>
-  can('STUDENTS_READ') || can('CLASSROOMS_READ')
+  canView.value.STUDENTS_READ || canView.value.CLASSROOMS_READ
 )
 
 const hasVisibleAdminItems = computed(() =>
-  can('ANNOUNCEMENTS_READ') || can('REPORTS') || can('AUDIT_LOGS') || can('MEETINGS')
+  canView.value.ANNOUNCEMENTS_READ || canView.value.REPORTS || canView.value.AUDIT_LOGS || canView.value.MEETINGS
 )
 
 const toggleCollapse = () => {

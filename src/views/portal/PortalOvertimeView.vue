@@ -280,7 +280,7 @@ onMounted(fetchOvertimes)
             <el-tag v-if="typeDetecting" type="info" size="default">
               <el-icon class="is-loading" style="vertical-align: middle;"><Loading /></el-icon> 偵測中…
             </el-tag>
-            <el-tag v-else-if="form.overtime_date" :type="form.overtime_type === 'weekday' ? '' : form.overtime_type === 'weekend' ? 'warning' : 'danger'" size="default">
+            <el-tag v-else-if="form.overtime_date" :type="form.overtime_type === 'weekday' ? 'info' : form.overtime_type === 'weekend' ? 'warning' : 'danger'" size="default">
               {{ typeLabel }}
             </el-tag>
             <span v-else style="color: var(--el-text-color-placeholder);">請先選擇日期</span>

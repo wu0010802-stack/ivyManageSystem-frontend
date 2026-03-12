@@ -103,7 +103,7 @@ const saveQuotaRow = async (row) => {
     >
       <el-table-column label="假別" width="130">
         <template #default="{ row }">
-          <el-tag :type="leaveTypes.find(t => t.value === row.leave_type)?.color || ''" size="small">
+          <el-tag :type="leaveTypes.find(t => t.value === row.leave_type)?.color || 'info'" size="small">
             {{ row.leave_type_label }}
           </el-tag>
         </template>

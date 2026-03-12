@@ -1,5 +1,8 @@
 // Token 已改由後端 httpOnly Cookie 管理，JS 無法存取。
 // 保留函式簽名供向下相容，但不再操作 localStorage。
+let cachedUserInfoRaw = null
+let cachedUserInfo = null
+
 export function getToken() {
   return null // httpOnly Cookie，JS 無法讀取
 }
@@ -14,14 +17,32 @@ export function removeToken() {
 
 export function getUserInfo() {
   const str = localStorage.getItem('userInfo')
-  return str ? JSON.parse(str) : null
+  if (str === cachedUserInfoRaw) {
+    return cachedUserInfo
+  }
+
+  if (!str) {
+    cachedUserInfoRaw = null
+    cachedUserInfo = null
+    return null
+  }
+
+  const parsed = JSON.parse(str)
+  cachedUserInfoRaw = str
+  cachedUserInfo = parsed
+  return parsed
 }
 
 export function setUserInfo(info) {
-  localStorage.setItem('userInfo', JSON.stringify(info))
+  const serialized = JSON.stringify(info)
+  cachedUserInfoRaw = serialized
+  cachedUserInfo = info
+  localStorage.setItem('userInfo', serialized)
 }
 
 export function clearAuth() {
+  cachedUserInfoRaw = null
+  cachedUserInfo = null
   localStorage.removeItem('userInfo')
   // 通知後端清除 httpOnly Cookie（fire-and-forget）
   try {

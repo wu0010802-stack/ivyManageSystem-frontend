@@ -2,9 +2,11 @@
 import { reactive, ref, onMounted } from 'vue'
 import { getBonusConfig, updateBonusConfig, getGradeTargets, updateGradeTargets, getPositionSalary, updatePositionSalary } from '@/api/config'
 import { ElMessage } from 'element-plus'
+import { hasPermission } from '@/utils/auth'
 
 const loadingBonus = ref(false)
 const activeBonusTab = ref('overtime')
+const canReadSalarySettings = hasPermission('SETTINGS_READ')
 
 const bonusConfig = reactive({
   head_teacher_ab: 0,
@@ -139,6 +141,7 @@ const saveAllBonusSettings = async () => {
 }
 
 onMounted(() => {
+  if (!canReadSalarySettings) return
   fetchBonusConfig()
   fetchGradeTargets()
   fetchPositionSalary()
@@ -146,7 +149,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div v-loading="loadingBonus">
+  <div v-if="canReadSalarySettings" v-loading="loadingBonus">
     <div class="bonus-actions">
       <el-button type="primary" size="large" @click="saveAllBonusSettings">儲存所有薪資設定</el-button>
     </div>
@@ -418,6 +421,7 @@ onMounted(() => {
       </el-tab-pane>
     </el-tabs>
   </div>
+  <el-alert v-else type="warning" :closable="false" show-icon title="目前帳號沒有查看薪資設定的權限" />
 </template>
 
 <style scoped>

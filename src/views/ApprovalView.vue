@@ -69,7 +69,7 @@ const approveLeave = async (row, approved) => {
     await approveLeaveApi(row.id, { approved })
     ElMessage.success(approved ? '請假已核准' : '請假已駁回')
     fetchPendingLeaves()
-    approvalStore.fetchSummary()
+    approvalStore.fetchSummary({ force: true })
   } catch (error) {
     ElMessage.error('操作失敗')
   }
@@ -80,7 +80,7 @@ const approveOvertime = async (row, approved) => {
     await approveOvertimeApi(row.id, approved)
     ElMessage.success(approved ? '加班已核准' : '加班已駁回')
     fetchPendingOvertimes()
-    approvalStore.fetchSummary()
+    approvalStore.fetchSummary({ force: true })
   } catch (error) {
     ElMessage.error('操作失敗')
   }
@@ -105,7 +105,7 @@ const approveCorrection = async (row, approved) => {
     await approveCorrectionApi(row.id, payload)
     ElMessage.success(approved ? '補打卡已核准，考勤已更新' : '補打卡已駁回')
     fetchPendingCorrections()
-    approvalStore.fetchSummary()
+    approvalStore.fetchSummary({ force: true })
   } catch (error) {
     ElMessage.error(error.response?.data?.detail || '操作失敗')
   }
@@ -237,7 +237,7 @@ onMounted(fetchAll)
         <el-table-column prop="overtime_date" label="日期" width="120" />
         <el-table-column label="類型" width="100">
           <template #default="{ row }">
-            <el-tag :type="overtimeTypeMap[row.overtime_type]?.type || ''" size="small">
+            <el-tag :type="overtimeTypeMap[row.overtime_type]?.type || 'info'" size="small">
               {{ overtimeTypeMap[row.overtime_type]?.label || row.overtime_type }}
             </el-tag>
           </template>
@@ -290,7 +290,7 @@ onMounted(fetchAll)
         <el-table-column prop="attendance_date" label="申請日期" width="120" />
         <el-table-column label="補正類型" width="110">
           <template #default="{ row }">
-            <el-tag :type="correctionTypeMap[row.correction_type]?.type || ''" size="small">
+            <el-tag :type="correctionTypeMap[row.correction_type]?.type || 'info'" size="small">
               {{ correctionTypeMap[row.correction_type]?.label || row.correction_type_label }}
             </el-tag>
           </template>

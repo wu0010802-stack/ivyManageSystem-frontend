@@ -3,7 +3,12 @@ import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getMyLeaves, createMyLeave, uploadMyLeaveAttachments, getMyLeaveAttachment, getMyQuotas, getMyLeaveStats, getMyWorkdayHours, getMySubstituteRequests, respondToSubstitute } from '@/api/portal'
 import { getEmployees } from '@/api/employees'
-import { LEAVE_TYPES as leaveTypes } from '@/utils/leaves'
+import {
+  LEAVE_TYPES as leaveTypes,
+  LEAVE_RULE_HINTS,
+  getRequestedCalendarDays,
+  leaveRequiresAttachment,
+} from '@/utils/leaves'
 
 const loading = ref(false)
 const submitLoading = ref(false)
@@ -63,39 +68,6 @@ const query = reactive({
   year: now.getFullYear(),
   month: now.getMonth() + 1,
 })
-
-const leaveDeductionInfo = {
-  annual: '不扣薪',
-  personal: '扣全薪 (基本薪俸/30)*天數',
-  sick: '扣半薪 (基本薪俸/30)*天數/2',
-  menstrual: '扣半薪 (基本薪俸/30)*天數/2',
-  maternity: '不扣薪',
-  paternity: '不扣薪',
-  official: '不扣薪（教召、研習等）',
-  marriage: '不扣薪，共8日（可分次請）',
-  bereavement: '不扣薪，依親疏3/6/8日',
-  prenatal: '不扣薪，共7日（可以小時為單位）',
-  paternity_new: '不扣薪，共7日',
-  miscarriage: '不扣薪，依懷孕週數5日/1週/4週',
-  family_care: '不給薪，併入事假計算，年7日',
-  parental_unpaid: '留停無薪，子女滿3歲前，最長2年',
-}
-
-// 需要附件的假別（建議上傳）
-const ATTACHMENT_SUGGESTED = new Set(['sick', 'marriage', 'bereavement', 'maternity', 'paternity', 'prenatal', 'paternity_new', 'miscarriage'])
-// 必須上傳附件的假別
-const ATTACHMENT_REQUIRED = new Set(['sick', 'paternity'])
-
-const ATTACHMENT_HINTS = {
-  sick: '建議上傳：醫院診斷證明書',
-  marriage: '建議上傳：結婚證書或喜帖',
-  bereavement: '建議上傳：訃聞或死亡證明',
-  maternity: '建議上傳：媽媽手冊或出生證明',
-  paternity: '建議上傳：出生證明',
-  prenatal: '建議上傳：產檢相關文件',
-  paternity_new: '建議上傳：出生證明',
-  miscarriage: '建議上傳：醫院證明',
-}
 
 const showForm = ref(false)
 const form = reactive({
@@ -291,7 +263,19 @@ const afterApplyRemaining = computed(() => {
 })
 
 // 附件是否必填
-const attachmentRequired = computed(() => ATTACHMENT_REQUIRED.has(form.leave_type))
+const requestedCalendarDays = computed(() =>
+  getRequestedCalendarDays(form.start_date, form.end_date)
+)
+const attachmentRequired = computed(() =>
+  leaveRequiresAttachment(form.start_date, form.end_date)
+)
+const selectedLeaveRule = computed(() => LEAVE_RULE_HINTS[form.leave_type] || '')
+const attachmentHint = computed(() => {
+  if (!form.start_date || !form.end_date) return '請假超過 2 天時需檢附證明附件'
+  return attachmentRequired.value
+    ? `本次請假共 ${requestedCalendarDays.value} 天，需檢附證明附件`
+    : '僅請假超過 2 天時需檢附證明附件'
+})
 
 // 是否可送出
 const canSubmit = computed(() => !quotaExceeded.value)
@@ -514,9 +498,25 @@ const submitLeave = async () => {
 
   // 附件必填檢查
   if (attachmentRequired.value && fileList.value.length === 0) {
-    const ltLabel = leaveTypes.find(t => t.value === form.leave_type)?.label || form.leave_type
-    ElMessage.error(`申請「${ltLabel}」須上傳證明附件，請先選擇檔案`)
+    ElMessage.error('請假超過 2 天時須上傳證明附件，請先選擇檔案')
     return
+  }
+
+  if (form.leave_type === 'sick' && form.leave_hours % 4 !== 0) {
+    ElMessage.error('病假必須以 4 小時為單位申請')
+    return
+  }
+
+  if (form.leave_type === 'personal') {
+    const start = new Date(form.start_date)
+    const today = new Date()
+    start.setHours(0, 0, 0, 0)
+    today.setHours(0, 0, 0, 0)
+    const diffDays = Math.floor((start - today) / 86400000)
+    if (diffDays < 2) {
+      ElMessage.error('事假需至少提前 2 日提出申請')
+      return
+    }
   }
 
   // 配額超額阻擋
@@ -737,10 +737,6 @@ onMounted(() => {
           <el-select v-model="form.leave_type" placeholder="請選擇" style="width: 100%;">
             <el-option v-for="lt in leaveTypes" :key="lt.value" :label="lt.label" :value="lt.value">
               <span>{{ lt.label }}</span>
-              <el-tag
-                size="small"
-                :type="lt.deduction.includes('不扣') ? 'success' : lt.deduction.includes('半') ? 'warning' : 'danger'"
-              >{{ lt.deduction }}</el-tag>
             </el-option>
           </el-select>
           <div style="margin-top: 5px; font-size: 12px; min-height: 20px;">
@@ -768,9 +764,13 @@ onMounted(() => {
               </div>
             </template>
           </div>
-          <div v-if="ATTACHMENT_HINTS[form.leave_type]" style="margin-top: 5px; font-size: 12px; color: var(--el-color-warning); display: flex; align-items: center; gap: 4px;">
+          <div v-if="selectedLeaveRule" style="margin-top: 5px; font-size: 12px; color: var(--el-color-primary); display: flex; align-items: center; gap: 4px;">
             <el-icon><InfoFilled /></el-icon>
-            {{ ATTACHMENT_HINTS[form.leave_type] }}
+            {{ selectedLeaveRule }}
+          </div>
+          <div style="margin-top: 5px; font-size: 12px; color: var(--el-color-warning); display: flex; align-items: center; gap: 4px;">
+            <el-icon><InfoFilled /></el-icon>
+            {{ attachmentHint }}
           </div>
         </el-form-item>
         <el-form-item label="請假模式">
@@ -853,7 +853,7 @@ onMounted(() => {
           <div class="portal-breakdown">
             <div v-for="day in calcBreakdown" :key="day.date" class="pb-row" :class="day.type">
               <span class="pb-date">{{ day.date }}</span>
-              <el-tag size="small" :type="day.type==='workday'?'':day.type==='holiday'?'danger':'info'" class="pb-tag">
+              <el-tag size="small" :type="day.type==='workday' ? 'info' : day.type==='holiday' ? 'danger' : 'info'" class="pb-tag">
                 {{ day.type==='workday' ? (day.shift||'預設班')+(day.work_start?` ${day.work_start}–${day.work_end}`:'') : day.type==='holiday' ? day.holiday_name : '週末' }}
               </el-tag>
               <span class="pb-hours">{{ day.type==='workday' ? `${day.hours}h` : '—' }}</span>
@@ -902,7 +902,7 @@ onMounted(() => {
               </el-button>
             </el-upload>
             <div class="upload-tip">
-              可選：附上相關證明文件（圖片或 PDF，最多 5 個，單檔 5 MB）
+              請假超過 2 天時必填；其餘情況可選。支援圖片或 PDF，最多 5 個，單檔 5 MB
             </div>
           </div>
         </el-form-item>
