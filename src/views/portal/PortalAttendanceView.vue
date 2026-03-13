@@ -43,7 +43,7 @@ const lowerDays = computed(() => sheetData.value?.days?.slice(15) || [])
 const getStatusTag = (day) => {
   if (day.is_holiday) return { text: day.holiday_name, type: 'danger', effect: 'dark' }
   if (day.is_weekend) return { text: day.weekday, type: 'info' }
-  if (day.leave_type_label) return { text: day.leave_type_label, type: '' }
+  if (day.leave_type_label) return { text: day.leave_type_label, type: 'info' }
   if (day.is_late) return { text: `遲${day.late_minutes}分`, type: 'warning' }
   if (day.is_missing_punch_in || day.is_missing_punch_out) return { text: '缺卡', type: 'danger' }
   if (day.is_early_leave) return { text: '早退', type: 'warning' }

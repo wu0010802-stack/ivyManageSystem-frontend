@@ -2,6 +2,8 @@ import api from './index'
 
 export const getEvents = (params) => api.get('/events', { params })
 
+export const getCalendarFeed = (params) => api.get('/events/calendar-feed', { params })
+
 export const createEvent = (data) => api.post('/events', data)
 
 export const updateEvent = (id, data) => api.put(`/events/${id}`, data)

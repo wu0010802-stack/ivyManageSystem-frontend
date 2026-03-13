@@ -2,8 +2,15 @@ import { describe, it, expect } from 'vitest'
 import { LEAVE_TYPES, LEAVE_TYPE_MAP } from '@/utils/leaves'
 
 describe('LEAVE_TYPES', () => {
-  it('包含 14 種假別', () => {
-    expect(LEAVE_TYPES).toHaveLength(14)
+  it('至少包含 18 種假別（容許未來新增不打破測試）', () => {
+    expect(LEAVE_TYPES.length).toBeGreaterThanOrEqual(18)
+  })
+
+  it('包含主要與擴充假別', () => {
+    const values = LEAVE_TYPES.map(t => t.value)
+    for (const value of ['personal', 'sick', 'annual', 'family_care', 'compensatory', 'occupational_injury', 'typhoon']) {
+      expect(values).toContain(value)
+    }
   })
 
   it('每筆資料皆有必要欄位', () => {
@@ -37,11 +44,18 @@ describe('LEAVE_TYPES', () => {
   })
 
   it('不扣薪假別正確標示（特休、產假、公假等）', () => {
-    const noDeductTypes = ['annual', 'maternity', 'paternity', 'official', 'marriage', 'bereavement']
+    const noDeductTypes = ['annual', 'maternity', 'paternity', 'official', 'marriage', 'bereavement', 'prenatal', 'compensatory', 'occupational_injury']
     for (const value of noDeductTypes) {
       const t = LEAVE_TYPES.find(t => t.value === value)
       expect(t.deduction).toBe('不扣')
     }
+  })
+
+  it('特殊假別維持目前扣薪文案', () => {
+    expect(LEAVE_TYPES.find(t => t.value === 'family_care')?.deduction).toBe('全扣（併入事假）')
+    expect(LEAVE_TYPES.find(t => t.value === 'parental_unpaid')?.deduction).toBe('留停無薪')
+    expect(LEAVE_TYPES.find(t => t.value === 'pregnancy_rest')?.deduction).toBe('扣半薪（依病假）')
+    expect(LEAVE_TYPES.find(t => t.value === 'typhoon')?.deduction).toBe('得不給薪')
   })
 })
 

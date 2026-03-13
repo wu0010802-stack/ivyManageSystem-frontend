@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { getApprovalSummary } from '@/api/home'
+import { useNotificationStore } from '@/stores/notification'
 
 const SUMMARY_TTL_MS = 10_000
 let inflightSummaryRequest = null
@@ -27,9 +27,11 @@ export const useApprovalStore = defineStore('approval', {
         return inflightSummaryRequest
       }
 
-      inflightSummaryRequest = getApprovalSummary()
-        .then((res) => {
-          this.pendingTotal = res.data.total || 0
+      const notificationStore = useNotificationStore()
+
+      inflightSummaryRequest = notificationStore.fetchSummary({ force })
+        .then(() => {
+          this.pendingTotal = notificationStore.approvalCount || 0
           this.lastFetchedAt = Date.now()
           return this.pendingTotal
         })

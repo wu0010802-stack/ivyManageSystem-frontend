@@ -126,6 +126,50 @@ const router = createRouter({
             meta: { title: '薪資邏輯檢視 (Dev)' }
         },
 
+        // ============ 課後才藝 ============
+        {
+            path: '/activity/dashboard',
+            name: 'activity-dashboard',
+            component: () => import('../views/activity/ActivityDashboardView.vue'),
+            meta: { title: '才藝統計儀表板' }
+        },
+        {
+            path: '/activity/registrations',
+            name: 'activity-registrations',
+            component: () => import('../views/activity/ActivityRegistrationView.vue'),
+            meta: { title: '報名管理' }
+        },
+        {
+            path: '/activity/courses',
+            name: 'activity-courses',
+            component: () => import('../views/activity/ActivityCourseView.vue'),
+            meta: { title: '課程管理' }
+        },
+        {
+            path: '/activity/supplies',
+            name: 'activity-supplies',
+            component: () => import('../views/activity/ActivitySupplyView.vue'),
+            meta: { title: '用品管理' }
+        },
+        {
+            path: '/activity/inquiries',
+            name: 'activity-inquiries',
+            component: () => import('../views/activity/ActivityInquiryView.vue'),
+            meta: { title: '家長提問' }
+        },
+        {
+            path: '/activity/settings',
+            name: 'activity-settings',
+            component: () => import('../views/activity/ActivitySettingsView.vue'),
+            meta: { title: '報名時間設定' }
+        },
+        {
+            path: '/activity/changes',
+            name: 'activity-changes',
+            component: () => import('../views/activity/ActivityChangesView.vue'),
+            meta: { title: '修改紀錄' }
+        },
+
         // ============ Admin Login / Change Password ============
         {
             path: '/login',

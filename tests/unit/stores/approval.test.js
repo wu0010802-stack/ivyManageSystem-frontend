@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useApprovalStore } from '@/stores/approval'
-import { getApprovalSummary } from '@/api/home'
+import { useNotificationStore } from '@/stores/notification'
+import { getNotificationSummary } from '@/api/notifications'
 
-vi.mock('@/api/home', () => ({
-  getApprovalSummary: vi.fn(),
+vi.mock('@/api/notifications', () => ({
+  getNotificationSummary: vi.fn(),
 }))
 
 describe('approval store', () => {
@@ -15,7 +16,7 @@ describe('approval store', () => {
 
   it('deduplicates concurrent summary requests', async () => {
     let resolveRequest
-    getApprovalSummary.mockReturnValue(
+    getNotificationSummary.mockReturnValue(
       new Promise((resolve) => {
         resolveRequest = resolve
       })
@@ -25,9 +26,15 @@ describe('approval store', () => {
     const firstRequest = store.fetchSummary()
     const secondRequest = store.fetchSummary()
 
-    expect(getApprovalSummary).toHaveBeenCalledTimes(1)
+    expect(getNotificationSummary).toHaveBeenCalledTimes(1)
 
-    resolveRequest({ data: { total: 7 } })
+    resolveRequest({
+      data: {
+        total_badge: 7,
+        action_items: [{ type: 'approval', count: 7, route: '/approvals' }],
+        reminders: [],
+      },
+    })
 
     await Promise.all([firstRequest, secondRequest])
 
@@ -35,17 +42,25 @@ describe('approval store', () => {
   })
 
   it('reuses fresh data unless force is set', async () => {
-    getApprovalSummary.mockResolvedValue({ data: { total: 3 } })
+    getNotificationSummary.mockResolvedValue({
+      data: {
+        total_badge: 3,
+        action_items: [{ type: 'approval', count: 3, route: '/approvals' }],
+        reminders: [],
+      },
+    })
 
     const store = useApprovalStore()
+    const notificationStore = useNotificationStore()
 
     await store.fetchSummary()
     await store.fetchSummary()
 
-    expect(getApprovalSummary).toHaveBeenCalledTimes(1)
+    expect(getNotificationSummary).toHaveBeenCalledTimes(1)
+    expect(notificationStore.approvalCount).toBe(3)
 
     await store.fetchSummary({ force: true })
 
-    expect(getApprovalSummary).toHaveBeenCalledTimes(2)
+    expect(getNotificationSummary).toHaveBeenCalledTimes(2)
   })
 })

@@ -97,6 +97,8 @@ export const PERMISSION_VALUES = {
   SETTINGS_WRITE: 1 << 25,
   USER_MANAGEMENT_READ: 1 << 16,
   USER_MANAGEMENT_WRITE: 1 << 26,
+  ACTIVITY_READ:  1 << 27,
+  ACTIVITY_WRITE: 1 << 28,
 }
 
 // 路由與權限對應表（瀏覽頁面屬於 READ 操作）
@@ -118,6 +120,13 @@ export const ROUTE_PERMISSIONS = {
   '/audit-logs': 'AUDIT_LOGS',
   '/settings': 'SETTINGS_READ',
   '/dev/salary': 'SALARY_READ',
+  '/activity/dashboard':     'ACTIVITY_READ',
+  '/activity/registrations': 'ACTIVITY_READ',
+  '/activity/courses':       'ACTIVITY_READ',
+  '/activity/supplies':      'ACTIVITY_READ',
+  '/activity/inquiries':     'ACTIVITY_READ',
+  '/activity/settings':      'ACTIVITY_WRITE',
+  '/activity/changes':       'ACTIVITY_READ',
 }
 
 /**

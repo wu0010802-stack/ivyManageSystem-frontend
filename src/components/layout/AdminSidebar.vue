@@ -129,6 +129,45 @@
           </el-menu-item>
         </el-sub-menu>
 
+        <!-- 課後才藝 -->
+        <el-sub-menu v-if="hasVisibleActivityItems" index="group-activity">
+          <template #title>
+            <el-icon><Star /></el-icon>
+            <span>課後才藝</span>
+          </template>
+          <el-menu-item v-if="canView.ACTIVITY_READ" index="/activity/dashboard">
+            <el-icon><DataAnalysis /></el-icon>
+            <template #title>統計儀表板</template>
+          </el-menu-item>
+          <el-menu-item v-if="canView.ACTIVITY_READ" index="/activity/registrations">
+            <el-icon><Document /></el-icon>
+            <template #title>報名管理</template>
+          </el-menu-item>
+          <el-menu-item v-if="canView.ACTIVITY_READ" index="/activity/courses">
+            <el-icon><Collection /></el-icon>
+            <template #title>課程管理</template>
+          </el-menu-item>
+          <el-menu-item v-if="canView.ACTIVITY_READ" index="/activity/supplies">
+            <el-icon><ShoppingBag /></el-icon>
+            <template #title>用品管理</template>
+          </el-menu-item>
+          <el-menu-item v-if="canView.ACTIVITY_READ" index="/activity/inquiries">
+            <el-icon><ChatDotRound /></el-icon>
+            <template #title>
+              家長提問
+              <el-badge v-if="pendingActivityInquiries > 0" :value="pendingActivityInquiries" :max="99" class="menu-badge" />
+            </template>
+          </el-menu-item>
+          <el-menu-item v-if="canView.ACTIVITY_WRITE" index="/activity/settings">
+            <el-icon><Timer /></el-icon>
+            <template #title>報名時間設定</template>
+          </el-menu-item>
+          <el-menu-item v-if="canView.ACTIVITY_READ" index="/activity/changes">
+            <el-icon><List /></el-icon>
+            <template #title>修改紀錄</template>
+          </el-menu-item>
+        </el-sub-menu>
+
         <!-- 系統設定 - 不摺疊 -->
         <el-menu-item v-if="canView.SETTINGS_READ" index="/settings">
           <el-icon><Setting /></el-icon>
@@ -154,12 +193,17 @@ import { useRoute } from 'vue-router'
 import {
   DataBoard, Finished, Calendar, Timer, Clock, Document, Watch,
   Money, User, School, OfficeBuilding, Notebook, Bell, TrendCharts, Setting,
-  Expand, Fold, Cpu, Warning, DataAnalysis, Files
+  Expand, Fold, Cpu, Warning, DataAnalysis, Files,
+  Star, Collection, ShoppingBag, ChatDotRound, List
 } from '@element-plus/icons-vue'
 import { PERMISSION_VALUES, getUserInfo } from '@/utils/auth'
 
 const props = defineProps({
   pendingApprovals: {
+    type: Number,
+    default: 0
+  },
+  pendingActivityInquiries: {
     type: Number,
     default: 0
   },
@@ -212,6 +256,10 @@ const hasVisibleStudentItems = computed(() =>
 
 const hasVisibleAdminItems = computed(() =>
   canView.value.ANNOUNCEMENTS_READ || canView.value.REPORTS || canView.value.AUDIT_LOGS || canView.value.MEETINGS
+)
+
+const hasVisibleActivityItems = computed(() =>
+  canView.value.ACTIVITY_READ || canView.value.ACTIVITY_WRITE
 )
 
 const toggleCollapse = () => {

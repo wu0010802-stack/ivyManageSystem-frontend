@@ -58,10 +58,10 @@ describe('StatCard.vue', () => {
             props: { label: '測試', value: 1, icon: MockIcon, color: 'primary' },
             global: globalConfig
         })
-        expect(wrapper.find('.stat-card__icon').exists()).toBe(true)
+        expect(wrapper.find('.stat-card__icon-wrap').exists()).toBe(true)
     })
 
-    it('不同 color 產生不同背景色', () => {
+    it('不同 color 產生不同顏色 class', () => {
         const wrapper1 = mount(StatCard, {
             props: { label: 'A', value: 1, icon: MockIcon, color: 'primary' },
             global: globalConfig
@@ -70,8 +70,7 @@ describe('StatCard.vue', () => {
             props: { label: 'B', value: 2, icon: MockIcon, color: 'danger' },
             global: globalConfig
         })
-        const style1 = wrapper1.find('.stat-card__icon').attributes('style')
-        const style2 = wrapper2.find('.stat-card__icon').attributes('style')
-        expect(style1).not.toBe(style2)
+        expect(wrapper1.classes()).toContain('stat-card--primary')
+        expect(wrapper2.classes()).toContain('stat-card--danger')
     })
 })

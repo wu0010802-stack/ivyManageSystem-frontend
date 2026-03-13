@@ -1,16 +1,25 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { getStudents } from '@/api/students'
 import { getToday, getTodayAnomalies } from '@/api/attendance'
-import { getApprovalSummary, getUpcomingEvents, getProbationAlerts, getStudentAttendanceSummary } from '@/api/home'
+import { getUpcomingEvents, getProbationAlerts, getStudentAttendanceSummary } from '@/api/home'
 import { useRouter } from 'vue-router'
 import StatCard from '@/components/common/StatCard.vue'
 import { useEmployeeStore } from '@/stores/employee'
+import { useNotificationStore } from '@/stores/notification'
 import { hasPermission, getUserInfo } from '@/utils/auth'
 
 const router = useRouter()
 const employeeStore = useEmployeeStore()
+const notificationStore = useNotificationStore()
 const loading = ref(false)
+const deferredSections = reactive({
+  studentAttendance: { loading: false, loaded: false },
+  anomalies: { loading: false, loaded: false },
+  calendar: { loading: false, loaded: false },
+  probation: { loading: false, loaded: false },
+})
+const deferredTimers = []
 
 const showAttendance = hasPermission('ATTENDANCE_READ')
 const showApprovals = hasPermission('APPROVALS')
@@ -31,11 +40,12 @@ const stats = computed(() => {
 
 const studentCount = ref(0)
 const todayStats = ref(null)
-const approvalSummary = ref(null)
 const upcomingEvents = ref([])
 const attendanceAnomalies = ref(null)
 const probationAlerts = ref(null)
 const studentAttendanceSummary = ref(null)
+const approvalSummary = computed(() => notificationStore.approvalSummary)
+const probationEmployees = computed(() => probationAlerts.value?.employees || [])
 
 const now = new Date()
 const weekDays = ['日', '一', '二', '三', '四', '五', '六']
@@ -94,10 +104,37 @@ const anomalyTagType = (type) => ({
   absent: 'danger', late: 'warning', missing_punch: 'info'
 }[type] || 'info')
 
-const fetchDashboardData = async () => {
+const ignoreErrors = (promiseLike) => Promise.resolve(promiseLike).catch(() => {})
+
+const loadDeferredSection = async (key, loader) => {
+  const section = deferredSections[key]
+  if (!section || section.loading || section.loaded) return
+
+  section.loading = true
+  try {
+    await loader()
+  } catch {
+    // API interceptor handles message
+  } finally {
+    section.loading = false
+    section.loaded = true
+  }
+}
+
+const scheduleDeferredSection = (key, enabled, delay, loader) => {
+  if (!enabled) return
+
+  const schedule = typeof window !== 'undefined' ? window.setTimeout : setTimeout
+  const timer = schedule(() => {
+    loadDeferredSection(key, loader)
+  }, delay)
+  deferredTimers.push(timer)
+}
+
+const fetchCriticalDashboardData = async () => {
   loading.value = true
   await Promise.all([
-    employeeStore.fetchEmployees().catch(() => {}),
+    ignoreErrors(employeeStore.fetchEmployees()),
     getStudents({ limit: 1 })
       .then(r => { studentCount.value = r.data.total })
       .catch(() => {}),
@@ -105,31 +142,41 @@ const fetchDashboardData = async () => {
       ? getToday().then(r => { todayStats.value = r.data }).catch(() => {})
       : null,
     showApprovals
-      ? getApprovalSummary().then(r => { approvalSummary.value = r.data }).catch(() => {})
-      : null,
-    showCalendar
-      ? getUpcomingEvents().then(r => { upcomingEvents.value = r.data }).catch(() => {})
-      : null,
-    showAttendance
-      ? getTodayAnomalies()
-          .then(r => { attendanceAnomalies.value = r.data }).catch(() => {})
-      : null,
-    showEmployees
-      ? getProbationAlerts()
-          .then(r => { probationAlerts.value = r.data }).catch(() => {})
-      : null,
-    showStudents
-      ? getStudentAttendanceSummary()
-          .then(r => { studentAttendanceSummary.value = r.data }).catch(() => {})
+      ? ignoreErrors(notificationStore.fetchSummary())
       : null,
   ].filter(Boolean))
   loading.value = false
 }
 
+const scheduleDeferredDashboardData = () => {
+  scheduleDeferredSection('studentAttendance', showStudents, 150, () =>
+    getStudentAttendanceSummary()
+      .then(r => { studentAttendanceSummary.value = r.data })
+  )
+  scheduleDeferredSection('anomalies', showAttendance, 400, () =>
+    getTodayAnomalies()
+      .then(r => { attendanceAnomalies.value = r.data })
+  )
+  scheduleDeferredSection('calendar', showCalendar, 650, () =>
+    getUpcomingEvents()
+      .then(r => { upcomingEvents.value = r.data })
+  )
+  scheduleDeferredSection('probation', showEmployees, 900, () =>
+    getProbationAlerts()
+      .then(r => { probationAlerts.value = r.data })
+  )
+}
+
 const navigateTo = (path) => router.push(path)
 
-onMounted(() => {
-  fetchDashboardData()
+onMounted(async () => {
+  await fetchCriticalDashboardData()
+  scheduleDeferredDashboardData()
+})
+
+onBeforeUnmount(() => {
+  deferredTimers.forEach((timer) => clearTimeout(timer))
+  deferredTimers.length = 0
 })
 </script>
 
@@ -193,7 +240,7 @@ onMounted(() => {
     </template>
 
     <!-- 學生出勤狀況 -->
-    <template v-if="showStudents && studentAttendanceSummary">
+    <template v-if="showStudents">
       <div class="section-header">
         <div class="section-title-wrap">
           <span class="section-dot section-dot--green"></span>
@@ -201,32 +248,39 @@ onMounted(() => {
         </div>
         <span class="section-date-chip">{{ todayDateStr }}</span>
       </div>
-      <el-row :gutter="20" class="stats-row">
-        <el-col :xs="24" :sm="12" :md="6" class="mb-4">
-          <StatCard label="今日在籍學生" :value="studentAttendanceSummary.total_students" icon="UserFilled" color="primary" />
-        </el-col>
-        <el-col :xs="24" :sm="12" :md="6" class="mb-4">
-          <StatCard label="已點名" :value="studentAttendanceSummary.recorded_count" icon="EditPen" color="success" />
-        </el-col>
-        <el-col :xs="24" :sm="12" :md="6" class="mb-4">
-          <StatCard label="到校" :value="studentAttendanceSummary.on_campus_count" icon="CircleCheck" color="warning" />
-        </el-col>
-        <el-col :xs="24" :sm="12" :md="6" class="mb-4">
-          <StatCard label="未點名" :value="studentAttendanceSummary.unmarked_count" icon="Warning" color="danger" />
-        </el-col>
-      </el-row>
-      <el-card class="no-hover student-summary-bar">
-        <div class="student-summary-bar__inner">
-          <div class="student-summary-bar__stats">
-            <span><strong>{{ studentAttendanceSummary.present_count }}</strong> 出席</span>
-            <span><strong>{{ studentAttendanceSummary.late_count }}</strong> 遲到</span>
-            <span><strong>{{ studentAttendanceSummary.absent_count }}</strong> 缺席</span>
-            <span><strong>{{ studentAttendanceSummary.leave_count }}</strong> 請假</span>
-            <span class="student-summary-bar__rate">點名完成率 <strong>{{ studentAttendanceSummary.record_completion_rate }}%</strong></span>
+      <template v-if="studentAttendanceSummary">
+        <el-row :gutter="20" class="stats-row">
+          <el-col :xs="24" :sm="12" :md="6" class="mb-4">
+            <StatCard label="今日在籍學生" :value="studentAttendanceSummary.total_students" icon="UserFilled" color="primary" />
+          </el-col>
+          <el-col :xs="24" :sm="12" :md="6" class="mb-4">
+            <StatCard label="已點名" :value="studentAttendanceSummary.recorded_count" icon="EditPen" color="success" />
+          </el-col>
+          <el-col :xs="24" :sm="12" :md="6" class="mb-4">
+            <StatCard label="到校" :value="studentAttendanceSummary.on_campus_count" icon="CircleCheck" color="warning" />
+          </el-col>
+          <el-col :xs="24" :sm="12" :md="6" class="mb-4">
+            <StatCard label="未點名" :value="studentAttendanceSummary.unmarked_count" icon="Warning" color="danger" />
+          </el-col>
+        </el-row>
+        <el-card class="no-hover student-summary-bar">
+          <div class="student-summary-bar__inner">
+            <div class="student-summary-bar__stats">
+              <span><strong>{{ studentAttendanceSummary.present_count }}</strong> 出席</span>
+              <span><strong>{{ studentAttendanceSummary.late_count }}</strong> 遲到</span>
+              <span><strong>{{ studentAttendanceSummary.absent_count }}</strong> 缺席</span>
+              <span><strong>{{ studentAttendanceSummary.leave_count }}</strong> 請假</span>
+              <span class="student-summary-bar__rate">點名完成率 <strong>{{ studentAttendanceSummary.record_completion_rate }}%</strong></span>
+            </div>
+            <el-button link size="small" @click="navigateTo('/student-attendance')">
+              前往學生出席紀錄 →
+            </el-button>
           </div>
-          <el-button link size="small" @click="navigateTo('/student-attendance')">
-            前往學生出席紀錄 →
-          </el-button>
+        </el-card>
+      </template>
+      <el-card v-else class="no-hover dashboard-placeholder-card mb-4">
+        <div class="dashboard-placeholder-card__text text-secondary">
+          {{ deferredSections.studentAttendance.loaded ? '暫無學生出勤摘要資料' : '學生出勤摘要載入中...' }}
         </div>
       </el-card>
     </template>
@@ -280,77 +334,77 @@ onMounted(() => {
             <div class="card-header-row">
               <span class="card-header-title">待審核提醒</span>
               <el-badge
-                v-if="approvalSummary && approvalSummary.total > 0"
+                v-if="approvalSummary.total > 0"
                 :value="approvalSummary.total"
                 type="danger"
               />
             </div>
           </template>
-          <template v-if="approvalSummary">
-            <div v-if="approvalSummary.total === 0" class="approval-done">
-              <el-icon class="approval-done__icon"><CircleCheckFilled /></el-icon>
-              <span>所有申請已審核完畢</span>
+          <div v-if="approvalSummary.total === 0" class="approval-done">
+            <el-icon class="approval-done__icon"><CircleCheckFilled /></el-icon>
+            <span>所有申請已審核完畢</span>
+          </div>
+          <div v-else class="approval-list">
+            <div class="approval-item" v-if="approvalSummary.pending_leaves > 0">
+              <span class="approval-item__label">待審請假</span>
+              <el-tag type="warning" effect="plain" size="small">
+                {{ approvalSummary.pending_leaves }} 筆
+              </el-tag>
             </div>
-            <div v-else class="approval-list">
-              <div class="approval-item" v-if="approvalSummary.pending_leaves > 0">
-                <span class="approval-item__label">待審請假</span>
-                <el-tag type="warning" effect="plain" size="small">
-                  {{ approvalSummary.pending_leaves }} 筆
+            <div class="approval-item" v-if="approvalSummary.pending_overtimes > 0">
+              <span class="approval-item__label">待審加班</span>
+              <el-tag type="warning" effect="plain" size="small">
+                {{ approvalSummary.pending_overtimes }} 筆
+              </el-tag>
+            </div>
+            <template v-if="approvalSummary.this_month_pending_leaves > 0 || approvalSummary.this_month_pending_overtimes > 0">
+              <el-divider style="margin: 4px 0;" />
+              <div class="month-tag">本月</div>
+              <div class="approval-item" v-if="approvalSummary.this_month_pending_leaves > 0">
+                <span class="approval-item__label">本月請假待審</span>
+                <el-tag type="danger" effect="plain" size="small">
+                  {{ approvalSummary.this_month_pending_leaves }} 筆
                 </el-tag>
               </div>
-              <div class="approval-item" v-if="approvalSummary.pending_overtimes > 0">
-                <span class="approval-item__label">待審加班</span>
-                <el-tag type="warning" effect="plain" size="small">
-                  {{ approvalSummary.pending_overtimes }} 筆
+              <div class="approval-item" v-if="approvalSummary.this_month_pending_overtimes > 0">
+                <span class="approval-item__label">本月加班待審</span>
+                <el-tag type="danger" effect="plain" size="small">
+                  {{ approvalSummary.this_month_pending_overtimes }} 筆
                 </el-tag>
               </div>
-              <template v-if="approvalSummary.this_month_pending_leaves > 0 || approvalSummary.this_month_pending_overtimes > 0">
-                <el-divider style="margin: 4px 0;" />
-                <div class="month-tag">本月</div>
-                <div class="approval-item" v-if="approvalSummary.this_month_pending_leaves > 0">
-                  <span class="approval-item__label">本月請假待審</span>
-                  <el-tag type="danger" effect="plain" size="small">
-                    {{ approvalSummary.this_month_pending_leaves }} 筆
-                  </el-tag>
-                </div>
-                <div class="approval-item" v-if="approvalSummary.this_month_pending_overtimes > 0">
-                  <span class="approval-item__label">本月加班待審</span>
-                  <el-tag type="danger" effect="plain" size="small">
-                    {{ approvalSummary.this_month_pending_overtimes }} 筆
-                  </el-tag>
-                </div>
-              </template>
-              <el-button
-                type="primary"
-                plain
-                size="small"
-                class="approval-btn"
-                @click="navigateTo('/approvals')"
-              >
-                前往審核工作台 →
-              </el-button>
-            </div>
-          </template>
-          <div v-else class="approval-loading text-secondary">載入中…</div>
+            </template>
+            <el-button
+              type="primary"
+              plain
+              size="small"
+              class="approval-btn"
+              @click="navigateTo('/approvals')"
+            >
+              前往審核工作台 →
+            </el-button>
+          </div>
         </el-card>
 
         <!-- 今日打卡異常 -->
-        <el-card v-if="showAttendance && attendanceAnomalies" class="no-hover side-card mb-4">
+        <el-card v-if="showAttendance" class="no-hover side-card mb-4">
           <template #header>
             <div class="card-header-row">
               <span class="card-header-title">今日打卡異常</span>
               <el-badge
-                v-if="attendanceAnomalies.anomalies.length > 0"
+                v-if="attendanceAnomalies && attendanceAnomalies.anomalies.length > 0"
                 :value="attendanceAnomalies.anomalies.length"
                 type="warning"
               />
             </div>
           </template>
-          <div v-if="attendanceAnomalies.anomalies.length === 0" class="approval-done">
+          <div v-if="!deferredSections.anomalies.loaded" class="dashboard-card-loading text-secondary">
+            正在整理今日異常紀錄...
+          </div>
+          <div v-else-if="attendanceAnomalies && attendanceAnomalies.anomalies.length === 0" class="approval-done">
             <el-icon class="approval-done__icon"><CircleCheckFilled /></el-icon>
             <span>今日無異常紀錄</span>
           </div>
-          <div v-else class="anomaly-list">
+          <div v-else-if="attendanceAnomalies" class="anomaly-list">
             <div
               v-for="(item, idx) in attendanceAnomalies.anomalies"
               :key="`${item.employee_id}-${item.anomaly_type}-${idx}`"
@@ -377,7 +431,10 @@ onMounted(() => {
               <el-button link size="small" @click="navigateTo('/calendar')">查看全部</el-button>
             </div>
           </template>
-          <div v-if="groupedEvents.length === 0" class="events-empty text-secondary">
+          <div v-if="!deferredSections.calendar.loaded" class="dashboard-card-loading text-secondary">
+            正在載入近期行事曆...
+          </div>
+          <div v-else-if="groupedEvents.length === 0" class="events-empty text-secondary">
             近 7 天無排程活動
           </div>
           <div v-else class="events-list">
@@ -407,18 +464,28 @@ onMounted(() => {
         </el-card>
 
         <!-- 試用期即將到期 -->
-        <el-card
-          v-if="showEmployees && probationAlerts && probationAlerts.employees.length > 0"
-          class="no-hover side-card mb-4"
-        >
+        <el-card v-if="showEmployees" class="no-hover side-card mb-4">
           <template #header>
             <div class="card-header-row">
               <span class="card-header-title">試用期即將到期</span>
-              <el-tag type="warning" effect="plain" size="small">{{ probationAlerts.next_month }}</el-tag>
+              <el-tag
+                v-if="probationAlerts?.next_month"
+                type="warning"
+                effect="plain"
+                size="small"
+              >
+                {{ probationAlerts.next_month }}
+              </el-tag>
             </div>
           </template>
-          <div class="probation-list">
-            <div v-for="emp in probationAlerts.employees" :key="emp.id" class="probation-item">
+          <div v-if="!deferredSections.probation.loaded" class="dashboard-card-loading text-secondary">
+            正在整理試用期提醒...
+          </div>
+          <div v-else-if="probationEmployees.length === 0" class="events-empty text-secondary">
+            下個月沒有試用期到期員工
+          </div>
+          <div v-else class="probation-list">
+            <div v-for="emp in probationEmployees" :key="emp.id" class="probation-item">
               <div class="probation-name">{{ emp.name }}</div>
               <div style="display: flex; align-items: center; gap: 6px;">
                 <span class="probation-date text-secondary">{{ emp.probation_end_date }}</span>
@@ -428,7 +495,14 @@ onMounted(() => {
               </div>
             </div>
           </div>
-          <el-button type="primary" plain size="small" class="approval-btn" @click="navigateTo('/employees')">
+          <el-button
+            v-if="probationEmployees.length > 0"
+            type="primary"
+            plain
+            size="small"
+            class="approval-btn"
+            @click="navigateTo('/employees')"
+          >
             前往員工管理 →
           </el-button>
         </el-card>
@@ -491,6 +565,19 @@ onMounted(() => {
 
 .dashboard-header__date-badge {
   display: none; /* 移除右側重複日期，標題已顯示 */
+}
+
+.dashboard-placeholder-card {
+  margin-bottom: 16px;
+}
+
+.dashboard-placeholder-card__text,
+.dashboard-card-loading {
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
 }
 
 /* ── Section header ── */

@@ -1,5 +1,8 @@
 import api from './index'
 
+export const getAttendanceOverview = (params) =>
+  api.get('/student-attendance/overview', { params })
+
 export const getDailyAttendance = (params) =>
   api.get('/student-attendance', { params })
 

@@ -3,6 +3,41 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { VitePWA } from 'vite-plugin-pwa'
 
+function manualChunks(id) {
+    if (!id.includes('node_modules') && !id.includes('/src/')) {
+        return
+    }
+
+    if (
+        id.includes('/src/views/activity/') ||
+        id.includes('/src/api/activity.js') ||
+        id.includes('/src/stores/activity.js')
+    ) {
+        return 'activity-admin'
+    }
+
+    if (id.includes('chart.js') || id.includes('vue-chartjs')) {
+        return 'chart-vendor'
+    }
+
+    if (id.includes('element-plus') || id.includes('@element-plus')) {
+        return 'element-plus'
+    }
+
+    if (
+        id.includes('/node_modules/vue/') ||
+        id.includes('/node_modules/@vue/') ||
+        id.includes('/node_modules/pinia/') ||
+        id.includes('/node_modules/vue-router/')
+    ) {
+        return 'vue-core'
+    }
+
+    if (id.includes('node_modules')) {
+        return 'vendor'
+    }
+}
+
 // https://vitejs.dev/config/
 export default defineConfig({
     plugins: [
@@ -31,13 +66,37 @@ export default defineConfig({
             },
 
             workbox: {
-                // 預快取：所有打包後靜態資源（JS/CSS/HTML/圖片）
-                globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+                // 只預快取 app shell 與核心 vendor；大型 route chunk 改由 runtime cache 接手
+                globPatterns: [
+                    'index.html',
+                    'registerSW.js',
+                    'manifest.webmanifest',
+                    'assets/index-*.css',
+                    'assets/index-*.js',
+                    'assets/vue-core-*.js',
+                    'assets/vendor-*.js',
+                    '**/*.{ico,png,svg,woff2}',
+                ],
 
                 // hash routing：所有導航請求都回傳 index.html
                 navigateFallback: 'index.html',
 
                 runtimeCaching: [
+                    {
+                        urlPattern: ({ url, request }) =>
+                            url.origin === self.location.origin &&
+                            url.pathname.startsWith('/assets/') &&
+                            ['script', 'style', 'font'].includes(request.destination),
+                        handler: 'StaleWhileRevalidate',
+                        options: {
+                            cacheName: 'app-static-assets',
+                            expiration: {
+                                maxEntries: 80,
+                                maxAgeSeconds: 60 * 60 * 24 * 7, // 7 天
+                            },
+                            cacheableResponse: { statuses: [0, 200] },
+                        },
+                    },
                     // Portal GET API：stale-while-revalidate，離線可看舊資料
                     {
                         urlPattern: ({ url, request }) =>
@@ -62,6 +121,13 @@ export default defineConfig({
         alias: {
             '@': fileURLToPath(new URL('./src', import.meta.url))
         }
+    },
+    build: {
+        rollupOptions: {
+            output: {
+                manualChunks,
+            },
+        },
     },
     server: {
         proxy: {

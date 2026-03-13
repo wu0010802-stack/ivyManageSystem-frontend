@@ -5,7 +5,8 @@
     <div v-if="isMobile && sidebarOpen" class="sidebar-overlay" @click="closeSidebar"></div>
 
     <AdminSidebar
-      :pending-approvals="approvalStore.pendingTotal"
+      :pending-approvals="notificationStore.approvalCount"
+      :pending-activity-inquiries="notificationStore.activityInquiryCount"
       :is-mobile="isMobile"
       :mobile-open="sidebarOpen"
       @close-sidebar="closeSidebar"
@@ -33,10 +34,10 @@ import { RouterView, useRoute } from 'vue-router'
 import AdminSidebar from '../components/layout/AdminSidebar.vue'
 import AdminHeader from '../components/layout/AdminHeader.vue'
 import { isLoggedIn } from '@/utils/auth'
-import { useApprovalStore } from '@/stores/approval'
+import { useNotificationStore } from '@/stores/notification'
 
 const route = useRoute()
-const approvalStore = useApprovalStore()
+const notificationStore = useNotificationStore()
 const isMobile = ref(false)
 const sidebarOpen = ref(false)
 
@@ -56,7 +57,7 @@ const closeSidebar = () => {
 onMounted(() => {
   checkMobile()
   window.addEventListener('resize', checkMobile)
-  if (isLoggedIn()) approvalStore.fetchSummary()
+  if (isLoggedIn()) notificationStore.fetchSummary()
 })
 
 onUnmounted(() => {
@@ -64,7 +65,7 @@ onUnmounted(() => {
 })
 
 watch(() => route.path, () => {
-  if (isLoggedIn()) approvalStore.fetchSummary()
+  if (isLoggedIn()) notificationStore.fetchSummary({ force: true })
 })
 </script>
 

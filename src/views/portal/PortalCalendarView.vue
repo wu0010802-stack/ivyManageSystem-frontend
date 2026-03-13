@@ -5,6 +5,7 @@ import { getCalendar } from '@/api/portal'
 
 const loading = ref(false)
 const events = ref([])
+const officialSync = ref(null)
 
 const now = new Date()
 const currentDate = ref(new Date(now.getFullYear(), now.getMonth(), 1))
@@ -12,7 +13,8 @@ const currentDate = ref(new Date(now.getFullYear(), now.getMonth(), 1))
 const eventTypes = [
   { value: 'meeting', label: '會議', color: '#409EFF' },
   { value: 'activity', label: '活動', color: '#67C23A' },
-  { value: 'holiday', label: '假日', color: '#E6A23C' },
+  { value: 'holiday', label: '國定假日', color: '#E6A23C' },
+  { value: 'makeup_workday', label: '補班日', color: '#8B5CF6' },
   { value: 'general', label: '一般', color: '#909399' },
 ]
 const eventTypeMap = Object.fromEntries(eventTypes.map(t => [t.value, t]))
@@ -25,13 +27,21 @@ const fetchEvents = async () => {
   loading.value = true
   try {
     const res = await getCalendar({ year: currentYear.value, month: currentMonth.value })
-    events.value = res.data
+    events.value = res.data.events || []
+    officialSync.value = res.data.official_sync || null
   } catch (error) {
     ElMessage.error(error.response?.data?.detail || '載入失敗')
   } finally {
     loading.value = false
   }
 }
+
+const officialSyncAlertType = computed(() => officialSync.value?.warning ? 'warning' : 'info')
+
+const officialSyncMessage = computed(() => {
+  if (officialSync.value?.warning) return officialSync.value.warning
+  return '此行事曆與後台同步，包含校內事件、國定假日與補班日。'
+})
 
 // Calendar helpers
 const daysInMonth = computed(() => new Date(currentYear.value, currentMonth.value, 0).getDate())
@@ -92,6 +102,14 @@ onMounted(fetchEvents)
 
 <template>
   <div class="portal-calendar" v-loading="loading">
+    <el-alert
+      :title="officialSyncMessage"
+      :type="officialSyncAlertType"
+      :closable="false"
+      show-icon
+      class="sync-alert"
+    />
+
     <!-- Calendar navigation -->
     <div class="calendar-nav">
       <el-button @click="prevMonth" :icon="'ArrowLeft'" circle size="small" />
@@ -158,6 +176,14 @@ onMounted(fetchEvents)
             <span v-if="ev.location"> | {{ ev.location }}</span>
           </div>
         </div>
+        <el-tag
+          v-if="ev.is_official"
+          type="info"
+          effect="plain"
+          size="small"
+        >
+          官方
+        </el-tag>
         <el-tag :color="eventTypeMap[ev.event_type]?.color" effect="dark" size="small" style="border: none; color: #fff">
           {{ ev.event_type_label }}
         </el-tag>
@@ -173,6 +199,9 @@ onMounted(fetchEvents)
           <el-descriptions-item label="類型">
             <el-tag :color="eventTypeMap[selectedEvent.event_type]?.color" effect="dark" size="small" style="border: none; color: #fff">
               {{ selectedEvent.event_type_label }}
+            </el-tag>
+            <el-tag v-if="selectedEvent.is_official" type="info" effect="plain" size="small" style="margin-left: 8px">
+              官方
             </el-tag>
           </el-descriptions-item>
           <el-descriptions-item label="日期">
@@ -199,6 +228,10 @@ onMounted(fetchEvents)
 <style scoped>
 .portal-calendar {
   padding: 10px;
+}
+
+.sync-alert {
+  margin-bottom: var(--space-4);
 }
 
 .calendar-nav {

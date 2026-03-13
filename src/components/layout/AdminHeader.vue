@@ -20,6 +20,8 @@
         </button>
         <GlobalSearch ref="globalSearchRef" />
 
+        <AdminNotificationBell :is-mobile="isMobile" />
+
         <!-- 進入前台按鈕 -->
         <el-button
           v-if="canEnterPortal"
@@ -88,6 +90,7 @@ import { getEmployees } from '@/api/employees'
 import { impersonate } from '@/api/auth'
 import { getUserInfo, clearAuth, setUserInfo } from '@/utils/auth'
 import GlobalSearch from '@/components/GlobalSearch.vue'
+import AdminNotificationBell from '@/components/layout/AdminNotificationBell.vue'
 
 defineProps({
   isMobile: { type: Boolean, default: false }

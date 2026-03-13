@@ -1,0 +1,240 @@
+<template>
+  <div class="activity-dashboard">
+    <h2 class="page-title">課後才藝統計儀表板</h2>
+
+    <el-row :gutter="16" class="stat-cards">
+      <el-col :xs="12" :sm="8" :lg="4" v-for="card in statCards" :key="card.label">
+        <el-card class="stat-card" shadow="hover">
+          <div class="stat-value">{{ card.value }}</div>
+          <div class="stat-label">{{ card.label }}</div>
+        </el-card>
+      </el-col>
+    </el-row>
+
+    <!-- 課後才藝統計表 -->
+    <el-card class="table-card" v-loading="loadingTable" style="margin-top: 16px;">
+      <template #header>
+        <div class="card-header">
+          <span>課後才藝統計表</span>
+        </div>
+      </template>
+      <el-table
+        v-if="dashboardData"
+        :data="flattenedTableData"
+        border
+        stripe
+        style="width: 100%"
+        :span-method="objectSpanMethod"
+      >
+        <el-table-column prop="classroom_name" label="班級" width="100" align="center" fixed="left" />
+        <el-table-column prop="teacher_name" label="班級老師" width="100" align="center" fixed="left" />
+        <el-table-column prop="student_count" label="在籍人數" width="90" align="center" />
+        
+        <!-- 動態課程欄位 -->
+        <el-table-column
+          v-for="course in dashboardData.courses"
+          :key="course.id"
+          :label="course.name"
+          align="center"
+          width="80"
+        >
+          <template #default="scope">
+            {{ getCourseCount(scope.row, course.id) }}
+          </template>
+        </el-table-column>
+
+        <el-table-column prop="total_enrollments" label="班級人數" width="90" align="center" />
+        <el-table-column prop="ratio" label="比率" width="80" align="center">
+            <template #default="scope">
+                <span v-if="scope.row.ratio !== undefined" :class="{'text-danger': scope.row.rowType !== 'grand_total' && scope.row.targetPercent > 0 && scope.row.ratio < scope.row.targetPercent, 'text-success': scope.row.rowType !== 'grand_total' && scope.row.targetPercent > 0 && scope.row.ratio >= scope.row.targetPercent}">
+                    {{ scope.row.ratio }}%
+                </span>
+            </template>
+        </el-table-column>
+        <el-table-column prop="bonus" label="達成獎金 +1000" width="140" align="center" />
+        <el-table-column prop="points" label="達成積分" width="100" align="center">
+            <template #default="scope">
+                <span v-if="scope.row.points">{{ scope.row.points }}%</span>
+            </template>
+        </el-table-column>
+      </el-table>
+    </el-card>
+
+    <el-row :gutter="16" class="charts-row" v-if="stats" style="margin-top: 16px;">
+      <el-col :xs="24" :md="14">
+        <el-card>
+          <template #header>每日報名趨勢</template>
+          <div v-if="dailyStats.length === 0" class="empty-hint">暫無資料</div>
+          <div v-else class="chart-container">
+            <div
+              v-for="item in dailyStats"
+              :key="item.date"
+              class="bar-row"
+            >
+              <span class="bar-date">{{ item.date }}</span>
+              <el-progress
+                :percentage="Math.min(100, (item.count / maxDaily) * 100)"
+                :format="() => item.count"
+                status=""
+              />
+            </div>
+          </div>
+        </el-card>
+      </el-col>
+
+      <el-col :xs="24" :md="10">
+        <el-card>
+          <template #header>熱門課程 Top 5</template>
+          <div v-if="topCourses.length === 0" class="empty-hint">暫無資料</div>
+          <el-table v-else :data="topCourses" size="small">
+            <el-table-column label="課程名稱" prop="name" />
+            <el-table-column label="報名數" prop="count" width="80" align="right" />
+          </el-table>
+        </el-card>
+      </el-col>
+    </el-row>
+  </div>
+</template>
+
+<script setup>
+import { ref, computed, onMounted } from 'vue'
+import { useActivityStore } from '@/stores/activity'
+import { getActivityDashboardTable } from '@/api/activity'
+
+const activityStore = useActivityStore()
+const loading = ref(false)
+const loadingTable = ref(false)
+const dashboardData = ref(null)
+
+const stats = computed(() => activityStore.stats)
+const statistics = computed(() => stats.value?.statistics || {})
+const dailyStats = computed(() => stats.value?.charts?.daily || [])
+const topCourses = computed(() => stats.value?.charts?.topCourses || [])
+const maxDaily = computed(() => Math.max(1, ...dailyStats.value.map((d) => d.count)))
+
+const statCards = computed(() => [
+  { label: '總報名數', value: statistics.value.totalRegistrations ?? '-' },
+  { label: '正式報名', value: statistics.value.totalEnrollments ?? '-' },
+  { label: '候補人數', value: statistics.value.totalWaitlist ?? '-' },
+  { label: '今日新增', value: statistics.value.todayNewRegistrations ?? '-' },
+  { label: '總收入（已繳）', value: statistics.value.totalRevenue != null ? `$${statistics.value.totalRevenue.toLocaleString()}` : '-' },
+  { label: '待繳金額', value: statistics.value.totalUnpaid != null ? `$${statistics.value.totalUnpaid.toLocaleString()}` : '-' },
+  { label: '報名率', value: statistics.value.enrollmentRate != null ? `${statistics.value.enrollmentRate}%` : '-' },
+  { label: '未讀提問', value: statistics.value.unreadInquiries ?? '-' },
+])
+
+const flattenedTableData = computed(() => {
+    if (!dashboardData.value) return [];
+    const data = [];
+    for (const grade of dashboardData.value.grades) {
+        const classCount = grade.classrooms.length;
+        if (classCount === 0) continue;
+        const rowSpan = classCount + 1; // +1 for the subtotal row
+        
+        grade.classrooms.forEach((cls, idx) => {
+            data.push({
+                ...cls,
+                rowType: 'class',
+                gradeName: grade.grade_name,
+                targetPercent: grade.target_percent,
+                isFirstOfGrade: idx === 0,
+                rowSpan: rowSpan,
+                bonus: grade.subtotal.bonus === 1000 ? '100%' : '',
+                points: grade.subtotal.points || ''
+            });
+        });
+
+        // Subtotal row
+        data.push({
+            ...grade.subtotal,
+            rowType: 'subtotal',
+            classroom_name: '小計',
+            teacher_name: '',
+            gradeName: grade.grade_name,
+            targetPercent: grade.target_percent,
+            isFirstOfGrade: false,
+            rowSpan: 0,
+            bonus: grade.subtotal.bonus === 1000 ? '100%' : '',
+            points: grade.subtotal.points || ''
+        });
+    }
+
+    // Grand total row
+    data.push({
+        ...dashboardData.value.grand_total,
+        rowType: 'grand_total',
+        classroom_name: '總計',
+        teacher_name: '',
+        gradeName: '',
+        bonus: '',
+        points: ''
+    });
+
+    return data;
+});
+
+const getCourseCount = (row, courseId) => {
+    const courses = row.courses || {};
+    const count = courses[courseId];
+    return count > 0 ? count : '';
+};
+
+const objectSpanMethod = ({ row, column, rowIndex, columnIndex }) => {
+    // Columns: bonus is property "bonus", points is "points"
+    if (column.property === 'bonus' || column.property === 'points') {
+        if (row.rowType === 'grand_total') {
+            return { rowspan: 1, colspan: 1 };
+        }
+        if (row.isFirstOfGrade) {
+            return {
+                rowspan: row.rowSpan,
+                colspan: 1
+            };
+        } else {
+            return {
+                rowspan: 0,
+                colspan: 0
+            };
+        }
+    }
+    return { rowspan: 1, colspan: 1 };
+};
+
+onMounted(async () => {
+  loading.value = true;
+  await Promise.all([
+    activityStore.fetchSummary({ force: true }),
+    activityStore.fetchCharts({ force: true }),
+  ]);
+  loading.value = false;
+
+  loadingTable.value = true;
+  try {
+      const res = await getActivityDashboardTable();
+      dashboardData.value = res.data;
+  } catch (e) {
+      console.error(e);
+  } finally {
+      loadingTable.value = false;
+  }
+})
+</script>
+
+<style scoped>
+.activity-dashboard { padding: 16px; }
+.page-title { margin-bottom: 16px; font-size: 20px; font-weight: 600; }
+.stat-cards { margin-bottom: 16px; }
+.stat-card { text-align: center; padding: 8px 0; }
+.stat-value { font-size: 28px; font-weight: 700; color: var(--color-primary, #4f46e5); }
+.stat-label { font-size: 13px; color: #64748b; margin-top: 4px; }
+.charts-row { margin-top: 8px; }
+.chart-container { max-height: 320px; overflow-y: auto; }
+.bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.bar-date { width: 90px; font-size: 12px; color: #64748b; flex-shrink: 0; }
+.empty-hint { color: #94a3b8; text-align: center; padding: 24px 0; }
+
+.text-danger { color: #e11d48; font-weight: bold; }
+.text-success { color: #16a34a; font-weight: bold; }
+
+/* Let Element Plus handle the default table styles instead of custom backgrounds */
+</style>
