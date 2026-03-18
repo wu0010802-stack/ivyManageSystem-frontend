@@ -5,6 +5,7 @@ import { RouterView, useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 import { getSubstitutePendingCount, getUnreadCount, getSwapPendingCount } from '@/api/portal'
+import { getPortalPendingCount } from '@/api/dismissalCalls'
 import { changePassword, endImpersonate } from '@/api/auth'
 import { getUserInfo, clearAuth, setUserInfo } from '@/utils/auth'
 import OfflineIndicator from '@/components/OfflineIndicator.vue'
@@ -33,6 +34,7 @@ const unreadCount = ref(0)
 // Swap pending count
 const swapPendingCount = ref(0)
 const substitutePendingCount = ref(0)
+const dismissalPendingCount = ref(0)
 
 const fetchUnreadCount = async () => {
   try {
@@ -61,10 +63,20 @@ const fetchSubstitutePendingCount = async () => {
   }
 }
 
+const fetchDismissalPendingCount = async () => {
+  try {
+    const res = await getPortalPendingCount()
+    dismissalPendingCount.value = res.data.count || 0
+  } catch (e) {
+    // Silent fail
+  }
+}
+
 const refreshPortalCounts = () => {
   fetchUnreadCount()
   fetchSwapPendingCount()
   fetchSubstitutePendingCount()
+  fetchDismissalPendingCount()
 }
 
 // PWA 安裝提示
@@ -307,6 +319,11 @@ const submitPassword = async () => {
           <el-menu-item index="/portal/assessments">
             <el-icon><DataAnalysis /></el-icon>
             <span>學期評量</span>
+          </el-menu-item>
+          <el-menu-item index="/portal/dismissal-calls">
+            <el-icon><Van /></el-icon>
+            <span>接送通知</span>
+            <el-badge v-if="dismissalPendingCount > 0" :value="dismissalPendingCount" :max="99" class="announcement-badge" />
           </el-menu-item>
         </el-sub-menu>
 

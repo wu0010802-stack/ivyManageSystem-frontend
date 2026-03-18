@@ -3,6 +3,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getAnnouncements, createAnnouncement, updateAnnouncement, deleteAnnouncement } from '@/api/announcements'
 import { getEmployees } from '@/api/employees'
+import { Top } from '@element-plus/icons-vue'
 
 const loading = ref(false)
 const announcements = ref([])
@@ -151,6 +152,13 @@ const formatDate = (isoStr) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
+const getReadPreview = (row) => row.read_preview || []
+
+const getRemainingReaders = (row) => Math.max(
+  0,
+  (row.read_count || 0) - getReadPreview(row).length,
+)
+
 onMounted(() => {
   fetchAnnouncements()
   fetchEmployees()
@@ -208,9 +216,47 @@ onMounted(() => {
         </template>
       </el-table-column>
 
-      <el-table-column label="已讀人數" width="90" align="center">
+      <el-table-column label="已讀預覽" min-width="220">
         <template #default="{ row }">
-          <el-tag type="success" size="small">{{ row.read_count }}</el-tag>
+          <div class="read-preview-cell">
+            <template v-if="row.read_count > 0">
+              <div class="read-preview-tags">
+                <el-tag
+                  v-for="reader in getReadPreview(row)"
+                  :key="reader.employee_id"
+                  type="success"
+                  size="small"
+                  effect="plain"
+                >
+                  {{ reader.name }}
+                </el-tag>
+              </div>
+              <el-popover
+                placement="top-start"
+                trigger="hover"
+                width="260"
+              >
+                <template #reference>
+                  <el-button link type="success" class="read-preview-button">
+                    已讀 {{ row.read_count }} 人
+                    <span v-if="getRemainingReaders(row) > 0">，再顯示 {{ getRemainingReaders(row) }} 人</span>
+                  </el-button>
+                </template>
+                <div class="reader-popover">
+                  <div class="reader-popover-title">已讀名單</div>
+                  <div
+                    v-for="reader in row.readers || []"
+                    :key="`${row.id}-${reader.employee_id}`"
+                    class="reader-row"
+                  >
+                    <span>{{ reader.name }}</span>
+                    <span class="reader-read-at">{{ formatDate(reader.read_at) }}</span>
+                  </div>
+                </div>
+              </el-popover>
+            </template>
+            <span v-else class="text-muted">尚未有人已讀</span>
+          </div>
         </template>
       </el-table-column>
 
@@ -293,5 +339,51 @@ onMounted(() => {
 <style scoped>
 .announcement-view {
   padding: 0;
+}
+
+.read-preview-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.read-preview-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.read-preview-button {
+  padding: 0;
+  justify-content: flex-start;
+  height: auto;
+}
+
+.reader-popover {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.reader-popover-title {
+  font-weight: 600;
+  color: #303133;
+}
+
+.reader-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  color: #606266;
+}
+
+.reader-read-at {
+  color: #909399;
+  white-space: nowrap;
+}
+
+.text-muted {
+  color: #909399;
 }
 </style>

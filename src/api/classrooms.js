@@ -10,6 +10,10 @@ export const updateClassroom = (id, payload) => api.put(`/classrooms/${id}`, pay
 
 export const deleteClassroom = (id) => api.delete(`/classrooms/${id}`)
 
+export const cloneClassroomsToTerm = (payload) => api.post('/classrooms/clone-term', payload)
+
+export const promoteAcademicYear = (payload) => api.post('/classrooms/promote-academic-year', payload)
+
 export const getTeacherOptions = () => api.get('/classrooms/teacher-options')
 
 export const getTeachers = getTeacherOptions

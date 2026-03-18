@@ -1,183 +1,36 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
-import { getStudents } from '@/api/students'
-import { getToday, getTodayAnomalies } from '@/api/attendance'
-import { getUpcomingEvents, getProbationAlerts, getStudentAttendanceSummary } from '@/api/home'
-import { useRouter } from 'vue-router'
 import StatCard from '@/components/common/StatCard.vue'
-import { useEmployeeStore } from '@/stores/employee'
-import { useNotificationStore } from '@/stores/notification'
-import { hasPermission, getUserInfo } from '@/utils/auth'
+import { useDashboardSections } from '@/composables'
 
-const router = useRouter()
-const employeeStore = useEmployeeStore()
-const notificationStore = useNotificationStore()
-const loading = ref(false)
-const deferredSections = reactive({
-  studentAttendance: { loading: false, loaded: false },
-  anomalies: { loading: false, loaded: false },
-  calendar: { loading: false, loaded: false },
-  probation: { loading: false, loaded: false },
-})
-const deferredTimers = []
-
-const showAttendance = hasPermission('ATTENDANCE_READ')
-const showApprovals = hasPermission('APPROVALS')
-const showCalendar = hasPermission('CALENDAR')
-const showEmployees = hasPermission('EMPLOYEES_READ')
-const showStudents = hasPermission('STUDENTS_READ')
-
-const stats = computed(() => {
-  const total = employeeStore.employees.length
-  const teachers = employeeStore.employees.filter(e => {
-    const title = e.title || ''
-    const position = e.position || ''
-    return title.includes('師') || position.includes('師') ||
-           title.includes('導') || position.includes('導')
-  }).length
-  return { total, teachers, others: total - teachers }
-})
-
-const studentCount = ref(0)
-const todayStats = ref(null)
-const upcomingEvents = ref([])
-const attendanceAnomalies = ref(null)
-const probationAlerts = ref(null)
-const studentAttendanceSummary = ref(null)
-const approvalSummary = computed(() => notificationStore.approvalSummary)
-const probationEmployees = computed(() => probationAlerts.value?.employees || [])
-
-const now = new Date()
-const weekDays = ['日', '一', '二', '三', '四', '五', '六']
-
-const todayDateStr = computed(() => {
-  const n = new Date()
-  return `${n.getMonth() + 1} 月 ${n.getDate()} 日（星期${weekDays[n.getDay()]}）`
-})
-
-const greeting = computed(() => {
-  const h = now.getHours()
-  if (h < 12) return '早安'
-  if (h < 18) return '午安'
-  return '晚安'
-})
-
-const userName = computed(() => {
-  const info = getUserInfo()
-  return info?.display_name || info?.username || '管理員'
-})
-
-const groupedEvents = computed(() => {
-  if (!upcomingEvents.value.length) return []
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const map = {}
-  for (const ev of upcomingEvents.value) {
-    const key = ev.event_date
-    if (!map[key]) {
-      const evDate = new Date(key + 'T00:00:00')
-      const diff = Math.round((evDate - today) / 86400000)
-      let label
-      if (diff === 0) label = '今天'
-      else if (diff === 1) label = '明天'
-      else if (diff === 2) label = '後天'
-      else {
-        const [, m, d] = key.split('-')
-        label = `${parseInt(m)} 月 ${parseInt(d)} 日`
-      }
-      map[key] = { label, events: [] }
-    }
-    map[key].events.push(ev)
-  }
-  return Object.entries(map)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([, v]) => v)
-})
-
-const eventTagType = { meeting: '', activity: 'success', holiday: 'danger', general: 'info' }
-
-const anomalyLabel = (type, minutes) => ({
-  absent: '未打卡', late: `遲到 ${minutes} 分`, missing_punch: '缺打卡'
-}[type] || type)
-
-const anomalyTagType = (type) => ({
-  absent: 'danger', late: 'warning', missing_punch: 'info'
-}[type] || 'info')
-
-const ignoreErrors = (promiseLike) => Promise.resolve(promiseLike).catch(() => {})
-
-const loadDeferredSection = async (key, loader) => {
-  const section = deferredSections[key]
-  if (!section || section.loading || section.loaded) return
-
-  section.loading = true
-  try {
-    await loader()
-  } catch {
-    // API interceptor handles message
-  } finally {
-    section.loading = false
-    section.loaded = true
-  }
-}
-
-const scheduleDeferredSection = (key, enabled, delay, loader) => {
-  if (!enabled) return
-
-  const schedule = typeof window !== 'undefined' ? window.setTimeout : setTimeout
-  const timer = schedule(() => {
-    loadDeferredSection(key, loader)
-  }, delay)
-  deferredTimers.push(timer)
-}
-
-const fetchCriticalDashboardData = async () => {
-  loading.value = true
-  await Promise.all([
-    ignoreErrors(employeeStore.fetchEmployees()),
-    getStudents({ limit: 1 })
-      .then(r => { studentCount.value = r.data.total })
-      .catch(() => {}),
-    showAttendance
-      ? getToday().then(r => { todayStats.value = r.data }).catch(() => {})
-      : null,
-    showApprovals
-      ? ignoreErrors(notificationStore.fetchSummary())
-      : null,
-  ].filter(Boolean))
-  loading.value = false
-}
-
-const scheduleDeferredDashboardData = () => {
-  scheduleDeferredSection('studentAttendance', showStudents, 150, () =>
-    getStudentAttendanceSummary()
-      .then(r => { studentAttendanceSummary.value = r.data })
-  )
-  scheduleDeferredSection('anomalies', showAttendance, 400, () =>
-    getTodayAnomalies()
-      .then(r => { attendanceAnomalies.value = r.data })
-  )
-  scheduleDeferredSection('calendar', showCalendar, 650, () =>
-    getUpcomingEvents()
-      .then(r => { upcomingEvents.value = r.data })
-  )
-  scheduleDeferredSection('probation', showEmployees, 900, () =>
-    getProbationAlerts()
-      .then(r => { probationAlerts.value = r.data })
-  )
-}
-
-const navigateTo = (path) => router.push(path)
-
-onMounted(async () => {
-  await fetchCriticalDashboardData()
-  scheduleDeferredDashboardData()
-})
-
-onBeforeUnmount(() => {
-  deferredTimers.forEach((timer) => clearTimeout(timer))
-  deferredTimers.length = 0
-})
+const {
+  loading,
+  deferredSections,
+  studentAttendanceSectionRef,
+  anomaliesSectionRef,
+  calendarSectionRef,
+  probationSectionRef,
+  showAttendance,
+  showApprovals,
+  showCalendar,
+  showEmployees,
+  showStudents,
+  stats,
+  studentCount,
+  todayStats,
+  attendanceAnomalies,
+  probationAlerts,
+  studentAttendanceSummary,
+  approvalSummary,
+  probationEmployees,
+  todayDateStr,
+  greeting,
+  userName,
+  groupedEvents,
+  eventTagType,
+  anomalyLabel,
+  anomalyTagType,
+  navigateTo,
+} = useDashboardSections()
 </script>
 
 <template>
@@ -240,7 +93,11 @@ onBeforeUnmount(() => {
     </template>
 
     <!-- 學生出勤狀況 -->
-    <template v-if="showStudents">
+    <div
+      v-if="showStudents"
+      ref="studentAttendanceSectionRef"
+      data-deferred-section="studentAttendance"
+    >
       <div class="section-header">
         <div class="section-title-wrap">
           <span class="section-dot section-dot--green"></span>
@@ -283,7 +140,7 @@ onBeforeUnmount(() => {
           {{ deferredSections.studentAttendance.loaded ? '暫無學生出勤摘要資料' : '學生出勤摘要載入中...' }}
         </div>
       </el-card>
-    </template>
+    </div>
 
     <!-- 主要內容 -->
     <el-row :gutter="20" style="margin-top: 8px;">
@@ -386,7 +243,12 @@ onBeforeUnmount(() => {
         </el-card>
 
         <!-- 今日打卡異常 -->
-        <el-card v-if="showAttendance" class="no-hover side-card mb-4">
+        <div
+          v-if="showAttendance"
+          ref="anomaliesSectionRef"
+          data-deferred-section="anomalies"
+        >
+        <el-card class="no-hover side-card mb-4">
           <template #header>
             <div class="card-header-row">
               <span class="card-header-title">今日打卡異常</span>
@@ -422,9 +284,15 @@ onBeforeUnmount(() => {
             </el-button>
           </div>
         </el-card>
+        </div>
 
         <!-- 近期行事曆 -->
-        <el-card v-if="showCalendar" class="no-hover side-card mb-4">
+        <div
+          v-if="showCalendar"
+          ref="calendarSectionRef"
+          data-deferred-section="calendar"
+        >
+        <el-card class="no-hover side-card mb-4">
           <template #header>
             <div class="card-header-row">
               <span class="card-header-title">近期行事曆</span>
@@ -462,9 +330,15 @@ onBeforeUnmount(() => {
             </div>
           </div>
         </el-card>
+        </div>
 
         <!-- 試用期即將到期 -->
-        <el-card v-if="showEmployees" class="no-hover side-card mb-4">
+        <div
+          v-if="showEmployees"
+          ref="probationSectionRef"
+          data-deferred-section="probation"
+        >
+        <el-card class="no-hover side-card mb-4">
           <template #header>
             <div class="card-header-row">
               <span class="card-header-title">試用期即將到期</span>
@@ -506,6 +380,7 @@ onBeforeUnmount(() => {
             前往員工管理 →
           </el-button>
         </el-card>
+        </div>
 
         <!-- 系統狀態 -->
         <el-card class="no-hover side-card">

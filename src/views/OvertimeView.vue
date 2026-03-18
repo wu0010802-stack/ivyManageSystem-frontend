@@ -1,17 +1,25 @@
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { getOvertimes, createOvertime, updateOvertime, approveOvertime as approveOvertimeApi, batchApproveOvertimes, getOvertimeImportTemplate, importOvertimes } from '@/api/overtimes'
 import { getApprovalLogs, getApprovalPolicies } from '@/api/approvalSettings'
-import { getUserInfo } from '@/utils/auth'
+import { getUserInfo, hasPermission } from '@/utils/auth'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useEmployeeStore } from '@/stores/employee'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
 import { useCrudDialog, useConfirmDelete, useDateQuery } from '@/composables'
 import { downloadFile } from '@/utils/download'
 import { money } from '@/utils/format'
+import MeetingManagementPanel from '@/components/overtime/MeetingManagementPanel.vue'
 
 const { currentYear, query } = useDateQuery()
 const employeeStore = useEmployeeStore()
+const route = useRoute()
+const router = useRouter()
+
+const canViewOvertime = hasPermission('OVERTIME_READ')
+const canViewMeetings = hasPermission('MEETINGS')
+const activeSection = ref('overtime')
 
 const loading = ref(false)
 const overtimeRecords = ref([])
@@ -61,7 +69,15 @@ const populateForm = (row) => {
 
 const { dialogVisible, isEdit, openCreate, openEdit, closeDialog } = useCrudDialog({ resetForm, populateForm })
 
+const resolveSectionFromRoute = () => {
+  if (route.query.tab === 'meetings' && canViewMeetings) return 'meetings'
+  if (canViewOvertime) return 'overtime'
+  if (canViewMeetings) return 'meetings'
+  return 'overtime'
+}
+
 const fetchOvertimes = async () => {
+  if (!canViewOvertime) return
   loading.value = true
   try {
     const params = { year: query.year, month: query.month }
@@ -76,6 +92,7 @@ const fetchOvertimes = async () => {
 }
 
 const fetchPendingOvertimes = async () => {
+  if (!canViewOvertime) return
   try {
     const response = await getOvertimes({ status: 'pending' })
     pendingRecords.value = Array.isArray(response.data) ? response.data : []
@@ -300,144 +317,169 @@ const canApprove = (row) => {
 
 onMounted(() => {
   employeeStore.fetchEmployees()
+  activeSection.value = resolveSectionFromRoute()
   fetchOvertimes()
   fetchPendingOvertimes()
   fetchApprovalPoliciesForView()
+})
+
+watch(
+  () => route.query.tab,
+  () => {
+    activeSection.value = resolveSectionFromRoute()
+  },
+)
+
+watch(activeSection, async (value) => {
+  const nextTab = value === 'meetings' ? 'meetings' : undefined
+  const currentTab = typeof route.query.tab === 'string' ? route.query.tab : undefined
+  if (nextTab === currentTab || (!nextTab && !currentTab)) return
+
+  const nextQuery = { ...route.query }
+  if (nextTab) nextQuery.tab = nextTab
+  else delete nextQuery.tab
+  await router.replace({ query: nextQuery })
 })
 </script>
 
 <template>
   <div class="overtime-page">
-    <h2>加班管理</h2>
+    <h2>加班 / 園務會議</h2>
 
-    <el-card class="control-panel">
-      <div class="controls">
-        <el-select v-model="query.employee_id" placeholder="全部員工" clearable filterable style="width: 180px;">
-          <el-option v-for="emp in employeeStore.employees" :key="emp.id" :label="emp.name" :value="emp.id" />
-        </el-select>
-        <el-select v-model="query.year" style="width: 110px;">
-          <el-option v-for="y in 5" :key="y" :label="(currentYear - 2 + y) + ' 年'" :value="currentYear - 2 + y" />
-        </el-select>
-        <el-select v-model="query.month" style="width: 90px;">
-          <el-option v-for="m in 12" :key="m" :label="m + ' 月'" :value="m" />
-        </el-select>
-        <el-button type="primary" @click="fetchOvertimes" :loading="loading">查詢</el-button>
-        <el-button type="warning" @click="downloadFile(`/exports/overtimes?year=${query.year}&month=${query.month}`, `${query.year}年${query.month}月加班記錄.xlsx`)">匯出 Excel</el-button>
-        <el-button @click="downloadImportTemplate">下載範本</el-button>
-        <el-button @click="importVisible = true">匯入 Excel</el-button>
-        <el-button
-          v-if="selectedOvertimes.length > 0"
-          type="success"
-          :loading="batchLoading"
-          @click="showBatchApproveConfirm"
-        >批次核准 ({{ selectedOvertimes.length }})</el-button>
-        <el-button
-          v-if="selectedOvertimes.length > 0"
-          type="danger"
-          :loading="batchLoading"
-          @click="openBatchReject"
-        >批次駁回 ({{ selectedOvertimes.length }})</el-button>
-        <el-button type="success" @click="openCreate">
-          <el-icon><Plus /></el-icon> 新增加班
-        </el-button>
-      </div>
-    </el-card>
-
-    <!-- Pending Approvals -->
-    <el-card v-if="pendingRecords.length > 0" class="pending-card" shadow="hover">
-      <template #header>
-        <div class="card-header">
-          <span>待審核項目 ({{ pendingRecords.length }})</span>
-          <el-tag type="warning" effect="dark" size="small">需處理</el-tag>
-        </div>
-      </template>
-      <el-table :data="pendingRecords" style="width: 100%" size="small">
-        <el-table-column prop="employee_name" label="員工" width="100" />
-        <el-table-column prop="overtime_date" label="日期" width="110" />
-        <el-table-column label="類型" width="90">
-          <template #default="{ row }">{{ row.overtime_type_label }}</template>
-        </el-table-column>
-        <el-table-column prop="hours" label="時數" width="70">
-          <template #default="{ row }">{{ row.hours }}h</template>
-        </el-table-column>
-        <el-table-column label="方式" width="80">
-          <template #default="{ row }">
-            <el-tag v-if="row.use_comp_leave" type="success" size="small">補休</el-tag>
-            <el-tag v-else size="small">加班費</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="reason" label="原因" show-overflow-tooltip />
-        <el-table-column label="操作" width="140" align="right">
-          <template #default="{ row }">
-            <el-button type="success" size="small" circle @click="approveOvertime(row, true)">
-              <el-icon><Check /></el-icon>
+    <el-tabs v-model="activeSection" class="overtime-section-tabs">
+      <el-tab-pane v-if="canViewOvertime" label="一般加班" name="overtime">
+        <el-card class="control-panel">
+          <div class="controls">
+            <el-select v-model="query.employee_id" placeholder="全部員工" clearable filterable style="width: 180px;">
+              <el-option v-for="emp in employeeStore.employees" :key="emp.id" :label="emp.name" :value="emp.id" />
+            </el-select>
+            <el-select v-model="query.year" style="width: 110px;">
+              <el-option v-for="y in 5" :key="y" :label="(currentYear - 2 + y) + ' 年'" :value="currentYear - 2 + y" />
+            </el-select>
+            <el-select v-model="query.month" style="width: 90px;">
+              <el-option v-for="m in 12" :key="m" :label="m + ' 月'" :value="m" />
+            </el-select>
+            <el-button type="primary" @click="fetchOvertimes" :loading="loading">查詢</el-button>
+            <el-button type="warning" @click="downloadFile(`/exports/overtimes?year=${query.year}&month=${query.month}`, `${query.year}年${query.month}月加班記錄.xlsx`)">匯出 Excel</el-button>
+            <el-button @click="downloadImportTemplate">下載範本</el-button>
+            <el-button @click="importVisible = true">匯入 Excel</el-button>
+            <el-button
+              v-if="selectedOvertimes.length > 0"
+              type="success"
+              :loading="batchLoading"
+              @click="showBatchApproveConfirm"
+            >批次核准 ({{ selectedOvertimes.length }})</el-button>
+            <el-button
+              v-if="selectedOvertimes.length > 0"
+              type="danger"
+              :loading="batchLoading"
+              @click="openBatchReject"
+            >批次駁回 ({{ selectedOvertimes.length }})</el-button>
+            <el-button type="success" @click="openCreate">
+              <el-icon><Plus /></el-icon> 新增加班
             </el-button>
-            <el-button type="danger" size="small" circle @click="approveOvertime(row, false)">
-              <el-icon><Close /></el-icon>
-            </el-button>
+          </div>
+        </el-card>
+
+        <el-card v-if="pendingRecords.length > 0" class="pending-card" shadow="hover">
+          <template #header>
+            <div class="card-header">
+              <span>待審核項目 ({{ pendingRecords.length }})</span>
+              <el-tag type="warning" effect="dark" size="small">需處理</el-tag>
+            </div>
           </template>
-        </el-table-column>
-      </el-table>
-    </el-card>
+          <el-table :data="pendingRecords" style="width: 100%" size="small">
+            <el-table-column prop="employee_name" label="員工" width="100" />
+            <el-table-column prop="overtime_date" label="日期" width="110" />
+            <el-table-column label="類型" width="90">
+              <template #default="{ row }">{{ row.overtime_type_label }}</template>
+            </el-table-column>
+            <el-table-column prop="hours" label="時數" width="70">
+              <template #default="{ row }">{{ row.hours }}h</template>
+            </el-table-column>
+            <el-table-column label="方式" width="80">
+              <template #default="{ row }">
+                <el-tag v-if="row.use_comp_leave" type="success" size="small">補休</el-tag>
+                <el-tag v-else size="small">加班費</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="reason" label="原因" show-overflow-tooltip />
+            <el-table-column label="操作" width="140" align="right">
+              <template #default="{ row }">
+                <el-button type="success" size="small" circle @click="approveOvertime(row, true)">
+                  <el-icon><Check /></el-icon>
+                </el-button>
+                <el-button type="danger" size="small" circle @click="approveOvertime(row, false)">
+                  <el-icon><Close /></el-icon>
+                </el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-card>
 
-    <TableSkeleton v-if="loading && !overtimeRecords.length" :columns="8" />
-    <el-table v-else :data="overtimeRecords" border stripe style="width: 100%; margin-top: 20px;" v-loading="loading" max-height="600" @selection-change="handleSelectionChange">
-      <el-table-column type="selection" width="45" />
-      <el-table-column prop="employee_name" label="員工" width="100" />
-      <el-table-column prop="overtime_date" label="日期" width="120" />
-      <el-table-column label="類型" width="100">
-        <template #default="scope">
-          <el-tag :type="scope.row.overtime_type === 'weekday' ? 'info' : 'warning'" size="small">
-            {{ scope.row.overtime_type_label }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column label="時間" width="130">
-        <template #default="scope">
-          {{ scope.row.start_time || '-' }} ~ {{ scope.row.end_time || '-' }}
-        </template>
-      </el-table-column>
-      <el-table-column label="時數" width="80">
-        <template #default="scope">{{ scope.row.hours }}h</template>
-      </el-table-column>
-      <el-table-column label="方式" width="90">
-        <template #default="scope">
-          <el-tag v-if="scope.row.use_comp_leave" type="success" size="small">補休 {{ scope.row.hours }}h</el-tag>
-          <el-tag v-else size="small">加班費</el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column label="加班費" width="110">
-        <template #default="scope">
-          <span v-if="scope.row.use_comp_leave" style="color: var(--el-text-color-secondary);">--</span>
-          <strong v-else>{{ money(scope.row.overtime_pay) }}</strong>
-        </template>
-      </el-table-column>
-      <el-table-column prop="reason" label="原因" min-width="120" show-overflow-tooltip />
-      <el-table-column label="審核" width="100">
-        <template #default="scope">
-          <el-tag v-if="scope.row.is_approved === true" type="success" size="small">已核准</el-tag>
-          <el-tag v-else-if="scope.row.is_approved === false" type="danger" size="small">已駁回</el-tag>
-          <el-tag v-else type="warning" size="small">待審核</el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column label="操作" width="240" fixed="right">
-        <template #default="scope">
-          <el-button v-if="scope.row.is_approved !== true && canApprove(scope.row)" type="success" size="small" link @click="approveOvertime(scope.row, true)">核准</el-button>
-          <el-button v-if="scope.row.is_approved !== false && canApprove(scope.row)" type="warning" size="small" link @click="approveOvertime(scope.row, false)">駁回</el-button>
-          <el-button type="primary" size="small" link @click="openEdit(scope.row)">編輯</el-button>
-          <el-button type="danger" size="small" link @click="deleteOvertime(scope.row)">刪除</el-button>
-          <el-button type="info" size="small" link @click="openApprovalLogs(scope.row)">記錄</el-button>
-        </template>
-      </el-table-column>
-    </el-table>
+        <TableSkeleton v-if="loading && !overtimeRecords.length" :columns="8" />
+        <el-table v-else :data="overtimeRecords" border stripe style="width: 100%; margin-top: 20px;" v-loading="loading" max-height="600" @selection-change="handleSelectionChange">
+          <el-table-column type="selection" width="45" />
+          <el-table-column prop="employee_name" label="員工" width="100" />
+          <el-table-column prop="overtime_date" label="日期" width="120" />
+          <el-table-column label="類型" width="100">
+            <template #default="scope">
+              <el-tag :type="scope.row.overtime_type === 'weekday' ? 'info' : 'warning'" size="small">
+                {{ scope.row.overtime_type_label }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="時間" width="130">
+            <template #default="scope">
+              {{ scope.row.start_time || '-' }} ~ {{ scope.row.end_time || '-' }}
+            </template>
+          </el-table-column>
+          <el-table-column label="時數" width="80">
+            <template #default="scope">{{ scope.row.hours }}h</template>
+          </el-table-column>
+          <el-table-column label="方式" width="90">
+            <template #default="scope">
+              <el-tag v-if="scope.row.use_comp_leave" type="success" size="small">補休 {{ scope.row.hours }}h</el-tag>
+              <el-tag v-else size="small">加班費</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="加班費" width="110">
+            <template #default="scope">
+              <span v-if="scope.row.use_comp_leave" style="color: var(--el-text-color-secondary);">--</span>
+              <strong v-else>{{ money(scope.row.overtime_pay) }}</strong>
+            </template>
+          </el-table-column>
+          <el-table-column prop="reason" label="原因" min-width="120" show-overflow-tooltip />
+          <el-table-column label="審核" width="100">
+            <template #default="scope">
+              <el-tag v-if="scope.row.is_approved === true" type="success" size="small">已核准</el-tag>
+              <el-tag v-else-if="scope.row.is_approved === false" type="danger" size="small">已駁回</el-tag>
+              <el-tag v-else type="warning" size="small">待審核</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="240" fixed="right">
+            <template #default="scope">
+              <el-button v-if="scope.row.is_approved !== true && canApprove(scope.row)" type="success" size="small" link @click="approveOvertime(scope.row, true)">核准</el-button>
+              <el-button v-if="scope.row.is_approved !== false && canApprove(scope.row)" type="warning" size="small" link @click="approveOvertime(scope.row, false)">駁回</el-button>
+              <el-button type="primary" size="small" link @click="openEdit(scope.row)">編輯</el-button>
+              <el-button type="danger" size="small" link @click="deleteOvertime(scope.row)">刪除</el-button>
+              <el-button type="info" size="small" link @click="openApprovalLogs(scope.row)">記錄</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
 
-    <!-- Summary -->
-    <el-card v-if="overtimeRecords.length > 0" class="summary-card">
-      <div class="summary">
-        <span>本月加班合計: <strong>{{ totalHours }} 小時</strong></span>
-        <span>加班費合計: <strong>{{ money(totalPay) }}</strong></span>
-      </div>
-    </el-card>
+        <el-card v-if="overtimeRecords.length > 0" class="summary-card">
+          <div class="summary">
+            <span>本月加班合計: <strong>{{ totalHours }} 小時</strong></span>
+            <span>加班費合計: <strong>{{ money(totalPay) }}</strong></span>
+          </div>
+        </el-card>
+      </el-tab-pane>
+
+      <el-tab-pane v-if="canViewMeetings" label="園務會議" name="meetings">
+        <MeetingManagementPanel embedded />
+      </el-tab-pane>
+    </el-tabs>
 
     <!-- 批次駁回 Dialog -->
     <el-dialog v-model="batchRejectVisible" title="批次駁回加班" width="420px">
@@ -578,6 +620,10 @@ onMounted(() => {
   flex-wrap: wrap;
 }
 .summary-card {
+  margin-top: var(--space-4);
+}
+
+.overtime-section-tabs {
   margin-top: var(--space-4);
 }
 .summary {

@@ -1,22 +1,42 @@
 <script setup>
 import { ref, reactive, onMounted, computed, watch } from 'vue'
-import { getStudents, createStudent, updateStudent, graduateStudent } from '@/api/students'
+import { useRoute, useRouter } from 'vue-router'
+import { getStudents, createStudent, updateStudent, graduateStudent, bulkTransferStudents } from '@/api/students'
 import { getClassrooms } from '@/api/classrooms'
+import { createDismissalCall, getDismissalCalls } from '@/api/dismissalCalls'
 import { ElMessage } from 'element-plus'
-import { Search, Plus, Edit, Delete, Warning } from '@element-plus/icons-vue'
+import { Search, Plus, Edit, Delete, Warning, Van } from '@element-plus/icons-vue'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
 import { useCrudDialog, useConfirmDelete } from '@/composables'
 import { downloadFile } from '@/utils/download'
+import { getCurrentAcademicTerm, normalizeSchoolYear, buildSchoolYearOptions } from '@/utils/academic'
+import { STUDENT_STATUS_TAG_OPTIONS } from '@/utils/student'
 
+const route = useRoute()
+const router = useRouter()
 const students = ref([])
 const classrooms = ref([])
 const totalStudents = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(50)
 const loading = ref(false)
+const selectedStudents = ref([])
 const searchQuery = ref('')
 const debouncedSearch = ref('')
 const activeTab = ref('active')  // 'active' | 'graduated'
+const transferDialogVisible = ref(false)
+const transferTargetClassroomId = ref(null)
+const showAllClassrooms = ref(false)
+const handledRouteActionKey = ref('')
+
+const currentAcademicTerm = getCurrentAcademicTerm()
+const filterSchoolYear = ref(currentAcademicTerm.school_year)
+const filterSemester = ref(currentAcademicTerm.semester)
+const filterClassroomId = ref(null)
+const semesterOptions = [
+  { label: '上學期（8 月 - 1 月）', value: 1 },
+  { label: '下學期（2 月 - 7 月）', value: 2 },
+]
 
 // 畢業/轉出 dialog
 const graduateDialogVisible = ref(false)
@@ -59,6 +79,38 @@ const rules = {
   name: [{ required: true, message: '請輸入姓名', trigger: 'blur' }]
 }
 
+const schoolYearOptions = computed(() => {
+  const years = new Set(buildSchoolYearOptions(currentAcademicTerm.school_year))
+  classrooms.value.forEach((item) => item.school_year && years.add(Number(item.school_year)))
+  years.add(normalizeSchoolYear(filterSchoolYear.value))
+  return Array.from(years).sort((a, b) => b - a)
+})
+
+const classroomLabel = (classroom) => {
+  if (!classroom) return '-'
+  return `${classroom.name}｜${classroom.semester_label || '-'}｜${classroom.grade_name || '未設定年級'}`
+}
+
+const filteredClassroomOptions = computed(() => {
+  if (showAllClassrooms.value) return classrooms.value
+  return classrooms.value.filter((item) => (
+    item.school_year === normalizeSchoolYear(filterSchoolYear.value)
+    && item.semester === filterSemester.value
+  ))
+})
+
+const dialogClassroomOptions = computed(() => {
+  const options = [...filteredClassroomOptions.value]
+  if (
+    form.classroom_id
+    && !options.some((item) => item.id === form.classroom_id)
+  ) {
+    const selected = classrooms.value.find((item) => item.id === form.classroom_id)
+    if (selected) options.push(selected)
+  }
+  return options
+})
+
 const filteredStudents = computed(() => {
   if (!debouncedSearch.value) return students.value
   const lowerQuery = debouncedSearch.value.toLowerCase()
@@ -73,6 +125,23 @@ const exportStudents = () => {
   downloadFile('/exports/students', '學生名冊.xlsx')
 }
 
+// 接送通知：有 pending/acknowledged 通知的學生 ID 集合
+const activeCallStudentIds = ref(new Set())
+
+const fetchActiveCallIds = async () => {
+  try {
+    const res = await getDismissalCalls({ status: undefined })
+    const activeIds = new Set(
+      (res.data || [])
+        .filter(c => c.status === 'pending' || c.status === 'acknowledged')
+        .map(c => c.student_id)
+    )
+    activeCallStudentIds.value = activeIds
+  } catch {
+    // silent
+  }
+}
+
 const fetchStudents = async () => {
   loading.value = true
   try {
@@ -80,14 +149,38 @@ const fetchStudents = async () => {
     const response = await getStudents({
       skip,
       limit: pageSize.value,
-      is_active: activeTab.value === 'active'
+      is_active: activeTab.value === 'active',
+      school_year: normalizeSchoolYear(filterSchoolYear.value),
+      semester: filterSemester.value,
+      classroom_id: filterClassroomId.value || undefined,
     })
     students.value = response.data.items
     totalStudents.value = response.data.total
+    if (activeTab.value === 'active') {
+      fetchActiveCallIds()
+    }
   } catch (error) {
     ElMessage.error('載入學生資料失敗')
   } finally {
     loading.value = false
+  }
+}
+
+const handleNotifyDismissal = async (row) => {
+  if (!row.classroom_id) {
+    ElMessage.warning('此學生尚未分班，無法發送接送通知')
+    return
+  }
+  try {
+    await createDismissalCall({
+      student_id: row.id,
+      classroom_id: row.classroom_id,
+    })
+    ElMessage.success(`已通知 ${row.name} 的班級老師`)
+    fetchActiveCallIds()
+  } catch (error) {
+    const msg = error.response?.data?.detail || '通知失敗'
+    ElMessage.error(msg)
   }
 }
 
@@ -129,7 +222,33 @@ const handleSizeChange = (size) => {
   fetchStudents()
 }
 
-const classroomName = (id) => classrooms.value.find(c => c.id === id)?.name ?? '-'
+const classroomName = (id) => classroomLabel(classrooms.value.find(c => c.id === id))
+const handleSelectionChange = (rows) => {
+  selectedStudents.value = rows
+}
+const openTransferDialog = () => {
+  transferTargetClassroomId.value = null
+  transferDialogVisible.value = true
+}
+const submitTransfer = async () => {
+  if (!selectedStudents.value.length) return
+  if (!transferTargetClassroomId.value) {
+    ElMessage.warning('請先選擇目標班級')
+    return
+  }
+  try {
+    await bulkTransferStudents({
+      student_ids: selectedStudents.value.map((student) => student.id),
+      target_classroom_id: transferTargetClassroomId.value,
+    })
+    ElMessage.success('學生轉班成功')
+    transferDialogVisible.value = false
+    selectedStudents.value = []
+    fetchStudents()
+  } catch (error) {
+    ElMessage.error(error.response?.data?.detail ?? '轉班失敗')
+  }
+}
 
 const resetForm = () => {
   form.id = null
@@ -163,6 +282,50 @@ const { confirmDelete: handleDelete } = useConfirmDelete({
   successMsg: '刪除成功',
 })
 
+const applyRouteContext = () => {
+  const parsedSemester = Number(route.query.semester)
+  const parsedClassroomId = Number(route.query.classroom_id)
+  filterSchoolYear.value = normalizeSchoolYear(route.query.school_year)
+  filterSemester.value = [1, 2].includes(parsedSemester) ? parsedSemester : currentAcademicTerm.semester
+  filterClassroomId.value = Number.isFinite(parsedClassroomId) ? parsedClassroomId : null
+  showAllClassrooms.value = route.query.show_all === '1'
+}
+
+const clearRouteAction = async () => {
+  if (!route.query.action) return
+  const nextQuery = { ...route.query }
+  delete nextQuery.action
+  await router.replace({ query: nextQuery })
+}
+
+const handleRouteAction = async () => {
+  const actionKey = JSON.stringify(route.query)
+  if (handledRouteActionKey.value === actionKey) return
+
+  if (route.query.action === 'create' && route.query.classroom_id) {
+    handleAdd()
+    form.classroom_id = Number(route.query.classroom_id)
+    handledRouteActionKey.value = actionKey
+    await clearRouteAction()
+    return
+  }
+
+  if (route.query.action === 'transfer' && route.query.classroom_id && activeTab.value === 'active') {
+    selectedStudents.value = students.value.filter((student) => student.classroom_id === Number(route.query.classroom_id))
+    if (selectedStudents.value.length > 0) {
+      transferTargetClassroomId.value = null
+      transferDialogVisible.value = true
+    } else {
+      ElMessage.warning('目前班級沒有可轉班的在讀學生')
+    }
+    handledRouteActionKey.value = actionKey
+    await clearRouteAction()
+    return
+  }
+
+  handledRouteActionKey.value = actionKey
+}
+
 const submitForm = async () => {
   if (!formRef.value) return
 
@@ -184,14 +347,34 @@ const submitForm = async () => {
   })
 }
 
-onMounted(async () => {
-  fetchStudents()
+const loadClassrooms = async () => {
   try {
-    const res = await getClassrooms()
+    const res = await getClassrooms({ current_only: false })
     classrooms.value = res.data
   } catch {
     ElMessage.error('載入班級資料失敗')
   }
+}
+
+watch([filterSchoolYear, filterSemester, filterClassroomId], () => {
+  currentPage.value = 1
+  fetchStudents()
+})
+
+watch(
+  () => route.query,
+  async () => {
+    applyRouteContext()
+    await fetchStudents()
+    await handleRouteAction()
+  },
+)
+
+onMounted(async () => {
+  applyRouteContext()
+  await loadClassrooms()
+  await fetchStudents()
+  await handleRouteAction()
 })
 </script>
 
@@ -201,6 +384,14 @@ onMounted(async () => {
       <h2>學生管理</h2>
       <div class="header-actions">
         <el-button type="success" @click="exportStudents">匯出 Excel</el-button>
+        <el-button
+          v-if="activeTab === 'active'"
+          plain
+          :disabled="selectedStudents.length === 0"
+          @click="openTransferDialog"
+        >
+          批次轉班
+        </el-button>
         <el-button type="primary" :icon="Plus" @click="handleAdd">新增學生</el-button>
       </div>
     </div>
@@ -210,17 +401,58 @@ onMounted(async () => {
         <el-tab-pane label="在讀中" name="active" />
         <el-tab-pane label="已離園" name="graduated" />
       </el-tabs>
-      <el-input
-        v-model="searchQuery"
-        placeholder="搜尋編號、姓名或家長..."
-        prefix-icon="Search"
-        clearable
-        style="width: 300px; margin-top: 12px"
-      />
+      <div class="filter-toolbar">
+        <el-select v-model="filterSchoolYear" filterable allow-create default-first-option style="width: 150px">
+          <el-option
+            v-for="year in schoolYearOptions"
+            :key="year"
+            :label="`${year}學年度`"
+            :value="year"
+          />
+        </el-select>
+        <el-select v-model="filterSemester" style="width: 190px">
+          <el-option
+            v-for="option in semesterOptions"
+            :key="option.value"
+            :label="option.label"
+            :value="option.value"
+          />
+        </el-select>
+        <el-select v-model="filterClassroomId" clearable placeholder="全部班級" style="width: 300px">
+          <el-option
+            v-for="classroom in filteredClassroomOptions"
+            :key="classroom.id"
+            :label="classroomLabel(classroom)"
+            :value="classroom.id"
+          />
+        </el-select>
+        <el-switch
+          v-model="showAllClassrooms"
+          inline-prompt
+          active-text="全部學期"
+          inactive-text="本學期"
+        />
+        <el-input
+          v-model="searchQuery"
+          placeholder="搜尋編號、姓名或家長..."
+          :prefix-icon="Search"
+          clearable
+          style="width: 300px"
+        />
+      </div>
     </div>
 
     <TableSkeleton v-if="loading && !students.length" :columns="8" />
-    <el-table v-else :data="filteredStudents" v-loading="loading" stripe style="width: 100%" max-height="600">
+    <el-table
+      v-else
+      :data="filteredStudents"
+      v-loading="loading"
+      stripe
+      style="width: 100%"
+      max-height="600"
+      @selection-change="handleSelectionChange"
+    >
+      <el-table-column v-if="activeTab === 'active'" type="selection" width="48" />
       <el-table-column prop="student_id" label="編號" width="100" sortable />
       <el-table-column label="姓名" width="130" sortable prop="name">
         <template #default="{ row }">
@@ -264,9 +496,17 @@ onMounted(async () => {
           <span v-else class="text-muted">-</span>
         </template>
       </el-table-column>
-      <el-table-column label="操作" min-width="200">
+      <el-table-column label="操作" min-width="260">
         <template #default="scope">
           <el-button size="small" :icon="Edit" @click="handleEdit(scope.row)">編輯</el-button>
+          <el-button
+            v-if="activeTab === 'active'"
+            size="small"
+            type="primary"
+            :icon="Van"
+            :disabled="activeCallStudentIds.has(scope.row.id)"
+            @click="handleNotifyDismissal(scope.row)"
+          >{{ activeCallStudentIds.has(scope.row.id) ? '已通知' : '通知放學' }}</el-button>
           <el-button
             v-if="activeTab === 'active'"
             size="small"
@@ -316,9 +556,9 @@ onMounted(async () => {
         <el-form-item label="班級" prop="classroom_id">
           <el-select v-model="form.classroom_id" placeholder="選擇班級" clearable style="width: 100%">
             <el-option
-              v-for="c in classrooms"
+              v-for="c in dialogClassroomOptions"
               :key="c.id"
-              :label="c.name"
+              :label="classroomLabel(c)"
               :value="c.id"
             />
           </el-select>
@@ -347,7 +587,22 @@ onMounted(async () => {
           <el-input v-model="form.emergency_contact_relation" placeholder="例: 祖母、舅舅" />
         </el-form-item>
         <el-form-item label="狀態標籤">
-          <el-input v-model="form.status_tag" placeholder="例: 新生、不足齡、特殊生" />
+          <el-select
+            v-model="form.status_tag"
+            filterable
+            allow-create
+            default-first-option
+            clearable
+            placeholder="選擇或輸入標籤"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="tag in STUDENT_STATUS_TAG_OPTIONS"
+              :key="tag"
+              :label="tag"
+              :value="tag"
+            />
+          </el-select>
         </el-form-item>
 
         <el-divider content-position="left" style="margin: 8px 0 4px">健康資訊</el-divider>
@@ -396,11 +651,41 @@ onMounted(async () => {
         <el-button type="warning" @click="submitGraduate">確認離園</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="transferDialogVisible" title="批次轉班" width="420px">
+      <el-form label-width="100px">
+        <el-form-item label="已選學生">
+          <span>{{ selectedStudents.length }} 位</span>
+        </el-form-item>
+        <el-form-item label="目標班級">
+          <el-select v-model="transferTargetClassroomId" placeholder="選擇班級" style="width: 100%">
+            <el-option
+              v-for="c in filteredClassroomOptions"
+              :key="c.id"
+              :label="classroomLabel(c)"
+              :value="c.id"
+            />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="transferDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="submitTransfer">確認轉班</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <style scoped>
 .filter-section {
   margin-bottom: var(--space-5);
+}
+
+.filter-toolbar {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 12px;
 }
 </style>

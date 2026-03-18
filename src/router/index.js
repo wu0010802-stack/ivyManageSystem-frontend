@@ -98,7 +98,7 @@ const router = createRouter({
         {
             path: '/meetings',
             name: 'meetings',
-            component: () => import('../views/MeetingView.vue'),
+            redirect: { path: '/overtime', query: { tab: 'meetings' } },
             meta: { title: '會議管理' }
         },
         {
@@ -124,6 +124,14 @@ const router = createRouter({
             name: 'dev-salary',
             component: () => import('../views/DevSalaryView.vue'),
             meta: { title: '薪資邏輯檢視 (Dev)' }
+        },
+
+        // ============ 接送通知 ============
+        {
+            path: '/dismissal-queue',
+            name: 'dismissal-queue',
+            component: () => import('../views/DismissalQueueView.vue'),
+            meta: { title: '接送通知' }
         },
 
         // ============ 課後才藝 ============
@@ -246,6 +254,12 @@ const router = createRouter({
                     name: 'portal-assessments',
                     component: () => import('../views/portal/PortalAssessmentView.vue'),
                     meta: { title: '學期評量' },
+                },
+                {
+                    path: 'dismissal-calls',
+                    name: 'portal-dismissal-calls',
+                    component: () => import('../views/portal/PortalDismissalCallsView.vue'),
+                    meta: { title: '接送通知' },
                 },
                 {
                     path: 'student-attendance',

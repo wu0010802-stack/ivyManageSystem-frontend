@@ -1,16 +1,19 @@
 <script setup>
-import { ref, reactive, computed, onMounted, watch } from 'vue'
-import { getLeaves, createLeave, updateLeave, approveLeave as approveLeaveApi, getWorkdayHours, getLeaveQuotas, batchApproveLeaves, getLeaveImportTemplate, importLeaves } from '@/api/leaves'
+import { ref, reactive, computed, onMounted } from 'vue'
+import { getLeaves, createLeave, updateLeave, approveLeave as approveLeaveApi, batchApproveLeaves, getLeaveImportTemplate, importLeaves } from '@/api/leaves'
 import { getApprovalLogs, getApprovalPolicies } from '@/api/approvalSettings'
 import { getUserInfo } from '@/utils/auth'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useEmployeeStore } from '@/stores/employee'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
-import { useCrudDialog, useConfirmDelete, useDateQuery } from '@/composables'
+import { useCrudDialog, useConfirmDelete, useDateQuery, useLeaveHoursCalculator } from '@/composables'
 import { downloadFile } from '@/utils/download'
 import { LEAVE_TYPES as leaveTypes, LEAVE_RULE_HINTS } from '@/utils/leaves'
 import { money } from '@/utils/format'
 import LeaveAttachmentDialog from './leave/LeaveAttachmentDialog.vue'
+import LeaveApprovalLogDrawer from './leave/LeaveApprovalLogDrawer.vue'
+import LeaveBatchRejectDialog from './leave/LeaveBatchRejectDialog.vue'
+import LeaveImportDialog from './leave/LeaveImportDialog.vue'
 import LeaveQuotaManager from './leave/LeaveQuotaManager.vue'
 import LeaveRejectDialog from './leave/LeaveRejectDialog.vue'
 import LeaveCalendar from './leave/LeaveCalendar.vue'
@@ -33,46 +36,6 @@ const quotaDialogVisible = ref(false)
 const ATTACHMENT_HINTS = {
   default: '請假超過 2 天時，核准前需補上證明附件',
 }
-
-const DAILY_WORK_HOURS = 8  // 無排班資料時的降級預設值
-
-// 本地降級計算（無排班資料或 API 失敗時使用）
-const countWorkdays = (startDate, endDate) => {
-  let count = 0
-  const cur = new Date(startDate)
-  cur.setHours(0, 0, 0, 0)
-  const end = new Date(endDate)
-  end.setHours(0, 0, 0, 0)
-  while (cur <= end) {
-    const dow = cur.getDay()
-    if (dow !== 0 && dow !== 6) count++
-    cur.setDate(cur.getDate() + 1)
-  }
-  return count
-}
-
-const calcSameDayHours = (start, end) => {
-  const sTime = start.toTimeString().substring(0, 5)
-  const eTime = end.toTimeString().substring(0, 5)
-  const toMin = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m }
-  let minutes = toMin(eTime) - toMin(sTime)
-  const overlapStart = Math.max(toMin(sTime), toMin('12:00'))
-  const overlapEnd = Math.min(toMin(eTime), toMin('13:00'))
-  if (overlapEnd > overlapStart) minutes -= (overlapEnd - overlapStart)
-  const h = Math.min(minutes / 60, DAILY_WORK_HOURS)
-  return Math.max(0, h)
-}
-
-const calcHint = ref('')
-const calcBreakdown = ref([])
-const calcLoading = ref(false)
-const leaveMode = ref('full') // 'full' | 'morning' | 'afternoon' | 'custom'
-const leaveSingleDate = ref('') // 上午/下午模式用的單一日期
-
-// ── 配額追蹤 ──
-const QUOTA_TYPES = new Set(['annual', 'sick', 'menstrual', 'personal', 'family_care'])
-const quotaInfo = ref(null)   // { total_hours, used_hours, pending_hours, remaining_hours }
-const quotaLoading = ref(false)
 
 const form = reactive({
   id: null,
@@ -105,6 +68,24 @@ const formRules = {
   ],
 }
 
+const {
+  QUOTA_TYPES,
+  calcHint,
+  calcBreakdown,
+  calcLoading,
+  leaveMode,
+  leaveSingleDate,
+  quotaInfo,
+  quotaLoading,
+  quotaExceeded,
+  canSave,
+  calcTooltipHtml,
+  officeHoursWarning,
+  resetCalculatorState,
+  getExpectedMaxHours,
+  populateFormFromRecord,
+} = useLeaveHoursCalculator({ form, formRef })
+
 // 結束日期不得早於開始日期
 const disabledEndDate = (time) => {
   if (!form.start_date) return false
@@ -121,191 +102,13 @@ const resetForm = () => {
   form.end_date = ''
   form.leave_hours = 8
   form.reason = ''
-  calcHint.value = ''
-  calcBreakdown.value = []
-  calcLoading.value = false
-  quotaInfo.value = null
-  leaveMode.value = 'full'
-  leaveSingleDate.value = ''
-  formRef.value?.clearValidate()
+  resetCalculatorState()
 }
 
-// ---- 排班整合計算 ----
-
-const _fallbackCalc = (start, end) => {
-  const s = new Date(start)
-  const e = new Date(end)
-  const sDay = new Date(s); sDay.setHours(0, 0, 0, 0)
-  const eDay = new Date(e); eDay.setHours(0, 0, 0, 0)
-  if (sDay.getTime() === eDay.getTime()) {
-    const hours = calcSameDayHours(s, e)
-    form.leave_hours = Math.max(0.5, Math.round(hours * 2) / 2)
-    const lunchNote = hours < (e - s) / 3600000 ? '（已扣除 1h 午休）' : ''
-    calcHint.value = `同日請假 ${form.leave_hours}h${lunchNote}（預設班制）`
-  } else {
-    const workdays = countWorkdays(sDay, eDay)
-    const total = workdays * DAILY_WORK_HOURS
-    form.leave_hours = Math.max(0.5, total)
-    calcHint.value = `${workdays} 個工作日 × ${DAILY_WORK_HOURS}h = ${total}h（預設班制，已排除週末）`
-  }
-}
-
-const fetchWorkdayHours = async (employeeId, start, end) => {
-  calcLoading.value = true
-  calcBreakdown.value = []
-  calcHint.value = ''
-  try {
-    const sd = start.substring(0, 10)
-    const ed = end.substring(0, 10)
-    const res = await getWorkdayHours({ employee_id: employeeId, start_date: sd, end_date: ed })
-    const { total_hours, breakdown } = res.data
-    calcBreakdown.value = breakdown
-
-    if (leaveMode.value === 'morning') {
-      const dayData = breakdown.find(d => d.date === sd && d.type === 'workday')
-      const workStart = dayData?.work_start || '08:00'
-      form.start_date = `${sd} ${workStart}:00`
-      form.end_date = `${sd} 12:00:00`
-      const hours = Math.max(0.5, Math.round((new Date(form.end_date) - new Date(form.start_date)) / 3600000 * 2) / 2)
-      form.leave_hours = hours
-      calcHint.value = `上午請假 ${hours}h（${workStart}–12:00）`
-    } else if (leaveMode.value === 'afternoon') {
-      const dayData = breakdown.find(d => d.date === sd && d.type === 'workday')
-      const workEnd = dayData?.work_end || '17:00'
-      form.start_date = `${sd} 13:00:00`
-      form.end_date = `${sd} ${workEnd}:00`
-      const hours = Math.max(0.5, Math.round((new Date(form.end_date) - new Date(form.start_date)) / 3600000 * 2) / 2)
-      form.leave_hours = hours
-      calcHint.value = `下午請假 ${hours}h（13:00–${workEnd}）`
-    } else if (leaveMode.value === 'full') {
-      form.leave_hours = Math.max(0.5, total_hours)
-      const workdayCount = breakdown.filter(d => d.type === 'workday').length
-      const holidayCount = breakdown.filter(d => d.type === 'holiday').length
-      const parts = [`${workdayCount} 個工作日，合計 ${total_hours}h`]
-      if (holidayCount > 0) parts.push(`${holidayCount} 天國定假日不計`)
-      calcHint.value = parts.join('，')
-    } else {
-      // custom 模式：跨日或同日計算，考慮首尾日的實際時間
-      const startTime = start.substring(11, 16) || '09:00'
-      const endTime = end.substring(11, 16) || '18:00'
-      const startDateStr = start.substring(0, 10)
-      const endDateStr = end.substring(0, 10)
-      let totalH = 0
-      for (const d of breakdown) {
-        if (d.type !== 'workday') continue
-        const ws = d.work_start || '09:00'
-        const we = d.work_end || '18:00'
-        const lunchStart = '12:00', lunchEnd = '13:00'
-        let dayStart = ws, dayEnd = we
-        if (d.date === startDateStr) dayStart = startTime > ws ? startTime : ws
-        if (d.date === endDateStr) dayEnd = endTime < we ? endTime : we
-        if (dayStart >= dayEnd) continue
-        const toMin = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m }
-        let minutes = toMin(dayEnd) - toMin(dayStart)
-        const overlapStart = Math.max(toMin(dayStart), toMin(lunchStart))
-        const overlapEnd = Math.min(toMin(dayEnd), toMin(lunchEnd))
-        if (overlapEnd > overlapStart) minutes -= (overlapEnd - overlapStart)
-        totalH += Math.max(0, minutes / 60)
-      }
-      form.leave_hours = Math.max(0.5, Math.round(totalH * 2) / 2)
-      const wdays = breakdown.filter(d => d.type === 'workday').length
-      const hdays = breakdown.filter(d => d.type === 'holiday').length
-      calcHint.value = `${wdays} 個工作日，合計 ${form.leave_hours}h（依實際時段）` + (hdays > 0 ? `，${hdays} 天國定假日不計` : '')
-    }
-  } catch {
-    // API 失敗時降級為本地計算
-    _fallbackCalc(start, end)
-    calcBreakdown.value = []
-  } finally {
-    calcLoading.value = false
-  }
-}
-
-// 整天/自訂時段模式的計算觸發
-watch([() => form.employee_id, () => form.start_date, () => form.end_date], ([empId, start, end]) => {
-  if (leaveMode.value === 'morning' || leaveMode.value === 'afternoon') return
-  if (!start || !end) { calcHint.value = ''; calcBreakdown.value = []; return }
-  const s = new Date(start), e = new Date(end)
-  // 整天模式允許 start == end（單日全天），其他模式要求 end > start
-  if (leaveMode.value === 'full' ? e < s : e <= s) { calcHint.value = ''; calcBreakdown.value = []; return }
-  if (empId) {
-    fetchWorkdayHours(empId, start, end)
-  } else {
-    _fallbackCalc(start, end)
-    calcBreakdown.value = []
-  }
+const { dialogVisible, isEdit, openCreate, openEdit, closeDialog } = useCrudDialog({
+  resetForm,
+  populateForm: populateFormFromRecord,
 })
-
-// 上午/下午模式的計算觸發
-watch([() => form.employee_id, leaveSingleDate, leaveMode], ([empId, singleDate, mode]) => {
-  if (mode !== 'morning' && mode !== 'afternoon') return
-  calcBreakdown.value = []
-  if (!singleDate) { calcHint.value = ''; form.start_date = ''; form.end_date = ''; return }
-  // 立即設定暫時時間以通過表單驗證
-  if (mode === 'morning') {
-    form.start_date = `${singleDate} 08:00:00`
-    form.end_date = `${singleDate} 12:00:00`
-    form.leave_hours = 4
-  } else {
-    form.start_date = `${singleDate} 13:00:00`
-    form.end_date = `${singleDate} 17:00:00`
-    form.leave_hours = 4
-  }
-  if (empId) {
-    fetchWorkdayHours(empId, singleDate, singleDate)
-  } else {
-    calcHint.value = `${mode === 'morning' ? '上午' : '下午'} 4h（預設班制）`
-  }
-})
-
-// 請假模式切換時同步日期狀態
-watch(leaveMode, (newMode) => {
-  calcHint.value = ''
-  calcBreakdown.value = []
-  if (newMode === 'full') {
-    if (leaveSingleDate.value) {
-      form.start_date = leaveSingleDate.value
-      form.end_date = leaveSingleDate.value
-    } else if (form.start_date) {
-      form.start_date = form.start_date.substring(0, 10)
-      form.end_date = form.end_date ? form.end_date.substring(0, 10) : ''
-    }
-    leaveSingleDate.value = ''
-  } else if (newMode === 'morning' || newMode === 'afternoon') {
-    const dateStr = form.start_date ? form.start_date.substring(0, 10) : ''
-    leaveSingleDate.value = dateStr
-    form.start_date = ''
-    form.end_date = ''
-  } else if (newMode === 'custom') {
-    const dateStr = leaveSingleDate.value || (form.start_date ? form.start_date.substring(0, 10) : '')
-    if (dateStr) {
-      form.start_date = `${dateStr} 08:00:00`
-      form.end_date = `${dateStr} 17:00:00`
-    }
-    leaveSingleDate.value = ''
-  }
-})
-
-const populateForm = (row) => {
-  form.id = row.id
-  form.employee_id = row.employee_id
-  form.leave_type = row.leave_type
-  if (row.start_time || row.end_time) {
-    leaveMode.value = 'custom'
-    form.start_date = row.start_time ? `${row.start_date} ${row.start_time}:00` : `${row.start_date} 00:00:00`
-    form.end_date = row.end_time ? `${row.end_date} ${row.end_time}:00` : `${row.end_date} 00:00:00`
-    leaveSingleDate.value = row.start_date
-  } else {
-    leaveMode.value = 'full'
-    form.start_date = row.start_date
-    form.end_date = row.end_date
-    leaveSingleDate.value = row.start_date
-  }
-  form.leave_hours = row.leave_hours
-  form.reason = row.reason
-}
-
-const { dialogVisible, isEdit, openCreate, openEdit, closeDialog } = useCrudDialog({ resetForm, populateForm })
 
 const statusFilter = ref('')
 
@@ -415,124 +218,6 @@ const handleImportFile = async (file) => {
   return false
 }
 
-// ── 表單配額查詢 ──
-const fetchQuotaInfo = async () => {
-  if (!form.employee_id || !QUOTA_TYPES.has(form.leave_type)) {
-    quotaInfo.value = null
-    return
-  }
-  quotaLoading.value = true
-  try {
-    const year = new Date().getFullYear()
-    const res = await getLeaveQuotas({ employee_id: form.employee_id, year, leave_type: form.leave_type })
-    quotaInfo.value = res.data[0] || null
-  } catch {
-    quotaInfo.value = null
-  } finally {
-    quotaLoading.value = false
-  }
-}
-watch([() => form.employee_id, () => form.leave_type], fetchQuotaInfo)
-
-const quotaExceeded = computed(() =>
-  !!(quotaInfo.value && form.leave_hours > quotaInfo.value.remaining_hours)
-)
-
-// ── 是否可儲存 ──
-const canSave = computed(() => !quotaExceeded.value)
-
-// ── 計算公式 Tooltip ──
-const calcTooltipHtml = computed(() => {
-  if (!calcBreakdown.value.length) return ''
-  const weekdays = ['日', '一', '二', '三', '四', '五', '六']
-  const lines = []
-  let total = 0
-  const isCustom = leaveMode.value === 'custom'
-  const startTime = isCustom && form.start_date ? form.start_date.substring(11, 16) : ''
-  const endTime = isCustom && form.end_date ? form.end_date.substring(11, 16) : ''
-  const startDateStr = isCustom && form.start_date ? form.start_date.substring(0, 10) : ''
-  const endDateStr = isCustom && form.end_date ? form.end_date.substring(0, 10) : ''
-  const toMin = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m }
-
-  for (const d of calcBreakdown.value) {
-    const dt = new Date(d.date)
-    const wd = weekdays[dt.getDay()]
-    if (d.type === 'workday') {
-      let h = d.hours
-      if (isCustom && startTime && endTime) {
-        const ws = d.work_start || '09:00'
-        const we = d.work_end || '18:00'
-        let dayStart = ws, dayEnd = we
-        if (d.date === startDateStr) dayStart = startTime > ws ? startTime : ws
-        if (d.date === endDateStr) dayEnd = endTime < we ? endTime : we
-        if (dayStart >= dayEnd) { h = 0 } else {
-          let mins = toMin(dayEnd) - toMin(dayStart)
-          const oS = Math.max(toMin(dayStart), 720), oE = Math.min(toMin(dayEnd), 780)
-          if (oE > oS) mins -= (oE - oS)
-          h = Math.max(0, Math.round(mins / 60 * 2) / 2)
-        }
-      }
-      const timeRange = isCustom ? (() => {
-        const ws = d.work_start || '09:00', we = d.work_end || '18:00'
-        let ds = ws, de = we
-        if (d.date === startDateStr && startTime) ds = startTime > ws ? startTime : ws
-        if (d.date === endDateStr && endTime) de = endTime < we ? endTime : we
-        return ` ${ds}–${de}`
-      })() : ''
-      lines.push(`${d.date}（${wd}）${h}h${timeRange}`)
-      total += h
-    } else if (d.type === 'holiday') {
-      lines.push(`${d.date}（${wd}）${d.holiday_name} 0h`)
-    } else {
-      lines.push(`${d.date}（${wd}）週末 0h`)
-    }
-  }
-  lines.push(`合計 = ${total}h`)
-  return lines.join('<br>')
-})
-
-// ── 辦公時間邊界警告 ──
-const DEFAULT_WORK_START = '09:00'
-const DEFAULT_WORK_END = '18:00'
-const officeHoursWarning = computed(() => {
-  if (leaveMode.value !== 'custom' || !form.start_date || !form.end_date) return ''
-  const st = form.start_date.substring(11, 16)
-  const et = form.end_date.substring(11, 16)
-  if (!st || !et) return ''
-  const warnings = []
-  if (st < DEFAULT_WORK_START) warnings.push(`開始時間 ${st} 早於預設上班 ${DEFAULT_WORK_START}`)
-  if (et > DEFAULT_WORK_END) warnings.push(`結束時間 ${et} 晚於預設下班 ${DEFAULT_WORK_END}`)
-  return warnings.join('；')
-})
-
-// ── 自訂時段 30 分鐘對齊 ──
-const snapMinuteTo30 = (val) => {
-  if (!val || val.length < 16) return val
-  const min = parseInt(val.substring(14, 16), 10)
-  const snapped = min < 15 ? '00' : min < 45 ? '30' : '00'
-  let result = val.substring(0, 14) + snapped + val.substring(16)
-  if (min >= 45) {
-    const d = new Date(result)
-    d.setHours(d.getHours() + 1)
-    const hh = String(d.getHours()).padStart(2, '0')
-    result = result.substring(0, 11) + hh + ':' + snapped + result.substring(16)
-  }
-  return result
-}
-
-watch(() => form.start_date, (val) => {
-  if (leaveMode.value === 'custom' && val && val.length > 10) {
-    const snapped = snapMinuteTo30(val)
-    if (snapped !== val) form.start_date = snapped
-  }
-})
-watch(() => form.end_date, (val) => {
-  if (leaveMode.value === 'custom' && val && val.length > 10) {
-    const snapped = snapMinuteTo30(val)
-    if (snapped !== val) form.end_date = snapped
-  }
-})
-
 const fetchLeaves = async () => {
   loading.value = true
   try {
@@ -562,12 +247,7 @@ const saveLeave = async () => {
   }
 
   // 時數合理性警告：優先用 API 算出的工時，否則降級為本地計算
-  const sDay = new Date(s); sDay.setHours(0, 0, 0, 0)
-  const eDay = new Date(e); eDay.setHours(0, 0, 0, 0)
-  const apiMaxHours = calcBreakdown.value.length
-    ? calcBreakdown.value.reduce((sum, d) => sum + (d.hours || 0), 0)
-    : null
-  const maxHours = apiMaxHours ?? (countWorkdays(sDay, eDay) * DAILY_WORK_HOURS)
+  const maxHours = getExpectedMaxHours()
   if (form.leave_hours > maxHours + 0.5) {
     const confirmed = await ElMessageBox.confirm(
       `請假時數（${form.leave_hours}h）超過預期工作日時數（${maxHours}h），確認要儲存嗎？`,
@@ -880,61 +560,6 @@ onMounted(() => {
     <LeaveQuotaManager v-model:visible="quotaDialogVisible" />
     <LeaveAttachmentDialog ref="attachRef" />
 
-    <!-- 批次駁回 Dialog -->
-    <el-dialog v-model="batchRejectVisible" title="批次駁回" width="420px">
-      <el-form label-width="80px">
-        <el-form-item label="駁回原因" required>
-          <el-input
-            v-model="batchRejectReason"
-            type="textarea"
-            :rows="3"
-            placeholder="必填：請輸入駁回原因（將套用至所有選取假單）"
-          />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="batchRejectVisible = false">取消</el-button>
-        <el-button type="danger" :loading="batchLoading" @click="confirmBatchReject">確認駁回</el-button>
-      </template>
-    </el-dialog>
-
-    <!-- 匯入 Excel Dialog -->
-    <el-dialog v-model="importVisible" title="批次匯入請假" width="500px">
-      <div style="margin-bottom: 12px;">
-        <el-alert type="info" :closable="false" show-icon>
-          <template #title>上傳 Excel 檔案（.xlsx），系統將批次建立草稿假單，需後續人工審核。</template>
-        </el-alert>
-      </div>
-      <el-upload
-        drag
-        :auto-upload="false"
-        :on-change="handleImportFile"
-        accept=".xlsx"
-        :limit="1"
-        :show-file-list="false"
-      >
-        <el-icon class="el-icon--upload" style="font-size: 48px; color: var(--el-color-primary);"><UploadFilled /></el-icon>
-        <div class="el-upload__text">拖曳 Excel 至此，或 <em>點擊選取</em></div>
-        <template #tip><div class="el-upload__tip">僅支援 .xlsx 格式</div></template>
-      </el-upload>
-      <div v-if="importLoading" style="text-align:center; margin-top: 16px;">
-        <el-icon class="is-loading" style="font-size: 24px;"><Loading /></el-icon> 匯入中…
-      </div>
-      <el-card v-if="importResult" style="margin-top: 16px;" shadow="never">
-        <div style="display: flex; gap: 16px; align-items: center;">
-          <span>共 <strong>{{ importResult.total }}</strong> 筆</span>
-          <el-tag type="success">成功 {{ importResult.created }}</el-tag>
-          <el-tag v-if="importResult.failed > 0" type="danger">失敗 {{ importResult.failed }}</el-tag>
-        </div>
-        <div v-if="importResult.errors?.length" style="margin-top: 8px; max-height: 150px; overflow-y: auto;">
-          <p v-for="e in importResult.errors" :key="e" style="font-size:12px; color:var(--el-color-danger); margin: 2px 0;">{{ e }}</p>
-        </div>
-      </el-card>
-      <template #footer>
-        <el-button @click="importVisible = false">關閉</el-button>
-      </template>
-    </el-dialog>
-
     <!-- Create/Edit Dialog -->
     <el-dialog v-model="dialogVisible" :title="isEdit ? '編輯請假' : '新增請假申請'" width="550px">
       <el-form ref="formRef" :model="form" :rules="formRules" label-width="100px">
@@ -1102,33 +727,27 @@ onMounted(() => {
       </template>
     </el-dialog>
 
-    <!-- 簽核記錄 Drawer -->
-    <el-drawer v-model="approvalLogDrawerVisible" title="簽核記錄" direction="rtl" size="420px">
-      <div v-loading="approvalLogLoading">
-        <el-empty v-if="!approvalLogLoading && approvalLogs.length === 0" description="尚無簽核記錄" />
-        <el-timeline v-else>
-          <el-timeline-item
-            v-for="log in approvalLogs"
-            :key="log.id"
-            :timestamp="log.created_at ? new Date(log.created_at).toLocaleString('zh-TW') : ''"
-            placement="top"
-          >
-            <el-card shadow="never" style="padding: 8px 12px;">
-              <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                <el-tag :type="ACTION_TAG_TYPES[log.action] || 'info'" size="small">
-                  {{ ACTION_LABELS[log.action] || log.action }}
-                </el-tag>
-                <span style="font-weight: 500;">{{ log.approver_username }}</span>
-                <el-tag size="small" type="info">{{ log.approver_role }}</el-tag>
-              </div>
-              <div v-if="log.comment" style="margin-top: 6px; color: #606266; font-size: 13px;">
-                {{ log.comment }}
-              </div>
-            </el-card>
-          </el-timeline-item>
-        </el-timeline>
-      </div>
-    </el-drawer>
+    <LeaveBatchRejectDialog
+      v-model:visible="batchRejectVisible"
+      v-model:reason="batchRejectReason"
+      :loading="batchLoading"
+      @confirm="confirmBatchReject"
+    />
+
+    <LeaveImportDialog
+      v-model:visible="importVisible"
+      :loading="importLoading"
+      :result="importResult"
+      :on-file-change="handleImportFile"
+    />
+
+    <LeaveApprovalLogDrawer
+      v-model:visible="approvalLogDrawerVisible"
+      :loading="approvalLogLoading"
+      :logs="approvalLogs"
+      :action-labels="ACTION_LABELS"
+      :action-tag-types="ACTION_TAG_TYPES"
+    />
   </div>
 </template>
 

@@ -142,22 +142,22 @@ const studentResults = ref([])
 
 // ---------- 靜態頁面清單 ----------
 const ALL_PAGES = [
-  { title: '儀表板', path: '/' },
-  { title: '審核工作台', path: '/approvals' },
-  { title: '考勤管理', path: '/attendance' },
-  { title: '請假管理', path: '/leaves' },
-  { title: '加班管理', path: '/overtime' },
-  { title: '員工管理', path: '/employees' },
-  { title: '學生管理', path: '/students' },
-  { title: '班級管理', path: '/classrooms' },
-  { title: '薪資管理', path: '/salary' },
-  { title: '公告管理', path: '/announcements' },
-  { title: '報表統計', path: '/reports' },
-  { title: '操作紀錄', path: '/audit-logs' },
-  { title: '系統設定', path: '/settings' },
-  { title: '班表管理', path: '/schedule' },
-  { title: '會議管理', path: '/meetings' },
-  { title: '學校行事曆', path: '/calendar' },
+  { title: '儀表板', path: '/', accessPath: '/' },
+  { title: '審核工作台', path: '/approvals', accessPath: '/approvals' },
+  { title: '考勤管理', path: '/attendance', accessPath: '/attendance' },
+  { title: '請假管理', path: '/leaves', accessPath: '/leaves' },
+  { title: '加班 / 會議', path: '/overtime', accessPath: '/overtime' },
+  { title: '員工管理', path: '/employees', accessPath: '/employees' },
+  { title: '學生管理', path: '/students', accessPath: '/students' },
+  { title: '班級管理', path: '/classrooms', accessPath: '/classrooms' },
+  { title: '薪資管理', path: '/salary', accessPath: '/salary' },
+  { title: '公告管理', path: '/announcements', accessPath: '/announcements' },
+  { title: '報表統計', path: '/reports', accessPath: '/reports' },
+  { title: '操作紀錄', path: '/audit-logs', accessPath: '/audit-logs' },
+  { title: '系統設定', path: '/settings', accessPath: '/settings' },
+  { title: '班表管理', path: '/schedule', accessPath: '/schedule' },
+  { title: '園務會議', path: '/overtime?tab=meetings', accessPath: '/overtime' },
+  { title: '學校行事曆', path: '/calendar', accessPath: '/calendar' },
 ]
 
 // ---------- computed 搜尋結果 ----------
@@ -187,7 +187,7 @@ const pageResults = computed(() => {
   const q = query.value.trim()
   if (!q) return []
   return ALL_PAGES
-    .filter(p => canAccessRoute(p.path) && p.title.includes(q))
+    .filter(p => canAccessRoute(p.accessPath || p.path) && p.title.includes(q))
     .map(p => ({ ...p, _type: 'page' }))
 })
 

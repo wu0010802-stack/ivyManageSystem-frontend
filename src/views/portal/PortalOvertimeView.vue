@@ -231,7 +231,7 @@ onMounted(fetchOvertimes)
         <el-table-column label="方式" width="80">
           <template #default="{ row }">
             <el-tag v-if="row.use_comp_leave" type="success" size="small">補休</el-tag>
-            <el-tag v-else type="" size="small">加班費</el-tag>
+            <el-tag v-else size="small">加班費</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="加班費" width="110">

@@ -65,7 +65,7 @@ onUnmounted(() => {
 })
 
 watch(() => route.path, () => {
-  if (isLoggedIn()) notificationStore.fetchSummary({ force: true })
+  if (isLoggedIn()) notificationStore.fetchSummary()
 })
 </script>
 

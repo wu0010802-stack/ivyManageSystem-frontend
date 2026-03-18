@@ -134,6 +134,7 @@ export default defineConfig({
             '/api': {
                 target: 'http://127.0.0.1:8088',
                 changeOrigin: true,
+                ws: true,   // 讓 /api/ws/* WebSocket 也通過 proxy
             }
         }
     }

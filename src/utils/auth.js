@@ -178,6 +178,9 @@ export function canAccessRoute(path) {
   }
 
   // admin 檢查路由權限
+  if (path === '/overtime') {
+    return hasPermission('OVERTIME_READ') || hasPermission('MEETINGS')
+  }
   const permissionName = ROUTE_PERMISSIONS[path]
   if (!permissionName) {
     // 未定義權限的路由預設允許存取 (如 /login)
@@ -202,6 +205,12 @@ export function getAllowedRoutes() {
   // admin
   const allowed = []
   for (const [route, perm] of Object.entries(ROUTE_PERMISSIONS)) {
+    if (route === '/overtime') {
+      if (hasPermission('OVERTIME_READ') || hasPermission('MEETINGS')) {
+        allowed.push(route)
+      }
+      continue
+    }
     if (hasPermission(perm)) {
       allowed.push(route)
     }

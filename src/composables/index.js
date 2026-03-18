@@ -1,3 +1,5 @@
 export { useCrudDialog } from './useCrudDialog'
 export { useConfirmDelete } from './useConfirmDelete'
 export { useDateQuery } from './useDateQuery'
+export { useDashboardSections } from './useDashboardSections'
+export { useLeaveHoursCalculator } from './useLeaveHoursCalculator'

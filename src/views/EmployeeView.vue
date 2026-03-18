@@ -67,6 +67,7 @@ const form = reactive({
   email: '',
   hire_date: '',
   probation_end_date: '',
+  birthday: '',
   classroom_id: null,
   base_salary: 0,
   hourly_rate: 0,
@@ -559,6 +560,11 @@ onMounted(async () => {
                   <el-date-picker v-model="form.probation_end_date" type="date" placeholder="選擇日期（可自動建議）" style="width: 100%" value-format="YYYY-MM-DD" clearable />
                 </el-form-item>
               </el-col>
+              <el-col :span="12">
+                <el-form-item label="生日">
+                  <el-date-picker v-model="form.birthday" type="date" placeholder="選擇日期" style="width: 100%" value-format="YYYY-MM-DD" clearable />
+                </el-form-item>
+              </el-col>
             </el-row>
             <el-form-item label="主管職">
               <el-select v-model="form.supervisor_role" clearable placeholder="無主管職" style="width: 100%">
@@ -690,6 +696,7 @@ onMounted(async () => {
             </el-descriptions-item>
             <el-descriptions-item label="到職日">{{ currentDetail.hire_date }}</el-descriptions-item>
             <el-descriptions-item label="試用期至">{{ currentDetail.probation_end_date || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="生日">{{ currentDetail.birthday || '-' }}</el-descriptions-item>
             <el-descriptions-item label="在職狀態">
               <el-tag :type="getEmployeeStatus(currentDetail).type" size="small">
                 {{ getEmployeeStatus(currentDetail).label }}

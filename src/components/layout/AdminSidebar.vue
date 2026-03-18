@@ -47,9 +47,9 @@
             <el-icon><Document /></el-icon>
             <template #title>請假管理</template>
           </el-menu-item>
-          <el-menu-item v-if="canView.OVERTIME_READ" index="/overtime">
+          <el-menu-item v-if="canView.OVERTIME_READ || canView.MEETINGS" index="/overtime">
             <el-icon><Watch /></el-icon>
-            <template #title>加班管理</template>
+            <template #title>加班 / 會議</template>
           </el-menu-item>
           <el-menu-item v-if="canView.SCHEDULE" index="/schedule">
             <el-icon><Timer /></el-icon>
@@ -103,6 +103,10 @@
             <el-icon><DataAnalysis /></el-icon>
             <template #title>學期評量記錄</template>
           </el-menu-item>
+          <el-menu-item v-if="canView.STUDENTS_READ" index="/dismissal-queue">
+            <el-icon><Van /></el-icon>
+            <template #title>接送通知</template>
+          </el-menu-item>
         </el-sub-menu>
 
         <!-- 園務行政 -->
@@ -114,10 +118,6 @@
           <el-menu-item v-if="canView.ANNOUNCEMENTS_READ" index="/announcements">
             <el-icon><Bell /></el-icon>
             <template #title>公告管理</template>
-          </el-menu-item>
-          <el-menu-item v-if="canView.MEETINGS" index="/meetings">
-            <el-icon><Notebook /></el-icon>
-            <template #title>園務會議</template>
           </el-menu-item>
           <el-menu-item v-if="canView.REPORTS" index="/reports">
             <el-icon><TrendCharts /></el-icon>
@@ -192,9 +192,9 @@ import { ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   DataBoard, Finished, Calendar, Timer, Clock, Document, Watch,
-  Money, User, School, OfficeBuilding, Notebook, Bell, TrendCharts, Setting,
+  Money, User, School, OfficeBuilding, Bell, TrendCharts, Setting,
   Expand, Fold, Cpu, Warning, DataAnalysis, Files,
-  Star, Collection, ShoppingBag, ChatDotRound, List
+  Star, Collection, ShoppingBag, ChatDotRound, List, Van
 } from '@element-plus/icons-vue'
 import { PERMISSION_VALUES, getUserInfo } from '@/utils/auth'
 
@@ -243,7 +243,7 @@ const canView = computed(() => {
 
 // 檢查子選單是否有任何可見項目
 const hasVisibleLeaveItems = computed(() =>
-  canView.value.ATTENDANCE_READ || canView.value.LEAVES_READ || canView.value.OVERTIME_READ || canView.value.SCHEDULE || canView.value.CALENDAR
+  canView.value.ATTENDANCE_READ || canView.value.LEAVES_READ || canView.value.OVERTIME_READ || canView.value.MEETINGS || canView.value.SCHEDULE || canView.value.CALENDAR
 )
 
 const hasVisibleHrItems = computed(() =>
@@ -255,7 +255,7 @@ const hasVisibleStudentItems = computed(() =>
 )
 
 const hasVisibleAdminItems = computed(() =>
-  canView.value.ANNOUNCEMENTS_READ || canView.value.REPORTS || canView.value.AUDIT_LOGS || canView.value.MEETINGS
+  canView.value.ANNOUNCEMENTS_READ || canView.value.REPORTS || canView.value.AUDIT_LOGS
 )
 
 const hasVisibleActivityItems = computed(() =>

@@ -14,7 +14,7 @@ export const useEmployeeStore = defineStore('employee', {
   getters: {
     teacherList: (state) =>
       state.employees.filter((e) =>
-        ['主教', '助教', '美術老師'].includes(e.job_title)
+        ['主教', '助教', '美語老師'].includes(e.job_title)
       ),
   },
 

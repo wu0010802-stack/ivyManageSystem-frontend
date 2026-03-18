@@ -1,8 +1,31 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { shallowMount } from '@vue/test-utils'
+import { nextTick } from 'vue'
 import HomeView from '@/views/HomeView.vue'
 
 const push = vi.fn()
+const intersectionObservers = []
+
+class MockIntersectionObserver {
+  constructor(callback) {
+    this.callback = callback
+    this.elements = []
+    this.observe = vi.fn((element) => {
+      this.elements.push(element)
+    })
+    this.unobserve = vi.fn()
+    this.disconnect = vi.fn()
+    intersectionObservers.push(this)
+  }
+
+  trigger(indexes) {
+    const entries = indexes.map((index) => ({
+      isIntersecting: true,
+      target: this.elements[index],
+    }))
+    this.callback(entries, this)
+  }
+}
 
 const employeeStore = {
   employees: [
@@ -94,12 +117,12 @@ const globalConfig = {
   },
   stubs: {
     StatCard: true,
-    'el-row': true,
-    'el-col': true,
-    'el-card': true,
+    'el-row': { template: '<div><slot /></div>' },
+    'el-col': { template: '<div><slot /></div>' },
+    'el-card': { template: '<div><slot /><slot name="header" /></div>' },
     'el-badge': true,
     'el-tag': true,
-    'el-button': true,
+    'el-button': { template: '<button><slot /></button>' },
     'el-icon': true,
     'el-divider': true,
     Calendar: true,
@@ -122,17 +145,22 @@ const globalConfig = {
 
 describe('HomeView', () => {
   beforeEach(() => {
-    vi.useFakeTimers()
     vi.clearAllMocks()
+    intersectionObservers.length = 0
+    global.IntersectionObserver = MockIntersectionObserver
+    window.IntersectionObserver = MockIntersectionObserver
   })
 
   afterEach(() => {
-    vi.useRealTimers()
+    delete global.IntersectionObserver
+    delete window.IntersectionObserver
   })
 
-  it('loads only critical cards on mount and defers secondary dashboard requests', async () => {
+  it('loads only critical cards on mount and defers secondary dashboard requests until sections enter viewport', async () => {
     shallowMount(HomeView, { global: globalConfig })
 
+    await flushPromises()
+    await nextTick()
     await flushPromises()
 
     expect(employeeStore.fetchEmployees).toHaveBeenCalledTimes(1)
@@ -145,22 +173,25 @@ describe('HomeView', () => {
     expect(getUpcomingEvents).not.toHaveBeenCalled()
     expect(getProbationAlerts).not.toHaveBeenCalled()
 
-    await vi.advanceTimersByTimeAsync(150)
+    expect(intersectionObservers).toHaveLength(1)
+    expect(intersectionObservers[0].observe).toHaveBeenCalledTimes(4)
+
+    intersectionObservers[0].trigger([0])
     await flushPromises()
     expect(getStudentAttendanceSummary).toHaveBeenCalledTimes(1)
     expect(getTodayAnomalies).not.toHaveBeenCalled()
 
-    await vi.advanceTimersByTimeAsync(250)
+    intersectionObservers[0].trigger([1])
     await flushPromises()
     expect(getTodayAnomalies).toHaveBeenCalledTimes(1)
     expect(getUpcomingEvents).not.toHaveBeenCalled()
 
-    await vi.advanceTimersByTimeAsync(250)
+    intersectionObservers[0].trigger([2])
     await flushPromises()
     expect(getUpcomingEvents).toHaveBeenCalledTimes(1)
     expect(getProbationAlerts).not.toHaveBeenCalled()
 
-    await vi.advanceTimersByTimeAsync(250)
+    intersectionObservers[0].trigger([3])
     await flushPromises()
     expect(getProbationAlerts).toHaveBeenCalledTimes(1)
   })
