@@ -11,6 +11,7 @@ import {
   Legend,
 } from 'chart.js'
 
+import { apiError } from '@/utils/error'
 import { getClassrooms } from '@/api/classrooms'
 import {
   batchSaveAttendance,
@@ -104,17 +105,17 @@ const monthlySummaryCards = computed(() => {
 })
 
 const chartData = computed(() => {
-  if (!monthlyStudents.value.length) return null
+  const students = monthlyStudents.value
+  if (!students.length) return null
+  const labels = []
+  const data = []
+  for (const student of students) {
+    labels.push(student.name)
+    data.push(student.attendance_rate)
+  }
   return {
-    labels: monthlyStudents.value.map((student) => student.name),
-    datasets: [
-      {
-        label: '出席率',
-        data: monthlyStudents.value.map((student) => student.attendance_rate),
-        backgroundColor: '#22577a',
-        borderRadius: 6,
-      },
-    ],
+    labels,
+    datasets: [{ label: '出席率', data, backgroundColor: '#22577a', borderRadius: 6 }],
   }
 })
 
@@ -182,7 +183,7 @@ const fetchOverview = async () => {
     const res = await getAttendanceOverview({ date: overviewDate.value })
     overviewData.value = res.data
   } catch (error) {
-    ElMessage.error(error.response?.data?.detail ?? '載入班級出席總覽失敗')
+    ElMessage.error(apiError(error, '載入班級出席總覽失敗'))
   } finally {
     overviewLoading.value = false
   }
@@ -202,7 +203,7 @@ const fetchDaily = async () => {
       remark: record.remark ?? '',
     }))
   } catch (error) {
-    ElMessage.error(error.response?.data?.detail ?? '載入點名編修資料失敗')
+    ElMessage.error(apiError(error, '載入點名編修資料失敗'))
   } finally {
     dailyLoading.value = false
   }
@@ -217,7 +218,7 @@ const fetchDetailRecords = async (classroomId) => {
     })
     detailRecords.value = res.data.records
   } catch (error) {
-    ElMessage.error(error.response?.data?.detail ?? '載入班級明細失敗')
+    ElMessage.error(apiError(error, '載入班級明細失敗'))
   } finally {
     detailLoading.value = false
   }
@@ -235,7 +236,7 @@ const fetchMonthly = async () => {
     })
     monthlyData.value = res.data
   } catch (error) {
-    ElMessage.error(error.response?.data?.detail ?? '載入班級月分析失敗')
+    ElMessage.error(apiError(error, '載入班級月分析失敗'))
   } finally {
     monthlyLoading.value = false
   }
@@ -260,15 +261,16 @@ const saveDaily = async () => {
       })),
     })
     ElMessage.success('點名編修儲存成功')
-    await fetchDaily()
+    const refreshTasks = [fetchDaily()]
     if (overviewDate.value === editDate.value) {
-      await fetchOverview()
+      refreshTasks.push(fetchOverview())
       if (detailDrawerVisible.value && detailClassroom.value?.classroom_id === editClassroomId.value) {
-        await fetchDetailRecords(editClassroomId.value)
+        refreshTasks.push(fetchDetailRecords(editClassroomId.value))
       }
     }
+    await Promise.all(refreshTasks)
   } catch (error) {
-    ElMessage.error(error.response?.data?.detail ?? '儲存失敗')
+    ElMessage.error(apiError(error, '儲存失敗'))
   } finally {
     saving.value = false
   }

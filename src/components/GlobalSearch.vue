@@ -149,7 +149,7 @@ const ALL_PAGES = [
   { title: '加班 / 會議', path: '/overtime', accessPath: '/overtime' },
   { title: '員工管理', path: '/employees', accessPath: '/employees' },
   { title: '學生管理', path: '/students', accessPath: '/students' },
-  { title: '班級管理', path: '/classrooms', accessPath: '/classrooms' },
+  { title: '班級學生管理', path: '/classrooms', accessPath: '/classrooms' },
   { title: '薪資管理', path: '/salary', accessPath: '/salary' },
   { title: '公告管理', path: '/announcements', accessPath: '/announcements' },
   { title: '報表統計', path: '/reports', accessPath: '/reports' },
@@ -312,7 +312,10 @@ function onGlobalKeydown(e) {
 }
 
 onMounted(() => window.addEventListener('keydown', onGlobalKeydown))
-onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
+onUnmounted(() => {
+  window.removeEventListener('keydown', onGlobalKeydown)
+  clearTimeout(studentTimer)
+})
 
 // ---------- 對外暴露 ----------
 defineExpose({ open })

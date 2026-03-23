@@ -2,10 +2,13 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { calculate, getFestivalBonus, getRecords, getSalaryFieldBreakdown, manualAdjustSalary } from '@/api/salary'
 import { ElMessage } from 'element-plus'
-import { Search, InfoFilled } from '@element-plus/icons-vue'
+import { Search, InfoFilled, SuccessFilled } from '@element-plus/icons-vue'
 import BonusConfigPanel from './salary/BonusConfigPanel.vue'
 import SalaryHistoryPanel from './salary/SalaryHistoryPanel.vue'
+import SalarySimulatePanel from './salary/SalarySimulatePanel.vue'
+import SalaryLogicPanel from './salary/SalaryLogicPanel.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import { apiError } from '@/utils/error'
 import { downloadFile } from '@/utils/download'
 import { money } from '@/utils/format'
 import { hasPermission } from '@/utils/auth'
@@ -19,7 +22,10 @@ const query = reactive({
 })
 
 const loading = ref(false)
+const bonusLoading = ref(false)
 const hasCalculated = ref(false)
+const lastCalculatedAt = ref(null)
+const dbCalculatedAt = ref(null)
 const salaryResults = ref([])
 const bonusResults = ref([])
 const showBonusDialog = ref(false)
@@ -78,6 +84,7 @@ const calculateSalary = async () => {
     const { results, errors } = response.data
     salaryResults.value = results
     hasCalculated.value = true
+    lastCalculatedAt.value = new Date()
     if (errors && errors.length > 0) {
       const names = errors.map(e => `${e.employee_name}（${e.error}）`).join('、')
       ElMessage.warning(`部分員工薪資計算失敗，共 ${errors.length} 筆：${names}`)
@@ -86,37 +93,65 @@ const calculateSalary = async () => {
     }
     await fetchSalaryRecords()
   } catch (error) {
-    ElMessage.error('計算失敗: ' + (error.response?.data?.detail || error.message))
+    ElMessage.error('計算失敗: ' + apiError(error, error.message))
   } finally {
     loading.value = false
   }
 }
 
 const fetchFestivalBonus = async () => {
-  loading.value = true
+  bonusLoading.value = true
   try {
     const response = await getFestivalBonus(query.year, query.month)
     bonusResults.value = response.data
     showBonusDialog.value = true
   } catch (error) {
-    ElMessage.error('取得獎金資料失敗: ' + (error.response?.data?.detail || error.message))
+    ElMessage.error('取得獎金資料失敗: ' + apiError(error, error.message))
   } finally {
-    loading.value = false
+    bonusLoading.value = false
   }
 }
 
 // ---- Salary Records (for export) ----
 const salaryRecords = ref([])
 
+// O(1) lookup map: employee_id → record
+const salaryRecordsMap = computed(() => {
+  const map = new Map()
+  for (const r of salaryRecords.value) {
+    if (r.employee_id != null) map.set(r.employee_id, r)
+  }
+  return map
+})
+
+// O(1) lookup map: employee_name → record（fallback 用，避免 O(n) find）
+const salaryRecordsByName = computed(() => {
+  const map = new Map()
+  for (const r of salaryRecords.value) {
+    if (r.employee_name) map.set(r.employee_name, r)
+  }
+  return map
+})
+
 const fetchSalaryRecords = async () => {
   try {
     const response = await getRecords(query.year, query.month)
     salaryRecords.value = response.data
+    const timestamps = response.data.map(r => r.calculated_at).filter(Boolean)
+    if (timestamps.length) {
+      dbCalculatedAt.value = timestamps.sort().at(-1)
+    }
     if (salaryResults.value.length > 0) {
+      // 使用 Map 合併 remark，O(n) 取代 O(n²)
+      const recordMap = new Map(response.data.map(r => [r.employee_id, r]))
       salaryResults.value = salaryResults.value.map((row) => {
-        const record = response.data.find((item) => item.employee_id === row.employee_id)
+        const record = recordMap.get(row.employee_id)
         return record ? { ...row, remark: record.remark || '' } : row
       })
+    } else if (response.data.length > 0) {
+      // 頁面重整後從 DB records 重建計算結果（records 已包含前端所需的欄位別名）
+      salaryResults.value = response.data
+      hasCalculated.value = true
     }
   } catch (error) {
     // silent - records may not exist yet
@@ -124,16 +159,14 @@ const fetchSalaryRecords = async () => {
 }
 
 const getRecordId = (employeeName) => {
-  const rec = salaryRecords.value.find(r => r.employee_name === employeeName)
-  return rec ? rec.id : null
+  return salaryRecordsByName.value.get(employeeName)?.id ?? null
 }
 
 const getRecordForRow = (row) => {
-  if (row?.employee_id) {
-    const matched = salaryRecords.value.find(r => r.employee_id === row.employee_id)
-    if (matched) return matched
+  if (row?.employee_id != null) {
+    return salaryRecordsMap.value.get(row.employee_id) || null
   }
-  return salaryRecords.value.find(r => r.employee_name === row?.employee_name) || null
+  return salaryRecordsByName.value.get(row?.employee_name) || null
 }
 
 const exportPdf = (row) => {
@@ -196,7 +229,7 @@ const saveManualAdjust = async () => {
     ElMessage.success('薪資金額已更新')
     showEditDialog.value = false
   } catch (error) {
-    ElMessage.error('儲存編輯失敗: ' + (error.response?.data?.detail || error.message))
+    ElMessage.error('儲存編輯失敗: ' + apiError(error, error.message))
   } finally {
     editLoading.value = false
   }
@@ -215,7 +248,7 @@ const openFieldBreakdown = async (row, field) => {
     fieldBreakdown.value = response.data
     showFieldBreakdownDialog.value = true
   } catch (error) {
-    ElMessage.error('載入欄位明細失敗: ' + (error.response?.data?.detail || error.message))
+    ElMessage.error('載入欄位明細失敗: ' + apiError(error, error.message))
   } finally {
     fieldBreakdownLoading.value = false
   }
@@ -251,6 +284,13 @@ const renderFieldBreakdownValue = (row, column) => {
   return value
 }
 
+const formatDateTime = (value) => {
+  if (!value) return ''
+  const d = typeof value === 'string' ? new Date(value) : value
+  const pad = n => String(n).padStart(2, '0')
+  return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+}
+
 onMounted(() => {
   fetchSalaryRecords()
 })
@@ -273,9 +313,18 @@ onMounted(() => {
             </el-select>
 
             <el-button type="success" :loading="loading" @click="calculateSalary">計算薪資</el-button>
-            <el-button type="primary" :loading="loading" @click="fetchFestivalBonus">節慶獎金明細</el-button>
+            <el-button type="primary" :loading="bonusLoading" @click="fetchFestivalBonus">節慶獎金明細</el-button>
             <el-button v-if="salaryRecords.length > 0" type="warning" @click="exportAllExcel">匯出全部 Excel</el-button>
             <el-button v-if="salaryRecords.length > 0" type="danger" @click="exportAllPdf">匯出全部 PDF</el-button>
+          </div>
+          <div v-if="dbCalculatedAt || lastCalculatedAt" class="calc-status">
+            <span v-if="dbCalculatedAt" class="calc-status__item">
+              <el-icon style="vertical-align: middle; margin-right: 4px;"><SuccessFilled /></el-icon>
+              資料庫記錄：{{ formatDateTime(dbCalculatedAt) }}
+            </span>
+            <span v-if="lastCalculatedAt" class="calc-status__item calc-status__item--session">
+              本次計算：{{ formatDateTime(lastCalculatedAt) }}
+            </span>
           </div>
         </el-card>
 
@@ -442,6 +491,16 @@ onMounted(() => {
       <el-tab-pane v-if="canReadEmployees" label="薪資歷史" name="history">
         <SalaryHistoryPanel v-if="activeTab === 'history'" />
       </el-tab-pane>
+
+      <!-- 薪資試算 -->
+      <el-tab-pane label="薪資試算" name="simulate">
+        <SalarySimulatePanel v-if="activeTab === 'simulate'" />
+      </el-tab-pane>
+
+      <!-- 薪資邏輯 -->
+      <el-tab-pane label="薪資邏輯" name="logic">
+        <SalaryLogicPanel v-if="activeTab === 'logic'" />
+      </el-tab-pane>
     </el-tabs>
 
     <!-- Festival Bonus Dialog -->
@@ -541,6 +600,25 @@ onMounted(() => {
   display: flex;
   gap: 15px;
   align-items: center;
+}
+.calc-status {
+  margin-top: 10px;
+  padding: 6px 10px;
+  background: #f0f9eb;
+  border-left: 3px solid #67c23a;
+  border-radius: 4px;
+  font-size: 13px;
+  color: #529b2e;
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.calc-status__item {
+  display: flex;
+  align-items: center;
+}
+.calc-status__item--session {
+  color: #409eff;
 }
 .results-section {
   margin-top: var(--space-5);

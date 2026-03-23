@@ -4,6 +4,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { getAnnouncements, createAnnouncement, updateAnnouncement, deleteAnnouncement } from '@/api/announcements'
 import { getEmployees } from '@/api/employees'
 import { Top } from '@element-plus/icons-vue'
+import { apiError } from '@/utils/error'
 
 const loading = ref(false)
 const announcements = ref([])
@@ -57,7 +58,7 @@ const fetchAnnouncements = async () => {
     const res = await getAnnouncements()
     announcements.value = res.data.items || []
   } catch (error) {
-    ElMessage.error(error.response?.data?.detail || '載入失敗')
+    ElMessage.error(apiError(error, '載入失敗'))
   } finally {
     loading.value = false
   }
@@ -113,7 +114,7 @@ const handleSubmit = async () => {
     dialogVisible.value = false
     fetchAnnouncements()
   } catch (error) {
-    ElMessage.error(error.response?.data?.detail || '操作失敗')
+    ElMessage.error(apiError(error, '操作失敗'))
   } finally {
     submitLoading.value = false
   }

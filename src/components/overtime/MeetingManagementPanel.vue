@@ -4,6 +4,7 @@ import { getMeetings, getMeetingSummary, createBatch, updateMeeting, deleteMeeti
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { money } from '@/utils/format'
 import { useEmployeeStore } from '@/stores/employee'
+import { apiError } from '@/utils/error'
 
 const props = defineProps({
   embedded: {
@@ -111,8 +112,16 @@ const toggleSelectAll = (value) => {
   })
 }
 
-const attendedCount = computed(() => employeeAttendance.value.filter(employee => employee.attended).length)
-const absentCount = computed(() => employeeAttendance.value.filter(employee => !employee.attended).length)
+const meetingCounts = computed(() =>
+  employeeAttendance.value.reduce(
+    (acc, e) => {
+      if (e.attended) acc.attendedCount++
+      else acc.absentCount++
+      return acc
+    },
+    { attendedCount: 0, absentCount: 0 },
+  ),
+)
 
 const submitBatch = async () => {
   if (!batchForm.meeting_date) {
@@ -143,7 +152,7 @@ const submitBatch = async () => {
     fetchRecords()
     if (activeTab.value === 'summary') fetchSummary()
   } catch (error) {
-    ElMessage.error(`建立失敗: ${error.response?.data?.detail || error.message}`)
+    ElMessage.error(`建立失敗: ${apiError(error, error.message)}`)
   } finally {
     loading.value = false
   }
@@ -325,7 +334,7 @@ onMounted(() => {
         <el-divider>員工出席狀況</el-divider>
         <div class="batch-actions">
           <el-checkbox v-model="batchForm.selectAll" @change="toggleSelectAll">全員出席</el-checkbox>
-          <span class="text-muted">出席 {{ attendedCount }} 人 / 缺席 {{ absentCount }} 人</span>
+          <span class="text-muted">出席 {{ meetingCounts.attendedCount }} 人 / 缺席 {{ meetingCounts.absentCount }} 人</span>
         </div>
         <div class="employee-list">
           <div v-for="employee in employeeAttendance" :key="employee.id" class="employee-item">

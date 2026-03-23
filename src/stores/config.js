@@ -7,6 +7,7 @@ export const useConfigStore = defineStore('config', {
   state: () => ({
     jobTitles: [],
     loading: false,
+    error: null,
     _fetchedAt: 0,
     _pending: null,
   }),
@@ -17,12 +18,15 @@ export const useConfigStore = defineStore('config', {
       if (this._pending) return this._pending
 
       this.loading = true
+      this.error = null
       this._pending = getTitles()
         .then(res => {
           this.jobTitles = res.data
           this._fetchedAt = Date.now()
         })
-        .catch(() => { /* handled by API interceptor */ })
+        .catch((err) => {
+          this.error = err?.response?.data?.detail || '職稱資料載入失敗'
+        })
         .finally(() => {
           this.loading = false
           this._pending = null

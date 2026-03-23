@@ -19,3 +19,5 @@ export const manualAdjustSalary = (recordId, payload) =>
   api.put(`/salaries/${recordId}/manual-adjust`, payload)
 
 export const getHistory = (params) => api.get('/salaries/history', { params })
+
+export const simulateSalary = (payload) => api.post('/salaries/simulate', payload)

@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { createEvent, deleteEvent, getCalendarFeed, updateEvent } from '@/api/events'
 import { downloadFile } from '@/utils/download'
+import { apiError } from '@/utils/error'
 
 const loading = ref(false)
 const events = ref([])
@@ -84,18 +85,31 @@ const firstDayOfWeek = computed(() => {
 })
 
 const calendarDays = computed(() => {
+  const yr = currentYear.value
+  const mo = String(currentMonth.value).padStart(2, '0')
+  const totalDays = daysInMonth.value
+
+  // 預建日期→事件 Map，避免對每天都做 O(n) 線性掃描
+  const eventsByDate = new Map()
+  for (const event of events.value) {
+    const start = event.event_date
+    const end = event.end_date || event.event_date
+    for (let d = 1; d <= totalDays; d += 1) {
+      const dateStr = `${yr}-${mo}-${String(d).padStart(2, '0')}`
+      if (dateStr >= start && dateStr <= end) {
+        if (!eventsByDate.has(dateStr)) eventsByDate.set(dateStr, [])
+        eventsByDate.get(dateStr).push(event)
+      }
+    }
+  }
+
   const days = []
   for (let i = 0; i < firstDayOfWeek.value; i += 1) {
     days.push({ day: null, events: [] })
   }
-  for (let day = 1; day <= daysInMonth.value; day += 1) {
-    const dateStr = `${currentYear.value}-${String(currentMonth.value).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-    const dayEvents = events.value.filter((event) => {
-      const start = event.event_date
-      const end = event.end_date || event.event_date
-      return dateStr >= start && dateStr <= end
-    })
-    days.push({ day, date: dateStr, events: dayEvents })
+  for (let day = 1; day <= totalDays; day += 1) {
+    const dateStr = `${yr}-${mo}-${String(day).padStart(2, '0')}`
+    days.push({ day, date: dateStr, events: eventsByDate.get(dateStr) || [] })
   }
   return days
 })
@@ -115,7 +129,7 @@ const fetchEvents = async () => {
     events.value = res.data.events
     officialSync.value = res.data.official_sync
   } catch (error) {
-    ElMessage.error(error.response?.data?.detail || '載入失敗')
+    ElMessage.error(apiError(error, '載入失敗'))
   } finally {
     loading.value = false
   }
@@ -205,7 +219,7 @@ const saveEvent = async () => {
     dialogVisible.value = false
     await fetchEvents()
   } catch (error) {
-    ElMessage.error(error.response?.data?.detail || '操作失敗')
+    ElMessage.error(apiError(error, '操作失敗'))
   }
 }
 
@@ -220,7 +234,7 @@ const handleDelete = (event) => {
       ElMessage.success('事件已刪除')
       await fetchEvents()
     } catch (error) {
-      ElMessage.error(error.response?.data?.detail || '刪除失敗')
+      ElMessage.error(apiError(error, '刪除失敗'))
     }
   }).catch(() => {})
 }

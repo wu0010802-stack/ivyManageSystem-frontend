@@ -165,7 +165,7 @@ describe('AdminNotificationBell', () => {
     expect(wrapper.text()).toContain('待審核')
     expect(wrapper.text()).toContain('課後詢問')
     // 兩個 action item 的個別計數正確顯示
-    const items = wrapper.findAll('.notification-item__count')
+    const items = wrapper.findAll('.nf-count-badge')
     const counts = items.map((el) => el.text())
     expect(counts).toContain('3')
     expect(counts).toContain('2')

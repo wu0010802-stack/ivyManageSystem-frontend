@@ -1,7 +1,8 @@
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getAnomalies, confirmAnomaly as confirmAnomalyApi } from '@/api/portal'
+import { apiError } from '@/utils/error'
 
 const loading = ref(false)
 const anomalies = ref([])
@@ -36,13 +37,13 @@ const confirmAnomaly = async (anomaly) => {
     ElMessage.success(res.data.message)
     anomaly.confirmed = true
   } catch (error) {
-    ElMessage.error(error.response?.data?.detail || '處理失敗')
+    ElMessage.error(apiError(error, '處理失敗'))
   } finally {
     anomaly.submitting = false
   }
 }
 
-const pendingCount = () => anomalies.value.filter(a => !a.confirmed).length
+const pendingCount = computed(() => anomalies.value.filter(a => !a.confirmed).length)
 
 onMounted(fetchAnomalies)
 </script>
@@ -62,8 +63,8 @@ onMounted(fetchAnomalies)
     </div>
 
     <el-alert
-      v-if="pendingCount() > 0"
-      :title="`您有 ${pendingCount()} 筆出勤異常需要確認`"
+      v-if="pendingCount > 0"
+      :title="`您有 ${pendingCount} 筆出勤異常需要確認`"
       type="warning"
       :closable="false"
       show-icon

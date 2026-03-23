@@ -65,7 +65,7 @@ describe('ClassroomView', () => {
     vi.clearAllMocks()
   })
 
-  it('renders student preview summary on classroom cards', async () => {
+  it('renders classroom card with class info and teacher assignments', async () => {
     const wrapper = mount(ClassroomView, {
       global: {
         directives: {
@@ -100,9 +100,9 @@ describe('ClassroomView', () => {
     await flushPromises()
 
     expect(getClassrooms).toHaveBeenCalled()
-    expect(wrapper.text()).toContain('小安')
-    expect(wrapper.text()).toContain('小寶')
-    expect(wrapper.text()).toContain('小晴')
-    expect(wrapper.text()).toContain('還有 1 位學生')
+    expect(wrapper.text()).toContain('SUN-01')
+    expect(wrapper.text()).toContain('王老師')
+    expect(wrapper.text()).toContain('林老師')
+    expect(wrapper.text()).toContain('向日葵班')
   })
 })

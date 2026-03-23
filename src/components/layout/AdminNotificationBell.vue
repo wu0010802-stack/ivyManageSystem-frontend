@@ -190,6 +190,7 @@
 
 <script setup>
 import { computed, markRaw, onMounted, ref } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useRouter } from 'vue-router'
 import {
   ArrowRight, Bell,
@@ -206,9 +207,7 @@ const notificationStore = useNotificationStore()
 const popoverVisible = ref(false)
 const drawerVisible = ref(false)
 
-const badgeCount = computed(() => notificationStore.badgeCount)
-const actionItems = computed(() => notificationStore.actionItems)
-const reminders = computed(() => notificationStore.reminders)
+const { badgeCount, actionItems, reminders } = storeToRefs(notificationStore)
 const isEmpty = computed(() => !actionItems.value.length && !reminders.value.length)
 
 const itemMeta = {

@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { getActivityStats, getActivityStatsCharts, getActivityStatsSummary } from '@/api/activity'
+import { getActivityStatsCharts, getActivityStatsSummary } from '@/api/activity'
 
 const SUMMARY_TTL_MS = 15_000
 const CHARTS_TTL_MS = 60_000
@@ -20,6 +20,9 @@ export const useActivityStore = defineStore('activity', {
     charts: null,
     lastSummaryFetchedAt: 0,
     lastChartsFetchedAt: 0,
+    loadingSummary: false,
+    loadingCharts: false,
+    error: '',
   }),
 
   getters: {
@@ -39,6 +42,8 @@ export const useActivityStore = defineStore('activity', {
         return inflightSummaryRequest
       }
 
+      this.loadingSummary = true
+      this.error = ''
       inflightSummaryRequest = getActivityStatsSummary()
         .then((res) => {
           this.summary = res.data
@@ -46,10 +51,12 @@ export const useActivityStore = defineStore('activity', {
           this.lastSummaryFetchedAt = Date.now()
           return this.summary
         })
-        .catch(() => {
+        .catch((err) => {
+          this.error = err?.message || '載入課後才藝摘要失敗'
           return this.summary
         })
         .finally(() => {
+          this.loadingSummary = false
           inflightSummaryRequest = null
         })
 
@@ -65,14 +72,19 @@ export const useActivityStore = defineStore('activity', {
         return inflightChartsRequest
       }
 
+      this.loadingCharts = true
       inflightChartsRequest = getActivityStatsCharts()
         .then((res) => {
           this.charts = res.data
           this.lastChartsFetchedAt = Date.now()
           return this.charts
         })
-        .catch(() => this.charts)
+        .catch((err) => {
+          this.error = err?.message || '載入課後才藝圖表失敗'
+          return this.charts
+        })
         .finally(() => {
+          this.loadingCharts = false
           inflightChartsRequest = null
         })
 
@@ -91,16 +103,6 @@ export const useActivityStore = defineStore('activity', {
         this.fetchCharts({ force }),
       ])
       return this.stats
-    },
-
-    async fetchLegacyStats({ force = false } = {}) {
-      const res = await getActivityStats()
-      this.summary = res.data?.statistics || null
-      this.charts = res.data?.charts || null
-      this.unreadInquiries = res.data?.statistics?.unreadInquiries || 0
-      this.lastSummaryFetchedAt = Date.now()
-      this.lastChartsFetchedAt = Date.now()
-      return res.data
     },
   },
 })

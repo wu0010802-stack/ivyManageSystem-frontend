@@ -8,10 +8,11 @@ import { getOvertimes, approveOvertime as approveOvertimeApi } from '@/api/overt
 import { getCorrections, approveCorrection as approveCorrectionApi } from '@/api/punchCorrections'
 import { LEAVE_TYPE_MAP as leaveTypeMap } from '@/utils/leaves'
 import { money, formatDate, formatTime } from '@/utils/format'
-import { useApprovalStore } from '@/stores/approval'
+import { useNotificationStore } from '@/stores/notification'
+import { apiError } from '@/utils/error'
 
 const router = useRouter()
-const approvalStore = useApprovalStore()
+const notificationStore = useNotificationStore()
 
 const loading = ref(false)
 const pendingLeaves = ref([])
@@ -119,7 +120,7 @@ const approveLeave = async (row, approved) => {
     await approveLeaveApi(row.id, payload)
     ElMessage.success(approved ? '請假已核准' : '請假已駁回')
     fetchPendingLeaves()
-    approvalStore.fetchSummary({ force: true })
+    notificationStore.fetchSummary({ force: true })
   } catch (error) {
     if (error === 'cancel' || error === 'close') return
     ElMessage.error('操作失敗')
@@ -131,7 +132,7 @@ const approveOvertime = async (row, approved) => {
     await approveOvertimeApi(row.id, approved)
     ElMessage.success(approved ? '加班已核准' : '加班已駁回')
     fetchPendingOvertimes()
-    approvalStore.fetchSummary({ force: true })
+    notificationStore.fetchSummary({ force: true })
   } catch {
     ElMessage.error('操作失敗')
   }
@@ -156,9 +157,9 @@ const approveCorrection = async (row, approved) => {
     await approveCorrectionApi(row.id, payload)
     ElMessage.success(approved ? '補打卡已核准，考勤已更新' : '補打卡已駁回')
     fetchPendingCorrections()
-    approvalStore.fetchSummary({ force: true })
+    notificationStore.fetchSummary({ force: true })
   } catch (error) {
-    ElMessage.error(error.response?.data?.detail || '操作失敗')
+    ElMessage.error(apiError(error, '操作失敗'))
   }
 }
 
@@ -536,7 +537,7 @@ onMounted(fetchAll)
         無附件
       </div>
       <div v-else class="attach-grid">
-        <div v-for="(item, index) in attachItems" :key="index" class="attach-item">
+        <div v-for="item in attachItems" :key="item.url" class="attach-item">
           <el-image
             v-if="item.isImage"
             :src="item.url"

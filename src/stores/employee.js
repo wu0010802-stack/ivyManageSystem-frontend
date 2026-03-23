@@ -7,6 +7,7 @@ export const useEmployeeStore = defineStore('employee', {
   state: () => ({
     employees: [],
     loading: false,
+    error: null,
     _fetchedAt: 0,
     _pending: null,
   }),
@@ -27,12 +28,15 @@ export const useEmployeeStore = defineStore('employee', {
       if (this._pending) return this._pending
 
       this.loading = true
+      this.error = null
       this._pending = getEmployees()
         .then(res => {
           this.employees = res.data
           this._fetchedAt = Date.now()
         })
-        .catch(() => { /* handled by API interceptor */ })
+        .catch((err) => {
+          this.error = err?.response?.data?.detail || '員工資料載入失敗'
+        })
         .finally(() => {
           this.loading = false
           this._pending = null

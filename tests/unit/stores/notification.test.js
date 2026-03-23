@@ -81,7 +81,6 @@ describe('notification store', () => {
       { id: 10, label: '親師座談', date: '2026-04-01' },
       { id: 11, label: '運動會', date: '2026-04-15' },
     ]
-    const probationItems = [{ id: 1, label: 'E001 林老師' }]
 
     getNotificationSummary.mockResolvedValue({
       data: {
@@ -89,7 +88,6 @@ describe('notification store', () => {
         action_items: [],
         reminders: [
           { type: 'calendar', route: '/calendar', items: calendarItems },
-          { type: 'probation', route: '/employees', items: probationItems },
         ],
       },
     })
@@ -97,11 +95,9 @@ describe('notification store', () => {
     const store = useNotificationStore()
     await store.fetchSummary()
 
-    expect(store.reminders).toHaveLength(2)
+    expect(store.reminders).toHaveLength(1)
     const calendarReminder = store.reminders.find((r) => r.type === 'calendar')
     expect(calendarReminder.items).toEqual(calendarItems)
-    const probationReminder = store.reminders.find((r) => r.type === 'probation')
-    expect(probationReminder.items).toEqual(probationItems)
     // reminders 不計入 badge
     expect(store.badgeCount).toBe(0)
   })

@@ -98,6 +98,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useActivityStore } from '@/stores/activity'
 import { getActivityDashboardTable } from '@/api/activity'
 
@@ -106,7 +107,7 @@ const loading = ref(false)
 const loadingTable = ref(false)
 const dashboardData = ref(null)
 
-const stats = computed(() => activityStore.stats)
+const { stats } = storeToRefs(activityStore)
 const statistics = computed(() => stats.value?.statistics || {})
 const dailyStats = computed(() => stats.value?.charts?.daily || [])
 const topCourses = computed(() => stats.value?.charts?.topCourses || [])

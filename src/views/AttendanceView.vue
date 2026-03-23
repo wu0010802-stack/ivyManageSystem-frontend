@@ -4,6 +4,7 @@ import { uploadFile, uploadCsv, getRecords, getSummary, deleteMonthRecords as de
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { UploadFilled, Search } from '@element-plus/icons-vue'
 import { downloadFile } from '@/utils/download'
+import { apiError } from '@/utils/error'
 import EmptyState from '@/components/common/EmptyState.vue'
 
 const activeTab = ref('upload')
@@ -25,7 +26,7 @@ const handleExcelUpload = async (options) => {
     uploadResult.value = response.data
     ElMessage.success(response.data.message || '匯入完成')
   } catch (error) {
-    ElMessage.error('上傳失敗: ' + (error.response?.data?.detail || error.message))
+    ElMessage.error('上傳失敗: ' + apiError(error, error.message))
   } finally {
     uploading.value = false
   }
@@ -78,7 +79,7 @@ const handleCsvImport = async () => {
     uploadResult.value = response.data.results || response.data
     ElMessage.success(response.data.message || '匯入完成')
   } catch (error) {
-    ElMessage.error('匯入失敗: ' + (error.response?.data?.detail || error.message))
+    ElMessage.error('匯入失敗: ' + apiError(error, error.message))
   } finally {
     uploading.value = false
   }
@@ -136,7 +137,7 @@ const deleteMonthRecords = () => {
       attendanceRecords.value = []
       summaryData.value = []
     } catch (error) {
-      ElMessage.error('刪除失敗: ' + (error.response?.data?.detail || error.message))
+      ElMessage.error('刪除失敗: ' + apiError(error, error.message))
     }
   }).catch(() => {})
 }
@@ -193,7 +194,7 @@ const fetchAnomalies = async () => {
     anomalyData.value = res.data
     selectedAnomalies.value = []
   } catch (error) {
-    ElMessage.error('查詢異常清單失敗：' + (error.response?.data?.detail || error.message))
+    ElMessage.error('查詢異常清單失敗：' + apiError(error, error.message))
   } finally {
     loadingAnomalies.value = false
   }
@@ -224,7 +225,7 @@ const doBatchConfirm = async (action) => {
     ElMessage.success(`已處理 ${res.data.processed} 筆`)
     await fetchAnomalies()
   } catch (error) {
-    ElMessage.error('批次確認失敗：' + (error.response?.data?.detail || error.message))
+    ElMessage.error('批次確認失敗：' + apiError(error, error.message))
   }
 }
 
@@ -238,7 +239,7 @@ const doExportAnomalies = async () => {
     a.click()
     URL.revokeObjectURL(url)
   } catch (error) {
-    ElMessage.error('匯出失敗：' + (error.response?.data?.detail || error.message))
+    ElMessage.error('匯出失敗：' + apiError(error, error.message))
   }
 }
 
@@ -251,10 +252,12 @@ watch(activeTab, (tab) => {
 // Employee dropdown filter for records table
 const selectedEmployeeId = ref(null)
 const uniqueEmployees = computed(() => {
-  const seen = new Set()
-  return attendanceRecords.value
-    .filter(r => { if (seen.has(r.employee_id)) return false; seen.add(r.employee_id); return true })
-    .map(r => ({ id: r.employee_id, name: r.employee_name }))
+  const map = new Map()
+  for (const r of attendanceRecords.value) {
+    if (!map.has(r.employee_id)) map.set(r.employee_id, r.employee_name)
+  }
+  return [...map.entries()]
+    .map(([id, name]) => ({ id, name }))
     .sort((a, b) => a.name.localeCompare(b.name, 'zh-TW'))
 })
 const filteredRecords = computed(() => {

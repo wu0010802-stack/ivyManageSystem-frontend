@@ -18,6 +18,7 @@ import {
   getMyClassAttendanceMonthly,
 } from '@/api/portal'
 import { downloadFile } from '@/utils/download'
+import { apiError } from '@/utils/error'
 
 ChartJS.register(BarElement, CategoryScale, LinearScale, Tooltip, Legend)
 
@@ -75,7 +76,7 @@ const fetchDailyAttendance = async () => {
       remark: record.remark || '',
     }))
   } catch (error) {
-    ElMessage.error(error.response?.data?.detail || '載入點名資料失敗')
+    ElMessage.error(apiError(error, '載入點名資料失敗'))
   } finally {
     dailyLoading.value = false
   }
@@ -102,7 +103,7 @@ const saveDailyAttendance = async () => {
     })
     ElMessage.success('點名儲存成功')
   } catch (error) {
-    ElMessage.error(error.response?.data?.detail || '儲存失敗')
+    ElMessage.error(apiError(error, '儲存失敗'))
   } finally {
     saveLoading.value = false
   }
@@ -120,7 +121,7 @@ const fetchMonthly = async () => {
     })
     monthlyData.value = res.data
   } catch (error) {
-    ElMessage.error(error.response?.data?.detail || '載入月統計失敗')
+    ElMessage.error(apiError(error, '載入月統計失敗'))
   } finally {
     monthlyLoading.value = false
   }

@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, watch, defineAsyncComponent } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getDashboard } from '@/api/reports'
+import { apiError } from '@/utils/error'
 
 // Chart.js + vue-chartjs 延遲載入：僅在此頁面實際渲染時才下載
 let _chartReady = null
@@ -46,7 +47,7 @@ const fetchReport = async () => {
     const res = await getDashboard({ year: selectedYear.value })
     reportData.value = res.data
   } catch (error) {
-    ElMessage.error(error.response?.data?.detail || '載入報表失敗')
+    ElMessage.error(apiError(error, '載入報表失敗'))
   } finally {
     loading.value = false
   }

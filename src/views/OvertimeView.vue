@@ -8,6 +8,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { useEmployeeStore } from '@/stores/employee'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
 import { useCrudDialog, useConfirmDelete, useDateQuery } from '@/composables'
+import { apiError } from '@/utils/error'
 import { downloadFile } from '@/utils/download'
 import { money } from '@/utils/format'
 import MeetingManagementPanel from '@/components/overtime/MeetingManagementPanel.vue'
@@ -101,11 +102,15 @@ const fetchPendingOvertimes = async () => {
   }
 }
 
+const saveOvertimeLoading = ref(false)
+const approveActionLoading = ref(false)
+
 const saveOvertime = async () => {
   if (!form.employee_id || !form.overtime_date) {
     ElMessage.warning('請填寫必要欄位')
     return
   }
+  saveOvertimeLoading.value = true
   try {
     const payload = {
       employee_id: form.employee_id,
@@ -129,7 +134,9 @@ const saveOvertime = async () => {
     fetchOvertimes()
     fetchPendingOvertimes()
   } catch (error) {
-    ElMessage.error('儲存失敗: ' + (error.response?.data?.detail || error.message))
+    ElMessage.error('儲存失敗: ' + apiError(error, error.message))
+  } finally {
+    saveOvertimeLoading.value = false
   }
 }
 
@@ -145,24 +152,30 @@ const { confirmDelete: deleteOvertime } = useConfirmDelete({
 })
 
 const approveOvertime = async (row, approved) => {
+  approveActionLoading.value = true
   try {
     await approveOvertimeApi(row.id, approved)
     ElMessage.success(approved ? '已核准' : '已駁回')
     fetchOvertimes()
     fetchPendingOvertimes()
   } catch (error) {
-    ElMessage.error('操作失敗')
+    ElMessage.error('操作失敗：' + apiError(error, error.message))
+  } finally {
+    approveActionLoading.value = false
   }
 }
 
 
-const totalHours = computed(() => {
-  return overtimeRecords.value.reduce((sum, r) => sum + (r.hours || 0), 0)
-})
-
-const totalPay = computed(() => {
-  return overtimeRecords.value.reduce((sum, r) => sum + (r.overtime_pay || 0), 0)
-})
+const overtimeSummary = computed(() =>
+  overtimeRecords.value.reduce(
+    (acc, r) => {
+      acc.totalHours += r.hours || 0
+      acc.totalPay += r.overtime_pay || 0
+      return acc
+    },
+    { totalHours: 0, totalPay: 0 },
+  ),
+)
 
 // ── 批次審核 ──
 const selectedOvertimes = ref([])
@@ -316,11 +329,13 @@ const canApprove = (row) => {
 }
 
 onMounted(() => {
-  employeeStore.fetchEmployees()
   activeSection.value = resolveSectionFromRoute()
-  fetchOvertimes()
-  fetchPendingOvertimes()
-  fetchApprovalPoliciesForView()
+  Promise.all([
+    employeeStore.fetchEmployees(),
+    fetchOvertimes(),
+    fetchPendingOvertimes(),
+    fetchApprovalPoliciesForView(),
+  ])
 })
 
 watch(
@@ -470,8 +485,8 @@ watch(activeSection, async (value) => {
 
         <el-card v-if="overtimeRecords.length > 0" class="summary-card">
           <div class="summary">
-            <span>本月加班合計: <strong>{{ totalHours }} 小時</strong></span>
-            <span>加班費合計: <strong>{{ money(totalPay) }}</strong></span>
+            <span>本月加班合計: <strong>{{ overtimeSummary.totalHours }} 小時</strong></span>
+            <span>加班費合計: <strong>{{ money(overtimeSummary.totalPay) }}</strong></span>
           </div>
         </el-card>
       </el-tab-pane>
@@ -575,7 +590,7 @@ watch(activeSection, async (value) => {
       </el-form>
       <template #footer>
         <el-button @click="closeDialog">取消</el-button>
-        <el-button type="primary" @click="saveOvertime">儲存</el-button>
+        <el-button type="primary" :loading="saveOvertimeLoading" @click="saveOvertime">儲存</el-button>
       </template>
     </el-dialog>
 

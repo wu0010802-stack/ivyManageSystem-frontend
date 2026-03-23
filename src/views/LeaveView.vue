@@ -8,6 +8,7 @@ import { useEmployeeStore } from '@/stores/employee'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
 import { useCrudDialog, useConfirmDelete, useDateQuery, useLeaveHoursCalculator } from '@/composables'
 import { downloadFile } from '@/utils/download'
+import { apiError } from '@/utils/error'
 import { LEAVE_TYPES as leaveTypes, LEAVE_RULE_HINTS } from '@/utils/leaves'
 import { money } from '@/utils/format'
 import LeaveAttachmentDialog from './leave/LeaveAttachmentDialog.vue'
@@ -117,6 +118,8 @@ const selectedLeaves = ref([])
 const batchRejectVisible = ref(false)
 const batchRejectReason = ref('')
 const batchLoading = ref(false)
+const saveLoading = ref(false)
+const approveActionLoading = ref(false)
 
 const handleSelectionChange = (selection) => {
   selectedLeaves.value = selection
@@ -268,6 +271,7 @@ const saveLeave = async () => {
     if (!confirmed) return
   }
 
+  saveLoading.value = true
   try {
     const sd = form.start_date ? form.start_date.substring(0, 10) : ''
     const st = form.start_date && form.start_date.length > 10 ? form.start_date.substring(11, 16) : ''
@@ -301,7 +305,9 @@ const saveLeave = async () => {
     closeDialog()
     fetchLeaves()
   } catch (error) {
-    ElMessage.error('儲存失敗: ' + (error.response?.data?.detail || error.message))
+    ElMessage.error('儲存失敗: ' + apiError(error, error.message))
+  } finally {
+    saveLoading.value = false
   }
 }
 
@@ -312,6 +318,7 @@ const { confirmDelete: deleteLeave } = useConfirmDelete({
 })
 
 const approveLeave = async (row) => {
+  approveActionLoading.value = true
   try {
     const payload = { approved: true }
     if (['pending', 'rejected'].includes(row.substitute_status)) {
@@ -330,17 +337,22 @@ const approveLeave = async (row) => {
     fetchLeaves()
   } catch (error) {
     if (error === 'cancel' || error === 'close') return
-    ElMessage.error('操作失敗：' + (error.response?.data?.detail || error.message))
+    ElMessage.error('操作失敗：' + apiError(error, error.message))
+  } finally {
+    approveActionLoading.value = false
   }
 }
 
 const cancelApprove = async (row) => {
+  approveActionLoading.value = true
   try {
     await approveLeaveApi(row.id, { approved: false, rejection_reason: '取消核准' })
     ElMessage.success('已取消核准')
     fetchLeaves()
   } catch (error) {
-    ElMessage.error('操作失敗：' + (error.response?.data?.detail || error.message))
+    ElMessage.error('操作失敗：' + apiError(error, error.message))
+  } finally {
+    approveActionLoading.value = false
   }
 }
 
@@ -393,9 +405,11 @@ const canApprove = (row) => {
 }
 
 onMounted(() => {
-  employeeStore.fetchEmployees()
-  fetchLeaves()
-  fetchApprovalPoliciesForView()
+  Promise.all([
+    employeeStore.fetchEmployees(),
+    fetchLeaves(),
+    fetchApprovalPoliciesForView(),
+  ])
 })
 </script>
 
@@ -723,7 +737,7 @@ onMounted(() => {
       </el-form>
       <template #footer>
         <el-button @click="closeDialog">取消</el-button>
-        <el-button type="primary" :disabled="!canSave" @click="saveLeave">儲存</el-button>
+        <el-button type="primary" :disabled="!canSave || saveLoading" :loading="saveLoading" @click="saveLeave">儲存</el-button>
       </template>
     </el-dialog>
 

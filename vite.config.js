@@ -2,6 +2,9 @@ import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { VitePWA } from 'vite-plugin-pwa'
+import AutoImport from 'unplugin-auto-import/vite'
+import Components from 'unplugin-vue-components/vite'
+import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 
 function manualChunks(id) {
     if (!id.includes('node_modules') && !id.includes('/src/')) {
@@ -14,6 +17,14 @@ function manualChunks(id) {
         id.includes('/src/stores/activity.js')
     ) {
         return 'activity-admin'
+    }
+
+    // Portal（教師入口）獨立 chunk，管理端不需要下載
+    if (
+        id.includes('/src/views/portal/') ||
+        id.includes('/src/api/portal.js')
+    ) {
+        return 'portal'
     }
 
     if (id.includes('chart.js') || id.includes('vue-chartjs')) {
@@ -42,6 +53,12 @@ function manualChunks(id) {
 export default defineConfig({
     plugins: [
         vue(),
+        AutoImport({
+            resolvers: [ElementPlusResolver()],
+        }),
+        Components({
+            resolvers: [ElementPlusResolver()],
+        }),
         VitePWA({
             registerType: 'autoUpdate',          // 有新版本時自動更新 SW
             includeAssets: ['favicon.ico', 'apple-touch-icon-180x180.png', 'logo.svg'],
@@ -123,6 +140,7 @@ export default defineConfig({
         }
     },
     build: {
+        chunkSizeWarningLimit: 500,
         rollupOptions: {
             output: {
                 manualChunks,

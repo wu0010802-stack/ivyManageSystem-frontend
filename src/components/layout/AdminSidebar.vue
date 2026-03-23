@@ -75,6 +75,10 @@
             <el-icon><Money /></el-icon>
             <template #title>薪資管理</template>
           </el-menu-item>
+          <el-menu-item v-if="canView.SALARY_READ" index="/gov-reports">
+            <el-icon><Files /></el-icon>
+            <template #title>政府申報匯出</template>
+          </el-menu-item>
         </el-sub-menu>
 
         <!-- 學生教務 -->
@@ -83,25 +87,17 @@
             <el-icon><School /></el-icon>
             <span>學生教務</span>
           </template>
-          <el-menu-item v-if="canView.STUDENTS_READ" index="/students">
-            <el-icon><School /></el-icon>
-            <template #title>學生管理</template>
-          </el-menu-item>
           <el-menu-item v-if="canView.CLASSROOMS_READ" index="/classrooms">
             <el-icon><OfficeBuilding /></el-icon>
-            <template #title>班級管理</template>
+            <template #title>班級學生管理</template>
           </el-menu-item>
           <el-menu-item v-if="canView.STUDENTS_READ" index="/student-attendance">
             <el-icon><Calendar /></el-icon>
             <template #title>學生出席紀錄</template>
           </el-menu-item>
-          <el-menu-item v-if="canView.STUDENTS_READ" index="/student-incidents">
-            <el-icon><Warning /></el-icon>
-            <template #title>學生事件紀錄</template>
-          </el-menu-item>
-          <el-menu-item v-if="canView.STUDENTS_READ" index="/student-assessments">
+          <el-menu-item v-if="canView.STUDENTS_READ" index="/student-records">
             <el-icon><DataAnalysis /></el-icon>
-            <template #title>學期評量記錄</template>
+            <template #title>學生紀錄</template>
           </el-menu-item>
           <el-menu-item v-if="canView.STUDENTS_READ" index="/dismissal-queue">
             <el-icon><Van /></el-icon>
@@ -173,10 +169,6 @@
           <el-icon><Setting /></el-icon>
           <template #title>系統設定</template>
         </el-menu-item>
-        <el-menu-item v-if="canView.SALARY_READ" index="/dev/salary">
-          <el-icon><Cpu /></el-icon>
-          <template #title>薪資邏輯 (Dev)</template>
-        </el-menu-item>
       </el-menu>
     </el-scrollbar>
 
@@ -193,7 +185,7 @@ import { useRoute } from 'vue-router'
 import {
   DataBoard, Finished, Calendar, Timer, Clock, Document, Watch,
   Money, User, School, OfficeBuilding, Bell, TrendCharts, Setting,
-  Expand, Fold, Cpu, Warning, DataAnalysis, Files,
+  Expand, Fold, Warning, DataAnalysis, Files,
   Star, Collection, ShoppingBag, ChatDotRound, List, Van
 } from '@element-plus/icons-vue'
 import { PERMISSION_VALUES, getUserInfo } from '@/utils/auth'

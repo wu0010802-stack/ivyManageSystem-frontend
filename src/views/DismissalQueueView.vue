@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getDismissalCalls, cancelDismissalCall, createDismissalCall } from '@/api/dismissalCalls'
 import { getClassrooms } from '@/api/classrooms'
@@ -20,6 +20,21 @@ const createDialogVisible = ref(false)
 const createLoading = ref(false)
 const studentList = ref([])
 const createForm = ref({ student_id: null, classroom_id: null, note: '' })
+const createFilterClassroomId = ref(null)
+
+const filteredStudentOptions = computed(() => {
+  if (!createFilterClassroomId.value) return studentList.value
+  return studentList.value.filter(s => s.classroom_id === createFilterClassroomId.value)
+})
+
+const classroomNameMap = computed(() =>
+  Object.fromEntries(classrooms.value.map(c => [c.id, c.name]))
+)
+
+const studentLabel = (s) => {
+  const cName = classroomNameMap.value[s.classroom_id]
+  return cName ? `${s.name}（${cName}）` : s.name
+}
 
 // WebSocket
 let ws = null
@@ -84,6 +99,7 @@ const handleCancel = async (call) => {
 // ─── 建立通知 ────────────────────────────────────────────
 const openCreateDialog = async () => {
   createForm.value = { student_id: null, classroom_id: null, note: '' }
+  createFilterClassroomId.value = null
   studentList.value = []
   try {
     const res = await getStudents({ is_active: true, limit: 500 })
@@ -93,6 +109,16 @@ const openCreateDialog = async () => {
   }
   createDialogVisible.value = true
 }
+
+// 切換班級篩選時，若已選學生不在該班則清除
+watch(createFilterClassroomId, (newVal) => {
+  if (!newVal) return
+  const selected = studentList.value.find(s => s.id === createForm.value.student_id)
+  if (selected && selected.classroom_id !== newVal) {
+    createForm.value.student_id = null
+    createForm.value.classroom_id = null
+  }
+})
 
 const onStudentSelect = (studentId) => {
   const s = studentList.value.find(s => s.id === studentId)
@@ -279,6 +305,16 @@ onUnmounted(() => {
     <!-- 建立通知 Dialog -->
     <el-dialog v-model="createDialogVisible" title="建立接送通知" width="420px">
       <el-form label-width="80px">
+        <el-form-item label="班級篩選">
+          <el-select
+            v-model="createFilterClassroomId"
+            placeholder="全部班級"
+            clearable
+            style="width:100%"
+          >
+            <el-option v-for="c in classrooms" :key="c.id" :label="c.name" :value="c.id" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="學生" required>
           <el-select
             v-model="createForm.student_id"
@@ -288,9 +324,9 @@ onUnmounted(() => {
             @change="onStudentSelect"
           >
             <el-option
-              v-for="s in studentList"
+              v-for="s in filteredStudentOptions"
               :key="s.id"
-              :label="s.name"
+              :label="studentLabel(s)"
               :value="s.id"
             />
           </el-select>

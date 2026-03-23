@@ -1,7 +1,9 @@
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted } from 'vue'
+import { useDebounceFn } from '@vueuse/core'
 import { ElMessage } from 'element-plus'
 import { getMyPunchCorrections, createMyPunchCorrection } from '@/api/portal'
+import { apiError } from '@/utils/error'
 
 const loading = ref(false)
 const submitLoading = ref(false)
@@ -105,7 +107,7 @@ const submitCorrection = async () => {
     showForm.value = false
     fetchCorrections()
   } catch (error) {
-    ElMessage.error(error.response?.data?.detail || '提交失敗')
+    ElMessage.error(apiError(error, '提交失敗'))
   } finally {
     submitLoading.value = false
   }
@@ -134,6 +136,10 @@ const formatTime = (isoStr) => {
   return isoStr.slice(11, 16)
 }
 
+// 年/月連動時只觸發一次請求（防止使用者先改年再改月，送出兩次 API）
+const _debouncedFetch = useDebounceFn(fetchCorrections, 200)
+watch([() => query.year, () => query.month], _debouncedFetch)
+
 onMounted(fetchCorrections)
 </script>
 
@@ -159,10 +165,10 @@ onMounted(fetchCorrections)
 
     <el-card v-loading="loading">
       <div class="query-row">
-        <el-select v-model="query.year" style="width: 100px;" @change="fetchCorrections">
+        <el-select v-model="query.year" style="width: 100px;">
           <el-option v-for="y in [2024,2025,2026,2027]" :key="y" :label="`${y}年`" :value="y" />
         </el-select>
-        <el-select v-model="query.month" style="width: 100px;" @change="fetchCorrections">
+        <el-select v-model="query.month" style="width: 100px;">
           <el-option v-for="m in 12" :key="m" :label="`${m}月`" :value="m" />
         </el-select>
       </div>

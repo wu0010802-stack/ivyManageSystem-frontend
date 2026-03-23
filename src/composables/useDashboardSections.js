@@ -3,7 +3,7 @@ import { useRouter } from 'vue-router'
 
 import { getStudents } from '@/api/students'
 import { getToday, getTodayAnomalies } from '@/api/attendance'
-import { getUpcomingEvents, getProbationAlerts, getStudentAttendanceSummary } from '@/api/home'
+import { getUpcomingEvents, getStudentAttendanceSummary, getProbationAlerts } from '@/api/home'
 import { useEmployeeStore } from '@/stores/employee'
 import { useNotificationStore } from '@/stores/notification'
 import { hasPermission, getUserInfo } from '@/utils/auth'
@@ -46,10 +46,10 @@ export function useDashboardSections() {
   const todayStats = ref(null)
   const upcomingEvents = ref([])
   const attendanceAnomalies = ref(null)
-  const probationAlerts = ref(null)
   const studentAttendanceSummary = ref(null)
+  const probationEmployees = ref([])
+  const probationAlerts = ref(null)
   const approvalSummary = computed(() => notificationStore.approvalSummary)
-  const probationEmployees = computed(() => probationAlerts.value?.employees || [])
 
   const weekDays = ['日', '一', '二', '三', '四', '五', '六']
 
@@ -132,7 +132,10 @@ export function useDashboardSections() {
     calendar: () => getUpcomingEvents()
       .then(r => { upcomingEvents.value = r.data }),
     probation: () => getProbationAlerts()
-      .then(r => { probationAlerts.value = r.data }),
+      .then(r => {
+        probationEmployees.value = r.data.employees
+        probationAlerts.value = r.data.alerts
+      }),
   }
 
   const deferredTargets = {
@@ -225,10 +228,10 @@ export function useDashboardSections() {
     studentCount,
     todayStats,
     attendanceAnomalies,
-    probationAlerts,
     studentAttendanceSummary,
-    approvalSummary,
     probationEmployees,
+    probationAlerts,
+    approvalSummary,
     todayDateStr,
     greeting,
     userName,

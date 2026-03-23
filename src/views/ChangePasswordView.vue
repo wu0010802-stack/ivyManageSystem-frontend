@@ -5,6 +5,7 @@ import { ElMessage } from 'element-plus'
 import { changePassword } from '@/api/auth'
 import { clearMustChangePassword, getUserInfo } from '@/utils/auth'
 import { PASSWORD_RULES, validatePasswordStrength } from '@/utils/passwordRules'
+import { apiError } from '@/utils/error'
 
 const router = useRouter()
 const loading = ref(false)
@@ -54,7 +55,7 @@ const handleSubmit = async () => {
     ElMessage.success('密碼修改成功，請重新使用新密碼操作系統')
     router.push('/')
   } catch (error) {
-    ElMessage.error(error.response?.data?.detail || '修改失敗，請確認目前密碼是否正確')
+    ElMessage.error(apiError(error, '修改失敗，請確認目前密碼是否正確'))
   } finally {
     loading.value = false
   }

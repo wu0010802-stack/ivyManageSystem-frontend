@@ -1,7 +1,8 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getPortalAnnouncements, markAnnouncementRead } from '@/api/portal'
+import { apiError } from '@/utils/error'
 
 const loading = ref(false)
 const announcements = ref([])
@@ -31,7 +32,7 @@ const fetchAnnouncements = async (append = false) => {
     }
     noMore.value = announcements.value.length >= total
   } catch (error) {
-    ElMessage.error(error.response?.data?.detail || '載入失敗')
+    ElMessage.error(apiError(error, '載入失敗'))
   } finally {
     loading.value = false
   }
@@ -66,7 +67,7 @@ const formatDate = (isoStr) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
-const unreadCount = () => announcements.value.filter(a => !a.is_read).length
+const unreadCount = computed(() => announcements.value.filter(a => !a.is_read).length)
 
 onMounted(fetchAnnouncements)
 </script>
@@ -76,8 +77,8 @@ onMounted(fetchAnnouncements)
     <h3 style="margin: 0 0 16px;">公告通知</h3>
 
     <el-alert
-      v-if="unreadCount() > 0"
-      :title="`您有 ${unreadCount()} 則未讀公告`"
+      v-if="unreadCount > 0"
+      :title="`您有 ${unreadCount} 則未讀公告`"
       type="warning"
       :closable="false"
       show-icon

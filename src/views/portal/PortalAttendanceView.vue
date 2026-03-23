@@ -3,6 +3,7 @@ import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getAttendanceSheet } from '@/api/portal'
 import { getUserInfo } from '@/utils/auth'
+import { apiError } from '@/utils/error'
 
 const loading = ref(false)
 const userInfo = getUserInfo()
@@ -30,7 +31,7 @@ const fetchSheet = async () => {
     const res = await getAttendanceSheet({ year: query.year, month: query.month })
     sheetData.value = res.data
   } catch (error) {
-    ElMessage.error('載入失敗: ' + (error.response?.data?.detail || error.message))
+    ElMessage.error('載入失敗: ' + apiError(error, error.message))
   } finally {
     loading.value = false
   }
@@ -74,6 +75,19 @@ const getOvertimeDisplay = (day) => {
     approved: ot.is_approved,
   }
 }
+
+// 預計算每天的請假/加班顯示資訊，避免 template 多次重複呼叫同函式
+const dayDisplayMap = computed(() => {
+  const map = new Map()
+  if (!sheetData.value?.days) return map
+  for (const day of sheetData.value.days) {
+    map.set(day.day, {
+      leave: getLeaveDisplay(day),
+      overtime: getOvertimeDisplay(day),
+    })
+  }
+  return map
+})
 
 const getWorkHoursClass = (day) => {
   if (!day.work_hours || day.is_weekend) return ''
@@ -243,14 +257,14 @@ onUnmounted(() => {
               <td class="label-col">請假</td>
               <td v-for="day in upperDays" :key="'lv'+day.day" class="day-col"
                   :class="{ weekend: day.is_weekend }">
-                <template v-if="getLeaveDisplay(day)">
-                  <el-tooltip :content="getLeaveDisplay(day).tooltip" placement="top">
+                <template v-if="dayDisplayMap.get(day.day)?.leave">
+                  <el-tooltip :content="dayDisplayMap.get(day.day).leave.tooltip" placement="top">
                     <span class="request-badge" :class="{
-                      approved: getLeaveDisplay(day).approved === true,
-                      rejected: getLeaveDisplay(day).approved === false,
-                      pending: getLeaveDisplay(day).approved === null || getLeaveDisplay(day).approved === undefined,
+                      approved: dayDisplayMap.get(day.day).leave.approved === true,
+                      rejected: dayDisplayMap.get(day.day).leave.approved === false,
+                      pending: dayDisplayMap.get(day.day).leave.approved === null || dayDisplayMap.get(day.day).leave.approved === undefined,
                     }">
-                      {{ getLeaveDisplay(day).text }}
+                      {{ dayDisplayMap.get(day.day).leave.text }}
                     </span>
                   </el-tooltip>
                 </template>
@@ -261,14 +275,14 @@ onUnmounted(() => {
               <td class="label-col">加班</td>
               <td v-for="day in upperDays" :key="'ot'+day.day" class="day-col"
                   :class="{ weekend: day.is_weekend }">
-                <template v-if="getOvertimeDisplay(day)">
-                  <el-tooltip :content="getOvertimeDisplay(day).tooltip" placement="top">
+                <template v-if="dayDisplayMap.get(day.day)?.overtime">
+                  <el-tooltip :content="dayDisplayMap.get(day.day).overtime.tooltip" placement="top">
                     <span class="request-badge" :class="{
-                      approved: getOvertimeDisplay(day).approved === true,
-                      rejected: getOvertimeDisplay(day).approved === false,
-                      pending: getOvertimeDisplay(day).approved === null || getOvertimeDisplay(day).approved === undefined,
+                      approved: dayDisplayMap.get(day.day).overtime.approved === true,
+                      rejected: dayDisplayMap.get(day.day).overtime.approved === false,
+                      pending: dayDisplayMap.get(day.day).overtime.approved === null || dayDisplayMap.get(day.day).overtime.approved === undefined,
                     }">
-                      {{ getOvertimeDisplay(day).text }}
+                      {{ dayDisplayMap.get(day.day).overtime.text }}
                     </span>
                   </el-tooltip>
                 </template>
@@ -338,14 +352,14 @@ onUnmounted(() => {
               <td class="label-col">請假</td>
               <td v-for="day in lowerDays" :key="'lv'+day.day" class="day-col"
                   :class="{ weekend: day.is_weekend }">
-                <template v-if="getLeaveDisplay(day)">
-                  <el-tooltip :content="getLeaveDisplay(day).tooltip" placement="top">
+                <template v-if="dayDisplayMap.get(day.day)?.leave">
+                  <el-tooltip :content="dayDisplayMap.get(day.day).leave.tooltip" placement="top">
                     <span class="request-badge" :class="{
-                      approved: getLeaveDisplay(day).approved === true,
-                      rejected: getLeaveDisplay(day).approved === false,
-                      pending: getLeaveDisplay(day).approved === null || getLeaveDisplay(day).approved === undefined,
+                      approved: dayDisplayMap.get(day.day).leave.approved === true,
+                      rejected: dayDisplayMap.get(day.day).leave.approved === false,
+                      pending: dayDisplayMap.get(day.day).leave.approved === null || dayDisplayMap.get(day.day).leave.approved === undefined,
                     }">
-                      {{ getLeaveDisplay(day).text }}
+                      {{ dayDisplayMap.get(day.day).leave.text }}
                     </span>
                   </el-tooltip>
                 </template>
@@ -356,14 +370,14 @@ onUnmounted(() => {
               <td class="label-col">加班</td>
               <td v-for="day in lowerDays" :key="'ot'+day.day" class="day-col"
                   :class="{ weekend: day.is_weekend }">
-                <template v-if="getOvertimeDisplay(day)">
-                  <el-tooltip :content="getOvertimeDisplay(day).tooltip" placement="top">
+                <template v-if="dayDisplayMap.get(day.day)?.overtime">
+                  <el-tooltip :content="dayDisplayMap.get(day.day).overtime.tooltip" placement="top">
                     <span class="request-badge" :class="{
-                      approved: getOvertimeDisplay(day).approved === true,
-                      rejected: getOvertimeDisplay(day).approved === false,
-                      pending: getOvertimeDisplay(day).approved === null || getOvertimeDisplay(day).approved === undefined,
+                      approved: dayDisplayMap.get(day.day).overtime.approved === true,
+                      rejected: dayDisplayMap.get(day.day).overtime.approved === false,
+                      pending: dayDisplayMap.get(day.day).overtime.approved === null || dayDisplayMap.get(day.day).overtime.approved === undefined,
                     }">
-                      {{ getOvertimeDisplay(day).text }}
+                      {{ dayDisplayMap.get(day.day).overtime.text }}
                     </span>
                   </el-tooltip>
                 </template>

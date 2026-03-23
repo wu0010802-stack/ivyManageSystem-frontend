@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { login } from '@/api/auth'
 import { setUserInfo } from '@/utils/auth'
+import { apiError } from '@/utils/error'
 
 const router = useRouter()
 const loading = ref(false)
@@ -40,7 +41,7 @@ const handleLogin = async () => {
     ElMessage.success(`歡迎回來，${res.data.user.name}`)
     router.push(res.data.must_change_password ? '/change-password' : '/')
   } catch (error) {
-    ElMessage.error(error.response?.data?.detail || '登入失敗')
+    ElMessage.error(apiError(error, '登入失敗'))
   } finally {
     loading.value = false
   }

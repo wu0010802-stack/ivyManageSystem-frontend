@@ -59,7 +59,6 @@ const getToday = vi.fn(() => Promise.resolve({
 }))
 const getTodayAnomalies = vi.fn(() => Promise.resolve({ data: { anomalies: [] } }))
 const getUpcomingEvents = vi.fn(() => Promise.resolve({ data: [] }))
-const getProbationAlerts = vi.fn(() => Promise.resolve({ data: { next_month: '2026-04', employees: [] } }))
 const getStudentAttendanceSummary = vi.fn(() => Promise.resolve({
   data: {
     total_students: 120,
@@ -95,10 +94,14 @@ vi.mock('@/api/attendance', () => ({
   getTodayAnomalies: (...args) => getTodayAnomalies(...args),
 }))
 
+const getProbationAlerts = vi.fn(() => Promise.resolve({
+  data: { employees: [], alerts: [] },
+}))
+
 vi.mock('@/api/home', () => ({
   getUpcomingEvents: (...args) => getUpcomingEvents(...args),
-  getProbationAlerts: (...args) => getProbationAlerts(...args),
   getStudentAttendanceSummary: (...args) => getStudentAttendanceSummary(...args),
+  getProbationAlerts: (...args) => getProbationAlerts(...args),
 }))
 
 vi.mock('@/utils/auth', () => ({
@@ -171,26 +174,29 @@ describe('HomeView', () => {
     expect(getStudentAttendanceSummary).not.toHaveBeenCalled()
     expect(getTodayAnomalies).not.toHaveBeenCalled()
     expect(getUpcomingEvents).not.toHaveBeenCalled()
-    expect(getProbationAlerts).not.toHaveBeenCalled()
 
     expect(intersectionObservers).toHaveLength(1)
     expect(intersectionObservers[0].observe).toHaveBeenCalledTimes(4)
 
+    // section[0]: studentAttendance
     intersectionObservers[0].trigger([0])
     await flushPromises()
     expect(getStudentAttendanceSummary).toHaveBeenCalledTimes(1)
     expect(getTodayAnomalies).not.toHaveBeenCalled()
 
+    // section[1]: anomalies
     intersectionObservers[0].trigger([1])
     await flushPromises()
     expect(getTodayAnomalies).toHaveBeenCalledTimes(1)
     expect(getUpcomingEvents).not.toHaveBeenCalled()
 
+    // section[2]: calendar
     intersectionObservers[0].trigger([2])
     await flushPromises()
     expect(getUpcomingEvents).toHaveBeenCalledTimes(1)
     expect(getProbationAlerts).not.toHaveBeenCalled()
 
+    // section[3]: probation
     intersectionObservers[0].trigger([3])
     await flushPromises()
     expect(getProbationAlerts).toHaveBeenCalledTimes(1)

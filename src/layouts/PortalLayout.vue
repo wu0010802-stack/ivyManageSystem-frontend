@@ -9,6 +9,7 @@ import { getPortalPendingCount } from '@/api/dismissalCalls'
 import { changePassword, endImpersonate } from '@/api/auth'
 import { getUserInfo, clearAuth, setUserInfo } from '@/utils/auth'
 import OfflineIndicator from '@/components/OfflineIndicator.vue'
+import { apiError } from '@/utils/error'
 
 const route = useRoute()
 const router = useRouter()
@@ -176,7 +177,7 @@ const handleSwitchUser = async (employeeId) => {
     ElMessage.success(`已切換為：${res.data.user.name}`)
     window.location.reload()
   } catch (error) {
-    ElMessage.error(error.response?.data?.detail || '切換失敗')
+    ElMessage.error(apiError(error, '切換失敗'))
   }
 }
 
@@ -193,7 +194,7 @@ const goBackToAdmin = async () => {
     isImpersonating.value = false
     router.push('/')
   } catch (error) {
-    ElMessage.error(error.response?.data?.detail || '返回失敗')
+    ElMessage.error(apiError(error, '返回失敗'))
     // 失敗時強制登出
     clearAuth()
     router.push('/login')
@@ -230,7 +231,7 @@ const submitPassword = async () => {
     ElMessage.success('密碼修改成功')
     showPasswordDialog.value = false
   } catch (error) {
-    ElMessage.error(error.response?.data?.detail || '修改失敗')
+    ElMessage.error(apiError(error, '修改失敗'))
   } finally {
     passwordLoading.value = false
   }

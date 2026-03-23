@@ -7,6 +7,7 @@ export const useShiftStore = defineStore('shift', {
   state: () => ({
     shiftTypes: [],
     loading: false,
+    error: null,
     _fetchedAt: 0,
     _pending: null,
   }),
@@ -22,12 +23,15 @@ export const useShiftStore = defineStore('shift', {
       if (this._pending) return this._pending
 
       this.loading = true
+      this.error = null
       this._pending = getShiftTypes()
         .then(res => {
           this.shiftTypes = res.data
           this._fetchedAt = Date.now()
         })
-        .catch(() => { /* handled by API interceptor */ })
+        .catch((err) => {
+          this.error = err?.response?.data?.detail || '班別資料載入失敗'
+        })
         .finally(() => {
           this.loading = false
           this._pending = null

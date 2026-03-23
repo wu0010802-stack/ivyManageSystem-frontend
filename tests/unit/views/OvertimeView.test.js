@@ -207,7 +207,7 @@ describe('OvertimeView', () => {
       const wrapper = mountOvertimeView()
       await flushPromises()
 
-      expect(wrapper.vm.$.setupState.totalHours).toBe(5)
+      expect(wrapper.vm.$.setupState.overtimeSummary.totalHours).toBe(5)
     })
 
     it('正確加總所有加班費', async () => {
@@ -220,7 +220,7 @@ describe('OvertimeView', () => {
       const wrapper = mountOvertimeView()
       await flushPromises()
 
-      expect(wrapper.vm.$.setupState.totalPay).toBe(1000)
+      expect(wrapper.vm.$.setupState.overtimeSummary.totalPay).toBe(1000)
     })
 
     it('overtime_pay 為 null/undefined 時不影響計算', async () => {
@@ -233,8 +233,8 @@ describe('OvertimeView', () => {
       const wrapper = mountOvertimeView()
       await flushPromises()
 
-      expect(wrapper.vm.$.setupState.totalPay).toBe(0)
-      expect(wrapper.vm.$.setupState.totalHours).toBe(3)
+      expect(wrapper.vm.$.setupState.overtimeSummary.totalPay).toBe(0)
+      expect(wrapper.vm.$.setupState.overtimeSummary.totalHours).toBe(3)
     })
   })
 

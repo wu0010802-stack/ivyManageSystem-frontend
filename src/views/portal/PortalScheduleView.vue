@@ -3,6 +3,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getMySchedule, getSwapRequests, getSwapCandidates, createSwapRequest, respondToSwap, cancelSwapRequest } from '@/api/portal'
 import { getUserInfo } from '@/utils/auth'
+import { apiError } from '@/utils/error'
 
 const loading = ref(false)
 const userInfo = getUserInfo()
@@ -73,15 +74,15 @@ const calendarWeeks = computed(() => {
   return weeks
 })
 
-const isToday = (day) => {
-  if (!day) return false
-  const today = new Date()
-  return day.date === `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
-}
+// 預計算今日字串與午夜時間戳，避免 isToday/isFutureDate 每次 render 重建 Date 物件
+const _todayStr = (() => {
+  const t = new Date()
+  return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`
+})()
+const _todayMidnight = new Date(new Date().setHours(0, 0, 0, 0))
 
-const isFutureDate = (dateStr) => {
-  return dateStr >= new Date().toISOString().slice(0, 10)
-}
+const isToday = (day) => !!day && day.date === _todayStr
+const isFutureDate = (dateStr) => dateStr >= _todayStr
 
 // ============ Swap Requests ============
 const fetchSwapRequests = async () => {
@@ -156,7 +157,7 @@ const submitSwap = async () => {
     showSwapDialog.value = false
     fetchSwapRequests()
   } catch (error) {
-    ElMessage.error(error.response?.data?.detail || '送出失敗')
+    ElMessage.error(apiError(error, '送出失敗'))
   }
 }
 
@@ -347,7 +348,7 @@ onMounted(() => {
             type="date"
             placeholder="選擇日期"
             value-format="YYYY-MM-DD"
-            :disabled-date="(d) => d < new Date(new Date().setHours(0,0,0,0))"
+            :disabled-date="(d) => d < _todayMidnight"
             style="width: 100%"
             @change="onSwapDateChange"
           />

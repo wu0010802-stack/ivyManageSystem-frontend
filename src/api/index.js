@@ -63,6 +63,11 @@ api.interceptors.response.use(
             _redirectToLogin()
         }
 
+        // 正規化 UI 顯示用錯誤訊息，避免各元件重複解析 response 結構
+        error.displayMessage = error.response?.data?.detail
+            || error.response?.data?.message
+            || null
+
         return Promise.reject(error)
     }
 )

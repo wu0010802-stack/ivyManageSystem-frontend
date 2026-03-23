@@ -90,6 +90,7 @@ import { getEmployees } from '@/api/employees'
 import { impersonate } from '@/api/auth'
 import { getUserInfo, clearAuth, setUserInfo } from '@/utils/auth'
 import GlobalSearch from '@/components/GlobalSearch.vue'
+import { apiError } from '@/utils/error'
 import AdminNotificationBell from '@/components/layout/AdminNotificationBell.vue'
 
 defineProps({
@@ -155,7 +156,7 @@ const doImpersonate = async (employeeId) => {
     showEmployeePicker.value = false
     router.push('/portal/attendance')
   } catch (error) {
-    ElMessage.error(error.response?.data?.detail || '切換失敗')
+    ElMessage.error(apiError(error, '切換失敗'))
   }
 }
 

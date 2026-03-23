@@ -1,7 +1,9 @@
 <script setup>
 import { ref, reactive, computed, watch, onMounted } from 'vue'
+import { useDebounceFn } from '@vueuse/core'
 import { ElMessage } from 'element-plus'
 import { getMyOvertimes, createMyOvertime, deleteMyOvertime, getMyWorkdayHours } from '@/api/portal'
+import { apiError } from '@/utils/error'
 
 const loading = ref(false)
 const submitLoading = ref(false)
@@ -68,8 +70,7 @@ const openForm = () => {
 }
 
 // ── 根據日期自動偵測加班類型 ──
-watch(() => form.overtime_date, async (dateStr) => {
-  if (!dateStr) { typeHint.value = ''; return }
+const _detectOvertimeType = useDebounceFn(async (dateStr) => {
   typeDetecting.value = true
   try {
     // 用 workday-hours API 查詢該日的 type
@@ -102,6 +103,11 @@ watch(() => form.overtime_date, async (dateStr) => {
   } finally {
     typeDetecting.value = false
   }
+}, 300)
+
+watch(() => form.overtime_date, (dateStr) => {
+  if (!dateStr) { typeHint.value = ''; return }
+  _detectOvertimeType(dateStr)
 })
 
 // ── 根據起迄時間自動計算時數 ──
@@ -160,7 +166,7 @@ const submitOvertime = async () => {
     showForm.value = false
     fetchOvertimes()
   } catch (error) {
-    ElMessage.error(error.response?.data?.detail || '提交失敗')
+    ElMessage.error(apiError(error, '提交失敗'))
   } finally {
     submitLoading.value = false
   }
@@ -172,7 +178,7 @@ const withdrawOvertime = async (id) => {
     ElMessage.success('加班申請已撤回')
     fetchOvertimes()
   } catch (error) {
-    ElMessage.error(error.response?.data?.detail || '撤回失敗')
+    ElMessage.error(apiError(error, '撤回失敗'))
   }
 }
 

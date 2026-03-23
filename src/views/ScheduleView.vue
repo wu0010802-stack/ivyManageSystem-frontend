@@ -5,15 +5,16 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { getMonthWeeks } from '@/utils/scheduleUtils'
 import { useEmployeeStore } from '@/stores/employee'
 import { useShiftStore } from '@/stores/shift'
+import { storeToRefs } from 'pinia'
+import { apiError } from '@/utils/error'
 
 // --- State ---
 const loading = ref(false)
 const saving = ref(false)
 const employeeStore = useEmployeeStore()
 const shiftStore = useShiftStore()
-// computed 別名：template 不需改動
-const employees = computed(() => employeeStore.employees)
-const shiftTypes = computed(() => shiftStore.activeShiftTypes)
+const { employees } = storeToRefs(employeeStore)
+const { activeShiftTypes: shiftTypes } = storeToRefs(shiftStore)
 const assignments = ref({}) // { employee_id: { shift_type_id, notes } }
 
 // Week selector - default to current week's Monday
@@ -91,9 +92,13 @@ const setAssignment = (empId, shiftTypeId) => {
   assignments.value[empId].shift_type_id = shiftTypeId
 }
 
-const getShiftInfo = (shiftTypeId) => {
-  return shiftTypes.value.find(t => t.id === shiftTypeId)
-}
+const shiftTypeMap = computed(() => {
+  const map = new Map()
+  for (const st of shiftTypes.value) map.set(st.id, st)
+  return map
+})
+
+const getShiftInfo = (shiftTypeId) => shiftTypeMap.value.get(shiftTypeId)
 
 // --- Save ---
 const saveAll = async () => {
@@ -114,7 +119,7 @@ const saveAll = async () => {
     })
     ElMessage.success('排班已儲存')
   } catch (error) {
-    ElMessage.error(error.response?.data?.detail || '儲存失敗')
+    ElMessage.error(apiError(error, '儲存失敗'))
   } finally {
     saving.value = false
   }
@@ -375,7 +380,7 @@ const handleShiftImportFile = async (file) => {
     }
     fetchAssignments()
   } catch (error) {
-    ElMessage.error(error.response?.data?.detail || '匯入失敗')
+    ElMessage.error(apiError(error, '匯入失敗'))
   } finally {
     shiftImportLoading.value = false
   }

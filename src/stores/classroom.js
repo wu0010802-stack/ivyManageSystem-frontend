@@ -7,6 +7,7 @@ export const useClassroomStore = defineStore('classroom', {
   state: () => ({
     classrooms: [],
     loading: false,
+    error: null,
     _fetchedAt: 0,
     _pending: null,
   }),
@@ -17,12 +18,15 @@ export const useClassroomStore = defineStore('classroom', {
       if (this._pending) return this._pending
 
       this.loading = true
+      this.error = null
       this._pending = getClassrooms()
         .then(res => {
           this.classrooms = res.data
           this._fetchedAt = Date.now()
         })
-        .catch(() => { /* handled by API interceptor */ })
+        .catch((err) => {
+          this.error = err?.response?.data?.detail || '班級資料載入失敗'
+        })
         .finally(() => {
           this.loading = false
           this._pending = null

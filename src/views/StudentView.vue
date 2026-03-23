@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, onMounted, computed, watch } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getStudents, createStudent, updateStudent, graduateStudent, bulkTransferStudents } from '@/api/students'
 import { getClassrooms } from '@/api/classrooms'
@@ -8,6 +8,7 @@ import { ElMessage } from 'element-plus'
 import { Search, Plus, Edit, Delete, Warning, Van } from '@element-plus/icons-vue'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
 import { useCrudDialog, useConfirmDelete } from '@/composables'
+import { apiError } from '@/utils/error'
 import { downloadFile } from '@/utils/download'
 import { getCurrentAcademicTerm, normalizeSchoolYear, buildSchoolYearOptions } from '@/utils/academic'
 import { STUDENT_STATUS_TAG_OPTIONS } from '@/utils/student'
@@ -51,6 +52,9 @@ let _searchTimer = null
 watch(searchQuery, (val) => {
   clearTimeout(_searchTimer)
   _searchTimer = setTimeout(() => { debouncedSearch.value = val }, 300)
+})
+onUnmounted(() => {
+  if (_searchTimer) clearTimeout(_searchTimer)
 })
 const formRef = ref(null)
 
@@ -179,8 +183,7 @@ const handleNotifyDismissal = async (row) => {
     ElMessage.success(`已通知 ${row.name} 的班級老師`)
     fetchActiveCallIds()
   } catch (error) {
-    const msg = error.response?.data?.detail || '通知失敗'
-    ElMessage.error(msg)
+    ElMessage.error(apiError(error, '通知失敗'))
   }
 }
 
@@ -206,7 +209,7 @@ const submitGraduate = async () => {
       graduateDialogVisible.value = false
       fetchStudents()
     } catch (error) {
-      ElMessage.error(error.response?.data?.detail ?? '操作失敗')
+      ElMessage.error(apiError(error, '操作失敗'))
     }
   })
 }
@@ -246,7 +249,7 @@ const submitTransfer = async () => {
     selectedStudents.value = []
     fetchStudents()
   } catch (error) {
-    ElMessage.error(error.response?.data?.detail ?? '轉班失敗')
+    ElMessage.error(apiError(error, '轉班失敗'))
   }
 }
 
@@ -341,7 +344,11 @@ const submitForm = async () => {
         closeDialog()
         fetchStudents()
       } catch (error) {
-        ElMessage.error('操作失敗')
+        const detail = error.response?.data?.detail
+        const msg = Array.isArray(detail)
+          ? detail.map(e => e.msg).join('；')
+          : (detail ?? '操作失敗')
+        ElMessage.error(msg)
       }
     }
   })
@@ -356,7 +363,10 @@ const loadClassrooms = async () => {
   }
 }
 
+let _applyingRoute = false
+
 watch([filterSchoolYear, filterSemester, filterClassroomId], () => {
+  if (_applyingRoute) return
   currentPage.value = 1
   fetchStudents()
 })
@@ -364,7 +374,10 @@ watch([filterSchoolYear, filterSemester, filterClassroomId], () => {
 watch(
   () => route.query,
   async () => {
+    _applyingRoute = true
     applyRouteContext()
+    await nextTick()
+    _applyingRoute = false
     await fetchStudents()
     await handleRouteAction()
   },

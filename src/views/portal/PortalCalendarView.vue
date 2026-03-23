@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getCalendar } from '@/api/portal'
+import { apiError } from '@/utils/error'
 
 const loading = ref(false)
 const events = ref([])
@@ -30,7 +31,7 @@ const fetchEvents = async () => {
     events.value = res.data.events || []
     officialSync.value = res.data.official_sync || null
   } catch (error) {
-    ElMessage.error(error.response?.data?.detail || '載入失敗')
+    ElMessage.error(apiError(error, '載入失敗'))
   } finally {
     loading.value = false
   }
@@ -52,18 +53,31 @@ const firstDayOfWeek = computed(() => {
 })
 
 const calendarDays = computed(() => {
+  const yr = currentYear.value
+  const mo = String(currentMonth.value).padStart(2, '0')
+  const totalDays = daysInMonth.value
+
+  // 預建日期→事件 Map，避免對每天都做 O(n) 線性掃描
+  const eventsByDate = new Map()
+  for (const ev of events.value) {
+    const start = ev.event_date
+    const end = ev.end_date || ev.event_date
+    for (let d = 1; d <= totalDays; d++) {
+      const dateStr = `${yr}-${mo}-${String(d).padStart(2, '0')}`
+      if (dateStr >= start && dateStr <= end) {
+        if (!eventsByDate.has(dateStr)) eventsByDate.set(dateStr, [])
+        eventsByDate.get(dateStr).push(ev)
+      }
+    }
+  }
+
   const days = []
   for (let i = 0; i < firstDayOfWeek.value; i++) {
     days.push({ day: null, events: [] })
   }
-  for (let d = 1; d <= daysInMonth.value; d++) {
-    const dateStr = `${currentYear.value}-${String(currentMonth.value).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-    const dayEvents = events.value.filter(ev => {
-      const start = ev.event_date
-      const end = ev.end_date || ev.event_date
-      return dateStr >= start && dateStr <= end
-    })
-    days.push({ day: d, date: dateStr, events: dayEvents })
+  for (let d = 1; d <= totalDays; d++) {
+    const dateStr = `${yr}-${mo}-${String(d).padStart(2, '0')}`
+    days.push({ day: d, date: dateStr, events: eventsByDate.get(dateStr) || [] })
   }
   return days
 })

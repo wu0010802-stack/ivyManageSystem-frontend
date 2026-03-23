@@ -42,22 +42,16 @@ const router = createRouter({
             meta: { title: '學生出席紀錄' }
         },
         {
-            path: '/student-incidents',
-            name: 'student-incidents',
-            component: () => import('../views/StudentIncidentView.vue'),
-            meta: { title: '學生事件紀錄' }
-        },
-        {
-            path: '/student-assessments',
-            name: 'student-assessments',
-            component: () => import('../views/StudentAssessmentView.vue'),
-            meta: { title: '學期評量記錄' }
+            path: '/student-records',
+            name: 'student-records',
+            component: () => import('../views/StudentRecordsView.vue'),
+            meta: { title: '學生紀錄' }
         },
         {
             path: '/classrooms',
             name: 'classrooms',
             component: () => import('../views/ClassroomView.vue'),
-            meta: { title: '班級管理' }
+            meta: { title: '班級學生管理' }
         },
         {
             path: '/attendance',
@@ -120,12 +114,11 @@ const router = createRouter({
             meta: { title: '系統設定' }
         },
         {
-            path: '/dev/salary',
-            name: 'dev-salary',
-            component: () => import('../views/DevSalaryView.vue'),
-            meta: { title: '薪資邏輯檢視 (Dev)' }
+            path: '/gov-reports',
+            name: 'gov-reports',
+            component: () => import('../views/GovReportsView.vue'),
+            meta: { title: '政府申報匯出' }
         },
-
         // ============ 接送通知 ============
         {
             path: '/dismissal-queue',

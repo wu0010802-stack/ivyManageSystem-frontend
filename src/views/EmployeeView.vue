@@ -1,5 +1,6 @@
 <script setup>
 import { ref, reactive, onMounted, computed, watch, nextTick } from 'vue'
+import { useDebounceFn } from '@vueuse/core'
 import { Loading } from '@element-plus/icons-vue'
 import { getEmployee, createEmployee, updateEmployee, offboard, getFinalSalaryPreview } from '@/api/employees'
 import { getRecords as getAttendanceRecords, uploadCsv, deleteEmployeeDateRecord } from '@/api/attendance'
@@ -66,7 +67,6 @@ const form = reactive({
   phone: '',
   email: '',
   hire_date: '',
-  probation_end_date: '',
   birthday: '',
   classroom_id: null,
   base_salary: 0,
@@ -100,15 +100,6 @@ const bureauJobTitleOptions = computed(() => {
   return official
 })
 
-// 當 hire_date 變動時，若 probation_end_date 尚未填寫，自動建議 hire_date + 3 個月
-watch(() => form.hire_date, (val) => {
-  if (val && !form.probation_end_date) {
-    const d = new Date(val)
-    d.setMonth(d.getMonth() + 3)
-    form.probation_end_date = d.toISOString().slice(0, 10)
-  }
-})
-
 // 其他職位對應設定欄位的對照表
 const POSITION_SALARY_KEY = {
   '行政': 'admin_staff',
@@ -122,6 +113,8 @@ const POSITION_SALARY_KEY = {
 
 // 用於區分「載入舊資料」vs「使用者手動修改」，避免 populateForm 觸發連動
 let _populatingForm = false
+// 用於防止 Watch 1 改變 base_salary 時連動觸發 Watch 2
+let _bulkUpdating = false
 
 // 根據職稱 + 職位 + bonus_grade 計算並自動套用標準底薪
 watch([() => form.job_title_id, () => form.position, () => form.bonus_grade], () => {
@@ -137,12 +130,17 @@ watch([() => form.job_title_id, () => form.position, () => form.bonus_grade], ()
     salary = key ? (positionSalaryConfig.value[key] ?? null) : null
   }
   suggestedSalary.value = salary
-  if (salary !== null) form.base_salary = salary
+  if (salary !== null) {
+    _bulkUpdating = true
+    form.base_salary = salary
+    nextTick(() => { _bulkUpdating = false })
+  }
 })
 
-// 基本薪資變動時自動連動投保級距（排除 populateForm 載入時的變動）
+// 基本薪資變動時自動連動投保級距（排除 populateForm 載入與 Watch 1 的連動觸發）
 watch(() => form.base_salary, (val) => {
-  if (!_populatingForm) form.insurance_salary_level = val
+  if (_bulkUpdating || _populatingForm) return
+  form.insurance_salary_level = val
 })
 
 // 查詢某員工對應的標準薪俸（詳情頁用）
@@ -177,10 +175,6 @@ const getEmployeeStatus = (emp) => {
   if (!emp.is_active) return { label: '已離職', type: 'info' }
   if (emp.resign_date && emp.resign_date > today) {
     return { label: `待離職・${emp.resign_date}`, type: 'warning' }
-  }
-  if (emp.probation_end_date && emp.probation_end_date >= today) {
-    const diff = Math.ceil((new Date(emp.probation_end_date) - new Date(today)) / 86400000)
-    return { label: `試用中・剩 ${diff} 天`, type: 'primary' }
   }
   return { label: '在職', type: 'success' }
 }
@@ -232,11 +226,8 @@ const submitOffboard = async () => {
 
 const searchQuery = ref('')
 const debouncedSearch = ref('')
-let _searchTimer = null
-watch(searchQuery, (val) => {
-  clearTimeout(_searchTimer)
-  _searchTimer = setTimeout(() => { debouncedSearch.value = val }, 300)
-})
+const updateSearch = useDebounceFn((val) => { debouncedSearch.value = val }, 300)
+watch(searchQuery, updateSearch)
 
 const filteredEmployees = computed(() => {
   if (!debouncedSearch.value) return employeeStore.employees
@@ -277,7 +268,6 @@ const resetForm = () => {
   form.department = 'Teaching'
   form.work_start_time = '08:00'
   form.work_end_time = '17:00'
-  form.probation_end_date = ''
   suggestedSalary.value = null
 }
 
@@ -408,7 +398,7 @@ const saveEmployee = async () => {
         closeDialog()
         fetchEmployees()
       } catch (error) {
-        ElMessage.error('操作失敗: ' + (error.response?.data?.detail || error.message))
+        ElMessage.error('操作失敗: ' + apiError(error, error.message))
       }
     }
   })
@@ -446,15 +436,6 @@ onMounted(async () => {
         <el-table-column prop="title" label="教育局系統" width="150" sortable />
         <el-table-column prop="position" label="職位" width="120" />
         <el-table-column prop="hire_date" label="到職日" width="120" sortable />
-        <el-table-column label="試用期至" width="130">
-          <template #default="scope">
-            <template v-if="scope.row.probation_end_date">
-              <span v-if="scope.row.probation_end_date < new Date().toISOString().slice(0,10)" style="color:#999">已過試用</span>
-              <span v-else>{{ scope.row.probation_end_date }}</span>
-            </template>
-            <span v-else>-</span>
-          </template>
-        </el-table-column>
         <el-table-column label="狀態" width="160">
           <template #default="scope">
             <el-tag :type="getEmployeeStatus(scope.row).type" size="small">
@@ -555,11 +536,6 @@ onMounted(async () => {
               </el-col>
             </el-row>
             <el-row :gutter="20">
-              <el-col :span="12">
-                <el-form-item label="試用期結束日">
-                  <el-date-picker v-model="form.probation_end_date" type="date" placeholder="選擇日期（可自動建議）" style="width: 100%" value-format="YYYY-MM-DD" clearable />
-                </el-form-item>
-              </el-col>
               <el-col :span="12">
                 <el-form-item label="生日">
                   <el-date-picker v-model="form.birthday" type="date" placeholder="選擇日期" style="width: 100%" value-format="YYYY-MM-DD" clearable />
@@ -695,7 +671,6 @@ onMounted(async () => {
               <span v-else>-</span>
             </el-descriptions-item>
             <el-descriptions-item label="到職日">{{ currentDetail.hire_date }}</el-descriptions-item>
-            <el-descriptions-item label="試用期至">{{ currentDetail.probation_end_date || '-' }}</el-descriptions-item>
             <el-descriptions-item label="生日">{{ currentDetail.birthday || '-' }}</el-descriptions-item>
             <el-descriptions-item label="在職狀態">
               <el-tag :type="getEmployeeStatus(currentDetail).type" size="small">

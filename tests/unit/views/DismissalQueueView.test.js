@@ -37,7 +37,7 @@ const mockWs = {
   onerror: null,
   onclose: null,
 }
-vi.stubGlobal('WebSocket', vi.fn(() => mockWs))
+vi.stubGlobal('WebSocket', vi.fn(function () { return mockWs }))
 
 // ─── Helpers ─────────────────────────────────────────────
 const SAMPLE_CALL = {

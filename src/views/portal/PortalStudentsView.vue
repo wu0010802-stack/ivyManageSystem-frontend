@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getMyStudents } from '@/api/portal'
+import { apiError } from '@/utils/error'
 
 const loading = ref(false)
 const data = ref({ classrooms: [], total_students: 0, employee_name: '' })
@@ -17,7 +18,7 @@ const fetchStudents = async () => {
       activeClassroom.value = res.data.classrooms[0].classroom_id
     }
   } catch (error) {
-    ElMessage.error(error.response?.data?.detail || '載入失敗')
+    ElMessage.error(apiError(error, '載入失敗'))
   } finally {
     loading.value = false
   }
@@ -39,25 +40,23 @@ const filteredStudents = computed(() => {
   )
 })
 
-const calculateAge = (birthday) => {
-  if (!birthday) return ''
-  const birth = new Date(birthday)
+// 預算所有學生年齡，資料載入後只計算一次，避免 v-for 每次 render 重複 Date 解析
+const ageMap = computed(() => {
   const today = new Date()
-  let years = today.getFullYear() - birth.getFullYear()
-  let months = today.getMonth() - birth.getMonth()
-  if (months < 0) {
-    years--
-    months += 12
-  }
-  if (today.getDate() < birth.getDate()) {
-    months--
-    if (months < 0) {
-      years--
-      months += 12
+  const map = new Map()
+  for (const cls of data.value.classrooms) {
+    for (const s of cls.students) {
+      if (!s.birthday) { map.set(s.id, ''); continue }
+      const birth = new Date(s.birthday)
+      let years = today.getFullYear() - birth.getFullYear()
+      let months = today.getMonth() - birth.getMonth()
+      if (months < 0) { years--; months += 12 }
+      if (today.getDate() < birth.getDate()) { months--; if (months < 0) { years--; months += 12 } }
+      map.set(s.id, `${years}歲${months}個月`)
     }
   }
-  return `${years}歲${months}個月`
-}
+  return map
+})
 
 const genderLabel = (g) => {
   if (g === 'M' || g === '男') return '男'
@@ -130,7 +129,7 @@ onMounted(fetchStudents)
         </el-table-column>
         <el-table-column label="年齡" width="120">
           <template #default="{ row }">
-            {{ calculateAge(row.birthday) || '-' }}
+            {{ ageMap.get(row.id) || '-' }}
           </template>
         </el-table-column>
         <el-table-column prop="parent_name" label="家長姓名" width="100" />
