@@ -326,6 +326,14 @@ const submitPassword = async () => {
             <span>接送通知</span>
             <el-badge v-if="dismissalPendingCount > 0" :value="dismissalPendingCount" :max="99" class="announcement-badge" />
           </el-menu-item>
+          <el-menu-item index="/portal/activity">
+            <el-icon><Brush /></el-icon>
+            <span>才藝查詢</span>
+          </el-menu-item>
+          <el-menu-item index="/portal/activity/attendance">
+            <el-icon><Checked /></el-icon>
+            <span>才藝點名</span>
+          </el-menu-item>
         </el-sub-menu>
 
         <!-- 學校行事曆 -->

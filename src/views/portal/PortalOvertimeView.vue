@@ -4,6 +4,7 @@ import { useDebounceFn } from '@vueuse/core'
 import { ElMessage } from 'element-plus'
 import { getMyOvertimes, createMyOvertime, deleteMyOvertime, getMyWorkdayHours } from '@/api/portal'
 import { apiError } from '@/utils/error'
+import { OVERTIME_TYPES as overtimeTypes } from '@/constants/approvalEnums'
 
 const loading = ref(false)
 const submitLoading = ref(false)
@@ -15,11 +16,6 @@ const query = reactive({
   month: now.getMonth() + 1,
 })
 
-const overtimeTypes = [
-  { value: 'weekday', label: '平日', info: '前2hr 1.34倍, 後2hr 1.67倍' },
-  { value: 'weekend', label: '假日', info: '全部 2倍' },
-  { value: 'holiday', label: '國定假日', info: '全部 2倍' },
-]
 
 const showForm = ref(false)
 const form = reactive({
@@ -208,7 +204,7 @@ onMounted(fetchOvertimes)
       <div class="rules-grid">
         <div v-for="ot in overtimeTypes" :key="ot.value" class="rule-item">
           <el-tag size="small">{{ ot.label }}</el-tag>
-          <span>{{ ot.info }}</span>
+          <span>{{ ot.desc }}</span>
         </div>
       </div>
     </el-card>

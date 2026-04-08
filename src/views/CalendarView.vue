@@ -7,6 +7,7 @@ import { apiError } from '@/utils/error'
 
 const loading = ref(false)
 const events = ref([])
+const deleting = ref(false)
 const dialogVisible = ref(false)
 const detailVisible = ref(false)
 const isEdit = ref(false)
@@ -223,20 +224,26 @@ const saveEvent = async () => {
   }
 }
 
-const handleDelete = (event) => {
-  ElMessageBox.confirm(`確定要刪除「${event.title}」？`, '確認刪除', {
-    confirmButtonText: '刪除',
-    cancelButtonText: '取消',
-    type: 'warning',
-  }).then(async () => {
-    try {
-      await deleteEvent(event.id)
-      ElMessage.success('事件已刪除')
-      await fetchEvents()
-    } catch (error) {
-      ElMessage.error(apiError(error, '刪除失敗'))
-    }
-  }).catch(() => {})
+const handleDelete = async (event) => {
+  try {
+    await ElMessageBox.confirm(`確定要刪除「${event.title}」？`, '確認刪除', {
+      confirmButtonText: '刪除',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
+  } catch {
+    return
+  }
+  deleting.value = true
+  try {
+    await deleteEvent(event.id)
+    ElMessage.success('事件已刪除')
+    await fetchEvents()
+  } catch (error) {
+    ElMessage.error(apiError(error, '刪除失敗'))
+  } finally {
+    deleting.value = false
+  }
 }
 
 onMounted(fetchEvents)
@@ -357,7 +364,7 @@ onMounted(fetchEvents)
             </template>
             <template v-else>
               <el-button link type="primary" size="small" @click="openEvent(row)">編輯</el-button>
-              <el-button link type="danger" size="small" @click="handleDelete(row)">刪除</el-button>
+              <el-button link type="danger" size="small" @click="handleDelete(row)" :loading="deleting">刪除</el-button>
             </template>
           </template>
         </el-table-column>

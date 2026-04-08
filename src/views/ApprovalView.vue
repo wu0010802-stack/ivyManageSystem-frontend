@@ -8,43 +8,22 @@ import { getOvertimes, approveOvertime as approveOvertimeApi } from '@/api/overt
 import { getCorrections, approveCorrection as approveCorrectionApi } from '@/api/punchCorrections'
 import { LEAVE_TYPE_MAP as leaveTypeMap } from '@/utils/leaves'
 import { money, formatDate, formatTime } from '@/utils/format'
-import { useNotificationStore } from '@/stores/notification'
 import { apiError } from '@/utils/error'
+import { useFetchPending, useApprovalOperation } from '@/composables'
+import { ROLE_TAG_MAP, OVERTIME_TYPE_MAP, CORRECTION_TYPE_MAP, SUBSTITUTE_STATUS_MAP } from '@/constants/approvalEnums'
 
 const router = useRouter()
-const notificationStore = useNotificationStore()
 
 const loading = ref(false)
-const pendingLeaves = ref([])
-const pendingOvertimes = ref([])
-const pendingPunchCorrections = ref([])
 
-const roleTagMap = {
-  teacher: { label: '教師', type: 'info' },
-  supervisor: { label: '主管', type: 'warning' },
-  hr: { label: '人資', type: 'success' },
-  admin: { label: '管理員', type: 'danger' },
-}
+const { items: pendingLeaves,          fetch: fetchPendingLeaves    } = useFetchPending(getLeaves)
+const { items: pendingOvertimes,       fetch: fetchPendingOvertimes } = useFetchPending(getOvertimes)
+const { items: pendingPunchCorrections, fetch: fetchPendingCorrections } = useFetchPending(getCorrections)
 
-const overtimeTypeMap = {
-  weekday: { label: '平日', type: '' },
-  weekend: { label: '假日', type: 'warning' },
-  holiday: { label: '國定假日', type: 'danger' },
-}
-
-const correctionTypeMap = {
-  punch_in: { label: '補上班卡', type: 'warning' },
-  punch_out: { label: '補下班卡', type: 'info' },
-  both: { label: '補全天', type: 'danger' },
-}
-
-const substituteStatusMap = {
-  not_required: { label: '免代理', type: 'info' },
-  pending: { label: '待回應', type: 'warning' },
-  accepted: { label: '已接受', type: 'success' },
-  rejected: { label: '已拒絕', type: 'danger' },
-  waived: { label: '主管略過', type: 'info' },
-}
+const roleTagMap        = ROLE_TAG_MAP
+const overtimeTypeMap   = OVERTIME_TYPE_MAP
+const correctionTypeMap = CORRECTION_TYPE_MAP
+const substituteStatusMap = SUBSTITUTE_STATUS_MAP
 
 const totalPending = computed(() =>
   pendingLeaves.value.length + pendingOvertimes.value.length + pendingPunchCorrections.value.length
@@ -70,43 +49,20 @@ const goToLeaveManagement = () => router.push({ name: 'leaves' })
 const goToOvertimeManagement = () => router.push({ name: 'overtime' })
 const goToAttendanceManagement = () => router.push({ name: 'attendance' })
 
-const fetchPendingLeaves = async () => {
-  try {
-    const res = await getLeaves({ status: 'pending' })
-    pendingLeaves.value = Array.isArray(res.data) ? res.data : []
-  } catch {
-    // silent
-  }
-}
-
-const fetchPendingOvertimes = async () => {
-  try {
-    const res = await getOvertimes({ status: 'pending' })
-    pendingOvertimes.value = Array.isArray(res.data) ? res.data : []
-  } catch {
-    // silent
-  }
-}
-
-const fetchPendingCorrections = async () => {
-  try {
-    const res = await getCorrections({ status: 'pending' })
-    pendingPunchCorrections.value = Array.isArray(res.data) ? res.data : []
-  } catch {
-    // silent
-  }
-}
-
 const fetchAll = async () => {
   loading.value = true
   await Promise.all([fetchPendingLeaves(), fetchPendingOvertimes(), fetchPendingCorrections()])
   loading.value = false
 }
 
+const { execute: executeLeaveApproval }      = useApprovalOperation({ apiFn: approveLeaveApi,      onSuccess: fetchPendingLeaves })
+const { execute: executeOvertimeApproval }   = useApprovalOperation({ apiFn: approveOvertimeApi,   onSuccess: fetchPendingOvertimes })
+const { execute: executeCorrectionApproval } = useApprovalOperation({ apiFn: approveCorrectionApi, onSuccess: fetchPendingCorrections })
+
 const approveLeave = async (row, approved) => {
-  try {
-    const payload = { approved }
-    if (approved && ['pending', 'rejected'].includes(row.substitute_status)) {
+  const payload = { approved }
+  if (approved && ['pending', 'rejected'].includes(row.substitute_status)) {
+    try {
       const warningText = row.substitute_status === 'pending'
         ? '代理人尚未接受此代理請求，仍要直接核准嗎？'
         : '代理人已拒絕此代理請求，仍要直接核准嗎？'
@@ -116,26 +72,15 @@ const approveLeave = async (row, approved) => {
         { type: 'warning', confirmButtonText: '仍要核准', cancelButtonText: '取消' }
       )
       payload.force_without_substitute = true
+    } catch {
+      return
     }
-    await approveLeaveApi(row.id, payload)
-    ElMessage.success(approved ? '請假已核准' : '請假已駁回')
-    fetchPendingLeaves()
-    notificationStore.fetchSummary({ force: true })
-  } catch (error) {
-    if (error === 'cancel' || error === 'close') return
-    ElMessage.error('操作失敗')
   }
+  await executeLeaveApproval(row.id, payload, approved ? '請假已核准' : '請假已駁回')
 }
 
 const approveOvertime = async (row, approved) => {
-  try {
-    await approveOvertimeApi(row.id, approved)
-    ElMessage.success(approved ? '加班已核准' : '加班已駁回')
-    fetchPendingOvertimes()
-    notificationStore.fetchSummary({ force: true })
-  } catch {
-    ElMessage.error('操作失敗')
-  }
+  await executeOvertimeApproval(row.id, approved, approved ? '加班已核准' : '加班已駁回')
 }
 
 const approveCorrection = async (row, approved) => {
@@ -153,14 +98,7 @@ const approveCorrection = async (row, approved) => {
       return
     }
   }
-  try {
-    await approveCorrectionApi(row.id, payload)
-    ElMessage.success(approved ? '補打卡已核准，考勤已更新' : '補打卡已駁回')
-    fetchPendingCorrections()
-    notificationStore.fetchSummary({ force: true })
-  } catch (error) {
-    ElMessage.error(apiError(error, '操作失敗'))
-  }
+  await executeCorrectionApproval(row.id, payload, approved ? '補打卡已核准，考勤已更新' : '補打卡已駁回')
 }
 
 const attachDialogVisible = ref(false)

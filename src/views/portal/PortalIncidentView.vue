@@ -3,22 +3,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getMyClassIncidents, createPortalIncident } from '@/api/studentIncidents'
 import api from '@/api/index'
-
-const INCIDENT_TYPES = ['身體健康', '意外受傷', '行為觀察', '其他']
-const SEVERITIES = ['輕微', '中度', '嚴重']
-
-const TYPE_TAG = {
-  '身體健康': 'warning',
-  '意外受傷': 'danger',
-  '行為觀察': 'info',
-  '其他': '',
-}
-
-const SEVERITY_TAG = {
-  '輕微': 'success',
-  '中度': 'warning',
-  '嚴重': 'danger',
-}
+import { INCIDENT_TYPES, SEVERITIES, INCIDENT_TYPE_TAG as TYPE_TAG, SEVERITY_TAG } from '@/constants/studentRecords'
 
 // ── 班級/學生 ─────────────────────────────────────────
 const classrooms = ref([])      // [{ classroom_id, classroom_name, students: [...] }]

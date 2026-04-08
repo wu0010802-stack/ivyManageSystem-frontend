@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { defineComponent, h, nextTick } from 'vue'
+import { createPinia, setActivePinia } from 'pinia'
 import AnnouncementView from '@/views/AnnouncementView.vue'
 
 const getAnnouncements = vi.fn(() => Promise.resolve({
@@ -83,6 +84,7 @@ const ElTableStub = defineComponent({
 
 describe('AnnouncementView', () => {
   beforeEach(() => {
+    setActivePinia(createPinia())
     vi.clearAllMocks()
   })
 

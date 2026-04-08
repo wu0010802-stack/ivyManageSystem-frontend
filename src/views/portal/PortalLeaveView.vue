@@ -6,12 +6,13 @@ import {
   getMySubstituteRequests,
   respondToSubstitute,
 } from '@/api/portal'
-import { getEmployees } from '@/api/employees'
+import { useEmployeeStore } from '@/stores/employee'
 import PortalLeaveForm from '@/components/portal/PortalLeaveForm.vue'
 import PortalLeaveList from '@/components/portal/PortalLeaveList.vue'
 
 // ── 代理人相關 ──
-const allEmployees = ref([])
+const employeeStore = useEmployeeStore()
+const allEmployees = computed(() => employeeStore.employees)
 const mySubstituteRequests = ref([])
 const substituteLoading = ref(false)
 const respondLoading = ref(false)
@@ -24,15 +25,6 @@ const substituteStatusLabel = (status) => {
 const substituteStatusType = (status) => {
   const map = { not_required: 'info', pending: 'warning', accepted: 'success', rejected: 'danger', waived: 'info' }
   return map[status] || ''
-}
-
-const fetchEmployees = async () => {
-  try {
-    const res = await getEmployees()
-    allEmployees.value = res.data || []
-  } catch {
-    // silent
-  }
 }
 
 const fetchSubstituteRequests = async () => {
@@ -117,7 +109,7 @@ onMounted(() => {
   Promise.all([
     leaveListRef.value?.fetchLeaves(),
     fetchLeaveStats(),
-    fetchEmployees(),
+    employeeStore.fetchEmployees(),
     fetchSubstituteRequests(),
   ])
 })

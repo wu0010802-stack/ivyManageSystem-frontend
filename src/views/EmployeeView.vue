@@ -285,7 +285,7 @@ const populateForm = (row) => {
 
 const { dialogVisible, isEdit, openCreate: handleAdd, openEdit: handleEdit, closeDialog } = useCrudDialog({ resetForm, populateForm })
 
-const { confirmDelete: handleDelete } = useConfirmDelete({
+const { confirmDelete: handleDelete, deleting: deleteLoading } = useConfirmDelete({
   endpoint: '/employees',
   onSuccess: fetchEmployees,
   successMsg: '刪除成功',
@@ -448,7 +448,7 @@ onMounted(async () => {
             <el-button link type="primary" size="small" @click="handleDetail(scope.row)">詳情</el-button>
             <el-button link type="primary" size="small" @click="handleEdit(scope.row)">編輯</el-button>
             <el-button v-if="scope.row.is_active" link type="warning" size="small" @click="openOffboard(scope.row)">辦理離職</el-button>
-            <el-button link type="danger" size="small" @click="handleDelete(scope.row)">刪除</el-button>
+            <el-button link type="danger" size="small" @click="handleDelete(scope.row)" :loading="deleteLoading">刪除</el-button>
           </template>
         </el-table-column>
         <template #empty>

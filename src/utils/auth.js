@@ -99,6 +99,12 @@ export const PERMISSION_VALUES = {
   USER_MANAGEMENT_WRITE: 1 << 26,
   ACTIVITY_READ:  1 << 27,
   ACTIVITY_WRITE: 1 << 28,
+  // ⚠️ 注意：1 << 29 及以上在 JS 32-bit 有符號整數下會溢位（1 << 31 為負數，1 << 32 = 1）。
+  // 使用 2 ** N 儲存，並在 hasPermission 改用 BigInt 運算以保持正確性。
+  DISMISSAL_CALLS_READ:  2 ** 29,
+  DISMISSAL_CALLS_WRITE: 2 ** 30,
+  FEES_READ:  2 ** 31,
+  FEES_WRITE: 2 ** 32,
 }
 
 // 路由與權限對應表（瀏覽頁面屬於 READ 操作）
@@ -127,6 +133,8 @@ export const ROUTE_PERMISSIONS = {
   '/activity/inquiries':     'ACTIVITY_READ',
   '/activity/settings':      'ACTIVITY_WRITE',
   '/activity/changes':       'ACTIVITY_READ',
+  '/fees':                   'FEES_READ',
+  '/student-enrollment':     'STUDENTS_READ',
 }
 
 /**
@@ -151,7 +159,10 @@ export function hasPermission(permissionName) {
   const permValue = PERMISSION_VALUES[permissionName]
   if (!permValue) return false
 
-  return (permissions & permValue) === permValue
+  // 使用 BigInt 運算，避免高位元（≥ 1<<31）在 JS 32-bit 運算中溢位
+  const permBig = BigInt(permValue)
+  const permsBig = BigInt(permissions)
+  return (permsBig & permBig) === permBig
 }
 
 /**

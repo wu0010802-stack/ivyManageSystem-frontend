@@ -45,7 +45,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { getRegistrationTime, updateRegistrationTime } from '@/api/activity'
 
 const loading = ref(false)
@@ -70,13 +70,30 @@ async function fetchSettings() {
 }
 
 async function handleSave() {
+  // 前端驗證：截止時間必須晚於開放時間
+  if (form.value.open_at && form.value.close_at && form.value.close_at <= form.value.open_at) {
+    ElMessage.error('截止時間必須晚於開放時間')
+    return
+  }
+
+  const statusText = form.value.is_open ? '開放報名' : '關閉報名'
+  try {
+    await ElMessageBox.confirm(
+      `確定要將報名設定為「${statusText}」並儲存？`,
+      '確認儲存',
+      { type: 'warning', confirmButtonText: '確定儲存', cancelButtonText: '取消' }
+    )
+  } catch {
+    return
+  }
+
   saving.value = true
   try {
     await updateRegistrationTime(form.value)
     ElMessage.success('設定已儲存')
     savedAt.value = new Date().toLocaleString('zh-TW')
-  } catch {
-    ElMessage.error('儲存失敗')
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '儲存失敗')
   } finally {
     saving.value = false
   }

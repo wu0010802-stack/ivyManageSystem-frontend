@@ -1,37 +1,22 @@
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getIncidents, createIncident, updateIncident, deleteIncident } from '@/api/studentIncidents'
 import { getAssessments, createAssessment, updateAssessment, deleteAssessment } from '@/api/studentAssessments'
-import { getClassrooms } from '@/api/classrooms'
+import { useClassroomStore } from '@/stores/classroom'
 import { getStudents } from '@/api/students'
-
-// ── 事件常數 ─────────────────────────────────────────────
-const INCIDENT_TYPES = ['身體健康', '意外受傷', '行為觀察', '其他']
-const SEVERITIES = ['輕微', '中度', '嚴重']
-const TYPE_TAG = { '身體健康': 'warning', '意外受傷': 'danger', '行為觀察': 'info', '其他': '' }
-const SEVERITY_TAG = { '輕微': 'success', '中度': 'warning', '嚴重': 'danger' }
-
-// ── 評量常數 ─────────────────────────────────────────────
-const ASSESSMENT_TYPES = ['期中', '期末', '學期']
-const DOMAINS = ['身體動作與健康', '語文', '認知', '社會', '情緒', '美感', '綜合']
-const RATINGS = ['優', '良', '需加強']
-const RATING_TAG = { '優': 'success', '良': 'warning', '需加強': 'danger' }
+import {
+  INCIDENT_TYPES, SEVERITIES, INCIDENT_TYPE_TAG as TYPE_TAG, SEVERITY_TAG,
+  ASSESSMENT_TYPES, DOMAINS, RATINGS, RATING_TAG,
+} from '@/constants/studentRecords'
+import { apiError } from '@/utils/error'
 
 // ── 共用：班級 & Dialog 學生選擇 ──────────────────────────
-const classrooms = ref([])
+const classroomStore = useClassroomStore()
+const classrooms = computed(() => classroomStore.classrooms)
 const dialogClassroom = ref(null)
 const dialogStudents = ref([])
 const dialogStudentsLoading = ref(false)
-
-const fetchClassrooms = async () => {
-  try {
-    const res = await getClassrooms()
-    classrooms.value = (res.data || []).filter(c => c.is_active !== false)
-  } catch {
-    ElMessage.error('載入班級資料失敗')
-  }
-}
 
 const onDialogClassroomChange = async (cid) => {
   incForm.student_id = null
@@ -159,7 +144,7 @@ const submitIncidentForm = async () => {
     incDialogVisible.value = false
     fetchIncidents()
   } catch (e) {
-    ElMessage.error(e.response?.data?.detail || '操作失敗')
+    ElMessage.error(apiError(e, '操作失敗'))
   } finally {
     incFormLoading.value = false
   }
@@ -187,7 +172,7 @@ const handleDeleteIncident = async (row) => {
     ElMessage.success('刪除成功')
     fetchIncidents()
   } catch (e) {
-    if (e !== 'cancel') ElMessage.error(e.response?.data?.detail || '刪除失敗')
+    if (e !== 'cancel') ElMessage.error(apiError(e, '刪除失敗'))
   }
 }
 
@@ -296,7 +281,7 @@ const submitAssessmentForm = async () => {
     asmDialogVisible.value = false
     fetchAssessments()
   } catch (e) {
-    ElMessage.error(e.response?.data?.detail || '操作失敗')
+    ElMessage.error(apiError(e, '操作失敗'))
   } finally {
     asmFormLoading.value = false
   }
@@ -309,13 +294,13 @@ const handleDeleteAssessment = async (row) => {
     ElMessage.success('刪除成功')
     fetchAssessments()
   } catch (e) {
-    if (e !== 'cancel') ElMessage.error(e.response?.data?.detail || '刪除失敗')
+    if (e !== 'cancel') ElMessage.error(apiError(e, '刪除失敗'))
   }
 }
 
 // ── 初始化 ───────────────────────────────────────────────
 onMounted(() => {
-  fetchClassrooms()
+  classroomStore.fetchClassrooms()
   fetchIncidents()
   fetchAssessments()
 })

@@ -2,13 +2,14 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getSalaryLogic, getEmployeeSalaryDebug } from '@/api/dev'
-import { getEmployees } from '@/api/employees'
+import { useEmployeeStore } from '@/stores/employee'
 
 const loading = ref(false)
 const logicData = ref(null)
 
 // Employee debug
-const employees = ref([])
+const employeeStore = useEmployeeStore()
+const employees = computed(() => employeeStore.employees.filter(e => e.is_active))
 const debugForm = reactive({
   employee_id: null,
   year: new Date().getFullYear(),
@@ -38,13 +39,6 @@ const fetchLogic = async () => {
   }
 }
 
-const fetchEmployees = async () => {
-  try {
-    const res = await getEmployees()
-    employees.value = res.data.filter(e => e.is_active)
-  } catch { /* ignore */ }
-}
-
 const runDebug = async () => {
   if (!debugForm.employee_id) {
     ElMessage.warning('請選擇員工')
@@ -72,7 +66,7 @@ const formatJson = (obj) => {
 
 onMounted(() => {
   fetchLogic()
-  fetchEmployees()
+  employeeStore.fetchEmployees()
 })
 </script>
 

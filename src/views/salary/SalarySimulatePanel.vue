@@ -1,12 +1,15 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { simulateSalary } from '@/api/salary'
-import { getEmployees } from '@/api/employees'
+import { useEmployeeStore } from '@/stores/employee'
 import { ElMessage } from 'element-plus'
 import { QuestionFilled } from '@element-plus/icons-vue'
 import { money } from '@/utils/format'
 
-const employees = ref([])
+const employeeStore = useEmployeeStore()
+const employees = computed(() =>
+  employeeStore.employees.filter(e => e.is_active && e.employee_type !== 'hourly')
+)
 const loading = ref(false)
 const result = ref(null)
 
@@ -28,13 +31,6 @@ const form = reactive({
   enrollment_override: null,
   extra_overtime_pay: 0,
 })
-
-const fetchEmployees = async () => {
-  try {
-    const res = await getEmployees()
-    employees.value = res.data.filter(e => e.is_active && e.employee_type !== 'hourly')
-  } catch { /* ignore */ }
-}
 
 const runSimulate = async () => {
   if (!form.employee_id) {
@@ -122,7 +118,7 @@ const formatDiff = (val) => {
   return (val > 0 ? '+' : '') + money(val)
 }
 
-onMounted(fetchEmployees)
+onMounted(() => employeeStore.fetchEmployees())
 </script>
 
 <template>

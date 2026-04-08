@@ -1,8 +1,8 @@
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getAnnouncements, createAnnouncement, updateAnnouncement, deleteAnnouncement } from '@/api/announcements'
-import { getEmployees } from '@/api/employees'
+import { useEmployeeStore } from '@/stores/employee'
 import { Top } from '@element-plus/icons-vue'
 import { apiError } from '@/utils/error'
 
@@ -10,7 +10,13 @@ const loading = ref(false)
 const announcements = ref([])
 const dialogVisible = ref(false)
 const isEdit = ref(false)
-const employeeOptions = ref([])
+const employeeStore = useEmployeeStore()
+const employeeOptions = computed(() =>
+  employeeStore.employees.map(e => ({
+    value: e.id,
+    label: `${e.name}（${e.department || e.job_title || ''}）`,
+  }))
+)
 
 const priorityOptions = [
   { value: 'normal', label: '一般', type: 'info' },
@@ -38,18 +44,6 @@ const resetForm = () => {
   form.is_pinned = false
   form.restrict_recipients = false
   form.target_employee_ids = []
-}
-
-const fetchEmployees = async () => {
-  try {
-    const res = await getEmployees()
-    employeeOptions.value = (res.data.employees || res.data || []).map(e => ({
-      value: e.id,
-      label: `${e.name}（${e.department || e.job_title || ''}）`,
-    }))
-  } catch {
-    // 非必要，載入失敗不阻斷流程
-  }
 }
 
 const fetchAnnouncements = async () => {
@@ -162,7 +156,7 @@ const getRemainingReaders = (row) => Math.max(
 
 onMounted(() => {
   fetchAnnouncements()
-  fetchEmployees()
+  employeeStore.fetchEmployees()
 })
 </script>
 

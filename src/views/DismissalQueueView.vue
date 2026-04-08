@@ -2,14 +2,15 @@
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getDismissalCalls, cancelDismissalCall, createDismissalCall } from '@/api/dismissalCalls'
-import { getClassrooms } from '@/api/classrooms'
+import { useClassroomStore } from '@/stores/classroom'
 import { getStudents } from '@/api/students'
 import { getUserInfo } from '@/utils/auth'
 
 // ─── 狀態 ───────────────────────────────────────────────
 const calls = ref([])
 const loading = ref(false)
-const classrooms = ref([])
+const classroomStore = useClassroomStore()
+const classrooms = computed(() => classroomStore.classrooms)
 
 // 篩選
 const filterStatus = ref('active') // active=pending+acknowledged | completed | cancelled | all
@@ -50,18 +51,8 @@ const fetchCalls = async () => {
     const params = {}
     if (filterClassroomId.value) params.classroom_id = filterClassroomId.value
     if (filterStatus.value !== 'all') {
-      if (filterStatus.value === 'active') {
-        // 分兩次查，合併
-        const [pendRes, ackRes] = await Promise.all([
-          getDismissalCalls({ ...params, status: 'pending' }),
-          getDismissalCalls({ ...params, status: 'acknowledged' }),
-        ])
-        calls.value = [...(pendRes.data || []), ...(ackRes.data || [])].sort(
-          (a, b) => new Date(b.requested_at) - new Date(a.requested_at)
-        )
-        return
-      }
-      params.status = filterStatus.value
+      // active = pending + acknowledged，後端支援逗號分隔多狀態，一次查詢
+      params.status = filterStatus.value === 'active' ? 'pending,acknowledged' : filterStatus.value
     }
     const res = await getDismissalCalls(params)
     calls.value = res.data || []
@@ -70,13 +61,6 @@ const fetchCalls = async () => {
   } finally {
     loading.value = false
   }
-}
-
-const fetchClassrooms = async () => {
-  try {
-    const res = await getClassrooms()
-    classrooms.value = res.data || []
-  } catch { /* silent */ }
 }
 
 // ─── 取消通知 ────────────────────────────────────────────
@@ -228,7 +212,7 @@ const formatTime = (dt) => {
 
 // ─── Lifecycle ────────────────────────────────────────────
 onMounted(async () => {
-  await Promise.all([fetchCalls(), fetchClassrooms()])
+  await Promise.all([fetchCalls(), classroomStore.fetchClassrooms()])
   connectWs()
 })
 

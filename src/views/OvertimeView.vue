@@ -2,16 +2,19 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getOvertimes, createOvertime, updateOvertime, approveOvertime as approveOvertimeApi, batchApproveOvertimes, getOvertimeImportTemplate, importOvertimes } from '@/api/overtimes'
-import { getApprovalLogs, getApprovalPolicies } from '@/api/approvalSettings'
-import { getUserInfo, hasPermission } from '@/utils/auth'
+import { useApprovalPolicyStore } from '@/stores/approvalPolicy'
+import { hasPermission } from '@/utils/auth'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useEmployeeStore } from '@/stores/employee'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
-import { useCrudDialog, useConfirmDelete, useDateQuery } from '@/composables'
+import { useCrudDialog, useConfirmDelete, useDateQuery, useFetchPending, useApprovalOperation } from '@/composables'
+import { useApprovalModule } from '@/composables/useApprovalModule'
 import { apiError } from '@/utils/error'
 import { downloadFile } from '@/utils/download'
 import { money } from '@/utils/format'
 import MeetingManagementPanel from '@/components/overtime/MeetingManagementPanel.vue'
+import ApprovalLogDrawer from '@/components/common/ApprovalLogDrawer.vue'
+import { OVERTIME_TYPES as overtimeTypes } from '@/constants/approvalEnums'
 
 const { currentYear, query } = useDateQuery()
 const employeeStore = useEmployeeStore()
@@ -24,13 +27,8 @@ const activeSection = ref('overtime')
 
 const loading = ref(false)
 const overtimeRecords = ref([])
-const pendingRecords = ref([])
+const { items: pendingRecords, fetch: silentFetchPending } = useFetchPending(getOvertimes)
 
-const overtimeTypes = [
-  { value: 'weekday', label: '平日',           desc: '前2h ×1.34，超過2h ×1.67' },
-  { value: 'weekend', label: '休息日',          desc: '前2h ×1.33，3~8h ×1.67，超8h ×2.67（最低計2h）' },
-  { value: 'holiday', label: '例假日/國定假日', desc: '全部 ×2.0' },
-]
 
 const form = reactive({
   id: null,
@@ -92,18 +90,16 @@ const fetchOvertimes = async () => {
   }
 }
 
-const fetchPendingOvertimes = async () => {
+const fetchPendingOvertimes = () => {
   if (!canViewOvertime) return
-  try {
-    const response = await getOvertimes({ status: 'pending' })
-    pendingRecords.value = Array.isArray(response.data) ? response.data : []
-  } catch {
-    // silent
-  }
+  return silentFetchPending()
 }
 
 const saveOvertimeLoading = ref(false)
-const approveActionLoading = ref(false)
+
+const refreshAllData = async () => {
+  await Promise.all([fetchOvertimes(), fetchPendingOvertimes()])
+}
 
 const saveOvertime = async () => {
   if (!form.employee_id || !form.overtime_date) {
@@ -131,8 +127,7 @@ const saveOvertime = async () => {
       ElMessage.success(`加班記錄已新增，加班費: $${resp.data.overtime_pay?.toLocaleString() || 0}`)
     }
     closeDialog()
-    fetchOvertimes()
-    fetchPendingOvertimes()
+    await refreshAllData()
   } catch (error) {
     ElMessage.error('儲存失敗: ' + apiError(error, error.message))
   } finally {
@@ -140,30 +135,22 @@ const saveOvertime = async () => {
   }
 }
 
-const onDeleteSuccess = () => {
-  fetchOvertimes()
-  fetchPendingOvertimes()
+const onDeleteSuccess = async () => {
+  await refreshAllData()
 }
 
-const { confirmDelete: deleteOvertime } = useConfirmDelete({
+const { confirmDelete: deleteOvertime, deleting: deleteOvertimeLoading } = useConfirmDelete({
   endpoint: '/overtimes',
   onSuccess: onDeleteSuccess,
   successMsg: '已刪除',
 })
 
-const approveOvertime = async (row, approved) => {
-  approveActionLoading.value = true
-  try {
-    await approveOvertimeApi(row.id, approved)
-    ElMessage.success(approved ? '已核准' : '已駁回')
-    fetchOvertimes()
-    fetchPendingOvertimes()
-  } catch (error) {
-    ElMessage.error('操作失敗：' + apiError(error, error.message))
-  } finally {
-    approveActionLoading.value = false
-  }
-}
+const { execute: executeApproval } = useApprovalOperation({
+  apiFn: approveOvertimeApi,
+  onSuccess: refreshAllData,
+})
+const approveOvertime = (row, approved) =>
+  executeApproval(row.id, approved, approved ? '已核准' : '已駁回')
 
 
 const overtimeSummary = computed(() =>
@@ -177,72 +164,26 @@ const overtimeSummary = computed(() =>
   ),
 )
 
-// ── 批次審核 ──
-const selectedOvertimes = ref([])
-const batchRejectVisible = ref(false)
-const batchRejectReason = ref('')
-const batchLoading = ref(false)
-
-const handleSelectionChange = (selection) => {
-  selectedOvertimes.value = selection
-}
-
-const showBatchApproveConfirm = async () => {
-  try {
-    await ElMessageBox.confirm(
-      `確認批次核准選取的 ${selectedOvertimes.value.length} 筆加班記錄？`,
-      '批次核准',
-      { type: 'warning', confirmButtonText: '確認核准', cancelButtonText: '取消' }
-    )
-    batchLoading.value = true
-    const ids = selectedOvertimes.value.map(r => r.id)
-    const res = await batchApproveOvertimes(ids, true)
-    const { succeeded, failed } = res.data
-    if (failed.length === 0) {
-      ElMessage.success(`已成功核准 ${succeeded.length} 筆`)
-    } else {
-      ElMessage.warning(
-        `核准完成：成功 ${succeeded.length} 筆，失敗 ${failed.length} 筆（${failed.map(f => `#${f.id}: ${f.reason}`).join('；')}）`
-      )
-    }
-    fetchOvertimes()
-    fetchPendingOvertimes()
-  } catch (err) {
-    if (err !== 'cancel') ElMessage.error('批次核准失敗：' + (err.response?.data?.detail || err.message))
-  } finally {
-    batchLoading.value = false
-  }
-}
-
-const openBatchReject = () => {
-  batchRejectReason.value = ''
-  batchRejectVisible.value = true
-}
-
-const confirmBatchReject = async () => {
-  if (!batchRejectReason.value.trim()) {
-    ElMessage.warning('請填寫駁回原因')
-    return
-  }
-  batchLoading.value = true
-  try {
-    const ids = selectedOvertimes.value.map(r => r.id)
-    const res = await batchApproveOvertimes(ids, false, batchRejectReason.value.trim())
-    const { succeeded, failed } = res.data
-    batchRejectVisible.value = false
-    if (failed.length === 0) {
-      ElMessage.success(`已成功駁回 ${succeeded.length} 筆`)
-    } else {
-      ElMessage.warning(`駁回完成：成功 ${succeeded.length} 筆，失敗 ${failed.length} 筆`)
-    }
-    fetchOvertimes()
-    fetchPendingOvertimes()
-  } catch (err) {
-    ElMessage.error('批次駁回失敗：' + (err.response?.data?.detail || err.message))
-  } finally {
-    batchLoading.value = false
-  }
-}
+const {
+  selectedItems: selectedOvertimes,
+  batchLoading,
+  batchRejectVisible,
+  batchRejectReason,
+  handleSelectionChange,
+  showBatchApproveConfirm,
+  openBatchReject,
+  confirmBatchReject,
+  approvalLogDrawerVisible,
+  approvalLogs,
+  approvalLogLoading,
+  openApprovalLogs,
+  canApprove,
+} = useApprovalModule({
+  docType: 'overtime',
+  batchApproveFn: batchApproveOvertimes,
+  fetchFn: refreshAllData,
+  recordLabel: '加班記錄',
+})
 
 // ── Excel 匯入 ──
 const importVisible = ref(false)
@@ -273,8 +214,7 @@ const handleImportFile = async (file) => {
     importResult.value = res.data
     if (res.data.failed === 0) {
       ElMessage.success(`匯入完成，成功建立 ${res.data.created} 筆草稿加班單`)
-      fetchOvertimes()
-      fetchPendingOvertimes()
+      await refreshAllData()
     }
   } catch (err) {
     ElMessage.error('匯入失敗：' + (err.response?.data?.detail || err.message))
@@ -284,49 +224,8 @@ const handleImportFile = async (file) => {
   return false
 }
 
-// ── 簽核記錄 Drawer ─────────────────────────────────────────────────────────
-const approvalLogDrawerVisible = ref(false)
-const approvalLogs = ref([])
-const approvalLogLoading = ref(false)
-
-const openApprovalLogs = async (row) => {
-  approvalLogDrawerVisible.value = true
-  approvalLogLoading.value = true
-  approvalLogs.value = []
-  try {
-    const res = await getApprovalLogs('overtime', row.id)
-    approvalLogs.value = res.data
-  } catch {
-    ElMessage.error('載入簽核記錄失敗')
-  } finally {
-    approvalLogLoading.value = false
-  }
-}
-
-const ACTION_LABELS = { approved: '核准', rejected: '駁回', cancelled: '取消' }
-const ACTION_TAG_TYPES = { approved: 'success', rejected: 'danger', cancelled: 'warning' }
-
-// ── 審核資格判斷 ─────────────────────────────────────────────────────────────
-const approvalPolicies = ref([])
-const currentUserInfo = getUserInfo()
-
-const fetchApprovalPoliciesForView = async () => {
-  try {
-    const res = await getApprovalPolicies()
-    approvalPolicies.value = res.data
-  } catch {
-    // 靜默
-  }
-}
-
-const canApprove = (row) => {
-  const myRole = currentUserInfo?.role
-  if (!myRole || myRole === 'teacher') return false
-  const submitterRole = row.submitter_role || 'teacher'
-  const policy = approvalPolicies.value.find(p => p.submitter_role === submitterRole)
-  if (!policy) return myRole === 'admin'
-  return policy.approver_roles.split(',').map(r => r.trim()).includes(myRole)
-}
+// ── 審核流程（approvalPolicyStore 仍需 onMounted 中呼叫 fetchPolicies）──────
+const approvalPolicyStore = useApprovalPolicyStore()
 
 onMounted(() => {
   activeSection.value = resolveSectionFromRoute()
@@ -334,7 +233,7 @@ onMounted(() => {
     employeeStore.fetchEmployees(),
     fetchOvertimes(),
     fetchPendingOvertimes(),
-    fetchApprovalPoliciesForView(),
+    approvalPolicyStore.fetchPolicies(),
   ])
 })
 
@@ -477,7 +376,7 @@ watch(activeSection, async (value) => {
               <el-button v-if="scope.row.is_approved !== true && canApprove(scope.row)" type="success" size="small" link @click="approveOvertime(scope.row, true)">核准</el-button>
               <el-button v-if="scope.row.is_approved !== false && canApprove(scope.row)" type="warning" size="small" link @click="approveOvertime(scope.row, false)">駁回</el-button>
               <el-button type="primary" size="small" link @click="openEdit(scope.row)">編輯</el-button>
-              <el-button type="danger" size="small" link @click="deleteOvertime(scope.row)">刪除</el-button>
+              <el-button type="danger" size="small" link @click="deleteOvertime(scope.row)" :loading="deleteOvertimeLoading">刪除</el-button>
               <el-button type="info" size="small" link @click="openApprovalLogs(scope.row)">記錄</el-button>
             </template>
           </el-table-column>
@@ -595,32 +494,11 @@ watch(activeSection, async (value) => {
     </el-dialog>
 
     <!-- 簽核記錄 Drawer -->
-    <el-drawer v-model="approvalLogDrawerVisible" title="簽核記錄" direction="rtl" size="420px">
-      <div v-loading="approvalLogLoading">
-        <el-empty v-if="!approvalLogLoading && approvalLogs.length === 0" description="尚無簽核記錄" />
-        <el-timeline v-else>
-          <el-timeline-item
-            v-for="log in approvalLogs"
-            :key="log.id"
-            :timestamp="log.created_at ? new Date(log.created_at).toLocaleString('zh-TW') : ''"
-            placement="top"
-          >
-            <el-card shadow="never" style="padding: 8px 12px;">
-              <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                <el-tag :type="ACTION_TAG_TYPES[log.action] || 'info'" size="small">
-                  {{ ACTION_LABELS[log.action] || log.action }}
-                </el-tag>
-                <span style="font-weight: 500;">{{ log.approver_username }}</span>
-                <el-tag size="small" type="info">{{ log.approver_role }}</el-tag>
-              </div>
-              <div v-if="log.comment" style="margin-top: 6px; color: #606266; font-size: 13px;">
-                {{ log.comment }}
-              </div>
-            </el-card>
-          </el-timeline-item>
-        </el-timeline>
-      </div>
-    </el-drawer>
+    <ApprovalLogDrawer
+      v-model:visible="approvalLogDrawerVisible"
+      :loading="approvalLogLoading"
+      :logs="approvalLogs"
+    />
   </div>
 </template>
 

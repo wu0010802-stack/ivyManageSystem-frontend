@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import { shallowMount } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
 import DismissalQueueView from '@/views/DismissalQueueView.vue'
 
 // ─── Mock API ────────────────────────────────────────────
@@ -81,6 +82,7 @@ function mountView() {
 // ─── Tests ───────────────────────────────────────────────
 describe('DismissalQueueView', () => {
   beforeEach(() => {
+    setActivePinia(createPinia())
     vi.clearAllMocks()
     getDismissalCalls.mockResolvedValue({ data: [] })
     getClassrooms.mockResolvedValue({ data: [] })
@@ -97,8 +99,9 @@ describe('DismissalQueueView', () => {
     getDismissalCalls.mockResolvedValue({ data: [SAMPLE_CALL] })
     const wrapper = mountView()
     await nextTick()
-    // filter=active 會分兩次查 pending + acknowledged
-    expect(getDismissalCalls).toHaveBeenCalledTimes(2)
+    // filter=active 合併為單次查詢，傳 status=pending,acknowledged
+    expect(getDismissalCalls).toHaveBeenCalledTimes(1)
+    expect(getDismissalCalls).toHaveBeenCalledWith(expect.objectContaining({ status: 'pending,acknowledged' }))
   })
 
   it('filterStatus 為 all 時只呼叫一次 getDismissalCalls', async () => {

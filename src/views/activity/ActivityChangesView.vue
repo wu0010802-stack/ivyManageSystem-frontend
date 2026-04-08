@@ -11,7 +11,7 @@
       <el-table-column label="描述" prop="description" min-width="200" show-overflow-tooltip />
       <el-table-column label="操作者" prop="changed_by" width="100" />
       <el-table-column label="時間" min-width="130">
-        <template #default="{ row }">{{ formatDate(row.created_at) }}</template>
+        <template #default="{ row }">{{ formatActivityDate(row.created_at) }}</template>
       </el-table-column>
     </el-table>
 
@@ -30,6 +30,7 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getChanges } from '@/api/activity'
+import { formatActivityDate } from '@/utils/format'
 
 const list = ref([])
 const total = ref(0)
@@ -51,11 +52,6 @@ async function fetchList() {
   } finally {
     loading.value = false
   }
-}
-
-function formatDate(str) {
-  if (!str) return '-'
-  return str.replace('T', ' ').substring(0, 16)
 }
 
 onMounted(fetchList)

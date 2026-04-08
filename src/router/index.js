@@ -42,6 +42,12 @@ const router = createRouter({
             meta: { title: '學生出席紀錄' }
         },
         {
+            path: '/student-enrollment',
+            name: 'student-enrollment',
+            component: () => import('../views/StudentEnrollmentView.vue'),
+            meta: { title: '在籍統計' }
+        },
+        {
             path: '/student-records',
             name: 'student-records',
             component: () => import('../views/StudentRecordsView.vue'),
@@ -119,6 +125,14 @@ const router = createRouter({
             component: () => import('../views/GovReportsView.vue'),
             meta: { title: '政府申報匯出' }
         },
+        // ============ 學費管理 ============
+        {
+            path: '/fees',
+            name: 'fees',
+            component: () => import('../views/StudentFeeView.vue'),
+            meta: { title: '學費管理' }
+        },
+
         // ============ 接送通知 ============
         {
             path: '/dismissal-queue',
@@ -169,6 +183,20 @@ const router = createRouter({
             name: 'activity-changes',
             component: () => import('../views/activity/ActivityChangesView.vue'),
             meta: { title: '修改紀錄' }
+        },
+        {
+            path: '/activity/attendance',
+            name: 'activity-attendance',
+            component: () => import('../views/activity/ActivityAttendanceView.vue'),
+            meta: { title: '點名管理' }
+        },
+
+        // ============ 公開前台 ============
+        {
+            path: '/public/activity',
+            name: 'public-activity',
+            component: () => import('../views/public/ActivityPublicView.vue'),
+            meta: { title: '課後才藝報名', noAuth: true },
         },
 
         // ============ Admin Login / Change Password ============
@@ -285,6 +313,18 @@ const router = createRouter({
                     name: 'portal-change-password',
                     component: () => import('../views/portal/PortalChangePasswordView.vue'),
                     meta: { mustChangePassword: true },
+                },
+                {
+                    path: 'activity',
+                    name: 'portal-activity',
+                    component: () => import('../views/portal/PortalActivityView.vue'),
+                    meta: { title: '才藝查詢' },
+                },
+                {
+                    path: 'activity/attendance',
+                    name: 'portal-activity-attendance',
+                    component: () => import('../views/portal/PortalActivityAttendanceView.vue'),
+                    meta: { title: '才藝點名' },
                 },
             ],
         },

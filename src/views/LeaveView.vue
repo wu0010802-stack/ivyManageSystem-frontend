@@ -1,18 +1,18 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { getLeaves, createLeave, updateLeave, approveLeave as approveLeaveApi, batchApproveLeaves, getLeaveImportTemplate, importLeaves } from '@/api/leaves'
-import { getApprovalLogs, getApprovalPolicies } from '@/api/approvalSettings'
-import { getUserInfo } from '@/utils/auth'
+import { useApprovalPolicyStore } from '@/stores/approvalPolicy'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useEmployeeStore } from '@/stores/employee'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
-import { useCrudDialog, useConfirmDelete, useDateQuery, useLeaveHoursCalculator } from '@/composables'
+import { useCrudDialog, useConfirmDelete, useDateQuery, useLeaveHoursCalculator, useApprovalOperation } from '@/composables'
+import { useApprovalModule } from '@/composables/useApprovalModule'
 import { downloadFile } from '@/utils/download'
 import { apiError } from '@/utils/error'
 import { LEAVE_TYPES as leaveTypes, LEAVE_RULE_HINTS } from '@/utils/leaves'
 import { money } from '@/utils/format'
 import LeaveAttachmentDialog from './leave/LeaveAttachmentDialog.vue'
-import LeaveApprovalLogDrawer from './leave/LeaveApprovalLogDrawer.vue'
+import ApprovalLogDrawer from '@/components/common/ApprovalLogDrawer.vue'
 import LeaveBatchRejectDialog from './leave/LeaveBatchRejectDialog.vue'
 import LeaveImportDialog from './leave/LeaveImportDialog.vue'
 import LeaveQuotaManager from './leave/LeaveQuotaManager.vue'
@@ -113,74 +113,28 @@ const { dialogVisible, isEdit, openCreate, openEdit, closeDialog } = useCrudDial
 
 const statusFilter = ref('')
 
-// ── 批次審核 ──
-const selectedLeaves = ref([])
-const batchRejectVisible = ref(false)
-const batchRejectReason = ref('')
-const batchLoading = ref(false)
 const saveLoading = ref(false)
-const approveActionLoading = ref(false)
 
-const handleSelectionChange = (selection) => {
-  selectedLeaves.value = selection
-}
-
-const showBatchApproveConfirm = async () => {
-  try {
-    await ElMessageBox.confirm(
-      `確認批次核准選取的 ${selectedLeaves.value.length} 筆請假記錄？`,
-      '批次核准',
-      { type: 'warning', confirmButtonText: '確認核准', cancelButtonText: '取消' }
-    )
-    batchLoading.value = true
-    const ids = selectedLeaves.value.map(r => r.id)
-    const res = await batchApproveLeaves(ids, true)
-    const { succeeded, failed } = res.data
-    if (failed.length === 0) {
-      ElMessage.success(`已成功核准 ${succeeded.length} 筆`)
-    } else {
-      ElMessage.warning(
-        `核准完成：成功 ${succeeded.length} 筆，失敗 ${failed.length} 筆（${failed.map(f => `#${f.id}: ${f.reason}`).join('；')}）`
-      )
-    }
-    fetchLeaves()
-  } catch (err) {
-    if (err !== 'cancel') ElMessage.error('批次核准失敗：' + (err.response?.data?.detail || err.message))
-  } finally {
-    batchLoading.value = false
-  }
-}
-
-const openBatchReject = () => {
-  batchRejectReason.value = ''
-  batchRejectVisible.value = true
-}
-
-const confirmBatchReject = async () => {
-  if (!batchRejectReason.value.trim()) {
-    ElMessage.warning('請填寫駁回原因')
-    return
-  }
-  batchLoading.value = true
-  try {
-    const ids = selectedLeaves.value.map(r => r.id)
-    const res = await batchApproveLeaves(ids, false, batchRejectReason.value.trim())
-    const { succeeded, failed } = res.data
-    batchRejectVisible.value = false
-    if (failed.length === 0) {
-      ElMessage.success(`已成功駁回 ${succeeded.length} 筆`)
-    } else {
-      ElMessage.warning(
-        `駁回完成：成功 ${succeeded.length} 筆，失敗 ${failed.length} 筆`
-      )
-    }
-    fetchLeaves()
-  } catch (err) {
-    ElMessage.error('批次駁回失敗：' + (err.response?.data?.detail || err.message))
-  } finally {
-    batchLoading.value = false
-  }
-}
+const {
+  selectedItems: selectedLeaves,
+  batchLoading,
+  batchRejectVisible,
+  batchRejectReason,
+  handleSelectionChange,
+  showBatchApproveConfirm,
+  openBatchReject,
+  confirmBatchReject,
+  approvalLogDrawerVisible,
+  approvalLogs,
+  approvalLogLoading,
+  openApprovalLogs,
+  canApprove,
+} = useApprovalModule({
+  docType: 'leave',
+  batchApproveFn: batchApproveLeaves,
+  fetchFn: () => fetchLeaves(),
+  recordLabel: '請假記錄',
+})
 
 // ── Excel 匯入 ──
 const importVisible = ref(false)
@@ -311,104 +265,52 @@ const saveLeave = async () => {
   }
 }
 
-const { confirmDelete: deleteLeave } = useConfirmDelete({
+const { confirmDelete: deleteLeave, deleting: deleteLeaveLoading } = useConfirmDelete({
   endpoint: '/leaves',
   onSuccess: fetchLeaves,
   successMsg: '已刪除',
 })
 
+const { execute: executeApproval, isLoading: approveActionLoading } = useApprovalOperation({
+  apiFn: approveLeaveApi,
+  onSuccess: fetchLeaves,
+})
+
 const approveLeave = async (row) => {
-  approveActionLoading.value = true
-  try {
-    const payload = { approved: true }
-    if (['pending', 'rejected'].includes(row.substitute_status)) {
-      const warningText = row.substitute_status === 'pending'
-        ? '代理人尚未接受此代理請求，仍要直接核准嗎？'
-        : '代理人已拒絕此代理請求，仍要直接核准嗎？'
+  const payload = { approved: true }
+  if (['pending', 'rejected'].includes(row.substitute_status)) {
+    const warningText = row.substitute_status === 'pending'
+      ? '代理人尚未接受此代理請求，仍要直接核准嗎？'
+      : '代理人已拒絕此代理請求，仍要直接核准嗎？'
+    try {
       await ElMessageBox.confirm(
         `${warningText} 系統會以「無代理人核准」方式通過此假單。`,
         '代理人未確認',
         { type: 'warning', confirmButtonText: '仍要核准', cancelButtonText: '取消' }
       )
       payload.force_without_substitute = true
+    } catch {
+      return
     }
-    await approveLeaveApi(row.id, payload)
-    ElMessage.success('已核准')
-    fetchLeaves()
-  } catch (error) {
-    if (error === 'cancel' || error === 'close') return
-    ElMessage.error('操作失敗：' + apiError(error, error.message))
-  } finally {
-    approveActionLoading.value = false
   }
+  await executeApproval(row.id, payload, '已核准')
 }
 
-const cancelApprove = async (row) => {
-  approveActionLoading.value = true
-  try {
-    await approveLeaveApi(row.id, { approved: false, rejection_reason: '取消核准' })
-    ElMessage.success('已取消核准')
-    fetchLeaves()
-  } catch (error) {
-    ElMessage.error('操作失敗：' + apiError(error, error.message))
-  } finally {
-    approveActionLoading.value = false
-  }
-}
+const cancelApprove = (row) =>
+  executeApproval(row.id, { approved: false, rejection_reason: '取消核准' }, '已取消核准')
 
 const getLeaveTypeTag = (type) => {
   return leaveTypes.find(t => t.value === type) || { label: type, color: '' }
 }
 
-// ── 簽核記錄 Drawer ─────────────────────────────────────────────────────────
-const approvalLogDrawerVisible = ref(false)
-const approvalLogs = ref([])
-const approvalLogLoading = ref(false)
-
-const openApprovalLogs = async (row) => {
-  approvalLogDrawerVisible.value = true
-  approvalLogLoading.value = true
-  approvalLogs.value = []
-  try {
-    const res = await getApprovalLogs('leave', row.id)
-    approvalLogs.value = res.data
-  } catch {
-    ElMessage.error('載入簽核記錄失敗')
-  } finally {
-    approvalLogLoading.value = false
-  }
-}
-
-const ACTION_LABELS = { approved: '核准', rejected: '駁回', cancelled: '取消' }
-const ACTION_TAG_TYPES = { approved: 'success', rejected: 'danger', cancelled: 'warning' }
-
-// ── 審核資格判斷 ─────────────────────────────────────────────────────────────
-const approvalPolicies = ref([])
-const currentUserInfo = getUserInfo()
-
-const fetchApprovalPoliciesForView = async () => {
-  try {
-    const res = await getApprovalPolicies()
-    approvalPolicies.value = res.data
-  } catch {
-    // 靜默：載入失敗時 canApprove 退回 false（不影響主功能）
-  }
-}
-
-const canApprove = (row) => {
-  const myRole = currentUserInfo?.role
-  if (!myRole || myRole === 'teacher') return false
-  const submitterRole = row.submitter_role || 'teacher'
-  const policy = approvalPolicies.value.find(p => p.submitter_role === submitterRole)
-  if (!policy) return myRole === 'admin'
-  return policy.approver_roles.split(',').map(r => r.trim()).includes(myRole)
-}
+// ── 審核流程（approvalPolicyStore 仍需 onMounted 中呼叫 fetchPolicies）──────
+const approvalPolicyStore = useApprovalPolicyStore()
 
 onMounted(() => {
   Promise.all([
     employeeStore.fetchEmployees(),
     fetchLeaves(),
-    fetchApprovalPoliciesForView(),
+    approvalPolicyStore.fetchPolicies(),
   ])
 })
 </script>
@@ -553,7 +455,7 @@ onMounted(() => {
             <el-button v-if="scope.row.is_approved === true && canApprove(scope.row)" type="warning" size="small" link @click="cancelApprove(scope.row)">取消核准</el-button>
             <el-button v-if="scope.row.is_approved === false && canApprove(scope.row)" type="success" size="small" link @click="approveLeave(scope.row)">核准</el-button>
             <el-button type="primary" size="small" link @click="openEdit(scope.row)">編輯</el-button>
-            <el-button type="danger" size="small" link @click="deleteLeave(scope.row)">刪除</el-button>
+            <el-button type="danger" size="small" link @click="deleteLeave(scope.row)" :loading="deleteLeaveLoading">刪除</el-button>
             <el-button type="info" size="small" link @click="openApprovalLogs(scope.row)">記錄</el-button>
           </template>
         </el-table-column>
@@ -755,12 +657,10 @@ onMounted(() => {
       :on-file-change="handleImportFile"
     />
 
-    <LeaveApprovalLogDrawer
+    <ApprovalLogDrawer
       v-model:visible="approvalLogDrawerVisible"
       :loading="approvalLogLoading"
       :logs="approvalLogs"
-      :action-labels="ACTION_LABELS"
-      :action-tag-types="ACTION_TAG_TYPES"
     />
   </div>
 </template>

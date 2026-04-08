@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { ref } from 'vue'
+import { createPinia, setActivePinia } from 'pinia'
 import LeaveView from '@/views/LeaveView.vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
@@ -84,6 +85,18 @@ vi.mock('@/composables', () => ({
     getExpectedMaxHours: () => 8,
     populateFormFromRecord: mockPopulateFormFromRecord,
   }),
+  useApprovalOperation: ({ apiFn, onSuccess, errorMsg = '操作失敗' }) => {
+    const execute = async (id, payload, successMsg) => {
+      try {
+        await apiFn(id, payload)
+        ElMessage.success(successMsg)
+        onSuccess()
+      } catch {
+        ElMessage.error(errorMsg)
+      }
+    }
+    return { execute, isLoading: ref(false) }
+  },
 }))
 
 // ── utils mocks ────────────────────────────────────────────────────────────
@@ -165,6 +178,7 @@ function mountLeaveView() {
 
 describe('LeaveView', () => {
   beforeEach(() => {
+    setActivePinia(createPinia())
     vi.clearAllMocks()
     mockUserInfo = { role: 'admin', permissions: -1 }
     getLeaves.mockResolvedValue({ data: [] })

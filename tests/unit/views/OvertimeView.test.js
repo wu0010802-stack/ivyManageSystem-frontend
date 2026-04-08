@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { ref } from 'vue'
+import { createPinia, setActivePinia } from 'pinia'
 import OvertimeView from '@/views/OvertimeView.vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
@@ -65,6 +66,28 @@ vi.mock('@/composables', () => ({
   useConfirmDelete: () => ({
     confirmDelete: vi.fn(),
   }),
+  useFetchPending: (apiFn) => {
+    const items = ref([])
+    const fetch = vi.fn(async () => {
+      try {
+        const res = await apiFn({ status: 'pending' })
+        items.value = Array.isArray(res.data) ? res.data : []
+      } catch { /* silent */ }
+    })
+    return { items, fetch, isLoading: ref(false) }
+  },
+  useApprovalOperation: ({ apiFn, onSuccess, errorMsg = '操作失敗' }) => {
+    const execute = async (id, payload, successMsg) => {
+      try {
+        await apiFn(id, payload)
+        ElMessage.success(successMsg)
+        onSuccess()
+      } catch {
+        ElMessage.error(errorMsg)
+      }
+    }
+    return { execute, isLoading: ref(false) }
+  },
 }))
 
 // ── router mock ────────────────────────────────────────────────────────────
@@ -143,6 +166,7 @@ function mountOvertimeView() {
 
 describe('OvertimeView', () => {
   beforeEach(() => {
+    setActivePinia(createPinia())
     vi.clearAllMocks()
     mockHasPermission = vi.fn(() => true)
     mockUserInfo = { role: 'admin', permissions: -1 }
@@ -469,6 +493,79 @@ describe('OvertimeView', () => {
       await flushPromises()
 
       expect(batchApproveOvertimes).toHaveBeenCalledWith([3], false, '理由不充分')
+    })
+  })
+
+  // ── handleImportFile ──────────────────────────────────────────────────────
+
+  describe('handleImportFile', () => {
+    it('匯入成功（failed=0）時顯示成功訊息並刷新主列表', async () => {
+      importOvertimes.mockResolvedValue({
+        data: { total: 3, created: 3, failed: 0, errors: [] },
+      })
+      const wrapper = mountOvertimeView()
+      await flushPromises()
+      vi.clearAllMocks()
+      getOvertimes.mockResolvedValue({ data: [] })
+
+      await wrapper.vm.$.setupState.handleImportFile({ raw: new File([], 'test.xlsx') })
+      await flushPromises()
+
+      expect(ElMessage.success).toHaveBeenCalledWith(expect.stringContaining('3'))
+      expect(getOvertimes).toHaveBeenCalled()
+    })
+
+    it('匯入有部分失敗（failed>0）時 importResult 保留錯誤，不刷新主列表', async () => {
+      importOvertimes.mockResolvedValue({
+        data: { total: 3, created: 2, failed: 1, errors: ['第3行日期格式錯誤'] },
+      })
+      const wrapper = mountOvertimeView()
+      await flushPromises()
+      vi.clearAllMocks()
+      getOvertimes.mockResolvedValue({ data: [] })
+
+      await wrapper.vm.$.setupState.handleImportFile({ raw: new File([], 'test.xlsx') })
+      await flushPromises()
+
+      expect(ElMessage.success).not.toHaveBeenCalled()
+      expect(getOvertimes).not.toHaveBeenCalled()
+      expect(wrapper.vm.$.setupState.importResult.failed).toBe(1)
+    })
+  })
+
+  // ── openApprovalLogs ──────────────────────────────────────────────────────
+
+  describe('openApprovalLogs', () => {
+    it('呼叫 getApprovalLogs("overtime", row.id) 並開啟 drawer', async () => {
+      getApprovalLogs.mockResolvedValue({
+        data: [{ id: 1, action: 'approved', approver_username: 'admin', approver_role: 'admin' }],
+      })
+      const wrapper = mountOvertimeView()
+      await flushPromises()
+
+      await wrapper.vm.$.setupState.openApprovalLogs({ id: 42 })
+      await flushPromises()
+
+      expect(getApprovalLogs).toHaveBeenCalledWith('overtime', 42)
+      expect(wrapper.vm.$.setupState.approvalLogDrawerVisible).toBe(true)
+      expect(wrapper.vm.$.setupState.approvalLogs).toHaveLength(1)
+    })
+  })
+
+  // ── onDeleteSuccess ───────────────────────────────────────────────────────
+
+  describe('onDeleteSuccess', () => {
+    it('刪除成功後同時刷新主列表與待審列表', async () => {
+      const wrapper = mountOvertimeView()
+      await flushPromises()
+      vi.clearAllMocks()
+      getOvertimes.mockResolvedValue({ data: [] })
+
+      wrapper.vm.$.setupState.onDeleteSuccess()
+      await flushPromises()
+
+      // fetchOvertimes + fetchPendingOvertimes 皆呼叫 getOvertimes（參數不同）
+      expect(getOvertimes).toHaveBeenCalledTimes(2)
     })
   })
 })

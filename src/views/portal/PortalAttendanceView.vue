@@ -16,6 +16,7 @@ const query = reactive({
 
 const sheetData = ref(null)
 const viewMode = ref('table') // 'table' or 'cards'
+const sheetCache = new Map() // key: 'YYYY-M'，唯讀 View 快取可永久保留
 
 // Auto-detect mobile
 const isMobile = ref(window.innerWidth < 768)
@@ -25,11 +26,17 @@ const onResize = () => {
   if (!isMobile.value && viewMode.value === 'cards') viewMode.value = 'table'
 }
 
-const fetchSheet = async () => {
+const fetchSheet = async (force = false) => {
+  const key = `${query.year}-${query.month}`
+  if (!force && sheetCache.has(key)) {
+    sheetData.value = sheetCache.get(key)
+    return
+  }
   loading.value = true
   try {
     const res = await getAttendanceSheet({ year: query.year, month: query.month })
     sheetData.value = res.data
+    sheetCache.set(key, res.data)
   } catch (error) {
     ElMessage.error('載入失敗: ' + apiError(error, error.message))
   } finally {

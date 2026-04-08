@@ -7,11 +7,12 @@ import AdminLayout from './layouts/AdminLayout.vue'
 const route = useRoute()
 const isPortalRoute = computed(() => route.path.startsWith('/portal'))
 const isLoginPage = computed(() => route.path === '/login')
+const isPublicRoute = computed(() => route.path.startsWith('/public'))
 </script>
 
 <template>
-  <!-- Portal routes and admin login use their own layout -->
-  <RouterView v-if="isPortalRoute || isLoginPage" />
+  <!-- Portal routes, admin login, and public routes use their own layout -->
+  <RouterView v-if="isPortalRoute || isLoginPage || isPublicRoute" />
 
   <!-- Admin routes use the AdminLayout -->
   <AdminLayout v-else />

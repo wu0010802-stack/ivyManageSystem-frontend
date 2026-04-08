@@ -12,7 +12,7 @@ import {
 } from 'chart.js'
 
 import { apiError } from '@/utils/error'
-import { getClassrooms } from '@/api/classrooms'
+import { useClassroomStore } from '@/stores/classroom'
 import {
   batchSaveAttendance,
   getAttendanceOverview,
@@ -26,7 +26,8 @@ ChartJS.register(BarElement, CategoryScale, LinearScale, Tooltip, Legend)
 const STATUS_OPTIONS = ['出席', '缺席', '病假', '事假', '遲到']
 const TODAY = new Date().toISOString().slice(0, 10)
 
-const classrooms = ref([])
+const classroomStore = useClassroomStore()
+const classrooms = computed(() => classroomStore.classrooms)
 const activeTab = ref('overview')
 
 const overviewDate = ref(TODAY)
@@ -164,18 +165,6 @@ const detailSummary = computed(() => {
 
   return summary
 })
-
-const fetchClassrooms = async () => {
-  try {
-    const res = await getClassrooms()
-    classrooms.value = res.data
-    const firstId = classrooms.value[0]?.id ?? null
-    if (!editClassroomId.value) editClassroomId.value = firstId
-    if (!monthlyClassroomId.value) monthlyClassroomId.value = firstId
-  } catch {
-    ElMessage.error('載入班級失敗')
-  }
-}
 
 const fetchOverview = async () => {
   overviewLoading.value = true
@@ -352,7 +341,10 @@ watch(activeTab, (tab) => {
 })
 
 onMounted(async () => {
-  await fetchClassrooms()
+  await classroomStore.fetchClassrooms()
+  const firstId = classrooms.value[0]?.id ?? null
+  if (!editClassroomId.value) editClassroomId.value = firstId
+  if (!monthlyClassroomId.value) monthlyClassroomId.value = firstId
   await fetchOverview()
 })
 </script>

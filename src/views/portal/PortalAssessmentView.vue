@@ -3,16 +3,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getMyClassAssessments, createPortalAssessment } from '@/api/studentAssessments'
 import api from '@/api/index'
-
-const ASSESSMENT_TYPES = ['期中', '期末', '學期']
-const DOMAINS = ['身體動作與健康', '語文', '認知', '社會', '情緒', '美感', '綜合']
-const RATINGS = ['優', '良', '需加強']
-
-const RATING_TAG = {
-  '優': 'success',
-  '良': 'warning',
-  '需加強': 'danger',
-}
+import { ASSESSMENT_TYPES, DOMAINS, RATINGS, RATING_TAG } from '@/constants/studentRecords'
 
 // ── 班級/學生 ─────────────────────────────────────────
 const classrooms = ref([])      // [{ classroom_id, classroom_name, students: [...] }]

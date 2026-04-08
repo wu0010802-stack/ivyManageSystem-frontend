@@ -1,22 +1,15 @@
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getAssessments, createAssessment, updateAssessment, deleteAssessment } from '@/api/studentAssessments'
-import { getClassrooms } from '@/api/classrooms'
+import { useClassroomStore } from '@/stores/classroom'
 import { getStudents } from '@/api/students'
-
-const ASSESSMENT_TYPES = ['期中', '期末', '學期']
-const DOMAINS = ['身體動作與健康', '語文', '認知', '社會', '情緒', '美感', '綜合']
-const RATINGS = ['優', '良', '需加強']
-
-const RATING_TAG = {
-  '優': 'success',
-  '良': 'warning',
-  '需加強': 'danger',
-}
+import { ASSESSMENT_TYPES, DOMAINS, RATINGS, RATING_TAG } from '@/constants/studentRecords'
+import { apiError } from '@/utils/error'
 
 // ── 篩選 ────────────────────────────────────────────────
-const classrooms = ref([])
+const classroomStore = useClassroomStore()
+const classrooms = computed(() => classroomStore.classrooms)
 const filterClassroom = ref(null)
 const filterSemester = ref(null)
 const filterType = ref(null)
@@ -51,15 +44,6 @@ const editId = ref(null)
 const dialogClassroom = ref(null)
 const dialogStudents = ref([])
 const dialogStudentsLoading = ref(false)
-
-const fetchClassrooms = async () => {
-  try {
-    const res = await getClassrooms()
-    classrooms.value = (res.data || []).filter(c => c.is_active !== false)
-  } catch {
-    ElMessage.error('載入班級資料失敗')
-  }
-}
 
 const fetchAssessments = async () => {
   loading.value = true
@@ -163,7 +147,7 @@ const submitForm = async () => {
     dialogVisible.value = false
     fetchAssessments()
   } catch (e) {
-    ElMessage.error(e.response?.data?.detail || '操作失敗')
+    ElMessage.error(apiError(e, '操作失敗'))
   } finally {
     formLoading.value = false
   }
@@ -180,7 +164,7 @@ const handleDelete = async (row) => {
     ElMessage.success('刪除成功')
     fetchAssessments()
   } catch (e) {
-    if (e !== 'cancel') ElMessage.error(e.response?.data?.detail || '刪除失敗')
+    if (e !== 'cancel') ElMessage.error(apiError(e, '刪除失敗'))
   }
 }
 
@@ -190,7 +174,7 @@ const truncate = (text, len = 60) => {
 }
 
 onMounted(() => {
-  fetchClassrooms()
+  classroomStore.fetchClassrooms()
   fetchAssessments()
 })
 </script>

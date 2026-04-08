@@ -10,9 +10,9 @@
 export function getCurrentAcademicTerm() {
   const now = new Date()
   const month = now.getMonth() + 1
-  if (month >= 8) return { school_year: now.getFullYear(), semester: 1 }
-  if (month >= 2) return { school_year: now.getFullYear() - 1, semester: 2 }
-  return { school_year: now.getFullYear() - 1, semester: 1 }
+  if (month >= 8) return { school_year: now.getFullYear() - 1911, semester: 1 }
+  if (month >= 2) return { school_year: now.getFullYear() - 1 - 1911, semester: 2 }
+  return { school_year: now.getFullYear() - 1 - 1911, semester: 1 }
 }
 
 /**

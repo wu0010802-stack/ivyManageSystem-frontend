@@ -14,8 +14,9 @@
     <!-- 課後才藝統計表 -->
     <el-card class="table-card" v-loading="loadingTable" style="margin-top: 16px;">
       <template #header>
-        <div class="card-header">
+        <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;">
           <span>課後才藝統計表</span>
+          <el-button size="small" type="success" :loading="exportingTable" @click="handleExportTable">匯出 Excel</el-button>
         </div>
       </template>
       <el-table
@@ -60,6 +61,33 @@
       </el-table>
     </el-card>
 
+    <!-- 出席率統計 -->
+    <el-row :gutter="16" v-if="attendanceStats && attendanceStats.by_course.length > 0" style="margin-top: 16px;">
+      <el-col :xs="24">
+        <el-card>
+          <template #header>
+            <span>課程出席率統計</span>
+            <span style="float:right; font-size:13px; color:#64748b">
+              共 {{ attendanceStats.total_sessions }} 場次 · 平均出席率 {{ avgAttendanceRate }}
+            </span>
+          </template>
+          <el-table :data="attendanceStats.by_course" size="small" border>
+            <el-table-column label="課程名稱" prop="course_name" />
+            <el-table-column label="場次數" prop="sessions" width="90" align="center" />
+            <el-table-column label="平均出席率" width="120" align="center">
+              <template #default="{ row }">
+                <el-progress
+                  :percentage="Math.round(row.avg_rate * 100)"
+                  :format="() => `${Math.round(row.avg_rate * 100)}%`"
+                  :status="row.avg_rate >= 0.8 ? 'success' : row.avg_rate >= 0.6 ? '' : 'exception'"
+                />
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-card>
+      </el-col>
+    </el-row>
+
     <el-row :gutter="16" class="charts-row" v-if="stats" style="margin-top: 16px;">
       <el-col :xs="24" :md="14">
         <el-card>
@@ -100,18 +128,26 @@
 import { ref, computed, onMounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useActivityStore } from '@/stores/activity'
-import { getActivityDashboardTable } from '@/api/activity'
+import { getActivityDashboardTable, exportDashboardTable } from '@/api/activity'
+import { ElMessage } from 'element-plus'
 
 const activityStore = useActivityStore()
 const loading = ref(false)
 const loadingTable = ref(false)
+const exportingTable = ref(false)
 const dashboardData = ref(null)
 
 const { stats } = storeToRefs(activityStore)
 const statistics = computed(() => stats.value?.statistics || {})
 const dailyStats = computed(() => stats.value?.charts?.daily || [])
 const topCourses = computed(() => stats.value?.charts?.topCourses || [])
+const attendanceStats = computed(() => stats.value?.attendance_stats || null)
 const maxDaily = computed(() => Math.max(1, ...dailyStats.value.map((d) => d.count)))
+
+const avgAttendanceRate = computed(() => {
+  const rate = attendanceStats.value?.avg_attendance_rate
+  return rate != null ? `${Math.round(rate * 100)}%` : '-'
+})
 
 const statCards = computed(() => [
   { label: '總報名數', value: statistics.value.totalRegistrations ?? '-' },
@@ -121,6 +157,7 @@ const statCards = computed(() => [
   { label: '總收入（已繳）', value: statistics.value.totalRevenue != null ? `$${statistics.value.totalRevenue.toLocaleString()}` : '-' },
   { label: '待繳金額', value: statistics.value.totalUnpaid != null ? `$${statistics.value.totalUnpaid.toLocaleString()}` : '-' },
   { label: '報名率', value: statistics.value.enrollmentRate != null ? `${statistics.value.enrollmentRate}%` : '-' },
+  { label: '平均出席率', value: avgAttendanceRate.value },
   { label: '未讀提問', value: statistics.value.unreadInquiries ?? '-' },
 ])
 
@@ -214,11 +251,31 @@ onMounted(async () => {
       const res = await getActivityDashboardTable();
       dashboardData.value = res.data;
   } catch (e) {
-      console.error(e);
+      ElMessage.error('資料載入失敗，請重新整理');
   } finally {
       loadingTable.value = false;
   }
 })
+
+async function handleExportTable() {
+  exportingTable.value = true
+  try {
+    const res = await exportDashboardTable()
+    const url = URL.createObjectURL(new Blob([res.data]))
+    const a = document.createElement('a')
+    a.href = url
+    // 使用本地時區日期（避免 UTC 與台灣時間跨日問題）
+    const localDate = new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-')
+    a.download = `activity_dashboard_${localDate}.xlsx`
+    a.click()
+    URL.revokeObjectURL(url)
+    ElMessage.success('匯出成功')
+  } catch {
+    ElMessage.error('匯出失敗')
+  } finally {
+    exportingTable.value = false
+  }
+}
 </script>
 
 <style scoped>

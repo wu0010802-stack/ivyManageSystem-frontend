@@ -95,6 +95,10 @@
             <el-icon><Calendar /></el-icon>
             <template #title>學生出席紀錄</template>
           </el-menu-item>
+          <el-menu-item v-if="canView.STUDENTS_READ" index="/student-enrollment">
+            <el-icon><TrendCharts /></el-icon>
+            <template #title>在籍統計</template>
+          </el-menu-item>
           <el-menu-item v-if="canView.STUDENTS_READ" index="/student-records">
             <el-icon><DataAnalysis /></el-icon>
             <template #title>學生紀錄</template>
@@ -102,6 +106,10 @@
           <el-menu-item v-if="canView.STUDENTS_READ" index="/dismissal-queue">
             <el-icon><Van /></el-icon>
             <template #title>接送通知</template>
+          </el-menu-item>
+          <el-menu-item v-if="canView.FEES_READ" index="/fees">
+            <el-icon><CreditCard /></el-icon>
+            <template #title>學費管理</template>
           </el-menu-item>
         </el-sub-menu>
 
@@ -162,6 +170,10 @@
             <el-icon><List /></el-icon>
             <template #title>修改紀錄</template>
           </el-menu-item>
+          <el-menu-item v-if="canView.ACTIVITY_READ" index="/activity/attendance">
+            <el-icon><Checked /></el-icon>
+            <template #title>點名管理</template>
+          </el-menu-item>
         </el-sub-menu>
 
         <!-- 系統設定 - 不摺疊 -->
@@ -186,7 +198,7 @@ import {
   DataBoard, Finished, Calendar, Timer, Clock, Document, Watch,
   Money, User, School, OfficeBuilding, Bell, TrendCharts, Setting,
   Expand, Fold, Warning, DataAnalysis, Files,
-  Star, Collection, ShoppingBag, ChatDotRound, List, Van
+  Star, Collection, ShoppingBag, ChatDotRound, List, Van, CreditCard, Checked
 } from '@element-plus/icons-vue'
 import { PERMISSION_VALUES, getUserInfo } from '@/utils/auth'
 
@@ -243,7 +255,7 @@ const hasVisibleHrItems = computed(() =>
 )
 
 const hasVisibleStudentItems = computed(() =>
-  canView.value.STUDENTS_READ || canView.value.CLASSROOMS_READ
+  canView.value.STUDENTS_READ || canView.value.CLASSROOMS_READ || canView.value.FEES_READ
 )
 
 const hasVisibleAdminItems = computed(() =>

@@ -21,3 +21,9 @@ export const formatDate = (isoStr) => {
   const d = new Date(isoStr)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
+
+// 才藝管理用：ISO 字串轉 "YYYY-MM-DD HH:MM"，null → '-'
+export const formatActivityDate = (str) => {
+  if (!str) return '-'
+  return str.replace('T', ' ').substring(0, 16)
+}
