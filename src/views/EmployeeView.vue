@@ -2,7 +2,7 @@
 import { ref, reactive, onMounted, computed, watch, nextTick } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { Loading } from '@element-plus/icons-vue'
-import { getEmployee, createEmployee, updateEmployee, offboard, getFinalSalaryPreview } from '@/api/employees'
+import { getEmployee, getEmployees, createEmployee, updateEmployee, offboard, getFinalSalaryPreview } from '@/api/employees'
 import { getRecords as getAttendanceRecords, uploadCsv, deleteEmployeeDateRecord } from '@/api/attendance'
 import { getPositionSalary } from '@/api/config'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -229,14 +229,23 @@ const debouncedSearch = ref('')
 const updateSearch = useDebounceFn((val) => { debouncedSearch.value = val }, 300)
 watch(searchQuery, updateSearch)
 
-const filteredEmployees = computed(() => {
-  if (!debouncedSearch.value) return employeeStore.employees
-  const query = debouncedSearch.value.toLowerCase()
-  return employeeStore.employees.filter(emp =>
-    emp.name.toLowerCase().includes(query) ||
-    emp.employee_id.toLowerCase().includes(query) ||
-    (emp.title && emp.title.toLowerCase().includes(query))
-  )
+const searchResults = ref(null) // null = 用 store；有值 = 搜尋結果
+
+const filteredEmployees = computed(() =>
+  searchResults.value !== null ? searchResults.value : employeeStore.employees
+)
+
+watch(debouncedSearch, async (val) => {
+  if (!val) {
+    searchResults.value = null
+    return
+  }
+  try {
+    const res = await getEmployees({ search: val })
+    searchResults.value = res.data
+  } catch {
+    ElMessage.error('搜尋員工失敗')
+  }
 })
 
 const exportEmployees = () => {

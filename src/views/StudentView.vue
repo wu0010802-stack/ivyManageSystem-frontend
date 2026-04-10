@@ -115,14 +115,9 @@ const dialogClassroomOptions = computed(() => {
   return options
 })
 
-const filteredStudents = computed(() => {
-  if (!debouncedSearch.value) return students.value
-  const lowerQuery = debouncedSearch.value.toLowerCase()
-  return students.value.filter(s =>
-    s.name.toLowerCase().includes(lowerQuery) ||
-    s.student_id.toLowerCase().includes(lowerQuery) ||
-    (s.parent_name && s.parent_name.toLowerCase().includes(lowerQuery))
-  )
+watch(debouncedSearch, () => {
+  currentPage.value = 1
+  fetchStudents()
 })
 
 const exportStudents = () => {
@@ -157,6 +152,7 @@ const fetchStudents = async () => {
       school_year: normalizeSchoolYear(filterSchoolYear.value),
       semester: filterSemester.value,
       classroom_id: filterClassroomId.value || undefined,
+      search: debouncedSearch.value || undefined,
     })
     students.value = response.data.items
     totalStudents.value = response.data.total
@@ -458,7 +454,7 @@ onMounted(async () => {
     <TableSkeleton v-if="loading && !students.length" :columns="8" />
     <el-table
       v-else
-      :data="filteredStudents"
+      :data="students"
       v-loading="loading"
       stripe
       style="width: 100%"

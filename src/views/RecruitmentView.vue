@@ -26,110 +26,34 @@
     <el-tabs v-model="activeTab" @tab-click="onTabClick">
       <!-- ==================== 總覽 ==================== -->
       <el-tab-pane label="總覽" name="overview">
-        <div class="kpi-row">
-          <el-card class="kpi-card" shadow="hover">
-            <div class="kpi-value">{{ stats.total_visit }}</div>
-            <div class="kpi-label">總參觀紀錄</div>
-          </el-card>
-          <el-card class="kpi-card kpi-teal" shadow="hover">
-            <div class="kpi-value">{{ stats.unique_visit ?? '—' }}</div>
-            <div class="kpi-label">唯一幼生數</div>
-          </el-card>
-          <el-card class="kpi-card kpi-accent" shadow="hover">
-            <div class="kpi-value">{{ stats.total_deposit }}</div>
-            <div class="kpi-label">總預繳人數</div>
-          </el-card>
-          <el-card class="kpi-card kpi-blue" shadow="hover">
-            <div class="kpi-value">{{ overallRate }}</div>
-            <div class="kpi-label">整體預繳率</div>
-          </el-card>
-          <el-card class="kpi-card kpi-blue" shadow="hover">
-            <div class="kpi-value">{{ uniqueDepositRate }}</div>
-            <div class="kpi-label">唯一幼生預繳率</div>
-          </el-card>
-          <el-card class="kpi-card kpi-green" shadow="hover">
-            <div class="kpi-value">{{ stats.chuannian_visit ?? 0 }}</div>
-            <div class="kpi-label">童年綠地參觀</div>
-          </el-card>
-          <el-card class="kpi-card kpi-green" shadow="hover">
-            <div class="kpi-value">{{ stats.chuannian_deposit ?? 0 }}</div>
-            <div class="kpi-label">童年綠地預繳</div>
-          </el-card>
-          <el-card class="kpi-card" shadow="hover">
-            <div class="kpi-value">{{ bestMonthRate }}</div>
-            <div class="kpi-label">最高月份預繳率</div>
-            <div class="kpi-sub">{{ bestMonth }}</div>
-          </el-card>
-        </div>
-
-        <div class="chart-row">
-          <el-card class="chart-card">
-            <template #header>月度參觀 vs 預繳趨勢</template>
-            <div class="chart-box">
-              <Bar v-if="monthlyBarData" :data="monthlyBarData" :options="barOptions" />
-            </div>
-          </el-card>
-          <el-card class="chart-card">
-            <template #header>月度預繳率走勢</template>
-            <div class="chart-box">
-              <Line v-if="monthlyRateData" :data="monthlyRateData" :options="lineOptions" />
-            </div>
-          </el-card>
-        </div>
-
-        <el-card>
-          <template #header>月度明細表</template>
-          <el-table :data="monthlyTableData" border stripe size="small">
-            <el-table-column prop="month" label="月份" width="90" />
-            <el-table-column prop="visit" label="參觀人數" align="center" width="90" />
-            <el-table-column prop="deposit" label="預繳人數" align="center" width="90" />
-            <el-table-column label="預繳率" align="center" width="90">
-              <template #default="{ row }">{{ fmtPct(row.deposit, row.visit) }}</template>
-            </el-table-column>
-            <el-table-column prop="chuannian_visit" label="童年綠地參觀" align="center" width="110">
-              <template #default="{ row }">{{ row.chuannian_visit ?? 0 }}</template>
-            </el-table-column>
-            <el-table-column prop="chuannian_deposit" label="童年綠地預繳" align="center" width="110">
-              <template #default="{ row }">{{ row.chuannian_deposit ?? 0 }}</template>
-            </el-table-column>
-          </el-table>
-        </el-card>
-
-        <!-- 年度統計 -->
-        <el-card style="margin-top:16px">
-          <template #header>年度統計</template>
-          <el-table :data="stats.by_year" border stripe size="small">
-            <el-table-column label="年份" width="90">
-              <template #default="{ row }">{{ row.year }}年</template>
-            </el-table-column>
-            <el-table-column prop="visit" label="參觀人數" align="center" width="90" />
-            <el-table-column prop="deposit" label="預繳人數" align="center" width="90" />
-            <el-table-column label="預繳率" align="center" width="90">
-              <template #default="{ row }">{{ fmtPct(row.deposit, row.visit) }}</template>
-            </el-table-column>
-            <el-table-column prop="chuannian_visit" label="童年綠地參觀" align="center" width="110">
-              <template #default="{ row }">{{ row.chuannian_visit ?? 0 }}</template>
-            </el-table-column>
-            <el-table-column prop="chuannian_deposit" label="童年綠地預繳" align="center" width="110">
-              <template #default="{ row }">{{ row.chuannian_deposit ?? 0 }}</template>
-            </el-table-column>
-          </el-table>
-        </el-card>
+        <RecruitmentOverviewTab
+          :stats="stats"
+          :show-charts="isChartTabActive('overview')"
+          :monthly-table-data="monthlyTableData"
+          :monthly-bar-data="monthlyBarData"
+          :monthly-rate-data="monthlyRateData"
+          :bar-options="barOptions"
+          :monthly-bar-options="monthlyBarOptions"
+          :line-options="percentLineOptions"
+          :bar-component="Bar"
+          :line-component="Line"
+          :fmt-rate="fmtRate"
+        />
       </el-tab-pane>
 
       <!-- ==================== 班別分析 ==================== -->
-      <el-tab-pane label="班別分析" name="class">
+      <el-tab-pane label="班別分析" name="class" lazy>
         <div class="chart-row">
           <el-card class="chart-card">
             <template #header>各班別參觀人數</template>
             <div class="chart-box">
-              <Bar v-if="classBarData" :data="classBarData" :options="barOptions" />
+              <Bar v-if="isChartTabActive('class') && classBarData" :data="classBarData" :options="classBarOptions" />
             </div>
           </el-card>
           <el-card class="chart-card">
             <template #header>各班別預繳率</template>
             <div class="chart-box">
-              <Bar v-if="classRateData" :data="classRateData" :options="horizBarOptions" />
+              <Bar v-if="isChartTabActive('class') && classRateData" :data="classRateData" :options="percentHorizBarOptions" />
             </div>
           </el-card>
         </div>
@@ -162,18 +86,18 @@
       </el-tab-pane>
 
       <!-- ==================== 來源分析 ==================== -->
-      <el-tab-pane label="來源分析" name="source">
+      <el-tab-pane label="來源分析" name="source" lazy>
         <div class="chart-row">
           <el-card class="chart-card">
             <template #header>各來源參觀人數排名</template>
             <div class="chart-box chart-box-tall">
-              <Bar v-if="sourceBarData" :data="sourceBarData" :options="horizBarOptions" />
+              <Bar v-if="isChartTabActive('source') && sourceBarData" :data="sourceBarData" :options="sourceClickBarOptions" />
             </div>
           </el-card>
           <el-card class="chart-card">
             <template #header>各來源預繳率</template>
             <div class="chart-box chart-box-tall">
-              <Bar v-if="sourceRateData" :data="sourceRateData" :options="horizBarOptions" />
+              <Bar v-if="isChartTabActive('source') && sourceRateData" :data="sourceRateData" :options="percentHorizBarOptions" />
             </div>
           </el-card>
         </div>
@@ -192,18 +116,18 @@
       </el-tab-pane>
 
       <!-- ==================== 接待分析 ==================== -->
-      <el-tab-pane label="接待分析" name="staff">
+      <el-tab-pane label="接待分析" name="staff" lazy>
         <div class="chart-row">
           <el-card class="chart-card">
             <template #header>接待人員參觀量</template>
             <div class="chart-box">
-              <Bar v-if="staffBarData" :data="staffBarData" :options="barOptions" />
+              <Bar v-if="isChartTabActive('staff') && staffBarData" :data="staffBarData" :options="barOptions" />
             </div>
           </el-card>
           <el-card class="chart-card">
             <template #header>接待人員預繳率</template>
             <div class="chart-box">
-              <Bar v-if="staffRateData" :data="staffRateData" :options="barOptions" />
+              <Bar v-if="isChartTabActive('staff') && staffRateData" :data="staffRateData" :options="percentBarOptions" />
             </div>
           </el-card>
         </div>
@@ -261,7 +185,7 @@
       </el-tab-pane>
 
       <!-- ==================== 區域分析 ==================== -->
-      <el-tab-pane label="區域分析" name="area">
+      <el-tab-pane label="區域分析" name="area" lazy>
         <div class="kpi-row" style="margin-bottom:16px">
           <el-card class="kpi-card" shadow="hover" v-for="band in distanceBandKPI" :key="band.label">
             <div class="kpi-value">{{ band.visit }}</div>
@@ -286,80 +210,68 @@
             </el-table-column>
           </el-table>
         </el-card>
+        <el-card style="margin-bottom:16px" v-loading="loadingAreaHotspots">
+          <template #header>家長地址熱點圖</template>
+          <RecruitmentAddressHeatmap
+            :hotspots="areaHotspotsSummary.hotspots"
+            :records-with-address="areaHotspotsSummary.records_with_address"
+            :total-hotspots="areaHotspotsSummary.total_hotspots"
+            :geocoded-hotspots="areaHotspotsSummary.geocoded_hotspots"
+            :pending-hotspots="areaHotspotsSummary.pending_hotspots"
+            :failed-hotspots="areaHotspotsSummary.failed_hotspots"
+            :provider-available="areaHotspotsSummary.provider_available"
+            :provider-name="areaHotspotsSummary.provider_name"
+            :school-lat="SCHOOL_LAT"
+            :school-lng="SCHOOL_LNG"
+            :can-write="canWrite"
+            :syncing="syncingAreaHotspots"
+            :fmt-pct="fmtPct"
+            @sync="handleAreaHotspotSync"
+          />
+        </el-card>
         <div class="chart-row">
           <el-card class="chart-card">
             <template #header>各行政區參觀人數</template>
             <div class="chart-box">
-              <Bar v-if="areaBarData" :data="areaBarData" :options="horizBarOptions" />
+              <Bar v-if="isChartTabActive('area') && areaBarData" :data="areaBarData" :options="horizBarOptions" />
             </div>
           </el-card>
           <el-card class="chart-card">
             <template #header>距離帶分佈</template>
             <div class="chart-box">
-              <Doughnut v-if="distanceDoughnutData" :data="distanceDoughnutData" :options="doughnutOptions" />
+              <Doughnut v-if="isChartTabActive('area') && distanceDoughnutData" :data="distanceDoughnutData" :options="doughnutOptions" />
             </div>
           </el-card>
         </div>
       </el-tab-pane>
 
       <!-- ==================== 未預繳原因分析 ==================== -->
-      <el-tab-pane label="未預繳原因" name="nodeposit">
-        <div class="chart-row">
-          <el-card class="chart-card">
-            <template #header>未預繳原因分佈</template>
-            <div class="chart-box chart-box-tall">
-              <Bar v-if="noDepositReasonBarData" :data="noDepositReasonBarData" :options="horizBarOptions" />
-            </div>
-          </el-card>
-          <el-card class="chart-card">
-            <template #header>各年級未預繳原因</template>
-            <div class="chart-box chart-box-tall">
-              <Bar v-if="noDepositGradeBarData" :data="noDepositGradeBarData" :options="barOptions" />
-            </div>
-          </el-card>
-        </div>
-        <el-card>
-          <template #header>
-            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-              <span>未預繳明細</span>
-              <el-select
-                v-model="ndFilter.reason"
-                placeholder="篩選原因"
-                clearable
-                size="small"
-                style="width:200px"
-                @change="fetchNoDeposit"
-              >
-                <el-option v-for="r in options.no_deposit_reasons" :key="r" :label="r" :value="r" />
-              </el-select>
-              <el-select
-                v-model="ndFilter.grade"
-                placeholder="班別"
-                clearable
-                size="small"
-                style="width:100px"
-                @change="fetchNoDeposit"
-              >
-                <el-option v-for="g in GRADES_ORDER" :key="g" :label="g" :value="g" />
-              </el-select>
-              <span class="record-count">共 {{ ndTotal }} 筆未預繳</span>
-            </div>
-          </template>
-          <el-table :data="ndData" border stripe size="small" v-loading="loadingND">
-            <el-table-column prop="month" label="月份" width="80" />
-            <el-table-column prop="child_name" label="姓名" width="90" />
-            <el-table-column prop="grade" label="班別" width="80" />
-            <el-table-column prop="no_deposit_reason" label="原因分類" min-width="140" />
-            <el-table-column prop="no_deposit_reason_detail" label="說明" min-width="160" show-overflow-tooltip />
-            <el-table-column prop="source" label="來源" width="100" />
-            <el-table-column prop="referrer" label="介紹者" width="80" />
-            <el-table-column prop="parent_response" label="電訪回應" min-width="120" show-overflow-tooltip />
-          </el-table>
-        </el-card>
+      <el-tab-pane label="未預繳原因" name="nodeposit" lazy>
+        <RecruitmentNoDepositTab
+          :show-charts="isChartTabActive('nodeposit')"
+          :no-deposit-reason-bar-data="noDepositReasonBarData"
+          :no-deposit-grade-bar-data="noDepositGradeBarData"
+          :horiz-bar-options="horizBarOptions"
+          :no-deposit-grade-options="noDepositGradeBarOptions"
+          :bar-component="Bar"
+          :reason-options="options.no_deposit_reasons"
+          :grades="GRADES_ORDER"
+          :reason="ndFilter.reason"
+          :grade="ndFilter.grade"
+          :page="ndFilter.page"
+          :page-size="ndFilter.page_size"
+          :total="ndTotal"
+          :records="ndData"
+          :loading="loadingND"
+          @update:reason="ndFilter.reason = $event"
+          @update:grade="ndFilter.grade = $event"
+          @filter-change="onNoDepositFilterChange"
+          @page-change="onNDPageChange"
+        />
       </el-tab-pane>
 
       <!-- ==================== 童年綠地分析 ==================== -->
-      <el-tab-pane label="童年綠地" name="chuannian">
+      <el-tab-pane label="童年綠地" name="chuannian" lazy>
         <div class="kpi-row">
           <el-card class="kpi-card kpi-green" shadow="hover">
             <div class="kpi-value">{{ stats.chuannian_visit ?? 0 }}</div>
@@ -388,13 +300,13 @@
           <el-card class="chart-card">
             <template #header>預計就讀月份分佈（參觀 vs 預繳）</template>
             <div class="chart-box chart-box-tall">
-              <Bar v-if="chuannianExpectedBarData" :data="chuannianExpectedBarData" :options="barOptions" />
+              <Bar v-if="isChartTabActive('chuannian') && chuannianExpectedBarData" :data="chuannianExpectedBarData" :options="barOptions" />
             </div>
           </el-card>
           <el-card class="chart-card">
             <template #header>童年綠地各班別分佈</template>
             <div class="chart-box chart-box-tall">
-              <Bar v-if="chuannianGradeBarData" :data="chuannianGradeBarData" :options="horizBarOptions" />
+              <Bar v-if="isChartTabActive('chuannian') && chuannianGradeBarData" :data="chuannianGradeBarData" :options="horizBarOptions" />
             </div>
           </el-card>
         </div>
@@ -438,230 +350,45 @@
       </el-tab-pane>
 
       <!-- ==================== 近五年轉換整合 ==================== -->
-      <el-tab-pane label="近五年轉換" name="periods">
-        <!-- 整體量體 KPI -->
-        <div class="kpi-row" v-if="periodsSummary">
-          <el-card class="kpi-card" shadow="hover">
-            <div class="kpi-value">{{ periodsSummary.total_visit }}</div>
-            <div class="kpi-label">近五年總參觀</div>
-          </el-card>
-          <el-card class="kpi-card kpi-accent" shadow="hover">
-            <div class="kpi-value">{{ periodsSummary.total_deposit }}</div>
-            <div class="kpi-label">近五年總預繳</div>
-          </el-card>
-          <el-card class="kpi-card kpi-green" shadow="hover">
-            <div class="kpi-value">{{ periodsSummary.total_enrolled }}</div>
-            <div class="kpi-label">近五年總註冊</div>
-          </el-card>
-          <el-card class="kpi-card kpi-blue" shadow="hover">
-            <div class="kpi-value">{{ periodsSummary.visit_to_deposit_rate }}%</div>
-            <div class="kpi-label">整體參觀→預繳率</div>
-          </el-card>
-          <el-card class="kpi-card kpi-blue" shadow="hover">
-            <div class="kpi-value">{{ periodsSummary.visit_to_enrolled_rate }}%</div>
-            <div class="kpi-label">整體參觀→註冊率</div>
-          </el-card>
-          <el-card class="kpi-card kpi-blue" shadow="hover">
-            <div class="kpi-value">{{ periodsSummary.deposit_to_enrolled_rate }}%</div>
-            <div class="kpi-label">整體預繳→註冊率</div>
-          </el-card>
-          <el-card class="kpi-card kpi-teal" shadow="hover">
-            <div class="kpi-value">{{ periodsSummary.effective_to_enrolled_rate }}%</div>
-            <div class="kpi-label">排除轉期→註冊率</div>
-          </el-card>
-        </div>
-
-        <!-- 最佳/最差期間 -->
-        <div class="kpi-row" v-if="periodsSummary" style="margin-bottom:16px">
-          <el-card class="kpi-card kpi-green" shadow="hover">
-            <div class="kpi-value" style="font-size:1rem">{{ periodsSummary.best_visit_to_enrolled?.period ?? '—' }}</div>
-            <div class="kpi-label">最高參觀→註冊率</div>
-            <div class="kpi-sub">{{ periodsSummary.best_visit_to_enrolled?.rate }}%</div>
-          </el-card>
-          <el-card class="kpi-card kpi-accent" shadow="hover">
-            <div class="kpi-value" style="font-size:1rem">{{ periodsSummary.worst_visit_to_enrolled?.period ?? '—' }}</div>
-            <div class="kpi-label">最低參觀→註冊率</div>
-            <div class="kpi-sub">{{ periodsSummary.worst_visit_to_enrolled?.rate }}%</div>
-          </el-card>
-          <el-card class="kpi-card kpi-green" shadow="hover">
-            <div class="kpi-value" style="font-size:1rem">{{ periodsSummary.best_deposit_to_enrolled?.period ?? '—' }}</div>
-            <div class="kpi-label">最高預繳→註冊率</div>
-            <div class="kpi-sub">{{ periodsSummary.best_deposit_to_enrolled?.rate }}%</div>
-          </el-card>
-          <el-card class="kpi-card kpi-accent" shadow="hover">
-            <div class="kpi-value" style="font-size:1rem">{{ periodsSummary.worst_deposit_to_enrolled?.period ?? '—' }}</div>
-            <div class="kpi-label">最低預繳→註冊率</div>
-            <div class="kpi-sub">{{ periodsSummary.worst_deposit_to_enrolled?.rate }}%</div>
-          </el-card>
-        </div>
-
-        <!-- 轉換率趨勢圖 -->
-        <div class="chart-row" style="margin-bottom:16px">
-          <el-card class="chart-card">
-            <template #header>各期間轉換率走勢（%）</template>
-            <div class="chart-box">
-              <Line v-if="periodsTrendData" :data="periodsTrendData" :options="lineOptions" />
-            </div>
-          </el-card>
-          <el-card class="chart-card">
-            <template #header>各期間參觀 / 預繳 / 註冊人數</template>
-            <div class="chart-box">
-              <Bar v-if="periodsCountBarData" :data="periodsCountBarData" :options="barOptions" />
-            </div>
-          </el-card>
-        </div>
-
-        <!-- 各期間主表 -->
-        <el-card style="margin-bottom:16px">
-          <template #header>
-            <div style="display:flex;justify-content:space-between;align-items:center">
-              <span>各期間轉換明細</span>
-              <el-button v-if="canWrite" type="primary" size="small" @click="openPeriodAdd">新增期間</el-button>
-            </div>
-          </template>
-          <el-table :data="periods" border stripe size="small" v-loading="loadingPeriods" style="overflow-x:auto">
-            <el-table-column prop="period_name" label="期間" min-width="160" fixed="left" />
-            <el-table-column prop="visit_count" label="參觀" align="center" width="70" />
-            <el-table-column prop="deposit_count" label="預繳" align="center" width="70" />
-            <el-table-column prop="enrolled_count" label="註冊" align="center" width="70" />
-            <el-table-column prop="transfer_term_count" label="轉學期" align="center" width="75" />
-            <el-table-column prop="effective_deposit_count" label="有效預繳" align="center" width="85" />
-            <el-table-column prop="not_enrolled_deposit" label="未就讀退" align="center" width="80" />
-            <el-table-column prop="enrolled_after_school" label="註冊後退" align="center" width="80" />
-            <el-table-column label="參觀→預繳" align="center" width="95">
-              <template #default="{ row }">{{ fmtRate(row.visit_to_deposit_rate) }}</template>
-            </el-table-column>
-            <el-table-column label="參觀→註冊" align="center" width="95">
-              <template #default="{ row }">{{ fmtRate(row.visit_to_enrolled_rate) }}</template>
-            </el-table-column>
-            <el-table-column label="預繳→註冊" align="center" width="95">
-              <template #default="{ row }">{{ fmtRate(row.deposit_to_enrolled_rate) }}</template>
-            </el-table-column>
-            <el-table-column label="排除轉→註冊" align="center" width="105">
-              <template #default="{ row }">{{ fmtRate(row.effective_to_enrolled_rate) }}</template>
-            </el-table-column>
-            <el-table-column prop="notes" label="備註" min-width="110" show-overflow-tooltip />
-            <el-table-column v-if="canWrite" label="操作" width="175" fixed="right">
-              <template #default="{ row }">
-                <el-button size="small" type="info" @click="handlePeriodSync(row.id)">同步</el-button>
-                <el-button size="small" @click="openPeriodEdit(row)">編輯</el-button>
-                <el-button size="small" type="danger" @click="handlePeriodDelete(row.id)">刪除</el-button>
-              </template>
-            </el-table-column>
-          </el-table>
-        </el-card>
-
-        <!-- 近五年班別轉換分析 -->
-        <el-card v-if="periodsSummary && periodsSummary.by_grade && periodsSummary.by_grade.length">
-          <template #header>近五年班別轉換分析</template>
-          <el-table :data="periodsSummary.by_grade" border stripe size="small">
-            <el-table-column prop="grade" label="班別" width="100" />
-            <el-table-column prop="visit" label="參觀人數" align="center" width="100" />
-            <el-table-column prop="deposit" label="預繳人數" align="center" width="100" />
-            <el-table-column prop="enrolled" label="註冊人數" align="center" width="100" />
-            <el-table-column label="參觀→預繳率" align="center" width="110">
-              <template #default="{ row }">{{ row.visit_to_deposit_rate }}%</template>
-            </el-table-column>
-            <el-table-column label="參觀→註冊率" align="center" width="110">
-              <template #default="{ row }">{{ row.visit_to_enrolled_rate }}%</template>
-            </el-table-column>
-            <el-table-column label="預繳→註冊率" align="center" width="110">
-              <template #default="{ row }">{{ row.deposit_to_enrolled_rate }}%</template>
-            </el-table-column>
-          </el-table>
-        </el-card>
+      <el-tab-pane label="近五年轉換" name="periods" lazy>
+        <RecruitmentPeriodsTab
+          :can-write="canWrite"
+          :show-charts="isChartTabActive('periods')"
+          :periods-summary="periodsSummary"
+          :periods="periods"
+          :loading-periods="loadingPeriods"
+          :periods-trend-data="periodsTrendData"
+          :periods-count-bar-data="periodsCountBarData"
+          :line-options="percentLineOptions"
+          :bar-options="barOptions"
+          :line-component="Line"
+          :bar-component="Bar"
+          :fmt-rate="fmtRate"
+          @open-add="openPeriodAdd"
+          @sync="handlePeriodSync"
+          @edit="openPeriodEdit"
+          @delete="handlePeriodDelete"
+        />
       </el-tab-pane>
 
       <!-- ==================== 原始明細 ==================== -->
-      <el-tab-pane label="原始明細" name="detail">
-        <el-card>
-          <div class="filter-bar">
-            <el-select v-model="filter.month" placeholder="月份" clearable size="small" style="width:110px" @change="fetchDetail">
-              <el-option v-for="m in options.months" :key="m" :label="m" :value="m" />
-            </el-select>
-            <el-select v-model="filter.grade" placeholder="班別" clearable size="small" style="width:100px" @change="fetchDetail">
-              <el-option v-for="g in options.grades" :key="g" :label="g" :value="g" />
-            </el-select>
-            <el-select v-model="filter.source" placeholder="來源" clearable size="small" style="width:130px" @change="fetchDetail">
-              <el-option v-for="s in options.sources" :key="s" :label="s" :value="s" />
-            </el-select>
-            <el-select v-model="filter.referrer" placeholder="介紹者" clearable size="small" style="width:110px" @change="fetchDetail">
-              <el-option v-for="r in options.referrers" :key="r" :label="r" :value="r" />
-            </el-select>
-            <el-select v-model="filter.has_deposit" placeholder="預繳" clearable size="small" style="width:90px" @change="fetchDetail">
-              <el-option label="是" :value="true" />
-              <el-option label="否" :value="false" />
-            </el-select>
-            <el-select v-model="filter.no_deposit_reason" placeholder="未預繳原因" clearable size="small" style="width:160px" @change="fetchDetail">
-              <el-option v-for="r in options.no_deposit_reasons" :key="r" :label="r" :value="r" />
-            </el-select>
-            <el-input
-              v-model="filter.keyword"
-              placeholder="姓名/地址/備註搜尋..."
-              size="small"
-              style="width:200px"
-              clearable
-              @input="fetchDetailDebounced"
-            />
-            <el-button size="small" @click="clearFilter">清除篩選</el-button>
-            <span class="record-count">顯示 {{ detailData.length }} / {{ detailTotal }} 筆</span>
-          </div>
-
-          <el-table
-            :data="detailData"
-            border
-            stripe
-            size="small"
-            v-loading="loadingDetail"
-            :row-class-name="depositRowClass"
-            style="margin-top:12px"
-          >
-            <el-table-column prop="month" label="月份" width="80" />
-            <el-table-column prop="child_name" label="姓名" width="90" />
-            <el-table-column prop="grade" label="班別" width="80" />
-            <el-table-column prop="district" label="行政區" width="80" />
-            <el-table-column prop="source" label="來源" min-width="100" />
-            <el-table-column prop="referrer" label="介紹者" width="90" />
-            <el-table-column label="預繳" align="center" width="70">
-              <template #default="{ row }">
-                <el-tag :type="row.has_deposit ? 'success' : 'danger'" size="small">
-                  {{ row.has_deposit ? '是' : '否' }}
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="已報到" align="center" width="70">
-              <template #default="{ row }">
-                <el-tag v-if="row.enrolled" type="success" size="small">是</el-tag>
-                <span v-else>—</span>
-              </template>
-            </el-table-column>
-            <el-table-column label="轉學期" align="center" width="70">
-              <template #default="{ row }">
-                <el-tag v-if="row.transfer_term" type="warning" size="small">是</el-tag>
-                <span v-else>—</span>
-              </template>
-            </el-table-column>
-            <el-table-column prop="no_deposit_reason" label="未預繳原因" min-width="120" show-overflow-tooltip />
-            <el-table-column prop="notes" label="備註" min-width="120" show-overflow-tooltip />
-            <el-table-column prop="parent_response" label="電訪回應" min-width="120" show-overflow-tooltip />
-            <el-table-column v-if="canWrite" label="操作" width="120" fixed="right">
-              <template #default="{ row }">
-                <el-button size="small" @click="openEditDialog(row)">編輯</el-button>
-                <el-button size="small" type="danger" @click="handleDelete(row.id)">刪除</el-button>
-              </template>
-            </el-table-column>
-          </el-table>
-
-          <el-pagination
-            v-if="detailTotal > filter.page_size"
-            class="pagination"
-            :current-page="filter.page"
-            :page-size="filter.page_size"
-            :total="detailTotal"
-            layout="prev, pager, next"
-            @current-change="onPageChange"
-          />
-        </el-card>
+      <el-tab-pane label="原始明細" name="detail" lazy>
+        <RecruitmentDetailTab
+          :can-write="canWrite"
+          :options="options"
+          :filters="filter"
+          :detail-data="detailData"
+          :detail-total="detailTotal"
+          :loading-detail="loadingDetail"
+          :row-class-name="depositRowClass"
+          @update-filter="updateDetailFilter"
+          @filter-change="fetchDetail"
+          @keyword-input="fetchDetailDebounced"
+          @clear-filter="clearFilter"
+          @page-change="onPageChange"
+          @edit="openEditDialog"
+          @delete="handleDelete"
+        />
       </el-tab-pane>
     </el-tabs>
 
@@ -932,6 +659,8 @@ import {
   updateRecruitmentRecord,
   deleteRecruitmentRecord,
   getNoDepositAnalysis,
+  getRecruitmentAddressHotspots,
+  syncRecruitmentAddressHotspots,
   getPeriods,
   getPeriodsSummary,
   createPeriod,
@@ -945,6 +674,11 @@ import {
 } from '@/api/recruitment'
 import { apiError } from '@/utils/error'
 import { getUserInfo, PERMISSION_VALUES } from '@/utils/auth'
+import RecruitmentOverviewTab from '@/components/recruitment/RecruitmentOverviewTab.vue'
+import RecruitmentAddressHeatmap from '@/components/recruitment/RecruitmentAddressHeatmap.vue'
+import RecruitmentNoDepositTab from '@/components/recruitment/RecruitmentNoDepositTab.vue'
+import RecruitmentPeriodsTab from '@/components/recruitment/RecruitmentPeriodsTab.vue'
+import RecruitmentDetailTab from '@/components/recruitment/RecruitmentDetailTab.vue'
 
 // -------- Chart.js 延遲載入 --------
 let _chartReady = null
@@ -1007,15 +741,30 @@ const activeTab = ref('overview')
 const loadingStats = ref(false)
 const loadingDetail = ref(false)
 const loadingND = ref(false)
+const loadingAreaHotspots = ref(false)
+const syncingAreaHotspots = ref(false)
 const loadingPeriods = ref(false)
 const saving = ref(false)
 const savingPeriod = ref(false)
+const optionsLoaded = ref(false)
+const detailLoaded = ref(false)
+const ndLoaded = ref(false)
+const areaLoaded = ref(false)
+const periodsLoaded = ref(false)
 
 const stats = ref({
   total_visit: 0,
   total_deposit: 0,
+  total_enrolled: 0,
+  total_transfer_term: 0,
+  total_pending_deposit: 0,
+  total_effective_deposit: 0,
   unique_visit: 0,
   unique_deposit: 0,
+  visit_to_deposit_rate: 0,
+  visit_to_enrolled_rate: 0,
+  deposit_to_enrolled_rate: 0,
+  effective_to_enrolled_rate: 0,
   chuannian_visit: 0,
   chuannian_deposit: 0,
   monthly: [],
@@ -1044,17 +793,52 @@ const filter = ref({
 // 未預繳分析
 const ndData = ref([])
 const ndTotal = ref(0)
-const ndFilter = ref({ reason: null, grade: null })
+const ndFilter = ref({ reason: null, grade: null, page: 1, page_size: 50 })
+
+const emptyAreaHotspotsSummary = () => ({
+  records_with_address: 0,
+  total_hotspots: 0,
+  geocoded_hotspots: 0,
+  pending_hotspots: 0,
+  failed_hotspots: 0,
+  provider_available: false,
+  provider_name: null,
+  hotspots: [],
+})
+
+const normalizeAreaHotspotsSummary = (payload = {}) => ({
+  ...emptyAreaHotspotsSummary(),
+  ...payload,
+  hotspots: payload.hotspots ?? [],
+})
+
+const areaHotspotsSummary = ref({
+  ...emptyAreaHotspotsSummary(),
+})
 
 // 近五年期間
 const periods = ref([])
 const periodsSummary = ref(null)
 
 let debounceTimer = null
+let optionsPromise = null
 const fetchDetailDebounced = () => {
   clearTimeout(debounceTimer)
   debounceTimer = setTimeout(() => fetchDetail(), 400)
 }
+
+const invalidateOptions = () => {
+  optionsLoaded.value = false
+}
+
+const invalidateLazyTabs = () => {
+  detailLoaded.value = false
+  ndLoaded.value = false
+  areaLoaded.value = false
+  periodsLoaded.value = false
+}
+
+const isChartTabActive = (tabName) => activeTab.value === tabName
 
 // -------- 訪視記錄 Dialog --------
 const dialogVisible = ref(false)
@@ -1124,7 +908,10 @@ const handleAddMonth = async () => {
     registeredMonths.value.sort((a, b) => a.month.localeCompare(b.month))
     newMonthInput.value = ''
     ElMessage.success(`已登記月份 ${month}`)
-    await fetchStats()
+    invalidateOptions()
+    if (detailLoaded.value || ndLoaded.value) {
+      await fetchOptions(true)
+    }
   } catch (e) {
     const msg = e.response?.status === 409 ? `月份 ${month} 已存在` : apiError(e, '新增失敗')
     ElMessage.error(msg)
@@ -1147,7 +934,10 @@ const handleDeleteMonth = async (month) => {
     await deleteMonth(month)
     registeredMonths.value = registeredMonths.value.filter(r => r.month !== month)
     ElMessage.success(`已刪除登記月份 ${month}`)
-    await fetchStats()
+    invalidateOptions()
+    if (detailLoaded.value || ndLoaded.value) {
+      await fetchOptions(true)
+    }
   } catch (e) {
     ElMessage.error(apiError(e, '刪除失敗'))
   }
@@ -1237,17 +1027,36 @@ const handleExportExcel = async () => {
 }
 
 // -------- 載入 --------
+const fetchOptions = async (force = false) => {
+  if (optionsLoaded.value && !force) return true
+  if (optionsPromise && !force) return optionsPromise
+
+  optionsPromise = (async () => {
+    try {
+      const res = await getRecruitmentOptions()
+      options.value = res.data
+      optionsLoaded.value = true
+      return true
+    } catch (e) {
+      ElMessage.error(apiError(e, '載入篩選選項失敗'))
+      return false
+    } finally {
+      optionsPromise = null
+    }
+  })()
+
+  return optionsPromise
+}
+
 const fetchStats = async () => {
   loadingStats.value = true
   try {
-    const [statsRes, optRes] = await Promise.all([
-      getRecruitmentStats(),
-      getRecruitmentOptions(),
-    ])
+    const statsRes = await getRecruitmentStats()
     stats.value = statsRes.data
-    options.value = optRes.data
+    return true
   } catch (e) {
     ElMessage.error(apiError(e, '載入統計資料失敗'))
+    return false
   } finally {
     loadingStats.value = false
   }
@@ -1269,8 +1078,10 @@ const fetchDetail = async () => {
     const res = await getRecruitmentRecords(params)
     detailData.value = res.data.records
     detailTotal.value = res.data.total
+    return true
   } catch (e) {
     ElMessage.error(apiError(e, '載入明細失敗'))
+    return false
   } finally {
     loadingDetail.value = false
   }
@@ -1279,16 +1090,54 @@ const fetchDetail = async () => {
 const fetchNoDeposit = async () => {
   loadingND.value = true
   try {
-    const params = {}
+    const params = { page: ndFilter.value.page, page_size: ndFilter.value.page_size }
     if (ndFilter.value.reason) params.reason = ndFilter.value.reason
     if (ndFilter.value.grade) params.grade = ndFilter.value.grade
     const res = await getNoDepositAnalysis(params)
     ndData.value = res.data.records
     ndTotal.value = res.data.total
+    return true
   } catch (e) {
     ElMessage.error(apiError(e, '載入未預繳資料失敗'))
+    return false
   } finally {
     loadingND.value = false
+  }
+}
+
+const fetchAreaHotspots = async () => {
+  loadingAreaHotspots.value = true
+  try {
+    const res = await getRecruitmentAddressHotspots({ limit: 200 })
+    areaHotspotsSummary.value = normalizeAreaHotspotsSummary(res.data)
+    return true
+  } catch (e) {
+    ElMessage.error(apiError(e, '載入地址熱點失敗'))
+    return false
+  } finally {
+    loadingAreaHotspots.value = false
+  }
+}
+
+const handleAreaHotspotSync = async () => {
+  syncingAreaHotspots.value = true
+  try {
+    const res = await syncRecruitmentAddressHotspots({ batch_size: 10, limit: 200 })
+    areaHotspotsSummary.value = normalizeAreaHotspotsSummary(res.data)
+    areaLoaded.value = true
+
+    if (res.data.synced > 0) {
+      const suffix = res.data.pending_hotspots > 0 ? `，尚有 ${res.data.pending_hotspots} 個地址待同步` : ''
+      ElMessage.success(`已同步 ${res.data.synced} 個地址座標${suffix}`)
+    } else if (res.data.failed > 0) {
+      ElMessage.warning(`本次同步失敗 ${res.data.failed} 個地址，請檢查地址內容或 geocoding 設定`)
+    } else {
+      ElMessage.success('目前沒有需要同步的新地址座標')
+    }
+  } catch (e) {
+    ElMessage.error(apiError(e, '同步地址座標失敗'))
+  } finally {
+    syncingAreaHotspots.value = false
   }
 }
 
@@ -1298,19 +1147,51 @@ const fetchPeriods = async () => {
     const [listRes, summaryRes] = await Promise.all([getPeriods(), getPeriodsSummary()])
     periods.value = listRes.data
     periodsSummary.value = summaryRes.data
+    return true
   } catch (e) {
     ElMessage.error(apiError(e, '載入期間資料失敗'))
+    return false
   } finally {
     loadingPeriods.value = false
   }
 }
 
-onMounted(() => Promise.all([fetchStats(), fetchDetail()]))
+const loadDetailTab = async (force = false) => {
+  const [detailOk] = await Promise.all([
+    fetchDetail(),
+    fetchOptions(force),
+  ])
+  if (detailOk) detailLoaded.value = true
+}
 
-const onTabClick = (tab) => {
-  if (tab.paneName === 'detail') fetchDetail()
-  if (tab.paneName === 'nodeposit') fetchNoDeposit()
-  if (tab.paneName === 'periods') fetchPeriods()
+const loadNoDepositTab = async (force = false) => {
+  const [ndOk] = await Promise.all([
+    fetchNoDeposit(),
+    fetchOptions(force),
+  ])
+  if (ndOk) ndLoaded.value = true
+}
+
+const loadAreaTab = async () => {
+  const ok = await fetchAreaHotspots()
+  if (ok) areaLoaded.value = true
+}
+
+const loadPeriodsTab = async () => {
+  const ok = await fetchPeriods()
+  if (ok) periodsLoaded.value = true
+}
+
+onMounted(() => {
+  fetchStats()
+})
+
+const onTabClick = async (tab) => {
+  if (tab?.paneName) activeTab.value = tab.paneName
+  if (tab.paneName === 'detail' && !detailLoaded.value) await loadDetailTab()
+  if (tab.paneName === 'nodeposit' && !ndLoaded.value) await loadNoDepositTab()
+  if (tab.paneName === 'area' && !areaLoaded.value) await loadAreaTab()
+  if (tab.paneName === 'periods' && !periodsLoaded.value) await loadPeriodsTab()
 }
 
 // -------- 篩選 --------
@@ -1323,20 +1204,51 @@ const clearFilter = () => {
   fetchDetail()
 }
 
+const updateDetailFilter = (patch) => {
+  filter.value = {
+    ...filter.value,
+    ...patch,
+  }
+}
+
+const drillToDetail = (patch) => {
+  filter.value = {
+    month: null, grade: null, source: null, referrer: null,
+    has_deposit: null, no_deposit_reason: null, keyword: '',
+    page: 1, page_size: filter.value.page_size,
+    ...patch,
+  }
+  activeTab.value = 'detail'
+  detailLoaded.value = true
+  fetchDetail()
+}
+
 const onPageChange = (page) => {
   filter.value.page = page
   fetchDetail()
 }
 
+const onNoDepositFilterChange = () => {
+  ndFilter.value.page = 1
+  fetchNoDeposit()
+}
+
+const onNDPageChange = (page) => {
+  ndFilter.value.page = page
+  fetchNoDeposit()
+}
+
 // -------- 訪視記錄 CRUD --------
-const openAddDialog = () => {
+const openAddDialog = async () => {
+  await fetchOptions()
   form.value = emptyForm()
   dialogMode.value = 'add'
   editingId.value = null
   dialogVisible.value = true
 }
 
-const openEditDialog = (row) => {
+const openEditDialog = async (row) => {
+  await fetchOptions()
   form.value = {
     month: row.month,
     month_raw: rocDateToISO(row.visit_date) ?? rocMonthToISO(row.month),  // 優先用完整日期還原
@@ -1371,7 +1283,12 @@ const handleSave = async () => {
     }
     dialogVisible.value = false
     await fetchStats()
-    await fetchDetail()
+    invalidateOptions()
+    invalidateLazyTabs()
+    if (activeTab.value === 'detail') await loadDetailTab(true)
+    if (activeTab.value === 'nodeposit') await loadNoDepositTab(true)
+    if (activeTab.value === 'area') await loadAreaTab()
+    if (activeTab.value === 'periods') await loadPeriodsTab()
   } catch (e) {
     ElMessage.error(apiError(e, '儲存失敗'))
   } finally {
@@ -1385,7 +1302,12 @@ const handleDelete = async (id) => {
     await deleteRecruitmentRecord(id)
     ElMessage.success('刪除成功')
     await fetchStats()
-    await fetchDetail()
+    invalidateOptions()
+    invalidateLazyTabs()
+    if (activeTab.value === 'detail') await loadDetailTab(true)
+    if (activeTab.value === 'nodeposit') await loadNoDepositTab(true)
+    if (activeTab.value === 'area') await loadAreaTab()
+    if (activeTab.value === 'periods') await loadPeriodsTab()
   } catch (e) {
     ElMessage.error(apiError(e, '刪除失敗'))
   }
@@ -1429,7 +1351,8 @@ const handlePeriodSave = async () => {
       ElMessage.success('更新成功')
     }
     periodDialogVisible.value = false
-    await fetchPeriods()
+    periodsLoaded.value = false
+    if (activeTab.value === 'periods') await loadPeriodsTab()
   } catch (e) {
     ElMessage.error(apiError(e, '儲存失敗'))
   } finally {
@@ -1442,7 +1365,8 @@ const handlePeriodDelete = async (id) => {
   try {
     await deletePeriod(id)
     ElMessage.success('刪除成功')
-    await fetchPeriods()
+    periodsLoaded.value = false
+    if (activeTab.value === 'periods') await loadPeriodsTab()
   } catch (e) {
     ElMessage.error(apiError(e, '刪除失敗'))
   }
@@ -1452,7 +1376,8 @@ const handlePeriodSync = async (id) => {
   try {
     await syncPeriod(id)
     ElMessage.success('期間數據已從訪視明細更新')
-    await fetchPeriods()
+    periodsLoaded.value = false
+    if (activeTab.value === 'periods') await loadPeriodsTab()
   } catch (e) {
     ElMessage.error(apiError(e, '同步失敗'))
   }
@@ -1478,24 +1403,6 @@ const shortPeriodLabel = (name) => {
 
 const depositRowClass = ({ row }) => row.has_deposit ? 'deposit-row' : ''
 
-// -------- KPI computed --------
-const overallRate = computed(() => fmtPct(stats.value.total_deposit, stats.value.total_visit))
-
-const uniqueDepositRate = computed(() => fmtPct(stats.value.unique_deposit, stats.value.unique_visit))
-
-const bestMonthData = computed(() => {
-  const active = stats.value.monthly.filter(m => m.visit > 0)
-  if (!active.length) return null
-  return active.reduce((best, m) => (m.deposit / m.visit > best.deposit / best.visit ? m : best))
-})
-
-const bestMonthRate = computed(() => {
-  if (!bestMonthData.value) return '—'
-  return fmtPct(bestMonthData.value.deposit, bestMonthData.value.visit)
-})
-
-const bestMonth = computed(() => bestMonthData.value?.month ?? '—')
-
 // -------- 月度圖表 --------
 const monthlyTableData = computed(() => stats.value.monthly)
 
@@ -1507,6 +1414,7 @@ const monthlyBarData = computed(() => {
     datasets: [
       { label: '參觀人數', data: data.map(m => m.visit), backgroundColor: '#74c69d', borderRadius: 4 },
       { label: '預繳人數', data: data.map(m => m.deposit), backgroundColor: '#40916c', borderRadius: 4 },
+      { label: '註冊人數', data: data.map(m => m.enrolled ?? 0), backgroundColor: '#1d4ed8', borderRadius: 4 },
     ],
   }
 })
@@ -1516,16 +1424,59 @@ const monthlyRateData = computed(() => {
   if (!data.length) return null
   return {
     labels: data.map(m => m.month),
-    datasets: [{
-      label: '預繳率 (%)',
-      data: data.map(m => m.visit ? +(m.deposit / m.visit * 100).toFixed(1) : 0),
-      borderColor: '#40916c',
-      backgroundColor: 'rgba(64,145,108,0.15)',
-      tension: 0.3,
-      fill: true,
-    }],
+    datasets: [
+      {
+        label: '參觀→預繳率 (%)',
+        data: data.map(m => m.visit_to_deposit_rate ?? 0),
+        borderColor: '#40916c',
+        backgroundColor: 'rgba(64,145,108,0.15)',
+        tension: 0.3,
+        fill: false,
+      },
+      {
+        label: '參觀→註冊率 (%)',
+        data: data.map(m => m.visit_to_enrolled_rate ?? 0),
+        borderColor: '#1d4ed8',
+        backgroundColor: 'rgba(29,78,216,0.15)',
+        tension: 0.3,
+        fill: false,
+      },
+      {
+        label: '排除轉期→註冊率 (%)',
+        data: data.map(m => m.effective_to_enrolled_rate ?? 0),
+        borderColor: '#e76f51',
+        backgroundColor: 'rgba(231,111,81,0.15)',
+        tension: 0.3,
+        fill: false,
+      },
+    ],
   }
 })
+
+// -------- 圖表互動 options --------
+const monthlyBarOptions = computed(() => ({
+  ...barOptions,
+  onClick: (_ev, elements, chart) => {
+    if (!elements.length) return
+    drillToDetail({ month: chart.data.labels[elements[0].index] })
+  },
+}))
+
+const classBarOptions = computed(() => ({
+  ...barOptions,
+  onClick: (_ev, elements, chart) => {
+    if (!elements.length) return
+    drillToDetail({ grade: chart.data.labels[elements[0].index] })
+  },
+}))
+
+const sourceClickBarOptions = computed(() => ({
+  ...horizBarOptions,
+  onClick: (_ev, elements, chart) => {
+    if (!elements.length) return
+    drillToDetail({ source: chart.data.labels[elements[0].index] })
+  },
+}))
 
 // -------- 班別圖表 --------
 const gradeByMap = computed(() => new Map(stats.value.by_grade.map(g => [g.grade, g])))
@@ -1689,6 +1640,8 @@ const periodsCountBarData = computed(() => {
       { label: '參觀', data: trend.map(d => d.visit_count), backgroundColor: '#74c69d', borderRadius: 4 },
       { label: '預繳', data: trend.map(d => d.deposit_count), backgroundColor: '#52b788', borderRadius: 4 },
       { label: '註冊', data: trend.map(d => d.enrolled_count), backgroundColor: '#40916c', borderRadius: 4 },
+      { label: '未就讀退', data: trend.map(d => d.not_enrolled_deposit ?? 0), backgroundColor: '#f59e0b', borderRadius: 4 },
+      { label: '註冊後退', data: trend.map(d => d.enrolled_after_school ?? 0), backgroundColor: '#e76f51', borderRadius: 4 },
     ],
   }
 })
@@ -1713,7 +1666,7 @@ const noDepositGradeBarData = computed(() => {
   if (!data || !data.length) return null
   const colors = ['#74c69d', '#52b788', '#40916c', '#2d6a4f']
   return {
-    labels: data.map(d => d.reason.length > 12 ? d.reason.slice(0, 12) + '…' : d.reason),
+    labels: data.map(d => d.reason),
     datasets: GRADES_ORDER.map((g, i) => ({
       label: g,
       data: data.map(d => d.by_grade?.[g] ?? 0),
@@ -1785,28 +1738,121 @@ const distanceDoughnutData = computed(() => {
 })
 
 // -------- Chart options --------
-const barOptions = {
+const truncateChartLabel = (label, max = 12) => (
+  typeof label === 'string' && label.length > max ? `${label.slice(0, max)}…` : label
+)
+
+const extractChartValue = (context) => {
+  const parsed = context?.parsed
+  if (typeof parsed === 'number') return parsed
+  if (parsed && typeof parsed.y === 'number') return parsed.y
+  if (parsed && typeof parsed.x === 'number') return parsed.x
+  return Number(context?.raw ?? 0)
+}
+
+const formatPercentTooltip = (context) => {
+  const label = context?.dataset?.label ? `${context.dataset.label}: ` : ''
+  const value = Number(extractChartValue(context) ?? 0)
+  return `${label}${value.toFixed(1)}%`
+}
+
+const percentTickFormatter = (value) => `${value}%`
+
+const commonChartOptions = {
   responsive: true,
   maintainAspectRatio: false,
+}
+
+const barOptions = {
+  ...commonChartOptions,
   plugins: { legend: { position: 'top' } },
 }
 
 const horizBarOptions = {
+  ...commonChartOptions,
   indexAxis: 'y',
-  responsive: true,
-  maintainAspectRatio: false,
   plugins: { legend: { display: false } },
 }
 
+const percentBarOptions = {
+  ...barOptions,
+  scales: {
+    y: {
+      min: 0,
+      max: 100,
+      ticks: { callback: percentTickFormatter },
+    },
+  },
+  plugins: {
+    ...barOptions.plugins,
+    tooltip: {
+      callbacks: {
+        label: formatPercentTooltip,
+      },
+    },
+  },
+}
+
+const percentHorizBarOptions = {
+  ...horizBarOptions,
+  scales: {
+    x: {
+      min: 0,
+      max: 100,
+      ticks: { callback: percentTickFormatter },
+    },
+  },
+  plugins: {
+    ...horizBarOptions.plugins,
+    tooltip: {
+      callbacks: {
+        label: formatPercentTooltip,
+      },
+    },
+  },
+}
+
 const lineOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
+  ...commonChartOptions,
   plugins: { legend: { position: 'top' } },
 }
 
+const percentLineOptions = {
+  ...lineOptions,
+  scales: {
+    y: {
+      min: 0,
+      max: 100,
+      ticks: { callback: percentTickFormatter },
+    },
+  },
+  plugins: {
+    ...lineOptions.plugins,
+    tooltip: {
+      callbacks: {
+        label: formatPercentTooltip,
+      },
+    },
+  },
+}
+
+const noDepositGradeBarOptions = {
+  ...barOptions,
+  scales: {
+    x: {
+      ticks: {
+        callback(value) {
+          return truncateChartLabel(this.getLabelForValue(value))
+        },
+        maxRotation: 0,
+        minRotation: 0,
+      },
+    },
+  },
+}
+
 const doughnutOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
+  ...commonChartOptions,
   plugins: { legend: { position: 'bottom' } },
 }
 </script>
@@ -1841,63 +1887,91 @@ const doughnutOptions = {
 .form-section-title:first-child {
   margin-top: 0;
 }
-.kpi-row {
+:deep(.kpi-row) {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
   margin-bottom: 16px;
 }
-.kpi-card {
+:deep(.kpi-card) {
   flex: 1;
   min-width: 130px;
   border-left: 4px solid #40916c;
 }
-.kpi-card.kpi-accent { border-left-color: #e76f51; }
-.kpi-card.kpi-blue  { border-left-color: #3182ce; }
-.kpi-card.kpi-teal  { border-left-color: #319795; }
-.kpi-card.kpi-green { border-left-color: #2f855a; }
-.kpi-value {
+:deep(.kpi-card.kpi-accent) { border-left-color: #e76f51; }
+:deep(.kpi-card.kpi-blue)  { border-left-color: #3182ce; }
+:deep(.kpi-card.kpi-teal)  { border-left-color: #319795; }
+:deep(.kpi-card.kpi-green) { border-left-color: #2f855a; }
+:deep(.kpi-value) {
   font-size: 1.8rem;
   font-weight: 700;
   color: #2d6a4f;
 }
-.kpi-card.kpi-accent .kpi-value { color: #c25a3d; }
-.kpi-card.kpi-blue  .kpi-value  { color: #2b6cb0; }
-.kpi-card.kpi-teal  .kpi-value  { color: #2c7a7b; }
-.kpi-card.kpi-green .kpi-value  { color: #22543d; }
-.kpi-label {
+:deep(.kpi-card.kpi-accent .kpi-value) { color: #c25a3d; }
+:deep(.kpi-card.kpi-blue .kpi-value)  { color: #2b6cb0; }
+:deep(.kpi-card.kpi-teal .kpi-value)  { color: #2c7a7b; }
+:deep(.kpi-card.kpi-green .kpi-value) { color: #22543d; }
+:deep(.kpi-label) {
   font-size: 0.78rem;
   color: #718096;
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
-.kpi-sub { font-size: 0.8rem; color: #a0aec0; }
-.chart-row {
+:deep(.kpi-sub) { font-size: 0.8rem; color: #a0aec0; }
+:deep(.chart-row) {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
   gap: 16px;
   margin-bottom: 16px;
 }
-.chart-card { overflow: hidden; }
-.chart-box {
+:deep(.chart-card) { overflow: hidden; }
+:deep(.chart-box) {
   height: 280px;
   position: relative;
 }
-.chart-box-tall { height: 360px; }
-.filter-bar {
+:deep(.chart-box-tall) { height: 360px; }
+:deep(.filter-bar) {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
 }
-.record-count {
+:deep(.record-count) {
   margin-left: auto;
   font-size: 0.85rem;
   color: #718096;
 }
-.pagination {
+:deep(.pagination) {
   margin-top: 12px;
   justify-content: flex-end;
 }
 :deep(.deposit-row) { background: #f0fff4 !important; }
+
+@media (max-width: 768px) {
+  .recruitment-view {
+    padding: 16px;
+  }
+
+  .page-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .header-actions {
+    flex-wrap: wrap;
+  }
+
+  :deep(.chart-row) {
+    grid-template-columns: 1fr;
+  }
+
+  :deep(.chart-box) {
+    height: 240px;
+  }
+
+  :deep(.chart-box-tall) {
+    height: 300px;
+  }
+}
 </style>

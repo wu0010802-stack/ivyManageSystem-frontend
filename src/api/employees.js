@@ -1,6 +1,6 @@
 import api from './index'
 
-export const getEmployees = () => api.get('/employees')
+export const getEmployees = (params) => api.get('/employees', { params })
 
 export const getEmployee = (id) => api.get(`/employees/${id}`)
 
