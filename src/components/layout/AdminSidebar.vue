@@ -111,6 +111,10 @@
             <el-icon><CreditCard /></el-icon>
             <template #title>學費管理</template>
           </el-menu-item>
+          <el-menu-item v-if="canView.RECRUITMENT_READ" index="/recruitment">
+            <el-icon><DataAnalysis /></el-icon>
+            <template #title>招生統計</template>
+          </el-menu-item>
         </el-sub-menu>
 
         <!-- 園務行政 -->
@@ -240,8 +244,13 @@ const canView = computed(() => {
     return Object.fromEntries(Object.keys(PERMISSION_VALUES).map((name) => [name, true]))
   }
 
+  // 使用 BigInt 運算，避免高位元（≥ 2^31）在 JS 32-bit 有符號整數中溢位
+  const permsBig = BigInt(permissions)
   return Object.fromEntries(
-    Object.entries(PERMISSION_VALUES).map(([name, value]) => [name, (permissions & value) === value])
+    Object.entries(PERMISSION_VALUES).map(([name, value]) => {
+      const valBig = BigInt(value)
+      return [name, (permsBig & valBig) === valBig]
+    })
   )
 })
 
@@ -255,7 +264,7 @@ const hasVisibleHrItems = computed(() =>
 )
 
 const hasVisibleStudentItems = computed(() =>
-  canView.value.STUDENTS_READ || canView.value.CLASSROOMS_READ || canView.value.FEES_READ
+  canView.value.STUDENTS_READ || canView.value.CLASSROOMS_READ || canView.value.FEES_READ || canView.value.RECRUITMENT_READ
 )
 
 const hasVisibleAdminItems = computed(() =>

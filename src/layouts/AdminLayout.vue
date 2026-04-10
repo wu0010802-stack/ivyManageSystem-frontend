@@ -109,17 +109,12 @@ watch(() => route.path, () => {
 /* Page Transitions */
 .fade-transform-enter-active,
 .fade-transform-leave-active {
-  transition: all var(--transition-slow);
+  transition: opacity var(--transition-slow);
 }
 
-.fade-transform-enter-from {
-  opacity: 0;
-  transform: translateY(10px);
-}
-
+.fade-transform-enter-from,
 .fade-transform-leave-to {
   opacity: 0;
-  transform: translateY(-10px);
 }
 
 @media (max-width: 767px) {

@@ -48,6 +48,12 @@ const router = createRouter({
             meta: { title: '在籍統計' }
         },
         {
+            path: '/recruitment',
+            name: 'recruitment',
+            component: () => import('../views/RecruitmentView.vue'),
+            meta: { title: '招生統計' }
+        },
+        {
             path: '/student-records',
             name: 'student-records',
             component: () => import('../views/StudentRecordsView.vue'),

@@ -105,6 +105,8 @@ export const PERMISSION_VALUES = {
   DISMISSAL_CALLS_WRITE: 2 ** 30,
   FEES_READ:  2 ** 31,
   FEES_WRITE: 2 ** 32,
+  RECRUITMENT_READ:  2 ** 33,
+  RECRUITMENT_WRITE: 2 ** 34,
 }
 
 // 路由與權限對應表（瀏覽頁面屬於 READ 操作）
@@ -135,6 +137,7 @@ export const ROUTE_PERMISSIONS = {
   '/activity/changes':       'ACTIVITY_READ',
   '/fees':                   'FEES_READ',
   '/student-enrollment':     'STUDENTS_READ',
+  '/recruitment':            'RECRUITMENT_READ',
 }
 
 /**
