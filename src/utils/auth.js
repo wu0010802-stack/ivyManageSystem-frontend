@@ -109,35 +109,43 @@ export const PERMISSION_VALUES = {
   RECRUITMENT_WRITE: 2 ** 34,
 }
 
-// 路由與權限對應表（瀏覽頁面屬於 READ 操作）
-export const ROUTE_PERMISSIONS = {
-  '/': 'DASHBOARD',
-  '/approvals': 'APPROVALS',
-  '/calendar': 'CALENDAR',
-  '/schedule': 'SCHEDULE',
-  '/attendance': 'ATTENDANCE_READ',
-  '/leaves': 'LEAVES_READ',
-  '/overtime': 'OVERTIME_READ',
-  '/meetings': 'MEETINGS',
-  '/employees': 'EMPLOYEES_READ',
-  '/students': 'STUDENTS_READ',
-  '/classrooms': 'CLASSROOMS_READ',
-  '/salary': 'SALARY_READ',
-  '/announcements': 'ANNOUNCEMENTS_READ',
-  '/reports': 'REPORTS',
-  '/audit-logs': 'AUDIT_LOGS',
-  '/settings': 'SETTINGS_READ',
-  '/dev/salary': 'SALARY_READ',
-  '/activity/dashboard':     'ACTIVITY_READ',
-  '/activity/registrations': 'ACTIVITY_READ',
-  '/activity/courses':       'ACTIVITY_READ',
-  '/activity/supplies':      'ACTIVITY_READ',
-  '/activity/inquiries':     'ACTIVITY_READ',
-  '/activity/settings':      'ACTIVITY_WRITE',
-  '/activity/changes':       'ACTIVITY_READ',
-  '/fees':                   'FEES_READ',
-  '/student-enrollment':     'STUDENTS_READ',
-  '/recruitment':            'RECRUITMENT_READ',
+const ROUTE_PERMISSION_RULES = [
+  { path: '/', permission: 'DASHBOARD' },
+  { path: '/approvals', permission: 'APPROVALS' },
+  { path: '/calendar', permission: 'CALENDAR' },
+  { path: '/schedule', permission: 'SCHEDULE' },
+  { path: '/attendance', permission: 'ATTENDANCE_READ' },
+  { path: '/leaves', permission: 'LEAVES_READ' },
+  { path: '/meetings', permission: 'MEETINGS' },
+  { path: '/employees', permission: 'EMPLOYEES_READ' },
+  { path: '/students', permission: 'STUDENTS_READ' },
+  { path: '/classrooms', permission: 'CLASSROOMS_READ' },
+  { path: '/salary', permission: 'SALARY_READ' },
+  { path: '/announcements', permission: 'ANNOUNCEMENTS_READ' },
+  { path: '/reports', permission: 'REPORTS' },
+  { path: '/audit-logs', permission: 'AUDIT_LOGS' },
+  { path: '/settings', permission: 'SETTINGS_READ' },
+  { path: '/dev/salary', permission: 'SALARY_READ' },
+  { path: '/activity/dashboard', permission: 'ACTIVITY_READ' },
+  { path: '/activity/registrations', permission: 'ACTIVITY_READ' },
+  { path: '/activity/courses', permission: 'ACTIVITY_READ' },
+  { path: '/activity/supplies', permission: 'ACTIVITY_READ' },
+  { path: '/activity/inquiries', permission: 'ACTIVITY_READ' },
+  { path: '/activity/settings', permission: 'ACTIVITY_WRITE' },
+  { path: '/activity/changes', permission: 'ACTIVITY_READ' },
+  { path: '/fees', permission: 'FEES_READ' },
+  { path: '/student-enrollment', permission: 'STUDENTS_READ' },
+  { path: '/recruitment', permission: 'RECRUITMENT_READ' },
+]
+
+const getRoutePermission = (path) => {
+  const sortedRules = [...ROUTE_PERMISSION_RULES].sort((a, b) => b.path.length - a.path.length)
+  const matched = sortedRules.find((rule) => (
+    rule.prefix
+      ? path === rule.path || path.startsWith(`${rule.path}/`)
+      : path === rule.path
+  ))
+  return matched?.permission || null
 }
 
 /**
@@ -195,7 +203,7 @@ export function canAccessRoute(path) {
   if (path === '/overtime') {
     return hasPermission('OVERTIME_READ') || hasPermission('MEETINGS')
   }
-  const permissionName = ROUTE_PERMISSIONS[path]
+  const permissionName = getRoutePermission(path)
   if (!permissionName) {
     // 未定義權限的路由預設允許存取 (如 /login)
     return true
@@ -218,16 +226,13 @@ export function getAllowedRoutes() {
 
   // admin
   const allowed = []
-  for (const [route, perm] of Object.entries(ROUTE_PERMISSIONS)) {
-    if (route === '/overtime') {
-      if (hasPermission('OVERTIME_READ') || hasPermission('MEETINGS')) {
-        allowed.push(route)
-      }
-      continue
+  for (const rule of ROUTE_PERMISSION_RULES) {
+    if (hasPermission(rule.permission) && !allowed.includes(rule.path)) {
+      allowed.push(rule.path)
     }
-    if (hasPermission(perm)) {
-      allowed.push(route)
-    }
+  }
+  if (hasPermission('OVERTIME_READ') || hasPermission('MEETINGS')) {
+    allowed.push('/overtime')
   }
   return allowed
 }

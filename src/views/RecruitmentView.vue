@@ -3,6 +3,21 @@
     <div class="page-header">
       <h2>招生統計儀表板</h2>
       <div class="header-actions">
+        <el-select
+          v-model="referenceMonth"
+          size="small"
+          placeholder="參考月份"
+          clearable
+          style="width: 140px"
+          @change="handleReferenceMonthChange"
+        >
+          <el-option
+            v-for="month in options.months"
+            :key="month"
+            :label="month"
+            :value="month"
+          />
+        </el-select>
         <el-button
           v-if="canWrite"
           size="small"
@@ -16,6 +31,13 @@
         >匯出 Excel</el-button>
         <el-button
           v-if="canWrite"
+          type="warning"
+          size="small"
+          :loading="syncingIvykidsBackend"
+          @click="handleIvykidsBackendSync"
+        >同步義華官網</el-button>
+        <el-button
+          v-if="canWrite"
           type="primary"
           size="small"
           @click="openAddDialog"
@@ -23,11 +45,28 @@
       </div>
     </div>
 
+    <div class="sync-status-bar">
+      <el-tag size="small" :type="ivykidsSyncStatus.scheduler_enabled ? 'success' : 'info'">
+        自動同步：{{ ivykidsSyncStatus.scheduler_enabled ? '啟用中' : '未啟用' }}
+      </el-tag>
+      <span class="sync-status-text">每 {{ ivykidsSyncStatus.sync_interval_minutes }} 分鐘</span>
+      <span class="sync-status-text">上次同步：{{ formatIvykidsSyncTime(ivykidsSyncStatus.last_synced_at) }}</span>
+      <span class="sync-status-text">{{ ivykidsSyncStatusSummary }}</span>
+    </div>
+
+    <RecruitmentModuleNav />
+
     <el-tabs v-model="activeTab" @tab-click="onTabClick">
       <!-- ==================== 總覽 ==================== -->
       <el-tab-pane label="總覽" name="overview">
         <RecruitmentOverviewTab
           :stats="stats"
+          :reference-month="referenceMonth"
+          :decision-summary="stats.decision_summary"
+          :funnel-snapshot="stats.funnel_snapshot"
+          :month-over-month="stats.month_over_month"
+          :alerts="stats.alerts"
+          :top-action-queue="stats.top_action_queue"
           :show-charts="isChartTabActive('overview')"
           :monthly-table-data="monthlyTableData"
           :monthly-bar-data="monthlyBarData"
@@ -38,6 +77,7 @@
           :bar-component="Bar"
           :line-component="Line"
           :fmt-rate="fmtRate"
+          @navigate="handleDashboardTarget"
         />
       </el-tab-pane>
 
@@ -186,6 +226,34 @@
 
       <!-- ==================== 區域分析 ==================== -->
       <el-tab-pane label="區域分析" name="area" lazy>
+        <div class="chart-row">
+          <el-card>
+            <template #header>園所中心點</template>
+            <div class="filter-bar">
+              <div>
+                <div style="font-weight:600">{{ currentCampus.campus_name }}</div>
+                <div style="font-size:12px;color:#718096">{{ currentCampus.campus_address || '尚未設定地址' }}</div>
+                <div style="font-size:12px;color:#718096">
+                  {{ currentCampus.campus_lat?.toFixed?.(4) || '—' }}, {{ currentCampus.campus_lng?.toFixed?.(4) || '—' }}
+                </div>
+              </div>
+              <div class="header-actions">
+                <el-tag effect="plain">交通模式：{{ currentCampus.travel_mode === 'walking' ? '步行' : currentCampus.travel_mode === 'cycling' ? '騎車' : '開車' }}</el-tag>
+                <el-button v-if="canWrite" size="small" @click="openCampusDialog">設定中心點</el-button>
+                <el-button v-if="canWrite" type="primary" size="small" :loading="syncingMarket" @click="handleMarketSync">同步市場情報</el-button>
+              </div>
+            </div>
+          </el-card>
+          <el-card>
+            <template #header>資料完整度</template>
+            <div class="filter-bar">
+              <el-tag :type="marketSnapshot.data_completeness === 'complete' ? 'success' : 'warning'">
+                {{ marketSnapshot.data_completeness === 'complete' ? '完整' : marketSnapshot.data_completeness === 'cached' ? '快取中' : '部分資料' }}
+              </el-tag>
+              <span class="record-count">上次同步：{{ marketSnapshot.synced_at ? new Date(marketSnapshot.synced_at).toLocaleString() : '尚未同步' }}</span>
+            </div>
+          </el-card>
+        </div>
         <div class="kpi-row" style="margin-bottom:16px">
           <el-card class="kpi-card" shadow="hover" v-for="band in distanceBandKPI" :key="band.label">
             <div class="kpi-value">{{ band.visit }}</div>
@@ -193,54 +261,83 @@
           </el-card>
         </div>
         <el-card style="margin-bottom:16px">
-          <template #header>行政區排名</template>
-          <el-table :data="districtWithDistance" border stripe size="small">
+          <template #header>行政區比較表</template>
+          <el-table :data="districtMarketRows" border stripe size="small" @row-click="selectedMarketDistrict = $event.district">
             <el-table-column type="index" label="#" width="50" />
             <el-table-column prop="district" label="行政區" width="100" />
-            <el-table-column prop="visit" label="參觀人數" align="center" width="100" />
-            <el-table-column prop="deposit" label="預繳人數" align="center" width="100" />
-            <el-table-column label="預繳率" align="center" width="100">
-              <template #default="{ row }">{{ fmtPct(row.deposit, row.visit) }}</template>
+            <el-table-column prop="lead_count_30d" label="30 天來源" align="center" width="100" sortable />
+            <el-table-column prop="lead_count_90d" label="90 天來源" align="center" width="100" sortable />
+            <el-table-column prop="deposit_rate_90d" label="90 天預繳率" align="center" width="120" sortable>
+              <template #default="{ row }">{{ fmtRate(row.deposit_rate_90d) }}</template>
             </el-table-column>
-            <el-table-column label="距離" align="center" width="100">
-              <template #default="{ row }">{{ row.km != null ? row.km.toFixed(1) + ' km' : '—' }}</template>
+            <el-table-column prop="avg_travel_minutes" label="平均通勤" align="center" width="110" sortable>
+              <template #default="{ row }">{{ row.avg_travel_minutes != null ? `${row.avg_travel_minutes.toFixed(1)} 分` : '—' }}</template>
             </el-table-column>
-            <el-table-column label="距離帶" align="center" width="100">
-              <template #default="{ row }">{{ row.band }}</template>
+            <el-table-column prop="population_density" label="人口密度" align="center" width="100" sortable>
+              <template #default="{ row }">{{ row.population_density != null ? row.population_density.toFixed(1) : '—' }}</template>
+            </el-table-column>
+            <el-table-column prop="population_0_6" label="0-6 歲" align="center" width="100" sortable>
+              <template #default="{ row }">{{ row.population_0_6 ?? '—' }}</template>
             </el-table-column>
           </el-table>
         </el-card>
-        <el-card style="margin-bottom:16px" v-loading="loadingAreaHotspots">
+        <el-card style="margin-bottom:16px" v-loading="loadingAreaHotspots || loadingMarket">
           <template #header>家長地址熱點圖</template>
           <RecruitmentAddressHeatmap
             :hotspots="areaHotspotsSummary.hotspots"
+            :campus="currentCampus"
+            :travel-bands="TRAVEL_BANDS"
+            :selected-district="selectedMarketDistrict"
             :records-with-address="areaHotspotsSummary.records_with_address"
             :total-hotspots="areaHotspotsSummary.total_hotspots"
             :geocoded-hotspots="areaHotspotsSummary.geocoded_hotspots"
             :pending-hotspots="areaHotspotsSummary.pending_hotspots"
+            :stale-hotspots="areaHotspotsSummary.stale_hotspots"
             :failed-hotspots="areaHotspotsSummary.failed_hotspots"
             :provider-available="areaHotspotsSummary.provider_available"
             :provider-name="areaHotspotsSummary.provider_name"
-            :school-lat="SCHOOL_LAT"
-            :school-lng="SCHOOL_LNG"
+            :school-lat="currentCampus.campus_lat"
+            :school-lng="currentCampus.campus_lng"
             :can-write="canWrite"
-            :syncing="syncingAreaHotspots"
+            :syncing-mode="syncingAreaHotspotsMode"
+            :nearby-schools="nearbySchools"
+            :nearby-schools-loading="loadingNearbySchools"
+            :nearby-schools-available="nearbySchoolsAvailable"
+            :nearby-schools-message="nearbySchoolsMessage"
             :fmt-pct="fmtPct"
             @sync="handleAreaHotspotSync"
+            @viewport-change="handleNearbyViewportChange"
           />
         </el-card>
         <div class="chart-row">
           <el-card class="chart-card">
-            <template #header>各行政區參觀人數</template>
+            <template #header>各行政區 90 天來源量</template>
             <div class="chart-box">
               <Bar v-if="isChartTabActive('area') && areaBarData" :data="areaBarData" :options="horizBarOptions" />
             </div>
           </el-card>
           <el-card class="chart-card">
-            <template #header>距離帶分佈</template>
+            <template #header>生活圈分佈</template>
             <div class="chart-box">
               <Doughnut v-if="isChartTabActive('area') && distanceDoughnutData" :data="distanceDoughnutData" :options="doughnutOptions" />
             </div>
+          </el-card>
+        </div>
+        <div class="chart-row" style="margin-bottom:0" v-if="selectedDistrictDetail">
+          <el-card>
+            <template #header>{{ selectedDistrictDetail.district }} 來源地址</template>
+            <el-table :data="selectedDistrictHotspots" border stripe size="small">
+              <el-table-column prop="matched_address" label="地址" min-width="220">
+                <template #default="{ row }">{{ row.matched_address || row.formatted_address || row.address }}</template>
+              </el-table-column>
+              <el-table-column prop="visit" label="來源量" align="center" width="80" />
+              <el-table-column label="預繳率" align="center" width="90">
+                <template #default="{ row }">{{ fmtPct(row.deposit, row.visit) }}</template>
+              </el-table-column>
+              <el-table-column label="通勤" align="center" width="100">
+                <template #default="{ row }">{{ row.travel_minutes != null ? `${row.travel_minutes.toFixed(1)} 分` : '—' }}</template>
+              </el-table-column>
+            </el-table>
           </el-card>
         </div>
       </el-tab-pane>
@@ -256,15 +353,22 @@
           :bar-component="Bar"
           :reason-options="options.no_deposit_reasons"
           :grades="GRADES_ORDER"
+          :summary="ndSummary"
+          :priority="ndFilter.priority"
           :reason="ndFilter.reason"
           :grade="ndFilter.grade"
+          :overdue-days="ndFilter.overdue_days"
+          :cold-only="ndFilter.cold_only"
           :page="ndFilter.page"
           :page-size="ndFilter.page_size"
           :total="ndTotal"
           :records="ndData"
           :loading="loadingND"
+          @update:priority="ndFilter.priority = $event"
           @update:reason="ndFilter.reason = $event"
           @update:grade="ndFilter.grade = $event"
+          @update:overdue-days="ndFilter.overdue_days = $event"
+          @update:cold-only="ndFilter.cold_only = $event"
           @filter-change="onNoDepositFilterChange"
           @page-change="onNDPageChange"
         />
@@ -645,6 +749,44 @@
         <el-button type="primary" :loading="savingPeriod" @click="handlePeriodSave">儲存</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog
+      v-model="campusDialogVisible"
+      title="設定園所中心點"
+      width="520px"
+    >
+      <el-form :model="campusForm" label-width="100px" size="small">
+        <el-form-item label="園所名稱">
+          <el-input v-model="campusForm.campus_name" />
+        </el-form-item>
+        <el-form-item label="園所地址">
+          <el-input v-model="campusForm.campus_address" placeholder="建議填完整地址，方便官方比對" />
+        </el-form-item>
+        <el-row :gutter="12">
+          <el-col :span="12">
+            <el-form-item label="緯度">
+              <el-input-number v-model="campusForm.campus_lat" :step="0.0001" :precision="6" style="width:100%" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="經度">
+              <el-input-number v-model="campusForm.campus_lng" :step="0.0001" :precision="6" style="width:100%" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-form-item label="交通模式">
+          <el-select v-model="campusForm.travel_mode" style="width:100%">
+            <el-option label="開車" value="driving" />
+            <el-option label="步行" value="walking" />
+            <el-option label="騎車" value="cycling" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="campusDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="savingCampus" @click="handleCampusSave">儲存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -652,33 +794,32 @@
 import { ref, computed, onMounted, defineAsyncComponent, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  getRecruitmentStats,
-  getRecruitmentOptions,
   getRecruitmentRecords,
   createRecruitmentRecord,
   updateRecruitmentRecord,
   deleteRecruitmentRecord,
   getNoDepositAnalysis,
-  getRecruitmentAddressHotspots,
-  syncRecruitmentAddressHotspots,
-  getPeriods,
-  getPeriodsSummary,
+  getRecruitmentIvykidsBackendStatus,
+  syncRecruitmentIvykidsBackend,
   createPeriod,
   updatePeriod,
   deletePeriod,
   syncPeriod,
-  exportRecruitmentStats,
   getMonths,
   addMonth,
   deleteMonth,
 } from '@/api/recruitment'
 import { apiError } from '@/utils/error'
 import { getUserInfo, PERMISSION_VALUES } from '@/utils/auth'
+import { useRecruitmentDashboard } from '@/composables/useRecruitmentDashboard'
+import { useRecruitmentArea, createEmptyCampus } from '@/composables/useRecruitmentArea'
+import { useRecruitmentPeriods } from '@/composables/useRecruitmentPeriods'
 import RecruitmentOverviewTab from '@/components/recruitment/RecruitmentOverviewTab.vue'
 import RecruitmentAddressHeatmap from '@/components/recruitment/RecruitmentAddressHeatmap.vue'
 import RecruitmentNoDepositTab from '@/components/recruitment/RecruitmentNoDepositTab.vue'
 import RecruitmentPeriodsTab from '@/components/recruitment/RecruitmentPeriodsTab.vue'
 import RecruitmentDetailTab from '@/components/recruitment/RecruitmentDetailTab.vue'
+import RecruitmentModuleNav from '@/components/recruitment/RecruitmentModuleNav.vue'
 
 // -------- Chart.js 延遲載入 --------
 let _chartReady = null
@@ -711,19 +852,12 @@ const Doughnut = defineAsyncComponent(() =>
 
 // -------- 常數 --------
 const GRADES_ORDER = ['幼幼班', '小班', '中班', '大班']
-const SCHOOL_LAT = 22.6420
-const SCHOOL_LNG = 120.3243
-const AREA_COORDS = {
-  '三民區': [22.646, 120.3208],
-  '鳳山區': [22.6269, 120.3578],
-  '鳥松區': [22.6596, 120.3648],
-  '苓雅區': [22.6248, 120.3155],
-  '仁武區': [22.7019, 120.3471],
-  '前鎮區': [22.5941, 120.3089],
-  '大寮區': [22.607, 120.3978],
-  '大樹區': [22.7106, 120.433],
-  '左營區': [22.6742, 120.2928],
-}
+const FALLBACK_SCHOOL_LAT = 22.6420
+const FALLBACK_SCHOOL_LNG = 120.3243
+const TRAVEL_BANDS = [10, 15, 20]
+const AREA_HOTSPOT_DISPLAY_LIMIT = 200
+const AREA_HOTSPOT_SYNC_BATCH_SIZE = 20
+const AREA_HOTSPOT_MAX_SYNC_ROUNDS = 100
 
 // -------- 權限 --------
 const canWrite = computed(() => {
@@ -738,49 +872,30 @@ const canWrite = computed(() => {
 
 // -------- 狀態 --------
 const activeTab = ref('overview')
-const loadingStats = ref(false)
 const loadingDetail = ref(false)
 const loadingND = ref(false)
-const loadingAreaHotspots = ref(false)
-const syncingAreaHotspots = ref(false)
-const loadingPeriods = ref(false)
 const saving = ref(false)
-const savingPeriod = ref(false)
-const optionsLoaded = ref(false)
 const detailLoaded = ref(false)
 const ndLoaded = ref(false)
 const areaLoaded = ref(false)
 const periodsLoaded = ref(false)
+const savingPeriod = ref(false)
+const syncingIvykidsBackend = ref(false)
+const loadingIvykidsSyncStatus = ref(false)
 
-const stats = ref({
-  total_visit: 0,
-  total_deposit: 0,
-  total_enrolled: 0,
-  total_transfer_term: 0,
-  total_pending_deposit: 0,
-  total_effective_deposit: 0,
-  unique_visit: 0,
-  unique_deposit: 0,
-  visit_to_deposit_rate: 0,
-  visit_to_enrolled_rate: 0,
-  deposit_to_enrolled_rate: 0,
-  effective_to_enrolled_rate: 0,
-  chuannian_visit: 0,
-  chuannian_deposit: 0,
-  monthly: [],
-  by_grade: [],
-  month_grade: {},
-  by_source: [],
-  by_referrer: [],
-  by_district: [],
-  referrer_source_cross: null,
-  no_deposit_reasons: [],
-  chuannian_by_expected: [],
-  chuannian_by_grade: [],
-  by_year: [],
+const createEmptyIvykidsSyncStatus = () => ({
+  provider_available: false,
+  provider_name: 'ivykids_yihua_backend',
+  scheduler_enabled: false,
+  sync_interval_minutes: 10,
+  sync_in_progress: false,
+  last_synced_at: null,
+  last_sync_status: null,
+  last_sync_message: null,
+  last_sync_counts: {},
+  message: '尚未設定義華校官網同步',
 })
-
-const options = ref({ months: [], grades: [], sources: [], referrers: [], no_deposit_reasons: [] })
+const ivykidsSyncStatus = ref(createEmptyIvykidsSyncStatus())
 
 const detailData = ref([])
 const detailTotal = ref(0)
@@ -793,42 +908,86 @@ const filter = ref({
 // 未預繳分析
 const ndData = ref([])
 const ndTotal = ref(0)
-const ndFilter = ref({ reason: null, grade: null, page: 1, page_size: 50 })
+const emptyNDFilter = () => ({
+  priority: 'high',
+  reason: null,
+  grade: null,
+  overdue_days: null,
+  cold_only: false,
+  page: 1,
+  page_size: 50,
+})
+const emptyNDSummary = () => ({
+  high_potential_count: 0,
+  overdue_followup_count: 0,
+  cold_count: 0,
+})
+const ndFilter = ref(emptyNDFilter())
+const ndSummary = ref(emptyNDSummary())
 
-const emptyAreaHotspotsSummary = () => ({
-  records_with_address: 0,
-  total_hotspots: 0,
-  geocoded_hotspots: 0,
-  pending_hotspots: 0,
-  failed_hotspots: 0,
-  provider_available: false,
-  provider_name: null,
-  hotspots: [],
+const {
+  stats,
+  options,
+  loadingStats,
+  optionsLoaded,
+  exportingExcel,
+  referenceMonth,
+  invalidateOptions,
+  fetchOptions,
+  fetchStats,
+  loadDashboard,
+  setReferenceMonth,
+  handleExportExcel,
+} = useRecruitmentDashboard({
+  notifyError: (message) => ElMessage.error(message),
 })
 
-const normalizeAreaHotspotsSummary = (payload = {}) => ({
-  ...emptyAreaHotspotsSummary(),
-  ...payload,
-  hotspots: payload.hotspots ?? [],
+const {
+  loadingAreaHotspots,
+  syncingAreaHotspotsMode,
+  loadingMarket,
+  syncingMarket,
+  savingCampus,
+  loadingNearbySchools,
+  areaHotspotsSummary,
+  campusSetting,
+  marketSnapshot,
+  nearbySchools,
+  nearbySchoolsAvailable,
+  nearbySchoolsMessage,
+  selectedMarketDistrict,
+  campusDialogVisible,
+  campusForm,
+  loadAreaTab: loadAreaData,
+  fetchNearbySchools,
+  handleAreaHotspotSync: syncAreaHotspotsAction,
+  handleMarketSync: syncMarketAction,
+  openCampusDialog: openCampusDialogAction,
+  handleCampusSave: saveCampusSettingAction,
+} = useRecruitmentArea({
+  notifyError: (message) => ElMessage.error(message),
+  notifyWarning: (message) => ElMessage.warning(message),
+  notifySuccess: (message) => ElMessage.success(message),
+  displayLimit: AREA_HOTSPOT_DISPLAY_LIMIT,
+  syncBatchSize: AREA_HOTSPOT_SYNC_BATCH_SIZE,
+  maxSyncRounds: AREA_HOTSPOT_MAX_SYNC_ROUNDS,
+  fallbackCampusLat: FALLBACK_SCHOOL_LAT,
+  fallbackCampusLng: FALLBACK_SCHOOL_LNG,
 })
 
-const areaHotspotsSummary = ref({
-  ...emptyAreaHotspotsSummary(),
+const {
+  loadingPeriods,
+  periods,
+  periodsSummary,
+  fetchPeriods,
+} = useRecruitmentPeriods({
+  notifyError: (message) => ElMessage.error(message),
 })
-
-// 近五年期間
-const periods = ref([])
-const periodsSummary = ref(null)
 
 let debounceTimer = null
-let optionsPromise = null
 const fetchDetailDebounced = () => {
   clearTimeout(debounceTimer)
   debounceTimer = setTimeout(() => fetchDetail(), 400)
-}
-
-const invalidateOptions = () => {
-  optionsLoaded.value = false
 }
 
 const invalidateLazyTabs = () => {
@@ -1005,63 +1164,6 @@ const onDepositChange = (val) => {
   }
 }
 
-// -------- 匯出 Excel --------
-const exportingExcel = ref(false)
-const handleExportExcel = async () => {
-  exportingExcel.value = true
-  try {
-    const res = await exportRecruitmentStats()
-    const blob = new Blob([res.data])
-    const link = document.createElement('a')
-    link.href = URL.createObjectURL(blob)
-    link.download = '招生統計.xlsx'
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(link.href)
-  } catch (e) {
-    ElMessage.error('匯出失敗：' + (e.message || '未知錯誤'))
-  } finally {
-    exportingExcel.value = false
-  }
-}
-
-// -------- 載入 --------
-const fetchOptions = async (force = false) => {
-  if (optionsLoaded.value && !force) return true
-  if (optionsPromise && !force) return optionsPromise
-
-  optionsPromise = (async () => {
-    try {
-      const res = await getRecruitmentOptions()
-      options.value = res.data
-      optionsLoaded.value = true
-      return true
-    } catch (e) {
-      ElMessage.error(apiError(e, '載入篩選選項失敗'))
-      return false
-    } finally {
-      optionsPromise = null
-    }
-  })()
-
-  return optionsPromise
-}
-
-const fetchStats = async () => {
-  loadingStats.value = true
-  try {
-    const statsRes = await getRecruitmentStats()
-    stats.value = statsRes.data
-    return true
-  } catch (e) {
-    ElMessage.error(apiError(e, '載入統計資料失敗'))
-    return false
-  } finally {
-    loadingStats.value = false
-  }
-}
-
 const fetchDetail = async () => {
   loadingDetail.value = true
   try {
@@ -1091,68 +1193,24 @@ const fetchNoDeposit = async () => {
   loadingND.value = true
   try {
     const params = { page: ndFilter.value.page, page_size: ndFilter.value.page_size }
+    if (ndFilter.value.priority) params.priority = ndFilter.value.priority
     if (ndFilter.value.reason) params.reason = ndFilter.value.reason
     if (ndFilter.value.grade) params.grade = ndFilter.value.grade
+    if (ndFilter.value.overdue_days) params.overdue_days = ndFilter.value.overdue_days
+    if (ndFilter.value.cold_only) params.cold_only = true
     const res = await getNoDepositAnalysis(params)
     ndData.value = res.data.records
     ndTotal.value = res.data.total
+    ndSummary.value = {
+      ...emptyNDSummary(),
+      ...(res.data.summary || {}),
+    }
     return true
   } catch (e) {
     ElMessage.error(apiError(e, '載入未預繳資料失敗'))
     return false
   } finally {
     loadingND.value = false
-  }
-}
-
-const fetchAreaHotspots = async () => {
-  loadingAreaHotspots.value = true
-  try {
-    const res = await getRecruitmentAddressHotspots({ limit: 200 })
-    areaHotspotsSummary.value = normalizeAreaHotspotsSummary(res.data)
-    return true
-  } catch (e) {
-    ElMessage.error(apiError(e, '載入地址熱點失敗'))
-    return false
-  } finally {
-    loadingAreaHotspots.value = false
-  }
-}
-
-const handleAreaHotspotSync = async () => {
-  syncingAreaHotspots.value = true
-  try {
-    const res = await syncRecruitmentAddressHotspots({ batch_size: 10, limit: 200 })
-    areaHotspotsSummary.value = normalizeAreaHotspotsSummary(res.data)
-    areaLoaded.value = true
-
-    if (res.data.synced > 0) {
-      const suffix = res.data.pending_hotspots > 0 ? `，尚有 ${res.data.pending_hotspots} 個地址待同步` : ''
-      ElMessage.success(`已同步 ${res.data.synced} 個地址座標${suffix}`)
-    } else if (res.data.failed > 0) {
-      ElMessage.warning(`本次同步失敗 ${res.data.failed} 個地址，請檢查地址內容或 geocoding 設定`)
-    } else {
-      ElMessage.success('目前沒有需要同步的新地址座標')
-    }
-  } catch (e) {
-    ElMessage.error(apiError(e, '同步地址座標失敗'))
-  } finally {
-    syncingAreaHotspots.value = false
-  }
-}
-
-const fetchPeriods = async () => {
-  loadingPeriods.value = true
-  try {
-    const [listRes, summaryRes] = await Promise.all([getPeriods(), getPeriodsSummary()])
-    periods.value = listRes.data
-    periodsSummary.value = summaryRes.data
-    return true
-  } catch (e) {
-    ElMessage.error(apiError(e, '載入期間資料失敗'))
-    return false
-  } finally {
-    loadingPeriods.value = false
   }
 }
 
@@ -1173,7 +1231,7 @@ const loadNoDepositTab = async (force = false) => {
 }
 
 const loadAreaTab = async () => {
-  const ok = await fetchAreaHotspots()
+  const ok = await loadAreaData()
   if (ok) areaLoaded.value = true
 }
 
@@ -1182,9 +1240,146 @@ const loadPeriodsTab = async () => {
   if (ok) periodsLoaded.value = true
 }
 
-onMounted(() => {
-  fetchStats()
+const handleAreaHotspotSync = async (mode = 'incremental') => {
+  const ok = await syncAreaHotspotsAction(mode)
+  if (ok) areaLoaded.value = true
+}
+
+const handleMarketSync = async () => {
+  const ok = await syncMarketAction()
+  if (ok) areaLoaded.value = true
+}
+
+const applyIvykidsSyncStatus = (payload = {}) => {
+  const counts = payload.last_sync_counts || {}
+  ivykidsSyncStatus.value = {
+    ...createEmptyIvykidsSyncStatus(),
+    ...ivykidsSyncStatus.value,
+    ...payload,
+    last_sync_counts: {
+      inserted: counts.inserted ?? ivykidsSyncStatus.value.last_sync_counts?.inserted ?? 0,
+      updated: counts.updated ?? ivykidsSyncStatus.value.last_sync_counts?.updated ?? 0,
+      skipped: counts.skipped ?? ivykidsSyncStatus.value.last_sync_counts?.skipped ?? 0,
+      total_fetched: counts.total_fetched ?? ivykidsSyncStatus.value.last_sync_counts?.total_fetched ?? 0,
+      page_count: counts.page_count ?? ivykidsSyncStatus.value.last_sync_counts?.page_count ?? 0,
+    },
+  }
+}
+
+const formatIvykidsSyncTime = (value) => {
+  if (!value) return '尚未同步'
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return value
+  return parsed.toLocaleString()
+}
+
+const ivykidsSyncStatusSummary = computed(() => {
+  if (loadingIvykidsSyncStatus.value && !ivykidsSyncStatus.value.last_synced_at) {
+    return '載入義華官網同步狀態中'
+  }
+  if (syncingIvykidsBackend.value || ivykidsSyncStatus.value.sync_in_progress) {
+    return '義華官網同步中'
+  }
+  if (ivykidsSyncStatus.value.last_sync_message) {
+    return ivykidsSyncStatus.value.last_sync_message
+  }
+  if (ivykidsSyncStatus.value.message) {
+    return ivykidsSyncStatus.value.message
+  }
+  const counts = ivykidsSyncStatus.value.last_sync_counts || {}
+  if (ivykidsSyncStatus.value.last_sync_status === 'success') {
+    return `最近一次：新增 ${counts.inserted || 0} 筆、更新 ${counts.updated || 0} 筆、略過 ${counts.skipped || 0} 筆`
+  }
+  return '尚未同步'
 })
+
+const loadIvykidsBackendStatus = async () => {
+  loadingIvykidsSyncStatus.value = true
+  try {
+    const res = await getRecruitmentIvykidsBackendStatus()
+    applyIvykidsSyncStatus(res.data || {})
+    return true
+  } catch (e) {
+    applyIvykidsSyncStatus({
+      message: apiError(e, '載入義華官網同步狀態失敗'),
+      last_sync_status: 'failed',
+    })
+    return false
+  } finally {
+    loadingIvykidsSyncStatus.value = false
+  }
+}
+
+const handleIvykidsBackendSync = async () => {
+  syncingIvykidsBackend.value = true
+  try {
+    const res = await syncRecruitmentIvykidsBackend({ max_pages: 20 })
+    const data = res.data || {}
+    applyIvykidsSyncStatus({
+      ...data,
+      last_sync_message: data.message,
+      last_sync_status: data.sync_success ? 'success' : (data.sync_in_progress ? 'running' : 'failed'),
+      last_sync_counts: data.last_sync_counts || {
+        inserted: data.inserted || 0,
+        updated: data.updated || 0,
+        skipped: data.skipped || 0,
+        total_fetched: data.total_fetched || 0,
+        page_count: data.page_count || 0,
+      },
+    })
+
+    if (!data.provider_available) {
+      ElMessage.warning(data.message || '義華校官網同步尚未啟用')
+      return
+    }
+
+    if (!data.sync_success) {
+      if (data.sync_in_progress) {
+        ElMessage.warning(data.message || '義華校官網同步進行中')
+      } else {
+        ElMessage.error(data.message || '同步義華校官網失敗')
+      }
+      return
+    }
+
+    if (data.message) {
+      ElMessage.success(data.message)
+    }
+
+    invalidateOptions()
+    await fetchStats()
+    await fetchOptions(true)
+    if (detailLoaded.value) await fetchDetail()
+  } catch (e) {
+    ElMessage.error(apiError(e, '同步義華校官網失敗'))
+  } finally {
+    syncingIvykidsBackend.value = false
+  }
+}
+
+const handleNearbyViewportChange = async (bounds) => {
+  await fetchNearbySchools(bounds)
+}
+
+const openCampusDialog = () => {
+  openCampusDialogAction()
+}
+
+const handleCampusSave = async () => {
+  const ok = await saveCampusSettingAction()
+  if (ok) areaLoaded.value = true
+}
+
+onMounted(() => {
+  Promise.all([
+    loadDashboard(),
+    loadIvykidsBackendStatus(),
+  ])
+})
+
+const handleReferenceMonthChange = async (value) => {
+  await setReferenceMonth(value || null)
+}
 
 const onTabClick = async (tab) => {
   if (tab?.paneName) activeTab.value = tab.paneName
@@ -1221,6 +1416,51 @@ const drillToDetail = (patch) => {
   activeTab.value = 'detail'
   detailLoaded.value = true
   fetchDetail()
+}
+
+const applyNoDepositFilter = async (patch = {}) => {
+  ndFilter.value = {
+    ...emptyNDFilter(),
+    page_size: ndFilter.value.page_size,
+    ...patch,
+    page: 1,
+  }
+  activeTab.value = 'nodeposit'
+  await loadNoDepositTab(true)
+}
+
+const handleDashboardTarget = async (target = {}) => {
+  const targetTab = target.target_tab
+  const targetFilter = target.target_filter || {}
+
+  if (targetTab === 'detail') {
+    filter.value = {
+      month: null,
+      grade: null,
+      source: null,
+      referrer: null,
+      has_deposit: null,
+      no_deposit_reason: null,
+      keyword: '',
+      page: 1,
+      page_size: filter.value.page_size,
+      ...targetFilter,
+    }
+    activeTab.value = 'detail'
+    await loadDetailTab(true)
+    return
+  }
+
+  if (targetTab === 'nodeposit') {
+    await applyNoDepositFilter(targetFilter)
+    return
+  }
+
+  if (targetTab === 'area') {
+    activeTab.value = 'area'
+    await loadAreaTab()
+    if (targetFilter.district) selectedMarketDistrict.value = targetFilter.district
+  }
 }
 
 const onPageChange = (page) => {
@@ -1677,65 +1917,71 @@ const noDepositGradeBarData = computed(() => {
 })
 
 // -------- 區域圖表 --------
-function haversine(lat1, lng1, lat2, lng2) {
-  const R = 6371
-  const dLat = (lat2 - lat1) * Math.PI / 180
-  const dLng = (lng2 - lng1) * Math.PI / 180
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+function travelBand(minutes) {
+  if (minutes == null) return '未明'
+  if (minutes <= 10) return '10 分鐘內'
+  if (minutes <= 15) return '11-15 分鐘'
+  if (minutes <= 20) return '16-20 分鐘'
+  return '20 分鐘以上'
 }
 
-function distanceBand(km) {
-  if (km == null) return '未明'
-  if (km < 3) return '0-3km'
-  if (km < 6) return '3-6km'
-  if (km < 10) return '6-10km'
-  return '10km+'
-}
+const currentCampus = computed(() => ({
+  ...createEmptyCampus(FALLBACK_SCHOOL_LAT, FALLBACK_SCHOOL_LNG),
+  ...campusSetting.value,
+  ...(marketSnapshot.value.campus || {}),
+  campus_lat: marketSnapshot.value.campus?.campus_lat ?? campusSetting.value.campus_lat ?? FALLBACK_SCHOOL_LAT,
+  campus_lng: marketSnapshot.value.campus?.campus_lng ?? campusSetting.value.campus_lng ?? FALLBACK_SCHOOL_LNG,
+}))
 
-const districtWithDistance = computed(() =>
-  stats.value.by_district.map(d => {
-    const coords = AREA_COORDS[d.district]
-    const km = coords ? haversine(SCHOOL_LAT, SCHOOL_LNG, coords[0], coords[1]) : null
-    return { ...d, km, band: distanceBand(km) }
-  })
+const districtMarketRows = computed(() =>
+  (marketSnapshot.value.districts || []).map((row) => ({
+    ...row,
+    travel_band: travelBand(row.avg_travel_minutes),
+  }))
 )
 
 const distanceBandKPI = computed(() => {
-  const bands = ['0-3km', '3-6km', '6-10km', '10km+', '未明']
-  return bands.map(b => ({
-    label: b,
-    visit: districtWithDistance.value
-      .filter(d => d.band === b)
-      .reduce((s, d) => s + d.visit, 0),
+  const bands = ['10 分鐘內', '11-15 分鐘', '16-20 分鐘', '20 分鐘以上', '未明']
+  return bands.map((label) => ({
+    label,
+    visit: districtMarketRows.value
+      .filter((row) => row.travel_band === label)
+      .reduce((sum, row) => sum + (row.lead_count_90d || 0), 0),
   }))
 })
 
 const areaBarData = computed(() => {
-  const known = districtWithDistance.value.filter(d => d.district !== '未填寫')
-  if (!known.length) return null
+  const rows = districtMarketRows.value.filter((row) => row.district !== '未填寫')
+  if (!rows.length) return null
   return {
-    labels: known.map(d => d.district),
+    labels: rows.map((row) => row.district),
     datasets: [{
-      label: '參觀人數',
-      data: known.map(d => d.visit),
+      label: '90 天來源量',
+      data: rows.map((row) => row.lead_count_90d || 0),
       backgroundColor: '#52b788',
       borderRadius: 4,
     }],
   }
 })
 
-const distanceDoughnutData = computed(() => {
-  const bands = ['0-3km', '3-6km', '6-10km', '10km+', '未明']
-  const counts = distanceBandKPI.value.map(b => b.visit)
-  return {
-    labels: bands,
-    datasets: [{
-      data: counts,
-      backgroundColor: ['#40916c', '#52b788', '#f4a261', '#e76f51', '#a0aec0'],
-    }],
-  }
+const distanceDoughnutData = computed(() => ({
+  labels: distanceBandKPI.value.map((item) => item.label),
+  datasets: [{
+    data: distanceBandKPI.value.map((item) => item.visit),
+    backgroundColor: ['#2f855a', '#52b788', '#f4a261', '#e76f51', '#a0aec0'],
+  }],
+}))
+
+const selectedDistrictDetail = computed(() => {
+  if (!selectedMarketDistrict.value) return null
+  return districtMarketRows.value.find((row) => row.district === selectedMarketDistrict.value) || null
 })
+
+const selectedDistrictHotspots = computed(() =>
+  (areaHotspotsSummary.value.hotspots || [])
+    .filter((item) => item.district === selectedMarketDistrict.value)
+    .sort((a, b) => (b.visit || 0) - (a.visit || 0))
+)
 
 // -------- Chart options --------
 const truncateChartLabel = (label, max = 12) => (
@@ -1871,6 +2117,21 @@ const doughnutOptions = {
   margin: 0;
   font-size: 1.3rem;
 }
+.sync-status-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  padding: 10px 12px;
+  margin-bottom: 16px;
+  border: 1px solid #d9ecff;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #f7fbff 0%, #eef7ff 100%);
+}
+.sync-status-text {
+  font-size: 0.85rem;
+  color: #4a5568;
+}
 .header-actions {
   display: flex;
   gap: 8px;
@@ -1956,6 +2217,10 @@ const doughnutOptions = {
     flex-direction: column;
     align-items: stretch;
     gap: 12px;
+  }
+
+  .sync-status-bar {
+    align-items: flex-start;
   }
 
   .header-actions {

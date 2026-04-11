@@ -22,7 +22,7 @@ import {
 } from '@/utils/auth'
 
 function buildPermissions(...permNames) {
-  return permNames.reduce((acc, name) => acc | PERMISSION_VALUES[name], 0)
+  return permNames.reduce((acc, name) => acc + PERMISSION_VALUES[name], 0)
 }
 
 describe('登入 → 權限 → 路由整合流程', () => {

@@ -201,7 +201,7 @@ import { useRoute } from 'vue-router'
 import {
   DataBoard, Finished, Calendar, Timer, Clock, Document, Watch,
   Money, User, School, OfficeBuilding, Bell, TrendCharts, Setting,
-  Expand, Fold, Warning, DataAnalysis, Files,
+  Expand, Fold, DataAnalysis, Files,
   Star, Collection, ShoppingBag, ChatDotRound, List, Van, CreditCard, Checked
 } from '@element-plus/icons-vue'
 import { PERMISSION_VALUES, getUserInfo } from '@/utils/auth'
@@ -229,7 +229,6 @@ const emit = defineEmits(['close-sidebar'])
 
 const route = useRoute()
 const isCollapse = ref(false)
-const activeMenu = computed(() => route.path)
 
 const canView = computed(() => {
   route.path
@@ -252,6 +251,13 @@ const canView = computed(() => {
       return [name, (permsBig & valBig) === valBig]
     })
   )
+})
+
+const activeMenu = computed(() => {
+  if (route.path.startsWith('/recruitment')) {
+    return '/recruitment'
+  }
+  return route.path
 })
 
 // 檢查子選單是否有任何可見項目

@@ -104,6 +104,11 @@
       </el-table-column>
       <el-table-column prop="source" label="來源" min-width="100" />
       <el-table-column prop="referrer" label="介紹者" width="90" />
+      <el-table-column label="外部同步" min-width="150" show-overflow-tooltip>
+        <template #default="{ row }">
+          {{ formatExternalSync(row) }}
+        </template>
+      </el-table-column>
       <el-table-column label="預繳" align="center" width="70">
         <template #default="{ row }">
           <el-tag :type="row.has_deposit ? 'success' : 'danger'" size="small">
@@ -169,5 +174,13 @@ const emit = defineEmits([
 
 const updateFilter = (field, value) => {
   emit('update-filter', { [field]: value })
+}
+
+const formatExternalSync = (row) => {
+  if (!row?.external_source) return '—'
+  const sourceLabel = row.external_source === 'ivykids_yihua_backend'
+    ? '義華官網'
+    : row.external_source
+  return row.external_status ? `${sourceLabel} / ${row.external_status}` : sourceLabel
 }
 </script>
