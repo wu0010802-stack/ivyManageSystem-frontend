@@ -1,7 +1,17 @@
 <template>
   <div class="recruitment-view" v-loading="loadingStats">
     <div class="page-header">
-      <h2>招生統計儀表板</h2>
+      <div class="page-header-left">
+        <div class="page-header-icon" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/>
+          </svg>
+        </div>
+        <div>
+          <h2 class="page-title">招生統計儀表板</h2>
+          <p class="page-subtitle">招生漏斗 · 轉換率 · 區域分析</p>
+        </div>
+      </div>
       <div class="header-actions">
         <el-select
           v-model="referenceMonth"
@@ -31,30 +41,12 @@
         >匯出 Excel</el-button>
         <el-button
           v-if="canWrite"
-          type="warning"
-          size="small"
-          :loading="syncingIvykidsBackend"
-          @click="handleIvykidsBackendSync"
-        >同步義華官網</el-button>
-        <el-button
-          v-if="canWrite"
           type="primary"
           size="small"
           @click="openAddDialog"
         >新增訪視記錄</el-button>
       </div>
     </div>
-
-    <div class="sync-status-bar">
-      <el-tag size="small" :type="ivykidsSyncStatus.scheduler_enabled ? 'success' : 'info'">
-        自動同步：{{ ivykidsSyncStatus.scheduler_enabled ? '啟用中' : '未啟用' }}
-      </el-tag>
-      <span class="sync-status-text">每 {{ ivykidsSyncStatus.sync_interval_minutes }} 分鐘</span>
-      <span class="sync-status-text">上次同步：{{ formatIvykidsSyncTime(ivykidsSyncStatus.last_synced_at) }}</span>
-      <span class="sync-status-text">{{ ivykidsSyncStatusSummary }}</span>
-    </div>
-
-    <RecruitmentModuleNav />
 
     <el-tabs v-model="activeTab" @tab-click="onTabClick">
       <!-- ==================== 總覽 ==================== -->
@@ -226,43 +218,103 @@
 
       <!-- ==================== 區域分析 ==================== -->
       <el-tab-pane label="區域分析" name="area" lazy>
-        <div class="chart-row">
-          <el-card>
-            <template #header>園所中心點</template>
-            <div class="filter-bar">
-              <div>
-                <div style="font-weight:600">{{ currentCampus.campus_name }}</div>
-                <div style="font-size:12px;color:#718096">{{ currentCampus.campus_address || '尚未設定地址' }}</div>
-                <div style="font-size:12px;color:#718096">
-                  {{ currentCampus.campus_lat?.toFixed?.(4) || '—' }}, {{ currentCampus.campus_lng?.toFixed?.(4) || '—' }}
-                </div>
-              </div>
-              <div class="header-actions">
-                <el-tag effect="plain">交通模式：{{ currentCampus.travel_mode === 'walking' ? '步行' : currentCampus.travel_mode === 'cycling' ? '騎車' : '開車' }}</el-tag>
-                <el-button v-if="canWrite" size="small" @click="openCampusDialog">設定中心點</el-button>
-                <el-button v-if="canWrite" type="primary" size="small" :loading="syncingMarket" @click="handleMarketSync">同步市場情報</el-button>
-              </div>
-            </div>
-          </el-card>
-          <el-card>
-            <template #header>資料完整度</template>
-            <div class="filter-bar">
-              <el-tag :type="marketSnapshot.data_completeness === 'complete' ? 'success' : 'warning'">
-                {{ marketSnapshot.data_completeness === 'complete' ? '完整' : marketSnapshot.data_completeness === 'cached' ? '快取中' : '部分資料' }}
-              </el-tag>
-              <span class="record-count">上次同步：{{ marketSnapshot.synced_at ? new Date(marketSnapshot.synced_at).toLocaleString() : '尚未同步' }}</span>
-            </div>
-          </el-card>
+
+        <!-- 1. 緊湊標頭：中心點 + 完整度 + 操作 -->
+        <div class="area-header-bar">
+          <div class="area-campus-info">
+            <span class="area-campus-name">{{ currentCampus.campus_name }}</span>
+            <span class="area-campus-addr">{{ currentCampus.campus_address || '尚未設定地址' }}</span>
+            <span class="area-campus-coord" :class="{ 'area-campus-coord-warn': !campusGeocodedOk }">
+              <template v-if="campusGeocodedOk">
+                {{ campusSetting.campus_lat.toFixed(4) }}, {{ campusSetting.campus_lng.toFixed(4) }}
+              </template>
+              <template v-else>
+                座標未設定（熱點圖使用預設位置）—請點「設定中心點」→「自動定位」
+              </template>
+            </span>
+          </div>
+          <div class="area-header-meta">
+            <el-tag
+              :type="marketSnapshot.data_completeness === 'complete' ? 'success' : 'warning'"
+              effect="light"
+              size="small"
+            >
+              {{ marketSnapshot.data_completeness === 'complete' ? '資料完整' : marketSnapshot.data_completeness === 'cached' ? '快取中' : '部分資料' }}
+            </el-tag>
+            <el-tag effect="plain" size="small">
+              {{ currentCampus.travel_mode === 'walking' ? '步行' : currentCampus.travel_mode === 'cycling' ? '騎車' : '開車' }}
+            </el-tag>
+            <el-tag v-if="!campusGeocodedOk" type="danger" effect="light" size="small">
+              座標未設定
+            </el-tag>
+            <span class="area-sync-time">
+              上次同步：{{ marketSnapshot.synced_at ? new Date(marketSnapshot.synced_at).toLocaleString() : '尚未同步' }}
+            </span>
+          </div>
+          <div class="header-actions" v-if="canWrite">
+            <el-button size="small" @click="openCampusDialog">設定中心點</el-button>
+            <el-button type="primary" size="small" :loading="syncingMarket" @click="handleMarketSync">同步市場情報</el-button>
+          </div>
         </div>
-        <div class="kpi-row" style="margin-bottom:16px">
-          <el-card class="kpi-card" shadow="hover" v-for="band in distanceBandKPI" :key="band.label">
-            <div class="kpi-value">{{ band.visit }}</div>
+
+        <!-- 2. 生活圈 KPI（帶百分比 + 進度條） -->
+        <div class="kpi-row area-kpi-row">
+          <el-card
+            v-for="band in distanceBandKPI"
+            :key="band.label"
+            class="kpi-card area-band-card"
+            :class="areaBandCardClass(band.label)"
+            shadow="hover"
+          >
+            <div class="area-band-top">
+              <div class="kpi-value">{{ band.visit }}</div>
+              <div class="area-band-pct">
+                {{ distanceBandTotal ? `${Math.round(band.visit / distanceBandTotal * 100)}%` : '—' }}
+              </div>
+            </div>
             <div class="kpi-label">{{ band.label }}</div>
+            <div class="area-band-bar-track">
+              <div
+                class="area-band-bar-fill"
+                :style="{ width: distanceBandTotal ? `${(band.visit / distanceBandTotal * 100).toFixed(1)}%` : '0%' }"
+              />
+            </div>
           </el-card>
         </div>
+
+        <!-- 3. 圖表（總覽先行） -->
+        <div class="chart-row">
+          <el-card class="chart-card">
+            <template #header>各行政區 90 天來源量</template>
+            <div class="chart-box">
+              <Bar v-if="isChartTabActive('area') && areaBarData" :data="areaBarData" :options="horizBarOptions" />
+            </div>
+          </el-card>
+          <el-card class="chart-card">
+            <template #header>生活圈分佈</template>
+            <div class="chart-box">
+              <Doughnut v-if="isChartTabActive('area') && distanceDoughnutData" :data="distanceDoughnutData" :options="doughnutOptions" />
+            </div>
+          </el-card>
+        </div>
+
+        <!-- 4. 行政區比較表（可點擊選取，inline 展開明細） -->
         <el-card style="margin-bottom:16px">
-          <template #header>行政區比較表</template>
-          <el-table :data="districtMarketRows" border stripe size="small" @row-click="selectedMarketDistrict = $event.district">
+          <template #header>
+            <div class="area-table-header">
+              <span>行政區比較表</span>
+              <span class="area-table-hint">點擊列篩選熱點圖</span>
+            </div>
+          </template>
+          <el-table
+            :data="districtMarketRows"
+            border
+            stripe
+            size="small"
+            :row-class-name="({ row }) => row.district === selectedMarketDistrict ? 'district-row-selected' : ''"
+            style="cursor:pointer"
+            @row-click="selectedMarketDistrict = selectedMarketDistrict === $event.district ? '' : $event.district"
+          >
             <el-table-column type="index" label="#" width="50" />
             <el-table-column prop="district" label="行政區" width="100" />
             <el-table-column prop="lead_count_30d" label="30 天來源" align="center" width="100" sortable />
@@ -281,7 +333,9 @@
             </el-table-column>
           </el-table>
         </el-card>
-        <el-card style="margin-bottom:16px" v-loading="loadingAreaHotspots || loadingMarket">
+
+        <!-- 5. 家長地址熱點圖 -->
+        <el-card style="margin-bottom:0" v-loading="loadingAreaHotspots || loadingMarket">
           <template #header>家長地址熱點圖</template>
           <RecruitmentAddressHeatmap
             :hotspots="areaHotspotsSummary.hotspots"
@@ -307,39 +361,10 @@
             :fmt-pct="fmtPct"
             @sync="handleAreaHotspotSync"
             @viewport-change="handleNearbyViewportChange"
+            @set-as-campus="handleSetAsCampus"
           />
         </el-card>
-        <div class="chart-row">
-          <el-card class="chart-card">
-            <template #header>各行政區 90 天來源量</template>
-            <div class="chart-box">
-              <Bar v-if="isChartTabActive('area') && areaBarData" :data="areaBarData" :options="horizBarOptions" />
-            </div>
-          </el-card>
-          <el-card class="chart-card">
-            <template #header>生活圈分佈</template>
-            <div class="chart-box">
-              <Doughnut v-if="isChartTabActive('area') && distanceDoughnutData" :data="distanceDoughnutData" :options="doughnutOptions" />
-            </div>
-          </el-card>
-        </div>
-        <div class="chart-row" style="margin-bottom:0" v-if="selectedDistrictDetail">
-          <el-card>
-            <template #header>{{ selectedDistrictDetail.district }} 來源地址</template>
-            <el-table :data="selectedDistrictHotspots" border stripe size="small">
-              <el-table-column prop="matched_address" label="地址" min-width="220">
-                <template #default="{ row }">{{ row.matched_address || row.formatted_address || row.address }}</template>
-              </el-table-column>
-              <el-table-column prop="visit" label="來源量" align="center" width="80" />
-              <el-table-column label="預繳率" align="center" width="90">
-                <template #default="{ row }">{{ fmtPct(row.deposit, row.visit) }}</template>
-              </el-table-column>
-              <el-table-column label="通勤" align="center" width="100">
-                <template #default="{ row }">{{ row.travel_minutes != null ? `${row.travel_minutes.toFixed(1)} 分` : '—' }}</template>
-              </el-table-column>
-            </el-table>
-          </el-card>
-        </div>
+
       </el-tab-pane>
 
       <!-- ==================== 未預繳原因分析 ==================== -->
@@ -753,27 +778,80 @@
     <el-dialog
       v-model="campusDialogVisible"
       title="設定園所中心點"
-      width="520px"
+      width="540px"
     >
       <el-form :model="campusForm" label-width="100px" size="small">
         <el-form-item label="園所名稱">
           <el-input v-model="campusForm.campus_name" />
         </el-form-item>
         <el-form-item label="園所地址">
-          <el-input v-model="campusForm.campus_address" placeholder="建議填完整地址，方便官方比對" />
+          <div style="display:flex;gap:8px;width:100%">
+            <el-input
+              v-model="campusForm.campus_address"
+              placeholder="請填完整地址，例：高雄市三民區義華路68號"
+              style="flex:1"
+              @change="campusGeocodeDirty = true"
+            />
+            <el-button
+              size="small"
+              :loading="geocodingCampus"
+              :disabled="!campusForm.campus_address"
+              @click="geocodeCampusAddress"
+            >自動定位</el-button>
+          </div>
         </el-form-item>
+
+        <el-alert
+          v-if="campusForm.campus_lat == null || campusForm.campus_lng == null"
+          type="warning"
+          show-icon
+          :closable="false"
+          style="margin-bottom:12px"
+        >
+          <template #default>
+            <span>座標尚未設定，熱點圖將使用預設位置。請填入地址後點「自動定位」，或手動輸入緯度 / 經度。</span>
+          </template>
+        </el-alert>
+
         <el-row :gutter="12">
           <el-col :span="12">
             <el-form-item label="緯度">
-              <el-input-number v-model="campusForm.campus_lat" :step="0.0001" :precision="6" style="width:100%" />
+              <el-input-number
+                v-model="campusForm.campus_lat"
+                :step="0.0001"
+                :precision="6"
+                placeholder="例：22.647xxx"
+                style="width:100%"
+              />
             </el-form-item>
           </el-col>
           <el-col :span="12">
             <el-form-item label="經度">
-              <el-input-number v-model="campusForm.campus_lng" :step="0.0001" :precision="6" style="width:100%" />
+              <el-input-number
+                v-model="campusForm.campus_lng"
+                :step="0.0001"
+                :precision="6"
+                placeholder="例：120.314xxx"
+                style="width:100%"
+              />
             </el-form-item>
           </el-col>
         </el-row>
+
+        <div
+          v-if="campusForm.campus_lat != null && campusForm.campus_lng != null"
+          class="campus-coord-preview"
+        >
+          <span>預覽：</span>
+          <a
+            :href="`https://www.openstreetmap.org/?mlat=${campusForm.campus_lat}&mlon=${campusForm.campus_lng}#map=17/${campusForm.campus_lat}/${campusForm.campus_lng}`"
+            target="_blank"
+            rel="noreferrer"
+          >
+            {{ campusForm.campus_lat.toFixed(6) }}, {{ campusForm.campus_lng.toFixed(6) }} →在地圖上確認
+          </a>
+        </div>
+
         <el-form-item label="交通模式">
           <el-select v-model="campusForm.travel_mode" style="width:100%">
             <el-option label="開車" value="driving" />
@@ -799,8 +877,6 @@ import {
   updateRecruitmentRecord,
   deleteRecruitmentRecord,
   getNoDepositAnalysis,
-  getRecruitmentIvykidsBackendStatus,
-  syncRecruitmentIvykidsBackend,
   createPeriod,
   updatePeriod,
   deletePeriod,
@@ -819,7 +895,7 @@ import RecruitmentAddressHeatmap from '@/components/recruitment/RecruitmentAddre
 import RecruitmentNoDepositTab from '@/components/recruitment/RecruitmentNoDepositTab.vue'
 import RecruitmentPeriodsTab from '@/components/recruitment/RecruitmentPeriodsTab.vue'
 import RecruitmentDetailTab from '@/components/recruitment/RecruitmentDetailTab.vue'
-import RecruitmentModuleNav from '@/components/recruitment/RecruitmentModuleNav.vue'
+
 
 // -------- Chart.js 延遲載入 --------
 let _chartReady = null
@@ -879,23 +955,8 @@ const detailLoaded = ref(false)
 const ndLoaded = ref(false)
 const areaLoaded = ref(false)
 const periodsLoaded = ref(false)
-const savingPeriod = ref(false)
-const syncingIvykidsBackend = ref(false)
-const loadingIvykidsSyncStatus = ref(false)
 
-const createEmptyIvykidsSyncStatus = () => ({
-  provider_available: false,
-  provider_name: 'ivykids_yihua_backend',
-  scheduler_enabled: false,
-  sync_interval_minutes: 10,
-  sync_in_progress: false,
-  last_synced_at: null,
-  last_sync_status: null,
-  last_sync_message: null,
-  last_sync_counts: {},
-  message: '尚未設定義華校官網同步',
-})
-const ivykidsSyncStatus = ref(createEmptyIvykidsSyncStatus())
+const savingPeriod = ref(false)
 
 const detailData = ref([])
 const detailTotal = ref(0)
@@ -995,6 +1056,7 @@ const invalidateLazyTabs = () => {
   ndLoaded.value = false
   areaLoaded.value = false
   periodsLoaded.value = false
+
 }
 
 const isChartTabActive = (tabName) => activeTab.value === tabName
@@ -1240,6 +1302,7 @@ const loadPeriodsTab = async () => {
   if (ok) periodsLoaded.value = true
 }
 
+
 const handleAreaHotspotSync = async (mode = 'incremental') => {
   const ok = await syncAreaHotspotsAction(mode)
   if (ok) areaLoaded.value = true
@@ -1250,113 +1313,6 @@ const handleMarketSync = async () => {
   if (ok) areaLoaded.value = true
 }
 
-const applyIvykidsSyncStatus = (payload = {}) => {
-  const counts = payload.last_sync_counts || {}
-  ivykidsSyncStatus.value = {
-    ...createEmptyIvykidsSyncStatus(),
-    ...ivykidsSyncStatus.value,
-    ...payload,
-    last_sync_counts: {
-      inserted: counts.inserted ?? ivykidsSyncStatus.value.last_sync_counts?.inserted ?? 0,
-      updated: counts.updated ?? ivykidsSyncStatus.value.last_sync_counts?.updated ?? 0,
-      skipped: counts.skipped ?? ivykidsSyncStatus.value.last_sync_counts?.skipped ?? 0,
-      total_fetched: counts.total_fetched ?? ivykidsSyncStatus.value.last_sync_counts?.total_fetched ?? 0,
-      page_count: counts.page_count ?? ivykidsSyncStatus.value.last_sync_counts?.page_count ?? 0,
-    },
-  }
-}
-
-const formatIvykidsSyncTime = (value) => {
-  if (!value) return '尚未同步'
-  const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) return value
-  return parsed.toLocaleString()
-}
-
-const ivykidsSyncStatusSummary = computed(() => {
-  if (loadingIvykidsSyncStatus.value && !ivykidsSyncStatus.value.last_synced_at) {
-    return '載入義華官網同步狀態中'
-  }
-  if (syncingIvykidsBackend.value || ivykidsSyncStatus.value.sync_in_progress) {
-    return '義華官網同步中'
-  }
-  if (ivykidsSyncStatus.value.last_sync_message) {
-    return ivykidsSyncStatus.value.last_sync_message
-  }
-  if (ivykidsSyncStatus.value.message) {
-    return ivykidsSyncStatus.value.message
-  }
-  const counts = ivykidsSyncStatus.value.last_sync_counts || {}
-  if (ivykidsSyncStatus.value.last_sync_status === 'success') {
-    return `最近一次：新增 ${counts.inserted || 0} 筆、更新 ${counts.updated || 0} 筆、略過 ${counts.skipped || 0} 筆`
-  }
-  return '尚未同步'
-})
-
-const loadIvykidsBackendStatus = async () => {
-  loadingIvykidsSyncStatus.value = true
-  try {
-    const res = await getRecruitmentIvykidsBackendStatus()
-    applyIvykidsSyncStatus(res.data || {})
-    return true
-  } catch (e) {
-    applyIvykidsSyncStatus({
-      message: apiError(e, '載入義華官網同步狀態失敗'),
-      last_sync_status: 'failed',
-    })
-    return false
-  } finally {
-    loadingIvykidsSyncStatus.value = false
-  }
-}
-
-const handleIvykidsBackendSync = async () => {
-  syncingIvykidsBackend.value = true
-  try {
-    const res = await syncRecruitmentIvykidsBackend({ max_pages: 20 })
-    const data = res.data || {}
-    applyIvykidsSyncStatus({
-      ...data,
-      last_sync_message: data.message,
-      last_sync_status: data.sync_success ? 'success' : (data.sync_in_progress ? 'running' : 'failed'),
-      last_sync_counts: data.last_sync_counts || {
-        inserted: data.inserted || 0,
-        updated: data.updated || 0,
-        skipped: data.skipped || 0,
-        total_fetched: data.total_fetched || 0,
-        page_count: data.page_count || 0,
-      },
-    })
-
-    if (!data.provider_available) {
-      ElMessage.warning(data.message || '義華校官網同步尚未啟用')
-      return
-    }
-
-    if (!data.sync_success) {
-      if (data.sync_in_progress) {
-        ElMessage.warning(data.message || '義華校官網同步進行中')
-      } else {
-        ElMessage.error(data.message || '同步義華校官網失敗')
-      }
-      return
-    }
-
-    if (data.message) {
-      ElMessage.success(data.message)
-    }
-
-    invalidateOptions()
-    await fetchStats()
-    await fetchOptions(true)
-    if (detailLoaded.value) await fetchDetail()
-  } catch (e) {
-    ElMessage.error(apiError(e, '同步義華校官網失敗'))
-  } finally {
-    syncingIvykidsBackend.value = false
-  }
-}
-
 const handleNearbyViewportChange = async (bounds) => {
   await fetchNearbySchools(bounds)
 }
@@ -1365,16 +1321,61 @@ const openCampusDialog = () => {
   openCampusDialogAction()
 }
 
+const handleSetAsCampus = async ({ lat, lng, name, address }) => {
+  campusForm.value = {
+    ...campusSetting.value,
+    campus_lat: lat,
+    campus_lng: lng,
+    ...(address ? { campus_address: address } : {}),
+  }
+  const ok = await saveCampusSettingAction()
+  if (ok) areaLoaded.value = true
+}
+
 const handleCampusSave = async () => {
   const ok = await saveCampusSettingAction()
   if (ok) areaLoaded.value = true
 }
 
+const campusGeocodedOk = computed(() =>
+  campusSetting.value?.campus_lat != null && campusSetting.value?.campus_lng != null
+)
+
+const geocodingCampus = ref(false)
+const campusGeocodeDirty = ref(false)
+
+const geocodeCampusAddress = async () => {
+  const address = campusForm.value?.campus_address
+  if (!address) return
+  geocodingCampus.value = true
+  try {
+    const url = new URL('https://nominatim.openstreetmap.org/search')
+    url.searchParams.set('q', address)
+    url.searchParams.set('format', 'json')
+    url.searchParams.set('limit', '1')
+    url.searchParams.set('countrycodes', 'tw')
+    const response = await fetch(url.toString(), {
+      headers: { 'Accept-Language': 'zh-Hant-TW,zh-TW;q=0.9' },
+    })
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    const data = await response.json()
+    if (data.length > 0) {
+      campusForm.value.campus_lat = parseFloat(data[0].lat)
+      campusForm.value.campus_lng = parseFloat(data[0].lon)
+      campusGeocodeDirty.value = false
+      ElMessage.success(`已定位：${data[0].display_name}`)
+    } else {
+      ElMessage.warning('找不到此地址，請嘗試填寫更精確的地址（含縣市區），或直接手動輸入座標')
+    }
+  } catch {
+    ElMessage.error('自動定位服務暫時無法使用，請手動輸入緯度 / 經度')
+  } finally {
+    geocodingCampus.value = false
+  }
+}
+
 onMounted(() => {
-  Promise.all([
-    loadDashboard(),
-    loadIvykidsBackendStatus(),
-  ])
+  loadDashboard()
 })
 
 const handleReferenceMonthChange = async (value) => {
@@ -1387,6 +1388,7 @@ const onTabClick = async (tab) => {
   if (tab.paneName === 'nodeposit' && !ndLoaded.value) await loadNoDepositTab()
   if (tab.paneName === 'area' && !areaLoaded.value) await loadAreaTab()
   if (tab.paneName === 'periods' && !periodsLoaded.value) await loadPeriodsTab()
+
 }
 
 // -------- 篩選 --------
@@ -1950,6 +1952,18 @@ const distanceBandKPI = computed(() => {
   }))
 })
 
+const distanceBandTotal = computed(() =>
+  distanceBandKPI.value.reduce((sum, band) => sum + (band.visit || 0), 0)
+)
+
+const areaBandCardClass = (label) => {
+  if (label === '10 分鐘內') return 'area-band-near'
+  if (label === '11-15 分鐘') return 'area-band-mid'
+  if (label === '16-20 分鐘') return 'area-band-far'
+  if (label === '20 分鐘以上') return 'area-band-xfar'
+  return 'area-band-unknown'
+}
+
 const areaBarData = computed(() => {
   const rows = districtMarketRows.value.filter((row) => row.district !== '未填寫')
   if (!rows.length) return null
@@ -1971,17 +1985,6 @@ const distanceDoughnutData = computed(() => ({
     backgroundColor: ['#2f855a', '#52b788', '#f4a261', '#e76f51', '#a0aec0'],
   }],
 }))
-
-const selectedDistrictDetail = computed(() => {
-  if (!selectedMarketDistrict.value) return null
-  return districtMarketRows.value.find((row) => row.district === selectedMarketDistrict.value) || null
-})
-
-const selectedDistrictHotspots = computed(() =>
-  (areaHotspotsSummary.value.hotspots || [])
-    .filter((item) => item.district === selectedMarketDistrict.value)
-    .sort((a, b) => (b.visit || 0) - (a.visit || 0))
-)
 
 // -------- Chart options --------
 const truncateChartLabel = (label, max = 12) => (
@@ -2104,37 +2107,80 @@ const doughnutOptions = {
 </script>
 
 <style scoped>
+/* ── Design Tokens ── */
 .recruitment-view {
-  padding: 20px;
+  --rv-primary:      #1E40AF;
+  --rv-primary-lt:   #DBEAFE;
+  --rv-secondary:    #3B82F6;
+  --rv-accent:       #D97706;
+  --rv-bg:           #F8FAFC;
+  --rv-surface:      #FFFFFF;
+  --rv-muted:        #E9EEF6;
+  --rv-border:       #DBEAFE;
+  --rv-text:         #1E293B;
+  --rv-text-2:       #64748B;
+  --rv-success:      #16A34A;
+  --rv-danger:       #DC2626;
+  --rv-font-num:     'Fira Code', ui-monospace, monospace;
 }
+
+.recruitment-view {
+  padding: 24px;
+  background: var(--rv-bg);
+  min-height: 100%;
+}
+
+/* ── Page Header ── */
 .page-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
+  padding: 16px 20px;
+  background: var(--rv-surface);
+  border: 1px solid var(--rv-border);
+  border-radius: 14px;
+  border-left: 4px solid var(--rv-primary);
+  box-shadow: 0 1px 4px rgba(30,64,175,0.07);
 }
-.page-header h2 {
-  margin: 0;
-  font-size: 1.3rem;
-}
-.sync-status-bar {
+
+.page-header-left {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px 12px;
   align-items: center;
-  padding: 10px 12px;
-  margin-bottom: 16px;
-  border: 1px solid #d9ecff;
+  gap: 12px;
+}
+
+.page-header-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
   border-radius: 10px;
-  background: linear-gradient(180deg, #f7fbff 0%, #eef7ff 100%);
+  background: var(--rv-primary-lt);
+  color: var(--rv-primary);
+  flex-shrink: 0;
 }
-.sync-status-text {
-  font-size: 0.85rem;
-  color: #4a5568;
+
+.page-title {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--rv-text);
+  letter-spacing: -0.01em;
 }
+
+.page-subtitle {
+  margin: 2px 0 0;
+  font-size: 0.78rem;
+  color: var(--rv-text-2);
+}
+
 .header-actions {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
 }
 .form-section-title {
   font-size: 12px;
@@ -2157,28 +2203,35 @@ const doughnutOptions = {
 :deep(.kpi-card) {
   flex: 1;
   min-width: 130px;
-  border-left: 4px solid #40916c;
+  border-left: 4px solid var(--rv-primary, #1E40AF);
+  transition: box-shadow 0.18s ease, transform 0.18s ease;
 }
-:deep(.kpi-card.kpi-accent) { border-left-color: #e76f51; }
-:deep(.kpi-card.kpi-blue)  { border-left-color: #3182ce; }
-:deep(.kpi-card.kpi-teal)  { border-left-color: #319795; }
-:deep(.kpi-card.kpi-green) { border-left-color: #2f855a; }
+:deep(.kpi-card:hover) {
+  box-shadow: 0 4px 16px rgba(30, 64, 175, 0.10);
+  transform: translateY(-1px);
+}
+:deep(.kpi-card.kpi-accent) { border-left-color: #D97706; }
+:deep(.kpi-card.kpi-blue)   { border-left-color: #3B82F6; }
+:deep(.kpi-card.kpi-teal)   { border-left-color: #0891B2; }
+:deep(.kpi-card.kpi-green)  { border-left-color: #16A34A; }
 :deep(.kpi-value) {
+  font-family: 'Fira Code', ui-monospace, monospace;
   font-size: 1.8rem;
   font-weight: 700;
-  color: #2d6a4f;
+  color: var(--rv-primary, #1E3A8A);
+  font-variant-numeric: tabular-nums;
 }
-:deep(.kpi-card.kpi-accent .kpi-value) { color: #c25a3d; }
-:deep(.kpi-card.kpi-blue .kpi-value)  { color: #2b6cb0; }
-:deep(.kpi-card.kpi-teal .kpi-value)  { color: #2c7a7b; }
-:deep(.kpi-card.kpi-green .kpi-value) { color: #22543d; }
+:deep(.kpi-card.kpi-accent .kpi-value) { color: #B45309; }
+:deep(.kpi-card.kpi-blue   .kpi-value) { color: #1D4ED8; }
+:deep(.kpi-card.kpi-teal   .kpi-value) { color: #0E7490; }
+:deep(.kpi-card.kpi-green  .kpi-value) { color: #15803D; }
 :deep(.kpi-label) {
   font-size: 0.78rem;
-  color: #718096;
+  color: #94A3B8;
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
-:deep(.kpi-sub) { font-size: 0.8rem; color: #a0aec0; }
+:deep(.kpi-sub) { font-size: 0.78rem; color: #94A3B8; }
 :deep(.chart-row) {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
@@ -2208,6 +2261,142 @@ const doughnutOptions = {
 }
 :deep(.deposit-row) { background: #f0fff4 !important; }
 
+/* -------- 區域分析：標頭 -------- */
+.area-header-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 18px;
+  margin-bottom: 16px;
+  background: var(--rv-surface, #fff);
+  border: 1px solid var(--rv-border, #DBEAFE);
+  border-left: 4px solid var(--rv-secondary, #3B82F6);
+  border-radius: 12px;
+  box-shadow: 0 1px 4px rgba(30, 64, 175, 0.06);
+}
+.area-campus-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 180px;
+}
+.area-campus-name {
+  font-weight: 700;
+  font-size: 0.97rem;
+  color: var(--rv-text, #1E293B);
+}
+.area-campus-addr {
+  font-size: 0.8rem;
+  color: var(--rv-text-2, #64748B);
+}
+.area-campus-coord {
+  font-size: 0.75rem;
+  color: #94A3B8;
+  font-variant-numeric: tabular-nums;
+  font-family: 'Fira Code', ui-monospace, monospace;
+}
+.area-header-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.area-sync-time {
+  font-size: 0.75rem;
+  color: #94A3B8;
+}
+
+/* -------- KPI 生活圈進度條 -------- */
+.area-kpi-row {
+  margin-bottom: 16px;
+}
+.area-band-card {
+  border-left: 4px solid #40916c;
+}
+.area-band-near  { border-left-color: #2f855a; }
+.area-band-mid   { border-left-color: #52b788; }
+.area-band-far   { border-left-color: #f4a261; }
+.area-band-xfar  { border-left-color: #e76f51; }
+.area-band-unknown { border-left-color: #a0aec0; }
+
+.area-band-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 6px;
+}
+.area-band-pct {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #718096;
+}
+.area-band-bar-track {
+  margin-top: 6px;
+  height: 4px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
+}
+.area-band-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: currentColor;
+  transition: width 0.4s ease;
+}
+.area-band-near  .area-band-bar-fill { background: #2f855a; }
+.area-band-mid   .area-band-bar-fill { background: #52b788; }
+.area-band-far   .area-band-bar-fill { background: #f4a261; }
+.area-band-xfar  .area-band-bar-fill { background: #e76f51; }
+.area-band-unknown .area-band-bar-fill { background: #a0aec0; }
+
+/* -------- 園所座標狀態 -------- */
+.area-campus-coord-warn {
+  color: #c05621 !important;
+  font-weight: 600;
+}
+
+.campus-coord-preview {
+  margin-bottom: 12px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: #f0fff4;
+  border: 1px solid #c6f6d5;
+  font-size: 0.8rem;
+  color: #276749;
+}
+.campus-coord-preview a {
+  color: #276749;
+}
+
+/* -------- 行政區比較表 -------- */
+.area-table-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.area-table-hint {
+  font-size: 0.75rem;
+  color: #a0aec0;
+  font-weight: 400;
+}
+:deep(.district-row-selected td) {
+  background: #f0fff4 !important;
+  font-weight: 600;
+}
+:deep(.district-row-selected td .cell) {
+  color: #22543d;
+}
+
+@media (max-width: 768px) {
+  .area-header-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 @media (max-width: 768px) {
   .recruitment-view {
     padding: 16px;
@@ -2217,10 +2406,6 @@ const doughnutOptions = {
     flex-direction: column;
     align-items: stretch;
     gap: 12px;
-  }
-
-  .sync-status-bar {
-    align-items: flex-start;
   }
 
   .header-actions {

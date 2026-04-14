@@ -54,6 +54,12 @@ const router = createRouter({
             meta: { title: '招生統計' }
         },
         {
+            path: '/recruitment-ivykids',
+            name: 'recruitment-ivykids',
+            component: () => import('../views/RecruitmentIvykidsView.vue'),
+            meta: { title: '官網報名' }
+        },
+        {
             path: '/student-records',
             name: 'student-records',
             component: () => import('../views/StudentRecordsView.vue'),

@@ -7,8 +7,6 @@ import RecruitmentView from '@/views/RecruitmentView.vue'
 const getRecruitmentStats = vi.fn()
 const getRecruitmentOptions = vi.fn()
 const getRecruitmentRecords = vi.fn()
-const getRecruitmentIvykidsBackendStatus = vi.fn()
-const syncRecruitmentIvykidsBackend = vi.fn()
 const getNoDepositAnalysis = vi.fn()
 const getRecruitmentAddressHotspots = vi.fn()
 const syncRecruitmentAddressHotspots = vi.fn()
@@ -55,8 +53,6 @@ vi.mock('@/api/recruitment', () => ({
   getRecruitmentStats: (...args) => getRecruitmentStats(...args),
   getRecruitmentOptions: (...args) => getRecruitmentOptions(...args),
   getRecruitmentRecords: (...args) => getRecruitmentRecords(...args),
-  getRecruitmentIvykidsBackendStatus: (...args) => getRecruitmentIvykidsBackendStatus(...args),
-  syncRecruitmentIvykidsBackend: (...args) => syncRecruitmentIvykidsBackend(...args),
   createRecruitmentRecord: vi.fn(),
   updateRecruitmentRecord: vi.fn(),
   deleteRecruitmentRecord: vi.fn(),
@@ -164,7 +160,8 @@ const recruitmentViewSource = readFileSync(
   'utf8',
 )
 
-const mountView = () => shallowMount(RecruitmentView, {
+const mountView = (props = {}) => shallowMount(RecruitmentView, {
+  props,
   global: {
     directives: {
       loading: () => {},
@@ -191,7 +188,6 @@ const mountView = () => shallowMount(RecruitmentView, {
       'el-autocomplete': true,
       'el-switch': true,
       'el-input-number': true,
-      RecruitmentModuleNav: { template: '<div />' },
       RecruitmentAddressHeatmap: { name: 'RecruitmentAddressHeatmap', template: '<div />' },
     },
   },
@@ -205,40 +201,6 @@ describe('RecruitmentView', () => {
     getRecruitmentOptions.mockResolvedValue({ data: defaultOptions })
     getRecruitmentRecords.mockResolvedValue({
       data: { records: [], total: 0 },
-    })
-    getRecruitmentIvykidsBackendStatus.mockResolvedValue({
-      data: {
-        provider_available: true,
-        provider_name: 'ivykids_yihua_backend',
-        scheduler_enabled: true,
-        sync_interval_minutes: 10,
-        sync_in_progress: false,
-        last_synced_at: '2026-04-12T09:30:00',
-        last_sync_status: 'success',
-        last_sync_message: '義華校官網同步完成：新增 2 筆、更新 1 筆、略過 0 筆。',
-        last_sync_counts: {
-          inserted: 2,
-          updated: 1,
-          skipped: 0,
-          total_fetched: 3,
-          page_count: 1,
-        },
-        message: '義華校官網同步完成：新增 2 筆、更新 1 筆、略過 0 筆。',
-      },
-    })
-    syncRecruitmentIvykidsBackend.mockResolvedValue({
-      data: {
-        provider_available: true,
-        provider_name: 'ivykids_yihua_backend',
-        sync_success: true,
-        page_count: 1,
-        total_fetched: 3,
-        inserted: 2,
-        updated: 1,
-        skipped: 0,
-        message: '義華校官網同步完成：新增 2 筆、更新 1 筆、略過 0 筆。',
-        preview: [],
-      },
     })
     getNoDepositAnalysis.mockResolvedValue({
       data: {
@@ -424,20 +386,8 @@ describe('RecruitmentView', () => {
 
     expect(getRecruitmentStats).toHaveBeenCalledTimes(1)
     expect(getRecruitmentOptions).toHaveBeenCalledTimes(1)
-    expect(getRecruitmentIvykidsBackendStatus).toHaveBeenCalledTimes(1)
     expect(getRecruitmentRecords).not.toHaveBeenCalled()
     expect(getRecruitmentAddressHotspots).not.toHaveBeenCalled()
-  })
-
-  it('renders ivykids sync scheduler status on initial load', async () => {
-    const wrapper = mountView()
-
-    await flushPromises()
-
-    expect(wrapper.text()).toContain('自動同步：')
-    expect(wrapper.text()).toContain('啟用中')
-    expect(wrapper.text()).toContain('每 10 分鐘')
-    expect(wrapper.text()).toContain('義華校官網同步完成：新增 2 筆、更新 1 筆、略過 0 筆。')
   })
 
   it('lazy loads detail data and options when detail tab is opened', async () => {
@@ -452,6 +402,23 @@ describe('RecruitmentView', () => {
       page: 1,
       page_size: 50,
     })
+  })
+
+  it('keeps manual recruitment requests free of dataset scope parameters', async () => {
+    const wrapper = mountView()
+
+    await flushPromises()
+    await wrapper.vm.onTabClick({ paneName: 'detail' })
+    await flushPromises()
+
+    for (const [params] of getRecruitmentStats.mock.calls) {
+      expect(params?.dataset_scope).toBeUndefined()
+    }
+    for (const [params] of getRecruitmentRecords.mock.calls) {
+      expect(params?.dataset_scope).toBeUndefined()
+    }
+    expect(recruitmentViewSource).not.toContain('dataset_scope')
+    expect(recruitmentViewSource).not.toContain('datasetScope')
   })
 
   it('tracks the active tab so non-current charts can stay unmounted', async () => {
@@ -504,65 +471,6 @@ describe('RecruitmentView', () => {
     expect(getRecruitmentStats).toHaveBeenCalledWith({ reference_month: '115.04' })
   })
 
-  it('syncs ivykids backend data and refreshes dashboard datasets', async () => {
-    const wrapper = mountView()
-
-    await flushPromises()
-    getRecruitmentStats.mockClear()
-    getRecruitmentOptions.mockClear()
-    getRecruitmentRecords.mockClear()
-
-    wrapper.vm.detailLoaded = true
-    await wrapper.vm.handleIvykidsBackendSync()
-    await flushPromises()
-
-    expect(syncRecruitmentIvykidsBackend).toHaveBeenCalledWith({ max_pages: 20 })
-    expect(getRecruitmentStats).toHaveBeenCalledTimes(1)
-    expect(getRecruitmentOptions).toHaveBeenCalledTimes(1)
-    expect(getRecruitmentRecords).toHaveBeenCalledWith({
-      page: 1,
-      page_size: 50,
-    })
-    expect(wrapper.vm.ivykidsSyncStatus.last_sync_counts).toEqual({
-      inserted: 2,
-      updated: 1,
-      skipped: 0,
-      total_fetched: 3,
-      page_count: 1,
-    })
-  })
-
-  it('shows warning and skips refresh when ivykids backend sync is unavailable', async () => {
-    const { ElMessage } = await import('element-plus')
-    syncRecruitmentIvykidsBackend.mockResolvedValueOnce({
-      data: {
-        provider_available: false,
-        provider_name: 'ivykids_yihua_backend',
-        sync_success: false,
-        page_count: 0,
-        total_fetched: 0,
-        inserted: 0,
-        updated: 0,
-        skipped: 0,
-        message: '尚未設定義華校官網同步帳密',
-        preview: [],
-      },
-    })
-
-    const wrapper = mountView()
-
-    await flushPromises()
-    getRecruitmentStats.mockClear()
-    getRecruitmentOptions.mockClear()
-
-    await wrapper.vm.handleIvykidsBackendSync()
-    await flushPromises()
-
-    expect(ElMessage.warning).toHaveBeenCalledWith('尚未設定義華校官網同步帳密')
-    expect(getRecruitmentStats).not.toHaveBeenCalled()
-    expect(getRecruitmentOptions).not.toHaveBeenCalled()
-    expect(wrapper.vm.ivykidsSyncStatus.provider_available).toBe(false)
-  })
 
   it('routes dashboard actions into the no-deposit tab filters', async () => {
     const wrapper = mountView()
@@ -613,6 +521,7 @@ describe('RecruitmentView', () => {
     expect(getRecruitmentMarketIntelligence).toHaveBeenCalledTimes(1)
     expect(getRecruitmentAddressHotspots).toHaveBeenCalledWith({ limit: 200 })
     expect(wrapper.vm.currentCampus.campus_name).toBe('本園')
+    expect(wrapper.vm.selectedMarketDistrict).toBe('')
     expect(wrapper.vm.districtMarketRows[0]).toMatchObject({
       district: '三民區',
       lead_count_90d: 2,
@@ -980,5 +889,13 @@ describe('RecruitmentView', () => {
   it('uses a responsive chart grid that does not force 400px cards on mobile', () => {
     expect(recruitmentViewSource).toContain('minmax(min(100%, 320px), 1fr)')
     expect(recruitmentViewSource).toContain('@media (max-width: 768px)')
+  })
+
+  it('removes the inline district detail panel and keeps hotspot filter hint', () => {
+    expect(recruitmentViewSource).not.toContain('來源地址明細')
+    expect(recruitmentViewSource).not.toContain('selectedDistrictDetail')
+    expect(recruitmentViewSource).not.toContain('selectedDistrictHotspots')
+    expect(recruitmentViewSource).toContain('點擊列篩選熱點圖')
+    expect(recruitmentViewSource).toContain("selectedMarketDistrict = selectedMarketDistrict === $event.district ? '' : $event.district")
   })
 })

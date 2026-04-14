@@ -158,6 +158,7 @@ const ALL_PAGES = [
   { title: '班表管理', path: '/schedule', accessPath: '/schedule' },
   { title: '園務會議', path: '/overtime?tab=meetings', accessPath: '/overtime' },
   { title: '學校行事曆', path: '/calendar', accessPath: '/calendar' },
+  { title: '招生統計', path: '/recruitment', accessPath: '/recruitment' },
 ]
 
 // ---------- computed 搜尋結果 ----------

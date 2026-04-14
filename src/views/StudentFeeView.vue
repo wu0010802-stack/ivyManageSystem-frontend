@@ -11,17 +11,25 @@
       <el-tab-pane label="費用項目設定" name="items">
         <div class="toolbar">
           <div class="filters">
-            <el-input
+            <el-select
               v-model="itemFilter.period"
-              placeholder="學期篩選（如 2025-1）"
+              placeholder="學期篩選"
               clearable
               style="width: 180px"
               @change="fetchItems"
-            />
+            >
+              <el-option
+                v-for="period in periodOptions"
+                :key="period"
+                :label="period"
+                :value="period"
+              />
+            </el-select>
             <el-select v-model="itemFilter.is_active" placeholder="狀態" clearable style="width: 110px" @change="fetchItems">
               <el-option label="啟用中" :value="true" />
               <el-option label="已停用" :value="false" />
             </el-select>
+            <el-button @click="resetItemFilters">清除篩選</el-button>
           </div>
           <el-button type="primary" @click="openCreateItem">
             <el-icon><Plus /></el-icon> 新增項目
@@ -60,25 +68,59 @@
       <el-tab-pane label="繳費記錄" name="records">
         <div class="toolbar">
           <div class="filters">
-            <el-input
+            <el-select
               v-model="recordFilter.period"
-              placeholder="學期（如 2025-1）"
+              placeholder="學期"
               clearable
               style="width: 150px"
-              @change="() => { recordPage.value = 1; fetchRecords() }"
-            />
-            <el-input
+            >
+              <el-option
+                v-for="period in periodOptions"
+                :key="period"
+                :label="period"
+                :value="period"
+              />
+            </el-select>
+            <el-select
               v-model="recordFilter.classroom_name"
-              placeholder="班級名稱"
+              placeholder="班級"
               clearable
               style="width: 130px"
-              @change="() => { recordPage.value = 1; fetchRecords() }"
+            >
+              <el-option
+                v-for="cls in classrooms"
+                :key="cls.id"
+                :label="cls.name"
+                :value="cls.name"
+              />
+            </el-select>
+            <el-select
+              v-model="recordFilter.fee_item_id"
+              placeholder="費用項目"
+              clearable
+              style="width: 180px"
+            >
+              <el-option
+                v-for="item in recordFeeItemOptions"
+                :key="item.id"
+                :label="`${item.name}（${item.period}）`"
+                :value="item.id"
+              />
+            </el-select>
+            <el-input
+              v-model="recordFilter.student_name"
+              placeholder="學生姓名"
+              clearable
+              style="width: 130px"
+              @keyup.enter="searchRecords"
             />
-            <el-select v-model="recordFilter.status" placeholder="繳費狀態" clearable style="width: 120px" @change="() => { recordPage.value = 1; fetchRecords() }">
+            <el-select v-model="recordFilter.status" placeholder="繳費狀態" clearable style="width: 120px">
               <el-option label="未繳" value="unpaid" />
+              <el-option label="部分繳費" value="partial" />
               <el-option label="已繳" value="paid" />
             </el-select>
-            <el-button @click="() => { recordPage.value = 1; fetchRecords() }">搜尋</el-button>
+            <el-button @click="searchRecords">搜尋</el-button>
+            <el-button @click="resetRecordFilters">重設</el-button>
           </div>
         </div>
 
@@ -93,10 +135,10 @@
           <el-table-column label="已繳（元）" width="100" align="right">
             <template #default="{ row }">{{ row.amount_paid.toLocaleString() }}</template>
           </el-table-column>
-          <el-table-column label="狀態" width="75" align="center">
+          <el-table-column label="狀態" width="100" align="center">
             <template #default="{ row }">
-              <el-tag :type="row.status === 'paid' ? 'success' : 'warning'" size="small">
-                {{ row.status === 'paid' ? '已繳' : '未繳' }}
+              <el-tag :type="getRecordStatusType(row.status)" size="small">
+                {{ getRecordStatusLabel(row.status) }}
               </el-tag>
             </template>
           </el-table-column>
@@ -106,14 +148,14 @@
           <el-table-column label="繳費方式" width="90">
             <template #default="{ row }">{{ row.payment_method || '—' }}</template>
           </el-table-column>
-          <el-table-column label="操作" width="100" align="center" fixed="right">
+          <el-table-column label="操作" width="110" align="center" fixed="right">
             <template #default="{ row }">
               <el-button
-                v-if="row.status === 'unpaid'"
+                v-if="row.status !== 'paid'"
                 size="small"
                 type="primary"
                 @click="openPayDialog(row)"
-              >登記繳費</el-button>
+              >{{ row.status === 'partial' ? '更新繳費' : '登記繳費' }}</el-button>
               <span v-else class="paid-label">已完成</span>
             </template>
           </el-table-column>
@@ -135,8 +177,11 @@
         <div class="summary-bar" v-if="summary">
           <el-tag type="info" size="large">總筆數：{{ summary.total_count }}</el-tag>
           <el-tag type="default" size="large">總應繳：{{ summary.total_due.toLocaleString() }} 元</el-tag>
-          <el-tag type="success" size="large">已繳：{{ summary.total_paid.toLocaleString() }} 元（{{ summary.paid_count }} 人）</el-tag>
-          <el-tag type="warning" size="large">未繳：{{ summary.total_unpaid.toLocaleString() }} 元（{{ summary.unpaid_count }} 人）</el-tag>
+          <el-tag type="success" size="large">已收：{{ summary.total_paid.toLocaleString() }} 元</el-tag>
+          <el-tag type="success" size="large">已繳：{{ summary.paid_count }} 人</el-tag>
+          <el-tag type="warning" size="large">部分繳費：{{ summary.partial_count }} 人</el-tag>
+          <el-tag type="danger" size="large">未繳：{{ summary.unpaid_count }} 人</el-tag>
+          <el-tag type="danger" size="large">未收：{{ summary.total_unpaid.toLocaleString() }} 元</el-tag>
         </div>
       </el-tab-pane>
     </el-tabs>
@@ -214,11 +259,14 @@
       <div v-if="payingRecord">
         <p>學生：<strong>{{ payingRecord.student_name }}</strong>（{{ payingRecord.classroom_name }}）</p>
         <p>費用項目：{{ payingRecord.fee_item_name }} — 應繳 <strong>{{ payingRecord.amount_due.toLocaleString() }} 元</strong></p>
+        <p v-if="payingRecord.status === 'partial'" class="hint">
+          目前已登記 {{ payingRecord.amount_paid.toLocaleString() }} 元，請輸入更新後的累計已繳金額。
+        </p>
         <el-form :model="payForm" :rules="payRules" ref="payFormRef" label-width="90px">
           <el-form-item label="繳費日期" prop="payment_date">
             <el-date-picker v-model="payForm.payment_date" type="date" placeholder="選擇日期" style="width: 100%" value-format="YYYY-MM-DD" />
           </el-form-item>
-          <el-form-item label="繳費金額" prop="amount_paid">
+          <el-form-item label="累計已繳" prop="amount_paid">
             <el-input-number v-model="payForm.amount_paid" :min="0" :precision="0" style="width: 100%" />
           </el-form-item>
           <el-form-item label="繳費方式" prop="payment_method">
@@ -246,16 +294,18 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import {
-  getFeeItems, createFeeItem, updateFeeItem, deleteFeeItem,
+  getFeeItems, getFeePeriods, createFeeItem, updateFeeItem, deleteFeeItem,
   generateFeeRecords, getFeeRecords, payFeeRecord, getFeeSummary,
 } from '@/api/fees'
 import { useClassroomStore } from '@/stores/classroom'
 
 // ─── Tab 狀態 ────────────────────────────────────────────────────────────────
 const activeTab = ref('items')
+const periodOptions = ref([])
 
 // ─── 費用項目 ─────────────────────────────────────────────────────────────────
 const feeItems = ref([])
+const recordFeeItems = ref([])
 const itemsLoading = ref(false)
 const itemFilter = ref({ period: '', is_active: null })
 
@@ -275,9 +325,34 @@ async function fetchItems() {
   }
 }
 
+async function fetchFeePeriods() {
+  try {
+    periodOptions.value = await getFeePeriods()
+  } catch {
+    ElMessage.error('載入學期列表失敗')
+  }
+}
+
+async function fetchRecordFeeItems() {
+  try {
+    recordFeeItems.value = await getFeeItems()
+  } catch {
+    ElMessage.error('載入費用篩選選項失敗')
+  }
+}
+
+function resetItemFilters() {
+  itemFilter.value = { period: '', is_active: null }
+  fetchItems()
+}
+
 // ─── 班級列表（供下拉選單） ───────────────────────────────────────────────────
 const classroomStore = useClassroomStore()
 const classrooms = computed(() => classroomStore.classrooms)
+const recordFeeItemOptions = computed(() => {
+  if (!recordFilter.value.period) return recordFeeItems.value
+  return recordFeeItems.value.filter((item) => item.period === recordFilter.value.period)
+})
 
 // ─── 新增/編輯費用項目 ────────────────────────────────────────────────────────
 const itemDialogVisible = ref(false)
@@ -329,7 +404,11 @@ async function submitItem() {
       ElMessage.success('費用項目已新增')
     }
     itemDialogVisible.value = false
-    fetchItems()
+    await Promise.all([
+      fetchItems(),
+      fetchFeePeriods(),
+      fetchRecordFeeItems(),
+    ])
   } catch (err) {
     ElMessage.error(err?.response?.data?.detail || '操作失敗')
   } finally {
@@ -351,7 +430,11 @@ async function handleDeleteItem(row) {
   try {
     await deleteFeeItem(row.id)
     ElMessage.success('已刪除')
-    fetchItems()
+    await Promise.all([
+      fetchItems(),
+      fetchFeePeriods(),
+      fetchRecordFeeItems(),
+    ])
   } catch (err) {
     ElMessage.error(err?.response?.data?.detail || '刪除失敗')
   } finally {
@@ -390,7 +473,14 @@ async function submitGenerate() {
 // ─── 繳費記錄 ─────────────────────────────────────────────────────────────────
 const feeRecords = ref([])
 const recordsLoading = ref(false)
-const recordFilter = ref({ period: '', classroom_name: '', status: '' })
+const emptyRecordFilter = () => ({
+  period: '',
+  classroom_name: '',
+  status: '',
+  fee_item_id: null,
+  student_name: '',
+})
+const recordFilter = ref(emptyRecordFilter())
 const recordPage = ref(1)
 const recordPageSize = ref(50)
 const recordTotal = ref(0)
@@ -401,6 +491,8 @@ function _buildRecordParams() {
   if (recordFilter.value.period) params.period = recordFilter.value.period
   if (recordFilter.value.classroom_name) params.classroom_name = recordFilter.value.classroom_name
   if (recordFilter.value.status) params.status = recordFilter.value.status
+  if (recordFilter.value.fee_item_id) params.fee_item_id = recordFilter.value.fee_item_id
+  if (recordFilter.value.student_name) params.student_name = recordFilter.value.student_name
   return params
 }
 
@@ -422,6 +514,29 @@ async function fetchRecords() {
   }
 }
 
+function searchRecords() {
+  recordPage.value = 1
+  fetchRecords()
+}
+
+function resetRecordFilters() {
+  recordFilter.value = emptyRecordFilter()
+  recordPage.value = 1
+  return fetchRecords()
+}
+
+function getRecordStatusLabel(status) {
+  if (status === 'paid') return '已繳'
+  if (status === 'partial') return '部分繳費'
+  return '未繳'
+}
+
+function getRecordStatusType(status) {
+  if (status === 'paid') return 'success'
+  if (status === 'partial') return 'warning'
+  return 'info'
+}
+
 // ─── 登記繳費 ─────────────────────────────────────────────────────────────────
 const payDialogVisible = ref(false)
 const payingRecord = ref(null)
@@ -441,9 +556,9 @@ function openPayDialog(row) {
   payingRecord.value = row
   payForm.value = {
     payment_date: new Date().toISOString().slice(0, 10),
-    amount_paid: row.amount_due,
-    payment_method: '現金',
-    notes: '',
+    amount_paid: row.status === 'partial' ? row.amount_paid : row.amount_due,
+    payment_method: row.payment_method || '現金',
+    notes: row.notes || '',
   }
   payDialogVisible.value = true
 }
@@ -469,8 +584,19 @@ watch(activeTab, (val) => {
   if (val === 'records') fetchRecords()
 })
 
+watch(() => recordFilter.value.period, () => {
+  const selectedId = recordFilter.value.fee_item_id
+  if (!selectedId) return
+  const stillAvailable = recordFeeItemOptions.value.some((item) => item.id === selectedId)
+  if (!stillAvailable) {
+    recordFilter.value.fee_item_id = null
+  }
+})
+
 onMounted(() => {
   fetchItems()
+  fetchFeePeriods()
+  fetchRecordFeeItems()
   classroomStore.fetchClassrooms()
 })
 </script>

@@ -115,6 +115,10 @@ export function useRecruitmentArea({
     if (notifyError) notifyError(apiError(error, fallback))
   }
 
+  const buildScopeParams = (base = {}) => {
+    return { ...base }
+  }
+
   const buildSyncMessage = (mode, payload = {}) => {
     const attempted = payload.attempted ?? 0
     const synced = payload.synced ?? 0
@@ -161,7 +165,7 @@ export function useRecruitmentArea({
   const fetchAreaHotspots = async () => {
     loadingAreaHotspots.value = true
     try {
-      const response = await getRecruitmentAddressHotspots({ limit: displayLimit })
+      const response = await getRecruitmentAddressHotspots(buildScopeParams({ limit: displayLimit }))
       areaHotspotsSummary.value = normalizeAreaHotspotsSummary(response.data)
       return true
     } catch (error) {
@@ -191,7 +195,7 @@ export function useRecruitmentArea({
   const fetchMarketIntelligence = async () => {
     loadingMarket.value = true
     try {
-      const response = await getRecruitmentMarketIntelligence()
+      const response = await getRecruitmentMarketIntelligence(buildScopeParams())
       marketSnapshot.value = {
         ...marketSnapshot.value,
         ...response.data,
@@ -201,9 +205,6 @@ export function useRecruitmentArea({
           campus_lat: response.data?.campus?.campus_lat ?? campusSetting.value.campus_lat,
           campus_lng: response.data?.campus?.campus_lng ?? campusSetting.value.campus_lng,
         },
-      }
-      if (!selectedMarketDistrict.value && marketSnapshot.value.districts.length) {
-        selectedMarketDistrict.value = marketSnapshot.value.districts[0].district
       }
       return true
     } catch (error) {
@@ -280,6 +281,7 @@ export function useRecruitmentArea({
 
       for (let round = 0; round < maxSyncRounds; round += 1) {
         const response = await syncRecruitmentAddressHotspots({
+          ...buildScopeParams(),
           batch_size: syncBatchSize,
           limit: displayLimit,
           sync_mode: mode,

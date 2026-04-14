@@ -116,13 +116,18 @@ export function useRecruitmentDashboard({ notifyError } = {}) {
     optionsLoaded.value = false
   }
 
+  const buildScopeParams = (base = {}) => {
+    const params = { ...base }
+    return Object.keys(params).length ? params : undefined
+  }
+
   const fetchOptions = async (force = false) => {
     if (optionsLoaded.value && !force) return true
     if (optionsPromise && !force) return optionsPromise
 
     optionsPromise = (async () => {
       try {
-        const response = await getRecruitmentOptions()
+        const response = await getRecruitmentOptions(buildScopeParams())
         options.value = {
           ...createEmptyRecruitmentOptions(),
           ...(response.data || {}),
@@ -143,7 +148,7 @@ export function useRecruitmentDashboard({ notifyError } = {}) {
   const fetchStats = async (month = referenceMonth.value) => {
     loadingStats.value = true
     try {
-      const params = month ? { reference_month: month } : undefined
+      const params = buildScopeParams(month ? { reference_month: month } : {})
       const response = await getRecruitmentStats(params)
       applyStatsPayload(response.data)
       return true
@@ -171,7 +176,11 @@ export function useRecruitmentDashboard({ notifyError } = {}) {
   const handleExportExcel = async () => {
     exportingExcel.value = true
     try {
-      await downloadFile(buildRecruitmentExportUrl(referenceMonth.value), '招生統計.xlsx')
+      const filename = '招生統計.xlsx'
+      await downloadFile(
+        buildRecruitmentExportUrl(referenceMonth.value),
+        filename,
+      )
       return true
     } catch (error) {
       reportError(error, '匯出失敗')

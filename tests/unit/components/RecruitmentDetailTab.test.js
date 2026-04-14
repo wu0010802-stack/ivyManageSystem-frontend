@@ -13,8 +13,6 @@ const sampleRow = {
   district: '三民區',
   source: '網路',
   referrer: '王主任',
-  external_source: 'ivykids_yihua_backend',
-  external_status: '預約正常',
   has_deposit: true,
   enrolled: false,
   transfer_term: false,
@@ -128,6 +126,6 @@ describe('RecruitmentDetailTab', () => {
     )).toBe(true)
     expect(wrapper.text()).toContain('115.04.18')
     expect(wrapper.text()).toContain('高雄市三民區民族一路100號')
-    expect(wrapper.text()).toContain('義華官網 / 預約正常')
+    expect(wrapper.text()).not.toContain('義華官網')
   })
 })

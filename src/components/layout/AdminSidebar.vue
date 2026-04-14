@@ -115,6 +115,10 @@
             <el-icon><DataAnalysis /></el-icon>
             <template #title>招生統計</template>
           </el-menu-item>
+          <el-menu-item v-if="canView.RECRUITMENT_READ" index="/recruitment-ivykids">
+            <el-icon><Document /></el-icon>
+            <template #title>官網報名</template>
+          </el-menu-item>
         </el-sub-menu>
 
         <!-- 園務行政 -->
@@ -253,12 +257,7 @@ const canView = computed(() => {
   )
 })
 
-const activeMenu = computed(() => {
-  if (route.path.startsWith('/recruitment')) {
-    return '/recruitment'
-  }
-  return route.path
-})
+const activeMenu = computed(() => route.path)
 
 // 檢查子選單是否有任何可見項目
 const hasVisibleLeaveItems = computed(() =>

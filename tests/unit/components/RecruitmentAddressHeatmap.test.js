@@ -6,6 +6,7 @@ const leafletHandlers = {}
 const mockMap = {
   remove: vi.fn(),
   fitBounds: vi.fn(),
+  setView: vi.fn(),
   invalidateSize: vi.fn(),
   on: vi.fn((event, handler) => {
     leafletHandlers[event] = handler
@@ -89,8 +90,8 @@ const flushPromises = async () => {
   await new Promise((resolve) => setTimeout(resolve, 20))
 }
 
-const loadComponent = async () => {
-  vi.stubEnv('VITE_GOOGLE_MAPS_API_KEY', '')
+const loadComponent = async (googleMapsApiKey = '') => {
+  vi.stubEnv('VITE_GOOGLE_MAPS_API_KEY', googleMapsApiKey)
   vi.resetModules()
   const module = await import('@/components/recruitment/RecruitmentAddressHeatmap.vue')
   return module.default
@@ -260,13 +261,135 @@ describe('RecruitmentAddressHeatmap', () => {
     })
 
     const buttons = wrapper.findAll('button')
-    expect(buttons).toHaveLength(2)
+    // DOM 順序（每間學校內交錯排列）：
+    // 0: 全台幼兒園地圖切換
+    // 1: sync incremental, 2: sync resync_google
+    // 3: 設為本園(school[0]), 4: 詳細資料(school[0])
+    // 5: 設為本園(school[1]), 6: 詳細資料(school[1])
+    expect(buttons).toHaveLength(7)
 
-    await buttons[0].trigger('click')
     await buttons[1].trigger('click')
+    await buttons[2].trigger('click')
     expect(wrapper.emitted('sync')).toEqual([
       ['incremental'],
       ['resync_google'],
     ])
+
+    // 點第一所學校的「設為本園」
+    await buttons[3].trigger('click')
+    const setAsCampusEvents = wrapper.emitted('set-as-campus')
+    expect(setAsCampusEvents).toHaveLength(1)
+    expect(setAsCampusEvents[0][0]).toMatchObject({
+      lat: 22.6461,
+      lng: 120.3209,
+      name: '本園旁幼兒園',
+    })
+
+    // 點第一所學校的「詳細資料」展開政府資料面板
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce({
+        json: () => Promise.resolve({
+          type: 'FeatureCollection',
+          features: [{
+            type: 'Feature',
+            properties: {
+              title: '高雄市三民區私立本園旁幼兒園',
+              owner: '王小明',
+              tel: '07-3881234',
+              address: '[807]高雄市三民區民族一路100號',
+              type: '私立',
+              count_approved: '300',
+              monthly: 11057,
+              is_active: 1,
+            },
+            geometry: { type: 'Point', coordinates: [120.3209, 22.6461] },
+          }],
+        }),
+      })
+      .mockResolvedValueOnce({
+        json: () => Promise.resolve({ '負責人：王小明': [] }),
+      })
+
+    await buttons[4].trigger('click')
+    await flushPromises()
+    const govDetail = wrapper.find('.preschool-gov-detail')
+    expect(govDetail.exists()).toBe(true)
+    expect(wrapper.text()).toContain('王小明')
+    expect(wrapper.text()).toContain('私立')
+  })
+
+  it('falls back to OpenStreetMap when Google Maps SDK fails to load', async () => {
+    const RecruitmentAddressHeatmap = await loadComponent('broken-browser-key')
+    leafletMap.mockClear()
+    leafletTileLayer.mockClear()
+    leafletLayerGroup.mockClear()
+    circleMarker.mockClear()
+    circle.mockClear()
+
+    const appendChildSpy = vi.spyOn(document.head, 'appendChild').mockImplementation((node) => {
+      if (node instanceof HTMLScriptElement) {
+        setTimeout(() => {
+          node.dispatchEvent(new Event('error'))
+        }, 0)
+      }
+      return node
+    })
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const wrapper = mount(RecruitmentAddressHeatmap, {
+      props: {
+        hotspots: [
+          {
+            address: '高雄市三民區民族一路100號',
+            formatted_address: 'TW 高雄市三民區民族一路100號',
+            district: '三民區',
+            visit: 2,
+            deposit: 1,
+            lat: 22.6461,
+            lng: 120.3209,
+            geocode_status: 'resolved',
+          },
+        ],
+        campus: {
+          campus_name: '本園',
+          campus_address: '高雄市三民區民族一路100號',
+          campus_lat: 22.6420,
+          campus_lng: 120.3243,
+          travel_mode: 'driving',
+        },
+        recordsWithAddress: 2,
+        totalHotspots: 1,
+        geocodedHotspots: 1,
+        pendingHotspots: 0,
+        staleHotspots: 0,
+        failedHotspots: 0,
+        providerAvailable: true,
+        providerName: 'google',
+        schoolLat: 22.6420,
+        schoolLng: 120.3243,
+        canWrite: true,
+        syncingMode: '',
+        fmtPct: (deposit, visit) => (visit ? `${(deposit / visit * 100).toFixed(1)}%` : '0%'),
+        nearbySchools: [],
+        nearbySchoolsLoading: false,
+        nearbySchoolsAvailable: true,
+        nearbySchoolsMessage: '',
+      },
+      global: {
+        components: { ElButton, ElEmpty, ElTag },
+      },
+    })
+
+    await flushPromises()
+    await flushPromises()
+
+    expect(wrapper.find('.heatmap-map').exists()).toBe(true)
+    expect(wrapper.text()).toContain('地圖：OpenStreetMap')
+    expect(wrapper.text()).toContain('Google Maps 載入失敗，已自動改用 OpenStreetMap。')
+    expect(leafletMap).toHaveBeenCalledTimes(1)
+    expect(warnSpy).toHaveBeenCalledTimes(1)
+
+    warnSpy.mockRestore()
+    appendChildSpy.mockRestore()
   })
 })

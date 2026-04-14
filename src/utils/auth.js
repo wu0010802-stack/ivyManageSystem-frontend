@@ -136,6 +136,7 @@ const ROUTE_PERMISSION_RULES = [
   { path: '/fees', permission: 'FEES_READ' },
   { path: '/student-enrollment', permission: 'STUDENTS_READ' },
   { path: '/recruitment', permission: 'RECRUITMENT_READ' },
+  { path: '/recruitment-ivykids', permission: 'RECRUITMENT_READ' },
 ]
 
 const getRoutePermission = (path) => {
