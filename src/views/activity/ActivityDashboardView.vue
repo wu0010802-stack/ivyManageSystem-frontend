@@ -1,6 +1,16 @@
 <template>
   <div class="activity-dashboard">
-    <h2 class="page-title">課後才藝統計儀表板</h2>
+    <div class="page-header">
+      <h2 class="page-title">課後才藝統計儀表板</h2>
+      <el-select v-model="selectedTermKey" style="width: 220px">
+        <el-option
+          v-for="t in semesterOptions"
+          :key="t.key"
+          :label="t.label"
+          :value="t.key"
+        />
+      </el-select>
+    </div>
 
     <el-row :gutter="16" class="stat-cards">
       <el-col :xs="12" :sm="8" :lg="4" v-for="card in statCards" :key="card.label">
@@ -125,13 +135,38 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useActivityStore } from '@/stores/activity'
+import { useAcademicTermStore } from '@/stores/academicTerm'
+import { getCurrentAcademicTerm } from '@/utils/academic'
 import { getActivityDashboardTable, exportDashboardTable } from '@/api/activity'
 import { ElMessage } from 'element-plus'
 
 const activityStore = useActivityStore()
+const termStore = useAcademicTermStore()
+const currentAcademicTerm = getCurrentAcademicTerm()
+
+const semesterOptions = computed(() => {
+  const { school_year: cy, semester: cs } = currentAcademicTerm
+  const semLabel = (s) => (s === 1 ? '上學期' : '下學期')
+  const prevTerm = cs === 1 ? { school_year: cy - 1, semester: 2 } : { school_year: cy, semester: 1 }
+  const nextTerm = cs === 1 ? { school_year: cy, semester: 2 } : { school_year: cy + 1, semester: 1 }
+  return [
+    { key: `${prevTerm.school_year}-${prevTerm.semester}`, ...prevTerm, label: `${prevTerm.school_year}學年度 ${semLabel(prevTerm.semester)}` },
+    { key: `${cy}-${cs}`, school_year: cy, semester: cs, label: `${cy}學年度 ${semLabel(cs)}（本學期）` },
+    { key: `${nextTerm.school_year}-${nextTerm.semester}`, ...nextTerm, label: `${nextTerm.school_year}學年度 ${semLabel(nextTerm.semester)}` },
+  ]
+})
+
+const selectedTermKey = computed({
+  get: () => `${termStore.school_year}-${termStore.semester}`,
+  set: (val) => {
+    const [y, s] = val.split('-').map(Number)
+    termStore.setTerm(y, s)
+  },
+})
+
 const loading = ref(false)
 const loadingTable = ref(false)
 const exportingTable = ref(false)
@@ -238,33 +273,43 @@ const objectSpanMethod = ({ row, column, rowIndex, columnIndex }) => {
     return { rowspan: 1, colspan: 1 };
 };
 
+const fetchTable = async () => {
+  loadingTable.value = true
+  try {
+    const res = await getActivityDashboardTable({
+      school_year: termStore.school_year,
+      semester: termStore.semester,
+    })
+    dashboardData.value = res.data
+  } catch {
+    ElMessage.error('資料載入失敗，請重新整理')
+  } finally {
+    loadingTable.value = false
+  }
+}
+
+watch(selectedTermKey, fetchTable)
+
 onMounted(async () => {
-  loading.value = true;
+  loading.value = true
   await Promise.all([
     activityStore.fetchSummary({ force: true }),
     activityStore.fetchCharts({ force: true }),
-  ]);
-  loading.value = false;
-
-  loadingTable.value = true;
-  try {
-      const res = await getActivityDashboardTable();
-      dashboardData.value = res.data;
-  } catch (e) {
-      ElMessage.error('資料載入失敗，請重新整理');
-  } finally {
-      loadingTable.value = false;
-  }
+  ])
+  loading.value = false
+  await fetchTable()
 })
 
 async function handleExportTable() {
   exportingTable.value = true
   try {
-    const res = await exportDashboardTable()
+    const res = await exportDashboardTable({
+      school_year: termStore.school_year,
+      semester: termStore.semester,
+    })
     const url = URL.createObjectURL(new Blob([res.data]))
     const a = document.createElement('a')
     a.href = url
-    // 使用本地時區日期（避免 UTC 與台灣時間跨日問題）
     const localDate = new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-')
     a.download = `activity_dashboard_${localDate}.xlsx`
     a.click()
@@ -280,7 +325,8 @@ async function handleExportTable() {
 
 <style scoped>
 .activity-dashboard { padding: 16px; }
-.page-title { margin-bottom: 16px; font-size: 20px; font-weight: 600; }
+.page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; gap: 12px; }
+.page-title { margin: 0; font-size: 20px; font-weight: 600; }
 .stat-cards { margin-bottom: 16px; }
 .stat-card { text-align: center; padding: 8px 0; }
 .stat-value { font-size: 28px; font-weight: 700; color: var(--color-primary, #4f46e5); }

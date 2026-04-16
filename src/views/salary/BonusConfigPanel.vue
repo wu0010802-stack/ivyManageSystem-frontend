@@ -1,6 +1,6 @@
 <script setup>
 import { reactive, ref, onMounted } from 'vue'
-import { getBonusConfig, updateBonusConfig, getGradeTargets, updateGradeTargets, getPositionSalary, updatePositionSalary } from '@/api/config'
+import { getBonusConfig, updateBonusConfig, getGradeTargets, updateGradeTargets, getPositionSalary, updatePositionSalary, comparePositionSalary, syncPositionSalary } from '@/api/config'
 import { ElMessage } from 'element-plus'
 import { hasPermission } from '@/utils/auth'
 
@@ -102,8 +102,23 @@ const positionSalary = reactive({
   nurse: 29800,
   driver: 30000,
   kitchen_staff: 29700,
+  director: null,
+  principal: null,
 })
 const loadingPositionSalary = ref(false)
+const compareRows = ref([])
+const compareOutOfSync = ref(0)
+const loadingCompare = ref(false)
+const syncingAll = ref(false)
+const syncingIds = ref(new Set())
+
+const STANDARD_KEY_LABEL = {
+  head_teacher_a: '班導師 A 級', head_teacher_b: '班導師 B 級', head_teacher_c: '班導師 C 級',
+  assistant_teacher_a: '副班導師 A 級', assistant_teacher_b: '副班導師 B 級', assistant_teacher_c: '副班導師 C 級',
+  admin_staff: '行政', english_teacher: '美語', art_teacher: '藝術',
+  designer: '美編', nurse: '護理', driver: '司機', kitchen_staff: '廚房',
+  director: '主任', principal: '園長',
+}
 
 const fetchPositionSalary = async () => {
   loadingPositionSalary.value = true
@@ -122,10 +137,52 @@ const savePositionSalary = async () => {
   try {
     await updatePositionSalary(positionSalary)
     ElMessage.success('職位標準底薪設定已儲存')
+    await fetchCompare()
   } catch (error) {
     ElMessage.error('職位底薪設定儲存失敗')
   } finally {
     loadingPositionSalary.value = false
+  }
+}
+
+const fetchCompare = async () => {
+  loadingCompare.value = true
+  try {
+    const res = await comparePositionSalary()
+    compareRows.value = res.data.employees
+    compareOutOfSync.value = res.data.out_of_sync
+  } catch {
+    ElMessage.error('載入比對資料失敗')
+  } finally {
+    loadingCompare.value = false
+  }
+}
+
+const syncOne = async (row) => {
+  syncingIds.value = new Set([...syncingIds.value, row.employee_id])
+  try {
+    await syncPositionSalary([row.employee_id])
+    ElMessage.success(`${row.name} 底薪已更新為 $${row.standard_salary.toLocaleString()}`)
+    await fetchCompare()
+  } catch {
+    ElMessage.error('同步失敗')
+  } finally {
+    const s = new Set(syncingIds.value)
+    s.delete(row.employee_id)
+    syncingIds.value = s
+  }
+}
+
+const syncAll = async () => {
+  syncingAll.value = true
+  try {
+    const res = await syncPositionSalary([])
+    ElMessage.success(`已同步 ${res.data.total_updated} 位員工底薪至職位標準`)
+    await fetchCompare()
+  } catch {
+    ElMessage.error('批次同步失敗')
+  } finally {
+    syncingAll.value = false
   }
 }
 
@@ -145,6 +202,7 @@ onMounted(() => {
   fetchBonusConfig()
   fetchGradeTargets()
   fetchPositionSalary()
+  fetchCompare()
 })
 </script>
 
@@ -412,10 +470,95 @@ onMounted(() => {
                 <el-input-number v-model="positionSalary.kitchen_staff" :min="0" :step="100" style="width: 100%" />
               </el-card>
             </el-col>
+            <el-col :span="8" class="mt-4">
+              <el-card header="主任" shadow="never" class="box-card">
+                <div class="label">基本薪俸</div>
+                <el-input-number v-model="positionSalary.director" :min="0" :step="100" style="width: 100%" placeholder="未設定" />
+              </el-card>
+            </el-col>
+            <el-col :span="8" class="mt-4">
+              <el-card header="園長" shadow="never" class="box-card">
+                <div class="label">基本薪俸（留空表示不套用標準）</div>
+                <el-input-number v-model="positionSalary.principal" :min="0" :step="100" style="width: 100%" placeholder="未設定" />
+              </el-card>
+            </el-col>
           </el-row>
 
           <div class="mt-4" style="text-align: right">
             <el-button type="primary" @click="savePositionSalary">儲存職位底薪設定</el-button>
+          </div>
+
+          <!-- 員工底薪比對 -->
+          <el-divider />
+          <div class="section-title" style="display: flex; align-items: center; gap: 12px">
+            員工底薪比對
+            <el-tag v-if="compareOutOfSync > 0" type="danger" size="small">
+              {{ compareOutOfSync }} 人不符標準
+            </el-tag>
+            <el-tag v-else-if="compareRows.length > 0" type="success" size="small">全員已符合標準</el-tag>
+          </div>
+          <p class="desc-text">薪資計算時會自動套用上方標準底薪，此表顯示員工資料庫中的底薪是否已同步（僅供參考，不影響計算結果）。</p>
+
+          <div v-loading="loadingCompare">
+            <div v-if="compareRows.length > 0">
+              <div style="text-align: right; margin-bottom: 8px">
+                <el-button
+                  type="warning"
+                  size="small"
+                  :loading="syncingAll"
+                  :disabled="compareOutOfSync === 0"
+                  @click="syncAll"
+                >
+                  批次同步全部（{{ compareOutOfSync }} 人）
+                </el-button>
+                <el-button size="small" :loading="loadingCompare" @click="fetchCompare">重新整理</el-button>
+              </div>
+
+              <el-table :data="compareRows" size="small" border stripe>
+                <el-table-column label="姓名" prop="name" width="90" />
+                <el-table-column label="職稱" prop="title" width="90" />
+                <el-table-column label="職位" prop="position" width="80" />
+                <el-table-column label="等級" width="60">
+                  <template #default="{ row }">{{ row.bonus_grade || '—' }}</template>
+                </el-table-column>
+                <el-table-column label="對應標準" width="120">
+                  <template #default="{ row }">{{ STANDARD_KEY_LABEL[row.standard_key] || row.standard_key }}</template>
+                </el-table-column>
+                <el-table-column label="目前底薪" width="110" align="right">
+                  <template #default="{ row }">
+                    <span :style="row.in_sync ? '' : 'color: var(--el-color-danger)'">
+                      ${{ row.current_salary.toLocaleString() }}
+                    </span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="標準底薪" width="110" align="right">
+                  <template #default="{ row }">
+                    ${{ row.standard_salary.toLocaleString() }}
+                  </template>
+                </el-table-column>
+                <el-table-column label="差異" width="100" align="right">
+                  <template #default="{ row }">
+                    <span v-if="row.in_sync" style="color: var(--el-color-success)">✓ 符合</span>
+                    <span v-else :style="row.diff > 0 ? 'color: var(--el-color-success)' : 'color: var(--el-color-danger)'">
+                      {{ row.diff > 0 ? '+' : '' }}{{ row.diff.toLocaleString() }}
+                    </span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="操作" width="90" align="center">
+                  <template #default="{ row }">
+                    <el-button
+                      v-if="!row.in_sync"
+                      type="primary"
+                      size="small"
+                      :loading="syncingIds.has(row.employee_id)"
+                      @click="syncOne(row)"
+                    >同步</el-button>
+                    <span v-else style="color: var(--el-color-success); font-size: 12px">已同步</span>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </div>
+            <el-empty v-else description="無可比對員工" :image-size="60" />
           </div>
         </div>
       </el-tab-pane>

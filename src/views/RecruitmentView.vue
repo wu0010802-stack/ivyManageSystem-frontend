@@ -219,81 +219,74 @@
       <!-- ==================== 區域分析 ==================== -->
       <el-tab-pane label="區域分析" name="area" lazy>
 
-        <!-- 1. 緊湊標頭：中心點 + 完整度 + 操作 -->
+        <!-- 1. 園所資訊 header bar -->
         <div class="area-header-bar">
           <div class="area-campus-info">
-            <span class="area-campus-name">{{ currentCampus.campus_name }}</span>
-            <span class="area-campus-addr">{{ currentCampus.campus_address || '尚未設定地址' }}</span>
-            <span class="area-campus-coord" :class="{ 'area-campus-coord-warn': !campusGeocodedOk }">
-              <template v-if="campusGeocodedOk">
-                {{ campusSetting.campus_lat.toFixed(4) }}, {{ campusSetting.campus_lng.toFixed(4) }}
-              </template>
-              <template v-else>
-                座標未設定（熱點圖使用預設位置）—請點「設定中心點」→「自動定位」
-              </template>
+            <span class="area-campus-name">{{ currentCampus.campus_name || '本園' }}</span>
+            <span v-if="currentCampus.campus_address" class="area-campus-addr">{{ currentCampus.campus_address }}</span>
+            <span
+              class="area-campus-coord"
+              :class="{ 'area-campus-coord-warn': !campusGeocodedOk }"
+            >
+              {{ campusGeocodedOk
+                  ? `${currentCampus.campus_lat?.toFixed(5)}, ${currentCampus.campus_lng?.toFixed(5)}`
+                  : '⚠ 尚未設定座標' }}
             </span>
           </div>
           <div class="area-header-meta">
-            <el-tag
-              :type="marketSnapshot.data_completeness === 'complete' ? 'success' : 'warning'"
-              effect="light"
-              size="small"
-            >
-              {{ marketSnapshot.data_completeness === 'complete' ? '資料完整' : marketSnapshot.data_completeness === 'cached' ? '快取中' : '部分資料' }}
-            </el-tag>
-            <el-tag effect="plain" size="small">
-              {{ currentCampus.travel_mode === 'walking' ? '步行' : currentCampus.travel_mode === 'cycling' ? '騎車' : '開車' }}
-            </el-tag>
-            <el-tag v-if="!campusGeocodedOk" type="danger" effect="light" size="small">
-              座標未設定
-            </el-tag>
-            <span class="area-sync-time">
-              上次同步：{{ marketSnapshot.synced_at ? new Date(marketSnapshot.synced_at).toLocaleString() : '尚未同步' }}
+            <span v-if="marketSnapshot.synced_at" class="area-sync-time">
+              情報更新：{{ new Date(marketSnapshot.synced_at).toLocaleString('zh-TW', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' }) }}
             </span>
-          </div>
-          <div class="header-actions" v-if="canWrite">
-            <el-button size="small" @click="openCampusDialog">設定中心點</el-button>
-            <el-button type="primary" size="small" :loading="syncingMarket" @click="handleMarketSync">同步市場情報</el-button>
+            <el-button
+              v-if="canWrite"
+              size="small"
+              :loading="syncingMarket"
+              @click="handleMarketSync"
+            >同步市場情報</el-button>
+            <el-button
+              v-if="canWrite"
+              size="small"
+              plain
+              @click="openCampusDialog"
+            >設定園所中心點</el-button>
           </div>
         </div>
 
-        <!-- 2. 生活圈 KPI（帶百分比 + 進度條） -->
-        <div class="kpi-row area-kpi-row">
-          <el-card
-            v-for="band in distanceBandKPI"
-            :key="band.label"
-            class="kpi-card area-band-card"
-            :class="areaBandCardClass(band.label)"
-            shadow="hover"
-          >
-            <div class="area-band-top">
-              <div class="kpi-value">{{ band.visit }}</div>
-              <div class="area-band-pct">
-                {{ distanceBandTotal ? `${Math.round(band.visit / distanceBandTotal * 100)}%` : '—' }}
+        <!-- 2. KPI 卡片列 -->
+        <div class="area-kpi-row">
+          <div class="area-kpi-card">
+            <div class="area-kpi-value">{{ areaHotspotsSummary.geocoded_hotspots ?? 0 }}<span class="area-kpi-denom"> / {{ areaHotspotsSummary.records_with_address ?? 0 }}</span></div>
+            <div class="area-kpi-label">已定位地址</div>
+            <div class="area-kpi-sub">
+              <div class="area-kpi-bar-bg">
+                <div
+                  class="area-kpi-bar-fill area-kpi-bar-fill--blue"
+                  :style="{ width: areaHotspotsSummary.records_with_address > 0 ? `${Math.round(areaHotspotsSummary.geocoded_hotspots / areaHotspotsSummary.records_with_address * 100)}%` : '0%' }"
+                />
               </div>
             </div>
-            <div class="kpi-label">{{ band.label }}</div>
-            <div class="area-band-bar-track">
-              <div
-                class="area-band-bar-fill"
-                :style="{ width: distanceBandTotal ? `${(band.visit / distanceBandTotal * 100).toFixed(1)}%` : '0%' }"
-              />
-            </div>
-          </el-card>
+          </div>
+          <div class="area-kpi-card">
+            <div class="area-kpi-value">{{ areaActiveDistrictCount }}</div>
+            <div class="area-kpi-label">覆蓋行政區數</div>
+            <div class="area-kpi-sub area-kpi-sub--muted">近 90 天有來源紀錄</div>
+          </div>
         </div>
 
-        <!-- 3. 圖表（總覽先行） -->
+        <!-- 3. 雙圖表列 -->
         <div class="chart-row">
           <el-card class="chart-card">
             <template #header>各行政區 90 天來源量</template>
             <div class="chart-box">
               <Bar v-if="isChartTabActive('area') && areaBarData" :data="areaBarData" :options="horizBarOptions" />
+              <div v-else-if="!areaBarData" class="chart-empty">暫無行政區資料</div>
             </div>
           </el-card>
           <el-card class="chart-card">
-            <template #header>生活圈分佈</template>
+            <template #header>各行政區 90 天預繳率</template>
             <div class="chart-box">
-              <Doughnut v-if="isChartTabActive('area') && distanceDoughnutData" :data="distanceDoughnutData" :options="doughnutOptions" />
+              <Bar v-if="isChartTabActive('area') && areaDepositRateBarData" :data="areaDepositRateBarData" :options="areaRateBarOptions" />
+              <div v-else-if="!areaDepositRateBarData" class="chart-empty">暫無預繳率資料</div>
             </div>
           </el-card>
         </div>
@@ -303,11 +296,17 @@
           <template #header>
             <div class="area-table-header">
               <span>行政區比較表</span>
-              <span class="area-table-hint">點擊列篩選熱點圖</span>
+              <div style="display:flex; align-items:center; gap:10px">
+                <span v-if="selectedMarketDistrict" class="area-table-filter-tag">
+                  篩選中：{{ selectedMarketDistrict }}
+                  <el-button link size="small" @click="selectedMarketDistrict = ''">✕</el-button>
+                </span>
+                <span class="area-table-hint">點擊列篩選熱點圖</span>
+              </div>
             </div>
           </template>
           <el-table
-            :data="districtMarketRows"
+            :data="marketSnapshot.districts || []"
             border
             stripe
             size="small"
@@ -315,21 +314,39 @@
             style="cursor:pointer"
             @row-click="selectedMarketDistrict = selectedMarketDistrict === $event.district ? '' : $event.district"
           >
-            <el-table-column type="index" label="#" width="50" />
-            <el-table-column prop="district" label="行政區" width="100" />
-            <el-table-column prop="lead_count_30d" label="30 天來源" align="center" width="100" sortable />
-            <el-table-column prop="lead_count_90d" label="90 天來源" align="center" width="100" sortable />
-            <el-table-column prop="deposit_rate_90d" label="90 天預繳率" align="center" width="120" sortable>
-              <template #default="{ row }">{{ fmtRate(row.deposit_rate_90d) }}</template>
+            <el-table-column type="index" label="#" width="44" />
+            <el-table-column prop="district" label="行政區" min-width="90" />
+            <el-table-column prop="lead_count_30d" label="30 天" align="center" width="80" sortable />
+            <el-table-column prop="lead_count_90d" label="90 天" align="center" width="80" sortable />
+            <el-table-column prop="deposit_rate_90d" label="預繳率" align="center" min-width="130" sortable>
+              <template #default="{ row }">
+                <div class="rate-cell">
+                  <div class="rate-bar-bg">
+                    <div
+                      class="rate-bar-fill"
+                      :class="rateBarClass(row.deposit_rate_90d)"
+                      :style="{ width: `${Math.min(row.deposit_rate_90d, 100)}%` }"
+                    />
+                  </div>
+                  <span class="rate-label">{{ fmtRate(row.deposit_rate_90d) }}</span>
+                </div>
+              </template>
             </el-table-column>
-            <el-table-column prop="avg_travel_minutes" label="平均通勤" align="center" width="110" sortable>
-              <template #default="{ row }">{{ row.avg_travel_minutes != null ? `${row.avg_travel_minutes.toFixed(1)} 分` : '—' }}</template>
+            <el-table-column prop="avg_travel_minutes" label="平均通勤" align="center" width="100" sortable>
+              <template #default="{ row }">
+                <span
+                  v-if="row.avg_travel_minutes != null"
+                  class="travel-badge"
+                  :class="travelBadgeClass(row.avg_travel_minutes)"
+                >{{ row.avg_travel_minutes.toFixed(1) }} 分</span>
+                <span v-else class="text-muted">—</span>
+              </template>
             </el-table-column>
-            <el-table-column prop="population_density" label="人口密度" align="center" width="100" sortable>
+            <el-table-column prop="population_density" label="人口密度" align="center" width="95" sortable>
               <template #default="{ row }">{{ row.population_density != null ? row.population_density.toFixed(1) : '—' }}</template>
             </el-table-column>
-            <el-table-column prop="population_0_6" label="0-6 歲" align="center" width="100" sortable>
-              <template #default="{ row }">{{ row.population_0_6 ?? '—' }}</template>
+            <el-table-column prop="population_0_6" label="0-6 歲人口" align="center" width="100" sortable>
+              <template #default="{ row }">{{ row.population_0_6 != null ? row.population_0_6.toLocaleString() : '—' }}</template>
             </el-table-column>
           </el-table>
         </el-card>
@@ -360,7 +377,6 @@
             :nearby-schools-message="nearbySchoolsMessage"
             :fmt-pct="fmtPct"
             @sync="handleAreaHotspotSync"
-            @viewport-change="handleNearbyViewportChange"
             @set-as-campus="handleSetAsCampus"
           />
         </el-card>
@@ -1313,9 +1329,6 @@ const handleMarketSync = async () => {
   if (ok) areaLoaded.value = true
 }
 
-const handleNearbyViewportChange = async (bounds) => {
-  await fetchNearbySchools(bounds)
-}
 
 const openCampusDialog = () => {
   openCampusDialogAction()
@@ -1631,6 +1644,19 @@ const fmtPct = (deposit, visit) => {
   return (deposit / visit * 100).toFixed(1) + '%'
 }
 
+const rateBarClass = (rate) => {
+  if (rate >= 50) return 'rate-bar-fill--green'
+  if (rate >= 25) return 'rate-bar-fill--yellow'
+  return 'rate-bar-fill--red'
+}
+
+const travelBadgeClass = (minutes) => {
+  if (minutes == null) return ''
+  if (minutes <= 10) return 'travel-badge--green'
+  if (minutes <= 20) return 'travel-badge--yellow'
+  return 'travel-badge--orange'
+}
+
 /** 將後端回傳的百分比數值格式化為字串，如 51.8 → "51.8%" */
 const fmtRate = (rate) => {
   if (rate == null || rate === 0) return '0%'
@@ -1919,14 +1945,6 @@ const noDepositGradeBarData = computed(() => {
 })
 
 // -------- 區域圖表 --------
-function travelBand(minutes) {
-  if (minutes == null) return '未明'
-  if (minutes <= 10) return '10 分鐘內'
-  if (minutes <= 15) return '11-15 分鐘'
-  if (minutes <= 20) return '16-20 分鐘'
-  return '20 分鐘以上'
-}
-
 const currentCampus = computed(() => ({
   ...createEmptyCampus(FALLBACK_SCHOOL_LAT, FALLBACK_SCHOOL_LNG),
   ...campusSetting.value,
@@ -1935,37 +1953,8 @@ const currentCampus = computed(() => ({
   campus_lng: marketSnapshot.value.campus?.campus_lng ?? campusSetting.value.campus_lng ?? FALLBACK_SCHOOL_LNG,
 }))
 
-const districtMarketRows = computed(() =>
-  (marketSnapshot.value.districts || []).map((row) => ({
-    ...row,
-    travel_band: travelBand(row.avg_travel_minutes),
-  }))
-)
-
-const distanceBandKPI = computed(() => {
-  const bands = ['10 分鐘內', '11-15 分鐘', '16-20 分鐘', '20 分鐘以上', '未明']
-  return bands.map((label) => ({
-    label,
-    visit: districtMarketRows.value
-      .filter((row) => row.travel_band === label)
-      .reduce((sum, row) => sum + (row.lead_count_90d || 0), 0),
-  }))
-})
-
-const distanceBandTotal = computed(() =>
-  distanceBandKPI.value.reduce((sum, band) => sum + (band.visit || 0), 0)
-)
-
-const areaBandCardClass = (label) => {
-  if (label === '10 分鐘內') return 'area-band-near'
-  if (label === '11-15 分鐘') return 'area-band-mid'
-  if (label === '16-20 分鐘') return 'area-band-far'
-  if (label === '20 分鐘以上') return 'area-band-xfar'
-  return 'area-band-unknown'
-}
-
 const areaBarData = computed(() => {
-  const rows = districtMarketRows.value.filter((row) => row.district !== '未填寫')
+  const rows = (marketSnapshot.value.districts || []).filter((row) => row.district !== '未填寫')
   if (!rows.length) return null
   return {
     labels: rows.map((row) => row.district),
@@ -1978,13 +1967,50 @@ const areaBarData = computed(() => {
   }
 })
 
-const distanceDoughnutData = computed(() => ({
-  labels: distanceBandKPI.value.map((item) => item.label),
-  datasets: [{
-    data: distanceBandKPI.value.map((item) => item.visit),
-    backgroundColor: ['#2f855a', '#52b788', '#f4a261', '#e76f51', '#a0aec0'],
-  }],
+const areaDepositRateBarData = computed(() => {
+  const rows = (marketSnapshot.value.districts || [])
+    .filter((row) => row.district !== '未填寫' && (row.lead_count_90d || 0) > 0)
+  if (!rows.length) return null
+  return {
+    labels: rows.map((row) => row.district),
+    datasets: [{
+      label: '90 天預繳率',
+      data: rows.map((row) => row.deposit_rate_90d || 0),
+      backgroundColor: rows.map((row) => {
+        const r = row.deposit_rate_90d || 0
+        if (r >= 50) return '#22c55e'
+        if (r >= 25) return '#f59e0b'
+        return '#f87171'
+      }),
+      borderRadius: 4,
+    }],
+  }
+})
+
+const areaRateBarOptions = computed(() => ({
+  ...commonChartOptions,
+  indexAxis: 'y',
+  plugins: {
+    legend: { display: false },
+    tooltip: {
+      callbacks: {
+        label: (ctx) => ` ${Number(ctx.raw).toFixed(1)}%`,
+      },
+    },
+  },
+  scales: {
+    x: {
+      min: 0,
+      max: 100,
+      ticks: { callback: (v) => `${v}%` },
+    },
+  },
 }))
+
+const areaActiveDistrictCount = computed(() =>
+  (marketSnapshot.value.districts || []).filter((r) => r.district !== '未填寫' && (r.lead_count_90d || 0) > 0).length
+)
+
 
 // -------- Chart options --------
 const truncateChartLabel = (label, max = 12) => (
@@ -2308,49 +2334,6 @@ const doughnutOptions = {
   color: #94A3B8;
 }
 
-/* -------- KPI 生活圈進度條 -------- */
-.area-kpi-row {
-  margin-bottom: 16px;
-}
-.area-band-card {
-  border-left: 4px solid #40916c;
-}
-.area-band-near  { border-left-color: #2f855a; }
-.area-band-mid   { border-left-color: #52b788; }
-.area-band-far   { border-left-color: #f4a261; }
-.area-band-xfar  { border-left-color: #e76f51; }
-.area-band-unknown { border-left-color: #a0aec0; }
-
-.area-band-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 6px;
-}
-.area-band-pct {
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: #718096;
-}
-.area-band-bar-track {
-  margin-top: 6px;
-  height: 4px;
-  border-radius: 999px;
-  background: #e2e8f0;
-  overflow: hidden;
-}
-.area-band-bar-fill {
-  height: 100%;
-  border-radius: 999px;
-  background: currentColor;
-  transition: width 0.4s ease;
-}
-.area-band-near  .area-band-bar-fill { background: #2f855a; }
-.area-band-mid   .area-band-bar-fill { background: #52b788; }
-.area-band-far   .area-band-bar-fill { background: #f4a261; }
-.area-band-xfar  .area-band-bar-fill { background: #e76f51; }
-.area-band-unknown .area-band-bar-fill { background: #a0aec0; }
-
 /* -------- 園所座標狀態 -------- */
 .area-campus-coord-warn {
   color: #c05621 !important;
@@ -2370,6 +2353,120 @@ const doughnutOptions = {
   color: #276749;
 }
 
+/* -------- 區域 KPI 卡片 -------- */
+.area-kpi-row {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+@media (max-width: 560px) {
+  .area-kpi-row { grid-template-columns: 1fr; }
+}
+
+.area-kpi-card {
+  background: #fff;
+  border: 1px solid #E2E8F0;
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.area-kpi-value {
+  font-family: 'Fira Code', ui-monospace, monospace;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1E293B;
+  line-height: 1.2;
+}
+.area-kpi-denom {
+  font-size: 0.85rem;
+  font-weight: 400;
+  color: #94A3B8;
+}
+.area-kpi-label {
+  font-size: 0.75rem;
+  color: #64748B;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.area-kpi-sub {
+  margin-top: 6px;
+}
+.area-kpi-sub--muted {
+  font-size: 0.72rem;
+  color: #94A3B8;
+}
+.area-kpi-bar-bg {
+  height: 5px;
+  background: #E2E8F0;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.area-kpi-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+.area-kpi-bar-fill--blue { background: #3B82F6; }
+
+/* -------- 預繳率進度條 -------- */
+.rate-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.rate-bar-bg {
+  flex: 1;
+  height: 6px;
+  background: #F1F5F9;
+  border-radius: 3px;
+  overflow: hidden;
+  min-width: 40px;
+}
+.rate-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+.rate-bar-fill--green  { background: #22c55e; }
+.rate-bar-fill--yellow { background: #f59e0b; }
+.rate-bar-fill--red    { background: #f87171; }
+.rate-label {
+  font-size: 0.8rem;
+  font-family: 'Fira Code', ui-monospace, monospace;
+  color: #1E293B;
+  white-space: nowrap;
+  min-width: 42px;
+  text-align: right;
+}
+
+/* -------- 通勤時間 badge -------- */
+.travel-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.travel-badge--green  { background: #DCFCE7; color: #15803D; }
+.travel-badge--yellow { background: #FEF9C3; color: #A16207; }
+.travel-badge--orange { background: #FFEDD5; color: #C2410C; }
+.text-muted { color: #CBD5E1; }
+
+.chart-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #94A3B8;
+  font-size: 0.85rem;
+}
+
 /* -------- 行政區比較表 -------- */
 .area-table-header {
   display: flex;
@@ -2381,6 +2478,18 @@ const doughnutOptions = {
   font-size: 0.75rem;
   color: #a0aec0;
   font-weight: 400;
+}
+.area-table-filter-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 8px 2px 10px;
+  background: #EFF6FF;
+  border: 1px solid #BFDBFE;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  color: #1D4ED8;
+  font-weight: 600;
 }
 :deep(.district-row-selected td) {
   background: #f0fff4 !important;

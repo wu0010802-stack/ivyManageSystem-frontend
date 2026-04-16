@@ -32,3 +32,8 @@ export const updateGradeTargets = (payload) => api.put('/config/grade-targets', 
 export const getPositionSalary = () => api.get('/config/position-salary')
 
 export const updatePositionSalary = (data) => api.put('/config/position-salary', data)
+
+export const comparePositionSalary = () => api.get('/config/position-salary/compare')
+
+export const syncPositionSalary = (employeeIds = []) =>
+  api.post('/config/position-salary/sync', { employee_ids: employeeIds })

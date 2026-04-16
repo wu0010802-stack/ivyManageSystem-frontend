@@ -14,11 +14,13 @@ import { getCurrentAcademicTerm, normalizeSchoolYear, buildSchoolYearOptions } f
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Delete, Edit, Plus, RefreshRight } from '@element-plus/icons-vue'
 import { useClassroomStore } from '@/stores/classroom'
+import { useAcademicTermStore } from '@/stores/academicTerm'
 import { hasPermission } from '@/utils/auth'
 import { apiError } from '@/utils/error'
 import ClassroomStudentDrawer from '@/components/classroom/ClassroomStudentDrawer.vue'
 
 const classroomStore = useClassroomStore()
+const termStore = useAcademicTermStore()
 const currentAcademicTerm = getCurrentAcademicTerm()
 const classrooms = ref([])
 const grades = ref([])
@@ -40,8 +42,14 @@ const drawerClassroom = ref(null)
 const canWrite = hasPermission('CLASSROOMS_WRITE')
 const canReadStudents = hasPermission('STUDENTS_READ')
 
-const filterSchoolYear = ref(currentAcademicTerm.school_year)
-const filterSemester = ref(currentAcademicTerm.semester)
+const filterSchoolYear = computed({
+  get: () => termStore.school_year,
+  set: (val) => { termStore.school_year = val },
+})
+const filterSemester = computed({
+  get: () => termStore.semester,
+  set: (val) => { termStore.semester = val },
+})
 const semesterOptions = [
   { label: '上學期（8 月 - 1 月）', value: 1 },
   { label: '下學期（2 月 - 7 月）', value: 2 },

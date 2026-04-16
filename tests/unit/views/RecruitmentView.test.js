@@ -74,6 +74,9 @@ vi.mock('@/api/recruitment', () => ({
   getMonths: vi.fn(() => Promise.resolve({ data: [] })),
   addMonth: vi.fn(),
   deleteMonth: vi.fn(),
+  getGovKindergartens: vi.fn(() => Promise.resolve({ data: { schools: [], total: 0 } })),
+  syncGovKindergartens: vi.fn(),
+  getGovKindergartensSyncStatus: vi.fn(() => Promise.resolve({ data: { sync_in_progress: false } })),
 }))
 
 vi.mock('@/utils/error', () => ({
@@ -522,7 +525,7 @@ describe('RecruitmentView', () => {
     expect(getRecruitmentAddressHotspots).toHaveBeenCalledWith({ limit: 200 })
     expect(wrapper.vm.currentCampus.campus_name).toBe('本園')
     expect(wrapper.vm.selectedMarketDistrict).toBe('')
-    expect(wrapper.vm.districtMarketRows[0]).toMatchObject({
+    expect(wrapper.vm.marketSnapshot.districts[0]).toMatchObject({
       district: '三民區',
       lead_count_90d: 2,
       population_density: 1234.5,

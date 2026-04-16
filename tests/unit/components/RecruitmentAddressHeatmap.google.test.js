@@ -25,6 +25,23 @@ const ElTag = defineComponent({
   },
 })
 
+const ElSelect = defineComponent({
+  name: 'ElSelect',
+  props: ['modelValue', 'placeholder', 'size', 'clearable'],
+  emits: ['update:modelValue', 'change'],
+  setup(_props, { slots }) {
+    return () => h('select', { class: 'el-select' }, slots.default?.())
+  },
+})
+
+const ElOption = defineComponent({
+  name: 'ElOption',
+  props: ['label', 'value'],
+  setup(props) {
+    return () => h('option', { value: props.value }, props.label)
+  },
+})
+
 const flushPromises = async () => {
   await Promise.resolve()
   await Promise.resolve()
@@ -36,6 +53,8 @@ const installGoogleMapsMock = () => {
   const maps = {}
 
   maps.SymbolPath = { CIRCLE: 'CIRCLE' }
+  maps.Point = vi.fn(function MockPoint(x, y) { this.x = x; this.y = y })
+  maps.Size = vi.fn(function MockSize(w, h) { this.width = w; this.height = h })
   maps.LatLngBounds = vi.fn(function MockLatLngBounds() {
     this.extend = vi.fn()
   })
@@ -147,7 +166,7 @@ describe('RecruitmentAddressHeatmap Google Maps mode', () => {
         nearbySchoolsMessage: '',
       },
       global: {
-        components: { ElButton, ElEmpty, ElTag },
+        components: { ElButton, ElEmpty, ElTag, ElSelect, ElOption },
       },
     })
 
@@ -157,7 +176,7 @@ describe('RecruitmentAddressHeatmap Google Maps mode', () => {
     expect(wrapper.find('.heatmap-map').exists()).toBe(true)
     expect(maps.Map).toHaveBeenCalledTimes(1)
     expect(maps.Marker).toHaveBeenCalled()
-    expect(maps.Circle).toHaveBeenCalled()
+    // 新版改用 Marker + SVG icon 取代 Circle，不再呼叫 mapsApi.Circle
     expect(wrapper.text()).toContain('附近幼兒園')
     expect(wrapper.emitted('viewport-change')?.at(-1)?.[0]).toEqual({
       south: 22.62,

@@ -119,14 +119,24 @@
           <div v-else-if="!rosterLoading" class="empty-hint">暫無資料</div>
         </div>
       </el-tab-pane>
+
+      <!-- Tab 3：獎金達成 -->
+      <el-tab-pane v-if="showBonusTab" label="獎金達成" name="bonus">
+        <BonusDashboard v-if="activeTab === 'bonus'" />
+      </el-tab-pane>
     </el-tabs>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, defineAsyncComponent } from 'vue'
+import { ref, computed, onMounted, watch, defineAsyncComponent } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getEnrollmentStats, getEnrollmentOptions, getEnrollmentRoster } from '@/api/studentEnrollment'
+import { hasPermission } from '@/utils/auth'
+import BonusDashboard from '@/components/enrollment/BonusDashboard.vue'
+
+const showBonusTab = computed(() => hasPermission('SALARY_READ'))
+import { useAcademicTermStore } from '@/stores/academicTerm'
 import { apiError } from '@/utils/error'
 import EnrollmentRosterTable from '@/components/enrollment/EnrollmentRosterTable.vue'
 
@@ -154,13 +164,22 @@ const DoughnutChart = defineAsyncComponent(() =>
 // ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
+const termStore = useAcademicTermStore()
 const loading = ref(false)
 const rosterLoading = ref(false)
 const stats = ref(null)
 const roster = ref(null)
 const termOptions = ref([])
-const selectedTerm = ref(null)
 const activeTab = ref('stats')
+
+// selectedTerm 與 termStore 雙向同步
+const selectedTerm = computed({
+  get: () => `${termStore.school_year}-${termStore.semester}`,
+  set: (val) => {
+    const [sy, sem] = val.split('-').map(Number)
+    termStore.setTerm(sy, sem)
+  },
+})
 
 // ---------------------------------------------------------------------------
 // Fetch
@@ -169,20 +188,24 @@ const fetchOptions = async () => {
   try {
     const res = await getEnrollmentOptions()
     termOptions.value = res.data
-    if (termOptions.value.length && !selectedTerm.value) {
+    // 如果 store 的學期不在選項清單裡，自動切換到最近一筆
+    const key = selectedTerm.value
+    const found = termOptions.value.some(
+      (o) => `${o.school_year}-${o.semester}` === key,
+    )
+    if (!found && termOptions.value.length) {
       const first = termOptions.value[0]
-      selectedTerm.value = `${first.school_year}-${first.semester}`
+      termStore.setTerm(first.school_year, first.semester)
     }
   } catch (e) {
     ElMessage.error(apiError(e, '載入學年選項失敗'))
   }
 }
 
-const termParams = () => {
-  if (!selectedTerm.value) return {}
-  const [sy, sem] = selectedTerm.value.split('-')
-  return { school_year: parseInt(sy), semester: parseInt(sem) }
-}
+const termParams = () => ({
+  school_year: termStore.school_year,
+  semester: termStore.semester,
+})
 
 const fetchStats = async () => {
   loading.value = true
@@ -208,9 +231,15 @@ const fetchRoster = async () => {
   }
 }
 
-const onTermChange = () => {
+// selectedTerm 變化時（含從其他頁面同步過來）自動刷新
+watch(selectedTerm, () => {
+  roster.value = null // 學期變了，清除舊花名冊
   if (activeTab.value === 'stats') fetchStats()
   else fetchRoster()
+})
+
+const onTermChange = () => {
+  // 由 watch(selectedTerm) 處理，此處保留供 @change 呼叫
 }
 
 const onRefresh = () => {
@@ -230,6 +259,7 @@ const printRoster = () => {
 
 onMounted(async () => {
   await fetchOptions()
+  // watch 不會在 mount 時觸發，手動拉一次
   await fetchStats()
 })
 

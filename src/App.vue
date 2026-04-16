@@ -1,13 +1,20 @@
 
 <script setup>
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import AdminLayout from './layouts/AdminLayout.vue'
+import { applyPageTitle } from './utils/pageTitle'
 
 const route = useRoute()
 const isPortalRoute = computed(() => route.path.startsWith('/portal'))
 const isLoginPage = computed(() => route.path === '/login')
 const isPublicRoute = computed(() => route.path.startsWith('/public'))
+
+watch(
+  () => [route.path, route.meta?.title, route.meta?.portal, route.meta?.noAuth],
+  () => applyPageTitle(route),
+  { immediate: true }
+)
 </script>
 
 <template>

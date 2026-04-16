@@ -2,9 +2,9 @@
 <template>
   <el-aside :width="isMobile ? '260px' : (isCollapse ? '64px' : '260px')" class="admin-sidebar" :class="{ 'is-collapsed': isCollapse && !isMobile, 'sidebar-mobile': isMobile, 'sidebar-mobile-open': isMobile && mobileOpen, 'sidebar-mobile-hidden': isMobile && !mobileOpen }">
     <div class="logo-container">
-      <div class="logo-icon">IM</div>
+      <img src="/pwa-64x64.png" class="logo-icon-img" alt="IVY" />
       <transition name="fade">
-        <span v-if="!isCollapse" class="logo-text">Ivy Manager</span>
+        <span v-if="!isCollapse" class="logo-text">常春藤管理系統</span>
       </transition>
     </div>
     
@@ -37,8 +37,20 @@
         <el-sub-menu v-if="hasVisibleLeaveItems" index="group-leave">
           <template #title>
             <el-icon><Clock /></el-icon>
-            <span>假勤管理</span>
+            <span>人事薪資</span>
           </template>
+          <el-menu-item v-if="canView.EMPLOYEES_READ" index="/employees">
+            <el-icon><User /></el-icon>
+            <template #title>員工管理</template>
+          </el-menu-item>
+          <el-menu-item v-if="canView.SALARY_READ" index="/salary">
+            <el-icon><Money /></el-icon>
+            <template #title>薪資管理</template>
+          </el-menu-item>
+          <el-menu-item v-if="canView.SALARY_READ" index="/gov-reports">
+            <el-icon><Files /></el-icon>
+            <template #title>政府申報匯出</template>
+          </el-menu-item>
           <el-menu-item v-if="canView.ATTENDANCE_READ" index="/attendance">
             <el-icon><Clock /></el-icon>
             <template #title>出勤管理</template>
@@ -58,26 +70,6 @@
           <el-menu-item v-if="canView.CALENDAR" index="/calendar">
             <el-icon><Calendar /></el-icon>
             <template #title>行事曆</template>
-          </el-menu-item>
-        </el-sub-menu>
-
-        <!-- 人事薪資 -->
-        <el-sub-menu v-if="hasVisibleHrItems" index="group-hr">
-          <template #title>
-            <el-icon><User /></el-icon>
-            <span>人事薪資</span>
-          </template>
-          <el-menu-item v-if="canView.EMPLOYEES_READ" index="/employees">
-            <el-icon><User /></el-icon>
-            <template #title>員工管理</template>
-          </el-menu-item>
-          <el-menu-item v-if="canView.SALARY_READ" index="/salary">
-            <el-icon><Money /></el-icon>
-            <template #title>薪資管理</template>
-          </el-menu-item>
-          <el-menu-item v-if="canView.SALARY_READ" index="/gov-reports">
-            <el-icon><Files /></el-icon>
-            <template #title>政府申報匯出</template>
           </el-menu-item>
         </el-sub-menu>
 
@@ -111,6 +103,14 @@
             <el-icon><CreditCard /></el-icon>
             <template #title>學費管理</template>
           </el-menu-item>
+        </el-sub-menu>
+
+        <!-- 園務統計 -->
+        <el-sub-menu v-if="hasVisibleStatsItems" index="group-stats">
+          <template #title>
+            <el-icon><TrendCharts /></el-icon>
+            <span>園務統計</span>
+          </template>
           <el-menu-item v-if="canView.RECRUITMENT_READ" index="/recruitment">
             <el-icon><DataAnalysis /></el-icon>
             <template #title>招生統計</template>
@@ -118,6 +118,10 @@
           <el-menu-item v-if="canView.RECRUITMENT_READ" index="/recruitment-ivykids">
             <el-icon><Document /></el-icon>
             <template #title>官網報名</template>
+          </el-menu-item>
+          <el-menu-item v-if="canView.REPORTS" index="/reports">
+            <el-icon><Files /></el-icon>
+            <template #title>報表統計</template>
           </el-menu-item>
         </el-sub-menu>
 
@@ -130,10 +134,6 @@
           <el-menu-item v-if="canView.ANNOUNCEMENTS_READ" index="/announcements">
             <el-icon><Bell /></el-icon>
             <template #title>公告管理</template>
-          </el-menu-item>
-          <el-menu-item v-if="canView.REPORTS" index="/reports">
-            <el-icon><TrendCharts /></el-icon>
-            <template #title>報表統計</template>
           </el-menu-item>
           <el-menu-item v-if="canView.AUDIT_LOGS" index="/audit-logs">
             <el-icon><Document /></el-icon>
@@ -261,19 +261,22 @@ const activeMenu = computed(() => route.path)
 
 // 檢查子選單是否有任何可見項目
 const hasVisibleLeaveItems = computed(() =>
-  canView.value.ATTENDANCE_READ || canView.value.LEAVES_READ || canView.value.OVERTIME_READ || canView.value.MEETINGS || canView.value.SCHEDULE || canView.value.CALENDAR
-)
-
-const hasVisibleHrItems = computed(() =>
-  canView.value.EMPLOYEES_READ || canView.value.SALARY_READ
+  canView.value.EMPLOYEES_READ || canView.value.SALARY_READ ||
+  canView.value.ATTENDANCE_READ || canView.value.LEAVES_READ ||
+  canView.value.OVERTIME_READ || canView.value.MEETINGS ||
+  canView.value.SCHEDULE || canView.value.CALENDAR
 )
 
 const hasVisibleStudentItems = computed(() =>
-  canView.value.STUDENTS_READ || canView.value.CLASSROOMS_READ || canView.value.FEES_READ || canView.value.RECRUITMENT_READ
+  canView.value.STUDENTS_READ || canView.value.CLASSROOMS_READ || canView.value.FEES_READ
+)
+
+const hasVisibleStatsItems = computed(() =>
+  canView.value.RECRUITMENT_READ || canView.value.REPORTS
 )
 
 const hasVisibleAdminItems = computed(() =>
-  canView.value.ANNOUNCEMENTS_READ || canView.value.REPORTS || canView.value.AUDIT_LOGS
+  canView.value.ANNOUNCEMENTS_READ || canView.value.AUDIT_LOGS
 )
 
 const hasVisibleActivityItems = computed(() =>
@@ -321,17 +324,11 @@ const onMenuSelect = () => {
   padding: 0;
 }
 
-.logo-icon {
-  width: 32px;
-  height: 32px;
-  background: linear-gradient(135deg, var(--color-primary-soft) 0%, var(--color-primary) 100%);
+.logo-icon-img {
+  width: 36px;
+  height: 36px;
   border-radius: var(--radius-md);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: bold;
-  font-size: var(--text-base);
-  color: white;
+  object-fit: cover;
   flex-shrink: 0;
 }
 

@@ -8,7 +8,7 @@
  *   4. getAllowedRoutes 根據角色與 permissions 回傳正確清單
  */
 
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   getUserInfo,
   setUserInfo,
@@ -27,8 +27,10 @@ function buildPermissions(...permNames) {
 
 describe('登入 → 權限 → 路由整合流程', () => {
   beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: true })))
     clearAuth()
     localStorage.clear()
+    sessionStorage.clear()
   })
 
   // ── 未登入狀態 ─────────────────────────────────────────────────────────────

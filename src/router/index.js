@@ -1,5 +1,6 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
-import { isLoggedIn, canAccessRoute, getUserInfo, getAllowedRoutes } from '@/utils/auth'
+import { refreshSession } from '@/api/auth'
+import { isLoggedIn, canAccessRoute, getUserInfo, getAllowedRoutes, hasStoredUserInfo, setUserInfo, clearAuth } from '@/utils/auth'
 
 const router = createRouter({
     history: createWebHashHistory(),
@@ -343,10 +344,35 @@ const router = createRouter({
     ]
 })
 
+async function restoreSessionIfNeeded(to) {
+    const needsProtectedSession = Boolean(to.meta.requiresAuth) || (!to.meta.noAuth && !to.meta.portal)
+
+    if (!needsProtectedSession || isLoggedIn() || !hasStoredUserInfo()) {
+        return {
+            loggedIn: isLoggedIn(),
+            userInfo: getUserInfo(),
+        }
+    }
+
+    try {
+        const res = await refreshSession()
+        setUserInfo(res.data.user)
+        return {
+            loggedIn: true,
+            userInfo: getUserInfo(),
+        }
+    } catch {
+        clearAuth({ notifyServer: false })
+        return {
+            loggedIn: false,
+            userInfo: null,
+        }
+    }
+}
+
 // Auth guard
-router.beforeEach((to, from, next) => {
-    const loggedIn = isLoggedIn()
-    const userInfo = getUserInfo()
+router.beforeEach(async (to, from, next) => {
+    let { loggedIn, userInfo } = await restoreSessionIfNeeded(to)
 
     // 強制改密碼攔截：已登入且旗標為 true，且目標路由不是改密碼頁也不是登入頁
     if (loggedIn && userInfo?.must_change_password && !to.meta.mustChangePassword && !to.meta.noAuth) {

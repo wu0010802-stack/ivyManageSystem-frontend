@@ -1,7 +1,27 @@
 // Token 已改由後端 httpOnly Cookie 管理，JS 無法存取。
 // 保留函式簽名供向下相容，但不再操作 localStorage。
+const USER_INFO_KEY = 'userInfo'
+const SESSION_VALIDATED_AT_KEY = 'auth_session_validated_at'
+const SESSION_MAX_AGE_MS = 14 * 60 * 1000
+
 let cachedUserInfoRaw = null
 let cachedUserInfo = null
+
+function _setSessionValidatedAt(timestamp = Date.now()) {
+  sessionStorage.setItem(SESSION_VALIDATED_AT_KEY, String(timestamp))
+}
+
+function _getSessionValidatedAt() {
+  const raw = sessionStorage.getItem(SESSION_VALIDATED_AT_KEY)
+  if (!raw) return null
+
+  const parsed = Number(raw)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function _clearSessionValidatedAt() {
+  sessionStorage.removeItem(SESSION_VALIDATED_AT_KEY)
+}
 
 export function getToken() {
   return null // httpOnly Cookie，JS 無法讀取
@@ -16,7 +36,7 @@ export function removeToken() {
 }
 
 export function getUserInfo() {
-  const str = localStorage.getItem('userInfo')
+  const str = localStorage.getItem(USER_INFO_KEY)
   if (str === cachedUserInfoRaw) {
     return cachedUserInfo
   }
@@ -37,21 +57,30 @@ export function setUserInfo(info) {
   const serialized = JSON.stringify(info)
   cachedUserInfoRaw = serialized
   cachedUserInfo = info
-  localStorage.setItem('userInfo', serialized)
+  localStorage.setItem(USER_INFO_KEY, serialized)
+  _setSessionValidatedAt()
 }
 
-export function clearAuth() {
+export function hasStoredUserInfo() {
+  return !!localStorage.getItem(USER_INFO_KEY)
+}
+
+export function clearAuth(options = {}) {
+  const { notifyServer = true } = options
   cachedUserInfoRaw = null
   cachedUserInfo = null
-  localStorage.removeItem('userInfo')
+  localStorage.removeItem(USER_INFO_KEY)
+  _clearSessionValidatedAt()
   // 通知後端清除 httpOnly Cookie（fire-and-forget）
-  try {
-    const baseURL = import.meta.env?.VITE_API_BASE_URL || '/api'
-    fetch(`${baseURL}/auth/logout`, {
-      method: 'POST',
-      credentials: 'include',
-    }).catch(() => { /* silent */ })
-  } catch { /* silent */ }
+  if (notifyServer) {
+    try {
+      const baseURL = import.meta.env?.VITE_API_BASE_URL || '/api'
+      fetch(`${baseURL}/auth/logout`, {
+        method: 'POST',
+        credentials: 'include',
+      }).catch(() => { /* silent */ })
+    } catch { /* silent */ }
+  }
 }
 
 export function clearMustChangePassword() {
@@ -63,7 +92,12 @@ export function clearMustChangePassword() {
 }
 
 export function isLoggedIn() {
-  return !!getUserInfo()
+  if (!getUserInfo()) return false
+
+  const validatedAt = _getSessionValidatedAt()
+  if (!validatedAt) return false
+
+  return Date.now() - validatedAt < SESSION_MAX_AGE_MS
 }
 
 // 權限位元值對照表（讀寫分離版）

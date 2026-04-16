@@ -3,12 +3,14 @@ import { getToken, setToken, removeToken, getUserInfo, setUserInfo, clearAuth, i
 
 describe('auth utilities', () => {
     beforeEach(() => {
+        vi.clearAllMocks()
+        vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: true })))
         // 清除 localStorage 與模組層級快取：先呼叫 clearAuth 可同步重置 cache，
         // 再 clear 掉任何殘留的 localStorage 項目（clearAuth 只 removeItem 不 clear）。
         clearAuth()
         localStorage.clear()
-        vi.clearAllMocks()
-        vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: true })))
+        sessionStorage.clear()
+        fetch.mockClear()
     })
 
     describe('token 管理', () => {
@@ -56,6 +58,16 @@ describe('auth utilities', () => {
             expect(getUserInfo()).toBeNull()
             expect(fetch).toHaveBeenCalledTimes(1)
         })
+
+        it('notifyServer=false 時只清除本地狀態，不送出 logout 請求', () => {
+            setUserInfo({ id: 'E001', role: 'admin' })
+
+            clearAuth({ notifyServer: false })
+
+            expect(getUserInfo()).toBeNull()
+            expect(isLoggedIn()).toBe(false)
+            expect(fetch).not.toHaveBeenCalled()
+        })
     })
 
     describe('isLoggedIn', () => {
@@ -66,6 +78,12 @@ describe('auth utilities', () => {
         it('有 userInfo 時回傳 true', () => {
             setUserInfo({ id: 'E001', role: 'admin' })
             expect(isLoggedIn()).toBe(true)
+        })
+
+        it('只有 localStorage 殘留 userInfo、沒有當前 session 標記時回傳 false', () => {
+            localStorage.setItem('userInfo', JSON.stringify({ id: 'E001', role: 'admin' }))
+
+            expect(isLoggedIn()).toBe(false)
         })
     })
 })

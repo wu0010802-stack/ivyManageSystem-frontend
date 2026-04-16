@@ -151,6 +151,9 @@ onMounted(() => {
         <el-table-column label="考勤扣款" width="100">
           <template #default="scope">{{ money(scope.row.attendance_deduction) }}</template>
         </el-table-column>
+        <el-table-column label="請假扣款" width="100">
+          <template #default="scope">{{ money(scope.row.leave_deduction) }}</template>
+        </el-table-column>
         <el-table-column label="應發" width="110">
           <template #default="scope">{{ money(scope.row.gross_salary) }}</template>
         </el-table-column>

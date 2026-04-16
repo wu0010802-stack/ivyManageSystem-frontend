@@ -9,3 +9,5 @@ export const updateStudent = (id, data) => api.put(`/students/${id}`, data)
 export const graduateStudent = (id, data) => api.post(`/students/${id}/graduate`, data)
 
 export const bulkTransferStudents = (data) => api.post('/students/bulk-transfer', data)
+
+export const previewBonusImpact = (data) => api.post('/bonus-impact-preview', data)

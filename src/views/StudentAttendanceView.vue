@@ -12,7 +12,9 @@ import {
 } from 'chart.js'
 
 import { apiError } from '@/utils/error'
-import { useClassroomStore } from '@/stores/classroom'
+import { useAcademicTermStore } from '@/stores/academicTerm'
+import { getClassrooms } from '@/api/classrooms'
+import { getCurrentAcademicTerm, normalizeSchoolYear } from '@/utils/academic'
 import {
   batchSaveAttendance,
   getAttendanceOverview,
@@ -26,8 +28,30 @@ ChartJS.register(BarElement, CategoryScale, LinearScale, Tooltip, Legend)
 const STATUS_OPTIONS = ['出席', '缺席', '病假', '事假', '遲到']
 const TODAY = new Date().toISOString().slice(0, 10)
 
-const classroomStore = useClassroomStore()
-const classrooms = computed(() => classroomStore.classrooms)
+const termStore = useAcademicTermStore()
+const currentAcademicTerm = getCurrentAcademicTerm()
+
+const termOptions = computed(() => {
+  const { school_year: cy, semester: cs } = currentAcademicTerm
+  const semLabel = (s) => (s === 1 ? '上學期' : '下學期')
+  const prevTerm = cs === 1 ? { school_year: cy - 1, semester: 2 } : { school_year: cy, semester: 1 }
+  const nextTerm = cs === 1 ? { school_year: cy, semester: 2 } : { school_year: cy + 1, semester: 1 }
+  return [
+    { key: `${prevTerm.school_year}-${prevTerm.semester}`, ...prevTerm, label: `${prevTerm.school_year}學年度 ${semLabel(prevTerm.semester)}` },
+    { key: `${cy}-${cs}`, school_year: cy, semester: cs, label: `${cy}學年度 ${semLabel(cs)}（本學期）` },
+    { key: `${nextTerm.school_year}-${nextTerm.semester}`, ...nextTerm, label: `${nextTerm.school_year}學年度 ${semLabel(nextTerm.semester)}` },
+  ]
+})
+
+const selectedTermKey = computed({
+  get: () => `${termStore.school_year}-${termStore.semester}`,
+  set: (val) => {
+    const [y, s] = val.split('-').map(Number)
+    termStore.setTerm(y, s)
+  },
+})
+
+const termClassrooms = ref([])
 const activeTab = ref('overview')
 
 const overviewDate = ref(TODAY)
@@ -51,11 +75,24 @@ const monthlyData = ref(null)
 const monthlyLoading = ref(false)
 
 const classroomOptions = computed(() =>
-  classrooms.value.map((classroom) => ({
+  termClassrooms.value.map((classroom) => ({
     label: classroom.name,
     value: classroom.id,
   }))
 )
+
+const fetchTermClassrooms = async () => {
+  try {
+    const res = await getClassrooms({
+      school_year: normalizeSchoolYear(termStore.school_year),
+      semester: termStore.semester,
+      include_inactive: false,
+    })
+    termClassrooms.value = res.data
+  } catch {
+    termClassrooms.value = []
+  }
+}
 
 const overviewRows = computed(() => overviewData.value?.classrooms ?? [])
 const overviewTotals = computed(() => overviewData.value?.totals ?? {
@@ -169,7 +206,11 @@ const detailSummary = computed(() => {
 const fetchOverview = async () => {
   overviewLoading.value = true
   try {
-    const res = await getAttendanceOverview({ date: overviewDate.value })
+    const res = await getAttendanceOverview({
+      date: overviewDate.value,
+      school_year: termStore.school_year,
+      semester: termStore.semester,
+    })
     overviewData.value = res.data
   } catch (error) {
     ElMessage.error(apiError(error, '載入班級出席總覽失敗'))
@@ -340,9 +381,17 @@ watch(activeTab, (tab) => {
   if (tab === 'edit') fetchDaily()
 })
 
+watch(selectedTermKey, async () => {
+  await fetchTermClassrooms()
+  const firstId = termClassrooms.value[0]?.id ?? null
+  editClassroomId.value = firstId
+  monthlyClassroomId.value = firstId
+  await fetchOverview()
+})
+
 onMounted(async () => {
-  await classroomStore.fetchClassrooms()
-  const firstId = classrooms.value[0]?.id ?? null
+  await fetchTermClassrooms()
+  const firstId = termClassrooms.value[0]?.id ?? null
   if (!editClassroomId.value) editClassroomId.value = firstId
   if (!monthlyClassroomId.value) monthlyClassroomId.value = firstId
   await fetchOverview()
@@ -352,8 +401,18 @@ onMounted(async () => {
 <template>
   <div class="sa-page">
     <div class="page-header">
-      <h2>學生出席紀錄</h2>
-      <p class="page-subtitle">此頁主要查看各班出席狀況；點名編修保留為次要管理功能。</p>
+      <div>
+        <h2>學生出席紀錄</h2>
+        <p class="page-subtitle">此頁主要查看各班出席狀況；點名編修保留為次要管理功能。</p>
+      </div>
+      <el-select v-model="selectedTermKey" style="width: 220px">
+        <el-option
+          v-for="t in termOptions"
+          :key="t.key"
+          :label="t.label"
+          :value="t.key"
+        />
+      </el-select>
     </div>
 
     <el-tabs v-model="activeTab" class="main-tabs">
@@ -659,8 +718,16 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .page-subtitle {
-  margin-top: 8px;
+  margin-top: 4px;
   color: #64748b;
 }
 

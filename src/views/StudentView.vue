@@ -12,6 +12,7 @@ import { apiError } from '@/utils/error'
 import { downloadFile } from '@/utils/download'
 import { getCurrentAcademicTerm, normalizeSchoolYear, buildSchoolYearOptions } from '@/utils/academic'
 import { STUDENT_STATUS_TAG_OPTIONS } from '@/utils/student'
+import BonusImpactPreview from '@/components/students/BonusImpactPreview.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -27,6 +28,10 @@ const debouncedSearch = ref('')
 const activeTab = ref('active')  // 'active' | 'graduated'
 const transferDialogVisible = ref(false)
 const transferTargetClassroomId = ref(null)
+const transferSourceClassroomId = computed(() => {
+  if (!selectedStudents.value.length) return null
+  return selectedStudents.value[0].classroom_id ?? null
+})
 const showAllClassrooms = ref(false)
 const handledRouteActionKey = ref('')
 
@@ -625,6 +630,11 @@ onMounted(async () => {
           <el-input v-model="form.special_needs" type="textarea" :rows="2" placeholder="例: 語言發展遲緩、需輔助進食" />
         </el-form-item>
       </el-form>
+      <BonusImpactPreview
+        v-if="!isEdit && form.classroom_id"
+        operation="add"
+        :classroom-id="form.classroom_id"
+      />
       <template #footer>
         <span class="dialog-footer">
           <el-button @click="closeDialog">取消</el-button>
@@ -655,6 +665,11 @@ onMounted(async () => {
           />
         </el-form-item>
       </el-form>
+      <BonusImpactPreview
+        v-if="graduateTarget?.classroom_id"
+        operation="graduate"
+        :source-classroom-id="graduateTarget.classroom_id"
+      />
       <template #footer>
         <el-button @click="graduateDialogVisible = false">取消</el-button>
         <el-button type="warning" @click="submitGraduate">確認離園</el-button>
@@ -677,6 +692,13 @@ onMounted(async () => {
           </el-select>
         </el-form-item>
       </el-form>
+      <BonusImpactPreview
+        v-if="transferTargetClassroomId"
+        operation="transfer"
+        :classroom-id="transferTargetClassroomId"
+        :source-classroom-id="transferSourceClassroomId"
+        :student-count="selectedStudents.length"
+      />
       <template #footer>
         <el-button @click="transferDialogVisible = false">取消</el-button>
         <el-button type="primary" @click="submitTransfer">確認轉班</el-button>

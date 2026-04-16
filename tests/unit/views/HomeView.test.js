@@ -201,4 +201,42 @@ describe('HomeView', () => {
     await flushPromises()
     expect(getProbationAlerts).toHaveBeenCalledTimes(1)
   })
+
+  it('mount 時不應出現未解析的 Element Plus icon 警告', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const {
+      Calendar,
+      User,
+      Reading,
+      UserFilled,
+      More,
+      Select,
+      AlarmClock,
+      Warning,
+      EditPen,
+      CircleCheck,
+      Clock,
+      TrendCharts,
+      Setting,
+      CircleCheckFilled,
+      Location,
+      ...stubsWithoutIcons
+    } = globalConfig.stubs
+
+    shallowMount(HomeView, {
+      global: {
+        ...globalConfig,
+        stubs: stubsWithoutIcons,
+      },
+    })
+
+    await flushPromises()
+    await nextTick()
+    await flushPromises()
+
+    const warnings = warnSpy.mock.calls.flat().join('\n')
+    expect(warnings).not.toContain('Failed to resolve component')
+
+    warnSpy.mockRestore()
+  })
 })

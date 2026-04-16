@@ -4,7 +4,7 @@ import api from './index'
 export const getActivityStats = () => api.get('/activity/stats')
 export const getActivityStatsSummary = () => api.get('/activity/stats-summary')
 export const getActivityStatsCharts = () => api.get('/activity/stats-charts')
-export const getActivityDashboardTable = () => api.get('/activity/dashboard-table')
+export const getActivityDashboardTable = (params) => api.get('/activity/dashboard-table', { params })
 
 // 報名
 export const getRegistrations = (params) => api.get('/activity/registrations', { params })
@@ -57,8 +57,8 @@ export const getChanges = (params) => api.get('/activity/changes', { params })
 export const getClassOptions = () => api.get('/activity/class-options')
 
 // 統計表匯出
-export const exportDashboardTable = () =>
-  api.get('/activity/dashboard-table/export', { responseType: 'blob' })
+export const exportDashboardTable = (params) =>
+  api.get('/activity/dashboard-table/export', { params, responseType: 'blob' })
 
 // Portal - 才藝查詢
 export const getPortalActivityRegistrations = () =>

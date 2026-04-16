@@ -74,7 +74,7 @@ api.interceptors.response.use(
 
 function _redirectToLogin() {
     const isPortal = window.location.hash.includes('/portal')
-    clearAuth()
+    clearAuth({ notifyServer: false })
     if (isPortal) {
         window.location.hash = '#/portal/login'
     } else {

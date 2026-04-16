@@ -85,7 +85,7 @@
 import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Monitor, Search } from '@element-plus/icons-vue'
+import { Monitor, Search, Setting, SwitchButton, User, ArrowDown } from '@element-plus/icons-vue'
 import { getEmployees } from '@/api/employees'
 import { impersonate } from '@/api/auth'
 import { getUserInfo, clearAuth, setUserInfo } from '@/utils/auth'

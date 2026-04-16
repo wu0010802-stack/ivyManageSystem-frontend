@@ -108,8 +108,6 @@ export function useRecruitmentArea({
   const selectedMarketDistrict = ref('')
   const campusDialogVisible = ref(false)
   const campusForm = ref(createEmptyCampus(fallbackCampusLat, fallbackCampusLng))
-  const nearbySchoolCache = new Map()
-  const activeNearbyViewportSignature = ref('')
 
   const reportError = (error, fallback) => {
     if (notifyError) notifyError(apiError(error, fallback))
@@ -223,35 +221,11 @@ export function useRecruitmentArea({
     return normalized
   }
 
-  const fetchNearbySchools = async (bounds = {}) => {
-    const signature = buildNearbyViewportSignature(bounds)
-    if (!signature) return false
-    if (signature === activeNearbyViewportSignature.value && nearbySchoolCache.has(signature)) {
-      applyNearbySchoolState(nearbySchoolCache.get(signature))
-      return true
-    }
-
-    const cached = nearbySchoolCache.get(signature)
-    if (cached) {
-      applyNearbySchoolState(cached)
-      activeNearbyViewportSignature.value = signature
-      return true
-    }
-
+  const fetchNearbySchools = async () => {
     loadingNearbySchools.value = true
-    activeNearbyViewportSignature.value = signature
     try {
-      const params = {
-        south: Number(bounds.south),
-        west: Number(bounds.west),
-        north: Number(bounds.north),
-        east: Number(bounds.east),
-        zoom: Math.round(Number(bounds.zoom)),
-      }
-      const response = await getRecruitmentNearbyKindergartens(params)
-      const normalized = applyNearbySchoolState(response.data)
-      nearbySchoolCache.set(signature, normalized)
-      activeNearbyViewportSignature.value = signature
+      const response = await getRecruitmentNearbyKindergartens()
+      applyNearbySchoolState(response.data)
       return true
     } catch (error) {
       nearbySchools.value = []
@@ -268,6 +242,7 @@ export function useRecruitmentArea({
       fetchCampusSetting(),
       fetchAreaHotspots(),
       fetchMarketIntelligence(),
+      fetchNearbySchools(),
     ])
     return campusOk && hotspotOk && marketOk
   }
@@ -393,14 +368,13 @@ export function useRecruitmentArea({
     nearbySchools,
     nearbySchoolsAvailable,
     nearbySchoolsMessage,
-    activeNearbyViewportSignature,
     selectedMarketDistrict,
     campusDialogVisible,
     campusForm,
     fetchAreaHotspots,
     fetchCampusSetting,
     fetchMarketIntelligence,
-    fetchNearbySchools,
+    fetchNearbySchools,  // 供本園座標更新後手動重新整理用
     loadAreaTab,
     handleAreaHotspotSync,
     handleMarketSync,

@@ -324,7 +324,7 @@ async function loadSessions() {
     if (filterStartDate.value) params.start_date = filterStartDate.value
     if (filterEndDate.value) params.end_date = filterEndDate.value
     const res = await getAttendanceSessions(params)
-    sessions.value = res.data
+    sessions.value = res.data?.items ?? (Array.isArray(res.data) ? res.data : [])
   } catch {
     ElMessage.error('載入場次失敗')
   } finally {

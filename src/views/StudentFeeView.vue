@@ -519,6 +519,16 @@ function searchRecords() {
   fetchRecords()
 }
 
+// 學生姓名即時搜尋（300ms debounce）
+let _feeSearchTimer = null
+watch(() => recordFilter.value.student_name, (val) => {
+  clearTimeout(_feeSearchTimer)
+  _feeSearchTimer = setTimeout(() => {
+    recordPage.value = 1
+    fetchRecords()
+  }, 300)
+})
+
 function resetRecordFilters() {
   recordFilter.value = emptyRecordFilter()
   recordPage.value = 1
@@ -586,12 +596,19 @@ watch(activeTab, (val) => {
 
 watch(() => recordFilter.value.period, () => {
   const selectedId = recordFilter.value.fee_item_id
-  if (!selectedId) return
-  const stillAvailable = recordFeeItemOptions.value.some((item) => item.id === selectedId)
-  if (!stillAvailable) {
-    recordFilter.value.fee_item_id = null
+  if (selectedId) {
+    const stillAvailable = recordFeeItemOptions.value.some((item) => item.id === selectedId)
+    if (!stillAvailable) {
+      recordFilter.value.fee_item_id = null
+    }
   }
+  searchRecords()
 })
+
+// 下拉篩選即時觸發搜尋
+watch(() => recordFilter.value.status, () => searchRecords())
+watch(() => recordFilter.value.fee_item_id, () => searchRecords())
+watch(() => recordFilter.value.classroom_name, () => searchRecords())
 
 onMounted(() => {
   fetchItems()

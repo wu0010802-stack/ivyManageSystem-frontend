@@ -1,4 +1,13 @@
 <script setup>
+import {
+  Calendar,
+  CircleCheckFilled,
+  Clock,
+  Location,
+  Setting,
+  TrendCharts,
+  User,
+} from '@element-plus/icons-vue'
 import StatCard from '@/components/common/StatCard.vue'
 import { useDashboardSections } from '@/composables'
 

@@ -5,6 +5,7 @@ import { getIncidents, createIncident, updateIncident, deleteIncident } from '@/
 import { getAssessments, createAssessment, updateAssessment, deleteAssessment } from '@/api/studentAssessments'
 import { useClassroomStore } from '@/stores/classroom'
 import { getStudents } from '@/api/students'
+import StudentChangeLogs from '@/components/student/StudentChangeLogs.vue'
 import {
   INCIDENT_TYPES, SEVERITIES, INCIDENT_TYPE_TAG as TYPE_TAG, SEVERITY_TAG,
   ASSESSMENT_TYPES, DOMAINS, RATINGS, RATING_TAG,
@@ -475,6 +476,11 @@ onMounted(() => {
             />
           </div>
         </el-card>
+      </el-tab-pane>
+
+      <!-- ════════════════ 異動紀錄 Tab ════════════════ -->
+      <el-tab-pane label="異動紀錄">
+        <StudentChangeLogs />
       </el-tab-pane>
     </el-tabs>
 

@@ -24,9 +24,21 @@ const currentStudentData = ref(null)
 const graduateDialogVisible = ref(false)
 const graduateTarget = ref(null)
 
-const filteredStudents = computed(() => {
-  const students = props.classroom?.students || []
-  return students.filter((s) => {
+const showInactive = ref(false)
+
+// is_active = null 也算在讀（與後端邏輯一致）
+const activeStudents = computed(() =>
+  (props.classroom?.students || []).filter((s) => s.is_active !== false),
+)
+const inactiveStudents = computed(() =>
+  (props.classroom?.students || []).filter((s) => s.is_active === false),
+)
+
+const visibleStudents = computed(() => {
+  const base = showInactive.value
+    ? (props.classroom?.students || [])
+    : activeStudents.value
+  return base.filter((s) => {
     const matchSearch = !studentSearch.value
       || s.name.includes(studentSearch.value)
       || s.student_id?.includes(studentSearch.value)
@@ -35,8 +47,11 @@ const filteredStudents = computed(() => {
   })
 })
 
+// 相容舊程式碼（template 中仍用 filteredStudents）
+const filteredStudents = visibleStudents
+
 const studentStats = computed(() => {
-  const students = props.classroom?.students || []
+  const students = activeStudents.value
   return students.reduce(
     (acc, s) => {
       if (s.gender === '男') acc.maleCount++
@@ -117,7 +132,7 @@ const close = () => emit('update:visible', false)
         <!-- 統計 Stat Pills -->
         <div class="stat-pills-row">
           <div class="stat-pill stat-pill--primary">
-            <div class="stat-pill-value">{{ classroom.current_count }} / {{ classroom.capacity }}</div>
+            <div class="stat-pill-value">{{ activeStudents.length }} / {{ classroom.capacity }}</div>
             <div class="stat-pill-label">在讀人數</div>
           </div>
           <div class="stat-pill stat-pill--info">
@@ -140,7 +155,7 @@ const close = () => emit('update:visible', false)
             v-model="studentSearch"
             placeholder="搜尋姓名或學號"
             clearable
-            style="width: 220px"
+            style="width: 200px"
           >
             <template #prefix><el-icon><Search /></el-icon></template>
           </el-input>
@@ -149,6 +164,13 @@ const close = () => emit('update:visible', false)
             <el-radio-button value="男">男</el-radio-button>
             <el-radio-button value="女">女</el-radio-button>
           </el-radio-group>
+          <el-switch
+            v-if="inactiveStudents.length > 0"
+            v-model="showInactive"
+            size="small"
+            :active-text="`含離班 ${inactiveStudents.length} 人`"
+            inactive-text=""
+          />
         </div>
 
         <!-- 學生表格 -->
@@ -167,18 +189,20 @@ const close = () => emit('update:visible', false)
               :data="filteredStudents"
               size="small"
               style="width: 100%"
+              :row-class-name="({ row }) => row.is_active === false ? 'row-inactive' : ''"
             >
               <el-table-column width="50" align="center">
                 <template #default="{ row }">
                   <el-avatar
                     :size="28"
-                    :style="{ backgroundColor: avatarBgColor(row.gender), fontSize: '12px', flexShrink: 0 }"
+                    :style="{ backgroundColor: row.is_active === false ? '#c0c4cc' : avatarBgColor(row.gender), fontSize: '12px', flexShrink: 0 }"
                   >{{ row.name?.[0] }}</el-avatar>
                 </template>
               </el-table-column>
               <el-table-column label="姓名" min-width="80">
                 <template #default="{ row }">
                   <span>{{ row.name }}</span>
+                  <el-tag v-if="row.is_active === false" size="small" type="info" style="margin-left: 4px">{{ row.status || '已離班' }}</el-tag>
                   <el-tooltip
                     v-if="row.allergy || row.medication || row.special_needs"
                     placement="top"
@@ -343,5 +367,9 @@ const close = () => emit('update:visible', false)
 
 .text-muted {
   color: #909399;
+}
+
+:deep(.row-inactive) td {
+  color: #c0c4cc;
 }
 </style>

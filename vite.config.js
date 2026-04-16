@@ -64,9 +64,9 @@ export default defineConfig({
             includeAssets: ['favicon.ico', 'apple-touch-icon-180x180.png', 'logo.svg'],
 
             manifest: {
-                name: '常春藤教師入口',
-                short_name: '常春藤 Portal',
-                description: '常春藤幼兒園教職員考勤與請假自助系統',
+                name: '常春藤管理系統',
+                short_name: '常春藤管理',
+                description: '常春藤幼兒園管理與教師入口系統',
                 theme_color: '#3f7d48',
                 background_color: '#ffffff',
                 display: 'standalone',
@@ -83,7 +83,7 @@ export default defineConfig({
             },
 
             workbox: {
-                // 只預快取 app shell 與核心 vendor；大型 route chunk 改由 runtime cache 接手
+                // 只預快取 app shell 與核心 vendor；大型 route chunk 與圖片改由 runtime cache 接手
                 globPatterns: [
                     'index.html',
                     'registerSW.js',
@@ -92,7 +92,13 @@ export default defineConfig({
                     'assets/index-*.js',
                     'assets/vue-core-*.js',
                     'assets/vendor-*.js',
-                    '**/*.{ico,png,svg,woff2}',
+                    '*.{ico,svg}',
+                    'assets/*.woff2',
+                ],
+                // 排除大型 PWA 圖示（由 manifest 按需載入）與 chart-vendor
+                globIgnores: [
+                    'assets/chart-vendor-*.js',
+                    '**/*512*',
                 ],
 
                 // hash routing：所有導航請求都回傳 index.html
