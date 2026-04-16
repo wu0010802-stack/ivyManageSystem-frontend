@@ -27,6 +27,8 @@ export const addMonth    = (month) => api.post('/recruitment/months', { month })
 export const deleteMonth = (month) => api.delete(`/recruitment/months/${encodeURIComponent(month)}`)
 
 // 競爭者學校地理編碼
+export const getGeocodePendingCount = () =>
+  api.get('/recruitment/competitor-schools/geocode-pending')
 export const geocodeCompetitorSchools = (limit = 826) =>
   api.post('/recruitment/competitor-schools/geocode', null, { params: { limit } })
 

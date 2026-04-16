@@ -6,17 +6,29 @@ import { getGovKindergartens } from '@/api/recruitment'
 
 let _govDbCache = null        // 已載入的全量資料（陣列）
 let _govDbPromise = null      // in-flight 請求
+let _govDbCacheTime = 0       // cache 建立時間（ms）
+const GOV_DB_CACHE_TTL = 15 * 60 * 1000 // 15 分鐘
+
+/** 清除快取，下次呼叫 loadGovDbData() 會重新載入。 */
+export const invalidateGovDbCache = () => {
+  _govDbCache = null
+  _govDbPromise = null
+  _govDbCacheTime = 0
+}
 
 /**
  * 從後端 API 載入教育部高雄市幼兒園快取資料。
  */
 export const loadGovDbData = () => {
-  if (_govDbCache !== null) return Promise.resolve(_govDbCache)
+  if (_govDbCache !== null && Date.now() - _govDbCacheTime < GOV_DB_CACHE_TTL) {
+    return Promise.resolve(_govDbCache)
+  }
   if (_govDbPromise) return _govDbPromise
   _govDbPromise = getGovKindergartens({ page_size: 500 })
     .then((res) => {
       const schools = res.data?.schools ?? []
       _govDbCache = schools
+      _govDbCacheTime = Date.now()
       return schools
     })
     .catch((err) => {

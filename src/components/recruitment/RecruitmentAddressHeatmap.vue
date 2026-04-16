@@ -1,91 +1,73 @@
 <template>
   <div class="heatmap-shell">
     <div class="heatmap-toolbar">
-      <!-- 第一行：數字統計 + 操作按鈕 -->
       <div class="heatmap-toolbar-top">
+        <!-- 統計概覽 -->
         <div class="heatmap-summary">
           <div class="summary-pill">
-            <strong>{{ totalHotspots }}</strong>
-            <span>地址熱點</span>
+            <strong>{{ recordsWithAddress }}</strong>
+            <span>有地址筆數</span>
           </div>
           <div class="summary-pill">
             <strong>{{ geocodedHotspots }}</strong>
             <span>已定位</span>
           </div>
-          <div class="summary-pill" :class="pendingHotspots > 0 ? 'summary-pill--warn' : ''">
+          <div v-if="pendingHotspots > 0" class="summary-pill summary-pill--warn">
             <strong>{{ pendingHotspots }}</strong>
             <span>待同步</span>
           </div>
-          <div class="summary-pill" :class="staleHotspots > 0 ? 'summary-pill--warn' : ''">
+          <div v-if="staleHotspots > 0" class="summary-pill summary-pill--warn">
             <strong>{{ staleHotspots }}</strong>
             <span>待升級</span>
           </div>
           <div class="summary-pill">
-            <strong>{{ recordsWithAddress }}</strong>
-            <span>有地址筆數</span>
+            <strong>{{ nearbySchoolCount }}</strong>
+            <span>視野幼兒園</span>
           </div>
         </div>
 
-        <div class="heatmap-actions">
+        <!-- 操作按鈕：僅在需要手動介入時顯示 -->
+        <div v-if="canWrite && (needsIncrementalSync || staleHotspots > 0)" class="heatmap-actions">
           <el-button
-            size="small"
-            :type="showPreschoolMap ? 'primary' : ''"
-            @click="showPreschoolMap = !showPreschoolMap"
-          >全台幼兒園地圖</el-button>
-          <el-button
-            v-if="canWrite && needsIncrementalSync"
+            v-if="needsIncrementalSync"
             type="primary"
             size="small"
             :loading="syncingMode === 'incremental'"
             @click="emit('sync', 'incremental')"
           >同步全部地址</el-button>
           <el-button
-            v-if="canWrite && staleHotspots > 0"
+            v-if="staleHotspots > 0"
             size="small"
             :loading="syncingMode === 'resync_google'"
             @click="emit('sync', 'resync_google')"
           >Google 重同步</el-button>
-          <el-button
-            v-if="canWrite"
-            size="small"
-            :loading="govSyncing"
-            @click="handleGovSync"
-          >更新教育部資料</el-button>
-          <el-button
-            v-if="canWrite"
-            size="small"
-            :loading="geocodingCompetitors"
-            @click="handleGeocodeCompetitors"
-          >補全學校座標</el-button>
         </div>
       </div>
 
-      <!-- 第二行：provider 狀態 tags -->
-      <div class="heatmap-status-tags">
-        <el-tag :type="providerAvailable ? 'success' : 'info'" effect="plain" size="small">
-          Geocoding：{{ providerLabel }}
-        </el-tag>
-        <el-tag effect="plain" size="small">
-          地圖：{{ mapProviderLabel }}
-        </el-tag>
-        <el-tag v-if="syncingMode" type="warning" effect="plain" size="small">
-          {{ syncingLabel }}
-        </el-tag>
-        <el-tag v-if="govSyncing" type="warning" effect="plain" size="small">
-          教育部資料同步中…
-        </el-tag>
-        <el-tag v-else-if="govSyncMessage" type="danger" effect="plain" size="small">
+      <!-- 狀態列：精簡合併 -->
+      <div class="heatmap-status-bar">
+        <span class="status-item">
+          <span class="status-dot" :class="providerAvailable ? 'status-dot--ok' : 'status-dot--off'" />
+          {{ mapProviderLabel }}
+        </span>
+        <span v-if="govSyncing" class="status-item status-item--busy">
+          教育部同步中…
+        </span>
+        <span v-else-if="govSyncMessage" class="status-item status-item--error">
           {{ govSyncMessage }}
-        </el-tag>
-        <el-tag v-else-if="govSyncedAtLabel" effect="plain" size="small">
-          教育部資料：{{ govSyncedAtLabel }}
-        </el-tag>
-        <el-tag v-if="geocodingCompetitors" type="warning" effect="plain" size="small">
-          學校座標補全中…
-        </el-tag>
-        <el-tag v-else-if="geocodeCompetitorResult" type="success" effect="plain" size="small">
+        </span>
+        <span v-else-if="govSyncedAtLabel" class="status-item">
+          教育部 {{ govSyncedAtLabel }}
+        </span>
+        <span v-if="geocodingCompetitors" class="status-item status-item--busy">
+          座標補全中… {{ geocodeCompetitorResult }}
+        </span>
+        <span v-else-if="geocodeCompetitorResult" class="status-item status-item--ok">
           {{ geocodeCompetitorResult }}
-        </el-tag>
+        </span>
+        <span v-if="syncingMode" class="status-item status-item--busy">
+          {{ syncingLabel }}
+        </span>
       </div>
     </div>
 
@@ -327,21 +309,6 @@
       </div>
     </div>
 
-    <div v-if="showPreschoolMap" class="preschool-map-section">
-      <div class="preschool-map-header">
-        <span class="side-title">全台幼兒園分佈圖（kiang.github.io）</span>
-        <el-button size="small" @click="showPreschoolMap = false">收起</el-button>
-      </div>
-      <iframe
-        src="https://kiang.github.io/preschools/"
-        class="preschool-map-iframe"
-        title="全台幼兒園分佈圖"
-        loading="lazy"
-        referrerpolicy="no-referrer"
-        sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
-      />
-    </div>
-
     <div class="heatmap-note">
       <template v-if="providerAvailable">
         說明：橘色點位為家長來源地址。按上方按鈕後，系統會自動分批同步到完成，不需要重複點擊。
@@ -359,7 +326,7 @@
 import { computed, nextTick, onBeforeUnmount, onErrorCaptured, onMounted, ref, watch } from 'vue'
 import 'leaflet/dist/leaflet.css'
 // kiang 前端查詢已移除，所有資料由 nearby-kindergartens API 一次回傳
-import { syncGovKindergartens, getGovKindergartensSyncStatus, geocodeCompetitorSchools } from '@/api/recruitment'
+import { syncGovKindergartens, getGovKindergartensSyncStatus, getGeocodePendingCount, geocodeCompetitorSchools } from '@/api/recruitment'
 
 const props = defineProps({
   hotspots: { type: Array, required: true },
@@ -416,6 +383,8 @@ const fetchGovSyncStatus = async () => {
   }
 }
 
+let govSyncPoll = null
+
 const handleGovSync = async () => {
   if (govSyncing.value) return
   try {
@@ -423,9 +392,14 @@ const handleGovSync = async () => {
     govSyncMessage.value = ''
     await syncGovKindergartens(true)
     // 背景作業已啟動，每 5 秒輪詢一次直到完成
-    const poll = setInterval(async () => {
+    govSyncPoll = setInterval(async () => {
       await fetchGovSyncStatus()
-      if (!govSyncing.value) clearInterval(poll)
+      if (!govSyncing.value) {
+        clearInterval(govSyncPoll)
+        govSyncPoll = null
+        // 教育部同步完成後，自動檢查是否需要補全座標
+        autoGeocodeIfNeeded()
+      }
     }, 5000)
   } catch (e) {
     govSyncing.value = false
@@ -437,16 +411,40 @@ const handleGovSync = async () => {
 const geocodingCompetitors = ref(false)
 const geocodeCompetitorResult = ref('')
 
+const autoGeocodeIfNeeded = async () => {
+  if (!props.canWrite || geocodingCompetitors.value) return
+  try {
+    const res = await getGeocodePendingCount()
+    if ((res.data?.pending ?? 0) > 0) {
+      handleGeocodeCompetitors()
+    }
+  } catch {
+    // 靜默失敗
+  }
+}
+
 const handleGeocodeCompetitors = async () => {
   if (geocodingCompetitors.value) return
   geocodingCompetitors.value = true
   geocodeCompetitorResult.value = ''
+  let totalGeocoded = 0
+  let totalFailed = 0
+  let batchCount = 0
   try {
-    const res = await geocodeCompetitorSchools(826)
-    const { geocoded, skipped, failed, total } = res.data ?? {}
-    geocodeCompetitorResult.value = `完成：${geocoded} 筆成功、${skipped} 筆已有座標、${failed} 筆失敗（共 ${total} 筆）`
+    // 每批最多 500 筆，重複執行直到沒有剩餘待 geocode 的學校
+    while (true) {
+      batchCount += 1
+      geocodeCompetitorResult.value = `第 ${batchCount} 批處理中…（累計成功 ${totalGeocoded} 筆）`
+      const res = await geocodeCompetitorSchools(500)
+      const { geocoded = 0, failed = 0, total = 0 } = res.data ?? {}
+      totalGeocoded += geocoded
+      totalFailed += failed
+      // total === 0 表示已無待處理的學校；geocoded === 0 表示本批全失敗，停止避免無限迴圈
+      if (total === 0 || geocoded === 0) break
+    }
+    geocodeCompetitorResult.value = `完成：${totalGeocoded} 筆成功、${totalFailed} 筆失敗（共 ${batchCount} 批）`
   } catch {
-    geocodeCompetitorResult.value = '地理編碼失敗，請稍後再試'
+    geocodeCompetitorResult.value = `地理編碼中斷：已成功 ${totalGeocoded} 筆、失敗 ${totalFailed} 筆`
   } finally {
     geocodingCompetitors.value = false
   }
@@ -563,7 +561,6 @@ const makeGoogleNearbySchoolIcon = (mapsApi, style = DEFAULT_SCHOOL_STYLE) => {
 
 const mapRef = ref(null)
 const mapInitialized = ref(false)
-const showPreschoolMap = ref(false)
 const setCampusSelected = ref('')
 const selectedGovDataKey = ref('')
 const preschoolGovData = ref(null)
@@ -581,6 +578,7 @@ const mapFallbackMessage = computed(() => {
   return '目前地圖底圖仍使用 OpenStreetMap；若要把前台地圖也切到 Google，前端再設 `VITE_GOOGLE_MAPS_API_KEY` 即可。'
 })
 const needsIncrementalSync = computed(() => props.providerAvailable && (props.pendingHotspots > 0 || props.failedHotspots > 0))
+const nearbySchoolCount = computed(() => sortedNearbySchools.value.length)
 const campusLat = computed(() => props.campus?.campus_lat ?? props.schoolLat)
 const campusLng = computed(() => props.campus?.campus_lng ?? props.schoolLng)
 const campusName = computed(() => props.campus?.campus_name || '本園')
@@ -645,7 +643,7 @@ const clearSearch = () => {
 
 const topNearbySchools = computed(() => filteredNearbySchools.value.slice(0, 8))
 const hiddenNearbySchoolCount = computed(() =>
-  Math.max(filteredNearbySchools.value.length - topNearbySchools.value.length, 0)
+  Math.max(filteredNearbySchools.value.length - 8, 0)
 )
 
 const panMapTo = (lat, lng) => {
@@ -1147,10 +1145,23 @@ onMounted(async () => {
   if (mapReady.value) {
     await renderMap()
   }
-  fetchGovSyncStatus()
+  // 自動執行：更新教育部資料
+  await fetchGovSyncStatus()
+  if (props.canWrite && !govSyncing.value) {
+    handleGovSync()
+  }
+  // 補全學校座標：先查有沒有待補的，有才跑（避免浪費 Google API 流量）
+  // 如果教育部正在同步，會在同步完成後自動觸發
+  if (!govSyncing.value) {
+    autoGeocodeIfNeeded()
+  }
 })
 
 onBeforeUnmount(() => {
+  if (govSyncPoll) {
+    clearInterval(govSyncPoll)
+    govSyncPoll = null
+  }
   destroyMap()
 })
 
@@ -1183,7 +1194,7 @@ watch(topNearbySchools, (newList) => {
 .heatmap-toolbar {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
 }
 
 .heatmap-toolbar-top {
@@ -1197,22 +1208,22 @@ watch(topNearbySchools, (newList) => {
 .heatmap-summary {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
 }
 
 .summary-pill {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border-radius: 999px;
-  background: #EFF6FF;
-  border: 1px solid #DBEAFE;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
   white-space: nowrap;
 }
 
 .summary-pill strong {
-  font-size: 0.95rem;
+  font-size: 0.88rem;
   font-weight: 700;
   color: #1E40AF;
   font-family: 'Fira Code', ui-monospace, monospace;
@@ -1220,23 +1231,42 @@ watch(topNearbySchools, (newList) => {
 }
 
 .summary-pill span {
-  font-size: 0.76rem;
+  font-size: 0.72rem;
   color: #64748B;
 }
 
 .summary-pill--warn  { background: #FFFBEB; border-color: #FDE68A; }
 .summary-pill--warn strong { color: #B45309; }
-.summary-pill--error { background: #FFF1F2; border-color: #FECDD3; }
-.summary-pill--error strong { color: #BE123C; }
 
-.heatmap-status-tags {
+/* ── 狀態列 ── */
+.heatmap-status-bar {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 12px;
   align-items: center;
-  padding-top: 6px;
-  border-top: 1px solid #F1F5F9;
+  font-size: 0.72rem;
+  color: #94A3B8;
 }
+
+.status-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #CBD5E1;
+  flex-shrink: 0;
+}
+.status-dot--ok  { background: #22C55E; }
+.status-dot--off { background: #CBD5E1; }
+
+.status-item--busy { color: #D97706; }
+.status-item--error { color: #DC2626; }
+.status-item--ok { color: #16A34A; }
 
 .heatmap-actions {
   display: flex;
@@ -1660,26 +1690,6 @@ watch(topNearbySchools, (newList) => {
 .db-school-item {
   border-color: #E2E8F0;
   border-left-color: #64748b;
-}
-
-.preschool-map-section {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.preschool-map-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.preschool-map-iframe {
-  width: 100%;
-  height: 560px;
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  border-radius: 16px;
-  background: #f8fbfa;
 }
 
 .heatmap-note {
