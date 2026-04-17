@@ -151,15 +151,15 @@
       <header class="page-header">
         <div class="page-header-main">
           <div class="page-title-line1">IVY AFTER-SCHOOL ARTS PROGRAM</div>
-          <h1 class="page-title-line2">114 下藝童趣｜課後才藝報名</h1>
+          <h1 class="page-title-line2">{{ displayTitle }}</h1>
         </div>
         <aside class="page-header-side" aria-label="本期活動資訊">
-          <div class="badge-term">114 下學期</div>
-          <div class="header-meta-item">
+          <div class="badge-term">{{ displayTermLabel }}</div>
+          <div v-if="displayEventDate" class="header-meta-item">
             <svg class="icon" width="16" height="16" aria-hidden="true"><use href="#i-calendar" /></svg>
-            <span>活動日期：2026-02-23</span>
+            <span>活動日期：{{ displayEventDate }}</span>
           </div>
-          <div class="header-meta-note">對象：本園在學幼兒</div>
+          <div v-if="displayAudience" class="header-meta-note">對象：{{ displayAudience }}</div>
         </aside>
       </header>
 
@@ -182,7 +182,13 @@
           <div class="grid-layout">
             <div class="col-left">
               <div class="poster-wrapper">
-                <img src="/images/activity-poster.png" alt="114 下藝童趣活動海報" loading="eager" decoding="async" />
+                <img
+                  :src="posterSrc"
+                  :alt="`${displayTitle} 活動海報`"
+                  loading="eager"
+                  decoding="async"
+                  @error="onPosterError"
+                />
               </div>
               <div class="info-box">
                 <p class="info-intro">
@@ -204,7 +210,7 @@
               <section class="form-card">
                 <div class="form-card-header">
                   <svg class="icon" width="20" height="20" aria-hidden="true"><use href="#i-form" /></svg>
-                  <span class="form-card-header-title">114 下藝童趣 · 2026-02-23</span>
+                  <span class="form-card-header-title">{{ displayFormCardTitle }}</span>
                 </div>
                 <div class="form-card-body">
                   <div class="form-row">
@@ -250,7 +256,6 @@
                         <span class="required-mark">*</span>
                         家長手機 <span class="en">Parent Mobile</span>
                       </label>
-                      <span class="form-hint">用於家長聯繫與資料確認</span>
                     </div>
                     <div class="form-input-col">
                       <input
@@ -416,6 +421,34 @@ const { courses, supplies, classes, videos, loading: optionsLoading, loadOptions
 const { timeInfo, loadTime } = useActivityRegistrationTime()
 const { availability, refresh: refreshAvailability, startPolling, stopPolling } = useActivityAvailability()
 
+// ===== 前台客製化顯示 =====
+const DEFAULT_POSTER = '/images/activity-poster.png'
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
+const posterBroken = ref(false)
+
+const displayTitle = computed(() => timeInfo.value?.page_title?.trim() || '114 下藝童趣｜課後才藝報名')
+const displayTermLabel = computed(() => timeInfo.value?.term_label?.trim() || '114 下學期')
+const displayEventDate = computed(() => timeInfo.value?.event_date_label?.trim() || '2026-02-23')
+const displayAudience = computed(() => timeInfo.value?.target_audience?.trim() || '本園在學幼兒')
+const displayFormCardTitle = computed(() => {
+  const custom = timeInfo.value?.form_card_title?.trim()
+  if (custom) return custom
+  return `${displayTitle.value.split('｜')[0]} · ${displayEventDate.value}`
+})
+const posterSrc = computed(() => {
+  if (posterBroken.value) return DEFAULT_POSTER
+  const url = timeInfo.value?.poster_url
+  if (!url) return DEFAULT_POSTER
+  // 後端路徑以 /api 起頭，若前端 baseURL 指向跨 host 後端則補 host
+  if (url.startsWith('/api/') && API_BASE && API_BASE !== '/api') {
+    return API_BASE.replace(/\/api\/?$/, '') + url
+  }
+  return url
+})
+function onPosterError() {
+  posterBroken.value = true
+}
+
 const form = reactive({
   name: '',
   birthday: '',
@@ -535,6 +568,7 @@ function closeContactModal() {
   contactModalVisible.value = false
 }
 async function handleContactSubmit() {
+  if (inquirySubmitting.value) return
   const name = inquiry.name.trim()
   const phone = inquiry.phone.trim()
   const question = inquiry.question.trim()
@@ -608,10 +642,10 @@ async function handleSubmitRegistration() {
       name,
       birthday,
       parent_phone: parentPhone,
-      class_name: className,
-      courses: form.selectedCourses,
-      supplies: form.selectedSupplies,
-      notes: '',
+      class: className,
+      courses: form.selectedCourses.map((courseName) => ({ name: courseName, price: '' })),
+      supplies: form.selectedSupplies.map((supplyName) => ({ name: supplyName, price: '' })),
+      remark: '',
     })
     const result = res?.data || {}
     let msg = result.message || '報名成功'

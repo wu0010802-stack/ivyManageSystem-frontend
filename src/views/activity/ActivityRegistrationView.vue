@@ -46,6 +46,10 @@
             待審核佇列
           </el-button>
         </el-badge>
+        <el-button type="info" plain @click="goToPublic">
+          <el-icon><Link /></el-icon>
+          前台報名頁
+        </el-button>
       </div>
     </div>
 
@@ -313,7 +317,9 @@
           <el-input-number
             v-model="paymentForm.amount"
             :min="1"
-            :max="paymentForm.type === 'refund' ? (paymentInfo.paid_amount || 0) : 9999999"
+            :max="paymentForm.type === 'refund' ? (paymentInfo.paid_amount || 0) : 999999"
+            :step="1"
+            :precision="0"
             style="width: 100%"
           />
         </el-form-item>
@@ -568,7 +574,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Edit } from '@element-plus/icons-vue'
+import { Plus, Edit, Link } from '@element-plus/icons-vue'
 import {
   getRegistrationDetail,
   updateRemark, promoteWaitlist, deleteRegistration,
@@ -604,6 +610,10 @@ async function loadPendingCount() {
 function goToPending() {
   router.push({ name: 'activity-registrations-pending' })
 }
+function goToPublic() {
+  const url = router.resolve({ name: 'public-activity' }).href
+  window.open(url, '_blank', 'noopener')
+}
 
 const MATCH_STATUS_TAG = {
   matched: { label: '系統自動', type: 'success' },
@@ -611,6 +621,7 @@ const MATCH_STATUS_TAG = {
   pending: { label: '待審核', type: 'warning' },
   rejected: { label: '已拒絕', type: 'info' },
   unmatched: { label: '未比對', type: 'info' },
+  forced: { label: '強行收件', type: 'danger' },
 }
 function matchStatusTag(status) {
   return MATCH_STATUS_TAG[status] || { label: status || '—', type: 'info' }
@@ -742,16 +753,38 @@ function openPaymentDialog(type) {
 
 async function handleAddPayment() {
   if (!detail.value) return
+  if (savingPayment.value) return
+  const typeLabel = paymentForm.type === 'payment' ? '繳費' : '退費'
+  const amount = Number(paymentForm.amount) || 0
+  if (amount <= 0) {
+    ElMessage.warning('金額必須大於 0')
+    return
+  }
+  if (paymentForm.type === 'refund') {
+    try {
+      await ElMessageBox.confirm(
+        `確定要為 ${detail.value.student_name || '此報名'} 退費 NT$${amount.toLocaleString()}？此操作會同步更新已繳金額。`,
+        '確認退費',
+        {
+          type: 'warning',
+          confirmButtonText: '確定退費',
+          confirmButtonClass: 'el-button--danger',
+          cancelButtonText: '取消',
+        }
+      )
+    } catch {
+      return
+    }
+  }
   savingPayment.value = true
   try {
     await addRegistrationPayment(detail.value.id, {
       type: paymentForm.type,
-      amount: paymentForm.amount,
+      amount,
       payment_date: paymentForm.payment_date,
       payment_method: paymentForm.payment_method,
       notes: paymentForm.notes.trim(),
     })
-    const typeLabel = paymentForm.type === 'payment' ? '繳費' : '退費'
     ElMessage.success(`${typeLabel}記錄新增成功`)
     paymentDialogVisible.value = false
     await loadPayments(detail.value.id)

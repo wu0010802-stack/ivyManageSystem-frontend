@@ -8,7 +8,20 @@
           <span class="hamburger-line"></span>
           <span class="hamburger-line"></span>
         </button>
-        <h2 class="page-title">{{ pageTitle }}</h2>
+        <el-tooltip
+          v-if="pageTitle"
+          :content="isPagePinned ? '取消置頂' : '點擊置頂到側邊欄'"
+          placement="bottom"
+        >
+          <h2
+            class="page-title"
+            :class="{ 'is-pinned': isPagePinned }"
+            @click="togglePinCurrent"
+          >
+            <span>{{ pageTitle }}</span>
+            <el-icon class="pin-icon"><component :is="isPagePinned ? StarFilled : Star" /></el-icon>
+          </h2>
+        </el-tooltip>
       </div>
 
       <div class="header-right">
@@ -85,7 +98,8 @@
 import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Monitor, Search, Setting, SwitchButton, User, ArrowDown } from '@element-plus/icons-vue'
+import { Monitor, Search, Setting, SwitchButton, User, ArrowDown, Star, StarFilled } from '@element-plus/icons-vue'
+import { usePinnedPages } from '@/composables/usePinnedPages'
 import { getEmployees } from '@/api/employees'
 import { impersonate } from '@/api/auth'
 import { getUserInfo, clearAuth, setUserInfo } from '@/utils/auth'
@@ -105,6 +119,14 @@ const route = useRoute()
 const router = useRouter()
 
 const pageTitle = computed(() => route.meta?.title || '')
+
+const { isPinned, togglePin } = usePinnedPages()
+const isPagePinned = computed(() => isPinned(route.path))
+const togglePinCurrent = () => {
+  if (!pageTitle.value) return
+  togglePin(route.path, pageTitle.value)
+  ElMessage.success(isPagePinned.value ? '已置頂到側邊欄' : '已取消置頂')
+}
 
 const userInfo = computed(() => getUserInfo() || {})
 const displayName = computed(() => userInfo.value.name || '管理員')
@@ -200,6 +222,34 @@ const handleCommand = (command) => {
   font-size: var(--text-2xl);
   font-weight: 600;
   color: var(--text-primary);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  padding: 2px 8px;
+  border-radius: var(--radius-md);
+  transition: background-color var(--transition-base), color var(--transition-base);
+  user-select: none;
+}
+
+.page-title:hover {
+  background-color: var(--bg-color);
+}
+
+.page-title:hover .pin-icon,
+.page-title.is-pinned .pin-icon {
+  opacity: 1;
+}
+
+.page-title.is-pinned {
+  color: var(--color-primary);
+}
+
+.pin-icon {
+  font-size: var(--text-lg);
+  opacity: 0.35;
+  transition: opacity var(--transition-base), color var(--transition-base);
+  color: var(--color-primary);
 }
 
 .header-right {

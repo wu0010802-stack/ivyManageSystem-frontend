@@ -6,11 +6,14 @@
       <POSSearchPanel
         v-model:mode="mode"
         v-model:search-query="searchQuery"
+        v-model:classroom-filter="classroomFilter"
+        v-model:overdue-only="overdueOnly"
         :searching="searching"
         :groups="searchGroups"
         :registrations="searchRegistrations"
         :selected-ids="selectedIds"
         :is-refund-mode="isRefundMode"
+        :classroom-options="classroomOptions"
         class="pos-panel-wrap__col"
         @search="triggerSearch"
         @toggle="handleToggle"
@@ -155,7 +158,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { Printer, RefreshRight } from '@element-plus/icons-vue'
 
 import POSCartPanel from '@/components/activity/POSCartPanel.vue'
@@ -163,6 +166,7 @@ import POSDailySummaryBar from '@/components/activity/POSDailySummaryBar.vue'
 import POSPaymentPanel from '@/components/activity/POSPaymentPanel.vue'
 import POSReceipt from '@/components/activity/POSReceipt.vue'
 import POSSearchPanel from '@/components/activity/POSSearchPanel.vue'
+import { getClassrooms } from '@/api/classrooms'
 import { usePOSCheckout } from '@/composables/usePOSCheckout'
 import { formatTWD, toChineseAmount } from '@/constants/pos'
 import { useAcademicTermStore } from '@/stores/academicTerm'
@@ -174,10 +178,13 @@ const props = defineProps({
 const {
   mode,
   searchQuery,
+  classroomFilter,
+  overdueOnly,
   searching,
   searchGroups,
   searchRegistrations,
   triggerSearch,
+  runSearch,
   checkoutType,
   isRefundMode,
   cart,
@@ -233,18 +240,37 @@ function formatTime(iso) {
 
 const termStore = useAcademicTermStore()
 
+const classroomOptions = ref([])
+async function loadClassroomOptions() {
+  try {
+    const res = await getClassrooms({
+      school_year: termStore.school_year,
+      semester: termStore.semester,
+      is_active: true,
+    })
+    const rows = res.data?.items || res.data || []
+    classroomOptions.value = rows.map((c) => c.name).filter(Boolean)
+  } catch {
+    classroomOptions.value = []
+  }
+}
+
 // 切學期時重新整理搜尋結果與日結（交易記錄本就按日期不按學期過濾）
 watch(
   () => [termStore.school_year, termStore.semester],
   () => {
     cart.value = []
-    if (searchQuery.value) triggerSearch()
+    classroomFilter.value = ''
+    loadClassroomOptions()
+    runSearch()
   }
 )
 
 onMounted(() => {
   refreshDailySummary()
   refreshRecentTransactions()
+  loadClassroomOptions()
+  runSearch() // 首次進頁面即列出全部未結清，搜尋框變過濾器而非啟動條件
 })
 
 defineExpose({ refreshDailySummary, refreshRecentTransactions })

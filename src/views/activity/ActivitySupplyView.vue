@@ -27,7 +27,7 @@
           <el-input v-model="form.name" />
         </el-form-item>
         <el-form-item label="價格（元）" required>
-          <el-input-number v-model="form.price" :min="0" style="width: 100%" />
+          <el-input-number v-model="form.price" :min="0" :max="999999" :step="1" :precision="0" style="width: 100%" />
         </el-form-item>
       </el-form>
       <template #footer>

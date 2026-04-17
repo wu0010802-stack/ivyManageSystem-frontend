@@ -66,13 +66,13 @@
           <el-input v-model="form.name" />
         </el-form-item>
         <el-form-item label="價格（元）" required>
-          <el-input-number v-model="form.price" :min="0" style="width: 100%" />
+          <el-input-number v-model="form.price" :min="0" :max="999999" :step="1" :precision="0" style="width: 100%" />
         </el-form-item>
         <el-form-item label="堂數">
-          <el-input-number v-model="form.sessions" :min="1" style="width: 100%" />
+          <el-input-number v-model="form.sessions" :min="1" :step="1" :precision="0" style="width: 100%" />
         </el-form-item>
         <el-form-item label="容量">
-          <el-input-number v-model="form.capacity" :min="1" style="width: 100%" />
+          <el-input-number v-model="form.capacity" :min="1" :step="1" :precision="0" style="width: 100%" />
         </el-form-item>
         <el-form-item label="允許候補">
           <el-switch v-model="form.allow_waitlist" />

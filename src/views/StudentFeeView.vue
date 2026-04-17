@@ -148,7 +148,7 @@
           <el-table-column label="繳費方式" width="90">
             <template #default="{ row }">{{ row.payment_method || '—' }}</template>
           </el-table-column>
-          <el-table-column label="操作" width="110" align="center" fixed="right">
+          <el-table-column label="操作" width="170" align="center" fixed="right">
             <template #default="{ row }">
               <el-button
                 v-if="row.status !== 'paid'"
@@ -156,7 +156,13 @@
                 type="primary"
                 @click="openPayDialog(row)"
               >{{ row.status === 'partial' ? '更新繳費' : '登記繳費' }}</el-button>
-              <span v-else class="paid-label">已完成</span>
+              <el-button
+                v-if="(row.amount_paid || 0) > 0"
+                size="small"
+                type="danger"
+                plain
+                @click="openRefundDialog(row)"
+              >退款</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -200,7 +206,7 @@
           <el-input v-model="itemForm.name" placeholder="如：學費、雜費、材料費" />
         </el-form-item>
         <el-form-item label="金額（元）" prop="amount">
-          <el-input-number v-model="itemForm.amount" :min="0" :precision="0" style="width: 100%" />
+          <el-input-number v-model="itemForm.amount" :min="0" :max="999999" :step="1" :precision="0" style="width: 100%" />
         </el-form-item>
         <el-form-item label="適用班級" prop="classroom_id">
           <el-select v-model="itemForm.classroom_id" placeholder="全校（不選=全校）" clearable style="width: 100%">
@@ -267,7 +273,14 @@
             <el-date-picker v-model="payForm.payment_date" type="date" placeholder="選擇日期" style="width: 100%" value-format="YYYY-MM-DD" />
           </el-form-item>
           <el-form-item label="累計已繳" prop="amount_paid">
-            <el-input-number v-model="payForm.amount_paid" :min="0" :precision="0" style="width: 100%" />
+            <el-input-number
+              v-model="payForm.amount_paid"
+              :min="1"
+              :max="Math.min(payingRecord?.amount_due || 999999, 999999)"
+              :step="1"
+              :precision="0"
+              style="width: 100%"
+            />
           </el-form-item>
           <el-form-item label="繳費方式" prop="payment_method">
             <el-select v-model="payForm.payment_method" style="width: 100%">
@@ -286,6 +299,54 @@
         <el-button type="primary" :loading="saving" @click="submitPay">確認繳費</el-button>
       </template>
     </el-dialog>
+
+    <!-- ================================================================
+         Dialog：退款
+    ================================================================ -->
+    <el-dialog v-model="refundDialogVisible" title="退款" width="460px" destroy-on-close>
+      <div v-if="refundingRecord">
+        <p>學生：<strong>{{ refundingRecord.student_name }}</strong>（{{ refundingRecord.classroom_name }}）</p>
+        <p>費用項目：{{ refundingRecord.fee_item_name }}</p>
+        <p>目前已繳 <strong>{{ (refundingRecord.amount_paid || 0).toLocaleString() }} 元</strong>，最多可退此金額。</p>
+        <el-form :model="refundForm" :rules="refundRules" ref="refundFormRef" label-width="90px">
+          <el-form-item label="退款金額" prop="amount">
+            <el-input-number
+              v-model="refundForm.amount"
+              :min="1"
+              :max="refundingRecord?.amount_paid || 1"
+              :step="1"
+              :precision="0"
+              style="width: 100%"
+            />
+          </el-form-item>
+          <el-form-item label="退款原因" prop="reason">
+            <el-input v-model="refundForm.reason" maxlength="100" show-word-limit placeholder="例：家長申請退學、重複收費…" />
+          </el-form-item>
+          <el-form-item label="備註">
+            <el-input v-model="refundForm.notes" type="textarea" :rows="2" maxlength="200" show-word-limit />
+          </el-form-item>
+        </el-form>
+
+        <el-divider>退款歷史</el-divider>
+        <div v-if="refundHistory.length === 0" class="hint">尚無退款紀錄。</div>
+        <el-table v-else :data="refundHistory" size="small" stripe>
+          <el-table-column label="日期" width="140">
+            <template #default="{ row }">
+              {{ row.refunded_at ? row.refunded_at.slice(0, 16).replace('T', ' ') : '—' }}
+            </template>
+          </el-table-column>
+          <el-table-column label="金額" width="90" align="right">
+            <template #default="{ row }">NT${{ row.amount.toLocaleString() }}</template>
+          </el-table-column>
+          <el-table-column label="原因" prop="reason" />
+          <el-table-column label="操作者" prop="refunded_by" width="90" />
+        </el-table>
+      </div>
+      <template #footer>
+        <el-button @click="refundDialogVisible = false">關閉</el-button>
+        <el-button type="danger" :loading="saving" @click="submitRefund">確認退款</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -296,6 +357,7 @@ import { Plus } from '@element-plus/icons-vue'
 import {
   getFeeItems, getFeePeriods, createFeeItem, updateFeeItem, deleteFeeItem,
   generateFeeRecords, getFeeRecords, payFeeRecord, getFeeSummary,
+  refundFeeRecord, getFeeRefunds,
 } from '@/api/fees'
 import { useClassroomStore } from '@/stores/classroom'
 
@@ -584,6 +646,59 @@ async function submitPay() {
     fetchRecords()
   } catch (err) {
     ElMessage.error(err?.response?.data?.detail || '登記繳費失敗')
+  } finally {
+    saving.value = false
+  }
+}
+
+// ─── 退款 ─────────────────────────────────────────────────────────────────────
+const refundDialogVisible = ref(false)
+const refundingRecord = ref(null)
+const refundHistory = ref([])
+const refundFormRef = ref(null)
+const refundForm = ref({ amount: 0, reason: '', notes: '' })
+const refundRules = {
+  amount: [{ required: true, message: '請輸入退款金額', trigger: 'blur' }],
+  reason: [{ required: true, message: '請填寫退款原因', trigger: 'blur' }],
+}
+
+async function openRefundDialog(row) {
+  refundingRecord.value = row
+  refundForm.value = {
+    amount: row.amount_paid || 0,
+    reason: '',
+    notes: '',
+  }
+  refundHistory.value = []
+  refundDialogVisible.value = true
+  try {
+    const res = await getFeeRefunds(row.id)
+    refundHistory.value = res?.refunds || []
+  } catch {
+    refundHistory.value = []
+  }
+}
+
+async function submitRefund() {
+  const valid = await refundFormRef.value?.validate().catch(() => false)
+  if (!valid) return
+  try {
+    await ElMessageBox.confirm(
+      `確定要退款 NT$${(refundForm.value.amount || 0).toLocaleString()} 給 ${refundingRecord.value.student_name}？`,
+      '確認退款',
+      { type: 'warning', confirmButtonText: '確定退款', confirmButtonClass: 'el-button--danger' }
+    )
+  } catch {
+    return
+  }
+  saving.value = true
+  try {
+    await refundFeeRecord(refundingRecord.value.id, refundForm.value)
+    ElMessage.success('退款已完成')
+    refundDialogVisible.value = false
+    fetchRecords()
+  } catch (err) {
+    ElMessage.error(err?.response?.data?.detail || '退款失敗')
   } finally {
     saving.value = false
   }

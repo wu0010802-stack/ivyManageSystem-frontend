@@ -28,10 +28,37 @@
       @keyup.enter="$emit('search')"
     />
 
-    <div class="pos-panel__hint" v-if="!searchQuery">
-      <el-icon><InfoFilled /></el-icon>
-      <span>
-        {{ isRefundMode ? '輸入學生/班級搜尋已繳費報名以退費' : '輸入學生/班級關鍵字開始搜尋未結清報名' }}
+    <div class="pos-panel__filters">
+      <el-select
+        :model-value="classroomFilter"
+        placeholder="全部班級"
+        clearable
+        size="small"
+        class="pos-panel__classroom"
+        @update:model-value="$emit('update:classroomFilter', $event ?? '')"
+      >
+        <el-option label="全部班級" value="" />
+        <el-option
+          v-for="c in classroomOptions"
+          :key="c"
+          :label="c"
+          :value="c"
+        />
+      </el-select>
+      <el-switch
+        v-if="!isRefundMode"
+        :model-value="overdueOnly"
+        size="small"
+        active-text="只看逾期"
+        inline-prompt
+        @update:model-value="$emit('update:overdueOnly', $event)"
+      />
+    </div>
+
+    <div class="pos-panel__summary" v-if="!searching && resultCount > 0">
+      <span>{{ resultCount }} {{ mode === 'by-student' ? '位學生' : '筆報名' }}</span>
+      <span class="pos-panel__summary-total">
+        待{{ isRefundMode ? '退' : '收' }}合計 <strong>{{ formatTWD(totalAmount) }}</strong>
       </span>
     </div>
 
@@ -136,27 +163,56 @@
 
 <script setup>
 import { computed } from 'vue'
-import { InfoFilled, Search } from '@element-plus/icons-vue'
+import { Search } from '@element-plus/icons-vue'
 
 import { POS_MODES, formatTWD } from '@/constants/pos'
 
 const props = defineProps({
   mode: { type: String, required: true },
   searchQuery: { type: String, required: true },
+  classroomFilter: { type: String, default: '' },
+  overdueOnly: { type: Boolean, default: false },
   searching: { type: Boolean, default: false },
   groups: { type: Array, default: () => [] },
   registrations: { type: Array, default: () => [] },
   selectedIds: { type: Array, default: () => [] },
   isRefundMode: { type: Boolean, default: false },
+  classroomOptions: { type: Array, default: () => [] },
 })
 
-const emit = defineEmits(['update:mode', 'update:searchQuery', 'search', 'toggle'])
+const emit = defineEmits([
+  'update:mode',
+  'update:searchQuery',
+  'update:classroomFilter',
+  'update:overdueOnly',
+  'search',
+  'toggle',
+])
 
 const modeOptions = POS_MODES
 
 const placeholder = computed(() => {
-  if (props.isRefundMode) return '輸入學生/班級搜尋可退費報名…'
-  return props.mode === 'by-student' ? '輸入學生姓名搜尋…' : '輸入學生/班級搜尋未結清報名…'
+  // 新語意：搜尋是過濾器（已預載全部）而非啟動條件
+  if (props.isRefundMode) return '搜尋姓名 / 班級 / 家長手機（已列出全部可退費）'
+  return props.mode === 'by-student'
+    ? '搜尋姓名 / 班級 / 家長手機（已列出全部未結清）'
+    : '搜尋姓名 / 班級（依單筆瀏覽）'
+})
+
+const resultCount = computed(() =>
+  props.mode === 'by-student' ? props.groups.length : props.registrations.length
+)
+
+const totalAmount = computed(() => {
+  if (props.mode === 'by-student') {
+    return props.groups.reduce((s, g) => s + (g.group_owed_total || 0), 0)
+  }
+  return props.registrations.reduce((s, r) => {
+    const base = props.isRefundMode
+      ? r.paid_amount || 0
+      : Math.max(0, (r.total_amount || 0) - (r.paid_amount || 0))
+    return s + base
+  }, 0)
 })
 
 const isSelected = (id) => props.selectedIds.includes(id)
@@ -201,14 +257,32 @@ function handleSingleToggle(row) {
   justify-content: center;
 }
 
-.pos-panel__hint {
+.pos-panel__filters {
   display: flex;
+  gap: 10px;
   align-items: center;
-  gap: 8px;
-  color: #94a3b8;
+}
+
+.pos-panel__classroom {
+  flex: 1;
+  min-width: 0;
+}
+
+.pos-panel__summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   font-size: 13px;
-  justify-content: center;
-  padding: 8px 0;
+  color: #475569;
+  padding: 6px 10px;
+  background: #f1f5f9;
+  border-radius: 8px;
+}
+
+.pos-panel__summary-total strong {
+  color: #dc2626;
+  font-size: 15px;
+  margin-left: 4px;
 }
 
 .pos-panel__results {

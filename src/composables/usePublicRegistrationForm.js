@@ -108,10 +108,10 @@ export function usePublicRegistrationForm({ courses, supplies, availability }) {
         name: form.name.trim(),
         birthday: form.birthday,
         parent_phone: normalizeMobile(form.parent_phone),
-        class_name: form.class_name,
-        courses: form.selectedCourses,
-        supplies: form.selectedSupplies,
-        notes: form.notes.trim(),
+        class: form.class_name,
+        courses: form.selectedCourses.map((name) => ({ name, price: '' })),
+        supplies: form.selectedSupplies.map((name) => ({ name, price: '' })),
+        remark: form.notes.trim(),
       })
       submitResult.value = res.data
       localStorage.removeItem(DRAFT_KEY)

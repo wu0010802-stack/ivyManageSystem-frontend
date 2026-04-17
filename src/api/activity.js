@@ -16,8 +16,12 @@ export const matchRegistration = (id, studentId) =>
   api.post(`/activity/registrations/${id}/match`, { student_id: studentId })
 export const rejectRegistration = (id, reason = '') =>
   api.post(`/activity/registrations/${id}/reject`, { reason })
-export const rematchRegistration = (id) =>
-  api.post(`/activity/registrations/${id}/rematch`)
+export const rematchRegistration = (id, data = {}) =>
+  api.post(`/activity/registrations/${id}/rematch`, data)
+export const forceAcceptRegistration = (id, data = {}) =>
+  api.post(`/activity/registrations/${id}/force-accept`, data)
+export const restoreRegistration = (id) =>
+  api.post(`/activity/registrations/${id}/restore`)
 export const searchActivityStudents = (q, limit = 20) =>
   api.get('/activity/students/search', { params: { q, limit } })
 export const createRegistration = (data) => api.post('/activity/registrations', data)
@@ -73,6 +77,15 @@ export const deleteInquiry = (id) => api.delete(`/activity/inquiries/${id}`)
 export const getRegistrationTime = () => api.get('/activity/settings/registration-time')
 export const updateRegistrationTime = (data) => api.post('/activity/settings/registration-time', data)
 
+// 海報上傳（multipart）
+export const uploadActivityPoster = (file) => {
+  const form = new FormData()
+  form.append('file', file)
+  return api.post('/activity/settings/poster', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}
+
 // 修改紀錄
 export const getChanges = (params) => api.get('/activity/changes', { params })
 
@@ -84,8 +97,12 @@ export const exportDashboardTable = (params) =>
   api.get('/activity/dashboard-table/export', { params, responseType: 'blob' })
 
 // POS 收銀
-export const getPOSOutstandingByStudent = (q, limit = 20, opts = {}) =>
-  api.get('/activity/pos/outstanding-by-student', { params: { q, limit, ...opts } })
+export const getPOSOutstandingByStudent = (q, limit = 100, opts = {}) => {
+  const params = { limit, ...opts }
+  const keyword = (q || '').trim()
+  if (keyword) params.q = keyword
+  return api.get('/activity/pos/outstanding-by-student', { params })
+}
 export const posCheckout = (payload) => api.post('/activity/pos/checkout', payload)
 export const getPOSDailySummary = (date) =>
   api.get('/activity/pos/daily-summary', { params: date ? { date } : {} })

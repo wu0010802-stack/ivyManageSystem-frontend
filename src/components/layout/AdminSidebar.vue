@@ -20,6 +20,31 @@
         background-color="#1e293b"
         @select="onMenuSelect"
       >
+        <!-- 我的置頂 -->
+        <template v-if="pinnedPages.length > 0">
+          <div v-if="!isCollapse || isMobile" class="pinned-header">
+            <el-icon><StarFilled /></el-icon>
+            <span>我的置頂</span>
+          </div>
+          <el-menu-item
+            v-for="item in pinnedPages"
+            :key="`pinned-${item.path}`"
+            :index="item.path"
+            class="pinned-item"
+          >
+            <el-icon><StarFilled /></el-icon>
+            <template #title>
+              <span class="pinned-title-text">{{ item.title }}</span>
+              <el-icon
+                class="pinned-remove"
+                title="取消置頂"
+                @click.stop.prevent="unpin(item.path)"
+              ><Close /></el-icon>
+            </template>
+          </el-menu-item>
+          <div v-if="!isCollapse || isMobile" class="pinned-divider"></div>
+        </template>
+
         <!-- 首頁區域 - 不摺疊 -->
         <el-menu-item v-if="canView.DASHBOARD" index="/">
           <el-icon><DataBoard /></el-icon>
@@ -135,10 +160,6 @@
             <el-icon><Calendar /></el-icon>
             <template #title>行事曆</template>
           </el-menu-item>
-          <el-menu-item v-if="canView.AUDIT_LOGS" index="/audit-logs">
-            <el-icon><Document /></el-icon>
-            <template #title>操作紀錄</template>
-          </el-menu-item>
         </el-sub-menu>
 
         <!-- 課後才藝 -->
@@ -184,11 +205,21 @@
           </el-menu-item>
         </el-sub-menu>
 
-        <!-- 系統設定 - 不摺疊 -->
-        <el-menu-item v-if="canView.SETTINGS_READ" index="/settings">
-          <el-icon><Setting /></el-icon>
-          <template #title>系統設定</template>
-        </el-menu-item>
+        <!-- 系統設定 -->
+        <el-sub-menu v-if="hasVisibleSettingsItems" index="group-settings">
+          <template #title>
+            <el-icon><Setting /></el-icon>
+            <span>系統設定</span>
+          </template>
+          <el-menu-item v-if="canView.SETTINGS_READ" index="/settings">
+            <el-icon><Setting /></el-icon>
+            <template #title>一般設定</template>
+          </el-menu-item>
+          <el-menu-item v-if="canView.AUDIT_LOGS" index="/audit-logs">
+            <el-icon><Document /></el-icon>
+            <template #title>操作紀錄</template>
+          </el-menu-item>
+        </el-sub-menu>
       </el-menu>
     </el-scrollbar>
 
@@ -206,9 +237,10 @@ import {
   DataBoard, Finished, Calendar, Timer, Clock, Document, Watch,
   Money, User, School, OfficeBuilding, Bell, TrendCharts, Setting,
   Expand, Fold, DataAnalysis, Files,
-  Star, Collection, ChatDotRound, List, Van, CreditCard, Checked
+  Star, StarFilled, Close, Collection, ChatDotRound, List, Van, CreditCard, Checked
 } from '@element-plus/icons-vue'
 import { PERMISSION_VALUES, getUserInfo } from '@/utils/auth'
+import { usePinnedPages } from '@/composables/usePinnedPages'
 
 const props = defineProps({
   pendingApprovals: {
@@ -233,6 +265,8 @@ const emit = defineEmits(['close-sidebar'])
 
 const route = useRoute()
 const isCollapse = ref(false)
+
+const { pinnedPages, unpin } = usePinnedPages()
 
 const canView = computed(() => {
   route.path
@@ -276,11 +310,15 @@ const hasVisibleStatsItems = computed(() =>
 )
 
 const hasVisibleAdminItems = computed(() =>
-  canView.value.ANNOUNCEMENTS_READ || canView.value.CALENDAR || canView.value.AUDIT_LOGS
+  canView.value.ANNOUNCEMENTS_READ || canView.value.CALENDAR
 )
 
 const hasVisibleActivityItems = computed(() =>
   canView.value.ACTIVITY_READ || canView.value.ACTIVITY_WRITE
+)
+
+const hasVisibleSettingsItems = computed(() =>
+  canView.value.SETTINGS_READ || canView.value.AUDIT_LOGS
 )
 
 const toggleCollapse = () => {
@@ -429,6 +467,68 @@ const onMenuSelect = () => {
   transform: scale(0.9);
   display: inline-flex;
   vertical-align: middle;
+}
+
+/* ===== 我的置頂 ===== */
+.pinned-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px var(--space-5) 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #f59e0b;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.pinned-header .el-icon {
+  font-size: 13px;
+}
+
+:deep(.el-menu-item.pinned-item) {
+  background-color: rgba(245, 158, 11, 0.08);
+}
+
+:deep(.el-menu-item.pinned-item) > .el-icon {
+  color: #f59e0b !important;
+}
+
+:deep(.el-menu-item.pinned-item:hover) {
+  background-color: rgba(245, 158, 11, 0.18) !important;
+}
+
+.pinned-title-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pinned-remove {
+  margin-left: 8px;
+  font-size: 14px;
+  color: #64748b;
+  opacity: 0;
+  transition: opacity var(--transition-base), color var(--transition-base);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+}
+
+:deep(.el-menu-item.pinned-item:hover) .pinned-remove {
+  opacity: 1;
+}
+
+.pinned-remove:hover {
+  color: #ef4444;
+  background-color: rgba(239, 68, 68, 0.1);
+}
+
+.pinned-divider {
+  height: 1px;
+  background-color: #334155;
+  margin: 6px var(--space-5) 6px;
 }
 
 :deep(.el-badge__content) {

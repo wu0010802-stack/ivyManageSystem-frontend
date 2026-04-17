@@ -43,6 +43,8 @@ export function usePOSCheckout() {
   // ── 模式與搜尋 ────────────────────────────────────────────────────
   const mode = ref('by-student') // 'by-student' | 'by-registration'
   const searchQuery = ref('')
+  const classroomFilter = ref('') // 班級下拉選單：'' = 全部
+  const overdueOnly = ref(false) // 逾期過濾（僅繳費模式有意義）
   const searching = ref(false)
   const searchGroups = ref([])
   const searchRegistrations = ref([])
@@ -142,34 +144,35 @@ export function usePOSCheckout() {
 
   async function runSearch() {
     const q = (searchQuery.value || '').trim()
-    if (!q) {
-      searchGroups.value = []
-      searchRegistrations.value = []
-      return
-    }
+    const classroom = (classroomFilter.value || '').trim()
     const seq = ++searchSeq
     searching.value = true
     try {
       if (mode.value === 'by-student') {
-        const res = await getPOSOutstandingByStudent(q, 20, {
+        const opts = {
           filter: isRefundMode.value ? 'refundable' : 'outstanding',
           school_year: termStore.school_year,
           semester: termStore.semester,
-        })
+        }
+        if (classroom) opts.classroom = classroom
+        if (overdueOnly.value && !isRefundMode.value) opts.overdue_only = true
+        const res = await getPOSOutstandingByStudent(q, 100, opts)
         if (seq !== searchSeq) return
         searchGroups.value = res.data?.groups || []
       } else {
         const statuses = isRefundMode.value
           ? ['paid', 'partial', 'overpaid']
           : ['partial', 'unpaid']
+        const baseParams = {
+          payment_status: undefined,
+          limit: 50,
+          school_year: termStore.school_year,
+          semester: termStore.semester,
+        }
+        if (q) baseParams.search = q
+        if (classroom) baseParams.classroom_name = classroom
         const calls = statuses.map((s) =>
-          getRegistrations({
-            search: q,
-            payment_status: s,
-            limit: 25,
-            school_year: termStore.school_year,
-            semester: termStore.semester,
-          })
+          getRegistrations({ ...baseParams, payment_status: s })
         )
         const results = await Promise.all(calls)
         if (seq !== searchSeq) return
@@ -200,6 +203,11 @@ export function usePOSCheckout() {
     searchRegistrations.value = []
     runSearch()
   }
+
+  // 班級 / 逾期 filter 變動時立即重搜
+  watch([classroomFilter, overdueOnly], () => {
+    runSearch()
+  })
 
   // ── 購物車 ────────────────────────────────────────────────────
   function addToCart(row) {
@@ -400,6 +408,8 @@ export function usePOSCheckout() {
     // 模式 / 搜尋
     mode,
     searchQuery,
+    classroomFilter,
+    overdueOnly,
     searching,
     searchGroups,
     searchRegistrations,

@@ -61,6 +61,8 @@
             :model-value="row.amount_applied"
             :min="1"
             :max="isRefundMode ? (row.paid_amount || 1) : 999999"
+            :step="1"
+            :precision="0"
             :controls="false"
             size="small"
             class="pos-cart__amount-input"
