@@ -1,5 +1,13 @@
 // Token 已改由後端 httpOnly Cookie 管理，JS 無法存取。
 // 保留函式簽名供向下相容，但不再操作 localStorage。
+import {
+  PERMISSION_VALUES,
+  ROUTE_PERMISSION_RULES,
+  TEACHER_PORTAL_ROUTES,
+} from '@/constants/permissions'
+
+export { PERMISSION_VALUES, ROUTE_PERMISSION_RULES }
+
 const USER_INFO_KEY = 'userInfo'
 const SESSION_VALIDATED_AT_KEY = 'auth_session_validated_at'
 const SESSION_MAX_AGE_MS = 14 * 60 * 1000
@@ -100,79 +108,6 @@ export function isLoggedIn() {
   return Date.now() - validatedAt < SESSION_MAX_AGE_MS
 }
 
-// 權限位元值對照表（讀寫分離版）
-export const PERMISSION_VALUES = {
-  // 不拆分的模組
-  DASHBOARD: 1 << 0,
-  APPROVALS: 1 << 1,
-  CALENDAR: 1 << 2,
-  SCHEDULE: 1 << 3,
-  MEETINGS: 1 << 7,
-  REPORTS: 1 << 13,
-  AUDIT_LOGS: 1 << 14,
-  // 讀寫分離模組
-  ATTENDANCE_READ: 1 << 4,
-  ATTENDANCE_WRITE: 1 << 17,
-  LEAVES_READ: 1 << 5,
-  LEAVES_WRITE: 1 << 18,
-  OVERTIME_READ: 1 << 6,
-  OVERTIME_WRITE: 1 << 19,
-  EMPLOYEES_READ: 1 << 8,
-  EMPLOYEES_WRITE: 1 << 20,
-  STUDENTS_READ: 1 << 9,
-  STUDENTS_WRITE: 1 << 21,
-  CLASSROOMS_READ: 1 << 10,
-  CLASSROOMS_WRITE: 1 << 22,
-  SALARY_READ: 1 << 11,
-  SALARY_WRITE: 1 << 23,
-  ANNOUNCEMENTS_READ: 1 << 12,
-  ANNOUNCEMENTS_WRITE: 1 << 24,
-  SETTINGS_READ: 1 << 15,
-  SETTINGS_WRITE: 1 << 25,
-  USER_MANAGEMENT_READ: 1 << 16,
-  USER_MANAGEMENT_WRITE: 1 << 26,
-  ACTIVITY_READ:  1 << 27,
-  ACTIVITY_WRITE: 1 << 28,
-  // ⚠️ 注意：1 << 29 及以上在 JS 32-bit 有符號整數下會溢位（1 << 31 為負數，1 << 32 = 1）。
-  // 使用 2 ** N 儲存，並在 hasPermission 改用 BigInt 運算以保持正確性。
-  DISMISSAL_CALLS_READ:  2 ** 29,
-  DISMISSAL_CALLS_WRITE: 2 ** 30,
-  FEES_READ:  2 ** 31,
-  FEES_WRITE: 2 ** 32,
-  RECRUITMENT_READ:  2 ** 33,
-  RECRUITMENT_WRITE: 2 ** 34,
-}
-
-const ROUTE_PERMISSION_RULES = [
-  { path: '/', permission: 'DASHBOARD' },
-  { path: '/approvals', permission: 'APPROVALS' },
-  { path: '/calendar', permission: 'CALENDAR' },
-  { path: '/schedule', permission: 'SCHEDULE' },
-  { path: '/attendance', permission: 'ATTENDANCE_READ' },
-  { path: '/leaves', permission: 'LEAVES_READ' },
-  { path: '/meetings', permission: 'MEETINGS' },
-  { path: '/employees', permission: 'EMPLOYEES_READ' },
-  { path: '/students', permission: 'STUDENTS_READ' },
-  { path: '/classrooms', permission: 'CLASSROOMS_READ' },
-  { path: '/salary', permission: 'SALARY_READ' },
-  { path: '/announcements', permission: 'ANNOUNCEMENTS_READ' },
-  { path: '/reports', permission: 'REPORTS' },
-  { path: '/audit-logs', permission: 'AUDIT_LOGS' },
-  { path: '/settings', permission: 'SETTINGS_READ' },
-  { path: '/dev/salary', permission: 'SALARY_READ' },
-  { path: '/activity/dashboard', permission: 'ACTIVITY_READ' },
-  { path: '/activity/registrations', permission: 'ACTIVITY_READ' },
-  { path: '/activity/courses', permission: 'ACTIVITY_READ' },
-  { path: '/activity/supplies', permission: 'ACTIVITY_READ' },
-  { path: '/activity/inquiries', permission: 'ACTIVITY_READ' },
-  { path: '/activity/settings', permission: 'ACTIVITY_WRITE' },
-  { path: '/activity/changes', permission: 'ACTIVITY_READ' },
-  { path: '/fees', permission: 'FEES_READ' },
-  { path: '/student-enrollment', permission: 'STUDENTS_READ' },
-  { path: '/recruitment', permission: 'RECRUITMENT_READ' },
-  { path: '/recruitment-ivykids', permission: 'RECRUITMENT_READ' },
-]
-
 const getRoutePermission = (path) => {
   const sortedRules = [...ROUTE_PERMISSION_RULES].sort((a, b) => b.path.length - a.path.length)
   const matched = sortedRules.find((rule) => (
@@ -256,7 +191,7 @@ export function getAllowedRoutes() {
   if (!userInfo) return []
 
   if (userInfo.role === 'teacher') {
-    return ['/portal', '/portal/attendance', '/portal/leave', '/portal/overtime', '/portal/schedule', '/portal/anomalies', '/portal/students', '/portal/calendar', '/portal/salary', '/portal/announcements', '/portal/profile']
+    return [...TEACHER_PORTAL_ROUTES]
   }
 
   // admin

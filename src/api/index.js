@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { setUserInfo, clearAuth } from '@/utils/auth'
+import { classifyError } from '@/utils/errorHandler'
 
 const api = axios.create({
     baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
@@ -67,6 +68,7 @@ api.interceptors.response.use(
         error.displayMessage = error.response?.data?.detail
             || error.response?.data?.message
             || null
+        error.errorType = classifyError(error)
 
         return Promise.reject(error)
     }

@@ -13,6 +13,13 @@ import { useClassroomStore } from '@/stores/classroom'
 import { useConfigStore } from '@/stores/config'
 import { useCrudDialog, useConfirmDelete } from '@/composables'
 import { downloadFile } from '@/utils/download'
+import {
+  POSITION_OPTIONS,
+  SUPERVISOR_ROLE_OPTIONS,
+  OFFICIAL_JOB_TITLE_NAMES,
+  TITLE_TO_GRADE,
+  POSITION_SALARY_KEY,
+} from '@/constants/employee'
 
 const employeeStore = useEmployeeStore()
 const classroomStore = useClassroomStore()
@@ -30,16 +37,6 @@ const rules = {
 
 const positionSalaryConfig = ref(null)
 const suggestedSalary = ref(null)
-
-const POSITION_OPTIONS = ['班導', '副班導', '主任', '組長', '副組長', '司機', '美編', '行政', '美語教師', '藝術', '護理人員', '廚房']
-const SUPERVISOR_ROLE_OPTIONS = ['園長', '主任', '組長', '副組長']
-const OFFICIAL_JOB_TITLE_NAMES = ['園長', '幼兒園教師', '教保員', '助理教保員', '司機', '廚工', '職員']
-
-const TITLE_TO_GRADE = {
-  '幼兒園教師': 'A',
-  '教保員': 'B',
-  '助理教保員': 'C',
-}
 
 const detectRole = (position) => {
   if (!position) return null
@@ -99,17 +96,6 @@ const bureauJobTitleOptions = computed(() => {
 
   return official
 })
-
-// 其他職位對應設定欄位的對照表
-const POSITION_SALARY_KEY = {
-  '行政': 'admin_staff',
-  '美語教師': 'english_teacher',
-  '藝術': 'art_teacher',
-  '美編': 'designer',
-  '護理人員': 'nurse',
-  '司機': 'driver',
-  '廚房': 'kitchen_staff',
-}
 
 // 用於區分「載入舊資料」vs「使用者手動修改」，避免 populateForm 觸發連動
 let _populatingForm = false

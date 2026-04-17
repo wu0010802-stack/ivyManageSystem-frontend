@@ -67,10 +67,6 @@
             <el-icon><Timer /></el-icon>
             <template #title>排班管理</template>
           </el-menu-item>
-          <el-menu-item v-if="canView.CALENDAR" index="/calendar">
-            <el-icon><Calendar /></el-icon>
-            <template #title>行事曆</template>
-          </el-menu-item>
         </el-sub-menu>
 
         <!-- 學生教務 -->
@@ -135,6 +131,10 @@
             <el-icon><Bell /></el-icon>
             <template #title>公告管理</template>
           </el-menu-item>
+          <el-menu-item v-if="canView.CALENDAR" index="/calendar">
+            <el-icon><Calendar /></el-icon>
+            <template #title>行事曆</template>
+          </el-menu-item>
           <el-menu-item v-if="canView.AUDIT_LOGS" index="/audit-logs">
             <el-icon><Document /></el-icon>
             <template #title>操作紀錄</template>
@@ -155,13 +155,13 @@
             <el-icon><Document /></el-icon>
             <template #title>報名管理</template>
           </el-menu-item>
-          <el-menu-item v-if="canView.ACTIVITY_READ" index="/activity/courses">
-            <el-icon><Collection /></el-icon>
-            <template #title>課程管理</template>
+          <el-menu-item v-if="canView.ACTIVITY_WRITE" index="/activity/pos">
+            <el-icon><Money /></el-icon>
+            <template #title>POS 收銀</template>
           </el-menu-item>
-          <el-menu-item v-if="canView.ACTIVITY_READ" index="/activity/supplies">
-            <el-icon><ShoppingBag /></el-icon>
-            <template #title>用品管理</template>
+          <el-menu-item v-if="canView.ACTIVITY_READ" index="/activity/catalog">
+            <el-icon><Collection /></el-icon>
+            <template #title>課程與用品</template>
           </el-menu-item>
           <el-menu-item v-if="canView.ACTIVITY_READ" index="/activity/inquiries">
             <el-icon><ChatDotRound /></el-icon>
@@ -206,7 +206,7 @@ import {
   DataBoard, Finished, Calendar, Timer, Clock, Document, Watch,
   Money, User, School, OfficeBuilding, Bell, TrendCharts, Setting,
   Expand, Fold, DataAnalysis, Files,
-  Star, Collection, ShoppingBag, ChatDotRound, List, Van, CreditCard, Checked
+  Star, Collection, ChatDotRound, List, Van, CreditCard, Checked
 } from '@element-plus/icons-vue'
 import { PERMISSION_VALUES, getUserInfo } from '@/utils/auth'
 
@@ -264,7 +264,7 @@ const hasVisibleLeaveItems = computed(() =>
   canView.value.EMPLOYEES_READ || canView.value.SALARY_READ ||
   canView.value.ATTENDANCE_READ || canView.value.LEAVES_READ ||
   canView.value.OVERTIME_READ || canView.value.MEETINGS ||
-  canView.value.SCHEDULE || canView.value.CALENDAR
+  canView.value.SCHEDULE
 )
 
 const hasVisibleStudentItems = computed(() =>
@@ -276,7 +276,7 @@ const hasVisibleStatsItems = computed(() =>
 )
 
 const hasVisibleAdminItems = computed(() =>
-  canView.value.ANNOUNCEMENTS_READ || canView.value.AUDIT_LOGS
+  canView.value.ANNOUNCEMENTS_READ || canView.value.CALENDAR || canView.value.AUDIT_LOGS
 )
 
 const hasVisibleActivityItems = computed(() =>

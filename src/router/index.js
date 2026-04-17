@@ -168,16 +168,31 @@ const router = createRouter({
             meta: { title: '報名管理' }
         },
         {
+            path: '/activity/registrations/pending',
+            name: 'activity-registrations-pending',
+            component: () => import('../views/activity/ActivityPendingReviewView.vue'),
+            meta: { title: '報名審核佇列' }
+        },
+        {
+            path: '/activity/pos',
+            name: 'activity-pos',
+            component: () => import('../views/activity/POSView.vue'),
+            meta: { title: 'POS 收銀' }
+        },
+        {
+            path: '/activity/catalog',
+            name: 'activity-catalog',
+            component: () => import('../views/activity/ActivityCatalogView.vue'),
+            meta: { title: '課程與用品管理' }
+        },
+        // 舊路徑保留相容：自動導向新整合頁
+        {
             path: '/activity/courses',
-            name: 'activity-courses',
-            component: () => import('../views/activity/ActivityCourseView.vue'),
-            meta: { title: '課程管理' }
+            redirect: '/activity/catalog?tab=courses'
         },
         {
             path: '/activity/supplies',
-            name: 'activity-supplies',
-            component: () => import('../views/activity/ActivitySupplyView.vue'),
-            meta: { title: '用品管理' }
+            redirect: '/activity/catalog?tab=supplies'
         },
         {
             path: '/activity/inquiries',
@@ -210,6 +225,12 @@ const router = createRouter({
             name: 'public-activity',
             component: () => import('../views/public/ActivityPublicView.vue'),
             meta: { title: '課後才藝報名', noAuth: true },
+        },
+        {
+            path: '/public/activity/query',
+            name: 'public-activity-query',
+            component: () => import('../views/public/ActivityPublicQueryView.vue'),
+            meta: { title: '查詢 / 修改報名', noAuth: true },
         },
 
         // ============ Admin Login / Change Password ============
