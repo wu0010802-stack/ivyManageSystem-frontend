@@ -58,6 +58,10 @@
         </span>
         <span v-else-if="govSyncedAtLabel" class="status-item">
           教育部 {{ govSyncedAtLabel }}
+          <a v-if="canWrite" class="status-action" @click.prevent="handleGovSync">更新</a>
+        </span>
+        <span v-else-if="canWrite" class="status-item">
+          <a class="status-action" @click.prevent="handleGovSync">同步教育部資料</a>
         </span>
         <span v-if="geocodingCompetitors" class="status-item status-item--busy">
           座標補全中… {{ geocodeCompetitorResult }}
@@ -158,7 +162,7 @@
               v-for="school in topNearbySchools"
               :key="school.place_id || `${school.name}-${school.lat}-${school.lng}`"
               class="nearby-school-item nearby-school-item--clickable"
-              @click="panMapTo(school.lat, school.lng)"
+              @click="panMapTo(school.lat, school.lng, school)"
             >
               <div class="nearby-school-header">
                 <div class="nearby-school-name">{{ school.name || '未命名幼兒園' }}</div>
@@ -247,11 +251,11 @@
                     <div v-if="preschoolGovData.totalAreaSqm != null" class="gov-detail-row">
                       <span class="gov-detail-label">全園總面積</span>
                       <span class="gov-detail-value">
-                        {{ Number(preschoolGovData.totalAreaSqm).toLocaleString() }} m²
+                        {{ sqmToPing(preschoolGovData.totalAreaSqm) }} 坪
                         <template v-if="preschoolGovData.indoorAreaSqm != null || preschoolGovData.outdoorAreaSqm != null">
-                          （<template v-if="preschoolGovData.indoorAreaSqm != null">室內 {{ Number(preschoolGovData.indoorAreaSqm).toLocaleString() }}</template>
+                          （<template v-if="preschoolGovData.indoorAreaSqm != null">室內 {{ sqmToPing(preschoolGovData.indoorAreaSqm) }}</template>
                           <template v-if="preschoolGovData.indoorAreaSqm != null && preschoolGovData.outdoorAreaSqm != null"> / </template>
-                          <template v-if="preschoolGovData.outdoorAreaSqm != null">室外 {{ Number(preschoolGovData.outdoorAreaSqm).toLocaleString() }}</template> m²）
+                          <template v-if="preschoolGovData.outdoorAreaSqm != null">室外 {{ sqmToPing(preschoolGovData.outdoorAreaSqm) }}</template> 坪）
                         </template>
                       </span>
                     </div>
@@ -326,7 +330,7 @@
 import { computed, nextTick, onBeforeUnmount, onErrorCaptured, onMounted, ref, watch } from 'vue'
 import 'leaflet/dist/leaflet.css'
 // kiang 前端查詢已移除，所有資料由 nearby-kindergartens API 一次回傳
-import { syncGovKindergartens, getGovKindergartensSyncStatus, getGeocodePendingCount, geocodeCompetitorSchools } from '@/api/recruitment'
+import { syncGovKindergartens, getGovKindergartensSyncStatus, getGeocodePendingCount, geocodeCompetitorSchools, syncKiangData } from '@/api/recruitment'
 
 const props = defineProps({
   hotspots: { type: Array, required: true },
@@ -448,6 +452,15 @@ const handleGeocodeCompetitors = async () => {
   } finally {
     geocodingCompetitors.value = false
   }
+}
+
+const GOV_SYNC_STALE_DAYS = 90
+
+const isGovSyncStale = () => {
+  if (!govSyncedAt.value) return true // 從未同步過
+  const lastSync = new Date(govSyncedAt.value)
+  const daysSince = (Date.now() - lastSync.getTime()) / (1000 * 60 * 60 * 24)
+  return daysSince >= GOV_SYNC_STALE_DAYS
 }
 
 const govSyncedAtLabel = computed(() => {
@@ -646,13 +659,57 @@ const hiddenNearbySchoolCount = computed(() =>
   Math.max(filteredNearbySchools.value.length - 8, 0)
 )
 
-const panMapTo = (lat, lng) => {
+const HIGHLIGHT_SVG = [
+  '<svg xmlns="http://www.w3.org/2000/svg" width="30" height="42" viewBox="0 0 30 42">',
+  '<filter id="hs"><feDropShadow dx="0" dy="1" stdDeviation="2" flood-opacity="0.35"/></filter>',
+  '<path d="M15 2C7.82 2 2 7.82 2 15c0 9.5 13 24 13 24s13-14.5 13-24C28 7.82 22.18 2 15 2z"',
+  ' fill="#DC2626" stroke="#991B1B" stroke-width="1.5" filter="url(#hs)"/>',
+  '<circle cx="15" cy="14" r="5" fill="white" opacity="0.95"/>',
+  '</svg>',
+].join('')
+
+const panMapTo = (lat, lng, school) => {
   if (!mapInstance || !Number.isFinite(lat) || !Number.isFinite(lng)) return
   if (renderedMapProvider.value === 'google') {
     mapInstance.panTo({ lat, lng })
     mapInstance.setZoom(16)
+    // 移動高亮標記
+    if (highlightMarker) {
+      highlightMarker.setPosition({ lat, lng })
+      highlightMarker.setTitle(school?.name || '')
+      highlightMarker.setVisible(true)
+    } else if (googleMapsApi) {
+      highlightMarker = new googleMapsApi.Marker({
+        map: mapInstance,
+        position: { lat, lng },
+        title: school?.name || '',
+        icon: {
+          url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(HIGHLIGHT_SVG)}`,
+          anchor: new googleMapsApi.Point(15, 42),
+          scaledSize: new googleMapsApi.Size(30, 42),
+        },
+        zIndex: 1000,
+      })
+    }
   } else if (typeof mapInstance.setView === 'function') {
     mapInstance.setView([lat, lng], 16)
+    // 移動高亮標記
+    if (highlightMarker) {
+      highlightMarker.setLatLng([lat, lng])
+    } else if (leafletApi) {
+      const icon = leafletApi.divIcon({
+        className: '',
+        html: HIGHLIGHT_SVG,
+        iconSize: [30, 42],
+        iconAnchor: [15, 42],
+        popupAnchor: [0, -44],
+      })
+      highlightMarker = leafletApi.marker([lat, lng], { icon, zIndexOffset: 1000 })
+      highlightMarker.addTo(mapInstance)
+    }
+    if (school?.name && highlightMarker) {
+      highlightMarker.bindPopup(`<strong>${escapeHtml(school.name)}</strong>`).openPopup()
+    }
   }
 }
 
@@ -662,7 +719,7 @@ watch(filteredNearbySchools, (schools) => {
   if (schools.length !== 1) return
   const s = schools[0]
   if (Number.isFinite(s?.lat) && Number.isFinite(s?.lng)) {
-    panMapTo(s.lat, s.lng)
+    panMapTo(s.lat, s.lng, s)
   }
 })
 
@@ -710,6 +767,7 @@ let overlayLayer = null
 let nearbySchoolLayer = null
 let googleInfoWindow = null
 let googleOverlays = []
+let highlightMarker = null
 let lastFittedBaseSignature = ''
 let leafletMoveHandler = null
 let googleIdleHandler = null
@@ -822,6 +880,8 @@ const starClass = (rating, index) => {
   return 'star-empty'
 }
 
+const sqmToPing = (sqm) => (Number(sqm) / 3.30579).toFixed(1)
+
 const escapeHtml = (text) => String(text ?? '')
   .replaceAll('&', '&amp;')
   .replaceAll('<', '&lt;')
@@ -849,6 +909,11 @@ const clearGoogleOverlays = () => {
 
 const destroyMap = () => {
   lastFittedBaseSignature = ''
+  if (highlightMarker) {
+    if (typeof highlightMarker.setMap === 'function') highlightMarker.setMap(null)
+    else if (typeof highlightMarker.remove === 'function') highlightMarker.remove()
+    highlightMarker = null
+  }
   if (renderedMapProvider.value === 'google') {
     clearGoogleOverlays()
     googleInfoWindow = null
@@ -1145,15 +1210,20 @@ onMounted(async () => {
   if (mapReady.value) {
     await renderMap()
   }
-  // 自動執行：更新教育部資料
+  // 取得教育部同步狀態
   await fetchGovSyncStatus()
-  if (props.canWrite && !govSyncing.value) {
+  // 超過 90 天才自動同步教育部資料，否則手動按按鈕
+  if (props.canWrite && !govSyncing.value && isGovSyncStale()) {
     handleGovSync()
   }
   // 補全學校座標：先查有沒有待補的，有才跑（避免浪費 Google API 流量）
   // 如果教育部正在同步，會在同步完成後自動觸發
   if (!govSyncing.value) {
     autoGeocodeIfNeeded()
+  }
+  // kiang 補充同步（月費、面積等，不消耗 Google API）
+  if (props.canWrite) {
+    syncKiangData().catch(() => {})
   }
 })
 
@@ -1267,6 +1337,14 @@ watch(topNearbySchools, (newList) => {
 .status-item--busy { color: #D97706; }
 .status-item--error { color: #DC2626; }
 .status-item--ok { color: #16A34A; }
+
+.status-action {
+  color: #3B82F6;
+  cursor: pointer;
+  margin-left: 4px;
+  text-decoration: none;
+}
+.status-action:hover { text-decoration: underline; }
 
 .heatmap-actions {
   display: flex;

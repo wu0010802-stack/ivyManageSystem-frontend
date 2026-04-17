@@ -218,169 +218,24 @@
 
       <!-- ==================== 區域分析 ==================== -->
       <el-tab-pane label="區域分析" name="area" lazy>
-
-        <!-- 1. 園所資訊 header bar -->
-        <div class="area-header-bar">
-          <div class="area-campus-info">
-            <span class="area-campus-name">{{ currentCampus.campus_name || '本園' }}</span>
-            <span v-if="currentCampus.campus_address" class="area-campus-addr">{{ currentCampus.campus_address }}</span>
-            <span
-              class="area-campus-coord"
-              :class="{ 'area-campus-coord-warn': !campusGeocodedOk }"
-            >
-              {{ campusGeocodedOk
-                  ? `${currentCampus.campus_lat?.toFixed(5)}, ${currentCampus.campus_lng?.toFixed(5)}`
-                  : '⚠ 尚未設定座標' }}
-            </span>
-          </div>
-          <div class="area-header-meta">
-            <span v-if="marketSnapshot.synced_at" class="area-sync-time">
-              情報更新：{{ new Date(marketSnapshot.synced_at).toLocaleString('zh-TW', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' }) }}
-            </span>
-            <el-button
-              v-if="canWrite"
-              size="small"
-              :loading="syncingMarket"
-              @click="handleMarketSync"
-            >同步市場情報</el-button>
-            <el-button
-              v-if="canWrite"
-              size="small"
-              plain
-              @click="openCampusDialog"
-            >設定園所中心點</el-button>
-          </div>
-        </div>
-
-        <!-- 2. KPI 卡片列 -->
-        <div class="area-kpi-row">
-          <div class="area-kpi-card">
-            <div class="area-kpi-value">{{ areaHotspotsSummary.geocoded_hotspots ?? 0 }}<span class="area-kpi-denom"> / {{ areaHotspotsSummary.records_with_address ?? 0 }}</span></div>
-            <div class="area-kpi-label">已定位地址</div>
-            <div class="area-kpi-sub">
-              <div class="area-kpi-bar-bg">
-                <div
-                  class="area-kpi-bar-fill area-kpi-bar-fill--blue"
-                  :style="{ width: areaHotspotsSummary.records_with_address > 0 ? `${Math.round(areaHotspotsSummary.geocoded_hotspots / areaHotspotsSummary.records_with_address * 100)}%` : '0%' }"
-                />
-              </div>
-            </div>
-          </div>
-          <div class="area-kpi-card">
-            <div class="area-kpi-value">{{ areaActiveDistrictCount }}</div>
-            <div class="area-kpi-label">覆蓋行政區數</div>
-            <div class="area-kpi-sub area-kpi-sub--muted">近 90 天有來源紀錄</div>
-          </div>
-        </div>
-
-        <!-- 3. 雙圖表列 -->
-        <div class="chart-row">
-          <el-card class="chart-card">
-            <template #header>各行政區 90 天來源量</template>
-            <div class="chart-box">
-              <Bar v-if="isChartTabActive('area') && areaBarData" :data="areaBarData" :options="horizBarOptions" />
-              <div v-else-if="!areaBarData" class="chart-empty">暫無行政區資料</div>
-            </div>
-          </el-card>
-          <el-card class="chart-card">
-            <template #header>各行政區 90 天預繳率</template>
-            <div class="chart-box">
-              <Bar v-if="isChartTabActive('area') && areaDepositRateBarData" :data="areaDepositRateBarData" :options="areaRateBarOptions" />
-              <div v-else-if="!areaDepositRateBarData" class="chart-empty">暫無預繳率資料</div>
-            </div>
-          </el-card>
-        </div>
-
-        <!-- 4. 行政區比較表（可點擊選取，inline 展開明細） -->
-        <el-card style="margin-bottom:16px">
-          <template #header>
-            <div class="area-table-header">
-              <span>行政區比較表</span>
-              <div style="display:flex; align-items:center; gap:10px">
-                <span v-if="selectedMarketDistrict" class="area-table-filter-tag">
-                  篩選中：{{ selectedMarketDistrict }}
-                  <el-button link size="small" @click="selectedMarketDistrict = ''">✕</el-button>
-                </span>
-                <span class="area-table-hint">點擊列篩選熱點圖</span>
-              </div>
-            </div>
-          </template>
-          <el-table
-            :data="marketSnapshot.districts || []"
-            border
-            stripe
-            size="small"
-            :row-class-name="({ row }) => row.district === selectedMarketDistrict ? 'district-row-selected' : ''"
-            style="cursor:pointer"
-            @row-click="selectedMarketDistrict = selectedMarketDistrict === $event.district ? '' : $event.district"
-          >
-            <el-table-column type="index" label="#" width="44" />
-            <el-table-column prop="district" label="行政區" min-width="90" />
-            <el-table-column prop="lead_count_30d" label="30 天" align="center" width="80" sortable />
-            <el-table-column prop="lead_count_90d" label="90 天" align="center" width="80" sortable />
-            <el-table-column prop="deposit_rate_90d" label="預繳率" align="center" min-width="130" sortable>
-              <template #default="{ row }">
-                <div class="rate-cell">
-                  <div class="rate-bar-bg">
-                    <div
-                      class="rate-bar-fill"
-                      :class="rateBarClass(row.deposit_rate_90d)"
-                      :style="{ width: `${Math.min(row.deposit_rate_90d, 100)}%` }"
-                    />
-                  </div>
-                  <span class="rate-label">{{ fmtRate(row.deposit_rate_90d) }}</span>
-                </div>
-              </template>
-            </el-table-column>
-            <el-table-column prop="avg_travel_minutes" label="平均通勤" align="center" width="100" sortable>
-              <template #default="{ row }">
-                <span
-                  v-if="row.avg_travel_minutes != null"
-                  class="travel-badge"
-                  :class="travelBadgeClass(row.avg_travel_minutes)"
-                >{{ row.avg_travel_minutes.toFixed(1) }} 分</span>
-                <span v-else class="text-muted">—</span>
-              </template>
-            </el-table-column>
-            <el-table-column prop="population_density" label="人口密度" align="center" width="95" sortable>
-              <template #default="{ row }">{{ row.population_density != null ? row.population_density.toFixed(1) : '—' }}</template>
-            </el-table-column>
-            <el-table-column prop="population_0_6" label="0-6 歲人口" align="center" width="100" sortable>
-              <template #default="{ row }">{{ row.population_0_6 != null ? row.population_0_6.toLocaleString() : '—' }}</template>
-            </el-table-column>
-          </el-table>
-        </el-card>
-
-        <!-- 5. 家長地址熱點圖 -->
-        <el-card style="margin-bottom:0" v-loading="loadingAreaHotspots || loadingMarket">
-          <template #header>家長地址熱點圖</template>
-          <RecruitmentAddressHeatmap
-            :hotspots="areaHotspotsSummary.hotspots"
-            :campus="currentCampus"
-            :travel-bands="TRAVEL_BANDS"
-            :selected-district="selectedMarketDistrict"
-            :records-with-address="areaHotspotsSummary.records_with_address"
-            :total-hotspots="areaHotspotsSummary.total_hotspots"
-            :geocoded-hotspots="areaHotspotsSummary.geocoded_hotspots"
-            :pending-hotspots="areaHotspotsSummary.pending_hotspots"
-            :stale-hotspots="areaHotspotsSummary.stale_hotspots"
-            :failed-hotspots="areaHotspotsSummary.failed_hotspots"
-            :provider-available="areaHotspotsSummary.provider_available"
-            :provider-name="areaHotspotsSummary.provider_name"
-            :school-lat="currentCampus.campus_lat"
-            :school-lng="currentCampus.campus_lng"
-            :can-write="canWrite"
-            :syncing-mode="syncingAreaHotspotsMode"
-            :nearby-schools="nearbySchools"
-            :nearby-schools-loading="loadingNearbySchools"
-            :nearby-schools-available="nearbySchoolsAvailable"
-            :nearby-schools-message="nearbySchoolsMessage"
-            :fmt-pct="fmtPct"
-            @sync="handleAreaHotspotSync"
-            @set-as-campus="handleSetAsCampus"
-          />
-        </el-card>
-
+        <RecruitmentAreaTab
+          :campus="currentCampus"
+          :market-snapshot="marketSnapshot"
+          :hotspots-summary="areaHotspotsSummary"
+          :travel-bands="TRAVEL_BANDS"
+          v-model:selected-district="selectedMarketDistrict"
+          :can-write="canWrite"
+          :syncing-market="syncingMarket"
+          :syncing-mode="syncingAreaHotspotsMode"
+          :nearby-schools="nearbySchools"
+          :nearby-schools-loading="loadingNearbySchools"
+          :nearby-schools-available="nearbySchoolsAvailable"
+          :nearby-schools-message="nearbySchoolsMessage"
+          :fmt-pct="fmtPct"
+          :loading="loadingAreaHotspots || loadingMarket"
+          @sync="handleAreaHotspotSync"
+          @set-as-campus="handleSetAsCampus"
+        />
       </el-tab-pane>
 
       <!-- ==================== 未預繳原因分析 ==================== -->
@@ -538,349 +393,39 @@
     </el-tabs>
 
     <!-- ==================== 管理月份 Dialog ==================== -->
-    <el-dialog v-model="monthDialogVisible" title="管理登記月份" width="420px">
-      <!-- 已登記月份列表 -->
-      <el-table :data="registeredMonths" border stripe size="small" style="margin-bottom:16px">
-        <el-table-column prop="month" label="月份" />
-        <el-table-column label="操作" width="80" align="center">
-          <template #default="{ row }">
-            <el-button
-              type="danger"
-              size="small"
-              text
-              @click="handleDeleteMonth(row.month)"
-            >刪除</el-button>
-          </template>
-        </el-table-column>
-        <template #empty>
-          <span style="color:#999">尚未手動登記任何月份</span>
-        </template>
-      </el-table>
-
-      <!-- 新增月份輸入列 -->
-      <div style="display:flex;gap:8px;align-items:center">
-        <el-input
-          v-model="newMonthInput"
-          placeholder="輸入月份，如 115.04"
-          size="small"
-          style="flex:1"
-          @keyup.enter="handleAddMonth"
-        />
-        <el-button
-          type="primary"
-          size="small"
-          :loading="monthSaving"
-          @click="handleAddMonth"
-        >新增</el-button>
-      </div>
-      <div style="margin-top:6px;font-size:12px;color:#909399">
-        格式：民國年.月，如 115.04（刪除只移除登記，不影響訪視記錄）
-      </div>
-
-      <template #footer>
-        <el-button @click="monthDialogVisible = false">關閉</el-button>
-      </template>
-    </el-dialog>
+    <RecruitmentMonthDialog
+      v-model:visible="monthDialogVisible"
+      @changed="handleMonthsChanged"
+    />
 
     <!-- ==================== 新增/編輯訪視記錄 Dialog ==================== -->
-    <el-dialog
-      v-model="dialogVisible"
-      :title="dialogMode === 'add' ? '新增訪視記錄' : '編輯訪視記錄'"
-      width="680px"
-    >
-      <el-form :model="form" :rules="formRules" ref="formRef" label-width="95px" size="small">
-
-        <!-- ── 基本資料 ── -->
-        <div class="form-section-title">基本資料</div>
-        <el-row :gutter="12">
-          <el-col :span="12">
-            <el-form-item label="參觀日期" prop="month">
-              <el-date-picker
-                v-model="form.month_raw"
-                type="date"
-                value-format="YYYY-MM-DD"
-                placeholder="選擇參觀日期（年月日）"
-                style="width:100%"
-              />
-              <div v-if="form.visit_date" style="font-size:11px;color:#909399;margin-top:2px">
-                民國：{{ form.visit_date }}（月份：{{ form.month }}）
-              </div>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="序號">
-              <el-input v-model="form.seq_no" placeholder="選填" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="幼生姓名" prop="child_name">
-              <el-input v-model="form.child_name" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="適讀班級">
-              <el-select v-model="form.grade" clearable style="width:100%">
-                <el-option v-for="g in GRADES_ORDER" :key="g" :label="g" :value="g" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="生日">
-              <el-date-picker v-model="form.birthday" type="date" value-format="YYYY-MM-DD" style="width:100%" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-
-        <!-- ── 聯絡與來源 ── -->
-        <div class="form-section-title">聯絡與來源</div>
-        <el-row :gutter="12">
-          <el-col :span="12">
-            <el-form-item label="電話">
-              <el-input v-model="form.phone" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="行政區">
-              <el-autocomplete
-                v-model="form.district"
-                :fetch-suggestions="districtQuery"
-                clearable
-                style="width:100%"
-              />
-            </el-form-item>
-          </el-col>
-          <el-col :span="24">
-            <el-form-item label="地址">
-              <el-input v-model="form.address" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="幼生來源">
-              <el-autocomplete
-                v-model="form.source"
-                :fetch-suggestions="sourceQuery"
-                clearable
-                style="width:100%"
-              />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="介紹者">
-              <el-autocomplete
-                v-model="form.referrer"
-                :fetch-suggestions="referrerQuery"
-                clearable
-                style="width:100%"
-              />
-            </el-form-item>
-          </el-col>
-        </el-row>
-
-        <!-- ── 預繳狀態 ── -->
-        <div class="form-section-title">預繳狀態</div>
-        <el-row :gutter="12">
-          <el-col :span="12">
-            <el-form-item label="是否預繳">
-              <el-switch
-                v-model="form.has_deposit"
-                active-text="已預繳"
-                inactive-text="未預繳"
-                @change="onDepositChange"
-              />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="收預繳人員">
-              <el-input v-model="form.deposit_collector" :disabled="!form.has_deposit" placeholder="預繳時填寫" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="已報到/註冊">
-              <el-switch v-model="form.enrolled" active-text="是" inactive-text="否" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="轉其他學期">
-              <el-switch v-model="form.transfer_term" active-text="是" inactive-text="否" />
-            </el-form-item>
-          </el-col>
-          <!-- 未預繳相關欄位：只在未預繳時顯示 -->
-          <template v-if="!form.has_deposit">
-            <el-col :span="24">
-              <el-form-item label="未預繳原因">
-                <el-select v-model="form.no_deposit_reason" clearable placeholder="請選擇原因" style="width:100%">
-                  <el-option v-for="r in options.no_deposit_reasons" :key="r" :label="r" :value="r" />
-                </el-select>
-              </el-form-item>
-            </el-col>
-            <el-col :span="24">
-              <el-form-item label="原因說明">
-                <el-input v-model="form.no_deposit_reason_detail" type="textarea" :rows="2" placeholder="詳細說明（選填）" />
-              </el-form-item>
-            </el-col>
-          </template>
-        </el-row>
-
-        <!-- ── 備註 ── -->
-        <div class="form-section-title">備註</div>
-        <el-row :gutter="12">
-          <el-col :span="24">
-            <el-form-item label="備註">
-              <el-input v-model="form.notes" type="textarea" :rows="2" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="24">
-            <el-form-item label="電訪回應">
-              <el-input v-model="form.parent_response" type="textarea" :rows="2" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-
-      </el-form>
-      <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="handleSave">儲存</el-button>
-      </template>
-    </el-dialog>
+    <RecruitmentRecordDialog
+      v-model:visible="dialogVisible"
+      :mode="dialogMode"
+      :form="form"
+      :saving="saving"
+      :district-suggestions="districtSuggestions"
+      :source-suggestions="options.sources || []"
+      :referrer-suggestions="options.referrers || []"
+      :no-deposit-reasons="options.no_deposit_reasons || []"
+      @save="handleSave"
+    />
 
     <!-- ==================== 近五年期間 Dialog ==================== -->
-    <el-dialog
-      v-model="periodDialogVisible"
-      :title="periodDialogMode === 'add' ? '新增招生期間' : '編輯招生期間'"
-      width="560px"
-    >
-      <el-form :model="periodForm" ref="periodFormRef" label-width="110px" size="small">
-        <el-row :gutter="12">
-          <el-col :span="24">
-            <el-form-item label="期間名稱" prop="period_name" :rules="[{required:true,message:'必填'}]">
-              <el-input v-model="periodForm.period_name" placeholder="如 114.09.16~115.03.15" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="參觀人數"><el-input-number v-model="periodForm.visit_count" :min="0" style="width:100%" /></el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="預繳人數"><el-input-number v-model="periodForm.deposit_count" :min="0" style="width:100%" /></el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="實際註冊"><el-input-number v-model="periodForm.enrolled_count" :min="0" style="width:100%" /></el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="轉其他學期"><el-input-number v-model="periodForm.transfer_term_count" :min="0" style="width:100%" /></el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="有效預繳"><el-input-number v-model="periodForm.effective_deposit_count" :min="0" style="width:100%" /></el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="未就讀退預繳"><el-input-number v-model="periodForm.not_enrolled_deposit" :min="0" style="width:100%" /></el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="註冊後退學"><el-input-number v-model="periodForm.enrolled_after_school" :min="0" style="width:100%" /></el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="排序"><el-input-number v-model="periodForm.sort_order" :min="0" style="width:100%" /></el-form-item>
-          </el-col>
-          <el-col :span="24">
-            <el-form-item label="備註"><el-input v-model="periodForm.notes" type="textarea" :rows="2" /></el-form-item>
-          </el-col>
-        </el-row>
-      </el-form>
-      <template #footer>
-        <el-button @click="periodDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="savingPeriod" @click="handlePeriodSave">儲存</el-button>
-      </template>
-    </el-dialog>
+    <RecruitmentPeriodDialog
+      v-model:visible="periodDialogVisible"
+      :mode="periodDialogMode"
+      :form="periodForm"
+      :saving="savingPeriod"
+      @save="handlePeriodSave"
+    />
 
-    <el-dialog
-      v-model="campusDialogVisible"
-      title="設定園所中心點"
-      width="540px"
-    >
-      <el-form :model="campusForm" label-width="100px" size="small">
-        <el-form-item label="園所名稱">
-          <el-input v-model="campusForm.campus_name" />
-        </el-form-item>
-        <el-form-item label="園所地址">
-          <div style="display:flex;gap:8px;width:100%">
-            <el-input
-              v-model="campusForm.campus_address"
-              placeholder="請填完整地址，例：高雄市三民區義華路68號"
-              style="flex:1"
-              @change="campusGeocodeDirty = true"
-            />
-            <el-button
-              size="small"
-              :loading="geocodingCampus"
-              :disabled="!campusForm.campus_address"
-              @click="geocodeCampusAddress"
-            >自動定位</el-button>
-          </div>
-        </el-form-item>
-
-        <el-alert
-          v-if="campusForm.campus_lat == null || campusForm.campus_lng == null"
-          type="warning"
-          show-icon
-          :closable="false"
-          style="margin-bottom:12px"
-        >
-          <template #default>
-            <span>座標尚未設定，熱點圖將使用預設位置。請填入地址後點「自動定位」，或手動輸入緯度 / 經度。</span>
-          </template>
-        </el-alert>
-
-        <el-row :gutter="12">
-          <el-col :span="12">
-            <el-form-item label="緯度">
-              <el-input-number
-                v-model="campusForm.campus_lat"
-                :step="0.0001"
-                :precision="6"
-                placeholder="例：22.647xxx"
-                style="width:100%"
-              />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="經度">
-              <el-input-number
-                v-model="campusForm.campus_lng"
-                :step="0.0001"
-                :precision="6"
-                placeholder="例：120.314xxx"
-                style="width:100%"
-              />
-            </el-form-item>
-          </el-col>
-        </el-row>
-
-        <div
-          v-if="campusForm.campus_lat != null && campusForm.campus_lng != null"
-          class="campus-coord-preview"
-        >
-          <span>預覽：</span>
-          <a
-            :href="`https://www.openstreetmap.org/?mlat=${campusForm.campus_lat}&mlon=${campusForm.campus_lng}#map=17/${campusForm.campus_lat}/${campusForm.campus_lng}`"
-            target="_blank"
-            rel="noreferrer"
-          >
-            {{ campusForm.campus_lat.toFixed(6) }}, {{ campusForm.campus_lng.toFixed(6) }} →在地圖上確認
-          </a>
-        </div>
-
-        <el-form-item label="交通模式">
-          <el-select v-model="campusForm.travel_mode" style="width:100%">
-            <el-option label="開車" value="driving" />
-            <el-option label="步行" value="walking" />
-            <el-option label="騎車" value="cycling" />
-          </el-select>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="campusDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="savingCampus" @click="handleCampusSave">儲存</el-button>
-      </template>
-    </el-dialog>
+    <RecruitmentCampusDialog
+      v-model:visible="campusDialogVisible"
+      :form="campusForm"
+      :saving="savingCampus"
+      @save="handleCampusSave"
+    />
   </div>
 </template>
 
@@ -908,9 +453,21 @@ import { useRecruitmentArea, createEmptyCampus } from '@/composables/useRecruitm
 import { useRecruitmentPeriods } from '@/composables/useRecruitmentPeriods'
 import RecruitmentOverviewTab from '@/components/recruitment/RecruitmentOverviewTab.vue'
 import RecruitmentAddressHeatmap from '@/components/recruitment/RecruitmentAddressHeatmap.vue'
+import RecruitmentAreaTab from '@/components/recruitment/RecruitmentAreaTab.vue'
 import RecruitmentNoDepositTab from '@/components/recruitment/RecruitmentNoDepositTab.vue'
 import RecruitmentPeriodsTab from '@/components/recruitment/RecruitmentPeriodsTab.vue'
 import RecruitmentDetailTab from '@/components/recruitment/RecruitmentDetailTab.vue'
+import RecruitmentMonthDialog from '@/components/recruitment/RecruitmentMonthDialog.vue'
+import RecruitmentRecordDialog from '@/components/recruitment/RecruitmentRecordDialog.vue'
+import RecruitmentPeriodDialog from '@/components/recruitment/RecruitmentPeriodDialog.vue'
+import RecruitmentCampusDialog from '@/components/recruitment/RecruitmentCampusDialog.vue'
+import { useRecruitmentCharts } from '@/composables/useRecruitmentCharts'
+import {
+  GRADES_ORDER,
+  FALLBACK_SCHOOL_LAT,
+  FALLBACK_SCHOOL_LNG,
+  TRAVEL_BANDS,
+} from '@/constants/recruitment'
 
 
 // -------- Chart.js 延遲載入 --------
@@ -943,10 +500,6 @@ const Doughnut = defineAsyncComponent(() =>
 )
 
 // -------- 常數 --------
-const GRADES_ORDER = ['幼幼班', '小班', '中班', '大班']
-const FALLBACK_SCHOOL_LAT = 22.6420
-const FALLBACK_SCHOOL_LNG = 120.3243
-const TRAVEL_BANDS = [10, 15, 20]
 const AREA_HOTSPOT_DISPLAY_LIMIT = 200
 const AREA_HOTSPOT_SYNC_BATCH_SIZE = 20
 const AREA_HOTSPOT_MAX_SYNC_ROUNDS = 100
@@ -1081,7 +634,6 @@ const isChartTabActive = (tabName) => activeTab.value === tabName
 const dialogVisible = ref(false)
 const dialogMode = ref('add')
 const editingId = ref(null)
-const formRef = ref(null)
 const emptyForm = () => ({
   month: '', month_raw: null, seq_no: '', visit_date: '', child_name: '',
   birthday: null, grade: null, phone: '', address: '',
@@ -1091,16 +643,11 @@ const emptyForm = () => ({
   notes: '', parent_response: '',
 })
 const form = ref(emptyForm())
-const formRules = {
-  month: [{ required: true, message: '請選擇參觀日期', trigger: 'blur' }],
-  child_name: [{ required: true, message: '請填寫姓名', trigger: 'blur' }],
-}
 
 // -------- 近五年期間 Dialog --------
 const periodDialogVisible = ref(false)
 const periodDialogMode = ref('add')
 const editingPeriodId = ref(null)
-const periodFormRef = ref(null)
 const emptyPeriodForm = () => ({
   period_name: '', visit_count: 0, deposit_count: 0,
   enrolled_count: 0, transfer_term_count: 0, effective_deposit_count: 0,
@@ -1108,89 +655,18 @@ const emptyPeriodForm = () => ({
 })
 const periodForm = ref(emptyPeriodForm())
 
-// -------- 管理月份 Dialog --------
+// -------- 管理月份 Dialog（MonthDialog 內部自行 load/add/delete，這裡只處理通知）--------
 const monthDialogVisible = ref(false)
-const registeredMonths   = ref([])
-const newMonthInput      = ref('')
-const monthSaving        = ref(false)
+const openMonthDialog = () => { monthDialogVisible.value = true }
 
-const _validateMonthFormat = (v) => {
-  const parts = v.trim().split('.')
-  if (parts.length !== 2) return false
-  const num = parseInt(parts[1], 10)
-  return !isNaN(num) && num >= 1 && num <= 12
-}
-
-const openMonthDialog = async () => {
-  monthDialogVisible.value = true
-  try {
-    const res = await getMonths()
-    registeredMonths.value = res.data
-  } catch (e) {
-    ElMessage.error(apiError(e, '載入月份失敗'))
+const handleMonthsChanged = async () => {
+  invalidateOptions()
+  if (detailLoaded.value || ndLoaded.value) {
+    await fetchOptions(true)
   }
 }
 
-const handleAddMonth = async () => {
-  const month = newMonthInput.value.trim()
-  if (!month) return
-  if (!_validateMonthFormat(month)) {
-    ElMessage.warning('格式錯誤，請輸入民國年.月，如 115.04')
-    return
-  }
-  monthSaving.value = true
-  try {
-    const res = await addMonth(month)
-    registeredMonths.value.push(res.data)
-    registeredMonths.value.sort((a, b) => a.month.localeCompare(b.month))
-    newMonthInput.value = ''
-    ElMessage.success(`已登記月份 ${month}`)
-    invalidateOptions()
-    if (detailLoaded.value || ndLoaded.value) {
-      await fetchOptions(true)
-    }
-  } catch (e) {
-    const msg = e.response?.status === 409 ? `月份 ${month} 已存在` : apiError(e, '新增失敗')
-    ElMessage.error(msg)
-  } finally {
-    monthSaving.value = false
-  }
-}
-
-const handleDeleteMonth = async (month) => {
-  try {
-    await ElMessageBox.confirm(`確定刪除登記月份「${month}」？`, '確認刪除', {
-      type: 'warning',
-      confirmButtonText: '刪除',
-      cancelButtonText: '取消',
-    })
-  } catch {
-    return
-  }
-  try {
-    await deleteMonth(month)
-    registeredMonths.value = registeredMonths.value.filter(r => r.month !== month)
-    ElMessage.success(`已刪除登記月份 ${month}`)
-    invalidateOptions()
-    if (detailLoaded.value || ndLoaded.value) {
-      await fetchOptions(true)
-    }
-  } catch (e) {
-    ElMessage.error(apiError(e, '刪除失敗'))
-  }
-}
-
-// -------- 日期轉換工具（西元 ↔ 民國）--------
-const isoToRoc = (iso) => {
-  if (!iso) return ''
-  const [y, m, d] = iso.split('-')
-  return `${parseInt(y) - 1911}.${m}.${d}`
-}
-const isoToRocMonth = (iso) => {
-  if (!iso) return ''
-  const [y, m] = iso.split('-')
-  return `${parseInt(y) - 1911}.${m}`
-}
+// -------- 日期轉換（僅保留 openEditDialog 還需要的兩個）--------
 const rocDateToISO = (roc) => {
   if (!roc) return null
   const parts = roc.split('.')
@@ -1206,41 +682,11 @@ const rocMonthToISO = (rm) => {
   return `${year}-${parts[1].padStart(2, '0')}`
 }
 
-// 監聽參觀日期選擇器（YYYY-MM-DD）→ 同步 visit_date 與 month（民國格式）
-watch(() => form.value.month_raw, (iso) => {
-  if (iso) {
-    form.value.visit_date = isoToRoc(iso)
-    form.value.month = isoToRocMonth(iso.substring(0, 7))
-  } else {
-    form.value.visit_date = ''
-    form.value.month = ''
-  }
-})
-
-// -------- 訪視記錄 Dialog helpers --------
-const _makeSuggestions = (list, query, cb) => {
-  const q = (query || '').trim().toLowerCase()
-  const items = list
-    .filter(v => !q || v.toLowerCase().includes(q))
-    .map(v => ({ value: v }))
-  cb(items)
-}
-
-const districtQuery = (query, cb) => {
-  const districts = (stats.value.by_district || []).map(d => d.district).filter(Boolean)
-  _makeSuggestions(districts, query, cb)
-}
-const sourceQuery   = (query, cb) => _makeSuggestions(options.value.sources   || [], query, cb)
-const referrerQuery = (query, cb) => _makeSuggestions(options.value.referrers || [], query, cb)
-
-const onDepositChange = (val) => {
-  if (val) {
-    form.value.no_deposit_reason        = null
-    form.value.no_deposit_reason_detail = ''
-  } else {
-    form.value.deposit_collector = ''
-  }
-}
+// 訪視記錄對話框內的 form helpers（watch / _makeSuggestions / onDepositChange）
+// 已搬到 RecruitmentRecordDialog.vue；這裡僅保留 district 建議清單的 computed。
+const districtSuggestions = computed(
+  () => (stats.value.by_district || []).map((d) => d.district).filter(Boolean),
+)
 
 const fetchDetail = async () => {
   loadingDetail.value = true
@@ -1310,7 +756,11 @@ const loadNoDepositTab = async (force = false) => {
 
 const loadAreaTab = async () => {
   const ok = await loadAreaData()
-  if (ok) areaLoaded.value = true
+  if (ok) {
+    areaLoaded.value = true
+    // 自動同步市場情報（背景執行，不阻塞頁面）
+    if (canWrite.value) handleMarketSync()
+  }
 }
 
 const loadPeriodsTab = async () => {
@@ -1354,38 +804,7 @@ const campusGeocodedOk = computed(() =>
   campusSetting.value?.campus_lat != null && campusSetting.value?.campus_lng != null
 )
 
-const geocodingCampus = ref(false)
-const campusGeocodeDirty = ref(false)
-
-const geocodeCampusAddress = async () => {
-  const address = campusForm.value?.campus_address
-  if (!address) return
-  geocodingCampus.value = true
-  try {
-    const url = new URL('https://nominatim.openstreetmap.org/search')
-    url.searchParams.set('q', address)
-    url.searchParams.set('format', 'json')
-    url.searchParams.set('limit', '1')
-    url.searchParams.set('countrycodes', 'tw')
-    const response = await fetch(url.toString(), {
-      headers: { 'Accept-Language': 'zh-Hant-TW,zh-TW;q=0.9' },
-    })
-    if (!response.ok) throw new Error(`HTTP ${response.status}`)
-    const data = await response.json()
-    if (data.length > 0) {
-      campusForm.value.campus_lat = parseFloat(data[0].lat)
-      campusForm.value.campus_lng = parseFloat(data[0].lon)
-      campusGeocodeDirty.value = false
-      ElMessage.success(`已定位：${data[0].display_name}`)
-    } else {
-      ElMessage.warning('找不到此地址，請嘗試填寫更精確的地址（含縣市區），或直接手動輸入座標')
-    }
-  } catch {
-    ElMessage.error('自動定位服務暫時無法使用，請手動輸入緯度 / 經度')
-  } finally {
-    geocodingCampus.value = false
-  }
-}
+// 地址 → 座標 geocode 已搬到 RecruitmentCampusDialog.vue
 
 onMounted(() => {
   loadDashboard()
@@ -1524,7 +943,7 @@ const openEditDialog = async (row) => {
 }
 
 const handleSave = async () => {
-  await formRef.value.validate()
+  // Dialog 內部已經驗證過表單（RecruitmentRecordDialog 的 handleSave）
   saving.value = true
   // 排除前端內部用的 month_raw，不送到後端
   const { month_raw: _mr, ...payload } = form.value
@@ -1595,7 +1014,7 @@ const openPeriodEdit = (row) => {
 }
 
 const handlePeriodSave = async () => {
-  await periodFormRef.value.validate()
+  // Dialog 內部已經驗證過表單（RecruitmentPeriodDialog 的 handleSave）
   savingPeriod.value = true
   try {
     if (periodDialogMode.value === 'add') {
@@ -1671,280 +1090,48 @@ const shortPeriodLabel = (name) => {
 
 const depositRowClass = ({ row }) => row.has_deposit ? 'deposit-row' : ''
 
-// -------- 月度圖表 --------
-const monthlyTableData = computed(() => stats.value.monthly)
-
-const monthlyBarData = computed(() => {
-  const data = stats.value.monthly
-  if (!data.length) return null
-  return {
-    labels: data.map(m => m.month),
-    datasets: [
-      { label: '參觀人數', data: data.map(m => m.visit), backgroundColor: '#74c69d', borderRadius: 4 },
-      { label: '預繳人數', data: data.map(m => m.deposit), backgroundColor: '#40916c', borderRadius: 4 },
-      { label: '註冊人數', data: data.map(m => m.enrolled ?? 0), backgroundColor: '#1d4ed8', borderRadius: 4 },
-    ],
-  }
+// -------- 圖表資料 & options（全部從 composable 取得）--------
+const {
+  monthlyTableData,
+  monthlyBarData,
+  monthlyRateData,
+  monthlyBarOptions,
+  classBarOptions,
+  sourceClickBarOptions,
+  classBarData,
+  classRateData,
+  monthGradeTableData,
+  sourceBarData,
+  sourceRateData,
+  staffBarData,
+  staffRateData,
+  chuannianNoDeposit,
+  chuannianExpectedBarData,
+  chuannianGradeBarData,
+  periodsTrendData,
+  periodsCountBarData,
+  noDepositReasonBarData,
+  noDepositGradeBarData,
+  areaBarData,
+  areaDepositRateBarData,
+  areaRateBarOptions,
+  areaActiveDistrictCount,
+  barOptions,
+  horizBarOptions,
+  percentBarOptions,
+  percentHorizBarOptions,
+  lineOptions,
+  percentLineOptions,
+  noDepositGradeBarOptions,
+  doughnutOptions,
+} = useRecruitmentCharts({
+  stats,
+  periodsSummary,
+  marketSnapshot,
+  drillToDetail: (patch) => drillToDetail(patch),
 })
 
-const monthlyRateData = computed(() => {
-  const data = stats.value.monthly
-  if (!data.length) return null
-  return {
-    labels: data.map(m => m.month),
-    datasets: [
-      {
-        label: '參觀→預繳率 (%)',
-        data: data.map(m => m.visit_to_deposit_rate ?? 0),
-        borderColor: '#40916c',
-        backgroundColor: 'rgba(64,145,108,0.15)',
-        tension: 0.3,
-        fill: false,
-      },
-      {
-        label: '參觀→註冊率 (%)',
-        data: data.map(m => m.visit_to_enrolled_rate ?? 0),
-        borderColor: '#1d4ed8',
-        backgroundColor: 'rgba(29,78,216,0.15)',
-        tension: 0.3,
-        fill: false,
-      },
-      {
-        label: '排除轉期→註冊率 (%)',
-        data: data.map(m => m.effective_to_enrolled_rate ?? 0),
-        borderColor: '#e76f51',
-        backgroundColor: 'rgba(231,111,81,0.15)',
-        tension: 0.3,
-        fill: false,
-      },
-    ],
-  }
-})
-
-// -------- 圖表互動 options --------
-const monthlyBarOptions = computed(() => ({
-  ...barOptions,
-  onClick: (_ev, elements, chart) => {
-    if (!elements.length) return
-    drillToDetail({ month: chart.data.labels[elements[0].index] })
-  },
-}))
-
-const classBarOptions = computed(() => ({
-  ...barOptions,
-  onClick: (_ev, elements, chart) => {
-    if (!elements.length) return
-    drillToDetail({ grade: chart.data.labels[elements[0].index] })
-  },
-}))
-
-const sourceClickBarOptions = computed(() => ({
-  ...horizBarOptions,
-  onClick: (_ev, elements, chart) => {
-    if (!elements.length) return
-    drillToDetail({ source: chart.data.labels[elements[0].index] })
-  },
-}))
-
-// -------- 班別圖表 --------
-const gradeByMap = computed(() => new Map(stats.value.by_grade.map(g => [g.grade, g])))
-
-const classBarData = computed(() => {
-  const gm = gradeByMap.value
-  return {
-    labels: GRADES_ORDER,
-    datasets: [
-      { label: '參觀人數', data: GRADES_ORDER.map(g => gm.get(g)?.visit ?? 0), backgroundColor: '#74c69d', borderRadius: 4 },
-    ],
-  }
-})
-
-const classRateData = computed(() => {
-  const gm = gradeByMap.value
-  return {
-    labels: GRADES_ORDER,
-    datasets: [{
-      label: '預繳率 (%)',
-      data: GRADES_ORDER.map(g => { const d = gm.get(g); return d?.visit ? +(d.deposit / d.visit * 100).toFixed(1) : 0 }),
-      backgroundColor: '#40916c',
-      borderRadius: 4,
-    }],
-  }
-})
-
-const monthGradeTableData = computed(() => {
-  const mg = stats.value.month_grade
-  return Object.keys(mg).sort().map(m => ({ month: m, ...mg[m] }))
-})
-
-// -------- 來源圖表 --------
-const sourceBarData = computed(() => {
-  const data = stats.value.by_source
-  if (!data.length) return null
-  return {
-    labels: data.map(d => d.source),
-    datasets: [{
-      label: '參觀人數',
-      data: data.map(d => d.visit),
-      backgroundColor: '#52b788',
-      borderRadius: 4,
-    }],
-  }
-})
-
-const sourceRateData = computed(() => {
-  const data = stats.value.by_source
-  if (!data.length) return null
-  return {
-    labels: data.map(d => d.source),
-    datasets: [{
-      label: '預繳率 (%)',
-      data: data.map(d => d.visit ? +(d.deposit / d.visit * 100).toFixed(1) : 0),
-      backgroundColor: '#40916c',
-      borderRadius: 4,
-    }],
-  }
-})
-
-// -------- 接待圖表 --------
-const staffBarData = computed(() => {
-  const data = stats.value.by_referrer
-  if (!data.length) return null
-  return {
-    labels: data.map(d => d.referrer),
-    datasets: [{
-      label: '參觀人數',
-      data: data.map(d => d.visit),
-      backgroundColor: '#74c69d',
-      borderRadius: 4,
-    }],
-  }
-})
-
-const staffRateData = computed(() => {
-  const data = stats.value.by_referrer
-  if (!data.length) return null
-  return {
-    labels: data.map(d => d.referrer),
-    datasets: [{
-      label: '預繳率 (%)',
-      data: data.map(d => d.visit ? +(d.deposit / d.visit * 100).toFixed(1) : 0),
-      backgroundColor: '#40916c',
-      borderRadius: 4,
-    }],
-  }
-})
-
-// -------- 童年綠地 computed --------
-const chuannianNoDeposit = computed(() =>
-  (stats.value.chuannian_visit ?? 0) - (stats.value.chuannian_deposit ?? 0)
-)
-
-const chuannianExpectedBarData = computed(() => {
-  const data = stats.value.chuannian_by_expected
-  if (!data || !data.length) return null
-  return {
-    labels: data.map(d => d.expected_month),
-    datasets: [
-      { label: '預繳', data: data.map(d => d.deposit), backgroundColor: '#40916c', borderRadius: 4 },
-      { label: '未預繳', data: data.map(d => d.visit - d.deposit), backgroundColor: '#e76f51', borderRadius: 4 },
-    ],
-  }
-})
-
-const chuannianGradeBarData = computed(() => {
-  const data = stats.value.chuannian_by_grade
-  if (!data || !data.length) return null
-  return {
-    labels: data.map(d => d.grade),
-    datasets: [
-      { label: '預繳', data: data.map(d => d.deposit), backgroundColor: '#40916c', borderRadius: 4 },
-      { label: '未預繳', data: data.map(d => d.visit - d.deposit), backgroundColor: '#e76f51', borderRadius: 4 },
-    ],
-  }
-})
-
-// -------- 近五年轉換圖表 computed --------
-const periodsTrendData = computed(() => {
-  const trend = periodsSummary.value?.trend
-  if (!trend || !trend.length) return null
-  return {
-    labels: trend.map(d => shortPeriodLabel(d.period_name)),
-    datasets: [
-      {
-        label: '參觀→預繳率(%)',
-        data: trend.map(d => d.visit_to_deposit_rate),
-        borderColor: '#52b788',
-        backgroundColor: 'rgba(82,183,136,0.15)',
-        tension: 0.3,
-        fill: false,
-      },
-      {
-        label: '參觀→註冊率(%)',
-        data: trend.map(d => d.visit_to_enrolled_rate),
-        borderColor: '#40916c',
-        backgroundColor: 'rgba(64,145,108,0.15)',
-        tension: 0.3,
-        fill: false,
-      },
-      {
-        label: '預繳→註冊率(%)',
-        data: trend.map(d => d.deposit_to_enrolled_rate),
-        borderColor: '#3182ce',
-        backgroundColor: 'rgba(49,130,206,0.15)',
-        tension: 0.3,
-        fill: false,
-      },
-    ],
-  }
-})
-
-const periodsCountBarData = computed(() => {
-  const trend = periodsSummary.value?.trend
-  if (!trend || !trend.length) return null
-  return {
-    labels: trend.map(d => shortPeriodLabel(d.period_name)),
-    datasets: [
-      { label: '參觀', data: trend.map(d => d.visit_count), backgroundColor: '#74c69d', borderRadius: 4 },
-      { label: '預繳', data: trend.map(d => d.deposit_count), backgroundColor: '#52b788', borderRadius: 4 },
-      { label: '註冊', data: trend.map(d => d.enrolled_count), backgroundColor: '#40916c', borderRadius: 4 },
-      { label: '未就讀退', data: trend.map(d => d.not_enrolled_deposit ?? 0), backgroundColor: '#f59e0b', borderRadius: 4 },
-      { label: '註冊後退', data: trend.map(d => d.enrolled_after_school ?? 0), backgroundColor: '#e76f51', borderRadius: 4 },
-    ],
-  }
-})
-
-// -------- 未預繳原因圖表 --------
-const noDepositReasonBarData = computed(() => {
-  const data = stats.value.no_deposit_reasons
-  if (!data || !data.length) return null
-  return {
-    labels: data.map(d => d.reason),
-    datasets: [{
-      label: '未預繳筆數',
-      data: data.map(d => d.count),
-      backgroundColor: '#e76f51',
-      borderRadius: 4,
-    }],
-  }
-})
-
-const noDepositGradeBarData = computed(() => {
-  const data = stats.value.no_deposit_reasons
-  if (!data || !data.length) return null
-  const colors = ['#74c69d', '#52b788', '#40916c', '#2d6a4f']
-  return {
-    labels: data.map(d => d.reason),
-    datasets: GRADES_ORDER.map((g, i) => ({
-      label: g,
-      data: data.map(d => d.by_grade?.[g] ?? 0),
-      backgroundColor: colors[i],
-      borderRadius: 4,
-    })),
-  }
-})
-
-// -------- 區域圖表 --------
+// -------- 區域分析：本園座標合併（含市場情報回傳覆蓋）--------
 const currentCampus = computed(() => ({
   ...createEmptyCampus(FALLBACK_SCHOOL_LAT, FALLBACK_SCHOOL_LNG),
   ...campusSetting.value,
@@ -1952,184 +1139,6 @@ const currentCampus = computed(() => ({
   campus_lat: marketSnapshot.value.campus?.campus_lat ?? campusSetting.value.campus_lat ?? FALLBACK_SCHOOL_LAT,
   campus_lng: marketSnapshot.value.campus?.campus_lng ?? campusSetting.value.campus_lng ?? FALLBACK_SCHOOL_LNG,
 }))
-
-const areaBarData = computed(() => {
-  const rows = (marketSnapshot.value.districts || []).filter((row) => row.district !== '未填寫')
-  if (!rows.length) return null
-  return {
-    labels: rows.map((row) => row.district),
-    datasets: [{
-      label: '90 天來源量',
-      data: rows.map((row) => row.lead_count_90d || 0),
-      backgroundColor: '#52b788',
-      borderRadius: 4,
-    }],
-  }
-})
-
-const areaDepositRateBarData = computed(() => {
-  const rows = (marketSnapshot.value.districts || [])
-    .filter((row) => row.district !== '未填寫' && (row.lead_count_90d || 0) > 0)
-  if (!rows.length) return null
-  return {
-    labels: rows.map((row) => row.district),
-    datasets: [{
-      label: '90 天預繳率',
-      data: rows.map((row) => row.deposit_rate_90d || 0),
-      backgroundColor: rows.map((row) => {
-        const r = row.deposit_rate_90d || 0
-        if (r >= 50) return '#22c55e'
-        if (r >= 25) return '#f59e0b'
-        return '#f87171'
-      }),
-      borderRadius: 4,
-    }],
-  }
-})
-
-const areaRateBarOptions = computed(() => ({
-  ...commonChartOptions,
-  indexAxis: 'y',
-  plugins: {
-    legend: { display: false },
-    tooltip: {
-      callbacks: {
-        label: (ctx) => ` ${Number(ctx.raw).toFixed(1)}%`,
-      },
-    },
-  },
-  scales: {
-    x: {
-      min: 0,
-      max: 100,
-      ticks: { callback: (v) => `${v}%` },
-    },
-  },
-}))
-
-const areaActiveDistrictCount = computed(() =>
-  (marketSnapshot.value.districts || []).filter((r) => r.district !== '未填寫' && (r.lead_count_90d || 0) > 0).length
-)
-
-
-// -------- Chart options --------
-const truncateChartLabel = (label, max = 12) => (
-  typeof label === 'string' && label.length > max ? `${label.slice(0, max)}…` : label
-)
-
-const extractChartValue = (context) => {
-  const parsed = context?.parsed
-  if (typeof parsed === 'number') return parsed
-  if (parsed && typeof parsed.y === 'number') return parsed.y
-  if (parsed && typeof parsed.x === 'number') return parsed.x
-  return Number(context?.raw ?? 0)
-}
-
-const formatPercentTooltip = (context) => {
-  const label = context?.dataset?.label ? `${context.dataset.label}: ` : ''
-  const value = Number(extractChartValue(context) ?? 0)
-  return `${label}${value.toFixed(1)}%`
-}
-
-const percentTickFormatter = (value) => `${value}%`
-
-const commonChartOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
-}
-
-const barOptions = {
-  ...commonChartOptions,
-  plugins: { legend: { position: 'top' } },
-}
-
-const horizBarOptions = {
-  ...commonChartOptions,
-  indexAxis: 'y',
-  plugins: { legend: { display: false } },
-}
-
-const percentBarOptions = {
-  ...barOptions,
-  scales: {
-    y: {
-      min: 0,
-      max: 100,
-      ticks: { callback: percentTickFormatter },
-    },
-  },
-  plugins: {
-    ...barOptions.plugins,
-    tooltip: {
-      callbacks: {
-        label: formatPercentTooltip,
-      },
-    },
-  },
-}
-
-const percentHorizBarOptions = {
-  ...horizBarOptions,
-  scales: {
-    x: {
-      min: 0,
-      max: 100,
-      ticks: { callback: percentTickFormatter },
-    },
-  },
-  plugins: {
-    ...horizBarOptions.plugins,
-    tooltip: {
-      callbacks: {
-        label: formatPercentTooltip,
-      },
-    },
-  },
-}
-
-const lineOptions = {
-  ...commonChartOptions,
-  plugins: { legend: { position: 'top' } },
-}
-
-const percentLineOptions = {
-  ...lineOptions,
-  scales: {
-    y: {
-      min: 0,
-      max: 100,
-      ticks: { callback: percentTickFormatter },
-    },
-  },
-  plugins: {
-    ...lineOptions.plugins,
-    tooltip: {
-      callbacks: {
-        label: formatPercentTooltip,
-      },
-    },
-  },
-}
-
-const noDepositGradeBarOptions = {
-  ...barOptions,
-  scales: {
-    x: {
-      ticks: {
-        callback(value) {
-          return truncateChartLabel(this.getLabelForValue(value))
-        },
-        maxRotation: 0,
-        minRotation: 0,
-      },
-    },
-  },
-}
-
-const doughnutOptions = {
-  ...commonChartOptions,
-  plugins: { legend: { position: 'bottom' } },
-}
 </script>
 
 <style scoped>

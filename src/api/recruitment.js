@@ -31,6 +31,10 @@ export const getGeocodePendingCount = () =>
   api.get('/recruitment/competitor-schools/geocode-pending')
 export const geocodeCompetitorSchools = (limit = 826) =>
   api.post('/recruitment/competitor-schools/geocode', null, { params: { limit } })
+export const syncKiangData = () =>
+  api.post('/recruitment/competitor-schools/sync-kiang')
+export const getCampusCompetition = () =>
+  api.get('/recruitment/campus-competition')
 
 // 教育部幼兒園公開資料（高雄市）
 export const getGovKindergartens = (params) => api.get('/recruitment/gov-kindergartens', { params })
