@@ -172,18 +172,13 @@ describe('RecruitmentAddressHeatmap Google Maps mode', () => {
 
     await flushPromises()
 
-    expect(wrapper.text()).toContain('地圖：Google Maps')
+    // 2026-04 重構：移除舊版 label「地圖：Google Maps」與 viewport-change 事件，
+    // 改為內文說明句（含 Google Maps 字樣）。
+    expect(wrapper.text()).toContain('Google Maps')
     expect(wrapper.find('.heatmap-map').exists()).toBe(true)
     expect(maps.Map).toHaveBeenCalledTimes(1)
     expect(maps.Marker).toHaveBeenCalled()
     // 新版改用 Marker + SVG icon 取代 Circle，不再呼叫 mapsApi.Circle
     expect(wrapper.text()).toContain('附近幼兒園')
-    expect(wrapper.emitted('viewport-change')?.at(-1)?.[0]).toEqual({
-      south: 22.62,
-      west: 120.29,
-      north: 22.69,
-      east: 120.35,
-      zoom: 13,
-    })
   })
 })

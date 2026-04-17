@@ -51,6 +51,10 @@ vi.mock('@/stores/classroom', () => ({
   }),
 }))
 
+vi.mock('@/stores/academicTerm', () => ({
+  useAcademicTermStore: () => ({ school_year: 114, semester: 1 }),
+}))
+
 vi.mock('@/utils/auth', () => ({
   hasPermission: vi.fn(() => true),
 }))

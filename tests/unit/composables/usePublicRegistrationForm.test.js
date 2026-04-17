@@ -88,10 +88,22 @@ describe('usePublicRegistrationForm', () => {
     const { form, canSubmit } = makeComposable()
     form.name = '王小明'
     form.birthday = '2020-01-01'
+    form.parent_phone = '0912345678'
     form.class_name = '大班'
     form.selectedCourses = ['美術']
 
     expect(canSubmit.value).toBe(true)
+  })
+
+  it('canSubmit 電話格式錯誤時為 false', () => {
+    const { form, canSubmit } = makeComposable()
+    form.name = '王小明'
+    form.birthday = '2020-01-01'
+    form.parent_phone = '123'  // 非 09 開頭 10 碼
+    form.class_name = '大班'
+    form.selectedCourses = ['美術']
+
+    expect(canSubmit.value).toBe(false)
   })
 
   it('totalCost 計算課程 + 用品費用', () => {

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { simulateSalary } from '@/api/salary'
 import { useEmployeeStore } from '@/stores/employee'
 import { ElMessage } from 'element-plus'
@@ -32,11 +32,74 @@ const form = reactive({
   extra_overtime_pay: 0,
 })
 
-const runSimulate = async () => {
+// ── 試算結果快取（sessionStorage）──────────────────────────────────────
+// 避免重新整理頁面或切換 tab 時丟失上一次試算結果；
+// 也能讓相同參數不再打 API（省 rate-limit + 後端 CPU）。
+const STORAGE_KEY_LAST = 'salary_simulate_last_v1'
+const STORAGE_KEY_CACHE = 'salary_simulate_cache_v1'
+const CACHE_TTL_MS = 10 * 60 * 1000 // 10 分鐘
+const CACHE_MAX_ENTRIES = 20
+
+const buildCacheKey = () => {
+  const payload = {
+    e: form.employee_id,
+    y: form.year,
+    m: form.month,
+    lc: form.late_count,
+    ec: form.early_leave_count,
+    mc: form.missing_punch_count,
+    lm: form.total_late_minutes,
+    em: form.total_early_minutes,
+    wd: form.work_days,
+    pl: form.extra_personal_leave_hours || 0,
+    sl: form.extra_sick_leave_hours || 0,
+    en: form.enrollment_override,
+    op: form.extra_overtime_pay || 0,
+  }
+  return JSON.stringify(payload)
+}
+
+const readCache = () => {
+  try {
+    return JSON.parse(sessionStorage.getItem(STORAGE_KEY_CACHE) || '{}') || {}
+  } catch {
+    return {}
+  }
+}
+
+const writeCache = (cache) => {
+  try {
+    sessionStorage.setItem(STORAGE_KEY_CACHE, JSON.stringify(cache))
+  } catch {
+    /* sessionStorage 滿/不可用時靜默忽略 */
+  }
+}
+
+const pruneCache = (cache) => {
+  const entries = Object.entries(cache)
+  const fresh = entries.filter(([, v]) => v && v.ts && Date.now() - v.ts < CACHE_TTL_MS)
+  fresh.sort(([, a], [, b]) => b.ts - a.ts)
+  return Object.fromEntries(fresh.slice(0, CACHE_MAX_ENTRIES))
+}
+
+const runSimulate = async ({ useCache = true } = {}) => {
   if (!form.employee_id) {
     ElMessage.warning('請先選擇員工')
     return
   }
+
+  const cacheKey = buildCacheKey()
+  if (useCache) {
+    const cache = pruneCache(readCache())
+    const hit = cache[cacheKey]
+    if (hit && hit.data) {
+      result.value = hit.data
+      persistLast(hit.data)
+      ElMessage.success({ message: '已載入快取結果', duration: 1500 })
+      return
+    }
+  }
+
   loading.value = true
   result.value = null
   try {
@@ -58,10 +121,39 @@ const runSimulate = async () => {
       },
     })
     result.value = res.data
+    persistLast(res.data)
+    const cache = pruneCache(readCache())
+    cache[cacheKey] = { ts: Date.now(), data: res.data }
+    writeCache(pruneCache(cache))
   } catch (e) {
     ElMessage.error('試算失敗: ' + (e.response?.data?.detail || e.message))
   } finally {
     loading.value = false
+  }
+}
+
+const persistLast = (data) => {
+  try {
+    sessionStorage.setItem(
+      STORAGE_KEY_LAST,
+      JSON.stringify({ form: { ...form }, result: data, ts: Date.now() }),
+    )
+  } catch {
+    /* ignore */
+  }
+}
+
+const restoreLast = () => {
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY_LAST)
+    if (!raw) return
+    const saved = JSON.parse(raw)
+    if (!saved?.form || !saved?.result) return
+    if (Date.now() - (saved.ts || 0) > CACHE_TTL_MS) return
+    Object.assign(form, saved.form)
+    result.value = saved.result
+  } catch {
+    /* ignore */
   }
 }
 
@@ -77,6 +169,11 @@ const resetOverrides = () => {
   form.enrollment_override = null
   form.extra_overtime_pay = 0
   result.value = null
+  try {
+    sessionStorage.removeItem(STORAGE_KEY_LAST)
+  } catch {
+    /* ignore */
+  }
 }
 
 const hasActual = computed(() => result.value?.actual != null)
@@ -118,7 +215,10 @@ const formatDiff = (val) => {
   return (val > 0 ? '+' : '') + money(val)
 }
 
-onMounted(() => employeeStore.fetchEmployees())
+onMounted(() => {
+  employeeStore.fetchEmployees()
+  restoreLast()
+})
 </script>
 
 <template>
@@ -134,7 +234,7 @@ onMounted(() => employeeStore.fetchEmployees())
           </el-tooltip>
         </template>
 
-        <el-form label-width="100px" size="small" @submit.prevent="runSimulate">
+        <el-form label-width="100px" size="small" @submit.prevent="runSimulate()">
           <el-form-item label="員工">
             <el-select
               v-model="form.employee_id"
@@ -213,6 +313,11 @@ onMounted(() => employeeStore.fetchEmployees())
             <el-button type="primary" native-type="submit" :loading="loading" style="flex: 1">
               開始試算
             </el-button>
+            <el-tooltip content="忽略快取、強制重新計算" placement="top">
+              <el-button :disabled="loading" @click="runSimulate({ useCache: false })">
+                重算
+              </el-button>
+            </el-tooltip>
             <el-button @click="resetOverrides">重置</el-button>
           </div>
         </el-form>

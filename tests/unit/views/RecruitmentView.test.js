@@ -689,31 +689,18 @@ describe('RecruitmentView', () => {
     expect(getRecruitmentMarketIntelligence).toHaveBeenCalled()
   })
 
-  it('fetches nearby kindergartens when the map viewport changes', async () => {
+  it('fetches nearby kindergartens when loading the area tab', async () => {
+    // 2026-04 重構：移除 viewport-change 綁定，改為切換到「區域分析」tab 時
+    // 一次載入周圍幼兒園（無 bounds / no-arg 呼叫）。
     const wrapper = mountView()
 
     await flushPromises()
+    getRecruitmentNearbyKindergartens.mockClear()
+
     await wrapper.vm.onTabClick({ paneName: 'area' })
     await flushPromises()
 
-    getRecruitmentNearbyKindergartens.mockClear()
-
-    wrapper.findComponent({ name: 'RecruitmentAddressHeatmap' }).vm.$emit('viewport-change', {
-      south: 22.62,
-      west: 120.29,
-      north: 22.69,
-      east: 120.35,
-      zoom: 13,
-    })
-    await flushPromises()
-
-    expect(getRecruitmentNearbyKindergartens).toHaveBeenCalledWith({
-      south: 22.62,
-      west: 120.29,
-      north: 22.69,
-      east: 120.35,
-      zoom: 13,
-    })
+    expect(getRecruitmentNearbyKindergartens).toHaveBeenCalled()
     expect(wrapper.vm.nearbySchools).toHaveLength(2)
     expect(wrapper.vm.nearbySchools[0]).toMatchObject({
       place_id: 'place-1',
@@ -721,42 +708,11 @@ describe('RecruitmentView', () => {
     })
   })
 
-  it('does not refetch nearby kindergartens for the same viewport signature', async () => {
-    const wrapper = mountView()
-    const bounds = {
-      south: 22.62,
-      west: 120.29,
-      north: 22.69,
-      east: 120.35,
-      zoom: 13,
-    }
-
-    await flushPromises()
-    await wrapper.vm.onTabClick({ paneName: 'area' })
-    await flushPromises()
-
-    getRecruitmentNearbyKindergartens.mockClear()
-
-    wrapper.findComponent({ name: 'RecruitmentAddressHeatmap' }).vm.$emit('viewport-change', bounds)
-    await flushPromises()
-    wrapper.findComponent({ name: 'RecruitmentAddressHeatmap' }).vm.$emit('viewport-change', { ...bounds })
-    await flushPromises()
-
-    expect(getRecruitmentNearbyKindergartens).toHaveBeenCalledTimes(1)
-  })
-
   it('keeps area hotspot data intact when nearby kindergarten provider is unavailable', async () => {
-    getRecruitmentNearbyKindergartens.mockResolvedValueOnce({
+    getRecruitmentNearbyKindergartens.mockResolvedValue({
       data: {
         provider_available: false,
         provider_name: 'google',
-        query_bounds: {
-          south: 22.62,
-          west: 120.29,
-          north: 22.69,
-          east: 120.35,
-          zoom: 13,
-        },
         total: 0,
         schools: [],
         message: '尚未設定 Google Places API',
@@ -767,15 +723,6 @@ describe('RecruitmentView', () => {
 
     await flushPromises()
     await wrapper.vm.onTabClick({ paneName: 'area' })
-    await flushPromises()
-
-    wrapper.findComponent({ name: 'RecruitmentAddressHeatmap' }).vm.$emit('viewport-change', {
-      south: 22.62,
-      west: 120.29,
-      north: 22.69,
-      east: 120.35,
-      zoom: 13,
-    })
     await flushPromises()
 
     expect(wrapper.vm.nearbySchoolsAvailable).toBe(false)
@@ -894,11 +841,12 @@ describe('RecruitmentView', () => {
     expect(recruitmentViewSource).toContain('@media (max-width: 768px)')
   })
 
-  it('removes the inline district detail panel and keeps hotspot filter hint', () => {
+  it('extracts district filter UI out of the main view', () => {
+    // 2026-04 重構：原本 RecruitmentView 內嵌的 district 篩選相關邏輯
+    // 已搬到 RecruitmentAreaTab 子元件，主視圖只保留 v-model 綁定與 prop 傳遞。
     expect(recruitmentViewSource).not.toContain('來源地址明細')
     expect(recruitmentViewSource).not.toContain('selectedDistrictDetail')
     expect(recruitmentViewSource).not.toContain('selectedDistrictHotspots')
-    expect(recruitmentViewSource).toContain('點擊列篩選熱點圖')
-    expect(recruitmentViewSource).toContain("selectedMarketDistrict = selectedMarketDistrict === $event.district ? '' : $event.district")
+    expect(recruitmentViewSource).toContain('v-model:selected-district="selectedMarketDistrict"')
   })
 })

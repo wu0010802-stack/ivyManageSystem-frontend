@@ -189,7 +189,8 @@ describe('RecruitmentAddressHeatmap', () => {
     await flushPromises()
 
     expect(wrapper.find('.heatmap-map').exists()).toBe(true)
-    expect(wrapper.text()).toContain('地圖：OpenStreetMap')
+    // 2026-04 重構：舊版 UI label「地圖：OpenStreetMap」已改為說明句。
+    expect(wrapper.text()).toContain('OpenStreetMap')
   })
 
   it('renders nearby schools, emits sync requests, and uses smaller hotspot circles', async () => {
@@ -295,8 +296,9 @@ describe('RecruitmentAddressHeatmap', () => {
 
     await flushPromises()
 
-    expect(wrapper.text()).toContain('Geocoding：GOOGLE')
-    expect(wrapper.text()).toContain('地圖：OpenStreetMap')
+    // 2026-04 重構：移除「Geocoding：GOOGLE」「地圖：OpenStreetMap」label 與
+    // viewport-change 事件；改為顯示說明句，OpenStreetMap 字樣仍保留於狀態說明。
+    expect(wrapper.text()).toContain('OpenStreetMap')
     // 模板已從「個待升級」改為「待升級」
     expect(wrapper.text()).toContain('待升級')
     // 熱點的 formatted_address 現在只顯示在地圖彈出視窗，不在側邊欄
@@ -310,24 +312,18 @@ describe('RecruitmentAddressHeatmap', () => {
     expect(
       circleMarker.mock.calls.some(([, options]) => options?.radius === 3)
     ).toBe(true)
-    expect(wrapper.emitted('viewport-change')?.at(-1)?.[0]).toEqual({
-      south: 22.62,
-      west: 120.29,
-      north: 22.69,
-      east: 120.35,
-      zoom: 13,
-    })
 
     const buttons = wrapper.findAll('button')
-    // 新版 DOM 順序（「設為本園」已改為 el-select 下拉，不再是按鈕）：
-    // 0: 全台幼兒園地圖切換
-    // 1: sync incremental, 2: sync resync_google
-    // 3: 詳細資料(school[0])
-    // 4: 詳細資料(school[1])
-    expect(buttons).toHaveLength(5)
+    // 2026-04 重構：「全台幼兒園地圖切換」按鈕已移除。
+    // 當前 DOM 順序：
+    // 0: sync incremental ("同步全部地址")
+    // 1: sync resync_google ("Google 重同步")
+    // 2: 詳細資料(school[0])
+    // 3: 詳細資料(school[1])
+    expect(buttons).toHaveLength(4)
 
+    await buttons[0].trigger('click')
     await buttons[1].trigger('click')
-    await buttons[2].trigger('click')
     expect(wrapper.emitted('sync')).toEqual([
       ['incremental'],
       ['resync_google'],
@@ -335,7 +331,7 @@ describe('RecruitmentAddressHeatmap', () => {
 
     // 點第一所學校的「詳細資料」展開政府資料面板
     // fetch mock 已在掛載前設定（URL-based），preschool/punish 資料已快取
-    await buttons[3].trigger('click')
+    await buttons[2].trigger('click')
     await flushPromises()
     const govDetail = wrapper.find('.preschool-gov-detail')
     expect(govDetail.exists()).toBe(true)
@@ -409,7 +405,7 @@ describe('RecruitmentAddressHeatmap', () => {
     await flushPromises()
 
     expect(wrapper.find('.heatmap-map').exists()).toBe(true)
-    expect(wrapper.text()).toContain('地圖：OpenStreetMap')
+    // 2026-04 重構：舊版 label「地圖：OpenStreetMap」已移除，fallback 說明保留。
     expect(wrapper.text()).toContain('Google Maps 載入失敗，已自動改用 OpenStreetMap。')
     expect(leafletMap).toHaveBeenCalledTimes(1)
     // 確認 Google Maps 失敗警告有被記錄（不限制總次數，因元件可能有其他 Vue 警告）

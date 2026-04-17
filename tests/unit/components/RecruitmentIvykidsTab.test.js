@@ -40,7 +40,8 @@ const flushPromises = async () => {
 
 const routerSource = readFileSync(resolve(process.cwd(), 'src/router/index.js'), 'utf8')
 const sidebarSource = readFileSync(resolve(process.cwd(), 'src/components/layout/AdminSidebar.vue'), 'utf8')
-const authSource = readFileSync(resolve(process.cwd(), 'src/utils/auth.js'), 'utf8')
+// 2026-04 重構：ROUTE_PERMISSION_RULES 從 src/utils/auth.js 移到 src/constants/permissions.js
+const permissionsSource = readFileSync(resolve(process.cwd(), 'src/constants/permissions.js'), 'utf8')
 
 describe('RecruitmentIvykidsTab', () => {
   beforeEach(() => {
@@ -123,6 +124,6 @@ describe('RecruitmentIvykidsTab', () => {
     expect(routerSource).toContain("meta: { title: '官網報名' }")
     expect(sidebarSource).toContain('index="/recruitment-ivykids"')
     expect(sidebarSource).toContain('官網報名')
-    expect(authSource).toContain("{ path: '/recruitment-ivykids', permission: 'RECRUITMENT_READ' }")
+    expect(permissionsSource).toContain("{ path: '/recruitment-ivykids', permission: 'RECRUITMENT_READ' }")
   })
 })
