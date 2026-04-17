@@ -4,11 +4,17 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { toggleArrayItem } from '@/utils/arrayUtils'
 
 const DRAFT_KEY = 'activity_draft'
+const TW_MOBILE_RE = /^09\d{8}$/
+
+function normalizeMobile(raw) {
+  return String(raw || '').replace(/[\s\-().]/g, '')
+}
 
 export function usePublicRegistrationForm({ courses, supplies, availability }) {
   const form = reactive({
     name: '',
     birthday: '',
+    parent_phone: '',
     class_name: '',
     selectedCourses: [],
     selectedSupplies: [],
@@ -48,10 +54,18 @@ export function usePublicRegistrationForm({ courses, supplies, availability }) {
     }
   }
 
+  const phoneError = computed(() => {
+    if (!form.parent_phone) return ''
+    const normalized = normalizeMobile(form.parent_phone)
+    if (!TW_MOBILE_RE.test(normalized)) return '請輸入 09 開頭的 10 碼手機號碼'
+    return ''
+  })
+
   const canSubmit = computed(() =>
     form.name.trim() &&
     form.birthday &&
     form.class_name &&
+    TW_MOBILE_RE.test(normalizeMobile(form.parent_phone)) &&
     form.selectedCourses.length > 0
   )
 
@@ -79,6 +93,7 @@ export function usePublicRegistrationForm({ courses, supplies, availability }) {
   function resetForm() {
     form.name = ''
     form.birthday = ''
+    form.parent_phone = ''
     form.class_name = ''
     form.selectedCourses = []
     form.selectedSupplies = []
@@ -92,6 +107,7 @@ export function usePublicRegistrationForm({ courses, supplies, availability }) {
       const res = await publicRegister({
         name: form.name.trim(),
         birthday: form.birthday,
+        parent_phone: normalizeMobile(form.parent_phone),
         class_name: form.class_name,
         courses: form.selectedCourses,
         supplies: form.selectedSupplies,
@@ -109,7 +125,7 @@ export function usePublicRegistrationForm({ courses, supplies, availability }) {
 
   return {
     form, submitting, submitResult, supplyExpanded,
-    canSubmit, totalCost,
+    canSubmit, totalCost, phoneError,
     toggleCourse, toggleSupply, resetForm, handleSubmit, loadDraftIfExists,
   }
 }

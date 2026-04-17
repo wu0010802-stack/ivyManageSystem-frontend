@@ -1,8 +1,13 @@
 <template>
   <div class="activity-registrations">
-    <div class="toolbar">
+    <div class="page-header">
       <h2>報名管理</h2>
+    </div>
+
+    <div class="mode-list">
+    <div class="toolbar">
       <div class="filters">
+        <AcademicTermSelector />
         <el-input
           v-model="searchText"
           placeholder="搜尋學生/班級"
@@ -26,6 +31,21 @@
         <el-button :loading="loading" :disabled="loading" @click="handleSearch">搜尋</el-button>
         <el-button @click="resetFilters">重置</el-button>
         <el-button type="success" :loading="exporting" :disabled="exporting" @click="handleExport">匯出 Excel</el-button>
+        <el-button v-if="canWrite" type="primary" @click="openCreateDialog">
+          <el-icon><Plus /></el-icon>
+          新增報名
+        </el-button>
+        <el-badge
+          v-if="canWrite"
+          :value="pendingCount"
+          :hidden="pendingCount === 0"
+          type="warning"
+          class="pending-badge"
+        >
+          <el-button type="warning" plain @click="goToPending">
+            待審核佇列
+          </el-button>
+        </el-badge>
       </div>
     </div>
 
@@ -48,7 +68,18 @@
     >
       <el-table-column type="selection" width="45" />
       <el-table-column label="學生" prop="student_name" min-width="90" />
-      <el-table-column label="班級" prop="class_name" min-width="80" />
+      <el-table-column label="班級" prop="class_name" min-width="100">
+        <template #default="{ row }">
+          <span>{{ row.class_name || '—' }}</span>
+          <el-tag
+            v-if="row.match_status"
+            size="small"
+            :type="matchStatusTag(row.match_status).type"
+            effect="plain"
+            class="source-tag"
+          >{{ matchStatusTag(row.match_status).label }}</el-tag>
+        </template>
+      </el-table-column>
       <el-table-column label="課程" prop="course_names" min-width="160" show-overflow-tooltip />
       <el-table-column label="繳費" width="120" align="center">
         <template #default="{ row }">
@@ -110,6 +141,12 @@
         <el-skeleton :rows="6" animated />
       </div>
       <div v-else-if="detail" class="detail-body">
+        <div class="section-header">
+          <span class="section-header-title">基本資料</span>
+          <el-button v-if="canWrite" size="small" type="primary" link @click="openEditBasicDialog">
+            <el-icon><Edit /></el-icon>編輯
+          </el-button>
+        </div>
         <el-descriptions :column="2" border size="small">
           <el-descriptions-item label="學生姓名">{{ detail.student_name }}</el-descriptions-item>
           <el-descriptions-item label="班級">{{ detail.class_name }}</el-descriptions-item>
@@ -173,7 +210,12 @@
           </div>
         </div>
 
-        <div class="section-title">課程（總計：${{ detail.total_amount?.toLocaleString() }}）</div>
+        <div class="section-header">
+          <span class="section-header-title">課程（總計：${{ detail.total_amount?.toLocaleString() }}）</span>
+          <el-button v-if="canWrite" size="small" type="primary" link @click="openAddCourseDialog">
+            <el-icon><Plus /></el-icon>新增課程
+          </el-button>
+        </div>
         <el-table :data="detail.courses" size="small" border>
           <el-table-column label="課程名稱" prop="name" />
           <el-table-column label="金額" prop="price" width="80" align="right">
@@ -206,11 +248,27 @@
           </el-table-column>
         </el-table>
 
-        <div class="section-title">用品</div>
+        <div class="section-header">
+          <span class="section-header-title">用品</span>
+          <el-button v-if="canWrite" size="small" type="primary" link @click="openAddSupplyDialog">
+            <el-icon><Plus /></el-icon>新增用品
+          </el-button>
+        </div>
         <el-table :data="detail.supplies" size="small" border>
           <el-table-column label="用品名稱" prop="name" />
           <el-table-column label="金額" prop="price" width="80" align="right">
             <template #default="{ row }">{{ row.price ? `$${row.price}` : '-' }}</template>
+          </el-table-column>
+          <el-table-column v-if="canWrite" label="操作" width="80" align="center">
+            <template #default="{ row }">
+              <el-button
+                size="small"
+                type="danger"
+                plain
+                :loading="deletingSupplyId === row.id"
+                @click="handleRemoveSupply(row)"
+              >移除</el-button>
+            </template>
           </el-table-column>
         </el-table>
 
@@ -297,22 +355,266 @@
         >確認送出</el-button>
       </template>
     </el-dialog>
+
+    <!-- 新增報名 Dialog -->
+    <el-dialog
+      v-model="createDialogVisible"
+      title="新增報名（後台手動）"
+      width="560px"
+      :close-on-click-modal="false"
+    >
+      <el-form :model="createForm" label-width="90px" ref="createFormRef">
+        <el-form-item label="學生姓名" required>
+          <el-input v-model="createForm.name" maxlength="50" placeholder="請輸入學生姓名" />
+        </el-form-item>
+        <el-form-item label="生日" required>
+          <el-date-picker
+            v-model="createForm.birthday"
+            type="date"
+            format="YYYY-MM-DD"
+            value-format="YYYY-MM-DD"
+            placeholder="YYYY-MM-DD"
+            style="width: 100%"
+          />
+        </el-form-item>
+        <el-form-item label="班級" required>
+          <el-select v-model="createForm.class_" placeholder="選擇班級" style="width: 100%">
+            <el-option v-for="n in classroomOptions" :key="n" :label="n" :value="n" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="Email">
+          <el-input v-model="createForm.email" maxlength="200" placeholder="選填" />
+        </el-form-item>
+        <el-form-item label="課程">
+          <el-select
+            v-model="createForm.courseNames"
+            multiple
+            filterable
+            placeholder="選擇課程（可多選）"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="c in courseOptions"
+              :key="c.id"
+              :label="`${c.name}（$${c.price}，剩 ${c.remaining}/${c.capacity}）`"
+              :value="c.name"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="用品">
+          <el-select
+            v-model="createForm.supplyNames"
+            multiple
+            filterable
+            placeholder="選擇用品（可多選）"
+            style="width: 100%"
+            :loading="loadingSupplies"
+          >
+            <el-option
+              v-for="s in supplyOptions"
+              :key="s.id"
+              :label="`${s.name}（$${s.price}）`"
+              :value="s.name"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="備註">
+          <el-input v-model="createForm.remark" type="textarea" :rows="2" maxlength="500" />
+        </el-form-item>
+      </el-form>
+      <div class="create-summary">
+        總計：<strong>NT$ {{ createTotal.toLocaleString() }}</strong>
+        <span v-if="createTotal === 0" class="create-hint">（未選擇課程或用品）</span>
+      </div>
+      <template #footer>
+        <el-button @click="createDialogVisible = false">取消</el-button>
+        <el-button
+          type="primary"
+          :loading="creating"
+          :disabled="!createFormValid"
+          @click="handleCreate"
+        >確認新增</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 編輯基本資料 Dialog -->
+    <el-dialog
+      v-model="editBasicDialogVisible"
+      title="編輯基本資料"
+      width="480px"
+      :close-on-click-modal="false"
+    >
+      <el-form :model="editBasicForm" label-width="90px">
+        <el-form-item label="學生姓名" required>
+          <el-input v-model="editBasicForm.name" maxlength="50" />
+        </el-form-item>
+        <el-form-item label="生日" required>
+          <el-date-picker
+            v-model="editBasicForm.birthday"
+            type="date"
+            format="YYYY-MM-DD"
+            value-format="YYYY-MM-DD"
+            placeholder="YYYY-MM-DD"
+            style="width: 100%"
+          />
+        </el-form-item>
+        <el-form-item label="班級" required>
+          <el-select v-model="editBasicForm.class_" style="width: 100%">
+            <el-option v-for="n in classroomOptions" :key="n" :label="n" :value="n" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="Email">
+          <el-input v-model="editBasicForm.email" maxlength="200" placeholder="選填" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="editBasicDialogVisible = false">取消</el-button>
+        <el-button
+          type="primary"
+          :loading="savingEditBasic"
+          :disabled="!editBasicValid"
+          @click="handleSaveEditBasic"
+        >儲存</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 新增課程 Dialog -->
+    <el-dialog
+      v-model="addCourseDialogVisible"
+      title="新增課程"
+      width="480px"
+      :close-on-click-modal="false"
+    >
+      <el-form label-width="90px">
+        <el-form-item label="選擇課程" required>
+          <el-select
+            v-model="addCourseId"
+            filterable
+            placeholder="選擇要加入的課程"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="c in availableCoursesForAdd"
+              :key="c.id"
+              :label="`${c.name}（$${c.price}，剩 ${c.remaining}/${c.capacity}）`"
+              :value="c.id"
+            >
+              <span>{{ c.name }}</span>
+              <span style="float: right; color: #999; font-size: 12px">
+                ${{ c.price }}｜{{ c.remaining > 0 ? `剩 ${c.remaining}` : (c.allow_waitlist ? '候補' : '額滿') }}
+              </span>
+            </el-option>
+          </el-select>
+        </el-form-item>
+        <el-alert
+          v-if="addCourseWaitlistHint"
+          type="warning"
+          :closable="false"
+          :title="addCourseWaitlistHint"
+          show-icon
+        />
+      </el-form>
+      <template #footer>
+        <el-button @click="addCourseDialogVisible = false">取消</el-button>
+        <el-button
+          type="primary"
+          :loading="addingCourse"
+          :disabled="!addCourseId"
+          @click="handleAddCourse"
+        >確認新增</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 新增用品 Dialog -->
+    <el-dialog
+      v-model="addSupplyDialogVisible"
+      title="新增用品"
+      width="480px"
+      :close-on-click-modal="false"
+    >
+      <el-form label-width="90px">
+        <el-form-item label="選擇用品" required>
+          <el-select
+            v-model="addSupplyId"
+            filterable
+            placeholder="選擇要加入的用品"
+            style="width: 100%"
+            :loading="loadingSupplies"
+          >
+            <el-option
+              v-for="s in supplyOptions"
+              :key="s.id"
+              :label="`${s.name}（$${s.price}）`"
+              :value="s.id"
+            />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="addSupplyDialogVisible = false">取消</el-button>
+        <el-button
+          type="primary"
+          :loading="addingSupply"
+          :disabled="!addSupplyId"
+          @click="handleAddSupply"
+        >確認新增</el-button>
+      </template>
+    </el-dialog>
+    </div><!-- /.mode-list -->
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Plus, Edit } from '@element-plus/icons-vue'
 import {
   getRegistrationDetail,
   updateRemark, promoteWaitlist, deleteRegistration,
   exportRegistrations,
   getRegistrationPayments, addRegistrationPayment, deleteRegistrationPayment,
   withdrawCourse, getRegistrationTime,
+  createRegistration, getSupplies,
+  updateRegistrationBasic, addRegistrationCourse,
+  addRegistrationSupply, removeRegistrationSupply,
+  listPendingRegistrations,
 } from '@/api/activity'
+import { useAcademicTermStore } from '@/stores/academicTerm'
 import { PAYMENT_STATUS_TAG_TYPE, PAYMENT_STATUS_LABEL, COURSE_STATUS_TAG_TYPE, COURSE_STATUS_LABEL } from '@/constants/activity'
 import { useActivityRegistration } from '@/composables/useActivityRegistration'
 import { formatActivityDate } from '@/utils/format'
+import { hasPermission } from '@/utils/auth'
+import AcademicTermSelector from '@/components/common/AcademicTermSelector.vue'
+
+const canWrite = computed(() => hasPermission('ACTIVITY_WRITE'))
+const termStore = useAcademicTermStore()
+const router = useRouter()
+
+const pendingCount = ref(0)
+async function loadPendingCount() {
+  if (!canWrite.value) return
+  try {
+    const res = await listPendingRegistrations({ skip: 0, limit: 1 })
+    pendingCount.value = res.data?.total || 0
+  } catch {
+    pendingCount.value = 0
+  }
+}
+function goToPending() {
+  router.push({ name: 'activity-registrations-pending' })
+}
+
+const MATCH_STATUS_TAG = {
+  matched: { label: '系統自動', type: 'success' },
+  manual: { label: '人工指定', type: 'primary' },
+  pending: { label: '待審核', type: 'warning' },
+  rejected: { label: '已拒絕', type: 'info' },
+  unmatched: { label: '未比對', type: 'info' },
+}
+function matchStatusTag(status) {
+  return MATCH_STATUS_TAG[status] || { label: status || '—', type: 'info' }
+}
 
 const {
   list, total, page, pageSize, loading,
@@ -603,10 +905,266 @@ async function handleExport() {
   }
 }
 
+// ── 新增報名 ────────────────────────────────────────────
+const createDialogVisible = ref(false)
+const creating = ref(false)
+const loadingSupplies = ref(false)
+const supplyOptions = ref([])
+const createFormRef = ref(null)
+const createForm = reactive({
+  name: '',
+  birthday: '',
+  class_: '',
+  email: '',
+  courseNames: [],
+  supplyNames: [],
+  remark: '',
+})
+
+const createFormValid = computed(() =>
+  !!createForm.name && !!createForm.birthday && !!createForm.class_
+)
+
+const createTotal = computed(() => {
+  let sum = 0
+  for (const n of createForm.courseNames) {
+    const c = courseOptions.value.find((x) => x.name === n)
+    if (c) sum += c.price || 0
+  }
+  for (const n of createForm.supplyNames) {
+    const s = supplyOptions.value.find((x) => x.name === n)
+    if (s) sum += s.price || 0
+  }
+  return sum
+})
+
+async function openCreateDialog() {
+  createForm.name = ''
+  createForm.birthday = ''
+  createForm.class_ = ''
+  createForm.email = ''
+  createForm.courseNames = []
+  createForm.supplyNames = []
+  createForm.remark = ''
+  createDialogVisible.value = true
+
+  if (supplyOptions.value.length === 0) {
+    loadingSupplies.value = true
+    try {
+      const res = await getSupplies({
+        school_year: termStore.school_year,
+        semester: termStore.semester,
+      })
+      supplyOptions.value = res.data.supplies || []
+    } catch {
+      ElMessage.warning('用品清單載入失敗')
+    } finally {
+      loadingSupplies.value = false
+    }
+  }
+}
+
+async function handleCreate() {
+  if (!createFormValid.value) return
+  creating.value = true
+  try {
+    const payload = {
+      name: createForm.name.trim(),
+      birthday: createForm.birthday,
+      class: createForm.class_,
+      email: createForm.email?.trim() || null,
+      remark: createForm.remark || '',
+      courses: createForm.courseNames.map((name) => ({ name, price: '' })),
+      supplies: createForm.supplyNames.map((name) => ({ name, price: '' })),
+      school_year: termStore.school_year,
+      semester: termStore.semester,
+    }
+    const res = await createRegistration(payload)
+    ElMessage.success(res.data.message || '新增成功')
+    createDialogVisible.value = false
+    await fetchList()
+    // 重新載入課程選項以更新剩餘名額
+    loadOptions()
+    // 強制重新載入用品（本次已新增可能影響）
+    supplyOptions.value = []
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '新增失敗')
+  } finally {
+    creating.value = false
+  }
+}
+
+// ── 編輯基本資料 ────────────────────────────────────────
+const editBasicDialogVisible = ref(false)
+const savingEditBasic = ref(false)
+const editBasicForm = reactive({
+  name: '',
+  birthday: '',
+  class_: '',
+  email: '',
+})
+const editBasicValid = computed(() =>
+  !!editBasicForm.name && !!editBasicForm.birthday && !!editBasicForm.class_
+)
+
+function openEditBasicDialog() {
+  if (!detail.value) return
+  editBasicForm.name = detail.value.student_name || ''
+  editBasicForm.birthday = detail.value.birthday || ''
+  editBasicForm.class_ = detail.value.class_name || ''
+  editBasicForm.email = detail.value.email || ''
+  editBasicDialogVisible.value = true
+}
+
+async function handleSaveEditBasic() {
+  if (!detail.value || !editBasicValid.value) return
+  savingEditBasic.value = true
+  try {
+    await updateRegistrationBasic(detail.value.id, {
+      name: editBasicForm.name.trim(),
+      birthday: editBasicForm.birthday,
+      class: editBasicForm.class_,
+      email: editBasicForm.email?.trim() || null,
+    })
+    ElMessage.success('基本資料已更新')
+    editBasicDialogVisible.value = false
+    const res = await getRegistrationDetail(detail.value.id)
+    detail.value = res.data
+    fetchList()
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '更新失敗')
+  } finally {
+    savingEditBasic.value = false
+  }
+}
+
+// ── 新增課程 ─────────────────────────────────────────────
+const addCourseDialogVisible = ref(false)
+const addingCourse = ref(false)
+const addCourseId = ref(null)
+
+const availableCoursesForAdd = computed(() => {
+  if (!detail.value) return courseOptions.value
+  const existing = new Set((detail.value.courses || []).map((c) => c.course_id))
+  return courseOptions.value.filter((c) => !existing.has(c.id))
+})
+
+const addCourseWaitlistHint = computed(() => {
+  if (!addCourseId.value) return ''
+  const c = courseOptions.value.find((x) => x.id === addCourseId.value)
+  if (!c) return ''
+  if (c.remaining > 0) return ''
+  if (c.allow_waitlist) return `課程「${c.name}」已額滿，新增後將進入候補`
+  return `課程「${c.name}」已額滿且不開放候補，無法新增`
+})
+
+async function openAddCourseDialog() {
+  addCourseId.value = null
+  addCourseDialogVisible.value = true
+  if (courseOptions.value.length === 0) {
+    await loadOptions()
+  }
+}
+
+async function handleAddCourse() {
+  if (!detail.value || !addCourseId.value) return
+  addingCourse.value = true
+  try {
+    const res = await addRegistrationCourse(detail.value.id, addCourseId.value)
+    ElMessage.success(res.data.message || '課程新增成功')
+    addCourseDialogVisible.value = false
+    const [d] = await Promise.all([
+      getRegistrationDetail(detail.value.id),
+      loadPayments(detail.value.id),
+    ])
+    detail.value = d.data
+    loadOptions()
+    fetchList()
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '新增失敗')
+  } finally {
+    addingCourse.value = false
+  }
+}
+
+// ── 新增用品 ─────────────────────────────────────────────
+const addSupplyDialogVisible = ref(false)
+const addingSupply = ref(false)
+const addSupplyId = ref(null)
+const deletingSupplyId = ref(null)
+
+async function openAddSupplyDialog() {
+  addSupplyId.value = null
+  addSupplyDialogVisible.value = true
+  if (supplyOptions.value.length === 0) {
+    loadingSupplies.value = true
+    try {
+      const res = await getSupplies({
+        school_year: termStore.school_year,
+        semester: termStore.semester,
+      })
+      supplyOptions.value = res.data.supplies || []
+    } catch {
+      ElMessage.warning('用品清單載入失敗')
+    } finally {
+      loadingSupplies.value = false
+    }
+  }
+}
+
+async function handleAddSupply() {
+  if (!detail.value || !addSupplyId.value) return
+  addingSupply.value = true
+  try {
+    await addRegistrationSupply(detail.value.id, addSupplyId.value)
+    ElMessage.success('用品新增成功')
+    addSupplyDialogVisible.value = false
+    const [d] = await Promise.all([
+      getRegistrationDetail(detail.value.id),
+      loadPayments(detail.value.id),
+    ])
+    detail.value = d.data
+    fetchList()
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '新增失敗')
+  } finally {
+    addingSupply.value = false
+  }
+}
+
+async function handleRemoveSupply(row) {
+  if (!detail.value) return
+  try {
+    await ElMessageBox.confirm(
+      `確定要移除用品「${row.name}」？`,
+      '確認移除',
+      { type: 'warning', confirmButtonText: '確定移除', confirmButtonClass: 'el-button--danger' }
+    )
+  } catch {
+    return
+  }
+  deletingSupplyId.value = row.id
+  try {
+    await removeRegistrationSupply(detail.value.id, row.id)
+    ElMessage.success('用品已移除')
+    const [d] = await Promise.all([
+      getRegistrationDetail(detail.value.id),
+      loadPayments(detail.value.id),
+    ])
+    detail.value = d.data
+    fetchList()
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '移除失敗')
+  } finally {
+    deletingSupplyId.value = null
+  }
+}
+
 onMounted(async () => {
   initFromQuery()
   fetchList()
   loadOptions()
+  loadPendingCount()
   try {
     const res = await getRegistrationTime()
     regTimeInfo.value = res.data
@@ -618,9 +1176,12 @@ onMounted(async () => {
 
 <style scoped>
 .amount-hint { font-size: 11px; color: #999; margin-top: 2px; }
+.source-tag { margin-left: 6px; font-size: 11px; }
+.pending-badge { margin-left: 4px; }
 .activity-registrations { padding: 16px; }
-.toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
-.toolbar h2 { margin: 0; font-size: 20px; font-weight: 600; }
+.page-header { margin-bottom: 16px; }
+.page-header h2 { margin: 0; font-size: 20px; font-weight: 600; }
+.toolbar { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
 .filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 
 @media (max-width: 768px) {
@@ -630,6 +1191,14 @@ onMounted(async () => {
 }
 .detail-body { padding: 0 4px; }
 .section-title { font-weight: 600; margin: 16px 0 8px; font-size: 14px; color: #374151; }
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 16px 0 8px;
+}
+.section-header-title { font-weight: 600; font-size: 14px; color: #374151; }
+.section-header :deep(.el-button--small) { gap: 4px; }
 .remark-row { display: flex; gap: 8px; align-items: flex-start; }
 .change-by { color: #94a3b8; font-size: 12px; }
 
@@ -711,6 +1280,16 @@ onMounted(async () => {
   .batch-bar-enter-from,
   .batch-bar-leave-to { opacity: 0; transform: translateY(20px); }
 }
+
+.create-summary {
+  padding: 8px 12px;
+  background: #f8fafc;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #374151;
+  margin-top: 4px;
+}
+.create-hint { color: #9ca3af; margin-left: 8px; font-size: 13px; }
 
 .dialog-payment-summary {
   display: flex;

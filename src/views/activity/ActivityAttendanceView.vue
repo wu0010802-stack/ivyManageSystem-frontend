@@ -170,11 +170,17 @@
           style="margin-bottom: 10px"
         />
 
-        <!-- 快速操作 + 統計 Tags -->
+        <!-- 快速操作 + 統計 Tags + 分組切換 -->
         <div class="drawer-top-actions">
           <el-space>
             <el-button size="small" @click="setAllPresent(true)">全部出席</el-button>
             <el-button size="small" @click="setAllPresent(false)">全部缺席</el-button>
+            <el-switch
+              v-model="groupByClassroom"
+              active-text="按班級分組"
+              inline-prompt
+              @change="onGroupToggle"
+            />
           </el-space>
           <el-space>
             <el-tag type="info">共 {{ drawerSession.total }} 位</el-tag>
@@ -184,7 +190,66 @@
           </el-space>
         </div>
 
+        <!-- 分組模式：每班獨立 section + 全選 -->
+        <template v-if="groupByClassroom && drawerSession.groups?.length">
+          <el-collapse v-model="activeGroups" style="margin-top: 12px">
+            <el-collapse-item
+              v-for="g in drawerSession.groups"
+              :key="String(g.classroom_id ?? 'unassigned')"
+              :name="String(g.classroom_id ?? 'unassigned')"
+            >
+              <template #title>
+                <span class="group-title">
+                  {{ g.classroom_name }}
+                  <el-tag size="small" type="info" effect="plain">{{ g.students.length }} 位</el-tag>
+                  <el-tag v-if="g.classroom_id === null" size="small" type="warning" effect="plain">未分班</el-tag>
+                </span>
+                <el-button
+                  size="small"
+                  type="primary"
+                  link
+                  style="margin-left: auto"
+                  @click.stop="setGroupPresent(g, true)"
+                >全班出席</el-button>
+                <el-button
+                  size="small"
+                  type="info"
+                  link
+                  @click.stop="setGroupPresent(g, false)"
+                >全班缺席</el-button>
+              </template>
+              <el-table
+                :data="g.students"
+                :row-class-name="({ row }) => row.is_present === null ? 'unmarked-row' : ''"
+                border
+                size="small"
+              >
+                <el-table-column label="姓名" prop="student_name" min-width="90" />
+                <el-table-column label="出席" width="100" align="center">
+                  <template #default="{ row }">
+                    <el-switch
+                      v-model="row.is_present"
+                      :active-value="true"
+                      :inactive-value="false"
+                      active-text="出席"
+                      inactive-text="缺席"
+                      inline-prompt
+                    />
+                  </template>
+                </el-table-column>
+                <el-table-column label="備註" min-width="100">
+                  <template #default="{ row }">
+                    <el-input v-model="row.attendance_notes" size="small" placeholder="備註" />
+                  </template>
+                </el-table-column>
+              </el-table>
+            </el-collapse-item>
+          </el-collapse>
+        </template>
+
+        <!-- Flat 模式：原有單一表格 -->
         <el-table
+          v-else
           :data="sortedStudents"
           :row-class-name="({ row }) => row.is_present === null ? 'unmarked-row' : ''"
           border
@@ -267,6 +332,15 @@ const createDialogVisible = ref(false)
 const createLoading = ref(false)
 const createForm = ref({ course_id: null, session_date: null, notes: '' })
 
+// 按班級分組：預設開啟；切換時重新呼叫 API（帶不同 group_by）
+const GROUP_PREF_KEY = 'activity_attendance_group_by_classroom'
+const groupByClassroom = ref(
+  typeof localStorage !== 'undefined'
+    ? localStorage.getItem(GROUP_PREF_KEY) !== '0'
+    : true
+)
+const activeGroups = ref([])
+
 // 點名 Drawer（共用 composable）
 const {
   drawerVisible,
@@ -278,13 +352,40 @@ const {
   drawerPresentCount,
   drawerAbsentCount,
   drawerUnmarkedCount,
-  openDrawer,
+  openDrawer: openDrawerRaw,
+  reloadCurrentSession,
   setAllPresent,
   handleSave,
 } = useActivityAttendanceDrawer({
   getSessionFn: getAttendanceSession,
   updateFn: batchUpdateAttendance,
 })
+
+function currentGroupParams() {
+  return groupByClassroom.value ? { group_by: 'classroom' } : {}
+}
+
+async function openDrawer(row) {
+  await openDrawerRaw(row, currentGroupParams())
+  syncActiveGroups()
+}
+
+function syncActiveGroups() {
+  const groups = drawerSession.value?.groups || []
+  activeGroups.value = groups.map(g => String(g.classroom_id ?? 'unassigned'))
+}
+
+async function onGroupToggle(val) {
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem(GROUP_PREF_KEY, val ? '1' : '0')
+  }
+  await reloadCurrentSession(currentGroupParams())
+  syncActiveGroups()
+}
+
+function setGroupPresent(group, value) {
+  (group.students || []).forEach(s => { s.is_present = value })
+}
 
 // 快速日期範圍
 function setQuickRange(range) {
@@ -453,6 +554,12 @@ onMounted(() => {
   justify-content: flex-end;
   gap: 8px;
   margin-top: 16px;
+}
+.group-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
 }
 </style>
 

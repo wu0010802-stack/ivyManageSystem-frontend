@@ -14,8 +14,8 @@ export const publicRegister = (data) =>
   api.post('/activity/public/register', data)
 export const publicCreateInquiry = (data) =>
   api.post('/activity/public/inquiries', data)
-export const publicQueryRegistration = (name, birthday) =>
-  api.get('/activity/public/query', { params: { name, birthday } })
+export const publicQueryRegistration = (name, birthday, parent_phone) =>
+  api.get('/activity/public/query', { params: { name, birthday, parent_phone } })
 export const publicUpdateRegistration = (data) =>
   api.post('/activity/public/update', data)
 export const getPublicCourseVideos = () =>

@@ -2,7 +2,11 @@
   <div class="activity-courses">
     <div class="toolbar">
       <h2>課程管理</h2>
-      <el-button type="primary" @click="openCreate">新增課程</el-button>
+      <div class="toolbar__actions">
+        <AcademicTermSelector />
+        <el-button @click="openCopyDialog" :icon="CopyDocument">複製上學期</el-button>
+        <el-button type="primary" @click="openCreate">新增課程</el-button>
+      </div>
     </div>
 
     <el-table :data="courses" v-loading="loading" border>
@@ -108,15 +112,48 @@
       目前無候補學生
     </div>
   </el-drawer>
+
+  <!-- 複製上學期課程對話框 -->
+  <el-dialog v-model="copyDialogVisible" title="複製上學期課程" width="460px" destroy-on-close>
+    <el-form :model="copyForm" label-width="100px" size="default">
+      <el-form-item label="來源學年度">
+        <el-input-number v-model="copyForm.source_school_year" :min="100" :max="200" style="width: 120px" />
+      </el-form-item>
+      <el-form-item label="來源學期">
+        <el-radio-group v-model="copyForm.source_semester">
+          <el-radio :value="1">上學期</el-radio>
+          <el-radio :value="2">下學期</el-radio>
+        </el-radio-group>
+      </el-form-item>
+      <el-form-item label="目標學期">
+        {{ termStore.school_year }} 學年度
+        {{ termStore.semester === 1 ? '上' : '下' }}學期（當前）
+      </el-form-item>
+      <el-alert
+        title="已存在同名課程會自動跳過；不含任何報名、候補或繳費記錄。"
+        type="info"
+        :closable="false"
+        show-icon
+      />
+    </el-form>
+    <template #footer>
+      <el-button @click="copyDialogVisible = false">取消</el-button>
+      <el-button type="primary" :loading="copying" @click="handleCopy">確認複製</el-button>
+    </template>
+  </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { VideoPlay } from '@element-plus/icons-vue'
-import { getCourses, createCourse, updateCourse, deleteCourse,
+import { CopyDocument, VideoPlay } from '@element-plus/icons-vue'
+import { copyCoursesFromPrevious, getCourses, createCourse, updateCourse, deleteCourse,
          getCourseWaitlist, promoteWaitlist } from '@/api/activity'
+import AcademicTermSelector from '@/components/common/AcademicTermSelector.vue'
+import { useAcademicTermStore } from '@/stores/academicTerm'
+
+const termStore = useAcademicTermStore()
 
 const courses = ref([])
 const loading = ref(false)
@@ -124,6 +161,9 @@ const deletingId = ref(null)
 const dialogVisible = ref(false)
 const saving = ref(false)
 const editingId = ref(null)
+const copyDialogVisible = ref(false)
+const copying = ref(false)
+const copyForm = ref({ source_school_year: null, source_semester: 1 })
 
 const defaultForm = () => ({
   name: '',
@@ -175,12 +215,49 @@ async function handleWaitlistPromote(item) {
 async function fetchCourses() {
   loading.value = true
   try {
-    const res = await getCourses()
+    const res = await getCourses({
+      school_year: termStore.school_year,
+      semester: termStore.semester,
+    })
     courses.value = res.data.courses
   } catch {
     ElMessage.error('載入失敗')
   } finally {
     loading.value = false
+  }
+}
+
+watch(
+  () => [termStore.school_year, termStore.semester],
+  () => fetchCourses()
+)
+
+function openCopyDialog() {
+  // 預設來源=上學期
+  const cy = termStore.school_year
+  const cs = termStore.semester
+  copyForm.value = cs === 1
+    ? { source_school_year: cy - 1, source_semester: 2 }
+    : { source_school_year: cy, source_semester: 1 }
+  copyDialogVisible.value = true
+}
+
+async function handleCopy() {
+  copying.value = true
+  try {
+    const res = await copyCoursesFromPrevious({
+      source_school_year: copyForm.value.source_school_year,
+      source_semester: copyForm.value.source_semester,
+      target_school_year: termStore.school_year,
+      target_semester: termStore.semester,
+    })
+    ElMessage.success(res.data.message)
+    copyDialogVisible.value = false
+    fetchCourses()
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '複製失敗')
+  } finally {
+    copying.value = false
   }
 }
 
@@ -253,6 +330,7 @@ onMounted(fetchCourses)
 
 <style scoped>
 .activity-courses { padding: 16px; }
-.toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; gap: 12px; flex-wrap: wrap; }
 .toolbar h2 { margin: 0; font-size: 20px; font-weight: 600; }
+.toolbar__actions { display: flex; gap: 8px; align-items: center; }
 </style>

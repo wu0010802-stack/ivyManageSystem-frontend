@@ -49,16 +49,30 @@ export function useActivityAttendanceDrawer({ getSessionFn, updateFn }) {
       : 0
   )
 
-  async function openDrawer(row) {
+  async function openDrawer(row, params = {}) {
     drawerVisible.value = true
     drawerLoading.value = true
     drawerSession.value = null
     try {
-      const res = await getSessionFn(row.id)
+      const res = await getSessionFn(row.id, params)
       drawerSession.value = res.data
     } catch {
       ElMessage.error('載入點名資料失敗')
       drawerVisible.value = false
+    } finally {
+      drawerLoading.value = false
+    }
+  }
+
+  async function reloadCurrentSession(params = {}) {
+    if (!drawerSession.value) return
+    drawerLoading.value = true
+    const sid = drawerSession.value.id
+    try {
+      const res = await getSessionFn(sid, params)
+      drawerSession.value = res.data
+    } catch {
+      ElMessage.error('重新載入點名資料失敗')
     } finally {
       drawerLoading.value = false
     }
@@ -105,6 +119,7 @@ export function useActivityAttendanceDrawer({ getSessionFn, updateFn }) {
     drawerAbsentCount,
     drawerUnmarkedCount,
     openDrawer,
+    reloadCurrentSession,
     setAllPresent,
     handleSave,
   }

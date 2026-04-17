@@ -2,7 +2,10 @@
   <div class="activity-supplies">
     <div class="toolbar">
       <h2>用品管理</h2>
-      <el-button type="primary" @click="openCreate">新增用品</el-button>
+      <div class="toolbar__actions">
+        <AcademicTermSelector />
+        <el-button type="primary" @click="openCreate">新增用品</el-button>
+      </div>
     </div>
 
     <el-table :data="supplies" v-loading="loading" border>
@@ -36,9 +39,13 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getSupplies, createSupply, updateSupply, deleteSupply } from '@/api/activity'
+import AcademicTermSelector from '@/components/common/AcademicTermSelector.vue'
+import { useAcademicTermStore } from '@/stores/academicTerm'
+
+const termStore = useAcademicTermStore()
 
 const supplies = ref([])
 const loading = ref(false)
@@ -50,7 +57,10 @@ const form = ref({ name: '', price: 0 })
 async function fetchSupplies() {
   loading.value = true
   try {
-    const res = await getSupplies()
+    const res = await getSupplies({
+      school_year: termStore.school_year,
+      semester: termStore.semester,
+    })
     supplies.value = res.data.supplies
   } catch {
     ElMessage.error('載入失敗')
@@ -58,6 +68,8 @@ async function fetchSupplies() {
     loading.value = false
   }
 }
+
+watch(() => [termStore.school_year, termStore.semester], () => fetchSupplies())
 
 function openCreate() {
   editingId.value = null
@@ -113,6 +125,7 @@ onMounted(fetchSupplies)
 
 <style scoped>
 .activity-supplies { padding: 16px; }
-.toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; gap: 12px; flex-wrap: wrap; }
 .toolbar h2 { margin: 0; font-size: 20px; font-weight: 600; }
+.toolbar__actions { display: flex; gap: 8px; align-items: center; }
 </style>

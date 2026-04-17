@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -7,6 +7,7 @@ import {
   getCourses,
   getClassOptions,
 } from '@/api/activity'
+import { useAcademicTermStore } from '@/stores/academicTerm'
 
 /**
  * 封裝才藝報名管理的核心狀態與操作。
@@ -15,6 +16,7 @@ import {
 export function useActivityRegistration() {
   const route = useRoute()
   const router = useRouter()
+  const termStore = useAcademicTermStore()
 
   // ── 列表狀態 ────────────────────────────────────────────────
   const list = ref([])
@@ -74,6 +76,8 @@ export function useActivityRegistration() {
         payment_status: paymentFilter.value || undefined,
         course_id: courseFilter.value || undefined,
         classroom_name: classroomFilter.value || undefined,
+        school_year: termStore.school_year,
+        semester: termStore.semester,
       })
       if (seq !== fetchSeq.value) return
       list.value = res.data.items
@@ -124,13 +128,30 @@ export function useActivityRegistration() {
   // ── 載入下拉選項 ─────────────────────────────────────────────
   async function loadOptions() {
     try {
-      const [coursesRes, classRes] = await Promise.all([getCourses(), getClassOptions()])
+      const [coursesRes, classRes] = await Promise.all([
+        getCourses({
+          school_year: termStore.school_year,
+          semester: termStore.semester,
+        }),
+        getClassOptions(),
+      ])
       courseOptions.value = coursesRes.data.courses || []
       classroomOptions.value = classRes.data.options || []
     } catch {
       ElMessage.warning('篩選選項載入失敗，部分篩選功能暫不可用')
     }
   }
+
+  // 切換學期時自動重新載入
+  watch(
+    () => [termStore.school_year, termStore.semester],
+    () => {
+      page.value = 1
+      courseFilter.value = null
+      loadOptions()
+      fetchList()
+    }
+  )
 
   return {
     // 列表

@@ -8,6 +8,27 @@ export const getActivityDashboardTable = (params) => api.get('/activity/dashboar
 
 // 報名
 export const getRegistrations = (params) => api.get('/activity/registrations', { params })
+
+// 審核工作流：公開報名靜默比對不到在校生時進入待審核佇列，由校方人工處理
+export const listPendingRegistrations = (params) =>
+  api.get('/activity/registrations/pending', { params })
+export const matchRegistration = (id, studentId) =>
+  api.post(`/activity/registrations/${id}/match`, { student_id: studentId })
+export const rejectRegistration = (id, reason = '') =>
+  api.post(`/activity/registrations/${id}/reject`, { reason })
+export const rematchRegistration = (id) =>
+  api.post(`/activity/registrations/${id}/rematch`)
+export const searchActivityStudents = (q, limit = 20) =>
+  api.get('/activity/students/search', { params: { q, limit } })
+export const createRegistration = (data) => api.post('/activity/registrations', data)
+export const updateRegistrationBasic = (id, data) =>
+  api.put(`/activity/registrations/${id}`, data)
+export const addRegistrationCourse = (id, courseId) =>
+  api.post(`/activity/registrations/${id}/courses`, { course_id: courseId })
+export const addRegistrationSupply = (id, supplyId) =>
+  api.post(`/activity/registrations/${id}/supplies`, { supply_id: supplyId })
+export const removeRegistrationSupply = (registrationId, supplyRecordId) =>
+  api.delete(`/activity/registrations/${registrationId}/supplies/${supplyRecordId}`)
 export const getRegistrationDetail = (id) => api.get(`/activity/registrations/${id}`)
 export const updateRemark = (id, data) => api.put(`/activity/registrations/${id}/remark`, data)
 export const promoteWaitlist = (registrationId, courseId) =>
@@ -27,15 +48,17 @@ export const exportRegistrations = (params) =>
   api.get('/activity/registrations/export', { params, responseType: 'blob' })
 
 // 課程
-export const getCourses = () => api.get('/activity/courses')
+export const getCourses = (params = {}) => api.get('/activity/courses', { params })
 export const getCourseDetail = (id) => api.get(`/activity/courses/${id}`)
 export const getCourseWaitlist = (courseId) => api.get(`/activity/courses/${courseId}/waitlist`)
 export const createCourse = (data) => api.post('/activity/courses', data)
 export const updateCourse = (id, data) => api.put(`/activity/courses/${id}`, data)
 export const deleteCourse = (id) => api.delete(`/activity/courses/${id}`)
+export const copyCoursesFromPrevious = (payload) =>
+  api.post('/activity/courses/copy-from-previous', payload)
 
 // 用品
-export const getSupplies = () => api.get('/activity/supplies')
+export const getSupplies = (params = {}) => api.get('/activity/supplies', { params })
 export const createSupply = (data) => api.post('/activity/supplies', data)
 export const updateSupply = (id, data) => api.put(`/activity/supplies/${id}`, data)
 export const deleteSupply = (id) => api.delete(`/activity/supplies/${id}`)
@@ -60,6 +83,15 @@ export const getClassOptions = () => api.get('/activity/class-options')
 export const exportDashboardTable = (params) =>
   api.get('/activity/dashboard-table/export', { params, responseType: 'blob' })
 
+// POS 收銀
+export const getPOSOutstandingByStudent = (q, limit = 20, opts = {}) =>
+  api.get('/activity/pos/outstanding-by-student', { params: { q, limit, ...opts } })
+export const posCheckout = (payload) => api.post('/activity/pos/checkout', payload)
+export const getPOSDailySummary = (date) =>
+  api.get('/activity/pos/daily-summary', { params: date ? { date } : {} })
+export const getPOSRecentTransactions = (params = {}) =>
+  api.get('/activity/pos/recent-transactions', { params })
+
 // Portal - 才藝查詢
 export const getPortalActivityRegistrations = () =>
   api.get('/portal/activity/registrations')
@@ -71,8 +103,8 @@ export const createAttendanceSession = (data) =>
   api.post('/activity/attendance/sessions', data)
 export const deleteAttendanceSession = (id) =>
   api.delete(`/activity/attendance/sessions/${id}`)
-export const getAttendanceSession = (id) =>
-  api.get(`/activity/attendance/sessions/${id}`)
+export const getAttendanceSession = (id, params = {}) =>
+  api.get(`/activity/attendance/sessions/${id}`, { params })
 export const batchUpdateAttendance = (id, records) =>
   api.put(`/activity/attendance/sessions/${id}/records`, { records })
 
@@ -82,7 +114,7 @@ export const exportAttendanceSession = (id) =>
 // Portal - 才藝點名
 export const getPortalAttendanceSessions = (params) =>
   api.get('/portal/activity/attendance/sessions', { params })
-export const getPortalAttendanceSession = (id) =>
-  api.get(`/portal/activity/attendance/sessions/${id}`)
+export const getPortalAttendanceSession = (id, params = {}) =>
+  api.get(`/portal/activity/attendance/sessions/${id}`, { params })
 export const batchUpdatePortalAttendance = (id, records) =>
   api.put(`/portal/activity/attendance/sessions/${id}/records`, { records })

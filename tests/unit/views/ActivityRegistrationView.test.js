@@ -8,6 +8,7 @@ vi.mock('@/api/activity', () => ({
   getRegistrationDetail: vi.fn(),
   batchUpdatePayment: vi.fn(),
   getCourses: vi.fn(),
+  getSupplies: vi.fn().mockResolvedValue({ data: { supplies: [] } }),
   getClassOptions: vi.fn(),
   updatePayment: vi.fn(),
   updateRemark: vi.fn(),
@@ -18,12 +19,35 @@ vi.mock('@/api/activity', () => ({
   addRegistrationPayment: vi.fn(),
   deleteRegistrationPayment: vi.fn(),
   withdrawCourse: vi.fn(),
+  getRegistrationTime: vi.fn().mockResolvedValue({ data: { is_open: false } }),
+  createRegistration: vi.fn(),
+  updateRegistrationBasic: vi.fn(),
+  addRegistrationCourse: vi.fn(),
+  addRegistrationSupply: vi.fn(),
+  removeRegistrationSupply: vi.fn(),
+}))
+
+// ── Pinia store mock ───────────────────────────────────────────────────────
+vi.mock('@/stores/academicTerm', () => ({
+  useAcademicTermStore: () => ({ school_year: 114, semester: 1 }),
+}))
+
+// ── auth util mock（hasPermission 固定回傳 true）─────────────────────────────
+vi.mock('@/utils/auth', () => ({
+  hasPermission: () => true,
+}))
+
+// ── format util mock ───────────────────────────────────────────────────────
+vi.mock('@/utils/format', () => ({
+  formatActivityDate: (v) => v || '',
 }))
 
 // ── constants mock ─────────────────────────────────────────────────────────
 vi.mock('@/constants/activity', () => ({
   PAYMENT_STATUS_TAG_TYPE: { paid: 'success', partial: 'warning', overpaid: 'danger', unpaid: 'info' },
   PAYMENT_STATUS_LABEL: { paid: '已繳費', partial: '部分繳費', overpaid: '超繳', unpaid: '未繳費' },
+  COURSE_STATUS_TAG_TYPE: { enrolled: 'success', waitlist: 'warning' },
+  COURSE_STATUS_LABEL: { enrolled: '正式', waitlist: '候補' },
 }))
 
 // ── composable mock ────────────────────────────────────────────────────────

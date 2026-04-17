@@ -1,0 +1,661 @@
+<template>
+  <div class="public-query-page">
+    <div class="toast-container" aria-live="polite" aria-atomic="true">
+      <div
+        v-for="t in toasts"
+        :key="t.id"
+        class="toast"
+        :class="t.type"
+        :role="t.type === 'error' ? 'alert' : 'status'"
+      >
+        <div class="toast-icon" v-html="TOAST_ICONS[t.type] || TOAST_ICONS.info" />
+        <div class="toast-content">
+          <div class="toast-message">{{ t.message }}</div>
+        </div>
+        <button type="button" class="toast-close" aria-label="關閉通知" @click="dismissToast(t.id)">&times;</button>
+      </div>
+    </div>
+
+    <div class="page-wrapper">
+      <header class="page-header">
+        <div class="page-title-main">查詢 / 修改報名資料</div>
+        <div class="page-subtitle">Query &amp; Edit Registration</div>
+      </header>
+
+      <!-- 搜尋區 -->
+      <section class="search-section">
+        <div class="search-box">
+          <div class="field-group">
+            <label for="searchName">幼兒姓名 <span class="required-mark">*</span></label>
+            <input
+              id="searchName"
+              v-model="queryForm.name"
+              type="text"
+              class="input-text"
+              :class="{ valid: nameValid, invalid: nameTouched && !nameValid }"
+              placeholder="請輸入幼兒姓名"
+              @keyup.enter="handleQuery"
+              @blur="nameTouched = true"
+            />
+            <div v-if="nameTouched && !nameValid" class="validation-msg error">請輸入幼兒姓名</div>
+          </div>
+          <div class="field-group">
+            <label for="searchBirthday">幼兒生日 <span class="required-mark">*</span></label>
+            <input
+              id="searchBirthday"
+              v-model="queryForm.birthday"
+              type="date"
+              class="input-text"
+              :class="{ valid: birthdayValid, invalid: birthdayTouched && !birthdayValid }"
+              @blur="birthdayTouched = true"
+            />
+            <div v-if="birthdayTouched && !birthdayValid" class="validation-msg error">
+              {{ birthdayErrorMsg }}
+            </div>
+          </div>
+          <div class="field-group">
+            <label for="searchPhone">家長手機 <span class="required-mark">*</span></label>
+            <input
+              id="searchPhone"
+              v-model="queryForm.parent_phone"
+              type="tel"
+              class="input-text"
+              :class="{ valid: phoneValid, invalid: phoneTouched && !phoneValid }"
+              placeholder="09xx-xxx-xxx"
+              maxlength="15"
+              @keyup.enter="handleQuery"
+              @blur="phoneTouched = true"
+            />
+            <div v-if="phoneTouched && !phoneValid" class="validation-msg error">
+              請輸入 09 開頭的 10 碼手機號碼
+            </div>
+          </div>
+          <button
+            type="button"
+            class="btn btn-primary btn-block"
+            :disabled="queryLoading"
+            @click="handleQuery"
+          >
+            {{ queryLoading ? '查詢中…' : '查詢 Search' }}
+          </button>
+        </div>
+      </section>
+
+      <section v-if="searchError" class="result-section">
+        <div class="error-message">{{ searchError }}</div>
+      </section>
+
+      <!-- 結果編輯區 -->
+      <section v-if="queryResult" class="result-section">
+        <div class="result-header">
+          <h2>編輯報名資料</h2>
+        </div>
+
+        <div class="info-hint">
+          <strong>提示：</strong>您可以修改以下資料，完成後請點選「儲存修改」按鈕。
+        </div>
+
+        <div class="field-group">
+          <label>幼兒姓名</label>
+          <input :value="queryResult.name" type="text" class="input-text" readonly />
+        </div>
+
+        <div class="field-group">
+          <label>幼兒生日</label>
+          <input :value="queryResult.birthday" type="date" class="input-text" readonly />
+        </div>
+
+        <div class="field-group">
+          <label>寶貝班級</label>
+          <select v-model="editForm.class_name" class="input-select">
+            <option value="" disabled>請選擇班級</option>
+            <option v-for="cls in classes" :key="cls" :value="cls">{{ cls }}</option>
+          </select>
+        </div>
+
+        <div class="field-group">
+          <label>才藝課班別</label>
+          <div class="checkbox-group">
+            <div v-if="courses.length === 0" class="empty-hint">目前尚無可選課程</div>
+            <label
+              v-for="course in courses"
+              v-else
+              :key="course.name"
+              class="course-item"
+            >
+              <input
+                type="checkbox"
+                :value="course.name"
+                :checked="editForm.selectedCourses.includes(course.name)"
+                @change="toggleArrayItem(editForm.selectedCourses, course.name)"
+              />
+              <span class="course-text">
+                {{ course.name }}
+                <span class="price-tag">${{ course.price }}</span>
+                <span v-if="statusBadgeFor(course.name)" class="qty-display is-waiting">
+                  {{ statusBadgeFor(course.name) }}
+                </span>
+              </span>
+            </label>
+          </div>
+        </div>
+
+        <div class="field-group">
+          <label>舞蹈班代辦品</label>
+          <div class="checkbox-group">
+            <div v-if="supplies.length === 0" class="empty-hint">目前沒有代辦用品</div>
+            <label
+              v-for="supply in supplies"
+              v-else
+              :key="supply.name"
+              class="course-item"
+            >
+              <input
+                type="checkbox"
+                :value="supply.name"
+                :checked="editForm.selectedSupplies.includes(supply.name)"
+                @change="toggleArrayItem(editForm.selectedSupplies, supply.name)"
+              />
+              <span class="course-text">
+                {{ supply.name }}
+                <span class="price-tag">${{ supply.price }}</span>
+              </span>
+            </label>
+          </div>
+        </div>
+
+        <div class="action-buttons">
+          <button type="button" class="btn btn-outline" @click="closeWindow">取消 Cancel</button>
+          <button
+            type="button"
+            class="btn btn-primary"
+            :disabled="editSubmitting"
+            @click="handleSaveChanges"
+          >
+            {{ editSubmitting ? '儲存中…' : '儲存修改 Save' }}
+          </button>
+        </div>
+      </section>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { ref, reactive, computed, onMounted, watch } from 'vue'
+import {
+  publicQueryRegistration,
+  publicUpdateRegistration,
+} from '@/api/activityPublic'
+import { usePublicActivityOptions } from '@/composables/usePublicActivityOptions'
+import { toggleArrayItem } from '@/utils/arrayUtils'
+
+const TOAST_ICONS = {
+  success: '<svg viewBox="0 0 24 24" fill="none" stroke="#15803D" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>',
+  error: '<svg viewBox="0 0 24 24" fill="none" stroke="#DC2626" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>',
+  warning: '<svg viewBox="0 0 24 24" fill="none" stroke="#D97706" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>',
+  info: '<svg viewBox="0 0 24 24" fill="none" stroke="#1E3A8A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>',
+}
+
+const { courses, supplies, classes, loadOptions } = usePublicActivityOptions()
+
+const queryForm = reactive({ name: '', birthday: '', parent_phone: '' })
+const queryLoading = ref(false)
+const queryResult = ref(null)
+const searchError = ref('')
+const nameTouched = ref(false)
+const birthdayTouched = ref(false)
+const phoneTouched = ref(false)
+
+const TW_MOBILE_RE = /^09\d{8}$/
+function normalizeMobile(raw) {
+  return String(raw || '').replace(/[\s\-().]/g, '')
+}
+const phoneValid = computed(() =>
+  TW_MOBILE_RE.test(normalizeMobile(queryForm.parent_phone))
+)
+
+const editForm = reactive({
+  class_name: '',
+  selectedCourses: [],
+  selectedSupplies: [],
+})
+const editSubmitting = ref(false)
+
+const toasts = ref([])
+let toastSeq = 0
+function showToast(message, type = 'success', duration = 4500) {
+  const id = ++toastSeq
+  toasts.value.push({ id, message, type })
+  setTimeout(() => dismissToast(id), duration)
+}
+function dismissToast(id) {
+  toasts.value = toasts.value.filter((t) => t.id !== id)
+}
+
+const nameValid = computed(() => queryForm.name.trim().length > 0)
+const birthdayErrorMsg = ref('請選擇幼兒生日')
+const birthdayValid = computed(() => {
+  if (!queryForm.birthday) {
+    birthdayErrorMsg.value = '請選擇幼兒生日'
+    return false
+  }
+  const date = new Date(queryForm.birthday)
+  if (date > new Date()) {
+    birthdayErrorMsg.value = '生日不能是未來的日期'
+    return false
+  }
+  return true
+})
+
+function statusBadgeFor(name) {
+  if (!queryResult.value) return ''
+  const entry = (queryResult.value.courses || []).find((c) => c.name === name)
+  if (entry && entry.status === 'waitlist') {
+    return `候補第 ${entry.waitlist_position ?? '?'} 位`
+  }
+  return ''
+}
+
+async function handleQuery() {
+  nameTouched.value = true
+  birthdayTouched.value = true
+  phoneTouched.value = true
+  if (!nameValid.value || !birthdayValid.value || !phoneValid.value) return
+
+  queryLoading.value = true
+  searchError.value = ''
+  queryResult.value = null
+  try {
+    const res = await publicQueryRegistration(
+      queryForm.name.trim(),
+      queryForm.birthday,
+      normalizeMobile(queryForm.parent_phone)
+    )
+    hydrateResult(res.data)
+  } catch (err) {
+    // 通用錯誤：404 / 403 均一律顯示同樣訊息，不透露哪一欄錯
+    searchError.value = err.response?.data?.detail
+      || '查無對應報名，請確認三項資料是否與報名時一致。'
+  } finally {
+    queryLoading.value = false
+  }
+}
+
+function hydrateResult(data) {
+  queryResult.value = data
+  editForm.class_name = data.class_name || ''
+  editForm.selectedCourses = (data.courses || []).map((c) => c.name)
+  editForm.selectedSupplies = Array.isArray(data.supplies)
+    ? data.supplies.map((s) => (typeof s === 'string' ? s : s.name))
+    : []
+}
+
+async function handleSaveChanges() {
+  if (!editForm.class_name) {
+    showToast('請選擇班級', 'error')
+    return
+  }
+
+  editSubmitting.value = true
+  try {
+    const coursesPayload = editForm.selectedCourses.map((name) => {
+      const c = courses.value.find((x) => x.name === name)
+      return { name, price: String(c?.price ?? 0) }
+    })
+    const suppliesPayload = editForm.selectedSupplies.map((name) => {
+      const s = supplies.value.find((x) => x.name === name)
+      return { name, price: String(s?.price ?? 0) }
+    })
+
+    const phonePayload = normalizeMobile(queryForm.parent_phone)
+    const res = await publicUpdateRegistration({
+      id: queryResult.value.id,
+      name: queryResult.value.name,
+      birthday: queryResult.value.birthday || queryForm.birthday,
+      parent_phone: phonePayload,
+      class: editForm.class_name,
+      courses: coursesPayload,
+      supplies: suppliesPayload,
+    })
+
+    showToast(res?.data?.message || '資料更新成功！', 'success')
+    const refreshed = await publicQueryRegistration(
+      queryResult.value.name,
+      queryResult.value.birthday || queryForm.birthday,
+      phonePayload
+    )
+    hydrateResult(refreshed.data)
+  } catch (err) {
+    showToast(err.response?.data?.detail || '更新失敗', 'error')
+  } finally {
+    editSubmitting.value = false
+  }
+}
+
+function closeWindow() {
+  window.close()
+}
+
+// Clear error once user edits inputs again
+watch(
+  () => [queryForm.name, queryForm.birthday, queryForm.parent_phone],
+  () => { searchError.value = '' }
+)
+
+onMounted(async () => {
+  try {
+    await loadOptions()
+  } catch (err) {
+    showToast(err?.response?.data?.detail || '無法載入頁面資料', 'error')
+  }
+})
+</script>
+
+<style scoped>
+.public-query-page {
+  --color-bg: #FFFBEB;
+  --color-surface: #FFFFFF;
+  --color-surface-muted: #FFF8E1;
+  --color-primary: #15803D;
+  --color-primary-hover: #166534;
+  --color-primary-soft: #DCFCE7;
+  --color-primary-contrast: #FFFFFF;
+  --color-cta: #EA580C;
+  --color-cta-hover: #C2410C;
+  --color-cta-contrast: #FFFFFF;
+  --color-text: #1F2937;
+  --color-text-muted: #4B5563;
+  --color-text-subtle: #6B7280;
+  --color-border: #F2E6C9;
+  --color-border-muted: #E5E7EB;
+  --color-danger: #DC2626;
+  --color-danger-soft: #FEE2E2;
+  --color-warning: #D97706;
+  --color-success: #15803D;
+  --color-required: #E11D48;
+  --font-sans: 'Noto Sans TC', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+  --fs-xs: 12px; --fs-sm: 13px; --fs-base: 15px; --fs-md: 16px; --fs-lg: 18px; --fs-xl: 22px;
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px; --space-6: 24px; --space-8: 32px;
+  --radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px; --radius-xl: 24px; --radius-full: 999px;
+  --shadow-sm: 0 1px 2px rgba(17, 24, 39, 0.06);
+  --shadow-lg: 0 12px 32px rgba(17, 24, 39, 0.10);
+  --dur-fast: 150ms; --dur-slow: 320ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --focus-ring: 0 0 0 3px rgba(21, 128, 61, 0.28);
+
+  min-height: 100vh;
+  padding: clamp(12px, 3vw, 20px);
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: var(--fs-base);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+.public-query-page *, .public-query-page *::before, .public-query-page *::after { box-sizing: border-box; }
+
+.page-wrapper {
+  max-width: 900px;
+  margin: 0 auto;
+  background: var(--color-surface);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.page-header {
+  text-align: center;
+  padding: var(--space-6) var(--space-5);
+  background: linear-gradient(135deg, #FEF3C7 0%, #DCFCE7 100%);
+  border-bottom: 1px solid var(--color-border);
+}
+.page-title-main {
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  color: var(--color-primary);
+  margin-bottom: var(--space-1);
+}
+.page-subtitle { font-size: var(--fs-xs); color: var(--color-text-subtle); letter-spacing: 0.05em; }
+
+.search-section {
+  padding: var(--space-6) var(--space-6);
+  border-bottom: 1px solid var(--color-border);
+}
+.search-box { max-width: 520px; margin: 0 auto; }
+
+.result-section { padding: var(--space-6); }
+
+.result-header {
+  background: linear-gradient(135deg, var(--color-primary) 0%, #3a8a5e 100%);
+  color: #fff;
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-5);
+}
+.result-header h2 { margin: 0; font-size: var(--fs-lg); }
+
+.info-hint {
+  background: var(--color-surface-muted);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--fs-sm);
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-4);
+}
+
+.field-group { margin-bottom: var(--space-4); }
+.field-group label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--color-text);
+  margin-bottom: var(--space-2);
+}
+.required-mark { color: var(--color-required); font-weight: 700; }
+
+.input-text, .input-select {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 14px;
+  font-family: inherit;
+  font-size: var(--fs-md);
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1.5px solid var(--color-border-muted);
+  border-radius: var(--radius-sm);
+  transition: border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+}
+.input-text:focus, .input-select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: var(--focus-ring);
+}
+.input-text:read-only { background-color: #F9FAFB; color: var(--color-text-muted); }
+.input-text.valid { border-color: var(--color-success); }
+.input-text.invalid { border-color: var(--color-danger); }
+.validation-msg { font-size: var(--fs-xs); margin-top: var(--space-1); }
+.validation-msg.error { color: var(--color-danger); }
+
+.input-select {
+  padding-right: 36px;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%234B5563' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+}
+
+.checkbox-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-height: 320px;
+  overflow-y: auto;
+  padding: var(--space-3);
+  background: #F9FAFB;
+  border: 1px solid var(--color-border-muted);
+  border-radius: var(--radius-md);
+}
+.course-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface);
+  border: 1.5px solid var(--color-border-muted);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
+}
+.course-item:hover { border-color: var(--color-primary); background: var(--color-primary-soft); }
+.course-item:has(input:checked) {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+  box-shadow: inset 0 0 0 1px var(--color-primary);
+}
+.course-item input[type="checkbox"] {
+  flex-shrink: 0;
+  margin-top: 3px;
+  width: 18px; height: 18px;
+  accent-color: var(--color-primary);
+}
+.course-text {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+.price-tag { color: var(--color-text-subtle); font-size: var(--fs-sm); font-weight: 500; }
+.qty-display {
+  font-weight: 600;
+  font-size: var(--fs-xs);
+  padding: 2px 10px;
+  border-radius: var(--radius-full);
+  background-color: #FEF3C7;
+  color: #B45309;
+}
+
+.empty-hint {
+  padding: var(--space-5);
+  color: var(--color-text-subtle);
+  font-size: var(--fs-sm);
+  text-align: center;
+  background-color: var(--color-surface-muted);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 48px;
+  padding: 12px 20px;
+  font-family: inherit;
+  font-size: var(--fs-md);
+  font-weight: 600;
+  border: 1.5px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text);
+  cursor: pointer;
+  transition: background-color var(--dur-fast), border-color var(--dur-fast), color var(--dur-fast), transform var(--dur-fast), box-shadow var(--dur-fast);
+  white-space: nowrap;
+}
+.btn-block { width: 100%; margin-top: var(--space-3); }
+.btn-primary {
+  background-color: var(--color-cta);
+  color: var(--color-cta-contrast);
+  border-color: var(--color-cta);
+  box-shadow: 0 6px 16px rgba(234, 88, 12, 0.25);
+}
+.btn-primary:hover:not(:disabled) {
+  background-color: var(--color-cta-hover);
+  border-color: var(--color-cta-hover);
+  transform: translateY(-1px);
+}
+.btn-primary:disabled { background-color: #D1D5DB; border-color: #D1D5DB; color: #6B7280; cursor: not-allowed; box-shadow: none; }
+.btn-outline {
+  background: var(--color-surface);
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+.btn-outline:hover { background: var(--color-primary); color: var(--color-primary-contrast); }
+
+.action-buttons {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: center;
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px dashed var(--color-border);
+}
+.action-buttons .btn { flex: 1; max-width: 240px; }
+
+.error-message {
+  background: var(--color-danger-soft);
+  border-left: 4px solid var(--color-danger);
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  color: var(--color-danger);
+  font-weight: 500;
+}
+
+/* Toast */
+.toast-container {
+  position: fixed;
+  top: var(--space-5);
+  right: var(--space-5);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-width: calc(100vw - 40px);
+  pointer-events: none;
+}
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  min-width: 280px;
+  max-width: 420px;
+  padding: var(--space-4);
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  border-left: 4px solid var(--color-primary);
+}
+.toast.success { border-left-color: var(--color-success); }
+.toast.error { border-left-color: var(--color-danger); }
+.toast.warning { border-left-color: var(--color-warning); }
+.toast-icon { flex-shrink: 0; width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; }
+.toast-content { flex: 1; min-width: 0; }
+.toast-message { font-size: var(--fs-sm); color: var(--color-text-muted); }
+.toast-close {
+  flex-shrink: 0;
+  width: 28px; height: 28px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: var(--radius-full);
+  color: var(--color-text-subtle);
+  font-size: 20px;
+  cursor: pointer;
+}
+.toast-close:hover { background: var(--color-surface-muted); color: var(--color-text); }
+
+@media (max-width: 600px) {
+  .public-query-page { padding: 0; }
+  .page-wrapper { border-radius: 0; box-shadow: none; }
+  .toast-container { top: auto; bottom: var(--space-3); right: var(--space-3); left: var(--space-3); }
+  .toast { min-width: 0; max-width: none; }
+  .action-buttons { flex-direction: column; }
+  .action-buttons .btn { max-width: none; }
+}
+</style>
