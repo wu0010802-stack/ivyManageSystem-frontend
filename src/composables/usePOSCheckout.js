@@ -330,7 +330,17 @@ export function usePOSCheckout() {
       if (status && status >= 400 && status < 500) {
         pendingIdempotencyKey = null
       }
-      ElMessage.error(e?.response?.data?.detail || '結帳失敗')
+      const detailMsg = e?.response?.data?.detail || '結帳失敗'
+      // 400 且 detail 包含「日結」→ 用 alert 對話框顯示更清楚的指引
+      if (status === 400 && /日結簽核/.test(detailMsg)) {
+        ElMessageBox.alert(
+          `${detailMsg}\n\n若確認要補這筆交易，請到「POS 日結簽核」解鎖該日，再重新結帳。`,
+          '該日已日結，無法新增交易',
+          { type: 'warning', confirmButtonText: '了解' }
+        ).catch(() => {})
+      } else {
+        ElMessage.error(detailMsg)
+      }
     } finally {
       submitting.value = false
     }

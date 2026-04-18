@@ -694,7 +694,14 @@ const paymentForm = reactive({
   payment_date: '',
   payment_method: '現金',
   notes: '',
+  idempotency_key: '',
 })
+
+function _genIdempotencyKey() {
+  // 後端 pattern: ^[A-Za-z0-9_-]{8,64}$
+  const rand = Math.random().toString(36).slice(2, 10)
+  return `REG-${Date.now()}-${rand}`
+}
 
 const overpaymentAmount = computed(() => {
   if (paymentForm.type !== 'payment') return 0
@@ -748,6 +755,8 @@ function openPaymentDialog(type) {
   paymentForm.payment_date = new Date().toISOString().slice(0, 10)
   paymentForm.payment_method = '現金'
   paymentForm.notes = ''
+  // 每次開 dialog 產生新冪等 key；同一個 key 用於後續重試（失敗後按確認不會重複扣款）
+  paymentForm.idempotency_key = _genIdempotencyKey()
   paymentDialogVisible.value = true
 }
 
@@ -784,6 +793,7 @@ async function handleAddPayment() {
       payment_date: paymentForm.payment_date,
       payment_method: paymentForm.payment_method,
       notes: paymentForm.notes.trim(),
+      idempotency_key: paymentForm.idempotency_key,
     })
     ElMessage.success(`${typeLabel}記錄新增成功`)
     paymentDialogVisible.value = false
@@ -862,15 +872,44 @@ async function handleWithdrawCourse(course) {
   } catch {
     return
   }
+  await doWithdrawCourse(course, false)
+}
+
+async function doWithdrawCourse(course, forceRefund) {
   withdrawingCourseId.value = course.id
   try {
-    await withdrawCourse(detail.value.id, course.course_id)
-    ElMessage.success(`已退出課程「${course.name}」`)
+    await withdrawCourse(detail.value.id, course.course_id, { forceRefund })
+    ElMessage.success(
+      forceRefund
+        ? `已退出課程「${course.name}」並自動寫退費沖帳`
+        : `已退出課程「${course.name}」`
+    )
     const res = await getRegistrationDetail(detail.value.id)
     detail.value = res.data
     await loadPayments(detail.value.id)
     fetchList()
   } catch (e) {
+    // 409：退課後將超繳，需二次確認以 force_refund=true 自動沖帳
+    if (e?.response?.status === 409 && !forceRefund) {
+      const detailMsg = e?.response?.data?.detail || '退課將產生超繳'
+      try {
+        await ElMessageBox.confirm(
+          `${detailMsg}\n\n按「確認退課並沖帳」後會自動寫一筆退費沖帳紀錄（付款方式：系統補齊），原繳費歷史保留。`,
+          '需要確認自動沖帳',
+          {
+            type: 'warning',
+            confirmButtonText: '確認退課並沖帳',
+            cancelButtonText: '取消',
+            dangerouslyUseHTMLString: false,
+          }
+        )
+      } catch {
+        withdrawingCourseId.value = null
+        return
+      }
+      await doWithdrawCourse(course, true)
+      return
+    }
     ElMessage.error(e?.response?.data?.detail || '退課失敗')
   } finally {
     withdrawingCourseId.value = null
@@ -887,13 +926,38 @@ async function handleDelete(row) {
   } catch {
     return
   }
+  await doDeleteRegistration(row, false)
+}
+
+async function doDeleteRegistration(row, forceRefund) {
   deletingRegistrationId.value = row.id
   try {
-    await deleteRegistration(row.id)
-    ElMessage.success('已刪除')
+    await deleteRegistration(row.id, { forceRefund })
+    ElMessage.success(forceRefund ? '已刪除並自動寫退費沖帳' : '已刪除')
     drawerVisible.value = false
     fetchList()
   } catch (e) {
+    // 409：報名尚有已繳金額，需二次確認以 force_refund=true 自動沖帳
+    if (e?.response?.status === 409 && !forceRefund) {
+      const detailMsg = e?.response?.data?.detail || '報名尚有已繳金額'
+      try {
+        await ElMessageBox.confirm(
+          `${detailMsg}\n\n按「確認刪除並沖帳」後會自動寫退費沖帳紀錄（付款方式：系統補齊），原繳費歷史保留。`,
+          '需要確認自動沖帳',
+          {
+            type: 'warning',
+            confirmButtonText: '確認刪除並沖帳',
+            cancelButtonText: '取消',
+            confirmButtonClass: 'el-button--danger',
+          }
+        )
+      } catch {
+        deletingRegistrationId.value = null
+        return
+      }
+      await doDeleteRegistration(row, true)
+      return
+    }
     ElMessage.error(e?.response?.data?.detail || '刪除失敗')
   } finally {
     deletingRegistrationId.value = null

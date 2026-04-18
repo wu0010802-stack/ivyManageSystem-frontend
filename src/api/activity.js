@@ -37,9 +37,14 @@ export const getRegistrationDetail = (id) => api.get(`/activity/registrations/${
 export const updateRemark = (id, data) => api.put(`/activity/registrations/${id}/remark`, data)
 export const promoteWaitlist = (registrationId, courseId) =>
   api.put(`/activity/registrations/${registrationId}/waitlist`, null, { params: { course_id: courseId } })
-export const withdrawCourse = (registrationId, courseId) =>
-  api.delete(`/activity/registrations/${registrationId}/courses/${courseId}`)
-export const deleteRegistration = (id) => api.delete(`/activity/registrations/${id}`)
+export const withdrawCourse = (registrationId, courseId, { forceRefund = false } = {}) =>
+  api.delete(`/activity/registrations/${registrationId}/courses/${courseId}`, {
+    params: forceRefund ? { force_refund: true } : {},
+  })
+export const deleteRegistration = (id, { forceRefund = false } = {}) =>
+  api.delete(`/activity/registrations/${id}`, {
+    params: forceRefund ? { force_refund: true } : {},
+  })
 export const batchUpdatePayment = (ids, isPaid) =>
   api.put('/activity/registrations/batch-payment', { ids, is_paid: isPaid })
 export const getRegistrationPayments = (id) =>

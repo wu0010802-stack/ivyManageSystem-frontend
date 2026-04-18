@@ -102,9 +102,12 @@ export function useActivityRegistration() {
   // ── 批次標記繳費 ─────────────────────────────────────────────
   async function batchMarkPaid(isPaid, onSuccess) {
     const label = isPaid ? '已繳費' : '未繳費'
+    const extraNote = isPaid
+      ? '系統將自動補齊差額為「系統補齊」付款紀錄。'
+      : '系統將對有已繳金額者自動寫一筆退費沖帳紀錄（付款方式：系統補齊），原繳費歷史保留。'
     try {
       await ElMessageBox.confirm(
-        `確定將已選 ${selectedIds.value.length} 筆報名標記為「${label}」？`,
+        `確定將已選 ${selectedIds.value.length} 筆報名標記為「${label}」？\n\n${extraNote}`,
         '批次更新確認',
         { type: 'warning', confirmButtonText: '確定' }
       )
