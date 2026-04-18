@@ -1,309 +1,254 @@
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getIncidents, createIncident, updateIncident, deleteIncident } from '@/api/studentIncidents'
-import { getAssessments, createAssessment, updateAssessment, deleteAssessment } from '@/api/studentAssessments'
-import { useClassroomStore } from '@/stores/classroom'
+
+import { getStudentRecordsTimeline } from '@/api/studentRecords'
+import { deleteIncident } from '@/api/studentIncidents'
+import { deleteAssessment } from '@/api/studentAssessments'
+import { deleteChangeLog } from '@/api/studentChangeLogs'
 import { getStudents } from '@/api/students'
-import StudentChangeLogs from '@/components/student/StudentChangeLogs.vue'
-import {
-  INCIDENT_TYPES, SEVERITIES, INCIDENT_TYPE_TAG as TYPE_TAG, SEVERITY_TAG,
-  ASSESSMENT_TYPES, DOMAINS, RATINGS, RATING_TAG,
-} from '@/constants/studentRecords'
+import { useClassroomStore } from '@/stores/classroom'
+import { getCurrentAcademicTerm } from '@/utils/academic'
 import { apiError } from '@/utils/error'
 
-// ── 共用：班級 & Dialog 學生選擇 ──────────────────────────
+import {
+  INCIDENT_TYPES,
+  INCIDENT_TYPE_TAG,
+  SEVERITY_TAG,
+  RATING_TAG,
+} from '@/constants/studentRecords'
+
+import IncidentEditorDialog from '@/components/student/IncidentEditorDialog.vue'
+import AssessmentEditorDialog from '@/components/student/AssessmentEditorDialog.vue'
+import ChangeLogEditorDialog from '@/components/student/ChangeLogEditorDialog.vue'
+
+const router = useRouter()
 const classroomStore = useClassroomStore()
 const classrooms = computed(() => classroomStore.classrooms)
-const dialogClassroom = ref(null)
-const dialogStudents = ref([])
-const dialogStudentsLoading = ref(false)
 
-const onDialogClassroomChange = async (cid) => {
-  incForm.student_id = null
-  asmForm.student_id = null
-  dialogStudents.value = []
-  if (!cid) return
-  dialogStudentsLoading.value = true
+// ── 篩選器 ──────────────────────────────────────────
+const currentTerm = getCurrentAcademicTerm()
+
+const filters = reactive({
+  types: ['incident', 'assessment', 'change_log'],
+  classroom_id: null,
+  student_id: null,
+  date_from: null,
+  date_to: null,
+  // 學期（僅影響 change_log）
+  school_year: currentTerm.school_year,
+  semester: currentTerm.semester,
+})
+
+const TYPE_OPTIONS = [
+  { value: 'incident', label: '事件' },
+  { value: 'assessment', label: '評量' },
+  { value: 'change_log', label: '異動' },
+]
+
+const TYPE_TAG_COLOR = {
+  incident: 'danger',
+  assessment: 'success',
+  change_log: 'warning',
+}
+
+const TYPE_LABEL = {
+  incident: '事件',
+  assessment: '評量',
+  change_log: '異動',
+}
+
+const viewMode = ref('timeline') // 'timeline' | 'table'
+const activeTableTab = ref('incident')
+const dateRange = ref([])
+
+// ── 學生下拉（依班級動態載入）──────────────────────
+const classroomStudents = ref([])
+const classroomStudentsLoading = ref(false)
+
+watch(
+  () => filters.classroom_id,
+  async (cid) => {
+    filters.student_id = null
+    if (!cid) { classroomStudents.value = []; return }
+    classroomStudentsLoading.value = true
+    try {
+      const res = await getStudents({ classroom_id: cid, is_active: true })
+      classroomStudents.value = res.data.items || []
+    } catch {
+      classroomStudents.value = []
+    } finally {
+      classroomStudentsLoading.value = false
+    }
+  }
+)
+
+// ── 資料載入 ──────────────────────────────────────
+const items = ref([])
+const total = ref(0)
+const page = ref(1)
+const pageSize = ref(20)
+const loading = ref(false)
+
+const fetchTimeline = async () => {
+  loading.value = true
   try {
-    const res = await getStudents({ classroom_id: cid, is_active: true })
-    dialogStudents.value = res.data.items || []
-  } catch {
-    ElMessage.error('載入學生資料失敗')
+    const params = {
+      page: page.value,
+      page_size: pageSize.value,
+    }
+    if (filters.types?.length && filters.types.length < TYPE_OPTIONS.length) {
+      params.type = filters.types
+    }
+    if (filters.classroom_id) params.classroom_id = filters.classroom_id
+    if (filters.student_id) params.student_id = filters.student_id
+    if (filters.date_from) params.date_from = filters.date_from
+    if (filters.date_to) params.date_to = filters.date_to
+    // term 僅影響 change_log
+    if (filters.types?.includes('change_log')) {
+      if (filters.school_year) params.school_year = filters.school_year
+      if (filters.semester) params.semester = filters.semester
+    }
+    const res = await getStudentRecordsTimeline(params)
+    items.value = res.data.items
+    total.value = res.data.total
+  } catch (e) {
+    ElMessage.error(apiError(e, '載入學生紀錄失敗'))
   } finally {
-    dialogStudentsLoading.value = false
+    loading.value = false
   }
 }
 
-const truncate = (text, len = 60) => {
+const handleSearch = () => { page.value = 1; fetchTimeline() }
+const handleReset = () => {
+  filters.types = ['incident', 'assessment', 'change_log']
+  filters.classroom_id = null
+  filters.student_id = null
+  filters.date_from = null
+  filters.date_to = null
+  filters.school_year = currentTerm.school_year
+  filters.semester = currentTerm.semester
+  dateRange.value = []
+  page.value = 1
+  fetchTimeline()
+}
+
+// 按類型分組（table 模式用）
+const groupedItems = computed(() => {
+  const groups = { incident: [], assessment: [], change_log: [] }
+  for (const it of items.value) {
+    if (groups[it.record_type]) groups[it.record_type].push(it)
+  }
+  return groups
+})
+
+// ── Dialog 狀態 ──────────────────────────────────────
+const incidentDialog = reactive({ visible: false, mode: 'create', initial: null })
+const assessmentDialog = reactive({ visible: false, mode: 'create', initial: null })
+const changeLogDialog = reactive({ visible: false, mode: 'create', initial: null })
+
+const openCreate = (type) => {
+  if (type === 'incident') {
+    incidentDialog.initial = null
+    incidentDialog.mode = 'create'
+    incidentDialog.visible = true
+  } else if (type === 'assessment') {
+    assessmentDialog.initial = null
+    assessmentDialog.mode = 'create'
+    assessmentDialog.visible = true
+  } else if (type === 'change_log') {
+    changeLogDialog.initial = null
+    changeLogDialog.mode = 'create'
+    changeLogDialog.visible = true
+  }
+}
+
+const openEdit = (row) => {
+  // row 來自聚合端點，payload 內含原始欄位
+  const p = row.payload || {}
+  if (row.record_type === 'incident') {
+    incidentDialog.initial = {
+      id: row.record_id,
+      student_id: row.student_id,
+      student_name: row.student_name,
+      classroom_id: row.classroom_id,
+      incident_type: p.incident_type,
+      severity: p.severity,
+      occurred_at: row.occurred_at,
+      description: p.description,
+      action_taken: p.action_taken,
+      parent_notified: p.parent_notified,
+    }
+    incidentDialog.mode = 'edit'
+    incidentDialog.visible = true
+  } else if (row.record_type === 'assessment') {
+    assessmentDialog.initial = {
+      id: row.record_id,
+      student_id: row.student_id,
+      student_name: row.student_name,
+      classroom_id: row.classroom_id,
+      semester: p.semester,
+      assessment_type: p.assessment_type,
+      domain: p.domain,
+      rating: p.rating,
+      content: p.content,
+      suggestions: p.suggestions,
+      assessment_date: p.assessment_date,
+    }
+    assessmentDialog.mode = 'edit'
+    assessmentDialog.visible = true
+  } else if (row.record_type === 'change_log') {
+    changeLogDialog.initial = {
+      id: row.record_id,
+      student_id: row.student_id,
+      student_name: row.student_name,
+      school_year: p.school_year,
+      semester: p.semester,
+      event_type: p.event_type,
+      event_date: p.event_date,
+      reason: p.reason,
+      notes: p.notes,
+    }
+    changeLogDialog.mode = 'edit'
+    changeLogDialog.visible = true
+  }
+}
+
+const handleDelete = async (row) => {
+  const msg = `確定要刪除「${row.student_name}」的這筆${TYPE_LABEL[row.record_type]}紀錄？`
+  try {
+    await ElMessageBox.confirm(msg, '確認刪除', { type: 'warning' })
+    if (row.record_type === 'incident') await deleteIncident(row.record_id)
+    else if (row.record_type === 'assessment') await deleteAssessment(row.record_id)
+    else if (row.record_type === 'change_log') await deleteChangeLog(row.record_id)
+    ElMessage.success('刪除成功')
+    fetchTimeline()
+  } catch (e) {
+    if (e !== 'cancel') ElMessage.error(apiError(e, '刪除失敗'))
+  }
+}
+
+const goToProfile = (row) => {
+  router.push(`/students/profile/${row.student_id}`)
+}
+
+// ── 格式化顯示 ──────────────────────────────────────
+const formatTimestamp = (iso) => {
+  if (!iso) return '-'
+  const s = String(iso)
+  return s.length >= 16 ? s.slice(0, 16).replace('T', ' ') : s
+}
+
+const truncate = (text, len = 80) => {
   if (!text) return ''
   return text.length > len ? text.slice(0, len) + '…' : text
 }
 
-// ═══════════════════════════════════════════════════════════
-// 學生事件紀錄
-// ═══════════════════════════════════════════════════════════
-
-const incFilterClassroom = ref(null)
-const incFilterType = ref(null)
-const incFilterDateRange = ref([])
-
-const incidents = ref([])
-const incTotal = ref(0)
-const incLoading = ref(false)
-const incCurrentPage = ref(1)
-const incPageSize = ref(20)
-
-const incDialogVisible = ref(false)
-const incDialogMode = ref('create')
-const incFormLoading = ref(false)
-const incEditId = ref(null)
-
-const emptyIncForm = () => ({
-  student_id: null,
-  incident_type: '',
-  severity: '',
-  occurred_at: '',
-  description: '',
-  action_taken: '',
-  parent_notified: false,
-})
-const incForm = reactive(emptyIncForm())
-
-const fetchIncidents = async () => {
-  incLoading.value = true
-  try {
-    const params = { skip: (incCurrentPage.value - 1) * incPageSize.value, limit: incPageSize.value }
-    if (incFilterClassroom.value) params.classroom_id = incFilterClassroom.value
-    if (incFilterType.value) params.incident_type = incFilterType.value
-    if (incFilterDateRange.value?.length === 2) {
-      params.start_date = incFilterDateRange.value[0]
-      params.end_date = incFilterDateRange.value[1]
-    }
-    const res = await getIncidents(params)
-    incidents.value = res.data.items
-    incTotal.value = res.data.total
-  } catch {
-    ElMessage.error('載入事件紀錄失敗')
-  } finally {
-    incLoading.value = false
-  }
-}
-
-const incHandleSearch = () => { incCurrentPage.value = 1; fetchIncidents() }
-const incHandlePageChange = (page) => { incCurrentPage.value = page; fetchIncidents() }
-
-const openCreateIncident = () => {
-  Object.assign(incForm, emptyIncForm())
-  dialogClassroom.value = null
-  dialogStudents.value = []
-  incEditId.value = null
-  incDialogMode.value = 'create'
-  incDialogVisible.value = true
-}
-
-const openEditIncident = (row) => {
-  Object.assign(incForm, {
-    student_id: row.student_id,
-    incident_type: row.incident_type,
-    severity: row.severity || '',
-    occurred_at: row.occurred_at ? row.occurred_at.slice(0, 16) : '',
-    description: row.description,
-    action_taken: row.action_taken || '',
-    parent_notified: row.parent_notified,
-  })
-  dialogClassroom.value = row.classroom_id
-  dialogStudents.value = [{ id: row.student_id, name: row.student_name }]
-  incEditId.value = row.id
-  incDialogMode.value = 'edit'
-  incDialogVisible.value = true
-}
-
-const submitIncidentForm = async () => {
-  if (!incForm.student_id || !incForm.incident_type || !incForm.occurred_at || !incForm.description) {
-    ElMessage.warning('請填寫必填欄位（學生、類型、發生時間、描述）')
-    return
-  }
-  incFormLoading.value = true
-  try {
-    const payload = {
-      student_id: incForm.student_id,
-      incident_type: incForm.incident_type,
-      severity: incForm.severity || null,
-      occurred_at: incForm.occurred_at,
-      description: incForm.description,
-      action_taken: incForm.action_taken || null,
-      parent_notified: incForm.parent_notified,
-    }
-    if (incDialogMode.value === 'create') {
-      await createIncident(payload)
-      ElMessage.success('新增成功')
-    } else {
-      await updateIncident(incEditId.value, payload)
-      ElMessage.success('更新成功')
-    }
-    incDialogVisible.value = false
-    fetchIncidents()
-  } catch (e) {
-    ElMessage.error(apiError(e, '操作失敗'))
-  } finally {
-    incFormLoading.value = false
-  }
-}
-
-const toggleParentNotified = async (row) => {
-  const newVal = !row.parent_notified
-  try {
-    await updateIncident(row.id, {
-      parent_notified: newVal,
-      parent_notified_at: newVal ? new Date().toISOString() : null,
-    })
-    row.parent_notified = newVal
-    row.parent_notified_at = newVal ? new Date().toISOString() : null
-    ElMessage.success(newVal ? '已標記通知家長' : '已取消通知標記')
-  } catch {
-    ElMessage.error('更新失敗')
-  }
-}
-
-const handleDeleteIncident = async (row) => {
-  try {
-    await ElMessageBox.confirm(`確定要刪除「${row.student_name}」的事件紀錄嗎？`, '確認刪除', { type: 'warning' })
-    await deleteIncident(row.id)
-    ElMessage.success('刪除成功')
-    fetchIncidents()
-  } catch (e) {
-    if (e !== 'cancel') ElMessage.error(apiError(e, '刪除失敗'))
-  }
-}
-
-// ═══════════════════════════════════════════════════════════
-// 學期評量記錄
-// ═══════════════════════════════════════════════════════════
-
-const asmFilterClassroom = ref(null)
-const asmFilterSemester = ref(null)
-const asmFilterType = ref(null)
-
-const assessments = ref([])
-const asmTotal = ref(0)
-const asmLoading = ref(false)
-const asmCurrentPage = ref(1)
-const asmPageSize = ref(20)
-
-const asmDialogVisible = ref(false)
-const asmDialogMode = ref('create')
-const asmFormLoading = ref(false)
-const asmEditId = ref(null)
-
-const emptyAsmForm = () => ({
-  student_id: null,
-  semester: '',
-  assessment_type: '',
-  domain: '',
-  rating: '',
-  content: '',
-  suggestions: '',
-  assessment_date: '',
-})
-const asmForm = reactive(emptyAsmForm())
-
-const fetchAssessments = async () => {
-  asmLoading.value = true
-  try {
-    const params = { skip: (asmCurrentPage.value - 1) * asmPageSize.value, limit: asmPageSize.value }
-    if (asmFilterClassroom.value) params.classroom_id = asmFilterClassroom.value
-    if (asmFilterSemester.value) params.semester = asmFilterSemester.value
-    if (asmFilterType.value) params.assessment_type = asmFilterType.value
-    const res = await getAssessments(params)
-    assessments.value = res.data.items
-    asmTotal.value = res.data.total
-  } catch {
-    ElMessage.error('載入評量記錄失敗')
-  } finally {
-    asmLoading.value = false
-  }
-}
-
-const asmHandleSearch = () => { asmCurrentPage.value = 1; fetchAssessments() }
-const asmHandlePageChange = (page) => { asmCurrentPage.value = page; fetchAssessments() }
-
-const openCreateAssessment = () => {
-  Object.assign(asmForm, emptyAsmForm())
-  dialogClassroom.value = null
-  dialogStudents.value = []
-  asmEditId.value = null
-  asmDialogMode.value = 'create'
-  asmDialogVisible.value = true
-}
-
-const openEditAssessment = (row) => {
-  Object.assign(asmForm, {
-    student_id: row.student_id,
-    semester: row.semester || '',
-    assessment_type: row.assessment_type || '',
-    domain: row.domain || '',
-    rating: row.rating || '',
-    content: row.content || '',
-    suggestions: row.suggestions || '',
-    assessment_date: row.assessment_date || '',
-  })
-  dialogClassroom.value = row.classroom_id
-  dialogStudents.value = [{ id: row.student_id, name: row.student_name }]
-  asmEditId.value = row.id
-  asmDialogMode.value = 'edit'
-  asmDialogVisible.value = true
-}
-
-const submitAssessmentForm = async () => {
-  if (!asmForm.student_id || !asmForm.semester || !asmForm.assessment_type || !asmForm.content || !asmForm.assessment_date) {
-    ElMessage.warning('請填寫必填欄位（學生、學期、評量類型、評量內容、評量日期）')
-    return
-  }
-  asmFormLoading.value = true
-  try {
-    const payload = {
-      student_id: asmForm.student_id,
-      semester: asmForm.semester,
-      assessment_type: asmForm.assessment_type,
-      domain: asmForm.domain || null,
-      rating: asmForm.rating || null,
-      content: asmForm.content,
-      suggestions: asmForm.suggestions || null,
-      assessment_date: asmForm.assessment_date,
-    }
-    if (asmDialogMode.value === 'create') {
-      await createAssessment(payload)
-      ElMessage.success('新增成功')
-    } else {
-      await updateAssessment(asmEditId.value, payload)
-      ElMessage.success('更新成功')
-    }
-    asmDialogVisible.value = false
-    fetchAssessments()
-  } catch (e) {
-    ElMessage.error(apiError(e, '操作失敗'))
-  } finally {
-    asmFormLoading.value = false
-  }
-}
-
-const handleDeleteAssessment = async (row) => {
-  try {
-    await ElMessageBox.confirm(`確定要刪除「${row.student_name}」的評量記錄嗎？`, '確認刪除', { type: 'warning' })
-    await deleteAssessment(row.id)
-    ElMessage.success('刪除成功')
-    fetchAssessments()
-  } catch (e) {
-    if (e !== 'cancel') ElMessage.error(apiError(e, '刪除失敗'))
-  }
-}
-
-// ── 初始化 ───────────────────────────────────────────────
+// ── 初始化 ──────────────────────────────────────────
 onMounted(() => {
   classroomStore.fetchClassrooms()
-  fetchIncidents()
-  fetchAssessments()
+  fetchTimeline()
 })
 </script>
 
@@ -311,287 +256,337 @@ onMounted(() => {
   <div class="page-container">
     <div class="page-header">
       <h2>學生紀錄</h2>
+      <el-dropdown trigger="click" @command="openCreate">
+        <el-button type="primary">＋ 新增紀錄 ▾</el-button>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item command="incident">事件紀錄</el-dropdown-item>
+            <el-dropdown-item command="assessment">學期評量</el-dropdown-item>
+            <el-dropdown-item command="change_log">異動紀錄</el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
     </div>
 
-    <el-tabs type="border-card">
-      <!-- ════════════════ 事件紀錄 Tab ════════════════ -->
-      <el-tab-pane label="事件紀錄">
-        <div class="tab-header">
-          <el-button type="primary" @click="openCreateIncident">＋ 新增事件</el-button>
-        </div>
+    <!-- 篩選列 -->
+    <el-card class="filter-card" shadow="never">
+      <el-row :gutter="12" align="middle" class="filter-row">
+        <el-col :xs="24" :sm="12" :md="6">
+          <el-select
+            v-model="filters.types"
+            multiple
+            collapse-tags
+            placeholder="紀錄類型"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="t in TYPE_OPTIONS"
+              :key="t.value"
+              :label="t.label"
+              :value="t.value"
+            />
+          </el-select>
+        </el-col>
+        <el-col :xs="24" :sm="12" :md="5">
+          <el-select
+            v-model="filters.classroom_id"
+            placeholder="篩選班級"
+            clearable
+            style="width: 100%"
+          >
+            <el-option v-for="c in classrooms" :key="c.id" :label="c.name" :value="c.id" />
+          </el-select>
+        </el-col>
+        <el-col :xs="24" :sm="12" :md="5">
+          <el-select
+            v-model="filters.student_id"
+            placeholder="篩選學生"
+            clearable
+            :disabled="!filters.classroom_id"
+            :loading="classroomStudentsLoading"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="s in classroomStudents"
+              :key="s.id"
+              :label="s.name"
+              :value="s.id"
+            />
+          </el-select>
+        </el-col>
+        <el-col :xs="24" :sm="24" :md="8">
+          <el-date-picker
+            v-model="dateRange"
+            type="daterange"
+            range-separator="至"
+            start-placeholder="開始日期"
+            end-placeholder="結束日期"
+            value-format="YYYY-MM-DD"
+            style="width: 100%"
+            @change="(v) => { filters.date_from = v?.[0] || null; filters.date_to = v?.[1] || null }"
+          />
+        </el-col>
+      </el-row>
+      <el-row :gutter="12" align="middle" class="filter-row">
+        <el-col :xs="24" :sm="12" :md="6" v-if="filters.types.includes('change_log')">
+          <el-input-number
+            v-model="filters.school_year"
+            :min="100"
+            :max="200"
+            placeholder="學年（僅影響異動）"
+            style="width: 100%"
+          />
+        </el-col>
+        <el-col :xs="24" :sm="12" :md="4" v-if="filters.types.includes('change_log')">
+          <el-select v-model="filters.semester" placeholder="學期" style="width: 100%">
+            <el-option :label="'上學期'" :value="1" />
+            <el-option :label="'下學期'" :value="2" />
+          </el-select>
+        </el-col>
+        <el-col :xs="24" :sm="24" :md="8">
+          <el-radio-group v-model="viewMode">
+            <el-radio-button label="timeline">時間軸</el-radio-button>
+            <el-radio-button label="table">分類表格</el-radio-button>
+          </el-radio-group>
+        </el-col>
+        <el-col :xs="24" :sm="24" :md="6" class="filter-actions">
+          <el-button type="primary" @click="handleSearch">查詢</el-button>
+          <el-button @click="handleReset">重置</el-button>
+        </el-col>
+      </el-row>
+    </el-card>
 
-        <el-card class="filter-card" shadow="never">
-          <el-row :gutter="12" align="middle">
-            <el-col :xs="24" :sm="6">
-              <el-select v-model="incFilterClassroom" placeholder="篩選班級" clearable style="width: 100%">
-                <el-option v-for="c in classrooms" :key="c.id" :label="c.name" :value="c.id" />
-              </el-select>
-            </el-col>
-            <el-col :xs="24" :sm="5">
-              <el-select v-model="incFilterType" placeholder="事件類型" clearable style="width: 100%">
-                <el-option v-for="t in INCIDENT_TYPES" :key="t" :label="t" :value="t" />
-              </el-select>
-            </el-col>
-            <el-col :xs="24" :sm="8">
-              <el-date-picker
-                v-model="incFilterDateRange"
-                type="daterange"
-                range-separator="至"
-                start-placeholder="開始日期"
-                end-placeholder="結束日期"
-                value-format="YYYY-MM-DD"
-                style="width: 100%"
-              />
-            </el-col>
-            <el-col :xs="24" :sm="5">
-              <el-button type="primary" @click="incHandleSearch">查詢</el-button>
-              <el-button @click="incFilterClassroom = null; incFilterType = null; incFilterDateRange = []; incHandleSearch()">重置</el-button>
-            </el-col>
-          </el-row>
-        </el-card>
+    <!-- Timeline 模式 -->
+    <el-card v-if="viewMode === 'timeline'" shadow="never" class="content-card" v-loading="loading">
+      <div v-if="!items.length" class="empty-hint">尚無紀錄</div>
+      <el-timeline v-else>
+        <el-timeline-item
+          v-for="row in items"
+          :key="`${row.record_type}-${row.record_id}`"
+          :timestamp="formatTimestamp(row.occurred_at)"
+          :type="TYPE_TAG_COLOR[row.record_type]"
+          placement="top"
+        >
+          <div class="timeline-card">
+            <div class="timeline-row-head">
+              <el-tag :type="TYPE_TAG_COLOR[row.record_type]" size="small">
+                {{ TYPE_LABEL[row.record_type] }}
+              </el-tag>
+              <span class="student-chip">{{ row.student_name }}</span>
+              <span v-if="row.classroom_name" class="classroom-chip">{{ row.classroom_name }}</span>
+              <!-- 事件專屬 badge -->
+              <el-tag
+                v-if="row.record_type === 'incident' && row.payload?.incident_type"
+                :type="INCIDENT_TYPE_TAG[row.payload.incident_type]"
+                size="small"
+              >
+                {{ row.payload.incident_type }}
+              </el-tag>
+              <el-tag
+                v-if="row.record_type === 'incident' && row.severity"
+                :type="SEVERITY_TAG[row.severity]"
+                size="small"
+              >
+                {{ row.severity }}
+              </el-tag>
+              <el-tag v-if="row.record_type === 'incident' && row.parent_notified" type="success" size="small">
+                已通知家長
+              </el-tag>
+              <!-- 評量專屬 badge -->
+              <el-tag v-if="row.record_type === 'assessment' && row.payload?.domain" type="info" size="small">
+                {{ row.payload.domain }}
+              </el-tag>
+              <el-tag
+                v-if="row.record_type === 'assessment' && row.payload?.rating"
+                :type="RATING_TAG[row.payload.rating]"
+                size="small"
+              >
+                {{ row.payload.rating }}
+              </el-tag>
+              <!-- 異動專屬 badge -->
+              <el-tag v-if="row.record_type === 'change_log' && row.payload?.event_type" type="warning" size="small">
+                {{ row.payload.event_type }}
+              </el-tag>
+            </div>
+            <div class="timeline-body">
+              {{ truncate(row.summary || row.payload?.description || row.payload?.content || '') }}
+            </div>
+            <div class="timeline-actions">
+              <el-button size="small" text @click="goToProfile(row)">檔案</el-button>
+              <el-button size="small" text @click="openEdit(row)">編輯</el-button>
+              <el-button size="small" text type="danger" @click="handleDelete(row)">刪除</el-button>
+            </div>
+          </div>
+        </el-timeline-item>
+      </el-timeline>
 
-        <el-card shadow="never" style="margin-top: 16px">
-          <el-table :data="incidents" v-loading="incLoading" stripe>
-            <el-table-column label="發生時間" width="155" prop="occurred_at">
-              <template #default="{ row }">
-                {{ row.occurred_at ? row.occurred_at.slice(0, 16).replace('T', ' ') : '-' }}
-              </template>
+      <div class="pagination-wrap">
+        <el-pagination
+          v-model:current-page="page"
+          :page-size="pageSize"
+          :total="total"
+          layout="total, prev, pager, next"
+          @current-change="fetchTimeline"
+        />
+      </div>
+    </el-card>
+
+    <!-- Table 模式：分類顯示 -->
+    <el-card v-else shadow="never" class="content-card" v-loading="loading">
+      <el-tabs v-model="activeTableTab">
+        <el-tab-pane label="事件" name="incident">
+          <el-table :data="groupedItems.incident" stripe>
+            <el-table-column label="發生時間" width="155">
+              <template #default="{ row }">{{ formatTimestamp(row.occurred_at) }}</template>
             </el-table-column>
-            <el-table-column label="學生姓名" width="100" prop="student_name" />
-            <el-table-column label="事件類型" width="100">
+            <el-table-column label="學生" width="110" prop="student_name" />
+            <el-table-column label="班級" width="110" prop="classroom_name" />
+            <el-table-column label="類型" width="100">
               <template #default="{ row }">
-                <el-tag :type="TYPE_TAG[row.incident_type]" size="small">{{ row.incident_type }}</el-tag>
+                <el-tag :type="INCIDENT_TYPE_TAG[row.payload?.incident_type]" size="small">
+                  {{ row.payload?.incident_type }}
+                </el-tag>
               </template>
             </el-table-column>
             <el-table-column label="嚴重程度" width="90">
               <template #default="{ row }">
-                <el-tag v-if="row.severity" :type="SEVERITY_TAG[row.severity]" size="small">{{ row.severity }}</el-tag>
+                <el-tag v-if="row.severity" :type="SEVERITY_TAG[row.severity]" size="small">
+                  {{ row.severity }}
+                </el-tag>
                 <span v-else>-</span>
               </template>
             </el-table-column>
-            <el-table-column label="事件描述" min-width="180">
+            <el-table-column label="描述" min-width="200">
               <template #default="{ row }">
-                <el-tooltip :content="row.description" placement="top" :show-after="500">
-                  <span>{{ truncate(row.description) }}</span>
+                <el-tooltip :content="row.payload?.description || ''" placement="top" :show-after="500">
+                  <span>{{ truncate(row.payload?.description || '') }}</span>
                 </el-tooltip>
               </template>
             </el-table-column>
-            <el-table-column label="通知家長" width="90" align="center">
+            <el-table-column label="家長" width="80" align="center">
               <template #default="{ row }">
-                <el-switch :model-value="row.parent_notified" @change="toggleParentNotified(row)" size="small" />
+                <el-tag v-if="row.parent_notified" size="small" type="success">已通知</el-tag>
+                <span v-else>-</span>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="130" fixed="right">
+            <el-table-column label="操作" width="170" fixed="right">
               <template #default="{ row }">
-                <el-button size="small" text @click="openEditIncident(row)">編輯</el-button>
-                <el-button size="small" text type="danger" @click="handleDeleteIncident(row)">刪除</el-button>
+                <el-button size="small" text @click="goToProfile(row)">檔案</el-button>
+                <el-button size="small" text @click="openEdit(row)">編輯</el-button>
+                <el-button size="small" text type="danger" @click="handleDelete(row)">刪除</el-button>
               </template>
             </el-table-column>
           </el-table>
+        </el-tab-pane>
 
-          <div style="display: flex; justify-content: flex-end; margin-top: 16px">
-            <el-pagination
-              v-model:current-page="incCurrentPage"
-              :page-size="incPageSize"
-              :total="incTotal"
-              layout="total, prev, pager, next"
-              @current-change="incHandlePageChange"
-            />
-          </div>
-        </el-card>
-      </el-tab-pane>
-
-      <!-- ════════════════ 評量紀錄 Tab ════════════════ -->
-      <el-tab-pane label="學期評量">
-        <div class="tab-header">
-          <el-button type="primary" @click="openCreateAssessment">＋ 新增評量</el-button>
-        </div>
-
-        <el-card class="filter-card" shadow="never">
-          <el-row :gutter="12" align="middle">
-            <el-col :xs="24" :sm="5">
-              <el-select v-model="asmFilterClassroom" placeholder="篩選班級" clearable style="width: 100%">
-                <el-option v-for="c in classrooms" :key="c.id" :label="c.name" :value="c.id" />
-              </el-select>
-            </el-col>
-            <el-col :xs="24" :sm="5">
-              <el-input v-model="asmFilterSemester" placeholder="學期（如 2025上）" clearable style="width: 100%" />
-            </el-col>
-            <el-col :xs="24" :sm="5">
-              <el-select v-model="asmFilterType" placeholder="評量類型" clearable style="width: 100%">
-                <el-option v-for="t in ASSESSMENT_TYPES" :key="t" :label="t" :value="t" />
-              </el-select>
-            </el-col>
-            <el-col :xs="24" :sm="5">
-              <el-button type="primary" @click="asmHandleSearch">查詢</el-button>
-              <el-button @click="asmFilterClassroom = null; asmFilterSemester = null; asmFilterType = null; asmHandleSearch()">重置</el-button>
-            </el-col>
-          </el-row>
-        </el-card>
-
-        <el-card shadow="never" style="margin-top: 16px">
-          <el-table :data="assessments" v-loading="asmLoading" stripe>
-            <el-table-column label="學生姓名" width="100" prop="student_name" />
-            <el-table-column label="學期" width="90" prop="semester" />
+        <el-tab-pane label="評量" name="assessment">
+          <el-table :data="groupedItems.assessment" stripe>
+            <el-table-column label="日期" width="110">
+              <template #default="{ row }">{{ row.payload?.assessment_date || '-' }}</template>
+            </el-table-column>
+            <el-table-column label="學生" width="110" prop="student_name" />
+            <el-table-column label="班級" width="110" prop="classroom_name" />
+            <el-table-column label="學期" width="100">
+              <template #default="{ row }">{{ row.payload?.semester || '-' }}</template>
+            </el-table-column>
             <el-table-column label="評量類型" width="90">
               <template #default="{ row }">
-                <el-tag type="info" size="small">{{ row.assessment_type }}</el-tag>
+                <el-tag type="info" size="small">{{ row.payload?.assessment_type }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="領域" width="130" prop="domain">
+            <el-table-column label="領域" width="130">
+              <template #default="{ row }">{{ row.payload?.domain || '-' }}</template>
+            </el-table-column>
+            <el-table-column label="評等" width="80">
               <template #default="{ row }">
-                <span v-if="row.domain">{{ row.domain }}</span>
-                <span v-else style="color: #c0c4cc">-</span>
+                <el-tag v-if="row.payload?.rating" :type="RATING_TAG[row.payload.rating]" size="small">
+                  {{ row.payload.rating }}
+                </el-tag>
+                <span v-else>-</span>
               </template>
             </el-table-column>
-            <el-table-column label="評等" width="90">
+            <el-table-column label="內容" min-width="200">
               <template #default="{ row }">
-                <el-tag v-if="row.rating" :type="RATING_TAG[row.rating]" size="small">{{ row.rating }}</el-tag>
-                <span v-else style="color: #c0c4cc">-</span>
-              </template>
-            </el-table-column>
-            <el-table-column label="評量內容" min-width="180">
-              <template #default="{ row }">
-                <el-tooltip :content="row.content" placement="top" :show-after="500">
-                  <span>{{ truncate(row.content) }}</span>
+                <el-tooltip :content="row.payload?.content || ''" placement="top" :show-after="500">
+                  <span>{{ truncate(row.payload?.content || '') }}</span>
                 </el-tooltip>
               </template>
             </el-table-column>
-            <el-table-column label="評量日期" width="110" prop="assessment_date" />
-            <el-table-column label="操作" width="130" fixed="right">
+            <el-table-column label="操作" width="170" fixed="right">
               <template #default="{ row }">
-                <el-button size="small" text @click="openEditAssessment(row)">編輯</el-button>
-                <el-button size="small" text type="danger" @click="handleDeleteAssessment(row)">刪除</el-button>
+                <el-button size="small" text @click="goToProfile(row)">檔案</el-button>
+                <el-button size="small" text @click="openEdit(row)">編輯</el-button>
+                <el-button size="small" text type="danger" @click="handleDelete(row)">刪除</el-button>
               </template>
             </el-table-column>
           </el-table>
+        </el-tab-pane>
 
-          <div style="display: flex; justify-content: flex-end; margin-top: 16px">
-            <el-pagination
-              v-model:current-page="asmCurrentPage"
-              :page-size="asmPageSize"
-              :total="asmTotal"
-              layout="total, prev, pager, next"
-              @current-change="asmHandlePageChange"
-            />
-          </div>
-        </el-card>
-      </el-tab-pane>
+        <el-tab-pane label="異動" name="change_log">
+          <el-table :data="groupedItems.change_log" stripe>
+            <el-table-column label="異動日期" width="110">
+              <template #default="{ row }">{{ row.payload?.event_date || '-' }}</template>
+            </el-table-column>
+            <el-table-column label="學生" width="110" prop="student_name" />
+            <el-table-column label="班級" width="110" prop="classroom_name" />
+            <el-table-column label="異動類型" width="100">
+              <template #default="{ row }">
+                <el-tag type="warning" size="small">{{ row.payload?.event_type }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="原因" width="130">
+              <template #default="{ row }">{{ row.payload?.reason || '-' }}</template>
+            </el-table-column>
+            <el-table-column label="備註" min-width="180">
+              <template #default="{ row }">
+                <el-tooltip :content="row.payload?.notes || ''" placement="top" :show-after="500">
+                  <span>{{ truncate(row.payload?.notes || '') }}</span>
+                </el-tooltip>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="170" fixed="right">
+              <template #default="{ row }">
+                <el-button size="small" text @click="goToProfile(row)">檔案</el-button>
+                <el-button size="small" text @click="openEdit(row)">編輯</el-button>
+                <el-button size="small" text type="danger" @click="handleDelete(row)">刪除</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-tab-pane>
+      </el-tabs>
 
-      <!-- ════════════════ 異動紀錄 Tab ════════════════ -->
-      <el-tab-pane label="異動紀錄">
-        <StudentChangeLogs />
-      </el-tab-pane>
-    </el-tabs>
+      <div class="pagination-wrap">
+        <el-pagination
+          v-model:current-page="page"
+          :page-size="pageSize"
+          :total="total"
+          layout="total, prev, pager, next"
+          @current-change="fetchTimeline"
+        />
+      </div>
+    </el-card>
 
-    <!-- 事件紀錄 Dialog -->
-    <el-dialog
-      v-model="incDialogVisible"
-      :title="incDialogMode === 'create' ? '新增事件紀錄' : '編輯事件紀錄'"
-      width="560px"
-    >
-      <el-form label-width="90px">
-        <el-form-item label="班級">
-          <el-select v-model="dialogClassroom" placeholder="選擇班級" @change="onDialogClassroomChange" style="width: 100%">
-            <el-option v-for="c in classrooms" :key="c.id" :label="c.name" :value="c.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="學生 *">
-          <el-select v-model="incForm.student_id" placeholder="選擇學生" :loading="dialogStudentsLoading" style="width: 100%">
-            <el-option v-for="s in dialogStudents" :key="s.id" :label="s.name" :value="s.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="事件類型 *">
-          <el-select v-model="incForm.incident_type" placeholder="選擇類型" style="width: 100%">
-            <el-option v-for="t in INCIDENT_TYPES" :key="t" :label="t" :value="t" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="嚴重程度">
-          <el-select v-model="incForm.severity" placeholder="選擇嚴重程度" clearable style="width: 100%">
-            <el-option v-for="s in SEVERITIES" :key="s" :label="s" :value="s" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="發生時間 *">
-          <el-date-picker
-            v-model="incForm.occurred_at"
-            type="datetime"
-            placeholder="選擇日期時間"
-            value-format="YYYY-MM-DDTHH:mm:ss"
-            style="width: 100%"
-          />
-        </el-form-item>
-        <el-form-item label="事件描述 *">
-          <el-input v-model="incForm.description" type="textarea" :rows="3" placeholder="請描述事件經過" />
-        </el-form-item>
-        <el-form-item label="處置方式">
-          <el-input v-model="incForm.action_taken" type="textarea" :rows="2" placeholder="已採取的處置措施" />
-        </el-form-item>
-        <el-form-item label="通知家長">
-          <el-checkbox v-model="incForm.parent_notified">已通知家長</el-checkbox>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="incDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="incFormLoading" @click="submitIncidentForm">確認</el-button>
-      </template>
-    </el-dialog>
-
-    <!-- 評量記錄 Dialog -->
-    <el-dialog
-      v-model="asmDialogVisible"
-      :title="asmDialogMode === 'create' ? '新增評量記錄' : '編輯評量記錄'"
-      width="580px"
-    >
-      <el-form label-width="100px">
-        <el-form-item label="班級">
-          <el-select v-model="dialogClassroom" placeholder="選擇班級" @change="onDialogClassroomChange" style="width: 100%">
-            <el-option v-for="c in classrooms" :key="c.id" :label="c.name" :value="c.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="學生 *">
-          <el-select v-model="asmForm.student_id" placeholder="選擇學生" :loading="dialogStudentsLoading" style="width: 100%">
-            <el-option v-for="s in dialogStudents" :key="s.id" :label="s.name" :value="s.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="學期 *">
-          <el-input v-model="asmForm.semester" placeholder="例：2025上" style="width: 100%" />
-        </el-form-item>
-        <el-form-item label="評量類型 *">
-          <el-select v-model="asmForm.assessment_type" placeholder="選擇類型" style="width: 100%">
-            <el-option v-for="t in ASSESSMENT_TYPES" :key="t" :label="t" :value="t" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="領域">
-          <el-select v-model="asmForm.domain" placeholder="選擇領域" clearable style="width: 100%">
-            <el-option v-for="d in DOMAINS" :key="d" :label="d" :value="d" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="評等">
-          <el-select v-model="asmForm.rating" placeholder="選擇評等" clearable style="width: 100%">
-            <el-option v-for="r in RATINGS" :key="r" :label="r" :value="r" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="評量日期 *">
-          <el-date-picker
-            v-model="asmForm.assessment_date"
-            type="date"
-            placeholder="選擇日期"
-            value-format="YYYY-MM-DD"
-            style="width: 100%"
-          />
-        </el-form-item>
-        <el-form-item label="評量內容 *">
-          <el-input v-model="asmForm.content" type="textarea" :rows="4" placeholder="請描述評量觀察內容" />
-        </el-form-item>
-        <el-form-item label="改善建議">
-          <el-input v-model="asmForm.suggestions" type="textarea" :rows="2" placeholder="改善建議（選填）" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="asmDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="asmFormLoading" @click="submitAssessmentForm">確認</el-button>
-      </template>
-    </el-dialog>
+    <!-- Editor Dialogs -->
+    <IncidentEditorDialog
+      v-model:visible="incidentDialog.visible"
+      :mode="incidentDialog.mode"
+      :initial="incidentDialog.initial"
+      :classrooms="classrooms"
+      @submitted="fetchTimeline"
+    />
+    <AssessmentEditorDialog
+      v-model:visible="assessmentDialog.visible"
+      :mode="assessmentDialog.mode"
+      :initial="assessmentDialog.initial"
+      :classrooms="classrooms"
+      @submitted="fetchTimeline"
+    />
+    <ChangeLogEditorDialog
+      v-model:visible="changeLogDialog.visible"
+      :mode="changeLogDialog.mode"
+      :initial="changeLogDialog.initial"
+      @submitted="fetchTimeline"
+    />
   </div>
 </template>
 
@@ -610,12 +605,60 @@ onMounted(() => {
   font-size: 1.4rem;
   font-weight: 600;
 }
-.tab-header {
+.filter-card {
+  margin-bottom: 14px;
+}
+.filter-row {
+  margin-bottom: 8px;
+}
+.filter-row:last-child {
+  margin-bottom: 0;
+}
+.filter-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.content-card {
+  min-height: 300px;
+}
+.empty-hint {
+  text-align: center;
+  color: #a3a3a3;
+  padding: 40px 0;
+}
+.timeline-card {
+  background: #fafafa;
+  border-radius: 6px;
+  padding: 10px 14px;
+}
+.timeline-row-head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.timeline-body {
+  margin-top: 6px;
+  color: #374151;
+  line-height: 1.6;
+}
+.timeline-actions {
+  display: flex;
+  gap: 2px;
+  margin-top: 6px;
+}
+.student-chip {
+  font-weight: 600;
+  color: #1f2937;
+}
+.classroom-chip {
+  color: #64748b;
+  font-size: 13px;
+}
+.pagination-wrap {
   display: flex;
   justify-content: flex-end;
-  margin-bottom: 16px;
-}
-.filter-card {
-  margin-bottom: 0;
+  margin-top: 16px;
 }
 </style>

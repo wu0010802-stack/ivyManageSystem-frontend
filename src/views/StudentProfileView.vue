@@ -123,37 +123,15 @@
         <el-empty v-else description="您沒有檢視監護人資料的權限" />
       </el-tab-pane>
 
-      <el-tab-pane label="生命週期時間軸" name="timeline">
-        <el-timeline v-if="profile.timeline.length > 0">
-          <el-timeline-item
-            v-for="item in profile.timeline"
-            :key="item.id"
-            :timestamp="item.event_date"
-            :type="timelineColor(item.event_type)"
-            placement="top"
-          >
-            <el-card shadow="never">
-              <div class="timeline-head">
-                <el-tag :type="timelineColor(item.event_type)" size="small">
-                  {{ item.event_type }}
-                </el-tag>
-                <span v-if="item.reason" class="timeline-reason">{{ item.reason }}</span>
-              </div>
-              <div v-if="item.notes" class="timeline-notes">{{ item.notes }}</div>
-              <div class="timeline-meta">
-                學年 {{ item.school_year }} 學期 {{ item.semester }}
-                <span v-if="item.classroom_id">・班級 #{{ item.classroom_id }}</span>
-              </div>
-            </el-card>
-          </el-timeline-item>
-        </el-timeline>
-        <el-empty v-else description="尚無異動紀錄" />
-      </el-tab-pane>
-
-      <el-tab-pane label="近期事件" name="incidents">
-        <el-table :data="profile.incident_summary" border empty-text="無事件紀錄">
-          <el-table-column label="發生時間" prop="occurred_at" width="170" />
-          <el-table-column label="類型" prop="incident_type" width="120" />
+      <el-tab-pane label="事件" name="incidents">
+        <div class="tab-header">
+          <el-button type="primary" size="small" @click="openIncidentCreate">＋ 新增事件</el-button>
+        </div>
+        <el-table :data="incidentList" v-loading="incidentLoading" border empty-text="無事件紀錄">
+          <el-table-column label="發生時間" width="170">
+            <template #default="{ row }">{{ formatTs(row.occurred_at) }}</template>
+          </el-table-column>
+          <el-table-column label="類型" prop="incident_type" width="110" />
           <el-table-column label="嚴重程度" prop="severity" width="100" />
           <el-table-column label="描述" prop="description" min-width="200" show-overflow-tooltip />
           <el-table-column label="已通知家長" width="110" align="center">
@@ -163,18 +141,127 @@
               </el-tag>
             </template>
           </el-table-column>
+          <el-table-column label="操作" width="140" fixed="right">
+            <template #default="{ row }">
+              <el-button size="small" text @click="openIncidentEdit(row)">編輯</el-button>
+              <el-button size="small" text type="danger" @click="handleIncidentDelete(row)">刪除</el-button>
+            </template>
+          </el-table-column>
         </el-table>
+      </el-tab-pane>
+
+      <el-tab-pane label="評量" name="assessments">
+        <div class="tab-header">
+          <el-button type="primary" size="small" @click="openAssessmentCreate">＋ 新增評量</el-button>
+        </div>
+        <el-table :data="assessmentList" v-loading="assessmentLoading" border empty-text="無評量紀錄">
+          <el-table-column label="評量日期" prop="assessment_date" width="110" />
+          <el-table-column label="學期" prop="semester" width="100" />
+          <el-table-column label="類型" prop="assessment_type" width="90" />
+          <el-table-column label="領域" prop="domain" width="130" />
+          <el-table-column label="評等" prop="rating" width="80" />
+          <el-table-column label="內容" prop="content" min-width="200" show-overflow-tooltip />
+          <el-table-column label="操作" width="140" fixed="right">
+            <template #default="{ row }">
+              <el-button size="small" text @click="openAssessmentEdit(row)">編輯</el-button>
+              <el-button size="small" text type="danger" @click="handleAssessmentDelete(row)">刪除</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </el-tab-pane>
+
+      <el-tab-pane label="異動" name="change_logs">
+        <div class="tab-header">
+          <el-select v-model="changeLogTermKey" style="width: 200px">
+            <el-option
+              v-for="t in changeLogTermOptions"
+              :key="t.key"
+              :label="t.label"
+              :value="t.key"
+            />
+          </el-select>
+          <el-button type="primary" size="small" @click="openChangeLogCreate">＋ 新增異動</el-button>
+        </div>
+        <el-table :data="changeLogList" v-loading="changeLogLoading" border empty-text="無異動紀錄">
+          <el-table-column label="異動日期" prop="event_date" width="110" />
+          <el-table-column label="異動類型" prop="event_type" width="100" />
+          <el-table-column label="原因" prop="reason" width="130" />
+          <el-table-column label="備註" prop="notes" min-width="200" show-overflow-tooltip />
+          <el-table-column label="操作" width="140" fixed="right">
+            <template #default="{ row }">
+              <el-button size="small" text @click="openChangeLogEdit(row)">編輯</el-button>
+              <el-button size="small" text type="danger" @click="handleChangeLogDelete(row)">刪除</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </el-tab-pane>
+
+      <el-tab-pane label="完整時間軸" name="timeline">
+        <el-timeline v-if="mergedTimeline.length > 0">
+          <el-timeline-item
+            v-for="item in mergedTimeline"
+            :key="`${item.record_type || 'legacy'}-${item.record_id || item.id}`"
+            :timestamp="item.occurred_at || item.event_date"
+            :type="timelineItemColor(item)"
+            placement="top"
+          >
+            <el-card shadow="never">
+              <div class="timeline-head">
+                <el-tag :type="timelineItemColor(item)" size="small">
+                  {{ timelineItemLabel(item) }}
+                </el-tag>
+                <span v-if="item.summary" class="timeline-reason">{{ item.summary }}</span>
+              </div>
+              <div v-if="item.payload?.notes || item.payload?.reason || item.payload?.description || item.payload?.content" class="timeline-notes">
+                {{ item.payload?.notes || item.payload?.reason || item.payload?.description || item.payload?.content }}
+              </div>
+            </el-card>
+          </el-timeline-item>
+        </el-timeline>
+        <el-empty v-else description="尚無紀錄" />
       </el-tab-pane>
 
       <el-tab-pane label="相關連結" name="links">
         <div class="quick-links">
           <el-button @click="goTo('/student-attendance')">學生出席紀錄</el-button>
           <el-button @click="goTo('/fees')">學費管理</el-button>
-          <el-button @click="goTo('/student-records')">學生紀錄（評量/異動）</el-button>
+          <el-button @click="goTo('/student-records')">學生紀錄總覽</el-button>
           <el-button @click="goTo('/students')">回到學生列表</el-button>
         </div>
       </el-tab-pane>
     </el-tabs>
+
+    <!-- 本檔案專用的三個 Editor Dialog（鎖學生）-->
+    <IncidentEditorDialog
+      v-if="profile"
+      v-model:visible="incidentDialog.visible"
+      :mode="incidentDialog.mode"
+      :initial="incidentDialog.initial"
+      :lock-student="true"
+      :default-student-id="profile.basic.id"
+      :default-classroom-id="profile.basic.classroom_id"
+      @submitted="fetchIncidents"
+    />
+    <AssessmentEditorDialog
+      v-if="profile"
+      v-model:visible="assessmentDialog.visible"
+      :mode="assessmentDialog.mode"
+      :initial="assessmentDialog.initial"
+      :lock-student="true"
+      :default-student-id="profile.basic.id"
+      :default-classroom-id="profile.basic.classroom_id"
+      @submitted="fetchAssessments"
+    />
+    <ChangeLogEditorDialog
+      v-if="profile"
+      v-model:visible="changeLogDialog.visible"
+      :mode="changeLogDialog.mode"
+      :initial="changeLogDialog.initial"
+      :lock-student="true"
+      :default-student-id="profile.basic.id"
+      :default-term-key="changeLogTermKey"
+      @submitted="fetchChangeLogs"
+    />
 
     <LifecycleTransitionDialog
       v-if="profile"
@@ -187,13 +274,21 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import GuardianManager from '@/components/student/GuardianManager.vue'
 import LifecycleTransitionDialog from '@/components/student/LifecycleTransitionDialog.vue'
+import IncidentEditorDialog from '@/components/student/IncidentEditorDialog.vue'
+import AssessmentEditorDialog from '@/components/student/AssessmentEditorDialog.vue'
+import ChangeLogEditorDialog from '@/components/student/ChangeLogEditorDialog.vue'
 import { getStudentProfile } from '@/api/students'
+import { getIncidents, deleteIncident } from '@/api/studentIncidents'
+import { getAssessments, deleteAssessment } from '@/api/studentAssessments'
+import { getChangeLogs, deleteChangeLog } from '@/api/studentChangeLogs'
+import { getCurrentAcademicTerm } from '@/utils/academic'
 import { hasPermission } from '@/utils/auth'
+import { apiError } from '@/utils/error'
 
 const route = useRoute()
 const router = useRouter()
@@ -206,6 +301,180 @@ const lifecycleDialogVisible = ref(false)
 const studentId = computed(() => Number(route.params.id))
 const canLifecycleWrite = computed(() => hasPermission('STUDENTS_LIFECYCLE_WRITE'))
 const canGuardiansRead = computed(() => hasPermission('GUARDIANS_READ'))
+
+// ── 事件紀錄（本學生） ──────────────────────────────
+const incidentList = ref([])
+const incidentLoading = ref(false)
+const incidentDialog = reactive({ visible: false, mode: 'create', initial: null })
+
+const fetchIncidents = async () => {
+  if (!studentId.value) return
+  incidentLoading.value = true
+  try {
+    const res = await getIncidents({ student_id: studentId.value, limit: 200 })
+    incidentList.value = res.data.items || []
+  } catch (e) {
+    ElMessage.error(apiError(e, '載入事件紀錄失敗'))
+  } finally {
+    incidentLoading.value = false
+  }
+}
+const openIncidentCreate = () => {
+  incidentDialog.initial = null
+  incidentDialog.mode = 'create'
+  incidentDialog.visible = true
+}
+const openIncidentEdit = (row) => {
+  incidentDialog.initial = { ...row, student_name: profile.value?.basic.name }
+  incidentDialog.mode = 'edit'
+  incidentDialog.visible = true
+}
+const handleIncidentDelete = async (row) => {
+  try {
+    await ElMessageBox.confirm('確定刪除此筆事件紀錄？', '確認刪除', { type: 'warning' })
+    await deleteIncident(row.id)
+    ElMessage.success('刪除成功')
+    fetchIncidents()
+  } catch (e) {
+    if (e !== 'cancel') ElMessage.error(apiError(e, '刪除失敗'))
+  }
+}
+
+// ── 學期評量（本學生） ──────────────────────────────
+const assessmentList = ref([])
+const assessmentLoading = ref(false)
+const assessmentDialog = reactive({ visible: false, mode: 'create', initial: null })
+
+const fetchAssessments = async () => {
+  if (!studentId.value) return
+  assessmentLoading.value = true
+  try {
+    const res = await getAssessments({ student_id: studentId.value, limit: 200 })
+    assessmentList.value = res.data.items || []
+  } catch (e) {
+    ElMessage.error(apiError(e, '載入評量紀錄失敗'))
+  } finally {
+    assessmentLoading.value = false
+  }
+}
+const openAssessmentCreate = () => {
+  assessmentDialog.initial = null
+  assessmentDialog.mode = 'create'
+  assessmentDialog.visible = true
+}
+const openAssessmentEdit = (row) => {
+  assessmentDialog.initial = { ...row, student_name: profile.value?.basic.name }
+  assessmentDialog.mode = 'edit'
+  assessmentDialog.visible = true
+}
+const handleAssessmentDelete = async (row) => {
+  try {
+    await ElMessageBox.confirm('確定刪除此筆評量？', '確認刪除', { type: 'warning' })
+    await deleteAssessment(row.id)
+    ElMessage.success('刪除成功')
+    fetchAssessments()
+  } catch (e) {
+    if (e !== 'cancel') ElMessage.error(apiError(e, '刪除失敗'))
+  }
+}
+
+// ── 異動紀錄（本學生，依學期）──────────────────────
+const currentTerm = getCurrentAcademicTerm()
+const changeLogTermKey = ref(`${currentTerm.school_year}-${currentTerm.semester}`)
+const changeLogList = ref([])
+const changeLogLoading = ref(false)
+const changeLogDialog = reactive({ visible: false, mode: 'create', initial: null })
+
+const changeLogTermOptions = computed(() => {
+  const opts = []
+  let sy = currentTerm.school_year
+  let s = currentTerm.semester
+  for (let i = 0; i < 6; i++) {
+    opts.push({
+      key: `${sy}-${s}`,
+      label: `${sy}學年度 ${s === 1 ? '上學期' : '下學期'}`,
+    })
+    if (s === 1) { s = 2; sy -= 1 } else { s = 1 }
+  }
+  return opts
+})
+
+const fetchChangeLogs = async () => {
+  if (!studentId.value) return
+  changeLogLoading.value = true
+  try {
+    const [sy, sem] = changeLogTermKey.value.split('-').map(Number)
+    const res = await getChangeLogs({
+      student_id: studentId.value,
+      school_year: sy,
+      semester: sem,
+      page_size: 100,
+    })
+    changeLogList.value = res.data.items || []
+  } catch (e) {
+    ElMessage.error(apiError(e, '載入異動紀錄失敗'))
+  } finally {
+    changeLogLoading.value = false
+  }
+}
+const openChangeLogCreate = () => {
+  changeLogDialog.initial = null
+  changeLogDialog.mode = 'create'
+  changeLogDialog.visible = true
+}
+const openChangeLogEdit = (row) => {
+  changeLogDialog.initial = { ...row, student_name: profile.value?.basic.name }
+  changeLogDialog.mode = 'edit'
+  changeLogDialog.visible = true
+}
+const handleChangeLogDelete = async (row) => {
+  try {
+    await ElMessageBox.confirm('確定刪除此筆異動紀錄？', '確認刪除', { type: 'warning' })
+    await deleteChangeLog(row.id)
+    ElMessage.success('刪除成功')
+    fetchChangeLogs()
+  } catch (e) {
+    if (e !== 'cancel') ElMessage.error(apiError(e, '刪除失敗'))
+  }
+}
+
+watch(changeLogTermKey, () => fetchChangeLogs())
+
+// 當使用者切到特定 tab 時才載入該資料（延遲載入）
+watch(activeTab, (v) => {
+  if (v === 'incidents' && incidentList.value.length === 0) fetchIncidents()
+  if (v === 'assessments' && assessmentList.value.length === 0) fetchAssessments()
+  if (v === 'change_logs' && changeLogList.value.length === 0) fetchChangeLogs()
+})
+
+// ── 合併時間軸（優先用後端 timeline_all，fallback 用 timeline）
+const mergedTimeline = computed(() => {
+  const p = profile.value
+  if (!p) return []
+  if (Array.isArray(p.timeline_all) && p.timeline_all.length > 0) return p.timeline_all
+  return p.timeline || []
+})
+
+function timelineItemLabel(item) {
+  if (item.record_type === 'incident') return item.payload?.incident_type || '事件'
+  if (item.record_type === 'assessment') return item.payload?.assessment_type || '評量'
+  if (item.record_type === 'change_log') return item.payload?.event_type || '異動'
+  // 舊格式 fallback
+  return item.event_type || '紀錄'
+}
+
+function timelineItemColor(item) {
+  if (item.record_type === 'incident') return 'danger'
+  if (item.record_type === 'assessment') return 'success'
+  if (item.record_type === 'change_log') return timelineColor(item.payload?.event_type)
+  return timelineColor(item.event_type)
+}
+
+function formatTs(iso) {
+  if (!iso) return '-'
+  const s = String(iso)
+  return s.length >= 16 ? s.slice(0, 16).replace('T', ' ') : s
+}
 
 const LIFECYCLE_LABELS = {
   prospect: '招生中',
