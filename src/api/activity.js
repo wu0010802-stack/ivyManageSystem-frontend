@@ -109,6 +109,20 @@ export const getPOSDailySummary = (date) =>
 export const getPOSRecentTransactions = (params = {}) =>
   api.get('/activity/pos/recent-transactions', { params })
 
+// POS 日結簽核（老闆核對每日流水）
+export const getPOSDailyClosePending = (params = {}) =>
+  api.get('/activity/pos/daily-close/pending', { params })
+export const getPOSDailyCloseStatus = (dateStr) =>
+  api.get(`/activity/pos/daily-close/${dateStr}`)
+export const approvePOSDailyClose = (dateStr, payload = {}) =>
+  api.post(`/activity/pos/daily-close/${dateStr}`, payload)
+export const unlockPOSDailyClose = (dateStr) =>
+  api.delete(`/activity/pos/daily-close/${dateStr}`)
+export const getPOSReconciliation = (startDate, endDate) =>
+  api.get('/activity/pos/reconciliation', {
+    params: { start_date: startDate, end_date: endDate },
+  })
+
 // Portal - 才藝查詢
 export const getPortalActivityRegistrations = () =>
   api.get('/portal/activity/registrations')

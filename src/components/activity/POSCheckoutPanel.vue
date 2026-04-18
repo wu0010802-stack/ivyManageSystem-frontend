@@ -19,30 +19,21 @@
         @toggle="handleToggle"
       />
 
-      <POSCartPanel
-        :cart="cart"
-        :cart-total="cartTotal"
-        :is-refund-mode="isRefundMode"
-        class="pos-panel-wrap__col"
-        @remove="removeFromCart"
-        @edit-amount="handleEditAmount"
-      />
-
       <POSPaymentPanel
         v-model:payment-method="paymentMethod"
-        v-model:tendered-input="tenderedInput"
         v-model:notes="notes"
         v-model:checkout-type="checkoutType"
         :payment-method-options="paymentMethodOptions"
-        :is-cash="isCash"
         :is-refund-mode="isRefundMode"
-        :change="change"
-        :cart-total="cartTotal"
+        :item-total="itemTotal"
+        :selected-item="selectedItem"
         :can-submit="canSubmit"
         :submitting="submitting"
         class="pos-panel-wrap__col"
-        @clear="resetCart"
-        @submit="submit"
+        @update:applied-amount="updateSelectedAmount"
+        @clear-selection="clearSelection"
+        @clear="resetTransactionInputs"
+        @submit="handleSubmit"
       />
     </div>
 
@@ -161,7 +152,6 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { Printer, RefreshRight } from '@element-plus/icons-vue'
 
-import POSCartPanel from '@/components/activity/POSCartPanel.vue'
 import POSDailySummaryBar from '@/components/activity/POSDailySummaryBar.vue'
 import POSPaymentPanel from '@/components/activity/POSPaymentPanel.vue'
 import POSReceipt from '@/components/activity/POSReceipt.vue'
@@ -187,17 +177,15 @@ const {
   runSearch,
   checkoutType,
   isRefundMode,
-  cart,
-  cartTotal,
-  removeFromCart,
-  toggleCart,
-  resetCart,
+  selectedItem,
+  itemTotal,
+  selectItem,
+  clearSelection,
+  updateSelectedAmount,
+  resetTransactionInputs,
   paymentMethod,
   paymentMethodOptions,
-  isCash,
-  tenderedInput,
   notes,
-  change,
   canSubmit,
   submitting,
   submit: doSubmit,
@@ -211,19 +199,19 @@ const {
   refreshRecentTransactions,
 } = usePOSCheckout()
 
-const selectedIds = computed(() => cart.value.map((r) => r.id))
+// 搜尋面板的 selected-ids 仍以陣列接口呈現，單筆模式下至多一個元素
+const selectedIds = computed(() => (selectedItem.value ? [selectedItem.value.id] : []))
 
 function handleToggle(row, studentName) {
-  toggleCart(row, studentName)
+  selectItem(row, studentName)
 }
 
-function handleEditAmount({ id, amount }) {
-  const target = cart.value.find((r) => r.id === id)
-  if (target) target.amount_applied = Number(amount) || 0
-}
-
-async function submit() {
-  await doSubmit(() => props.onAfterCheckout?.())
+async function handleSubmit(payload = {}) {
+  const { print = true } = payload
+  await doSubmit({
+    print,
+    onSubmitted: () => props.onAfterCheckout?.(),
+  })
 }
 
 function formatTime(iso) {
@@ -259,7 +247,7 @@ async function loadClassroomOptions() {
 watch(
   () => [termStore.school_year, termStore.semester],
   () => {
-    cart.value = []
+    clearSelection()
     classroomFilter.value = ''
     loadClassroomOptions()
     runSearch()
@@ -286,7 +274,7 @@ defineExpose({ refreshDailySummary, refreshRecentTransactions })
 
 .pos-panel-wrap__body {
   display: grid;
-  grid-template-columns: 1.2fr 1fr 1fr;
+  grid-template-columns: 1.3fr 1fr;
   gap: 12px;
   min-height: 0;
   align-items: stretch;
@@ -371,7 +359,7 @@ defineExpose({ refreshDailySummary, refreshRecentTransactions })
   gap: 4px;
 }
 
-@media (max-width: 1200px) {
+@media (max-width: 1000px) {
   .pos-panel-wrap__body {
     grid-template-columns: 1fr;
   }

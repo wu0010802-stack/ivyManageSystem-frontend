@@ -39,6 +39,12 @@ export const PERMISSION_VALUES = {
   FEES_WRITE: 2 ** 32,
   RECRUITMENT_READ: 2 ** 33,
   RECRUITMENT_WRITE: 2 ** 34,
+  ACTIVITY_PAYMENT_APPROVE: 2 ** 35,
+  // 學生生命週期追蹤（Phase A）
+  STUDENTS_LIFECYCLE_WRITE: 2 ** 36,
+  GUARDIANS_READ: 2 ** 37,
+  GUARDIANS_WRITE: 2 ** 38,
+  RECRUITMENT_CONVERT: 2 ** 39,
 }
 
 export const ROUTE_PERMISSION_RULES = [
@@ -51,6 +57,7 @@ export const ROUTE_PERMISSION_RULES = [
   { path: '/meetings', permission: 'MEETINGS' },
   { path: '/employees', permission: 'EMPLOYEES_READ' },
   { path: '/students', permission: 'STUDENTS_READ' },
+  { path: '/students/profile', permission: 'STUDENTS_READ', prefix: true },
   { path: '/classrooms', permission: 'CLASSROOMS_READ' },
   { path: '/salary', permission: 'SALARY_READ' },
   { path: '/announcements', permission: 'ANNOUNCEMENTS_READ' },
@@ -61,6 +68,7 @@ export const ROUTE_PERMISSION_RULES = [
   { path: '/activity/dashboard', permission: 'ACTIVITY_READ' },
   { path: '/activity/registrations', permission: 'ACTIVITY_READ' },
   { path: '/activity/pos', permission: 'ACTIVITY_WRITE' },
+  { path: '/activity/pos/approval', permission: 'ACTIVITY_PAYMENT_APPROVE' },
   { path: '/activity/courses', permission: 'ACTIVITY_READ' },
   { path: '/activity/supplies', permission: 'ACTIVITY_READ' },
   { path: '/activity/inquiries', permission: 'ACTIVITY_READ' },

@@ -180,6 +180,10 @@
             <el-icon><Money /></el-icon>
             <template #title>POS 收銀</template>
           </el-menu-item>
+          <el-menu-item v-if="canView.ACTIVITY_PAYMENT_APPROVE" index="/activity/pos/approval">
+            <el-icon><Finished /></el-icon>
+            <template #title>收款簽核</template>
+          </el-menu-item>
           <el-menu-item v-if="canView.ACTIVITY_READ" index="/activity/catalog">
             <el-icon><Collection /></el-icon>
             <template #title>課程與用品</template>

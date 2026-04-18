@@ -413,16 +413,22 @@ async function confirmEdit() {
 async function handleReject(row) {
   try {
     const { value: reason } = await ElMessageBox.prompt(
-      `確認將「${row.student_name}」視為資料不符拒絕？`,
+      `確認將「${row.student_name}」視為資料不符拒絕？（原因將寫入 audit log）`,
       '拒絕報名',
       {
-        inputPlaceholder: '（選填）拒絕原因',
+        inputPlaceholder: '必填：拒絕原因（至少 2 字）',
         confirmButtonText: '確認拒絕',
         cancelButtonText: '取消',
         type: 'warning',
+        inputValidator: (val) => {
+          const t = (val || '').trim()
+          if (t.length < 2) return '請填寫拒絕原因（至少 2 字）'
+          if (t.length > 200) return '不得超過 200 字'
+          return true
+        },
       }
     )
-    await rejectRegistration(row.id, reason || '')
+    await rejectRegistration(row.id, reason.trim())
     ElMessage.success('已拒絕該筆報名（同頁可見，需要時可復原）')
     await loadList()
   } catch (err) {

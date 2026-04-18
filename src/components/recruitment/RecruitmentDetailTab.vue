@@ -126,10 +126,16 @@
       <el-table-column prop="no_deposit_reason" label="未預繳原因" min-width="120" show-overflow-tooltip />
       <el-table-column prop="notes" label="備註" min-width="120" show-overflow-tooltip />
       <el-table-column prop="parent_response" label="電訪回應" min-width="120" show-overflow-tooltip />
-      <el-table-column v-if="canWrite" label="操作" width="120" fixed="right">
+      <el-table-column v-if="canWrite || canConvert" label="操作" width="220" fixed="right">
         <template #default="{ row }">
-          <el-button size="small" @click="$emit('edit', row)">編輯</el-button>
-          <el-button size="small" type="danger" @click="$emit('delete', row.id)">刪除</el-button>
+          <el-button v-if="canWrite" size="small" @click="$emit('edit', row)">編輯</el-button>
+          <el-button
+            v-if="canConvert && !row.enrolled"
+            size="small"
+            type="success"
+            @click="$emit('convert', row)"
+          >轉為學生</el-button>
+          <el-button v-if="canWrite" size="small" type="danger" @click="$emit('delete', row.id)">刪除</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -149,6 +155,7 @@
 <script setup>
 const props = defineProps({
   canWrite: { type: Boolean, required: true },
+  canConvert: { type: Boolean, default: false },
   options: { type: Object, required: true },
   filters: { type: Object, required: true },
   detailData: { type: Array, required: true },

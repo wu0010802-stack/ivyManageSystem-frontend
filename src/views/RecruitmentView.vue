@@ -375,6 +375,7 @@
       <el-tab-pane label="原始明細" name="detail" lazy>
         <RecruitmentDetailTab
           :can-write="canWrite"
+          :can-convert="canConvert"
           :options="options"
           :filters="filter"
           :detail-data="detailData"
@@ -388,6 +389,7 @@
           @page-change="onPageChange"
           @edit="openEditDialog"
           @delete="handleDelete"
+          @convert="openConvertDialog"
         />
       </el-tab-pane>
     </el-tabs>
@@ -426,6 +428,13 @@
       :saving="savingCampus"
       @save="handleCampusSave"
     />
+
+    <RecruitmentConvertDialog
+      v-model="convertDialogVisible"
+      :visit="convertTargetVisit"
+      :classroom-options="classroomOptions"
+      @converted="onConverted"
+    />
   </div>
 </template>
 
@@ -457,6 +466,9 @@ import RecruitmentAreaTab from '@/components/recruitment/RecruitmentAreaTab.vue'
 import RecruitmentNoDepositTab from '@/components/recruitment/RecruitmentNoDepositTab.vue'
 import RecruitmentPeriodsTab from '@/components/recruitment/RecruitmentPeriodsTab.vue'
 import RecruitmentDetailTab from '@/components/recruitment/RecruitmentDetailTab.vue'
+import RecruitmentConvertDialog from '@/components/recruitment/RecruitmentConvertDialog.vue'
+import { getClassrooms } from '@/api/classrooms'
+import { useRouter } from 'vue-router'
 import RecruitmentMonthDialog from '@/components/recruitment/RecruitmentMonthDialog.vue'
 import RecruitmentRecordDialog from '@/components/recruitment/RecruitmentRecordDialog.vue'
 import RecruitmentPeriodDialog from '@/components/recruitment/RecruitmentPeriodDialog.vue'
@@ -514,6 +526,63 @@ const canWrite = computed(() => {
     return (BigInt(info.permissions) & val) === val
   } catch { return false }
 })
+
+const canConvert = computed(() => {
+  try {
+    const info = getUserInfo()
+    if (!info) return false
+    if (info.permissions === -1 || info.permissions === null || info.permissions === undefined) return true
+    const val = BigInt(PERMISSION_VALUES.RECRUITMENT_CONVERT)
+    return (BigInt(info.permissions) & val) === val
+  } catch { return false }
+})
+
+// -------- 轉化為學生 --------
+const router = useRouter()
+const convertDialogVisible = ref(false)
+const convertTargetVisit = ref(null)
+const classroomOptions = ref([])
+let classroomsLoaded = false
+
+async function loadClassroomsOnce() {
+  if (classroomsLoaded) return
+  try {
+    const { data } = await getClassrooms({ is_active: true })
+    classroomOptions.value = data?.items || data || []
+    classroomsLoaded = true
+  } catch (err) {
+    // 失敗靜默：不阻擋 dialog 開啟，使用者仍可不選班級
+    classroomOptions.value = []
+  }
+}
+
+async function openConvertDialog(row) {
+  if (row?.enrolled) {
+    ElMessage.warning('此訪視已標記為已報到')
+    return
+  }
+  convertTargetVisit.value = row
+  await loadClassroomsOnce()
+  convertDialogVisible.value = true
+}
+
+function onConverted(result) {
+  // 更新此筆訪視記錄的 enrolled 狀態
+  if (convertTargetVisit.value) {
+    const target = detailData.value.find((r) => r.id === convertTargetVisit.value.id)
+    if (target) target.enrolled = true
+  }
+  // 提供跳轉學生檔案的選項
+  ElMessageBox.confirm(
+    `學生已建立（ID #${result.student_id}），是否立即查看檔案？`,
+    '轉化成功',
+    { confirmButtonText: '查看檔案', cancelButtonText: '留在本頁', type: 'success' },
+  )
+    .then(() => {
+      router.push({ name: 'student-profile', params: { id: result.student_id } })
+    })
+    .catch(() => { /* 留在本頁 */ })
+}
 
 // -------- 狀態 --------
 const activeTab = ref('overview')

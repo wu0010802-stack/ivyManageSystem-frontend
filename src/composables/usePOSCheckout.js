@@ -12,14 +12,15 @@ import { CASH_METHOD, LARGE_AMOUNT_THRESHOLD, POS_PAYMENT_METHODS, formatTWD } f
 import { useAcademicTermStore } from '@/stores/academicTerm'
 
 /**
- * POS 收銀狀態機：搜尋 → 選擇 → 輸入實收 → 送出 → 列印 → 重置。
+ * POS 收銀狀態機：搜尋 → 選擇單筆 → 送出（可選列印） → 重置。
+ * 單筆模式：同時間只允許選取一筆報名，點選第二筆會直接取代前一筆。
+ * 一次繳清定位：不處理實收/找零，只記錄「收款金額」。
  * 有意不放 Pinia store：POS 狀態頁面級且短暫，不跨路由共享。
  *
  * 安全保護：
  * - 每次送出產生新的 idempotency_key，避免網路重送造成重複結帳
  * - payment_date 使用台北時區本地日期字串，避免跨日 UTC 誤差
  * - scope dispose 時清除 searchTimer
- * - 切換付款方式時清空 tenderedInput
  */
 
 /** 取得台北時區當日 ISO 日期字串（避免 new Date().toISOString() 跨日誤差） */
@@ -51,8 +52,9 @@ export function usePOSCheckout() {
   let searchSeq = 0
   let searchTimer = null
 
-  // ── 購物車 ──────────────────────────────────────────────────────
-  const cart = ref([])
+  // ── 單筆選取（取代購物車） ───────────────────────────────────────
+  // null = 尚未選取；物件結構同以往 cart 行項目
+  const selectedItem = ref(null)
 
   // ── 交易類型（繳費 or 退費） ─────────────────────────────────────
   const checkoutType = ref('payment') // 'payment' | 'refund'
@@ -60,7 +62,6 @@ export function usePOSCheckout() {
 
   // ── 收款 ────────────────────────────────────────────────────────
   const paymentMethod = ref(CASH_METHOD)
-  const tenderedInput = ref(null)
   const notes = ref('')
   const submitting = ref(false)
 
@@ -83,51 +84,27 @@ export function usePOSCheckout() {
   })
 
   // ── 計算屬性 ──────────────────────────────────────────────────
-  const cartTotal = computed(() =>
-    cart.value.reduce((sum, row) => sum + (Number(row.amount_applied) || 0), 0)
+  const itemTotal = computed(() =>
+    selectedItem.value ? Number(selectedItem.value.amount_applied) || 0 : 0
   )
-
-  const isCash = computed(() => paymentMethod.value === CASH_METHOD)
-
-  const change = computed(() => {
-    if (!isCash.value || tenderedInput.value == null) return null
-    const diff = Number(tenderedInput.value) - cartTotal.value
-    return diff >= 0 ? diff : null
-  })
 
   const canSubmit = computed(() => {
     if (submitting.value) return false
-    if (cart.value.length === 0) return false
-    if (cartTotal.value <= 0) return false
-    if (cart.value.some((row) => !(Number(row.amount_applied) > 0))) return false
-    // 退費模式：每筆金額不得超過已繳
-    if (isRefundMode.value) {
-      if (cart.value.some((row) => Number(row.amount_applied) > (row.paid_amount || 0))) {
-        return false
-      }
-    } else if (isCash.value) {
-      // 收款模式 + 現金：必須輸入足夠實收
-      if (tenderedInput.value == null) return false
-      if (Number(tenderedInput.value) < cartTotal.value) return false
-    }
+    const item = selectedItem.value
+    if (!item) return false
+    const applied = Number(item.amount_applied) || 0
+    if (applied <= 0) return false
+    // 退費模式：金額不得超過已繳
+    if (isRefundMode.value && applied > (item.paid_amount || 0)) return false
     return true
   })
 
   const paymentMethodOptions = POS_PAYMENT_METHODS
 
-  // 切換付款方式（非現金）時清空實收欄位，避免殘值誤導
-  watch(paymentMethod, (next, prev) => {
-    if (next === prev) return
-    if (next !== CASH_METHOD) {
-      tenderedInput.value = null
-    }
-  })
-
-  // 切換繳費 / 退費時：清空購物車（兩模式邏輯不同，避免混淆）
+  // 切換繳費 / 退費時：清空選取（兩模式邏輯不同，避免混淆）
   watch(checkoutType, (next, prev) => {
     if (next === prev) return
-    cart.value = []
-    tenderedInput.value = null
+    selectedItem.value = null
     notes.value = ''
     // 搜尋結果也重新拉（退費模式要看已繳金額 > 0 的）
     if (searchQuery.value) runSearch()
@@ -209,19 +186,17 @@ export function usePOSCheckout() {
     runSearch()
   })
 
-  // ── 購物車 ────────────────────────────────────────────────────
-  function addToCart(row) {
-    const id = row.id
-    if (cart.value.some((r) => r.id === id)) return
+  // ── 選取（單筆） ─────────────────────────────────────────────
+  function buildSelection(row, studentName) {
     const paid = Number(row.paid_amount || 0)
     const owed = Number(
       row.owed ?? Math.max(0, (row.total_amount || 0) - paid)
     )
     // 繳費：預填欠費；退費：預填已繳金額
     const defaultAmount = isRefundMode.value ? paid : owed
-    cart.value.push({
-      id,
-      student_name: row.student_name || row._student_name || '',
+    return {
+      id: row.id,
+      student_name: row.student_name || studentName || '',
       class_name: row.class_name || '',
       total_amount: row.total_amount || 0,
       paid_amount: paid,
@@ -229,30 +204,38 @@ export function usePOSCheckout() {
       amount_applied: defaultAmount,
       courses: row.courses || [],
       supplies: row.supplies || [],
-    })
-  }
-
-  function removeFromCart(id) {
-    cart.value = cart.value.filter((r) => r.id !== id)
-  }
-
-  function toggleCart(row, studentName) {
-    const exists = cart.value.find((r) => r.id === row.id)
-    if (exists) {
-      removeFromCart(row.id)
-    } else {
-      addToCart({ ...row, _student_name: studentName })
     }
   }
 
-  function resetCart() {
-    cart.value = []
-    tenderedInput.value = null
+  /** 點擊搜尋結果：同 id 再點 → 取消；不同 id → 取代 */
+  function selectItem(row, studentName) {
+    if (!row) return
+    if (selectedItem.value && selectedItem.value.id === row.id) {
+      selectedItem.value = null
+      return
+    }
+    selectedItem.value = buildSelection(row, studentName)
+  }
+
+  function clearSelection() {
+    selectedItem.value = null
+  }
+
+  function updateSelectedAmount(amount) {
+    if (!selectedItem.value) return
+    selectedItem.value = {
+      ...selectedItem.value,
+      amount_applied: Number(amount) || 0,
+    }
+  }
+
+  function resetTransactionInputs() {
+    selectedItem.value = null
     notes.value = ''
   }
 
   function reset() {
-    resetCart()
+    resetTransactionInputs()
     searchQuery.value = ''
     searchGroups.value = []
     searchRegistrations.value = []
@@ -260,15 +243,23 @@ export function usePOSCheckout() {
   }
 
   // ── 送出 ──────────────────────────────────────────────────────
-  async function submit(onSubmitted) {
+  /**
+   * @param {Object} [options]
+   * @param {boolean} [options.print=true] 是否在成功後觸發列印
+   * @param {Function} [options.onSubmitted] 成功後的回調
+   */
+  async function submit(options = {}) {
+    const { print: shouldPrint = true, onSubmitted } = options
     if (!canSubmit.value) return
+    const item = selectedItem.value
+    if (!item) return
 
     // 大額交易（>= LARGE_AMOUNT_THRESHOLD）二次確認
-    if (cartTotal.value >= LARGE_AMOUNT_THRESHOLD) {
+    if (itemTotal.value >= LARGE_AMOUNT_THRESHOLD) {
       const typeLabel = isRefundMode.value ? '退費' : '收款'
       try {
         await ElMessageBox.confirm(
-          `本次${typeLabel}金額為 ${formatTWD(cartTotal.value)}，請確認金額無誤後繼續。`,
+          `本次${typeLabel}金額為 ${formatTWD(itemTotal.value)}，請確認金額無誤後繼續。`,
           `大額${typeLabel}確認`,
           {
             type: 'warning',
@@ -291,13 +282,15 @@ export function usePOSCheckout() {
 
     try {
       const payload = {
-        items: cart.value.map((r) => ({
-          registration_id: r.id,
-          amount: Number(r.amount_applied),
-        })),
+        items: [
+          {
+            registration_id: item.id,
+            amount: Number(item.amount_applied),
+          },
+        ],
         payment_method: paymentMethod.value,
         payment_date: taipeiTodayISO(),
-        tendered: (!isRefundMode.value && isCash.value) ? Number(tenderedInput.value) : null,
+        tendered: null,
         notes: (notes.value || '').trim(),
         type: checkoutType.value,
         idempotency_key: pendingIdempotencyKey,
@@ -308,21 +301,23 @@ export function usePOSCheckout() {
         items_with_student: res.data.items,
       }
       lastReceipt.value = receipt
-      receiptDialogVisible.value = true
 
       if (receipt.idempotent_replay) {
         ElMessage.info(`偵測到重試，顯示先前收據：${receipt.receipt_no}`)
       } else {
-        const doneLabel = receipt.type === 'refund' ? '退費成功' : '結帳成功'
+        const doneLabel = receipt.type === 'refund' ? '退費成功' : '收款成功'
         ElMessage.success(`${doneLabel}：${receipt.receipt_no}`)
       }
 
       // 送出成功後才釋放 key，重試時會復用
       pendingIdempotencyKey = null
 
-      await nextTick()
-      printReceipt()
-      resetCart()
+      if (shouldPrint) {
+        receiptDialogVisible.value = true
+        await nextTick()
+        printReceipt()
+      }
+      resetTransactionInputs()
       // 刷新：日結、最近交易、搜尋結果（讓剛收款的學生立即從欠費列表消失）
       await Promise.allSettled([
         refreshDailySummary(),
@@ -419,21 +414,18 @@ export function usePOSCheckout() {
     // 交易類型
     checkoutType,
     isRefundMode,
-    // 購物車
-    cart,
-    cartTotal,
-    addToCart,
-    removeFromCart,
-    toggleCart,
-    resetCart,
+    // 單筆選取
+    selectedItem,
+    itemTotal,
+    selectItem,
+    clearSelection,
+    updateSelectedAmount,
+    resetTransactionInputs,
     reset,
     // 收款
     paymentMethod,
     paymentMethodOptions,
-    isCash,
-    tenderedInput,
     notes,
-    change,
     canSubmit,
     submitting,
     submit,

@@ -254,6 +254,10 @@ const submitTransfer = async () => {
   }
 }
 
+const openProfile = (row) => {
+  router.push({ name: 'student-profile', params: { id: row.id } })
+}
+
 const resetForm = () => {
   form.id = null
   form.student_id = ''
@@ -510,8 +514,9 @@ onMounted(async () => {
           <span v-else class="text-muted">-</span>
         </template>
       </el-table-column>
-      <el-table-column label="操作" min-width="260">
+      <el-table-column label="操作" min-width="320">
         <template #default="scope">
+          <el-button size="small" @click="openProfile(scope.row)">檔案</el-button>
           <el-button size="small" :icon="Edit" @click="handleEdit(scope.row)">編輯</el-button>
           <el-button
             v-if="activeTab === 'active'"

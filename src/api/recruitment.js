@@ -4,6 +4,10 @@ export const getRecruitmentRecords = (params) => api.get('/recruitment/records',
 export const createRecruitmentRecord = (data) => api.post('/recruitment/records', data)
 export const updateRecruitmentRecord = (id, data) => api.put(`/recruitment/records/${id}`, data)
 export const deleteRecruitmentRecord = (id) => api.delete(`/recruitment/records/${id}`)
+// 招生訪視轉化為正式學生
+// body: { student_id_code, classroom_id?, enrollment_date?, gender?, initial_lifecycle_status? }
+export const convertRecruitmentRecord = (id, data) =>
+  api.post(`/recruitment/records/${id}/convert`, data)
 export const getRecruitmentStats = (params) => api.get('/recruitment/stats', { params })
 export const getRecruitmentOptions = (params) => api.get('/recruitment/options', { params })
 export const importRecruitmentRecords = (records) => api.post('/recruitment/import', records)

@@ -37,6 +37,12 @@ const router = createRouter({
             meta: { title: '學生管理' }
         },
         {
+            path: '/students/profile/:id',
+            name: 'student-profile',
+            component: () => import('../views/StudentProfileView.vue'),
+            meta: { title: '學生檔案' }
+        },
+        {
             path: '/student-attendance',
             name: 'student-attendance',
             component: () => import('../views/StudentAttendanceView.vue'),
@@ -178,6 +184,12 @@ const router = createRouter({
             name: 'activity-pos',
             component: () => import('../views/activity/POSView.vue'),
             meta: { title: 'POS 收銀' }
+        },
+        {
+            path: '/activity/pos/approval',
+            name: 'activity-pos-approval',
+            component: () => import('../views/activity/POSApprovalView.vue'),
+            meta: { title: 'POS 收款簽核' }
         },
         {
             path: '/activity/catalog',

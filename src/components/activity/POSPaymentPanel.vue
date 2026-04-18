@@ -14,6 +14,74 @@
       </el-radio-group>
     </div>
 
+    <!-- 已選取報名摘要 -->
+    <div v-if="!selectedItem" class="pos-payment__empty">
+      <el-empty description="請從左側選擇一筆報名" :image-size="80" />
+    </div>
+
+    <div
+      v-else
+      class="pos-payment__selected"
+      :class="{ 'pos-payment__selected--refund': isRefundMode }"
+    >
+      <div class="pos-payment__selected-head">
+        <div>
+          <div class="pos-payment__selected-name">
+            {{ selectedItem.student_name }}
+            <span class="pos-payment__selected-class">{{ selectedItem.class_name || '—' }}</span>
+          </div>
+          <div class="pos-payment__selected-meta">
+            應繳 {{ formatTWD(selectedItem.total_amount) }} · 已繳 {{ formatTWD(selectedItem.paid_amount) }}
+          </div>
+        </div>
+        <el-button size="small" link :icon="Close" @click="$emit('clear-selection')">
+          取消選取
+        </el-button>
+      </div>
+
+      <div
+        v-if="(selectedItem.courses && selectedItem.courses.length) || (selectedItem.supplies && selectedItem.supplies.length)"
+        class="pos-payment__selected-lines"
+      >
+        <div
+          v-for="(c, i) in selectedItem.courses"
+          :key="`c-${i}`"
+          class="pos-payment__selected-line"
+        >
+          <span class="pos-payment__selected-dot" />
+          <span class="pos-payment__selected-line-name">{{ c.name }}</span>
+          <span v-if="c.price" class="pos-payment__selected-line-price">{{ formatTWD(c.price) }}</span>
+        </div>
+        <div
+          v-for="(s, i) in selectedItem.supplies"
+          :key="`s-${i}`"
+          class="pos-payment__selected-line"
+        >
+          <span class="pos-payment__selected-dot pos-payment__selected-dot--supply" />
+          <span class="pos-payment__selected-line-name">{{ s.name }}</span>
+          <span v-if="s.price" class="pos-payment__selected-line-price">{{ formatTWD(s.price) }}</span>
+        </div>
+      </div>
+
+      <div class="pos-payment__selected-footer">
+        <span class="pos-payment__label">
+          {{ isRefundMode ? '本次退費' : '本次收取' }}
+        </span>
+        <el-input-number
+          :model-value="selectedItem.amount_applied"
+          :min="1"
+          :max="isRefundMode ? (selectedItem.paid_amount || 1) : 999999"
+          :step="1"
+          :precision="0"
+          :controls="false"
+          size="small"
+          class="pos-payment__applied-input"
+          :class="{ 'pos-payment__applied-input--refund': isRefundMode }"
+          @update:model-value="(v) => $emit('update:appliedAmount', v)"
+        />
+      </div>
+    </div>
+
     <div class="pos-payment__field">
       <label class="pos-payment__label">
         {{ isRefundMode ? '退款方式' : '付款方式' }}
@@ -40,52 +108,10 @@
           class="pos-payment__amount"
           :class="{ 'pos-payment__amount--refund': isRefundMode }"
         >
-          {{ formatTWD(cartTotal) }}
+          {{ formatTWD(itemTotal) }}
         </strong>
       </div>
     </div>
-
-    <!-- 收款模式 + 現金才顯示實收 / 找零 -->
-    <template v-if="!isRefundMode && isCash">
-      <div class="pos-payment__field">
-        <label class="pos-payment__label">實收金額</label>
-        <el-input-number
-          :model-value="tenderedInput"
-          :min="0"
-          :max="9999999"
-          :step="1"
-          :precision="0"
-          :controls="false"
-          size="large"
-          class="pos-payment__tendered"
-          placeholder="請輸入客戶實付金額"
-          @update:model-value="$emit('update:tenderedInput', $event)"
-        />
-        <div class="pos-payment__quick-keys">
-          <el-button
-            v-for="k in quickKeys"
-            :key="k"
-            size="small"
-            plain
-            @click="applyQuick(k)"
-          >
-            {{ k === 'exact' ? '剛好' : `+${k}` }}
-          </el-button>
-        </div>
-      </div>
-
-      <div class="pos-payment__summary pos-payment__summary--change">
-        <div class="pos-payment__row">
-          <span>找零</span>
-          <strong
-            class="pos-payment__amount"
-            :class="{ 'pos-payment__amount--positive': change > 0 }"
-          >
-            {{ change == null ? '—' : formatTWD(change) }}
-          </strong>
-        </div>
-      </div>
-    </template>
 
     <div class="pos-payment__field">
       <label class="pos-payment__label">備註（選填）</label>
@@ -101,8 +127,17 @@
     </div>
 
     <div class="pos-payment__actions">
-      <el-button size="large" :disabled="cartTotal === 0" @click="$emit('clear')">
+      <el-button size="large" :disabled="!selectedItem" @click="$emit('clear')">
         清空
+      </el-button>
+      <el-button
+        size="large"
+        :loading="submitting"
+        :disabled="!canSubmit"
+        class="pos-payment__submit pos-payment__submit--plain"
+        @click="$emit('submit', { print: false })"
+      >
+        {{ isRefundMode ? '只確認退費' : '只確認收款' }}
       </el-button>
       <el-button
         :type="isRefundMode ? 'danger' : 'primary'"
@@ -110,24 +145,24 @@
         :loading="submitting"
         :disabled="!canSubmit"
         class="pos-payment__submit"
-        @click="$emit('submit')"
+        @click="$emit('submit', { print: true })"
       >
-        {{ isRefundMode ? '送出退費' : '送出並列印' }}
+        {{ isRefundMode ? '確認退費並列印' : '確認收款並列印' }}
       </el-button>
     </div>
   </el-card>
 </template>
 
 <script setup>
+import { Close } from '@element-plus/icons-vue'
+
 import { formatTWD } from '@/constants/pos'
 
-const props = defineProps({
+defineProps({
   paymentMethod: { type: String, required: true },
   paymentMethodOptions: { type: Array, required: true },
-  isCash: { type: Boolean, required: true },
-  tenderedInput: { type: Number, default: null },
-  change: { type: Number, default: null },
-  cartTotal: { type: Number, required: true },
+  itemTotal: { type: Number, required: true },
+  selectedItem: { type: Object, default: null },
   notes: { type: String, default: '' },
   canSubmit: { type: Boolean, required: true },
   submitting: { type: Boolean, required: true },
@@ -135,25 +170,15 @@ const props = defineProps({
   isRefundMode: { type: Boolean, default: false },
 })
 
-const emit = defineEmits([
+defineEmits([
   'update:paymentMethod',
-  'update:tenderedInput',
   'update:notes',
   'update:checkoutType',
+  'update:appliedAmount',
+  'clear-selection',
   'clear',
   'submit',
 ])
-
-const quickKeys = ['exact', 100, 500, 1000]
-
-function applyQuick(k) {
-  if (k === 'exact') {
-    emit('update:tenderedInput', props.cartTotal)
-    return
-  }
-  const base = props.tenderedInput == null ? props.cartTotal : Number(props.tenderedInput)
-  emit('update:tenderedInput', base + Number(k))
-}
 </script>
 
 <style scoped>
@@ -188,6 +213,106 @@ function applyQuick(k) {
   color: #dc2626;
 }
 
+.pos-payment__empty {
+  padding: 24px 0;
+  border: 1px dashed #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.pos-payment__selected {
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pos-payment__selected--refund {
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.pos-payment__selected-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.pos-payment__selected-name {
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.pos-payment__selected-class {
+  font-weight: 400;
+  color: #64748b;
+  font-size: 13px;
+  margin-left: 8px;
+}
+
+.pos-payment__selected-meta {
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.pos-payment__selected-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  background: #ffffff;
+  border-radius: 6px;
+}
+
+.pos-payment__selected-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #334155;
+}
+
+.pos-payment__selected-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #6366f1;
+}
+
+.pos-payment__selected-dot--supply {
+  background: #f59e0b;
+}
+
+.pos-payment__selected-line-name {
+  flex: 1;
+}
+
+.pos-payment__selected-line-price {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.pos-payment__selected-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 8px;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.pos-payment__applied-input {
+  width: 130px;
+}
+
+.pos-payment__applied-input--refund :deep(input) {
+  color: #dc2626;
+}
+
 .pos-payment__field {
   display: flex;
   flex-direction: column;
@@ -207,11 +332,6 @@ function applyQuick(k) {
   border: 1px solid #e2e8f0;
 }
 
-.pos-payment__summary--change {
-  background: #eef0fd;
-  border-color: #c7d2fe;
-}
-
 .pos-payment__row {
   display: flex;
   justify-content: space-between;
@@ -226,32 +346,19 @@ function applyQuick(k) {
   color: #1e293b;
 }
 
-.pos-payment__amount--positive {
-  color: #059669;
-}
-
-.pos-payment__tendered {
-  width: 100%;
-}
-.pos-payment__tendered :deep(input) {
-  text-align: right;
-  font-size: 22px;
-  font-weight: 700;
-}
-
-.pos-payment__quick-keys {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
 .pos-payment__actions {
   margin-top: auto;
   display: flex;
-  gap: 10px;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .pos-payment__submit {
   flex: 1;
+  min-width: 140px;
+}
+
+.pos-payment__submit--plain {
+  flex: 0.8;
 }
 </style>
