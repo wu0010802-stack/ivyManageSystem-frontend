@@ -244,13 +244,18 @@ async function loadClassroomOptions() {
 }
 
 // 切學期時重新整理搜尋結果與日結（交易記錄本就按日期不按學期過濾）
+// 主動清舊學期的日結 / 當日交易快照，避免 nextTick 前短暫顯示上一學期數字
 watch(
   () => [termStore.school_year, termStore.semester],
   () => {
     clearSelection()
     classroomFilter.value = ''
+    dailySummary.data = null
+    recentTransactions.items = []
     loadClassroomOptions()
     runSearch()
+    refreshDailySummary()
+    refreshRecentTransactions()
   }
 )
 

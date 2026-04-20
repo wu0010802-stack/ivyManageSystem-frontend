@@ -1,7 +1,7 @@
 <script setup>
 import { reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { createStudent, updateStudent } from '@/api/students'
+import { useStudentStore } from '@/stores/student'
 import { STUDENT_STATUS_TAG_OPTIONS } from '@/utils/student'
 import { apiError } from '@/utils/error'
 
@@ -61,13 +61,14 @@ const handleClose = () => {
 
 const handleSubmit = async () => {
   if (!studentFormRef.value) return
+  const studentStore = useStudentStore()
   await studentFormRef.value.validate(async (valid) => {
     if (!valid) return
     try {
       if (props.isEdit) {
-        await updateStudent(studentForm.id, studentForm)
+        await studentStore.updateStudent(studentForm.id, studentForm)
       } else {
-        await createStudent(studentForm)
+        await studentStore.createStudent(studentForm)
       }
       ElMessage.success(props.isEdit ? '更新成功' : '新增成功')
       emit('update:visible', false)

@@ -2,10 +2,25 @@
   <el-dialog
     :model-value="visible"
     @update:model-value="(v) => emit('update:visible', v)"
-    :title="mode === 'create' ? '新增補登異動紀錄' : '編輯異動紀錄'"
+    :title="mode === 'create' ? '補登歷史異動紀錄' : '編輯補登紀錄'"
     width="520px"
     @closed="onClosed"
   >
+    <el-alert
+      v-if="mode === 'create'"
+      type="warning"
+      :closable="false"
+      show-icon
+      style="margin-bottom: 12px"
+    >
+      <template #title>
+        此功能僅補寫歷史遺漏的紀錄，<strong>不會更動學生目前狀態</strong>
+      </template>
+      <div style="font-size: 0.85em; line-height: 1.6">
+        若要將學生轉為退學／畢業／轉出等，請使用「變更狀態」功能。
+      </div>
+    </el-alert>
+
     <el-form ref="formRef" :model="form" :rules="formRules" label-width="90px">
       <el-form-item v-if="mode === 'create'" label="學年學期" prop="termKey">
         <el-select v-model="form.termKey" style="width: 100%">
@@ -42,6 +57,7 @@
           type="date"
           format="YYYY-MM-DD"
           value-format="YYYY-MM-DD"
+          :disabled-date="isFutureDate"
           style="width: 100%"
         />
       </el-form-item>
@@ -52,7 +68,7 @@
     <template #footer>
       <el-button @click="emit('update:visible', false)">取消</el-button>
       <el-button type="primary" :loading="submitting" @click="submit">
-        {{ mode === 'create' ? '新增' : '儲存' }}
+        {{ mode === 'create' ? '補登' : '儲存' }}
       </el-button>
     </template>
   </el-dialog>
@@ -62,12 +78,18 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getCurrentAcademicTerm } from '@/utils/academic'
-import {
-  getChangeLogOptions,
-  createChangeLog,
-  updateChangeLog,
-} from '@/api/studentChangeLogs'
+import { getChangeLogOptions } from '@/api/studentChangeLogs'
 import { getStudents } from '@/api/students'
+import { useStudentRecordsStore } from '@/stores/studentRecords'
+
+const isoToday = () => new Date().toISOString().slice(0, 10)
+const isFutureDate = (d) => {
+  if (!(d instanceof Date)) return false
+  const yyyy = d.getFullYear()
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${yyyy}-${mm}-${dd}` > isoToday()
+}
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -120,7 +142,19 @@ const submitting = ref(false)
 const formRules = {
   student_id: [{ required: true, message: '請選擇學生', trigger: 'change' }],
   event_type: [{ required: true, message: '請選擇異動類型', trigger: 'change' }],
-  event_date: [{ required: true, message: '請選擇異動日期', trigger: 'change' }],
+  event_date: [
+    { required: true, message: '請選擇異動日期', trigger: 'change' },
+    {
+      validator: (_rule, value, cb) => {
+        if (value && value > isoToday()) {
+          cb(new Error('補登只能選今天或過去的日期'))
+        } else {
+          cb()
+        }
+      },
+      trigger: 'change',
+    },
+  ],
 }
 
 const eventTypes = ref([])
@@ -197,9 +231,10 @@ const submit = async () => {
   if (!valid) return
   submitting.value = true
   try {
+    const recordsStore = useStudentRecordsStore()
     if (props.mode === 'create') {
       const [school_year, semester] = form.termKey.split('-').map(Number)
-      await createChangeLog({
+      await recordsStore.createRecord('change_log', {
         student_id: form.student_id,
         school_year,
         semester,
@@ -208,20 +243,21 @@ const submit = async () => {
         reason: form.reason || undefined,
         notes: form.notes || undefined,
       })
-      ElMessage.success('異動紀錄已新增')
+      ElMessage.success('異動紀錄已補登')
     } else {
-      await updateChangeLog(props.initial.id, {
+      await recordsStore.updateRecord('change_log', props.initial.id, {
         event_type: form.event_type,
         event_date: form.event_date,
         reason: form.reason || undefined,
         notes: form.notes || undefined,
       })
-      ElMessage.success('異動紀錄已更新')
+      ElMessage.success('補登紀錄已更新')
     }
     emit('submitted')
     emit('update:visible', false)
-  } catch {
-    ElMessage.error(props.mode === 'create' ? '新增失敗' : '更新失敗')
+  } catch (err) {
+    const detail = err?.response?.data?.detail
+    ElMessage.error(detail || (props.mode === 'create' ? '補登失敗' : '更新失敗'))
   } finally {
     submitting.value = false
   }

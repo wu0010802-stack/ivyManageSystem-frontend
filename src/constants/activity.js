@@ -20,11 +20,27 @@ export const PAYMENT_STATUS_LABEL = {
 export const COURSE_STATUS_TAG_TYPE = {
   enrolled: 'success',
   waitlist: 'info',
+  promoted_pending: 'warning',
 }
 
 export const COURSE_STATUS_LABEL = {
   enrolled: '正式',
   waitlist: '候補',
+  promoted_pending: '待家長確認',
 }
 
 export const PAYMENT_METHODS = ['現金', '轉帳', '其他']
+
+export const APPROVAL_STATUS_LABEL = {
+  fully_approved:     '已簽核',
+  partially_approved: '部分簽核',
+  pending_approval:   '待簽核',
+  no_payment:         '尚未繳費',
+}
+
+export const APPROVAL_STATUS_TAG_TYPE = {
+  fully_approved:     'success',
+  partially_approved: 'warning',
+  pending_approval:   'danger',
+  no_payment:         'info',
+}

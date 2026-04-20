@@ -261,7 +261,7 @@ function studentTagClass(student) {
 <style scoped>
 /* ── 外層 Layout ── */
 .roster-wrapper {
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .roster-outer {
@@ -289,7 +289,7 @@ function studentTagClass(student) {
 
 .roster-table td {
   border: 1px solid #aaa;
-  padding: 2px 5px;
+  padding: 5px 8px;
   text-align: center;
   vertical-align: middle;
 }
@@ -304,20 +304,20 @@ function studentTagClass(student) {
 
 /* ── 表頭 ── */
 .title-cell {
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 700;
   text-align: left !important;
-  padding-left: 8px !important;
+  padding-left: 10px !important;
 }
 
 .date-cell {
-  font-size: 11px;
+  font-size: 12px;
   color: #555;
-  min-width: 60px;
+  min-width: 72px;
 }
 
 .class-num-cell {
-  min-width: 58px;
+  min-width: 72px;
   font-weight: 600;
   background: #f8f9fa;
 }
@@ -330,7 +330,7 @@ function studentTagClass(student) {
   text-align: center;
   font-weight: 600;
   background: #f0f2f5;
-  min-width: 44px;
+  min-width: 56px;
   white-space: nowrap;
   border-right: 2px solid #8c8c8c !important;
 }
@@ -346,7 +346,7 @@ thead td.corner-cell:first-child {
 }
 
 .class-name-cell {
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .teacher-label {
@@ -355,7 +355,7 @@ thead td.corner-cell:first-child {
 
 .teacher-cell {
   background: #fffbe6;
-  font-size: 11px;
+  font-size: 13px;
 }
 
 /* ── 學生本體 ── */
@@ -365,18 +365,18 @@ thead td.corner-cell:first-child {
   z-index: 2;
   background: #f0f2f5;
   color: #666;
-  font-size: 11px;
-  min-width: 24px;
+  font-size: 12px;
+  min-width: 32px;
   border-right: 2px solid #8c8c8c !important;
 }
 
 .student-cell {
-  min-width: 58px;
-  max-width: 80px;
+  min-width: 72px;
+  max-width: 96px;
 }
 
 .indigenous-mark {
-  font-size: 9px;
+  font-size: 10px;
   color: #2563eb;
   margin-left: 1px;
   vertical-align: super;
@@ -408,7 +408,7 @@ tfoot tr:first-child td {
 }
 
 .count-cell {
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .grade-total-cell {
@@ -418,15 +418,15 @@ tfoot tr:first-child td {
 
 .grade-breakdown-cell {
   background: #f1f5f9;
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .grand-total-row td {
   background: #dbeafe;
   font-weight: 700;
-  font-size: 13px;
+  font-size: 15px;
   text-align: left !important;
-  padding-left: 12px !important;
+  padding-left: 14px !important;
   border-top: 2px solid #3b82f6 !important;
 }
 
@@ -480,6 +480,21 @@ tfoot tr:first-child td {
 
 /* ── 列印 ── */
 @media print {
+  .roster-wrapper { font-size: 12px; }
+  .roster-table td { padding: 2px 5px; }
+  .title-cell { font-size: 15px; padding-left: 8px !important; }
+  .date-cell { font-size: 11px; min-width: 60px; }
+  .class-num-cell { min-width: 58px; }
+  .row-label { min-width: 44px; }
+  .class-name-cell,
+  .teacher-cell,
+  .count-cell,
+  .grade-breakdown-cell { font-size: 11px; }
+  .seq-cell { font-size: 11px; min-width: 24px; }
+  .student-cell { min-width: 58px; max-width: 80px; }
+  .indigenous-mark { font-size: 9px; }
+  .grand-total-row td { font-size: 13px; padding-left: 12px !important; }
+
   .roster-outer {
     display: flex !important;
     flex-direction: row !important;

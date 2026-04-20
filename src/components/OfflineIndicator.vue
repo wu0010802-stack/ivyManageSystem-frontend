@@ -1,25 +1,24 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted } from 'vue'
+import { useOnlineStatus } from '@/composables/useOnlineStatus'
+import { countPending, OP_KINDS } from '@/utils/offlineQueue'
 
-const isOffline = ref(!navigator.onLine)
-
-const onOnline = () => { isOffline.value = false }
-const onOffline = () => { isOffline.value = true }
-
-onMounted(() => {
-  window.addEventListener('online', onOnline)
-  window.addEventListener('offline', onOffline)
+const { isOnline } = useOnlineStatus(async () => {
+  // 重新連線時更新一下 badge，實際同步由點名頁自行觸發
+  pendingCount.value = await countPending(OP_KINDS.CLASS_ATTENDANCE)
 })
 
-onUnmounted(() => {
-  window.removeEventListener('online', onOnline)
-  window.removeEventListener('offline', onOffline)
+const pendingCount = ref(0)
+
+onMounted(async () => {
+  pendingCount.value = await countPending(OP_KINDS.CLASS_ATTENDANCE)
 })
 </script>
 
 <template>
-  <div v-if="isOffline" class="offline-banner">
-    ⚠️ 您目前離線，顯示最近快取資料
+  <div v-if="!isOnline" class="offline-banner">
+    ⚠️ 您目前離線，顯示最近快取的資料；寫入操作會暫存於本機，連線後自動同步
+    <span v-if="pendingCount > 0" class="pending-chip">待同步 {{ pendingCount }} 筆</span>
   </div>
 </template>
 
@@ -34,5 +33,16 @@ onUnmounted(() => {
   width: 100%;
   box-sizing: border-box;
   flex-shrink: 0;
+}
+
+.pending-chip {
+  display: inline-block;
+  margin-left: 10px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: #f59e0b;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
 }
 </style>

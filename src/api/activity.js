@@ -37,6 +37,8 @@ export const getRegistrationDetail = (id) => api.get(`/activity/registrations/${
 export const updateRemark = (id, data) => api.put(`/activity/registrations/${id}/remark`, data)
 export const promoteWaitlist = (registrationId, courseId) =>
   api.put(`/activity/registrations/${registrationId}/waitlist`, null, { params: { course_id: courseId } })
+export const sweepExpiredWaitlist = () =>
+  api.post('/activity/waitlist/sweep-expired')
 export const withdrawCourse = (registrationId, courseId, { forceRefund = false } = {}) =>
   api.delete(`/activity/registrations/${registrationId}/courses/${courseId}`, {
     params: forceRefund ? { force_refund: true } : {},
@@ -127,6 +129,8 @@ export const getPOSReconciliation = (startDate, endDate) =>
   api.get('/activity/pos/reconciliation', {
     params: { start_date: startDate, end_date: endDate },
   })
+export const getPOSSemesterReconciliation = (params = {}) =>
+  api.get('/activity/pos/semester-reconciliation', { params })
 
 // Portal - 才藝查詢
 export const getPortalActivityRegistrations = () =>

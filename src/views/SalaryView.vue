@@ -1,7 +1,7 @@
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
 import { calculate, getFestivalBonus, getRecords, getSalaryFieldBreakdown, manualAdjustSalary } from '@/api/salary'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, InfoFilled, SuccessFilled } from '@element-plus/icons-vue'
 import BonusConfigPanel from './salary/BonusConfigPanel.vue'
 import SalaryHistoryPanel from './salary/SalaryHistoryPanel.vue'
@@ -49,6 +49,7 @@ const MONEY_KEYS = new Set([
 const showEditDialog = ref(false)
 const editLoading = ref(false)
 const editingRow = ref(null)
+const editingVersion = ref(null)
 const editForm = reactive({
   festival_bonus: 0,
   overtime_bonus: 0,
@@ -185,6 +186,7 @@ const openEditDialog = (row) => {
     return
   }
   editingRow.value = row
+  editingVersion.value = record.version ?? null
   for (const field of editableFieldList) {
     editForm[field.key] = row[field.key] || 0
   }
@@ -201,7 +203,11 @@ const saveManualAdjust = async () => {
     for (const field of editableFieldList) {
       payload[field.key] = Number(editForm[field.key] || 0)
     }
-    const response = await manualAdjustSalary(record.id, payload)
+    const response = await manualAdjustSalary(
+      record.id,
+      payload,
+      editingVersion.value ?? record.version ?? null
+    )
     const updated = response.data.record
     Object.assign(editingRow.value, {
       festival_bonus: updated.festival_bonus,
@@ -226,10 +232,22 @@ const saveManualAdjust = async () => {
         ...updated,
       }
     }
+    editingVersion.value = updated.version ?? null
     ElMessage.success('薪資金額已更新')
     showEditDialog.value = false
   } catch (error) {
-    ElMessage.error('儲存編輯失敗: ' + apiError(error, error.message))
+    if (error?.response?.status === 409) {
+      ElMessageBox.alert(
+        error.response.data?.detail || '此筆薪資已被他人修改，請重新整理後再編輯',
+        '版本衝突',
+        { confirmButtonText: '重新載入', type: 'warning' }
+      ).then(() => {
+        showEditDialog.value = false
+        fetchSalaryRecords()
+      }).catch(() => {})
+    } else {
+      ElMessage.error('儲存編輯失敗: ' + apiError(error, error.message))
+    }
   } finally {
     editLoading.value = false
   }
@@ -334,9 +352,6 @@ onMounted(() => {
             <el-table-column prop="employee_name" label="姓名" width="100" fixed />
             <el-table-column label="底薪" width="100">
               <template #default="scope">{{ money(scope.row.base_salary) }}</template>
-            </el-table-column>
-            <el-table-column label="津貼" width="100">
-              <template #default="scope">{{ money(scope.row.total_allowances) }}</template>
             </el-table-column>
             <el-table-column label="節慶獎金" width="120">
               <template #header>

@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Bar } from 'vue-chartjs'
 import {
   Chart as ChartJS,
@@ -19,6 +19,18 @@ import {
 } from '@/api/portal'
 import { downloadFile } from '@/utils/download'
 import { apiError } from '@/utils/error'
+import {
+  enqueueOp,
+  countPending,
+  listOps,
+  listOtherUsersPendingOps,
+  removeOp,
+  OP_KINDS,
+  OP_STATUS,
+} from '@/utils/offlineQueue'
+import { flushClassAttendanceQueue } from '@/utils/attendanceSync'
+import { useOnlineStatus, isNetworkError } from '@/composables/useOnlineStatus'
+import { getUserInfo } from '@/utils/auth'
 
 ChartJS.register(BarElement, CategoryScale, LinearScale, Tooltip, Legend)
 
@@ -38,6 +50,75 @@ const monthPicker = ref(new Date().toISOString().slice(0, 7))
 const monthlyClassroomId = ref(null)
 const monthlyData = ref(null)
 const monthlyLoading = ref(false)
+
+// ---- 離線佇列 ----
+const pendingCount = ref(0)
+const reviewOps = ref([])
+const otherUserOpsCount = ref(0)
+const syncing = ref(false)
+
+const currentUserId = () => getUserInfo()?.id ?? null
+
+const refreshPendingCount = async () => {
+  const uid = currentUserId()
+  if (uid == null) {
+    pendingCount.value = 0
+    reviewOps.value = []
+    otherUserOpsCount.value = 0
+    return
+  }
+  pendingCount.value = await countPending(OP_KINDS.CLASS_ATTENDANCE, uid)
+  reviewOps.value = await listOps({
+    kind: OP_KINDS.CLASS_ATTENDANCE,
+    status: OP_STATUS.NEEDS_REVIEW,
+    userId: uid,
+  })
+  const others = await listOtherUsersPendingOps(uid, OP_KINDS.CLASS_ATTENDANCE)
+  otherUserOpsCount.value = others.length
+}
+
+const syncQueue = async ({ silent = false } = {}) => {
+  if (syncing.value) return
+  const uid = currentUserId()
+  if (uid == null) return
+  if (pendingCount.value === 0) {
+    await refreshPendingCount()
+    if (pendingCount.value === 0) return
+  }
+  syncing.value = true
+  try {
+    const result = await flushClassAttendanceQueue(
+      (payload) => batchSaveClassAttendance(payload),
+      { userId: uid },
+    )
+    await refreshPendingCount()
+    if (result.auth_failed) {
+      ElMessage.warning('登入已過期，佇列已保留，請重新登入後自動同步')
+    } else if (!silent) {
+      if (result.succeeded > 0) {
+        ElMessage.success(`已同步 ${result.succeeded} 筆離線點名`)
+      }
+      if (result.needs_review > 0) {
+        ElMessage.warning(`${result.needs_review} 筆需人工確認（學生可能已轉班）`)
+      }
+    }
+  } finally {
+    syncing.value = false
+  }
+}
+
+const { isOnline } = useOnlineStatus(() => syncQueue({ silent: false }))
+
+const dismissReviewOp = async (id) => {
+  await ElMessageBox.confirm('確定要丟棄這筆離線點名？（無法復原）', '丟棄暫存', {
+    type: 'warning',
+  }).catch(() => null).then(async (ok) => {
+    if (!ok) return
+    await removeOp(id)
+    await refreshPendingCount()
+    ElMessage.success('已丟棄')
+  })
+}
 
 const classroomOptions = computed(() =>
   classrooms.value.map((classroom) => ({
@@ -88,21 +169,70 @@ const setAllStatus = (status) => {
   })
 }
 
+const selectedClassroomName = computed(() => {
+  const cr = classrooms.value.find(
+    (c) => c.classroom_id === dailyClassroomId.value
+  )
+  return cr?.classroom_name || ''
+})
+
 const saveDailyAttendance = async () => {
   if (!dailyClassroomId.value || dailyRecords.value.length === 0) return
+  const payload = {
+    date: dailyDate.value,
+    classroom_id: dailyClassroomId.value,
+    entries: dailyRecords.value.map((record) => ({
+      student_id: record.student_id,
+      status: record.status,
+      remark: record.remark || null,
+    })),
+  }
+
   saveLoading.value = true
   try {
-    await batchSaveClassAttendance({
+    const uid = currentUserId()
+    if (uid == null) {
+      ElMessage.error('無法取得使用者身分，請重新登入')
+      return
+    }
+    const meta = {
       date: dailyDate.value,
-      classroom_id: dailyClassroomId.value,
-      entries: dailyRecords.value.map((record) => ({
-        student_id: record.student_id,
-        status: record.status,
-        remark: record.remark || null,
-      })),
-    })
+      classroom_name: selectedClassroomName.value,
+      count: payload.entries.length,
+    }
+    // 離線：直接進佇列，不嘗試網路請求
+    if (!isOnline.value) {
+      await enqueueOp({ kind: OP_KINDS.CLASS_ATTENDANCE, payload, userId: uid, meta })
+      await refreshPendingCount()
+      ElMessage.success(`離線中，已暫存 ${payload.entries.length} 筆，連線後自動同步`)
+      return
+    }
+    await batchSaveClassAttendance(payload)
     ElMessage.success('點名儲存成功')
+    // 趁這次有連線順便把之前累積的佇列送出
+    if (pendingCount.value > 0) {
+      syncQueue({ silent: true })
+    }
   } catch (error) {
+    // navigator.onLine 可能說謊：實際網路失敗也要 fallback 到佇列
+    if (isNetworkError(error)) {
+      const uid = currentUserId()
+      if (uid != null) {
+        await enqueueOp({
+          kind: OP_KINDS.CLASS_ATTENDANCE,
+          payload,
+          userId: uid,
+          meta: {
+            date: dailyDate.value,
+            classroom_name: selectedClassroomName.value,
+            count: payload.entries.length,
+          },
+        })
+        await refreshPendingCount()
+        ElMessage.warning(`網路異常，已暫存 ${payload.entries.length} 筆，稍後自動重送`)
+        return
+      }
+    }
     ElMessage.error(apiError(error, '儲存失敗'))
   } finally {
     saveLoading.value = false
@@ -199,6 +329,11 @@ watch(activeTab, (tab) => {
 })
 
 onMounted(async () => {
+  await refreshPendingCount()
+  // 進頁時若已連線且有佇列，立即靜默同步
+  if (isOnline.value && pendingCount.value > 0) {
+    syncQueue({ silent: false })
+  }
   await fetchClassrooms()
   fetchDailyAttendance()
 })
@@ -208,7 +343,50 @@ onMounted(async () => {
   <div>
     <div class="page-header">
       <h3>學生點名</h3>
+      <div class="header-badges">
+        <el-tag v-if="!isOnline" type="warning" effect="dark">離線模式</el-tag>
+        <el-tag v-if="pendingCount > 0" type="info" effect="plain">
+          待同步 {{ pendingCount }} 筆
+          <el-button
+            link
+            type="primary"
+            size="small"
+            :loading="syncing"
+            :disabled="!isOnline"
+            @click="syncQueue({ silent: false })"
+            style="margin-left: 6px"
+          >立即同步</el-button>
+        </el-tag>
+      </div>
     </div>
+
+    <el-alert
+      v-if="otherUserOpsCount > 0"
+      type="warning"
+      :closable="false"
+      style="margin-bottom: 12px"
+      show-icon
+    >
+      <template #title>
+        偵測到其他使用者在此裝置留下 {{ otherUserOpsCount }} 筆未同步點名，請該老師登入處理（本帳號的同步不受影響）
+      </template>
+    </el-alert>
+
+    <el-alert
+      v-if="reviewOps.length > 0"
+      type="error"
+      :closable="false"
+      style="margin-bottom: 12px"
+    >
+      <template #title>有 {{ reviewOps.length }} 筆離線點名無法自動同步，請人工處理：</template>
+      <ul class="review-list">
+        <li v-for="op in reviewOps" :key="op.id">
+          {{ op.meta?.date }} · {{ op.meta?.classroom_name || '未知班級' }} · {{ op.meta?.count }} 筆
+          ｜原因：{{ op.last_error || '未知' }}
+          <el-button link type="danger" size="small" @click="dismissReviewOp(op.id)">丟棄</el-button>
+        </li>
+      </ul>
+    </el-alert>
 
     <el-tabs v-model="activeTab">
       <el-tab-pane label="每日點名" name="daily">
@@ -385,6 +563,22 @@ onMounted(async () => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 16px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.header-badges {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.review-list {
+  margin: 6px 0 0 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.7;
 }
 
 .page-header h3 {

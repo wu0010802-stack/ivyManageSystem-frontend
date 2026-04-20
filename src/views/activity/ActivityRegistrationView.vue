@@ -225,22 +225,28 @@
           <el-table-column label="金額" prop="price" width="80" align="right">
             <template #default="{ row }">{{ row.price ? `$${row.price}` : '-' }}</template>
           </el-table-column>
-          <el-table-column label="狀態" width="80" align="center">
+          <el-table-column label="狀態" width="150" align="center">
             <template #default="{ row }">
               <el-tag :type="COURSE_STATUS_TAG_TYPE[row.status] || 'info'" size="small">
                 {{ COURSE_STATUS_LABEL[row.status] || row.status }}
               </el-tag>
+              <div
+                v-if="row.status === 'promoted_pending' && row.confirm_deadline"
+                class="promotion-deadline-hint"
+              >
+                {{ formatDeadlineHint(row.confirm_deadline) }}
+              </div>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="140" align="center">
+          <el-table-column label="操作" width="160" align="center">
             <template #default="{ row }">
               <el-button
-                v-if="row.status === 'waitlist'"
+                v-if="row.status === 'waitlist' || row.status === 'promoted_pending'"
                 size="small"
                 type="primary"
                 @click="handlePromote(row)"
                 :loading="savingPromote"
-              >升正式</el-button>
+              >{{ row.status === 'promoted_pending' ? '代替家長確認' : '升正式' }}</el-button>
               <el-button
                 size="small"
                 type="danger"
@@ -588,6 +594,7 @@ import {
 } from '@/api/activity'
 import { useAcademicTermStore } from '@/stores/academicTerm'
 import { PAYMENT_STATUS_TAG_TYPE, PAYMENT_STATUS_LABEL, COURSE_STATUS_TAG_TYPE, COURSE_STATUS_LABEL } from '@/constants/activity'
+import { computeOwed } from '@/constants/pos'
 import { useActivityRegistration } from '@/composables/useActivityRegistration'
 import { formatActivityDate } from '@/utils/format'
 import { hasPermission } from '@/utils/auth'
@@ -625,6 +632,18 @@ const MATCH_STATUS_TAG = {
 }
 function matchStatusTag(status) {
   return MATCH_STATUS_TAG[status] || { label: status || '—', type: 'info' }
+}
+
+function formatDeadlineHint(iso) {
+  if (!iso) return ''
+  const deadline = new Date(iso)
+  if (Number.isNaN(deadline.getTime())) return ''
+  const diffMs = deadline.getTime() - Date.now()
+  if (diffMs <= 0) return '已逾期'
+  const hours = Math.floor(diffMs / 3600000)
+  const mins = Math.floor((diffMs % 3600000) / 60000)
+  const label = hours >= 1 ? `${hours} 小時` : `${mins} 分鐘`
+  return `剩 ${label}`
 }
 
 const {
@@ -750,7 +769,7 @@ async function loadPayments(registrationId) {
 function openPaymentDialog(type) {
   paymentForm.type = type
   paymentForm.amount = type === 'payment'
-    ? Math.max(0, (detail.value?.total_amount || 0) - (paymentInfo.value.paid_amount || 0))
+    ? computeOwed(detail.value?.total_amount, paymentInfo.value.paid_amount)
     : paymentInfo.value.paid_amount || 0
   paymentForm.payment_date = new Date().toISOString().slice(0, 10)
   paymentForm.payment_method = '現金'
@@ -1298,6 +1317,11 @@ onMounted(async () => {
 .section-header :deep(.el-button--small) { gap: 4px; }
 .remark-row { display: flex; gap: 8px; align-items: flex-start; }
 .change-by { color: #94a3b8; font-size: 12px; }
+.promotion-deadline-hint {
+  font-size: 11px;
+  color: #d97706;
+  margin-top: 2px;
+}
 
 /* ── 繳費面板 ── */
 .payment-panel {

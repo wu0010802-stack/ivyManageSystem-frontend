@@ -136,9 +136,6 @@ onMounted(() => {
         <el-table-column label="底薪" width="100">
           <template #default="scope">{{ money(scope.row.base_salary) }}</template>
         </el-table-column>
-        <el-table-column label="津貼" width="100">
-          <template #default="scope">{{ money(scope.row.total_allowances) }}</template>
-        </el-table-column>
         <el-table-column label="獎金" width="100">
           <template #default="scope">{{ money(scope.row.total_bonus) }}</template>
         </el-table-column>

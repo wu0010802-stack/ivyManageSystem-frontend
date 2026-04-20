@@ -3,6 +3,12 @@ import { ref, computed, onMounted, watch, defineAsyncComponent } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getDashboard } from '@/api/reports'
 import { apiError } from '@/utils/error'
+import { getUserInfo } from '@/utils/auth'
+
+const viewerName = computed(() => {
+  const info = getUserInfo()
+  return info?.display_name || info?.username || '管理員'
+})
 
 // Chart.js + vue-chartjs 延遲載入：僅在此頁面實際渲染時才下載
 let _chartReady = null
@@ -362,7 +368,10 @@ const salaryChartOptions = {
 <template>
   <div class="reports-page" v-loading="loading">
     <div class="page-header">
-      <h2>報表統計</h2>
+      <div class="page-title">
+        <h2>報表統計</h2>
+        <span class="viewer-tag">{{ viewerName }} 的報表統計</span>
+      </div>
       <el-select v-model="selectedYear" style="width: 120px;">
         <el-option v-for="y in 5" :key="y" :label="(currentYear - 2 + y) + ' 年'" :value="currentYear - 2 + y" />
       </el-select>
@@ -512,5 +521,17 @@ const salaryChartOptions = {
 .chart-container {
   height: 320px;
   position: relative;
+}
+
+.page-title {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.viewer-tag {
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
 }
 </style>

@@ -73,8 +73,8 @@
 import { reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ASSESSMENT_TYPES, DOMAINS, RATINGS } from '@/constants/studentRecords'
-import { createAssessment, updateAssessment } from '@/api/studentAssessments'
 import { getStudents } from '@/api/students'
+import { useStudentRecordsStore } from '@/stores/studentRecords'
 import { apiError } from '@/utils/error'
 
 const props = defineProps({
@@ -181,14 +181,13 @@ const submit = async () => {
       suggestions: form.suggestions || null,
       assessment_date: form.assessment_date,
     }
+    const recordsStore = useStudentRecordsStore()
     let saved
     if (props.mode === 'create') {
-      const res = await createAssessment(payload)
-      saved = res.data
+      saved = await recordsStore.createRecord('assessment', payload)
       ElMessage.success('新增成功')
     } else {
-      const res = await updateAssessment(props.initial.id, payload)
-      saved = res.data
+      saved = await recordsStore.updateRecord('assessment', props.initial.id, payload)
       ElMessage.success('更新成功')
     }
     emit('submitted', { payload, saved })

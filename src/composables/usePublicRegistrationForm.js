@@ -30,14 +30,17 @@ export function usePublicRegistrationForm({ courses, supplies, availability }) {
     (val) => {
       const hasContent = val.name || val.birthday || val.class_name || val.selectedCourses.length > 0
       if (hasContent) {
-        localStorage.setItem(DRAFT_KEY, JSON.stringify(val))
+        sessionStorage.setItem(DRAFT_KEY, JSON.stringify(val))
       }
     },
     { deep: true }
   )
 
   async function loadDraftIfExists() {
-    const raw = localStorage.getItem(DRAFT_KEY)
+    // 草稿含 PII（姓名/生日/手機）→ 改 sessionStorage 避免跨 tab 關閉後仍殘留；
+    // 同時清掉舊版本殘留的 localStorage 草稿（升級遷移）。
+    try { localStorage.removeItem(DRAFT_KEY) } catch { /* silent */ }
+    const raw = sessionStorage.getItem(DRAFT_KEY)
     if (!raw) return
     try {
       const draft = JSON.parse(raw)
@@ -50,7 +53,7 @@ export function usePublicRegistrationForm({ courses, supplies, availability }) {
       Object.assign(form, draft)
     } catch {
       // 使用者選擇重新填寫或解析失敗，清除草稿
-      localStorage.removeItem(DRAFT_KEY)
+      sessionStorage.removeItem(DRAFT_KEY)
     }
   }
 
@@ -98,7 +101,7 @@ export function usePublicRegistrationForm({ courses, supplies, availability }) {
     form.selectedCourses = []
     form.selectedSupplies = []
     form.notes = ''
-    localStorage.removeItem(DRAFT_KEY)
+    sessionStorage.removeItem(DRAFT_KEY)
   }
 
   async function handleSubmit(onSuccess) {
@@ -114,7 +117,7 @@ export function usePublicRegistrationForm({ courses, supplies, availability }) {
         remark: form.notes.trim(),
       })
       submitResult.value = res.data
-      localStorage.removeItem(DRAFT_KEY)
+      sessionStorage.removeItem(DRAFT_KEY)
       if (onSuccess) await onSuccess()
     } catch (err) {
       ElMessage.error(err.response?.data?.detail || '報名失敗，請稍後再試')

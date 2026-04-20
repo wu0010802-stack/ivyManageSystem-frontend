@@ -31,7 +31,7 @@ export function useConfirmDelete({ endpoint, onSuccess, successMsg = '已刪除'
     try {
       await api.delete(`${endpoint}/${row[idField]}`)
       ElMessage.success(successMsg)
-      if (onSuccess) onSuccess()
+      if (onSuccess) onSuccess(row)
     } catch (e) {
       ElMessage.error(e?.response?.data?.detail || errorMsg)
     } finally {

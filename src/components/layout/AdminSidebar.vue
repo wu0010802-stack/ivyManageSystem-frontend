@@ -112,10 +112,6 @@
             <el-icon><TrendCharts /></el-icon>
             <template #title>在籍統計</template>
           </el-menu-item>
-          <el-menu-item v-if="canView.STUDENTS_READ" index="/student-records">
-            <el-icon><DataAnalysis /></el-icon>
-            <template #title>學生紀錄</template>
-          </el-menu-item>
           <el-menu-item v-if="canView.STUDENTS_READ" index="/dismissal-queue">
             <el-icon><Van /></el-icon>
             <template #title>接送通知</template>

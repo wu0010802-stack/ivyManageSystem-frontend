@@ -56,7 +56,7 @@
     </div>
 
     <div class="pos-panel__summary" v-if="!searching && resultCount > 0">
-      <span>{{ resultCount }} {{ mode === 'by-student' ? '位學生' : '筆報名' }}</span>
+      <span>{{ resultSummaryText }}</span>
       <span class="pos-panel__summary-total">
         待{{ isRefundMode ? '退' : '收' }}合計 <strong>{{ formatTWD(totalAmount) }}</strong>
       </span>
@@ -125,36 +125,80 @@
       </template>
 
       <template v-else>
-        <div
-          v-if="registrations.length === 0 && searchQuery && !searching"
-          class="pos-panel__empty"
-        >
-          無結果
+        <div class="pos-cal__nav">
+          <el-button size="small" :icon="ArrowLeft" circle @click="shiftMonth(-1)" />
+          <span class="pos-cal__month">{{ monthLabel }}</span>
+          <el-button size="small" :icon="ArrowRight" circle @click="shiftMonth(1)" />
+          <el-button size="small" plain @click="gotoToday">今日</el-button>
         </div>
-        <div
-          v-for="row in registrations"
-          :key="row.id"
-          class="pos-reg pos-reg--solo"
-          :class="{ 'pos-reg--selected': isSelected(row.id) }"
-          @click="handleSingleToggle(row)"
-        >
-          <el-checkbox
-            :model-value="isSelected(row.id)"
-            @click.stop
-            @change="handleSingleToggle(row)"
-          />
-          <div class="pos-reg__info">
-            <div class="pos-reg__name">{{ row.student_name }} · {{ row.class_name || '—' }}</div>
-            <div class="pos-reg__meta">
-              {{ row.course_names || '' }}
+
+        <div class="pos-cal__weekdays">
+          <div v-for="d in weekdayLabels" :key="d">{{ d }}</div>
+        </div>
+
+        <div class="pos-cal__grid">
+          <div
+            v-for="cell in calendarCells"
+            :key="cell.dateKey"
+            class="pos-cal__cell"
+            :class="{
+              'pos-cal__cell--out': !cell.inMonth,
+              'pos-cal__cell--active': cell.dateKey === selectedDate,
+              'pos-cal__cell--today': cell.dateKey === todayKey,
+              'pos-cal__cell--has': cell.count > 0,
+            }"
+            @click="selectDate(cell.dateKey)"
+          >
+            <div class="pos-cal__day">{{ cell.day }}</div>
+            <div
+              v-if="cell.count > 0"
+              class="pos-cal__amt"
+              :class="{ 'pos-cal__amt--refund': isRefundMode }"
+            >
+              {{ compactTWD(cell.amount) }}
             </div>
-            <div class="pos-reg__meta">
-              應繳 {{ formatTWD(row.total_amount) }} · 已繳 {{ formatTWD(row.paid_amount) }}
+            <div v-if="cell.count > 0" class="pos-cal__cnt">{{ cell.count }} 筆</div>
+          </div>
+        </div>
+
+        <div class="pos-cal__list">
+          <div v-if="!selectedDate" class="pos-panel__empty">點日期查看當日報名</div>
+          <template v-else>
+            <div class="pos-cal__list-head">
+              {{ selectedDate }} · {{ selectedDateRows.length }} 筆報名
             </div>
-          </div>
-          <div class="pos-reg__owed" :class="{ 'pos-reg__owed--refund': isRefundMode }">
-            {{ formatTWD(isRefundMode ? (row.paid_amount || 0) : Math.max(0, (row.total_amount || 0) - (row.paid_amount || 0))) }}
-          </div>
+            <div
+              v-if="selectedDateRows.length === 0"
+              class="pos-panel__empty"
+            >
+              當日無{{ isRefundMode ? '可退費' : '未結清' }}報名
+            </div>
+            <div
+              v-for="row in selectedDateRows"
+              :key="row.id"
+              class="pos-reg pos-reg--solo"
+              :class="{ 'pos-reg--selected': isSelected(row.id) }"
+              @click="handleSingleToggle(row)"
+            >
+              <el-checkbox
+                :model-value="isSelected(row.id)"
+                @click.stop
+                @change="handleSingleToggle(row)"
+              />
+              <div class="pos-reg__info">
+                <div class="pos-reg__name">{{ row.student_name }} · {{ row.class_name || '—' }}</div>
+                <div class="pos-reg__meta">
+                  {{ row.course_names || '' }}
+                </div>
+                <div class="pos-reg__meta">
+                  應繳 {{ formatTWD(row.total_amount) }} · 已繳 {{ formatTWD(row.paid_amount) }}
+                </div>
+              </div>
+              <div class="pos-reg__owed" :class="{ 'pos-reg__owed--refund': isRefundMode }">
+                {{ formatTWD(isRefundMode ? (row.paid_amount || 0) : computeOwed(row.total_amount, row.paid_amount)) }}
+              </div>
+            </div>
+          </template>
         </div>
       </template>
     </el-scrollbar>
@@ -162,10 +206,41 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
-import { Search } from '@element-plus/icons-vue'
+import { computed, ref, watch } from 'vue'
+import { ArrowLeft, ArrowRight, Search } from '@element-plus/icons-vue'
 
-import { POS_MODES, formatTWD } from '@/constants/pos'
+import { POS_MODES, computeOwed, formatTWD } from '@/constants/pos'
+
+const weekdayLabels = ['日', '一', '二', '三', '四', '五', '六']
+
+function taipeiToday() {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Taipei',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date())
+  return {
+    year: Number(parts.find((p) => p.type === 'year').value),
+    month: Number(parts.find((p) => p.type === 'month').value) - 1,
+    day: Number(parts.find((p) => p.type === 'day').value),
+  }
+}
+
+function pad2(n) {
+  return String(n).padStart(2, '0')
+}
+
+function compactTWD(n) {
+  const v = Number(n) || 0
+  if (v <= 0) return ''
+  if (v < 1000) return `$${v}`
+  if (v < 10000) {
+    const k = (v / 1000).toFixed(1).replace(/\.0$/, '')
+    return `$${k}k`
+  }
+  return `$${Math.round(v / 1000)}k`
+}
 
 const props = defineProps({
   mode: { type: String, required: true },
@@ -196,12 +271,151 @@ const placeholder = computed(() => {
   if (props.isRefundMode) return '搜尋姓名 / 班級 / 家長手機（已列出全部可退費）'
   return props.mode === 'by-student'
     ? '搜尋姓名 / 班級 / 家長手機（已列出全部未結清）'
-    : '搜尋姓名 / 班級（依單筆瀏覽）'
+    : '搜尋姓名 / 班級（依報名日期瀏覽）'
 })
+
+function extractDateKey(iso) {
+  if (!iso) return ''
+  // created_at 為 UTC ISO，以 Asia/Taipei 時區為準切出 YYYY-MM-DD
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return String(iso).slice(0, 10)
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Taipei',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(d)
+  const y = parts.find((p) => p.type === 'year')?.value
+  const m = parts.find((p) => p.type === 'month')?.value
+  const day = parts.find((p) => p.type === 'day')?.value
+  return `${y}-${m}-${day}`
+}
+
+// 每日欠款彙總：Map<YYYY-MM-DD, { rows, amount }>
+const dateMap = computed(() => {
+  const m = new Map()
+  for (const row of props.registrations) {
+    const key = extractDateKey(row.created_at) || '未知'
+    if (!m.has(key)) m.set(key, { rows: [], amount: 0 })
+    const g = m.get(key)
+    g.rows.push(row)
+    g.amount += props.isRefundMode
+      ? Number(row.paid_amount || 0)
+      : computeOwed(row.total_amount, row.paid_amount)
+  }
+  return m
+})
+
+// 月曆狀態
+const _today = taipeiToday()
+const todayKey = `${_today.year}-${pad2(_today.month + 1)}-${pad2(_today.day)}`
+const currentMonth = ref({ year: _today.year, month: _today.month })
+const selectedDate = ref('')
+
+const monthLabel = computed(
+  () => `${currentMonth.value.year} 年 ${pad2(currentMonth.value.month + 1)} 月`
+)
+
+const calendarCells = computed(() => {
+  const { year, month } = currentMonth.value
+  const firstWeekday = new Date(year, month, 1).getDay()
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const prevMonthDays = new Date(year, month, 0).getDate()
+  const cells = []
+
+  // 上月補滿前導
+  for (let i = firstWeekday - 1; i >= 0; i--) {
+    const d = prevMonthDays - i
+    const pm = month === 0 ? 12 : month
+    const py = month === 0 ? year - 1 : year
+    const key = `${py}-${pad2(pm)}-${pad2(d)}`
+    const entry = dateMap.value.get(key)
+    cells.push({
+      day: d,
+      dateKey: key,
+      inMonth: false,
+      amount: entry?.amount || 0,
+      count: entry?.rows.length || 0,
+    })
+  }
+
+  // 當月
+  for (let d = 1; d <= daysInMonth; d++) {
+    const key = `${year}-${pad2(month + 1)}-${pad2(d)}`
+    const entry = dateMap.value.get(key)
+    cells.push({
+      day: d,
+      dateKey: key,
+      inMonth: true,
+      amount: entry?.amount || 0,
+      count: entry?.rows.length || 0,
+    })
+  }
+
+  // 下月補滿到 6 列
+  let nd = 1
+  while (cells.length < 42) {
+    const nm = month === 11 ? 1 : month + 2
+    const ny = month === 11 ? year + 1 : year
+    const key = `${ny}-${pad2(nm)}-${pad2(nd)}`
+    const entry = dateMap.value.get(key)
+    cells.push({
+      day: nd,
+      dateKey: key,
+      inMonth: false,
+      amount: entry?.amount || 0,
+      count: entry?.rows.length || 0,
+    })
+    nd++
+  }
+  return cells
+})
+
+const selectedDateRows = computed(() =>
+  selectedDate.value ? dateMap.value.get(selectedDate.value)?.rows || [] : []
+)
+
+function shiftMonth(delta) {
+  const { year, month } = currentMonth.value
+  const newIdx = month + delta
+  if (newIdx < 0) currentMonth.value = { year: year - 1, month: 11 }
+  else if (newIdx > 11) currentMonth.value = { year: year + 1, month: 0 }
+  else currentMonth.value = { year, month: newIdx }
+  selectedDate.value = ''
+}
+
+function gotoToday() {
+  const t = taipeiToday()
+  currentMonth.value = { year: t.year, month: t.month }
+  selectedDate.value = `${t.year}-${pad2(t.month + 1)}-${pad2(t.day)}`
+}
+
+function selectDate(key) {
+  // 點到上／下月帶動月份切換
+  const [y, m] = key.split('-').map(Number)
+  if (y !== currentMonth.value.year || m - 1 !== currentMonth.value.month) {
+    currentMonth.value = { year: y, month: m - 1 }
+  }
+  selectedDate.value = selectedDate.value === key ? '' : key
+}
+
+// 切換搜尋 / 班級 / 模式時，若選中日期已無對應資料則清掉
+watch(
+  () => [props.mode, props.registrations.length, props.classroomFilter, props.searchQuery],
+  () => {
+    if (!selectedDate.value) return
+    if (!dateMap.value.has(selectedDate.value)) selectedDate.value = ''
+  }
+)
 
 const resultCount = computed(() =>
   props.mode === 'by-student' ? props.groups.length : props.registrations.length
 )
+
+const resultSummaryText = computed(() => {
+  if (props.mode === 'by-student') return `${props.groups.length} 位學生`
+  return `${props.registrations.length} 筆報名 · ${dateMap.value.size} 個日期`
+})
 
 const totalAmount = computed(() => {
   if (props.mode === 'by-student') {
@@ -210,7 +424,7 @@ const totalAmount = computed(() => {
   return props.registrations.reduce((s, r) => {
     const base = props.isRefundMode
       ? r.paid_amount || 0
-      : Math.max(0, (r.total_amount || 0) - (r.paid_amount || 0))
+      : computeOwed(r.total_amount, r.paid_amount)
     return s + base
   }, 0)
 })
@@ -219,7 +433,7 @@ const isSelected = (id) => props.selectedIds.includes(id)
 
 function handleSingleToggle(row) {
   // 依單筆模式的搜尋結果需要組成 owed / courses 給購物車
-  const owed = Math.max(0, (row.total_amount || 0) - (row.paid_amount || 0))
+  const owed = computeOwed(row.total_amount, row.paid_amount)
   const normalized = {
     id: row.id,
     student_name: row.student_name,
@@ -407,5 +621,121 @@ function handleSingleToggle(row) {
 
 .pos-reg__owed--refund {
   color: #0284c7;
+}
+
+/* ── 月曆視圖 ─────────────────────────────────────────────── */
+.pos-cal__nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 4px 0 8px;
+}
+
+.pos-cal__month {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1e293b;
+  min-width: 110px;
+  text-align: center;
+}
+
+.pos-cal__weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  font-size: 12px;
+  color: #64748b;
+  text-align: center;
+  padding: 4px 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.pos-cal__grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  padding: 8px 0;
+}
+
+.pos-cal__cell {
+  position: relative;
+  min-height: 62px;
+  padding: 4px 6px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pos-cal__cell:hover {
+  border-color: #94a3b8;
+  background: #f8fafc;
+}
+
+.pos-cal__cell--out {
+  opacity: 0.4;
+}
+
+.pos-cal__cell--today {
+  border-color: #3b82f6;
+}
+
+.pos-cal__cell--today .pos-cal__day {
+  color: #2563eb;
+  font-weight: 700;
+}
+
+.pos-cal__cell--active {
+  background: #dbeafe !important;
+  border-color: #2563eb !important;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.25);
+}
+
+.pos-cal__cell--has {
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.pos-cal__cell--has.pos-cal__cell--active {
+  background: #fee2e2 !important;
+}
+
+.pos-cal__day {
+  font-size: 13px;
+  font-weight: 500;
+  color: #1e293b;
+}
+
+.pos-cal__amt {
+  font-size: 12px;
+  font-weight: 700;
+  color: #dc2626;
+  margin-top: auto;
+}
+
+.pos-cal__amt--refund {
+  color: #0284c7;
+}
+
+.pos-cal__cnt {
+  font-size: 10px;
+  color: #64748b;
+}
+
+.pos-cal__list {
+  border-top: 1px solid #e2e8f0;
+  padding-top: 10px;
+  margin-top: 6px;
+}
+
+.pos-cal__list-head {
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+  padding: 4px 0 8px;
 }
 </style>

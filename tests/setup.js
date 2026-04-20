@@ -1,4 +1,5 @@
 import { vi } from 'vitest'
+import 'fake-indexeddb/auto'
 
 // Node.js 22+ 內建 localStorage 與 happy-dom/jsdom 衝突
 // 手動提供完整的 localStorage mock

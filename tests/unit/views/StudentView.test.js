@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { reactive, nextTick } from 'vue'
 import { shallowMount } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
 import StudentView from '@/views/StudentView.vue'
 
 const route = reactive({
@@ -55,6 +56,7 @@ const flushPromises = async () => {
 
 describe('StudentView', () => {
   beforeEach(() => {
+    setActivePinia(createPinia())
     vi.clearAllMocks()
     route.query = {
       school_year: '2025',

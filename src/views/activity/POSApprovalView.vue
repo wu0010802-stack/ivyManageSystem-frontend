@@ -1,7 +1,9 @@
 <template>
   <div class="pos-approval">
-    <PageHeader title="POS 收款簽核" subtitle="老闆每日核對 POS 流水後簽核，凍結 snapshot 供稽核" />
+    <PageHeader title="POS 收款簽核" subtitle="日結：老闆核對單日流水後簽核；學期對帳：跨學期檢視繳費與簽核狀況" />
 
+    <el-tabs v-model="activeTab" class="pos-approval__tabs">
+      <el-tab-pane label="日結簽核" name="daily">
     <div class="pos-approval__body">
       <el-card class="pos-approval__pane" shadow="never">
         <template #header>
@@ -110,6 +112,79 @@
             >
               {{ method }} · {{ formatTWD(amount) }}
             </span>
+          </div>
+
+          <div class="pos-approval__tx-block" v-loading="loadingTx">
+            <div class="pos-approval__tx-head">
+              <span>當日交易明細 ({{ dailyTransactions.length }})</span>
+              <el-button size="small" :icon="RefreshRight" link @click="loadDailyTransactions">
+                重新整理
+              </el-button>
+            </div>
+            <el-empty
+              v-if="!loadingTx && dailyTransactions.length === 0"
+              description="當日無交易"
+              :image-size="48"
+            />
+            <el-table
+              v-else
+              :data="dailyTransactions"
+              size="small"
+              :max-height="260"
+            >
+              <el-table-column type="expand">
+                <template #default="{ row }">
+                  <div class="pos-approval__tx-items">
+                    <div
+                      v-for="(item, idx) in row.items || []"
+                      :key="idx"
+                      class="pos-approval__tx-item"
+                    >
+                      <span>
+                        {{ item.student_name }}
+                        <em v-if="item.class_name">（{{ item.class_name }}）</em>
+                      </span>
+                      <strong>{{ formatTWD(item.amount_applied) }}</strong>
+                    </div>
+                    <div v-if="row.notes" class="pos-approval__tx-note">
+                      備註：{{ row.notes }}
+                    </div>
+                    <div v-if="row.operator" class="pos-approval__tx-note">
+                      經手人：{{ row.operator }}
+                    </div>
+                  </div>
+                </template>
+              </el-table-column>
+              <el-table-column label="時間" width="72">
+                <template #default="{ row }">{{ formatTime(row.created_at) }}</template>
+              </el-table-column>
+              <el-table-column label="收據編號" min-width="200">
+                <template #default="{ row }">
+                  <code v-if="row.source !== 'system'">{{ row.receipt_no }}</code>
+                  <el-tag v-else type="info" size="small" effect="plain">
+                    系統沖帳
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="類型" width="60">
+                <template #default="{ row }">
+                  <el-tag :type="row.type === 'refund' ? 'danger' : 'success'" size="small">
+                    {{ row.type === 'refund' ? '退費' : '繳費' }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="學生" min-width="140">
+                <template #default="{ row }">
+                  {{ (row.student_names || []).join('、') }}
+                </template>
+              </el-table-column>
+              <el-table-column label="金額" width="100" align="right">
+                <template #default="{ row }">{{ formatTWD(row.total) }}</template>
+              </el-table-column>
+              <el-table-column label="方式" width="70" align="center">
+                <template #default="{ row }">{{ row.payment_method }}</template>
+              </el-table-column>
+            </el-table>
           </div>
 
           <!-- 已簽核：展示結果 + 解鎖按鈕 -->
@@ -286,6 +361,12 @@
         </span>
       </div>
     </el-card>
+      </el-tab-pane>
+
+      <el-tab-pane label="學期對帳" name="semester" lazy>
+        <POSSemesterReconciliation />
+      </el-tab-pane>
+    </el-tabs>
   </div>
 </template>
 
@@ -301,6 +382,7 @@ import {
 } from '@element-plus/icons-vue'
 
 import PageHeader from '@/components/common/PageHeader.vue'
+import POSSemesterReconciliation from '@/components/activity/POSSemesterReconciliation.vue'
 import StatCard from '@/components/common/StatCard.vue'
 import { CASH_METHOD, formatTWD } from '@/constants/pos'
 import {
@@ -308,11 +390,14 @@ import {
   getPOSDailyClosePending,
   getPOSDailyCloseStatus,
   getPOSReconciliation,
+  getPOSRecentTransactions,
   unlockPOSDailyClose,
 } from '@/api/activity'
 import { hasPermission } from '@/utils/auth'
 
 const canApprove = computed(() => hasPermission('ACTIVITY_PAYMENT_APPROVE'))
+
+const activeTab = ref('daily')
 
 function todayISO() {
   const d = new Date()
@@ -338,6 +423,9 @@ const loadingPending = ref(false)
 const detail = ref(null)
 const loadingDetail = ref(false)
 const submitting = ref(false)
+
+const dailyTransactions = ref([])
+const loadingTx = ref(false)
 
 const reconciliation = reactive({ items: [], totals: {} })
 const loadingRecon = ref(false)
@@ -376,6 +464,18 @@ function formatDateTime(iso) {
   return d.toLocaleString('zh-Hant', { hour12: false, timeZone: 'Asia/Taipei' })
 }
 
+function formatTime(iso) {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso.slice(11, 16)
+  return d.toLocaleTimeString('zh-Hant', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: 'Asia/Taipei',
+  })
+}
+
 async function loadPending() {
   loadingPending.value = true
   try {
@@ -405,6 +505,24 @@ async function loadDetail() {
   }
 }
 
+async function loadDailyTransactions() {
+  if (!selectedDate.value) return
+  loadingTx.value = true
+  try {
+    const res = await getPOSRecentTransactions({
+      date: selectedDate.value,
+      limit: 100,
+      include_system: true,
+    })
+    dailyTransactions.value = res.data?.transactions || []
+  } catch (err) {
+    dailyTransactions.value = []
+    ElMessage.error(err?.response?.data?.detail || '讀取當日交易失敗')
+  } finally {
+    loadingTx.value = false
+  }
+}
+
 async function loadReconciliation() {
   loadingRecon.value = true
   try {
@@ -419,7 +537,12 @@ async function loadReconciliation() {
 }
 
 async function refreshAll() {
-  await Promise.all([loadPending(), loadDetail(), loadReconciliation()])
+  await Promise.all([
+    loadPending(),
+    loadDetail(),
+    loadDailyTransactions(),
+    loadReconciliation(),
+  ])
 }
 
 function handlePendingSelect(row) {
@@ -483,7 +606,10 @@ async function handleUnlock() {
   }
 }
 
-watch(selectedDate, loadDetail)
+watch(selectedDate, () => {
+  loadDetail()
+  loadDailyTransactions()
+})
 
 onMounted(refreshAll)
 </script>
@@ -494,6 +620,10 @@ onMounted(refreshAll)
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.pos-approval__tabs :deep(.el-tabs__content) {
+  padding-top: 4px;
 }
 
 .pos-approval__body {
@@ -590,6 +720,51 @@ onMounted(refreshAll)
 
 .pos-approval__hint--danger {
   color: #dc2626;
+}
+
+.pos-approval__tx-block {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.pos-approval__tx-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 600;
+  font-size: 13px;
+  color: #475569;
+  margin-bottom: 8px;
+}
+
+.pos-approval__tx-items {
+  padding: 8px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: #475569;
+}
+
+.pos-approval__tx-item {
+  display: flex;
+  justify-content: space-between;
+}
+
+.pos-approval__tx-item em {
+  font-style: normal;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.pos-approval__tx-note {
+  font-size: 12px;
+  color: #64748b;
+  border-top: 1px dashed #e2e8f0;
+  padding-top: 4px;
+  margin-top: 4px;
 }
 
 .pos-approval__reconciliation {

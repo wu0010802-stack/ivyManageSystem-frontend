@@ -12,12 +12,14 @@ import {
 } from '@/api/classrooms'
 import { getCurrentAcademicTerm, normalizeSchoolYear, buildSchoolYearOptions } from '@/utils/academic'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Delete, Edit, Plus, RefreshRight } from '@element-plus/icons-vue'
+import { Clock, Delete, Edit, Plus, RefreshRight, Setting } from '@element-plus/icons-vue'
 import { useClassroomStore } from '@/stores/classroom'
 import { useAcademicTermStore } from '@/stores/academicTerm'
 import { hasPermission } from '@/utils/auth'
 import { apiError } from '@/utils/error'
 import ClassroomStudentDrawer from '@/components/classroom/ClassroomStudentDrawer.vue'
+import ClassroomChangeLogDrawer from '@/components/classroom/ClassroomChangeLogDrawer.vue'
+import GradeSettingsDialog from '@/components/classroom/GradeSettingsDialog.vue'
 
 const classroomStore = useClassroomStore()
 const termStore = useAcademicTermStore()
@@ -39,6 +41,9 @@ const currentClassroom = ref(null)
 const classroomDrawerVisible = ref(false)
 const classroomDrawerLoading = ref(false)
 const drawerClassroom = ref(null)
+const changeLogDrawerVisible = ref(false)
+const changeLogClassroom = ref(null)
+const gradeSettingsVisible = ref(false)
 const canWrite = hasPermission('CLASSROOMS_WRITE')
 const canReadStudents = hasPermission('STUDENTS_READ')
 
@@ -239,6 +244,11 @@ const openStudentDrawer = async (classroom) => {
 
 const closeStudentDrawer = () => {
   classroomDrawerVisible.value = false
+}
+
+const openChangeLogDrawer = (classroom) => {
+  changeLogClassroom.value = classroom
+  changeLogDrawerVisible.value = true
 }
 
 const handleStudentUpdated = async () => {
@@ -446,6 +456,7 @@ onMounted(async () => {
           inactive-text="僅顯示啟用"
         />
         <el-button :icon="RefreshRight" @click="fetchClassrooms">重新整理</el-button>
+        <el-button :icon="Setting" @click="gradeSettingsVisible = true">年級設定</el-button>
         <el-button v-if="canWrite" type="primary" :icon="Plus" @click="openCreate">新增班級</el-button>
       </div>
     </div>
@@ -505,9 +516,10 @@ onMounted(async () => {
             <el-button
               v-if="canReadStudents"
               size="small"
-              @click.stop="openStudentDrawer(classroom)"
+              :icon="Clock"
+              @click.stop="openChangeLogDrawer(classroom)"
             >
-              查看學生
+              歷史紀錄
             </el-button>
             <el-button v-if="canWrite" size="small" :icon="Edit" @click.stop="openEdit(classroom)">編輯</el-button>
             <el-button
@@ -653,6 +665,16 @@ onMounted(async () => {
       @student-updated="handleStudentUpdated"
     />
 
+    <GradeSettingsDialog
+      v-model:visible="gradeSettingsVisible"
+      :can-write="canWrite"
+      @updated="fetchOptions"
+    />
+
+    <ClassroomChangeLogDrawer
+      v-model:visible="changeLogDrawerVisible"
+      :classroom="changeLogClassroom"
+    />
 
   </div>
 </template>

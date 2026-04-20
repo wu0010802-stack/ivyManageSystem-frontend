@@ -117,22 +117,98 @@ export default defineConfig({
                                 maxEntries: 80,
                                 maxAgeSeconds: 60 * 60 * 24 * 7, // 7 天
                             },
-                            cacheableResponse: { statuses: [0, 200] },
+                            cacheableResponse: { statuses: [200] },
                         },
                     },
-                    // Portal GET API：stale-while-revalidate，離線可看舊資料
+                    // Portal 點名 GET：離線仍能看到名單（教師場景主線）
+                    {
+                        urlPattern: ({ url, request }) =>
+                            url.pathname.startsWith('/api/portal/my-class-attendance') &&
+                            request.method === 'GET',
+                        handler: 'StaleWhileRevalidate',
+                        options: {
+                            cacheName: 'portal-class-attendance',
+                            expiration: {
+                                maxEntries: 60,
+                                maxAgeSeconds: 60 * 60 * 24, // 1 天（跨日點名用）
+                            },
+                            cacheableResponse: { statuses: [200] },
+                        },
+                    },
+                    // Portal 班級/學生清單：含學生個資 → NetworkFirst，離線才走快取
+                    {
+                        urlPattern: ({ url, request }) =>
+                            url.pathname === '/api/portal/my-students' &&
+                            request.method === 'GET',
+                        handler: 'NetworkFirst',
+                        options: {
+                            cacheName: 'portal-my-students',
+                            networkTimeoutSeconds: 5,
+                            expiration: {
+                                maxEntries: 5,
+                                maxAgeSeconds: 60 * 60 * 24, // 1 天
+                            },
+                            cacheableResponse: { statuses: [200] },
+                        },
+                    },
+                    // Portal 敏感唯讀資料（薪資、班級出席、個人假別/加班）：NetworkFirst 降低共享裝置殘留
+                    {
+                        urlPattern: ({ url, request }) => {
+                            if (request.method !== 'GET') return false
+                            const p = url.pathname
+                            return (
+                                p.startsWith('/api/portal/salary-preview') ||
+                                p.startsWith('/api/portal/attendance-sheet') ||
+                                p.startsWith('/api/portal/my-leaves') ||
+                                p.startsWith('/api/portal/my-overtimes') ||
+                                p.startsWith('/api/portal/my-schedule')
+                            )
+                        },
+                        handler: 'NetworkFirst',
+                        options: {
+                            cacheName: 'portal-sensitive',
+                            networkTimeoutSeconds: 5,
+                            expiration: {
+                                maxEntries: 30,
+                                maxAgeSeconds: 60 * 60 * 2, // 2 小時
+                            },
+                            cacheableResponse: { statuses: [200] },  // 不快取 401/403/0
+                        },
+                    },
+                    // 公告、行事曆等低敏內容：保留 StaleWhileRevalidate 提供離線體驗
+                    {
+                        urlPattern: ({ url, request }) => {
+                            if (request.method !== 'GET') return false
+                            const p = url.pathname
+                            return (
+                                p.startsWith('/api/portal/announcements') ||
+                                p.startsWith('/api/portal/calendar')
+                            )
+                        },
+                        handler: 'StaleWhileRevalidate',
+                        options: {
+                            cacheName: 'portal-public',
+                            expiration: {
+                                maxEntries: 20,
+                                maxAgeSeconds: 60 * 60 * 12,
+                            },
+                            cacheableResponse: { statuses: [200] },
+                        },
+                    },
+                    // 其他 Portal GET API：NetworkFirst，避免未知敏感端點被預設快取
                     {
                         urlPattern: ({ url, request }) =>
                             url.pathname.startsWith('/api/portal') &&
                             request.method === 'GET',
-                        handler: 'StaleWhileRevalidate',
+                        handler: 'NetworkFirst',
                         options: {
                             cacheName: 'portal-api',
+                            networkTimeoutSeconds: 5,
                             expiration: {
                                 maxEntries: 30,
-                                maxAgeSeconds: 60 * 60 * 2,   // 2 小時
+                                maxAgeSeconds: 60 * 60 * 2,
                             },
-                            cacheableResponse: { statuses: [0, 200] },
+                            cacheableResponse: { statuses: [200] },
                         },
                     },
                     // 注意：POST（請假/加班申請）由 Workbox 預設排除，不會快取
@@ -147,6 +223,7 @@ export default defineConfig({
     },
     build: {
         chunkSizeWarningLimit: 500,
+        sourcemap: false, // 避免正式環境外洩程式碼結構與原始檔路徑
         rollupOptions: {
             output: {
                 manualChunks,

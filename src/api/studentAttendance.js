@@ -14,3 +14,8 @@ export const getMonthlySummary = (params) =>
 
 export const exportStudentAttendance = (params) =>
   api.get('/student-attendance/export', { params, responseType: 'blob' })
+
+export const getAttendanceByStudent = (studentId, params = {}) =>
+  api.get('/student-attendance/by-student', {
+    params: { student_id: studentId, ...params },
+  })

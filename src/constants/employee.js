@@ -28,3 +28,14 @@ export const POSITION_SALARY_KEY = {
 }
 
 export const DEPARTMENT_OPTIONS = ['Teaching', 'Administrative', 'Support']
+
+// 學歷 / 合約 / 員工類型：值必須與後端 api/employees_docs.py 的
+// DEGREE_VALUES / CONTRACT_TYPE_VALUES 字面完全一致（含繁簡、空白）
+export const DEGREE_OPTIONS = ['高中職', '學士', '碩士', '博士', '其他']
+
+export const CONTRACT_TYPE_OPTIONS = ['正式', '兼職', '試用', '臨時', '續約']
+
+export const EMPLOYEE_TYPE_OPTIONS = [
+  { label: '正職員工', value: 'regular' },
+  { label: '才藝老師 (時薪制)', value: 'hourly' },
+]

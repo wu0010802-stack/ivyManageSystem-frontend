@@ -1,8 +1,13 @@
 <script setup>
 import { ref, reactive, onMounted, computed, watch, nextTick } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
-import { Loading } from '@element-plus/icons-vue'
-import { getEmployee, getEmployees, createEmployee, updateEmployee, offboard, getFinalSalaryPreview } from '@/api/employees'
+import { Loading, User } from '@element-plus/icons-vue'
+import {
+  getEmployee, getEmployees, createEmployee, updateEmployee, offboard, getFinalSalaryPreview,
+  listEmployeeEducations, createEmployeeEducation, updateEmployeeEducation, deleteEmployeeEducation,
+  listEmployeeCertificates, createEmployeeCertificate, updateEmployeeCertificate, deleteEmployeeCertificate,
+  listEmployeeContracts, createEmployeeContract, updateEmployeeContract, deleteEmployeeContract,
+} from '@/api/employees'
 import { getRecords as getAttendanceRecords, uploadCsv, deleteEmployeeDateRecord } from '@/api/attendance'
 import { getPositionSalary } from '@/api/config'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -13,12 +18,16 @@ import { useClassroomStore } from '@/stores/classroom'
 import { useConfigStore } from '@/stores/config'
 import { useCrudDialog, useConfirmDelete } from '@/composables'
 import { downloadFile } from '@/utils/download'
+import { apiError } from '@/utils/error'
 import {
   POSITION_OPTIONS,
   SUPERVISOR_ROLE_OPTIONS,
   OFFICIAL_JOB_TITLE_NAMES,
   TITLE_TO_GRADE,
   POSITION_SALARY_KEY,
+  DEGREE_OPTIONS,
+  CONTRACT_TYPE_OPTIONS,
+  EMPLOYEE_TYPE_OPTIONS,
 } from '@/constants/employee'
 
 const employeeStore = useEmployeeStore()
@@ -56,28 +65,29 @@ const form = reactive({
   id: null,
   employee_id: '',
   name: '',
+  id_number: '',
+  employee_type: 'regular',
   job_title_id: null,
   position: '',
   supervisor_role: null,
   bonus_grade: null,
   department: 'Teaching',
   phone: '',
-  email: '',
+  address: '',
+  emergency_contact_name: '',
+  emergency_contact_phone: '',
   hire_date: '',
+  probation_end_date: '',
   birthday: '',
   classroom_id: null,
   base_salary: 0,
   hourly_rate: 0,
   insurance_salary_level: 0,
-  supervisor_allowance: 0,
-  teacher_allowance: 0,
+  pension_self_rate: 0,
   dependents: 0,
-  meal_allowance: 0,
-  transportation_allowance: 0,
-  other_allowance: 0,
   bank_code: '',
   bank_account: '',
-  bank_name: '',
+  bank_account_name: '',
   work_start_time: '08:00',
   work_end_time: '17:00'
 })
@@ -359,13 +369,154 @@ const deleteAttendance = (row) => {
    })
 }
 
+// ── 詳情對話框 tab 切換 / lazy loading ──────────────
+const activeDetailTab = ref('personal')
+const loadedTabs = ref(new Set())
+const educations = ref([])
+const certificates = ref([])
+const contracts = ref([])
+
+const employeeTypeLabel = (v) => {
+  const opt = EMPLOYEE_TYPE_OPTIONS.find(o => o.value === v)
+  return opt ? opt.label : (v || '-')
+}
+
+const fetchEducations = async () => {
+  if (!currentDetail.value.id) return
+  const res = await listEmployeeEducations(currentDetail.value.id)
+  educations.value = res.data
+}
+const fetchCertificates = async () => {
+  if (!currentDetail.value.id) return
+  const res = await listEmployeeCertificates(currentDetail.value.id)
+  certificates.value = res.data
+}
+const fetchContracts = async () => {
+  if (!currentDetail.value.id) return
+  const res = await listEmployeeContracts(currentDetail.value.id)
+  contracts.value = res.data
+}
+
+const onDetailTabChange = async (name) => {
+  if (loadedTabs.value.has(name)) return
+  try {
+    if (name === 'education') await fetchEducations()
+    else if (name === 'certificate') await fetchCertificates()
+    else if (name === 'contract') await fetchContracts()
+    else if (name === 'attendance') await fetchAttendance()
+    loadedTabs.value.add(name)
+  } catch {
+    ElMessage.error('載入失敗')
+  }
+}
+
+// ── 學歷 / 證照 / 合約 共用子對話框 ──────────────────
+const subDialog = reactive({
+  visible: false,
+  isEdit: false,
+  kind: null, // 'education' | 'certificate' | 'contract'
+  form: {},
+})
+const subDialogTitle = computed(() => {
+  const kindLabel = { education: '學歷', certificate: '證照', contract: '合約' }[subDialog.kind] || ''
+  return `${subDialog.isEdit ? '編輯' : '新增'}${kindLabel}`
+})
+
+const openEduCreate = () => {
+  subDialog.kind = 'education'; subDialog.isEdit = false
+  subDialog.form = {
+    school_name: '', major: '', degree: '學士',
+    graduation_date: '', is_highest: false, remark: '',
+  }
+  subDialog.visible = true
+}
+const openEduEdit = (row) => {
+  subDialog.kind = 'education'; subDialog.isEdit = true
+  subDialog.form = { ...row }
+  subDialog.visible = true
+}
+const openCertCreate = () => {
+  subDialog.kind = 'certificate'; subDialog.isEdit = false
+  subDialog.form = {
+    certificate_name: '', issuer: '', certificate_number: '',
+    issued_date: '', expiry_date: '', remark: '',
+  }
+  subDialog.visible = true
+}
+const openCertEdit = (row) => {
+  subDialog.kind = 'certificate'; subDialog.isEdit = true
+  subDialog.form = { ...row }
+  subDialog.visible = true
+}
+const openContractCreate = () => {
+  subDialog.kind = 'contract'; subDialog.isEdit = false
+  subDialog.form = {
+    contract_type: '正式', start_date: '', end_date: '',
+    salary_at_contract: null, remark: '',
+  }
+  subDialog.visible = true
+}
+const openContractEdit = (row) => {
+  subDialog.kind = 'contract'; subDialog.isEdit = true
+  subDialog.form = { ...row }
+  subDialog.visible = true
+}
+
+const submitSub = async () => {
+  const id = currentDetail.value.id
+  if (!id) return
+  const payload = { ...subDialog.form }
+  try {
+    if (subDialog.kind === 'education') {
+      if (!payload.school_name) return ElMessage.warning('請輸入學校名稱')
+      if (subDialog.isEdit) await updateEmployeeEducation(id, payload.id, payload)
+      else await createEmployeeEducation(id, payload)
+      await fetchEducations()
+    } else if (subDialog.kind === 'certificate') {
+      if (!payload.certificate_name) return ElMessage.warning('請輸入證照名稱')
+      if (subDialog.isEdit) await updateEmployeeCertificate(id, payload.id, payload)
+      else await createEmployeeCertificate(id, payload)
+      await fetchCertificates()
+    } else if (subDialog.kind === 'contract') {
+      if (!payload.contract_type) return ElMessage.warning('請選擇合約類型')
+      if (!payload.start_date) return ElMessage.warning('請選擇合約起始日')
+      if (subDialog.isEdit) await updateEmployeeContract(id, payload.id, payload)
+      else await createEmployeeContract(id, payload)
+      await fetchContracts()
+    }
+    subDialog.visible = false
+    ElMessage.success('儲存成功')
+  } catch (err) {
+    ElMessage.error('儲存失敗：' + (err.response?.data?.detail || err.message))
+  }
+}
+
+const confirmDeleteSub = (kind, row) => {
+  ElMessageBox.confirm('確定刪除此筆記錄？', '警告', { type: 'warning' }).then(async () => {
+    const id = currentDetail.value.id
+    try {
+      if (kind === 'education') { await deleteEmployeeEducation(id, row.id); await fetchEducations() }
+      else if (kind === 'certificate') { await deleteEmployeeCertificate(id, row.id); await fetchCertificates() }
+      else if (kind === 'contract') { await deleteEmployeeContract(id, row.id); await fetchContracts() }
+      ElMessage.success('已刪除')
+    } catch (err) {
+      ElMessage.error('刪除失敗：' + (err.response?.data?.detail || err.message))
+    }
+  }).catch(() => {})
+}
+
 const handleDetail = async (row) => {
   try {
     const response = await getEmployee(row.id)
     currentDetail.value = response.data
-    // Default to current month or whatever is set
+    // 重置 lazy loading 狀態；個人/職務/薪資直接從 currentDetail 讀取，不需 fetch
+    loadedTabs.value = new Set(['personal', 'job', 'salary'])
+    activeDetailTab.value = 'personal'
+    educations.value = []
+    certificates.value = []
+    contracts.value = []
     attendanceMonth.value = new Date().toISOString().slice(0, 7)
-    await fetchAttendance()
+    attendanceRecords.value = []
     detailDialogVisible.value = true
   } catch (error) {
     ElMessage.error('載入詳情失敗')
@@ -525,8 +676,27 @@ onMounted(async () => {
                 </el-form-item>
               </el-col>
               <el-col :span="12">
+                <el-form-item label="員工類型">
+                  <el-select v-model="form.employee_type" style="width: 100%">
+                    <el-option
+                      v-for="opt in EMPLOYEE_TYPE_OPTIONS"
+                      :key="opt.value"
+                      :label="opt.label"
+                      :value="opt.value"
+                    />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-row :gutter="20">
+              <el-col :span="12">
                 <el-form-item label="到職日期">
                   <el-date-picker v-model="form.hire_date" type="date" placeholder="選擇日期" style="width: 100%" value-format="YYYY-MM-DD" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="試用期結束">
+                  <el-date-picker v-model="form.probation_end_date" type="date" placeholder="選擇日期" style="width: 100%" value-format="YYYY-MM-DD" clearable />
                 </el-form-item>
               </el-col>
             </el-row>
@@ -534,6 +704,11 @@ onMounted(async () => {
               <el-col :span="12">
                 <el-form-item label="生日">
                   <el-date-picker v-model="form.birthday" type="date" placeholder="選擇日期" style="width: 100%" value-format="YYYY-MM-DD" clearable />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="身分證字號">
+                  <el-input v-model="form.id_number" placeholder="保留遮罩值將不會更新" />
                 </el-form-item>
               </el-col>
             </el-row>
@@ -552,9 +727,37 @@ onMounted(async () => {
                 />
               </el-select>
             </el-form-item>
+            <el-divider content-position="left">聯絡與緊急聯絡</el-divider>
+            <el-row :gutter="20">
+              <el-col :span="12">
+                <el-form-item label="聯絡電話">
+                  <el-input v-model="form.phone" placeholder="例：0912-345-678" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="眷屬人數">
+                  <el-input-number v-model="form.dependents" :min="0" :max="9" :step="1" style="width: 100%" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-form-item label="通訊地址">
+              <el-input v-model="form.address" type="textarea" :rows="2" />
+            </el-form-item>
+            <el-row :gutter="20">
+              <el-col :span="12">
+                <el-form-item label="緊急聯絡人">
+                  <el-input v-model="form.emergency_contact_name" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="緊急聯絡電話">
+                  <el-input v-model="form.emergency_contact_phone" />
+                </el-form-item>
+              </el-col>
+            </el-row>
           </el-tab-pane>
 
-          <el-tab-pane label="薪資與津貼">
+          <el-tab-pane label="薪資">
             <el-row :gutter="20">
               <el-col :span="12">
                 <el-form-item label="基本薪資">
@@ -574,40 +777,13 @@ onMounted(async () => {
                 </el-form-item>
               </el-col>
               <el-col :span="12">
-                <el-form-item label="眷屬人數">
-                  <el-input-number v-model="form.dependents" :min="0" :max="3" :step="1" style="width: 100%" />
-                </el-form-item>
-              </el-col>
-            </el-row>
-            <el-divider content-position="center">津貼</el-divider>
-            <el-row :gutter="20">
-              <el-col :span="12">
-                <el-form-item label="主管加給">
-                  <el-input-number v-model="form.supervisor_allowance" :min="0" style="width: 100%" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="12">
-                <el-form-item label="教師加給">
-                  <el-input-number v-model="form.teacher_allowance" :min="0" style="width: 100%" />
-                </el-form-item>
-              </el-col>
-            </el-row>
-            <el-row :gutter="20">
-              <el-col :span="12">
-                <el-form-item label="伙食津貼">
-                  <el-input-number v-model="form.meal_allowance" :min="0" style="width: 100%" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="12">
-                <el-form-item label="交通津貼">
-                  <el-input-number v-model="form.transportation_allowance" :min="0" style="width: 100%" />
-                </el-form-item>
-              </el-col>
-            </el-row>
-             <el-row :gutter="20">
-              <el-col :span="12">
-                <el-form-item label="其他津貼">
-                  <el-input-number v-model="form.other_allowance" :min="0" style="width: 100%" />
+                <el-form-item label="勞退自提">
+                  <el-input-number
+                    v-model="form.pension_self_rate"
+                    :min="0" :max="0.06" :step="0.01" :precision="2"
+                    style="width: 100%"
+                  />
+                  <div style="font-size:12px;color:#909399;margin-top:4px">最高 6%（0.06）</div>
                 </el-form-item>
               </el-col>
             </el-row>
@@ -627,7 +803,7 @@ onMounted(async () => {
               </el-col>
             </el-row>
             <el-form-item label="戶名">
-               <el-input v-model="form.bank_name" />
+               <el-input v-model="form.bank_account_name" />
             </el-form-item>
             <el-divider />
             <el-row :gutter="20">
@@ -653,87 +829,330 @@ onMounted(async () => {
       </template>
     </el-dialog>
 
-    <!-- Detail Dialog -->
-    <el-dialog v-model="detailDialogVisible" title="員工詳情" width="800px">
-      <el-tabs type="border-card">
-        <el-tab-pane label="基本資料">
-          <el-descriptions :title="currentDetail.name" :column="2" border>
-            <el-descriptions-item label="編號">{{ currentDetail.employee_id }}</el-descriptions-item>
-            <el-descriptions-item label="教育局系統">{{ currentDetail.job_title_name || currentDetail.title }}</el-descriptions-item>
-            <el-descriptions-item label="職位">{{ currentDetail.position }}</el-descriptions-item>
-            <el-descriptions-item label="主管職">
-              <el-tag v-if="currentDetail.supervisor_role" size="small">{{ currentDetail.supervisor_role }}</el-tag>
-              <span v-else>-</span>
-            </el-descriptions-item>
-            <el-descriptions-item label="到職日">{{ currentDetail.hire_date }}</el-descriptions-item>
-            <el-descriptions-item label="生日">{{ currentDetail.birthday || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="在職狀態">
+    <!-- Detail Dialog：左右欄位佈局 -->
+    <el-dialog v-model="detailDialogVisible" title="員工詳情" width="1100px" top="5vh">
+      <div class="detail-layout">
+        <!-- 左欄：員工身份摘要 -->
+        <aside class="detail-aside">
+          <div class="avatar-placeholder">
+            <el-icon :size="64" color="#909399"><User /></el-icon>
+          </div>
+          <h3 class="emp-name">{{ currentDetail.name || '-' }}</h3>
+          <div class="emp-meta">
+            <div><span class="meta-label">編號</span>{{ currentDetail.employee_id || '-' }}</div>
+            <div><span class="meta-label">職稱</span>{{ currentDetail.job_title_name || currentDetail.title || '-' }}</div>
+            <div v-if="currentDetail.position"><span class="meta-label">職位</span>{{ currentDetail.position }}</div>
+            <div v-if="currentDetail.classroom_name"><span class="meta-label">班級</span>{{ currentDetail.classroom_name }}</div>
+            <div style="margin-top:12px">
               <el-tag :type="getEmployeeStatus(currentDetail).type" size="small">
                 {{ getEmployeeStatus(currentDetail).label }}
               </el-tag>
-            </el-descriptions-item>
-            <el-descriptions-item v-if="currentDetail.resign_date" label="離職日">{{ currentDetail.resign_date }}</el-descriptions-item>
-            <el-descriptions-item v-if="currentDetail.resign_reason" label="離職原因">{{ currentDetail.resign_reason }}</el-descriptions-item>
-            <el-descriptions-item label="基本薪資">
-              <span>{{ Number(currentDetail.base_salary).toLocaleString() }}</span>
-              <template v-if="standardSalaryFor(currentDetail) !== null">
-                <span style="color:#909399;font-size:12px;margin-left:8px">
-                  標準：{{ standardSalaryFor(currentDetail).toLocaleString() }}
-                </span>
-                <el-tag
-                  v-if="Number(currentDetail.base_salary) !== standardSalaryFor(currentDetail)"
-                  size="small"
-                  :type="Number(currentDetail.base_salary) > standardSalaryFor(currentDetail) ? 'success' : 'warning'"
-                  style="margin-left:6px"
-                >
-                  {{ Number(currentDetail.base_salary) > standardSalaryFor(currentDetail) ? '↑ 高於標準' : '↓ 低於標準' }}
-                </el-tag>
-                <el-tag v-else size="small" type="info" style="margin-left:6px">符合標準</el-tag>
-              </template>
-            </el-descriptions-item>
-            <el-descriptions-item label="投保級距">{{ currentDetail.insurance_salary_level }}</el-descriptions-item>
-            <el-descriptions-item label="班級">{{ currentDetail.classroom_name || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="銀行資訊">{{ currentDetail.bank_code }} - {{ currentDetail.bank_account }} ({{ currentDetail.bank_name }})</el-descriptions-item>
-          </el-descriptions>
-          <el-divider content-position="left">津貼</el-divider>
-          <el-descriptions :column="2" border>
-            <el-descriptions-item label="主管加給">{{ currentDetail.supervisor_allowance }}</el-descriptions-item>
-            <el-descriptions-item label="教師加給">{{ currentDetail.teacher_allowance }}</el-descriptions-item>
-            <el-descriptions-item label="伙食津貼">{{ currentDetail.meal_allowance }}</el-descriptions-item>
-            <el-descriptions-item label="交通津貼">{{ currentDetail.transportation_allowance }}</el-descriptions-item>
-            <el-descriptions-item label="其他津貼">{{ currentDetail.other_allowance }}</el-descriptions-item>
-          </el-descriptions>
-        </el-tab-pane>
-        <el-tab-pane label="出勤紀錄">
-          <div class="attendance-filter">
-            <el-date-picker
-              v-model="attendanceMonth"
-              type="month"
-              placeholder="選擇月份"
-              format="YYYY-MM"
-              value-format="YYYY-MM"
-              @change="fetchAttendance"
-            />
+              <el-tag v-if="currentDetail.supervisor_role" size="small" type="warning" style="margin-left:6px">
+                {{ currentDetail.supervisor_role }}
+              </el-tag>
+            </div>
           </div>
-          <el-table :data="attendanceRecords" height="400" style="width: 100%; margin-top: 10px;">
-            <el-table-column prop="date" label="日期" width="120" />
-            <el-table-column prop="weekday" label="星期" width="80" />
-            <el-table-column prop="punch_in" label="上班" />
-            <el-table-column prop="punch_out" label="下班" />
-            <el-table-column prop="status" label="狀態">
-              <template #default="scope">
-                <el-tag :type="getAttendanceStatusType(scope.row.status)">{{ scope.row.status }}</el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="操作" width="150">
-               <template #default="scope">
-                  <el-button link type="primary" @click="editAttendance(scope.row)">編輯</el-button>
-                  <el-button link type="danger" @click="deleteAttendance(scope.row)">刪除</el-button>
-               </template>
-            </el-table-column>
-          </el-table>
-        </el-tab-pane>
-      </el-tabs>
+        </aside>
+
+        <!-- 右欄：分頁內容 -->
+        <section class="detail-main">
+          <el-tabs
+            v-model="activeDetailTab"
+            type="border-card"
+            @tab-change="onDetailTabChange"
+          >
+            <!-- 個人資料 -->
+            <el-tab-pane label="個人資料" name="personal">
+              <el-descriptions :column="2" border>
+                <el-descriptions-item label="聯絡電話">{{ currentDetail.phone || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="生日">{{ currentDetail.birthday || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="身分證">{{ currentDetail.id_number || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="眷屬人數">{{ currentDetail.dependents ?? '-' }}</el-descriptions-item>
+                <el-descriptions-item label="通訊地址" :span="2">{{ currentDetail.address || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="緊急聯絡人">{{ currentDetail.emergency_contact_name || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="緊急聯絡電話">{{ currentDetail.emergency_contact_phone || '-' }}</el-descriptions-item>
+              </el-descriptions>
+            </el-tab-pane>
+
+            <!-- 職務資料 -->
+            <el-tab-pane label="職務資料" name="job">
+              <el-descriptions :column="2" border>
+                <el-descriptions-item label="員工類型">{{ employeeTypeLabel(currentDetail.employee_type) }}</el-descriptions-item>
+                <el-descriptions-item label="職位">{{ currentDetail.position || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="到職日">{{ currentDetail.hire_date || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="試用期結束">{{ currentDetail.probation_end_date || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="主管職">
+                  <el-tag v-if="currentDetail.supervisor_role" size="small">{{ currentDetail.supervisor_role }}</el-tag>
+                  <span v-else>-</span>
+                </el-descriptions-item>
+                <el-descriptions-item label="班級">{{ currentDetail.classroom_name || '-' }}</el-descriptions-item>
+                <el-descriptions-item v-if="currentDetail.resign_date" label="離職日">{{ currentDetail.resign_date }}</el-descriptions-item>
+                <el-descriptions-item v-if="currentDetail.resign_reason" label="離職原因">{{ currentDetail.resign_reason }}</el-descriptions-item>
+              </el-descriptions>
+            </el-tab-pane>
+
+            <!-- 薪資 -->
+            <el-tab-pane label="薪資" name="salary">
+              <el-descriptions :column="2" border>
+                <el-descriptions-item label="基本薪資">
+                  <span>{{ Number(currentDetail.base_salary).toLocaleString() }}</span>
+                  <template v-if="standardSalaryFor(currentDetail) !== null">
+                    <span style="color:#909399;font-size:12px;margin-left:8px">
+                      標準：{{ standardSalaryFor(currentDetail).toLocaleString() }}
+                    </span>
+                    <el-tag
+                      v-if="Number(currentDetail.base_salary) !== standardSalaryFor(currentDetail)"
+                      size="small"
+                      :type="Number(currentDetail.base_salary) > standardSalaryFor(currentDetail) ? 'success' : 'warning'"
+                      style="margin-left:6px"
+                    >
+                      {{ Number(currentDetail.base_salary) > standardSalaryFor(currentDetail) ? '↑ 高於標準' : '↓ 低於標準' }}
+                    </el-tag>
+                    <el-tag v-else size="small" type="info" style="margin-left:6px">符合標準</el-tag>
+                  </template>
+                </el-descriptions-item>
+                <el-descriptions-item label="投保級距">{{ currentDetail.insurance_salary_level }}</el-descriptions-item>
+                <el-descriptions-item label="時薪">{{ currentDetail.hourly_rate }}</el-descriptions-item>
+                <el-descriptions-item label="勞退自提">{{ ((currentDetail.pension_self_rate || 0) * 100).toFixed(1) }}%</el-descriptions-item>
+                <el-descriptions-item label="銀行資訊" :span="2">
+                  {{ currentDetail.bank_code }} - {{ currentDetail.bank_account }}
+                  <span v-if="currentDetail.bank_account_name">（{{ currentDetail.bank_account_name }}）</span>
+                </el-descriptions-item>
+              </el-descriptions>
+            </el-tab-pane>
+
+            <!-- 學歷 -->
+            <el-tab-pane label="學歷" name="education">
+              <div style="margin-bottom:10px;text-align:right">
+                <el-button type="primary" size="small" @click="openEduCreate">
+                  <el-icon><Plus /></el-icon> 新增學歷
+                </el-button>
+              </div>
+              <el-table :data="educations" border size="small">
+                <el-table-column prop="school_name" label="學校" min-width="140" />
+                <el-table-column prop="major" label="科系" min-width="120" />
+                <el-table-column prop="degree" label="學位" width="90" />
+                <el-table-column prop="graduation_date" label="畢業日期" width="130" />
+                <el-table-column label="最高學歷" width="90">
+                  <template #default="scope">
+                    <el-tag v-if="scope.row.is_highest" type="success" size="small">最高</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="remark" label="備註" min-width="120" show-overflow-tooltip />
+                <el-table-column label="操作" width="120" fixed="right">
+                  <template #default="scope">
+                    <el-button link size="small" type="primary" @click="openEduEdit(scope.row)">編輯</el-button>
+                    <el-button link size="small" type="danger" @click="confirmDeleteSub('education', scope.row)">刪除</el-button>
+                  </template>
+                </el-table-column>
+                <template #empty>
+                  <EmptyState title="尚無學歷資料" description="點擊上方「新增學歷」開始建立" />
+                </template>
+              </el-table>
+            </el-tab-pane>
+
+            <!-- 證照 -->
+            <el-tab-pane label="證照" name="certificate">
+              <div style="margin-bottom:10px;text-align:right">
+                <el-button type="primary" size="small" @click="openCertCreate">
+                  <el-icon><Plus /></el-icon> 新增證照
+                </el-button>
+              </div>
+              <el-table :data="certificates" border size="small">
+                <el-table-column prop="certificate_name" label="證照名稱" min-width="160" />
+                <el-table-column prop="issuer" label="頒發機構" min-width="140" />
+                <el-table-column prop="certificate_number" label="證照編號" min-width="140" />
+                <el-table-column prop="issued_date" label="取得日期" width="130" />
+                <el-table-column label="到期日" width="130">
+                  <template #default="scope">
+                    <span v-if="scope.row.expiry_date">{{ scope.row.expiry_date }}</span>
+                    <el-tag v-else size="small" type="info">永久</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="remark" label="備註" min-width="120" show-overflow-tooltip />
+                <el-table-column label="操作" width="120" fixed="right">
+                  <template #default="scope">
+                    <el-button link size="small" type="primary" @click="openCertEdit(scope.row)">編輯</el-button>
+                    <el-button link size="small" type="danger" @click="confirmDeleteSub('certificate', scope.row)">刪除</el-button>
+                  </template>
+                </el-table-column>
+                <template #empty>
+                  <EmptyState title="尚無證照資料" description="點擊上方「新增證照」開始建立" />
+                </template>
+              </el-table>
+            </el-tab-pane>
+
+            <!-- 合約 -->
+            <el-tab-pane label="合約" name="contract">
+              <div style="margin-bottom:10px;text-align:right">
+                <el-button type="primary" size="small" @click="openContractCreate">
+                  <el-icon><Plus /></el-icon> 新增合約
+                </el-button>
+              </div>
+              <el-table :data="contracts" border size="small">
+                <el-table-column prop="contract_type" label="類型" width="90" />
+                <el-table-column prop="start_date" label="起始日" width="130" />
+                <el-table-column label="結束日" width="130">
+                  <template #default="scope">
+                    <span v-if="scope.row.end_date">{{ scope.row.end_date }}</span>
+                    <el-tag v-else size="small" type="info">未定</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column label="簽約薪資" width="120">
+                  <template #default="scope">
+                    <span v-if="scope.row.salary_at_contract != null">{{ Number(scope.row.salary_at_contract).toLocaleString() }}</span>
+                    <span v-else>-</span>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="remark" label="備註" min-width="140" show-overflow-tooltip />
+                <el-table-column label="操作" width="120" fixed="right">
+                  <template #default="scope">
+                    <el-button link size="small" type="primary" @click="openContractEdit(scope.row)">編輯</el-button>
+                    <el-button link size="small" type="danger" @click="confirmDeleteSub('contract', scope.row)">刪除</el-button>
+                  </template>
+                </el-table-column>
+                <template #empty>
+                  <EmptyState title="尚無合約資料" description="點擊上方「新增合約」開始建立" />
+                </template>
+              </el-table>
+            </el-tab-pane>
+
+            <!-- 出勤紀錄 -->
+            <el-tab-pane label="出勤紀錄" name="attendance">
+              <div class="attendance-filter">
+                <el-date-picker
+                  v-model="attendanceMonth"
+                  type="month"
+                  placeholder="選擇月份"
+                  format="YYYY-MM"
+                  value-format="YYYY-MM"
+                  @change="fetchAttendance"
+                />
+              </div>
+              <el-table :data="attendanceRecords" height="400" style="width: 100%; margin-top: 10px;">
+                <el-table-column prop="date" label="日期" width="120" />
+                <el-table-column prop="weekday" label="星期" width="80" />
+                <el-table-column prop="punch_in" label="上班" />
+                <el-table-column prop="punch_out" label="下班" />
+                <el-table-column prop="status" label="狀態">
+                  <template #default="scope">
+                    <el-tag :type="getAttendanceStatusType(scope.row.status)">{{ scope.row.status }}</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column label="操作" width="150">
+                   <template #default="scope">
+                      <el-button link type="primary" @click="editAttendance(scope.row)">編輯</el-button>
+                      <el-button link type="danger" @click="deleteAttendance(scope.row)">刪除</el-button>
+                   </template>
+                </el-table-column>
+              </el-table>
+            </el-tab-pane>
+          </el-tabs>
+        </section>
+      </div>
+    </el-dialog>
+
+    <!-- 學歷 / 證照 / 合約 共用子對話框 -->
+    <el-dialog
+      v-model="subDialog.visible"
+      :title="subDialogTitle"
+      width="560px"
+      append-to-body
+    >
+      <!-- 學歷 -->
+      <el-form v-if="subDialog.kind === 'education'" label-width="110px">
+        <el-form-item label="學校名稱" required>
+          <el-input v-model="subDialog.form.school_name" />
+        </el-form-item>
+        <el-form-item label="科系">
+          <el-input v-model="subDialog.form.major" />
+        </el-form-item>
+        <el-form-item label="學位" required>
+          <el-select v-model="subDialog.form.degree" style="width:100%">
+            <el-option v-for="d in DEGREE_OPTIONS" :key="d" :label="d" :value="d" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="畢業日期">
+          <el-date-picker
+            v-model="subDialog.form.graduation_date"
+            type="date" value-format="YYYY-MM-DD" style="width:100%" clearable
+          />
+        </el-form-item>
+        <el-form-item label="最高學歷">
+          <el-switch v-model="subDialog.form.is_highest" />
+          <span style="margin-left:10px;font-size:12px;color:#909399">
+            標記後，該員工其他學歷的「最高」會自動取消
+          </span>
+        </el-form-item>
+        <el-form-item label="備註">
+          <el-input v-model="subDialog.form.remark" type="textarea" :rows="2" maxlength="255" />
+        </el-form-item>
+      </el-form>
+
+      <!-- 證照 -->
+      <el-form v-else-if="subDialog.kind === 'certificate'" label-width="110px">
+        <el-form-item label="證照名稱" required>
+          <el-input v-model="subDialog.form.certificate_name" />
+        </el-form-item>
+        <el-form-item label="頒發機構">
+          <el-input v-model="subDialog.form.issuer" />
+        </el-form-item>
+        <el-form-item label="證照編號">
+          <el-input v-model="subDialog.form.certificate_number" />
+        </el-form-item>
+        <el-form-item label="取得日期">
+          <el-date-picker
+            v-model="subDialog.form.issued_date"
+            type="date" value-format="YYYY-MM-DD" style="width:100%" clearable
+          />
+        </el-form-item>
+        <el-form-item label="到期日">
+          <el-date-picker
+            v-model="subDialog.form.expiry_date"
+            type="date" value-format="YYYY-MM-DD" style="width:100%" clearable
+            placeholder="空值表示永久有效"
+          />
+        </el-form-item>
+        <el-form-item label="備註">
+          <el-input v-model="subDialog.form.remark" type="textarea" :rows="2" maxlength="255" />
+        </el-form-item>
+      </el-form>
+
+      <!-- 合約 -->
+      <el-form v-else-if="subDialog.kind === 'contract'" label-width="110px">
+        <el-form-item label="合約類型" required>
+          <el-select v-model="subDialog.form.contract_type" style="width:100%">
+            <el-option v-for="t in CONTRACT_TYPE_OPTIONS" :key="t" :label="t" :value="t" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="起始日" required>
+          <el-date-picker
+            v-model="subDialog.form.start_date"
+            type="date" value-format="YYYY-MM-DD" style="width:100%"
+          />
+        </el-form-item>
+        <el-form-item label="結束日">
+          <el-date-picker
+            v-model="subDialog.form.end_date"
+            type="date" value-format="YYYY-MM-DD" style="width:100%" clearable
+            placeholder="空值表示未定"
+          />
+        </el-form-item>
+        <el-form-item label="簽約薪資">
+          <el-input-number
+            v-model="subDialog.form.salary_at_contract"
+            :min="0" style="width:100%"
+          />
+        </el-form-item>
+        <el-form-item label="備註">
+          <el-input v-model="subDialog.form.remark" type="textarea" :rows="2" maxlength="255" />
+        </el-form-item>
+      </el-form>
+
+      <template #footer>
+        <el-button @click="subDialog.visible = false">取消</el-button>
+        <el-button type="primary" @click="submitSub">儲存</el-button>
+      </template>
     </el-dialog>
     <!-- Offboard Dialog -->
     <el-dialog v-model="offboardVisible" title="辦理離職" width="560px">
@@ -774,7 +1193,6 @@ onMounted(async () => {
                 （{{ finalSalaryPreview.proration_note }}）
               </span>
             </el-descriptions-item>
-            <el-descriptions-item label="各項津貼">NT${{ finalSalaryPreview.total_allowance?.toLocaleString() }}</el-descriptions-item>
             <el-descriptions-item label="應發合計">NT${{ finalSalaryPreview.gross_salary?.toLocaleString() }}</el-descriptions-item>
             <el-descriptions-item label="各項扣款">NT${{ finalSalaryPreview.total_deduction?.toLocaleString() }}</el-descriptions-item>
             <el-descriptions-item label="預估實發" :span="2">
@@ -799,5 +1217,47 @@ onMounted(async () => {
 .dialog-footer {
   display: flex;
   justify-content: flex-end;
+}
+
+.detail-layout {
+  display: flex;
+  gap: 16px;
+  min-height: 500px;
+}
+.detail-aside {
+  flex: 0 0 28%;
+  border-right: 1px solid var(--el-border-color-lighter);
+  padding-right: 16px;
+  text-align: center;
+}
+.detail-main {
+  flex: 1 1 72%;
+  min-width: 0;
+}
+.avatar-placeholder {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: var(--el-color-info-light-9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 8px auto 16px;
+}
+.emp-name {
+  margin: 0 0 12px;
+  font-size: 18px;
+}
+.emp-meta {
+  text-align: left;
+  font-size: 13px;
+  color: var(--el-text-color-regular);
+  line-height: 1.9;
+  padding: 0 4px;
+}
+.emp-meta .meta-label {
+  display: inline-block;
+  width: 48px;
+  color: var(--el-text-color-secondary);
 }
 </style>

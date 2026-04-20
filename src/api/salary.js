@@ -15,8 +15,13 @@ export const getSalaryBreakdown = (recordId) =>
 export const getSalaryFieldBreakdown = (recordId, field) =>
   api.get(`/salaries/${recordId}/field-breakdown?field=${field}`)
 
-export const manualAdjustSalary = (recordId, payload) =>
-  api.put(`/salaries/${recordId}/manual-adjust`, payload)
+export const manualAdjustSalary = (recordId, payload, version) => {
+  const config = {}
+  if (version != null) {
+    config.headers = { 'If-Match': `"${version}"` }
+  }
+  return api.put(`/salaries/${recordId}/manual-adjust`, payload, config)
+}
 
 export const getHistory = (params) => api.get('/salaries/history', { params })
 

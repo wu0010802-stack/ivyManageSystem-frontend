@@ -3,10 +3,14 @@ import {
   Calendar,
   CircleCheckFilled,
   Clock,
+  Document,
   Location,
   Setting,
   TrendCharts,
+  Trophy,
   User,
+  UserFilled,
+  Wallet,
 } from '@element-plus/icons-vue'
 import StatCard from '@/components/common/StatCard.vue'
 import { useDashboardSections } from '@/composables'
@@ -17,7 +21,6 @@ const {
   studentAttendanceSectionRef,
   anomaliesSectionRef,
   calendarSectionRef,
-  probationSectionRef,
   showAttendance,
   showApprovals,
   showCalendar,
@@ -27,10 +30,8 @@ const {
   studentCount,
   todayStats,
   attendanceAnomalies,
-  probationAlerts,
   studentAttendanceSummary,
   approvalSummary,
-  probationEmployees,
   todayDateStr,
   greeting,
   userName,
@@ -169,11 +170,35 @@ const {
               </div>
               <span>員工管理</span>
             </div>
+            <div class="action-item" @click="navigateTo('/students')">
+              <div class="action-circle action-circle--warning">
+                <el-icon :size="22"><UserFilled /></el-icon>
+              </div>
+              <span>學生管理</span>
+            </div>
             <div class="action-item" @click="navigateTo('/attendance')">
               <div class="action-circle action-circle--success">
                 <el-icon :size="22"><Clock /></el-icon>
               </div>
               <span>出勤查詢</span>
+            </div>
+            <div class="action-item" @click="navigateTo('/salary')">
+              <div class="action-circle action-circle--info">
+                <el-icon :size="22"><Wallet /></el-icon>
+              </div>
+              <span>薪資管理</span>
+            </div>
+            <div class="action-item" @click="navigateTo('/leaves')">
+              <div class="action-circle action-circle--purple">
+                <el-icon :size="22"><Document /></el-icon>
+              </div>
+              <span>請假管理</span>
+            </div>
+            <div class="action-item" @click="navigateTo('/activity/dashboard')">
+              <div class="action-circle action-circle--pink">
+                <el-icon :size="22"><Trophy /></el-icon>
+              </div>
+              <span>活動管理</span>
             </div>
             <div class="action-item" @click="navigateTo('/reports')">
               <div class="action-circle action-circle--danger">
@@ -341,77 +366,6 @@ const {
         </el-card>
         </div>
 
-        <!-- 試用期即將到期 -->
-        <div
-          v-if="showEmployees"
-          ref="probationSectionRef"
-          data-deferred-section="probation"
-        >
-        <el-card class="no-hover side-card mb-4">
-          <template #header>
-            <div class="card-header-row">
-              <span class="card-header-title">試用期即將到期</span>
-              <el-tag
-                v-if="probationAlerts?.next_month"
-                type="warning"
-                effect="plain"
-                size="small"
-              >
-                {{ probationAlerts.next_month }}
-              </el-tag>
-            </div>
-          </template>
-          <div v-if="!deferredSections.probation.loaded" class="dashboard-card-loading text-secondary">
-            正在整理試用期提醒...
-          </div>
-          <div v-else-if="probationEmployees.length === 0" class="events-empty text-secondary">
-            下個月沒有試用期到期員工
-          </div>
-          <div v-else class="probation-list">
-            <div v-for="emp in probationEmployees" :key="emp.id" class="probation-item">
-              <div class="probation-name">{{ emp.name }}</div>
-              <div style="display: flex; align-items: center; gap: 6px;">
-                <span class="probation-date text-secondary">{{ emp.probation_end_date }}</span>
-                <el-tag :type="emp.days_remaining <= 14 ? 'danger' : 'warning'" effect="plain" size="small">
-                  剩 {{ emp.days_remaining }} 天
-                </el-tag>
-              </div>
-            </div>
-          </div>
-          <el-button
-            v-if="probationEmployees.length > 0"
-            type="primary"
-            plain
-            size="small"
-            class="approval-btn"
-            @click="navigateTo('/employees')"
-          >
-            前往員工管理 →
-          </el-button>
-        </el-card>
-        </div>
-
-        <!-- 系統狀態 -->
-        <el-card class="no-hover side-card">
-          <template #header>
-            <span class="card-header-title">系統狀態</span>
-          </template>
-          <div class="system-status-list">
-            <div class="status-item">
-              <span>系統運行狀態</span>
-              <el-tag type="success" effect="dark" size="small">正常運行</el-tag>
-            </div>
-            <div class="status-item">
-              <span>資料庫連線</span>
-              <span class="status-ok"><span class="dot"></span> 正常</span>
-            </div>
-            <div class="status-item">
-              <span>上次備份時間</span>
-              <span class="text-secondary">今日 03:00</span>
-            </div>
-          </div>
-        </el-card>
-
       </el-col>
     </el-row>
   </div>
@@ -553,8 +507,14 @@ const {
 
 .action-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
-  gap: 8px 16px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px 16px;
+}
+
+@media (max-width: 640px) {
+  .action-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 .action-item {
@@ -591,11 +551,19 @@ const {
 
 .action-circle--primary { background: #e0e7ff; color: #4f46e5; }
 .action-circle--success { background: #dcfce7; color: #10b981; }
+.action-circle--warning { background: #fef3c7; color: #d97706; }
+.action-circle--info    { background: #e0f2fe; color: #0284c7; }
+.action-circle--purple  { background: #ede9fe; color: #7c3aed; }
+.action-circle--pink    { background: #fce7f3; color: #db2777; }
 .action-circle--danger  { background: #fee2e2; color: #ef4444; }
 .action-circle--neutral { background: #f1f5f9; color: #64748b; }
 
 .action-item:hover .action-circle--primary { background: #4f46e5; color: #fff; box-shadow: 0 4px 14px rgba(79,70,229,0.3); }
 .action-item:hover .action-circle--success { background: #10b981; color: #fff; box-shadow: 0 4px 14px rgba(16,185,129,0.3); }
+.action-item:hover .action-circle--warning { background: #d97706; color: #fff; box-shadow: 0 4px 14px rgba(217,119,6,0.3); }
+.action-item:hover .action-circle--info    { background: #0284c7; color: #fff; box-shadow: 0 4px 14px rgba(2,132,199,0.3); }
+.action-item:hover .action-circle--purple  { background: #7c3aed; color: #fff; box-shadow: 0 4px 14px rgba(124,58,237,0.3); }
+.action-item:hover .action-circle--pink    { background: #db2777; color: #fff; box-shadow: 0 4px 14px rgba(219,39,119,0.3); }
 .action-item:hover .action-circle--danger  { background: #ef4444; color: #fff; box-shadow: 0 4px 14px rgba(239,68,68,0.3); }
 .action-item:hover .action-circle--neutral { background: #64748b; color: #fff; box-shadow: 0 4px 14px rgba(100,116,139,0.3); }
 
@@ -741,56 +709,4 @@ const {
   gap: 3px;
 }
 
-/* ── 試用期 ── */
-.probation-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-
-.probation-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.probation-name { font-size: 13px; color: #1e293b; }
-.probation-date { font-size: 11px; }
-
-/* ── 系統狀態 ── */
-.system-status-list {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.status-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #f1f5f9;
-  font-size: 13px;
-}
-
-.status-item:last-child { border-bottom: none; padding-bottom: 0; }
-
-.status-item span:first-child { color: #64748b; }
-
-.status-ok {
-  display: flex;
-  align-items: center;
-  color: #10b981;
-  font-size: 13px;
-}
-
-.dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #10b981;
-  margin-right: 6px;
-  display: inline-block;
-}
 </style>

@@ -94,9 +94,6 @@ onMounted(fetchSalary)
           <el-descriptions-item label="底薪">
             NT$ {{ salaryData.salary.base_salary?.toLocaleString() || 0 }}
           </el-descriptions-item>
-          <el-descriptions-item label="津貼合計">
-            NT$ {{ salaryData.salary.total_allowances?.toLocaleString() || 0 }}
-          </el-descriptions-item>
           <el-descriptions-item label="獎金合計（不含主管紅利）">
             NT$ {{ salaryData.salary.total_bonus?.toLocaleString() || 0 }}
           </el-descriptions-item>
@@ -118,6 +115,9 @@ onMounted(fetchSalary)
           </el-descriptions-item>
           <el-descriptions-item label="健保費">
             -NT$ {{ salaryData.salary.health_insurance?.toLocaleString() || 0 }}
+          </el-descriptions-item>
+          <el-descriptions-item label="勞退自提">
+            -NT$ {{ salaryData.salary.pension_employee?.toLocaleString() || 0 }}
           </el-descriptions-item>
           <el-descriptions-item label="遲到扣款">
             -NT$ {{ salaryData.salary.late_deduction?.toLocaleString() || 0 }}

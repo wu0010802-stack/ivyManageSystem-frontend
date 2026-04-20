@@ -19,3 +19,8 @@ export const getTeacherOptions = () => api.get('/classrooms/teacher-options')
 export const getTeachers = getTeacherOptions
 
 export const getGrades = () => api.get('/grades')
+
+export const updateGrade = (id, payload) => api.patch(`/grades/${id}`, payload)
+
+export const getClassroomEnrollmentComposition = (id) =>
+  api.get(`/classrooms/${id}/enrollment-composition`)

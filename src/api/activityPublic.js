@@ -20,3 +20,14 @@ export const publicUpdateRegistration = (data) =>
   api.post('/activity/public/update', data)
 export const getPublicCourseVideos = () =>
   api.get('/activity/public/course-videos')
+
+export const publicConfirmPromotion = (registrationId, courseId, payload) =>
+  api.post(
+    `/activity/public/registrations/${registrationId}/courses/${courseId}/confirm-promotion`,
+    payload,
+  )
+export const publicDeclinePromotion = (registrationId, courseId, payload) =>
+  api.post(
+    `/activity/public/registrations/${registrationId}/courses/${courseId}/decline-promotion`,
+    payload,
+  )

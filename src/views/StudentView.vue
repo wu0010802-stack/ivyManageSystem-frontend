@@ -1,7 +1,7 @@
 <script setup>
 import { ref, reactive, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getStudents, createStudent, updateStudent, graduateStudent, bulkTransferStudents } from '@/api/students'
+import { getStudents } from '@/api/students'
 import { getClassrooms } from '@/api/classrooms'
 import { createDismissalCall, getDismissalCalls } from '@/api/dismissalCalls'
 import { ElMessage } from 'element-plus'
@@ -13,6 +13,8 @@ import { downloadFile } from '@/utils/download'
 import { getCurrentAcademicTerm, normalizeSchoolYear, buildSchoolYearOptions } from '@/utils/academic'
 import { STUDENT_STATUS_TAG_OPTIONS } from '@/utils/student'
 import BonusImpactPreview from '@/components/students/BonusImpactPreview.vue'
+import { useStudentStore } from '@/stores/student'
+import { domainBus, STUDENT_EVENTS } from '@/utils/domainBus'
 
 const route = useRoute()
 const router = useRouter()
@@ -48,11 +50,16 @@ const semesterOptions = [
 const graduateDialogVisible = ref(false)
 const graduateTarget = ref(null)
 const graduateFormRef = ref(null)
-const graduateForm = reactive({ graduation_date: '', status: '已畢業' })
+const graduateForm = reactive({ graduation_date: '', status: '已畢業', reason: '', notes: '' })
 const graduateRules = {
   graduation_date: [{ required: true, message: '請選擇離園日期', trigger: 'change' }],
   status: [{ required: true, message: '請選擇類型', trigger: 'change' }]
 }
+const GRADUATE_REASON_OPTIONS = {
+  已畢業: ['正常畢業'],
+  已轉出: ['家庭因素', '健康因素', '搬遷', '轉往他園', '其他'],
+}
+watch(() => graduateForm.status, () => { graduateForm.reason = '' })
 let _searchTimer = null
 watch(searchQuery, (val) => {
   clearTimeout(_searchTimer)
@@ -197,6 +204,8 @@ const openGraduateDialog = (row) => {
   graduateTarget.value = row
   graduateForm.graduation_date = ''
   graduateForm.status = '已畢業'
+  graduateForm.reason = ''
+  graduateForm.notes = ''
   graduateDialogVisible.value = true
 }
 
@@ -205,7 +214,8 @@ const submitGraduate = async () => {
   await graduateFormRef.value.validate(async (valid) => {
     if (!valid) return
     try {
-      await graduateStudent(graduateTarget.value.id, graduateForm)
+      const studentStore = useStudentStore()
+      await studentStore.graduateStudent(graduateTarget.value.id, graduateForm)
       ElMessage.success(`已將「${graduateTarget.value.name}」設為${graduateForm.status}`)
       graduateDialogVisible.value = false
       fetchStudents()
@@ -241,9 +251,11 @@ const submitTransfer = async () => {
     return
   }
   try {
-    await bulkTransferStudents({
+    const studentStore = useStudentStore()
+    await studentStore.bulkTransfer({
       student_ids: selectedStudents.value.map((student) => student.id),
       target_classroom_id: transferTargetClassroomId.value,
+      source_classroom_id: transferSourceClassroomId.value,
     })
     ElMessage.success('學生轉班成功')
     transferDialogVisible.value = false
@@ -286,7 +298,10 @@ const { dialogVisible, isEdit, openCreate: handleAdd, openEdit: handleEdit, clos
 
 const { confirmDelete: handleDelete, deleting: deleteLoading } = useConfirmDelete({
   endpoint: '/students',
-  onSuccess: fetchStudents,
+  onSuccess: (row) => {
+    domainBus.emit(STUDENT_EVENTS.DELETED, { id: row?.id })
+    fetchStudents()
+  },
   successMsg: '刪除成功',
 })
 
@@ -340,10 +355,11 @@ const submitForm = async () => {
   await formRef.value.validate(async (valid) => {
     if (valid) {
       try {
+        const studentStore = useStudentStore()
         if (isEdit.value) {
-          await updateStudent(form.id, form)
+          await studentStore.updateStudent(form.id, form)
         } else {
-          await createStudent(form)
+          await studentStore.createStudent(form)
         }
         ElMessage.success(isEdit.value ? '更新成功' : '新增成功')
         closeDialog()
@@ -387,6 +403,19 @@ watch(
     await handleRouteAction()
   },
 )
+
+const onBusRefresh = () => fetchStudents()
+const busEvents = [
+  STUDENT_EVENTS.UPDATED,
+  STUDENT_EVENTS.CREATED,
+  STUDENT_EVENTS.DELETED,
+  STUDENT_EVENTS.TRANSFERRED,
+  STUDENT_EVENTS.LIFECYCLE_CHANGED,
+]
+busEvents.forEach((evt) => domainBus.on(evt, onBusRefresh))
+onUnmounted(() => {
+  busEvents.forEach((evt) => domainBus.off(evt, onBusRefresh))
+})
 
 onMounted(async () => {
   applyRouteContext()
@@ -668,6 +697,14 @@ onMounted(async () => {
             value-format="YYYY-MM-DD"
             style="width: 100%"
           />
+        </el-form-item>
+        <el-form-item label="原因">
+          <el-select v-model="graduateForm.reason" placeholder="選擇原因（選填）" clearable style="width: 100%">
+            <el-option v-for="r in GRADUATE_REASON_OPTIONS[graduateForm.status] || []" :key="r" :label="r" :value="r" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="備註">
+          <el-input v-model="graduateForm.notes" type="textarea" :rows="2" placeholder="補充說明（選填）" />
         </el-form-item>
       </el-form>
       <BonusImpactPreview

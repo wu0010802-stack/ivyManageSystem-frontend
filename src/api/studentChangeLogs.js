@@ -14,3 +14,6 @@ export const updateChangeLog = (id, data) =>
   api.put(`/students/change-logs/${id}`, data)
 
 export const deleteChangeLog = (id) => api.delete(`/students/change-logs/${id}`)
+
+export const exportChangeLogs = (params) =>
+  api.get('/students/change-logs/export', { params, responseType: 'blob' })

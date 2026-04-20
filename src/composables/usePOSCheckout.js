@@ -8,7 +8,13 @@ import {
   getRegistrations,
   posCheckout,
 } from '@/api/activity'
-import { CASH_METHOD, LARGE_AMOUNT_THRESHOLD, POS_PAYMENT_METHODS, formatTWD } from '@/constants/pos'
+import {
+  CASH_METHOD,
+  LARGE_AMOUNT_THRESHOLD,
+  POS_PAYMENT_METHODS,
+  computeOwed,
+  formatTWD,
+} from '@/constants/pos'
 import { useAcademicTermStore } from '@/stores/academicTerm'
 
 /**
@@ -142,7 +148,7 @@ export function usePOSCheckout() {
           : ['partial', 'unpaid']
         const baseParams = {
           payment_status: undefined,
-          limit: 50,
+          limit: 200,
           school_year: termStore.school_year,
           semester: termStore.semester,
         }
@@ -159,6 +165,9 @@ export function usePOSCheckout() {
         for (const item of items) {
           if (seen.has(item.id)) continue
           seen.add(item.id)
+          // 過濾空報名（無 enrolled 課程且無用品），避免後端 unpaid=paid_amount==0 漏擋
+          const total = Number(item.total_amount || 0)
+          if (total <= 0) continue
           merged.push(item)
         }
         merged.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))
@@ -186,12 +195,19 @@ export function usePOSCheckout() {
     runSearch()
   })
 
+  // 切換 mode（依學生 / 依日期）時清掉對側資料並重新拉對應資料
+  watch(mode, (next, prev) => {
+    if (next === prev) return
+    if (next === 'by-student') searchRegistrations.value = []
+    else searchGroups.value = []
+    selectedItem.value = null
+    runSearch()
+  })
+
   // ── 選取（單筆） ─────────────────────────────────────────────
   function buildSelection(row, studentName) {
     const paid = Number(row.paid_amount || 0)
-    const owed = Number(
-      row.owed ?? Math.max(0, (row.total_amount || 0) - paid)
-    )
+    const owed = Number(row.owed ?? computeOwed(row.total_amount, paid))
     // 繳費：預填欠費；退費：預填已繳金額
     const defaultAmount = isRefundMode.value ? paid : owed
     return {
@@ -350,9 +366,13 @@ export function usePOSCheckout() {
     window.print()
   }
 
+  // 重印防抖：避免連點兩次送兩次列印
+  let reprinting = false
+
   /** 從歷史交易重印收據（重新指定 lastReceipt 並觸發列印） */
   async function reprintTransaction(tx) {
-    if (!tx) return
+    if (!tx || reprinting) return
+    reprinting = true
     lastReceipt.value = {
       receipt_no: tx.receipt_no,
       type: tx.type,
@@ -370,7 +390,14 @@ export function usePOSCheckout() {
     }
     receiptDialogVisible.value = true
     await nextTick()
-    printReceipt()
+    try {
+      printReceipt()
+    } finally {
+      // 略等一小段時間再解鎖，避免印表機尚未結束就被觸發第二次
+      setTimeout(() => {
+        reprinting = false
+      }, 1500)
+    }
   }
 
   // ── 日結 ──────────────────────────────────────────────────────

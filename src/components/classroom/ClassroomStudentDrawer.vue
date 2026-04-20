@@ -1,10 +1,11 @@
 <script setup>
 import { ref, computed } from 'vue'
-import { Delete, Edit, Plus, SwitchButton, Search, Warning } from '@element-plus/icons-vue'
+import { Delete, Edit, Plus, Search, Warning, Document } from '@element-plus/icons-vue'
 import { hasPermission } from '@/utils/auth'
 import { useConfirmDelete } from '@/composables'
+import { domainBus, STUDENT_EVENTS } from '@/utils/domainBus'
 import StudentCrudDialog from './StudentCrudDialog.vue'
-import GraduateDialog from './GraduateDialog.vue'
+import StudentRecordsQuickDrawer from '@/components/student/StudentRecordsQuickDrawer.vue'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -21,8 +22,6 @@ const studentGenderFilter = ref('')
 const studentDialogVisible = ref(false)
 const isStudentEdit = ref(false)
 const currentStudentData = ref(null)
-const graduateDialogVisible = ref(false)
-const graduateTarget = ref(null)
 
 const showInactive = ref(false)
 
@@ -81,19 +80,24 @@ const handleStudentEdit = (student) => {
   studentDialogVisible.value = true
 }
 
-const openGraduateDialog = (student) => {
-  graduateTarget.value = student
-  graduateDialogVisible.value = true
-}
-
 const { confirmDelete: handleStudentDelete } = useConfirmDelete({
   endpoint: '/students',
-  onSuccess: () => emit('student-updated'),
+  onSuccess: (row) => {
+    domainBus.emit(STUDENT_EVENTS.DELETED, { id: row?.id })
+    emit('student-updated')
+  },
   successMsg: '刪除成功',
 })
 
+const recordsDrawerVisible = ref(false)
+const recordsTargetStudent = ref(null)
+const openRecordsDrawer = (student) => {
+  recordsTargetStudent.value = student
+  recordsDrawerVisible.value = true
+}
+
 const onStudentSaved = () => emit('student-updated')
-const onGraduated = () => emit('student-updated')
+const onChangeLogSaved = () => emit('student-updated')
 const close = () => emit('update:visible', false)
 </script>
 
@@ -221,17 +225,19 @@ const close = () => emit('update:visible', false)
                 </template>
               </el-table-column>
               <el-table-column prop="parent_phone" label="家長電話" min-width="110" />
-              <el-table-column v-if="canWriteStudents" label="操作" width="110" align="center">
+              <el-table-column label="操作" width="120" align="center">
                 <template #default="{ row }">
-                  <el-tooltip content="編輯" placement="top">
-                    <el-button size="small" :icon="Edit" type="primary" plain circle @click="handleStudentEdit(row)" />
+                  <el-tooltip content="查看紀錄" placement="top">
+                    <el-button size="small" :icon="Document" type="info" plain circle @click="openRecordsDrawer(row)" />
                   </el-tooltip>
-                  <el-tooltip content="畢業/轉出" placement="top">
-                    <el-button size="small" :icon="SwitchButton" type="warning" plain circle @click="openGraduateDialog(row)" />
-                  </el-tooltip>
-                  <el-tooltip content="刪除" placement="top">
-                    <el-button size="small" :icon="Delete" type="danger" plain circle @click="handleStudentDelete(row)" />
-                  </el-tooltip>
+                  <template v-if="canWriteStudents">
+                    <el-tooltip content="編輯" placement="top">
+                      <el-button size="small" :icon="Edit" type="primary" plain circle @click="handleStudentEdit(row)" />
+                    </el-tooltip>
+                    <el-tooltip content="刪除" placement="top">
+                      <el-button size="small" :icon="Delete" type="danger" plain circle @click="handleStudentDelete(row)" />
+                    </el-tooltip>
+                  </template>
                 </template>
               </el-table-column>
             </el-table>
@@ -252,11 +258,11 @@ const close = () => emit('update:visible', false)
       @saved="onStudentSaved"
     />
 
-    <!-- 畢業/轉出 Dialog -->
-    <GraduateDialog
-      v-model:visible="graduateDialogVisible"
-      :student="graduateTarget"
-      @graduated="onGraduated"
+    <!-- 學生紀錄快速抽屜 -->
+    <StudentRecordsQuickDrawer
+      v-model:visible="recordsDrawerVisible"
+      :student="recordsTargetStudent"
+      @lifecycle-changed="onChangeLogSaved"
     />
   </el-dialog>
 </template>

@@ -68,8 +68,8 @@
 import { reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { INCIDENT_TYPES, SEVERITIES } from '@/constants/studentRecords'
-import { createIncident, updateIncident } from '@/api/studentIncidents'
 import { getStudents } from '@/api/students'
+import { useStudentRecordsStore } from '@/stores/studentRecords'
 import { apiError } from '@/utils/error'
 
 const props = defineProps({
@@ -173,14 +173,13 @@ const submit = async () => {
       action_taken: form.action_taken || null,
       parent_notified: form.parent_notified,
     }
+    const recordsStore = useStudentRecordsStore()
     let saved
     if (props.mode === 'create') {
-      const res = await createIncident(payload)
-      saved = res.data
+      saved = await recordsStore.createRecord('incident', payload)
       ElMessage.success('新增成功')
     } else {
-      const res = await updateIncident(props.initial.id, payload)
-      saved = res.data
+      saved = await recordsStore.updateRecord('incident', props.initial.id, payload)
       ElMessage.success('更新成功')
     }
     emit('submitted', { payload, saved })

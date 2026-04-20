@@ -228,10 +228,15 @@ describe('SalaryView', () => {
     await flushPromises()
     await nextTick()
 
-    expect(manualAdjustSalary).toHaveBeenCalledWith(8, expect.objectContaining({
-      festival_bonus: 1800,
-      leave_deduction: 500,
-    }))
+    expect(manualAdjustSalary).toHaveBeenCalledWith(
+      8,
+      expect.objectContaining({
+        festival_bonus: 1800,
+        leave_deduction: 500,
+      }),
+      // 第 3 參數為 version（If-Match 樂觀鎖），此測試資料未帶 version → null
+      null,
+    )
     expect(row.festival_bonus).toBe(1800)
     expect(row.leave_deduction).toBe(500)
     expect(row.total_deductions).toBe(3300)

@@ -79,6 +79,13 @@ export function clearAuth(options = {}) {
   cachedUserInfo = null
   localStorage.removeItem(USER_INFO_KEY)
   _clearSessionValidatedAt()
+  // 公開報名草稿含 PII（姓名/生日/手機），登出時一併清除
+  try {
+    sessionStorage.removeItem('activity_draft')
+    localStorage.removeItem('activity_draft')  // 清舊版殘留
+  } catch { /* silent */ }
+  // 離線點名佇列：登出時清乾淨，避免共享裝置上殘留前一位教師的學生名單
+  _purgeOfflineQueue()
   // 通知後端清除 httpOnly Cookie（fire-and-forget）
   if (notifyServer) {
     try {
@@ -89,6 +96,31 @@ export function clearAuth(options = {}) {
       }).catch(() => { /* silent */ })
     } catch { /* silent */ }
   }
+  // 共享裝置：清掉 SW 為此 user 快取的 Portal 私人資料
+  // （薪資、班級名單、公告等），避免下一位登入者看到上一位的內容。
+  _purgePortalCaches()
+}
+
+const _PORTAL_USER_CACHES = [
+  'portal-class-attendance',
+  'portal-my-students',
+  'portal-readonly',
+  'portal-api',
+]
+
+function _purgePortalCaches() {
+  if (typeof caches === 'undefined' || !caches.delete) return
+  // fire-and-forget：不阻塞登出流程
+  Promise.all(
+    _PORTAL_USER_CACHES.map((name) => caches.delete(name).catch(() => false))
+  ).catch(() => { /* silent */ })
+}
+
+function _purgeOfflineQueue() {
+  // 動態 import 避免冷啟動就載入 idb 函式庫
+  import('@/utils/offlineQueue')
+    .then((mod) => mod.clearAll?.().catch(() => {}))
+    .catch(() => { /* silent */ })
 }
 
 export function clearMustChangePassword() {

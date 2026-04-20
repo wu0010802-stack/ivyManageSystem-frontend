@@ -180,17 +180,31 @@
               :value="t.key"
             />
           </el-select>
-          <el-button type="primary" size="small" @click="openChangeLogCreate">＋ 新增異動</el-button>
+          <el-button type="primary" size="small" @click="openChangeLogCreate">＋ 補登異動</el-button>
+          <el-text type="info" size="small" style="margin-left:auto">
+            補登僅寫入歷史紀錄；狀態變更請用上方「變更狀態」
+          </el-text>
         </div>
         <el-table :data="changeLogList" v-loading="changeLogLoading" border empty-text="無異動紀錄">
           <el-table-column label="異動日期" prop="event_date" width="110" />
           <el-table-column label="異動類型" prop="event_type" width="100" />
+          <el-table-column label="來源" width="80">
+            <template #default="{ row }">
+              <el-tag v-if="row.source === 'lifecycle'" size="small" type="info">系統</el-tag>
+              <el-tag v-else size="small" effect="plain">補登</el-tag>
+            </template>
+          </el-table-column>
           <el-table-column label="原因" prop="reason" width="130" />
           <el-table-column label="備註" prop="notes" min-width="200" show-overflow-tooltip />
           <el-table-column label="操作" width="140" fixed="right">
             <template #default="{ row }">
-              <el-button size="small" text @click="openChangeLogEdit(row)">編輯</el-button>
-              <el-button size="small" text type="danger" @click="handleChangeLogDelete(row)">刪除</el-button>
+              <template v-if="(row.source || 'manual') === 'manual'">
+                <el-button size="small" text @click="openChangeLogEdit(row)">編輯</el-button>
+                <el-button size="small" text type="danger" @click="handleChangeLogDelete(row)">刪除</el-button>
+              </template>
+              <el-tooltip v-else content="系統自動產生，稽核保護" placement="top">
+                <el-text type="info" size="small">—</el-text>
+              </el-tooltip>
             </template>
           </el-table-column>
         </el-table>
@@ -225,7 +239,7 @@
         <div class="quick-links">
           <el-button @click="goTo('/student-attendance')">學生出席紀錄</el-button>
           <el-button @click="goTo('/fees')">學費管理</el-button>
-          <el-button @click="goTo('/student-records')">學生紀錄總覽</el-button>
+          <el-button @click="goTo('/classrooms')">班級學生管理</el-button>
           <el-button @click="goTo('/students')">回到學生列表</el-button>
         </div>
       </el-tab-pane>

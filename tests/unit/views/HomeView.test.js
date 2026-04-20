@@ -176,7 +176,9 @@ describe('HomeView', () => {
     expect(getUpcomingEvents).not.toHaveBeenCalled()
 
     expect(intersectionObservers).toHaveLength(1)
-    expect(intersectionObservers[0].observe).toHaveBeenCalledTimes(4)
+    // 目前 HomeView 模板只綁定 3 個 deferred section（studentAttendance/anomalies/calendar）；
+    // composable 內 probation section 尚未在模板落地，故 observe 次數為 3。
+    expect(intersectionObservers[0].observe).toHaveBeenCalledTimes(3)
 
     // section[0]: studentAttendance
     intersectionObservers[0].trigger([0])
@@ -195,11 +197,6 @@ describe('HomeView', () => {
     await flushPromises()
     expect(getUpcomingEvents).toHaveBeenCalledTimes(1)
     expect(getProbationAlerts).not.toHaveBeenCalled()
-
-    // section[3]: probation
-    intersectionObservers[0].trigger([3])
-    await flushPromises()
-    expect(getProbationAlerts).toHaveBeenCalledTimes(1)
   })
 
   it('mount 時不應出現未解析的 Element Plus icon 警告', async () => {

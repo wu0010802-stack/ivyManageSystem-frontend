@@ -14,7 +14,7 @@ export const POS_PAYMENT_METHODS = [
 
 export const POS_MODES = [
   { value: 'by-student', label: '依學生' },
-  { value: 'by-registration', label: '依單筆' },
+  { value: 'by-registration', label: '依日期' },
 ]
 
 export const CASH_METHOD = '現金'
@@ -26,6 +26,13 @@ export const formatTWD = (n) => {
   if (n == null || Number.isNaN(Number(n))) return '—'
   return `NT$ ${Number(n).toLocaleString('zh-Hant')}`
 }
+
+/**
+ * 統一欠費計算：各頁面都應透過此 helper 以保持規則一致。
+ * 若之後後端調整 derive（例如加上 offline_paid 扣減），只改這裡即可。
+ */
+export const computeOwed = (total, paid) =>
+  Math.max(0, (Number(total) || 0) - (Number(paid) || 0))
 
 // 中文大寫金額（收據用）：1500 → 壹仟伍佰元整
 const _CN_DIGITS = ['零', '壹', '貳', '參', '肆', '伍', '陸', '柒', '捌', '玖']
