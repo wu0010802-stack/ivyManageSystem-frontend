@@ -85,6 +85,49 @@
         <div class="error-message">{{ searchError }}</div>
       </section>
 
+      <!-- 候補已升正式待確認 -->
+      <section v-if="pendingPromotions.length > 0" class="result-section">
+        <div class="result-header promotion-header">
+          <h2>🎉 您有候補已升為正式</h2>
+        </div>
+        <div class="info-hint promotion-hint">
+          <strong>須於期限前確認：</strong>請於各項目截止時間前完成確認，
+          逾期系統將自動釋出給下一位候補。
+        </div>
+        <div
+          v-for="item in pendingPromotions"
+          :key="`pending-${item.course_id}`"
+          class="promotion-card"
+        >
+          <div class="promotion-card-header">
+            <span class="promotion-course-name">{{ item.name }}</span>
+            <span class="promotion-price">${{ item.price }}</span>
+          </div>
+          <div class="promotion-card-deadline">
+            截止：{{ formatDeadline(item.confirm_deadline) }}
+            <span class="promotion-countdown">（{{ formatCountdown(item.confirm_deadline) }}）</span>
+          </div>
+          <div class="promotion-card-actions">
+            <button
+              type="button"
+              class="btn btn-primary btn-sm"
+              :disabled="promotionSubmitting === item.course_id"
+              @click="handleConfirmPromotion(item)"
+            >
+              {{ promotionSubmitting === item.course_id ? '處理中…' : '確認參加' }}
+            </button>
+            <button
+              type="button"
+              class="btn btn-outline btn-sm"
+              :disabled="promotionSubmitting === item.course_id"
+              @click="handleDeclinePromotion(item)"
+            >
+              放棄此位
+            </button>
+          </div>
+        </div>
+      </section>
+
       <!-- 結果編輯區 -->
       <section v-if="queryResult" class="result-section">
         <div class="result-header">
@@ -111,6 +154,23 @@
             <option value="" disabled>請選擇班級</option>
             <option v-for="cls in classes" :key="cls" :value="cls">{{ cls }}</option>
           </select>
+        </div>
+
+        <div class="field-group">
+          <label for="editNewPhone">家長手機（如需變更請填寫新號碼）</label>
+          <input
+            id="editNewPhone"
+            v-model="editForm.new_parent_phone"
+            type="tel"
+            class="input-text"
+            :class="{ invalid: newPhoneTouched && !newPhoneValid }"
+            placeholder="留空表示不變更"
+            maxlength="15"
+            @blur="newPhoneTouched = true"
+          />
+          <div v-if="newPhoneTouched && !newPhoneValid" class="validation-msg error">
+            請輸入 09 開頭的 10 碼手機號碼
+          </div>
         </div>
 
         <div class="field-group">
@@ -185,6 +245,8 @@ import { ref, reactive, computed, onMounted, watch } from 'vue'
 import {
   publicQueryRegistration,
   publicUpdateRegistration,
+  publicConfirmPromotion,
+  publicDeclinePromotion,
 } from '@/api/activityPublic'
 import { usePublicActivityOptions } from '@/composables/usePublicActivityOptions'
 import { toggleArrayItem } from '@/utils/arrayUtils'
@@ -218,8 +280,14 @@ const editForm = reactive({
   class_name: '',
   selectedCourses: [],
   selectedSupplies: [],
+  new_parent_phone: '',
 })
 const editSubmitting = ref(false)
+const newPhoneTouched = ref(false)
+const newPhoneValid = computed(() => {
+  const raw = normalizeMobile(editForm.new_parent_phone)
+  return raw === '' || TW_MOBILE_RE.test(raw)
+})
 
 const toasts = ref([])
 let toastSeq = 0
@@ -250,10 +318,95 @@ const birthdayValid = computed(() => {
 function statusBadgeFor(name) {
   if (!queryResult.value) return ''
   const entry = (queryResult.value.courses || []).find((c) => c.name === name)
-  if (entry && entry.status === 'waitlist') {
+  if (!entry) return ''
+  if (entry.status === 'waitlist') {
     return `候補第 ${entry.waitlist_position ?? '?'} 位`
   }
+  if (entry.status === 'promoted_pending') {
+    return '已升正式（待確認）'
+  }
   return ''
+}
+
+// 候補已升正式待確認清單（供獨立確認區塊使用）
+const pendingPromotions = computed(() => {
+  if (!queryResult.value) return []
+  return (queryResult.value.courses || []).filter(
+    (c) => c.status === 'promoted_pending' && c.confirm_deadline,
+  )
+})
+
+function formatDeadline(iso) {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return '—'
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  const hh = String(d.getHours()).padStart(2, '0')
+  const mm = String(d.getMinutes()).padStart(2, '0')
+  return `${y}-${m}-${day} ${hh}:${mm}`
+}
+
+function formatCountdown(iso) {
+  if (!iso) return ''
+  const diffMs = new Date(iso).getTime() - Date.now()
+  if (diffMs <= 0) return '已逾期'
+  const hours = Math.floor(diffMs / 3600000)
+  const mins = Math.floor((diffMs % 3600000) / 60000)
+  return hours >= 1 ? `剩 ${hours} 小時` : `剩 ${mins} 分鐘`
+}
+
+const promotionSubmitting = ref(null)
+
+async function handleConfirmPromotion(item) {
+  promotionSubmitting.value = item.course_id
+  try {
+    const phonePayload = normalizeMobile(queryForm.parent_phone)
+    const res = await publicConfirmPromotion(queryResult.value.id, item.course_id, {
+      name: queryResult.value.name,
+      birthday: queryResult.value.birthday || queryForm.birthday,
+      parent_phone: phonePayload,
+    })
+    showToast(res?.data?.message || '已確認升為正式', 'success')
+    // 重新查詢以更新狀態
+    const refreshed = await publicQueryRegistration(
+      queryResult.value.name,
+      queryResult.value.birthday || queryForm.birthday,
+      phonePayload,
+    )
+    hydrateResult(refreshed.data)
+  } catch (err) {
+    showToast(err.response?.data?.detail || '確認失敗', 'error')
+  } finally {
+    promotionSubmitting.value = null
+  }
+}
+
+async function handleDeclinePromotion(item) {
+  if (!window.confirm(`確定要放棄「${item.name}」的正式名額？\n放棄後將遞補給下一位候補，無法復原。`)) {
+    return
+  }
+  promotionSubmitting.value = item.course_id
+  try {
+    const phonePayload = normalizeMobile(queryForm.parent_phone)
+    const res = await publicDeclinePromotion(queryResult.value.id, item.course_id, {
+      name: queryResult.value.name,
+      birthday: queryResult.value.birthday || queryForm.birthday,
+      parent_phone: phonePayload,
+    })
+    showToast(res?.data?.message || '已放棄該名額', 'warning')
+    const refreshed = await publicQueryRegistration(
+      queryResult.value.name,
+      queryResult.value.birthday || queryForm.birthday,
+      phonePayload,
+    )
+    hydrateResult(refreshed.data)
+  } catch (err) {
+    showToast(err.response?.data?.detail || '放棄失敗', 'error')
+  } finally {
+    promotionSubmitting.value = null
+  }
 }
 
 async function handleQuery() {
@@ -288,6 +441,8 @@ function hydrateResult(data) {
   editForm.selectedSupplies = Array.isArray(data.supplies)
     ? data.supplies.map((s) => (typeof s === 'string' ? s : s.name))
     : []
+  editForm.new_parent_phone = ''
+  newPhoneTouched.value = false
 }
 
 async function handleSaveChanges() {
@@ -295,6 +450,15 @@ async function handleSaveChanges() {
     showToast('請選擇班級', 'error')
     return
   }
+
+  const oldPhone = normalizeMobile(queryForm.parent_phone)
+  const newPhoneRaw = normalizeMobile(editForm.new_parent_phone)
+  if (newPhoneRaw && !TW_MOBILE_RE.test(newPhoneRaw)) {
+    newPhoneTouched.value = true
+    showToast('新手機號碼格式錯誤', 'error')
+    return
+  }
+  const phoneWillChange = newPhoneRaw && newPhoneRaw !== oldPhone
 
   editSubmitting.value = true
   try {
@@ -307,22 +471,30 @@ async function handleSaveChanges() {
       return { name, price: String(s?.price ?? 0) }
     })
 
-    const phonePayload = normalizeMobile(queryForm.parent_phone)
-    const res = await publicUpdateRegistration({
+    const payload = {
       id: queryResult.value.id,
       name: queryResult.value.name,
       birthday: queryResult.value.birthday || queryForm.birthday,
-      parent_phone: phonePayload,
+      parent_phone: oldPhone,
       class: editForm.class_name,
       courses: coursesPayload,
       supplies: suppliesPayload,
-    })
+    }
+    if (phoneWillChange) {
+      payload.new_parent_phone = newPhoneRaw
+    }
+    const res = await publicUpdateRegistration(payload)
 
     showToast(res?.data?.message || '資料更新成功！', 'success')
+    // 若家長已更新電話，後續查詢需用新號碼，同步回填查詢表單
+    const effectivePhone = phoneWillChange ? newPhoneRaw : oldPhone
+    if (phoneWillChange) {
+      queryForm.parent_phone = newPhoneRaw
+    }
     const refreshed = await publicQueryRegistration(
       queryResult.value.name,
       queryResult.value.birthday || queryForm.birthday,
-      phonePayload
+      effectivePhone
     )
     hydrateResult(refreshed.data)
   } catch (err) {
@@ -596,6 +768,47 @@ onMounted(async () => {
   border-top: 1px dashed var(--color-border);
 }
 .action-buttons .btn { flex: 1; max-width: 240px; }
+
+/* 候補升正式待確認區塊 */
+.result-header.promotion-header {
+  background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+}
+.info-hint.promotion-hint {
+  background: #FEF3C7;
+  border-color: #F59E0B;
+  color: #92400E;
+}
+.promotion-card {
+  background: var(--color-surface);
+  border: 1.5px solid #F59E0B;
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  margin-bottom: var(--space-3);
+}
+.promotion-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-2);
+}
+.promotion-course-name { font-weight: 700; font-size: var(--fs-md); color: var(--color-text); }
+.promotion-price { color: var(--color-text-muted); font-size: var(--fs-sm); }
+.promotion-card-deadline {
+  font-size: var(--fs-sm);
+  color: var(--color-warning);
+  margin-bottom: var(--space-3);
+}
+.promotion-countdown { font-weight: 600; }
+.promotion-card-actions {
+  display: flex;
+  gap: var(--space-3);
+}
+.btn.btn-sm {
+  min-height: 40px;
+  padding: 8px 16px;
+  font-size: var(--fs-sm);
+  flex: 1;
+}
 
 .error-message {
   background: var(--color-danger-soft);
