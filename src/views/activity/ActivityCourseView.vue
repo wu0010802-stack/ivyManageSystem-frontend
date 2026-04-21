@@ -18,7 +18,14 @@
         <template #default="{ row }">{{ row.sessions ?? '-' }}</template>
       </el-table-column>
       <el-table-column label="容量" width="70" align="center">
-        <template #default="{ row }">{{ row.enrolled }}/{{ row.capacity }}</template>
+        <template #default="{ row }">
+          <el-button
+            v-if="row.enrolled > 0"
+            link type="primary" size="small"
+            @click="openEnrolled(row)"
+          >{{ row.enrolled }}/{{ row.capacity }}</el-button>
+          <span v-else>0/{{ row.capacity }}</span>
+        </template>
       </el-table-column>
       <el-table-column label="候補" width="70" align="center">
         <template #default="{ row }">
@@ -113,6 +120,23 @@
     </div>
   </el-drawer>
 
+  <!-- 正式報名名單 Drawer -->
+  <el-drawer
+    v-model="enrolledDrawer"
+    :title="`報名名單 — ${enrolledCourse?.name ?? ''}`"
+    direction="rtl" size="420px" destroy-on-close
+  >
+    <el-table :data="enrolledItems" v-loading="enrolledLoading" border size="small">
+      <el-table-column label="序號" prop="position" width="60" align="center" />
+      <el-table-column label="學生姓名" prop="student_name" min-width="90" />
+      <el-table-column label="班級" prop="class_name" width="90" />
+    </el-table>
+    <div v-if="!enrolledLoading && enrolledItems.length === 0"
+         style="text-align:center; padding: 32px; color: #94a3b8;">
+      目前無正式報名學生
+    </div>
+  </el-drawer>
+
   <!-- 複製上學期課程對話框 -->
   <el-dialog v-model="copyDialogVisible" title="複製上學期課程" width="460px" destroy-on-close>
     <el-form :model="copyForm" label-width="100px" size="default">
@@ -149,7 +173,7 @@ import { ref, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { CopyDocument, VideoPlay } from '@element-plus/icons-vue'
 import { copyCoursesFromPrevious, getCourses, createCourse, updateCourse, deleteCourse,
-         getCourseWaitlist, promoteWaitlist } from '@/api/activity'
+         getCourseWaitlist, getCourseEnrolled, promoteWaitlist } from '@/api/activity'
 import AcademicTermSelector from '@/components/common/AcademicTermSelector.vue'
 import { useAcademicTermStore } from '@/stores/academicTerm'
 
@@ -181,6 +205,25 @@ const waitlistCourse = ref(null)
 const waitlistItems = ref([])
 const waitlistLoading = ref(false)
 const promotingId = ref(null)
+
+const enrolledDrawer = ref(false)
+const enrolledCourse = ref(null)
+const enrolledItems = ref([])
+const enrolledLoading = ref(false)
+
+async function openEnrolled(row) {
+  enrolledCourse.value = { id: row.id, name: row.name }
+  enrolledDrawer.value = true
+  enrolledLoading.value = true
+  try {
+    const res = await getCourseEnrolled(row.id)
+    enrolledItems.value = res.data.items
+  } catch {
+    ElMessage.error('載入報名名單失敗')
+  } finally {
+    enrolledLoading.value = false
+  }
+}
 
 async function openWaitlist(row) {
   waitlistCourse.value = { id: row.id, name: row.name }

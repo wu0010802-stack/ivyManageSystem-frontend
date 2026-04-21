@@ -62,6 +62,7 @@ export const exportRegistrations = (params) =>
 export const getCourses = (params = {}) => api.get('/activity/courses', { params })
 export const getCourseDetail = (id) => api.get(`/activity/courses/${id}`)
 export const getCourseWaitlist = (courseId) => api.get(`/activity/courses/${courseId}/waitlist`)
+export const getCourseEnrolled = (courseId) => api.get(`/activity/courses/${courseId}/enrolled`)
 export const createCourse = (data) => api.post('/activity/courses', data)
 export const updateCourse = (id, data) => api.put(`/activity/courses/${id}`, data)
 export const deleteCourse = (id) => api.delete(`/activity/courses/${id}`)
