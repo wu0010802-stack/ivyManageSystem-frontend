@@ -26,3 +26,18 @@ export const manualAdjustSalary = (recordId, payload, version) => {
 export const getHistory = (params) => api.get('/salaries/history', { params })
 
 export const simulateSalary = (payload) => api.post('/salaries/simulate', payload)
+
+export const listSalarySnapshots = (year, month, employeeId) => {
+  const params = { year, month }
+  if (employeeId != null) params.employee_id = employeeId
+  return api.get('/salaries/snapshots', { params })
+}
+
+export const getSalarySnapshot = (snapshotId) =>
+  api.get(`/salaries/snapshots/${snapshotId}`)
+
+export const createManualSnapshot = (year, month, payload = {}) =>
+  api.post(`/salaries/snapshots?year=${year}&month=${month}`, payload)
+
+export const getSnapshotDiff = (snapshotId) =>
+  api.get(`/salaries/snapshots/${snapshotId}/diff`)

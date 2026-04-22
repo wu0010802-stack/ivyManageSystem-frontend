@@ -2,11 +2,12 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { calculate, getFestivalBonus, getRecords, getSalaryFieldBreakdown, manualAdjustSalary } from '@/api/salary'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, InfoFilled, SuccessFilled } from '@element-plus/icons-vue'
+import { Search, InfoFilled, SuccessFilled, Picture } from '@element-plus/icons-vue'
 import BonusConfigPanel from './salary/BonusConfigPanel.vue'
 import SalaryHistoryPanel from './salary/SalaryHistoryPanel.vue'
 import SalarySimulatePanel from './salary/SalarySimulatePanel.vue'
 import SalaryLogicPanel from './salary/SalaryLogicPanel.vue'
+import SalarySnapshotDialog from './salary/SalarySnapshotDialog.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import { apiError } from '@/utils/error'
 import { downloadFile } from '@/utils/download'
@@ -46,6 +47,7 @@ const MONEY_KEYS = new Set([
   'ruleAmount',
   'penalty',
 ])
+const showSnapshotDialog = ref(false)
 const showEditDialog = ref(false)
 const editLoading = ref(false)
 const editingRow = ref(null)
@@ -334,6 +336,9 @@ onMounted(() => {
             <el-button type="primary" :loading="bonusLoading" @click="fetchFestivalBonus">節慶獎金明細</el-button>
             <el-button v-if="salaryRecords.length > 0" type="warning" @click="exportAllExcel">匯出全部 Excel</el-button>
             <el-button v-if="salaryRecords.length > 0" type="danger" @click="exportAllPdf">匯出全部 PDF</el-button>
+            <el-tooltip content="查看該月快照（月底自動／封存／手動補拍）" placement="top">
+              <el-button :icon="Picture" @click="showSnapshotDialog = true">月底快照</el-button>
+            </el-tooltip>
           </div>
           <div v-if="dbCalculatedAt || lastCalculatedAt" class="calc-status">
             <span v-if="dbCalculatedAt" class="calc-status__item">
@@ -604,6 +609,13 @@ onMounted(() => {
         <el-button type="primary" :loading="editLoading" @click="saveManualAdjust">儲存</el-button>
       </template>
     </el-dialog>
+
+    <SalarySnapshotDialog
+      v-model="showSnapshotDialog"
+      :year="query.year"
+      :month="query.month"
+      :can-write="canWriteSalary"
+    />
   </div>
 </template>
 
