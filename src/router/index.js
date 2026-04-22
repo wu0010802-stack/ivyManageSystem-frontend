@@ -224,6 +224,12 @@ const router = createRouter({
             component: () => import('../views/activity/ActivityAttendanceView.vue'),
             meta: { title: '點名管理' }
         },
+        {
+            path: '/activity/attendance/sessions/:sessionId/print',
+            name: 'activity-attendance-print',
+            component: () => import('../views/activity/ActivityAttendancePrintView.vue'),
+            meta: { title: '列印點名單', bare: true }
+        },
 
         // ============ 公開前台 ============
         {

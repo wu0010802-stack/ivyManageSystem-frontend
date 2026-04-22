@@ -93,7 +93,7 @@
       </el-table-column>
       <el-table-column label="備註" prop="notes" min-width="120" show-overflow-tooltip />
       <el-table-column label="建立者" prop="created_by" width="100" align="center" />
-      <el-table-column label="操作" width="150" align="center" fixed="right">
+      <el-table-column label="操作" width="200" align="center" fixed="right">
         <template #default="{ row }">
           <el-button
             type="primary"
@@ -101,6 +101,11 @@
             :icon="Check"
             @click="openDrawer(row)"
           >點名</el-button>
+          <el-button
+            size="small"
+            :icon="Printer"
+            @click="openPrint(row)"
+          >列印</el-button>
           <el-button
             v-if="canWrite"
             type="danger"
@@ -282,6 +287,7 @@
         </el-table>
 
         <div class="drawer-actions">
+          <el-button :icon="Printer" @click="openPrintForCurrent">列印點名單</el-button>
           <el-button @click="handleExport">匯出 Excel</el-button>
           <el-button
             type="primary"
@@ -296,8 +302,9 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Check, Delete } from '@element-plus/icons-vue'
+import { Plus, Check, Delete, Printer } from '@element-plus/icons-vue'
 import {
   getAttendanceSessions,
   createAttendanceSession,
@@ -310,12 +317,26 @@ import {
 import { PERMISSION_VALUES, getUserInfo } from '@/utils/auth'
 import { useActivityAttendanceDrawer } from '@/composables/useActivityAttendanceDrawer'
 
+const router = useRouter()
+
 const canWrite = computed(() => {
   const userInfo = getUserInfo()
   if (!userInfo) return false
   if (userInfo.permissions === -1) return true
   return (userInfo.permissions & PERMISSION_VALUES.ACTIVITY_WRITE) !== 0
 })
+
+function openPrint(row) {
+  const href = router.resolve({
+    name: 'activity-attendance-print',
+    params: { sessionId: row.id },
+  }).href
+  window.open(href, '_blank', 'noopener')
+}
+
+function openPrintForCurrent() {
+  if (drawerSession.value?.id) openPrint({ id: drawerSession.value.id })
+}
 
 const loading = ref(false)
 const sessions = ref([])
@@ -436,7 +457,7 @@ async function loadSessions() {
 async function loadCourses() {
   try {
     const res = await getCourses()
-    courses.value = res.data
+    courses.value = res.data?.courses ?? []
   } catch {
     // silent
   }

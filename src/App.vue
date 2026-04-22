@@ -9,6 +9,7 @@ const route = useRoute()
 const isPortalRoute = computed(() => route.path.startsWith('/portal'))
 const isLoginPage = computed(() => route.path === '/login')
 const isPublicRoute = computed(() => route.path.startsWith('/public'))
+const isBareRoute = computed(() => route.meta?.bare === true)
 
 watch(
   () => [route.path, route.meta?.title, route.meta?.portal, route.meta?.noAuth],
@@ -18,8 +19,8 @@ watch(
 </script>
 
 <template>
-  <!-- Portal routes, admin login, and public routes use their own layout -->
-  <RouterView v-if="isPortalRoute || isLoginPage || isPublicRoute" />
+  <!-- Portal routes, admin login, public routes, and bare (print) routes use their own layout -->
+  <RouterView v-if="isPortalRoute || isLoginPage || isPublicRoute || isBareRoute" />
 
   <!-- Admin routes use the AdminLayout -->
   <AdminLayout v-else />

@@ -33,7 +33,6 @@ const batchDialogVisible = ref(false)
 const batchForm = reactive({
   meeting_date: '',
   meeting_type: 'staff_meeting',
-  overtime_hours: 0,
   remark: '',
   selectAll: true,
 })
@@ -43,7 +42,6 @@ const editDialogVisible = ref(false)
 const editForm = reactive({
   id: null,
   attended: true,
-  overtime_hours: 0,
   overtime_pay: 0,
   remark: '',
 })
@@ -95,7 +93,6 @@ const groupedByDate = computed(() => {
 const handleBatchCreate = () => {
   batchForm.meeting_date = ''
   batchForm.meeting_type = 'staff_meeting'
-  batchForm.overtime_hours = 0
   batchForm.remark = ''
   batchForm.selectAll = true
   employeeAttendance.value = employees.value.map(employee => ({
@@ -144,7 +141,6 @@ const submitBatch = async () => {
       meeting_type: batchForm.meeting_type,
       attendees,
       absentees,
-      overtime_hours: batchForm.overtime_hours,
       remark: batchForm.remark,
     })
     ElMessage.success('批次建立完成')
@@ -161,7 +157,6 @@ const submitBatch = async () => {
 const handleEdit = (row) => {
   editForm.id = row.id
   editForm.attended = row.attended
-  editForm.overtime_hours = row.overtime_hours
   editForm.overtime_pay = row.overtime_pay
   editForm.remark = row.remark || ''
   editDialogVisible.value = true
@@ -171,7 +166,6 @@ const submitEdit = async () => {
   try {
     await updateMeeting(editForm.id, {
       attended: editForm.attended,
-      overtime_hours: editForm.overtime_hours,
       overtime_pay: editForm.overtime_pay,
       remark: editForm.remark || null,
     })
@@ -324,9 +318,8 @@ onMounted(() => {
         <el-form-item label="會議日期">
           <el-date-picker v-model="batchForm.meeting_date" type="date" value-format="YYYY-MM-DD" style="width: 100%;" />
         </el-form-item>
-        <el-form-item label="會議時數">
-          <el-input-number v-model="batchForm.overtime_hours" :min="0" :max="8" :step="0.5" />
-          <span class="dialog-hint">小時（將套用至所有出席員工）</span>
+        <el-form-item label="加班費">
+          <span class="dialog-hint">依勞基法平日加班費公式（時薪 × 1 小時 × 1.34）自動計算</span>
         </el-form-item>
         <el-form-item label="備註">
           <el-input v-model="batchForm.remark" type="textarea" :rows="2" />
@@ -358,11 +351,9 @@ onMounted(() => {
         <el-form-item label="出席狀態">
           <el-switch v-model="editForm.attended" active-text="出席" inactive-text="缺席" />
         </el-form-item>
-        <el-form-item label="會議時數">
-          <el-input-number v-model="editForm.overtime_hours" :min="0" :max="8" :step="0.5" />
-        </el-form-item>
         <el-form-item label="加班費">
-          <el-input-number v-model="editForm.overtime_pay" :min="0" :step="100" />
+          <el-input-number v-model="editForm.overtime_pay" :min="0" :step="1" />
+          <span class="dialog-hint">如需手動調整可直接修改</span>
         </el-form-item>
         <el-form-item label="備註">
           <el-input v-model="editForm.remark" type="textarea" :rows="2" />

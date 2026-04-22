@@ -31,7 +31,7 @@
         <template #default="{ row }">
           <el-button
             v-if="row.waitlist_count > 0"
-            link type="primary" size="small"
+            link type="warning" size="small"
             @click="openWaitlist(row)"
           >{{ row.waitlist_count }}</el-button>
           <span v-else>0</span>
