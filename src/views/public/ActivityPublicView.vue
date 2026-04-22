@@ -630,6 +630,13 @@ async function handleSubmitRegistration() {
     showToast('出生日期無效：不能選擇未來的日期。', 'error')
     return
   }
+  // 與後端 _validate_birthday_str 20 年上限同步，避免誤填 1900 等離譜年份
+  const earliest = new Date(today)
+  earliest.setFullYear(earliest.getFullYear() - 20)
+  if (inputDate < earliest) {
+    showToast('出生日期超出合理範圍，請再次確認。', 'error')
+    return
+  }
 
   if (form.selectedCourses.length === 0) {
     showToast('請至少選擇一門才藝課。', 'error')

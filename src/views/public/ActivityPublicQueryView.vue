@@ -308,8 +308,16 @@ const birthdayValid = computed(() => {
     return false
   }
   const date = new Date(queryForm.birthday)
-  if (date > new Date()) {
+  const now = new Date()
+  if (date > now) {
     birthdayErrorMsg.value = '生日不能是未來的日期'
+    return false
+  }
+  // 與後端 20 年窗口同步：查詢時也擋明顯不合理的生日，避免 round-trip 才失敗
+  const earliest = new Date(now)
+  earliest.setFullYear(earliest.getFullYear() - 20)
+  if (date < earliest) {
+    birthdayErrorMsg.value = '生日超出合理範圍'
     return false
   }
   return true
