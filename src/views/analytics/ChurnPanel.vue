@@ -162,7 +162,7 @@ const reasonOptions = {
 }
 
 const goToStudent = (id) => {
-  router.push(`/students/${id}`)
+  router.push({ name: 'student-profile', params: { id } })
 }
 
 onMounted(() => {
