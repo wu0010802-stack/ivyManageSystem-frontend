@@ -115,5 +115,23 @@ npm run test:coverage  # 含覆蓋率報告
 
 ---
 
+## 頁面結構
+
+### views/analytics/
+
+經營分析頁面（路由 `/analytics`）。
+- `AnalyticsView.vue` — tab 框架（招生漏斗 / 流失預警），與 `RouterView` 搭配
+- `FunnelPanel.vue` — 6 階段漏斗 BarChart、no_deposit_reasons PieChart、依來源/班別切片
+- `ChurnPanel.vue` — at-risk 學生列表（含嚴重度 tag、訊號 detail）、12 月流失趨勢 LineChart、原因分布 BarChart
+
+支援 module：
+- `src/api/analytics.js` — `fetchFunnel(params)`、`fetchAtRisk()`、`fetchChurnHistory(months)`
+- `src/composables/useAnalyticsTimeRange.js` — 時間範圍 composable（本月/上月/本學期/上學期/本學年/自訂）
+
+權限：`BUSINESS_ANALYTICS`（高位元 1 << 40，已加入 `src/constants/permissions.js`，sidebar `canView` 自動處理）。
+依賴 `views/reports/chartSetup.js` 的 vue-chartjs 共用初始化。
+
+---
+
 ## 開發注意事項
 - 回應語言：一律使用**繁體中文**
