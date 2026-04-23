@@ -45,6 +45,7 @@ export const PERMISSION_VALUES = {
   GUARDIANS_READ: 2 ** 37,
   GUARDIANS_WRITE: 2 ** 38,
   RECRUITMENT_CONVERT: 2 ** 39,
+  BUSINESS_ANALYTICS: 2 ** 40,
 }
 
 export const ROUTE_PERMISSION_RULES = [
@@ -78,6 +79,7 @@ export const ROUTE_PERMISSION_RULES = [
   { path: '/student-enrollment', permission: 'STUDENTS_READ' },
   { path: '/recruitment', permission: 'RECRUITMENT_READ' },
   { path: '/recruitment-ivykids', permission: 'RECRUITMENT_READ' },
+  { path: '/analytics', permission: 'BUSINESS_ANALYTICS', prefix: true },
 ]
 
 export const TEACHER_PORTAL_ROUTES = [

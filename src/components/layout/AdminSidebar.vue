@@ -140,6 +140,10 @@
             <el-icon><Files /></el-icon>
             <template #title>報表統計</template>
           </el-menu-item>
+          <el-menu-item v-if="canView.BUSINESS_ANALYTICS" index="/analytics">
+            <el-icon><DataAnalysis /></el-icon>
+            <template #title>經營分析</template>
+          </el-menu-item>
         </el-sub-menu>
 
         <!-- 園務行政 -->
@@ -306,7 +310,7 @@ const hasVisibleStudentItems = computed(() =>
 )
 
 const hasVisibleStatsItems = computed(() =>
-  canView.value.RECRUITMENT_READ || canView.value.REPORTS
+  canView.value.RECRUITMENT_READ || canView.value.REPORTS || canView.value.BUSINESS_ANALYTICS
 )
 
 const hasVisibleAdminItems = computed(() =>

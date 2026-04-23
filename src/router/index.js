@@ -25,6 +25,26 @@ const router = createRouter({
             meta: { title: '報表統計' }
         },
         {
+            path: '/analytics',
+            component: () => import('../views/analytics/AnalyticsView.vue'),
+            meta: { title: '經營分析' },
+            redirect: '/analytics/funnel',
+            children: [
+                {
+                    path: 'funnel',
+                    name: 'analytics-funnel',
+                    component: () => import('../views/analytics/FunnelPanel.vue'),
+                    meta: { title: '招生漏斗' },
+                },
+                {
+                    path: 'churn',
+                    name: 'analytics-churn',
+                    component: () => import('../views/analytics/ChurnPanel.vue'),
+                    meta: { title: '流失預警' },
+                },
+            ],
+        },
+        {
             path: '/employees',
             name: 'employees',
             component: () => import('../views/EmployeeView.vue'),
