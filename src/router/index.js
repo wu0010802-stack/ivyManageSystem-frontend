@@ -1,5 +1,6 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import { refreshSession } from '@/api/auth'
+import { startRouteLoading, finishRouteLoading } from '@/composables/useRouteLoading'
 import { isLoggedIn, canAccessRoute, getUserInfo, getAllowedRoutes, hasStoredUserInfo, setUserInfo, clearAuth } from '@/utils/auth'
 
 const router = createRouter({
@@ -425,6 +426,8 @@ async function restoreSessionIfNeeded(to) {
 
 // Auth guard
 router.beforeEach(async (to, from, next) => {
+    startRouteLoading()
+
     let { loggedIn, userInfo } = await restoreSessionIfNeeded(to)
 
     // 強制改密碼攔截：已登入且旗標為 true，且目標路由不是改密碼頁也不是登入頁
@@ -485,6 +488,14 @@ router.beforeEach(async (to, from, next) => {
     }
 
     next()
+})
+
+router.afterEach(() => {
+    finishRouteLoading()
+})
+
+router.onError(() => {
+    finishRouteLoading()
 })
 
 export default router
