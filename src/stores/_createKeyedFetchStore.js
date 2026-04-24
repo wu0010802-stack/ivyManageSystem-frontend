@@ -42,11 +42,14 @@ export function createKeyedFetchStore(storeName, apiFn, {
   return defineStore(storeName, {
     state: () => ({
       entries: new Map(),
-      loading: false,
+      loadingKeys: new Set(),
       error: null,
     }),
 
     getters: {
+      loading(state) {
+        return state.loadingKeys.size > 0
+      },
       allItems(state) {
         const out = []
         for (const entry of state.entries.values()) {
@@ -74,6 +77,10 @@ export function createKeyedFetchStore(storeName, apiFn, {
         return this.entries.get(this._keyOf(params)) || null
       },
 
+      isLoading(params) {
+        return this.loadingKeys.has(this._keyOf(params))
+      },
+
       items(params) {
         return this.getEntry(params)?.data ?? []
       },
@@ -91,7 +98,7 @@ export function createKeyedFetchStore(storeName, apiFn, {
         if (existing && existing.pending) return existing.pending
 
         const entry = existing || { data: [], meta: {}, fetchedAt: 0, pending: null }
-        this.loading = true
+        this.loadingKeys.add(key)
         this.error = null
 
         entry.pending = apiFn(params)
@@ -109,7 +116,7 @@ export function createKeyedFetchStore(storeName, apiFn, {
           })
           .finally(() => {
             entry.pending = null
-            this.loading = false
+            this.loadingKeys.delete(key)
           })
 
         this.entries.set(key, entry)
