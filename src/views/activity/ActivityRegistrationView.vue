@@ -72,6 +72,11 @@
     >
       <el-table-column type="selection" width="45" />
       <el-table-column label="學生" prop="student_name" min-width="90" />
+      <el-table-column label="家長手機" prop="parent_phone" min-width="120">
+        <template #default="{ row }">
+          <span>{{ row.parent_phone || '—' }}</span>
+        </template>
+      </el-table-column>
       <el-table-column label="班級" prop="class_name" min-width="100">
         <template #default="{ row }">
           <span>{{ row.class_name || '—' }}</span>
@@ -134,7 +139,9 @@
       <div v-if="selectedIds.length > 0" class="batch-toolbar">
         <span class="batch-info">已選 {{ selectedIds.length }} 筆</span>
         <el-button size="small" type="success" :loading="savingBatch" @click="handleBatchMarkPaid(true)">標記已繳費</el-button>
-        <el-button size="small" type="warning" :loading="savingBatch" @click="handleBatchMarkPaid(false)">標記未繳費</el-button>
+        <el-tooltip content="批次沖帳已停用，請改至繳費明細逐筆軟刪以防誤操作" placement="top">
+          <el-button size="small" type="warning" disabled>標記未繳費（已停用）</el-button>
+        </el-tooltip>
         <el-button size="small" @click="clearSelection">取消</el-button>
       </div>
     </transition>
@@ -155,7 +162,8 @@
           <el-descriptions-item label="學生姓名">{{ detail.student_name }}</el-descriptions-item>
           <el-descriptions-item label="班級">{{ detail.class_name }}</el-descriptions-item>
           <el-descriptions-item label="生日">{{ detail.birthday }}</el-descriptions-item>
-          <el-descriptions-item label="Email">{{ detail.email }}</el-descriptions-item>
+          <el-descriptions-item label="家長手機">{{ detail.parent_phone || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="Email" :span="2">{{ detail.email }}</el-descriptions-item>
           <el-descriptions-item label="報名時間" :span="2">{{ formatActivityDate(detail.created_at) }}</el-descriptions-item>
         </el-descriptions>
 
@@ -182,28 +190,34 @@
             </div>
           </div>
 
-          <!-- 繳費歷史 -->
+          <!-- 繳費歷史（含已軟刪紀錄；voided 列以半透明 + 劃線顯示） -->
           <div v-if="paymentInfo.records?.length" class="payment-history">
             <div class="payment-history-title">繳費明細</div>
             <div
               v-for="rec in paymentInfo.records"
               :key="rec.id"
               class="payment-record-row"
+              :class="{ 'payment-record-voided': rec.is_voided }"
             >
               <el-tag :type="rec.type === 'payment' ? 'success' : 'danger'" size="small">
                 {{ rec.type === 'payment' ? '繳費' : '退費' }}
               </el-tag>
+              <el-tag v-if="rec.is_voided" type="info" size="small">已軟刪</el-tag>
               <span class="pr-amount">{{ rec.type === 'payment' ? '+' : '-' }}{{ rec.amount.toLocaleString() }}</span>
               <span class="pr-date">{{ rec.payment_date }}</span>
               <span class="pr-method">{{ rec.payment_method }}</span>
               <span v-if="rec.notes" class="pr-notes">{{ rec.notes }}</span>
+              <span v-if="rec.is_voided && rec.void_reason" class="pr-notes">
+                軟刪原因：{{ rec.void_reason }}
+              </span>
               <el-button
+                v-if="!rec.is_voided"
                 link
                 type="danger"
                 size="small"
                 :loading="deletingPaymentId === rec.id"
                 @click="handleDeletePayment(rec)"
-              >刪除</el-button>
+              >軟刪</el-button>
             </div>
           </div>
           <div v-else class="no-payment-hint">尚無繳費記錄</div>
@@ -826,23 +840,35 @@ async function handleAddPayment() {
 }
 
 async function handleDeletePayment(rec) {
+  // 軟刪除（voiding）：需具備「才藝課收款簽核」權限，且強制填寫原因（≥5 字）
+  // 原紀錄會保留供稽核；paid_amount 會重新計算排除已 voided 的紀錄。
+  let reasonResult
   try {
-    await ElMessageBox.confirm(
-      `確定要刪除此${rec.type === 'payment' ? '繳費' : '退費'}記錄（NT$${rec.amount}）？`,
-      '確認刪除',
-      { type: 'warning', confirmButtonText: '確定刪除', confirmButtonClass: 'el-button--danger' }
+    reasonResult = await ElMessageBox.prompt(
+      `將軟刪此${rec.type === 'payment' ? '繳費' : '退費'}記錄（NT$${rec.amount}）。` +
+        '\n\n請輸入操作原因（至少 5 字，例：單據誤植、客戶退款後重開）。' +
+        '\n原紀錄會保留於資料庫供稽核，不會真正刪除。',
+      '軟刪繳費紀錄',
+      {
+        confirmButtonText: '確認軟刪',
+        cancelButtonText: '取消',
+        inputPattern: /.{5,200}/,
+        inputErrorMessage: '原因必須 5-200 個字，不可敷衍',
+        confirmButtonClass: 'el-button--danger',
+      }
     )
   } catch {
     return
   }
+  const reason = (reasonResult.value || '').trim()
   deletingPaymentId.value = rec.id
   try {
-    await deleteRegistrationPayment(detail.value.id, rec.id)
-    ElMessage.success('記錄已刪除')
+    await deleteRegistrationPayment(detail.value.id, rec.id, reason)
+    ElMessage.success('記錄已軟刪（原紀錄保留供稽核）')
     await loadPayments(detail.value.id)
     fetchList()
   } catch (e) {
-    ElMessage.error(e?.response?.data?.detail || '刪除失敗')
+    ElMessage.error(e?.response?.data?.detail || '軟刪失敗')
   } finally {
     deletingPaymentId.value = null
   }
@@ -1363,6 +1389,8 @@ onMounted(async () => {
 .pr-date { color: #6b7280; }
 .pr-method { color: #888; }
 .pr-notes { color: #aaa; font-style: italic; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.payment-record-voided { opacity: 0.55; text-decoration: line-through; }
+.payment-record-voided .pr-notes { text-decoration: none; }
 
 .no-payment-hint { color: #aaa; font-size: 13px; padding: 8px 0; margin-bottom: 8px; }
 .payment-actions { display: flex; gap: 8px; }

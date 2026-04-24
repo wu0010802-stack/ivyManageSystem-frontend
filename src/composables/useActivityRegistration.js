@@ -99,15 +99,19 @@ export function useActivityRegistration() {
     }, 300)
   }
 
-  // ── 批次標記繳費 ─────────────────────────────────────────────
+  // ── 批次標記「已繳費」─────────────────────────────────────────
+  // Why: 批次「未繳費」會一口氣寫多筆全額沖帳 refund，誤操作損失大，後端已禁用。
+  // 需要退費請走單筆 PUT /payment（帶 confirm_refund_amount）或 DELETE /payments/{id} 軟刪。
   async function batchMarkPaid(isPaid, onSuccess) {
-    const label = isPaid ? '已繳費' : '未繳費'
-    const extraNote = isPaid
-      ? '系統將自動補齊差額為「系統補齊」付款紀錄。'
-      : '系統將對有已繳金額者自動寫一筆退費沖帳紀錄（付款方式：系統補齊），原繳費歷史保留。'
+    if (!isPaid) {
+      ElMessage.warning(
+        '批次沖帳已停用，請改用單筆繳費明細頁的退費 / 軟刪按鈕逐筆處理。'
+      )
+      return
+    }
     try {
       await ElMessageBox.confirm(
-        `確定將已選 ${selectedIds.value.length} 筆報名標記為「${label}」？\n\n${extraNote}`,
+        `確定將已選 ${selectedIds.value.length} 筆報名標記為「已繳費」？\n\n系統將自動補齊差額為「系統補齊」付款紀錄。`,
         '批次更新確認',
         { type: 'warning', confirmButtonText: '確定' }
       )
@@ -116,7 +120,7 @@ export function useActivityRegistration() {
     }
     savingBatch.value = true
     try {
-      const res = await batchUpdatePayment(selectedIds.value, isPaid)
+      const res = await batchUpdatePayment(selectedIds.value)
       ElMessage.success(res.data.message)
       selectedIds.value = []
       if (onSuccess) onSuccess()

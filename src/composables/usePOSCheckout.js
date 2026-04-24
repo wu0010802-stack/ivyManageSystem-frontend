@@ -270,6 +270,13 @@ export function usePOSCheckout() {
     const item = selectedItem.value
     if (!item) return
 
+    // 退費必填原因（≥ 5 字），後端 schema 層亦會擋；此處提前 UI 驗證避免送出後被拒
+    const cleanedNotes = (notes.value || '').trim()
+    if (isRefundMode.value && cleanedNotes.length < 5) {
+      ElMessage.warning('退費必須於備註填寫原因（至少 5 個字）')
+      return
+    }
+
     // 大額交易（>= LARGE_AMOUNT_THRESHOLD）二次確認
     if (itemTotal.value >= LARGE_AMOUNT_THRESHOLD) {
       const typeLabel = isRefundMode.value ? '退費' : '收款'
