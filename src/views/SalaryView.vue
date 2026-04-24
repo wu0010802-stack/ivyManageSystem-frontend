@@ -2,7 +2,7 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { calculate, getFestivalBonus, getRecords, getSalaryFieldBreakdown, manualAdjustSalary, getFestivalBonusPeriodAccrual } from '@/api/salary'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, InfoFilled, SuccessFilled, Picture, Loading } from '@element-plus/icons-vue'
+import { Search, InfoFilled, SuccessFilled, Picture } from '@element-plus/icons-vue'
 import BonusConfigPanel from './salary/BonusConfigPanel.vue'
 import SalaryHistoryPanel from './salary/SalaryHistoryPanel.vue'
 import SalarySimulatePanel from './salary/SalarySimulatePanel.vue'
@@ -34,6 +34,7 @@ const bonusDialogTab = ref('single')  // 'single' | 'accrual'
 const periodAccrualLoading = ref(false)
 const periodAccrualData = ref(null)
 const periodAccrualKey = ref(null)   // cache key `${year}-${month}`
+const periodAccrualError = ref(false)
 const showFieldBreakdownDialog = ref(false)
 const fieldBreakdownLoading = ref(false)
 const fieldBreakdown = ref(null)
@@ -110,6 +111,7 @@ const fetchFestivalBonus = async () => {
   // 每次點按鈕重新開 dialog → 重置 accrual cache 與 tab（query 可能改變月份）
   periodAccrualKey.value = null
   periodAccrualData.value = null
+  periodAccrualError.value = false
   bonusDialogTab.value = 'single'
 
   bonusLoading.value = true
@@ -128,11 +130,13 @@ const fetchPeriodAccrual = async () => {
   const key = `${query.year}-${query.month}`
   if (periodAccrualKey.value === key && periodAccrualData.value) return
   periodAccrualLoading.value = true
+  periodAccrualError.value = false
   try {
     const response = await getFestivalBonusPeriodAccrual(query.year, query.month)
     periodAccrualData.value = response.data
     periodAccrualKey.value = key
   } catch (error) {
+    periodAccrualError.value = true
     ElMessage.error('取得本期累積失敗: ' + apiError(error, error.message))
   } finally {
     periodAccrualLoading.value = false
@@ -149,8 +153,31 @@ const formatAccrualMonthLabel = (m, currentYear) => {
 }
 
 const findMonthlyEntry = (row, year, month) => {
-  return row.monthly?.find(x => x.year === year && x.month === month)
+  return row.monthlyMap?.get(`${year}-${month}`) || null
 }
+
+const accrualColumnMonths = computed(() => {
+  const d = periodAccrualData.value
+  if (!d || d.is_distribution_month || !d.period_start_year) return []
+  const months = []
+  let y = d.period_start_year
+  let m = d.period_start_month
+  while (y < d.current_year || (y === d.current_year && m <= d.current_month)) {
+    months.push({ year: y, month: m })
+    m += 1
+    if (m > 12) { m = 1; y += 1 }
+  }
+  return months
+})
+
+const accrualRowsWithMap = computed(() => {
+  const rows = periodAccrualData.value?.rows
+  if (!rows) return []
+  return rows.map(r => ({
+    ...r,
+    monthlyMap: new Map(r.monthly.map(x => [`${x.year}-${x.month}`, x])),
+  }))
+})
 
 // ---- Salary Records (for export) ----
 const salaryRecords = ref([])
@@ -561,7 +588,7 @@ onMounted(() => {
     </el-tabs>
 
     <!-- Festival Bonus Dialog -->
-    <el-dialog v-model="showBonusDialog" title="節慶獎金明細" width="1200px">
+    <el-dialog v-model="showBonusDialog" title="節慶獎金明細" width="min(1200px, 95vw)">
       <el-tabs v-model="bonusDialogTab" type="card" @tab-change="onBonusTabChange">
         <!-- 單月試算：原有內容 -->
         <el-tab-pane label="單月試算" name="single">
@@ -592,88 +619,99 @@ onMounted(() => {
 
         <!-- 本期累積 -->
         <el-tab-pane label="本期累積" name="accrual">
-          <div v-if="periodAccrualLoading" style="padding: 40px; text-align: center;">
-            <el-icon class="is-loading"><Loading /></el-icon>
-            <div style="margin-top: 8px; color: #666;">載入中...</div>
-          </div>
-
-          <el-alert
-            v-else-if="periodAccrualData?.is_distribution_month"
-            type="info"
-            :closable="false"
-            title="本月為發放月，實際發放金額請見左側薪資列表"
-            style="margin-bottom: 12px;"
-          />
-
-          <template v-else-if="periodAccrualData">
-            <div class="accrual-hint">
-              <el-tooltip placement="top">
-                <template #content>
-                  預估不含「事病假 &gt; 40 小時歸零」規則（該規則僅在發放月當月檢查）。<br/>
-                  離職員工不列入（與發放月實發條件一致）。
-                </template>
-                <span>
-                  本期
-                  {{ formatAccrualMonthLabel(
-                    { year: periodAccrualData.period_start_year, month: periodAccrualData.period_start_month },
-                    periodAccrualData.current_year
-                  ) }}
-                  ~ {{ periodAccrualData.current_month }} 月累積，預定於
-                  {{ periodAccrualData.distribution_month }} 月發放
-                  <el-icon :size="12"><InfoFilled /></el-icon>
-                </span>
-              </el-tooltip>
-            </div>
-            <el-table
-              :data="periodAccrualData.rows"
-              border
-              stripe
-              max-height="550"
-            >
-              <el-table-column prop="name" label="姓名" width="100" fixed />
-              <el-table-column prop="category" label="類別" width="100" />
-              <el-table-column
-                v-for="m in periodAccrualData.rows?.[0]?.monthly || []"
-                :key="`${m.year}-${m.month}`"
-                :label="formatAccrualMonthLabel(m, periodAccrualData.current_year)"
-                align="center"
+          <div v-loading="periodAccrualLoading" element-loading-text="載入中...">
+            <template v-if="periodAccrualError">
+              <EmptyState
+                :icon="InfoFilled"
+                title="載入失敗"
+                description="取得本期累積資料時發生錯誤，請關閉此視窗後重新開啟再試。"
+              />
+            </template>
+            <template v-else-if="periodAccrualData?.is_distribution_month">
+              <el-alert
+                type="info"
+                :closable="false"
+                title="本月為發放月，實際發放金額請見左側薪資列表"
+                style="margin-bottom: 12px;"
+              />
+            </template>
+            <template v-else-if="periodAccrualData && accrualRowsWithMap.length === 0">
+              <EmptyState
+                :icon="InfoFilled"
+                title="無資料"
+                :description="`${periodAccrualData.current_year} 年 ${periodAccrualData.current_month} 月無在職員工可顯示累積資料`"
+              />
+            </template>
+            <template v-else-if="periodAccrualData">
+              <div class="accrual-hint">
+                <el-tooltip placement="top">
+                  <template #content>
+                    預估不含「事病假 &gt; 40 小時歸零」規則（該規則僅在發放月當月檢查）。<br/>
+                    離職員工不列入（與發放月實發條件一致）。
+                  </template>
+                  <span>
+                    本期
+                    {{ formatAccrualMonthLabel(
+                      { year: periodAccrualData.period_start_year, month: periodAccrualData.period_start_month },
+                      periodAccrualData.current_year
+                    ) }}
+                    ~ {{ periodAccrualData.current_month }} 月累積，預定於
+                    {{ periodAccrualData.distribution_month }} 月發放
+                    <el-icon :size="12"><InfoFilled /></el-icon>
+                  </span>
+                </el-tooltip>
+              </div>
+              <el-table
+                :data="accrualRowsWithMap"
+                border
+                stripe
+                max-height="550"
               >
-                <el-table-column label="節慶" width="90">
-                  <template #default="scope">{{ money(findMonthlyEntry(scope.row, m.year, m.month)?.festival_bonus) }}</template>
+                <el-table-column prop="name" label="姓名" width="100" fixed />
+                <el-table-column prop="category" label="類別" width="100" />
+                <el-table-column
+                  v-for="m in accrualColumnMonths"
+                  :key="`${m.year}-${m.month}`"
+                  :label="formatAccrualMonthLabel(m, periodAccrualData.current_year)"
+                  align="center"
+                >
+                  <el-table-column label="節慶" width="90">
+                    <template #default="scope">{{ money(findMonthlyEntry(scope.row, m.year, m.month)?.festival_bonus) }}</template>
+                  </el-table-column>
+                  <el-table-column label="超額" width="90">
+                    <template #default="scope">{{ money(findMonthlyEntry(scope.row, m.year, m.month)?.overtime_bonus) }}</template>
+                  </el-table-column>
+                  <el-table-column label="扣款" width="90">
+                    <template #default="scope">
+                      <span :class="{ 'text-danger': (findMonthlyEntry(scope.row, m.year, m.month)?.meeting_absence_deduction || 0) > 0 }">
+                        {{ money(findMonthlyEntry(scope.row, m.year, m.month)?.meeting_absence_deduction) }}
+                      </span>
+                    </template>
+                  </el-table-column>
                 </el-table-column>
-                <el-table-column label="超額" width="90">
-                  <template #default="scope">{{ money(findMonthlyEntry(scope.row, m.year, m.month)?.overtime_bonus) }}</template>
+                <el-table-column label="本期小計" align="center">
+                  <el-table-column label="節慶" width="100">
+                    <template #default="scope">{{ money(scope.row.totals.festival_bonus) }}</template>
+                  </el-table-column>
+                  <el-table-column label="超額" width="100">
+                    <template #default="scope">{{ money(scope.row.totals.overtime_bonus) }}</template>
+                  </el-table-column>
+                  <el-table-column label="扣款" width="100">
+                    <template #default="scope">
+                      <span :class="{ 'text-danger': scope.row.totals.meeting_absence_deduction > 0 }">
+                        {{ money(scope.row.totals.meeting_absence_deduction) }}
+                      </span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="預估實發" width="120">
+                    <template #default="scope">
+                      <strong>{{ money(scope.row.totals.net_estimate) }}</strong>
+                    </template>
+                  </el-table-column>
                 </el-table-column>
-                <el-table-column label="扣款" width="90">
-                  <template #default="scope">
-                    <span :class="{ 'text-danger': (findMonthlyEntry(scope.row, m.year, m.month)?.meeting_absence_deduction || 0) > 0 }">
-                      {{ money(findMonthlyEntry(scope.row, m.year, m.month)?.meeting_absence_deduction) }}
-                    </span>
-                  </template>
-                </el-table-column>
-              </el-table-column>
-              <el-table-column label="本期小計" align="center">
-                <el-table-column label="節慶" width="100">
-                  <template #default="scope">{{ money(scope.row.totals.festival_bonus) }}</template>
-                </el-table-column>
-                <el-table-column label="超額" width="100">
-                  <template #default="scope">{{ money(scope.row.totals.overtime_bonus) }}</template>
-                </el-table-column>
-                <el-table-column label="扣款" width="100">
-                  <template #default="scope">
-                    <span :class="{ 'text-danger': scope.row.totals.meeting_absence_deduction > 0 }">
-                      {{ money(scope.row.totals.meeting_absence_deduction) }}
-                    </span>
-                  </template>
-                </el-table-column>
-                <el-table-column label="預估實發" width="120">
-                  <template #default="scope">
-                    <strong>{{ money(scope.row.totals.net_estimate) }}</strong>
-                  </template>
-                </el-table-column>
-              </el-table-column>
-            </el-table>
-          </template>
+              </el-table>
+            </template>
+          </div>
         </el-tab-pane>
       </el-tabs>
     </el-dialog>
