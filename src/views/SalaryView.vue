@@ -1,8 +1,8 @@
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
-import { calculate, getFestivalBonus, getRecords, getSalaryFieldBreakdown, manualAdjustSalary } from '@/api/salary'
+import { calculate, getFestivalBonus, getRecords, getSalaryFieldBreakdown, manualAdjustSalary, getFestivalBonusPeriodAccrual } from '@/api/salary'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, InfoFilled, SuccessFilled, Picture } from '@element-plus/icons-vue'
+import { Search, InfoFilled, SuccessFilled, Picture, Loading } from '@element-plus/icons-vue'
 import BonusConfigPanel from './salary/BonusConfigPanel.vue'
 import SalaryHistoryPanel from './salary/SalaryHistoryPanel.vue'
 import SalarySimulatePanel from './salary/SalarySimulatePanel.vue'
@@ -30,6 +30,10 @@ const dbCalculatedAt = ref(null)
 const salaryResults = ref([])
 const bonusResults = ref([])
 const showBonusDialog = ref(false)
+const bonusDialogTab = ref('single')  // 'single' | 'accrual'
+const periodAccrualLoading = ref(false)
+const periodAccrualData = ref(null)
+const periodAccrualKey = ref(null)   // cache key `${year}-${month}`
 const showFieldBreakdownDialog = ref(false)
 const fieldBreakdownLoading = ref(false)
 const fieldBreakdown = ref(null)
@@ -103,6 +107,11 @@ const calculateSalary = async () => {
 }
 
 const fetchFestivalBonus = async () => {
+  // 每次點按鈕重新開 dialog → 重置 accrual cache 與 tab（query 可能改變月份）
+  periodAccrualKey.value = null
+  periodAccrualData.value = null
+  bonusDialogTab.value = 'single'
+
   bonusLoading.value = true
   try {
     const response = await getFestivalBonus(query.year, query.month)
@@ -113,6 +122,34 @@ const fetchFestivalBonus = async () => {
   } finally {
     bonusLoading.value = false
   }
+}
+
+const fetchPeriodAccrual = async () => {
+  const key = `${query.year}-${query.month}`
+  if (periodAccrualKey.value === key && periodAccrualData.value) return
+  periodAccrualLoading.value = true
+  try {
+    const response = await getFestivalBonusPeriodAccrual(query.year, query.month)
+    periodAccrualData.value = response.data
+    periodAccrualKey.value = key
+  } catch (error) {
+    ElMessage.error('取得本期累積失敗: ' + apiError(error, error.message))
+  } finally {
+    periodAccrualLoading.value = false
+  }
+}
+
+const onBonusTabChange = (tab) => {
+  if (tab === 'accrual') fetchPeriodAccrual()
+}
+
+const formatAccrualMonthLabel = (m, currentYear) => {
+  // 同年只顯示月份，跨年顯示「YYYY/MM」避免 1 月查詢時混淆
+  return m.year === currentYear ? `${m.month} 月` : `${m.year}/${m.month}`
+}
+
+const findMonthlyEntry = (row, year, month) => {
+  return row.monthly?.find(x => x.year === year && x.month === month)
 }
 
 // ---- Salary Records (for export) ----
@@ -524,32 +561,121 @@ onMounted(() => {
     </el-tabs>
 
     <!-- Festival Bonus Dialog -->
-    <el-dialog v-model="showBonusDialog" title="節慶獎金明細" width="950px">
-      <el-table :data="bonusResults" border height="500" stripe>
-        <el-table-column prop="name" label="姓名" width="100" />
-        <el-table-column prop="category" label="類別" width="100" />
-        <el-table-column label="獎金基數" width="100">
-          <template #default="scope">{{ money(scope.row.bonusBase) }}</template>
-        </el-table-column>
-        <el-table-column label="目標人數" width="90">
-          <template #default="scope">{{ scope.row.targetEnrollment || '-' }}</template>
-        </el-table-column>
-        <el-table-column label="在籍人數" width="90">
-          <template #default="scope">{{ scope.row.currentEnrollment || '-' }}</template>
-        </el-table-column>
-        <el-table-column label="達成率" width="80">
-          <template #default="scope">{{ pct(scope.row.ratio) }}</template>
-        </el-table-column>
-        <el-table-column label="獎金" width="100">
-          <template #default="scope">{{ money(scope.row.festivalBonus) }}</template>
-        </el-table-column>
-        <el-table-column prop="remark" label="備註" min-width="120" />
-      </el-table>
-      <template #footer>
-        <div class="bonus-total">
-          獎金合計: <strong>{{ money(bonusTotal) }}</strong>
-        </div>
-      </template>
+    <el-dialog v-model="showBonusDialog" title="節慶獎金明細" width="1200px">
+      <el-tabs v-model="bonusDialogTab" type="card" @tab-change="onBonusTabChange">
+        <!-- 單月試算：原有內容 -->
+        <el-tab-pane label="單月試算" name="single">
+          <el-table :data="bonusResults" border height="500" stripe>
+            <el-table-column prop="name" label="姓名" width="100" />
+            <el-table-column prop="category" label="類別" width="100" />
+            <el-table-column label="獎金基數" width="100">
+              <template #default="scope">{{ money(scope.row.bonusBase) }}</template>
+            </el-table-column>
+            <el-table-column label="目標人數" width="90">
+              <template #default="scope">{{ scope.row.targetEnrollment || '-' }}</template>
+            </el-table-column>
+            <el-table-column label="在籍人數" width="90">
+              <template #default="scope">{{ scope.row.currentEnrollment || '-' }}</template>
+            </el-table-column>
+            <el-table-column label="達成率" width="80">
+              <template #default="scope">{{ pct(scope.row.ratio) }}</template>
+            </el-table-column>
+            <el-table-column label="獎金" width="100">
+              <template #default="scope">{{ money(scope.row.festivalBonus) }}</template>
+            </el-table-column>
+            <el-table-column prop="remark" label="備註" min-width="120" />
+          </el-table>
+          <div class="bonus-total" style="margin-top: 12px;">
+            獎金合計: <strong>{{ money(bonusTotal) }}</strong>
+          </div>
+        </el-tab-pane>
+
+        <!-- 本期累積 -->
+        <el-tab-pane label="本期累積" name="accrual">
+          <div v-if="periodAccrualLoading" style="padding: 40px; text-align: center;">
+            <el-icon class="is-loading"><Loading /></el-icon>
+            <div style="margin-top: 8px; color: #666;">載入中...</div>
+          </div>
+
+          <el-alert
+            v-else-if="periodAccrualData?.is_distribution_month"
+            type="info"
+            :closable="false"
+            title="本月為發放月，實際發放金額請見左側薪資列表"
+            style="margin-bottom: 12px;"
+          />
+
+          <template v-else-if="periodAccrualData">
+            <div class="accrual-hint">
+              <el-tooltip placement="top">
+                <template #content>
+                  預估不含「事病假 &gt; 40 小時歸零」規則（該規則僅在發放月當月檢查）。<br/>
+                  離職員工不列入（與發放月實發條件一致）。
+                </template>
+                <span>
+                  本期
+                  {{ formatAccrualMonthLabel(
+                    { year: periodAccrualData.period_start_year, month: periodAccrualData.period_start_month },
+                    periodAccrualData.current_year
+                  ) }}
+                  ~ {{ periodAccrualData.current_month }} 月累積，預定於
+                  {{ periodAccrualData.distribution_month }} 月發放
+                  <el-icon :size="12"><InfoFilled /></el-icon>
+                </span>
+              </el-tooltip>
+            </div>
+            <el-table
+              :data="periodAccrualData.rows"
+              border
+              stripe
+              max-height="550"
+            >
+              <el-table-column prop="name" label="姓名" width="100" fixed />
+              <el-table-column prop="category" label="類別" width="100" />
+              <el-table-column
+                v-for="m in periodAccrualData.rows?.[0]?.monthly || []"
+                :key="`${m.year}-${m.month}`"
+                :label="formatAccrualMonthLabel(m, periodAccrualData.current_year)"
+                align="center"
+              >
+                <el-table-column label="節慶" width="90">
+                  <template #default="scope">{{ money(findMonthlyEntry(scope.row, m.year, m.month)?.festival_bonus) }}</template>
+                </el-table-column>
+                <el-table-column label="超額" width="90">
+                  <template #default="scope">{{ money(findMonthlyEntry(scope.row, m.year, m.month)?.overtime_bonus) }}</template>
+                </el-table-column>
+                <el-table-column label="扣款" width="90">
+                  <template #default="scope">
+                    <span :class="{ 'text-danger': (findMonthlyEntry(scope.row, m.year, m.month)?.meeting_absence_deduction || 0) > 0 }">
+                      {{ money(findMonthlyEntry(scope.row, m.year, m.month)?.meeting_absence_deduction) }}
+                    </span>
+                  </template>
+                </el-table-column>
+              </el-table-column>
+              <el-table-column label="本期小計" align="center">
+                <el-table-column label="節慶" width="100">
+                  <template #default="scope">{{ money(scope.row.totals.festival_bonus) }}</template>
+                </el-table-column>
+                <el-table-column label="超額" width="100">
+                  <template #default="scope">{{ money(scope.row.totals.overtime_bonus) }}</template>
+                </el-table-column>
+                <el-table-column label="扣款" width="100">
+                  <template #default="scope">
+                    <span :class="{ 'text-danger': scope.row.totals.meeting_absence_deduction > 0 }">
+                      {{ money(scope.row.totals.meeting_absence_deduction) }}
+                    </span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="預估實發" width="120">
+                  <template #default="scope">
+                    <strong>{{ money(scope.row.totals.net_estimate) }}</strong>
+                  </template>
+                </el-table-column>
+              </el-table-column>
+            </el-table>
+          </template>
+        </el-tab-pane>
+      </el-tabs>
     </el-dialog>
 
     <el-dialog v-model="showFieldBreakdownDialog" :title="fieldBreakdownTitle" width="960px">
@@ -661,6 +787,14 @@ onMounted(() => {
 .bonus-total {
   font-size: var(--text-lg);
   text-align: right;
+}
+.accrual-hint {
+  margin-bottom: 12px;
+  color: #666;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 .breakdown-meta {
   margin-bottom: 16px;

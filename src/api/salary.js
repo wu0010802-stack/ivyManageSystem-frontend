@@ -6,6 +6,9 @@ export const calculate = (year, month) =>
 export const getFestivalBonus = (year, month) =>
   api.get(`/salaries/festival-bonus?year=${year}&month=${month}`)
 
+export const getFestivalBonusPeriodAccrual = (year, month) =>
+  api.get(`/salaries/festival-bonus/period-accrual?year=${year}&month=${month}`)
+
 export const getRecords = (year, month) =>
   api.get(`/salaries/records?year=${year}&month=${month}`)
 
