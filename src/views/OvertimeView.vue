@@ -7,6 +7,7 @@ import { hasPermission } from '@/utils/auth'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useEmployeeStore } from '@/stores/employee'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
+import LoadingPanel from '@/components/common/LoadingPanel.vue'
 import { useCrudDialog, useConfirmDelete, useDateQuery, useFetchPending, useApprovalOperation } from '@/composables'
 import { useApprovalModule } from '@/composables/useApprovalModule'
 import { apiError } from '@/utils/error'
@@ -331,8 +332,15 @@ watch(activeSection, async (value) => {
           </el-table>
         </el-card>
 
-        <TableSkeleton v-if="loading && !overtimeRecords.length" :columns="8" />
-        <el-table v-else :data="overtimeRecords" border stripe style="width: 100%; margin-top: 20px;" v-loading="loading" max-height="600" @selection-change="handleSelectionChange">
+        <LoadingPanel
+          :loading="loading && !overtimeRecords.length"
+          :empty="!loading && !overtimeRecords.length"
+          variant="skeleton"
+          class="overtime-table-panel"
+        >
+          <template #skeleton><TableSkeleton :columns="8" /></template>
+          <template #empty><el-empty description="尚無加班紀錄" /></template>
+          <el-table :data="overtimeRecords" border stripe style="width: 100%; margin-top: 20px;" v-loading="loading" max-height="600" @selection-change="handleSelectionChange">
           <el-table-column type="selection" width="45" />
           <el-table-column prop="employee_name" label="員工" width="100" />
           <el-table-column prop="overtime_date" label="日期" width="120" />
@@ -381,6 +389,7 @@ watch(activeSection, async (value) => {
             </template>
           </el-table-column>
         </el-table>
+        </LoadingPanel>
 
         <el-card v-if="overtimeRecords.length > 0" class="summary-card">
           <div class="summary">
