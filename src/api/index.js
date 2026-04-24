@@ -1,6 +1,7 @@
 import axios from 'axios'
 import { setUserInfo, clearAuth } from '@/utils/auth'
 import { classifyError } from '@/utils/errorHandler'
+import { applyDedupe } from '@/utils/apiDedupe'
 
 const api = axios.create({
     baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
@@ -10,6 +11,9 @@ const api = axios.create({
         'Content-Type': 'application/json'
     }
 })
+
+// 對 mutating 請求做同 key 去重，防止按鈕連點送出多筆
+applyDedupe(api)
 
 // 不再需要 request interceptor 注入 Authorization header
 // Token 改由瀏覽器自動攜帶 httpOnly Cookie
