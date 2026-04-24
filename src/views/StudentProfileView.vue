@@ -235,6 +235,14 @@
         <el-empty v-else description="尚無紀錄" />
       </el-tab-pane>
 
+      <el-tab-pane v-if="canPortfolioRead" label="成長歷程" name="portfolio">
+        <PortfolioTab v-if="profile" :student-id="profile.basic.id" />
+      </el-tab-pane>
+
+      <el-tab-pane v-if="canHealthRead" label="健康" name="health">
+        <HealthTab v-if="profile" :student-id="profile.basic.id" />
+      </el-tab-pane>
+
       <el-tab-pane label="相關連結" name="links">
         <div class="quick-links">
           <el-button @click="goTo('/student-attendance')">學生出席紀錄</el-button>
@@ -296,6 +304,8 @@ import LifecycleTransitionDialog from '@/components/student/LifecycleTransitionD
 import IncidentEditorDialog from '@/components/student/IncidentEditorDialog.vue'
 import AssessmentEditorDialog from '@/components/student/AssessmentEditorDialog.vue'
 import ChangeLogEditorDialog from '@/components/student/ChangeLogEditorDialog.vue'
+import PortfolioTab from '@/components/portfolio/PortfolioTab.vue'
+import HealthTab from '@/components/portfolio/HealthTab.vue'
 import { getStudentProfile } from '@/api/students'
 import { getIncidents, deleteIncident } from '@/api/studentIncidents'
 import { getAssessments, deleteAssessment } from '@/api/studentAssessments'
@@ -315,6 +325,8 @@ const lifecycleDialogVisible = ref(false)
 const studentId = computed(() => Number(route.params.id))
 const canLifecycleWrite = computed(() => hasPermission('STUDENTS_LIFECYCLE_WRITE'))
 const canGuardiansRead = computed(() => hasPermission('GUARDIANS_READ'))
+const canPortfolioRead = computed(() => hasPermission('PORTFOLIO_READ'))
+const canHealthRead = computed(() => hasPermission('STUDENTS_HEALTH_READ'))
 
 // ── 事件紀錄（本學生） ──────────────────────────────
 const incidentList = ref([])
