@@ -1,5 +1,6 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import { refreshSession } from '@/api/auth'
+import { startRouteLoading, finishRouteLoading } from '@/composables/useRouteLoading'
 import { isLoggedIn, canAccessRoute, getUserInfo, getAllowedRoutes, hasStoredUserInfo, setUserInfo, clearAuth } from '@/utils/auth'
 
 const router = createRouter({
@@ -25,6 +26,26 @@ const router = createRouter({
             meta: { title: '報表統計' }
         },
         {
+            path: '/analytics',
+            component: () => import('../views/analytics/AnalyticsView.vue'),
+            meta: { title: '經營分析' },
+            redirect: '/analytics/funnel',
+            children: [
+                {
+                    path: 'funnel',
+                    name: 'analytics-funnel',
+                    component: () => import('../views/analytics/FunnelPanel.vue'),
+                    meta: { title: '招生漏斗' },
+                },
+                {
+                    path: 'churn',
+                    name: 'analytics-churn',
+                    component: () => import('../views/analytics/ChurnPanel.vue'),
+                    meta: { title: '流失預警' },
+                },
+            ],
+        },
+        {
             path: '/employees',
             name: 'employees',
             component: () => import('../views/EmployeeView.vue'),
@@ -47,6 +68,12 @@ const router = createRouter({
             name: 'student-attendance',
             component: () => import('../views/StudentAttendanceView.vue'),
             meta: { title: '學生出席紀錄' }
+        },
+        {
+            path: '/portfolio/medication-today',
+            name: 'medication-today',
+            component: () => import('../views/MedicationTodayView.vue'),
+            meta: { title: '今日用藥' }
         },
         {
             path: '/student-enrollment',
@@ -405,6 +432,8 @@ async function restoreSessionIfNeeded(to) {
 
 // Auth guard
 router.beforeEach(async (to, from, next) => {
+    startRouteLoading()
+
     let { loggedIn, userInfo } = await restoreSessionIfNeeded(to)
 
     // 強制改密碼攔截：已登入且旗標為 true，且目標路由不是改密碼頁也不是登入頁
@@ -465,6 +494,14 @@ router.beforeEach(async (to, from, next) => {
     }
 
     next()
+})
+
+router.afterEach(() => {
+    finishRouteLoading()
+})
+
+router.onError(() => {
+    finishRouteLoading()
 })
 
 export default router

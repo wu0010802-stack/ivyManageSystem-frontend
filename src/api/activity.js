@@ -47,14 +47,22 @@ export const deleteRegistration = (id, { forceRefund = false } = {}) =>
   api.delete(`/activity/registrations/${id}`, {
     params: forceRefund ? { force_refund: true } : {},
   })
-export const batchUpdatePayment = (ids, isPaid) =>
-  api.put('/activity/registrations/batch-payment', { ids, is_paid: isPaid })
+// 批次標記「已繳費」（is_paid=true）— 後端已禁用 is_paid=false 批次沖帳以防誤操作
+export const batchUpdatePayment = (ids) =>
+  api.put('/activity/registrations/batch-payment', { ids, is_paid: true })
+// 更新付款狀態：is_paid=false 需帶 confirm_refund_amount (=current_paid) 與 refund_reason (≥5 字)
+export const updateRegistrationPayment = (id, payload) =>
+  api.put(`/activity/registrations/${id}/payment`, payload)
 export const getRegistrationPayments = (id) =>
   api.get(`/activity/registrations/${id}/payments`)
 export const addRegistrationPayment = (id, data) =>
   api.post(`/activity/registrations/${id}/payments`, data)
-export const deleteRegistrationPayment = (registrationId, paymentId) =>
-  api.delete(`/activity/registrations/${registrationId}/payments/${paymentId}`)
+// 軟刪除繳費紀錄（voiding）：需 ACTIVITY_PAYMENT_APPROVE 權限 + reason ≥ 5 字
+// 原紀錄仍保留於 DB（voided_at/by/reason 欄位），不計入 paid_amount / 日結
+export const deleteRegistrationPayment = (registrationId, paymentId, reason) =>
+  api.delete(`/activity/registrations/${registrationId}/payments/${paymentId}`, {
+    data: { reason },
+  })
 export const exportRegistrations = (params) =>
   api.get('/activity/registrations/export', { params, responseType: 'blob' })
 

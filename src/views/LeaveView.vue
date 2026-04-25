@@ -5,6 +5,7 @@ import { useApprovalPolicyStore } from '@/stores/approvalPolicy'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useEmployeeStore } from '@/stores/employee'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
+import LoadingPanel from '@/components/common/LoadingPanel.vue'
 import { useCrudDialog, useConfirmDelete, useDateQuery, useLeaveHoursCalculator, useApprovalOperation } from '@/composables'
 import { useApprovalModule } from '@/composables/useApprovalModule'
 import { downloadFile } from '@/utils/download'
@@ -364,8 +365,15 @@ onMounted(() => {
       </div>
     </el-card>
 
-    <TableSkeleton v-if="loading && !leaveRecords.length" :columns="8" />
-    <el-table v-else :data="leaveRecords" border stripe style="width: 100%; margin-top: 20px;" v-loading="loading" max-height="600" @selection-change="handleSelectionChange">
+    <LoadingPanel
+      :loading="loading && !leaveRecords.length"
+      :empty="!loading && !leaveRecords.length"
+      variant="skeleton"
+      class="leave-table-panel"
+    >
+      <template #skeleton><TableSkeleton :columns="8" /></template>
+      <template #empty><el-empty description="尚無請假紀錄" /></template>
+      <el-table :data="leaveRecords" border stripe style="width: 100%; margin-top: 20px;" v-loading="loading" max-height="600" @selection-change="handleSelectionChange">
       <el-table-column type="selection" width="45" />
       <el-table-column prop="employee_name" label="員工" width="100" />
       <el-table-column label="假別" width="100">
@@ -460,6 +468,7 @@ onMounted(() => {
           </template>
         </el-table-column>
       </el-table>
+    </LoadingPanel>
 
       </el-tab-pane>
 

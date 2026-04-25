@@ -102,13 +102,22 @@ describe('useActivityRegistration', () => {
     )
   })
 
-  it('batchMarkPaid 送出正確的 ids 和 isPaid', async () => {
+  it('batchMarkPaid 送出正確的 ids（只接受 isPaid=true，批次沖帳已禁用）', async () => {
     const { selectedIds, batchMarkPaid } = useActivityRegistration()
     selectedIds.value = [1, 2, 3]
 
     await batchMarkPaid(true)
 
-    expect(batchUpdatePayment).toHaveBeenCalledWith([1, 2, 3], true)
+    expect(batchUpdatePayment).toHaveBeenCalledWith([1, 2, 3])
+  })
+
+  it('batchMarkPaid 傳入 isPaid=false 不呼叫 API（已禁用批次沖帳）', async () => {
+    const { selectedIds, batchMarkPaid } = useActivityRegistration()
+    selectedIds.value = [1, 2]
+
+    await batchMarkPaid(false)
+
+    expect(batchUpdatePayment).not.toHaveBeenCalled()
   })
 
   it('batchMarkPaid 成功後顯示後端訊息並清空 selectedIds', async () => {

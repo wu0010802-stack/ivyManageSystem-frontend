@@ -45,6 +45,16 @@ export const PERMISSION_VALUES = {
   GUARDIANS_READ: 2 ** 37,
   GUARDIANS_WRITE: 2 ** 38,
   RECRUITMENT_CONVERT: 2 ** 39,
+  BUSINESS_ANALYTICS: 2 ** 40,
+  // 學習 Portfolio（幼兒成長歷程）— 位元需與後端 utils/permissions.py 對齊
+  PORTFOLIO_READ: 2 ** 41,
+  PORTFOLIO_WRITE: 2 ** 42,
+  PORTFOLIO_PUBLISH: 2 ** 43,
+  STUDENTS_HEALTH_READ: 2 ** 44,
+  STUDENTS_HEALTH_WRITE: 2 ** 45,
+  STUDENTS_MEDICATION_ADMINISTER: 2 ** 46,
+  STUDENTS_SPECIAL_NEEDS_READ: 2 ** 47,
+  STUDENTS_SPECIAL_NEEDS_WRITE: 2 ** 48,
 }
 
 export const ROUTE_PERMISSION_RULES = [
@@ -78,6 +88,8 @@ export const ROUTE_PERMISSION_RULES = [
   { path: '/student-enrollment', permission: 'STUDENTS_READ' },
   { path: '/recruitment', permission: 'RECRUITMENT_READ' },
   { path: '/recruitment-ivykids', permission: 'RECRUITMENT_READ' },
+  { path: '/analytics', permission: 'BUSINESS_ANALYTICS', prefix: true },
+  { path: '/portfolio/medication-today', permission: 'STUDENTS_HEALTH_READ' },
 ]
 
 export const TEACHER_PORTAL_ROUTES = [

@@ -64,6 +64,78 @@
       </div>
     </div>
 
+    <!-- Success Modal -->
+    <div
+      v-if="successModal.visible"
+      class="modal-overlay is-visible"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="successModalTitle"
+      @click.self="closeSuccessModal"
+    >
+      <div class="modal-panel modal-panel--success">
+        <div class="modal-header">
+          <h3 id="successModalTitle" class="modal-title">
+            <svg class="icon" width="22" height="22" aria-hidden="true"><use href="#i-check" /></svg>
+            報名資料已送出
+          </h3>
+          <button type="button" class="modal-close" aria-label="關閉視窗" @click="closeSuccessModal">
+            <svg width="18" height="18" aria-hidden="true"><use href="#i-close" /></svg>
+          </button>
+        </div>
+        <div class="modal-body">
+          <p class="success-msg">{{ successModal.message }}</p>
+
+          <div class="summary-block">
+            <div class="summary-row"><span class="summary-label">幼兒姓名</span><span class="summary-value">{{ successModal.studentName }}</span></div>
+            <div class="summary-row"><span class="summary-label">家長手機</span><span class="summary-value">{{ successModal.parentPhone }}</span></div>
+          </div>
+
+          <div v-if="successModal.enrolledCourses.length > 0" class="summary-section">
+            <div class="summary-section-title">
+              <svg class="icon" width="16" height="16" aria-hidden="true"><use href="#i-check" /></svg>
+              已報名課程（{{ successModal.enrolledCourses.length }}）
+            </div>
+            <ul class="summary-list">
+              <li v-for="c in successModal.enrolledCourses" :key="`e-${c.name}`">
+                <span>{{ c.name }}</span><span class="summary-amount">${{ c.price }}</span>
+              </li>
+            </ul>
+          </div>
+
+          <div v-if="successModal.waitlistCourses.length > 0" class="summary-section is-waitlist">
+            <div class="summary-section-title">
+              <svg class="icon" width="16" height="16" aria-hidden="true"><use href="#i-alert" /></svg>
+              候補課程（{{ successModal.waitlistCourses.length }}）
+            </div>
+            <ul class="summary-list">
+              <li v-for="c in successModal.waitlistCourses" :key="`w-${c.name}`">
+                <span>{{ c.name }}</span><span class="summary-amount summary-amount--muted">候補中</span>
+              </li>
+            </ul>
+            <p class="summary-note">候補課程不計入應繳金額，校方將儘快與您聯繫。</p>
+          </div>
+
+          <div v-if="successModal.selectedSupplies.length > 0" class="summary-section">
+            <div class="summary-section-title">加購項目</div>
+            <ul class="summary-list">
+              <li v-for="s in successModal.selectedSupplies" :key="`s-${s.name}`">
+                <span>{{ s.name }}</span><span class="summary-amount">${{ s.price }}</span>
+              </li>
+            </ul>
+          </div>
+
+          <div class="summary-total">
+            <span>預估應繳金額</span>
+            <strong>${{ successModal.totalAmount }}</strong>
+          </div>
+          <p class="summary-final-note">本金額不含候補課程；實際金額以園方確認後通知為準。</p>
+
+          <button type="button" class="btn btn-primary btn-block" @click="closeSuccessModal">完成</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Contact Modal -->
     <div
       v-if="contactModalVisible"
@@ -181,12 +253,14 @@
         <form novalidate @submit.prevent="handleSubmitRegistration">
           <div class="grid-layout">
             <div class="col-left">
-              <div class="poster-wrapper">
+              <div class="poster-wrapper" :class="{ 'is-loading': !posterLoaded }">
                 <img
                   :src="posterSrc"
                   :alt="`${displayTitle} 活動海報`"
                   loading="eager"
+                  fetchpriority="high"
                   decoding="async"
+                  @load="onPosterLoad"
                   @error="onPosterError"
                 />
               </div>
@@ -213,7 +287,7 @@
                   <span class="form-card-header-title">{{ displayFormCardTitle }}</span>
                 </div>
                 <div class="form-card-body">
-                  <div class="form-row">
+                  <div class="form-row" :class="{ 'has-error': !!errors.name }">
                     <div class="form-label-col">
                       <label class="form-label" for="studentName">
                         <span class="required-mark">*</span>
@@ -226,14 +300,19 @@
                         v-model="form.name"
                         type="text"
                         class="input-text"
+                        :class="{ 'is-invalid': !!errors.name }"
+                        :aria-invalid="!!errors.name"
+                        :aria-describedby="errors.name ? 'studentName-err' : undefined"
                         placeholder="請輸入幼兒姓名"
                         maxlength="100"
                         autocomplete="off"
+                        @input="clearError('name')"
                       />
+                      <div v-if="errors.name" id="studentName-err" class="form-error-hint" role="alert">{{ errors.name }}</div>
                     </div>
                   </div>
 
-                  <div class="form-row">
+                  <div class="form-row" :class="{ 'has-error': !!errors.birthday }">
                     <div class="form-label-col">
                       <label class="form-label" for="studentBirthday">
                         <span class="required-mark">*</span>
@@ -246,11 +325,18 @@
                         v-model="form.birthday"
                         type="date"
                         class="input-text"
+                        :class="{ 'is-invalid': !!errors.birthday }"
+                        :min="minBirthdayISO"
+                        :max="maxBirthdayISO"
+                        :aria-invalid="!!errors.birthday"
+                        :aria-describedby="errors.birthday ? 'studentBirthday-err' : undefined"
+                        @input="clearError('birthday')"
                       />
+                      <div v-if="errors.birthday" id="studentBirthday-err" class="form-error-hint" role="alert">{{ errors.birthday }}</div>
                     </div>
                   </div>
 
-                  <div class="form-row">
+                  <div class="form-row" :class="{ 'has-error': !!parentPhoneError }">
                     <div class="form-label-col">
                       <label class="form-label" for="parentPhone">
                         <span class="required-mark">*</span>
@@ -263,15 +349,20 @@
                         v-model="form.parent_phone"
                         type="tel"
                         class="input-text"
+                        :class="{ 'is-invalid': !!parentPhoneError }"
+                        :aria-invalid="!!parentPhoneError"
+                        :aria-describedby="parentPhoneError ? 'parentPhone-err' : undefined"
                         placeholder="09xx-xxx-xxx"
                         maxlength="15"
                         autocomplete="tel"
+                        inputmode="tel"
+                        @input="clearError('parent_phone')"
                       />
-                      <div v-if="parentPhoneError" class="form-error-hint">{{ parentPhoneError }}</div>
+                      <div v-if="parentPhoneError" id="parentPhone-err" class="form-error-hint" role="alert">{{ parentPhoneError }}</div>
                     </div>
                   </div>
 
-                  <div class="form-row">
+                  <div class="form-row" :class="{ 'has-error': !!errors.class_name }">
                     <div class="form-label-col">
                       <label class="form-label" for="studentClass">
                         <span class="required-mark">*</span>
@@ -279,14 +370,23 @@
                       </label>
                     </div>
                     <div class="form-input-col">
-                      <select id="studentClass" v-model="form.class_name" class="input-select">
+                      <select
+                        id="studentClass"
+                        v-model="form.class_name"
+                        class="input-select"
+                        :class="{ 'is-invalid': !!errors.class_name }"
+                        :aria-invalid="!!errors.class_name"
+                        :aria-describedby="errors.class_name ? 'studentClass-err' : undefined"
+                        @change="clearError('class_name')"
+                      >
                         <option value="" disabled>請選擇班級</option>
                         <option v-for="cls in classes" :key="cls" :value="cls">{{ cls }}</option>
                       </select>
+                      <div v-if="errors.class_name" id="studentClass-err" class="form-error-hint" role="alert">{{ errors.class_name }}</div>
                     </div>
                   </div>
 
-                  <div class="form-row">
+                  <div class="form-row" :class="{ 'has-error': !!errors.courses }">
                     <div class="form-label-col">
                       <span class="form-label">
                         <span class="required-mark">*</span>
@@ -295,64 +395,74 @@
                       <span class="form-hint">可複選；剩餘名額即時顯示</span>
                     </div>
                     <div class="form-input-col">
-                      <div class="course-list-vertical" role="group" aria-label="才藝課程選項">
+                      <div
+                        id="courseListGroup"
+                        class="course-list-vertical"
+                        role="group"
+                        aria-label="才藝課程選項"
+                        tabindex="-1"
+                      >
                         <div v-if="optionsLoading" class="empty-hint">載入中…</div>
                         <div v-else-if="courses.length === 0" class="empty-hint">目前尚無可報名課程</div>
-                        <label
+                        <div
                           v-for="course in courses"
                           v-else
                           :key="course.name"
                           class="course-item"
                           :class="{ 'course-item-disabled': availabilityState(course).full }"
+                          :title="availabilityState(course).full ? '此課程已額滿，無法再報名' : ''"
                         >
-                          <input
-                            type="checkbox"
-                            name="course"
-                            :value="course.name"
-                            :disabled="availabilityState(course).full"
-                            :checked="form.selectedCourses.includes(course.name)"
-                            @change="toggleCourse(course)"
-                          />
-                          <span class="course-text">
-                            {{ course.name }}
-                            <span class="price-tag">
-                              <template v-if="course.sessions">{{ course.sessions }}堂</template>
-                              ${{ course.price }}
+                          <label class="course-label">
+                            <input
+                              type="checkbox"
+                              name="course"
+                              :value="course.name"
+                              :disabled="availabilityState(course).full"
+                              :checked="form.selectedCourses.includes(course.name)"
+                              @change="toggleCourse(course); clearError('courses')"
+                            />
+                            <span class="course-text">
+                              <span class="course-name">{{ course.name }}</span>
+                              <span class="price-tag">
+                                <template v-if="course.sessions">{{ course.sessions }}堂</template>
+                                ${{ course.price }}
+                              </span>
+                              <span v-if="course.frequency" class="rem-count">{{ course.frequency }}</span>
+                              <span
+                                v-if="availabilityState(course).text"
+                                class="qty-display"
+                                :class="availabilityState(course).cssClass"
+                              >
+                                {{ availabilityState(course).text }}
+                              </span>
                             </span>
-                            <span v-if="course.frequency" class="rem-count">{{ course.frequency }}</span>
-                            <span
-                              v-if="availabilityState(course).text"
-                              class="qty-display"
-                              :class="availabilityState(course).cssClass"
-                            >
-                              {{ availabilityState(course).text }}
-                            </span>
-                            <button
-                              v-if="videos[course.name]"
-                              type="button"
-                              class="video-btn"
-                              :aria-label="`觀看 ${course.name} 介紹影片`"
-                              @click.prevent.stop="openVideoModal(course.name, videos[course.name])"
-                            >
-                              <svg class="icon" aria-hidden="true"><use href="#i-play" /></svg>
-                              課程介紹
-                            </button>
-                          </span>
-                        </label>
+                          </label>
+                          <button
+                            v-if="videos[course.name]"
+                            type="button"
+                            class="video-btn"
+                            :aria-label="`觀看 ${course.name} 介紹影片`"
+                            @click="openVideoModal(course.name, videos[course.name])"
+                          >
+                            <svg class="icon" aria-hidden="true"><use href="#i-play" /></svg>
+                            課程介紹
+                          </button>
+                        </div>
                       </div>
+                      <div v-if="errors.courses" class="form-error-hint" role="alert">{{ errors.courses }}</div>
                     </div>
                   </div>
 
                   <div v-if="supplies.length > 0" class="form-row">
                     <div class="form-label-col">
                       <span class="form-label">
-                        舞蹈班代辦品 <span class="en">Supplies</span>
+                        課程加購項目 <span class="en">Supplies</span>
                       </span>
                       <span class="form-hint">選填</span>
                     </div>
                     <div class="form-input-col">
-                      <div class="dance-grid" role="group" aria-label="代辦品選項">
-                        <label v-for="supply in supplies" :key="supply.name" class="course-item">
+                      <div class="dance-grid" role="group" aria-label="加購項目">
+                        <label v-for="supply in supplies" :key="supply.name" class="course-item supply-item">
                           <input
                             type="checkbox"
                             name="supply"
@@ -361,7 +471,7 @@
                             @change="toggleSupply(supply)"
                           />
                           <span class="course-text">
-                            {{ supply.name }}
+                            <span class="course-name">{{ supply.name }}</span>
                             <span class="price-tag">${{ supply.price }}</span>
                           </span>
                         </label>
@@ -371,17 +481,19 @@
                 </div>
               </section>
 
-              <button
-                type="submit"
-                class="btn btn-primary btn-submit"
-                :disabled="submitButtonDisabled"
-              >
-                {{ submitButtonLabel }}
-                <span v-if="isRegistrationOpen && !submitting" class="btn-suffix">Submit</span>
-              </button>
+              <div class="submit-bar">
+                <button
+                  type="submit"
+                  class="btn btn-primary btn-submit"
+                  :disabled="submitButtonDisabled"
+                >
+                  {{ submitButtonLabel }}
+                  <span v-if="isRegistrationOpen && !submitting" class="btn-suffix">Submit</span>
+                </button>
+              </div>
 
               <div class="btn-actions-row">
-                <button type="button" class="btn btn-outline" @click="openQueryWindow">
+                <button type="button" class="btn btn-outline" @click="goToQuery">
                   <svg class="icon" width="18" height="18" aria-hidden="true"><use href="#i-search" /></svg>
                   查詢 / 修改報名
                 </button>
@@ -403,12 +515,15 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { useRouter } from 'vue-router'
 import { publicRegister, publicCreateInquiry } from '@/api/activityPublic'
 import { usePublicActivityOptions } from '@/composables/usePublicActivityOptions'
 import { useActivityRegistrationTime } from '@/composables/useActivityRegistrationTime'
 import { useActivityAvailability } from '@/composables/useActivityAvailability'
 import { toggleArrayItem } from '@/utils/arrayUtils'
+
+const router = useRouter()
 
 const TOAST_ICONS = {
   success: '<svg viewBox="0 0 24 24" fill="none" stroke="#15803D" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>',
@@ -458,17 +573,47 @@ const form = reactive({
   selectedSupplies: [],
 })
 
+// 各欄位錯誤訊息（送出後填入；使用者開始修改時清除對應欄位）
+const errors = reactive({
+  name: '',
+  birthday: '',
+  parent_phone: '',
+  class_name: '',
+  courses: '',
+})
+
 const TW_MOBILE_RE = /^09\d{8}$/
 function normalizeMobile(raw) {
   return String(raw || '').replace(/[\s\-().]/g, '')
 }
 const parentPhoneError = computed(() => {
+  if (errors.parent_phone) return errors.parent_phone
   if (!form.parent_phone) return ''
   return TW_MOBILE_RE.test(normalizeMobile(form.parent_phone))
     ? ''
     : '請輸入 09 開頭的 10 碼手機號碼'
 })
 const submitting = ref(false)
+const posterLoaded = ref(false)
+function onPosterLoad() { posterLoaded.value = true }
+
+// ===== 生日輸入上下限（與後端 _validate_birthday_str 同步：20 年內、不可未來） =====
+function toISODate(d) {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+const maxBirthdayISO = computed(() => toISODate(new Date()))
+const minBirthdayISO = computed(() => {
+  const d = new Date()
+  d.setFullYear(d.getFullYear() - 20)
+  return toISODate(d)
+})
+
+// ===== 倒數時間 reactive tick（每 60 秒更新一次） =====
+const nowTick = ref(Date.now())
+let tickTimer = null
 
 const toasts = ref([])
 let toastSeq = 0
@@ -484,7 +629,7 @@ function dismissToast(id) {
 // ===== 報名時段狀態 =====
 const noticeState = computed(() => {
   const settings = timeInfo.value || {}
-  const now = new Date()
+  const now = new Date(nowTick.value)
   const openAt = settings.open_at ? new Date(settings.open_at) : null
   const closeAt = settings.close_at ? new Date(settings.close_at) : null
 
@@ -515,7 +660,7 @@ const submitButtonLabel = computed(() => {
 
 const submitButtonDisabled = computed(() => submitting.value || !isRegistrationOpen.value)
 
-// ===== 名額狀態（配合新設計 qty-display） =====
+// ===== 名額狀態（顏色語意：充足→中性綠、≤3→紅、候補→黃、額滿→灰） =====
 function availabilityState(course) {
   const remaining = availability.value[course.name]
   if (remaining === undefined) {
@@ -527,7 +672,10 @@ function availabilityState(course) {
   if (remaining <= 0) {
     return { text: '額滿·可候補', cssClass: 'is-waiting', full: false }
   }
-  return { text: `剩 ${remaining} 位`, cssClass: 'is-remaining', full: false }
+  if (remaining <= 3) {
+    return { text: `剩 ${remaining} 位`, cssClass: 'is-low', full: false }
+  }
+  return { text: `剩 ${remaining} 位`, cssClass: 'is-available', full: false }
 }
 
 function toggleCourse(course) {
@@ -591,10 +739,135 @@ async function handleContactSubmit() {
   }
 }
 
-// ===== 查詢 / 修改 視窗 =====
-function openQueryWindow() {
-  const url = `${window.location.origin}${window.location.pathname}#/public/activity/query`
-  window.open(url, 'QueryWindow', 'width=900,height=800,scrollbars=yes')
+// ===== 查詢 / 修改：使用同視窗路由（避免行動裝置 popup 被擋） =====
+function goToQuery() {
+  router.push({ name: 'public-activity-query' })
+}
+
+// ===== 送出成功 modal =====
+const successModal = reactive({
+  visible: false,
+  studentName: '',
+  parentPhone: '',
+  message: '',
+  waitlisted: false,
+  enrolledCourses: [], // [{ name, price }]
+  waitlistCourses: [], // [{ name, price }]
+  selectedSupplies: [], // [{ name, price }]
+  totalAmount: 0,
+})
+
+function priceOf(name, source) {
+  const item = source.find((it) => it.name === name)
+  return Number(item?.price) || 0
+}
+
+function buildSuccessSummary({ name, parentPhone, message, waitlisted, waitlistCourses }) {
+  const waitlistSet = new Set(waitlistCourses || [])
+  const enrolledCourses = []
+  const waitlistOnes = []
+  let total = 0
+
+  form.selectedCourses.forEach((courseName) => {
+    const price = priceOf(courseName, courses.value)
+    const item = { name: courseName, price }
+    if (waitlistSet.has(courseName)) {
+      waitlistOnes.push(item)
+    } else {
+      enrolledCourses.push(item)
+      total += price
+    }
+  })
+
+  const supplyItems = form.selectedSupplies.map((supplyName) => {
+    const price = priceOf(supplyName, supplies.value)
+    total += price
+    return { name: supplyName, price }
+  })
+
+  successModal.studentName = name
+  successModal.parentPhone = parentPhone
+  successModal.message = message
+  successModal.waitlisted = !!waitlisted
+  successModal.enrolledCourses = enrolledCourses
+  successModal.waitlistCourses = waitlistOnes
+  successModal.selectedSupplies = supplyItems
+  successModal.totalAmount = total
+  successModal.visible = true
+}
+
+function closeSuccessModal() {
+  successModal.visible = false
+}
+
+// ===== 表單驗證：一次收集所有錯誤、auto focus 第一個錯誤欄位 =====
+const FIELD_FOCUS_ORDER = ['name', 'birthday', 'parent_phone', 'class_name', 'courses']
+const FIELD_ELEMENT_ID = {
+  name: 'studentName',
+  birthday: 'studentBirthday',
+  parent_phone: 'parentPhone',
+  class_name: 'studentClass',
+  courses: 'courseListGroup',
+}
+
+function clearError(field) {
+  if (errors[field]) errors[field] = ''
+}
+
+function validateForm() {
+  errors.name = ''
+  errors.birthday = ''
+  errors.parent_phone = ''
+  errors.class_name = ''
+  errors.courses = ''
+
+  const name = form.name.trim()
+  const birthday = form.birthday
+  const className = form.class_name
+  const parentPhone = normalizeMobile(form.parent_phone)
+
+  if (!name) errors.name = '請輸入幼兒姓名'
+
+  if (!birthday) {
+    errors.birthday = '請選擇幼兒生日'
+  } else {
+    const inputDate = new Date(birthday)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    if (Number.isNaN(inputDate.getTime())) {
+      errors.birthday = '生日格式不正確'
+    } else if (inputDate > today) {
+      errors.birthday = '生日不可選擇未來日期'
+    } else {
+      const earliest = new Date(today)
+      earliest.setFullYear(earliest.getFullYear() - 20)
+      if (inputDate < earliest) errors.birthday = '生日超出合理範圍，請再次確認'
+    }
+  }
+
+  if (!parentPhone) {
+    errors.parent_phone = '請輸入家長手機號碼'
+  } else if (!TW_MOBILE_RE.test(parentPhone)) {
+    errors.parent_phone = '請輸入 09 開頭的 10 碼手機號碼'
+  }
+
+  if (!className) errors.class_name = '請選擇寶貝班級'
+
+  if (form.selectedCourses.length === 0) errors.courses = '請至少選擇一門才藝課'
+
+  return FIELD_FOCUS_ORDER.every((f) => !errors[f])
+}
+
+async function focusFirstError() {
+  const field = FIELD_FOCUS_ORDER.find((f) => errors[f])
+  if (!field) return
+  await nextTick()
+  const el = document.getElementById(FIELD_ELEMENT_ID[field])
+  if (!el) return
+  if (typeof el.focus === 'function') {
+    try { el.focus({ preventScroll: false }) } catch { el.focus() }
+  }
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' })
 }
 
 // ===== 送出報名 =====
@@ -608,40 +881,16 @@ async function handleSubmitRegistration() {
     return
   }
 
+  if (!validateForm()) {
+    showToast('請修正紅字標示的欄位後再送出。', 'error')
+    await focusFirstError()
+    return
+  }
+
   const name = form.name.trim()
   const birthday = form.birthday
   const className = form.class_name
   const parentPhone = normalizeMobile(form.parent_phone)
-
-  if (!name || !birthday || !className) {
-    showToast('請填寫完整的幼兒姓名、生日及班級。', 'error')
-    return
-  }
-
-  if (!TW_MOBILE_RE.test(parentPhone)) {
-    showToast('請輸入正確的家長手機號碼（09 開頭 10 碼）。', 'error')
-    return
-  }
-
-  const inputDate = new Date(birthday)
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  if (inputDate > today) {
-    showToast('出生日期無效：不能選擇未來的日期。', 'error')
-    return
-  }
-  // 與後端 _validate_birthday_str 20 年上限同步，避免誤填 1900 等離譜年份
-  const earliest = new Date(today)
-  earliest.setFullYear(earliest.getFullYear() - 20)
-  if (inputDate < earliest) {
-    showToast('出生日期超出合理範圍，請再次確認。', 'error')
-    return
-  }
-
-  if (form.selectedCourses.length === 0) {
-    showToast('請至少選擇一門才藝課。', 'error')
-    return
-  }
 
   submitting.value = true
   try {
@@ -655,13 +904,15 @@ async function handleSubmitRegistration() {
       remark: '',
     })
     const result = res?.data || {}
-    let msg = result.message || '報名成功'
-    if (Array.isArray(result.waitlist_courses) && result.waitlist_courses.length) {
-      msg += `（候補課程：${result.waitlist_courses.join('、')}）`
-    }
-    showToast(msg, 'success')
+    buildSuccessSummary({
+      name,
+      parentPhone,
+      message: result.message || '報名資料已送出',
+      waitlisted: result.waitlisted,
+      waitlistCourses: Array.isArray(result.waitlist_courses) ? result.waitlist_courses : [],
+    })
+    showToast(result.message || '報名送出成功！', 'success')
     resetForm()
-    window.scrollTo({ top: 0, behavior: 'smooth' })
     await refreshAvailability()
   } catch (err) {
     showToast(err.response?.data?.detail || '送出失敗', 'error')
@@ -689,8 +940,12 @@ onMounted(async () => {
     showToast(err?.response?.data?.detail || '頁面初始化失敗，請重新整理。', 'error')
   }
   startPolling()
+  tickTimer = setInterval(() => { nowTick.value = Date.now() }, 60_000)
 })
-onUnmounted(() => stopPolling())
+onUnmounted(() => {
+  stopPolling()
+  if (tickTimer) clearInterval(tickTimer)
+})
 </script>
 
 <style scoped>
@@ -762,7 +1017,7 @@ onUnmounted(() => stopPolling())
 .public-activity-page :focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: 4px; }
 
 .page-wrapper {
-  max-width: 1200px;
+  max-width: 1400px;
   margin: 0 auto;
   background-color: var(--color-surface);
   border-radius: var(--radius-xl);
@@ -843,7 +1098,7 @@ onUnmounted(() => stopPolling())
 .page-body { padding: var(--space-8); }
 .grid-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
   gap: var(--space-8);
 }
 
@@ -877,6 +1132,7 @@ onUnmounted(() => stopPolling())
   box-shadow: var(--shadow-sm);
   overflow: hidden;
 }
+.poster-wrapper { position: relative; }
 .poster-wrapper img {
   width: 100%;
   display: block;
@@ -884,6 +1140,25 @@ onUnmounted(() => stopPolling())
   object-fit: cover;
   border-radius: var(--radius-md);
   background-color: var(--color-surface-muted);
+  transition: opacity var(--dur-base) var(--ease-out);
+}
+.poster-wrapper.is-loading img { opacity: 0; }
+.poster-wrapper.is-loading::after {
+  content: "";
+  position: absolute;
+  inset: var(--space-2);
+  border-radius: var(--radius-md);
+  background:
+    linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.55) 50%, transparent 100%),
+    var(--color-surface-muted);
+  background-size: 200% 100%, 100% 100%;
+  background-repeat: no-repeat;
+  animation: posterShimmer 1.4s linear infinite;
+  pointer-events: none;
+}
+@keyframes posterShimmer {
+  from { background-position: -100% 0, 0 0; }
+  to { background-position: 100% 0, 0 0; }
 }
 .info-box {
   background: linear-gradient(180deg, var(--color-surface-muted) 0%, var(--color-surface) 100%);
@@ -1003,6 +1278,33 @@ onUnmounted(() => stopPolling())
   border-color: var(--color-primary);
   box-shadow: var(--focus-ring);
 }
+.input-text.is-invalid, .input-select.is-invalid {
+  border-color: var(--color-danger);
+  background-color: #FFF5F5;
+}
+.input-text.is-invalid:focus, .input-select.is-invalid:focus {
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.22);
+}
+.form-error-hint {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  font-size: var(--fs-xs);
+  color: var(--color-danger);
+  font-weight: 600;
+  line-height: 1.4;
+}
+.form-error-hint::before {
+  content: "";
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23DC2626' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><line x1='12' y1='8' x2='12' y2='12'/><line x1='12' y1='16' x2='12.01' y2='16'/></svg>");
+  background-size: contain;
+  background-repeat: no-repeat;
+}
 .input-select {
   padding-right: 36px;
   appearance: none;
@@ -1012,20 +1314,25 @@ onUnmounted(() => stopPolling())
   background-position: right 12px center;
 }
 
-.course-list-vertical,
 .dance-grid { display: flex; flex-direction: column; gap: var(--space-2); }
+.course-list-vertical {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--space-2);
+}
+.course-list-vertical:focus-visible { outline: none; box-shadow: var(--focus-ring); border-radius: var(--radius-md); }
 
 .course-item {
   display: flex;
-  align-items: flex-start;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
+  align-items: stretch;
+  gap: var(--space-2);
+  padding: 0;
   background-color: var(--color-surface);
   border: 1.5px solid var(--color-border-muted);
   border-radius: var(--radius-md);
-  cursor: pointer;
   transition: border-color var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
   line-height: 1.5;
+  overflow: hidden;
 }
 .course-item:hover:not(.course-item-disabled) {
   border-color: var(--color-primary);
@@ -1036,6 +1343,17 @@ onUnmounted(() => stopPolling())
   background-color: var(--color-primary-soft);
   box-shadow: inset 0 0 0 1px var(--color-primary);
 }
+.course-label {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  cursor: pointer;
+  min-width: 0;
+}
+/* supply-item 仍保留原本 label 即 row 的單純結構 */
+.course-item.supply-item { padding: var(--space-3) var(--space-4); cursor: pointer; align-items: flex-start; }
 .course-item input[type="checkbox"] {
   flex-shrink: 0;
   margin: 3px 0 0 0;
@@ -1044,7 +1362,8 @@ onUnmounted(() => stopPolling())
   accent-color: var(--color-primary);
   cursor: pointer;
 }
-.course-item-disabled { opacity: 0.55; cursor: not-allowed; background-color: #F9FAFB; }
+.course-item-disabled { opacity: 0.55; background-color: #F9FAFB; }
+.course-item-disabled .course-label { cursor: not-allowed; }
 .course-item-disabled input { cursor: not-allowed; }
 .course-text {
   flex: 1;
@@ -1056,8 +1375,19 @@ onUnmounted(() => stopPolling())
   color: var(--color-text);
   min-width: 0;
 }
-.price-tag { color: var(--color-text-subtle); font-size: var(--fs-sm); font-weight: 500; }
-.rem-count { color: var(--color-danger); font-size: var(--fs-xs); font-weight: 600; }
+.course-name { font-weight: 500; }
+.price-tag {
+  color: var(--color-text-subtle);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.rem-count {
+  color: var(--color-danger);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
 .qty-display {
   font-weight: 600;
   font-size: var(--fs-xs);
@@ -1066,12 +1396,15 @@ onUnmounted(() => stopPolling())
   background-color: var(--color-surface-muted);
   color: var(--color-text-muted);
   letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
 }
-.qty-display.is-remaining { background-color: #FEE2E2; color: #B91C1C; }
+.qty-display.is-available { background-color: var(--color-primary-soft); color: var(--color-primary); }
+.qty-display.is-low { background-color: #FEE2E2; color: #B91C1C; }
 .qty-display.is-waiting { background-color: #FEF3C7; color: #B45309; }
 .qty-display.is-full { background-color: #E5E7EB; color: #6B7280; }
 
 .empty-hint {
+  grid-column: 1 / -1;
   padding: var(--space-5);
   color: var(--color-text-subtle);
   font-size: var(--fs-sm);
@@ -1121,7 +1454,8 @@ onUnmounted(() => stopPolling())
 }
 .btn-primary:active:not(:disabled) { transform: translateY(0); box-shadow: 0 4px 10px rgba(234, 88, 12, 0.25); }
 .btn-primary:disabled { background-color: #D1D5DB; border-color: #D1D5DB; color: #6B7280; cursor: not-allowed; box-shadow: none; }
-.btn-submit { width: 100%; min-height: 56px; font-size: var(--fs-lg); margin-top: var(--space-3); }
+.submit-bar { margin-top: var(--space-3); }
+.btn-submit { width: 100%; min-height: 56px; font-size: var(--fs-lg); }
 .btn-block { width: 100%; }
 .btn-outline {
   background-color: var(--color-surface);
@@ -1134,12 +1468,14 @@ onUnmounted(() => stopPolling())
 .btn-actions-row { display: flex; gap: var(--space-3); margin-top: var(--space-3); }
 .btn-actions-row .btn { flex: 1; }
 
-/* Video Button */
+/* Video Button — 獨立於 label 之外，避免與 checkbox 互動衝突 */
 .video-btn {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 10px 4px 8px;
+  align-self: center;
+  margin-right: var(--space-3);
+  padding: 6px 12px;
   background-color: var(--color-accent-soft);
   color: var(--color-accent);
   border: 1px solid transparent;
@@ -1147,7 +1483,8 @@ onUnmounted(() => stopPolling())
   font-size: var(--fs-xs);
   font-weight: 600;
   cursor: pointer;
-  min-height: 26px;
+  min-height: 32px;
+  white-space: nowrap;
   transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
 }
 .video-btn:hover { background-color: var(--color-accent); color: #FFFFFF; transform: scale(1.03); }
@@ -1249,6 +1586,94 @@ onUnmounted(() => stopPolling())
   animation: modalSlideIn var(--dur-slow) var(--ease-out);
 }
 .modal-panel--video { max-width: 900px; padding: var(--space-5); }
+.modal-panel--success { max-width: 560px; }
+.modal-panel--success .modal-title { color: var(--color-success); }
+.success-msg {
+  margin: 0 0 var(--space-4) 0;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-primary-soft);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-sm);
+  color: var(--color-text);
+  line-height: 1.6;
+}
+.summary-block {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-4);
+  background: var(--color-surface-muted);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-sm);
+}
+.summary-row { display: contents; }
+.summary-label { color: var(--color-text-subtle); font-weight: 500; }
+.summary-value { color: var(--color-text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.summary-section { margin-bottom: var(--space-4); }
+.summary-section-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--color-text);
+  margin-bottom: var(--space-2);
+}
+.summary-section-title .icon { color: var(--color-primary); }
+.summary-section.is-waitlist .summary-section-title .icon { color: var(--color-warning); }
+.summary-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.summary-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 10px var(--space-4);
+  font-size: var(--fs-sm);
+  color: var(--color-text);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border-muted);
+}
+.summary-list li:last-child { border-bottom: 0; }
+.summary-amount { color: var(--color-text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.summary-amount--muted { color: var(--color-warning); font-weight: 600; }
+.summary-note {
+  margin: var(--space-2) 0 0 0;
+  font-size: var(--fs-xs);
+  color: var(--color-warning);
+  line-height: 1.5;
+}
+.summary-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-3) var(--space-4);
+  background: linear-gradient(135deg, var(--color-primary-soft) 0%, var(--color-surface-muted) 100%);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--fs-md);
+  font-weight: 600;
+  color: var(--color-text);
+}
+.summary-total strong {
+  color: var(--color-cta);
+  font-size: var(--fs-xl);
+  font-variant-numeric: tabular-nums;
+}
+.summary-final-note {
+  margin: var(--space-2) 0 var(--space-4) 0;
+  font-size: var(--fs-xs);
+  color: var(--color-text-subtle);
+  text-align: center;
+  line-height: 1.5;
+}
 .modal-header {
   display: flex;
   align-items: center;
@@ -1384,11 +1809,31 @@ onUnmounted(() => stopPolling())
   .public-activity-page { padding: 0; }
   .page-wrapper { border-radius: 0; box-shadow: none; }
   .page-header { padding: var(--space-5); }
-  .page-body { padding: var(--space-5); padding-bottom: var(--space-12); }
+  /* 為 sticky CTA 預留空間，避免遮擋頁尾文字 */
+  .page-body { padding: var(--space-5); padding-bottom: 96px; }
   .page-title-line2 { font-size: var(--fs-xl); }
   .form-card-body { padding: var(--space-1) var(--space-4) var(--space-4); }
   .btn-actions-row { flex-direction: column; }
-  .toast-container { top: auto; bottom: var(--space-3); right: var(--space-3); left: var(--space-3); }
+  .toast-container { top: auto; bottom: 96px; right: var(--space-3); left: var(--space-3); }
   .toast { min-width: 0; max-width: none; }
+
+  /* 手機版主 CTA 固定底部（page-wrapper overflow:hidden 會破壞 sticky，改用 fixed） */
+  .submit-bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    margin: 0;
+    padding: var(--space-3) var(--space-4) calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
+    background: var(--color-surface);
+    border-top: 1px solid var(--color-border);
+    box-shadow: 0 -8px 24px rgba(17, 24, 39, 0.08);
+    z-index: 50;
+  }
+  .btn-submit { min-height: 52px; font-size: var(--fs-md); }
+
+  /* 課程列：影片按鈕在小螢幕往下換行更舒服 */
+  .course-item { flex-wrap: wrap; }
+  .video-btn { margin: 0 var(--space-4) var(--space-3); }
 }
 </style>
