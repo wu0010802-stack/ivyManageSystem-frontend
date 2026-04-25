@@ -35,3 +35,7 @@ export const updateGuardian = (guardianId, data) =>
 
 export const deleteGuardian = (guardianId) =>
   api.delete(`/students/guardians/${guardianId}`)
+
+// 簽發家長 LINE LIFF 綁定碼（明碼僅回一次；後端 sha256 存 hash）
+export const createGuardianBindingCode = (guardianId) =>
+  api.post(`/guardians/${guardianId}/binding-code`)

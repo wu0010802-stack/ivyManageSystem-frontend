@@ -1,8 +1,16 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getAnnouncements, createAnnouncement, updateAnnouncement, deleteAnnouncement } from '@/api/announcements'
+import {
+  getAnnouncements,
+  createAnnouncement,
+  updateAnnouncement,
+  deleteAnnouncement,
+  getAnnouncementParentRecipients,
+  replaceAnnouncementParentRecipients,
+} from '@/api/announcements'
 import { useEmployeeStore } from '@/stores/employee'
+import { useClassroomStore } from '@/stores/classroom'
 import { Top } from '@element-plus/icons-vue'
 import { apiError } from '@/utils/error'
 
@@ -11,10 +19,17 @@ const announcements = ref([])
 const dialogVisible = ref(false)
 const isEdit = ref(false)
 const employeeStore = useEmployeeStore()
+const classroomStore = useClassroomStore()
 const employeeOptions = computed(() =>
   employeeStore.employees.map(e => ({
     value: e.id,
     label: `${e.name}（${e.department || e.job_title || ''}）`,
+  }))
+)
+const classroomOptions = computed(() =>
+  (classroomStore.classrooms || []).map(c => ({
+    value: c.id,
+    label: c.name,
   }))
 )
 
@@ -26,6 +41,9 @@ const priorityOptions = [
 
 const priorityMap = Object.fromEntries(priorityOptions.map(p => [p.value, p]))
 
+// parent_visibility: 'off' | 'all' | 'classroom'
+// 後端 scope 支援 all/classroom/student/guardian；前端先涵蓋常用三種，
+// student/guardian 細粒度待後續補（model 已就位，PUT 結構可向下相容）
 const form = reactive({
   id: null,
   title: '',
@@ -34,6 +52,8 @@ const form = reactive({
   is_pinned: false,
   restrict_recipients: false,
   target_employee_ids: [],
+  parent_visibility: 'off',
+  parent_target_classroom_ids: [],
 })
 
 const resetForm = () => {
@@ -44,6 +64,8 @@ const resetForm = () => {
   form.is_pinned = false
   form.restrict_recipients = false
   form.target_employee_ids = []
+  form.parent_visibility = 'off'
+  form.parent_target_classroom_ids = []
 }
 
 const fetchAnnouncements = async () => {
@@ -64,7 +86,7 @@ const openAdd = () => {
   dialogVisible.value = true
 }
 
-const openEdit = (row) => {
+const openEdit = async (row) => {
   form.id = row.id
   form.title = row.title
   form.content = row.content
@@ -72,8 +94,42 @@ const openEdit = (row) => {
   form.is_pinned = row.is_pinned
   form.target_employee_ids = row.recipient_ids ? [...row.recipient_ids] : []
   form.restrict_recipients = form.target_employee_ids.length > 0
+  // 先以預設值打開，再 fetch 家長 scope
+  form.parent_visibility = 'off'
+  form.parent_target_classroom_ids = []
   isEdit.value = true
   dialogVisible.value = true
+  try {
+    const res = await getAnnouncementParentRecipients(row.id)
+    const items = res.data?.items || []
+    if (items.length === 0) {
+      form.parent_visibility = 'off'
+    } else if (items.some(it => it.scope === 'all')) {
+      form.parent_visibility = 'all'
+    } else if (items.every(it => it.scope === 'classroom' && it.classroom_id)) {
+      form.parent_visibility = 'classroom'
+      form.parent_target_classroom_ids = items.map(it => it.classroom_id)
+    } else {
+      // 含 student/guardian scope 的進階設定，前端 UI 暫無對應，視為「自訂」唯讀
+      form.parent_visibility = 'custom'
+    }
+  } catch (error) {
+    // 讀失敗不阻擋編輯，僅提示
+    ElMessage.warning('無法載入家長端發送對象設定，提交時將不變更該設定')
+    form.parent_visibility = 'unchanged'
+  }
+}
+
+const buildParentRecipients = () => {
+  if (form.parent_visibility === 'off') return []
+  if (form.parent_visibility === 'all') return [{ scope: 'all' }]
+  if (form.parent_visibility === 'classroom') {
+    return form.parent_target_classroom_ids.map(cid => ({
+      scope: 'classroom',
+      classroom_id: cid,
+    }))
+  }
+  return null // 'custom' / 'unchanged'：不變更
 }
 
 const submitLoading = ref(false)
@@ -83,9 +139,17 @@ const handleSubmit = async () => {
     ElMessage.warning('請填寫標題和內容')
     return
   }
+  if (
+    form.parent_visibility === 'classroom'
+    && form.parent_target_classroom_ids.length === 0
+  ) {
+    ElMessage.warning('已選「指定班級」對家長公開，請至少勾選一個班級')
+    return
+  }
   submitLoading.value = true
   try {
     const recipientIds = form.restrict_recipients ? form.target_employee_ids : []
+    let announcementId = form.id
     if (isEdit.value) {
       await updateAnnouncement(form.id, {
         title: form.title,
@@ -94,17 +158,30 @@ const handleSubmit = async () => {
         is_pinned: form.is_pinned,
         target_employee_ids: recipientIds,
       })
-      ElMessage.success('公告已更新')
     } else {
-      await createAnnouncement({
+      const res = await createAnnouncement({
         title: form.title,
         content: form.content,
         priority: form.priority,
         is_pinned: form.is_pinned,
         target_employee_ids: recipientIds.length > 0 ? recipientIds : null,
       })
-      ElMessage.success('公告已發佈')
+      announcementId = res.data?.id ?? res.data?.announcement?.id ?? null
     }
+
+    // 家長端 scope 同步（plan A.5）
+    if (announcementId) {
+      const parentRecipients = buildParentRecipients()
+      if (parentRecipients !== null) {
+        try {
+          await replaceAnnouncementParentRecipients(announcementId, parentRecipients)
+        } catch (e) {
+          ElMessage.warning(apiError(e, '公告已存檔，但家長端對象設定失敗，請稍後重試'))
+        }
+      }
+    }
+
+    ElMessage.success(isEdit.value ? '公告已更新' : '公告已發佈')
     dialogVisible.value = false
     fetchAnnouncements()
   } catch (error) {
@@ -157,6 +234,7 @@ const getRemainingReaders = (row) => Math.max(
 onMounted(() => {
   fetchAnnouncements()
   employeeStore.fetchEmployees()
+  classroomStore.fetchClassrooms()
 })
 </script>
 
@@ -312,6 +390,45 @@ onMounted(() => {
             />
           </el-select>
         </el-form-item>
+
+        <el-divider content-position="left">家長端</el-divider>
+
+        <el-form-item label="家長端">
+          <el-radio-group v-model="form.parent_visibility">
+            <el-radio value="off">不對家長公開</el-radio>
+            <el-radio value="all">全部家長</el-radio>
+            <el-radio value="classroom">指定班級</el-radio>
+            <el-radio v-if="form.parent_visibility === 'custom'" value="custom" disabled>
+              進階（細粒度，含學生/監護人）
+            </el-radio>
+            <el-radio v-if="form.parent_visibility === 'unchanged'" value="unchanged" disabled>
+              讀取失敗，將不變更
+            </el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item v-if="form.parent_visibility === 'classroom'" label="指定班級">
+          <el-select
+            v-model="form.parent_target_classroom_ids"
+            multiple
+            filterable
+            placeholder="請選擇班級"
+            style="width: 100%;"
+          >
+            <el-option
+              v-for="opt in classroomOptions"
+              :key="opt.value"
+              :label="opt.label"
+              :value="opt.value"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item v-if="form.parent_visibility === 'custom'" label="提示">
+          <span class="text-muted">
+            此公告對家長端的發送對象包含學生或監護人精細設定，目前介面尚未支援編輯；
+            可透過後端 API 維護，或選擇上方選項覆蓋既有設定。
+          </span>
+        </el-form-item>
+
         <el-form-item label="內容">
           <el-input
             v-model="form.content"

@@ -108,6 +108,10 @@
             <el-icon><Calendar /></el-icon>
             <template #title>學生出席紀錄</template>
           </el-menu-item>
+          <el-menu-item v-if="canView.STUDENTS_READ" index="/student-leaves">
+            <el-icon><Calendar /></el-icon>
+            <template #title>家長請假審核</template>
+          </el-menu-item>
           <el-menu-item v-if="canView.STUDENTS_READ" index="/student-enrollment">
             <el-icon><TrendCharts /></el-icon>
             <template #title>在籍統計</template>

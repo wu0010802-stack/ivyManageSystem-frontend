@@ -70,6 +70,12 @@ const router = createRouter({
             meta: { title: '學生出席紀錄' }
         },
         {
+            path: '/student-leaves',
+            name: 'student-leave-review',
+            component: () => import('../views/StudentLeaveReviewView.vue'),
+            meta: { title: '家長學生請假審核' }
+        },
+        {
             path: '/portfolio/medication-today',
             name: 'medication-today',
             component: () => import('../views/MedicationTodayView.vue'),

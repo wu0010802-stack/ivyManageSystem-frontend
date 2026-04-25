@@ -37,9 +37,10 @@
         </template>
       </el-table-column>
       <el-table-column label="備註" prop="custody_note" min-width="140" show-overflow-tooltip />
-      <el-table-column v-if="canWrite" label="操作" width="140" align="center" fixed="right">
+      <el-table-column v-if="canWrite" label="操作" width="220" align="center" fixed="right">
         <template #default="{ row }">
           <el-button size="small" @click="openEditDialog(row)">編輯</el-button>
+          <el-button size="small" type="primary" plain @click="handleIssueBindingCode(row)">發碼</el-button>
           <el-button size="small" type="danger" @click="handleDelete(row)">刪除</el-button>
         </template>
       </el-table-column>
@@ -95,6 +96,32 @@
         <el-button type="primary" :loading="saving" @click="handleSave">儲存</el-button>
       </template>
     </el-dialog>
+
+    <!-- 綁定碼簽發結果 Dialog（明碼僅顯示一次，DB 只存 sha256） -->
+    <el-dialog
+      v-model="bindingCodeVisible"
+      title="家長 LINE 綁定碼"
+      width="420px"
+      :close-on-click-modal="false"
+      @closed="bindingCode = ''"
+    >
+      <el-alert
+        type="warning"
+        :closable="false"
+        title="請立即抄寫並交給家長：此碼僅顯示一次，關閉後無法再查看。"
+        style="margin-bottom: 12px;"
+      />
+      <div class="binding-code-display">
+        <span class="binding-code-text">{{ bindingCode }}</span>
+        <el-button size="small" @click="copyBindingCode">複製</el-button>
+      </div>
+      <div class="binding-code-meta">
+        過期時間：{{ bindingCodeExpiresAt || '—' }}（預設 24 小時，一次性使用）
+      </div>
+      <template #footer>
+        <el-button type="primary" @click="bindingCodeVisible = false">我已抄寫</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -103,6 +130,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   createGuardian,
+  createGuardianBindingCode,
   deleteGuardian,
   listGuardians,
   updateGuardian,
@@ -238,6 +266,43 @@ async function handleDelete(row) {
   }
 }
 
+// 家長綁定碼簽發
+const bindingCodeVisible = ref(false)
+const bindingCode = ref('')
+const bindingCodeExpiresAt = ref('')
+
+async function handleIssueBindingCode(row) {
+  try {
+    await ElMessageBox.confirm(
+      `確定要為「${row.name}」簽發 LINE 綁定碼嗎？\n明碼僅顯示一次，請務必當下抄寫並當面交給家長。`,
+      '簽發綁定碼',
+      { type: 'warning', confirmButtonText: '確定簽發' },
+    )
+  } catch {
+    return
+  }
+  try {
+    const { data } = await createGuardianBindingCode(row.id)
+    bindingCode.value = data?.code || ''
+    bindingCodeExpiresAt.value = data?.expires_at
+      ? data.expires_at.replace('T', ' ').slice(0, 16)
+      : ''
+    bindingCodeVisible.value = true
+  } catch (err) {
+    ElMessage.error(err.displayMessage || '簽發失敗')
+  }
+}
+
+async function copyBindingCode() {
+  if (!bindingCode.value) return
+  try {
+    await navigator.clipboard.writeText(bindingCode.value)
+    ElMessage.success('已複製到剪貼簿')
+  } catch {
+    ElMessage.warning('瀏覽器不支援複製，請手動抄寫')
+  }
+}
+
 defineExpose({ refresh: fetchGuardians })
 
 onMounted(fetchGuardians)
@@ -267,5 +332,26 @@ watch(() => props.studentId, fetchGuardians)
   margin-top: 4px;
   color: var(--el-text-color-secondary);
   font-size: 12px;
+}
+.binding-code-display {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--el-fill-color-light);
+  border: 1px dashed var(--el-border-color);
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+.binding-code-text {
+  font-family: ui-monospace, "Menlo", monospace;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 4px;
+  user-select: all;
+}
+.binding-code-meta {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
 }
 </style>
