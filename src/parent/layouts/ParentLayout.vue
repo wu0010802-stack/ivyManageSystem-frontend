@@ -1,17 +1,39 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useParentAuthStore } from '../stores/parentAuth'
+import { getUnreadCount } from '../api/announcements'
 
 const route = useRoute()
 const router = useRouter()
+const authStore = useParentAuthStore()
 
-// 公開頁面（登入、綁定）不顯示 layout（無 header/tab bar）
 const isPublic = computed(() => route.meta?.public === true)
+const hideTabBar = computed(() => route.meta?.hideTabBar === true)
+const currentTab = computed(() => route.meta?.tab || '')
 
-const goBack = () => {
-  if (window.history.length > 1) router.back()
-  else router.replace('/home')
+const unread = ref(0)
+
+const TABS = [
+  { key: 'home', icon: '🏠', label: '首頁', path: '/home' },
+  { key: 'attendance', icon: '📋', label: '出席', path: '/attendance' },
+  { key: 'announcements', icon: '📢', label: '公告', path: '/announcements' },
+  { key: 'leaves', icon: '📝', label: '請假', path: '/leaves' },
+  { key: 'more', icon: '⋯', label: '更多', path: '/more' },
+]
+
+async function refreshUnread() {
+  if (!authStore.isAuthed()) return
+  try {
+    const { data } = await getUnreadCount()
+    unread.value = data?.unread_count || 0
+  } catch {
+    /* ignore */
+  }
 }
+
+onMounted(refreshUnread)
+watch(() => route.fullPath, refreshUnread)
 </script>
 
 <template>
@@ -19,9 +41,28 @@ const goBack = () => {
     <header v-if="!isPublic" class="parent-header">
       <span class="parent-header-title">{{ route.meta?.title || '常春藤家長' }}</span>
     </header>
-    <main class="parent-main" :class="{ 'is-public': isPublic }">
+
+    <main class="parent-main" :class="{ 'is-public': isPublic, 'with-tabbar': !hideTabBar && !isPublic }">
       <slot />
     </main>
+
+    <nav v-if="!hideTabBar && !isPublic" class="tab-bar">
+      <router-link
+        v-for="t in TABS"
+        :key="t.key"
+        :to="t.path"
+        class="tab-item"
+        :class="{ active: currentTab === t.key }"
+      >
+        <span class="tab-icon">
+          {{ t.icon }}
+          <span v-if="t.key === 'announcements' && unread > 0" class="badge">
+            {{ unread > 99 ? '99+' : unread }}
+          </span>
+        </span>
+        <span class="tab-label">{{ t.label }}</span>
+      </router-link>
+    </nav>
   </div>
 </template>
 
@@ -59,5 +100,61 @@ const goBack = () => {
 
 .parent-main.is-public {
   padding: 0;
+}
+
+.parent-main.with-tabbar {
+  padding-bottom: calc(64px + env(safe-area-inset-bottom, 0));
+}
+
+.tab-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #fff;
+  border-top: 1px solid #e5e7eb;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  padding-bottom: env(safe-area-inset-bottom, 0);
+  z-index: 50;
+}
+
+.tab-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 0;
+  font-size: 11px;
+  color: #888;
+  text-decoration: none;
+}
+
+.tab-item.active {
+  color: #3f7d48;
+}
+
+.tab-icon {
+  font-size: 20px;
+  position: relative;
+  line-height: 1;
+}
+
+.tab-label {
+  margin-top: 2px;
+}
+
+.badge {
+  position: absolute;
+  top: -6px;
+  right: -10px;
+  background: #c0392b;
+  color: #fff;
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 8px;
+  min-width: 16px;
+  text-align: center;
+  line-height: 1.4;
 }
 </style>
