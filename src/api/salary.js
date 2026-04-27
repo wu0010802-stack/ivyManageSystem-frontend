@@ -44,3 +44,11 @@ export const createManualSnapshot = (year, month, payload = {}) =>
 
 export const getSnapshotDiff = (snapshotId) =>
   api.get(`/salaries/snapshots/${snapshotId}/diff`)
+
+// 解除單筆薪資封存（高風險、不可逆）：
+// - 需 SALARY_WRITE + admin/hr 角色 + ACTIVITY_PAYMENT_APPROVE（金流簽核）
+// - reason 必填 ≥ 10 字，會寫入 record.remark + audit_summary 供日後稽核
+// - 不可解除自己的薪資封存
+// 失敗回傳：422（reason 太短 / 未帶 body）、403（缺權限或自我解封）、409（未封存）
+export const unfinalizeSalary = (recordId, reason) =>
+  api.delete(`/salaries/${recordId}/finalize`, { data: { reason } })

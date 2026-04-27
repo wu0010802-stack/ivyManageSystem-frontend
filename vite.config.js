@@ -218,6 +218,99 @@ export default defineConfig({
                             cacheableResponse: { statuses: [200] },
                         },
                     },
+                    // ─── 家長端 /api/parent/* ───────────────────────────
+                    // 家長首頁彙總：個資 + 摘要 → NetworkFirst，3 秒 timeout 兜離線
+                    {
+                        urlPattern: ({ url, request }) =>
+                            url.pathname === '/api/parent/home/summary' &&
+                            request.method === 'GET',
+                        handler: 'NetworkFirst',
+                        options: {
+                            cacheName: 'parent-home',
+                            networkTimeoutSeconds: 3,
+                            expiration: {
+                                maxEntries: 5,
+                                maxAgeSeconds: 60 * 60 * 2,
+                            },
+                            cacheableResponse: { statuses: [200] },
+                        },
+                    },
+                    // 家長個資 / 子女清單：含個資 → NetworkFirst
+                    {
+                        urlPattern: ({ url, request }) => {
+                            if (request.method !== 'GET') return false
+                            const p = url.pathname
+                            return (
+                                p === '/api/parent/me' ||
+                                p === '/api/parent/my-children'
+                            )
+                        },
+                        handler: 'NetworkFirst',
+                        options: {
+                            cacheName: 'parent-profile',
+                            networkTimeoutSeconds: 5,
+                            expiration: {
+                                maxEntries: 5,
+                                maxAgeSeconds: 60 * 60 * 24,
+                            },
+                            cacheableResponse: { statuses: [200] },
+                        },
+                    },
+                    // 家長端敏感唯讀（出席 / 費用 / 請假 / 才藝 / 事件）：NetworkFirst
+                    {
+                        urlPattern: ({ url, request }) => {
+                            if (request.method !== 'GET') return false
+                            const p = url.pathname
+                            return (
+                                p.startsWith('/api/parent/attendance') ||
+                                p.startsWith('/api/parent/fees') ||
+                                p.startsWith('/api/parent/student-leaves') ||
+                                p.startsWith('/api/parent/activity') ||
+                                p.startsWith('/api/parent/events')
+                            )
+                        },
+                        handler: 'NetworkFirst',
+                        options: {
+                            cacheName: 'parent-sensitive',
+                            networkTimeoutSeconds: 5,
+                            expiration: {
+                                maxEntries: 40,
+                                maxAgeSeconds: 60 * 60 * 2,
+                            },
+                            cacheableResponse: { statuses: [200] },
+                        },
+                    },
+                    // 公告（家長 scope）：StaleWhileRevalidate，離線體驗最優
+                    {
+                        urlPattern: ({ url, request }) =>
+                            url.pathname.startsWith('/api/parent/announcements') &&
+                            request.method === 'GET',
+                        handler: 'StaleWhileRevalidate',
+                        options: {
+                            cacheName: 'parent-public',
+                            expiration: {
+                                maxEntries: 10,
+                                maxAgeSeconds: 60 * 60 * 12,
+                            },
+                            cacheableResponse: { statuses: [200] },
+                        },
+                    },
+                    // 其他 /api/parent/* GET：NetworkFirst 兜底（避免新端點意外被預設快取）
+                    {
+                        urlPattern: ({ url, request }) =>
+                            url.pathname.startsWith('/api/parent') &&
+                            request.method === 'GET',
+                        handler: 'NetworkFirst',
+                        options: {
+                            cacheName: 'parent-api-fallback',
+                            networkTimeoutSeconds: 5,
+                            expiration: {
+                                maxEntries: 30,
+                                maxAgeSeconds: 60 * 60,
+                            },
+                            cacheableResponse: { statuses: [200] },
+                        },
+                    },
                     // 注意：POST（請假/加班申請）由 Workbox 預設排除，不會快取
                 ],
             },

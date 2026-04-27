@@ -1,32 +1,38 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { getMe, getMyChildren } from '../api/profile'
+import { getHomeSummary } from '../api/profile'
 import { logout } from '../api/auth'
 import { useParentAuthStore } from '../stores/parentAuth'
+import { useCachedAsync, invalidateCachedAsync } from '@/composables/useCachedAsync'
+import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
 
 const router = useRouter()
 const authStore = useParentAuthStore()
 
-const me = ref(null)
-const children = ref([])
-const loading = ref(true)
-const errorMessage = ref('')
+const { data, error, pending, refresh } = useCachedAsync(
+  'parent/home/summary',
+  async () => {
+    const res = await getHomeSummary()
+    if (res.data?.me) authStore.setUser(res.data.me)
+    return res.data
+  },
+  { ttl: 60_000 },
+)
 
-async function fetchAll() {
-  loading.value = true
-  errorMessage.value = ''
-  try {
-    const [meRes, childrenRes] = await Promise.all([getMe(), getMyChildren()])
-    me.value = meRes.data
-    children.value = childrenRes.data?.items || []
-    if (meRes.data) authStore.setUser(meRes.data)
-  } catch (err) {
-    errorMessage.value = err?.displayMessage || '載入失敗，請稍後再試'
-  } finally {
-    loading.value = false
-  }
-}
+const me = computed(() => data.value?.me || null)
+const children = computed(() => data.value?.children || [])
+const summary = computed(() => data.value?.summary || null)
+
+const fees = computed(() => summary.value?.fees || null)
+const unpaidCount = computed(() => fees.value?.outstanding_count || 0)
+const unpaidTotal = computed(() => fees.value?.outstanding || 0)
+const overdueAmount = computed(() => fees.value?.overdue || 0)
+const unreadAnnouncements = computed(() => summary.value?.unread_announcements || 0)
+const pendingAcks = computed(() => summary.value?.pending_event_acks || 0)
+const hasAnyTodos = computed(
+  () => unpaidCount.value > 0 || unreadAnnouncements.value > 0 || pendingAcks.value > 0,
+)
 
 async function handleLogout() {
   try {
@@ -34,6 +40,7 @@ async function handleLogout() {
   } catch {
     /* ignore — 即使後端失敗也清前端 */
   }
+  invalidateCachedAsync('parent/')
   authStore.clear()
   router.replace('/login')
 }
@@ -51,19 +58,28 @@ const lifecycleLabel = (s) => {
   return map[s] || s || ''
 }
 
-onMounted(fetchAll)
+function formatMoney(n) {
+  if (!n) return '0'
+  return n.toLocaleString('en-US')
+}
+
+function go(path) {
+  router.push(path)
+}
 </script>
 
 <template>
   <div class="home-view">
-    <div v-if="loading" class="state-block">載入中...</div>
-    <div v-else-if="errorMessage" class="state-block error">
-      {{ errorMessage }}
-      <button class="retry" @click="fetchAll">重試</button>
-    </div>
+    <div v-if="pending && !data" class="state-block">載入中...</div>
 
-    <template v-else>
-      <section class="me-card" v-if="me">
+    <MobileErrorRetry
+      v-else-if="error && !data"
+      :error="error"
+      @retry="refresh(true)"
+    />
+
+    <template v-else-if="data">
+      <section v-if="me" class="me-card">
         <div class="me-name">{{ me.name || '家長' }}</div>
         <div class="me-meta">
           <span v-if="me.can_push" class="badge ok">LINE 推播已開啟</span>
@@ -71,16 +87,60 @@ onMounted(fetchAll)
         </div>
       </section>
 
+      <section v-if="hasAnyTodos" class="todos-card">
+        <h3 class="section-title">今日待辦</h3>
+        <button
+          v-if="unpaidCount > 0"
+          class="todo-row"
+          type="button"
+          @click="go('/fees')"
+        >
+          <span class="todo-icon">💴</span>
+          <span class="todo-text">
+            待繳費 <strong>{{ unpaidCount }}</strong> 筆
+            ／ NT$ {{ formatMoney(unpaidTotal) }}
+            <span v-if="overdueAmount > 0" class="todo-warn">
+              （逾期 NT$ {{ formatMoney(overdueAmount) }}）
+            </span>
+          </span>
+          <span class="todo-arrow">›</span>
+        </button>
+        <button
+          v-if="unreadAnnouncements > 0"
+          class="todo-row"
+          type="button"
+          @click="go('/announcements')"
+        >
+          <span class="todo-icon">📢</span>
+          <span class="todo-text">
+            未讀公告 <strong>{{ unreadAnnouncements }}</strong> 則
+          </span>
+          <span class="todo-arrow">›</span>
+        </button>
+        <button
+          v-if="pendingAcks > 0"
+          class="todo-row"
+          type="button"
+          @click="go('/events')"
+        >
+          <span class="todo-icon">📝</span>
+          <span class="todo-text">
+            待簽閱事件 <strong>{{ pendingAcks }}</strong> 件
+          </span>
+          <span class="todo-arrow">›</span>
+        </button>
+      </section>
+      <section v-else class="todos-empty">
+        <span class="todos-empty-icon">✓</span>
+        目前沒有待辦事項
+      </section>
+
       <section class="children-section">
         <h3 class="section-title">我的小孩（{{ children.length }}）</h3>
         <div v-if="children.length === 0" class="empty">
           尚未綁定任何學生，請聯絡園所協助。
         </div>
-        <div
-          v-for="c in children"
-          :key="c.guardian_id"
-          class="child-card"
-        >
+        <div v-for="c in children" :key="c.guardian_id" class="child-card">
           <div class="child-row">
             <span class="child-name">{{ c.name }}</span>
             <span class="child-classroom">{{ c.classroom_name || '未分班' }}</span>
@@ -97,10 +157,6 @@ onMounted(fetchAll)
       <section class="actions">
         <button class="logout" @click="handleLogout">登出</button>
       </section>
-
-      <p class="footer-note">
-        其他功能（出席、公告、請假、費用等）開發中。
-      </p>
     </template>
   </div>
 </template>
@@ -116,20 +172,6 @@ onMounted(fetchAll)
   text-align: center;
   padding: 40px 16px;
   color: #666;
-}
-
-.state-block.error {
-  color: #c0392b;
-}
-
-.retry {
-  display: block;
-  margin: 12px auto 0;
-  padding: 8px 20px;
-  background: #3f7d48;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
 }
 
 .me-card {
@@ -173,6 +215,86 @@ onMounted(fetchAll)
   font-weight: 600;
   color: #555;
   margin: 0 0 8px 4px;
+}
+
+.todos-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 8px 0;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+}
+
+.todos-card .section-title {
+  margin: 8px 16px 4px;
+}
+
+.todo-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 16px;
+  background: transparent;
+  border: none;
+  border-top: 1px solid #f0f0f0;
+  text-align: left;
+  font-size: 14px;
+  color: #2c3e50;
+  cursor: pointer;
+}
+
+.todo-row:active {
+  background: #f6f8fa;
+}
+
+.todo-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.todo-text {
+  flex: 1;
+}
+
+.todo-text strong {
+  color: #c0392b;
+  font-weight: 700;
+  margin: 0 2px;
+}
+
+.todo-warn {
+  color: #c0392b;
+  font-size: 12px;
+}
+
+.todo-arrow {
+  color: #aaa;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.todos-empty {
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px;
+  text-align: center;
+  font-size: 14px;
+  color: #888;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+}
+
+.todos-empty-icon {
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #e3f4e7;
+  color: #3f7d48;
+  text-align: center;
+  line-height: 22px;
+  margin-right: 6px;
+  font-weight: 700;
 }
 
 .children-section {
@@ -256,12 +378,5 @@ onMounted(fetchAll)
   border-radius: 8px;
   color: #c0392b;
   font-size: 15px;
-}
-
-.footer-note {
-  margin-top: 16px;
-  text-align: center;
-  font-size: 12px;
-  color: #aaa;
 }
 </style>

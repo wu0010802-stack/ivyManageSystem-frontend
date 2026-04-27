@@ -42,7 +42,7 @@ const editDialogVisible = ref(false)
 const editForm = reactive({
   id: null,
   attended: true,
-  overtime_pay: 0,
+  overtime_hours: 0,
   remark: '',
 })
 
@@ -157,7 +157,7 @@ const submitBatch = async () => {
 const handleEdit = (row) => {
   editForm.id = row.id
   editForm.attended = row.attended
-  editForm.overtime_pay = row.overtime_pay
+  editForm.overtime_hours = row.overtime_hours || 0
   editForm.remark = row.remark || ''
   editDialogVisible.value = true
 }
@@ -166,7 +166,7 @@ const submitEdit = async () => {
   try {
     await updateMeeting(editForm.id, {
       attended: editForm.attended,
-      overtime_pay: editForm.overtime_pay,
+      overtime_hours: editForm.overtime_hours,
       remark: editForm.remark || null,
     })
     ElMessage.success('更新成功')
@@ -351,9 +351,9 @@ onMounted(() => {
         <el-form-item label="出席狀態">
           <el-switch v-model="editForm.attended" active-text="出席" inactive-text="缺席" />
         </el-form-item>
-        <el-form-item label="加班費">
-          <el-input-number v-model="editForm.overtime_pay" :min="0" :step="1" />
-          <span class="dialog-hint">如需手動調整可直接修改</span>
+        <el-form-item label="加班時數">
+          <el-input-number v-model="editForm.overtime_hours" :min="0" :max="24" :step="0.5" />
+          <span class="dialog-hint">加班費將依時數 × 員工底薪 × 1.34 自動重算</span>
         </el-form-item>
         <el-form-item label="備註">
           <el-input v-model="editForm.remark" type="textarea" :rows="2" />

@@ -48,9 +48,16 @@ export const deleteRegistration = (id, { forceRefund = false } = {}) =>
     params: forceRefund ? { force_refund: true } : {},
   })
 // 批次標記「已繳費」（is_paid=true）— 後端已禁用 is_paid=false 批次沖帳以防誤操作
-export const batchUpdatePayment = (ids) =>
-  api.put('/activity/registrations/batch-payment', { ids, is_paid: true })
-// 更新付款狀態：is_paid=false 需帶 confirm_refund_amount (=current_paid) 與 refund_reason (≥5 字)
+// reason ≥ 5 字必填；整批 shortfall 合計 > NT$1000 需 ACTIVITY_PAYMENT_APPROVE 權限
+export const batchUpdatePayment = (ids, reason) =>
+  api.put('/activity/registrations/batch-payment', { ids, is_paid: true, reason })
+// 更新付款狀態（單筆）：
+// payload 視 is_paid 而異：
+// - is_paid=false（沖帳）：必填 confirm_refund_amount (=current_paid) + refund_reason (≥5 字)
+// - is_paid=true（補齊欠費）（2026-04-27 守衛）：當 shortfall>0 時必填
+//   * payment_method（不可為「系統補齊」，請填現金/轉帳/其他）
+//   * payment_reason（≥5 字）
+//   * shortfall > NT$1000 需 ACTIVITY_PAYMENT_APPROVE 權限
 export const updateRegistrationPayment = (id, payload) =>
   api.put(`/activity/registrations/${id}/payment`, payload)
 export const getRegistrationPayments = (id) =>
@@ -132,8 +139,9 @@ export const getPOSDailyCloseStatus = (dateStr) =>
   api.get(`/activity/pos/daily-close/${dateStr}`)
 export const approvePOSDailyClose = (dateStr, payload = {}) =>
   api.post(`/activity/pos/daily-close/${dateStr}`, payload)
-export const unlockPOSDailyClose = (dateStr) =>
-  api.delete(`/activity/pos/daily-close/${dateStr}`)
+// 解鎖日結：reason ≥ 10 字必填；原 snapshot 摘要會寫進 ApprovalLog 稽核軌跡
+export const unlockPOSDailyClose = (dateStr, reason) =>
+  api.delete(`/activity/pos/daily-close/${dateStr}`, { data: { reason } })
 export const getPOSReconciliation = (startDate, endDate) =>
   api.get('/activity/pos/reconciliation', {
     params: { start_date: startDate, end_date: endDate },

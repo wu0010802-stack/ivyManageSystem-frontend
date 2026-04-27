@@ -585,18 +585,26 @@ async function handleApprove() {
 
 async function handleUnlock() {
   if (!canApprove.value) return
+  let reason = ''
   try {
-    await ElMessageBox.confirm(
-      `確認解鎖 ${selectedDate.value} 的簽核？解鎖後原 snapshot 會失效，需重新簽核。`,
+    const res = await ElMessageBox.prompt(
+      `確認解鎖 ${selectedDate.value} 的簽核？解鎖後原 snapshot 會失效，需重新簽核。\n\n請輸入解鎖原因（≥ 10 字，會寫入稽核軌跡）：`,
       '解鎖確認',
-      { type: 'warning', confirmButtonText: '確認解鎖', cancelButtonText: '取消' }
+      {
+        type: 'warning',
+        confirmButtonText: '確認解鎖',
+        cancelButtonText: '取消',
+        inputPattern: /.{10,}/,
+        inputErrorMessage: '原因至少 10 字',
+      }
     )
+    reason = (res?.value || '').trim()
   } catch {
     return
   }
   submitting.value = true
   try {
-    await unlockPOSDailyClose(selectedDate.value)
+    await unlockPOSDailyClose(selectedDate.value, reason)
     ElMessage.success('已解鎖')
     await refreshAll()
   } catch (err) {

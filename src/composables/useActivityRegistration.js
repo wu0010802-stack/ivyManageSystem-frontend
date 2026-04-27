@@ -109,18 +109,25 @@ export function useActivityRegistration() {
       )
       return
     }
+    let reason = ''
     try {
-      await ElMessageBox.confirm(
-        `確定將已選 ${selectedIds.value.length} 筆報名標記為「已繳費」？\n\n系統將自動補齊差額為「系統補齊」付款紀錄。`,
+      const res = await ElMessageBox.prompt(
+        `確定將已選 ${selectedIds.value.length} 筆報名標記為「已繳費」？\n\n系統將自動補齊差額為「系統補齊」付款紀錄。\n\n請輸入操作原因（≥ 5 字，會寫入稽核軌跡）：`,
         '批次更新確認',
-        { type: 'warning', confirmButtonText: '確定' }
+        {
+          type: 'warning',
+          confirmButtonText: '確定',
+          inputPattern: /.{5,}/,
+          inputErrorMessage: '原因至少 5 字',
+        }
       )
+      reason = (res?.value || '').trim()
     } catch {
       return
     }
     savingBatch.value = true
     try {
-      const res = await batchUpdatePayment(selectedIds.value)
+      const res = await batchUpdatePayment(selectedIds.value, reason)
       ElMessage.success(res.data.message)
       selectedIds.value = []
       if (onSuccess) onSuccess()

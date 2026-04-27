@@ -28,6 +28,7 @@ const ElMessageSuccess = vi.fn()
 const ElMessageError = vi.fn()
 const ElMessageWarning = vi.fn()
 const ElMessageBoxConfirm = vi.fn()
+const ElMessageBoxPrompt = vi.fn()
 
 vi.mock('element-plus', () => ({
   ElMessage: {
@@ -37,6 +38,7 @@ vi.mock('element-plus', () => ({
   },
   ElMessageBox: {
     confirm: (...a) => ElMessageBoxConfirm(...a),
+    prompt: (...a) => ElMessageBoxPrompt(...a),
   },
 }))
 
@@ -56,6 +58,8 @@ describe('useActivityRegistration', () => {
     getClassOptions.mockResolvedValue({ data: { options: [] } })
     batchUpdatePayment.mockResolvedValue({ data: { message: '已更新 2 筆報名為已繳費' } })
     ElMessageBoxConfirm.mockResolvedValue(true)
+    // batchMarkPaid 改用 prompt 收集 reason（2026-04-27 守衛）；測試預設一個合法 reason
+    ElMessageBoxPrompt.mockResolvedValue({ value: '期末批次補齊（家長現金繳清，已對帳）' })
   })
 
   it('fetchList 呼叫 API 並更新 list 和 total', async () => {
@@ -102,13 +106,16 @@ describe('useActivityRegistration', () => {
     )
   })
 
-  it('batchMarkPaid 送出正確的 ids（只接受 isPaid=true，批次沖帳已禁用）', async () => {
+  it('batchMarkPaid 送出正確的 ids 與 reason（只接受 isPaid=true，批次沖帳已禁用）', async () => {
     const { selectedIds, batchMarkPaid } = useActivityRegistration()
     selectedIds.value = [1, 2, 3]
 
     await batchMarkPaid(true)
 
-    expect(batchUpdatePayment).toHaveBeenCalledWith([1, 2, 3])
+    expect(batchUpdatePayment).toHaveBeenCalledWith(
+      [1, 2, 3],
+      '期末批次補齊（家長現金繳清，已對帳）'
+    )
   })
 
   it('batchMarkPaid 傳入 isPaid=false 不呼叫 API（已禁用批次沖帳）', async () => {
@@ -131,7 +138,8 @@ describe('useActivityRegistration', () => {
   })
 
   it('batchMarkPaid 取消確認後不呼叫 API', async () => {
-    ElMessageBoxConfirm.mockRejectedValue(new Error('cancel'))
+    // prompt 取消（user 按 cancel 或關閉對話框）→ ElMessageBox.prompt reject
+    ElMessageBoxPrompt.mockRejectedValue(new Error('cancel'))
 
     const { selectedIds, batchMarkPaid } = useActivityRegistration()
     selectedIds.value = [1]

@@ -6,6 +6,7 @@
  */
 
 import axios from 'axios'
+import { applyDedupe } from '@/utils/apiDedupe'
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
@@ -13,6 +14,40 @@ const api = axios.create({
   withCredentials: true,
   headers: { 'Content-Type': 'application/json' },
 })
+
+applyDedupe(api)
+
+const TIMING_BUFFER_KEY = 'parent_api_timings'
+const TIMING_BUFFER_MAX = 50
+
+api.interceptors.request.use((config) => {
+  config.metadata = { startedAt: performance.now() }
+  return config
+})
+
+function _recordTiming(method, url, status, durationMs) {
+  if (import.meta.env.DEV) {
+    const tag = status >= 400 ? '✗' : '✓'
+    console.debug(
+      `[parent-api] ${tag} ${method} ${url} → ${status} ${durationMs.toFixed(0)}ms`,
+    )
+  }
+  try {
+    const raw = sessionStorage.getItem(TIMING_BUFFER_KEY)
+    const buf = raw ? JSON.parse(raw) : []
+    buf.push({
+      m: method,
+      u: url,
+      s: status,
+      d: Math.round(durationMs),
+      t: Date.now(),
+    })
+    if (buf.length > TIMING_BUFFER_MAX) buf.splice(0, buf.length - TIMING_BUFFER_MAX)
+    sessionStorage.setItem(TIMING_BUFFER_KEY, JSON.stringify(buf))
+  } catch {
+    /* sessionStorage 滿/不可用 — 安靜失敗 */
+  }
+}
 
 let _refreshing = null
 
@@ -23,7 +58,18 @@ function _doRefresh() {
 }
 
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    const startedAt = response.config?.metadata?.startedAt
+    if (startedAt != null) {
+      _recordTiming(
+        (response.config.method || 'get').toUpperCase(),
+        response.config.url || '',
+        response.status,
+        performance.now() - startedAt,
+      )
+    }
+    return response
+  },
   async (error) => {
     const originalRequest = error.config
     const url = originalRequest?.url || ''
@@ -31,6 +77,16 @@ api.interceptors.response.use(
       url.includes('/parent/auth/liff-login') ||
       url.includes('/parent/auth/bind') ||
       url.includes('/auth/refresh')
+
+    const startedAt = originalRequest?.metadata?.startedAt
+    if (startedAt != null) {
+      _recordTiming(
+        (originalRequest.method || 'get').toUpperCase(),
+        url,
+        error.response?.status ?? 0,
+        performance.now() - startedAt,
+      )
+    }
 
     if (
       error.response?.status === 401 &&

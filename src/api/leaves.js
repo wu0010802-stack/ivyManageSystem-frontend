@@ -6,7 +6,15 @@ export const createLeave = (data) => api.post('/leaves', data)
 
 export const updateLeave = (id, data) => api.put(`/leaves/${id}`, data)
 
-// payload: { approved: boolean, rejection_reason?: string }
+// payload: {
+//   approved: boolean,
+//   rejection_reason?: string,                  // 駁回時必填
+//   force_without_substitute?: boolean,         // 主管警告後仍核准（無代理人）
+//   force_overlap?: boolean,                    // 主管警告後仍核准（與其他已核准假單重疊）
+//   force_overlap_reason?: string,              // force_overlap=true 時必填 ≥10 字（2026-04-27 守衛）
+// }
+// 注意：force_overlap=true 時，操作者需具 ACTIVITY_PAYMENT_APPROVE 權限（金流簽核），
+//       且 force_overlap_reason ≥10 字，後端會寫進 ApprovalLog 永久稽核軌跡。
 export const approveLeave = (id, payload) => api.put(`/leaves/${id}/approve`, payload)
 
 export const getLeaveAttachment = (leaveId, filename) =>
