@@ -12,6 +12,7 @@
         "test:coverage": "vitest run --coverage"
     },
     "dependencies": {
+        "@line/liff": "^2.28.0",
         "axios": "^1.15.1",
         "chart.js": "^4.5.1",
         "element-plus": "^2.5.6",

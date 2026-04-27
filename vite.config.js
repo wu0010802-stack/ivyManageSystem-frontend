@@ -27,6 +27,11 @@ function manualChunks(id) {
         return 'portal'
     }
 
+    // 家長 App（LIFF）獨立 chunk；管理端 / Portal 都不需要載入
+    if (id.includes('/src/parent/') || id.includes('@line/liff')) {
+        return 'parent-app'
+    }
+
     if (id.includes('chart.js') || id.includes('vue-chartjs')) {
         return 'chart-vendor'
     }
@@ -84,16 +89,16 @@ export default defineConfig({
 
             workbox: {
                 // 只預快取 app shell 與核心 vendor；大型 route chunk 與圖片改由 runtime cache 接手
+                // multi-page 後管理端 entry 是 main-*.js，家長 App 是 parent-app-*.js（走 runtime cache）
                 globPatterns: [
                     'index.html',
                     'registerSW.js',
                     'manifest.webmanifest',
-                    'assets/index-*.css',
-                    'assets/index-*.js',
+                    'assets/main-*.css',
+                    'assets/main-*.js',
                     'assets/vue-core-*.js',
                     'assets/vendor-*.js',
                     '*.{ico,svg}',
-                    'assets/*.woff2',
                 ],
                 // 排除大型 PWA 圖示（由 manifest 按需載入）與 chart-vendor
                 globIgnores: [
@@ -101,8 +106,10 @@ export default defineConfig({
                     '**/*512*',
                 ],
 
-                // hash routing：所有導航請求都回傳 index.html
+                // hash routing：所有 SPA 內導航回傳 index.html；
+                // 家長 App 是另一個獨立 HTML，必須排除避免被導向管理端
                 navigateFallback: 'index.html',
+                navigateFallbackDenylist: [/^\/parent\.html/, /^\/parent\//],
 
                 runtimeCaching: [
                     {
@@ -225,6 +232,14 @@ export default defineConfig({
         chunkSizeWarningLimit: 500,
         sourcemap: false, // 避免正式環境外洩程式碼結構與原始檔路徑
         rollupOptions: {
+            // multi-page：管理端 + 家長 LIFF App 兩個獨立 entry
+            // dev/prod 路徑：
+            //   - 管理端：/index.html（hash 模式 #/...）
+            //   - 家長 App：/parent.html（hash 模式 #/...，方便 LIFF endpoint URL 直接綁這個）
+            input: {
+                main: fileURLToPath(new URL('./index.html', import.meta.url)),
+                parent: fileURLToPath(new URL('./parent.html', import.meta.url)),
+            },
             output: {
                 manualChunks,
             },
