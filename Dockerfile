@@ -27,9 +27,14 @@ FROM nginx:alpine AS runtime
 COPY nginx.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=build /app/dist /usr/share/nginx/html
 
+# 啟動時從 /etc/resolv.conf 動態替換 __RESOLVER_IP__ 為真實 cluster DNS IP
+# （nginx:alpine 內建 NGINX_LOCAL_RESOLVERS 在 Zeabur 環境會出錯，自己處理較穩）
+COPY 25-fix-resolver.sh /docker-entrypoint.d/25-fix-resolver.sh
+RUN chmod +x /docker-entrypoint.d/25-fix-resolver.sh
+
 # 只替換 ${BACKEND_URL}，避免動到 nginx 內建變數（$host、$remote_addr 等）
 # BACKEND_URL 由 Zeabur frontend service 的 env 注入；預設指向同專案後端 internal DNS
 ENV BACKEND_URL=http://ivymanagesystem-backend-rulla.zeabur.internal:8080 \
-    NGINX_ENVSUBST_FILTER='^(BACKEND_URL|NGINX_LOCAL_RESOLVERS)$'
+    NGINX_ENVSUBST_FILTER=BACKEND_URL
 
 EXPOSE 8080
