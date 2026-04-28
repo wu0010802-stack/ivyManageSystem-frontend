@@ -11,7 +11,7 @@ RUN npm ci
 COPY . .
 
 # VITE_* 變數會被烤進 bundle，必須在 build 階段提供
-ARG VITE_API_BASE_URL=/api
+ARG VITE_API_BASE_URL=https://ivymanagesystem-api.zeabur.app/api
 ARG VITE_GOOGLE_MAPS_API_KEY=
 ARG VITE_LIFF_ID=2009899896-2qCpwrdC 
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL \
