@@ -29,7 +29,7 @@ COPY --from=build /app/dist /usr/share/nginx/html
 
 # 只替換 ${BACKEND_URL}，避免動到 nginx 內建變數（$host、$remote_addr 等）
 # BACKEND_URL 由 Zeabur frontend service 的 env 注入；預設指向同專案後端 internal DNS
-ENV BACKEND_URL=http://ivymanagesystem-backend-rulla.zeabur.internal:8088 \
+ENV BACKEND_URL=http://ivymanagesystem-backend-rulla.zeabur.internal:8080 \
     NGINX_ENVSUBST_FILTER=BACKEND_URL
 
 EXPOSE 80
