@@ -187,6 +187,44 @@ export function hasWritePermission(moduleName) {
   return hasPermission(`${moduleName}_WRITE`)
 }
 
+// ── BigInt 安全的 permission mask 運算（INFO-1）─────────────────────
+// JS `&`/`|` 強制 32-bit 整數運算，遇到 ≥ 1<<32 的位元會溢位／truncate。
+// 任何「以位元組合 mask」的場景一律走這幾個 helper，避免分散使用 `& bit`。
+
+const _toBig = (v) => {
+  if (v === null || v === undefined) return 0n
+  return typeof v === 'bigint' ? v : BigInt(v)
+}
+
+/** 檢查 mask 是否包含 value 對應的位元（BigInt 安全）。 */
+export function permissionMaskHas(mask, value) {
+  if (mask === -1) return true
+  const m = _toBig(mask)
+  const v = _toBig(value)
+  return (m & v) === v && v !== 0n
+}
+
+/** 在 mask 加上 value 位元；回傳的數值仍為 Number，供 API payload 使用。 */
+export function permissionMaskAdd(mask, value) {
+  const m = _toBig(mask)
+  const v = _toBig(value)
+  return Number(m | v)
+}
+
+/** 從 mask 移除 value 位元（保留其他位元）。 */
+export function permissionMaskRemove(mask, value) {
+  const m = _toBig(mask)
+  const v = _toBig(value)
+  return Number(m & ~v)
+}
+
+/** 把多個位元值 OR 起來；用於「全選」場景。 */
+export function permissionMaskCombine(values) {
+  let acc = 0n
+  for (const v of values) acc |= _toBig(v)
+  return Number(acc)
+}
+
 /**
  * 檢查使用者是否可存取指定路由
  * @param {string} path - 路由路徑

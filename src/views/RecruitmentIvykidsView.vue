@@ -27,7 +27,7 @@
 
 <script setup>
 import { computed, defineAsyncComponent } from 'vue'
-import { getUserInfo, PERMISSION_VALUES } from '@/utils/auth'
+import { hasPermission } from '@/utils/auth'
 import RecruitmentIvykidsTab from '@/components/recruitment/RecruitmentIvykidsTab.vue'
 
 let chartReadyPromise = null
@@ -52,17 +52,7 @@ const Bar = defineAsyncComponent(() =>
   ensureChartReady().then(() => import('vue-chartjs').then((module) => module.Bar))
 )
 
-const canWrite = computed(() => {
-  try {
-    const info = getUserInfo()
-    if (!info) return false
-    if (info.permissions === -1 || info.permissions === null || info.permissions === undefined) return true
-    const permissionValue = BigInt(PERMISSION_VALUES.RECRUITMENT_WRITE)
-    return (BigInt(info.permissions) & permissionValue) === permissionValue
-  } catch {
-    return false
-  }
-})
+const canWrite = computed(() => hasPermission('RECRUITMENT_WRITE'))
 </script>
 
 <style scoped>

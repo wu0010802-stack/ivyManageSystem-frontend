@@ -89,6 +89,7 @@ vi.mock('@/utils/download', () => ({
 
 vi.mock('@/utils/auth', () => ({
   getUserInfo: vi.fn(() => ({ permissions: -1 })),
+  hasPermission: vi.fn(() => true),
   PERMISSION_VALUES: {
     RECRUITMENT_WRITE: '1',
   },

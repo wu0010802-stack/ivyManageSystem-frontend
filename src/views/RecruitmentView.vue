@@ -456,7 +456,7 @@ import {
   deleteMonth,
 } from '@/api/recruitment'
 import { apiError } from '@/utils/error'
-import { getUserInfo, PERMISSION_VALUES } from '@/utils/auth'
+import { hasPermission } from '@/utils/auth'
 import { useRecruitmentDashboard } from '@/composables/useRecruitmentDashboard'
 import { useRecruitmentArea, createEmptyCampus } from '@/composables/useRecruitmentArea'
 import { useRecruitmentPeriods } from '@/composables/useRecruitmentPeriods'
@@ -517,25 +517,8 @@ const AREA_HOTSPOT_SYNC_BATCH_SIZE = 20
 const AREA_HOTSPOT_MAX_SYNC_ROUNDS = 100
 
 // -------- 權限 --------
-const canWrite = computed(() => {
-  try {
-    const info = getUserInfo()
-    if (!info) return false
-    if (info.permissions === -1 || info.permissions === null || info.permissions === undefined) return true
-    const val = BigInt(PERMISSION_VALUES.RECRUITMENT_WRITE)
-    return (BigInt(info.permissions) & val) === val
-  } catch { return false }
-})
-
-const canConvert = computed(() => {
-  try {
-    const info = getUserInfo()
-    if (!info) return false
-    if (info.permissions === -1 || info.permissions === null || info.permissions === undefined) return true
-    const val = BigInt(PERMISSION_VALUES.RECRUITMENT_CONVERT)
-    return (BigInt(info.permissions) & val) === val
-  } catch { return false }
-})
+const canWrite = computed(() => hasPermission('RECRUITMENT_WRITE'))
+const canConvert = computed(() => hasPermission('RECRUITMENT_CONVERT'))
 
 // -------- 轉化為學生 --------
 const router = useRouter()

@@ -135,3 +135,5 @@ npm run test:coverage  # 含覆蓋率報告
 
 ## 開發注意事項
 - 回應語言：一律使用**繁體中文**
+- 權限位元運算：禁止 `mask & PERMISSION_VALUES.X` 直接寫法（≥ 1<<32 的位元會被 32-bit truncate）；改用 `@/utils/auth` 的 `hasPermission` / `permissionMaskHas` / `permissionMaskAdd` / `permissionMaskRemove` / `permissionMaskCombine`，這些 helper 內部以 BigInt 運算。
+- 升級依賴後必須跑 `npm audit --production --audit-level=moderate`；CI 會 enforce。dev-only 套件的 transitive CVE（如 `vite-plugin-pwa`）需評估是否要 force 升級。

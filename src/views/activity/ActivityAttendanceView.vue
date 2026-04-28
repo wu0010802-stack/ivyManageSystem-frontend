@@ -314,17 +314,12 @@ import {
   exportAttendanceSession,
   getCourses,
 } from '@/api/activity'
-import { PERMISSION_VALUES, getUserInfo } from '@/utils/auth'
+import { hasPermission } from '@/utils/auth'
 import { useActivityAttendanceDrawer } from '@/composables/useActivityAttendanceDrawer'
 
 const router = useRouter()
 
-const canWrite = computed(() => {
-  const userInfo = getUserInfo()
-  if (!userInfo) return false
-  if (userInfo.permissions === -1) return true
-  return (userInfo.permissions & PERMISSION_VALUES.ACTIVITY_WRITE) !== 0
-})
+const canWrite = computed(() => hasPermission('ACTIVITY_WRITE'))
 
 function openPrint(row) {
   const href = router.resolve({

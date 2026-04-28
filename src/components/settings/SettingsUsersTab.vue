@@ -5,6 +5,12 @@ import { getUsers, getPermissions, createUser, updateUser, deleteUser, resetPass
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useEmployeeStore } from '@/stores/employee'
 import { apiError } from '@/utils/error'
+import {
+  permissionMaskAdd,
+  permissionMaskCombine,
+  permissionMaskHas,
+  permissionMaskRemove,
+} from '@/utils/auth'
 
 const employeeStore = useEmployeeStore()
 const { employees } = storeToRefs(employeeStore)
@@ -157,21 +163,20 @@ const saveEditUser = async () => {
 const isPermissionChecked = (form, permName) => {
   if (form.permissions === -1) return true
   const permValue = permissionDefinition.value.permissions[permName]?.value || 0
-  return (form.permissions & permValue) === permValue
+  return permissionMaskHas(form.permissions, permValue)
 }
 
 const togglePermission = (form, permName) => {
   const permValue = permissionDefinition.value.permissions[permName]?.value || 0
   if (form.permissions === -1) {
-    let allPerms = 0
-    for (const p of Object.values(permissionDefinition.value.permissions)) {
-      allPerms |= p.value
-    }
-    form.permissions = allPerms & ~permValue
-  } else if ((form.permissions & permValue) === permValue) {
-    form.permissions = form.permissions & ~permValue
+    const allPerms = permissionMaskCombine(
+      Object.values(permissionDefinition.value.permissions).map((p) => p.value),
+    )
+    form.permissions = permissionMaskRemove(allPerms, permValue)
+  } else if (permissionMaskHas(form.permissions, permValue)) {
+    form.permissions = permissionMaskRemove(form.permissions, permValue)
   } else {
-    form.permissions = form.permissions | permValue
+    form.permissions = permissionMaskAdd(form.permissions, permValue)
   }
 }
 
