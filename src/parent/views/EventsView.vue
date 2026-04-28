@@ -1,8 +1,11 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { useChildrenStore } from '../stores/children'
 import { listEvents, acknowledgeEvent } from '../api/events'
 import { toast } from '../utils/toast'
+
+const router = useRouter()
 
 const childrenStore = useChildrenStore()
 const items = ref([])
@@ -97,7 +100,13 @@ onMounted(async () => {
         </div>
         <div v-if="ev.need_ack_student_ids?.length" class="ack-actions">
           <button class="primary-btn" @click="openAck(ev)">
-            簽閱（{{ ev.need_ack_student_ids.length }} 位待簽）
+            快速簽閱（{{ ev.need_ack_student_ids.length }} 位待簽）
+          </button>
+          <button
+            class="secondary-btn"
+            @click="router.push({ path: `/events/${ev.id}/ack`, query: { student_id: ev.need_ack_student_ids[0] } })"
+          >
+            ✍ 手寫簽名
           </button>
         </div>
         <div v-else class="ack-done">所有子女皆已簽閱 ✓</div>

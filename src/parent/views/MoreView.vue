@@ -12,9 +12,12 @@ const childrenStore = useChildrenStore()
 const me = ref(null)
 
 const items = [
+  { icon: '📝', title: '請假', path: '/leaves' },
   { icon: '💰', title: '費用查詢', path: '/fees' },
   { icon: '📅', title: '事件簽閱', path: '/events' },
+  { icon: '💊', title: '用藥單', path: '/medications' },
   { icon: '🎨', title: '才藝課', path: '/activity' },
+  { icon: '🔔', title: '通知偏好', path: '/notifications/preferences' },
   { icon: '➕', title: '加綁子女', path: '/bind-additional' },
 ]
 

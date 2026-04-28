@@ -38,7 +38,19 @@ const router = createRouter({
       path: '/leaves',
       name: 'parent-leaves',
       component: () => import('./views/LeavesView.vue'),
-      meta: { title: '請假', tab: 'leaves' },
+      meta: { title: '請假', tab: 'more' },
+    },
+    {
+      path: '/messages',
+      name: 'parent-messages',
+      component: () => import('./views/MessagesView.vue'),
+      meta: { title: '訊息', tab: 'messages' },
+    },
+    {
+      path: '/messages/:threadId',
+      name: 'parent-message-thread',
+      component: () => import('./views/MessageThreadView.vue'),
+      meta: { title: '對話', tab: 'messages' },
     },
     {
       path: '/more',
@@ -57,6 +69,36 @@ const router = createRouter({
       name: 'parent-events',
       component: () => import('./views/EventsView.vue'),
       meta: { title: '事件簽閱', tab: 'more' },
+    },
+    {
+      path: '/events/:eventId/ack',
+      name: 'parent-event-ack',
+      component: () => import('./views/EventAckView.vue'),
+      meta: { title: '簽收', tab: 'more' },
+    },
+    {
+      path: '/medications',
+      name: 'parent-medications',
+      component: () => import('./views/MedicationListView.vue'),
+      meta: { title: '用藥', tab: 'more' },
+    },
+    {
+      path: '/medications/new',
+      name: 'parent-medication-new',
+      component: () => import('./views/MedicationFormView.vue'),
+      meta: { title: '新增用藥單', tab: 'more' },
+    },
+    {
+      path: '/medications/:id',
+      name: 'parent-medication-detail',
+      component: () => import('./views/MedicationDetailView.vue'),
+      meta: { title: '用藥詳情', tab: 'more' },
+    },
+    {
+      path: '/notifications/preferences',
+      name: 'parent-notif-prefs',
+      component: () => import('./views/NotificationPrefsView.vue'),
+      meta: { title: '通知偏好', tab: 'more' },
     },
     {
       path: '/activity',

@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useParentAuthStore } from '../stores/parentAuth'
 import { getUnreadCount } from '../api/announcements'
+import { getMessageUnreadCount } from '../api/messages'
 
 const route = useRoute()
 const router = useRouter()
@@ -13,20 +14,26 @@ const hideTabBar = computed(() => route.meta?.hideTabBar === true)
 const currentTab = computed(() => route.meta?.tab || '')
 
 const unread = ref(0)
+const unreadMessages = ref(0)
 
+// Phase 3: Tab Bar 重排 — 請假 demote 到「更多」，新增「訊息」tab
 const TABS = [
   { key: 'home', icon: '🏠', label: '首頁', path: '/home' },
   { key: 'attendance', icon: '📋', label: '出席', path: '/attendance' },
+  { key: 'messages', icon: '💬', label: '訊息', path: '/messages' },
   { key: 'announcements', icon: '📢', label: '公告', path: '/announcements' },
-  { key: 'leaves', icon: '📝', label: '請假', path: '/leaves' },
   { key: 'more', icon: '⋯', label: '更多', path: '/more' },
 ]
 
 async function refreshUnread() {
   if (!authStore.isAuthed()) return
   try {
-    const { data } = await getUnreadCount()
-    unread.value = data?.unread_count || 0
+    const [{ data: a }, { data: m }] = await Promise.all([
+      getUnreadCount(),
+      getMessageUnreadCount(),
+    ])
+    unread.value = a?.unread_count || 0
+    unreadMessages.value = m?.unread_count || 0
   } catch {
     /* ignore */
   }
@@ -58,6 +65,9 @@ watch(() => route.fullPath, refreshUnread)
           {{ t.icon }}
           <span v-if="t.key === 'announcements' && unread > 0" class="badge">
             {{ unread > 99 ? '99+' : unread }}
+          </span>
+          <span v-if="t.key === 'messages' && unreadMessages > 0" class="badge">
+            {{ unreadMessages > 99 ? '99+' : unreadMessages }}
           </span>
         </span>
         <span class="tab-label">{{ t.label }}</span>

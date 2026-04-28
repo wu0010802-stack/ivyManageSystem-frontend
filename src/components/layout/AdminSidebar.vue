@@ -104,6 +104,10 @@
             <el-icon><OfficeBuilding /></el-icon>
             <template #title>班級學生管理</template>
           </el-menu-item>
+          <el-menu-item v-if="canView.STUDENTS_READ" index="/students">
+            <el-icon><User /></el-icon>
+            <template #title>學生管理</template>
+          </el-menu-item>
           <el-menu-item v-if="canView.STUDENTS_READ" index="/student-attendance">
             <el-icon><Calendar /></el-icon>
             <template #title>學生出席紀錄</template>
