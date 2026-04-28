@@ -141,6 +141,7 @@ import { useActivityStore } from '@/stores/activity'
 import { useAcademicTermStore } from '@/stores/academicTerm'
 import { getCurrentAcademicTerm } from '@/utils/academic'
 import { getActivityDashboardTable, exportDashboardTable } from '@/api/activity'
+import { FULL_ATTENDANCE_BONUS } from '@/constants/activity'
 import { ElMessage } from 'element-plus'
 
 const activityStore = useActivityStore()
@@ -196,14 +197,19 @@ const statCards = computed(() => [
   { label: '未讀提問', value: statistics.value.unreadInquiries ?? '-' },
 ])
 
+// Why: 後端回傳 grades > classrooms 的樹狀結構，但 el-table 只接受平面陣列。
+// 透過此 computed 將每個年級的「各班列 + 小計列」展開，並標記 rowSpan / isFirstOfGrade
+// 給 objectSpanMethod 用來合併「獎金」「積分」這兩欄（同年級共用一個值）。
 const flattenedTableData = computed(() => {
     if (!dashboardData.value) return [];
     const data = [];
     for (const grade of dashboardData.value.grades) {
         const classCount = grade.classrooms.length;
         if (classCount === 0) continue;
-        const rowSpan = classCount + 1; // +1 for the subtotal row
-        
+        const rowSpan = classCount + 1; // +1 給該年級的小計列
+        const bonusLabel = grade.subtotal.bonus === FULL_ATTENDANCE_BONUS ? '100%' : '';
+        const pointsLabel = grade.subtotal.points || '';
+
         grade.classrooms.forEach((cls, idx) => {
             data.push({
                 ...cls,
@@ -211,13 +217,12 @@ const flattenedTableData = computed(() => {
                 gradeName: grade.grade_name,
                 targetPercent: grade.target_percent,
                 isFirstOfGrade: idx === 0,
-                rowSpan: rowSpan,
-                bonus: grade.subtotal.bonus === 1000 ? '100%' : '',
-                points: grade.subtotal.points || ''
+                rowSpan,
+                bonus: bonusLabel,
+                points: pointsLabel,
             });
         });
 
-        // Subtotal row
         data.push({
             ...grade.subtotal,
             rowType: 'subtotal',
@@ -227,12 +232,11 @@ const flattenedTableData = computed(() => {
             targetPercent: grade.target_percent,
             isFirstOfGrade: false,
             rowSpan: 0,
-            bonus: grade.subtotal.bonus === 1000 ? '100%' : '',
-            points: grade.subtotal.points || ''
+            bonus: bonusLabel,
+            points: pointsLabel,
         });
     }
 
-    // Grand total row
     data.push({
         ...dashboardData.value.grand_total,
         rowType: 'grand_total',
@@ -240,7 +244,7 @@ const flattenedTableData = computed(() => {
         teacher_name: '',
         gradeName: '',
         bonus: '',
-        points: ''
+        points: '',
     });
 
     return data;

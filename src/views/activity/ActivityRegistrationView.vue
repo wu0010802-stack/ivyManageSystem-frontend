@@ -317,70 +317,15 @@
     </el-drawer>
 
     <!-- 新增繳費/退費 Dialog -->
-    <el-dialog
+    <RegistrationPaymentDialog
       v-model="paymentDialogVisible"
-      :title="paymentForm.type === 'payment' ? '新增繳費記錄' : '新增退費記錄'"
-      width="400px"
-    >
-      <div class="dialog-payment-summary">
-        <span>應繳 <strong>NT${{ (detail?.total_amount ?? 0).toLocaleString() }}</strong></span>
-        <span class="dps-divider">|</span>
-        <span>已繳 <strong class="dps-paid">NT${{ (paymentInfo.paid_amount || 0).toLocaleString() }}</strong></span>
-        <span class="dps-divider">|</span>
-        <span :class="(paymentInfo.paid_amount || 0) > (detail?.total_amount ?? 0) ? 'dps-over' : 'dps-owed'">
-          {{ (paymentInfo.paid_amount || 0) > (detail?.total_amount ?? 0) ? '超繳' : '尚欠' }}
-          <strong>NT${{ Math.abs((detail?.total_amount ?? 0) - (paymentInfo.paid_amount || 0)).toLocaleString() }}</strong>
-        </span>
-      </div>
-      <el-form :model="paymentForm" label-width="90px">
-        <el-form-item label="金額（元）">
-          <el-input-number
-            v-model="paymentForm.amount"
-            :min="1"
-            :max="paymentForm.type === 'refund' ? (paymentInfo.paid_amount || 0) : 999999"
-            :step="1"
-            :precision="0"
-            style="width: 100%"
-          />
-        </el-form-item>
-        <el-form-item label="日期">
-          <el-date-picker
-            v-model="paymentForm.payment_date"
-            type="date"
-            placeholder="選擇日期"
-            format="YYYY-MM-DD"
-            value-format="YYYY-MM-DD"
-            style="width: 100%"
-          />
-        </el-form-item>
-        <el-form-item label="繳費方式">
-          <el-select v-model="paymentForm.payment_method" style="width: 100%">
-            <el-option label="現金" value="現金" />
-            <el-option label="轉帳" value="轉帳" />
-            <el-option label="其他" value="其他" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="備註">
-          <el-input v-model="paymentForm.notes" type="textarea" :rows="2" />
-        </el-form-item>
-      </el-form>
-      <el-alert
-        v-if="overpaymentAmount > 0"
-        :title="`送出後將超繳 NT$${overpaymentAmount.toLocaleString()} 元，請確認`"
-        type="warning"
-        :closable="false"
-        style="margin-top: 4px"
-      />
-      <template #footer>
-        <el-button @click="paymentDialogVisible = false">取消</el-button>
-        <el-button
-          :type="paymentForm.type === 'payment' ? 'success' : 'danger'"
-          :loading="savingPayment"
-          :disabled="!paymentForm.amount || !paymentForm.payment_date"
-          @click="handleAddPayment"
-        >確認送出</el-button>
-      </template>
-    </el-dialog>
+      :type="paymentDialogType"
+      :registration-id="detail?.id"
+      :student-name="detail?.student_name || ''"
+      :total-amount="detail?.total_amount ?? 0"
+      :paid-amount="paymentInfo.paid_amount || 0"
+      @submitted="onPaymentSubmitted"
+    />
 
     <!-- 新增報名 Dialog -->
     <el-dialog
@@ -391,7 +336,7 @@
     >
       <el-form :model="createForm" label-width="90px" ref="createFormRef">
         <el-form-item label="學生姓名" required>
-          <el-input v-model="createForm.name" maxlength="50" placeholder="請輸入學生姓名" />
+          <el-input v-model="createForm.name" :maxlength="FIELD_RULES.studentNameMax" placeholder="請輸入學生姓名" />
         </el-form-item>
         <el-form-item label="生日" required>
           <el-date-picker
@@ -409,7 +354,7 @@
           </el-select>
         </el-form-item>
         <el-form-item label="Email">
-          <el-input v-model="createForm.email" maxlength="200" placeholder="選填" />
+          <el-input v-model="createForm.email" :maxlength="FIELD_RULES.emailMax" placeholder="選填" />
         </el-form-item>
         <el-form-item label="課程">
           <el-select
@@ -445,7 +390,7 @@
           </el-select>
         </el-form-item>
         <el-form-item label="備註">
-          <el-input v-model="createForm.remark" type="textarea" :rows="2" maxlength="500" />
+          <el-input v-model="createForm.remark" type="textarea" :rows="2" :maxlength="FIELD_RULES.remarkMax" />
         </el-form-item>
       </el-form>
       <div class="create-summary">
@@ -463,46 +408,13 @@
       </template>
     </el-dialog>
 
-    <!-- 編輯基本資料 Dialog -->
-    <el-dialog
+    <RegistrationEditBasicDialog
       v-model="editBasicDialogVisible"
-      title="編輯基本資料"
-      width="480px"
-      :close-on-click-modal="false"
-    >
-      <el-form :model="editBasicForm" label-width="90px">
-        <el-form-item label="學生姓名" required>
-          <el-input v-model="editBasicForm.name" maxlength="50" />
-        </el-form-item>
-        <el-form-item label="生日" required>
-          <el-date-picker
-            v-model="editBasicForm.birthday"
-            type="date"
-            format="YYYY-MM-DD"
-            value-format="YYYY-MM-DD"
-            placeholder="YYYY-MM-DD"
-            style="width: 100%"
-          />
-        </el-form-item>
-        <el-form-item label="班級" required>
-          <el-select v-model="editBasicForm.class_" style="width: 100%">
-            <el-option v-for="n in classroomOptions" :key="n" :label="n" :value="n" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="Email">
-          <el-input v-model="editBasicForm.email" maxlength="200" placeholder="選填" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="editBasicDialogVisible = false">取消</el-button>
-        <el-button
-          type="primary"
-          :loading="savingEditBasic"
-          :disabled="!editBasicValid"
-          @click="handleSaveEditBasic"
-        >儲存</el-button>
-      </template>
-    </el-dialog>
+      :registration-id="detail?.id"
+      :initial="detail || {}"
+      :classroom-options="classroomOptions"
+      @saved="onEditBasicSaved"
+    />
 
     <!-- 新增課程 Dialog -->
     <el-dialog
@@ -599,20 +511,26 @@ import {
   getRegistrationDetail,
   updateRemark, promoteWaitlist, deleteRegistration,
   exportRegistrations,
-  getRegistrationPayments, addRegistrationPayment, deleteRegistrationPayment,
+  getRegistrationPayments, deleteRegistrationPayment,
   withdrawCourse, getRegistrationTime,
   createRegistration, getSupplies,
-  updateRegistrationBasic, addRegistrationCourse,
+  addRegistrationCourse,
   addRegistrationSupply, removeRegistrationSupply,
   listPendingRegistrations,
 } from '@/api/activity'
 import { useAcademicTermStore } from '@/stores/academicTerm'
-import { PAYMENT_STATUS_TAG_TYPE, PAYMENT_STATUS_LABEL, COURSE_STATUS_TAG_TYPE, COURSE_STATUS_LABEL } from '@/constants/activity'
-import { computeOwed } from '@/constants/pos'
+import {
+  PAYMENT_STATUS_TAG_TYPE, PAYMENT_STATUS_LABEL,
+  COURSE_STATUS_TAG_TYPE, COURSE_STATUS_LABEL,
+  FIELD_RULES, VOID_REASON_PATTERN,
+} from '@/constants/activity'
 import { useActivityRegistration } from '@/composables/useActivityRegistration'
+import { useCountdownBanner, countdownLabel } from '@/composables/useCountdownBanner'
 import { formatActivityDate } from '@/utils/format'
 import { hasPermission } from '@/utils/auth'
 import AcademicTermSelector from '@/components/common/AcademicTermSelector.vue'
+import RegistrationPaymentDialog from '@/components/activity/RegistrationPaymentDialog.vue'
+import RegistrationEditBasicDialog from '@/components/activity/RegistrationEditBasicDialog.vue'
 
 const canWrite = computed(() => hasPermission('ACTIVITY_WRITE'))
 const termStore = useAcademicTermStore()
@@ -648,17 +566,8 @@ function matchStatusTag(status) {
   return MATCH_STATUS_TAG[status] || { label: status || '—', type: 'info' }
 }
 
-function formatDeadlineHint(iso) {
-  if (!iso) return ''
-  const deadline = new Date(iso)
-  if (Number.isNaN(deadline.getTime())) return ''
-  const diffMs = deadline.getTime() - Date.now()
-  if (diffMs <= 0) return '已逾期'
-  const hours = Math.floor(diffMs / 3600000)
-  const mins = Math.floor((diffMs % 3600000) / 60000)
-  const label = hours >= 1 ? `${hours} 小時` : `${mins} 分鐘`
-  return `剩 ${label}`
-}
+// 短時段倒數提示由 useCountdownBanner 提供，這裡僅做別名保留呼叫端 API
+const formatDeadlineHint = countdownLabel
 
 const {
   list, total, page, pageSize, loading,
@@ -683,25 +592,7 @@ function resetFilters() {
 
 // ── 報名時間 banner ──
 const regTimeInfo = ref({ is_open: false, open_at: null, close_at: null })
-
-const regTimeBanner = computed(() => {
-  const info = regTimeInfo.value
-  if (!info.close_at && !info.open_at) return null
-  const now = new Date()
-  if (info.close_at) {
-    const closeDate = new Date(info.close_at)
-    const diffMs = closeDate - now
-    if (diffMs <= 0) return { type: 'info', msg: `報名已截止（${info.close_at.replace('T', ' ').slice(0, 16)}）` }
-    const diffDays = diffMs / (1000 * 60 * 60 * 24)
-    if (diffDays < 3) {
-      const h = Math.floor(diffMs / (1000 * 60 * 60))
-      const m = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60))
-      return { type: 'warning', msg: `報名截止倒數：${h} 小時 ${m} 分鐘（${info.close_at.replace('T', ' ').slice(0, 16)}）` }
-    }
-  }
-  if (!info.is_open) return { type: 'info', msg: '報名目前未開放' }
-  return null
-})
+const { banner: regTimeBanner } = useCountdownBanner(regTimeInfo)
 
 const drawerVisible = ref(false)
 const detail = ref(null)
@@ -717,31 +608,10 @@ const tableRef = ref(null)
 // ── 繳費相關 state ──
 const loadingPayments = ref(false)
 const paymentInfo = ref({ total_amount: 0, paid_amount: 0, payment_status: 'unpaid', records: [] })
-const savingPayment = ref(false)
 const deletingPaymentId = ref(null)
 const deletingRegistrationId = ref(null)
 const paymentDialogVisible = ref(false)
-const paymentForm = reactive({
-  type: 'payment',
-  amount: 0,
-  payment_date: '',
-  payment_method: '現金',
-  notes: '',
-  idempotency_key: '',
-})
-
-function _genIdempotencyKey() {
-  // 後端 pattern: ^[A-Za-z0-9_-]{8,64}$
-  const rand = Math.random().toString(36).slice(2, 10)
-  return `REG-${Date.now()}-${rand}`
-}
-
-const overpaymentAmount = computed(() => {
-  if (paymentForm.type !== 'payment') return 0
-  const willBePaid = (paymentInfo.value.paid_amount || 0) + (paymentForm.amount || 0)
-  const total = detail.value?.total_amount ?? 0
-  return Math.max(0, willBePaid - total)
-})
+const paymentDialogType = ref('payment') // 'payment' | 'refund'
 
 // ── 繳費狀態 helper（使用 constants）──
 const paymentTagType = (row) => PAYMENT_STATUS_TAG_TYPE[row.payment_status] || 'info'
@@ -781,62 +651,14 @@ async function loadPayments(registrationId) {
 }
 
 function openPaymentDialog(type) {
-  paymentForm.type = type
-  paymentForm.amount = type === 'payment'
-    ? computeOwed(detail.value?.total_amount, paymentInfo.value.paid_amount)
-    : paymentInfo.value.paid_amount || 0
-  paymentForm.payment_date = new Date().toISOString().slice(0, 10)
-  paymentForm.payment_method = '現金'
-  paymentForm.notes = ''
-  // 每次開 dialog 產生新冪等 key；同一個 key 用於後續重試（失敗後按確認不會重複扣款）
-  paymentForm.idempotency_key = _genIdempotencyKey()
+  paymentDialogType.value = type
   paymentDialogVisible.value = true
 }
 
-async function handleAddPayment() {
+async function onPaymentSubmitted() {
   if (!detail.value) return
-  if (savingPayment.value) return
-  const typeLabel = paymentForm.type === 'payment' ? '繳費' : '退費'
-  const amount = Number(paymentForm.amount) || 0
-  if (amount <= 0) {
-    ElMessage.warning('金額必須大於 0')
-    return
-  }
-  if (paymentForm.type === 'refund') {
-    try {
-      await ElMessageBox.confirm(
-        `確定要為 ${detail.value.student_name || '此報名'} 退費 NT$${amount.toLocaleString()}？此操作會同步更新已繳金額。`,
-        '確認退費',
-        {
-          type: 'warning',
-          confirmButtonText: '確定退費',
-          confirmButtonClass: 'el-button--danger',
-          cancelButtonText: '取消',
-        }
-      )
-    } catch {
-      return
-    }
-  }
-  savingPayment.value = true
-  try {
-    await addRegistrationPayment(detail.value.id, {
-      type: paymentForm.type,
-      amount,
-      payment_date: paymentForm.payment_date,
-      payment_method: paymentForm.payment_method,
-      notes: paymentForm.notes.trim(),
-      idempotency_key: paymentForm.idempotency_key,
-    })
-    ElMessage.success(`${typeLabel}記錄新增成功`)
-    paymentDialogVisible.value = false
-    await loadPayments(detail.value.id)
-    fetchList()
-  } catch (e) {
-    ElMessage.error(e?.response?.data?.detail || '新增失敗')
-  } finally {
-    savingPayment.value = false
-  }
+  await loadPayments(detail.value.id)
+  fetchList()
 }
 
 async function handleDeletePayment(rec) {
@@ -846,14 +668,14 @@ async function handleDeletePayment(rec) {
   try {
     reasonResult = await ElMessageBox.prompt(
       `將軟刪此${rec.type === 'payment' ? '繳費' : '退費'}記錄（NT$${rec.amount}）。` +
-        '\n\n請輸入操作原因（至少 5 字，例：單據誤植、客戶退款後重開）。' +
+        `\n\n請輸入操作原因（至少 ${FIELD_RULES.voidReasonMin} 字，例：單據誤植、客戶退款後重開）。` +
         '\n原紀錄會保留於資料庫供稽核，不會真正刪除。',
       '軟刪繳費紀錄',
       {
         confirmButtonText: '確認軟刪',
         cancelButtonText: '取消',
-        inputPattern: /.{5,200}/,
-        inputErrorMessage: '原因必須 5-200 個字，不可敷衍',
+        inputPattern: VOID_REASON_PATTERN,
+        inputErrorMessage: `原因必須 ${FIELD_RULES.voidReasonMin}-${FIELD_RULES.voidReasonMax} 個字，不可敷衍`,
         confirmButtonClass: 'el-button--danger',
       }
     )
@@ -1138,46 +960,17 @@ async function handleCreate() {
 
 // ── 編輯基本資料 ────────────────────────────────────────
 const editBasicDialogVisible = ref(false)
-const savingEditBasic = ref(false)
-const editBasicForm = reactive({
-  name: '',
-  birthday: '',
-  class_: '',
-  email: '',
-})
-const editBasicValid = computed(() =>
-  !!editBasicForm.name && !!editBasicForm.birthday && !!editBasicForm.class_
-)
 
 function openEditBasicDialog() {
   if (!detail.value) return
-  editBasicForm.name = detail.value.student_name || ''
-  editBasicForm.birthday = detail.value.birthday || ''
-  editBasicForm.class_ = detail.value.class_name || ''
-  editBasicForm.email = detail.value.email || ''
   editBasicDialogVisible.value = true
 }
 
-async function handleSaveEditBasic() {
-  if (!detail.value || !editBasicValid.value) return
-  savingEditBasic.value = true
-  try {
-    await updateRegistrationBasic(detail.value.id, {
-      name: editBasicForm.name.trim(),
-      birthday: editBasicForm.birthday,
-      class: editBasicForm.class_,
-      email: editBasicForm.email?.trim() || null,
-    })
-    ElMessage.success('基本資料已更新')
-    editBasicDialogVisible.value = false
-    const res = await getRegistrationDetail(detail.value.id)
-    detail.value = res.data
-    fetchList()
-  } catch (e) {
-    ElMessage.error(e?.response?.data?.detail || '更新失敗')
-  } finally {
-    savingEditBasic.value = false
-  }
+async function onEditBasicSaved() {
+  if (!detail.value) return
+  const res = await getRegistrationDetail(detail.value.id)
+  detail.value = res.data
+  fetchList()
 }
 
 // ── 新增課程 ─────────────────────────────────────────────
@@ -1439,21 +1232,4 @@ onMounted(async () => {
   margin-top: 4px;
 }
 .create-hint { color: #9ca3af; margin-left: 8px; font-size: 13px; }
-
-.dialog-payment-summary {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background: #f8fafc;
-  border-radius: 6px;
-  margin-bottom: 16px;
-  font-size: 13px;
-  color: #374151;
-  flex-wrap: wrap;
-}
-.dps-divider { color: #d1d5db; }
-.dps-paid { color: #16a34a; }
-.dps-owed { color: #374151; }
-.dps-over { color: #d97706; }
 </style>

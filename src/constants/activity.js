@@ -44,3 +44,27 @@ export const APPROVAL_STATUS_TAG_TYPE = {
   pending_approval:   'danger',
   no_payment:         'info',
 }
+
+// 表單欄位限制（與後端 schema 一致；變更時兩端需同步）
+export const FIELD_RULES = {
+  studentNameMax: 50,
+  emailMax: 200,
+  remarkMax: 500,
+  paymentAmountMax: 999999,
+  voidReasonMin: 5,
+  voidReasonMax: 200,
+  unlockReasonMin: 10,
+}
+
+// 軟刪除繳費紀錄原因的正則（≥5 字 ≤200 字）
+export const VOID_REASON_PATTERN = new RegExp(
+  `.{${FIELD_RULES.voidReasonMin},${FIELD_RULES.voidReasonMax}}`
+)
+
+// 解鎖日結原因的正則（≥10 字）
+export const UNLOCK_REASON_PATTERN = new RegExp(
+  `.{${FIELD_RULES.unlockReasonMin},}`
+)
+
+// 滿勤獎金門檻（後端 grade.subtotal.bonus = 1000 代表達成 100% 出席）
+export const FULL_ATTENDANCE_BONUS = 1000

@@ -156,7 +156,7 @@
                 </template>
               </el-table-column>
               <el-table-column label="時間" width="72">
-                <template #default="{ row }">{{ formatTime(row.created_at) }}</template>
+                <template #default="{ row }">{{ formatTimeTW(row.created_at) }}</template>
               </el-table-column>
               <el-table-column label="收據編號" min-width="200">
                 <template #default="{ row }">
@@ -195,7 +195,7 @@
             </div>
             <div class="pos-approval__info-row">
               <span>簽核時間</span>
-              <strong>{{ formatDateTime(detail.approved_at) }}</strong>
+              <strong>{{ formatDateTimeTW(detail.approved_at) }}</strong>
             </div>
             <div v-if="detail.actual_cash_count != null" class="pos-approval__info-row">
               <span>實際現金盤點</span>
@@ -394,27 +394,12 @@ import {
   unlockPOSDailyClose,
 } from '@/api/activity'
 import { hasPermission } from '@/utils/auth'
+import { todayISO, offsetISO, formatDateTimeTW, formatTimeTW } from '@/utils/format'
+import { FIELD_RULES, UNLOCK_REASON_PATTERN } from '@/constants/activity'
 
 const canApprove = computed(() => hasPermission('ACTIVITY_PAYMENT_APPROVE'))
 
 const activeTab = ref('daily')
-
-function todayISO() {
-  const d = new Date()
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
-
-function offsetISO(days) {
-  const d = new Date()
-  d.setDate(d.getDate() + days)
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
 
 const selectedDate = ref(todayISO())
 const pending = ref([])
@@ -457,24 +442,6 @@ function resetForm() {
   form.note = ''
 }
 
-function formatDateTime(iso) {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return iso
-  return d.toLocaleString('zh-Hant', { hour12: false, timeZone: 'Asia/Taipei' })
-}
-
-function formatTime(iso) {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return iso.slice(11, 16)
-  return d.toLocaleTimeString('zh-Hant', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-    timeZone: 'Asia/Taipei',
-  })
-}
 
 async function loadPending() {
   loadingPending.value = true
@@ -588,14 +555,14 @@ async function handleUnlock() {
   let reason = ''
   try {
     const res = await ElMessageBox.prompt(
-      `確認解鎖 ${selectedDate.value} 的簽核？解鎖後原 snapshot 會失效，需重新簽核。\n\n請輸入解鎖原因（≥ 10 字，會寫入稽核軌跡）：`,
+      `確認解鎖 ${selectedDate.value} 的簽核？解鎖後原 snapshot 會失效，需重新簽核。\n\n請輸入解鎖原因（≥ ${FIELD_RULES.unlockReasonMin} 字，會寫入稽核軌跡）：`,
       '解鎖確認',
       {
         type: 'warning',
         confirmButtonText: '確認解鎖',
         cancelButtonText: '取消',
-        inputPattern: /.{10,}/,
-        inputErrorMessage: '原因至少 10 字',
+        inputPattern: UNLOCK_REASON_PATTERN,
+        inputErrorMessage: `原因至少 ${FIELD_RULES.unlockReasonMin} 字`,
       }
     )
     reason = (res?.value || '').trim()

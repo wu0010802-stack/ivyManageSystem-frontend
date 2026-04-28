@@ -42,13 +42,24 @@ vi.mock('@/utils/format', () => ({
   formatActivityDate: (v) => v || '',
 }))
 
-// ── constants mock ─────────────────────────────────────────────────────────
-vi.mock('@/constants/activity', () => ({
-  PAYMENT_STATUS_TAG_TYPE: { paid: 'success', partial: 'warning', overpaid: 'danger', unpaid: 'info' },
-  PAYMENT_STATUS_LABEL: { paid: '已繳費', partial: '部分繳費', overpaid: '超繳', unpaid: '未繳費' },
-  COURSE_STATUS_TAG_TYPE: { enrolled: 'success', waitlist: 'warning' },
-  COURSE_STATUS_LABEL: { enrolled: '正式', waitlist: '候補' },
+// ── countdown banner composable mock ───────────────────────────────────────
+vi.mock('@/composables/useCountdownBanner', () => ({
+  useCountdownBanner: () => ({ banner: ref(null), countdownLabel: () => '', formatIsoMinute: (v) => v || '' }),
+  countdownLabel: () => '',
+  formatIsoMinute: (v) => v || '',
 }))
+
+// ── constants mock ─────────────────────────────────────────────────────────
+vi.mock('@/constants/activity', async (importOriginal) => {
+  const actual = await importOriginal()
+  return {
+    ...actual,
+    PAYMENT_STATUS_TAG_TYPE: { paid: 'success', partial: 'warning', overpaid: 'danger', unpaid: 'info' },
+    PAYMENT_STATUS_LABEL: { paid: '已繳費', partial: '部分繳費', overpaid: '超繳', unpaid: '未繳費' },
+    COURSE_STATUS_TAG_TYPE: { enrolled: 'success', waitlist: 'warning' },
+    COURSE_STATUS_LABEL: { enrolled: '正式', waitlist: '候補' },
+  }
+})
 
 // ── composable mock ────────────────────────────────────────────────────────
 const mockFetchList = vi.fn()
@@ -132,6 +143,8 @@ const GLOBAL_STUBS = {
   'el-timeline': { template: '<div><slot /></div>' },
   'el-timeline-item': { template: '<div><slot /></div>' },
   'el-icon': { template: '<span />' },
+  RegistrationPaymentDialog: true,
+  RegistrationEditBasicDialog: true,
 }
 
 const flushPromises = async () => {
