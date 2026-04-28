@@ -17,8 +17,9 @@ server {
     # ── /api/* 反代到後端（含 WebSocket，dev 配置顯示 /api/ws/* 走 WS） ──
     # 用變數讓 DNS 在 request 時 resolve，避免 K8s/Zeabur 環境啟動瞬間
     # internal DNS 還沒備妥造成 nginx [emerg] host not found 直接死掉。
-    # resolver 用 K8s cluster DNS（kube-dns），所有 pod 預設都能用。
-    resolver 10.96.0.10 8.8.8.8 valid=30s ipv6=off;
+    # NGINX_LOCAL_RESOLVERS 由 nginx:alpine 內建的 15-local-resolvers.envsh
+    # 從 /etc/resolv.conf 抓出來（不同 K8s/Zeabur 區域 DNS IP 不同，不能寫死）。
+    resolver ${NGINX_LOCAL_RESOLVERS} valid=30s ipv6=off;
     resolver_timeout 5s;
 
     location /api/ {
