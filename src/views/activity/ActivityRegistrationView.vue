@@ -327,86 +327,14 @@
       @submitted="onPaymentSubmitted"
     />
 
-    <!-- 新增報名 Dialog -->
-    <el-dialog
+    <RegistrationCreateDialog
       v-model="createDialogVisible"
-      title="新增報名（後台手動）"
-      width="560px"
-      :close-on-click-modal="false"
-    >
-      <el-form :model="createForm" label-width="90px" ref="createFormRef">
-        <el-form-item label="學生姓名" required>
-          <el-input v-model="createForm.name" :maxlength="FIELD_RULES.studentNameMax" placeholder="請輸入學生姓名" />
-        </el-form-item>
-        <el-form-item label="生日" required>
-          <el-date-picker
-            v-model="createForm.birthday"
-            type="date"
-            format="YYYY-MM-DD"
-            value-format="YYYY-MM-DD"
-            placeholder="YYYY-MM-DD"
-            style="width: 100%"
-          />
-        </el-form-item>
-        <el-form-item label="班級" required>
-          <el-select v-model="createForm.class_" placeholder="選擇班級" style="width: 100%">
-            <el-option v-for="n in classroomOptions" :key="n" :label="n" :value="n" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="Email">
-          <el-input v-model="createForm.email" :maxlength="FIELD_RULES.emailMax" placeholder="選填" />
-        </el-form-item>
-        <el-form-item label="課程">
-          <el-select
-            v-model="createForm.courseNames"
-            multiple
-            filterable
-            placeholder="選擇課程（可多選）"
-            style="width: 100%"
-          >
-            <el-option
-              v-for="c in courseOptions"
-              :key="c.id"
-              :label="`${c.name}（$${c.price}，剩 ${c.remaining}/${c.capacity}）`"
-              :value="c.name"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="用品">
-          <el-select
-            v-model="createForm.supplyNames"
-            multiple
-            filterable
-            placeholder="選擇用品（可多選）"
-            style="width: 100%"
-            :loading="loadingSupplies"
-          >
-            <el-option
-              v-for="s in supplyOptions"
-              :key="s.id"
-              :label="`${s.name}（$${s.price}）`"
-              :value="s.name"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="備註">
-          <el-input v-model="createForm.remark" type="textarea" :rows="2" :maxlength="FIELD_RULES.remarkMax" />
-        </el-form-item>
-      </el-form>
-      <div class="create-summary">
-        總計：<strong>NT$ {{ createTotal.toLocaleString() }}</strong>
-        <span v-if="createTotal === 0" class="create-hint">（未選擇課程或用品）</span>
-      </div>
-      <template #footer>
-        <el-button @click="createDialogVisible = false">取消</el-button>
-        <el-button
-          type="primary"
-          :loading="creating"
-          :disabled="!createFormValid"
-          @click="handleCreate"
-        >確認新增</el-button>
-      </template>
-    </el-dialog>
+      :school-year="termStore.school_year"
+      :semester="termStore.semester"
+      :classroom-options="classroomOptions"
+      :course-options="courseOptions"
+      @created="onRegistrationCreated"
+    />
 
     <RegistrationEditBasicDialog
       v-model="editBasicDialogVisible"
