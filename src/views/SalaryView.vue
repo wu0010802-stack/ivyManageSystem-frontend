@@ -2,7 +2,7 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { calculate, getFestivalBonus, getRecords, getSalaryFieldBreakdown, manualAdjustSalary, getFestivalBonusPeriodAccrual } from '@/api/salary'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, InfoFilled, SuccessFilled, Picture } from '@element-plus/icons-vue'
+import { Search, InfoFilled, SuccessFilled, Picture, Edit } from '@element-plus/icons-vue'
 import BonusConfigPanel from './salary/BonusConfigPanel.vue'
 import SalaryHistoryPanel from './salary/SalaryHistoryPanel.vue'
 import SalarySimulatePanel from './salary/SalarySimulatePanel.vue'
@@ -209,11 +209,17 @@ const fetchSalaryRecords = async () => {
       dbCalculatedAt.value = timestamps.sort().at(-1)
     }
     if (salaryResults.value.length > 0) {
-      // 使用 Map 合併 remark，O(n) 取代 O(n²)
+      // 使用 Map 合併 remark + manual_overrides，O(n) 取代 O(n²)
+      // manual_overrides 從 records 帶過來,讓「人工調整」icon 在重算後仍正確顯示
       const recordMap = new Map(response.data.map(r => [r.employee_id, r]))
       salaryResults.value = salaryResults.value.map((row) => {
         const record = recordMap.get(row.employee_id)
-        return record ? { ...row, remark: record.remark || '' } : row
+        if (!record) return row
+        return {
+          ...row,
+          remark: record.remark || '',
+          manual_overrides: Array.isArray(record.manual_overrides) ? record.manual_overrides : [],
+        }
       })
     } else if (response.data.length > 0) {
       // 頁面重整後從 DB records 重建計算結果（records 已包含前端所需的欄位別名）
@@ -234,6 +240,14 @@ const getRecordForRow = (row) => {
     return salaryRecordsMap.value.get(row.employee_id) || null
   }
   return salaryRecordsByName.value.get(row?.employee_name) || null
+}
+
+// 判斷該欄位是否為人工調整(對應後端 SalaryRecord.manual_overrides)
+// 表頁列(row)與後端 SalaryRecord 的欄位名一致(欄位 key 同時是 EDITABLE_SALARY_FIELDS key),
+// 故直接用 key 比對即可。
+const isManualOverride = (row, fieldKey) => {
+  const overrides = row?.manual_overrides
+  return Array.isArray(overrides) && overrides.includes(fieldKey)
 }
 
 const exportPdf = (row) => {
@@ -290,6 +304,7 @@ const saveManualAdjust = async () => {
       total_deductions: updated.total_deduction,
       net_pay: updated.net_salary,
       remark: updated.remark,
+      manual_overrides: Array.isArray(updated.manual_overrides) ? updated.manual_overrides : [],
     })
     const recordIndex = salaryRecords.value.findIndex(item => item.id === record.id)
     if (recordIndex >= 0) {
@@ -432,6 +447,9 @@ onMounted(() => {
                 <button type="button" class="cell-link text-link-primary" @click="openFieldBreakdown(scope.row, 'festival_bonus')">
                   {{ money(scope.row.festival_bonus) }}
                 </button>
+                <el-tooltip v-if="isManualOverride(scope.row, 'festival_bonus')" content="此欄位已人工調整，重算時將保留此值" placement="top">
+                  <el-icon class="manual-override-icon" :size="11"><Edit /></el-icon>
+                </el-tooltip>
               </template>
             </el-table-column>
             <el-table-column label="超額獎金" width="100">
@@ -439,6 +457,9 @@ onMounted(() => {
                 <button type="button" class="cell-link text-link-primary" @click="openFieldBreakdown(scope.row, 'overtime_bonus')">
                   {{ money(scope.row.overtime_bonus) }}
                 </button>
+                <el-tooltip v-if="isManualOverride(scope.row, 'overtime_bonus')" content="此欄位已人工調整，重算時將保留此值" placement="top">
+                  <el-icon class="manual-override-icon" :size="11"><Edit /></el-icon>
+                </el-tooltip>
               </template>
             </el-table-column>
             <el-table-column label="加班津貼" width="100">
@@ -446,6 +467,9 @@ onMounted(() => {
                 <button type="button" class="cell-link text-link-primary" @click="openFieldBreakdown(scope.row, 'overtime_pay')">
                   {{ money(scope.row.overtime_pay) }}
                 </button>
+                <el-tooltip v-if="isManualOverride(scope.row, 'overtime_pay')" content="此欄位已人工調整，重算時將保留此值" placement="top">
+                  <el-icon class="manual-override-icon" :size="11"><Edit /></el-icon>
+                </el-tooltip>
               </template>
             </el-table-column>
             <el-table-column label="主管紅利" width="100">
@@ -453,6 +477,9 @@ onMounted(() => {
                 <button type="button" class="cell-link text-link-primary" @click="openFieldBreakdown(scope.row, 'supervisor_dividend')">
                   {{ money(scope.row.supervisor_dividend) }}
                 </button>
+                <el-tooltip v-if="isManualOverride(scope.row, 'supervisor_dividend')" content="此欄位已人工調整，重算時將保留此值" placement="top">
+                  <el-icon class="manual-override-icon" :size="11"><Edit /></el-icon>
+                </el-tooltip>
               </template>
             </el-table-column>
             <el-table-column label="會議加班" width="100">
@@ -460,6 +487,9 @@ onMounted(() => {
                 <button type="button" class="cell-link text-link-primary" @click="openFieldBreakdown(scope.row, 'meeting_overtime_pay')">
                   {{ money(scope.row.meeting_overtime_pay) }}
                 </button>
+                <el-tooltip v-if="isManualOverride(scope.row, 'meeting_overtime_pay')" content="此欄位已人工調整，重算時將保留此值" placement="top">
+                  <el-icon class="manual-override-icon" :size="11"><Edit /></el-icon>
+                </el-tooltip>
               </template>
             </el-table-column>
             <el-table-column label="生日禮金" width="100">
@@ -467,6 +497,9 @@ onMounted(() => {
                 <button type="button" class="cell-link text-link-primary" @click="openFieldBreakdown(scope.row, 'birthday_bonus')">
                   {{ money(scope.row.birthday_bonus) }}
                 </button>
+                <el-tooltip v-if="isManualOverride(scope.row, 'birthday_bonus')" content="此欄位已人工調整，重算時將保留此值" placement="top">
+                  <el-icon class="manual-override-icon" :size="11"><Edit /></el-icon>
+                </el-tooltip>
               </template>
             </el-table-column>
             <el-table-column label="勞保" width="90">
@@ -489,6 +522,9 @@ onMounted(() => {
                 <button type="button" class="cell-link text-link-danger" @click="openFieldBreakdown(scope.row, 'leave_deduction')">
                   {{ money(scope.row.leave_deduction) }}
                 </button>
+                <el-tooltip v-if="isManualOverride(scope.row, 'leave_deduction')" content="此欄位已人工調整，重算時將保留此值" placement="top">
+                  <el-icon class="manual-override-icon" :size="11"><Edit /></el-icon>
+                </el-tooltip>
               </template>
             </el-table-column>
             <el-table-column label="遲到扣款" width="100">
@@ -496,6 +532,9 @@ onMounted(() => {
                 <button type="button" class="cell-link text-link-danger" @click="openFieldBreakdown(scope.row, 'late_deduction')">
                   {{ money(scope.row.late_deduction) }}
                 </button>
+                <el-tooltip v-if="isManualOverride(scope.row, 'late_deduction')" content="此欄位已人工調整，重算時將保留此值" placement="top">
+                  <el-icon class="manual-override-icon" :size="11"><Edit /></el-icon>
+                </el-tooltip>
               </template>
             </el-table-column>
             <el-table-column label="早退扣款" width="100">
@@ -503,6 +542,9 @@ onMounted(() => {
                 <button type="button" class="cell-link text-link-danger" @click="openFieldBreakdown(scope.row, 'early_leave_deduction')">
                   {{ money(scope.row.early_leave_deduction) }}
                 </button>
+                <el-tooltip v-if="isManualOverride(scope.row, 'early_leave_deduction')" content="此欄位已人工調整，重算時將保留此值" placement="top">
+                  <el-icon class="manual-override-icon" :size="11"><Edit /></el-icon>
+                </el-tooltip>
               </template>
             </el-table-column>
             <el-table-column width="128">
@@ -515,6 +557,9 @@ onMounted(() => {
                 <button type="button" class="cell-link text-link-warning" @click="openFieldBreakdown(scope.row, 'meeting_absence_deduction')">
                   {{ money(scope.row.meeting_absence_deduction) }}
                 </button>
+                <el-tooltip v-if="isManualOverride(scope.row, 'meeting_absence_deduction')" content="此欄位已人工調整，重算時將保留此值" placement="top">
+                  <el-icon class="manual-override-icon" :size="11"><Edit /></el-icon>
+                </el-tooltip>
               </template>
             </el-table-column>
             <el-table-column label="曠職扣款" width="100">
@@ -522,6 +567,9 @@ onMounted(() => {
                 <button type="button" class="cell-link text-link-danger" @click="openFieldBreakdown(scope.row, 'absence_deduction')">
                   {{ money(scope.row.absence_deduction) }}
                 </button>
+                <el-tooltip v-if="isManualOverride(scope.row, 'absence_deduction')" content="此欄位已人工調整，重算時將保留此值" placement="top">
+                  <el-icon class="manual-override-icon" :size="11"><Edit /></el-icon>
+                </el-tooltip>
               </template>
             </el-table-column>
             <el-table-column label="總扣款" width="100">
@@ -879,5 +927,11 @@ onMounted(() => {
 .text-warning {
   color: var(--el-color-warning);
   font-weight: 600;
+}
+/* 人工調整指示器:出現在已透過 manual-adjust 改過的欄位旁,提示重算將保留此值 */
+.manual-override-icon {
+  margin-left: 4px;
+  color: var(--el-color-warning);
+  vertical-align: middle;
 }
 </style>
