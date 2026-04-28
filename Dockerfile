@@ -32,4 +32,4 @@ COPY --from=build /app/dist /usr/share/nginx/html
 ENV BACKEND_URL=http://ivymanagesystem-backend-rulla.zeabur.internal:8080 \
     NGINX_ENVSUBST_FILTER=BACKEND_URL
 
-EXPOSE 80
+EXPOSE 8080
