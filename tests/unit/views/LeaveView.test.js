@@ -108,6 +108,7 @@ vi.mock('@/utils/leaves', () => ({
     { value: 'annual', label: '特休', deduction: '不扣', color: 'success' },
   ],
   LEAVE_RULE_HINTS: { annual: '年度特休依比例給予' },
+  validateLeaveRules: vi.fn(() => []),
 }))
 
 // ── element-plus mocks ─────────────────────────────────────────────────────

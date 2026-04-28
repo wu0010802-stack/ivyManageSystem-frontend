@@ -58,15 +58,28 @@ export const formatTimeTW = (iso) => {
   })
 }
 
-// 今日 YYYY-MM-DD（本地時區）
-export const todayISO = () => {
-  const d = new Date()
+// 將 Date 物件轉為「本地時區」的 YYYY-MM-DD
+// Why: 不可用 d.toISOString().slice(0, 10)，那會用 UTC，台灣 UTC+8 之後會跨日。
+export const dateToLocalISO = (d) => {
+  if (!(d instanceof Date) || Number.isNaN(d.getTime())) return ''
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
 }
+
+// 將 Date 物件轉為「本地時區」的 YYYY-MM
+export const dateToLocalISOMonth = (d) => {
+  if (!(d instanceof Date) || Number.isNaN(d.getTime())) return ''
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`
+}
+
+// 今日 YYYY-MM-DD（本地時區）
+export const todayISO = () => dateToLocalISO(new Date())
 
 // 今日 ± n 天的 YYYY-MM-DD（本地時區）
 export const offsetISO = (days) => {
   const d = new Date()
   d.setDate(d.getDate() + days)
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
+  return dateToLocalISO(d)
 }
+
+// 今月 YYYY-MM（本地時區）
+export const thisMonthISO = () => dateToLocalISOMonth(new Date())

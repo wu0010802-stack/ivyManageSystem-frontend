@@ -53,15 +53,51 @@ export const LEAVE_RULE_HINTS = {
   typhoon: '依勞基法辦理，勞工可不出勤，雇主得不給薪。',
 }
 
+/**
+ * 把 'YYYY-MM-DD' 或 'YYYY-MM-DD HH:MM:SS' 字串解析為瀏覽器本地零點的 Date。
+ * 直接 `new Date('YYYY-MM-DD')` 會被 JS 引擎視為 UTC，跨負時區會少一天。
+ */
+const parseDateLocal = (input) => {
+  if (!input) return null
+  if (input instanceof Date) {
+    const d = new Date(input)
+    d.setHours(0, 0, 0, 0)
+    return d
+  }
+  const s = String(input).substring(0, 10)
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!m) return null
+  return new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10), 0, 0, 0, 0)
+}
+
 export const getRequestedCalendarDays = (startDate, endDate) => {
   if (!startDate || !endDate) return 0
-  const start = new Date(startDate)
-  const end = new Date(endDate)
-  start.setHours(0, 0, 0, 0)
-  end.setHours(0, 0, 0, 0)
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) return 0
+  const start = parseDateLocal(startDate)
+  const end = parseDateLocal(endDate)
+  if (!start || !end || end < start) return 0
   return Math.floor((end - start) / 86400000) + 1
 }
 
 export const leaveRequiresAttachment = (startDate, endDate) =>
   getRequestedCalendarDays(startDate, endDate) > 2
+
+/**
+ * 檢查請假申請是否違反業務規則（病假 4h 倍數、事假提前 2 日）。
+ * 回傳違規訊息陣列；caller 可選擇 hard block 或 confirm 後繼續。
+ */
+export const validateLeaveRules = ({ leave_type, leave_hours, start_date } = {}) => {
+  const violations = []
+  if (leave_type === 'sick' && Number(leave_hours) > 0 && Number(leave_hours) % 4 !== 0) {
+    violations.push('病假必須以 4 小時為單位申請')
+  }
+  if (leave_type === 'personal' && start_date) {
+    const start = parseDateLocal(start_date)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    if (start) {
+      const diffDays = Math.floor((start - today) / 86400000)
+      if (diffDays < 2) violations.push('事假需至少提前 2 日提出申請')
+    }
+  }
+  return violations
+}

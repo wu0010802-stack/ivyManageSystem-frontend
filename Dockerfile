@@ -23,18 +23,8 @@ RUN npm run build
 # ---------- Runtime stage ----------
 FROM nginx:alpine AS runtime
 
-# 用 templates 目錄讓 nginx:alpine 的 entrypoint 在啟動時跑 envsubst
+# 純靜態 nginx，不再 proxy /api（前端 bundle 直接打 backend public URL）
 COPY nginx.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=build /app/dist /usr/share/nginx/html
-
-# 啟動時從 /etc/resolv.conf 動態替換 __RESOLVER_IP__ 為真實 cluster DNS IP
-# （nginx:alpine 內建 NGINX_LOCAL_RESOLVERS 在 Zeabur 環境會出錯，自己處理較穩）
-COPY 25-fix-resolver.sh /docker-entrypoint.d/25-fix-resolver.sh
-RUN chmod +x /docker-entrypoint.d/25-fix-resolver.sh
-
-# 只替換 ${BACKEND_URL}，避免動到 nginx 內建變數（$host、$remote_addr 等）
-# BACKEND_URL 由 Zeabur frontend service 的 env 注入；預設指向同專案後端 internal DNS
-ENV BACKEND_URL=http://ivymanagesystem-backend-rulla.zeabur.internal:8080 \
-    NGINX_ENVSUBST_FILTER=BACKEND_URL
 
 EXPOSE 8080

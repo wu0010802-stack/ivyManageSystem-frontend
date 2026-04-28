@@ -67,7 +67,7 @@ export const getMyLeaveAttachment = (leaveId, filename) =>
     responseType: 'blob',
   })
 
-export const getMyQuotas = () => api.get('/portal/my-quotas')
+export const getMyQuotas = (params) => api.get('/portal/my-quotas', { params })
 
 export const getMyLeaveStats = () => api.get('/portal/my-leave-stats')
 

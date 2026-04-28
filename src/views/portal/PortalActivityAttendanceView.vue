@@ -177,6 +177,7 @@ import {
   batchUpdatePortalAttendance,
 } from '@/api/activity'
 import { useActivityAttendanceDrawer } from '@/composables/useActivityAttendanceDrawer'
+import { dateToLocalISO } from '@/utils/format'
 
 const loading = ref(false)
 const sessions = ref([])
@@ -224,10 +225,9 @@ function _monthBounds(offset) {
   const today = new Date()
   const y = today.getFullYear()
   const m = today.getMonth() + offset
-  const fmt = (d) => d.toISOString().slice(0, 10)
   return {
-    start: fmt(new Date(y, m, 1)),
-    end: fmt(new Date(y, m + 1, 0)),
+    start: dateToLocalISO(new Date(y, m, 1)),
+    end: dateToLocalISO(new Date(y, m + 1, 0)),
   }
 }
 

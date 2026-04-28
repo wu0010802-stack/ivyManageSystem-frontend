@@ -67,6 +67,27 @@ const populateForm = (row) => {
   form.use_comp_leave = row.use_comp_leave || false
 }
 
+// 起迄時間 vs 時數一致性檢查
+const overtimeTimeError = ref('')
+const overtimeHoursWarning = ref('')
+const checkOvertimeTimeConsistency = () => {
+  overtimeTimeError.value = ''
+  overtimeHoursWarning.value = ''
+  if (!form.start_time || !form.end_time) return
+  if (form.end_time <= form.start_time) {
+    overtimeTimeError.value = '結束時間必須晚於開始時間'
+    return
+  }
+  const [sh, sm] = form.start_time.split(':').map(Number)
+  const [eh, em] = form.end_time.split(':').map(Number)
+  const minutes = (eh * 60 + em) - (sh * 60 + sm)
+  const calculated = Math.round(minutes / 60 * 2) / 2
+  if (Math.abs(calculated - Number(form.hours)) > 0.001) {
+    overtimeHoursWarning.value = `依時段計算為 ${calculated}h，與輸入時數 ${form.hours}h 不一致`
+  }
+}
+watch([() => form.start_time, () => form.end_time, () => form.hours], checkOvertimeTimeConsistency)
+
 const { dialogVisible, isEdit, openCreate, openEdit, closeDialog } = useCrudDialog({ resetForm, populateForm })
 
 const resolveSectionFromRoute = () => {
@@ -106,6 +127,18 @@ const saveOvertime = async () => {
   if (!form.employee_id || !form.overtime_date) {
     ElMessage.warning('請填寫必要欄位')
     return
+  }
+  if (overtimeTimeError.value) {
+    ElMessage.error(overtimeTimeError.value)
+    return
+  }
+  if (overtimeHoursWarning.value) {
+    const confirmed = await ElMessageBox.confirm(
+      `${overtimeHoursWarning.value}。仍要以輸入的時數儲存嗎？`,
+      '時數與時段不一致',
+      { type: 'warning', confirmButtonText: '仍要儲存', cancelButtonText: '取消' },
+    ).catch(() => false)
+    if (!confirmed) return
   }
   saveOvertimeLoading.value = true
   try {
@@ -478,11 +511,15 @@ watch(activeSection, async (value) => {
         <el-form-item label="開始時間">
           <el-time-picker v-model="form.start_time" format="HH:mm" value-format="HH:mm" placeholder="選擇時間" style="width: 100%;" />
         </el-form-item>
-        <el-form-item label="結束時間">
+        <el-form-item label="結束時間" :error="overtimeTimeError">
           <el-time-picker v-model="form.end_time" format="HH:mm" value-format="HH:mm" placeholder="選擇時間" style="width: 100%;" />
         </el-form-item>
         <el-form-item label="加班時數" required>
           <el-input-number v-model="form.hours" :min="0.5" :step="0.5" :max="12" />
+          <div v-if="overtimeHoursWarning" style="margin-top: 4px; font-size: 12px; color: var(--el-color-warning);">
+            <el-icon style="vertical-align: middle;"><Warning /></el-icon>
+            {{ overtimeHoursWarning }}
+          </div>
         </el-form-item>
         <el-form-item label="補休方式">
           <el-switch

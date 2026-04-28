@@ -15,6 +15,7 @@ import { apiError } from '@/utils/error'
 import { useAcademicTermStore } from '@/stores/academicTerm'
 import { getClassrooms } from '@/api/classrooms'
 import { getCurrentAcademicTerm, normalizeSchoolYear } from '@/utils/academic'
+import { todayISO } from '@/utils/format'
 import {
   batchSaveAttendance,
   getAttendanceOverview,
@@ -26,7 +27,7 @@ import { downloadFile } from '@/utils/download'
 ChartJS.register(BarElement, CategoryScale, LinearScale, Tooltip, Legend)
 
 const STATUS_OPTIONS = ['出席', '缺席', '病假', '事假', '遲到']
-const TODAY = new Date().toISOString().slice(0, 10)
+const TODAY = todayISO()
 
 const termStore = useAcademicTermStore()
 const currentAcademicTerm = getCurrentAcademicTerm()

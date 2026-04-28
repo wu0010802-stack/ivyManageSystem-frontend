@@ -10,7 +10,7 @@ import { useCrudDialog, useConfirmDelete, useDateQuery, useLeaveHoursCalculator,
 import { useApprovalModule } from '@/composables/useApprovalModule'
 import { downloadFile } from '@/utils/download'
 import { apiError } from '@/utils/error'
-import { LEAVE_TYPES as leaveTypes, LEAVE_RULE_HINTS } from '@/utils/leaves'
+import { LEAVE_TYPES as leaveTypes, LEAVE_RULE_HINTS, validateLeaveRules } from '@/utils/leaves'
 import { money } from '@/utils/format'
 import LeaveAttachmentDialog from './leave/LeaveAttachmentDialog.vue'
 import ApprovalLogDrawer from '@/components/common/ApprovalLogDrawer.vue'
@@ -202,6 +202,21 @@ const saveLeave = async () => {
   if (leaveMode.value === 'full' ? e < s : e <= s) {
     ElMessage.warning(leaveMode.value === 'full' ? '結束日期不得早於開始日期' : '結束時間必須晚於開始時間')
     return
+  }
+
+  // 業務規則檢查：病假 4h 倍數、事假提前 2 日。管理端容許覆寫，需顯式 confirm
+  const ruleViolations = validateLeaveRules({
+    leave_type: form.leave_type,
+    leave_hours: form.leave_hours,
+    start_date: form.start_date,
+  })
+  if (ruleViolations.length > 0) {
+    const confirmed = await ElMessageBox.confirm(
+      `${ruleViolations.join('；')}。確認要繼續儲存嗎？`,
+      '違反請假規則',
+      { type: 'warning', confirmButtonText: '仍要儲存', cancelButtonText: '取消' },
+    ).catch(() => false)
+    if (!confirmed) return
   }
 
   // 時數合理性警告：優先用 API 算出的工時，否則降級為本地計算

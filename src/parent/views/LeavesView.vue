@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useChildrenStore } from '../stores/children'
 import { listLeaves, createLeave, cancelLeave } from '../api/leaves'
 import { toast } from '../utils/toast'
+import { todayISO, dateToLocalISO } from '@/utils/format'
 
 const childrenStore = useChildrenStore()
 const items = ref([])
@@ -23,16 +24,16 @@ const STATUS_COLOR = {
   cancelled: { bg: '#f0f2f5', color: '#666' },
 }
 
-const todayStr = new Date().toISOString().slice(0, 10)
+const todayStr = todayISO()
 const futureLimitStr = (() => {
   const d = new Date()
   d.setDate(d.getDate() + 60)
-  return d.toISOString().slice(0, 10)
+  return dateToLocalISO(d)
 })()
 const pastLimitStr = (() => {
   const d = new Date()
   d.setDate(d.getDate() - 30)
-  return d.toISOString().slice(0, 10)
+  return dateToLocalISO(d)
 })()
 
 const form = ref({

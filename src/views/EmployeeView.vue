@@ -14,6 +14,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import EmptyState from '@/components/common/EmptyState.vue'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
 import { useEmployeeStore } from '@/stores/employee'
+import { todayISO, thisMonthISO } from '@/utils/format'
 import { useClassroomStore } from '@/stores/classroom'
 import { useConfigStore } from '@/stores/config'
 import { useCrudDialog, useConfirmDelete } from '@/composables'
@@ -167,7 +168,7 @@ const finalSalaryPreview = ref(null)
 const finalSalaryLoading = ref(false)
 
 const getEmployeeStatus = (emp) => {
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayISO()
   if (!emp.is_active) return { label: '已離職', type: 'info' }
   if (emp.resign_date && emp.resign_date > today) {
     return { label: `待離職・${emp.resign_date}`, type: 'warning' }
@@ -297,7 +298,7 @@ const { confirmDelete: handleDelete, deleting: deleteLoading } = useConfirmDelet
 })
 
 const attendanceRecords = ref([])
-const attendanceMonth = ref(new Date().toISOString().slice(0, 7)) // YYYY-MM
+const attendanceMonth = ref(thisMonthISO()) // YYYY-MM
 // ... existing variables
 
 const fetchAttendance = async () => {
@@ -515,7 +516,7 @@ const handleDetail = async (row) => {
     educations.value = []
     certificates.value = []
     contracts.value = []
-    attendanceMonth.value = new Date().toISOString().slice(0, 7)
+    attendanceMonth.value = thisMonthISO()
     attendanceRecords.value = []
     detailDialogVisible.value = true
   } catch (error) {

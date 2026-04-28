@@ -194,6 +194,7 @@ import {
 } from '@/api/portfolio'
 import { hasPermission } from '@/utils/auth'
 import { apiError } from '@/utils/error'
+import { todayISO } from '@/utils/format'
 
 const DOMAINS = [
   '身體動作與健康',
@@ -224,7 +225,7 @@ const editor = reactive({
   saving: false,
   editingId: null,
   form: {
-    observation_date: new Date().toISOString().slice(0, 10),
+    observation_date: todayISO(),
     domain: '',
     narrative: '',
     rating: 0,
@@ -265,7 +266,7 @@ function openCreate() {
   editor.mode = 'create'
   editor.editingId = null
   editor.form = {
-    observation_date: new Date().toISOString().slice(0, 10),
+    observation_date: todayISO(),
     domain: '',
     narrative: '',
     rating: 0,

@@ -360,6 +360,7 @@ import {
   refundFeeRecord, getFeeRefunds,
 } from '@/api/fees'
 import { useClassroomStore } from '@/stores/classroom'
+import { todayISO } from '@/utils/format'
 
 // ─── Tab 狀態 ────────────────────────────────────────────────────────────────
 const activeTab = ref('items')
@@ -627,7 +628,7 @@ const payRules = {
 function openPayDialog(row) {
   payingRecord.value = row
   payForm.value = {
-    payment_date: new Date().toISOString().slice(0, 10),
+    payment_date: todayISO(),
     amount_paid: row.status === 'partial' ? row.amount_paid : row.amount_due,
     payment_method: row.payment_method || '現金',
     notes: row.notes || '',

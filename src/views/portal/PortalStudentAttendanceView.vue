@@ -30,6 +30,7 @@ import {
 } from '@/utils/offlineQueue'
 import { flushClassAttendanceQueue } from '@/utils/attendanceSync'
 import { useOnlineStatus, isNetworkError } from '@/composables/useOnlineStatus'
+import { todayISO, thisMonthISO } from '@/utils/format'
 import { getUserInfo } from '@/utils/auth'
 
 ChartJS.register(BarElement, CategoryScale, LinearScale, Tooltip, Legend)
@@ -40,13 +41,13 @@ const classrooms = ref([])
 const classLoading = ref(false)
 const activeTab = ref('daily')
 
-const dailyDate = ref(new Date().toISOString().slice(0, 10))
+const dailyDate = ref(todayISO())
 const dailyClassroomId = ref(null)
 const dailyRecords = ref([])
 const dailyLoading = ref(false)
 const saveLoading = ref(false)
 
-const monthPicker = ref(new Date().toISOString().slice(0, 7))
+const monthPicker = ref(thisMonthISO())
 const monthlyClassroomId = ref(null)
 const monthlyData = ref(null)
 const monthlyLoading = ref(false)

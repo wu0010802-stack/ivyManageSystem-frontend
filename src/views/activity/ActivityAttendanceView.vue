@@ -315,6 +315,7 @@ import {
   getCourses,
 } from '@/api/activity'
 import { hasPermission } from '@/utils/auth'
+import { todayISO, dateToLocalISO } from '@/utils/format'
 import { useActivityAttendanceDrawer } from '@/composables/useActivityAttendanceDrawer'
 
 const router = useRouter()
@@ -407,23 +408,22 @@ function setGroupPresent(group, value) {
 function setQuickRange(range) {
   quickRange.value = range
   const today = new Date()
-  const fmt = (d) => d.toISOString().slice(0, 10)
   if (range === 'today') {
-    filterStartDate.value = fmt(today)
-    filterEndDate.value = fmt(today)
+    filterStartDate.value = dateToLocalISO(today)
+    filterEndDate.value = dateToLocalISO(today)
   } else if (range === 'week') {
     const day = today.getDay() || 7
     const mon = new Date(today)
     mon.setDate(today.getDate() - day + 1)
     const sun = new Date(mon)
     sun.setDate(mon.getDate() + 6)
-    filterStartDate.value = fmt(mon)
-    filterEndDate.value = fmt(sun)
+    filterStartDate.value = dateToLocalISO(mon)
+    filterEndDate.value = dateToLocalISO(sun)
   } else if (range === 'month') {
     const y = today.getFullYear()
     const m = today.getMonth()
-    filterStartDate.value = fmt(new Date(y, m, 1))
-    filterEndDate.value = fmt(new Date(y, m + 1, 0))
+    filterStartDate.value = dateToLocalISO(new Date(y, m, 1))
+    filterEndDate.value = dateToLocalISO(new Date(y, m + 1, 0))
   }
   loadSessions()
 }
@@ -469,7 +469,7 @@ function resetFilter() {
 function openCreateDialog() {
   createForm.value = {
     course_id: null,
-    session_date: new Date().toISOString().slice(0, 10),
+    session_date: todayISO(),
     notes: '',
   }
   createDialogVisible.value = true

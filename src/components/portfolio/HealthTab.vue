@@ -219,6 +219,7 @@ import {
 } from '@/api/studentHealth'
 import { hasPermission } from '@/utils/auth'
 import { apiError } from '@/utils/error'
+import { todayISO } from '@/utils/format'
 
 const props = defineProps({
   studentId: { type: Number, required: true },
@@ -246,7 +247,7 @@ const medDialog = reactive({
   visible: false,
   saving: false,
   form: {
-    order_date: new Date().toISOString().slice(0, 10),
+    order_date: todayISO(),
     medication_name: '',
     dose: '',
     time_slots: ['08:30'],
@@ -349,7 +350,7 @@ async function confirmDeleteAllergy(a) {
 
 function openMedOrder() {
   medDialog.form = {
-    order_date: new Date().toISOString().slice(0, 10),
+    order_date: todayISO(),
     medication_name: '',
     dose: '',
     time_slots: ['08:30'],

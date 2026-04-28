@@ -12,6 +12,7 @@ import {
 import { getCommunications } from '@/api/studentCommunications'
 import { getClassroomEnrollmentComposition } from '@/api/classrooms'
 import { apiError } from '@/utils/error'
+import { dateToLocalISO } from '@/utils/format'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -162,11 +163,10 @@ const fetchCommunications = async () => {
     const today = new Date()
     const from = new Date(today)
     from.setDate(today.getDate() - 30)
-    const fmt = (d) => d.toISOString().slice(0, 10)
     const res = await getCommunications({
       classroom_id: props.classroom.id,
-      date_from: fmt(from),
-      date_to: fmt(today),
+      date_from: dateToLocalISO(from),
+      date_to: dateToLocalISO(today),
       page_size: 100,
     })
     communications.value = res.data.items

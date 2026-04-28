@@ -345,93 +345,27 @@
     />
 
     <!-- 新增課程 Dialog -->
-    <el-dialog
+    <RegistrationAddCourseDialog
       v-model="addCourseDialogVisible"
-      title="新增課程"
-      width="480px"
-      :close-on-click-modal="false"
-    >
-      <el-form label-width="90px">
-        <el-form-item label="選擇課程" required>
-          <el-select
-            v-model="addCourseId"
-            filterable
-            placeholder="選擇要加入的課程"
-            style="width: 100%"
-          >
-            <el-option
-              v-for="c in availableCoursesForAdd"
-              :key="c.id"
-              :label="`${c.name}（$${c.price}，剩 ${c.remaining}/${c.capacity}）`"
-              :value="c.id"
-            >
-              <span>{{ c.name }}</span>
-              <span style="float: right; color: #999; font-size: 12px">
-                ${{ c.price }}｜{{ c.remaining > 0 ? `剩 ${c.remaining}` : (c.allow_waitlist ? '候補' : '額滿') }}
-              </span>
-            </el-option>
-          </el-select>
-        </el-form-item>
-        <el-alert
-          v-if="addCourseWaitlistHint"
-          type="warning"
-          :closable="false"
-          :title="addCourseWaitlistHint"
-          show-icon
-        />
-      </el-form>
-      <template #footer>
-        <el-button @click="addCourseDialogVisible = false">取消</el-button>
-        <el-button
-          type="primary"
-          :loading="addingCourse"
-          :disabled="!addCourseId"
-          @click="handleAddCourse"
-        >確認新增</el-button>
-      </template>
-    </el-dialog>
+      :registration-id="detail?.id"
+      :course-options="courseOptions"
+      :enrolled-course-ids="(detail?.courses || []).map((c) => c.course_id)"
+      @added="onCourseAdded"
+    />
 
-    <!-- 新增用品 Dialog -->
-    <el-dialog
+    <RegistrationAddSupplyDialog
       v-model="addSupplyDialogVisible"
-      title="新增用品"
-      width="480px"
-      :close-on-click-modal="false"
-    >
-      <el-form label-width="90px">
-        <el-form-item label="選擇用品" required>
-          <el-select
-            v-model="addSupplyId"
-            filterable
-            placeholder="選擇要加入的用品"
-            style="width: 100%"
-            :loading="loadingSupplies"
-          >
-            <el-option
-              v-for="s in supplyOptions"
-              :key="s.id"
-              :label="`${s.name}（$${s.price}）`"
-              :value="s.id"
-            />
-          </el-select>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="addSupplyDialogVisible = false">取消</el-button>
-        <el-button
-          type="primary"
-          :loading="addingSupply"
-          :disabled="!addSupplyId"
-          @click="handleAddSupply"
-        >確認新增</el-button>
-      </template>
-    </el-dialog>
+      :registration-id="detail?.id"
+      :school-year="termStore.school_year"
+      :semester="termStore.semester"
+      @added="onSupplyAdded"
+    />
     </div><!-- /.mode-list -->
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Edit, Link } from '@element-plus/icons-vue'
@@ -441,9 +375,7 @@ import {
   exportRegistrations,
   getRegistrationPayments, deleteRegistrationPayment,
   withdrawCourse, getRegistrationTime,
-  createRegistration, getSupplies,
-  addRegistrationCourse,
-  addRegistrationSupply, removeRegistrationSupply,
+  removeRegistrationSupply,
   listPendingRegistrations,
 } from '@/api/activity'
 import { useAcademicTermStore } from '@/stores/academicTerm'
@@ -459,6 +391,9 @@ import { hasPermission } from '@/utils/auth'
 import AcademicTermSelector from '@/components/common/AcademicTermSelector.vue'
 import RegistrationPaymentDialog from '@/components/activity/RegistrationPaymentDialog.vue'
 import RegistrationEditBasicDialog from '@/components/activity/RegistrationEditBasicDialog.vue'
+import RegistrationCreateDialog from '@/components/activity/RegistrationCreateDialog.vue'
+import RegistrationAddCourseDialog from '@/components/activity/RegistrationAddCourseDialog.vue'
+import RegistrationAddSupplyDialog from '@/components/activity/RegistrationAddSupplyDialog.vue'
 
 const canWrite = computed(() => hasPermission('ACTIVITY_WRITE'))
 const termStore = useAcademicTermStore()
@@ -525,6 +460,9 @@ const { banner: regTimeBanner } = useCountdownBanner(regTimeInfo)
 const drawerVisible = ref(false)
 const detail = ref(null)
 const loadingDetail = ref(false)
+// Why: 防止使用者快速點兩列、或關閉 drawer 後 in-flight 請求覆蓋 detail/paymentInfo
+const drawerSeq = ref(0)
+watch(drawerVisible, (v) => { if (!v) drawerSeq.value++ })
 const remarkText = ref('')
 const savingPromote = ref(false)
 const savingRemark = ref(false)
@@ -548,44 +486,58 @@ const paymentTagTypeByStatus = (status) => PAYMENT_STATUS_TAG_TYPE[status] || 'i
 const paymentStatusLabel = (status) => PAYMENT_STATUS_LABEL[status] || '未繳費'
 
 async function openDetail(row) {
+  const seq = ++drawerSeq.value
   drawerVisible.value = true
   detail.value = null
+  remarkText.value = ''
   loadingDetail.value = true
   paymentInfo.value = { total_amount: 0, paid_amount: 0, payment_status: 'unpaid', records: [] }
   try {
-    const [detailRes] = await Promise.all([
-      getRegistrationDetail(row.id),
-    ])
+    const detailRes = await getRegistrationDetail(row.id)
+    if (seq !== drawerSeq.value) return
     detail.value = detailRes.data
     remarkText.value = detailRes.data.remark || ''
-    await loadPayments(row.id)
+    await loadPayments(row.id, seq)
   } catch (e) {
-    ElMessage.error(e?.response?.data?.detail || '載入詳情失敗，請稍後重試')
+    if (seq === drawerSeq.value) {
+      ElMessage.error(e?.response?.data?.detail || '載入詳情失敗，請稍後重試')
+    }
   } finally {
-    loadingDetail.value = false
+    if (seq === drawerSeq.value) loadingDetail.value = false
   }
 }
 
-async function loadPayments(registrationId) {
+async function loadPayments(registrationId, seq = drawerSeq.value) {
   loadingPayments.value = true
   try {
     const res = await getRegistrationPayments(registrationId)
+    if (seq !== drawerSeq.value) return
     paymentInfo.value = res.data
   } catch (e) {
-    ElMessage.warning(e?.response?.data?.detail || '繳費資訊載入失敗')
+    if (seq === drawerSeq.value) {
+      ElMessage.warning(e?.response?.data?.detail || '繳費資訊載入失敗')
+    }
   } finally {
-    loadingPayments.value = false
+    if (seq === drawerSeq.value) loadingPayments.value = false
   }
 }
 
 function openPaymentDialog(type) {
+  // Why: 繳費資訊未載入完成時，computeOwed 會用到 paid_amount=0 預填全額，
+  // 使用者誤送出將造成超繳。
+  if (loadingPayments.value) {
+    ElMessage.warning('繳費資訊載入中，請稍候再試')
+    return
+  }
   paymentDialogType.value = type
   paymentDialogVisible.value = true
 }
 
 async function onPaymentSubmitted() {
   if (!detail.value) return
-  await loadPayments(detail.value.id)
+  const targetId = detail.value.id
+  const seq = drawerSeq.value
+  await loadPayments(targetId, seq)
   fetchList()
 }
 
@@ -611,14 +563,20 @@ async function handleDeletePayment(rec) {
     return
   }
   const reason = (reasonResult.value || '').trim()
+  if (!detail.value) return
+  const targetId = detail.value.id
+  const seq = drawerSeq.value
   deletingPaymentId.value = rec.id
   try {
-    await deleteRegistrationPayment(detail.value.id, rec.id, reason)
+    await deleteRegistrationPayment(targetId, rec.id, reason)
+    if (seq !== drawerSeq.value) return
     ElMessage.success('記錄已軟刪（原紀錄保留供稽核）')
-    await loadPayments(detail.value.id)
+    await loadPayments(targetId, seq)
     fetchList()
   } catch (e) {
-    ElMessage.error(e?.response?.data?.detail || '軟刪失敗')
+    if (seq === drawerSeq.value) {
+      ElMessage.error(e?.response?.data?.detail || '軟刪失敗')
+    }
   } finally {
     deletingPaymentId.value = null
   }
@@ -626,10 +584,13 @@ async function handleDeletePayment(rec) {
 
 async function saveRemark() {
   if (!detail.value) return
+  const targetId = detail.value.id
+  const text = remarkText.value
   savingRemark.value = true
   try {
-    await updateRemark(detail.value.id, { remark: remarkText.value })
-    detail.value.remark = remarkText.value
+    await updateRemark(targetId, { remark: text })
+    // Why: await 期間使用者可能關閉 drawer 或切換到別人，避免把備註寫到錯的學生身上
+    if (detail.value?.id === targetId) detail.value.remark = text
     ElMessage.success('備註已儲存')
   } catch {
     ElMessage.error('儲存失敗')
@@ -640,17 +601,23 @@ async function saveRemark() {
 
 async function handlePromote(course) {
   if (!detail.value) return
+  const targetId = detail.value.id
+  const seq = drawerSeq.value
   savingPromote.value = true
   try {
-    await promoteWaitlist(detail.value.id, course.course_id)
+    await promoteWaitlist(targetId, course.course_id)
+    if (seq !== drawerSeq.value) return
     ElMessage.success('已升為正式報名')
-    const res = await getRegistrationDetail(detail.value.id)
+    const res = await getRegistrationDetail(targetId)
+    if (seq !== drawerSeq.value) return
     detail.value = res.data
     // 升正式後總金額可能改變，重新載入繳費資訊
-    await loadPayments(detail.value.id)
+    await loadPayments(targetId, seq)
     fetchList()
   } catch (e) {
-    ElMessage.error(e?.response?.data?.detail || '升正式失敗')
+    if (seq === drawerSeq.value) {
+      ElMessage.error(e?.response?.data?.detail || '升正式失敗')
+    }
   } finally {
     savingPromote.value = false
   }
@@ -671,17 +638,22 @@ async function handleWithdrawCourse(course) {
 }
 
 async function doWithdrawCourse(course, forceRefund) {
+  if (!detail.value) return
+  const targetId = detail.value.id
+  const seq = drawerSeq.value
   withdrawingCourseId.value = course.id
   try {
-    await withdrawCourse(detail.value.id, course.course_id, { forceRefund })
+    await withdrawCourse(targetId, course.course_id, { forceRefund })
+    if (seq !== drawerSeq.value) return
     ElMessage.success(
       forceRefund
         ? `已退出課程「${course.name}」並自動寫退費沖帳`
         : `已退出課程「${course.name}」`
     )
-    const res = await getRegistrationDetail(detail.value.id)
+    const res = await getRegistrationDetail(targetId)
+    if (seq !== drawerSeq.value) return
     detail.value = res.data
-    await loadPayments(detail.value.id)
+    await loadPayments(targetId, seq)
     fetchList()
   } catch (e) {
     // 409：退課後將超繳，需二次確認以 force_refund=true 自動沖帳
@@ -826,96 +798,45 @@ async function onEditBasicSaved() {
 
 // ── 新增課程 ─────────────────────────────────────────────
 const addCourseDialogVisible = ref(false)
-const addingCourse = ref(false)
-const addCourseId = ref(null)
-
-const availableCoursesForAdd = computed(() => {
-  if (!detail.value) return courseOptions.value
-  const existing = new Set((detail.value.courses || []).map((c) => c.course_id))
-  return courseOptions.value.filter((c) => !existing.has(c.id))
-})
-
-const addCourseWaitlistHint = computed(() => {
-  if (!addCourseId.value) return ''
-  const c = courseOptions.value.find((x) => x.id === addCourseId.value)
-  if (!c) return ''
-  if (c.remaining > 0) return ''
-  if (c.allow_waitlist) return `課程「${c.name}」已額滿，新增後將進入候補`
-  return `課程「${c.name}」已額滿且不開放候補，無法新增`
-})
 
 async function openAddCourseDialog() {
-  addCourseId.value = null
   addCourseDialogVisible.value = true
-  if (courseOptions.value.length === 0) {
-    await loadOptions()
-  }
+  if (courseOptions.value.length === 0) await loadOptions()
 }
 
-async function handleAddCourse() {
-  if (!detail.value || !addCourseId.value) return
-  addingCourse.value = true
-  try {
-    const res = await addRegistrationCourse(detail.value.id, addCourseId.value)
-    ElMessage.success(res.data.message || '課程新增成功')
-    addCourseDialogVisible.value = false
-    const [d] = await Promise.all([
-      getRegistrationDetail(detail.value.id),
-      loadPayments(detail.value.id),
-    ])
-    detail.value = d.data
-    loadOptions()
-    fetchList()
-  } catch (e) {
-    ElMessage.error(e?.response?.data?.detail || '新增失敗')
-  } finally {
-    addingCourse.value = false
-  }
+async function onCourseAdded() {
+  if (!detail.value) return
+  const targetId = detail.value.id
+  const seq = drawerSeq.value
+  const [d] = await Promise.all([
+    getRegistrationDetail(targetId),
+    loadPayments(targetId, seq),
+  ])
+  if (seq !== drawerSeq.value) return
+  detail.value = d.data
+  loadOptions()
+  fetchList()
 }
 
 // ── 新增用品 ─────────────────────────────────────────────
 const addSupplyDialogVisible = ref(false)
-const addingSupply = ref(false)
-const addSupplyId = ref(null)
 const deletingSupplyId = ref(null)
 
-async function openAddSupplyDialog() {
-  addSupplyId.value = null
+function openAddSupplyDialog() {
   addSupplyDialogVisible.value = true
-  if (supplyOptions.value.length === 0) {
-    loadingSupplies.value = true
-    try {
-      const res = await getSupplies({
-        school_year: termStore.school_year,
-        semester: termStore.semester,
-      })
-      supplyOptions.value = res.data.supplies || []
-    } catch {
-      ElMessage.warning('用品清單載入失敗')
-    } finally {
-      loadingSupplies.value = false
-    }
-  }
 }
 
-async function handleAddSupply() {
-  if (!detail.value || !addSupplyId.value) return
-  addingSupply.value = true
-  try {
-    await addRegistrationSupply(detail.value.id, addSupplyId.value)
-    ElMessage.success('用品新增成功')
-    addSupplyDialogVisible.value = false
-    const [d] = await Promise.all([
-      getRegistrationDetail(detail.value.id),
-      loadPayments(detail.value.id),
-    ])
-    detail.value = d.data
-    fetchList()
-  } catch (e) {
-    ElMessage.error(e?.response?.data?.detail || '新增失敗')
-  } finally {
-    addingSupply.value = false
-  }
+async function onSupplyAdded() {
+  if (!detail.value) return
+  const targetId = detail.value.id
+  const seq = drawerSeq.value
+  const [d] = await Promise.all([
+    getRegistrationDetail(targetId),
+    loadPayments(targetId, seq),
+  ])
+  if (seq !== drawerSeq.value) return
+  detail.value = d.data
+  fetchList()
 }
 
 async function handleRemoveSupply(row) {
@@ -929,18 +850,25 @@ async function handleRemoveSupply(row) {
   } catch {
     return
   }
+  if (!detail.value) return
+  const targetId = detail.value.id
+  const seq = drawerSeq.value
   deletingSupplyId.value = row.id
   try {
-    await removeRegistrationSupply(detail.value.id, row.id)
+    await removeRegistrationSupply(targetId, row.id)
+    if (seq !== drawerSeq.value) return
     ElMessage.success('用品已移除')
     const [d] = await Promise.all([
-      getRegistrationDetail(detail.value.id),
-      loadPayments(detail.value.id),
+      getRegistrationDetail(targetId),
+      loadPayments(targetId, seq),
     ])
+    if (seq !== drawerSeq.value) return
     detail.value = d.data
     fetchList()
   } catch (e) {
-    ElMessage.error(e?.response?.data?.detail || '移除失敗')
+    if (seq === drawerSeq.value) {
+      ElMessage.error(e?.response?.data?.detail || '移除失敗')
+    }
   } finally {
     deletingSupplyId.value = null
   }

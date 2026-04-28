@@ -70,6 +70,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { addRegistrationPayment } from '@/api/activity'
 import { computeOwed } from '@/constants/pos'
 import { FIELD_RULES, PAYMENT_METHODS } from '@/constants/activity'
+import { todayISO } from '@/utils/format'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -103,7 +104,7 @@ watch(
     form.amount = props.type === 'payment'
       ? computeOwed(props.totalAmount, props.paidAmount)
       : props.paidAmount
-    form.payment_date = new Date().toISOString().slice(0, 10)
+    form.payment_date = todayISO()
     form.payment_method = PAYMENT_METHODS[0]
     form.notes = ''
     form.idempotency_key = genIdempotencyKey()

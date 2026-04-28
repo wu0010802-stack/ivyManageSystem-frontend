@@ -12,6 +12,7 @@ import {
   LEAVE_RULE_HINTS,
   getRequestedCalendarDays,
   leaveRequiresAttachment,
+  validateLeaveRules,
 } from '@/utils/leaves'
 import { apiError } from '@/utils/error'
 import { useLeaveHoursCalculator } from '@/composables/useLeaveHoursCalculator'
@@ -44,13 +45,14 @@ const {
   leaveMode, leaveSingleDate,
   quotaInfo, quotaLoading, quotaExceeded, QUOTA_TYPES,
   calcTooltipHtml, officeHoursWarning,
+  resetCalculatorState,
 } = useLeaveHoursCalculator({
   form,
   formRef,
   fetchWorkdayHoursFn: (start, end) => getMyWorkdayHours({ start_date: start, end_date: end }),
-  fetchQuotaFn: async (leaveType) => {
+  fetchQuotaFn: async (leaveType, year) => {
     if (!leaveType || !_QUOTA_TYPES_LOCAL.has(leaveType)) return null
-    const res = await getMyQuotas()
+    const res = await getMyQuotas(year ? { year } : undefined)
     return res.data.find(q => q.leave_type === leaveType) || null
   },
 })
@@ -108,6 +110,7 @@ const resetForm = () => {
   form.reason = ''
   form.substitute_employee_id = null
   fileList.value = []
+  resetCalculatorState()
 }
 
 watch(() => props.visible, (val) => {
@@ -144,21 +147,14 @@ const submitLeave = async () => {
     return
   }
 
-  if (form.leave_type === 'sick' && form.leave_hours % 4 !== 0) {
-    ElMessage.error('病假必須以 4 小時為單位申請')
+  const violations = validateLeaveRules({
+    leave_type: form.leave_type,
+    leave_hours: form.leave_hours,
+    start_date: form.start_date,
+  })
+  if (violations.length > 0) {
+    ElMessage.error(violations[0])
     return
-  }
-
-  if (form.leave_type === 'personal') {
-    const start = new Date(form.start_date)
-    const today = new Date()
-    start.setHours(0, 0, 0, 0)
-    today.setHours(0, 0, 0, 0)
-    const diffDays = Math.floor((start - today) / 86400000)
-    if (diffDays < 2) {
-      ElMessage.error('事假需至少提前 2 日提出申請')
-      return
-    }
   }
 
   if (quotaExceeded.value) {

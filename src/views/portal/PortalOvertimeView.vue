@@ -86,8 +86,9 @@ const _detectOvertimeType = useDebounceFn(async (dateStr) => {
       }
     }
   } catch {
-    // API 失敗時用星期幾判斷
-    const d = new Date(dateStr)
+    // API 失敗時用星期幾判斷（拆字串避免 'YYYY-MM-DD' 被解為 UTC 而跨時區偏移）
+    const m = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})/)
+    const d = m ? new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10)) : new Date(dateStr)
     const wd = d.getDay()
     if (wd === 0 || wd === 6) {
       form.overtime_type = 'weekend'
@@ -118,8 +119,13 @@ const calcHours = () => {
   }
   const [sh, sm] = form.start_time.split(':').map(Number)
   const [eh, em] = form.end_time.split(':').map(Number)
-  let minutes = (eh * 60 + em) - (sh * 60 + sm)
-  form.hours = Math.max(0.5, Math.round(minutes / 60 * 2) / 2)
+  const minutes = (eh * 60 + em) - (sh * 60 + sm)
+  if (minutes < 30) {
+    timeError.value = '加班時段不足 30 分鐘，請以 0.5 小時為最小單位'
+    form.hours = 0
+    return
+  }
+  form.hours = Math.round(minutes / 60 * 2) / 2
 }
 watch(() => form.start_time, calcHours)
 watch(() => form.end_time, calcHours)

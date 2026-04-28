@@ -21,16 +21,19 @@ export function useLeaveHoursCalculator({ form, formRef, fetchWorkdayHoursFn = n
   const resetCalculatorState = () => {
     calculator.resetCalculatorState(formRef)
     quota.quotaInfo.value = null
+    quota.clearEditBaseline()
   }
 
   const populateFormFromRecord = (row) => {
     form.id = row.id
     form.employee_id = row.employee_id
     form.leave_type = row.leave_type
-    if (row.start_time || row.end_time) {
+    // 半邊 time 防呆：只填 start 沒 end（或反之）視為破損資料，退回 full 模式
+    const hasBothTimes = row.start_time && row.end_time
+    if (hasBothTimes) {
       calculator.leaveMode.value = 'custom'
-      form.start_date = row.start_time ? `${row.start_date} ${row.start_time}:00` : `${row.start_date} 00:00:00`
-      form.end_date = row.end_time ? `${row.end_date} ${row.end_time}:00` : `${row.end_date} 00:00:00`
+      form.start_date = `${row.start_date} ${row.start_time}:00`
+      form.end_date = `${row.end_date} ${row.end_time}:00`
       calculator.leaveSingleDate.value = row.start_date
     } else {
       calculator.leaveMode.value = 'full'
@@ -40,6 +43,7 @@ export function useLeaveHoursCalculator({ form, formRef, fetchWorkdayHoursFn = n
     }
     form.leave_hours = row.leave_hours
     form.reason = row.reason
+    quota.setEditBaseline(row.leave_hours)
   }
 
   return {

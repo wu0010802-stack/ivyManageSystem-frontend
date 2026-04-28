@@ -81,14 +81,11 @@ import { getCurrentAcademicTerm } from '@/utils/academic'
 import { getChangeLogOptions } from '@/api/studentChangeLogs'
 import { getStudents } from '@/api/students'
 import { useStudentRecordsStore } from '@/stores/studentRecords'
+import { todayISO, dateToLocalISO } from '@/utils/format'
 
-const isoToday = () => new Date().toISOString().slice(0, 10)
 const isFutureDate = (d) => {
   if (!(d instanceof Date)) return false
-  const yyyy = d.getFullYear()
-  const mm = String(d.getMonth() + 1).padStart(2, '0')
-  const dd = String(d.getDate()).padStart(2, '0')
-  return `${yyyy}-${mm}-${dd}` > isoToday()
+  return dateToLocalISO(d) > todayISO()
 }
 
 const props = defineProps({
@@ -146,7 +143,7 @@ const formRules = {
     { required: true, message: '請選擇異動日期', trigger: 'change' },
     {
       validator: (_rule, value, cb) => {
-        if (value && value > isoToday()) {
+        if (value && value > todayISO()) {
           cb(new Error('補登只能選今天或過去的日期'))
         } else {
           cb()

@@ -145,6 +145,9 @@ const GLOBAL_STUBS = {
   'el-icon': { template: '<span />' },
   RegistrationPaymentDialog: true,
   RegistrationEditBasicDialog: true,
+  RegistrationCreateDialog: true,
+  RegistrationAddCourseDialog: true,
+  RegistrationAddSupplyDialog: true,
 }
 
 const flushPromises = async () => {
