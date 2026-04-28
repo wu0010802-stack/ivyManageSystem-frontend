@@ -799,91 +799,14 @@ async function handleExport() {
 
 // ── 新增報名 ────────────────────────────────────────────
 const createDialogVisible = ref(false)
-const creating = ref(false)
-const loadingSupplies = ref(false)
-const supplyOptions = ref([])
-const createFormRef = ref(null)
-const createForm = reactive({
-  name: '',
-  birthday: '',
-  class_: '',
-  email: '',
-  courseNames: [],
-  supplyNames: [],
-  remark: '',
-})
 
-const createFormValid = computed(() =>
-  !!createForm.name && !!createForm.birthday && !!createForm.class_
-)
-
-const createTotal = computed(() => {
-  let sum = 0
-  for (const n of createForm.courseNames) {
-    const c = courseOptions.value.find((x) => x.name === n)
-    if (c) sum += c.price || 0
-  }
-  for (const n of createForm.supplyNames) {
-    const s = supplyOptions.value.find((x) => x.name === n)
-    if (s) sum += s.price || 0
-  }
-  return sum
-})
-
-async function openCreateDialog() {
-  createForm.name = ''
-  createForm.birthday = ''
-  createForm.class_ = ''
-  createForm.email = ''
-  createForm.courseNames = []
-  createForm.supplyNames = []
-  createForm.remark = ''
+function openCreateDialog() {
   createDialogVisible.value = true
-
-  if (supplyOptions.value.length === 0) {
-    loadingSupplies.value = true
-    try {
-      const res = await getSupplies({
-        school_year: termStore.school_year,
-        semester: termStore.semester,
-      })
-      supplyOptions.value = res.data.supplies || []
-    } catch {
-      ElMessage.warning('用品清單載入失敗')
-    } finally {
-      loadingSupplies.value = false
-    }
-  }
 }
 
-async function handleCreate() {
-  if (!createFormValid.value) return
-  creating.value = true
-  try {
-    const payload = {
-      name: createForm.name.trim(),
-      birthday: createForm.birthday,
-      class: createForm.class_,
-      email: createForm.email?.trim() || null,
-      remark: createForm.remark || '',
-      courses: createForm.courseNames.map((name) => ({ name, price: '' })),
-      supplies: createForm.supplyNames.map((name) => ({ name, price: '' })),
-      school_year: termStore.school_year,
-      semester: termStore.semester,
-    }
-    const res = await createRegistration(payload)
-    ElMessage.success(res.data.message || '新增成功')
-    createDialogVisible.value = false
-    await fetchList()
-    // 重新載入課程選項以更新剩餘名額
-    loadOptions()
-    // 強制重新載入用品（本次已新增可能影響）
-    supplyOptions.value = []
-  } catch (e) {
-    ElMessage.error(e?.response?.data?.detail || '新增失敗')
-  } finally {
-    creating.value = false
-  }
+async function onRegistrationCreated() {
+  await fetchList()
+  loadOptions() // 重新載入課程選項以更新剩餘名額
 }
 
 // ── 編輯基本資料 ────────────────────────────────────────
