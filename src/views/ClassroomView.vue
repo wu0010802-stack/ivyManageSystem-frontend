@@ -117,6 +117,7 @@ const form = reactive({
 const rules = {
   name: [{ required: true, message: '請輸入班級名稱', trigger: 'blur' }],
   capacity: [{ required: true, message: '請輸入班級容量', trigger: 'change' }],
+  grade_id: [{ required: true, message: '請選擇年級', trigger: 'change' }],
 }
 
 const dialogTitle = computed(() => (isEdit.value ? '編輯班級' : '新增班級'))
@@ -580,8 +581,8 @@ onMounted(async () => {
 
           <el-row :gutter="16">
             <el-col :span="12">
-              <el-form-item label="年級">
-                <el-select v-model="form.grade_id" :disabled="!canWrite" placeholder="選擇年級" clearable style="width: 100%">
+              <el-form-item label="年級" prop="grade_id">
+                <el-select v-model="form.grade_id" :disabled="!canWrite" placeholder="選擇年級" style="width: 100%">
                   <el-option v-for="grade in grades" :key="grade.id" :label="grade.name" :value="grade.id" />
                 </el-select>
               </el-form-item>
