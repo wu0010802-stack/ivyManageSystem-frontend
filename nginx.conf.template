@@ -14,10 +14,33 @@ server {
         application/javascript application/json
         application/manifest+json image/svg+xml;
 
-    # 前端 bundle 直接打 backend public URL（VITE_API_BASE_URL=
-    # https://ivymanagesystem-api.zeabur.app/api），不走 nginx proxy；
-    # 這台 nginx 只服務靜態檔。後端 cookie 用 SameSite=None + Secure
-    # + 對 portal origin 開 CORS 來支援跨站。
+    # /api/* 反代到後端（內部網路）— 讓 cookie 變 first-party，
+    # 解 LIFF in-app webview 第三方 cookie 被 ITP 擋的問題。
+    # BACKEND_URL 由 Zeabur frontend service 注入：
+    #   http://ivymanagesystem-backend-rulla.zeabur.internal:8080
+    # WS 走 upgrade，HTTP 走標準反代
+    location /api/ws/ {
+        proxy_pass ${BACKEND_URL}/api/ws/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+    }
+
+    location /api/ {
+        proxy_pass ${BACKEND_URL}/api/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_buffering off;
+    }
 
     # ── 必須每次 revalidate 的檔案（PWA 推不下去就是這幾個快取太兇） ──
     location = /index.html {
