@@ -66,7 +66,7 @@ export default defineConfig({
         }),
         VitePWA({
             registerType: 'autoUpdate',          // 有新版本時自動更新 SW
-            includeAssets: ['favicon.ico', 'apple-touch-icon-180x180.png', 'logo.svg', 'images/ivy-kids-loading.png'],
+            includeAssets: ['favicon.ico', 'LOGO.png', 'apple-touch-icon-180x180.png', 'logo.svg', 'images/ivy-kids-loading.png'],
 
             manifest: {
                 name: '常春藤管理系統',

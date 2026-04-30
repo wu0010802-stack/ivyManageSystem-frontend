@@ -2,7 +2,7 @@
 <template>
   <el-aside :width="isMobile ? '260px' : (isCollapse ? '64px' : '260px')" class="admin-sidebar" :class="{ 'is-collapsed': isCollapse && !isMobile, 'sidebar-mobile': isMobile, 'sidebar-mobile-open': isMobile && mobileOpen, 'sidebar-mobile-hidden': isMobile && !mobileOpen }">
     <div class="logo-container">
-      <img src="/pwa-64x64.png" class="logo-icon-img" alt="IVY" />
+      <img src="/LOGO.png" class="logo-icon-img" alt="IVY" />
       <transition name="fade">
         <span v-if="!isCollapse" class="logo-text">常春藤管理系統</span>
       </transition>
