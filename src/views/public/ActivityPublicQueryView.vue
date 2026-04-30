@@ -83,6 +83,18 @@
 
       <section v-if="searchError" class="result-section">
         <div class="error-message">{{ searchError }}</div>
+        <div class="not-found-help">
+          <div class="not-found-title">常見原因</div>
+          <ul class="not-found-list">
+            <li>姓名包含全形/半形空格或別字（請與報名表填寫完全一致）</li>
+            <li>幼兒生日西元年月日格式錯誤</li>
+            <li>家長手機與報名時填寫的不同（如已換號請使用舊號查詢）</li>
+            <li>本學期尚未報名，或已由校方取消報名</li>
+          </ul>
+          <div class="not-found-cta">
+            如三項資料皆確認無誤，請於上班時間來電聯繫校方協助查詢。
+          </div>
+        </div>
       </section>
 
       <!-- 候補已升正式待確認 -->
@@ -150,10 +162,20 @@
 
         <div class="field-group">
           <label>寶貝班級</label>
-          <select v-model="editForm.class_name" class="input-select">
-            <option value="" disabled>請選擇班級</option>
-            <option v-for="cls in classes" :key="cls" :value="cls">{{ cls }}</option>
-          </select>
+          <template v-if="classEditable">
+            <select v-model="editForm.class_name" class="input-select">
+              <option value="" disabled>請選擇班級</option>
+              <option v-for="cls in classes" :key="cls" :value="cls">{{ cls }}</option>
+            </select>
+            <div class="field-hint">家長填寫班級，校方確認後可能調整</div>
+          </template>
+          <template v-else>
+            <input :value="editForm.class_name" type="text" class="input-text" readonly />
+            <div class="field-hint field-hint-locked">
+              <span class="field-tag">依園所系統資料</span>
+              如班級有誤，請聯繫校方協助調整
+            </div>
+          </template>
         </div>
 
         <div class="field-group">
@@ -224,12 +246,45 @@
           </div>
         </div>
 
+        <div v-if="feePreview" class="fee-preview" :class="{ 'fee-preview-warn': feePreview.wouldOverpay }">
+          <div class="fee-preview-title">費用預覽（估算）</div>
+          <dl class="fee-preview-list">
+            <div class="fee-row">
+              <dt>原應繳</dt>
+              <dd>NT$ {{ feePreview.originalTotal }}</dd>
+            </div>
+            <div class="fee-row">
+              <dt>新應繳</dt>
+              <dd>NT$ {{ feePreview.newTotal }}</dd>
+            </div>
+            <div class="fee-row">
+              <dt>已繳</dt>
+              <dd>NT$ {{ feePreview.paidAmount }}</dd>
+            </div>
+            <div v-if="feePreview.additionalDue > 0" class="fee-row fee-row-due">
+              <dt>需補繳</dt>
+              <dd>NT$ {{ feePreview.additionalDue }}</dd>
+            </div>
+            <div v-if="feePreview.wouldOverpay" class="fee-row fee-row-refund">
+              <dt>可能退費</dt>
+              <dd>NT$ {{ feePreview.refundNeeded }}</dd>
+            </div>
+          </dl>
+          <div v-if="feePreview.wouldOverpay" class="fee-preview-msg">
+            <strong>此修改會產生退費</strong>，無法於前台直接沖帳，請聯繫校方協助處理。
+          </div>
+          <div v-else class="fee-preview-note">
+            * 估算值，候補課程升正式時才會計入應繳。
+          </div>
+        </div>
+
         <div class="action-buttons">
           <button type="button" class="btn btn-outline" @click="closeWindow">取消 Cancel</button>
           <button
             type="button"
             class="btn btn-primary"
-            :disabled="editSubmitting"
+            :disabled="editSubmitting || saveBlocked"
+            :title="saveBlocked ? '此修改會產生退費，請聯繫校方' : ''"
             @click="handleSaveChanges"
           >
             {{ editSubmitting ? '儲存中…' : '儲存修改 Save' }}
@@ -241,7 +296,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import {
   publicQueryRegistration,
   publicUpdateRegistration,
@@ -249,6 +304,7 @@ import {
   publicDeclinePromotion,
 } from '@/api/activityPublic'
 import { usePublicActivityOptions } from '@/composables/usePublicActivityOptions'
+import { useActivityAvailability } from '@/composables/useActivityAvailability'
 import { toggleArrayItem } from '@/utils/arrayUtils'
 
 const TOAST_ICONS = {
@@ -259,6 +315,8 @@ const TOAST_ICONS = {
 }
 
 const { courses, supplies, classes, loadOptions } = usePublicActivityOptions()
+const { availability, refresh: refreshAvailability, startPolling, stopPolling } =
+  useActivityAvailability()
 
 const queryForm = reactive({ name: '', birthday: '', parent_phone: '' })
 const queryLoading = ref(false)
@@ -343,6 +401,64 @@ const pendingPromotions = computed(() => {
     (c) => c.status === 'promoted_pending' && c.confirm_deadline,
   )
 })
+
+// field_state 由後端決定。Fallback 預設為「已比對」，保守鎖住班級欄位避免
+// 舊版後端漏回此欄位時 UI 出現可改 → 後端覆寫的不一致。
+const fieldState = computed(() => {
+  const fs = queryResult.value?.field_state
+  return {
+    class_source: fs?.class_source ?? 'student_record',
+    class_editable: fs?.class_editable ?? false,
+    review_state: fs?.review_state ?? 'confirmed',
+  }
+})
+const classEditable = computed(() => fieldState.value.class_editable === true)
+
+// 估算修改後課程狀態 — 與後端 _attach_courses 對齊：刪後重插時依「現有名額」決定。
+// 因此 availability 優先於原狀態（例：原本 waitlist、現在退一位空出 → 估為 enrolled）。
+// availability[name]：>0 有名額（enrolled）、=0 無名額但開候補（waitlist）、<0 已滿不開候補。
+function estimatedCourseStatus(courseName) {
+  const remaining = availability.value?.[courseName]
+  if (remaining > 0) return 'enrolled'
+  if (remaining === 0) return 'waitlist'
+  if (remaining === undefined) {
+    const orig = (queryResult.value?.courses || []).find((c) => c.name === courseName)
+    return orig?.status ?? 'enrolled'
+  }
+  return 'enrolled'
+}
+
+// 儲存前費用預覽：估算新應繳並比對已繳，及早警示退費場景。
+// 與後端 /public/update 的 _attach_courses 一致：以「目前」課程/用品價格估算，
+// 候補/promoted_pending 不計費。退費警告以「已繳 > 估算新應繳」為準（與後端 409 一致）。
+const feePreview = computed(() => {
+  if (!queryResult.value) return null
+  const newCourseTotal = editForm.selectedCourses.reduce((sum, name) => {
+    if (estimatedCourseStatus(name) !== 'enrolled') return sum
+    const opt = courses.value.find((c) => c.name === name)
+    return sum + Number(opt?.price ?? 0)
+  }, 0)
+  const newSupplyTotal = editForm.selectedSupplies.reduce((sum, name) => {
+    const opt = supplies.value.find((s) => s.name === name)
+    return sum + Number(opt?.price ?? 0)
+  }, 0)
+  const newTotal = newCourseTotal + newSupplyTotal
+  const originalTotal = Number(queryResult.value.total_amount || 0)
+  const paidAmount = Number(queryResult.value.paid_amount || 0)
+  const wouldOverpay = newTotal < paidAmount
+  return {
+    originalTotal,
+    newTotal,
+    paidAmount,
+    diff: newTotal - originalTotal,
+    additionalDue: newTotal > paidAmount ? newTotal - paidAmount : 0,
+    refundNeeded: wouldOverpay ? paidAmount - newTotal : 0,
+    wouldOverpay,
+    hasChange: newTotal !== originalTotal,
+  }
+})
+
+const saveBlocked = computed(() => Boolean(feePreview.value?.wouldOverpay))
 
 function formatDeadline(iso) {
   if (!iso) return '—'
@@ -458,6 +574,10 @@ async function handleSaveChanges() {
     showToast('請選擇班級', 'error')
     return
   }
+  if (saveBlocked.value) {
+    showToast('此修改會產生退費，請聯繫校方協助處理', 'warning', 6000)
+    return
+  }
 
   const oldPhone = normalizeMobile(queryForm.parent_phone)
   const newPhoneRaw = normalizeMobile(editForm.new_parent_phone)
@@ -524,10 +644,15 @@ watch(
 
 onMounted(async () => {
   try {
-    await loadOptions()
+    await Promise.all([loadOptions(), refreshAvailability()])
+    startPolling(30000)
   } catch (err) {
     showToast(err?.response?.data?.detail || '無法載入頁面資料', 'error')
   }
+})
+
+onBeforeUnmount(() => {
+  stopPolling()
 })
 </script>
 
@@ -825,6 +950,119 @@ onMounted(async () => {
   border-radius: var(--radius-md);
   color: var(--color-danger);
   font-weight: 500;
+}
+
+/* 查無結果引導 */
+.not-found-help {
+  margin-top: var(--space-4);
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+}
+.not-found-title {
+  font-weight: 700;
+  color: var(--color-text);
+  margin-bottom: var(--space-2);
+}
+.not-found-list {
+  margin: 0 0 var(--space-3);
+  padding-left: 20px;
+  font-size: var(--fs-sm);
+  color: var(--color-text-muted);
+  line-height: 1.7;
+}
+.not-found-cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  font-size: var(--fs-sm);
+  color: var(--color-text-muted);
+  padding-top: var(--space-3);
+  border-top: 1px dashed var(--color-border);
+}
+.contact-link {
+  color: var(--color-primary);
+  font-weight: 600;
+  text-decoration: none;
+}
+.contact-link:hover { text-decoration: underline; }
+
+/* 班級欄位提示 */
+.field-hint {
+  margin-top: var(--space-1);
+  font-size: var(--fs-xs);
+  color: var(--color-text-subtle);
+}
+.field-hint-locked {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+.field-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--color-primary);
+  background: var(--color-primary-soft);
+  border-radius: var(--radius-full);
+}
+
+/* 費用預覽 */
+.fee-preview {
+  margin-top: var(--space-5);
+  padding: var(--space-4);
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+.fee-preview-title {
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--color-text);
+  margin-bottom: var(--space-3);
+}
+.fee-preview-list {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.fee-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--fs-sm);
+  color: var(--color-text-muted);
+}
+.fee-row dt { margin: 0; font-weight: 500; }
+.fee-row dd { margin: 0; font-variant-numeric: tabular-nums; }
+.fee-row-due dt, .fee-row-due dd {
+  color: var(--color-cta);
+  font-weight: 700;
+}
+.fee-row-refund dt, .fee-row-refund dd {
+  color: var(--color-danger);
+  font-weight: 700;
+}
+.fee-preview-warn {
+  background: #FEF2F2;
+  border-color: var(--color-danger);
+}
+.fee-preview-msg {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px dashed var(--color-danger);
+  font-size: var(--fs-sm);
+  color: var(--color-danger);
+  line-height: 1.6;
+}
+.fee-preview-note {
+  margin-top: var(--space-2);
+  font-size: var(--fs-xs);
+  color: var(--color-text-subtle);
 }
 
 /* Toast */

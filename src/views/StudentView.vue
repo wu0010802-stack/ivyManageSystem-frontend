@@ -7,12 +7,12 @@ import { createDismissalCall, getDismissalCalls } from '@/api/dismissalCalls'
 import { ElMessage } from 'element-plus'
 import { Search, Plus, Edit, Delete, Warning, Van } from '@element-plus/icons-vue'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
-import { useCrudDialog, useConfirmDelete } from '@/composables'
+import { useConfirmDelete } from '@/composables'
 import { apiError } from '@/utils/error'
 import { downloadFile } from '@/utils/download'
 import { getCurrentAcademicTerm, normalizeSchoolYear, buildSchoolYearOptions } from '@/utils/academic'
-import { STUDENT_STATUS_TAG_OPTIONS } from '@/utils/student'
 import BonusImpactPreview from '@/components/students/BonusImpactPreview.vue'
+import StudentEditDialog from '@/components/student/StudentEditDialog.vue'
 import { useStudentStore } from '@/stores/student'
 import { domainBus, STUDENT_EVENTS } from '@/utils/domainBus'
 
@@ -68,32 +68,12 @@ watch(searchQuery, (val) => {
 onUnmounted(() => {
   if (_searchTimer) clearTimeout(_searchTimer)
 })
-const formRef = ref(null)
 
-const form = reactive({
-  id: null,
-  student_id: '',
-  name: '',
-  gender: null,
-  birthday: '',
-  classroom_id: null,
-  enrollment_date: '',
-  parent_name: '',
-  parent_phone: '',
-  address: '',
-  status_tag: '',
-  allergy: '',
-  medication: '',
-  special_needs: '',
-  emergency_contact_name: '',
-  emergency_contact_phone: '',
-  emergency_contact_relation: ''
-})
-
-const rules = {
-  student_id: [{ required: true, message: '請輸入學生編號', trigger: 'blur' }],
-  name: [{ required: true, message: '請輸入姓名', trigger: 'blur' }]
-}
+// 學生新增/編輯 dialog（用 StudentEditDialog 統一）
+const editDialogVisible = ref(false)
+const editMode = ref('create') // 'create' | 'edit'
+const editInitial = ref(null)
+const pendingClassroomId = ref(null) // 從 route action create 帶入的預設班級
 
 const schoolYearOptions = computed(() => {
   const years = new Set(buildSchoolYearOptions(currentAcademicTerm.school_year))
@@ -117,11 +97,9 @@ const filteredClassroomOptions = computed(() => {
 
 const dialogClassroomOptions = computed(() => {
   const options = [...filteredClassroomOptions.value]
-  if (
-    form.classroom_id
-    && !options.some((item) => item.id === form.classroom_id)
-  ) {
-    const selected = classrooms.value.find((item) => item.id === form.classroom_id)
+  const cid = editInitial.value?.classroom_id || pendingClassroomId.value
+  if (cid && !options.some((item) => item.id === cid)) {
+    const selected = classrooms.value.find((item) => item.id === cid)
     if (selected) options.push(selected)
   }
   return options
@@ -270,31 +248,24 @@ const openProfile = (row) => {
   router.push({ name: 'student-profile', params: { id: row.id } })
 }
 
-const resetForm = () => {
-  form.id = null
-  form.student_id = ''
-  form.name = ''
-  form.gender = null
-  form.birthday = ''
-  form.classroom_id = null
-  form.enrollment_date = ''
-  form.parent_name = ''
-  form.parent_phone = ''
-  form.address = ''
-  form.status_tag = ''
-  form.allergy = ''
-  form.medication = ''
-  form.special_needs = ''
-  form.emergency_contact_name = ''
-  form.emergency_contact_phone = ''
-  form.emergency_contact_relation = ''
+const handleAdd = () => {
+  editInitial.value = null
+  pendingClassroomId.value = null
+  editMode.value = 'create'
+  editDialogVisible.value = true
 }
 
-const populateForm = (row) => {
-  Object.assign(form, row)
+const handleEdit = (row) => {
+  editInitial.value = { ...row }
+  pendingClassroomId.value = row.classroom_id || null
+  editMode.value = 'edit'
+  editDialogVisible.value = true
 }
 
-const { dialogVisible, isEdit, openCreate: handleAdd, openEdit: handleEdit, closeDialog } = useCrudDialog({ resetForm, populateForm })
+const handleEditSaved = () => {
+  editDialogVisible.value = false
+  fetchStudents()
+}
 
 const { confirmDelete: handleDelete, deleting: deleteLoading } = useConfirmDelete({
   endpoint: '/students',
@@ -326,8 +297,10 @@ const handleRouteAction = async () => {
   if (handledRouteActionKey.value === actionKey) return
 
   if (route.query.action === 'create' && route.query.classroom_id) {
-    handleAdd()
-    form.classroom_id = Number(route.query.classroom_id)
+    pendingClassroomId.value = Number(route.query.classroom_id)
+    editInitial.value = { classroom_id: pendingClassroomId.value }
+    editMode.value = 'create'
+    editDialogVisible.value = true
     handledRouteActionKey.value = actionKey
     await clearRouteAction()
     return
@@ -347,32 +320,6 @@ const handleRouteAction = async () => {
   }
 
   handledRouteActionKey.value = actionKey
-}
-
-const submitForm = async () => {
-  if (!formRef.value) return
-
-  await formRef.value.validate(async (valid) => {
-    if (valid) {
-      try {
-        const studentStore = useStudentStore()
-        if (isEdit.value) {
-          await studentStore.updateStudent(form.id, form)
-        } else {
-          await studentStore.createStudent(form)
-        }
-        ElMessage.success(isEdit.value ? '更新成功' : '新增成功')
-        closeDialog()
-        fetchStudents()
-      } catch (error) {
-        const detail = error.response?.data?.detail
-        const msg = Array.isArray(detail)
-          ? detail.map(e => e.msg).join('；')
-          : (detail ?? '操作失敗')
-        ElMessage.error(msg)
-      }
-    }
-  })
 }
 
 const loadClassrooms = async () => {
@@ -579,103 +526,23 @@ onMounted(async () => {
       @size-change="handleSizeChange"
     />
 
-    <!-- Add/Edit Dialog -->
-    <el-dialog
-      v-model="dialogVisible"
-      :title="isEdit ? '編輯學生' : '新增學生'"
-      width="500px"
+    <!-- 學生新增/編輯（統一使用 StudentEditDialog）-->
+    <StudentEditDialog
+      v-model:visible="editDialogVisible"
+      :mode="editMode"
+      :initial="editInitial"
+      :default-classroom-id="pendingClassroomId"
+      :classroom-options="dialogClassroomOptions"
+      @saved="handleEditSaved"
     >
-      <el-form :model="form" :rules="rules" ref="formRef" label-width="100px">
-        <el-form-item label="學生編號" prop="student_id">
-          <el-input v-model="form.student_id" placeholder="例: S001" />
-        </el-form-item>
-        <el-form-item label="姓名" prop="name">
-          <el-input v-model="form.name" />
-        </el-form-item>
-        <el-form-item label="性別" prop="gender">
-          <el-radio-group v-model="form.gender">
-            <el-radio value="男">男</el-radio>
-            <el-radio value="女">女</el-radio>
-          </el-radio-group>
-        </el-form-item>
-        <el-form-item label="生日" prop="birthday">
-          <el-date-picker v-model="form.birthday" type="date" placeholder="選擇日期" value-format="YYYY-MM-DD" style="width: 100%" />
-        </el-form-item>
-        <el-form-item label="班級" prop="classroom_id">
-          <el-select v-model="form.classroom_id" placeholder="選擇班級" clearable style="width: 100%">
-            <el-option
-              v-for="c in dialogClassroomOptions"
-              :key="c.id"
-              :label="classroomLabel(c)"
-              :value="c.id"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="入學日" prop="enrollment_date">
-           <el-date-picker v-model="form.enrollment_date" type="date" placeholder="選擇日期" value-format="YYYY-MM-DD" style="width: 100%" />
-        </el-form-item>
-        <el-form-item label="家長姓名" prop="parent_name">
-          <el-input v-model="form.parent_name" />
-        </el-form-item>
-        <el-form-item label="電話" prop="parent_phone">
-          <el-input v-model="form.parent_phone" />
-        </el-form-item>
-        <el-form-item label="地址" prop="address">
-          <el-input v-model="form.address" type="textarea" :rows="2" />
-        </el-form-item>
-
-        <el-divider content-position="left" style="margin: 8px 0 4px">緊急聯絡人</el-divider>
-        <el-form-item label="姓名">
-          <el-input v-model="form.emergency_contact_name" placeholder="例: 王奶奶" />
-        </el-form-item>
-        <el-form-item label="電話">
-          <el-input v-model="form.emergency_contact_phone" />
-        </el-form-item>
-        <el-form-item label="關係">
-          <el-input v-model="form.emergency_contact_relation" placeholder="例: 祖母、舅舅" />
-        </el-form-item>
-        <el-form-item label="狀態標籤">
-          <el-select
-            v-model="form.status_tag"
-            filterable
-            allow-create
-            default-first-option
-            clearable
-            placeholder="選擇或輸入標籤"
-            style="width: 100%"
-          >
-            <el-option
-              v-for="tag in STUDENT_STATUS_TAG_OPTIONS"
-              :key="tag"
-              :label="tag"
-              :value="tag"
-            />
-          </el-select>
-        </el-form-item>
-
-        <el-divider content-position="left" style="margin: 8px 0 4px">健康資訊</el-divider>
-        <el-form-item label="過敏原">
-          <el-input v-model="form.allergy" type="textarea" :rows="2" placeholder="例: 花生、塵蟎、青黴素" />
-        </el-form-item>
-        <el-form-item label="用藥說明">
-          <el-input v-model="form.medication" type="textarea" :rows="2" placeholder="例: 每日午餐後服用 XXX 1 顆" />
-        </el-form-item>
-        <el-form-item label="特殊需求">
-          <el-input v-model="form.special_needs" type="textarea" :rows="2" placeholder="例: 語言發展遲緩、需輔助進食" />
-        </el-form-item>
-      </el-form>
-      <BonusImpactPreview
-        v-if="!isEdit && form.classroom_id"
-        operation="add"
-        :classroom-id="form.classroom_id"
-      />
-      <template #footer>
-        <span class="dialog-footer">
-          <el-button @click="closeDialog">取消</el-button>
-          <el-button type="primary" @click="submitForm">確認</el-button>
-        </span>
+      <template #extra="{ classroomId, isEdit }">
+        <BonusImpactPreview
+          v-if="!isEdit && classroomId"
+          operation="add"
+          :classroom-id="classroomId"
+        />
       </template>
-    </el-dialog>
+    </StudentEditDialog>
 
     <!-- 畢業/轉出 Dialog -->
     <el-dialog v-model="graduateDialogVisible" title="設定離園" width="400px">

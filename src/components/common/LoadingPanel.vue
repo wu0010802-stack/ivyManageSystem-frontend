@@ -121,4 +121,12 @@ onBeforeUnmount(() => {
   0%, 80%, 100% { transform: scale(0.6); opacity: 0.5; }
   40% { transform: scale(1); opacity: 1; }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-panel-dot {
+    animation: none;
+    transform: scale(0.85);
+    opacity: 0.7;
+  }
+}
 </style>

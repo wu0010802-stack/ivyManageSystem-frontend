@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 專案概述
 幼稚園考勤與薪資管理系統的前端（Vue 3 SPA），涵蓋管理端介面與教師入口（Portal）。
-對應後端為獨立 repo：`ivyManageSystem-backend`。
+對應後端為獨立 repo：`ivy-backend`。
 
 ## 技術棧
 - Vue 3 (Composition API), Vite, Vitest

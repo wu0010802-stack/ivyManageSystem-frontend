@@ -1,0 +1,126 @@
+/**
+ * 跨角色共用設計 tokens
+ *
+ * 適用：admin / portal / parent / public 四個角色 app
+ *
+ * 設計原則
+ *  1. 角色 accent 由各 app 自己覆寫 `--brand-*`（admin = indigo / portal = 紫 /
+ *     parent = 綠 / public = 奶油橘）；本檔不寫死 brand 色，避免錯亂。
+ *  2. 字級 / 間距 / 圓角 / 陰影 / 動效時長：四個角色共用一致的尺度，避免
+ *     「四個產品」的視覺語言分裂。
+ *  3. semantic 色（success / warning / danger / info）一致——錯誤紅色不該因
+ *     角色而異。
+ *  4. 任何角色 app 的 main.js 都應 `import '@/assets/design-tokens.css'`，
+ *     再 import 自己的 layer styles（main.css / parent-specific.css）。
+ *
+ *  Why：先把基礎尺度對齊，再逐步把 login / card / button 的結構統一
+ *       是低風險、可漸進的做法；一次 sweep 4 個 app 的 login 改造太發散。
+ */
+
+:root {
+  /* ===== Typography Scale (共用) ===== */
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-lg: 16px;
+  --text-xl: 18px;
+  --text-2xl: 20px;
+  --text-3xl: 24px;
+  --text-4xl: 30px;
+
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  --line-height-tight: 1.25;
+  --line-height-base: 1.5;
+  --line-height-relaxed: 1.75;
+
+  /* ===== Spacing Scale (共用) ===== */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* ===== Radius (共用) ===== */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 20px;
+  --radius-full: 9999px;
+
+  /* ===== Shadow (共用) ===== */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+
+  /* ===== Transition (共用) ===== */
+  --transition-fast: 0.15s ease;
+  --transition-base: 0.2s ease;
+  --transition-slow: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ===== Semantic Colors (共用) ===== */
+  --color-success: #10b981;
+  --color-success-soft: #dcfce7;
+  --color-warning: #f59e0b;
+  --color-warning-soft: #fef3c7;
+  --color-danger: #ef4444;
+  --color-danger-soft: #fee2e2;
+  --color-info: #3b82f6;
+  --color-info-soft: #dbeafe;
+
+  /* ===== Neutral / Surface (共用基底) ===== */
+  --neutral-0: #ffffff;
+  --neutral-50: #f8fafc;
+  --neutral-100: #f1f5f9;
+  --neutral-200: #e2e8f0;
+  --neutral-300: #cbd5e1;
+  --neutral-400: #94a3b8;
+  --neutral-500: #64748b;
+  --neutral-600: #475569;
+  --neutral-700: #334155;
+  --neutral-800: #1e293b;
+  --neutral-900: #0f172a;
+
+  /* ===== Card / Surface tokens (共用尺度) ===== */
+  --card-padding-sm: var(--space-4);
+  --card-padding: var(--space-5);
+  --card-padding-lg: var(--space-6);
+  --card-radius: var(--radius-lg);
+  --card-border: 1px solid var(--neutral-200);
+  --card-shadow: var(--shadow-sm);
+
+  /* ===== Button tokens (共用尺度) ===== */
+  --btn-height-sm: 28px;
+  --btn-height-md: 36px;
+  --btn-height-lg: 44px;
+  --btn-padding-x-sm: 12px;
+  --btn-padding-x-md: 16px;
+  --btn-padding-x-lg: 20px;
+  --btn-radius: var(--radius-md);
+
+  /* ===== Login Page tokens (共用結構) =====
+   *  各 app 用 --brand-* 覆寫色彩；版面尺度共用，避免結構分裂。
+   */
+  --auth-card-max-width: 420px;
+  --auth-card-padding: var(--space-8);
+  --auth-card-radius: var(--radius-xl);
+  --auth-card-shadow: var(--shadow-lg);
+  --auth-bg: var(--neutral-50);
+
+  /* ===== Brand accent (各 app 自行覆寫) =====
+   *  admin / portal / parent / public 在自己的 main entry 或 root .vue
+   *  覆寫這幾個變數。
+   */
+  --brand-primary: #4f46e5; /* admin default = indigo */
+  --brand-primary-hover: #4338ca;
+  --brand-primary-soft: #e0e7ff;
+}

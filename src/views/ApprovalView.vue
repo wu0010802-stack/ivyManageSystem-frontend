@@ -10,11 +10,15 @@ import { LEAVE_TYPE_MAP as leaveTypeMap } from '@/utils/leaves'
 import { money, formatDate, formatTime } from '@/utils/format'
 import { apiError } from '@/utils/error'
 import { useFetchPending, useApprovalOperation } from '@/composables'
+import TableSkeleton from '@/components/common/TableSkeleton.vue'
 import { ROLE_TAG_MAP, OVERTIME_TYPE_MAP, CORRECTION_TYPE_MAP, SUBSTITUTE_STATUS_MAP } from '@/constants/approvalEnums'
 
 const router = useRouter()
 
 const loading = ref(false)
+// 首載完成後翻為 false；按「重新整理」雖然 loading 會再 true，isFirstLoad 不會回 true。
+// 給模板區別「畫骨架」與「靜默重整」（重整時保持原有資料 + 表格，避免閃爍）。
+const isFirstLoad = ref(true)
 
 const { items: pendingLeaves,          fetch: fetchPendingLeaves    } = useFetchPending(getLeaves)
 const { items: pendingOvertimes,       fetch: fetchPendingOvertimes } = useFetchPending(getOvertimes)
@@ -51,8 +55,12 @@ const goToAttendanceManagement = () => router.push({ name: 'attendance' })
 
 const fetchAll = async () => {
   loading.value = true
-  await Promise.all([fetchPendingLeaves(), fetchPendingOvertimes(), fetchPendingCorrections()])
-  loading.value = false
+  try {
+    await Promise.all([fetchPendingLeaves(), fetchPendingOvertimes(), fetchPendingCorrections()])
+  } finally {
+    loading.value = false
+    isFirstLoad.value = false
+  }
 }
 
 const { execute: executeLeaveApproval }      = useApprovalOperation({ apiFn: approveLeaveApi,      onSuccess: fetchPendingLeaves })
@@ -137,7 +145,12 @@ onMounted(fetchAll)
 </script>
 
 <template>
-  <div class="approval-page" v-loading="loading">
+  <!--
+    Why no full-page v-loading：標題與快捷卡永遠該保留可見，避免重新整理時整頁
+    閃白；首載用各 section 內的 skeleton 表達「資料載入中」，後續刷新只在 el-table
+    上加 :loading 屬性局部遮罩。頂部進度條（App.vue）足以表示 navigation。
+  -->
+  <div class="approval-page">
     <div class="page-header">
       <div>
         <h2>審核工作台</h2>
@@ -215,7 +228,16 @@ onMounted(fetchAll)
         </div>
       </template>
 
-      <el-table v-if="pendingLeaves.length > 0" :data="pendingLeaves" stripe size="small" style="width: 100%" max-height="520">
+      <TableSkeleton v-if="isFirstLoad && loading" :columns="9" :rows="3" />
+      <el-table
+        v-else-if="pendingLeaves.length > 0"
+        v-loading="loading && !isFirstLoad"
+        :data="pendingLeaves"
+        stripe
+        size="small"
+        style="width: 100%"
+        max-height="520"
+      >
         <el-table-column label="員工" min-width="140">
           <template #default="{ row }">
             <div class="cell-stack">
@@ -307,7 +329,7 @@ onMounted(fetchAll)
         </el-table-column>
       </el-table>
 
-      <el-empty v-else description="沒有待審核的請假申請" :image-size="60" />
+      <el-empty v-else-if="!isFirstLoad" description="沒有待審核的請假申請" :image-size="60" />
     </el-card>
 
     <el-card class="section-card overtime-card" shadow="hover">
@@ -327,7 +349,16 @@ onMounted(fetchAll)
         </div>
       </template>
 
-      <el-table v-if="pendingOvertimes.length > 0" :data="pendingOvertimes" stripe size="small" style="width: 100%" max-height="520">
+      <TableSkeleton v-if="isFirstLoad && loading" :columns="9" :rows="3" />
+      <el-table
+        v-else-if="pendingOvertimes.length > 0"
+        v-loading="loading && !isFirstLoad"
+        :data="pendingOvertimes"
+        stripe
+        size="small"
+        style="width: 100%"
+        max-height="520"
+      >
         <el-table-column label="員工" min-width="140">
           <template #default="{ row }">
             <div class="cell-stack">
@@ -395,7 +426,7 @@ onMounted(fetchAll)
         </el-table-column>
       </el-table>
 
-      <el-empty v-else description="沒有待審核的加班申請" :image-size="60" />
+      <el-empty v-else-if="!isFirstLoad" description="沒有待審核的加班申請" :image-size="60" />
     </el-card>
 
     <el-card class="section-card correction-card" shadow="hover">
@@ -415,7 +446,16 @@ onMounted(fetchAll)
         </div>
       </template>
 
-      <el-table v-if="pendingPunchCorrections.length > 0" :data="pendingPunchCorrections" stripe size="small" style="width: 100%" max-height="520">
+      <TableSkeleton v-if="isFirstLoad && loading" :columns="8" :rows="3" />
+      <el-table
+        v-else-if="pendingPunchCorrections.length > 0"
+        v-loading="loading && !isFirstLoad"
+        :data="pendingPunchCorrections"
+        stripe
+        size="small"
+        style="width: 100%"
+        max-height="520"
+      >
         <el-table-column prop="employee_name" label="員工" min-width="120" />
         <el-table-column prop="attendance_date" label="考勤日期" width="120" />
         <el-table-column label="補正類型" width="110">
@@ -459,7 +499,7 @@ onMounted(fetchAll)
         </el-table-column>
       </el-table>
 
-      <el-empty v-else description="沒有待審核的補打卡申請" :image-size="60" />
+      <el-empty v-else-if="!isFirstLoad" description="沒有待審核的補打卡申請" :image-size="60" />
     </el-card>
 
     <el-dialog

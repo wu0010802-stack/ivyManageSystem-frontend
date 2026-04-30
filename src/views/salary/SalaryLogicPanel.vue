@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
-import { getSalaryLogic } from '@/api/dev'
+import { getSalaryLogic } from '@/api/salary'
 
 const loading = ref(false)
 const logicData = ref(null)

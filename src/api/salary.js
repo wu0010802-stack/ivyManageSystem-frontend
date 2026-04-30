@@ -30,6 +30,11 @@ export const getHistory = (params) => api.get('/salaries/history', { params })
 
 export const simulateSalary = (payload) => api.post('/salaries/simulate', payload)
 
+export const getSalaryLogic = () => api.get('/salaries/logic')
+
+export const getEmployeeSalaryDebug = (params) =>
+  api.get('/salaries/employee-salary-debug', { params })
+
 export const listSalarySnapshots = (year, month, employeeId) => {
   const params = { year, month }
   if (employeeId != null) params.employee_id = employeeId

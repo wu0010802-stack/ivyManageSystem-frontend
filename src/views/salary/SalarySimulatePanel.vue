@@ -1,7 +1,6 @@
 <script setup>
 import { ref, reactive, computed, onMounted, watch } from 'vue'
-import { simulateSalary } from '@/api/salary'
-import { getEmployeeSalaryDebug } from '@/api/dev'
+import { simulateSalary, getEmployeeSalaryDebug } from '@/api/salary'
 import { useEmployeeStore } from '@/stores/employee'
 import { ElMessage } from 'element-plus'
 import { QuestionFilled } from '@element-plus/icons-vue'
@@ -471,7 +470,7 @@ onMounted(() => {
             </el-descriptions>
           </el-card>
 
-          <!-- 詳細診斷（由 /api/dev/employee-salary-debug 提供，使用 DB 實際資料，不套用試算 override） -->
+          <!-- 詳細診斷（由 /api/salaries/employee-salary-debug 提供，使用 DB 實際資料，不套用試算 override） -->
           <template v-if="debugResult">
             <el-divider content-position="left">
               <span class="section-label">詳細診斷（DB 實際資料）</span>

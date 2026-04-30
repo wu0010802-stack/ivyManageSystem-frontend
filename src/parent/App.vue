@@ -10,6 +10,13 @@ import ParentLayout from './layouts/ParentLayout.vue'
 </template>
 
 <style>
+/* 家長 app 角色 brand：綠色（與公開報名/校園識別一致） */
+:root {
+  --brand-primary: #3f7d48;
+  --brand-primary-hover: #336440;
+  --brand-primary-soft: #e7f3e9;
+}
+
 /* App 級 reset，避免 LIFF webview 的預設 padding */
 html, body, #app {
   margin: 0;

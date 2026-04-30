@@ -31,21 +31,44 @@ export const addRegistrationCourse = (id, courseId) =>
   api.post(`/activity/registrations/${id}/courses`, { course_id: courseId })
 export const addRegistrationSupply = (id, supplyId) =>
   api.post(`/activity/registrations/${id}/supplies`, { supply_id: supplyId })
-export const removeRegistrationSupply = (registrationId, supplyRecordId) =>
-  api.delete(`/activity/registrations/${registrationId}/supplies/${supplyRecordId}`)
+// 移除已報名用品；移除後若會超繳，需 forceRefund=true 並附 refundReason（≥5 字）
+// 後端會寫一筆「系統補齊」付款方式的退費沖帳紀錄。
+export const removeRegistrationSupply = (
+  registrationId,
+  supplyRecordId,
+  { forceRefund = false, refundReason } = {},
+) =>
+  api.delete(`/activity/registrations/${registrationId}/supplies/${supplyRecordId}`, {
+    params: buildForceRefundParams({ forceRefund, refundReason }),
+  })
 export const getRegistrationDetail = (id) => api.get(`/activity/registrations/${id}`)
 export const updateRemark = (id, data) => api.put(`/activity/registrations/${id}/remark`, data)
 export const promoteWaitlist = (registrationId, courseId) =>
   api.put(`/activity/registrations/${registrationId}/waitlist`, null, { params: { course_id: courseId } })
 export const sweepExpiredWaitlist = () =>
   api.post('/activity/waitlist/sweep-expired')
-export const withdrawCourse = (registrationId, courseId, { forceRefund = false } = {}) =>
+// 退課 / 刪除報名 / 移除用品在「移除後仍有已繳金額」時，後端會回 409；
+// 前端二次確認後需帶 force_refund=true 觸發自動沖帳，且必填 refund_reason（≥5 字）。
+function buildForceRefundParams({ forceRefund = false, refundReason } = {}) {
+  if (!forceRefund) return {}
+  const params = { force_refund: true }
+  if (refundReason != null && String(refundReason).length > 0) {
+    params.refund_reason = refundReason
+  }
+  return params
+}
+
+export const withdrawCourse = (
+  registrationId,
+  courseId,
+  { forceRefund = false, refundReason } = {},
+) =>
   api.delete(`/activity/registrations/${registrationId}/courses/${courseId}`, {
-    params: forceRefund ? { force_refund: true } : {},
+    params: buildForceRefundParams({ forceRefund, refundReason }),
   })
-export const deleteRegistration = (id, { forceRefund = false } = {}) =>
+export const deleteRegistration = (id, { forceRefund = false, refundReason } = {}) =>
   api.delete(`/activity/registrations/${id}`, {
-    params: forceRefund ? { force_refund: true } : {},
+    params: buildForceRefundParams({ forceRefund, refundReason }),
   })
 // 批次標記「已繳費」（is_paid=true）— 後端已禁用 is_paid=false 批次沖帳以防誤操作
 // reason ≥ 5 字必填；整批 shortfall 合計 > NT$1000 需 ACTIVITY_PAYMENT_APPROVE 權限

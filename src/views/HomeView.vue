@@ -1,4 +1,5 @@
 <script setup>
+import { computed } from 'vue'
 import {
   Calendar,
   CircleCheckFilled,
@@ -17,6 +18,7 @@ import { useDashboardSections } from '@/composables'
 
 const {
   loading,
+  isFirstLoad,
   deferredSections,
   studentAttendanceSectionRef,
   anomaliesSectionRef,
@@ -41,16 +43,69 @@ const {
   anomalyTagType,
   navigateTo,
 } = useDashboardSections()
+
+// 今日待辦：把分散在右欄/出勤摘要的「需要處理」數字升為頁面前段第一視覺
+// Why: 既有 dashboard 全是統計數字（系統有什麼），把待審/異常/未點名前置成
+//      「今天需要處理什麼」，讓使用者一眼知道下一步要點哪裡。
+const todoTiles = computed(() => {
+  const tiles = []
+
+  if (showApprovals.value) {
+    const pendingLeaves = approvalSummary.value?.pending_leaves ?? 0
+    if (pendingLeaves > 0) {
+      tiles.push({ key: 'leaves', label: '待審請假', count: pendingLeaves, tone: 'warning', path: '/approvals' })
+    }
+    const pendingOvertimes = approvalSummary.value?.pending_overtimes ?? 0
+    if (pendingOvertimes > 0) {
+      tiles.push({ key: 'overtimes', label: '待審加班', count: pendingOvertimes, tone: 'warning', path: '/approvals' })
+    }
+  }
+
+  if (showAttendance.value && attendanceAnomalies.value) {
+    const count = attendanceAnomalies.value.anomalies?.length ?? 0
+    if (count > 0) {
+      tiles.push({ key: 'anomalies', label: '今日打卡異常', count, tone: 'danger', path: '/attendance' })
+    }
+  }
+
+  if (showStudents.value && studentAttendanceSummary.value) {
+    const unmarked = studentAttendanceSummary.value.unmarked_count ?? 0
+    if (unmarked > 0) {
+      tiles.push({ key: 'unmarked', label: '學生未點名', count: unmarked, tone: 'danger', path: '/student-attendance' })
+    }
+  }
+
+  return tiles
+})
+
+// 任何待辦資料尚未到齊則顯示骨架；都到齊且為 0 才顯示「全部清空」
+const todoDataReady = computed(() => {
+  if (isFirstLoad.value && loading.value) return false
+  if (showApprovals.value && approvalSummary.value == null) return false
+  if (showAttendance.value && !deferredSections.anomalies?.loaded) return false
+  if (showStudents.value && !deferredSections.studentAttendance?.loaded) return false
+  return true
+})
+
+const showTodoSection = computed(
+  () => showApprovals.value || showAttendance.value || showStudents.value
+)
 </script>
 
 <template>
-  <div class="dashboard-container" v-loading="loading">
+  <!--
+    Why no full-page v-loading any longer:
+    - greeting / 標題 / 快速操作 永遠該保持可見，避免重新整理時整頁變空白
+    - 首載：本檔內各 stats-row 用 skeleton 替代；deferred section 自帶 placeholder
+    - 後續刷新：頂部細條進度條（App.vue 提供）即可表示 navigating，不打斷工作流
+  -->
+  <div class="dashboard-container">
 
     <!-- 頁首 -->
     <div class="dashboard-header">
       <div class="dashboard-header__left">
         <h1 class="dashboard-header__greeting">{{ greeting }}，{{ userName }}</h1>
-        <p class="dashboard-header__sub">{{ todayDateStr }} &nbsp;·&nbsp; 查看今日學校概況</p>
+        <p class="dashboard-header__sub">{{ todayDateStr }} &nbsp;·&nbsp; 今天需要處理什麼</p>
       </div>
       <div class="dashboard-header__date-badge">
         <el-icon style="margin-right:4px;"><Calendar /></el-icon>
@@ -58,11 +113,68 @@ const {
       </div>
     </div>
 
+    <!-- 今日待辦（升為主工作佇列） -->
+    <section v-if="showTodoSection" class="todo-board" aria-label="今日待辦">
+      <div class="section-header section-header--top">
+        <div class="section-title-wrap">
+          <span class="section-dot section-dot--amber"></span>
+          <span class="section-title">今日待辦</span>
+        </div>
+        <span v-if="todoDataReady && todoTiles.length > 0" class="section-date-chip">
+          {{ todoTiles.reduce((sum, t) => sum + t.count, 0) }} 筆需處理
+        </span>
+      </div>
+
+      <!-- 載入中骨架 -->
+      <div v-if="!todoDataReady" class="todo-grid" aria-busy="true">
+        <div v-for="i in 3" :key="i" class="todo-tile todo-tile--skeleton">
+          <div class="skeleton-pulse todo-tile__skeleton-label" />
+          <div class="skeleton-pulse todo-tile__skeleton-count" />
+        </div>
+      </div>
+
+      <!-- 全部清空 -->
+      <div v-else-if="todoTiles.length === 0" class="todo-empty">
+        <el-icon class="todo-empty__icon"><CircleCheckFilled /></el-icon>
+        <span>太好了！今天沒有待處理的工作。</span>
+      </div>
+
+      <!-- 待辦磚 -->
+      <div v-else class="todo-grid">
+        <button
+          v-for="tile in todoTiles"
+          :key="tile.key"
+          type="button"
+          class="todo-tile"
+          :class="`todo-tile--${tile.tone}`"
+          @click="navigateTo(tile.path)"
+        >
+          <div class="todo-tile__label">{{ tile.label }}</div>
+          <div class="todo-tile__count">
+            <span class="todo-tile__count-num">{{ tile.count }}</span>
+            <span class="todo-tile__count-unit">筆</span>
+          </div>
+          <div class="todo-tile__cta">前往處理 →</div>
+        </button>
+      </div>
+    </section>
+
     <!-- 學校概況 -->
     <div class="section-header section-header--top">
       <span class="section-title">學校概況</span>
     </div>
-    <el-row :gutter="20" class="stats-row">
+    <el-row v-if="isFirstLoad && loading" :gutter="20" class="stats-row" aria-busy="true">
+      <el-col v-for="i in 4" :key="i" :xs="24" :sm="12" :md="6" class="mb-4">
+        <div class="stat-skeleton">
+          <div class="skeleton-pulse stat-skeleton__icon" />
+          <div class="stat-skeleton__body">
+            <div class="skeleton-pulse stat-skeleton__label" />
+            <div class="skeleton-pulse stat-skeleton__value" />
+          </div>
+        </div>
+      </el-col>
+    </el-row>
+    <el-row v-else :gutter="20" class="stats-row">
       <el-col :xs="24" :sm="12" :md="6" class="mb-4">
         <StatCard label="教職員總數" :value="stats.total" icon="User" color="primary" variant="filled" />
       </el-col>
@@ -78,7 +190,7 @@ const {
     </el-row>
 
     <!-- 教師出勤狀況 -->
-    <template v-if="showAttendance && todayStats">
+    <template v-if="showAttendance">
       <div class="section-header">
         <div class="section-title-wrap">
           <span class="section-dot section-dot--blue"></span>
@@ -86,7 +198,18 @@ const {
         </div>
         <span class="section-date-chip">{{ todayDateStr }}</span>
       </div>
-      <el-row :gutter="20" class="stats-row">
+      <el-row v-if="isFirstLoad && !todayStats" :gutter="20" class="stats-row" aria-busy="true">
+        <el-col v-for="i in 4" :key="i" :xs="24" :sm="12" :md="6" class="mb-4">
+          <div class="stat-skeleton">
+            <div class="skeleton-pulse stat-skeleton__icon" />
+            <div class="stat-skeleton__body">
+              <div class="skeleton-pulse stat-skeleton__label" />
+              <div class="skeleton-pulse stat-skeleton__value" />
+            </div>
+          </div>
+        </el-col>
+      </el-row>
+      <el-row v-else-if="todayStats" :gutter="20" class="stats-row">
         <el-col :xs="24" :sm="12" :md="6" class="mb-4">
           <StatCard label="今日應出勤" :value="todayStats.total_employees" icon="Calendar" color="primary" />
         </el-col>
@@ -452,6 +575,123 @@ const {
 
 .section-dot--blue  { background: #4f46e5; }
 .section-dot--green { background: #10b981; }
+.section-dot--amber { background: #f59e0b; }
+
+/* ── 今日待辦 todo board ── */
+.todo-board {
+  margin-bottom: 32px;
+}
+
+.todo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.todo-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 18px 18px 14px;
+  border-radius: 14px;
+  border: 1px solid transparent;
+  background: #fff;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.todo-tile:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+}
+
+.todo-tile:focus-visible {
+  outline: 2px solid #4f46e5;
+  outline-offset: 2px;
+}
+
+.todo-tile__label {
+  font-size: 13px;
+  color: #475569;
+  font-weight: 500;
+}
+
+.todo-tile__count {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.todo-tile__count-num {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+.todo-tile__count-unit {
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+.todo-tile__cta {
+  font-size: 12px;
+  color: #64748b;
+  margin-top: auto;
+}
+
+.todo-tile--warning {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+.todo-tile--warning .todo-tile__count-num { color: #b45309; }
+
+.todo-tile--danger {
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+.todo-tile--danger .todo-tile__count-num { color: #b91c1c; }
+
+.todo-tile--skeleton {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+  cursor: default;
+  pointer-events: none;
+}
+.todo-tile--skeleton:hover {
+  transform: none;
+  box-shadow: none;
+}
+.todo-tile__skeleton-label {
+  width: 60%;
+  height: 12px;
+  border-radius: 4px;
+}
+.todo-tile__skeleton-count {
+  width: 40%;
+  height: 28px;
+  border-radius: 6px;
+}
+
+.todo-empty {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 20px;
+  border-radius: 12px;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #065f46;
+  font-size: 13px;
+}
+
+.todo-empty__icon {
+  font-size: 20px;
+  color: #10b981;
+}
 
 .section-date-chip {
   display: inline-flex;
@@ -709,4 +949,37 @@ const {
   gap: 3px;
 }
 
+/* StatCard 首載骨架（保持與真實卡相近高度，避免換成真卡時版面跳動） */
+.stat-skeleton {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border-radius: var(--radius-lg, 12px);
+  background: var(--bg-color, #fff);
+  border: 1px solid var(--border-color-light, rgba(0, 0, 0, 0.06));
+  min-height: 84px;
+}
+.stat-skeleton__icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.stat-skeleton__body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.stat-skeleton__label {
+  height: 12px;
+  width: 60%;
+  border-radius: 4px;
+}
+.stat-skeleton__value {
+  height: 20px;
+  width: 40%;
+  border-radius: 4px;
+}
 </style>

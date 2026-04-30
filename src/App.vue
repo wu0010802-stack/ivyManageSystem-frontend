@@ -7,7 +7,7 @@ import { useRouteLoading } from './composables/useRouteLoading'
 import { applyPageTitle } from './utils/pageTitle'
 
 const route = useRoute()
-const { routeLoading } = useRouteLoading()
+const { routeLoading, routeProgress } = useRouteLoading()
 const isPortalRoute = computed(() => route.path.startsWith('/portal'))
 const isLoginPage = computed(() => route.path === '/login')
 const isPublicRoute = computed(() => route.path.startsWith('/public'))
@@ -29,6 +29,16 @@ watch(
 
   <!-- Admin routes use the AdminLayout -->
   <AdminLayout v-else />
+
+  <!-- 一般換頁的頂部細進度條（冷啟動由全頁遮罩處理） -->
+  <Transition name="route-progress-fade">
+    <div
+      v-if="routeProgress && !routeLoading"
+      class="route-progress-bar"
+      role="progressbar"
+      aria-label="頁面載入中"
+    />
+  </Transition>
 
   <Transition name="route-loading-fade">
     <div
@@ -106,6 +116,63 @@ watch(
   }
   50% {
     transform: scale(1.03);
+  }
+}
+
+/* 一般換頁的頂部進度條 */
+.route-progress-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  z-index: 6000;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    #f4b43f 30%,
+    #f4b43f 70%,
+    transparent
+  );
+  background-size: 240% 100%;
+  animation: route-progress-slide 1.1s linear infinite;
+  pointer-events: none;
+}
+
+.route-progress-fade-enter-active,
+.route-progress-fade-leave-active {
+  transition: opacity 0.15s ease;
+}
+
+.route-progress-fade-enter-from,
+.route-progress-fade-leave-to {
+  opacity: 0;
+}
+
+@keyframes route-progress-slide {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+/* ─── 動效降階：尊重 OS「減少動態效果」設定 ─────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .route-loading-mark::before {
+    animation: none;
+    border-top-color: rgba(63, 125, 72, 0.45);
+  }
+  .route-loading-logo {
+    animation: none;
+  }
+  .route-progress-bar {
+    animation: none;
+    background: #f4b43f;
+    opacity: 0.7;
+  }
+  .route-loading-fade-enter-active,
+  .route-loading-fade-leave-active,
+  .route-progress-fade-enter-active,
+  .route-progress-fade-leave-active {
+    transition: none;
   }
 }
 </style>

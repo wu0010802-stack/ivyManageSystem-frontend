@@ -250,7 +250,33 @@
           </div>
         </div>
 
-        <form novalidate @submit.prevent="handleSubmitRegistration">
+        <!-- 初始化失敗：頁內錯誤 + 重試（避免 toast 一閃但表單空殼） -->
+        <div
+          v-if="initState === 'error'"
+          class="init-error-panel"
+          role="alert"
+          aria-live="assertive"
+        >
+          <svg class="notice-icon" width="28" height="28" aria-hidden="true"><use href="#i-alert" /></svg>
+          <div class="init-error-content">
+            <div class="init-error-title">頁面載入失敗</div>
+            <div class="init-error-message">{{ initErrorMessage }}</div>
+          </div>
+          <button
+            type="button"
+            class="btn btn-primary"
+            :disabled="retryingInit"
+            @click="retryInit"
+          >
+            {{ retryingInit ? '重新載入中…' : '重新載入' }}
+          </button>
+        </div>
+
+        <form
+          v-else
+          novalidate
+          @submit.prevent="handleSubmitRegistration"
+        >
           <div class="grid-layout">
             <div class="col-left">
               <div class="poster-wrapper" :class="{ 'is-loading': !posterLoaded }">
@@ -597,6 +623,38 @@ const submitting = ref(false)
 const posterLoaded = ref(false)
 function onPosterLoad() { posterLoaded.value = true }
 
+// 初始化狀態：'loading' | 'ready' | 'error'
+// loading 期間隱藏報名表，error 顯示頁內錯誤狀態 + 重試按鈕，避免「toast 一閃但頁面空殼」
+const initState = ref('loading')
+const initErrorMessage = ref('')
+const retryingInit = ref(false)
+
+async function runInit() {
+  try {
+    await Promise.all([loadTime(), loadOptions(), refreshAvailability()])
+    initState.value = 'ready'
+    initErrorMessage.value = ''
+    if (classes.value.length === 0) {
+      showToast('目前沒有可選班級，請稍後再試或聯絡園方。', 'warning')
+    }
+  } catch (err) {
+    initState.value = 'error'
+    initErrorMessage.value =
+      err?.response?.data?.detail || err?.message || '頁面初始化失敗，請稍後再試。'
+  }
+}
+
+async function retryInit() {
+  if (retryingInit.value) return
+  retryingInit.value = true
+  initState.value = 'loading'
+  try {
+    await runInit()
+  } finally {
+    retryingInit.value = false
+  }
+}
+
 // ===== 生日輸入上下限（與後端 _validate_birthday_str 同步：20 年內、不可未來） =====
 function toISODate(d) {
   const y = d.getFullYear()
@@ -931,14 +989,7 @@ function resetForm() {
 }
 
 onMounted(async () => {
-  try {
-    await Promise.all([loadTime(), loadOptions(), refreshAvailability()])
-    if (classes.value.length === 0) {
-      showToast('目前沒有可選班級，請稍後再試或聯絡園方。', 'warning')
-    }
-  } catch (err) {
-    showToast(err?.response?.data?.detail || '頁面初始化失敗，請重新整理。', 'error')
-  }
+  await runInit()
   startPolling()
   tickTimer = setInterval(() => { nowTick.value = Date.now() }, 60_000)
 })
@@ -1121,6 +1172,23 @@ onUnmounted(() => {
 .notice-content { flex: 1; min-width: 0; }
 .notice-title { font-weight: 700; font-size: var(--fs-md); color: var(--color-text); margin-bottom: 2px; }
 .notice-message { font-size: var(--fs-sm); color: var(--color-text-muted); }
+
+/* 初始化失敗：頁內錯誤狀態 */
+.init-error-panel {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+  padding: var(--space-5) var(--space-6);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-danger);
+  background-color: var(--color-danger-soft);
+  flex-wrap: wrap;
+}
+.init-error-panel .notice-icon { color: var(--color-danger); width: 28px; height: 28px; }
+.init-error-content { flex: 1; min-width: 200px; }
+.init-error-title { font-weight: 700; font-size: var(--fs-lg); color: var(--color-text); margin-bottom: 4px; }
+.init-error-message { font-size: var(--fs-sm); color: var(--color-text-muted); }
 
 /* Left Column */
 .col-left { display: flex; flex-direction: column; gap: var(--space-5); }

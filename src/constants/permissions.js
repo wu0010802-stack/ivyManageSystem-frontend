@@ -74,7 +74,6 @@ export const ROUTE_PERMISSION_RULES = [
   { path: '/reports', permission: 'REPORTS' },
   { path: '/audit-logs', permission: 'AUDIT_LOGS' },
   { path: '/settings', permission: 'SETTINGS_READ' },
-  { path: '/dev/salary', permission: 'SALARY_READ' },
   { path: '/activity/dashboard', permission: 'ACTIVITY_READ' },
   { path: '/activity/registrations', permission: 'ACTIVITY_READ' },
   { path: '/activity/pos', permission: 'ACTIVITY_WRITE' },

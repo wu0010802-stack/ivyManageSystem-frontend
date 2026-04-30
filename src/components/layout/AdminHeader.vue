@@ -42,9 +42,10 @@
           size="small"
           plain
           :icon="Monitor"
+          :title="'進入前台'"
           @click="goToPortal"
         >
-          進入前台
+          <span class="enter-portal-label">進入前台</span>
         </el-button>
 
         <el-dropdown trigger="click" @command="handleCommand">
@@ -209,12 +210,17 @@ const handleCommand = (command) => {
   justify-content: space-between;
   align-items: center;
   width: 100%;
+  min-width: 0;
+  gap: var(--space-3);
 }
 
 .header-left {
   display: flex;
   align-items: center;
   gap: var(--space-4);
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
 }
 
 .page-title {
@@ -230,6 +236,13 @@ const handleCommand = (command) => {
   border-radius: var(--radius-md);
   transition: background-color var(--transition-base), color var(--transition-base);
   user-select: none;
+  min-width: 0;
+}
+
+.page-title > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .page-title:hover {
@@ -256,6 +269,7 @@ const handleCommand = (command) => {
   display: flex;
   align-items: center;
   gap: var(--space-6);
+  flex: 0 0 auto;
 }
 
 .user-profile {
@@ -377,11 +391,24 @@ const handleCommand = (command) => {
 
 @media (max-width: 767px) {
   .admin-header {
-    padding: 0 var(--space-4);
+    padding: 0 var(--space-3);
+  }
+
+  .header-content {
+    gap: var(--space-2);
+  }
+
+  .header-right {
+    gap: var(--space-2);
   }
 
   .page-title {
     font-size: var(--text-lg);
+    padding: 2px 4px;
+  }
+
+  .pin-icon {
+    display: none;
   }
 
   .user-info {
@@ -395,6 +422,15 @@ const handleCommand = (command) => {
 
   .search-trigger {
     min-width: unset;
+    padding: 6px 8px;
+  }
+
+  /* 進入前台按鈕在手機只顯示 icon，文字隱藏 */
+  .header-right :deep(.el-button) {
+    padding: 6px 8px;
+  }
+  .enter-portal-label {
+    display: none;
   }
 }
 </style>

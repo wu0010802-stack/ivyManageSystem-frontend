@@ -13,6 +13,9 @@ export function useDashboardSections() {
   const employeeStore = useEmployeeStore()
   const notificationStore = useNotificationStore()
   const loading = ref(false)
+  // 首載完成後翻為 false；後續使用者按「重新整理」雖然 loading 會再 true，
+  // isFirstLoad 不會回 true。給模板區別「畫骨架」與「靜默重整」。
+  const isFirstLoad = ref(true)
   const deferredSections = reactive({
     studentAttendance: { loading: false, loaded: false },
     anomalies: { loading: false, loaded: false },
@@ -174,6 +177,7 @@ export function useDashboardSections() {
         : null,
     ].filter(Boolean))
     loading.value = false
+    isFirstLoad.value = false
   }
 
   const setupDeferredDashboardData = async () => {
@@ -214,6 +218,7 @@ export function useDashboardSections() {
 
   return {
     loading,
+    isFirstLoad,
     deferredSections,
     studentAttendanceSectionRef,
     anomaliesSectionRef,

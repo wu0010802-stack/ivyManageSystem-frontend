@@ -1,7 +1,7 @@
 <script setup>
 import { ref, reactive, onMounted, computed, watch, nextTick } from 'vue'
-import { useDebounceFn } from '@vueuse/core'
-import { Loading, User } from '@element-plus/icons-vue'
+import { useDebounceFn, useMediaQuery } from '@vueuse/core'
+import { Loading, User, Plus } from '@element-plus/icons-vue'
 import {
   getEmployee, getEmployees, createEmployee, updateEmployee, offboard, getFinalSalaryPreview,
   listEmployeeEducations, createEmployeeEducation, updateEmployeeEducation, deleteEmployeeEducation,
@@ -33,6 +33,9 @@ import {
 
 const employeeStore = useEmployeeStore()
 const classroomStore = useClassroomStore()
+
+// 手機版（≤767px）：詳情/編輯 Dialog 改為全螢幕，內部 grid 改單欄
+const isMobile = useMediaQuery('(max-width: 767px)')
 const configStore = useConfigStore()
 
 const loading = ref(false)
@@ -608,7 +611,9 @@ onMounted(async () => {
     <el-dialog
       v-model="dialogVisible"
       :title="isEdit ? '編輯員工' : '新增員工'"
-      width="800px"
+      :width="isMobile ? '100%' : '800px'"
+      :top="isMobile ? '0' : '15vh'"
+      :fullscreen="isMobile"
     >
       <el-form :model="form" :rules="rules" ref="formRef" label-width="140px">
         <el-tabs type="border-card">
@@ -830,9 +835,15 @@ onMounted(async () => {
       </template>
     </el-dialog>
 
-    <!-- Detail Dialog：左右欄位佈局 -->
-    <el-dialog v-model="detailDialogVisible" title="員工詳情" width="1100px" top="5vh">
-      <div class="detail-layout">
+    <!-- Detail Dialog：桌機左右欄、手機全螢幕單欄 -->
+    <el-dialog
+      v-model="detailDialogVisible"
+      title="員工詳情"
+      :width="isMobile ? '100%' : '1100px'"
+      :top="isMobile ? '0' : '5vh'"
+      :fullscreen="isMobile"
+    >
+      <div class="detail-layout" :class="{ 'is-mobile': isMobile }">
         <!-- 左欄：員工身份摘要 -->
         <aside class="detail-aside">
           <div class="avatar-placeholder">
@@ -864,7 +875,7 @@ onMounted(async () => {
           >
             <!-- 個人資料 -->
             <el-tab-pane label="個人資料" name="personal">
-              <el-descriptions :column="2" border>
+              <el-descriptions :column="isMobile ? 1 : 2" border>
                 <el-descriptions-item label="聯絡電話">{{ currentDetail.phone || '-' }}</el-descriptions-item>
                 <el-descriptions-item label="生日">{{ currentDetail.birthday || '-' }}</el-descriptions-item>
                 <el-descriptions-item label="身分證">{{ currentDetail.id_number || '-' }}</el-descriptions-item>
@@ -877,7 +888,7 @@ onMounted(async () => {
 
             <!-- 職務資料 -->
             <el-tab-pane label="職務資料" name="job">
-              <el-descriptions :column="2" border>
+              <el-descriptions :column="isMobile ? 1 : 2" border>
                 <el-descriptions-item label="員工類型">{{ employeeTypeLabel(currentDetail.employee_type) }}</el-descriptions-item>
                 <el-descriptions-item label="職位">{{ currentDetail.position || '-' }}</el-descriptions-item>
                 <el-descriptions-item label="到職日">{{ currentDetail.hire_date || '-' }}</el-descriptions-item>
@@ -894,7 +905,7 @@ onMounted(async () => {
 
             <!-- 薪資 -->
             <el-tab-pane label="薪資" name="salary">
-              <el-descriptions :column="2" border>
+              <el-descriptions :column="isMobile ? 1 : 2" border>
                 <el-descriptions-item label="基本薪資">
                   <span>{{ Number(currentDetail.base_salary).toLocaleString() }}</span>
                   <template v-if="standardSalaryFor(currentDetail) !== null">
@@ -1235,6 +1246,34 @@ onMounted(async () => {
   flex: 1 1 72%;
   min-width: 0;
 }
+
+/* 手機版：詳情 dialog 改單欄堆疊 */
+.detail-layout.is-mobile {
+  flex-direction: column;
+  min-height: 0;
+  gap: 12px;
+}
+.detail-layout.is-mobile .detail-aside {
+  flex: 0 0 auto;
+  border-right: none;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+  padding-right: 0;
+  padding-bottom: 12px;
+}
+.detail-layout.is-mobile .detail-main {
+  flex: 1 1 auto;
+}
+.detail-layout.is-mobile .avatar-placeholder {
+  width: 80px;
+  height: 80px;
+  margin: 4px auto 8px;
+}
+.detail-layout.is-mobile .emp-name {
+  font-size: 16px;
+}
+
+/* 手機版：el-descriptions 內部調整由 :column="1" 處理；
+   表單 grid（el-row/el-col）的響應式落在全域 main.css，避免逐視圖重寫 */
 .avatar-placeholder {
   width: 120px;
   height: 120px;
@@ -1260,5 +1299,32 @@ onMounted(async () => {
   display: inline-block;
   width: 48px;
   color: var(--el-text-color-secondary);
+}
+</style>
+
+<!-- 手機版表單欄位響應式：dialog 內容被 teleport 到 body，scoped 規則無法穿透，
+     用非 scoped block 提供全域 fallback，但僅針對含 .responsive-form-dialog 的 dialog -->
+<style>
+@media (max-width: 767px) {
+  .el-overlay-dialog .el-dialog.is-fullscreen .el-row .el-col {
+    width: 100% !important;
+    max-width: 100% !important;
+    flex: 0 0 100% !important;
+  }
+  .el-overlay-dialog .el-dialog.is-fullscreen .el-form .el-form-item__label {
+    width: auto !important;
+    text-align: left !important;
+    line-height: 1.4 !important;
+    padding: 0 0 4px !important;
+  }
+  .el-overlay-dialog .el-dialog.is-fullscreen .el-form .el-form-item__content {
+    margin-left: 0 !important;
+  }
+  .el-overlay-dialog .el-dialog.is-fullscreen .el-tabs--border-card > .el-tabs__content {
+    padding: 12px;
+  }
+  .el-overlay-dialog .el-dialog.is-fullscreen .el-descriptions__cell {
+    padding: 8px 10px !important;
+  }
 }
 </style>

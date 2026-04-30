@@ -260,3 +260,28 @@ body {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
 }
+
+/* ========== Reduced Motion ==========
+ * 尊重 OS / 瀏覽器「減少動態效果」設定（無障礙、暈動症友善）。
+ * - 凡是純裝飾性 keyframe 動畫（pulse / shimmer / spin / breathe）關閉
+ * - el-loading、el-spinner 等 element-plus 元件的旋轉也降階
+ * - 一般 hover transition 改為極短，仍保留視覺回饋
+ * 注意：本檔位置在所有 component scoped style 之後 import，所以這段 media query 會
+ * 覆蓋大多數元件的 keyframe 動畫；若有 component 透過 :deep 自訂 animation，
+ * 仍應在 component 自己加 @media (prefers-reduced-motion: reduce) 保護。
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .skeleton-pulse {
+    animation: none !important;
+    background: var(--bg-color-soft);
+    opacity: 0.85;
+  }
+}

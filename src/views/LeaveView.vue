@@ -315,6 +315,27 @@ const approveLeave = async (row) => {
 const cancelApprove = (row) =>
   executeApproval(row.id, { approved: false, rejection_reason: '取消核准' }, '已取消核准')
 
+// 行操作的「更多」dropdown：把次要/危險動作集中收斂，降低表格視覺密度
+function handleRowCommand(cmd, row) {
+  switch (cmd) {
+    case 'reject':
+      rejectRef.value?.open(row)
+      break
+    case 'cancel-approve':
+      cancelApprove(row)
+      break
+    case 'edit':
+      openEdit(row)
+      break
+    case 'logs':
+      openApprovalLogs(row)
+      break
+    case 'delete':
+      deleteLeave(row)
+      break
+  }
+}
+
 const getLeaveTypeTag = (type) => {
   return leaveTypes.find(t => t.value === type) || { label: type, color: '' }
 }
@@ -469,17 +490,51 @@ onMounted(() => {
             <span v-else style="color:var(--el-text-color-secondary);font-size:12px;">—</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="260" fixed="right">
+        <el-table-column label="操作" width="180" fixed="right">
           <template #default="scope">
+            <!-- 主動作：依狀態決定，最常用的操作直接外露 -->
             <template v-if="scope.row.is_approved === null && canApprove(scope.row)">
               <el-button type="success" size="small" link @click="approveLeave(scope.row)">核准</el-button>
-              <el-button type="danger" size="small" link @click="rejectRef.open(scope.row)">駁回</el-button>
             </template>
-            <el-button v-if="scope.row.is_approved === true && canApprove(scope.row)" type="warning" size="small" link @click="cancelApprove(scope.row)">取消核准</el-button>
-            <el-button v-if="scope.row.is_approved === false && canApprove(scope.row)" type="success" size="small" link @click="approveLeave(scope.row)">核准</el-button>
-            <el-button type="primary" size="small" link @click="openEdit(scope.row)">編輯</el-button>
-            <el-button type="danger" size="small" link @click="deleteLeave(scope.row)" :loading="deleteLeaveLoading">刪除</el-button>
-            <el-button type="info" size="small" link @click="openApprovalLogs(scope.row)">記錄</el-button>
+            <el-button
+              v-else-if="scope.row.is_approved === false && canApprove(scope.row)"
+              type="success"
+              size="small"
+              link
+              @click="approveLeave(scope.row)"
+            >核准</el-button>
+            <el-button
+              v-else
+              type="primary"
+              size="small"
+              link
+              @click="openEdit(scope.row)"
+            >編輯</el-button>
+
+            <!-- 次要/危險動作收進 dropdown，降低誤觸與視覺密度 -->
+            <el-dropdown trigger="click" @command="(cmd) => handleRowCommand(cmd, scope.row)">
+              <el-button type="info" size="small" link>更多 ▾</el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item
+                    v-if="scope.row.is_approved === null && canApprove(scope.row)"
+                    command="reject"
+                  >駁回</el-dropdown-item>
+                  <el-dropdown-item
+                    v-if="scope.row.is_approved === true && canApprove(scope.row)"
+                    command="cancel-approve"
+                  >取消核准</el-dropdown-item>
+                  <!-- 編輯：當主動作是「核准」（待審/已駁回 且可核准）時補上入口，
+                       審核者常需在核准前先修錯字。其他情況主動作就是編輯，無需重複。 -->
+                  <el-dropdown-item
+                    v-if="scope.row.is_approved !== true && canApprove(scope.row)"
+                    command="edit"
+                  >編輯</el-dropdown-item>
+                  <el-dropdown-item command="logs">審核紀錄</el-dropdown-item>
+                  <el-dropdown-item divided command="delete">刪除</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </template>
         </el-table-column>
       </el-table>

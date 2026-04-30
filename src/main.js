@@ -5,6 +5,7 @@ import App from './App.vue'
 import router from './router'
 import { initSyncBridge } from './stores/syncBridge'
 
+import './assets/design-tokens.css'
 import './assets/main.css'
 
 const app = createApp(App)
