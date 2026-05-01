@@ -122,9 +122,16 @@ function attUrl(att) {
 const TIMELINE_STEPS = [
   { key: 'created', label: '已送出', match: () => true },
   {
-    key: 'final',
+    key: 'approved',
     label: '已成立',
-    match: (item) => ['approved', 'cancelled'].includes(item.status),
+    // cancel 規則要求 status 必須先是 approved 才能取消，所以 cancelled
+    // 紀錄歷史上一定經過 approved；pending/rejected 為相容歷史資料
+    match: (item) => ['approved', 'cancelled', 'pending', 'rejected'].includes(item.status),
+  },
+  {
+    key: 'cancelled',
+    label: '已取消',
+    match: (item) => item.status === 'cancelled',
   },
 ]
 
@@ -134,7 +141,8 @@ function timelineSteps(item) {
     const done = step.match(item)
     let timestamp = null
     if (step.key === 'created') timestamp = item.created_at
-    else if (step.key === 'final') timestamp = item.reviewed_at || item.updated_at
+    else if (step.key === 'approved') timestamp = item.reviewed_at || item.updated_at
+    else if (step.key === 'cancelled') timestamp = item.updated_at
     return { ...step, done, timestamp }
   })
 }
