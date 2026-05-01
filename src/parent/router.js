@@ -113,6 +113,18 @@ const router = createRouter({
       meta: { title: '加綁子女', tab: 'more' },
     },
     {
+      path: '/children/:studentId',
+      name: 'parent-child-profile',
+      component: () => import('./views/ChildProfileView.vue'),
+      meta: { title: '孩子檔案', tab: 'home' },
+    },
+    {
+      path: '/calendar',
+      name: 'parent-calendar',
+      component: () => import('./views/CalendarView.vue'),
+      meta: { title: '本週行程', tab: 'home' },
+    },
+    {
       path: '/:pathMatch(.*)*',
       redirect: '/login',
     },

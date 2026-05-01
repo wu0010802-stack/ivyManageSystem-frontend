@@ -5,6 +5,8 @@ import App from './App.vue'
 import router from './router'
 import { initSyncBridge } from './stores/syncBridge'
 
+import 'element-plus/theme-chalk/el-message-box.css'
+import 'element-plus/theme-chalk/el-message.css'
 import './assets/design-tokens.css'
 import './assets/main.css'
 

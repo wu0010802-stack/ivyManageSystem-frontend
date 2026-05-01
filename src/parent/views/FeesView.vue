@@ -80,6 +80,50 @@ function closeDetail() {
 
 const formatNum = (n) => (n ?? 0).toLocaleString()
 
+async function copyText(text) {
+  if (!text) return
+  try {
+    if (navigator.clipboard) {
+      await navigator.clipboard.writeText(text)
+      toast.success('已複製')
+      return
+    }
+  } catch {
+    /* ignore */
+  }
+  // fallback：建立暫時 textarea
+  try {
+    const ta = document.createElement('textarea')
+    ta.value = text
+    document.body.appendChild(ta)
+    ta.select()
+    document.execCommand('copy')
+    document.body.removeChild(ta)
+    toast.success('已複製')
+  } catch {
+    toast.warn('無法複製，請長按手動複製')
+  }
+}
+
+function buildReceiptText(record, payments) {
+  const lines = [
+    `${record.fee_item_name}（${record.period}）`,
+    `學生：${record.student_name || '—'}`,
+    `應繳：$${formatNum(record.amount_due)}`,
+    `已繳：$${formatNum(record.amount_paid)}`,
+  ]
+  if (payments?.length) {
+    lines.push('— 繳費明細 —')
+    for (const p of payments) {
+      lines.push(
+        `${p.payment_date} ${p.payment_method || ''} +$${formatNum(p.amount)}` +
+          (p.receipt_no ? ` (收據 ${p.receipt_no})` : ''),
+      )
+    }
+  }
+  return lines.join('\n')
+}
+
 onMounted(async () => {
   await childrenStore.load()
   ensureSelected(childrenStore.items)
@@ -179,6 +223,28 @@ watch(selectedId, fetchRecords)
               <div>{{ r.refunded_at?.slice(0, 10) }} ・ {{ r.reason }}</div>
               <div class="pay-amount">-${{ formatNum(r.amount) }}</div>
             </div>
+
+            <!-- 收據動作 -->
+            <div class="receipt-actions">
+              <button
+                class="action-btn"
+                type="button"
+                @click="copyText(buildReceiptText(detail.record, detail.payments))"
+              >
+                📋 複製收據資訊
+              </button>
+              <button
+                v-if="detail.payments[0]?.receipt_no"
+                class="action-btn"
+                type="button"
+                @click="copyText(detail.payments[0].receipt_no)"
+              >
+                # 複製收據編號
+              </button>
+            </div>
+            <p class="receipt-hint">
+              如需正本紙本收據或對帳資訊，請聯絡園所行政。
+            </p>
           </template>
         </div>
       </div>
@@ -376,6 +442,31 @@ watch(selectedId, fetchRecords)
   color: #3f7d48;
 }
 
+.receipt-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+.action-btn {
+  flex: 1 1 140px;
+  padding: 10px;
+  background: #fff;
+  border: 1px solid #d0d0d0;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #2c3e50;
+  cursor: pointer;
+}
+.action-btn:active {
+  background: #f0f2f5;
+}
+.receipt-hint {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: #888;
+  text-align: center;
+}
 .pay-receipt {
   grid-column: 1 / -1;
   color: #aaa;

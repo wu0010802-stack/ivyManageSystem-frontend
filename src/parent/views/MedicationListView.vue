@@ -2,15 +2,17 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useChildrenStore } from '../stores/children'
+import { useChildSelection } from '../composables/useChildSelection'
+import ChildSelector from '../components/ChildSelector.vue'
 import { listMedicationOrders } from '../api/medications'
 import { toast } from '../utils/toast'
 import { todayISO } from '@/utils/format'
 
 const router = useRouter()
 const childrenStore = useChildrenStore()
+const { selectedId: selectedStudentId, ensureSelected } = useChildSelection()
 const items = ref([])
 const loading = ref(false)
-const selectedStudentId = ref(null)
 
 const STATUS_LABEL = {
   pending: '待餵',
@@ -43,9 +45,7 @@ async function fetchData() {
 
 onMounted(async () => {
   await childrenStore.load()
-  if ((childrenStore.items || []).length > 0) {
-    selectedStudentId.value = childrenStore.items[0].student_id
-  }
+  ensureSelected(childrenStore.items)
 })
 
 watch(selectedStudentId, fetchData, { immediate: true })
@@ -74,12 +74,8 @@ const today = todayISO()
 
 <template>
   <div class="med-list">
+    <ChildSelector />
     <div class="header-row">
-      <select v-model="selectedStudentId" class="child-select">
-        <option v-for="c in childrenStore.items || []" :key="c.student_id" :value="c.student_id">
-          {{ c.name }}
-        </option>
-      </select>
       <button class="new-btn" @click="goNew">+ 新增</button>
     </div>
 
@@ -117,8 +113,7 @@ const today = todayISO()
 
 <style scoped>
 .med-list { padding: 16px; }
-.header-row { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; }
-.child-select { flex: 1; padding: 8px; font-size: 14px; border: 1px solid #ccc; border-radius: 6px; }
+.header-row { display: flex; gap: 12px; align-items: center; justify-content: flex-end; margin-bottom: 12px; }
 .new-btn { padding: 8px 14px; background: #2c7be5; color: #fff; border: none; border-radius: 6px; font-size: 14px; }
 .hint { color: #888; padding: 24px 0; text-align: center; }
 .cards { display: flex; flex-direction: column; gap: 10px; }

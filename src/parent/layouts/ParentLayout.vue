@@ -18,11 +18,11 @@ const unreadMessages = ref(0)
 
 // Phase 3: Tab Bar 重排 — 請假 demote 到「更多」，新增「訊息」tab
 const TABS = [
-  { key: 'home', icon: '🏠', label: '首頁', path: '/home' },
-  { key: 'attendance', icon: '📋', label: '出席', path: '/attendance' },
-  { key: 'messages', icon: '💬', label: '訊息', path: '/messages' },
-  { key: 'announcements', icon: '📢', label: '公告', path: '/announcements' },
-  { key: 'more', icon: '⋯', label: '更多', path: '/more' },
+  { key: 'home', label: '首頁', path: '/home' },
+  { key: 'attendance', label: '出席', path: '/attendance' },
+  { key: 'messages', label: '訊息', path: '/messages' },
+  { key: 'announcements', label: '公告', path: '/announcements' },
+  { key: 'more', label: '更多', path: '/more' },
 ]
 
 async function refreshUnread() {
@@ -62,7 +62,65 @@ watch(() => route.fullPath, refreshUnread)
         :class="{ active: currentTab === t.key }"
       >
         <span class="tab-icon">
-          {{ t.icon }}
+          <svg
+            v-if="t.key === 'home'"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1h-5v-7h-6v7H4a1 1 0 0 1-1-1V9.5z" />
+          </svg>
+          <svg
+            v-else-if="t.key === 'attendance'"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <rect x="4" y="5" width="16" height="16" rx="2" />
+            <path d="M16 3v4M8 3v4M4 11h16M8 15h2M14 15h2M8 18h2M14 18h2" />
+          </svg>
+          <svg
+            v-else-if="t.key === 'messages'"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+          </svg>
+          <svg
+            v-else-if="t.key === 'announcements'"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M3 11l18-8v18l-18-8v-2z" />
+            <path d="M11 14l1 6h3l-1-6" />
+          </svg>
+          <svg
+            v-else-if="t.key === 'more'"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <circle cx="5" cy="12" r="1.5" />
+            <circle cx="12" cy="12" r="1.5" />
+            <circle cx="19" cy="12" r="1.5" />
+          </svg>
           <span v-if="t.key === 'announcements' && unread > 0" class="badge">
             {{ unread > 99 ? '99+' : unread }}
           </span>
@@ -145,9 +203,18 @@ watch(() => route.fullPath, refreshUnread)
 }
 
 .tab-icon {
-  font-size: 20px;
   position: relative;
   line-height: 1;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tab-icon svg {
+  width: 22px;
+  height: 22px;
 }
 
 .tab-label {

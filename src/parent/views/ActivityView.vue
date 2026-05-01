@@ -1,6 +1,8 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useChildrenStore } from '../stores/children'
+import { useChildSelection } from '../composables/useChildSelection'
+import ChildSelector from '../components/ChildSelector.vue'
 import {
   listCourses,
   myRegistrations,
@@ -10,6 +12,7 @@ import {
 import { toast } from '../utils/toast'
 
 const childrenStore = useChildrenStore()
+const { selectedId, ensureSelected } = useChildSelection()
 const tab = ref('my') // my / new
 
 const courses = ref([])
@@ -30,6 +33,11 @@ const studentNameMap = computed(() => {
   const m = new Map()
   for (const c of childrenStore.items || []) m.set(c.student_id, c.name)
   return m
+})
+
+const filteredRegs = computed(() => {
+  if (!selectedId.value) return myRegs.value
+  return myRegs.value.filter((r) => r.student_id === selectedId.value)
 })
 
 const COURSE_STATUS = {
@@ -74,7 +82,7 @@ function openRegister() {
   // 預設帶入第一門課的學期
   const c0 = courses.value[0]
   form.value = {
-    student_id: childrenStore.items[0].student_id,
+    student_id: selectedId.value || childrenStore.items[0].student_id,
     school_year: c0.school_year,
     semester: c0.semester,
     course_ids: [],
@@ -136,6 +144,7 @@ async function onConfirmPromotion(reg, rc) {
 
 onMounted(async () => {
   await childrenStore.load()
+  ensureSelected(childrenStore.items)
   fetchMy()
   fetchCourses()
 })
@@ -143,6 +152,7 @@ onMounted(async () => {
 
 <template>
   <div class="activity-view">
+    <ChildSelector />
     <div class="tab-row">
       <button
         class="tab-btn"
@@ -157,9 +167,9 @@ onMounted(async () => {
     </div>
 
     <template v-if="tab === 'my'">
-      <div v-if="!loading && myRegs.length === 0" class="empty">尚無報名</div>
+      <div v-if="!loading && filteredRegs.length === 0" class="empty">尚無報名</div>
       <div
-        v-for="reg in myRegs"
+        v-for="reg in filteredRegs"
         :key="reg.id"
         class="reg-card"
       >

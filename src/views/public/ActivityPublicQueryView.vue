@@ -25,51 +25,108 @@
       <!-- 搜尋區 -->
       <section class="search-section">
         <div class="search-box">
-          <div class="field-group">
-            <label for="searchName">幼兒姓名 <span class="required-mark">*</span></label>
-            <input
-              id="searchName"
-              v-model="queryForm.name"
-              type="text"
-              class="input-text"
-              :class="{ valid: nameValid, invalid: nameTouched && !nameValid }"
-              placeholder="請輸入幼兒姓名"
-              @keyup.enter="handleQuery"
-              @blur="nameTouched = true"
-            />
-            <div v-if="nameTouched && !nameValid" class="validation-msg error">請輸入幼兒姓名</div>
+          <div class="mode-tabs" role="tablist">
+            <button
+              type="button"
+              role="tab"
+              :aria-selected="queryMode === 'token'"
+              :class="['mode-tab', { active: queryMode === 'token' }]"
+              @click="queryMode = 'token'"
+            >查詢碼 + 手機</button>
+            <button
+              type="button"
+              role="tab"
+              :aria-selected="queryMode === 'fields'"
+              :class="['mode-tab', { active: queryMode === 'fields' }]"
+              @click="queryMode = 'fields'"
+            >姓名 + 生日 + 手機</button>
           </div>
-          <div class="field-group">
-            <label for="searchBirthday">幼兒生日 <span class="required-mark">*</span></label>
-            <input
-              id="searchBirthday"
-              v-model="queryForm.birthday"
-              type="date"
-              class="input-text"
-              :class="{ valid: birthdayValid, invalid: birthdayTouched && !birthdayValid }"
-              @blur="birthdayTouched = true"
-            />
-            <div v-if="birthdayTouched && !birthdayValid" class="validation-msg error">
-              {{ birthdayErrorMsg }}
+
+          <template v-if="queryMode === 'token'">
+            <div class="field-group">
+              <label for="searchToken">查詢碼 <span class="required-mark">*</span></label>
+              <input
+                id="searchToken"
+                v-model="queryForm.token"
+                type="text"
+                class="input-text"
+                :class="{ valid: tokenValid, invalid: tokenTouched && !tokenValid }"
+                placeholder="請貼上報名後收到的查詢碼"
+                autocomplete="off"
+                @keyup.enter="handleQuery"
+                @blur="tokenTouched = true"
+              />
+              <div v-if="tokenTouched && !tokenValid" class="validation-msg error">
+                請輸入查詢碼
+              </div>
             </div>
-          </div>
-          <div class="field-group">
-            <label for="searchPhone">家長手機 <span class="required-mark">*</span></label>
-            <input
-              id="searchPhone"
-              v-model="queryForm.parent_phone"
-              type="tel"
-              class="input-text"
-              :class="{ valid: phoneValid, invalid: phoneTouched && !phoneValid }"
-              placeholder="09xx-xxx-xxx"
-              maxlength="15"
-              @keyup.enter="handleQuery"
-              @blur="phoneTouched = true"
-            />
-            <div v-if="phoneTouched && !phoneValid" class="validation-msg error">
-              請輸入 09 開頭的 10 碼手機號碼
+            <div class="field-group">
+              <label for="searchPhone">家長手機 <span class="required-mark">*</span></label>
+              <input
+                id="searchPhone"
+                v-model="queryForm.parent_phone"
+                type="tel"
+                class="input-text"
+                :class="{ valid: phoneValid, invalid: phoneTouched && !phoneValid }"
+                placeholder="09xx-xxx-xxx"
+                maxlength="15"
+                @keyup.enter="handleQuery"
+                @blur="phoneTouched = true"
+              />
+              <div v-if="phoneTouched && !phoneValid" class="validation-msg error">
+                請輸入 09 開頭的 10 碼手機號碼
+              </div>
             </div>
-          </div>
+          </template>
+
+          <template v-else>
+            <div class="field-group">
+              <label for="searchName">幼兒姓名 <span class="required-mark">*</span></label>
+              <input
+                id="searchName"
+                v-model="queryForm.name"
+                type="text"
+                class="input-text"
+                :class="{ valid: nameValid, invalid: nameTouched && !nameValid }"
+                placeholder="請輸入幼兒姓名"
+                @keyup.enter="handleQuery"
+                @blur="nameTouched = true"
+              />
+              <div v-if="nameTouched && !nameValid" class="validation-msg error">請輸入幼兒姓名</div>
+            </div>
+            <div class="field-group">
+              <label for="searchBirthday">幼兒生日 <span class="required-mark">*</span></label>
+              <input
+                id="searchBirthday"
+                v-model="queryForm.birthday"
+                type="date"
+                class="input-text"
+                :class="{ valid: birthdayValid, invalid: birthdayTouched && !birthdayValid }"
+                @blur="birthdayTouched = true"
+              />
+              <div v-if="birthdayTouched && !birthdayValid" class="validation-msg error">
+                {{ birthdayErrorMsg }}
+              </div>
+            </div>
+            <div class="field-group">
+              <label for="searchPhoneFields">家長手機 <span class="required-mark">*</span></label>
+              <input
+                id="searchPhoneFields"
+                v-model="queryForm.parent_phone"
+                type="tel"
+                class="input-text"
+                :class="{ valid: phoneValid, invalid: phoneTouched && !phoneValid }"
+                placeholder="09xx-xxx-xxx"
+                maxlength="15"
+                @keyup.enter="handleQuery"
+                @blur="phoneTouched = true"
+              />
+              <div v-if="phoneTouched && !phoneValid" class="validation-msg error">
+                請輸入 09 開頭的 10 碼手機號碼
+              </div>
+            </div>
+          </template>
+
           <button
             type="button"
             class="btn btn-primary btn-block"
@@ -297,8 +354,10 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import {
   publicQueryRegistration,
+  publicQueryByToken,
   publicUpdateRegistration,
   publicConfirmPromotion,
   publicDeclinePromotion,
@@ -318,13 +377,20 @@ const { courses, supplies, classes, loadOptions } = usePublicActivityOptions()
 const { availability, refresh: refreshAvailability, startPolling, stopPolling } =
   useActivityAvailability()
 
-const queryForm = reactive({ name: '', birthday: '', parent_phone: '' })
+// 查詢模式：'token' 用查詢碼+手機（Phase 3）；'fields' 用姓名+生日+手機（向後相容）
+// 預設 'fields'（最小驚訝：既有家長進來看到熟悉 UI）；URL 帶 ?token= 時 onMounted 切到 token 模式
+const route = useRoute()
+const queryMode = ref('fields')
+
+const queryForm = reactive({ token: '', name: '', birthday: '', parent_phone: '' })
 const queryLoading = ref(false)
 const queryResult = ref(null)
 const searchError = ref('')
 const nameTouched = ref(false)
 const birthdayTouched = ref(false)
 const phoneTouched = ref(false)
+const tokenTouched = ref(false)
+const tokenValid = computed(() => queryForm.token.trim().length >= 8)
 
 const TW_MOBILE_RE = /^09\d{8}$/
 function normalizeMobile(raw) {
@@ -534,10 +600,35 @@ async function handleDeclinePromotion(item) {
 }
 
 async function handleQuery() {
+  // 兩種模式分流驗證 + 不同 API
+  phoneTouched.value = true
+  if (!phoneValid.value) return
+
+  if (queryMode.value === 'token') {
+    tokenTouched.value = true
+    if (!tokenValid.value) return
+    queryLoading.value = true
+    searchError.value = ''
+    queryResult.value = null
+    try {
+      const res = await publicQueryByToken(
+        queryForm.token.trim(),
+        normalizeMobile(queryForm.parent_phone),
+      )
+      hydrateResult(res.data)
+    } catch (err) {
+      searchError.value = err.response?.data?.detail
+        || '查無對應報名，請確認查詢碼與手機號碼是否正確。'
+    } finally {
+      queryLoading.value = false
+    }
+    return
+  }
+
+  // 三欄模式（fields）— 向後相容
   nameTouched.value = true
   birthdayTouched.value = true
-  phoneTouched.value = true
-  if (!nameValid.value || !birthdayValid.value || !phoneValid.value) return
+  if (!nameValid.value || !birthdayValid.value) return
 
   queryLoading.value = true
   searchError.value = ''
@@ -567,6 +658,21 @@ function hydrateResult(data) {
     : []
   editForm.new_parent_phone = ''
   newPhoneTouched.value = false
+}
+
+// 用當前 mode 重新查一次（給 stale 409 / 儲存後 refresh 共用）
+async function refetchCurrent(phoneOverride) {
+  const phone = phoneOverride || normalizeMobile(queryForm.parent_phone)
+  if (queryMode.value === 'token' && queryForm.token) {
+    const r = await publicQueryByToken(queryForm.token.trim(), phone)
+    return r.data
+  }
+  const r = await publicQueryRegistration(
+    queryResult.value?.name || queryForm.name.trim(),
+    queryResult.value?.birthday || queryForm.birthday,
+    phone,
+  )
+  return r.data
 }
 
 async function handleSaveChanges() {
@@ -611,22 +717,36 @@ async function handleSaveChanges() {
     if (phoneWillChange) {
       payload.new_parent_phone = newPhoneRaw
     }
+    // 樂觀鎖：把當前查詢回來的 updated_at 帶回去，後端比對不符即拒（409）
+    if (queryResult.value.updated_at) {
+      payload.if_unmodified_since = queryResult.value.updated_at
+    }
     const res = await publicUpdateRegistration(payload)
 
     showToast(res?.data?.message || '資料更新成功！', 'success')
-    // 若家長已更新電話，後續查詢需用新號碼，同步回填查詢表單
-    const effectivePhone = phoneWillChange ? newPhoneRaw : oldPhone
     if (phoneWillChange) {
       queryForm.parent_phone = newPhoneRaw
     }
-    const refreshed = await publicQueryRegistration(
-      queryResult.value.name,
-      queryResult.value.birthday || queryForm.birthday,
-      effectivePhone
-    )
-    hydrateResult(refreshed.data)
+    // 後端 update response 已含完整 registration（含 field_state 與新 updated_at），
+    // 直接 hydrate 即可，不需再打一次 publicQueryRegistration。
+    hydrateResult(res.data)
   } catch (err) {
-    showToast(err.response?.data?.detail || '更新失敗', 'error')
+    const status = err.response?.status
+    const detail = err.response?.data?.detail
+    // 409 stale：資料已被校方更新。提示家長 + 自動重抓最新狀態，但不自動重送
+    // （家長要重新確認新狀態下的修改是否仍合理）。
+    if (status === 409 && typeof detail === 'string' && detail.includes('資料已被校方更新')) {
+      showToast('資料已被校方更新，已為您重新整理最新狀態', 'warning', 6000)
+      // stale 時 update 並未成功，後端 reg.parent_phone 仍是舊號，重新查詢用 oldPhone
+      try {
+        const refreshed = await refetchCurrent(oldPhone)
+        hydrateResult(refreshed)
+      } catch (refreshErr) {
+        showToast(refreshErr.response?.data?.detail || '重新整理失敗，請手動重新查詢', 'error')
+      }
+      return
+    }
+    showToast(detail || '更新失敗', 'error')
   } finally {
     editSubmitting.value = false
   }
@@ -638,11 +758,34 @@ function closeWindow() {
 
 // Clear error once user edits inputs again
 watch(
-  () => [queryForm.name, queryForm.birthday, queryForm.parent_phone],
+  () => [queryForm.token, queryForm.name, queryForm.birthday, queryForm.parent_phone, queryMode.value],
   () => { searchError.value = '' }
 )
 
+// 編修連結上的 ?token= 會出現在 referer / 連結預覽縮圖等周邊；加 noindex 與
+// no-referrer，避免搜尋引擎索引 / 點外連結時把 token 帶到第三方站。
+function applyTokenPagePrivacyMeta() {
+  const ensureMeta = (name, content) => {
+    let m = document.head.querySelector(`meta[name="${name}"]`)
+    if (!m) {
+      m = document.createElement('meta')
+      m.setAttribute('name', name)
+      document.head.appendChild(m)
+    }
+    m.setAttribute('content', content)
+  }
+  ensureMeta('robots', 'noindex,nofollow')
+  ensureMeta('referrer', 'no-referrer')
+}
+
 onMounted(async () => {
+  applyTokenPagePrivacyMeta()
+  // URL ?token= 直接帶入 token 模式（家長從報名 success 頁的編修連結進來的常見情境）
+  const tokenFromUrl = typeof route.query.token === 'string' ? route.query.token.trim() : ''
+  if (tokenFromUrl) {
+    queryForm.token = tokenFromUrl
+    queryMode.value = 'token'
+  }
   try {
     await Promise.all([loadOptions(), refreshAvailability()])
     startPolling(30000)
@@ -727,6 +870,35 @@ onBeforeUnmount(() => {
   border-bottom: 1px solid var(--color-border);
 }
 .search-box { max-width: 520px; margin: 0 auto; }
+
+.mode-tabs {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-5);
+  padding: 4px;
+  background: var(--color-surface-muted);
+  border-radius: var(--radius-md);
+}
+.mode-tab {
+  flex: 1;
+  min-height: 40px;
+  padding: 8px 12px;
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  background: transparent;
+  border: 1.5px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--dur-fast), color var(--dur-fast);
+}
+.mode-tab.active {
+  color: var(--color-primary);
+  background: var(--color-surface);
+  border-color: var(--color-primary);
+}
+.mode-tab:not(.active):hover { background: var(--color-surface); }
 
 .result-section { padding: var(--space-6); }
 

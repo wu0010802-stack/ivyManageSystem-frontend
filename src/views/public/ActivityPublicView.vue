@@ -131,6 +131,35 @@
           </div>
           <p class="summary-final-note">本金額不含候補課程；實際金額以園方確認後通知為準。</p>
 
+          <div v-if="successModal.queryToken" class="success-token-box">
+            <div class="token-title">查詢 / 編修專用連結</div>
+            <p class="token-hint">
+              請<strong>妥善保存以下查詢碼</strong>，後續查詢或修改報名資料時可免去輸入姓名/生日，僅需查詢碼 + 家長手機。
+            </p>
+            <div class="token-row">
+              <span class="token-label">查詢碼</span>
+              <code class="token-value">{{ successModal.queryToken }}</code>
+              <button
+                type="button"
+                class="btn-copy"
+                @click="copyToClipboard(successModal.queryToken, '查詢碼')"
+              >複製</button>
+            </div>
+            <div class="token-row">
+              <span class="token-label">編修連結</span>
+              <a class="token-link" :href="successModal.editUrl" target="_blank" rel="noopener">
+                {{ successModal.editUrl }}
+              </a>
+              <button
+                type="button"
+                class="btn-copy"
+                @click="copyToClipboard(successModal.editUrl, '連結')"
+              >複製</button>
+            </div>
+            <div v-if="successModal.copyHint" class="token-copy-hint">{{ successModal.copyHint }}</div>
+            <p class="token-warn">⚠ 連結含個資識別碼，請勿轉傳他人。</p>
+          </div>
+
           <button type="button" class="btn btn-primary btn-block" @click="closeSuccessModal">完成</button>
         </div>
       </div>
@@ -813,6 +842,10 @@ const successModal = reactive({
   waitlistCourses: [], // [{ name, price }]
   selectedSupplies: [], // [{ name, price }]
   totalAmount: 0,
+  // Phase 3：查詢碼 / 編修連結（後端 register response 一次性回，不再重發）
+  queryToken: '',
+  editUrl: '',
+  copyHint: '',
 })
 
 function priceOf(name, source) {
@@ -820,7 +853,7 @@ function priceOf(name, source) {
   return Number(item?.price) || 0
 }
 
-function buildSuccessSummary({ name, parentPhone, message, waitlisted, waitlistCourses }) {
+function buildSuccessSummary({ name, parentPhone, message, waitlisted, waitlistCourses, queryToken }) {
   const waitlistSet = new Set(waitlistCourses || [])
   const enrolledCourses = []
   const waitlistOnes = []
@@ -851,7 +884,24 @@ function buildSuccessSummary({ name, parentPhone, message, waitlisted, waitlistC
   successModal.waitlistCourses = waitlistOnes
   successModal.selectedSupplies = supplyItems
   successModal.totalAmount = total
+  // 編修連結由前端用 window.location.origin 組（後端不知道 frontend host）
+  successModal.queryToken = queryToken || ''
+  successModal.editUrl = queryToken
+    ? `${window.location.origin}/public/activity/query?token=${encodeURIComponent(queryToken)}`
+    : ''
+  successModal.copyHint = ''
   successModal.visible = true
+}
+
+async function copyToClipboard(text, label) {
+  try {
+    await navigator.clipboard.writeText(text)
+    successModal.copyHint = `已複製${label}`
+    setTimeout(() => { successModal.copyHint = '' }, 2500)
+  } catch {
+    successModal.copyHint = '複製失敗，請手動長按文字選取'
+    setTimeout(() => { successModal.copyHint = '' }, 4000)
+  }
 }
 
 function closeSuccessModal() {
@@ -968,6 +1018,7 @@ async function handleSubmitRegistration() {
       message: result.message || '報名資料已送出',
       waitlisted: result.waitlisted,
       waitlistCourses: Array.isArray(result.waitlist_courses) ? result.waitlist_courses : [],
+      queryToken: result.query_token,
     })
     showToast(result.message || '報名送出成功！', 'success')
     resetForm()
@@ -1741,6 +1792,80 @@ onUnmounted(() => {
   color: var(--color-text-subtle);
   text-align: center;
   line-height: 1.5;
+}
+
+/* Phase 3 查詢碼/編修連結 */
+.success-token-box {
+  margin: var(--space-4) 0;
+  padding: var(--space-4);
+  background: var(--color-primary-soft);
+  border: 1.5px solid var(--color-primary);
+  border-radius: var(--radius-md);
+}
+.token-title {
+  font-weight: 700;
+  color: var(--color-primary);
+  margin-bottom: var(--space-2);
+}
+.token-hint {
+  margin: 0 0 var(--space-3);
+  font-size: var(--fs-sm);
+  color: var(--color-text-muted);
+  line-height: 1.6;
+}
+.token-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-muted);
+  border-radius: var(--radius-sm);
+}
+.token-label {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--color-text-subtle);
+  min-width: 64px;
+}
+.token-value {
+  flex: 1;
+  font-family: monospace;
+  font-size: var(--fs-sm);
+  color: var(--color-text);
+  word-break: break-all;
+}
+.token-link {
+  flex: 1;
+  font-size: var(--fs-xs);
+  color: var(--color-primary);
+  word-break: break-all;
+  text-decoration: underline;
+}
+.btn-copy {
+  padding: 4px 12px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--color-primary-contrast);
+  background: var(--color-primary);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.btn-copy:hover { background: var(--color-primary-hover); }
+.token-copy-hint {
+  margin: var(--space-1) 0 var(--space-2);
+  font-size: var(--fs-xs);
+  color: var(--color-success);
+  text-align: center;
+}
+.token-warn {
+  margin: var(--space-2) 0 0;
+  font-size: var(--fs-xs);
+  color: var(--color-warning);
+  font-weight: 600;
 }
 .modal-header {
   display: flex;

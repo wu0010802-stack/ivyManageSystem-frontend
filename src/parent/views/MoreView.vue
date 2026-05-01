@@ -11,14 +11,30 @@ const childrenStore = useChildrenStore()
 
 const me = ref(null)
 
-const items = [
-  { icon: '📝', title: '請假', path: '/leaves' },
-  { icon: '💰', title: '費用查詢', path: '/fees' },
-  { icon: '📅', title: '事件簽閱', path: '/events' },
-  { icon: '💊', title: '用藥單', path: '/medications' },
-  { icon: '🎨', title: '才藝課', path: '/activity' },
-  { icon: '🔔', title: '通知偏好', path: '/notifications/preferences' },
-  { icon: '➕', title: '加綁子女', path: '/bind-additional' },
+const groups = [
+  {
+    title: '孩子與園所',
+    items: [
+      { icon: '📅', title: '本週行程', path: '/calendar' },
+      { icon: '📝', title: '請假', path: '/leaves' },
+      { icon: '💊', title: '用藥單', path: '/medications' },
+      { icon: '🎨', title: '才藝課', path: '/activity' },
+    ],
+  },
+  {
+    title: '財務與簽閱',
+    items: [
+      { icon: '💰', title: '費用查詢', path: '/fees' },
+      { icon: '📅', title: '事件簽閱', path: '/events' },
+    ],
+  },
+  {
+    title: '帳號設定',
+    items: [
+      { icon: '🔔', title: '通知偏好', path: '/notifications/preferences' },
+      { icon: '➕', title: '加綁子女', path: '/bind-additional' },
+    ],
+  },
 ]
 
 async function handleLogout() {
@@ -51,17 +67,20 @@ onMounted(async () => {
       </div>
     </div>
 
-    <div class="menu-card">
-      <router-link
-        v-for="item in items"
-        :key="item.path"
-        :to="item.path"
-        class="menu-item"
-      >
-        <span class="icon">{{ item.icon }}</span>
-        <span class="title">{{ item.title }}</span>
-        <span class="arrow">›</span>
-      </router-link>
+    <div v-for="g in groups" :key="g.title" class="group">
+      <div class="group-title">{{ g.title }}</div>
+      <div class="menu-card">
+        <router-link
+          v-for="item in g.items"
+          :key="item.path"
+          :to="item.path"
+          class="menu-item"
+        >
+          <span class="icon">{{ item.icon }}</span>
+          <span class="title">{{ item.title }}</span>
+          <span class="arrow">›</span>
+        </router-link>
+      </div>
     </div>
 
     <button class="logout" @click="handleLogout">登出</button>
@@ -112,6 +131,18 @@ onMounted(async () => {
 
 .menu-card {
   overflow: hidden;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+}
+
+.group-title {
+  font-size: 12px;
+  color: #888;
+  margin: 4px 4px 6px;
+  letter-spacing: 0.5px;
 }
 
 .menu-item {

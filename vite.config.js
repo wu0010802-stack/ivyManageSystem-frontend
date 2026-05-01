@@ -11,6 +11,21 @@ function manualChunks(id) {
         return
     }
 
+    // 共用工具：admin & 家長兩端皆會引用、且不能依賴 element-plus / activity-admin。
+    // 必須先於 activity-admin / parent-app 規則，避免被 rollup 自動合併進
+    // activity-admin chunk（曾發生 parent.html 因 format.js 被合併而被迫載入
+    // activity-admin 整包的回歸）。
+    // ⚠ 只放 element-plus-free 的檔案；download.js / useConfirmDelete.js 等用 ElMessage
+    // 的檔案不能放進來，否則家長 bundle 會被迫拉 element-plus chunk。
+    if (
+        id.includes('/src/utils/format.js') ||
+        id.includes('/src/utils/apiDedupe.js') ||
+        id.includes('/src/composables/useCachedAsync.js') ||
+        id.includes('/src/components/common/MobileErrorRetry.vue')
+    ) {
+        return 'shared-common'
+    }
+
     if (
         id.includes('/src/views/activity/') ||
         id.includes('/src/api/activity.js') ||
@@ -98,6 +113,8 @@ export default defineConfig({
                     'assets/main-*.js',
                     'assets/vue-core-*.js',
                     'assets/vendor-*.js',
+                    'assets/shared-common-*.js',
+                    'assets/shared-common-*.css',
                     '*.{ico,svg}',
                 ],
                 // 排除大型 PWA 圖示（由 manifest 按需載入）與 chart-vendor
