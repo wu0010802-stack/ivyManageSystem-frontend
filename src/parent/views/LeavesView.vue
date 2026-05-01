@@ -22,16 +22,17 @@ const showForm = ref(false)
 const submitting = ref(false)
 
 const STATUS_LABEL = {
-  pending: '審核中',
-  approved: '已核准',
-  rejected: '已駁回',
+  approved: '已成立',
   cancelled: '已取消',
+  // 相容歷史資料（migration 跑前的紀錄）
+  pending: '已成立',
+  rejected: '已成立',
 }
 const STATUS_COLOR = {
-  pending: { bg: '#fff4e6', color: '#a25e0a' },
   approved: { bg: '#e6f4ea', color: '#2d6a3a' },
-  rejected: { bg: '#fde8e8', color: '#a51c1c' },
   cancelled: { bg: '#f0f2f5', color: '#666' },
+  pending: { bg: '#e6f4ea', color: '#2d6a3a' },
+  rejected: { bg: '#e6f4ea', color: '#2d6a3a' },
 }
 
 const todayStr = todayISO()
@@ -121,14 +122,9 @@ function attUrl(att) {
 const TIMELINE_STEPS = [
   { key: 'created', label: '已送出', match: () => true },
   {
-    key: 'reviewed',
-    label: '校方審核',
-    match: (item) => !!item.reviewed_at,
-  },
-  {
     key: 'final',
-    label: '完成',
-    match: (item) => ['approved', 'rejected', 'cancelled'].includes(item.status),
+    label: '已成立',
+    match: (item) => ['approved', 'cancelled'].includes(item.status),
   },
 ]
 
@@ -189,7 +185,7 @@ async function submit() {
       end_date: form.value.end_date,
       reason: form.value.reason.trim() || null,
     })
-    toast.success('已送出申請')
+    toast.success('請假已成立')
     showForm.value = false
     fetchData()
   } catch (err) {
@@ -248,7 +244,11 @@ onMounted(async () => {
       </div>
       <div v-if="item.reason" class="leave-reason">原因：{{ item.reason }}</div>
       <div v-if="item.review_note" class="leave-review">校方備註：{{ item.review_note }}</div>
-      <div class="leave-actions" v-if="item.status === 'pending'" @click.stop>
+      <div
+        class="leave-actions"
+        v-if="item.status === 'approved' && item.start_date > todayStr"
+        @click.stop
+      >
         <button class="cancel-btn" @click="onCancel(item)">取消申請</button>
       </div>
     </div>
@@ -295,8 +295,11 @@ onMounted(async () => {
           </div>
 
           <h4 class="section-h">佐證附件</h4>
-          <p v-if="detail.status !== 'pending'" class="detail-hint">
-            審核已啟動或結案，無法新增/刪除附件。
+          <p
+            v-if="!(detail.status === 'approved' && detail.start_date > todayStr)"
+            class="detail-hint"
+          >
+            請假已成立或已開始，無法新增/刪除附件。
           </p>
           <div v-if="detail.attachments?.length" class="att-list">
             <div v-for="a in detail.attachments" :key="a.id" class="att-row">
@@ -304,14 +307,17 @@ onMounted(async () => {
                 📎 {{ a.original_filename || `附件 #${a.id}` }}
               </a>
               <button
-                v-if="detail.status === 'pending'"
+                v-if="detail.status === 'approved' && detail.start_date > todayStr"
                 class="att-del"
                 @click="removeAttachment(a)"
               >刪除</button>
             </div>
           </div>
           <div v-else class="att-empty">尚未上傳任何附件</div>
-          <label v-if="detail.status === 'pending'" class="upload-btn">
+          <label
+            v-if="detail.status === 'approved' && detail.start_date > todayStr"
+            class="upload-btn"
+          >
             <input
               type="file"
               accept="image/*,.pdf,.heic,.heif"
