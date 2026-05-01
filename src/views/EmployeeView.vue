@@ -7,6 +7,7 @@ import {
   listEmployeeEducations, createEmployeeEducation, updateEmployeeEducation, deleteEmployeeEducation,
   listEmployeeCertificates, createEmployeeCertificate, updateEmployeeCertificate, deleteEmployeeCertificate,
   listEmployeeContracts, createEmployeeContract, updateEmployeeContract, deleteEmployeeContract,
+  updateEmployeeBasic, updateEmployeeSalary,
 } from '@/api/employees'
 import { getRecords as getAttendanceRecords, uploadCsv, deleteEmployeeDateRecord } from '@/api/attendance'
 import { getPositionSalary } from '@/api/config'
@@ -19,7 +20,7 @@ import { useClassroomStore } from '@/stores/classroom'
 import { useConfigStore } from '@/stores/config'
 import { useCrudDialog, useConfirmDelete } from '@/composables'
 import { downloadFile } from '@/utils/download'
-import { apiError } from '@/utils/error'
+import { apiError, mapEmployeeError } from '@/utils/error'
 import {
   POSITION_OPTIONS,
   SUPERVISOR_ROLE_OPTIONS,
@@ -30,6 +31,13 @@ import {
   CONTRACT_TYPE_OPTIONS,
   EMPLOYEE_TYPE_OPTIONS,
 } from '@/constants/employee'
+import { hasPermission, getUserInfo } from '@/utils/auth'
+import { useEmployeeFormDirty } from '@/composables/useEmployeeFormDirty'
+import { BASIC_TAB_FIELDS, SALARY_TAB_FIELDS } from '@/constants/employeeFields'
+import { validateInsuranceVsBase } from '@/validators/employeeForm'
+import EmployeeFormBasic from '@/components/employee/EmployeeFormBasic.vue'
+import EmployeeFormSalary from '@/components/employee/EmployeeFormSalary.vue'
+import EmployeeChangesPreviewDialog from '@/components/employee/EmployeeChangesPreviewDialog.vue'
 
 const employeeStore = useEmployeeStore()
 const classroomStore = useClassroomStore()
@@ -42,6 +50,10 @@ const loading = ref(false)
 const currentDetail = ref({})
 const detailDialogVisible = ref(false)
 const formRef = ref(null)
+
+// ── 權限 ──────────────────────────────────────────────
+const canWriteEmployees = computed(() => hasPermission('EMPLOYEES_WRITE'))
+const canWriteSalary = computed(() => hasPermission('SALARY_WRITE'))
 
 const rules = {
   employee_id: [{ required: true, message: '請輸入員工編號', trigger: 'blur' }],
@@ -96,6 +108,48 @@ const form = reactive({
   work_end_time: '17:00'
 })
 
+// ── 編輯 dialog tab + dirty tracking ─────────────────
+const activeTab = ref('basic')
+const { reset: resetDirty, basicDirty, salaryDirty } = useEmployeeFormDirty(form, BASIC_TAB_FIELDS, SALARY_TAB_FIELDS)
+
+// ── 薪資變更預覽對話框 ────────────────────────────────
+const previewDialog = reactive({
+  visible: false, title: '', changes: {}, requireConfirm: false, onConfirm: null,
+})
+
+// ── 自動建議薪資 ──────────────────────────────────────
+const dismissedSuggestion = ref(false)
+const insuranceError = computed(() =>
+  validateInsuranceVsBase(form.insurance_salary_level, form.base_salary, form.employee_type)
+)
+
+// ── 欄位標籤（預覽對話框用）──────────────────────────
+const FIELD_LABELS = {
+  name: '姓名', phone: '電話', address: '地址',
+  base_salary: '底薪', hourly_rate: '時薪',
+  insurance_salary_level: '投保級距', pension_self_rate: '勞退自提',
+  bank_code: '銀行代碼', bank_account: '銀行帳號',
+  bank_account_name: '戶名', birthday: '生日',
+  job_title_id: '教育局系統', position: '職位',
+  classroom_id: '班級', hire_date: '到職日',
+  employee_type: '員工類型', supervisor_role: '主管職務',
+  bonus_grade: '獎金等級',
+  emergency_contact_name: '緊急聯絡人',
+  emergency_contact_phone: '緊急聯絡電話',
+  department: '部門', dependents: '眷屬人數',
+  probation_end_date: '試用期截止',
+  work_start_time: '上班時間', work_end_time: '下班時間',
+  id_number: '身分證字號',
+}
+
+const dirtyToPayload = (diff) =>
+  Object.fromEntries(Object.entries(diff).map(([k, v]) => [k, v.after]))
+
+const showError = (err) => {
+  const m = mapEmployeeError(err)
+  ElMessage({ type: m.type || 'error', message: m.message, duration: 5000 })
+}
+
 const bureauJobTitleOptions = computed(() => {
   const titles = configStore.jobTitles || []
   const titleMap = new Map(titles.map(item => [item.name, item]))
@@ -113,10 +167,8 @@ const bureauJobTitleOptions = computed(() => {
 
 // 用於區分「載入舊資料」vs「使用者手動修改」，避免 populateForm 觸發連動
 let _populatingForm = false
-// 用於防止 Watch 1 改變 base_salary 時連動觸發 Watch 2
-let _bulkUpdating = false
 
-// 根據職稱 + 職位 + bonus_grade 計算並自動套用標準底薪
+// 根據職稱 + 職位 + bonus_grade 計算建議薪資（不再自動寫入 form，改由 banner 讓使用者手動套用）
 watch([() => form.job_title_id, () => form.position, () => form.bonus_grade], () => {
   if (!positionSalaryConfig.value) { suggestedSalary.value = null; return }
   const role = detectRole(form.position)
@@ -130,18 +182,29 @@ watch([() => form.job_title_id, () => form.position, () => form.bonus_grade], ()
     salary = key ? (positionSalaryConfig.value[key] ?? null) : null
   }
   suggestedSalary.value = salary
-  if (salary !== null) {
-    _bulkUpdating = true
-    form.base_salary = salary
-    nextTick(() => { _bulkUpdating = false })
-  }
+  // 職稱/職位/獎金等級變動時重置 dismiss 狀態，讓 banner 重新顯示
+  dismissedSuggestion.value = false
 })
 
-// 基本薪資變動時自動連動投保級距（排除 populateForm 載入與 Watch 1 的連動觸發）
-watch(() => form.base_salary, (val) => {
-  if (_bulkUpdating || _populatingForm) return
-  form.insurance_salary_level = val
-})
+// pendingSuggestion：建議薪資存在、未被 dismiss、且與目前 base_salary 不同
+const pendingSuggestion = computed(() =>
+  !dismissedSuggestion.value
+  && suggestedSalary.value !== null
+  && suggestedSalary.value !== form.base_salary
+)
+
+// 套用建議薪資（同時寫 base_salary + insurance_salary_level，避免不一致）
+const applySuggestion = () => {
+  if (suggestedSalary.value === null) return
+  form.base_salary = suggestedSalary.value
+  form.insurance_salary_level = suggestedSalary.value
+  dismissedSuggestion.value = true
+}
+const dismissSuggestion = () => { dismissedSuggestion.value = true }
+// 手動同步：將投保級距對齊目前底薪
+const syncInsuranceToBase = () => {
+  form.insurance_salary_level = form.base_salary
+}
 
 // 查詢某員工對應的標準薪俸（詳情頁用）
 const standardSalaryFor = (emp) => {
@@ -289,10 +352,27 @@ const populateForm = (row) => {
   if (!form.insurance_salary_level || form.insurance_salary_level !== form.base_salary) {
     form.insurance_salary_level = form.base_salary
   }
-  nextTick(() => { _populatingForm = false })
+  // 重置 tab + dirty 快照 + suggestion dismiss
+  activeTab.value = 'basic'
+  dismissedSuggestion.value = false
+  nextTick(() => {
+    _populatingForm = false
+    resetDirty(form)
+  })
 }
 
 const { dialogVisible, isEdit, openCreate: handleAdd, openEdit: handleEdit, closeDialog } = useCrudDialog({ resetForm, populateForm })
+
+// ── 薪資自我編輯保護（需在 isEdit 宣告後）────────────
+const isSelfEdit = computed(() =>
+  isEdit.value && form.id === getUserInfo()?.employee_id
+)
+const isSalaryReadonly = computed(() => isSelfEdit.value || !canWriteSalary.value)
+const salaryReadonlyReason = computed(() => {
+  if (isSelfEdit.value) return '本人不可修改自己的薪資/投保資料，請由 HR 處理'
+  if (!canWriteSalary.value) return '無薪資編輯權限，僅可檢視'
+  return ''
+})
 
 const { confirmDelete: handleDelete, deleting: deleteLoading } = useConfirmDelete({
   endpoint: '/employees',
@@ -527,7 +607,8 @@ const handleDetail = async (row) => {
   }
 }
 
-const saveEmployee = async () => {
+// ── 新增流程（CREATE）────────────────────────────────
+const saveCreate = async () => {
   if (!formRef.value) return
   form.supervisor_role = form.supervisor_role || null
   form.bonus_grade = form.bonus_grade ? form.bonus_grade.toUpperCase() : null
@@ -536,21 +617,75 @@ const saveEmployee = async () => {
     return
   }
   await formRef.value.validate(async (valid) => {
-    if (valid) {
-      try {
-        if (isEdit.value) {
-          await updateEmployee(form.id, form)
-          ElMessage.success('員工資料已更新')
-        } else {
-          await createEmployee(form)
-          ElMessage.success('員工已新增')
-        }
-        closeDialog()
-        fetchEmployees()
-      } catch (error) {
-        ElMessage.error('操作失敗: ' + apiError(error, error.message))
-      }
+    if (!valid) return
+    try {
+      await createEmployee(form)
+      ElMessage.success('員工已新增')
+      closeDialog()
+      await fetchEmployees()
+    } catch (err) {
+      showError(err)
     }
+  })
+}
+
+// ── 基本資料更新（只送 dirty fields）────────────────
+const saveBasic = async () => {
+  const payload = dirtyToPayload(basicDirty.value)
+  if (Object.keys(payload).length === 0) {
+    ElMessage.info('無變動')
+    return
+  }
+  try {
+    await updateEmployeeBasic(form.id, payload)
+    ElMessage.success(`基本資料已更新（${Object.keys(payload).length} 個欄位）`)
+    await fetchEmployees()
+    resetDirty(form)
+  } catch (err) {
+    showError(err)
+  }
+}
+
+// ── 薪資更新（強制預覽確認 modal）────────────────────
+const submitSalary = async () => {
+  const payload = dirtyToPayload(salaryDirty.value)
+  if (Object.keys(payload).length === 0) {
+    ElMessage.info('無變動')
+    return
+  }
+  try {
+    await updateEmployeeSalary(form.id, payload)
+    ElMessage.success(`薪資資料已更新（${Object.keys(payload).length} 個欄位）`)
+    await fetchEmployees()
+    resetDirty(form)
+  } catch (err) {
+    showError(err)
+  }
+}
+
+const saveSalary = () => {
+  const diff = salaryDirty.value
+  if (Object.keys(diff).length === 0) {
+    ElMessage.info('無變動')
+    return
+  }
+  Object.assign(previewDialog, {
+    visible: true,
+    title: '薪資變更確認',
+    changes: diff,
+    requireConfirm: true,
+    onConfirm: submitSalary,
+  })
+}
+
+// ── 基本資料變更預覽（只看，不需 confirm）────────────
+const showBasicPreview = () => {
+  Object.assign(previewDialog, {
+    visible: true,
+    title: '基本資料變更預覽',
+    changes: basicDirty.value,
+    requireConfirm: false,
+    onConfirm: null,
   })
 }
 
@@ -593,12 +728,21 @@ onMounted(async () => {
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column fixed="right" label="操作" width="240">
+        <el-table-column fixed="right" label="操作" width="280">
           <template #default="scope">
             <el-button link type="primary" size="small" @click="handleDetail(scope.row)">詳情</el-button>
-            <el-button link type="primary" size="small" @click="handleEdit(scope.row)">編輯</el-button>
-            <el-button v-if="scope.row.is_active" link type="warning" size="small" @click="openOffboard(scope.row)">辦理離職</el-button>
-            <el-button link type="danger" size="small" @click="handleDelete(scope.row)" :loading="deleteLoading">刪除</el-button>
+            <el-tooltip
+              v-if="!canWriteEmployees"
+              content="需要員工管理編輯權限"
+              placement="top"
+            >
+              <span>
+                <el-button link type="primary" size="small" disabled>編輯</el-button>
+              </span>
+            </el-tooltip>
+            <el-button v-else link type="primary" size="small" @click="handleEdit(scope.row)">編輯</el-button>
+            <el-button v-if="canWriteEmployees && scope.row.is_active" link type="warning" size="small" @click="openOffboard(scope.row)">辦理離職</el-button>
+            <el-button v-if="canWriteEmployees" link type="danger" size="small" @click="handleDelete(scope.row)" :loading="deleteLoading">刪除</el-button>
           </template>
         </el-table-column>
         <template #empty>
@@ -616,224 +760,76 @@ onMounted(async () => {
       :fullscreen="isMobile"
     >
       <el-form :model="form" :rules="rules" ref="formRef" label-width="140px">
-        <el-tabs type="border-card">
-          <el-tab-pane label="基本資料">
-            <el-row :gutter="20">
-              <el-col :span="12">
-                <el-form-item label="員工編號" prop="employee_id">
-                  <el-input v-model="form.employee_id" placeholder="例: EMP001" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="12">
-                <el-form-item label="姓名" prop="name">
-                  <el-input v-model="form.name" />
-                </el-form-item>
-              </el-col>
-            </el-row>
-            <el-row :gutter="20">
-              <el-col :span="12">
-                <el-form-item label="教育局系統" prop="job_title_id">
-                  <el-select v-model="form.job_title_id" placeholder="請選擇教育局系統職稱" style="width: 100%">
-                    <el-option
-                      v-for="item in bureauJobTitleOptions"
-                      :key="item.id"
-                      :label="item.name"
-                      :value="item.id"
-                    />
-                  </el-select>
-                </el-form-item>
-              </el-col>
-              <el-col :span="12">
-                <el-form-item label="職位" prop="position">
-                  <el-select
-                    v-model="form.position"
-                    filterable
-                    allow-create
-                    default-first-option
-                    placeholder="選擇或輸入職位"
-                    style="width: 100%"
-                  >
-                    <el-option v-for="p in POSITION_OPTIONS" :key="p" :label="p" :value="p" />
-                  </el-select>
-                </el-form-item>
-              </el-col>
-            </el-row>
-            <el-row :gutter="20">
-              <el-col :span="12">
-                <el-form-item label="獎金等級覆蓋">
-                  <el-select v-model="form.bonus_grade" clearable filterable allow-create placeholder="自動（依教育局系統）" style="width: 100%">
-                    <el-option label="A 級（幼兒園教師）" value="A" />
-                    <el-option label="B 級（教保員）" value="B" />
-                    <el-option label="C 級（助理教保員）" value="C" />
-                  </el-select>
-                  <div style="font-size:12px;color:#909399;margin-top:4px">保留手動覆蓋用於特例調整；請輸入或選擇 A / B / C，空白表示依教育局系統自動判斷</div>
-                </el-form-item>
-              </el-col>
-              <el-col :span="12" v-if="suggestedSalary !== null">
-                <el-form-item label="標準底薪">
-                  <span style="font-size:14px;color:#909399">{{ suggestedSalary?.toLocaleString() }}（已自動套用）</span>
-                </el-form-item>
-              </el-col>
-            </el-row>
-            <el-row :gutter="20">
-              <el-col :span="12">
-                <el-form-item label="部門">
-                  <el-input v-model="form.department" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="12">
-                <el-form-item label="員工類型">
-                  <el-select v-model="form.employee_type" style="width: 100%">
-                    <el-option
-                      v-for="opt in EMPLOYEE_TYPE_OPTIONS"
-                      :key="opt.value"
-                      :label="opt.label"
-                      :value="opt.value"
-                    />
-                  </el-select>
-                </el-form-item>
-              </el-col>
-            </el-row>
-            <el-row :gutter="20">
-              <el-col :span="12">
-                <el-form-item label="到職日期">
-                  <el-date-picker v-model="form.hire_date" type="date" placeholder="選擇日期" style="width: 100%" value-format="YYYY-MM-DD" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="12">
-                <el-form-item label="試用期結束">
-                  <el-date-picker v-model="form.probation_end_date" type="date" placeholder="選擇日期" style="width: 100%" value-format="YYYY-MM-DD" clearable />
-                </el-form-item>
-              </el-col>
-            </el-row>
-            <el-row :gutter="20">
-              <el-col :span="12">
-                <el-form-item label="生日">
-                  <el-date-picker v-model="form.birthday" type="date" placeholder="選擇日期" style="width: 100%" value-format="YYYY-MM-DD" clearable />
-                </el-form-item>
-              </el-col>
-              <el-col :span="12">
-                <el-form-item label="身分證字號">
-                  <el-input v-model="form.id_number" placeholder="保留遮罩值將不會更新" />
-                </el-form-item>
-              </el-col>
-            </el-row>
-            <el-form-item label="主管職">
-              <el-select v-model="form.supervisor_role" clearable placeholder="無主管職" style="width: 100%">
-                <el-option v-for="item in SUPERVISOR_ROLE_OPTIONS" :key="item" :label="item" :value="item" />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="班級">
-              <el-select v-model="form.classroom_id" placeholder="選擇班級" clearable style="width: 100%">
-                <el-option
-                  v-for="c in classroomStore.classrooms"
-                  :key="c.id"
-                  :label="`${c.name} (${c.grade_name || ''})`"
-                  :value="c.id"
-                />
-              </el-select>
-            </el-form-item>
-            <el-divider content-position="left">聯絡與緊急聯絡</el-divider>
-            <el-row :gutter="20">
-              <el-col :span="12">
-                <el-form-item label="聯絡電話">
-                  <el-input v-model="form.phone" placeholder="例：0912-345-678" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="12">
-                <el-form-item label="眷屬人數">
-                  <el-input-number v-model="form.dependents" :min="0" :max="9" :step="1" style="width: 100%" />
-                </el-form-item>
-              </el-col>
-            </el-row>
-            <el-form-item label="通訊地址">
-              <el-input v-model="form.address" type="textarea" :rows="2" />
-            </el-form-item>
-            <el-row :gutter="20">
-              <el-col :span="12">
-                <el-form-item label="緊急聯絡人">
-                  <el-input v-model="form.emergency_contact_name" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="12">
-                <el-form-item label="緊急聯絡電話">
-                  <el-input v-model="form.emergency_contact_phone" />
-                </el-form-item>
-              </el-col>
-            </el-row>
+        <el-tabs type="border-card" v-model="activeTab">
+          <el-tab-pane label="基本資料" name="basic">
+            <EmployeeFormBasic
+              :form="form"
+              :bureau-job-title-options="bureauJobTitleOptions"
+              :classroom-options="classroomStore.classrooms"
+              :is-self-edit="isSelfEdit"
+              :pending-suggestion="pendingSuggestion"
+              :suggested-salary="suggestedSalary"
+            />
           </el-tab-pane>
-
-          <el-tab-pane label="薪資">
-            <el-row :gutter="20">
-              <el-col :span="12">
-                <el-form-item label="基本薪資">
-                  <el-input-number v-model="form.base_salary" :min="0" style="width: 100%" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="12">
-                <el-form-item label="時薪">
-                  <el-input-number v-model="form.hourly_rate" :min="0" style="width: 100%" />
-                </el-form-item>
-              </el-col>
-            </el-row>
-            <el-row :gutter="20">
-              <el-col :span="12">
-                <el-form-item label="投保級距">
-                  <el-input-number v-model="form.insurance_salary_level" :min="0" style="width: 100%" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="12">
-                <el-form-item label="勞退自提">
-                  <el-input-number
-                    v-model="form.pension_self_rate"
-                    :min="0" :max="0.06" :step="0.01" :precision="2"
-                    style="width: 100%"
-                  />
-                  <div style="font-size:12px;color:#909399;margin-top:4px">最高 6%（0.06）</div>
-                </el-form-item>
-              </el-col>
-            </el-row>
-          </el-tab-pane>
-
-          <el-tab-pane label="銀行與工作資訊">
-             <el-row :gutter="20">
-              <el-col :span="8">
-                <el-form-item label="銀行代碼">
-                  <el-input v-model="form.bank_code" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="16">
-                <el-form-item label="帳號">
-                  <el-input v-model="form.bank_account" />
-                </el-form-item>
-              </el-col>
-            </el-row>
-            <el-form-item label="戶名">
-               <el-input v-model="form.bank_account_name" />
-            </el-form-item>
-            <el-divider />
-            <el-row :gutter="20">
-              <el-col :span="12">
-                <el-form-item label="上班時間">
-                  <el-time-select v-model="form.work_start_time" start="06:00" step="00:30" end="22:00" style="width: 100%" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="12">
-                <el-form-item label="下班時間">
-                  <el-time-select v-model="form.work_end_time" start="06:00" step="00:30" end="22:00" style="width: 100%" />
-                </el-form-item>
-              </el-col>
-            </el-row>
+          <el-tab-pane label="薪資 / 投保 / 銀行" name="salary">
+            <EmployeeFormSalary
+              :form="form"
+              :is-readonly="isSalaryReadonly"
+              :readonly-reason="salaryReadonlyReason"
+              :pending-suggestion="pendingSuggestion"
+              :suggested-salary="suggestedSalary"
+              :insurance-error="insuranceError"
+              @apply-suggestion="applySuggestion"
+              @dismiss-suggestion="dismissSuggestion"
+              @sync-insurance="syncInsuranceToBase"
+            />
           </el-tab-pane>
         </el-tabs>
       </el-form>
       <template #footer>
-        <span class="dialog-footer">
+        <template v-if="!isEdit">
           <el-button @click="closeDialog">取消</el-button>
-          <el-button type="primary" @click="saveEmployee">儲存</el-button>
-        </span>
+          <el-button type="primary" @click="saveCreate">儲存</el-button>
+        </template>
+        <template v-else>
+          <el-button @click="closeDialog">關閉</el-button>
+          <template v-if="activeTab === 'basic'">
+            <el-button
+              :disabled="Object.keys(basicDirty).length === 0"
+              @click="showBasicPreview"
+            >
+              檢視變更 ({{ Object.keys(basicDirty).length }})
+            </el-button>
+            <el-button
+              type="primary"
+              :disabled="Object.keys(basicDirty).length === 0"
+              @click="saveBasic"
+            >
+              儲存基本資料 ({{ Object.keys(basicDirty).length }})
+            </el-button>
+          </template>
+          <template v-else-if="activeTab === 'salary' && !isSalaryReadonly">
+            <el-button
+              type="primary"
+              :disabled="Object.keys(salaryDirty).length === 0"
+              @click="saveSalary"
+            >
+              儲存薪資 ({{ Object.keys(salaryDirty).length }})
+            </el-button>
+          </template>
+        </template>
       </template>
     </el-dialog>
+
+    <!-- 員工資料變更預覽 / 薪資強制確認對話框 -->
+    <EmployeeChangesPreviewDialog
+      v-model="previewDialog.visible"
+      :title="previewDialog.title"
+      :changes="previewDialog.changes"
+      :require-confirm="previewDialog.requireConfirm"
+      :field-labels="FIELD_LABELS"
+      @confirm="previewDialog.onConfirm?.()"
+    />
 
     <!-- Detail Dialog：桌機左右欄、手機全螢幕單欄 -->
     <el-dialog
