@@ -13,6 +13,17 @@ export const offboard = (id, data) => api.post(`/employees/${id}/offboard`, data
 export const getFinalSalaryPreview = (id, params) =>
   api.get(`/employees/${id}/final-salary-preview`, { params })
 
+// ============ Diff-only updates ============
+// Why: 後端 require_not_self_edit 比對 update_data.keys()，前端必須只送
+// 真正異動的欄位才不會誤觸守衛（即使值相同也算 touch）。
+// updateEmployeeBasic / updateEmployeeSalary 各自只送對應 tab 的 dirty fields。
+
+export const updateEmployeeBasic = (id, dirtyPayload) =>
+    api.put(`/employees/${id}`, dirtyPayload)
+
+export const updateEmployeeSalary = (id, dirtyPayload) =>
+    api.put(`/employees/${id}`, dirtyPayload)
+
 // ========== Educations ==========
 export const listEmployeeEducations = (id) =>
   api.get(`/employees/${id}/educations`)
