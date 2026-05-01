@@ -3,7 +3,7 @@ import { ref, reactive, onMounted, computed, watch, nextTick } from 'vue'
 import { useDebounceFn, useMediaQuery } from '@vueuse/core'
 import { Loading, User, Plus } from '@element-plus/icons-vue'
 import {
-  getEmployee, getEmployees, createEmployee, updateEmployee, offboard, getFinalSalaryPreview,
+  getEmployee, getEmployees, createEmployee, offboard, getFinalSalaryPreview,
   listEmployeeEducations, createEmployeeEducation, updateEmployeeEducation, deleteEmployeeEducation,
   listEmployeeCertificates, createEmployeeCertificate, updateEmployeeCertificate, deleteEmployeeCertificate,
   listEmployeeContracts, createEmployeeContract, updateEmployeeContract, deleteEmployeeContract,
@@ -20,7 +20,7 @@ import { useClassroomStore } from '@/stores/classroom'
 import { useConfigStore } from '@/stores/config'
 import { useCrudDialog, useConfirmDelete } from '@/composables'
 import { downloadFile } from '@/utils/download'
-import { apiError, mapEmployeeError } from '@/utils/error'
+import { mapEmployeeError } from '@/utils/error'
 import {
   POSITION_OPTIONS,
   SUPERVISOR_ROLE_OPTIONS,
@@ -164,9 +164,6 @@ const bureauJobTitleOptions = computed(() => {
 
   return official
 })
-
-// 用於區分「載入舊資料」vs「使用者手動修改」，避免 populateForm 觸發連動
-let _populatingForm = false
 
 // 根據職稱 + 職位 + bonus_grade 計算建議薪資（不再自動寫入 form，改由 banner 讓使用者手動套用）
 watch([() => form.job_title_id, () => form.position, () => form.bonus_grade], () => {
@@ -344,7 +341,6 @@ const resetForm = () => {
 }
 
 const populateForm = (row) => {
-  _populatingForm = true
   Object.assign(form, row)
   form.base_salary = Number(row.base_salary)
   form.hourly_rate = Number(row.hourly_rate)
@@ -356,7 +352,6 @@ const populateForm = (row) => {
   activeTab.value = 'basic'
   dismissedSuggestion.value = false
   nextTick(() => {
-    _populatingForm = false
     resetDirty(form)
   })
 }
