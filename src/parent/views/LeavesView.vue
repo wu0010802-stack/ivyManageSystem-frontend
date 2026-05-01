@@ -35,7 +35,7 @@ const STATUS_COLOR = {
   rejected: { bg: '#e6f4ea', color: '#2d6a3a' },
 }
 
-const todayStr = todayISO()
+const todayStr = computed(() => todayISO())
 const futureLimitStr = (() => {
   const d = new Date()
   d.setDate(d.getDate() + 60)
@@ -50,8 +50,8 @@ const pastLimitStr = (() => {
 const form = ref({
   student_id: null,
   leave_type: '病假',
-  start_date: todayStr,
-  end_date: todayStr,
+  start_date: todayStr.value,
+  end_date: todayStr.value,
   reason: '',
 })
 
@@ -134,7 +134,6 @@ function timelineSteps(item) {
     const done = step.match(item)
     let timestamp = null
     if (step.key === 'created') timestamp = item.created_at
-    else if (step.key === 'reviewed') timestamp = item.reviewed_at
     else if (step.key === 'final') timestamp = item.reviewed_at || item.updated_at
     return { ...step, done, timestamp }
   })
@@ -160,8 +159,8 @@ function openForm() {
   form.value = {
     student_id: selectedId.value || childrenStore.items[0].student_id,
     leave_type: '病假',
-    start_date: todayStr,
-    end_date: todayStr,
+    start_date: todayStr.value,
+    end_date: todayStr.value,
     reason: '',
   }
   showForm.value = true
@@ -284,7 +283,7 @@ onMounted(async () => {
               v-for="step in timelineSteps(detail)"
               :key="step.key"
               class="step"
-              :class="{ done: step.done, rejected: step.key === 'final' && detail.status === 'rejected' }"
+              :class="{ done: step.done }"
             >
               <span class="step-dot" />
               <span class="step-label">{{ step.label }}</span>
@@ -619,9 +618,6 @@ onMounted(async () => {
 .step.done {
   color: #2c3e50;
 }
-.step.done.rejected {
-  color: #c0392b;
-}
 .step-dot {
   width: 10px;
   height: 10px;
@@ -632,10 +628,6 @@ onMounted(async () => {
 .step.done .step-dot {
   background: #3f7d48;
   border-color: #3f7d48;
-}
-.step.done.rejected .step-dot {
-  background: #c0392b;
-  border-color: #c0392b;
 }
 .step-label {
   flex: 1;
