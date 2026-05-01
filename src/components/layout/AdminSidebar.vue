@@ -114,7 +114,7 @@
           </el-menu-item>
           <el-menu-item v-if="canView.STUDENTS_READ" index="/student-leaves">
             <el-icon><Calendar /></el-icon>
-            <template #title>家長請假審核</template>
+            <template #title>學生請假紀錄</template>
           </el-menu-item>
           <el-menu-item v-if="canView.STUDENTS_READ" index="/student-enrollment">
             <el-icon><TrendCharts /></el-icon>

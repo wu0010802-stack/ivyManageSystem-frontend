@@ -1,24 +1,18 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import {
-  listStudentLeaves,
-  approveStudentLeave,
-  rejectStudentLeave,
-} from '@/api/studentLeaves'
+import { ElMessage } from 'element-plus'
+import { listStudentLeaves } from '@/api/studentLeaves'
 import { useClassroomStore } from '@/stores/classroom'
 import { apiError } from '@/utils/error'
 
 const STATUS_OPTIONS = [
-  { value: 'pending', label: '待審', type: 'warning' },
-  { value: 'approved', label: '已核准', type: 'success' },
-  { value: 'rejected', label: '已駁回', type: 'danger' },
+  { value: 'approved', label: '已成立', type: 'success' },
   { value: 'cancelled', label: '已取消', type: 'info' },
 ]
 const STATUS_MAP = Object.fromEntries(STATUS_OPTIONS.map(s => [s.value, s]))
 
 const filters = reactive({
-  status: 'pending',
+  status: 'approved',
   classroom_id: null,
 })
 const loading = ref(false)
@@ -39,35 +33,6 @@ const fetchLeaves = async () => {
   }
 }
 
-const _confirmAndCall = async (row, label, action) => {
-  let note = ''
-  try {
-    const result = await ElMessageBox.prompt(
-      `${label}：${row.student_name}（${row.leave_type} ${row.start_date}~${row.end_date}）`,
-      `${label}學生請假`,
-      {
-        confirmButtonText: label,
-        cancelButtonText: '取消',
-        inputPlaceholder: '備註（可空）',
-        inputValidator: () => true,
-      },
-    )
-    note = result?.value || ''
-  } catch {
-    return
-  }
-  try {
-    await action(row.id, { review_note: note })
-    ElMessage.success(`${label}成功`)
-    fetchLeaves()
-  } catch (error) {
-    ElMessage.error(apiError(error, `${label}失敗`))
-  }
-}
-
-const onApprove = (row) => _confirmAndCall(row, '核准', approveStudentLeave)
-const onReject = (row) => _confirmAndCall(row, '駁回', rejectStudentLeave)
-
 const formatDate = (s) => (s ? s.replace(/T.*/, '') : '')
 
 onMounted(() => {
@@ -77,9 +42,10 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="student-leave-review-view">
+  <div class="student-leaves-list-view">
     <div class="page-header">
-      <h2>家長學生請假審核</h2>
+      <h2>學生請假紀錄</h2>
+      <p class="hint">家長端提交即自動成立，此頁僅供查閱。如需修改考勤請至「學生考勤」介面。</p>
     </div>
 
     <el-form :inline="true" class="filter-bar">
@@ -135,25 +101,12 @@ onMounted(() => {
           {{ row.created_at ? row.created_at.replace('T', ' ').slice(0, 16) : '' }}
         </template>
       </el-table-column>
-      <el-table-column label="審核備註" prop="review_note" min-width="180" show-overflow-tooltip />
-      <el-table-column label="操作" width="200" align="center" fixed="right">
-        <template #default="{ row }">
-          <template v-if="row.status === 'pending'">
-            <el-button type="success" size="small" @click="onApprove(row)">核准</el-button>
-            <el-button type="danger" size="small" @click="onReject(row)">駁回</el-button>
-          </template>
-          <template v-else-if="row.status === 'approved'">
-            <el-button type="warning" size="small" @click="onReject(row)">改判駁回</el-button>
-          </template>
-          <span v-else class="text-muted">—</span>
-        </template>
-      </el-table-column>
     </el-table>
   </div>
 </template>
 
 <style scoped>
-.student-leave-review-view {
+.student-leaves-list-view {
   padding: 0;
 }
 
@@ -161,11 +114,13 @@ onMounted(() => {
   margin-bottom: 16px;
 }
 
-.filter-bar {
-  margin-bottom: 16px;
+.page-header .hint {
+  color: #909399;
+  font-size: 13px;
+  margin-top: 4px;
 }
 
-.text-muted {
-  color: #909399;
+.filter-bar {
+  margin-bottom: 16px;
 }
 </style>

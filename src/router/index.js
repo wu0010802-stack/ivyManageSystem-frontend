@@ -71,9 +71,9 @@ const router = createRouter({
         },
         {
             path: '/student-leaves',
-            name: 'student-leave-review',
-            component: () => import('../views/StudentLeaveReviewView.vue'),
-            meta: { title: '家長學生請假審核' }
+            name: 'student-leaves',
+            component: () => import('../views/StudentLeavesListView.vue'),
+            meta: { title: '學生請假紀錄' }
         },
         {
             path: '/portfolio/medication-today',
