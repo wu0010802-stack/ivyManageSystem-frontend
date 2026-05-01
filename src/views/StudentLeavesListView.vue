@@ -27,6 +27,7 @@ const fetchLeaves = async () => {
     const res = await listStudentLeaves(params)
     items.value = res.data?.items || []
   } catch (error) {
+    items.value = []
     ElMessage.error(apiError(error, '載入失敗'))
   } finally {
     loading.value = false
