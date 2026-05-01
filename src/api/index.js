@@ -69,9 +69,15 @@ api.interceptors.response.use(
         }
 
         // 正規化 UI 顯示用錯誤訊息，避免各元件重複解析 response 結構
-        error.displayMessage = error.response?.data?.detail
-            || error.response?.data?.message
-            || null
+        const rawDetail = error.response?.data?.detail
+        if (rawDetail && typeof rawDetail === 'object' && rawDetail.message) {
+            // structured detail：把 message 摳出，保留完整物件供 mapEmployeeError 取用
+            error.displayMessage = rawDetail.message
+            error.errorDetail = rawDetail  // 含 code / context
+        } else {
+            error.displayMessage = rawDetail || error.response?.data?.message || null
+            error.errorDetail = null
+        }
         error.errorType = classifyError(error)
 
         return Promise.reject(error)
