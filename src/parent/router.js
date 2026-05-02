@@ -125,6 +125,18 @@ const router = createRouter({
       meta: { title: '本週行程', tab: 'home' },
     },
     {
+      path: '/contact-book',
+      name: 'parent-contact-book',
+      component: () => import('./views/ContactBookView.vue'),
+      meta: { title: '聯絡簿', tab: 'home' },
+    },
+    {
+      path: '/contact-book/:entryId',
+      name: 'parent-contact-book-detail',
+      component: () => import('./views/ContactBookDetailView.vue'),
+      meta: { title: '聯絡簿詳情', tab: 'home' },
+    },
+    {
       path: '/:pathMatch(.*)*',
       redirect: '/login',
     },
