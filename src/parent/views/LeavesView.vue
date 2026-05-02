@@ -16,6 +16,7 @@ import { todayISO, dateToLocalISO } from '@/utils/format'
 import ParentIcon from '../components/ParentIcon.vue'
 import AppModal from '../components/AppModal.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
+import LeaveListCard from '../components/leaves/LeaveListCard.vue'
 import { useIncrementalRender } from '../composables/useIncrementalRender'
 
 const childrenStore = useChildrenStore()
@@ -287,36 +288,17 @@ onMounted(async () => {
 
     <div v-if="!loading && filteredItems.length === 0" class="empty">尚無請假紀錄</div>
 
-    <div
+    <LeaveListCard
       v-for="item in visibleLeaves"
       :key="item.id"
-      class="leave-card press-scale"
+      :leave="item"
+      :student-name="studentNameMap.get(item.student_id) || ''"
+      :status-label="STATUS_LABEL[item.status] || item.status"
+      :status-color="STATUS_COLOR[item.status] || null"
+      :can-cancel="item.status === 'approved' && item.start_date > todayStr"
       @click="openDetail(item)"
-    >
-      <div class="leave-row1">
-        <span class="student">{{ studentNameMap.get(item.student_id) || `學生 #${item.student_id}` }}</span>
-        <span class="type">{{ item.leave_type }}</span>
-        <span
-          class="status"
-          :style="{
-            background: STATUS_COLOR[item.status]?.bg,
-            color: STATUS_COLOR[item.status]?.color,
-          }"
-        >{{ STATUS_LABEL[item.status] || item.status }}</span>
-      </div>
-      <div class="leave-row2">
-        {{ item.start_date }} ~ {{ item.end_date }}
-      </div>
-      <div v-if="item.reason" class="leave-reason">原因：{{ item.reason }}</div>
-      <div v-if="item.review_note" class="leave-review">校方備註：{{ item.review_note }}</div>
-      <div
-        class="leave-actions"
-        v-if="item.status === 'approved' && item.start_date > todayStr"
-        @click.stop
-      >
-        <button type="button" class="cancel-btn" @click="askCancel(item)">取消申請</button>
-      </div>
-    </div>
+      @cancel="askCancel(item)"
+    />
 
     <div v-if="hasMoreLeaves" ref="leavesSentinel" class="render-sentinel" aria-hidden="true" />
 
@@ -542,65 +524,6 @@ onMounted(async () => {
   text-align: center;
   padding: 40px 16px;
   color: var(--pt-text-placeholder);
-}
-
-.leave-card {
-  background: var(--neutral-0);
-  border-radius: 12px;
-  padding: 12px 14px;
-  box-shadow: var(--pt-elev-1);
-}
-
-.leave-row1 {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.student {
-  font-weight: 600;
-  color: var(--pt-text-strong);
-}
-
-.type {
-  background: var(--color-info-soft);
-  color: var(--pt-info-link);
-  padding: 1px 8px;
-  border-radius: 10px;
-  font-size: 12px;
-}
-
-.status {
-  margin-left: auto;
-  padding: 1px 8px;
-  border-radius: 10px;
-  font-size: 12px;
-}
-
-.leave-row2 {
-  margin-top: 6px;
-  color: var(--pt-text-muted);
-  font-size: 14px;
-}
-
-.leave-reason,
-.leave-review {
-  margin-top: 4px;
-  color: var(--pt-text-faint);
-  font-size: 13px;
-}
-
-.leave-actions {
-  margin-top: 8px;
-}
-
-.cancel-btn {
-  padding: 4px 12px;
-  background: var(--neutral-0);
-  color: var(--color-danger);
-  border: 1px solid #e0c4c0;
-  border-radius: 6px;
-  font-size: 12px;
 }
 
 .detail-header,
