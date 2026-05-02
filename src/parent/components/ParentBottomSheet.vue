@@ -2,7 +2,7 @@
 /**
  * 家長端底部彈窗（snap points 進階版）。
  *
- * 提供：
+ * 提供（drag/keyboard 在 Task 1.6/1.7 接續，本檔先建好 snap 與無障礙基底）：
  *  - 三段 snap：peek (30vh) / mid (60vh) / full (92vh)
  *  - drag-to-dismiss 與慣性吸附
  *  - keyboard 開啟時自動切 full + 鎖拖曳（避輸入框被遮）
@@ -192,7 +192,7 @@ const hasFooterSlot = computed(() => !!slots.footer)
   width: 100%;
   max-width: 640px;
   height: var(--pt-bsheet-h, 60vh);
-  max-height: 92vh;
+  max-height: 92vh; /* 硬上限：防止 snap 值被覆寫成異常值時撐破畫面 */
   transition: height 0.32s cubic-bezier(0.32, 0.72, 0, 1);
   display: flex;
   flex-direction: column;
@@ -227,6 +227,7 @@ const hasFooterSlot = computed(() => !!slots.footer)
 .pt-bsheet-leave-to .pt-bsheet-dialog { transform: translateY(100%); }
 
 @media (prefers-reduced-motion: reduce) {
+  .pt-bsheet-dialog,
   .pt-bsheet-enter-active,
   .pt-bsheet-leave-active,
   .pt-bsheet-enter-active .pt-bsheet-dialog,
