@@ -8,6 +8,7 @@ import router from './router'
 // 各角色 app 共用同一份基礎尺度，避免「四個產品」的視覺語言分裂。
 // 角色 accent 由 parent app 在自己 root style 覆寫 --brand-*。
 import '@/assets/design-tokens.css'
+import '@/assets/a11y.css'
 
 import { useParentAuthStore } from './stores/parentAuth'
 import { getMe } from './api/profile'

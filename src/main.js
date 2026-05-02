@@ -9,6 +9,7 @@ import 'element-plus/theme-chalk/el-message-box.css'
 import 'element-plus/theme-chalk/el-message.css'
 import './assets/design-tokens.css'
 import './assets/main.css'
+import './assets/a11y.css'
 
 const app = createApp(App)
 

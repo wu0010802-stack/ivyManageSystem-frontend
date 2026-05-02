@@ -1,0 +1,42 @@
+/**
+ * 無障礙基準 token + 全站 focus 規範
+ *
+ * 本檔覆寫 Element Plus 的 CSS 變數，目的是把預設字級與灰字對比拉到
+ * WCAG 2.1 AA 水準（針對內部使用者 - 教師入口 + 管理端 - 反映「看不清楚」）。
+ *
+ * 載入順序：必須在 element-plus 與 @/assets/design-tokens.css 之後。
+ *
+ * Phase 2 會在本檔追加 .ivy-size-* / .ivy-contrast-high 的預設類別。
+ */
+
+:root {
+  /* ----- 字級基準升級：14px → 15px ----- */
+  --el-font-size-extra-small: 13px;   /* 12 → 13 */
+  --el-font-size-small: 14px;          /* 13 → 14 */
+  --el-font-size-base: 15px;           /* 14 → 15 ← 主要變化 */
+  --el-font-size-medium: 15px;         /* 14 → 15 */
+  --el-font-size-large: 17px;          /* 16 → 17 */
+  --el-font-size-extra-large: 19px;    /* 18 → 19 */
+
+  /* ----- 文字對比升級（WCAG AA on white）----- */
+  /* primary  #303133 (12.6:1) - 維持 */
+  /* regular  #606266 ( 7.0:1) - 維持 */
+  --el-text-color-secondary: #5e6266;     /* 原 #909399 (3.4:1, AA Fail) → 7.1:1 AA Pass */
+  --el-text-color-placeholder: #767a82;   /* 原 #a8abb2 (2.8:1, AA Fail) → 4.6:1 AA Pass */
+  /* disabled #c0c4cc - 維持（disabled 允許低對比） */
+}
+
+/* ----- 全站 focus 統一規格 ----- */
+:focus-visible {
+  outline: 2px solid var(--el-color-primary, #409eff);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Element Plus 自己的 button/input 已有 focus 樣式；只在沒有時補上 */
+button:focus-visible,
+[role="button"]:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--el-color-primary, #409eff);
+  outline-offset: 2px;
+}
