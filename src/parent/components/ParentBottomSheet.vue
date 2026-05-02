@@ -40,6 +40,7 @@ const emit = defineEmits(['update:modelValue', 'close', 'snap-change'])
 
 const slots = useSlots()
 const dialogRef = ref(null)
+const previouslyFocused = ref(null)
 const headerId = `pt-bsheet-${Math.random().toString(36).slice(2, 9)}`
 
 function close() {
@@ -47,12 +48,64 @@ function close() {
   emit('close')
 }
 
+function getFocusableElements() {
+  if (!dialogRef.value) return []
+  return Array.from(
+    dialogRef.value.querySelectorAll(
+      'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    ),
+  )
+}
+
+function trapFocus(e) {
+  const focusable = getFocusableElements()
+  if (focusable.length === 0) {
+    e.preventDefault()
+    return
+  }
+  const first = focusable[0]
+  const last = focusable[focusable.length - 1]
+  if (e.shiftKey && document.activeElement === first) {
+    e.preventDefault()
+    last.focus()
+  } else if (!e.shiftKey && document.activeElement === last) {
+    e.preventDefault()
+    first.focus()
+  }
+}
+
+function lockBody() { document.body.style.overflow = 'hidden' }
+function unlockBody() { document.body.style.overflow = '' }
+
 function onKeydown(e) {
   if (e.key === 'Escape' && props.dismissible) {
     e.stopPropagation()
     close()
+    return
   }
+  if (e.key === 'Tab') trapFocus(e)
 }
+
+watch(
+  () => props.modelValue,
+  async (isOpen) => {
+    if (isOpen) {
+      previouslyFocused.value = document.activeElement
+      lockBody()
+      await nextTick()
+      const focusable = getFocusableElements()
+      if (focusable.length > 0) focusable[0].focus()
+      else dialogRef.value?.focus()
+    } else {
+      unlockBody()
+      if (previouslyFocused.value && typeof previouslyFocused.value.focus === 'function') {
+        previouslyFocused.value.focus()
+      }
+    }
+  },
+)
+
+onBeforeUnmount(() => unlockBody())
 
 const hasHeaderSlot = computed(() => !!slots.header)
 const hasFooterSlot = computed(() => !!slots.footer)

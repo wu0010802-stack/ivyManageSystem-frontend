@@ -91,3 +91,33 @@ describe('ParentBottomSheet — dismiss', () => {
     wrapper.unmount()
   })
 })
+
+describe('ParentBottomSheet — a11y', () => {
+  it('開啟時鎖 body overflow，關閉時還原', async () => {
+    document.body.style.overflow = ''
+    const wrapper = mount(ParentBottomSheet, {
+      ...mountOpts,
+      props: { modelValue: false },
+    })
+    await wrapper.setProps({ modelValue: true })
+    await new Promise((r) => setTimeout(r, 0))
+    expect(document.body.style.overflow).toBe('hidden')
+
+    await wrapper.setProps({ modelValue: false })
+    await new Promise((r) => setTimeout(r, 0))
+    expect(document.body.style.overflow).toBe('')
+    wrapper.unmount()
+  })
+
+  it('開啟後焦點移到 dialog 內第一個可 focus 元素', async () => {
+    const wrapper = mount(ParentBottomSheet, {
+      ...mountOpts,
+      props: { modelValue: false },
+      slots: { default: '<button class="first-btn">A</button><button class="second-btn">B</button>' },
+    })
+    await wrapper.setProps({ modelValue: true })
+    await new Promise((r) => setTimeout(r, 50))
+    expect(document.activeElement?.classList.contains('first-btn')).toBe(true)
+    wrapper.unmount()
+  })
+})
