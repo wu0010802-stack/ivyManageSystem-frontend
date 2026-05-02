@@ -17,9 +17,11 @@ import '@/assets/a11y.css'
 import { useParentAuthStore } from './stores/parentAuth'
 import { getMe } from './api/profile'
 import { initTheme } from './composables/useTheme'
+import { initA11y } from './composables/useA11y'
 
-// Theme 應在第一次 paint 前套用，避免閃爍
+// Theme + A11y 應在第一次 paint 前套用，避免閃爍
 initTheme()
+initA11y()
 
 const app = createApp(App)
 app.use(createPinia())

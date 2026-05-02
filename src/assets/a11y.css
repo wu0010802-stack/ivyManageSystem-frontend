@@ -75,3 +75,95 @@ html.ivy-contrast-high :focus-visible {
   outline: 3px solid #000;
   outline-offset: 2px;
 }
+
+/* ============================================================
+ * 家長 App（parent）字級與高對比
+ *
+ * Parent app 不用 Element Plus，所以上面 EP 變數對它無效。
+ * 這段把同樣的 ivy-size-* / ivy-contrast-high class 對應到
+ * design-tokens.css + globals.css 的 parent token 上。
+ * ============================================================ */
+
+/* ===== Parent: 字級預設類別 =====
+ * 套到 :root 上的 CSS variable 會被 component scoped style 透過
+ * var(--text-*) 取得；硬編 px 不受影響（已盡量 sweep 到 token）。
+ */
+html[class*="ivy-size-"] {
+  --text-xs: calc(12px * var(--ivy-font-scale, 1));
+  --text-sm: calc(13px * var(--ivy-font-scale, 1));
+  --text-base: calc(14px * var(--ivy-font-scale, 1));
+  --text-lg: calc(16px * var(--ivy-font-scale, 1));
+  --text-xl: calc(18px * var(--ivy-font-scale, 1));
+  --text-2xl: calc(20px * var(--ivy-font-scale, 1));
+  --text-3xl: calc(24px * var(--ivy-font-scale, 1));
+  --text-4xl: calc(30px * var(--ivy-font-scale, 1));
+}
+
+/* ===== Parent: 高對比（亮模式）===== */
+html.ivy-contrast-high {
+  /* 文字加深到接近黑 */
+  --pt-text-strong: #000000;
+  --pt-text-body: #000000;
+  --pt-text-muted: #1a1d20;
+  --pt-text-soft: #2e3338;
+  --pt-text-faint: #424850;
+  --pt-text-placeholder: #424850;
+  --pt-text-disabled: #6b7280;
+  --pt-text-hint: #6b7280;
+
+  /* border 加深 */
+  --pt-border: #6b7280;
+  --pt-border-light: #9ca3af;
+  --pt-border-strong: #4b5563;
+  --pt-border-stronger: #374151;
+
+  /* brand 換成更高對比的藍綠色（與內政部色彩無障礙建議一致） */
+  --brand-primary: #1d4ed8;
+  --brand-primary-hover: #1e40af;
+  --brand-primary-soft: #dbeafe;
+
+  /* semantic 加深 */
+  --color-danger: #b91c1c;
+  --color-danger-soft: #fecaca;
+  --color-warning: #b45309;
+  --color-warning-soft: #fde68a;
+  --color-success: #047857;
+  --color-success-soft: #a7f3d0;
+}
+
+/* ===== Parent: 高對比（深模式）=====
+ * dark + high contrast 同時開啟時，反向加白
+ */
+html.ivy-contrast-high[data-theme="dark"],
+html.ivy-contrast-high:not([data-theme="light"]) {
+  --pt-text-strong: #ffffff;
+  --pt-text-body: #ffffff;
+  --pt-text-muted: #f1f5f9;
+  --pt-text-soft: #cbd5e1;
+  --pt-text-faint: #cbd5e1;
+  --pt-text-placeholder: #94a3b8;
+  --pt-text-disabled: #94a3b8;
+  --pt-text-hint: #94a3b8;
+
+  --pt-border: #94a3b8;
+  --pt-border-light: #64748b;
+  --pt-border-strong: #cbd5e1;
+  --pt-border-stronger: #e2e8f0;
+
+  /* brand 換更亮的綠（在深背景上 AA） */
+  --brand-primary: #6ee7b7;
+  --brand-primary-hover: #34d399;
+  --brand-primary-soft: rgba(110, 231, 183, 0.22);
+
+  --color-danger: #fca5a5;
+  --color-warning: #fcd34d;
+  --color-success: #6ee7b7;
+}
+
+/* 高對比時 focus 環加粗 + 換高對比色 */
+html.ivy-contrast-high :focus-visible,
+html.ivy-contrast-high a:focus-visible,
+html.ivy-contrast-high button:focus-visible {
+  outline: 3px solid currentColor;
+  outline-offset: 2px;
+}

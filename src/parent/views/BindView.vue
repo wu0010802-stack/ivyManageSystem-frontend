@@ -94,12 +94,13 @@ async function submit() {
 }
 
 .bind-card {
-  background: var(--neutral-0);
-  border-radius: 16px;
+  background: var(--pt-surface-card, var(--neutral-0));
+  border-radius: var(--radius-xl, 16px);
   padding: 28px 22px;
   width: 100%;
   max-width: 360px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--pt-elev-2);
+  border: var(--pt-hairline);
 }
 
 .title {

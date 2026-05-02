@@ -153,7 +153,7 @@ onMounted(fetchData)
   background: var(--neutral-0);
   border-radius: 12px;
   padding: 8px 0 4px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--pt-elev-1);
 }
 .day-head {
   padding: 8px 14px;

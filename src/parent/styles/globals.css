@@ -65,6 +65,49 @@
   --brand-primary: #3f7d48;
   --brand-primary-hover: #336440;
   --brand-primary-soft: #e7f3e9;
+  --brand-primary-tint: #f0f7f1;       /* 比 soft 更淡，給大面積背景用 */
+  --brand-accent: #f59e0b;             /* 暖色點綴：強調動作、未讀 */
+
+  /* ===== Soft UI Evolution: 現代 Elevation 系統 =====
+   * 多層陰影營造柔和懸浮感，比單層 shadow 更有層次。
+   * 三階：1=card 一般、2=hover/今日卡、3=modal/sheet
+   * 注意 dark mode 用更深的 alpha + 較強 blur。
+   */
+  --pt-elev-1: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.06);
+  --pt-elev-2: 0 2px 4px rgba(15, 23, 42, 0.04), 0 4px 12px rgba(15, 23, 42, 0.08);
+  --pt-elev-3: 0 8px 16px rgba(15, 23, 42, 0.08), 0 16px 32px rgba(15, 23, 42, 0.12);
+
+  /* Hairline border：替代「白卡片有邊」需求，subtle 不搶戲 */
+  --pt-hairline: 1px solid rgba(15, 23, 42, 0.06);
+
+  /* ===== 漸層 tokens（subtle，不搶 brand 色彩） =====
+   * 用於 hero 卡、push CTA 卡、強調用區塊。
+   */
+  --pt-gradient-brand: linear-gradient(135deg, #4a8d54 0%, #3f7d48 100%);
+  --pt-gradient-brand-soft: linear-gradient(135deg, #f0f7f1 0%, #e7f3e9 100%);
+  --pt-gradient-warm: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  --pt-gradient-info: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+  /* Hero 漸層：兩端皆為深綠以保證白色文字 ≥ AA 對比（#3f7d48 上白色 ≈ 5.5:1）。
+   * 視覺層次靠字級/字重而非透明度，避免 opacity 把對比打掉。 */
+  --pt-gradient-hero: linear-gradient(135deg, #2d5a35 0%, #3f7d48 60%, #4d8a58 100%);
+
+  /* ===== Icon tint（quick action / todo 背景）=====
+   * 每類功能對應一個淡色背景，icon 與背景同色系，與卡片白底分離又不過搶眼。
+   */
+  --pt-tint-money: #dcfce7;            --pt-tint-money-fg: #15803d;
+  --pt-tint-message: #dbeafe;          --pt-tint-message-fg: #1d4ed8;
+  --pt-tint-event: #f3e8ff;            --pt-tint-event-fg: #7c3aed;
+  --pt-tint-announcement: #fef3c7;     --pt-tint-announcement-fg: #b45309;
+  --pt-tint-leave: #ffedd5;            --pt-tint-leave-fg: #c2410c;
+  --pt-tint-activity: #fce7f3;         --pt-tint-activity-fg: #be185d;
+  --pt-tint-medication: #ddd6fe;       --pt-tint-medication-fg: #5b21b6;
+  --pt-tint-pickup: #cffafe;           --pt-tint-pickup-fg: #0e7490;
+  --pt-tint-calendar: #e0e7ff;         --pt-tint-calendar-fg: #3730a3;
+  --pt-tint-contact: #d1fae5;          --pt-tint-contact-fg: #065f46;
+
+  /* ===== Backdrop（modal / sheet）===== */
+  --pt-scrim: rgba(15, 23, 42, 0.45);
+  --pt-backdrop-blur: 8px;
 }
 
 /* ============================================================
@@ -119,6 +162,8 @@
     --brand-primary: #5fa46a;
     --brand-primary-hover: #79b685;
     --brand-primary-soft: rgba(95, 164, 106, 0.18);
+    --brand-primary-tint: rgba(95, 164, 106, 0.10);
+    --brand-accent: #fbbf24;
 
     /* Semantic softs 改半透明避光害 */
     --color-success-soft: rgba(16, 185, 129, 0.18);
@@ -135,6 +180,33 @@
     --pt-info-link: #93c5fd;
     --pt-violet-bg: rgba(167, 139, 250, 0.22);
     --pt-violet-text: #c4b5fd;
+
+    /* Elevation：dark mode 用更深的陰影 + 偏輕的 blur */
+    --pt-elev-1: 0 1px 2px rgba(0, 0, 0, 0.30), 0 1px 3px rgba(0, 0, 0, 0.20);
+    --pt-elev-2: 0 4px 8px rgba(0, 0, 0, 0.30), 0 8px 16px rgba(0, 0, 0, 0.20);
+    --pt-elev-3: 0 12px 24px rgba(0, 0, 0, 0.40), 0 24px 48px rgba(0, 0, 0, 0.30);
+    --pt-hairline: 1px solid rgba(255, 255, 255, 0.06);
+
+    /* Gradient：dark mode 加深 brand 漸層、其他用半透明 */
+    --pt-gradient-brand: linear-gradient(135deg, #4d8a58 0%, #3f7d48 100%);
+    --pt-gradient-brand-soft: linear-gradient(135deg, rgba(95, 164, 106, 0.15) 0%, rgba(95, 164, 106, 0.08) 100%);
+    --pt-gradient-warm: linear-gradient(135deg, rgba(245, 158, 11, 0.20) 0%, rgba(251, 191, 36, 0.12) 100%);
+    --pt-gradient-info: linear-gradient(135deg, rgba(59, 130, 246, 0.20) 0%, rgba(59, 130, 246, 0.10) 100%);
+    --pt-gradient-hero: linear-gradient(135deg, #2d5a35 0%, #3f7d48 60%, #5fa46a 100%);
+
+    /* Icon tint：dark mode 用半透明 */
+    --pt-tint-money: rgba(34, 197, 94, 0.20);          --pt-tint-money-fg: #6ee7b7;
+    --pt-tint-message: rgba(59, 130, 246, 0.22);       --pt-tint-message-fg: #93c5fd;
+    --pt-tint-event: rgba(168, 85, 247, 0.20);         --pt-tint-event-fg: #c4b5fd;
+    --pt-tint-announcement: rgba(245, 158, 11, 0.20);  --pt-tint-announcement-fg: #fbbf24;
+    --pt-tint-leave: rgba(249, 115, 22, 0.20);         --pt-tint-leave-fg: #fdba74;
+    --pt-tint-activity: rgba(236, 72, 153, 0.20);      --pt-tint-activity-fg: #f9a8d4;
+    --pt-tint-medication: rgba(167, 139, 250, 0.22);   --pt-tint-medication-fg: #c4b5fd;
+    --pt-tint-pickup: rgba(6, 182, 212, 0.22);         --pt-tint-pickup-fg: #67e8f9;
+    --pt-tint-calendar: rgba(99, 102, 241, 0.22);      --pt-tint-calendar-fg: #a5b4fc;
+    --pt-tint-contact: rgba(16, 185, 129, 0.22);       --pt-tint-contact-fg: #6ee7b7;
+
+    --pt-scrim: rgba(0, 0, 0, 0.65);
   }
 }
 
@@ -170,6 +242,8 @@
   --brand-primary: #5fa46a;
   --brand-primary-hover: #79b685;
   --brand-primary-soft: rgba(95, 164, 106, 0.18);
+  --brand-primary-tint: rgba(95, 164, 106, 0.10);
+  --brand-accent: #fbbf24;
 
   --color-success-soft: rgba(16, 185, 129, 0.18);
   --color-warning-soft: rgba(245, 158, 11, 0.18);
@@ -184,6 +258,30 @@
   --pt-info-link: #93c5fd;
   --pt-violet-bg: rgba(167, 139, 250, 0.22);
   --pt-violet-text: #c4b5fd;
+
+  --pt-elev-1: 0 1px 2px rgba(0, 0, 0, 0.30), 0 1px 3px rgba(0, 0, 0, 0.20);
+  --pt-elev-2: 0 4px 8px rgba(0, 0, 0, 0.30), 0 8px 16px rgba(0, 0, 0, 0.20);
+  --pt-elev-3: 0 12px 24px rgba(0, 0, 0, 0.40), 0 24px 48px rgba(0, 0, 0, 0.30);
+  --pt-hairline: 1px solid rgba(255, 255, 255, 0.06);
+
+  --pt-gradient-brand: linear-gradient(135deg, #4d8a58 0%, #3f7d48 100%);
+  --pt-gradient-brand-soft: linear-gradient(135deg, rgba(95, 164, 106, 0.15) 0%, rgba(95, 164, 106, 0.08) 100%);
+  --pt-gradient-warm: linear-gradient(135deg, rgba(245, 158, 11, 0.20) 0%, rgba(251, 191, 36, 0.12) 100%);
+  --pt-gradient-info: linear-gradient(135deg, rgba(59, 130, 246, 0.20) 0%, rgba(59, 130, 246, 0.10) 100%);
+  --pt-gradient-hero: linear-gradient(135deg, #2d5a35 0%, #3f7d48 60%, #5fa46a 100%);
+
+  --pt-tint-money: rgba(34, 197, 94, 0.20);          --pt-tint-money-fg: #6ee7b7;
+  --pt-tint-message: rgba(59, 130, 246, 0.22);       --pt-tint-message-fg: #93c5fd;
+  --pt-tint-event: rgba(168, 85, 247, 0.20);         --pt-tint-event-fg: #c4b5fd;
+  --pt-tint-announcement: rgba(245, 158, 11, 0.20);  --pt-tint-announcement-fg: #fbbf24;
+  --pt-tint-leave: rgba(249, 115, 22, 0.20);         --pt-tint-leave-fg: #fdba74;
+  --pt-tint-activity: rgba(236, 72, 153, 0.20);      --pt-tint-activity-fg: #f9a8d4;
+  --pt-tint-medication: rgba(167, 139, 250, 0.22);   --pt-tint-medication-fg: #c4b5fd;
+  --pt-tint-pickup: rgba(6, 182, 212, 0.22);         --pt-tint-pickup-fg: #67e8f9;
+  --pt-tint-calendar: rgba(99, 102, 241, 0.22);      --pt-tint-calendar-fg: #a5b4fc;
+  --pt-tint-contact: rgba(16, 185, 129, 0.22);       --pt-tint-contact-fg: #6ee7b7;
+
+  --pt-scrim: rgba(0, 0, 0, 0.65);
 }
 
 /* ========== Focus Visible ==========
@@ -290,4 +388,80 @@ button {
   .press-scale:active {
     transform: none;
   }
+}
+
+/* ========== Card Surface Utility ==========
+ * 整個 parent app 的卡片預設樣式：白底 + 12px 圓角 + Soft UI Evolution 雙層陰影 + hairline border。
+ * 既有 view 仍可在 scoped style 內 override，但建議改用 .pt-card 取代手寫的
+ * `background: var(--neutral-0); border-radius: 12px; box-shadow: 0 1px 4px ...`。
+ *
+ * Hairline border 提供「卡片邊界感」，比單獨陰影更現代；dark mode 自動轉為白色低 alpha。
+ */
+.pt-card {
+  background: var(--pt-surface-card, var(--neutral-0));
+  border-radius: var(--radius-lg, 12px);
+  box-shadow: var(--pt-elev-1);
+  border: var(--pt-hairline);
+}
+
+.pt-card-elevated {
+  background: var(--pt-surface-card, var(--neutral-0));
+  border-radius: var(--radius-xl, 16px);
+  box-shadow: var(--pt-elev-2);
+  border: var(--pt-hairline);
+}
+
+/* ========== Section title（首頁/More 統一）========== */
+.pt-section-title {
+  font-size: var(--text-sm, 13px);
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--pt-text-muted);
+  margin: 0 0 var(--space-2, 8px) var(--space-1, 4px);
+  letter-spacing: 0.02em;
+}
+
+/* ========== Shimmer（Skeleton Loading）==========
+ * 取代純色塊：左→右光暈動畫，給家長等待時更現代的感覺。
+ * reduced-motion 自動關閉動畫由全域規則處理。
+ */
+@keyframes pt-shimmer {
+  0%   { background-position: -200px 0; }
+  100% { background-position: calc(200px + 100%) 0; }
+}
+
+.pt-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--pt-surface-mute, #f0f2f5) 0%,
+    var(--pt-surface-mute-soft, #f6f8fa) 50%,
+    var(--pt-surface-mute, #f0f2f5) 100%
+  );
+  background-size: 200px 100%;
+  background-repeat: no-repeat;
+  animation: pt-shimmer 1.4s ease-in-out infinite;
+}
+
+/* ========== Stagger Entrance ==========
+ * 列表/卡片進場動畫。套在父層加 .pt-stagger，子層自動 fade-up。
+ * 用 CSS variable `--pt-stagger-delay` 控制每張卡的延遲。
+ */
+@keyframes pt-fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.pt-stagger > * {
+  animation: pt-fade-up 0.32s cubic-bezier(0.4, 0, 0.2, 1) both;
+  animation-delay: var(--pt-stagger-delay, 0ms);
+}
+.pt-stagger > *:nth-child(1) { animation-delay: 0ms; }
+.pt-stagger > *:nth-child(2) { animation-delay: 40ms; }
+.pt-stagger > *:nth-child(3) { animation-delay: 80ms; }
+.pt-stagger > *:nth-child(4) { animation-delay: 120ms; }
+.pt-stagger > *:nth-child(5) { animation-delay: 160ms; }
+.pt-stagger > *:nth-child(6) { animation-delay: 200ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pt-shimmer { animation: none; }
+  .pt-stagger > * { animation: none; }
 }

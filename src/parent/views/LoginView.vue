@@ -107,12 +107,14 @@ onMounted(startLogin)
 
 .login-card {
   background: var(--neutral-0);
-  border-radius: 16px;
+  border-radius: var(--radius-xl, 16px);
   padding: 32px 24px;
   width: 100%;
   max-width: 360px;
   text-align: center;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  background: var(--pt-surface-card, var(--neutral-0));
+  box-shadow: var(--pt-elev-2);
+  border: var(--pt-hairline);
 }
 
 .logo img {

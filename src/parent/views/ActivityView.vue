@@ -301,7 +301,7 @@ onMounted(async () => {
   border-radius: 12px;
   padding: 4px;
   gap: 4px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--pt-elev-1);
 }
 
 .tab-btn {
@@ -355,7 +355,7 @@ onMounted(async () => {
   background: var(--neutral-0);
   border-radius: 12px;
   padding: 12px 14px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--pt-elev-1);
 }
 
 .reg-header {

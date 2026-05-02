@@ -88,11 +88,21 @@ function refresh() {
 }
 
 const QUICK_ACTIONS = [
-  { icon: 'notebook', label: '聯絡簿', path: '/contact-book' },
-  { icon: 'calendar', label: '本週行程', path: '/calendar' },
-  { icon: 'clipboard', label: '請假', path: '/leaves' },
-  { icon: 'pill', label: '用藥單', path: '/medications' },
+  { icon: 'notebook', label: '聯絡簿', path: '/contact-book', tint: 'contact' },
+  { icon: 'calendar', label: '本週行程', path: '/calendar', tint: 'calendar' },
+  { icon: 'clipboard', label: '請假', path: '/leaves', tint: 'leave' },
+  { icon: 'pill', label: '用藥單', path: '/medications', tint: 'medication' },
 ]
+
+// 依當前時間給問候語
+const greetingText = computed(() => {
+  const h = new Date().getHours()
+  if (h < 5) return '夜深了，記得早點休息'
+  if (h < 11) return '早安'
+  if (h < 14) return '午安'
+  if (h < 18) return '下午好'
+  return '晚安'
+})
 
 // 接送狀態文案：對應後端 status (pending/acknowledged/completed)
 function dismissalLabel(d) {
@@ -120,7 +130,22 @@ function dismissalLabel(d) {
     />
 
     <template v-else-if="summaryData">
-      <!-- 1) 推播未啟用 CTA — 視覺分量大，催加好友 -->
+      <!-- 0) Hero 問候卡 — 漸層 brand 色，建立視覺定錨 -->
+      <section class="hero-card">
+        <div class="hero-content">
+          <div class="hero-greeting">{{ greetingText }}</div>
+          <div class="hero-name">{{ me?.name || '家長' }}</div>
+          <div v-if="children.length" class="hero-meta">
+            照顧 {{ children.length }} 位寶貝
+          </div>
+        </div>
+        <div class="hero-decoration" aria-hidden="true">
+          <span class="hero-blob hero-blob-1" />
+          <span class="hero-blob hero-blob-2" />
+        </div>
+      </section>
+
+      <!-- 1) 推播未啟用 CTA — 暖色提醒卡 -->
       <section v-if="showPushCta" class="push-cta">
         <div class="push-cta-head">
           <span class="push-cta-icon" aria-hidden="true">
@@ -128,7 +153,7 @@ function dismissalLabel(d) {
           </span>
           <div>
             <div class="push-cta-title">尚未加 LINE 為好友</div>
-            <div class="push-cta-sub">以下通知將收不到推播：</div>
+            <div class="push-cta-sub">以下通知將收不到推播</div>
           </div>
         </div>
         <ul class="push-cta-list">
@@ -138,8 +163,9 @@ function dismissalLabel(d) {
           <li>接送通知狀態變更</li>
           <li>才藝候補升正式提醒</li>
         </ul>
-        <button class="push-cta-btn" type="button" @click="go('/notifications/preferences')">
+        <button class="push-cta-btn press-scale" type="button" @click="go('/notifications/preferences')">
           前往設定
+          <ParentIcon name="chevron-right" size="sm" />
         </button>
       </section>
 
@@ -182,7 +208,7 @@ function dismissalLabel(d) {
           type="button"
           @click="go('/fees')"
         >
-          <span class="todo-icon"><ParentIcon name="money" size="md" /></span>
+          <span class="todo-icon tint-money"><ParentIcon name="money" size="sm" /></span>
           <span class="todo-text">
             待繳費 <strong>{{ unpaidCount }}</strong> 筆
             ／ NT$ {{ formatMoney(unpaidTotal) }}
@@ -198,7 +224,7 @@ function dismissalLabel(d) {
           type="button"
           @click="go('/messages')"
         >
-          <span class="todo-icon"><ParentIcon name="chat" size="md" /></span>
+          <span class="todo-icon tint-message"><ParentIcon name="chat" size="sm" /></span>
           <span class="todo-text">
             未讀訊息 <strong>{{ unreadMessages }}</strong> 則
           </span>
@@ -210,7 +236,7 @@ function dismissalLabel(d) {
           type="button"
           @click="go('/events')"
         >
-          <span class="todo-icon"><ParentIcon name="signature" size="md" /></span>
+          <span class="todo-icon tint-event"><ParentIcon name="signature" size="sm" /></span>
           <span class="todo-text">
             待簽閱事件 <strong>{{ pendingAcks }}</strong> 件
           </span>
@@ -222,7 +248,7 @@ function dismissalLabel(d) {
           type="button"
           @click="go('/announcements')"
         >
-          <span class="todo-icon"><ParentIcon name="megaphone" size="md" /></span>
+          <span class="todo-icon tint-announcement"><ParentIcon name="megaphone" size="sm" /></span>
           <span class="todo-text">
             未讀公告 <strong>{{ unreadAnnouncements }}</strong> 則
           </span>
@@ -234,7 +260,7 @@ function dismissalLabel(d) {
           type="button"
           @click="go('/leaves')"
         >
-          <span class="todo-icon"><ParentIcon name="clipboard" size="md" /></span>
+          <span class="todo-icon tint-leave"><ParentIcon name="clipboard" size="sm" /></span>
           <span class="todo-text">
             最近請假審核結果 <strong>{{ recentLeaveReviews }}</strong> 件
           </span>
@@ -246,7 +272,7 @@ function dismissalLabel(d) {
           type="button"
           @click="go('/activity')"
         >
-          <span class="todo-icon"><ParentIcon name="art" size="md" /></span>
+          <span class="todo-icon tint-activity"><ParentIcon name="art" size="sm" /></span>
           <span class="todo-text">
             才藝候補待確認 <strong>{{ pendingPromotions }}</strong> 件
           </span>
@@ -290,7 +316,7 @@ function dismissalLabel(d) {
       <!-- 5) 常用操作 -->
       <section class="quick-section">
         <h3 class="section-title">常用操作</h3>
-        <div class="quick-grid">
+        <div class="quick-grid pt-stagger">
           <button
             v-for="q in QUICK_ACTIONS"
             :key="q.path"
@@ -298,8 +324,8 @@ function dismissalLabel(d) {
             type="button"
             @click="go(q.path)"
           >
-            <span class="quick-icon">
-              <ParentIcon :name="q.icon" size="lg" />
+            <span class="quick-icon" :class="`tint-${q.tint}`">
+              <ParentIcon :name="q.icon" size="md" />
             </span>
             <span class="quick-label">{{ q.label }}</span>
           </button>
@@ -313,22 +339,83 @@ function dismissalLabel(d) {
 .home-view {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-4, 16px);
 }
 
-.state-block {
-  text-align: center;
-  padding: 40px 16px;
-  color: var(--pt-text-soft);
+/* ==========================================================
+ * Hero 問候卡 — 漸層 brand 色，建立首頁視覺定錨
+ * ========================================================== */
+.hero-card {
+  position: relative;
+  background: var(--pt-gradient-hero);
+  border-radius: var(--radius-xl, 16px);
+  padding: 18px 20px 20px;
+  color: var(--neutral-0, #fff);
+  box-shadow: var(--pt-elev-2);
+  overflow: hidden;
+  isolation: isolate;
 }
 
-/* 推播 CTA */
+.hero-content {
+  position: relative;
+  z-index: 1;
+}
+
+.hero-greeting {
+  font-size: var(--text-sm, 13px);
+  /* 不用 opacity 區分層次，避免在淡色端文字對比不足；改以亮黃色帶 brand 暖意 */
+  color: rgba(255, 255, 255, 0.96);
+  letter-spacing: 0.04em;
+}
+
+.hero-name {
+  font-size: var(--text-2xl, 22px);
+  font-weight: var(--font-weight-bold, 700);
+  margin-top: 2px;
+  letter-spacing: 0.01em;
+}
+
+.hero-meta {
+  font-size: var(--text-xs, 12px);
+  margin-top: 6px;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+/* 浮球裝飾 — 純 CSS，零 asset cost */
+.hero-decoration {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.hero-blob {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.16);
+  filter: blur(2px);
+}
+.hero-blob-1 {
+  top: -32px;
+  right: -24px;
+  width: 120px;
+  height: 120px;
+}
+.hero-blob-2 {
+  bottom: -48px;
+  right: 56px;
+  width: 80px;
+  height: 80px;
+  background: rgba(255, 255, 255, 0.10);
+}
+
+/* ==========================================================
+ * 推播 CTA — 升級為 token-based 暖色卡
+ * ========================================================== */
 .push-cta {
-  background: linear-gradient(135deg, var(--color-warning-soft) 0%, var(--color-warning-soft) 100%);
+  background: var(--pt-gradient-warm);
   border: 1px solid var(--color-warning);
-  border-radius: 12px;
-  padding: 14px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+  border-radius: var(--radius-lg, 12px);
+  padding: 14px 16px 16px;
+  box-shadow: var(--pt-elev-1);
 }
 .push-cta-head {
   display: flex;
@@ -339,76 +426,89 @@ function dismissalLabel(d) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-full, 9999px);
+  background: rgba(217, 119, 6, 0.18);
   color: var(--pt-warning-text-mid);
   flex-shrink: 0;
 }
 .push-cta-title {
-  font-size: 15px;
-  font-weight: 600;
+  font-size: var(--text-base, 15px);
+  font-weight: var(--font-weight-semibold, 600);
   color: var(--pt-warning-text);
 }
 .push-cta-sub {
-  font-size: 12px;
+  font-size: var(--text-xs, 12px);
   color: var(--pt-warning-text-mid);
   margin-top: 2px;
 }
 .push-cta-list {
-  margin: 8px 0 8px 38px;
+  margin: 10px 0 12px 56px;
   padding: 0;
   list-style: disc;
   color: var(--pt-warning-text);
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: var(--text-xs, 12px);
+  line-height: 1.6;
 }
 .push-cta-btn {
-  display: block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
   width: 100%;
-  margin-top: 8px;
-  padding: 10px;
+  margin-top: 4px;
+  padding: 12px;
   background: var(--pt-warning-text-mid);
   color: var(--neutral-0);
   border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 600;
-}
-.push-cta-btn:active {
-  background: var(--pt-warning-text-mid);
+  border-radius: var(--radius-md, 8px);
+  font-size: var(--text-base, 14px);
+  font-weight: var(--font-weight-semibold, 600);
+  letter-spacing: 0.02em;
+  box-shadow: 0 4px 12px rgba(217, 119, 6, 0.32);
+  cursor: pointer;
 }
 
-/* 區塊標題 */
+/* ==========================================================
+ * 區塊標題 — 統一 .section-title
+ * ========================================================== */
 .section-title {
-  font-size: 14px;
-  font-weight: 600;
+  font-size: var(--text-sm, 13px);
+  font-weight: var(--font-weight-semibold, 600);
   color: var(--pt-text-muted);
   margin: 0 0 8px 4px;
+  letter-spacing: 0.02em;
 }
 
-/* 今日狀態 */
+/* ==========================================================
+ * 今日狀態
+ * ========================================================== */
 .today-section {
   display: flex;
   flex-direction: column;
 }
 .today-card {
-  background: var(--neutral-0);
-  border-radius: 12px;
-  padding: 12px 14px;
+  background: var(--pt-surface-card);
+  border-radius: var(--radius-lg, 12px);
+  padding: 14px 16px;
   margin-bottom: 8px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--pt-elev-1);
+  border: var(--pt-hairline);
 }
 .today-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 .today-name {
-  font-size: 15px;
-  font-weight: 600;
+  font-size: var(--text-base, 15px);
+  font-weight: var(--font-weight-semibold, 600);
   color: var(--pt-text-strong);
 }
 .today-class {
-  font-size: 12px;
+  font-size: var(--text-xs, 12px);
   color: var(--pt-text-placeholder);
 }
 .chips {
@@ -420,11 +520,12 @@ function dismissalLabel(d) {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 12px;
-  padding: 3px 10px;
-  border-radius: 12px;
+  font-size: var(--text-xs, 12px);
+  padding: 4px 10px;
+  border-radius: var(--radius-full, 9999px);
   background: var(--pt-surface-mute);
   color: var(--pt-text-muted);
+  font-weight: var(--font-weight-medium, 500);
 }
 .chip-attendance { background: var(--color-success-soft); color: var(--pt-success-text); }
 .chip-leave      { background: var(--color-warning-soft); color: var(--pt-warning-text); }
@@ -432,15 +533,18 @@ function dismissalLabel(d) {
 .chip-pickup     { background: var(--color-info-soft); color: var(--pt-info-text); }
 .chip-muted      { background: var(--pt-surface-mute-warm); color: var(--pt-text-placeholder); }
 
-/* 待辦 */
+/* ==========================================================
+ * 待辦中心（icon tint + refined surface）
+ * ========================================================== */
 .todos-card {
-  background: var(--neutral-0);
-  border-radius: 12px;
-  padding: 8px 0;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+  background: var(--pt-surface-card);
+  border-radius: var(--radius-lg, 12px);
+  padding: 6px 0 4px;
+  box-shadow: var(--pt-elev-1);
+  border: var(--pt-hairline);
   overflow: hidden;
 }
-.todos-title { margin: 8px 16px 4px; }
+.todos-title { margin: 12px 16px 6px; }
 .todo-row {
   display: flex;
   align-items: center;
@@ -451,68 +555,89 @@ function dismissalLabel(d) {
   border: none;
   border-top: 1px solid var(--pt-border-light);
   text-align: left;
-  font-size: 14px;
+  font-size: var(--text-base, 14px);
   color: var(--pt-text-strong);
   cursor: pointer;
 }
+.todos-card .todo-row:first-of-type {
+  border-top: none;
+}
 .todo-row:active { background: var(--pt-surface-mute-soft); }
+
+/* Icon tint container（取代純色 currentColor，給類型視覺對應） */
 .todo-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md, 8px);
+  background: var(--brand-primary-soft);
   color: var(--brand-primary);
   flex-shrink: 0;
 }
-.todo-text { flex: 1; }
+.todo-icon.tint-money       { background: var(--pt-tint-money);        color: var(--pt-tint-money-fg); }
+.todo-icon.tint-message     { background: var(--pt-tint-message);      color: var(--pt-tint-message-fg); }
+.todo-icon.tint-event       { background: var(--pt-tint-event);        color: var(--pt-tint-event-fg); }
+.todo-icon.tint-announcement{ background: var(--pt-tint-announcement); color: var(--pt-tint-announcement-fg); }
+.todo-icon.tint-leave       { background: var(--pt-tint-leave);        color: var(--pt-tint-leave-fg); }
+.todo-icon.tint-activity    { background: var(--pt-tint-activity);     color: var(--pt-tint-activity-fg); }
+
+.todo-text { flex: 1; line-height: 1.45; }
 .todo-text strong {
   color: var(--color-danger);
-  font-weight: 700;
+  font-weight: var(--font-weight-bold, 700);
   margin: 0 2px;
   font-variant-numeric: tabular-nums;
 }
-.todo-warn { color: var(--color-danger); font-size: 12px; }
+.todo-warn { color: var(--color-danger); font-size: var(--text-xs, 12px); }
 .todo-arrow { color: var(--pt-text-disabled); flex-shrink: 0; }
 
 .todos-empty {
-  background: var(--neutral-0);
-  border-radius: 12px;
-  padding: 16px;
+  background: var(--pt-surface-card);
+  border-radius: var(--radius-lg, 12px);
+  padding: 18px 16px;
   text-align: center;
-  font-size: 14px;
+  font-size: var(--text-base, 14px);
   color: var(--pt-text-placeholder);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--pt-elev-1);
+  border: var(--pt-hairline);
 }
 .todos-empty-icon {
   display: inline-flex;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full, 9999px);
   background: var(--brand-primary-soft);
   color: var(--brand-primary);
   align-items: center;
   justify-content: center;
-  margin-right: 6px;
+  margin-right: 8px;
   vertical-align: middle;
 }
 
-/* 子女區 */
+/* ==========================================================
+ * 子女區
+ * ========================================================== */
 .children-section { display: flex; flex-direction: column; }
 .empty {
-  background: var(--neutral-0);
-  border-radius: 12px;
+  background: var(--pt-surface-card);
+  border-radius: var(--radius-lg, 12px);
   padding: 24px 16px;
   text-align: center;
   color: var(--pt-text-placeholder);
-  font-size: 14px;
+  font-size: var(--text-base, 14px);
+  box-shadow: var(--pt-elev-1);
+  border: var(--pt-hairline);
 }
 .child-card {
-  background: var(--neutral-0);
-  border-radius: 12px;
+  background: var(--pt-surface-card);
+  border-radius: var(--radius-lg, 12px);
   padding: 14px 16px;
   margin-bottom: 10px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--pt-elev-1);
+  border: var(--pt-hairline);
   width: 100%;
-  border: none;
   text-align: left;
   display: block;
   cursor: pointer;
@@ -532,22 +657,34 @@ function dismissalLabel(d) {
   justify-content: space-between;
   align-items: center;
 }
-.child-name { font-size: 16px; font-weight: 600; color: var(--pt-text-strong); }
-.child-classroom { font-size: 13px; color: var(--pt-text-faint); }
+.child-name {
+  font-size: var(--text-lg, 16px);
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--pt-text-strong);
+}
+.child-classroom { font-size: var(--text-sm, 13px); color: var(--pt-text-faint); }
 .child-meta {
   margin-top: 8px;
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
-  font-size: 12px;
+  font-size: var(--text-xs, 12px);
   color: var(--pt-text-soft);
+  align-items: center;
 }
-.tag { padding: 2px 8px; border-radius: 10px; background: var(--pt-surface-mute); }
+.tag {
+  padding: 3px 10px;
+  border-radius: var(--radius-full, 9999px);
+  background: var(--pt-surface-mute);
+  font-weight: var(--font-weight-medium, 500);
+}
 .tag.primary { background: var(--brand-primary-soft); color: var(--brand-primary); }
 .tag.pickup { background: var(--color-warning-soft); color: var(--pt-warning-text-mid); }
-.tag.status { background: #eef0f5; color: var(--pt-text-muted); }
+.tag.status { background: var(--pt-surface-mute-warm); color: var(--pt-text-muted); }
 
-/* 常用操作 */
+/* ==========================================================
+ * 常用操作（quick tiles，icon tint 化）
+ * ========================================================== */
 .quick-section {
   display: flex;
   flex-direction: column;
@@ -558,22 +695,35 @@ function dismissalLabel(d) {
   gap: 8px;
 }
 .quick-tile {
-  background: var(--neutral-0);
-  border-radius: 12px;
-  padding: 14px 6px;
-  border: none;
+  background: var(--pt-surface-card);
+  border-radius: var(--radius-lg, 12px);
+  padding: 14px 6px 12px;
+  border: var(--pt-hairline);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+  gap: 8px;
+  box-shadow: var(--pt-elev-1);
+  cursor: pointer;
 }
 .quick-tile:active { background: var(--pt-surface-mute-soft); }
 .quick-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md, 8px);
+  background: var(--brand-primary-soft);
   color: var(--brand-primary);
 }
-.quick-label { font-size: 12px; color: var(--pt-text-muted); }
+.quick-icon.tint-contact     { background: var(--pt-tint-contact);     color: var(--pt-tint-contact-fg); }
+.quick-icon.tint-calendar    { background: var(--pt-tint-calendar);    color: var(--pt-tint-calendar-fg); }
+.quick-icon.tint-leave       { background: var(--pt-tint-leave);       color: var(--pt-tint-leave-fg); }
+.quick-icon.tint-medication  { background: var(--pt-tint-medication);  color: var(--pt-tint-medication-fg); }
+.quick-label {
+  font-size: var(--text-xs, 12px);
+  color: var(--pt-text-muted);
+  font-weight: var(--font-weight-medium, 500);
+}
 </style>

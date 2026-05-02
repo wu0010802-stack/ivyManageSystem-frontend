@@ -144,7 +144,7 @@ onMounted(fetchData)
   background: var(--neutral-0);
   border-radius: 12px;
   padding: 14px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--pt-elev-1);
 }
 .head {
   margin-bottom: 12px;

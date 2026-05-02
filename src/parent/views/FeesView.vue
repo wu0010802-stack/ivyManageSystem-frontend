@@ -278,7 +278,7 @@ watch(selectedId, fetchRecords)
   background: var(--neutral-0);
   border-radius: 12px;
   padding: 12px 14px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--pt-elev-1);
 }
 
 .totals-title {
@@ -329,7 +329,7 @@ watch(selectedId, fetchRecords)
   border-radius: 12px;
   padding: 12px 14px;
   cursor: pointer;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--pt-elev-1);
 }
 
 .record-row1 {

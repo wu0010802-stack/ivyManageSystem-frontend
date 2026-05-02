@@ -73,9 +73,13 @@ const customStyle = computed(() => {
 </template>
 
 <style scoped>
+/**
+ * Shimmer 用 token-aware 漸層，dark mode 自動切換。
+ * highlight = surface-card（亮面）、base = surface-mute（暗面），平滑掃過。
+ */
 .sk {
   display: block;
-  background: var(--neutral-100, #f1f5f9);
+  background: var(--pt-surface-mute, var(--neutral-100, #f1f5f9));
   border-radius: var(--radius-sm, 4px);
   position: relative;
   overflow: hidden;
@@ -88,15 +92,17 @@ const customStyle = computed(() => {
   background: linear-gradient(
     90deg,
     transparent 0%,
-    rgba(255, 255, 255, 0.6) 50%,
+    var(--pt-surface-card, rgba(255, 255, 255, 0.6)) 50%,
     transparent 100%
   );
+  opacity: 0.6;
   animation: sk-shimmer 1.4s ease-in-out infinite;
 }
 
 .sk-line {
   height: 14px;
   width: 100%;
+  border-radius: 6px;
 }
 
 .sk-line + .sk-line {
@@ -104,10 +110,11 @@ const customStyle = computed(() => {
 }
 
 .sk-card {
-  background: var(--neutral-0, #fff);
+  background: var(--pt-surface-card, var(--neutral-0, #fff));
   padding: var(--card-padding, 20px);
   border-radius: var(--card-radius, var(--radius-lg, 12px));
-  box-shadow: var(--card-shadow, var(--shadow-sm));
+  box-shadow: var(--pt-elev-1, var(--shadow-sm));
+  border: var(--pt-hairline, 1px solid transparent);
   margin-bottom: var(--space-2, 8px);
 }
 
@@ -115,8 +122,8 @@ const customStyle = computed(() => {
   display: flex;
   gap: var(--space-3, 12px);
   padding: var(--space-3, 12px) var(--space-4, 16px);
-  background: var(--neutral-0, #fff);
-  border-bottom: 1px solid var(--neutral-100, #f1f5f9);
+  background: var(--pt-surface-card, var(--neutral-0, #fff));
+  border-bottom: 1px solid var(--pt-border-light, var(--neutral-100, #f1f5f9));
 }
 
 .sk-row-body {
@@ -129,7 +136,7 @@ const customStyle = computed(() => {
   height: 44px;
   border-radius: 50%;
   flex-shrink: 0;
-  background: var(--neutral-100, #f1f5f9);
+  background: var(--pt-surface-mute, var(--neutral-100, #f1f5f9));
   position: relative;
   overflow: hidden;
 }
@@ -141,9 +148,10 @@ const customStyle = computed(() => {
   background: linear-gradient(
     90deg,
     transparent 0%,
-    rgba(255, 255, 255, 0.6) 50%,
+    var(--pt-surface-card, rgba(255, 255, 255, 0.6)) 50%,
     transparent 100%
   );
+  opacity: 0.6;
   animation: sk-shimmer 1.4s ease-in-out infinite;
 }
 
@@ -160,7 +168,7 @@ const customStyle = computed(() => {
   .sk::after,
   .sk-avatar::after {
     animation: none;
-    background: rgba(255, 255, 255, 0.3);
+    opacity: 0.3;
   }
 }
 </style>

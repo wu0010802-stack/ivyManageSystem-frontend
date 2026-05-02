@@ -149,7 +149,7 @@ function moodInfo(m) {
   border-radius: 10px;
   padding: 12px;
   margin-bottom: 10px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  box-shadow: var(--pt-elev-1);
 }
 .today-card { border: 1px solid #cfe6ff; }
 .row { display: flex; align-items: center; gap: 10px; }

@@ -204,7 +204,7 @@ onMounted(async () => {
   border-radius: 10px;
   padding: 16px;
   margin-bottom: 12px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  box-shadow: var(--pt-elev-1);
 }
 .title { margin: 0 0 12px; font-size: 17px; }
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }

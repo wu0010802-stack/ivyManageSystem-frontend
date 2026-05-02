@@ -375,7 +375,7 @@ const submitPassword = async () => {
       <el-header height="60px">
         <div class="portal-header">
           <div class="header-left">
-            <h3>義華幼兒園 - 教職員考勤系統</h3>
+            <h3>常春藤義華幼兒園 - 教職員考勤系統</h3>
           </div>
           <div class="portal-user">
             <A11yMenu />

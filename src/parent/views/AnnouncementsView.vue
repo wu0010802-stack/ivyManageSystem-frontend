@@ -153,7 +153,7 @@ onMounted(fetchData)
   border-radius: 12px;
   padding: 12px 14px;
   cursor: pointer;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--pt-elev-1);
 }
 
 .ann-card.unread {

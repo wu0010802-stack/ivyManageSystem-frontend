@@ -76,19 +76,21 @@ function goBack() {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 48px;
-  background: var(--brand-primary, #3f7d48);
+  min-height: 52px;
+  background: var(--pt-gradient-brand, var(--brand-primary, #3f7d48));
   color: var(--neutral-0, #fff);
   padding-top: env(safe-area-inset-top, 0);
   padding-left: var(--space-2, 8px);
   padding-right: var(--space-2, 8px);
+  /* Soft UI Evolution：標題列加微陰影提供深度，捲動時更分明 */
+  box-shadow: 0 1px 12px rgba(15, 23, 42, 0.08);
 }
 
 .header-title {
   margin: 0;
   font-size: var(--text-lg, 16px);
   font-weight: var(--font-weight-semibold, 600);
-  letter-spacing: 1px;
+  letter-spacing: 0.5px;
   /* 如果太長就截斷，避免 header 變高 */
   overflow: hidden;
   text-overflow: ellipsis;
@@ -97,17 +99,30 @@ function goBack() {
 
 .back-btn {
   position: absolute;
-  left: var(--space-1, 4px);
-  top: env(safe-area-inset-top, 0);
-  background: transparent;
-  border: none;
+  left: var(--space-2, 8px);
+  top: calc(env(safe-area-inset-top, 0) + 4px);
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   color: var(--neutral-0, #fff);
   cursor: pointer;
-  border-radius: var(--radius-md, 8px);
-  padding: 0;
+  border-radius: var(--radius-full, 9999px);
+  padding: 6px;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--transition-fast, 0.15s ease), transform var(--transition-fast, 0.15s ease);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+
+.back-btn:hover {
+  background: rgba(255, 255, 255, 0.22);
 }
 
 .back-btn:active {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.28);
+  transform: scale(0.94);
 }
 </style>

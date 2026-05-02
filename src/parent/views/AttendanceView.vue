@@ -188,7 +188,7 @@ watch([selectedId, year, month], fetchData)
   border-radius: 12px;
   padding: 8px;
   margin-bottom: 12px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--pt-elev-1);
 }
 
 .month-label {
@@ -278,7 +278,7 @@ watch([selectedId, year, month], fetchData)
   border-radius: 12px;
   padding: 12px 16px;
   font-size: 14px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--pt-elev-1);
 }
 
 .detail.empty {

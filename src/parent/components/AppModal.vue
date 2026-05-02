@@ -167,7 +167,10 @@ const dialogStyle = computed(() => ({
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--pt-scrim, rgba(0, 0, 0, 0.5));
+  /* Backdrop blur — Soft UI Evolution 標誌：背景虛化突顯前景 */
+  -webkit-backdrop-filter: blur(var(--pt-backdrop-blur, 8px));
+  backdrop-filter: blur(var(--pt-backdrop-blur, 8px));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -178,9 +181,10 @@ const dialogStyle = computed(() => ({
 }
 
 .modal-dialog {
-  background: var(--neutral-0, #fff);
-  border-radius: var(--radius-lg, 12px);
-  box-shadow: var(--shadow-xl, 0 20px 25px -5px rgba(0,0,0,.1));
+  background: var(--pt-surface-card, var(--neutral-0, #fff));
+  border-radius: var(--radius-xl, 16px);
+  box-shadow: var(--pt-elev-3, var(--shadow-xl, 0 20px 25px -5px rgba(0,0,0,.1)));
+  border: var(--pt-hairline);
   width: 100%;
   max-height: calc(100dvh - var(--space-8, 32px));
   overflow-y: auto;
@@ -203,7 +207,11 @@ const dialogStyle = computed(() => ({
 .modal-fade-enter-from .modal-dialog,
 .modal-fade-leave-to .modal-dialog {
   opacity: 0;
-  transform: translateY(8px) scale(0.98);
+  transform: translateY(16px) scale(0.96);
+}
+.modal-fade-enter-active .modal-dialog {
+  /* 進場用 spring-like easing，更具質感 */
+  transition: transform 0.32s cubic-bezier(0.34, 1.2, 0.64, 1), opacity 0.22s ease;
 }
 
 @media (prefers-reduced-motion: reduce) {

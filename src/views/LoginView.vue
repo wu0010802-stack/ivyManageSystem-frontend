@@ -1,7 +1,8 @@
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { User, Lock } from '@element-plus/icons-vue'
 import { login } from '@/api/auth'
 import { setUserInfo } from '@/utils/auth'
 import { apiError } from '@/utils/error'
@@ -10,6 +11,7 @@ const router = useRouter()
 const loading = ref(false)
 const loginForm = ref(null)
 const usernameInput = ref(null)
+const passwordInput = ref(null)
 
 onMounted(() => {
   requestAnimationFrame(() => {
@@ -27,10 +29,17 @@ const rules = {
   password: [{ required: true, message: '請輸入密碼', trigger: 'blur' }],
 }
 
+const focusFirstInvalid = async () => {
+  await nextTick()
+  if (!form.username) usernameInput.value?.focus?.()
+  else if (!form.password) passwordInput.value?.focus?.()
+}
+
 const handleLogin = async () => {
   try {
     await loginForm.value.validate()
   } catch {
+    focusFirstInvalid()
     return
   }
 
@@ -40,6 +49,7 @@ const handleLogin = async () => {
 
     if (res.data.user.role !== 'admin') {
       ElMessage.error('權限不足，僅管理員可登入後台')
+      usernameInput.value?.focus?.()
       return
     }
 
@@ -49,6 +59,7 @@ const handleLogin = async () => {
     router.push(res.data.must_change_password ? '/change-password' : '/')
   } catch (error) {
     ElMessage.error(apiError(error, '登入失敗'))
+    usernameInput.value?.focus?.()
   } finally {
     loading.value = false
   }
@@ -70,23 +81,34 @@ const handleLogin = async () => {
             <h2>管理系統登入</h2>
           </div>
 
-          <el-form ref="loginForm" :model="form" :rules="rules" @submit.prevent="handleLogin">
-            <el-form-item prop="username">
+          <el-form
+            ref="loginForm"
+            :model="form"
+            :rules="rules"
+            label-position="top"
+            @submit.prevent="handleLogin"
+          >
+            <el-form-item prop="username" label="帳號">
               <el-input
                 ref="usernameInput"
                 v-model="form.username"
-                placeholder="帳號"
+                placeholder="請輸入帳號"
                 size="large"
-                :prefix-icon="'User'"
+                autocomplete="username"
+                aria-label="帳號"
+                :prefix-icon="User"
               />
             </el-form-item>
-            <el-form-item prop="password">
+            <el-form-item prop="password" label="密碼">
               <el-input
+                ref="passwordInput"
                 v-model="form.password"
                 type="password"
-                placeholder="密碼"
+                placeholder="請輸入密碼"
                 size="large"
-                :prefix-icon="'Lock'"
+                autocomplete="current-password"
+                aria-label="密碼"
+                :prefix-icon="Lock"
                 show-password
                 @keyup.enter="handleLogin"
               />
@@ -145,14 +167,10 @@ const handleLogin = async () => {
 }
 
 .brand-mark {
-  width: 152px;
-  height: 152px;
+  width: 240px;
+  height: 240px;
   margin-bottom: 16px;
-  background: #ffffff url('/images/login-bg.png') center / 84% no-repeat;
-  border-radius: 28px;
-  box-shadow:
-    0 1px 2px rgba(28, 30, 33, 0.06),
-    0 12px 28px rgba(28, 30, 33, 0.1);
+  background: url('/images/login-bg.png') center / contain no-repeat;
 }
 
 .login-brand h1 {
@@ -204,6 +222,14 @@ const handleLogin = async () => {
 
 .login-card :deep(.el-form-item) {
   margin-bottom: 12px;
+}
+
+.login-card :deep(.el-form-item__label) {
+  padding: 0 0 4px;
+  color: #1c1e21;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
 }
 
 .login-card :deep(.el-input__wrapper) {
@@ -350,8 +376,8 @@ const handleLogin = async () => {
   }
 
   .brand-mark {
-    width: 112px;
-    height: 112px;
+    width: 160px;
+    height: 160px;
     margin: 0 auto 12px;
   }
 
