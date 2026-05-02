@@ -11,6 +11,8 @@ import '@/assets/design-tokens.css'
 // 家長 App 全域樣式：focus / reduced-motion / tap-highlight / utility class。
 // 必須在 design-tokens.css 之後 import（因為它使用 token 變數）。
 import './styles/globals.css'
+// 無障礙偏好（字級 / 高對比）覆寫，需在 globals.css 之後以便覆蓋。
+import '@/assets/a11y.css'
 
 import { useParentAuthStore } from './stores/parentAuth'
 import { getMe } from './api/profile'
