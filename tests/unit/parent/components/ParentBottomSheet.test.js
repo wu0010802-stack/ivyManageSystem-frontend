@@ -159,3 +159,67 @@ describe('ParentBottomSheet — snap points', () => {
     wrapper.unmount()
   })
 })
+
+describe('ParentBottomSheet — drag gesture', () => {
+  function dispatchPointer(el, type, y) {
+    let evt
+    try {
+      evt = new PointerEvent(type, {
+        bubbles: true, pointerId: 1, clientY: y, pointerType: 'touch',
+      })
+    } catch (_e) {
+      // happy-dom 若沒有 PointerEvent polyfill 時退回 Event 並手動掛 clientY
+      evt = new Event(type, { bubbles: true })
+      evt.clientY = y
+      evt.pointerId = 1
+      evt.pointerType = 'touch'
+    }
+    el.dispatchEvent(evt)
+  }
+
+  it('drag down 超過 100px 從 peek 關閉', async () => {
+    const wrapper = mount(ParentBottomSheet, {
+      ...mountOpts,
+      props: { modelValue: true, snapPoints: ['peek', 'mid', 'full'], defaultSnap: 'peek' },
+    })
+    await new Promise((r) => setTimeout(r, 0))
+    const handle = wrapper.find('.pt-bsheet-handle').element
+    dispatchPointer(handle, 'pointerdown', 100)
+    dispatchPointer(window, 'pointermove', 250)
+    dispatchPointer(window, 'pointerup', 250)
+    await wrapper.vm.$nextTick()
+    expect(wrapper.emitted('update:modelValue')?.[0]).toEqual([false])
+    wrapper.unmount()
+  })
+
+  it('drag up 從 mid 切到 full', async () => {
+    const wrapper = mount(ParentBottomSheet, {
+      ...mountOpts,
+      props: { modelValue: true, snapPoints: ['mid', 'full'], defaultSnap: 'mid' },
+    })
+    await new Promise((r) => setTimeout(r, 0))
+    const handle = wrapper.find('.pt-bsheet-handle').element
+    dispatchPointer(handle, 'pointerdown', 300)
+    dispatchPointer(window, 'pointermove', 100)
+    dispatchPointer(window, 'pointerup', 100)
+    await wrapper.vm.$nextTick()
+    expect(wrapper.emitted('snap-change')?.at(-1)).toEqual(['full'])
+    wrapper.unmount()
+  })
+
+  it('小幅拖曳（< 30px）回彈到原 snap', async () => {
+    const wrapper = mount(ParentBottomSheet, {
+      ...mountOpts,
+      props: { modelValue: true, snapPoints: ['mid', 'full'], defaultSnap: 'mid' },
+    })
+    await new Promise((r) => setTimeout(r, 0))
+    const handle = wrapper.find('.pt-bsheet-handle').element
+    dispatchPointer(handle, 'pointerdown', 300)
+    dispatchPointer(window, 'pointermove', 320)
+    dispatchPointer(window, 'pointerup', 320)
+    await wrapper.vm.$nextTick()
+    expect(wrapper.emitted('snap-change')).toBeFalsy()
+    expect(wrapper.emitted('update:modelValue')).toBeFalsy()
+    wrapper.unmount()
+  })
+})

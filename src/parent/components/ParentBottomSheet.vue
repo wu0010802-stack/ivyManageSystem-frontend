@@ -2,9 +2,9 @@
 /**
  * 家長端底部彈窗（snap points 進階版）。
  *
- * 提供（drag/keyboard 在 Task 1.6/1.7 接續，本檔先建好 snap 與無障礙基底）：
+ * 提供（keyboard 模式於 Task 1.7 接續）：
  *  - 三段 snap：peek (30vh) / mid (60vh) / full (92vh)
- *  - drag-to-dismiss 與慣性吸附
+ *  - drag-to-dismiss 與速度/距離吸附（>600 px/s 視為快滑、<30px 回彈）
  *  - keyboard 開啟時自動切 full + 鎖拖曳（避輸入框被遮）
  *  - role="dialog"、focus trap、ESC 關閉、body scroll lock
  *  - safe-area-inset-bottom
@@ -44,6 +44,9 @@ const previouslyFocused = ref(null)
 const headerId = `pt-bsheet-${Math.random().toString(36).slice(2, 9)}`
 
 const SNAP_HEIGHT = { peek: '30vh', mid: '60vh', full: '92vh' }
+// SNAP_ORDER 由上至下：full（最高）→ mid → peek（最低）。
+// 「向下吸附」= index + 1（變矮）；「向上吸附」= index - 1（變高）。
+const SNAP_ORDER = ['full', 'mid', 'peek']
 const currentSnap = ref(props.defaultSnap)
 
 function setSnap(snap) {
@@ -51,6 +54,72 @@ function setSnap(snap) {
   currentSnap.value = snap
   emit('snap-change', snap)
 }
+
+// ---------- drag gesture ----------
+const dragStartY = ref(0)
+const dragStartTime = ref(0)
+const dragOffset = ref(0)
+const isDragging = ref(false)
+
+function onDragStart(e) {
+  isDragging.value = true
+  dragStartY.value = e.clientY
+  dragStartTime.value = Date.now()
+  dragOffset.value = 0
+  window.addEventListener('pointermove', onDragMove)
+  window.addEventListener('pointerup', onDragEnd, { once: true })
+  window.addEventListener('pointercancel', onDragEnd, { once: true })
+}
+
+function onDragMove(e) {
+  if (!isDragging.value) return
+  // 上限 -200px：避免拖太上方造成不自然的飛離
+  dragOffset.value = Math.max(-200, e.clientY - dragStartY.value)
+}
+
+function onDragEnd(e) {
+  window.removeEventListener('pointermove', onDragMove)
+  if (!isDragging.value) return
+  const delta = e.clientY - dragStartY.value
+  const elapsed = Math.max(1, Date.now() - dragStartTime.value)
+  const velocity = (delta / elapsed) * 1000 // px/s（正值=向下、負值=向上）
+  isDragging.value = false
+  dragOffset.value = 0
+
+  const enabled = SNAP_ORDER.filter((s) => props.snapPoints.includes(s))
+  const currentIdx = enabled.indexOf(currentSnap.value)
+
+  // 距離不足直接回彈，避免短促觸控被誤判為高速滑動（合成事件下 elapsed≈1ms 會撐出極大 velocity）
+  if (Math.abs(delta) < 30) return // 回彈（不切 snap）
+
+  // 速度判定（>600 px/s 視為快滑）
+  if (velocity > 600) {
+    if (currentSnap.value === enabled[enabled.length - 1]) {
+      if (props.dismissible) close()
+    } else {
+      setSnap(enabled[Math.min(enabled.length - 1, currentIdx + 1)])
+    }
+    return
+  }
+  if (velocity < -600) {
+    setSnap(enabled[Math.max(0, currentIdx - 1)])
+    return
+  }
+  // 距離判定
+  if (delta > 100 && currentSnap.value === 'peek' && props.dismissible) {
+    close()
+    return
+  }
+  if (delta > 60) {
+    setSnap(enabled[Math.min(enabled.length - 1, currentIdx + 1)])
+  } else if (delta < -60) {
+    setSnap(enabled[Math.max(0, currentIdx - 1)])
+  }
+}
+
+const dialogTransform = computed(() =>
+  isDragging.value ? `translateY(${dragOffset.value}px)` : '',
+)
 
 watch(
   () => props.modelValue,
@@ -75,7 +144,7 @@ function getFocusableElements() {
     dialogRef.value.querySelectorAll(
       'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
     ),
-  )
+  ).filter((el) => !el.classList.contains('pt-bsheet-handle'))
 }
 
 function trapFocus(e) {
@@ -143,14 +212,25 @@ const hasFooterSlot = computed(() => !!slots.footer)
         <div
           ref="dialogRef"
           class="pt-bsheet-dialog"
-          :style="{ '--pt-bsheet-h': snapHeight }"
+          :style="{
+            '--pt-bsheet-h': snapHeight,
+            transform: dialogTransform,
+            transition: isDragging ? 'none' : undefined,
+          }"
           role="dialog"
           aria-modal="true"
           :aria-labelledby="headerId"
           tabindex="-1"
           @keydown="onKeydown"
         >
-          <div v-if="showHandle" class="pt-bsheet-handle" aria-hidden="true" />
+          <div
+            v-if="showHandle"
+            class="pt-bsheet-handle"
+            role="button"
+            tabindex="0"
+            aria-label="拖曳調整高度"
+            @pointerdown="onDragStart"
+          />
 
           <div :id="headerId" class="pt-bsheet-header">
             <slot name="header">
