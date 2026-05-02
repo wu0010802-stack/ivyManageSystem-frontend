@@ -5,6 +5,7 @@ import { useParentAuthStore } from '../stores/parentAuth'
 import { getUnreadCount } from '../api/announcements'
 import { getMessageUnreadCount } from '../api/messages'
 import AppHeader from '../components/AppHeader.vue'
+import ConnectionBanner from '../components/ConnectionBanner.vue'
 import ParentIcon from '../components/ParentIcon.vue'
 
 const route = useRoute()
@@ -47,6 +48,10 @@ watch(() => route.fullPath, refreshUnread)
 <template>
   <div class="parent-layout">
     <AppHeader v-if="!isPublic" />
+
+    <div v-if="!isPublic" class="parent-conn-slot">
+      <ConnectionBanner />
+    </div>
 
     <main class="parent-main" :class="{ 'is-public': isPublic, 'with-tabbar': !hideTabBar && !isPublic }">
       <slot />
@@ -206,5 +211,13 @@ watch(() => route.fullPath, refreshUnread)
   font-variant-numeric: tabular-nums;
   /* 加細白邊讓 badge 與 icon-bg 分離 */
   box-shadow: 0 0 0 2px var(--pt-surface-card, var(--neutral-0));
+}
+
+/* ConnectionBanner sticky slot：AppHeader 本身為 sticky top:0（高度約 52px + safe-area-inset-top），
+   故 banner 黏在 AppHeader 之下；z-index 介於 AppHeader (--z-sticky:10) 與 tab-bar (50) 之間 */
+.parent-conn-slot {
+  position: sticky;
+  top: calc(var(--header-height, 52px) + env(safe-area-inset-top, 0));
+  z-index: 9;
 }
 </style>
