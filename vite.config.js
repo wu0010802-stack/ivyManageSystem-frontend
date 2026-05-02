@@ -7,6 +7,15 @@ import Components from 'unplugin-vue-components/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 
 function manualChunks(id) {
+    // Vite SFC helper（plugin-vue:export-helper）固定到 vue-core。
+    // 不鎖的話 Rollup 會把它推到第一個用 SFC 的 chunk（曾跑去 parent-app），
+    // 造成 shared-common ↔ parent-app 循環依賴 → TDZ：
+    //   Cannot access 'B' before initialization
+    // 必須在 node_modules / src 過濾之前判斷，因為它是 virtual module。
+    if (id.includes('plugin-vue:export-helper')) {
+        return 'vue-core'
+    }
+
     if (!id.includes('node_modules') && !id.includes('/src/')) {
         return
     }

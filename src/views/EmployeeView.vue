@@ -113,8 +113,12 @@ const activeTab = ref('basic')
 const { reset: resetDirty, basicDirty, salaryDirty } = useEmployeeFormDirty(form, BASIC_TAB_FIELDS, SALARY_TAB_FIELDS)
 
 // ── 薪資變更預覽對話框 ────────────────────────────────
+// 後端 finance_guards：底薪 / 時薪 / 投保級距變動需 adjustment_reason；
+// 大額（合計 > 1000）還需 ACTIVITY_PAYMENT_APPROVE 權限。
+const SALARY_AMOUNT_FIELDS = ['base_salary', 'hourly_rate', 'insurance_salary_level']
 const previewDialog = reactive({
-  visible: false, title: '', changes: {}, requireConfirm: false, onConfirm: null,
+  visible: false, title: '', changes: {}, requireConfirm: false,
+  requireReason: false, onConfirm: null,
 })
 
 // ── 自動建議薪資 ──────────────────────────────────────
@@ -642,12 +646,13 @@ const saveBasic = async () => {
 }
 
 // ── 薪資更新（強制預覽確認 modal）────────────────────
-const submitSalary = async () => {
+const submitSalary = async (adjustmentReason = null) => {
   const payload = dirtyToPayload(salaryDirty.value)
   if (Object.keys(payload).length === 0) {
     ElMessage.info('無變動')
     return
   }
+  if (adjustmentReason) payload.adjustment_reason = adjustmentReason
   try {
     await updateEmployeeSalary(form.id, payload)
     ElMessage.success(`薪資資料已更新（${Object.keys(payload).length} 個欄位）`)
@@ -664,11 +669,14 @@ const saveSalary = () => {
     ElMessage.info('無變動')
     return
   }
+  // 任一直接金額欄位（底薪/時薪/投保級距）有變動 → 後端會要求 adjustment_reason
+  const needsReason = SALARY_AMOUNT_FIELDS.some((f) => f in diff)
   Object.assign(previewDialog, {
     visible: true,
     title: '薪資變更確認',
     changes: diff,
     requireConfirm: true,
+    requireReason: needsReason,
     onConfirm: submitSalary,
   })
 }
@@ -822,8 +830,9 @@ onMounted(async () => {
       :title="previewDialog.title"
       :changes="previewDialog.changes"
       :require-confirm="previewDialog.requireConfirm"
+      :require-reason="previewDialog.requireReason"
       :field-labels="FIELD_LABELS"
-      @confirm="previewDialog.onConfirm?.()"
+      @confirm="previewDialog.onConfirm?.($event)"
     />
 
     <!-- Detail Dialog：桌機左右欄、手機全螢幕單欄 -->
