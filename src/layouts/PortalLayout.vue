@@ -10,6 +10,7 @@ import { changePassword, endImpersonate } from '@/api/auth'
 import { getUserInfo, clearAuth, setUserInfo } from '@/utils/auth'
 import OfflineIndicator from '@/components/OfflineIndicator.vue'
 import { apiError } from '@/utils/error'
+import A11yMenu from '@/components/common/A11yMenu.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -373,6 +374,7 @@ const submitPassword = async () => {
             <h3>義華幼兒園 - 教職員考勤系統</h3>
           </div>
           <div class="portal-user">
+            <A11yMenu />
             <!-- 返回後台按鈕 -->
             <el-button
               v-if="showBackToAdmin"

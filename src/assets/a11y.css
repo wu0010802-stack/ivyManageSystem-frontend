@@ -40,3 +40,37 @@ a:focus-visible {
   outline: 2px solid var(--el-color-primary, #409eff);
   outline-offset: 2px;
 }
+
+/* ===== 字級預設類別（掛在 <html>）===== */
+
+/* 預設無類別 = ivy-size-md（與 :root 基準等效） */
+html.ivy-size-sm { --ivy-font-scale: 0.93; }   /* ~14px body */
+html.ivy-size-md { --ivy-font-scale: 1; }      /*  15px body（與 :root 同） */
+html.ivy-size-lg { --ivy-font-scale: 1.13; }   /* ~17px body */
+html.ivy-size-xl { --ivy-font-scale: 1.27; }   /* ~19px body */
+
+html[class*="ivy-size-"] {
+  --el-font-size-extra-small: calc(13px * var(--ivy-font-scale, 1));
+  --el-font-size-small:       calc(14px * var(--ivy-font-scale, 1));
+  --el-font-size-base:        calc(15px * var(--ivy-font-scale, 1));
+  --el-font-size-medium:      calc(15px * var(--ivy-font-scale, 1));
+  --el-font-size-large:       calc(17px * var(--ivy-font-scale, 1));
+  --el-font-size-extra-large: calc(19px * var(--ivy-font-scale, 1));
+}
+
+/* ===== 高對比模式 ===== */
+html.ivy-contrast-high {
+  --el-text-color-primary: #000000;
+  --el-text-color-regular: #1a1d20;
+  --el-text-color-secondary: #2e3338;
+  --el-text-color-placeholder: #424850;
+  --el-border-color: #6b7280;
+  --el-border-color-light: #9ca3af;
+  --el-border-color-lighter: #d1d5db;
+  --el-color-primary: #1d4ed8;
+}
+
+html.ivy-contrast-high :focus-visible {
+  outline: 3px solid #000;
+  outline-offset: 2px;
+}

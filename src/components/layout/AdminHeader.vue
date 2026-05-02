@@ -35,6 +35,8 @@
 
         <AdminNotificationBell :is-mobile="isMobile" />
 
+        <A11yMenu />
+
         <!-- 進入前台按鈕 -->
         <el-button
           v-if="canEnterPortal"
@@ -107,6 +109,7 @@ import { getUserInfo, clearAuth, setUserInfo } from '@/utils/auth'
 import GlobalSearch from '@/components/GlobalSearch.vue'
 import { apiError } from '@/utils/error'
 import AdminNotificationBell from '@/components/layout/AdminNotificationBell.vue'
+import A11yMenu from '@/components/common/A11yMenu.vue'
 
 defineProps({
   isMobile: { type: Boolean, default: false }
