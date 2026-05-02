@@ -68,6 +68,7 @@ html.ivy-contrast-high {
   --el-border-color-light: #9ca3af;
   --el-border-color-lighter: #d1d5db;
   --el-color-primary: #1d4ed8;
+  --el-color-primary-light-9: #dbeafe;  /* 配合 primary 的高對比版底色 */
 }
 
 html.ivy-contrast-high :focus-visible {

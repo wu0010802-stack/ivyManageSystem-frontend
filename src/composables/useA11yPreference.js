@@ -4,6 +4,14 @@ import { useA11yPreferenceStore } from '@/stores/a11yPreference'
 
 const STORAGE_KEY = 'ivy.a11y'
 const SIZE_CLASSES = ['ivy-size-sm', 'ivy-size-md', 'ivy-size-lg', 'ivy-size-xl']
+const VALID_SIZES = ['sm', 'md', 'lg', 'xl']
+const VALID_CONTRASTS = ['normal', 'high']
+
+let initialized = false
+
+export function _resetForTests() {
+  initialized = false
+}
 
 /**
  * 無障礙偏好 composable
@@ -37,12 +45,16 @@ export function useA11yPreference() {
   }
 
   function init() {
+    if (initialized) return
+    initialized = true
     try {
       const raw = localStorage.getItem(STORAGE_KEY)
       if (raw) {
         const parsed = JSON.parse(raw)
         if (parsed && typeof parsed === 'object') {
-          Object.assign(store.$state, parsed)
+          if (VALID_SIZES.includes(parsed.fontSize)) store.fontSize = parsed.fontSize
+          if (VALID_CONTRASTS.includes(parsed.contrast)) store.contrast = parsed.contrast
+          if (typeof parsed.colorBlind === 'boolean') store.colorBlind = parsed.colorBlind
         }
       }
     } catch {

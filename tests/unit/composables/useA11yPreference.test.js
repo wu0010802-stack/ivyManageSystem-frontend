@@ -1,13 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
-import { useA11yPreference } from '@/composables/useA11yPreference'
+import { useA11yPreference, _resetForTests } from '@/composables/useA11yPreference'
 import { useA11yPreferenceStore } from '@/stores/a11yPreference'
 
 const STORAGE_KEY = 'ivy.a11y'
 
 describe('useA11yPreference', () => {
   beforeEach(() => {
+    _resetForTests()
     setActivePinia(createPinia())
     document.documentElement.className = ''
     localStorage.clear()
@@ -46,6 +47,16 @@ describe('useA11yPreference', () => {
     localStorage.setItem(STORAGE_KEY, '{ not valid json')
     useA11yPreference().init()
     expect(document.documentElement.classList.contains('ivy-size-md')).toBe(true)
+  })
+
+  it('init() localStorage 含未知值時跳過該欄位，保留預設', () => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ fontSize: 'foo', contrast: 'high' }))
+    useA11yPreference().init()
+    // fontSize 'foo' 不在白名單 → 維持預設 md
+    expect(document.documentElement.classList.contains('ivy-size-md')).toBe(true)
+    expect(document.documentElement.classList.contains('ivy-size-foo')).toBe(false)
+    // contrast 'high' 在白名單 → 套用
+    expect(document.documentElement.classList.contains('ivy-contrast-high')).toBe(true)
   })
 
   it('reset() 清除類別並回預設', async () => {
