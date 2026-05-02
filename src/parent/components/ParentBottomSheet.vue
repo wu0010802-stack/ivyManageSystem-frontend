@@ -43,6 +43,27 @@ const dialogRef = ref(null)
 const previouslyFocused = ref(null)
 const headerId = `pt-bsheet-${Math.random().toString(36).slice(2, 9)}`
 
+const SNAP_HEIGHT = { peek: '30vh', mid: '60vh', full: '92vh' }
+const currentSnap = ref(props.defaultSnap)
+
+function setSnap(snap) {
+  if (!props.snapPoints.includes(snap)) return
+  currentSnap.value = snap
+  emit('snap-change', snap)
+}
+
+watch(
+  () => props.modelValue,
+  (isOpen) => {
+    if (isOpen) currentSnap.value = props.defaultSnap
+  },
+  { flush: 'pre' },
+)
+
+const snapHeight = computed(() => SNAP_HEIGHT[currentSnap.value])
+
+defineExpose({ setSnap })
+
 function close() {
   emit('update:modelValue', false)
   emit('close')
@@ -122,6 +143,7 @@ const hasFooterSlot = computed(() => !!slots.footer)
         <div
           ref="dialogRef"
           class="pt-bsheet-dialog"
+          :style="{ '--pt-bsheet-h': snapHeight }"
           role="dialog"
           aria-modal="true"
           :aria-labelledby="headerId"
@@ -169,7 +191,9 @@ const hasFooterSlot = computed(() => !!slots.footer)
   box-shadow: var(--pt-elev-3);
   width: 100%;
   max-width: 640px;
+  height: var(--pt-bsheet-h, 60vh);
   max-height: 92vh;
+  transition: height 0.32s cubic-bezier(0.32, 0.72, 0, 1);
   display: flex;
   flex-direction: column;
   outline: none;

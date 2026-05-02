@@ -121,3 +121,41 @@ describe('ParentBottomSheet — a11y', () => {
     wrapper.unmount()
   })
 })
+
+describe('ParentBottomSheet — snap points', () => {
+  it('defaultSnap=peek 時 dialog 高度為 30vh', async () => {
+    const wrapper = mount(ParentBottomSheet, {
+      ...mountOpts,
+      props: { modelValue: true, snapPoints: ['peek', 'mid', 'full'], defaultSnap: 'peek' },
+    })
+    await new Promise((r) => setTimeout(r, 0))
+    const dialog = wrapper.find('.pt-bsheet-dialog').element
+    expect(dialog.style.getPropertyValue('--pt-bsheet-h')).toBe('30vh')
+    wrapper.unmount()
+  })
+
+  it('defaultSnap=full 時為 92vh', async () => {
+    const wrapper = mount(ParentBottomSheet, {
+      ...mountOpts,
+      props: { modelValue: true, defaultSnap: 'full' },
+    })
+    await new Promise((r) => setTimeout(r, 0))
+    expect(wrapper.find('.pt-bsheet-dialog').element.style.getPropertyValue('--pt-bsheet-h'))
+      .toBe('92vh')
+    wrapper.unmount()
+  })
+
+  it('呼叫 setSnap("full") 切到 full 並 emit snap-change', async () => {
+    const wrapper = mount(ParentBottomSheet, {
+      ...mountOpts,
+      props: { modelValue: true, snapPoints: ['mid', 'full'], defaultSnap: 'mid' },
+    })
+    await new Promise((r) => setTimeout(r, 0))
+    wrapper.vm.setSnap('full')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.pt-bsheet-dialog').element.style.getPropertyValue('--pt-bsheet-h'))
+      .toBe('92vh')
+    expect(wrapper.emitted('snap-change')[0]).toEqual(['full'])
+    wrapper.unmount()
+  })
+})
