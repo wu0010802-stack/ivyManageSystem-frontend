@@ -195,7 +195,12 @@ watch(
   },
 )
 
-onBeforeUnmount(() => unlockBody())
+onBeforeUnmount(() => {
+  unlockBody()
+  window.removeEventListener('pointermove', onDragMove)
+  window.removeEventListener('pointerup', onDragEnd)
+  window.removeEventListener('pointercancel', onDragEnd)
+})
 
 const hasHeaderSlot = computed(() => !!slots.header)
 const hasFooterSlot = computed(() => !!slots.footer)
