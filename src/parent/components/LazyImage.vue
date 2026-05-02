@@ -91,9 +91,9 @@ function onError() { errored.value = true }
 }
 .pt-lazyimg-shimmer {
   background: linear-gradient(90deg,
-    var(--pt-surface-mute) 0%,
-    var(--pt-surface-mute-soft) 50%,
-    var(--pt-surface-mute) 100%);
+    var(--pt-surface-mute, #f0f2f5) 0%,
+    var(--pt-surface-mute-soft, #f6f8fa) 50%,
+    var(--pt-surface-mute, #f0f2f5) 100%);
   background-size: 200% 100%;
   animation: pt-shimmer 1.4s ease-in-out infinite;
 }
@@ -102,5 +102,10 @@ function onError() { errored.value = true }
   width: 100%; height: 100%;
   color: var(--pt-text-muted, #94a3b8);
   font-size: 24px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pt-lazyimg-shimmer {
+    animation: none;
+  }
 }
 </style>
