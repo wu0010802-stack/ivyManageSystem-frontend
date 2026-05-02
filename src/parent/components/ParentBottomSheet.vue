@@ -47,6 +47,13 @@ function close() {
   emit('close')
 }
 
+function onKeydown(e) {
+  if (e.key === 'Escape' && props.dismissible) {
+    e.stopPropagation()
+    close()
+  }
+}
+
 const hasHeaderSlot = computed(() => !!slots.header)
 const hasFooterSlot = computed(() => !!slots.footer)
 </script>
@@ -66,6 +73,7 @@ const hasFooterSlot = computed(() => !!slots.footer)
           aria-modal="true"
           :aria-labelledby="headerId"
           tabindex="-1"
+          @keydown="onKeydown"
         >
           <div v-if="showHandle" class="pt-bsheet-handle" aria-hidden="true" />
 

@@ -46,3 +46,48 @@ describe('ParentBottomSheet — basic render', () => {
     wrapper.unmount()
   })
 })
+
+describe('ParentBottomSheet — dismiss', () => {
+  it('dismissible=true 點 backdrop emit update:modelValue=false', async () => {
+    const wrapper = mount(ParentBottomSheet, {
+      ...mountOpts,
+      props: { modelValue: true, dismissible: true },
+    })
+    await wrapper.find('.pt-bsheet-overlay').trigger('click')
+    const evts = wrapper.emitted('update:modelValue')
+    expect(evts).toBeTruthy()
+    expect(evts[0]).toEqual([false])
+    wrapper.unmount()
+  })
+
+  it('dismissible=false 點 backdrop 不 emit', async () => {
+    const wrapper = mount(ParentBottomSheet, {
+      ...mountOpts,
+      props: { modelValue: true, dismissible: false },
+    })
+    await wrapper.find('.pt-bsheet-overlay').trigger('click')
+    expect(wrapper.emitted('update:modelValue')).toBeFalsy()
+    wrapper.unmount()
+  })
+
+  it('ESC 鍵在 dismissible=true 時關閉', async () => {
+    const wrapper = mount(ParentBottomSheet, {
+      ...mountOpts,
+      props: { modelValue: true, dismissible: true },
+    })
+    const dialog = wrapper.find('[role="dialog"]')
+    await dialog.trigger('keydown', { key: 'Escape' })
+    expect(wrapper.emitted('update:modelValue')[0]).toEqual([false])
+    wrapper.unmount()
+  })
+
+  it('ESC 鍵在 dismissible=false 時不關閉', async () => {
+    const wrapper = mount(ParentBottomSheet, {
+      ...mountOpts,
+      props: { modelValue: true, dismissible: false },
+    })
+    await wrapper.find('[role="dialog"]').trigger('keydown', { key: 'Escape' })
+    expect(wrapper.emitted('update:modelValue')).toBeFalsy()
+    wrapper.unmount()
+  })
+})
