@@ -17,7 +17,7 @@ import ParentIcon from '../components/ParentIcon.vue'
 import AppModal from '../components/AppModal.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import LeaveListCard from '../components/leaves/LeaveListCard.vue'
-import LeaveAttachments from '../components/leaves/LeaveAttachments.vue'
+import LeaveDetailSheet from '../components/leaves/LeaveDetailSheet.vue'
 import { useIncrementalRender } from '../composables/useIncrementalRender'
 
 const childrenStore = useChildrenStore()
@@ -301,64 +301,18 @@ onMounted(async () => {
 
     <div v-if="hasMoreLeaves" ref="leavesSentinel" class="render-sentinel" aria-hidden="true" />
 
-    <!-- detail / timeline / 附件 modal -->
-    <AppModal
-      v-model:open="detailOpen"
-      labelled-by="leave-detail-title"
-    >
-      <template v-if="detail">
-        <div class="detail-header">
-          <span id="leave-detail-title" class="detail-title">{{ detail.leave_type }} 申請</span>
-          <button class="close" type="button" aria-label="關閉" @click="closeDetail">
-            <ParentIcon name="close" size="sm" />
-          </button>
-        </div>
-        <div class="detail-body">
-          <div class="detail-line">
-            <span class="detail-label">學生</span>
-            <span>{{ studentNameMap.get(detail.student_id) || '—' }}</span>
-          </div>
-          <div class="detail-line">
-            <span class="detail-label">期間</span>
-            <span>{{ detail.start_date }} ~ {{ detail.end_date }}</span>
-          </div>
-          <div v-if="detail.reason" class="detail-line">
-            <span class="detail-label">原因</span>
-            <span>{{ detail.reason }}</span>
-          </div>
-          <div v-if="detail.review_note" class="detail-line">
-            <span class="detail-label">校方備註</span>
-            <span>{{ detail.review_note }}</span>
-          </div>
-
-          <h4 class="section-h">審核進度</h4>
-          <div class="timeline">
-            <div
-              v-for="step in timelineSteps(detail)"
-              :key="step.key"
-              class="step"
-              :class="{ done: step.done }"
-            >
-              <span class="step-dot" />
-              <span class="step-label">{{ step.label }}</span>
-              <span v-if="step.timestamp" class="step-time">
-                {{ step.timestamp.replace('T', ' ').slice(0, 16) }}
-              </span>
-            </div>
-          </div>
-
-          <h4 class="section-h">佐證附件</h4>
-          <LeaveAttachments
-            :attachments="detail.attachments || []"
-            :editable="detail.status === 'approved' && detail.start_date > todayStr"
-            :uploading="detailUploading"
-            :url-resolver="attUrl"
-            @upload="onAttUpload"
-            @remove="askRemoveAttachment"
-          />
-        </div>
-      </template>
-    </AppModal>
+    <!-- detail / timeline / 附件 sheet -->
+    <LeaveDetailSheet
+      v-model="detailOpen"
+      :leave="detail"
+      :student-name="detail ? (studentNameMap.get(detail.student_id) || '') : ''"
+      :timeline-steps="detail ? timelineSteps(detail) : []"
+      :att-uploading="detailUploading"
+      :att-editable="!!detail && detail.status === 'approved' && detail.start_date > todayStr"
+      :url-resolver="attUrl"
+      @att-upload="onAttUpload"
+      @att-remove="askRemoveAttachment"
+    />
 
     <!-- 新申請 modal -->
     <AppModal
@@ -493,7 +447,6 @@ onMounted(async () => {
   color: var(--pt-text-placeholder);
 }
 
-.detail-header,
 .form-header {
   display: flex;
   align-items: center;
@@ -501,7 +454,6 @@ onMounted(async () => {
   border-bottom: 1px solid var(--pt-border-light);
 }
 
-.detail-title,
 .form-title {
   flex: 1;
   font-weight: 600;
@@ -569,66 +521,6 @@ onMounted(async () => {
   justify-content: flex-end;
   padding: 12px 16px;
   border-top: 1px solid var(--pt-border-light);
-}
-
-.detail-body {
-  padding: 16px;
-}
-
-.detail-line {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 6px;
-  font-size: 14px;
-  color: var(--pt-text-strong);
-}
-.detail-label {
-  width: 56px;
-  color: var(--pt-text-placeholder);
-  flex-shrink: 0;
-}
-
-.section-h {
-  margin: 16px 0 8px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--pt-text-muted);
-}
-
-/* 時間軸 */
-.timeline {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding-left: 4px;
-}
-.step {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 13px;
-  color: var(--pt-text-faint);
-}
-.step.done {
-  color: var(--pt-text-strong);
-}
-.step-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--pt-border);
-  border: 2px solid var(--pt-border-strong);
-}
-.step.done .step-dot {
-  background: var(--brand-primary);
-  border-color: var(--brand-primary);
-}
-.step-label {
-  flex: 1;
-}
-.step-time {
-  font-size: 11px;
-  color: var(--pt-text-placeholder);
 }
 
 .render-sentinel { height: 1px; }
