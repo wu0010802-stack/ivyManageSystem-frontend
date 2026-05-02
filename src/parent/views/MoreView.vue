@@ -15,6 +15,7 @@ const groups = [
   {
     title: '孩子與園所',
     items: [
+      { icon: '📓', title: '聯絡簿', path: '/contact-book' },
       { icon: '📅', title: '本週行程', path: '/calendar' },
       { icon: '📝', title: '請假', path: '/leaves' },
       { icon: '💊', title: '用藥單', path: '/medications' },

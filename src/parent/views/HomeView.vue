@@ -86,10 +86,10 @@ function refresh() {
 }
 
 const QUICK_ACTIONS = [
+  { icon: '📓', label: '聯絡簿', path: '/contact-book' },
   { icon: '📅', label: '本週行程', path: '/calendar' },
   { icon: '📝', label: '請假', path: '/leaves' },
   { icon: '💊', label: '用藥單', path: '/medications' },
-  { icon: '💬', label: '訊息', path: '/messages' },
 ]
 
 // 接送狀態文案：對應後端 status (pending/acknowledged/completed)

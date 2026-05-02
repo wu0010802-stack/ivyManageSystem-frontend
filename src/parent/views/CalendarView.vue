@@ -14,6 +14,9 @@ const CATEGORY_META = {
   fee_due: { icon: '💴', label: '繳費截止', color: '#c0392b' },
   announcement: { icon: '📢', label: '公告', color: '#92400e' },
   holiday: { icon: '🏖', label: '假日', color: '#3f7d48' },
+  contact_book: { icon: '📓', label: '聯絡簿', color: '#0e8e6f' },
+  leave: { icon: '📝', label: '請假', color: '#7c3aed' },
+  medication: { icon: '💊', label: '用藥', color: '#d97706' },
 }
 
 const groupedByDate = computed(() => {
@@ -41,9 +44,15 @@ async function fetchData() {
 }
 
 function gotoItem(it) {
-  if (it.category === 'fee_due') router.push('/fees')
-  else if (it.category === 'event') router.push('/events')
-  else if (it.category === 'announcement') router.push('/announcements')
+  // 後端同時送 kind / category（向後相容），新欄位優先
+  const kind = it.kind || it.category
+  const id = it.target_id ?? it.ref?.id
+  if (kind === 'fee_due') router.push('/fees')
+  else if (kind === 'event' || kind === 'holiday') router.push('/events')
+  else if (kind === 'announcement') router.push('/announcements')
+  else if (kind === 'contact_book' && id) router.push(`/contact-book/${id}`)
+  else if (kind === 'leave') router.push('/leaves')
+  else if (kind === 'medication' && id) router.push(`/medications/${id}`)
 }
 
 function dayLabel(iso) {
