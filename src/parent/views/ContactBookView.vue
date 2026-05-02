@@ -6,6 +6,9 @@ import { useChildSelection } from '../composables/useChildSelection'
 import ChildSelector from '../components/ChildSelector.vue'
 import { getTodayContactBook, listContactBook } from '../api/contactBook'
 import { toast } from '../utils/toast'
+import ParentIcon from '../components/ParentIcon.vue'
+import SkeletonBlock from '../components/SkeletonBlock.vue'
+import { useIncrementalRender } from '../composables/useIncrementalRender'
 
 const router = useRouter()
 const childrenStore = useChildrenStore()
@@ -15,6 +18,12 @@ const today = ref(null)
 const history = ref([])
 const loading = ref(false)
 
+// 漸進渲染：歷史紀錄量大時不一次渲染整個 DOM
+const { visible: visibleHistory, sentinelRef, hasMore } = useIncrementalRender(
+  history,
+  { pageSize: 20 },
+)
+
 const studentName = computed(() => {
   const c = (childrenStore.items || []).find(
     (x) => x.student_id === selectedStudentId.value,
@@ -22,12 +31,14 @@ const studentName = computed(() => {
   return c?.name || ''
 })
 
-const MOOD_EMOJI = {
-  happy: '😄',
-  normal: '🙂',
-  tired: '😴',
-  sad: '😢',
-  sick: '🤒',
+// 心情 emoji 屬於內容語意（教師選的小孩當日情緒），保留 emoji 並用
+// <span role="img" aria-label="..."> 包裝，方便 screen reader 念出。
+const MOOD_OPTIONS = {
+  happy: { emoji: '😄', text: '開心' },
+  normal: { emoji: '🙂', text: '普通' },
+  tired: { emoji: '😴', text: '想睡' },
+  sad: { emoji: '😢', text: '難過' },
+  sick: { emoji: '🤒', text: '不舒服' },
 }
 
 async function fetchAll() {
@@ -58,8 +69,8 @@ function goDetail(entryId) {
   router.push({ path: `/contact-book/${entryId}` })
 }
 
-function moodEmoji(m) {
-  return MOOD_EMOJI[m] || ''
+function moodInfo(m) {
+  return MOOD_OPTIONS[m] || null
 }
 </script>
 
@@ -67,13 +78,20 @@ function moodEmoji(m) {
   <div class="cb">
     <ChildSelector />
 
-    <p v-if="loading" class="hint">載入中…</p>
+    <template v-if="loading">
+      <SkeletonBlock variant="card" :count="3" />
+    </template>
 
     <section v-else>
       <h3 class="section-title">今日聯絡簿</h3>
       <div v-if="today" class="card today-card" @click="goDetail(today.id)">
         <div class="row">
-          <span class="emoji">{{ moodEmoji(today.mood) }}</span>
+          <span
+            v-if="moodInfo(today.mood)"
+            class="emoji"
+            role="img"
+            :aria-label="`心情：${moodInfo(today.mood).text}`"
+          >{{ moodInfo(today.mood).emoji }}</span>
           <div class="meta">
             <strong>{{ studentName }} {{ today.log_date }}</strong>
             <p v-if="today.teacher_note" class="preview">
@@ -86,16 +104,29 @@ function moodEmoji(m) {
           <span v-if="today.meal_lunch != null" class="chip">午餐 {{ today.meal_lunch }}/3</span>
           <span v-if="today.nap_minutes != null" class="chip">午睡 {{ today.nap_minutes }}min</span>
           <span v-if="today.temperature_c != null" class="chip">體溫 {{ today.temperature_c }}°C</span>
-          <span v-if="(today.photos || []).length" class="chip">📷 {{ today.photos.length }}</span>
+          <span v-if="(today.photos || []).length" class="chip chip-icon">
+            <ParentIcon name="camera" size="xs" />
+            {{ today.photos.length }}
+          </span>
         </div>
       </div>
       <p v-else class="hint">{{ studentName }} 今日尚無聯絡簿。</p>
 
       <h3 class="section-title" style="margin-top:24px;">歷史聯絡簿</h3>
       <p v-if="history.length === 0" class="hint">沒有更多紀錄</p>
-      <div v-for="e in history" :key="e.id" class="card" @click="goDetail(e.id)">
+      <div
+        v-for="e in visibleHistory"
+        :key="e.id"
+        class="card press-scale"
+        @click="goDetail(e.id)"
+      >
         <div class="row">
-          <span class="emoji">{{ moodEmoji(e.mood) }}</span>
+          <span
+            v-if="moodInfo(e.mood)"
+            class="emoji"
+            role="img"
+            :aria-label="`心情：${moodInfo(e.mood).text}`"
+          >{{ moodInfo(e.mood).emoji }}</span>
           <div class="meta">
             <strong>{{ e.log_date }}</strong>
             <p v-if="e.teacher_note" class="preview">{{ e.teacher_note }}</p>
@@ -103,16 +134,18 @@ function moodEmoji(m) {
           <span v-if="!e.my_acknowledged_at" class="dot dot-unread" />
         </div>
       </div>
+      <div v-if="hasMore" ref="sentinelRef" class="render-sentinel" aria-hidden="true" />
     </section>
   </div>
 </template>
 
 <style scoped>
 .cb { padding: 12px; }
-.section-title { font-size: 15px; color: #666; margin: 0 0 8px; }
-.hint { color: #999; text-align: center; padding: 16px 0; }
+.section-title { font-size: 15px; color: var(--pt-text-soft); margin: 0 0 8px; }
+.hint { color: var(--pt-text-faint); text-align: center; padding: 16px 0; }
+.render-sentinel { height: 1px; }
 .card {
-  background: #fff;
+  background: var(--neutral-0);
   border-radius: 10px;
   padding: 12px;
   margin-bottom: 10px;
@@ -126,7 +159,7 @@ function moodEmoji(m) {
 .preview {
   margin: 2px 0 0;
   font-size: 13px;
-  color: #555;
+  color: var(--pt-text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
@@ -141,6 +174,11 @@ function moodEmoji(m) {
   padding: 2px 8px;
   border-radius: 12px;
   background: #f0f4f8;
-  color: #555;
+  color: var(--pt-text-muted);
+}
+.chip-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 </style>

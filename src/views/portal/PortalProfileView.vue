@@ -1,9 +1,12 @@
 <script setup>
 import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import QRCode from 'qrcode'
 import { getProfile, updateProfile } from '@/api/portal'
 import { getMyLineBinding, updateMyLineBinding, deleteMyLineBinding } from '@/api/lineBinding'
 import { apiError } from '@/utils/error'
+
+const lineBotFriendUrl = import.meta.env.VITE_LINE_BOT_FRIEND_URL || ''
 
 const loading = ref(false)
 const saving = ref(false)
@@ -86,7 +89,32 @@ const lineUserId = ref(null)
 const lineBindInput = ref('')
 const loadingLine = ref(false)
 const savingLine = ref(false)
+const lineBotQrDataUrl = ref('')
 const LINE_ID_RE = /^U[0-9a-f]{32}$/
+
+const generateLineBotQr = async () => {
+  if (!lineBotFriendUrl) return
+  try {
+    lineBotQrDataUrl.value = await QRCode.toDataURL(lineBotFriendUrl, {
+      width: 220,
+      margin: 1,
+      errorCorrectionLevel: 'M',
+      color: { dark: '#1f2937', light: '#ffffff' },
+    })
+  } catch {
+    lineBotQrDataUrl.value = ''
+  }
+}
+
+const copyLineBotUrl = async () => {
+  if (!lineBotFriendUrl) return
+  try {
+    await navigator.clipboard.writeText(lineBotFriendUrl)
+    ElMessage.success('連結已複製')
+  } catch {
+    ElMessage.error('複製失敗，請手動長按連結')
+  }
+}
 
 const fetchLineBinding = async () => {
   loadingLine.value = true
@@ -145,6 +173,7 @@ const removeLineBinding = async () => {
 onMounted(() => {
   fetchProfile()
   fetchLineBinding()
+  generateLineBotQr()
 })
 </script>
 
@@ -250,10 +279,41 @@ onMounted(() => {
           綁定個人 LINE 帳號後，可透過 LINE Bot 查詢薪資、假單、打卡，<br>
           且審核結果將直接推播至您的 LINE。
         </p>
-        <p style="color: #909399; font-size: 12px; margin: 0 0 12px;">
-          取得方式：將本校 LINE Bot 加為好友後，Bot 會自動回覆您的 User ID（格式：U 開頭接 32 碼）。
-        </p>
-        <el-form label-width="0" style="max-width: 420px;">
+
+        <!-- 步驟說明 + QR code -->
+        <div class="line-bind-guide">
+          <div class="line-bind-steps">
+            <div class="step-title">綁定步驟</div>
+            <ol class="step-list">
+              <li>用手機 LINE 掃描右側 QR code（或點下方按鈕）加本校 Bot 為好友</li>
+              <li>加好友後 Bot 會自動回覆一串 <code>U</code> 開頭的 User ID</li>
+              <li>長按複製該 ID，貼入下方欄位儲存</li>
+            </ol>
+            <div v-if="lineBotFriendUrl" class="line-bind-actions">
+              <el-button
+                type="success"
+                tag="a"
+                :href="lineBotFriendUrl"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <el-icon style="margin-right: 4px;"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z"/></svg></el-icon>
+                在手機上開啟 LINE 加好友
+              </el-button>
+              <el-button @click="copyLineBotUrl">複製連結</el-button>
+            </div>
+            <p v-else class="line-bot-url-missing">
+              ⚠ 尚未設定 Bot 加好友連結，請聯絡系統管理員於前端 <code>.env</code> 設定 <code>VITE_LINE_BOT_FRIEND_URL</code>
+            </p>
+          </div>
+
+          <div v-if="lineBotQrDataUrl" class="line-bind-qr">
+            <img :src="lineBotQrDataUrl" alt="LINE Bot QR code" />
+            <div class="qr-caption">手機掃我加好友</div>
+          </div>
+        </div>
+
+        <el-form label-width="0" style="max-width: 420px; margin-top: 16px;">
           <el-form-item>
             <el-input
               v-model="lineBindInput"
@@ -296,9 +356,99 @@ onMounted(() => {
   max-width: min(600px, 100%);
 }
 
+.line-bind-guide {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  padding: 14px;
+  background: var(--bg-color, #fafafa);
+  border-radius: 8px;
+  border: 1px solid var(--border-color-lighter, #ebeef5);
+}
+
+.line-bind-steps {
+  flex: 1;
+  min-width: 0;
+}
+
+.step-title {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.step-list {
+  margin: 0 0 10px;
+  padding-left: 20px;
+  font-size: 13px;
+  color: var(--text-regular, #606266);
+  line-height: 1.7;
+}
+
+.step-list code {
+  background: rgba(0, 0, 0, 0.05);
+  padding: 0 4px;
+  border-radius: 3px;
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+}
+
+.line-bind-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.line-bind-qr {
+  flex-shrink: 0;
+  text-align: center;
+}
+
+.line-bind-qr img {
+  display: block;
+  width: 160px;
+  height: 160px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color-lighter, #ebeef5);
+  background: #fff;
+}
+
+.qr-caption {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-secondary, #909399);
+}
+
+.line-bot-url-missing {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  background: #fff7e6;
+  border: 1px solid #ffe1a8;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #b88230;
+}
+
+.line-bot-url-missing code {
+  background: rgba(0, 0, 0, 0.06);
+  padding: 0 4px;
+  border-radius: 3px;
+  font-family: ui-monospace, monospace;
+}
+
 @media (max-width: 768px) {
   :deep(.el-descriptions) {
     --el-descriptions-item-bordered-label-background: var(--bg-color);
+  }
+
+  .line-bind-guide {
+    flex-direction: column-reverse;
+    align-items: center;
+  }
+
+  .line-bind-steps {
+    width: 100%;
   }
 }
 </style>

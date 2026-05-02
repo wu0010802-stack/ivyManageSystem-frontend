@@ -107,6 +107,27 @@
   --btn-padding-x-lg: 20px;
   --btn-radius: var(--radius-md);
 
+  /* ===== Icon Size tokens (行動端統一) =====
+   *  維持 4 個層級，避免各頁面亂填 px。所有 SVG icon 一律走這組。
+   */
+  --icon-xs: 14px;
+  --icon-sm: 18px;
+  --icon-md: 22px;
+  --icon-lg: 28px;
+  --icon-stroke: 2;
+
+  /* ===== Touch Target (行動端強制下限) =====
+   *  最小可點區，所有按鈕 / icon button 應 min-height/width 對齊。
+   */
+  --touch-target-min: 44px;
+
+  /* ===== Z-index scale (避免散落各檔案隨意填數字) ===== */
+  --z-sticky: 10;
+  --z-tab-bar: 50;
+  --z-modal-backdrop: 90;
+  --z-modal: 100;
+  --z-toast: 1000;
+
   /* ===== Login Page tokens (共用結構) =====
    *  各 app 用 --brand-* 覆寫色彩；版面尺度共用，避免結構分裂。
    */

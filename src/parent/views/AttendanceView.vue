@@ -5,6 +5,7 @@ import { useChildrenStore } from '../stores/children'
 import { useChildSelection } from '../composables/useChildSelection'
 import { getMonthlyAttendance } from '../api/attendance'
 import { toast } from '../utils/toast'
+import SkeletonBlock from '../components/SkeletonBlock.vue'
 
 const childrenStore = useChildrenStore()
 const { selectedId, ensureSelected } = useChildSelection()
@@ -87,12 +88,12 @@ function nextMonth() {
 
 const statusColor = (status) => {
   return {
-    出席: { bg: '#e6f4ea', color: '#2d6a3a' },
-    缺席: { bg: '#fde8e8', color: '#a51c1c' },
-    病假: { bg: '#fff4e6', color: '#a25e0a' },
-    事假: { bg: '#eaf2fb', color: '#2057a8' },
+    出席: { bg: 'var(--brand-primary-soft)', color: 'var(--pt-success-text)' },
+    缺席: { bg: 'var(--color-danger-soft)', color: 'var(--color-danger)' },
+    病假: { bg: 'var(--color-warning-soft)', color: 'var(--pt-warning-text-soft)' },
+    事假: { bg: 'var(--color-info-soft)', color: 'var(--pt-info-link)' },
     遲到: { bg: '#fff8d6', color: '#7a6500' },
-  }[status] || { bg: '#f0f2f5', color: '#666' }
+  }[status] || { bg: 'var(--pt-surface-mute)', color: 'var(--pt-text-soft)' }
 }
 
 onMounted(async () => {
@@ -166,7 +167,10 @@ watch([selectedId, year, month], fetchData)
       {{ selected.date }} 尚無紀錄
     </div>
 
-    <div v-if="loading" class="loading-mask">載入中...</div>
+    <div v-if="loading && !data" class="skeleton-wrap">
+      <SkeletonBlock variant="card" :count="2" />
+    </div>
+    <div v-else-if="loading" class="loading-mask" aria-hidden="true" />
   </div>
 </template>
 
@@ -180,7 +184,7 @@ watch([selectedId, year, month], fetchData)
   align-items: center;
   justify-content: center;
   gap: 16px;
-  background: #fff;
+  background: var(--neutral-0);
   border-radius: 12px;
   padding: 8px;
   margin-bottom: 12px;
@@ -190,7 +194,7 @@ watch([selectedId, year, month], fetchData)
 .month-label {
   font-size: 16px;
   font-weight: 600;
-  color: #2c3e50;
+  color: var(--pt-text-strong);
 }
 
 .nav {
@@ -199,7 +203,7 @@ watch([selectedId, year, month], fetchData)
   border: none;
   background: transparent;
   font-size: 20px;
-  color: #3f7d48;
+  color: var(--brand-primary);
   cursor: pointer;
 }
 
@@ -208,12 +212,12 @@ watch([selectedId, year, month], fetchData)
   gap: 8px;
   flex-wrap: wrap;
   font-size: 12px;
-  color: #555;
+  color: var(--pt-text-muted);
   margin-bottom: 10px;
 }
 
 .stats span {
-  background: #fff;
+  background: var(--neutral-0);
   padding: 4px 10px;
   border-radius: 12px;
 }
@@ -224,7 +228,7 @@ watch([selectedId, year, month], fetchData)
   gap: 4px;
   text-align: center;
   font-size: 12px;
-  color: #888;
+  color: var(--pt-text-placeholder);
   margin-bottom: 4px;
 }
 
@@ -247,7 +251,7 @@ watch([selectedId, year, month], fetchData)
 }
 
 .cell.filled {
-  background: #fff;
+  background: var(--neutral-0);
   cursor: pointer;
 }
 
@@ -256,7 +260,7 @@ watch([selectedId, year, month], fetchData)
 }
 
 .cell.selected {
-  outline: 2px solid #3f7d48;
+  outline: 2px solid var(--brand-primary);
 }
 
 .day {
@@ -270,7 +274,7 @@ watch([selectedId, year, month], fetchData)
 
 .detail {
   margin-top: 12px;
-  background: #fff;
+  background: var(--neutral-0);
   border-radius: 12px;
   padding: 12px 16px;
   font-size: 14px;
@@ -278,7 +282,7 @@ watch([selectedId, year, month], fetchData)
 }
 
 .detail.empty {
-  color: #888;
+  color: var(--pt-text-placeholder);
   text-align: center;
 }
 
@@ -289,18 +293,18 @@ watch([selectedId, year, month], fetchData)
 }
 
 .detail-row .label {
-  color: #888;
+  color: var(--pt-text-placeholder);
   width: 48px;
 }
 
 .loading-mask {
   position: absolute;
   inset: 0;
-  background: rgba(255, 255, 255, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #888;
+  background: rgba(255, 255, 255, 0.4);
   pointer-events: none;
+}
+
+.skeleton-wrap {
+  margin-top: 12px;
 }
 </style>

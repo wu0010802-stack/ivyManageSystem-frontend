@@ -4,6 +4,8 @@ import { useRouter } from 'vue-router'
 import { useChildrenStore } from '../stores/children'
 import { listEvents, acknowledgeEvent } from '../api/events'
 import { toast } from '../utils/toast'
+import ParentIcon from '../components/ParentIcon.vue'
+import AppModal from '../components/AppModal.vue'
 
 const router = useRouter()
 
@@ -11,6 +13,13 @@ const childrenStore = useChildrenStore()
 const items = ref([])
 const loading = ref(false)
 const ackTarget = ref(null) // { event, student_id, signature_name }
+
+const ackModalOpen = computed({
+  get: () => ackTarget.value !== null,
+  set: (v) => {
+    if (!v) ackTarget.value = null
+  },
+})
 
 const TYPE_LABEL = {
   meeting: '會議',
@@ -88,7 +97,10 @@ onMounted(async () => {
           ・ {{ ev.start_time || '' }}-{{ ev.end_time || '' }}
         </span>
       </div>
-      <div v-if="ev.location" class="event-loc">📍 {{ ev.location }}</div>
+      <div v-if="ev.location" class="event-loc">
+        <ParentIcon name="location" size="xs" />
+        {{ ev.location }}
+      </div>
       <div v-if="ev.description" class="event-desc">{{ ev.description }}</div>
 
       <template v-if="ev.requires_acknowledgment">
@@ -103,22 +115,31 @@ onMounted(async () => {
             快速簽閱（{{ ev.need_ack_student_ids.length }} 位待簽）
           </button>
           <button
-            class="secondary-btn"
+            class="secondary-btn icon-btn"
             @click="router.push({ path: `/events/${ev.id}/ack`, query: { student_id: ev.need_ack_student_ids[0] } })"
           >
-            ✍ 手寫簽名
+            <ParentIcon name="signature" size="sm" />
+            手寫簽名
           </button>
         </div>
-        <div v-else class="ack-done">所有子女皆已簽閱 ✓</div>
+        <div v-else class="ack-done">
+          所有子女皆已簽閱
+          <ParentIcon name="check" size="xs" />
+        </div>
       </template>
     </div>
 
     <!-- 簽閱 modal -->
-    <div v-if="ackTarget" class="modal-mask" @click.self="ackTarget = null">
-      <div class="modal">
-        <div class="modal-header">
-          <span class="modal-title">簽閱事件</span>
-          <button class="close" @click="ackTarget = null">✕</button>
+    <AppModal
+      v-model:open="ackModalOpen"
+      labelled-by="event-ack-title"
+    >
+      <template v-if="ackTarget">
+        <div class="ack-header">
+          <span id="event-ack-title" class="ack-title">簽閱事件</span>
+          <button class="close" type="button" aria-label="關閉" @click="ackTarget = null">
+            <ParentIcon name="close" size="sm" />
+          </button>
         </div>
         <div class="form">
           <div class="event-summary">
@@ -126,8 +147,8 @@ onMounted(async () => {
             <div class="event-summary-date">{{ ackTarget.event.event_date }}</div>
           </div>
           <div class="field">
-            <label>代表哪位小孩簽？</label>
-            <select v-model="ackTarget.student_id">
+            <label for="event-ack-student">代表哪位小孩簽？</label>
+            <select id="event-ack-student" v-model="ackTarget.student_id">
               <option
                 v-for="sid in ackTarget.event.need_ack_student_ids"
                 :key="sid"
@@ -136,16 +157,22 @@ onMounted(async () => {
             </select>
           </div>
           <div class="field">
-            <label>簽章姓名（選填）</label>
-            <input type="text" v-model="ackTarget.signature_name" maxlength="50" />
+            <label for="event-ack-signame">簽章姓名（選填）</label>
+            <input
+              id="event-ack-signame"
+              type="text"
+              v-model="ackTarget.signature_name"
+              maxlength="50"
+              autocomplete="name"
+            />
           </div>
         </div>
-        <div class="modal-footer">
-          <button class="secondary-btn" @click="ackTarget = null">取消</button>
-          <button class="primary-btn" @click="submitAck">確認簽閱</button>
+        <div class="ack-footer">
+          <button type="button" class="secondary-btn" @click="ackTarget = null">取消</button>
+          <button type="button" class="primary-btn" @click="submitAck">確認簽閱</button>
         </div>
-      </div>
-    </div>
+      </template>
+    </AppModal>
   </div>
 </template>
 
@@ -159,18 +186,18 @@ onMounted(async () => {
 .empty {
   text-align: center;
   padding: 40px 16px;
-  color: #888;
+  color: var(--pt-text-placeholder);
 }
 
 .event-card {
-  background: #fff;
+  background: var(--neutral-0);
   border-radius: 12px;
   padding: 12px 14px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 .event-card.require {
-  border-left: 3px solid #d97706;
+  border-left: 3px solid var(--pt-warning-text-mid);
 }
 
 .event-row1 {
@@ -180,8 +207,8 @@ onMounted(async () => {
 }
 
 .event-type {
-  background: #eaf2fb;
-  color: #2057a8;
+  background: var(--color-info-soft);
+  color: var(--pt-info-link);
   padding: 1px 8px;
   border-radius: 10px;
   font-size: 11px;
@@ -190,25 +217,28 @@ onMounted(async () => {
 .event-title {
   flex: 1;
   font-weight: 600;
-  color: #2c3e50;
+  color: var(--pt-text-strong);
   font-size: 15px;
 }
 
 .event-row2 {
   margin-top: 6px;
-  color: #555;
+  color: var(--pt-text-muted);
   font-size: 13px;
 }
 
 .event-loc {
   margin-top: 4px;
-  color: #777;
+  color: var(--pt-text-faint);
   font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .event-desc {
   margin-top: 6px;
-  color: #666;
+  color: var(--pt-text-soft);
   font-size: 13px;
   line-height: 1.5;
 }
@@ -218,7 +248,7 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  color: #888;
+  color: var(--pt-text-placeholder);
   font-size: 12px;
 }
 
@@ -228,14 +258,23 @@ onMounted(async () => {
 
 .ack-done {
   margin-top: 8px;
-  color: #3f7d48;
+  color: var(--brand-primary);
   font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .primary-btn {
   padding: 8px 16px;
-  background: #3f7d48;
-  color: #fff;
+  background: var(--brand-primary);
+  color: var(--neutral-0);
   border: none;
   border-radius: 8px;
   font-size: 14px;
@@ -243,41 +282,21 @@ onMounted(async () => {
 
 .secondary-btn {
   padding: 8px 16px;
-  background: #fff;
-  color: #555;
-  border: 1px solid #d0d0d0;
+  background: var(--neutral-0);
+  color: var(--pt-text-muted);
+  border: 1px solid var(--pt-border-strong);
   border-radius: 8px;
   font-size: 14px;
 }
 
-.modal-mask {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 100;
-  padding: 16px;
-}
-
-.modal {
-  background: #fff;
-  border-radius: 12px;
-  width: 100%;
-  max-width: 420px;
-  display: flex;
-  flex-direction: column;
-}
-
-.modal-header {
+.ack-header {
   display: flex;
   align-items: center;
   padding: 14px 16px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--pt-border-light);
 }
 
-.modal-title {
+.ack-title {
   flex: 1;
   font-weight: 600;
 }
@@ -287,8 +306,11 @@ onMounted(async () => {
   height: 28px;
   border: none;
   background: transparent;
-  font-size: 18px;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--pt-text-placeholder);
 }
 
 .form {
@@ -299,7 +321,7 @@ onMounted(async () => {
 }
 
 .event-summary {
-  background: #f7f9f8;
+  background: var(--pt-surface-thread-bg);
   padding: 10px 12px;
   border-radius: 8px;
 }
@@ -310,7 +332,7 @@ onMounted(async () => {
 }
 
 .event-summary-date {
-  color: #888;
+  color: var(--pt-text-placeholder);
   font-size: 12px;
   margin-top: 2px;
 }
@@ -318,7 +340,7 @@ onMounted(async () => {
 .field label {
   display: block;
   font-size: 13px;
-  color: #555;
+  color: var(--pt-text-muted);
   margin-bottom: 4px;
 }
 
@@ -326,16 +348,16 @@ onMounted(async () => {
 .field select {
   width: 100%;
   padding: 8px 10px;
-  border: 1px solid #d0d0d0;
+  border: 1px solid var(--pt-border-strong);
   border-radius: 6px;
   font-size: 14px;
 }
 
-.modal-footer {
+.ack-footer {
   display: flex;
   gap: 8px;
   justify-content: flex-end;
   padding: 12px 16px;
-  border-top: 1px solid #eee;
+  border-top: 1px solid var(--pt-border-light);
 }
 </style>

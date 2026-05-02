@@ -4,49 +4,67 @@ import { useRouter } from 'vue-router'
 import { logout } from '../api/auth'
 import { useParentAuthStore } from '../stores/parentAuth'
 import { useChildrenStore } from '../stores/children'
+import ParentIcon from '../components/ParentIcon.vue'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
+import { useTheme } from '../composables/useTheme'
 
 const router = useRouter()
 const authStore = useParentAuthStore()
 const childrenStore = useChildrenStore()
+const { preference: themePref, setPreference: setTheme } = useTheme()
+
+const THEME_OPTIONS = [
+  { key: 'system', label: '跟隨系統' },
+  { key: 'light', label: '亮色' },
+  { key: 'dark', label: '深色' },
+]
 
 const me = ref(null)
+const showLogoutConfirm = ref(false)
+const loggingOut = ref(false)
 
 const groups = [
   {
     title: '孩子與園所',
     items: [
-      { icon: '📓', title: '聯絡簿', path: '/contact-book' },
-      { icon: '📅', title: '本週行程', path: '/calendar' },
-      { icon: '📝', title: '請假', path: '/leaves' },
-      { icon: '💊', title: '用藥單', path: '/medications' },
-      { icon: '🎨', title: '才藝課', path: '/activity' },
+      { icon: 'notebook', title: '聯絡簿', path: '/contact-book' },
+      { icon: 'calendar', title: '本週行程', path: '/calendar' },
+      { icon: 'clipboard', title: '請假', path: '/leaves' },
+      { icon: 'pill', title: '用藥單', path: '/medications' },
+      { icon: 'art', title: '才藝課', path: '/activity' },
     ],
   },
   {
     title: '財務與簽閱',
     items: [
-      { icon: '💰', title: '費用查詢', path: '/fees' },
-      { icon: '📅', title: '事件簽閱', path: '/events' },
+      { icon: 'money', title: '費用查詢', path: '/fees' },
+      { icon: 'signature', title: '事件簽閱', path: '/events' },
     ],
   },
   {
     title: '帳號設定',
     items: [
-      { icon: '🔔', title: '通知偏好', path: '/notifications/preferences' },
-      { icon: '➕', title: '加綁子女', path: '/bind-additional' },
+      { icon: 'bell', title: '通知偏好', path: '/notifications/preferences' },
+      { icon: 'plus', title: '加綁子女', path: '/bind-additional' },
     ],
   },
 ]
 
-async function handleLogout() {
-  if (!confirm('確定要登出？')) return
+function askLogout() {
+  showLogoutConfirm.value = true
+}
+
+async function doLogout() {
+  if (loggingOut.value) return
+  loggingOut.value = true
   try {
     await logout()
   } catch {
     /* ignore */
+  } finally {
+    authStore.clear()
+    router.replace('/login')
   }
-  authStore.clear()
-  router.replace('/login')
 }
 
 onMounted(async () => {
@@ -63,8 +81,14 @@ onMounted(async () => {
         子女：{{ (childrenStore.items || []).map(c => c.name).join('、') || '尚未綁定' }}
       </div>
       <div v-if="me" class="user-push">
-        <span v-if="me.can_push" class="badge ok">✓ LINE 推播已啟用</span>
-        <span v-else class="badge warn">⚠ 尚未加 LINE 為好友（無法收推播）</span>
+        <span v-if="me.can_push" class="badge ok">
+          <ParentIcon name="check" size="xs" />
+          LINE 推播已啟用
+        </span>
+        <span v-else class="badge warn">
+          <ParentIcon name="warn" size="xs" />
+          尚未加 LINE 為好友（無法收推播）
+        </span>
       </div>
     </div>
 
@@ -75,16 +99,51 @@ onMounted(async () => {
           v-for="item in g.items"
           :key="item.path"
           :to="item.path"
-          class="menu-item"
+          class="menu-item press-scale"
         >
-          <span class="icon">{{ item.icon }}</span>
+          <span class="icon">
+            <ParentIcon :name="item.icon" size="md" />
+          </span>
           <span class="title">{{ item.title }}</span>
-          <span class="arrow">›</span>
+          <ParentIcon name="chevron-right" size="sm" class="arrow" />
         </router-link>
       </div>
     </div>
 
-    <button class="logout" @click="handleLogout">登出</button>
+    <!-- 外觀（亮 / 深 / 跟隨系統） -->
+    <div class="group">
+      <div class="group-title">外觀</div>
+      <div
+        class="theme-card"
+        role="radiogroup"
+        aria-label="主題顏色偏好"
+      >
+        <button
+          v-for="opt in THEME_OPTIONS"
+          :key="opt.key"
+          type="button"
+          class="theme-btn press-scale"
+          :class="{ active: themePref === opt.key }"
+          role="radio"
+          :aria-checked="themePref === opt.key"
+          @click="setTheme(opt.key)"
+        >
+          {{ opt.label }}
+        </button>
+      </div>
+    </div>
+
+    <button class="logout" type="button" @click="askLogout">登出</button>
+
+    <ConfirmDialog
+      v-model:open="showLogoutConfirm"
+      title="確定要登出？"
+      message="登出後需重新從 LINE 進入家長 App。"
+      confirm-label="登出"
+      cancel-label="取消"
+      destructive
+      @confirm="doLogout"
+    />
   </div>
 </template>
 
@@ -92,43 +151,52 @@ onMounted(async () => {
 .more-view {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-3, 12px);
 }
 
 .card,
 .menu-card {
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  background: var(--neutral-0);
+  border-radius: var(--radius-lg, 12px);
+  box-shadow: var(--shadow-sm);
 }
 
 .user-card {
-  padding: 16px;
+  padding: var(--space-4, 16px);
 }
 
 .user-name {
-  font-size: 18px;
-  font-weight: 600;
-  color: #2c3e50;
+  font-size: var(--text-xl, 18px);
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--pt-text-strong);
 }
 
 .user-children {
   margin-top: 6px;
-  color: #666;
-  font-size: 13px;
+  color: var(--pt-text-soft);
+  font-size: var(--text-sm, 13px);
 }
 
 .user-push {
-  margin-top: 8px;
+  margin-top: var(--space-2, 8px);
 }
 
 .badge {
-  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--text-xs, 12px);
   padding: 2px 8px;
   border-radius: 10px;
 }
-.badge.ok { background: #e6f4ea; color: #3f7d48; }
-.badge.warn { background: #fff4e6; color: #d97706; }
+.badge.ok {
+  background: var(--brand-primary-soft);
+  color: var(--brand-primary);
+}
+.badge.warn {
+  background: var(--color-warning-soft);
+  color: var(--pt-warning-text-mid);
+}
 
 .menu-card {
   overflow: hidden;
@@ -140,8 +208,8 @@ onMounted(async () => {
 }
 
 .group-title {
-  font-size: 12px;
-  color: #888;
+  font-size: var(--text-xs, 12px);
+  color: var(--pt-text-placeholder);
   margin: 4px 4px 6px;
   letter-spacing: 0.5px;
 }
@@ -149,36 +217,86 @@ onMounted(async () => {
 .menu-item {
   display: flex;
   align-items: center;
-  padding: 14px 16px;
-  border-bottom: 1px solid #f0f2f5;
+  gap: var(--space-3, 12px);
+  min-height: var(--touch-target-min, 44px);
+  padding: var(--space-3, 12px) var(--space-4, 16px);
+  border-bottom: 1px solid var(--pt-surface-mute);
   text-decoration: none;
-  color: #2c3e50;
+  color: var(--pt-text-strong);
+  transition: background var(--transition-fast, 0.15s ease);
 }
 
 .menu-item:last-child { border-bottom: none; }
 
+.menu-item:active {
+  background: var(--pt-surface-mute-soft);
+}
+
 .menu-item .icon {
   width: 28px;
-  font-size: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--brand-primary);
 }
 
 .menu-item .title {
   flex: 1;
-  font-size: 15px;
+  font-size: var(--text-lg, 15px);
 }
 
 .menu-item .arrow {
-  color: #ccc;
-  font-size: 18px;
+  color: var(--pt-text-hint);
+  flex-shrink: 0;
 }
 
 .logout {
   width: 100%;
-  padding: 12px;
-  background: #fff;
-  border: 1px solid #d0d0d0;
-  border-radius: 12px;
-  color: #c0392b;
-  font-size: 15px;
+  min-height: var(--touch-target-min, 44px);
+  padding: var(--space-3, 12px);
+  background: var(--neutral-0);
+  border: 1px solid var(--pt-border-strong);
+  border-radius: var(--radius-lg, 12px);
+  color: var(--color-danger);
+  font-size: var(--text-lg, 15px);
+  cursor: pointer;
+  transition: background var(--transition-fast, 0.15s ease);
+}
+
+.logout:active {
+  background: var(--color-danger-soft);
+}
+
+/* ===== 外觀切換 ===== */
+.theme-card {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2, 8px);
+  background: var(--neutral-0);
+  border-radius: var(--radius-lg, 12px);
+  padding: var(--space-2, 8px);
+  box-shadow: var(--shadow-sm);
+}
+
+.theme-btn {
+  min-height: var(--touch-target-min, 44px);
+  padding: var(--space-2, 8px);
+  background: transparent;
+  border: 1px solid var(--pt-border);
+  border-radius: var(--radius-md, 8px);
+  font-size: var(--text-sm, 13px);
+  color: var(--pt-text-muted);
+  cursor: pointer;
+  transition:
+    background var(--transition-fast, 0.15s ease),
+    border-color var(--transition-fast, 0.15s ease),
+    color var(--transition-fast, 0.15s ease);
+}
+
+.theme-btn.active {
+  background: var(--brand-primary-soft);
+  border-color: var(--brand-primary);
+  color: var(--brand-primary);
+  font-weight: var(--font-weight-semibold, 600);
 }
 </style>

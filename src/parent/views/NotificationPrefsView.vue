@@ -6,6 +6,7 @@ import {
   updateNotificationPreferences,
 } from '../api/notifications'
 import { toast } from '../utils/toast'
+import SkeletonBlock from '../components/SkeletonBlock.vue'
 
 const router = useRouter()
 
@@ -66,7 +67,9 @@ onMounted(load)
     <h2>LINE 通知偏好</h2>
     <p class="hint">關閉項目後，園所雖仍會在 App 內保留通知，但不再透過 LINE 推播。</p>
 
-    <div v-if="loading" class="status">載入中…</div>
+    <template v-if="loading">
+      <SkeletonBlock variant="card" :count="2" />
+    </template>
     <div v-else class="list">
       <label
         v-for="(label, ev) in EVENT_LABELS"
@@ -90,26 +93,25 @@ onMounted(load)
 
 <style scoped>
 .prefs-view { padding: 16px; }
-.back { background: none; border: none; color: #2c7be5; font-size: 14px; margin-bottom: 8px; }
+.back { background: none; border: none; color: var(--pt-info-link); font-size: 14px; margin-bottom: 8px; }
 h2 { margin: 0 0 6px; font-size: 18px; }
-.hint { color: #888; font-size: 13px; margin-bottom: 16px; }
-.status { color: #888; padding: 24px 0; text-align: center; }
-.list { background: #fff; border-radius: 8px; overflow: hidden; }
+.hint { color: var(--pt-text-placeholder); font-size: 13px; margin-bottom: 16px; }
+.list { background: var(--neutral-0); border-radius: 8px; overflow: hidden; }
 .row {
   display: flex; align-items: center; gap: 12px;
-  padding: 14px 16px; border-bottom: 1px solid #f0f2f5; cursor: pointer;
+  padding: 14px 16px; border-bottom: 1px solid var(--pt-surface-mute); cursor: pointer;
 }
 .row:last-child { border-bottom: none; }
 .text { flex: 1; display: flex; flex-direction: column; gap: 2px; }
-.text strong { font-size: 15px; color: #2c3e50; }
-.sub { font-size: 12px; color: #888; }
+.text strong { font-size: 15px; color: var(--pt-text-strong); }
+.sub { font-size: 12px; color: var(--pt-text-placeholder); }
 input[type="checkbox"] {
-  width: 44px; height: 24px; appearance: none; background: #ccc;
+  width: 44px; height: 24px; appearance: none; background: var(--pt-text-hint);
   border-radius: 12px; position: relative; cursor: pointer; transition: background .2s;
 }
-input[type="checkbox"]:checked { background: #3f7d48; }
+input[type="checkbox"]:checked { background: var(--brand-primary); }
 input[type="checkbox"]::before {
-  content: ''; width: 20px; height: 20px; background: #fff;
+  content: ''; width: 20px; height: 20px; background: var(--neutral-0);
   border-radius: 10px; position: absolute; top: 2px; left: 2px;
   transition: transform .2s;
 }

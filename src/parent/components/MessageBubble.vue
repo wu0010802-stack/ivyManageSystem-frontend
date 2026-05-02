@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue'
+import ParentIcon from './ParentIcon.vue'
 
 const props = defineProps({
   message: { type: Object, required: true },
@@ -35,7 +36,10 @@ const time = computed(() => {
             rel="noopener"
           >
             <img v-if="att.thumb_url" :src="att.thumb_url" :alt="att.original_filename" />
-            <span v-else>📄 {{ att.original_filename }}</span>
+            <span v-else class="att-fallback">
+              <ParentIcon name="document" size="xs" />
+              {{ att.original_filename }}
+            </span>
           </a>
         </div>
       </template>
@@ -59,23 +63,24 @@ const time = computed(() => {
   max-width: 75%;
   padding: 8px 12px;
   border-radius: 12px;
-  background: #f0f2f5;
-  color: #2c3e50;
+  background: var(--pt-surface-mute);
+  color: var(--pt-text-strong);
   font-size: 14px;
   line-height: 1.4;
 }
 .bubble-row.mine .bubble {
-  background: #3f7d48;
-  color: #fff;
+  background: var(--brand-primary);
+  color: var(--neutral-0);
 }
-.bubble.deleted { font-style: italic; opacity: 0.6; background: #f7f7f7 !important; color: #888 !important; }
+.bubble.deleted { font-style: italic; opacity: 0.6; background: #f7f7f7 !important; color: var(--pt-text-placeholder) !important; }
 .bubble.pending { opacity: 0.7; }
 .body { white-space: pre-wrap; word-break: break-word; }
 .attachments { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
 .attachments a img { width: 80px; height: 80px; object-fit: cover; border-radius: 4px; }
 .attachments a span { padding: 4px 8px; background: rgba(255,255,255,.2); border-radius: 4px; }
+.att-fallback { display: inline-flex; align-items: center; gap: 4px; }
 .meta { display: flex; gap: 8px; align-items: center; margin-top: 4px; font-size: 11px; opacity: 0.7; }
-.bubble-row:not(.mine) .meta { color: #888; }
+.bubble-row:not(.mine) .meta { color: var(--pt-text-placeholder); }
 .recall { background: none; border: none; color: inherit; font-size: 11px; cursor: pointer; text-decoration: underline; padding: 0; }
 .status { font-style: italic; }
 </style>

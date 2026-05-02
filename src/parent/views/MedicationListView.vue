@@ -7,6 +7,7 @@ import ChildSelector from '../components/ChildSelector.vue'
 import { listMedicationOrders } from '../api/medications'
 import { toast } from '../utils/toast'
 import { todayISO } from '@/utils/format'
+import SkeletonBlock from '../components/SkeletonBlock.vue'
 
 const router = useRouter()
 const childrenStore = useChildrenStore()
@@ -79,7 +80,9 @@ const today = todayISO()
       <button class="new-btn" @click="goNew">+ 新增</button>
     </div>
 
-    <p v-if="loading" class="hint">載入中…</p>
+    <template v-if="loading">
+      <SkeletonBlock variant="card" :count="3" />
+    </template>
     <p v-else-if="items.length === 0" class="hint">{{ studentName }} 沒有用藥紀錄</p>
 
     <div v-else class="cards">
@@ -114,20 +117,20 @@ const today = todayISO()
 <style scoped>
 .med-list { padding: 16px; }
 .header-row { display: flex; gap: 12px; align-items: center; justify-content: flex-end; margin-bottom: 12px; }
-.new-btn { padding: 8px 14px; background: #2c7be5; color: #fff; border: none; border-radius: 6px; font-size: 14px; }
-.hint { color: #888; padding: 24px 0; text-align: center; }
+.new-btn { padding: 8px 14px; background: var(--pt-info-link); color: var(--neutral-0); border: none; border-radius: 6px; font-size: 14px; }
+.hint { color: var(--pt-text-placeholder); padding: 24px 0; text-align: center; }
 .cards { display: flex; flex-direction: column; gap: 10px; }
-.card { background: #fff; border-radius: 8px; padding: 12px; border: 1px solid #eee; cursor: pointer; }
-.card.today { border-color: #2c7be5; box-shadow: 0 1px 4px rgba(44,123,229,.1); }
+.card { background: var(--neutral-0); border-radius: 8px; padding: 12px; border: 1px solid var(--pt-border-light); cursor: pointer; }
+.card.today { border-color: var(--pt-info-link); box-shadow: 0 1px 4px rgba(44,123,229,.1); }
 .card-row { display: flex; justify-content: space-between; align-items: baseline; }
-.date { color: #888; font-size: 13px; }
-.meta { font-size: 13px; color: #555; margin-top: 4px; }
+.date { color: var(--pt-text-placeholder); font-size: 13px; }
+.meta { font-size: 13px; color: var(--pt-text-muted); margin-top: 4px; }
 .tag { display: inline-block; padding: 1px 6px; margin-left: 6px; border-radius: 3px; font-size: 11px; }
-.tag.self { background: #fff4e6; color: #a25e0a; }
+.tag.self { background: var(--color-warning-soft); color: var(--pt-warning-text-soft); }
 .logs { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 4px; }
-.slot { padding: 2px 8px; border-radius: 10px; font-size: 12px; background: #f0f2f5; color: #555; }
-.slot.pending { background: #fff4e6; color: #a25e0a; }
-.slot.administered { background: #e6f4ea; color: #2d6a3a; }
-.slot.skipped { background: #f0f2f5; color: #888; text-decoration: line-through; }
+.slot { padding: 2px 8px; border-radius: 10px; font-size: 12px; background: var(--pt-surface-mute); color: var(--pt-text-muted); }
+.slot.pending { background: var(--color-warning-soft); color: var(--pt-warning-text-soft); }
+.slot.administered { background: var(--brand-primary-soft); color: var(--pt-success-text); }
+.slot.skipped { background: var(--pt-surface-mute); color: var(--pt-text-placeholder); text-decoration: line-through; }
 .slot.correction { background: #ede4ff; color: #5a3da5; }
 </style>

@@ -1,0 +1,293 @@
+/**
+ * 家長 App 全域樣式
+ *
+ * 範圍：focus 樣式 / reduced motion / scrollbar / 共用 utility class +
+ *       parent app 專屬色彩 alias tokens。
+ * 由 src/parent/main.js 在 design-tokens.css 之後 import。
+ *
+ * 不放這裡：
+ *  - 共用 design tokens 變數（在 design-tokens.css）
+ *  - brand override（在 src/parent/App.vue 的 :root 區塊）
+ *  - 元件內樣式（各 .vue scoped style）
+ *
+ * Parent app 色彩 alias 設計：
+ *  - design-tokens.css 的 neutral-* 是 slate 偏冷藍；parent app 早期硬編
+ *    用的是中性灰（#888 #555 #2c3e50）。為避免 sweep 後色偏，這裡定義
+ *    parent 專屬 alias 保留原 hex 值。
+ *  - 之後若要切深色模式，只要在 :root[data-theme="dark"] 覆寫這幾個
+ *    alias 即可，所有 view 不必動。
+ */
+
+:root {
+  /* ===== Parent App 文字色 alias（保留原 hex 不色偏） ===== */
+  --pt-text-strong: #2c3e50;       /* 主標題、姓名 */
+  --pt-text-body: #2c3e50;         /* 內文 */
+  --pt-text-muted: #555;           /* 次要文字、label */
+  --pt-text-soft: #666;            /* 描述、meta */
+  --pt-text-faint: #777;           /* 提示 */
+  --pt-text-placeholder: #888;     /* placeholder、hint */
+  --pt-text-disabled: #aaa;        /* 弱化、arrow */
+  --pt-text-hint: #ccc;            /* divider 上文字 */
+
+  /* ===== Parent App 表面 / 背景 alias ===== */
+  --pt-surface-app: #f4f6f5;       /* App body bg */
+  --pt-surface-card: #ffffff;      /* card 背景 */
+  --pt-surface-mute: #f0f2f5;      /* card divider / mute 背景 */
+  --pt-surface-mute-soft: #f6f8fa; /* hover / pressed 背景 */
+  --pt-surface-mute-warm: #f3f4f6; /* 變體 */
+  --pt-surface-brand-tint: #f8fbf9;/* unread message 底色 */
+  --pt-surface-thread-bg: #f7f9f8; /* thread bg */
+  --pt-surface-note: #f9f9f9;      /* note bg */
+
+  /* ===== Parent App 邊框 alias ===== */
+  --pt-border: #e5e7eb;
+  --pt-border-light: #f0f0f0;
+  --pt-border-strong: #d0d0d0;
+  --pt-border-stronger: #cccccc;
+
+  /* ===== Parent App semantic 變體（補 design-tokens 沒有的中間色） ===== */
+  --pt-warning-text: #92400e;       /* warning label 文字 */
+  --pt-warning-text-mid: #d97706;   /* warning 圖示色 */
+  --pt-warning-text-soft: #a25e0a;  /* warning chip 文字 */
+  --pt-success-text: #2d6a3a;       /* success label 文字 */
+  --pt-info-text: #1d4ed8;          /* info chip 文字 */
+  --pt-info-link: #2c7be5;          /* link 色 */
+  --pt-violet-bg: #ddd6fe;          /* medication chip bg */
+  --pt-violet-text: #5b21b6;        /* medication chip text */
+
+  /* App-level surface（給 App.vue body / parent-layout 用） */
+  color-scheme: light;
+
+  /* ===== Brand override（家長 app 主色：綠色） =====
+   *  之前放在 App.vue，但 App.vue style 的 cascade order 會壓過 dark mode；
+   *  集中放這裡，dark mode 區塊的 :root[data-theme='dark'] 可正確覆寫。
+   */
+  --brand-primary: #3f7d48;
+  --brand-primary-hover: #336440;
+  --brand-primary-soft: #e7f3e9;
+}
+
+/* ============================================================
+ * Dark Mode
+ *
+ * 兩種觸發路徑：
+ *  1. 系統偏好 prefers-color-scheme: dark（自動）
+ *  2. 手動切換：<html data-theme="dark">（useTheme composable）
+ *
+ * 設計原則：
+ *  - 不改視覺結構，只覆寫色彩 token；既有元件 scoped style 走 token 即自動切換
+ *  - dark surface 用 slate-900/800/700 階梯，brand 提亮一階確保對比
+ *  - softs（warning-soft / danger-soft 等）改用半透明色，避免光害
+ *
+ * 注意：要 dark mode 生效，元件必須走 token；硬編 hex 在這裡無能為力。
+ * ============================================================ */
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+
+    /* 文字色 */
+    --pt-text-strong: #f1f5f9;
+    --pt-text-body: #f1f5f9;
+    --pt-text-muted: #cbd5e1;
+    --pt-text-soft: #94a3b8;
+    --pt-text-faint: #94a3b8;
+    --pt-text-placeholder: #64748b;
+    --pt-text-disabled: #475569;
+    --pt-text-hint: #475569;
+
+    /* 表面色 */
+    --pt-surface-app: #0f172a;
+    --pt-surface-card: #1e293b;
+    --pt-surface-mute: #334155;
+    --pt-surface-mute-soft: #1e293b;
+    --pt-surface-mute-warm: #334155;
+    --pt-surface-brand-tint: #1a2820;
+    --pt-surface-thread-bg: #0f172a;
+    --pt-surface-note: #1e293b;
+
+    /* 邊框 */
+    --pt-border: #334155;
+    --pt-border-light: #1e293b;
+    --pt-border-strong: #475569;
+    --pt-border-stronger: #64748b;
+
+    /* 共用 neutral 翻面 */
+    --neutral-0: #1e293b;
+
+    /* Brand 提亮 + soft 半透明 */
+    --brand-primary: #5fa46a;
+    --brand-primary-hover: #79b685;
+    --brand-primary-soft: rgba(95, 164, 106, 0.18);
+
+    /* Semantic softs 改半透明避光害 */
+    --color-success-soft: rgba(16, 185, 129, 0.18);
+    --color-warning-soft: rgba(245, 158, 11, 0.18);
+    --color-danger-soft: rgba(239, 68, 68, 0.18);
+    --color-info-soft: rgba(59, 130, 246, 0.20);
+
+    /* Parent semantic text 變體（提亮） */
+    --pt-warning-text: #fbbf24;
+    --pt-warning-text-mid: #fbbf24;
+    --pt-warning-text-soft: #fbbf24;
+    --pt-success-text: #6ee7b7;
+    --pt-info-text: #93c5fd;
+    --pt-info-link: #93c5fd;
+    --pt-violet-bg: rgba(167, 139, 250, 0.22);
+    --pt-violet-text: #c4b5fd;
+  }
+}
+
+/* 手動 dark 模式（覆寫 prefers-color-scheme：使用者明確選 dark） */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --pt-text-strong: #f1f5f9;
+  --pt-text-body: #f1f5f9;
+  --pt-text-muted: #cbd5e1;
+  --pt-text-soft: #94a3b8;
+  --pt-text-faint: #94a3b8;
+  --pt-text-placeholder: #64748b;
+  --pt-text-disabled: #475569;
+  --pt-text-hint: #475569;
+
+  --pt-surface-app: #0f172a;
+  --pt-surface-card: #1e293b;
+  --pt-surface-mute: #334155;
+  --pt-surface-mute-soft: #1e293b;
+  --pt-surface-mute-warm: #334155;
+  --pt-surface-brand-tint: #1a2820;
+  --pt-surface-thread-bg: #0f172a;
+  --pt-surface-note: #1e293b;
+
+  --pt-border: #334155;
+  --pt-border-light: #1e293b;
+  --pt-border-strong: #475569;
+  --pt-border-stronger: #64748b;
+
+  --neutral-0: #1e293b;
+
+  --brand-primary: #5fa46a;
+  --brand-primary-hover: #79b685;
+  --brand-primary-soft: rgba(95, 164, 106, 0.18);
+
+  --color-success-soft: rgba(16, 185, 129, 0.18);
+  --color-warning-soft: rgba(245, 158, 11, 0.18);
+  --color-danger-soft: rgba(239, 68, 68, 0.18);
+  --color-info-soft: rgba(59, 130, 246, 0.20);
+
+  --pt-warning-text: #fbbf24;
+  --pt-warning-text-mid: #fbbf24;
+  --pt-warning-text-soft: #fbbf24;
+  --pt-success-text: #6ee7b7;
+  --pt-info-text: #93c5fd;
+  --pt-info-link: #93c5fd;
+  --pt-violet-bg: rgba(167, 139, 250, 0.22);
+  --pt-violet-text: #c4b5fd;
+}
+
+/* ========== Focus Visible ==========
+ * 鍵盤使用者必須看得到 focus；指針點擊不顯示 outline 避免視覺干擾。
+ * 用 :focus-visible 規則精準切分，現代瀏覽器全支援。
+ */
+:focus {
+  outline: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--brand-primary, #3f7d48);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* 連結與按鈕的 focus 環稍微貼近視覺邊界（避免破壞 12px radius 卡片） */
+a:focus-visible,
+button:focus-visible,
+[role='button']:focus-visible,
+[tabindex]:focus-visible {
+  outline-offset: 2px;
+}
+
+/* ========== Reduced Motion ==========
+ * 尊重 OS 「減少動態效果」設定。
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ========== 系統預設 reset ==========
+ * webview 的預設行為調整：避免 iOS 點擊高光、tap 延遲。
+ */
+html {
+  -webkit-tap-highlight-color: transparent;
+  text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
+}
+
+button {
+  /* 預設 button 字級 / 字型繼承父層，避免 webview 用系統字型 */
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  -webkit-tap-highlight-color: transparent;
+  /* 減少 mobile webview 的 300ms tap delay */
+  touch-action: manipulation;
+}
+
+/* ========== Touch Target Helper ==========
+ * 內含 icon-only 的小按鈕，可加 .touch-target 強制 44×44。
+ */
+.touch-target {
+  min-width: var(--touch-target-min);
+  min-height: var(--touch-target-min);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ========== Visually Hidden ==========
+ * 給 screen reader 看見、視覺上隱藏的文字（icon-only 按鈕的 label fallback）。
+ */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ========== Press Feedback ==========
+ * 行動端按下時的微縮放 + transition；比單純 background change 更接近原生感。
+ * 套到主要可點元素（卡片、tab、todo row、tile、chip、按鈕）。
+ * @media reduced-motion 已由全域規則處理。
+ */
+.press-scale {
+  transition:
+    transform var(--transition-fast, 0.15s ease),
+    background var(--transition-fast, 0.15s ease);
+  transform: scale(1);
+  /* 取消行動端 webview 預設高光，由 scale 動畫提供回饋 */
+  -webkit-tap-highlight-color: transparent;
+}
+
+.press-scale:active {
+  transform: scale(0.97);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .press-scale,
+  .press-scale:active {
+    transform: none;
+  }
+}

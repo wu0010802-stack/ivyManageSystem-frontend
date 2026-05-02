@@ -368,6 +368,12 @@ const router = createRouter({
                     meta: { title: '學生點名' },
                 },
                 {
+                    path: 'contact-book',
+                    name: 'portal-contact-book',
+                    component: () => import('../views/portal/PortalContactBookView.vue'),
+                    meta: { title: '每日聯絡簿' },
+                },
+                {
                     path: 'calendar',
                     name: 'portal-calendar',
                     component: () => import('../views/portal/PortalCalendarView.vue'),

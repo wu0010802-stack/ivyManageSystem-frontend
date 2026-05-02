@@ -43,7 +43,7 @@ onMounted(() => {
   ctx.lineWidth = 2.2
   ctx.lineCap = 'round'
   ctx.lineJoin = 'round'
-  ctx.strokeStyle = '#222'
+  ctx.strokeStyle = 'var(--pt-text-strong)'
 })
 
 onUnmounted(() => {
@@ -94,17 +94,19 @@ defineExpose({ clear, isEmpty, toBlob })
   gap: 6px;
 }
 canvas {
-  border: 1px dashed #aaa;
-  background: #fff;
+  border: 1px dashed var(--pt-text-disabled);
+  background: var(--neutral-0);
   border-radius: 6px;
   touch-action: none;
 }
 .clear-btn {
   align-self: flex-end;
-  padding: 4px 12px;
-  font-size: 13px;
-  background: #f0f2f5;
+  min-height: var(--touch-target-min, 44px);
+  padding: 4px 16px;
+  font-size: var(--text-sm, 13px);
+  background: var(--pt-surface-mute);
   border: 1px solid #d0d2d5;
-  border-radius: 4px;
+  border-radius: var(--radius-sm, 4px);
+  cursor: pointer;
 }
 </style>

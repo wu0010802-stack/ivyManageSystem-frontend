@@ -8,6 +8,8 @@ import {
 } from '../api/medications'
 import { toast } from '../utils/toast'
 import { todayISO } from '@/utils/format'
+import ParentIcon from '../components/ParentIcon.vue'
+import AppModal from '../components/AppModal.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -27,6 +29,13 @@ const form = ref({
 })
 
 const studentOptions = computed(() => childrenStore.items || [])
+
+const allergyModalOpen = computed({
+  get: () => allergyWarning.value !== null,
+  set: (v) => {
+    if (!v) allergyWarning.value = null
+  },
+})
 
 onMounted(async () => {
   await childrenStore.load()
@@ -115,94 +124,318 @@ function cancelAllergy() {
 
 <template>
   <div class="med-form">
-    <h2>新增用藥單</h2>
+    <h2 id="med-form-title">新增用藥單</h2>
 
-    <label>子女</label>
-    <select v-model="form.student_id">
+    <label for="med-student">子女</label>
+    <select id="med-student" v-model="form.student_id">
       <option v-for="c in studentOptions" :key="c.student_id" :value="c.student_id">{{ c.name }}</option>
     </select>
 
-    <label>用藥日期</label>
-    <input type="date" v-model="form.order_date" />
+    <label for="med-date">用藥日期</label>
+    <input id="med-date" type="date" v-model="form.order_date" />
 
-    <label>藥名</label>
-    <input v-model="form.medication_name" placeholder="例：退燒藥 / Amoxicillin 250mg" maxlength="100" />
+    <label for="med-name">藥名</label>
+    <input
+      id="med-name"
+      v-model="form.medication_name"
+      placeholder="例：退燒藥 / Amoxicillin 250mg"
+      maxlength="100"
+      autocomplete="off"
+    />
 
-    <label>劑量</label>
-    <input v-model="form.dose" placeholder="例：5ml / 1顆" maxlength="50" />
+    <label for="med-dose">劑量</label>
+    <input
+      id="med-dose"
+      v-model="form.dose"
+      placeholder="例：5ml / 1顆"
+      maxlength="50"
+      autocomplete="off"
+    />
 
     <label>用藥時段</label>
     <div class="slots">
-      <div v-for="(t, i) in form.time_slots" :key="i" class="slot-row">
-        <input type="time" v-model="form.time_slots[i]" />
-        <button type="button" class="del-btn" @click="removeSlot(i)" :disabled="form.time_slots.length === 1">×</button>
+      <div v-for="(_, i) in form.time_slots" :key="i" class="slot-row">
+        <input :id="`med-time-${i}`" type="time" v-model="form.time_slots[i]" />
+        <button
+          type="button"
+          class="del-btn touch-target"
+          :aria-label="`移除第 ${i + 1} 個時段`"
+          @click="removeSlot(i)"
+          :disabled="form.time_slots.length === 1"
+        >
+          <ParentIcon name="close" size="sm" />
+        </button>
       </div>
-      <button type="button" class="add-slot" @click="addSlot" :disabled="form.time_slots.length >= 10">+ 新增時段</button>
+      <button
+        type="button"
+        class="add-slot"
+        @click="addSlot"
+        :disabled="form.time_slots.length >= 10"
+      >
+        <ParentIcon name="plus" size="sm" />
+        新增時段
+      </button>
     </div>
 
-    <label>備註</label>
-    <textarea v-model="form.note" placeholder="飯後服用 / 冷藏…" rows="2" maxlength="500" />
+    <label for="med-note">備註</label>
+    <textarea
+      id="med-note"
+      v-model="form.note"
+      placeholder="飯後服用 / 冷藏…"
+      rows="2"
+      maxlength="500"
+    />
 
-    <label>藥袋／處方照（最多 3 張）</label>
-    <input type="file" accept="image/*,application/pdf" multiple @change="onPick" />
+    <label for="med-files">藥袋／處方照（最多 3 張）</label>
+    <input id="med-files" type="file" accept="image/*,application/pdf" multiple @change="onPick" />
     <ul class="files">
       <li v-for="(f, i) in photoFiles" :key="i">
         <span>{{ f.name }} ({{ Math.round(f.size / 1024) }}KB)</span>
-        <button type="button" @click="removePhoto(i)">移除</button>
+        <button
+          type="button"
+          class="touch-target"
+          :aria-label="`移除 ${f.name}`"
+          @click="removePhoto(i)"
+        >
+          移除
+        </button>
       </li>
     </ul>
 
     <div class="actions">
-      <button class="cancel" @click="router.back()">取消</button>
-      <button class="submit" @click="submit(false)" :disabled="submitting">
+      <button type="button" class="cancel" @click="router.back()">取消</button>
+      <button
+        type="button"
+        class="submit"
+        :disabled="submitting"
+        @click="submit(false)"
+      >
         {{ submitting ? '送出中…' : '送出' }}
       </button>
     </div>
 
-    <!-- 過敏軟警告彈框 -->
-    <div v-if="allergyWarning" class="modal-overlay" @click.self="cancelAllergy">
-      <div class="modal">
-        <h3>⚠ 用藥可能與過敏原相關</h3>
-        <p>偵測到該藥名與以下過敏原相關：</p>
+    <!-- 過敏軟警告彈框（已套 AppModal：focus trap + esc + a11y） -->
+    <AppModal
+      v-model:open="allergyModalOpen"
+      labelled-by="allergy-modal-title"
+      described-by="allergy-modal-desc"
+      max-width="360px"
+    >
+      <div class="allergy-modal">
+        <h3 id="allergy-modal-title" class="allergy-title">
+          <ParentIcon name="warn" size="sm" />
+          用藥可能與過敏原相關
+        </h3>
+        <p id="allergy-modal-desc">偵測到該藥名與以下過敏原相關：</p>
         <ul>
-          <li v-for="a in allergyWarning.allergens" :key="a.id">
+          <li v-for="a in allergyWarning?.allergens || []" :key="a.id">
             <strong>{{ a.allergen }}</strong>（{{ a.severity }}）
             <span v-if="a.reaction_symptom"> · {{ a.reaction_symptom }}</span>
           </li>
         </ul>
         <p class="hint">仍要送出嗎？老師端會看到此用藥單，請務必確認與兒科醫師討論過。</p>
         <div class="modal-actions">
-          <button @click="cancelAllergy">取消</button>
-          <button class="confirm" @click="confirmAllergy">仍要送出</button>
+          <button type="button" class="cancel-modal" @click="cancelAllergy">取消</button>
+          <button type="button" class="confirm-modal" @click="confirmAllergy">仍要送出</button>
         </div>
       </div>
-    </div>
+    </AppModal>
   </div>
 </template>
 
 <style scoped>
-.med-form { padding: 16px; display: flex; flex-direction: column; gap: 8px; }
-h2 { margin: 0 0 12px; font-size: 18px; }
-label { font-size: 13px; color: #555; margin-top: 8px; }
-input, select, textarea { padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; }
-.slots { display: flex; flex-direction: column; gap: 6px; }
-.slot-row { display: flex; gap: 6px; align-items: center; }
-.slot-row input { flex: 1; }
-.del-btn { width: 32px; padding: 0; background: #fde8e8; color: #a51c1c; border: none; border-radius: 4px; }
-.del-btn:disabled { opacity: 0.4; }
-.add-slot { padding: 6px; background: #f0f2f5; border: 1px dashed #aaa; border-radius: 4px; font-size: 13px; }
-.files { list-style: none; padding: 0; font-size: 13px; }
-.files li { display: flex; justify-content: space-between; padding: 4px 0; }
-.actions { display: flex; gap: 8px; margin-top: 16px; }
-.actions button { flex: 1; padding: 10px; border-radius: 6px; border: none; font-size: 15px; }
-.cancel { background: #f0f2f5; color: #333; }
-.submit { background: #2c7be5; color: #fff; }
-.submit:disabled { opacity: 0.5; }
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: flex; align-items: center; justify-content: center; z-index: 100; }
-.modal { background: #fff; border-radius: 8px; padding: 16px; width: 90%; max-width: 360px; }
-.modal h3 { margin: 0 0 8px; color: #a51c1c; }
-.modal-actions { display: flex; gap: 8px; margin-top: 12px; }
-.modal-actions button { flex: 1; padding: 8px; border-radius: 6px; border: 1px solid #ccc; }
-.modal-actions .confirm { background: #a51c1c; color: #fff; border-color: #a51c1c; }
-.hint { color: #888; font-size: 13px; }
+.med-form {
+  padding: var(--space-4, 16px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 8px);
+}
+
+h2 {
+  margin: 0 0 var(--space-3, 12px);
+  font-size: var(--text-xl, 18px);
+  color: var(--pt-text-strong);
+}
+
+label {
+  font-size: var(--text-sm, 13px);
+  color: var(--pt-text-muted);
+  margin-top: var(--space-2, 8px);
+  font-weight: var(--font-weight-medium, 500);
+}
+
+input,
+select,
+textarea {
+  padding: 10px;
+  min-height: var(--touch-target-min, 44px);
+  border: 1px solid var(--pt-text-hint);
+  border-radius: var(--radius-md, 6px);
+  font-size: var(--text-base, 14px);
+  font-family: inherit;
+}
+
+textarea {
+  min-height: 60px;
+}
+
+.slots {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 6px);
+}
+
+.slot-row {
+  display: flex;
+  gap: var(--space-2, 6px);
+  align-items: center;
+}
+
+.slot-row input {
+  flex: 1;
+}
+
+.del-btn {
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+  border: none;
+  border-radius: var(--radius-sm, 4px);
+}
+
+.del-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.add-slot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: var(--touch-target-min, 44px);
+  padding: var(--space-2, 6px);
+  background: var(--pt-surface-mute);
+  border: 1px dashed var(--pt-text-disabled);
+  border-radius: var(--radius-sm, 4px);
+  font-size: var(--text-sm, 13px);
+  color: var(--pt-text-muted);
+  cursor: pointer;
+}
+
+.add-slot:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.files {
+  list-style: none;
+  padding: 0;
+  font-size: var(--text-sm, 13px);
+}
+
+.files li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-1, 4px) 0;
+}
+
+.files button {
+  background: transparent;
+  border: 1px solid var(--pt-border-strong);
+  border-radius: var(--radius-sm, 4px);
+  padding: 0 var(--space-3, 12px);
+  font-size: var(--text-sm, 13px);
+  color: var(--pt-text-muted);
+  cursor: pointer;
+}
+
+.actions {
+  display: flex;
+  gap: var(--space-2, 8px);
+  margin-top: var(--space-4, 16px);
+}
+
+.actions button {
+  flex: 1;
+  min-height: var(--touch-target-min, 44px);
+  padding: 10px;
+  border-radius: var(--radius-md, 6px);
+  border: none;
+  font-size: var(--text-lg, 15px);
+  cursor: pointer;
+}
+
+.cancel {
+  background: var(--pt-surface-mute);
+  color: var(--pt-text-strong);
+}
+
+.submit {
+  background: var(--brand-primary, var(--pt-info-link));
+  color: var(--neutral-0);
+}
+
+.submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ===== 過敏 modal 內容（AppModal 提供 dialog 框架） ===== */
+.allergy-modal {
+  padding: var(--space-4, 16px);
+}
+
+.allergy-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  margin: 0 0 var(--space-2, 8px);
+  color: var(--color-danger);
+  font-size: var(--text-lg, 16px);
+}
+
+.allergy-modal p {
+  margin: var(--space-2, 8px) 0;
+  color: var(--pt-text-strong);
+  font-size: var(--text-base, 14px);
+}
+
+.allergy-modal ul {
+  margin: var(--space-2, 8px) 0;
+  padding-left: var(--space-5, 20px);
+  font-size: var(--text-base, 14px);
+}
+
+.allergy-modal .hint {
+  color: var(--pt-text-placeholder);
+  font-size: var(--text-sm, 13px);
+}
+
+.modal-actions {
+  display: flex;
+  gap: var(--space-2, 8px);
+  margin-top: var(--space-3, 12px);
+}
+
+.modal-actions button {
+  flex: 1;
+  min-height: var(--touch-target-min, 44px);
+  padding: var(--space-2, 8px);
+  border-radius: var(--radius-md, 6px);
+  border: 1px solid var(--pt-text-hint);
+  cursor: pointer;
+  font-size: var(--text-base, 14px);
+}
+
+.cancel-modal {
+  background: var(--neutral-0);
+  color: var(--pt-text-strong);
+}
+
+.confirm-modal {
+  background: var(--color-danger);
+  color: var(--neutral-0);
+  border-color: var(--color-danger);
+}
 </style>

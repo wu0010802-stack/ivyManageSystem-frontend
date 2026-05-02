@@ -8,6 +8,7 @@ import {
   replyContactBook,
 } from '../api/contactBook'
 import { toast } from '../utils/toast'
+import SkeletonBlock from '../components/SkeletonBlock.vue'
 
 const route = useRoute()
 const entryId = Number(route.params.entryId)
@@ -17,12 +18,14 @@ const newReply = ref('')
 const loading = ref(false)
 const submitting = ref(false)
 
-const MOOD_LABEL = {
-  happy: '開心 😄',
-  normal: '普通 🙂',
-  tired: '想睡 😴',
-  sad: '難過 😢',
-  sick: '不舒服 🤒',
+// 心情 emoji 屬於內容語意（教師選的小孩當日情緒），保留 emoji。
+// 顯示時用 <span role="img" aria-label="..."> wrap，screen reader 才能正確念出。
+const MOOD_OPTIONS = {
+  happy: { emoji: '😄', text: '開心' },
+  normal: { emoji: '🙂', text: '普通' },
+  tired: { emoji: '😴', text: '想睡' },
+  sad: { emoji: '😢', text: '難過' },
+  sick: { emoji: '🤒', text: '不舒服' },
 }
 
 const BOWEL_LABEL = {
@@ -98,7 +101,9 @@ onMounted(async () => {
 
 <template>
   <div class="detail">
-    <p v-if="loading" class="hint">載入中…</p>
+    <template v-if="loading">
+      <SkeletonBlock variant="card" :count="2" />
+    </template>
     <div v-else-if="entry" class="card-wrap">
       <div class="card">
         <h2 class="title">{{ entry.log_date }} 聯絡簿</h2>
@@ -106,7 +111,11 @@ onMounted(async () => {
         <div class="grid">
           <div v-if="entry.mood" class="cell">
             <label>心情</label>
-            <span>{{ MOOD_LABEL[entry.mood] || entry.mood }}</span>
+            <span v-if="MOOD_OPTIONS[entry.mood]">
+              {{ MOOD_OPTIONS[entry.mood].text }}
+              <span role="img" :aria-label="`心情：${MOOD_OPTIONS[entry.mood].text}`">{{ MOOD_OPTIONS[entry.mood].emoji }}</span>
+            </span>
+            <span v-else>{{ entry.mood }}</span>
           </div>
           <div v-if="entry.meal_lunch != null" class="cell">
             <label>午餐</label>
@@ -166,15 +175,18 @@ onMounted(async () => {
         </ul>
         <p v-else class="hint">尚無回覆</p>
 
+        <label for="contact-reply" class="sr-only">回覆內容</label>
         <textarea
+          id="contact-reply"
           v-model="newReply"
           rows="3"
           placeholder="留個訊息給老師（最多 500 字）"
           maxlength="500"
+          autocomplete="off"
         />
         <div class="actions">
           <span class="counter">{{ newReply.length }} / 500</span>
-          <button class="primary" :disabled="submitting" @click="submitReply">
+          <button type="button" class="primary" :disabled="submitting" @click="submitReply">
             送出回覆
           </button>
         </div>
@@ -186,9 +198,9 @@ onMounted(async () => {
 
 <style scoped>
 .detail { padding: 12px; }
-.hint { color: #999; text-align: center; padding: 24px 0; }
+.hint { color: var(--pt-text-faint); text-align: center; padding: 24px 0; }
 .card {
-  background: #fff;
+  background: var(--neutral-0);
   border-radius: 10px;
   padding: 16px;
   margin-bottom: 12px;
@@ -197,21 +209,21 @@ onMounted(async () => {
 .title { margin: 0 0 12px; font-size: 17px; }
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
 .cell { padding: 8px; background: #f7f9fc; border-radius: 6px; }
-.cell label { display: block; font-size: 11px; color: #777; margin-bottom: 2px; }
+.cell label { display: block; font-size: 11px; color: var(--pt-text-faint); margin-bottom: 2px; }
 .cell span { font-size: 14px; }
 .block { margin-top: 12px; }
-.block h3 { font-size: 14px; color: #555; margin: 0 0 4px; }
+.block h3 { font-size: 14px; color: var(--pt-text-muted); margin: 0 0 4px; }
 .block p { margin: 0; font-size: 14px; line-height: 1.6; white-space: pre-wrap; }
 .photos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 10px; }
 .photos img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 6px; }
 .reply-list { list-style: none; padding: 0; margin: 0 0 12px; }
-.reply-list li { padding: 8px 0; border-bottom: 1px solid #f0f0f0; }
+.reply-list li { padding: 8px 0; border-bottom: 1px solid var(--pt-border-light); }
 .reply-list .body { margin: 0 0 4px; font-size: 14px; }
-.reply-list .meta { font-size: 11px; color: #999; }
+.reply-list .meta { font-size: 11px; color: var(--pt-text-faint); }
 .link-btn { background: none; border: none; color: #d33; margin-left: 8px; cursor: pointer; }
 textarea {
   width: 100%;
-  border: 1px solid #ddd;
+  border: 1px solid var(--pt-border-stronger);
   border-radius: 6px;
   padding: 8px;
   font-family: inherit;
@@ -219,10 +231,10 @@ textarea {
   box-sizing: border-box;
 }
 .actions { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
-.counter { color: #999; font-size: 12px; }
+.counter { color: var(--pt-text-faint); font-size: 12px; }
 .primary {
   background: #4a90e2;
-  color: #fff;
+  color: var(--neutral-0);
   border: none;
   padding: 8px 16px;
   border-radius: 6px;

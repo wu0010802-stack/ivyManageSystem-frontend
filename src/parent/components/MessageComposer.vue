@@ -1,5 +1,6 @@
 <script setup>
 import { ref } from 'vue'
+import ParentIcon from './ParentIcon.vue'
 
 const emit = defineEmits(['send'])
 const body = ref('')
@@ -44,22 +45,38 @@ async function submit() {
   <div class="composer">
     <div v-if="files.length" class="files">
       <span v-for="(f, i) in files" :key="i" class="file">
-        📎 {{ f.name }}
-        <button @click="removeFile(i)">×</button>
+        <ParentIcon name="attachment" size="xs" />
+        {{ f.name }}
+        <button
+          type="button"
+          :aria-label="`移除附件 ${f.name}`"
+          @click="removeFile(i)"
+        >
+          <ParentIcon name="close" size="xs" />
+        </button>
       </span>
     </div>
     <div class="row">
-      <label class="attach-btn">
-        📎
+      <label class="attach-btn" aria-label="加入附件">
+        <ParentIcon name="attachment" size="sm" />
         <input type="file" accept="image/*,application/pdf" multiple @change="onPick" hidden />
       </label>
+      <label for="msg-composer-body" class="sr-only">輸入訊息</label>
       <textarea
+        id="msg-composer-body"
         v-model="body"
         placeholder="輸入訊息…"
         rows="1"
+        autocomplete="off"
         @keydown.enter.exact.prevent="submit"
       />
-      <button class="send" :disabled="sending" @click="submit">
+      <button
+        type="button"
+        class="send"
+        :disabled="sending"
+        :aria-label="sending ? '送出中' : '送出訊息'"
+        @click="submit"
+      >
         {{ sending ? '⋯' : '送出' }}
       </button>
     </div>
@@ -67,13 +84,13 @@ async function submit() {
 </template>
 
 <style scoped>
-.composer { background: #fff; border-top: 1px solid #e5e7eb; padding: 8px; }
+.composer { background: var(--neutral-0); border-top: 1px solid var(--pt-border); padding: 8px; }
 .files { display: flex; flex-wrap: wrap; gap: 4px; padding-bottom: 6px; font-size: 12px; }
-.file { background: #f0f2f5; padding: 2px 6px; border-radius: 4px; }
-.file button { border: none; background: none; cursor: pointer; padding: 0 0 0 4px; }
+.file { background: var(--pt-surface-mute); padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; }
+.file button { border: none; background: none; cursor: pointer; padding: 0 0 0 4px; display: inline-flex; align-items: center; }
 .row { display: flex; gap: 6px; align-items: flex-end; }
-.attach-btn { padding: 6px; background: #f0f2f5; border-radius: 6px; font-size: 18px; cursor: pointer; }
-textarea { flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; resize: none; max-height: 80px; }
-.send { padding: 8px 14px; background: #3f7d48; color: #fff; border: none; border-radius: 6px; font-size: 14px; }
+.attach-btn { padding: 6px; background: var(--pt-surface-mute); border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+textarea { flex: 1; padding: 8px; border: 1px solid var(--pt-text-hint); border-radius: 6px; font-size: 14px; resize: none; max-height: 80px; }
+.send { padding: 8px 14px; background: var(--brand-primary); color: var(--neutral-0); border: none; border-radius: 6px; font-size: 14px; }
 .send:disabled { opacity: 0.5; }
 </style>

@@ -1,19 +1,20 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { useMessagesStore } from '../stores/messages'
 import { getMessageThread } from '../api/messages'
 import MessageBubble from '../components/MessageBubble.vue'
 import MessageComposer from '../components/MessageComposer.vue'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
 import { toast } from '../utils/toast'
 
 const route = useRoute()
-const router = useRouter()
 const messagesStore = useMessagesStore()
 
 const threadId = computed(() => Number(route.params.threadId))
 const thread = ref(null)
 const loadingMore = ref(false)
+const recallTarget = ref(null) // 待撤回的 messageId 或 null
 
 const messages = computed(() => {
   const bucket = messagesStore.messagesByThread[threadId.value]
@@ -57,10 +58,23 @@ async function onSend({ body, attachments, done }) {
   }
 }
 
-async function onRecall(messageId) {
-  if (!confirm('確定撤回？對方仍可看到「此訊息已撤回」。')) return
+function askRecall(messageId) {
+  recallTarget.value = messageId
+}
+
+const recallOpen = computed({
+  get: () => recallTarget.value !== null,
+  set: (v) => {
+    if (!v) recallTarget.value = null
+  },
+})
+
+async function doRecall() {
+  const id = recallTarget.value
+  recallTarget.value = null
+  if (!id) return
   try {
-    await messagesStore.recall(messageId)
+    await messagesStore.recall(id)
   } catch (err) {
     toast.error(err?.displayMessage || '撤回失敗')
   }
@@ -71,16 +85,21 @@ onMounted(init)
 
 <template>
   <div class="thread-view">
-    <header class="header">
-      <button class="back" @click="router.back()">←</button>
-      <div class="title">
-        <strong>{{ thread?.teacher_name || '老師' }}</strong>
-        <span v-if="thread" class="sub">{{ thread.student_name }}</span>
-      </div>
-    </header>
+    <!-- AppHeader 已由 ParentLayout 提供（router 設 showBack: true）；
+         這裡只顯示對話對方的副標題（學生名）。 -->
+    <div v-if="thread" class="thread-subtitle">
+      <strong>{{ thread.teacher_name || '老師' }}</strong>
+      <span class="sub">{{ thread.student_name }}</span>
+    </div>
 
     <div class="messages">
-      <button v-if="hasMore" class="load-more" @click="loadMore" :disabled="loadingMore">
+      <button
+        v-if="hasMore"
+        type="button"
+        class="load-more"
+        :disabled="loadingMore"
+        @click="loadMore"
+      >
         {{ loadingMore ? '載入中…' : '載入更早訊息' }}
       </button>
       <MessageBubble
@@ -88,28 +107,71 @@ onMounted(init)
         :key="m.id"
         :message="m"
         :can-recall="true"
-        @recall="onRecall"
+        @recall="askRecall"
       />
     </div>
 
     <MessageComposer @send="onSend" />
+
+    <ConfirmDialog
+      v-model:open="recallOpen"
+      title="確定撤回此訊息？"
+      message="對方仍可看到「此訊息已撤回」。"
+      confirm-label="撤回"
+      destructive
+      @confirm="doRecall"
+    />
   </div>
 </template>
 
 <style scoped>
-.thread-view { display: flex; flex-direction: column; height: calc(100vh - 64px); margin: -16px; background: #f7f9f8; }
-.header {
-  display: flex; align-items: center; gap: 8px; padding: 10px 12px;
-  background: #fff; border-bottom: 1px solid #e5e7eb;
+.thread-view {
+  display: flex;
+  flex-direction: column;
+  height: calc(100dvh - 64px);
+  margin: -16px;
+  background: var(--pt-surface-thread-bg);
 }
-.back { background: none; border: none; font-size: 22px; padding: 4px 8px; color: #2c7be5; }
-.title { display: flex; flex-direction: column; }
-.title strong { font-size: 15px; color: #2c3e50; }
-.title .sub { font-size: 12px; color: #888; }
-.messages { flex: 1; overflow-y: auto; padding: 12px; }
+
+.thread-subtitle {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-2, 8px) var(--space-4, 16px);
+  background: var(--neutral-0, var(--neutral-0));
+  border-bottom: 1px solid var(--pt-border);
+}
+
+.thread-subtitle strong {
+  font-size: var(--text-base, 15px);
+  color: var(--pt-text-strong);
+}
+
+.thread-subtitle .sub {
+  font-size: var(--text-xs, 12px);
+  color: var(--pt-text-placeholder);
+  margin-top: 2px;
+}
+
+.messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-3, 12px);
+}
+
 .load-more {
-  display: block; margin: 0 auto 12px; padding: 6px 16px;
-  background: #fff; border: 1px solid #ddd; border-radius: 14px; font-size: 12px;
+  display: block;
+  margin: 0 auto 12px;
+  min-height: var(--touch-target-min, 44px);
+  padding: var(--space-2, 6px) var(--space-4, 16px);
+  background: var(--neutral-0, var(--neutral-0));
+  border: 1px solid var(--pt-border-stronger);
+  border-radius: 14px;
+  font-size: var(--text-xs, 12px);
+  cursor: pointer;
 }
-.load-more:disabled { opacity: 0.5; }
+
+.load-more:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 </style>

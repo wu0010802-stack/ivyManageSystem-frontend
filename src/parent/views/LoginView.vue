@@ -64,14 +64,32 @@ onMounted(startLogin)
   <div class="login-view">
     <div class="login-card">
       <div class="logo">
-        <img src="/pwa-192x192.png" alt="logo" />
+        <img src="/pwa-192x192.png" alt="" aria-hidden="true" />
       </div>
       <h1 class="title">常春藤家長</h1>
-      <p v-if="status === 'init'" class="hint">正在開啟 LINE 登入...</p>
-      <p v-else-if="status === 'loading'" class="hint">驗證您的身分...</p>
+      <p
+        v-if="status === 'init'"
+        class="hint"
+        role="status"
+        aria-live="polite"
+      >
+        正在開啟 LINE 登入...
+      </p>
+      <p
+        v-else-if="status === 'loading'"
+        class="hint"
+        role="status"
+        aria-live="polite"
+      >
+        驗證您的身分...
+      </p>
       <template v-else-if="status === 'error'">
-        <p class="error">{{ errorMessage }}</p>
-        <button class="retry" @click="manualRetry">重試登入</button>
+        <p class="error" role="alert" aria-live="assertive">
+          {{ errorMessage }}
+        </p>
+        <button type="button" class="retry" @click="manualRetry">
+          重試登入
+        </button>
       </template>
     </div>
   </div>
@@ -79,16 +97,16 @@ onMounted(startLogin)
 
 <style scoped>
 .login-view {
-  min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: linear-gradient(135deg, #3f7d48 0%, #5fa46a 100%);
+  background: linear-gradient(135deg, var(--brand-primary) 0%, #5fa46a 100%);
 }
 
 .login-card {
-  background: #fff;
+  background: var(--neutral-0);
   border-radius: 16px;
   padding: 32px 24px;
   width: 100%;
@@ -106,16 +124,16 @@ onMounted(startLogin)
 .title {
   margin: 16px 0 24px;
   font-size: 22px;
-  color: #3f7d48;
+  color: var(--brand-primary);
 }
 
 .hint {
-  color: #555;
+  color: var(--pt-text-muted);
   font-size: 14px;
 }
 
 .error {
-  color: #c0392b;
+  color: var(--color-danger);
   font-size: 14px;
   margin-bottom: 16px;
   word-break: break-word;
@@ -123,16 +141,19 @@ onMounted(startLogin)
 
 .retry {
   margin-top: 8px;
+  min-height: var(--touch-target-min, 44px);
   padding: 10px 24px;
-  background: #3f7d48;
-  color: #fff;
+  background: var(--brand-primary);
+  color: var(--neutral-0);
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-md, 8px);
   font-size: 15px;
+  font-weight: var(--font-weight-medium, 500);
   cursor: pointer;
+  transition: background var(--transition-fast, 0.15s ease);
 }
 
 .retry:active {
-  background: #336440;
+  background: var(--brand-primary-hover);
 }
 </style>

@@ -2,10 +2,26 @@
 import { computed, onMounted, ref } from 'vue'
 import { listAnnouncements, markRead } from '../api/announcements'
 import { toast } from '../utils/toast'
+import ParentIcon from '../components/ParentIcon.vue'
+import AppModal from '../components/AppModal.vue'
+import { useIncrementalRender } from '../composables/useIncrementalRender'
 
 const items = ref([])
 const loading = ref(false)
 const selected = ref(null) // 開啟詳情的公告
+
+// 漸進渲染：列表 > 20 項時觸底自動載下一頁，避免一次渲染過多 DOM
+const { visible: visibleItems, sentinelRef, hasMore } = useIncrementalRender(
+  items,
+  { pageSize: 20 },
+)
+
+const detailOpen = computed({
+  get: () => selected.value !== null,
+  set: (v) => {
+    if (!v) selected.value = null
+  },
+})
 
 const PRIORITY_LABEL = {
   normal: '一般',
@@ -14,9 +30,9 @@ const PRIORITY_LABEL = {
 }
 
 const PRIORITY_COLOR = {
-  normal: { bg: '#f0f2f5', color: '#666' },
-  important: { bg: '#fff4e6', color: '#a25e0a' },
-  urgent: { bg: '#fde8e8', color: '#a51c1c' },
+  normal: { bg: 'var(--pt-surface-mute)', color: 'var(--pt-text-soft)' },
+  important: { bg: 'var(--color-warning-soft)', color: 'var(--pt-warning-text-soft)' },
+  urgent: { bg: 'var(--color-danger-soft)', color: 'var(--color-danger)' },
 }
 
 async function fetchData() {
@@ -58,9 +74,9 @@ onMounted(fetchData)
     <div v-if="!loading && items.length === 0" class="empty">目前沒有公告</div>
 
     <div
-      v-for="item in items"
+      v-for="item in visibleItems"
       :key="item.id"
-      class="ann-card"
+      class="ann-card press-scale"
       :class="{ unread: !item.is_read }"
       @click="openDetail(item)"
     >
@@ -83,12 +99,18 @@ onMounted(fetchData)
       <div class="time">{{ formatTime(item.created_at) }}</div>
     </div>
 
+    <!-- 漸進渲染哨點：觸碰視窗時載入下一批 -->
+    <div v-if="hasMore" ref="sentinelRef" class="render-sentinel" aria-hidden="true" />
+
     <div v-if="loading" class="loading">載入中...</div>
 
     <!-- 詳情 modal -->
-    <div v-if="selected" class="modal-mask" @click.self="close">
-      <div class="modal">
-        <div class="modal-header">
+    <AppModal
+      v-model:open="detailOpen"
+      labelled-by="announcement-detail-title"
+    >
+      <template v-if="selected">
+        <div class="detail-header">
           <span
             class="priority-tag"
             :style="{
@@ -98,13 +120,15 @@ onMounted(fetchData)
           >
             {{ PRIORITY_LABEL[selected.priority] || selected.priority }}
           </span>
-          <span class="modal-title">{{ selected.title }}</span>
-          <button class="close" @click="close">✕</button>
+          <span id="announcement-detail-title" class="detail-title">{{ selected.title }}</span>
+          <button class="close" type="button" aria-label="關閉" @click="close">
+            <ParentIcon name="close" size="sm" />
+          </button>
         </div>
-        <div class="modal-time">{{ formatTime(selected.created_at) }}</div>
-        <div class="modal-content">{{ selected.content }}</div>
-      </div>
-    </div>
+        <div class="detail-time">{{ formatTime(selected.created_at) }}</div>
+        <div class="detail-content">{{ selected.content }}</div>
+      </template>
+    </AppModal>
   </div>
 </template>
 
@@ -119,11 +143,13 @@ onMounted(fetchData)
 .loading {
   text-align: center;
   padding: 40px 16px;
-  color: #888;
+  color: var(--pt-text-placeholder);
 }
 
+.render-sentinel { height: 1px; }
+
 .ann-card {
-  background: #fff;
+  background: var(--neutral-0);
   border-radius: 12px;
   padding: 12px 14px;
   cursor: pointer;
@@ -131,7 +157,7 @@ onMounted(fetchData)
 }
 
 .ann-card.unread {
-  border-left: 3px solid #3f7d48;
+  border-left: 3px solid var(--brand-primary);
 }
 
 .ann-row {
@@ -150,7 +176,7 @@ onMounted(fetchData)
 .title {
   flex: 1;
   font-weight: 600;
-  color: #2c3e50;
+  color: var(--pt-text-strong);
   font-size: 15px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -160,58 +186,36 @@ onMounted(fetchData)
 .unread-dot {
   width: 8px;
   height: 8px;
-  background: #c0392b;
+  background: var(--color-danger);
   border-radius: 50%;
 }
 
 .preview {
   margin-top: 6px;
-  color: #666;
+  color: var(--pt-text-soft);
   font-size: 13px;
   line-height: 1.4;
 }
 
 .time {
   margin-top: 6px;
-  color: #aaa;
+  color: var(--pt-text-disabled);
   font-size: 12px;
 }
 
-.modal-mask {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 100;
-  padding: 16px;
-}
-
-.modal {
-  background: #fff;
-  border-radius: 12px;
-  width: 100%;
-  max-width: 420px;
-  max-height: 80vh;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.modal-header {
+.detail-header {
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 14px 16px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--pt-border-light);
 }
 
-.modal-title {
+.detail-title {
   flex: 1;
   font-weight: 600;
   font-size: 16px;
-  color: #2c3e50;
+  color: var(--pt-text-strong);
 }
 
 .close {
@@ -219,23 +223,24 @@ onMounted(fetchData)
   height: 28px;
   border: none;
   background: transparent;
-  font-size: 18px;
-  color: #888;
+  color: var(--pt-text-placeholder);
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.modal-time {
+.detail-time {
   padding: 4px 16px 12px;
-  color: #aaa;
+  color: var(--pt-text-disabled);
   font-size: 12px;
 }
 
-.modal-content {
+.detail-content {
   padding: 0 16px 20px;
-  overflow-y: auto;
   white-space: pre-wrap;
   line-height: 1.6;
-  color: #2c3e50;
+  color: var(--pt-text-strong);
   font-size: 14px;
 }
 </style>

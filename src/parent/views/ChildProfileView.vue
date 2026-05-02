@@ -3,6 +3,8 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getChildProfile } from '../api/profile'
 import { toast } from '../utils/toast'
+import ParentIcon from '../components/ParentIcon.vue'
+import SkeletonBlock from '../components/SkeletonBlock.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -13,7 +15,7 @@ const loading = ref(false)
 
 const SEVERITY_LABEL = { mild: '輕度', moderate: '中度', severe: '嚴重' }
 const SEVERITY_COLOR = {
-  mild: { bg: '#fef3c7', color: '#92400e' },
+  mild: { bg: 'var(--color-warning-soft)', color: 'var(--pt-warning-text)' },
   moderate: { bg: '#fed7aa', color: '#9a3412' },
   severe: { bg: '#fecaca', color: '#991b1b' },
 }
@@ -49,7 +51,9 @@ onMounted(fetchData)
 
 <template>
   <div class="profile-view">
-    <div v-if="loading && !data" class="state">載入中…</div>
+    <template v-if="loading && !data">
+      <SkeletonBlock variant="card" :count="2" />
+    </template>
 
     <template v-else-if="data">
       <section class="card">
@@ -122,7 +126,8 @@ onMounted(fetchData)
           不會在此頁直接修改，以確保校方記錄一致。
         </p>
         <button class="primary-btn" type="button" @click="goMessages">
-          📩 開啟訊息聯絡導師
+          <ParentIcon name="envelope" size="sm" />
+          開啟訊息聯絡導師
         </button>
       </section>
     </template>
@@ -135,42 +140,37 @@ onMounted(fetchData)
   flex-direction: column;
   gap: 12px;
 }
-.state {
-  text-align: center;
-  padding: 40px 16px;
-  color: #888;
-}
 .card {
-  background: #fff;
+  background: var(--neutral-0);
   border-radius: 12px;
   padding: 14px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
 }
 .head {
   margin-bottom: 12px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--pt-border-light);
   padding-bottom: 12px;
 }
 .name {
   font-size: 20px;
   font-weight: 700;
-  color: #2c3e50;
+  color: var(--pt-text-strong);
 }
 .sub {
   margin-top: 4px;
   font-size: 13px;
-  color: #888;
+  color: var(--pt-text-placeholder);
 }
 .row {
   display: flex;
   gap: 10px;
   margin-bottom: 6px;
   font-size: 14px;
-  color: #2c3e50;
+  color: var(--pt-text-strong);
 }
 .row .label {
   width: 56px;
-  color: #888;
+  color: var(--pt-text-placeholder);
   flex-shrink: 0;
 }
 .teachers {
@@ -180,16 +180,16 @@ onMounted(fetchData)
 }
 .teacher-tag {
   font-size: 13px;
-  color: #555;
+  color: var(--pt-text-muted);
 }
 .section-title {
   font-size: 14px;
   font-weight: 600;
-  color: #555;
+  color: var(--pt-text-muted);
   margin: 0 0 10px;
 }
 .empty {
-  color: #888;
+  color: var(--pt-text-placeholder);
   font-size: 13px;
   padding: 6px 0;
 }
@@ -198,17 +198,17 @@ onMounted(fetchData)
   align-items: center;
   justify-content: space-between;
   padding: 8px 0;
-  border-top: 1px solid #f3f4f6;
+  border-top: 1px solid var(--pt-surface-mute-warm);
 }
 .guardian-row:first-of-type {
   border-top: none;
 }
 .guardian-name {
   font-weight: 600;
-  color: #2c3e50;
+  color: var(--pt-text-strong);
 }
 .guardian-rel {
-  color: #888;
+  color: var(--pt-text-placeholder);
   font-size: 13px;
 }
 .guardian-tags {
@@ -220,24 +220,24 @@ onMounted(fetchData)
   font-size: 11px;
   padding: 2px 8px;
   border-radius: 10px;
-  background: #f0f2f5;
-  color: #666;
+  background: var(--pt-surface-mute);
+  color: var(--pt-text-soft);
 }
 .tag.self {
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: var(--color-info-soft);
+  color: var(--pt-info-text);
 }
 .tag.primary {
-  background: #dcfce7;
-  color: #166534;
+  background: var(--color-success-soft);
+  color: var(--pt-success-text);
 }
 .tag.pickup {
-  background: #fef3c7;
-  color: #92400e;
+  background: var(--color-warning-soft);
+  color: var(--pt-warning-text);
 }
 .allergy-row {
   padding: 8px 0;
-  border-top: 1px solid #f3f4f6;
+  border-top: 1px solid var(--pt-surface-mute-warm);
 }
 .allergy-row:first-of-type {
   border-top: none;
@@ -249,7 +249,7 @@ onMounted(fetchData)
 }
 .allergen {
   font-weight: 600;
-  color: #2c3e50;
+  color: var(--pt-text-strong);
 }
 .severity {
   font-size: 11px;
@@ -259,10 +259,10 @@ onMounted(fetchData)
 .allergy-text {
   margin-top: 4px;
   font-size: 13px;
-  color: #555;
+  color: var(--pt-text-muted);
 }
 .change-card {
-  background: #fffbeb;
+  background: var(--neutral-0)eb;
   border: 1px solid #fbbf24;
 }
 .change-text {
@@ -274,11 +274,15 @@ onMounted(fetchData)
 .primary-btn {
   width: 100%;
   padding: 10px;
-  background: #d97706;
-  color: #fff;
+  background: var(--pt-warning-text-mid);
+  color: var(--neutral-0);
   border: none;
   border-radius: 8px;
   font-size: 14px;
   font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 }
 </style>

@@ -8,9 +8,16 @@ import router from './router'
 // 各角色 app 共用同一份基礎尺度，避免「四個產品」的視覺語言分裂。
 // 角色 accent 由 parent app 在自己 root style 覆寫 --brand-*。
 import '@/assets/design-tokens.css'
+// 家長 App 全域樣式：focus / reduced-motion / tap-highlight / utility class。
+// 必須在 design-tokens.css 之後 import（因為它使用 token 變數）。
+import './styles/globals.css'
 
 import { useParentAuthStore } from './stores/parentAuth'
 import { getMe } from './api/profile'
+import { initTheme } from './composables/useTheme'
+
+// Theme 應在第一次 paint 前套用，避免閃爍
+initTheme()
 
 const app = createApp(App)
 app.use(createPinia())

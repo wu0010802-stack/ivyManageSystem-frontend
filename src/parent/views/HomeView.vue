@@ -5,6 +5,8 @@ import { getHomeSummary, getTodayStatus } from '../api/profile'
 import { useParentAuthStore } from '../stores/parentAuth'
 import { useCachedAsync } from '@/composables/useCachedAsync'
 import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
+import ParentIcon from '../components/ParentIcon.vue'
+import SkeletonBlock from '../components/SkeletonBlock.vue'
 
 const router = useRouter()
 const authStore = useParentAuthStore()
@@ -86,10 +88,10 @@ function refresh() {
 }
 
 const QUICK_ACTIONS = [
-  { icon: '📓', label: '聯絡簿', path: '/contact-book' },
-  { icon: '📅', label: '本週行程', path: '/calendar' },
-  { icon: '📝', label: '請假', path: '/leaves' },
-  { icon: '💊', label: '用藥單', path: '/medications' },
+  { icon: 'notebook', label: '聯絡簿', path: '/contact-book' },
+  { icon: 'calendar', label: '本週行程', path: '/calendar' },
+  { icon: 'clipboard', label: '請假', path: '/leaves' },
+  { icon: 'pill', label: '用藥單', path: '/medications' },
 ]
 
 // 接送狀態文案：對應後端 status (pending/acknowledged/completed)
@@ -104,7 +106,12 @@ function dismissalLabel(d) {
 
 <template>
   <div class="home-view">
-    <div v-if="summaryPending && !summaryData" class="state-block">載入中...</div>
+    <!-- 骨架載入：>300ms 的非同步請求應顯示結構，避免畫面空白 -->
+    <template v-if="summaryPending && !summaryData">
+      <SkeletonBlock variant="card" />
+      <SkeletonBlock variant="card" />
+      <SkeletonBlock variant="card" />
+    </template>
 
     <MobileErrorRetry
       v-else-if="summaryError && !summaryData"
@@ -116,7 +123,9 @@ function dismissalLabel(d) {
       <!-- 1) 推播未啟用 CTA — 視覺分量大，催加好友 -->
       <section v-if="showPushCta" class="push-cta">
         <div class="push-cta-head">
-          <span class="push-cta-icon">🔔</span>
+          <span class="push-cta-icon" aria-hidden="true">
+            <ParentIcon name="bell" size="lg" />
+          </span>
           <div>
             <div class="push-cta-title">尚未加 LINE 為好友</div>
             <div class="push-cta-sub">以下通知將收不到推播：</div>
@@ -144,17 +153,21 @@ function dismissalLabel(d) {
           </div>
           <div class="chips">
             <span v-if="c.attendance" class="chip chip-attendance">
-              ✓ {{ c.attendance.status }}
+              <ParentIcon name="check" size="xs" />
+              {{ c.attendance.status }}
             </span>
             <span v-else class="chip chip-muted">尚未到校</span>
             <span v-if="c.leave" class="chip chip-leave">
-              📝 {{ c.leave.type }}
+              <ParentIcon name="clipboard" size="xs" />
+              {{ c.leave.type }}
             </span>
             <span v-if="c.medication.has_order" class="chip chip-med">
-              💊 用藥 {{ c.medication.order_count }} 次
+              <ParentIcon name="pill" size="xs" />
+              用藥 {{ c.medication.order_count }} 次
             </span>
             <span v-if="c.dismissal" class="chip chip-pickup">
-              🚸 {{ dismissalLabel(c.dismissal) }}
+              <ParentIcon name="pickup" size="xs" />
+              {{ dismissalLabel(c.dismissal) }}
             </span>
           </div>
         </div>
@@ -165,11 +178,11 @@ function dismissalLabel(d) {
         <h3 class="section-title todos-title">今日待辦</h3>
         <button
           v-if="unpaidCount > 0"
-          class="todo-row"
+          class="todo-row press-scale"
           type="button"
           @click="go('/fees')"
         >
-          <span class="todo-icon">💴</span>
+          <span class="todo-icon"><ParentIcon name="money" size="md" /></span>
           <span class="todo-text">
             待繳費 <strong>{{ unpaidCount }}</strong> 筆
             ／ NT$ {{ formatMoney(unpaidTotal) }}
@@ -177,71 +190,73 @@ function dismissalLabel(d) {
               （逾期 NT$ {{ formatMoney(overdueAmount) }}）
             </span>
           </span>
-          <span class="todo-arrow">›</span>
+          <ParentIcon name="chevron-right" size="sm" class="todo-arrow" />
         </button>
         <button
           v-if="unreadMessages > 0"
-          class="todo-row"
+          class="todo-row press-scale"
           type="button"
           @click="go('/messages')"
         >
-          <span class="todo-icon">💬</span>
+          <span class="todo-icon"><ParentIcon name="chat" size="md" /></span>
           <span class="todo-text">
             未讀訊息 <strong>{{ unreadMessages }}</strong> 則
           </span>
-          <span class="todo-arrow">›</span>
+          <ParentIcon name="chevron-right" size="sm" class="todo-arrow" />
         </button>
         <button
           v-if="pendingAcks > 0"
-          class="todo-row"
+          class="todo-row press-scale"
           type="button"
           @click="go('/events')"
         >
-          <span class="todo-icon">📝</span>
+          <span class="todo-icon"><ParentIcon name="signature" size="md" /></span>
           <span class="todo-text">
             待簽閱事件 <strong>{{ pendingAcks }}</strong> 件
           </span>
-          <span class="todo-arrow">›</span>
+          <ParentIcon name="chevron-right" size="sm" class="todo-arrow" />
         </button>
         <button
           v-if="unreadAnnouncements > 0"
-          class="todo-row"
+          class="todo-row press-scale"
           type="button"
           @click="go('/announcements')"
         >
-          <span class="todo-icon">📢</span>
+          <span class="todo-icon"><ParentIcon name="megaphone" size="md" /></span>
           <span class="todo-text">
             未讀公告 <strong>{{ unreadAnnouncements }}</strong> 則
           </span>
-          <span class="todo-arrow">›</span>
+          <ParentIcon name="chevron-right" size="sm" class="todo-arrow" />
         </button>
         <button
           v-if="recentLeaveReviews > 0"
-          class="todo-row"
+          class="todo-row press-scale"
           type="button"
           @click="go('/leaves')"
         >
-          <span class="todo-icon">📋</span>
+          <span class="todo-icon"><ParentIcon name="clipboard" size="md" /></span>
           <span class="todo-text">
             最近請假審核結果 <strong>{{ recentLeaveReviews }}</strong> 件
           </span>
-          <span class="todo-arrow">›</span>
+          <ParentIcon name="chevron-right" size="sm" class="todo-arrow" />
         </button>
         <button
           v-if="pendingPromotions > 0"
-          class="todo-row"
+          class="todo-row press-scale"
           type="button"
           @click="go('/activity')"
         >
-          <span class="todo-icon">🎨</span>
+          <span class="todo-icon"><ParentIcon name="art" size="md" /></span>
           <span class="todo-text">
             才藝候補待確認 <strong>{{ pendingPromotions }}</strong> 件
           </span>
-          <span class="todo-arrow">›</span>
+          <ParentIcon name="chevron-right" size="sm" class="todo-arrow" />
         </button>
       </section>
       <section v-else class="todos-empty">
-        <span class="todos-empty-icon">✓</span>
+        <span class="todos-empty-icon" aria-hidden="true">
+          <ParentIcon name="check" size="sm" />
+        </span>
         目前沒有待辦事項
       </section>
 
@@ -255,7 +270,7 @@ function dismissalLabel(d) {
           v-for="c in children"
           :key="c.guardian_id"
           type="button"
-          class="child-card"
+          class="child-card press-scale"
           @click="go(`/children/${c.student_id}`)"
         >
           <div class="child-row">
@@ -267,7 +282,7 @@ function dismissalLabel(d) {
             <span v-if="c.is_primary" class="tag primary">主要聯絡人</span>
             <span v-if="c.can_pickup" class="tag pickup">可接送</span>
             <span class="tag status">{{ lifecycleLabel(c.lifecycle_status) }}</span>
-            <span class="child-arrow">›</span>
+            <ParentIcon name="chevron-right" size="sm" class="child-arrow" />
           </div>
         </button>
       </section>
@@ -279,11 +294,13 @@ function dismissalLabel(d) {
           <button
             v-for="q in QUICK_ACTIONS"
             :key="q.path"
-            class="quick-tile"
+            class="quick-tile press-scale"
             type="button"
             @click="go(q.path)"
           >
-            <span class="quick-icon">{{ q.icon }}</span>
+            <span class="quick-icon">
+              <ParentIcon :name="q.icon" size="lg" />
+            </span>
             <span class="quick-label">{{ q.label }}</span>
           </button>
         </div>
@@ -302,13 +319,13 @@ function dismissalLabel(d) {
 .state-block {
   text-align: center;
   padding: 40px 16px;
-  color: #666;
+  color: var(--pt-text-soft);
 }
 
 /* 推播 CTA */
 .push-cta {
-  background: linear-gradient(135deg, #fff7ed 0%, #fee9c2 100%);
-  border: 1px solid #f59e0b;
+  background: linear-gradient(135deg, var(--color-warning-soft) 0%, var(--color-warning-soft) 100%);
+  border: 1px solid var(--color-warning);
   border-radius: 12px;
   padding: 14px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
@@ -319,24 +336,27 @@ function dismissalLabel(d) {
   align-items: flex-start;
 }
 .push-cta-icon {
-  font-size: 28px;
-  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--pt-warning-text-mid);
+  flex-shrink: 0;
 }
 .push-cta-title {
   font-size: 15px;
   font-weight: 600;
-  color: #92400e;
+  color: var(--pt-warning-text);
 }
 .push-cta-sub {
   font-size: 12px;
-  color: #b45309;
+  color: var(--pt-warning-text-mid);
   margin-top: 2px;
 }
 .push-cta-list {
   margin: 8px 0 8px 38px;
   padding: 0;
   list-style: disc;
-  color: #92400e;
+  color: var(--pt-warning-text);
   font-size: 12px;
   line-height: 1.5;
 }
@@ -345,22 +365,22 @@ function dismissalLabel(d) {
   width: 100%;
   margin-top: 8px;
   padding: 10px;
-  background: #d97706;
-  color: #fff;
+  background: var(--pt-warning-text-mid);
+  color: var(--neutral-0);
   border: none;
   border-radius: 8px;
   font-size: 14px;
   font-weight: 600;
 }
 .push-cta-btn:active {
-  background: #b45309;
+  background: var(--pt-warning-text-mid);
 }
 
 /* 區塊標題 */
 .section-title {
   font-size: 14px;
   font-weight: 600;
-  color: #555;
+  color: var(--pt-text-muted);
   margin: 0 0 8px 4px;
 }
 
@@ -370,7 +390,7 @@ function dismissalLabel(d) {
   flex-direction: column;
 }
 .today-card {
-  background: #fff;
+  background: var(--neutral-0);
   border-radius: 12px;
   padding: 12px 14px;
   margin-bottom: 8px;
@@ -385,11 +405,11 @@ function dismissalLabel(d) {
 .today-name {
   font-size: 15px;
   font-weight: 600;
-  color: #2c3e50;
+  color: var(--pt-text-strong);
 }
 .today-class {
   font-size: 12px;
-  color: #888;
+  color: var(--pt-text-placeholder);
 }
 .chips {
   display: flex;
@@ -397,21 +417,24 @@ function dismissalLabel(d) {
   gap: 6px;
 }
 .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 12px;
   padding: 3px 10px;
   border-radius: 12px;
-  background: #f0f2f5;
-  color: #555;
+  background: var(--pt-surface-mute);
+  color: var(--pt-text-muted);
 }
-.chip-attendance { background: #dcfce7; color: #166534; }
-.chip-leave      { background: #fef3c7; color: #92400e; }
-.chip-med        { background: #ddd6fe; color: #5b21b6; }
-.chip-pickup     { background: #dbeafe; color: #1d4ed8; }
-.chip-muted      { background: #f3f4f6; color: #888; }
+.chip-attendance { background: var(--color-success-soft); color: var(--pt-success-text); }
+.chip-leave      { background: var(--color-warning-soft); color: var(--pt-warning-text); }
+.chip-med        { background: var(--pt-violet-bg); color: var(--pt-violet-text); }
+.chip-pickup     { background: var(--color-info-soft); color: var(--pt-info-text); }
+.chip-muted      { background: var(--pt-surface-mute-warm); color: var(--pt-text-placeholder); }
 
 /* 待辦 */
 .todos-card {
-  background: #fff;
+  background: var(--neutral-0);
   border-radius: 12px;
   padding: 8px 0;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
@@ -426,57 +449,64 @@ function dismissalLabel(d) {
   padding: 12px 16px;
   background: transparent;
   border: none;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--pt-border-light);
   text-align: left;
   font-size: 14px;
-  color: #2c3e50;
+  color: var(--pt-text-strong);
   cursor: pointer;
 }
-.todo-row:active { background: #f6f8fa; }
-.todo-icon { font-size: 20px; flex-shrink: 0; }
+.todo-row:active { background: var(--pt-surface-mute-soft); }
+.todo-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--brand-primary);
+  flex-shrink: 0;
+}
 .todo-text { flex: 1; }
 .todo-text strong {
-  color: #c0392b;
+  color: var(--color-danger);
   font-weight: 700;
   margin: 0 2px;
+  font-variant-numeric: tabular-nums;
 }
-.todo-warn { color: #c0392b; font-size: 12px; }
-.todo-arrow { color: #aaa; font-size: 18px; flex-shrink: 0; }
+.todo-warn { color: var(--color-danger); font-size: 12px; }
+.todo-arrow { color: var(--pt-text-disabled); flex-shrink: 0; }
 
 .todos-empty {
-  background: #fff;
+  background: var(--neutral-0);
   border-radius: 12px;
   padding: 16px;
   text-align: center;
   font-size: 14px;
-  color: #888;
+  color: var(--pt-text-placeholder);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
 }
 .todos-empty-icon {
-  display: inline-block;
-  width: 22px;
-  height: 22px;
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  background: #e3f4e7;
-  color: #3f7d48;
-  text-align: center;
-  line-height: 22px;
+  background: var(--brand-primary-soft);
+  color: var(--brand-primary);
+  align-items: center;
+  justify-content: center;
   margin-right: 6px;
-  font-weight: 700;
+  vertical-align: middle;
 }
 
 /* 子女區 */
 .children-section { display: flex; flex-direction: column; }
 .empty {
-  background: #fff;
+  background: var(--neutral-0);
   border-radius: 12px;
   padding: 24px 16px;
   text-align: center;
-  color: #888;
+  color: var(--pt-text-placeholder);
   font-size: 14px;
 }
 .child-card {
-  background: #fff;
+  background: var(--neutral-0);
   border-radius: 12px;
   padding: 14px 16px;
   margin-bottom: 10px;
@@ -488,34 +518,34 @@ function dismissalLabel(d) {
   cursor: pointer;
 }
 .child-card:active {
-  background: #f6f8fa;
+  background: var(--pt-surface-mute-soft);
 }
 .child-arrow {
   margin-left: auto;
-  color: #aaa;
-  font-size: 18px;
+  color: var(--pt-text-disabled);
   background: transparent;
   padding: 0;
+  flex-shrink: 0;
 }
 .child-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
-.child-name { font-size: 16px; font-weight: 600; color: #2c3e50; }
-.child-classroom { font-size: 13px; color: #777; }
+.child-name { font-size: 16px; font-weight: 600; color: var(--pt-text-strong); }
+.child-classroom { font-size: 13px; color: var(--pt-text-faint); }
 .child-meta {
   margin-top: 8px;
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
   font-size: 12px;
-  color: #666;
+  color: var(--pt-text-soft);
 }
-.tag { padding: 2px 8px; border-radius: 10px; background: #f0f2f5; }
-.tag.primary { background: #e6f4ea; color: #3f7d48; }
-.tag.pickup { background: #fff4e6; color: #d97706; }
-.tag.status { background: #eef0f5; color: #555; }
+.tag { padding: 2px 8px; border-radius: 10px; background: var(--pt-surface-mute); }
+.tag.primary { background: var(--brand-primary-soft); color: var(--brand-primary); }
+.tag.pickup { background: var(--color-warning-soft); color: var(--pt-warning-text-mid); }
+.tag.status { background: #eef0f5; color: var(--pt-text-muted); }
 
 /* 常用操作 */
 .quick-section {
@@ -528,7 +558,7 @@ function dismissalLabel(d) {
   gap: 8px;
 }
 .quick-tile {
-  background: #fff;
+  background: var(--neutral-0);
   border-radius: 12px;
   padding: 14px 6px;
   border: none;
@@ -538,7 +568,12 @@ function dismissalLabel(d) {
   gap: 4px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
 }
-.quick-tile:active { background: #f6f8fa; }
-.quick-icon { font-size: 24px; }
-.quick-label { font-size: 12px; color: #555; }
+.quick-tile:active { background: var(--pt-surface-mute-soft); }
+.quick-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--brand-primary);
+}
+.quick-label { font-size: 12px; color: var(--pt-text-muted); }
 </style>

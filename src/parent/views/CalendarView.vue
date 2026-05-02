@@ -3,20 +3,23 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { getWeekAgenda } from '../api/calendar'
 import { toast } from '../utils/toast'
+import ParentIcon from '../components/ParentIcon.vue'
+import SkeletonBlock from '../components/SkeletonBlock.vue'
 
 const router = useRouter()
 const data = ref(null)
 const loading = ref(false)
 const days = ref(7)
 
+// 注意：holiday 暫無沙灘 icon，先以 calendar 替代
 const CATEGORY_META = {
-  event: { icon: '📅', label: '活動', color: '#1d4ed8' },
-  fee_due: { icon: '💴', label: '繳費截止', color: '#c0392b' },
-  announcement: { icon: '📢', label: '公告', color: '#92400e' },
-  holiday: { icon: '🏖', label: '假日', color: '#3f7d48' },
-  contact_book: { icon: '📓', label: '聯絡簿', color: '#0e8e6f' },
-  leave: { icon: '📝', label: '請假', color: '#7c3aed' },
-  medication: { icon: '💊', label: '用藥', color: '#d97706' },
+  event: { icon: 'calendar', label: '活動', color: 'var(--pt-info-text)' },
+  fee_due: { icon: 'money', label: '繳費截止', color: 'var(--color-danger)' },
+  announcement: { icon: 'megaphone', label: '公告', color: 'var(--pt-warning-text)' },
+  holiday: { icon: 'calendar', label: '假日', color: 'var(--brand-primary)' },
+  contact_book: { icon: 'notebook', label: '聯絡簿', color: '#0e8e6f' },
+  leave: { icon: 'clipboard', label: '請假', color: '#7c3aed' },
+  medication: { icon: 'pill', label: '用藥', color: 'var(--pt-warning-text-mid)' },
 }
 
 const groupedByDate = computed(() => {
@@ -72,15 +75,17 @@ onMounted(fetchData)
 <template>
   <div class="cal-view">
     <div class="header">
-      <span class="title">本週行程</span>
-      <select v-model.number="days" class="days-select" @change="fetchData">
+      <label for="cal-days" class="title">本週行程</label>
+      <select id="cal-days" v-model.number="days" class="days-select" @change="fetchData">
         <option :value="3">3 天</option>
         <option :value="7">7 天</option>
         <option :value="14">14 天</option>
       </select>
     </div>
 
-    <div v-if="loading && !data" class="state">載入中…</div>
+    <template v-if="loading && !data">
+      <SkeletonBlock variant="card" :count="3" />
+    </template>
 
     <div v-else-if="data && groupedByDate.length === 0" class="state">
       未來 {{ days }} 天沒有特別行程
@@ -98,9 +103,14 @@ onMounted(fetchData)
         >
           <span
             class="dot"
-            :style="{ background: CATEGORY_META[it.category]?.color || '#888' }"
+            :style="{ background: CATEGORY_META[it.category]?.color || 'var(--pt-text-placeholder)' }"
           />
-          <span class="icon">{{ CATEGORY_META[it.category]?.icon || '•' }}</span>
+          <span
+            class="icon"
+            :style="{ color: CATEGORY_META[it.category]?.color || 'var(--pt-text-placeholder)' }"
+          >
+            <ParentIcon :name="CATEGORY_META[it.category]?.icon || 'info'" size="sm" />
+          </span>
           <span class="content">
             <span class="t">{{ it.title }}</span>
             <span v-if="it.subtitle" class="s">{{ it.subtitle }}</span>
@@ -126,21 +136,21 @@ onMounted(fetchData)
 .title {
   font-size: 16px;
   font-weight: 600;
-  color: #2c3e50;
+  color: var(--pt-text-strong);
 }
 .days-select {
   padding: 4px 8px;
   font-size: 13px;
-  border: 1px solid #d0d0d0;
+  border: 1px solid var(--pt-border-strong);
   border-radius: 6px;
 }
 .state {
   text-align: center;
   padding: 40px 16px;
-  color: #888;
+  color: var(--pt-text-placeholder);
 }
 .day-block {
-  background: #fff;
+  background: var(--neutral-0);
   border-radius: 12px;
   padding: 8px 0 4px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
@@ -148,7 +158,7 @@ onMounted(fetchData)
 .day-head {
   padding: 8px 14px;
   font-size: 12px;
-  color: #888;
+  color: var(--pt-text-placeholder);
   font-weight: 600;
 }
 .item {
@@ -159,12 +169,12 @@ onMounted(fetchData)
   padding: 10px 14px;
   background: transparent;
   border: none;
-  border-top: 1px solid #f3f4f6;
+  border-top: 1px solid var(--pt-surface-mute-warm);
   text-align: left;
   cursor: pointer;
 }
 .item:active {
-  background: #f6f8fa;
+  background: var(--pt-surface-mute-soft);
 }
 .dot {
   width: 6px;
@@ -173,8 +183,10 @@ onMounted(fetchData)
   flex-shrink: 0;
 }
 .icon {
-  font-size: 16px;
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .content {
   flex: 1;
@@ -183,17 +195,17 @@ onMounted(fetchData)
 }
 .t {
   font-size: 14px;
-  color: #2c3e50;
+  color: var(--pt-text-strong);
 }
 .s {
   font-size: 12px;
-  color: #888;
+  color: var(--pt-text-placeholder);
   margin-top: 2px;
 }
 .badge {
   font-size: 11px;
   padding: 2px 6px;
-  background: #fee2e2;
+  background: var(--color-danger-soft);
   color: #991b1b;
   border-radius: 8px;
   flex-shrink: 0;

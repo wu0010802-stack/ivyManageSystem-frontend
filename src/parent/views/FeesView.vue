@@ -9,6 +9,8 @@ import {
   getFeePayments,
 } from '../api/fees'
 import { toast } from '../utils/toast'
+import ParentIcon from '../components/ParentIcon.vue'
+import AppModal from '../components/AppModal.vue'
 
 const childrenStore = useChildrenStore()
 const { selectedId, ensureSelected } = useChildSelection()
@@ -19,15 +21,22 @@ const loading = ref(false)
 const detail = ref(null) // { record, payments, refunds }
 const detailLoading = ref(false)
 
+const detailOpen = computed({
+  get: () => detail.value !== null,
+  set: (v) => {
+    if (!v) detail.value = null
+  },
+})
+
 const STATUS_LABEL = {
   unpaid: '未繳',
   partial: '部分繳費',
   paid: '已繳清',
 }
 const STATUS_COLOR = {
-  unpaid: { bg: '#fde8e8', color: '#a51c1c' },
-  partial: { bg: '#fff4e6', color: '#a25e0a' },
-  paid: { bg: '#e6f4ea', color: '#2d6a3a' },
+  unpaid: { bg: 'var(--color-danger-soft)', color: 'var(--color-danger)' },
+  partial: { bg: 'var(--color-warning-soft)', color: 'var(--pt-warning-text-soft)' },
+  paid: { bg: 'var(--brand-primary-soft)', color: 'var(--pt-success-text)' },
 }
 
 const childTotals = computed(() => {
@@ -192,13 +201,18 @@ watch(selectedId, fetchRecords)
     </div>
 
     <!-- 收據 modal -->
-    <div v-if="detail" class="modal-mask" @click.self="closeDetail">
-      <div class="modal">
-        <div class="modal-header">
-          <span class="modal-title">繳費收據</span>
-          <button class="close" @click="closeDetail">✕</button>
+    <AppModal
+      v-model:open="detailOpen"
+      labelled-by="fee-detail-title"
+    >
+      <template v-if="detail">
+        <div class="detail-header">
+          <span id="fee-detail-title" class="detail-title">繳費收據</span>
+          <button class="close" type="button" aria-label="關閉" @click="closeDetail">
+            <ParentIcon name="close" size="sm" />
+          </button>
         </div>
-        <div class="modal-body">
+        <div class="detail-body">
           <div class="detail-name">{{ detail.record.fee_item_name }}</div>
           <div class="detail-period">{{ detail.record.period }}</div>
           <div v-if="detailLoading" class="detail-loading">載入中...</div>
@@ -231,7 +245,8 @@ watch(selectedId, fetchRecords)
                 type="button"
                 @click="copyText(buildReceiptText(detail.record, detail.payments))"
               >
-                📋 複製收據資訊
+                <ParentIcon name="clipboard" size="sm" />
+                複製收據資訊
               </button>
               <button
                 v-if="detail.payments[0]?.receipt_no"
@@ -247,8 +262,8 @@ watch(selectedId, fetchRecords)
             </p>
           </template>
         </div>
-      </div>
-    </div>
+      </template>
+    </AppModal>
   </div>
 </template>
 
@@ -260,7 +275,7 @@ watch(selectedId, fetchRecords)
 }
 
 .totals-card {
-  background: #fff;
+  background: var(--neutral-0);
   border-radius: 12px;
   padding: 12px 14px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
@@ -269,7 +284,7 @@ watch(selectedId, fetchRecords)
 .totals-title {
   margin: 0 0 8px;
   font-size: 13px;
-  color: #888;
+  color: var(--pt-text-placeholder);
   font-weight: 500;
 }
 
@@ -281,7 +296,7 @@ watch(selectedId, fetchRecords)
 
 .total-cell .label {
   font-size: 12px;
-  color: #888;
+  color: var(--pt-text-placeholder);
 }
 
 .total-cell .value {
@@ -290,15 +305,15 @@ watch(selectedId, fetchRecords)
   font-weight: 600;
 }
 
-.value.danger { color: #c0392b; }
-.value.warn { color: #d97706; }
+.value.danger { color: var(--color-danger); }
+.value.warn { color: var(--pt-warning-text-mid); }
 .value.warn-mild { color: #b78a30; }
-.value.ok { color: #3f7d48; }
+.value.ok { color: var(--brand-primary); }
 
 .single-totals {
   font-size: 13px;
-  color: #555;
-  background: #fff;
+  color: var(--pt-text-muted);
+  background: var(--neutral-0);
   border-radius: 8px;
   padding: 8px 12px;
 }
@@ -306,11 +321,11 @@ watch(selectedId, fetchRecords)
 .empty {
   text-align: center;
   padding: 40px 16px;
-  color: #888;
+  color: var(--pt-text-placeholder);
 }
 
 .record-card {
-  background: #fff;
+  background: var(--neutral-0);
   border-radius: 12px;
   padding: 12px 14px;
   cursor: pointer;
@@ -325,7 +340,7 @@ watch(selectedId, fetchRecords)
 
 .record-name {
   font-weight: 600;
-  color: #2c3e50;
+  color: var(--pt-text-strong);
   font-size: 15px;
 }
 
@@ -337,47 +352,26 @@ watch(selectedId, fetchRecords)
 
 .record-row2 {
   margin-top: 6px;
-  color: #555;
+  color: var(--pt-text-muted);
   font-size: 13px;
 }
 
 .record-row3 {
   margin-top: 4px;
-  color: #888;
+  color: var(--pt-text-placeholder);
   font-size: 12px;
   display: flex;
   gap: 12px;
 }
 
-.modal-mask {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 100;
-  padding: 16px;
-}
-
-.modal {
-  background: #fff;
-  border-radius: 12px;
-  width: 100%;
-  max-width: 420px;
-  max-height: 80vh;
-  display: flex;
-  flex-direction: column;
-}
-
-.modal-header {
+.detail-header {
   display: flex;
   align-items: center;
   padding: 14px 16px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--pt-border-light);
 }
 
-.modal-title {
+.detail-title {
   flex: 1;
   font-weight: 600;
 }
@@ -387,23 +381,25 @@ watch(selectedId, fetchRecords)
   height: 28px;
   border: none;
   background: transparent;
-  font-size: 18px;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--pt-text-placeholder);
 }
 
-.modal-body {
+.detail-body {
   padding: 16px;
-  overflow-y: auto;
 }
 
 .detail-name {
   font-size: 16px;
   font-weight: 600;
-  color: #2c3e50;
+  color: var(--pt-text-strong);
 }
 
 .detail-period {
-  color: #888;
+  color: var(--pt-text-placeholder);
   font-size: 13px;
   margin-top: 2px;
 }
@@ -412,18 +408,18 @@ watch(selectedId, fetchRecords)
 .section-empty {
   text-align: center;
   padding: 12px;
-  color: #888;
+  color: var(--pt-text-placeholder);
   font-size: 13px;
 }
 
 .section-h {
   margin: 16px 0 6px;
   font-size: 13px;
-  color: #888;
+  color: var(--pt-text-placeholder);
 }
 
 .pay-row {
-  background: #f7f9f8;
+  background: var(--pt-surface-thread-bg);
   border-radius: 8px;
   padding: 8px 12px;
   margin-bottom: 6px;
@@ -434,12 +430,12 @@ watch(selectedId, fetchRecords)
 }
 
 .pay-row.refund .pay-amount {
-  color: #c0392b;
+  color: var(--color-danger);
 }
 
 .pay-amount {
   font-weight: 600;
-  color: #3f7d48;
+  color: var(--brand-primary);
 }
 
 .receipt-actions {
@@ -451,25 +447,29 @@ watch(selectedId, fetchRecords)
 .action-btn {
   flex: 1 1 140px;
   padding: 10px;
-  background: #fff;
-  border: 1px solid #d0d0d0;
+  background: var(--neutral-0);
+  border: 1px solid var(--pt-border-strong);
   border-radius: 8px;
   font-size: 13px;
-  color: #2c3e50;
+  color: var(--pt-text-strong);
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 }
 .action-btn:active {
-  background: #f0f2f5;
+  background: var(--pt-surface-mute);
 }
 .receipt-hint {
   margin: 10px 0 0;
   font-size: 12px;
-  color: #888;
+  color: var(--pt-text-placeholder);
   text-align: center;
 }
 .pay-receipt {
   grid-column: 1 / -1;
-  color: #aaa;
+  color: var(--pt-text-disabled);
   font-size: 11px;
   font-family: ui-monospace, monospace;
 }

@@ -313,6 +313,10 @@ const submitPassword = async () => {
             <el-icon><Checked /></el-icon>
             <span>學生點名</span>
           </el-menu-item>
+          <el-menu-item index="/portal/contact-book">
+            <el-icon><Document /></el-icon>
+            <span>每日聯絡簿</span>
+          </el-menu-item>
           <el-menu-item index="/portal/incidents">
             <el-icon><Warning /></el-icon>
             <span>事件紀錄</span>

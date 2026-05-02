@@ -13,6 +13,10 @@ import {
 } from '../api/leaves'
 import { toast } from '../utils/toast'
 import { todayISO, dateToLocalISO } from '@/utils/format'
+import ParentIcon from '../components/ParentIcon.vue'
+import AppModal from '../components/AppModal.vue'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
+import { useIncrementalRender } from '../composables/useIncrementalRender'
 
 const childrenStore = useChildrenStore()
 const { selectedId, ensureSelected } = useChildSelection()
@@ -20,6 +24,31 @@ const items = ref([])
 const loading = ref(false)
 const showForm = ref(false)
 const submitting = ref(false)
+
+// 二階段確認 state（取代 window.confirm）
+const removeAttTarget = ref(null) // 待刪除附件 attachment 或 null
+const cancelTarget = ref(null) // 待取消的請假 item 或 null
+
+const removeAttOpen = computed({
+  get: () => removeAttTarget.value !== null,
+  set: (v) => {
+    if (!v) removeAttTarget.value = null
+  },
+})
+
+const cancelOpen = computed({
+  get: () => cancelTarget.value !== null,
+  set: (v) => {
+    if (!v) cancelTarget.value = null
+  },
+})
+
+const cancelTitle = computed(() => {
+  const item = cancelTarget.value
+  if (!item) return ''
+  const name = studentNameMap.value.get(item.student_id) || ''
+  return `確定取消「${name} ${item.leave_type} ${item.start_date}」？`
+})
 
 const STATUS_LABEL = {
   approved: '已成立',
@@ -29,10 +58,10 @@ const STATUS_LABEL = {
   rejected: '已成立',
 }
 const STATUS_COLOR = {
-  approved: { bg: '#e6f4ea', color: '#2d6a3a' },
-  cancelled: { bg: '#f0f2f5', color: '#666' },
-  pending: { bg: '#e6f4ea', color: '#2d6a3a' },
-  rejected: { bg: '#e6f4ea', color: '#2d6a3a' },
+  approved: { bg: 'var(--brand-primary-soft)', color: 'var(--pt-success-text)' },
+  cancelled: { bg: 'var(--pt-surface-mute)', color: 'var(--pt-text-soft)' },
+  pending: { bg: 'var(--brand-primary-soft)', color: 'var(--pt-success-text)' },
+  rejected: { bg: 'var(--brand-primary-soft)', color: 'var(--pt-success-text)' },
 }
 
 const todayStr = computed(() => todayISO())
@@ -67,8 +96,22 @@ const filteredItems = computed(() => {
   return items.value.filter((x) => x.student_id === selectedId.value)
 })
 
+// 漸進渲染：請假累積多筆時觸底加載
+const {
+  visible: visibleLeaves,
+  sentinelRef: leavesSentinel,
+  hasMore: hasMoreLeaves,
+} = useIncrementalRender(filteredItems, { pageSize: 20 })
+
 const detail = ref(null)
 const detailUploading = ref(false)
+
+const detailOpen = computed({
+  get: () => detail.value !== null,
+  set: (v) => {
+    if (!v) detail.value = null
+  },
+})
 
 async function openDetail(item) {
   try {
@@ -100,9 +143,15 @@ async function pickAndUpload(ev) {
   }
 }
 
-async function removeAttachment(att) {
+function askRemoveAttachment(att) {
   if (!detail.value) return
-  if (!confirm('確定要刪除此附件？')) return
+  removeAttTarget.value = att
+}
+
+async function doRemoveAttachment() {
+  const att = removeAttTarget.value
+  removeAttTarget.value = null
+  if (!att || !detail.value) return
   try {
     await deleteLeaveAttachment(detail.value.id, att.id)
     toast.success('已刪除')
@@ -202,8 +251,14 @@ async function submit() {
   }
 }
 
-async function onCancel(item) {
-  if (!confirm(`確定要取消「${studentNameMap.value.get(item.student_id) || ''} ${item.leave_type} ${item.start_date}」的申請？`)) return
+function askCancel(item) {
+  cancelTarget.value = item
+}
+
+async function doCancel() {
+  const item = cancelTarget.value
+  cancelTarget.value = null
+  if (!item) return
   try {
     await cancelLeave(item.id)
     toast.success('已取消')
@@ -224,15 +279,18 @@ onMounted(async () => {
   <div class="leaves-view">
     <ChildSelector />
     <div class="toolbar">
-      <button class="primary-btn" @click="openForm">＋ 申請請假</button>
+      <button class="primary-btn icon-btn" @click="openForm">
+        <ParentIcon name="plus" size="sm" />
+        申請請假
+      </button>
     </div>
 
     <div v-if="!loading && filteredItems.length === 0" class="empty">尚無請假紀錄</div>
 
     <div
-      v-for="item in filteredItems"
+      v-for="item in visibleLeaves"
       :key="item.id"
-      class="leave-card"
+      class="leave-card press-scale"
       @click="openDetail(item)"
     >
       <div class="leave-row1">
@@ -256,18 +314,25 @@ onMounted(async () => {
         v-if="item.status === 'approved' && item.start_date > todayStr"
         @click.stop
       >
-        <button class="cancel-btn" @click="onCancel(item)">取消申請</button>
+        <button type="button" class="cancel-btn" @click="askCancel(item)">取消申請</button>
       </div>
     </div>
 
+    <div v-if="hasMoreLeaves" ref="leavesSentinel" class="render-sentinel" aria-hidden="true" />
+
     <!-- detail / timeline / 附件 modal -->
-    <div v-if="detail" class="modal-mask" @click.self="closeDetail">
-      <div class="modal">
-        <div class="modal-header">
-          <span class="modal-title">{{ detail.leave_type }} 申請</span>
-          <button class="close" @click="closeDetail">✕</button>
+    <AppModal
+      v-model:open="detailOpen"
+      labelled-by="leave-detail-title"
+    >
+      <template v-if="detail">
+        <div class="detail-header">
+          <span id="leave-detail-title" class="detail-title">{{ detail.leave_type }} 申請</span>
+          <button class="close" type="button" aria-label="關閉" @click="closeDetail">
+            <ParentIcon name="close" size="sm" />
+          </button>
         </div>
-        <div class="modal-body">
+        <div class="detail-body">
           <div class="detail-line">
             <span class="detail-label">學生</span>
             <span>{{ studentNameMap.get(detail.student_id) || '—' }}</span>
@@ -311,12 +376,15 @@ onMounted(async () => {
           <div v-if="detail.attachments?.length" class="att-list">
             <div v-for="a in detail.attachments" :key="a.id" class="att-row">
               <a :href="attUrl(a)" target="_blank" rel="noopener" class="att-link">
-                📎 {{ a.original_filename || `附件 #${a.id}` }}
+                <ParentIcon name="attachment" size="xs" />
+                {{ a.original_filename || `附件 #${a.id}` }}
               </a>
               <button
                 v-if="detail.status === 'approved' && detail.start_date > todayStr"
+                type="button"
                 class="att-del"
-                @click="removeAttachment(a)"
+                :aria-label="`刪除附件 ${a.original_filename || `附件 ${a.id}`}`"
+                @click="askRemoveAttachment(a)"
               >刪除</button>
             </div>
           </div>
@@ -331,62 +399,108 @@ onMounted(async () => {
               @change="pickAndUpload"
               :disabled="detailUploading"
             />
-            <span>{{ detailUploading ? '上傳中...' : '＋ 上傳附件' }}</span>
+            <span class="upload-label">
+              <template v-if="detailUploading">上傳中...</template>
+              <template v-else>
+                <ParentIcon name="plus" size="sm" />
+                上傳附件
+              </template>
+            </span>
           </label>
         </div>
-      </div>
-    </div>
+      </template>
+    </AppModal>
 
     <!-- 新申請 modal -->
-    <div v-if="showForm" class="modal-mask" @click.self="showForm = false">
-      <div class="modal">
-        <div class="modal-header">
-          <span class="modal-title">申請請假</span>
-          <button class="close" @click="showForm = false">✕</button>
+    <AppModal
+      v-model:open="showForm"
+      labelled-by="leave-form-title"
+    >
+      <div class="form-header">
+        <span id="leave-form-title" class="form-title">申請請假</span>
+        <button class="close" type="button" aria-label="關閉" @click="showForm = false">
+          <ParentIcon name="close" size="sm" />
+        </button>
+      </div>
+      <div class="form">
+        <div class="field">
+          <label for="leave-student">學生</label>
+          <select id="leave-student" v-model="form.student_id">
+            <option
+              v-for="c in childrenStore.items"
+              :key="c.student_id"
+              :value="c.student_id"
+            >{{ c.name }}</option>
+          </select>
         </div>
-        <div class="form">
-          <div class="field">
-            <label>學生</label>
-            <select v-model="form.student_id">
-              <option
-                v-for="c in childrenStore.items"
-                :key="c.student_id"
-                :value="c.student_id"
-              >{{ c.name }}</option>
-            </select>
+        <fieldset class="field radio-fieldset">
+          <legend>假別</legend>
+          <div class="radio-row">
+            <label class="radio">
+              <input type="radio" v-model="form.leave_type" value="病假" />病假
+            </label>
+            <label class="radio">
+              <input type="radio" v-model="form.leave_type" value="事假" />事假
+            </label>
           </div>
-          <div class="field">
-            <label>假別</label>
-            <div class="radio-row">
-              <label class="radio">
-                <input type="radio" v-model="form.leave_type" value="病假" />病假
-              </label>
-              <label class="radio">
-                <input type="radio" v-model="form.leave_type" value="事假" />事假
-              </label>
-            </div>
-          </div>
-          <div class="field">
-            <label>起始日</label>
-            <input type="date" v-model="form.start_date" :min="pastLimitStr" :max="futureLimitStr" />
-          </div>
-          <div class="field">
-            <label>結束日</label>
-            <input type="date" v-model="form.end_date" :min="form.start_date" :max="futureLimitStr" />
-          </div>
-          <div class="field">
-            <label>原因（選填）</label>
-            <textarea v-model="form.reason" rows="3" maxlength="500" />
-          </div>
+        </fieldset>
+        <div class="field">
+          <label for="leave-start">起始日</label>
+          <input
+            id="leave-start"
+            type="date"
+            v-model="form.start_date"
+            :min="pastLimitStr"
+            :max="futureLimitStr"
+          />
         </div>
-        <div class="modal-footer">
-          <button class="secondary-btn" @click="showForm = false">取消</button>
-          <button class="primary-btn" :disabled="submitting" @click="submit">
-            {{ submitting ? '送出中...' : '送出' }}
-          </button>
+        <div class="field">
+          <label for="leave-end">結束日</label>
+          <input
+            id="leave-end"
+            type="date"
+            v-model="form.end_date"
+            :min="form.start_date"
+            :max="futureLimitStr"
+          />
+        </div>
+        <div class="field">
+          <label for="leave-reason">原因（選填）</label>
+          <textarea
+            id="leave-reason"
+            v-model="form.reason"
+            rows="3"
+            maxlength="500"
+            autocomplete="off"
+          />
         </div>
       </div>
-    </div>
+      <div class="form-footer">
+        <button type="button" class="secondary-btn" @click="showForm = false">取消</button>
+        <button type="button" class="primary-btn" :disabled="submitting" @click="submit">
+          {{ submitting ? '送出中...' : '送出' }}
+        </button>
+      </div>
+    </AppModal>
+
+    <!-- 二階段確認 dialog（取代 window.confirm） -->
+    <ConfirmDialog
+      v-model:open="removeAttOpen"
+      title="確定刪除此附件？"
+      message="刪除後無法還原。"
+      confirm-label="刪除"
+      destructive
+      @confirm="doRemoveAttachment"
+    />
+    <ConfirmDialog
+      v-model:open="cancelOpen"
+      :title="cancelTitle"
+      message="取消後此申請會標為已取消，並還原原本的出席狀態。"
+      confirm-label="取消申請"
+      cancel-label="不取消"
+      destructive
+      @confirm="doCancel"
+    />
   </div>
 </template>
 
@@ -404,8 +518,8 @@ onMounted(async () => {
 
 .primary-btn {
   padding: 8px 16px;
-  background: #3f7d48;
-  color: #fff;
+  background: var(--brand-primary);
+  color: var(--neutral-0);
   border: none;
   border-radius: 8px;
   font-size: 14px;
@@ -417,9 +531,9 @@ onMounted(async () => {
 
 .secondary-btn {
   padding: 8px 16px;
-  background: #fff;
-  color: #555;
-  border: 1px solid #d0d0d0;
+  background: var(--neutral-0);
+  color: var(--pt-text-muted);
+  border: 1px solid var(--pt-border-strong);
   border-radius: 8px;
   font-size: 14px;
 }
@@ -427,11 +541,11 @@ onMounted(async () => {
 .empty {
   text-align: center;
   padding: 40px 16px;
-  color: #888;
+  color: var(--pt-text-placeholder);
 }
 
 .leave-card {
-  background: #fff;
+  background: var(--neutral-0);
   border-radius: 12px;
   padding: 12px 14px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
@@ -445,12 +559,12 @@ onMounted(async () => {
 
 .student {
   font-weight: 600;
-  color: #2c3e50;
+  color: var(--pt-text-strong);
 }
 
 .type {
-  background: #eaf2fb;
-  color: #2057a8;
+  background: var(--color-info-soft);
+  color: var(--pt-info-link);
   padding: 1px 8px;
   border-radius: 10px;
   font-size: 12px;
@@ -465,14 +579,14 @@ onMounted(async () => {
 
 .leave-row2 {
   margin-top: 6px;
-  color: #555;
+  color: var(--pt-text-muted);
   font-size: 14px;
 }
 
 .leave-reason,
 .leave-review {
   margin-top: 4px;
-  color: #777;
+  color: var(--pt-text-faint);
   font-size: 13px;
 }
 
@@ -482,41 +596,23 @@ onMounted(async () => {
 
 .cancel-btn {
   padding: 4px 12px;
-  background: #fff;
-  color: #c0392b;
+  background: var(--neutral-0);
+  color: var(--color-danger);
   border: 1px solid #e0c4c0;
   border-radius: 6px;
   font-size: 12px;
 }
 
-.modal-mask {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 100;
-  padding: 16px;
-}
-
-.modal {
-  background: #fff;
-  border-radius: 12px;
-  width: 100%;
-  max-width: 420px;
-  display: flex;
-  flex-direction: column;
-}
-
-.modal-header {
+.detail-header,
+.form-header {
   display: flex;
   align-items: center;
   padding: 14px 16px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--pt-border-light);
 }
 
-.modal-title {
+.detail-title,
+.form-title {
   flex: 1;
   font-weight: 600;
   font-size: 16px;
@@ -527,9 +623,24 @@ onMounted(async () => {
   height: 28px;
   border: none;
   background: transparent;
-  font-size: 18px;
-  color: #888;
+  color: var(--pt-text-placeholder);
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.upload-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  justify-content: center;
 }
 
 .form {
@@ -542,7 +653,7 @@ onMounted(async () => {
 .field label {
   display: block;
   font-size: 13px;
-  color: #555;
+  color: var(--pt-text-muted);
   margin-bottom: 4px;
 }
 
@@ -551,7 +662,7 @@ onMounted(async () => {
 .field textarea {
   width: 100%;
   padding: 8px 10px;
-  border: 1px solid #d0d0d0;
+  border: 1px solid var(--pt-border-strong);
   border-radius: 6px;
   font-size: 14px;
   font-family: inherit;
@@ -569,18 +680,16 @@ onMounted(async () => {
   font-size: 14px;
 }
 
-.modal-footer {
+.form-footer {
   display: flex;
   gap: 8px;
   justify-content: flex-end;
   padding: 12px 16px;
-  border-top: 1px solid #eee;
+  border-top: 1px solid var(--pt-border-light);
 }
 
-.modal-body {
+.detail-body {
   padding: 16px;
-  max-height: 70vh;
-  overflow-y: auto;
 }
 
 .detail-line {
@@ -588,11 +697,11 @@ onMounted(async () => {
   gap: 8px;
   margin-bottom: 6px;
   font-size: 14px;
-  color: #2c3e50;
+  color: var(--pt-text-strong);
 }
 .detail-label {
   width: 56px;
-  color: #888;
+  color: var(--pt-text-placeholder);
   flex-shrink: 0;
 }
 
@@ -600,12 +709,12 @@ onMounted(async () => {
   margin: 16px 0 8px;
   font-size: 13px;
   font-weight: 600;
-  color: #555;
+  color: var(--pt-text-muted);
 }
 
 .detail-hint {
   font-size: 12px;
-  color: #888;
+  color: var(--pt-text-placeholder);
   margin: 0 0 6px;
 }
 
@@ -621,28 +730,28 @@ onMounted(async () => {
   align-items: center;
   gap: 10px;
   font-size: 13px;
-  color: #999;
+  color: var(--pt-text-faint);
 }
 .step.done {
-  color: #2c3e50;
+  color: var(--pt-text-strong);
 }
 .step-dot {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: #e5e7eb;
-  border: 2px solid #d0d0d0;
+  background: var(--pt-border);
+  border: 2px solid var(--pt-border-strong);
 }
 .step.done .step-dot {
-  background: #3f7d48;
-  border-color: #3f7d48;
+  background: var(--brand-primary);
+  border-color: var(--brand-primary);
 }
 .step-label {
   flex: 1;
 }
 .step-time {
   font-size: 11px;
-  color: #888;
+  color: var(--pt-text-placeholder);
 }
 
 /* 附件清單 */
@@ -656,20 +765,23 @@ onMounted(async () => {
   align-items: center;
   gap: 8px;
   padding: 8px 10px;
-  background: #f6f8fa;
+  background: var(--pt-surface-mute-soft);
   border-radius: 6px;
 }
 .att-link {
   flex: 1;
   font-size: 13px;
-  color: #2057a8;
+  color: var(--pt-info-link);
   text-decoration: none;
   word-break: break-all;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 .att-del {
   background: transparent;
   border: 1px solid #e0c4c0;
-  color: #c0392b;
+  color: var(--color-danger);
   padding: 2px 8px;
   border-radius: 4px;
   font-size: 12px;
@@ -677,7 +789,7 @@ onMounted(async () => {
 }
 .att-empty {
   font-size: 13px;
-  color: #888;
+  color: var(--pt-text-placeholder);
   padding: 8px 0;
 }
 .upload-btn {
@@ -685,14 +797,15 @@ onMounted(async () => {
   margin-top: 10px;
   padding: 10px;
   text-align: center;
-  background: #fff;
-  border: 1px dashed #aaa;
+  background: var(--neutral-0);
+  border: 1px dashed var(--pt-text-disabled);
   border-radius: 8px;
-  color: #555;
+  color: var(--pt-text-muted);
   font-size: 14px;
   cursor: pointer;
 }
 .upload-btn input {
   display: none;
 }
+.render-sentinel { height: 1px; }
 </style>

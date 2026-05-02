@@ -10,6 +10,8 @@ import {
   confirmPromotion,
 } from '../api/activity'
 import { toast } from '../utils/toast'
+import ParentIcon from '../components/ParentIcon.vue'
+import AppModal from '../components/AppModal.vue'
 
 const childrenStore = useChildrenStore()
 const { selectedId, ensureSelected } = useChildSelection()
@@ -41,9 +43,9 @@ const filteredRegs = computed(() => {
 })
 
 const COURSE_STATUS = {
-  enrolled: { label: '已報名', color: { bg: '#e6f4ea', color: '#2d6a3a' } },
-  waitlist: { label: '候補中', color: { bg: '#fff4e6', color: '#a25e0a' } },
-  promoted_pending: { label: '待您確認', color: { bg: '#fde8e8', color: '#a51c1c' } },
+  enrolled: { label: '已報名', color: { bg: 'var(--brand-primary-soft)', color: 'var(--pt-success-text)' } },
+  waitlist: { label: '候補中', color: { bg: 'var(--color-warning-soft)', color: 'var(--pt-warning-text-soft)' } },
+  promoted_pending: { label: '待您確認', color: { bg: 'var(--color-danger-soft)', color: 'var(--color-danger)' } },
 }
 
 async function fetchMy() {
@@ -206,7 +208,10 @@ onMounted(async () => {
 
     <template v-else>
       <div class="toolbar">
-        <button class="primary-btn" @click="openRegister">＋ 開始報名</button>
+        <button class="primary-btn icon-btn" @click="openRegister">
+          <ParentIcon name="plus" size="sm" />
+          開始報名
+        </button>
       </div>
       <div v-if="!loading && courses.length === 0" class="empty">目前沒有開放的課程</div>
       <div
@@ -231,52 +236,55 @@ onMounted(async () => {
     </template>
 
     <!-- 報名 modal -->
-    <div v-if="showRegister" class="modal-mask" @click.self="showRegister = false">
-      <div class="modal">
-        <div class="modal-header">
-          <span class="modal-title">報名才藝課</span>
-          <button class="close" @click="showRegister = false">✕</button>
-        </div>
-        <div class="form">
-          <div class="field">
-            <label>學生</label>
-            <select v-model="form.student_id">
-              <option
-                v-for="c in childrenStore.items"
-                :key="c.student_id"
-                :value="c.student_id"
-              >{{ c.name }}</option>
-            </select>
-          </div>
-          <div class="field">
-            <label>選擇課程（可複選）</label>
-            <div v-if="filteredCourses.length === 0" class="text-muted">無可報名課程</div>
-            <label
-              v-for="c in filteredCourses"
-              :key="c.id"
-              class="course-pick"
-            >
-              <input
-                type="checkbox"
-                :checked="form.course_ids.includes(c.id)"
-                @change="toggleCourse(c.id)"
-              />
-              <span class="pick-name">{{ c.name }}</span>
-              <span class="pick-meta">
-                ${{ c.price?.toLocaleString() }}
-                <span v-if="c.is_full">・已額滿{{ c.allow_waitlist ? '（候補）' : '' }}</span>
-              </span>
-            </label>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="secondary-btn" @click="showRegister = false">取消</button>
-          <button class="primary-btn" :disabled="submitting" @click="submitRegister">
-            {{ submitting ? '送出中...' : '送出報名' }}
-          </button>
-        </div>
+    <AppModal
+      v-model:open="showRegister"
+      labelled-by="activity-register-title"
+    >
+      <div class="register-header">
+        <span id="activity-register-title" class="register-title">報名才藝課</span>
+        <button class="close" type="button" aria-label="關閉" @click="showRegister = false">
+          <ParentIcon name="close" size="sm" />
+        </button>
       </div>
-    </div>
+      <div class="form">
+        <div class="field">
+          <label for="activity-student">學生</label>
+          <select id="activity-student" v-model="form.student_id">
+            <option
+              v-for="c in childrenStore.items"
+              :key="c.student_id"
+              :value="c.student_id"
+            >{{ c.name }}</option>
+          </select>
+        </div>
+        <fieldset class="field">
+          <legend>選擇課程（可複選）</legend>
+          <div v-if="filteredCourses.length === 0" class="text-muted">無可報名課程</div>
+          <label
+            v-for="c in filteredCourses"
+            :key="c.id"
+            class="course-pick"
+          >
+            <input
+              type="checkbox"
+              :checked="form.course_ids.includes(c.id)"
+              @change="toggleCourse(c.id)"
+            />
+            <span class="pick-name">{{ c.name }}</span>
+            <span class="pick-meta">
+              ${{ c.price?.toLocaleString() }}
+              <span v-if="c.is_full">・已額滿{{ c.allow_waitlist ? '（候補）' : '' }}</span>
+            </span>
+          </label>
+        </fieldset>
+      </div>
+      <div class="register-footer">
+        <button type="button" class="secondary-btn" @click="showRegister = false">取消</button>
+        <button type="button" class="primary-btn" :disabled="submitting" @click="submitRegister">
+          {{ submitting ? '送出中...' : '送出報名' }}
+        </button>
+      </div>
+    </AppModal>
   </div>
 </template>
 
@@ -289,7 +297,7 @@ onMounted(async () => {
 
 .tab-row {
   display: flex;
-  background: #fff;
+  background: var(--neutral-0);
   border-radius: 12px;
   padding: 4px;
   gap: 4px;
@@ -307,8 +315,8 @@ onMounted(async () => {
 }
 
 .tab-btn.active {
-  background: #3f7d48;
-  color: #fff;
+  background: var(--brand-primary);
+  color: var(--neutral-0);
 }
 
 .toolbar {
@@ -318,8 +326,8 @@ onMounted(async () => {
 
 .primary-btn {
   padding: 8px 16px;
-  background: #3f7d48;
-  color: #fff;
+  background: var(--brand-primary);
+  color: var(--neutral-0);
   border: none;
   border-radius: 8px;
   font-size: 14px;
@@ -329,9 +337,9 @@ onMounted(async () => {
 
 .secondary-btn {
   padding: 8px 16px;
-  background: #fff;
-  color: #555;
-  border: 1px solid #d0d0d0;
+  background: var(--neutral-0);
+  color: var(--pt-text-muted);
+  border: 1px solid var(--pt-border-strong);
   border-radius: 8px;
   font-size: 14px;
 }
@@ -339,12 +347,12 @@ onMounted(async () => {
 .empty {
   text-align: center;
   padding: 40px 16px;
-  color: #888;
+  color: var(--pt-text-placeholder);
 }
 
 .reg-card,
 .course-card {
-  background: #fff;
+  background: var(--neutral-0);
   border-radius: 12px;
   padding: 12px 14px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
@@ -359,12 +367,12 @@ onMounted(async () => {
 
 .reg-student {
   font-weight: 600;
-  color: #2c3e50;
+  color: var(--pt-text-strong);
 }
 
 .reg-term {
-  background: #eaf2fb;
-  color: #2057a8;
+  background: var(--color-info-soft);
+  color: var(--pt-info-link);
   padding: 1px 8px;
   border-radius: 10px;
   font-size: 12px;
@@ -376,21 +384,21 @@ onMounted(async () => {
   border-radius: 10px;
   font-size: 12px;
 }
-.paid.ok { background: #e6f4ea; color: #2d6a3a; }
-.paid.warn { background: #fff4e6; color: #a25e0a; }
+.paid.ok { background: var(--brand-primary-soft); color: var(--pt-success-text); }
+.paid.warn { background: var(--color-warning-soft); color: var(--pt-warning-text-soft); }
 
 .course-row {
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 8px 0;
-  border-top: 1px solid #f0f2f5;
+  border-top: 1px solid var(--pt-surface-mute);
 }
 
 .course-name {
   flex: 1;
   font-size: 14px;
-  color: #555;
+  color: var(--pt-text-muted);
 }
 
 .course-status {
@@ -401,8 +409,8 @@ onMounted(async () => {
 
 .confirm-btn {
   padding: 4px 10px;
-  background: #3f7d48;
-  color: #fff;
+  background: var(--brand-primary);
+  color: var(--neutral-0);
   border: none;
   border-radius: 6px;
   font-size: 12px;
@@ -416,17 +424,17 @@ onMounted(async () => {
 
 .course-card-name {
   font-weight: 600;
-  color: #2c3e50;
+  color: var(--pt-text-strong);
 }
 
 .course-card-price {
-  color: #3f7d48;
+  color: var(--brand-primary);
   font-weight: 600;
 }
 
 .course-card-row2 {
   margin-top: 4px;
-  color: #777;
+  color: var(--pt-text-faint);
   font-size: 12px;
   display: flex;
   gap: 6px;
@@ -440,53 +448,41 @@ onMounted(async () => {
   font-size: 11px;
   margin-left: auto;
 }
-.enroll-tag.open { background: #e6f4ea; color: #2d6a3a; }
-.enroll-tag.full { background: #fff4e6; color: #a25e0a; }
+.enroll-tag.open { background: var(--brand-primary-soft); color: var(--pt-success-text); }
+.enroll-tag.full { background: var(--color-warning-soft); color: var(--pt-warning-text-soft); }
 
 .course-card-desc {
   margin-top: 6px;
-  color: #666;
+  color: var(--pt-text-soft);
   font-size: 13px;
   line-height: 1.5;
 }
 
-.modal-mask {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 100;
-  padding: 16px;
-}
-
-.modal {
-  background: #fff;
-  border-radius: 12px;
-  width: 100%;
-  max-width: 420px;
-  max-height: 80vh;
-  display: flex;
-  flex-direction: column;
-}
-
-.modal-header {
+.register-header {
   display: flex;
   align-items: center;
   padding: 14px 16px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--pt-border-light);
 }
 
-.modal-title { flex: 1; font-weight: 600; }
+.register-title { flex: 1; font-weight: 600; }
 
 .close {
   width: 28px;
   height: 28px;
   border: none;
   background: transparent;
-  font-size: 18px;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--pt-text-placeholder);
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .form {
@@ -500,14 +496,14 @@ onMounted(async () => {
 .field label {
   display: block;
   font-size: 13px;
-  color: #555;
+  color: var(--pt-text-muted);
   margin-bottom: 4px;
 }
 
 .field select {
   width: 100%;
   padding: 8px 10px;
-  border: 1px solid #d0d0d0;
+  border: 1px solid var(--pt-border-strong);
   border-radius: 6px;
   font-size: 14px;
 }
@@ -530,22 +526,22 @@ onMounted(async () => {
 }
 
 .pick-meta {
-  color: #888;
+  color: var(--pt-text-placeholder);
   font-size: 12px;
 }
 
 .text-muted {
-  color: #888;
+  color: var(--pt-text-placeholder);
   font-size: 13px;
   text-align: center;
   padding: 12px;
 }
 
-.modal-footer {
+.register-footer {
   display: flex;
   gap: 8px;
   justify-content: flex-end;
   padding: 12px 16px;
-  border-top: 1px solid #eee;
+  border-top: 1px solid var(--pt-border-light);
 }
 </style>
