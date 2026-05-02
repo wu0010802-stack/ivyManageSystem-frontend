@@ -17,6 +17,7 @@ import ParentIcon from '../components/ParentIcon.vue'
 import AppModal from '../components/AppModal.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import LeaveListCard from '../components/leaves/LeaveListCard.vue'
+import LeaveAttachments from '../components/leaves/LeaveAttachments.vue'
 import { useIncrementalRender } from '../composables/useIncrementalRender'
 
 const childrenStore = useChildrenStore()
@@ -127,9 +128,7 @@ function closeDetail() {
   detail.value = null
 }
 
-async function pickAndUpload(ev) {
-  const file = ev.target.files?.[0]
-  ev.target.value = ''
+async function onAttUpload(file) {
   if (!file || !detail.value) return
   detailUploading.value = true
   try {
@@ -349,46 +348,14 @@ onMounted(async () => {
           </div>
 
           <h4 class="section-h">佐證附件</h4>
-          <p
-            v-if="!(detail.status === 'approved' && detail.start_date > todayStr)"
-            class="detail-hint"
-          >
-            請假已成立或已開始，無法新增/刪除附件。
-          </p>
-          <div v-if="detail.attachments?.length" class="att-list">
-            <div v-for="a in detail.attachments" :key="a.id" class="att-row">
-              <a :href="attUrl(a)" target="_blank" rel="noopener" class="att-link">
-                <ParentIcon name="attachment" size="xs" />
-                {{ a.original_filename || `附件 #${a.id}` }}
-              </a>
-              <button
-                v-if="detail.status === 'approved' && detail.start_date > todayStr"
-                type="button"
-                class="att-del"
-                :aria-label="`刪除附件 ${a.original_filename || `附件 ${a.id}`}`"
-                @click="askRemoveAttachment(a)"
-              >刪除</button>
-            </div>
-          </div>
-          <div v-else class="att-empty">尚未上傳任何附件</div>
-          <label
-            v-if="detail.status === 'approved' && detail.start_date > todayStr"
-            class="upload-btn"
-          >
-            <input
-              type="file"
-              accept="image/*,.pdf,.heic,.heif"
-              @change="pickAndUpload"
-              :disabled="detailUploading"
-            />
-            <span class="upload-label">
-              <template v-if="detailUploading">上傳中...</template>
-              <template v-else>
-                <ParentIcon name="plus" size="sm" />
-                上傳附件
-              </template>
-            </span>
-          </label>
+          <LeaveAttachments
+            :attachments="detail.attachments || []"
+            :editable="detail.status === 'approved' && detail.start_date > todayStr"
+            :uploading="detailUploading"
+            :url-resolver="attUrl"
+            @upload="onAttUpload"
+            @remove="askRemoveAttachment"
+          />
         </div>
       </template>
     </AppModal>
@@ -559,13 +526,6 @@ onMounted(async () => {
   gap: 4px;
 }
 
-.upload-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  justify-content: center;
-}
-
 .form {
   padding: 16px;
   display: flex;
@@ -635,12 +595,6 @@ onMounted(async () => {
   color: var(--pt-text-muted);
 }
 
-.detail-hint {
-  font-size: 12px;
-  color: var(--pt-text-placeholder);
-  margin: 0 0 6px;
-}
-
 /* 時間軸 */
 .timeline {
   display: flex;
@@ -677,58 +631,5 @@ onMounted(async () => {
   color: var(--pt-text-placeholder);
 }
 
-/* 附件清單 */
-.att-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.att-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  background: var(--pt-surface-mute-soft);
-  border-radius: 6px;
-}
-.att-link {
-  flex: 1;
-  font-size: 13px;
-  color: var(--pt-info-link);
-  text-decoration: none;
-  word-break: break-all;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-.att-del {
-  background: transparent;
-  border: 1px solid #e0c4c0;
-  color: var(--color-danger);
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-  cursor: pointer;
-}
-.att-empty {
-  font-size: 13px;
-  color: var(--pt-text-placeholder);
-  padding: 8px 0;
-}
-.upload-btn {
-  display: block;
-  margin-top: 10px;
-  padding: 10px;
-  text-align: center;
-  background: var(--neutral-0);
-  border: 1px dashed var(--pt-text-disabled);
-  border-radius: 8px;
-  color: var(--pt-text-muted);
-  font-size: 14px;
-  cursor: pointer;
-}
-.upload-btn input {
-  display: none;
-}
 .render-sentinel { height: 1px; }
 </style>
