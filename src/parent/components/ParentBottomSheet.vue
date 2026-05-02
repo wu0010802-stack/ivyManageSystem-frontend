@@ -2,13 +2,24 @@
 /**
  * 家長端底部彈窗（snap points 進階版）。
  *
- * 提供（keyboard 模式於 Task 1.7 接續）：
- *  - 三段 snap：peek (30vh) / mid (60vh) / full (92vh)
- *  - drag-to-dismiss 與速度/距離吸附（>600 px/s 視為快滑、<30px 回彈）
- *  - keyboard 開啟時自動切 full + 鎖拖曳（避輸入框被遮）
- *  - role="dialog"、focus trap、ESC 關閉、body scroll lock
- *  - safe-area-inset-bottom
+ * 功能：
+ *  - 三段 snap：peek (30vh) / mid (60vh) / full (92vh)；`setSnap()` 可程式化切換
+ *  - 拖曳手勢：drag-to-dismiss、速度判定（>600 px/s 視為快滑）、距離判定（>60px 切段、<30px 回彈）
+ *  - keyboard 模式：visualViewport 縮小 > 100px 時自動切 full 並鎖拖曳，鍵盤收回時解鎖
+ *  - a11y：role="dialog"、aria-modal、aria-labelledby、focus trap、ESC 關閉、開啟時自動 focus 第一個可 focus 元素、關閉時還原焦點
+ *  - body scroll lock（開啟時鎖定、關閉/卸載時還原）
+ *  - safe-area-inset-bottom 適配；reduced-motion 下停用 transition/transform 動畫
  *  - 視覺：--pt-elev-3 + --pt-hairline + --pt-scrim + --pt-backdrop-blur
+ *
+ * Props：
+ *  - modelValue / title / snapPoints / defaultSnap / dismissible / showHandle
+ *
+ * Emits：
+ *  - update:modelValue / close / snap-change
+ *
+ * Exposed：
+ *  - setSnap(snap)：切換 snap point
+ *  - isDraggingForTest：測試用 ref（內部 isDragging 別名，僅用於單元測試）
  *
  * 使用：
  *   <ParentBottomSheet v-model="show" title="收據明細" :snap-points="['mid','full']" default-snap="mid">
@@ -17,7 +28,7 @@
  *     <template #footer><button>送出</button></template>
  *   </ParentBottomSheet>
  */
-import { computed, nextTick, onBeforeUnmount, ref, useSlots, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useSlots, watch } from 'vue'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -62,6 +73,7 @@ const dragOffset = ref(0)
 const isDragging = ref(false)
 
 function onDragStart(e) {
+  if (keyboardLocked.value) return
   isDragging.value = true
   dragStartY.value = e.clientY
   dragStartTime.value = Date.now()
@@ -131,7 +143,33 @@ watch(
 
 const snapHeight = computed(() => SNAP_HEIGHT[currentSnap.value])
 
-defineExpose({ setSnap })
+// ---------- keyboard mode (visualViewport) ----------
+// 行動裝置鍵盤彈出時 visualViewport.height 會縮小；超過 100px 視為鍵盤開啟，
+// 自動切到 full（避免輸入框被鍵盤遮住）並鎖拖曳；鍵盤收回時解鎖（snap 不還原）。
+const keyboardLocked = ref(false)
+const initialVVHeight = ref(0)
+
+function onVVResize() {
+  if (typeof window === 'undefined' || !window.visualViewport) return
+  const delta = initialVVHeight.value - window.visualViewport.height
+  if (delta > 100) {
+    if (!keyboardLocked.value) {
+      keyboardLocked.value = true
+      currentSnap.value = 'full'
+    }
+  } else {
+    keyboardLocked.value = false
+  }
+}
+
+onMounted(() => {
+  if (typeof window !== 'undefined' && window.visualViewport) {
+    initialVVHeight.value = window.visualViewport.height
+    window.visualViewport.addEventListener('resize', onVVResize)
+  }
+})
+
+defineExpose({ setSnap, isDraggingForTest: isDragging })
 
 function close() {
   emit('update:modelValue', false)
@@ -200,6 +238,9 @@ onBeforeUnmount(() => {
   window.removeEventListener('pointermove', onDragMove)
   window.removeEventListener('pointerup', onDragEnd)
   window.removeEventListener('pointercancel', onDragEnd)
+  if (typeof window !== 'undefined' && window.visualViewport) {
+    window.visualViewport.removeEventListener('resize', onVVResize)
+  }
 })
 
 const hasHeaderSlot = computed(() => !!slots.header)

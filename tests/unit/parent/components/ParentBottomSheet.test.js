@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import ParentBottomSheet from '@/parent/components/ParentBottomSheet.vue'
 
@@ -221,5 +221,39 @@ describe('ParentBottomSheet — drag gesture', () => {
     expect(wrapper.emitted('snap-change')).toBeFalsy()
     expect(wrapper.emitted('update:modelValue')).toBeFalsy()
     wrapper.unmount()
+  })
+})
+
+describe('ParentBottomSheet — keyboard mode', () => {
+  it('visualViewport 縮小 > 100px 時自動切 full 並停拖曳', async () => {
+    const handlers = {}
+    const fakeVV = {
+      height: 800,
+      addEventListener: vi.fn((e, h) => { handlers[e] = h }),
+      removeEventListener: vi.fn(),
+    }
+    vi.stubGlobal('visualViewport', fakeVV)
+
+    const wrapper = mount(ParentBottomSheet, {
+      ...mountOpts,
+      props: { modelValue: true, snapPoints: ['mid', 'full'], defaultSnap: 'mid' },
+    })
+    await new Promise((r) => setTimeout(r, 0))
+    expect(wrapper.find('.pt-bsheet-dialog').element.style.getPropertyValue('--pt-bsheet-h'))
+      .toBe('60vh')
+
+    fakeVV.height = 500
+    handlers.resize?.()
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.pt-bsheet-dialog').element.style.getPropertyValue('--pt-bsheet-h'))
+      .toBe('92vh')
+
+    // 拖曳被鎖
+    const handle = wrapper.find('.pt-bsheet-handle').element
+    handle.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientY: 200 }))
+    expect(wrapper.vm.isDraggingForTest ?? false).toBe(false)
+
+    wrapper.unmount()
+    vi.unstubAllGlobals()
   })
 })
