@@ -22,6 +22,12 @@ export const getCalendar = (params) => api.get('/portal/calendar', { params })
 // ----- 學生 -----
 export const getMyStudents = () => api.get('/portal/my-students')
 
+export const getPortalStudentDetail = (studentId) =>
+  api.get(`/portal/students/${studentId}/detail`)
+
+export const revealPortalStudentPhone = (studentId, payload) =>
+  api.post(`/portal/students/${studentId}/reveal-phone`, payload)
+
 // ----- 學生點名 -----
 export const getMyClassAttendance = (params) =>
   api.get('/portal/my-class-attendance', { params })

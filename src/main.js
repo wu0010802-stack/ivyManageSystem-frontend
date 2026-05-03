@@ -11,6 +11,7 @@ import 'element-plus/theme-chalk/el-message.css'
 import './assets/design-tokens.css'
 import './assets/main.css'
 import './assets/a11y.css'
+import './styles/portal/soft-ui.css'
 
 const app = createApp(App)
 

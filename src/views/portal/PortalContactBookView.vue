@@ -5,13 +5,17 @@ import { Bell, Camera, Delete, Edit, Refresh } from '@element-plus/icons-vue'
 
 import { getMyStudents } from '@/api/portal'
 import {
+  applyTemplate,
+  batchPublish,
   batchUpsert,
+  copyFromYesterday,
   deletePhoto,
   getClassDay,
   publishEntry,
   updateEntry,
   uploadPhoto,
 } from '@/api/contactBook'
+import { useContactBookTemplates } from '@/composables/useContactBookTemplates'
 import { todayISO } from '@/utils/format'
 import { apiError } from '@/utils/error'
 
@@ -271,6 +275,119 @@ async function removePhoto(att) {
   }
 }
 
+// ── 範本與批次操作 ────────────────────────────────────────────────
+const tpls = useContactBookTemplates()
+const showTemplateDialog = ref(false)
+const selectedTemplateId = ref(null)
+const showOnlyUnpublished = ref(false)
+const batchBusy = ref(false)
+
+const visibleItems = computed(() => {
+  if (!showOnlyUnpublished.value) return items.value
+  return items.value.filter((it) => !it.entry || !it.entry.published_at)
+})
+
+async function handleCopyYesterday() {
+  if (!selectedClassroomId.value) return
+  try {
+    await ElMessageBox.confirm(
+      '把昨日該班所有聯絡簿欄位複製為今日草稿？已存在當日 entry 的學生會被略過。',
+      '複製昨日',
+      { confirmButtonText: '複製', cancelButtonText: '取消' },
+    )
+  } catch {
+    return
+  }
+  batchBusy.value = true
+  try {
+    const res = await copyFromYesterday({
+      classroom_id: selectedClassroomId.value,
+      target_date: selectedDate.value,
+    })
+    ElMessage.success(`已建立 ${res.data.created} 筆草稿`)
+    await fetchClassDay()
+  } catch (err) {
+    ElMessage.error(apiError(err, '複製失敗'))
+  } finally {
+    batchBusy.value = false
+  }
+}
+
+async function openTemplateDialog() {
+  showTemplateDialog.value = true
+  if (!tpls.loaded.value) {
+    try {
+      await tpls.load()
+    } catch (e) {
+      ElMessage.error('讀取範本失敗')
+    }
+  }
+}
+
+async function handleApplyTemplateToClass() {
+  if (!selectedTemplateId.value) {
+    ElMessage.warning('請選擇範本')
+    return
+  }
+  // 找出當日所有未發布的 entry id
+  const draftEntryIds = items.value
+    .filter((it) => it.entry && !it.entry.published_at)
+    .map((it) => it.entry.id)
+  if (!draftEntryIds.length) {
+    ElMessage.warning('無可套用的草稿（請先建立草稿或複製昨日）')
+    return
+  }
+  batchBusy.value = true
+  try {
+    const res = await applyTemplate({
+      template_id: selectedTemplateId.value,
+      entry_ids: draftEntryIds,
+      only_fill_blank: true,
+    })
+    const totalChanged = res.data.results.reduce(
+      (acc, r) => acc + (r.changed_fields?.length || 0),
+      0,
+    )
+    ElMessage.success(`已套用範本，共改動 ${totalChanged} 個欄位`)
+    showTemplateDialog.value = false
+    selectedTemplateId.value = null
+    await fetchClassDay()
+  } catch (err) {
+    ElMessage.error(apiError(err, '套用失敗'))
+  } finally {
+    batchBusy.value = false
+  }
+}
+
+async function handleBatchPublish() {
+  const draftEntryIds = items.value
+    .filter((it) => it.entry && !it.entry.published_at)
+    .map((it) => it.entry.id)
+  if (!draftEntryIds.length) {
+    ElMessage.warning('沒有可發布的草稿')
+    return
+  }
+  try {
+    await ElMessageBox.confirm(
+      `確定批次發布 ${draftEntryIds.length} 筆草稿？將推播 LINE 與通知家長。`,
+      '批次發布',
+      { type: 'warning', confirmButtonText: '發布', cancelButtonText: '取消' },
+    )
+  } catch {
+    return
+  }
+  batchBusy.value = true
+  try {
+    const res = await batchPublish({ entry_ids: draftEntryIds })
+    ElMessage.success(`已發布 ${res.data.success_count} / ${draftEntryIds.length}`)
+    await fetchClassDay()
+  } catch (err) {
+    ElMessage.error(apiError(err, '批次發布失敗'))
+  } finally {
+    batchBusy.value = false
+  }
+}
+
 onMounted(fetchClassrooms)
 watch([selectedClassroomId, selectedDate], () => {
   // 切換班級或日期時關閉抽屜，避免顯示 stale 的別班學生資料
@@ -308,6 +425,16 @@ watch([selectedClassroomId, selectedDate], () => {
       </div>
     </div>
 
+    <div class="batch-bar pt-card" v-if="selectedClassroomId">
+      <el-button :loading="batchBusy" @click="handleCopyYesterday">複製昨日</el-button>
+      <el-button :loading="batchBusy" @click="openTemplateDialog">套用範本到全班</el-button>
+      <el-button :loading="batchBusy" type="success" @click="handleBatchPublish">
+        批次發布草稿
+      </el-button>
+      <el-divider direction="vertical" />
+      <el-checkbox v-model="showOnlyUnpublished">只看未發布</el-checkbox>
+    </div>
+
     <el-card v-if="completion.roster > 0" class="completion-card" shadow="never">
       <div class="completion-row">
         <div class="completion-stats">
@@ -327,13 +454,13 @@ watch([selectedClassroomId, selectedDate], () => {
     </el-card>
 
     <el-empty
-      v-if="!listLoading && items.length === 0"
-      description="此日期此班級無學生資料"
+      v-if="!listLoading && visibleItems.length === 0"
+      :description="showOnlyUnpublished ? '無未發布草稿' : '此日期此班級無學生資料'"
     />
 
     <div v-else class="card-grid" v-loading="listLoading">
       <el-card
-        v-for="it in items"
+        v-for="it in visibleItems"
         :key="it.student_id"
         class="student-card"
         shadow="hover"
@@ -511,6 +638,33 @@ watch([selectedClassroomId, selectedDate], () => {
         </div>
       </template>
     </el-drawer>
+
+    <!-- 範本選擇對話框 -->
+    <el-dialog v-model="showTemplateDialog" title="套用範本到全班草稿" width="480px">
+      <div v-if="tpls.loading.value" class="empty">讀取中…</div>
+      <div v-else-if="!tpls.templates.value.length" class="empty">
+        尚無範本。可先到管理介面建立個人或園所共用範本。
+      </div>
+      <el-radio-group v-else v-model="selectedTemplateId" class="tpl-list">
+        <el-radio
+          v-for="t in tpls.templates.value"
+          :key="t.id"
+          :value="t.id"
+          class="tpl-row"
+        >
+          <strong>{{ t.name }}</strong>
+          <el-tag v-if="t.scope === 'shared'" size="small" type="success">共用</el-tag>
+          <el-tag v-else size="small">個人</el-tag>
+        </el-radio>
+      </el-radio-group>
+      <p class="hint">套用規則：只填入空欄位，已填值不會被覆蓋。</p>
+      <template #footer>
+        <el-button @click="showTemplateDialog = false">取消</el-button>
+        <el-button type="primary" :loading="batchBusy" @click="handleApplyTemplateToClass">
+          套用
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -520,6 +674,18 @@ watch([selectedClassroomId, selectedDate], () => {
   flex-direction: column;
   gap: var(--space-4);
 }
+
+.batch-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3);
+}
+
+.tpl-list { display: flex; flex-direction: column; gap: var(--space-2); }
+.tpl-row { display: flex; gap: var(--space-2); align-items: center; }
+.hint { font-size: var(--text-xs); color: var(--pt-text-muted); margin-top: var(--space-2); }
+.empty { color: var(--pt-text-muted); padding: var(--space-3); text-align: center; }
 
 .page-header {
   display: flex;

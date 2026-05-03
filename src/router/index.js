@@ -306,12 +306,50 @@ const router = createRouter({
             children: [
                 {
                     path: '',
-                    redirect: '/portal/attendance',
+                    redirect: '/portal/home',
+                },
+                {
+                    path: 'home',
+                    name: 'portal-home',
+                    component: () => import('../views/portal/PortalHomeView.vue'),
+                    meta: { title: '今日待辦' },
                 },
                 {
                     path: 'attendance',
                     name: 'portal-attendance',
                     component: () => import('../views/portal/PortalAttendanceView.vue'),
+                },
+                {
+                    path: 'messages',
+                    name: 'portal-messages',
+                    component: () => import('../views/portal/PortalMessagesView.vue'),
+                    meta: { title: '家長訊息' },
+                },
+                {
+                    path: 'messages/:threadId',
+                    name: 'portal-message-thread',
+                    component: () => import('../views/portal/PortalMessageThreadView.vue'),
+                    props: true,
+                    meta: { title: '訊息對話' },
+                },
+                {
+                    path: 'students/:studentId',
+                    name: 'portal-student-detail',
+                    component: () => import('../views/portal/PortalStudentDetailView.vue'),
+                    props: true,
+                    meta: { title: '學生個案' },
+                },
+                {
+                    path: 'medications',
+                    name: 'portal-medications',
+                    component: () => import('../views/portal/PortalMedicationView.vue'),
+                    meta: { title: '用藥執行' },
+                },
+                {
+                    path: 'observations',
+                    name: 'portal-observations',
+                    component: () => import('../views/portal/PortalObservationView.vue'),
+                    meta: { title: '課堂觀察' },
                 },
                 {
                     path: 'leave',

@@ -1,0 +1,140 @@
+/**
+ * Portal Soft UI Evolution token alias
+ *
+ * 把家長端 (src/parent/styles/globals.css) 的中性 Soft UI token 引入 portal 範圍：
+ * elevation、hairline、radius、shimmer、stagger，以及 .pt-card / .pt-card-elevated utility。
+ *
+ * 不引入家長 app 的 brand-primary 綠系色彩 — portal 維持原有 indigo (--color-primary)，
+ * 強化「員工後台 vs 家長 app」視覺差異。
+ *
+ * 由 main.js 在 main.css 之後 import；新元件可直接用：
+ *   <div class="pt-card">…</div>
+ *   box-shadow: var(--pt-elev-2);
+ */
+
+:root {
+  /* Soft UI Evolution: 多層陰影 */
+  --pt-elev-1: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.06);
+  --pt-elev-2: 0 2px 4px rgba(15, 23, 42, 0.04), 0 4px 12px rgba(15, 23, 42, 0.08);
+  --pt-elev-3: 0 8px 16px rgba(15, 23, 42, 0.08), 0 16px 32px rgba(15, 23, 42, 0.12);
+
+  /* Hairline border */
+  --pt-hairline: 1px solid rgba(15, 23, 42, 0.06);
+
+  /* Surface alias（淺色） */
+  --pt-surface-app: var(--bg-color, #f8fafc);
+  --pt-surface-card: var(--surface-color, #ffffff);
+  --pt-surface-mute: var(--bg-color-soft, #f1f5f9);
+  --pt-surface-mute-soft: #f6f8fa;
+
+  /* Text alias（保留 portal 視覺，深色文字） */
+  --pt-text-strong: var(--text-primary, #1e293b);
+  --pt-text-body: var(--text-primary, #1e293b);
+  --pt-text-muted: var(--text-secondary, #64748b);
+  --pt-text-soft: var(--text-secondary, #64748b);
+  --pt-text-faint: var(--text-tertiary, #94a3b8);
+  --pt-border: var(--border-color, #e2e8f0);
+
+  /* Icon tint：與家長端一致，方便共用元件 */
+  --pt-tint-money: #dcfce7;            --pt-tint-money-fg: #15803d;
+  --pt-tint-message: #dbeafe;          --pt-tint-message-fg: #1d4ed8;
+  --pt-tint-event: #f3e8ff;            --pt-tint-event-fg: #7c3aed;
+  --pt-tint-announcement: #fef3c7;     --pt-tint-announcement-fg: #b45309;
+  --pt-tint-leave: #ffedd5;            --pt-tint-leave-fg: #c2410c;
+  --pt-tint-activity: #fce7f3;         --pt-tint-activity-fg: #be185d;
+  --pt-tint-medication: #ddd6fe;       --pt-tint-medication-fg: #5b21b6;
+  --pt-tint-pickup: #cffafe;           --pt-tint-pickup-fg: #0e7490;
+  --pt-tint-calendar: #e0e7ff;         --pt-tint-calendar-fg: #3730a3;
+  --pt-tint-contact: #d1fae5;          --pt-tint-contact-fg: #065f46;
+
+  /* 漸層（portal 用 indigo） */
+  --pt-gradient-portal: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  --pt-gradient-portal-soft: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
+}
+
+/* ========== Card utility ========== */
+.pt-card {
+  background: var(--pt-surface-card);
+  border-radius: var(--radius-lg, 12px);
+  box-shadow: var(--pt-elev-1);
+  border: var(--pt-hairline);
+}
+
+.pt-card-elevated {
+  background: var(--pt-surface-card);
+  border-radius: var(--radius-xl, 16px);
+  box-shadow: var(--pt-elev-2);
+  border: var(--pt-hairline);
+}
+
+.pt-section-title {
+  font-size: var(--text-sm, 13px);
+  font-weight: 600;
+  color: var(--pt-text-muted);
+  margin: 0 0 var(--space-2, 8px) var(--space-1, 4px);
+  letter-spacing: 0.02em;
+}
+
+/* ========== Press feedback (mobile) ========== */
+.press-scale {
+  transition:
+    transform var(--transition-fast, 0.15s ease),
+    background var(--transition-fast, 0.15s ease);
+  transform: scale(1);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.press-scale:active {
+  transform: scale(0.97);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .press-scale,
+  .press-scale:active {
+    transform: none;
+  }
+}
+
+/* ========== Stagger entrance ========== */
+@keyframes pt-fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.pt-stagger > * {
+  animation: pt-fade-up 0.32s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+.pt-stagger > *:nth-child(1) { animation-delay: 0ms; }
+.pt-stagger > *:nth-child(2) { animation-delay: 40ms; }
+.pt-stagger > *:nth-child(3) { animation-delay: 80ms; }
+.pt-stagger > *:nth-child(4) { animation-delay: 120ms; }
+.pt-stagger > *:nth-child(5) { animation-delay: 160ms; }
+.pt-stagger > *:nth-child(6) { animation-delay: 200ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pt-stagger > * {
+    animation: none;
+  }
+}
+
+/* ========== Shimmer ========== */
+@keyframes pt-shimmer {
+  0%   { background-position: -200px 0; }
+  100% { background-position: calc(200px + 100%) 0; }
+}
+
+.pt-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--pt-surface-mute) 0%,
+    var(--pt-surface-mute-soft) 50%,
+    var(--pt-surface-mute) 100%
+  );
+  background-size: 200px 100%;
+  background-repeat: no-repeat;
+  animation: pt-shimmer 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pt-shimmer { animation: none; }
+}

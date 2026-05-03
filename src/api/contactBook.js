@@ -29,3 +29,21 @@ export const uploadPhoto = (entryId, formData) =>
 // 軟刪照片
 export const deletePhoto = (entryId, attachmentId) =>
   api.delete(`/portal/contact-book/${entryId}/photos/${attachmentId}`)
+
+// ----- 便利端點：未發布列表 / 複製昨日 / 套用範本 / 批次發布 -----
+
+// 列某班某日未發布草稿
+export const listUnpublished = (params) =>
+  api.get('/portal/contact-book/unpublished', { params })
+
+// 把昨日該班所有 entry 欄位複製為今日草稿（已存在則 skip）
+export const copyFromYesterday = (data) =>
+  api.post('/portal/contact-book/copy-from-yesterday', data)
+
+// 套用範本到一個或多個 entry
+export const applyTemplate = (data) =>
+  api.post('/portal/contact-book/apply-template', data)
+
+// 一鍵批次發布草稿
+export const batchPublish = (data) =>
+  api.post('/portal/contact-book/batch-publish', data)

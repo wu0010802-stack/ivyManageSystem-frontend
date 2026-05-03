@@ -6,6 +6,8 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 import { getSubstitutePendingCount, getUnreadCount, getSwapPendingCount } from '@/api/portal'
 import { getPortalPendingCount } from '@/api/dismissalCalls'
+import { getUnreadCount as getMessagesUnreadCount } from '@/api/portalMessages'
+import { listToday as listTodayMedications } from '@/api/portalMedications'
 import { changePassword, endImpersonate } from '@/api/auth'
 import { getUserInfo, clearAuth, setUserInfo } from '@/utils/auth'
 import OfflineIndicator from '@/components/OfflineIndicator.vue'
@@ -37,6 +39,11 @@ const unreadCount = ref(0)
 const swapPendingCount = ref(0)
 const substitutePendingCount = ref(0)
 const dismissalPendingCount = ref(0)
+
+// 家園溝通：家長訊息未讀
+const messagesUnreadCount = ref(0)
+// 用藥未執行
+const pendingMedicationCount = ref(0)
 
 const fetchUnreadCount = async () => {
   try {
@@ -74,11 +81,35 @@ const fetchDismissalPendingCount = async () => {
   }
 }
 
+const fetchMessagesUnreadCount = async () => {
+  try {
+    const res = await getMessagesUnreadCount()
+    messagesUnreadCount.value = res.data.unread_count || 0
+  } catch (e) {
+    // 沒有 PARENT_MESSAGES_WRITE 權限會 403，靜默忽略
+  }
+}
+
+const fetchPendingMedicationCount = async () => {
+  try {
+    const res = await listTodayMedications()
+    const groups = res.data.groups || []
+    pendingMedicationCount.value = groups.reduce(
+      (acc, g) => acc + (g.stats?.pending || 0),
+      0,
+    )
+  } catch (e) {
+    // 無權限或無班級時靜默
+  }
+}
+
 const refreshPortalCounts = () => {
   fetchUnreadCount()
   fetchSwapPendingCount()
   fetchSubstitutePendingCount()
   fetchDismissalPendingCount()
+  fetchMessagesUnreadCount()
+  fetchPendingMedicationCount()
 }
 
 // PWA 安裝提示
@@ -258,11 +289,35 @@ const submitPassword = async () => {
         background-color="#1e293b"
         @select="closeSidebar"
       >
+        <!-- 首頁 -->
+        <el-menu-item index="/portal/home">
+          <el-icon><HomeFilled /></el-icon>
+          <span>今日首頁</span>
+        </el-menu-item>
+
         <!-- 個人資料 -->
         <el-menu-item index="/portal/profile">
           <el-icon><UserFilled /></el-icon>
           <span>個人資料</span>
         </el-menu-item>
+
+        <!-- 家園溝通 -->
+        <el-sub-menu index="group-comm">
+          <template #title>
+            <el-icon><ChatLineRound /></el-icon>
+            <span>家園溝通</span>
+          </template>
+          <el-menu-item index="/portal/messages">
+            <el-icon><Message /></el-icon>
+            <span>家長訊息</span>
+            <el-badge v-if="messagesUnreadCount > 0" :value="messagesUnreadCount" :max="99" class="announcement-badge" />
+          </el-menu-item>
+          <el-menu-item index="/portal/announcements">
+            <el-icon><Bell /></el-icon>
+            <span>公告通知</span>
+            <el-badge v-if="unreadCount > 0" :value="unreadCount" :max="99" class="announcement-badge" />
+          </el-menu-item>
+        </el-sub-menu>
 
         <!-- 假勤申請 -->
         <el-sub-menu index="group-leave">
@@ -318,6 +373,15 @@ const submitPassword = async () => {
             <el-icon><Document /></el-icon>
             <span>每日聯絡簿</span>
           </el-menu-item>
+          <el-menu-item index="/portal/observations">
+            <el-icon><Reading /></el-icon>
+            <span>課堂觀察</span>
+          </el-menu-item>
+          <el-menu-item index="/portal/medications">
+            <el-icon><Suitcase /></el-icon>
+            <span>用藥執行</span>
+            <el-badge v-if="pendingMedicationCount > 0" :value="pendingMedicationCount" :max="99" class="announcement-badge" />
+          </el-menu-item>
           <el-menu-item index="/portal/incidents">
             <el-icon><Warning /></el-icon>
             <span>事件紀錄</span>
@@ -351,13 +415,6 @@ const submitPassword = async () => {
         <el-menu-item index="/portal/salary">
           <el-icon><Money /></el-icon>
           <span>薪資查詢</span>
-        </el-menu-item>
-
-        <!-- 公告通知 -->
-        <el-menu-item index="/portal/announcements">
-          <el-icon><Bell /></el-icon>
-          <span>公告通知</span>
-          <el-badge v-if="unreadCount > 0" :value="unreadCount" :max="99" class="announcement-badge" />
         </el-menu-item>
       </el-menu>
     </el-aside>
@@ -625,10 +682,33 @@ const submitPassword = async () => {
   color: var(--text-primary);
 }
 
-/* Main Content */
+/* Main Content：套用 Soft UI 表面色 */
 .el-main {
-  background-color: var(--bg-color);
+  background-color: var(--pt-surface-app, var(--bg-color));
   padding: var(--space-6);
+}
+
+/* 全 Portal 內 el-card：升級為 Soft UI Evolution 雙層陰影 + hairline。
+ * 既有 view 不需修改即可獲得新質感；hover 仍走 main.css 的 translateY 動畫。 */
+:deep(.el-card) {
+  box-shadow: var(--pt-elev-1) !important;
+  border: var(--pt-hairline) !important;
+}
+
+:deep(.el-card:hover) {
+  box-shadow: var(--pt-elev-2) !important;
+}
+
+:deep(.el-card[shadow="never"]),
+:deep(.el-card.no-hover) {
+  box-shadow: var(--pt-elev-1) !important;
+}
+
+/* Mobile padding 收緊 */
+@media (max-width: 768px) {
+  .el-main {
+    padding: var(--space-4);
+  }
 }
 
 .install-banner {
