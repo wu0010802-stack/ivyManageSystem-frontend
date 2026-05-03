@@ -132,10 +132,10 @@ html.ivy-contrast-high {
 }
 
 /* ===== Parent: 高對比（深模式）=====
- * dark + high contrast 同時開啟時，反向加白
+ * dark + high contrast 同時開啟時，反向加白。
+ * 只在明確 dark 或系統 dark 時套用，避免單純開高對比就誤吃深色 token。
  */
-html.ivy-contrast-high[data-theme="dark"],
-html.ivy-contrast-high:not([data-theme="light"]) {
+html.ivy-contrast-high[data-theme="dark"] {
   --pt-text-strong: #ffffff;
   --pt-text-body: #ffffff;
   --pt-text-muted: #f1f5f9;
@@ -158,6 +158,33 @@ html.ivy-contrast-high:not([data-theme="light"]) {
   --color-danger: #fca5a5;
   --color-warning: #fcd34d;
   --color-success: #6ee7b7;
+}
+
+@media (prefers-color-scheme: dark) {
+  html.ivy-contrast-high:not([data-theme="light"]) {
+    --pt-text-strong: #ffffff;
+    --pt-text-body: #ffffff;
+    --pt-text-muted: #f1f5f9;
+    --pt-text-soft: #cbd5e1;
+    --pt-text-faint: #cbd5e1;
+    --pt-text-placeholder: #94a3b8;
+    --pt-text-disabled: #94a3b8;
+    --pt-text-hint: #94a3b8;
+
+    --pt-border: #94a3b8;
+    --pt-border-light: #64748b;
+    --pt-border-strong: #cbd5e1;
+    --pt-border-stronger: #e2e8f0;
+
+    /* brand 換更亮的綠（在深背景上 AA） */
+    --brand-primary: #6ee7b7;
+    --brand-primary-hover: #34d399;
+    --brand-primary-soft: rgba(110, 231, 183, 0.22);
+
+    --color-danger: #fca5a5;
+    --color-warning: #fcd34d;
+    --color-success: #6ee7b7;
+  }
 }
 
 /* 高對比時 focus 環加粗 + 換高對比色 */
