@@ -7,6 +7,7 @@ import { useCachedAsync } from '@/composables/useCachedAsync'
 import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
 import ParentIcon from '../components/ParentIcon.vue'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
+import HomeHero from '../components/home/HomeHero.vue'
 
 const router = useRouter()
 const authStore = useParentAuthStore()
@@ -94,16 +95,6 @@ const QUICK_ACTIONS = [
   { icon: 'pill', label: '用藥單', path: '/medications', tint: 'medication' },
 ]
 
-// 依當前時間給問候語
-const greetingText = computed(() => {
-  const h = new Date().getHours()
-  if (h < 5) return '夜深了，記得早點休息'
-  if (h < 11) return '早安'
-  if (h < 14) return '午安'
-  if (h < 18) return '下午好'
-  return '晚安'
-})
-
 // 接送狀態文案：對應後端 status (pending/acknowledged/completed)
 function dismissalLabel(d) {
   if (!d) return null
@@ -130,20 +121,8 @@ function dismissalLabel(d) {
     />
 
     <template v-else-if="summaryData">
-      <!-- 0) Hero 問候卡 — 漸層 brand 色，建立視覺定錨 -->
-      <section class="hero-card">
-        <div class="hero-content">
-          <div class="hero-greeting">{{ greetingText }}</div>
-          <div class="hero-name">{{ me?.name || '家長' }}</div>
-          <div v-if="children.length" class="hero-meta">
-            照顧 {{ children.length }} 位寶貝
-          </div>
-        </div>
-        <div class="hero-decoration" aria-hidden="true">
-          <span class="hero-blob hero-blob-1" />
-          <span class="hero-blob hero-blob-2" />
-        </div>
-      </section>
+      <!-- 0) Hero 問候卡 — 抽出為 HomeHero 元件（ACD Phase 3.2） -->
+      <HomeHero :parent-name="me?.name" :children-count="children.length" />
 
       <!-- 1) 推播未啟用 CTA — 暖色提醒卡 -->
       <section v-if="showPushCta" class="push-cta">
@@ -340,71 +319,6 @@ function dismissalLabel(d) {
   display: flex;
   flex-direction: column;
   gap: var(--space-4, 16px);
-}
-
-/* ==========================================================
- * Hero 問候卡 — 漸層 brand 色，建立首頁視覺定錨
- * ========================================================== */
-.hero-card {
-  position: relative;
-  background: var(--pt-gradient-hero);
-  border-radius: var(--radius-xl, 16px);
-  padding: 18px 20px 20px;
-  color: var(--neutral-0, #fff);
-  box-shadow: var(--pt-elev-2);
-  overflow: hidden;
-  isolation: isolate;
-}
-
-.hero-content {
-  position: relative;
-  z-index: 1;
-}
-
-.hero-greeting {
-  font-size: var(--text-sm, 13px);
-  /* 不用 opacity 區分層次，避免在淡色端文字對比不足；改以亮黃色帶 brand 暖意 */
-  color: rgba(255, 255, 255, 0.96);
-  letter-spacing: 0.04em;
-}
-
-.hero-name {
-  font-size: var(--text-2xl, 22px);
-  font-weight: var(--font-weight-bold, 700);
-  margin-top: 2px;
-  letter-spacing: 0.01em;
-}
-
-.hero-meta {
-  font-size: var(--text-xs, 12px);
-  margin-top: 6px;
-  color: rgba(255, 255, 255, 0.92);
-}
-
-/* 浮球裝飾 — 純 CSS，零 asset cost */
-.hero-decoration {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-.hero-blob {
-  position: absolute;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.16);
-  filter: blur(2px);
-}
-.hero-blob-1 {
-  top: -32px;
-  right: -24px;
-  width: 120px;
-  height: 120px;
-}
-.hero-blob-2 {
-  bottom: -48px;
-  right: 56px;
-  width: 80px;
-  height: 80px;
-  background: rgba(255, 255, 255, 0.10);
 }
 
 /* ==========================================================
