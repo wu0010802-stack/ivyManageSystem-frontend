@@ -13,7 +13,6 @@ import {
 } from '../api/leaves'
 import { toast } from '../utils/toast'
 import { todayISO, dateToLocalISO } from '@/utils/format'
-import ParentIcon from '../components/ParentIcon.vue'
 import ParentBottomSheet from '../components/ParentBottomSheet.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import LeaveListCard from '../components/leaves/LeaveListCard.vue'
@@ -307,12 +306,12 @@ onMounted(async () => {
 <template>
   <div class="leaves-view">
     <ChildSelector />
-    <div class="toolbar">
-      <button class="primary-btn icon-btn" @click="openForm">
-        <ParentIcon name="plus" size="sm" />
-        申請請假
-      </button>
-    </div>
+
+    <LeaveHero :summary="heroSummary">
+      <template #action>
+        <button class="hero-cta" type="button" @click="openForm">＋ 申請請假</button>
+      </template>
+    </LeaveHero>
 
     <div v-if="!loading && filteredItems.length === 0" class="empty">尚無請假紀錄</div>
 
@@ -389,35 +388,22 @@ onMounted(async () => {
   gap: 10px;
 }
 
-.toolbar {
-  display: flex;
-  justify-content: flex-end;
-}
-
-.primary-btn {
-  padding: 8px 16px;
-  background: var(--brand-primary);
-  color: var(--neutral-0);
-  border: none;
-  border-radius: 8px;
-  font-size: 14px;
-}
-
-.primary-btn:disabled {
-  opacity: 0.5;
-}
-
 .empty {
   text-align: center;
   padding: 40px 16px;
   color: var(--pt-text-placeholder);
 }
 
-.icon-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
 .render-sentinel { height: 1px; }
+
+.hero-cta {
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--brand-primary, #3f7d48);
+  border: none;
+  padding: 8px 14px;
+  border-radius: 99px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.hero-cta:hover { background: #fff; }
 </style>
