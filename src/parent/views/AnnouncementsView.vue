@@ -4,6 +4,7 @@ import { listAnnouncements, markRead } from '../api/announcements'
 import { toast } from '../utils/toast'
 import ParentIcon from '../components/ParentIcon.vue'
 import AppModal from '../components/AppModal.vue'
+import PullToRefresh from '../components/PullToRefresh.vue'
 import { useIncrementalRender } from '../composables/useIncrementalRender'
 
 const items = ref([])
@@ -67,10 +68,14 @@ const formatTime = (s) =>
   s ? s.replace('T', ' ').slice(0, 16) : ''
 
 onMounted(fetchData)
+
+async function pullRefresh() {
+  await fetchData()
+}
 </script>
 
 <template>
-  <div class="announcements-view">
+  <PullToRefresh :on-refresh="pullRefresh" class="announcements-view">
     <div v-if="!loading && items.length === 0" class="empty">目前沒有公告</div>
 
     <div
@@ -129,11 +134,11 @@ onMounted(fetchData)
         <div class="detail-content">{{ selected.content }}</div>
       </template>
     </AppModal>
-  </div>
+  </PullToRefresh>
 </template>
 
 <style scoped>
-.announcements-view {
+.announcements-view :deep(.ptr-content) {
   display: flex;
   flex-direction: column;
   gap: 8px;

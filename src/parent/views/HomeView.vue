@@ -6,6 +6,7 @@ import { useParentAuthStore } from '../stores/parentAuth'
 import { useCachedAsync } from '@/composables/useCachedAsync'
 import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
 import ParentIcon from '../components/ParentIcon.vue'
+import PullToRefresh from '../components/PullToRefresh.vue'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 
 const router = useRouter()
@@ -87,6 +88,14 @@ function refresh() {
   refreshToday(true)
 }
 
+// 下拉刷新：等兩支 API 都完成才結束 indicator
+async function pullRefresh() {
+  await Promise.all([
+    refreshSummary(true),
+    refreshToday(true),
+  ])
+}
+
 const QUICK_ACTIONS = [
   { icon: 'notebook', label: '聯絡簿', path: '/contact-book', tint: 'contact' },
   { icon: 'calendar', label: '本週行程', path: '/calendar', tint: 'calendar' },
@@ -115,7 +124,7 @@ function dismissalLabel(d) {
 </script>
 
 <template>
-  <div class="home-view">
+  <PullToRefresh :on-refresh="pullRefresh" class="home-view">
     <!-- 骨架載入：>300ms 的非同步請求應顯示結構，避免畫面空白 -->
     <template v-if="summaryPending && !summaryData">
       <SkeletonBlock variant="card" />
@@ -332,11 +341,11 @@ function dismissalLabel(d) {
         </div>
       </section>
     </template>
-  </div>
+  </PullToRefresh>
 </template>
 
 <style scoped>
-.home-view {
+.home-view :deep(.ptr-content) {
   display: flex;
   flex-direction: column;
   gap: var(--space-4, 16px);

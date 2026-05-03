@@ -11,6 +11,7 @@ import {
 import { toast } from '../utils/toast'
 import ParentIcon from '../components/ParentIcon.vue'
 import AppModal from '../components/AppModal.vue'
+import PullToRefresh from '../components/PullToRefresh.vue'
 
 const childrenStore = useChildrenStore()
 const { selectedId, ensureSelected } = useChildSelection()
@@ -141,10 +142,14 @@ onMounted(async () => {
 })
 
 watch(selectedId, fetchRecords)
+
+async function pullRefresh() {
+  await Promise.all([fetchSummary(), fetchRecords()])
+}
 </script>
 
 <template>
-  <div class="fees-view">
+  <PullToRefresh :on-refresh="pullRefresh" class="fees-view">
     <div v-if="summary" class="totals-card">
       <h3 class="totals-title">所有子女費用總覽</h3>
       <div class="total-grid">
@@ -264,11 +269,11 @@ watch(selectedId, fetchRecords)
         </div>
       </template>
     </AppModal>
-  </div>
+  </PullToRefresh>
 </template>
 
 <style scoped>
-.fees-view {
+.fees-view :deep(.ptr-content) {
   display: flex;
   flex-direction: column;
   gap: 10px;

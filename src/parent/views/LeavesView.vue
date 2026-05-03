@@ -19,6 +19,7 @@ import ConfirmDialog from '../components/ConfirmDialog.vue'
 import LeaveListCard from '../components/leaves/LeaveListCard.vue'
 import LeaveDetailSheet from '../components/leaves/LeaveDetailSheet.vue'
 import LeaveForm from '../components/leaves/LeaveForm.vue'
+import PullToRefresh from '../components/PullToRefresh.vue'
 import { useIncrementalRender } from '../composables/useIncrementalRender'
 
 const childrenStore = useChildrenStore()
@@ -274,10 +275,14 @@ onMounted(async () => {
   ensureSelected(childrenStore.items)
   fetchData()
 })
+
+async function pullRefresh() {
+  await fetchData()
+}
 </script>
 
 <template>
-  <div class="leaves-view">
+  <PullToRefresh :on-refresh="pullRefresh" class="leaves-view">
     <ChildSelector />
     <div class="toolbar">
       <button class="primary-btn icon-btn" @click="openForm">
@@ -351,11 +356,11 @@ onMounted(async () => {
       destructive
       @confirm="doCancel"
     />
-  </div>
+  </PullToRefresh>
 </template>
 
 <style scoped>
-.leaves-view {
+.leaves-view :deep(.ptr-content) {
   display: flex;
   flex-direction: column;
   gap: 10px;

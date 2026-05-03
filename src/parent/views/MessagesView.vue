@@ -5,6 +5,7 @@ import { useMessagesStore } from '../stores/messages'
 import { toast } from '../utils/toast'
 import ParentIcon from '../components/ParentIcon.vue'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
+import PullToRefresh from '../components/PullToRefresh.vue'
 import { fmtTimeOrDate } from '../utils/datetime'
 
 const router = useRouter()
@@ -22,11 +23,15 @@ function openThread(t) {
   router.push({ path: `/messages/${t.id}` })
 }
 
+async function pullRefresh() {
+  await messagesStore.fetchThreads(true)
+}
+
 onMounted(init)
 </script>
 
 <template>
-  <div class="messages-view">
+  <PullToRefresh :on-refresh="pullRefresh" class="messages-view">
     <template v-if="!messagesStore.threadsLoaded">
       <SkeletonBlock variant="row" :count="4" />
     </template>
@@ -59,7 +64,7 @@ onMounted(init)
         </div>
       </div>
     </div>
-  </div>
+  </PullToRefresh>
 </template>
 
 <style scoped>
