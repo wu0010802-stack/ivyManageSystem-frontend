@@ -102,7 +102,12 @@ api.interceptors.response.use(
         }
         await _refreshing
         return api(originalRequest)
-      } catch {
+      } catch (refreshErr) {
+        // refresh 自己回 409 RACE：兄弟請求已完成 rotation 並寫入新 cookie，
+        // 此分支直接重打原請求即可恢復；不重導登入
+        if (refreshErr?.response?.status === 409) {
+          return api(originalRequest)
+        }
         _redirectToLogin()
         return Promise.reject(error)
       }
