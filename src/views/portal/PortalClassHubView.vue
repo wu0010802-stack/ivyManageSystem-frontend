@@ -38,7 +38,6 @@
     />
     <ClassHubMedicationSheet
       v-model:show="sheets.medication"
-      :order-id="activeMedicationLogId"
       @done="onSheetDone('medications_pending')"
     />
     <ClassHubIncidentQuickSheet
@@ -66,8 +65,6 @@ const sheets = reactive({
   medication: false,
   incident: false,
 })
-const activeMedicationLogId = ref(null)
-
 // Re-evaluate which slot is current every minute (also handled by composable polling)
 const nowTick = ref(Date.now())
 let tickTimer = null
@@ -99,7 +96,6 @@ function onOpenSheet(task) {
   if (task.kind === 'attendance') {
     sheets.attendance = true
   } else if (task.kind === 'medication') {
-    activeMedicationLogId.value = task.samples?.[0]?.student_id ?? null
     sheets.medication = true
   } else if (task.kind === 'incident') {
     sheets.incident = true
