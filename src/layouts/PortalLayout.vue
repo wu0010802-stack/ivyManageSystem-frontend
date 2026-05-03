@@ -541,6 +541,11 @@ const submitPassword = async () => {
 
 <style scoped>
 .portal-layout {
+  /* 顯式鎖定亮色 token：防 PWA 快取殘留 / 跨入口 CSS 殘留 / OS 暗模式偏好把表面色改深 */
+  --bg-color: #f8fafc;
+  --surface-color: #ffffff;
+  --pt-surface-app: #f8fafc;
+  --pt-surface-card: #ffffff;
   height: 100vh;
   background-color: var(--bg-color);
 }
@@ -682,9 +687,9 @@ const submitPassword = async () => {
   color: var(--text-primary);
 }
 
-/* Main Content：套用 Soft UI 表面色 */
+/* Main Content：對齊管理端背景，避免 --pt-surface-app 被暗模式 token 覆寫導致教師端偏深 */
 .el-main {
-  background-color: var(--pt-surface-app, var(--bg-color));
+  background-color: var(--bg-color);
   padding: var(--space-6);
 }
 

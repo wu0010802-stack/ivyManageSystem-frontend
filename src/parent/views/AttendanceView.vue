@@ -6,6 +6,7 @@ import { useChildSelection } from '../composables/useChildSelection'
 import { getMonthlyAttendance } from '../api/attendance'
 import { toast } from '../utils/toast'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
+import PullToRefresh from '../components/PullToRefresh.vue'
 
 const childrenStore = useChildrenStore()
 const { selectedId, ensureSelected } = useChildSelection()
@@ -103,10 +104,14 @@ onMounted(async () => {
 })
 
 watch([selectedId, year, month], fetchData)
+
+async function pullRefresh() {
+  await fetchData()
+}
 </script>
 
 <template>
-  <div class="attendance-view">
+  <PullToRefresh :on-refresh="pullRefresh" class="attendance-view">
     <ChildSelector />
 
     <div class="month-bar">
@@ -171,11 +176,14 @@ watch([selectedId, year, month], fetchData)
       <SkeletonBlock variant="card" :count="2" />
     </div>
     <div v-else-if="loading" class="loading-mask" aria-hidden="true" />
-  </div>
+  </PullToRefresh>
 </template>
 
 <style scoped>
 .attendance-view {
+  position: relative;
+}
+.attendance-view :deep(.ptr-content) {
   position: relative;
 }
 

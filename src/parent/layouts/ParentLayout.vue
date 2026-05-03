@@ -15,6 +15,21 @@ const isPublic = computed(() => route.meta?.public === true)
 const hideTabBar = computed(() => route.meta?.hideTabBar === true)
 const currentTab = computed(() => route.meta?.tab || '')
 
+/**
+ * 點再次點 active tab → scroll-to-top。
+ * 條件嚴格：必須「目前路徑等於 tab.path」才觸發；若使用者在深層頁
+ * （/messages/123，meta.tab 仍為 'messages'）點 messages tab，仍應
+ * 走 router-link 正常導回 /messages（不阻止預設行為）。
+ */
+function onTabClick(t) {
+  if (route.path !== t.path) return
+  const reduce =
+    typeof window !== 'undefined' &&
+    window.matchMedia &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' })
+}
+
 const unread = ref(0)
 const unreadMessages = ref(0)
 
@@ -65,6 +80,7 @@ watch(() => route.fullPath, refreshUnread)
         class="tab-item"
         :class="{ active: currentTab === t.key }"
         :aria-current="currentTab === t.key ? 'page' : null"
+        @click="onTabClick(t)"
       >
         <span class="tab-icon-wrap">
           <span class="tab-icon-bg" aria-hidden="true" />

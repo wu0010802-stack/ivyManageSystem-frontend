@@ -12,6 +12,7 @@ import {
 import { toast } from '../utils/toast'
 import ParentIcon from '../components/ParentIcon.vue'
 import AppModal from '../components/AppModal.vue'
+import PullToRefresh from '../components/PullToRefresh.vue'
 
 const childrenStore = useChildrenStore()
 const { selectedId, ensureSelected } = useChildSelection()
@@ -150,10 +151,14 @@ onMounted(async () => {
   fetchMy()
   fetchCourses()
 })
+
+async function pullRefresh() {
+  await Promise.all([fetchMy(), fetchCourses()])
+}
 </script>
 
 <template>
-  <div class="activity-view">
+  <PullToRefresh :on-refresh="pullRefresh" class="activity-view">
     <ChildSelector />
     <div class="tab-row">
       <button
@@ -285,11 +290,11 @@ onMounted(async () => {
         </button>
       </div>
     </AppModal>
-  </div>
+  </PullToRefresh>
 </template>
 
 <style scoped>
-.activity-view {
+.activity-view :deep(.ptr-content) {
   display: flex;
   flex-direction: column;
   gap: 10px;
