@@ -19,6 +19,7 @@ import ConfirmDialog from '../components/ConfirmDialog.vue'
 import LeaveListCard from '../components/leaves/LeaveListCard.vue'
 import LeaveDetailSheet from '../components/leaves/LeaveDetailSheet.vue'
 import LeaveForm from '../components/leaves/LeaveForm.vue'
+import LeaveHero from '../components/leaves/LeaveHero.vue'
 import { useIncrementalRender } from '../composables/useIncrementalRender'
 
 const childrenStore = useChildrenStore()
@@ -97,6 +98,33 @@ const studentNameMap = computed(() => {
 const filteredItems = computed(() => {
   if (!selectedId.value) return items.value
   return items.value.filter((x) => x.student_id === selectedId.value)
+})
+
+// 學期定義（簡化）：8/1–7/31 為一學年
+function currentSemesterRange(today = new Date()) {
+  const y = today.getMonth() + 1 >= 8 ? today.getFullYear() : today.getFullYear() - 1
+  return {
+    start: new Date(y, 7, 1), // 8/1
+    end: new Date(y + 1, 6, 31, 23, 59, 59), // 7/31
+    label: `${y - 1911} 學年度`,
+  }
+}
+
+const heroSummary = computed(() => {
+  const { start, end, label } = currentSemesterRange()
+  const inSemester = (filteredItems.value ?? []).filter((l) => {
+    const d = new Date(l.start_date)
+    return l.status !== 'rejected' && l.status !== 'cancelled' && d >= start && d <= end
+  })
+  const by_type = {}
+  let total = 0
+  for (const l of inSemester) {
+    const t = l.leave_type
+    const days = Number(l.duration_days) || 0
+    by_type[t] = (by_type[t] || 0) + days
+    total += days
+  }
+  return { total_used: total, by_type, semester_label: label }
 })
 
 // 漸進渲染：請假累積多筆時觸底加載
