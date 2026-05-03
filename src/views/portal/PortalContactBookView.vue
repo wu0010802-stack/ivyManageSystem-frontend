@@ -4,6 +4,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Bell, Camera, Delete, Edit, Refresh } from '@element-plus/icons-vue'
 
 import { getMyStudents } from '@/api/portal'
+import { usePortalFromHub } from '@/composables/usePortalFromHub'
 import {
   applyTemplate,
   batchPublish,
@@ -18,6 +19,8 @@ import {
 import { useContactBookTemplates } from '@/composables/useContactBookTemplates'
 import { todayISO } from '@/utils/format'
 import { apiError } from '@/utils/error'
+
+const { fromHub, backToHub } = usePortalFromHub()
 
 const MOOD_OPTIONS = [
   { value: 'happy', label: '😄 開心' },
@@ -398,6 +401,11 @@ watch([selectedClassroomId, selectedDate], () => {
 
 <template>
   <div class="contact-book-page">
+    <div v-if="fromHub" class="from-hub-bar">
+      <el-button type="primary" link @click="backToHub">
+        ← 返回今日工作台
+      </el-button>
+    </div>
     <div class="page-header">
       <h2>每日聯絡簿</h2>
       <div class="header-actions">
@@ -673,6 +681,11 @@ watch([selectedClassroomId, selectedDate], () => {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+}
+
+.from-hub-bar {
+  margin: 0 0 12px;
+  padding: 4px 0;
 }
 
 .batch-bar {
