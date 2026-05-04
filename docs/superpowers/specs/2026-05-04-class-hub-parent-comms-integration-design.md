@@ -1,39 +1,44 @@
 # 家長溝通整合到班級教務工作台 — 設計文件
 
-- 日期：2026-05-04
+- 日期：2026-05-04（**Scope 於 2026-05-04 縮減**：移除公告通知整合，公告獨立到 sidebar）
 - 類型：教師端（Portal）資訊架構與 UI 整合
 - 範圍：`ivy-frontend`（純前端改動，不動後端 API、不動後端 schema）
 - 使用情境：教師端 PWA / 桌面 portal
 
 ## 1. 問題與目標
 
-教師端側欄目前把「家園溝通」與「班級教務」拆成兩個分組，造成老師日常處理家長相關事務時要在多個獨立頁面之間切換：
+教師端側欄目前把「家園溝通」群組與「班級教務」拆成兩個分組。但業務上：
 
-- `/portal/messages`（家長訊息列表）
-- `/portal/messages/:threadId`（單筆對話）
-- `/portal/announcements`（公告通知）
-- `/portal/class-hub`（今日工作台：點名、用藥、聯絡簿等班務）
+- 「家長訊息」（`/portal/messages`、`/portal/messages/:threadId`）— **真正的家園溝通**（教師 ↔ 家長）
+- 「公告通知」（`/portal/announcements`）— **校內內部通知**（學校 → 教師），不是家園溝通
 
-目標：把「家長訊息」與「公告通知」深度整合進 `/portal/class-hub`，讓老師打開「今日工作台」即可一站式處理所有班務與家園溝通；側欄移除「家園溝通」群組，舊路由透過 router 級 redirect 透明導向，避免破壞已發出但未開啟的 deeplink（LINE 推送、PWA 通知、通知中心存量）。
+目標（**已於 2026-05-04 縮減 scope**）：
+
+- 把「家長訊息」深度整合進 `/portal/class-hub`，老師處理班務時可同時處理家長訊息
+- 側欄移除「家園溝通」群組
+- 「公告通知」獨立成 sidebar 頂層 menu item（與「我的排班」「學校行事曆」並列）；維持原 `/portal/announcements` 路由與 view
+- 舊 `/portal/messages*` 路由透過 router 級 redirect 透明導向，避免破壞已發出但未開啟的 deeplink（LINE 推送、PWA 通知、通知中心存量）
 
 非目標（明確排除）：
 
 - 不整合「每日聯絡簿」（`/portal/contact-book`）— 維持現狀
 - 不整合「接送通知」（`/portal/dismissal-calls`）— 已在班級教務群組
+- **不整合「公告通知」進 class-hub** — 業主反饋校內內部通知不屬於家園溝通範疇
 - 不動 `/portal/home`（今日首頁）
 - 不動 mobile bottom-nav 結構
 - 不動後端 router、Pydantic schema、權限位元
-- 不動 `src/api/portalMessages.js`、`src/api/announcements.js`、`src/stores/portalMessages.js`
+- 不動 `src/api/portalMessages.js`、`src/api/announcements.js`、`src/stores/portalMessages.js`、`src/views/portal/PortalAnnouncementView.vue`
 
 ## 2. 使用者決策（brainstorming 結論）
 
 | 決策點 | 選定方案 |
 |--------|----------|
-| 整合層級 | C：單頁深度整合，沒有獨立 messages / announcements 頁 |
-| 整合範圍 | 1（家長訊息）+ 2（公告通知）；不含聯絡簿 |
+| 整合層級 | C：單頁深度整合，沒有獨立 messages 頁 |
+| 整合範圍 | **僅 1（家長訊息）**；公告通知獨立 sidebar 入口；不含聯絡簿（**2026-05-04 縮減**） |
 | 容器型態 | B：頂端摘要卡 + 既有時段卡，drawer 從右側滑入 |
-| 舊路由處理 | A2：刪除 view，router 保留 redirect rules |
+| 舊路由處理 | A2：刪除 messages view，router 保留 redirect rules（announcements 不動） |
 | Drawer 內 thread 切換 | A：雙視圖切換（list ↔ thread），桌面與手機同型 |
+| 公告通知擺位 | A：sidebar 頂層獨立 menu item（與「我的排班」「學校行事曆」並列） |
 
 ## 3. 資訊架構
 
@@ -41,31 +46,37 @@
 
 **移除**：
 
-- 整個 `el-sub-menu#group-comm`（即「家園溝通」群組，目前涵蓋 `/portal/messages`、`/portal/announcements`，位於 `PortalLayout.vue` L310-325）
+- 整個 `el-sub-menu#group-comm`（即「家園溝通」群組，目前位於 `PortalLayout.vue` L310-325）
 
-**修改**：
+**新增頂層 menu item「公告通知」**：
+
+- 與「我的排班」「學校行事曆」「薪資查詢」並列為 sidebar 頂層獨立項目（不在群組內）
+- 路由仍指 `/portal/announcements`
+- 保留原本的未讀 badge（`unreadCount`）
+
+**修改「今日工作台」menu item**：
 
 - 「班級教務」群組下「今日工作台」menu item 的 badge 改為聚合值：
 
   ```text
-  totalHubBadge = hubPendingCount + messagesUnreadCount + announcementsUnreadCount
+  totalHubBadge = hubPendingCount + messagesUnreadCount
   ```
 
-  其中 `messagesUnreadCount` 與 `announcementsUnreadCount` 仍由現有獨立 API 取得（`getMessagesUnreadCount`、`getUnreadCount`），保持與後端 contract 不變。
+  `messagesUnreadCount` 由 `usePortalMessagesStore.unreadCount` 取得（或維持既有 `getMessagesUnreadCount` polling）。**不再**包含 `announcementsUnreadCount`（公告通知已獨立 menu item，自帶 badge）。
 
 **Bottom-nav（mobile）**：
 
 - 結構不動（出勤 / 請假 / 排班 / 薪資 / 更多）
-- 「更多」按鈕的 announcement badge 移除（因為公告已聚合到「今日工作台」menu item，避免雙重 badge）— 注意：`unreadCount` 變數仍要保留用於聚合計算
+- 「更多」按鈕的 announcement badge **保留**（公告獨立後仍透過「更多」展開可見）
 
 ### 3.2 Class Hub 頁面（`src/views/portal/PortalClassHubView.vue`）
 
 ```
 ┌──────────────────────────────────────────────┐
 │ ClassHubCommBar  ← 新增（最頂端）            │
-│ ┌──────────────┐ ┌──────────────┐            │
-│ │ 家長訊息 3   │ │ 公告通知 1   │            │
-│ └──────────────┘ └──────────────┘            │
+│ ┌──────────────────────────────┐             │
+│ │ 家長訊息 3 則未讀             │             │
+│ └──────────────────────────────┘             │
 ├──────────────────────────────────────────────┤
 │ ClassHubStickyNext   ← 既有                  │
 ├──────────────────────────────────────────────┤
@@ -78,9 +89,10 @@
 │ ClassHubMedicationSheet                       │
 │ ClassHubIncidentQuickSheet                    │
 │ ClassHubMessagesDrawer        ← 新增 drawer  │
-│ ClassHubAnnouncementsDrawer                   │
 └──────────────────────────────────────────────┘
 ```
+
+CommBar 只放一張卡（家長訊息）；公告通知不在這頁。
 
 ## 4. 元件邊界
 
@@ -88,23 +100,23 @@
 
 | 路徑 | 職責 | 依賴 |
 |------|------|------|
-| `src/components/portal/class-hub/ClassHubCommBar.vue` | 顯示兩張置頂摘要卡（家長訊息 / 公告通知）並回饋未讀數；點擊發出 `open-panel` 事件 | `usePortalMessagesStore`（取 unread count）、announcements unread fetch |
+| `src/components/portal/class-hub/ClassHubCommBar.vue` | 顯示一張置頂摘要卡（家長訊息）並回饋未讀數；點擊發出 `open-panel` 事件 | `usePortalMessagesStore`（取 unread count） |
 | `src/components/portal/class-hub/ClassHubMessagesDrawer.vue` | 訊息 drawer 容器；內含雙視圖（list ↔ thread）切換；輸入區（thread view 底部） | `usePortalMessagesStore`（fetchThreads、startThread、發訊）、`getMyStudents` |
-| `src/components/portal/class-hub/ClassHubAnnouncementsDrawer.vue` | 公告 drawer 容器；列表 + 點擊展開全文 | `src/api/announcements.js` |
 
 ### 4.2 修改元件
 
 | 路徑 | 修改內容 |
 |------|---------|
-| `src/views/portal/PortalClassHubView.vue` | 加入 `<ClassHubCommBar>`、兩個 drawer；新增 `useClassHubPanelQuery` composable 處理 URL `?panel=` `&thread=` 同步 |
-| `src/layouts/PortalLayout.vue` | 移除「家園溝通」`el-sub-menu`；class-hub menu item badge 改聚合；bottom-nav「更多」badge 移除 |
-| `src/router/index.js` | 刪除 portal-messages / portal-message-thread / portal-announcements 三條 routes；加入三條 redirect routes |
+| `src/views/portal/PortalClassHubView.vue` | 加入 `<ClassHubCommBar>` 與 messages drawer；新增 `useClassHubPanelQuery` composable 處理 URL `?panel=` `&thread=` 同步 |
+| `src/layouts/PortalLayout.vue` | 移除「家園溝通」`el-sub-menu`；新增頂層「公告通知」menu item；class-hub menu item badge 改聚合 hub + messages |
+| `src/router/index.js` | 刪除 portal-messages / portal-message-thread 兩條 routes；加入兩條 redirect routes；**保留 portal-announcements 不動** |
 
 ### 4.3 刪除檔案
 
 - `src/views/portal/PortalMessagesView.vue`
 - `src/views/portal/PortalMessageThreadView.vue`
-- `src/views/portal/PortalAnnouncementView.vue`
+
+**保留**：`src/views/portal/PortalAnnouncementView.vue`（仍由獨立 sidebar 入口使用）
 
 注意：`src/components/portal/messages/MessageComposer.vue` 等子元件仍被新 drawer 復用，**不要刪**。
 
@@ -112,8 +124,10 @@
 
 - `src/api/portalMessages.js`
 - `src/api/announcements.js`
+- `src/api/portal.js`（含 `getPortalAnnouncements`、`markAnnouncementRead`、announcements `getUnreadCount`）
 - `src/stores/portalMessages.js`
 - `src/components/portal/messages/*`（子元件，例如 MessageComposer / MessageList / ThreadHeader 等若有）
+- `src/views/portal/PortalAnnouncementView.vue`
 - 後端所有 router 與 schema
 
 ## 5. URL 與 deeplink 設計
@@ -125,7 +139,8 @@
 | `/portal/class-hub` | 一切 drawer 關閉 |
 | `/portal/class-hub?panel=messages` | 開啟訊息 drawer，顯示 list view |
 | `/portal/class-hub?panel=messages&thread=42` | 開啟訊息 drawer，進入 thread 42 對話視圖 |
-| `/portal/class-hub?panel=announcements` | 開啟公告 drawer |
+
+注意：`useClassHubPanelQuery` composable 仍泛化保留 `panel` 概念（為將來擴充預留），但本期實際只有 `messages` 一個 panel 值。
 
 行為規範：
 
@@ -138,7 +153,7 @@
 ### 5.2 Router redirect rules（`src/router/index.js`）
 
 ```js
-// 取代原本的 portal-messages / portal-message-thread / portal-announcements routes
+// 取代原本的 portal-messages / portal-message-thread routes
 {
   path: 'messages',
   redirect: { name: 'portal-class-hub', query: { panel: 'messages' } },
@@ -150,10 +165,8 @@
     query: { panel: 'messages', thread: to.params.threadId },
   }),
 },
-{
-  path: 'announcements',
-  redirect: { name: 'portal-class-hub', query: { panel: 'announcements' } },
-},
+
+// portal-announcements route 保留不動（不做 redirect）
 ```
 
 放在原 portal children 區塊內，維持 `requiresAuth` 與 `portal: true` meta（meta 由 parent 繼承）。
@@ -166,7 +179,7 @@
 | 通知中心 store 既存 link_to | `/portal/messages` 或 `/portal/messages/:id` | redirect 接住 |
 | PWA push payload | 同上 | redirect 接住 |
 | 老師瀏覽器書籤 / PWA 主畫面捷徑 | 同上 | redirect 接住 |
-| 公告通知 deeplink（如有） | `/portal/announcements` | redirect 接住 |
+| 公告通知 deeplink（如有） | `/portal/announcements` | **不變**，原 view 仍存活 |
 
 不需要更動後端通知 link_to 模板、不需要清通知中心存量、不需要更新 LINE Rich Menu。
 
@@ -174,11 +187,10 @@
 
 ### 6.1 ClassHubCommBar
 
-- 桌面：水平兩張卡並排，gap 跟既有 sticky-next 一致
-- Mobile：縱向堆疊或仍橫向（兩張卡寬一半），由 CSS grid 自動處理
-- 卡片內容：icon + 標題 + 未讀數 badge（紅點）+ 副資訊（最近一筆 thread 摘要 / 最新公告標題）
-- 點擊整張卡 → emit `open-panel` `{ panel: 'messages' | 'announcements' }`
-- 權限：沒對應權限的卡不渲染；兩張都不該顯示 → 整條 CommBar 不渲染（不留空白）
+- 一張寬幅摘要卡（家長訊息）橫貫頂端
+- 卡片內容：icon + 標題（家長訊息）+ 未讀數 badge（紅點）+ 副資訊（N 則未讀 / 無未讀）
+- 點擊卡 → emit `open-panel` `'messages'`
+- 權限：沒 `PARENT_MESSAGES_WRITE` → 整條 CommBar 不渲染（不留空白）
 
 ### 6.2 ClassHubMessagesDrawer
 
@@ -200,26 +212,16 @@
   - 進入時 fetch thread 詳情並 markRead（沿用既有 `PortalMessageThreadView` 內呼叫 `usePortalMessagesStore` 的實作位置；元件刪除前先把 markRead 邏輯抽進 store action 或 thread view 元件）
 - 關閉 drawer：emit `update:modelValue=false` + `update:threadId=null`
 
-### 6.3 ClassHubAnnouncementsDrawer
+### 6.3 (已移除) ClassHubAnnouncementsDrawer
 
-- 同樣 `el-drawer` 從右側滑入，寬 480px
-- 列表 sorted by 時間倒序
-- 點公告 → 內部 expand 顯示全文（不切視圖，列表保持可見）
-- 已讀標記沿用既有 announcements API
-- 關閉 drawer：清 query、refresh 未讀數
-
-### 6.4 雙 drawer 互斥
-
-- 同時間最多開一個 drawer
-- 從 messages drawer 內若以某種方式跳到 announcements（目前無此需求，預留設計）→ 先關前者再開後者，URL 經 single replace
+公告通知不再合進 class-hub。獨立 sidebar 入口使用既有 `PortalAnnouncementView.vue`。
 
 ## 7. 權限分流
 
 | 權限位元 | 影響元件 |
 |---------|---------|
-| `PARENT_MESSAGES_WRITE` (1 << 49) | 沒有 → 不渲染訊息摘要卡與訊息 drawer 入口；redirect `/portal/messages*` 仍指 class-hub，但 drawer 不開（用戶看到 class-hub 主畫面） |
-| `ANNOUNCEMENTS_READ` (1 << 12) | 沒有 → 不渲染公告摘要卡與公告 drawer 入口 |
-| 兩者都沒 | CommBar 不渲染；class-hub 行為等同整合前 |
+| `PARENT_MESSAGES_WRITE` (1 << 49) | 沒有 → 不渲染訊息摘要卡（CommBar 整條不渲染）與訊息 drawer 入口；redirect `/portal/messages*` 仍指 class-hub，但 drawer 不開 |
+| `ANNOUNCEMENTS_READ` (1 << 12) | 沒有 → sidebar「公告通知」menu item 不顯示（沿用既有 router permission rule）|
 
 權限檢查使用 `src/utils/auth.js` 既有 helper（`hasPermission` 之類），不要新增權限位元。
 
@@ -230,19 +232,21 @@ PortalClassHubView (parent)
 ├── reads route.query.panel/thread (computed)
 ├── owns drawer open/close + thread state
 ├── ClassHubCommBar
-│   └── reads: messagesUnreadCount, announcementsUnreadCount
-│       (via usePortalMessagesStore + announcements unread API)
-├── ClassHubMessagesDrawer
-│   ├── reads/writes via usePortalMessagesStore
-│   ├── 子元件 MessageComposer 沿用
-│   └── (無新增 store)
-└── ClassHubAnnouncementsDrawer
-    └── reads via existing announcements API client
+│   └── reads: messagesUnreadCount (via usePortalMessagesStore)
+└── ClassHubMessagesDrawer
+    ├── reads/writes via usePortalMessagesStore
+    ├── 子元件 MessageComposer 沿用
+    └── (無新增 store)
 ```
 
-PortalLayout 仍維持自己的 unread fetch（`fetchMessagesUnreadCount` / `fetchUnreadCount`）以驅動「今日工作台」menu item 的聚合 badge；class-hub 內 drawer 開啟 / mark read 後，藉由既有 store reactive 機制自動更新 sidebar badge（usePortalMessagesStore 已是 pinia store，PortalLayout 應 subscribe 到 store 而非靠 polling）。
+PortalLayout 維持自己的 unread fetch（`fetchMessagesUnreadCount` / `fetchUnreadCount`）：
 
-**優化建議（非阻塞，可後續處理）：** 評估把 PortalLayout 的 `fetchMessagesUnreadCount` 改為直接 subscribe `usePortalMessagesStore.unreadCount`，避免重複 fetch；若 store 沒有 expose unread count 則保留現有 polling。本次整合不阻塞，可在後續 PR 處理。
+- `messagesUnreadCount` 仍驅動「今日工作台」menu item 的聚合 badge（`hub + messages`）
+- `unreadCount`（announcement）仍驅動獨立「公告通知」menu item 的 badge
+
+class-hub 內 messages drawer 開啟 / mark read 後，藉由既有 store reactive 機制自動更新 sidebar badge。
+
+**優化建議（非阻塞，可後續處理）：** 評估把 PortalLayout 的 `fetchMessagesUnreadCount` 改為直接 subscribe `usePortalMessagesStore.unreadCount`，避免重複 fetch。本次整合不阻塞，可在後續 PR 處理。
 
 ## 9. Composable
 
@@ -256,7 +260,8 @@ export function useClassHubPanelQuery() {
   const panel = computed(() => route.query.panel || null)
   const threadId = computed(() => {
     const t = route.query.thread
-    return t ? Number(t) : null
+    const n = t ? Number(t) : NaN
+    return Number.isFinite(n) ? n : null
   })
 
   // guard：同 panel/thread 重複呼叫不再 push（避免 history 污染）
@@ -286,22 +291,20 @@ export function useClassHubPanelQuery() {
 
 ## 10. 測試策略
 
-### 10.1 Playwright e2e（新增 / 修改 spec）
+### 10.1 Playwright e2e
 
-- `tests/e2e/portal-class-hub-comms.spec.js`（新增）
+- `tests/e2e/portal-class-hub-comms.spec.js`（本 PR 改為手動 smoke test，e2e 留作另案）
   - 訪問 `/portal/messages` → URL 落在 `/portal/class-hub?panel=messages`，drawer 自動開啟 list view
   - 訪問 `/portal/messages/123` → drawer 進入 thread view，header 顯示 thread 標題
-  - 訪問 `/portal/announcements` → 公告 drawer 開啟
+  - 訪問 `/portal/announcements` → **行為不變**（獨立 view 仍存活）
   - 從 class-hub 直接點訊息卡 → drawer 開
   - drawer 內 list → thread 切換 → URL query 同步更新
   - 關閉 drawer → URL query 清空
-  - 沒 `PARENT_MESSAGES_WRITE` 的 user → CommBar 上訊息卡不顯示
-- 既有的 `portal-messages.spec.js`（如有）刪除或改寫到新 spec
+  - 沒 `PARENT_MESSAGES_WRITE` 的 user → CommBar 不顯示
 
 ### 10.2 Vitest 單元測試
 
-- `tests/unit/composables/useClassHubPanelQuery.test.js`（新增）
-- `tests/unit/components/portal/ClassHubCommBar.test.js`（新增，權限分流 + 未讀顯示）
+- `tests/unit/composables/useClassHubPanelQuery.test.js`（已新增於 Task 1）
 - 既有 messagesStore 測試 → 不動
 - `tests/unit/utils/auth-permissions.test.js` → 不動
 
@@ -309,34 +312,35 @@ export function useClassHubPanelQuery() {
 
 - LINE 沙箱模擬推送舊 deeplink → 在 PWA 內點開 → 落在 thread 對話視圖
 - 通知中心 mock 一筆舊 link_to → 點開 → redirect 接住
-- 老師帳號（無 admin 權限）登入 → 側欄無「家園溝通」群組
+- 老師帳號（無 admin 權限）登入 → 側欄無「家園溝通」群組；「公告通知」獨立 menu item 可見
 
 ## 11. 風險與相容性
 
 | 風險 | 影響 | 緩解 |
 |------|------|------|
-| 已發出但未開啟的 LINE 通知 / PWA push 帶舊 URL | 點開 404 | router redirect 接住 |
+| 已發出但未開啟的 LINE 通知 / PWA push 帶舊 messages URL | 點開 404 | router redirect 接住 |
 | 通知中心 store 快取舊 link_to | 同上 | redirect 接住 |
 | 教師端 PWA Service Worker 快取舊 chunk | 過渡期最後一次離線啟動可能拿到舊 router 但 view 已不存在 | SW 已有版本機制，下次連線自動更新；最壞情況 1 次 reload |
-| 「家園溝通」群組消失，老師找不到舊功能 | UX | 在 release notes 與 portal 公告中說明；側欄「今日工作台」聚合 badge 提供視覺指引 |
-| `messagesUnreadCount` 來自 store / `announcementsUnreadCount` 來自獨立 API → 計算同步點不一致 | badge 短暫不準 | 接受（既有狀況），不額外處理 |
-| 雙 drawer 同時被 query 觸發開啟（手動構造的 URL 例如 `?panel=announcements&thread=1`） | 不該發生 | parent 元件以 panel 為主，thread 只在 panel=messages 時生效 |
+| 「家園溝通」群組消失，老師找不到舊功能 | UX | 在 release notes 與 portal 公告中說明；class-hub CommBar 與獨立「公告通知」menu item 提供清楚指引 |
+| `messagesUnreadCount` 來自 store / sidebar polling 不同步點 | badge 短暫不準 | 接受（既有狀況），不額外處理 |
+| 公告通知獨立後仍出現「家園溝通」殘留視覺 | 用戶混淆 | release notes 中說明分類調整原因（家園溝通 vs 校內通知） |
 
 ## 12. Out of scope（明確不在這個 spec）
 
-- 後端 `class_hub` API 增加 `messages_unread / announcements_unread` 聚合欄位（後續 optimization；目前前端聚合）
+- 後端 `class_hub` API 增加 `messages_unread` 聚合欄位（後續 optimization；目前前端聚合）
 - 把聯絡簿（contact-book）也整進 class-hub
 - 把 `/portal/home` 整併到 class-hub
+- 把公告通知整進 class-hub（**已於 2026-05-04 排除**：業主反饋為校內內部通知，不屬家園溝通）
 - 重構 mobile bottom-nav 結構（例如改成「工作台 / 訊息 / 排班 / 薪資 / 更多」）
 - 後端 LINE Rich Menu / 通知 link_to 模板更新（router redirect 已接住，無需更新）
 
 ## 13. 交付物
 
-1. 新增 3 元件、1 composable
+1. 新增 2 元件、1 composable（CommBar、MessagesDrawer、useClassHubPanelQuery）
 2. 修改 3 檔案（`PortalClassHubView.vue` / `PortalLayout.vue` / `router/index.js`）
-3. 刪除 3 view 檔
-4. 新增 1 e2e spec、2 unit spec
-5. PR description 須包含 deeplink 兼容矩陣與截圖（drawer list view / thread view / announcement view）
+3. 刪除 2 view 檔（PortalMessagesView、PortalMessageThreadView；**保留** PortalAnnouncementView）
+4. 新增 1 unit spec（composable）；e2e 改手動 smoke test
+5. PR description 須包含 deeplink 兼容矩陣與截圖（CommBar、drawer list view / thread view、sidebar 新「公告通知」入口）
 
 ## 14. 分支策略（依 user CLAUDE.md memory 慣例）
 

@@ -1,10 +1,22 @@
 # 家長溝通整合到班級教務工作台 Implementation Plan
 
+> **⚠ SCOPE 變更（2026-05-04 mid-execution）：** 公告通知不再合進 class-hub，改為 sidebar 頂層獨立 menu item。
+> - Task 2（ClassHubAnnouncementsDrawer）已撤銷（commit 後又 git rm）
+> - Task 4 CommBar 改為單卡（家長訊息）
+> - Task 5 PortalClassHubView 不引用 AnnouncementsDrawer
+> - Task 6 PortalLayout 新增頂層「公告通知」menu item，badge 聚合不含 announcements
+> - Task 7 router 不對 `/portal/announcements` 做 redirect
+> - Task 8 不刪 `PortalAnnouncementView.vue`
+>
+> 詳見 spec § 1, § 2 變更說明。實作時以 spec 為準，plan 內部 Task 5-8 程式碼需改寫（對應 task 在 dispatch 時用更新後的 prompt）。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 把教師端側欄「家園溝通」群組（家長訊息 + 公告通知）深度整合進 `/portal/class-hub`，老師一站式處理所有班務 + 家園溝通；舊路由透過 router redirect 接住 deeplink 存量。
+**Goal:** 把教師端側欄「家長訊息」深度整合進 `/portal/class-hub`，老師一站式處理班務 + 家長溝通；公告通知獨立到 sidebar 頂層 menu item（非家園溝通）；舊 messages 路由透過 router redirect 接住 deeplink 存量。
 
-**Architecture:** `PortalClassHubView` 頂端新增 `ClassHubCommBar`（兩張摘要卡），點擊從右側滑入 `ClassHubMessagesDrawer`（list ↔ thread 雙視圖）或 `ClassHubAnnouncementsDrawer`。Drawer 開關狀態由 URL `?panel=messages&thread=:id` query 同步，舊 `/portal/messages*` 與 `/portal/announcements` 路由改成 redirect 到 class-hub 對應 query。前端純改動，後端 / store / API client 完全 reuse。
+**Scope 變更（2026-05-04）：** 公告通知不再合進 class-hub。原因：業主反饋公告通知為校內內部通知（學校→教師），不屬家園溝通範疇。改為獨立 sidebar 頂層 menu item，與「我的排班」「學校行事曆」並列。
+
+**Architecture:** `PortalClassHubView` 頂端新增 `ClassHubCommBar`（一張家長訊息摘要卡），點擊從右側滑入 `ClassHubMessagesDrawer`（list ↔ thread 雙視圖）。Drawer 開關狀態由 URL `?panel=messages&thread=:id` query 同步，舊 `/portal/messages*` 路由改成 redirect 到 class-hub 對應 query。`/portal/announcements` 維持原 view 與路由不變。前端純改動，後端 / store / API client 完全 reuse。
 
 **Tech Stack:** Vue 3 + Vite + Pinia + Vue Router 4 + Element Plus + Vitest（unit）。
 
@@ -25,24 +37,24 @@
 | 路徑 | 職責 | 行數預估 |
 |------|------|----------|
 | `src/composables/useClassHubPanelQuery.js` | URL `?panel=` `&thread=` query 同步 helper（open/close panel、open/close thread + 重複呼叫 guard） | ~50 |
-| `src/components/portal/class-hub/ClassHubCommBar.vue` | 兩張置頂摘要卡（家長訊息 / 公告通知）；權限分流；emit `open-panel` 事件 | ~120 |
-| `src/components/portal/class-hub/ClassHubMessagesDrawer.vue` | 訊息 drawer 容器；雙視圖切換（list ↔ thread）；reuse `MessageBubble` + `MessageComposer` | ~250 |
-| `src/components/portal/class-hub/ClassHubAnnouncementsDrawer.vue` | 公告 drawer 容器；列表 + 點擊展開全文；reuse 既有公告 API | ~180 |
-| `tests/unit/composables/useClassHubPanelQuery.test.js` | composable 單元測試（含 guard 驗證） | ~120 |
+| `src/components/portal/class-hub/ClassHubCommBar.vue` | 一張置頂摘要卡（家長訊息）；權限分流；emit `open-panel` 事件 | ~80 |
+| `src/components/portal/class-hub/ClassHubMessagesDrawer.vue` | 訊息 drawer 容器；雙視圖切換（list ↔ thread）；reuse `MessageBubble` + `MessageComposer` | ~370 |
+| `tests/unit/composables/useClassHubPanelQuery.test.js` | composable 單元測試（含 guard 驗證） | ~140 |
 
 ### 修改檔案
 
 | 路徑 | 修改內容 |
 |------|---------|
-| `src/views/portal/PortalClassHubView.vue` | 加入 `<ClassHubCommBar>` + 兩個 drawer；用 `useClassHubPanelQuery` 接 URL；listen drawer 內 emit |
-| `src/layouts/PortalLayout.vue` | 移除「家園溝通」`el-sub-menu`（L310-325）；class-hub menu item badge 改聚合（hub + messages + announcement） |
-| `src/router/index.js` | 刪除三條 portal-messages / portal-message-thread / portal-announcements routes 與 view import；新增三條 redirect routes |
+| `src/views/portal/PortalClassHubView.vue` | 加入 `<ClassHubCommBar>` + messages drawer；用 `useClassHubPanelQuery` 接 URL；listen drawer 內 emit |
+| `src/layouts/PortalLayout.vue` | 移除「家園溝通」`el-sub-menu`（L310-325）；新增頂層「公告通知」menu item；class-hub menu item badge 改聚合（hub + messages） |
+| `src/router/index.js` | 刪除兩條 portal-messages / portal-message-thread routes 與 view import；新增兩條 redirect routes；保留 portal-announcements route 不動 |
 
 ### 刪除檔案
 
 - `src/views/portal/PortalMessagesView.vue`
 - `src/views/portal/PortalMessageThreadView.vue`
-- `src/views/portal/PortalAnnouncementView.vue`
+
+**保留**：`src/views/portal/PortalAnnouncementView.vue`（仍由獨立 sidebar 入口使用）
 
 ### 完全不動
 

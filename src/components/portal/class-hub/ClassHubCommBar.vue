@@ -1,7 +1,6 @@
 <template>
-  <div v-if="showAny" class="comm-bar">
+  <div v-if="canMessages" class="comm-bar">
     <button
-      v-if="canMessages"
       class="comm-card"
       :class="{ 'has-unread': messagesUnread > 0 }"
       @click="$emit('open-panel', 'messages')"
@@ -23,54 +22,24 @@
         class="comm-card__badge"
       />
     </button>
-
-    <button
-      v-if="canAnnouncements"
-      class="comm-card"
-      :class="{ 'has-unread': announcementsUnread > 0 }"
-      @click="$emit('open-panel', 'announcements')"
-    >
-      <div class="comm-card__icon">
-        <el-icon><Bell /></el-icon>
-      </div>
-      <div class="comm-card__body">
-        <div class="comm-card__title">公告通知</div>
-        <div class="comm-card__sub">
-          <span v-if="announcementsUnread > 0">{{ announcementsUnread }} 則未讀</span>
-          <span v-else>無未讀</span>
-        </div>
-      </div>
-      <el-badge
-        v-if="announcementsUnread > 0"
-        :value="announcementsUnread"
-        :max="99"
-        class="comm-card__badge"
-      />
-    </button>
   </div>
 </template>
 
 <script setup>
 import { computed } from 'vue'
-import { Message, Bell } from '@element-plus/icons-vue'
+import { Message } from '@element-plus/icons-vue'
 import { hasPermission } from '@/utils/auth'
 
-const props = defineProps({
+defineProps({
   messagesUnread: { type: Number, default: 0 },
-  announcementsUnread: { type: Number, default: 0 },
 })
 defineEmits(['open-panel'])
 
 const canMessages = computed(() => hasPermission('PARENT_MESSAGES_WRITE'))
-const canAnnouncements = computed(() => hasPermission('ANNOUNCEMENTS_READ'))
-const showAny = computed(() => canMessages.value || canAnnouncements.value)
 </script>
 
 <style scoped>
 .comm-bar {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: var(--space-3);
   margin-bottom: var(--space-3);
 }
 
@@ -80,6 +49,7 @@ const showAny = computed(() => canMessages.value || canAnnouncements.value)
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
+  width: 100%;
   background: var(--pt-surface-card);
   border: var(--pt-hairline);
   border-radius: var(--radius-md);
@@ -109,8 +79,4 @@ const showAny = computed(() => canMessages.value || canAnnouncements.value)
 .comm-card__sub { font-size: var(--text-xs); color: var(--pt-text-muted); margin-top: 2px; }
 
 .comm-card__badge { position: absolute; top: 8px; right: 12px; }
-
-@media (max-width: 480px) {
-  .comm-bar { grid-template-columns: 1fr; }
-}
 </style>
