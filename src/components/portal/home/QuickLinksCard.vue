@@ -9,7 +9,7 @@ const links = [
   { label: '用藥執行', to: '/portal/medications', tint: 'medication' },
   { label: '事件紀錄', to: '/portal/incidents', tint: 'announcement' },
   { label: '學期評量', to: '/portal/assessments', tint: 'contact' },
-  { label: '才藝點名', to: '/portal/activity/attendance', tint: 'activity' },
+  { label: '才藝點名', to: { path: '/portal/activity', query: { tab: 'attendance' } }, tint: 'activity' },
 ]
 
 function go(to) {
@@ -23,7 +23,7 @@ function go(to) {
     <div class="link-grid">
       <button
         v-for="l in links"
-        :key="l.to"
+        :key="l.label"
         class="link-tile press-scale"
         @click="go(l.to)"
       >

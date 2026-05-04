@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getMySchedule, getSwapRequests, getSwapCandidates, createSwapRequest, respondToSwap, cancelSwapRequest } from '@/api/portal'
 import { getUserInfo } from '@/utils/auth'
@@ -33,6 +33,52 @@ const candidates = ref([])
 const candidatesLoading = ref(false)
 
 const WEEKDAY_NAMES = ['日', '一', '二', '三', '四', '五', '六']
+
+// ============ 行動裝置偵測 ============
+// mobile 上點 calendar cell 改開 BottomSheet（cell 太小無法塞 link button）；
+// desktop 維持原本 cell 內 link button 直接開換班 dialog。
+const isMobile = ref(false)
+let mqList = null
+const onMqChange = (e) => { isMobile.value = e.matches }
+
+// ============ Day Detail BottomSheet（mobile only）============
+const showDaySheet = ref(false)
+const selectedDay = ref(null)
+
+const onCellClick = (day) => {
+  if (!day || !isMobile.value) return
+  selectedDay.value = day
+  showDaySheet.value = true
+}
+
+const selectedDayLabel = computed(() => {
+  const d = selectedDay.value
+  if (!d) return ''
+  const [, m, dd] = d.date.split('-')
+  const w = WEEKDAY_NAMES[new Date(d.date).getDay()]
+  return `${m}/${dd}（星期${w}）`
+})
+
+const canSwapSelected = computed(() => {
+  const d = selectedDay.value
+  if (!d) return false
+  return !!d.shift_name && isFutureDate(d.date) && !d.is_weekend
+})
+
+const swapDisabledReason = computed(() => {
+  const d = selectedDay.value
+  if (!d) return ''
+  if (!d.shift_name) return '此日無排班，不需申請換班'
+  if (d.is_weekend) return '週末無排班，不需申請換班'
+  if (!isFutureDate(d.date)) return '換班僅限今日（含）之後的日期'
+  return ''
+})
+
+const swapFromSheet = () => {
+  if (!selectedDay.value) return
+  showDaySheet.value = false
+  openSwapDialog(selectedDay.value.date)
+}
 
 // ============ Fetch Schedule ============
 const fetchSchedule = async () => {
@@ -204,6 +250,13 @@ const changeMonth = (offset) => {
 onMounted(() => {
   fetchSchedule()
   fetchSwapRequests()
+  mqList = window.matchMedia('(max-width: 767px)')
+  isMobile.value = mqList.matches
+  mqList.addEventListener('change', onMqChange)
+})
+
+onUnmounted(() => {
+  mqList?.removeEventListener('change', onMqChange)
 })
 </script>
 
@@ -214,11 +267,11 @@ onMounted(() => {
     <!-- Month Navigation -->
     <el-card class="control-panel">
       <div class="controls">
-        <el-button @click="changeMonth(-1)">上月</el-button>
+        <el-button class="ctrl-btn" @click="changeMonth(-1)">上月</el-button>
         <span class="month-label">{{ query.year }} 年 {{ query.month }} 月</span>
-        <el-button @click="changeMonth(1)">下月</el-button>
+        <el-button class="ctrl-btn" @click="changeMonth(1)">下月</el-button>
         <div class="spacer" />
-        <el-button type="primary" @click="openSwapDialog('')">發起換班</el-button>
+        <el-button type="primary" class="ctrl-btn ctrl-btn--cta" @click="openSwapDialog('')">發起換班</el-button>
       </div>
     </el-card>
 
@@ -239,7 +292,12 @@ onMounted(() => {
               'has-shift': day && day.shift_name,
               'no-shift': day && !day.shift_name && !day.is_weekend,
               'is-empty': !day,
+              'is-tappable': isMobile && day,
             }"
+            :role="isMobile && day ? 'button' : undefined"
+            :tabindex="isMobile && day ? 0 : undefined"
+            @click="onCellClick(day)"
+            @keydown.enter="onCellClick(day)"
           >
             <template v-if="day">
               <div class="cell-day">{{ day.day }}</div>
@@ -258,7 +316,7 @@ onMounted(() => {
                 type="primary"
                 link
                 class="cell-swap-btn"
-                @click="openSwapDialog(day.date)"
+                @click.stop="openSwapDialog(day.date)"
               >換班</el-button>
             </template>
           </div>
@@ -339,6 +397,41 @@ onMounted(() => {
       </el-tabs>
     </el-card>
 
+    <!-- Day Detail BottomSheet（mobile only）-->
+    <el-drawer
+      v-model="showDaySheet"
+      direction="btt"
+      size="auto"
+      :title="selectedDayLabel"
+      :with-header="true"
+    >
+      <div class="day-sheet" v-if="selectedDay">
+        <div class="day-sheet__row">
+          <span class="day-sheet__label">班別</span>
+          <span class="day-sheet__val">{{ selectedDay.shift_name || '無排班' }}</span>
+        </div>
+        <div class="day-sheet__row" v-if="selectedDay.work_start">
+          <span class="day-sheet__label">時間</span>
+          <span class="day-sheet__val">{{ selectedDay.work_start }} ~ {{ selectedDay.work_end }}</span>
+        </div>
+        <div class="day-sheet__row" v-if="selectedDay.is_override">
+          <span class="day-sheet__label">狀態</span>
+          <el-tag size="small" type="warning" effect="plain">調班</el-tag>
+        </div>
+
+        <div class="day-sheet__actions">
+          <el-button
+            type="primary"
+            size="large"
+            class="day-sheet__cta"
+            :disabled="!canSwapSelected"
+            @click="swapFromSheet"
+          >申請換班</el-button>
+          <p v-if="!canSwapSelected" class="day-sheet__hint">{{ swapDisabledReason }}</p>
+        </div>
+      </div>
+    </el-drawer>
+
     <!-- Create Swap Dialog -->
     <el-dialog v-model="showSwapDialog" title="發起換班申請" width="500px">
       <el-form label-width="80px">
@@ -402,6 +495,12 @@ onMounted(() => {
   gap: var(--space-3);
   align-items: center;
   flex-wrap: wrap;
+}
+
+.ctrl-btn {
+  min-height: var(--touch-target-min);
+  padding-left: var(--space-4);
+  padding-right: var(--space-4);
 }
 
 .month-label {
@@ -500,6 +599,66 @@ onMounted(() => {
   font-size: 11px !important;
   padding: 0 !important;
   margin-top: 2px;
+}
+
+.calendar-cell.is-tappable {
+  cursor: pointer;
+  -webkit-tap-highlight-color: rgba(64, 158, 255, 0.15);
+}
+
+.calendar-cell.is-tappable:focus-visible {
+  outline: 2px solid var(--color-primary, #409eff);
+  outline-offset: -2px;
+}
+
+/* ===== Day Detail BottomSheet ===== */
+.day-sheet {
+  padding: 0 var(--space-4) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.day-sheet__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border-color-light, #ebeef5);
+}
+
+.day-sheet__row:last-of-type {
+  border-bottom: none;
+}
+
+.day-sheet__label {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.day-sheet__val {
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--text-primary);
+  font-size: var(--text-base);
+}
+
+.day-sheet__actions {
+  margin-top: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.day-sheet__cta {
+  width: 100%;
+  min-height: var(--touch-target-min);
+}
+
+.day-sheet__hint {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  text-align: center;
 }
 
 /* Swap Section */

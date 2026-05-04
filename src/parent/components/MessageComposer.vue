@@ -1,6 +1,10 @@
 <script setup>
 import { ref } from 'vue'
 import ParentIcon from './ParentIcon.vue'
+import { toast } from '../utils/toast'
+
+const MAX_FILES = 3
+const MAX_FILE_SIZE = 10 * 1024 * 1024
 
 const emit = defineEmits(['send'])
 const body = ref('')
@@ -9,11 +13,25 @@ const sending = ref(false)
 
 function onPick(e) {
   const incoming = Array.from(e.target.files || [])
-  // 最多 3 檔
+  let droppedOversize = 0
+  let droppedOverLimit = 0
   for (const f of incoming) {
-    if (files.value.length >= 3) break
-    if (f.size > 10 * 1024 * 1024) continue
+    if (files.value.length >= MAX_FILES) {
+      droppedOverLimit += 1
+      continue
+    }
+    if (f.size > MAX_FILE_SIZE) {
+      droppedOversize += 1
+      continue
+    }
     files.value.push(f)
+  }
+  // Why: 之前是靜默 drop，家長以為附件全傳了。
+  if (droppedOversize > 0) {
+    toast.warn(`${droppedOversize} 個附件超過 10MB，已略過`)
+  }
+  if (droppedOverLimit > 0) {
+    toast.warn(`最多 ${MAX_FILES} 個附件，多餘的已略過`)
   }
   e.target.value = ''
 }

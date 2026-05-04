@@ -3,12 +3,12 @@
 import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import axios from 'axios'
 import { getSubstitutePendingCount, getUnreadCount, getSwapPendingCount } from '@/api/portal'
 import { getPortalPendingCount } from '@/api/dismissalCalls'
 import { getUnreadCount as getMessagesUnreadCount } from '@/api/portalMessages'
 import { getTodayHub } from '@/api/portalClassHub'
-import { changePassword, endImpersonate } from '@/api/auth'
+import { changePassword, endImpersonate, impersonate } from '@/api/auth'
+import { getEmployees } from '@/api/employees'
 import { getUserInfo, clearAuth, setUserInfo } from '@/utils/auth'
 import OfflineIndicator from '@/components/OfflineIndicator.vue'
 import { apiError } from '@/utils/error'
@@ -193,20 +193,13 @@ const showBackToAdmin = computed(() => {
   return ['admin', 'hr', 'supervisor'].includes(role) || isImpersonating.value
 })
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
-
 const employeeList = ref([])
 
 const fetchEmployees = async () => {
   if (userInfo.value.role !== 'admin' && !isImpersonating.value) return
+  // 冒充狀態下後端用 admin_token Cookie 驗證；axios instance 預設帶 cookies。
   try {
-    // 冒充狀態下，後端會使用 admin_token Cookie 驗證
-    // 但當前 access_token 是幫員工的，可能沒有 EMPLOYEES_READ 權限
-    // 所以用後端 end-impersonate 再查，或者直接用 axios 帶 credential
-    const res = await axios.get(`${API_BASE}/employees`, {
-      withCredentials: true,
-      timeout: 30000,
-    })
+    const res = await getEmployees()
     employeeList.value = res.data
   } catch {
     // silent
@@ -215,13 +208,7 @@ const fetchEmployees = async () => {
 
 const handleSwitchUser = async (employeeId) => {
   try {
-    // 呼叫 impersonate API，後端會自動設定 access_token + admin_token Cookie
-    const res = await axios.post(
-      `${API_BASE}/auth/impersonate`,
-      { employee_id: employeeId },
-      { withCredentials: true, timeout: 30000 }
-    )
-    // 更新前端 userInfo
+    const res = await impersonate(employeeId)
     setUserInfo(res.data.user)
     isImpersonating.value = true
     ElMessage.success(`已切換為：${res.data.user.name}`)
@@ -404,11 +391,7 @@ const submitPassword = async () => {
           </el-menu-item>
           <el-menu-item index="/portal/activity">
             <el-icon><Brush /></el-icon>
-            <span>才藝查詢</span>
-          </el-menu-item>
-          <el-menu-item index="/portal/activity/attendance">
-            <el-icon><Checked /></el-icon>
-            <span>才藝點名</span>
+            <span>才藝管理</span>
           </el-menu-item>
         </el-sub-menu>
 

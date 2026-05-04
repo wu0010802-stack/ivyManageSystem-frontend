@@ -1,7 +1,12 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { initLiff, liff } from '../services/liff'
+import {
+  clearLiffTokenRefreshMarker,
+  forceLiffReloginOnce,
+  initLiff,
+  liff,
+} from '../services/liff'
 import { liffLogin } from '../api/auth'
 import { useParentAuthStore } from '../stores/parentAuth'
 
@@ -11,7 +16,12 @@ const authStore = useParentAuthStore()
 const status = ref('init') // init / loading / error
 const errorMessage = ref('')
 
-async function startLogin() {
+function isIdTokenExpiredError(err) {
+  const detail = err?.response?.data?.detail || ''
+  return err?.response?.status === 401 && /id_token|LINE/i.test(detail)
+}
+
+async function startLogin({ forceFresh = false } = {}) {
   status.value = 'init'
   errorMessage.value = ''
   try {
@@ -20,6 +30,12 @@ async function startLogin() {
     status.value = 'error'
     errorMessage.value =
       err?.message || 'LIFF 初始化失敗，請確認 VITE_LIFF_ID 設定'
+    return
+  }
+
+  if (forceFresh) {
+    clearLiffTokenRefreshMarker()
+    forceLiffReloginOnce({ redirectUri: window.location.href, nowMs: Date.now() })
     return
   }
 
@@ -36,9 +52,11 @@ async function startLogin() {
     if (!idToken) throw new Error('無法取得 LINE id_token')
     const { data } = await liffLogin(idToken)
     if (data?.status === 'ok') {
+      clearLiffTokenRefreshMarker()
       authStore.setUser(data.user)
       router.replace('/home')
     } else if (data?.status === 'need_binding') {
+      clearLiffTokenRefreshMarker()
       router.replace({
         path: '/bind',
         query: { name_hint: data.name_hint || '' },
@@ -47,6 +65,14 @@ async function startLogin() {
       throw new Error('伺服器回應未預期狀態')
     }
   } catch (err) {
+    // id_token 過期 → 自動嘗試一次完整 OAuth 重認證
+    // helper 內 sessionStorage marker 確保同 callback window 內只重 login 一次
+    if (
+      isIdTokenExpiredError(err) &&
+      forceLiffReloginOnce({ redirectUri: window.location.href, nowMs: Date.now() })
+    ) {
+      return
+    }
     status.value = 'error'
     errorMessage.value =
       err?.displayMessage || err?.message || '登入失敗，請稍後再試'
@@ -54,10 +80,11 @@ async function startLogin() {
 }
 
 function manualRetry() {
-  startLogin()
+  // 使用者主動點重試：清掉 marker 後強制走完整 OAuth，確保拿新 id_token
+  startLogin({ forceFresh: true })
 }
 
-onMounted(startLogin)
+onMounted(() => startLogin())
 </script>
 
 <template>

@@ -138,10 +138,14 @@ describe('權限位元邏輯（BigInt 正確性）', () => {
       expect(canAccessRoute('/overtime')).toBe(false)
     })
 
-    it('未知路由預設允許訪問（如 /login）', () => {
+    it('公開路由（/login、/change-password、/public/*）放行；未知路由預設拒絕', () => {
+      // 改為 default-deny：登入相關頁面與 /public/ 才預設允許，
+      // 其他未匹配 ROUTE_PERMISSION_RULES 的路由一律拒絕，避免隱性後門。
       setUserInfo({ role: 'admin', permissions: 0 })
       expect(canAccessRoute('/login')).toBe(true)
-      expect(canAccessRoute('/some-unknown-path')).toBe(true)
+      expect(canAccessRoute('/change-password')).toBe(true)
+      expect(canAccessRoute('/public/activity')).toBe(true)
+      expect(canAccessRoute('/some-unknown-path')).toBe(false)
     })
 
     it('未登入時任何路由皆禁止', () => {

@@ -1,6 +1,7 @@
 <script setup>
 import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
+import { ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
 import { getAttendanceSheet } from '@/api/portal'
 import { getUserInfo } from '@/utils/auth'
 import { apiError } from '@/utils/error'
@@ -141,26 +142,91 @@ const nextMonth = () => {
   fetchSheet()
 }
 
+// ===== Mobile sticky 月份 bar =====
+// header-card 滑出 viewport 後再顯示，避免 sticky bar 與 header 同時出現重複資訊
+const topSentinel = ref(null)
+const showStickyBar = ref(false)
+let stickyObserver = null
+
+// dayCardRefs: { [day.day]: HTMLElement } —「今日」按鈕用來定位 scroll
+const dayCardRefs = ref({})
+const setDayCardRef = (dayNum, el) => {
+  if (el) dayCardRefs.value[dayNum] = el
+  else delete dayCardRefs.value[dayNum]
+}
+
+const isViewingCurrentMonth = computed(() => {
+  const t = new Date()
+  return query.year === t.getFullYear() && query.month === (t.getMonth() + 1)
+})
+
+const scrollToToday = () => {
+  if (!isViewingCurrentMonth.value) return
+  const todayNum = new Date().getDate()
+  const el = dayCardRefs.value[todayNum]
+  if (!el) return
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  el.classList.add('day-card--highlight')
+  setTimeout(() => el.classList.remove('day-card--highlight'), 1500)
+}
+
 onMounted(() => {
   onResize()
   window.addEventListener('resize', onResize)
   fetchSheet()
+  if ('IntersectionObserver' in window && topSentinel.value) {
+    stickyObserver = new IntersectionObserver(
+      ([entry]) => { showStickyBar.value = !entry.isIntersecting },
+      { threshold: 0 },
+    )
+    stickyObserver.observe(topSentinel.value)
+  }
 })
 
 onUnmounted(() => {
   window.removeEventListener('resize', onResize)
+  stickyObserver?.disconnect()
 })
 </script>
 
 <template>
   <div class="portal-attendance">
+    <!-- Mobile sticky 月份 bar：header-card 滑出後顯示 -->
+    <transition name="sticky-bar-fade">
+      <div v-show="showStickyBar && isMobile" class="sticky-month-bar">
+        <el-button
+          :icon="ArrowLeft"
+          circle
+          class="sticky-bar__btn"
+          aria-label="上個月"
+          @click="prevMonth"
+        />
+        <span class="sticky-bar__label">
+          {{ query.year }} / {{ String(query.month).padStart(2, '0') }}
+        </span>
+        <el-button
+          :icon="ArrowRight"
+          circle
+          class="sticky-bar__btn"
+          aria-label="下個月"
+          @click="nextMonth"
+        />
+        <el-button
+          v-if="isViewingCurrentMonth"
+          type="primary"
+          class="sticky-bar__today"
+          @click="scrollToToday"
+        >今日</el-button>
+      </div>
+    </transition>
+
     <el-card class="header-card">
       <div class="sheet-header">
         <h2>出勤紀錄表</h2>
         <div class="month-nav">
-          <el-button :icon="'ArrowLeft'" circle size="small" @click="prevMonth" />
+          <el-button :icon="ArrowLeft" circle class="month-nav__btn" aria-label="上個月" @click="prevMonth" />
           <span class="month-label">{{ query.year }} 年 {{ String(query.month).padStart(2, '0') }} 月</span>
-          <el-button :icon="'ArrowRight'" circle size="small" @click="nextMonth" />
+          <el-button :icon="ArrowRight" circle class="month-nav__btn" aria-label="下個月" @click="nextMonth" />
         </div>
       </div>
       <div class="employee-info" v-if="sheetData">
@@ -169,6 +235,9 @@ onUnmounted(() => {
         <span class="hide-mobile"><strong>考核日期：</strong>{{ query.year }} 年 {{ String(query.month).padStart(2, '0') }} 月</span>
       </div>
     </el-card>
+
+    <!-- Sentinel: 觀察 header-card 是否仍在 viewport，控制 sticky bar 顯示 -->
+    <div ref="topSentinel" class="top-sentinel" aria-hidden="true" />
 
     <!-- Summary Stats -->
     <el-card v-if="sheetData" class="summary-card">
@@ -400,6 +469,7 @@ onUnmounted(() => {
     <div v-if="viewMode === 'cards' && sheetData" v-loading="loading" class="mobile-cards">
       <div
         v-for="day in sheetData.days" :key="day.day"
+        :ref="(el) => setDayCardRef(day.day, el)"
         class="day-card"
         :class="{
           'day-card--weekend': day.is_weekend,
@@ -497,6 +567,87 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: var(--space-4);
+}
+
+.month-nav__btn {
+  min-width: var(--touch-target-min);
+  min-height: var(--touch-target-min);
+}
+
+/* ===== Mobile Sticky 月份 Bar ===== */
+.top-sentinel {
+  height: 1px;
+  margin-top: calc(var(--space-6) * -1);
+}
+
+.sticky-month-bar {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky, 10);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-color);
+  border-bottom: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+  margin: 0 calc(var(--space-4) * -1) var(--space-3);
+}
+
+.sticky-bar__btn {
+  min-width: var(--touch-target-min);
+  min-height: var(--touch-target-min);
+  flex-shrink: 0;
+}
+
+.sticky-bar__label {
+  flex: 1;
+  text-align: center;
+  font-weight: var(--font-weight-semibold, 600);
+  font-size: var(--text-base);
+  color: var(--text-primary);
+}
+
+.sticky-bar__today {
+  min-height: var(--touch-target-min);
+  padding-left: var(--space-3);
+  padding-right: var(--space-3);
+  flex-shrink: 0;
+}
+
+.sticky-bar-fade-enter-active,
+.sticky-bar-fade-leave-active {
+  transition: transform var(--transition-base, 0.2s ease), opacity var(--transition-base, 0.2s ease);
+}
+
+.sticky-bar-fade-enter-from,
+.sticky-bar-fade-leave-to {
+  transform: translateY(-100%);
+  opacity: 0;
+}
+
+@keyframes day-card-flash {
+  0%, 100% {
+    box-shadow: var(--shadow-sm);
+  }
+  50% {
+    box-shadow: 0 0 0 3px var(--color-primary, #409eff);
+  }
+}
+
+.day-card.day-card--highlight {
+  animation: day-card-flash 1.5s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sticky-bar-fade-enter-active,
+  .sticky-bar-fade-leave-active {
+    transition: none;
+  }
+  .day-card.day-card--highlight {
+    animation: none;
+    box-shadow: 0 0 0 3px var(--color-primary, #409eff);
+  }
 }
 
 .month-label {

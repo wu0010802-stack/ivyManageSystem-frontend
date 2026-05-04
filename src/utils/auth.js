@@ -4,9 +4,16 @@ import {
   PERMISSION_VALUES,
   ROUTE_PERMISSION_RULES,
   TEACHER_PORTAL_ROUTES,
+  PUBLIC_ROUTES,
+  PUBLIC_ROUTE_PREFIXES,
 } from '@/constants/permissions'
 
 export { PERMISSION_VALUES, ROUTE_PERMISSION_RULES }
+
+function _isPublicRoute(path) {
+  if (PUBLIC_ROUTES.includes(path)) return true
+  return PUBLIC_ROUTE_PREFIXES.some((prefix) => path.startsWith(prefix))
+}
 
 const USER_INFO_KEY = 'userInfo'
 const SESSION_VALIDATED_AT_KEY = 'auth_session_validated_at'
@@ -243,11 +250,13 @@ export function canAccessRoute(path) {
   if (path === '/overtime') {
     return hasPermission('OVERTIME_READ') || hasPermission('MEETINGS')
   }
+
+  // Why: 改成 default-deny。未匹配權限規則時，若是公開路由（登入頁、公開報名等）放行，
+  // 否則一律拒絕——避免日後新增頁面卻忘了加 ROUTE_PERMISSION_RULES 就形成隱性後門。
+  if (_isPublicRoute(path)) return true
+
   const permissionName = getRoutePermission(path)
-  if (!permissionName) {
-    // 未定義權限的路由預設允許存取 (如 /login)
-    return true
-  }
+  if (!permissionName) return false
 
   return hasPermission(permissionName)
 }

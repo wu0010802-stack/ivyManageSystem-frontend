@@ -69,21 +69,28 @@ export const ROUTE_PERMISSION_RULES = [
   { path: '/employees', permission: 'EMPLOYEES_READ' },
   { path: '/students', permission: 'STUDENTS_READ' },
   { path: '/students/profile', permission: 'STUDENTS_READ', prefix: true },
+  { path: '/student-attendance', permission: 'STUDENTS_READ' },
+  { path: '/student-leaves', permission: 'STUDENTS_READ' },
   { path: '/classrooms', permission: 'CLASSROOMS_READ' },
   { path: '/salary', permission: 'SALARY_READ' },
   { path: '/announcements', permission: 'ANNOUNCEMENTS_READ' },
   { path: '/reports', permission: 'REPORTS' },
+  { path: '/gov-reports', permission: 'REPORTS' },
   { path: '/audit-logs', permission: 'AUDIT_LOGS' },
   { path: '/settings', permission: 'SETTINGS_READ' },
+  { path: '/dismissal-queue', permission: 'DISMISSAL_CALLS_READ' },
   { path: '/activity/dashboard', permission: 'ACTIVITY_READ' },
   { path: '/activity/registrations', permission: 'ACTIVITY_READ' },
+  { path: '/activity/registrations/pending', permission: 'ACTIVITY_PAYMENT_APPROVE' },
   { path: '/activity/pos', permission: 'ACTIVITY_WRITE' },
   { path: '/activity/pos/approval', permission: 'ACTIVITY_PAYMENT_APPROVE' },
+  { path: '/activity/catalog', permission: 'ACTIVITY_READ' },
   { path: '/activity/courses', permission: 'ACTIVITY_READ' },
   { path: '/activity/supplies', permission: 'ACTIVITY_READ' },
   { path: '/activity/inquiries', permission: 'ACTIVITY_READ' },
   { path: '/activity/settings', permission: 'ACTIVITY_WRITE' },
   { path: '/activity/changes', permission: 'ACTIVITY_READ' },
+  { path: '/activity/attendance', permission: 'ACTIVITY_READ', prefix: true },
   { path: '/fees', permission: 'FEES_READ' },
   { path: '/student-enrollment', permission: 'STUDENTS_READ' },
   { path: '/recruitment', permission: 'RECRUITMENT_READ' },
@@ -91,6 +98,12 @@ export const ROUTE_PERMISSION_RULES = [
   { path: '/analytics', permission: 'BUSINESS_ANALYTICS', prefix: true },
   { path: '/portfolio/medication-today', permission: 'STUDENTS_HEALTH_READ' },
 ]
+
+// 不需要權限即可訪問的路由（登入頁、密碼變更、公開報名頁等）。
+// canAccessRoute 改為 default-deny，未匹配 ROUTE_PERMISSION_RULES 又不在此清單者一律拒絕，
+// 避免「忘記補規則 → 直接打 URL 進頁面」的隱性後門。
+export const PUBLIC_ROUTES = ['/login', '/change-password', '/portal/login']
+export const PUBLIC_ROUTE_PREFIXES = ['/public/']
 
 export const TEACHER_PORTAL_ROUTES = [
   '/portal',
