@@ -1,5 +1,6 @@
 <script setup>
 import { ref } from 'vue'
+import { ElMessage } from 'element-plus'
 
 const props = defineProps({
   disabled: { type: Boolean, default: false },
@@ -18,7 +19,7 @@ function onPickFile(e) {
   for (const f of fs) {
     const ext = f.name.includes('.') ? '.' + f.name.split('.').pop().toLowerCase() : ''
     if (!ALLOWED_EXT.includes(ext)) {
-      window.alert(`不支援的檔案格式：${f.name}`)
+      ElMessage.warning(`不支援的檔案格式：${f.name}`)
       continue
     }
     files.value.push(f)

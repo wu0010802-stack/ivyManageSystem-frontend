@@ -95,6 +95,7 @@
 <script setup>
 import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { geocodeAddress as geocodeAddressViaNominatim } from '@/utils/geocoding'
 
 const props = defineProps({
   visible: { type: Boolean, required: true },
@@ -112,21 +113,12 @@ const geocodeAddress = async () => {
   if (!address) return
   geocoding.value = true
   try {
-    const url = new URL('https://nominatim.openstreetmap.org/search')
-    url.searchParams.set('q', address)
-    url.searchParams.set('format', 'json')
-    url.searchParams.set('limit', '1')
-    url.searchParams.set('countrycodes', 'tw')
-    const response = await fetch(url.toString(), {
-      headers: { 'Accept-Language': 'zh-Hant-TW,zh-TW;q=0.9' },
-    })
-    if (!response.ok) throw new Error(`HTTP ${response.status}`)
-    const data = await response.json()
-    if (data.length > 0) {
-      props.form.campus_lat = parseFloat(data[0].lat)
-      props.form.campus_lng = parseFloat(data[0].lon)
+    const hit = await geocodeAddressViaNominatim(address)
+    if (hit) {
+      props.form.campus_lat = hit.lat
+      props.form.campus_lng = hit.lng
       geocodeDirty.value = false
-      ElMessage.success(`已定位：${data[0].display_name}`)
+      ElMessage.success(`已定位：${hit.displayName}`)
     } else {
       ElMessage.warning('找不到此地址，請嘗試填寫更精確的地址（含縣市區），或直接手動輸入座標')
     }
