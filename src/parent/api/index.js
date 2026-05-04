@@ -10,7 +10,8 @@ import { applyDedupe } from '@/utils/apiDedupe'
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
-  timeout: 10000,
+  // 30s：手機端網路較慢；在 nginx upstream timeout（60s）前先 abort 即可。
+  timeout: 30000,
   withCredentials: true,
   headers: { 'Content-Type': 'application/json' },
 })
@@ -53,7 +54,7 @@ let _refreshing = null
 
 function _doRefresh() {
   return axios
-    .post('/api/parent/auth/refresh', null, { withCredentials: true, timeout: 10000 })
+    .post('/api/parent/auth/refresh', null, { withCredentials: true, timeout: 30000 })
     .then(() => true)
 }
 

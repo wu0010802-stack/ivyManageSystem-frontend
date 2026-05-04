@@ -1,6 +1,6 @@
 
 <script setup>
-import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
@@ -44,6 +44,11 @@ const dismissalPendingCount = ref(0)
 const messagesUnreadCount = ref(0)
 // 今日工作台待辦數
 const hubPendingCount = ref(0)
+
+// Badge 刷新節流：避免短時間內被多次觸發（route 切換、tab 切回）打爆後端。
+// 30 秒內已 refresh 過就不再全量重抓；個別事件（如代理人狀態變更）仍可 force。
+const COUNTS_TTL_MS = 30_000
+let lastCountsRefreshAt = 0
 
 const fetchUnreadCount = async () => {
   try {
@@ -105,13 +110,27 @@ const fetchHubPendingCount = async () => {
   }
 }
 
-const refreshPortalCounts = () => {
+const refreshPortalCounts = ({ force = false } = {}) => {
+  if (!force && Date.now() - lastCountsRefreshAt < COUNTS_TTL_MS) return
+  lastCountsRefreshAt = Date.now()
   fetchUnreadCount()
   fetchSwapPendingCount()
   fetchSubstitutePendingCount()
   fetchDismissalPendingCount()
   fetchMessagesUnreadCount()
   fetchHubPendingCount()
+}
+
+// substitute 事件 listener wrapper：force 重抓單一欄位，不影響整體 TTL
+const onSubstituteChanged = () => {
+  fetchSubstitutePendingCount()
+}
+
+// tab 切回前景時，若距上次刷新超過 TTL 再抓一次（不切頁就不刷）
+const onVisibilityChange = () => {
+  if (document.visibilityState === 'visible') {
+    refreshPortalCounts()
+  }
 }
 
 // PWA 安裝提示
@@ -139,19 +158,16 @@ const dismissInstallBanner = () => {
 onMounted(() => {
   checkMobile()
   window.addEventListener('resize', checkMobile)
-  window.addEventListener('portal-substitute-count-changed', fetchSubstitutePendingCount)
+  window.addEventListener('portal-substitute-count-changed', onSubstituteChanged)
+  document.addEventListener('visibilitychange', onVisibilityChange)
   fetchEmployees()
-  refreshPortalCounts()
-})
-
-// Refresh counts when navigating
-watch(() => route.path, () => {
-  refreshPortalCounts()
+  refreshPortalCounts({ force: true })
 })
 
 onUnmounted(() => {
   window.removeEventListener('resize', checkMobile)
-  window.removeEventListener('portal-substitute-count-changed', fetchSubstitutePendingCount)
+  window.removeEventListener('portal-substitute-count-changed', onSubstituteChanged)
+  document.removeEventListener('visibilitychange', onVisibilityChange)
 })
 
 const toggleSidebar = () => {
@@ -189,7 +205,7 @@ const fetchEmployees = async () => {
     // 所以用後端 end-impersonate 再查，或者直接用 axios 帶 credential
     const res = await axios.get(`${API_BASE}/employees`, {
       withCredentials: true,
-      timeout: 10000,
+      timeout: 30000,
     })
     employeeList.value = res.data
   } catch {
@@ -203,7 +219,7 @@ const handleSwitchUser = async (employeeId) => {
     const res = await axios.post(
       `${API_BASE}/auth/impersonate`,
       { employee_id: employeeId },
-      { withCredentials: true, timeout: 10000 }
+      { withCredentials: true, timeout: 30000 }
     )
     // 更新前端 userInfo
     setUserInfo(res.data.user)

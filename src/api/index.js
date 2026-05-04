@@ -5,7 +5,9 @@ import { applyDedupe } from '@/utils/apiDedupe'
 
 const api = axios.create({
     baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
-    timeout: 10000,
+    // 30s：在 nginx upstream timeout（60s）前先 abort，讓 UI 有足夠時間等慢端點，
+    // 不再讓使用者在 10s 看到「載入失敗」誤導訊息。
+    timeout: 30000,
     withCredentials: true, // 自動攜帶 httpOnly Cookie
     headers: {
         'Content-Type': 'application/json'
@@ -25,7 +27,7 @@ function _doRefresh() {
     // Cookie 會自動帶出，不需手動設定 header
     return axios.post('/api/auth/refresh', null, {
         withCredentials: true,
-        timeout: 10000,
+        timeout: 30000,
     }).then(res => {
         // 後端已透過 Set-Cookie 更新 access_token，前端只需更新 userInfo
         const { user } = res.data

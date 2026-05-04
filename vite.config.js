@@ -90,7 +90,10 @@ export default defineConfig({
         }),
         VitePWA({
             registerType: 'autoUpdate',          // 有新版本時自動更新 SW
-            includeAssets: ['favicon.ico', 'LOGO.png', 'apple-touch-icon-180x180.png', 'logo.svg', 'images/ivy-kids-loading.png'],
+            // 不放 images/ivy-kids-loading.png（324 KB）：放進 includeAssets 會被 SW
+            // 在 install 階段搶下載，與首屏 API 競爭頻寬；改 runtime 才載入。
+            // 圖檔仍由 vite 自動複製 public/ 下到 dist，App.vue 用到時即可取得。
+            includeAssets: ['favicon.ico', 'LOGO.png', 'apple-touch-icon-180x180.png', 'logo.svg'],
 
             manifest: {
                 name: '常春藤管理系統',
@@ -149,6 +152,23 @@ export default defineConfig({
                             expiration: {
                                 maxEntries: 80,
                                 maxAgeSeconds: 60 * 60 * 24 * 7, // 7 天
+                            },
+                            cacheableResponse: { statuses: [200] },
+                        },
+                    },
+                    // /images/*：移出 precache（避免 SW install 卡頻寬）後仍走 cache，
+                    // 第一次載入後 reload 不再重抓 324 KB 的 loading 圖。
+                    {
+                        urlPattern: ({ url, request }) =>
+                            url.origin === self.location.origin &&
+                            url.pathname.startsWith('/images/') &&
+                            request.destination === 'image',
+                        handler: 'CacheFirst',
+                        options: {
+                            cacheName: 'app-images',
+                            expiration: {
+                                maxEntries: 20,
+                                maxAgeSeconds: 60 * 60 * 24 * 30, // 30 天
                             },
                             cacheableResponse: { statuses: [200] },
                         },

@@ -44,13 +44,49 @@ describe('apiDedupe', () => {
     expect(api._calls).toBe(2)
   })
 
-  it('GET 不去重', async () => {
+  it('相同 url+params 的 GET 併發只打一次（in-flight 共用 promise）', async () => {
     const api = makeInstance()
-    await Promise.all([
+    const [r1, r2] = await Promise.all([
       api.get('/foo', { params: { x: 1 } }),
       api.get('/foo', { params: { x: 1 } }),
     ])
+    expect(api._calls).toBe(1)
+    expect(r1.data.callIndex).toBe(1)
+    expect(r2.data.callIndex).toBe(1)
+  })
+
+  it('params 不同的併發 GET 不去重', async () => {
+    const api = makeInstance()
+    await Promise.all([
+      api.get('/foo', { params: { x: 1 } }),
+      api.get('/foo', { params: { x: 2 } }),
+    ])
     expect(api._calls).toBe(2)
+  })
+
+  it('GET 完成後第二次相同請求會重新發出（不做結果快取）', async () => {
+    const api = makeInstance()
+    await api.get('/foo', { params: { x: 1 } })
+    await api.get('/foo', { params: { x: 1 } })
+    expect(api._calls).toBe(2)
+  })
+
+  it('GET 也支援 meta.allowConcurrent 繞過去重', async () => {
+    const api = makeInstance()
+    await Promise.all([
+      api.get('/foo', { params: { x: 1 }, meta: { allowConcurrent: true } }),
+      api.get('/foo', { params: { x: 1 }, meta: { allowConcurrent: true } }),
+    ])
+    expect(api._calls).toBe(2)
+  })
+
+  it('params key 順序不影響 GET dedupe', async () => {
+    const api = makeInstance()
+    await Promise.all([
+      api.get('/foo', { params: { a: 1, b: 2 } }),
+      api.get('/foo', { params: { b: 2, a: 1 } }),
+    ])
+    expect(api._calls).toBe(1)
   })
 
   it('meta.allowConcurrent 繞過去重', async () => {
