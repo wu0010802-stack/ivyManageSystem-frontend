@@ -327,16 +327,14 @@ const router = createRouter({
                 },
                 {
                     path: 'messages',
-                    name: 'portal-messages',
-                    component: () => import('../views/portal/PortalMessagesView.vue'),
-                    meta: { title: '家長訊息' },
+                    redirect: { name: 'portal-class-hub', query: { panel: 'messages' } },
                 },
                 {
                     path: 'messages/:threadId',
-                    name: 'portal-message-thread',
-                    component: () => import('../views/portal/PortalMessageThreadView.vue'),
-                    props: true,
-                    meta: { title: '訊息對話' },
+                    redirect: (to) => ({
+                        name: 'portal-class-hub',
+                        query: { panel: 'messages', thread: String(to.params.threadId) },
+                    }),
                 },
                 {
                     path: 'students/:studentId',
