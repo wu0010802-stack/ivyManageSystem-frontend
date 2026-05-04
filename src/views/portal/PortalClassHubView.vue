@@ -51,6 +51,7 @@
     />
 
     <ClassHubMessagesDrawer
+      v-if="canMessages"
       :model-value="panel === 'messages'"
       :thread-id="threadId"
       @update:model-value="onMessagesDrawerToggle"
@@ -88,6 +89,8 @@ const {
   openThread,
   closeThread,
 } = useClassHubPanelQuery()
+
+const canMessages = computed(() => hasPermission('PARENT_MESSAGES_WRITE'))
 
 const sheets = reactive({
   attendance: false,
