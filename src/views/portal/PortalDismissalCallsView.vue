@@ -1,6 +1,7 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Bell, Mute, Refresh } from '@element-plus/icons-vue'
 import {
   getPortalDismissalCalls,
   acknowledgeDismissalCall,
@@ -9,16 +10,61 @@ import {
 
 // ─── 狀態 ───────────────────────────────────────────────
 const activeCalls = ref([])   // pending + acknowledged
-const historyExpanded = ref(false)
 const loading = ref(false)
 
-// WebSocket
+// WebSocket 與連線狀態
 let ws = null
 let wsReconnectTimer = null
-let wsReconnectCount = 0
-const WS_MAX_RETRIES = 5
 let pollingTimer = null
+const WS_MAX_RETRIES = 5
 const wsConnected = ref(false)
+const wsReconnectCount = ref(0)
+const wsExhausted = ref(false) // 已達重試上限，fallback 至 polling
+
+// 連線體感狀態：normal / reconnecting / exhausted
+const connectionState = computed(() => {
+  if (wsConnected.value) return 'normal'
+  if (wsExhausted.value) return 'exhausted'
+  return 'reconnecting'
+})
+
+// ─── 聲音/震動偏好 ──────────────────────────────────────
+const SOUND_PREF_KEY = 'portal_dismissal_sound_muted'
+const muted = ref(localStorage.getItem(SOUND_PREF_KEY) === '1')
+const toggleMute = () => {
+  muted.value = !muted.value
+  localStorage.setItem(SOUND_PREF_KEY, muted.value ? '1' : '')
+  ElMessage.success(muted.value ? '已靜音通知聲音' : '已開啟通知聲音')
+}
+
+// 用 Web Audio API 合成短 beep，避免額外音檔依賴
+let audioCtx = null
+const playBeep = () => {
+  if (muted.value) return
+  try {
+    if (!audioCtx) {
+      const Ctx = window.AudioContext || window.webkitAudioContext
+      if (!Ctx) return
+      audioCtx = new Ctx()
+    }
+    if (audioCtx.state === 'suspended') audioCtx.resume()
+    const osc = audioCtx.createOscillator()
+    const gain = audioCtx.createGain()
+    osc.type = 'sine'
+    osc.frequency.value = 880
+    gain.gain.setValueAtTime(0, audioCtx.currentTime)
+    gain.gain.linearRampToValueAtTime(0.25, audioCtx.currentTime + 0.02)
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.35)
+    osc.connect(gain).connect(audioCtx.destination)
+    osc.start()
+    osc.stop(audioCtx.currentTime + 0.4)
+  } catch { /* ignore audio failure */ }
+}
+
+const triggerHaptic = () => {
+  if (muted.value) return
+  if (navigator.vibrate) navigator.vibrate([180, 80, 180])
+}
 
 // ─── HTTP 載入 ───────────────────────────────────────────
 const fetchCalls = async () => {
@@ -89,7 +135,8 @@ const connectWs = () => {
 
   ws.onopen = () => {
     wsConnected.value = true
-    wsReconnectCount = 0
+    wsReconnectCount.value = 0
+    wsExhausted.value = false
     stopPolling()
     if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null }
     // 重連後重新 fetch，補回斷線期間的更新
@@ -107,24 +154,29 @@ const connectWs = () => {
 
   ws.onclose = () => {
     wsConnected.value = false
-    if (wsReconnectCount < WS_MAX_RETRIES) {
-      const delay = Math.min(1000 * Math.pow(2, wsReconnectCount), 30000)
-      wsReconnectCount++
+    if (wsReconnectCount.value < WS_MAX_RETRIES) {
+      const delay = Math.min(1000 * Math.pow(2, wsReconnectCount.value), 30000)
+      wsReconnectCount.value++
       wsReconnectTimer = setTimeout(connectWs, delay)
     } else {
-      // 超過重試上限，改用 polling
+      // 超過重試上限，改用 polling，並升級 banner 提醒使用者重新整理
+      wsExhausted.value = true
       startPolling()
     }
   }
 }
 
+const reloadPage = () => {
+  location.reload()
+}
+
 const handleWsEvent = (event) => {
   const { type, payload } = event
   if (type === 'dismissal_call_created') {
-    // prepend 到列表
     activeCalls.value.unshift(payload)
-    // 發出瀏覽器通知（若有權限）
     notifyBrowser(payload)
+    playBeep()
+    triggerHaptic()
   } else if (type === 'dismissal_call_updated') {
     const idx = activeCalls.value.findIndex(c => c.id === payload.id)
     if (payload.status === 'completed' || payload.status === 'cancelled') {
@@ -172,16 +224,60 @@ onUnmounted(() => {
   if (ws) ws.close()
   if (wsReconnectTimer) clearTimeout(wsReconnectTimer)
   stopPolling()
+  if (audioCtx) { audioCtx.close().catch(() => {}); audioCtx = null }
 })
 </script>
 
 <template>
   <div class="portal-dismissal-calls">
-    <div class="page-header">
-      <h2>接送通知</h2>
-      <el-tag :type="wsConnected ? 'success' : 'warning'" size="small">
-        {{ wsConnected ? '即時接收中' : '輪詢模式' }}
-      </el-tag>
+    <el-card class="header-card">
+      <div class="sheet-header">
+        <h2>接送通知</h2>
+        <div class="header-actions">
+          <el-tag
+            :type="wsConnected ? 'success' : 'warning'"
+            size="small"
+            class="conn-tag"
+          >
+            {{ wsConnected ? '即時接收中' : '輪詢模式' }}
+          </el-tag>
+          <el-button
+            :icon="muted ? Mute : Bell"
+            circle
+            class="mute-btn"
+            :aria-label="muted ? '開啟通知聲音' : '靜音通知聲音'"
+            :title="muted ? '開啟通知聲音' : '靜音通知聲音'"
+            @click="toggleMute"
+          />
+        </div>
+      </div>
+    </el-card>
+
+    <!-- 連線狀態 banner（reconnecting 黃 / exhausted 紅）-->
+    <div
+      v-if="connectionState !== 'normal'"
+      class="conn-banner"
+      :class="`conn-banner--${connectionState}`"
+      role="alert"
+    >
+      <div class="conn-banner__text">
+        <template v-if="connectionState === 'reconnecting'">
+          <span>即時連線中斷，正在重連…</span>
+          <span class="conn-banner__sub">第 {{ wsReconnectCount }} / {{ WS_MAX_RETRIES }} 次嘗試</span>
+        </template>
+        <template v-else>
+          <span>即時連線失敗，目前每 15 秒輪詢一次。</span>
+          <span class="conn-banner__sub">為避免漏接通知，請重新整理頁面。</span>
+        </template>
+      </div>
+      <el-button
+        v-if="connectionState === 'exhausted'"
+        type="danger"
+        size="small"
+        :icon="Refresh"
+        class="conn-banner__btn"
+        @click="reloadPage"
+      >重新整理</el-button>
     </div>
 
     <div v-loading="loading">
@@ -226,71 +322,131 @@ onUnmounted(() => {
 
 <style scoped>
 .portal-dismissal-calls {
-  padding: 16px;
   max-width: 600px;
   margin: 0 auto;
+  padding: var(--space-4);
 }
 
-.page-header {
+.header-card {
+  margin-bottom: var(--space-4);
+  background-color: var(--surface-color);
+}
+
+.sheet-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.sheet-header h2 {
+  margin: 0;
+  font-size: var(--text-3xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-primary);
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.mute-btn {
+  min-width: var(--touch-target-min);
+  min-height: var(--touch-target-min);
+}
+
+/* ─── 連線狀態 banner ─── */
+.conn-banner {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 20px;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-4);
+  border: 1px solid transparent;
 }
 
-.page-header h2 {
-  margin: 0;
-  font-size: 1.2rem;
-  font-weight: 600;
+.conn-banner--reconnecting {
+  background-color: var(--color-warning-soft);
+  color: var(--text-primary);
+  border-color: var(--color-warning);
+}
+
+.conn-banner--exhausted {
+  background-color: var(--color-danger-soft);
+  color: var(--text-primary);
+  border-color: var(--color-danger);
+}
+
+.conn-banner__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.conn-banner__sub {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  font-weight: var(--font-weight-regular);
+}
+
+.conn-banner__btn {
+  flex-shrink: 0;
 }
 
 .empty-state {
-  margin-top: 40px;
+  margin-top: var(--space-10);
 }
 
 .call-card {
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-  padding: 16px;
-  margin-bottom: 12px;
+  background: var(--surface-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-4);
+  margin-bottom: var(--space-3);
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
-  border-left: 4px solid #e4e7ed;
-  transition: border-color 0.2s;
+  gap: var(--space-3);
+  border-left: 4px solid var(--border-color);
+  transition: border-color var(--transition-fast);
 }
 
 .call-card.pending {
-  border-left-color: #e6a23c;
+  border-left-color: var(--color-warning);
 }
 
 .call-card.acknowledged {
-  border-left-color: #409eff;
+  border-left-color: var(--color-info);
 }
 
 .student-name {
-  font-size: 1.1rem;
-  font-weight: 600;
-  margin-bottom: 4px;
+  font-size: var(--text-xl);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  margin-bottom: var(--space-1);
 }
 
 .classroom-name {
-  color: #606266;
-  font-size: 0.9rem;
-  margin-bottom: 4px;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  margin-bottom: var(--space-1);
 }
 
 .call-time {
-  color: #909399;
-  font-size: 0.85rem;
+  color: var(--text-tertiary);
+  font-size: var(--text-xs);
 }
 
 .call-note {
-  color: #606266;
-  font-size: 0.85rem;
-  margin-top: 4px;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  margin-top: var(--space-1);
   font-style: italic;
 }
 
@@ -298,7 +454,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 8px;
+  gap: var(--space-2);
   flex-shrink: 0;
   min-width: 110px;
 }
@@ -312,7 +468,7 @@ onUnmounted(() => {
 }
 
 .call-actions__btn--primary {
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 
 @media (max-width: 480px) {
