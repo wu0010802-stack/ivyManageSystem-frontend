@@ -70,7 +70,7 @@ export function useDashboardSections() {
 
   const userName = computed(() => {
     const info = getUserInfo()
-    return info?.display_name || info?.username || '管理員'
+    return info?.name || info?.display_name || info?.username || '管理員'
   })
 
   const groupedEvents = computed(() => {

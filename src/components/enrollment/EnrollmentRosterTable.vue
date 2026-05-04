@@ -262,6 +262,7 @@ function studentTagClass(student) {
 /* ── 外層 Layout ── */
 .roster-wrapper {
   font-size: 14px;
+  color: #1e293b;
 }
 
 .roster-outer {
@@ -285,6 +286,7 @@ function studentTagClass(student) {
 .roster-table {
   border-collapse: collapse;
   white-space: nowrap;
+  color: #1e293b;
 }
 
 .roster-table td {
