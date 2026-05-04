@@ -41,14 +41,17 @@ export function useClassHubPanelQuery() {
     ) {
       return
     }
-    router.push({ query: { panel: 'messages', thread: String(id) } })
+    router.push({
+      query: { ...route.query, panel: 'messages', thread: String(id) },
+    })
   }
 
   // closeThread uses push（非 replace）— 讓使用者按瀏覽器返回鍵能重回剛才的 thread。
   // 與 closePanel 的 replace 不同；closePanel 會收掉整個 drawer，回到 thread 沒意義。
   function closeThread() {
     if (route.query.panel === 'messages' && !route.query.thread) return
-    router.push({ query: { panel: 'messages' } })
+    const { thread: _t, ...rest } = route.query
+    router.push({ query: { ...rest, panel: 'messages' } })
   }
 
   return { panel, threadId, openPanel, closePanel, openThread, closeThread }

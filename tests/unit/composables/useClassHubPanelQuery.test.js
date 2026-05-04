@@ -123,6 +123,15 @@ describe('useClassHubPanelQuery', () => {
       openThread(42)
       expect(mockRouter.push).not.toHaveBeenCalled()
     })
+
+    it('openThread 保留其他 query keys', () => {
+      mockRoute.query = { foo: 'bar' }
+      const { openThread } = useClassHubPanelQuery()
+      openThread(42)
+      expect(mockRouter.push).toHaveBeenCalledWith({
+        query: { foo: 'bar', panel: 'messages', thread: '42' },
+      })
+    })
   })
 
   describe('closeThread', () => {
@@ -139,6 +148,15 @@ describe('useClassHubPanelQuery', () => {
       closeThread()
       expect(mockRouter.push).toHaveBeenCalledWith({
         query: { panel: 'messages' },
+      })
+    })
+
+    it('closeThread 保留其他 query keys，移除 thread', () => {
+      mockRoute.query = { panel: 'messages', thread: '42', foo: 'bar' }
+      const { closeThread } = useClassHubPanelQuery()
+      closeThread()
+      expect(mockRouter.push).toHaveBeenCalledWith({
+        query: { foo: 'bar', panel: 'messages' },
       })
     })
   })
