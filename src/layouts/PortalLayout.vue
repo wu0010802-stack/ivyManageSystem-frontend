@@ -528,14 +528,22 @@ const submitPassword = async () => {
 .portal-layout {
   /* 顯式鎖定亮色 token：防 PWA 快取殘留 / 跨入口 CSS 殘留 / OS 暗模式偏好把表面色改深 */
   --bg-color: #f8fafc;
+  --bg-color-soft: #f3f4f6;
   --surface-color: #ffffff;
   --pt-surface-app: #f8fafc;
   --pt-surface-card: #ffffff;
-  /* 次級文字提到 slate-600 (#475569, 7.5:1 ≈ AAA on #fff)：原 #64748b 業主反映過淡 */
-  --pt-text-muted: #475569;
-  --pt-text-soft: #475569;
+  --pt-surface-mute: #f3f4f6;
+  --pt-surface-mute-soft: #f9fafb;
+  /* 文字鎖深色：避免 OS dark / 跨入口殘留把 strong/body 改成白色 */
+  --pt-text-strong: #0f172a;
+  --pt-text-body: #1e293b;
+  /* 次級文字 slate-700 (#334155, 10.4:1 AAA on #fff)：業主反映過淡，再往深調一階 */
+  --pt-text-muted: #334155;
+  --pt-text-soft: #334155;
+  --pt-text-faint: #475569;
   height: 100vh;
   background-color: var(--bg-color);
+  color: var(--pt-text-body);
 }
 
 /* Sidebar Styling */

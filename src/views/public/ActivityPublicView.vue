@@ -1474,12 +1474,34 @@ onUnmounted(() => {
 /* supply-item 仍保留原本 label 即 row 的單純結構 */
 .course-item.supply-item { padding: var(--space-3) var(--space-4); cursor: pointer; align-items: flex-start; }
 .course-item input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
   flex-shrink: 0;
+  display: grid;
+  place-content: center;
   margin: 3px 0 0 0;
   width: 18px;
   height: 18px;
-  accent-color: var(--color-primary);
+  border: 2px solid #86EFAC;
+  border-radius: 5px;
+  background-color: var(--color-surface);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 12px 12px;
   cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+.course-item input[type="checkbox"]:checked {
+  border-color: var(--color-primary);
+  background-color: var(--color-primary);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none'><path d='M2.5 6.2 5 8.7 9.5 3.3' stroke='%23FFFFFF' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+}
+.course-item input[type="checkbox"]:disabled {
+  border-color: #D1D5DB;
+  background-color: #F3F4F6;
 }
 .course-item-disabled { opacity: 0.55; background-color: #F9FAFB; }
 .course-item-disabled .course-label { cursor: not-allowed; }
