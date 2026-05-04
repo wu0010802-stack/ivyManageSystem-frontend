@@ -315,6 +315,12 @@ const router = createRouter({
                     meta: { title: '今日待辦' },
                 },
                 {
+                    path: 'class-hub',
+                    name: 'portal-class-hub',
+                    component: () => import('../views/portal/PortalClassHubView.vue'),
+                    meta: { title: '今日工作台' },
+                },
+                {
                     path: 'attendance',
                     name: 'portal-attendance',
                     component: () => import('../views/portal/PortalAttendanceView.vue'),

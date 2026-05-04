@@ -4,6 +4,9 @@ import { ElMessage } from 'element-plus'
 import { getMyClassIncidents, createPortalIncident } from '@/api/studentIncidents'
 import api from '@/api/index'
 import { INCIDENT_TYPES, SEVERITIES, INCIDENT_TYPE_TAG as TYPE_TAG, SEVERITY_TAG } from '@/constants/studentRecords'
+import { usePortalFromHub } from '@/composables/usePortalFromHub'
+
+const { fromHub, backToHub } = usePortalFromHub()
 
 // ── 班級/學生 ─────────────────────────────────────────
 const classrooms = ref([])      // [{ classroom_id, classroom_name, students: [...] }]
@@ -123,6 +126,11 @@ onMounted(async () => {
 
 <template>
   <div>
+    <div v-if="fromHub" class="from-hub-bar">
+      <el-button type="primary" link @click="backToHub">
+        ← 返回今日工作台
+      </el-button>
+    </div>
     <div class="page-header">
       <h3>事件紀錄</h3>
       <el-button type="primary" size="small" @click="openCreate">＋ 新增事件</el-button>
@@ -262,6 +270,11 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+.from-hub-bar {
+  margin: 0 0 12px;
+  padding: 4px 0;
+}
+
 .page-header {
   display: flex;
   justify-content: space-between;

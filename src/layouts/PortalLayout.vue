@@ -7,7 +7,7 @@ import axios from 'axios'
 import { getSubstitutePendingCount, getUnreadCount, getSwapPendingCount } from '@/api/portal'
 import { getPortalPendingCount } from '@/api/dismissalCalls'
 import { getUnreadCount as getMessagesUnreadCount } from '@/api/portalMessages'
-import { listToday as listTodayMedications } from '@/api/portalMedications'
+import { getTodayHub } from '@/api/portalClassHub'
 import { changePassword, endImpersonate } from '@/api/auth'
 import { getUserInfo, clearAuth, setUserInfo } from '@/utils/auth'
 import OfflineIndicator from '@/components/OfflineIndicator.vue'
@@ -42,8 +42,8 @@ const dismissalPendingCount = ref(0)
 
 // 家園溝通：家長訊息未讀
 const messagesUnreadCount = ref(0)
-// 用藥未執行
-const pendingMedicationCount = ref(0)
+// 今日工作台待辦數
+const hubPendingCount = ref(0)
 
 const fetchUnreadCount = async () => {
   try {
@@ -90,16 +90,18 @@ const fetchMessagesUnreadCount = async () => {
   }
 }
 
-const fetchPendingMedicationCount = async () => {
+const fetchHubPendingCount = async () => {
   try {
-    const res = await listTodayMedications()
-    const groups = res.data.groups || []
-    pendingMedicationCount.value = groups.reduce(
-      (acc, g) => acc + (g.stats?.pending || 0),
-      0,
-    )
-  } catch (e) {
-    // 無權限或無班級時靜默
+    const data = await getTodayHub()
+    const c = data.counts || {}
+    hubPendingCount.value =
+      (c.attendance_pending || 0) +
+      (c.medications_pending || 0) +
+      (c.observations_pending || 0) +
+      (c.contact_books_pending || 0)
+    // incidents_today 不算「待辦」(它是已建立的事件數)，不納入 badge
+  } catch {
+    hubPendingCount.value = 0
   }
 }
 
@@ -109,7 +111,7 @@ const refreshPortalCounts = () => {
   fetchSubstitutePendingCount()
   fetchDismissalPendingCount()
   fetchMessagesUnreadCount()
-  fetchPendingMedicationCount()
+  fetchHubPendingCount()
 }
 
 // PWA 安裝提示
@@ -365,26 +367,15 @@ const submitPassword = async () => {
             <el-icon><User /></el-icon>
             <span>班級學生</span>
           </el-menu-item>
-          <el-menu-item index="/portal/student-attendance">
-            <el-icon><Checked /></el-icon>
-            <span>學生點名</span>
-          </el-menu-item>
-          <el-menu-item index="/portal/contact-book">
-            <el-icon><Document /></el-icon>
-            <span>每日聯絡簿</span>
-          </el-menu-item>
-          <el-menu-item index="/portal/observations">
-            <el-icon><Reading /></el-icon>
-            <span>課堂觀察</span>
-          </el-menu-item>
-          <el-menu-item index="/portal/medications">
-            <el-icon><Suitcase /></el-icon>
-            <span>用藥執行</span>
-            <el-badge v-if="pendingMedicationCount > 0" :value="pendingMedicationCount" :max="99" class="announcement-badge" />
-          </el-menu-item>
-          <el-menu-item index="/portal/incidents">
-            <el-icon><Warning /></el-icon>
-            <span>事件紀錄</span>
+          <el-menu-item index="/portal/class-hub">
+            <el-icon><Calendar /></el-icon>
+            <span>今日工作台</span>
+            <el-badge
+              v-if="hubPendingCount > 0"
+              :value="hubPendingCount"
+              :max="99"
+              class="announcement-badge"
+            />
           </el-menu-item>
           <el-menu-item index="/portal/assessments">
             <el-icon><DataAnalysis /></el-icon>

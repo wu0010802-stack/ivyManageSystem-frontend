@@ -4,8 +4,10 @@ import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getMyStudents } from '@/api/portal'
 import { listObservations, createObservation } from '@/api/portalObservations'
+import { usePortalFromHub } from '@/composables/usePortalFromHub'
 
 const route = useRoute()
+const { fromHub, backToHub } = usePortalFromHub()
 
 // 7 領域對齊台灣課綱（後端 StudentObservation.domain）
 const DOMAINS = [
@@ -116,6 +118,11 @@ async function submit() {
 
 <template>
   <div class="obs-view">
+    <div v-if="fromHub" class="from-hub-bar">
+      <el-button type="primary" link @click="backToHub">
+        ← 返回今日工作台
+      </el-button>
+    </div>
     <header class="page-header">
       <h2>課堂觀察 / 成長紀錄</h2>
     </header>
@@ -206,6 +213,10 @@ async function submit() {
 
 <style scoped>
 .obs-view { max-width: 800px; margin: 0 auto; }
+.from-hub-bar {
+  margin: 0 0 12px;
+  padding: 4px 0;
+}
 .page-header { margin-bottom: var(--space-3); }
 .page-header h2 { margin: 0; color: var(--pt-text-strong); }
 
