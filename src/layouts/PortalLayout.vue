@@ -537,6 +537,9 @@ const submitPassword = async () => {
   --surface-color: #ffffff;
   --pt-surface-app: #f8fafc;
   --pt-surface-card: #ffffff;
+  /* 次級文字提到 slate-600 (#475569, 7.5:1 ≈ AAA on #fff)：原 #64748b 業主反映過淡 */
+  --pt-text-muted: #475569;
+  --pt-text-soft: #475569;
   height: 100vh;
   background-color: var(--bg-color);
 }

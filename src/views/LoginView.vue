@@ -71,8 +71,6 @@ const handleLogin = async () => {
     <main class="login-shell" aria-label="常春藤義華幼兒園管理系統登入">
       <section class="login-brand">
         <div class="brand-mark" aria-hidden="true"></div>
-        <h1>常春藤義華幼兒園</h1>
-        <p>園務、考勤與薪資管理集中在同一個入口，讓每日作業更清楚。</p>
       </section>
 
       <section class="login-panel" aria-label="管理系統登入表單">
@@ -129,7 +127,6 @@ const handleLogin = async () => {
           <div class="login-divider" role="separator"><span>或</span></div>
           <router-link class="alternate-entry" to="/portal/login">前往教職員入口</router-link>
         </div>
-        <p class="login-note">請使用學校配發的管理帳號登入。</p>
       </section>
     </main>
 
@@ -163,32 +160,14 @@ const handleLogin = async () => {
 }
 
 .login-brand {
-  padding-bottom: 56px;
+  display: flex;
+  justify-content: center;
 }
 
 .brand-mark {
-  width: 240px;
-  height: 240px;
-  margin-bottom: 16px;
+  width: min(100%, 440px);
+  aspect-ratio: 1 / 1;
   background: url('/images/login-bg.png') center / contain no-repeat;
-}
-
-.login-brand h1 {
-  margin: 0 0 16px;
-  color: #1877f2;
-  font-size: clamp(40px, 5vw, 56px);
-  font-weight: 700;
-  line-height: 1.08;
-  letter-spacing: 0;
-}
-
-.login-brand p {
-  max-width: 520px;
-  margin: 0;
-  color: #1c1e21;
-  font-size: clamp(19px, 2vw, 24px);
-  line-height: 1.45;
-  letter-spacing: 0;
 }
 
 .login-panel {
@@ -328,15 +307,6 @@ const handleLogin = async () => {
   transform: translateY(-1px);
 }
 
-.login-note {
-  margin: 24px 0 0;
-  color: #1c1e21;
-  font-size: 14px;
-  line-height: 1.5;
-  text-align: center;
-  letter-spacing: 0;
-}
-
 .login-footer {
   width: min(100%, 980px);
   margin-top: clamp(40px, 6vw, 64px);
@@ -370,23 +340,8 @@ const handleLogin = async () => {
     gap: 24px;
   }
 
-  .login-brand {
-    padding-bottom: 0;
-    text-align: center;
-  }
-
   .brand-mark {
-    width: 160px;
-    height: 160px;
-    margin: 0 auto 12px;
-  }
-
-  .login-brand h1 {
-    font-size: 34px;
-  }
-
-  .login-brand p {
-    font-size: 18px;
+    width: min(100%, 280px);
   }
 }
 

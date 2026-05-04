@@ -105,7 +105,7 @@ function go(to) {
 }
 
 .action-tile.is-empty {
-  opacity: 0.55;
+  opacity: 0.85;
 }
 
 .tile-count {
