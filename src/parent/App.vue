@@ -58,23 +58,42 @@ html, body, #app {
   margin: 0;
   padding: 0;
   height: 100%;
-  background: var(--pt-surface-app, #f4f6f5);
 }
 
-/* 阻擋 Android Chrome 原生下拉刷新 — 已交給 PullToRefresh 元件處理。
-   設在實際捲動容器（body）才生效，設在 .ptr-root 上是無效的。 */
+/* Sunny Skyline 底色：sky 漸層 + 右下 sun radial。
+   寫在 body 而非 #app，避免 PullToRefresh 容器把背景遮住；
+   #app 自身保持透明承接此漸層。 */
 body {
+  background:
+    radial-gradient(ellipse 800px 500px at 100% 100%, var(--sun-100, #FFF4C9) 0%, transparent 70%),
+    radial-gradient(ellipse 1200px 600px at 50% -200px, var(--sky-200, #BBDDED) 0%, transparent 60%),
+    var(--pt-surface-app, #F2F9FC);
+  background-attachment: fixed;
+  /* 阻擋 Android Chrome 原生下拉刷新 — 已交給 PullToRefresh 元件處理。
+     設在實際捲動容器（body）才生效，設在 .ptr-root 上是無效的。 */
   overscroll-behavior-y: contain;
 }
 
 #app {
-  font-family: -apple-system, BlinkMacSystemFont, 'PingFang TC', 'Helvetica Neue', sans-serif;
+  background: transparent;
+  /* Sunny Skyline 字體 stack：Quicksand body + Outfit display + Noto Sans TC 中文
+     由 globals.css 注入 token，這裡只是 fallback 寫法 */
+  font-family: var(--pt-font-body, 'Quicksand', 'Noto Sans TC', -apple-system, BlinkMacSystemFont, 'PingFang TC', 'Helvetica Neue', sans-serif);
+  font-weight: 500;
   -webkit-font-smoothing: antialiased;
-  color: var(--pt-text-strong, #2c3e50);
+  color: var(--pt-text-strong, #1B4459);
 }
 
 * {
   box-sizing: border-box;
+}
+
+/* 標題層級統一改用 Outfit display 字體（中文 fallback Noto Sans TC）。
+   跨整個家長 app；元件內 scoped 若有 override 仍會覆蓋。 */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--pt-font-display, 'Outfit', 'Noto Sans TC', sans-serif);
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
 /* ============================================================

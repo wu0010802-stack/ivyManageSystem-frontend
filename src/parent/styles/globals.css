@@ -19,95 +19,178 @@
  */
 
 :root {
-  /* ===== Parent App 文字色 alias（保留原 hex 不色偏） ===== */
-  --pt-text-strong: #2c3e50;       /* 主標題、姓名 */
-  --pt-text-body: #2c3e50;         /* 內文 */
-  --pt-text-muted: #555;           /* 次要文字、label */
-  --pt-text-soft: #666;            /* 描述、meta */
-  --pt-text-faint: #777;           /* 提示 */
-  --pt-text-placeholder: #888;     /* placeholder、hint */
-  --pt-text-disabled: #aaa;        /* 弱化、arrow */
-  --pt-text-hint: #ccc;            /* divider 上文字 */
+  /* ============================================================
+   * Sunny Skyline 配色（v2.1）
+   * 天空藍底 / 珊瑚 CTA / 陽光黃 highlight / 葉綠保留 Ivy 品牌呼應
+   * 全部彩度壓 < 90% 維持成熟度，避免螢光感。
+   * ============================================================ */
 
-  /* ===== Parent App 表面 / 背景 alias ===== */
-  --pt-surface-app: #f4f6f5;       /* App body bg */
-  --pt-surface-card: #ffffff;      /* card 背景 */
-  --pt-surface-mute: #f0f2f5;      /* card divider / mute 背景 */
-  --pt-surface-mute-soft: #f6f8fa; /* hover / pressed 背景 */
-  --pt-surface-mute-warm: #f3f4f6; /* 變體 */
-  --pt-surface-brand-tint: #f8fbf9;/* unread message 底色 */
-  --pt-surface-thread-bg: #f7f9f8; /* thread bg */
-  --pt-surface-note: #f9f9f9;      /* note bg */
+  /* ---- Sky 階（底色 / 文字 / chip） ---- */
+  --sky-50:    #F2F9FC;
+  --sky-100:   #DCEEF5;
+  --sky-200:   #BBDDED;
+  --sky-300:   #92C8E0;
+  --sky-500:   #5BA8CC;
+  --sky-700:   #2D6F8E;
+  --sky-900:   #1B4459;
 
-  /* ===== Parent App 邊框 alias ===== */
-  --pt-border: #e5e7eb;
-  --pt-border-light: #f0f0f0;
-  --pt-border-strong: #d0d0d0;
-  --pt-border-stronger: #cccccc;
+  /* ---- Sun 階（高亮 / highlight underline） ---- */
+  --sun-100:   #FFF4C9;
+  --sun-300:   #FFE285;
+  --sun-500:   #FFD93D;
+  --sun-700:   #C99500;
+  --sun-900:   #4A3700;
 
-  /* ===== Parent App semantic 變體（補 design-tokens 沒有的中間色） ===== */
-  --pt-warning-text: #92400e;       /* warning label 文字 */
-  --pt-warning-text-mid: #d97706;   /* warning 圖示色 */
-  --pt-warning-text-soft: #a25e0a;  /* warning chip 文字 */
-  --pt-success-text: #2d6a3a;       /* success label 文字 */
-  --pt-info-text: #1d4ed8;          /* info chip 文字 */
-  --pt-info-link: #2c7be5;          /* link 色 */
-  --pt-violet-bg: #ddd6fe;          /* medication chip bg */
-  --pt-violet-text: #5b21b6;        /* medication chip text */
+  /* ---- Coral 階（CTA / 主行動 / 緊急） ---- */
+  --coral-100: #FFE3E0;
+  --coral-300: #FFB5AD;
+  --coral-500: #FF8B8B;
+  --coral-600: #E96B6B;
+  --coral-700: #B14545;
 
-  /* App-level surface（給 App.vue body / parent-layout 用） */
+  /* ---- Leaf 階（Ivy 品牌呼應 / 成功 / 自然） ---- */
+  --leaf-100:  #DCF4E6;
+  --leaf-300:  #A8E6CF;
+  --leaf-500:  #5FC79A;
+  --leaf-700:  #2D7C56;
+
+  /* ---- Grape 階（次要 / 用藥 / 行事曆） ---- */
+  --grape-100: #EBE0F5;
+  --grape-300: #D4BCE6;
+  --grape-500: #B58CD9;
+  --grape-700: #6E3F94;
+
+  /* ---- Cream（warm 卡背景 / hero 中性） ---- */
+  --cream:     #FFFCF2;
+
+  /* ============================================================
+   * Parent App 文字色 alias
+   * Sky-tinted ink 取代純灰：在天空藍底上更和諧，避免冷感跳脫
+   * ============================================================ */
+  --pt-text-strong: #1B4459;       /* 主標題、姓名（= sky-900） */
+  --pt-text-body:   #1F2937;       /* 內文 */
+  --pt-text-muted:  #2D6F8E;       /* 次要文字、label（= sky-700） */
+  --pt-text-soft:   #4B5563;       /* 描述、meta */
+  --pt-text-faint:  #6B7280;       /* 提示 */
+  --pt-text-placeholder: #9CA3AF;  /* placeholder */
+  --pt-text-disabled:   #C4D2D9;   /* 弱化、arrow */
+  --pt-text-hint:       #DCEEF5;   /* divider 上文字 */
+
+  /* ============================================================
+   * Parent App 表面 / 背景 alias
+   * App body 改用 sky 漸層底（由 App.vue 套用），其餘維持白卡 + cream
+   * ============================================================ */
+  --pt-surface-app:        #F2F9FC; /* App body bg（= sky-50） */
+  --pt-surface-card:       #ffffff; /* card 主背景 */
+  --pt-surface-mute:       #ECF5F9; /* card divider / 弱化 */
+  --pt-surface-mute-soft:  #F6FAFC; /* hover / pressed 背景 */
+  --pt-surface-mute-warm:  #FFFCF2; /* warm 卡 = cream */
+  --pt-surface-brand-tint: #FFF4F2; /* unread message 底色（淡 coral） */
+  --pt-surface-thread-bg:  #F2F9FC; /* thread bg */
+  --pt-surface-note:       #FFFCF2; /* note bg */
+
+  /* ============================================================
+   * Parent App 邊框 alias
+   * 改用 sky-tinted 邊線，與底色和諧
+   * ============================================================ */
+  --pt-border:         #DCEEF5;
+  --pt-border-light:   #ECF5F9;
+  --pt-border-strong:  #BBDDED;
+  --pt-border-stronger:#92C8E0;
+
+  /* ============================================================
+   * Parent App semantic 變體
+   * 補 design-tokens 沒有的中間色；色相對齊新 palette
+   * ============================================================ */
+  --pt-warning-text:      #C99500;       /* warning label */
+  --pt-warning-text-mid:  #C99500;       /* warning 圖示 */
+  --pt-warning-text-soft: #9C7300;       /* warning chip */
+  --pt-success-text:      #2D7C56;       /* success label */
+  --pt-info-text:         #2D6F8E;       /* info chip */
+  --pt-info-link:         #5BA8CC;       /* link 色 */
+  --pt-violet-bg:         #EBE0F5;       /* medication chip bg */
+  --pt-violet-text:       #6E3F94;       /* medication chip text */
+
   color-scheme: light;
 
-  /* ===== Brand override（家長 app 主色：綠色） =====
-   *  之前放在 App.vue，但 App.vue style 的 cascade order 會壓過 dark mode；
-   *  集中放這裡，dark mode 區塊的 :root[data-theme='dark'] 可正確覆寫。
-   */
-  --brand-primary: #3f7d48;
-  --brand-primary-hover: #336440;
-  --brand-primary-soft: #e7f3e9;
-  --brand-primary-tint: #f0f7f1;       /* 比 soft 更淡，給大面積背景用 */
-  --brand-accent: #f59e0b;             /* 暖色點綴：強調動作、未讀 */
+  /* ============================================================
+   * Brand：Sunny Skyline 主色 = Coral，accent = Sun
+   * 從深綠 (#3f7d48) → 珊瑚 (#FF8B8B) 的品牌切換。Leaf 綠仍保留作 tint
+   * 用於成功/自然，呼應 Ivy 品牌名。
+   * ============================================================ */
+  --brand-primary:        #FF8B8B; /* coral-500 */
+  --brand-primary-hover:  #E96B6B; /* coral-600 */
+  --brand-primary-soft:   #FFE3E0; /* coral-100 */
+  --brand-primary-tint:   #FFF4F2; /* coral-100 再淡一階 */
+  --brand-accent:         #FFD93D; /* sun-500 — 高亮 highlight */
 
-  /* ===== Soft UI Evolution: 現代 Elevation 系統 =====
-   * 多層陰影營造柔和懸浮感，比單層 shadow 更有層次。
-   * 三階：1=card 一般、2=hover/今日卡、3=modal/sheet
-   * 注意 dark mode 用更深的 alpha + 較強 blur。
-   */
-  --pt-elev-1: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.06);
-  --pt-elev-2: 0 2px 4px rgba(15, 23, 42, 0.04), 0 4px 12px rgba(15, 23, 42, 0.08);
-  --pt-elev-3: 0 8px 16px rgba(15, 23, 42, 0.08), 0 16px 32px rgba(15, 23, 42, 0.12);
+  /* ============================================================
+   * Elevation：Sky-tinted 暖陰影（取代冷藍灰）
+   * 三階：1 = card / 2 = hover or 今日卡 / 3 = modal / sheet
+   * 加入 inset highlight 讓白卡有 claymorphism 軟質感
+   * ============================================================ */
+  --pt-elev-1:
+    0 1px 0 rgba(255, 255, 255, 0.85) inset,
+    0 1px 2px rgba(91, 168, 204, 0.05),
+    0 2px 8px rgba(91, 168, 204, 0.06);
+  --pt-elev-2:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 -2px 6px rgba(91, 168, 204, 0.05) inset,
+    0 4px 12px rgba(91, 168, 204, 0.10),
+    0 12px 28px rgba(91, 168, 204, 0.12);
+  --pt-elev-3:
+    0 1px 0 rgba(255, 255, 255, 0.95) inset,
+    0 -3px 8px rgba(91, 168, 204, 0.08) inset,
+    0 8px 18px rgba(91, 168, 204, 0.14),
+    0 20px 48px rgba(91, 168, 204, 0.18);
 
-  /* Hairline border：替代「白卡片有邊」需求，subtle 不搶戲 */
-  --pt-hairline: 1px solid rgba(15, 23, 42, 0.06);
+  /* Hairline border：sky-tinted */
+  --pt-hairline: 1px solid rgba(91, 168, 204, 0.18);
 
-  /* ===== 漸層 tokens（subtle，不搶 brand 色彩） =====
-   * 用於 hero 卡、push CTA 卡、強調用區塊。
-   */
-  --pt-gradient-brand: linear-gradient(135deg, #4a8d54 0%, #3f7d48 100%);
-  --pt-gradient-brand-soft: linear-gradient(135deg, #f0f7f1 0%, #e7f3e9 100%);
-  --pt-gradient-warm: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-  --pt-gradient-info: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
-  /* Hero 漸層：兩端皆為深綠以保證白色文字 ≥ AA 對比（#3f7d48 上白色 ≈ 5.5:1）。
-   * 視覺層次靠字級/字重而非透明度，避免 opacity 把對比打掉。 */
-  --pt-gradient-hero: linear-gradient(135deg, #2d5a35 0%, #3f7d48 60%, #4d8a58 100%);
+  /* ============================================================
+   * 漸層 tokens（v2.1 配色）
+   * ============================================================ */
+  --pt-gradient-brand:      linear-gradient(135deg, #FF8B8B 0%, #E96B6B 100%);
+  --pt-gradient-brand-soft: linear-gradient(135deg, #FFF4F2 0%, #FFE3E0 100%);
+  --pt-gradient-warm:       linear-gradient(135deg, #FFF4C9 0%, #FFE285 100%);
+  --pt-gradient-info:       linear-gradient(135deg, #DCEEF5 0%, #BBDDED 100%);
+  /* Hero 漸層：sky → coral 暖色過渡，白色文字仍有 ≥ 4.5:1 對比（在 coral-500 段）。
+   * 用 radial 加 sun 點綴模擬 v2 的「天空裡的太陽」感。 */
+  --pt-gradient-hero:
+    radial-gradient(circle at 80% 0%, #FFE285 0%, transparent 50%),
+    linear-gradient(155deg, #FFB5AD 0%, #FF8B8B 50%, #5BA8CC 100%);
 
-  /* ===== Icon tint（quick action / todo 背景）=====
-   * 每類功能對應一個淡色背景，icon 與背景同色系，與卡片白底分離又不過搶眼。
-   */
-  --pt-tint-money: #dcfce7;            --pt-tint-money-fg: #15803d;
-  --pt-tint-message: #dbeafe;          --pt-tint-message-fg: #1d4ed8;
-  --pt-tint-event: #f3e8ff;            --pt-tint-event-fg: #7c3aed;
-  --pt-tint-announcement: #fef3c7;     --pt-tint-announcement-fg: #b45309;
-  --pt-tint-leave: #ffedd5;            --pt-tint-leave-fg: #c2410c;
-  --pt-tint-activity: #fce7f3;         --pt-tint-activity-fg: #be185d;
-  --pt-tint-medication: #ddd6fe;       --pt-tint-medication-fg: #5b21b6;
-  --pt-tint-pickup: #cffafe;           --pt-tint-pickup-fg: #0e7490;
-  --pt-tint-calendar: #e0e7ff;         --pt-tint-calendar-fg: #3730a3;
-  --pt-tint-contact: #d1fae5;          --pt-tint-contact-fg: #065f46;
+  /* ============================================================
+   * Icon tint（quick action / todo 背景）— v2.1 配色
+   * 每類功能對應一組淡色背景 + 同色系 fg
+   * ============================================================ */
+  --pt-tint-money:        #DCF4E6;  --pt-tint-money-fg:        #2D7C56;  /* leaf */
+  --pt-tint-message:      #DCEEF5;  --pt-tint-message-fg:      #2D6F8E;  /* sky */
+  --pt-tint-event:        #EBE0F5;  --pt-tint-event-fg:        #6E3F94;  /* grape */
+  --pt-tint-announcement: #FFF4C9;  --pt-tint-announcement-fg: #9C7300;  /* sun */
+  --pt-tint-leave:        #FFE3E0;  --pt-tint-leave-fg:        #B14545;  /* coral */
+  --pt-tint-activity:     #EBE0F5;  --pt-tint-activity-fg:     #6E3F94;  /* grape */
+  --pt-tint-medication:   #EBE0F5;  --pt-tint-medication-fg:   #6E3F94;  /* grape */
+  --pt-tint-pickup:       #DCEEF5;  --pt-tint-pickup-fg:       #2D6F8E;  /* sky */
+  --pt-tint-calendar:     #DCF4E6;  --pt-tint-calendar-fg:     #2D7C56;  /* leaf */
+  --pt-tint-contact:      #DCF4E6;  --pt-tint-contact-fg:      #2D7C56;  /* leaf */
 
-  /* ===== Backdrop（modal / sheet）===== */
-  --pt-scrim: rgba(15, 23, 42, 0.45);
+  /* ============================================================
+   * Backdrop / blur
+   * ============================================================ */
+  --pt-scrim: rgba(27, 68, 89, 0.45);  /* sky-900 偏暖 */
   --pt-backdrop-blur: 8px;
+
+  /* ============================================================
+   * Sunny Skyline 字體 stack
+   * Display = Outfit (圓潤無襯線、現代感、字重 700+ 維持嚴肅)
+   * Body    = Quicksand（柔和、易讀）
+   * Hand    = Patrick Hand（手寫點綴，僅用於老師親筆 / 裝飾標）
+   * 中文同步用 Noto Sans TC，避免系統字體跳動
+   * ============================================================ */
+  --pt-font-display: 'Outfit', 'Noto Sans TC', -apple-system, BlinkMacSystemFont, 'PingFang TC', 'Helvetica Neue', sans-serif;
+  --pt-font-body:    'Quicksand', 'Noto Sans TC', -apple-system, BlinkMacSystemFont, 'PingFang TC', 'Helvetica Neue', sans-serif;
+  --pt-font-hand:    'Patrick Hand', 'Noto Sans TC', cursive;
 }
 
 /* ============================================================
@@ -139,31 +222,31 @@
     --pt-text-disabled: #475569;
     --pt-text-hint: #475569;
 
-    /* 表面色 */
-    --pt-surface-app: #0f172a;
-    --pt-surface-card: #1e293b;
-    --pt-surface-mute: #334155;
-    --pt-surface-mute-soft: #1e293b;
-    --pt-surface-mute-warm: #334155;
-    --pt-surface-brand-tint: #1a2820;
-    --pt-surface-thread-bg: #0f172a;
-    --pt-surface-note: #1e293b;
+    /* 表面色 — sky-tinted dark surface */
+    --pt-surface-app:        #0F1F2A;
+    --pt-surface-card:       #1B2C3A;
+    --pt-surface-mute:       #25394A;
+    --pt-surface-mute-soft:  #1B2C3A;
+    --pt-surface-mute-warm:  #2A3548;
+    --pt-surface-brand-tint: #2A1F1F;
+    --pt-surface-thread-bg:  #0F1F2A;
+    --pt-surface-note:       #1B2C3A;
 
     /* 邊框 */
-    --pt-border: #334155;
-    --pt-border-light: #1e293b;
-    --pt-border-strong: #475569;
-    --pt-border-stronger: #64748b;
+    --pt-border:         #25394A;
+    --pt-border-light:   #1B2C3A;
+    --pt-border-strong:  #3A526A;
+    --pt-border-stronger:#52708F;
 
     /* 共用 neutral 翻面 */
-    --neutral-0: #1e293b;
+    --neutral-0: #1B2C3A;
 
-    /* Brand 提亮 + soft 半透明 */
-    --brand-primary: #5fa46a;
-    --brand-primary-hover: #79b685;
-    --brand-primary-soft: rgba(95, 164, 106, 0.18);
-    --brand-primary-tint: rgba(95, 164, 106, 0.10);
-    --brand-accent: #fbbf24;
+    /* Brand：dark mode 用 coral-300（提亮）保證對比 */
+    --brand-primary:       #FFB5AD;
+    --brand-primary-hover: #FFC9C2;
+    --brand-primary-soft:  rgba(255, 139, 139, 0.18);
+    --brand-primary-tint:  rgba(255, 139, 139, 0.10);
+    --brand-accent:        #FFE285;
 
     /* Semantic softs 改半透明避光害 */
     --color-success-soft: rgba(16, 185, 129, 0.18);
@@ -181,36 +264,39 @@
     --pt-violet-bg: rgba(167, 139, 250, 0.22);
     --pt-violet-text: #c4b5fd;
 
-    /* Elevation：dark mode 用更深的陰影 + 偏輕的 blur */
+    /* Elevation：dark mode 改用偏暖 sky-tinted 陰影 */
     --pt-elev-1: 0 1px 2px rgba(0, 0, 0, 0.30), 0 1px 3px rgba(0, 0, 0, 0.20);
     --pt-elev-2: 0 4px 8px rgba(0, 0, 0, 0.30), 0 8px 16px rgba(0, 0, 0, 0.20);
     --pt-elev-3: 0 12px 24px rgba(0, 0, 0, 0.40), 0 24px 48px rgba(0, 0, 0, 0.30);
     --pt-hairline: 1px solid rgba(255, 255, 255, 0.06);
 
-    /* Gradient：dark mode 加深 brand 漸層、其他用半透明 */
-    --pt-gradient-brand: linear-gradient(135deg, #4d8a58 0%, #3f7d48 100%);
-    --pt-gradient-brand-soft: linear-gradient(135deg, rgba(95, 164, 106, 0.15) 0%, rgba(95, 164, 106, 0.08) 100%);
-    --pt-gradient-warm: linear-gradient(135deg, rgba(245, 158, 11, 0.20) 0%, rgba(251, 191, 36, 0.12) 100%);
-    --pt-gradient-info: linear-gradient(135deg, rgba(59, 130, 246, 0.20) 0%, rgba(59, 130, 246, 0.10) 100%);
-    --pt-gradient-hero: linear-gradient(135deg, #2d5a35 0%, #3f7d48 60%, #5fa46a 100%);
+    /* Gradient：dark mode 用半透明 / 提亮 brand */
+    --pt-gradient-brand:      linear-gradient(135deg, #FF8B8B 0%, #E96B6B 100%);
+    --pt-gradient-brand-soft: linear-gradient(135deg, rgba(255, 139, 139, 0.18) 0%, rgba(255, 139, 139, 0.10) 100%);
+    --pt-gradient-warm:       linear-gradient(135deg, rgba(255, 217, 61, 0.22) 0%, rgba(255, 226, 133, 0.14) 100%);
+    --pt-gradient-info:       linear-gradient(135deg, rgba(91, 168, 204, 0.24) 0%, rgba(91, 168, 204, 0.12) 100%);
+    --pt-gradient-hero:
+      radial-gradient(circle at 80% 0%, rgba(255, 226, 133, 0.30) 0%, transparent 50%),
+      linear-gradient(155deg, #B14545 0%, #8B4848 50%, #2D6F8E 100%);
 
     /* Icon tint：dark mode 用半透明 */
-    --pt-tint-money: rgba(34, 197, 94, 0.20);          --pt-tint-money-fg: #6ee7b7;
-    --pt-tint-message: rgba(59, 130, 246, 0.22);       --pt-tint-message-fg: #93c5fd;
-    --pt-tint-event: rgba(168, 85, 247, 0.20);         --pt-tint-event-fg: #c4b5fd;
-    --pt-tint-announcement: rgba(245, 158, 11, 0.20);  --pt-tint-announcement-fg: #fbbf24;
-    --pt-tint-leave: rgba(249, 115, 22, 0.20);         --pt-tint-leave-fg: #fdba74;
-    --pt-tint-activity: rgba(236, 72, 153, 0.20);      --pt-tint-activity-fg: #f9a8d4;
-    --pt-tint-medication: rgba(167, 139, 250, 0.22);   --pt-tint-medication-fg: #c4b5fd;
-    --pt-tint-pickup: rgba(6, 182, 212, 0.22);         --pt-tint-pickup-fg: #67e8f9;
-    --pt-tint-calendar: rgba(99, 102, 241, 0.22);      --pt-tint-calendar-fg: #a5b4fc;
-    --pt-tint-contact: rgba(16, 185, 129, 0.22);       --pt-tint-contact-fg: #6ee7b7;
+    --pt-tint-money:        rgba(95, 199, 154, 0.20);  --pt-tint-money-fg:        #A8E6CF;
+    --pt-tint-message:      rgba(91, 168, 204, 0.22);  --pt-tint-message-fg:      #92C8E0;
+    --pt-tint-event:        rgba(181, 140, 217, 0.22); --pt-tint-event-fg:        #D4BCE6;
+    --pt-tint-announcement: rgba(255, 217, 61, 0.20);  --pt-tint-announcement-fg: #FFE285;
+    --pt-tint-leave:        rgba(255, 139, 139, 0.20); --pt-tint-leave-fg:        #FFB5AD;
+    --pt-tint-activity:     rgba(181, 140, 217, 0.22); --pt-tint-activity-fg:     #D4BCE6;
+    --pt-tint-medication:   rgba(181, 140, 217, 0.22); --pt-tint-medication-fg:   #D4BCE6;
+    --pt-tint-pickup:       rgba(91, 168, 204, 0.22);  --pt-tint-pickup-fg:       #92C8E0;
+    --pt-tint-calendar:     rgba(95, 199, 154, 0.20);  --pt-tint-calendar-fg:     #A8E6CF;
+    --pt-tint-contact:      rgba(95, 199, 154, 0.20);  --pt-tint-contact-fg:      #A8E6CF;
 
-    --pt-scrim: rgba(0, 0, 0, 0.65);
+    --pt-scrim: rgba(15, 31, 42, 0.65);
   }
 }
 
-/* 手動 dark 模式（覆寫 prefers-color-scheme：使用者明確選 dark） */
+/* 手動 dark 模式（覆寫 prefers-color-scheme：使用者明確選 dark）
+   token 與 @media (prefers-color-scheme: dark) 區段保持一致；只是觸發路徑不同。 */
 :root[data-theme='dark'] {
   color-scheme: dark;
 
@@ -223,65 +309,67 @@
   --pt-text-disabled: #475569;
   --pt-text-hint: #475569;
 
-  --pt-surface-app: #0f172a;
-  --pt-surface-card: #1e293b;
-  --pt-surface-mute: #334155;
-  --pt-surface-mute-soft: #1e293b;
-  --pt-surface-mute-warm: #334155;
-  --pt-surface-brand-tint: #1a2820;
-  --pt-surface-thread-bg: #0f172a;
-  --pt-surface-note: #1e293b;
+  --pt-surface-app:        #0F1F2A;
+  --pt-surface-card:       #1B2C3A;
+  --pt-surface-mute:       #25394A;
+  --pt-surface-mute-soft:  #1B2C3A;
+  --pt-surface-mute-warm:  #2A3548;
+  --pt-surface-brand-tint: #2A1F1F;
+  --pt-surface-thread-bg:  #0F1F2A;
+  --pt-surface-note:       #1B2C3A;
 
-  --pt-border: #334155;
-  --pt-border-light: #1e293b;
-  --pt-border-strong: #475569;
-  --pt-border-stronger: #64748b;
+  --pt-border:         #25394A;
+  --pt-border-light:   #1B2C3A;
+  --pt-border-strong:  #3A526A;
+  --pt-border-stronger:#52708F;
 
-  --neutral-0: #1e293b;
+  --neutral-0: #1B2C3A;
 
-  --brand-primary: #5fa46a;
-  --brand-primary-hover: #79b685;
-  --brand-primary-soft: rgba(95, 164, 106, 0.18);
-  --brand-primary-tint: rgba(95, 164, 106, 0.10);
-  --brand-accent: #fbbf24;
+  --brand-primary:       #FFB5AD;
+  --brand-primary-hover: #FFC9C2;
+  --brand-primary-soft:  rgba(255, 139, 139, 0.18);
+  --brand-primary-tint:  rgba(255, 139, 139, 0.10);
+  --brand-accent:        #FFE285;
 
-  --color-success-soft: rgba(16, 185, 129, 0.18);
-  --color-warning-soft: rgba(245, 158, 11, 0.18);
-  --color-danger-soft: rgba(239, 68, 68, 0.18);
-  --color-info-soft: rgba(59, 130, 246, 0.20);
+  --color-success-soft: rgba(95, 199, 154, 0.18);
+  --color-warning-soft: rgba(255, 217, 61, 0.18);
+  --color-danger-soft:  rgba(255, 139, 139, 0.18);
+  --color-info-soft:    rgba(91, 168, 204, 0.20);
 
-  --pt-warning-text: #fbbf24;
-  --pt-warning-text-mid: #fbbf24;
-  --pt-warning-text-soft: #fbbf24;
-  --pt-success-text: #6ee7b7;
-  --pt-info-text: #93c5fd;
-  --pt-info-link: #93c5fd;
-  --pt-violet-bg: rgba(167, 139, 250, 0.22);
-  --pt-violet-text: #c4b5fd;
+  --pt-warning-text:      #FFE285;
+  --pt-warning-text-mid:  #FFE285;
+  --pt-warning-text-soft: #FFE285;
+  --pt-success-text:      #A8E6CF;
+  --pt-info-text:         #92C8E0;
+  --pt-info-link:         #92C8E0;
+  --pt-violet-bg:         rgba(181, 140, 217, 0.22);
+  --pt-violet-text:       #D4BCE6;
 
   --pt-elev-1: 0 1px 2px rgba(0, 0, 0, 0.30), 0 1px 3px rgba(0, 0, 0, 0.20);
   --pt-elev-2: 0 4px 8px rgba(0, 0, 0, 0.30), 0 8px 16px rgba(0, 0, 0, 0.20);
   --pt-elev-3: 0 12px 24px rgba(0, 0, 0, 0.40), 0 24px 48px rgba(0, 0, 0, 0.30);
   --pt-hairline: 1px solid rgba(255, 255, 255, 0.06);
 
-  --pt-gradient-brand: linear-gradient(135deg, #4d8a58 0%, #3f7d48 100%);
-  --pt-gradient-brand-soft: linear-gradient(135deg, rgba(95, 164, 106, 0.15) 0%, rgba(95, 164, 106, 0.08) 100%);
-  --pt-gradient-warm: linear-gradient(135deg, rgba(245, 158, 11, 0.20) 0%, rgba(251, 191, 36, 0.12) 100%);
-  --pt-gradient-info: linear-gradient(135deg, rgba(59, 130, 246, 0.20) 0%, rgba(59, 130, 246, 0.10) 100%);
-  --pt-gradient-hero: linear-gradient(135deg, #2d5a35 0%, #3f7d48 60%, #5fa46a 100%);
+  --pt-gradient-brand:      linear-gradient(135deg, #FF8B8B 0%, #E96B6B 100%);
+  --pt-gradient-brand-soft: linear-gradient(135deg, rgba(255, 139, 139, 0.18) 0%, rgba(255, 139, 139, 0.10) 100%);
+  --pt-gradient-warm:       linear-gradient(135deg, rgba(255, 217, 61, 0.22) 0%, rgba(255, 226, 133, 0.14) 100%);
+  --pt-gradient-info:       linear-gradient(135deg, rgba(91, 168, 204, 0.24) 0%, rgba(91, 168, 204, 0.12) 100%);
+  --pt-gradient-hero:
+    radial-gradient(circle at 80% 0%, rgba(255, 226, 133, 0.30) 0%, transparent 50%),
+    linear-gradient(155deg, #B14545 0%, #8B4848 50%, #2D6F8E 100%);
 
-  --pt-tint-money: rgba(34, 197, 94, 0.20);          --pt-tint-money-fg: #6ee7b7;
-  --pt-tint-message: rgba(59, 130, 246, 0.22);       --pt-tint-message-fg: #93c5fd;
-  --pt-tint-event: rgba(168, 85, 247, 0.20);         --pt-tint-event-fg: #c4b5fd;
-  --pt-tint-announcement: rgba(245, 158, 11, 0.20);  --pt-tint-announcement-fg: #fbbf24;
-  --pt-tint-leave: rgba(249, 115, 22, 0.20);         --pt-tint-leave-fg: #fdba74;
-  --pt-tint-activity: rgba(236, 72, 153, 0.20);      --pt-tint-activity-fg: #f9a8d4;
-  --pt-tint-medication: rgba(167, 139, 250, 0.22);   --pt-tint-medication-fg: #c4b5fd;
-  --pt-tint-pickup: rgba(6, 182, 212, 0.22);         --pt-tint-pickup-fg: #67e8f9;
-  --pt-tint-calendar: rgba(99, 102, 241, 0.22);      --pt-tint-calendar-fg: #a5b4fc;
-  --pt-tint-contact: rgba(16, 185, 129, 0.22);       --pt-tint-contact-fg: #6ee7b7;
+  --pt-tint-money:        rgba(95, 199, 154, 0.20);  --pt-tint-money-fg:        #A8E6CF;
+  --pt-tint-message:      rgba(91, 168, 204, 0.22);  --pt-tint-message-fg:      #92C8E0;
+  --pt-tint-event:        rgba(181, 140, 217, 0.22); --pt-tint-event-fg:        #D4BCE6;
+  --pt-tint-announcement: rgba(255, 217, 61, 0.20);  --pt-tint-announcement-fg: #FFE285;
+  --pt-tint-leave:        rgba(255, 139, 139, 0.20); --pt-tint-leave-fg:        #FFB5AD;
+  --pt-tint-activity:     rgba(181, 140, 217, 0.22); --pt-tint-activity-fg:     #D4BCE6;
+  --pt-tint-medication:   rgba(181, 140, 217, 0.22); --pt-tint-medication-fg:   #D4BCE6;
+  --pt-tint-pickup:       rgba(91, 168, 204, 0.22);  --pt-tint-pickup-fg:       #92C8E0;
+  --pt-tint-calendar:     rgba(95, 199, 154, 0.20);  --pt-tint-calendar-fg:     #A8E6CF;
+  --pt-tint-contact:      rgba(95, 199, 154, 0.20);  --pt-tint-contact-fg:      #A8E6CF;
 
-  --pt-scrim: rgba(0, 0, 0, 0.65);
+  --pt-scrim: rgba(15, 31, 42, 0.65);
 }
 
 /* ========== Focus Visible ==========
