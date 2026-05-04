@@ -45,6 +45,12 @@ const messagesUnreadCount = ref(0)
 // 今日工作台待辦數
 const hubPendingCount = ref(0)
 
+// 「今日工作台」menu badge 聚合：hub 待辦 + 家長訊息未讀。
+// 不含公告（unreadCount），因為「公告通知」已是獨立頂層 menu item 自帶 badge。
+const totalHubBadge = computed(
+  () => hubPendingCount.value + messagesUnreadCount.value,
+)
+
 // Badge 刷新節流：避免短時間內被多次觸發（route 切換、tab 切回）打爆後端。
 // 30 秒內已 refresh 過就不再全量重抓；個別事件（如代理人狀態變更）仍可 force。
 const COUNTS_TTL_MS = 30_000
@@ -306,24 +312,6 @@ const submitPassword = async () => {
           <span>個人資料</span>
         </el-menu-item>
 
-        <!-- 家園溝通 -->
-        <el-sub-menu index="group-comm">
-          <template #title>
-            <el-icon><ChatLineRound /></el-icon>
-            <span>家園溝通</span>
-          </template>
-          <el-menu-item index="/portal/messages">
-            <el-icon><Message /></el-icon>
-            <span>家長訊息</span>
-            <el-badge v-if="messagesUnreadCount > 0" :value="messagesUnreadCount" :max="99" class="announcement-badge" />
-          </el-menu-item>
-          <el-menu-item index="/portal/announcements">
-            <el-icon><Bell /></el-icon>
-            <span>公告通知</span>
-            <el-badge v-if="unreadCount > 0" :value="unreadCount" :max="99" class="announcement-badge" />
-          </el-menu-item>
-        </el-sub-menu>
-
         <!-- 假勤申請 -->
         <el-sub-menu index="group-leave">
           <template #title>
@@ -360,6 +348,13 @@ const submitPassword = async () => {
           <el-badge v-if="swapPendingCount > 0" :value="swapPendingCount" :max="99" class="announcement-badge" />
         </el-menu-item>
 
+        <!-- 公告通知 -->
+        <el-menu-item index="/portal/announcements">
+          <el-icon><Bell /></el-icon>
+          <span>公告通知</span>
+          <el-badge v-if="unreadCount > 0" :value="unreadCount" :max="99" class="announcement-badge" />
+        </el-menu-item>
+
         <!-- 班級教務 -->
         <el-sub-menu index="group-class">
           <template #title>
@@ -374,8 +369,8 @@ const submitPassword = async () => {
             <el-icon><Calendar /></el-icon>
             <span>今日工作台</span>
             <el-badge
-              v-if="hubPendingCount > 0"
-              :value="hubPendingCount"
+              v-if="totalHubBadge > 0"
+              :value="totalHubBadge"
               :max="99"
               class="announcement-badge"
             />

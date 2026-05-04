@@ -1,10 +1,32 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { defineComponent, h } from 'vue'
+import { createPinia, setActivePinia } from 'pinia'
 
 // ---- Mock the api wrapper used by usePortalClassHub ----
 vi.mock('@/api/portalClassHub', () => ({
   getTodayHub: vi.fn(),
+}))
+
+// ---- Mock portalMessages api 防止 usePortalMessagesStore.refreshUnread 真打網路 ----
+vi.mock('@/api/portalMessages', () => ({
+  listThreads: vi.fn(() => Promise.resolve({ data: { items: [] } })),
+  listMessages: vi.fn(() =>
+    Promise.resolve({ data: { items: [], next_cursor: null } }),
+  ),
+  postReply: vi.fn(),
+  createThread: vi.fn(),
+  attachToMessage: vi.fn(),
+  markThreadRead: vi.fn(),
+  recallMessage: vi.fn(),
+  getUnreadCount: vi.fn(() =>
+    Promise.resolve({ data: { unread_count: 0 } }),
+  ),
+}))
+
+// ---- Mock auth so hasPermission('PARENT_MESSAGES_WRITE') 為 deterministic ----
+vi.mock('@/utils/auth', () => ({
+  hasPermission: vi.fn(() => true),
 }))
 
 // ---- Mock Vue Router (PortalClassHubView calls useRouter) ----
@@ -130,6 +152,7 @@ const FAKE_BASE = {
 
 describe('PortalClassHubView', () => {
   beforeEach(() => {
+    setActivePinia(createPinia())
     vi.useFakeTimers()
     routerPush.mockReset()
     getTodayHub.mockReset()

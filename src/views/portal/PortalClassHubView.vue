@@ -1,5 +1,10 @@
 <template>
   <div class="class-hub" v-loading="loading && !data">
+    <ClassHubCommBar
+      :messages-unread="messagesUnread"
+      @open-panel="onOpenPanel"
+    />
+
     <ClassHubStickyNext :next="data?.sticky_next" @jump="jumpDeep" />
 
     <div class="class-hub__header">
@@ -44,34 +49,73 @@
       v-model:show="sheets.incident"
       @done="manualRefresh"
     />
+
+    <ClassHubMessagesDrawer
+      v-if="canMessages"
+      :model-value="panel === 'messages'"
+      :thread-id="threadId"
+      @update:model-value="onMessagesDrawerToggle"
+      @open-thread="openThread"
+      @close-thread="closeThread"
+    />
   </div>
 </template>
 
 <script setup>
-import { computed, reactive, ref, onMounted, onBeforeUnmount } from 'vue'
+import { computed, reactive, ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { storeToRefs } from 'pinia'
 import { usePortalClassHub } from '@/composables/usePortalClassHub'
+import { useClassHubPanelQuery } from '@/composables/useClassHubPanelQuery'
+import { usePortalMessagesStore } from '@/stores/portalMessages'
+import { hasPermission } from '@/utils/auth'
 import ClassHubStickyNext from '@/components/portal/class-hub/ClassHubStickyNext.vue'
 import ClassHubTimeSlotCard from '@/components/portal/class-hub/ClassHubTimeSlotCard.vue'
 import ClassHubAttendanceSheet from '@/components/portal/class-hub/ClassHubAttendanceSheet.vue'
 import ClassHubMedicationSheet from '@/components/portal/class-hub/ClassHubMedicationSheet.vue'
 import ClassHubIncidentQuickSheet from '@/components/portal/class-hub/ClassHubIncidentQuickSheet.vue'
+import ClassHubCommBar from '@/components/portal/class-hub/ClassHubCommBar.vue'
+import ClassHubMessagesDrawer from '@/components/portal/class-hub/ClassHubMessagesDrawer.vue'
 
 const { data, loading, refresh, decrementCount } = usePortalClassHub()
 const router = useRouter()
+const messagesStore = usePortalMessagesStore()
+const { unreadCount: messagesUnread } = storeToRefs(messagesStore)
+const {
+  panel,
+  threadId,
+  openPanel,
+  closePanel,
+  openThread,
+  closeThread,
+} = useClassHubPanelQuery()
+
+const canMessages = computed(() => hasPermission('PARENT_MESSAGES_WRITE'))
 
 const sheets = reactive({
   attendance: false,
   medication: false,
   incident: false,
 })
-// Re-evaluate which slot is current every minute (also handled by composable polling)
+
+// 訊息未讀也要主動拉一次（store 沒有 auto-fetch）
+async function refreshMessagesUnread() {
+  if (!hasPermission('PARENT_MESSAGES_WRITE')) return
+  try {
+    await messagesStore.refreshUnread()
+  } catch {
+    /* silent */
+  }
+}
+
+// Re-evaluate which slot is current every minute
 const nowTick = ref(Date.now())
 let tickTimer = null
 onMounted(() => {
   tickTimer = setInterval(() => {
     nowTick.value = Date.now()
   }, 60_000)
+  refreshMessagesUnread()
 })
 onBeforeUnmount(() => {
   if (tickTimer) clearInterval(tickTimer)
@@ -79,7 +123,7 @@ onBeforeUnmount(() => {
 
 const currentSlotId = computed(() => {
   // eslint-disable-next-line no-unused-expressions
-  nowTick.value // re-trigger when nowTick changes
+  nowTick.value
   const now = new Date()
   const m = now.getHours() * 60 + now.getMinutes()
   if (m < 9 * 60) return 'morning'
@@ -90,16 +134,17 @@ const currentSlotId = computed(() => {
 
 function manualRefresh() {
   refresh().catch(() => {})
+  refreshMessagesUnread()
 }
 
 function onOpenSheet(task) {
-  if (task.kind === 'attendance') {
-    sheets.attendance = true
-  } else if (task.kind === 'medication') {
-    sheets.medication = true
-  } else if (task.kind === 'incident') {
-    sheets.incident = true
-  }
+  if (task.kind === 'attendance') sheets.attendance = true
+  else if (task.kind === 'medication') sheets.medication = true
+  else if (task.kind === 'incident') sheets.incident = true
+}
+
+function onSheetDone(countKey) {
+  decrementCount(countKey)
 }
 
 function onJumpPage(task) {
@@ -116,10 +161,6 @@ function jumpDeep(deepLink) {
   router.push(deepLink)
 }
 
-function onSheetDone(countKey) {
-  decrementCount(countKey)
-}
-
 function formatTime(iso) {
   if (!iso) return ''
   const d = new Date(iso)
@@ -128,6 +169,20 @@ function formatTime(iso) {
   const mm = String(d.getMinutes()).padStart(2, '0')
   return `${hh}:${mm}`
 }
+
+// drawer 控制
+function onOpenPanel(name) {
+  openPanel(name)
+}
+
+function onMessagesDrawerToggle(val) {
+  if (!val) closePanel()
+}
+
+// 關閉 panel / thread 時刷未讀
+watch(panel, (newPanel, oldPanel) => {
+  if (oldPanel === 'messages' && newPanel !== 'messages') refreshMessagesUnread()
+})
 </script>
 
 <style scoped>
