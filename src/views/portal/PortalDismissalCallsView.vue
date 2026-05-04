@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   getPortalDismissalCalls,
   acknowledgeDismissalCall,
@@ -45,7 +45,22 @@ const handleAcknowledge = async (call) => {
 }
 
 // ─── 確認已放學 ──────────────────────────────────────────
+// 此操作無法撤銷（後端無 reverse-complete 端點，且家長端會收到放學通知），
+// 因此先二次確認再送出。
 const handleComplete = async (call) => {
+  try {
+    await ElMessageBox.confirm(
+      `確定 ${call.student_name}（${call.classroom_name}）已交給家長放學？\n此操作無法撤銷，家長端將收到放學通知。`,
+      '確認放學',
+      {
+        confirmButtonText: '確定放學',
+        cancelButtonText: '取消',
+        type: 'warning',
+      },
+    )
+  } catch {
+    return // 使用者取消
+  }
   try {
     await completeDismissalCall(call.id)
     activeCalls.value = activeCalls.value.filter(c => c.id !== call.id)
@@ -186,20 +201,21 @@ onUnmounted(() => {
           <el-tag
             :type="call.status === 'pending' ? 'warning' : 'primary'"
             size="small"
-            style="margin-bottom: 8px"
+            class="call-actions__status"
           >
             {{ call.status === 'pending' ? '等待確認' : '已收到' }}
           </el-tag>
           <el-button
             v-if="call.status === 'pending'"
             type="primary"
-            size="small"
+            class="call-actions__btn"
             @click="handleAcknowledge(call)"
           >已收到</el-button>
           <el-button
             v-if="call.status === 'acknowledged'"
             type="success"
-            size="small"
+            size="large"
+            class="call-actions__btn call-actions__btn--primary"
             @click="handleComplete(call)"
           >已放學</el-button>
         </div>
@@ -281,7 +297,34 @@ onUnmounted(() => {
 .call-actions {
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
+  align-items: stretch;
+  gap: 8px;
   flex-shrink: 0;
+  min-width: 110px;
+}
+
+.call-actions__status {
+  align-self: flex-end;
+}
+
+.call-actions__btn {
+  min-height: var(--touch-target-min);
+}
+
+.call-actions__btn--primary {
+  font-weight: 600;
+}
+
+@media (max-width: 480px) {
+  .call-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .call-actions {
+    min-width: 0;
+  }
+  .call-actions__status {
+    align-self: flex-start;
+  }
 }
 </style>
