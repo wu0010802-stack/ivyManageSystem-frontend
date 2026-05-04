@@ -214,11 +214,11 @@ onMounted(() => {
     <!-- Month Navigation -->
     <el-card class="control-panel">
       <div class="controls">
-        <el-button @click="changeMonth(-1)">上月</el-button>
+        <el-button class="ctrl-btn" @click="changeMonth(-1)">上月</el-button>
         <span class="month-label">{{ query.year }} 年 {{ query.month }} 月</span>
-        <el-button @click="changeMonth(1)">下月</el-button>
+        <el-button class="ctrl-btn" @click="changeMonth(1)">下月</el-button>
         <div class="spacer" />
-        <el-button type="primary" @click="openSwapDialog('')">發起換班</el-button>
+        <el-button type="primary" class="ctrl-btn ctrl-btn--cta" @click="openSwapDialog('')">發起換班</el-button>
       </div>
     </el-card>
 
@@ -402,6 +402,12 @@ onMounted(() => {
   gap: var(--space-3);
   align-items: center;
   flex-wrap: wrap;
+}
+
+.ctrl-btn {
+  min-height: var(--touch-target-min);
+  padding-left: var(--space-4);
+  padding-right: var(--space-4);
 }
 
 .month-label {

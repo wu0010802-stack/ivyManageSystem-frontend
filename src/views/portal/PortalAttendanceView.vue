@@ -1,6 +1,7 @@
 <script setup>
 import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
+import { ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
 import { getAttendanceSheet } from '@/api/portal'
 import { getUserInfo } from '@/utils/auth'
 import { apiError } from '@/utils/error'
@@ -158,9 +159,9 @@ onUnmounted(() => {
       <div class="sheet-header">
         <h2>出勤紀錄表</h2>
         <div class="month-nav">
-          <el-button :icon="'ArrowLeft'" circle size="small" @click="prevMonth" />
+          <el-button :icon="ArrowLeft" circle class="month-nav__btn" aria-label="上個月" @click="prevMonth" />
           <span class="month-label">{{ query.year }} 年 {{ String(query.month).padStart(2, '0') }} 月</span>
-          <el-button :icon="'ArrowRight'" circle size="small" @click="nextMonth" />
+          <el-button :icon="ArrowRight" circle class="month-nav__btn" aria-label="下個月" @click="nextMonth" />
         </div>
       </div>
       <div class="employee-info" v-if="sheetData">
@@ -497,6 +498,11 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: var(--space-4);
+}
+
+.month-nav__btn {
+  min-width: var(--touch-target-min);
+  min-height: var(--touch-target-min);
 }
 
 .month-label {
