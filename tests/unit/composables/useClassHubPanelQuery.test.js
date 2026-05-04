@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { ref } from 'vue'
 
 const mockRoute = { query: {} }
 const mockRouter = {
@@ -51,6 +50,12 @@ describe('useClassHubPanelQuery', () => {
       const { threadId } = useClassHubPanelQuery()
       expect(threadId.value).toBe(42)
     })
+
+    it('query 有非數字 thread 時回傳 null', () => {
+      mockRoute.query = { panel: 'messages', thread: 'abc' }
+      const { threadId } = useClassHubPanelQuery()
+      expect(threadId.value).toBeNull()
+    })
   })
 
   describe('openPanel', () => {
@@ -75,6 +80,15 @@ describe('useClassHubPanelQuery', () => {
       openPanel('messages')
       expect(mockRouter.push).toHaveBeenCalledWith({
         query: { panel: 'messages', thread: undefined },
+      })
+    })
+
+    it('openPanel 保留其他 query keys（如 tab、filter）', () => {
+      mockRoute.query = { foo: 'bar' }
+      const { openPanel } = useClassHubPanelQuery()
+      openPanel('messages')
+      expect(mockRouter.push).toHaveBeenCalledWith({
+        query: { foo: 'bar', panel: 'messages', thread: undefined },
       })
     })
   })
