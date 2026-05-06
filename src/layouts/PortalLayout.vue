@@ -168,6 +168,30 @@ onMounted(() => {
   document.addEventListener('visibilitychange', onVisibilityChange)
   fetchEmployees()
   refreshPortalCounts({ force: true })
+
+  // 導航更新一次性提示（v=1: 2026-05 教師端 ACD 改造）
+  const PORTAL_LAYOUT_VERSION = '1'
+  const stored = localStorage.getItem('portal_layout_v')
+  if (stored !== PORTAL_LAYOUT_VERSION) {
+    setTimeout(() => {
+      ElMessageBox({
+        title: '導航更新',
+        message:
+          '教師端介面已更新：\n\n' +
+          '• 底部 tab 第 5 個從「更多」改為「我的」（個人選單）\n' +
+          '• 側邊欄「班級教務」拆為「班級 — 教學」與「班級 — 管理」\n' +
+          '• 新增「今日工作台」為預設首頁\n\n' +
+          '原本的選單仍可由側邊欄找到。',
+        type: 'info',
+        confirmButtonText: '我知道了',
+        showCancelButton: false,
+      })
+        .catch(() => {})
+        .finally(() => {
+          localStorage.setItem('portal_layout_v', PORTAL_LAYOUT_VERSION)
+        })
+    }, 500)
+  }
 })
 
 onUnmounted(() => {
