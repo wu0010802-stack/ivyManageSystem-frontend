@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import LazyImage from '@/parent/components/LazyImage.vue'
+import LazyImage from '@/components/common/LazyImage.vue'
 
 describe('LazyImage', () => {
   let observers = []
