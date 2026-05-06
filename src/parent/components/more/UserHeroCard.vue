@@ -158,6 +158,6 @@ defineProps({
 }
 .badge.warn {
   background: rgba(254, 243, 199, 0.95);
-  color: #92400e;
+  color: var(--pt-warning-text-soft);
 }
 </style>

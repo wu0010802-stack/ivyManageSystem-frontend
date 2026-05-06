@@ -410,5 +410,5 @@ async function pullRefresh() {
   font-weight: 600;
   cursor: pointer;
 }
-.hero-cta:hover { background: #fff; }
+.hero-cta:hover { background: var(--neutral-0); }
 </style>

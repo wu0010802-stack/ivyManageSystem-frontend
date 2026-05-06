@@ -31,7 +31,7 @@ if [ -n "$INFO_BTN" ]; then
 fi
 
 # 3. 直寫 hex 在 background / color / border-color
-DIRECT_HEX=$(git grep -nE '(background|color|border-color):[[:space:]]*#[0-9a-fA-F]{3,8}\b' src/parent/views/ src/parent/components/ \
+DIRECT_HEX=$(git grep -nP '(background|color|border-color):\s*#[0-9a-fA-F]{3,8}\b' src/parent/views/ src/parent/components/ \
   | grep -vE '/\*|//|rgba\(' \
   || true)
 if [ -n "$DIRECT_HEX" ]; then

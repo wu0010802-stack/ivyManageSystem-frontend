@@ -41,7 +41,7 @@ function fmt(n) { return Number(n).toLocaleString('en-US') }
 .act-hero {
   position: relative; overflow: hidden;
   background: var(--pt-gradient-info);
-  color: #1e3a8a;
+  color: var(--pt-info-text);
   border-radius: 16px; padding: 16px;
   box-shadow: var(--pt-elev-2); border: var(--pt-hairline);
 }

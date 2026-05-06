@@ -54,7 +54,7 @@ function fmt(n) { return Number(n).toLocaleString('en-US') }
   position: relative;
   overflow: hidden;
   background: var(--pt-gradient-warm);
-  color: #78350f;
+  color: var(--pt-warning-text-soft);
   border-radius: 16px;
   padding: 20px;
   box-shadow: var(--pt-elev-2);
@@ -101,7 +101,7 @@ function fmt(n) { return Number(n).toLocaleString('en-US') }
 .fee-hero-overdue {
   font-size: 12px;
   margin-top: 4px;
-  color: #b91c1c;
+  color: var(--color-danger);
   font-weight: 600;
 }
 .fee-hero-due {
@@ -113,7 +113,7 @@ function fmt(n) { return Number(n).toLocaleString('en-US') }
   position: relative;
   z-index: 1;
   background: rgba(255, 255, 255, 0.95);
-  color: #b45309;
+  color: var(--pt-warning-text);
   border: none;
   padding: 8px 14px;
   border-radius: 99px;
@@ -121,6 +121,6 @@ function fmt(n) { return Number(n).toLocaleString('en-US') }
   cursor: pointer;
 }
 .fee-hero-cta:hover {
-  background: #fff;
+  background: var(--neutral-0);
 }
 </style>

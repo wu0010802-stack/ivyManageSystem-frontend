@@ -72,7 +72,7 @@ const time = computed(() => {
   background: var(--brand-primary);
   color: var(--neutral-0);
 }
-.bubble.deleted { font-style: italic; opacity: 0.6; background: #f7f7f7 !important; color: var(--pt-text-placeholder) !important; }
+.bubble.deleted { font-style: italic; opacity: 0.6; background: var(--pt-surface-mute) !important; color: var(--pt-text-placeholder) !important; }
 .bubble.pending { opacity: 0.7; }
 .body { white-space: pre-wrap; word-break: break-word; }
 .attachments { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }

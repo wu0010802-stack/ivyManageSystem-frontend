@@ -143,6 +143,6 @@ function onConfirm() {
 }
 
 .btn-confirm.is-destructive:active {
-  background: #b91c1c;
+  background: var(--color-danger);
 }
 </style>
