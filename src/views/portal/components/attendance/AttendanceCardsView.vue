@@ -76,6 +76,7 @@ const formatDate = (day, month) => {
     <div
       v-for="day in days"
       :key="day.day"
+      :data-day="day.day"
       class="day-card"
       :class="{
         'day-card--weekend': day.is_weekend,

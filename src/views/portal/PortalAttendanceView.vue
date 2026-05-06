@@ -75,9 +75,6 @@ const topSentinel = ref(null)
 const showStickyBar = ref(false)
 let stickyObserver = null
 
-// dayCardRefs: { [day.day]: HTMLElement } —「今日」按鈕用來定位 scroll
-const dayCardRefs = ref({})
-
 const isViewingCurrentMonth = computed(() => {
   const t = new Date()
   return query.year === t.getFullYear() && query.month === (t.getMonth() + 1)
@@ -89,7 +86,8 @@ const isCurrentMonth = computed(() => isViewingCurrentMonth.value)
 const scrollToToday = () => {
   if (!isViewingCurrentMonth.value) return
   const todayNum = new Date().getDate()
-  const el = dayCardRefs.value[todayNum]
+  // 從 AttendanceCardsView 渲染的 .day-card[data-day=N] 取 DOM
+  const el = document.querySelector(`.day-card[data-day="${todayNum}"]`)
   if (!el) return
   el.scrollIntoView({ behavior: 'smooth', block: 'center' })
   el.classList.add('day-card--highlight')
