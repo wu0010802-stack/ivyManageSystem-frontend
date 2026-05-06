@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   ackContactBook,
@@ -9,12 +9,18 @@ import {
 } from '../api/contactBook'
 import { toast } from '../utils/toast'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
 
 const route = useRoute()
 const entryId = Number(route.params.entryId)
 const entry = ref(null)
 const replies = ref([])
 const newReply = ref('')
+const removeReplyTarget = ref(null) // 待刪除的 reply id 或 null
+const removeReplyOpen = computed({
+  get: () => removeReplyTarget.value !== null,
+  set: (v) => { if (!v) removeReplyTarget.value = null },
+})
 const loading = ref(false)
 const submitting = ref(false)
 
@@ -81,7 +87,14 @@ async function submitReply() {
   }
 }
 
-async function removeReply(replyId) {
+function askRemoveReply(replyId) {
+  removeReplyTarget.value = replyId
+}
+
+async function doRemoveReply() {
+  const replyId = removeReplyTarget.value
+  removeReplyTarget.value = null
+  if (!replyId) return
   try {
     await deleteContactBookReply(entryId, replyId)
     replies.value = replies.value.filter((r) => r.id !== replyId)
@@ -169,7 +182,7 @@ onMounted(async () => {
             <p class="body">{{ r.body }}</p>
             <small class="meta">
               {{ new Date(r.created_at).toLocaleString('zh-TW') }}
-              <button class="link-btn" @click="removeReply(r.id)">刪除</button>
+              <button class="link-btn" @click="askRemoveReply(r.id)">刪除</button>
             </small>
           </li>
         </ul>
@@ -193,6 +206,15 @@ onMounted(async () => {
       </div>
     </div>
     <p v-else class="hint">找不到聯絡簿。</p>
+
+    <ConfirmDialog
+      v-model:open="removeReplyOpen"
+      title="確定刪除這則回覆？"
+      message="刪除後無法還原。"
+      confirm-label="刪除"
+      destructive
+      @confirm="doRemoveReply"
+    />
   </div>
 </template>
 
