@@ -11,7 +11,6 @@ import {
 import {
   CASH_METHOD,
   LARGE_AMOUNT_THRESHOLD,
-  POS_PAYMENT_METHODS,
   computeOwed,
   formatTWD,
 } from '@/constants/pos'
@@ -67,6 +66,7 @@ export function usePOSCheckout() {
   const isRefundMode = computed(() => checkoutType.value === 'refund')
 
   // ── 收款 ────────────────────────────────────────────────────────
+  // 永遠是現金（spec 2026-05-06-pos-cash-only）；保留 ref 以便未來擴充時最小改動
   const paymentMethod = ref(CASH_METHOD)
   const notes = ref('')
   const submitting = ref(false)
@@ -100,12 +100,13 @@ export function usePOSCheckout() {
     if (!item) return false
     const applied = Number(item.amount_applied) || 0
     if (applied <= 0) return false
-    // 退費模式：金額不得超過已繳
-    if (isRefundMode.value && applied > (item.paid_amount || 0)) return false
+    // 退費模式：金額不得超過已繳；備註原因 ≥ 15 字（與後端 MIN_REFUND_REASON_LENGTH 一致）
+    if (isRefundMode.value) {
+      if (applied > (item.paid_amount || 0)) return false
+      if ((notes.value || '').trim().length < 15) return false
+    }
     return true
   })
-
-  const paymentMethodOptions = POS_PAYMENT_METHODS
 
   // 切換繳費 / 退費時：清空選取（兩模式邏輯不同，避免混淆）
   watch(checkoutType, (next, prev) => {
@@ -270,10 +271,10 @@ export function usePOSCheckout() {
     const item = selectedItem.value
     if (!item) return
 
-    // 退費必填原因（≥ 5 字），後端 schema 層亦會擋；此處提前 UI 驗證避免送出後被拒
+    // 退費必填原因（≥ 15 字），後端 schema 層亦會擋；此處提前 UI 驗證避免送出後被拒
     const cleanedNotes = (notes.value || '').trim()
-    if (isRefundMode.value && cleanedNotes.length < 5) {
-      ElMessage.warning('退費必須於備註填寫原因（至少 5 個字）')
+    if (isRefundMode.value && cleanedNotes.length < 15) {
+      ElMessage.warning('退費必須於備註填寫具體原因（至少 15 個字）')
       return
     }
 
@@ -468,7 +469,6 @@ export function usePOSCheckout() {
     reset,
     // 收款
     paymentMethod,
-    paymentMethodOptions,
     notes,
     canSubmit,
     submitting,

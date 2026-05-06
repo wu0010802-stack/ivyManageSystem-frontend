@@ -82,25 +82,6 @@
       </div>
     </div>
 
-    <div class="pos-payment__field">
-      <label class="pos-payment__label">
-        {{ isRefundMode ? '退款方式' : '付款方式' }}
-      </label>
-      <el-radio-group
-        :model-value="paymentMethod"
-        size="large"
-        @update:model-value="$emit('update:paymentMethod', $event)"
-      >
-        <el-radio-button
-          v-for="m in paymentMethodOptions"
-          :key="m.value"
-          :value="m.value"
-        >
-          {{ m.label }}
-        </el-radio-button>
-      </el-radio-group>
-    </div>
-
     <div class="pos-payment__summary">
       <div class="pos-payment__row">
         <span>{{ isRefundMode ? '退款合計' : '應收' }}</span>
@@ -121,7 +102,7 @@
         :rows="2"
         maxlength="200"
         show-word-limit
-        :placeholder="isRefundMode ? '例如：家長要求退費、事由' : ''"
+        :placeholder="isRefundMode ? '退費原因（至少 15 字，例如：家長申請退費，原因為…）' : ''"
         @update:model-value="$emit('update:notes', $event)"
       />
     </div>
@@ -159,8 +140,6 @@ import { Close } from '@element-plus/icons-vue'
 import { formatTWD } from '@/constants/pos'
 
 defineProps({
-  paymentMethod: { type: String, required: true },
-  paymentMethodOptions: { type: Array, required: true },
   itemTotal: { type: Number, required: true },
   selectedItem: { type: Object, default: null },
   notes: { type: String, default: '' },
@@ -171,7 +150,6 @@ defineProps({
 })
 
 defineEmits([
-  'update:paymentMethod',
   'update:notes',
   'update:checkoutType',
   'update:appliedAmount',

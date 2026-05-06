@@ -181,9 +181,6 @@
               <el-table-column label="金額" width="100" align="right">
                 <template #default="{ row }">{{ formatTWD(row.total) }}</template>
               </el-table-column>
-              <el-table-column label="方式" width="70" align="center">
-                <template #default="{ row }">{{ row.payment_method }}</template>
-              </el-table-column>
             </el-table>
           </div>
 
@@ -516,9 +513,25 @@ function handlePendingSelect(row) {
   if (row?.date) selectedDate.value = row.date
 }
 
+// 盤點門檻：與後端 _CASH_COUNT_REQUIRED_THRESHOLD 同步
+// 預期現金 ≥ NT$3,000 時 actual_cash_count 必填，否則前端先擋下避免送出後再被 400
+const CASH_COUNT_REQUIRED_THRESHOLD = 3000
+
 async function handleApprove() {
   if (!canApprove.value) return
   const cash = form.actualCashCount
+  const expectedCash = Number(cashInSystem.value) || 0
+  if (
+    expectedCash >= CASH_COUNT_REQUIRED_THRESHOLD
+    && (cash == null || cash === '')
+  ) {
+    ElMessage.warning(
+      `當日預期現金 ${formatTWD(expectedCash)} ≥ ${formatTWD(
+        CASH_COUNT_REQUIRED_THRESHOLD
+      )}，必須填寫實際現金盤點金額`
+    )
+    return
+  }
   const variance = cash == null ? null : cash - cashInSystem.value
   const warnMsg =
     variance != null && variance !== 0

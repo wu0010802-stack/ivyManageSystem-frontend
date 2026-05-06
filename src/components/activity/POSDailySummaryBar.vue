@@ -28,30 +28,18 @@
       color="info"
       variant="filled"
     />
-    <div v-if="methodBreakdown.length" class="pos-daily-bar__methods">
-      <span
-        v-for="m in methodBreakdown"
-        :key="m.method"
-        class="pos-daily-bar__method-tag"
-      >
-        {{ m.method }} · {{ formatTWD(m.payment) }}
-      </span>
-    </div>
   </div>
 </template>
 
 <script setup>
-import { computed } from 'vue'
 import { Money, RefreshLeft, Tickets, Wallet } from '@element-plus/icons-vue'
 
 import StatCard from '@/components/common/StatCard.vue'
 import { formatTWD } from '@/constants/pos'
 
-const props = defineProps({
+defineProps({
   data: { type: Object, default: null },
 })
-
-const methodBreakdown = computed(() => props.data?.by_method || [])
 </script>
 
 <style scoped>
@@ -60,21 +48,6 @@ const methodBreakdown = computed(() => props.data?.by_method || [])
   grid-template-columns: repeat(4, minmax(160px, 1fr));
   gap: 12px;
   align-items: stretch;
-}
-
-.pos-daily-bar__methods {
-  grid-column: 1 / -1;
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  font-size: 12px;
-  color: #64748b;
-}
-
-.pos-daily-bar__method-tag {
-  background: #f1f5f9;
-  padding: 4px 10px;
-  border-radius: 999px;
 }
 
 @media (max-width: 900px) {

@@ -20,10 +20,8 @@
       />
 
       <POSPaymentPanel
-        v-model:payment-method="paymentMethod"
         v-model:notes="notes"
         v-model:checkout-type="checkoutType"
-        :payment-method-options="paymentMethodOptions"
         :is-refund-mode="isRefundMode"
         :item-total="itemTotal"
         :selected-item="selectedItem"
@@ -83,9 +81,6 @@
         </el-table-column>
         <el-table-column label="金額" width="100" align="right">
           <template #default="{ row }">{{ formatTWD(row.total) }}</template>
-        </el-table-column>
-        <el-table-column label="方式" width="70" align="center">
-          <template #default="{ row }">{{ row.payment_method }}</template>
         </el-table-column>
         <el-table-column label="操作" width="90" align="center" fixed="right">
           <template #default="{ row }">
@@ -184,7 +179,6 @@ const {
   updateSelectedAmount,
   resetTransactionInputs,
   paymentMethod,
-  paymentMethodOptions,
   notes,
   canSubmit,
   submitting,
