@@ -118,11 +118,11 @@ onMounted(fetchAnnouncements)
         </div>
 
         <div v-if="expandedId !== ann.id" class="ann-preview">
-          {{ ann.content.length > 80 ? ann.content.slice(0, 80) + '...' : ann.content }}
+          {{ (ann.content ?? '').length > 80 ? (ann.content ?? '').slice(0, 80) + '...' : (ann.content ?? '') }}
         </div>
 
         <div v-if="expandedId === ann.id" class="ann-content">
-          {{ ann.content }}
+          {{ ann.content ?? '' }}
         </div>
       </div>
     </div>
