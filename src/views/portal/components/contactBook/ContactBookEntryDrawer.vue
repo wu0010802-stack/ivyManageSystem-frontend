@@ -1,7 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { Bell, Camera, Delete } from '@element-plus/icons-vue'
-import ContactBookPhotoGrid from './ContactBookPhotoGrid.vue'
 
 const props = defineProps({
   modelValue: { type: Boolean, required: true },
