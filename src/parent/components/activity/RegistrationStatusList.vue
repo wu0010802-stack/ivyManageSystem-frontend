@@ -88,7 +88,7 @@ const emit = defineEmits(['confirm-promotion'])
 
 .reg-term {
   background: var(--color-info-soft);
-  color: var(--pt-info-link);
+  color: var(--pt-info-link); /* 學期資訊 chip，語意為 info status，保留 info-link */
   padding: 1px 8px;
   border-radius: 10px;
   font-size: 12px;

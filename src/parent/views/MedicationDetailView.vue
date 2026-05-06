@@ -163,5 +163,6 @@ h3 { margin-top: 16px; font-size: 14px; color: var(--pt-text-muted); }
   line-height: 1;
   cursor: pointer;
 }
-.upload-btn { display: inline-block; padding: 8px 16px; background: var(--pt-info-link); color: var(--neutral-0); border-radius: 6px; cursor: pointer; margin-top: 12px; font-size: 14px; }
+.upload-btn { display: inline-block; padding: 8px 16px; background: var(--brand-primary); color: var(--neutral-0); border-radius: 6px; cursor: pointer; margin-top: 12px; font-size: 14px; transition: background var(--transition-fast, 0.15s ease); }
+.upload-btn:active { background: var(--brand-primary-hover); }
 </style>

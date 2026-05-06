@@ -109,6 +109,7 @@ h2 { margin: 0 0 4px; font-size: 18px; }
 label { font-size: 13px; color: var(--pt-text-muted); margin-top: 8px; }
 input, select { padding: 8px; border: 1px solid var(--pt-text-hint); border-radius: 6px; font-size: 14px; }
 .actions { margin-top: 16px; }
-.submit { width: 100%; padding: 12px; background: var(--pt-info-link); color: var(--neutral-0); border: none; border-radius: 6px; font-size: 15px; }
+.submit { width: 100%; padding: 12px; background: var(--brand-primary); color: var(--neutral-0); border: none; border-radius: 6px; font-size: 15px; transition: background var(--transition-fast, 0.15s ease); }
+.submit:active { background: var(--brand-primary-hover); }
 .submit:disabled { opacity: 0.5; }
 </style>

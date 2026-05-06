@@ -1,14 +1,11 @@
 <script setup>
 import { onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
 import {
   getNotificationPreferences,
   updateNotificationPreferences,
 } from '../api/notifications'
 import { toast } from '../utils/toast'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
-
-const router = useRouter()
 
 const EVENT_LABELS = {
   message_received: '老師訊息',
@@ -63,7 +60,6 @@ onMounted(load)
 
 <template>
   <div class="prefs-view">
-    <button class="back" @click="router.back()">← 返回</button>
     <h2>LINE 通知偏好</h2>
     <p class="hint">關閉項目後，園所雖仍會在 App 內保留通知，但不再透過 LINE 推播。</p>
 
@@ -93,7 +89,6 @@ onMounted(load)
 
 <style scoped>
 .prefs-view { padding: 16px; }
-.back { background: none; border: none; color: var(--pt-info-link); font-size: 14px; margin-bottom: 8px; }
 h2 { margin: 0 0 6px; font-size: 18px; }
 .hint { color: var(--pt-text-placeholder); font-size: 13px; margin-bottom: 16px; }
 .list { background: var(--neutral-0); border-radius: 8px; overflow: hidden; }

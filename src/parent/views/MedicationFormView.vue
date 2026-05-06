@@ -372,7 +372,7 @@ textarea {
 }
 
 .submit {
-  background: var(--brand-primary, var(--pt-info-link));
+  background: var(--brand-primary, #FF8B8B);
   color: var(--neutral-0);
 }
 
