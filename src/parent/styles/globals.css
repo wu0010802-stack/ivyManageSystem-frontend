@@ -124,6 +124,12 @@
   --brand-primary-tint:   #FFF4F2; /* coral-100 再淡一階 */
   --brand-accent:         #FFD93D; /* sun-500 — 高亮 highlight */
 
+  /* danger hover：搭配 destructive button :active 視覺回饋 */
+  --color-danger-hover: #C92626;  /* color-danger #ef4444 darken ~15% */
+
+  /* hero / brand 漸層上的文字色：light + dark 都白，避免 neutral-0 在 dark mode 落到 slate 後對比崩潰 */
+  --pt-on-hero: #ffffff;
+
   /* ============================================================
    * Elevation：Sky-tinted 暖陰影（取代冷藍灰）
    * 三階：1 = card / 2 = hover or 今日卡 / 3 = modal / sheet
@@ -296,6 +302,9 @@
   --pt-tint-late: rgba(255, 217, 61, 0.20); --pt-tint-late-fg: #FFE285;
 
   --pt-scrim: rgba(15, 31, 42, 0.65);
+
+  --color-danger-hover: #DC2626;  /* dark mode 用稍亮一階 */
+  --pt-on-hero: #ffffff;          /* dark mode 仍白 */
 }
 
 /* ========== Focus Visible ==========

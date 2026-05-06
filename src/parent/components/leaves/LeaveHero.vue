@@ -55,7 +55,7 @@ const TYPE_LABEL = {
   position: relative;
   overflow: hidden;
   background: var(--pt-gradient-hero);
-  color: var(--neutral-0);
+  color: var(--pt-on-hero);
   border-radius: 16px;
   padding: 20px;
   box-shadow: var(--pt-elev-2);

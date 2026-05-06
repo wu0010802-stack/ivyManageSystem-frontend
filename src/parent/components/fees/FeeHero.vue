@@ -121,6 +121,6 @@ function fmt(n) { return Number(n).toLocaleString('en-US') }
   cursor: pointer;
 }
 .fee-hero-cta:hover {
-  background: var(--neutral-0);
+  background: var(--pt-on-hero);
 }
 </style>
