@@ -471,16 +471,16 @@ const submitPassword = async () => {
 
       <!-- Bottom Navigation (mobile only) -->
       <div v-if="isMobile" class="bottom-nav">
+        <div class="bottom-tab" :class="{ active: route.path.startsWith('/portal/home') || route.path.startsWith('/portal/class-hub') }" @click="router.push('/portal/home')">
+          <div class="tab-icon-wrapper">
+            <el-icon><HomeFilled /></el-icon>
+            <el-badge v-if="totalHubBadge > 0" :value="totalHubBadge" :max="99" class="tab-badge" />
+          </div>
+          <span>工作台</span>
+        </div>
         <div class="bottom-tab" :class="{ active: route.path.startsWith('/portal/attendance') }" @click="router.push('/portal/attendance')">
           <el-icon><Calendar /></el-icon>
           <span>出勤</span>
-        </div>
-        <div class="bottom-tab" :class="{ active: route.path.startsWith('/portal/leave') }" @click="router.push('/portal/leave')">
-          <div class="tab-icon-wrapper">
-            <el-icon><Document /></el-icon>
-            <el-badge v-if="substitutePendingCount > 0" :value="substitutePendingCount" :max="99" class="tab-badge" />
-          </div>
-          <span>請假</span>
         </div>
         <div class="bottom-tab" :class="{ active: route.path.startsWith('/portal/schedule') }" @click="router.push('/portal/schedule')">
           <div class="tab-icon-wrapper">
@@ -489,16 +489,13 @@ const submitPassword = async () => {
           </div>
           <span>排班</span>
         </div>
-        <div class="bottom-tab" :class="{ active: route.path.startsWith('/portal/salary') }" @click="router.push('/portal/salary')">
-          <el-icon><Money /></el-icon>
-          <span>薪資</span>
+        <div class="bottom-tab" :class="{ active: route.path.startsWith('/portal/students') || route.path.startsWith('/portal/student') }" @click="router.push('/portal/students')">
+          <el-icon><User /></el-icon>
+          <span>學生</span>
         </div>
-        <div class="bottom-tab" @click="toggleSidebar">
-          <div class="tab-icon-wrapper">
-            <el-icon><Menu /></el-icon>
-            <el-badge v-if="unreadCount > 0" :value="unreadCount" :max="99" class="tab-badge" />
-          </div>
-          <span>更多</span>
+        <div class="bottom-tab" :class="{ active: route.path.startsWith('/portal/profile') }" @click="router.push('/portal/profile')">
+          <el-icon><UserFilled /></el-icon>
+          <span>我的</span>
         </div>
       </div>
     </el-container>
