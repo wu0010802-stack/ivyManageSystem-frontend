@@ -125,7 +125,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
 import { usePortalMessagesStore } from '@/stores/portalMessages'
 import { broadcastDashboardInvalidate } from '@/composables/usePortalDashboard'
@@ -145,9 +145,19 @@ const emit = defineEmits([
 
 const store = usePortalMessagesStore()
 
-const drawerSize = computed(() =>
-  window.innerWidth < 768 ? '100%' : '480px',
-)
+// drawerSize 需隨視窗 resize 重算（旋轉裝置 / 縮放跨越 768px 邊界）；
+// computed 直接讀 window.innerWidth 不會響應式，需用 ref + resize 監聽。
+const windowWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1024)
+function onWindowResize() {
+  windowWidth.value = window.innerWidth
+}
+onMounted(() => {
+  window.addEventListener('resize', onWindowResize)
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', onWindowResize)
+})
+const drawerSize = computed(() => (windowWidth.value < 768 ? '100%' : '480px'))
 const currentView = computed(() =>
   props.threadId ? 'thread' : 'list',
 )
@@ -192,11 +202,13 @@ function emitBackToList() {
   emit('close-thread')
 }
 
-async function onSend({ body, attachments }) {
+async function onSend({ body, attachments, done }) {
   try {
     await store.send(props.threadId, body, attachments)
+    done?.(true)
   } catch (e) {
     ElMessage.error(e?.response?.data?.detail || '送出失敗')
+    done?.(false)
   }
 }
 
