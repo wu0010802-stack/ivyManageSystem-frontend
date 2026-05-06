@@ -17,8 +17,8 @@ const CATEGORY_META = {
   fee_due: { icon: 'money', label: '繳費截止', color: 'var(--color-danger)' },
   announcement: { icon: 'megaphone', label: '公告', color: 'var(--pt-warning-text)' },
   holiday: { icon: 'calendar', label: '假日', color: 'var(--brand-primary)' },
-  contact_book: { icon: 'notebook', label: '聯絡簿', color: '#0e8e6f' },
-  leave: { icon: 'clipboard', label: '請假', color: '#7c3aed' },
+  contact_book: { icon: 'notebook', label: '聯絡簿', color: 'var(--pt-tint-contact-fg)' },
+  leave: { icon: 'clipboard', label: '請假', color: 'var(--pt-tint-event-fg)' },
   medication: { icon: 'pill', label: '用藥', color: 'var(--pt-warning-text-mid)' },
 }
 
@@ -206,7 +206,7 @@ onMounted(fetchData)
   font-size: 11px;
   padding: 2px 6px;
   background: var(--color-danger-soft);
-  color: #991b1b;
+  color: var(--color-danger);
   border-radius: 8px;
   flex-shrink: 0;
 }

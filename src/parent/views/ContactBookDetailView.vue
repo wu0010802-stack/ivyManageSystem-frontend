@@ -230,7 +230,7 @@ onMounted(async () => {
 }
 .title { margin: 0 0 12px; font-size: 17px; }
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
-.cell { padding: 8px; background: #f7f9fc; border-radius: 6px; }
+.cell { padding: 8px; background: var(--pt-surface-mute-soft); border-radius: 6px; }
 .cell label { display: block; font-size: 11px; color: var(--pt-text-faint); margin-bottom: 2px; }
 .cell span { font-size: 14px; }
 .block { margin-top: 12px; }
@@ -242,7 +242,7 @@ onMounted(async () => {
 .reply-list li { padding: 8px 0; border-bottom: 1px solid var(--pt-border-light); }
 .reply-list .body { margin: 0 0 4px; font-size: 14px; }
 .reply-list .meta { font-size: 11px; color: var(--pt-text-faint); }
-.link-btn { background: none; border: none; color: #d33; margin-left: 8px; cursor: pointer; }
+.link-btn { background: none; border: none; color: var(--color-danger); margin-left: 8px; cursor: pointer; }
 textarea {
   width: 100%;
   border: 1px solid var(--pt-border-stronger);
@@ -255,12 +255,14 @@ textarea {
 .actions { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
 .counter { color: var(--pt-text-faint); font-size: 12px; }
 .primary {
-  background: #4a90e2;
+  background: var(--brand-primary);
   color: var(--neutral-0);
   border: none;
   padding: 8px 16px;
   border-radius: 6px;
   font-size: 14px;
+  transition: background var(--transition-fast, 0.15s ease);
 }
-.primary:disabled { background: #aac4e2; }
+.primary:active { background: var(--brand-primary-hover); }
+.primary:disabled { background: var(--brand-primary-soft); color: var(--pt-text-disabled); cursor: not-allowed; }
 </style>

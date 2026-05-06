@@ -151,7 +151,7 @@ function moodInfo(m) {
   margin-bottom: 10px;
   box-shadow: var(--pt-elev-1);
 }
-.today-card { border: 1px solid #cfe6ff; }
+.today-card { border: 1px solid var(--pt-border-strong); }
 .row { display: flex; align-items: center; gap: 10px; }
 .emoji { font-size: 24px; flex-shrink: 0; }
 .meta { flex: 1; min-width: 0; }
@@ -167,13 +167,13 @@ function moodInfo(m) {
   -webkit-box-orient: vertical;
 }
 .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-.dot-unread { background: #ff5252; }
+.dot-unread { background: var(--color-danger); }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .chip {
   font-size: 12px;
   padding: 2px 8px;
   border-radius: 12px;
-  background: #f0f4f8;
+  background: var(--pt-surface-mute);
   color: var(--pt-text-muted);
 }
 .chip-icon {

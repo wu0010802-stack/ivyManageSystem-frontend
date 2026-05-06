@@ -76,12 +76,12 @@ function retry() {
   border-bottom: var(--pt-hairline);
 }
 .pt-conn-offline {
-  background: var(--pt-tint-money, #fef3c7);
-  color: var(--pt-tint-money-fg, #b45309);
+  background: var(--pt-tint-announcement);
+  color: var(--pt-tint-announcement-fg);
 }
 .pt-conn-ws {
-  background: var(--pt-tint-message, #dbeafe);
-  color: var(--pt-tint-message-fg, #1d4ed8);
+  background: var(--pt-tint-message);
+  color: var(--pt-tint-message-fg);
 }
 .pt-conn-retry {
   background: transparent;

@@ -183,6 +183,11 @@
   --pt-severity-severe-bg: #FECACA;  --pt-severity-severe-fg: #991B1B;  /* 比 coral 更強，獨立紅 */
 
   /* ============================================================
+   * Late chip 專用 tint（與 warning 區隔）
+   * ============================================================ */
+  --pt-tint-late:    #FFF4C9;  --pt-tint-late-fg: #7A6500;
+
+  /* ============================================================
    * Backdrop / blur
    * ============================================================ */
   --pt-scrim: rgba(27, 68, 89, 0.45);  /* sky-900 偏暖 */
@@ -379,6 +384,8 @@
   --pt-severity-mild-bg:   rgba(255, 217, 61, 0.20);  --pt-severity-mild-fg:   #FFE285;
   --pt-severity-mod-bg:    rgba(255, 139, 139, 0.20); --pt-severity-mod-fg:    #FFB5AD;
   --pt-severity-severe-bg: rgba(239, 68, 68, 0.22);   --pt-severity-severe-fg: #FECACA;
+
+  --pt-tint-late: rgba(255, 217, 61, 0.20); --pt-tint-late-fg: #FFE285;
 
   --pt-scrim: rgba(15, 31, 42, 0.65);
 }

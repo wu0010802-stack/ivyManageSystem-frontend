@@ -143,7 +143,7 @@ h3 { margin-top: 16px; font-size: 14px; color: var(--pt-text-muted); }
 .status.pending { background: var(--color-warning-soft); color: var(--pt-warning-text-soft); }
 .status.administered { background: var(--brand-primary-soft); color: var(--pt-success-text); }
 .status.skipped { background: var(--pt-surface-mute); color: var(--pt-text-placeholder); }
-.status.correction { background: #ede4ff; color: #5a3da5; }
+.status.correction { background: var(--pt-tint-medication); color: var(--pt-violet-text); }
 .ts, .reason { color: var(--pt-text-placeholder); font-size: 12px; }
 .hint { color: var(--pt-text-placeholder); padding: 12px 0; }
 .photos { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }

@@ -93,7 +93,7 @@ const statusColor = (status) => {
     缺席: { bg: 'var(--color-danger-soft)', color: 'var(--color-danger)' },
     病假: { bg: 'var(--color-warning-soft)', color: 'var(--pt-warning-text-soft)' },
     事假: { bg: 'var(--color-info-soft)', color: 'var(--pt-info-link)' },
-    遲到: { bg: '#fff8d6', color: '#7a6500' },
+    遲到: { bg: 'var(--pt-tint-late)', color: 'var(--pt-tint-late-fg)' },
   }[status] || { bg: 'var(--pt-surface-mute)', color: 'var(--pt-text-soft)' }
 }
 

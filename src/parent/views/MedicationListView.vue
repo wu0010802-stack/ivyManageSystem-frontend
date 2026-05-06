@@ -133,5 +133,5 @@ const today = todayISO()
 .slot.pending { background: var(--color-warning-soft); color: var(--pt-warning-text-soft); }
 .slot.administered { background: var(--brand-primary-soft); color: var(--pt-success-text); }
 .slot.skipped { background: var(--pt-surface-mute); color: var(--pt-text-placeholder); text-decoration: line-through; }
-.slot.correction { background: #ede4ff; color: #5a3da5; }
+.slot.correction { background: var(--pt-tint-medication); color: var(--pt-violet-text); }
 </style>
