@@ -1,8 +1,8 @@
 <script setup>
 /**
  * 家長端連線狀態 banner。
- * - 離線：橘色「目前離線，部分功能受限」
- * - WS 斷線（online 但 wsConnected=false 超過 delay）：淺灰「即時通知暫停，正在重連...」
+ * - 離線：暖黃 announcement tint「目前離線，部分功能受限」
+ * - WS 斷線（online 但 wsConnected=false 超過 delay）：淺藍 message tint「即時通知暫停，正在重連...」
  */
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useConnectionStatus } from '@/parent/composables/useConnectionStatus'

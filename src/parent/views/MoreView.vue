@@ -39,7 +39,7 @@ const groups = [
     title: '帳號設定',
     items: [
       { icon: 'bell', title: '通知偏好', path: '/notifications/preferences', tint: 'announcement' },
-      { icon: 'plus', title: '加綁子女', path: '/bind-additional', tint: 'message' },
+      { icon: 'plus', title: '加綁子女', path: '/bind-additional', tint: 'activity' },
     ],
   },
 ]

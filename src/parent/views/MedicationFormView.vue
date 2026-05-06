@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, useId } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useChildrenStore } from '../stores/children'
 import {
@@ -14,6 +14,9 @@ import AppModal from '../components/AppModal.vue'
 const route = useRoute()
 const router = useRouter()
 const childrenStore = useChildrenStore()
+
+const allergyTitleId = useId()
+const allergyDescId = useId()
 
 const submitting = ref(false)
 const allergyWarning = ref(null) // { allergens: [...] } 出現時顯示確認彈框
@@ -217,16 +220,16 @@ function cancelAllergy() {
     <!-- 過敏軟警告彈框（已套 AppModal：focus trap + esc + a11y） -->
     <AppModal
       v-model:open="allergyModalOpen"
-      labelled-by="allergy-modal-title"
-      described-by="allergy-modal-desc"
+      :labelled-by="allergyTitleId"
+      :described-by="allergyDescId"
       max-width="360px"
     >
       <div class="allergy-modal">
-        <h3 id="allergy-modal-title" class="allergy-title">
+        <h3 :id="allergyTitleId" class="allergy-title">
           <ParentIcon name="warn" size="sm" />
           用藥可能與過敏原相關
         </h3>
-        <p id="allergy-modal-desc">偵測到該藥名與以下過敏原相關：</p>
+        <p :id="allergyDescId">偵測到該藥名與以下過敏原相關：</p>
         <ul>
           <li v-for="a in allergyWarning?.allergens || []" :key="a.id">
             <strong>{{ a.allergen }}</strong>（{{ a.severity }}）

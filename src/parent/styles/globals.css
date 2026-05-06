@@ -474,6 +474,10 @@ button {
 .pt-stagger > *:nth-child(4) { animation-delay: 120ms; }
 .pt-stagger > *:nth-child(5) { animation-delay: 160ms; }
 .pt-stagger > *:nth-child(6) { animation-delay: 200ms; }
+.pt-stagger > *:nth-child(7) { animation-delay: 240ms; }
+.pt-stagger > *:nth-child(8) { animation-delay: 280ms; }
+/* 第 9 起固定 280ms 不再遞增（避免長列表進場拖很久） */
+.pt-stagger > *:nth-child(n+9) { animation-delay: 280ms; }
 
 @media (prefers-reduced-motion: reduce) {
   .pt-shimmer { animation: none; }

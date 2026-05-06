@@ -98,9 +98,7 @@ async function pullRefresh() {
         <span class="title">{{ item.title }}</span>
         <span v-if="!item.is_read" class="unread-dot" />
       </div>
-      <div class="preview">
-        {{ item.content?.slice(0, 60) }}{{ item.content?.length > 60 ? '...' : '' }}
-      </div>
+      <div class="preview">{{ item.content || '' }}</div>
       <div class="time">{{ formatTime(item.created_at) }}</div>
     </div>
 
@@ -200,6 +198,10 @@ async function pullRefresh() {
   color: var(--pt-text-soft);
   font-size: 13px;
   line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .time {
