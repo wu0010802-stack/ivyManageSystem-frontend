@@ -1,10 +1,20 @@
 <script setup>
-import { ref, reactive, onMounted, onUnmounted } from 'vue'
+import { computed, ref, reactive, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getSalaryPreview } from '@/api/portal'
 
 const loading = ref(false)
 const salaryData = ref(null)
+
+// 後端 salary_status: finalized / draft / recalc_pending / none
+// 草稿/重算中不回傳 salary 欄位細節,前端依狀態顯示對應提示。
+// 對齊 LINE「我的薪資」的「只看已封存且非 stale」語意。
+const STATUS_MESSAGES = {
+  none: { title: '本月薪資尚未計算', desc: '請待主管完成當期薪資計算後再查詢' },
+  draft: { title: '薪資草稿尚未結算', desc: '本月薪資已計算但尚未結算,完成結算後即可查看明細' },
+  recalc_pending: { title: '薪資需重算', desc: '相關資料(請假/加班/設定)異動,等待主管完成重算與結算' },
+}
+const statusMessage = computed(() => STATUS_MESSAGES[salaryData.value?.salary_status] || STATUS_MESSAGES.none)
 
 const isMobile = ref(window.innerWidth < 768)
 const checkMobile = () => { isMobile.value = window.innerWidth < 768 }
@@ -157,16 +167,18 @@ onMounted(fetchSalary)
           <span class="net-value">NT$ {{ salaryData.salary.net_salary?.toLocaleString() || 0 }}</span>
         </div>
 
-        <el-tag v-if="salaryData.salary.is_finalized" type="success" style="margin-top: 12px;">
-          已結算
-        </el-tag>
-        <el-tag v-else type="warning" style="margin-top: 12px;">
-          尚未結算（金額僅供參考）
-        </el-tag>
+        <el-tag type="success" style="margin-top: 12px;">已結算</el-tag>
       </el-card>
 
       <el-card v-else-if="salaryData && !salaryData.salary">
-        <el-empty description="本月薪資尚未計算" />
+        <el-empty :description="statusMessage.title">
+          <template #description>
+            <p style="margin: 0; font-weight: 600;">{{ statusMessage.title }}</p>
+            <p style="margin: 4px 0 0; color: var(--text-secondary); font-size: var(--text-sm);">
+              {{ statusMessage.desc }}
+            </p>
+          </template>
+        </el-empty>
       </el-card>
     </div>
   </div>
