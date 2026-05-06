@@ -39,27 +39,42 @@ async function submit() {
     return
   }
   submitting.value = true
+  // 兩段式：先 ack（已落 DB）→ 再上傳簽名。第二步失敗不可讓使用者誤以為要重簽
+  // 整個流程；後端已有 ack 紀錄，重 ack 會冪等或 409。改為「ack 成功就跳走，
+  // 簽名失敗只提示去詳情頁重補」。
+  let ackOk = false
   try {
-    // Step 1: ack（取 ack_id）
     await acknowledgeEvent(event.value.id, {
       student_id: studentId.value,
       signature_name: signatureName.value || null,
     })
+    ackOk = true
+  } catch (err) {
+    toast.error(err?.displayMessage || '簽收失敗')
+    submitting.value = false
+    return
+  }
 
-    // Step 2: 若有簽名就上傳
-    if (padRef.value && !padRef.value.isEmpty()) {
+  // Step 2: 若有簽名就上傳
+  if (padRef.value && !padRef.value.isEmpty()) {
+    try {
       const blob = await padRef.value.toBlob()
       if (blob) {
         await uploadAckSignature(event.value.id, studentId.value, blob)
       }
+    } catch (err) {
+      toast.warn(err?.displayMessage || '已簽收，但簽名上傳失敗，請於事件詳情頁補上')
+      submitting.value = false
+      router.replace({ path: '/events' })
+      return
     }
+  }
+
+  if (ackOk) {
     toast.success('已簽收')
     router.replace({ path: '/events' })
-  } catch (err) {
-    toast.error(err?.displayMessage || '簽收失敗')
-  } finally {
-    submitting.value = false
   }
+  submitting.value = false
 }
 
 onMounted(init)
