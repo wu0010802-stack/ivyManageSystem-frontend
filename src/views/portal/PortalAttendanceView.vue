@@ -5,6 +5,10 @@ import { ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
 import { getAttendanceSheet } from '@/api/portal'
 import { getUserInfo } from '@/utils/auth'
 import { apiError } from '@/utils/error'
+import AttendanceMonthSticky from './components/attendance/AttendanceMonthSticky.vue'
+import AttendanceStatsRow from './components/attendance/AttendanceStatsRow.vue'
+import AttendanceCardsView from './components/attendance/AttendanceCardsView.vue'
+import AttendanceTableView from './components/attendance/AttendanceTableView.vue'
 
 const loading = ref(false)
 const userInfo = getUserInfo()
@@ -45,83 +49,6 @@ const fetchSheet = async (force = false) => {
   }
 }
 
-// Split days into upper (1-15) and lower (16-end) rows for the grid
-const upperDays = computed(() => sheetData.value?.days?.slice(0, 15) || [])
-const lowerDays = computed(() => sheetData.value?.days?.slice(15) || [])
-
-const getStatusTag = (day) => {
-  if (day.is_holiday) return { text: day.holiday_name, type: 'danger', effect: 'dark' }
-  if (day.is_weekend) return { text: day.weekday, type: 'info' }
-  if (day.leave_type_label) return { text: day.leave_type_label, type: 'info' }
-  if (day.is_late) return { text: `遲${day.late_minutes}分`, type: 'warning' }
-  if (day.is_missing_punch_in || day.is_missing_punch_out) return { text: '缺卡', type: 'danger' }
-  if (day.is_early_leave) return { text: '早退', type: 'warning' }
-  if (day.punch_in) return { text: '正常', type: 'success' }
-  return { text: '-', type: 'info' }
-}
-
-const getLeaveDisplay = (day) => {
-  if (!day.leave_requests || day.leave_requests.length === 0) return null
-  const lv = day.leave_requests[0]
-  const statusIcon = lv.is_approved === true ? '✓' : lv.is_approved === false ? '✗' : '⏳'
-  return {
-    text: lv.leave_type_label,
-    statusIcon,
-    tooltip: `${lv.leave_type_label} ${lv.leave_hours}h\n${statusIcon === '✓' ? '已核准' : statusIcon === '✗' ? '已駁回' : '待審核'}${lv.reason ? '\n原因: ' + lv.reason : ''}`,
-    approved: lv.is_approved,
-  }
-}
-
-const getOvertimeDisplay = (day) => {
-  if (!day.overtime_requests || day.overtime_requests.length === 0) return null
-  const ot = day.overtime_requests[0]
-  const statusIcon = ot.is_approved === true ? '✓' : ot.is_approved === false ? '✗' : '⏳'
-  return {
-    text: `${ot.hours}h`,
-    statusIcon,
-    tooltip: `${ot.overtime_type_label} ${ot.hours}h\n${statusIcon === '✓' ? '已核准' : statusIcon === '✗' ? '已駁回' : '待審核'}${ot.reason ? '\n原因: ' + ot.reason : ''}`,
-    approved: ot.is_approved,
-  }
-}
-
-// 預計算每天的請假/加班顯示資訊，避免 template 多次重複呼叫同函式
-const dayDisplayMap = computed(() => {
-  const map = new Map()
-  if (!sheetData.value?.days) return map
-  for (const day of sheetData.value.days) {
-    map.set(day.day, {
-      leave: getLeaveDisplay(day),
-      overtime: getOvertimeDisplay(day),
-    })
-  }
-  return map
-})
-
-const getWorkHoursClass = (day) => {
-  if (!day.work_hours || day.is_weekend) return ''
-  if (day.work_hours < 8) return 'hours-short'
-  return 'hours-ok'
-}
-
-const getApprovalLabel = (val) => {
-  if (val === true) return '已核准'
-  if (val === false) return '已駁回'
-  return '待審核'
-}
-
-const getApprovalClass = (val) => {
-  if (val === true) return 'approved'
-  if (val === false) return 'rejected'
-  return 'pending'
-}
-
-const formatShift = (day) => {
-  if (day.scheduled_start && day.scheduled_end) {
-    return `${day.scheduled_start}-${day.scheduled_end}`
-  }
-  return day.shift_name || (day.is_weekend ? '' : '-')
-}
-
 const prevMonth = () => {
   if (query.month === 1) {
     query.year--
@@ -150,15 +77,14 @@ let stickyObserver = null
 
 // dayCardRefs: { [day.day]: HTMLElement } —「今日」按鈕用來定位 scroll
 const dayCardRefs = ref({})
-const setDayCardRef = (dayNum, el) => {
-  if (el) dayCardRefs.value[dayNum] = el
-  else delete dayCardRefs.value[dayNum]
-}
 
 const isViewingCurrentMonth = computed(() => {
   const t = new Date()
   return query.year === t.getFullYear() && query.month === (t.getMonth() + 1)
 })
+
+// isCurrentMonth：供 AttendanceMonthSticky prop 使用（與 isViewingCurrentMonth 同義）
+const isCurrentMonth = computed(() => isViewingCurrentMonth.value)
 
 const scrollToToday = () => {
   if (!isViewingCurrentMonth.value) return
@@ -192,33 +118,15 @@ onUnmounted(() => {
 <template>
   <div class="portal-attendance">
     <!-- Mobile sticky 月份 bar：header-card 滑出後顯示 -->
-    <transition name="sticky-bar-fade">
-      <div v-show="showStickyBar && isMobile" class="sticky-month-bar">
-        <el-button
-          :icon="ArrowLeft"
-          circle
-          class="sticky-bar__btn"
-          aria-label="上個月"
-          @click="prevMonth"
-        />
-        <span class="sticky-bar__label">
-          {{ query.year }} / {{ String(query.month).padStart(2, '0') }}
-        </span>
-        <el-button
-          :icon="ArrowRight"
-          circle
-          class="sticky-bar__btn"
-          aria-label="下個月"
-          @click="nextMonth"
-        />
-        <el-button
-          v-if="isViewingCurrentMonth"
-          type="primary"
-          class="sticky-bar__today"
-          @click="scrollToToday"
-        >今日</el-button>
-      </div>
-    </transition>
+    <AttendanceMonthSticky
+      :visible="showStickyBar && isMobile"
+      :year="query.year"
+      :month="query.month"
+      :is-current-month="isCurrentMonth"
+      @prev="prevMonth"
+      @next="nextMonth"
+      @today="scrollToToday"
+    />
 
     <el-card class="header-card">
       <div class="sheet-header">
@@ -242,299 +150,26 @@ onUnmounted(() => {
     <!-- Summary Stats -->
     <el-card v-if="sheetData" class="summary-card">
       <h3>本月出勤統計</h3>
-      <div class="stats-row">
-        <div class="stat-item">
-          <div class="stat-value">{{ sheetData.summary.total_work_days }}</div>
-          <div class="stat-label">出勤天數</div>
-        </div>
-        <div class="stat-item">
-          <div class="stat-value">{{ sheetData.summary.avg_work_hours || 0 }}</div>
-          <div class="stat-label">平均工時(h)</div>
-        </div>
-        <div class="stat-item warning">
-          <div class="stat-value">{{ sheetData.summary.late_count }}</div>
-          <div class="stat-label">遲到次數</div>
-        </div>
-        <div class="stat-item warning">
-          <div class="stat-value">{{ sheetData.summary.early_leave_count }}</div>
-          <div class="stat-label">早退次數</div>
-        </div>
-        <div class="stat-item danger">
-          <div class="stat-value">{{ sheetData.summary.missing_punch_count }}</div>
-          <div class="stat-label">缺卡次數</div>
-        </div>
-        <div class="stat-item info">
-          <div class="stat-value">{{ sheetData.summary.leave_count }}</div>
-          <div class="stat-label">請假天數</div>
-        </div>
-      </div>
+      <AttendanceStatsRow :summary="sheetData.summary" />
     </el-card>
 
     <!-- ===== Table View (Desktop) ===== -->
     <el-card v-loading="loading" class="grid-card" v-if="viewMode === 'table'">
-      <div class="attendance-grid" v-if="sheetData">
-        <!-- Upper half: day 1-15 -->
-        <table class="att-table">
-          <thead>
-            <tr>
-              <th class="label-col">日期</th>
-              <th v-for="day in upperDays" :key="day.day" class="day-col"
-                  :class="{ weekend: day.is_weekend, holiday: day.is_holiday }">
-                {{ day.day }}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td class="label-col">星期</td>
-              <td v-for="day in upperDays" :key="'w'+day.day" class="day-col"
-                  :class="{ weekend: day.is_weekend, holiday: day.is_holiday }">
-                {{ day.weekday }}
-              </td>
-            </tr>
-            <tr v-if="sheetData.uses_shift">
-              <td class="label-col">班表</td>
-              <td v-for="day in upperDays" :key="'sh'+day.day" class="day-col shift-col"
-                  :class="{ weekend: day.is_weekend }">
-                {{ formatShift(day) }}
-              </td>
-            </tr>
-            <tr>
-              <td class="label-col">上班</td>
-              <td v-for="day in upperDays" :key="'in'+day.day" class="day-col"
-                  :class="{ weekend: day.is_weekend, late: day.is_late }">
-                {{ day.punch_in || (day.is_weekend ? '' : '-') }}
-              </td>
-            </tr>
-            <tr>
-              <td class="label-col">下班</td>
-              <td v-for="day in upperDays" :key="'out'+day.day" class="day-col"
-                  :class="{ weekend: day.is_weekend }">
-                {{ day.punch_out || (day.is_weekend ? '' : '-') }}
-              </td>
-            </tr>
-            <tr>
-              <td class="label-col">工時</td>
-              <td v-for="day in upperDays" :key="'h'+day.day" class="day-col"
-                  :class="[{ weekend: day.is_weekend }, getWorkHoursClass(day)]">
-                {{ day.work_hours != null ? day.work_hours + 'h' : (day.is_weekend ? '' : '-') }}
-              </td>
-            </tr>
-            <tr>
-              <td class="label-col">狀態</td>
-              <td v-for="day in upperDays" :key="'s'+day.day" class="day-col"
-                  :class="{ weekend: day.is_weekend }">
-                <el-tag :type="getStatusTag(day).type" size="small" effect="plain" v-if="!day.is_weekend || day.punch_in">
-                  {{ getStatusTag(day).text }}
-                </el-tag>
-              </td>
-            </tr>
-            <tr>
-              <td class="label-col">請假</td>
-              <td v-for="day in upperDays" :key="'lv'+day.day" class="day-col"
-                  :class="{ weekend: day.is_weekend }">
-                <template v-if="dayDisplayMap.get(day.day)?.leave">
-                  <el-tooltip :content="dayDisplayMap.get(day.day).leave.tooltip" placement="top">
-                    <span class="request-badge" :class="{
-                      approved: dayDisplayMap.get(day.day).leave.approved === true,
-                      rejected: dayDisplayMap.get(day.day).leave.approved === false,
-                      pending: dayDisplayMap.get(day.day).leave.approved === null || dayDisplayMap.get(day.day).leave.approved === undefined,
-                    }">
-                      {{ dayDisplayMap.get(day.day).leave.text }}
-                    </span>
-                  </el-tooltip>
-                </template>
-                <template v-else>{{ day.is_weekend ? '' : '-' }}</template>
-              </td>
-            </tr>
-            <tr>
-              <td class="label-col">加班</td>
-              <td v-for="day in upperDays" :key="'ot'+day.day" class="day-col"
-                  :class="{ weekend: day.is_weekend }">
-                <template v-if="dayDisplayMap.get(day.day)?.overtime">
-                  <el-tooltip :content="dayDisplayMap.get(day.day).overtime.tooltip" placement="top">
-                    <span class="request-badge" :class="{
-                      approved: dayDisplayMap.get(day.day).overtime.approved === true,
-                      rejected: dayDisplayMap.get(day.day).overtime.approved === false,
-                      pending: dayDisplayMap.get(day.day).overtime.approved === null || dayDisplayMap.get(day.day).overtime.approved === undefined,
-                    }">
-                      {{ dayDisplayMap.get(day.day).overtime.text }}
-                    </span>
-                  </el-tooltip>
-                </template>
-                <template v-else>{{ day.is_weekend ? '' : '-' }}</template>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-
-        <!-- Lower half: day 16+ -->
-        <table class="att-table" style="margin-top: 16px;">
-          <thead>
-            <tr>
-              <th class="label-col">日期</th>
-              <th v-for="day in lowerDays" :key="day.day" class="day-col"
-                  :class="{ weekend: day.is_weekend, holiday: day.is_holiday }">
-                {{ day.day }}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td class="label-col">星期</td>
-              <td v-for="day in lowerDays" :key="'w'+day.day" class="day-col"
-                  :class="{ weekend: day.is_weekend, holiday: day.is_holiday }">
-                {{ day.weekday }}
-              </td>
-            </tr>
-            <tr v-if="sheetData.uses_shift">
-              <td class="label-col">班表</td>
-              <td v-for="day in lowerDays" :key="'sh'+day.day" class="day-col shift-col"
-                  :class="{ weekend: day.is_weekend }">
-                {{ formatShift(day) }}
-              </td>
-            </tr>
-            <tr>
-              <td class="label-col">上班</td>
-              <td v-for="day in lowerDays" :key="'in'+day.day" class="day-col"
-                  :class="{ weekend: day.is_weekend, late: day.is_late }">
-                {{ day.punch_in || (day.is_weekend ? '' : '-') }}
-              </td>
-            </tr>
-            <tr>
-              <td class="label-col">下班</td>
-              <td v-for="day in lowerDays" :key="'out'+day.day" class="day-col"
-                  :class="{ weekend: day.is_weekend }">
-                {{ day.punch_out || (day.is_weekend ? '' : '-') }}
-              </td>
-            </tr>
-            <tr>
-              <td class="label-col">工時</td>
-              <td v-for="day in lowerDays" :key="'h'+day.day" class="day-col"
-                  :class="[{ weekend: day.is_weekend }, getWorkHoursClass(day)]">
-                {{ day.work_hours != null ? day.work_hours + 'h' : (day.is_weekend ? '' : '-') }}
-              </td>
-            </tr>
-            <tr>
-              <td class="label-col">狀態</td>
-              <td v-for="day in lowerDays" :key="'s'+day.day" class="day-col"
-                  :class="{ weekend: day.is_weekend }">
-                <el-tag :type="getStatusTag(day).type" size="small" effect="plain" v-if="!day.is_weekend || day.punch_in">
-                  {{ getStatusTag(day).text }}
-                </el-tag>
-              </td>
-            </tr>
-            <tr>
-              <td class="label-col">請假</td>
-              <td v-for="day in lowerDays" :key="'lv'+day.day" class="day-col"
-                  :class="{ weekend: day.is_weekend }">
-                <template v-if="dayDisplayMap.get(day.day)?.leave">
-                  <el-tooltip :content="dayDisplayMap.get(day.day).leave.tooltip" placement="top">
-                    <span class="request-badge" :class="{
-                      approved: dayDisplayMap.get(day.day).leave.approved === true,
-                      rejected: dayDisplayMap.get(day.day).leave.approved === false,
-                      pending: dayDisplayMap.get(day.day).leave.approved === null || dayDisplayMap.get(day.day).leave.approved === undefined,
-                    }">
-                      {{ dayDisplayMap.get(day.day).leave.text }}
-                    </span>
-                  </el-tooltip>
-                </template>
-                <template v-else>{{ day.is_weekend ? '' : '-' }}</template>
-              </td>
-            </tr>
-            <tr>
-              <td class="label-col">加班</td>
-              <td v-for="day in lowerDays" :key="'ot'+day.day" class="day-col"
-                  :class="{ weekend: day.is_weekend }">
-                <template v-if="dayDisplayMap.get(day.day)?.overtime">
-                  <el-tooltip :content="dayDisplayMap.get(day.day).overtime.tooltip" placement="top">
-                    <span class="request-badge" :class="{
-                      approved: dayDisplayMap.get(day.day).overtime.approved === true,
-                      rejected: dayDisplayMap.get(day.day).overtime.approved === false,
-                      pending: dayDisplayMap.get(day.day).overtime.approved === null || dayDisplayMap.get(day.day).overtime.approved === undefined,
-                    }">
-                      {{ dayDisplayMap.get(day.day).overtime.text }}
-                    </span>
-                  </el-tooltip>
-                </template>
-                <template v-else>{{ day.is_weekend ? '' : '-' }}</template>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <AttendanceTableView
+        v-if="sheetData"
+        :days="sheetData.days || []"
+        :uses-shift="sheetData.uses_shift || false"
+      />
     </el-card>
 
     <!-- ===== Card View (Mobile) ===== -->
-    <div v-if="viewMode === 'cards' && sheetData" v-loading="loading" class="mobile-cards">
-      <div
-        v-for="day in sheetData.days" :key="day.day"
-        :ref="(el) => setDayCardRef(day.day, el)"
-        class="day-card"
-        :class="{
-          'day-card--weekend': day.is_weekend,
-          'day-card--holiday': day.is_holiday,
-          'day-card--late': day.is_late,
-        }"
-      >
-        <div class="day-card__header">
-          <div class="day-card__date">
-            <span class="day-num">{{ String(query.month).padStart(2,'0') }}/{{ String(day.day).padStart(2,'0') }}</span>
-            <span class="day-weekday" :class="{ 'text-red': day.is_weekend || day.is_holiday }">{{ day.weekday }}</span>
-          </div>
-          <el-tag :type="getStatusTag(day).type" size="small" effect="plain">
-            {{ getStatusTag(day).text }}
-          </el-tag>
-        </div>
-
-        <!-- Holiday banner -->
-        <div v-if="day.is_holiday" class="day-card__holiday-banner">
-          🎉 {{ day.holiday_name }}
-        </div>
-
-        <!-- Punch info -->
-        <div class="day-card__body" v-if="!day.is_weekend || day.punch_in">
-          <div class="day-card__row">
-            <span class="row-label">上班</span>
-            <span :class="{ late: day.is_late }">{{ day.punch_in || '-' }}</span>
-          </div>
-          <div class="day-card__row">
-            <span class="row-label">下班</span>
-            <span>{{ day.punch_out || '-' }}</span>
-          </div>
-          <div class="day-card__row" v-if="day.work_hours != null">
-            <span class="row-label">工時</span>
-            <span :class="getWorkHoursClass(day)">{{ day.work_hours }}h</span>
-          </div>
-          <div class="day-card__row" v-if="day.shift_name">
-            <span class="row-label">班表</span>
-            <span class="text-gray">{{ formatShift(day) }}</span>
-          </div>
-        </div>
-
-        <!-- Leave / Overtime requests -->
-        <div class="day-card__footer" v-if="getLeaveDisplay(day) || getOvertimeDisplay(day)">
-          <div v-if="getLeaveDisplay(day)" class="day-card__request">
-            <span class="request-badge" :class="getApprovalClass(getLeaveDisplay(day).approved)">
-              請假: {{ getLeaveDisplay(day).text }}
-            </span>
-            <span class="approval-text" :class="getApprovalClass(getLeaveDisplay(day).approved)">
-              {{ getApprovalLabel(getLeaveDisplay(day).approved) }}
-            </span>
-          </div>
-          <div v-if="getOvertimeDisplay(day)" class="day-card__request">
-            <span class="request-badge" :class="getApprovalClass(getOvertimeDisplay(day).approved)">
-              加班: {{ getOvertimeDisplay(day).text }}
-            </span>
-            <span class="approval-text" :class="getApprovalClass(getOvertimeDisplay(day).approved)">
-              {{ getApprovalLabel(getOvertimeDisplay(day).approved) }}
-            </span>
-          </div>
-        </div>
-      </div>
+    <div v-if="viewMode === 'cards'" v-loading="loading" class="cards-wrapper">
+      <AttendanceCardsView
+        v-if="sheetData"
+        :days="sheetData.days || []"
+        :month="query.month"
+      />
     </div>
-
-
   </div>
 </template>
 
@@ -574,80 +209,10 @@ onUnmounted(() => {
   min-height: var(--touch-target-min);
 }
 
-/* ===== Mobile Sticky 月份 Bar ===== */
+/* ===== Mobile Sticky sentinel ===== */
 .top-sentinel {
   height: 1px;
   margin-top: calc(var(--space-6) * -1);
-}
-
-.sticky-month-bar {
-  position: sticky;
-  top: 0;
-  z-index: var(--z-sticky, 10);
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  background: var(--surface-color);
-  border-bottom: 1px solid var(--border-color);
-  box-shadow: var(--shadow-sm);
-  margin: 0 calc(var(--space-4) * -1) var(--space-3);
-}
-
-.sticky-bar__btn {
-  min-width: var(--touch-target-min);
-  min-height: var(--touch-target-min);
-  flex-shrink: 0;
-}
-
-.sticky-bar__label {
-  flex: 1;
-  text-align: center;
-  font-weight: var(--font-weight-semibold, 600);
-  font-size: var(--text-base);
-  color: var(--text-primary);
-}
-
-.sticky-bar__today {
-  min-height: var(--touch-target-min);
-  padding-left: var(--space-3);
-  padding-right: var(--space-3);
-  flex-shrink: 0;
-}
-
-.sticky-bar-fade-enter-active,
-.sticky-bar-fade-leave-active {
-  transition: transform var(--transition-base, 0.2s ease), opacity var(--transition-base, 0.2s ease);
-}
-
-.sticky-bar-fade-enter-from,
-.sticky-bar-fade-leave-to {
-  transform: translateY(-100%);
-  opacity: 0;
-}
-
-@keyframes day-card-flash {
-  0%, 100% {
-    box-shadow: var(--shadow-sm);
-  }
-  50% {
-    box-shadow: 0 0 0 3px var(--color-primary, #409eff);
-  }
-}
-
-.day-card.day-card--highlight {
-  animation: day-card-flash 1.5s ease-out;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .sticky-bar-fade-enter-active,
-  .sticky-bar-fade-leave-active {
-    transition: none;
-  }
-  .day-card.day-card--highlight {
-    animation: none;
-    box-shadow: 0 0 0 3px var(--color-primary, #409eff);
-  }
 }
 
 .month-label {
@@ -667,69 +232,6 @@ onUnmounted(() => {
   border-top: 1px solid var(--border-color);
 }
 
-.grid-card {
-  margin-bottom: var(--space-6);
-  overflow-x: auto;
-}
-
-.att-table {
-  width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-  font-size: var(--text-sm);
-}
-
-.att-table th, .att-table td {
-  border: 1px solid var(--border-color);
-  padding: 8px 6px;
-  text-align: center;
-  min-width: 55px;
-}
-
-.att-table th {
-  background-color: var(--bg-color);
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.label-col {
-  min-width: 60px !important;
-  width: 60px;
-  font-weight: 600;
-  background-color: var(--bg-color);
-  color: var(--text-secondary);
-}
-
-.weekend {
-  background-color: #fef2f2; /* Red 50 */
-  color: var(--color-danger);
-}
-
-.holiday {
-  background-color: #fff7ed; /* Orange 50 */
-  color: var(--color-warning);
-  font-weight: bold;
-}
-
-.late {
-  color: var(--color-warning);
-  font-weight: 600;
-}
-
-.shift-col {
-  font-size: 11px;
-  color: var(--text-secondary);
-}
-
-.hours-short {
-  color: var(--color-danger);
-  font-weight: 600;
-}
-
-.hours-ok {
-  color: var(--color-success);
-}
-
 .summary-card h3 {
   margin: 0 0 var(--space-5) 0;
   font-size: var(--text-xl);
@@ -737,182 +239,34 @@ onUnmounted(() => {
   color: var(--text-primary);
 }
 
-.stats-row {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: var(--space-5);
+.grid-card {
+  margin-bottom: var(--space-6);
+  overflow-x: auto;
 }
 
-.stat-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: var(--space-5) var(--space-4);
-  background: var(--surface-color);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-sm);
-  border: 1px solid var(--border-color);
-  transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.stat-item:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
-}
-
-.stat-item.warning .stat-value { color: var(--color-warning); }
-.stat-item.danger .stat-value { color: var(--color-danger); }
-.stat-item.info .stat-value { color: var(--text-secondary); }
-
-.stat-value {
-  font-size: 32px;
-  font-weight: 700;
-  color: var(--color-primary);
-  line-height: 1.2;
-}
-
-.stat-label {
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
-  margin-top: 8px;
-  font-weight: 500;
-}
-
-.request-badge {
-  display: inline-block;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  border: 1px solid transparent;
-}
-
-.request-badge.approved {
-  background-color: #ecfdf5;
-  color: var(--color-success);
-  border-color: #a7f3d0;
-}
-
-.request-badge.rejected {
-  background-color: #fef2f2;
-  color: var(--color-danger);
-  border-color: #fecaca;
-}
-
-.request-badge.pending {
-  background-color: #fff7ed;
-  color: var(--color-warning);
-  border-color: #fed7aa;
-}
-
-/* ===== Mobile Card View ===== */
-.mobile-cards {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
+.cards-wrapper {
   margin-bottom: var(--space-6);
 }
 
-.day-card {
-  background: var(--surface-color);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
-  border: 1px solid var(--border-color);
-  overflow: hidden;
+@keyframes day-card-flash {
+  0%, 100% {
+    box-shadow: var(--shadow-sm);
+  }
+  50% {
+    box-shadow: 0 0 0 3px var(--color-primary, #409eff);
+  }
 }
 
-.day-card--weekend {
-  border-left: 4px solid var(--color-danger);
-  background-color: #fcfcfc;
+.day-card.day-card--highlight {
+  animation: day-card-flash 1.5s ease-out;
 }
 
-.day-card--holiday {
-  border-left: 4px solid var(--color-warning);
-  background-color: #fffbf0;
+@media (prefers-reduced-motion: reduce) {
+  .day-card.day-card--highlight {
+    animation: none;
+    box-shadow: 0 0 0 3px var(--color-primary, #409eff);
+  }
 }
-
-.day-card--late {
-  border-left: 4px solid var(--color-warning);
-}
-
-.day-card__header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--space-3) var(--space-4);
-  background: var(--bg-color);
-  border-bottom: 1px solid var(--border-color);
-}
-
-.day-card__date {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-}
-
-.day-num {
-  font-size: var(--text-lg);
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
-.day-weekday {
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
-}
-
-.text-red { color: var(--color-danger); }
-.text-gray { color: var(--text-secondary); }
-
-.day-card__holiday-banner {
-  padding: 8px var(--space-4);
-  background: linear-gradient(135deg, #fff7ed, #ffedd5);
-  color: var(--color-warning);
-  font-weight: 600;
-  font-size: var(--text-sm);
-}
-
-.day-card__body {
-  padding: var(--space-3) var(--space-4);
-}
-
-.day-card__row {
-  display: flex;
-  justify-content: space-between;
-  padding: 4px 0;
-  font-size: var(--text-base);
-}
-
-.row-label {
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
-}
-
-.day-card__footer {
-  padding: var(--space-3) var(--space-4);
-  border-top: 1px solid var(--border-color);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  background-color: var(--bg-color);
-}
-
-.day-card__request {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.approval-text {
-  font-size: var(--text-xs);
-  font-weight: 600;
-}
-
-.approval-text.approved { color: var(--color-success); }
-.approval-text.rejected { color: var(--color-danger); }
-.approval-text.pending { color: var(--color-warning); }
 
 /* ===== Mobile responsive ===== */
 @media (max-width: 767px) {
@@ -940,23 +294,6 @@ onUnmounted(() => {
 
   .hide-mobile {
     display: none;
-  }
-
-  .stats-row {
-    grid-template-columns: repeat(2, 1fr);
-    gap: var(--space-3);
-  }
-
-  .stat-item {
-    padding: var(--space-4) var(--space-3);
-  }
-
-  .stat-value {
-    font-size: var(--text-3xl);
-  }
-
-  .stat-label {
-    font-size: var(--text-xs);
   }
 
   .summary-card h3 {
