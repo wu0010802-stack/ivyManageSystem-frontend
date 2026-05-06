@@ -176,6 +176,13 @@
   --pt-tint-contact:      #DCF4E6;  --pt-tint-contact-fg:      #2D7C56;  /* leaf */
 
   /* ============================================================
+   * Severity（過敏 / 醫療警示三階）
+   * ============================================================ */
+  --pt-severity-mild-bg:   #FFF4C9;  --pt-severity-mild-fg:   #9C7300;  /* sun-soft */
+  --pt-severity-mod-bg:    #FFE3E0;  --pt-severity-mod-fg:    #B14545;  /* coral-soft */
+  --pt-severity-severe-bg: #FECACA;  --pt-severity-severe-fg: #991B1B;  /* 比 coral 更強，獨立紅 */
+
+  /* ============================================================
    * Backdrop / blur
    * ============================================================ */
   --pt-scrim: rgba(27, 68, 89, 0.45);  /* sky-900 偏暖 */
@@ -368,6 +375,10 @@
   --pt-tint-pickup:       rgba(91, 168, 204, 0.22);  --pt-tint-pickup-fg:       #92C8E0;
   --pt-tint-calendar:     rgba(95, 199, 154, 0.20);  --pt-tint-calendar-fg:     #A8E6CF;
   --pt-tint-contact:      rgba(95, 199, 154, 0.20);  --pt-tint-contact-fg:      #A8E6CF;
+
+  --pt-severity-mild-bg:   rgba(255, 217, 61, 0.20);  --pt-severity-mild-fg:   #FFE285;
+  --pt-severity-mod-bg:    rgba(255, 139, 139, 0.20); --pt-severity-mod-fg:    #FFB5AD;
+  --pt-severity-severe-bg: rgba(239, 68, 68, 0.22);   --pt-severity-severe-fg: #FECACA;
 
   --pt-scrim: rgba(15, 31, 42, 0.65);
 }

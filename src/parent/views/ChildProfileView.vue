@@ -15,9 +15,9 @@ const loading = ref(false)
 
 const SEVERITY_LABEL = { mild: '輕度', moderate: '中度', severe: '嚴重' }
 const SEVERITY_COLOR = {
-  mild: { bg: 'var(--color-warning-soft)', color: 'var(--pt-warning-text)' },
-  moderate: { bg: '#fed7aa', color: '#9a3412' },
-  severe: { bg: '#fecaca', color: '#991b1b' },
+  mild:     { bg: 'var(--pt-severity-mild-bg)',     color: 'var(--pt-severity-mild-fg)' },
+  moderate: { bg: 'var(--pt-severity-mod-bg)',      color: 'var(--pt-severity-mod-fg)' },
+  severe:   { bg: 'var(--pt-severity-severe-bg)',   color: 'var(--pt-severity-severe-fg)' },
 }
 
 async function fetchData() {
@@ -262,19 +262,19 @@ onMounted(fetchData)
   color: var(--pt-text-muted);
 }
 .change-card {
-  background: var(--neutral-0)eb;
-  border: 1px solid #fbbf24;
+  background: var(--color-warning-soft);
+  border: 1px solid var(--pt-warning-text);
 }
 .change-text {
   font-size: 13px;
-  color: #78350f;
+  color: var(--pt-warning-text-soft);
   margin: 0 0 10px;
   line-height: 1.5;
 }
 .primary-btn {
   width: 100%;
   padding: 10px;
-  background: var(--pt-warning-text-mid);
+  background: var(--brand-primary);
   color: var(--neutral-0);
   border: none;
   border-radius: 8px;
@@ -284,5 +284,9 @@ onMounted(fetchData)
   align-items: center;
   justify-content: center;
   gap: 6px;
+  transition: background var(--transition-fast, 0.15s ease);
+}
+.primary-btn:active {
+  background: var(--brand-primary-hover);
 }
 </style>
