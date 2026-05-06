@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   ackContactBook,
@@ -11,7 +11,9 @@ import { toast } from '../utils/toast'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 
 const route = useRoute()
-const entryId = Number(route.params.entryId)
+// vue-router 在同 component 跨參數導航時會復用實例；用 computed 讓 entryId 隨
+// route.params 變動，再 watch 觸發重抓，避免顯示前一筆 entry。
+const entryId = computed(() => Number(route.params.entryId))
 const entry = ref(null)
 const replies = ref([])
 const newReply = ref('')
@@ -38,7 +40,7 @@ const BOWEL_LABEL = {
 async function fetchData() {
   loading.value = true
   try {
-    const { data } = await getContactBookDetail(entryId)
+    const { data } = await getContactBookDetail(entryId.value)
     entry.value = data
     replies.value = data?.replies || []
   } catch (err) {
@@ -50,7 +52,7 @@ async function fetchData() {
 
 async function markRead() {
   try {
-    const { data } = await ackContactBook(entryId)
+    const { data } = await ackContactBook(entryId.value)
     if (entry.value) {
       entry.value.my_acknowledged_at = data.read_at
     }
@@ -71,7 +73,7 @@ async function submitReply() {
   }
   submitting.value = true
   try {
-    const { data } = await replyContactBook(entryId, body)
+    const { data } = await replyContactBook(entryId.value, body)
     replies.value.push(data)
     newReply.value = ''
   } catch (err) {
@@ -83,19 +85,30 @@ async function submitReply() {
 
 async function removeReply(replyId) {
   try {
-    await deleteContactBookReply(entryId, replyId)
+    await deleteContactBookReply(entryId.value, replyId)
     replies.value = replies.value.filter((r) => r.id !== replyId)
   } catch (err) {
     toast.error(err?.displayMessage || '刪除失敗')
   }
 }
 
-onMounted(async () => {
+async function loadAndMark() {
   await fetchData()
   // 自動標記為已讀（家長一打開即視為閱讀）
   if (entry.value && !entry.value.my_acknowledged_at) {
     await markRead()
   }
+}
+
+onMounted(loadAndMark)
+
+// vue-router 復用同 component 時切 :entryId 不會重 mount，必須以 watch 重抓。
+watch(entryId, async (newId, oldId) => {
+  if (!newId || newId === oldId) return
+  entry.value = null
+  replies.value = []
+  newReply.value = ''
+  await loadAndMark()
 })
 </script>
 
