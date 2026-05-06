@@ -208,107 +208,15 @@
 /* ============================================================
  * Dark Mode
  *
- * 兩種觸發路徑：
- *  1. 系統偏好 prefers-color-scheme: dark（自動）
- *  2. 手動切換：<html data-theme="dark">（useTheme composable）
+ * 觸發路徑：useTheme composable 永遠顯式設 <html data-theme="light|dark">
+ * （system 偏好下也會依 matchMedia 結果寫入），所以 CSS 只需單一
+ * [data-theme='dark'] 選擇器，不需 @media (prefers-color-scheme: dark)。
  *
  * 設計原則：
  *  - 不改視覺結構，只覆寫色彩 token；既有元件 scoped style 走 token 即自動切換
- *  - dark surface 用 slate-900/800/700 階梯，brand 提亮一階確保對比
+ *  - dark surface 用 sky-tinted slate；brand 提亮一階確保對比
  *  - softs（warning-soft / danger-soft 等）改用半透明色，避免光害
- *
- * 注意：要 dark mode 生效，元件必須走 token；硬編 hex 在這裡無能為力。
  * ============================================================ */
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
-    color-scheme: dark;
-
-    /* 文字色 */
-    --pt-text-strong: #f1f5f9;
-    --pt-text-body: #f1f5f9;
-    --pt-text-muted: #cbd5e1;
-    --pt-text-soft: #94a3b8;
-    --pt-text-faint: #94a3b8;
-    --pt-text-placeholder: #64748b;
-    --pt-text-disabled: #475569;
-    --pt-text-hint: #475569;
-
-    /* 表面色 — sky-tinted dark surface */
-    --pt-surface-app:        #0F1F2A;
-    --pt-surface-card:       #1B2C3A;
-    --pt-surface-mute:       #25394A;
-    --pt-surface-mute-soft:  #1B2C3A;
-    --pt-surface-mute-warm:  #2A3548;
-    --pt-surface-brand-tint: #2A1F1F;
-    --pt-surface-thread-bg:  #0F1F2A;
-    --pt-surface-note:       #1B2C3A;
-
-    /* 邊框 */
-    --pt-border:         #25394A;
-    --pt-border-light:   #1B2C3A;
-    --pt-border-strong:  #3A526A;
-    --pt-border-stronger:#52708F;
-
-    /* 共用 neutral 翻面 */
-    --neutral-0: #1B2C3A;
-
-    /* Brand：dark mode 用 coral-300（提亮）保證對比 */
-    --brand-primary:       #FFB5AD;
-    --brand-primary-hover: #FFC9C2;
-    --brand-primary-soft:  rgba(255, 139, 139, 0.18);
-    --brand-primary-tint:  rgba(255, 139, 139, 0.10);
-    --brand-accent:        #FFE285;
-
-    /* Semantic softs 改半透明避光害 */
-    --color-success-soft: rgba(16, 185, 129, 0.18);
-    --color-warning-soft: rgba(245, 158, 11, 0.18);
-    --color-danger-soft: rgba(239, 68, 68, 0.18);
-    --color-info-soft: rgba(59, 130, 246, 0.20);
-
-    /* Parent semantic text 變體（提亮） */
-    --pt-warning-text: #fbbf24;
-    --pt-warning-text-mid: #fbbf24;
-    --pt-warning-text-soft: #fbbf24;
-    --pt-success-text: #6ee7b7;
-    --pt-info-text: #93c5fd;
-    --pt-info-link: #93c5fd;
-    --pt-violet-bg: rgba(167, 139, 250, 0.22);
-    --pt-violet-text: #c4b5fd;
-
-    /* Elevation：dark mode 改用偏暖 sky-tinted 陰影 */
-    --pt-elev-1: 0 1px 2px rgba(0, 0, 0, 0.30), 0 1px 3px rgba(0, 0, 0, 0.20);
-    --pt-elev-2: 0 4px 8px rgba(0, 0, 0, 0.30), 0 8px 16px rgba(0, 0, 0, 0.20);
-    --pt-elev-3: 0 12px 24px rgba(0, 0, 0, 0.40), 0 24px 48px rgba(0, 0, 0, 0.30);
-    --pt-hairline: 1px solid rgba(255, 255, 255, 0.06);
-
-    /* Gradient：dark mode 用半透明 / 提亮 brand */
-    --pt-gradient-brand:      linear-gradient(135deg, #FF8B8B 0%, #E96B6B 100%);
-    --pt-gradient-brand-soft: linear-gradient(135deg, rgba(255, 139, 139, 0.18) 0%, rgba(255, 139, 139, 0.10) 100%);
-    --pt-gradient-warm:       linear-gradient(135deg, rgba(255, 217, 61, 0.22) 0%, rgba(255, 226, 133, 0.14) 100%);
-    --pt-gradient-info:       linear-gradient(135deg, rgba(91, 168, 204, 0.24) 0%, rgba(91, 168, 204, 0.12) 100%);
-    --pt-gradient-hero:
-      radial-gradient(circle at 80% 0%, rgba(255, 226, 133, 0.30) 0%, transparent 50%),
-      linear-gradient(155deg, #B14545 0%, #8B4848 50%, #2D6F8E 100%);
-
-    /* Icon tint：dark mode 用半透明 */
-    --pt-tint-money:        rgba(95, 199, 154, 0.20);  --pt-tint-money-fg:        #A8E6CF;
-    --pt-tint-message:      rgba(91, 168, 204, 0.22);  --pt-tint-message-fg:      #92C8E0;
-    --pt-tint-event:        rgba(181, 140, 217, 0.22); --pt-tint-event-fg:        #D4BCE6;
-    --pt-tint-announcement: rgba(255, 217, 61, 0.20);  --pt-tint-announcement-fg: #FFE285;
-    --pt-tint-leave:        rgba(255, 139, 139, 0.20); --pt-tint-leave-fg:        #FFB5AD;
-    --pt-tint-activity:     rgba(181, 140, 217, 0.22); --pt-tint-activity-fg:     #D4BCE6;
-    --pt-tint-medication:   rgba(181, 140, 217, 0.22); --pt-tint-medication-fg:   #D4BCE6;
-    --pt-tint-pickup:       rgba(91, 168, 204, 0.22);  --pt-tint-pickup-fg:       #92C8E0;
-    --pt-tint-calendar:     rgba(95, 199, 154, 0.20);  --pt-tint-calendar-fg:     #A8E6CF;
-    --pt-tint-contact:      rgba(95, 199, 154, 0.20);  --pt-tint-contact-fg:      #A8E6CF;
-
-    --pt-scrim: rgba(15, 31, 42, 0.65);
-  }
-}
-
-/* 手動 dark 模式（覆寫 prefers-color-scheme：使用者明確選 dark）
-   token 與 @media (prefers-color-scheme: dark) 區段保持一致；只是觸發路徑不同。 */
 :root[data-theme='dark'] {
   color-scheme: dark;
 

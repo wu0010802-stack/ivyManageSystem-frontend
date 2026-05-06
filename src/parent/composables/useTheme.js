@@ -34,11 +34,9 @@ function getSystemPrefersDark() {
 function applyToDOM(pref) {
   if (typeof document === 'undefined') return
   const root = document.documentElement
-  if (pref === 'system') {
-    root.removeAttribute('data-theme')
-    return
-  }
-  root.setAttribute('data-theme', pref)
+  const effective =
+    pref === 'system' ? (getSystemPrefersDark() ? 'dark' : 'light') : pref
+  root.setAttribute('data-theme', effective)
 }
 
 /**
@@ -72,13 +70,9 @@ export function useTheme() {
     if (typeof window === 'undefined' || !window.matchMedia) return
     mql = window.matchMedia('(prefers-color-scheme: dark)')
     onChange = () => {
-      // 觸發 effective recompute（透過 ref 再賦值同值不會 trigger，需用 trick）
+      // OS 偏好變了；若使用者 preference=system，重套 attribute 即可
       if (preference.value === 'system') {
-        // 透過重新賦值同值 + nextTick 強制 effective recompute；
-        // 簡單做法：把 ref 設為非自身再設回。
-        const v = preference.value
-        preference.value = ''
-        preference.value = v
+        applyToDOM('system')
       }
     }
     mql.addEventListener?.('change', onChange)
