@@ -392,7 +392,7 @@
 }
 
 :focus-visible {
-  outline: 2px solid var(--brand-primary, #3f7d48);
+  outline: 2px solid var(--brand-primary, #FF8B8B);
   outline-offset: 2px;
   border-radius: var(--radius-sm);
 }

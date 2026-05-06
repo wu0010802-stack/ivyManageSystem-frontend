@@ -130,7 +130,7 @@ function onConfirm() {
 }
 
 .btn-confirm {
-  background: var(--brand-primary, #3f7d48);
+  background: var(--brand-primary, #FF8B8B);
   color: var(--neutral-0, #fff);
 }
 
