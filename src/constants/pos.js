@@ -16,8 +16,12 @@ export const POS_MODES = [
 // 與此處需同步調整
 export const CASH_METHOD = '現金'
 
-// 大額交易二次確認門檻（元）
+// 大額交易二次確認門檻（元）：金額 ≥ 此值時跳出確認框，避免手誤輸錯金額
 export const LARGE_AMOUNT_THRESHOLD = 10000
+
+// 退費簽核門檻（元）：單筆退費 > 此值需 ACTIVITY_PAYMENT_APPROVE 權限
+// 必須與後端 api/activity/_shared.py REFUND_APPROVAL_THRESHOLD 對齊
+export const REFUND_APPROVAL_THRESHOLD = 1000
 
 export const formatTWD = (n) => {
   if (n == null || Number.isNaN(Number(n))) return '—'

@@ -26,6 +26,7 @@
         :item-total="itemTotal"
         :selected-item="selectedItem"
         :can-submit="canSubmit"
+        :refund-approval-blocked="refundApprovalBlocked"
         :submitting="submitting"
         class="pos-panel-wrap__col"
         @update:applied-amount="updateSelectedAmount"
@@ -181,6 +182,7 @@ const {
   paymentMethod,
   notes,
   canSubmit,
+  refundApprovalBlocked,
   submitting,
   submit: doSubmit,
   lastReceipt,

@@ -107,6 +107,16 @@
       />
     </div>
 
+    <el-alert
+      v-if="refundApprovalBlocked"
+      type="warning"
+      :closable="false"
+      show-icon
+      class="pos-payment__approval-hint"
+    >
+      此筆退費金額超過簽核門檻，需具備「金流簽核」權限（ACTIVITY_PAYMENT_APPROVE）才能送出。請改由主管操作或於「待簽核」頁送審。
+    </el-alert>
+
     <div class="pos-payment__actions">
       <el-button size="large" :disabled="!selectedItem" @click="$emit('clear')">
         清空
@@ -144,6 +154,7 @@ defineProps({
   selectedItem: { type: Object, default: null },
   notes: { type: String, default: '' },
   canSubmit: { type: Boolean, required: true },
+  refundApprovalBlocked: { type: Boolean, default: false },
   submitting: { type: Boolean, required: true },
   checkoutType: { type: String, default: 'payment' },
   isRefundMode: { type: Boolean, default: false },
@@ -322,6 +333,10 @@ defineEmits([
   font-size: 22px;
   font-weight: 700;
   color: #1e293b;
+}
+
+.pos-payment__approval-hint {
+  margin-top: 12px;
 }
 
 .pos-payment__actions {

@@ -11,10 +11,12 @@ import {
 import {
   CASH_METHOD,
   LARGE_AMOUNT_THRESHOLD,
+  REFUND_APPROVAL_THRESHOLD,
   computeOwed,
   formatTWD,
 } from '@/constants/pos'
 import { useAcademicTermStore } from '@/stores/academicTerm'
+import { hasPermission } from '@/utils/auth'
 
 /**
  * POS 收銀狀態機：搜尋 → 選擇單筆 → 送出（可選列印） → 重置。
@@ -94,6 +96,17 @@ export function usePOSCheckout() {
     selectedItem.value ? Number(selectedItem.value.amount_applied) || 0 : 0
   )
 
+  // 退費簽核權限：與後端 REFUND_APPROVAL_THRESHOLD 對齊；無權限時 UI 直接 disable 送出按鈕
+  const canApproveRefund = computed(() => hasPermission('ACTIVITY_PAYMENT_APPROVE'))
+
+  // 給 UI 顯示「需主管簽核」提示用：退費 + 金額超門檻 + 沒權限
+  const refundApprovalBlocked = computed(
+    () =>
+      isRefundMode.value &&
+      itemTotal.value > REFUND_APPROVAL_THRESHOLD &&
+      !canApproveRefund.value
+  )
+
   const canSubmit = computed(() => {
     if (submitting.value) return false
     const item = selectedItem.value
@@ -104,6 +117,8 @@ export function usePOSCheckout() {
     if (isRefundMode.value) {
       if (applied > (item.paid_amount || 0)) return false
       if ((notes.value || '').trim().length < 15) return false
+      // 大於門檻必須有 ACTIVITY_PAYMENT_APPROVE，否則後端會 403
+      if (applied > REFUND_APPROVAL_THRESHOLD && !canApproveRefund.value) return false
     }
     return true
   })
@@ -471,6 +486,7 @@ export function usePOSCheckout() {
     paymentMethod,
     notes,
     canSubmit,
+    refundApprovalBlocked,
     submitting,
     submit,
     // 收據
