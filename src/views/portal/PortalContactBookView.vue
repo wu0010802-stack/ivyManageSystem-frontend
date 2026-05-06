@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Bell, Camera, Delete, Edit, Refresh } from '@element-plus/icons-vue'
+import { Bell, Camera, Delete } from '@element-plus/icons-vue'
 
 import { getMyStudents } from '@/api/portal'
 import { usePortalFromHub } from '@/composables/usePortalFromHub'
@@ -19,6 +19,8 @@ import {
 import { useContactBookTemplates } from '@/composables/useContactBookTemplates'
 import { todayISO } from '@/utils/format'
 import { apiError } from '@/utils/error'
+import ContactBookFilterBar from './components/contactBook/ContactBookFilterBar.vue'
+import ContactBookEntryCard from './components/contactBook/ContactBookEntryCard.vue'
 
 const { fromHub, backToHub } = usePortalFromHub()
 
@@ -87,12 +89,6 @@ const completionPercent = computed(() => {
   if (!total) return 0
   return Math.round((completion.value.published / total) * 100)
 })
-
-function statusOf(entry) {
-  if (!entry) return { label: '未填', type: 'info' }
-  if (entry.published_at) return { label: '已發布', type: 'success' }
-  return { label: '草稿', type: 'warning' }
-}
 
 async function fetchClassrooms() {
   classroomLoading.value = true
@@ -408,40 +404,20 @@ watch([selectedClassroomId, selectedDate], () => {
     </div>
     <div class="page-header">
       <h2>每日聯絡簿</h2>
-      <div class="header-actions">
-        <el-select
-          v-model="selectedClassroomId"
-          placeholder="選擇班級"
-          :loading="classroomLoading"
-          style="width: 180px"
-        >
-          <el-option
-            v-for="o in classroomOptions"
-            :key="o.value"
-            :label="o.label"
-            :value="o.value"
-          />
-        </el-select>
-        <el-date-picker
-          v-model="selectedDate"
-          type="date"
-          value-format="YYYY-MM-DD"
-          :clearable="false"
-          style="width: 160px"
-        />
-        <el-button :icon="Refresh" :loading="listLoading" @click="fetchClassDay">重新整理</el-button>
-      </div>
     </div>
 
-    <div class="batch-bar pt-card" v-if="selectedClassroomId">
-      <el-button :loading="batchBusy" @click="handleCopyYesterday">複製昨日</el-button>
-      <el-button :loading="batchBusy" @click="openTemplateDialog">套用範本到全班</el-button>
-      <el-button :loading="batchBusy" type="success" @click="handleBatchPublish">
-        批次發布草稿
-      </el-button>
-      <el-divider direction="vertical" />
-      <el-checkbox v-model="showOnlyUnpublished">只看未發布</el-checkbox>
-    </div>
+    <ContactBookFilterBar
+      v-model:classroom-id="selectedClassroomId"
+      v-model:log-date="selectedDate"
+      v-model:show-only-unpublished="showOnlyUnpublished"
+      :classroom-options="classroomOptions"
+      :loading="listLoading"
+      :batch-busy="batchBusy"
+      @refresh="fetchClassDay"
+      @open-copy="handleCopyYesterday"
+      @open-template="openTemplateDialog"
+      @open-batch="handleBatchPublish"
+    />
 
     <el-card v-if="completion.roster > 0" class="completion-card" shadow="never">
       <div class="completion-row">
@@ -467,39 +443,13 @@ watch([selectedClassroomId, selectedDate], () => {
     />
 
     <div v-else class="card-grid" v-loading="listLoading">
-      <el-card
+      <ContactBookEntryCard
         v-for="it in visibleItems"
         :key="it.student_id"
-        class="student-card"
-        shadow="hover"
-        @click="openDrawer(it)"
-      >
-        <div class="card-top">
-          <div class="card-name">{{ it.student_name }}</div>
-          <el-tag :type="statusOf(it.entry).type" size="small">
-            {{ statusOf(it.entry).label }}
-          </el-tag>
-        </div>
-        <div class="card-body">
-          <div class="card-mood">
-            <span v-if="it.entry?.mood" class="mood-emoji">{{ MOOD_EMOJI[it.entry.mood] || '🙂' }}</span>
-            <span v-else class="mood-empty">—</span>
-          </div>
-          <div class="card-meta">
-            <div v-if="it.entry?.teacher_note" class="card-note">{{ it.entry.teacher_note }}</div>
-            <div v-else class="card-note muted">尚未填寫</div>
-            <div v-if="it.entry?.photos?.length" class="card-photos">
-              <el-icon><Camera /></el-icon>
-              <span>{{ it.entry.photos.length }} 張</span>
-            </div>
-          </div>
-        </div>
-        <div class="card-action">
-          <el-button :icon="Edit" size="small" type="primary" plain>
-            編輯
-          </el-button>
-        </div>
-      </el-card>
+        :item="it"
+        :mood-emoji="MOOD_EMOJI"
+        @click="openDrawer"
+      />
     </div>
 
     <!-- Drawer：單筆編輯 -->
@@ -688,13 +638,6 @@ watch([selectedClassroomId, selectedDate], () => {
   padding: 4px 0;
 }
 
-.batch-bar {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-3);
-}
-
 .tpl-list { display: flex; flex-direction: column; gap: var(--space-2); }
 .tpl-row { display: flex; gap: var(--space-2); align-items: center; }
 .hint { font-size: var(--text-xs); color: var(--pt-text-muted); margin-top: var(--space-2); }
@@ -713,12 +656,6 @@ watch([selectedClassroomId, selectedDate], () => {
   font-size: var(--text-2xl);
   font-weight: 700;
   color: var(--text-primary);
-}
-
-.header-actions {
-  display: flex;
-  gap: var(--space-2);
-  flex-wrap: wrap;
 }
 
 .completion-card {
@@ -751,76 +688,6 @@ watch([selectedClassroomId, selectedDate], () => {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: var(--space-3);
-}
-
-.student-card {
-  cursor: pointer;
-  transition: transform var(--transition-base), box-shadow var(--transition-base);
-}
-
-.student-card:hover {
-  transform: translateY(-2px);
-}
-
-.card-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: var(--space-2);
-}
-
-.card-name {
-  font-size: var(--text-lg);
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.card-body {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-3);
-  min-height: 56px;
-}
-
-.card-mood {
-  font-size: 32px;
-  line-height: 1;
-}
-
-.mood-empty {
-  font-size: 24px;
-  color: var(--text-tertiary);
-}
-
-.card-meta {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
-.card-note {
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.card-photos {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: var(--text-xs);
-  color: var(--text-tertiary);
-}
-
-.card-action {
-  margin-top: var(--space-2);
-  display: flex;
-  justify-content: flex-end;
 }
 
 .muted {
