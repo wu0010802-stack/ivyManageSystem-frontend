@@ -69,7 +69,7 @@ function refresh() {
 async function pullRefresh() {
   await Promise.all([
     refreshSummary(true),
-    refreshToday(true),
+    todayRef.value?.refresh(),
   ])
 }
 
