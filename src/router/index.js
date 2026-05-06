@@ -219,6 +219,12 @@ const router = createRouter({
             meta: { title: 'POS 收款簽核' }
         },
         {
+            path: '/activity/audit/pos-unlock',
+            name: 'POSAuditEvents',
+            component: () => import('../views/activity/POSAuditEventsView.vue'),
+            meta: { title: 'POS 日結異常稽核軌跡' }
+        },
+        {
             path: '/activity/catalog',
             name: 'activity-catalog',
             component: () => import('../views/activity/ActivityCatalogView.vue'),
