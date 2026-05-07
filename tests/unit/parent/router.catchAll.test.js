@@ -53,7 +53,7 @@ describe('router meta.tab — 深層頁不持續高亮', () => {
     }
 
     // 主 tab 路由仍保留 tab
-    const tabPaths = ['/home', '/attendance', '/announcements', '/messages', '/messages/:threadId', '/more']
+    const tabPaths = ['/home', '/attendance', '/announcements', '/messages', '/messages/:threadId', '/me']
     for (const p of tabPaths) {
       const r = routes.find((x) => x.path === p)
       expect(r.meta?.tab, `${p} 應保留 meta.tab`).toBeDefined()

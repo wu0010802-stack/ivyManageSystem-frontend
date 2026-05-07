@@ -39,7 +39,7 @@ const TABS = [
   { key: 'attendance', label: '出席', path: '/attendance' },
   { key: 'messages', label: '訊息', path: '/messages' },
   { key: 'announcements', label: '公告', path: '/announcements' },
-  { key: 'more', label: '更多', path: '/more' },
+  { key: 'more', label: '更多', path: '/me' },
 ]
 
 async function refreshUnread() {

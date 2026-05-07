@@ -53,10 +53,15 @@ const router = createRouter({
       meta: { title: '對話', tab: 'messages', showBack: true },
     },
     {
+      path: '/me',
+      name: 'parent-me',
+      component: () => import('./views/MeView.vue'),
+      // Phase 1 過渡：meta.tab='more' 讓「更多」tab 維持 active；Phase 3 會改回 'me'
+      meta: { title: '我的', tab: 'more' },
+    },
+    {
       path: '/more',
-      name: 'parent-more',
-      component: () => import('./views/MoreView.vue'),
-      meta: { title: '更多', tab: 'more' },
+      redirect: '/me',
     },
     {
       path: '/fees',
