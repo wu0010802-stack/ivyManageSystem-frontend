@@ -9,23 +9,16 @@ async function buildRouter() {
 }
 
 describe('parent router IA v2', () => {
-  it('/me 路由存在且 meta.tab=more（Phase 1 過渡期）', async () => {
+  it('/me 路由 meta.tab=me（Phase 3 已正規化）', async () => {
     const router = await buildRouter()
     await router.push('/me')
     expect(router.currentRoute.value.name).toBe('parent-me')
-    expect(router.currentRoute.value.meta.tab).toBe('more')
+    expect(router.currentRoute.value.meta.tab).toBe('me')
   })
 
   it('/more 會 redirect 到 /me', async () => {
     const router = await buildRouter()
     await router.push('/more')
     expect(router.currentRoute.value.path).toBe('/me')
-  })
-
-  it('「更多」tab 點擊後 url 為 /me、active 樣式仍套用 more', async () => {
-    const router = await buildRouter()
-    await router.push('/me')
-    expect(router.currentRoute.value.path).toBe('/me')
-    expect(router.currentRoute.value.meta.tab).toBe('more')
   })
 })

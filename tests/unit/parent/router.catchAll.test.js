@@ -24,12 +24,15 @@ describe('router catch-all', () => {
   })
 })
 
-describe('router meta.tab — 深層頁不持續高亮', () => {
-  it('深層頁路由 meta 不含 tab 欄位', async () => {
+describe('router meta.tab — IA v2 Phase 3 深層頁高亮對應 tab', () => {
+  it('每個深層頁都有 meta.tab，且為四個 tab key 之一', async () => {
     // 動態載入真實 router 以拿到完整 routes
     const { default: router } = await import('@/parent/router')
     const routes = router.options.routes
 
+    const validTabs = new Set(['home', 'messages', 'family', 'me'])
+
+    // Phase 3 起，所有深層頁都應有 meta.tab，使對應 tab 高亮
     const deepPaths = [
       '/leaves',
       '/fees',
@@ -49,7 +52,8 @@ describe('router meta.tab — 深層頁不持續高亮', () => {
     for (const p of deepPaths) {
       const r = routes.find((x) => x.path === p)
       expect(r, `route ${p} not found`).toBeTruthy()
-      expect(r.meta?.tab, `${p} 應移除 meta.tab`).toBeUndefined()
+      expect(r.meta?.tab, `${p} 應有 meta.tab`).toBeDefined()
+      expect(validTabs.has(r.meta.tab), `${p} meta.tab=${r.meta.tab} 須為 4 tab key 之一`).toBe(true)
     }
 
     // 主 tab 路由仍保留 tab
