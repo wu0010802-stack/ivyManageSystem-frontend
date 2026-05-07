@@ -11,7 +11,11 @@ import { computed } from 'vue'
 
 const props = defineProps({
   size: { type: Number, default: 24 },
-  expression: { type: String, default: 'smile' }, // smile | wink | sleep
+  expression: {
+    type: String,
+    default: 'smile',
+    validator: (v) => ['smile', 'wink', 'sleep'].includes(v),
+  },
   decorative: { type: Boolean, default: false },
 })
 

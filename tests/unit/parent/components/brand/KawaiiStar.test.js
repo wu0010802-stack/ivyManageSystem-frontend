@@ -37,4 +37,11 @@ describe('KawaiiStar', () => {
     const winkMouth = w2.find('[data-test="mouth"]').attributes('d')
     expect(smileMouth).not.toBe(winkMouth)
   })
+
+  it('expression=sleep 套用 sleep 嘴 path 且左眼仍為點', () => {
+    const w = mount(KawaiiStar, { props: { expression: 'sleep' } })
+    expect(w.find('[data-test="mouth"]').attributes('d')).toBe('M27 36 L33 36')
+    // sleep 與 smile 一樣：左眼是 circle（不是 wink 那條線）
+    expect(w.findAll('circle').length).toBeGreaterThanOrEqual(2)
+  })
 })
