@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
+import { ref } from 'vue'
 
 const mockContactBookApi = vi.hoisted(() => ({
   getTodayContactBook: vi.fn(),
@@ -17,13 +18,9 @@ vi.mock('@/parent/stores/children', () => ({
 
 vi.mock('@/parent/composables/useChildSelection', () => ({
   useChildSelection: () => ({
-    selectedId: { value: 1 },
+    selectedId: ref(1),
     ensureSelected: vi.fn(),
   }),
-}))
-
-vi.mock('vue-router', () => ({
-  useRouter: () => ({ push: vi.fn() }),
 }))
 
 import ContactBookView from '@/parent/views/ContactBookView.vue'
