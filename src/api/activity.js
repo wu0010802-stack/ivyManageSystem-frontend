@@ -170,6 +170,8 @@ export const unlockPOSDailyClose = (date, payload) =>
   api.delete(`/activity/pos/daily-close/${date}`, { data: payload })
 export const getPOSUnlockEvents = (days = 30) =>
   api.get('/activity/audit/pos-unlock-events', { params: { days } })
+export const getPOSOperatorActivity = (days = 30) =>
+  api.get('/activity/audit/operator-activity', { params: { days } })
 export const getPOSReconciliation = (startDate, endDate) =>
   api.get('/activity/pos/reconciliation', {
     params: { start_date: startDate, end_date: endDate },
