@@ -41,7 +41,7 @@ const balloons = computed(() => {
   <svg
     :width="count * 40"
     :height="80"
-    viewBox="0 0 200 80"
+    :viewBox="`0 0 ${count * 40} 80`"
     aria-hidden="true"
     xmlns="http://www.w3.org/2000/svg"
   >

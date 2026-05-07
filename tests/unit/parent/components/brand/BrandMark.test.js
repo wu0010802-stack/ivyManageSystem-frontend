@@ -31,4 +31,10 @@ describe('BrandMark', () => {
     const w = mount(BrandMark)
     expect(w.find('[data-test="brand-mark"]').attributes('aria-label')).toBe('常春藤幼兒園')
   })
+
+  it('size prop 透過 --mark-size CSS var 傳給內層 ribbon font-size', () => {
+    const w = mount(BrandMark, { props: { variant: 'full', size: 100 } })
+    const root = w.find('[data-test="brand-mark"]')
+    expect(root.attributes('style') || '').toContain('--mark-size: 100px')
+  })
 })

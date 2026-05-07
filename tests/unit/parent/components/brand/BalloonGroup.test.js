@@ -33,4 +33,11 @@ describe('BalloonGroup', () => {
     const w = mount(BalloonGroup)
     expect(w.find('svg').attributes('aria-hidden')).toBe('true')
   })
+
+  it('viewBox 隨 count 動態調整避免裁切', () => {
+    const w1 = mount(BalloonGroup, { props: { count: 3 } })
+    expect(w1.find('svg').attributes('viewBox')).toBe('0 0 120 80')
+    const w2 = mount(BalloonGroup, { props: { count: 8 } })
+    expect(w2.find('svg').attributes('viewBox')).toBe('0 0 320 80')
+  })
 })

@@ -27,6 +27,7 @@ const containerStyle = computed(() => ({
   width: `${props.size}px`,
   height: `${props.size}px`,
   position: 'relative',
+  '--mark-size': `${props.size}px`,
 }))
 
 const showRibbon = computed(() => props.variant === 'full')
