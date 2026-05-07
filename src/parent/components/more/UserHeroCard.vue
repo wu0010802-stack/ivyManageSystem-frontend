@@ -2,6 +2,9 @@
 /**
  * 家長 More 頁 hero 卡：頭像 + 名字 + 子女列表 + LINE 推播狀態 badge。
  *
+ * IvyKids rebrand 2026-05-07：月桂葉水印 + KawaiiStar 右上裝飾 + 暖底漸層，
+ * avatar 改深綠 brand-primary 漸層圓形。
+ *
  * 純呈現元件，無 store/composable 依賴；所有資料由父層算好傳入。
  *
  * Props:
@@ -12,6 +15,8 @@
  *  - pushStatusKnown: me 是否已載入（false 時 hide push badge 區）
  */
 import ParentIcon from '../ParentIcon.vue'
+import LaurelWreath from '../brand/LaurelWreath.vue'
+import KawaiiStar from '../brand/KawaiiStar.vue'
 
 defineProps({
   userName: { type: String, default: '家長' },
@@ -23,7 +28,12 @@ defineProps({
 </script>
 
 <template>
-  <div class="user-card">
+  <section class="user-card" aria-label="家長身份">
+    <!-- 月桂葉水印 -->
+    <LaurelWreath side="full" :opacity="0.15" :size="120" class="user-card-laurel" />
+    <!-- KawaiiStar 右上裝飾 -->
+    <KawaiiStar :size="32" decorative class="user-card-star" />
+
     <div class="user-card-content">
       <div class="user-avatar" aria-hidden="true">
         {{ avatarInitial }}
@@ -45,23 +55,37 @@ defineProps({
         尚未加 LINE 為好友（無法收推播）
       </span>
     </div>
-    <div class="user-decoration" aria-hidden="true">
-      <span class="user-blob user-blob-1" />
-      <span class="user-blob user-blob-2" />
-    </div>
-  </div>
+  </section>
 </template>
 
 <style scoped>
 .user-card {
   position: relative;
+  margin: 0 var(--space-3, 12px);
+  padding: var(--space-5, 22px) var(--space-4, 16px);
   background: var(--pt-gradient-hero);
-  border-radius: var(--radius-xl, 16px);
-  padding: 18px 20px 20px;
-  color: var(--neutral-0, #fff);
-  box-shadow: var(--pt-elev-2);
+  border: 1px solid rgba(90, 168, 66, 0.15);
+  border-radius: 18px;
+  box-shadow: var(--pt-elev-1);
   overflow: hidden;
   isolation: isolate;
+}
+
+.user-card-laurel {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 0;
+  pointer-events: none;
+}
+
+.user-card-star {
+  position: absolute;
+  right: var(--space-3, 12px);
+  top: var(--space-3, 12px);
+  z-index: 0;
+  pointer-events: none;
 }
 
 .user-card-content {
@@ -73,19 +97,18 @@ defineProps({
 }
 
 .user-avatar {
-  width: 52px;
-  height: 52px;
+  width: 56px;
+  height: 56px;
   border-radius: var(--radius-full, 9999px);
-  background: rgba(255, 255, 255, 0.22);
-  border: 1px solid rgba(255, 255, 255, 0.30);
+  background: linear-gradient(135deg, var(--ivy-green-deep, #0d9053), var(--ivy-green-bright, #0caf76));
+  border: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font-size: var(--text-2xl, 22px);
-  font-weight: var(--font-weight-bold, 700);
+  font-weight: 900;
   color: var(--neutral-0, #fff);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
+  box-shadow: var(--pt-elev-1);
   flex-shrink: 0;
 }
 
@@ -96,13 +119,14 @@ defineProps({
 
 .user-name {
   font-size: var(--text-xl, 18px);
-  font-weight: var(--font-weight-bold, 700);
+  font-weight: 900;
+  color: var(--pt-text-strong);
   letter-spacing: 0.01em;
 }
 
 .user-children {
   margin-top: 4px;
-  color: rgba(255, 255, 255, 0.94);
+  color: var(--pt-text-muted);
   font-size: var(--text-sm, 13px);
   line-height: 1.4;
   overflow: hidden;
@@ -115,31 +139,6 @@ defineProps({
   margin-top: var(--space-3, 12px);
 }
 
-.user-decoration {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-.user-blob {
-  position: absolute;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.14);
-  filter: blur(2px);
-}
-.user-blob-1 {
-  top: -36px;
-  right: -28px;
-  width: 130px;
-  height: 130px;
-}
-.user-blob-2 {
-  bottom: -52px;
-  right: 64px;
-  width: 90px;
-  height: 90px;
-  background: rgba(255, 255, 255, 0.10);
-}
-
 .badge {
   display: inline-flex;
   align-items: center;
@@ -148,13 +147,11 @@ defineProps({
   padding: 4px 10px;
   border-radius: var(--radius-full, 9999px);
   font-weight: var(--font-weight-medium, 500);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
 }
 .badge.ok {
-  background: rgba(255, 255, 255, 0.22);
-  color: var(--neutral-0, #fff);
-  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(90, 168, 66, 0.15);
+  color: var(--ivy-green-deep, #0d9053);
+  border: 1px solid rgba(90, 168, 66, 0.30);
 }
 .badge.warn {
   background: rgba(254, 243, 199, 0.95);
