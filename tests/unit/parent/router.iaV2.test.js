@@ -21,4 +21,11 @@ describe('parent router IA v2', () => {
     await router.push('/more')
     expect(router.currentRoute.value.path).toBe('/me')
   })
+
+  it('「更多」tab 點擊後 url 為 /me、active 樣式仍套用 more', async () => {
+    const router = await buildRouter()
+    await router.push('/me')
+    expect(router.currentRoute.value.path).toBe('/me')
+    expect(router.currentRoute.value.meta.tab).toBe('more')
+  })
 })
