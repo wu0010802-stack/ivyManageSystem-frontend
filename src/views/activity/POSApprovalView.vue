@@ -656,6 +656,29 @@ async function doUnlock({ isOverride, minLen }) {
         duration: 6000,
       })
     }
+    // spec H2: 顯示實況 vs 簽核當下 snapshot 差異，幫解鎖人理解「為什麼帳變了」
+    const diff = data?.live_diff
+    if (diff) {
+      const hasDelta =
+        diff.payment_total_diff !== 0 ||
+        diff.refund_total_diff !== 0 ||
+        diff.transaction_count_diff !== 0
+      if (hasDelta) {
+        const sign = (n) => (n > 0 ? `+${n}` : `${n}`)
+        const lines = [
+          `📊 簽核當下 snapshot vs 解鎖當下實況差異：`,
+          `• 收款 NT$${diff.original_payment_total} → NT$${diff.live_payment_total}（${sign(diff.payment_total_diff)}）`,
+          `• 退款 NT$${diff.original_refund_total} → NT$${diff.live_refund_total}（${sign(diff.refund_total_diff)}）`,
+          `• 淨額 NT$${diff.original_net_total} → NT$${diff.live_net_total}（${sign(diff.net_total_diff)}）`,
+          `• 筆數 ${diff.original_transaction_count} → ${diff.live_transaction_count}（${sign(diff.transaction_count_diff)}）`,
+        ]
+        ElMessageBox.alert(lines.join('\n'), '解鎖後實況差異', {
+          confirmButtonText: '了解',
+          type: 'info',
+          customClass: 'pos-approval__diff-alert',
+        }).catch(() => {})
+      }
+    }
     await refreshAll()
   } catch (err) {
     ElMessage.error(err?.response?.data?.detail || '解鎖失敗')
