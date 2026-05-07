@@ -137,6 +137,12 @@ const router = createRouter({
       meta: { title: '聯絡簿詳情', showBack: true },
     },
     {
+      path: '/family',
+      name: 'parent-family',
+      component: () => import('./views/FamilyView.vue'),
+      meta: { title: '家校', tab: 'family' },
+    },
+    {
       path: '/:pathMatch(.*)*',
       redirect: '/home',
     },
