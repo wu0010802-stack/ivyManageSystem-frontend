@@ -65,4 +65,16 @@ export const SALARY_TAB_FIELDS = Object.freeze([
   'bank_code',
   'bank_account',
   'bank_account_name',
+  // 階段 2-C：特殊投保/獎金狀態旗標
+  'no_employment_insurance',
+  'health_exempt',
+  'skip_payroll_bonuses',
+  'extra_dependents_quarterly',
+  'insurance_salary_override_reason',
+  // 議題 A 選項 3：底薪標準化覆寫
+  'bypass_standard_base',
+  // 議題 B：分項投保
+  'labor_insured_salary',
+  'health_insured_salary',
+  'pension_insured_salary',
 ])

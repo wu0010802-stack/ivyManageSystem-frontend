@@ -105,7 +105,18 @@ const form = reactive({
   bank_account: '',
   bank_account_name: '',
   work_start_time: '08:00',
-  work_end_time: '17:00'
+  work_end_time: '17:00',
+  // 階段 2-C 特殊狀況旗標（預設 0/false，多數員工不需動）
+  no_employment_insurance: false,
+  health_exempt: false,
+  skip_payroll_bonuses: false,
+  extra_dependents_quarterly: 0,
+  insurance_salary_override_reason: '',
+  bypass_standard_base: false,
+  // 議題 B 分項投保（null=沿用 insurance_salary_level）
+  labor_insured_salary: null,
+  health_insured_salary: null,
+  pension_insured_salary: null,
 })
 
 // ── 編輯 dialog tab + dirty tracking ─────────────────
@@ -341,6 +352,10 @@ const resetForm = () => {
   form.department = 'Teaching'
   form.work_start_time = '08:00'
   form.work_end_time = '17:00'
+  // 議題 B 分項投保 null（reset 預設 0 不適用，須 null 以走 fallback）
+  form.labor_insured_salary = null
+  form.health_insured_salary = null
+  form.pension_insured_salary = null
   suggestedSalary.value = null
 }
 
