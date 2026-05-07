@@ -119,6 +119,10 @@ const globalConfig = {
     loading: () => {},
   },
   stubs: {
+    RouterLink: {
+      template: '<a :href="to"><slot /></a>',
+      props: ['to'],
+    },
     StatCard: true,
     'el-row': { template: '<div><slot /></div>' },
     'el-col': { template: '<div><slot /></div>' },
@@ -197,6 +201,17 @@ describe('HomeView', () => {
     await flushPromises()
     expect(getUpcomingEvents).toHaveBeenCalledTimes(1)
     expect(getProbationAlerts).not.toHaveBeenCalled()
+  })
+
+  it('快速操作 8 個磚塊都是可鍵盤聚焦的 <a> 元素，並有 href', async () => {
+    const wrapper = shallowMount(HomeView, { global: globalConfig })
+    await flushPromises()
+    const items = wrapper.findAll('.action-item')
+    expect(items.length).toBe(8)
+    items.forEach((item) => {
+      expect(item.element.tagName).toBe('A')
+      expect(item.attributes('href')).toBeTruthy()
+    })
   })
 
   it('mount 時不應出現未解析的 Element Plus icon 警告', async () => {
