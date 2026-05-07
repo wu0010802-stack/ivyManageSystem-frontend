@@ -77,7 +77,7 @@ const todos = computed(() => {
   const list = []
   if (unpaidCount.value > 0) {
     list.push({
-      key: 'fees',
+      key: overdueAmount.value > 0 ? 'fees_overdue' : 'fees',
       icon: 'money',
       tint: 'money',
       path: '/fees',
@@ -144,6 +144,17 @@ const todos = computed(() => {
       suffix: ' 件',
     })
   }
+  // IA v2 Phase 3：依時效/重要性排序，逾期繳費置頂、請假審核結果墊底
+  const KEY_PRIORITY = {
+    fees_overdue: 0,
+    acks: 1,
+    fees: 2,
+    messages: 3,
+    promotions: 4,
+    announcements: 5,
+    leaveReviews: 6,
+  }
+  list.sort((a, b) => (KEY_PRIORITY[a.key] ?? 99) - (KEY_PRIORITY[b.key] ?? 99))
   return list
 })
 </script>

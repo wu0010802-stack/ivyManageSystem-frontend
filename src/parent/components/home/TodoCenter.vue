@@ -4,12 +4,13 @@
  *
  * 接受 pre-flattened todos 陣列，逐列渲染（icon + 文字 + arrow）。
  * 為純呈現元件，路由由父層透過 `@navigate="go"` 接住。
+ * 排序由父層（HomeView）依 KEY_PRIORITY 預先處理，本元件直接依陣列順序渲染。
  *
  * todos item shape:
  *   { key, icon, tint, primaryText, count?, suffix?, warn?, path }
  *
  * 渲染時 `count` 會以 <strong> 強調（紅色 / tabular-nums）保留原有設計。
- * 若 todos 為空陣列，則顯示「目前沒有待辦事項」空狀態。
+ * 若 todos 為空陣列，仍渲染區塊但顯示「目前沒有待辦 ✨」（IA v2 Phase 3）。
  */
 import ParentIcon from '../ParentIcon.vue'
 
@@ -26,32 +27,29 @@ const emit = defineEmits(['navigate'])
 </script>
 
 <template>
-  <section v-if="todos.length" class="todos-card">
-    <h3 class="section-title todos-title">今日待辦</h3>
-    <button
-      v-for="t in todos"
-      :key="t.key"
-      class="todo-row press-scale"
-      type="button"
-      @click="emit('navigate', t.path)"
-    >
-      <span class="todo-icon" :class="`tint-${t.tint}`">
-        <ParentIcon :name="t.icon" size="sm" />
-      </span>
-      <span class="todo-text">
-        {{ t.primaryText }}
-        <strong v-if="t.count != null">{{ t.count }}</strong>
-        <template v-if="t.suffix">{{ t.suffix }}</template>
-        <span v-if="t.warn" class="todo-warn">{{ t.warn }}</span>
-      </span>
-      <ParentIcon name="chevron-right" size="sm" class="todo-arrow" />
-    </button>
-  </section>
-  <section v-else class="todos-empty">
-    <span class="todos-empty-icon" aria-hidden="true">
-      <ParentIcon name="check" size="sm" />
-    </span>
-    目前沒有待辦事項
+  <section class="todos-card">
+    <h3 class="section-title todos-title">需要你處理（{{ todos.length }}）</h3>
+    <template v-if="todos.length">
+      <button
+        v-for="t in todos"
+        :key="t.key"
+        class="todo-row press-scale"
+        type="button"
+        @click="emit('navigate', t.path)"
+      >
+        <span class="todo-icon" :class="`tint-${t.tint}`">
+          <ParentIcon :name="t.icon" size="sm" />
+        </span>
+        <span class="todo-text">
+          {{ t.primaryText }}
+          <strong v-if="t.count != null">{{ t.count }}</strong>
+          <template v-if="t.suffix">{{ t.suffix }}</template>
+          <span v-if="t.warn" class="todo-warn">{{ t.warn }}</span>
+        </span>
+        <ParentIcon name="chevron-right" size="sm" class="todo-arrow" />
+      </button>
+    </template>
+    <p v-else class="todos-empty-msg">目前沒有待辦 ✨</p>
   </section>
 </template>
 
@@ -120,26 +118,13 @@ const emit = defineEmits(['navigate'])
 .todo-warn { color: var(--color-danger); font-size: var(--text-xs, 12px); }
 .todo-arrow { color: var(--pt-text-disabled); flex-shrink: 0; }
 
-.todos-empty {
-  background: var(--pt-surface-card);
-  border-radius: var(--radius-lg, 12px);
-  padding: 18px 16px;
+.todos-empty-msg {
+  margin: 4px 16px 14px;
+  padding: 12px 14px;
   text-align: center;
   font-size: var(--text-base, 14px);
   color: var(--pt-text-placeholder);
-  box-shadow: var(--pt-elev-1);
-  border: var(--pt-hairline);
-}
-.todos-empty-icon {
-  display: inline-flex;
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-full, 9999px);
-  background: var(--brand-primary-soft);
-  color: var(--brand-primary);
-  align-items: center;
-  justify-content: center;
-  margin-right: 8px;
-  vertical-align: middle;
+  background: var(--pt-surface-mute-soft, transparent);
+  border-radius: var(--radius-md, 8px);
 }
 </style>
