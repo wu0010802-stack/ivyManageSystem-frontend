@@ -209,6 +209,26 @@
   --pt-font-display: 'Outfit', 'Noto Sans TC', -apple-system, BlinkMacSystemFont, 'PingFang TC', 'Helvetica Neue', sans-serif;
   --pt-font-body:    'Quicksand', 'Noto Sans TC', -apple-system, BlinkMacSystemFont, 'PingFang TC', 'Helvetica Neue', sans-serif;
   --pt-font-hand:    'Patrick Hand', 'Noto Sans TC', cursive;
+
+  /* ---------------- IvyKids brand tokens (2026-05-07 rebrand) ---------------- */
+  --ivy-green-deep:    #0d9053;  /* primary CTA, emphasis bar */
+  --ivy-green-bright:  #0caf76;  /* hover state */
+  --ivy-green-laurel:  #5aa842;  /* 月桂葉、accent bar */
+  --ivy-green-mid:     #41a074;  /* 中綠 icon bg */
+  --ivy-teal-primary:  #33aaaa;  /* secondary primary button */
+  --ivy-teal-soft:     #d3ecec;  /* teal soft tint */
+  --ivy-star-yellow:   #ffde51;  /* kawaii 星黃 */
+  --ivy-crown-gold:    #f3c630;  /* 皇冠 + 邊線金 */
+  --ivy-cream-bg:      #fffce8;  /* 奶油黃底色 */
+  --ivy-leaf-bg:       #f5fbe6;  /* 嫩綠底色 */
+
+  /* 童彩 6 色 tile（bg + fg 配對，全部對比過 AA）*/
+  --ivy-tile-yellow-bg:  #fff8d8;  --ivy-tile-yellow-fg:  #b07700;
+  --ivy-tile-coral-bg:   #ffe8e4;  --ivy-tile-coral-fg:   #b14545;
+  --ivy-tile-pink-bg:    #ffd8de;  --ivy-tile-pink-fg:    #a33340;
+  --ivy-tile-purple-bg:  #efe5f5;  --ivy-tile-purple-fg:  #6e3f94;
+  --ivy-tile-green-bg:   #e8f5e3;  --ivy-tile-green-fg:   #1b5e20;
+  --ivy-tile-teal-bg:    #d3ecec;  --ivy-tile-teal-fg:    #145555;
 }
 
 /* ============================================================
@@ -305,6 +325,52 @@
 
   --color-danger-hover: #DC2626;  /* dark mode 用稍亮一階 */
   --pt-on-hero: #ffffff;          /* dark mode 仍白 */
+
+  /* ---------------- IvyKids brand tokens — dark (2026-05-07 rebrand) ---------------- */
+  --ivy-green-deep:    #5aa842;
+  --ivy-green-bright:  #6dc068;
+  --ivy-green-laurel:  #8bc34a;
+  --ivy-green-mid:     #6dc068;
+  --ivy-teal-primary:  #4dc4c4;
+  --ivy-teal-soft:     rgba(77, 196, 196, 0.18);
+  --ivy-star-yellow:   #ffe66d;
+  --ivy-crown-gold:    #ffd647;
+  --ivy-cream-bg:      #1f1c14;
+  --ivy-leaf-bg:       #1a2418;
+
+  --ivy-tile-yellow-bg:  rgba(255, 222, 81, 0.18);  --ivy-tile-yellow-fg:  #ffe66d;
+  --ivy-tile-coral-bg:   rgba(243, 149, 140, 0.18); --ivy-tile-coral-fg:   #ff9a90;
+  --ivy-tile-pink-bg:    rgba(246, 82, 101, 0.18);  --ivy-tile-pink-fg:    #ff8a98;
+  --ivy-tile-purple-bg:  rgba(159, 137, 189, 0.18); --ivy-tile-purple-fg:  #b8a3d4;
+  --ivy-tile-green-bg:   rgba(90, 168, 66, 0.18);   --ivy-tile-green-fg:   #8bc34a;
+  --ivy-tile-teal-bg:    rgba(77, 196, 196, 0.18);  --ivy-tile-teal-fg:    #4dc4c4;
+}
+
+/* ============================================================
+ * IvyKids brand tokens — @media dark fallback
+ * （app 以 [data-theme='dark'] 為主，此段供純系統偏好偵測備用）
+ * ============================================================ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* ---------------- IvyKids brand tokens — dark (2026-05-07 rebrand) ---------------- */
+    --ivy-green-deep:    #5aa842;
+    --ivy-green-bright:  #6dc068;
+    --ivy-green-laurel:  #8bc34a;
+    --ivy-green-mid:     #6dc068;
+    --ivy-teal-primary:  #4dc4c4;
+    --ivy-teal-soft:     rgba(77, 196, 196, 0.18);
+    --ivy-star-yellow:   #ffe66d;
+    --ivy-crown-gold:    #ffd647;
+    --ivy-cream-bg:      #1f1c14;
+    --ivy-leaf-bg:       #1a2418;
+
+    --ivy-tile-yellow-bg:  rgba(255, 222, 81, 0.18);  --ivy-tile-yellow-fg:  #ffe66d;
+    --ivy-tile-coral-bg:   rgba(243, 149, 140, 0.18); --ivy-tile-coral-fg:   #ff9a90;
+    --ivy-tile-pink-bg:    rgba(246, 82, 101, 0.18);  --ivy-tile-pink-fg:    #ff8a98;
+    --ivy-tile-purple-bg:  rgba(159, 137, 189, 0.18); --ivy-tile-purple-fg:  #b8a3d4;
+    --ivy-tile-green-bg:   rgba(90, 168, 66, 0.18);   --ivy-tile-green-fg:   #8bc34a;
+    --ivy-tile-teal-bg:    rgba(77, 196, 196, 0.18);  --ivy-tile-teal-fg:    #4dc4c4;
+  }
 }
 
 /* ========== Focus Visible ==========
