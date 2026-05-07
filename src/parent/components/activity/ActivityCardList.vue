@@ -84,8 +84,8 @@ defineProps({
   font-size: 11px;
   margin-left: auto;
 }
-.enroll-tag.open { background: var(--brand-primary-soft); color: var(--pt-success-text); }
-.enroll-tag.full { background: var(--color-warning-soft); color: var(--pt-warning-text-soft); }
+.enroll-tag.open { background: var(--pt-tint-calendar); color: var(--pt-tint-calendar-fg); }
+.enroll-tag.full { background: var(--pt-tint-money); color: var(--pt-tint-money-fg); }
 
 .course-card-desc {
   margin-top: 6px;

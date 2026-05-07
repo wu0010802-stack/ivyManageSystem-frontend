@@ -42,6 +42,7 @@ const emit = defineEmits(['confirm-promotion'])
         <span class="course-name">{{ rc.course_name }}</span>
         <span
           class="course-status"
+          :data-status="rc.status"
           :style="{
             background: courseStatusMap[rc.status]?.color.bg,
             color: courseStatusMap[rc.status]?.color.color,
@@ -100,8 +101,15 @@ const emit = defineEmits(['confirm-promotion'])
   border-radius: 10px;
   font-size: 12px;
 }
-.paid.ok { background: var(--brand-primary-soft); color: var(--pt-success-text); }
-.paid.warn { background: var(--color-warning-soft); color: var(--pt-warning-text-soft); }
+.paid.ok   { background: var(--pt-tint-calendar); color: var(--pt-tint-calendar-fg); }
+.paid.warn { background: var(--pt-tint-money); color: var(--pt-tint-money-fg); }
+
+/* 童彩報名狀態 chip（courseStatusMap inline style 優先；以下為 token 預設） */
+.course-status[data-status="enrolled"]         { background: var(--pt-tint-calendar); color: var(--pt-tint-calendar-fg); }
+.course-status[data-status="waitlist"]         { background: var(--pt-tint-money); color: var(--pt-tint-money-fg); }
+.course-status[data-status="finished"]         { background: var(--pt-tint-pickup); color: var(--pt-tint-pickup-fg); }
+.course-status[data-status="refunded"]         { background: var(--pt-tint-event); color: var(--pt-tint-event-fg); }
+.course-status[data-status="promoted_pending"] { background: var(--pt-tint-announcement); color: var(--pt-tint-announcement-fg); }
 
 .course-row {
   display: flex;
