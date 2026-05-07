@@ -40,6 +40,7 @@ function isUnpaidAnchor(r, idx) {
       <span class="record-name">{{ r.fee_item_name }}</span>
       <span
         class="record-status"
+        :data-status="r.status"
         :style="
           statusColor(r.status)
             ? { background: statusColor(r.status).bg, color: statusColor(r.status).color }
@@ -83,6 +84,12 @@ function isUnpaidAnchor(r, idx) {
   border-radius: 10px;
   font-size: 12px;
 }
+
+/* 童彩狀態 chip（prop statusColor 優先；以下為無 prop 時的 token 預設） */
+.record-status[data-status="paid"]    { background: var(--pt-tint-calendar); color: var(--pt-tint-calendar-fg); }
+.record-status[data-status="unpaid"]  { background: var(--pt-tint-money); color: var(--pt-tint-money-fg); }
+.record-status[data-status="overdue"] { background: var(--pt-tint-announcement); color: var(--pt-tint-announcement-fg); }
+.record-status[data-status="partial"] { background: var(--pt-tint-pickup); color: var(--pt-tint-pickup-fg); }
 
 .record-row2 {
   margin-top: 6px;
