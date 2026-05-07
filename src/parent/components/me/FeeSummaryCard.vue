@@ -5,7 +5,7 @@ const props = defineProps({
   outstanding: { type: Number, default: 0 },
   overdue: { type: Number, default: 0 },
   detailHref: { type: String, default: '/fees' },
-  historyHref: { type: String, default: '/fees?tab=history' },
+  historyHref: { type: String, default: '/fees' },
 })
 
 const hasOutstanding = computed(() => props.outstanding > 0)
@@ -55,10 +55,10 @@ function fmt(n) {
 .title { font-size: var(--text-base, 15px); font-weight: var(--font-weight-semibold, 600); margin: 0; }
 .amounts { display: flex; flex-direction: column; gap: var(--space-2, 8px); }
 .row { display: flex; justify-content: space-between; align-items: baseline; }
-.label { color: var(--pt-text-secondary); font-size: var(--text-sm, 13px); }
+.label { color: var(--pt-text-muted); font-size: var(--text-sm, 13px); }
 .amount { font-size: var(--text-lg, 18px); font-weight: var(--font-weight-semibold, 600); font-variant-numeric: tabular-nums; }
 .amount.overdue { color: var(--color-danger); }
-.empty { color: var(--pt-text-secondary); margin: 0; }
+.empty { color: var(--pt-text-muted); margin: 0; }
 .actions { display: flex; gap: var(--space-2, 8px); }
 .btn {
   flex: 1; min-height: var(--touch-target-min, 44px);

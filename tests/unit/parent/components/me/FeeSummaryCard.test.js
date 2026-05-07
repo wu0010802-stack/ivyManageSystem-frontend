@@ -2,7 +2,12 @@ import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
 import FeeSummaryCard from '@/parent/components/me/FeeSummaryCard.vue'
 
-const stubs = { 'router-link': { template: '<a><slot /></a>' } }
+const stubs = {
+  'router-link': {
+    template: '<a :data-to="to"><slot /></a>',
+    props: ['to'],
+  },
+}
 
 describe('FeeSummaryCard', () => {
   it('顯示應繳餘額與逾期金額', () => {
@@ -36,6 +41,19 @@ describe('FeeSummaryCard', () => {
       props: { outstanding: 100, overdue: 0 },
       global: { stubs },
     })
-    expect(wrapper.findAll('a').length).toBe(2)
+    const links = wrapper.findAll('a')
+    expect(links.length).toBe(2)
+    expect(links[0].attributes('data-to')).toBe('/fees')
+    expect(links[1].attributes('data-to')).toBe('/fees')
+  })
+
+  it('passes through custom detailHref / historyHref props', () => {
+    const wrapper = mount(FeeSummaryCard, {
+      props: { outstanding: 100, overdue: 0, detailHref: '/fees/123', historyHref: '/fees/history' },
+      global: { stubs },
+    })
+    const links = wrapper.findAll('a')
+    expect(links[0].attributes('data-to')).toBe('/fees/123')
+    expect(links[1].attributes('data-to')).toBe('/fees/history')
   })
 })
