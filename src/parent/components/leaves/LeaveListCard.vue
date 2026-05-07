@@ -37,9 +37,10 @@ const emit = defineEmits(['click', 'cancel'])
       <span
         v-if="props.statusColor"
         class="status"
+        :data-status="props.leave.status"
         :style="{ background: props.statusColor.bg, color: props.statusColor.color }"
       >{{ props.statusLabel }}</span>
-      <span v-else class="status">{{ props.statusLabel }}</span>
+      <span v-else class="status" :data-status="props.leave.status">{{ props.statusLabel }}</span>
     </div>
     <div class="leave-row2">
       {{ props.leave.start_date }} ~ {{ props.leave.end_date }}
@@ -87,6 +88,12 @@ const emit = defineEmits(['click', 'cancel'])
   font-size: 12px;
 }
 
+/* 童彩狀態 chip */
+.status[data-status="pending"]   { background: var(--pt-tint-money); color: var(--pt-tint-money-fg); }
+.status[data-status="approved"]  { background: var(--pt-tint-calendar); color: var(--pt-tint-calendar-fg); }
+.status[data-status="rejected"]  { background: var(--pt-tint-announcement); color: var(--pt-tint-announcement-fg); }
+.status[data-status="withdrawn"] { background: var(--pt-tint-pickup); color: var(--pt-tint-pickup-fg); }
+
 .leave-row2 {
   margin-top: 6px;
   color: var(--pt-text-muted);
@@ -108,7 +115,7 @@ const emit = defineEmits(['click', 'cancel'])
   padding: 4px 12px;
   background: var(--neutral-0);
   color: var(--color-danger);
-  border: 1px solid #e0c4c0;
+  border: 1px solid var(--pt-tint-announcement);
   border-radius: 6px;
   font-size: 12px;
 }
