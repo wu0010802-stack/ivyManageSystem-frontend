@@ -375,7 +375,7 @@ textarea {
 }
 
 .submit {
-  background: var(--brand-primary, #0d9053);
+  background: var(--brand-primary);
   color: var(--neutral-0);
 }
 

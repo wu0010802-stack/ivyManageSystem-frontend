@@ -127,11 +127,12 @@ const today = todayISO()
 .date { color: var(--pt-text-placeholder); font-size: 13px; }
 .meta { font-size: 13px; color: var(--pt-text-muted); margin-top: 4px; }
 .tag { display: inline-block; padding: 1px 6px; margin-left: 6px; border-radius: 3px; font-size: 11px; }
-.tag.self { background: var(--color-warning-soft); color: var(--pt-warning-text-soft); }
+.tag.self { background: var(--pt-tint-money); color: var(--pt-tint-money-fg); }
 .logs { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 4px; }
 .slot { padding: 2px 8px; border-radius: 10px; font-size: 12px; background: var(--pt-surface-mute); color: var(--pt-text-muted); }
-.slot.pending { background: var(--color-warning-soft); color: var(--pt-warning-text-soft); }
-.slot.administered { background: var(--brand-primary-soft); color: var(--pt-success-text); }
-.slot.skipped { background: var(--pt-surface-mute); color: var(--pt-text-placeholder); text-decoration: line-through; }
-.slot.correction { background: var(--pt-tint-medication); color: var(--pt-violet-text); }
+/* status pill：[data-status] 等效 class pattern */
+.slot.pending      { background: var(--pt-tint-money);        color: var(--pt-tint-money-fg); }
+.slot.administered { background: var(--pt-tint-calendar);     color: var(--pt-tint-calendar-fg); }
+.slot.skipped      { background: var(--pt-tint-pickup);       color: var(--pt-tint-pickup-fg); text-decoration: line-through; }
+.slot.correction   { background: var(--pt-tint-medication);   color: var(--pt-tint-medication-fg); }
 </style>
