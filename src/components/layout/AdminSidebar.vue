@@ -76,6 +76,10 @@
             <el-icon><Files /></el-icon>
             <template #title>政府申報匯出</template>
           </el-menu-item>
+          <el-menu-item v-if="canView.SALARY_WRITE" index="/admin/gov-data-sync">
+            <el-icon><RefreshRight /></el-icon>
+            <template #title>政府資料同步</template>
+          </el-menu-item>
           <el-menu-item v-if="canView.ATTENDANCE_READ" index="/attendance">
             <el-icon><Clock /></el-icon>
             <template #title>出勤管理</template>
@@ -248,7 +252,7 @@ import { useRoute } from 'vue-router'
 import {
   DataBoard, Finished, Calendar, Timer, Clock, Document, Watch,
   Money, User, School, OfficeBuilding, Bell, TrendCharts, Setting,
-  Expand, Fold, DataAnalysis, Files,
+  Expand, Fold, DataAnalysis, Files, RefreshRight,
   Star, StarFilled, Close, Collection, ChatDotRound, List, Van, CreditCard, Checked
 } from '@element-plus/icons-vue'
 import { PERMISSION_VALUES, getUserInfo } from '@/utils/auth'
@@ -307,7 +311,7 @@ const activeMenu = computed(() => route.path)
 
 // 檢查子選單是否有任何可見項目
 const hasVisibleLeaveItems = computed(() =>
-  canView.value.EMPLOYEES_READ || canView.value.SALARY_READ ||
+  canView.value.EMPLOYEES_READ || canView.value.SALARY_READ || canView.value.SALARY_WRITE ||
   canView.value.ATTENDANCE_READ || canView.value.LEAVES_READ ||
   canView.value.OVERTIME_READ || canView.value.MEETINGS ||
   canView.value.SCHEDULE
