@@ -190,6 +190,7 @@ watch(() => route.fullPath, refreshUnread)
     transform var(--transition-slow, 0.3s cubic-bezier(0.4, 0, 0.2, 1));
 }
 
+/* P2.2 rebrand：active pill 用 brand token，對齊 IvyKids 深綠主題 */
 .tab-item.active .tab-icon-bg {
   background: var(--brand-primary-soft);
   opacity: 1;
