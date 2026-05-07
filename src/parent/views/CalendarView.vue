@@ -13,13 +13,13 @@ const days = ref(7)
 
 // 注意：holiday 暫無沙灘 icon，先以 calendar 替代
 const CATEGORY_META = {
-  event: { icon: 'calendar', label: '活動', color: 'var(--pt-info-text)' },
-  fee_due: { icon: 'money', label: '繳費截止', color: 'var(--color-danger)' },
-  announcement: { icon: 'megaphone', label: '公告', color: 'var(--pt-warning-text)' },
-  holiday: { icon: 'calendar', label: '假日', color: 'var(--brand-primary)' },
+  event: { icon: 'calendar', label: '活動', color: 'var(--pt-tint-activity-fg)' },
+  fee_due: { icon: 'money', label: '繳費截止', color: 'var(--pt-tint-money-fg)' },
+  announcement: { icon: 'megaphone', label: '公告', color: 'var(--pt-tint-announcement-fg)' },
+  holiday: { icon: 'calendar', label: '假日', color: 'var(--pt-tint-contact-fg)' },
   contact_book: { icon: 'notebook', label: '聯絡簿', color: 'var(--pt-tint-contact-fg)' },
-  leave: { icon: 'clipboard', label: '請假', color: 'var(--pt-tint-event-fg)' },
-  medication: { icon: 'pill', label: '用藥', color: 'var(--pt-warning-text-mid)' },
+  leave: { icon: 'clipboard', label: '請假', color: 'var(--pt-tint-leave-fg)' },
+  medication: { icon: 'pill', label: '用藥', color: 'var(--pt-tint-medication-fg)' },
 }
 
 const groupedByDate = computed(() => {
