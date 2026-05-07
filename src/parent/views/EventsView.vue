@@ -111,8 +111,10 @@ onMounted(async () => {
           </span>
         </div>
         <div v-if="ev.need_ack_student_ids?.length" class="ack-actions">
+          <!-- ack chip: pending state -->
+          <span class="ack-chip" data-status="pending">{{ ev.need_ack_student_ids.length }} 位待簽</span>
           <button class="primary-btn" @click="openAck(ev)">
-            快速簽閱（{{ ev.need_ack_student_ids.length }} 位待簽）
+            快速簽閱
           </button>
           <button
             class="secondary-btn icon-btn"
@@ -123,7 +125,8 @@ onMounted(async () => {
           </button>
         </div>
         <div v-else class="ack-done">
-          所有子女皆已簽閱
+          <!-- ack chip: signed state -->
+          <span class="ack-chip" data-status="signed">已全部簽閱</span>
           <ParentIcon name="check" size="xs" />
         </div>
       </template>
@@ -207,8 +210,8 @@ onMounted(async () => {
 }
 
 .event-type {
-  background: var(--color-info-soft);
-  color: var(--pt-info-link);
+  background: var(--pt-tint-event);
+  color: var(--pt-tint-event-fg);
   padding: 1px 8px;
   border-radius: 10px;
   font-size: 11px;
@@ -250,6 +253,28 @@ onMounted(async () => {
   gap: 2px;
   color: var(--pt-text-placeholder);
   font-size: 12px;
+}
+
+/* ack status chip — [data-status] pattern */
+.ack-chip {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 500;
+}
+.ack-chip[data-status='pending'] {
+  background: var(--pt-tint-money);
+  color: var(--pt-tint-money-fg);
+}
+.ack-chip[data-status='signed'],
+.ack-chip[data-status='acked'] {
+  background: var(--pt-tint-calendar);
+  color: var(--pt-tint-calendar-fg);
+}
+.ack-chip[data-status='expired'] {
+  background: var(--pt-tint-announcement);
+  color: var(--pt-tint-announcement-fg);
 }
 
 .ack-actions {
