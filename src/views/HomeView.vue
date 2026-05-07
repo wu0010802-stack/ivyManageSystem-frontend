@@ -6,6 +6,7 @@ import {
   Clock,
   Document,
   Location,
+  Select,
   Setting,
   TrendCharts,
   Trophy,
@@ -214,7 +215,7 @@ const showTodoSection = computed(
           <StatCard label="今日應出勤" :value="todayStats.total_employees" icon="Calendar" color="primary" />
         </el-col>
         <el-col :xs="24" :sm="12" :md="6" class="mb-4">
-          <StatCard label="已出勤" :value="todayStats.present_count" icon="Select" color="success" />
+          <StatCard label="已出勤" :value="todayStats.present_count" :icon="Select" color="success" />
         </el-col>
         <el-col :xs="24" :sm="12" :md="6" class="mb-4">
           <StatCard label="遲到" :value="todayStats.late_count" icon="AlarmClock" color="warning" />

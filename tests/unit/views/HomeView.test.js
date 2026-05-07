@@ -251,4 +251,10 @@ describe('HomeView', () => {
 
     warnSpy.mockRestore()
   })
+
+  it('儀表板不應 render 任何 native <select>（避免 component:is fallback 成 HTML tag）', async () => {
+    const wrapper = shallowMount(HomeView, { global: globalConfig })
+    await flushPromises()
+    expect(wrapper.findAll('select').length).toBe(0)
+  })
 })
