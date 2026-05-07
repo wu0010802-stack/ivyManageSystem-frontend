@@ -85,8 +85,8 @@
   --pt-surface-mute:       var(--ivy-leaf-bg, #f5fbe6); /* card divider / 弱化 */
   --pt-surface-mute-soft:  #fefcf3; /* hover / pressed 背景 */
   --pt-surface-mute-warm:  var(--ivy-cream-bg, #fffce8); /* warm 卡 = IvyKids cream */
-  --pt-surface-brand-tint: #FFF4F2; /* unread message 底色（淡 coral） */
-  --pt-surface-thread-bg:  #F2F9FC; /* thread bg */
+  --pt-surface-brand-tint: var(--ivy-leaf-bg, #f5fbe6);  /* 從 coral tint 改 leaf tint */
+  --pt-surface-thread-bg:  var(--ivy-cream-bg, #fffce8); /* thread bg 對齊 surface-app */
   --pt-surface-note:       #FFFCF2; /* note bg */
 
   /* ============================================================
@@ -264,9 +264,9 @@
   --pt-surface-card:       #1B2C3A;
   --pt-surface-mute:       var(--ivy-leaf-bg);
   --pt-surface-mute-soft:  #1B2C3A;
-  --pt-surface-mute-warm:  #2A3548;
-  --pt-surface-brand-tint: #2A1F1F;
-  --pt-surface-thread-bg:  #0F1F2A;
+  --pt-surface-mute-warm:  var(--ivy-cream-bg);
+  --pt-surface-brand-tint: rgba(13, 144, 83, 0.10);  /* 對齊 brand-primary-tint dark */
+  --pt-surface-thread-bg:  var(--ivy-cream-bg);
   --pt-surface-note:       #1B2C3A;
 
   --pt-border:         #25394A;
@@ -361,7 +361,7 @@
 }
 
 :focus-visible {
-  outline: 2px solid var(--brand-primary, #FF8B8B);
+  outline: 2px solid var(--brand-primary, #0d9053);
   outline-offset: 2px;
   border-radius: var(--radius-sm);
 }
