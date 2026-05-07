@@ -91,15 +91,17 @@ defineProps({
   color: var(--brand-primary);
   flex-shrink: 0;
 }
-.menu-item .icon.tint-money       { background: var(--pt-tint-money);        color: var(--pt-tint-money-fg); }
-.menu-item .icon.tint-message     { background: var(--pt-tint-message);      color: var(--pt-tint-message-fg); }
-.menu-item .icon.tint-event       { background: var(--pt-tint-event);        color: var(--pt-tint-event-fg); }
-.menu-item .icon.tint-announcement{ background: var(--pt-tint-announcement); color: var(--pt-tint-announcement-fg); }
-.menu-item .icon.tint-leave       { background: var(--pt-tint-leave);        color: var(--pt-tint-leave-fg); }
-.menu-item .icon.tint-activity    { background: var(--pt-tint-activity);     color: var(--pt-tint-activity-fg); }
-.menu-item .icon.tint-medication  { background: var(--pt-tint-medication);   color: var(--pt-tint-medication-fg); }
-.menu-item .icon.tint-calendar    { background: var(--pt-tint-calendar);     color: var(--pt-tint-calendar-fg); }
-.menu-item .icon.tint-contact     { background: var(--pt-tint-contact);      color: var(--pt-tint-contact-fg); }
+/* 童彩 10 類別 tile：背景 + 前景色 + 邊框 */
+.menu-item .icon.tint-money        { background: var(--pt-tint-money);        color: var(--pt-tint-money-fg);        border: 2px solid var(--pt-tint-money-fg); }
+.menu-item .icon.tint-message      { background: var(--pt-tint-message);      color: var(--pt-tint-message-fg);      border: 2px solid var(--pt-tint-message-fg); }
+.menu-item .icon.tint-event        { background: var(--pt-tint-event);        color: var(--pt-tint-event-fg);        border: 2px solid var(--pt-tint-event-fg); }
+.menu-item .icon.tint-announcement { background: var(--pt-tint-announcement); color: var(--pt-tint-announcement-fg); border: 2px solid var(--pt-tint-announcement-fg); }
+.menu-item .icon.tint-leave        { background: var(--pt-tint-leave);        color: var(--pt-tint-leave-fg);        border: 2px solid var(--pt-tint-leave-fg); }
+.menu-item .icon.tint-activity     { background: var(--pt-tint-activity);     color: var(--pt-tint-activity-fg);     border: 2px solid var(--pt-tint-activity-fg); }
+.menu-item .icon.tint-medication   { background: var(--pt-tint-medication);   color: var(--pt-tint-medication-fg);   border: 2px solid var(--pt-tint-medication-fg); }
+.menu-item .icon.tint-pickup       { background: var(--pt-tint-pickup);       color: var(--pt-tint-pickup-fg);       border: 2px solid var(--pt-tint-pickup-fg); }
+.menu-item .icon.tint-calendar     { background: var(--pt-tint-calendar);     color: var(--pt-tint-calendar-fg);     border: 2px solid var(--pt-tint-calendar-fg); }
+.menu-item .icon.tint-contact      { background: var(--pt-tint-contact);      color: var(--pt-tint-contact-fg);      border: 2px solid var(--pt-tint-contact-fg); }
 
 .menu-item .title {
   flex: 1;

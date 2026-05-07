@@ -107,8 +107,8 @@ async function submit() {
 .file { background: var(--pt-surface-mute); padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; }
 .file button { border: none; background: none; cursor: pointer; padding: 0 0 0 4px; display: inline-flex; align-items: center; }
 .row { display: flex; gap: 6px; align-items: flex-end; }
-.attach-btn { padding: 6px; background: var(--pt-surface-mute); border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
-textarea { flex: 1; padding: 8px; border: 1px solid var(--pt-text-hint); border-radius: 6px; font-size: 14px; resize: none; max-height: 80px; }
+.attach-btn { padding: 6px; background: var(--pt-tint-event); color: var(--pt-tint-event-fg); border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+textarea { flex: 1; padding: 8px; border: 1px solid var(--pt-border); border-radius: 6px; font-size: 14px; resize: none; max-height: 80px; }
 .send { padding: 8px 14px; background: var(--brand-primary); color: var(--neutral-0); border: none; border-radius: 6px; font-size: 14px; }
 .send:disabled { opacity: 0.5; }
 </style>

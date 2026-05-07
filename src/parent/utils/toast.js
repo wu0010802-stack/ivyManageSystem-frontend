@@ -36,7 +36,7 @@ function ensureContainer(isAlert = false) {
 
 const TYPE_STYLES = {
   success: {
-    bg: 'var(--brand-primary, #FF8B8B)',
+    bg: 'var(--brand-primary, #0d9053)',
     color: 'var(--neutral-0, #fff)',
   },
   error: {

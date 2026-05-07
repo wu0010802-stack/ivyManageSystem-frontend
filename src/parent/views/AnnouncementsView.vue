@@ -31,9 +31,9 @@ const PRIORITY_LABEL = {
 }
 
 const PRIORITY_COLOR = {
-  normal: { bg: 'var(--pt-surface-mute)', color: 'var(--pt-text-soft)' },
-  important: { bg: 'var(--color-warning-soft)', color: 'var(--pt-warning-text-soft)' },
-  urgent: { bg: 'var(--color-danger-soft)', color: 'var(--color-danger)' },
+  normal: { bg: 'var(--pt-tint-message)', color: 'var(--pt-tint-message-fg)' },
+  important: { bg: 'var(--pt-tint-contact)', color: 'var(--pt-tint-contact-fg)' },
+  urgent: { bg: 'var(--pt-tint-announcement)', color: 'var(--pt-tint-announcement-fg)' },
 }
 
 async function fetchData() {
@@ -161,6 +161,7 @@ async function pullRefresh() {
 
 .ann-card.unread {
   border-left: 3px solid var(--brand-primary);
+  background: var(--brand-primary-tint);
 }
 
 .ann-row {
@@ -189,7 +190,7 @@ async function pullRefresh() {
 .unread-dot {
   width: 8px;
   height: 8px;
-  background: var(--color-danger);
+  background: var(--brand-primary);
   border-radius: 50%;
 }
 

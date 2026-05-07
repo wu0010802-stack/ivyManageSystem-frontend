@@ -1,8 +1,8 @@
 <script setup>
 /**
  * 家長端連線狀態 banner。
- * - 離線：暖黃 announcement tint「目前離線，部分功能受限」
- * - WS 斷線（online 但 wsConnected=false 超過 delay）：淺藍 message tint「即時通知暫停，正在重連...」
+ * - 離線：暖黃 money tint（--pt-tint-money）「目前離線，部分功能受限」
+ * - WS 斷線（online 但 wsConnected=false 超過 delay）：藍綠 message tint（--pt-tint-message）「即時通知暫停，正在重連...」
  */
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useConnectionStatus } from '@/parent/composables/useConnectionStatus'
@@ -75,13 +75,14 @@ function retry() {
   font-weight: 500;
   border-bottom: var(--pt-hairline);
 }
+/* P2.4 rebrand：離線改用暖黃 money tint（警告語意）；WS 斷線維持藍綠 message tint（資訊語意） */
 .pt-conn-offline {
-  background: var(--pt-tint-announcement);
-  color: var(--pt-tint-announcement-fg);
+  background: var(--pt-tint-money, #fff8d8);
+  color: var(--pt-tint-money-fg, #7a6500);
 }
 .pt-conn-ws {
-  background: var(--pt-tint-message);
-  color: var(--pt-tint-message-fg);
+  background: var(--pt-tint-message, #e0f7f4);
+  color: var(--pt-tint-message-fg, #0d7a6a);
 }
 .pt-conn-retry {
   background: transparent;

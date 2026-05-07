@@ -75,7 +75,8 @@ const customStyle = computed(() => {
 <style scoped>
 /**
  * Shimmer 用 token-aware 漸層，dark mode 自動切換。
- * highlight = surface-card（亮面）、base = surface-mute（暗面），平滑掃過。
+ * P2.4 rebrand：highlight 改用 --pt-surface-mute-soft（leaf-bg #fefcf3），
+ * 與新 IvyKids 暖白基底相性更佳；base = surface-mute（暗面）。
  */
 .sk {
   display: block;
@@ -92,7 +93,7 @@ const customStyle = computed(() => {
   background: linear-gradient(
     90deg,
     transparent 0%,
-    var(--pt-surface-card, rgba(255, 255, 255, 0.6)) 50%,
+    var(--pt-surface-mute-soft, rgba(255, 255, 255, 0.6)) 50%,
     transparent 100%
   );
   opacity: 0.6;
@@ -148,7 +149,7 @@ const customStyle = computed(() => {
   background: linear-gradient(
     90deg,
     transparent 0%,
-    var(--pt-surface-card, rgba(255, 255, 255, 0.6)) 50%,
+    var(--pt-surface-mute-soft, rgba(255, 255, 255, 0.6)) 50%,
     transparent 100%
   );
   opacity: 0.6;

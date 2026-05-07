@@ -33,12 +33,13 @@ npm run test:coverage  # 含覆蓋率報告
 
 ---
 
-## 環境變數（frontend-vue/.env.local）
+## 環境變數（`.env.local`，repo 根目錄）
 
 | 變數 | 說明 |
 |------|------|
 | `VITE_API_BASE_URL` | 後端 API 基底路徑，未設時預設 `/api` |
 | `VITE_GOOGLE_MAPS_API_KEY` | 設定後招生熱點圖改走 Google Maps；未設定維持 Leaflet + OpenStreetMap fallback。前端 key 應於 Google Console 設定 HTTP referrer 限制與只開 `Maps JavaScript API` |
+| `VITE_LIFF_ID` | LINE LIFF App ID，家長入口（parent portal）需要；未設定家長端 LINE 綁定/登入流程會失效 |
 
 ---
 
@@ -115,7 +116,9 @@ npm run test:coverage  # 含覆蓋率報告
 
 ---
 
-## 頁面結構
+## 重點頁面範例：經營分析
+
+> `src/views/` 底下有 30+ 個 view（`portal/` / `salary/` / `leave/` / `activity/` / `parent-portal` 等），不一一列舉，依檔名語義即可定位。下面只記錄「跨多檔協作 + 跨權限 + 帶 composable」的代表性區塊作為新增類似功能時的範本。
 
 ### views/analytics/
 

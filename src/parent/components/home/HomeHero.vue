@@ -1,107 +1,121 @@
 <script setup>
 /**
- * 家長首頁 hero 問候卡。
+ * 家長首頁 hero 問候卡（IvyKids rebrand 2026-05-07）。
  *
- * 內含：時間問候 + 家長名 + 子女數，漸層 brand 色 + 兩個裝飾 blob。
- * 為純呈現元件，無外部依賴；問候語邏輯在元件內以 `new Date()` 計算。
+ * 視覺：cream/leaf 漸層底（pt-gradient-hero）、左下月桂葉裝飾、右上 kawaii 星，
+ *      雙色字（暖咖啡 + 深綠）。問候語依時間段切換。
+ *
+ * Props：
+ *   parentName (String) — 家長名，default '家長'
+ *   childrenCount (Number) — 子女總數
+ *   dailyStar (Object | null) — 「今日 X 之星」moment，後端 ChildSummary.daily_star
+ *     形狀 { childName: string, label: string }；為 null 時隱藏該行（目前後端尚未提供）
  */
 import { computed } from 'vue'
+import LaurelWreath from '../brand/LaurelWreath.vue'
+import KawaiiStar from '../brand/KawaiiStar.vue'
 
 const props = defineProps({
   parentName: { type: String, default: '家長' },
   childrenCount: { type: Number, default: 0 },
+  dailyStar: { type: Object, default: null },
 })
 
-function greetingByHour(h = new Date().getHours()) {
-  if (h < 5) return '夜深了，記得早點休息'
+const greeting = computed(() => {
+  const h = new Date().getHours()
+  if (h < 5) return '夜深了'
   if (h < 11) return '早安'
   if (h < 14) return '午安'
   if (h < 18) return '下午好'
   return '晚安'
-}
+})
 
-const greeting = computed(() => greetingByHour())
+const todayLabel = computed(() => {
+  const d = new Date()
+  const wd = ['日', '一', '二', '三', '四', '五', '六'][d.getDay()]
+  return `${d.getMonth() + 1}/${d.getDate()} · 星期${wd}`
+})
 </script>
 
 <template>
-  <section class="home-hero">
+  <section class="home-hero" aria-label="今日問候">
+    <LaurelWreath side="left" :opacity="0.18" :size="80" class="hero-laurel" />
+    <KawaiiStar :size="40" decorative class="hero-star" />
+
     <div class="home-hero-content">
-      <div class="home-hero-greeting">{{ greeting }}</div>
-      <div class="home-hero-name">{{ parentName || '家長' }}</div>
-      <div v-if="childrenCount > 0" class="home-hero-meta">
-        照顧 {{ childrenCount }} 位寶貝
+      <div class="hero-date">{{ todayLabel }}</div>
+      <h1 class="hero-greeting">
+        {{ greeting }}，<span class="hero-name">{{ parentName || '家長' }}</span>
+      </h1>
+      <p v-if="childrenCount > 0" class="hero-subtitle">
+        您今天有 {{ childrenCount }} 位寶貝
+      </p>
+      <div v-if="dailyStar" class="hero-daily-star">
+        <KawaiiStar :size="14" decorative class="daily-star-icon" />
+        今日 {{ dailyStar.childName }} 是「{{ dailyStar.label }}」
       </div>
-    </div>
-    <div class="home-hero-decoration" aria-hidden="true">
-      <span class="home-hero-blob home-hero-blob-1" />
-      <span class="home-hero-blob home-hero-blob-2" />
     </div>
   </section>
 </template>
 
 <style scoped>
-/* ==========================================================
- * Hero 問候卡 — 漸層 brand 色，建立首頁視覺定錨
- * ========================================================== */
 .home-hero {
   position: relative;
+  margin: 0 var(--space-3, 12px);
+  padding: var(--space-4, 16px) var(--space-3, 12px) var(--space-4, 16px) var(--space-4, 16px);
   background: var(--pt-gradient-hero);
-  border-radius: var(--radius-xl, 16px);
-  padding: 18px 20px 20px;
-  color: var(--neutral-0, #fff);
-  box-shadow: var(--pt-elev-2);
+  border: 1px solid rgba(90, 168, 66, 0.15);
+  border-radius: 18px;
+  box-shadow: var(--pt-elev-1);
   overflow: hidden;
   isolation: isolate;
 }
-
+.hero-laurel {
+  position: absolute;
+  left: -10px;
+  top: 4px;
+  z-index: 0;
+}
+.hero-star {
+  position: absolute;
+  right: var(--space-3, 12px);
+  top: 10px;
+  z-index: 0;
+}
 .home-hero-content {
   position: relative;
   z-index: 1;
 }
-
-.home-hero-greeting {
-  font-size: var(--text-sm, 13px);
-  /* 不用 opacity 區分層次，避免在淡色端文字對比不足；改以亮黃色帶 brand 暖意 */
-  color: rgba(255, 255, 255, 0.96);
-  letter-spacing: 0.04em;
+.hero-date {
+  font-size: 11px;
+  color: var(--ivy-green-laurel, #5aa842);
+  font-weight: 700;
+  letter-spacing: 1px;
 }
-
-.home-hero-name {
-  font-size: var(--text-2xl, 22px);
-  font-weight: var(--font-weight-bold, 700);
-  margin-top: 2px;
-  letter-spacing: 0.01em;
+.hero-greeting {
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1.2;
+  margin: 4px 0 0;
+  color: var(--pt-text-strong);
 }
-
-.home-hero-meta {
-  font-size: var(--text-xs, 12px);
+.hero-name {
+  color: var(--brand-primary);
+}
+.hero-subtitle {
+  font-size: 12px;
+  color: var(--pt-text-muted);
+  margin: 6px 0 0;
+  font-weight: 500;
+}
+.hero-daily-star {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   margin-top: 6px;
-  color: rgba(255, 255, 255, 0.92);
+  font-size: 11px;
+  color: var(--ivy-tile-yellow-fg);
+  font-weight: 700;
 }
-
-/* 浮球裝飾 — 純 CSS，零 asset cost */
-.home-hero-decoration {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-.home-hero-blob {
-  position: absolute;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.16);
-  filter: blur(2px);
-}
-.home-hero-blob-1 {
-  top: -32px;
-  right: -24px;
-  width: 120px;
-  height: 120px;
-}
-.home-hero-blob-2 {
-  bottom: -48px;
-  right: 56px;
-  width: 80px;
-  height: 80px;
-  background: rgba(255, 255, 255, 0.10);
-}
+.daily-star-icon { vertical-align: middle; }
 </style>

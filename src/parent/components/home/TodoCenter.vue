@@ -103,12 +103,12 @@ const emit = defineEmits(['navigate'])
   color: var(--brand-primary);
   flex-shrink: 0;
 }
-.todo-icon.tint-money       { background: var(--pt-tint-money);        color: var(--pt-tint-money-fg); }
-.todo-icon.tint-message     { background: var(--pt-tint-message);      color: var(--pt-tint-message-fg); }
-.todo-icon.tint-event       { background: var(--pt-tint-event);        color: var(--pt-tint-event-fg); }
-.todo-icon.tint-announcement{ background: var(--pt-tint-announcement); color: var(--pt-tint-announcement-fg); }
-.todo-icon.tint-leave       { background: var(--pt-tint-leave);        color: var(--pt-tint-leave-fg); }
-.todo-icon.tint-activity    { background: var(--pt-tint-activity);     color: var(--pt-tint-activity-fg); }
+.todo-icon.tint-money       { background: var(--pt-tint-money);        color: var(--pt-tint-money-fg);        border: 2px solid var(--pt-tint-money-fg); }
+.todo-icon.tint-message     { background: var(--pt-tint-message);      color: var(--pt-tint-message-fg);      border: 2px solid var(--pt-tint-message-fg); }
+.todo-icon.tint-event       { background: var(--pt-tint-event);        color: var(--pt-tint-event-fg);        border: 2px solid var(--pt-tint-event-fg); }
+.todo-icon.tint-announcement{ background: var(--pt-tint-announcement); color: var(--pt-tint-announcement-fg); border: 2px solid var(--pt-tint-announcement-fg); }
+.todo-icon.tint-leave       { background: var(--pt-tint-leave);        color: var(--pt-tint-leave-fg);        border: 2px solid var(--pt-tint-leave-fg); }
+.todo-icon.tint-activity    { background: var(--pt-tint-activity);     color: var(--pt-tint-activity-fg);     border: 2px solid var(--pt-tint-activity-fg); }
 
 .todo-text { flex: 1; line-height: 1.45; }
 .todo-text strong {

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
 import ChildrenStrip from '@/parent/components/home/ChildrenStrip.vue'
 
-const stubs = { ParentIcon: true }
+const stubs = { ParentIcon: true, CrownIcon: true }
 
 describe('ChildrenStrip', () => {
   it('children 為空時顯示提示文', () => {

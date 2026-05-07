@@ -1,6 +1,6 @@
 <script setup>
 import { reactive, ref, onMounted } from 'vue'
-import { getBonusConfig, updateBonusConfig, getGradeTargets, updateGradeTargets, getPositionSalary, updatePositionSalary, comparePositionSalary, syncPositionSalary } from '@/api/config'
+import { getBonusConfig, updateBonusConfig, getGradeTargets, updateGradeTargets, getPositionSalary, updatePositionSalary, comparePositionSalary, syncPositionSalary, getTitles, updateTitle } from '@/api/config'
 import { ElMessage } from 'element-plus'
 import { hasPermission } from '@/utils/auth'
 
@@ -27,7 +27,11 @@ const bonusConfig = reactive({
   overtime_head_baby: 0,
   overtime_assistant_normal: 0,
   overtime_assistant_baby: 0,
-  school_wide_target: 0
+  school_wide_target: 0,
+  // 階段 2-B：園規常數從 hardcode 搬到 BonusConfig
+  meeting_default_hours: 2,
+  meeting_absence_penalty: 100,
+  art_teacher_festival: 2000,
 })
 
 const gradeTargets = ref([])
@@ -173,6 +177,30 @@ const syncOne = async (row) => {
   }
 }
 
+// 階段 2-D：職稱→節慶獎金等級對應（job_titles.bonus_grade）
+const jobTitles = ref([])
+const loadingTitles = ref(false)
+const fetchJobTitles = async () => {
+  loadingTitles.value = true
+  try {
+    const res = await getTitles()
+    jobTitles.value = res.data
+  } catch {
+    ElMessage.error('職稱載入失敗')
+  } finally {
+    loadingTitles.value = false
+  }
+}
+const updateTitleGrade = async (title) => {
+  try {
+    await updateTitle(title.id, { name: title.name, bonus_grade: title.bonus_grade || null })
+    ElMessage.success(`${title.name} 等級已更新`)
+  } catch {
+    ElMessage.error(`${title.name} 更新失敗`)
+    await fetchJobTitles()  // 失敗時重抓還原
+  }
+}
+
 const syncAll = async () => {
   syncingAll.value = true
   try {
@@ -203,6 +231,7 @@ onMounted(() => {
   fetchGradeTargets()
   fetchPositionSalary()
   fetchCompare()
+  fetchJobTitles()
 })
 </script>
 
@@ -384,6 +413,56 @@ onMounted(() => {
             </el-col>
           </el-row>
         </el-card>
+
+        <!-- 階段 2-B：園規常數（會議與美語/才藝教師獎金）-->
+        <el-card class="box-card" shadow="never">
+          <template #header><div class="card-header"><span>園規常數</span></div></template>
+          <p class="desc-text">園務會議計薪小時、缺席扣款、美語/才藝教師節慶獎金基數。原本寫死於程式碼，現可線上調整。</p>
+          <el-row :gutter="20">
+            <el-col :span="8">
+              <el-form-item>
+                <template #label>
+                  <el-tooltip content="每場園務會議計幾小時加班費（業主實務 2 小時）" placement="top">
+                    <span>園務會議時數</span>
+                  </el-tooltip>
+                </template>
+                <el-input-number
+                  v-model="bonusConfig.meeting_default_hours"
+                  :min="0" :max="12" :step="0.5" :precision="1"
+                  controls-position="right" style="width: 100%"
+                />
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item>
+                <template #label>
+                  <el-tooltip content="缺席園務會議每次扣節慶獎金金額" placement="top">
+                    <span>會議缺席扣款</span>
+                  </el-tooltip>
+                </template>
+                <el-input-number
+                  v-model="bonusConfig.meeting_absence_penalty"
+                  :min="0" :max="10000" :step="50"
+                  controls-position="right" style="width: 100%"
+                />
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item>
+                <template #label>
+                  <el-tooltip content="美語/才藝教師節慶獎金基數（A/B/C 等級皆同）" placement="top">
+                    <span>美師節慶獎金</span>
+                  </el-tooltip>
+                </template>
+                <el-input-number
+                  v-model="bonusConfig.art_teacher_festival"
+                  :min="0" :step="100"
+                  controls-position="right" style="width: 100%"
+                />
+              </el-form-item>
+            </el-col>
+          </el-row>
+        </el-card>
       </el-tab-pane>
 
       <!-- 職位標準底薪 -->
@@ -560,6 +639,48 @@ onMounted(() => {
             </div>
             <el-empty v-else description="無可比對員工" :image-size="60" />
           </div>
+        </div>
+      </el-tab-pane>
+
+      <!-- 階段 2-D：職稱→節慶獎金等級對應 -->
+      <el-tab-pane label="職稱等級對應" name="job_title_grade">
+        <div v-loading="loadingTitles">
+          <div class="section-title">職稱 → 節慶獎金等級</div>
+          <p class="desc-text">
+            設定每個職稱對應的節慶獎金等級（A/B/C），影響班導/副班導獎金基數選擇。
+            非帶班職稱（園長、司機、廚工等）留空即可，走主管 / office_staff 路徑不受此影響。
+          </p>
+          <el-table :data="jobTitles" border>
+            <el-table-column prop="name" label="職稱" width="200" />
+            <el-table-column label="等級">
+              <template #default="scope">
+                <el-select
+                  v-model="scope.row.bonus_grade"
+                  placeholder="（不設定）"
+                  clearable
+                  size="small"
+                  style="width: 200px;"
+                  @change="updateTitleGrade(scope.row)"
+                >
+                  <el-option label="A 級（幼兒園教師）" value="A" />
+                  <el-option label="B 級（教保員）" value="B" />
+                  <el-option label="C 級（助理教保員）" value="C" />
+                </el-select>
+              </template>
+            </el-table-column>
+            <el-table-column label="說明" min-width="240">
+              <template #default="scope">
+                <span style="color: var(--el-text-color-secondary); font-size: 12px;">
+                  {{
+                    scope.row.bonus_grade === 'A' ? 'A 級：班導獎金 2000 / 副班導 1200' :
+                    scope.row.bonus_grade === 'B' ? 'B 級：班導獎金 2000 / 副班導 1200' :
+                    scope.row.bonus_grade === 'C' ? 'C 級：班導獎金 1500 / 副班導 1200' :
+                    '不適用（走主管 / office_staff 路徑）'
+                  }}
+                </span>
+              </template>
+            </el-table-column>
+          </el-table>
         </div>
       </el-tab-pane>
     </el-tabs>

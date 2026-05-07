@@ -65,9 +65,9 @@ html, body, #app {
    #app 自身保持透明承接此漸層。 */
 body {
   background:
-    radial-gradient(ellipse 800px 500px at 100% 100%, var(--sun-100, #FFF4C9) 0%, transparent 70%),
-    radial-gradient(ellipse 1200px 600px at 50% -200px, var(--sky-200, #BBDDED) 0%, transparent 60%),
-    var(--pt-surface-app, #F2F9FC);
+    radial-gradient(ellipse 800px 500px at 100% 100%, var(--ivy-tile-yellow-bg, #fff8d8) 0%, transparent 70%),
+    radial-gradient(ellipse 1200px 600px at 50% -200px, var(--ivy-leaf-bg, #f5fbe6) 0%, transparent 60%),
+    var(--pt-surface-app, #fffce8);
   background-attachment: fixed;
   /* 阻擋 Android Chrome 原生下拉刷新 — 已交給 PullToRefresh 元件處理。
      設在實際捲動容器（body）才生效，設在 .ptr-root 上是無效的。 */

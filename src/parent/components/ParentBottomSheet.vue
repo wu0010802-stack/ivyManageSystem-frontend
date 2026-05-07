@@ -298,6 +298,7 @@ const hasFooterSlot = computed(() => !!slots.footer)
 </template>
 
 <style scoped>
+/* P2.3 token sweep：所有色值已 token 化（scrim/surface fallback hex 保留） */
 .pt-bsheet-overlay {
   position: fixed;
   inset: 0;

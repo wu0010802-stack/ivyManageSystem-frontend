@@ -16,6 +16,7 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ParentIcon from './ParentIcon.vue'
+import BrandMark from './brand/BrandMark.vue'
 
 const props = defineProps({
   /** 覆寫 route.meta.title */
@@ -63,6 +64,13 @@ function goBack() {
     >
       <ParentIcon name="back" size="md" />
     </button>
+    <!-- BrandMark mini：只在 tab 首頁（無返回鍵）時顯示；深層頁以 back-btn 替代 -->
+    <BrandMark
+      v-if="!displayShowBack"
+      variant="mini"
+      :size="28"
+      class="app-header-brand"
+    />
     <h1 class="header-title">{{ displayTitle }}</h1>
     <slot name="actions" />
   </header>
@@ -77,7 +85,7 @@ function goBack() {
   align-items: center;
   justify-content: center;
   min-height: 52px;
-  background: var(--pt-gradient-brand, var(--brand-primary, #FF8B8B));
+  background: var(--pt-gradient-brand, var(--brand-primary, #0d9053));
   color: var(--neutral-0, #fff);
   padding-top: env(safe-area-inset-top, 0);
   padding-left: var(--space-2, 8px);
@@ -124,5 +132,12 @@ function goBack() {
 .back-btn:active {
   background: rgba(255, 255, 255, 0.28);
   transform: scale(0.94);
+}
+
+.app-header-brand {
+  position: absolute;
+  left: var(--space-2, 8px);
+  top: calc(env(safe-area-inset-top, 0) + 12px);
+  flex-shrink: 0;
 }
 </style>

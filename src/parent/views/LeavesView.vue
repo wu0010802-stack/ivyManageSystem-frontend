@@ -403,7 +403,7 @@ async function pullRefresh() {
 
 .hero-cta {
   background: rgba(255, 255, 255, 0.95);
-  color: var(--brand-primary, #FF8B8B);
+  color: var(--brand-primary, #0d9053);
   border: none;
   padding: 8px 14px;
   border-radius: 99px;

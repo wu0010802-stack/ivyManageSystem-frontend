@@ -140,6 +140,132 @@ const fmtRO = (v, currency = false) => {
             </el-form-item>
         </el-col>
     </el-row>
+
+    <!-- 進階特殊投保／獎金狀態（預設摺疊，僅特殊個案需設定）-->
+    <el-collapse style="margin-top: 12px;">
+        <el-collapse-item name="advanced">
+            <template #title>
+                <span style="font-weight: 600;">進階特殊狀況</span>
+                <span style="margin-left: 8px; color: var(--el-text-color-secondary); font-size: 12px;">
+                    免就保 / 健保豁免 / 不發紅利 / 季扣眷屬 / 分項投保 / 個人合約底薪
+                </span>
+            </template>
+
+            <!-- 計薪行為旗標 -->
+            <el-row :gutter="20">
+                <el-col :span="6">
+                    <el-form-item>
+                        <template #label>
+                            <el-tooltip content="退休再聘等：勞保改算 11.5%（不含就保 1%）" placement="top">
+                                <span>免就保</span>
+                            </el-tooltip>
+                        </template>
+                        <el-switch v-model="form.no_employment_insurance" :disabled="isReadonly" />
+                    </el-form-item>
+                </el-col>
+                <el-col :span="6">
+                    <el-form-item>
+                        <template #label>
+                            <el-tooltip content="健保由其他管道（公保/老人健保等）；公司不扣本人+眷屬健保" placement="top">
+                                <span>健保豁免</span>
+                            </el-tooltip>
+                        </template>
+                        <el-switch v-model="form.health_exempt" :disabled="isReadonly" />
+                    </el-form-item>
+                </el-col>
+                <el-col :span="6">
+                    <el-form-item>
+                        <template #label>
+                            <el-tooltip content="業主指示不發紅利/節慶/超額/生日禮金；保險仍計算" placement="top">
+                                <span>不發獎金</span>
+                            </el-tooltip>
+                        </template>
+                        <el-switch v-model="form.skip_payroll_bonuses" :disabled="isReadonly" />
+                    </el-form-item>
+                </el-col>
+                <el-col :span="6">
+                    <el-form-item>
+                        <template #label>
+                            <el-tooltip content="True=用個人合約底薪（含年資加給）；False=走 PositionSalaryConfig 標準" placement="top">
+                                <span>個人合約底薪</span>
+                            </el-tooltip>
+                        </template>
+                        <el-switch v-model="form.bypass_standard_base" :disabled="isReadonly" />
+                    </el-form-item>
+                </el-col>
+            </el-row>
+
+            <!-- 季扣眷屬人數 + 投保覆蓋原因 -->
+            <el-row :gutter="20">
+                <el-col :span="8">
+                    <el-form-item>
+                        <template #label>
+                            <el-tooltip content="第 2 名以上眷屬季扣（4/7/10/1 月加扣 health × N × 3）" placement="top">
+                                <span>季扣眷屬人數</span>
+                            </el-tooltip>
+                        </template>
+                        <el-input-number
+                            v-model="form.extra_dependents_quarterly"
+                            :min="0" :max="10" :step="1"
+                            controls-position="right" style="width: 100%"
+                            :disabled="isReadonly"
+                        />
+                    </el-form-item>
+                </el-col>
+                <el-col :span="16">
+                    <el-form-item label="投保金額調整原因">
+                        <el-input
+                            v-model="form.insurance_salary_override_reason"
+                            placeholder="若投保金額 ≠ 底薪，填寫合規記錄（如：年資加給合約、業主協議、退休再聘等）"
+                            maxlength="200" show-word-limit
+                            :readonly="isReadonly"
+                        />
+                    </el-form-item>
+                </el-col>
+            </el-row>
+
+            <!-- 分項投保（議題 B）-->
+            <el-form-item>
+                <template #label>
+                    <el-tooltip
+                        content="留空=沿用上方「投保級距」；填值=該制度獨立投保。實務常見：勞保 vs 健保 vs 勞退 投保金額不同"
+                        placement="top"
+                    >
+                        <span>分項投保（留空 = 沿用投保級距）</span>
+                    </el-tooltip>
+                </template>
+                <el-row :gutter="12" style="width: 100%;">
+                    <el-col :span="8">
+                        <el-input-number
+                            v-model="form.labor_insured_salary"
+                            :min="0" :step="100" placeholder="勞保投保"
+                            controls-position="right" style="width: 100%"
+                            :disabled="isReadonly"
+                        />
+                        <span class="hint">勞保投保金額</span>
+                    </el-col>
+                    <el-col :span="8">
+                        <el-input-number
+                            v-model="form.health_insured_salary"
+                            :min="0" :step="100" placeholder="健保投保"
+                            controls-position="right" style="width: 100%"
+                            :disabled="isReadonly"
+                        />
+                        <span class="hint">健保投保金額</span>
+                    </el-col>
+                    <el-col :span="8">
+                        <el-input-number
+                            v-model="form.pension_insured_salary"
+                            :min="0" :step="100" placeholder="勞退提繳"
+                            controls-position="right" style="width: 100%"
+                            :disabled="isReadonly"
+                        />
+                        <span class="hint">勞退提繳工資</span>
+                    </el-col>
+                </el-row>
+            </el-form-item>
+        </el-collapse-item>
+    </el-collapse>
 </template>
 
 <style scoped>
@@ -151,5 +277,12 @@ const fmtRO = (v, currency = false) => {
     background: var(--el-fill-color-light);
     padding: 4px 12px;
     border-radius: 4px;
+}
+.hint {
+    display: block;
+    margin-top: 4px;
+    font-size: 12px;
+    color: var(--el-text-color-secondary);
+    text-align: center;
 }
 </style>

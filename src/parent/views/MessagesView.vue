@@ -99,7 +99,7 @@ onMounted(init)
 .student { color: var(--brand-primary); flex-shrink: 0; }
 .preview { color: var(--pt-text-soft); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .badge {
-  background: var(--color-danger); color: var(--neutral-0); font-size: 11px;
+  background: var(--brand-primary); color: var(--neutral-0); font-size: 11px;
   padding: 2px 7px; border-radius: 10px; flex-shrink: 0;
 }
 </style>
