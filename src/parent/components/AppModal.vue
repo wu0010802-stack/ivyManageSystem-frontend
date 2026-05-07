@@ -164,6 +164,7 @@ const dialogStyle = computed(() => ({
 </template>
 
 <style scoped>
+/* P2.3 token sweep：所有色值已 token 化（scrim/shadow rgba 保留為設計性 fallback） */
 .modal-overlay {
   position: fixed;
   inset: 0;
