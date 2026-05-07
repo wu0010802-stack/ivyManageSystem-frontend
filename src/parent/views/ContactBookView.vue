@@ -9,6 +9,7 @@ import { toast } from '../utils/toast'
 import ParentIcon from '../components/ParentIcon.vue'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import { useIncrementalRender } from '../composables/useIncrementalRender'
+import KawaiiStar from '../components/brand/KawaiiStar.vue'
 
 const router = useRouter()
 const childrenStore = useChildrenStore()
@@ -110,10 +111,16 @@ function moodInfo(m) {
           </span>
         </div>
       </div>
-      <p v-else class="hint">{{ studentName }} 今日尚無聯絡簿。</p>
+      <div v-else class="empty">
+        <KawaiiStar :size="64" decorative />
+        <p>{{ studentName }} 今日尚無聯絡簿</p>
+      </div>
 
       <h3 class="section-title" style="margin-top:24px;">歷史聯絡簿</h3>
-      <p v-if="history.length === 0" class="hint">沒有更多紀錄</p>
+      <div v-if="history.length === 0" class="empty">
+        <KawaiiStar :size="64" decorative />
+        <p>還沒有歷史聯絡簿喔！</p>
+      </div>
       <div
         v-for="e in visibleHistory"
         :key="e.id"
@@ -167,7 +174,9 @@ function moodInfo(m) {
   -webkit-box-orient: vertical;
 }
 .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-.dot-unread { background: var(--color-danger); }
+.dot-unread { background: var(--brand-primary); }
+.empty { text-align: center; padding: 20px 0 8px; color: var(--pt-text-placeholder); }
+.empty p { margin: 8px 0 0; font-size: 14px; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .chip {
   font-size: 12px;
