@@ -8,6 +8,7 @@
  * lifecycle 標籤對應表內嵌於本元件，避免父層仍須提供 helper。
  */
 import ParentIcon from '../ParentIcon.vue'
+import CrownIcon from '../brand/CrownIcon.vue'
 
 defineProps({
   children: {
@@ -31,6 +32,15 @@ const LIFECYCLE_LABELS = {
 function lifecycleLabel(s) {
   return LIFECYCLE_LABELS[s] || s || ''
 }
+
+function isBirthdayToday(child) {
+  if (!child.birthday) return false
+  const parts = String(child.birthday).split('-')
+  if (parts.length < 3) return false
+  const [, m, day] = parts.map(Number)
+  const d = new Date()
+  return d.getMonth() + 1 === m && d.getDate() === day
+}
 </script>
 
 <template>
@@ -47,7 +57,15 @@ function lifecycleLabel(s) {
       @click="emit('navigate', `/children/${c.student_id}`)"
     >
       <div class="child-row">
-        <span class="child-name">{{ c.name }}</span>
+        <span class="child-avatar-wrap">
+          <CrownIcon
+            v-if="isBirthdayToday(c)"
+            :size="18"
+            decorative
+            class="child-crown"
+          />
+          <span class="child-name">{{ c.name }}</span>
+        </span>
         <span class="child-classroom">{{ c.classroom_name || '未分班' }}</span>
       </div>
       <div class="child-meta">
@@ -132,4 +150,13 @@ function lifecycleLabel(s) {
 .tag.primary { background: var(--brand-primary-soft); color: var(--brand-primary); }
 .tag.pickup { background: var(--color-warning-soft); color: var(--pt-warning-text-mid); }
 .tag.status { background: var(--pt-surface-mute-warm); color: var(--pt-text-muted); }
+
+.child-avatar-wrap { position: relative; display: inline-block; }
+.child-crown {
+  position: absolute;
+  left: 50%;
+  top: -10px;
+  transform: translateX(-50%);
+  z-index: 2;
+}
 </style>
