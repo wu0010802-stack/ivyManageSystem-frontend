@@ -162,7 +162,7 @@ defineExpose({ _triggerRefresh })
   align-items: center;
   gap: 8px;
   padding: 12px 16px;
-  color: var(--brand-primary, #FF8B8B);
+  color: var(--brand-primary, #0d9053);
   font-size: var(--text-xs, 12px);
   font-weight: var(--font-weight-medium, 500);
   letter-spacing: 0.02em;

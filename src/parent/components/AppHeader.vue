@@ -77,7 +77,7 @@ function goBack() {
   align-items: center;
   justify-content: center;
   min-height: 52px;
-  background: var(--pt-gradient-brand, var(--brand-primary, #FF8B8B));
+  background: var(--pt-gradient-brand, var(--brand-primary, #0d9053));
   color: var(--neutral-0, #fff);
   padding-top: env(safe-area-inset-top, 0);
   padding-left: var(--space-2, 8px);
