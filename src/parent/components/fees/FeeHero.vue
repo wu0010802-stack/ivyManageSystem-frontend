@@ -1,6 +1,7 @@
 <script setup>
 /**
- * 費用 hero 卡：未繳合計 + 最近到期 + 跳到應繳 CTA（暖橘漸層）。
+ * 費用 hero 卡：未繳合計 + 最近到期 + 跳到應繳 CTA（暖黃漸層 + 月桂葉右下）。
+ * IvyKids rebrand 2026-05-07（Phase 4.3）
  *
  * Props:
  *  - unpaidTotal: 未繳金額合計
@@ -11,6 +12,8 @@
  * Emits:
  *  - jump-unpaid: CTA 點擊；父層負責 scrollIntoView 到 [data-unpaid-anchor]
  */
+import LaurelWreath from '../brand/LaurelWreath.vue'
+
 const props = defineProps({
   unpaidTotal: { type: Number, default: 0 },
   unpaidCount: { type: Number, default: 0 },
@@ -24,7 +27,7 @@ function fmt(n) { return Number(n).toLocaleString('en-US') }
 
 <template>
   <section class="fee-hero">
-    <div class="fee-hero-blob" aria-hidden="true" />
+    <LaurelWreath side="right" :opacity="0.18" :size="80" class="hero-laurel" />
     <div class="fee-hero-content">
       <span class="fee-hero-label">未繳合計</span>
       <div class="fee-hero-amount">
@@ -53,74 +56,86 @@ function fmt(n) { return Number(n).toLocaleString('en-US') }
 .fee-hero {
   position: relative;
   overflow: hidden;
+  isolation: isolate;
   background: var(--pt-gradient-warm);
-  color: var(--pt-warning-text-soft);
-  border-radius: 16px;
-  padding: 20px;
-  box-shadow: var(--pt-elev-2);
-  border: var(--pt-hairline);
+  border: 1px solid rgba(243, 198, 48, 0.25);
+  border-radius: 18px;
+  padding: var(--space-4, 16px);
+  box-shadow: var(--pt-elev-1);
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
 }
-.fee-hero-blob {
+
+.hero-laurel {
   position: absolute;
-  width: 160px;
-  height: 160px;
-  background: rgba(255, 255, 255, 0.5);
-  border-radius: 50%;
-  filter: blur(40px);
-  top: -50px;
-  right: -50px;
-  pointer-events: none;
+  right: -10px;
+  bottom: 4px;
+  z-index: 0;
 }
+
 .fee-hero-content {
   position: relative;
   z-index: 1;
 }
+
 .fee-hero-label {
-  font-size: 12px;
-  opacity: 0.85;
-  letter-spacing: 0.04em;
+  display: block;
+  font-size: 11px;
+  color: var(--ivy-tile-yellow-fg);
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
 }
+
 .fee-hero-amount {
   display: flex;
   align-items: baseline;
   gap: 4px;
-  margin-top: 2px;
+  margin-top: 4px;
 }
+
 .fee-hero-currency {
   font-size: 13px;
-  opacity: 0.85;
+  color: var(--pt-text-muted);
+  font-weight: 600;
 }
+
 .fee-hero-num {
-  font-size: 28px;
-  font-weight: 700;
+  font-size: 32px;
+  font-weight: 900;
+  color: var(--pt-text-strong);
 }
+
 .fee-hero-overdue {
   font-size: 12px;
   margin-top: 4px;
-  color: var(--color-danger);
-  font-weight: 600;
+  color: var(--ivy-tile-pink-fg);
+  font-weight: 700;
 }
+
 .fee-hero-due {
   font-size: 12px;
   margin-top: 4px;
-  opacity: 0.85;
+  color: var(--pt-text-muted);
 }
+
 .fee-hero-cta {
   position: relative;
   z-index: 1;
-  background: rgba(255, 255, 255, 0.95);
-  color: var(--pt-warning-text);
-  border: none;
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--ivy-tile-yellow-fg);
+  border: 1px solid rgba(243, 198, 48, 0.4);
   padding: 8px 14px;
   border-radius: 99px;
-  font-weight: 600;
+  font-weight: 700;
+  font-size: 13px;
   cursor: pointer;
+  white-space: nowrap;
 }
+
 .fee-hero-cta:hover {
-  background: var(--pt-on-hero);
+  background: rgba(255, 255, 255, 1);
 }
 </style>
