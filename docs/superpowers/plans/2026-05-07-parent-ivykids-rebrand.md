@@ -97,14 +97,20 @@ Expected: 既有 parent 測試全綠（baseline）
 - [ ] **Step 1：閱讀現有 globals.css 結構**
 
 Run: `wc -l src/parent/styles/globals.css && grep -n "^:root\|^}" src/parent/styles/globals.css | head -20`
-Expected: 找到 `:root {` 起始位置與 light mode `}` 結束行；找到 `@media (prefers-color-scheme: dark)` 與 `:root[data-theme='dark']` 兩段 dark override 起始位置。
+Expected: 找到 `:root {` 起始位置、light mode `}` 結束行、`:root[data-theme='dark']` dark override 起始位置（不需要 @media — 見下方架構提醒）。
+
+> **重要架構提醒**：本檔案 `useTheme.js` 一律會寫 `<html data-theme="...">`（即使 system 偏好 dark），所以 dark token **只需 `:root[data-theme='dark']` 一段**，不需要 `@media (prefers-color-scheme: dark)`。原 plan 寫加兩段是錯的（P1.2 review 確認），所有 P1.x 後續 tasks 都應遵循「只 data-theme 一段」原則。
 
 - [ ] **Step 2：在 :root 結束 } 前插入 IvyKids token 區（light mode）**
 
 在 `:root { ... }` 內的最後加入：
 
 ```css
-  /* ---------------- IvyKids brand tokens (2026-05-07 rebrand) ---------------- */
+  /* ---------------- IvyKids brand tokens (2026-05-07 rebrand) ----------------
+   * Hex 來源：ivykids.tw 官網 CSS / favicon / about-b 教學理念 tile。
+   * Spec：docs/superpowers/specs/2026-05-07-parent-ivykids-rebrand-design.md §3.2
+   * Brand audit：reference_ivykids_brand.md（auto-memory）
+   */
   --ivy-green-deep:    #0d9053;  /* primary CTA, emphasis bar */
   --ivy-green-bright:  #0caf76;  /* hover state */
   --ivy-green-laurel:  #5aa842;  /* 月桂葉、accent bar */
@@ -116,8 +122,8 @@ Expected: 找到 `:root {` 起始位置與 light mode `}` 結束行；找到 `@m
   --ivy-cream-bg:      #fffce8;  /* 奶油黃底色 */
   --ivy-leaf-bg:       #f5fbe6;  /* 嫩綠底色 */
 
-  /* 童彩 6 色 tile（bg + fg 配對，全部對比過 AA）*/
-  --ivy-tile-yellow-bg:  #fff8d8;  --ivy-tile-yellow-fg:  #b07700;
+  /* 童彩 6 色 tile（bg + fg 配對，6/6 light + 6/6 dark 皆過 WCAG AA 4.5:1）*/
+  --ivy-tile-yellow-bg:  #fff8d8;  --ivy-tile-yellow-fg:  #8a5d00;
   --ivy-tile-coral-bg:   #ffe8e4;  --ivy-tile-coral-fg:   #b14545;
   --ivy-tile-pink-bg:    #ffd8de;  --ivy-tile-pink-fg:    #a33340;
   --ivy-tile-purple-bg:  #efe5f5;  --ivy-tile-purple-fg:  #6e3f94;
@@ -125,9 +131,14 @@ Expected: 找到 `:root {` 起始位置與 light mode `}` 結束行；找到 `@m
   --ivy-tile-teal-bg:    #d3ecec;  --ivy-tile-teal-fg:    #145555;
 ```
 
-- [ ] **Step 3：在 @media (prefers-color-scheme: dark) 區段加入 dark 版本**
+> 注意：`--ivy-tile-yellow-fg: #8a5d00` 是 P1.2 review 修正後的值（原 `#b07700` 過不了 AA 4.5:1，僅 3.59:1）。
+
+- [ ] **Step 3：在 :root[data-theme='dark'] 區段加入 dark 版本**
+
+在 `:root[data-theme='dark'] { ... }` 內加入：
 
 ```css
+  /* IvyKids dark — 對應 light 段，rgba 0.18 軟化 tile bg */
   --ivy-green-deep:    #5aa842;
   --ivy-green-bright:  #6dc068;
   --ivy-green-laurel:  #8bc34a;
@@ -147,9 +158,7 @@ Expected: 找到 `:root {` 起始位置與 light mode `}` 結束行；找到 `@m
   --ivy-tile-teal-bg:    rgba(77, 196, 196, 0.18);  --ivy-tile-teal-fg:    #4dc4c4;
 ```
 
-- [ ] **Step 4：在 :root[data-theme='dark'] 區段重複貼上同樣的 dark token（兩段需一致）**
-
-複製上一步的內容到 `:root[data-theme='dark'] { ... }` 區段。
+- [ ] **Step 4：（已併入 Step 3，刪除）**
 
 - [ ] **Step 5：驗證 dev server 仍可啟動 + token 不破現有畫面**
 
@@ -1040,7 +1049,7 @@ git commit -m "feat(parent-rebrand): BalloonGroup 慶祝氣球（reduced-motion 
 
 - [ ] **Step 5：dark mode 兩段同步替換**
 
-在 `@media (prefers-color-scheme: dark)` 與 `:root[data-theme='dark']` 兩段內，找到對應的 brand / surface / text / gradient / tint 區，套同樣替換。原則：light 用 hex 直寫的，dark 也用 hex；light 用 var() 的，dark 也用 var()（dark token 在 Task 1.2 已建好）。
+在 `:root[data-theme='dark']` 內（**只一段**，不再加 @media — P1.2 review 確認既有架構 useTheme.js 一律寫 data-theme），找到對應的 brand / surface / text / gradient / tint 區，套同樣替換。原則：light 用 hex 直寫的，dark 也用 hex；light 用 var() 的，dark 也用 var()（dark token 在 Task 1.2 已建好）。
 
 具體 dark 替換：
 ```css
