@@ -8,6 +8,8 @@
  */
 import { computed } from 'vue'
 
+defineOptions({ name: 'IvyRibbon' })
+
 const props = defineProps({
   color: {
     type: String,

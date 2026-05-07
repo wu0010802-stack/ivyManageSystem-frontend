@@ -9,6 +9,8 @@
  */
 import { computed } from 'vue'
 
+defineOptions({ name: 'LaurelWreath' })
+
 const props = defineProps({
   side: {
     type: String,

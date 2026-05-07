@@ -9,6 +9,8 @@
  */
 import { computed } from 'vue'
 
+defineOptions({ name: 'CrownIcon' })
+
 const props = defineProps({
   size: { type: Number, default: 20 },
   variant: {
