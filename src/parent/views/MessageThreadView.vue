@@ -51,10 +51,10 @@ async function loadMore() {
 async function onSend({ body, attachments, done }) {
   try {
     await messagesStore.send(threadId.value, body, attachments)
+    done(true)
   } catch (err) {
     toast.error(err?.displayMessage || '送出失敗')
-  } finally {
-    done()
+    done(false)
   }
 }
 

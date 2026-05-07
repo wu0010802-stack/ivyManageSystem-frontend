@@ -162,9 +162,16 @@ export const getPOSDailyCloseStatus = (dateStr) =>
   api.get(`/activity/pos/daily-close/${dateStr}`)
 export const approvePOSDailyClose = (dateStr, payload = {}) =>
   api.post(`/activity/pos/daily-close/${dateStr}`, payload)
-// 解鎖日結：reason ≥ 10 字必填；原 snapshot 摘要會寫進 ApprovalLog 稽核軌跡
-export const unlockPOSDailyClose = (dateStr, reason) =>
-  api.delete(`/activity/pos/daily-close/${dateStr}`, { data: { reason } })
+// 解鎖日結：payload: { reason: string, is_admin_override?: boolean }
+// 後端 response: 200 + { close_date, unlocked_at, is_admin_override, notification_delivered }
+export const unlockPOSDailyClose = (date, payload) =>
+  // payload: { reason: string, is_admin_override?: boolean }
+  // 後端 response: 200 + { close_date, unlocked_at, is_admin_override, notification_delivered }
+  api.delete(`/activity/pos/daily-close/${date}`, { data: payload })
+export const getPOSUnlockEvents = (days = 30) =>
+  api.get('/activity/audit/pos-unlock-events', { params: { days } })
+export const getPOSOperatorActivity = (days = 30) =>
+  api.get('/activity/audit/operator-activity', { params: { days } })
 export const getPOSReconciliation = (startDate, endDate) =>
   api.get('/activity/pos/reconciliation', {
     params: { start_date: startDate, end_date: endDate },

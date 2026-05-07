@@ -35,10 +35,21 @@ async function submit() {
   const text = body.value.trim()
   if (!text || sending.value || props.disabled) return
   sending.value = true
+  // Vue 的 emit 不回傳 Promise，無法 await 父層 async handler。
+  // 改為傳遞 done(success: boolean) callback，父層 try/catch 後告知結果，
+  // 失敗時保留 body/attachments 讓使用者能重送。
   try {
-    await emit('send', { body: text, attachments: files.value })
-    body.value = ''
-    files.value = []
+    const success = await new Promise((resolve) => {
+      emit('send', {
+        body: text,
+        attachments: [...files.value],
+        done: (ok = true) => resolve(ok !== false),
+      })
+    })
+    if (success) {
+      body.value = ''
+      files.value = []
+    }
   } finally {
     sending.value = false
   }

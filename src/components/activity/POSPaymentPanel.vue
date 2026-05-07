@@ -82,25 +82,6 @@
       </div>
     </div>
 
-    <div class="pos-payment__field">
-      <label class="pos-payment__label">
-        {{ isRefundMode ? '退款方式' : '付款方式' }}
-      </label>
-      <el-radio-group
-        :model-value="paymentMethod"
-        size="large"
-        @update:model-value="$emit('update:paymentMethod', $event)"
-      >
-        <el-radio-button
-          v-for="m in paymentMethodOptions"
-          :key="m.value"
-          :value="m.value"
-        >
-          {{ m.label }}
-        </el-radio-button>
-      </el-radio-group>
-    </div>
-
     <div class="pos-payment__summary">
       <div class="pos-payment__row">
         <span>{{ isRefundMode ? '退款合計' : '應收' }}</span>
@@ -121,10 +102,20 @@
         :rows="2"
         maxlength="200"
         show-word-limit
-        :placeholder="isRefundMode ? '例如：家長要求退費、事由' : ''"
+        :placeholder="isRefundMode ? '退費原因（至少 15 字，例如：家長申請退費，原因為…）' : ''"
         @update:model-value="$emit('update:notes', $event)"
       />
     </div>
+
+    <el-alert
+      v-if="refundApprovalBlocked"
+      type="warning"
+      :closable="false"
+      show-icon
+      class="pos-payment__approval-hint"
+    >
+      此筆退費金額超過簽核門檻，需具備「金流簽核」權限（ACTIVITY_PAYMENT_APPROVE）才能送出。請改由主管操作或於「待簽核」頁送審。
+    </el-alert>
 
     <div class="pos-payment__actions">
       <el-button size="large" :disabled="!selectedItem" @click="$emit('clear')">
@@ -159,19 +150,17 @@ import { Close } from '@element-plus/icons-vue'
 import { formatTWD } from '@/constants/pos'
 
 defineProps({
-  paymentMethod: { type: String, required: true },
-  paymentMethodOptions: { type: Array, required: true },
   itemTotal: { type: Number, required: true },
   selectedItem: { type: Object, default: null },
   notes: { type: String, default: '' },
   canSubmit: { type: Boolean, required: true },
+  refundApprovalBlocked: { type: Boolean, default: false },
   submitting: { type: Boolean, required: true },
   checkoutType: { type: String, default: 'payment' },
   isRefundMode: { type: Boolean, default: false },
 })
 
 defineEmits([
-  'update:paymentMethod',
   'update:notes',
   'update:checkoutType',
   'update:appliedAmount',
@@ -344,6 +333,10 @@ defineEmits([
   font-size: 22px;
   font-weight: 700;
   color: #1e293b;
+}
+
+.pos-payment__approval-hint {
+  margin-top: 12px;
 }
 
 .pos-payment__actions {

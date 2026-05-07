@@ -53,9 +53,15 @@ function _recordTiming(method, url, status, durationMs) {
 let _refreshing = null
 
 function _doRefresh() {
+  // 回傳 boolean (true=成功)；rotation 5s race 視窗內同 family 第二次 refresh 會回 409，
+  // 等同「已被同 family 完成 rotation」→ 仍視為成功（後續重打原請求會帶到新 cookie）。
   return axios
     .post('/api/parent/auth/refresh', null, { withCredentials: true, timeout: 30000 })
     .then(() => true)
+    .catch((err) => {
+      if (err?.response?.status === 409) return true
+      throw err
+    })
 }
 
 api.interceptors.response.use(
@@ -102,19 +108,23 @@ api.interceptors.response.use(
           })
         }
         await _refreshing
+        // 不論 refresh 是本請求發起或共享自其他並發請求，都要重打原請求；
+        // 重打若仍 401 才落到下方的 _redirectToLogin。
         return api(originalRequest)
       } catch (refreshErr) {
-        // refresh 自己回 409 RACE：兄弟請求已完成 rotation 並寫入新 cookie，
-        // 此分支直接重打原請求即可恢復；不重導登入
-        if (refreshErr?.response?.status === 409) {
-          return api(originalRequest)
-        }
+        // refresh 真的失敗（過期 / 撤銷）才導去登入
         _redirectToLogin()
-        return Promise.reject(error)
+        return Promise.reject(refreshErr)
       }
     }
 
-    if (error.response?.status === 401 && !isAuthEndpoint) {
+    if (
+      error.response?.status === 401 &&
+      !isAuthEndpoint &&
+      originalRequest._retried
+    ) {
+      // 重打仍 401 才導去登入；先前邏輯會在第三、四個並發請求拿不到 refresh
+      // share 而誤登出，這裡僅針對「真正重試後仍失敗」的請求觸發。
       _redirectToLogin()
     }
 

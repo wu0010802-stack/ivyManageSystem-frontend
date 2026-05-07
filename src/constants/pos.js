@@ -6,21 +6,22 @@ export const POS_ORG_INFO = {
   subtitle: '課後才藝繳費收據',
 }
 
-export const POS_PAYMENT_METHODS = [
-  { value: '現金', label: '現金' },
-  { value: '轉帳', label: '轉帳' },
-  { value: '其他', label: '其他' },
-]
-
 export const POS_MODES = [
   { value: 'by-student', label: '依學生' },
   { value: 'by-registration', label: '依日期' },
 ]
 
+// 才藝 POS 僅收現金（spec 2026-05-06-pos-cash-only-design.md）
+// 若未來擴充付款方式，後端 schema (api/activity/pos.py POSCheckoutRequest.payment_method)
+// 與此處需同步調整
 export const CASH_METHOD = '現金'
 
-// 大額交易二次確認門檻（元）
+// 大額交易二次確認門檻（元）：金額 ≥ 此值時跳出確認框，避免手誤輸錯金額
 export const LARGE_AMOUNT_THRESHOLD = 10000
+
+// 退費簽核門檻（元）：單筆退費 > 此值需 ACTIVITY_PAYMENT_APPROVE 權限
+// 必須與後端 api/activity/_shared.py REFUND_APPROVAL_THRESHOLD 對齊
+export const REFUND_APPROVAL_THRESHOLD = 1000
 
 export const formatTWD = (n) => {
   if (n == null || Number.isNaN(Number(n))) return '—'

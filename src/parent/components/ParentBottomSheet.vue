@@ -202,8 +202,34 @@ function trapFocus(e) {
   }
 }
 
-function lockBody() { document.body.style.overflow = 'hidden' }
-function unlockBody() { document.body.style.overflow = '' }
+// 多個 sheet/Modal 同時開啟時須用參考計數，避免內層關閉就把 body 整個解鎖
+// 而外層仍開但背景可滾動。記在 window 上才能跨多個 component 實例共享。
+const _BODY_LOCK_KEY = '__pt_bsheet_lock_count__'
+const _BODY_LOCK_PREV_KEY = '__pt_bsheet_prev_overflow__'
+let _ownsLock = false
+function lockBody() {
+  if (_ownsLock) return
+  if (typeof window === 'undefined') return
+  const cur = window[_BODY_LOCK_KEY] || 0
+  if (cur === 0) {
+    window[_BODY_LOCK_PREV_KEY] = document.body.style.overflow || ''
+    document.body.style.overflow = 'hidden'
+  }
+  window[_BODY_LOCK_KEY] = cur + 1
+  _ownsLock = true
+}
+function unlockBody() {
+  if (!_ownsLock) return
+  if (typeof window === 'undefined') return
+  const cur = window[_BODY_LOCK_KEY] || 0
+  const next = Math.max(0, cur - 1)
+  window[_BODY_LOCK_KEY] = next
+  if (next === 0) {
+    document.body.style.overflow = window[_BODY_LOCK_PREV_KEY] || ''
+    window[_BODY_LOCK_PREV_KEY] = ''
+  }
+  _ownsLock = false
+}
 
 function onKeydown(e) {
   if (e.key === 'Escape' && props.dismissible) {

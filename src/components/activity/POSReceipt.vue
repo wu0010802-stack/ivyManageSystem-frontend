@@ -11,7 +11,7 @@
     <div class="r-meta">
       <div>編號：{{ receipt.receipt_no }}</div>
       <div>時間：{{ receipt.created_at }}</div>
-      <div>方式：{{ receipt.payment_method }}</div>
+      <div>方式：現金</div>
       <div v-if="receipt.operator">經手：{{ receipt.operator }}</div>
     </div>
 

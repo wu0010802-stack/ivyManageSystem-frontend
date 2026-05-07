@@ -43,16 +43,20 @@ function removeFile(i) {
 async function submit() {
   if (!body.value.trim() && files.value.length === 0) return
   sending.value = true
+  // done(success?: boolean) — 父層 onSend 在 catch 應呼叫 done(false)，避免失敗
+  // 也清空 body/attachments 導致使用者輸入遺失而無法重送。
   try {
-    await new Promise((resolve) => {
+    const success = await new Promise((resolve) => {
       emit('send', {
         body: body.value.trim() || '(附件)',
         attachments: [...files.value],
-        done: resolve,
+        done: (ok = true) => resolve(ok !== false),
       })
     })
-    body.value = ''
-    files.value = []
+    if (success) {
+      body.value = ''
+      files.value = []
+    }
   } finally {
     sending.value = false
   }
