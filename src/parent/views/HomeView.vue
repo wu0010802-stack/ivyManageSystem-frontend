@@ -10,8 +10,6 @@ import SkeletonBlock from '../components/SkeletonBlock.vue'
 import HomeHero from '../components/home/HomeHero.vue'
 import TodayStatusCards from '../components/home/TodayStatusCards.vue'
 import TodoCenter from '../components/home/TodoCenter.vue'
-import ChildrenStrip from '../components/home/ChildrenStrip.vue'
-import QuickActions from '../components/home/QuickActions.vue'
 import PushCta from '../components/home/PushCta.vue'
 
 const router = useRouter()
@@ -72,13 +70,6 @@ async function pullRefresh() {
     todayRef.value?.refresh(),
   ])
 }
-
-const QUICK_ACTIONS = [
-  { icon: 'notebook', label: '聯絡簿', path: '/contact-book', tint: 'contact' },
-  { icon: 'calendar', label: '本週行程', path: '/calendar', tint: 'calendar' },
-  { icon: 'clipboard', label: '請假', path: '/leaves', tint: 'leave' },
-  { icon: 'pill', label: '用藥單', path: '/medications', tint: 'medication' },
-]
 
 // 將 6 種待辦扁平化為陣列，避免 TodoCenter 需要知道每種待辦的取數路徑。
 // shape: { key, icon, tint, primaryText, count, suffix?, warn?, path }
@@ -173,23 +164,17 @@ const todos = computed(() => {
     />
 
     <template v-else-if="summaryData">
-      <!-- 0) Hero 問候卡（ACD Phase 3.2） -->
-      <HomeHero :parent-name="me?.name" :children-count="children.length" />
-
-      <!-- 1) 推播未啟用 CTA — 暖色提醒卡 -->
+      <!-- 1) 推播未啟用 CTA — 暖色提醒卡（置頂警示） -->
       <PushCta v-if="showPushCta" @enable="go('/notifications/preferences')" />
 
-      <!-- 2) 今日孩子狀態（ACD Phase 3.3） -->
-      <TodayStatusCards ref="todayRef" />
+      <!-- 2) Hero 問候卡 -->
+      <HomeHero :parent-name="me?.name" :children-count="children.length" />
 
-      <!-- 3) 今日待辦中心（ACD Phase 3.4） -->
+      <!-- 3) 今日待辦中心（首頁靈魂） -->
       <TodoCenter :todos="todos" @navigate="go" />
 
-      <!-- 4) 我的孩子（ACD Phase 3.4） -->
-      <ChildrenStrip :children="children" @navigate="go" />
-
-      <!-- 5) 常用操作（ACD Phase 3.4） -->
-      <QuickActions :actions="QUICK_ACTIONS" @navigate="go" />
+      <!-- 4) 今日孩子狀態 -->
+      <TodayStatusCards ref="todayRef" />
     </template>
   </PullToRefresh>
 </template>
