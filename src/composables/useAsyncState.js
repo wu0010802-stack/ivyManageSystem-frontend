@@ -1,86 +1,64 @@
-import { ref, shallowRef } from 'vue'
+import { ref } from 'vue'
+import { ElMessage } from 'element-plus'
 
 /**
- * 統一的非同步資料載入 composable。
+ * 統一非同步狀態管理。
  *
- * @param {(signal: AbortSignal) => Promise<any>} fetcher
- * @param {Object} [options]
- * @param {boolean} [options.immediate=false]
- * @param {number}  [options.minShowMs=300]
- * @param {boolean} [options.dedupe=true]
- * @param {any}     [options.initialData=null]
+ * @param {() => Promise<any>} fetcher 任何回傳 promise 的函式
+ * @param {Object} [opts]
+ * @param {boolean} [opts.immediate=false] 創建時立即 execute
+ * @param {boolean} [opts.toast=true]      失敗時顯示 ElMessage.error
+ * @param {any}     [opts.initialData=null] 初始 data 值
+ * @returns {{ data, loading, error, execute, refresh }}
  */
-export function useAsyncState(fetcher, options = {}) {
-  const {
-    immediate = false,
-    minShowMs = 300,
-    dedupe = true,
-    initialData = null,
-  } = options
+export function useAsyncState(fetcher, opts = {}) {
+  const { immediate = false, toast = true, initialData = null } = opts
 
-  const data = shallowRef(initialData)
+  const data = ref(initialData)
+  const loading = ref(false)
   const error = ref(null)
-  const pending = ref(false)
 
-  let inflight = null
-  let currentController = null
-
-  function reset() {
-    data.value = initialData
+  const execute = async (...args) => {
+    loading.value = true
     error.value = null
-    pending.value = false
-    if (currentController) {
-      currentController.abort()
-      currentController = null
+    try {
+      const result = await fetcher(...args)
+      data.value = result
+      return result
+    } catch (e) {
+      error.value = e
+      if (toast) {
+        const msg = e?.response?.data?.detail || e?.message || '操作失敗'
+        ElMessage.error(typeof msg === 'string' ? msg : '操作失敗')
+      }
+      return undefined
+    } finally {
+      loading.value = false
     }
-    inflight = null
   }
 
-  function execute() {
-    if (dedupe && inflight) return inflight
-
-    pending.value = true
-    error.value = null
-
-    const controller = new AbortController()
-    currentController = controller
-    const startedAt = Date.now()
-
-    let fetcherResult
-    try {
-      fetcherResult = Promise.resolve(fetcher(controller.signal))
-    } catch (err) {
-      fetcherResult = Promise.reject(err)
-    }
-
-    const p = fetcherResult
-      .then((result) => {
-        if (controller.signal.aborted) return data.value
+  // shadow=true：背景重抓不顯示 loading，避免 spinner 閃爍
+  const refresh = async ({ shadow = false, ...rest } = {}) => {
+    if (shadow) {
+      try {
+        const result = await fetcher(rest)
         data.value = result
         return result
-      })
-      .catch((err) => {
-        if (controller.signal.aborted) return
-        error.value = err
-      })
-      .finally(() => {
-        const elapsed = Date.now() - startedAt
-        const remaining = Math.max(0, minShowMs - elapsed)
-        const settle = () => {
-          if (!controller.signal.aborted) pending.value = false
-          if (inflight === p) inflight = null
+      } catch (e) {
+        error.value = e
+        if (toast) {
+          const msg = e?.response?.data?.detail || e?.message || '操作失敗'
+          ElMessage.error(typeof msg === 'string' ? msg : '操作失敗')
         }
-        if (remaining > 0) {
-          return new Promise((r) => setTimeout(r, remaining)).then(settle)
-        }
-        settle()
-      })
-
-    inflight = p
-    return p
+        return undefined
+      }
+    }
+    return execute(rest)
   }
 
-  if (immediate) execute()
+  if (immediate) {
+    execute()
+  }
 
-  return { data, error, pending, execute, reset }
+  return { data, loading, error, execute, refresh }
 }

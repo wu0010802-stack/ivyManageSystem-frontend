@@ -168,6 +168,30 @@ onMounted(() => {
   document.addEventListener('visibilitychange', onVisibilityChange)
   fetchEmployees()
   refreshPortalCounts({ force: true })
+
+  // 導航更新一次性提示（v=1: 2026-05 教師端 ACD 改造）
+  const PORTAL_LAYOUT_VERSION = '1'
+  const stored = localStorage.getItem('portal_layout_v')
+  if (stored !== PORTAL_LAYOUT_VERSION) {
+    setTimeout(() => {
+      ElMessageBox({
+        title: '導航更新',
+        message:
+          '教師端介面已更新：\n\n' +
+          '• 底部 tab 第 5 個從「更多」改為「我的」（個人選單）\n' +
+          '• 側邊欄「班級教務」拆為「班級 — 教學」與「班級 — 管理」\n' +
+          '• 新增「今日工作台」為預設首頁\n\n' +
+          '原本的選單仍可由側邊欄找到。',
+        type: 'info',
+        confirmButtonText: '我知道了',
+        showCancelButton: false,
+      })
+        .catch(() => {})
+        .finally(() => {
+          localStorage.setItem('portal_layout_v', PORTAL_LAYOUT_VERSION)
+        })
+    }, 500)
+  }
 })
 
 onUnmounted(() => {
@@ -300,106 +324,115 @@ const submitPassword = async () => {
         background-color="#1e293b"
         @select="closeSidebar"
       >
-        <!-- 首頁 -->
-        <el-menu-item index="/portal/home">
-          <el-icon><HomeFilled /></el-icon>
-          <span>今日首頁</span>
-        </el-menu-item>
+        <!-- ============ 我的 ============ -->
+        <el-sub-menu index="group-mine">
+          <template #title>
+            <el-icon><UserFilled /></el-icon>
+            <span>我的</span>
+          </template>
+          <el-menu-item index="/portal/home">
+            <el-icon><HomeFilled /></el-icon>
+            <span>今日工作台</span>
+            <el-badge v-if="totalHubBadge > 0" :value="totalHubBadge" :max="99" class="announcement-badge" />
+          </el-menu-item>
+          <el-menu-item index="/portal/attendance">
+            <el-icon><Calendar /></el-icon>
+            <span>我的出勤</span>
+          </el-menu-item>
+          <el-menu-item index="/portal/schedule">
+            <el-icon><Timer /></el-icon>
+            <span>我的排班</span>
+            <el-badge v-if="swapPendingCount > 0" :value="swapPendingCount" :max="99" class="announcement-badge" />
+          </el-menu-item>
+          <el-menu-item index="/portal/salary">
+            <el-icon><Money /></el-icon>
+            <span>薪資查詢</span>
+          </el-menu-item>
+          <el-menu-item index="/portal/profile">
+            <el-icon><User /></el-icon>
+            <span>個人資料</span>
+          </el-menu-item>
+        </el-sub-menu>
 
-        <!-- 個人資料 -->
-        <el-menu-item index="/portal/profile">
-          <el-icon><UserFilled /></el-icon>
-          <span>個人資料</span>
-        </el-menu-item>
-
-        <!-- 假勤申請 -->
+        <!-- ============ 假勤申請 ============ -->
         <el-sub-menu index="group-leave">
           <template #title>
             <el-icon><Document /></el-icon>
             <span>假勤申請</span>
           </template>
-          <el-menu-item index="/portal/attendance">
-            <el-icon><Calendar /></el-icon>
-            <span>我的出勤</span>
-          </el-menu-item>
           <el-menu-item index="/portal/leave">
-            <el-icon><Document /></el-icon>
             <span>請假申請</span>
             <el-badge v-if="substitutePendingCount > 0" :value="substitutePendingCount" :max="99" class="announcement-badge" />
           </el-menu-item>
           <el-menu-item index="/portal/overtime">
-            <el-icon><Watch /></el-icon>
             <span>加班申請</span>
           </el-menu-item>
           <el-menu-item index="/portal/punch-correction">
-            <el-icon><Edit /></el-icon>
             <span>補打卡申請</span>
           </el-menu-item>
           <el-menu-item index="/portal/anomalies">
-            <el-icon><Warning /></el-icon>
             <span>異常確認</span>
           </el-menu-item>
         </el-sub-menu>
 
-        <!-- 我的排班 -->
-        <el-menu-item index="/portal/schedule">
-          <el-icon><Timer /></el-icon>
-          <span>我的排班</span>
-          <el-badge v-if="swapPendingCount > 0" :value="swapPendingCount" :max="99" class="announcement-badge" />
-        </el-menu-item>
+        <!-- ============ 班級 — 教學 ============ -->
+        <el-sub-menu index="group-class-teach">
+          <template #title>
+            <el-icon><School /></el-icon>
+            <span>班級 — 教學</span>
+          </template>
+          <el-menu-item index="/portal/students">
+            <span>班級學生</span>
+          </el-menu-item>
+          <el-menu-item index="/portal/class-hub">
+            <span>今日班級工作台</span>
+          </el-menu-item>
+          <el-menu-item index="/portal/observations">
+            <span>課堂觀察</span>
+          </el-menu-item>
+          <el-menu-item index="/portal/assessments">
+            <span>學期評量</span>
+          </el-menu-item>
+        </el-sub-menu>
 
-        <!-- 公告通知 -->
+        <!-- ============ 班級 — 管理 ============ -->
+        <el-sub-menu index="group-class-admin">
+          <template #title>
+            <el-icon><Warning /></el-icon>
+            <span>班級 — 管理</span>
+          </template>
+          <el-menu-item index="/portal/incidents">
+            <span>事件紀錄</span>
+          </el-menu-item>
+          <el-menu-item index="/portal/dismissal-calls">
+            <span>接送通知</span>
+            <el-badge v-if="dismissalPendingCount > 0" :value="dismissalPendingCount" :max="99" class="announcement-badge" />
+          </el-menu-item>
+          <el-menu-item index="/portal/medications">
+            <span>用藥執行</span>
+          </el-menu-item>
+        </el-sub-menu>
+
+        <!-- ============ 才藝 ============ -->
+        <el-sub-menu index="group-activity">
+          <template #title>
+            <el-icon><Brush /></el-icon>
+            <span>才藝</span>
+          </template>
+          <el-menu-item index="/portal/activity">
+            <span>才藝管理</span>
+          </el-menu-item>
+        </el-sub-menu>
+
+        <!-- ============ 其他 ============ -->
         <el-menu-item index="/portal/announcements">
           <el-icon><Bell /></el-icon>
           <span>公告通知</span>
           <el-badge v-if="unreadCount > 0" :value="unreadCount" :max="99" class="announcement-badge" />
         </el-menu-item>
-
-        <!-- 班級教務 -->
-        <el-sub-menu index="group-class">
-          <template #title>
-            <el-icon><School /></el-icon>
-            <span>班級教務</span>
-          </template>
-          <el-menu-item index="/portal/students">
-            <el-icon><User /></el-icon>
-            <span>班級學生</span>
-          </el-menu-item>
-          <el-menu-item index="/portal/class-hub">
-            <el-icon><Calendar /></el-icon>
-            <span>今日工作台</span>
-            <el-badge
-              v-if="totalHubBadge > 0"
-              :value="totalHubBadge"
-              :max="99"
-              class="announcement-badge"
-            />
-          </el-menu-item>
-          <el-menu-item index="/portal/assessments">
-            <el-icon><DataAnalysis /></el-icon>
-            <span>學期評量</span>
-          </el-menu-item>
-          <el-menu-item index="/portal/dismissal-calls">
-            <el-icon><Van /></el-icon>
-            <span>接送通知</span>
-            <el-badge v-if="dismissalPendingCount > 0" :value="dismissalPendingCount" :max="99" class="announcement-badge" />
-          </el-menu-item>
-          <el-menu-item index="/portal/activity">
-            <el-icon><Brush /></el-icon>
-            <span>才藝管理</span>
-          </el-menu-item>
-        </el-sub-menu>
-
-        <!-- 學校行事曆 -->
         <el-menu-item index="/portal/calendar">
           <el-icon><Calendar /></el-icon>
           <span>學校行事曆</span>
-        </el-menu-item>
-
-        <!-- 薪資查詢 -->
-        <el-menu-item index="/portal/salary">
-          <el-icon><Money /></el-icon>
-          <span>薪資查詢</span>
         </el-menu-item>
       </el-menu>
     </el-aside>
@@ -471,16 +504,16 @@ const submitPassword = async () => {
 
       <!-- Bottom Navigation (mobile only) -->
       <div v-if="isMobile" class="bottom-nav">
+        <div class="bottom-tab" :class="{ active: route.path.startsWith('/portal/home') || route.path.startsWith('/portal/class-hub') }" @click="router.push('/portal/home')">
+          <div class="tab-icon-wrapper">
+            <el-icon><HomeFilled /></el-icon>
+            <el-badge v-if="totalHubBadge > 0" :value="totalHubBadge" :max="99" class="tab-badge" />
+          </div>
+          <span>工作台</span>
+        </div>
         <div class="bottom-tab" :class="{ active: route.path.startsWith('/portal/attendance') }" @click="router.push('/portal/attendance')">
           <el-icon><Calendar /></el-icon>
           <span>出勤</span>
-        </div>
-        <div class="bottom-tab" :class="{ active: route.path.startsWith('/portal/leave') }" @click="router.push('/portal/leave')">
-          <div class="tab-icon-wrapper">
-            <el-icon><Document /></el-icon>
-            <el-badge v-if="substitutePendingCount > 0" :value="substitutePendingCount" :max="99" class="tab-badge" />
-          </div>
-          <span>請假</span>
         </div>
         <div class="bottom-tab" :class="{ active: route.path.startsWith('/portal/schedule') }" @click="router.push('/portal/schedule')">
           <div class="tab-icon-wrapper">
@@ -489,16 +522,13 @@ const submitPassword = async () => {
           </div>
           <span>排班</span>
         </div>
-        <div class="bottom-tab" :class="{ active: route.path.startsWith('/portal/salary') }" @click="router.push('/portal/salary')">
-          <el-icon><Money /></el-icon>
-          <span>薪資</span>
+        <div class="bottom-tab" :class="{ active: route.path.startsWith('/portal/students') || route.path.startsWith('/portal/student') }" @click="router.push('/portal/students')">
+          <el-icon><User /></el-icon>
+          <span>學生</span>
         </div>
-        <div class="bottom-tab" @click="toggleSidebar">
-          <div class="tab-icon-wrapper">
-            <el-icon><Menu /></el-icon>
-            <el-badge v-if="unreadCount > 0" :value="unreadCount" :max="99" class="tab-badge" />
-          </div>
-          <span>更多</span>
+        <div class="bottom-tab" :class="{ active: route.path.startsWith('/portal/profile') }" @click="router.push('/portal/profile')">
+          <el-icon><UserFilled /></el-icon>
+          <span>我的</span>
         </div>
       </div>
     </el-container>
