@@ -179,7 +179,11 @@ const todos = computed(() => {
       <PushCta v-if="showPushCta" @enable="go('/notifications/preferences')" />
 
       <!-- 2) Hero 問候卡 -->
-      <HomeHero :parent-name="me?.name" :children-count="children.length" />
+      <HomeHero
+        :parent-name="me?.name"
+        :children-count="children.length"
+        :todo-count="todos.length"
+      />
 
       <!-- 3) 今日待辦中心（首頁靈魂） -->
       <TodoCenter :todos="todos" @navigate="go" />

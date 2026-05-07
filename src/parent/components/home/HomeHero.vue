@@ -8,6 +8,7 @@
  * Props：
  *   parentName (String) — 家長名，default '家長'
  *   childrenCount (Number) — 子女總數
+ *   todoCount (Number) — 今日待辦件數，>0 顯示處理提示，=0 顯示正向訊息（IA v2 Phase 3）
  *   dailyStar (Object | null) — 「今日 X 之星」moment，後端 ChildSummary.daily_star
  *     形狀 { childName: string, label: string }；為 null 時隱藏該行（目前後端尚未提供）
  */
@@ -18,6 +19,7 @@ import KawaiiStar from '../brand/KawaiiStar.vue'
 const props = defineProps({
   parentName: { type: String, default: '家長' },
   childrenCount: { type: Number, default: 0 },
+  todoCount: { type: Number, default: 0 },
   dailyStar: { type: Object, default: null },
 })
 
@@ -47,6 +49,14 @@ const todayLabel = computed(() => {
       <h1 class="hero-greeting">
         {{ greeting }}，<span class="hero-name">{{ parentName || '家長' }}</span>
       </h1>
+      <p class="hero-summary">
+        <template v-if="todoCount > 0">
+          今天有 {{ todoCount }} 件事需要你處理
+        </template>
+        <template v-else>
+          今天無待辦，孩子們在園所很好
+        </template>
+      </p>
       <p v-if="childrenCount > 0" class="hero-subtitle">
         您今天有 {{ childrenCount }} 位寶貝
       </p>
@@ -101,6 +111,11 @@ const todayLabel = computed(() => {
 }
 .hero-name {
   color: var(--brand-primary);
+}
+.hero-summary {
+  margin: var(--space-1, 4px) 0 0;
+  color: var(--pt-text-muted);
+  font-size: var(--text-sm, 13px);
 }
 .hero-subtitle {
   font-size: 12px;
