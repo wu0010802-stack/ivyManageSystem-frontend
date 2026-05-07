@@ -78,10 +78,10 @@ const emit = defineEmits(['navigate'])
   background: var(--brand-primary-soft);
   color: var(--brand-primary);
 }
-.quick-icon.tint-contact     { background: var(--pt-tint-contact);     color: var(--pt-tint-contact-fg); }
-.quick-icon.tint-calendar    { background: var(--pt-tint-calendar);    color: var(--pt-tint-calendar-fg); }
-.quick-icon.tint-leave       { background: var(--pt-tint-leave);       color: var(--pt-tint-leave-fg); }
-.quick-icon.tint-medication  { background: var(--pt-tint-medication);  color: var(--pt-tint-medication-fg); }
+.quick-icon.tint-contact     { background: var(--pt-tint-contact);     color: var(--pt-tint-contact-fg);    border: 2px solid var(--pt-tint-contact-fg); }
+.quick-icon.tint-calendar    { background: var(--pt-tint-calendar);    color: var(--pt-tint-calendar-fg);   border: 2px solid var(--pt-tint-calendar-fg); }
+.quick-icon.tint-leave       { background: var(--pt-tint-leave);       color: var(--pt-tint-leave-fg);      border: 2px solid var(--pt-tint-leave-fg); }
+.quick-icon.tint-medication  { background: var(--pt-tint-medication);  color: var(--pt-tint-medication-fg); border: 2px solid var(--pt-tint-medication-fg); }
 .quick-label {
   font-size: var(--text-xs, 12px);
   color: var(--pt-text-muted);
