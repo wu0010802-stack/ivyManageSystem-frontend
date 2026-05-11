@@ -239,10 +239,16 @@
       </el-menu>
     </el-scrollbar>
 
-    <div v-if="!isMobile" class="collapse-toggle" @click="toggleCollapse">
+    <button
+      v-if="!isMobile"
+      type="button"
+      class="collapse-toggle"
+      :aria-label="isCollapse ? '展開側邊欄' : '收合側邊欄'"
+      @click="toggleCollapse"
+    >
       <el-icon v-if="isCollapse"><Expand /></el-icon>
       <el-icon v-else><Fold /></el-icon>
-    </div>
+    </button>
   </el-aside>
 </template>
 
@@ -463,11 +469,18 @@ const onMenuSelect = () => {
 }
 
 .collapse-toggle {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
   height: 48px;
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
   color: var(--text-tertiary);
   border-top: 1px solid #334155;
   transition: all var(--transition-base);
@@ -476,6 +489,11 @@ const onMenuSelect = () => {
 .collapse-toggle:hover {
   background-color: #334155;
   color: #fff;
+}
+
+.collapse-toggle:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 2px;
 }
 
 .menu-badge {

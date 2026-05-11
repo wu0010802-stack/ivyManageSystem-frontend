@@ -1,6 +1,5 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
 import { useChildrenStore } from '../stores/children'
 import { useChildSelection } from '../composables/useChildSelection'
 import ChildSelector from '../components/ChildSelector.vue'
@@ -11,7 +10,6 @@ import SkeletonBlock from '../components/SkeletonBlock.vue'
 import { useIncrementalRender } from '../composables/useIncrementalRender'
 import KawaiiStar from '@/components/brand/KawaiiStar.vue'
 
-const router = useRouter()
 const childrenStore = useChildrenStore()
 const { selectedId: selectedStudentId, ensureSelected } = useChildSelection()
 
@@ -66,10 +64,6 @@ onMounted(async () => {
 
 watch(selectedStudentId, fetchAll, { immediate: true })
 
-function goDetail(entryId) {
-  router.push({ path: `/contact-book/${entryId}` })
-}
-
 function moodInfo(m) {
   return MOOD_OPTIONS[m] || null
 }
@@ -85,7 +79,11 @@ function moodInfo(m) {
 
     <section v-else>
       <h3 class="section-title">今日聯絡簿</h3>
-      <div v-if="today" class="card today-card" @click="goDetail(today.id)">
+      <router-link
+        v-if="today"
+        :to="`/contact-book/${today.id}`"
+        class="card today-card"
+      >
         <div class="row">
           <span
             v-if="moodInfo(today.mood)"
@@ -110,7 +108,7 @@ function moodInfo(m) {
             {{ today.photos.length }}
           </span>
         </div>
-      </div>
+      </router-link>
       <div v-else class="empty">
         <KawaiiStar :size="64" decorative />
         <p>{{ studentName }} 今日尚無聯絡簿</p>
@@ -121,11 +119,11 @@ function moodInfo(m) {
         <KawaiiStar :size="64" decorative />
         <p>還沒有歷史聯絡簿喔！</p>
       </div>
-      <div
+      <router-link
         v-for="e in visibleHistory"
         :key="e.id"
-        class="card press-scale"
-        @click="goDetail(e.id)"
+        :to="`/contact-book/${e.id}`"
+        class="card history-card press-scale"
       >
         <div class="row">
           <span
@@ -140,7 +138,7 @@ function moodInfo(m) {
           </div>
           <span v-if="!e.my_acknowledged_at" class="dot dot-unread" />
         </div>
-      </div>
+      </router-link>
       <div v-if="hasMore" ref="sentinelRef" class="render-sentinel" aria-hidden="true" />
     </section>
   </div>
@@ -168,6 +166,17 @@ function moodInfo(m) {
   box-shadow: var(--pt-shadow-card, var(--pt-elev-1));
 }
 .today-card { border-color: var(--pt-border-strong); }
+.card.today-card,
+.card.history-card {
+  text-decoration: none;
+  color: inherit;
+  display: block;
+}
+.card.today-card:focus-visible,
+.card.history-card:focus-visible {
+  outline: 2px solid var(--brand-primary, #0d9053);
+  outline-offset: 2px;
+}
 .row { display: flex; align-items: center; gap: 10px; }
 .emoji { font-size: 24px; flex-shrink: 0; }
 .meta { flex: 1; min-width: 0; }

@@ -49,7 +49,12 @@
           <span class="district-list-title">行政區競爭分析</span>
           <span v-if="selectedDistrict" class="district-filter-tag">
             {{ selectedDistrict }}
-            <span class="district-filter-clear" @click="emit('update:selectedDistrict', '')">✕</span>
+            <button
+              type="button"
+              class="district-filter-clear"
+              :aria-label="`清除行政區過濾：${selectedDistrict}`"
+              @click="emit('update:selectedDistrict', '')"
+            >✕</button>
           </span>
         </div>
 
@@ -393,11 +398,23 @@ const opportunityText = (row) => {
   gap: 4px;
 }
 .district-filter-clear {
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: none;
+  padding: 0 4px;
+  font: inherit;
+  color: inherit;
   cursor: pointer;
   font-size: 0.68rem;
   opacity: 0.6;
 }
 .district-filter-clear:hover { opacity: 1; }
+.district-filter-clear:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 1px;
+  border-radius: 2px;
+}
 
 /* ── 行政區卡片 ── */
 .district-list {

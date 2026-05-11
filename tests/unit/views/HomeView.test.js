@@ -119,6 +119,10 @@ const globalConfig = {
     loading: () => {},
   },
   stubs: {
+    RouterLink: {
+      template: '<a :href="to"><slot /></a>',
+      props: ['to'],
+    },
     StatCard: true,
     'el-row': { template: '<div><slot /></div>' },
     'el-col': { template: '<div><slot /></div>' },
@@ -199,6 +203,17 @@ describe('HomeView', () => {
     expect(getProbationAlerts).not.toHaveBeenCalled()
   })
 
+  it('快速操作 8 個磚塊都是可鍵盤聚焦的 <a> 元素，並有 href', async () => {
+    const wrapper = shallowMount(HomeView, { global: globalConfig })
+    await flushPromises()
+    const items = wrapper.findAll('.action-item')
+    expect(items.length).toBe(8)
+    items.forEach((item) => {
+      expect(item.element.tagName).toBe('A')
+      expect(item.attributes('href')).toBeTruthy()
+    })
+  })
+
   it('mount 時不應出現未解析的 Element Plus icon 警告', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const {
@@ -235,5 +250,11 @@ describe('HomeView', () => {
     expect(warnings).not.toContain('Failed to resolve component')
 
     warnSpy.mockRestore()
+  })
+
+  it('儀表板不應 render 任何 native <select>（避免 component:is fallback 成 HTML tag）', async () => {
+    const wrapper = shallowMount(HomeView, { global: globalConfig })
+    await flushPromises()
+    expect(wrapper.findAll('select').length).toBe(0)
   })
 })

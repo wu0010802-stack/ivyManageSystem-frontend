@@ -33,7 +33,15 @@ const formatDate = (iso) => {
   <div class="overview-tab" v-if="profile">
     <!-- 統計摘要 -->
     <div class="stat-grid">
-      <div class="stat-card stat-card--primary" @click="emit('goto-tab', 'attendance')">
+      <div
+        class="stat-card stat-card--primary"
+        role="button"
+        tabindex="0"
+        aria-label="本學期出席統計，按 Enter 切換到出勤分頁"
+        @click="emit('goto-tab', 'attendance')"
+        @keydown.enter.prevent="emit('goto-tab', 'attendance')"
+        @keydown.space.prevent="emit('goto-tab', 'attendance')"
+      >
         <div class="stat-icon"><el-icon :size="20"><Calendar /></el-icon></div>
         <div class="stat-body">
           <div class="stat-label">本學期出席</div>
@@ -45,7 +53,15 @@ const formatDate = (iso) => {
         </div>
       </div>
 
-      <div class="stat-card stat-card--success" @click="emit('goto-tab', 'fees')">
+      <div
+        class="stat-card stat-card--success"
+        role="button"
+        tabindex="0"
+        aria-label="學費狀態，按 Enter 切換到費用分頁"
+        @click="emit('goto-tab', 'fees')"
+        @keydown.enter.prevent="emit('goto-tab', 'fees')"
+        @keydown.space.prevent="emit('goto-tab', 'fees')"
+      >
         <div class="stat-icon"><el-icon :size="20"><Money /></el-icon></div>
         <div class="stat-body">
           <div class="stat-label">學費狀態</div>
@@ -59,7 +75,15 @@ const formatDate = (iso) => {
         </div>
       </div>
 
-      <div class="stat-card stat-card--info" @click="emit('goto-tab', 'guardians')">
+      <div
+        class="stat-card stat-card--info"
+        role="button"
+        tabindex="0"
+        aria-label="監護人，按 Enter 切換到監護人分頁"
+        @click="emit('goto-tab', 'guardians')"
+        @keydown.enter.prevent="emit('goto-tab', 'guardians')"
+        @keydown.space.prevent="emit('goto-tab', 'guardians')"
+      >
         <div class="stat-icon"><el-icon :size="20"><User /></el-icon></div>
         <div class="stat-body">
           <div class="stat-label">監護人</div>
@@ -76,7 +100,15 @@ const formatDate = (iso) => {
         </div>
       </div>
 
-      <div class="stat-card stat-card--danger" @click="emit('goto-tab', 'records')">
+      <div
+        class="stat-card stat-card--danger"
+        role="button"
+        tabindex="0"
+        aria-label="最近事件，按 Enter 切換到事件紀錄分頁"
+        @click="emit('goto-tab', 'records')"
+        @keydown.enter.prevent="emit('goto-tab', 'records')"
+        @keydown.space.prevent="emit('goto-tab', 'records')"
+      >
         <div class="stat-icon"><el-icon :size="20"><Warning /></el-icon></div>
         <div class="stat-body">
           <div class="stat-label">最近事件</div>
@@ -153,6 +185,10 @@ const formatDate = (iso) => {
 .stat-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+.stat-card:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 2px;
 }
 
 .stat-icon {

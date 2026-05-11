@@ -6,6 +6,7 @@ import {
   Clock,
   Document,
   Location,
+  Select,
   Setting,
   TrendCharts,
   Trophy,
@@ -215,7 +216,7 @@ const showTodoSection = computed(
           <StatCard label="今日應出勤" :value="todayStats.total_employees" icon="Calendar" color="primary" />
         </el-col>
         <el-col :xs="24" :sm="12" :md="6" class="mb-4">
-          <StatCard label="已出勤" :value="todayStats.present_count" icon="Select" color="success" />
+          <StatCard label="已出勤" :value="todayStats.present_count" :icon="Select" color="success" />
         </el-col>
         <el-col :xs="24" :sm="12" :md="6" class="mb-4">
           <StatCard label="遲到" :value="todayStats.late_count" icon="AlarmClock" color="warning" />
@@ -288,54 +289,54 @@ const showTodoSection = computed(
             </div>
           </template>
           <div class="action-grid">
-            <div class="action-item" @click="navigateTo('/employees')">
+            <router-link to="/employees" class="action-item">
               <div class="action-circle action-circle--primary">
                 <el-icon :size="22"><User /></el-icon>
               </div>
               <span>員工管理</span>
-            </div>
-            <div class="action-item" @click="navigateTo('/students')">
+            </router-link>
+            <router-link to="/students" class="action-item">
               <div class="action-circle action-circle--warning">
                 <el-icon :size="22"><UserFilled /></el-icon>
               </div>
               <span>學生管理</span>
-            </div>
-            <div class="action-item" @click="navigateTo('/attendance')">
+            </router-link>
+            <router-link to="/attendance" class="action-item">
               <div class="action-circle action-circle--success">
                 <el-icon :size="22"><Clock /></el-icon>
               </div>
               <span>出勤查詢</span>
-            </div>
-            <div class="action-item" @click="navigateTo('/salary')">
+            </router-link>
+            <router-link to="/salary" class="action-item">
               <div class="action-circle action-circle--info">
                 <el-icon :size="22"><Wallet /></el-icon>
               </div>
               <span>薪資管理</span>
-            </div>
-            <div class="action-item" @click="navigateTo('/leaves')">
+            </router-link>
+            <router-link to="/leaves" class="action-item">
               <div class="action-circle action-circle--purple">
                 <el-icon :size="22"><Document /></el-icon>
               </div>
               <span>請假管理</span>
-            </div>
-            <div class="action-item" @click="navigateTo('/activity/dashboard')">
+            </router-link>
+            <router-link to="/activity/dashboard" class="action-item">
               <div class="action-circle action-circle--pink">
                 <el-icon :size="22"><Trophy /></el-icon>
               </div>
               <span>活動管理</span>
-            </div>
-            <div class="action-item" @click="navigateTo('/reports')">
+            </router-link>
+            <router-link to="/reports" class="action-item">
               <div class="action-circle action-circle--danger">
                 <el-icon :size="22"><TrendCharts /></el-icon>
               </div>
               <span>報表統計</span>
-            </div>
-            <div class="action-item" @click="navigateTo('/settings')">
+            </router-link>
+            <router-link to="/settings" class="action-item">
               <div class="action-circle action-circle--neutral">
                 <el-icon :size="22"><Setting /></el-icon>
               </div>
               <span>系統設定</span>
-            </div>
+            </router-link>
           </div>
         </el-card>
       </el-col>
@@ -770,6 +771,14 @@ const showTodoSection = computed(
   padding: 16px 8px;
   border-radius: 12px;
   transition: background 0.18s ease;
+  text-decoration: none;
+  color: inherit;
+}
+
+.action-item:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 2px;
+  border-radius: 8px;
 }
 
 .action-item:hover {
