@@ -27,6 +27,7 @@ const formatClassroomLabel = (c) => {
 
 const formRef = ref(null)
 const submitting = ref(false)
+const govActive = ref([])  // 政府申報資料折疊區，預設關閉
 
 const emptyForm = () => ({
   id: null,
@@ -46,6 +47,16 @@ const emptyForm = () => ({
   emergency_contact_name: '',
   emergency_contact_phone: '',
   emergency_contact_relation: '',
+  id_number: '',
+  nationality: '本國',
+  household_address: '',
+  is_disadvantaged: false,
+  low_income_status: '',
+  indigenous_status: '',
+  disability_type: '',
+  disability_level: '',
+  disability_cert_no: '',
+  disability_cert_expiry: null,
 })
 
 const form = reactive(emptyForm())
@@ -218,6 +229,65 @@ const submit = async () => {
       <el-form-item label="特殊需求">
         <el-input v-model="form.special_needs" type="textarea" :rows="2" />
       </el-form-item>
+
+      <!-- 政府申報資料（折疊區） -->
+      <el-collapse class="gov-section" v-model="govActive">
+        <el-collapse-item title="政府申報資料" name="gov">
+          <el-form-item label="身分證字號">
+            <el-input v-model="form.id_number" maxlength="20" />
+          </el-form-item>
+          <el-form-item label="國籍">
+            <el-input v-model="form.nationality" maxlength="20" placeholder="本國" />
+          </el-form-item>
+          <el-form-item label="戶籍地址">
+            <el-input v-model="form.household_address" type="textarea" :rows="2" />
+          </el-form-item>
+          <el-form-item label="弱勢標記">
+            <el-switch v-model="form.is_disadvantaged" />
+          </el-form-item>
+          <el-form-item label="低收/中低收">
+            <el-select v-model="form.low_income_status" clearable placeholder="(無)">
+              <el-option label="低收入戶" value="low" />
+              <el-option label="中低收入戶" value="mid_low" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="原住民族">
+            <el-input v-model="form.indigenous_status" placeholder="阿美/泰雅/..." />
+          </el-form-item>
+          <el-form-item label="身障類型">
+            <el-select v-model="form.disability_type" clearable>
+              <el-option label="智能障礙" value="智能障礙" />
+              <el-option label="聽覺障礙" value="聽覺障礙" />
+              <el-option label="視覺障礙" value="視覺障礙" />
+              <el-option label="肢體障礙" value="肢體障礙" />
+              <el-option label="語言障礙" value="語言障礙" />
+              <el-option label="情緒行為障礙" value="情緒行為障礙" />
+              <el-option label="學習障礙" value="學習障礙" />
+              <el-option label="自閉症" value="自閉症" />
+              <el-option label="多重障礙" value="多重障礙" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="身障等級">
+            <el-select v-model="form.disability_level" clearable>
+              <el-option label="輕度" value="輕度" />
+              <el-option label="中度" value="中度" />
+              <el-option label="重度" value="重度" />
+              <el-option label="極重度" value="極重度" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="鑑定文號">
+            <el-input v-model="form.disability_cert_no" maxlength="50" />
+          </el-form-item>
+          <el-form-item label="鑑定到期日">
+            <el-date-picker
+              v-model="form.disability_cert_expiry"
+              type="date"
+              placeholder="(無則永久)"
+              value-format="YYYY-MM-DD"
+            />
+          </el-form-item>
+        </el-collapse-item>
+      </el-collapse>
     </el-form>
 
     <slot
