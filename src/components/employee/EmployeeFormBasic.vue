@@ -255,6 +255,30 @@ const classroomLabel = computed(() => {
       </el-form-item>
     </el-col>
   </el-row>
+
+  <!-- 教保身分（政府申報用） -->
+  <el-divider content-position="left">教保身分（政府申報用）</el-divider>
+  <el-form-item label="教保身分別">
+    <el-select v-model="form.staff_role_category" clearable placeholder="(未指定)" style="width: 100%">
+      <el-option label="幼教師（持幼教師證）" value="teacher_certified" />
+      <el-option label="教保員（持教保員證）" value="educare_certified" />
+      <el-option label="助理教保員" value="assistant_educare" />
+      <el-option label="行政人員" value="office" />
+      <el-option label="廚工" value="kitchen" />
+      <el-option label="司機" value="driver" />
+      <el-option label="其他" value="other" />
+    </el-select>
+  </el-form-item>
+  <el-form-item label="教師/教保員證號">
+    <el-input v-model="form.teacher_cert_no" maxlength="50" style="width: 100%" />
+  </el-form-item>
+  <el-form-item label="證號類型">
+    <el-select v-model="form.teacher_cert_type" clearable style="width: 100%">
+      <el-option label="幼教師證" value="幼教師證" />
+      <el-option label="教保員證" value="教保員證" />
+      <el-option label="助理教保員證" value="助理教保員證" />
+    </el-select>
+  </el-form-item>
 </template>
 
 <style scoped>

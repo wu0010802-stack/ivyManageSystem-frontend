@@ -117,6 +117,10 @@ const form = reactive({
   labor_insured_salary: null,
   health_insured_salary: null,
   pension_insured_salary: null,
+  // 教保身分（政府申報用）
+  staff_role_category: '',
+  teacher_cert_no: '',
+  teacher_cert_type: '',
 })
 
 // ── 編輯 dialog tab + dirty tracking ─────────────────
