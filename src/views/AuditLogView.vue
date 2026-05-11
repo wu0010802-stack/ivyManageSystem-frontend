@@ -80,6 +80,19 @@ const RISK_QUICK_FILTERS = [
       return false
     },
   },
+  {
+    key: 'login_failed',
+    label: '登入失敗',
+    entityType: 'auth',
+    predicate: (row) => row.action === 'LOGIN_FAILED',
+  },
+  {
+    key: 'login_blocked',
+    label: '登入限流/鎖定',
+    entityType: 'auth',
+    predicate: (row) =>
+      row.action === 'LOGIN_RATE_LIMITED' || row.action === 'LOGIN_LOCKED',
+  },
 ]
 
 const activeRiskFilter = ref('')
@@ -272,6 +285,18 @@ const getActionTag = (action) => {
     CREATE: { type: 'success', label: '新增' },
     UPDATE: { type: 'warning', label: '修改' },
     DELETE: { type: 'danger', label: '刪除' },
+    EXPORT: { type: 'info', label: '匯出' },
+    READ: { type: 'info', label: '查看' },
+    LOGIN_SUCCESS: { type: 'success', label: '登入成功' },
+    LOGIN_FAILED: { type: 'warning', label: '登入失敗' },
+    LOGIN_RATE_LIMITED: { type: 'danger', label: '登入被限流' },
+    LOGIN_LOCKED: { type: 'danger', label: '帳號鎖定中' },
+    LOGOUT: { type: 'info', label: '登出' },
+    TOKEN_REFRESH: { type: 'info', label: 'Token 刷新' },
+    TOKEN_REFRESH_FAILED: { type: 'warning', label: 'Token 刷新失敗' },
+    BLOCKED_CREATE: { type: 'danger', label: '拒絕新增' },
+    BLOCKED_UPDATE: { type: 'danger', label: '拒絕修改' },
+    BLOCKED_DELETE: { type: 'danger', label: '拒絕刪除' },
   }
   return map[action] || { type: 'info', label: action }
 }
