@@ -47,3 +47,19 @@ describe('govMoe API module', () => {
     })
   })
 })
+
+describe('govMoe phase 4B', () => {
+  it('createSubsidy posts to correct URL', async () => {
+    vi.resetModules()
+    vi.doMock('../../src/api/index', () => ({
+      default: { post: vi.fn().mockResolvedValue({ data: {} }) }
+    }))
+    const api = (await import('../../src/api/index')).default
+    const { createSubsidy } = await import('../../src/api/govMoe')
+    await createSubsidy({ subsidy_type: 'teacher_extra', employee_id: 1,
+                          period_start: '2026-05-01', period_end: '2026-05-31',
+                          amount_requested: '0' })
+    expect(api.post).toHaveBeenCalledWith('/gov-moe/subsidies',
+      expect.objectContaining({ subsidy_type: 'teacher_extra' }))
+  })
+})

@@ -23,3 +23,21 @@ export const generateCertificate = (studentId, payload) =>
 
 export const listCertificateHistory = (params = {}) =>
   api.get('/gov-moe/certificates/history', { params })
+
+// --- Special Subsidies (Phase 4B) ---
+export const listSubsidies = (params = {}) =>
+  api.get('/gov-moe/subsidies', { params })
+export const createSubsidy = (payload) =>
+  api.post('/gov-moe/subsidies', payload)
+export const updateSubsidy = (id, payload) =>
+  api.put(`/gov-moe/subsidies/${id}`, payload)
+export const submitSubsidy = (id) =>
+  api.put(`/gov-moe/subsidies/${id}/submit`)
+export const approveSubsidy = (id, payload) =>
+  api.put(`/gov-moe/subsidies/${id}/approve`, payload)
+export const markSubsidyPaid = (id, payload) =>
+  api.put(`/gov-moe/subsidies/${id}/mark_paid`, payload)
+export const rejectSubsidy = (id) =>
+  api.put(`/gov-moe/subsidies/${id}/reject`)
+export const exportSubsidies = (params) =>
+  api.get('/gov-moe/subsidies/export', { params, responseType: 'blob' })
