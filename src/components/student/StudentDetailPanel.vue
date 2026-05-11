@@ -21,6 +21,7 @@ import FeesTab from './tabs/FeesTab.vue'
 import ActivityTab from './tabs/ActivityTab.vue'
 import HealthGrowthTab from './tabs/HealthGrowthTab.vue'
 import CommunicationTab from './tabs/CommunicationTab.vue'
+import StudentDisabilityDocsPanel from './StudentDisabilityDocsPanel.vue'
 
 const props = defineProps({
   studentId: { type: Number, default: null },
@@ -51,6 +52,7 @@ const canHealthRead = computed(() => hasPermission('STUDENTS_HEALTH_READ'))
 const canGuardiansRead = computed(() => hasPermission('GUARDIANS_READ'))
 const canActivityRead = computed(() => hasPermission('ACTIVITY_READ'))
 const canFeesRead = computed(() => hasPermission('FEES_READ'))
+const canSpecialNeedsRead = computed(() => hasPermission('STUDENTS_SPECIAL_NEEDS_READ'))
 
 const defaultTabFor = (ctx) => (ctx === 'classroom' ? 'overview' : 'basic')
 const initialActive = props.initialTab || props.defaultTab || defaultTabFor(props.context)
@@ -72,6 +74,7 @@ const TAB_DEFS = computed(() => [
   { name: 'fees', label: '學費', show: canFeesRead.value },
   { name: 'activity', label: '才藝報名', show: canActivityRead.value },
   { name: 'health_growth', label: '健康／成長', show: canPortfolioRead.value || canHealthRead.value },
+  { name: 'disability_docs', label: '鑑定文件', show: canSpecialNeedsRead.value },
   { name: 'communication', label: '家長溝通', show: true },
 ])
 
@@ -276,6 +279,10 @@ const breadcrumbItems = computed(() => {
         />
         <HealthGrowthTab
           v-else-if="tab.name === 'health_growth'"
+          :student-id="studentId"
+        />
+        <StudentDisabilityDocsPanel
+          v-else-if="tab.name === 'disability_docs'"
           :student-id="studentId"
         />
         <CommunicationTab
