@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, computed, watch } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
   createMyLeave,
@@ -18,11 +18,10 @@ import { apiError } from '@/utils/error'
 import { useLeaveHoursCalculator } from '@/composables/useLeaveHoursCalculator'
 
 const props = defineProps({
-  visible: { type: Boolean, default: false },
   allEmployees: { type: Array, default: () => [] },
 })
 
-const emit = defineEmits(['update:visible', 'submitted'])
+const emit = defineEmits(['cancel', 'submitted'])
 
 const form = reactive({
   leave_type: '',
@@ -113,9 +112,7 @@ const resetForm = () => {
   resetCalculatorState()
 }
 
-watch(() => props.visible, (val) => {
-  if (val) resetForm()
-})
+onMounted(resetForm)
 
 const handleExceed = () => {
   ElMessage.warning(`最多上傳 5 個附件`)
@@ -189,7 +186,6 @@ const submitLeave = async () => {
     }
 
     ElMessage.success('請假申請已送出，待主管核准')
-    emit('update:visible', false)
     emit('submitted')
   } catch (error) {
     ElMessage.error(apiError(error, '提交失敗'))
@@ -200,7 +196,7 @@ const submitLeave = async () => {
 </script>
 
 <template>
-  <el-dialog :model-value="visible" title="新增請假申請" width="520px" @update:model-value="emit('update:visible', $event)">
+  <div class="portal-leave-form">
     <el-form ref="formRef" :model="form" :rules="rules" label-width="90px">
       <el-form-item label="假別" prop="leave_type">
         <el-select v-model="form.leave_type" placeholder="請選擇" style="width: 100%;">
@@ -365,14 +361,28 @@ const submitLeave = async () => {
       </el-form-item>
     </el-form>
 
-    <template #footer>
-      <el-button @click="emit('update:visible', false)">取消</el-button>
+    <div class="form-footer">
+      <el-button @click="emit('cancel')">取消</el-button>
       <el-button type="primary" :loading="submitLoading" :disabled="!canSubmit" @click="submitLeave">送出申請</el-button>
-    </template>
-  </el-dialog>
+    </div>
+  </div>
 </template>
 
 <style scoped>
+.portal-leave-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.form-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-color);
+}
+
 .upload-wrapper {
   width: 100%;
 }
