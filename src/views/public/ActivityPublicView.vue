@@ -16,6 +16,8 @@
       <symbol id="i-form" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /><path d="M9 13h6" /><path d="M9 17h6" /></symbol>
       <symbol id="i-calendar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2" /><line x1="16" x2="16" y1="2" y2="6" /><line x1="8" x2="8" y1="2" y2="6" /><line x1="3" x2="21" y1="10" y2="10" /></symbol>
       <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></symbol>
+      <symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></symbol>
+      <symbol id="i-share" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" /></symbol>
     </svg>
 
     <!-- Toast Container -->
@@ -84,6 +86,11 @@
           </button>
         </div>
         <div class="modal-body">
+          <div class="success-brand-banner" aria-hidden="true">
+            <KawaiiStar :size="22" expression="wink" decorative class="success-brand-star success-brand-star--l" />
+            <BrandMark variant="mark-only" :size="64" />
+            <KawaiiStar :size="18" expression="smile" decorative class="success-brand-star success-brand-star--r" />
+          </div>
           <p class="success-msg">{{ successModal.message }}</p>
 
           <div class="summary-block">
@@ -138,25 +145,58 @@
             </p>
             <div class="token-row">
               <span class="token-label">查詢碼</span>
-              <code class="token-value">{{ successModal.queryToken }}</code>
+              <input
+                class="token-input"
+                type="text"
+                readonly
+                :value="successModal.queryToken"
+                aria-label="報名查詢碼（唯讀，可選取複製）"
+                @focus="$event.target.select()"
+              />
               <button
                 type="button"
                 class="btn-copy"
+                aria-label="複製查詢碼"
                 @click="copyToClipboard(successModal.queryToken, '查詢碼')"
-              >複製</button>
+              >
+                <svg width="14" height="14" aria-hidden="true"><use href="#i-copy" /></svg>
+                複製
+              </button>
             </div>
             <div class="token-row">
               <span class="token-label">編修連結</span>
-              <a class="token-link" :href="successModal.editUrl" target="_blank" rel="noopener">
-                {{ successModal.editUrl }}
-              </a>
+              <input
+                class="token-input token-input--link"
+                type="url"
+                readonly
+                :value="successModal.editUrl"
+                aria-label="編修連結（唯讀，可選取複製）"
+                @focus="$event.target.select()"
+              />
               <button
                 type="button"
                 class="btn-copy"
+                aria-label="複製編修連結"
                 @click="copyToClipboard(successModal.editUrl, '連結')"
-              >複製</button>
+              >
+                <svg width="14" height="14" aria-hidden="true"><use href="#i-copy" /></svg>
+                複製
+              </button>
             </div>
-            <div v-if="successModal.copyHint" class="token-copy-hint">{{ successModal.copyHint }}</div>
+            <div v-if="canShare" class="token-share-row">
+              <button
+                type="button"
+                class="btn btn-outline btn-share"
+                @click="shareToken"
+              >
+                <svg width="16" height="16" aria-hidden="true"><use href="#i-share" /></svg>
+                分享給家人（Line / 訊息 / Email）
+              </button>
+            </div>
+            <div v-if="successModal.copyHint" class="token-copy-hint">
+              <svg width="12" height="12" aria-hidden="true"><use href="#i-check" /></svg>
+              {{ successModal.copyHint }}
+            </div>
             <p class="token-warn">⚠ 連結含個資識別碼，請勿轉傳他人。</p>
           </div>
 
@@ -250,18 +290,31 @@
 
     <div class="page-wrapper">
       <header class="page-header">
-        <div class="page-header-main">
-          <div class="page-title-line1">IVY AFTER-SCHOOL ARTS PROGRAM</div>
-          <h1 class="page-title-line2">{{ displayTitle }}</h1>
-        </div>
-        <aside class="page-header-side" aria-label="本期活動資訊">
-          <div class="badge-term">{{ displayTermLabel }}</div>
-          <div v-if="displayEventDate" class="header-meta-item">
-            <svg class="icon" width="16" height="16" aria-hidden="true"><use href="#i-calendar" /></svg>
-            <span>活動日期：{{ displayEventDate }}</span>
+        <div class="page-brand">
+          <img
+            src="/LOGO.png"
+            alt="常春藤幼兒園"
+            class="page-brand-logo"
+            width="96"
+            height="96"
+          />
+          <div class="page-brand-text">
+            <div class="page-brand-prefix">高雄市私立</div>
+            <div class="page-brand-zh">常春藤幼兒園</div>
+            <div class="page-brand-en">Ivy Kindergarten</div>
           </div>
-          <div v-if="displayAudience" class="header-meta-note">對象：{{ displayAudience }}</div>
-        </aside>
+        </div>
+        <div class="page-meta">
+          <h1 class="page-subtitle">{{ displayTitle }}</h1>
+          <div class="page-meta-row">
+            <span class="page-meta-term">{{ displayTermLabel }}</span>
+            <span v-if="displayEventDate" class="page-meta-item">
+              <svg class="icon" width="14" height="14" aria-hidden="true"><use href="#i-calendar" /></svg>
+              {{ displayEventDate }}
+            </span>
+            <span v-if="displayAudience" class="page-meta-item">對象：{{ displayAudience }}</span>
+          </div>
+        </div>
       </header>
 
       <main class="page-body">
@@ -342,6 +395,14 @@
                   <span class="form-card-header-title">{{ displayFormCardTitle }}</span>
                 </div>
                 <div class="form-card-body">
+                  <div class="form-section-step">
+                    <span class="step-num">1</span>
+                    <div class="step-title-col">
+                      <span class="step-title">寶貝資料</span>
+                      <span class="step-desc">填寫幼兒基本資訊與聯絡方式</span>
+                    </div>
+                  </div>
+
                   <div class="form-row" :class="{ 'has-error': !!errors.name }">
                     <div class="form-label-col">
                       <label class="form-label" for="studentName">
@@ -361,6 +422,7 @@
                         placeholder="請輸入幼兒姓名"
                         maxlength="100"
                         autocomplete="off"
+                        enterkeyhint="next"
                         @input="clearError('name')"
                       />
                       <div v-if="errors.name" id="studentName-err" class="form-error-hint" role="alert">{{ errors.name }}</div>
@@ -385,6 +447,7 @@
                         :max="maxBirthdayISO"
                         :aria-invalid="!!errors.birthday"
                         :aria-describedby="errors.birthday ? 'studentBirthday-err' : undefined"
+                        enterkeyhint="next"
                         @input="clearError('birthday')"
                       />
                       <div v-if="errors.birthday" id="studentBirthday-err" class="form-error-hint" role="alert">{{ errors.birthday }}</div>
@@ -411,7 +474,9 @@
                         maxlength="15"
                         autocomplete="tel"
                         inputmode="tel"
+                        enterkeyhint="next"
                         @input="clearError('parent_phone')"
+                        @blur="phoneTouched = true"
                       />
                       <div v-if="parentPhoneError" id="parentPhone-err" class="form-error-hint" role="alert">{{ parentPhoneError }}</div>
                     </div>
@@ -441,13 +506,20 @@
                     </div>
                   </div>
 
+                  <div class="form-section-step">
+                    <span class="step-num">2</span>
+                    <div class="step-title-col">
+                      <span class="step-title">選擇才藝課程</span>
+                      <span class="step-desc">可複選；剩餘名額即時顯示</span>
+                    </div>
+                  </div>
+
                   <div class="form-row" :class="{ 'has-error': !!errors.courses }">
                     <div class="form-label-col">
                       <span class="form-label">
                         <span class="required-mark">*</span>
                         才藝課班別 <span class="en">Courses</span>
                       </span>
-                      <span class="form-hint">可複選；剩餘名額即時顯示</span>
                     </div>
                     <div class="form-input-col">
                       <div
@@ -476,19 +548,35 @@
                               :checked="form.selectedCourses.includes(course.name)"
                               @change="toggleCourse(course); clearError('courses')"
                             />
-                            <span class="course-text">
-                              <span class="course-name">{{ course.name }}</span>
-                              <span class="price-tag">
-                                <template v-if="course.sessions">{{ course.sessions }}堂</template>
-                                ${{ course.price }}
+                            <span class="course-text course-text--stacked">
+                              <span class="course-row-main">
+                                <span class="course-name">{{ course.name }}</span>
+                                <span
+                                  v-if="availabilityState(course).text"
+                                  class="qty-display"
+                                  :class="availabilityState(course).cssClass"
+                                >
+                                  {{ availabilityState(course).text }}
+                                </span>
                               </span>
-                              <span v-if="course.frequency" class="rem-count">{{ course.frequency }}</span>
-                              <span
-                                v-if="availabilityState(course).text"
-                                class="qty-display"
-                                :class="availabilityState(course).cssClass"
-                              >
-                                {{ availabilityState(course).text }}
+                              <span class="course-row-meta">
+                                <span class="meta-chip meta-chip--price">
+                                  <template v-if="course.sessions">{{ course.sessions }} 堂 · </template>NT$ {{ course.price }}
+                                </span>
+                                <span v-if="formatSchedule(course)" class="meta-chip meta-chip--schedule">
+                                  <svg class="icon" width="12" height="12" aria-hidden="true"><use href="#i-calendar" /></svg>
+                                  {{ formatSchedule(course) }}
+                                </span>
+                                <span
+                                  v-for="(w, i) in courseAdvisory(course)"
+                                  :key="`${course.name}-adv-${i}`"
+                                  class="meta-chip meta-chip--advisory"
+                                  :class="`meta-chip--${w.severity}`"
+                                  role="status"
+                                >
+                                  <svg class="icon" width="12" height="12" aria-hidden="true"><use href="#i-alert" /></svg>
+                                  {{ w.message }}
+                                </span>
                               </span>
                             </span>
                           </label>
@@ -508,12 +596,21 @@
                     </div>
                   </div>
 
+                  <template v-if="supplies.length > 0">
+                    <div class="form-section-step">
+                      <span class="step-num">3</span>
+                      <div class="step-title-col">
+                        <span class="step-title">加購用品</span>
+                        <span class="step-desc">選填；學習所需材料、配件</span>
+                      </div>
+                    </div>
+                  </template>
+
                   <div v-if="supplies.length > 0" class="form-row">
                     <div class="form-label-col">
                       <span class="form-label">
                         課程加購項目 <span class="en">Supplies</span>
                       </span>
-                      <span class="form-hint">選填</span>
                     </div>
                     <div class="form-input-col">
                       <div class="dance-grid" role="group" aria-label="加購項目">
@@ -535,6 +632,71 @@
                   </div>
                 </div>
               </section>
+
+              <transition name="fee-fade">
+                <aside
+                  v-if="selectedAdvisories.length > 0"
+                  class="advisory-panel"
+                  role="status"
+                  aria-live="polite"
+                  aria-label="課程選擇提醒"
+                >
+                  <div class="advisory-panel-title">
+                    <svg class="icon" width="14" height="14" aria-hidden="true"><use href="#i-alert" /></svg>
+                    您選的課程有 {{ selectedAdvisories.length }} 項提醒
+                    <span class="advisory-panel-hint">（提醒參考用，仍可送出報名）</span>
+                  </div>
+                  <ul class="advisory-list">
+                    <li v-for="item in selectedAdvisories" :key="`adv-${item.courseName}`">
+                      <span class="advisory-course">{{ item.courseName }}</span>
+                      <span class="advisory-warnings">
+                        <span
+                          v-for="(w, i) in item.warnings"
+                          :key="`${item.courseName}-w-${i}`"
+                          class="advisory-tag"
+                          :class="`advisory-tag--${w.severity}`"
+                        >{{ w.message }}</span>
+                      </span>
+                    </li>
+                  </ul>
+                </aside>
+              </transition>
+
+              <transition name="fee-fade">
+                <aside v-if="feePreview" class="fee-preview" aria-live="polite" aria-label="費用預估">
+                  <div class="fee-preview-title">
+                    <svg class="icon" width="14" height="14" aria-hidden="true"><use href="#i-check" /></svg>
+                    費用預估
+                    <span class="fee-preview-count">
+                      <template v-if="feePreview.courseCount > 0">{{ feePreview.courseCount }} 堂課</template>
+                      <template v-if="feePreview.courseCount > 0 && feePreview.supplyCount > 0">．</template>
+                      <template v-if="feePreview.supplyCount > 0">{{ feePreview.supplyCount }} 項加購</template>
+                    </span>
+                  </div>
+                  <dl class="fee-preview-list">
+                    <div v-if="feePreview.courseCount > 0" class="fee-row">
+                      <dt>才藝課程小計</dt>
+                      <dd>NT$ {{ feePreview.coursesTotal.toLocaleString() }}</dd>
+                    </div>
+                    <div v-if="feePreview.supplyCount > 0" class="fee-row">
+                      <dt>用品加購小計</dt>
+                      <dd>NT$ {{ feePreview.suppliesTotal.toLocaleString() }}</dd>
+                    </div>
+                    <div class="fee-row fee-row-total">
+                      <dt>預估應繳合計</dt>
+                      <dd>NT$ {{ feePreview.total.toLocaleString() }}</dd>
+                    </div>
+                  </dl>
+                  <div class="fee-preview-note">
+                    <template v-if="feePreview.waitlistCount > 0">
+                      含 {{ feePreview.waitlistCount }} 堂候補課程；候補課程實際不收費，校方確認後另行通知。
+                    </template>
+                    <template v-else>
+                      * 此為估算金額，實際應繳以校方確認後通知為準。
+                    </template>
+                  </div>
+                </aside>
+              </transition>
 
               <div class="submit-bar">
                 <button
@@ -577,11 +739,14 @@ import { usePublicActivityOptions } from '@/composables/usePublicActivityOptions
 import { useActivityRegistrationTime } from '@/composables/useActivityRegistrationTime'
 import { useActivityAvailability } from '@/composables/useActivityAvailability'
 import { toggleArrayItem } from '@/utils/arrayUtils'
+import KawaiiStar from '@/components/brand/KawaiiStar.vue'
+import LaurelWreath from '@/components/brand/LaurelWreath.vue'
+import BrandMark from '@/components/brand/BrandMark.vue'
 
 const router = useRouter()
 
 const TOAST_ICONS = {
-  success: '<svg viewBox="0 0 24 24" fill="none" stroke="#15803D" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>',
+  success: '<svg viewBox="0 0 24 24" fill="none" stroke="#0D9053" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>',
   error: '<svg viewBox="0 0 24 24" fill="none" stroke="#DC2626" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>',
   warning: '<svg viewBox="0 0 24 24" fill="none" stroke="#D97706" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>',
   info: '<svg viewBox="0 0 24 24" fill="none" stroke="#1E3A8A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>',
@@ -641,9 +806,11 @@ const TW_MOBILE_RE = /^09\d{8}$/
 function normalizeMobile(raw) {
   return String(raw || '').replace(/[\s\-().]/g, '')
 }
+// 手機 onBlur 後才即時校驗，避免使用者剛開始打字就被紅字干擾
+const phoneTouched = ref(false)
 const parentPhoneError = computed(() => {
   if (errors.parent_phone) return errors.parent_phone
-  if (!form.parent_phone) return ''
+  if (!phoneTouched.value || !form.parent_phone) return ''
   return TW_MOBILE_RE.test(normalizeMobile(form.parent_phone))
     ? ''
     : '請輸入 09 開頭的 10 碼手機號碼'
@@ -714,6 +881,19 @@ function dismissToast(id) {
 }
 
 // ===== 報名時段狀態 =====
+function formatCountdown(targetMs, nowMs) {
+  const diff = targetMs - nowMs
+  if (diff <= 0) return '即將開放'
+  const totalMinutes = Math.floor(diff / 60_000)
+  const days = Math.floor(totalMinutes / 1440)
+  const hours = Math.floor((totalMinutes % 1440) / 60)
+  const minutes = totalMinutes % 60
+  if (days >= 2) return `${days} 天`
+  if (days === 1) return `1 天 ${hours} 小時`
+  if (hours >= 1) return `${hours} 小時 ${minutes} 分`
+  return `${minutes} 分鐘`
+}
+
 const noticeState = computed(() => {
   const settings = timeInfo.value || {}
   const now = new Date(nowTick.value)
@@ -724,15 +904,25 @@ const noticeState = computed(() => {
     return { variant: 'is-warning', title: '報名尚未開放', message: '目前尚未開放線上報名，請稍後再試。' }
   }
   if (openAt && now < openAt) {
-    const daysLeft = Math.ceil((openAt - now) / (1000 * 60 * 60 * 24))
     return {
       variant: 'is-warning',
       title: '報名尚未開始',
-      message: `報名開始時間：${openAt.toLocaleString('zh-TW')}，距離開放還有 ${daysLeft} 天。`,
+      message: `報名開始時間：${openAt.toLocaleString('zh-TW')}，距離開放還有 ${formatCountdown(openAt.getTime(), now.getTime())}。`,
     }
   }
   if (closeAt && now > closeAt) {
     return { variant: 'is-danger', title: '報名已截止', message: '感謝您的關注，本期報名已結束。' }
+  }
+  // 截止前 48 小時內：彈出收尾提醒（urgent close countdown）
+  if (closeAt) {
+    const diffHours = (closeAt - now) / 3_600_000
+    if (diffHours <= 48 && diffHours > 0) {
+      return {
+        variant: 'is-warning',
+        title: '報名即將截止',
+        message: `截止時間：${closeAt.toLocaleString('zh-TW')}，剩餘 ${formatCountdown(closeAt.getTime(), now.getTime())}，請儘速完成報名。`,
+      }
+    }
   }
   return null
 })
@@ -746,6 +936,120 @@ const submitButtonLabel = computed(() => {
 })
 
 const submitButtonDisabled = computed(() => submitting.value || !isRegistrationOpen.value)
+
+// ===== 即時費用預覽（學費 + 用品分項合計） =====
+// 候補課程仍計入估算（與 successModal 行為對齊：候補實際不收費，但家長對「最大金額」需有預期）
+const feePreview = computed(() => {
+  const hasSelection = form.selectedCourses.length > 0 || form.selectedSupplies.length > 0
+  if (!hasSelection) return null
+  const coursesTotal = form.selectedCourses.reduce(
+    (sum, name) => sum + priceOf(name, courses.value),
+    0,
+  )
+  const suppliesTotal = form.selectedSupplies.reduce(
+    (sum, name) => sum + priceOf(name, supplies.value),
+    0,
+  )
+  // 統計候補課程數量供文案提示
+  const waitlistCount = form.selectedCourses.reduce((n, name) => {
+    const remaining = availability.value[name]
+    return remaining !== undefined && remaining <= 0 ? n + 1 : n
+  }, 0)
+  return {
+    coursesTotal,
+    suppliesTotal,
+    total: coursesTotal + suppliesTotal,
+    courseCount: form.selectedCourses.length,
+    supplyCount: form.selectedSupplies.length,
+    waitlistCount,
+  }
+})
+
+// ===== Phase 3：適齡 + 結構化時段檢核（警告但不阻擋送出） =====
+const WEEKDAY_LABELS = ['一', '二', '三', '四', '五', '六', '日']
+
+function ageMonthsFromBirthday(birthday) {
+  if (!birthday) return null
+  const b = new Date(birthday)
+  if (Number.isNaN(b.getTime())) return null
+  const now = new Date()
+  let months = (now.getFullYear() - b.getFullYear()) * 12 + (now.getMonth() - b.getMonth())
+  if (now.getDate() < b.getDate()) months -= 1
+  return months >= 0 ? months : null
+}
+const ageInMonths = computed(() => ageMonthsFromBirthday(form.birthday))
+
+function monthsToYearLabel(m) {
+  if (m == null) return ''
+  const y = Math.floor(m / 12)
+  const mo = m % 12
+  if (y === 0) return `${mo} 個月`
+  if (mo === 0) return `${y} 歲`
+  return `${y} 歲 ${mo} 個月`
+}
+
+function hasSchedule(c) {
+  return c && c.meeting_weekday != null && !!c.meeting_start_time && !!c.meeting_end_time
+}
+
+function formatSchedule(course) {
+  if (!hasSchedule(course)) return ''
+  return `週${WEEKDAY_LABELS[course.meeting_weekday]} ${course.meeting_start_time}–${course.meeting_end_time}`
+}
+
+function schedulesOverlap(a, b) {
+  if (!hasSchedule(a) || !hasSchedule(b)) return false
+  if (a.meeting_weekday !== b.meeting_weekday) return false
+  // "HH:MM" 字串字典序與時間序一致；半開區間判定重疊
+  return a.meeting_start_time < b.meeting_end_time && b.meeting_start_time < a.meeting_end_time
+}
+
+// 對單一課程算 advisory（適齡 + 衝堂）；僅在課程被勾選時計算衝堂
+function courseAdvisory(course) {
+  const warnings = []
+  const ageMonths = ageInMonths.value
+  if (ageMonths != null) {
+    if (course.min_age_months != null && ageMonths < course.min_age_months) {
+      warnings.push({
+        kind: 'age',
+        severity: 'warn',
+        message: `建議 ${monthsToYearLabel(course.min_age_months)} 以上`,
+      })
+    } else if (course.max_age_months != null && ageMonths > course.max_age_months) {
+      warnings.push({
+        kind: 'age',
+        severity: 'warn',
+        message: `建議 ${monthsToYearLabel(course.max_age_months)} 以下`,
+      })
+    }
+  }
+  if (form.selectedCourses.includes(course.name) && hasSchedule(course)) {
+    for (const otherName of form.selectedCourses) {
+      if (otherName === course.name) continue
+      const other = courses.value.find((c) => c.name === otherName)
+      if (other && schedulesOverlap(course, other)) {
+        warnings.push({
+          kind: 'conflict',
+          severity: 'danger',
+          message: `與「${otherName}」衝堂`,
+        })
+      }
+    }
+  }
+  return warnings
+}
+
+// 已勾選課程的 advisory 匯總（用於 fee-preview 下方提醒區塊）
+const selectedAdvisories = computed(() => {
+  const items = []
+  for (const name of form.selectedCourses) {
+    const course = courses.value.find((c) => c.name === name)
+    if (!course) continue
+    const w = courseAdvisory(course)
+    if (w.length > 0) items.push({ courseName: name, warnings: w })
+  }
+  return items
+})
 
 // ===== 名額狀態（顏色語意：充足→中性綠、≤3→紅、候補→黃、額滿→灰） =====
 function availabilityState(course) {
@@ -904,6 +1208,27 @@ async function copyToClipboard(text, label) {
   }
 }
 
+// Web Share API（行動裝置：分享給配偶/長輩）
+const canShare = computed(() =>
+  typeof navigator !== 'undefined' && typeof navigator.share === 'function',
+)
+async function shareToken() {
+  if (!canShare.value) return
+  try {
+    await navigator.share({
+      title: '才藝報名查詢碼',
+      text: `查詢碼：${successModal.queryToken}\n編修連結：${successModal.editUrl}\n（請勿轉傳給校外人士，僅供家人留存）`,
+      url: successModal.editUrl,
+    })
+  } catch (err) {
+    // 使用者取消分享屬正常流程，不顯示錯誤
+    if (err && err.name !== 'AbortError') {
+      successModal.copyHint = '分享失敗，請改用複製按鈕'
+      setTimeout(() => { successModal.copyHint = '' }, 4000)
+    }
+  }
+}
+
 function closeSuccessModal() {
   successModal.visible = false
 }
@@ -1042,7 +1367,7 @@ function resetForm() {
 onMounted(async () => {
   await runInit()
   startPolling()
-  tickTimer = setInterval(() => { nowTick.value = Date.now() }, 60_000)
+  tickTimer = setInterval(() => { nowTick.value = Date.now() }, 30_000)
 })
 onUnmounted(() => {
   stopPolling()
@@ -1053,25 +1378,41 @@ onUnmounted(() => {
 <style scoped>
 /* 重置容器字型（使頁面獨立於 admin 全域樣式） */
 .public-activity-page {
-  --color-bg: #FFFBEB;
+  /* IvyKids 官方色票（reference_ivykids_brand.md） */
+  --color-bg: #FFFCE8;            /* 奶油黃 page bg */
   --color-surface: #FFFFFF;
-  --color-surface-muted: #FFF8E1;
+  --color-surface-muted: #FFF8E1; /* 暖黃 soft tint */
+  --color-surface-mint: #F5FBE6;  /* 嫩綠 soft tint */
 
-  --color-primary: #15803D;
-  --color-primary-hover: #166534;
-  --color-primary-soft: #DCFCE7;
+  --color-primary: #0D9053;       /* IvyKids 深綠主色 */
+  --color-primary-hover: #0CAF76; /* 亮綠 hover */
+  --color-primary-soft: #D4FFE7;  /* 淺綠 tint */
   --color-primary-contrast: #FFFFFF;
 
-  --color-cta: #EA580C;
-  --color-cta-hover: #C2410C;
+  /* CTA 改為品牌綠系一致；不再用橙色（移除舊 coral/sky 殘留） */
+  --color-cta: #0D9053;
+  --color-cta-hover: #0CAF76;
   --color-cta-contrast: #FFFFFF;
+
+  /* 童彩 6 色（裝飾、badge、強調） */
+  --ivy-star-yellow: #FFDE51;
+  --ivy-crown-gold: #F3C630;
+  --ivy-coral: #F3958C;
+  --ivy-rose: #F65265;
+  --ivy-purple: #9F89BD;
+  --ivy-laurel: #5AA842;
+  --ivy-green-laurel: #5AA842;    /* 與 LaurelWreath SVG 內 var 對齊 */
+  --ivy-teal: #33AAAA;            /* 藍綠次色（次要 CTA、tag） */
+
+  --color-festive: var(--ivy-crown-gold);
+  --color-festive-soft: #FFF4C8;
 
   --color-accent: #1E3A8A;
   --color-accent-soft: #E0E7FF;
 
-  --color-text: #1F2937;
-  --color-text-muted: #4B5563;
-  --color-text-subtle: #6B7280;
+  --color-text: #392A1C;          /* IvyKids 暖深咖啡（不用純黑） */
+  --color-text-muted: #5B5B5B;
+  --color-text-subtle: #8A7E6E;
 
   --color-border: #F2E6C9;
   --color-border-strong: #E8D9A8;
@@ -1081,8 +1422,8 @@ onUnmounted(() => {
   --color-danger-soft: #FEE2E2;
   --color-warning: #D97706;
   --color-warning-soft: #FEF3C7;
-  --color-success: #15803D;
-  --color-required: #E11D48;
+  --color-success: #0D9053;
+  --color-required: #F65265;      /* 童彩粉紅紅 */
 
   --font-sans: 'Noto Sans TC', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang TC', 'Microsoft JhengHei', sans-serif;
   --font-display: 'Baloo 2', 'Noto Sans TC', -apple-system, sans-serif;
@@ -1100,7 +1441,7 @@ onUnmounted(() => {
 
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --dur-fast: 150ms; --dur-base: 220ms; --dur-slow: 320ms;
-  --focus-ring: 0 0 0 3px rgba(21, 128, 61, 0.28);
+  --focus-ring: 0 0 0 3px rgba(13, 144, 83, 0.28);
 
   min-height: 100vh;
   padding: clamp(12px, 3vw, 28px);
@@ -1122,79 +1463,104 @@ onUnmounted(() => {
   max-width: 1400px;
   margin: 0 auto;
   background-color: var(--color-surface);
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-lg);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
   overflow: hidden;
 }
 
-/* Header */
+/* Header — 簡約版：LOGO + 校名 ｜ 活動標題 水平兩欄、純白底、無動畫 */
 .page-header {
-  position: relative;
-  padding: var(--space-8) var(--space-8) var(--space-6);
-  background: linear-gradient(135deg, #FEF3C7 0%, #DCFCE7 100%);
-  border-bottom: 1px solid var(--color-border);
   display: grid;
-  grid-template-columns: 1fr auto;
-  gap: var(--space-6);
+  grid-template-columns: auto 1fr;
+  gap: var(--space-8);
   align-items: center;
-}
-.page-header::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background-image:
-    radial-gradient(circle at 15% 20%, rgba(21, 128, 61, 0.08) 0, transparent 40%),
-    radial-gradient(circle at 85% 80%, rgba(234, 88, 12, 0.08) 0, transparent 40%);
-  pointer-events: none;
-}
-.page-header-main { position: relative; min-width: 0; }
-.page-title-line1 {
-  font-family: var(--font-display);
-  font-size: var(--fs-sm);
-  font-weight: 600;
-  letter-spacing: 0.18em;
-  color: var(--color-primary);
-  text-transform: uppercase;
-  margin-bottom: var(--space-2);
-}
-.page-title-line2 {
-  font-size: clamp(22px, 3.6vw, 32px);
-  font-weight: 700;
-  color: var(--color-text);
-  line-height: 1.25;
-  letter-spacing: -0.01em;
   margin: 0;
+  padding: var(--space-6) var(--space-8);
+  background: #fff;
+  border-bottom: 1px solid var(--color-border);
 }
-.page-header-side {
-  position: relative;
+.page-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  margin: 0;
+  padding-right: var(--space-8);
+  border-right: 1px solid var(--color-border);
+}
+.page-brand-logo {
+  flex-shrink: 0;
+  width: 96px;
+  height: 96px;
+  object-fit: contain;
+  user-select: none;
+}
+.page-brand-text {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
-  padding: var(--space-4) var(--space-5);
-  background-color: rgba(255, 255, 255, 0.9);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
+  min-width: 0;
+}
+.page-brand-prefix {
+  font-size: var(--fs-sm);
+  letter-spacing: 0.4em;
+  color: var(--color-text-muted);
+  margin-bottom: 2px;
+}
+.page-brand-zh {
+  font-size: clamp(22px, 3vw, 28px);
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: var(--color-text);
+  line-height: 1.15;
+}
+.page-brand-en {
+  font-size: var(--fs-sm);
+  letter-spacing: 0.08em;
+  color: var(--color-text-muted);
+  margin-top: 4px;
+}
+.page-meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.page-subtitle {
+  margin: 0;
+  font-size: clamp(20px, 3vw, 26px);
+  font-weight: 700;
+  color: var(--color-text);
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+}
+.page-meta-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-4);
   font-size: var(--fs-sm);
   color: var(--color-text-muted);
-  min-width: 220px;
 }
-.badge-term {
+.page-meta-term {
   display: inline-flex;
   align-items: center;
-  align-self: flex-start;
-  padding: 3px 10px;
+  padding: 2px 10px;
   border-radius: var(--radius-full);
-  background-color: var(--color-cta);
-  color: var(--color-cta-contrast);
-  font-weight: 700;
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-weight: 600;
   font-size: var(--fs-xs);
   letter-spacing: 0.04em;
-  margin-bottom: var(--space-2);
 }
-.header-meta-item { display: flex; align-items: center; gap: 6px; color: var(--color-text-muted); }
-.header-meta-item .icon { flex-shrink: 0; color: var(--color-primary); }
-.header-meta-note { color: var(--color-text-subtle); font-size: var(--fs-xs); margin-top: var(--space-1); }
+.page-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.page-meta-item .icon { color: var(--color-text-muted); flex-shrink: 0; }
+@keyframes starFloat {
+  0%, 100% { transform: translateY(0) rotate(-4deg); }
+  50% { transform: translateY(-6px) rotate(6deg); }
+}
 
 /* Body */
 .page-body { padding: var(--space-8); }
@@ -1248,10 +1614,9 @@ onUnmounted(() => {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   padding: var(--space-2);
-  box-shadow: var(--shadow-sm);
   overflow: hidden;
+  position: relative;
 }
-.poster-wrapper { position: relative; }
 .poster-wrapper img {
   width: 100%;
   display: block;
@@ -1280,26 +1645,21 @@ onUnmounted(() => {
   to { background-position: 100% 0, 0 0; }
 }
 .info-box {
-  background: linear-gradient(180deg, var(--color-surface-muted) 0%, var(--color-surface) 100%);
+  background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   padding: var(--space-5) var(--space-6);
-  box-shadow: var(--shadow-sm);
 }
 .info-intro {
-  color: var(--color-primary);
-  font-weight: 500;
+  color: var(--color-text);
+  font-weight: 400;
   font-size: var(--fs-base);
   line-height: 1.75;
   margin: 0 0 var(--space-4) 0;
 }
 .info-divider {
   height: 1px;
-  background: repeating-linear-gradient(to right,
-      var(--color-border-strong) 0,
-      var(--color-border-strong) 4px,
-      transparent 4px,
-      transparent 8px);
+  background: var(--color-border);
   margin: var(--space-4) 0;
   border: 0;
 }
@@ -1314,18 +1674,18 @@ onUnmounted(() => {
   color: var(--color-text-muted);
   line-height: 1.6;
 }
-.notice-list li { position: relative; padding-left: var(--space-5); }
+.notice-list li { position: relative; padding-left: var(--space-4); }
 .notice-list li::before {
   content: "";
   position: absolute;
   left: 0;
-  top: 0.6em;
-  width: 6px;
-  height: 6px;
+  top: 0.7em;
+  width: 4px;
+  height: 4px;
   border-radius: 50%;
-  background-color: var(--color-primary);
+  background-color: var(--color-text-muted);
 }
-.notice-list strong { color: var(--color-danger); font-weight: 700; }
+.notice-list strong { color: var(--color-text); font-weight: 700; }
 
 /* Right Column */
 .col-right { display: flex; flex-direction: column; gap: var(--space-4); }
@@ -1334,19 +1694,60 @@ onUnmounted(() => {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   overflow: hidden;
-  box-shadow: var(--shadow-sm);
 }
 .form-card-header {
   display: flex;
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-4) var(--space-5);
-  background: linear-gradient(135deg, var(--color-primary-soft) 0%, var(--color-surface-muted) 100%);
+  background: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
 }
-.form-card-header .icon { color: var(--color-primary); flex-shrink: 0; }
+.form-card-header .icon { color: var(--color-text-muted); flex-shrink: 0; }
 .form-card-header-title { font-weight: 700; font-size: var(--fs-md); color: var(--color-text); }
 .form-card-body { padding: var(--space-2) var(--space-5) var(--space-5); }
+
+/* 區塊段標：① 寶貝資料 / ② 選擇課程 / ③ 加購用品 */
+.form-section-step {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4) 0 var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+}
+.form-section-step:first-child { padding-top: var(--space-3); }
+.step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  background: transparent;
+  color: var(--color-primary);
+  font-weight: 700;
+  font-size: var(--fs-sm);
+  font-family: var(--font-display);
+  border: 1.5px solid var(--color-primary);
+  border-radius: var(--radius-full);
+}
+.step-title-col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.step-title {
+  font-size: var(--fs-md);
+  font-weight: 700;
+  color: var(--color-text);
+  letter-spacing: 0.01em;
+}
+.step-desc {
+  font-size: var(--fs-xs);
+  color: var(--color-text-subtle);
+  line-height: 1.4;
+}
 
 .form-row {
   display: flex;
@@ -1503,9 +1904,34 @@ onUnmounted(() => {
   border-color: #D1D5DB;
   background-color: #F3F4F6;
 }
-.course-item-disabled { opacity: 0.55; background-color: #F9FAFB; }
+/* 額滿狀態：邊框/灰底而非 opacity（保留可讀性，明確標示 disabled） */
+.course-item-disabled {
+  background-color: #F5F6F8;
+  border-style: dashed;
+  border-color: #CBD5E1;
+  position: relative;
+}
+.course-item-disabled::after {
+  content: "已額滿";
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 2px 8px;
+  background: #6B7280;
+  color: #FFFFFF;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: var(--radius-full);
+  letter-spacing: 0.05em;
+  pointer-events: none;
+}
+.course-item-disabled .course-name { color: #9CA3AF; text-decoration: line-through; text-decoration-color: rgba(156, 163, 175, 0.6); }
+.course-item-disabled .meta-chip { color: #B0B7BF; background-color: transparent; border-color: #E5E7EB; }
+.course-item-disabled .qty-display { display: none; }
+.course-item-disabled:hover { border-color: #CBD5E1; background-color: #F5F6F8; }
 .course-item-disabled .course-label { cursor: not-allowed; }
 .course-item-disabled input { cursor: not-allowed; }
+
 .course-text {
   flex: 1;
   display: flex;
@@ -1516,7 +1942,63 @@ onUnmounted(() => {
   color: var(--color-text);
   min-width: 0;
 }
-.course-name { font-weight: 500; }
+/* 課程卡（含名稱+剩餘 badge / 第二行 meta）使用直排 */
+.course-text--stacked {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 6px;
+}
+.course-row-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  width: 100%;
+}
+.course-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+}
+.course-name { font-weight: 600; font-size: var(--fs-base); line-height: 1.4; }
+.meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  border-radius: var(--radius-full);
+  font-variant-numeric: tabular-nums;
+  border: 1px solid transparent;
+  letter-spacing: 0.01em;
+}
+.meta-chip--price {
+  color: var(--color-primary);
+  background-color: var(--color-primary-soft);
+  border-color: rgba(13, 144, 83, 0.18);
+}
+.meta-chip--schedule {
+  color: var(--color-text-muted);
+  background-color: var(--color-surface-muted);
+  border-color: var(--color-border);
+}
+.meta-chip--schedule .icon { color: var(--ivy-teal); flex-shrink: 0; }
+/* Phase 3 advisory chips：適齡（warn 黃）/ 衝堂（danger 紅） */
+.meta-chip--advisory .icon { flex-shrink: 0; }
+.meta-chip--warn {
+  color: #B45309;
+  background-color: #FEF3C7;
+  border-color: rgba(217, 119, 6, 0.35);
+}
+.meta-chip--danger {
+  color: #B91C1C;
+  background-color: #FEE2E2;
+  border-color: rgba(220, 38, 38, 0.35);
+}
+/* supply-item 仍保留橫排 .price-tag */
 .price-tag {
   color: var(--color-text-subtle);
   font-size: var(--fs-sm);
@@ -1556,6 +2038,158 @@ onUnmounted(() => {
   border-radius: var(--radius-md);
 }
 
+/* 費用預估卡 */
+.fee-preview {
+  margin-top: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  background: linear-gradient(135deg, var(--color-primary-soft) 0%, var(--color-surface-mint) 100%);
+  border: 1px solid rgba(13, 144, 83, 0.30);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 4px 12px rgba(13, 144, 83, 0.08);
+}
+.fee-preview-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--color-primary);
+  margin-bottom: var(--space-3);
+}
+.fee-preview-title .icon {
+  background-color: var(--color-primary);
+  color: #FFFFFF;
+  border-radius: var(--radius-full);
+  padding: 3px;
+  width: 20px;
+  height: 20px;
+}
+.fee-preview-count {
+  margin-left: auto;
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  color: var(--color-text-muted);
+  background: rgba(255, 255, 255, 0.6);
+  padding: 2px 10px;
+  border-radius: var(--radius-full);
+}
+.fee-preview-list {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.fee-preview .fee-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: var(--fs-sm);
+  color: var(--color-text-muted);
+}
+.fee-preview .fee-row dt { margin: 0; font-weight: 500; }
+.fee-preview .fee-row dd { margin: 0; font-variant-numeric: tabular-nums; font-weight: 600; color: var(--color-text); }
+.fee-preview .fee-row-total {
+  padding-top: var(--space-3);
+  margin-top: var(--space-1);
+  border-top: 1px dashed rgba(13, 144, 83, 0.4);
+  font-size: var(--fs-md);
+}
+.fee-preview .fee-row-total dt {
+  font-weight: 700;
+  color: var(--color-primary);
+}
+.fee-preview .fee-row-total dd {
+  font-weight: 700;
+  color: var(--color-primary);
+  font-size: var(--fs-xl);
+}
+.fee-preview-note {
+  margin-top: var(--space-2);
+  font-size: var(--fs-xs);
+  color: var(--color-text-subtle);
+  line-height: 1.5;
+}
+
+.fee-fade-enter-active, .fee-fade-leave-active {
+  transition: opacity var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out);
+}
+.fee-fade-enter-from, .fee-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+/* Phase 3 課程提醒匯總卡 */
+.advisory-panel {
+  margin-top: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: linear-gradient(135deg, #FEF3C7 0%, #FFF8D6 100%);
+  border: 1px solid rgba(217, 119, 6, 0.4);
+  border-radius: var(--radius-md);
+}
+.advisory-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: #92400E;
+  margin-bottom: var(--space-2);
+}
+.advisory-panel-title .icon {
+  flex-shrink: 0;
+  color: #D97706;
+}
+.advisory-panel-hint {
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  color: var(--color-text-subtle);
+  margin-left: auto;
+}
+.advisory-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.advisory-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  font-size: var(--fs-sm);
+  color: var(--color-text);
+}
+.advisory-course {
+  font-weight: 600;
+  color: var(--color-text);
+}
+.advisory-warnings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.advisory-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  border-radius: var(--radius-full);
+  border: 1px solid transparent;
+}
+.advisory-tag--warn {
+  color: #92400E;
+  background-color: rgba(255, 255, 255, 0.7);
+  border-color: rgba(217, 119, 6, 0.4);
+}
+.advisory-tag--danger {
+  color: #B91C1C;
+  background-color: rgba(254, 226, 226, 0.95);
+  border-color: rgba(220, 38, 38, 0.4);
+}
+
 /* Buttons */
 .btn {
   display: inline-flex;
@@ -1585,15 +2219,15 @@ onUnmounted(() => {
   background-color: var(--color-cta);
   color: var(--color-cta-contrast);
   border-color: var(--color-cta);
-  box-shadow: 0 6px 16px rgba(234, 88, 12, 0.25);
+  box-shadow: 0 6px 16px rgba(13, 144, 83, 0.25);
 }
 .btn-primary:hover:not(:disabled) {
   background-color: var(--color-cta-hover);
   border-color: var(--color-cta-hover);
   transform: translateY(-1px);
-  box-shadow: 0 10px 20px rgba(234, 88, 12, 0.3);
+  box-shadow: 0 10px 20px rgba(13, 144, 83, 0.30);
 }
-.btn-primary:active:not(:disabled) { transform: translateY(0); box-shadow: 0 4px 10px rgba(234, 88, 12, 0.25); }
+.btn-primary:active:not(:disabled) { transform: translateY(0); box-shadow: 0 4px 10px rgba(13, 144, 83, 0.25); }
 .btn-primary:disabled { background-color: #D1D5DB; border-color: #D1D5DB; color: #6B7280; cursor: not-allowed; box-shadow: none; }
 .submit-bar { margin-top: var(--space-3); }
 .btn-submit { width: 100%; min-height: 56px; font-size: var(--fs-lg); }
@@ -1604,8 +2238,8 @@ onUnmounted(() => {
   border-color: var(--color-primary);
 }
 .btn-outline:hover:not(:disabled) { background-color: var(--color-primary); color: var(--color-primary-contrast); }
-.btn-outline--accent { color: var(--color-cta); border-color: var(--color-cta); }
-.btn-outline--accent:hover:not(:disabled) { background-color: var(--color-cta); color: var(--color-cta-contrast); border-color: var(--color-cta); }
+.btn-outline--accent { color: var(--ivy-teal); border-color: var(--ivy-teal); }
+.btn-outline--accent:hover:not(:disabled) { background-color: var(--ivy-teal); color: #FFFFFF; border-color: var(--ivy-teal); }
 .btn-actions-row { display: flex; gap: var(--space-3); margin-top: var(--space-3); }
 .btn-actions-row .btn { flex: 1; }
 
@@ -1729,6 +2363,21 @@ onUnmounted(() => {
 .modal-panel--video { max-width: 900px; padding: var(--space-5); }
 .modal-panel--success { max-width: 560px; }
 .modal-panel--success .modal-title { color: var(--color-success); }
+.success-brand-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-3) 0 var(--space-4);
+  margin-bottom: var(--space-2);
+  border-bottom: 1px dashed var(--color-border);
+}
+.success-brand-star {
+  flex-shrink: 0;
+  animation: starFloat 4.2s ease-in-out infinite;
+}
+.success-brand-star--l { animation-delay: -1.5s; }
+.success-brand-star--r { animation-delay: -3s; }
 .success-msg {
   margin: 0 0 var(--space-4) 0;
   padding: var(--space-3) var(--space-4);
@@ -1804,7 +2453,7 @@ onUnmounted(() => {
   color: var(--color-text);
 }
 .summary-total strong {
-  color: var(--color-cta);
+  color: var(--color-primary);
   font-size: var(--fs-xl);
   font-variant-numeric: tabular-nums;
 }
@@ -1866,8 +2515,33 @@ onUnmounted(() => {
   word-break: break-all;
   text-decoration: underline;
 }
+.token-input {
+  flex: 1;
+  min-width: 0;
+  min-height: 32px;
+  padding: 6px 10px;
+  font-family: 'SF Mono', 'JetBrains Mono', Consolas, monospace;
+  font-size: var(--fs-sm);
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-muted);
+  border-radius: var(--radius-sm);
+  font-variant-ligatures: none;
+  letter-spacing: 0.02em;
+  user-select: all;
+  -webkit-user-select: all;
+}
+.token-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(13, 144, 83, 0.2);
+}
+.token-input--link { font-size: var(--fs-xs); }
 .btn-copy {
-  padding: 4px 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
   font-size: var(--fs-xs);
   font-weight: 600;
   color: var(--color-primary-contrast);
@@ -1875,13 +2549,41 @@ onUnmounted(() => {
   border: none;
   border-radius: var(--radius-sm);
   cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+  flex-shrink: 0;
 }
 .btn-copy:hover { background: var(--color-primary-hover); }
+.btn-copy:active { transform: scale(0.96); }
+.btn-copy svg { flex-shrink: 0; }
+.token-share-row {
+  display: flex;
+  margin-top: var(--space-3);
+}
+.btn-share {
+  flex: 1;
+  min-height: 40px;
+  font-size: var(--fs-sm);
+  background: var(--color-surface);
+  color: var(--ivy-teal);
+  border-color: var(--ivy-teal);
+}
+.btn-share:hover:not(:disabled) {
+  background: var(--ivy-teal);
+  color: #FFFFFF;
+  border-color: var(--ivy-teal);
+}
 .token-copy-hint {
-  margin: var(--space-1) 0 var(--space-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin: var(--space-2) 0;
+  padding: 6px 12px;
+  background: var(--color-primary-soft);
+  border-radius: var(--radius-sm);
   font-size: var(--fs-xs);
   color: var(--color-success);
-  text-align: center;
+  font-weight: 600;
 }
 .token-warn {
   margin: var(--space-2) 0 0;
@@ -1979,10 +2681,10 @@ onUnmounted(() => {
   margin-bottom: var(--space-4);
   border-top: 1px dashed var(--color-border);
   font-size: var(--fs-sm);
-  color: var(--color-cta);
+  color: var(--ivy-teal);
   font-weight: 500;
 }
-.contact-form-intro .icon { color: var(--color-cta); }
+.contact-form-intro .icon { color: var(--ivy-teal); }
 
 .field-group { margin-bottom: var(--space-4); }
 .field-group:last-of-type { margin-bottom: var(--space-5); }
@@ -2017,16 +2719,28 @@ onUnmounted(() => {
 /* Responsive */
 @media (max-width: 900px) {
   .grid-layout { grid-template-columns: 1fr; gap: var(--space-6); }
-  .page-header { grid-template-columns: 1fr; padding: var(--space-6); }
-  .page-header-side { min-width: 0; }
+  .page-header {
+    grid-template-columns: 1fr;
+    gap: var(--space-5);
+    padding: var(--space-6);
+  }
+  .page-brand {
+    padding-right: 0;
+    padding-bottom: var(--space-5);
+    border-right: none;
+    border-bottom: 1px solid var(--color-border);
+  }
 }
 @media (max-width: 600px) {
   .public-activity-page { padding: 0; }
   .page-wrapper { border-radius: 0; box-shadow: none; }
-  .page-header { padding: var(--space-5); }
+  .page-header { padding: var(--space-5); gap: var(--space-4); }
+  .page-brand { gap: var(--space-4); padding-bottom: var(--space-4); }
+  .page-brand-logo { width: 72px; height: 72px; }
+  .page-brand-prefix { font-size: var(--fs-xs); letter-spacing: 0.3em; }
+  .page-subtitle { font-size: var(--fs-xl); }
   /* 為 sticky CTA 預留空間，避免遮擋頁尾文字 */
   .page-body { padding: var(--space-5); padding-bottom: 96px; }
-  .page-title-line2 { font-size: var(--fs-xl); }
   .form-card-body { padding: var(--space-1) var(--space-4) var(--space-4); }
   .btn-actions-row { flex-direction: column; }
   .toast-container { top: auto; bottom: 96px; right: var(--space-3); left: var(--space-3); }
@@ -2040,15 +2754,27 @@ onUnmounted(() => {
     bottom: 0;
     margin: 0;
     padding: var(--space-3) var(--space-4) calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
-    background: var(--color-surface);
-    border-top: 1px solid var(--color-border);
-    box-shadow: 0 -8px 24px rgba(17, 24, 39, 0.08);
+    background: rgba(255, 252, 232, 0.92);
+    backdrop-filter: blur(12px) saturate(1.2);
+    -webkit-backdrop-filter: blur(12px) saturate(1.2);
+    border-top: 2px solid var(--color-primary);
+    box-shadow: 0 -10px 32px rgba(13, 144, 83, 0.12);
     z-index: 50;
   }
   .btn-submit { min-height: 52px; font-size: var(--fs-md); }
 
+  /* 行動裝置 fee-preview 預留底部空間，避免被吸底 CTA 遮 */
+  .fee-preview { margin-bottom: 0; }
+
   /* 課程列：影片按鈕在小螢幕往下換行更舒服 */
   .course-item { flex-wrap: wrap; }
   .video-btn { margin: 0 var(--space-4) var(--space-3); }
+
+  /* 行動裝置課程卡 meta-chip 字級略縮 */
+  .meta-chip { padding: 2px 8px; }
+  .course-item-disabled::after { top: 6px; right: 6px; padding: 1px 6px; font-size: 9px; }
+
+  /* 行動裝置 success modal 的品牌 banner 縮小，避免擠壓內容 */
+  .success-brand-banner { padding: var(--space-2) 0 var(--space-3); }
 }
 </style>

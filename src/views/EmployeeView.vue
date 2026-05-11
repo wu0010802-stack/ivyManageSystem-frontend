@@ -110,6 +110,8 @@ const form = reactive({
   no_employment_insurance: false,
   health_exempt: false,
   skip_payroll_bonuses: false,
+  skip_payroll_transfer: false,
+  unreported_for_tax: false,
   extra_dependents_quarterly: 0,
   insurance_salary_override_reason: '',
   bypass_standard_base: false,

@@ -9,7 +9,7 @@ import { toast } from '../utils/toast'
 import ParentIcon from '../components/ParentIcon.vue'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import { useIncrementalRender } from '../composables/useIncrementalRender'
-import KawaiiStar from '../components/brand/KawaiiStar.vue'
+import KawaiiStar from '@/components/brand/KawaiiStar.vue'
 
 const router = useRouter()
 const childrenStore = useChildrenStore()
@@ -116,7 +116,7 @@ function moodInfo(m) {
         <p>{{ studentName }} 今日尚無聯絡簿</p>
       </div>
 
-      <h3 class="section-title" style="margin-top:24px;">歷史聯絡簿</h3>
+      <h3 class="section-title section-title--history">歷史聯絡簿</h3>
       <div v-if="history.length === 0" class="empty">
         <KawaiiStar :size="64" decorative />
         <p>還沒有歷史聯絡簿喔！</p>
@@ -147,18 +147,27 @@ function moodInfo(m) {
 </template>
 
 <style scoped>
-.cb { padding: 12px; }
-.section-title { font-size: 15px; color: var(--pt-text-soft); margin: 0 0 8px; }
+.cb { padding: 0; }
+.section-title {
+  font-size: 12px;
+  color: var(--pt-text-soft);
+  margin: 0 0 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.section-title--history { margin-top: 24px; }
 .hint { color: var(--pt-text-faint); text-align: center; padding: 16px 0; }
 .render-sentinel { height: 1px; }
 .card {
-  background: var(--neutral-0);
-  border-radius: 10px;
-  padding: 12px;
+  background: var(--pt-surface-card, var(--neutral-0));
+  border: 1px solid var(--pt-page-border, var(--pt-border));
+  border-radius: var(--pt-card-radius, 14px);
+  padding: 14px;
   margin-bottom: 10px;
-  box-shadow: var(--pt-elev-1);
+  box-shadow: var(--pt-shadow-card, var(--pt-elev-1));
 }
-.today-card { border: 1px solid var(--pt-border-strong); }
+.today-card { border-color: var(--pt-border-strong); }
 .row { display: flex; align-items: center; gap: 10px; }
 .emoji { font-size: 24px; flex-shrink: 0; }
 .meta { flex: 1; min-width: 0; }

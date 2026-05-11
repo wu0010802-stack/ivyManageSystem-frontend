@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
-import IvyRibbon from '@/parent/components/brand/IvyRibbon.vue'
+import IvyRibbon from '@/components/brand/IvyRibbon.vue'
 
 describe('IvyRibbon', () => {
   it('渲染 default slot 內容', () => {

@@ -7,6 +7,7 @@ import { getMonthlyAttendance } from '../api/attendance'
 import { toast } from '../utils/toast'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import PullToRefresh from '../components/PullToRefresh.vue'
+import ParentIcon from '../components/ParentIcon.vue'
 
 const childrenStore = useChildrenStore()
 const { selectedId, ensureSelected } = useChildSelection()
@@ -87,6 +88,12 @@ function nextMonth() {
   }
 }
 
+function goToday() {
+  const d = new Date()
+  year.value = d.getFullYear()
+  month.value = d.getMonth() + 1
+}
+
 const statusColor = (status) => {
   return {
     出席: { bg: 'var(--brand-primary-soft)', color: 'var(--pt-success-text)' },
@@ -115,9 +122,14 @@ async function pullRefresh() {
     <ChildSelector />
 
     <div class="month-bar">
-      <button class="nav" @click="prevMonth">‹</button>
+      <button class="nav" type="button" aria-label="上個月" @click="prevMonth">
+        <ParentIcon name="back" size="sm" />
+      </button>
       <span class="month-label">{{ year }} 年 {{ month }} 月</span>
-      <button class="nav" @click="nextMonth">›</button>
+      <button class="today-btn" type="button" @click="goToday">今天</button>
+      <button class="nav" type="button" aria-label="下個月" @click="nextMonth">
+        <ParentIcon name="chevron-right" size="sm" />
+      </button>
     </div>
 
     <div class="stats">
@@ -140,7 +152,7 @@ async function pullRefresh() {
         v-for="(cell, i) in calendarDays"
         :key="i"
         class="cell"
-        :class="{ filled: cell, has: cell?.info, selected: selected?.date === cell?.date }"
+        :class="{ filled: cell, has: cell?.info, selected: !!cell && selected?.date === cell.date }"
         :style="cell?.info ? {
           background: statusColor(cell.info.status).bg,
           color: statusColor(cell.info.status).color,
@@ -185,33 +197,53 @@ async function pullRefresh() {
 }
 .attendance-view :deep(.ptr-content) {
   position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .month-bar {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 16px;
-  background: var(--neutral-0);
-  border-radius: 12px;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--pt-surface-card, var(--neutral-0));
+  border: 1px solid var(--pt-page-border, var(--pt-border));
+  border-radius: var(--pt-card-radius, 14px);
   padding: 8px;
-  margin-bottom: 12px;
-  box-shadow: var(--pt-elev-1);
+  box-shadow: var(--pt-shadow-card, var(--pt-elev-1));
 }
 
 .month-label {
-  font-size: 16px;
-  font-weight: 600;
+  flex: 1;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 800;
   color: var(--pt-text-strong);
 }
 
 .nav {
-  width: 36px;
-  height: 36px;
+  width: 38px;
+  height: 38px;
   border: none;
-  background: transparent;
-  font-size: 20px;
+  border-radius: 12px;
+  background: var(--pt-tint-brand, var(--brand-primary-soft));
   color: var(--brand-primary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.today-btn {
+  min-height: 38px;
+  border: 1px solid var(--pt-page-border, var(--pt-border));
+  border-radius: 12px;
+  background: var(--pt-surface-raised, var(--pt-surface-card));
+  color: var(--pt-text-strong);
+  font-size: 12px;
+  font-weight: 800;
+  padding: 0 12px;
   cursor: pointer;
 }
 
@@ -221,13 +253,14 @@ async function pullRefresh() {
   flex-wrap: wrap;
   font-size: 12px;
   color: var(--pt-text-muted);
-  margin-bottom: 10px;
 }
 
 .stats span {
-  background: var(--neutral-0);
-  padding: 4px 10px;
-  border-radius: 12px;
+  background: var(--pt-surface-card, var(--neutral-0));
+  border: 1px solid var(--pt-page-border, var(--pt-border));
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-weight: 700;
 }
 
 .weekday-row {
@@ -237,19 +270,24 @@ async function pullRefresh() {
   text-align: center;
   font-size: 12px;
   color: var(--pt-text-placeholder);
-  margin-bottom: 4px;
+  padding: 0 2px;
 }
 
 .calendar {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   gap: 4px;
+  background: var(--pt-surface-card, var(--neutral-0));
+  border: 1px solid var(--pt-page-border, var(--pt-border));
+  border-radius: var(--pt-card-radius, 14px);
+  padding: 6px;
+  box-shadow: var(--pt-shadow-card, var(--pt-elev-1));
 }
 
 .cell {
   aspect-ratio: 1;
   background: transparent;
-  border-radius: 8px;
+  border-radius: 11px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -259,7 +297,7 @@ async function pullRefresh() {
 }
 
 .cell.filled {
-  background: var(--neutral-0);
+  background: var(--pt-surface-recessed, var(--pt-surface-mute));
   cursor: pointer;
 }
 
@@ -281,12 +319,12 @@ async function pullRefresh() {
 }
 
 .detail {
-  margin-top: 12px;
-  background: var(--neutral-0);
-  border-radius: 12px;
-  padding: 12px 16px;
+  background: var(--pt-surface-card, var(--neutral-0));
+  border: 1px solid var(--pt-page-border, var(--pt-border));
+  border-radius: var(--pt-card-radius, 14px);
+  padding: 14px 16px;
   font-size: 14px;
-  box-shadow: var(--pt-elev-1);
+  box-shadow: var(--pt-shadow-card, var(--pt-elev-1));
 }
 
 .detail.empty {

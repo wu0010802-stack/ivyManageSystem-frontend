@@ -12,7 +12,7 @@
  * Emits:
  *  - jump-unpaid: CTA 點擊；父層負責 scrollIntoView 到 [data-unpaid-anchor]
  */
-import LaurelWreath from '../brand/LaurelWreath.vue'
+import LaurelWreath from '@/components/brand/LaurelWreath.vue'
 
 const props = defineProps({
   unpaidTotal: { type: Number, default: 0 },
@@ -57,11 +57,12 @@ function fmt(n) { return Number(n).toLocaleString('en-US') }
   position: relative;
   overflow: hidden;
   isolation: isolate;
-  background: var(--pt-gradient-warm);
-  border: 1px solid rgba(243, 198, 48, 0.25);
-  border-radius: 18px;
+  background:
+    linear-gradient(135deg, var(--pt-tint-sun, var(--ivy-tile-yellow-bg)) 0%, var(--pt-surface-raised, #fff) 100%);
+  border: 1px solid color-mix(in srgb, var(--ivy-tile-yellow-fg) 28%, transparent);
+  border-radius: var(--pt-card-radius, 14px);
   padding: var(--space-4, 16px);
-  box-shadow: var(--pt-elev-1);
+  box-shadow: var(--pt-shadow-card, var(--pt-elev-1));
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -124,11 +125,11 @@ function fmt(n) { return Number(n).toLocaleString('en-US') }
 .fee-hero-cta {
   position: relative;
   z-index: 1;
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--pt-surface-raised, rgba(255, 255, 255, 0.9));
   color: var(--ivy-tile-yellow-fg);
-  border: 1px solid rgba(243, 198, 48, 0.4);
+  border: 1px solid color-mix(in srgb, var(--ivy-tile-yellow-fg) 28%, transparent);
   padding: 8px 14px;
-  border-radius: 99px;
+  border-radius: 999px;
   font-weight: 700;
   font-size: 13px;
   cursor: pointer;

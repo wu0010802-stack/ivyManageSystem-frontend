@@ -7,8 +7,8 @@
  *  - summary: Object（必填）
  *    { total_used: number, by_type: { sick, personal, ... }, semester_label: string }
  */
-import LaurelWreath from '../brand/LaurelWreath.vue'
-import KawaiiStar from '../brand/KawaiiStar.vue'
+import LaurelWreath from '@/components/brand/LaurelWreath.vue'
+import KawaiiStar from '@/components/brand/KawaiiStar.vue'
 
 const props = defineProps({
   summary: {
@@ -63,11 +63,12 @@ const TYPE_LABEL = {
   position: relative;
   overflow: hidden;
   isolation: isolate;
-  background: var(--pt-gradient-hero);
-  border: 1px solid rgba(90, 168, 66, 0.15);
-  border-radius: 18px;
+  background:
+    linear-gradient(135deg, var(--pt-surface-raised, #fff) 0%, var(--pt-surface-recessed, #f5fbe6) 100%);
+  border: 1px solid var(--pt-page-border, rgba(90, 168, 66, 0.15));
+  border-radius: var(--pt-card-radius, 14px);
   padding: var(--space-4, 16px) var(--space-3, 12px) var(--space-4, 16px) var(--space-4, 16px);
-  box-shadow: var(--pt-elev-1);
+  box-shadow: var(--pt-shadow-card, var(--pt-elev-1));
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
@@ -136,10 +137,10 @@ const TYPE_LABEL = {
 }
 
 .leave-hero-chip {
-  background: rgba(90, 168, 66, 0.12);
+  background: var(--pt-tint-brand, rgba(90, 168, 66, 0.12));
   color: var(--ivy-green-laurel);
   padding: 3px 10px;
-  border-radius: 99px;
+  border-radius: 999px;
   font-size: 12px;
   font-weight: 600;
 }

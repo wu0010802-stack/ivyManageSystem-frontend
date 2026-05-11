@@ -115,18 +115,18 @@ const today = todayISO()
 </template>
 
 <style scoped>
-.med-list { padding: 16px; }
-.header-row { display: flex; gap: 12px; align-items: center; justify-content: flex-end; margin-bottom: 12px; }
-.new-btn { padding: 8px 14px; background: var(--brand-primary); color: var(--neutral-0); border: none; border-radius: 6px; font-size: 14px; transition: background var(--transition-fast, 0.15s ease); }
+.med-list { padding: 0; }
+.header-row { display: flex; gap: 12px; align-items: center; justify-content: flex-end; margin-bottom: 14px; }
+.new-btn { min-height: 40px; padding: 8px 14px; background: var(--brand-primary); color: var(--neutral-0); border: none; border-radius: var(--pt-control-radius, 12px); font-size: 14px; font-weight: 800; transition: background var(--transition-fast, 0.15s ease), transform var(--transition-fast, 0.15s ease); }
 .new-btn:active { background: var(--brand-primary-hover); }
 .hint { color: var(--pt-text-placeholder); padding: 24px 0; text-align: center; }
 .cards { display: flex; flex-direction: column; gap: 10px; }
-.card { background: var(--neutral-0); border-radius: 8px; padding: 12px; border: 1px solid var(--pt-border-light); cursor: pointer; }
-.card.today { border-color: var(--brand-primary); box-shadow: 0 1px 4px rgba(255, 139, 139, 0.18); }
+.card { background: var(--pt-surface-card, var(--neutral-0)); border-radius: var(--pt-card-radius, 14px); padding: 14px; border: 1px solid var(--pt-page-border, var(--pt-border)); box-shadow: var(--pt-shadow-card, var(--pt-elev-1)); cursor: pointer; }
+.card.today { border-color: color-mix(in srgb, var(--brand-primary) 34%, var(--pt-border)); background: linear-gradient(135deg, var(--pt-tint-brand, var(--brand-primary-soft)) 0%, var(--pt-surface-card, var(--neutral-0)) 100%); }
 .card-row { display: flex; justify-content: space-between; align-items: baseline; }
 .date { color: var(--pt-text-placeholder); font-size: 13px; }
 .meta { font-size: 13px; color: var(--pt-text-muted); margin-top: 4px; }
-.tag { display: inline-block; padding: 1px 6px; margin-left: 6px; border-radius: 3px; font-size: 11px; }
+.tag { display: inline-block; padding: 2px 7px; margin-left: 6px; border-radius: 999px; font-size: 11px; font-weight: 700; }
 .tag.self { background: var(--color-warning-soft); color: var(--pt-warning-text-soft); }
 .logs { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 4px; }
 .slot { padding: 2px 8px; border-radius: 10px; font-size: 12px; background: var(--pt-surface-mute); color: var(--pt-text-muted); }

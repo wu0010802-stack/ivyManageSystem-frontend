@@ -180,7 +180,7 @@ onMounted(async () => {
 .events-view {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--pt-page-gap, 18px);
 }
 
 .empty {
@@ -190,14 +190,16 @@ onMounted(async () => {
 }
 
 .event-card {
-  background: var(--neutral-0);
-  border-radius: 12px;
-  padding: 12px 14px;
-  box-shadow: var(--pt-elev-1);
+  background: var(--pt-surface-card, var(--neutral-0));
+  border: 1px solid var(--pt-page-border, var(--pt-border));
+  border-radius: var(--pt-card-radius, 14px);
+  padding: 14px;
+  box-shadow: var(--pt-shadow-card, var(--pt-elev-1));
 }
 
 .event-card.require {
-  border-left: 3px solid var(--pt-warning-text-mid);
+  border-color: color-mix(in srgb, var(--pt-warning-text-mid) 36%, var(--pt-border));
+  background: linear-gradient(135deg, var(--pt-tint-sun, var(--color-warning-soft)) 0%, var(--pt-surface-card, var(--neutral-0)) 100%);
 }
 
 .event-row1 {
@@ -209,14 +211,15 @@ onMounted(async () => {
 .event-type {
   background: var(--color-info-soft);
   color: var(--pt-info-link);
-  padding: 1px 8px;
-  border-radius: 10px;
+  padding: 3px 9px;
+  border-radius: 999px;
   font-size: 11px;
+  font-weight: 800;
 }
 
 .event-title {
   flex: 1;
-  font-weight: 600;
+  font-weight: 800;
   color: var(--pt-text-strong);
   font-size: 15px;
 }
@@ -254,6 +257,9 @@ onMounted(async () => {
 
 .ack-actions {
   margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .ack-done {
@@ -272,21 +278,25 @@ onMounted(async () => {
 }
 
 .primary-btn {
+  min-height: 40px;
   padding: 8px 16px;
   background: var(--brand-primary);
   color: var(--neutral-0);
   border: none;
-  border-radius: 8px;
+  border-radius: var(--pt-control-radius, 12px);
   font-size: 14px;
+  font-weight: 800;
 }
 
 .secondary-btn {
+  min-height: 40px;
   padding: 8px 16px;
-  background: var(--neutral-0);
+  background: var(--pt-surface-card, var(--neutral-0));
   color: var(--pt-text-muted);
   border: 1px solid var(--pt-border-strong);
-  border-radius: 8px;
+  border-radius: var(--pt-control-radius, 12px);
   font-size: 14px;
+  font-weight: 800;
 }
 
 .ack-header {
@@ -323,7 +333,7 @@ onMounted(async () => {
 .event-summary {
   background: var(--pt-surface-thread-bg);
   padding: 10px 12px;
-  border-radius: 8px;
+  border-radius: var(--pt-control-radius, 12px);
 }
 
 .event-summary-title {
@@ -349,7 +359,7 @@ onMounted(async () => {
   width: 100%;
   padding: 8px 10px;
   border: 1px solid var(--pt-border-strong);
-  border-radius: 6px;
+  border-radius: var(--pt-control-radius, 12px);
   font-size: 14px;
 }
 

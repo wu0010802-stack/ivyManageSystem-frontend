@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
-import BrandMark from '@/parent/components/brand/BrandMark.vue'
+import BrandMark from '@/components/brand/BrandMark.vue'
 
 describe('BrandMark', () => {
   it('預設 variant=mini, size=32', () => {

@@ -19,7 +19,9 @@ const emit = defineEmits(['navigate'])
 
 <template>
   <section class="quick-section">
-    <h3 class="section-title">常用操作</h3>
+    <div class="pt-section-head">
+      <h3 class="pt-section-title">常用操作</h3>
+    </div>
     <div class="quick-grid pt-stagger">
       <button
         v-for="q in actions"
@@ -38,53 +40,47 @@ const emit = defineEmits(['navigate'])
 </template>
 
 <style scoped>
-.section-title {
-  font-size: var(--text-sm, 13px);
-  font-weight: var(--font-weight-semibold, 600);
-  color: var(--pt-text-muted);
-  margin: 0 0 8px 4px;
-  letter-spacing: 0.02em;
-}
-
 .quick-section {
   display: flex;
   flex-direction: column;
 }
 .quick-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
 }
 .quick-tile {
   background: var(--pt-surface-card);
-  border-radius: var(--radius-lg, 12px);
-  padding: 14px 6px 12px;
-  border: var(--pt-hairline);
+  border-radius: var(--pt-card-radius, 14px);
+  padding: 13px;
+  border: 1px solid var(--pt-page-border, var(--pt-border));
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 8px;
-  box-shadow: var(--pt-elev-1);
+  gap: 10px;
+  box-shadow: var(--pt-shadow-card, var(--pt-elev-1));
   cursor: pointer;
+  min-height: 68px;
+  text-align: left;
 }
 .quick-tile:active { background: var(--pt-surface-mute-soft); }
 .quick-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: var(--radius-md, 8px);
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
   background: var(--brand-primary-soft);
   color: var(--brand-primary);
 }
-.quick-icon.tint-contact     { background: var(--pt-tint-contact);     color: var(--pt-tint-contact-fg);    border: 2px solid var(--pt-tint-contact-fg); }
-.quick-icon.tint-calendar    { background: var(--pt-tint-calendar);    color: var(--pt-tint-calendar-fg);   border: 2px solid var(--pt-tint-calendar-fg); }
-.quick-icon.tint-leave       { background: var(--pt-tint-leave);       color: var(--pt-tint-leave-fg);      border: 2px solid var(--pt-tint-leave-fg); }
-.quick-icon.tint-medication  { background: var(--pt-tint-medication);  color: var(--pt-tint-medication-fg); border: 2px solid var(--pt-tint-medication-fg); }
+.quick-icon.tint-contact     { background: var(--pt-tint-contact);     color: var(--pt-tint-contact-fg);    border: 1px solid color-mix(in srgb, var(--pt-tint-contact-fg) 34%, transparent); }
+.quick-icon.tint-calendar    { background: var(--pt-tint-calendar);    color: var(--pt-tint-calendar-fg);   border: 1px solid color-mix(in srgb, var(--pt-tint-calendar-fg) 34%, transparent); }
+.quick-icon.tint-leave       { background: var(--pt-tint-leave);       color: var(--pt-tint-leave-fg);      border: 1px solid color-mix(in srgb, var(--pt-tint-leave-fg) 34%, transparent); }
+.quick-icon.tint-medication  { background: var(--pt-tint-medication);  color: var(--pt-tint-medication-fg); border: 1px solid color-mix(in srgb, var(--pt-tint-medication-fg) 34%, transparent); }
 .quick-label {
-  font-size: var(--text-xs, 12px);
-  color: var(--pt-text-muted);
-  font-weight: var(--font-weight-medium, 500);
+  font-size: var(--text-base, 14px);
+  color: var(--pt-text-strong);
+  font-weight: 800;
 }
 </style>

@@ -46,10 +46,11 @@ defineProps({
 }
 
 .course-card {
-  background: var(--neutral-0);
-  border-radius: 12px;
-  padding: 12px 14px;
-  box-shadow: var(--pt-elev-1);
+  background: var(--pt-surface-card, var(--neutral-0));
+  border: 1px solid var(--pt-page-border, var(--pt-border));
+  border-radius: var(--pt-card-radius, 14px);
+  padding: 14px;
+  box-shadow: var(--pt-shadow-card, var(--pt-elev-1));
 }
 
 .course-card-row1 {
@@ -59,13 +60,13 @@ defineProps({
 }
 
 .course-card-name {
-  font-weight: 600;
+  font-weight: 800;
   color: var(--pt-text-strong);
 }
 
 .course-card-price {
   color: var(--brand-primary);
-  font-weight: 600;
+  font-weight: 800;
 }
 
 .course-card-row2 {
@@ -79,9 +80,10 @@ defineProps({
 }
 
 .enroll-tag {
-  padding: 1px 8px;
-  border-radius: 10px;
+  padding: 3px 9px;
+  border-radius: 999px;
   font-size: 11px;
+  font-weight: 800;
   margin-left: auto;
 }
 .enroll-tag.open { background: var(--pt-tint-calendar); color: var(--pt-tint-calendar-fg); }

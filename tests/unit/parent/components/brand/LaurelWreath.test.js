@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
-import LaurelWreath from '@/parent/components/brand/LaurelWreath.vue'
+import LaurelWreath from '@/components/brand/LaurelWreath.vue'
 
 describe('LaurelWreath', () => {
   it('預設 side=full 渲染兩側葉子', () => {

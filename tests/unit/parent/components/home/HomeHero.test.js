@@ -14,20 +14,20 @@ describe('HomeHero', () => {
     expect(wrapper.text()).toMatch(/早安|午安|晚安|下午好|夜深了/)
   })
 
-  it('childrenCount=0 不顯示子女 meta', () => {
+  it('childrenCount=0 不顯示寶貝數量 pill', () => {
     const wrapper = mount(HomeHero, {
       props: { parentName: 'X', childrenCount: 0 },
       global: { stubs },
     })
-    expect(wrapper.find('.hero-subtitle').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('位寶貝')
   })
 
-  it('childrenCount>0 顯示「您今天有 N 位寶貝」', () => {
+  it('childrenCount>0 顯示 N 位寶貝', () => {
     const wrapper = mount(HomeHero, {
       props: { parentName: 'X', childrenCount: 3 },
       global: { stubs },
     })
-    expect(wrapper.text()).toContain('您今天有 3 位寶貝')
+    expect(wrapper.text()).toContain('3 位寶貝')
   })
 
   it('parentName 缺失時 fallback 「家長」', () => {

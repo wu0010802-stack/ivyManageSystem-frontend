@@ -139,7 +139,7 @@ async function pullRefresh() {
 .announcements-view :deep(.ptr-content) {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 .empty,
@@ -152,16 +152,17 @@ async function pullRefresh() {
 .render-sentinel { height: 1px; }
 
 .ann-card {
-  background: var(--neutral-0);
-  border-radius: 12px;
-  padding: 12px 14px;
+  background: var(--pt-surface-card, var(--neutral-0));
+  border: 1px solid var(--pt-page-border, var(--pt-border));
+  border-radius: var(--pt-card-radius, 14px);
+  padding: 14px;
   cursor: pointer;
-  box-shadow: var(--pt-elev-1);
+  box-shadow: var(--pt-shadow-card, var(--pt-elev-1));
 }
 
 .ann-card.unread {
-  border-left: 3px solid var(--brand-primary);
-  background: var(--brand-primary-tint);
+  border-color: color-mix(in srgb, var(--brand-primary) 38%, var(--pt-border));
+  background: linear-gradient(135deg, var(--pt-tint-brand, var(--brand-primary-tint)) 0%, var(--pt-surface-card, var(--neutral-0)) 100%);
 }
 
 .ann-row {
@@ -171,15 +172,16 @@ async function pullRefresh() {
 }
 
 .priority-tag {
-  padding: 2px 8px;
-  border-radius: 10px;
+  padding: 3px 9px;
+  border-radius: 999px;
   font-size: 11px;
+  font-weight: 800;
   white-space: nowrap;
 }
 
 .title {
   flex: 1;
-  font-weight: 600;
+  font-weight: 800;
   color: var(--pt-text-strong);
   font-size: 15px;
   overflow: hidden;

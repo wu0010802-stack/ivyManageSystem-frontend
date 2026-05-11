@@ -60,14 +60,10 @@ html, body, #app {
   height: 100%;
 }
 
-/* Sunny Skyline 底色：sky 漸層 + 右下 sun radial。
-   寫在 body 而非 #app，避免 PullToRefresh 容器把背景遮住；
-   #app 自身保持透明承接此漸層。 */
+/* Family OS 底色：使用線性 sky → cream 鋪底，不放裝飾 blob，讓卡片與功能區自己成為焦點。 */
 body {
   background:
-    radial-gradient(ellipse 800px 500px at 100% 100%, var(--ivy-tile-yellow-bg, #fff8d8) 0%, transparent 70%),
-    radial-gradient(ellipse 1200px 600px at 50% -200px, var(--ivy-leaf-bg, #f5fbe6) 0%, transparent 60%),
-    var(--pt-surface-app, #fffce8);
+    linear-gradient(180deg, var(--pt-surface-skyline, #edf8f5) 0%, var(--pt-surface-app, #fffce8) 46%, var(--pt-surface-app, #fffce8) 100%);
   background-attachment: fixed;
   /* 阻擋 Android Chrome 原生下拉刷新 — 已交給 PullToRefresh 元件處理。
      設在實際捲動容器（body）才生效，設在 .ptr-root 上是無效的。 */
@@ -93,7 +89,7 @@ body {
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--pt-font-display, 'Outfit', 'Noto Sans TC', sans-serif);
   font-weight: 700;
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
 }
 
 /* ============================================================
@@ -109,13 +105,13 @@ h1, h2, h3, h4, h5, h6 {
 .parent-fade-enter-active,
 .parent-slide-forward-enter-active,
 .parent-slide-back-enter-active {
-  transition: opacity 160ms ease-out, transform 160ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition: opacity 180ms ease-out, transform 180ms var(--pt-ease-out, cubic-bezier(0.22, 1, 0.36, 1));
 }
 
 .parent-fade-leave-active,
 .parent-slide-forward-leave-active,
 .parent-slide-back-leave-active {
-  transition: opacity 140ms ease-in, transform 140ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition: opacity 120ms ease-in, transform 120ms ease-in;
 }
 
 /* fade */

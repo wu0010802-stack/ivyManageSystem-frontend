@@ -234,6 +234,37 @@
   --ivy-tile-purple-bg:  #efe5f5;  --ivy-tile-purple-fg:  #6e3f94;
   --ivy-tile-green-bg:   #e8f5e3;  --ivy-tile-green-fg:   #1b5e20;
   --ivy-tile-teal-bg:    #d3ecec;  --ivy-tile-teal-fg:    #145555;
+
+  /* ============================================================
+   * Parent App v3：Family OS 版面與元件基調
+   * 目標：把 LIFF 內的「一張張功能卡」整理成清楚的日常工作台。
+   * ============================================================ */
+  --pt-app-max-width: 560px;
+  --pt-page-gutter: clamp(16px, 4vw, 24px);
+  --pt-page-gap: 18px;
+  --pt-card-radius: 14px;
+  --pt-control-radius: 12px;
+  --pt-dock-radius: 20px;
+  --pt-surface-toolbar: rgba(255, 252, 232, 0.98);
+  --pt-surface-dock: rgba(255, 255, 255, 0.98);
+  --pt-surface-raised: #ffffff;
+  --pt-surface-recessed: #f5fbe6;
+  --pt-surface-skyline: #edf8f5;
+  --pt-page-border: rgba(20, 85, 85, 0.12);
+  --pt-shadow-card:
+    0 1px 0 rgba(255, 255, 255, 0.92) inset,
+    0 10px 28px rgba(27, 68, 89, 0.08);
+  --pt-shadow-dock:
+    0 1px 0 rgba(255, 255, 255, 0.94) inset,
+    0 -10px 36px rgba(27, 68, 89, 0.12);
+  --pt-shadow-press:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 8px 18px rgba(27, 68, 89, 0.08);
+  --pt-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --pt-tint-brand: rgba(13, 144, 83, 0.10);
+  --pt-tint-brand-strong: rgba(13, 144, 83, 0.16);
+  --pt-tint-sun: rgba(255, 222, 81, 0.28);
+  --pt-tint-coral: rgba(255, 139, 139, 0.16);
 }
 
 /* ============================================================
@@ -350,6 +381,20 @@
   --ivy-tile-purple-bg:  rgba(159, 137, 189, 0.18); --ivy-tile-purple-fg:  #b8a3d4;
   --ivy-tile-green-bg:   rgba(90, 168, 66, 0.18);   --ivy-tile-green-fg:   #8bc34a;
   --ivy-tile-teal-bg:    rgba(77, 196, 196, 0.18);  --ivy-tile-teal-fg:    #4dc4c4;
+
+  --pt-surface-toolbar: rgba(31, 28, 20, 0.98);
+  --pt-surface-dock: rgba(27, 44, 58, 0.98);
+  --pt-surface-raised: #1B2C3A;
+  --pt-surface-recessed: #1a2418;
+  --pt-surface-skyline: #132736;
+  --pt-page-border: rgba(255, 255, 255, 0.08);
+  --pt-shadow-card: 0 10px 28px rgba(0, 0, 0, 0.28);
+  --pt-shadow-dock: 0 -10px 36px rgba(0, 0, 0, 0.32);
+  --pt-shadow-press: 0 8px 18px rgba(0, 0, 0, 0.24);
+  --pt-tint-brand: rgba(90, 168, 66, 0.16);
+  --pt-tint-brand-strong: rgba(90, 168, 66, 0.24);
+  --pt-tint-sun: rgba(255, 230, 109, 0.16);
+  --pt-tint-coral: rgba(255, 154, 144, 0.18);
 }
 
 /* ========== Focus Visible ==========
@@ -467,25 +512,63 @@ button {
  */
 .pt-card {
   background: var(--pt-surface-card, var(--neutral-0));
-  border-radius: var(--radius-lg, 12px);
-  box-shadow: var(--pt-elev-1);
+  border-radius: var(--pt-card-radius, 14px);
+  box-shadow: var(--pt-shadow-card, var(--pt-elev-1));
   border: var(--pt-hairline);
 }
 
 .pt-card-elevated {
   background: var(--pt-surface-card, var(--neutral-0));
-  border-radius: var(--radius-xl, 16px);
-  box-shadow: var(--pt-elev-2);
+  border-radius: var(--pt-card-radius, 14px);
+  box-shadow: var(--pt-shadow-card, var(--pt-elev-2));
   border: var(--pt-hairline);
 }
 
 /* ========== Section title（首頁/More 統一）========== */
 .pt-section-title {
-  font-size: var(--text-sm, 13px);
-  font-weight: var(--font-weight-semibold, 600);
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--pt-text-soft);
+  margin: 0 0 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.pt-page-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pt-page-gap, 18px);
+}
+
+.pt-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 2px 10px;
+}
+
+.pt-section-head .pt-section-title {
+  margin: 0;
+}
+
+.pt-muted-note {
   color: var(--pt-text-muted);
-  margin: 0 0 var(--space-2, 8px) var(--space-1, 4px);
-  letter-spacing: 0.02em;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.pt-icon-tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: var(--pt-control-radius, 12px);
+  background: var(--brand-primary-soft);
+  color: var(--brand-primary);
+  border: 1px solid var(--pt-page-border);
+  flex-shrink: 0;
 }
 
 /* ========== Shimmer（Skeleton Loading）==========

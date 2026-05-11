@@ -12,8 +12,8 @@
  *     形狀 { childName: string, label: string }；為 null 時隱藏該行（目前後端尚未提供）
  */
 import { computed } from 'vue'
-import LaurelWreath from '../brand/LaurelWreath.vue'
-import KawaiiStar from '../brand/KawaiiStar.vue'
+import LaurelWreath from '@/components/brand/LaurelWreath.vue'
+import KawaiiStar from '@/components/brand/KawaiiStar.vue'
 
 const props = defineProps({
   parentName: { type: String, default: '家長' },
@@ -38,18 +38,21 @@ const todayLabel = computed(() => {
 </script>
 
 <template>
-  <section class="home-hero" aria-label="今日問候">
-    <LaurelWreath side="left" :opacity="0.18" :size="80" class="hero-laurel" />
-    <KawaiiStar :size="40" decorative class="hero-star" />
+  <section class="home-hero" aria-label="今日總覽">
+    <LaurelWreath side="left" :opacity="0.12" :size="96" class="hero-laurel" />
+    <KawaiiStar :size="34" decorative class="hero-star" />
 
     <div class="home-hero-content">
       <div class="hero-date">{{ todayLabel }}</div>
       <h1 class="hero-greeting">
         {{ greeting }}，<span class="hero-name">{{ parentName || '家長' }}</span>
       </h1>
-      <p v-if="childrenCount > 0" class="hero-subtitle">
-        您今天有 {{ childrenCount }} 位寶貝
-      </p>
+      <div class="hero-summary">
+        <span v-if="childrenCount > 0" class="hero-pill">
+          {{ childrenCount }} 位寶貝
+        </span>
+        <span class="hero-pill hero-pill--soft">常春藤家長端</span>
+      </div>
       <div v-if="dailyStar" class="hero-daily-star">
         <KawaiiStar :size="14" decorative class="daily-star-icon" />
         今日 {{ dailyStar.childName }} 是「{{ dailyStar.label }}」
@@ -61,25 +64,25 @@ const todayLabel = computed(() => {
 <style scoped>
 .home-hero {
   position: relative;
-  margin: 0 var(--space-3, 12px);
-  padding: var(--space-4, 16px) var(--space-3, 12px) var(--space-4, 16px) var(--space-4, 16px);
-  background: var(--pt-gradient-hero);
-  border: 1px solid rgba(90, 168, 66, 0.15);
-  border-radius: 18px;
-  box-shadow: var(--pt-elev-1);
+  padding: 22px 18px 20px;
+  background:
+    linear-gradient(135deg, var(--pt-surface-raised, #fff) 0%, var(--pt-surface-recessed, #f5fbe6) 100%);
+  border: 1px solid var(--pt-page-border, rgba(90, 168, 66, 0.15));
+  border-radius: var(--pt-card-radius, 14px);
+  box-shadow: var(--pt-shadow-card, var(--pt-elev-1));
   overflow: hidden;
   isolation: isolate;
 }
 .hero-laurel {
   position: absolute;
-  left: -10px;
-  top: 4px;
+  left: -20px;
+  bottom: -12px;
   z-index: 0;
 }
 .hero-star {
   position: absolute;
-  right: var(--space-3, 12px);
-  top: 10px;
+  right: 16px;
+  top: 14px;
   z-index: 0;
 }
 .home-hero-content {
@@ -87,35 +90,56 @@ const todayLabel = computed(() => {
   z-index: 1;
 }
 .hero-date {
-  font-size: 11px;
-  color: var(--ivy-green-laurel, #5aa842);
-  font-weight: 700;
-  letter-spacing: 1px;
+  font-size: 12px;
+  color: var(--brand-primary);
+  font-weight: 800;
+  letter-spacing: 0.04em;
 }
 .hero-greeting {
-  font-size: 22px;
+  font-size: var(--text-3xl, 24px);
   font-weight: 900;
-  line-height: 1.2;
-  margin: 4px 0 0;
+  line-height: 1.12;
+  margin: 8px 42px 0 0;
   color: var(--pt-text-strong);
 }
 .hero-name {
   color: var(--brand-primary);
 }
-.hero-subtitle {
+.hero-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+.hero-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: var(--pt-tint-brand, var(--brand-primary-soft));
+  color: var(--brand-primary);
   font-size: 12px;
-  color: var(--pt-text-muted);
-  margin: 6px 0 0;
-  font-weight: 500;
+  font-weight: 800;
+}
+.hero-pill--soft {
+  background: var(--pt-tint-sun, var(--ivy-tile-yellow-bg));
+  color: var(--ivy-tile-yellow-fg);
 }
 .hero-daily-star {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  margin-top: 6px;
-  font-size: 11px;
+  margin-top: 10px;
+  font-size: 12px;
   color: var(--ivy-tile-yellow-fg);
   font-weight: 700;
 }
 .daily-star-icon { vertical-align: middle; }
+
+@media (min-width: 420px) {
+  .hero-greeting {
+    font-size: var(--text-4xl, 30px);
+  }
+}
 </style>

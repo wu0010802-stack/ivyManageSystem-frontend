@@ -90,6 +90,73 @@
         <el-form-item label="說明">
           <el-input v-model="form.description" type="textarea" :rows="2" />
         </el-form-item>
+
+        <el-divider content-position="left">
+          <span style="font-size: 12px; color: #6b7280;">
+            適齡 / 上課時段（公開報名頁顯示用；空白＝不限制）
+          </span>
+        </el-divider>
+        <el-form-item label="建議月齡">
+          <div style="display: flex; gap: 8px; align-items: center; width: 100%;">
+            <el-input-number
+              v-model="form.min_age_months"
+              :min="0"
+              :max="240"
+              :step="6"
+              :precision="0"
+              placeholder="最小"
+              controls-position="right"
+              style="flex: 1;"
+            />
+            <span style="color: #9ca3af;">~</span>
+            <el-input-number
+              v-model="form.max_age_months"
+              :min="0"
+              :max="240"
+              :step="6"
+              :precision="0"
+              placeholder="最大"
+              controls-position="right"
+              style="flex: 1;"
+            />
+            <span style="color: #6b7280; font-size: 12px; flex-shrink: 0;">月齡</span>
+          </div>
+        </el-form-item>
+        <el-form-item label="上課星期">
+          <el-select
+            v-model="form.meeting_weekday"
+            placeholder="選擇上課星期"
+            clearable
+            style="width: 100%;"
+          >
+            <el-option :value="0" label="週一" />
+            <el-option :value="1" label="週二" />
+            <el-option :value="2" label="週三" />
+            <el-option :value="3" label="週四" />
+            <el-option :value="4" label="週五" />
+            <el-option :value="5" label="週六" />
+            <el-option :value="6" label="週日" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="上課時間">
+          <div style="display: flex; gap: 8px; align-items: center; width: 100%;">
+            <el-time-picker
+              v-model="form.meeting_start_time"
+              value-format="HH:mm"
+              format="HH:mm"
+              placeholder="起始"
+              style="flex: 1;"
+            />
+            <span style="color: #9ca3af;">~</span>
+            <el-time-picker
+              v-model="form.meeting_end_time"
+              value-format="HH:mm"
+              format="HH:mm"
+              placeholder="結束"
+              style="flex: 1;"
+            />
+          </div>
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
@@ -197,6 +264,12 @@ const defaultForm = () => ({
   allow_waitlist: true,
   video_url: '',
   description: '',
+  // Phase 3：適齡 + 結構化時段（給家長公開頁前台 advisory 用；nullable 表示不限）
+  min_age_months: null,
+  max_age_months: null,
+  meeting_weekday: null,
+  meeting_start_time: '',
+  meeting_end_time: '',
 })
 const form = ref(defaultForm())
 
@@ -320,6 +393,11 @@ function openEdit(row) {
     allow_waitlist: row.allow_waitlist,
     video_url: row.video_url || '',
     description: row.description || '',
+    min_age_months: row.min_age_months ?? null,
+    max_age_months: row.max_age_months ?? null,
+    meeting_weekday: row.meeting_weekday ?? null,
+    meeting_start_time: row.meeting_start_time || '',
+    meeting_end_time: row.meeting_end_time || '',
   }
   dialogVisible.value = true
 }
@@ -328,13 +406,27 @@ async function handleSave() {
   if (!form.value.name || form.value.price == null) {
     return ElMessage.warning('請填寫課程名稱和價格')
   }
+  // Phase 3 前端驗證：與後端 Pydantic validator 同步
+  const f = form.value
+  if (f.min_age_months != null && f.max_age_months != null && f.min_age_months > f.max_age_months) {
+    return ElMessage.warning('最小月齡不可大於最大月齡')
+  }
+  if (f.meeting_start_time && f.meeting_end_time && f.meeting_start_time >= f.meeting_end_time) {
+    return ElMessage.warning('上課起始時刻必須早於結束時刻')
+  }
+  // 後端期望 time field 為 "HH:MM" 字串或 null
+  const payload = {
+    ...f,
+    meeting_start_time: f.meeting_start_time || null,
+    meeting_end_time: f.meeting_end_time || null,
+  }
   saving.value = true
   try {
     if (editingId.value) {
-      await updateCourse(editingId.value, form.value)
+      await updateCourse(editingId.value, payload)
       ElMessage.success('課程更新成功')
     } else {
-      await createCourse(form.value)
+      await createCourse(payload)
       ElMessage.success('課程新增成功')
     }
     dialogVisible.value = false

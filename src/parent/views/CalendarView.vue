@@ -126,23 +126,32 @@ onMounted(fetchData)
 .cal-view {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--pt-page-gap, 18px);
 }
 .header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
+  background: var(--pt-surface-card, var(--neutral-0));
+  border: 1px solid var(--pt-page-border, var(--pt-border));
+  border-radius: var(--pt-card-radius, 14px);
+  padding: 12px 14px;
+  box-shadow: var(--pt-shadow-card, var(--pt-elev-1));
 }
 .title {
   font-size: 16px;
-  font-weight: 600;
+  font-weight: 800;
   color: var(--pt-text-strong);
 }
 .days-select {
-  padding: 4px 8px;
+  min-height: 36px;
+  padding: 4px 10px;
   font-size: 13px;
   border: 1px solid var(--pt-border-strong);
-  border-radius: 6px;
+  border-radius: var(--pt-control-radius, 12px);
+  background: var(--pt-surface-raised, var(--pt-surface-card));
+  color: var(--pt-text-strong);
 }
 .state {
   text-align: center;
@@ -150,16 +159,18 @@ onMounted(fetchData)
   color: var(--pt-text-placeholder);
 }
 .day-block {
-  background: var(--neutral-0);
-  border-radius: 12px;
+  background: var(--pt-surface-card, var(--neutral-0));
+  border: 1px solid var(--pt-page-border, var(--pt-border));
+  border-radius: var(--pt-card-radius, 14px);
   padding: 8px 0 4px;
-  box-shadow: var(--pt-elev-1);
+  box-shadow: var(--pt-shadow-card, var(--pt-elev-1));
 }
 .day-head {
   padding: 8px 14px;
   font-size: 12px;
-  color: var(--pt-text-placeholder);
-  font-weight: 600;
+  color: var(--pt-text-soft);
+  font-weight: 800;
+  letter-spacing: 0.02em;
 }
 .item {
   display: flex;

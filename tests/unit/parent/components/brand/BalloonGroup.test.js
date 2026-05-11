@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
-import BalloonGroup from '@/parent/components/brand/BalloonGroup.vue'
+import BalloonGroup from '@/components/brand/BalloonGroup.vue'
 
 describe('BalloonGroup', () => {
   it('預設 count=3', () => {
