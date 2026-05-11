@@ -28,6 +28,14 @@ export const manualAdjustSalary = (recordId, payload, version) => {
 
 export const getHistory = (params) => api.get('/salaries/history', { params })
 
+// 銀行轉帳名冊匯出（xlsx）
+// type: 'base' | 'festival' | 'surplus' | 'art_teacher'
+export const exportTransferRoster = (year, month, type) =>
+  api.get(`/salaries/${year}/${month}/transfer-roster`, {
+    params: { type },
+    responseType: 'blob',
+  })
+
 export const simulateSalary = (payload) => api.post('/salaries/simulate', payload)
 
 export const getSalaryLogic = () => api.get('/salaries/logic')

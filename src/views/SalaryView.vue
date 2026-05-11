@@ -2,8 +2,11 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { calculate, getFestivalBonus, getRecords, getSalaryFieldBreakdown, manualAdjustSalary, getFestivalBonusPeriodAccrual } from '@/api/salary'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search, InfoFilled, SuccessFilled, Picture, Edit } from '@element-plus/icons-vue'
+import { Search, InfoFilled, SuccessFilled, Picture, Edit, Download } from '@element-plus/icons-vue'
 import BonusConfigPanel from './salary/BonusConfigPanel.vue'
+import DisciplinaryPanel from './salary/DisciplinaryPanel.vue'
+import ArtTeacherPayrollPanel from './salary/ArtTeacherPayrollPanel.vue'
+import SystemSettingsPanel from './salary/SystemSettingsPanel.vue'
 import SalaryHistoryPanel from './salary/SalaryHistoryPanel.vue'
 import SalarySimulatePanel from './salary/SalarySimulatePanel.vue'
 import SalaryLogicPanel from './salary/SalaryLogicPanel.vue'
@@ -361,6 +364,22 @@ const exportAllPdf = () => {
   downloadFile(`/salaries/export-all?year=${query.year}&month=${query.month}&format=pdf`, `${query.year}年${query.month}月薪資總表.pdf`)
 }
 
+const ROSTER_TYPE_LABELS = {
+  base: '薪資本薪',
+  festival: '節慶獎金',
+  surplus: '超額獎金',
+  art_teacher: '才藝老師',
+}
+
+const exportTransferRoster = (type) => {
+  const label = ROSTER_TYPE_LABELS[type] || type
+  const filename = `${query.year}年${String(query.month).padStart(2, '0')}月_${label}轉帳名冊.xlsx`
+  downloadFile(
+    `/salaries/${query.year}/${query.month}/transfer-roster?type=${type}`,
+    filename,
+  )
+}
+
 const pct = (val) => {
   if (!val && val !== 0) return '0.0%'
   return (val * 100).toFixed(1) + '%'
@@ -415,6 +434,19 @@ onMounted(() => {
             <el-button type="primary" :loading="bonusLoading" @click="fetchFestivalBonus">節慶獎金明細</el-button>
             <el-button v-if="salaryRecords.length > 0" type="warning" @click="exportAllExcel">匯出全部 Excel</el-button>
             <el-button v-if="salaryRecords.length > 0" type="danger" @click="exportAllPdf">匯出全部 PDF</el-button>
+            <el-dropdown v-if="salaryRecords.length > 0" trigger="click" @command="exportTransferRoster">
+              <el-button type="info" :icon="Download">
+                匯出轉帳名冊<el-icon class="el-icon--right"><InfoFilled /></el-icon>
+              </el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="base">薪資本薪</el-dropdown-item>
+                  <el-dropdown-item command="festival">節慶獎金</el-dropdown-item>
+                  <el-dropdown-item command="surplus">超額獎金</el-dropdown-item>
+                  <el-dropdown-item command="art_teacher">才藝老師</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
             <el-tooltip content="查看該月快照（月底自動／封存／手動補拍）" placement="top">
               <el-button :icon="Picture" @click="showSnapshotDialog = true">月底快照</el-button>
             </el-tooltip>
@@ -617,6 +649,21 @@ onMounted(() => {
       <!-- 薪資設定 -->
       <el-tab-pane v-if="canReadSalarySettings" label="薪資設定" name="bonus">
         <BonusConfigPanel v-if="activeTab === 'bonus'" />
+      </el-tab-pane>
+
+      <!-- 懲處記錄 -->
+      <el-tab-pane label="懲處記錄" name="disciplinary">
+        <DisciplinaryPanel v-if="activeTab === 'disciplinary'" />
+      </el-tab-pane>
+
+      <!-- 才藝老師薪資 -->
+      <el-tab-pane label="才藝老師薪資" name="art_teacher">
+        <ArtTeacherPayrollPanel v-if="activeTab === 'art_teacher'" />
+      </el-tab-pane>
+
+      <!-- 系統設定（公司付款帳號等） -->
+      <el-tab-pane label="系統設定" name="system_settings">
+        <SystemSettingsPanel v-if="activeTab === 'system_settings'" />
       </el-tab-pane>
 
       <!-- 薪資歷史 -->
