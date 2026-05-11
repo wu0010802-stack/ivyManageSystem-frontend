@@ -11,6 +11,7 @@ import PortalLeaveForm from '@/components/portal/PortalLeaveForm.vue'
 import PortalLeaveList from '@/components/portal/PortalLeaveList.vue'
 import { useIsMobile } from '@/composables/useIsMobile'
 import PortalSubstituteCardList from '@/components/portal/PortalSubstituteCardList.vue'
+import TeacherBottomSheet from '@/components/portal/TeacherBottomSheet.vue'
 
 const { isMobile } = useIsMobile()
 
@@ -104,8 +105,9 @@ const showForm = ref(false)
 // refreshTrigger 遞增後觸發 PortalLeaveList 重新 fetch
 const refreshTrigger = ref(0)
 
-const onLeaveSubmitted = () => {
+const onLeaveFormSubmitted = () => {
   refreshTrigger.value++
+  showForm.value = false
 }
 
 // ── PortalLeaveList ref（供 onMounted 初次 fetch）──
@@ -171,12 +173,36 @@ onMounted(() => {
     <!-- 請假紀錄列表 -->
     <PortalLeaveList ref="leaveListRef" :refresh-trigger="refreshTrigger" />
 
-    <!-- 新增請假表單 Dialog -->
-    <PortalLeaveForm
-      v-model:visible="showForm"
-      :all-employees="allEmployees"
-      @submitted="onLeaveSubmitted"
-    />
+    <!-- Mobile: BottomSheet -->
+    <TeacherBottomSheet
+        v-if="isMobile"
+        v-model="showForm"
+        title="新增請假申請"
+        default-snap="full"
+        :snap-points="['full']"
+    >
+        <PortalLeaveForm
+            v-if="showForm"
+            :all-employees="allEmployees"
+            @submitted="onLeaveFormSubmitted"
+            @cancel="showForm = false"
+        />
+    </TeacherBottomSheet>
+
+    <!-- Desktop: el-dialog -->
+    <el-dialog
+        v-else
+        v-model="showForm"
+        title="新增請假申請"
+        width="520px"
+    >
+        <PortalLeaveForm
+            v-if="showForm"
+            :all-employees="allEmployees"
+            @submitted="onLeaveFormSubmitted"
+            @cancel="showForm = false"
+        />
+    </el-dialog>
 
     <!-- 待我代理 -->
     <el-card ref="substituteSectionRef" v-loading="substituteLoading" style="margin-top: var(--space-4);">
