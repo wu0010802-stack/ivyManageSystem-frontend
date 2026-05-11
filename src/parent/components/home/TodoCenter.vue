@@ -26,8 +26,11 @@ const emit = defineEmits(['navigate'])
 </script>
 
 <template>
-  <section v-if="todos.length" class="todos-card">
-    <h3 class="section-title todos-title">今日待辦</h3>
+  <section v-if="todos.length" class="todos-section">
+    <div class="pt-section-head">
+      <h3 class="pt-section-title">今日待辦</h3>
+      <span class="todo-total">{{ todos.length }} 件</span>
+    </div>
     <button
       v-for="t in todos"
       :key="t.key"
@@ -56,39 +59,30 @@ const emit = defineEmits(['navigate'])
 </template>
 
 <style scoped>
-.section-title {
-  font-size: var(--text-sm, 13px);
-  font-weight: var(--font-weight-semibold, 600);
-  color: var(--pt-text-muted);
-  margin: 0 0 8px 4px;
-  letter-spacing: 0.02em;
+.todos-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
-
-.todos-card {
-  background: var(--pt-surface-card);
-  border-radius: var(--radius-lg, 12px);
-  padding: 6px 0 4px;
-  box-shadow: var(--pt-elev-1);
-  border: var(--pt-hairline);
-  overflow: hidden;
+.todo-total {
+  color: var(--pt-text-faint);
+  font-size: 12px;
+  font-weight: 700;
 }
-.todos-title { margin: 12px 16px 6px; }
 .todo-row {
   display: flex;
   align-items: center;
   gap: 12px;
   width: 100%;
-  padding: 12px 16px;
-  background: transparent;
-  border: none;
-  border-top: 1px solid var(--pt-border-light);
+  padding: 13px 14px;
+  background: var(--pt-surface-card);
+  border: 1px solid var(--pt-page-border, var(--pt-border));
+  border-radius: var(--pt-card-radius, 14px);
+  box-shadow: var(--pt-shadow-card, var(--pt-elev-1));
   text-align: left;
   font-size: var(--text-base, 14px);
   color: var(--pt-text-strong);
   cursor: pointer;
-}
-.todos-card .todo-row:first-of-type {
-  border-top: none;
 }
 .todo-row:active { background: var(--pt-surface-mute-soft); }
 
@@ -98,19 +92,19 @@ const emit = defineEmits(['navigate'])
   justify-content: center;
   width: 36px;
   height: 36px;
-  border-radius: var(--radius-md, 8px);
+  border-radius: 12px;
   background: var(--brand-primary-soft);
   color: var(--brand-primary);
   flex-shrink: 0;
 }
-.todo-icon.tint-money       { background: var(--pt-tint-money);        color: var(--pt-tint-money-fg);        border: 2px solid var(--pt-tint-money-fg); }
-.todo-icon.tint-message     { background: var(--pt-tint-message);      color: var(--pt-tint-message-fg);      border: 2px solid var(--pt-tint-message-fg); }
-.todo-icon.tint-event       { background: var(--pt-tint-event);        color: var(--pt-tint-event-fg);        border: 2px solid var(--pt-tint-event-fg); }
-.todo-icon.tint-announcement{ background: var(--pt-tint-announcement); color: var(--pt-tint-announcement-fg); border: 2px solid var(--pt-tint-announcement-fg); }
-.todo-icon.tint-leave       { background: var(--pt-tint-leave);        color: var(--pt-tint-leave-fg);        border: 2px solid var(--pt-tint-leave-fg); }
-.todo-icon.tint-activity    { background: var(--pt-tint-activity);     color: var(--pt-tint-activity-fg);     border: 2px solid var(--pt-tint-activity-fg); }
+.todo-icon.tint-money       { background: var(--pt-tint-money);        color: var(--pt-tint-money-fg);        border: 1px solid color-mix(in srgb, var(--pt-tint-money-fg) 34%, transparent); }
+.todo-icon.tint-message     { background: var(--pt-tint-message);      color: var(--pt-tint-message-fg);      border: 1px solid color-mix(in srgb, var(--pt-tint-message-fg) 34%, transparent); }
+.todo-icon.tint-event       { background: var(--pt-tint-event);        color: var(--pt-tint-event-fg);        border: 1px solid color-mix(in srgb, var(--pt-tint-event-fg) 34%, transparent); }
+.todo-icon.tint-announcement{ background: var(--pt-tint-announcement); color: var(--pt-tint-announcement-fg); border: 1px solid color-mix(in srgb, var(--pt-tint-announcement-fg) 34%, transparent); }
+.todo-icon.tint-leave       { background: var(--pt-tint-leave);        color: var(--pt-tint-leave-fg);        border: 1px solid color-mix(in srgb, var(--pt-tint-leave-fg) 34%, transparent); }
+.todo-icon.tint-activity    { background: var(--pt-tint-activity);     color: var(--pt-tint-activity-fg);     border: 1px solid color-mix(in srgb, var(--pt-tint-activity-fg) 34%, transparent); }
 
-.todo-text { flex: 1; line-height: 1.45; }
+.todo-text { flex: 1; line-height: 1.45; font-weight: 700; }
 .todo-text strong {
   color: var(--color-danger);
   font-weight: var(--font-weight-bold, 700);
@@ -122,13 +116,13 @@ const emit = defineEmits(['navigate'])
 
 .todos-empty {
   background: var(--pt-surface-card);
-  border-radius: var(--radius-lg, 12px);
+  border-radius: var(--pt-card-radius, 14px);
   padding: 18px 16px;
   text-align: center;
   font-size: var(--text-base, 14px);
   color: var(--pt-text-placeholder);
-  box-shadow: var(--pt-elev-1);
-  border: var(--pt-hairline);
+  box-shadow: var(--pt-shadow-card, var(--pt-elev-1));
+  border: 1px solid var(--pt-page-border, var(--pt-border));
 }
 .todos-empty-icon {
   display: inline-flex;

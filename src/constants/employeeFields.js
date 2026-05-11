@@ -54,6 +54,10 @@ export const BASIC_TAB_FIELDS = Object.freeze([
   'work_start_time',
   'work_end_time',
   'dependents',
+  // 教保身分（政府申報用）
+  'staff_role_category',
+  'teacher_cert_no',
+  'teacher_cert_type',
 ])
 
 // 編輯 dialog「薪資」tab 涵蓋的欄位

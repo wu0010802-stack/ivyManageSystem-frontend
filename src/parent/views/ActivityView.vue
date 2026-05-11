@@ -211,7 +211,7 @@ async function pullRefresh() {
       @scroll-section="onScrollSection"
     />
 
-    <ChildSelector />
+    <ChildSelector v-if="tab === 'my'" />
     <div class="tab-row">
       <button
         class="tab-btn"
@@ -262,31 +262,36 @@ async function pullRefresh() {
 .activity-view :deep(.ptr-content) {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--pt-page-gap, 18px);
 }
 
 .tab-row {
   display: flex;
-  background: var(--neutral-0);
-  border-radius: 12px;
+  background: var(--pt-surface-recessed, var(--pt-surface-mute));
+  border: 1px solid var(--pt-page-border, var(--pt-border));
+  border-radius: 18px;
   padding: 4px;
   gap: 4px;
-  box-shadow: var(--pt-elev-1);
 }
 
 .tab-btn {
   flex: 1;
+  min-height: 40px;
   padding: 8px;
   background: transparent;
-  border: none;
+  border: 1px solid transparent;
   font-size: 14px;
-  border-radius: 8px;
+  font-weight: 800;
+  color: var(--pt-text-soft);
+  border-radius: 14px;
   cursor: pointer;
 }
 
 .tab-btn.active {
-  background: var(--brand-primary);
-  color: var(--neutral-0);
+  background: var(--pt-surface-raised, var(--neutral-0));
+  border-color: var(--pt-page-border, var(--pt-border));
+  color: var(--brand-primary);
+  box-shadow: var(--pt-shadow-press, var(--pt-elev-1));
 }
 
 .toolbar {
@@ -295,12 +300,14 @@ async function pullRefresh() {
 }
 
 .primary-btn {
+  min-height: 42px;
   padding: 8px 16px;
   background: var(--brand-primary);
   color: var(--neutral-0);
   border: none;
-  border-radius: 8px;
+  border-radius: var(--pt-control-radius, 12px);
   font-size: 14px;
+  font-weight: 800;
 }
 
 .primary-btn:disabled { opacity: 0.5; }

@@ -110,6 +110,8 @@ const form = reactive({
   no_employment_insurance: false,
   health_exempt: false,
   skip_payroll_bonuses: false,
+  skip_payroll_transfer: false,
+  unreported_for_tax: false,
   extra_dependents_quarterly: 0,
   insurance_salary_override_reason: '',
   bypass_standard_base: false,
@@ -117,6 +119,10 @@ const form = reactive({
   labor_insured_salary: null,
   health_insured_salary: null,
   pension_insured_salary: null,
+  // 教保身分（政府申報用）
+  staff_role_category: '',
+  teacher_cert_no: '',
+  teacher_cert_type: '',
 })
 
 // ── 編輯 dialog tab + dirty tracking ─────────────────

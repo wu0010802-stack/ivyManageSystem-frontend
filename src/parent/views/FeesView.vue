@@ -218,15 +218,17 @@ async function pullRefresh() {
 .fees-view :deep(.ptr-content) {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--pt-page-gap, 18px);
 }
 
 .single-totals {
   font-size: 13px;
   color: var(--pt-text-muted);
-  background: var(--neutral-0);
-  border-radius: 8px;
-  padding: 8px 12px;
+  background: var(--pt-surface-card, var(--neutral-0));
+  border: 1px solid var(--pt-page-border, var(--pt-border));
+  border-radius: var(--pt-control-radius, 12px);
+  padding: 10px 12px;
+  box-shadow: var(--pt-shadow-press, var(--pt-elev-1));
 }
 
 .empty {

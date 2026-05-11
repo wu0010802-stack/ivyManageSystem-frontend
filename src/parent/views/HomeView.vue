@@ -173,22 +173,22 @@ const todos = computed(() => {
     />
 
     <template v-else-if="summaryData">
-      <!-- 0) Hero 問候卡（ACD Phase 3.2） -->
+      <!-- 0) 今日工作台 -->
       <HomeHero :parent-name="me?.name" :children-count="children.length" />
 
       <!-- 1) 推播未啟用 CTA — 暖色提醒卡 -->
       <PushCta v-if="showPushCta" @enable="go('/notifications/preferences')" />
 
-      <!-- 2) 今日孩子狀態（ACD Phase 3.3） -->
-      <TodayStatusCards ref="todayRef" />
-
-      <!-- 3) 今日待辦中心（ACD Phase 3.4） -->
-      <TodoCenter :todos="todos" @navigate="go" />
-
-      <!-- 4) 我的孩子（ACD Phase 3.4） -->
+      <!-- 2) 我的孩子：多孩家庭先確認對象，再看狀態與待辦 -->
       <ChildrenStrip :children="children" @navigate="go" />
 
-      <!-- 5) 常用操作（ACD Phase 3.4） -->
+      <!-- 3) 今日孩子狀態 -->
+      <TodayStatusCards ref="todayRef" />
+
+      <!-- 4) 今日待辦中心 -->
+      <TodoCenter :todos="todos" @navigate="go" />
+
+      <!-- 5) 常用操作 -->
       <QuickActions :actions="QUICK_ACTIONS" @navigate="go" />
     </template>
   </PullToRefresh>

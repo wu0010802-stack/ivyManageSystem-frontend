@@ -114,11 +114,15 @@ watch(() => route.fullPath, refreshUnread)
   flex-direction: column;
   min-height: 100dvh;
   width: 100%;
+  max-width: var(--pt-app-max-width, 560px);
+  margin: 0 auto;
+  position: relative;
 }
 
 .parent-main {
   flex: 1;
-  padding: var(--space-4, 16px);
+  width: 100%;
+  padding: var(--pt-page-gutter, 18px);
 }
 
 .parent-main.is-public {
@@ -126,21 +130,23 @@ watch(() => route.fullPath, refreshUnread)
 }
 
 .parent-main.with-tabbar {
-  padding-bottom: calc(64px + env(safe-area-inset-bottom, 0));
+  padding-bottom: calc(92px + env(safe-area-inset-bottom, 0));
 }
 
 .tab-bar {
   position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background: var(--pt-surface-card, var(--neutral-0));
-  /* 取消硬邊線改成軟陰影 + hairline，視覺更輕盈 */
-  border-top: var(--pt-hairline, 1px solid var(--pt-border));
-  box-shadow: 0 -4px 24px rgba(15, 23, 42, 0.06);
+  bottom: calc(10px + env(safe-area-inset-bottom, 0));
+  left: 50%;
+  right: auto;
+  width: min(calc(100vw - 24px), var(--pt-app-max-width, 560px));
+  transform: translateX(-50%);
+  background: var(--pt-surface-dock, var(--pt-surface-card, var(--neutral-0)));
+  border: 1px solid var(--pt-page-border, var(--pt-border));
+  border-radius: var(--pt-dock-radius, 20px);
+  box-shadow: var(--pt-shadow-dock, 0 -4px 24px rgba(15, 23, 42, 0.06));
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  padding-bottom: env(safe-area-inset-bottom, 0);
+  padding: 6px;
   z-index: var(--z-tab-bar, 50);
 }
 
@@ -149,17 +155,22 @@ watch(() => route.fullPath, refreshUnread)
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: var(--touch-target-min, 44px);
-  padding: 6px 0 4px;
+  min-height: 52px;
+  padding: 6px 0 5px;
+  border-radius: 15px;
   font-size: var(--text-xs, 11px);
-  color: var(--neutral-400, var(--pt-text-placeholder));
+  color: var(--pt-text-faint);
   text-decoration: none;
-  transition: color var(--transition-fast, 0.15s ease);
+  transition:
+    background var(--transition-fast, 0.15s ease),
+    color var(--transition-fast, 0.15s ease),
+    transform var(--transition-fast, 0.15s ease);
 }
 
 .tab-item.active {
   color: var(--brand-primary);
   font-weight: var(--font-weight-semibold, 600);
+  background: var(--pt-tint-brand, var(--brand-primary-soft));
 }
 
 .tab-item:active .tab-icon-wrap {
@@ -172,15 +183,15 @@ watch(() => route.fullPath, refreshUnread)
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 56px;
-  height: 28px;
+  width: 44px;
+  height: 24px;
   transition: transform var(--transition-fast, 0.15s ease);
 }
 
 .tab-icon-bg {
   position: absolute;
   inset: 0;
-  border-radius: 14px;
+  border-radius: 12px;
   background: transparent;
   transform: scale(0.6);
   opacity: 0;
@@ -192,8 +203,8 @@ watch(() => route.fullPath, refreshUnread)
 
 /* P2.2 rebrand：active pill 用 brand token，對齊 IvyKids 深綠主題 */
 .tab-item.active .tab-icon-bg {
-  background: var(--brand-primary-soft);
-  opacity: 1;
+  background: transparent;
+  opacity: 0;
   transform: scale(1);
 }
 
@@ -209,8 +220,8 @@ watch(() => route.fullPath, refreshUnread)
 }
 
 .tab-label {
-  margin-top: 4px;
-  letter-spacing: 0.02em;
+  margin-top: 3px;
+  letter-spacing: 0;
 }
 
 .badge {
@@ -236,5 +247,14 @@ watch(() => route.fullPath, refreshUnread)
   position: sticky;
   top: calc(var(--header-height, 52px) + env(safe-area-inset-top, 0));
   z-index: 9;
+}
+
+@media (min-width: 720px) {
+  .parent-layout {
+    border-left: 1px solid var(--pt-page-border);
+    border-right: 1px solid var(--pt-page-border);
+    background: color-mix(in srgb, var(--pt-surface-app) 82%, transparent);
+    min-height: 100dvh;
+  }
 }
 </style>

@@ -55,10 +55,11 @@ const emit = defineEmits(['click', 'cancel'])
 
 <style scoped>
 .leave-card {
-  background: var(--neutral-0);
-  border-radius: 12px;
-  padding: 12px 14px;
-  box-shadow: var(--pt-elev-1);
+  background: var(--pt-surface-card, var(--neutral-0));
+  border: 1px solid var(--pt-page-border, var(--pt-border));
+  border-radius: var(--pt-card-radius, 14px);
+  padding: 14px;
+  box-shadow: var(--pt-shadow-card, var(--pt-elev-1));
   cursor: pointer;
 }
 
@@ -69,23 +70,25 @@ const emit = defineEmits(['click', 'cancel'])
 }
 
 .student {
-  font-weight: 600;
+  font-weight: 800;
   color: var(--pt-text-strong);
 }
 
 .type {
   background: var(--color-info-soft);
   color: var(--pt-info-link);
-  padding: 1px 8px;
-  border-radius: 10px;
+  padding: 3px 9px;
+  border-radius: 999px;
   font-size: 12px;
+  font-weight: 700;
 }
 
 .status {
   margin-left: auto;
-  padding: 1px 8px;
-  border-radius: 10px;
+  padding: 3px 9px;
+  border-radius: 999px;
   font-size: 12px;
+  font-weight: 800;
 }
 
 /* 童彩狀態 chip */
@@ -112,11 +115,12 @@ const emit = defineEmits(['click', 'cancel'])
 }
 
 .cancel-btn {
-  padding: 4px 12px;
-  background: var(--neutral-0);
+  padding: 6px 12px;
+  background: var(--pt-surface-card, var(--neutral-0));
   color: var(--color-danger);
   border: 1px solid var(--pt-tint-announcement);
-  border-radius: 6px;
+  border-radius: var(--pt-control-radius, 12px);
   font-size: 12px;
+  font-weight: 800;
 }
 </style>

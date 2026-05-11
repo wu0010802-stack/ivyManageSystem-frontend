@@ -25,7 +25,7 @@ describe('ActivityHero', () => {
 
   it('點擊三段分別 emit scroll-section + 對應 key', async () => {
     const wrapper = mount(ActivityHero, {
-      props: { activeRegistrations: 1, unpaidActivityFee: 0, upcomingCount: 0 },
+      props: { activeRegistrations: 1, unpaidActivityFee: 0, upcomingCount: 1 },
     })
     const stats = wrapper.findAll('.act-hero-stat')
     await stats[0].trigger('click')
@@ -36,5 +36,13 @@ describe('ActivityHero', () => {
     expect(events[0]).toEqual(['active'])
     expect(events[1]).toEqual(['unpaid'])
     expect(events[2]).toEqual(['upcoming'])
+  })
+
+  it('upcomingCount=0 時隱藏即將開課統計', () => {
+    const wrapper = mount(ActivityHero, {
+      props: { activeRegistrations: 1, unpaidActivityFee: 0, upcomingCount: 0 },
+    })
+    expect(wrapper.findAll('.act-hero-stat')).toHaveLength(2)
+    expect(wrapper.text()).not.toContain('即將開課')
   })
 })

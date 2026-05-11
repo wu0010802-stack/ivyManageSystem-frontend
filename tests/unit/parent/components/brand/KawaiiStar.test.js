@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
-import KawaiiStar from '@/parent/components/brand/KawaiiStar.vue'
+import KawaiiStar from '@/components/brand/KawaiiStar.vue'
 
 describe('KawaiiStar', () => {
   it('預設 size=24，render svg', () => {

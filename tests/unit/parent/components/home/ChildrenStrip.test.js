@@ -8,7 +8,8 @@ describe('ChildrenStrip', () => {
   it('children 為空時顯示提示文', () => {
     const wrapper = mount(ChildrenStrip, { props: { children: [] }, global: { stubs } })
     expect(wrapper.text()).toContain('尚未綁定任何學生')
-    expect(wrapper.text()).toContain('我的小孩（0）')
+    expect(wrapper.text()).toContain('我的孩子')
+    expect(wrapper.text()).not.toContain('0 位')
   })
 
   it('渲染 child name + classroom + 各種 tag', () => {

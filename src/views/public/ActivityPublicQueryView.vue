@@ -18,8 +18,24 @@
 
     <div class="page-wrapper">
       <header class="page-header">
-        <div class="page-title-main">查詢 / 修改報名資料</div>
-        <div class="page-subtitle">Query &amp; Edit Registration</div>
+        <div class="page-brand">
+          <img
+            src="/LOGO.png"
+            alt="常春藤幼兒園"
+            class="page-brand-logo"
+            width="96"
+            height="96"
+          />
+          <div class="page-brand-text">
+            <div class="page-brand-prefix">高雄市私立</div>
+            <div class="page-brand-zh">常春藤幼兒園</div>
+            <div class="page-brand-en">Ivy Kindergarten</div>
+          </div>
+        </div>
+        <div class="page-meta">
+          <h1 class="page-title-main">查詢 / 修改報名資料</h1>
+          <div class="page-subtitle">Query &amp; Edit Registration</div>
+        </div>
       </header>
 
       <!-- 搜尋區 -->
@@ -846,24 +862,77 @@ onBeforeUnmount(() => {
   max-width: 900px;
   margin: 0 auto;
   background: var(--color-surface);
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-lg);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
   overflow: hidden;
 }
 
 .page-header {
-  text-align: center;
-  padding: var(--space-6) var(--space-5);
-  background: linear-gradient(135deg, #FEF3C7 0%, #DCFCE7 100%);
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-8);
+  align-items: center;
+  margin: 0;
+  padding: var(--space-6) var(--space-8);
+  background: #fff;
   border-bottom: 1px solid var(--color-border);
 }
-.page-title-main {
-  font-size: var(--fs-xl);
-  font-weight: 700;
-  color: var(--color-primary);
-  margin-bottom: var(--space-1);
+.page-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  margin: 0;
+  padding-right: var(--space-8);
+  border-right: 1px solid var(--color-border);
 }
-.page-subtitle { font-size: var(--fs-xs); color: var(--color-text-subtle); letter-spacing: 0.05em; }
+.page-brand-logo {
+  flex-shrink: 0;
+  width: 96px;
+  height: 96px;
+  object-fit: contain;
+  user-select: none;
+}
+.page-brand-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.page-brand-prefix {
+  font-size: var(--fs-sm);
+  letter-spacing: 0.4em;
+  color: var(--color-text-muted);
+  margin-bottom: 2px;
+}
+.page-brand-zh {
+  font-size: clamp(22px, 3vw, 28px);
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: var(--color-text);
+  line-height: 1.15;
+}
+.page-brand-en {
+  font-size: var(--fs-sm);
+  letter-spacing: 0.08em;
+  color: var(--color-text-muted);
+  margin-top: 4px;
+}
+.page-meta {
+  min-width: 0;
+}
+.page-title-main {
+  margin: 0;
+  font-size: clamp(20px, 3vw, 24px);
+  font-weight: 700;
+  color: var(--color-text);
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+}
+.page-subtitle {
+  font-size: var(--fs-xs);
+  color: var(--color-text-muted);
+  letter-spacing: 0.08em;
+  margin-top: var(--space-1);
+}
 
 .search-section {
   padding: var(--space-6) var(--space-6);
@@ -903,7 +972,7 @@ onBeforeUnmount(() => {
 .result-section { padding: var(--space-6); }
 
 .result-header {
-  background: linear-gradient(135deg, var(--color-primary) 0%, #3a8a5e 100%);
+  background: var(--color-primary);
   color: #fff;
   padding: var(--space-4) var(--space-5);
   border-radius: var(--radius-md);
@@ -1049,7 +1118,6 @@ onBeforeUnmount(() => {
   background-color: var(--color-cta);
   color: var(--color-cta-contrast);
   border-color: var(--color-cta);
-  box-shadow: 0 6px 16px rgba(234, 88, 12, 0.25);
 }
 .btn-primary:hover:not(:disabled) {
   background-color: var(--color-cta-hover);
@@ -1076,7 +1144,7 @@ onBeforeUnmount(() => {
 
 /* 候補升正式待確認區塊 */
 .result-header.promotion-header {
-  background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+  background: #D97706;
 }
 .info-hint.promotion-hint {
   background: #FEF3C7;
@@ -1281,9 +1349,25 @@ onBeforeUnmount(() => {
 }
 .toast-close:hover { background: var(--color-surface-muted); color: var(--color-text); }
 
+@media (max-width: 700px) {
+  .page-header {
+    grid-template-columns: 1fr;
+    gap: var(--space-5);
+    padding: var(--space-5);
+  }
+  .page-brand {
+    padding-right: 0;
+    padding-bottom: var(--space-5);
+    border-right: none;
+    border-bottom: 1px solid var(--color-border);
+  }
+}
 @media (max-width: 600px) {
   .public-query-page { padding: 0; }
   .page-wrapper { border-radius: 0; box-shadow: none; }
+  .page-brand { gap: var(--space-4); padding-bottom: var(--space-4); }
+  .page-brand-logo { width: 72px; height: 72px; }
+  .page-brand-prefix { font-size: var(--fs-xs); letter-spacing: 0.3em; }
   .toast-container { top: auto; bottom: var(--space-3); right: var(--space-3); left: var(--space-3); }
   .toast { min-width: 0; max-width: none; }
   .action-buttons { flex-direction: column; }

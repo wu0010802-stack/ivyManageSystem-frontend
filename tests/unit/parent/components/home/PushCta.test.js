@@ -12,10 +12,10 @@ describe('PushCta', () => {
     expect(wrapper.text()).toContain('前往設定')
   })
 
-  it('列出五項收不到推播的通知類型', () => {
+  it('顯示推播延遲的精簡說明', () => {
     const wrapper = mount(PushCta, { global: { stubs } })
-    const items = wrapper.findAll('.push-cta-list li')
-    expect(items.length).toBe(5)
+    expect(wrapper.text()).toContain('公告、訊息與審核結果可能會延遲看到')
+    expect(wrapper.findAll('.push-cta-list li')).toHaveLength(0)
   })
 
   it('點擊「前往設定」按鈕會 emit enable', async () => {

@@ -15,6 +15,7 @@ import {
 } from '@element-plus/icons-vue'
 import StatCard from '@/components/common/StatCard.vue'
 import { useDashboardSections } from '@/composables'
+import DisabilityExpirySection from '@/components/dashboard/DisabilityExpirySection.vue'
 
 const {
   loading,
@@ -398,6 +399,9 @@ const showTodoSection = computed(
             </el-button>
           </div>
         </el-card>
+
+        <!-- 身障鑑定即將到期 -->
+        <DisabilityExpirySection />
 
         <!-- 今日打卡異常 -->
         <div

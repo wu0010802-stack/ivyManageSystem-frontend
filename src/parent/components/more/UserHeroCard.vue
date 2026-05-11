@@ -15,8 +15,8 @@
  *  - pushStatusKnown: me 是否已載入（false 時 hide push badge 區）
  */
 import ParentIcon from '../ParentIcon.vue'
-import LaurelWreath from '../brand/LaurelWreath.vue'
-import KawaiiStar from '../brand/KawaiiStar.vue'
+import LaurelWreath from '@/components/brand/LaurelWreath.vue'
+import KawaiiStar from '@/components/brand/KawaiiStar.vue'
 
 defineProps({
   userName: { type: String, default: '家長' },
@@ -61,12 +61,12 @@ defineProps({
 <style scoped>
 .user-card {
   position: relative;
-  margin: 0 var(--space-3, 12px);
-  padding: var(--space-5, 22px) var(--space-4, 16px);
-  background: var(--pt-gradient-hero);
-  border: 1px solid rgba(90, 168, 66, 0.15);
-  border-radius: 18px;
-  box-shadow: var(--pt-elev-1);
+  padding: 18px;
+  background:
+    linear-gradient(135deg, var(--pt-surface-raised, #fff) 0%, var(--pt-surface-recessed, #f5fbe6) 100%);
+  border: 1px solid var(--pt-page-border, rgba(90, 168, 66, 0.15));
+  border-radius: var(--pt-card-radius, 14px);
+  box-shadow: var(--pt-shadow-card, var(--pt-elev-1));
   overflow: hidden;
   isolation: isolate;
 }
@@ -99,16 +99,16 @@ defineProps({
 .user-avatar {
   width: 56px;
   height: 56px;
-  border-radius: var(--radius-full, 9999px);
-  background: linear-gradient(135deg, var(--ivy-green-deep, #0d9053), var(--ivy-green-bright, #0caf76));
-  border: none;
+  border-radius: 18px;
+  background: var(--pt-tint-brand, var(--brand-primary-soft));
+  border: 1px solid var(--pt-page-border, var(--pt-border));
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font-size: var(--text-2xl, 22px);
   font-weight: 900;
-  color: var(--neutral-0, #fff);
-  box-shadow: var(--pt-elev-1);
+  color: var(--brand-primary);
+  box-shadow: var(--pt-shadow-press, var(--pt-elev-1));
   flex-shrink: 0;
 }
 
@@ -149,12 +149,12 @@ defineProps({
   font-weight: var(--font-weight-medium, 500);
 }
 .badge.ok {
-  background: rgba(90, 168, 66, 0.15);
+  background: var(--pt-tint-brand, rgba(90, 168, 66, 0.15));
   color: var(--ivy-green-deep, #0d9053);
-  border: 1px solid rgba(90, 168, 66, 0.30);
+  border: 1px solid var(--pt-page-border, rgba(90, 168, 66, 0.30));
 }
 .badge.warn {
-  background: rgba(254, 243, 199, 0.95);
+  background: var(--pt-tint-sun, rgba(254, 243, 199, 0.95));
   color: var(--pt-warning-text-soft);
 }
 </style>

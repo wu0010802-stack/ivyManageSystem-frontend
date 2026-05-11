@@ -34,28 +34,42 @@ const items = computed(() => childrenStore.items || [])
 <style scoped>
 .child-selector {
   display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-bottom: 12px;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 4px;
+  margin-bottom: 14px;
+  background: var(--pt-surface-recessed, var(--pt-surface-mute));
+  border: 1px solid var(--pt-page-border, var(--pt-border));
+  border-radius: 18px;
+  scrollbar-width: none;
+}
+
+.child-selector::-webkit-scrollbar {
+  display: none;
 }
 
 .chip {
   min-height: var(--touch-target-min, 44px);
-  padding: 6px 16px;
-  border-radius: 16px;
-  border: 1px solid var(--pt-border-strong);
-  background: var(--neutral-0);
+  padding: 7px 16px;
+  border-radius: 14px;
+  border: 1px solid transparent;
+  background: transparent;
   font-size: var(--text-sm, 13px);
-  color: var(--pt-text-muted);
+  color: var(--pt-text-soft);
+  font-weight: 700;
+  white-space: nowrap;
   cursor: pointer;
-  transition: background var(--transition-fast, 0.15s ease),
+  transition:
+    background var(--transition-fast, 0.15s ease),
     border-color var(--transition-fast, 0.15s ease),
-    color var(--transition-fast, 0.15s ease);
+    color var(--transition-fast, 0.15s ease),
+    box-shadow var(--transition-fast, 0.15s ease);
 }
 
 .chip.active {
-  background: var(--brand-primary);
-  border-color: var(--brand-primary);
-  color: var(--neutral-0);
+  background: var(--pt-surface-raised, var(--pt-surface-card));
+  border-color: var(--pt-page-border, var(--pt-border));
+  color: var(--brand-primary);
+  box-shadow: var(--pt-shadow-press, var(--pt-elev-1));
 }
 </style>

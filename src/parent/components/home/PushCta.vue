@@ -26,16 +26,9 @@ function onClick() {
       </span>
       <div>
         <div class="push-cta-title">尚未加 LINE 為好友</div>
-        <div class="push-cta-sub">以下通知將收不到推播</div>
+        <div class="push-cta-sub">公告、訊息與審核結果可能會延遲看到</div>
       </div>
     </div>
-    <ul class="push-cta-list">
-      <li>新公告 / 校外教學簽閱</li>
-      <li>老師訊息回覆</li>
-      <li>請假審核結果</li>
-      <li>接送通知狀態變更</li>
-      <li>才藝候補升正式提醒</li>
-    </ul>
     <button class="push-cta-btn press-scale" type="button" @click="onClick">
       前往設定
       <ParentIcon name="chevron-right" size="sm" />
@@ -48,11 +41,11 @@ function onClick() {
  * 推播 CTA — token-based 暖色卡
  * ========================================================== */
 .push-cta {
-  background: var(--pt-gradient-warm);
-  border: 1px solid var(--color-warning);
-  border-radius: var(--radius-lg, 12px);
-  padding: 14px 16px 16px;
-  box-shadow: var(--pt-elev-1);
+  background: var(--pt-tint-sun, var(--pt-gradient-warm));
+  border: 1px solid color-mix(in srgb, var(--ivy-tile-yellow-fg) 28%, transparent);
+  border-radius: var(--pt-card-radius, 14px);
+  padding: 14px;
+  box-shadow: var(--pt-shadow-card, var(--pt-elev-1));
 }
 .push-cta-head {
   display: flex;
@@ -94,16 +87,16 @@ function onClick() {
   justify-content: center;
   gap: 4px;
   width: 100%;
-  margin-top: 4px;
-  padding: 12px;
-  background: var(--pt-warning-text-mid);
+  margin-top: 12px;
+  padding: 11px 12px;
+  background: var(--pt-text-strong);
   color: var(--neutral-0);
   border: none;
-  border-radius: var(--radius-md, 8px);
+  border-radius: var(--pt-control-radius, 12px);
   font-size: var(--text-base, 14px);
   font-weight: var(--font-weight-semibold, 600);
   letter-spacing: 0.02em;
-  box-shadow: 0 4px 12px rgba(217, 119, 6, 0.32);
+  box-shadow: 0 8px 18px rgba(74, 55, 0, 0.16);
   cursor: pointer;
 }
 </style>

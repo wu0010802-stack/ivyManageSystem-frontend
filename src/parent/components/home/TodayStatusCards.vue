@@ -32,11 +32,16 @@ defineExpose({ refresh })
 
 <template>
   <section v-if="todayChildren.length > 0" class="today-section">
-    <h3 class="section-title">今日狀態</h3>
+    <div class="pt-section-head">
+      <h3 class="pt-section-title">今日狀態</h3>
+    </div>
     <div v-for="c in todayChildren" :key="c.student_id" class="today-card">
       <div class="today-row">
-        <span class="today-name">{{ c.name }}</span>
-        <span v-if="c.classroom_name" class="today-class">{{ c.classroom_name }}</span>
+        <span class="today-avatar">{{ String(c.name || '孩').slice(0, 1) }}</span>
+        <span class="today-copy">
+          <span class="today-name">{{ c.name }}</span>
+          <span v-if="c.classroom_name" class="today-class">{{ c.classroom_name }}</span>
+        </span>
       </div>
       <div class="chips">
         <span v-if="c.attendance" class="chip chip-attendance">
@@ -63,40 +68,47 @@ defineExpose({ refresh })
 
 <style scoped>
 /* ==========================================================
- * 區塊標題 — 與 HomeView 共用樣式（scoped 不衝突，重複定義以維持獨立性）
- * ========================================================== */
-.section-title {
-  font-size: var(--text-sm, 13px);
-  font-weight: var(--font-weight-semibold, 600);
-  color: var(--pt-text-muted);
-  margin: 0 0 8px 4px;
-  letter-spacing: 0.02em;
-}
-
-/* ==========================================================
  * 今日狀態
  * ========================================================== */
 .today-section {
   display: flex;
   flex-direction: column;
+  gap: 10px;
 }
 .today-card {
   background: var(--pt-surface-card);
-  border-radius: var(--radius-lg, 12px);
-  padding: 14px 16px;
-  margin-bottom: 8px;
-  box-shadow: var(--pt-elev-1);
-  border: var(--pt-hairline);
+  border-radius: var(--pt-card-radius, 14px);
+  padding: 14px;
+  box-shadow: var(--pt-shadow-card, var(--pt-elev-1));
+  border: 1px solid var(--pt-page-border, var(--pt-border));
 }
 .today-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.today-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--pt-tint-brand, var(--brand-primary-soft));
+  color: var(--brand-primary);
+  font-size: 16px;
+  font-weight: 900;
+  flex-shrink: 0;
+}
+.today-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 .today-name {
   font-size: var(--text-base, 15px);
-  font-weight: var(--font-weight-semibold, 600);
+  font-weight: 800;
   color: var(--pt-text-strong);
 }
 .today-class {
@@ -113,11 +125,12 @@ defineExpose({ refresh })
   align-items: center;
   gap: 4px;
   font-size: var(--text-xs, 12px);
-  padding: 4px 10px;
-  border-radius: var(--radius-full, 9999px);
+  min-height: 28px;
+  padding: 5px 10px;
+  border-radius: 999px;
   background: var(--pt-surface-mute);
   color: var(--pt-text-muted);
-  font-weight: var(--font-weight-medium, 500);
+  font-weight: 700;
 }
 .chip-attendance { background: var(--color-success-soft); color: var(--pt-success-text); }
 .chip-leave      { background: var(--color-warning-soft); color: var(--pt-warning-text); }

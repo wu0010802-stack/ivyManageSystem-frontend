@@ -112,7 +112,7 @@ onMounted(async () => {
 .more-view {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4, 16px);
+  gap: var(--pt-page-gap, 18px);
 }
 
 .logout {
@@ -122,12 +122,12 @@ onMounted(async () => {
   padding: var(--space-3, 12px);
   background: var(--pt-surface-card, var(--neutral-0));
   border: var(--pt-hairline);
-  border-radius: var(--radius-lg, 12px);
+  border-radius: var(--pt-card-radius, 14px);
   color: var(--color-danger);
   font-size: var(--text-base, 15px);
   font-weight: var(--font-weight-semibold, 600);
   cursor: pointer;
-  box-shadow: var(--pt-elev-1);
+  box-shadow: var(--pt-shadow-card, var(--pt-elev-1));
   transition: background var(--transition-fast, 0.15s ease), transform var(--transition-fast, 0.15s ease);
 }
 

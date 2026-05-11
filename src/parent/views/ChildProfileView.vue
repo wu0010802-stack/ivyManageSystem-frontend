@@ -89,7 +89,7 @@ onMounted(fetchData)
           </div>
           <div class="guardian-tags">
             <span v-if="g.is_self" class="tag self">您本人</span>
-            <span v-if="g.is_primary" class="tag primary">主要聯絡</span>
+            <span v-if="g.is_primary" class="tag primary">主要聯絡人</span>
             <span v-if="g.can_pickup" class="tag pickup">可接送</span>
           </div>
         </div>
@@ -138,13 +138,14 @@ onMounted(fetchData)
 .profile-view {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--pt-page-gap, 18px);
 }
 .card {
-  background: var(--neutral-0);
-  border-radius: 12px;
-  padding: 14px;
-  box-shadow: var(--pt-elev-1);
+  background: var(--pt-surface-card, var(--neutral-0));
+  border: 1px solid var(--pt-page-border, var(--pt-border));
+  border-radius: var(--pt-card-radius, 14px);
+  padding: 15px;
+  box-shadow: var(--pt-shadow-card, var(--pt-elev-1));
 }
 .head {
   margin-bottom: 12px;
@@ -183,10 +184,12 @@ onMounted(fetchData)
   color: var(--pt-text-muted);
 }
 .section-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--pt-text-muted);
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--pt-text-soft);
   margin: 0 0 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 .empty {
   color: var(--pt-text-placeholder);
@@ -218,10 +221,11 @@ onMounted(fetchData)
 }
 .tag {
   font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 10px;
+  padding: 3px 9px;
+  border-radius: 999px;
   background: var(--pt-surface-mute);
   color: var(--pt-text-soft);
+  font-weight: 700;
 }
 .tag.self {
   background: var(--color-info-soft);
@@ -262,8 +266,8 @@ onMounted(fetchData)
   color: var(--pt-text-muted);
 }
 .change-card {
-  background: var(--color-warning-soft);
-  border: 1px solid var(--pt-warning-text);
+  background: var(--pt-tint-sun, var(--color-warning-soft));
+  border: 1px solid color-mix(in srgb, var(--pt-warning-text) 28%, transparent);
 }
 .change-text {
   font-size: 13px;
@@ -273,11 +277,12 @@ onMounted(fetchData)
 }
 .primary-btn {
   width: 100%;
+  min-height: 44px;
   padding: 10px;
   background: var(--brand-primary);
   color: var(--neutral-0);
   border: none;
-  border-radius: 8px;
+  border-radius: var(--pt-control-radius, 12px);
   font-size: 14px;
   font-weight: 600;
   display: inline-flex;

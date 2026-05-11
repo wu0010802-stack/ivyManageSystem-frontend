@@ -402,12 +402,12 @@ async function pullRefresh() {
 .render-sentinel { height: 1px; }
 
 .hero-cta {
-  background: rgba(255, 255, 255, 0.95);
-  color: var(--brand-primary, #0d9053);
-  border: none;
+  background: var(--pt-surface-raised, rgba(255, 255, 255, 0.95));
+  color: var(--brand-primary);
+  border: 1px solid var(--pt-page-border, var(--pt-border));
   padding: 8px 14px;
-  border-radius: 99px;
-  font-weight: 600;
+  border-radius: 999px;
+  font-weight: 800;
   cursor: pointer;
 }
 .hero-cta:hover { background: var(--neutral-0); }

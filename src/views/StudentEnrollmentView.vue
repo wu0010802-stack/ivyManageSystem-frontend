@@ -1,12 +1,12 @@
 <template>
   <div class="enrollment-view">
     <div class="page-header">
-      <h2 class="page-title">幼生在籍統計</h2>
-      <div class="filter-bar">
+      <h2>幼生在籍統計</h2>
+      <div class="header-actions">
         <el-select
           v-model="selectedTerm"
           placeholder="選擇學年學期"
-          style="width: 180px"
+          style="width: 200px"
           @change="onTermChange"
         >
           <el-option
@@ -16,73 +16,98 @@
             :value="`${opt.school_year}-${opt.semester}`"
           />
         </el-select>
-        <el-button :loading="loading" @click="onRefresh">重新整理</el-button>
-        <el-button v-if="activeTab === 'roster'" @click="printRoster">列印</el-button>
+        <el-button :icon="RefreshRight" :loading="loading" @click="onRefresh">重新整理</el-button>
+        <el-button v-if="activeTab === 'roster'" :icon="Printer" @click="printRoster">列印</el-button>
       </div>
     </div>
 
-    <el-tabs v-model="activeTab" @tab-click="onTabClick">
-      <!-- Tab 1：統計圖表 -->
+    <div v-if="stats" class="page-meta">
+      <span>{{ stats.school_year > 1911 ? stats.school_year - 1911 : stats.school_year }} 學年度 · {{ stats.semester_label }}</span>
+      <span v-if="stats.summary?.total != null" class="meta-sep">|</span>
+      <span v-if="stats.summary?.total != null">在籍 {{ stats.summary.total }} 人</span>
+    </div>
+
+    <el-tabs v-model="activeTab" @tab-click="onTabClick" class="enrollment-tabs">
+      <!-- ============ Tab 1：統計圖表 ============ -->
       <el-tab-pane label="統計圖表" name="stats">
-        <!-- 摘要卡片 -->
-        <el-row :gutter="16" class="summary-cards" v-loading="loading">
-          <el-col :xs="12" :sm="6">
-            <el-card class="summary-card" shadow="hover">
-              <div class="summary-value">{{ stats?.summary?.total ?? '—' }}</div>
-              <div class="summary-label">在籍總人數</div>
-            </el-card>
-          </el-col>
-          <el-col :xs="12" :sm="6">
-            <el-card class="summary-card summary-card--blue" shadow="hover">
-              <div class="summary-value">{{ stats?.summary?.male ?? '—' }}</div>
-              <div class="summary-label">男生</div>
-            </el-card>
-          </el-col>
-          <el-col :xs="12" :sm="6">
-            <el-card class="summary-card summary-card--pink" shadow="hover">
-              <div class="summary-value">{{ stats?.summary?.female ?? '—' }}</div>
-              <div class="summary-label">女生</div>
-            </el-card>
-          </el-col>
-          <el-col :xs="12" :sm="6">
-            <el-card class="summary-card summary-card--green" shadow="hover">
-              <div class="summary-value">{{ stats?.summary?.class_count ?? '—' }}</div>
-              <div class="summary-label">班級數</div>
+        <!-- Summary cards -->
+        <el-row :gutter="16" class="summary-cards">
+          <el-col :xs="12" :sm="6" v-for="card in summaryCards" :key="card.key">
+            <el-card class="summary-card" shadow="never">
+              <template v-if="loading && stats == null">
+                <el-skeleton :rows="2" animated />
+              </template>
+              <template v-else>
+                <div class="card-label">{{ card.label }}</div>
+                <div class="card-value">{{ card.value }}</div>
+                <div class="card-sub">{{ card.sub }}</div>
+              </template>
             </el-card>
           </el-col>
         </el-row>
 
-        <!-- 統計表（仿 Excel 格式） -->
-        <el-card class="table-card" v-loading="loading" style="margin-top: 16px;">
+        <!-- Statistics table -->
+        <el-card class="table-card" shadow="never">
           <template #header>
-            <span>各班在籍人數表</span>
-            <span v-if="stats" style="float:right; font-size:13px; color:#64748b;">
-              {{ stats.school_year > 1911 ? stats.school_year - 1911 : stats.school_year }} {{ stats.semester_label }}
-            </span>
+            <div class="card-header-row">
+              <span class="card-header-title">各班在籍人數表</span>
+              <span v-if="stats" class="card-header-meta">
+                {{ stats.school_year > 1911 ? stats.school_year - 1911 : stats.school_year }} 學年度 · {{ stats.semester_label }}
+              </span>
+            </div>
           </template>
+          <el-skeleton v-if="loading && !tableData.length" :rows="6" animated />
           <el-table
-            v-if="tableData.length"
+            v-else-if="tableData.length"
             :data="tableData"
             border
+            stripe
             style="width: 100%"
             :span-method="spanMethod"
             :row-class-name="rowClassName"
+            class="enrollment-table"
           >
-            <el-table-column label="年級" prop="grade_name" width="100" align="center" />
-            <el-table-column label="班級" prop="class_name" width="100" align="center" />
+            <el-table-column label="年級" prop="grade_name" width="120" align="center" />
+            <el-table-column label="班級" prop="class_name" width="110" align="center" />
             <el-table-column label="男生" prop="male" width="90" align="center" />
             <el-table-column label="女生" prop="female" width="90" align="center" />
-            <el-table-column label="合計" prop="total" width="90" align="center" />
+            <el-table-column label="合計" prop="total" width="90" align="center">
+              <template #default="{ row }">
+                <span class="num-total">{{ row.total }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="男女比例" min-width="180">
+              <template #default="{ row }">
+                <div v-if="row.total > 0" class="ratio-bar">
+                  <div class="ratio-track">
+                    <div class="ratio-male" :style="{ width: ratioPct(row.male, row.total) }" />
+                    <div class="ratio-female" :style="{ width: ratioPct(row.female, row.total) }" />
+                  </div>
+                  <div class="ratio-text">
+                    {{ ratioPct(row.male, row.total) }} / {{ ratioPct(row.female, row.total) }}
+                  </div>
+                </div>
+                <span v-else class="ratio-empty">—</span>
+              </template>
+            </el-table-column>
           </el-table>
-          <div v-else-if="!loading" class="empty-hint">暫無資料</div>
+          <el-empty
+            v-else-if="!loading"
+            description="此學期尚無在籍資料"
+            :image-size="80"
+          />
         </el-card>
 
-        <!-- 圖表區 -->
-        <el-row :gutter="16" style="margin-top: 16px;" v-if="stats?.by_grade?.length">
-          <!-- 各班人數堆疊長條圖 -->
+        <!-- Charts -->
+        <el-row :gutter="16" class="chart-row" v-if="stats?.by_grade?.length">
           <el-col :xs="24" :md="14">
-            <el-card>
-              <template #header>各班人數（男/女堆疊）</template>
+            <el-card shadow="never" class="chart-card">
+              <template #header>
+                <div class="card-header-row">
+                  <span class="card-header-title">各班人數（男 / 女堆疊）</span>
+                  <span class="card-header-meta">共 {{ classCount }} 班</span>
+                </div>
+              </template>
               <div class="chart-wrapper">
                 <component
                   :is="BarChart"
@@ -93,10 +118,14 @@
               </div>
             </el-card>
           </el-col>
-          <!-- 年級分布圓餅圖 -->
           <el-col :xs="24" :md="10">
-            <el-card>
-              <template #header>年級人數分布</template>
+            <el-card shadow="never" class="chart-card">
+              <template #header>
+                <div class="card-header-row">
+                  <span class="card-header-title">年級人數分布</span>
+                  <span class="card-header-meta">{{ stats?.by_grade?.length ?? 0 }} 個年級</span>
+                </div>
+              </template>
               <div class="chart-wrapper">
                 <component
                   :is="DoughnutChart"
@@ -110,17 +139,21 @@
         </el-row>
       </el-tab-pane>
 
-      <!-- Tab 2：在籍記錄表 -->
+      <!-- ============ Tab 2：在籍記錄表 ============ -->
       <el-tab-pane label="在籍記錄表" name="roster">
         <div v-loading="rosterLoading">
           <div v-if="roster" id="roster-print-area">
             <EnrollmentRosterTable :roster="roster" />
           </div>
-          <div v-else-if="!rosterLoading" class="empty-hint">暫無資料</div>
+          <el-empty
+            v-else-if="!rosterLoading"
+            description="尚未載入在籍記錄表，點擊上方「重新整理」載入資料"
+            :image-size="80"
+          />
         </div>
       </el-tab-pane>
 
-      <!-- Tab 3：獎金達成 -->
+      <!-- ============ Tab 3：獎金達成 ============ -->
       <el-tab-pane v-if="showBonusTab" label="獎金達成" name="bonus">
         <BonusDashboard v-if="activeTab === 'bonus'" />
       </el-tab-pane>
@@ -131,6 +164,7 @@
 <script setup>
 import { ref, computed, onMounted, watch, defineAsyncComponent } from 'vue'
 import { ElMessage } from 'element-plus'
+import { RefreshRight, Printer } from '@element-plus/icons-vue'
 import { getEnrollmentStats, getEnrollmentOptions, getEnrollmentRoster } from '@/api/studentEnrollment'
 import { hasPermission } from '@/utils/auth'
 import BonusDashboard from '@/components/enrollment/BonusDashboard.vue'
@@ -172,7 +206,6 @@ const roster = ref(null)
 const termOptions = ref([])
 const activeTab = ref('stats')
 
-// selectedTerm 與 termStore 雙向同步
 const selectedTerm = computed({
   get: () => `${termStore.school_year}-${termStore.semester}`,
   set: (val) => {
@@ -188,7 +221,6 @@ const fetchOptions = async () => {
   try {
     const res = await getEnrollmentOptions()
     termOptions.value = res.data
-    // 如果 store 的學期不在選項清單裡，自動切換到最近一筆
     const key = selectedTerm.value
     const found = termOptions.value.some(
       (o) => `${o.school_year}-${o.semester}` === key,
@@ -231,16 +263,13 @@ const fetchRoster = async () => {
   }
 }
 
-// selectedTerm 變化時（含從其他頁面同步過來）自動刷新
 watch(selectedTerm, () => {
-  roster.value = null // 學期變了，清除舊花名冊
+  roster.value = null
   if (activeTab.value === 'stats') fetchStats()
   else fetchRoster()
 })
 
-const onTermChange = () => {
-  // 由 watch(selectedTerm) 處理，此處保留供 @change 呼叫
-}
+const onTermChange = () => {}
 
 const onRefresh = () => {
   if (activeTab.value === 'stats') fetchStats()
@@ -259,9 +288,54 @@ const printRoster = () => {
 
 onMounted(async () => {
   await fetchOptions()
-  // watch 不會在 mount 時觸發，手動拉一次
   await fetchStats()
 })
+
+// ---------------------------------------------------------------------------
+// Summary cards
+// ---------------------------------------------------------------------------
+const summaryCards = computed(() => {
+  const s = stats.value?.summary
+  const total = s?.total ?? 0
+  const male = s?.male ?? 0
+  const female = s?.female ?? 0
+  const cls = s?.class_count ?? 0
+  const pct = (n) => (total > 0 ? `${Math.round((n / total) * 100)}%` : '—')
+  const avg = cls > 0 ? Math.round(total / cls) : null
+  return [
+    {
+      key: 'total',
+      label: '在籍總人數',
+      value: s ? total : '—',
+      sub: cls > 0 ? `分布於 ${cls} 個班級` : '尚無班級資料',
+    },
+    {
+      key: 'male',
+      label: '男生',
+      value: s ? male : '—',
+      sub: s ? `占全園 ${pct(male)}` : '—',
+    },
+    {
+      key: 'female',
+      label: '女生',
+      value: s ? female : '—',
+      sub: s ? `占全園 ${pct(female)}` : '—',
+    },
+    {
+      key: 'class',
+      label: '班級數',
+      value: s ? cls : '—',
+      sub: avg != null ? `平均 ${avg} 人 / 班` : '—',
+    },
+  ]
+})
+
+const classCount = computed(() => {
+  if (!stats.value?.by_grade) return 0
+  return stats.value.by_grade.reduce((s, g) => s + g.classes.length, 0)
+})
+
+const ratioPct = (n, total) => (total > 0 ? `${Math.round((n / total) * 100)}%` : '0%')
 
 // ---------------------------------------------------------------------------
 // 表格資料（展開 + 年級小計 + 全園總計）
@@ -301,16 +375,14 @@ const tableData = computed(() => {
   return rows
 })
 
-// 年級 rowspan 合併（只合併 class 列，subtotal/grand_total 另計）
 const spanMethod = ({ row, column, rowIndex, columnIndex }) => {
   if (row.type === 'subtotal' || row.type === 'grand_total') {
-    if (columnIndex === 0) return { rowspan: 1, colspan: 2 } // 合併「年級」+「班級」欄
-    if (columnIndex === 1) return { rowspan: 0, colspan: 0 } // 被合併，隱藏
-    return // 其餘欄位正常
+    if (columnIndex === 0) return { rowspan: 1, colspan: 2 }
+    if (columnIndex === 1) return { rowspan: 0, colspan: 0 }
+    return
   }
-  if (columnIndex !== 0) return // class 列只處理第一欄（年級）
+  if (columnIndex !== 0) return
   if (row.type === 'class') {
-    // 找出此年級第一個 class 列的 rowIndex
     const gradeRows = tableData.value.filter(
       r => r.type === 'class' && r.grade_name === row.grade_name
     )
@@ -330,7 +402,12 @@ const rowClassName = ({ row }) => {
 }
 
 // ---------------------------------------------------------------------------
-// 長條圖資料
+// 圖表色票（與 Element Plus 風格貼近的低飽和色）
+// ---------------------------------------------------------------------------
+const CHART_PALETTE = ['#409eff', '#67c23a', '#e6a23c', '#909399', '#f56c6c', '#a0cfff']
+
+// ---------------------------------------------------------------------------
+// 長條圖
 // ---------------------------------------------------------------------------
 const barChartData = computed(() => {
   if (!stats.value?.by_grade) return null
@@ -350,12 +427,16 @@ const barChartData = computed(() => {
       {
         label: '男生',
         data: maleData,
-        backgroundColor: 'rgba(59, 130, 246, 0.7)',
+        backgroundColor: '#409eff',
+        borderRadius: 4,
+        borderSkipped: false,
       },
       {
         label: '女生',
         data: femaleData,
-        backgroundColor: 'rgba(236, 72, 153, 0.6)',
+        backgroundColor: '#f56c6c',
+        borderRadius: 4,
+        borderSkipped: false,
       },
     ],
   }
@@ -365,25 +446,46 @@ const barChartOptions = {
   responsive: true,
   maintainAspectRatio: false,
   scales: {
-    x: { stacked: true },
-    y: { stacked: true, beginAtZero: true, ticks: { stepSize: 5 } },
+    x: {
+      stacked: true,
+      grid: { display: false },
+      ticks: { color: '#606266', font: { size: 11 } },
+    },
+    y: {
+      stacked: true,
+      beginAtZero: true,
+      ticks: { stepSize: 5, color: '#909399', font: { size: 11 } },
+      grid: { color: 'rgba(220, 223, 230, 0.5)' },
+    },
   },
   plugins: {
-    legend: { position: 'top' },
+    legend: {
+      position: 'top',
+      align: 'end',
+      labels: {
+        color: '#303133',
+        font: { size: 12 },
+        padding: 12,
+        boxWidth: 12,
+        boxHeight: 12,
+        usePointStyle: true,
+        pointStyle: 'circle',
+      },
+    },
+    tooltip: {
+      backgroundColor: 'rgba(48, 49, 51, 0.92)',
+      titleFont: { size: 12, weight: '600' },
+      bodyFont: { size: 12 },
+      padding: 10,
+      cornerRadius: 4,
+      displayColors: true,
+    },
   },
 }
 
 // ---------------------------------------------------------------------------
-// 圓餅圖資料
+// 圓餅圖
 // ---------------------------------------------------------------------------
-const gradeColors = [
-  'rgba(99, 102, 241, 0.8)',
-  'rgba(16, 185, 129, 0.8)',
-  'rgba(245, 158, 11, 0.8)',
-  'rgba(239, 68, 68, 0.8)',
-  'rgba(59, 130, 246, 0.8)',
-]
-
 const doughnutChartData = computed(() => {
   if (!stats.value?.by_grade) return null
   return {
@@ -391,7 +493,10 @@ const doughnutChartData = computed(() => {
     datasets: [
       {
         data: stats.value.by_grade.map(g => g.total),
-        backgroundColor: stats.value.by_grade.map((_, i) => gradeColors[i % gradeColors.length]),
+        backgroundColor: stats.value.by_grade.map((_, i) => CHART_PALETTE[i % CHART_PALETTE.length]),
+        borderColor: '#ffffff',
+        borderWidth: 2,
+        hoverOffset: 4,
       },
     ],
   }
@@ -400,94 +505,201 @@ const doughnutChartData = computed(() => {
 const doughnutChartOptions = {
   responsive: true,
   maintainAspectRatio: false,
+  cutout: '60%',
   plugins: {
-    legend: { position: 'bottom' },
+    legend: {
+      position: 'bottom',
+      labels: {
+        color: '#303133',
+        font: { size: 12 },
+        padding: 12,
+        boxWidth: 10,
+        boxHeight: 10,
+        usePointStyle: true,
+        pointStyle: 'circle',
+      },
+    },
+    tooltip: {
+      backgroundColor: 'rgba(48, 49, 51, 0.92)',
+      padding: 10,
+      cornerRadius: 4,
+      callbacks: {
+        label: (ctx) => {
+          const total = ctx.dataset.data.reduce((s, v) => s + v, 0)
+          const pct = total > 0 ? Math.round((ctx.parsed / total) * 100) : 0
+          return ` ${ctx.label}：${ctx.parsed} 人（${pct}%）`
+        },
+      },
+    },
   },
 }
 </script>
 
 <style scoped>
 .enrollment-view {
-  padding: 16px;
+  padding: var(--space-5, 20px);
 }
 
+/* ===== Page Header ===== */
 .page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-4, 16px);
+  margin-bottom: var(--space-3, 12px);
+  flex-wrap: wrap;
+}
+
+.page-header h2 {
+  margin: 0;
+}
+
+.header-actions {
+  display: flex;
+  gap: var(--space-3, 12px);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.page-meta {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 13px;
+  color: #909399;
+  margin-bottom: var(--space-5, 20px);
+}
+
+.meta-sep {
+  color: #dcdfe6;
+}
+
+/* ===== Summary Cards ===== */
+.summary-cards {
+  margin-bottom: var(--space-4, 16px);
+}
+
+.summary-card :deep(.el-card__body) {
+  padding: 16px 18px;
+}
+
+.card-label {
+  font-size: 13px;
+  color: #909399;
+  margin-bottom: 6px;
+}
+
+.card-value {
+  font-size: 1.75rem;
+  font-weight: 600;
+  line-height: 1.2;
+  color: #303133;
+}
+
+.card-sub {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #909399;
+}
+
+/* ===== Card (table & charts) ===== */
+.table-card,
+.chart-card {
+  margin-top: var(--space-4, 16px);
+}
+
+.card-header-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
-  gap: 8px;
 }
 
-.page-title {
-  margin: 0;
-  font-size: 1.25rem;
+.card-header-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.card-header-meta {
+  font-size: 12px;
+  color: #909399;
+}
+
+/* ===== Stats Table ===== */
+.num-total {
   font-weight: 600;
 }
 
-.filter-bar {
+.ratio-bar {
   display: flex;
-  gap: 8px;
   align-items: center;
+  gap: 8px;
+  padding: 0 8px;
 }
 
-.summary-cards {
-  margin-bottom: 0;
+.ratio-track {
+  flex: 1;
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+  display: flex;
+  background: #f0f2f5;
 }
 
-.summary-card {
-  text-align: center;
-  margin-bottom: 0;
+.ratio-male {
+  background: #409eff;
+  transition: width 0.3s ease;
 }
 
-.summary-value {
-  font-size: 2rem;
-  font-weight: 700;
-  color: #1e293b;
-  line-height: 1.2;
+.ratio-female {
+  background: #f56c6c;
+  transition: width 0.3s ease;
 }
 
-.summary-card--blue .summary-value { color: #3b82f6; }
-.summary-card--pink .summary-value { color: #ec4899; }
-.summary-card--green .summary-value { color: #10b981; }
-
-.summary-label {
-  font-size: 0.875rem;
-  color: #64748b;
-  margin-top: 4px;
+.ratio-text {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: #606266;
+  min-width: 80px;
+  text-align: right;
 }
 
-.table-card {
-  margin-top: 16px;
-}
-
-.chart-wrapper {
-  height: 280px;
-  position: relative;
-}
-
-.empty-hint {
-  text-align: center;
-  color: #94a3b8;
-  padding: 32px 0;
+.ratio-empty {
+  color: #c0c4cc;
 }
 
 :deep(.row-subtotal) td {
-  background-color: #f1f5f9 !important;
+  background-color: #fafafa !important;
   font-weight: 600;
 }
 
 :deep(.row-grand-total) td {
-  background-color: #e2e8f0 !important;
+  background-color: #f5f7fa !important;
   font-weight: 700;
+  color: #303133;
 }
 
-/* 列印時只印花名冊區域 */
+/* ===== Charts ===== */
+.chart-row {
+  margin-top: var(--space-4, 16px);
+}
+
+.chart-wrapper {
+  height: 340px;
+  position: relative;
+  padding: 8px 4px 0;
+}
+
+/* ===== Print ===== */
 @media print {
   .page-header,
-  .el-tabs__header {
+  .page-meta,
+  .el-tabs__header,
+  .enrollment-tabs :deep(.el-tabs__header) {
     display: none !important;
+  }
+  .enrollment-view {
+    padding: 0 !important;
   }
   #roster-print-area {
     display: block !important;

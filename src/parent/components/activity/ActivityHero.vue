@@ -12,7 +12,7 @@
  * Emits:
  *  - scroll-section(key): 'active' | 'unpaid' | 'upcoming'
  */
-import LaurelWreath from '../brand/LaurelWreath.vue'
+import LaurelWreath from '@/components/brand/LaurelWreath.vue'
 
 const props = defineProps({
   activeRegistrations: { type: Number, default: 0 },
@@ -38,7 +38,7 @@ function fmt(n) { return Number(n).toLocaleString('en-US') }
           <span class="num">NT$ {{ fmt(unpaidActivityFee) }}</span>
           <span class="lbl">待繳</span>
         </button>
-        <button type="button" class="act-hero-stat" @click="emit('scroll-section', 'upcoming')">
+        <button v-if="upcomingCount > 0" type="button" class="act-hero-stat" @click="emit('scroll-section', 'upcoming')">
           <span class="num">{{ upcomingCount }}</span>
           <span class="lbl">即將開課</span>
         </button>
@@ -52,11 +52,12 @@ function fmt(n) { return Number(n).toLocaleString('en-US') }
   position: relative;
   overflow: hidden;
   isolation: isolate;
-  background: var(--pt-gradient-info);
-  border: 1px solid rgba(51, 170, 170, 0.25);
-  border-radius: 18px;
+  background:
+    linear-gradient(135deg, var(--pt-tint-message, var(--ivy-tile-teal-bg)) 0%, var(--pt-surface-raised, #fff) 100%);
+  border: 1px solid color-mix(in srgb, var(--pt-tint-message-fg) 28%, transparent);
+  border-radius: var(--pt-card-radius, 14px);
   padding: var(--space-4, 16px);
-  box-shadow: var(--pt-elev-1);
+  box-shadow: var(--pt-shadow-card, var(--pt-elev-1));
 }
 
 .hero-laurel {
@@ -82,14 +83,14 @@ function fmt(n) { return Number(n).toLocaleString('en-US') }
 
 .act-hero-stats {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   gap: 8px;
 }
 
 .act-hero-stat {
-  background: rgba(255, 255, 255, 0.7);
-  border: 1px solid rgba(51, 170, 170, 0.2);
-  border-radius: 12px;
+  background: var(--pt-surface-raised, rgba(255, 255, 255, 0.7));
+  border: 1px solid var(--pt-page-border, rgba(51, 170, 170, 0.2));
+  border-radius: var(--pt-control-radius, 12px);
   padding: 10px 6px;
   cursor: pointer;
   display: flex;

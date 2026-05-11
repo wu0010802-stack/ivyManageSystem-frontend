@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
-import CrownIcon from '@/parent/components/brand/CrownIcon.vue'
+import CrownIcon from '@/components/brand/CrownIcon.vue'
 
 describe('CrownIcon', () => {
   it('預設 size=20、variant=gold、aria-label=皇冠', () => {

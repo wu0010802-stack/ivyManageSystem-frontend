@@ -16,7 +16,7 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ParentIcon from './ParentIcon.vue'
-import BrandMark from './brand/BrandMark.vue'
+import BrandMark from '@/components/brand/BrandMark.vue'
 
 const props = defineProps({
   /** 覆寫 route.meta.title */
@@ -54,7 +54,7 @@ function goBack() {
 </script>
 
 <template>
-  <header class="app-header" role="banner">
+  <header class="app-header" :class="{ 'has-back': displayShowBack }" role="banner">
     <button
       v-if="displayShowBack"
       type="button"
@@ -72,7 +72,9 @@ function goBack() {
       class="app-header-brand"
     />
     <h1 class="header-title">{{ displayTitle }}</h1>
-    <slot name="actions" />
+    <slot name="actions">
+      <span class="header-spacer" aria-hidden="true" />
+    </slot>
   </header>
 </template>
 
@@ -81,24 +83,25 @@ function goBack() {
   position: sticky;
   top: 0;
   z-index: var(--z-sticky, 10);
-  display: flex;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
   align-items: center;
-  justify-content: center;
-  min-height: 52px;
-  background: var(--pt-gradient-brand, var(--brand-primary, #0d9053));
-  color: var(--neutral-0, #fff);
+  min-height: 56px;
+  background: var(--pt-surface-toolbar, var(--pt-surface-card));
+  color: var(--pt-text-strong);
   padding-top: env(safe-area-inset-top, 0);
-  padding-left: var(--space-2, 8px);
-  padding-right: var(--space-2, 8px);
-  /* Soft UI Evolution：標題列加微陰影提供深度，捲動時更分明 */
-  box-shadow: 0 1px 12px rgba(15, 23, 42, 0.08);
+  padding-left: 10px;
+  padding-right: 10px;
+  border-bottom: 1px solid var(--pt-page-border, var(--pt-border));
+  box-shadow: 0 6px 20px rgba(27, 68, 89, 0.05);
 }
 
 .header-title {
   margin: 0;
   font-size: var(--text-lg, 16px);
-  font-weight: var(--font-weight-semibold, 600);
-  letter-spacing: 0.5px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-align: center;
   /* 如果太長就截斷，避免 header 變高 */
   overflow: hidden;
   text-overflow: ellipsis;
@@ -106,38 +109,42 @@ function goBack() {
 }
 
 .back-btn {
-  position: absolute;
-  left: var(--space-2, 8px);
-  top: calc(env(safe-area-inset-top, 0) + 4px);
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  color: var(--neutral-0, #fff);
+  position: relative;
+  left: auto;
+  top: auto;
+  background: var(--pt-tint-brand, var(--brand-primary-soft));
+  border: 1px solid var(--pt-page-border, var(--pt-border));
+  color: var(--brand-primary);
   cursor: pointer;
-  border-radius: var(--radius-full, 9999px);
+  border-radius: 14px;
   padding: 6px;
-  width: 36px;
-  height: 36px;
+  width: 38px;
+  height: 38px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   transition: background var(--transition-fast, 0.15s ease), transform var(--transition-fast, 0.15s ease);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
 }
 
 .back-btn:hover {
-  background: rgba(255, 255, 255, 0.22);
+  background: var(--pt-tint-brand-strong, var(--brand-primary-soft));
 }
 
 .back-btn:active {
-  background: rgba(255, 255, 255, 0.28);
+  background: var(--pt-tint-brand-strong, var(--brand-primary-soft));
   transform: scale(0.94);
 }
 
 .app-header-brand {
-  position: absolute;
-  left: var(--space-2, 8px);
-  top: calc(env(safe-area-inset-top, 0) + 12px);
+  position: relative;
+  left: auto;
+  top: auto;
+  justify-self: center;
   flex-shrink: 0;
+}
+
+.header-spacer {
+  width: 38px;
+  height: 38px;
 }
 </style>
