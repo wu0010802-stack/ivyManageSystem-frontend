@@ -83,8 +83,24 @@ function manualChunks(id) {
     }
 
     // 家長 App（LIFF）獨立 chunk；管理端 / Portal 都不需要載入
-    if (id.includes('/src/parent/') || id.includes('@line/liff')) {
+    // ⚠ 必須涵蓋 @line/liff 主套件 + @liff/* 所有 sub-package（init / sub-window /
+    //   message-bus / share-target-picker / analytics / util / permission / store / ...）
+    //   只攔 @line/liff 會讓 sub-package 落到 vendor catch-all → admin / portal 入口
+    //   被迫多載 ~25 KB gz。用 /node_modules/@liff/ 而非 @liff/ 避免 src/ 內別名誤命中。
+    if (
+        id.includes('/src/parent/') ||
+        id.includes('@line/liff') ||
+        id.includes('/node_modules/@liff/')
+    ) {
         return 'parent-app'
+    }
+
+    // Leaflet 地圖庫只在 RecruitmentAddressHeatmap.vue（招生熱力圖）動態 import 用到。
+    // 不抽出時會 fall through 到 vendor catch-all → 所有入口（admin / parent / portal）
+    // 都被迫載 150 KB raw / ~50 KB gz。
+    // 不放 parent-app：parent 完全不用地圖。
+    if (id.includes('/node_modules/leaflet/')) {
+        return 'leaflet'
     }
 
     if (id.includes('chart.js') || id.includes('vue-chartjs')) {
