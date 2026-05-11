@@ -9,6 +9,7 @@ import {
 } from '../services/liff'
 import { liffLogin } from '../api/auth'
 import { useParentAuthStore } from '../stores/parentAuth'
+import BrandMark from '@/parent/components/brand/BrandMark.vue'
 
 const router = useRouter()
 const authStore = useParentAuthStore()
@@ -89,10 +90,8 @@ onMounted(() => startLogin())
 
 <template>
   <div class="login-view">
+    <BrandMark variant="full" :size="100" class="welcome-mark" />
     <div class="login-card">
-      <div class="logo">
-        <img src="/pwa-192x192.png" alt="" aria-hidden="true" />
-      </div>
       <h1 class="title">常春藤家長</h1>
       <p
         v-if="status === 'init'"
@@ -126,10 +125,16 @@ onMounted(() => startLogin())
 .login-view {
   min-height: 100dvh;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: linear-gradient(135deg, var(--brand-primary) 0%, #5fa46a 100%);
+  background: var(--pt-gradient-hero);
+}
+
+.welcome-mark {
+  margin: var(--space-6, 32px) auto var(--space-5, 24px);
+  display: block;
 }
 
 .login-card {
@@ -144,14 +149,8 @@ onMounted(() => startLogin())
   border: var(--pt-hairline);
 }
 
-.logo img {
-  width: 72px;
-  height: 72px;
-  border-radius: 16px;
-}
-
 .title {
-  margin: 16px 0 24px;
+  margin: 0 0 24px;
   font-size: 22px;
   color: var(--brand-primary);
 }

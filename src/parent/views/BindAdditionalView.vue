@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { bindAdditional } from '../api/auth'
 import { useChildrenStore } from '../stores/children'
 import { toast } from '../utils/toast'
+import BrandMark from '@/parent/components/brand/BrandMark.vue'
 
 const router = useRouter()
 const childrenStore = useChildrenStore()
@@ -35,6 +36,7 @@ async function submit() {
 
 <template>
   <div class="bind-add-view">
+    <BrandMark variant="full" :size="100" class="welcome-mark" />
     <div class="card">
       <h2 class="title">加綁第二個小孩</h2>
       <p class="desc">
@@ -68,14 +70,27 @@ async function submit() {
 
 <style scoped>
 .bind-add-view {
-  padding: 8px 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--pt-gradient-hero);
 }
 
+.welcome-mark {
+  margin: var(--space-6, 32px) auto var(--space-5, 24px);
+  display: block;}
+
 .card {
-  background: var(--neutral-0);
-  border-radius: 12px;
-  padding: 20px;
-  box-shadow: var(--pt-elev-1);
+  background: var(--pt-surface-card, var(--neutral-0));
+  border-radius: var(--radius-xl, 16px);
+  padding: 28px 22px;
+  width: 100%;
+  max-width: 360px;
+  box-shadow: var(--pt-elev-2);
+  border: var(--pt-hairline);
 }
 
 .title {

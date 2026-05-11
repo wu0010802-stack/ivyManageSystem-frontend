@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { bind } from '../api/auth'
 import { useParentAuthStore } from '../stores/parentAuth'
+import BrandMark from '@/parent/components/brand/BrandMark.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -41,6 +42,7 @@ async function submit() {
 
 <template>
   <div class="bind-view">
+    <BrandMark variant="full" :size="100" class="welcome-mark" />
     <div class="bind-card">
       <h2 class="title">完成家長帳號綁定</h2>
       <p v-if="nameHint" class="hint">您好，{{ nameHint }}</p>
@@ -87,10 +89,16 @@ async function submit() {
 .bind-view {
   min-height: 100dvh;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: var(--pt-gradient-brand);
+  background: var(--pt-gradient-hero);
+}
+
+.welcome-mark {
+  margin: var(--space-6, 32px) auto var(--space-5, 24px);
+  display: block;
 }
 
 .bind-card {

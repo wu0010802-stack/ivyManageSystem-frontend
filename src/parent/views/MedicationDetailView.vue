@@ -140,10 +140,11 @@ h3 { margin-top: 16px; font-size: 14px; color: var(--pt-text-muted); }
 .logs li { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--pt-border-light); font-size: 14px; }
 .time { font-weight: bold; min-width: 50px; }
 .status { padding: 2px 8px; border-radius: 10px; font-size: 12px; }
-.status.pending { background: var(--color-warning-soft); color: var(--pt-warning-text-soft); }
-.status.administered { background: var(--brand-primary-soft); color: var(--pt-success-text); }
-.status.skipped { background: var(--pt-surface-mute); color: var(--pt-text-placeholder); }
-.status.correction { background: var(--pt-tint-medication); color: var(--pt-violet-text); }
+/* status chip：[data-status] 等效 class pattern */
+.status.pending      { background: var(--pt-tint-money);        color: var(--pt-tint-money-fg); }
+.status.administered { background: var(--pt-tint-calendar);     color: var(--pt-tint-calendar-fg); }
+.status.skipped      { background: var(--pt-tint-pickup);       color: var(--pt-tint-pickup-fg); }
+.status.correction   { background: var(--pt-tint-medication);   color: var(--pt-tint-medication-fg); }
 .ts, .reason { color: var(--pt-text-placeholder); font-size: 12px; }
 .hint { color: var(--pt-text-placeholder); padding: 12px 0; }
 .photos { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }

@@ -5,6 +5,18 @@ import { getChildProfile } from '../api/profile'
 import { toast } from '../utils/toast'
 import ParentIcon from '../components/ParentIcon.vue'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
+import LaurelWreath from '@/parent/components/brand/LaurelWreath.vue'
+import KawaiiStar from '@/parent/components/brand/KawaiiStar.vue'
+import CrownIcon from '@/parent/components/brand/CrownIcon.vue'
+
+function isBirthdayToday(child) {
+  if (!child?.birthday) return false
+  const parts = String(child.birthday).split('-')
+  if (parts.length < 3) return false
+  const [, m, day] = parts.map(Number)
+  const d = new Date()
+  return d.getMonth() + 1 === m && d.getDate() === day
+}
 
 const route = useRoute()
 const router = useRouter()
@@ -56,18 +68,33 @@ onMounted(fetchData)
     </template>
 
     <template v-else-if="data">
-      <section class="card">
-        <div class="head">
-          <div class="name">{{ data.student.name }}</div>
-          <div class="sub">
-            學號 {{ data.student.student_no || '—' }}
-            <span v-if="data.student.gender">・{{ data.student.gender }}</span>
-            <span v-if="data.student.birthday">・{{ data.student.birthday }}</span>
+      <section class="child-hero">
+        <LaurelWreath side="full" :opacity="0.15" :size="120" class="child-hero-laurel" />
+        <KawaiiStar :size="32" decorative class="child-hero-star" />
+        <div class="child-hero-inner">
+          <div class="child-avatar-wrap">
+            <CrownIcon
+              v-if="isBirthdayToday(data.student)"
+              :size="22"
+              decorative
+              class="child-crown"
+            />
+            <div class="child-avatar">
+              {{ data.student?.name ? data.student.name.charAt(0) : '👤' }}
+            </div>
+          </div>
+          <div class="child-info">
+            <div class="child-name">{{ data.student?.name || '寶貝' }}</div>
+            <div class="child-meta">{{ data.classroom?.name || '' }}</div>
           </div>
         </div>
-        <div class="row">
-          <span class="label">班級</span>
-          <span>{{ data.classroom?.name || '未分班' }}</span>
+      </section>
+
+      <section class="card">
+        <div class="sub-info">
+          <span>學號 {{ data.student.student_no || '—' }}</span>
+          <span v-if="data.student.gender">・{{ data.student.gender }}</span>
+          <span v-if="data.student.birthday">・{{ data.student.birthday }}</span>
         </div>
         <div v-if="data.teachers.length" class="row">
           <span class="label">老師</span>
@@ -140,6 +167,74 @@ onMounted(fetchData)
   flex-direction: column;
   gap: var(--pt-page-gap, 18px);
 }
+
+/* ── child hero ──────────────────────────────── */
+.child-hero {
+  position: relative;
+  margin: 0 var(--space-3, 12px);
+  padding: var(--space-5, 22px) var(--space-4, 16px);
+  background: var(--pt-gradient-hero);
+  border: 1px solid rgba(90, 168, 66, 0.15);
+  border-radius: 18px;
+  box-shadow: var(--pt-elev-1);
+  overflow: hidden;
+  isolation: isolate;
+}
+.child-hero-laurel {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 0;
+}
+.child-hero-star {
+  position: absolute;
+  right: var(--space-3, 12px);
+  top: var(--space-3, 12px);
+  z-index: 0;
+}
+.child-hero-inner {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3, 12px);
+}
+.child-avatar-wrap {
+  position: relative;
+}
+.child-crown {
+  position: absolute;
+  left: 50%;
+  top: -12px;
+  transform: translateX(-50%);
+  z-index: 2;
+}
+.child-avatar {
+  width: 56px;
+  height: 56px;
+  background: linear-gradient(135deg, var(--ivy-green-deep, #0d9053), var(--ivy-green-bright, #0caf76));
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  font-size: 22px;
+  box-shadow: var(--pt-elev-1);
+}
+.child-name {
+  font-size: 18px;
+  font-weight: 900;
+  color: var(--pt-text-strong);
+}
+.child-meta {
+  font-size: 12px;
+  color: var(--pt-text-muted);
+  margin-top: 2px;
+}
+
+/* ── info card ───────────────────────────────── */
 .card {
   background: var(--pt-surface-card, var(--neutral-0));
   border: 1px solid var(--pt-page-border, var(--pt-border));
@@ -147,20 +242,10 @@ onMounted(fetchData)
   padding: 15px;
   box-shadow: var(--pt-shadow-card, var(--pt-elev-1));
 }
-.head {
-  margin-bottom: 12px;
-  border-bottom: 1px solid var(--pt-border-light);
-  padding-bottom: 12px;
-}
-.name {
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--pt-text-strong);
-}
-.sub {
-  margin-top: 4px;
+.sub-info {
   font-size: 13px;
   color: var(--pt-text-placeholder);
+  margin-bottom: 10px;
 }
 .row {
   display: flex;

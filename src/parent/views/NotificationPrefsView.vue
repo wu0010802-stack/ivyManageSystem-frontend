@@ -16,6 +16,27 @@ const EVENT_LABELS = {
   attendance_alert: '出席異常',
 }
 
+// 通知類別 icon 圖示 → IvyKids tint 對應
+// messages→tint-message / announcements→tint-announcement / events→tint-event
+// medication（無本頁）/ fee→tint-money / leave→tint-leave / attendance→tint-pickup
+const EVENT_TINT = {
+  message_received:  'message',
+  announcement:      'announcement',
+  event_ack_required:'event',
+  fee_due:           'money',
+  leave_result:      'leave',
+  attendance_alert:  'pickup',
+}
+
+const EVENT_ICON = {
+  message_received:   '💬',
+  announcement:       '📢',
+  event_ack_required: '📅',
+  fee_due:            '💰',
+  leave_result:       '📋',
+  attendance_alert:   '🔔',
+}
+
 const EVENT_HINTS = {
   message_received: '老師主動傳訊或回覆時通知',
   announcement: '園所發布新公告時通知',
@@ -72,6 +93,11 @@ onMounted(load)
         :key="ev"
         class="row"
       >
+        <span
+          class="cat-icon"
+          :data-tint="EVENT_TINT[ev]"
+          :aria-hidden="true"
+        >{{ EVENT_ICON[ev] }}</span>
         <div class="text">
           <strong>{{ label }}</strong>
           <span class="sub">{{ EVENT_HINTS[ev] }}</span>
@@ -100,6 +126,26 @@ h2 { margin: 0 0 6px; font-size: 18px; }
 .text { flex: 1; display: flex; flex-direction: column; gap: 2px; }
 .text strong { font-size: 15px; color: var(--pt-text-strong); }
 .sub { font-size: 12px; color: var(--pt-text-placeholder); }
+/* 通知類別 icon dot — [data-tint] → IvyKids tint token */
+.cat-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+.cat-icon[data-tint='message']      { background: var(--pt-tint-message); }
+.cat-icon[data-tint='announcement'] { background: var(--pt-tint-announcement); }
+.cat-icon[data-tint='event']        { background: var(--pt-tint-event); }
+.cat-icon[data-tint='money']        { background: var(--pt-tint-money); }
+.cat-icon[data-tint='leave']        { background: var(--pt-tint-leave); }
+.cat-icon[data-tint='pickup']       { background: var(--pt-tint-pickup); }
+.cat-icon[data-tint='medication']   { background: var(--pt-tint-medication); }
+
+/* toggle on bg → var(--brand-primary) */
 input[type="checkbox"] {
   width: 44px; height: 24px; appearance: none; background: var(--pt-text-hint);
   border-radius: 12px; position: relative; cursor: pointer; transition: background .2s;

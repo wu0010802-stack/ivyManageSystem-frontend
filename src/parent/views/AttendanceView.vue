@@ -94,13 +94,18 @@ function goToday() {
   month.value = d.getMonth() + 1
 }
 
+// status → IvyKids tint token mapping
+// 出席/present/on_time → tint-calendar（綠）
+// 病假/事假/leave/absence → tint-leave（青綠）
+// 缺席/absent → tint-announcement（珊瑚紅）
+// 遲到/late/tardy → tint-money（黃）（已有 --pt-tint-late 但統一改用 tint-money 以符合 P6 規格）
 const statusColor = (status) => {
   return {
-    出席: { bg: 'var(--brand-primary-soft)', color: 'var(--pt-success-text)' },
-    缺席: { bg: 'var(--color-danger-soft)', color: 'var(--color-danger)' },
-    病假: { bg: 'var(--color-warning-soft)', color: 'var(--pt-warning-text-soft)' },
-    事假: { bg: 'var(--color-info-soft)', color: 'var(--pt-info-link)' },
-    遲到: { bg: 'var(--pt-tint-late)', color: 'var(--pt-tint-late-fg)' },
+    出席:   { bg: 'var(--pt-tint-calendar)',     color: 'var(--pt-tint-calendar-fg)' },
+    缺席:   { bg: 'var(--pt-tint-announcement)', color: 'var(--pt-tint-announcement-fg)' },
+    病假:   { bg: 'var(--pt-tint-leave)',        color: 'var(--pt-tint-leave-fg)' },
+    事假:   { bg: 'var(--pt-tint-leave)',        color: 'var(--pt-tint-leave-fg)' },
+    遲到:   { bg: 'var(--pt-tint-money)',        color: 'var(--pt-tint-money-fg)' },
   }[status] || { bg: 'var(--pt-surface-mute)', color: 'var(--pt-text-soft)' }
 }
 
