@@ -9,6 +9,10 @@ import {
 import { useEmployeeStore } from '@/stores/employee'
 import PortalLeaveForm from '@/components/portal/PortalLeaveForm.vue'
 import PortalLeaveList from '@/components/portal/PortalLeaveList.vue'
+import { useIsMobile } from '@/composables/useIsMobile'
+import PortalSubstituteCardList from '@/components/portal/PortalSubstituteCardList.vue'
+
+const { isMobile } = useIsMobile()
 
 // ── 代理人相關 ──
 const employeeStore = useEmployeeStore()
@@ -80,6 +84,8 @@ const handleSubstituteRespond = async (leaveId, action) => {
     respondLoading.value = false
   }
 }
+
+const onSubstituteRespond = (leaveId, action) => handleSubstituteRespond(leaveId, action)
 
 // ── 假單統計 ──
 const leaveStats = ref(null)
@@ -183,7 +189,17 @@ onMounted(() => {
           style="margin-left: 8px;"
         />
       </template>
-      <div style="overflow-x: auto">
+
+      <!-- Mobile: card list -->
+      <PortalSubstituteCardList
+          v-if="isMobile"
+          :requests="sortedSubstituteRequests"
+          :respond-loading="respondLoading"
+          @respond="onSubstituteRespond"
+      />
+
+      <!-- Desktop: table（保留原 markup）-->
+      <div v-else style="overflow-x: auto">
         <el-table :data="sortedSubstituteRequests" border stripe style="width: 100%;" max-height="400">
           <el-table-column prop="requester_name" label="請假人" width="100" />
           <el-table-column prop="leave_type_label" label="假別" width="100" />
@@ -210,6 +226,7 @@ onMounted(() => {
           </el-table-column>
         </el-table>
       </div>
+
       <el-empty v-if="!substituteLoading && mySubstituteRequests.length === 0" description="目前無待代理的假單" />
     </el-card>
   </div>
