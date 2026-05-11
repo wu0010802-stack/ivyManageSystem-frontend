@@ -1,9 +1,14 @@
 <script setup>
-import { ref, reactive, computed, watch, onMounted } from 'vue'
+import { ref, reactive, watch, onMounted } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { ElMessage } from 'element-plus'
 import { getMyPunchCorrections, createMyPunchCorrection } from '@/api/portal'
 import { apiError } from '@/utils/error'
+import { useIsMobile } from '@/composables/useIsMobile'
+import TeacherBottomSheet from '@/components/portal/TeacherBottomSheet.vue'
+import PortalPunchCorrectionForm from '@/components/portal/PortalPunchCorrectionForm.vue'
+
+const { isMobile } = useIsMobile()
 
 const loading = ref(false)
 const submitLoading = ref(false)
@@ -22,32 +27,6 @@ const correctionTypes = [
 ]
 
 const showForm = ref(false)
-const form = reactive({
-  attendance_date: '',
-  correction_type: 'punch_out',
-  requested_punch_in_time: '',
-  requested_punch_out_time: '',
-  reason: '',
-})
-
-const formRef = ref(null)
-
-const disabledDate = (time) => {
-  return time.getTime() > Date.now()
-}
-
-const showPunchIn = computed(() =>
-  form.correction_type === 'punch_in' || form.correction_type === 'both'
-)
-const showPunchOut = computed(() =>
-  form.correction_type === 'punch_out' || form.correction_type === 'both'
-)
-
-const rules = {
-  attendance_date: [{ required: true, message: '請選擇日期', trigger: 'change' }],
-  correction_type: [{ required: true, message: '請選擇補正類型', trigger: 'change' }],
-  reason: [{ required: false }],
-}
 
 const fetchCorrections = async () => {
   loading.value = true
@@ -61,47 +40,11 @@ const fetchCorrections = async () => {
   }
 }
 
-const openForm = () => {
-  form.attendance_date = ''
-  form.correction_type = 'punch_out'
-  form.requested_punch_in_time = ''
-  form.requested_punch_out_time = ''
-  form.reason = ''
-  showForm.value = true
-}
+const openForm = () => { showForm.value = true }
 
-const buildDatetime = (dateStr, timeStr) => {
-  if (!dateStr || !timeStr) return null
-  return `${dateStr}T${timeStr}:00`
-}
-
-const submitCorrection = async () => {
-  try {
-    await formRef.value.validate()
-  } catch {
-    return
-  }
-
-  // 前端驗證：依補正類型確認時間已填
-  if (showPunchIn.value && !form.requested_punch_in_time) {
-    ElMessage.warning('請填寫申請上班時間')
-    return
-  }
-  if (showPunchOut.value && !form.requested_punch_out_time) {
-    ElMessage.warning('請填寫申請下班時間')
-    return
-  }
-
+const submitCorrection = async (payload) => {
   submitLoading.value = true
   try {
-    const payload = {
-      attendance_date: form.attendance_date,
-      correction_type: form.correction_type,
-      requested_punch_in: buildDatetime(form.attendance_date, form.requested_punch_in_time),
-      requested_punch_out: buildDatetime(form.attendance_date, form.requested_punch_out_time),
-      reason: form.reason || null,
-    }
-
     await createMyPunchCorrection(payload)
     ElMessage.success('補打卡申請已送出，待主管核准')
     showForm.value = false
@@ -214,72 +157,35 @@ onMounted(fetchCorrections)
       <el-empty v-if="!loading && corrections.length === 0" description="本月無補打卡申請記錄" />
     </el-card>
 
-    <!-- 申請對話框 -->
-    <el-dialog v-model="showForm" title="新增補打卡申請" width="480px">
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
-        <el-form-item label="申請日期" prop="attendance_date">
-          <el-date-picker
-            v-model="form.attendance_date"
-            type="date"
-            value-format="YYYY-MM-DD"
-            placeholder="選擇遺漏打卡的日期"
-            :disabled-date="disabledDate"
-            style="width: 100%;"
-          />
-        </el-form-item>
-        <el-form-item label="補正類型" prop="correction_type">
-          <el-select v-model="form.correction_type" style="width: 100%;">
-            <el-option
-              v-for="t in correctionTypes"
-              :key="t.value"
-              :label="t.label"
-              :value="t.value"
-            >
-              <div style="display: flex; justify-content: space-between;">
-                <span>{{ t.label }}</span>
-                <span style="color: var(--el-text-color-placeholder); font-size: 12px;">{{ t.description }}</span>
-              </div>
-            </el-option>
-          </el-select>
-        </el-form-item>
-        <el-form-item v-if="showPunchIn" label="申請上班時間" required>
-          <el-time-picker
-            v-model="form.requested_punch_in_time"
-            format="HH:mm"
-            value-format="HH:mm"
-            placeholder="選擇申請上班時間"
-            style="width: 100%;"
-          />
-        </el-form-item>
-        <el-form-item v-if="showPunchOut" label="申請下班時間" required>
-          <el-time-picker
-            v-model="form.requested_punch_out_time"
-            format="HH:mm"
-            value-format="HH:mm"
-            placeholder="選擇申請下班時間"
-            style="width: 100%;"
-          />
-        </el-form-item>
-        <el-form-item label="說明原因">
-          <el-input
-            v-model="form.reason"
-            type="textarea"
-            :rows="3"
-            placeholder="請說明遺忘打卡的原因（選填）"
-          />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showForm = false">取消</el-button>
-        <el-button
-          type="primary"
-          :loading="submitLoading"
-          :disabled="!form.attendance_date"
-          @click="submitCorrection"
-        >
-          送出申請
-        </el-button>
-      </template>
+    <!-- Mobile: BottomSheet -->
+    <TeacherBottomSheet
+        v-if="isMobile"
+        v-model="showForm"
+        title="新增補打卡申請"
+        default-snap="full"
+        :snap-points="['full']"
+    >
+        <PortalPunchCorrectionForm
+            v-if="showForm"
+            :loading="submitLoading"
+            @submit="submitCorrection"
+            @cancel="showForm = false"
+        />
+    </TeacherBottomSheet>
+
+    <!-- Desktop: el-dialog -->
+    <el-dialog
+        v-else
+        v-model="showForm"
+        title="新增補打卡申請"
+        width="480px"
+    >
+        <PortalPunchCorrectionForm
+            v-if="showForm"
+            :loading="submitLoading"
+            @submit="submitCorrection"
+            @cancel="showForm = false"
+        />
     </el-dialog>
   </div>
 </template>
