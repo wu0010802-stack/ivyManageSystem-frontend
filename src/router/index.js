@@ -177,6 +177,12 @@ const router = createRouter({
             component: () => import('../views/admin/GovDataSync.vue'),
             meta: { title: '政府資料同步' }
         },
+        {
+            path: '/admin/gov-reports/certificates',
+            name: 'AdminGovReportsCertificates',
+            component: () => import('../views/admin/gov-reports/CertificatesView.vue'),
+            meta: { title: '在學證明開立紀錄' }
+        },
         // ============ 學費管理 ============
         {
             path: '/fees',
