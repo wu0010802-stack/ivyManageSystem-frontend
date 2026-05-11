@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { bind } from '../api/auth'
 import { useParentAuthStore } from '../stores/parentAuth'
-import BrandMark from '@/parent/components/brand/BrandMark.vue'
+import BrandMark from '@/components/brand/BrandMark.vue'
 
 const route = useRoute()
 const router = useRouter()

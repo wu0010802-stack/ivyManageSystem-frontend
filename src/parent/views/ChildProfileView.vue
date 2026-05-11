@@ -5,9 +5,9 @@ import { getChildProfile } from '../api/profile'
 import { toast } from '../utils/toast'
 import ParentIcon from '../components/ParentIcon.vue'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
-import LaurelWreath from '@/parent/components/brand/LaurelWreath.vue'
-import KawaiiStar from '@/parent/components/brand/KawaiiStar.vue'
-import CrownIcon from '@/parent/components/brand/CrownIcon.vue'
+import LaurelWreath from '@/components/brand/LaurelWreath.vue'
+import KawaiiStar from '@/components/brand/KawaiiStar.vue'
+import CrownIcon from '@/components/brand/CrownIcon.vue'
 
 function isBirthdayToday(child) {
   if (!child?.birthday) return false

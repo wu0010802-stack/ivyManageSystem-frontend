@@ -9,7 +9,7 @@ import {
 } from '../services/liff'
 import { liffLogin } from '../api/auth'
 import { useParentAuthStore } from '../stores/parentAuth'
-import BrandMark from '@/parent/components/brand/BrandMark.vue'
+import BrandMark from '@/components/brand/BrandMark.vue'
 
 const router = useRouter()
 const authStore = useParentAuthStore()

@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import { bindAdditional } from '../api/auth'
 import { useChildrenStore } from '../stores/children'
 import { toast } from '../utils/toast'
-import BrandMark from '@/parent/components/brand/BrandMark.vue'
+import BrandMark from '@/components/brand/BrandMark.vue'
 
 const router = useRouter()
 const childrenStore = useChildrenStore()
