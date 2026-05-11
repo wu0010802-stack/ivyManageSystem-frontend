@@ -41,3 +41,14 @@ export const rejectSubsidy = (id) =>
   api.put(`/gov-moe/subsidies/${id}/reject`)
 export const exportSubsidies = (params) =>
   api.get('/gov-moe/subsidies/export', { params, responseType: 'blob' })
+
+// --- IEP (Phase 4A) ---
+export const listIeps = (params = {}) => api.get('/gov-moe/iep', { params })
+export const createIep = (payload) => api.post('/gov-moe/iep', payload)
+export const updateIep = (id, payload) => api.put(`/gov-moe/iep/${id}`, payload)
+export const submitIep = (id) => api.put(`/gov-moe/iep/${id}/submit`)
+export const approveIep = (id) => api.put(`/gov-moe/iep/${id}/approve`)
+export const closeIep = (id) => api.put(`/gov-moe/iep/${id}/close`)
+export const cloneIep = (id, payload) => api.post(`/gov-moe/iep/${id}/clone`, payload)
+export const exportIepPdf = (id) =>
+  api.get(`/gov-moe/iep/${id}/export`, { responseType: 'blob' })
