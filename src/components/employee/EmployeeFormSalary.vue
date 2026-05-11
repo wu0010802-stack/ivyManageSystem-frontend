@@ -195,6 +195,36 @@ const fmtRO = (v, currency = false) => {
                 </el-col>
             </el-row>
 
+            <!-- 不薪轉 / 不入稅報（業主指示特殊個案） -->
+            <el-row :gutter="20">
+                <el-col :span="12">
+                    <el-form-item>
+                        <template #label>
+                            <el-tooltip
+                                content="薪資仍計算，但不入銀行轉帳名冊（用現金/其他管道支付，如執行長指示不薪轉的個案）"
+                                placement="top"
+                            >
+                                <span>不入轉帳名冊</span>
+                            </el-tooltip>
+                        </template>
+                        <el-switch v-model="form.skip_payroll_transfer" :disabled="isReadonly" />
+                    </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                    <el-form-item>
+                        <template #label>
+                            <el-tooltip
+                                content="薪資/保險仍正常計算扣繳，但年度扣繳憑單匯出時排除（國稅局不作帳）"
+                                placement="top"
+                            >
+                                <span>不入稅報</span>
+                            </el-tooltip>
+                        </template>
+                        <el-switch v-model="form.unreported_for_tax" :disabled="isReadonly" />
+                    </el-form-item>
+                </el-col>
+            </el-row>
+
             <!-- 季扣眷屬人數 + 投保覆蓋原因 -->
             <el-row :gutter="20">
                 <el-col :span="8">

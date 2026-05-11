@@ -35,6 +35,37 @@ function manualChunks(id) {
         return 'shared-common'
     }
 
+    // Admin entry 端 static-import 鏈會用到的共用 utilities：
+    // 不放任何規則時，Rollup 會把它們合併進第一個共用它的 dynamic chunk
+    // （實測：portal / activity-admin），造成 admin index.html 必須回頭 import
+    // 那兩個 chunk → modulepreload 把 portal 85KB / activity-admin 55KB（gz）
+    // 強制塞入管理端首屏 critical path。
+    //
+    // 不能放 shared-common：parent.html 也載 shared-common，把 admin-only 的
+    // auth/permissions/employees 邏輯給家長端會浪費 bundle 並洩漏權限相關代碼。
+    //
+    // 必須在 activity-admin / portal 規則之前，否則同樣的 fall-through 路徑
+    // 仍會被那兩條規則之外的 Rollup chunking 演算法吸收。
+    //
+    // ⚠ 加新檔案前先 grep 確認無 element-plus 引用；EP 引用會把 element-plus
+    // chunk 拉成 admin-core 的硬依賴，違反 admin-core 的「entry-only」定位。
+    if (
+        id.includes('/src/api/auth.js') ||
+        id.includes('/src/api/employees.js') ||
+        id.includes('/src/api/studentAssessments.js') ||
+        id.includes('/src/api/studentIncidents.js') ||
+        id.includes('/src/api/classrooms.js') ||
+        id.includes('/src/api/index.js') ||
+        id.includes('/src/stores/_createFetchStore.js') ||
+        id.includes('/src/stores/employee.js') ||
+        id.includes('/src/utils/auth.js') ||
+        id.includes('/src/utils/error.js') ||
+        id.includes('/src/utils/errorHandler.js') ||
+        id.includes('/src/constants/permissions.js')
+    ) {
+        return 'admin-core'
+    }
+
     if (
         id.includes('/src/views/activity/') ||
         id.includes('/src/api/activity.js') ||
@@ -52,8 +83,24 @@ function manualChunks(id) {
     }
 
     // 家長 App（LIFF）獨立 chunk；管理端 / Portal 都不需要載入
-    if (id.includes('/src/parent/') || id.includes('@line/liff')) {
+    // ⚠ 必須涵蓋 @line/liff 主套件 + @liff/* 所有 sub-package（init / sub-window /
+    //   message-bus / share-target-picker / analytics / util / permission / store / ...）
+    //   只攔 @line/liff 會讓 sub-package 落到 vendor catch-all → admin / portal 入口
+    //   被迫多載 ~25 KB gz。用 /node_modules/@liff/ 而非 @liff/ 避免 src/ 內別名誤命中。
+    if (
+        id.includes('/src/parent/') ||
+        id.includes('@line/liff') ||
+        id.includes('/node_modules/@liff/')
+    ) {
         return 'parent-app'
+    }
+
+    // Leaflet 地圖庫只在 RecruitmentAddressHeatmap.vue（招生熱力圖）動態 import 用到。
+    // 不抽出時會 fall through 到 vendor catch-all → 所有入口（admin / parent / portal）
+    // 都被迫載 150 KB raw / ~50 KB gz。
+    // 不放 parent-app：parent 完全不用地圖。
+    if (id.includes('/node_modules/leaflet/')) {
+        return 'leaflet'
     }
 
     if (id.includes('chart.js') || id.includes('vue-chartjs')) {
