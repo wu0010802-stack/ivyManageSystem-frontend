@@ -22,6 +22,7 @@ import ActivityTab from './tabs/ActivityTab.vue'
 import HealthGrowthTab from './tabs/HealthGrowthTab.vue'
 import CommunicationTab from './tabs/CommunicationTab.vue'
 import StudentDisabilityDocsPanel from './StudentDisabilityDocsPanel.vue'
+import StudentEnrollmentCertButton from './StudentEnrollmentCertButton.vue'
 
 const props = defineProps({
   studentId: { type: Number, default: null },
@@ -233,6 +234,7 @@ const breadcrumbItems = computed(() => {
       @open-full-page="handleOpenFullPage"
       @goto-link="handleGotoLink"
     />
+    <StudentEnrollmentCertButton v-if="studentId" :student-id="studentId" />
 
     <el-empty v-if="!loading && !profile" description="找不到學生資料" />
 
