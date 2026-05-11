@@ -27,4 +27,23 @@ describe('govMoe API module', () => {
       params: { days: 30 },
     })
   })
+
+  it('generateCertificate posts to correct URL', async () => {
+    api.post = vi.fn().mockResolvedValue({ data: {} })
+    const payload = { issue_date: '2026-05-12', purpose: 'p', copies: 1 }
+    await govMoe.generateCertificate(7, payload)
+    expect(api.post).toHaveBeenCalledWith(
+      '/gov-moe/certificates/7/generate',
+      payload
+    )
+  })
+
+  it('listCertificateHistory queries history endpoint', async () => {
+    api.get = vi.fn().mockResolvedValue({ data: [] })
+    const params = { student_id: 7 }
+    await govMoe.listCertificateHistory(params)
+    expect(api.get).toHaveBeenCalledWith('/gov-moe/certificates/history', {
+      params,
+    })
+  })
 })

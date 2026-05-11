@@ -16,3 +16,10 @@ export const deleteDisabilityDoc = (id) =>
 // --- Dashboard Widget (Phase 1) ---
 export const getDisabilityExpiryWidget = (days = 30) =>
   api.get('/gov-moe/dashboard/disability-expiry', { params: { days } })
+
+// --- Enrollment Certificates (Phase 4C) ---
+export const generateCertificate = (studentId, payload) =>
+  api.post(`/gov-moe/certificates/${studentId}/generate`, payload)
+
+export const listCertificateHistory = (params = {}) =>
+  api.get('/gov-moe/certificates/history', { params })
