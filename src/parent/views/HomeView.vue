@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { getHomeSummary } from '../api/profile'
 import { useParentAuthStore } from '../stores/parentAuth'
@@ -10,12 +10,28 @@ import SkeletonBlock from '../components/SkeletonBlock.vue'
 import HomeHero from '../components/home/HomeHero.vue'
 import TodayStatusCards from '../components/home/TodayStatusCards.vue'
 import TodoCenter from '../components/home/TodoCenter.vue'
-import ChildrenStrip from '../components/home/ChildrenStrip.vue'
-import QuickActions from '../components/home/QuickActions.vue'
 import PushCta from '../components/home/PushCta.vue'
 
 const router = useRouter()
 const authStore = useParentAuthStore()
+
+// IA v2 Phase 3：公告／出席 從獨立 tab 降為「家校」分頁子項目，
+// 對既有家長加一次性 banner 引導。flag 寫在 dismiss 時（reload 仍會看到 → 較溫和）。
+const IA_V2_BANNER_KEY = 'parent_ia_v2_migration_banner_seen'
+const showMigrationBanner = ref(false)
+
+onMounted(() => {
+  if (typeof window !== 'undefined' && !localStorage.getItem(IA_V2_BANNER_KEY)) {
+    showMigrationBanner.value = true
+  }
+})
+
+function dismissBanner() {
+  showMigrationBanner.value = false
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(IA_V2_BANNER_KEY, '1')
+  }
+}
 
 // summary 走 60s 快取（待辦變動慢）；today 狀態移到 TodayStatusCards 內，由 useTodayStatusCache 自管
 const {
@@ -73,20 +89,13 @@ async function pullRefresh() {
   ])
 }
 
-const QUICK_ACTIONS = [
-  { icon: 'notebook', label: '聯絡簿', path: '/contact-book', tint: 'contact' },
-  { icon: 'calendar', label: '本週行程', path: '/calendar', tint: 'calendar' },
-  { icon: 'clipboard', label: '請假', path: '/leaves', tint: 'leave' },
-  { icon: 'pill', label: '用藥單', path: '/medications', tint: 'medication' },
-]
-
 // 將 6 種待辦扁平化為陣列，避免 TodoCenter 需要知道每種待辦的取數路徑。
 // shape: { key, icon, tint, primaryText, count, suffix?, warn?, path }
 const todos = computed(() => {
   const list = []
   if (unpaidCount.value > 0) {
     list.push({
-      key: 'fees',
+      key: overdueAmount.value > 0 ? 'fees_overdue' : 'fees',
       icon: 'money',
       tint: 'money',
       path: '/fees',
@@ -153,12 +162,29 @@ const todos = computed(() => {
       suffix: ' 件',
     })
   }
+  // IA v2 Phase 3：依時效/重要性排序，逾期繳費置頂、請假審核結果墊底
+  const KEY_PRIORITY = {
+    fees_overdue: 0,
+    acks: 1,
+    fees: 2,
+    messages: 3,
+    promotions: 4,
+    announcements: 5,
+    leaveReviews: 6,
+  }
+  list.sort((a, b) => (KEY_PRIORITY[a.key] ?? 99) - (KEY_PRIORITY[b.key] ?? 99))
   return list
 })
 </script>
 
 <template>
   <PullToRefresh :on-refresh="pullRefresh" class="home-view">
+    <!-- IA v2 Phase 3：一次性遷移提示，與 summary 載入狀態無關，需獨立於下方分支之外 -->
+    <div v-if="showMigrationBanner" class="ia-banner" role="status">
+      <span class="ia-banner-text">📢 公告／出席已移至底部「家校」分頁</span>
+      <button type="button" class="ia-banner-close" aria-label="關閉" @click="dismissBanner">×</button>
+    </div>
+
     <!-- 骨架載入：>300ms 的非同步請求應顯示結構，避免畫面空白 -->
     <template v-if="summaryPending && !summaryData">
       <SkeletonBlock variant="card" />
@@ -199,5 +225,28 @@ const todos = computed(() => {
   display: flex;
   flex-direction: column;
   gap: var(--space-4, 16px);
+}
+
+.ia-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3, 12px);
+  background: var(--brand-tint-yellow, #fff7d6);
+  border-radius: var(--radius-md, 10px);
+  font-size: var(--text-sm, 13px);
+  color: var(--pt-text-strong, var(--neutral-900));
+}
+.ia-banner-text { flex: 1; }
+.ia-banner-close {
+  background: transparent;
+  border: none;
+  font-size: 20px;
+  line-height: 1;
+  padding: 0 var(--space-2, 8px);
+  cursor: pointer;
+  color: var(--pt-text-muted);
+  min-height: var(--touch-target-min, 44px);
+  min-width: var(--touch-target-min, 44px);
 }
 </style>

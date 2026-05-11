@@ -33,13 +33,12 @@ function onTabClick(t) {
 const unread = ref(0)
 const unreadMessages = ref(0)
 
-// Phase 3: Tab Bar 重排 — 請假 demote 到「更多」，新增「訊息」tab
+// IA v2 Phase 3: 5-tab → 4-tab；公告/出席 demote 至「家校」內
 const TABS = [
   { key: 'home', label: '首頁', path: '/home' },
-  { key: 'attendance', label: '出席', path: '/attendance' },
   { key: 'messages', label: '訊息', path: '/messages' },
-  { key: 'announcements', label: '公告', path: '/announcements' },
-  { key: 'more', label: '更多', path: '/more' },
+  { key: 'family', label: '家校', path: '/family' },
+  { key: 'me', label: '我的', path: '/me' },
 ]
 
 async function refreshUnread() {
@@ -145,8 +144,9 @@ watch(() => route.fullPath, refreshUnread)
   border-radius: var(--pt-dock-radius, 20px);
   box-shadow: var(--pt-shadow-dock, 0 -4px 24px rgba(15, 23, 42, 0.06));
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   padding: 6px;
+  padding-bottom: max(6px, env(safe-area-inset-bottom, 6px));
   z-index: var(--z-tab-bar, 50);
 }
 

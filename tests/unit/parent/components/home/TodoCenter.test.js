@@ -5,11 +5,13 @@ import TodoCenter from '@/parent/components/home/TodoCenter.vue'
 const stubs = { ParentIcon: true }
 
 describe('TodoCenter', () => {
-  it('todos 為空時顯示「目前沒有待辦事項」', () => {
+  it('todos 為空時 section 仍渲染並顯示空狀態文案（IA v2 Phase 3）', () => {
     const wrapper = mount(TodoCenter, { props: { todos: [] }, global: { stubs } })
-    expect(wrapper.text()).toContain('目前沒有待辦事項')
-    expect(wrapper.find('.todos-card').exists()).toBe(false)
-    expect(wrapper.find('.todos-empty').exists()).toBe(true)
+    expect(wrapper.text()).toContain('目前沒有待辦')
+    // Phase 3 起 .todos-card 永遠渲染（標題即「需要你處理（0）」），空狀態以內部 .todos-empty-msg 呈現
+    expect(wrapper.find('.todos-card').exists()).toBe(true)
+    expect(wrapper.find('.todos-empty-msg').exists()).toBe(true)
+    expect(wrapper.find('.todo-row').exists()).toBe(false)
   })
 
   it('渲染 todos 列表 + count 用 <strong> 強調', () => {

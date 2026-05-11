@@ -60,3 +60,21 @@ describe('HomeHero', () => {
     expect(wrapper.text()).toContain('閱讀之星')
   })
 })
+
+describe('HomeHero summary 行', () => {
+  it('todoCount > 0 顯示件數', () => {
+    const wrapper = mount(HomeHero, {
+      props: { parentName: '王太太', childrenCount: 1, todoCount: 3 },
+      global: { stubs },
+    })
+    expect(wrapper.html()).toContain('3 件事需要你處理')
+  })
+
+  it('todoCount=0 顯示正向訊息', () => {
+    const wrapper = mount(HomeHero, {
+      props: { parentName: '王太太', childrenCount: 1, todoCount: 0 },
+      global: { stubs },
+    })
+    expect(wrapper.html()).toContain('今天無待辦')
+  })
+})

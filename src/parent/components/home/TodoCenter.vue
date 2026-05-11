@@ -4,12 +4,13 @@
  *
  * 接受 pre-flattened todos 陣列，逐列渲染（icon + 文字 + arrow）。
  * 為純呈現元件，路由由父層透過 `@navigate="go"` 接住。
+ * 排序由父層（HomeView）依 KEY_PRIORITY 預先處理，本元件直接依陣列順序渲染。
  *
  * todos item shape:
  *   { key, icon, tint, primaryText, count?, suffix?, warn?, path }
  *
  * 渲染時 `count` 會以 <strong> 強調（紅色 / tabular-nums）保留原有設計。
- * 若 todos 為空陣列，則顯示「目前沒有待辦事項」空狀態。
+ * 若 todos 為空陣列，仍渲染區塊但顯示「目前沒有待辦 ✨」（IA v2 Phase 3）。
  */
 import ParentIcon from '../ParentIcon.vue'
 

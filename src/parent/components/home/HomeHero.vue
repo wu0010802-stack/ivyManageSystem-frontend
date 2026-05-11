@@ -8,6 +8,7 @@
  * Props：
  *   parentName (String) — 家長名，default '家長'
  *   childrenCount (Number) — 子女總數
+ *   todoCount (Number) — 今日待辦件數，>0 顯示處理提示，=0 顯示正向訊息（IA v2 Phase 3）
  *   dailyStar (Object | null) — 「今日 X 之星」moment，後端 ChildSummary.daily_star
  *     形狀 { childName: string, label: string }；為 null 時隱藏該行（目前後端尚未提供）
  */
@@ -18,6 +19,7 @@ import KawaiiStar from '@/components/brand/KawaiiStar.vue'
 const props = defineProps({
   parentName: { type: String, default: '家長' },
   childrenCount: { type: Number, default: 0 },
+  todoCount: { type: Number, default: 0 },
   dailyStar: { type: Object, default: null },
 })
 
