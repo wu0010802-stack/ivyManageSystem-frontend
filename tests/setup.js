@@ -14,3 +14,17 @@ const localStorageMock = {
 }
 
 vi.stubGlobal('localStorage', localStorageMock)
+
+// happy-dom 預設沒有 matchMedia；提供可被測試 override 的 stub
+if (typeof window !== 'undefined' && !window.matchMedia) {
+    window.matchMedia = vi.fn().mockImplementation((query) => ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),       // 舊 API
+        removeListener: vi.fn(),    // 舊 API
+        addEventListener: vi.fn(),  // 新 API
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+    }))
+}
