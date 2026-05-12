@@ -125,6 +125,12 @@ const router = createRouter({
       meta: { title: '歷次成長報告', showBack: true },
     },
     {
+      path: '/children/:studentId/photos',
+      name: 'parent-child-photos',
+      component: () => import('./views/ChildPhotosView.vue'),
+      meta: { title: '照片牆', showBack: true },
+    },
+    {
       path: '/calendar',
       name: 'parent-calendar',
       component: () => import('./views/CalendarView.vue'),
