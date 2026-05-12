@@ -8,6 +8,9 @@ import SkeletonBlock from '../components/SkeletonBlock.vue'
 import LaurelWreath from '@/components/brand/LaurelWreath.vue'
 import KawaiiStar from '@/components/brand/KawaiiStar.vue'
 import CrownIcon from '@/components/brand/CrownIcon.vue'
+import MilestoneCarousel from '../components/MilestoneCarousel.vue'
+import TimelineItem from '../components/TimelineItem.vue'
+import { useChildTimeline } from '../composables/useChildTimeline'
 
 function isBirthdayToday(child) {
   if (!child?.birthday) return false
@@ -58,11 +61,50 @@ function goMessages() {
   router.push('/messages')
 }
 
+function goReports() {
+  router.push(`/children/${studentId.value}/reports`)
+}
+
+// 成長動態 timeline feed
+const {
+  items: timelineItems,
+  loading: timelineLoading,
+  nextCursor,
+  loadMore,
+  error: timelineError,
+  reload: reloadTimeline,
+} = useChildTimeline(studentId)
+
 onMounted(fetchData)
 </script>
 
 <template>
   <div class="profile-view">
+    <!-- 成長里程碑 carousel -->
+    <section class="card growth-section">
+      <h3 class="section-title">🏆 成長里程碑</h3>
+      <MilestoneCarousel v-if="studentId" :student-id="studentId" />
+    </section>
+
+    <!-- 最新動態 timeline feed -->
+    <section class="card growth-section">
+      <h3 class="section-title">📖 最新動態</h3>
+      <div v-if="timelineError && !timelineItems.length" class="empty timeline-error">
+        <span>{{ timelineError }}</span>
+        <button class="retry-btn" :disabled="timelineLoading" @click="() => reloadTimeline(false)">
+          重試
+        </button>
+      </div>
+      <div v-else-if="timelineLoading && !timelineItems.length" class="empty">載入中…</div>
+      <div v-else-if="timelineItems.length === 0" class="empty">最近沒有動態</div>
+      <div v-else class="feed">
+        <TimelineItem v-for="item in timelineItems" :key="item.id" :item="item" />
+        <button v-if="nextCursor" class="load-more-btn" :disabled="timelineLoading" @click="loadMore">
+          {{ timelineLoading ? '載入中…' : '載入更多' }}
+        </button>
+      </div>
+    </section>
+
     <template v-if="loading && !data">
       <SkeletonBlock variant="card" :count="2" />
     </template>
@@ -158,6 +200,12 @@ onMounted(fetchData)
         </button>
       </section>
     </template>
+
+    <!-- 歷次報告 -->
+    <section class="card growth-section">
+      <h3 class="section-title">📄 歷次報告</h3>
+      <button class="link-btn" @click="goReports">查看歷次成長報告 →</button>
+    </section>
   </div>
 </template>
 
@@ -379,4 +427,63 @@ onMounted(fetchData)
 .primary-btn:active {
   background: var(--brand-primary-hover);
 }
+.growth-section .section-title {
+  font-size: 15px;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: 0;
+  color: #0d9053;
+  margin: 0 0 10px;
+}
+.feed {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.load-more-btn {
+  align-self: center;
+  margin-top: 4px;
+  padding: 8px 16px;
+  background: var(--pt-surface-mute, #f3f4f6);
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--pt-text-muted);
+}
+.load-more-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.timeline-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--pt-warning-text, #b85c00);
+}
+.retry-btn {
+  padding: 4px 12px;
+  background: var(--pt-surface-mute, #f3f4f6);
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--pt-text-muted);
+}
+.retry-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.link-btn {
+  background: #f3f4f6;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-size: 14px;
+  color: #0d9053;
+  font-weight: 600;
+  cursor: pointer;
+}
+.link-btn:hover { background: #e5e7eb; }
 </style>
