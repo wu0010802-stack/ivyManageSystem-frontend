@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { listMilestones, deleteMilestone, MILESTONE_TYPES } from '@/api/studentMilestones'
+import { listMilestones, deleteMilestone, MILESTONE_TYPES, autoDetectMilestones } from '@/api/studentMilestones'
 import { hasPermission } from '@/utils/auth'
 import MilestoneEditorDialog from '../MilestoneEditorDialog.vue'
 
@@ -16,6 +16,22 @@ const editing = ref(null)
 const filterType = ref('')
 
 const canWrite = hasPermission('PORTFOLIO_WRITE')
+
+const autoDetecting = ref(false)
+
+async function onAutoDetect() {
+  autoDetecting.value = true
+  try {
+    const r = await autoDetectMilestones(props.studentId)
+    const { created_count, skipped_existing } = r.data
+    ElMessage.success(`偵測完成：新增 ${created_count} 筆，跳過 ${skipped_existing} 筆已存在`)
+    await reload()
+  } catch (e) {
+    ElMessage.error('自動偵測失敗')
+  } finally {
+    autoDetecting.value = false
+  }
+}
 
 function typeMeta(t) {
   return MILESTONE_TYPES.find((x) => x.value === t) || {}
@@ -99,9 +115,16 @@ function handleSaved() {
 
       <el-button
         v-if="canWrite"
+        :loading="autoDetecting"
+        style="margin-left: auto"
+        @click="onAutoDetect"
+      >
+        🤖 自動偵測
+      </el-button>
+      <el-button
+        v-if="canWrite"
         type="primary"
         @click="openCreate"
-        style="margin-left: auto"
       >
         新增里程碑
       </el-button>

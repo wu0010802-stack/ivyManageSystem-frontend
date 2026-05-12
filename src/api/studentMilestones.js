@@ -14,6 +14,9 @@ export const updateMilestone = (studentId, id, payload) =>
 export const deleteMilestone = (studentId, id) =>
   api.delete(`${base(studentId)}/${id}`)
 
+export const autoDetectMilestones = (studentId, payload = {}) =>
+  api.post(`/students/${studentId}/milestones/auto-detect`, payload)
+
 export const MILESTONE_TYPES = [
   { value: 'birthday', label: '生日', icon: '🎂' },
   { value: 'first_day', label: '入學首日', icon: '🌱' },
