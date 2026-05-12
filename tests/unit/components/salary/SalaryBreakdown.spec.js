@@ -1,13 +1,30 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { createRouter, createWebHashHistory } from 'vue-router'
 import ElementPlus from 'element-plus'
 
 vi.mock('@/api/salary', () => ({
   simulateSalary: vi.fn(),
 }))
 
+// 保留真實 EP 元件（runSimulate 測試需要透過 ElInputNumber/ElButton 互動），
+// 只覆寫 ElMessage 為可監視 mock。
+vi.mock('element-plus', async () => {
+  const actual = await vi.importActual('element-plus')
+  return {
+    ...actual,
+    ElMessage: {
+      error: vi.fn(),
+      success: vi.fn(),
+      warning: vi.fn(),
+      info: vi.fn(),
+    },
+  }
+})
+
 import SalaryBreakdown from '@/views/salary/SalaryBreakdown.vue'
 import { simulateSalary } from '@/api/salary'
+import { ElMessage } from 'element-plus'
 
 const teacherRow = () => ({
   employee_id: 42,
@@ -27,15 +44,28 @@ const teacherRow = () => ({
   },
 })
 
+const buildRouter = () =>
+  createRouter({
+    history: createWebHashHistory(),
+    routes: [
+      { path: '/classrooms', name: 'classrooms', component: { template: '<div/>' } },
+      { path: '/:pathMatch(.*)*', component: { template: '<div/>' } },
+    ],
+  })
+
 const mountWithEP = (props) =>
   mount(SalaryBreakdown, {
     props,
-    global: { plugins: [ElementPlus] },
+    global: { plugins: [ElementPlus, buildRouter()] },
   })
 
 describe('SalaryBreakdown', () => {
   beforeEach(() => {
     simulateSalary.mockReset()
+    ElMessage.error.mockReset()
+    ElMessage.success.mockReset()
+    ElMessage.warning.mockReset()
+    ElMessage.info.mockReset()
   })
 
   it('renders enrollment section with snapshot date and classroom', () => {
@@ -80,9 +110,13 @@ describe('SalaryBreakdown', () => {
 
   it('classroom link opens in a new tab', () => {
     const wrapper = mountWithEP({ row: teacherRow(), year: 2026, month: 5 })
-    const link = wrapper.find('a[href="/classrooms"]')
+    // 使用 hash router（createWebHashHistory）後，router.resolve 會產生帶 '#/classrooms' 的 href，
+    // 在 prod 對應 /admin.html#/classrooms。避免硬寫 '/classrooms' 失效。
+    const link = wrapper.find('a[target="_blank"]')
     expect(link.exists()).toBe(true)
-    expect(link.attributes('target')).toBe('_blank')
+    const href = link.attributes('href')
+    expect(href).toContain('classrooms')
+    expect(href).toContain('#') // hash-aware，不是裸 /classrooms
     expect(link.attributes('rel')).toContain('noopener')
   })
 
@@ -142,5 +176,24 @@ describe('SalaryBreakdown', () => {
     expect(wrapper.text()).not.toContain('預覽：')
     expect(wrapper.emitted('reset')).toBeTruthy()
     expect(wrapper.emitted('reset')[0][0]).toEqual({ employee_id: 42 })
+  })
+
+  it('shows error message when simulate fails', async () => {
+    simulateSalary.mockRejectedValueOnce({
+      response: { data: { detail: '伺服器錯誤' } },
+      message: 'Request failed',
+    })
+    const wrapper = mountWithEP({ row: teacherRow(), year: 2026, month: 5 })
+    await wrapper.find('button.el-button--primary').trigger('click')
+    await wrapper.vm.$nextTick()
+    await wrapper.vm.$nextTick()
+
+    expect(ElMessage.error).toHaveBeenCalled()
+    expect(ElMessage.error.mock.calls[0][0]).toContain('伺服器錯誤')
+    // 預覽不應出現（catch 後不會 emit）
+    expect(wrapper.text()).not.toContain('預覽：')
+    // simulating 旗標已重置（loading 結束）
+    const btn = wrapper.find('button.el-button--primary')
+    expect(btn.classes()).not.toContain('is-loading')
   })
 })

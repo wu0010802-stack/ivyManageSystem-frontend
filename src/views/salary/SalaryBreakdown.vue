@@ -49,7 +49,8 @@
 
 <script setup>
 import { ref, computed } from 'vue'
-import { ElInputNumber, ElButton } from 'element-plus'
+import { ElMessage } from 'element-plus'
+import { useRouter } from 'vue-router'
 import { simulateSalary } from '@/api/salary'
 import { money } from '@/utils/format'
 
@@ -69,7 +70,8 @@ const overrideCount = ref(enrollment.value?.total ?? 0)
 const preview = ref(null)
 const simulating = ref(false)
 
-const classroomLink = computed(() => '/classrooms')
+const router = useRouter()
+const classroomLink = computed(() => router.resolve({ path: '/classrooms' }).href)
 
 const formattedSnapshot = computed(() => {
   const iso = enrollment.value?.snapshot_date
@@ -103,6 +105,8 @@ const runSimulate = async () => {
         simulated: preview.value,
       })
     }
+  } catch (e) {
+    ElMessage.error('試算失敗: ' + (e.response?.data?.detail || e.message))
   } finally {
     simulating.value = false
   }
@@ -116,22 +120,22 @@ const resetPreview = () => {
 </script>
 
 <style scoped>
-.salary-breakdown { padding: 12px 16px; background: #f8f9fa; border-radius: 4px; }
+.salary-breakdown { padding: 12px 16px; background: var(--el-fill-color-lighter); border-radius: 4px; }
 .bd-section { margin-bottom: 12px; }
 .bd-section:last-child { margin-bottom: 0; }
-.bd-section h4 { margin: 0 0 6px; font-size: 14px; color: #303133; }
+.bd-section h4 { margin: 0 0 6px; font-size: 14px; color: var(--el-text-color-primary); }
 .bd-section p { margin: 2px 0; }
-.bd-meta { color: #909399; font-size: 12px; }
+.bd-meta { color: var(--el-text-color-secondary); font-size: 12px; }
 .bd-controls { display: flex; gap: 8px; align-items: center; }
 .bd-preview {
   margin-top: 8px;
   padding: 8px 12px;
-  background: #ecf5ff;
-  border-left: 3px solid #409eff;
+  background: var(--el-color-primary-light-9);
+  border-left: 3px solid var(--el-color-primary);
   border-radius: 2px;
 }
 .bd-diff { margin-left: 6px; font-weight: 600; }
-.bd-diff-up { color: #67c23a; }
-.bd-diff-down { color: #f56c6c; }
-.bd-muted { color: #909399; font-style: italic; margin: 0; }
+.bd-diff-up { color: var(--el-color-success); }
+.bd-diff-down { color: var(--el-color-danger); }
+.bd-muted { color: var(--el-text-color-secondary); font-style: italic; margin: 0; }
 </style>
