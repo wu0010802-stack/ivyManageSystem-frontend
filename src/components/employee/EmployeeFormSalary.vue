@@ -269,28 +269,31 @@ const fmtRO = (v, currency = false) => {
                         <el-input-number
                             v-model="form.labor_insured_salary"
                             :min="0" :step="100" placeholder="勞保投保"
+                            :value-on-clear="null"
                             controls-position="right" style="width: 100%"
                             :disabled="isReadonly"
                         />
-                        <span class="hint">勞保投保金額</span>
+                        <span class="hint">勞保投保金額（清欄/0 = 沿用級距）</span>
                     </el-col>
                     <el-col :span="8">
                         <el-input-number
                             v-model="form.health_insured_salary"
                             :min="0" :step="100" placeholder="健保投保"
+                            :value-on-clear="null"
                             controls-position="right" style="width: 100%"
                             :disabled="isReadonly"
                         />
-                        <span class="hint">健保投保金額</span>
+                        <span class="hint">健保投保金額（清欄/0 = 沿用級距）</span>
                     </el-col>
                     <el-col :span="8">
                         <el-input-number
                             v-model="form.pension_insured_salary"
                             :min="0" :step="100" placeholder="勞退提繳"
+                            :value-on-clear="null"
                             controls-position="right" style="width: 100%"
                             :disabled="isReadonly"
                         />
-                        <span class="hint">勞退提繳工資</span>
+                        <span class="hint">勞退提繳工資（清欄/0 = 沿用級距）</span>
                     </el-col>
                 </el-row>
             </el-form-item>

@@ -7,6 +7,7 @@ import BonusConfigPanel from './salary/BonusConfigPanel.vue'
 import DisciplinaryPanel from './salary/DisciplinaryPanel.vue'
 import ArtTeacherPayrollPanel from './salary/ArtTeacherPayrollPanel.vue'
 import SystemSettingsPanel from './salary/SystemSettingsPanel.vue'
+import InsuranceBracketsPanel from './salary/InsuranceBracketsPanel.vue'
 import SalaryHistoryPanel from './salary/SalaryHistoryPanel.vue'
 import SalarySimulatePanel from './salary/SalarySimulatePanel.vue'
 import SalaryLogicPanel from './salary/SalaryLogicPanel.vue'
@@ -649,6 +650,11 @@ onMounted(() => {
       <!-- 薪資設定 -->
       <el-tab-pane v-if="canReadSalarySettings" label="薪資設定" name="bonus">
         <BonusConfigPanel v-if="activeTab === 'bonus'" />
+      </el-tab-pane>
+
+      <!-- 勞健保級距表 -->
+      <el-tab-pane v-if="canReadSalarySettings" label="勞健保級距" name="insurance_brackets">
+        <InsuranceBracketsPanel v-if="activeTab === 'insurance_brackets'" />
       </el-tab-pane>
 
       <!-- 懲處記錄 -->
