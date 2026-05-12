@@ -12,6 +12,7 @@ import SalaryHistoryPanel from './salary/SalaryHistoryPanel.vue'
 import SalarySimulatePanel from './salary/SalarySimulatePanel.vue'
 import SalaryLogicPanel from './salary/SalaryLogicPanel.vue'
 import SalarySnapshotDialog from './salary/SalarySnapshotDialog.vue'
+import SalaryBreakdown from '@/views/salary/SalaryBreakdown.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import { apiError } from '@/utils/error'
 import { downloadFile } from '@/utils/download'
@@ -32,6 +33,14 @@ const hasCalculated = ref(false)
 const lastCalculatedAt = ref(null)
 const dbCalculatedAt = ref(null)
 const salaryResults = ref([])
+const previewMap = ref({})
+
+const onPreviewChanged = ({ employee_id, simulated }) => {
+  previewMap.value[employee_id] = simulated
+}
+const onResetPreview = ({ employee_id }) => {
+  delete previewMap.value[employee_id]
+}
 const bonusResults = ref([])
 const showBonusDialog = ref(false)
 const bonusDialogTab = ref('single')  // 'single' | 'accrual'
@@ -466,6 +475,17 @@ onMounted(() => {
         <div v-if="salaryResults.length > 0" class="results-section">
           <h3>計算結果</h3>
           <el-table :data="salaryResults" border style="width: 100%" v-loading="loading" stripe max-height="600">
+            <el-table-column type="expand" width="44">
+              <template #default="{ row }">
+                <SalaryBreakdown
+                  :row="row"
+                  :year="query.year"
+                  :month="query.month"
+                  @preview-changed="onPreviewChanged"
+                  @reset="onResetPreview"
+                />
+              </template>
+            </el-table-column>
             <el-table-column prop="employee_name" label="姓名" width="100" fixed />
             <el-table-column label="底薪" width="100">
               <template #default="scope">{{ money(scope.row.base_salary) }}</template>
