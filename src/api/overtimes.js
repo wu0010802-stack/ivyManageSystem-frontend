@@ -6,8 +6,10 @@ export const createOvertime = (data) => api.post('/overtimes', data)
 
 export const updateOvertime = (id, data) => api.put(`/overtimes/${id}`, data)
 
-export const approveOvertime = (id, approved) =>
-  api.put(`/overtimes/${id}/approve?approved=${approved}`)
+// payload: { approved: boolean, rejection_reason?: string }
+// 駁回必須帶 rejection_reason（後端要求 trim 後 ≥3 字，2026-05-07 安全強化）
+export const approveOvertime = (id, payload) =>
+  api.put(`/overtimes/${id}/approve`, payload)
 
 // 批次審核
 export const batchApproveOvertimes = (ids, approved, rejection_reason) =>

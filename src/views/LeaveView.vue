@@ -47,6 +47,7 @@ const form = reactive({
   end_date: '',
   leave_hours: 8,
   reason: '',
+  is_hospitalized: false,
 })
 
 const selectedLeaveRule = computed(() => LEAVE_RULE_HINTS[form.leave_type] || '')
@@ -104,6 +105,7 @@ const resetForm = () => {
   form.end_date = ''
   form.leave_hours = 8
   form.reason = ''
+  form.is_hospitalized = false
   resetCalculatorState()
 }
 
@@ -248,15 +250,20 @@ const saveLeave = async () => {
     const ed = form.end_date ? form.end_date.substring(0, 10) : ''
     const et = form.end_date && form.end_date.length > 10 ? form.end_date.substring(11, 16) : ''
 
+    // 後端 _apply_leave_update_and_revoke 對 start_time/end_time 是「None 清空、空字串 setattr」（2026-05-11 P1-7）
+    // 半日→全日場景：時段欄空 → 送 null 才會清空、不會被存成 ''
+    // 病假時帶 is_hospitalized 區分雙桶（未住院 240h / 住院 2080h）；其他假別後端忽略
+    const isSick = form.leave_type === 'sick'
     if (isEdit.value) {
       await updateLeave(form.id, {
         leave_type: form.leave_type,
         start_date: sd,
-        start_time: st,
+        start_time: st || null,
         end_date: ed,
-        end_time: et,
+        end_time: et || null,
         leave_hours: form.leave_hours,
         reason: form.reason,
+        is_hospitalized: isSick ? form.is_hospitalized : false,
       })
       ElMessage.success('請假記錄已更新')
     } else {
@@ -264,11 +271,12 @@ const saveLeave = async () => {
         employee_id: form.employee_id,
         leave_type: form.leave_type,
         start_date: sd,
-        start_time: st,
+        start_time: st || null,
         end_date: ed,
-        end_time: et,
+        end_time: et || null,
         leave_hours: form.leave_hours,
         reason: form.reason,
+        is_hospitalized: isSick ? form.is_hospitalized : false,
       })
       ElMessage.success('請假記錄已新增')
     }
@@ -605,6 +613,12 @@ onMounted(() => {
           <div style="margin-top: 5px; font-size: 12px; color: var(--el-color-warning); display: flex; align-items: center; gap: 4px;">
             <el-icon><InfoFilled /></el-icon>
             {{ ATTACHMENT_HINTS.default }}
+          </div>
+        </el-form-item>
+        <el-form-item v-if="form.leave_type === 'sick'" label="住院病假">
+          <el-switch v-model="form.is_hospitalized" active-text="住院（2080h 上限）" inactive-text="未住院（240h 上限）" />
+          <div style="margin-top: 4px; font-size: 12px; color: var(--el-text-color-secondary);">
+            依勞工請假規則第 4 條，未住院年度上限 30 日（240h），含住院最高 1 年（2080h）。
           </div>
         </el-form-item>
         <el-form-item label="請假模式">

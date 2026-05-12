@@ -69,7 +69,20 @@ const { execute: executeCorrectionApproval } = useApprovalOperation({ apiFn: app
 
 const approveLeave = async (row, approved) => {
   const payload = { approved }
-  if (approved && ['pending', 'rejected'].includes(row.substitute_status)) {
+  if (!approved) {
+    try {
+      const { value } = await ElMessageBox.prompt('請填寫駁回原因', '駁回請假申請', {
+        confirmButtonText: '確認駁回',
+        cancelButtonText: '取消',
+        inputType: 'textarea',
+        inputPattern: /\S+/,
+        inputErrorMessage: '請填寫駁回原因',
+      })
+      payload.rejection_reason = value.trim()
+    } catch {
+      return
+    }
+  } else if (['pending', 'rejected'].includes(row.substitute_status)) {
     try {
       const warningText = row.substitute_status === 'pending'
         ? '代理人尚未接受此代理請求，仍要直接核准嗎？'
@@ -88,7 +101,22 @@ const approveLeave = async (row, approved) => {
 }
 
 const approveOvertime = async (row, approved) => {
-  await executeOvertimeApproval(row.id, approved, approved ? '加班已核准' : '加班已駁回')
+  const payload = { approved }
+  if (!approved) {
+    try {
+      const { value } = await ElMessageBox.prompt('請填寫駁回原因（至少 3 個字）', '駁回加班申請', {
+        confirmButtonText: '確認駁回',
+        cancelButtonText: '取消',
+        inputType: 'textarea',
+        inputPattern: /\S{3,}/,
+        inputErrorMessage: '請填寫駁回原因（至少 3 個字）',
+      })
+      payload.rejection_reason = value.trim()
+    } catch {
+      return
+    }
+  }
+  await executeOvertimeApproval(row.id, payload, approved ? '加班已核准' : '加班已駁回')
 }
 
 const approveCorrection = async (row, approved) => {

@@ -153,7 +153,8 @@ const saveOvertime = async () => {
       use_comp_leave: form.use_comp_leave,
     }
     if (isEdit.value) {
-      const { employee_id, ...updatePayload } = payload
+      // 後端 OvertimeUpdate 禁止翻轉 use_comp_leave（2026-05-11 P2-14），update payload 必須剔除
+      const { employee_id, use_comp_leave: _useCompLeave, ...updatePayload } = payload
       const resp = await updateOvertime(form.id, updatePayload)
       ElMessage.success(`加班記錄已更新，加班費: $${resp.data.overtime_pay?.toLocaleString() || 0}`)
     } else {
@@ -183,8 +184,24 @@ const { execute: executeApproval } = useApprovalOperation({
   apiFn: approveOvertimeApi,
   onSuccess: refreshAllData,
 })
-const approveOvertime = (row, approved) =>
-  executeApproval(row.id, approved, approved ? '已核准' : '已駁回')
+const approveOvertime = async (row, approved) => {
+  const payload = { approved }
+  if (!approved) {
+    try {
+      const { value } = await ElMessageBox.prompt('請填寫駁回原因（至少 3 個字）', '駁回加班申請', {
+        confirmButtonText: '確認駁回',
+        cancelButtonText: '取消',
+        inputType: 'textarea',
+        inputPattern: /\S{3,}/,
+        inputErrorMessage: '請填寫駁回原因（至少 3 個字）',
+      })
+      payload.rejection_reason = value.trim()
+    } catch {
+      return
+    }
+  }
+  await executeApproval(row.id, payload, approved ? '已核准' : '已駁回')
+}
 
 
 const overtimeSummary = computed(() =>
