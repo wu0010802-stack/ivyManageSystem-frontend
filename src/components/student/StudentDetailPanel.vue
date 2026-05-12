@@ -20,6 +20,7 @@ import RecordsTab from './tabs/RecordsTab.vue'
 import FeesTab from './tabs/FeesTab.vue'
 import ActivityTab from './tabs/ActivityTab.vue'
 import HealthGrowthTab from './tabs/HealthGrowthTab.vue'
+import MilestonesTab from './tabs/MilestonesTab.vue'
 import CommunicationTab from './tabs/CommunicationTab.vue'
 import StudentDisabilityDocsPanel from './StudentDisabilityDocsPanel.vue'
 
@@ -74,6 +75,7 @@ const TAB_DEFS = computed(() => [
   { name: 'fees', label: '學費', show: canFeesRead.value },
   { name: 'activity', label: '才藝報名', show: canActivityRead.value },
   { name: 'health_growth', label: '健康／成長', show: canPortfolioRead.value || canHealthRead.value },
+  { name: 'milestones', label: '里程碑', show: canPortfolioRead.value },
   { name: 'disability_docs', label: '鑑定文件', show: canSpecialNeedsRead.value },
   { name: 'communication', label: '家長溝通', show: true },
 ])
@@ -279,6 +281,10 @@ const breadcrumbItems = computed(() => {
         />
         <HealthGrowthTab
           v-else-if="tab.name === 'health_growth'"
+          :student-id="studentId"
+        />
+        <MilestonesTab
+          v-else-if="tab.name === 'milestones'"
           :student-id="studentId"
         />
         <StudentDisabilityDocsPanel
