@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { hasPermission } from '@/utils/auth'
 import PortfolioTab from '@/components/portfolio/PortfolioTab.vue'
 import HealthTab from '@/components/portfolio/HealthTab.vue'
+import MeasurementsSection from '@/components/portfolio/MeasurementsSection.vue'
 
 const props = defineProps({
   studentId: { type: Number, required: true },
@@ -22,6 +23,9 @@ const subTab = ref(canPortfolio.value ? 'portfolio' : 'health')
       </el-tab-pane>
       <el-tab-pane v-if="canHealth" label="健康紀錄" name="health">
         <HealthTab v-if="studentId" :student-id="studentId" />
+      </el-tab-pane>
+      <el-tab-pane v-if="canPortfolio" label="量測曲線" name="measurements">
+        <MeasurementsSection v-if="studentId" :student-id="studentId" />
       </el-tab-pane>
     </el-tabs>
     <el-empty
