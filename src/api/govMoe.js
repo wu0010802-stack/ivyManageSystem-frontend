@@ -16,3 +16,39 @@ export const deleteDisabilityDoc = (id) =>
 // --- Dashboard Widget (Phase 1) ---
 export const getDisabilityExpiryWidget = (days = 30) =>
   api.get('/gov-moe/dashboard/disability-expiry', { params: { days } })
+
+// --- Enrollment Certificates (Phase 4C) ---
+export const generateCertificate = (studentId, payload) =>
+  api.post(`/gov-moe/certificates/${studentId}/generate`, payload)
+
+export const listCertificateHistory = (params = {}) =>
+  api.get('/gov-moe/certificates/history', { params })
+
+// --- Special Subsidies (Phase 4B) ---
+export const listSubsidies = (params = {}) =>
+  api.get('/gov-moe/subsidies', { params })
+export const createSubsidy = (payload) =>
+  api.post('/gov-moe/subsidies', payload)
+export const updateSubsidy = (id, payload) =>
+  api.put(`/gov-moe/subsidies/${id}`, payload)
+export const submitSubsidy = (id) =>
+  api.put(`/gov-moe/subsidies/${id}/submit`)
+export const approveSubsidy = (id, payload) =>
+  api.put(`/gov-moe/subsidies/${id}/approve`, payload)
+export const markSubsidyPaid = (id, payload) =>
+  api.put(`/gov-moe/subsidies/${id}/mark_paid`, payload)
+export const rejectSubsidy = (id) =>
+  api.put(`/gov-moe/subsidies/${id}/reject`)
+export const exportSubsidies = (params) =>
+  api.get('/gov-moe/subsidies/export', { params, responseType: 'blob' })
+
+// --- IEP (Phase 4A) ---
+export const listIeps = (params = {}) => api.get('/gov-moe/iep', { params })
+export const createIep = (payload) => api.post('/gov-moe/iep', payload)
+export const updateIep = (id, payload) => api.put(`/gov-moe/iep/${id}`, payload)
+export const submitIep = (id) => api.put(`/gov-moe/iep/${id}/submit`)
+export const approveIep = (id) => api.put(`/gov-moe/iep/${id}/approve`)
+export const closeIep = (id) => api.put(`/gov-moe/iep/${id}/close`)
+export const cloneIep = (id, payload) => api.post(`/gov-moe/iep/${id}/clone`, payload)
+export const exportIepPdf = (id) =>
+  api.get(`/gov-moe/iep/${id}/export`, { responseType: 'blob' })

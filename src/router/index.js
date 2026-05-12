@@ -177,6 +177,24 @@ const router = createRouter({
             component: () => import('../views/admin/GovDataSync.vue'),
             meta: { title: '政府資料同步' }
         },
+        {
+            path: '/admin/gov-reports/certificates',
+            name: 'AdminGovReportsCertificates',
+            component: () => import('../views/admin/gov-reports/CertificatesView.vue'),
+            meta: { title: '在學證明開立紀錄' }
+        },
+        {
+            path: '/admin/gov-reports/subsidies',
+            name: 'AdminGovReportsSubsidies',
+            component: () => import('@/views/admin/gov-reports/SubsidiesView.vue'),
+            meta: { title: '特教加給' },
+        },
+        {
+            path: '/admin/gov-reports/iep',
+            name: 'AdminGovReportsIep',
+            component: () => import('@/views/admin/gov-reports/IepView.vue'),
+            meta: { title: 'IEP 個別化教育計畫' },
+        },
         // ============ 學費管理 ============
         {
             path: '/fees',
