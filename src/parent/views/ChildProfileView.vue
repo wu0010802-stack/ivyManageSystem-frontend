@@ -54,7 +54,14 @@ function goReports() {
 }
 
 // 成長動態 timeline feed
-const { items: timelineItems, loading: timelineLoading, nextCursor, loadMore } = useChildTimeline(studentId)
+const {
+  items: timelineItems,
+  loading: timelineLoading,
+  nextCursor,
+  loadMore,
+  error: timelineError,
+  reload: reloadTimeline,
+} = useChildTimeline(studentId)
 
 onMounted(fetchData)
 </script>
@@ -70,7 +77,13 @@ onMounted(fetchData)
     <!-- 最新動態 timeline feed -->
     <section class="card growth-section">
       <h3 class="section-title">📖 最新動態</h3>
-      <div v-if="timelineLoading && !timelineItems.length" class="empty">載入中…</div>
+      <div v-if="timelineError && !timelineItems.length" class="empty timeline-error">
+        <span>{{ timelineError }}</span>
+        <button class="retry-btn" :disabled="timelineLoading" @click="() => reloadTimeline(false)">
+          重試
+        </button>
+      </div>
+      <div v-else-if="timelineLoading && !timelineItems.length" class="empty">載入中…</div>
       <div v-else-if="timelineItems.length === 0" class="empty">最近沒有動態</div>
       <div v-else class="feed">
         <TimelineItem v-for="item in timelineItems" :key="item.id" :item="item" />
@@ -354,6 +367,26 @@ onMounted(fetchData)
   color: var(--pt-text-muted);
 }
 .load-more-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.timeline-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--pt-warning-text, #b85c00);
+}
+.retry-btn {
+  padding: 4px 12px;
+  background: var(--pt-surface-mute, #f3f4f6);
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--pt-text-muted);
+}
+.retry-btn:disabled {
   opacity: 0.6;
   cursor: default;
 }

@@ -45,6 +45,11 @@ const seriesName = computed(() => {
   return MAP[props.metric] || props.metric
 })
 
+const isEmpty = computed(() => {
+  const arr = props.data?.[props.metric]
+  return !Array.isArray(arr) || arr.length === 0
+})
+
 function buildOption() {
   const points = (props.data?.[props.metric] || []).slice().sort((a, b) =>
     a.x < b.x ? -1 : a.x > b.x ? 1 : 0
@@ -59,7 +64,8 @@ function buildOption() {
     tooltip: {
       trigger: 'axis',
       formatter: (params) => {
-        const p = params[0]
+        const p = Array.isArray(params) ? params[0] : params
+        if (!p) return ''
         return `${p.axisValue}<br/>${seriesName.value}：${p.value}`
       },
     },
@@ -117,12 +123,29 @@ watch([() => props.data, () => props.metric], render)
 </script>
 
 <template>
-  <div ref="chartEl" class="measurement-chart" />
+  <div class="measurement-chart-wrap">
+    <div v-show="!isEmpty" ref="chartEl" class="measurement-chart" />
+    <div v-if="isEmpty" class="measurement-chart-empty">尚無 {{ seriesName }} 紀錄</div>
+  </div>
 </template>
 
 <style scoped>
-.measurement-chart {
+.measurement-chart-wrap {
+  position: relative;
   width: 100%;
   height: 320px;
+}
+.measurement-chart {
+  width: 100%;
+  height: 100%;
+}
+.measurement-chart-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #909399;
+  font-size: 14px;
 }
 </style>

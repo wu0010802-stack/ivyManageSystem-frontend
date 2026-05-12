@@ -1,7 +1,14 @@
 <script setup>
 import { ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { createMeasurement, updateMeasurement } from '@/api/studentMeasurements'
+
+// 幼兒園學童常見範圍；超出時提示確認以避免誤輸入污染成長曲線
+const PLAUSIBLE_RANGES = {
+  height_cm: { min: 40, max: 180, label: '身高' },
+  weight_kg: { min: 2, max: 80, label: '體重' },
+  head_circumference_cm: { min: 25, max: 60, label: '頭圍' },
+}
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -73,6 +80,28 @@ async function submit() {
   if (!hasAnyValue) {
     ElMessage.warning('請至少填入一項量測數值')
     return
+  }
+
+  const outliers = []
+  for (const [field, range] of Object.entries(PLAUSIBLE_RANGES)) {
+    const raw = form.value[field]
+    if (raw === null || raw === undefined || raw === '') continue
+    const n = Number(raw)
+    if (isNaN(n)) continue
+    if (n < range.min || n > range.max) {
+      outliers.push(`${range.label} ${n}（一般範圍 ${range.min}–${range.max}）`)
+    }
+  }
+  if (outliers.length) {
+    try {
+      await ElMessageBox.confirm(
+        `以下數值超出幼兒常見範圍，請確認是否正確：\n\n${outliers.join('\n')}`,
+        '數值異常確認',
+        { confirmButtonText: '確認儲存', cancelButtonText: '回去修改', type: 'warning' }
+      )
+    } catch {
+      return
+    }
   }
 
   saving.value = true
