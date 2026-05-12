@@ -22,6 +22,7 @@ import ActivityTab from './tabs/ActivityTab.vue'
 import HealthGrowthTab from './tabs/HealthGrowthTab.vue'
 import MilestonesTab from './tabs/MilestonesTab.vue'
 import TimelineTab from './tabs/TimelineTab.vue'
+import GrowthReportTab from './tabs/GrowthReportTab.vue'
 import CommunicationTab from './tabs/CommunicationTab.vue'
 import StudentDisabilityDocsPanel from './StudentDisabilityDocsPanel.vue'
 
@@ -78,6 +79,7 @@ const TAB_DEFS = computed(() => [
   { name: 'health_growth', label: '健康／成長', show: canPortfolioRead.value || canHealthRead.value },
   { name: 'milestones', label: '里程碑', show: canPortfolioRead.value },
   { name: 'timeline', label: '成長時間軸', show: canPortfolioRead.value },
+  { name: 'growth_report', label: '成長報告', show: canPortfolioRead.value },
   { name: 'disability_docs', label: '鑑定文件', show: canSpecialNeedsRead.value },
   { name: 'communication', label: '家長溝通', show: true },
 ])
@@ -291,6 +293,10 @@ const breadcrumbItems = computed(() => {
         />
         <TimelineTab
           v-else-if="tab.name === 'timeline'"
+          :student-id="studentId"
+        />
+        <GrowthReportTab
+          v-else-if="tab.name === 'growth_report'"
           :student-id="studentId"
         />
         <StudentDisabilityDocsPanel
