@@ -43,6 +43,7 @@ export function useLeaveHoursCalculator({ form, formRef, fetchWorkdayHoursFn = n
     }
     form.leave_hours = row.leave_hours
     form.reason = row.reason
+    form.is_hospitalized = Boolean(row.is_hospitalized)
     quota.setEditBaseline(row.leave_hours)
   }
 

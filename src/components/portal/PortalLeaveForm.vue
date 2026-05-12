@@ -31,6 +31,7 @@ const form = reactive({
   leave_hours: 8,
   reason: '',
   substitute_employee_id: null,
+  is_hospitalized: false,
 })
 
 const formRef = ref(null)
@@ -109,6 +110,7 @@ const resetForm = () => {
   form.leave_hours = 8
   form.reason = ''
   form.substitute_employee_id = null
+  form.is_hospitalized = false
   fileList.value = []
   resetCalculatorState()
 }
@@ -178,6 +180,7 @@ const submitLeave = async () => {
       leave_hours: form.leave_hours,
       reason: form.reason,
       substitute_employee_id: form.substitute_employee_id || null,
+      is_hospitalized: form.leave_type === 'sick' ? form.is_hospitalized : false,
     })
     const leaveId = res.data.id
 
@@ -237,6 +240,13 @@ const submitLeave = async () => {
         </div>
         <div style="margin-top: 5px; font-size: 12px; color: var(--el-color-warning); display: flex; align-items: center; gap: 4px;">
           <el-icon><InfoFilled /></el-icon>{{ attachmentHint }}
+        </div>
+      </el-form-item>
+
+      <el-form-item v-if="form.leave_type === 'sick'" label="住院病假">
+        <el-switch v-model="form.is_hospitalized" active-text="住院" inactive-text="未住院" />
+        <div style="margin-top: 4px; font-size: 12px; color: var(--el-text-color-secondary);">
+          未住院年度上限 240h；住院最高 2080h（勞工請假規則第 4 條）
         </div>
       </el-form-item>
 
