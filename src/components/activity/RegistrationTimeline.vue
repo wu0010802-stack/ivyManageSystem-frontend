@@ -284,9 +284,11 @@ const voidedNode = computed(() => {
 })
 
 // --- 完結節點 ---
+// is_active 預設視為 true（後端 detail endpoint 已過濾 is_active=True，response 不含此欄位）；
+// 僅在明確傳入 false 時才判定為軟刪。
 const finalNode = computed(() => {
   const r = props.registration
-  if (!r.is_active) {
+  if (r.is_active === false) {
     return {
       key: 'final',
       title: '報名已撤銷',

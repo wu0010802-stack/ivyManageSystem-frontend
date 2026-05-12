@@ -152,4 +152,23 @@ describe('RegistrationTimeline', () => {
     expect(wrapper.text()).toContain('強行收件')
     expect(wrapper.find('.rt-warning').exists()).toBe(true)
   })
+
+  it('is_active 欄位缺失（後端 detail endpoint 不回傳）：不應誤判為撤銷', () => {
+    // 後端 get_registration_detail 已 filter is_active=True，response 不含此欄位。
+    // 此案 reproduce 該情境：完整繳費 + is_active 為 undefined。
+    const reg = makeReg({ is_paid: true })
+    delete reg.is_active
+    const wrapper = mount(RegistrationTimeline, {
+      props: {
+        registration: reg,
+        payments: [
+          { id: 1, type: 'payment', amount: 3000, payment_date: '2026-05-02', is_voided: false },
+        ],
+        paidAmount: 3000,
+        paymentStatus: 'paid',
+      },
+    })
+    expect(wrapper.text()).not.toContain('報名已撤銷')
+    expect(wrapper.text()).toContain('報名完成')
+  })
 })
