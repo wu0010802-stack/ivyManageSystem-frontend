@@ -5,6 +5,9 @@ import { getChildProfile } from '../api/profile'
 import { toast } from '../utils/toast'
 import ParentIcon from '../components/ParentIcon.vue'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
+import MilestoneCarousel from '../components/MilestoneCarousel.vue'
+import TimelineItem from '../components/TimelineItem.vue'
+import { useChildTimeline } from '../composables/useChildTimeline'
 
 const route = useRoute()
 const router = useRouter()
@@ -46,11 +49,33 @@ function goMessages() {
   router.push('/messages')
 }
 
+// 成長動態 timeline feed
+const { items: timelineItems, loading: timelineLoading, nextCursor, loadMore } = useChildTimeline(studentId)
+
 onMounted(fetchData)
 </script>
 
 <template>
   <div class="profile-view">
+    <!-- 成長里程碑 carousel -->
+    <section class="card growth-section">
+      <h3 class="section-title">🏆 成長里程碑</h3>
+      <MilestoneCarousel v-if="studentId" :student-id="studentId" />
+    </section>
+
+    <!-- 最新動態 timeline feed -->
+    <section class="card growth-section">
+      <h3 class="section-title">📖 最新動態</h3>
+      <div v-if="timelineLoading && !timelineItems.length" class="empty">載入中…</div>
+      <div v-else-if="timelineItems.length === 0" class="empty">最近沒有動態</div>
+      <div v-else class="feed">
+        <TimelineItem v-for="item in timelineItems" :key="item.id" :item="item" />
+        <button v-if="nextCursor" class="load-more-btn" :disabled="timelineLoading" @click="loadMore">
+          {{ timelineLoading ? '載入中…' : '載入更多' }}
+        </button>
+      </div>
+    </section>
+
     <template v-if="loading && !data">
       <SkeletonBlock variant="card" :count="2" />
     </template>
@@ -131,6 +156,12 @@ onMounted(fetchData)
         </button>
       </section>
     </template>
+
+    <!-- 歷次報告佔位 -->
+    <section class="card growth-section">
+      <h3 class="section-title">📄 歷次報告</h3>
+      <p class="empty">期末成長報告功能即將推出</p>
+    </section>
   </div>
 </template>
 
@@ -293,5 +324,33 @@ onMounted(fetchData)
 }
 .primary-btn:active {
   background: var(--brand-primary-hover);
+}
+.growth-section .section-title {
+  font-size: 15px;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: 0;
+  color: #0d9053;
+  margin: 0 0 10px;
+}
+.feed {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.load-more-btn {
+  align-self: center;
+  margin-top: 4px;
+  padding: 8px 16px;
+  background: var(--pt-surface-mute, #f3f4f6);
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--pt-text-muted);
+}
+.load-more-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 </style>
