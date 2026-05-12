@@ -131,6 +131,12 @@ const router = createRouter({
       meta: { title: '照片牆', showBack: true },
     },
     {
+      path: '/children/:studentId/measurements',
+      name: 'parent-child-measurements',
+      component: () => import('./views/ChildMeasurementsView.vue'),
+      meta: { requiresAuth: true, showBack: true },
+    },
+    {
       path: '/calendar',
       name: 'parent-calendar',
       component: () => import('./views/CalendarView.vue'),

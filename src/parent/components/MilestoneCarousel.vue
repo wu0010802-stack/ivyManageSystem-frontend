@@ -1,6 +1,6 @@
 <script setup>
 import { onMounted, ref, watch } from 'vue'
-import { fetchChildTimeline } from '../api/childTimeline'
+import { fetchChildMilestones, reactToMilestone } from '../api/childMilestones'
 import MilestoneCard from './MilestoneCard.vue'
 
 const props = defineProps({
@@ -17,11 +17,20 @@ async function load() {
   }
   loading.value = true
   try {
-    // 用 timeline endpoint 過濾 types=milestone（家長端 milestones 專用 endpoint 留 P4）
-    const r = await fetchChildTimeline(props.studentId, { types: 'milestone', limit: 10 })
+    const r = await fetchChildMilestones(props.studentId, { limit: 10 })
     milestones.value = r.data.items || []
   } finally {
     loading.value = false
+  }
+}
+
+async function onReact(milestone, reaction) {
+  try {
+    const r = await reactToMilestone(props.studentId, milestone.id, reaction)
+    const idx = milestones.value.findIndex((m) => m.id === milestone.id)
+    if (idx >= 0) milestones.value[idx] = r.data
+  } catch {
+    // silent fail (UI keeps old state)
   }
 }
 
@@ -33,7 +42,12 @@ watch(() => props.studentId, load)
   <div v-if="loading" class="loading">載入中…</div>
   <div v-else-if="milestones.length === 0" class="empty">尚無里程碑</div>
   <div v-else class="carousel">
-    <MilestoneCard v-for="m in milestones" :key="m.id" :milestone="m" />
+    <MilestoneCard
+      v-for="m in milestones"
+      :key="m.id"
+      :milestone="m"
+      @react="(reaction) => onReact(m, reaction)"
+    />
   </div>
 </template>
 

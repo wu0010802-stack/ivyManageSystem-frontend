@@ -58,6 +58,10 @@ function goPhotos() {
   router.push(`/children/${studentId.value}/photos`)
 }
 
+function goMeasurements() {
+  router.push(`/children/${studentId.value}/measurements`)
+}
+
 const photos = ref([])
 const photosLoading = ref(false)
 async function loadPhotos() {
@@ -215,6 +219,12 @@ onMounted(() => {
           <img :src="p.thumb_url || p.display_url || p.url" loading="lazy" />
         </div>
       </div>
+    </section>
+
+    <!-- 成長量測 -->
+    <section class="card growth-section">
+      <h3 class="section-title">📏 成長量測</h3>
+      <button class="link-btn" @click="goMeasurements">查看身高/體重曲線 →</button>
     </section>
 
     <!-- 歷次報告 -->
