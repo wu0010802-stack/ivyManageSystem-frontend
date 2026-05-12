@@ -49,6 +49,10 @@ function goMessages() {
   router.push('/messages')
 }
 
+function goReports() {
+  router.push(`/children/${studentId.value}/reports`)
+}
+
 // 成長動態 timeline feed
 const { items: timelineItems, loading: timelineLoading, nextCursor, loadMore } = useChildTimeline(studentId)
 
@@ -157,10 +161,10 @@ onMounted(fetchData)
       </section>
     </template>
 
-    <!-- 歷次報告佔位 -->
+    <!-- 歷次報告 -->
     <section class="card growth-section">
       <h3 class="section-title">📄 歷次報告</h3>
-      <p class="empty">期末成長報告功能即將推出</p>
+      <button class="link-btn" @click="goReports">查看歷次成長報告 →</button>
     </section>
   </div>
 </template>
@@ -353,4 +357,15 @@ onMounted(fetchData)
   opacity: 0.6;
   cursor: default;
 }
+.link-btn {
+  background: #f3f4f6;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-size: 14px;
+  color: #0d9053;
+  font-weight: 600;
+  cursor: pointer;
+}
+.link-btn:hover { background: #e5e7eb; }
 </style>

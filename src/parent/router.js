@@ -119,6 +119,12 @@ const router = createRouter({
       meta: { title: '孩子檔案', showBack: true },
     },
     {
+      path: '/children/:studentId/reports',
+      name: 'parent-child-reports',
+      component: () => import('./views/ChildReportsView.vue'),
+      meta: { title: '歷次成長報告', showBack: true },
+    },
+    {
       path: '/calendar',
       name: 'parent-calendar',
       component: () => import('./views/CalendarView.vue'),
