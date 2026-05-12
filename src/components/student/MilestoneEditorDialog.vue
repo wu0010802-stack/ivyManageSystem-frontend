@@ -100,6 +100,8 @@ async function submit() {
 function handleClose() {
   emit('update:modelValue', false)
 }
+
+defineExpose({ form, handleTypeChange })
 </script>
 
 <template>
