@@ -1,28 +1,30 @@
 import { mount, flushPromises } from '@vue/test-utils'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 
-vi.mock('@/parent/api/childTimeline', () => ({
-  fetchChildTimeline: vi.fn(),
+vi.mock('@/parent/api/childMilestones', () => ({
+  fetchChildMilestones: vi.fn(),
+  reactToMilestone: vi.fn(),
+  REACTION_EMOJI: { like: '👍', love: '🥰', celebrate: '🎉' },
 }))
 
-import { fetchChildTimeline } from '@/parent/api/childTimeline'
+import { fetchChildMilestones } from '@/parent/api/childMilestones'
 import MilestoneCarousel from '@/parent/components/MilestoneCarousel.vue'
 
 describe('MilestoneCarousel', () => {
   beforeEach(() => {
-    fetchChildTimeline.mockReset()
+    fetchChildMilestones.mockReset()
   })
 
   it('renders milestones from API', async () => {
-    fetchChildTimeline.mockResolvedValueOnce({
+    fetchChildMilestones.mockResolvedValueOnce({
       data: {
         items: [
           {
-            id: 'milestone-1',
-            type: 'milestone',
+            id: 1,
             title: '5 歲生日',
-            occurred_at: '2026-05-10',
+            achieved_on: '2026-05-10',
             icon: '🎂',
+            parent_reaction: null,
           },
         ],
       },
@@ -30,26 +32,26 @@ describe('MilestoneCarousel', () => {
     const w = mount(MilestoneCarousel, { props: { studentId: 1 } })
     await flushPromises()
     expect(w.text()).toContain('5 歲生日')
-    expect(fetchChildTimeline).toHaveBeenCalledWith(
+    expect(fetchChildMilestones).toHaveBeenCalledWith(
       1,
-      expect.objectContaining({ types: 'milestone' }),
+      expect.objectContaining({ limit: 10 }),
     )
   })
 
   it('shows empty state when no milestones', async () => {
-    fetchChildTimeline.mockResolvedValueOnce({ data: { items: [] } })
+    fetchChildMilestones.mockResolvedValueOnce({ data: { items: [] } })
     const w = mount(MilestoneCarousel, { props: { studentId: 2 } })
     await flushPromises()
     expect(w.text()).toContain('尚無')
   })
 
   it('refetches when studentId changes', async () => {
-    fetchChildTimeline.mockResolvedValue({ data: { items: [] } })
+    fetchChildMilestones.mockResolvedValue({ data: { items: [] } })
     const w = mount(MilestoneCarousel, { props: { studentId: 1 } })
     await flushPromises()
-    const callCount = fetchChildTimeline.mock.calls.length
+    const callCount = fetchChildMilestones.mock.calls.length
     await w.setProps({ studentId: 2 })
     await flushPromises()
-    expect(fetchChildTimeline.mock.calls.length).toBeGreaterThan(callCount)
+    expect(fetchChildMilestones.mock.calls.length).toBeGreaterThan(callCount)
   })
 })
