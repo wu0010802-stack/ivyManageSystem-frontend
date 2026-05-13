@@ -43,7 +43,7 @@ function onClick() {
 .push-cta {
   background: var(--pt-tint-sun, var(--pt-gradient-warm));
   border: 1px solid color-mix(in srgb, var(--ivy-tile-yellow-fg) 28%, transparent);
-  border-radius: var(--pt-card-radius, 14px);
+  border-radius: 16px;
   padding: 14px;
   box-shadow: var(--pt-shadow-card, var(--pt-elev-1));
 }

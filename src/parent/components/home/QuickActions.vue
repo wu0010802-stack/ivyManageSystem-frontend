@@ -50,15 +50,15 @@ const emit = defineEmits(['navigate'])
   gap: 10px;
 }
 .quick-tile {
-  background: var(--pt-surface-card);
-  border-radius: var(--pt-card-radius, 14px);
+  background: var(--m3-surface-container-low, var(--pt-surface-card));
+  border-radius: 16px;
   padding: 13px;
   border: 1px solid var(--pt-page-border, var(--pt-border));
   display: flex;
   flex-direction: row;
   align-items: center;
   gap: 10px;
-  box-shadow: var(--pt-shadow-card, var(--pt-elev-1));
+  box-shadow: var(--m3-elev-1, var(--pt-shadow-card, var(--pt-elev-1)));
   cursor: pointer;
   min-height: 68px;
   text-align: left;

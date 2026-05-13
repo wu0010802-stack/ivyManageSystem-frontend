@@ -118,7 +118,7 @@ function isBirthdayToday(child) {
 .children-track::-webkit-scrollbar { display: none; }
 .child-card {
   background: var(--pt-surface-card);
-  border-radius: var(--pt-card-radius, 14px);
+  border-radius: 16px;
   padding: 14px;
   box-shadow: var(--pt-shadow-card, var(--pt-elev-1));
   border: 1px solid var(--pt-page-border, var(--pt-border));
@@ -177,7 +177,7 @@ function isBirthdayToday(child) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: var(--pt-tint-brand, var(--brand-primary-soft));
+  background: var(--m3-secondary-container, var(--pt-tint-brand, var(--brand-primary-soft)));
   color: var(--brand-primary);
   font-size: 18px;
   font-weight: 900;
