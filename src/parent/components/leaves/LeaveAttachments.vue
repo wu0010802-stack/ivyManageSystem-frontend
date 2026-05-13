@@ -74,7 +74,7 @@ function onFileChange(e) {
 <style scoped>
 .detail-hint {
   font-size: 12px;
-  color: var(--pt-text-placeholder);
+  color: var(--m3-on-surface-variant, var(--pt-text-placeholder));
   margin: 0 0 6px;
 }
 
@@ -89,7 +89,7 @@ function onFileChange(e) {
   align-items: center;
   gap: 8px;
   padding: 8px 10px;
-  background: var(--pt-surface-mute-soft);
+  background: var(--m3-surface-container-low, var(--pt-surface-mute-soft));
   border-radius: 6px;
 }
 .att-link {
@@ -105,7 +105,7 @@ function onFileChange(e) {
 .att-del {
   background: transparent;
   border: 1px solid #e0c4c0;
-  color: var(--color-danger);
+  color: var(--m3-error, var(--color-danger));
   padding: 2px 8px;
   border-radius: 4px;
   font-size: 12px;
@@ -113,7 +113,7 @@ function onFileChange(e) {
 }
 .att-empty {
   font-size: 13px;
-  color: var(--pt-text-placeholder);
+  color: var(--m3-on-surface-variant, var(--pt-text-placeholder));
   padding: 8px 0;
 }
 .upload-btn {
@@ -122,9 +122,9 @@ function onFileChange(e) {
   padding: 10px;
   text-align: center;
   background: var(--neutral-0);
-  border: 1px dashed var(--pt-text-disabled);
+  border: 1px dashed var(--m3-outline-variant, var(--pt-text-disabled));
   border-radius: 8px;
-  color: var(--pt-text-muted);
+  color: var(--m3-on-surface-variant, var(--pt-text-muted));
   font-size: 14px;
   cursor: pointer;
 }

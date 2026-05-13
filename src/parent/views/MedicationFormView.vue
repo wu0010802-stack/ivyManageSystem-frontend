@@ -257,12 +257,12 @@ function cancelAllergy() {
 h2 {
   margin: 0 0 var(--space-3, 12px);
   font-size: var(--text-xl, 18px);
-  color: var(--pt-text-strong);
+  color: var(--m3-on-surface, var(--pt-text-strong));
 }
 
 label {
   font-size: var(--text-sm, 13px);
-  color: var(--pt-text-muted);
+  color: var(--m3-on-surface-variant, var(--pt-text-muted));
   margin-top: var(--space-2, 8px);
   font-weight: var(--font-weight-medium, 500);
 }
@@ -321,7 +321,7 @@ textarea {
   border: 1px dashed var(--pt-text-disabled);
   border-radius: var(--radius-sm, 4px);
   font-size: var(--text-sm, 13px);
-  color: var(--pt-text-muted);
+  color: var(--m3-on-surface-variant, var(--pt-text-muted));
   cursor: pointer;
 }
 
@@ -349,7 +349,7 @@ textarea {
   border-radius: var(--radius-sm, 4px);
   padding: 0 var(--space-3, 12px);
   font-size: var(--text-sm, 13px);
-  color: var(--pt-text-muted);
+  color: var(--m3-on-surface-variant, var(--pt-text-muted));
   cursor: pointer;
 }
 
@@ -371,11 +371,11 @@ textarea {
 
 .cancel {
   background: var(--pt-surface-mute);
-  color: var(--pt-text-strong);
+  color: var(--m3-on-surface, var(--pt-text-strong));
 }
 
 .submit {
-  background: var(--brand-primary);
+  background: var(--m3-primary, var(--brand-primary));
   color: var(--neutral-0);
 }
 
@@ -400,7 +400,7 @@ textarea {
 
 .allergy-modal p {
   margin: var(--space-2, 8px) 0;
-  color: var(--pt-text-strong);
+  color: var(--m3-on-surface, var(--pt-text-strong));
   font-size: var(--text-base, 14px);
 }
 
@@ -433,7 +433,7 @@ textarea {
 
 .cancel-modal {
   background: var(--neutral-0);
-  color: var(--pt-text-strong);
+  color: var(--m3-on-surface, var(--pt-text-strong));
 }
 
 .confirm-modal {

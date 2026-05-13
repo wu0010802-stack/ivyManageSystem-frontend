@@ -66,9 +66,9 @@ const TYPE_LABEL = {
   background:
     linear-gradient(135deg, var(--pt-surface-raised, #fff) 0%, var(--pt-surface-recessed, #f5fbe6) 100%);
   border: 1px solid var(--pt-page-border, rgba(90, 168, 66, 0.15));
-  border-radius: var(--pt-card-radius, 14px);
+  border-radius: 16px;
   padding: var(--space-4, 16px) var(--space-3, 12px) var(--space-4, 16px) var(--space-4, 16px);
-  box-shadow: var(--pt-shadow-card, var(--pt-elev-1));
+  box-shadow: var(--m3-elev-1, var(--pt-shadow-card, var(--pt-elev-1)));
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
@@ -114,18 +114,18 @@ const TYPE_LABEL = {
   font-size: 36px;
   font-weight: 900;
   line-height: 1;
-  color: var(--pt-text-strong);
+  color: var(--m3-on-surface, var(--pt-text-strong));
 }
 
 .leave-hero-num-unit {
   font-size: 14px;
-  color: var(--pt-text-muted);
+  color: var(--m3-on-surface-variant, var(--pt-text-muted));
 }
 
 .leave-hero-sub {
   display: block;
   font-size: 12px;
-  color: var(--pt-text-muted);
+  color: var(--m3-on-surface-variant, var(--pt-text-muted));
   margin-top: 2px;
 }
 
@@ -137,7 +137,7 @@ const TYPE_LABEL = {
 }
 
 .leave-hero-chip {
-  background: var(--pt-tint-brand, rgba(90, 168, 66, 0.12));
+  background: var(--m3-primary-container, var(--pt-tint-brand, rgba(90, 168, 66, 0.12)));
   color: var(--ivy-green-laurel);
   padding: 3px 10px;
   border-radius: 999px;

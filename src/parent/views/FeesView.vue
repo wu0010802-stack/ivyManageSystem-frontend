@@ -36,9 +36,9 @@ const STATUS_LABEL = {
   paid: '已繳清',
 }
 const STATUS_COLOR = {
-  unpaid: { bg: 'var(--color-danger-soft)', color: 'var(--color-danger)' },
-  partial: { bg: 'var(--color-warning-soft)', color: 'var(--pt-warning-text-soft)' },
-  paid: { bg: 'var(--brand-primary-soft)', color: 'var(--pt-success-text)' },
+  unpaid: { bg: 'var(--color-danger-soft)', color: 'var(--m3-error, var(--color-danger))' },
+  partial: { bg: 'var(--color-warning-soft)', color: 'var(--m3-tertiary, var(--pt-warning-text))' },
+  paid: { bg: 'var(--brand-primary-soft)', color: 'var(--m3-primary, var(--pt-success-text))' },
 }
 
 const childTotals = computed(() => {
@@ -223,12 +223,12 @@ async function pullRefresh() {
 
 .single-totals {
   font-size: 13px;
-  color: var(--pt-text-muted);
-  background: var(--pt-surface-card, var(--neutral-0));
-  border: 1px solid var(--pt-page-border, var(--pt-border));
+  color: var(--m3-on-surface-variant, var(--pt-text-muted));
+  background: var(--m3-surface-container-low, var(--pt-surface-card));
+  border: 1px solid var(--m3-outline-variant, var(--pt-border));
   border-radius: var(--pt-control-radius, 12px);
   padding: 10px 12px;
-  box-shadow: var(--pt-shadow-press, var(--pt-elev-1));
+  box-shadow: var(--m3-elev-1, var(--pt-shadow-card, var(--pt-elev-1)));
 }
 
 .empty {

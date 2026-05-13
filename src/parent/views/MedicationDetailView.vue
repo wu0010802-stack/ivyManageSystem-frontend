@@ -133,18 +133,18 @@ onMounted(fetchOrder)
 <style scoped>
 .med-detail { padding: 16px; }
 h2 { margin: 0 0 4px; }
-h3 { margin-top: 16px; font-size: 14px; color: var(--pt-text-muted); }
+h3 { margin-top: 16px; font-size: 14px; color: var(--m3-on-surface-variant, var(--pt-text-muted)); }
 .meta { color: var(--pt-text-placeholder); font-size: 13px; }
 .note { background: var(--pt-surface-note); padding: 8px; border-radius: 6px; font-size: 13px; }
 .logs { list-style: none; padding: 0; }
-.logs li { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--pt-border-light); font-size: 14px; }
+.logs li { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--m3-outline-variant, var(--pt-border-light)); font-size: 14px; }
 .time { font-weight: bold; min-width: 50px; }
 .status { padding: 2px 8px; border-radius: 10px; font-size: 12px; }
 /* status chip：[data-status] 等效 class pattern */
 .status.pending      { background: var(--pt-tint-money);        color: var(--pt-tint-money-fg); }
 .status.administered { background: var(--pt-tint-calendar);     color: var(--pt-tint-calendar-fg); }
 .status.skipped      { background: var(--pt-tint-pickup);       color: var(--pt-tint-pickup-fg); }
-.status.correction   { background: var(--pt-tint-medication);   color: var(--pt-tint-medication-fg); }
+.status.correction   { background: var(--m3-tertiary-container, var(--pt-tint-medication));   color: var(--m3-on-tertiary-container, var(--pt-tint-medication-fg)); }
 .ts, .reason { color: var(--pt-text-placeholder); font-size: 12px; }
 .hint { color: var(--pt-text-placeholder); padding: 12px 0; }
 .photos { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
@@ -164,6 +164,6 @@ h3 { margin-top: 16px; font-size: 14px; color: var(--pt-text-muted); }
   line-height: 1;
   cursor: pointer;
 }
-.upload-btn { display: inline-block; padding: 8px 16px; background: var(--brand-primary); color: var(--neutral-0); border-radius: 6px; cursor: pointer; margin-top: 12px; font-size: 14px; transition: background var(--transition-fast, 0.15s ease); }
+.upload-btn { display: inline-block; padding: 8px 16px; background: var(--m3-primary, var(--brand-primary)); color: var(--neutral-0); border-radius: 6px; cursor: pointer; margin-top: 12px; font-size: 14px; transition: background var(--transition-fast, 0.15s ease); }
 .upload-btn:active { background: var(--brand-primary-hover); }
 </style>

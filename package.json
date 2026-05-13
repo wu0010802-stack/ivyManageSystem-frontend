@@ -10,7 +10,8 @@
         "test": "vitest run",
         "test:watch": "vitest",
         "test:coverage": "vitest run --coverage",
-        "parent:audit": "bash scripts/parent-audit-grep.sh"
+        "parent:audit": "bash scripts/parent-audit-grep.sh",
+        "gen:m3-tokens": "node scripts/gen-m3-tokens.mjs > src/parent/styles/m3-tokens.css"
     },
     "dependencies": {
         "@line/liff": "^2.28.0",
@@ -29,6 +30,7 @@
         "vue-router": "^4.2.5"
     },
     "devDependencies": {
+        "@material/material-color-utilities": "^0.2.7",
         "@vitejs/plugin-vue": "^5.0.3",
         "@vue/test-utils": "^2.4.6",
         "axios-mock-adapter": "^2.1.0",

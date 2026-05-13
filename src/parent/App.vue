@@ -60,11 +60,9 @@ html, body, #app {
   height: 100%;
 }
 
-/* Family OS 底色：使用線性 sky → cream 鋪底，不放裝飾 blob，讓卡片與功能區自己成為焦點。 */
+/* M3 底色：用 surface 純色（拿掉 sky → cream 漸層）。卡片自帶 surface-container tonal 階層提供層次。 */
 body {
-  background:
-    linear-gradient(180deg, var(--pt-surface-skyline, #edf8f5) 0%, var(--pt-surface-app, #fffce8) 46%, var(--pt-surface-app, #fffce8) 100%);
-  background-attachment: fixed;
+  background: var(--m3-surface, #f7fbf3);
   /* 阻擋 Android Chrome 原生下拉刷新 — 已交給 PullToRefresh 元件處理。
      設在實際捲動容器（body）才生效，設在 .ptr-root 上是無效的。 */
   overscroll-behavior-y: contain;
@@ -72,32 +70,30 @@ body {
 
 #app {
   background: transparent;
-  /* Sunny Skyline 字體 stack：Quicksand body + Outfit display + Noto Sans TC 中文
-     由 globals.css 注入 token，這裡只是 fallback 寫法 */
-  font-family: var(--pt-font-body, 'Quicksand', 'Noto Sans TC', -apple-system, BlinkMacSystemFont, 'PingFang TC', 'Helvetica Neue', sans-serif);
-  font-weight: 500;
+  /* M3 type scale：Roboto + Noto Sans TC（spec §3.2）。
+     由 typography.css 注入 token，這裡只是 fallback 寫法 */
+  font-family: var(--m3-font-body, 'Roboto', 'Noto Sans TC', -apple-system, BlinkMacSystemFont, 'PingFang TC', 'Helvetica Neue', sans-serif);
+  font-weight: 400;
   -webkit-font-smoothing: antialiased;
-  color: var(--pt-text-strong, #1B4459);
+  color: var(--m3-on-surface, #181d18);
 }
 
 * {
   box-sizing: border-box;
 }
 
-/* 標題層級統一改用 Outfit display 字體（中文 fallback Noto Sans TC）。
-   跨整個家長 app；元件內 scoped 若有 override 仍會覆蓋。 */
+/* 標題層級用 M3 font-display (Roboto)。元件內 scoped 若用 m3-headline-* utility class 仍會覆蓋。 */
 h1, h2, h3, h4, h5, h6 {
-  font-family: var(--pt-font-display, 'Outfit', 'Noto Sans TC', sans-serif);
-  font-weight: 700;
+  font-family: var(--m3-font-display, 'Roboto', 'Noto Sans TC', sans-serif);
+  font-weight: 400;
   letter-spacing: 0;
 }
 
 /* ============================================================
- * 路由過場動畫
+ * 路由過場動畫（M3 Material Motion）
  * 三種：fade（tab 切換）、slide-forward（深入）、slide-back（返回）
- * 持續：mode="out-in"，leave 140ms / enter 160ms（總 ~300ms）。
- *   - leave 略短於 enter，符合「離開應比進入快」的 Material Motion 慣例
- *   - 仍夠短到 tab 切換不感到拖沓
+ * 持續：mode="out-in"，統一 300ms（medium-2）
+ * Easing：M3 emphasized-decel cubic-bezier(0.05, 0.7, 0.1, 1)
  * 用 transform + opacity（GPU 加速）。
  * reduced-motion 由 globals.css 全域 transition-duration: 0.001ms 接管。
  * ============================================================ */
@@ -105,13 +101,13 @@ h1, h2, h3, h4, h5, h6 {
 .parent-fade-enter-active,
 .parent-slide-forward-enter-active,
 .parent-slide-back-enter-active {
-  transition: opacity 180ms ease-out, transform 180ms var(--pt-ease-out, cubic-bezier(0.22, 1, 0.36, 1));
+  transition: opacity var(--m3-dur-medium-2, 300ms) var(--m3-easing-emphasized-decel, cubic-bezier(0.05, 0.7, 0.1, 1)), transform var(--m3-dur-medium-2, 300ms) var(--m3-easing-emphasized-decel, cubic-bezier(0.05, 0.7, 0.1, 1));
 }
 
 .parent-fade-leave-active,
 .parent-slide-forward-leave-active,
 .parent-slide-back-leave-active {
-  transition: opacity 120ms ease-in, transform 120ms ease-in;
+  transition: opacity var(--m3-dur-medium-2, 300ms) var(--m3-easing-emphasized-decel, cubic-bezier(0.05, 0.7, 0.1, 1)), transform var(--m3-dur-medium-2, 300ms) var(--m3-easing-emphasized-decel, cubic-bezier(0.05, 0.7, 0.1, 1));
 }
 
 /* fade */

@@ -86,15 +86,15 @@ onMounted(init)
 }
 .thread-row {
   display: flex; gap: 12px; padding: 14px;
-  border: 1px solid var(--pt-page-border, var(--pt-border));
-  border-radius: var(--pt-card-radius, 14px);
-  background: var(--pt-surface-card, var(--neutral-0));
-  box-shadow: var(--pt-shadow-card, var(--pt-elev-1));
+  border: 1px solid var(--m3-outline-variant, var(--pt-border));
+  border-radius: 12px;
+  background: var(--m3-surface, var(--pt-surface-card));
+  box-shadow: none;
   cursor: pointer;
 }
 .thread-row.unread {
-  background: linear-gradient(135deg, var(--pt-tint-brand, var(--pt-surface-brand-tint)) 0%, var(--pt-surface-card, var(--neutral-0)) 100%);
-  border-color: color-mix(in srgb, var(--brand-primary) 34%, var(--pt-border));
+  background: linear-gradient(135deg, var(--pt-tint-brand, var(--pt-surface-brand-tint)) 0%, var(--m3-surface, var(--pt-surface-card)) 100%);
+  border-color: color-mix(in srgb, var(--m3-tertiary, var(--brand-primary)) 34%, var(--m3-outline-variant, var(--pt-border)));
 }
 .avatar {
   width: 44px; height: 44px; border-radius: 16px;
@@ -104,13 +104,13 @@ onMounted(init)
 }
 .content { flex: 1; min-width: 0; }
 .row1 { display: flex; justify-content: space-between; align-items: baseline; }
-.row1 strong { color: var(--pt-text-strong); font-size: 15px; font-weight: 800; }
+.row1 strong { color: var(--m3-on-surface, var(--pt-text-strong)); font-size: 15px; font-weight: 800; }
 .time { color: var(--pt-text-placeholder); font-size: 12px; }
 .row2 { display: flex; gap: 4px; align-items: center; margin-top: 2px; font-size: 13px; }
 .student { color: var(--brand-primary); flex-shrink: 0; }
-.preview { color: var(--pt-text-soft); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.preview { color: var(--m3-on-surface-variant, var(--pt-text-muted)); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .badge {
-  background: var(--brand-primary); color: var(--neutral-0); font-size: 11px;
+  background: var(--m3-tertiary, var(--brand-primary)); color: var(--neutral-0); font-size: 11px;
   padding: 2px 7px; border-radius: 10px; flex-shrink: 0;
 }
 </style>

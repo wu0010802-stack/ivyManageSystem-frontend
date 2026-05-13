@@ -72,7 +72,7 @@ const emit = defineEmits(['confirm-promotion'])
   background: var(--neutral-0);
   border-radius: 12px;
   padding: 12px 14px;
-  box-shadow: var(--pt-elev-1);
+  box-shadow: var(--m3-elev-1, var(--pt-elev-1));
 }
 
 .reg-header {
@@ -84,7 +84,7 @@ const emit = defineEmits(['confirm-promotion'])
 
 .reg-student {
   font-weight: 600;
-  color: var(--pt-text-strong);
+  color: var(--m3-on-surface, var(--pt-text-strong));
 }
 
 .reg-term {
@@ -116,13 +116,13 @@ const emit = defineEmits(['confirm-promotion'])
   align-items: center;
   gap: 8px;
   padding: 8px 0;
-  border-top: 1px solid var(--pt-surface-mute);
+  border-top: 1px solid var(--m3-outline-variant, var(--pt-border));
 }
 
 .course-name {
   flex: 1;
   font-size: 14px;
-  color: var(--pt-text-muted);
+  color: var(--m3-on-surface-variant, var(--pt-text-muted));
 }
 
 .course-status {
@@ -133,7 +133,7 @@ const emit = defineEmits(['confirm-promotion'])
 
 .confirm-btn {
   padding: 4px 10px;
-  background: var(--brand-primary);
+  background: var(--m3-primary, var(--brand-primary));
   color: var(--neutral-0);
   border: none;
   border-radius: 6px;

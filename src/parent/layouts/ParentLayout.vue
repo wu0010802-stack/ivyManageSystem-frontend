@@ -1,14 +1,15 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useParentAuthStore } from '../stores/parentAuth'
 import { getUnreadCount } from '../api/announcements'
 import { getMessageUnreadCount } from '../api/messages'
-import AppHeader from '../components/AppHeader.vue'
+import M3TopAppBar from '../components/m3/M3TopAppBar.vue'
+import M3NavigationBar from '../components/m3/M3NavigationBar.vue'
 import ConnectionBanner from '../components/ConnectionBanner.vue'
-import ParentIcon from '../components/ParentIcon.vue'
 
 const route = useRoute()
+const router = useRouter()
 const authStore = useParentAuthStore()
 
 const isPublic = computed(() => route.meta?.public === true)
@@ -19,27 +20,55 @@ const currentTab = computed(() => route.meta?.tab || '')
  * 點再次點 active tab → scroll-to-top。
  * 條件嚴格：必須「目前路徑等於 tab.path」才觸發；若使用者在深層頁
  * （/messages/123，meta.tab 仍為 'messages'）點 messages tab，仍應
- * 走 router-link 正常導回 /messages（不阻止預設行為）。
+ * 走 router 正常導回 /messages（不阻止預設行為）。
  */
-function onTabClick(t) {
-  if (route.path !== t.path) return
-  const reduce =
-    typeof window !== 'undefined' &&
-    window.matchMedia &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' })
+function onTabSelect(key, item) {
+  if (route.path === item.path) {
+    const reduce =
+      typeof window !== 'undefined' &&
+      window.matchMedia &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' })
+    return
+  }
+  router.push(item.path)
 }
 
 const unread = ref(0)
 const unreadMessages = ref(0)
 
-// IA v2 Phase 3: 5-tab → 4-tab；公告/出席 demote 至「家校」內
-const TABS = [
-  { key: 'home', label: '首頁', path: '/home' },
-  { key: 'messages', label: '訊息', path: '/messages' },
-  { key: 'family', label: '家校', path: '/family' },
-  { key: 'me', label: '我的', path: '/me' },
-]
+const TABS = computed(() => [
+  {
+    key: 'home',
+    label: '首頁',
+    icon: 'home',
+    activeIcon: 'home',
+    path: '/home',
+  },
+  {
+    key: 'messages',
+    label: '訊息',
+    icon: 'chat_bubble',
+    activeIcon: 'chat_bubble',
+    path: '/messages',
+    badge: unreadMessages.value,
+  },
+  {
+    key: 'family',
+    label: '家校',
+    icon: 'school',
+    activeIcon: 'school',
+    path: '/family',
+    badge: unread.value,
+  },
+  {
+    key: 'me',
+    label: '我的',
+    icon: 'person',
+    activeIcon: 'person',
+    path: '/me',
+  },
+])
 
 async function refreshUnread() {
   if (!authStore.isAuthed()) return
@@ -57,53 +86,47 @@ async function refreshUnread() {
 
 onMounted(refreshUnread)
 watch(() => route.fullPath, refreshUnread)
+
+const headerTitle = computed(() => route.meta?.title || '常春藤家長')
+const headerShowBack = computed(() => route.meta?.showBack === true)
+
+function onBack() {
+  if (window.history.length > 1) {
+    router.back()
+  } else {
+    router.replace('/home')
+  }
+}
 </script>
 
 <template>
   <div class="parent-layout">
-    <AppHeader v-if="!isPublic" />
+    <M3TopAppBar
+      v-if="!isPublic"
+      :title="headerTitle"
+      :show-back="headerShowBack"
+      :on-back="onBack"
+      variant="small"
+    />
 
     <div v-if="!isPublic" class="parent-conn-slot">
       <ConnectionBanner />
     </div>
 
-    <main class="parent-main" :class="{ 'is-public': isPublic, 'with-tabbar': !hideTabBar && !isPublic }">
+    <main
+      class="parent-main"
+      :class="{ 'is-public': isPublic, 'with-tabbar': !hideTabBar && !isPublic }"
+    >
       <slot />
     </main>
 
-    <nav v-if="!hideTabBar && !isPublic" class="tab-bar" aria-label="主要功能">
-      <router-link
-        v-for="t in TABS"
-        :key="t.key"
-        :to="t.path"
-        class="tab-item"
-        :class="{ active: currentTab === t.key }"
-        :aria-current="currentTab === t.key ? 'page' : null"
-        @click="onTabClick(t)"
-      >
-        <span class="tab-icon-wrap">
-          <span class="tab-icon-bg" aria-hidden="true" />
-          <span class="tab-icon">
-            <ParentIcon :name="t.key" size="md" />
-            <span
-              v-if="t.key === 'announcements' && unread > 0"
-              class="badge"
-              :aria-label="`未讀公告 ${unread > 99 ? '超過 99' : unread} 則`"
-            >
-              {{ unread > 99 ? '99+' : unread }}
-            </span>
-            <span
-              v-if="t.key === 'messages' && unreadMessages > 0"
-              class="badge"
-              :aria-label="`未讀訊息 ${unreadMessages > 99 ? '超過 99' : unreadMessages} 則`"
-            >
-              {{ unreadMessages > 99 ? '99+' : unreadMessages }}
-            </span>
-          </span>
-        </span>
-        <span class="tab-label">{{ t.label }}</span>
-      </router-link>
-    </nav>
+    <M3NavigationBar
+      v-if="!hideTabBar && !isPublic"
+      class="parent-navbar"
+      :items="TABS"
+      :current-key="currentTab"
+      @select="onTabSelect"
+    />
   </div>
 </template>
 
@@ -118,143 +141,24 @@ watch(() => route.fullPath, refreshUnread)
   position: relative;
 }
 
-.parent-main {
-  flex: 1;
-  width: 100%;
-  padding: var(--pt-page-gutter, 18px);
-}
-
-.parent-main.is-public {
-  padding: 0;
-}
-
-.parent-main.with-tabbar {
-  padding-bottom: calc(92px + env(safe-area-inset-bottom, 0));
-}
-
-.tab-bar {
-  position: fixed;
-  bottom: calc(10px + env(safe-area-inset-bottom, 0));
-  left: 50%;
-  right: auto;
-  width: min(calc(100vw - 24px), var(--pt-app-max-width, 560px));
-  transform: translateX(-50%);
-  background: var(--pt-surface-dock, var(--pt-surface-card, var(--neutral-0)));
-  border: 1px solid var(--pt-page-border, var(--pt-border));
-  border-radius: var(--pt-dock-radius, 20px);
-  box-shadow: var(--pt-shadow-dock, 0 -4px 24px rgba(15, 23, 42, 0.06));
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  padding: 6px;
-  padding-bottom: max(6px, env(safe-area-inset-bottom, 6px));
-  z-index: var(--z-tab-bar, 50);
-}
-
-.tab-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 52px;
-  padding: 6px 0 5px;
-  border-radius: 15px;
-  font-size: var(--text-xs, 11px);
-  color: var(--pt-text-faint);
-  text-decoration: none;
-  transition:
-    background var(--transition-fast, 0.15s ease),
-    color var(--transition-fast, 0.15s ease),
-    transform var(--transition-fast, 0.15s ease);
-}
-
-.tab-item.active {
-  color: var(--brand-primary);
-  font-weight: var(--font-weight-semibold, 600);
-  background: var(--pt-tint-brand, var(--brand-primary-soft));
-}
-
-.tab-item:active .tab-icon-wrap {
-  transform: scale(0.92);
-}
-
-/* icon-wrap：包住 icon-bg pill + icon 本身，啟用時背景 pill 浮現 */
-.tab-icon-wrap {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 24px;
-  transition: transform var(--transition-fast, 0.15s ease);
-}
-
-.tab-icon-bg {
-  position: absolute;
-  inset: 0;
-  border-radius: 12px;
-  background: transparent;
-  transform: scale(0.6);
-  opacity: 0;
-  transition:
-    background var(--transition-base, 0.2s ease),
-    opacity var(--transition-base, 0.2s ease),
-    transform var(--transition-slow, 0.3s cubic-bezier(0.4, 0, 0.2, 1));
-}
-
-/* P2.2 rebrand：active pill 用 brand token，對齊 IvyKids 深綠主題 */
-.tab-item.active .tab-icon-bg {
-  background: transparent;
-  opacity: 0;
-  transform: scale(1);
-}
-
-.tab-icon {
-  position: relative;
-  z-index: 1;
-  line-height: 1;
-  width: var(--icon-md, 22px);
-  height: var(--icon-md, 22px);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.tab-label {
-  margin-top: 3px;
-  letter-spacing: 0;
-}
-
-.badge {
-  position: absolute;
-  top: -4px;
-  right: -8px;
-  background: var(--color-danger);
-  color: var(--neutral-0);
-  font-size: 10px;
-  padding: 1px 5px;
-  border-radius: var(--radius-full, 9999px);
-  min-width: 16px;
-  text-align: center;
-  line-height: 1.4;
-  font-variant-numeric: tabular-nums;
-  /* 加細白邊讓 badge 與 icon-bg 分離 */
-  box-shadow: 0 0 0 2px var(--pt-surface-card, var(--neutral-0));
-}
-
-/* ConnectionBanner sticky slot：AppHeader 本身為 sticky top:0（高度約 52px + safe-area-inset-top），
-   故 banner 黏在 AppHeader 之下；z-index 介於 AppHeader (--z-sticky:10) 與 tab-bar (50) 之間 */
 .parent-conn-slot {
   position: sticky;
-  top: calc(var(--header-height, 52px) + env(safe-area-inset-top, 0));
+  top: 64px;
   z-index: 9;
 }
 
-@media (min-width: 720px) {
-  .parent-layout {
-    border-left: 1px solid var(--pt-page-border);
-    border-right: 1px solid var(--pt-page-border);
-    background: color-mix(in srgb, var(--pt-surface-app) 82%, transparent);
-    min-height: 100dvh;
-  }
+.parent-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.parent-main.with-tabbar {
+  padding-bottom: 80px;
+}
+
+.parent-navbar {
+  position: sticky;
+  bottom: 0;
+  z-index: var(--z-sticky, 10);
 }
 </style>

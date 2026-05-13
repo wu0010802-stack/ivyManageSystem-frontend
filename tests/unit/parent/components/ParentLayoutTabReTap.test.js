@@ -41,9 +41,9 @@ async function mountLayout(initialPath) {
     global: {
       plugins: [router],
       stubs: {
-        AppHeader: true,
+        M3TopAppBar: true,
+        M3NavigationBar: { template: '<nav class="m3-navigation-bar"><slot /><button v-for="item in items" :key="item.key" class="m3-nav-tab" @click="$emit(\'select\', item.key, item)">{{ item.label }}</button></nav>', props: ['items', 'currentKey'], emits: ['select'] },
         ConnectionBanner: true,
-        ParentIcon: true,
       },
     },
     attachTo: document.body,
@@ -69,7 +69,7 @@ describe('ParentLayout tab re-tap', () => {
 
   it('在 /home，點 home tab → 觸發 scrollTo top', async () => {
     const { wrapper } = await mountLayout('/home')
-    const tabs = wrapper.findAll('.tab-item')
+    const tabs = wrapper.findAll('.m3-nav-tab')
     // home 是第一個 tab
     await tabs[0].trigger('click')
     expect(scrollToSpy).toHaveBeenCalledTimes(1)
@@ -79,9 +79,9 @@ describe('ParentLayout tab re-tap', () => {
     wrapper.unmount()
   })
 
-  it('在 /home，點 messages tab → 不觸發 scrollTo（讓 router-link 正常導航）', async () => {
+  it('在 /home，點 messages tab → 不觸發 scrollTo（讓 router 正常導航）', async () => {
     const { wrapper } = await mountLayout('/home')
-    const tabs = wrapper.findAll('.tab-item')
+    const tabs = wrapper.findAll('.m3-nav-tab')
     // messages 是第二個 tab（IA v2 Phase 3 4-tab）
     await tabs[1].trigger('click')
     expect(scrollToSpy).not.toHaveBeenCalled()
@@ -90,7 +90,7 @@ describe('ParentLayout tab re-tap', () => {
 
   it('在 /messages/123 深層，點 messages tab → 不觸發 scrollTo（仍應導航回 /messages）', async () => {
     const { wrapper } = await mountLayout('/messages/123')
-    const tabs = wrapper.findAll('.tab-item')
+    const tabs = wrapper.findAll('.m3-nav-tab')
     // messages 是第二個 tab（IA v2 Phase 3 4-tab）
     await tabs[1].trigger('click')
     expect(scrollToSpy).not.toHaveBeenCalled()
@@ -104,7 +104,7 @@ describe('ParentLayout tab re-tap', () => {
       writable: true,
     })
     const { wrapper } = await mountLayout('/home')
-    const tabs = wrapper.findAll('.tab-item')
+    const tabs = wrapper.findAll('.m3-nav-tab')
     await tabs[0].trigger('click')
     expect(scrollToSpy).toHaveBeenCalledWith({ top: 0, behavior: 'auto' })
     wrapper.unmount()

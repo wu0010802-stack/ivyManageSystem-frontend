@@ -122,12 +122,12 @@ onMounted(async () => {
   padding: var(--space-3, 12px);
   background: var(--pt-surface-card, var(--neutral-0));
   border: var(--pt-hairline);
-  border-radius: var(--pt-card-radius, 14px);
+  border-radius: 12px;
   color: var(--color-danger);
   font-size: var(--text-base, 15px);
   font-weight: var(--font-weight-semibold, 600);
   cursor: pointer;
-  box-shadow: var(--pt-shadow-card, var(--pt-elev-1));
+  box-shadow: var(--m3-elev-1, var(--pt-shadow-card, var(--pt-elev-1)));
   transition: background var(--transition-fast, 0.15s ease), transform var(--transition-fast, 0.15s ease);
 }
 

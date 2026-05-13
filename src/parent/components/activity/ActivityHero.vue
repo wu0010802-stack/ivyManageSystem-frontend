@@ -55,9 +55,9 @@ function fmt(n) { return Number(n).toLocaleString('en-US') }
   background:
     linear-gradient(135deg, var(--pt-tint-message, var(--ivy-tile-teal-bg)) 0%, var(--pt-surface-raised, #fff) 100%);
   border: 1px solid color-mix(in srgb, var(--pt-tint-message-fg) 28%, transparent);
-  border-radius: var(--pt-card-radius, 14px);
+  border-radius: 16px;
   padding: var(--space-4, 16px);
-  box-shadow: var(--pt-shadow-card, var(--pt-elev-1));
+  box-shadow: var(--m3-elev-1, var(--pt-shadow-card, var(--pt-elev-1)));
 }
 
 .hero-laurel {
@@ -104,11 +104,11 @@ function fmt(n) { return Number(n).toLocaleString('en-US') }
 .act-hero-stat .num {
   font-size: 16px;
   font-weight: 900;
-  color: var(--pt-text-strong);
+  color: var(--m3-on-surface, var(--pt-text-strong));
 }
 
 .act-hero-stat .lbl {
   font-size: 11px;
-  color: var(--pt-text-muted);
+  color: var(--m3-on-surface-variant, var(--pt-text-muted));
 }
 </style>

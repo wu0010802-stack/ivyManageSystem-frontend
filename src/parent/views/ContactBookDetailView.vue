@@ -235,8 +235,8 @@ watch(entryId, async (newId, oldId) => {
 .detail { padding: 12px; }
 .hint { color: var(--pt-text-faint); text-align: center; padding: 24px 0; }
 .card {
-  background: var(--neutral-0);
-  border-radius: 10px;
+  background: var(--m3-surface-container-low, var(--pt-surface-card));
+  border-radius: 16px;
   padding: 16px;
   margin-bottom: 12px;
   box-shadow: var(--pt-elev-1);
@@ -247,7 +247,7 @@ watch(entryId, async (newId, oldId) => {
 .cell label { display: block; font-size: 11px; color: var(--pt-text-faint); margin-bottom: 2px; }
 .cell span { font-size: 14px; }
 .block { margin-top: 12px; }
-.block h3 { font-size: 14px; color: var(--pt-text-muted); margin: 0 0 4px; }
+.block h3 { font-size: 14px; color: var(--m3-on-surface-variant, var(--pt-text-muted)); margin: 0 0 4px; }
 .block p { margin: 0; font-size: 14px; line-height: 1.6; white-space: pre-wrap; }
 .photos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 10px; }
 .photos img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 6px; }
@@ -264,6 +264,7 @@ textarea {
   font-family: inherit;
   font-size: 14px;
   box-sizing: border-box;
+  background: var(--m3-surface-container, var(--pt-surface-mute));
 }
 .actions { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
 .counter { color: var(--pt-text-faint); font-size: 12px; }

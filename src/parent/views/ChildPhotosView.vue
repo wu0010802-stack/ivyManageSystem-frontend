@@ -85,8 +85,8 @@ header > h2 { margin: 0; font-size: 17px; color: #0d9053; }
 .thumb {
   aspect-ratio: 1;
   overflow: hidden;
-  background: #f3f4f6;
-  border-radius: 4px;
+  background: var(--m3-surface-container-high, var(--pt-surface-mute));
+  border-radius: 12px;
   cursor: pointer;
 }
 .thumb > img { width: 100%; height: 100%; object-fit: cover; }

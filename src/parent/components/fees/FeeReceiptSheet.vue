@@ -94,7 +94,7 @@ const firstReceiptNo = computed(() => props.payments[0]?.receipt_no || '')
 .detail-name {
   font-size: 16px;
   font-weight: 600;
-  color: var(--pt-text-strong);
+  color: var(--m3-on-surface, var(--pt-text-strong));
 }
 
 .detail-period {
@@ -134,7 +134,7 @@ const firstReceiptNo = computed(() => props.payments[0]?.receipt_no || '')
 
 .pay-amount {
   font-weight: 600;
-  color: var(--brand-primary);
+  color: var(--m3-primary, var(--brand-primary));
 }
 
 .pay-receipt {
@@ -157,7 +157,7 @@ const firstReceiptNo = computed(() => props.payments[0]?.receipt_no || '')
   border: 1px solid var(--pt-border-strong);
   border-radius: 8px;
   font-size: 13px;
-  color: var(--pt-text-strong);
+  color: var(--m3-on-surface, var(--pt-text-strong));
   cursor: pointer;
   display: inline-flex;
   align-items: center;

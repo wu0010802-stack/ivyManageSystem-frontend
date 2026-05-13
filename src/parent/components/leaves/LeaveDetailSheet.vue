@@ -83,11 +83,11 @@ const emit = defineEmits(['update:modelValue', 'att-upload', 'att-remove'])
   gap: 8px;
   margin-bottom: 6px;
   font-size: 14px;
-  color: var(--pt-text-strong);
+  color: var(--m3-on-surface, var(--pt-text-strong));
 }
 .detail-label {
   width: 56px;
-  color: var(--pt-text-placeholder);
+  color: var(--m3-on-surface-variant, var(--pt-text-placeholder));
   flex-shrink: 0;
 }
 
@@ -95,7 +95,7 @@ const emit = defineEmits(['update:modelValue', 'att-upload', 'att-remove'])
   margin: 16px 0 8px;
   font-size: 13px;
   font-weight: 600;
-  color: var(--pt-text-muted);
+  color: var(--m3-on-surface-variant, var(--pt-text-muted));
 }
 
 /* 時間軸 */
@@ -110,27 +110,27 @@ const emit = defineEmits(['update:modelValue', 'att-upload', 'att-remove'])
   align-items: center;
   gap: 10px;
   font-size: 13px;
-  color: var(--pt-text-faint);
+  color: var(--m3-on-surface-variant, var(--pt-text-faint));
 }
 .step.done {
-  color: var(--pt-text-strong);
+  color: var(--m3-on-surface, var(--pt-text-strong));
 }
 .step-dot {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: var(--pt-border);
-  border: 2px solid var(--pt-border-strong);
+  background: var(--m3-outline-variant, var(--pt-border));
+  border: 2px solid var(--m3-outline-variant, var(--pt-border-strong));
 }
 .step.done .step-dot {
-  background: var(--brand-primary);
-  border-color: var(--brand-primary);
+  background: var(--m3-primary, var(--brand-primary));
+  border-color: var(--m3-primary, var(--brand-primary));
 }
 .step-label {
   flex: 1;
 }
 .step-time {
   font-size: 11px;
-  color: var(--pt-text-placeholder);
+  color: var(--m3-on-surface-variant, var(--pt-text-placeholder));
 }
 </style>

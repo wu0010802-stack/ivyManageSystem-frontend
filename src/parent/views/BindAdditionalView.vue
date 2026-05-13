@@ -84,12 +84,12 @@ async function submit() {
   display: block;}
 
 .card {
-  background: var(--pt-surface-card, var(--neutral-0));
-  border-radius: var(--radius-xl, 16px);
+  background: var(--m3-surface-container-low, var(--pt-surface-card, var(--neutral-0)));
+  border-radius: 16px;
   padding: 28px 22px;
   width: 100%;
   max-width: 360px;
-  box-shadow: var(--pt-elev-2);
+  box-shadow: var(--m3-elev-1, var(--pt-elev-2));
   border: var(--pt-hairline);
 }
 
@@ -130,7 +130,7 @@ async function submit() {
   width: 100%;
   min-height: var(--touch-target-min, 44px);
   padding: 12px;
-  background: var(--brand-primary);
+  background: var(--m3-primary, var(--brand-primary));
   color: var(--neutral-0);
   border: none;
   border-radius: var(--radius-md, 8px);

@@ -60,12 +60,12 @@ function isUnpaidAnchor(r, idx) {
 
 <style scoped>
 .record-card {
-  background: var(--pt-surface-card, var(--neutral-0));
-  border: 1px solid var(--pt-page-border, var(--pt-border));
-  border-radius: var(--pt-card-radius, 14px);
+  background: var(--m3-surface-container-low, var(--pt-surface-card));
+  border: 1px solid var(--m3-outline-variant, var(--pt-border));
+  border-radius: 12px;
   padding: 14px;
   cursor: pointer;
-  box-shadow: var(--pt-shadow-card, var(--pt-elev-1));
+  box-shadow: var(--m3-elev-1, var(--pt-shadow-card, var(--pt-elev-1)));
 }
 
 .record-row1 {
@@ -76,7 +76,7 @@ function isUnpaidAnchor(r, idx) {
 
 .record-name {
   font-weight: 800;
-  color: var(--pt-text-strong);
+  color: var(--m3-on-surface, var(--pt-text-strong));
   font-size: 15px;
 }
 

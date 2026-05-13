@@ -1,0 +1,48 @@
+/**
+ * Material 3 elevation + motion tokens.
+ *
+ * Spec: docs/superpowers/specs/2026-05-13-parent-material3-redesign-design.md §3.3 §3.4
+ *
+ * Elevation：六階（0-5），dual-layer shadow。
+ * Motion：standard / emphasized easing + 10 階 duration。
+ */
+
+:root {
+  /* Elevation level 0-5 */
+  --m3-elev-0: none;
+  --m3-elev-1:
+    0px 1px 2px 0px rgba(0, 0, 0, 0.30),
+    0px 1px 3px 1px rgba(0, 0, 0, 0.15);
+  --m3-elev-2:
+    0px 1px 2px 0px rgba(0, 0, 0, 0.30),
+    0px 2px 6px 2px rgba(0, 0, 0, 0.15);
+  --m3-elev-3:
+    0px 1px 3px 0px rgba(0, 0, 0, 0.30),
+    0px 4px 8px 3px rgba(0, 0, 0, 0.15);
+  --m3-elev-4:
+    0px 2px 3px 0px rgba(0, 0, 0, 0.30),
+    0px 6px 10px 4px rgba(0, 0, 0, 0.15);
+  --m3-elev-5:
+    0px 4px 4px 0px rgba(0, 0, 0, 0.30),
+    0px 8px 12px 6px rgba(0, 0, 0, 0.15);
+
+  /* Easing curves */
+  --m3-easing-standard:          cubic-bezier(0.2, 0, 0, 1);
+  --m3-easing-standard-accel:    cubic-bezier(0.3, 0, 1, 1);
+  --m3-easing-standard-decel:    cubic-bezier(0, 0, 0, 1);
+  --m3-easing-emphasized:        cubic-bezier(0.2, 0, 0, 1);
+  --m3-easing-emphasized-accel:  cubic-bezier(0.3, 0, 0.8, 0.15);
+  --m3-easing-emphasized-decel:  cubic-bezier(0.05, 0.7, 0.1, 1);
+
+  /* Duration */
+  --m3-dur-short-1:   50ms;
+  --m3-dur-short-2:   100ms;
+  --m3-dur-short-3:   150ms;
+  --m3-dur-short-4:   200ms;
+  --m3-dur-medium-1:  250ms;
+  --m3-dur-medium-2:  300ms;
+  --m3-dur-medium-3:  350ms;
+  --m3-dur-medium-4:  400ms;
+  --m3-dur-long-1:    450ms;
+  --m3-dur-long-2:    500ms;
+}

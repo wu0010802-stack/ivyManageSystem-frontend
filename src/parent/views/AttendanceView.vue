@@ -212,11 +212,11 @@ async function pullRefresh() {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  background: var(--pt-surface-card, var(--neutral-0));
+  background: var(--m3-surface-container-low, var(--pt-surface-card));
   border: 1px solid var(--pt-page-border, var(--pt-border));
-  border-radius: var(--pt-card-radius, 14px);
+  border-radius: 12px;
   padding: 8px;
-  box-shadow: var(--pt-shadow-card, var(--pt-elev-1));
+  box-shadow: var(--m3-elev-1, var(--pt-shadow-card, var(--pt-elev-1)));
 }
 
 .month-label {
@@ -224,7 +224,7 @@ async function pullRefresh() {
   text-align: center;
   font-size: 15px;
   font-weight: 800;
-  color: var(--pt-text-strong);
+  color: var(--m3-on-surface, var(--pt-text-strong));
 }
 
 .nav {
@@ -245,7 +245,7 @@ async function pullRefresh() {
   border: 1px solid var(--pt-page-border, var(--pt-border));
   border-radius: 12px;
   background: var(--pt-surface-raised, var(--pt-surface-card));
-  color: var(--pt-text-strong);
+  color: var(--m3-on-surface, var(--pt-text-strong));
   font-size: 12px;
   font-weight: 800;
   padding: 0 12px;
@@ -257,7 +257,7 @@ async function pullRefresh() {
   gap: 8px;
   flex-wrap: wrap;
   font-size: 12px;
-  color: var(--pt-text-muted);
+  color: var(--m3-on-surface-variant, var(--pt-text-muted));
 }
 
 .stats span {
@@ -282,11 +282,11 @@ async function pullRefresh() {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   gap: 4px;
-  background: var(--pt-surface-card, var(--neutral-0));
+  background: var(--m3-surface-container-low, var(--pt-surface-card));
   border: 1px solid var(--pt-page-border, var(--pt-border));
-  border-radius: var(--pt-card-radius, 14px);
+  border-radius: 12px;
   padding: 6px;
-  box-shadow: var(--pt-shadow-card, var(--pt-elev-1));
+  box-shadow: var(--m3-elev-1, var(--pt-shadow-card, var(--pt-elev-1)));
 }
 
 .cell {
@@ -324,12 +324,12 @@ async function pullRefresh() {
 }
 
 .detail {
-  background: var(--pt-surface-card, var(--neutral-0));
+  background: var(--m3-surface-container-low, var(--pt-surface-card));
   border: 1px solid var(--pt-page-border, var(--pt-border));
-  border-radius: var(--pt-card-radius, 14px);
+  border-radius: 12px;
   padding: 14px 16px;
   font-size: 14px;
-  box-shadow: var(--pt-shadow-card, var(--pt-elev-1));
+  box-shadow: var(--m3-elev-1, var(--pt-shadow-card, var(--pt-elev-1)));
 }
 
 .detail.empty {

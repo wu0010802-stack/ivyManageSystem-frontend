@@ -1,0 +1,134 @@
+/**
+ * Material 3 Type Scale.
+ *
+ * Spec: docs/superpowers/specs/2026-05-13-parent-material3-redesign-design.md §3.2
+ *
+ * Font stack 用 Roboto + Noto Sans TC（Google 官方 M3 中英搭配）。
+ * 載入由 parent.html 的 <link> 處理。
+ *
+ * 用法：
+ *   <h1 class="m3-headline-large">標題</h1>
+ *   <p class="m3-body-medium">內文</p>
+ */
+
+:root {
+  --m3-font-display: 'Roboto', 'Noto Sans TC', -apple-system, BlinkMacSystemFont,
+    'PingFang TC', 'Helvetica Neue', sans-serif;
+  --m3-font-body: 'Roboto', 'Noto Sans TC', -apple-system, BlinkMacSystemFont,
+    'PingFang TC', 'Helvetica Neue', sans-serif;
+}
+
+/* Display */
+.m3-display-large {
+  font-family: var(--m3-font-display);
+  font-size: 57px;
+  font-weight: 400;
+  line-height: 64px;
+  letter-spacing: -0.25px;
+}
+.m3-display-medium {
+  font-family: var(--m3-font-display);
+  font-size: 45px;
+  font-weight: 400;
+  line-height: 52px;
+  letter-spacing: 0;
+}
+.m3-display-small {
+  font-family: var(--m3-font-display);
+  font-size: 36px;
+  font-weight: 400;
+  line-height: 44px;
+  letter-spacing: 0;
+}
+
+/* Headline */
+.m3-headline-large {
+  font-family: var(--m3-font-display);
+  font-size: 32px;
+  font-weight: 400;
+  line-height: 40px;
+  letter-spacing: 0;
+}
+.m3-headline-medium {
+  font-family: var(--m3-font-display);
+  font-size: 28px;
+  font-weight: 400;
+  line-height: 36px;
+  letter-spacing: 0;
+}
+.m3-headline-small {
+  font-family: var(--m3-font-display);
+  font-size: 24px;
+  font-weight: 400;
+  line-height: 32px;
+  letter-spacing: 0;
+}
+
+/* Title */
+.m3-title-large {
+  font-family: var(--m3-font-display);
+  font-size: 22px;
+  font-weight: 400;
+  line-height: 28px;
+  letter-spacing: 0;
+}
+.m3-title-medium {
+  font-family: var(--m3-font-body);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
+  letter-spacing: 0.15px;
+}
+.m3-title-small {
+  font-family: var(--m3-font-body);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+  letter-spacing: 0.1px;
+}
+
+/* Label */
+.m3-label-large {
+  font-family: var(--m3-font-body);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+  letter-spacing: 0.1px;
+}
+.m3-label-medium {
+  font-family: var(--m3-font-body);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+  letter-spacing: 0.5px;
+}
+.m3-label-small {
+  font-family: var(--m3-font-body);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16px;
+  letter-spacing: 0.5px;
+}
+
+/* Body */
+.m3-body-large {
+  font-family: var(--m3-font-body);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 24px;
+  letter-spacing: 0.5px;
+}
+.m3-body-medium {
+  font-family: var(--m3-font-body);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
+  letter-spacing: 0.25px;
+}
+.m3-body-small {
+  font-family: var(--m3-font-body);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 16px;
+  letter-spacing: 0.4px;
+}

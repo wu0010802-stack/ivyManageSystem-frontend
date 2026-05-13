@@ -62,17 +62,18 @@ const time = computed(() => {
 .bubble {
   max-width: 75%;
   padding: 8px 12px;
-  border-radius: 12px;
-  background: var(--pt-surface-mute);
-  color: var(--pt-text-strong);
+  border-radius: 18px 18px 18px 4px;
+  background: var(--m3-surface-container-high, var(--pt-surface-mute));
+  color: var(--m3-on-surface, var(--pt-text-strong));
   font-size: 14px;
   line-height: 1.4;
 }
 .bubble-row.mine .bubble {
-  background: var(--brand-primary);
-  color: var(--neutral-0);
+  border-radius: 18px 18px 4px 18px;
+  background: var(--m3-primary-container, var(--brand-primary));
+  color: var(--m3-on-primary-container, var(--neutral-0));
 }
-.bubble.deleted { font-style: italic; opacity: 0.6; background: var(--pt-surface-mute) !important; color: var(--pt-text-placeholder) !important; }
+.bubble.deleted { font-style: italic; opacity: 0.6; background: var(--m3-surface-container, transparent) !important; color: var(--pt-text-placeholder) !important; }
 .bubble.pending { opacity: 0.7; }
 .body { white-space: pre-wrap; word-break: break-word; }
 .attachments { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }

@@ -327,21 +327,21 @@ onMounted(() => {
 .child-name {
   font-size: 18px;
   font-weight: 900;
-  color: var(--pt-text-strong);
+  color: var(--m3-on-surface, var(--pt-text-strong));
 }
 .child-meta {
   font-size: 12px;
-  color: var(--pt-text-muted);
+  color: var(--m3-on-surface-variant, var(--pt-text-muted));
   margin-top: 2px;
 }
 
 /* ── info card ───────────────────────────────── */
 .card {
-  background: var(--pt-surface-card, var(--neutral-0));
+  background: var(--m3-surface-container-low, var(--pt-surface-card, var(--neutral-0)));
   border: 1px solid var(--pt-page-border, var(--pt-border));
-  border-radius: var(--pt-card-radius, 14px);
+  border-radius: 16px;
   padding: 15px;
-  box-shadow: var(--pt-shadow-card, var(--pt-elev-1));
+  box-shadow: var(--m3-elev-1, var(--pt-shadow-card, var(--pt-elev-1)));
 }
 .sub-info {
   font-size: 13px;
@@ -353,7 +353,7 @@ onMounted(() => {
   gap: 10px;
   margin-bottom: 6px;
   font-size: 14px;
-  color: var(--pt-text-strong);
+  color: var(--m3-on-surface, var(--pt-text-strong));
 }
 .row .label {
   width: 56px;
@@ -367,7 +367,7 @@ onMounted(() => {
 }
 .teacher-tag {
   font-size: 13px;
-  color: var(--pt-text-muted);
+  color: var(--m3-on-surface-variant, var(--pt-text-muted));
 }
 .section-title {
   font-size: 12px;
@@ -394,7 +394,7 @@ onMounted(() => {
 }
 .guardian-name {
   font-weight: 600;
-  color: var(--pt-text-strong);
+  color: var(--m3-on-surface, var(--pt-text-strong));
 }
 .guardian-rel {
   color: var(--pt-text-placeholder);
@@ -439,7 +439,7 @@ onMounted(() => {
 }
 .allergen {
   font-weight: 600;
-  color: var(--pt-text-strong);
+  color: var(--m3-on-surface, var(--pt-text-strong));
 }
 .severity {
   font-size: 11px;
@@ -449,7 +449,7 @@ onMounted(() => {
 .allergy-text {
   margin-top: 4px;
   font-size: 13px;
-  color: var(--pt-text-muted);
+  color: var(--m3-on-surface-variant, var(--pt-text-muted));
 }
 .change-card {
   background: var(--pt-tint-sun, var(--color-warning-soft));
@@ -465,7 +465,7 @@ onMounted(() => {
   width: 100%;
   min-height: 44px;
   padding: 10px;
-  background: var(--brand-primary);
+  background: var(--m3-primary, var(--brand-primary));
   color: var(--neutral-0);
   border: none;
   border-radius: var(--pt-control-radius, 12px);
@@ -502,7 +502,7 @@ onMounted(() => {
   border-radius: 6px;
   font-size: 13px;
   cursor: pointer;
-  color: var(--pt-text-muted);
+  color: var(--m3-on-surface-variant, var(--pt-text-muted));
 }
 .load-more-btn:disabled {
   opacity: 0.6;
@@ -522,7 +522,7 @@ onMounted(() => {
   border-radius: 6px;
   font-size: 12px;
   cursor: pointer;
-  color: var(--pt-text-muted);
+  color: var(--m3-on-surface-variant, var(--pt-text-muted));
 }
 .retry-btn:disabled {
   opacity: 0.6;

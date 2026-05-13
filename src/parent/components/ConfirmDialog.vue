@@ -1,27 +1,17 @@
 <script setup>
 /**
- * 二擇一確認對話框，取代 window.confirm()。
+ * 二擇一確認對話框，取代 window.confirm()。M3 化版本。
  *
- * 為什麼不用原生 confirm？
- *  - 原生 dialog 在 LIFF webview 樣式不可控、跨 iOS/Android 視覺斷裂
- *  - 與 brand 視覺語言不一致
- *  - 無法套 destructive 變體（紅色）
+ * 用法與舊版完全相同：
+ *   <ConfirmDialog v-model:open="show" title="..." confirm-label="..." destructive @confirm="..." />
  *
- * 為什麼不放 a11y 必修分類？
- *  - 原生 confirm 的 focus / screen reader 是 OS 處理的，無障礙其實 OK
- *  - 此元件純為了視覺一致性
+ * P3 改造：內部按鈕換用 M3Button；外殼仍走 AppModal（AppModal 已 M3 視覺）。
  *
- * 用法：
- *   <ConfirmDialog
- *     v-model:open="show"
- *     title="確定要登出？"
- *     confirm-label="登出"
- *     destructive
- *     @confirm="doLogout"
- *   />
+ * Spec: docs/superpowers/specs/2026-05-13-parent-material3-redesign-design.md §6.1
  */
 import { computed } from 'vue'
 import AppModal from './AppModal.vue'
+import M3Button from './m3/M3Button.vue'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -29,7 +19,6 @@ const props = defineProps({
   message: { type: String, default: '' },
   confirmLabel: { type: String, default: '確定' },
   cancelLabel: { type: String, default: '取消' },
-  /** destructive：confirm button 用 danger 色 */
   destructive: { type: Boolean, default: false },
 })
 
@@ -58,91 +47,48 @@ function onConfirm() {
     :open="open"
     :labelled-by="titleId"
     :described-by="message ? messageId : null"
-    :max-width="'360px'"
-    @update:open="(v) => $emit('update:open', v)"
-    @close="onCancel"
+    @update:open="(v) => emit('update:open', v)"
   >
-    <div class="confirm-body">
-      <h3 :id="titleId" class="confirm-title">{{ title }}</h3>
-      <p v-if="message" :id="messageId" class="confirm-message">{{ message }}</p>
-      <div class="confirm-actions">
-        <button type="button" class="btn btn-cancel" @click="onCancel">
-          {{ cancelLabel }}
-        </button>
-        <button
-          type="button"
-          class="btn btn-confirm"
+    <div class="confirm-dialog">
+      <h2 :id="titleId" class="confirm-dialog-title m3-headline-small">{{ title }}</h2>
+      <p v-if="message" :id="messageId" class="confirm-dialog-message m3-body-medium">{{ message }}</p>
+      <div class="confirm-dialog-actions">
+        <M3Button variant="text" @click="onCancel">{{ cancelLabel }}</M3Button>
+        <M3Button
+          variant="filled"
           :class="{ 'is-destructive': destructive }"
           @click="onConfirm"
-        >
-          {{ confirmLabel }}
-        </button>
+        >{{ confirmLabel }}</M3Button>
       </div>
     </div>
   </AppModal>
 </template>
 
 <style scoped>
-.confirm-body {
-  padding: var(--space-5, 20px);
-}
-
-.confirm-title {
-  margin: 0 0 var(--space-3, 12px);
-  font-size: var(--text-lg, 16px);
-  font-weight: var(--font-weight-semibold, 600);
-  color: var(--neutral-800, #1e293b);
-  line-height: var(--line-height-tight, 1.25);
-}
-
-.confirm-message {
-  margin: 0 0 var(--space-5, 20px);
-  font-size: var(--text-base, 14px);
-  color: var(--neutral-600, #475569);
-  line-height: var(--line-height-base, 1.5);
-}
-
-.confirm-actions {
+.confirm-dialog {
+  padding: 24px;
   display: flex;
-  gap: var(--space-2, 8px);
-  margin-top: var(--space-4, 16px);
+  flex-direction: column;
+  gap: 16px;
+}
+.confirm-dialog-title {
+  margin: 0;
+  color: var(--m3-on-surface, #181d18);
+}
+.confirm-dialog-message {
+  margin: 0;
+  color: var(--m3-on-surface-variant, #424941);
+}
+.confirm-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
 }
 
-.btn {
-  flex: 1;
-  min-height: var(--touch-target-min, 44px);
-  padding: 0 var(--space-4, 16px);
-  border-radius: var(--btn-radius, var(--radius-md, 8px));
-  border: 1px solid transparent;
-  font-size: var(--text-base, 14px);
-  font-weight: var(--font-weight-medium, 500);
-  cursor: pointer;
-  transition: background var(--transition-fast, 0.15s ease);
-}
-
-.btn-cancel {
-  background: var(--neutral-100, #f1f5f9);
-  color: var(--neutral-700, #334155);
-}
-
-.btn-cancel:active {
-  background: var(--neutral-200, #e2e8f0);
-}
-
-.btn-confirm {
-  background: var(--brand-primary, #0d9053);
-  color: var(--neutral-0, #fff);
-}
-
-.btn-confirm:active {
-  background: var(--brand-primary-hover, #336440);
-}
-
-.btn-confirm.is-destructive {
-  background: var(--color-danger, #ef4444);
-}
-
-.btn-confirm.is-destructive:active {
-  background: var(--color-danger-hover);
+/* destructive variant：覆寫 M3Button filled bg 為 M3 error */
+.confirm-dialog-actions :deep(.is-destructive.m3-button-filled) {
+  background: var(--m3-error, #ba1a1a);
+  color: var(--m3-on-error, #ffffff);
 }
 </style>

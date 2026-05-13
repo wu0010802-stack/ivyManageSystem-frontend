@@ -396,15 +396,15 @@ async function pullRefresh() {
 .empty {
   text-align: center;
   padding: 40px 16px;
-  color: var(--pt-text-placeholder);
+  color: var(--m3-on-surface-variant, var(--pt-text-placeholder));
 }
 
 .render-sentinel { height: 1px; }
 
 .hero-cta {
   background: var(--pt-surface-raised, rgba(255, 255, 255, 0.95));
-  color: var(--brand-primary);
-  border: 1px solid var(--pt-page-border, var(--pt-border));
+  color: var(--m3-primary, var(--brand-primary));
+  border: 1px solid var(--m3-outline-variant, var(--pt-page-border, var(--pt-border)));
   padding: 8px 14px;
   border-radius: 999px;
   font-weight: 800;

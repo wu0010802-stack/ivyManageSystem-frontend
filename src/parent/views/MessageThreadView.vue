@@ -85,8 +85,7 @@ onMounted(init)
 
 <template>
   <div class="thread-view">
-    <!-- AppHeader 已由 ParentLayout 提供（router 設 showBack: true）；
-         這裡只顯示對話對方的副標題（學生名）。 -->
+    <!-- M3TopAppBar 由 ParentLayout 提供（依 route.meta.showBack 顯示返回鍵）；這裡只顯示對話對方的副標題（學生名）。 -->
     <div v-if="thread" class="thread-subtitle">
       <strong>{{ thread.teacher_name || '老師' }}</strong>
       <span class="sub">{{ thread.student_name }}</span>
@@ -130,7 +129,7 @@ onMounted(init)
   flex-direction: column;
   height: calc(100dvh - 64px);
   margin: -16px;
-  background: var(--pt-surface-thread-bg);
+  background: var(--m3-surface, var(--pt-surface-thread-bg));
 }
 
 .thread-subtitle {
@@ -143,7 +142,7 @@ onMounted(init)
 
 .thread-subtitle strong {
   font-size: var(--text-base, 15px);
-  color: var(--pt-text-strong);
+  color: var(--m3-on-surface, var(--pt-text-strong));
 }
 
 .thread-subtitle .sub {
