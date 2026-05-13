@@ -85,8 +85,7 @@ onMounted(init)
 
 <template>
   <div class="thread-view">
-    <!-- AppHeader 已由 ParentLayout 提供（router 設 showBack: true）；
-         這裡只顯示對話對方的副標題（學生名）。 -->
+    <!-- M3TopAppBar 由 ParentLayout 提供（依 route.meta.showBack 顯示返回鍵）；這裡只顯示對話對方的副標題（學生名）。 -->
     <div v-if="thread" class="thread-subtitle">
       <strong>{{ thread.teacher_name || '老師' }}</strong>
       <span class="sub">{{ thread.student_name }}</span>
