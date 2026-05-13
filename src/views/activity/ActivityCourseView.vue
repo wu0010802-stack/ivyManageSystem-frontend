@@ -17,6 +17,12 @@
       <el-table-column label="堂數" prop="sessions" width="70" align="center">
         <template #default="{ row }">{{ row.sessions ?? '-' }}</template>
       </el-table-column>
+      <el-table-column label="上課時段" min-width="140">
+        <template #default="{ row }">
+          <span v-if="formatSchedule(row)">{{ formatSchedule(row) }}</span>
+          <span v-else style="color: var(--text-tertiary);">-</span>
+        </template>
+      </el-table-column>
       <el-table-column label="容量" width="70" align="center">
         <template #default="{ row }">
           <el-button
@@ -92,7 +98,7 @@
         </el-form-item>
 
         <el-divider content-position="left">
-          <span style="font-size: 12px; color: #6b7280;">
+          <span style="font-size: 12px; color: var(--text-secondary);">
             適齡 / 上課時段（公開報名頁顯示用；空白＝不限制）
           </span>
         </el-divider>
@@ -108,7 +114,7 @@
               controls-position="right"
               style="flex: 1;"
             />
-            <span style="color: #9ca3af;">~</span>
+            <span style="color: var(--text-tertiary);">~</span>
             <el-input-number
               v-model="form.max_age_months"
               :min="0"
@@ -119,7 +125,7 @@
               controls-position="right"
               style="flex: 1;"
             />
-            <span style="color: #6b7280; font-size: 12px; flex-shrink: 0;">月齡</span>
+            <span style="color: var(--text-secondary); font-size: 12px; flex-shrink: 0;">月齡</span>
           </div>
         </el-form-item>
         <el-form-item label="上課星期">
@@ -147,7 +153,7 @@
               placeholder="起始"
               style="flex: 1;"
             />
-            <span style="color: #9ca3af;">~</span>
+            <span style="color: var(--text-tertiary);">~</span>
             <el-time-picker
               v-model="form.meeting_end_time"
               value-format="HH:mm"
@@ -173,16 +179,38 @@
       <el-table-column label="序號" prop="waitlist_position" width="60" align="center" />
       <el-table-column label="學生姓名" prop="student_name" min-width="90" />
       <el-table-column label="班級" prop="class_name" width="90" />
-      <el-table-column label="操作" width="80" align="center">
+      <el-table-column label="操作" width="90" align="center">
         <template #default="{ row }">
-          <el-button size="small" type="success"
-            :loading="promotingId === row.course_record_id"
-            @click="handleWaitlistPromote(row)">升正式</el-button>
+          <el-button
+            :data-test="`promote-waitlist-btn-${row.registration_id}`"
+            size="small" type="success"
+            @click="openPromoteDialog(row)"
+          >升正式</el-button>
         </template>
       </el-table-column>
     </el-table>
+
+    <!-- 手動升位確認 dialog -->
+    <div v-if="promoteDialog.open" class="promote-backdrop" @click.self="cancelPromote">
+      <div class="promote-modal">
+        <h3 class="promote-modal__title">確認手動升位</h3>
+        <p class="promote-modal__body">
+          將<strong>跳過順序</strong>，立即升此候補為<strong>正式報名</strong>（不需家長 48h 確認窗）。系統會自動推送 LINE 告知家長。確定？
+        </p>
+        <div class="promote-modal__actions">
+          <el-button @click="cancelPromote">取消</el-button>
+          <el-button
+            data-test="promote-confirm"
+            type="primary"
+            :loading="promoteDialog.submitting"
+            @click="confirmPromote"
+          >確認升位</el-button>
+        </div>
+        <p v-if="promoteDialog.error" class="promote-modal__error">{{ promoteDialog.error }}</p>
+      </div>
+    </div>
     <div v-if="!waitlistLoading && waitlistItems.length === 0"
-         style="text-align:center; padding: 32px; color: #94a3b8;">
+         style="text-align:center; padding: 32px; color: var(--text-tertiary);">
       目前無候補學生
     </div>
   </el-drawer>
@@ -199,7 +227,7 @@
       <el-table-column label="班級" prop="class_name" width="90" />
     </el-table>
     <div v-if="!enrolledLoading && enrolledItems.length === 0"
-         style="text-align:center; padding: 32px; color: #94a3b8;">
+         style="text-align:center; padding: 32px; color: var(--text-tertiary);">
       目前無正式報名學生
     </div>
   </el-drawer>
@@ -236,7 +264,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, reactive, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { CopyDocument, VideoPlay } from '@element-plus/icons-vue'
 import { copyCoursesFromPrevious, getCourses, createCourse, updateCourse, deleteCourse,
@@ -245,6 +273,14 @@ import AcademicTermSelector from '@/components/common/AcademicTermSelector.vue'
 import { useAcademicTermStore } from '@/stores/academicTerm'
 
 const termStore = useAcademicTermStore()
+
+const WEEKDAY_LABELS = ['一', '二', '三', '四', '五', '六', '日']
+function formatSchedule(row) {
+  if (row.meeting_weekday == null || !row.meeting_start_time || !row.meeting_end_time) {
+    return ''
+  }
+  return `週${WEEKDAY_LABELS[row.meeting_weekday]} ${row.meeting_start_time}–${row.meeting_end_time}`
+}
 
 const courses = ref([])
 const loading = ref(false)
@@ -277,7 +313,13 @@ const waitlistDrawer = ref(false)
 const waitlistCourse = ref(null)
 const waitlistItems = ref([])
 const waitlistLoading = ref(false)
-const promotingId = ref(null)
+
+const promoteDialog = reactive({
+  open: false,
+  registration: null,
+  submitting: false,
+  error: '',
+})
 
 const enrolledDrawer = ref(false)
 const enrolledCourse = ref(null)
@@ -312,19 +354,37 @@ async function openWaitlist(row) {
   }
 }
 
-async function handleWaitlistPromote(item) {
-  if (promotingId.value !== null) return
-  promotingId.value = item.course_record_id
+function openPromoteDialog(reg) {
+  promoteDialog.registration = reg
+  promoteDialog.error = ''
+  promoteDialog.open = true
+}
+
+function cancelPromote() {
+  promoteDialog.open = false
+  promoteDialog.registration = null
+  promoteDialog.error = ''
+}
+
+async function confirmPromote() {
+  if (!promoteDialog.registration) return
+  promoteDialog.submitting = true
+  promoteDialog.error = ''
   try {
-    await promoteWaitlist(item.registration_id, waitlistCourse.value.id)
-    ElMessage.success(`${item.student_name} 已升為正式報名`)
+    await promoteWaitlist(
+      promoteDialog.registration.registration_id,
+      waitlistCourse.value.id,
+    )
+    ElMessage.success(`${promoteDialog.registration.student_name} 已升為正式報名`)
+    promoteDialog.open = false
+    promoteDialog.registration = null
     const res = await getCourseWaitlist(waitlistCourse.value.id)
     waitlistItems.value = res.data.items
     await fetchCourses()
   } catch (e) {
-    ElMessage.error(e?.response?.data?.detail || '升正式失敗')
+    promoteDialog.error = e?.response?.data?.detail || '升位失敗，請稍後再試'
   } finally {
-    promotingId.value = null
+    promoteDialog.submitting = false
   }
 }
 
@@ -468,4 +528,46 @@ onMounted(fetchCourses)
 .toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; gap: 12px; flex-wrap: wrap; }
 .toolbar h2 { margin: 0; font-size: 20px; font-weight: 600; }
 .toolbar__actions { display: flex; gap: 8px; align-items: center; }
+</style>
+
+<style>
+.promote-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2100;
+}
+.promote-modal {
+  background: #fff;
+  border-radius: 8px;
+  padding: 24px 28px;
+  width: 400px;
+  max-width: 92vw;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+}
+.promote-modal__title {
+  margin: 0 0 12px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary, #303133);
+}
+.promote-modal__body {
+  font-size: 14px;
+  color: var(--text-regular, #606266);
+  line-height: 1.6;
+  margin: 0 0 20px;
+}
+.promote-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.promote-modal__error {
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: var(--el-color-danger, #f56c6c);
+}
 </style>

@@ -147,6 +147,7 @@
             type="button"
             class="btn btn-primary btn-block"
             :disabled="queryLoading"
+            data-test="query-submit"
             @click="handleQuery"
           >
             {{ queryLoading ? '查詢中…' : '查詢 Search' }}
@@ -221,6 +222,35 @@
 
         <div class="info-hint">
           <strong>提示：</strong>您可以修改以下資料，完成後請點選「儲存修改」按鈕。
+        </div>
+
+        <!-- 候補位次摘要：依 queryResult.courses 渲染，不依賴 options 列表 -->
+        <div
+          v-if="waitlistCourses.length > 0"
+          class="waitlist-summary"
+          data-test="waitlist-summary"
+        >
+          <div class="waitlist-summary-title">⏳ 候補狀態</div>
+          <div
+            v-for="wc in waitlistCourses"
+            :key="wc.course_id"
+            class="waitlist-row"
+          >
+            <span class="waitlist-course-name">{{ wc.name }}</span>
+            <span class="badge badge-waitlist">候補中</span>
+            <template v-if="wc.waitlist_position != null">
+              <span v-if="wc.waitlist_total === 1" class="waitlist-position waitlist-position--solo">
+                您是目前唯一候補者
+              </span>
+              <span v-else class="waitlist-position">
+                目前第 <strong>{{ wc.waitlist_position }}</strong> 位
+                <span class="waitlist-total">／共 {{ wc.waitlist_total }} 位</span>
+                <small v-if="wc.waitlist_position === 1" class="waitlist-hint">
+                  您是下一位候補；如有空位將自動通知
+                </small>
+              </span>
+            </template>
+          </div>
         </div>
 
         <div class="field-group">
@@ -383,10 +413,10 @@ import { useActivityAvailability } from '@/composables/useActivityAvailability'
 import { toggleArrayItem } from '@/utils/arrayUtils'
 
 const TOAST_ICONS = {
-  success: '<svg viewBox="0 0 24 24" fill="none" stroke="#15803D" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>',
-  error: '<svg viewBox="0 0 24 24" fill="none" stroke="#DC2626" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>',
-  warning: '<svg viewBox="0 0 24 24" fill="none" stroke="#D97706" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>',
-  info: '<svg viewBox="0 0 24 24" fill="none" stroke="#1E3A8A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>',
+  success: '<svg viewBox="0 0 24 24" fill="none" stroke="#15803d" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>',
+  error: '<svg viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>',
+  warning: '<svg viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>',
+  info: '<svg viewBox="0 0 24 24" fill="none" stroke="#1e3a8a" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>',
 }
 
 const { courses, supplies, classes, loadOptions } = usePublicActivityOptions()
@@ -475,6 +505,12 @@ function statusBadgeFor(name) {
   }
   return ''
 }
+
+// 候補位次清單：供獨立候補摘要區塊使用（不依賴 options 列表）
+const waitlistCourses = computed(() => {
+  if (!queryResult.value) return []
+  return (queryResult.value.courses || []).filter((c) => c.status === 'waitlist')
+})
 
 // 候補已升正式待確認清單（供獨立確認區塊使用）
 const pendingPromotions = computed(() => {
@@ -817,26 +853,26 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .public-query-page {
-  --color-bg: #FFFBEB;
-  --color-surface: #FFFFFF;
-  --color-surface-muted: #FFF8E1;
-  --color-primary: #15803D;
+  --color-bg: #fffbeb;
+  --color-surface: #ffffff;
+  --color-surface-muted: #fff8e1;
+  --color-primary: #15803d;
   --color-primary-hover: #166534;
-  --color-primary-soft: #DCFCE7;
-  --color-primary-contrast: #FFFFFF;
-  --color-cta: #EA580C;
-  --color-cta-hover: #C2410C;
-  --color-cta-contrast: #FFFFFF;
-  --color-text: #1F2937;
-  --color-text-muted: #4B5563;
-  --color-text-subtle: #6B7280;
-  --color-border: #F2E6C9;
-  --color-border-muted: #E5E7EB;
-  --color-danger: #DC2626;
-  --color-danger-soft: #FEE2E2;
-  --color-warning: #D97706;
-  --color-success: #15803D;
-  --color-required: #E11D48;
+  --color-primary-soft: #dcfce7;
+  --color-primary-contrast: #ffffff;
+  --color-cta: #ea580c;
+  --color-cta-hover: #c2410c;
+  --color-cta-contrast: #ffffff;
+  --color-text: #1f2937;
+  --color-text-muted: #4b5563;
+  --color-text-subtle: #6b7280;
+  --color-border: #f2e6c9;
+  --color-border-muted: #e5e7eb;
+  --color-danger: #dc2626;
+  --color-danger-soft: #fee2e2;
+  --color-warning: #d97706;
+  --color-success: #15803d;
+  --color-required: #e11d48;
   --font-sans: 'Noto Sans TC', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang TC', 'Microsoft JhengHei', sans-serif;
   --fs-xs: 12px; --fs-sm: 13px; --fs-base: 15px; --fs-md: 16px; --fs-lg: 18px; --fs-xl: 22px;
   --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px; --space-6: 24px; --space-8: 32px;
@@ -1019,7 +1055,7 @@ onBeforeUnmount(() => {
   border-color: var(--color-primary);
   box-shadow: var(--focus-ring);
 }
-.input-text:read-only { background-color: #F9FAFB; color: var(--color-text-muted); }
+.input-text:read-only { background-color: #f9fafb; color: var(--color-text-muted); }
 .input-text.valid { border-color: var(--color-success); }
 .input-text.invalid { border-color: var(--color-danger); }
 .validation-msg { font-size: var(--fs-xs); margin-top: var(--space-1); }
@@ -1041,7 +1077,7 @@ onBeforeUnmount(() => {
   max-height: 320px;
   overflow-y: auto;
   padding: var(--space-3);
-  background: #F9FAFB;
+  background: #f9fafb;
   border: 1px solid var(--color-border-muted);
   border-radius: var(--radius-md);
 }
@@ -1081,8 +1117,8 @@ onBeforeUnmount(() => {
   font-size: var(--fs-xs);
   padding: 2px 10px;
   border-radius: var(--radius-full);
-  background-color: #FEF3C7;
-  color: #B45309;
+  background-color: var(--color-warning-soft);
+  color: var(--color-warning-darker);
 }
 
 .empty-hint {
@@ -1124,7 +1160,7 @@ onBeforeUnmount(() => {
   border-color: var(--color-cta-hover);
   transform: translateY(-1px);
 }
-.btn-primary:disabled { background-color: #D1D5DB; border-color: #D1D5DB; color: #6B7280; cursor: not-allowed; box-shadow: none; }
+.btn-primary:disabled { background-color: var(--neutral-300); border-color: var(--neutral-300); color: var(--text-secondary); cursor: not-allowed; box-shadow: none; }
 .btn-outline {
   background: var(--color-surface);
   color: var(--color-primary);
@@ -1144,16 +1180,16 @@ onBeforeUnmount(() => {
 
 /* 候補升正式待確認區塊 */
 .result-header.promotion-header {
-  background: #D97706;
+  background: var(--color-warning-hover);
 }
 .info-hint.promotion-hint {
-  background: #FEF3C7;
-  border-color: #F59E0B;
-  color: #92400E;
+  background: var(--color-warning-soft);
+  border-color: var(--color-warning);
+  color: var(--color-warning-darker);
 }
 .promotion-card {
   background: var(--color-surface);
-  border: 1.5px solid #F59E0B;
+  border: 1.5px solid #f59e0b;
   border-radius: var(--radius-md);
   padding: var(--space-4);
   margin-bottom: var(--space-3);
@@ -1251,6 +1287,68 @@ onBeforeUnmount(() => {
   border-radius: var(--radius-full);
 }
 
+/* 候補位次摘要 */
+.waitlist-summary {
+  margin-bottom: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: #fff7e6;
+  border: 1px solid #f59e0b;
+  border-radius: var(--radius-md);
+}
+.waitlist-summary-title {
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: #92400e;
+  margin-bottom: var(--space-2);
+}
+.waitlist-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  border-top: 1px dashed #f59e0b;
+}
+.waitlist-row:first-of-type { border-top: none; }
+.waitlist-course-name {
+  font-weight: 600;
+  font-size: var(--fs-sm);
+  color: var(--color-text);
+  margin-right: var(--space-1);
+}
+.badge-waitlist {
+  background: #fef3c7;
+  color: #b45309;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.waitlist-position {
+  font-size: var(--fs-sm);
+  color: var(--color-text);
+}
+.waitlist-position strong {
+  font-weight: 700;
+  color: var(--color-warning);
+}
+.waitlist-position--solo {
+  font-weight: 600;
+  color: #92400e;
+}
+.waitlist-total {
+  color: var(--color-text-muted);
+  font-size: var(--fs-xs);
+}
+.waitlist-hint {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--fs-xs);
+  color: var(--color-primary);
+  font-weight: 500;
+}
+
 /* 費用預覽 */
 .fee-preview {
   margin-top: var(--space-5);
@@ -1288,7 +1386,7 @@ onBeforeUnmount(() => {
   font-weight: 700;
 }
 .fee-preview-warn {
-  background: #FEF2F2;
+  background: var(--color-danger-soft);
   border-color: var(--color-danger);
 }
 .fee-preview-msg {
