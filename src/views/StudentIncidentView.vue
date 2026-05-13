@@ -6,6 +6,7 @@ import { useClassroomStore } from '@/stores/classroom'
 import { getStudents } from '@/api/students'
 import { INCIDENT_TYPES, SEVERITIES, INCIDENT_TYPE_TAG as TYPE_TAG, SEVERITY_TAG } from '@/constants/studentRecords'
 import { apiError } from '@/utils/error'
+import { buildStudentProfileLink } from '@/utils/studentLinks'
 
 // ── 篩選 ────────────────────────────────────────────────
 const classroomStore = useClassroomStore()
@@ -242,7 +243,16 @@ onMounted(() => {
             {{ row.occurred_at ? row.occurred_at.slice(0, 16).replace('T', ' ') : '-' }}
           </template>
         </el-table-column>
-        <el-table-column label="學生姓名" width="100" prop="student_name" />
+        <el-table-column label="學生姓名" width="100">
+          <template #default="{ row }">
+            <router-link
+              v-if="buildStudentProfileLink(row.student_id, 'records')"
+              :to="buildStudentProfileLink(row.student_id, 'records')"
+              class="student-link"
+            >{{ row.student_name }}</router-link>
+            <span v-else>{{ row.student_name }}</span>
+          </template>
+        </el-table-column>
         <el-table-column label="事件類型" width="100">
           <template #default="{ row }">
             <el-tag :type="TYPE_TAG[row.incident_type]" size="small">{{ row.incident_type }}</el-tag>
@@ -381,4 +391,6 @@ onMounted(() => {
 .filter-card {
   margin-bottom: 0;
 }
+.student-link { color: var(--el-color-primary); text-decoration: none; }
+.student-link:hover { text-decoration: underline; }
 </style>
