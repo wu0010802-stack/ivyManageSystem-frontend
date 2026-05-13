@@ -76,10 +76,10 @@ defineExpose({ refresh })
   gap: 10px;
 }
 .today-card {
-  background: var(--pt-surface-card);
-  border-radius: var(--pt-card-radius, 14px);
+  background: var(--m3-surface-container-low, var(--pt-surface-card));
+  border-radius: 12px;
   padding: 14px;
-  box-shadow: var(--pt-shadow-card, var(--pt-elev-1));
+  box-shadow: var(--m3-elev-1, var(--pt-shadow-card, var(--pt-elev-1)));
   border: 1px solid var(--pt-page-border, var(--pt-border));
 }
 .today-row {
@@ -95,7 +95,7 @@ defineExpose({ refresh })
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: var(--pt-tint-brand, var(--brand-primary-soft));
+  background: var(--m3-secondary-container, var(--pt-tint-brand, var(--brand-primary-soft)));
   color: var(--brand-primary);
   font-size: 16px;
   font-weight: 900;

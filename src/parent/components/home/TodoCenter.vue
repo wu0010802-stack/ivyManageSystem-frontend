@@ -76,10 +76,10 @@ const emit = defineEmits(['navigate'])
   gap: 12px;
   width: 100%;
   padding: 13px 14px;
-  background: var(--pt-surface-card);
+  background: var(--m3-surface-container-low, var(--pt-surface-card));
   border: 1px solid var(--pt-page-border, var(--pt-border));
-  border-radius: var(--pt-card-radius, 14px);
-  box-shadow: var(--pt-shadow-card, var(--pt-elev-1));
+  border-radius: 12px;
+  box-shadow: var(--m3-elev-1, var(--pt-shadow-card, var(--pt-elev-1)));
   text-align: left;
   font-size: var(--text-base, 14px);
   color: var(--pt-text-strong);
@@ -116,13 +116,13 @@ const emit = defineEmits(['navigate'])
 .todo-arrow { color: var(--pt-text-disabled); flex-shrink: 0; }
 
 .todos-empty {
-  background: var(--pt-surface-card);
-  border-radius: var(--pt-card-radius, 14px);
+  background: var(--m3-surface-container-low, var(--pt-surface-card));
+  border-radius: 12px;
   padding: 18px 16px;
   text-align: center;
   font-size: var(--text-base, 14px);
   color: var(--pt-text-placeholder);
-  box-shadow: var(--pt-shadow-card, var(--pt-elev-1));
+  box-shadow: var(--m3-elev-1, var(--pt-shadow-card, var(--pt-elev-1)));
   border: 1px solid var(--pt-page-border, var(--pt-border));
 }
 .todos-empty-icon {
