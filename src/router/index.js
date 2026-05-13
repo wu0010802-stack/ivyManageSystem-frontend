@@ -207,6 +207,26 @@ const router = createRouter({
             component: () => import('@/views/admin/gov-reports/IepView.vue'),
             meta: { title: 'IEP 個別化教育計畫' },
         },
+        // ============ 教職員考核 ============
+        {
+            path: '/appraisal/cycles',
+            name: 'appraisal-cycles',
+            component: () => import('../views/appraisal/CycleListView.vue'),
+            meta: { title: '考核週期' }
+        },
+        {
+            path: '/appraisal/cycles/:id',
+            name: 'appraisal-cycle-detail',
+            component: () => import('../views/appraisal/CycleDetailView.vue'),
+            meta: { title: '考核週期詳情' }
+        },
+        {
+            path: '/appraisal/settings',
+            name: 'appraisal-settings',
+            component: () => import('../views/appraisal/AppraisalSettingsView.vue'),
+            meta: { title: '考核設定' }
+        },
+
         // ============ 學費管理 ============
         {
             path: '/fees',

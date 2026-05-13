@@ -101,6 +101,8 @@ export const ROUTE_PERMISSION_RULES = [
   { path: '/recruitment-ivykids', permission: 'RECRUITMENT_READ' },
   { path: '/analytics', permission: 'BUSINESS_ANALYTICS', prefix: true },
   { path: '/portfolio/medication-today', permission: 'STUDENTS_HEALTH_READ' },
+  // 考核：navigation gate 暫掛 SETTINGS_READ；後端 router 用 APPRAISAL_* 細粒度守衛
+  { path: '/appraisal', permission: 'SETTINGS_READ', prefix: true },
 ]
 
 // 不需要權限即可訪問的路由（登入頁、密碼變更、公開報名頁等）。
