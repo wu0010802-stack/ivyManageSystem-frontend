@@ -57,7 +57,7 @@ function dismissBanner() {
   }
 }
 
-const { events } = useTodayTimeline({ summary, todayChildren })
+const { buckets } = useTodayTimeline({ summary, todayChildren })
 
 const todayDayLabel = computed(() => {
   const d = new Date()
@@ -144,7 +144,7 @@ function go(path) {
     />
 
     <section v-else class="today-stream">
-      <TodayTimeline :events="events" @navigate="go" />
+      <TodayTimeline :buckets="buckets" @navigate="go" />
     </section>
   </PullToRefresh>
 </template>
