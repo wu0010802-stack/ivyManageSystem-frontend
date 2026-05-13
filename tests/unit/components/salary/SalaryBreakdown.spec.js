@@ -178,9 +178,10 @@ describe('SalaryBreakdown', () => {
     expect(wrapper.emitted('reset')[0][0]).toEqual({ employee_id: 42 })
   })
 
-  it('shows error message when simulate fails', async () => {
+  it('shows generic error message when simulate fails (no backend detail leak)', async () => {
+    // Why: 後端 detail 可能含內部欄位/邏輯線索，不直接餵給用戶 UI
     simulateSalary.mockRejectedValueOnce({
-      response: { data: { detail: '伺服器錯誤' } },
+      response: { data: { detail: '伺服器錯誤：內部欄位 _foo 例外' } },
       message: 'Request failed',
     })
     const wrapper = mountWithEP({ row: teacherRow(), year: 2026, month: 5 })
@@ -189,7 +190,10 @@ describe('SalaryBreakdown', () => {
     await wrapper.vm.$nextTick()
 
     expect(ElMessage.error).toHaveBeenCalled()
-    expect(ElMessage.error.mock.calls[0][0]).toContain('伺服器錯誤')
+    const msg = ElMessage.error.mock.calls[0][0]
+    expect(msg).toBe('試算失敗，請稍後重試')
+    expect(msg).not.toContain('伺服器錯誤')
+    expect(msg).not.toContain('_foo')
     // 預覽不應出現（catch 後不會 emit）
     expect(wrapper.text()).not.toContain('預覽：')
     // simulating 旗標已重置（loading 結束）

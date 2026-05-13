@@ -106,7 +106,8 @@ const runSimulate = async () => {
       })
     }
   } catch (e) {
-    ElMessage.error('試算失敗: ' + (e.response?.data?.detail || e.message))
+    console.warn('[SalaryBreakdown] simulate failed', e)
+    ElMessage.error('試算失敗，請稍後重試')
   } finally {
     simulating.value = false
   }
