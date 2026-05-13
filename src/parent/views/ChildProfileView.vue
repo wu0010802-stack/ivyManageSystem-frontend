@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getChildProfile } from '../api/profile'
+import { fetchChildPhotos } from '../api/childPhotos'
 import { toast } from '../utils/toast'
 import ParentIcon from '../components/ParentIcon.vue'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
@@ -65,6 +66,29 @@ function goReports() {
   router.push(`/children/${studentId.value}/reports`)
 }
 
+function goPhotos() {
+  router.push(`/children/${studentId.value}/photos`)
+}
+
+function goMeasurements() {
+  router.push(`/children/${studentId.value}/measurements`)
+}
+
+const photos = ref([])
+const photosLoading = ref(false)
+async function loadPhotos() {
+  if (!studentId.value) return
+  photosLoading.value = true
+  try {
+    const r = await fetchChildPhotos(studentId.value, { limit: 4 })
+    photos.value = r.data.items || []
+  } catch {
+    /* silent — photo strip is non-critical */
+  } finally {
+    photosLoading.value = false
+  }
+}
+
 // 成長動態 timeline feed
 const {
   items: timelineItems,
@@ -75,7 +99,10 @@ const {
   reload: reloadTimeline,
 } = useChildTimeline(studentId)
 
-onMounted(fetchData)
+onMounted(() => {
+  fetchData()
+  loadPhotos()
+})
 </script>
 
 <template>
@@ -200,6 +227,32 @@ onMounted(fetchData)
         </button>
       </section>
     </template>
+
+    <!-- 最新照片 -->
+    <section class="card growth-section">
+      <div class="section-header">
+        <h3 class="section-title">📷 最新照片</h3>
+        <button class="more-link" @click="goPhotos">查看全部 →</button>
+      </div>
+      <div v-if="photosLoading" class="placeholder small">載入中…</div>
+      <div v-else-if="photos.length === 0" class="placeholder small">尚無照片</div>
+      <div v-else class="photo-strip">
+        <div
+          v-for="p in photos.slice(0, 4)"
+          :key="p.id"
+          class="strip-thumb"
+          @click="goPhotos"
+        >
+          <img :src="p.thumb_url || p.display_url || p.url" loading="lazy" />
+        </div>
+      </div>
+    </section>
+
+    <!-- 成長量測 -->
+    <section class="card growth-section">
+      <h3 class="section-title">📏 成長量測</h3>
+      <button class="link-btn" @click="goMeasurements">查看身高/體重曲線 →</button>
+    </section>
 
     <!-- 歷次報告 -->
     <section class="card growth-section">
@@ -486,4 +539,38 @@ onMounted(fetchData)
   cursor: pointer;
 }
 .link-btn:hover { background: #e5e7eb; }
+.section-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.section-header .section-title {
+  flex: 1;
+  margin: 0;
+}
+.more-link {
+  background: none;
+  border: none;
+  color: #0d9053;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 0;
+}
+.photo-strip {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+.strip-thumb {
+  width: 80px;
+  height: 80px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #f3f4f6;
+  cursor: pointer;
+}
+.strip-thumb > img { width: 100%; height: 100%; object-fit: cover; }
+.placeholder.small { padding: 12px; font-size: 13px; }
 </style>
