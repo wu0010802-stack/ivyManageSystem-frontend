@@ -6,6 +6,7 @@ import { useClassroomStore } from '@/stores/classroom'
 import { getStudents } from '@/api/students'
 import { ASSESSMENT_TYPES, DOMAINS, RATINGS, RATING_TAG } from '@/constants/studentRecords'
 import { apiError } from '@/utils/error'
+import { buildStudentProfileLink } from '@/utils/studentLinks'
 
 // ── 篩選 ────────────────────────────────────────────────
 const classroomStore = useClassroomStore()
@@ -212,7 +213,16 @@ onMounted(() => {
     <!-- 表格 -->
     <el-card shadow="never" style="margin-top: 16px">
       <el-table :data="assessments" v-loading="loading" stripe>
-        <el-table-column label="學生姓名" width="100" prop="student_name" />
+        <el-table-column label="學生姓名" width="100">
+          <template #default="{ row }">
+            <router-link
+              v-if="buildStudentProfileLink(row.student_id, 'records')"
+              :to="buildStudentProfileLink(row.student_id, 'records')"
+              class="student-link"
+            >{{ row.student_name }}</router-link>
+            <span v-else>{{ row.student_name }}</span>
+          </template>
+        </el-table-column>
         <el-table-column label="學期" width="90" prop="semester" />
         <el-table-column label="評量類型" width="90">
           <template #default="{ row }">
@@ -354,5 +364,12 @@ onMounted(() => {
 }
 .filter-card {
   margin-bottom: 0;
+}
+.student-link {
+  color: var(--el-color-primary);
+  text-decoration: none;
+}
+.student-link:hover {
+  text-decoration: underline;
 }
 </style>
