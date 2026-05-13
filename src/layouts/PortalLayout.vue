@@ -13,6 +13,12 @@ import { getUserInfo, clearAuth, setUserInfo } from '@/utils/auth'
 import OfflineIndicator from '@/components/OfflineIndicator.vue'
 import { apiError } from '@/utils/error'
 import A11yMenu from '@/components/common/A11yMenu.vue'
+import PortalSearchPalette from '@/components/portal/PortalSearchPalette.vue'
+import { usePortalSearch, installPortalSearchKeyboard } from '@/composables/usePortalSearch'
+import { Search } from '@element-plus/icons-vue'
+
+const { openPalette } = usePortalSearch()
+installPortalSearchKeyboard()
 
 const route = useRoute()
 const router = useRouter()
@@ -452,6 +458,11 @@ const submitPassword = async () => {
           <div class="header-left">
             <h3>常春藤義華幼兒園 - 教職員考勤系統</h3>
           </div>
+          <button class="psp-trigger-portal" @click="openPalette" title="搜尋 (Cmd+K)">
+            <el-icon><Search /></el-icon>
+            <span class="psp-trigger-label">搜尋…</span>
+            <kbd class="psp-trigger-kbd">⌘K</kbd>
+          </button>
           <div class="portal-user">
             <A11yMenu />
             <!-- 返回後台按鈕 -->
@@ -531,7 +542,13 @@ const submitPassword = async () => {
           <span>我的</span>
         </div>
       </div>
+      <button v-if="isMobile" class="psp-fab" @click="openPalette" aria-label="搜尋">
+        <el-icon><Search /></el-icon>
+      </button>
     </el-container>
+
+    <!-- 全域快速搜尋 Palette (Cmd+K) -->
+    <PortalSearchPalette />
 
     <!-- Change Password Dialog -->
     <el-dialog v-model="showPasswordDialog" title="修改密碼" :width="isMobile ? '90%' : '400px'">
@@ -886,5 +903,55 @@ const submitPassword = async () => {
   .user-name {
     display: none;
   }
+}
+
+/* ── Cmd+K 搜尋觸發按鈕（桌面 top bar） ── */
+.psp-trigger-portal {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--el-border-color);
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+  color: var(--el-text-color-secondary);
+}
+.psp-trigger-portal:hover {
+  border-color: var(--el-color-primary);
+  color: var(--el-color-primary);
+}
+.psp-trigger-kbd {
+  padding: 1px 5px;
+  border: 1px solid var(--el-border-color);
+  border-radius: 3px;
+  font-size: 11px;
+}
+@media (max-width: 767px) {
+  .psp-trigger-portal {
+    display: none;
+  }
+}
+
+/* ── 行動端搜尋 FAB（右下角圓鈕） ── */
+.psp-fab {
+  position: fixed;
+  bottom: 76px; /* bottom-nav 60px + 16px gap */
+  right: 16px;
+  z-index: 50;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--el-color-primary);
+  color: white;
+  border: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.psp-fab .el-icon {
+  font-size: 22px;
 }
 </style>
