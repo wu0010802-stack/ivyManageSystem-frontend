@@ -195,9 +195,9 @@ onMounted(async () => {
 .event-card {
   background: var(--pt-surface-card, var(--neutral-0));
   border: 1px solid var(--pt-page-border, var(--pt-border));
-  border-radius: var(--pt-card-radius, 14px);
+  border-radius: 12px;
   padding: 14px;
-  box-shadow: var(--pt-shadow-card, var(--pt-elev-1));
+  box-shadow: var(--m3-elev-1, var(--pt-shadow-card, var(--pt-elev-1)));
 }
 
 .event-card.require {
@@ -223,13 +223,13 @@ onMounted(async () => {
 .event-title {
   flex: 1;
   font-weight: 800;
-  color: var(--pt-text-strong);
+  color: var(--m3-on-surface, var(--pt-text-strong));
   font-size: 15px;
 }
 
 .event-row2 {
   margin-top: 6px;
-  color: var(--pt-text-muted);
+  color: var(--m3-on-surface-variant, var(--pt-text-muted));
   font-size: 13px;
 }
 
@@ -317,7 +317,7 @@ onMounted(async () => {
   min-height: 40px;
   padding: 8px 16px;
   background: var(--pt-surface-card, var(--neutral-0));
-  color: var(--pt-text-muted);
+  color: var(--m3-on-surface-variant, var(--pt-text-muted));
   border: 1px solid var(--pt-border-strong);
   border-radius: var(--pt-control-radius, 12px);
   font-size: 14px;
@@ -375,7 +375,7 @@ onMounted(async () => {
 .field label {
   display: block;
   font-size: 13px;
-  color: var(--pt-text-muted);
+  color: var(--m3-on-surface-variant, var(--pt-text-muted));
   margin-bottom: 4px;
 }
 
