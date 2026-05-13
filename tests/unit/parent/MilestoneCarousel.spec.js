@@ -7,8 +7,14 @@ vi.mock('@/parent/api/childMilestones', () => ({
   REACTION_EMOJI: { like: '👍', love: '🥰', celebrate: '🎉' },
 }))
 
-import { fetchChildMilestones } from '@/parent/api/childMilestones'
+vi.mock('@/parent/utils/toast', () => ({
+  toast: { error: vi.fn(), success: vi.fn() },
+}))
+
+import { fetchChildMilestones, reactToMilestone } from '@/parent/api/childMilestones'
+import { toast } from '@/parent/utils/toast'
 import MilestoneCarousel from '@/parent/components/MilestoneCarousel.vue'
+import MilestoneCard from '@/parent/components/MilestoneCard.vue'
 
 describe('MilestoneCarousel', () => {
   beforeEach(() => {
@@ -53,5 +59,35 @@ describe('MilestoneCarousel', () => {
     await w.setProps({ studentId: 2 })
     await flushPromises()
     expect(fetchChildMilestones.mock.calls.length).toBeGreaterThan(callCount)
+  })
+
+  it('shows toast when react fails (no longer silent)', async () => {
+    // Why: 原本 catch{} 吞錯誤，家長以為點到實則沒寫入；應顯示錯誤
+    toast.error.mockReset()
+    fetchChildMilestones.mockResolvedValueOnce({
+      data: {
+        items: [
+          {
+            id: 9,
+            title: '走第一步',
+            achieved_on: '2026-05-01',
+            icon: '👣',
+            parent_reaction: null,
+          },
+        ],
+      },
+    })
+    reactToMilestone.mockRejectedValueOnce({
+      displayMessage: '網路錯誤',
+    })
+    const w = mount(MilestoneCarousel, { props: { studentId: 1 } })
+    await flushPromises()
+    const card = w.findComponent(MilestoneCard)
+    expect(card.exists()).toBe(true)
+    card.vm.$emit('react', 'like')
+    await flushPromises()
+    expect(reactToMilestone).toHaveBeenCalled()
+    expect(toast.error).toHaveBeenCalled()
+    expect(toast.error.mock.calls[0][0]).toBe('網路錯誤')
   })
 })

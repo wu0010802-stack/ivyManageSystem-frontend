@@ -1,11 +1,12 @@
 <script setup>
-import { ref, reactive, onMounted, nextTick } from 'vue'
+import { ref, reactive, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { User, Lock } from '@element-plus/icons-vue'
 import { login } from '@/api/auth'
 import { setUserInfo } from '@/utils/auth'
 import { apiError } from '@/utils/error'
+import BrandMark from '@/components/brand/BrandMark.vue'
 
 const router = useRouter()
 const loading = ref(false)
@@ -13,10 +14,24 @@ const loginForm = ref(null)
 const usernameInput = ref(null)
 const passwordInput = ref(null)
 
+// BrandMark size 依視窗寬度動態調整。BrandMark 內部用 inline style 鎖死寬高，
+// CSS media query 無法覆寫，因此改由 props 控制。
+const computeBrandSize = () =>
+  typeof window === 'undefined' ? 240 : window.innerWidth < 900 ? 168 : 240
+const brandSize = ref(computeBrandSize())
+const onResize = () => {
+  brandSize.value = computeBrandSize()
+}
+
 onMounted(() => {
+  window.addEventListener('resize', onResize, { passive: true })
   requestAnimationFrame(() => {
     usernameInput.value?.focus?.()
   })
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', onResize)
 })
 
 const form = reactive({
@@ -25,8 +40,8 @@ const form = reactive({
 })
 
 const rules = {
-  username: [{ required: true, message: '請輸入帳號', trigger: 'blur' }],
-  password: [{ required: true, message: '請輸入密碼', trigger: 'blur' }],
+  username: [{ required: true, message: '請填寫帳號後再登入', trigger: 'blur' }],
+  password: [{ required: true, message: '請填寫密碼後再登入', trigger: 'blur' }],
 }
 
 const focusFirstInvalid = async () => {
@@ -58,8 +73,8 @@ const handleLogin = async () => {
     ElMessage.success(`歡迎回來，${res.data.user.name}`)
     router.push(res.data.must_change_password ? '/change-password' : '/')
   } catch (error) {
-    ElMessage.error(apiError(error, '登入失敗'))
-    usernameInput.value?.focus?.()
+    ElMessage.error(apiError(error, '登入失敗，請確認帳號密碼'))
+    passwordInput.value?.focus?.()
   } finally {
     loading.value = false
   }
@@ -69,14 +84,16 @@ const handleLogin = async () => {
 <template>
   <div class="login-page">
     <main class="login-shell" aria-label="常春藤義華幼兒園管理系統登入">
-      <section class="login-brand">
-        <div class="brand-mark" aria-hidden="true"></div>
+      <section class="login-brand" aria-hidden="true">
+        <BrandMark variant="full" :size="brandSize" class="login-brand-mark" />
+        <p class="login-brand-name">常春藤義華幼兒園</p>
       </section>
 
       <section class="login-panel" aria-label="管理系統登入表單">
         <div class="login-card">
           <div class="login-header">
             <h2>管理系統登入</h2>
+            <p class="login-subtitle">請使用管理員帳號登入</p>
           </div>
 
           <el-form
@@ -90,7 +107,7 @@ const handleLogin = async () => {
               <el-input
                 ref="usernameInput"
                 v-model="form.username"
-                placeholder="請輸入帳號"
+                placeholder="例：admin"
                 size="large"
                 autocomplete="username"
                 aria-label="帳號"
@@ -102,7 +119,7 @@ const handleLogin = async () => {
                 ref="passwordInput"
                 v-model="form.password"
                 type="password"
-                placeholder="請輸入密碼"
+                placeholder="請輸入您的密碼"
                 size="large"
                 autocomplete="current-password"
                 aria-label="密碼"
@@ -111,21 +128,28 @@ const handleLogin = async () => {
                 @keyup.enter="handleLogin"
               />
             </el-form-item>
-            <el-form-item>
+            <el-form-item class="login-submit-item">
               <el-button
+                native-type="submit"
                 type="primary"
                 size="large"
                 :loading="loading"
                 class="login-button"
                 @click="handleLogin"
               >
-                登入
+                {{ loading ? '登入中…' : '登入' }}
               </el-button>
             </el-form-item>
           </el-form>
 
-          <div class="login-divider" role="separator"><span>或</span></div>
-          <router-link class="alternate-entry" to="/portal/login">前往教職員入口</router-link>
+          <p class="login-help">忘記密碼請聯絡系統管理員</p>
+
+          <div class="login-divider" role="separator" aria-orientation="horizontal">
+            <span>不是管理員？</span>
+          </div>
+          <router-link class="alternate-entry" to="/portal/login">
+            前往教職員入口
+          </router-link>
         </div>
       </section>
     </main>
@@ -138,6 +162,12 @@ const handleLogin = async () => {
 </template>
 
 <style scoped>
+/* IvyKids 品牌色（與 SVG brand 元件預設值一致）：
+ *   --ivy-green-deep #0d9053  主 CTA / 焦點環
+ *   --ivy-green-deep-hover #0a7843  hover/pressed
+ *   --ivy-green-laurel #5aa842  輔助綠（次 CTA outline 文字 + border）
+ * 字體：以 Noto Sans TC 為中文主體；西文回退 Inter / system。
+ */
 .login-page {
   box-sizing: border-box;
   min-height: 100vh;
@@ -146,8 +176,15 @@ const handleLogin = async () => {
   align-items: center;
   justify-content: center;
   padding: clamp(32px, 6vw, 72px) 24px;
-  background: #f0f2f5;
+  background:
+    radial-gradient(circle at 12% 18%, rgba(13, 144, 83, 0.06), transparent 55%),
+    radial-gradient(circle at 90% 82%, rgba(255, 222, 81, 0.08), transparent 55%),
+    #f5f8f5;
   color: #1c1e21;
+  font-family: 'Noto Sans TC', 'PingFang TC', 'Heiti TC', 'Inter',
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
+    Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
 .login-shell {
@@ -161,13 +198,21 @@ const handleLogin = async () => {
 
 .login-brand {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
 }
 
-.brand-mark {
-  width: min(100%, 440px);
-  aspect-ratio: 1 / 1;
-  background: url('/images/login-bg.png') center / contain no-repeat;
+.login-brand-mark {
+  --mark-size: 240px;
+}
+
+.login-brand-name {
+  margin: 0;
+  color: #0d9053;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
 }
 
 .login-panel {
@@ -177,30 +222,41 @@ const handleLogin = async () => {
 .login-card {
   box-sizing: border-box;
   width: 100%;
-  padding: 20px 16px 24px;
+  padding: 28px 24px 24px;
   background: #ffffff;
-  border-radius: 8px;
+  border-radius: 12px;
   box-shadow:
-    0 2px 4px rgba(0, 0, 0, 0.1),
-    0 8px 16px rgba(0, 0, 0, 0.1);
+    0 2px 6px rgba(13, 144, 83, 0.08),
+    0 12px 28px rgba(15, 23, 42, 0.08);
 }
 
 .login-header {
   text-align: center;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 
 .login-header h2 {
   margin: 0;
   color: #1c1e21;
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 700;
   line-height: 1.3;
   letter-spacing: 0;
 }
 
+.login-subtitle {
+  margin: 6px 0 0;
+  color: #65676b;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .login-card :deep(.el-form-item) {
-  margin-bottom: 12px;
+  margin-bottom: 18px;
+}
+
+.login-card :deep(.el-form-item.is-error) {
+  margin-bottom: 28px;
 }
 
 .login-card :deep(.el-form-item__label) {
@@ -211,18 +267,32 @@ const handleLogin = async () => {
   line-height: 1.4;
 }
 
+.login-card :deep(.el-form-item__error) {
+  padding-top: 4px;
+  color: #c0392b;
+  font-size: 13px;
+}
+
+/* 在 :deep 內塞 attr 雖然 element-plus 不支援，但對 a11y 我們以 form 整體 aria-live 為主：
+ * el-form 預設 .el-form-item__error 是 inline display，我們改 absolute 預留高度 →
+ * margin-bottom 在 is-error 補 28px，避免按鈕擋住 error 文字。 */
+
 .login-card :deep(.el-input__wrapper) {
   min-height: 52px;
   padding: 0 16px;
-  border-radius: 6px;
-  box-shadow: 0 0 0 1px #dddfe2 inset;
-  transition: box-shadow var(--transition-fast);
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px #d0d7d2 inset;
+  transition: box-shadow var(--transition-fast, 160ms ease);
 }
 
 .login-card :deep(.el-input__wrapper.is-focus) {
   box-shadow:
-    0 0 0 1px #1877f2 inset,
-    0 0 0 2px rgba(24, 119, 242, 0.12);
+    0 0 0 1px #0d9053 inset,
+    0 0 0 3px rgba(13, 144, 83, 0.18);
+}
+
+.login-card :deep(.el-input__wrapper:hover:not(.is-focus)) {
+  box-shadow: 0 0 0 1px #0d9053 inset;
 }
 
 .login-card :deep(.el-input__inner) {
@@ -231,39 +301,80 @@ const handleLogin = async () => {
 }
 
 .login-card :deep(.el-input__inner::placeholder) {
-  color: #8a8d91;
+  color: #9aa19c;
+}
+
+.login-card :deep(.el-input__prefix-inner > .el-input__icon) {
+  color: #5aa842;
+  font-size: 18px;
+}
+
+.login-submit-item {
+  margin-top: 4px;
+}
+
+.login-submit-item :deep(.el-form-item__content) {
+  display: block;
 }
 
 .login-card :deep(.login-button.el-button--primary) {
-  --el-button-bg-color: #1877f2;
-  --el-button-border-color: #1877f2;
-  --el-button-hover-bg-color: #166fe5;
-  --el-button-hover-border-color: #166fe5;
-  --el-button-active-bg-color: #1464cc;
-  --el-button-active-border-color: #1464cc;
+  --el-button-bg-color: #0d9053;
+  --el-button-border-color: #0d9053;
+  --el-button-hover-bg-color: #0a7843;
+  --el-button-hover-border-color: #0a7843;
+  --el-button-active-bg-color: #086338;
+  --el-button-active-border-color: #086338;
 
   width: 100%;
   min-height: 48px;
   border: 0;
-  border-radius: 6px;
-  background-color: #1877f2 !important;
-  border-color: #1877f2 !important;
+  border-radius: 8px;
+  background-color: #0d9053 !important;
+  border-color: #0d9053 !important;
   color: #ffffff !important;
-  font-size: 19px;
+  font-size: 18px;
   font-weight: 700;
-  letter-spacing: 0;
+  letter-spacing: 0.02em;
+  box-shadow: 0 2px 6px rgba(13, 144, 83, 0.32);
+  transition:
+    background-color var(--transition-fast, 160ms ease),
+    box-shadow var(--transition-fast, 160ms ease),
+    transform 80ms ease;
 }
 
 .login-card :deep(.login-button.el-button--primary:hover),
-.login-card :deep(.login-button.el-button--primary:focus) {
-  background-color: #166fe5 !important;
-  border-color: #166fe5 !important;
+.login-card :deep(.login-button.el-button--primary:focus-visible) {
+  background-color: #0a7843 !important;
+  border-color: #0a7843 !important;
+  box-shadow: 0 4px 10px rgba(13, 144, 83, 0.36);
+}
+
+.login-card :deep(.login-button.el-button--primary:active) {
+  transform: translateY(1px);
+  box-shadow: 0 1px 4px rgba(13, 144, 83, 0.32);
+}
+
+.login-card :deep(.login-button.el-button--primary:focus-visible) {
+  outline: 3px solid rgba(13, 144, 83, 0.32);
+  outline-offset: 2px;
+}
+
+.login-card :deep(.login-button.el-button--primary.is-loading) {
+  opacity: 0.92;
+}
+
+.login-help {
+  margin: 4px 0 0;
+  color: #65676b;
+  font-size: 13px;
+  text-align: center;
+  line-height: 1.5;
 }
 
 .login-divider {
   display: flex;
   align-items: center;
-  margin: 20px 0;
+  margin: 24px 0 14px;
   color: #65676b;
   font-size: 13px;
 }
@@ -273,7 +384,7 @@ const handleLogin = async () => {
   content: '';
   flex: 1;
   height: 1px;
-  background: #dadde1;
+  background: #e3e7e4;
 }
 
 .login-divider span {
@@ -282,36 +393,44 @@ const handleLogin = async () => {
 
 .alternate-entry {
   box-sizing: border-box;
-  width: fit-content;
+  width: 100%;
   min-height: 48px;
   display: flex;
   align-items: center;
   justify-content: center;
   margin: 0 auto;
   padding: 0 24px;
-  border-radius: 6px;
-  background: #42b72a;
-  color: #ffffff;
-  font-size: 17px;
-  font-weight: 700;
+  border-radius: 8px;
+  background: transparent;
+  border: 1.5px solid #5aa842;
+  color: #0a7843;
+  font-size: 16px;
+  font-weight: 600;
   letter-spacing: 0;
   text-decoration: none;
   transition:
-    background var(--transition-fast),
-    transform var(--transition-fast);
+    background var(--transition-fast, 160ms ease),
+    border-color var(--transition-fast, 160ms ease),
+    color var(--transition-fast, 160ms ease);
 }
 
 .alternate-entry:hover,
-.alternate-entry:focus {
-  background: #36a420;
-  transform: translateY(-1px);
+.alternate-entry:focus-visible {
+  background: rgba(90, 168, 66, 0.08);
+  border-color: #0d9053;
+  color: #0a7843;
+}
+
+.alternate-entry:focus-visible {
+  outline: 3px solid rgba(13, 144, 83, 0.28);
+  outline-offset: 2px;
 }
 
 .login-footer {
   width: min(100%, 980px);
   margin-top: clamp(40px, 6vw, 64px);
   padding-top: 20px;
-  border-top: 1px solid #dadde1;
+  border-top: 1px solid #e3e7e4;
   color: #65676b;
   font-size: 12px;
   line-height: 1.5;
@@ -340,34 +459,36 @@ const handleLogin = async () => {
     gap: 24px;
   }
 
-  .brand-mark {
-    width: min(100%, 280px);
+  .login-brand {
+    gap: 12px;
+  }
+
+  .login-brand-name {
+    font-size: 16px;
   }
 }
 
 @media (max-width: 420px) {
   .login-page {
-    padding-right: 12px;
-    padding-left: 12px;
+    padding: 24px 16px 16px;
   }
 
   .login-card {
-    padding: 16px 12px 20px;
+    padding: 24px 20px 22px;
   }
 
-  .alternate-entry {
-    width: 100%;
-    padding: 0 16px;
+  .login-header h2 {
+    font-size: 20px;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .login-card :deep(.login-button.el-button--primary),
   .alternate-entry {
     transition: none;
   }
 
-  .alternate-entry:hover,
-  .alternate-entry:focus {
+  .login-card :deep(.login-button.el-button--primary:active) {
     transform: none;
   }
 }

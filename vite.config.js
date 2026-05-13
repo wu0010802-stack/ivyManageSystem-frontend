@@ -162,6 +162,10 @@ export default defineConfig({
             },
 
             workbox: {
+                // 新 SW 一就緒就接管，避免舊 SW 繼續攔截到已不存在的 chunk hash → 404 白屏。
+                // 與 boot-time chunk-fail 自救（main.js）合作：雙保險避免 PWA 升級卡住。
+                skipWaiting: true,
+                clientsClaim: true,
                 // 只預快取 app shell 與核心 vendor；大型 route chunk 與圖片改由 runtime cache 接手
                 // multi-page 後管理端 entry 是 main-*.js，家長 App 是 parent-app-*.js（走 runtime cache）
                 globPatterns: [

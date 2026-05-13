@@ -19,7 +19,7 @@ const router = createRouter({
     {
       path: '/home',
       name: 'parent-home',
-      component: () => import('./views/HomeView.vue'),
+      component: () => import('./views/TodayView.vue'),
       meta: { title: '首頁', tab: 'home' },
     },
     {

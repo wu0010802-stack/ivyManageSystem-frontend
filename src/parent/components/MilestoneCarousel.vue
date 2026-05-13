@@ -1,6 +1,7 @@
 <script setup>
 import { onMounted, ref, watch } from 'vue'
 import { fetchChildMilestones, reactToMilestone } from '../api/childMilestones'
+import { toast } from '../utils/toast'
 import MilestoneCard from './MilestoneCard.vue'
 
 const props = defineProps({
@@ -29,8 +30,8 @@ async function onReact(milestone, reaction) {
     const r = await reactToMilestone(props.studentId, milestone.id, reaction)
     const idx = milestones.value.findIndex((m) => m.id === milestone.id)
     if (idx >= 0) milestones.value[idx] = r.data
-  } catch {
-    // silent fail (UI keeps old state)
+  } catch (e) {
+    toast.error(e?.displayMessage || '回應失敗，請重試')
   }
 }
 
