@@ -486,29 +486,12 @@ button {
   border: 0;
 }
 
-/* ========== Press Feedback ==========
- * 行動端按下時的微縮放 + transition；比單純 background change 更接近原生感。
- * 套到主要可點元素（卡片、tab、todo row、tile、chip、按鈕）。
- * @media reduced-motion 已由全域規則處理。
+/* ========== Press Feedback (deprecated, kept as no-op for backward compat) ==========
+ * P5 (M3 redesign): M3 元件已用 state layer overlay 取代 transform:scale 動畫；
+ * 此 class 保留為 no-op 避免 caller template 改寫風險（17 處使用），未來可移除。
  */
 .press-scale {
-  transition:
-    transform var(--transition-fast, 0.15s ease),
-    background var(--transition-fast, 0.15s ease);
-  transform: scale(1);
-  /* 取消行動端 webview 預設高光，由 scale 動畫提供回饋 */
   -webkit-tap-highlight-color: transparent;
-}
-
-.press-scale:active {
-  transform: scale(0.97);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .press-scale,
-  .press-scale:active {
-    transform: none;
-  }
 }
 
 /* ========== Card Surface Utility ==========
