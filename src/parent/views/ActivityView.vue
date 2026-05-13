@@ -47,7 +47,7 @@ const filteredRegs = computed(() => {
 })
 
 const COURSE_STATUS = {
-  enrolled: { label: '已報名', color: { bg: 'var(--brand-primary-soft)', color: 'var(--pt-success-text)' } },
+  enrolled: { label: '已報名', color: { bg: 'var(--brand-primary-soft)', color: 'var(--m3-primary, var(--pt-success-text))' } },
   waitlist: { label: '候補中', color: { bg: 'var(--color-warning-soft)', color: 'var(--pt-warning-text-soft)' } },
   promoted_pending: { label: '待您確認', color: { bg: 'var(--color-danger-soft)', color: 'var(--color-danger)' } },
 }
@@ -290,7 +290,7 @@ async function pullRefresh() {
 .tab-btn.active {
   background: var(--pt-surface-raised, var(--neutral-0));
   border-color: var(--pt-page-border, var(--pt-border));
-  color: var(--brand-primary);
+  color: var(--m3-primary, var(--brand-primary));
   box-shadow: var(--pt-shadow-press, var(--pt-elev-1));
 }
 
@@ -302,7 +302,7 @@ async function pullRefresh() {
 .primary-btn {
   min-height: 42px;
   padding: 8px 16px;
-  background: var(--brand-primary);
+  background: var(--m3-primary, var(--brand-primary));
   color: var(--neutral-0);
   border: none;
   border-radius: var(--pt-control-radius, 12px);

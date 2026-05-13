@@ -112,7 +112,7 @@ function toggleCourse(id) {
 .field legend {
   display: block;
   font-size: 13px;
-  color: var(--pt-text-muted);
+  color: var(--m3-on-surface-variant, var(--pt-text-muted));
   margin-bottom: 4px;
   padding: 0;
 }
@@ -169,7 +169,7 @@ function toggleCourse(id) {
 
 .primary-btn {
   padding: 8px 16px;
-  background: var(--brand-primary);
+  background: var(--m3-primary, var(--brand-primary));
   color: var(--neutral-0);
   border: none;
   border-radius: 8px;
@@ -181,7 +181,7 @@ function toggleCourse(id) {
 .secondary-btn {
   padding: 8px 16px;
   background: var(--neutral-0);
-  color: var(--pt-text-muted);
+  color: var(--m3-on-surface-variant, var(--pt-text-muted));
   border: 1px solid var(--pt-border-strong);
   border-radius: 8px;
   font-size: 14px;
