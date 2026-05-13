@@ -55,11 +55,11 @@ const emit = defineEmits(['click', 'cancel'])
 
 <style scoped>
 .leave-card {
-  background: var(--pt-surface-card, var(--neutral-0));
+  background: var(--m3-surface-container-low, var(--pt-surface-card, var(--neutral-0)));
   border: 1px solid var(--pt-page-border, var(--pt-border));
-  border-radius: var(--pt-card-radius, 14px);
+  border-radius: 12px;
   padding: 14px;
-  box-shadow: var(--pt-shadow-card, var(--pt-elev-1));
+  box-shadow: var(--m3-elev-1, var(--pt-shadow-card, var(--pt-elev-1)));
   cursor: pointer;
 }
 
@@ -71,7 +71,7 @@ const emit = defineEmits(['click', 'cancel'])
 
 .student {
   font-weight: 800;
-  color: var(--pt-text-strong);
+  color: var(--m3-on-surface, var(--pt-text-strong));
 }
 
 .type {
@@ -99,14 +99,14 @@ const emit = defineEmits(['click', 'cancel'])
 
 .leave-row2 {
   margin-top: 6px;
-  color: var(--pt-text-muted);
+  color: var(--m3-on-surface-variant, var(--pt-text-muted));
   font-size: 14px;
 }
 
 .leave-reason,
 .leave-review {
   margin-top: 4px;
-  color: var(--pt-text-faint);
+  color: var(--m3-on-surface-variant, var(--pt-text-faint));
   font-size: 13px;
 }
 
@@ -116,8 +116,8 @@ const emit = defineEmits(['click', 'cancel'])
 
 .cancel-btn {
   padding: 6px 12px;
-  background: var(--pt-surface-card, var(--neutral-0));
-  color: var(--color-danger);
+  background: var(--m3-surface-container-low, var(--pt-surface-card, var(--neutral-0)));
+  color: var(--m3-error, var(--color-danger));
   border: 1px solid var(--pt-tint-announcement);
   border-radius: var(--pt-control-radius, 12px);
   font-size: 12px;
