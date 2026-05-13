@@ -60,9 +60,9 @@ function fmt(n) { return Number(n).toLocaleString('en-US') }
   background:
     linear-gradient(135deg, var(--pt-tint-sun, var(--ivy-tile-yellow-bg)) 0%, var(--pt-surface-raised, #fff) 100%);
   border: 1px solid color-mix(in srgb, var(--ivy-tile-yellow-fg) 28%, transparent);
-  border-radius: var(--pt-card-radius, 14px);
+  border-radius: 16px;
   padding: var(--space-4, 16px);
-  box-shadow: var(--pt-shadow-card, var(--pt-elev-1));
+  box-shadow: var(--m3-elev-1, var(--pt-shadow-card, var(--pt-elev-1)));
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -99,14 +99,14 @@ function fmt(n) { return Number(n).toLocaleString('en-US') }
 
 .fee-hero-currency {
   font-size: 13px;
-  color: var(--pt-text-muted);
+  color: var(--m3-on-surface-variant, var(--pt-text-muted));
   font-weight: 600;
 }
 
 .fee-hero-num {
   font-size: 32px;
   font-weight: 900;
-  color: var(--pt-text-strong);
+  color: var(--m3-on-surface, var(--pt-text-strong));
 }
 
 .fee-hero-overdue {
@@ -119,7 +119,7 @@ function fmt(n) { return Number(n).toLocaleString('en-US') }
 .fee-hero-due {
   font-size: 12px;
   margin-top: 4px;
-  color: var(--pt-text-muted);
+  color: var(--m3-on-surface-variant, var(--pt-text-muted));
 }
 
 .fee-hero-cta {
