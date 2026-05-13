@@ -76,6 +76,18 @@ const router = createRouter({
             meta: { title: '學生請假紀錄' }
         },
         {
+            path: '/student-assessments',
+            name: 'student-assessments',
+            component: () => import('../views/StudentAssessmentView.vue'),
+            meta: { title: '學生評量紀錄' }
+        },
+        {
+            path: '/student-incidents',
+            name: 'student-incidents',
+            component: () => import('../views/StudentIncidentView.vue'),
+            meta: { title: '學生事件紀錄' }
+        },
+        {
             path: '/portfolio/medication-today',
             name: 'medication-today',
             component: () => import('../views/MedicationTodayView.vue'),
