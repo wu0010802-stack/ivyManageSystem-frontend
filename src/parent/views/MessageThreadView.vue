@@ -130,7 +130,7 @@ onMounted(init)
   flex-direction: column;
   height: calc(100dvh - 64px);
   margin: -16px;
-  background: var(--pt-surface-thread-bg);
+  background: var(--m3-surface, var(--pt-surface-thread-bg));
 }
 
 .thread-subtitle {
@@ -143,7 +143,7 @@ onMounted(init)
 
 .thread-subtitle strong {
   font-size: var(--text-base, 15px);
-  color: var(--pt-text-strong);
+  color: var(--m3-on-surface, var(--pt-text-strong));
 }
 
 .thread-subtitle .sub {
