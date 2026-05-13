@@ -14,16 +14,12 @@ import LifecycleTransitionDialog from './LifecycleTransitionDialog.vue'
 
 import OverviewTab from './tabs/OverviewTab.vue'
 import BasicInfoTab from './tabs/BasicInfoTab.vue'
-import GuardiansTab from './tabs/GuardiansTab.vue'
 import AttendanceTab from './tabs/AttendanceTab.vue'
 import RecordsTab from './tabs/RecordsTab.vue'
 import FeesTab from './tabs/FeesTab.vue'
 import ActivityTab from './tabs/ActivityTab.vue'
 import HealthGrowthTab from './tabs/HealthGrowthTab.vue'
-import MilestonesTab from './tabs/MilestonesTab.vue'
-import TimelineTab from './tabs/TimelineTab.vue'
-import GrowthReportTab from './tabs/GrowthReportTab.vue'
-import PhotoGalleryTab from './tabs/PhotoGalleryTab.vue'
+import GrowthProfileTab from './tabs/GrowthProfileTab.vue'
 import CommunicationTab from './tabs/CommunicationTab.vue'
 import StudentDisabilityDocsPanel from './StudentDisabilityDocsPanel.vue'
 import StudentEnrollmentCertButton from './StudentEnrollmentCertButton.vue'
@@ -54,13 +50,22 @@ const loading = ref(false)
 
 const canPortfolioRead = computed(() => hasPermission('PORTFOLIO_READ'))
 const canHealthRead = computed(() => hasPermission('STUDENTS_HEALTH_READ'))
-const canGuardiansRead = computed(() => hasPermission('GUARDIANS_READ'))
 const canActivityRead = computed(() => hasPermission('ACTIVITY_READ'))
 const canFeesRead = computed(() => hasPermission('FEES_READ'))
 const canSpecialNeedsRead = computed(() => hasPermission('STUDENTS_SPECIAL_NEEDS_READ'))
 
 const defaultTabFor = (ctx) => (ctx === 'classroom' ? 'overview' : 'basic')
-const initialActive = props.initialTab || props.defaultTab || defaultTabFor(props.context)
+const LEGACY_TAB_MAP = {
+  guardians: 'basic',
+  milestones: 'growth_profile',
+  timeline: 'growth_profile',
+  photo_gallery: 'growth_profile',
+  growth_report: 'growth_profile',
+}
+const mapLegacyTab = (name) => LEGACY_TAB_MAP[name] || name
+const initialActive = mapLegacyTab(
+  props.initialTab || props.defaultTab || defaultTabFor(props.context),
+)
 const activeTab = ref(initialActive)
 
 const editDialogVisible = ref(false)
@@ -73,16 +78,12 @@ const showOpenFullPage = computed(() => props.mode === 'drawer' && props.context
 const TAB_DEFS = computed(() => [
   { name: 'overview', label: '總覽', show: true },
   { name: 'basic', label: '基本資料', show: true },
-  { name: 'guardians', label: '監護人', show: canGuardiansRead.value },
   { name: 'attendance', label: '出席紀錄', show: true },
   { name: 'records', label: '綜合紀錄', show: true },
   { name: 'fees', label: '學費', show: canFeesRead.value },
   { name: 'activity', label: '才藝報名', show: canActivityRead.value },
   { name: 'health_growth', label: '健康／成長', show: canPortfolioRead.value || canHealthRead.value },
-  { name: 'milestones', label: '里程碑', show: canPortfolioRead.value },
-  { name: 'timeline', label: '成長時間軸', show: canPortfolioRead.value },
-  { name: 'photo_gallery', label: '照片牆', show: canPortfolioRead.value },
-  { name: 'growth_report', label: '成長報告', show: canPortfolioRead.value },
+  { name: 'growth_profile', label: '成長檔案', show: canPortfolioRead.value },
   { name: 'disability_docs', label: '鑑定文件', show: canSpecialNeedsRead.value },
   { name: 'communication', label: '家長溝通', show: true },
 ])
@@ -119,6 +120,13 @@ watch(activeTab, (val) => {
   const currentQuery = router.currentRoute.value.query
   if (currentQuery.tab === val) return
   router.replace({ query: { ...currentQuery, tab: val } })
+})
+
+// URL 帶舊 tab 名稱時即時轉換（書籤相容）
+watch(() => props.initialTab, (val) => {
+  if (!val) return
+  const mapped = mapLegacyTab(val)
+  if (mapped !== activeTab.value) activeTab.value = mapped
 })
 
 // 監聽 bus 重新載 profile（編輯後同步摘要）
@@ -258,13 +266,12 @@ const breadcrumbItems = computed(() => {
         <OverviewTab
           v-if="tab.name === 'overview'"
           :profile="profile"
-          @goto-tab="(t) => (activeTab = t)"
+          @goto-tab="(t) => (activeTab = mapLegacyTab(t))"
         />
-        <BasicInfoTab v-else-if="tab.name === 'basic'" :profile="profile" />
-        <GuardiansTab
-          v-else-if="tab.name === 'guardians'"
-          :student-id="studentId"
-          @changed="handleGuardiansChanged"
+        <BasicInfoTab
+          v-else-if="tab.name === 'basic'"
+          :profile="profile"
+          @guardians-changed="handleGuardiansChanged"
         />
         <AttendanceTab
           v-else-if="tab.name === 'attendance'"
@@ -291,21 +298,10 @@ const breadcrumbItems = computed(() => {
           v-else-if="tab.name === 'health_growth'"
           :student-id="studentId"
         />
-        <MilestonesTab
-          v-else-if="tab.name === 'milestones'"
+        <GrowthProfileTab
+          v-else-if="tab.name === 'growth_profile'"
           :student-id="studentId"
-        />
-        <TimelineTab
-          v-else-if="tab.name === 'timeline'"
-          :student-id="studentId"
-        />
-        <PhotoGalleryTab
-          v-else-if="tab.name === 'photo_gallery'"
-          :student-id="studentId"
-        />
-        <GrowthReportTab
-          v-else-if="tab.name === 'growth_report'"
-          :student-id="studentId"
+          :sync-url="syncUrl"
         />
         <StudentDisabilityDocsPanel
           v-else-if="tab.name === 'disability_docs'"
