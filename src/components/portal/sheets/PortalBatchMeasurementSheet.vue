@@ -73,26 +73,38 @@ async function submit() {
   submitting.value = true
   const targets = filledRows.value
   progress.value = { done: 0, total: targets.length }
-  for (const row of targets) {
-    await submitRow(row)
-    progress.value.done += 1
+  try {
+    for (const row of targets) {
+      await submitRow(row)
+      progress.value.done += 1
+    }
+  } finally {
+    submitting.value = false
   }
-  submitting.value = false
   const ok = targets.filter((r) => r.status === 'ok').length
   const failed = targets.length - ok
-  ElMessage.success(`已記 ${ok} 筆${failed ? `，${failed} 筆失敗` : ''}`)
-  emit('done')
+  if (ok > 0) {
+    ElMessage.success(`已記 ${ok} 筆${failed ? `，${failed} 筆失敗` : ''}`)
+    emit('done')
+  } else {
+    ElMessage.error(`${failed} 筆全部失敗，請重試或檢查網路`)
+  }
 }
 
 async function retry() {
   submitting.value = true
   const targets = [...failedRows.value]
   progress.value = { done: 0, total: targets.length }
-  for (const row of targets) {
-    await submitRow(row)
-    progress.value.done += 1
+  try {
+    for (const row of targets) {
+      await submitRow(row)
+      progress.value.done += 1
+    }
+  } finally {
+    submitting.value = false
   }
-  submitting.value = false
+  const ok = targets.filter((r) => r.status === 'ok').length
+  if (ok > 0) emit('done')
 }
 
 function close() {
