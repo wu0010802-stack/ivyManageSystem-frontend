@@ -167,6 +167,14 @@
           <el-descriptions-item label="報名時間" :span="2">{{ formatActivityDate(detail.created_at) }}</el-descriptions-item>
         </el-descriptions>
 
+        <div class="section-title">流程時間軸</div>
+        <RegistrationTimeline
+          :registration="detail"
+          :payments="paymentInfo.records || []"
+          :paid-amount="paymentInfo.paid_amount || 0"
+          :payment-status="paymentInfo.payment_status || 'unpaid'"
+        />
+
         <!-- ── 繳費管理區塊 ── -->
         <div class="section-title">繳費管理</div>
         <div v-if="loadingPayments" style="padding: 8px 0">
@@ -390,6 +398,7 @@ import { formatActivityDate } from '@/utils/format'
 import { hasPermission } from '@/utils/auth'
 import AcademicTermSelector from '@/components/common/AcademicTermSelector.vue'
 import RegistrationPaymentDialog from '@/components/activity/RegistrationPaymentDialog.vue'
+import RegistrationTimeline from '@/components/activity/RegistrationTimeline.vue'
 import RegistrationEditBasicDialog from '@/components/activity/RegistrationEditBasicDialog.vue'
 import RegistrationCreateDialog from '@/components/activity/RegistrationCreateDialog.vue'
 import RegistrationAddCourseDialog from '@/components/activity/RegistrationAddCourseDialog.vue'
