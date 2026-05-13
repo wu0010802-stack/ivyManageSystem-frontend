@@ -2,10 +2,21 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { View, Hide, Warning } from '@element-plus/icons-vue'
+import { View, Hide, Warning, MoreFilled } from '@element-plus/icons-vue'
 import { getMyStudents, revealPortalStudentPhone } from '@/api/portal'
 import { apiError } from '@/utils/error'
 import PortalStudentDrawer from '@/components/portal/students/PortalStudentDrawer.vue'
+import PortalMeasurementSheet from '@/components/portal/sheets/PortalMeasurementSheet.vue'
+import PortalMilestoneSheet from '@/components/portal/sheets/PortalMilestoneSheet.vue'
+
+const sheets = ref({ measurement: false, milestone: false })
+const sheetTarget = ref({ studentId: null, studentName: '' })
+
+function onCardCommand(cmd, student) {
+  sheetTarget.value = { studentId: student.id, studentName: student.name }
+  if (cmd === 'measurement') sheets.value.measurement = true
+  else if (cmd === 'milestone') sheets.value.milestone = true
+}
 
 const route = useRoute()
 const router = useRouter()
@@ -218,6 +229,21 @@ onMounted(fetchStudents)
               <el-icon><Warning /></el-icon>
               <span class="count">{{ s.health_alert_count }}</span>
             </span>
+            <el-dropdown
+              class="card-more"
+              trigger="click"
+              @command="(cmd) => onCardCommand(cmd, s)"
+            >
+              <button class="card-more-btn" @click.stop>
+                <el-icon><MoreFilled /></el-icon>
+              </button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="measurement">📏 記量測</el-dropdown-item>
+                  <el-dropdown-item command="milestone">⭐ 記里程碑</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </div>
 
           <div class="row meta">
@@ -282,6 +308,17 @@ onMounted(fetchStudents)
     <PortalStudentDrawer
       v-model="drawerOpen"
       :student-id="selectedStudentId"
+    />
+
+    <PortalMeasurementSheet
+      v-model="sheets.measurement"
+      :student-id="sheetTarget.studentId"
+      :student-name="sheetTarget.studentName"
+    />
+    <PortalMilestoneSheet
+      v-model="sheets.milestone"
+      :student-id="sheetTarget.studentId"
+      :student-name="sheetTarget.studentName"
     />
   </div>
 </template>
@@ -445,5 +482,18 @@ onMounted(fetchStudents)
 }
 .status-tag {
   align-self: flex-start;
+}
+.card-more {
+  margin-left: auto;
+}
+.card-more-btn {
+  background: transparent;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  color: var(--el-text-color-secondary);
+}
+.card-more-btn:hover {
+  color: var(--el-color-primary);
 }
 </style>
