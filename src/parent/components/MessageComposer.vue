@@ -106,13 +106,13 @@ async function submit() {
 </template>
 
 <style scoped>
-.composer { background: var(--neutral-0); border-top: 1px solid var(--pt-border); padding: 8px; }
+.composer { background: var(--m3-surface-container-high, var(--neutral-0)); border-top: 1px solid var(--pt-border); padding: 8px; }
 .files { display: flex; flex-wrap: wrap; gap: 4px; padding-bottom: 6px; font-size: 12px; }
-.file { background: var(--pt-surface-mute); padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; }
+.file { background: var(--m3-surface-container-low, var(--pt-surface-mute)); padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; }
 .file button { border: none; background: none; cursor: pointer; padding: 0 0 0 4px; display: inline-flex; align-items: center; }
-.row { display: flex; gap: 6px; align-items: flex-end; }
+.row { display: flex; gap: 6px; align-items: flex-end; background: var(--m3-surface-container-high, var(--neutral-0)); border-radius: 28px; padding: 4px 4px 4px 8px; border: 1px solid var(--pt-border); }
 .attach-btn { padding: 6px; background: var(--pt-tint-event); color: var(--pt-tint-event-fg); border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
-textarea { flex: 1; padding: 8px; border: 1px solid var(--pt-border); border-radius: 6px; font-size: 14px; resize: none; max-height: 80px; }
-.send { padding: 8px 14px; background: var(--brand-primary); color: var(--neutral-0); border: none; border-radius: 6px; font-size: 14px; }
+textarea { flex: 1; padding: 8px; border: none; border-radius: 0; background: transparent; font-size: 14px; resize: none; max-height: 80px; outline: none; }
+.send { padding: 8px 14px; background: var(--m3-primary, var(--brand-primary)); color: var(--m3-on-primary, var(--neutral-0)); border: none; border-radius: 24px; font-size: 14px; }
 .send:disabled { opacity: 0.5; }
 </style>
