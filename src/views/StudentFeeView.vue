@@ -166,7 +166,7 @@
                 size="small"
                 type="danger"
                 plain
-                @click="openRefundDialog(row)"
+                @click="openRefundModal(row)"
               >退款</el-button>
             </template>
           </el-table-column>
@@ -313,52 +313,14 @@
     </el-dialog>
 
     <!-- ================================================================
-         Dialog：退款
+         Modal：退費（Phase 3 - 含自動建議計算）
     ================================================================ -->
-    <el-dialog v-model="refundDialogVisible" title="退款" width="460px" destroy-on-close>
-      <div v-if="refundingRecord">
-        <p>學生：<strong>{{ refundingRecord.student_name }}</strong>（{{ refundingRecord.classroom_name }}）</p>
-        <p>費用項目：{{ refundingRecord.fee_item_name }}</p>
-        <p>目前已繳 <strong>{{ (refundingRecord.amount_paid || 0).toLocaleString() }} 元</strong>，最多可退此金額。</p>
-        <el-form :model="refundForm" :rules="refundRules" ref="refundFormRef" label-width="90px">
-          <el-form-item label="退款金額" prop="amount">
-            <el-input-number
-              v-model="refundForm.amount"
-              :min="1"
-              :max="refundingRecord?.amount_paid || 1"
-              :step="1"
-              :precision="0"
-              style="width: 100%"
-            />
-          </el-form-item>
-          <el-form-item label="退款原因" prop="reason">
-            <el-input v-model="refundForm.reason" maxlength="100" show-word-limit placeholder="例：家長申請退學、重複收費…" />
-          </el-form-item>
-          <el-form-item label="備註">
-            <el-input v-model="refundForm.notes" type="textarea" :rows="2" maxlength="200" show-word-limit />
-          </el-form-item>
-        </el-form>
-
-        <el-divider>退款歷史</el-divider>
-        <div v-if="refundHistory.length === 0" class="hint">尚無退款紀錄。</div>
-        <el-table v-else :data="refundHistory" size="small" stripe>
-          <el-table-column label="日期" width="140">
-            <template #default="{ row }">
-              {{ row.refunded_at ? row.refunded_at.slice(0, 16).replace('T', ' ') : '—' }}
-            </template>
-          </el-table-column>
-          <el-table-column label="金額" width="90" align="right">
-            <template #default="{ row }">NT${{ row.amount.toLocaleString() }}</template>
-          </el-table-column>
-          <el-table-column label="原因" prop="reason" />
-          <el-table-column label="操作者" prop="refunded_by" width="90" />
-        </el-table>
-      </div>
-      <template #footer>
-        <el-button @click="refundDialogVisible = false">關閉</el-button>
-        <el-button type="danger" :loading="saving" @click="submitRefund">確認退款</el-button>
-      </template>
-    </el-dialog>
+    <RefundSuggestModal
+      v-if="refundModalVisible"
+      v-model="refundModalVisible"
+      :record="refundTarget"
+      @refunded="fetchRecords"
+    />
 
     <!-- ================================================================
          Modal：依範本批次產生（Phase 2）
@@ -377,12 +339,12 @@ import { Plus } from '@element-plus/icons-vue'
 import {
   getFeeItems, getFeePeriods, createFeeItem, updateFeeItem, deleteFeeItem,
   generateFeeRecords, getFeeRecords, payFeeRecord, getFeeSummary,
-  refundFeeRecord, getFeeRefunds,
 } from '@/api/fees'
 import { useClassroomStore } from '@/stores/classroom'
 import { todayISO } from '@/utils/format'
 import FeeTemplateTab from '@/components/fees/FeeTemplateTab.vue'
 import FeeGenerateModal from '@/components/fees/FeeGenerateModal.vue'
+import RefundSuggestModal from '@/components/fees/RefundSuggestModal.vue'
 
 // ─── 依範本批次產生 modal ────────────────────────────────────────────────────
 const generateModalVisible = ref(false)
@@ -677,57 +639,13 @@ async function submitPay() {
   }
 }
 
-// ─── 退款 ─────────────────────────────────────────────────────────────────────
-const refundDialogVisible = ref(false)
-const refundingRecord = ref(null)
-const refundHistory = ref([])
-const refundFormRef = ref(null)
-const refundForm = ref({ amount: 0, reason: '', notes: '' })
-const refundRules = {
-  amount: [{ required: true, message: '請輸入退款金額', trigger: 'blur' }],
-  reason: [{ required: true, message: '請填寫退款原因', trigger: 'blur' }],
-}
+// ─── 退費（Phase 3：自動建議計算 modal） ───────────────────────────────────────
+const refundModalVisible = ref(false)
+const refundTarget = ref(null)
 
-async function openRefundDialog(row) {
-  refundingRecord.value = row
-  refundForm.value = {
-    amount: row.amount_paid || 0,
-    reason: '',
-    notes: '',
-  }
-  refundHistory.value = []
-  refundDialogVisible.value = true
-  try {
-    const res = await getFeeRefunds(row.id)
-    refundHistory.value = res?.refunds || []
-  } catch {
-    refundHistory.value = []
-  }
-}
-
-async function submitRefund() {
-  const valid = await refundFormRef.value?.validate().catch(() => false)
-  if (!valid) return
-  try {
-    await ElMessageBox.confirm(
-      `確定要退款 NT$${(refundForm.value.amount || 0).toLocaleString()} 給 ${refundingRecord.value.student_name}？`,
-      '確認退款',
-      { type: 'warning', confirmButtonText: '確定退款', confirmButtonClass: 'el-button--danger' }
-    )
-  } catch {
-    return
-  }
-  saving.value = true
-  try {
-    await refundFeeRecord(refundingRecord.value.id, refundForm.value)
-    ElMessage.success('退款已完成')
-    refundDialogVisible.value = false
-    fetchRecords()
-  } catch (err) {
-    ElMessage.error(err?.response?.data?.detail || '退款失敗')
-  } finally {
-    saving.value = false
-  }
+function openRefundModal(row) {
+  refundTarget.value = row
+  refundModalVisible.value = true
 }
 
 // ─── 切換 Tab 時自動載入 ──────────────────────────────────────────────────────

@@ -9,6 +9,8 @@ export const generateFeeRecords = (data) => api.post('/fees/generate', data).the
 export const getFeeRecords = (params) => api.get('/fees/records', { params }).then((res) => res.data)
 export const payFeeRecord = (id, data) => api.put(`/fees/records/${id}/pay`, data).then((res) => res.data)
 export const refundFeeRecord = (id, data) => api.post(`/fees/records/${id}/refund`, data).then((res) => res.data)
+export const suggestRefund = (recordId, payload) =>
+  api.post(`/fees/records/${recordId}/refund-suggest`, payload).then((res) => res.data)
 export const getFeeRefunds = (id) => api.get(`/fees/records/${id}/refunds`).then((res) => res.data)
 export const getFeeSummary = (params) => api.get('/fees/summary', { params }).then((res) => res.data)
 
