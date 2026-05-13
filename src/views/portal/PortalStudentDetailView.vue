@@ -3,6 +3,8 @@ import { onMounted, ref, watch, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getStudentDetail } from '@/api/portalStudentDetail'
+import PortalMeasurementSheet from '@/components/portal/sheets/PortalMeasurementSheet.vue'
+import PortalMilestoneSheet from '@/components/portal/sheets/PortalMilestoneSheet.vue'
 
 const props = defineProps({
   studentId: { type: [String, Number], required: true },
@@ -10,6 +12,14 @@ const props = defineProps({
 
 const router = useRouter()
 const detail = ref(null)
+const sheets = ref({ measurement: false, milestone: false })
+
+function openMeasurementSheet() {
+  sheets.value.measurement = true
+}
+function openMilestoneSheet() {
+  sheets.value.milestone = true
+}
 const loading = ref(false)
 const error = ref(null)
 const activeTab = ref('health')
@@ -96,6 +106,8 @@ function back() {
         <div class="actions">
           <el-button @click="goMessages">發訊息給家長</el-button>
           <el-button @click="goObservation">新增觀察</el-button>
+          <el-button @click="openMeasurementSheet">📏 記量測</el-button>
+          <el-button @click="openMilestoneSheet">⭐ 記里程碑</el-button>
         </div>
       </div>
 
@@ -228,6 +240,16 @@ function back() {
       </el-tabs>
     </template>
   </div>
+  <PortalMeasurementSheet
+    v-model="sheets.measurement"
+    :student-id="studentId"
+    :student-name="detail?.student?.name || ''"
+  />
+  <PortalMilestoneSheet
+    v-model="sheets.milestone"
+    :student-id="studentId"
+    :student-name="detail?.student?.name || ''"
+  />
 </template>
 
 <style scoped>
