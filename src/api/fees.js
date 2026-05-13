@@ -11,3 +11,13 @@ export const payFeeRecord = (id, data) => api.put(`/fees/records/${id}/pay`, dat
 export const refundFeeRecord = (id, data) => api.post(`/fees/records/${id}/refund`, data).then((res) => res.data)
 export const getFeeRefunds = (id) => api.get(`/fees/records/${id}/refunds`).then((res) => res.data)
 export const getFeeSummary = (params) => api.get('/fees/summary', { params }).then((res) => res.data)
+
+// ===== 費用範本 =====
+export const getFeeTemplates = (params = {}) =>
+  api.get('/fees/templates', { params }).then((res) => res.data)
+export const createFeeTemplate = (payload) =>
+  api.post('/fees/templates', payload).then((res) => res.data)
+export const updateFeeTemplate = (id, payload) =>
+  api.put(`/fees/templates/${id}`, payload).then((res) => res.data)
+export const deleteFeeTemplate = (id) =>
+  api.delete(`/fees/templates/${id}`).then((res) => res.data)

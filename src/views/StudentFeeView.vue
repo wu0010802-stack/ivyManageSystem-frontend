@@ -190,6 +190,13 @@
           <el-tag type="danger" size="large">未收：{{ summary.total_unpaid.toLocaleString() }} 元</el-tag>
         </div>
       </el-tab-pane>
+
+      <!-- ================================================================
+           Tab 3：費用範本
+      ================================================================ -->
+      <el-tab-pane label="費用範本" name="templates">
+        <FeeTemplateTab />
+      </el-tab-pane>
     </el-tabs>
 
     <!-- ================================================================
@@ -361,6 +368,7 @@ import {
 } from '@/api/fees'
 import { useClassroomStore } from '@/stores/classroom'
 import { todayISO } from '@/utils/format'
+import FeeTemplateTab from '@/components/fees/FeeTemplateTab.vue'
 
 // ─── Tab 狀態 ────────────────────────────────────────────────────────────────
 const activeTab = ref('items')
