@@ -88,15 +88,15 @@ header > h2 { margin: 0; font-size: 17px; color: #0d9053; }
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #fff;
+  background: var(--m3-surface-container-low, var(--pt-surface-card));
   border-radius: 12px;
   padding: 14px;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  box-shadow: var(--m3-elev-1, var(--pt-shadow-card, var(--pt-elev-1)));
 }
-.title { font-weight: 600; color: #0d9053; }
-.meta { font-size: 13px; color: #6b7280; }
+.title { font-weight: 600; color: var(--m3-on-surface, var(--pt-text-strong)); }
+.meta { font-size: 13px; color: var(--m3-on-surface-variant, var(--pt-text-muted)); }
 .download-btn {
-  background: #0d9053;
+  background: var(--m3-primary, var(--brand-primary));
   color: #fff;
   border: none;
   padding: 8px 14px;
