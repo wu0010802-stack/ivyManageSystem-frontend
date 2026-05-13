@@ -44,10 +44,10 @@ function fmt(n) {
 
 <style scoped>
 .fee-summary-card {
-  background: var(--pt-surface-card, var(--neutral-0));
-  border-radius: var(--radius-lg, 12px);
+  background: var(--m3-surface-container-low, var(--pt-surface-card, var(--neutral-0)));
+  border-radius: 16px;
   padding: var(--space-4, 16px);
-  box-shadow: var(--pt-elev-1);
+  box-shadow: var(--m3-elev-1, var(--pt-elev-1));
   display: flex;
   flex-direction: column;
   gap: var(--space-3, 12px);
@@ -55,10 +55,10 @@ function fmt(n) {
 .title { font-size: var(--text-base, 15px); font-weight: var(--font-weight-semibold, 600); margin: 0; }
 .amounts { display: flex; flex-direction: column; gap: var(--space-2, 8px); }
 .row { display: flex; justify-content: space-between; align-items: baseline; }
-.label { color: var(--pt-text-muted); font-size: var(--text-sm, 13px); }
+.label { color: var(--m3-on-surface-variant, var(--pt-text-muted)); font-size: var(--text-sm, 13px); }
 .amount { font-size: var(--text-lg, 18px); font-weight: var(--font-weight-semibold, 600); font-variant-numeric: tabular-nums; }
 .amount.overdue { color: var(--color-danger); }
-.empty { color: var(--pt-text-muted); margin: 0; }
+.empty { color: var(--m3-on-surface-variant, var(--pt-text-muted)); margin: 0; }
 .actions { display: flex; gap: var(--space-2, 8px); }
 .btn {
   flex: 1; min-height: var(--touch-target-min, 44px);
@@ -67,6 +67,6 @@ function fmt(n) {
   font-size: var(--text-sm, 13px); font-weight: var(--font-weight-semibold, 600);
   text-decoration: none;
 }
-.btn.primary { background: var(--brand-primary); color: var(--neutral-0); }
-.btn.ghost { background: var(--brand-primary-soft); color: var(--brand-primary); }
+.btn.primary { background: var(--m3-primary, var(--brand-primary)); color: var(--neutral-0); }
+.btn.ghost { background: var(--brand-primary-soft); color: var(--m3-primary, var(--brand-primary)); }
 </style>

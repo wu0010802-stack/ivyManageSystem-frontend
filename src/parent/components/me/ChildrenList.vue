@@ -34,13 +34,13 @@ defineProps({
 
 <style scoped>
 .children-list {
-  background: var(--pt-surface-card, var(--neutral-0));
-  border-radius: var(--radius-lg, 12px);
+  background: var(--m3-surface-container-low, var(--pt-surface-card, var(--neutral-0)));
+  border-radius: 12px;
   padding: var(--space-4, 16px);
-  box-shadow: var(--pt-elev-1);
+  box-shadow: var(--m3-elev-1, var(--pt-elev-1));
 }
 .title { font-size: var(--text-base, 15px); font-weight: var(--font-weight-semibold, 600); margin: 0 0 var(--space-3, 12px); }
-.empty { color: var(--pt-text-muted); margin: 0 0 var(--space-3, 12px); }
+.empty { color: var(--m3-on-surface-variant, var(--pt-text-muted)); margin: 0 0 var(--space-3, 12px); }
 .list { list-style: none; margin: 0 0 var(--space-2, 8px); padding: 0; display: flex; flex-direction: column; gap: var(--space-1, 4px); }
 .row-link {
   display: flex; align-items: center; gap: var(--space-3, 12px);
@@ -49,18 +49,18 @@ defineProps({
   border-radius: var(--radius-md, 10px);
   text-decoration: none; color: inherit;
 }
-.row-link:active { background: var(--brand-primary-soft); }
+.row-link:active { background: var(--m3-primary-container, var(--brand-primary-soft)); }
 .avatar { font-size: 22px; }
 .meta { flex: 1; display: flex; flex-direction: column; }
 .name { font-weight: var(--font-weight-semibold, 600); }
-.cls { color: var(--pt-text-muted); font-size: var(--text-xs, 11px); }
-.chev { color: var(--pt-text-placeholder); font-size: 20px; }
+.cls { color: var(--m3-on-surface-variant, var(--pt-text-muted)); font-size: var(--text-xs, 11px); }
+.chev { color: var(--m3-on-surface-variant, var(--pt-text-placeholder)); font-size: 20px; }
 .add-row {
   display: flex; align-items: center; gap: var(--space-2, 8px);
   min-height: var(--touch-target-min, 44px);
   padding: var(--space-2, 8px) var(--space-3, 12px);
-  border-top: var(--pt-hairline);
-  color: var(--brand-primary);
+  border-top: var(--m3-outline-variant, var(--pt-hairline));
+  color: var(--m3-primary, var(--brand-primary));
   text-decoration: none;
   font-weight: var(--font-weight-semibold, 600);
 }

@@ -102,10 +102,10 @@ onMounted(async () => {
 <style scoped>
 .me-view { display: flex; flex-direction: column; gap: var(--space-4, 16px); }
 .prefs {
-  background: var(--pt-surface-card, var(--neutral-0));
+  background: var(--m3-surface-container-low, var(--pt-surface-card, var(--neutral-0)));
   border-radius: var(--radius-lg, 12px);
   padding: var(--space-4, 16px);
-  box-shadow: var(--pt-elev-1);
+  box-shadow: var(--m3-elev-1, var(--pt-elev-1));
   display: flex; flex-direction: column; gap: var(--space-2, 8px);
 }
 .title { font-size: var(--text-base, 15px); font-weight: var(--font-weight-semibold, 600); margin: 0 0 var(--space-2, 8px); }
@@ -116,20 +116,20 @@ onMounted(async () => {
   text-decoration: none; color: inherit;
 }
 .pref-link .label { flex: 1; }
-.pref-link .chev { color: var(--pt-text-placeholder); font-size: 20px; }
+.pref-link .chev { color: var(--m3-on-surface-variant, var(--pt-text-placeholder)); font-size: 20px; }
 .logout {
   width: 100%;
   min-height: var(--touch-target-min, 44px);
   margin-top: var(--space-2, 8px);
   padding: var(--space-3, 12px);
-  background: var(--pt-surface-card, var(--neutral-0));
-  border: var(--pt-hairline);
+  background: var(--m3-surface-container-low, var(--pt-surface-card, var(--neutral-0)));
+  border: var(--m3-outline-variant, var(--pt-hairline));
   border-radius: var(--radius-lg, 12px);
   color: var(--color-danger);
   font-size: var(--text-base, 15px);
   font-weight: var(--font-weight-semibold, 600);
   cursor: pointer;
-  box-shadow: var(--pt-elev-1);
+  box-shadow: var(--m3-elev-1, var(--pt-elev-1));
 }
 .logout:active { background: var(--color-danger-soft); transform: scale(0.99); }
 </style>
