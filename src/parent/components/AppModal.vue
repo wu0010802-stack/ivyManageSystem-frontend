@@ -168,7 +168,7 @@ const dialogStyle = computed(() => ({
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: var(--pt-scrim, rgba(0, 0, 0, 0.5));
+  background: var(--pt-scrim, rgba(0, 0, 0, 0.32));
   /* Backdrop blur — Soft UI Evolution 標誌：背景虛化突顯前景 */
   -webkit-backdrop-filter: blur(var(--pt-backdrop-blur, 8px));
   backdrop-filter: blur(var(--pt-backdrop-blur, 8px));
@@ -182,9 +182,9 @@ const dialogStyle = computed(() => ({
 }
 
 .modal-dialog {
-  background: var(--pt-surface-card, var(--neutral-0, #fff));
-  border-radius: var(--radius-xl, 16px);
-  box-shadow: var(--pt-elev-3, var(--shadow-xl, 0 20px 25px -5px rgba(0,0,0,.1)));
+  background: var(--m3-surface-container-high, var(--pt-surface-card, var(--neutral-0, #fff)));
+  border-radius: var(--radius-xl, 28px);
+  box-shadow: var(--m3-elev-3, var(--pt-elev-3, var(--shadow-xl, 0 20px 25px -5px rgba(0,0,0,.1))));
   border: var(--pt-hairline);
   width: 100%;
   max-height: calc(100dvh - var(--space-8, 32px));
