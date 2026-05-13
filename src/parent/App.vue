@@ -90,11 +90,10 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 /* ============================================================
- * 路由過場動畫
+ * 路由過場動畫（M3 Material Motion）
  * 三種：fade（tab 切換）、slide-forward（深入）、slide-back（返回）
- * 持續：mode="out-in"，leave 140ms / enter 160ms（總 ~300ms）。
- *   - leave 略短於 enter，符合「離開應比進入快」的 Material Motion 慣例
- *   - 仍夠短到 tab 切換不感到拖沓
+ * 持續：mode="out-in"，統一 300ms（medium-2）
+ * Easing：M3 emphasized-decel cubic-bezier(0.05, 0.7, 0.1, 1)
  * 用 transform + opacity（GPU 加速）。
  * reduced-motion 由 globals.css 全域 transition-duration: 0.001ms 接管。
  * ============================================================ */
@@ -102,13 +101,13 @@ h1, h2, h3, h4, h5, h6 {
 .parent-fade-enter-active,
 .parent-slide-forward-enter-active,
 .parent-slide-back-enter-active {
-  transition: opacity 180ms ease-out, transform 180ms var(--pt-ease-out, cubic-bezier(0.22, 1, 0.36, 1));
+  transition: opacity var(--m3-dur-medium-2, 300ms) var(--m3-easing-emphasized-decel, cubic-bezier(0.05, 0.7, 0.1, 1)), transform var(--m3-dur-medium-2, 300ms) var(--m3-easing-emphasized-decel, cubic-bezier(0.05, 0.7, 0.1, 1));
 }
 
 .parent-fade-leave-active,
 .parent-slide-forward-leave-active,
 .parent-slide-back-leave-active {
-  transition: opacity 120ms ease-in, transform 120ms ease-in;
+  transition: opacity var(--m3-dur-medium-2, 300ms) var(--m3-easing-emphasized-decel, cubic-bezier(0.05, 0.7, 0.1, 1)), transform var(--m3-dur-medium-2, 300ms) var(--m3-easing-emphasized-decel, cubic-bezier(0.05, 0.7, 0.1, 1));
 }
 
 /* fade */
