@@ -120,9 +120,9 @@ onMounted(init)
 .event-ack { padding: 16px; display: flex; flex-direction: column; gap: 8px; }
 h2 { margin: 0 0 4px; font-size: 18px; }
 .meta { color: var(--pt-text-placeholder); font-size: 13px; }
-.desc { background: var(--pt-surface-note); padding: 8px; border-radius: 6px; font-size: 14px; }
+.desc { background: var(--m3-surface-container-low, var(--pt-surface-note)); padding: 8px; border-radius: 16px; font-size: 14px; }
 label { font-size: 13px; color: var(--pt-text-muted); margin-top: 8px; }
-input, select { padding: 8px; border: 1px solid var(--pt-text-hint); border-radius: 6px; font-size: 14px; }
+input, select { padding: 8px; border: 1px solid var(--m3-outline-variant, var(--pt-text-hint)); border-radius: 16px; font-size: 14px; }
 .actions { margin-top: 16px; }
 .submit { width: 100%; padding: 12px; background: var(--brand-primary); color: var(--neutral-0); border: none; border-radius: 6px; font-size: 15px; transition: background var(--transition-fast, 0.15s ease); }
 .submit:active { background: var(--brand-primary-hover); }
