@@ -60,11 +60,9 @@ html, body, #app {
   height: 100%;
 }
 
-/* Family OS 底色：使用線性 sky → cream 鋪底，不放裝飾 blob，讓卡片與功能區自己成為焦點。 */
+/* M3 底色：用 surface 純色（拿掉 sky → cream 漸層）。卡片自帶 surface-container tonal 階層提供層次。 */
 body {
-  background:
-    linear-gradient(180deg, var(--pt-surface-skyline, #edf8f5) 0%, var(--pt-surface-app, #fffce8) 46%, var(--pt-surface-app, #fffce8) 100%);
-  background-attachment: fixed;
+  background: var(--m3-surface, #f7fbf3);
   /* 阻擋 Android Chrome 原生下拉刷新 — 已交給 PullToRefresh 元件處理。
      設在實際捲動容器（body）才生效，設在 .ptr-root 上是無效的。 */
   overscroll-behavior-y: contain;
@@ -72,23 +70,22 @@ body {
 
 #app {
   background: transparent;
-  /* Sunny Skyline 字體 stack：Quicksand body + Outfit display + Noto Sans TC 中文
-     由 globals.css 注入 token，這裡只是 fallback 寫法 */
-  font-family: var(--pt-font-body, 'Quicksand', 'Noto Sans TC', -apple-system, BlinkMacSystemFont, 'PingFang TC', 'Helvetica Neue', sans-serif);
-  font-weight: 500;
+  /* M3 type scale：Roboto + Noto Sans TC（spec §3.2）。
+     由 typography.css 注入 token，這裡只是 fallback 寫法 */
+  font-family: var(--m3-font-body, 'Roboto', 'Noto Sans TC', -apple-system, BlinkMacSystemFont, 'PingFang TC', 'Helvetica Neue', sans-serif);
+  font-weight: 400;
   -webkit-font-smoothing: antialiased;
-  color: var(--pt-text-strong, #1B4459);
+  color: var(--m3-on-surface, #181d18);
 }
 
 * {
   box-sizing: border-box;
 }
 
-/* 標題層級統一改用 Outfit display 字體（中文 fallback Noto Sans TC）。
-   跨整個家長 app；元件內 scoped 若有 override 仍會覆蓋。 */
+/* 標題層級用 M3 font-display (Roboto)。元件內 scoped 若用 m3-headline-* utility class 仍會覆蓋。 */
 h1, h2, h3, h4, h5, h6 {
-  font-family: var(--pt-font-display, 'Outfit', 'Noto Sans TC', sans-serif);
-  font-weight: 700;
+  font-family: var(--m3-font-display, 'Roboto', 'Noto Sans TC', sans-serif);
+  font-weight: 400;
   letter-spacing: 0;
 }
 
