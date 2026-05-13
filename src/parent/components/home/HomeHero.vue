@@ -68,10 +68,10 @@ const todayLabel = computed(() => {
   position: relative;
   padding: 22px 18px 20px;
   background:
-    linear-gradient(135deg, var(--pt-surface-raised, #fff) 0%, var(--pt-surface-recessed, #f5fbe6) 100%);
+    linear-gradient(135deg, var(--m3-surface-container-low, var(--pt-surface-raised, #fff)) 0%, var(--m3-surface-container, var(--pt-surface-recessed, #f5fbe6)) 100%);
   border: 1px solid var(--pt-page-border, rgba(90, 168, 66, 0.15));
-  border-radius: var(--pt-card-radius, 14px);
-  box-shadow: var(--pt-shadow-card, var(--pt-elev-1));
+  border-radius: 24px;
+  box-shadow: var(--m3-elev-1, var(--pt-shadow-card, var(--pt-elev-1)));
   overflow: hidden;
   isolation: isolate;
 }
@@ -102,7 +102,7 @@ const todayLabel = computed(() => {
   font-weight: 900;
   line-height: 1.12;
   margin: 8px 42px 0 0;
-  color: var(--pt-text-strong);
+  color: var(--m3-on-primary-container, var(--pt-text-strong));
 }
 .hero-name {
   color: var(--brand-primary);
@@ -119,13 +119,13 @@ const todayLabel = computed(() => {
   min-height: 30px;
   padding: 5px 11px;
   border-radius: 999px;
-  background: var(--pt-tint-brand, var(--brand-primary-soft));
+  background: var(--m3-primary-container, var(--pt-tint-brand, var(--brand-primary-soft)));
   color: var(--brand-primary);
   font-size: 12px;
   font-weight: 800;
 }
 .hero-pill--soft {
-  background: var(--pt-tint-sun, var(--ivy-tile-yellow-bg));
+  background: var(--m3-tertiary-container, var(--pt-tint-sun, var(--ivy-tile-yellow-bg)));
   color: var(--ivy-tile-yellow-fg);
 }
 .hero-daily-star {
