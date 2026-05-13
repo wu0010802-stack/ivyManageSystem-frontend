@@ -7,6 +7,11 @@
 
     <ClassHubStickyNext :next="data?.sticky_next" @jump="jumpDeep" />
 
+    <ClassHubBatchMeasurementCard
+      :last-measured-on="lastBatchMeasuredOn"
+      @open="openBatchSheet"
+    />
+
     <div class="class-hub__header">
       <h2 class="class-hub__title">
         {{ data?.classroom_name || '今日工作台' }}
@@ -58,6 +63,11 @@
       @open-thread="openThread"
       @close-thread="closeThread"
     />
+
+    <PortalBatchMeasurementSheet
+      v-model="batchSheetOpen"
+      @done="onBatchDone"
+    />
   </div>
 </template>
 
@@ -76,6 +86,9 @@ import ClassHubMedicationSheet from '@/components/portal/class-hub/ClassHubMedic
 import ClassHubIncidentQuickSheet from '@/components/portal/class-hub/ClassHubIncidentQuickSheet.vue'
 import ClassHubCommBar from '@/components/portal/class-hub/ClassHubCommBar.vue'
 import ClassHubMessagesDrawer from '@/components/portal/class-hub/ClassHubMessagesDrawer.vue'
+import ClassHubBatchMeasurementCard from '@/components/portal/class-hub/ClassHubBatchMeasurementCard.vue'
+import PortalBatchMeasurementSheet from '@/components/portal/sheets/PortalBatchMeasurementSheet.vue'
+import { getMeasurementsLatest } from '@/api/portalMeasurements'
 
 const { data, loading, refresh, decrementCount } = usePortalClassHub()
 const router = useRouter()
@@ -91,6 +104,29 @@ const {
 } = useClassHubPanelQuery()
 
 const canMessages = computed(() => hasPermission('PARENT_MESSAGES_WRITE'))
+
+const batchSheetOpen = ref(false)
+const lastBatchMeasuredOn = ref(null)
+
+async function refreshLastBatchDate() {
+  try {
+    const { data: latestData } = await getMeasurementsLatest()
+    const dates = latestData
+      .map((r) => r.last_measurement?.measured_on)
+      .filter(Boolean)
+      .sort()
+    lastBatchMeasuredOn.value = dates.length > 0 ? dates[dates.length - 1] : null
+  } catch (_) {
+    lastBatchMeasuredOn.value = null
+  }
+}
+
+function openBatchSheet() {
+  batchSheetOpen.value = true
+}
+function onBatchDone() {
+  refreshLastBatchDate()
+}
 
 const sheets = reactive({
   attendance: false,
@@ -117,6 +153,7 @@ onMounted(() => {
   }, 60_000)
   refreshMessagesUnread()
 })
+onMounted(refreshLastBatchDate)
 onBeforeUnmount(() => {
   if (tickTimer) clearInterval(tickTimer)
 })
