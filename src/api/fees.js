@@ -21,3 +21,7 @@ export const updateFeeTemplate = (id, payload) =>
   api.put(`/fees/templates/${id}`, payload).then((res) => res.data)
 export const deleteFeeTemplate = (id) =>
   api.delete(`/fees/templates/${id}`).then((res) => res.data)
+
+// ===== 依範本批量產生費用單 =====
+export const generateFeesFromTemplates = (payload) =>
+  api.post('/fees/generate-from-templates', payload).then((res) => res.data)

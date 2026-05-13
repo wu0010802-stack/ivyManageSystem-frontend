@@ -31,9 +31,14 @@
             </el-select>
             <el-button @click="resetItemFilters">清除篩選</el-button>
           </div>
-          <el-button type="primary" @click="openCreateItem">
-            <el-icon><Plus /></el-icon> 新增項目
-          </el-button>
+          <div class="action-buttons">
+            <el-button type="primary" @click="generateModalVisible = true">
+              依範本批次產生
+            </el-button>
+            <el-button type="primary" @click="openCreateItem">
+              <el-icon><Plus /></el-icon> 新增項目
+            </el-button>
+          </div>
         </div>
 
         <el-table :data="feeItems" v-loading="itemsLoading" border>
@@ -354,6 +359,14 @@
         <el-button type="danger" :loading="saving" @click="submitRefund">確認退款</el-button>
       </template>
     </el-dialog>
+
+    <!-- ================================================================
+         Modal：依範本批次產生（Phase 2）
+    ================================================================ -->
+    <FeeGenerateModal
+      v-model="generateModalVisible"
+      @generated="fetchRecords"
+    />
   </div>
 </template>
 
@@ -369,6 +382,10 @@ import {
 import { useClassroomStore } from '@/stores/classroom'
 import { todayISO } from '@/utils/format'
 import FeeTemplateTab from '@/components/fees/FeeTemplateTab.vue'
+import FeeGenerateModal from '@/components/fees/FeeGenerateModal.vue'
+
+// ─── 依範本批次產生 modal ────────────────────────────────────────────────────
+const generateModalVisible = ref(false)
 
 // ─── Tab 狀態 ────────────────────────────────────────────────────────────────
 const activeTab = ref('items')
@@ -767,6 +784,12 @@ onMounted(() => {
 }
 
 .filters {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.action-buttons {
   display: flex;
   gap: var(--space-2);
   flex-wrap: wrap;
