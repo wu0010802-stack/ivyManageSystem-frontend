@@ -133,16 +133,16 @@ onMounted(fetchData)
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  background: var(--pt-surface-card, var(--neutral-0));
-  border: 1px solid var(--pt-page-border, var(--pt-border));
-  border-radius: var(--pt-card-radius, 14px);
+  background: var(--m3-surface-container-low, var(--pt-surface-card, var(--neutral-0)));
+  border: 1px solid var(--m3-outline-variant, var(--pt-page-border, var(--pt-border)));
+  border-radius: 12px;
   padding: 12px 14px;
-  box-shadow: var(--pt-shadow-card, var(--pt-elev-1));
+  box-shadow: var(--m3-elev-1, var(--pt-shadow-card, var(--pt-elev-1)));
 }
 .title {
   font-size: 16px;
   font-weight: 800;
-  color: var(--pt-text-strong);
+  color: var(--m3-on-surface, var(--pt-text-strong));
 }
 .days-select {
   min-height: 36px;
@@ -151,24 +151,24 @@ onMounted(fetchData)
   border: 1px solid var(--pt-border-strong);
   border-radius: var(--pt-control-radius, 12px);
   background: var(--pt-surface-raised, var(--pt-surface-card));
-  color: var(--pt-text-strong);
+  color: var(--m3-on-surface, var(--pt-text-strong));
 }
 .state {
   text-align: center;
   padding: 40px 16px;
-  color: var(--pt-text-placeholder);
+  color: var(--m3-on-surface-variant, var(--pt-text-placeholder));
 }
 .day-block {
-  background: var(--pt-surface-card, var(--neutral-0));
-  border: 1px solid var(--pt-page-border, var(--pt-border));
-  border-radius: var(--pt-card-radius, 14px);
+  background: var(--m3-surface-container-low, var(--pt-surface-card, var(--neutral-0)));
+  border: 1px solid var(--m3-outline-variant, var(--pt-page-border, var(--pt-border)));
+  border-radius: 12px;
   padding: 8px 0 4px;
-  box-shadow: var(--pt-shadow-card, var(--pt-elev-1));
+  box-shadow: var(--m3-elev-1, var(--pt-shadow-card, var(--pt-elev-1)));
 }
 .day-head {
   padding: 8px 14px;
   font-size: 12px;
-  color: var(--pt-text-soft);
+  color: var(--m3-on-surface-variant, var(--pt-text-soft));
   font-weight: 800;
   letter-spacing: 0.02em;
 }
@@ -206,11 +206,11 @@ onMounted(fetchData)
 }
 .t {
   font-size: 14px;
-  color: var(--pt-text-strong);
+  color: var(--m3-on-surface, var(--pt-text-strong));
 }
 .s {
   font-size: 12px;
-  color: var(--pt-text-placeholder);
+  color: var(--m3-on-surface-variant, var(--pt-text-placeholder));
   margin-top: 2px;
 }
 .badge {
