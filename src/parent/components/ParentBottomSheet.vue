@@ -325,28 +325,29 @@ const hasFooterSlot = computed(() => !!slots.footer)
 
 <style scoped>
 /* P2.3 token sweep：所有色值已 token 化（scrim/surface fallback hex 保留） */
+/* P3.1 M3 visual refactor：圓角/shadow/bg/scrim/easing 套 M3 tokens */
 .pt-bsheet-overlay {
   position: fixed;
   inset: 0;
   z-index: var(--z-modal-backdrop, 90);
-  background: var(--pt-scrim, rgba(15, 23, 42, 0.45));
-  -webkit-backdrop-filter: blur(var(--pt-backdrop-blur, 8px));
-  backdrop-filter: blur(var(--pt-backdrop-blur, 8px));
+  background: rgba(0, 0, 0, 0.32);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
   display: flex;
   align-items: flex-end;
   justify-content: center;
 }
 
 .pt-bsheet-dialog {
-  background: var(--pt-surface-card, #fff);
+  background: var(--m3-surface-container-low, var(--pt-surface-card, #fff));
   border: var(--pt-hairline);
-  border-radius: 16px 16px 0 0;
-  box-shadow: var(--pt-elev-3);
+  border-radius: 28px 28px 0 0;
+  box-shadow: var(--m3-elev-3, var(--pt-elev-3));
   width: 100%;
   max-width: 640px;
   height: var(--pt-bsheet-h, 60vh);
   max-height: 92vh; /* 硬上限：防止 snap 值被覆寫成異常值時撐破畫面 */
-  transition: height 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+  transition: height var(--m3-dur-medium-2, 300ms) var(--m3-easing-emphasized-decel, cubic-bezier(0.05, 0.7, 0.1, 1));
   display: flex;
   flex-direction: column;
   outline: none;
@@ -373,7 +374,7 @@ const hasFooterSlot = computed(() => !!slots.footer)
 }
 .pt-bsheet-enter-active .pt-bsheet-dialog,
 .pt-bsheet-leave-active .pt-bsheet-dialog {
-  transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+  transition: transform var(--m3-dur-medium-2, 300ms) var(--m3-easing-emphasized-decel, cubic-bezier(0.05, 0.7, 0.1, 1));
 }
 .pt-bsheet-enter-from, .pt-bsheet-leave-to { opacity: 0; }
 .pt-bsheet-enter-from .pt-bsheet-dialog,
