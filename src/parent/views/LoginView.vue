@@ -139,24 +139,24 @@ onMounted(() => startLogin())
 
 .login-card {
   background: var(--neutral-0);
-  border-radius: var(--radius-xl, 16px);
+  border-radius: 16px;
   padding: 32px 24px;
   width: 100%;
   max-width: 360px;
   text-align: center;
-  background: var(--pt-surface-card, var(--neutral-0));
-  box-shadow: var(--pt-elev-2);
+  background: var(--m3-surface-container-low, var(--pt-surface-card, var(--neutral-0)));
+  box-shadow: var(--m3-elev-1, var(--pt-elev-2));
   border: var(--pt-hairline);
 }
 
 .title {
   margin: 0 0 24px;
   font-size: 22px;
-  color: var(--brand-primary);
+  color: var(--m3-primary, var(--brand-primary));
 }
 
 .hint {
-  color: var(--pt-text-muted);
+  color: var(--m3-on-surface-variant, var(--pt-text-muted));
   font-size: 14px;
 }
 
@@ -171,7 +171,7 @@ onMounted(() => startLogin())
   margin-top: 8px;
   min-height: var(--touch-target-min, 44px);
   padding: 10px 24px;
-  background: var(--brand-primary);
+  background: var(--m3-primary, var(--brand-primary));
   color: var(--neutral-0);
   border: none;
   border-radius: var(--radius-md, 8px);
@@ -182,6 +182,6 @@ onMounted(() => startLogin())
 }
 
 .retry:active {
-  background: var(--brand-primary-hover);
+  background: var(--m3-primary-hover, var(--brand-primary-hover));
 }
 </style>
