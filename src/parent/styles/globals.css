@@ -5,6 +5,14 @@
  *       parent app 專屬色彩 alias tokens。
  * 由 src/parent/main.js 在 design-tokens.css 之後 import。
  *
+ * !! M3 重寫進行中（2026-05-13~）!!
+ * 本檔內 IvyKids / Sky / Coral / Sun / Leaf / Grape tokens 與 ivy-tile 童彩
+ * 6 色仍保留，因為 view 內部還在大量使用。等 P4 view 全部改完，P5 才在
+ * 此清理。新元件與新 view 一律用 src/parent/styles/m3-tokens.css 的 --m3-*
+ * tokens。
+ *
+ * Spec: docs/superpowers/specs/2026-05-13-parent-material3-redesign-design.md
+ *
  * 不放這裡：
  *  - 共用 design tokens 變數（在 design-tokens.css）
  *  - brand override（在 src/parent/App.vue 的 :root 區塊）

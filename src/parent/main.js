@@ -8,7 +8,14 @@ import router from './router'
 // 各角色 app 共用同一份基礎尺度，避免「四個產品」的視覺語言分裂。
 // 角色 accent 由 parent app 在自己 root style 覆寫 --brand-*。
 import '@/assets/design-tokens.css'
-// 家長 App 全域樣式：focus / reduced-motion / tap-highlight / utility class。
+// M3 token 基建（color / typography / elevation / motion / state layer）。
+// 在 globals.css 之前 import，讓 globals 可在需要時覆寫。
+// Spec: docs/superpowers/specs/2026-05-13-parent-material3-redesign-design.md §3
+import './styles/m3-tokens.css'
+import './styles/typography.css'
+import './styles/motion.css'
+// 家長 App 全域樣式：focus / reduced-motion / tap-highlight / utility class
+// + 既有 IvyKids tokens（與 M3 共存，P4 view 改完後 P5 統一清理）。
 // 必須在 design-tokens.css 之後 import（因為它使用 token 變數）。
 import './styles/globals.css'
 // 無障礙偏好（字級 / 高對比）覆寫，需在 globals.css 之後以便覆蓋。
