@@ -6,6 +6,7 @@ import {
 } from '../api/notifications'
 import { toast } from '../utils/toast'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
+import M3Switch from '../components/m3/M3Switch.vue'
 
 const EVENT_LABELS = {
   message_received: '老師訊息',
@@ -102,11 +103,11 @@ onMounted(load)
           <strong>{{ label }}</strong>
           <span class="sub">{{ EVENT_HINTS[ev] }}</span>
         </div>
-        <input
-          type="checkbox"
-          :checked="prefs[ev] !== false"
+        <M3Switch
+          :model-value="prefs[ev] !== false"
           :disabled="saving"
-          @change="toggle(ev)"
+          :aria-label="label"
+          @update:modelValue="toggle(ev)"
         />
       </label>
     </div>
