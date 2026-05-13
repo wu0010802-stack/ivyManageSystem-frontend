@@ -158,12 +158,12 @@ function moodInfo(m) {
 .hint { color: var(--pt-text-faint); text-align: center; padding: 16px 0; }
 .render-sentinel { height: 1px; }
 .card {
-  background: var(--pt-surface-card, var(--neutral-0));
+  background: var(--m3-surface-container-low, var(--pt-surface-card));
   border: 1px solid var(--pt-page-border, var(--pt-border));
-  border-radius: var(--pt-card-radius, 14px);
+  border-radius: 12px;
   padding: 14px;
   margin-bottom: 10px;
-  box-shadow: var(--pt-shadow-card, var(--pt-elev-1));
+  box-shadow: var(--m3-elev-1, var(--pt-shadow-card, var(--pt-elev-1)));
 }
 .today-card { border-color: var(--pt-border-strong); }
 .card.today-card,
