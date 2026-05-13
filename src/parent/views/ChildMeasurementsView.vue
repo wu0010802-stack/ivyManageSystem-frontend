@@ -46,6 +46,14 @@ async function ensureEcharts() {
   echarts = core
 }
 
+function m3Color(name, fallback) {
+  if (typeof window === 'undefined') return fallback
+  const v = getComputedStyle(document.documentElement)
+    .getPropertyValue(`--m3-${name}`)
+    .trim()
+  return v || fallback
+}
+
 async function render() {
   await ensureEcharts()
   if (!chartEl.value) return
@@ -63,7 +71,7 @@ async function render() {
       type: 'line',
       smooth: true,
       data: series.map((p) => Number(p.y)),
-      itemStyle: { color: '#0d9053' },
+      itemStyle: { color: m3Color(metric.value === 'height' ? 'primary' : 'tertiary', metric.value === 'height' ? '#006d3d' : '#3a6571') },
       lineStyle: { width: 2 },
     }],
   })
@@ -108,19 +116,20 @@ onBeforeUnmount(() => {
 <style scoped>
 .child-measurements-view { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
 header { display: flex; align-items: center; gap: 12px; }
-header > h2 { margin: 0; font-size: 17px; color: #0d9053; }
-.back-btn { background: none; border: none; font-size: 14px; color: #0d9053; }
+header > h2 { margin: 0; font-size: 17px; color: var(--m3-on-surface, var(--pt-text-strong)); }
+.back-btn { background: none; border: none; font-size: 14px; color: var(--m3-primary, var(--brand-primary)); }
 .metric-tabs { display: flex; gap: 8px; }
 .metric-tabs > button {
   flex: 1;
   padding: 10px;
-  background: #f3f4f6;
+  background: var(--m3-surface-container-low, var(--pt-surface-card));
   border: none;
-  border-radius: 8px;
+  border-radius: 12px;
   font-size: 14px;
+  color: var(--m3-on-surface, var(--pt-text-strong));
 }
 .metric-tabs > button.active {
-  background: #0d9053;
+  background: var(--m3-primary, var(--brand-primary));
   color: #fff;
 }
 .chart { width: 100%; height: 280px; }
