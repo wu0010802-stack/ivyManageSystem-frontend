@@ -4,6 +4,7 @@ import { ElMessage } from 'element-plus'
 import { listStudentLeaves } from '@/api/studentLeaves'
 import { useClassroomStore } from '@/stores/classroom'
 import { apiError } from '@/utils/error'
+import { buildStudentProfileLink } from '@/utils/studentLinks'
 
 const STATUS_OPTIONS = [
   { value: 'approved', label: '已成立', type: 'success' },
@@ -82,7 +83,16 @@ onMounted(() => {
     </el-form>
 
     <el-table :data="items" v-loading="loading" stripe border style="width: 100%;">
-      <el-table-column label="學生" prop="student_name" width="120" />
+      <el-table-column label="學生" width="120">
+        <template #default="{ row }">
+          <router-link
+            v-if="buildStudentProfileLink(row.student_id, 'records')"
+            :to="buildStudentProfileLink(row.student_id, 'records')"
+            class="student-link"
+          >{{ row.student_name }}</router-link>
+          <span v-else>{{ row.student_name }}</span>
+        </template>
+      </el-table-column>
       <el-table-column label="假別" prop="leave_type" width="80" align="center" />
       <el-table-column label="期間" min-width="200">
         <template #default="{ row }">
@@ -123,5 +133,13 @@ onMounted(() => {
 
 .filter-bar {
   margin-bottom: 16px;
+}
+
+.student-link {
+  color: var(--el-color-primary);
+  text-decoration: none;
+}
+.student-link:hover {
+  text-decoration: underline;
 }
 </style>

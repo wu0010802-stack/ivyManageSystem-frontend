@@ -23,6 +23,7 @@ import {
   getMonthlySummary,
 } from '@/api/studentAttendance'
 import { downloadFile } from '@/utils/download'
+import { buildStudentProfileLink } from '@/utils/studentLinks'
 
 ChartJS.register(BarElement, CategoryScale, LinearScale, Tooltip, Legend)
 
@@ -567,7 +568,16 @@ onMounted(async () => {
               max-height="520"
             >
               <el-table-column prop="student_no" label="學號" width="90" />
-              <el-table-column prop="name" label="姓名" width="110" />
+              <el-table-column label="姓名" width="110">
+                <template #default="{ row }">
+                  <router-link
+                    v-if="buildStudentProfileLink(row.student_id ?? row.id, 'attendance')"
+                    :to="buildStudentProfileLink(row.student_id ?? row.id, 'attendance')"
+                    class="student-link"
+                  >{{ row.name }}</router-link>
+                  <span v-else>{{ row.name }}</span>
+                </template>
+              </el-table-column>
               <el-table-column label="出席率" width="110" align="center">
                 <template #default="{ row }">
                   <el-tag :type="row.attendance_rate >= 90 ? 'success' : row.attendance_rate >= 75 ? 'warning' : 'danger'">
@@ -645,7 +655,16 @@ onMounted(async () => {
           max-height="520"
         >
           <el-table-column prop="student_no" label="學號" width="90" />
-          <el-table-column prop="name" label="姓名" width="110" />
+          <el-table-column label="姓名" width="110">
+            <template #default="{ row }">
+              <router-link
+                v-if="buildStudentProfileLink(row.student_id ?? row.id, 'attendance')"
+                :to="buildStudentProfileLink(row.student_id ?? row.id, 'attendance')"
+                class="student-link"
+              >{{ row.name }}</router-link>
+              <span v-else>{{ row.name }}</span>
+            </template>
+          </el-table-column>
           <el-table-column label="出席狀態" width="320">
             <template #default="{ row }">
               <el-radio-group v-model="row.status" size="small">
@@ -693,7 +712,16 @@ onMounted(async () => {
         style="width: 100%; margin-top: 12px"
       >
         <el-table-column prop="student_no" label="學號" width="90" />
-        <el-table-column prop="name" label="姓名" width="110" />
+        <el-table-column label="姓名" width="110">
+          <template #default="{ row }">
+            <router-link
+              v-if="buildStudentProfileLink(row.student_id ?? row.id, 'attendance')"
+              :to="buildStudentProfileLink(row.student_id ?? row.id, 'attendance')"
+              class="student-link"
+            >{{ row.name }}</router-link>
+            <span v-else>{{ row.name }}</span>
+          </template>
+        </el-table-column>
         <el-table-column label="狀態" width="110" align="center">
           <template #default="{ row }">
             <el-tag :type="detailStatusType(row.status)">
@@ -881,4 +909,7 @@ onMounted(async () => {
   padding: 40px 0;
   text-align: center;
 }
+
+.student-link { color: var(--el-color-primary); text-decoration: none; }
+.student-link:hover { text-decoration: underline; }
 </style>

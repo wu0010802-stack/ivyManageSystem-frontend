@@ -1,12 +1,17 @@
 <script setup>
 import { computed } from 'vue'
+import { hasPermission } from '@/utils/auth'
+import GuardianManager from '@/components/student/GuardianManager.vue'
 
 const props = defineProps({
   profile: { type: Object, required: true },
 })
+const emit = defineEmits(['guardians-changed'])
 
 const basic = computed(() => props.profile?.basic || {})
 const health = computed(() => props.profile?.health || {})
+const studentId = computed(() => basic.value?.id || null)
+const canGuardiansRead = computed(() => hasPermission('GUARDIANS_READ'))
 </script>
 
 <template>
@@ -38,6 +43,12 @@ const health = computed(() => props.profile?.health || {})
       </el-descriptions-item>
       <el-descriptions-item label="緊急聯絡電話">{{ health.emergency_contact_phone || '—' }}</el-descriptions-item>
     </el-descriptions>
+
+    <el-collapse v-if="canGuardiansRead && studentId" class="guardians-collapse" :model-value="['guardians']">
+      <el-collapse-item title="監護人 / 緊急聯絡人" name="guardians">
+        <GuardianManager :student-id="studentId" @change="emit('guardians-changed')" />
+      </el-collapse-item>
+    </el-collapse>
   </div>
 </template>
 
@@ -49,6 +60,9 @@ const health = computed(() => props.profile?.health || {})
   color: var(--el-text-color-primary);
 }
 .section-title:not(:first-child) {
+  margin-top: 18px;
+}
+.guardians-collapse {
   margin-top: 18px;
 }
 </style>

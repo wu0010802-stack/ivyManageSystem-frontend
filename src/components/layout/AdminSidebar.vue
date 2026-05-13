@@ -120,6 +120,14 @@
             <el-icon><Calendar /></el-icon>
             <template #title>學生請假紀錄</template>
           </el-menu-item>
+          <el-menu-item v-if="canView.STUDENTS_READ" index="/student-assessments">
+            <el-icon><Document /></el-icon>
+            <template #title>學生評量紀錄</template>
+          </el-menu-item>
+          <el-menu-item v-if="canView.STUDENTS_READ" index="/student-incidents">
+            <el-icon><Warning /></el-icon>
+            <template #title>學生事件紀錄</template>
+          </el-menu-item>
           <el-menu-item v-if="canView.STUDENTS_READ" index="/student-enrollment">
             <el-icon><TrendCharts /></el-icon>
             <template #title>在籍統計</template>
@@ -259,7 +267,8 @@ import {
   DataBoard, Finished, Calendar, Timer, Clock, Document, Watch,
   Money, User, School, OfficeBuilding, Bell, TrendCharts, Setting,
   Expand, Fold, DataAnalysis, Files, RefreshRight,
-  Star, StarFilled, Close, Collection, ChatDotRound, List, Van, CreditCard, Checked
+  Star, StarFilled, Close, Collection, ChatDotRound, List, Van, CreditCard, Checked,
+  Warning
 } from '@element-plus/icons-vue'
 import { PERMISSION_VALUES, getUserInfo } from '@/utils/auth'
 import { usePinnedPages } from '@/composables/usePinnedPages'
