@@ -102,10 +102,10 @@ onMounted(fetchOrder)
       <div v-if="order.photos.length === 0" class="hint">尚未上傳</div>
       <div v-else class="photos">
         <div v-for="p in order.photos" :key="p.id" class="photo">
-          <img :src="p.thumb_url || p.url" :alt="p.original_filename" />
+          <img :src="p.thumb_url || p.url" :alt="p.original_filename" loading="lazy" decoding="async" />
           <button
             type="button"
-            class="del touch-target"
+            class="del"
             :aria-label="`刪除 ${p.original_filename}`"
             @click="askRemovePhoto(p)"
           >
@@ -157,12 +157,23 @@ h3 { margin-top: 16px; font-size: 14px; color: var(--m3-on-surface-variant, var(
   background: var(--color-danger);
   color: var(--neutral-0);
   border: none;
-  min-width: 24px;
-  min-height: 24px;
+  width: 24px;
+  height: 24px;
   border-radius: 12px;
   font-size: 14px;
   line-height: 1;
   cursor: pointer;
+}
+/* 視覺保 24x24，pseudo-element 擴大可點區到 44x44（WCAG 2.1）。
+ * .del 已是 position: absolute，::before 以 .del 為定位錨點。 */
+.photo .del::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--touch-target-min, 44px);
+  height: var(--touch-target-min, 44px);
+  transform: translate(-50%, -50%);
 }
 .upload-btn { display: inline-block; padding: 8px 16px; background: var(--m3-primary, var(--brand-primary)); color: var(--neutral-0); border-radius: 6px; cursor: pointer; margin-top: 12px; font-size: 14px; transition: background var(--transition-fast, 0.15s ease); }
 .upload-btn:active { background: var(--brand-primary-hover); }

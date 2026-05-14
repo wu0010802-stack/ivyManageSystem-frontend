@@ -21,6 +21,7 @@ import LeaveForm from '../components/leaves/LeaveForm.vue'
 import PullToRefresh from '../components/PullToRefresh.vue'
 import LeaveHero from '../components/leaves/LeaveHero.vue'
 import { useIncrementalRender } from '../composables/useIncrementalRender'
+import EmptyState from '@/components/common/EmptyState.vue'
 
 const childrenStore = useChildrenStore()
 const { selectedId, ensureSelected } = useChildSelection()
@@ -318,7 +319,11 @@ async function pullRefresh() {
       </template>
     </LeaveHero>
 
-    <div v-if="!loading && filteredItems.length === 0" class="empty">尚無請假紀錄</div>
+    <EmptyState
+      v-if="!loading && filteredItems.length === 0"
+      variant="mobile"
+      title="尚無請假紀錄"
+    />
 
     <LeaveListCard
       v-for="item in visibleLeaves"
@@ -391,12 +396,6 @@ async function pullRefresh() {
   display: flex;
   flex-direction: column;
   gap: 10px;
-}
-
-.empty {
-  text-align: center;
-  padding: 40px 16px;
-  color: var(--m3-on-surface-variant, var(--pt-text-placeholder));
 }
 
 .render-sentinel { height: 1px; }

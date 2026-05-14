@@ -140,11 +140,41 @@ function onRemarkChange(student, value) {
   color: var(--pt-text-muted, #9ca3af);
 }
 
-@media (max-width: 480px) {
+/* 中等視口（≤ 600px）：保留 row 為大方向，避免 480px 才切讓 481-600px 寬度
+ * 內 radio-group 跟 input 嚴重擠壓 wrap。學號+姓名同行，radio-group 第二行
+ * 用 grid 5 等寬，每個 button 強制 44px 觸碰目標。備註輸入第三行。
+ * 為什麼 600px 而不是 768px：768px 已是 iPad portrait，table 仍可正常排，
+ * 600px 對應大多數手機橫向與小尺寸 phablet。 */
+@media (max-width: 600px) {
   .student-row {
     flex-direction: column;
     align-items: stretch;
-    gap: 4px;
+    gap: var(--space-2, 8px);
+  }
+
+  /* radio-group 內部用 grid 平分 5 個選項，避免 wrap 後高低不齊或被截斷 */
+  .student-row :deep(.el-radio-group) {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    width: 100%;
+  }
+  .student-row :deep(.el-radio-group .el-radio-button) {
+    width: 100%;
+  }
+  .student-row :deep(.el-radio-group .el-radio-button__inner) {
+    width: 100%;
+    min-height: var(--touch-target-min, 44px);
+    padding: 8px 2px;
+    font-size: var(--text-xs, 12px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .remark-input {
+    flex: none;
+    min-width: 0;
+    width: 100%;
   }
 }
 </style>

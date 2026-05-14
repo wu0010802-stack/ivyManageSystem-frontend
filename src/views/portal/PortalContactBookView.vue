@@ -21,6 +21,7 @@ import { apiError } from '@/utils/error'
 import ContactBookFilterBar from './components/contactBook/ContactBookFilterBar.vue'
 import ContactBookEntryCard from './components/contactBook/ContactBookEntryCard.vue'
 import ContactBookEntryDrawer from './components/contactBook/ContactBookEntryDrawer.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 
 const { fromHub, backToHub } = usePortalFromHub()
 
@@ -443,9 +444,12 @@ watch([selectedClassroomId, selectedDate], () => {
     <!-- 範本選擇對話框 -->
     <el-dialog v-model="showTemplateDialog" title="套用範本到全班草稿" width="480px">
       <div v-if="tpls.loading.value" class="empty">讀取中…</div>
-      <div v-else-if="!tpls.templates.value.length" class="empty">
-        尚無範本。可先到管理介面建立個人或園所共用範本。
-      </div>
+      <EmptyState
+        v-else-if="!tpls.templates.value.length"
+        variant="default"
+        title="尚無範本"
+        description="可先到管理介面建立個人或園所共用範本。"
+      />
       <el-radio-group v-else v-model="selectedTemplateId" class="tpl-list">
         <el-radio
           v-for="t in tpls.templates.value"

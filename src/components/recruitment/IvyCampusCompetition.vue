@@ -101,7 +101,6 @@ onMounted(async () => {
 
 .campus-block {
   border: 1px solid #E2E8F0;
-  border-left: 4px solid #0f7b52;
   border-radius: 10px;
   padding: 12px 14px;
   background: #fff;

@@ -71,7 +71,6 @@ const canWrite = computed(() => hasPermission('RECRUITMENT_WRITE'))
   background: #ffffff;
   border: 1px solid #dbeafe;
   border-radius: 14px;
-  border-left: 4px solid #1d4ed8;
   box-shadow: 0 1px 4px rgba(30, 64, 175, 0.07);
 }
 

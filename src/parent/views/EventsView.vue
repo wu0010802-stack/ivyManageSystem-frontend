@@ -6,6 +6,7 @@ import { listEvents, acknowledgeEvent } from '../api/events'
 import { toast } from '../utils/toast'
 import ParentIcon from '../components/ParentIcon.vue'
 import AppModal from '../components/AppModal.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 
 const router = useRouter()
 
@@ -79,7 +80,11 @@ onMounted(async () => {
 
 <template>
   <div class="events-view">
-    <div v-if="!loading && items.length === 0" class="empty">尚無事件</div>
+    <EmptyState
+      v-if="!loading && items.length === 0"
+      variant="mobile"
+      title="尚無事件"
+    />
 
     <div
       v-for="ev in items"
@@ -184,12 +189,6 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: var(--pt-page-gap, 18px);
-}
-
-.empty {
-  text-align: center;
-  padding: 40px 16px;
-  color: var(--pt-text-placeholder);
 }
 
 .event-card {
@@ -303,7 +302,7 @@ onMounted(async () => {
 }
 
 .primary-btn {
-  min-height: 40px;
+  min-height: var(--touch-target-min, 44px);
   padding: 8px 16px;
   background: var(--brand-primary);
   color: var(--neutral-0);
@@ -314,7 +313,7 @@ onMounted(async () => {
 }
 
 .secondary-btn {
-  min-height: 40px;
+  min-height: var(--touch-target-min, 44px);
   padding: 8px 16px;
   background: var(--pt-surface-card, var(--neutral-0));
   color: var(--m3-on-surface-variant, var(--pt-text-muted));

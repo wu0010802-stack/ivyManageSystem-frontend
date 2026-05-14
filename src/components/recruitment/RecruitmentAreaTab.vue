@@ -312,7 +312,6 @@ const opportunityText = (row) => {
   padding: 10px 16px;
   background: #fff;
   border: 1px solid #DBEAFE;
-  border-left: 4px solid #3B82F6;
   border-radius: 10px;
 }
 .area-campus-info { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 180px; }

@@ -183,7 +183,7 @@ watch(entryId, async (newId, oldId) => {
             target="_blank"
             rel="noopener"
           >
-            <img :src="p.thumb_url || p.display_url" alt="聯絡簿照片" />
+            <img :src="p.thumb_url || p.display_url" alt="聯絡簿照片" loading="lazy" decoding="async" />
           </a>
         </div>
       </div>

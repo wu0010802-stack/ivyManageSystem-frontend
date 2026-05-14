@@ -397,6 +397,7 @@ onUnmounted(() => {
 
 .conn-banner__btn {
   flex-shrink: 0;
+  min-height: var(--touch-target-min);
 }
 
 .empty-state {
@@ -471,7 +472,7 @@ onUnmounted(() => {
   font-weight: var(--font-weight-semibold);
 }
 
-@media (max-width: 480px) {
+@media (max-width: 768px) {
   .call-card {
     flex-direction: column;
     align-items: stretch;

@@ -145,7 +145,7 @@ onMounted(fetchData)
   color: var(--m3-on-surface, var(--pt-text-strong));
 }
 .days-select {
-  min-height: 36px;
+  min-height: var(--touch-target-min, 44px);
   padding: 4px 10px;
   font-size: 13px;
   border: 1px solid var(--pt-border-strong);

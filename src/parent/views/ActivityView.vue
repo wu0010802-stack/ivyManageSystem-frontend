@@ -276,7 +276,7 @@ async function pullRefresh() {
 
 .tab-btn {
   flex: 1;
-  min-height: 40px;
+  min-height: var(--touch-target-min, 44px);
   padding: 8px;
   background: transparent;
   border: 1px solid transparent;
@@ -300,7 +300,7 @@ async function pullRefresh() {
 }
 
 .primary-btn {
-  min-height: 42px;
+  min-height: var(--touch-target-min, 44px);
   padding: 8px 16px;
   background: var(--m3-primary, var(--brand-primary));
   color: var(--neutral-0);

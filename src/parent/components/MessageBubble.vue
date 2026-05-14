@@ -35,7 +35,7 @@ const time = computed(() => {
             target="_blank"
             rel="noopener"
           >
-            <img v-if="att.thumb_url" :src="att.thumb_url" :alt="att.original_filename" />
+            <img v-if="att.thumb_url" :src="att.thumb_url" :alt="att.original_filename" loading="lazy" decoding="async" />
             <span v-else class="att-fallback">
               <ParentIcon name="document" size="xs" />
               {{ att.original_filename }}

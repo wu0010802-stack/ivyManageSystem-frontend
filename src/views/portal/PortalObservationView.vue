@@ -5,6 +5,7 @@ import { ElMessage } from 'element-plus'
 import { getMyStudents } from '@/api/portal'
 import { listObservations, createObservation } from '@/api/portalObservations'
 import { usePortalFromHub } from '@/composables/usePortalFromHub'
+import EmptyState from '@/components/common/EmptyState.vue'
 
 const route = useRoute()
 const { fromHub, backToHub } = usePortalFromHub()
@@ -198,7 +199,11 @@ async function submit() {
     <div v-if="studentId" class="pt-card timeline-card">
       <h3>{{ selectedStudent?.name }} — 近 7 天觀察</h3>
       <p v-if="loadingRecent" class="empty">讀取中…</p>
-      <p v-else-if="!recent.length" class="empty">尚無紀錄</p>
+      <EmptyState
+        v-else-if="!recent.length"
+        variant="default"
+        title="尚無紀錄"
+      />
       <ul v-else class="timeline">
         <li v-for="o in recent" :key="o.id">
           <strong>{{ o.observation_date }}</strong>

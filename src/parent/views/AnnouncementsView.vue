@@ -33,7 +33,10 @@ const PRIORITY_LABEL = {
 const PRIORITY_COLOR = {
   normal: { bg: 'var(--pt-tint-message)', color: 'var(--pt-tint-message-fg)' },
   important: { bg: 'var(--pt-tint-contact)', color: 'var(--pt-tint-contact-fg)' },
-  urgent: { bg: 'var(--m3-secondary-container, var(--pt-tint-announcement))', color: 'var(--pt-tint-announcement-fg)' },
+  urgent: {
+    bg: 'var(--m3-error, var(--color-danger))',
+    color: 'var(--m3-on-error, white)',
+  },
 }
 
 async function fetchData() {
@@ -229,6 +232,7 @@ async function pullRefresh() {
 }
 
 .close {
+  position: relative;
   width: 28px;
   height: 28px;
   border: none;
@@ -238,6 +242,16 @@ async function pullRefresh() {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+/* 視覺保 28x28，pseudo-element 擴大可點區到 44x44 */
+.close::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--touch-target-min, 44px);
+  height: var(--touch-target-min, 44px);
+  transform: translate(-50%, -50%);
 }
 
 .detail-time {

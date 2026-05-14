@@ -198,7 +198,7 @@ const FONT_SIZE_OPTIONS = [
 }
 
 .size-btn {
-  min-width: 38px;
+  min-width: var(--touch-target-min, 44px);
   min-height: var(--touch-target-min, 44px);
   padding: 0 var(--space-2, 8px);
   background: transparent;
