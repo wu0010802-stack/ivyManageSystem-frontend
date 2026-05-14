@@ -228,8 +228,8 @@ async function pullRefresh() {
 }
 
 .nav {
-  width: 38px;
-  height: 38px;
+  width: var(--touch-target-min, 44px);
+  height: var(--touch-target-min, 44px);
   border: none;
   border-radius: 12px;
   background: var(--pt-tint-brand, var(--brand-primary-soft));
@@ -241,7 +241,7 @@ async function pullRefresh() {
 }
 
 .today-btn {
-  min-height: 38px;
+  min-height: var(--touch-target-min, 44px);
   border: 1px solid var(--pt-page-border, var(--pt-border));
   border-radius: 12px;
   background: var(--pt-surface-raised, var(--pt-surface-card));

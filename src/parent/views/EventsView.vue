@@ -303,7 +303,7 @@ onMounted(async () => {
 }
 
 .primary-btn {
-  min-height: 40px;
+  min-height: var(--touch-target-min, 44px);
   padding: 8px 16px;
   background: var(--brand-primary);
   color: var(--neutral-0);
@@ -314,7 +314,7 @@ onMounted(async () => {
 }
 
 .secondary-btn {
-  min-height: 40px;
+  min-height: var(--touch-target-min, 44px);
   padding: 8px 16px;
   background: var(--pt-surface-card, var(--neutral-0));
   color: var(--pt-text-muted);
