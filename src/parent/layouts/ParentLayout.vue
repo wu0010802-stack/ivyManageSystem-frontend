@@ -7,6 +7,7 @@ import { getMessageUnreadCount } from '../api/messages'
 import M3TopAppBar from '../components/m3/M3TopAppBar.vue'
 import M3NavigationBar from '../components/m3/M3NavigationBar.vue'
 import ConnectionBanner from '../components/ConnectionBanner.vue'
+import BrandMark from '@/components/brand/BrandMark.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -107,7 +108,14 @@ function onBack() {
       :show-back="headerShowBack"
       :on-back="onBack"
       variant="small"
-    />
+    >
+      <!-- 主分頁（home/messages/family/me）無 showBack，需要 BrandMark 補位；
+           深層頁有 back button 不用蓋。CLAUDE.md 列為 polish 階段 acceptance：
+           保留 LaurelWreath/CrownIcon brand。bug sweep round 4 (2026-05-14) F-FE-3。 -->
+      <template v-if="!headerShowBack" #leading>
+        <BrandMark variant="mini" :size="28" />
+      </template>
+    </M3TopAppBar>
 
     <div v-if="!isPublic" class="parent-conn-slot">
       <ConnectionBanner />

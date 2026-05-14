@@ -63,9 +63,22 @@ const LEGACY_TAB_MAP = {
   growth_report: 'growth_profile',
 }
 const mapLegacyTab = (name) => LEGACY_TAB_MAP[name] || name
+// 4 個原獨立 tab 整併成 growth_profile 的 sub-tab，書籤連結 ?tab=<舊名>
+// 需要同時帶 ?sub=<舊名> 進 GrowthProfileTab（讀 route.query.sub）；否則
+// 舊書籤 ?tab=timeline / photo_gallery / growth_report 全部落到預設的
+// milestones sub-tab。bug sweep round 4 (2026-05-14) F-FE-1。
+const GROWTH_SUB_FROM_LEGACY = new Set([
+  'milestones',
+  'timeline',
+  'photo_gallery',
+  'growth_report',
+])
 const initialActive = mapLegacyTab(
   props.initialTab || props.defaultTab || defaultTabFor(props.context),
 )
+const initialGrowthSub = GROWTH_SUB_FROM_LEGACY.has(props.initialTab)
+  ? props.initialTab
+  : null
 const activeTab = ref(initialActive)
 
 const editDialogVisible = ref(false)
@@ -122,11 +135,37 @@ watch(activeTab, (val) => {
   router.replace({ query: { ...currentQuery, tab: val } })
 })
 
+// 舊書籤 ?tab=<growth_profile sub 名> → 進來時補 ?sub= 讓 GrowthProfileTab 跳對
+// 預期 sub，並同步 ?tab=growth_profile 讓 URL 與顯示一致（否則 activeTab
+// 是 growth_profile 但 URL 仍掛舊名）。只在 page mode + syncUrl 時推 URL；
+// drawer/embedded mode 由父層控制 router。bug sweep round 4 (2026-05-14) F-FE-1。
+if (props.mode === 'page' && props.syncUrl && initialGrowthSub) {
+  const q = router.currentRoute.value.query
+  const needsTab = q.tab !== initialActive
+  const needsSub = q.sub !== initialGrowthSub
+  if (needsTab || needsSub) {
+    router.replace({
+      query: { ...q, tab: initialActive, sub: initialGrowthSub },
+    })
+  }
+}
+
 // URL 帶舊 tab 名稱時即時轉換（書籤相容）
 watch(() => props.initialTab, (val) => {
   if (!val) return
   const mapped = mapLegacyTab(val)
   if (mapped !== activeTab.value) activeTab.value = mapped
+  // 後續切換時若帶舊名，同樣補 ?sub=
+  if (
+    props.mode === 'page' &&
+    props.syncUrl &&
+    GROWTH_SUB_FROM_LEGACY.has(val) &&
+    router.currentRoute.value.query.sub !== val
+  ) {
+    router.replace({
+      query: { ...router.currentRoute.value.query, sub: val },
+    })
+  }
 })
 
 // 監聽 bus 重新載 profile（編輯後同步摘要）
