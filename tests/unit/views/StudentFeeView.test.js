@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
+import { nextTick } from 'vue'
 
 // ── API mocks ──────────────────────────────────────────────────────────────
 const getFeeItems = vi.fn()
@@ -35,6 +36,39 @@ vi.mock('element-plus', () => ({
   ElMessageBox: { confirm: vi.fn() },
 }))
 
+// ── stub children that pull in heavy dependencies ──────────────────────────
+// FeeRecordsTab：暴露 fetchRecords / refreshFeeItems 讓父層觸發
+vi.mock('@/components/fees/FeeRecordsTab.vue', () => {
+  const fetchRecords = vi.fn()
+  const refreshFeeItems = vi.fn()
+  return {
+    __fetchRecords: fetchRecords,
+    __refreshFeeItems: refreshFeeItems,
+    default: {
+      name: 'FeeRecordsTab',
+      props: ['periodOptions', 'classrooms'],
+      setup(_, { expose }) {
+        expose({ fetchRecords, refreshFeeItems })
+        return {}
+      },
+      template: '<div data-testid="fee-records-tab" />',
+    },
+  }
+})
+
+vi.mock('@/components/fees/FeeTemplateTab.vue', () => ({
+  default: { name: 'FeeTemplateTab', template: '<div data-testid="fee-template-tab" />' },
+}))
+
+vi.mock('@/components/fees/FeeGenerateModal.vue', () => ({
+  default: {
+    name: 'FeeGenerateModal',
+    props: ['modelValue'],
+    emits: ['update:modelValue', 'generated'],
+    template: '<div data-testid="fee-generate-modal" />',
+  },
+}))
+
 // ── global stubs ───────────────────────────────────────────────────────────
 const GLOBAL_STUBS = {
   'el-tabs': { template: '<div><slot /></div>' },
@@ -63,6 +97,7 @@ const flushPromises = async () => {
 }
 
 import StudentFeeView from '@/views/StudentFeeView.vue'
+import * as FeeRecordsTabModule from '@/components/fees/FeeRecordsTab.vue'
 
 function mountFeeView() {
   return mount(StudentFeeView, {
@@ -94,21 +129,17 @@ describe('StudentFeeView', () => {
     expect(getClassrooms).toHaveBeenCalled()
   })
 
-  it('切換至「繳費記錄」Tab 時呼叫 getFeeRecords', async () => {
+  it('切換至「繳費記錄」Tab 時呼叫子元件 fetchRecords', async () => {
     const wrapper = mountFeeView()
     await flushPromises()
-    vi.clearAllMocks()
-    getFeeRecords.mockResolvedValue({ items: [], total: 0 })
-    getFeeSummary.mockResolvedValue({
-      total_count: 0, total_due: 0, total_paid: 0,
-      paid_count: 0, partial_count: 0, total_unpaid: 0, unpaid_count: 0,
-    })
+    FeeRecordsTabModule.__fetchRecords.mockClear()
 
     // 觸發 watch(activeTab)
     wrapper.vm.$.setupState.activeTab = 'records'
+    await nextTick()
     await flushPromises()
 
-    expect(getFeeRecords).toHaveBeenCalled()
+    expect(FeeRecordsTabModule.__fetchRecords).toHaveBeenCalled()
   })
 
   it('submitItem 在新增模式呼叫 createFeeItem', async () => {
@@ -134,102 +165,42 @@ describe('StudentFeeView', () => {
     expect(createFeeItem).toHaveBeenCalled()
   })
 
-  it('submitPay 呼叫 payFeeRecord 後刷新記錄', async () => {
-    payFeeRecord.mockResolvedValue({})
-    getFeeRecords.mockResolvedValue({ items: [], total: 0 })
-    getFeeSummary.mockResolvedValue({
-      total_count: 0, total_due: 0, total_paid: 0,
-      paid_count: 0, partial_count: 0, total_unpaid: 0, unpaid_count: 0,
-    })
-
+  it('submitItem 成功後呼叫子元件 refreshFeeItems', async () => {
     const wrapper = mountFeeView()
     await flushPromises()
     vi.clearAllMocks()
-    payFeeRecord.mockResolvedValue({})
-    getFeeRecords.mockResolvedValue({ items: [], total: 0 })
-    getFeeSummary.mockResolvedValue({
-      total_count: 0, total_due: 0, total_paid: 0,
-      paid_count: 0, partial_count: 0, total_unpaid: 0, unpaid_count: 0,
-    })
+    createFeeItem.mockResolvedValue({})
+    getFeeItems.mockResolvedValue([])
+    getFeePeriods.mockResolvedValue([])
+    FeeRecordsTabModule.__refreshFeeItems.mockClear()
 
-    // 設定繳費對象
-    wrapper.vm.$.setupState.payingRecord = {
-      id: 5,
-      student_name: '王小明',
-      classroom_name: '小班',
-      fee_item_name: '學費',
-      amount_due: 5000,
-    }
-    // mock 表單驗證通過
-    wrapper.vm.$.setupState.payFormRef = {
+    wrapper.vm.$.setupState.editingItem = null
+    wrapper.vm.$.setupState.itemFormRef = {
       validate: vi.fn().mockResolvedValue(true),
     }
 
-    await wrapper.vm.$.setupState.submitPay()
+    await wrapper.vm.$.setupState.submitItem()
     await flushPromises()
 
-    expect(payFeeRecord).toHaveBeenCalledWith(5, expect.any(Object))
-    expect(getFeeRecords).toHaveBeenCalled()
+    expect(FeeRecordsTabModule.__refreshFeeItems).toHaveBeenCalled()
   })
 
-  it('fetchRecords 會把 fee_item_id、student_name 與 partial 狀態一起送到 records/summary', async () => {
+  it('submitGenerate 後若在 records tab 則觸發子元件 fetchRecords', async () => {
     const wrapper = mountFeeView()
     await flushPromises()
-    vi.clearAllMocks()
+    generateFeeRecords.mockResolvedValue({ created: 1, skipped: 0 })
+    FeeRecordsTabModule.__fetchRecords.mockClear()
 
-    wrapper.vm.$.setupState.recordFilter = {
-      period: '2025-1',
-      classroom_name: '大班A',
-      status: 'partial',
-      fee_item_id: 9,
-      student_name: '小明',
-    }
-    wrapper.vm.$.setupState.recordPage = 2
-    wrapper.vm.$.setupState.recordPageSize = 20
+    wrapper.vm.$.setupState.activeTab = 'records'
+    await nextTick()
+    FeeRecordsTabModule.__fetchRecords.mockClear()
 
-    await wrapper.vm.$.setupState.fetchRecords()
+    wrapper.vm.$.setupState.generatingItem = { id: 1, name: '學費', amount: 5000, period: '2025-1' }
+
+    await wrapper.vm.$.setupState.submitGenerate()
     await flushPromises()
 
-    const expectedParams = {
-      page: 2,
-      page_size: 20,
-      period: '2025-1',
-      classroom_name: '大班A',
-      status: 'partial',
-      fee_item_id: 9,
-      student_name: '小明',
-    }
-
-    expect(getFeeRecords).toHaveBeenCalledWith(expectedParams)
-    expect(getFeeSummary).toHaveBeenCalledWith(expectedParams)
-  })
-
-  it('resetRecordFilters 會清空條件並回到第一頁', async () => {
-    const wrapper = mountFeeView()
-    await flushPromises()
-    vi.clearAllMocks()
-
-    wrapper.vm.$.setupState.recordFilter = {
-      period: '2025-1',
-      classroom_name: '大班A',
-      status: 'partial',
-      fee_item_id: 9,
-      student_name: '小明',
-    }
-    wrapper.vm.$.setupState.recordPage = 3
-
-    await wrapper.vm.$.setupState.resetRecordFilters()
-    await flushPromises()
-
-    expect(wrapper.vm.$.setupState.recordPage).toBe(1)
-    expect(wrapper.vm.$.setupState.recordFilter).toEqual({
-      period: '',
-      classroom_name: '',
-      status: '',
-      fee_item_id: null,
-      student_name: '',
-    })
-    expect(getFeeRecords).toHaveBeenCalledWith({ page: 1, page_size: 50 })
-    expect(getFeeSummary).toHaveBeenCalledWith({ page: 1, page_size: 50 })
+    expect(generateFeeRecords).toHaveBeenCalled()
+    expect(FeeRecordsTabModule.__fetchRecords).toHaveBeenCalled()
   })
 })
