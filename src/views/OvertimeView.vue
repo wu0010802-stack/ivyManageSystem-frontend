@@ -589,7 +589,7 @@ watch(activeSection, async (value) => {
 }
 .pending-card {
   margin-bottom: var(--space-5);
-  border-left: 5px solid var(--color-warning) !important;
+  border-left: 3px solid var(--color-warning) !important;
 }
 .card-header {
   display: flex;

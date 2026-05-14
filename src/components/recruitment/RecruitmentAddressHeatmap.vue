@@ -1412,7 +1412,6 @@ watch(topNearbySchools, (newList) => {
   border-radius: 10px;
   background: #FFFFFF;
   border: 1px solid #FED7AA;
-  border-left: 3px solid #F97316;
   transition: box-shadow 0.15s ease;
 }
 .hotspot-item:hover {
@@ -1501,7 +1500,6 @@ watch(topNearbySchools, (newList) => {
   border-radius: 10px;
   background: #FFFFFF;
   border: 1px solid #DBEAFE;
-  border-left: 3px solid #3B82F6;
   transition: box-shadow 0.15s ease;
 }
 .nearby-school-item:hover {

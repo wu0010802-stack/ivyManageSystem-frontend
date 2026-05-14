@@ -1227,7 +1227,6 @@ const currentCampus = computed(() => ({
   background: var(--rv-surface);
   border: 1px solid var(--rv-border);
   border-radius: 14px;
-  border-left: 4px solid var(--rv-primary);
   box-shadow: 0 1px 4px rgba(30,64,175,0.07);
 }
 
@@ -1271,10 +1270,10 @@ const currentCampus = computed(() => ({
 }
 .form-section-title {
   font-size: 12px;
-  font-weight: 600;
-  color: #606266;
-  border-left: 3px solid #409eff;
-  padding-left: 8px;
+  font-weight: 700;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
   margin: 12px 0 8px;
   line-height: 1.4;
 }
@@ -1358,7 +1357,6 @@ const currentCampus = computed(() => ({
   margin-bottom: 16px;
   background: var(--rv-surface, #fff);
   border: 1px solid var(--rv-border, #DBEAFE);
-  border-left: 4px solid var(--rv-secondary, #3B82F6);
   border-radius: 12px;
   box-shadow: 0 1px 4px rgba(30, 64, 175, 0.06);
 }
