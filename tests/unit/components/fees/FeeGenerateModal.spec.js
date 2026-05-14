@@ -3,13 +3,13 @@ import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 
 vi.mock('@/api/fees', () => ({
-  generateFeesFromTemplates: vi.fn(),
+  generateFeeRecords: vi.fn(),
 }))
 vi.mock('element-plus', () => ({
   ElMessage: { success: vi.fn(), warning: vi.fn(), error: vi.fn() },
 }))
 
-import { generateFeesFromTemplates } from '@/api/fees'
+import { generateFeeRecords } from '@/api/fees'
 import { ElMessage } from 'element-plus'
 import FeeGenerateModal from '@/components/fees/FeeGenerateModal.vue'
 
@@ -35,7 +35,7 @@ describe('FeeGenerateModal', () => {
   beforeEach(() => vi.resetAllMocks())
 
   it('preview calls API with dry_run=true', async () => {
-    generateFeesFromTemplates.mockResolvedValue({ created: 10, skipped: 2, preview: [] })
+    generateFeeRecords.mockResolvedValue({ created: 10, skipped: 2, preview: [] })
     const wrapper = mount(FeeGenerateModal, {
       props: { modelValue: true },
       global: { stubs },
@@ -43,13 +43,13 @@ describe('FeeGenerateModal', () => {
     const buttons = wrapper.findAll('button')
     await buttons[0].trigger('click')  // 預覽
     await nextTick()
-    expect(generateFeesFromTemplates).toHaveBeenCalledWith(
+    expect(generateFeeRecords).toHaveBeenCalledWith(
       expect.objectContaining({ dry_run: true })
     )
   })
 
   it('confirm calls API with dry_run=false then emits generated', async () => {
-    generateFeesFromTemplates
+    generateFeeRecords
       .mockResolvedValueOnce({ created: 10, skipped: 2, preview: [] }) // preview
       .mockResolvedValueOnce({ created: 10, skipped: 2, preview: [] }) // confirm
     const wrapper = mount(FeeGenerateModal, {
@@ -63,7 +63,7 @@ describe('FeeGenerateModal', () => {
     await buttons[buttons.length - 1].trigger('click')  // 最後一個是 footer 確認
     await nextTick()
     await nextTick()
-    expect(generateFeesFromTemplates).toHaveBeenCalledTimes(2)
+    expect(generateFeeRecords).toHaveBeenCalledTimes(2)
     expect(wrapper.emitted('generated')).toBeTruthy()
   })
 })
