@@ -239,6 +239,14 @@
             <el-icon><Setting /></el-icon>
             <template #title>一般設定</template>
           </el-menu-item>
+          <el-menu-item v-if="canView.SETTINGS_READ" index="/appraisal/cycles">
+            <el-icon><Medal /></el-icon>
+            <template #title>考核週期</template>
+          </el-menu-item>
+          <el-menu-item v-if="canView.SETTINGS_READ" index="/appraisal/settings">
+            <el-icon><Tools /></el-icon>
+            <template #title>考核設定</template>
+          </el-menu-item>
           <el-menu-item v-if="canView.AUDIT_LOGS" index="/audit-logs">
             <el-icon><Document /></el-icon>
             <template #title>操作紀錄</template>
@@ -268,7 +276,7 @@ import {
   Money, User, School, OfficeBuilding, Bell, TrendCharts, Setting,
   Expand, Fold, DataAnalysis, Files, RefreshRight,
   Star, StarFilled, Close, Collection, ChatDotRound, List, Van, CreditCard, Checked,
-  Warning
+  Warning, Medal, Tools
 } from '@element-plus/icons-vue'
 import { PERMISSION_VALUES, getUserInfo } from '@/utils/auth'
 import { usePinnedPages } from '@/composables/usePinnedPages'
