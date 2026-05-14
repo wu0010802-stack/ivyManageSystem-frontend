@@ -38,38 +38,65 @@ admin「報表統計」頁（`/reports`）由 `views/ReportsView.vue` 進入，�
 
 ## 2. 解決方案
 
-### 2.1 引入 `useReportData` composable
+### 2.1 重用既有 `useCachedAsync` composable
 
-新增 `src/composables/useReportData.js`，提供 cache + dedupe，介面：
+**📌 重要修訂（2026-05-14）**：原計畫新建 `useReportData`，但發現 `src/composables/useCachedAsync.js` 已存在且功能完全涵蓋（TTL cache + stale-while-revalidate + inflight dedupe + global invalidate by prefix + AbortController）。已有測試檔 `tests/unit/composables/useCachedAsync.test.js`，parent 端 3 view（MeView、TodayView、FamilyView）在用。**P1 改為複用，不新建 composable**。
+
+#### 既有介面（節錄自 `useCachedAsync.js` JSDoc）
 
 ```js
-// 訂閱資料（多次相同 key+params 不重複請求）
-const { data, loading, error, refresh } = useReportData(
-  cacheKey,         // 'dashboard' | 'finance' 等
-  reactiveParams,   // ref / reactive，會被 watch
-  fetcher,          // (params) => Promise<{ data }>
-  { ttl = 300_000 } // 預設 5 分鐘
+const { data, error, pending, isStale, refresh, invalidate } = useCachedAsync(
+  key,         // string；同 key 跨元件共享 cache
+  fetcher,     // (signal: AbortSignal) => Promise<any>
+  {
+    ttl: 300_000,        // 多久內視為 fresh
+    immediate: true,     // mount 時自動 fetch
+    initialData: null,
+  }
 )
 
-// 全域 invalidate（給寫入端用，例如薪資封存後）
-import { invalidateReportData } from '@/composables/useReportData'
-invalidateReportData('dashboard') // 清掉所有 dashboard cache
-invalidateReportData('dashboard', { year: 2025 }) // 只清特定 params
+// 全域 invalidate by prefix
+import { invalidateCachedAsync } from '@/composables/useCachedAsync'
+invalidateCachedAsync('reports/')  // 清掉所有 reports/* cache
 ```
 
-#### 行為合約
+#### Key 命名慣例（沿用 parent 端 pattern）
 
-- **cache key 正規化**：內部用 `JSON.stringify(canonicalize(params))` 生成 cache key。`canonicalize` **移除 value 為 `null` / `undefined` 的欄位** 並按 key 字母序排序。例如 `{year:2025}` 與 `{year:2025, month:null}` 視為同 key（與後端 `month=None` 同一支查詢對齊）。
-- **cache hit**：同 key + 同 params + TTL 內 → 立即 return cached `data`，不打 API
-- **cache miss / expired**：呼叫 fetcher，存入 cache
-- **inflight dedupe**：同 key + 同正規化 params 並行請求 → 共享同一個 Promise（防止快速切 tab 雙發、防止兩 panel 同時打同一 endpoint）
-- **error 不快取**：失敗回應不入 cache，下次重試
-- **params reactive**：watch params 變化，自動換 key 重抓（cache hit 不會 loading flash）
-- **記憶體上限**：LRU 上限 20 筆（每 key），超過 evict 最舊
+- Dashboard：`reports/dashboard:{year}`（例：`reports/dashboard:2026`）
+- Finance（全年）：`reports/finance:{year}`（month 為 null/undefined 時）
+- Finance（指定月）：`reports/finance:{year}:{month}`（例：`reports/finance:2026:3`）
+
+**為何字串拼接 key 取代 spec 舊版的「物件 + JSON 正規化」**：parent 端既有 3 個 view 已用字串拼接 pattern，跟著一致；同時把「month=null 與省略 month 視為同 cache 鍵」的責任放到 key 組裝端（callers 自己負責），不需要 composable 內部做 canonicalize。Caller side 寫法：
+
+```js
+const financeKey = computed(() =>
+  selectedMonth.value != null
+    ? `reports/finance:${props.year}:${selectedMonth.value}`
+    : `reports/finance:${props.year}`
+)
+```
+
+#### Reactive params：watch + refresh pattern
+
+`useCachedAsync` 本身**不 watch params**，由 caller 控制：
+
+```js
+const dashboardKey = computed(() => `reports/dashboard:${props.year}`)
+const { data, pending, refresh } = useCachedAsync(
+  dashboardKey.value,  // 初始 key（注意：non-reactive 傳入）
+  () => getDashboard({ year: props.year }).then(r => r.data),
+  { ttl: 300_000 }
+)
+watch(() => props.year, () => refresh(false))  // 換 year 重抓（cache hit 不打 API）
+```
+
+**注意 key 必須隨參數變化**。本 P1 因為 `useCachedAsync` 簽名是 `(key, ...)`，目前 parent 端 pattern 是 **重建 composable instance** 或 **直接呼叫 refresh()**。本案選後者：watch year 變化 → refresh()。cache map 內部以「最後抓的 key」為準；同 year 重訪命中，新 year 走 fetcher。
+
+> ⚠️ 實作 caveat：caller 必須**在 fetcher 內讀取最新的 reactive 值**（如 `props.year`），不能 closure 凍結舊值。pattern 上面已展示。
 
 #### 為何 TTL = 5 分鐘
 
-後端 DB cache 30 分鐘是「上限」（資料異動端會 `invalidate_category` 主動清）。前端 5 分鐘較短，避免 user 修了資料後看不到變化；同時夠覆蓋「切 tab 來回」的常見操作。
+後端 DB cache 30 分鐘是「上限」（資料異動端會 `invalidate_category` 主動清）。前端 5 分鐘較短，避免 user 修了資料後看不到變化；同時夠覆蓋「切 tab 來回」的常見操作。沿用 parent 端 60_000 ms 也可考慮，但 admin 報表頁互動頻率較低，5 分鐘 ROI 較好。
 
 ### 2.2 重構 `ReportsView.vue`
 
@@ -83,35 +110,66 @@ invalidateReportData('dashboard', { year: 2025 }) // 只清特定 params
 
 ### 2.3 重構 4 個 Panel
 
-每個 panel 改用 `useReportData`，自己管 loading / error / data：
+每個 panel 改用 `useCachedAsync`，自己管 loading / error / data：
 
 ```js
 // 例：OverviewPanel.vue
-const props = defineProps({ year: Number })
+import { computed, watch } from 'vue'
+import { useCachedAsync } from '@/composables/useCachedAsync'
+import { getDashboard, getFinanceSummary } from '@/api/reports'
 
-const yearRef = computed(() => ({ year: props.year }))
-const dashboard = useReportData('dashboard', yearRef,
-  ({ year }) => getDashboard({ year })
+const props = defineProps({ year: { type: Number, required: true } })
+
+const dashboard = useCachedAsync(
+  `reports/dashboard:${props.year}`,
+  () => getDashboard({ year: props.year }).then(r => r.data),
+  { ttl: 300_000 }
 )
-const finance = useReportData('finance', yearRef,
-  ({ year }) => getFinanceSummary(year)
+const finance = useCachedAsync(
+  `reports/finance:${props.year}`,
+  () => getFinanceSummary(props.year).then(r => r.data),
+  { ttl: 300_000 }
 )
 
-// template 用 dashboard.loading.value / dashboard.data.value
+watch(() => props.year, () => {
+  dashboard.refresh(false)
+  finance.refresh(false)
+})
+
+// template 用 dashboard.pending.value / dashboard.data.value（pending 而非 loading）
 ```
 
-**FinanceSummaryPanel** 特例：params 含 `selectedMonth`（panel 內 state），cache key 自動含進去，月份切換自動 cache 命中。
+**FinanceSummaryPanel** 特例：key 隨 `selectedMonth` 變化，要 watch month 並 refresh：
+
+```js
+const props = defineProps({ year: { type: Number, required: true } })
+const selectedMonth = ref(null)
+
+const financeKey = computed(() =>
+  selectedMonth.value != null
+    ? `reports/finance:${props.year}:${selectedMonth.value}`
+    : `reports/finance:${props.year}`
+)
+
+const finance = useCachedAsync(
+  financeKey.value,
+  () => getFinanceSummary(props.year, selectedMonth.value).then(r => r.data),
+  { ttl: 300_000 }
+)
+
+watch([() => props.year, selectedMonth], () => finance.refresh(false))
+```
 
 #### Skeleton
 
 每個 panel `<template>` 結構：
 
 ```vue
-<el-skeleton v-if="dashboard.loading.value && !dashboard.data.value" :rows="6" animated />
+<el-skeleton v-if="dashboard.pending.value && !dashboard.data.value" :rows="6" animated />
 <div v-else>...</div>
 ```
 
-「首次 loading 才顯 skeleton；refresh 時保留舊資料（避免閃爍）」。
+「首次 loading 才顯 skeleton；refresh 時保留舊資料（avoid flash）」—— 這也是 `useCachedAsync` 內建的 SWR 行為（line 82：`pending.value = data.value == null`）。
 
 ### 2.4 Tab Lazy Loading
 
@@ -132,18 +190,13 @@ const finance = useReportData('finance', yearRef,
 
 ## 4. 測試策略
 
-### Vitest（必補）
+### Vitest
 
-新增 `tests/composables/useReportData.spec.js`：
+`useCachedAsync` 已有測試（`tests/unit/composables/useCachedAsync.test.js`），**不需新增 composable 測試**。
 
-1. **cache hit**：同 key+params 在 TTL 內第二次呼叫，fetcher 只被叫一次
-2. **cache miss after TTL**：vi.useFakeTimers 推進 TTL 後，fetcher 重新呼叫
-3. **inflight dedupe**：未 resolve 的 Promise 期間第二次呼叫，共享同一 Promise
-4. **params 變化**：params ref 改值，新 key 抓新資料，舊 key cache 仍保留
-5. **invalidate**：`invalidateReportData(key)` 後下次呼叫 fetcher 被叫
-6. **error 不快取**：fetcher reject 後，下次仍呼叫 fetcher
+panel 與 ReportsView 既有 spec（若存在）需通過。本 P1 不為 panel 補新整合測試（mock 量大、ROI 低，手動驗證為主）；但若改 panel 過程中發現該 panel 有既有 spec 引用 `dashboardData` / `financeData` 等舊 prop 命名，需同步更新該 spec。
 
-不補 panel 整合測試（panel 多 mock 量大，ROI 低）。手動驗證為主。
+執行：`npm run test -- --run` 全綠（既有 1340 個）。
 
 ### 手動驗證
 
@@ -185,28 +238,25 @@ const finance = useReportData('finance', yearRef,
 3. ✅ 切到「出勤」/「薪資」tab：**0 個新 request**（dashboard cache hit）
 4. ✅ 年份來回切：第二次切回不發 request（cache hit）
 5. ✅ 每個 panel skeleton：載入中時該 panel 顯 skeleton，其他 panel 可正常運作
-6. ✅ 既有 Vitest 全綠（1340 個）
-7. ✅ 新增 `useReportData` 6 個測試全綠
+6. ✅ 既有 Vitest 全綠（1340 個；含既有 `useCachedAsync` 測試）
 
 ---
 
 ## 7. 檔案異動清單
 
-**新增**：
-
-- `src/composables/useReportData.js`（~80 行）
-- `tests/composables/useReportData.spec.js`（~120 行）
+**新增**：（無，複用既有 `useCachedAsync`）
 
 **修改**：
 
 - `src/views/ReportsView.vue`：移除 fetch 邏輯，純 shell（110 → ~70 行）
-- `src/views/reports/OverviewPanel.vue`：改用 composable
-- `src/views/reports/FinanceSummaryPanel.vue`：改用 composable（移除 `onMounted(fetchData)`）
-- `src/views/reports/AttendancePanel.vue`：改用 composable
-- `src/views/reports/SalaryPanel.vue`：改用 composable
+- `src/views/reports/OverviewPanel.vue`：改用 `useCachedAsync`，自抓 dashboard + finance
+- `src/views/reports/FinanceSummaryPanel.vue`：改用 `useCachedAsync`，cache key 含 month；移除 `onMounted(fetchData)`
+- `src/views/reports/AttendancePanel.vue`：改用 `useCachedAsync`，自抓 dashboard
+- `src/views/reports/SalaryPanel.vue`：改用 `useCachedAsync`，自抓 dashboard + finance
 
 **不動**：
 
+- `src/composables/useCachedAsync.js`（直接重用既有實作）
 - `src/api/reports.js`（API 簽名不變）
 - 後端任何檔案
 - `chartSetup.js`、`FinanceDetailDialog.vue`
