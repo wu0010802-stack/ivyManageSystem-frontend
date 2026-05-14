@@ -128,6 +128,22 @@
   --z-modal: 100;
   --z-toast: 1000;
 
+  /* ===== Overlay / Scrim (Modal / BottomSheet 共用) =====
+   *  之前散落各檔的 rgba(0,0,0,0.45-0.5) 統一改用這組 token。
+   *  parent app 可在 globals.css 覆寫成暖咖啡 scrim。
+   */
+  --overlay-light: rgba(15, 23, 42, 0.35);
+  --overlay-medium: rgba(15, 23, 42, 0.45);
+  --overlay-dark: rgba(15, 23, 42, 0.65);
+  --backdrop-blur: 8px;
+
+  /* ===== Layout heights (給 view 計算 padding-bottom 用) =====
+   *  parent/portal mobile nav bar 用；不寫死可由 layout 覆寫。
+   *  TodayView/AnnouncementsView 等 view 用 padding-bottom: calc(var(--nav-bar-height) + var(--space-4))。
+   */
+  --nav-bar-height: 56px;
+  --nav-bar-safe-height: calc(var(--nav-bar-height) + env(safe-area-inset-bottom, 0px));
+
   /* ===== Login Page tokens (共用結構) =====
    *  各 app 用 --brand-* 覆寫色彩；版面尺度共用，避免結構分裂。
    */
