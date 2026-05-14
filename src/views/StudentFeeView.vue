@@ -27,7 +27,7 @@
            Tab 3：退費管理
       ================================================================ -->
       <el-tab-pane label="退費管理" name="refunds">
-        <FeeRefundsTab />
+        <FeeRefundsTab :period-options="periodOptions" />
       </el-tab-pane>
     </el-tabs>
   </div>
