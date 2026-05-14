@@ -3,9 +3,9 @@ import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useMessagesStore } from '../stores/messages'
 import { toast } from '../utils/toast'
-import ParentIcon from '../components/ParentIcon.vue'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import PullToRefresh from '../components/PullToRefresh.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 import { fmtTimeOrDate } from '../utils/datetime'
 
 const router = useRouter()
@@ -35,13 +35,12 @@ onMounted(init)
     <template v-if="!messagesStore.threadsLoaded">
       <SkeletonBlock variant="row" :count="4" />
     </template>
-    <div v-else-if="messagesStore.threads.length === 0" class="empty">
-      <div class="empty-icon" aria-hidden="true">
-        <ParentIcon name="chat" size="lg" />
-      </div>
-      <div class="empty-text">目前沒有訊息</div>
-      <div class="empty-hint">老師有訊息時會出現在這裡</div>
-    </div>
+    <EmptyState
+      v-else-if="messagesStore.threads.length === 0"
+      variant="mobile"
+      title="目前沒有訊息"
+      description="老師有訊息時會出現在這裡"
+    />
     <div v-else class="thread-list">
       <div
         v-for="t in messagesStore.threads"
@@ -69,16 +68,7 @@ onMounted(init)
 
 <style scoped>
 .messages-view { padding: 0; }
-.hint, .empty { text-align: center; padding: 40px 16px; color: var(--pt-text-placeholder); }
-.empty-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 12px;
-  color: var(--neutral-400, var(--pt-text-disabled));
-}
-.empty-text { font-size: 16px; color: var(--pt-text-muted); }
-.empty-hint { font-size: 13px; color: var(--pt-text-disabled); margin-top: 4px; }
+.hint { text-align: center; padding: 40px 16px; color: var(--pt-text-placeholder); }
 .thread-list {
   display: flex;
   flex-direction: column;

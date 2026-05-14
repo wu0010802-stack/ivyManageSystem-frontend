@@ -9,6 +9,7 @@ import ParentIcon from '../components/ParentIcon.vue'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import { useIncrementalRender } from '../composables/useIncrementalRender'
 import KawaiiStar from '@/components/brand/KawaiiStar.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 
 const childrenStore = useChildrenStore()
 const { selectedId: selectedStudentId, ensureSelected } = useChildSelection()
@@ -109,16 +110,20 @@ function moodInfo(m) {
           </span>
         </div>
       </router-link>
-      <div v-else class="empty">
-        <KawaiiStar :size="64" decorative />
-        <p>{{ studentName }} 今日尚無聯絡簿</p>
-      </div>
+      <EmptyState
+        v-else
+        variant="mobile"
+        :icon="KawaiiStar"
+        :title="`${studentName} 今日尚無聯絡簿`"
+      />
 
       <h3 class="section-title section-title--history">歷史聯絡簿</h3>
-      <div v-if="history.length === 0" class="empty">
-        <KawaiiStar :size="64" decorative />
-        <p>還沒有歷史聯絡簿喔！</p>
-      </div>
+      <EmptyState
+        v-if="history.length === 0"
+        variant="mobile"
+        :icon="KawaiiStar"
+        title="還沒有歷史聯絡簿喔！"
+      />
       <router-link
         v-for="e in visibleHistory"
         :key="e.id"
@@ -193,8 +198,6 @@ function moodInfo(m) {
 }
 .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
 .dot-unread { background: var(--brand-primary); }
-.empty { text-align: center; padding: 20px 0 8px; color: var(--pt-text-placeholder); }
-.empty p { margin: 8px 0 0; font-size: 14px; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .chip {
   font-size: 12px;

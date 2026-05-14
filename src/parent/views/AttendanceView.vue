@@ -8,6 +8,7 @@ import { toast } from '../utils/toast'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import PullToRefresh from '../components/PullToRefresh.vue'
 import ParentIcon from '../components/ParentIcon.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 
 const childrenStore = useChildrenStore()
 const { selectedId, ensureSelected } = useChildSelection()
@@ -185,9 +186,11 @@ async function pullRefresh() {
         <span>{{ selected.info.remark }}</span>
       </div>
     </div>
-    <div v-else-if="selected" class="detail empty">
-      {{ selected.date }} 尚無紀錄
-    </div>
+    <EmptyState
+      v-else-if="selected"
+      variant="inline"
+      :title="`${selected.date} 尚無紀錄`"
+    />
 
     <div v-if="loading && !data" class="skeleton-wrap">
       <SkeletonBlock variant="card" :count="2" />
@@ -330,11 +333,6 @@ async function pullRefresh() {
   padding: 14px 16px;
   font-size: 14px;
   box-shadow: var(--pt-shadow-card, var(--pt-elev-1));
-}
-
-.detail.empty {
-  color: var(--pt-text-placeholder);
-  text-align: center;
 }
 
 .detail-row {
