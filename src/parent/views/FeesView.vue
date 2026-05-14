@@ -13,6 +13,7 @@ import {
 } from '../api/fees'
 import { toast } from '../utils/toast'
 import PullToRefresh from '../components/PullToRefresh.vue'
+import SkeletonBlock from '../components/SkeletonBlock.vue'
 
 const childrenStore = useChildrenStore()
 const { selectedId, ensureSelected } = useChildSelection()
@@ -193,7 +194,11 @@ async function pullRefresh() {
       此學生：未繳 ${{ formatNum(myTotals.outstanding) }}・已繳 ${{ formatNum(myTotals.amount_paid) }}
     </div>
 
-    <div v-if="!loading && records.length === 0" class="empty">尚無費用紀錄</div>
+    <div v-if="loading && records.length === 0" class="skeleton-wrap">
+      <SkeletonBlock variant="card" :count="3" />
+    </div>
+
+    <div v-else-if="!loading && records.length === 0" class="empty">尚無費用紀錄</div>
 
     <FeeListGroup
       :records="records"
@@ -235,5 +240,11 @@ async function pullRefresh() {
   text-align: center;
   padding: 40px 16px;
   color: var(--pt-text-placeholder);
+}
+
+.skeleton-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3, 12px);
 }
 </style>
