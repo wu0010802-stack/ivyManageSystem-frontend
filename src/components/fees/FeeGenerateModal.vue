@@ -63,7 +63,7 @@
 <script setup>
 import { reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { generateFeesFromTemplates } from '@/api/fees'
+import { generateFeeRecords } from '@/api/fees'
 
 const props = defineProps({ modelValue: Boolean })
 const emit = defineEmits(['update:modelValue', 'generated'])
@@ -85,7 +85,7 @@ async function onPreview() {
   }
   loading.value = true
   try {
-    preview.value = await generateFeesFromTemplates({ ...form, dry_run: true })
+    preview.value = await generateFeeRecords({ ...form, dry_run: true })
   } catch (e) {
     ElMessage.error(e.response?.data?.detail || '預覽失敗')
   } finally {
@@ -96,7 +96,7 @@ async function onPreview() {
 async function onConfirm() {
   confirming.value = true
   try {
-    const result = await generateFeesFromTemplates({ ...form, dry_run: false })
+    const result = await generateFeeRecords({ ...form, dry_run: false })
     ElMessage.success(`已產生 ${result.created} 筆,跳過 ${result.skipped} 筆`)
     emit('generated', result)
     emit('update:modelValue', false)

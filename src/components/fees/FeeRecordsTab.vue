@@ -28,19 +28,6 @@
             :value="cls.name"
           />
         </el-select>
-        <el-select
-          v-model="recordFilter.fee_item_id"
-          placeholder="費用項目"
-          clearable
-          style="width: 180px"
-        >
-          <el-option
-            v-for="item in recordFeeItemOptions"
-            :key="item.id"
-            :label="`${item.name}（${item.period}）`"
-            :value="item.id"
-          />
-        </el-select>
         <el-input
           v-model="recordFilter.student_name"
           placeholder="學生姓名"
@@ -179,31 +166,15 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { getFeeItems, getFeeRecords, payFeeRecord, getFeeSummary } from '@/api/fees'
+import { getFeeRecords, payFeeRecord, getFeeSummary } from '@/api/fees'
 import { todayISO } from '@/utils/format'
 import RefundSuggestModal from '@/components/fees/RefundSuggestModal.vue'
 
 const props = defineProps({
   periodOptions: { type: Array, default: () => [] },
   classrooms: { type: Array, default: () => [] },
-})
-
-// ─── 費用項目（供下拉篩選用） ────────────────────────────────────────────────
-const recordFeeItems = ref([])
-
-async function fetchRecordFeeItems() {
-  try {
-    recordFeeItems.value = await getFeeItems()
-  } catch {
-    ElMessage.error('載入費用篩選選項失敗')
-  }
-}
-
-const recordFeeItemOptions = computed(() => {
-  if (!recordFilter.value.period) return recordFeeItems.value
-  return recordFeeItems.value.filter((item) => item.period === recordFilter.value.period)
 })
 
 // ─── 繳費記錄 ─────────────────────────────────────────────────────────────────
@@ -213,7 +184,6 @@ const emptyRecordFilter = () => ({
   period: '',
   classroom_name: '',
   status: '',
-  fee_item_id: null,
   student_name: '',
 })
 const recordFilter = ref(emptyRecordFilter())
@@ -227,7 +197,6 @@ function _buildRecordParams() {
   if (recordFilter.value.period) params.period = recordFilter.value.period
   if (recordFilter.value.classroom_name) params.classroom_name = recordFilter.value.classroom_name
   if (recordFilter.value.status) params.status = recordFilter.value.status
-  if (recordFilter.value.fee_item_id) params.fee_item_id = recordFilter.value.fee_item_id
   if (recordFilter.value.student_name) params.student_name = recordFilter.value.student_name
   return params
 }
@@ -336,29 +305,14 @@ function openRefundModal(row) {
 }
 
 // ─── 篩選 watcher ─────────────────────────────────────────────────────────────
-watch(() => recordFilter.value.period, () => {
-  const selectedId = recordFilter.value.fee_item_id
-  if (selectedId) {
-    const stillAvailable = recordFeeItemOptions.value.some((item) => item.id === selectedId)
-    if (!stillAvailable) {
-      recordFilter.value.fee_item_id = null
-    }
-  }
-  searchRecords()
-})
+watch(() => recordFilter.value.period, () => searchRecords())
 
 // 下拉篩選即時觸發搜尋
 watch(() => recordFilter.value.status, () => searchRecords())
-watch(() => recordFilter.value.fee_item_id, () => searchRecords())
 watch(() => recordFilter.value.classroom_name, () => searchRecords())
-
-onMounted(() => {
-  fetchRecordFeeItems()
-})
 
 defineExpose({
   fetchRecords,
-  refreshFeeItems: fetchRecordFeeItems,
   // 暴露給測試或父層存取需要的內部 state（白盒測試用）
   recordFilter,
   recordPage,

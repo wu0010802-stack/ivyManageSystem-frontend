@@ -2,13 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 
 // ── API mocks ──────────────────────────────────────────────────────────────
-const getFeeItems = vi.fn()
 const getFeeRecords = vi.fn()
 const payFeeRecord = vi.fn()
 const getFeeSummary = vi.fn()
 
 vi.mock('@/api/fees', () => ({
-  getFeeItems: (...a) => getFeeItems(...a),
   getFeeRecords: (...a) => getFeeRecords(...a),
   payFeeRecord: (...a) => payFeeRecord(...a),
   getFeeSummary: (...a) => getFeeSummary(...a),
@@ -64,18 +62,11 @@ function mountTab(props = {}) {
 describe('FeeRecordsTab', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    getFeeItems.mockResolvedValue([])
     getFeeRecords.mockResolvedValue({ items: [], total: 0 })
     getFeeSummary.mockResolvedValue({
       total_count: 0, total_due: 0, total_paid: 0,
       paid_count: 0, partial_count: 0, total_unpaid: 0, unpaid_count: 0,
     })
-  })
-
-  it('掛載後呼叫 getFeeItems 載入篩選下拉選項', async () => {
-    mountTab()
-    await flushPromises()
-    expect(getFeeItems).toHaveBeenCalled()
   })
 
   it('submitPay 呼叫 payFeeRecord 後刷新記錄', async () => {
@@ -109,7 +100,7 @@ describe('FeeRecordsTab', () => {
     expect(getFeeRecords).toHaveBeenCalled()
   })
 
-  it('fetchRecords 會把 fee_item_id、student_name 與 partial 狀態一起送到 records/summary', async () => {
+  it('fetchRecords 會把 student_name 與 partial 狀態一起送到 records/summary', async () => {
     const wrapper = mountTab()
     await flushPromises()
     vi.clearAllMocks()
@@ -118,7 +109,6 @@ describe('FeeRecordsTab', () => {
       period: '2025-1',
       classroom_name: '大班A',
       status: 'partial',
-      fee_item_id: 9,
       student_name: '小明',
     }
     wrapper.vm.$.setupState.recordPage = 2
@@ -133,7 +123,6 @@ describe('FeeRecordsTab', () => {
       period: '2025-1',
       classroom_name: '大班A',
       status: 'partial',
-      fee_item_id: 9,
       student_name: '小明',
     }
 
@@ -150,7 +139,6 @@ describe('FeeRecordsTab', () => {
       period: '2025-1',
       classroom_name: '大班A',
       status: 'partial',
-      fee_item_id: 9,
       student_name: '小明',
     }
     wrapper.vm.$.setupState.recordPage = 3
@@ -163,17 +151,15 @@ describe('FeeRecordsTab', () => {
       period: '',
       classroom_name: '',
       status: '',
-      fee_item_id: null,
       student_name: '',
     })
     expect(getFeeRecords).toHaveBeenCalledWith({ page: 1, page_size: 50 })
     expect(getFeeSummary).toHaveBeenCalledWith({ page: 1, page_size: 50 })
   })
 
-  it('expose fetchRecords 與 refreshFeeItems 給父層', async () => {
+  it('expose fetchRecords 給父層', async () => {
     const wrapper = mountTab()
     await flushPromises()
     expect(typeof wrapper.vm.fetchRecords).toBe('function')
-    expect(typeof wrapper.vm.refreshFeeItems).toBe('function')
   })
 })
