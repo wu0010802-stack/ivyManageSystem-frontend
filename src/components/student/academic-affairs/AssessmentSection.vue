@@ -5,9 +5,10 @@ import { apiError } from '@/utils/error'
 import { getAssessments } from '@/api/studentAssessments'
 import { useStudentRecordsStore } from '@/stores/studentRecords'
 import { ACADEMIC_AFFAIRS_FILTERS_KEY } from '@/composables/useAcademicAffairsFilters'
-import { RATING_TAG, RATINGS } from '@/constants/studentRecords'
+import { RATING_TAG } from '@/constants/studentRecords'
 import { domainBus, RECORD_EVENTS } from '@/utils/domainBus'
 import AssessmentEditorDialog from '@/components/student/AssessmentEditorDialog.vue'
+import SectionCard from './SectionCard.vue'
 
 const ctx = inject(ACADEMIC_AFFAIRS_FILTERS_KEY)
 if (!ctx) throw new Error('AssessmentSection 須在 StudentAcademicAffairsView 內使用')
@@ -18,6 +19,7 @@ const props = defineProps({
 
 const records = ref([])
 const loading = ref(false)
+const errorMessage = ref('')
 const dialogVisible = ref(false)
 const dialogMode = ref('create')
 const dialogInitial = ref(null)
@@ -40,17 +42,15 @@ const fetchAssessments = async () => {
     return
   }
   loading.value = true
+  errorMessage.value = ''
   try {
-    const params = {
-      classroom_id: ctx.filters.classroomId,
-      limit: 100,
-    }
+    const params = { classroom_id: ctx.filters.classroomId, limit: 100 }
     if (ctx.filters.studentId) params.student_id = ctx.filters.studentId
     const res = await getAssessments(params)
     const raw = res.data
     records.value = Array.isArray(raw) ? raw : raw?.items ?? []
   } catch (error) {
-    ElMessage.error(apiError(error, '載入評量資料失敗'))
+    errorMessage.value = apiError(error, '載入評量資料失敗')
     records.value = []
   } finally {
     loading.value = false
@@ -66,9 +66,6 @@ const openEdit = (row) => {
   dialogMode.value = 'edit'
   dialogInitial.value = { ...row }
   dialogVisible.value = true
-}
-const onSubmitted = () => {
-  // store 已 emit RECORD_EVENTS，listener 會自動 refetch
 }
 
 const removeRow = async (row) => {
@@ -116,37 +113,30 @@ defineExpose({ fetchAssessments })
 </script>
 
 <template>
-  <el-card shadow="never" class="section-card">
-    <template #header>
-      <div class="section-head">
-        <div class="section-title">
-          <span class="title-text">評量</span>
-          <el-badge :value="filteredRows.length" type="primary" />
-        </div>
-        <div class="section-actions">
-          <el-button
-            size="small"
-            type="primary"
-            :disabled="!ctx.filters.classroomId"
-            @click="openCreate"
-          >
-            新增評量
-          </el-button>
-          <router-link
-            :to="{ name: 'student-assessments' }"
-            target="_blank"
-            rel="noopener"
-            class="open-full-link"
-            title="開啟完整評量頁"
-          >
-            ↗
-          </router-link>
-        </div>
-      </div>
+  <SectionCard
+    title="評量"
+    :count="filteredRows.length"
+    count-type="primary"
+    :loading="loading"
+    :error-message="errorMessage"
+    :empty-description="ctx.filters.classroomId ? '期間內沒有評量資料' : '請先選擇班級'"
+    :show-empty="filteredRows.length === 0"
+    :open-full-route="{ name: 'student-assessments' }"
+    @retry="fetchAssessments"
+  >
+    <template #actions>
+      <el-button
+        size="small"
+        type="primary"
+        :disabled="!ctx.filters.classroomId"
+        @click="openCreate"
+      >
+        新增評量
+      </el-button>
     </template>
 
     <el-table
-      v-loading="loading"
+      v-if="filteredRows.length"
       :data="filteredRows"
       stripe
       size="small"
@@ -174,12 +164,6 @@ defineExpose({ fetchAssessments })
       </el-table-column>
     </el-table>
 
-    <el-empty
-      v-if="!loading && filteredRows.length === 0"
-      :description="ctx.filters.classroomId ? '期間內沒有評量資料' : '請先選擇班級'"
-      :image-size="48"
-    />
-
     <AssessmentEditorDialog
       v-model:visible="dialogVisible"
       :mode="dialogMode"
@@ -188,42 +172,6 @@ defineExpose({ fetchAssessments })
       :default-classroom-id="ctx.filters.classroomId"
       :default-student-id="ctx.filters.studentId"
       :lock-student="!!ctx.filters.studentId && dialogMode === 'create'"
-      @submitted="onSubmitted"
     />
-  </el-card>
+  </SectionCard>
 </template>
-
-<style scoped>
-.section-card {
-  border-radius: 12px;
-}
-.section-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-.section-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 600;
-}
-.title-text {
-  font-size: 15px;
-}
-.section-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.open-full-link {
-  font-size: 18px;
-  color: #64748b;
-  text-decoration: none;
-  padding: 0 6px;
-}
-.open-full-link:hover {
-  color: #1d4ed8;
-}
-</style>

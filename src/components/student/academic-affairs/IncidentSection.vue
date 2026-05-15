@@ -1,5 +1,5 @@
 <script setup>
-import { computed, inject, onMounted, onUnmounted, ref, watch } from 'vue'
+import { inject, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { apiError } from '@/utils/error'
 import { getIncidents } from '@/api/studentIncidents'
@@ -8,6 +8,7 @@ import { ACADEMIC_AFFAIRS_FILTERS_KEY } from '@/composables/useAcademicAffairsFi
 import { INCIDENT_TYPE_TAG, SEVERITY_TAG } from '@/constants/studentRecords'
 import { domainBus, RECORD_EVENTS } from '@/utils/domainBus'
 import IncidentEditorDialog from '@/components/student/IncidentEditorDialog.vue'
+import SectionCard from './SectionCard.vue'
 
 const ctx = inject(ACADEMIC_AFFAIRS_FILTERS_KEY)
 if (!ctx) throw new Error('IncidentSection 須在 StudentAcademicAffairsView 內使用')
@@ -18,6 +19,7 @@ const props = defineProps({
 
 const records = ref([])
 const loading = ref(false)
+const errorMessage = ref('')
 const dialogVisible = ref(false)
 const dialogMode = ref('create')
 const dialogInitial = ref(null)
@@ -28,6 +30,7 @@ const fetchIncidents = async () => {
     return
   }
   loading.value = true
+  errorMessage.value = ''
   try {
     const params = {
       classroom_id: ctx.filters.classroomId,
@@ -40,17 +43,14 @@ const fetchIncidents = async () => {
     const raw = res.data
     records.value = Array.isArray(raw) ? raw : raw?.items ?? []
   } catch (error) {
-    ElMessage.error(apiError(error, '載入事件資料失敗'))
+    errorMessage.value = apiError(error, '載入事件資料失敗')
     records.value = []
   } finally {
     loading.value = false
   }
 }
 
-const formatDateTime = (v) => {
-  if (!v) return ''
-  return v.replace('T', ' ').slice(0, 16)
-}
+const formatDateTime = (v) => (v ? v.replace('T', ' ').slice(0, 16) : '')
 
 const openCreate = () => {
   dialogMode.value = 'create'
@@ -61,9 +61,6 @@ const openEdit = (row) => {
   dialogMode.value = 'edit'
   dialogInitial.value = { ...row }
   dialogVisible.value = true
-}
-const onSubmitted = () => {
-  // store 已 emit，listener 會自動 refetch
 }
 
 const removeRow = async (row) => {
@@ -112,44 +109,35 @@ onUnmounted(() => {
   domainBus.off(RECORD_EVENTS.DELETED, onRecordEvent)
 })
 
-const _records = computed(() => records.value)
-
 defineExpose({ fetchIncidents })
 </script>
 
 <template>
-  <el-card shadow="never" class="section-card">
-    <template #header>
-      <div class="section-head">
-        <div class="section-title">
-          <span class="title-text">事件</span>
-          <el-badge :value="_records.length" type="danger" />
-        </div>
-        <div class="section-actions">
-          <el-button
-            size="small"
-            type="primary"
-            :disabled="!ctx.filters.classroomId"
-            @click="openCreate"
-          >
-            新增事件
-          </el-button>
-          <router-link
-            :to="{ name: 'student-incidents' }"
-            target="_blank"
-            rel="noopener"
-            class="open-full-link"
-            title="開啟完整事件頁"
-          >
-            ↗
-          </router-link>
-        </div>
-      </div>
+  <SectionCard
+    title="事件"
+    :count="records.length"
+    count-type="danger"
+    :loading="loading"
+    :error-message="errorMessage"
+    :empty-description="ctx.filters.classroomId ? '期間內沒有事件紀錄' : '請先選擇班級'"
+    :show-empty="records.length === 0"
+    :open-full-route="{ name: 'student-incidents' }"
+    @retry="fetchIncidents"
+  >
+    <template #actions>
+      <el-button
+        size="small"
+        type="primary"
+        :disabled="!ctx.filters.classroomId"
+        @click="openCreate"
+      >
+        新增事件
+      </el-button>
     </template>
 
     <el-table
-      v-loading="loading"
-      :data="_records"
+      v-if="records.length"
+      :data="records"
       stripe
       size="small"
       style="width: 100%"
@@ -187,12 +175,6 @@ defineExpose({ fetchIncidents })
       </el-table-column>
     </el-table>
 
-    <el-empty
-      v-if="!loading && _records.length === 0"
-      :description="ctx.filters.classroomId ? '期間內沒有事件紀錄' : '請先選擇班級'"
-      :image-size="48"
-    />
-
     <IncidentEditorDialog
       v-model:visible="dialogVisible"
       :mode="dialogMode"
@@ -201,42 +183,6 @@ defineExpose({ fetchIncidents })
       :default-classroom-id="ctx.filters.classroomId"
       :default-student-id="ctx.filters.studentId"
       :lock-student="!!ctx.filters.studentId && dialogMode === 'create'"
-      @submitted="onSubmitted"
     />
-  </el-card>
+  </SectionCard>
 </template>
-
-<style scoped>
-.section-card {
-  border-radius: 12px;
-}
-.section-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-.section-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 600;
-}
-.title-text {
-  font-size: 15px;
-}
-.section-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.open-full-link {
-  font-size: 18px;
-  color: #64748b;
-  text-decoration: none;
-  padding: 0 6px;
-}
-.open-full-link:hover {
-  color: #1d4ed8;
-}
-</style>

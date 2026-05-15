@@ -1,17 +1,18 @@
 <script setup>
 import { computed, inject, onMounted, onUnmounted, ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
 import { apiError } from '@/utils/error'
 import { getDailyAttendance } from '@/api/studentAttendance'
 import { ACADEMIC_AFFAIRS_FILTERS_KEY } from '@/composables/useAcademicAffairsFilters'
 import { ATTENDANCE_EVENTS, domainBus } from '@/utils/domainBus'
 import AttendanceBatchPanel from './AttendanceBatchPanel.vue'
+import SectionCard from './SectionCard.vue'
 
 const ctx = inject(ACADEMIC_AFFAIRS_FILTERS_KEY)
 if (!ctx) throw new Error('AttendanceSection 須在 StudentAcademicAffairsView 內使用')
 
 const records = ref([])
 const loading = ref(false)
+const errorMessage = ref('')
 const batchDrawerOpen = ref(false)
 
 const refDate = computed(() => ctx.endDate.value)
@@ -25,10 +26,7 @@ const filteredRows = computed(() => {
 const summary = computed(() => {
   const s = { total: filteredRows.value.length, present: 0, absent: 0, leave: 0, unmarked: 0, late: 0 }
   for (const r of filteredRows.value) {
-    if (!r.status) {
-      s.unmarked += 1
-      continue
-    }
+    if (!r.status) { s.unmarked += 1; continue }
     if (r.status === '出席') s.present += 1
     else if (r.status === '遲到') s.late += 1
     else if (r.status === '缺席') s.absent += 1
@@ -51,6 +49,7 @@ const fetchDaily = async () => {
     return
   }
   loading.value = true
+  errorMessage.value = ''
   try {
     const res = await getDailyAttendance({
       date: refDate.value,
@@ -58,7 +57,7 @@ const fetchDaily = async () => {
     })
     records.value = res.data?.records ?? []
   } catch (error) {
-    ElMessage.error(apiError(error, '載入出席資料失敗'))
+    errorMessage.value = apiError(error, '載入出席資料失敗')
     records.value = []
   } finally {
     loading.value = false
@@ -89,46 +88,40 @@ defineExpose({ fetchDaily })
 </script>
 
 <template>
-  <el-card shadow="never" class="section-card">
-    <template #header>
-      <div class="section-head">
-        <div class="section-title">
-          <span class="title-text">出席</span>
-          <el-tag v-if="refDate" type="info" size="small">{{ refDate }}</el-tag>
-          <el-badge :value="summary.total" type="primary" />
-        </div>
-        <div class="section-actions">
-          <el-button
-            size="small"
-            type="primary"
-            :disabled="!ctx.filters.classroomId"
-            @click="batchDrawerOpen = true"
-          >
-            批次點名
-          </el-button>
-          <router-link
-            :to="{ name: 'student-attendance' }"
-            target="_blank"
-            rel="noopener"
-            class="open-full-link"
-            title="開啟完整出席頁"
-          >
-            ↗
-          </router-link>
-        </div>
+  <SectionCard
+    title="出席"
+    :count="summary.total"
+    count-type="primary"
+    :loading="loading"
+    :error-message="errorMessage"
+    :empty-description="ctx.filters.classroomId ? '當日沒有資料' : '請先選擇班級'"
+    :show-empty="filteredRows.length === 0"
+    :open-full-route="{ name: 'student-attendance' }"
+    @retry="fetchDaily"
+  >
+    <template #titleExtra v-if="refDate">{{ refDate }}</template>
+    <template #actions>
+      <el-button
+        size="small"
+        type="primary"
+        :disabled="!ctx.filters.classroomId"
+        @click="batchDrawerOpen = true"
+      >
+        批次點名
+      </el-button>
+    </template>
+    <template #summary>
+      <div class="summary-tags">
+        <el-tag type="success" size="small">出席 {{ summary.present }}</el-tag>
+        <el-tag type="warning" size="small">遲到 {{ summary.late }}</el-tag>
+        <el-tag type="danger" size="small">缺席 {{ summary.absent }}</el-tag>
+        <el-tag type="info" size="small">請假 {{ summary.leave }}</el-tag>
+        <el-tag size="small">未點名 {{ summary.unmarked }}</el-tag>
       </div>
     </template>
 
-    <div class="summary-tags">
-      <el-tag type="success" size="small">出席 {{ summary.present }}</el-tag>
-      <el-tag type="warning" size="small">遲到 {{ summary.late }}</el-tag>
-      <el-tag type="danger" size="small">缺席 {{ summary.absent }}</el-tag>
-      <el-tag type="info" size="small">請假 {{ summary.leave }}</el-tag>
-      <el-tag size="small">未點名 {{ summary.unmarked }}</el-tag>
-    </div>
-
     <el-table
-      v-loading="loading"
+      v-if="filteredRows.length"
       :data="filteredRows"
       stripe
       size="small"
@@ -145,12 +138,6 @@ defineExpose({ fetchDaily })
       <el-table-column prop="remark" label="備註" show-overflow-tooltip />
     </el-table>
 
-    <el-empty
-      v-if="!loading && filteredRows.length === 0"
-      :description="ctx.filters.classroomId ? '當日沒有資料' : '請先選擇班級'"
-      :image-size="48"
-    />
-
     <el-drawer
       v-model="batchDrawerOpen"
       :title="`批次點名 - ${refDate}`"
@@ -165,42 +152,10 @@ defineExpose({ fetchDaily })
         hint="儲存後本頁出席區塊會自動更新；舊出席頁如同時開啟也會同步刷新。"
       />
     </el-drawer>
-  </el-card>
+  </SectionCard>
 </template>
 
 <style scoped>
-.section-card {
-  border-radius: 12px;
-}
-.section-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-.section-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 600;
-}
-.title-text {
-  font-size: 15px;
-}
-.section-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.open-full-link {
-  font-size: 18px;
-  color: #64748b;
-  text-decoration: none;
-  padding: 0 6px;
-}
-.open-full-link:hover {
-  color: #1d4ed8;
-}
 .summary-tags {
   display: flex;
   flex-wrap: wrap;

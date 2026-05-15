@@ -1,9 +1,9 @@
 <script setup>
 import { computed, inject, ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
 import { apiError } from '@/utils/error'
 import { listStudentLeaves } from '@/api/studentLeaves'
 import { ACADEMIC_AFFAIRS_FILTERS_KEY } from '@/composables/useAcademicAffairsFilters'
+import SectionCard from './SectionCard.vue'
 
 const STATUS_MAP = {
   approved: { label: '已成立', type: 'success' },
@@ -17,16 +17,14 @@ if (!ctx) throw new Error('LeaveSection 須在 StudentAcademicAffairsView 內使
 
 const items = ref([])
 const loading = ref(false)
+const errorMessage = ref('')
 
-// 後端 /api/student-leaves 不支援 student_id 與 date 範圍，
-// 故在 client 端依共享 filters 二次過濾。
 const filtered = computed(() => {
   const sid = ctx.filters.studentId
   const start = ctx.startDate.value
   const end = ctx.endDate.value
   return items.value.filter((it) => {
     if (sid && it.student_id !== sid) return false
-    // 期間重疊：leave [start_date..end_date] 與 filter [start..end] 有交集
     if (start && it.end_date && it.end_date.slice(0, 10) < start) return false
     if (end && it.start_date && it.start_date.slice(0, 10) > end) return false
     return true
@@ -41,6 +39,7 @@ const fetchLeaves = async () => {
     return
   }
   loading.value = true
+  errorMessage.value = ''
   try {
     const res = await listStudentLeaves({
       status: 'approved',
@@ -49,7 +48,7 @@ const fetchLeaves = async () => {
     })
     items.value = res.data?.items || []
   } catch (error) {
-    ElMessage.error(apiError(error, '載入請假資料失敗'))
+    errorMessage.value = apiError(error, '載入請假資料失敗')
     items.value = []
   } finally {
     loading.value = false
@@ -64,29 +63,19 @@ watch(
 </script>
 
 <template>
-  <el-card shadow="never" class="section-card">
-    <template #header>
-      <div class="section-head">
-        <div class="section-title">
-          <span class="title-text">請假</span>
-          <el-badge :value="filtered.length" type="info" />
-        </div>
-        <div class="section-actions">
-          <router-link
-            :to="{ name: 'student-leaves' }"
-            target="_blank"
-            rel="noopener"
-            class="open-full-link"
-            title="開啟完整請假頁"
-          >
-            ↗
-          </router-link>
-        </div>
-      </div>
-    </template>
-
+  <SectionCard
+    title="請假"
+    :count="filtered.length"
+    count-type="info"
+    :loading="loading"
+    :error-message="errorMessage"
+    :empty-description="ctx.filters.classroomId ? '期間內沒有請假紀錄' : '請先選擇班級'"
+    :show-empty="filtered.length === 0"
+    :open-full-route="{ name: 'student-leaves' }"
+    @retry="fetchLeaves"
+  >
     <el-table
-      v-loading="loading"
+      v-if="filtered.length"
       :data="filtered"
       stripe
       size="small"
@@ -109,46 +98,5 @@ watch(
         </template>
       </el-table-column>
     </el-table>
-
-    <el-empty
-      v-if="!loading && filtered.length === 0"
-      :description="ctx.filters.classroomId ? '期間內沒有請假紀錄' : '請先選擇班級'"
-      :image-size="48"
-    />
-  </el-card>
+  </SectionCard>
 </template>
-
-<style scoped>
-.section-card {
-  border-radius: 12px;
-}
-.section-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-.section-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 600;
-}
-.title-text {
-  font-size: 15px;
-}
-.section-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.open-full-link {
-  font-size: 18px;
-  color: #64748b;
-  text-decoration: none;
-  padding: 0 6px;
-}
-.open-full-link:hover {
-  color: #1d4ed8;
-}
-</style>
