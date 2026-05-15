@@ -112,13 +112,9 @@
             <el-icon><User /></el-icon>
             <template #title>學生管理</template>
           </el-menu-item>
-          <el-menu-item v-if="canView.STUDENTS_READ" index="/student-attendance">
+          <el-menu-item v-if="canView.STUDENTS_READ" index="/student-academic-affairs">
             <el-icon><Calendar /></el-icon>
-            <template #title>學生出席紀錄</template>
-          </el-menu-item>
-          <el-menu-item v-if="canView.STUDENTS_READ" index="/student-leaves">
-            <el-icon><Calendar /></el-icon>
-            <template #title>學生請假紀錄</template>
+            <template #title>學生教務管理</template>
           </el-menu-item>
           <el-menu-item v-if="canView.STUDENTS_READ" index="/student-assessments">
             <el-icon><Document /></el-icon>
