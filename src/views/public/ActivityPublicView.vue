@@ -259,95 +259,19 @@
                     </div>
                   </div>
 
-                  <div class="form-section-step">
-                    <span class="step-num">2</span>
-                    <div class="step-title-col">
-                      <span class="step-title">選擇才藝課程</span>
-                      <span class="step-desc">可複選；剩餘名額即時顯示</span>
-                    </div>
-                  </div>
-
-                  <div class="form-row" :class="{ 'has-error': !!errors.courses }">
-                    <div class="form-label-col">
-                      <span class="form-label">
-                        <span class="required-mark">*</span>
-                        才藝課班別 <span class="en">Courses</span>
-                      </span>
-                    </div>
-                    <div class="form-input-col">
-                      <div
-                        id="courseListGroup"
-                        class="course-list-vertical"
-                        role="group"
-                        aria-label="才藝課程選項"
-                        tabindex="-1"
-                      >
-                        <div v-if="optionsLoading" class="empty-hint">載入中…</div>
-                        <div v-else-if="courses.length === 0" class="empty-hint">目前尚無可報名課程</div>
-                        <div
-                          v-for="course in courses"
-                          v-else
-                          :key="course.name"
-                          class="course-item"
-                          :class="{ 'course-item-disabled': availabilityState(course).full }"
-                          :title="availabilityState(course).full ? '此課程已額滿，無法再報名' : ''"
-                        >
-                          <label class="course-label">
-                            <input
-                              type="checkbox"
-                              name="course"
-                              :value="course.name"
-                              :disabled="availabilityState(course).full"
-                              :checked="form.selectedCourses.includes(course.name)"
-                              @change="toggleCourse(course); clearError('courses')"
-                            />
-                            <span class="course-text course-text--stacked">
-                              <span class="course-row-main">
-                                <span class="course-name">{{ course.name }}</span>
-                                <span
-                                  v-if="availabilityState(course).text"
-                                  class="qty-display"
-                                  :class="availabilityState(course).cssClass"
-                                >
-                                  {{ availabilityState(course).text }}
-                                </span>
-                              </span>
-                              <span class="course-row-meta">
-                                <span class="meta-chip meta-chip--price">
-                                  <template v-if="course.sessions">{{ course.sessions }} 堂 · </template>NT$ {{ course.price }}
-                                </span>
-                                <span v-if="formatSchedule(course)" class="meta-chip meta-chip--schedule">
-                                  <svg class="icon" width="12" height="12" aria-hidden="true"><use href="#i-calendar" /></svg>
-                                  {{ formatSchedule(course) }}
-                                </span>
-                                <span
-                                  v-for="(w, i) in courseAdvisory(course)"
-                                  :key="`${course.name}-adv-${i}`"
-                                  class="meta-chip meta-chip--advisory"
-                                  :class="`meta-chip--${w.severity}`"
-                                  role="status"
-                                >
-                                  <svg class="icon" width="12" height="12" aria-hidden="true"><use href="#i-alert" /></svg>
-                                  {{ w.message }}
-                                </span>
-                              </span>
-                            </span>
-                          </label>
-                          <button
-                            v-if="videos[course.name]"
-                            type="button"
-                            class="video-btn"
-                            :aria-label="`觀看 ${course.name} 介紹影片`"
-                            @click="openVideoModal(course.name, videos[course.name])"
-                          >
-                            <svg class="icon" aria-hidden="true"><use href="#i-play" /></svg>
-                            課程介紹
-                          </button>
-                        </div>
-                      </div>
-                      <div v-if="errors.courses" class="form-error-hint" role="alert">{{ errors.courses }}</div>
-                    </div>
-                  </div>
+                  <!-- A1-P7：Step 2 抽 CoursePickerSection 元件 -->
+                  <CoursePickerSection
+                    :courses="courses"
+                    :options-loading="optionsLoading"
+                    :selected-courses="form.selectedCourses"
+                    :videos="videos"
+                    :error-message="errors.courses"
+                    :availability-state="availabilityState"
+                    :format-schedule="formatSchedule"
+                    :course-advisory="courseAdvisory"
+                    @toggle="(course) => { toggleCourse(course); clearError('courses') }"
+                    @open-video="openVideoModal"
+                  />
 
                   <template v-if="supplies.length > 0">
                     <div class="form-section-step">
@@ -490,13 +414,16 @@ import { useRouter } from 'vue-router'
 import { publicRegister } from '@/api/activityPublic'
 import { usePublicActivityOptions } from '@/composables/usePublicActivityOptions'
 import { useActivityRegistrationTime } from '@/composables/useActivityRegistrationTime'
+import { useRegistrationWindow } from '@/composables/useRegistrationWindow'
 import { useActivityAvailability } from '@/composables/useActivityAvailability'
 import { usePublicRegistrationForm } from '@/composables/usePublicRegistrationForm'
+import { useCourseAdvisory } from '@/composables/useCourseAdvisory'
 // KawaiiStar / LaurelWreath / BrandMark 已隨 SuccessSummaryModal 抽走（A1-P5）
 import VideoModal from './components/VideoModal.vue'
 import ContactInquiryModal from './components/ContactInquiryModal.vue'
 import ToastStack from './components/ToastStack.vue'
 import SuccessSummaryModal from './components/SuccessSummaryModal.vue'
+import CoursePickerSection from './components/CoursePickerSection.vue'
 
 const router = useRouter()
 
@@ -591,10 +518,6 @@ async function retryInit() {
 // 生日上下限 / feePreview / toggleCourse / toggleSupply / validateForm / clearError /
 // resetForm 已抽至 usePublicRegistrationForm（A1-P1）。
 
-// ===== 倒數時間 reactive tick（每 60 秒更新一次） =====
-const nowTick = ref(Date.now())
-let tickTimer = null
-
 const toasts = ref([])
 let toastSeq = 0
 function showToast(message, type = 'success', duration = 4500) {
@@ -665,109 +588,13 @@ const submitButtonDisabled = computed(() => submitting.value || !isRegistrationO
 
 // 費用預覽 feePreview 已抽至 usePublicRegistrationForm（A1-P1）
 
-// ===== Phase 3：適齡 + 結構化時段檢核（警告但不阻擋送出） =====
-const WEEKDAY_LABELS = ['一', '二', '三', '四', '五', '六', '日']
-
-function ageMonthsFromBirthday(birthday) {
-  if (!birthday) return null
-  const b = new Date(birthday)
-  if (Number.isNaN(b.getTime())) return null
-  const now = new Date()
-  let months = (now.getFullYear() - b.getFullYear()) * 12 + (now.getMonth() - b.getMonth())
-  if (now.getDate() < b.getDate()) months -= 1
-  return months >= 0 ? months : null
-}
-const ageInMonths = computed(() => ageMonthsFromBirthday(form.birthday))
-
-function monthsToYearLabel(m) {
-  if (m == null) return ''
-  const y = Math.floor(m / 12)
-  const mo = m % 12
-  if (y === 0) return `${mo} 個月`
-  if (mo === 0) return `${y} 歲`
-  return `${y} 歲 ${mo} 個月`
-}
-
-function hasSchedule(c) {
-  return c && c.meeting_weekday != null && !!c.meeting_start_time && !!c.meeting_end_time
-}
-
-function formatSchedule(course) {
-  if (!hasSchedule(course)) return ''
-  return `週${WEEKDAY_LABELS[course.meeting_weekday]} ${course.meeting_start_time}–${course.meeting_end_time}`
-}
-
-function schedulesOverlap(a, b) {
-  if (!hasSchedule(a) || !hasSchedule(b)) return false
-  if (a.meeting_weekday !== b.meeting_weekday) return false
-  // "HH:MM" 字串字典序與時間序一致；半開區間判定重疊
-  return a.meeting_start_time < b.meeting_end_time && b.meeting_start_time < a.meeting_end_time
-}
-
-// 對單一課程算 advisory（適齡 + 衝堂）；僅在課程被勾選時計算衝堂
-function courseAdvisory(course) {
-  const warnings = []
-  const ageMonths = ageInMonths.value
-  if (ageMonths != null) {
-    if (course.min_age_months != null && ageMonths < course.min_age_months) {
-      warnings.push({
-        kind: 'age',
-        severity: 'warn',
-        message: `建議 ${monthsToYearLabel(course.min_age_months)} 以上`,
-      })
-    } else if (course.max_age_months != null && ageMonths > course.max_age_months) {
-      warnings.push({
-        kind: 'age',
-        severity: 'warn',
-        message: `建議 ${monthsToYearLabel(course.max_age_months)} 以下`,
-      })
-    }
-  }
-  if (form.selectedCourses.includes(course.name) && hasSchedule(course)) {
-    for (const otherName of form.selectedCourses) {
-      if (otherName === course.name) continue
-      const other = courses.value.find((c) => c.name === otherName)
-      if (other && schedulesOverlap(course, other)) {
-        warnings.push({
-          kind: 'conflict',
-          severity: 'danger',
-          message: `與「${otherName}」衝堂`,
-        })
-      }
-    }
-  }
-  return warnings
-}
-
-// 已勾選課程的 advisory 匯總（用於 fee-preview 下方提醒區塊）
-const selectedAdvisories = computed(() => {
-  const items = []
-  for (const name of form.selectedCourses) {
-    const course = courses.value.find((c) => c.name === name)
-    if (!course) continue
-    const w = courseAdvisory(course)
-    if (w.length > 0) items.push({ courseName: name, warnings: w })
-  }
-  return items
-})
-
-// ===== 名額狀態（顏色語意：充足→中性綠、≤3→紅、候補→黃、額滿→灰） =====
-function availabilityState(course) {
-  const remaining = availability.value[course.name]
-  if (remaining === undefined) {
-    return { text: '', cssClass: '', full: false }
-  }
-  if (remaining === -1) {
-    return { text: '已額滿', cssClass: 'is-full', full: true }
-  }
-  if (remaining <= 0) {
-    return { text: '額滿·可候補', cssClass: 'is-waiting', full: false }
-  }
-  if (remaining <= 3) {
-    return { text: `剩 ${remaining} 位`, cssClass: 'is-low', full: false }
-  }
-  return { text: `剩 ${remaining} 位`, cssClass: 'is-available', full: false }
-}
+// 課程顯示輔助（適齡 / 衝堂 / 名額狀態 / age helpers）抽至 useCourseAdvisory（A1-P6）
+const {
+  formatSchedule,
+  courseAdvisory,
+  selectedAdvisories,
+  availabilityState,
+} = useCourseAdvisory({ courses, availability, form })
 
 // toggleCourse / toggleSupply 已抽至 usePublicRegistrationForm（A1-P1）;
 // 額滿判定（availability=-1）規則在 composable 內,與 availabilityState 一致。
