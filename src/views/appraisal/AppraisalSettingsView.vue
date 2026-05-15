@@ -8,8 +8,7 @@ const activeTab = ref('bonus_rates')
 
 <template>
   <div class="appraisal-settings-view">
-    <h2>考核設定</h2>
-    <el-tabs v-model="activeTab" type="card">
+    <el-tabs v-model="activeTab">
       <el-tab-pane label="年終獎金率" name="bonus_rates">
         <BonusRatesPanel v-if="activeTab === 'bonus_rates'" />
       </el-tab-pane>
@@ -22,12 +21,6 @@ const activeTab = ref('bonus_rates')
 
 <style scoped>
 .appraisal-settings-view {
-  padding: var(--space-5);
-}
-
-.appraisal-settings-view h2 {
-  margin: 0 0 var(--space-4);
-  font-size: var(--text-2xl);
-  color: var(--text-primary);
+  padding: 0;
 }
 </style>
