@@ -88,6 +88,12 @@ const router = createRouter({
             meta: { title: '學生事件紀錄' }
         },
         {
+            path: '/student-academic-affairs',
+            name: 'student-academic-affairs',
+            component: () => import('../views/StudentAcademicAffairsView.vue'),
+            meta: { title: '學生教務管理' }
+        },
+        {
             path: '/portfolio/medication-today',
             name: 'medication-today',
             component: () => import('../views/MedicationTodayView.vue'),
