@@ -88,7 +88,6 @@ export const ROUTE_PERMISSION_RULES = [
   { path: '/announcements', permission: 'ANNOUNCEMENTS_READ' },
   { path: '/reports', permission: 'REPORTS' },
   { path: '/gov-reports', permission: 'REPORTS' },
-  { path: '/admin/gov-data-sync', permission: 'SALARY_WRITE' },
   { path: '/audit-logs', permission: 'AUDIT_LOGS' },
   { path: '/settings', permission: 'SETTINGS_READ' },
   { path: '/dismissal-queue', permission: 'DISMISSAL_CALLS_READ' },

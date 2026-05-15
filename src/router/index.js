@@ -190,12 +190,6 @@ const router = createRouter({
             meta: { title: '政府申報匯出' }
         },
         {
-            path: '/admin/gov-data-sync',
-            name: 'AdminGovDataSync',
-            component: () => import('../views/admin/GovDataSync.vue'),
-            meta: { title: '政府資料同步' }
-        },
-        {
             path: '/admin/gov-reports/certificates',
             name: 'AdminGovReportsCertificates',
             component: () => import('../views/admin/gov-reports/CertificatesView.vue'),
