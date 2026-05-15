@@ -80,10 +80,10 @@ onMounted(fetchAll)
         <FinanceSummaryPanel v-if="activeTab === 'finance'" :year="selectedYear" />
       </el-tab-pane>
       <el-tab-pane label="出勤" name="attendance">
-        <AttendancePanel v-if="activeTab === 'attendance'" :data="dashboardData" />
+        <AttendancePanel v-if="activeTab === 'attendance'" :key="selectedYear" :year="selectedYear" />
       </el-tab-pane>
       <el-tab-pane label="薪資" name="salary">
-        <SalaryPanel v-if="activeTab === 'salary'" :data="dashboardData" :finance="financeData" />
+        <SalaryPanel v-if="activeTab === 'salary'" :key="selectedYear" :year="selectedYear" />
       </el-tab-pane>
     </el-tabs>
   </div>
