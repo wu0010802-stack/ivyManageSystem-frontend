@@ -529,62 +529,16 @@ function dismissToast(id) {
   toasts.value = toasts.value.filter((t) => t.id !== id)
 }
 
-// ===== 報名時段狀態 =====
-function formatCountdown(targetMs, nowMs) {
-  const diff = targetMs - nowMs
-  if (diff <= 0) return '即將開放'
-  const totalMinutes = Math.floor(diff / 60_000)
-  const days = Math.floor(totalMinutes / 1440)
-  const hours = Math.floor((totalMinutes % 1440) / 60)
-  const minutes = totalMinutes % 60
-  if (days >= 2) return `${days} 天`
-  if (days === 1) return `1 天 ${hours} 小時`
-  if (hours >= 1) return `${hours} 小時 ${minutes} 分`
-  return `${minutes} 分鐘`
-}
-
-const noticeState = computed(() => {
-  const settings = timeInfo.value || {}
-  const now = new Date(nowTick.value)
-  const openAt = settings.open_at ? new Date(settings.open_at) : null
-  const closeAt = settings.close_at ? new Date(settings.close_at) : null
-
-  if (!settings.is_open) {
-    return { variant: 'is-warning', title: '報名尚未開放', message: '目前尚未開放線上報名，請稍後再試。' }
-  }
-  if (openAt && now < openAt) {
-    return {
-      variant: 'is-warning',
-      title: '報名尚未開始',
-      message: `報名開始時間：${openAt.toLocaleString('zh-TW')}，距離開放還有 ${formatCountdown(openAt.getTime(), now.getTime())}。`,
-    }
-  }
-  if (closeAt && now > closeAt) {
-    return { variant: 'is-danger', title: '報名已截止', message: '感謝您的關注，本期報名已結束。' }
-  }
-  // 截止前 48 小時內：彈出收尾提醒（urgent close countdown）
-  if (closeAt) {
-    const diffHours = (closeAt - now) / 3_600_000
-    if (diffHours <= 48 && diffHours > 0) {
-      return {
-        variant: 'is-warning',
-        title: '報名即將截止',
-        message: `截止時間：${closeAt.toLocaleString('zh-TW')}，剩餘 ${formatCountdown(closeAt.getTime(), now.getTime())}，請儘速完成報名。`,
-      }
-    }
-  }
-  return null
-})
-
-const isRegistrationOpen = computed(() => noticeState.value === null)
-
-const submitButtonLabel = computed(() => {
-  if (submitting.value) return '送出中…'
-  if (!isRegistrationOpen.value) return noticeState.value?.title || '報名未開放'
-  return '確認報名資料'
-})
-
-const submitButtonDisabled = computed(() => submitting.value || !isRegistrationOpen.value)
+// ===== 報名時段狀態（A1-P7 抽至 useRegistrationWindow） =====
+// nowTick / formatCountdown / noticeState / isRegistrationOpen /
+// submitButtonLabel / submitButtonDisabled 由 composable 提供；
+// composable 內自管 30s tick timer 的 onMounted/onUnmounted lifecycle。
+const {
+  noticeState,
+  isRegistrationOpen,
+  submitButtonLabel,
+  submitButtonDisabled,
+} = useRegistrationWindow({ timeInfo, submitting })
 
 // 費用預覽 feePreview 已抽至 usePublicRegistrationForm（A1-P1）
 
@@ -774,11 +728,10 @@ async function handleSubmitRegistration() {
 onMounted(async () => {
   await runInit()
   startPolling()
-  tickTimer = setInterval(() => { nowTick.value = Date.now() }, 30_000)
+  // A1-P7：30s tick 由 useRegistrationWindow 自管 lifecycle
 })
 onUnmounted(() => {
   stopPolling()
-  if (tickTimer) clearInterval(tickTimer)
 })
 </script>
 

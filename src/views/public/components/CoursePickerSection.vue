@@ -7,7 +7,7 @@
  *  - 課程清單 v-for(含名額狀態、適齡/衝堂 advisory chip、影片預覽 btn)
  *
  * Props:
- *  - courses: array — 課程列表（包含 name/price/sessions/meeting_*/min_age_months/max_age_months）
+ *  - courses: array — 課程列表（包含 name / price / sessions / meeting_X / min_age_months / max_age_months）
  *  - optionsLoading: boolean — 課程載入中時顯示「載入中…」
  *  - selectedCourses: array — form.selectedCourses（已勾選課程名陣列）
  *  - videos: object — { courseName: videoUrl } 影片預覽連結
