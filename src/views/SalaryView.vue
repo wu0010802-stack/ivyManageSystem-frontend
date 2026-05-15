@@ -65,6 +65,7 @@ const showEditDialog = ref(false)
 const editLoading = ref(false)
 const editingRow = ref(null)
 const editingVersion = ref(null)
+const adjustmentReason = ref('')
 const editForm = reactive({
   festival_bonus: 0,
   overtime_bonus: 0,
@@ -282,6 +283,7 @@ const openEditDialog = (row) => {
   }
   editingRow.value = row
   editingVersion.value = record.version ?? null
+  adjustmentReason.value = ''
   for (const field of editableFieldList) {
     editForm[field.key] = row[field.key] || 0
   }
@@ -292,9 +294,15 @@ const saveManualAdjust = async () => {
   const record = getRecordForRow(editingRow.value)
   if (!record?.id || !editingRow.value) return
 
+  const reason = (adjustmentReason.value || '').trim()
+  if (reason.length < 5) {
+    ElMessage.warning('請填寫調整原因（至少 5 字）')
+    return
+  }
+
   editLoading.value = true
   try {
-    const payload = {}
+    const payload = { adjustment_reason: reason }
     for (const field of editableFieldList) {
       payload[field.key] = Number(editForm[field.key] || 0)
     }
@@ -885,6 +893,16 @@ onMounted(() => {
             <el-input-number v-model="editForm[field.key]" :min="0" :step="100" controls-position="right" />
           </el-form-item>
         </div>
+        <el-form-item label="調整原因" required>
+          <el-input
+            v-model="adjustmentReason"
+            type="textarea"
+            :rows="2"
+            maxlength="200"
+            show-word-limit
+            placeholder="至少 5 字（例：員工自請補發、主管核准一次性獎勵、誤算修正）"
+          />
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="showEditDialog = false">取消</el-button>
