@@ -434,7 +434,7 @@ const { timeInfo, loadTime } = useActivityRegistrationTime()
 const { availability, refresh: refreshAvailability, startPolling, stopPolling } = useActivityAvailability()
 
 // ===== 前台客製化顯示 =====
-const DEFAULT_POSTER = '/images/activity-poster.png'
+const DEFAULT_POSTER = '/images/activity-poster.jpg'
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
 const posterBroken = ref(false)
 

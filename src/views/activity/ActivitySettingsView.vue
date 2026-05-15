@@ -129,7 +129,7 @@ import {
   uploadActivityPoster,
 } from '@/api/activity'
 
-const DEFAULT_POSTER = '/images/activity-poster.png'
+const DEFAULT_POSTER = '/images/activity-poster.jpg'
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
 
 const loading = ref(false)
