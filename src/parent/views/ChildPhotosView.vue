@@ -75,8 +75,8 @@ onMounted(load)
 header { display: flex; align-items: center; gap: 12px; }
 header > h2 { margin: 0; font-size: 17px; color: #0d9053; }
 .back-btn { background: none; border: none; font-size: 14px; color: #0d9053; }
-.count { margin-left: auto; font-size: 13px; color: #6b7280; }
-.placeholder { padding: 32px; text-align: center; color: #9ca3af; }
+.count { margin-left: auto; font-size: 13px; color: var(--text-secondary); }
+.placeholder { padding: 32px; text-align: center; color: var(--text-tertiary); }
 .grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

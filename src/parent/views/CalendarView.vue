@@ -214,7 +214,7 @@ onMounted(fetchData)
   margin-top: 2px;
 }
 .badge {
-  font-size: 11px;
+  font-size: 12px;
   padding: 2px 6px;
   background: var(--color-danger-soft);
   color: var(--color-danger);

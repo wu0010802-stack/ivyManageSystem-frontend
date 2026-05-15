@@ -126,7 +126,7 @@ onMounted(() => {
 }
 
 .page-header .hint {
-  color: #909399;
+  color: var(--text-tertiary);
   font-size: 13px;
   margin-top: 4px;
 }

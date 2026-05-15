@@ -53,7 +53,7 @@ const hasAny = computed(
 .row-added { background: #e8f5e9; }
 .row-removed { background: #ffebee; }
 .row-modified { background: #fff8e1; }
-.row-noop { color: #888; }
+.row-noop { color: var(--text-tertiary); }
 .diff-table { width: 100%; border-collapse: collapse; }
 .diff-table th, .diff-table td {
   border: 1px solid #ddd;

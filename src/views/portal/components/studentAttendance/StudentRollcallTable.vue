@@ -114,7 +114,7 @@ function onRemarkChange(student, value) {
 }
 
 .student-row.is-absent {
-  background: #fef3c7;
+  background: var(--color-warning-soft);
 }
 
 .student-no {

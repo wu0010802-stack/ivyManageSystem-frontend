@@ -46,7 +46,7 @@ const visible = computed(() => props.count > 0)
   align-items: center;
   gap: 4px;
   padding: 4px 10px;
-  background: #fff7ed;
+  background: var(--color-warning-soft);
   color: #c2410c;
   border: 1px solid #fed7aa;
   border-radius: 999px;
@@ -62,13 +62,13 @@ const visible = computed(() => props.count > 0)
 }
 
 .badge--failed {
-  background: #fef2f2;
-  color: #b91c1c;
-  border-color: #fecaca;
+  background: var(--color-danger-soft);
+  color: var(--color-danger-darker);
+  border-color: var(--color-danger-soft);
 }
 
 .badge--failed:hover {
-  background: #fee2e2;
+  background: var(--color-danger-soft);
 }
 
 .badge__icon {

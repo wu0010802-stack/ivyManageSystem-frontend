@@ -199,29 +199,29 @@ defineEmits([
 }
 
 .pos-payment__amount--refund {
-  color: #dc2626;
+  color: var(--color-danger-hover);
 }
 
 .pos-payment__empty {
   padding: 24px 0;
-  border: 1px dashed #e2e8f0;
+  border: 1px dashed var(--border-color);
   border-radius: 10px;
-  background: #f8fafc;
+  background: var(--bg-color);
 }
 
 .pos-payment__selected {
   padding: 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border-color);
   border-radius: 10px;
-  background: #f8fafc;
+  background: var(--bg-color);
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
 .pos-payment__selected--refund {
-  background: #fef2f2;
-  border-color: #fecaca;
+  background: var(--color-danger-soft);
+  border-color: var(--color-danger-soft);
 }
 
 .pos-payment__selected-head {
@@ -233,19 +233,19 @@ defineEmits([
 
 .pos-payment__selected-name {
   font-weight: 600;
-  color: #1e293b;
+  color: var(--text-primary);
 }
 
 .pos-payment__selected-class {
   font-weight: 400;
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 13px;
   margin-left: 8px;
 }
 
 .pos-payment__selected-meta {
   font-size: 12px;
-  color: #64748b;
+  color: var(--text-secondary);
   margin-top: 2px;
 }
 
@@ -254,7 +254,7 @@ defineEmits([
   flex-direction: column;
   gap: 4px;
   padding: 8px 10px;
-  background: #ffffff;
+  background: var(--neutral-0);
   border-radius: 6px;
 }
 
@@ -263,7 +263,7 @@ defineEmits([
   align-items: center;
   gap: 8px;
   font-size: 13px;
-  color: #334155;
+  color: var(--neutral-700);
 }
 
 .pos-payment__selected-dot {
@@ -274,7 +274,7 @@ defineEmits([
 }
 
 .pos-payment__selected-dot--supply {
-  background: #f59e0b;
+  background: var(--color-warning);
 }
 
 .pos-payment__selected-line-name {
@@ -282,7 +282,7 @@ defineEmits([
 }
 
 .pos-payment__selected-line-price {
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 12px;
 }
 
@@ -291,7 +291,7 @@ defineEmits([
   justify-content: space-between;
   align-items: center;
   padding-top: 8px;
-  border-top: 1px dashed #e2e8f0;
+  border-top: 1px dashed var(--border-color);
 }
 
 .pos-payment__applied-input {
@@ -299,7 +299,7 @@ defineEmits([
 }
 
 .pos-payment__applied-input--refund :deep(input) {
-  color: #dc2626;
+  color: var(--color-danger-hover);
 }
 
 .pos-payment__field {
@@ -310,15 +310,15 @@ defineEmits([
 
 .pos-payment__label {
   font-size: 13px;
-  color: #475569;
+  color: var(--neutral-600);
   font-weight: 500;
 }
 
 .pos-payment__summary {
   padding: 12px 14px;
-  background: #f8fafc;
+  background: var(--bg-color);
   border-radius: 10px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border-color);
 }
 
 .pos-payment__row {
@@ -326,13 +326,13 @@ defineEmits([
   justify-content: space-between;
   align-items: baseline;
   font-size: 14px;
-  color: #475569;
+  color: var(--neutral-600);
 }
 
 .pos-payment__amount {
   font-size: 22px;
   font-weight: 700;
-  color: #1e293b;
+  color: var(--text-primary);
 }
 
 .pos-payment__approval-hint {

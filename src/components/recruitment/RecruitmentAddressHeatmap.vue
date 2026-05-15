@@ -545,9 +545,9 @@ const makeGoogleSchoolIcon = (mapsApi) => {
     `<svg xmlns="http://www.w3.org/2000/svg" width="30" height="38" viewBox="0 0 30 38">`,
     `<filter id="sh"><feDropShadow dx="0" dy="1" stdDeviation="1.5" flood-opacity="0.3"/></filter>`,
     `<path d="M15 0C6.716 0 0 6.716 0 15c0 10 15 23 15 23S30 25 30 15C30 6.716 23.284 0 15 0z"`,
-    ` fill="#1E40AF" stroke="#1E3A8A" stroke-width="1" filter="url(#sh)"/>`,
+    ` fill="#1e40af" stroke="#1e3a8a" stroke-width="1" filter="url(#sh)"/>`,
     `<circle cx="15" cy="14" r="7" fill="white" opacity="0.95"/>`,
-    `<text x="15" y="18.5" text-anchor="middle" font-size="8" font-weight="900" fill="#1E40AF" font-family="sans-serif">本園</text>`,
+    `<text x="15" y="18.5" text-anchor="middle" font-size="8" font-weight="900" fill="#1e40af" font-family="sans-serif">本園</text>`,
     `</svg>`,
   ].join('')
   return {
@@ -663,7 +663,7 @@ const HIGHLIGHT_SVG = [
   '<svg xmlns="http://www.w3.org/2000/svg" width="30" height="42" viewBox="0 0 30 42">',
   '<filter id="hs"><feDropShadow dx="0" dy="1" stdDeviation="2" flood-opacity="0.35"/></filter>',
   '<path d="M15 2C7.82 2 2 7.82 2 15c0 9.5 13 24 13 24s13-14.5 13-24C28 7.82 22.18 2 15 2z"',
-  ' fill="#DC2626" stroke="#991B1B" stroke-width="1.5" filter="url(#hs)"/>',
+  ' fill="#dc2626" stroke="#991b1b" stroke-width="1.5" filter="url(#hs)"/>',
   '<circle cx="15" cy="14" r="5" fill="white" opacity="0.95"/>',
   '</svg>',
 ].join('')
@@ -1019,7 +1019,7 @@ const renderLeafletMap = async () => {
       `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="36" viewBox="0 0 28 36">`,
       `<filter id="s"><feDropShadow dx="0" dy="1" stdDeviation="1.5" flood-opacity="0.3"/></filter>`,
       `<path d="M14 0C6.268 0 0 6.268 0 14c0 9.8 14 22 14 22s14-12.2 14-22C28 6.268 21.732 0 14 0z"`,
-      ` fill="#1E40AF" stroke="#1E3A8A" stroke-width="1" filter="url(#s)"/>`,
+      ` fill="#1e40af" stroke="#1e3a8a" stroke-width="1" filter="url(#s)"/>`,
       `<circle cx="14" cy="13" r="6" fill="white" opacity="0.95"/>`,
       `</svg>`,
     ].join(''),
@@ -1287,26 +1287,26 @@ watch(topNearbySchools, (newList) => {
   gap: 5px;
   padding: 4px 10px;
   border-radius: 6px;
-  background: #F8FAFC;
-  border: 1px solid #E2E8F0;
+  background: var(--bg-color);
+  border: 1px solid var(--border-color);
   white-space: nowrap;
 }
 
 .summary-pill strong {
   font-size: 0.88rem;
   font-weight: 700;
-  color: #1E40AF;
+  color: var(--color-info-darker);
   font-family: 'Fira Code', ui-monospace, monospace;
   font-variant-numeric: tabular-nums;
 }
 
 .summary-pill span {
   font-size: 0.72rem;
-  color: #64748B;
+  color: var(--text-secondary);
 }
 
-.summary-pill--warn  { background: #FFFBEB; border-color: #FDE68A; }
-.summary-pill--warn strong { color: #B45309; }
+.summary-pill--warn  { background: var(--color-warning-soft); border-color: #fde68a; }
+.summary-pill--warn strong { color: var(--color-warning-darker); }
 
 /* ── 狀態列 ── */
 .heatmap-status-bar {
@@ -1315,7 +1315,7 @@ watch(topNearbySchools, (newList) => {
   gap: 12px;
   align-items: center;
   font-size: 0.72rem;
-  color: #94A3B8;
+  color: var(--text-tertiary);
 }
 
 .status-item {
@@ -1328,18 +1328,18 @@ watch(topNearbySchools, (newList) => {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #CBD5E1;
+  background: var(--neutral-300);
   flex-shrink: 0;
 }
-.status-dot--ok  { background: #22C55E; }
-.status-dot--off { background: #CBD5E1; }
+.status-dot--ok  { background: var(--color-success); }
+.status-dot--off { background: var(--neutral-300); }
 
-.status-item--busy { color: #D97706; }
-.status-item--error { color: #DC2626; }
-.status-item--ok { color: #16A34A; }
+.status-item--busy { color: var(--color-warning-hover); }
+.status-item--error { color: var(--color-danger-hover); }
+.status-item--ok { color: var(--color-success-hover); }
 
 .status-action {
-  color: #3B82F6;
+  color: var(--color-info);
   cursor: pointer;
   margin-left: 4px;
   text-decoration: none;
@@ -1364,8 +1364,8 @@ watch(topNearbySchools, (newList) => {
   min-height: 440px;
   border-radius: 16px;
   overflow: hidden;
-  border: 1px solid #E2E8F0;
-  background: #F8FAFC;
+  border: 1px solid var(--border-color);
+  background: var(--bg-color);
   box-shadow: 0 1px 4px rgba(0,0,0,0.05);
 }
 
@@ -1381,13 +1381,13 @@ watch(topNearbySchools, (newList) => {
   max-height: 600px;
   overflow-y: auto;
   scrollbar-width: thin;
-  scrollbar-color: #E2E8F0 transparent;
+  scrollbar-color: var(--border-color) transparent;
 }
 
 .side-title {
   font-size: 0.82rem;
   font-weight: 700;
-  color: #475569;
+  color: var(--neutral-600);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -1427,7 +1427,7 @@ watch(topNearbySchools, (newList) => {
 
 .hotspot-address {
   font-size: 0.85rem;
-  color: #1E293B;
+  color: var(--text-primary);
   line-height: 1.45;
   word-break: break-word;
   font-weight: 500;
@@ -1443,24 +1443,24 @@ watch(topNearbySchools, (newList) => {
 }
 
 .status-resolved {
-  background: #DCFCE7;
-  color: #15803D;
+  background: var(--color-success-soft);
+  color: var(--color-success-darker);
 }
 
 .status-pending {
-  background: #FEF3C7;
-  color: #B45309;
+  background: var(--color-warning-soft);
+  color: var(--color-warning-darker);
 }
 
 .status-failed {
-  background: #FEE2E2;
-  color: #B91C1C;
+  background: var(--color-danger-soft);
+  color: var(--color-danger-darker);
 }
 
 .hotspot-meta {
   margin-top: 4px;
   font-size: 0.76rem;
-  color: #64748B;
+  color: var(--text-secondary);
 }
 
 .hotspot-extra {
@@ -1471,9 +1471,9 @@ watch(topNearbySchools, (newList) => {
 }
 .hotspot-extra span {
   font-size: 0.7rem;
-  color: #94A3B8;
-  background: #F8FAFC;
-  border: 1px solid #E2E8F0;
+  color: var(--text-tertiary);
+  background: var(--bg-color);
+  border: 1px solid var(--border-color);
   padding: 1px 6px;
   border-radius: 999px;
 }
@@ -1509,7 +1509,7 @@ watch(topNearbySchools, (newList) => {
   cursor: pointer;
 }
 .nearby-school-item--clickable:active {
-  background: #EFF6FF;
+  background: var(--color-info-soft);
 }
 
 .nearby-school-header {
@@ -1538,7 +1538,7 @@ watch(topNearbySchools, (newList) => {
   font-size: 0.68rem;
   font-weight: 600;
   color: #7f1d1d;
-  background: #fee2e2;
+  background: var(--color-danger-soft);
   border: 1px solid #fca5a5;
   padding: 1px 6px;
   border-radius: 999px;
@@ -1547,8 +1547,8 @@ watch(topNearbySchools, (newList) => {
   flex-shrink: 0;
   font-size: 0.68rem;
   font-weight: 600;
-  color: #92400e;
-  background: #fef3c7;
+  color: var(--color-warning-darker);
+  background: var(--color-warning-soft);
   border: 1px solid #fcd34d;
   padding: 1px 6px;
   border-radius: 999px;
@@ -1559,7 +1559,7 @@ watch(topNearbySchools, (newList) => {
   gap: 6px;
   margin-top: 4px;
   font-size: 0.74rem;
-  color: #475569;
+  color: var(--neutral-600);
 }
 .school-type-legend {
   display: flex;
@@ -1567,7 +1567,7 @@ watch(topNearbySchools, (newList) => {
   gap: 6px 10px;
   margin-bottom: 8px;
   font-size: 0.72rem;
-  color: #475569;
+  color: var(--neutral-600);
 }
 .legend-item {
   display: flex;
@@ -1583,7 +1583,7 @@ watch(topNearbySchools, (newList) => {
 
 .nearby-school-name {
   font-size: 0.85rem;
-  color: #1E3A8A;
+  color: var(--color-info-darker);
   font-weight: 600;
   flex: 1;
   line-height: 1.4;
@@ -1596,14 +1596,14 @@ watch(topNearbySchools, (newList) => {
   border-radius: 8px;
   border: 1px solid rgba(59, 130, 246, 0.25);
   background: #f0f7ff;
-  color: #1d4ed8;
+  color: var(--color-info-darker);
   font-size: 0.72rem;
   cursor: pointer;
   transition: background 0.15s ease;
 }
 .gov-data-btn:hover,
 .gov-data-btn.active {
-  background: #dbeafe;
+  background: var(--color-info-soft);
 }
 
 .preschool-gov-detail {
@@ -1619,16 +1619,16 @@ watch(topNearbySchools, (newList) => {
 
 .gov-detail-matched-name {
   font-size: 0.72rem;
-  color: #94A3B8;
+  color: var(--text-tertiary);
   margin-bottom: 6px;
   padding-bottom: 6px;
-  border-bottom: 1px solid #E2E8F0;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .gov-detail-loading,
 .gov-detail-empty {
   font-size: 0.78rem;
-  color: #9ca3af;
+  color: var(--text-tertiary);
   text-align: center;
   padding: 4px 0;
 }
@@ -1643,7 +1643,7 @@ watch(topNearbySchools, (newList) => {
 .gov-detail-label {
   flex: none;
   width: 56px;
-  color: #6b7280;
+  color: var(--text-secondary);
 }
 
 .gov-detail-value {
@@ -1652,13 +1652,13 @@ watch(topNearbySchools, (newList) => {
   flex: 1;
 }
 
-.gov-detail-link { color: #1d4ed8; text-decoration: underline; word-break: break-all; }
-.gov-detail-link:hover { color: #1e40af; }
+.gov-detail-link { color: var(--color-info-darker); text-decoration: underline; word-break: break-all; }
+.gov-detail-link:hover { color: var(--color-info-darker); }
 
 .gov-status-open  { color: #166534; font-weight: 600; }
 .gov-status-closed { color: #991b1b; font-weight: 600; }
 .gov-status-clean  { color: #166534; }
-.gov-status-warned { color: #92400e; font-weight: 600; }
+.gov-status-warned { color: var(--color-warning-darker); font-weight: 600; }
 
 /* v-show 展開動畫：直接在元素上做 max-height transition，不依賴 <Transition> */
 .preschool-gov-detail {
@@ -1676,9 +1676,9 @@ watch(topNearbySchools, (newList) => {
   flex: none;
   padding: 2px 8px;
   border-radius: 999px;
-  border: 1px solid #BFDBFE;
-  background: #EFF6FF;
-  color: #1D4ED8;
+  border: 1px solid #bfdbfe;
+  background: var(--color-info-soft);
+  color: var(--color-info-darker);
   font-size: 0.68rem;
   font-weight: 600;
   cursor: pointer;
@@ -1686,7 +1686,7 @@ watch(topNearbySchools, (newList) => {
   transition: background 0.15s ease;
 }
 .set-campus-btn:hover {
-  background: #DBEAFE;
+  background: var(--color-info-soft);
 }
 
 .nearby-school-rating {
@@ -1703,21 +1703,21 @@ watch(topNearbySchools, (newList) => {
 }
 
 .star { font-size: 0.75rem; }
-.star-full  { color: #F59E0B; }
-.star-half  { color: #F59E0B; opacity: 0.6; }
-.star-empty { color: #D1D5DB; }
+.star-full  { color: var(--color-warning); }
+.star-half  { color: var(--color-warning); opacity: 0.6; }
+.star-empty { color: var(--neutral-300); }
 
 .rating-score {
   font-size: 0.78rem;
   font-weight: 700;
-  color: #92400E;
+  color: var(--color-warning-darker);
   font-family: 'Fira Code', ui-monospace, monospace;
   font-variant-numeric: tabular-nums;
 }
 
 .rating-count {
   font-size: 0.68rem;
-  color: #94A3B8;
+  color: var(--text-tertiary);
 }
 
 .nearby-school-meta {
@@ -1726,12 +1726,12 @@ watch(topNearbySchools, (newList) => {
   gap: 6px;
   margin-top: 4px;
   font-size: 0.75rem;
-  color: #64748B;
+  color: var(--text-secondary);
 }
 
 .nearby-footnote {
   font-size: 0.72rem;
-  color: #94A3B8;
+  color: var(--text-tertiary);
   text-align: center;
   padding: 4px 0;
 }
@@ -1761,11 +1761,11 @@ watch(topNearbySchools, (newList) => {
   justify-content: space-between;
   align-items: center;
   padding-top: 4px;
-  border-top: 1px solid #E2E8F0;
+  border-top: 1px solid var(--border-color);
 }
 .db-school-item {
-  border-color: #E2E8F0;
-  border-left-color: #64748b;
+  border-color: var(--border-color);
+  border-left-color: var(--text-secondary);
 }
 
 .heatmap-note {
@@ -1791,13 +1791,13 @@ watch(topNearbySchools, (newList) => {
   font-size: 0.82rem;
 }
 
-:deep(.popup-rating .star-full)  { color: #f59e0b; }
-:deep(.popup-rating .star-half)  { color: #f59e0b; opacity: 0.6; }
-:deep(.popup-rating .star-empty) { color: #d1d5db; }
+:deep(.popup-rating .star-full)  { color: var(--color-warning); }
+:deep(.popup-rating .star-half)  { color: var(--color-warning); opacity: 0.6; }
+:deep(.popup-rating .star-empty) { color: var(--neutral-300); }
 
 :deep(.popup-rating-count) {
   font-size: 0.75rem;
-  color: #9ca3af;
+  color: var(--text-tertiary);
 }
 
 @media (max-width: 960px) {

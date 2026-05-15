@@ -108,15 +108,15 @@ onMounted(loadUnlock)
 
 .pos-audit__event-meta {
   font-size: 13px;
-  color: #64748b;
+  color: var(--text-secondary);
   margin-bottom: 4px;
 }
 
 .pos-audit__event-comment {
   font-size: 13px;
-  color: #475569;
+  color: var(--neutral-600);
   white-space: pre-wrap;
-  background: #f8fafc;
+  background: var(--bg-color);
   padding: 8px 10px;
   border-radius: 6px;
 }

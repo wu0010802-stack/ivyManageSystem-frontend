@@ -34,42 +34,42 @@
    * ============================================================ */
 
   /* ---- Sky 階（底色 / 文字 / chip） ---- */
-  --sky-50:    #F2F9FC;
-  --sky-100:   #DCEEF5;
-  --sky-200:   #BBDDED;
-  --sky-300:   #92C8E0;
-  --sky-500:   #5BA8CC;
-  --sky-700:   #2D6F8E;
-  --sky-900:   #1B4459;
+  --sky-50:    #f2f9fc;
+  --sky-100:   #dceef5;
+  --sky-200:   #bbdded;
+  --sky-300:   #92c8e0;
+  --sky-500:   #5ba8cc;
+  --sky-700:   #2d6f8e;
+  --sky-900:   #1b4459;
 
   /* ---- Sun 階（高亮 / highlight underline） ---- */
-  --sun-100:   #FFF4C9;
-  --sun-300:   #FFE285;
-  --sun-500:   #FFD93D;
-  --sun-700:   #C99500;
-  --sun-900:   #4A3700;
+  --sun-100:   #fff4c9;
+  --sun-300:   #ffe285;
+  --sun-500:   #ffd93d;
+  --sun-700:   #c99500;
+  --sun-900:   #4a3700;
 
   /* ---- Coral 階（CTA / 主行動 / 緊急） ---- */
-  --coral-100: #FFE3E0;
-  --coral-300: #FFB5AD;
-  --coral-500: #FF8B8B;
-  --coral-600: #E96B6B;
-  --coral-700: #B14545;
+  --coral-100: #ffe3e0;
+  --coral-300: #ffb5ad;
+  --coral-500: #ff8b8b;
+  --coral-600: #e96b6b;
+  --coral-700: #b14545;
 
   /* ---- Leaf 階（Ivy 品牌呼應 / 成功 / 自然） ---- */
-  --leaf-100:  #DCF4E6;
-  --leaf-300:  #A8E6CF;
-  --leaf-500:  #5FC79A;
-  --leaf-700:  #2D7C56;
+  --leaf-100:  #dcf4e6;
+  --leaf-300:  #a8e6cf;
+  --leaf-500:  #5fc79a;
+  --leaf-700:  #2d7c56;
 
   /* ---- Grape 階（次要 / 用藥 / 行事曆） ---- */
-  --grape-100: #EBE0F5;
-  --grape-300: #D4BCE6;
-  --grape-500: #B58CD9;
-  --grape-700: #6E3F94;
+  --grape-100: #ebe0f5;
+  --grape-300: #d4bce6;
+  --grape-500: #b58cd9;
+  --grape-700: #6e3f94;
 
   /* ---- Cream（warm 卡背景 / hero 中性） ---- */
-  --cream:     #FFFCF2;
+  --cream:     #fffcf2;
 
   /* ============================================================
    * Parent App 文字色 alias
@@ -77,12 +77,12 @@
    * ============================================================ */
   --pt-text-strong: #392a1c;       /* 主標題、姓名（IvyKids 暖棕黑） */
   --pt-text-body:   #392a1c;       /* 內文 */
-  --pt-text-muted:  #5B5B5B;       /* 次要文字、label */
-  --pt-text-soft:   #4B5563;       /* 描述、meta */
-  --pt-text-faint:  #6B7280;       /* 提示 */
-  --pt-text-placeholder: #9CA3AF;  /* placeholder */
-  --pt-text-disabled:   #C4D2D9;   /* 弱化、arrow */
-  --pt-text-hint:       #DCEEF5;   /* divider 上文字 */
+  --pt-text-muted:  #5b5b5b;       /* 次要文字、label */
+  --pt-text-soft:   #4b5563;       /* 描述、meta */
+  --pt-text-faint:  #6b7280;       /* 提示 */
+  --pt-text-placeholder: #9ca3af;  /* placeholder */
+  --pt-text-disabled:   #c4d2d9;   /* 弱化、arrow */
+  --pt-text-hint:       #dceef5;   /* divider 上文字 */
 
   /* ============================================================
    * Parent App 表面 / 背景 alias
@@ -95,35 +95,35 @@
   --pt-surface-mute-warm:  var(--ivy-cream-bg, #fffce8); /* warm 卡 = IvyKids cream */
   --pt-surface-brand-tint: var(--ivy-leaf-bg, #f5fbe6);  /* 從 coral tint 改 leaf tint */
   --pt-surface-thread-bg:  var(--ivy-cream-bg, #fffce8); /* thread bg 對齊 surface-app */
-  --pt-surface-note:       #FFFCF2; /* note bg */
+  --pt-surface-note:       #fffcf2; /* note bg */
 
   /* ============================================================
    * Parent App 邊框 alias
    * 改用 sky-tinted 邊線，與底色和諧
    * ============================================================ */
-  --pt-border:         #DCEEF5;
-  --pt-border-light:   #ECF5F9;
-  --pt-border-strong:  #BBDDED;
-  --pt-border-stronger:#92C8E0;
+  --pt-border:         #dceef5;
+  --pt-border-light:   #ecf5f9;
+  --pt-border-strong:  #bbdded;
+  --pt-border-stronger:#92c8e0;
 
   /* ============================================================
    * Parent App semantic 變體
    * 補 design-tokens 沒有的中間色；色相對齊新 palette
    * ============================================================ */
-  --pt-warning-text:      #C99500;       /* warning label */
-  --pt-warning-text-mid:  #C99500;       /* warning 圖示 */
-  --pt-warning-text-soft: #9C7300;       /* warning chip */
-  --pt-success-text:      #2D7C56;       /* success label */
-  --pt-info-text:         #2D6F8E;       /* info chip */
-  --pt-info-link:         #5BA8CC;       /* link 色 */
-  --pt-violet-bg:         #EBE0F5;       /* medication chip bg */
-  --pt-violet-text:       #6E3F94;       /* medication chip text */
+  --pt-warning-text:      #c99500;       /* warning label */
+  --pt-warning-text-mid:  #c99500;       /* warning 圖示 */
+  --pt-warning-text-soft: #9c7300;       /* warning chip */
+  --pt-success-text:      #2d7c56;       /* success label */
+  --pt-info-text:         #2d6f8e;       /* info chip */
+  --pt-info-link:         #5ba8cc;       /* link 色 */
+  --pt-violet-bg:         #ebe0f5;       /* medication chip bg */
+  --pt-violet-text:       #6e3f94;       /* medication chip text */
 
   color-scheme: light;
 
   /* ============================================================
    * Brand：IvyKids 深綠雙系統（2026-05-07 rebrand）
-   * 品牌主色切換史：#3f7d48 (原綠) → #FF8B8B (coral, 短暫過渡) → #0d9053 (回歸 IvyKids 官網深綠)
+   * 品牌主色切換史：#3f7d48 (原綠) → #ff8b8b (coral, 短暫過渡) → #0d9053 (回歸 IvyKids 官網深綠)
    * Secondary = teal #33aaaa，accent = star yellow。Leaf 綠仍保留作 tint。
    * ============================================================ */
   /* 2026-05-07：回歸 IvyKids 官網品牌（從 coral 切換回深綠雙系統）*/
@@ -136,7 +136,7 @@
   --brand-accent:         var(--ivy-star-yellow);   /* #ffde51 */
 
   /* danger hover：搭配 destructive button :active 視覺回饋 */
-  --color-danger-hover: #C92626;  /* color-danger #ef4444 darken ~15% */
+  --color-danger-hover: #c92626;  /* color-danger #ef4444 darken ~15% */
 
   /* hero / brand 漸層上的文字色：light + dark 都白，避免 neutral-0 在 dark mode 落到 slate 後對比崩潰 */
   --pt-on-hero: #ffffff;
@@ -193,14 +193,14 @@
   /* ============================================================
    * Severity（過敏 / 醫療警示三階）
    * ============================================================ */
-  --pt-severity-mild-bg:   #FFF4C9;  --pt-severity-mild-fg:   #9C7300;  /* sun-soft */
-  --pt-severity-mod-bg:    #FFE3E0;  --pt-severity-mod-fg:    #B14545;  /* coral-soft */
-  --pt-severity-severe-bg: #FECACA;  --pt-severity-severe-fg: #991B1B;  /* 比 coral 更強，獨立紅 */
+  --pt-severity-mild-bg:   #fff4c9;  --pt-severity-mild-fg:   #9c7300;  /* sun-soft */
+  --pt-severity-mod-bg:    #ffe3e0;  --pt-severity-mod-fg:    #b14545;  /* coral-soft */
+  --pt-severity-severe-bg: #fecaca;  --pt-severity-severe-fg: #991b1b;  /* 比 coral 更強，獨立紅 */
 
   /* ============================================================
    * Late chip 專用 tint（與 warning 區隔）
    * ============================================================ */
-  --pt-tint-late:    #FFF4C9;  --pt-tint-late-fg: #7A6500;
+  --pt-tint-late:    #fff4c9;  --pt-tint-late-fg: #7a6500;
 
   /* ============================================================
    * Backdrop / blur
@@ -300,20 +300,20 @@
   --pt-text-hint: #475569;
 
   --pt-surface-app:        var(--ivy-cream-bg);
-  --pt-surface-card:       #1B2C3A;
+  --pt-surface-card:       #1b2c3a;
   --pt-surface-mute:       var(--ivy-leaf-bg);
-  --pt-surface-mute-soft:  #1B2C3A;
+  --pt-surface-mute-soft:  #1b2c3a;
   --pt-surface-mute-warm:  var(--ivy-cream-bg);
   --pt-surface-brand-tint: rgba(13, 144, 83, 0.10);  /* 對齊 brand-primary-tint dark */
   --pt-surface-thread-bg:  var(--ivy-cream-bg);
-  --pt-surface-note:       #1B2C3A;
+  --pt-surface-note:       #1b2c3a;
 
-  --pt-border:         #25394A;
-  --pt-border-light:   #1B2C3A;
-  --pt-border-strong:  #3A526A;
-  --pt-border-stronger:#52708F;
+  --pt-border:         #25394a;
+  --pt-border-light:   #1b2c3a;
+  --pt-border-strong:  #3a526a;
+  --pt-border-stronger:#52708f;
 
-  --neutral-0: #1B2C3A;
+  --neutral-0: #1b2c3a;
 
   --brand-primary:        var(--ivy-green-deep);
   --brand-primary-hover:  var(--ivy-green-bright);
@@ -328,14 +328,14 @@
   --color-danger-soft:  rgba(255, 139, 139, 0.18);
   --color-info-soft:    rgba(91, 168, 204, 0.20);
 
-  --pt-warning-text:      #FFE285;
-  --pt-warning-text-mid:  #FFE285;
-  --pt-warning-text-soft: #FFE285;
-  --pt-success-text:      #A8E6CF;
-  --pt-info-text:         #92C8E0;
-  --pt-info-link:         #92C8E0;
+  --pt-warning-text:      #ffe285;
+  --pt-warning-text-mid:  #ffe285;
+  --pt-warning-text-soft: #ffe285;
+  --pt-success-text:      #a8e6cf;
+  --pt-info-text:         #92c8e0;
+  --pt-info-link:         #92c8e0;
   --pt-violet-bg:         rgba(181, 140, 217, 0.22);
-  --pt-violet-text:       #D4BCE6;
+  --pt-violet-text:       #d4bce6;
 
   --pt-elev-1: 0 1px 2px rgba(0, 0, 0, 0.30), 0 1px 3px rgba(0, 0, 0, 0.20);
   --pt-elev-2: 0 4px 8px rgba(0, 0, 0, 0.30), 0 8px 16px rgba(0, 0, 0, 0.20);
@@ -360,15 +360,15 @@
   --pt-tint-calendar:     var(--ivy-tile-green-bg);   --pt-tint-calendar-fg:     var(--ivy-tile-green-fg);
   --pt-tint-contact:      var(--ivy-tile-pink-bg);    --pt-tint-contact-fg:      var(--ivy-tile-pink-fg);
 
-  --pt-severity-mild-bg:   rgba(255, 217, 61, 0.20);  --pt-severity-mild-fg:   #FFE285;
-  --pt-severity-mod-bg:    rgba(255, 139, 139, 0.20); --pt-severity-mod-fg:    #FFB5AD;
-  --pt-severity-severe-bg: rgba(239, 68, 68, 0.22);   --pt-severity-severe-fg: #FECACA;
+  --pt-severity-mild-bg:   rgba(255, 217, 61, 0.20);  --pt-severity-mild-fg:   #ffe285;
+  --pt-severity-mod-bg:    rgba(255, 139, 139, 0.20); --pt-severity-mod-fg:    #ffb5ad;
+  --pt-severity-severe-bg: rgba(239, 68, 68, 0.22);   --pt-severity-severe-fg: #fecaca;
 
-  --pt-tint-late: rgba(255, 217, 61, 0.20); --pt-tint-late-fg: #FFE285;
+  --pt-tint-late: rgba(255, 217, 61, 0.20); --pt-tint-late-fg: #ffe285;
 
   --pt-scrim: rgba(15, 31, 42, 0.65);
 
-  --color-danger-hover: #DC2626;  /* dark mode 用稍亮一階 */
+  --color-danger-hover: #dc2626;  /* dark mode 用稍亮一階 */
   --pt-on-hero: #ffffff;          /* dark mode 仍白 */
 
   /* IvyKids dark — 對應 light 段，rgba 0.18 軟化 tile bg */
@@ -392,7 +392,7 @@
 
   --pt-surface-toolbar: rgba(31, 28, 20, 0.98);
   --pt-surface-dock: rgba(27, 44, 58, 0.98);
-  --pt-surface-raised: #1B2C3A;
+  --pt-surface-raised: #1b2c3a;
   --pt-surface-recessed: #1a2418;
   --pt-surface-skyline: #132736;
   --pt-page-border: rgba(255, 255, 255, 0.08);

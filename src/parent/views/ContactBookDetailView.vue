@@ -244,7 +244,7 @@ watch(entryId, async (newId, oldId) => {
 .title { margin: 0 0 12px; font-size: 17px; }
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
 .cell { padding: 8px; background: var(--pt-surface-mute-soft); border-radius: 6px; }
-.cell label { display: block; font-size: 11px; color: var(--pt-text-faint); margin-bottom: 2px; }
+.cell label { display: block; font-size: 12px; color: var(--pt-text-faint); margin-bottom: 2px; }
 .cell span { font-size: 14px; }
 .block { margin-top: 12px; }
 .block h3 { font-size: 14px; color: var(--m3-on-surface-variant, var(--pt-text-muted)); margin: 0 0 4px; }
@@ -254,7 +254,7 @@ watch(entryId, async (newId, oldId) => {
 .reply-list { list-style: none; padding: 0; margin: 0 0 12px; }
 .reply-list li { padding: 8px 0; border-bottom: 1px solid var(--pt-border-light); }
 .reply-list .body { margin: 0 0 4px; font-size: 14px; }
-.reply-list .meta { font-size: 11px; color: var(--pt-text-faint); }
+.reply-list .meta { font-size: 12px; color: var(--pt-text-faint); }
 .link-btn { background: none; border: none; color: var(--color-danger); margin-left: 8px; cursor: pointer; }
 textarea {
   width: 100%;

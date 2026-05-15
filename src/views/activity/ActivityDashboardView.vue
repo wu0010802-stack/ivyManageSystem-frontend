@@ -334,15 +334,15 @@ async function handleExportTable() {
 .stat-cards { margin-bottom: 16px; }
 .stat-card { text-align: center; padding: 8px 0; }
 .stat-value { font-size: 28px; font-weight: 700; color: var(--color-primary, #4f46e5); }
-.stat-label { font-size: 13px; color: #64748b; margin-top: 4px; }
+.stat-label { font-size: 13px; color: var(--text-secondary); margin-top: 4px; }
 .charts-row { margin-top: 8px; }
 .chart-container { max-height: 320px; overflow-y: auto; }
 .bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
-.bar-date { width: 90px; font-size: 12px; color: #64748b; flex-shrink: 0; }
-.empty-hint { color: #94a3b8; text-align: center; padding: 24px 0; }
+.bar-date { width: 90px; font-size: 12px; color: var(--text-secondary); flex-shrink: 0; }
+.empty-hint { color: var(--text-tertiary); text-align: center; padding: 24px 0; }
 
 .text-danger { color: #e11d48; font-weight: bold; }
-.text-success { color: #16a34a; font-weight: bold; }
+.text-success { color: var(--color-success-hover); font-weight: bold; }
 
 /* Let Element Plus handle the default table styles instead of custom backgrounds */
 </style>

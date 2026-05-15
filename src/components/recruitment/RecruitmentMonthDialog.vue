@@ -28,7 +28,7 @@
       />
       <el-button type="primary" size="small" :loading="saving" @click="handleAdd">新增</el-button>
     </div>
-    <div style="margin-top:6px;font-size:12px;color:#909399">
+    <div style="margin-top:6px;font-size:12px;color:var(--text-tertiary)">
       格式：民國年.月，如 115.04（刪除只移除登記，不影響訪視記錄）
     </div>
 

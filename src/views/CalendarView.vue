@@ -17,10 +17,10 @@ const now = new Date()
 const currentDate = ref(new Date(now.getFullYear(), now.getMonth(), 1))
 
 const eventTypes = [
-  { value: 'meeting', label: '會議', color: '#409EFF' },
-  { value: 'activity', label: '活動', color: '#67C23A' },
-  { value: 'holiday', label: '國定假日', color: '#E6A23C' },
-  { value: 'makeup_workday', label: '補班日', color: '#8B5CF6' },
+  { value: 'meeting', label: '會議', color: '#409eff' },
+  { value: 'activity', label: '活動', color: '#67c23a' },
+  { value: 'holiday', label: '國定假日', color: '#e6a23c' },
+  { value: 'makeup_workday', label: '補班日', color: '#8b5cf6' },
   { value: 'general', label: '一般', color: '#909399' },
 ]
 const eventTypeMap = Object.fromEntries(eventTypes.map((item) => [item.value, item]))
@@ -489,7 +489,7 @@ onMounted(fetchEvents)
   text-align: center;
   font-weight: bold;
   font-size: var(--text-sm);
-  color: #606266;
+  color: var(--text-secondary);
   background: var(--bg-color-soft);
   border-bottom: 1px solid var(--border-color);
 }
@@ -517,13 +517,13 @@ onMounted(fetchEvents)
 }
 
 .calendar-cell.today .cell-day {
-  color: #409eff;
+  color: var(--color-info);
   font-weight: bold;
 }
 
 .cell-day {
   font-size: var(--text-sm);
-  color: #303133;
+  color: var(--text-primary);
   margin-bottom: 2px;
 }
 
@@ -537,7 +537,7 @@ onMounted(fetchEvents)
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 11px;
+  font-size: 12px;
   color: #fff;
   padding: 1px 4px;
   border-radius: 3px;
@@ -567,8 +567,8 @@ onMounted(fetchEvents)
 }
 
 .event-more {
-  font-size: 11px;
-  color: #909399;
+  font-size: 12px;
+  color: var(--text-tertiary);
 }
 
 .legend {
@@ -584,7 +584,7 @@ onMounted(fetchEvents)
   align-items: center;
   gap: 4px;
   font-size: var(--text-xs);
-  color: #606266;
+  color: var(--text-secondary);
 }
 
 .legend-dot {
@@ -611,7 +611,7 @@ onMounted(fetchEvents)
 }
 
 .readonly-label {
-  color: #909399;
+  color: var(--text-tertiary);
   font-size: 12px;
 }
 </style>

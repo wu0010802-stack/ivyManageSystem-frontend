@@ -83,7 +83,7 @@ function fmt(n) { return Number(n).toLocaleString('en-US') }
 
 .fee-hero-label {
   display: block;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--ivy-tile-yellow-fg);
   font-weight: 700;
   letter-spacing: 0.5px;

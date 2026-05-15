@@ -215,7 +215,7 @@ onMounted(async () => {
   color: var(--pt-tint-event-fg);
   padding: 1px 8px;
   border-radius: 10px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
 }
 
@@ -262,7 +262,7 @@ onMounted(async () => {
   display: inline-block;
   padding: 1px 8px;
   border-radius: 10px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
 }
 .ack-chip[data-status='pending'] {

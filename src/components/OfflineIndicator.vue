@@ -24,9 +24,9 @@ onMounted(async () => {
 
 <style scoped>
 .offline-banner {
-  background: #fef3c7;
+  background: var(--color-warning-soft);
   border-bottom: 1px solid #fcd34d;
-  color: #92400e;
+  color: var(--color-warning-darker);
   font-size: 13px;
   padding: 8px 16px;
   text-align: center;
@@ -40,7 +40,7 @@ onMounted(async () => {
   margin-left: 10px;
   padding: 2px 8px;
   border-radius: 9999px;
-  background: #f59e0b;
+  background: var(--color-warning);
   color: #fff;
   font-size: 12px;
   font-weight: 600;

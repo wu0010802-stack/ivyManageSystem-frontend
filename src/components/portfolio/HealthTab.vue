@@ -435,11 +435,11 @@ onMounted(reload)
   border-radius: 4px;
 }
 .severity-label {
-  color: #909399;
+  color: var(--text-tertiary);
   font-size: 13px;
 }
 .symptom {
-  color: #606266;
+  color: var(--text-secondary);
   font-size: 13px;
   margin-left: 4px;
 }

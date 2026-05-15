@@ -232,13 +232,13 @@ onMounted(() => {
         <el-table-column label="領域" width="130" prop="domain">
           <template #default="{ row }">
             <span v-if="row.domain">{{ row.domain }}</span>
-            <span v-else style="color: #c0c4cc">-</span>
+            <span v-else style="color: var(--neutral-300)">-</span>
           </template>
         </el-table-column>
         <el-table-column label="評等" width="90">
           <template #default="{ row }">
             <el-tag v-if="row.rating" :type="RATING_TAG[row.rating]" size="small">{{ row.rating }}</el-tag>
-            <span v-else style="color: #c0c4cc">-</span>
+            <span v-else style="color: var(--neutral-300)">-</span>
           </template>
         </el-table-column>
         <el-table-column label="評量內容" min-width="180">

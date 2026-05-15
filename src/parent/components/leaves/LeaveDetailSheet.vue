@@ -130,7 +130,7 @@ const emit = defineEmits(['update:modelValue', 'att-upload', 'att-remove'])
   flex: 1;
 }
 .step-time {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--m3-on-surface-variant, var(--pt-text-placeholder));
 }
 </style>

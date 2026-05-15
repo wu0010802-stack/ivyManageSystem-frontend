@@ -30,7 +30,7 @@ defineEmits(['toggle'])
 <style scoped>
 .course-card {
   padding: 14px;
-  border: 2px solid #e2e8f0;
+  border: 2px solid var(--border-color);
   border-radius: 10px;
   margin-bottom: 8px;
   cursor: pointer;
@@ -48,7 +48,7 @@ defineEmits(['toggle'])
 }
 .empty-check { width: 18px; height: 18px; border: 2px solid #ccc; border-radius: 4px; }
 .course-info { flex: 1; min-width: 0; }
-.course-name { font-size: 15px; font-weight: 500; color: #333; }
+.course-name { font-size: 15px; font-weight: 500; color: var(--text-primary); }
 .course-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
 .course-price { font-size: 15px; font-weight: 600; color: #3f7d48; }
 </style>

@@ -25,7 +25,7 @@ defineProps({
   justify-content: center;
   padding: 40px 16px;
   text-align: center;
-  color: #666;
+  color: var(--text-secondary);
 }
 .mobile-empty-state__icon {
   font-size: 40px;
@@ -37,12 +37,12 @@ defineProps({
   margin: 0 0 6px;
   font-size: 15px;
   font-weight: 500;
-  color: #555;
+  color: var(--neutral-600);
 }
 .mobile-empty-state__desc {
   margin: 0;
   font-size: 13px;
-  color: #888;
+  color: var(--text-tertiary);
   max-width: 280px;
 }
 .mobile-empty-state__action {

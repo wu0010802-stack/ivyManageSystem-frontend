@@ -67,6 +67,6 @@ defineExpose({ previewVisible, openPreview })
   background: linear-gradient(180deg, transparent, rgba(0,0,0,0.6));
   color: #fff;
   padding: 4px 6px;
-  font-size: 11px;
+  font-size: 12px;
 }
 </style>

@@ -82,7 +82,7 @@ onMounted(() => {
           <template #default="{ row }">
             <div>
               <b>{{ row.description || row.config_key }}</b>
-              <div style="font-size: 11px; color: var(--el-text-color-secondary); margin-top: 2px;">
+              <div style="font-size: 12px; color: var(--el-text-color-secondary); margin-top: 2px;">
                 <code>{{ row.config_key }}</code>
                 <el-tag v-if="row.is_default" type="info" size="small" style="margin-left: 6px;">
                   預設值（未存 DB）
@@ -145,6 +145,6 @@ code {
   background: var(--el-fill-color-light);
   padding: 1px 4px;
   border-radius: 3px;
-  font-size: 11px;
+  font-size: 12px;
 }
 </style>

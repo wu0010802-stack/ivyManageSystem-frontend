@@ -181,9 +181,9 @@ onMounted(async () => {
   margin-bottom: 16px;
   border-bottom: 1px dashed #ccc;
 }
-.toolbar-hint { font-size: 12px; color: #888; }
+.toolbar-hint { font-size: 12px; color: var(--text-tertiary); }
 
-.loading-hint { text-align: center; padding: 60px; color: #888; }
+.loading-hint { text-align: center; padding: 60px; color: var(--text-tertiary); }
 .loading-hint.error { color: #c33; }
 
 .sheet-header { margin-bottom: 12px; }
@@ -196,7 +196,7 @@ onMounted(async () => {
   margin-bottom: 10px;
 }
 .title-row h1 { margin: 0; font-size: 22px; letter-spacing: 3px; }
-.schoolname { font-size: 13px; color: #333; }
+.schoolname { font-size: 13px; color: var(--text-primary); }
 
 .meta-grid {
   display: grid;
@@ -208,7 +208,7 @@ onMounted(async () => {
 .meta-grid label {
   display: inline-block;
   width: 72px;
-  color: #555;
+  color: var(--neutral-600);
   border-right: 1px solid #aaa;
   margin-right: 8px;
   padding-right: 6px;
@@ -217,15 +217,15 @@ onMounted(async () => {
 .meta-grid .blank-line {
   display: inline-block;
   min-width: 140px;
-  border-bottom: 1px solid #666;
+  border-bottom: 1px solid var(--text-secondary);
   height: 1em;
 }
 .notes {
   font-size: 13px;
-  color: #333;
+  color: var(--text-primary);
   padding: 4px 8px;
   background: #f8f8f8;
-  border-left: 3px solid #888;
+  border-left: 3px solid var(--text-tertiary);
   margin-bottom: 8px;
 }
 
@@ -249,7 +249,7 @@ onMounted(async () => {
 }
 .roll-table td.num,
 .roll-table td.check-cell { text-align: center; }
-.roll-table td.classname { text-align: center; color: #333; font-size: 12px; }
+.roll-table td.classname { text-align: center; color: var(--text-primary); font-size: 12px; }
 .roll-table td.name { font-weight: 600; }
 .roll-table .pad-row td { color: #bbb; }
 
@@ -268,7 +268,7 @@ onMounted(async () => {
   display: flex;
   gap: 24px;
   padding: 8px 0;
-  border-bottom: 1px dashed #999;
+  border-bottom: 1px dashed var(--text-tertiary);
 }
 .sign-row {
   display: flex;
@@ -279,7 +279,7 @@ onMounted(async () => {
 .sign-block label {
   display: block;
   font-size: 12px;
-  color: #555;
+  color: var(--neutral-600);
   margin-bottom: 4px;
 }
 .sign-line {
@@ -288,8 +288,8 @@ onMounted(async () => {
 }
 .print-ts {
   text-align: right;
-  font-size: 11px;
-  color: #888;
+  font-size: 12px;
+  color: var(--text-tertiary);
   margin-top: 8px;
 }
 

@@ -390,7 +390,7 @@ onMounted(() => {
   gap: 6px;
   padding: 8px 32px;
   font-size: 13px;
-  color: #475569;
+  color: var(--neutral-600);
 }
 
 .pos-semester__expand-row {
@@ -400,20 +400,20 @@ onMounted(() => {
 }
 
 .pos-semester__text--success {
-  color: #059669;
+  color: var(--color-success-hover);
 }
 
 .pos-semester__text--warning {
-  color: #d97706;
+  color: var(--color-warning-hover);
 }
 
 .pos-semester__text--danger {
-  color: #dc2626;
+  color: var(--color-danger-hover);
   font-weight: 600;
 }
 
 .pos-semester__text--muted {
-  color: #94a3b8;
+  color: var(--text-tertiary);
 }
 
 .pos-semester__inactive-tag {

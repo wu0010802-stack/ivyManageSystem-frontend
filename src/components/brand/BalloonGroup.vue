@@ -8,7 +8,7 @@
  * 使用：
  *   <BalloonGroup />                    <!-- 預設 3 顆童彩 -->
  *   <BalloonGroup :count="5" />         <!-- 5 顆 -->
- *   <BalloonGroup :colors="['#FFD93D']" /> <!-- 自訂單色 -->
+ *   <BalloonGroup :colors="['#ffd93d']" /> <!-- 自訂單色 -->
  */
 import { computed } from 'vue'
 

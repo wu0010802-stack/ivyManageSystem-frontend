@@ -108,14 +108,14 @@ const reload = async () => {
   }
 }
 
-const COLORS = ['#409EFF', '#67C23A', '#E6A23C', '#F56C6C', '#909399', '#9B59B6']
+const COLORS = ['#409eff', '#67c23a', '#e6a23c', '#f56c6c', '#909399', '#9b59b6']
 
 const funnelChartData = computed(() => ({
   labels: (data.value?.stages || []).map(s => s.label),
   datasets: [{
     label: '人數',
     data: (data.value?.stages || []).map(s => s.count),
-    backgroundColor: '#409EFF',
+    backgroundColor: '#409eff',
   }],
 }))
 
@@ -147,8 +147,8 @@ const sliceChartData = computed(() => {
   return {
     labels: rows.map(r => r[key] || '—'),
     datasets: [
-      { label: '線索', data: rows.map(r => r.lead), backgroundColor: '#409EFF' },
-      { label: '報名', data: rows.map(r => r.enrolled), backgroundColor: '#67C23A' },
+      { label: '線索', data: rows.map(r => r.lead), backgroundColor: '#409eff' },
+      { label: '報名', data: rows.map(r => r.enrolled), backgroundColor: '#67c23a' },
     ],
   }
 })
@@ -171,7 +171,7 @@ onMounted(reload)
 .chart-wrap { position: relative; height: 280px; }
 .chart-wrap.small { height: 200px; }
 .stage-meta { margin: 8px 0 0; padding-left: 18px; line-height: 1.8; font-size: 14px; }
-.stage-meta .rate { color: #909399; }
+.stage-meta .rate { color: var(--text-tertiary); }
 .mt { margin-top: 12px; }
 .slice-header { display: flex; justify-content: space-between; align-items: center; }
 </style>

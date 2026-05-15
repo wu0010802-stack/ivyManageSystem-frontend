@@ -96,7 +96,7 @@ const TYPE_LABEL = {
 
 .leave-hero-label {
   display: block;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--ivy-green-laurel);
   font-weight: 700;
   letter-spacing: 0.5px;

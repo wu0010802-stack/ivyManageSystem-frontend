@@ -412,28 +412,28 @@ watch(activeTab, (tab) => {
   background: #fff;
 }
 .stat-value { font-size: 20px; font-weight: 700; line-height: 1.2; }
-.stat-label { font-size: 12px; color: #64748b; margin-top: 2px; }
-.stat-enter .stat-value { color: #16a34a; }
-.stat-leave .stat-value { color: #dc2626; }
-.stat-net .stat-value { color: #2563eb; }
+.stat-label { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+.stat-enter .stat-value { color: var(--color-success-hover); }
+.stat-leave .stat-value { color: var(--color-danger-hover); }
+.stat-net .stat-value { color: var(--color-info-hover); }
 .stat-ratio .stat-value { color: #7c3aed; }
 
 .toolbar { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
 .timeline-wrap { min-height: 120px; }
 .event-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.event-main { font-weight: 500; color: #1e293b; }
-.event-meta { margin-top: 4px; color: #64748b; font-size: 12px; }
-.event-notes { color: #94a3b8; }
+.event-main { font-weight: 500; color: var(--text-primary); }
+.event-meta { margin-top: 4px; color: var(--text-secondary); font-size: 12px; }
+.event-notes { color: var(--text-tertiary); }
 .pager { margin-top: 12px; text-align: right; }
 
-.comm-topic { color: #475569; font-size: 13px; }
-.comm-content { color: #334155; }
-.comm-followup { color: #2563eb; }
+.comm-topic { color: var(--neutral-600); font-size: 13px; }
+.comm-content { color: var(--neutral-700); }
+.comm-followup { color: var(--color-info-hover); }
 
 .comp-wrap { padding: 8px 0; }
 .comp-chart { height: 240px; margin-bottom: 16px; }
-.comp-summary { font-size: 14px; line-height: 1.9; padding: 8px 12px; background: #f8fafc; border-radius: 6px; }
-.comp-summary b { color: #1e293b; }
-.comp-ratio { color: #94a3b8; font-size: 12px; }
-.comp-hint { margin-top: 12px; font-size: 12px; color: #94a3b8; text-align: center; }
+.comp-summary { font-size: 14px; line-height: 1.9; padding: 8px 12px; background: var(--bg-color); border-radius: 6px; }
+.comp-summary b { color: var(--text-primary); }
+.comp-ratio { color: var(--text-tertiary); font-size: 12px; }
+.comp-hint { margin-top: 12px; font-size: 12px; color: var(--text-tertiary); text-align: center; }
 </style>

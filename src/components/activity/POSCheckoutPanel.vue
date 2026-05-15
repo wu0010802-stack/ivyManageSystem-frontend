@@ -318,20 +318,20 @@ defineExpose({ refreshDailySummary, refreshRecentTransactions })
   display: flex;
   justify-content: space-between;
   font-size: 14px;
-  color: #475569;
+  color: var(--neutral-600);
 }
 
 .pos-panel-wrap__receipt-row--lg {
   font-size: 16px;
   padding-bottom: 8px;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--border-color);
   margin-bottom: 4px;
 }
 
 .pos-panel-wrap__receipt-row--small {
   font-size: 12px;
   font-style: italic;
-  color: #94a3b8;
+  color: var(--text-tertiary);
   margin-top: -6px;
 }
 
@@ -340,21 +340,21 @@ defineExpose({ refreshDailySummary, refreshRecentTransactions })
 }
 
 .pos-panel-wrap__receipt-row strong {
-  color: #1e293b;
+  color: var(--text-primary);
   font-size: 16px;
 }
 
 .pos-panel-wrap__change {
-  color: #059669 !important;
+  color: var(--color-success-hover) !important;
   font-size: 18px !important;
 }
 
 .pos-panel-wrap__receipt-items {
   margin-top: 12px;
   padding-top: 10px;
-  border-top: 1px dashed #e2e8f0;
+  border-top: 1px dashed var(--border-color);
   font-size: 13px;
-  color: #475569;
+  color: var(--neutral-600);
   display: flex;
   flex-direction: column;
   gap: 4px;

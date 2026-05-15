@@ -276,7 +276,7 @@ onMounted(() => {
 
       <el-table-column label="內容預覽" min-width="250">
         <template #default="{ row }">
-          <span style="color: #666;">{{ row.content.length > 60 ? row.content.slice(0, 60) + '...' : row.content }}</span>
+          <span style="color: var(--text-secondary);">{{ row.content.length > 60 ? row.content.slice(0, 60) + '...' : row.content }}</span>
         </template>
       </el-table-column>
 
@@ -479,7 +479,7 @@ onMounted(() => {
 
 .reader-popover-title {
   font-weight: 600;
-  color: #303133;
+  color: var(--text-primary);
 }
 
 .reader-row {
@@ -487,15 +487,15 @@ onMounted(() => {
   justify-content: space-between;
   gap: 12px;
   font-size: 13px;
-  color: #606266;
+  color: var(--text-secondary);
 }
 
 .reader-read-at {
-  color: #909399;
+  color: var(--text-tertiary);
   white-space: nowrap;
 }
 
 .text-muted {
-  color: #909399;
+  color: var(--text-tertiary);
 }
 </style>

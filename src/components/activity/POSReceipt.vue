@@ -210,7 +210,7 @@ const fmt = (n) => {
   #pos-receipt-print .r-reprint {
     font-size: 9pt;
     margin-left: 2mm;
-    color: #555;
+    color: var(--neutral-600);
   }
 
   #pos-receipt-print .r-notes {

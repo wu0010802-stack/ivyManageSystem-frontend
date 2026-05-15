@@ -126,7 +126,7 @@ const today = todayISO()
 .card-row { display: flex; justify-content: space-between; align-items: baseline; }
 .date { color: var(--pt-text-placeholder); font-size: 13px; }
 .meta { font-size: 13px; color: var(--m3-on-surface-variant, var(--pt-text-muted)); margin-top: 4px; }
-.tag { display: inline-block; padding: 1px 6px; margin-left: 6px; border-radius: 3px; font-size: 11px; }
+.tag { display: inline-block; padding: 1px 6px; margin-left: 6px; border-radius: 3px; font-size: 12px; }
 .tag.self { background: var(--pt-tint-money); color: var(--pt-tint-money-fg); }
 .logs { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 4px; }
 .slot { padding: 2px 8px; border-radius: 10px; font-size: 12px; background: var(--pt-surface-mute); color: var(--m3-on-surface-variant, var(--pt-text-muted)); }

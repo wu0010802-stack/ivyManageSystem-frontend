@@ -340,7 +340,7 @@ const opportunityText = (row) => {
   max-height: calc(100vh - 200px);
   overflow-y: auto;
   scrollbar-width: thin;
-  scrollbar-color: #E2E8F0 transparent;
+  scrollbar-color: var(--border-color) transparent;
 }
 
 /* KPI 條 */
@@ -349,8 +349,8 @@ const opportunityText = (row) => {
   align-items: center;
   gap: 0;
   padding: 10px 14px;
-  background: #F8FAFC;
-  border: 1px solid #E2E8F0;
+  background: var(--bg-color);
+  border: 1px solid var(--border-color);
   border-radius: 10px;
 }
 .kpi-item {
@@ -363,13 +363,13 @@ const opportunityText = (row) => {
 .kpi-val {
   font-size: 1.1rem;
   font-weight: 700;
-  color: #1E40AF;
+  color: var(--color-info-darker);
   font-family: 'Fira Code', ui-monospace, monospace;
   font-variant-numeric: tabular-nums;
   line-height: 1.2;
 }
-.kpi-label { font-size: 0.68rem; color: #64748B; }
-.kpi-sep { width: 1px; height: 28px; background: #E2E8F0; margin: 0 4px; }
+.kpi-label { font-size: 0.68rem; color: var(--text-secondary); }
+.kpi-sep { width: 1px; height: 28px; background: var(--border-color); margin: 0 4px; }
 
 /* 行政區清單標題 */
 .district-list-header {
@@ -381,15 +381,15 @@ const opportunityText = (row) => {
 .district-list-title {
   font-size: 0.78rem;
   font-weight: 700;
-  color: #475569;
+  color: var(--neutral-600);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 .district-filter-tag {
   font-size: 0.72rem;
-  color: #1D4ED8;
-  background: #EFF6FF;
-  border: 1px solid #BFDBFE;
+  color: var(--color-info-darker);
+  background: var(--color-info-soft);
+  border: 1px solid #bfdbfe;
   padding: 2px 8px;
   border-radius: 999px;
   display: flex;
@@ -426,18 +426,18 @@ const opportunityText = (row) => {
   padding: 10px 12px;
   border-radius: 10px;
   background: #fff;
-  border: 1px solid #E2E8F0;
+  border: 1px solid var(--border-color);
   cursor: pointer;
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 .district-card:hover {
-  border-color: #93C5FD;
+  border-color: var(--color-info-soft);
   box-shadow: 0 1px 6px rgba(59, 130, 246, 0.08);
 }
 .district-card--active {
-  border-color: #3B82F6;
-  border-left: 3px solid #3B82F6;
-  background: #F0F7FF;
+  border-color: var(--color-info);
+  border-left: 3px solid var(--color-info);
+  background: #f0f7ff;
 }
 
 .dc-row-top {
@@ -446,14 +446,14 @@ const opportunityText = (row) => {
   align-items: center;
   gap: 6px;
 }
-.dc-name { font-size: 0.85rem; font-weight: 600; color: #1E293B; }
+.dc-name { font-size: 0.85rem; font-weight: 600; color: var(--text-primary); }
 .dc-badges { display: flex; gap: 4px; align-items: center; flex-shrink: 0; }
 .dc-lead-badge {
   font-size: 0.68rem;
   font-weight: 600;
-  color: #1E40AF;
-  background: #EFF6FF;
-  border: 1px solid #DBEAFE;
+  color: var(--color-info-darker);
+  background: var(--color-info-soft);
+  border: 1px solid var(--color-info-soft);
   padding: 1px 6px;
   border-radius: 999px;
 }
@@ -463,9 +463,9 @@ const opportunityText = (row) => {
   padding: 1px 6px;
   border-radius: 999px;
 }
-.dc-travel-badge--green  { background: #DCFCE7; color: #15803D; }
-.dc-travel-badge--yellow { background: #FEF9C3; color: #A16207; }
-.dc-travel-badge--orange { background: #FFEDD5; color: #C2410C; }
+.dc-travel-badge--green  { background: var(--color-success-soft); color: var(--color-success-darker); }
+.dc-travel-badge--yellow { background: #fef9c3; color: var(--color-warning-darker); }
+.dc-travel-badge--orange { background: #ffedd5; color: #c2410c; }
 
 /* 預繳率條 */
 .dc-rate-row {
@@ -477,7 +477,7 @@ const opportunityText = (row) => {
 .dc-rate-bar-bg {
   flex: 1;
   height: 5px;
-  background: #F1F5F9;
+  background: var(--bg-color-soft);
   border-radius: 3px;
   overflow: hidden;
 }
@@ -486,13 +486,13 @@ const opportunityText = (row) => {
   border-radius: 3px;
   transition: width 0.3s ease;
 }
-.dc-rate-bar-fill--green  { background: #22c55e; }
-.dc-rate-bar-fill--yellow { background: #f59e0b; }
+.dc-rate-bar-fill--green  { background: var(--color-success); }
+.dc-rate-bar-fill--yellow { background: var(--color-warning); }
 .dc-rate-bar-fill--red    { background: #f87171; }
 .dc-rate-label {
   font-size: 0.72rem;
   font-family: 'Fira Code', ui-monospace, monospace;
-  color: #475569;
+  color: var(--neutral-600);
   min-width: 36px;
   text-align: right;
 }
@@ -504,22 +504,22 @@ const opportunityText = (row) => {
   gap: 6px;
   margin-top: 6px;
   font-size: 0.68rem;
-  color: #94A3B8;
+  color: var(--text-tertiary);
 }
 .dc-stat-val {
   font-weight: 600;
-  color: #475569;
+  color: var(--neutral-600);
   font-family: 'Fira Code', ui-monospace, monospace;
 }
-.dc-stat--ok .dc-stat-val { color: #15803D; }
-.dc-stat--warn .dc-stat-val { color: #A16207; }
-.dc-stat--danger .dc-stat-val { color: #DC2626; }
+.dc-stat--ok .dc-stat-val { color: var(--color-success-darker); }
+.dc-stat--warn .dc-stat-val { color: var(--color-warning-darker); }
+.dc-stat--danger .dc-stat-val { color: var(--color-danger-hover); }
 
 /* 展開詳細 */
 .dc-detail {
   margin-top: 8px;
   padding-top: 8px;
-  border-top: 1px solid #E2E8F0;
+  border-top: 1px solid var(--border-color);
 }
 .dc-detail-grid {
   display: grid;
@@ -531,22 +531,22 @@ const opportunityText = (row) => {
   flex-direction: column;
   gap: 1px;
 }
-.dc-detail-label { font-size: 0.65rem; color: #94A3B8; }
+.dc-detail-label { font-size: 0.65rem; color: var(--text-tertiary); }
 .dc-detail-value {
   font-size: 0.82rem;
   font-weight: 600;
-  color: #1E293B;
+  color: var(--text-primary);
   font-family: 'Fira Code', ui-monospace, monospace;
 }
-.dc-detail-item--warn .dc-detail-value { color: #DC2626; }
+.dc-detail-item--warn .dc-detail-value { color: var(--color-danger-hover); }
 
 /* 市場判讀 */
 .dc-insight {
   margin-top: 8px;
   padding: 6px 8px;
   border-radius: 6px;
-  background: #F0FDF4;
-  border: 1px solid #BBF7D0;
+  background: #f0fdf4;
+  border: 1px solid var(--color-success-soft);
   display: flex;
   gap: 6px;
   align-items: flex-start;
@@ -566,18 +566,18 @@ const opportunityText = (row) => {
   padding: 20px;
   text-align: center;
   font-size: 0.82rem;
-  color: #94A3B8;
+  color: var(--text-tertiary);
 }
 
 /* ── 校區競爭分析 ── */
 .campus-competition-header {
   font-size: 0.78rem;
   font-weight: 700;
-  color: #475569;
+  color: var(--neutral-600);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   padding: 8px 2px 0;
-  border-top: 1px solid #E2E8F0;
+  border-top: 1px solid var(--border-color);
   margin-top: 4px;
 }
 

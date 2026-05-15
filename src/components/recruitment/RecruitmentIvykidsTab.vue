@@ -310,7 +310,7 @@ const sourceChartOptions = {
     x: {
       beginAtZero: true,
       ticks: { precision: 0 },
-      grid: { color: '#F1F5F9' },
+      grid: { color: '#f1f5f9' },
     },
     y: {
       ticks: { font: { size: 11 } },
@@ -326,11 +326,11 @@ const monthChartOptions = {
     legend: { position: 'top' },
   },
   scales: {
-    x: { grid: { color: '#F1F5F9' } },
+    x: { grid: { color: '#f1f5f9' } },
     y: {
       beginAtZero: true,
       ticks: { precision: 0 },
-      grid: { color: '#F1F5F9' },
+      grid: { color: '#f1f5f9' },
     },
   },
 }
@@ -344,7 +344,7 @@ const sourceBarData = computed(() => {
     datasets: [{
       label: '報名人數',
       data: d.map(r => r.visit),
-      backgroundColor: '#3B82F6',
+      backgroundColor: '#3b82f6',
       borderRadius: 4,
     }],
   }
@@ -359,13 +359,13 @@ const monthTrendData = computed(() => {
       {
         label: '報名人數',
         data: d.map(r => r.visit),
-        backgroundColor: '#60A5FA',
+        backgroundColor: '#60a5fa',
         borderRadius: 3,
       },
       {
         label: '預繳人數',
         data: d.map(r => r.deposit),
-        backgroundColor: '#1D4ED8',
+        backgroundColor: '#1d4ed8',
         borderRadius: 3,
       },
     ],
@@ -534,12 +534,12 @@ onMounted(() => {
 .ivk-sync-label {
   font-weight: 700;
   font-size: 0.97rem;
-  color: #1E293B;
+  color: var(--text-primary);
 }
 
 .ivk-sync-meta {
   font-size: 0.8rem;
-  color: #64748B;
+  color: var(--text-secondary);
 }
 
 .ivk-sync-tags {
@@ -563,8 +563,8 @@ onMounted(() => {
 }
 
 .kpi-card {
-  background: #FFFFFF;
-  border: 1px solid #E2E8F0;
+  background: var(--neutral-0);
+  border: 1px solid var(--border-color);
   border-left: 3px solid transparent;
   border-radius: 12px;
   padding: 16px;
@@ -575,15 +575,15 @@ onMounted(() => {
   box-shadow: 0 2px 12px rgba(30, 64, 175, 0.08);
 }
 
-.kpi-card--primary { border-left-color: #1E40AF; }
-.kpi-card--green   { border-left-color: #16A34A; }
-.kpi-card--indigo  { border-left-color: #6366F1; }
-.kpi-card--amber   { border-left-color: #D97706; }
+.kpi-card--primary { border-left-color: var(--color-info-darker); }
+.kpi-card--green   { border-left-color: var(--color-success-hover); }
+.kpi-card--indigo  { border-left-color: #6366f1; }
+.kpi-card--amber   { border-left-color: var(--color-warning-hover); }
 
 .kpi-label {
   font-size: 0.72rem;
   font-weight: 600;
-  color: #94A3B8;
+  color: var(--text-tertiary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-bottom: 6px;
@@ -593,7 +593,7 @@ onMounted(() => {
   font-family: 'Fira Code', ui-monospace, monospace;
   font-size: 2rem;
   font-weight: 700;
-  color: #1E3A8A;
+  color: var(--color-info-darker);
   line-height: 1;
   font-variant-numeric: tabular-nums;
   margin-bottom: 4px;
@@ -601,7 +601,7 @@ onMounted(() => {
 
 .kpi-sub {
   font-size: 0.72rem;
-  color: #94A3B8;
+  color: var(--text-tertiary);
 }
 
 /* ── 圖表 ── */
@@ -631,9 +631,9 @@ onMounted(() => {
   font-variant-numeric: tabular-nums;
 }
 
-.rate-high { color: #15803D; font-weight: 600; }
-.rate-mid  { color: #D97706; font-weight: 600; }
-.rate-low  { color: #DC2626; font-weight: 600; }
+.rate-high { color: var(--color-success-darker); font-weight: 600; }
+.rate-mid  { color: var(--color-warning-hover); font-weight: 600; }
+.rate-low  { color: var(--color-danger-hover); font-weight: 600; }
 
 /* ── 明細表 ── */
 .records-header {
@@ -645,7 +645,7 @@ onMounted(() => {
 
 .records-total {
   font-size: 0.78rem;
-  color: #94A3B8;
+  color: var(--text-tertiary);
   font-weight: 400;
 }
 

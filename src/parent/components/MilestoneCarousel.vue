@@ -62,5 +62,5 @@ watch(() => props.studentId, load)
   -webkit-overflow-scrolling: touch;
 }
 .carousel > * { scroll-snap-align: start; }
-.loading, .empty { padding: 24px; color: #9ca3af; text-align: center; font-size: 14px; }
+.loading, .empty { padding: 24px; color: var(--text-tertiary); text-align: center; font-size: 14px; }
 </style>

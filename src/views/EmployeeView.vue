@@ -930,7 +930,7 @@ onMounted(async () => {
                 <el-descriptions-item label="基本薪資">
                   <span>{{ Number(currentDetail.base_salary).toLocaleString() }}</span>
                   <template v-if="standardSalaryFor(currentDetail) !== null">
-                    <span style="color:#909399;font-size:12px;margin-left:8px">
+                    <span style="color:var(--text-tertiary);font-size:12px;margin-left:8px">
                       標準：{{ standardSalaryFor(currentDetail).toLocaleString() }}
                     </span>
                     <el-tag
@@ -1113,7 +1113,7 @@ onMounted(async () => {
         </el-form-item>
         <el-form-item label="最高學歷">
           <el-switch v-model="subDialog.form.is_highest" />
-          <span style="margin-left:10px;font-size:12px;color:#909399">
+          <span style="margin-left:10px;font-size:12px;color:var(--text-tertiary)">
             標記後，該員工其他學歷的「最高」會自動取消
           </span>
         </el-form-item>
@@ -1233,7 +1233,7 @@ onMounted(async () => {
             </el-descriptions-item>
           </el-descriptions>
         </template>
-        <div v-else-if="offboardForm.resign_date" style="color:#999;font-size:13px;padding:8px 0">
+        <div v-else-if="offboardForm.resign_date" style="color:var(--text-tertiary);font-size:13px;padding:8px 0">
           薪資預覽無法取得（請確認薪資引擎已啟用）
         </div>
         <div v-else style="color:#bbb;font-size:13px;padding:8px 0">請先選擇離職日期以顯示薪資預覽</div>

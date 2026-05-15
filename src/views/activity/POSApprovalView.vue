@@ -735,7 +735,7 @@ onMounted(refreshAll)
 
 .pos-approval__field-label {
   font-size: 13px;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .pos-approval__detail {
@@ -755,18 +755,18 @@ onMounted(refreshAll)
   gap: 8px;
   flex-wrap: wrap;
   font-size: 12px;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .pos-approval__method-tag {
-  background: #f1f5f9;
+  background: var(--bg-color-soft);
   padding: 4px 10px;
   border-radius: 999px;
 }
 
 .pos-approval__approved,
 .pos-approval__form {
-  background: #f8fafc;
+  background: var(--bg-color);
   padding: 12px 16px;
   border-radius: 8px;
   display: flex;
@@ -778,16 +778,16 @@ onMounted(refreshAll)
   display: flex;
   justify-content: space-between;
   font-size: 14px;
-  color: #475569;
+  color: var(--neutral-600);
 }
 
 .pos-approval__info-row em {
   font-style: normal;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .pos-approval__info-row--danger strong {
-  color: #dc2626;
+  color: var(--color-danger-hover);
 }
 
 .pos-approval__action {
@@ -802,16 +802,16 @@ onMounted(refreshAll)
 .pos-approval__hint {
   margin-top: 4px;
   font-size: 12px;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .pos-approval__hint--danger {
-  color: #dc2626;
+  color: var(--color-danger-hover);
 }
 
 .pos-approval__tx-block {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
+  background: var(--neutral-0);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 10px 12px;
 }
@@ -822,7 +822,7 @@ onMounted(refreshAll)
   align-items: center;
   font-weight: 600;
   font-size: 13px;
-  color: #475569;
+  color: var(--neutral-600);
   margin-bottom: 8px;
 }
 
@@ -832,7 +832,7 @@ onMounted(refreshAll)
   flex-direction: column;
   gap: 4px;
   font-size: 13px;
-  color: #475569;
+  color: var(--neutral-600);
 }
 
 .pos-approval__tx-item {
@@ -842,14 +842,14 @@ onMounted(refreshAll)
 
 .pos-approval__tx-item em {
   font-style: normal;
-  color: #94a3b8;
+  color: var(--text-tertiary);
   font-size: 12px;
 }
 
 .pos-approval__tx-note {
   font-size: 12px;
-  color: #64748b;
-  border-top: 1px dashed #e2e8f0;
+  color: var(--text-secondary);
+  border-top: 1px dashed var(--border-color);
   padding-top: 4px;
   margin-top: 4px;
 }
@@ -863,14 +863,14 @@ onMounted(refreshAll)
   gap: 20px;
   flex-wrap: wrap;
   font-size: 13px;
-  color: #475569;
+  color: var(--neutral-600);
   padding: 10px 4px 0;
-  border-top: 1px dashed #e2e8f0;
+  border-top: 1px dashed var(--border-color);
   margin-top: 8px;
 }
 
 .pos-approval__variance {
-  color: #dc2626;
+  color: var(--color-danger-hover);
   font-weight: 600;
 }
 

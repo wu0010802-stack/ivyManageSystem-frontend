@@ -112,7 +112,7 @@ const classroomLabel = computed(() => {
             <el-option label="B 級（教保員）" value="B" />
             <el-option label="C 級（助理教保員）" value="C" />
           </el-select>
-          <div style="font-size:12px;color:#909399;margin-top:4px">保留手動覆蓋用於特例調整；請輸入或選擇 A / B / C，空白表示依教育局系統自動判斷</div>
+          <div style="font-size:12px;color:var(--text-tertiary);margin-top:4px">保留手動覆蓋用於特例調整；請輸入或選擇 A / B / C，空白表示依教育局系統自動判斷</div>
         </template>
       </el-form-item>
     </el-col>

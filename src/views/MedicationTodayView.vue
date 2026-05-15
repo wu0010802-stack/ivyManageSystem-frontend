@@ -219,7 +219,7 @@ onMounted(reload)
 }
 .dose,
 .note {
-  color: #606266;
+  color: var(--text-secondary);
   font-size: 13px;
 }
 .log-grid {
@@ -236,14 +236,14 @@ onMounted(reload)
 .log-row .slot {
   font-weight: 600;
   width: 60px;
-  color: #409eff;
+  color: var(--color-info);
 }
 .log-row .time {
-  color: #909399;
+  color: var(--text-tertiary);
   font-size: 13px;
 }
 .log-row .skip-reason {
-  color: #909399;
+  color: var(--text-tertiary);
   font-size: 13px;
 }
 .log-actions {

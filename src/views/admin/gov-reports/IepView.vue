@@ -330,14 +330,14 @@ onMounted(loadAll)
 .iep-page { display: flex; gap: 16px; height: calc(100vh - 60px); }
 .left-pane { width: 320px; border-right: 1px solid #eee; padding: 12px; overflow-y: auto; }
 .right-pane { flex: 1; padding: 16px; overflow-y: auto; }
-.empty-state { display: flex; align-items: center; justify-content: center; color: #999; }
+.empty-state { display: flex; align-items: center; justify-content: center; color: var(--text-tertiary); }
 .student-list { list-style: none; padding: 0; margin: 12px 0; }
 .student-list li {
   display: flex; justify-content: space-between; align-items: center;
   padding: 8px; border-radius: 4px; cursor: pointer;
 }
 .student-list li.active { background: #ecf5ff; }
-.student-list li.empty { color: #999; cursor: default; text-align: center; }
+.student-list li.empty { color: var(--text-tertiary); cursor: default; text-align: center; }
 .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
 .toolbar .actions { display: flex; gap: 6px; }
 .iep-tabs { margin-top: 12px; }

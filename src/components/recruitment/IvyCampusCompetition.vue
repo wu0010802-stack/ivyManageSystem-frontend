@@ -96,11 +96,11 @@ onMounted(async () => {
   text-align: center;
   padding: 20px;
   font-size: 0.82rem;
-  color: #94A3B8;
+  color: var(--text-tertiary);
 }
 
 .campus-block {
-  border: 1px solid #E2E8F0;
+  border: 1px solid var(--border-color);
   border-radius: 10px;
   padding: 12px 14px;
   background: #fff;
@@ -124,7 +124,7 @@ onMounted(async () => {
   display: flex;
   gap: 8px;
   font-size: 0.72rem;
-  color: #64748B;
+  color: var(--text-secondary);
 }
 
 .rings-row {
@@ -138,16 +138,16 @@ onMounted(async () => {
 }
 
 .ring-card {
-  border: 1px solid #F1F5F9;
+  border: 1px solid var(--bg-color-soft);
   border-radius: 8px;
   padding: 10px;
-  background: #FAFBFC;
+  background: #fafbfc;
 }
 
 .ring-label {
   font-size: 0.72rem;
   font-weight: 700;
-  color: #475569;
+  color: var(--neutral-600);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   margin-bottom: 6px;
@@ -163,19 +163,19 @@ onMounted(async () => {
 .ring-total-val {
   font-size: 1.3rem;
   font-weight: 700;
-  color: #1E293B;
+  color: var(--text-primary);
   font-family: 'Fira Code', ui-monospace, monospace;
 }
 
 .ring-total-unit {
   font-size: 0.75rem;
-  color: #64748B;
+  color: var(--text-secondary);
 }
 
 .ring-capacity {
   margin-left: auto;
   font-size: 0.72rem;
-  color: #94A3B8;
+  color: var(--text-tertiary);
 }
 
 .type-list {
@@ -199,30 +199,30 @@ onMounted(async () => {
 }
 
 .type-name {
-  color: #475569;
+  color: var(--neutral-600);
   font-weight: 600;
   min-width: 42px;
 }
 
 .type-count {
   font-weight: 700;
-  color: #1E293B;
+  color: var(--text-primary);
   font-family: 'Fira Code', ui-monospace, monospace;
   min-width: 24px;
   text-align: right;
 }
 
 .type-detail {
-  color: #94A3B8;
+  color: var(--text-tertiary);
   font-size: 0.68rem;
   min-width: 60px;
 }
 
 .type-penalty {
   font-size: 0.65rem;
-  color: #DC2626;
-  background: #FEF2F2;
-  border: 1px solid #FECACA;
+  color: var(--color-danger-hover);
+  background: var(--color-danger-soft);
+  border: 1px solid var(--color-danger-soft);
   padding: 0 4px;
   border-radius: 4px;
   margin-left: auto;

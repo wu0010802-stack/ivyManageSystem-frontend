@@ -372,8 +372,8 @@ const handleCommand = (command) => {
 }
 
 .search-trigger:hover {
-  border-color: var(--color-primary, #409eff);
-  color: var(--color-primary, #409eff);
+  border-color: var(--color-primary, var(--color-info));
+  color: var(--color-primary, var(--color-info));
 }
 
 .search-trigger-text {
@@ -382,7 +382,7 @@ const handleCommand = (command) => {
 }
 
 .search-trigger-kbd {
-  font-size: 11px;
+  font-size: 12px;
   padding: 1px 5px;
   border: 1px solid var(--border-color-light, #d1d5db);
   border-bottom-width: 2px;

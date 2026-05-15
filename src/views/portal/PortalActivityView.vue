@@ -206,6 +206,6 @@ onMounted(() => {
 
 <style>
 .el-table .unmarked-row td {
-  background-color: #fffbeb !important;
+  background-color: var(--color-warning-soft) !important;
 }
 </style>

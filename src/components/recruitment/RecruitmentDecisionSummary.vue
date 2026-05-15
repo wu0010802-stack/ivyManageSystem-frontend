@@ -105,12 +105,12 @@ const rateClass = (rate) => {
 .decision-title {
   font-size: 0.95rem;
   font-weight: 700;
-  color: #1E293B;
+  color: var(--text-primary);
 }
 
 .decision-subtitle {
   font-size: 0.78rem;
-  color: #64748B;
+  color: var(--text-secondary);
   margin-top: 2px;
 }
 
@@ -123,12 +123,12 @@ const rateClass = (rate) => {
   border-radius: 999px;
   font-size: 0.78rem;
   font-weight: 600;
-  background: #F1F5F9;
-  color: #64748B;
-  border: 1px solid #E2E8F0;
+  background: var(--bg-color-soft);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
 }
-.mom-badge--up   { background: #DCFCE7; color: #15803D; border-color: #BBF7D0; }
-.mom-badge--down { background: #FEE2E2; color: #B91C1C; border-color: #FECACA; }
+.mom-badge--up   { background: var(--color-success-soft); color: var(--color-success-darker); border-color: var(--color-success-soft); }
+.mom-badge--down { background: var(--color-danger-soft); color: var(--color-danger-darker); border-color: var(--color-danger-soft); }
 .mom-arrow { font-size: 0.7rem; }
 
 /* ── Grid ── */
@@ -141,8 +141,8 @@ const rateClass = (rate) => {
 /* ── Card ── */
 .decision-card {
   position: relative;
-  background: #FFFFFF;
-  border: 1px solid #E2E8F0;
+  background: var(--neutral-0);
+  border: 1px solid var(--border-color);
   border-radius: 12px;
   padding: 16px 16px 14px;
   overflow: hidden;
@@ -162,22 +162,22 @@ const rateClass = (rate) => {
   height: 3px;
   border-radius: 12px 12px 0 0;
 }
-.decision-card--current_month .dc-accent-bar { background: #1E40AF; }
-.decision-card--rolling_30d   .dc-accent-bar { background: #3B82F6; }
-.decision-card--rolling_90d   .dc-accent-bar { background: #6366F1; }
-.decision-card--ytd           .dc-accent-bar { background: #D97706; }
+.decision-card--current_month .dc-accent-bar { background: var(--color-info-darker); }
+.decision-card--rolling_30d   .dc-accent-bar { background: var(--color-info); }
+.decision-card--rolling_90d   .dc-accent-bar { background: #6366f1; }
+.decision-card--ytd           .dc-accent-bar { background: var(--color-warning-hover); }
 
 /* ── Label ── */
 .dc-label {
   font-size: 0.72rem;
   font-weight: 600;
-  color: #94A3B8;
+  color: var(--text-tertiary);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   margin-bottom: 8px;
 }
-.decision-card--current_month .dc-label { color: #1E40AF; }
-.decision-card--ytd           .dc-label { color: #B45309; }
+.decision-card--current_month .dc-label { color: var(--color-info-darker); }
+.decision-card--ytd           .dc-label { color: var(--color-warning-darker); }
 
 /* ── Main value ── */
 .dc-main {
@@ -191,14 +191,14 @@ const rateClass = (rate) => {
   font-family: 'Fira Code', ui-monospace, monospace;
   font-size: 2.1rem;
   font-weight: 700;
-  color: #1E3A8A;
+  color: var(--color-info-darker);
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
 
 .dc-unit {
   font-size: 0.75rem;
-  color: #94A3B8;
+  color: var(--text-tertiary);
   padding-bottom: 2px;
 }
 
@@ -218,7 +218,7 @@ const rateClass = (rate) => {
 
 .dc-rate-label {
   font-size: 0.68rem;
-  color: #94A3B8;
+  color: var(--text-tertiary);
 }
 
 .dc-rate-value {
@@ -227,9 +227,9 @@ const rateClass = (rate) => {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
-.dc-rate-value--high { color: #15803D; }
-.dc-rate-value--mid  { color: #D97706; }
-.dc-rate-value--low  { color: #DC2626; }
+.dc-rate-value--high { color: var(--color-success-darker); }
+.dc-rate-value--mid  { color: var(--color-warning-hover); }
+.dc-rate-value--low  { color: var(--color-danger-hover); }
 
 /* ── Sub row ── */
 .dc-sub {
@@ -237,13 +237,13 @@ const rateClass = (rate) => {
   align-items: center;
   gap: 4px;
   font-size: 0.78rem;
-  color: #64748B;
+  color: var(--text-secondary);
 }
 .dc-sub strong {
-  color: #1E293B;
+  color: var(--text-primary);
   font-variant-numeric: tabular-nums;
 }
 .dc-sub-sep {
-  color: #CBD5E1;
+  color: var(--neutral-300);
 }
 </style>

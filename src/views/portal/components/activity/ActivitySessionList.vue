@@ -136,8 +136,8 @@ const filteredSessions = computed(() => {
 <style scoped>
 .session-list { display: flex; flex-direction: column; }
 .filter-row { margin-top: 12px; margin-bottom: 12px; }
-.no-record { color: #94a3b8; font-size: 13px; }
-.present-count { color: #22c55e; font-weight: 600; }
-.count-sep { color: #94a3b8; }
-.empty-hint { text-align: center; color: #94a3b8; padding: 24px 0; font-size: 14px; }
+.no-record { color: var(--text-tertiary); font-size: 13px; }
+.present-count { color: var(--color-success); font-weight: 600; }
+.count-sep { color: var(--text-tertiary); }
+.empty-hint { text-align: center; color: var(--text-tertiary); padding: 24px 0; font-size: 14px; }
 </style>

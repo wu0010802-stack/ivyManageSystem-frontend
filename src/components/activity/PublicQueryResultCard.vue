@@ -63,17 +63,17 @@ const paymentLabel = computed(() =>
 .pub-card { background: #fff; border-radius: 12px; padding: 16px; margin: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
 .query-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
 .query-student { display: flex; align-items: center; gap: 8px; }
-.query-name { font-size: 18px; font-weight: 600; color: #333; }
-.query-class { font-size: 14px; color: #888; background: #f0f0f0; padding: 2px 8px; border-radius: 12px; }
+.query-name { font-size: 18px; font-weight: 600; color: var(--text-primary); }
+.query-class { font-size: 14px; color: var(--text-tertiary); background: #f0f0f0; padding: 2px 8px; border-radius: 12px; }
 .payment-info { display: flex; align-items: center; gap: 6px; }
-.payment-progress-text { font-size: 12px; color: #888; }
+.payment-progress-text { font-size: 12px; color: var(--text-tertiary); }
 .result-course-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0; }
 .result-course-row:last-child { border-bottom: none; }
-.result-course-name { font-size: 14px; color: #333; }
+.result-course-name { font-size: 14px; color: var(--text-primary); }
 .supply-list { margin-top: 12px; padding-top: 12px; border-top: 1px solid #f0f0f0; }
-.supply-list-title { font-size: 12px; color: #888; margin-bottom: 6px; }
-.supply-chip { display: inline-block; background: #f0f0f0; border-radius: 12px; padding: 2px 10px; font-size: 13px; color: #555; margin-right: 6px; margin-bottom: 4px; }
-.result-notes { margin-top: 10px; font-size: 13px; color: #888; }
+.supply-list-title { font-size: 12px; color: var(--text-tertiary); margin-bottom: 6px; }
+.supply-chip { display: inline-block; background: #f0f0f0; border-radius: 12px; padding: 2px 10px; font-size: 13px; color: var(--neutral-600); margin-right: 6px; margin-bottom: 4px; }
+.result-notes { margin-top: 10px; font-size: 13px; color: var(--text-tertiary); }
 .query-actions { display: flex; gap: 10px; margin-top: 16px; }
 .query-actions .el-button { flex: 1; height: 40px; }
 .empty-hint { color: #aaa; font-size: 14px; text-align: center; padding: 16px 0; }

@@ -101,7 +101,7 @@ onMounted(fetchAnnouncements)
         <div class="ann-header">
           <div class="ann-title-row">
             <span v-if="!ann.is_read" class="unread-dot"></span>
-            <el-icon v-if="ann.is_pinned" style="color: #E6A23C; margin-right: 4px;"><Top /></el-icon>
+            <el-icon v-if="ann.is_pinned" style="color: #e6a23c; margin-right: 4px;"><Top /></el-icon>
             <el-tag
               :type="priorityConfig[ann.priority]?.type || 'info'"
               size="small"
@@ -113,7 +113,7 @@ onMounted(fetchAnnouncements)
           </div>
           <div class="ann-meta">
             <span>{{ ann.created_by_name }}</span>
-            <span style="margin-left: 12px; color: #C0C4CC;">{{ formatDate(ann.created_at) }}</span>
+            <span style="margin-left: 12px; color: var(--neutral-300);">{{ formatDate(ann.created_at) }}</span>
           </div>
         </div>
 

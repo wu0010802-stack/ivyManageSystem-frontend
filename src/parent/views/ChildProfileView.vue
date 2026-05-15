@@ -406,7 +406,7 @@ onMounted(() => {
   flex-wrap: wrap;
 }
 .tag {
-  font-size: 11px;
+  font-size: 12px;
   padding: 3px 9px;
   border-radius: 999px;
   background: var(--pt-surface-mute);
@@ -442,7 +442,7 @@ onMounted(() => {
   color: var(--m3-on-surface, var(--pt-text-strong));
 }
 .severity {
-  font-size: 11px;
+  font-size: 12px;
   padding: 2px 8px;
   border-radius: 10px;
 }

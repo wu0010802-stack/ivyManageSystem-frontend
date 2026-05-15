@@ -166,15 +166,15 @@ async function handleSubmit() {
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  background: #f8fafc;
+  background: var(--bg-color);
   border-radius: 6px;
   margin-bottom: 16px;
   font-size: 13px;
-  color: #374151;
+  color: var(--neutral-700);
   flex-wrap: wrap;
 }
-.dps-divider { color: #d1d5db; }
-.dps-paid { color: #16a34a; }
-.dps-owed { color: #374151; }
-.dps-over { color: #d97706; }
+.dps-divider { color: var(--neutral-300); }
+.dps-paid { color: var(--color-success-hover); }
+.dps-owed { color: var(--neutral-700); }
+.dps-over { color: var(--color-warning-hover); }
 </style>

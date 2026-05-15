@@ -56,7 +56,7 @@ const levelLabel = (level) => ({
 .alert-item {
   border: 1px solid #dbe3ef;
   border-radius: 12px;
-  background: #f8fafc;
+  background: var(--bg-color);
   padding: 12px;
   text-align: left;
   cursor: pointer;
@@ -64,7 +64,7 @@ const levelLabel = (level) => ({
 }
 
 .alert-item:hover {
-  border-color: #93c5fd;
+  border-color: var(--color-info-soft);
   transform: translateY(-1px);
 }
 
@@ -77,18 +77,18 @@ const levelLabel = (level) => ({
 
 .alert-code {
   font-size: 0.78rem;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .alert-title {
   font-weight: 700;
-  color: #0f172a;
+  color: var(--neutral-900);
   margin-bottom: 6px;
 }
 
 .alert-message {
   font-size: 0.88rem;
-  color: #475569;
+  color: var(--neutral-600);
   line-height: 1.5;
 }
 </style>

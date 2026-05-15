@@ -367,7 +367,7 @@ function isRevealed(target, guardianId = null) {
   align-items: flex-start;
   gap: 12px;
   padding: 8px 0;
-  border-bottom: 1px dashed var(--border-color-light, #f0f2f5);
+  border-bottom: 1px dashed var(--border-color-light, var(--neutral-100));
 }
 .psd-list .k {
   width: 90px;

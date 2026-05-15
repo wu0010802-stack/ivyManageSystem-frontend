@@ -56,7 +56,7 @@ function submit() {
 }
 .dialog textarea { width: 100%; box-sizing: border-box; font-family: inherit; }
 .error { color: #d32f2f; font-size: 12px; }
-.hint { color: #666; font-size: 13px; margin-top: 0; }
+.hint { color: var(--text-secondary); font-size: 13px; margin-top: 0; }
 .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
 .actions button { padding: 6px 16px; border-radius: 4px; border: 1px solid #ddd; cursor: pointer; }
 .actions button:last-child {

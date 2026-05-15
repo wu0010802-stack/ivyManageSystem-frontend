@@ -17,7 +17,7 @@
               placeholder="選擇參觀日期（年月日）"
               style="width:100%"
             />
-            <div v-if="form.visit_date" style="font-size:11px;color:#909399;margin-top:2px">
+            <div v-if="form.visit_date" style="font-size:12px;color:var(--text-tertiary);margin-top:2px">
               民國：{{ form.visit_date }}（月份：{{ form.month }}）
             </div>
           </el-form-item>

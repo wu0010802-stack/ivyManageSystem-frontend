@@ -50,6 +50,6 @@ const truncatedError = computed(() =>
 .status-ok { border-color: #4caf50; }
 .status-error { border-color: #d32f2f; background: #fff8f8; }
 .error { color: #d32f2f; font-size: 12px; word-break: break-all; }
-.last-fetched { color: #555; font-size: 13px; }
-.http-status { font-size: 12px; color: #666; }
+.last-fetched { color: var(--neutral-600); font-size: 13px; }
+.http-status { font-size: 12px; color: var(--text-secondary); }
 </style>

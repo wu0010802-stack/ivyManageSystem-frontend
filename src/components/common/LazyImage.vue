@@ -80,7 +80,7 @@ function onError() { errored.value = true }
 .pt-lazyimg {
   display: block;
   width: 100%;
-  background: var(--pt-surface-mute, #f0f2f5);
+  background: var(--pt-surface-mute, var(--neutral-100));
   overflow: hidden;
 }
 .pt-lazyimg img {
@@ -91,9 +91,9 @@ function onError() { errored.value = true }
 }
 .pt-lazyimg-shimmer {
   background: linear-gradient(90deg,
-    var(--pt-surface-mute, #f0f2f5) 0%,
+    var(--pt-surface-mute, var(--neutral-100)) 0%,
     var(--pt-surface-mute-soft, #f6f8fa) 50%,
-    var(--pt-surface-mute, #f0f2f5) 100%);
+    var(--pt-surface-mute, var(--neutral-100)) 100%);
   background-size: 200% 100%;
   animation: pt-shimmer 1.4s ease-in-out infinite;
 }

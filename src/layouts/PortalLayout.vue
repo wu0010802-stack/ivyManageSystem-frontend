@@ -574,9 +574,9 @@ const submitPassword = async () => {
 <style scoped>
 .portal-layout {
   /* 顯式鎖定亮色 token：防 PWA 快取殘留 / 跨入口 CSS 殘留 / OS 暗模式偏好把表面色改深 */
-  --bg-color: #f8fafc;
+  --bg-color: var(--bg-color);
   --bg-color-soft: #f3f4f6;
-  --surface-color: #ffffff;
+  --surface-color: var(--neutral-0);
   --pt-surface-app: #f8fafc;
   --pt-surface-card: #ffffff;
   --pt-surface-mute: #f3f4f6;
@@ -595,9 +595,9 @@ const submitPassword = async () => {
 
 /* Sidebar Styling */
 .el-aside {
-  background-color: #1e293b;
+  background-color: var(--text-primary);
   color: #fff;
-  border-right: 1px solid #334155;
+  border-right: 1px solid var(--neutral-700);
   display: flex;
   flex-direction: column;
   transition: transform var(--transition-slow);
@@ -609,8 +609,8 @@ const submitPassword = async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-bottom: 1px solid #334155;
-  background-color: #0f172a;
+  border-bottom: 1px solid var(--neutral-700);
+  background-color: var(--neutral-900);
 }
 
 .portal-logo span {
@@ -634,7 +634,7 @@ const submitPassword = async () => {
 }
 
 :deep(.el-menu-item:hover) {
-  background-color: #334155 !important;
+  background-color: var(--neutral-700) !important;
   color: #fff !important;
 }
 
@@ -662,7 +662,7 @@ const submitPassword = async () => {
 }
 
 :deep(.el-sub-menu .el-sub-menu__title:hover) {
-  background-color: #334155 !important;
+  background-color: var(--neutral-700) !important;
   color: #fff !important;
 }
 
@@ -765,9 +765,9 @@ const submitPassword = async () => {
   gap: var(--space-3);
   padding: var(--space-2) var(--space-4);
   background: #f0fdf4;
-  border-bottom: 1px solid #bbf7d0;
+  border-bottom: 1px solid var(--color-success-soft);
   font-size: var(--text-base);
-  color: #15803d;
+  color: var(--color-success-darker);
 }
 
 /* Misc */
@@ -805,7 +805,7 @@ const submitPassword = async () => {
   align-items: center;
   justify-content: center;
   gap: 3px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-tertiary);
   cursor: pointer;
   transition: color var(--transition-base);

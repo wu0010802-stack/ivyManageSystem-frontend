@@ -942,8 +942,8 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.amount-hint { font-size: 11px; color: #999; margin-top: 2px; }
-.source-tag { margin-left: 6px; font-size: 11px; }
+.amount-hint { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; }
+.source-tag { margin-left: 6px; font-size: 12px; }
 .pending-badge { margin-left: 4px; }
 .activity-registrations { padding: 16px; }
 .page-header { margin-bottom: 16px; }
@@ -957,29 +957,29 @@ onMounted(async () => {
   .filters > * { width: 100% !important; }
 }
 .detail-body { padding: 0 4px; }
-.section-title { font-weight: 600; margin: 16px 0 8px; font-size: 14px; color: #374151; }
+.section-title { font-weight: 600; margin: 16px 0 8px; font-size: 14px; color: var(--neutral-700); }
 .section-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin: 16px 0 8px;
 }
-.section-header-title { font-weight: 600; font-size: 14px; color: #374151; }
+.section-header-title { font-weight: 600; font-size: 14px; color: var(--neutral-700); }
 .section-header :deep(.el-button--small) { gap: 4px; }
 .remark-row { display: flex; gap: 8px; align-items: flex-start; }
-.change-by { color: #94a3b8; font-size: 12px; }
+.change-by { color: var(--text-tertiary); font-size: 12px; }
 .promotion-deadline-hint {
-  font-size: 11px;
-  color: #d97706;
+  font-size: 12px;
+  color: var(--color-warning-hover);
   margin-top: 2px;
 }
 
 /* ── 繳費面板 ── */
 .payment-panel {
-  background: #f8fafc;
+  background: var(--bg-color);
   border-radius: 8px;
   padding: 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border-color);
 }
 .payment-summary {
   display: flex;
@@ -987,19 +987,19 @@ onMounted(async () => {
   flex-wrap: wrap;
   margin-bottom: 12px;
   padding-bottom: 12px;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--border-color);
 }
 .payment-summary-row {
   display: flex;
   align-items: center;
   gap: 8px;
 }
-.ps-label { font-size: 13px; color: #6b7280; }
-.ps-value { font-size: 15px; font-weight: 600; color: #1f2937; }
-.ps-paid { color: #16a34a; }
+.ps-label { font-size: 13px; color: var(--text-secondary); }
+.ps-value { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+.ps-paid { color: var(--color-success-hover); }
 
 .payment-history { margin-bottom: 12px; }
-.payment-history-title { font-size: 13px; color: #6b7280; margin-bottom: 6px; }
+.payment-history-title { font-size: 13px; color: var(--text-secondary); margin-bottom: 6px; }
 .payment-record-row {
   display: flex;
   align-items: center;
@@ -1011,8 +1011,8 @@ onMounted(async () => {
 }
 .payment-record-row:last-child { border-bottom: none; }
 .pr-amount { font-weight: 600; min-width: 60px; }
-.pr-date { color: #6b7280; }
-.pr-method { color: #888; }
+.pr-date { color: var(--text-secondary); }
+.pr-method { color: var(--text-tertiary); }
 .pr-notes { color: #aaa; font-style: italic; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .payment-record-voided { opacity: 0.55; text-decoration: line-through; }
 .payment-record-voided .pr-notes { text-decoration: none; }
@@ -1026,7 +1026,7 @@ onMounted(async () => {
   bottom: 24px;
   left: 50%;
   transform: translateX(-50%);
-  background: #1f2937;
+  background: var(--text-primary);
   color: #fff;
   padding: 10px 20px;
   border-radius: 8px;
@@ -1057,11 +1057,11 @@ onMounted(async () => {
 
 .create-summary {
   padding: 8px 12px;
-  background: #f8fafc;
+  background: var(--bg-color);
   border-radius: 6px;
   font-size: 14px;
-  color: #374151;
+  color: var(--neutral-700);
   margin-top: 4px;
 }
-.create-hint { color: #9ca3af; margin-left: 8px; font-size: 13px; }
+.create-hint { color: var(--text-tertiary); margin-left: 8px; font-size: 13px; }
 </style>

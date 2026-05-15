@@ -27,6 +27,8 @@
   --text-2xl: 20px;
   --text-3xl: 24px;
   --text-4xl: 30px;
+  --text-5xl: 36px;
+  --text-6xl: 48px;
 
   --font-weight-regular: 400;
   --font-weight-medium: 500;
@@ -67,15 +69,28 @@
   --transition-base: 0.2s ease;
   --transition-slow: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
-  /* ===== Semantic Colors (共用) ===== */
+  /* ===== Semantic Colors (共用) =====
+   *  *-soft = 淺底色（badge background, toast）
+   *  base  = 主色（icon, button background, text on light bg）
+   *  *-hover = hover/pressed 深一階
+   *  *-darker = 高對比深色（text on light, 警示強調）
+   */
   --color-success: #10b981;
   --color-success-soft: #dcfce7;
+  --color-success-hover: #059669;
+  --color-success-darker: #15803d;
   --color-warning: #f59e0b;
   --color-warning-soft: #fef3c7;
+  --color-warning-hover: #d97706;
+  --color-warning-darker: #b45309;
   --color-danger: #ef4444;
   --color-danger-soft: #fee2e2;
+  --color-danger-hover: #dc2626;
+  --color-danger-darker: #b91c1c;
   --color-info: #3b82f6;
   --color-info-soft: #dbeafe;
+  --color-info-hover: #2563eb;
+  --color-info-darker: #1d4ed8;
 
   /* ===== Neutral / Surface (共用基底) ===== */
   --neutral-0: #ffffff;

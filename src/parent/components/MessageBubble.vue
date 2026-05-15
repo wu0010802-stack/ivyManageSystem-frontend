@@ -80,8 +80,8 @@ const time = computed(() => {
 .attachments a img { width: 80px; height: 80px; object-fit: cover; border-radius: 4px; }
 .attachments a span { padding: 4px 8px; background: rgba(255,255,255,.2); border-radius: 4px; }
 .att-fallback { display: inline-flex; align-items: center; gap: 4px; }
-.meta { display: flex; gap: 8px; align-items: center; margin-top: 4px; font-size: 11px; opacity: 0.7; }
+.meta { display: flex; gap: 8px; align-items: center; margin-top: 4px; font-size: 12px; opacity: 0.7; }
 .bubble-row:not(.mine) .meta { color: var(--pt-text-placeholder); }
-.recall { background: none; border: none; color: inherit; font-size: 11px; cursor: pointer; text-decoration: underline; padding: 0; }
+.recall { background: none; border: none; color: inherit; font-size: 12px; cursor: pointer; text-decoration: underline; padding: 0; }
 .status { font-style: italic; }
 </style>

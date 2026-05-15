@@ -43,7 +43,7 @@
             :model-value="obs.rating"
             disabled
             show-score
-            :colors="['#F7BA2A', '#F7BA2A', '#F7BA2A']"
+            :colors="['#f7ba2a', '#f7ba2a', '#f7ba2a']"
             style="margin-left: auto"
           />
         </div>
@@ -408,11 +408,11 @@ onMounted(reload)
 }
 .obs-header .date {
   font-weight: 600;
-  color: #606266;
+  color: var(--text-secondary);
 }
 .obs-narrative {
   white-space: pre-wrap;
-  color: #303133;
+  color: var(--text-primary);
   line-height: 1.6;
   margin: 8px 0;
 }
@@ -444,12 +444,12 @@ onMounted(reload)
   gap: 4px;
 }
 .upload-hint {
-  color: #909399;
+  color: var(--text-tertiary);
   font-size: 13px;
   margin-bottom: 12px;
 }
 .upload-tip {
-  color: #909399;
+  color: var(--text-tertiary);
   font-size: 12px;
 }
 </style>

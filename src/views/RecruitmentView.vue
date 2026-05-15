@@ -1196,18 +1196,18 @@ const currentCampus = computed(() => ({
 <style scoped>
 /* ── Design Tokens ── */
 .recruitment-view {
-  --rv-primary:      #1E40AF;
-  --rv-primary-lt:   #DBEAFE;
-  --rv-secondary:    #3B82F6;
-  --rv-accent:       #D97706;
-  --rv-bg:           #F8FAFC;
-  --rv-surface:      #FFFFFF;
-  --rv-muted:        #E9EEF6;
-  --rv-border:       #DBEAFE;
-  --rv-text:         #1E293B;
-  --rv-text-2:       #64748B;
-  --rv-success:      #16A34A;
-  --rv-danger:       #DC2626;
+  --rv-primary:      #1e40af;
+  --rv-primary-lt:   #dbeafe;
+  --rv-secondary:    #3b82f6;
+  --rv-accent:       #d97706;
+  --rv-bg:           #f8fafc;
+  --rv-surface:      #ffffff;
+  --rv-muted:        #e9eef6;
+  --rv-border:       #dbeafe;
+  --rv-text:         #1e293b;
+  --rv-text-2:       #64748b;
+  --rv-success:      #16a34a;
+  --rv-danger:       #dc2626;
   --rv-font-num:     'Fira Code', ui-monospace, monospace;
 }
 
@@ -1289,35 +1289,35 @@ const currentCampus = computed(() => ({
 :deep(.kpi-card) {
   flex: 1;
   min-width: 130px;
-  border-left: 4px solid var(--rv-primary, #1E40AF);
+  border-left: 4px solid var(--rv-primary, #1e40af);
   transition: box-shadow 0.18s ease, transform 0.18s ease;
 }
 :deep(.kpi-card:hover) {
   box-shadow: 0 4px 16px rgba(30, 64, 175, 0.10);
   transform: translateY(-1px);
 }
-:deep(.kpi-card.kpi-accent) { border-left-color: #D97706; }
-:deep(.kpi-card.kpi-blue)   { border-left-color: #3B82F6; }
-:deep(.kpi-card.kpi-teal)   { border-left-color: #0891B2; }
-:deep(.kpi-card.kpi-green)  { border-left-color: #16A34A; }
+:deep(.kpi-card.kpi-accent) { border-left-color: var(--color-warning-hover); }
+:deep(.kpi-card.kpi-blue)   { border-left-color: var(--color-info); }
+:deep(.kpi-card.kpi-teal)   { border-left-color: #0891b2; }
+:deep(.kpi-card.kpi-green)  { border-left-color: var(--color-success-hover); }
 :deep(.kpi-value) {
   font-family: 'Fira Code', ui-monospace, monospace;
   font-size: 1.8rem;
   font-weight: 700;
-  color: var(--rv-primary, #1E3A8A);
+  color: var(--rv-primary, #1e3a8a);
   font-variant-numeric: tabular-nums;
 }
-:deep(.kpi-card.kpi-accent .kpi-value) { color: #B45309; }
-:deep(.kpi-card.kpi-blue   .kpi-value) { color: #1D4ED8; }
-:deep(.kpi-card.kpi-teal   .kpi-value) { color: #0E7490; }
-:deep(.kpi-card.kpi-green  .kpi-value) { color: #15803D; }
+:deep(.kpi-card.kpi-accent .kpi-value) { color: var(--color-warning-darker); }
+:deep(.kpi-card.kpi-blue   .kpi-value) { color: var(--color-info-darker); }
+:deep(.kpi-card.kpi-teal   .kpi-value) { color: #0e7490; }
+:deep(.kpi-card.kpi-green  .kpi-value) { color: var(--color-success-darker); }
 :deep(.kpi-label) {
   font-size: 0.78rem;
-  color: #94A3B8;
+  color: var(--text-tertiary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
-:deep(.kpi-sub) { font-size: 0.78rem; color: #94A3B8; }
+:deep(.kpi-sub) { font-size: 0.78rem; color: var(--text-tertiary); }
 :deep(.chart-row) {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
@@ -1370,15 +1370,15 @@ const currentCampus = computed(() => ({
 .area-campus-name {
   font-weight: 700;
   font-size: 0.97rem;
-  color: var(--rv-text, #1E293B);
+  color: var(--rv-text, #1e293b);
 }
 .area-campus-addr {
   font-size: 0.8rem;
-  color: var(--rv-text-2, #64748B);
+  color: var(--rv-text-2, #64748b);
 }
 .area-campus-coord {
   font-size: 0.75rem;
-  color: #94A3B8;
+  color: var(--text-tertiary);
   font-variant-numeric: tabular-nums;
   font-family: 'Fira Code', ui-monospace, monospace;
 }
@@ -1390,7 +1390,7 @@ const currentCampus = computed(() => ({
 }
 .area-sync-time {
   font-size: 0.75rem;
-  color: #94A3B8;
+  color: var(--text-tertiary);
 }
 
 /* -------- 園所座標狀態 -------- */
@@ -1426,7 +1426,7 @@ const currentCampus = computed(() => ({
 
 .area-kpi-card {
   background: #fff;
-  border: 1px solid #E2E8F0;
+  border: 1px solid var(--border-color);
   border-radius: 12px;
   padding: 14px 16px;
   display: flex;
@@ -1437,17 +1437,17 @@ const currentCampus = computed(() => ({
   font-family: 'Fira Code', ui-monospace, monospace;
   font-size: 1.5rem;
   font-weight: 700;
-  color: #1E293B;
+  color: var(--text-primary);
   line-height: 1.2;
 }
 .area-kpi-denom {
   font-size: 0.85rem;
   font-weight: 400;
-  color: #94A3B8;
+  color: var(--text-tertiary);
 }
 .area-kpi-label {
   font-size: 0.75rem;
-  color: #64748B;
+  color: var(--text-secondary);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -1457,11 +1457,11 @@ const currentCampus = computed(() => ({
 }
 .area-kpi-sub--muted {
   font-size: 0.72rem;
-  color: #94A3B8;
+  color: var(--text-tertiary);
 }
 .area-kpi-bar-bg {
   height: 5px;
-  background: #E2E8F0;
+  background: var(--border-color);
   border-radius: 3px;
   overflow: hidden;
 }
@@ -1470,7 +1470,7 @@ const currentCampus = computed(() => ({
   border-radius: 3px;
   transition: width 0.4s ease;
 }
-.area-kpi-bar-fill--blue { background: #3B82F6; }
+.area-kpi-bar-fill--blue { background: var(--color-info); }
 
 /* -------- 預繳率進度條 -------- */
 .rate-cell {
@@ -1481,7 +1481,7 @@ const currentCampus = computed(() => ({
 .rate-bar-bg {
   flex: 1;
   height: 6px;
-  background: #F1F5F9;
+  background: var(--bg-color-soft);
   border-radius: 3px;
   overflow: hidden;
   min-width: 40px;
@@ -1491,13 +1491,13 @@ const currentCampus = computed(() => ({
   border-radius: 3px;
   transition: width 0.4s ease;
 }
-.rate-bar-fill--green  { background: #22c55e; }
-.rate-bar-fill--yellow { background: #f59e0b; }
+.rate-bar-fill--green  { background: var(--color-success); }
+.rate-bar-fill--yellow { background: var(--color-warning); }
 .rate-bar-fill--red    { background: #f87171; }
 .rate-label {
   font-size: 0.8rem;
   font-family: 'Fira Code', ui-monospace, monospace;
-  color: #1E293B;
+  color: var(--text-primary);
   white-space: nowrap;
   min-width: 42px;
   text-align: right;
@@ -1512,17 +1512,17 @@ const currentCampus = computed(() => ({
   font-weight: 600;
   white-space: nowrap;
 }
-.travel-badge--green  { background: #DCFCE7; color: #15803D; }
-.travel-badge--yellow { background: #FEF9C3; color: #A16207; }
-.travel-badge--orange { background: #FFEDD5; color: #C2410C; }
-.text-muted { color: #CBD5E1; }
+.travel-badge--green  { background: var(--color-success-soft); color: var(--color-success-darker); }
+.travel-badge--yellow { background: #fef9c3; color: var(--color-warning-darker); }
+.travel-badge--orange { background: #ffedd5; color: #c2410c; }
+.text-muted { color: var(--neutral-300); }
 
 .chart-empty {
   display: flex;
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: #94A3B8;
+  color: var(--text-tertiary);
   font-size: 0.85rem;
 }
 
@@ -1543,11 +1543,11 @@ const currentCampus = computed(() => ({
   align-items: center;
   gap: 2px;
   padding: 2px 8px 2px 10px;
-  background: #EFF6FF;
-  border: 1px solid #BFDBFE;
+  background: var(--color-info-soft);
+  border: 1px solid #bfdbfe;
   border-radius: 12px;
   font-size: 0.75rem;
-  color: #1D4ED8;
+  color: var(--color-info-darker);
   font-weight: 600;
 }
 :deep(.district-row-selected td) {

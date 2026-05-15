@@ -407,12 +407,12 @@ onMounted(() => {
 
 .date-label {
   font-weight: 700;
-  color: #303133;
+  color: var(--text-primary);
 }
 
 .dialog-hint {
   margin-left: 12px;
-  color: #909399;
+  color: var(--text-tertiary);
 }
 
 .batch-actions {
@@ -452,6 +452,6 @@ onMounted(() => {
 
 .summary-muted,
 .text-muted {
-  color: #909399;
+  color: var(--text-tertiary);
 }
 </style>

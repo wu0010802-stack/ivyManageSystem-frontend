@@ -101,7 +101,7 @@ onMounted(reload)
 
 .operator-activity__hint {
   font-size: 13px;
-  color: #64748b;
+  color: var(--text-secondary);
   flex: 1;
   min-width: 280px;
 }
