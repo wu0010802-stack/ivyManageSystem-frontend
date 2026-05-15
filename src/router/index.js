@@ -228,6 +228,19 @@ const router = createRouter({
             path: '/appraisal/settings',
             redirect: { path: '/appraisal-management', query: { tab: 'settings' } },
         },
+        // ============ 年終獎金結算 ============
+        {
+            path: '/year_end/cycles',
+            name: 'year-end-cycles',
+            component: () => import('../views/yearEnd/YearEndListView.vue'),
+            meta: { title: '年終獎金結算' }
+        },
+        {
+            path: '/year_end/cycles/:id',
+            name: 'year-end-cycle-detail',
+            component: () => import('../views/yearEnd/YearEndDetailView.vue'),
+            meta: { title: '年終結算明細' }
+        },
 
         // ============ 學費管理 ============
         {
