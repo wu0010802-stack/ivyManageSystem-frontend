@@ -94,14 +94,18 @@ describe('AnnouncementView', () => {
         directives: {
           loading: () => {},
         },
+        // T11(2026-05-14 review)：teleport: true 對應 el-dialog/drawer 內部 <teleport>。
+        // 既有 'el-dialog' 自訂 stub 模板強制渲染 slot，違反 portal/parent 端慣例
+        // (PortalMeasurementSheet 等已採 teleport: true)。本檔 dialog 內容不被斷言。
         stubs: {
+          teleport: true,
           'el-button': { template: '<button><slot /></button>' },
           'el-table': ElTableStub,
           'el-table-column': ElTableColumnStub,
           'el-tag': { template: '<span><slot /></span>' },
           'el-icon': { template: '<i><slot /></i>' },
           'el-popover': { template: '<div><slot name="reference" /><slot /></div>' },
-          'el-dialog': { template: '<div><slot /><slot name="footer" /></div>' },
+          'el-dialog': true,
           'el-form': { template: '<form><slot /></form>' },
           'el-form-item': { template: '<div><slot /></div>' },
           'el-input': true,
