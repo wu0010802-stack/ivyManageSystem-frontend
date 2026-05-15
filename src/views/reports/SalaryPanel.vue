@@ -1,9 +1,11 @@
 <script setup>
-import { computed, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useCachedAsync } from '@/composables/useCachedAsync'
 import { getDashboard, getFinanceSummary } from '@/api/reports'
 import { BarChart, MONTH_LABELS } from './chartSetup.js'
 import { money } from '@/utils/format'
+import { getUserInfo } from '@/utils/auth'
+import SalaryContributorsDialog from './SalaryContributorsDialog.vue'
 
 const props = defineProps({
   year: { type: Number, required: true },
@@ -32,6 +34,19 @@ const loading = computed(() =>
   (finance.pending.value && !finance.data.value)
 )
 
+// canSeeAmount：admin/hr 看完整金額，其他 role 顯「—」（後端遮罩決定，前端僅 UI label 用）
+const canSeeAmount = computed(() => {
+  const info = getUserInfo()
+  return info?.role === 'admin' || info?.role === 'hr'
+})
+
+// drill-down dialog state
+const contribDialog = ref({ visible: false, month: null })
+
+function openContributors(monthIdx) {
+  contribDialog.value = { visible: true, month: monthIdx + 1 }
+}
+
 const salaryChartData = computed(() => {
   const monthMap = {}
   ;(data.value.salary_monthly || []).forEach(d => { monthMap[d.month] = d })
@@ -46,15 +61,15 @@ const salaryChartData = computed(() => {
   return {
     labels: MONTH_LABELS,
     datasets: [
-      { label: '應發總額', data: gross, backgroundColor: 'rgba(64,158,255,0.6)', borderColor: '#409eff', borderWidth: 1, borderRadius: 4, order: 3 },
-      { label: '實發總額', data: net, type: 'line', borderColor: '#67c23a', backgroundColor: 'rgba(103,194,58,0.1)', fill: false, tension: 0.3, pointRadius: 4, order: 1 },
-      { label: '獎金', data: bonus, type: 'line', borderColor: '#e6a23c', backgroundColor: 'rgba(230,162,60,0.1)', fill: false, tension: 0.3, borderDash: [5, 5], pointRadius: 3, order: 2 },
-      { label: '加班費', data: ot, type: 'line', borderColor: '#9b59b6', backgroundColor: 'rgba(155,89,182,0.1)', fill: false, tension: 0.3, borderDash: [3, 3], pointRadius: 3, order: 2 },
+      { label: '應發總額', data: gross, backgroundColor: 'rgba(64,158,255,0.6)', borderColor: '#409EFF', borderWidth: 1, borderRadius: 4, order: 3 },
+      { label: '實發總額', data: net, type: 'line', borderColor: '#67C23A', backgroundColor: 'rgba(103,194,58,0.1)', fill: false, tension: 0.3, pointRadius: 4, order: 1 },
+      { label: '獎金', data: bonus, type: 'line', borderColor: '#E6A23C', backgroundColor: 'rgba(230,162,60,0.1)', fill: false, tension: 0.3, borderDash: [5, 5], pointRadius: 3, order: 2 },
+      { label: '加班費', data: ot, type: 'line', borderColor: '#9B59B6', backgroundColor: 'rgba(155,89,182,0.1)', fill: false, tension: 0.3, borderDash: [3, 3], pointRadius: 3, order: 2 },
     ],
   }
 })
 
-const salaryChartOptions = {
+const salaryChartOptions = computed(() => ({
   responsive: true, maintainAspectRatio: false,
   plugins: {
     legend: { position: 'top' },
@@ -72,7 +87,11 @@ const salaryChartOptions = {
     },
   },
   spanGaps: true,
-}
+  onClick: (e, elements) => {
+    if (!elements.length) return
+    openContributors(elements[0].index)
+  },
+}))
 
 const expenseCategories = computed(() => financeData.value?.expense_by_category || [])
 const totalEmployerBenefit = computed(() => {
@@ -89,7 +108,7 @@ const totalGross = computed(() => {
   <el-skeleton v-if="loading" :rows="8" animated />
   <div v-else>
     <el-card class="chart-card" shadow="hover">
-      <template #header><span class="chart-title">薪資支出月度比較</span></template>
+      <template #header><span class="chart-title">薪資支出月度比較（點擊長條看 top 5 contributors）</span></template>
       <div class="chart-container chart-container--tall">
         <BarChart :data="salaryChartData" :options="salaryChartOptions" />
       </div>
@@ -118,17 +137,23 @@ const totalGross = computed(() => {
         </el-col>
       </el-row>
     </el-card>
+
+    <SalaryContributorsDialog
+      v-model="contribDialog.visible"
+      :year="year"
+      :month="contribDialog.month || 1"
+    />
   </div>
 </template>
 
 <style scoped>
 .chart-card { margin-bottom: var(--space-4); }
 .chart-title { font-size: 15px; font-weight: 600; color: var(--text-primary); }
-.chart-container { height: 320px; position: relative; }
-.chart-container--tall { height: 380px; }
+.chart-container { height: 320px; position: relative; cursor: pointer; }
+.chart-container--tall { height: 380px; cursor: pointer; }
 .kpi { text-align: center; padding: 12px 0; }
 .kpi-label { font-size: var(--text-sm); color: var(--text-secondary); margin-bottom: 6px; }
 .kpi-value { font-size: 22px; font-weight: 700; color: var(--text-primary); }
-.kpi-blue { color: var(--color-info); }
+.kpi-blue { color: #409EFF; }
 .kpi-orange { color: var(--color-warning); }
 </style>
