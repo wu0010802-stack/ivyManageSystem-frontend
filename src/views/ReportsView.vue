@@ -74,16 +74,16 @@ onMounted(fetchAll)
 
     <el-tabs v-model="activeTab" type="card" class="reports-tabs">
       <el-tab-pane label="概況" name="overview">
-        <OverviewPanel v-if="activeTab === 'overview'" :finance="financeData" :dashboard="dashboardData" />
+        <OverviewPanel v-if="activeTab === 'overview'" :key="selectedYear" :year="selectedYear" :finance="financeData" :dashboard="dashboardData" />
       </el-tab-pane>
       <el-tab-pane label="收支彙總" name="finance">
-        <FinanceSummaryPanel v-if="activeTab === 'finance'" :year="selectedYear" />
+        <FinanceSummaryPanel v-if="activeTab === 'finance'" :key="selectedYear" :year="selectedYear" />
       </el-tab-pane>
       <el-tab-pane label="出勤" name="attendance">
-        <AttendancePanel v-if="activeTab === 'attendance'" :data="dashboardData" />
+        <AttendancePanel v-if="activeTab === 'attendance'" :key="selectedYear" :year="selectedYear" :data="dashboardData" />
       </el-tab-pane>
       <el-tab-pane label="薪資" name="salary">
-        <SalaryPanel v-if="activeTab === 'salary'" :data="dashboardData" :finance="financeData" />
+        <SalaryPanel v-if="activeTab === 'salary'" :key="selectedYear" :year="selectedYear" :data="dashboardData" :finance="financeData" />
       </el-tab-pane>
     </el-tabs>
   </div>
