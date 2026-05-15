@@ -1,22 +1,40 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
+import { useCachedAsync } from '@/composables/useCachedAsync'
+import { getDashboard, getFinanceSummary } from '@/api/reports'
 import { BarChart, MONTH_LABELS } from './chartSetup.js'
 import { money } from '@/utils/format'
 
 const props = defineProps({
-  data: {
-    type: Object,
-    default: () => ({ salary_monthly: [] }),
-  },
-  finance: {
-    type: Object,
-    default: () => null,
-  },
+  year: { type: Number, required: true },
 })
+
+const dashboard = useCachedAsync(
+  `reports/dashboard:${props.year}`,
+  () => getDashboard({ year: props.year }).then(r => r.data),
+  { ttl: 300_000 }
+)
+const finance = useCachedAsync(
+  `reports/finance:${props.year}`,
+  () => getFinanceSummary(props.year).then(r => r.data),
+  { ttl: 300_000 }
+)
+
+watch(() => props.year, () => {
+  dashboard.refresh(false)
+  finance.refresh(false)
+})
+
+const data = computed(() => dashboard.data.value || { salary_monthly: [] })
+const financeData = computed(() => finance.data.value)
+const loading = computed(() =>
+  (dashboard.pending.value && !dashboard.data.value) ||
+  (finance.pending.value && !finance.data.value)
+)
 
 const salaryChartData = computed(() => {
   const monthMap = {}
-  ;(props.data.salary_monthly || []).forEach(d => { monthMap[d.month] = d })
+  ;(data.value.salary_monthly || []).forEach(d => { monthMap[d.month] = d })
   const gross = [], net = [], bonus = [], ot = []
   for (let m = 1; m <= 12; m++) {
     const d = monthMap[m]
@@ -56,15 +74,11 @@ const salaryChartOptions = {
   spanGaps: true,
 }
 
-const expenseCategories = computed(() => {
-  return props.finance?.expense_by_category || []
-})
-
+const expenseCategories = computed(() => financeData.value?.expense_by_category || [])
 const totalEmployerBenefit = computed(() => {
   const row = expenseCategories.value.find(c => c.category === 'employer_benefit')
   return row?.amount || 0
 })
-
 const totalGross = computed(() => {
   const row = expenseCategories.value.find(c => c.category === 'salary_gross')
   return row?.amount || 0
@@ -72,7 +86,8 @@ const totalGross = computed(() => {
 </script>
 
 <template>
-  <div>
+  <el-skeleton v-if="loading" :rows="8" animated />
+  <div v-else>
     <el-card class="chart-card" shadow="hover">
       <template #header><span class="chart-title">薪資支出月度比較</span></template>
       <div class="chart-container chart-container--tall">
@@ -80,7 +95,7 @@ const totalGross = computed(() => {
       </div>
     </el-card>
 
-    <el-card v-if="finance" class="chart-card" shadow="hover">
+    <el-card v-if="financeData" class="chart-card" shadow="hover">
       <template #header><span class="chart-title">園方人事成本（本年彙總）</span></template>
       <el-row :gutter="16">
         <el-col :xs="12" :sm="8">

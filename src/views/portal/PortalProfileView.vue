@@ -4,8 +4,9 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import QRCode from 'qrcode'
 import { getProfile, updateProfile } from '@/api/portal'
 import { getMyLineBinding, updateMyLineBinding, deleteMyLineBinding } from '@/api/lineBinding'
-import { apiError } from '@/utils/error'
+import { useErrorNotify } from '@/composables/useErrorNotify'
 
+const { notify } = useErrorNotify()
 const lineBotFriendUrl = import.meta.env.VITE_LINE_BOT_FRIEND_URL || ''
 
 const loading = ref(false)
@@ -36,7 +37,7 @@ const fetchProfile = async () => {
     profile.value = res.data
     syncForm(res.data)
   } catch (error) {
-    ElMessage.error(apiError(error, '載入個人資料失敗'))
+    notify(error, 'PortalProfile:load', '載入個人資料失敗')
   } finally {
     loading.value = false
   }
@@ -78,7 +79,7 @@ const saveProfile = async () => {
     isEditing.value = false
     fetchProfile()
   } catch (error) {
-    ElMessage.error(apiError(error, '更新失敗'))
+    notify(error, 'PortalProfile:update', '更新失敗')
   } finally {
     saving.value = false
   }
@@ -145,7 +146,7 @@ const saveLineBinding = async () => {
     lineUserId.value = lineBindInput.value
     lineBindInput.value = ''
   } catch (error) {
-    ElMessage.error(apiError(error, 'LINE 綁定失敗'))
+    notify(error, 'PortalProfile:lineBindUpdate', 'LINE 綁定失敗')
   } finally {
     savingLine.value = false
   }
@@ -164,7 +165,7 @@ const removeLineBinding = async () => {
     lineUserId.value = null
     lineBindInput.value = ''
   } catch (error) {
-    ElMessage.error(apiError(error, '解除失敗'))
+    notify(error, 'PortalProfile:lineBindDelete', '解除失敗')
   } finally {
     savingLine.value = false
   }

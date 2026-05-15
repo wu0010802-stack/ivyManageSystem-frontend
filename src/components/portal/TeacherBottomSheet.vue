@@ -202,8 +202,10 @@ function trapFocus(e) {
   }
 }
 
-function lockBody() { document.body.style.overflow = 'hidden' }
-function unlockBody() { document.body.style.overflow = '' }
+// A6 第一階段：body scroll lock 改用 ref-counted 共用 composable，修補原版多層
+// 疊起時內層關閉誤解鎖外層的 bug（與 ParentBottomSheet 同源）。
+import { useBodyLock } from '@/composables/useBodyLock'
+const { lock: lockBody, unlock: unlockBody } = useBodyLock()
 
 function onKeydown(e) {
   if (e.key === 'Escape' && props.dismissible) {

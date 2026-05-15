@@ -61,6 +61,22 @@
       <el-form-item label="改善建議">
         <el-input v-model="form.suggestions" type="textarea" :rows="2" placeholder="改善建議（選填）" />
       </el-form-item>
+      <el-form-item label="關聯事件">
+        <el-select
+          v-model="form.related_incident_id"
+          placeholder="（選填）引用本生既有事件"
+          clearable
+          :loading="incidentsLoading"
+          style="width: 100%"
+        >
+          <el-option
+            v-for="inc in incidentOptions"
+            :key="inc.id"
+            :label="`${inc.occurred_at?.slice(0, 10) || ''}　${inc.incident_type || ''}`"
+            :value="inc.id"
+          />
+        </el-select>
+      </el-form-item>
     </el-form>
     <template #footer>
       <el-button @click="emit('update:visible', false)">取消</el-button>
@@ -74,6 +90,7 @@ import { reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ASSESSMENT_TYPES, DOMAINS, RATINGS } from '@/constants/studentRecords'
 import { getStudents } from '@/api/students'
+import { getIncidents } from '@/api/studentIncidents'
 import { useStudentRecordsStore } from '@/stores/studentRecords'
 import { apiError } from '@/utils/error'
 
@@ -98,6 +115,7 @@ const empty = () => ({
   content: '',
   suggestions: '',
   assessment_date: '',
+  related_incident_id: null,
 })
 
 const form = reactive(empty())
@@ -105,6 +123,32 @@ const pickedClassroomId = ref(null)
 const studentOptions = ref([])
 const studentsLoading = ref(false)
 const submitting = ref(false)
+const incidentOptions = ref([])
+const incidentsLoading = ref(false)
+
+const loadIncidents = async (studentId) => {
+  if (!studentId) {
+    incidentOptions.value = []
+    return
+  }
+  incidentsLoading.value = true
+  try {
+    const res = await getIncidents({ student_id: studentId, limit: 50 })
+    incidentOptions.value = res.data?.items || []
+  } catch {
+    incidentOptions.value = []
+  } finally {
+    incidentsLoading.value = false
+  }
+}
+
+watch(
+  () => form.student_id,
+  (sid) => {
+    if (sid) loadIncidents(sid)
+    else incidentOptions.value = []
+  },
+)
 
 const loadStudents = async (classroomId) => {
   if (!classroomId) { studentOptions.value = []; return }
@@ -135,6 +179,7 @@ const hydrate = () => {
       content: props.initial.content || '',
       suggestions: props.initial.suggestions || '',
       assessment_date: props.initial.assessment_date || '',
+      related_incident_id: props.initial.related_incident_id ?? null,
     })
     pickedClassroomId.value = props.initial.classroom_id || props.defaultClassroomId || null
     studentOptions.value = props.initial.student_name
@@ -180,6 +225,7 @@ const submit = async () => {
       content: form.content,
       suggestions: form.suggestions || null,
       assessment_date: form.assessment_date,
+      related_incident_id: form.related_incident_id ?? null,
     }
     const recordsStore = useStudentRecordsStore()
     let saved

@@ -1,10 +1,11 @@
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Download } from '@element-plus/icons-vue'
 import { LineChart, PieChart } from './chartSetup.js'
 import FinanceDetailDialog from './FinanceDetailDialog.vue'
 import { getFinanceSummary, financeSummaryExportUrl } from '@/api/reports'
+import { useCachedAsync } from '@/composables/useCachedAsync'
 import { apiError } from '@/utils/error'
 import { money } from '@/utils/format'
 import { downloadFile } from '@/utils/download'
@@ -13,29 +14,56 @@ const props = defineProps({
   year: { type: Number, required: true },
 })
 
-const loading = ref(false)
 const exporting = ref(false)
 const selectedMonth = ref(null)
-const data = ref(null)
 
 const detailVisible = ref(false)
 const detailMonth = ref(null)
 
-const fetchData = async () => {
-  loading.value = true
-  try {
-    const res = await getFinanceSummary(props.year, selectedMonth.value)
-    data.value = res.data
-  } catch (e) {
-    ElMessage.error(apiError(e, '載入收支資料失敗'))
-  } finally {
-    loading.value = false
+// 雙軌策略：
+// - selectedMonth === null：走 useCachedAsync，cache key 與 OverviewPanel/SalaryPanel
+//   共用（reports/finance:${year}），切 tab 命中
+// - selectedMonth 有值：直接 axios，不寫入共用 cache（避免污染年級 cache：
+//   useCachedAsync 的 key 在 instance 建立時固定，若 refresh() 帶 month 結果會
+//   蓋到 reports/finance:${year} 條目，導致 Overview/Salary 拿到月資料而非全年）
+const yearLevel = useCachedAsync(
+  `reports/finance:${props.year}`,
+  () => getFinanceSummary(props.year).then(r => r.data),
+  { ttl: 300_000, immediate: false }
+)
+const monthData = ref(null)
+const monthLoading = ref(false)
+
+async function loadData() {
+  if (selectedMonth.value == null) {
+    try {
+      await yearLevel.refresh(false)
+    } catch (e) {
+      ElMessage.error(apiError(e, '載入收支資料失敗'))
+    }
+  } else {
+    monthLoading.value = true
+    try {
+      const res = await getFinanceSummary(props.year, selectedMonth.value)
+      monthData.value = res.data
+    } catch (e) {
+      ElMessage.error(apiError(e, '載入收支資料失敗'))
+    } finally {
+      monthLoading.value = false
+    }
   }
 }
 
-watch(() => props.year, fetchData)
-watch(selectedMonth, fetchData)
-onMounted(fetchData)
+watch([() => props.year, selectedMonth], loadData, { immediate: true })
+
+const data = computed(() =>
+  selectedMonth.value == null ? yearLevel.data.value : monthData.value
+)
+const loading = computed(() => {
+  const hasData = data.value != null
+  if (selectedMonth.value == null) return yearLevel.pending.value && !hasData
+  return monthLoading.value && !hasData
+})
 
 const months = Array.from({ length: 12 }, (_, i) => i + 1)
 
@@ -154,7 +182,8 @@ const exportXlsx = async () => {
 </script>
 
 <template>
-  <div v-loading="loading" class="finance-panel">
+  <el-skeleton v-if="loading" :rows="10" animated />
+  <div v-else class="finance-panel">
     <div class="controls">
       <el-select v-model="selectedMonth" clearable placeholder="整年" style="width: 140px;">
         <el-option v-for="m in months" :key="m" :label="`${m} 月`" :value="m" />

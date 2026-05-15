@@ -16,6 +16,17 @@ function manualChunks(id) {
         return 'vue-core'
     }
 
+    // A2 baseline bug fix：Vite 動態 import 的 __vitePreload runtime helper
+    // 預設會被 rollup 自動放進「第一個用到它的 chunk」（實測落在 parent-app），
+    // 導致 admin-core / public-app 等其他用 dynamic import 的 chunk 必須
+    // static-import parent-app 取得 helper → 各 entry HTML 被迫 preload
+    // parent-app 整包（家長端的 LIFF SDK / styles 等）。
+    // 固定到 vue-core 後三個 entry 都共享同一份 helper，
+    // 不再連鎖拉入彼此的 chunk。
+    if (id.includes('vite/preload-helper')) {
+        return 'vue-core'
+    }
+
     if (!id.includes('node_modules') && !id.includes('/src/')) {
         return
     }
@@ -95,6 +106,13 @@ function manualChunks(id) {
         return 'parent-app'
     }
 
+    // A2: 公開報名頁（public.html entry）shell + router + design-tokens.
+    // 不放 admin / parent；未登入家長不下載 admin-core / activity-admin 整包。
+    // views/public/* 由 router lazy dynamic import 落 ActivityPublicView 各自 chunk。
+    if (id.includes('/src/public/')) {
+        return 'public-app'
+    }
+
     // Leaflet 地圖庫只在 RecruitmentAddressHeatmap.vue（招生熱力圖）動態 import 用到。
     // 不抽出時會 fall through 到 vendor catch-all → 所有入口（admin / parent / portal）
     // 都被迫載 150 KB raw / ~50 KB gz。
@@ -105,6 +123,15 @@ function manualChunks(id) {
 
     if (id.includes('chart.js') || id.includes('vue-chartjs')) {
         return 'chart-vendor'
+    }
+
+    // A3: echarts 整包約 300 KB raw / ~95 KB gz；MeasurementChart 內部 dynamic import
+    // → 落獨立 chunk，不會被 fall-through 推進主 vendor。
+    if (
+        id.includes('/node_modules/echarts/') ||
+        id.includes('/node_modules/zrender/')
+    ) {
+        return 'echarts'
     }
 
     if (id.includes('element-plus') || id.includes('@element-plus')) {
@@ -422,13 +449,16 @@ export default defineConfig({
         chunkSizeWarningLimit: 500,
         sourcemap: false, // 避免正式環境外洩程式碼結構與原始檔路徑
         rollupOptions: {
-            // multi-page：管理端 + 家長 LIFF App 兩個獨立 entry
+            // multi-page：管理端 + 家長 LIFF App + 公開報名頁 三個獨立 entry
             // dev/prod 路徑：
             //   - 管理端：/index.html（hash 模式 #/...）
             //   - 家長 App：/parent.html（hash 模式 #/...，方便 LIFF endpoint URL 直接綁這個）
+            //   - 公開報名：/public.html（A2 把 /public/activity* 拆出，
+            //     未登入家長不下載 admin-core / element-plus / activity-admin 整包）
             input: {
                 main: fileURLToPath(new URL('./index.html', import.meta.url)),
                 parent: fileURLToPath(new URL('./parent.html', import.meta.url)),
+                public: fileURLToPath(new URL('./public.html', import.meta.url)),
             },
             output: {
                 manualChunks,

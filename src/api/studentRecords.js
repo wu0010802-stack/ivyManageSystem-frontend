@@ -9,3 +9,9 @@ export function getStudentRecordsTimeline(params = {}) {
     paramsSerializer: { indexes: null },
   })
 }
+
+// 教務摘要：本學期出席率 / 請假天 / 評量數 / 事件數
+// 後端端點：GET /api/students/{id}/academic-summary?school_year=&semester=
+export function getAcademicSummary(studentId, params = {}) {
+  return api.get(`/students/${studentId}/academic-summary`, { params })
+}

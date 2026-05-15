@@ -4,8 +4,10 @@ import { uploadFile, uploadCsv, getRecords, getSummary, deleteMonthRecords as de
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { UploadFilled, Search } from '@element-plus/icons-vue'
 import { downloadFile } from '@/utils/download'
-import { apiError } from '@/utils/error'
+import { useErrorNotify } from '@/composables/useErrorNotify'
 import EmptyState from '@/components/common/EmptyState.vue'
+
+const { notify } = useErrorNotify()
 
 const activeTab = ref('upload')
 const currentYear = new Date().getFullYear()
@@ -26,7 +28,7 @@ const handleExcelUpload = async (options) => {
     uploadResult.value = response.data
     ElMessage.success(response.data.message || '匯入完成')
   } catch (error) {
-    ElMessage.error('上傳失敗: ' + apiError(error, error.message))
+    notify(error, 'AttendanceView:upload', null, { prefix: '上傳失敗' })
   } finally {
     uploading.value = false
   }
@@ -79,7 +81,7 @@ const handleCsvImport = async () => {
     uploadResult.value = response.data.results || response.data
     ElMessage.success(response.data.message || '匯入完成')
   } catch (error) {
-    ElMessage.error('匯入失敗: ' + apiError(error, error.message))
+    notify(error, 'AttendanceView:import', null, { prefix: '匯入失敗' })
   } finally {
     uploading.value = false
   }
@@ -137,7 +139,7 @@ const deleteMonthRecords = () => {
       attendanceRecords.value = []
       summaryData.value = []
     } catch (error) {
-      ElMessage.error('刪除失敗: ' + apiError(error, error.message))
+      notify(error, 'AttendanceView:deleteMonth', null, { prefix: '刪除失敗' })
     }
   }).catch(() => {})
 }
@@ -194,7 +196,7 @@ const fetchAnomalies = async () => {
     anomalyData.value = res.data
     selectedAnomalies.value = []
   } catch (error) {
-    ElMessage.error('查詢異常清單失敗：' + apiError(error, error.message))
+    notify(error, 'AttendanceView:anomalyList', null, { prefix: '查詢異常清單失敗' })
   } finally {
     loadingAnomalies.value = false
   }
@@ -225,7 +227,7 @@ const doBatchConfirm = async (action) => {
     ElMessage.success(`已處理 ${res.data.processed} 筆`)
     await fetchAnomalies()
   } catch (error) {
-    ElMessage.error('批次確認失敗：' + apiError(error, error.message))
+    notify(error, 'AttendanceView:batchConfirm', null, { prefix: '批次確認失敗' })
   }
 }
 
@@ -239,7 +241,7 @@ const doExportAnomalies = async () => {
     a.click()
     URL.revokeObjectURL(url)
   } catch (error) {
-    ElMessage.error('匯出失敗：' + apiError(error, error.message))
+    notify(error, 'AttendanceView:exportAnomalies', null, { prefix: '匯出失敗' })
   }
 }
 

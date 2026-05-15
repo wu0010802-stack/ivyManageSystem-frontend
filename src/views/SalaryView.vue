@@ -13,8 +13,10 @@ import SalaryLogicPanel from './salary/SalaryLogicPanel.vue'
 import SalarySnapshotDialog from './salary/SalarySnapshotDialog.vue'
 import SalaryBreakdown from './salary/SalaryBreakdown.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
-import { apiError } from '@/utils/error'
+import { useErrorNotify } from '@/composables/useErrorNotify'
 import { downloadFile } from '@/utils/download'
+
+const { notify } = useErrorNotify()
 import { money } from '@/utils/format'
 import { hasPermission } from '@/utils/auth'
 
@@ -107,7 +109,7 @@ const calculateSalary = async () => {
     }
     await fetchSalaryRecords()
   } catch (error) {
-    ElMessage.error('計算失敗: ' + apiError(error, error.message))
+    notify(error, 'SalaryView:calculate', null, { prefix: '計算失敗' })
   } finally {
     loading.value = false
   }
@@ -126,7 +128,7 @@ const fetchFestivalBonus = async () => {
     bonusResults.value = response.data
     showBonusDialog.value = true
   } catch (error) {
-    ElMessage.error('取得獎金資料失敗: ' + apiError(error, error.message))
+    notify(error, 'SalaryView:bonusData', null, { prefix: '取得獎金資料失敗' })
   } finally {
     bonusLoading.value = false
   }
@@ -143,7 +145,7 @@ const fetchPeriodAccrual = async () => {
     periodAccrualKey.value = key
   } catch (error) {
     periodAccrualError.value = true
-    ElMessage.error('取得本期累積失敗: ' + apiError(error, error.message))
+    notify(error, 'SalaryView:periodAccrual', null, { prefix: '取得本期累積失敗' })
   } finally {
     periodAccrualLoading.value = false
   }
@@ -340,7 +342,7 @@ const saveManualAdjust = async () => {
         fetchSalaryRecords()
       }).catch(() => {})
     } else {
-      ElMessage.error('儲存編輯失敗: ' + apiError(error, error.message))
+      notify(error, 'SalaryView:saveEdit', null, { prefix: '儲存編輯失敗' })
     }
   } finally {
     editLoading.value = false
@@ -360,7 +362,7 @@ const openFieldBreakdown = async (row, field) => {
     fieldBreakdown.value = response.data
     showFieldBreakdownDialog.value = true
   } catch (error) {
-    ElMessage.error('載入欄位明細失敗: ' + apiError(error, error.message))
+    notify(error, 'SalaryView:loadFieldDetail', null, { prefix: '載入欄位明細失敗' })
   } finally {
     fieldBreakdownLoading.value = false
   }

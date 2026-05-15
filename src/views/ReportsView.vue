@@ -1,8 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
-import { ElMessage } from 'element-plus'
-import { getDashboard, getFinanceSummary } from '@/api/reports'
-import { apiError } from '@/utils/error'
+import { ref, computed } from 'vue'
 import { getUserInfo, hasPermission } from '@/utils/auth'
 import OverviewPanel from './reports/OverviewPanel.vue'
 import FinanceSummaryPanel from './reports/FinanceSummaryPanel.vue'
@@ -20,51 +17,10 @@ const currentYear = new Date().getFullYear()
 const selectedYear = ref(currentYear)
 const activeTab = ref('overview')
 const canSeeAnalytics = computed(() => hasPermission('BUSINESS_ANALYTICS'))
-
-const dashboardLoading = ref(false)
-const financeLoading = ref(false)
-const dashboardData = ref({
-  attendance_monthly: [],
-  attendance_by_classroom: [],
-  leave_monthly: [],
-  salary_monthly: [],
-})
-const financeData = ref(null)
-
-const loading = computed(() => dashboardLoading.value || financeLoading.value)
-
-const fetchDashboard = async () => {
-  dashboardLoading.value = true
-  try {
-    const res = await getDashboard({ year: selectedYear.value })
-    dashboardData.value = res.data
-  } catch (e) {
-    ElMessage.error(apiError(e, '載入考勤/薪資報表失敗'))
-  } finally {
-    dashboardLoading.value = false
-  }
-}
-
-const fetchFinance = async () => {
-  financeLoading.value = true
-  try {
-    const res = await getFinanceSummary(selectedYear.value)
-    financeData.value = res.data
-  } catch (e) {
-    ElMessage.error(apiError(e, '載入收支資料失敗'))
-  } finally {
-    financeLoading.value = false
-  }
-}
-
-const fetchAll = () => Promise.all([fetchDashboard(), fetchFinance()])
-
-watch(selectedYear, fetchAll)
-onMounted(fetchAll)
 </script>
 
 <template>
-  <div class="reports-page" v-loading="loading">
+  <div class="reports-page">
     <div class="page-header">
       <div class="page-title">
         <h2>報表統計</h2>
@@ -77,16 +33,16 @@ onMounted(fetchAll)
 
     <el-tabs v-model="activeTab" type="card" class="reports-tabs">
       <el-tab-pane label="概況" name="overview">
-        <OverviewPanel v-if="activeTab === 'overview'" :finance="financeData" :dashboard="dashboardData" />
+        <OverviewPanel v-if="activeTab === 'overview'" :key="selectedYear" :year="selectedYear" />
       </el-tab-pane>
       <el-tab-pane label="收支彙總" name="finance">
-        <FinanceSummaryPanel v-if="activeTab === 'finance'" :year="selectedYear" />
+        <FinanceSummaryPanel v-if="activeTab === 'finance'" :key="selectedYear" :year="selectedYear" />
       </el-tab-pane>
       <el-tab-pane label="出勤" name="attendance">
-        <AttendancePanel v-if="activeTab === 'attendance'" :data="dashboardData" />
+        <AttendancePanel v-if="activeTab === 'attendance'" :key="selectedYear" :year="selectedYear" />
       </el-tab-pane>
       <el-tab-pane label="薪資" name="salary">
-        <SalaryPanel v-if="activeTab === 'salary'" :data="dashboardData" :finance="financeData" />
+        <SalaryPanel v-if="activeTab === 'salary'" :key="selectedYear" :year="selectedYear" />
       </el-tab-pane>
       <el-tab-pane v-if="canSeeAnalytics" label="招生漏斗" name="funnel">
         <FunnelPanel v-if="activeTab === 'funnel'" />

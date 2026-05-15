@@ -17,8 +17,10 @@ import {
 } from '@/api/contactBook'
 import { useContactBookTemplates } from '@/composables/useContactBookTemplates'
 import { todayISO } from '@/utils/format'
-import { apiError } from '@/utils/error'
+import { useErrorNotify } from '@/composables/useErrorNotify'
 import ContactBookFilterBar from './components/contactBook/ContactBookFilterBar.vue'
+
+const { notify } = useErrorNotify()
 import ContactBookEntryCard from './components/contactBook/ContactBookEntryCard.vue'
 import ContactBookEntryDrawer from './components/contactBook/ContactBookEntryDrawer.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
@@ -69,7 +71,7 @@ async function fetchClassrooms() {
       selectedClassroomId.value = classrooms.value[0].classroom_id
     }
   } catch (err) {
-    ElMessage.error(apiError(err, '載入班級失敗'))
+    notify(err, 'PortalContactBook:loadClassrooms', '載入班級失敗')
   } finally {
     classroomLoading.value = false
   }
@@ -86,7 +88,7 @@ async function fetchClassDay() {
     items.value = res.data?.items || []
     completion.value = res.data?.completion || { roster: 0, draft: 0, published: 0, missing: 0 }
   } catch (err) {
-    ElMessage.error(apiError(err, '載入聯絡簿失敗'))
+    notify(err, 'PortalContactBook:loadEntries', '載入聯絡簿失敗')
   } finally {
     listLoading.value = false
   }
@@ -121,7 +123,7 @@ function handleSaveError(err) {
       ElMessage.warning('版本衝突，已重新整理列表')
     }
   } else {
-    ElMessage.error(apiError(err, '操作失敗'))
+    notify(err, 'PortalContactBook:save', '操作失敗')
   }
 }
 
@@ -221,7 +223,7 @@ async function handlePhotoUpload(opts) {
     }
     ElMessage.success('照片已上傳')
   } catch (err) {
-    ElMessage.error(apiError(err, '照片上傳失敗'))
+    notify(err, 'PortalContactBook:uploadPhoto', '照片上傳失敗')
   } finally {
     drawerPhotoUploading.value = false
   }
@@ -244,7 +246,7 @@ async function handleDeletePhoto(att) {
     }
     ElMessage.success('已刪除')
   } catch (err) {
-    ElMessage.error(apiError(err, '刪除失敗'))
+    notify(err, 'PortalContactBook:delete', '刪除失敗')
   }
 }
 
@@ -280,7 +282,7 @@ async function handleCopyYesterday() {
     ElMessage.success(`已建立 ${res.data.created} 筆草稿`)
     await fetchClassDay()
   } catch (err) {
-    ElMessage.error(apiError(err, '複製失敗'))
+    notify(err, 'PortalContactBook:copy', '複製失敗')
   } finally {
     batchBusy.value = false
   }
@@ -326,7 +328,7 @@ async function handleApplyTemplateToClass() {
     selectedTemplateId.value = null
     await fetchClassDay()
   } catch (err) {
-    ElMessage.error(apiError(err, '套用失敗'))
+    notify(err, 'PortalContactBook:applyTemplate', '套用失敗')
   } finally {
     batchBusy.value = false
   }
@@ -355,7 +357,7 @@ async function handleBatchPublish() {
     ElMessage.success(`已發布 ${res.data.success_count} / ${draftEntryIds.length}`)
     await fetchClassDay()
   } catch (err) {
-    ElMessage.error(apiError(err, '批次發布失敗'))
+    notify(err, 'PortalContactBook:batchPublish', '批次發布失敗')
   } finally {
     batchBusy.value = false
   }

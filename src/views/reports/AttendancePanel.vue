@@ -1,21 +1,30 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
+import { useCachedAsync } from '@/composables/useCachedAsync'
+import { getDashboard } from '@/api/reports'
 import { LineChart, BarChart, MONTH_LABELS } from './chartSetup.js'
 
 const props = defineProps({
-  data: {
-    type: Object,
-    default: () => ({
-      attendance_monthly: [],
-      attendance_by_classroom: [],
-      leave_monthly: [],
-    }),
-  },
+  year: { type: Number, required: true },
+})
+
+const dashboard = useCachedAsync(
+  `reports/dashboard:${props.year}`,
+  () => getDashboard({ year: props.year }).then(r => r.data),
+  { ttl: 300_000 }
+)
+
+watch(() => props.year, () => dashboard.refresh(false))
+
+const data = computed(() => dashboard.data.value || {
+  attendance_monthly: [],
+  attendance_by_classroom: [],
+  leave_monthly: [],
 })
 
 const attendanceChartData = computed(() => {
   const monthMap = {}
-  props.data.attendance_monthly.forEach(d => { monthMap[d.month] = d })
+  ;(data.value.attendance_monthly || []).forEach(d => { monthMap[d.month] = d })
   const rates = [], late = [], early = [], miss = []
   for (let m = 1; m <= 12; m++) {
     const d = monthMap[m]
@@ -47,10 +56,10 @@ const attendanceChartOptions = {
 }
 
 const classroomChartData = computed(() => {
-  const data = props.data.attendance_by_classroom || []
-  const labels = data.map(d => d.classroom)
-  const rates = data.map(d => d.rate)
-  const colors = rates.map(r => r >= 95 ? '#67c23a' : r >= 90 ? '#e6a23c' : '#f56c6c')
+  const arr = data.value.attendance_by_classroom || []
+  const labels = arr.map(d => d.classroom)
+  const rates = arr.map(d => d.rate)
+  const colors = rates.map(r => r >= 95 ? '#67C23A' : r >= 90 ? '#E6A23C' : '#F56C6C')
   return { labels, datasets: [{ label: '出勤率 (%)', data: rates, backgroundColor: colors, borderRadius: 4 }] }
 })
 
@@ -61,11 +70,11 @@ const classroomChartOptions = {
 }
 
 const leaveChartData = computed(() => {
-  const data = props.data.leave_monthly || []
-  const personal = data.map(d => d.personal || 0)
-  const sick = data.map(d => d.sick || 0)
-  const annual = data.map(d => d.annual || 0)
-  const other = data.map(d => (d.menstrual || 0) + (d.maternity || 0) + (d.paternity || 0))
+  const arr = data.value.leave_monthly || []
+  const personal = arr.map(d => d.personal || 0)
+  const sick = arr.map(d => d.sick || 0)
+  const annual = arr.map(d => d.annual || 0)
+  const other = arr.map(d => (d.menstrual || 0) + (d.maternity || 0) + (d.paternity || 0))
   return {
     labels: MONTH_LABELS,
     datasets: [
@@ -85,7 +94,8 @@ const leaveChartOptions = {
 </script>
 
 <template>
-  <el-row :gutter="16">
+  <el-skeleton v-if="dashboard.pending.value && !dashboard.data.value" :rows="8" animated />
+  <el-row v-else :gutter="16">
     <el-col :xs="24" :lg="12">
       <el-card class="chart-card" shadow="hover">
         <template #header><span class="chart-title">月度出勤率趨勢</span></template>
