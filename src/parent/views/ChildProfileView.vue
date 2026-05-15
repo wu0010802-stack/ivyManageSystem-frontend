@@ -76,14 +76,16 @@ function goMeasurements() {
 
 const photos = ref([])
 const photosLoading = ref(false)
+const photosError = ref(false)
 async function loadPhotos() {
   if (!studentId.value) return
   photosLoading.value = true
+  photosError.value = false
   try {
     const r = await fetchChildPhotos(studentId.value, { limit: 4 })
     photos.value = r.data.items || []
   } catch {
-    /* silent — photo strip is non-critical */
+    photosError.value = true
   } finally {
     photosLoading.value = false
   }
@@ -108,14 +110,20 @@ onMounted(() => {
 <template>
   <div class="profile-view">
     <!-- 成長里程碑 carousel -->
-    <section class="card growth-section">
-      <h3 class="section-title">🏆 成長里程碑</h3>
+    <section class="card growth-section" aria-labelledby="growth-milestones-title">
+      <h2 id="growth-milestones-title" class="section-title">
+        <ParentIcon name="trophy" size="sm" />
+        成長里程碑
+      </h2>
       <MilestoneCarousel v-if="studentId" :student-id="studentId" />
     </section>
 
     <!-- 最新動態 timeline feed -->
-    <section class="card growth-section">
-      <h3 class="section-title">📖 最新動態</h3>
+    <section class="card growth-section" aria-labelledby="growth-timeline-title">
+      <h2 id="growth-timeline-title" class="section-title">
+        <ParentIcon name="notebook" size="sm" />
+        最新動態
+      </h2>
       <div v-if="timelineError && !timelineItems.length" class="empty timeline-error">
         <span>{{ timelineError }}</span>
         <button class="retry-btn" :disabled="timelineLoading" @click="() => reloadTimeline(false)">
@@ -148,8 +156,9 @@ onMounted(() => {
               decorative
               class="child-crown"
             />
-            <div class="child-avatar">
-              {{ data.student?.name ? data.student.name.charAt(0) : '👤' }}
+            <div class="child-avatar" aria-hidden="true">
+              <template v-if="data.student?.name">{{ data.student.name.charAt(0) }}</template>
+              <ParentIcon v-else name="user" size="lg" />
             </div>
           </div>
           <div class="child-info">
@@ -175,8 +184,8 @@ onMounted(() => {
         </div>
       </section>
 
-      <section class="card">
-        <h3 class="section-title">監護人 / 接送人</h3>
+      <section class="card" aria-labelledby="guardians-title">
+        <h2 id="guardians-title" class="section-title">監護人 / 接送人</h2>
         <div v-if="!data.guardians.length" class="empty">尚未登記</div>
         <div v-for="g in data.guardians" :key="g.id" class="guardian-row">
           <div>
@@ -191,8 +200,8 @@ onMounted(() => {
         </div>
       </section>
 
-      <section class="card">
-        <h3 class="section-title">過敏 / 用藥提醒</h3>
+      <section class="card" aria-labelledby="allergies-title">
+        <h2 id="allergies-title" class="section-title">過敏 / 用藥提醒</h2>
         <div v-if="!data.allergies.length" class="empty">尚未登記</div>
         <div
           v-for="a in data.allergies"
@@ -215,8 +224,8 @@ onMounted(() => {
       </section>
 
       <!-- 修改申請：走訊息給導師，不直接寫 DB -->
-      <section class="card change-card">
-        <h3 class="section-title">資料有誤？</h3>
+      <section class="card change-card" aria-labelledby="change-card-title">
+        <h2 id="change-card-title" class="section-title">資料有誤？</h2>
         <p class="change-text">
           孩子個人資料、過敏資訊、接送人資訊如有錯誤或變更，請透過訊息聯絡導師處理；
           不會在此頁直接修改，以確保校方記錄一致。
@@ -229,35 +238,67 @@ onMounted(() => {
     </template>
 
     <!-- 最新照片 -->
-    <section class="card growth-section">
+    <section class="card growth-section" aria-labelledby="photos-title">
       <div class="section-header">
-        <h3 class="section-title">📷 最新照片</h3>
-        <button class="more-link" @click="goPhotos">查看全部 →</button>
+        <h2 id="photos-title" class="section-title">
+          <ParentIcon name="camera" size="sm" />
+          最新照片
+        </h2>
+        <button class="more-link" type="button" @click="goPhotos">
+          查看全部
+          <ParentIcon name="chevron-right" size="xs" />
+        </button>
       </div>
       <div v-if="photosLoading" class="placeholder small">載入中…</div>
+      <div v-else-if="photosError" class="placeholder small photos-error">
+        <span>載入失敗</span>
+        <button class="retry-btn" type="button" @click="loadPhotos">重試</button>
+      </div>
       <div v-else-if="photos.length === 0" class="placeholder small">尚無照片</div>
-      <div v-else class="photo-strip">
-        <div
-          v-for="p in photos.slice(0, 4)"
-          :key="p.id"
-          class="strip-thumb"
-          @click="goPhotos"
-        >
-          <img :src="p.thumb_url || p.display_url || p.url" loading="lazy" />
-        </div>
+      <div v-else class="photo-strip-wrap">
+        <ul class="photo-strip" role="list">
+          <li v-for="p in photos.slice(0, 4)" :key="p.id">
+            <button
+              type="button"
+              class="strip-thumb"
+              aria-label="查看相簿"
+              @click="goPhotos"
+            >
+              <img
+                :src="p.thumb_url || p.display_url || p.url"
+                alt=""
+                width="80"
+                height="80"
+                loading="lazy"
+              />
+            </button>
+          </li>
+        </ul>
       </div>
     </section>
 
     <!-- 成長量測 -->
-    <section class="card growth-section">
-      <h3 class="section-title">📏 成長量測</h3>
-      <button class="link-btn" @click="goMeasurements">查看身高/體重曲線 →</button>
+    <section class="card growth-section" aria-labelledby="measurements-title">
+      <h2 id="measurements-title" class="section-title">
+        <ParentIcon name="ruler" size="sm" />
+        成長量測
+      </h2>
+      <button class="link-btn" type="button" @click="goMeasurements">
+        查看身高/體重曲線
+        <ParentIcon name="chevron-right" size="xs" />
+      </button>
     </section>
 
     <!-- 歷次報告 -->
-    <section class="card growth-section">
-      <h3 class="section-title">📄 歷次報告</h3>
-      <button class="link-btn" @click="goReports">查看歷次成長報告 →</button>
+    <section class="card growth-section" aria-labelledby="reports-title">
+      <h2 id="reports-title" class="section-title">
+        <ParentIcon name="document" size="sm" />
+        歷次報告
+      </h2>
+      <button class="link-btn" type="button" @click="goReports">
+        查看歷次成長報告
+        <ParentIcon name="chevron-right" size="xs" />
+      </button>
     </section>
   </div>
 </template>
@@ -370,12 +411,17 @@ onMounted(() => {
   color: var(--m3-on-surface-variant, var(--pt-text-muted));
 }
 .section-title {
-  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.875rem; /* 14px */
   font-weight: 800;
-  color: var(--pt-text-soft);
+  color: var(--pt-text-strong);
   margin: 0 0 10px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.section-title :deep(.parent-icon) {
+  color: var(--brand-primary);
 }
 .empty {
   color: var(--pt-text-placeholder);
@@ -481,11 +527,10 @@ onMounted(() => {
   background: var(--brand-primary-hover);
 }
 .growth-section .section-title {
-  font-size: 15px;
+  font-size: 1rem; /* 16px */
   font-weight: 700;
-  text-transform: none;
   letter-spacing: 0;
-  color: #0d9053;
+  color: var(--pt-text-strong);
   margin: 0 0 10px;
 }
 .feed {
@@ -549,28 +594,78 @@ onMounted(() => {
   margin: 0;
 }
 .more-link {
-  background: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 44px;
+  padding: 8px 12px;
+  margin: -8px -12px -8px 0; /* 視覺對齊區塊邊緣，同時保留 44pt 觸控區 */
+  background: transparent;
   border: none;
-  color: #0d9053;
-  font-size: 13px;
+  color: var(--pt-text-strong);
+  font-size: 0.8125rem; /* 13px */
+  font-weight: 600;
   cursor: pointer;
-  padding: 0;
+  border-radius: 8px;
+  transition: background var(--transition-fast, 0.15s ease);
+}
+.more-link :deep(.parent-icon) { color: var(--brand-primary); }
+.more-link:active {
+  background: var(--pt-surface-mute, #f3f4f6);
+}
+/* 漸隱遮罩：暗示右側還有可滑動內容 */
+.photo-strip-wrap {
+  position: relative;
+}
+.photo-strip-wrap::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 4px;
+  width: 16px;
+  background: linear-gradient(
+    to right,
+    transparent,
+    var(--pt-surface-card, var(--neutral-0))
+  );
+  pointer-events: none;
 }
 .photo-strip {
   display: flex;
-  gap: 6px;
+  gap: 8px;
   overflow-x: auto;
-  padding-bottom: 4px;
+  padding: 0 0 4px;
+  margin: 0;
+  list-style: none;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
 }
+.photo-strip > li { flex-shrink: 0; scroll-snap-align: start; }
 .strip-thumb {
   width: 80px;
   height: 80px;
   flex-shrink: 0;
-  border-radius: 8px;
+  border-radius: 10px;
   overflow: hidden;
-  background: #f3f4f6;
+  background: var(--pt-surface-mute, #f3f4f6);
   cursor: pointer;
+  padding: 0;
+  border: none;
+  display: block;
+  transition: transform var(--transition-fast, 0.15s ease), box-shadow var(--transition-fast, 0.15s ease);
 }
-.strip-thumb > img { width: 100%; height: 100%; object-fit: cover; }
-.placeholder.small { padding: 12px; font-size: 13px; }
+.strip-thumb:active {
+  transform: scale(0.96);
+  box-shadow: var(--pt-elev-1);
+}
+.strip-thumb > img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.placeholder.small { padding: 12px; font-size: 0.8125rem; /* 13px */ }
+.placeholder.photos-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--pt-warning-text, #b85c00);
+}
 </style>
