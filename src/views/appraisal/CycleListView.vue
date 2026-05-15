@@ -179,10 +179,7 @@ onMounted(fetchCycles)
 <template>
   <div class="cycle-list-view">
     <header class="page-header">
-      <div>
-        <h2>考核週期</h2>
-        <p class="hint">每學期一個週期；OPEN 期間可登錄事件，LOCKED 後唯讀，CLOSED 後封存歷史。</p>
-      </div>
+      <p class="hint">每學期一個週期；OPEN 期間可登錄事件，LOCKED 後唯讀，CLOSED 後封存歷史。</p>
       <div class="actions">
         <el-button :icon="Refresh" @click="fetchCycles" :loading="loading">重新整理</el-button>
         <el-button type="primary" :icon="Plus" @click="openCreate">建立週期</el-button>

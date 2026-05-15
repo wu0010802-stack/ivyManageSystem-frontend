@@ -215,10 +215,14 @@ const router = createRouter({
         },
         // ============ 教職員考核 ============
         {
+            path: '/appraisal-management',
+            name: 'appraisal-management',
+            component: () => import('../views/AppraisalManagementView.vue'),
+            meta: { title: '考核管理' }
+        },
+        {
             path: '/appraisal/cycles',
-            name: 'appraisal-cycles',
-            component: () => import('../views/appraisal/CycleListView.vue'),
-            meta: { title: '考核週期' }
+            redirect: { path: '/appraisal-management', query: { tab: 'cycles' } },
         },
         {
             path: '/appraisal/cycles/:id',
@@ -228,9 +232,7 @@ const router = createRouter({
         },
         {
             path: '/appraisal/settings',
-            name: 'appraisal-settings',
-            component: () => import('../views/appraisal/AppraisalSettingsView.vue'),
-            meta: { title: '考核設定' }
+            redirect: { path: '/appraisal-management', query: { tab: 'settings' } },
         },
 
         // ============ 學費管理 ============

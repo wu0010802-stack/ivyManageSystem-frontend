@@ -96,7 +96,7 @@ const fetchCycle = async () => {
     cycle.value = (res.data || []).find((c) => c.id === cycleId.value) || null
     if (!cycle.value) {
       ElMessage.error('找不到此週期')
-      router.replace('/appraisal/cycles')
+      router.replace({ path: '/appraisal-management', query: { tab: 'cycles' } })
     }
   } catch (error) {
     ElMessage.error(apiError(error, '載入週期資料失敗'))
@@ -269,8 +269,8 @@ onMounted(reloadAll)
 <template>
   <div class="cycle-detail-view">
     <header class="page-header">
-      <el-button :icon="ArrowLeft" link @click="router.push('/appraisal/cycles')">
-        返回週期列表
+      <el-button :icon="ArrowLeft" link @click="router.push({ path: '/appraisal-management', query: { tab: 'cycles' } })">
+        返回考核管理
       </el-button>
       <div v-if="cycle" class="cycle-meta">
         <div class="cycle-meta-row">

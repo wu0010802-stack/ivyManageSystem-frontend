@@ -4,7 +4,6 @@ import { calculate, getFestivalBonus, getRecords, getSalaryFieldBreakdown, manua
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, InfoFilled, SuccessFilled, Picture, Edit, Download } from '@element-plus/icons-vue'
 import BonusConfigPanel from './salary/BonusConfigPanel.vue'
-import DisciplinaryPanel from './salary/DisciplinaryPanel.vue'
 import ArtTeacherPayrollPanel from './salary/ArtTeacherPayrollPanel.vue'
 import SystemSettingsPanel from './salary/SystemSettingsPanel.vue'
 import SalaryHistoryPanel from './salary/SalaryHistoryPanel.vue'
@@ -690,11 +689,6 @@ onMounted(() => {
       <!-- 薪資設定 -->
       <el-tab-pane v-if="canReadSalarySettings" label="薪資設定" name="bonus">
         <BonusConfigPanel v-if="activeTab === 'bonus'" />
-      </el-tab-pane>
-
-      <!-- 懲處記錄 -->
-      <el-tab-pane label="懲處記錄" name="disciplinary">
-        <DisciplinaryPanel v-if="activeTab === 'disciplinary'" />
       </el-tab-pane>
 
       <!-- 才藝老師薪資 -->

@@ -251,6 +251,12 @@ export function canAccessRoute(path) {
     return hasPermission('OVERTIME_READ') || hasPermission('MEETINGS')
   }
 
+  // 考核管理（含懲處記錄）— 原本懲處掛在 /salary（SALARY_READ）、考核設定掛在 /appraisal（SETTINGS_READ），
+  // 整合後為避免任一族群失去存取，採聯集授權。
+  if (path === '/appraisal-management') {
+    return hasPermission('SETTINGS_READ') || hasPermission('SALARY_READ')
+  }
+
   // Why: 改成 default-deny。未匹配權限規則時，若是公開路由（登入頁、公開報名等）放行，
   // 否則一律拒絕——避免日後新增頁面卻忘了加 ROUTE_PERMISSION_RULES 就形成隱性後門。
   if (_isPublicRoute(path)) return true

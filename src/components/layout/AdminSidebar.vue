@@ -72,6 +72,10 @@
             <el-icon><Money /></el-icon>
             <template #title>薪資管理</template>
           </el-menu-item>
+          <el-menu-item v-if="canView.SETTINGS_READ || canView.SALARY_READ" index="/appraisal-management">
+            <el-icon><Medal /></el-icon>
+            <template #title>考核管理</template>
+          </el-menu-item>
           <el-menu-item v-if="canView.SALARY_READ" index="/gov-reports">
             <el-icon><Files /></el-icon>
             <template #title>政府申報匯出</template>
@@ -227,14 +231,6 @@
             <el-icon><Setting /></el-icon>
             <template #title>一般設定</template>
           </el-menu-item>
-          <el-menu-item v-if="canView.SETTINGS_READ" index="/appraisal/cycles">
-            <el-icon><Medal /></el-icon>
-            <template #title>考核週期</template>
-          </el-menu-item>
-          <el-menu-item v-if="canView.SETTINGS_READ" index="/appraisal/settings">
-            <el-icon><Tools /></el-icon>
-            <template #title>考核設定</template>
-          </el-menu-item>
           <el-menu-item v-if="canView.AUDIT_LOGS" index="/audit-logs">
             <el-icon><Document /></el-icon>
             <template #title>操作紀錄</template>
@@ -264,7 +260,7 @@ import {
   Money, User, School, OfficeBuilding, Bell, TrendCharts, Setting,
   Expand, Fold, DataAnalysis, Files, RefreshRight,
   Star, StarFilled, Close, Collection, ChatDotRound, List, Van, CreditCard, Checked,
-  Warning, Medal, Tools
+  Warning, Medal
 } from '@element-plus/icons-vue'
 import { PERMISSION_VALUES, getUserInfo } from '@/utils/auth'
 import { usePinnedPages } from '@/composables/usePinnedPages'
@@ -325,7 +321,7 @@ const hasVisibleLeaveItems = computed(() =>
   canView.value.EMPLOYEES_READ || canView.value.SALARY_READ || canView.value.SALARY_WRITE ||
   canView.value.ATTENDANCE_READ || canView.value.LEAVES_READ ||
   canView.value.OVERTIME_READ || canView.value.MEETINGS ||
-  canView.value.SCHEDULE
+  canView.value.SCHEDULE || canView.value.SETTINGS_READ
 )
 
 const hasVisibleStudentItems = computed(() =>
