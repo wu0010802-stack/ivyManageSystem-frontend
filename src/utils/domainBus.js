@@ -13,6 +13,7 @@ import mitt from 'mitt'
  *  - 'student-record:created'   { kind, student_id, record_id }
  *  - 'student-record:updated'   { kind, student_id, record_id, patch }
  *  - 'student-record:deleted'   { kind, student_id, record_id }
+ *  - 'attendance:changed'       { date, classroom_id }
  *
  * kind ∈ 'incident' | 'assessment' | 'change_log'
  */
@@ -30,4 +31,8 @@ export const RECORD_EVENTS = Object.freeze({
   CREATED: 'student-record:created',
   UPDATED: 'student-record:updated',
   DELETED: 'student-record:deleted',
+})
+
+export const ATTENDANCE_EVENTS = Object.freeze({
+  CHANGED: 'attendance:changed',
 })

@@ -17,17 +17,16 @@ import { getClassrooms } from '@/api/classrooms'
 import { getCurrentAcademicTerm, normalizeSchoolYear } from '@/utils/academic'
 import { todayISO } from '@/utils/format'
 import {
-  batchSaveAttendance,
   getAttendanceOverview,
   getDailyAttendance,
   getMonthlySummary,
 } from '@/api/studentAttendance'
 import { downloadFile } from '@/utils/download'
 import { buildStudentProfileLink } from '@/utils/studentLinks'
+import AttendanceBatchPanel from '@/components/student/academic-affairs/AttendanceBatchPanel.vue'
 
 ChartJS.register(BarElement, CategoryScale, LinearScale, Tooltip, Legend)
 
-const STATUS_OPTIONS = ['出席', '缺席', '病假', '事假', '遲到']
 const TODAY = todayISO()
 
 const termStore = useAcademicTermStore()
@@ -67,9 +66,6 @@ const detailLoading = ref(false)
 
 const editClassroomId = ref(null)
 const editDate = ref(TODAY)
-const dailyRecords = ref([])
-const dailyLoading = ref(false)
-const saving = ref(false)
 
 const monthlyClassroomId = ref(null)
 const monthPicker = ref(TODAY.slice(0, 7))
@@ -221,26 +217,6 @@ const fetchOverview = async () => {
   }
 }
 
-const fetchDaily = async () => {
-  if (!editClassroomId.value || !editDate.value) return
-  dailyLoading.value = true
-  try {
-    const res = await getDailyAttendance({
-      date: editDate.value,
-      classroom_id: editClassroomId.value,
-    })
-    dailyRecords.value = res.data.records.map((record) => ({
-      ...record,
-      status: record.status ?? '出席',
-      remark: record.remark ?? '',
-    }))
-  } catch (error) {
-    ElMessage.error(apiError(error, '載入點名編修資料失敗'))
-  } finally {
-    dailyLoading.value = false
-  }
-}
-
 const fetchDetailRecords = async (classroomId) => {
   detailLoading.value = true
   try {
@@ -274,38 +250,15 @@ const fetchMonthly = async () => {
   }
 }
 
-const markAll = (status) => {
-  dailyRecords.value.forEach((record) => {
-    record.status = status
-  })
-}
-
-const saveDaily = async () => {
-  if (!dailyRecords.value.length) return
-  saving.value = true
-  try {
-    await batchSaveAttendance({
-      date: editDate.value,
-      entries: dailyRecords.value.map((record) => ({
-        student_id: record.student_id,
-        status: record.status,
-        remark: record.remark || null,
-      })),
-    })
-    ElMessage.success('點名編修儲存成功')
-    const refreshTasks = [fetchDaily()]
-    if (overviewDate.value === editDate.value) {
-      refreshTasks.push(fetchOverview())
-      if (detailDrawerVisible.value && detailClassroom.value?.classroom_id === editClassroomId.value) {
-        refreshTasks.push(fetchDetailRecords(editClassroomId.value))
-      }
+const onAttendanceSaved = async ({ classroom_id }) => {
+  const refreshTasks = []
+  if (overviewDate.value === editDate.value) {
+    refreshTasks.push(fetchOverview())
+    if (detailDrawerVisible.value && detailClassroom.value?.classroom_id === classroom_id) {
+      refreshTasks.push(fetchDetailRecords(classroom_id))
     }
-    await Promise.all(refreshTasks)
-  } catch (error) {
-    ElMessage.error(apiError(error, '儲存失敗'))
-  } finally {
-    saving.value = false
   }
+  if (refreshTasks.length) await Promise.all(refreshTasks)
 }
 
 const exportMonthly = () => {
@@ -360,10 +313,6 @@ const formatDateTime = (value) => {
   return value.replace('T', ' ').slice(0, 16)
 }
 
-watch([editClassroomId, editDate], () => {
-  if (activeTab.value === 'edit') fetchDaily()
-})
-
 watch([monthlyClassroomId, monthPicker], () => {
   if (activeTab.value === 'monthly') fetchMonthly()
 })
@@ -380,7 +329,6 @@ watch(overviewDate, async () => {
 watch(activeTab, (tab) => {
   if (tab === 'overview') fetchOverview()
   if (tab === 'monthly') fetchMonthly()
-  if (tab === 'edit') fetchDaily()
 })
 
 watch(selectedTermKey, async () => {
@@ -613,81 +561,12 @@ onMounted(async () => {
       </el-tab-pane>
 
       <el-tab-pane label="點名編修" name="edit">
-        <div class="toolbar">
-          <el-select v-model="editClassroomId" placeholder="選擇班級" style="width: 180px">
-            <el-option v-for="item in classroomOptions" :key="item.value" :label="item.label" :value="item.value" />
-          </el-select>
-          <el-date-picker
-            v-model="editDate"
-            type="date"
-            value-format="YYYY-MM-DD"
-            placeholder="選擇日期"
-            style="width: 170px"
-          />
-          <el-button-group>
-            <el-button size="small" type="success" @click="markAll('出席')">全部出席</el-button>
-            <el-button size="small" type="danger" @click="markAll('缺席')">全部缺席</el-button>
-          </el-button-group>
-          <el-button
-            type="primary"
-            style="margin-left: auto"
-            :loading="saving"
-            :disabled="!dailyRecords.length"
-            @click="saveDaily"
-          >
-            儲存編修
-          </el-button>
-        </div>
-
-        <el-alert
-          title="這裡用於管理端手動補登或修正單班出席狀態，不是主要日常點名入口。"
-          type="warning"
-          :closable="false"
-          show-icon
-          class="overview-alert"
+        <AttendanceBatchPanel
+          v-model:classroom-id="editClassroomId"
+          v-model:date="editDate"
+          :classroom-options="classroomOptions"
+          @saved="onAttendanceSaved"
         />
-
-        <el-table
-          v-loading="dailyLoading"
-          :data="dailyRecords"
-          stripe
-          style="width: 100%; margin-top: 12px"
-          max-height="520"
-        >
-          <el-table-column prop="student_no" label="學號" width="90" />
-          <el-table-column label="姓名" width="110">
-            <template #default="{ row }">
-              <router-link
-                v-if="buildStudentProfileLink(row.student_id ?? row.id, 'attendance')"
-                :to="buildStudentProfileLink(row.student_id ?? row.id, 'attendance')"
-                class="student-link"
-              >{{ row.name }}</router-link>
-              <span v-else>{{ row.name }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="出席狀態" width="320">
-            <template #default="{ row }">
-              <el-radio-group v-model="row.status" size="small">
-                <el-radio-button
-                  v-for="status in STATUS_OPTIONS"
-                  :key="status"
-                  :value="status"
-                >
-                  {{ status }}
-                </el-radio-button>
-              </el-radio-group>
-            </template>
-          </el-table-column>
-          <el-table-column label="備註">
-            <template #default="{ row }">
-              <el-input v-model="row.remark" placeholder="選填" size="small" clearable />
-            </template>
-          </el-table-column>
-        </el-table>
-
-        <div v-if="!dailyLoading && !dailyRecords.length" class="empty-hint">
-          請先選擇班級與日期
-        </div>
       </el-tab-pane>
     </el-tabs>
 
