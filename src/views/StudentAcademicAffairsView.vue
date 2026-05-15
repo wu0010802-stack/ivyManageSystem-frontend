@@ -10,6 +10,8 @@ import {
   useAcademicAffairsFilters,
   ACADEMIC_AFFAIRS_FILTERS_KEY,
 } from '@/composables/useAcademicAffairsFilters'
+import AttendanceSection from '@/components/student/academic-affairs/AttendanceSection.vue'
+import LeaveSection from '@/components/student/academic-affairs/LeaveSection.vue'
 
 const termStore = useAcademicTermStore()
 const {
@@ -201,13 +203,8 @@ onMounted(async () => {
     </el-card>
 
     <div class="sections-grid">
-      <!-- Sections 將在後續 commit 加入此處 -->
-      <el-card shadow="never" class="section-placeholder">
-        <el-empty description="出席區塊（待掛載）" :image-size="60" />
-      </el-card>
-      <el-card shadow="never" class="section-placeholder">
-        <el-empty description="請假區塊（待掛載）" :image-size="60" />
-      </el-card>
+      <AttendanceSection />
+      <LeaveSection />
       <el-card shadow="never" class="section-placeholder">
         <el-empty description="評量區塊（待掛載）" :image-size="60" />
       </el-card>
