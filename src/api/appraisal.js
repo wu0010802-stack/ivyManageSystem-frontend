@@ -2,134 +2,107 @@ import api from './index'
 
 // ============ Cycles 考核週期 ============
 
-export const listAppraisalCycles = (params = {}) =>
-  api.get('/appraisal/cycles', { params })
+export const listAppraisalCycles = () => api.get('/appraisal/cycles')
 
-// payload: { academic_year: number(民國年), semester: 'FIRST'|'SECOND', base_score_calc_date?: 'YYYY-MM-DD' }
-export const createAppraisalCycle = (data) =>
-  api.post('/appraisal/cycles', data)
+export const createAppraisalCycle = (payload) =>
+  api.post('/appraisal/cycles', payload)
 
-// payload: { base_score_calc_date?: 'YYYY-MM-DD' }
-export const patchAppraisalCycle = (cycleId, data) =>
-  api.patch(`/appraisal/cycles/${cycleId}`, data)
+export const patchAppraisalCycle = (cycleId, payload) =>
+  api.patch(`/appraisal/cycles/${cycleId}`, payload)
 
-export const lockAppraisalCycle = (cycleId) =>
-  api.post(`/appraisal/cycles/${cycleId}/lock`)
+// ============ Catalog（16 項加減分定義）============
 
-// reason ≥ 4 字（後端強制）
-export const unlockAppraisalCycle = (cycleId, reason) =>
-  api.post(`/appraisal/cycles/${cycleId}/unlock`, { reason })
+export const listAppraisalCatalog = () => api.get('/appraisal/catalog')
 
-// 封存：要求所有 summary 已 FINALIZED；幂等
-export const closeAppraisalCycle = (cycleId) =>
-  api.post(`/appraisal/cycles/${cycleId}/close`)
-
-// ============ Participants 參與者 ============
+// ============ Participants ============
 
 export const listAppraisalParticipants = (cycleId) =>
   api.get(`/appraisal/cycles/${cycleId}/participants`)
 
-// employee_ids 不傳則帶全體在職員工
-export const bulkInitAppraisalParticipants = (cycleId, employeeIds = null) =>
-  api.post(`/appraisal/cycles/${cycleId}/participants:bulk_init`, {
-    employee_ids: employeeIds,
-  })
+export const addAppraisalParticipant = (cycleId, payload) =>
+  api.post(`/appraisal/cycles/${cycleId}/participants`, payload)
 
-export const getAppraisalParticipant = (participantId) =>
-  api.get(`/appraisal/participants/${participantId}`)
+// ============ Score Items ============
 
-// payload: { role_group?, classroom_id?, base_score?, target_enrollment?, actual_enrollment? }
-export const patchAppraisalParticipant = (participantId, data) =>
-  api.patch(`/appraisal/participants/${participantId}`, data)
+export const listAppraisalScoreItems = (participantId) =>
+  api.get(`/appraisal/participants/${participantId}/score_items`)
 
-// 已產生事件的參與者不可刪（後端回 409）
-export const deleteAppraisalParticipant = (participantId) =>
-  api.delete(`/appraisal/participants/${participantId}`)
+export const addAppraisalScoreItem = (participantId, payload) =>
+  api.post(`/appraisal/participants/${participantId}/score_items`, payload)
 
-// ============ Events 考核事件 ============
+// ============ Summaries ============
 
-// params: { cycle_id?, participant_id?, event_type?, limit? (≤1000，預設 200) }
-export const listAppraisalEvents = (params = {}) =>
-  api.get('/appraisal/events', { params })
+export const listAppraisalSummaries = (cycleId) =>
+  api.get(`/appraisal/cycles/${cycleId}/summaries`)
 
-// payload: {
-//   participant_id, catalog_item_id?, event_type, event_date,
-//   score_delta(-20~20), severity_level?(1-5), parent_reaction?,
-//   title, detail
-// }
-export const createAppraisalEvent = (data) =>
-  api.post('/appraisal/events', data)
-
-export const patchAppraisalEvent = (eventId, data) =>
-  api.patch(`/appraisal/events/${eventId}`, data)
-
-// 軟作廢；reason ≥ 2 字
-export const revertAppraisalEvent = (eventId, reason) =>
-  api.post(`/appraisal/events/${eventId}/revert`, { reason })
-
-// 後端 v1 回 501，UI 端先預留以利未來銜接
-export const uploadAppraisalEventAttachment = (eventId, formData) =>
-  api.post(`/appraisal/events/${eventId}/attachments`, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  })
-
-// ============ Summaries 三階簽核 ============
-
-// params: { cycle_id?, status? }
-export const listAppraisalSummaries = (params = {}) =>
-  api.get('/appraisal/summaries', { params })
-
-export const getAppraisalSummary = (summaryId) =>
-  api.get(`/appraisal/summaries/${summaryId}`)
-
-// 重算整個 cycle 的所有 summary（已 FINALIZED 者跳過）
-export const recomputeCycleSummaries = (cycleId) =>
+export const recomputeAppraisalSummaries = (cycleId) =>
   api.post(`/appraisal/cycles/${cycleId}/summaries:recompute`)
 
-// payload: { comment?: string (≤500) }
-export const signSupervisor = (summaryId, comment = '') =>
-  api.post(`/appraisal/summaries/${summaryId}/sign_supervisor`, { comment })
+export const signSupervisorAppraisalSummary = (summaryId, comment = '') =>
+  api.post(`/appraisal/summaries/${summaryId}/sign_supervisor`, null, {
+    params: { comment },
+  })
 
-export const signAccounting = (summaryId, comment = '') =>
-  api.post(`/appraisal/summaries/${summaryId}/sign_accounting`, { comment })
+export const signAccountingAppraisalSummary = (summaryId, comment = '') =>
+  api.post(`/appraisal/summaries/${summaryId}/sign_accounting`, null, {
+    params: { comment },
+  })
 
-// payload: { comment?, reason } — reason ≥ 4 字（第三階雙簽必填）
-export const finalizeSummary = (summaryId, { comment = '', reason }) =>
-  api.post(`/appraisal/summaries/${summaryId}/finalize`, { comment, reason })
+export const finalizeAppraisalSummary = (summaryId, comment = '') =>
+  api.post(`/appraisal/summaries/${summaryId}/finalize`, null, {
+    params: { comment },
+  })
 
-// reason ≥ 4 字；權限依當前 stage 動態判定
-export const rejectSummary = (summaryId, reason) =>
-  api.post(`/appraisal/summaries/${summaryId}/reject`, { reason })
-
-// ============ Bonus Rates 年終獎金率 ============
+// ============ Bonus Rates ============
 
 export const listAppraisalBonusRates = () =>
   api.get('/appraisal/bonus_rates')
 
-// payload: { effective_from: 'YYYY-MM-DD', role_group, grade, base_amount(≥0) }
-export const createAppraisalBonusRate = (data) =>
-  api.post('/appraisal/bonus_rates', data)
+export const createAppraisalBonusRate = (payload) =>
+  api.post('/appraisal/bonus_rates', payload)
 
-// ============ Penalty Catalog 扣分項目目錄 ============
+// ============ Excel I/O ============
 
-// params: { active_only?: bool (預設 true), category? }
-export const listAppraisalPenaltyCatalog = (params = {}) =>
-  api.get('/appraisal/penalty_catalog', { params })
+export const importAppraisalExcel = (file, { startDate, endDate, baseScoreCalcDate }) => {
+  const fd = new FormData()
+  fd.append('file', file)
+  return api.post('/appraisal/cycles/import_excel', fd, {
+    params: {
+      start_date: startDate,
+      end_date: endDate,
+      base_score_calc_date: baseScoreCalcDate,
+    },
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}
 
-// payload: { default_score_delta?, severity_max?(1-5), is_active?, display_order? }
-export const patchAppraisalPenaltyCatalog = (itemId, data) =>
-  api.patch(`/appraisal/penalty_catalog/${itemId}`, data)
+export const exportAppraisalCycleXlsxUrl = (cycleId) =>
+  `${api.defaults.baseURL || '/api'}/appraisal/cycles/${cycleId}/export.xlsx`
 
-// ============ Reports 報表 ============
+export const exportAppraisalTransferRosterXlsxUrl = (cycleId) =>
+  `${api.defaults.baseURL || '/api'}/appraisal/cycles/${cycleId}/transfer_roster.xlsx`
 
-export const getAppraisalCycleReport = (cycleId) =>
-  api.get(`/appraisal/cycles/${cycleId}/report`)
+// ============ Deprecated（M1 重構後不再實作；保留 stub 讓舊 view 仍能 import）============
+// 舊 view 元件（CycleEventsSection / CycleSummariesSection / PenaltyCatalogPanel /
+// BonusRatesPanel）仍 import 這些函式名稱。實際呼叫會回傳 410 Gone。
 
-export const downloadAppraisalCycleReportXlsx = (cycleId) =>
-  api.get(`/appraisal/cycles/${cycleId}/report.xlsx`, { responseType: 'blob' })
+const _deprecated = (name) => () =>
+  Promise.reject(new Error(`${name} 已於 M1 重構移除，請改用新 API`))
 
-export const downloadAppraisalPenaltyLogXlsx = (cycleId) =>
-  api.get(`/appraisal/cycles/${cycleId}/penalty_log.xlsx`, { responseType: 'blob' })
-
-export const downloadAppraisalParticipantSheetXlsx = (participantId) =>
-  api.get(`/appraisal/participants/${participantId}/sheet.xlsx`, { responseType: 'blob' })
+export const lockAppraisalCycle = _deprecated('lockAppraisalCycle')
+export const unlockAppraisalCycle = _deprecated('unlockAppraisalCycle')
+export const closeAppraisalCycle = _deprecated('closeAppraisalCycle')
+export const bulkInitAppraisalParticipants = _deprecated('bulkInitAppraisalParticipants')
+export const getAppraisalParticipant = _deprecated('getAppraisalParticipant')
+export const listAppraisalEvents = _deprecated('listAppraisalEvents')
+export const createAppraisalEvent = _deprecated('createAppraisalEvent')
+export const patchAppraisalEvent = _deprecated('patchAppraisalEvent')
+export const revertAppraisalEvent = _deprecated('revertAppraisalEvent')
+export const listPenaltyCatalog = _deprecated('listPenaltyCatalog')
+export const createPenaltyCatalogItem = _deprecated('createPenaltyCatalogItem')
+export const patchPenaltyCatalogItem = _deprecated('patchPenaltyCatalogItem')
+export const togglePenaltyCatalogItem = _deprecated('togglePenaltyCatalogItem')
+export const rejectAppraisalSummary = _deprecated('rejectAppraisalSummary')
+export const getAppraisalReport = _deprecated('getAppraisalReport')
+export const getPenaltyLog = _deprecated('getPenaltyLog')
+export const getParticipantSheet = _deprecated('getParticipantSheet')
