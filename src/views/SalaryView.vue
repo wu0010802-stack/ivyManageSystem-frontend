@@ -419,6 +419,8 @@ const renderFieldBreakdownValue = (row, column) => {
   const value = row?.[column.key]
   if (value === null || value === undefined || value === '') return '-'
   if (MONEY_KEYS.has(column.key)) return money(value)
+  // 底薪／勞健保明細以「value」欄位混合金額與字串，整數視為金額格式化以對齊主表。
+  if (column.key === 'value' && typeof value === 'number') return money(value)
   return value
 }
 
@@ -498,7 +500,11 @@ onMounted(() => {
             </el-table-column>
             <el-table-column prop="employee_name" label="姓名" width="100" fixed />
             <el-table-column label="底薪" width="100">
-              <template #default="scope">{{ money(scope.row.base_salary) }}</template>
+              <template #default="scope">
+                <button type="button" class="cell-link text-link-primary" @click="openFieldBreakdown(scope.row, 'base_salary')">
+                  {{ money(scope.row.base_salary) }}
+                </button>
+              </template>
             </el-table-column>
             <el-table-column label="節慶獎金" width="120">
               <template #header>
@@ -567,12 +573,16 @@ onMounted(() => {
             </el-table-column>
             <el-table-column label="勞保" width="90">
               <template #default="scope">
-                <span class="text-danger">{{ money(scope.row.labor_insurance) }}</span>
+                <button type="button" class="cell-link text-link-danger" @click="openFieldBreakdown(scope.row, 'labor_insurance')">
+                  {{ money(scope.row.labor_insurance) }}
+                </button>
               </template>
             </el-table-column>
             <el-table-column label="健保" width="90">
               <template #default="scope">
-                <span class="text-danger">{{ money(scope.row.health_insurance) }}</span>
+                <button type="button" class="cell-link text-link-danger" @click="openFieldBreakdown(scope.row, 'health_insurance')">
+                  {{ money(scope.row.health_insurance) }}
+                </button>
               </template>
             </el-table-column>
             <el-table-column label="勞退自提" width="100">
