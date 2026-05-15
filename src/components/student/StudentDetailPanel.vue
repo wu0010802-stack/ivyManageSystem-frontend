@@ -92,7 +92,7 @@ const TAB_DEFS = computed(() => [
   { name: 'overview', label: '總覽', show: true },
   { name: 'basic', label: '基本資料', show: true },
   { name: 'attendance', label: '出席紀錄', show: true },
-  { name: 'records', label: '綜合紀錄', show: true },
+  { name: 'records', label: '教務紀錄', show: true },
   { name: 'fees', label: '學費', show: canFeesRead.value },
   { name: 'activity', label: '才藝報名', show: canActivityRead.value },
   { name: 'health_growth', label: '健康／成長', show: canPortfolioRead.value || canHealthRead.value },
@@ -179,6 +179,17 @@ const busEvents = [
 ]
 busEvents.forEach((e) => domainBus.on(e, onProfileMutate))
 onUnmounted(() => busEvents.forEach((e) => domainBus.off(e, onProfileMutate)))
+
+// 教務紀錄 → 出席跳轉：攜帶日期區間給 AttendanceTab 預填篩選
+const attendanceDateRange = ref(null)
+function handleRecordsJumpTab(payload) {
+  const target = typeof payload === 'string' ? payload : payload?.tab
+  if (!target) return
+  if (target === 'attendance' && payload?.query) {
+    attendanceDateRange.value = [payload.query.from, payload.query.to]
+  }
+  activeTab.value = mapLegacyTab(target)
+}
 
 // 摺要列：操作
 const handleLifecycleClick = () => { lifecycleDialogVisible.value = true }
@@ -316,12 +327,14 @@ const breadcrumbItems = computed(() => {
           v-else-if="tab.name === 'attendance'"
           :student-id="studentId"
           :active="activeTab === 'attendance'"
+          :external-date-range="attendanceDateRange"
         />
         <RecordsTab
           v-else-if="tab.name === 'records'"
           :student-id="studentId"
           :classroom-id="profile.basic?.classroom_id"
           :active="activeTab === 'records'"
+          @jump-tab="handleRecordsJumpTab"
         />
         <FeesTab
           v-else-if="tab.name === 'fees'"

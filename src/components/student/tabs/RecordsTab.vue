@@ -15,12 +15,16 @@ import {
 import IncidentEditorDialog from '@/components/student/IncidentEditorDialog.vue'
 import AssessmentEditorDialog from '@/components/student/AssessmentEditorDialog.vue'
 import ChangeLogEditorDialog from '@/components/student/ChangeLogEditorDialog.vue'
+import SummaryCards from '@/components/student/tabs/academic/SummaryCards.vue'
+import LeaveSection from '@/components/student/tabs/academic/LeaveSection.vue'
 
 const props = defineProps({
   studentId: { type: Number, required: true },
   classroomId: { type: Number, default: null },
   active: { type: Boolean, default: true },
 })
+
+const emit = defineEmits(['jump-tab'])
 
 const canWrite = hasPermission('STUDENTS_WRITE')
 
@@ -184,11 +188,34 @@ const truncate = (text, len = 60) => {
   return text.length > len ? text.slice(0, len) + '…' : text
 }
 
-defineExpose({ refresh: fetchData })
+const summaryRef = ref(null)
+
+function handleJumpSection(section) {
+  viewMode.value = 'table'
+  tableTab.value = section
+}
+
+function handleJumpAttendance(payload) {
+  emit('jump-tab', { tab: 'attendance', query: payload })
+}
+
+defineExpose({
+  refresh: () => {
+    fetchData()
+    summaryRef.value?.refresh?.()
+  },
+})
 </script>
 
 <template>
   <div class="records-tab">
+    <SummaryCards
+      ref="summaryRef"
+      :student-id="studentId"
+      :active="active"
+      @jump-tab="(tab) => emit('jump-tab', { tab })"
+      @jump-section="handleJumpSection"
+    />
     <div class="filter-bar">
       <el-date-picker
         v-model="dateRange"
@@ -394,6 +421,14 @@ defineExpose({ refresh: fetchData })
             </template>
           </el-table-column>
         </el-table>
+      </el-tab-pane>
+
+      <el-tab-pane label="請假" name="leave">
+        <LeaveSection
+          :student-id="studentId"
+          :active="active && tableTab === 'leave'"
+          @jump-attendance="handleJumpAttendance"
+        />
       </el-tab-pane>
 
       <el-tab-pane :label="`異動（${grouped.change_log.length}）`" name="change_log">
