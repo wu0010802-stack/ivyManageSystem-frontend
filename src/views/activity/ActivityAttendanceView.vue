@@ -551,12 +551,12 @@ onMounted(() => {
 }
 .page-header h2 { margin: 0; font-size: 20px; font-weight: 600; }
 .filter-card { margin-bottom: 0; }
-.no-record { color: #94a3b8; font-size: 13px; }
-.present-count { color: #22c55e; font-weight: 600; }
-.count-sep { color: #94a3b8; }
-.total-count { color: #334155; font-weight: 600; }
-.count-label { color: #94a3b8; font-size: 12px; }
-.empty-hint { text-align: center; color: #94a3b8; padding: 32px 0; font-size: 14px; }
+.no-record { color: var(--text-tertiary); font-size: 13px; }
+.present-count { color: var(--color-success); font-weight: 600; }
+.count-sep { color: var(--text-tertiary); }
+.total-count { color: var(--neutral-700); font-weight: 600; }
+.count-label { color: var(--text-tertiary); font-size: 12px; }
+.empty-hint { text-align: center; color: var(--text-tertiary); padding: 32px 0; font-size: 14px; }
 .drawer-top-actions {
   display: flex;
   justify-content: space-between;
@@ -581,6 +581,6 @@ onMounted(() => {
 
 <style>
 .el-table .unmarked-row td {
-  background-color: #fffbeb !important;
+  background-color: var(--color-warning-soft) !important;
 }
 </style>

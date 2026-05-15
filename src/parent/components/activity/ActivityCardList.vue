@@ -82,7 +82,7 @@ defineProps({
 .enroll-tag {
   padding: 3px 9px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   margin-left: auto;
 }

@@ -36,7 +36,7 @@ const updateVisible = (value) => emit('update:visible', value)
               <span style="font-weight: 500;">{{ log.approver_username }}</span>
               <el-tag size="small" type="info">{{ log.approver_role }}</el-tag>
             </div>
-            <div v-if="log.comment" style="margin-top: 6px; color: #606266; font-size: 13px;">
+            <div v-if="log.comment" style="margin-top: 6px; color: var(--text-secondary); font-size: 13px;">
               {{ log.comment }}
             </div>
           </el-card>

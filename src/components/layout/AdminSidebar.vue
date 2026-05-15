@@ -373,14 +373,14 @@ const onMenuSelect = () => {
 
 <style scoped>
 .admin-sidebar {
-  background-color: #1e293b;
+  background-color: var(--text-primary);
   color: #fff;
   height: 100vh;
   display: flex;
   flex-direction: column;
   transition: width var(--transition-slow);
   overflow: hidden;
-  border-right: 1px solid #334155;
+  border-right: 1px solid var(--neutral-700);
   box-shadow: 4px 0 24px rgba(0, 0, 0, 0.1);
   z-index: 20;
 }
@@ -390,8 +390,8 @@ const onMenuSelect = () => {
   display: flex;
   align-items: center;
   padding: 0 var(--space-5);
-  background-color: #0f172a;
-  border-bottom: 1px solid #334155;
+  background-color: var(--neutral-900);
+  border-bottom: 1px solid var(--neutral-700);
   overflow: hidden;
   white-space: nowrap;
 }
@@ -431,7 +431,7 @@ const onMenuSelect = () => {
 }
 
 :deep(.el-menu-item:hover) {
-  background-color: #334155 !important;
+  background-color: var(--neutral-700) !important;
   color: #fff !important;
 }
 
@@ -455,13 +455,13 @@ const onMenuSelect = () => {
   height: 50px;
   line-height: 50px;
   border-radius: var(--radius-md);
-  color: #94a3b8 !important;
+  color: var(--text-tertiary) !important;
   position: relative;
   z-index: 1;
 }
 
 :deep(.el-sub-menu .el-sub-menu__title:hover) {
-  background-color: #334155 !important;
+  background-color: var(--neutral-700) !important;
   color: #fff !important;
 }
 
@@ -499,12 +499,12 @@ const onMenuSelect = () => {
   align-items: center;
   justify-content: center;
   color: var(--text-tertiary);
-  border-top: 1px solid #334155;
+  border-top: 1px solid var(--neutral-700);
   transition: all var(--transition-base);
 }
 
 .collapse-toggle:hover {
-  background-color: #334155;
+  background-color: var(--neutral-700);
   color: #fff;
 }
 
@@ -526,9 +526,9 @@ const onMenuSelect = () => {
   align-items: center;
   gap: 6px;
   padding: 10px var(--space-5) 6px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
-  color: #f59e0b;
+  color: var(--color-warning);
   letter-spacing: 0.5px;
   text-transform: uppercase;
 }
@@ -542,7 +542,7 @@ const onMenuSelect = () => {
 }
 
 :deep(.el-menu-item.pinned-item) > .el-icon {
-  color: #f59e0b !important;
+  color: var(--color-warning) !important;
 }
 
 :deep(.el-menu-item.pinned-item:hover) {
@@ -559,7 +559,7 @@ const onMenuSelect = () => {
 .pinned-remove {
   margin-left: 8px;
   font-size: 14px;
-  color: #64748b;
+  color: var(--text-secondary);
   opacity: 0;
   transition: opacity var(--transition-base), color var(--transition-base);
   cursor: pointer;
@@ -572,13 +572,13 @@ const onMenuSelect = () => {
 }
 
 .pinned-remove:hover {
-  color: #ef4444;
+  color: var(--color-danger);
   background-color: rgba(239, 68, 68, 0.1);
 }
 
 .pinned-divider {
   height: 1px;
-  background-color: #334155;
+  background-color: var(--neutral-700);
   margin: 6px var(--space-5) 6px;
 }
 

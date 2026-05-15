@@ -183,7 +183,7 @@ defineEmits([
 }
 
 .summary-card {
-  border-left: 4px solid #dc2626;
+  border-left: 4px solid var(--color-danger-hover);
 }
 
 .summary-value {
@@ -193,7 +193,7 @@ defineEmits([
 }
 
 .summary-label {
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 0.85rem;
 }
 </style>

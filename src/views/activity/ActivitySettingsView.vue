@@ -285,7 +285,7 @@ onMounted(fetchSettings)
 }
 .poster-hint {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--text-secondary);
   line-height: 1.5;
 }
 </style>

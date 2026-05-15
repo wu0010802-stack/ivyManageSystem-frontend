@@ -47,13 +47,13 @@ defineEmits(['select'])
 
 .action-title {
   font-weight: 700;
-  color: #0f172a;
+  color: var(--neutral-900);
   margin-bottom: 6px;
 }
 
 .action-description {
   font-size: 0.88rem;
-  color: #475569;
+  color: var(--neutral-600);
   line-height: 1.5;
 }
 </style>

@@ -73,7 +73,7 @@ function fmt(n) { return Number(n).toLocaleString('en-US') }
 }
 
 .act-hero-label {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--ivy-tile-teal-fg);
   font-weight: 700;
   letter-spacing: 0.5px;
@@ -108,7 +108,7 @@ function fmt(n) { return Number(n).toLocaleString('en-US') }
 }
 
 .act-hero-stat .lbl {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--m3-on-surface-variant, var(--pt-text-muted));
 }
 </style>

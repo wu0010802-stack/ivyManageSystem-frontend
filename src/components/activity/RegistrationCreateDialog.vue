@@ -199,7 +199,7 @@ async function handleCreate() {
   text-align: right;
   font-size: 14px;
   margin-top: 8px;
-  color: #374151;
+  color: var(--neutral-700);
 }
-.create-hint { color: #9ca3af; margin-left: 8px; font-size: 13px; }
+.create-hint { color: var(--text-tertiary); margin-left: 8px; font-size: 13px; }
 </style>

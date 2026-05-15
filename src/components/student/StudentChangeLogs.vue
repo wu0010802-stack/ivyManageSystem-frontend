@@ -390,7 +390,7 @@ onMounted(async () => {
 .summary-row { margin-bottom: 14px; }
 .summary-card { text-align: center; }
 .summary-value { font-size: 26px; font-weight: 700; color: var(--color-primary, #4f46e5); }
-.summary-label { font-size: 13px; color: #64748b; margin-top: 4px; }
+.summary-label { font-size: 13px; color: var(--text-secondary); margin-top: 4px; }
 .table-card { }
 .pagination { margin-top: 12px; justify-content: flex-end; display: flex; }
 </style>

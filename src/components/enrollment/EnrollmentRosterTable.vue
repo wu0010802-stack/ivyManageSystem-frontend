@@ -262,7 +262,7 @@ function studentTagClass(student) {
 /* ── 外層 Layout ── */
 .roster-wrapper {
   font-size: 14px;
-  color: #1e293b;
+  color: var(--text-primary);
 }
 
 .roster-outer {
@@ -286,7 +286,7 @@ function studentTagClass(student) {
 .roster-table {
   border-collapse: collapse;
   white-space: nowrap;
-  color: #1e293b;
+  color: var(--text-primary);
 }
 
 .roster-table td {
@@ -314,7 +314,7 @@ function studentTagClass(student) {
 
 .date-cell {
   font-size: 12px;
-  color: #555;
+  color: var(--neutral-600);
   min-width: 72px;
 }
 
@@ -331,7 +331,7 @@ function studentTagClass(student) {
   z-index: 2;
   text-align: center;
   font-weight: 600;
-  background: #f0f2f5;
+  background: var(--neutral-100);
   min-width: 56px;
   white-space: nowrap;
   border-right: 2px solid #8c8c8c !important;
@@ -365,8 +365,8 @@ thead td.corner-cell:first-child {
   position: sticky;
   left: 0;
   z-index: 2;
-  background: #f0f2f5;
-  color: #666;
+  background: var(--neutral-100);
+  color: var(--text-secondary);
   font-size: 12px;
   min-width: 32px;
   border-right: 2px solid #8c8c8c !important;
@@ -379,34 +379,34 @@ thead td.corner-cell:first-child {
 
 .indigenous-mark {
   font-size: 10px;
-  color: #2563eb;
+  color: var(--color-info-hover);
   margin-left: 1px;
   vertical-align: super;
 }
 
 /* ── 色彩標籤 ── */
-.tag-new        { color: #16a34a; }
+.tag-new        { color: var(--color-success-hover); }
 .tag-underage   { color: #ea580c; }
 .tag-special    { color: #7c3aed; }
-.tag-indigenous { color: #2563eb; }
+.tag-indigenous { color: var(--color-info-hover); }
 
 /* ── 年級分隔粗邊框 ── */
 .grade-border-right {
-  border-right: 2px solid #475569 !important;
+  border-right: 2px solid var(--neutral-600) !important;
 }
 
 /* ── tfoot 統計區 ── */
 tfoot tr:first-child td {
-  border-top: 2px solid #475569;
+  border-top: 2px solid var(--neutral-600);
 }
 
 .total-label {
-  color: #dc2626;
+  color: var(--color-danger-hover);
 }
 
 .total-cell {
   font-weight: 700;
-  color: #dc2626;
+  color: var(--color-danger-hover);
 }
 
 .count-cell {
@@ -414,22 +414,22 @@ tfoot tr:first-child td {
 }
 
 .grade-total-cell {
-  background: #e2e8f0;
+  background: var(--border-color);
   font-weight: 700;
 }
 
 .grade-breakdown-cell {
-  background: #f1f5f9;
+  background: var(--bg-color-soft);
   font-size: 13px;
 }
 
 .grand-total-row td {
-  background: #dbeafe;
+  background: var(--color-info-soft);
   font-weight: 700;
   font-size: 15px;
   text-align: left !important;
   padding-left: 14px !important;
-  border-top: 2px solid #3b82f6 !important;
+  border-top: 2px solid var(--color-info) !important;
 }
 
 /* ── 右側員工名單 ── */
@@ -441,7 +441,7 @@ tfoot tr:first-child td {
 }
 
 .legend-item {
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .staff-section {
@@ -449,7 +449,7 @@ tfoot tr:first-child td {
   flex-direction: column;
   gap: 10px;
   padding: 8px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border-color);
   border-radius: 4px;
   background: #fafafa;
 }
@@ -462,9 +462,9 @@ tfoot tr:first-child td {
 
 .staff-role {
   font-weight: 700;
-  font-size: 11px;
-  color: #334155;
-  border-bottom: 1px solid #cbd5e1;
+  font-size: 12px;
+  color: var(--neutral-700);
+  border-bottom: 1px solid var(--neutral-300);
   padding-bottom: 1px;
   margin-bottom: 2px;
 }
@@ -476,8 +476,8 @@ tfoot tr:first-child td {
 }
 
 .staff-name {
-  font-size: 11px;
-  color: #475569;
+  font-size: 12px;
+  color: var(--neutral-600);
 }
 
 /* ── 列印 ── */
@@ -485,14 +485,14 @@ tfoot tr:first-child td {
   .roster-wrapper { font-size: 12px; }
   .roster-table td { padding: 2px 5px; }
   .title-cell { font-size: 15px; padding-left: 8px !important; }
-  .date-cell { font-size: 11px; min-width: 60px; }
+  .date-cell { font-size: 12px; min-width: 60px; }
   .class-num-cell { min-width: 58px; }
   .row-label { min-width: 44px; }
   .class-name-cell,
   .teacher-cell,
   .count-cell,
-  .grade-breakdown-cell { font-size: 11px; }
-  .seq-cell { font-size: 11px; min-width: 24px; }
+  .grade-breakdown-cell { font-size: 12px; }
+  .seq-cell { font-size: 12px; min-width: 24px; }
   .student-cell { min-width: 58px; max-width: 80px; }
   .indigenous-mark { font-size: 9px; }
   .grand-total-row td { font-size: 13px; padding-left: 12px !important; }

@@ -633,7 +633,7 @@ onMounted(fetchAll)
 }
 
 .leave-card {
-  border-left: 4px solid #409EFF;
+  border-left: 4px solid var(--color-info);
 }
 
 .overtime-card {

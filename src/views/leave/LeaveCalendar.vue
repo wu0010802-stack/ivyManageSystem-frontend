@@ -179,7 +179,7 @@ watch(calFilterEmp, () => {
     <!-- 圖例 -->
     <div class="cal-legend">
       <span class="cal-legend-item"><span class="legend-dot" style="background:#e6a23c"></span>事假</span>
-      <span class="cal-legend-item"><span class="legend-dot" style="background:#409eff"></span>病/生理假</span>
+      <span class="cal-legend-item"><span class="legend-dot" style="background:var(--color-info)"></span>病/生理假</span>
       <span class="cal-legend-item"><span class="legend-dot" style="background:#67c23a"></span>特休/公假</span>
       <span class="cal-legend-item"><span class="legend-dot" style="background:#f472b6"></span>產假/陪產</span>
       <span class="cal-legend-item"><span class="legend-dot pending-dot"></span>待審核</span>
@@ -470,7 +470,7 @@ watch(calFilterEmp, () => {
   border-radius: 3px;
   background: var(--el-fill-color-light);
   border-left: 3px solid #ccc;
-  font-size: 11px;
+  font-size: 12px;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -501,7 +501,7 @@ watch(calFilterEmp, () => {
 
 /* 超過 4 筆的 "more" 提示 */
 .cal-more {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--el-color-primary);
   padding: 1px 5px;
   text-align: right;

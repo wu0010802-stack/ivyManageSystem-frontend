@@ -112,8 +112,8 @@ const showClassTabs = computed(() => classrooms.value.length > 1)
 <style scoped>
 .summary-row { margin-bottom: 16px; }
 .summary-card { text-align: center; padding: 4px 0; }
-.card-val { font-size: 28px; font-weight: 700; color: #1d4ed8; }
-.card-label { font-size: 13px; color: #64748b; margin-top: 4px; }
-.no-course { color: #94a3b8; }
-.empty-hint { text-align: center; color: #94a3b8; padding: 24px 0; font-size: 14px; }
+.card-val { font-size: 28px; font-weight: 700; color: var(--color-info-darker); }
+.card-label { font-size: 13px; color: var(--text-secondary); margin-top: 4px; }
+.no-course { color: var(--text-tertiary); }
+.empty-hint { text-align: center; color: var(--text-tertiary); padding: 24px 0; font-size: 14px; }
 </style>

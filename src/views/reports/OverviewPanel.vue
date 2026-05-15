@@ -149,7 +149,7 @@ const formatPct = (v) => {
   position: relative;
   border-top: 3px solid transparent;
 }
-.kpi-card--blue   { border-top-color: #409EFF; }
+.kpi-card--blue   { border-top-color: var(--color-info); }
 .kpi-card--orange { border-top-color: var(--color-warning); }
 .kpi-card--red    { border-top-color: var(--color-danger); }
 .kpi-card--green  { border-top-color: var(--color-success); }
@@ -188,7 +188,7 @@ const formatPct = (v) => {
   margin-left: 4px;
 }
 
-.value-blue { color: #409EFF; }
+.value-blue { color: var(--color-info); }
 .value-orange { color: var(--color-warning); }
 .value-red { color: var(--color-danger); }
 .value-green { color: var(--color-success); }

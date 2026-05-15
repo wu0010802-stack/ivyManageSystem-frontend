@@ -36,7 +36,7 @@ const reactions = ['like', 'love', 'celebrate']
   transition: transform 0.15s;
 }
 .reaction.active {
-  background: #fef3c7;
+  background: var(--color-warning-soft);
   transform: scale(1.1);
 }
 .reaction:hover:not(.active) { background: #e5e7eb; }

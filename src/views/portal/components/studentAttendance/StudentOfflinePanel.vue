@@ -47,15 +47,15 @@ defineEmits(['sync-now'])
   justify-content: space-between;
   gap: var(--space-3);
   padding: var(--space-2) var(--space-3);
-  background: #fef3c7;
+  background: var(--color-warning-soft);
   border: 1px solid #fde68a;
   border-radius: var(--radius-md);
   margin-bottom: var(--space-3);
 }
 
 .offline-panel.is-offline {
-  background: #fee2e2;
-  border-color: #fecaca;
+  background: var(--color-danger-soft);
+  border-color: var(--color-danger-soft);
 }
 
 .status-text {
@@ -64,7 +64,7 @@ defineEmits(['sync-now'])
 }
 
 .status-text--offline {
-  color: #b91c1c;
+  color: var(--color-danger-darker);
   font-weight: 500;
 }
 

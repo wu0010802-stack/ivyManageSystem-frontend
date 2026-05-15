@@ -133,5 +133,5 @@ header > h2 { margin: 0; font-size: 17px; color: var(--m3-on-surface, var(--pt-t
   color: #fff;
 }
 .chart { width: 100%; height: 280px; }
-.placeholder { padding: 24px; text-align: center; color: #9ca3af; }
+.placeholder { padding: 24px; text-align: center; color: var(--text-tertiary); }
 </style>

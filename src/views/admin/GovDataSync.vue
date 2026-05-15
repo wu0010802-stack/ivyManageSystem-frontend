@@ -125,8 +125,8 @@ onMounted(refresh)
 .actions { display: flex; gap: 8px; margin-top: 12px; }
 .actions button { padding: 6px 16px; border-radius: 4px; cursor: pointer; }
 .promote-btn { background: #4caf50; color: #fff; border: 1px solid #4caf50; }
-.dismiss-btn { background: #fff; color: #555; border: 1px solid #ddd; }
-.empty { color: #888; font-style: italic; }
+.dismiss-btn { background: #fff; color: var(--neutral-600); border: 1px solid #ddd; }
+.empty { color: var(--text-tertiary); font-style: italic; }
 .mw-table { border-collapse: collapse; width: 100%; }
 .mw-table th, .mw-table td { border: 1px solid #ddd; padding: 6px 10px; }
 section { margin-bottom: 24px; }

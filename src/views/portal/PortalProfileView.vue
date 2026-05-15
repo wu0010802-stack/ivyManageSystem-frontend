@@ -275,7 +275,7 @@ onMounted(() => {
 
       <!-- 未綁定 -->
       <template v-else>
-        <p style="color: #606266; font-size: 13px; margin: 0 0 12px;">
+        <p style="color: var(--text-secondary); font-size: 13px; margin: 0 0 12px;">
           綁定個人 LINE 帳號後，可透過 LINE Bot 查詢薪資、假單、打卡，<br>
           且審核結果將直接推播至您的 LINE。
         </p>
@@ -382,7 +382,7 @@ onMounted(() => {
   margin: 0 0 10px;
   padding-left: 20px;
   font-size: 13px;
-  color: var(--text-regular, #606266);
+  color: var(--text-regular, var(--text-secondary));
   line-height: 1.7;
 }
 
@@ -417,13 +417,13 @@ onMounted(() => {
 .qr-caption {
   margin-top: 6px;
   font-size: 12px;
-  color: var(--text-secondary, #909399);
+  color: var(--text-secondary, var(--text-tertiary));
 }
 
 .line-bot-url-missing {
   margin: 8px 0 0;
   padding: 8px 10px;
-  background: #fff7e6;
+  background: var(--color-warning-soft);
   border: 1px solid #ffe1a8;
   border-radius: 4px;
   font-size: 12px;

@@ -112,7 +112,7 @@ const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
 }
 
 .calendar-cell.is-today {
-  border-color: var(--color-primary, #409eff);
+  border-color: var(--color-primary, var(--color-info));
   border-width: 2px;
 }
 
@@ -131,12 +131,12 @@ const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
 
 .cell-shift {
   font-size: 13px;
-  color: var(--color-primary, #409eff);
+  color: var(--color-primary, var(--color-info));
   font-weight: 500;
 }
 
 .cell-time {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-secondary);
 }
 
@@ -149,7 +149,7 @@ const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
 }
 
 .cell-swap-btn {
-  font-size: 11px !important;
+  font-size: 12px !important;
   padding: 0 !important;
 }
 
@@ -159,7 +159,7 @@ const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
 }
 
 .calendar-cell.is-tappable:focus-visible {
-  outline: 2px solid var(--color-primary, #409eff);
+  outline: 2px solid var(--color-primary, var(--color-info));
   outline-offset: -2px;
 }
 
@@ -167,7 +167,7 @@ const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
   .calendar-cell {
     min-height: 65px;
     padding: 4px;
-    font-size: 11px;
+    font-size: 12px;
   }
 
   .cell-time {

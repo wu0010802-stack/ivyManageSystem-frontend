@@ -132,9 +132,9 @@ const trendChartData = computed(() => {
     labels: monthly.map(m => `${m.year}/${String(m.month).padStart(2, '0')}`),
     datasets: [
       { label: '退學', data: monthly.map(m => m.withdrawn),
-        borderColor: '#F56C6C', backgroundColor: '#F56C6C', tension: 0.3, fill: false },
+        borderColor: '#f56c6c', backgroundColor: '#f56c6c', tension: 0.3, fill: false },
       { label: '轉出', data: monthly.map(m => m.transferred),
-        borderColor: '#E6A23C', backgroundColor: '#E6A23C', tension: 0.3, fill: false },
+        borderColor: '#e6a23c', backgroundColor: '#e6a23c', tension: 0.3, fill: false },
     ],
   }
 })
@@ -150,7 +150,7 @@ const reasonChartData = computed(() => {
   const rows = history.value?.by_reason || []
   return {
     labels: rows.map(r => r.reason),
-    datasets: [{ label: '次數', data: rows.map(r => r.count), backgroundColor: '#409EFF' }],
+    datasets: [{ label: '次數', data: rows.map(r => r.count), backgroundColor: '#409eff' }],
   }
 })
 const reasonOptions = {
@@ -176,7 +176,7 @@ onMounted(() => {
 .risk-card { margin-bottom: 12px; }
 .card-header { display: flex; justify-content: space-between; align-items: center; }
 .signal { display: flex; gap: 6px; align-items: center; margin: 2px 0; flex-wrap: wrap; }
-.signal-detail { color: #606266; font-size: 13px; }
+.signal-detail { color: var(--text-secondary); font-size: 13px; }
 .row { margin-top: 0; }
 .chart-wrap { position: relative; height: 240px; }
 </style>

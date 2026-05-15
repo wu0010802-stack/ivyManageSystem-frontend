@@ -12,10 +12,10 @@ const now = new Date()
 const currentDate = ref(new Date(now.getFullYear(), now.getMonth(), 1))
 
 const eventTypes = [
-  { value: 'meeting', label: '會議', color: '#409EFF' },
-  { value: 'activity', label: '活動', color: '#67C23A' },
-  { value: 'holiday', label: '國定假日', color: '#E6A23C' },
-  { value: 'makeup_workday', label: '補班日', color: '#8B5CF6' },
+  { value: 'meeting', label: '會議', color: '#409eff' },
+  { value: 'activity', label: '活動', color: '#67c23a' },
+  { value: 'holiday', label: '國定假日', color: '#e6a23c' },
+  { value: 'makeup_workday', label: '補班日', color: '#8b5cf6' },
   { value: 'general', label: '一般', color: '#909399' },
 ]
 const eventTypeMap = Object.fromEntries(eventTypes.map(t => [t.value, t]))
@@ -312,7 +312,7 @@ onMounted(fetchEvents)
 }
 
 .event-dot {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--surface-color);
   padding: 1px 4px;
   border-radius: 3px;
@@ -327,7 +327,7 @@ onMounted(fetchEvents)
 }
 
 .event-more {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-tertiary);
 }
 

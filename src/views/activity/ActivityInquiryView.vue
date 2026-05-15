@@ -61,8 +61,8 @@
     <el-dialog v-model="replyDialog" title="回覆家長提問"
                width="440px" destroy-on-close>
       <div v-if="replyTarget" style="margin-bottom: 12px;">
-        <div style="font-size: 13px; color: #64748b; margin-bottom: 4px;">原始問題：</div>
-        <div style="background: #f8fafc; padding: 8px 12px; border-radius: 6px; font-size: 14px;">
+        <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 4px;">原始問題：</div>
+        <div style="background: var(--bg-color); padding: 8px 12px; border-radius: 6px; font-size: 14px;">
           {{ replyTarget.question }}
         </div>
       </div>

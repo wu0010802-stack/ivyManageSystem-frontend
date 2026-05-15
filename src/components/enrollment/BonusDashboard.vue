@@ -311,7 +311,7 @@ const statusIcon = (status) => {
 }
 
 .festival-banner--active .banner-icon {
-  color: #d97706;
+  color: var(--color-warning-hover);
   box-shadow: 0 4px 12px rgba(243, 198, 48, 0.3);
 }
 
@@ -328,7 +328,7 @@ const statusIcon = (status) => {
 
 .banner-sub {
   font-size: 12.5px;
-  color: #5B5B5B;
+  color: var(--neutral-600);
   margin-top: 2px;
 }
 
@@ -344,7 +344,7 @@ const statusIcon = (status) => {
 .summary-card {
   border-radius: 14px;
   border: 1px solid rgba(148, 163, 184, 0.2);
-  background: #ffffff;
+  background: var(--neutral-0);
   position: relative;
   overflow: hidden;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
@@ -395,13 +395,13 @@ const statusIcon = (status) => {
 
 .summary-card--blue .card-icon { background: rgba(0, 121, 183, 0.08); color: #0079b7; }
 .summary-card--green .card-icon { background: rgba(13, 144, 83, 0.1); color: #0d9053; }
-.summary-card--orange .card-icon { background: rgba(243, 198, 48, 0.12); color: #d97706; }
+.summary-card--orange .card-icon { background: rgba(243, 198, 48, 0.12); color: var(--color-warning-hover); }
 .summary-card--red .card-icon { background: rgba(246, 82, 101, 0.1); color: #f65265; }
 .summary-card--purple .card-icon { background: rgba(159, 137, 189, 0.12); color: #9f89bd; }
 
 .card-label {
   font-size: 13px;
-  color: #5B5B5B;
+  color: var(--neutral-600);
   font-weight: 500;
 }
 
@@ -416,14 +416,14 @@ const statusIcon = (status) => {
 
 .summary-card--blue .card-value { color: #0079b7; }
 .summary-card--green .card-value { color: #0d9053; }
-.summary-card--orange .card-value { color: #d97706; }
+.summary-card--orange .card-value { color: var(--color-warning-hover); }
 .summary-card--red .card-value { color: #f65265; }
 .summary-card--purple .card-value { color: #9f89bd; }
 
 .card-sub {
   margin-top: 4px;
   font-size: 12px;
-  color: #94a3b8;
+  color: var(--text-tertiary);
 }
 
 /* ===== Achievement stats pills ===== */
@@ -441,8 +441,8 @@ const statusIcon = (status) => {
   padding: 5px 12px;
   border-radius: 999px;
   font-size: 12.5px;
-  color: #5B5B5B;
-  background: #ffffff;
+  color: var(--neutral-600);
+  background: var(--neutral-0);
   border: 1px solid rgba(148, 163, 184, 0.25);
 }
 
@@ -460,7 +460,7 @@ const statusIcon = (status) => {
 .stat-pill--above .pill-dot { background: #0d9053; box-shadow: 0 0 0 3px rgba(13,144,83,0.15); }
 .stat-pill--above strong { color: #0d9053; }
 
-.stat-pill--meet .pill-dot { background: #94a3b8; box-shadow: 0 0 0 3px rgba(148,163,184,0.18); }
+.stat-pill--meet .pill-dot { background: var(--text-tertiary); box-shadow: 0 0 0 3px rgba(148,163,184,0.18); }
 
 .stat-pill--below .pill-dot { background: #f65265; box-shadow: 0 0 0 3px rgba(246,82,101,0.15); }
 .stat-pill--below strong { color: #f65265; }
@@ -496,12 +496,12 @@ const statusIcon = (status) => {
 
 .card-header-meta {
   font-size: 12.5px;
-  color: #94a3b8;
+  color: var(--text-tertiary);
 }
 
 .bonus-table :deep(.el-table__header th) {
-  background: #f8fafc;
-  color: #5B5B5B;
+  background: var(--bg-color);
+  color: var(--neutral-600);
   font-weight: 600;
   font-size: 13px;
 }
@@ -526,7 +526,7 @@ const statusIcon = (status) => {
 
 .status-badge--meet {
   background: rgba(148, 163, 184, 0.18);
-  color: #5B5B5B;
+  color: var(--neutral-600);
 }
 
 .status-badge--below {
@@ -540,7 +540,7 @@ const statusIcon = (status) => {
   color: #392a1c;
 }
 
-.num-target { color: #5B5B5B; font-weight: 500; }
+.num-target { color: var(--neutral-600); font-weight: 500; }
 
 .teacher-bonus-item {
   display: flex;
@@ -564,13 +564,13 @@ const statusIcon = (status) => {
 }
 
 .bonus-base {
-  color: #94a3b8;
+  color: var(--text-tertiary);
   font-size: 11.5px;
   font-variant-numeric: tabular-nums;
 }
 
 .no-teacher {
-  color: #cbd5e1;
+  color: var(--neutral-300);
   font-size: 13px;
   font-style: italic;
 }
@@ -579,7 +579,7 @@ const statusIcon = (status) => {
 .empty-hint {
   text-align: center;
   padding: 48px 0 40px;
-  color: #94a3b8;
+  color: var(--text-tertiary);
 }
 
 .empty-icon {
@@ -597,13 +597,13 @@ const statusIcon = (status) => {
 .empty-title {
   font-size: 14px;
   font-weight: 600;
-  color: #5B5B5B;
+  color: var(--neutral-600);
   margin-bottom: 4px;
 }
 
 .empty-desc {
   font-size: 12.5px;
-  color: #94a3b8;
+  color: var(--text-tertiary);
 }
 
 :deep(.row-above) td {

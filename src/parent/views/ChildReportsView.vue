@@ -80,7 +80,7 @@ header > h2 { margin: 0; font-size: 17px; color: #0d9053; }
 .placeholder {
   padding: 32px 16px;
   text-align: center;
-  color: #9ca3af;
+  color: var(--text-tertiary);
 }
 .placeholder .hint { font-size: 13px; margin-top: 4px; }
 .list { display: flex; flex-direction: column; gap: 10px; }

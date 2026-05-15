@@ -59,7 +59,7 @@ const canWrite = computed(() => hasPermission('RECRUITMENT_WRITE'))
 .recruitment-ivykids-view {
   min-height: 100%;
   padding: 24px;
-  background: #f8fafc;
+  background: var(--bg-color);
 }
 
 .page-header {
@@ -87,8 +87,8 @@ const canWrite = computed(() => hasPermission('RECRUITMENT_WRITE'))
   width: 40px;
   height: 40px;
   border-radius: 10px;
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: var(--color-info-soft);
+  color: var(--color-info-darker);
   flex-shrink: 0;
 }
 
@@ -96,12 +96,12 @@ const canWrite = computed(() => hasPermission('RECRUITMENT_WRITE'))
   margin: 0;
   font-size: 1.2rem;
   font-weight: 700;
-  color: #1e293b;
+  color: var(--text-primary);
 }
 
 .page-subtitle {
   margin: 2px 0 0;
   font-size: 0.78rem;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 </style>

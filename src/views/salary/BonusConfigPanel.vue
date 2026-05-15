@@ -697,8 +697,8 @@ onMounted(() => {
   font-size: var(--text-lg);
   font-weight: bold;
   margin: var(--space-5) 0 10px 0;
-  color: #c0c4cc;
-  border-left: 4px solid #409eff;
+  color: var(--neutral-300);
+  border-left: 4px solid var(--color-info);
   padding-left: 10px;
 }
 .config-grid {
@@ -717,11 +717,11 @@ onMounted(() => {
 .label {
   margin-bottom: 5px;
   font-size: var(--text-base);
-  color: #909399;
+  color: var(--text-tertiary);
 }
 .desc-text {
   font-size: var(--text-sm);
-  color: #909399;
+  color: var(--text-tertiary);
   line-height: 1.6;
   margin-bottom: 15px;
 }

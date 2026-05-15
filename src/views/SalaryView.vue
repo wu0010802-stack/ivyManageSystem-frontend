@@ -925,7 +925,7 @@ onMounted(() => {
   align-items: center;
 }
 .calc-status__item--session {
-  color: #409eff;
+  color: var(--color-info);
 }
 .results-section {
   margin-top: var(--space-5);
@@ -944,7 +944,7 @@ onMounted(() => {
 }
 .accrual-hint {
   margin-bottom: 12px;
-  color: #666;
+  color: var(--text-secondary);
   font-size: 13px;
   display: flex;
   align-items: center;

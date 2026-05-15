@@ -487,14 +487,14 @@ function handleSingleToggle(row) {
   justify-content: space-between;
   align-items: center;
   font-size: 13px;
-  color: #475569;
+  color: var(--neutral-600);
   padding: 6px 10px;
-  background: #f1f5f9;
+  background: var(--bg-color-soft);
   border-radius: 8px;
 }
 
 .pos-panel__summary-total strong {
-  color: #dc2626;
+  color: var(--color-danger-hover);
   font-size: 15px;
   margin-left: 4px;
 }
@@ -506,16 +506,16 @@ function handleSingleToggle(row) {
 
 .pos-panel__empty {
   text-align: center;
-  color: #94a3b8;
+  color: var(--text-tertiary);
   padding: 32px 0;
 }
 
 .pos-group {
   margin-bottom: 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--border-color);
   border-radius: 10px;
   overflow: hidden;
-  background: #f8fafc;
+  background: var(--bg-color);
 }
 
 .pos-group__head {
@@ -524,24 +524,24 @@ function handleSingleToggle(row) {
   align-items: center;
   padding: 10px 14px;
   background: #eef0fd;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .pos-group__name {
   font-weight: 600;
   font-size: 15px;
-  color: #1e293b;
+  color: var(--text-primary);
 }
 
 .pos-group__sub {
   font-size: 12px;
-  color: #64748b;
+  color: var(--text-secondary);
   margin-top: 2px;
 }
 
 .pos-group__owed {
   font-weight: 700;
-  color: #dc2626;
+  color: var(--color-danger-hover);
   font-size: 15px;
 }
 
@@ -550,7 +550,7 @@ function handleSingleToggle(row) {
   align-items: center;
   gap: 10px;
   padding: 10px 14px;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid var(--border-color);
   cursor: pointer;
   transition: background 0.15s;
 }
@@ -560,19 +560,19 @@ function handleSingleToggle(row) {
 }
 
 .pos-reg:hover {
-  background: #f1f5f9;
+  background: var(--bg-color-soft);
 }
 
 .pos-reg--solo {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
+  background: var(--neutral-0);
+  border: 1px solid var(--border-color);
   border-radius: 10px;
   margin-bottom: 8px;
 }
 
 .pos-reg--selected {
-  background: #dcfce7 !important;
-  border-color: #10b981 !important;
+  background: var(--color-success-soft) !important;
+  border-color: var(--color-success) !important;
 }
 
 .pos-reg__info {
@@ -585,36 +585,36 @@ function handleSingleToggle(row) {
   flex-wrap: wrap;
   gap: 4px 8px;
   font-size: 13px;
-  color: #334155;
+  color: var(--neutral-700);
 }
 
 .pos-reg__line {
-  background: #e0e7ff;
-  color: #4338ca;
+  background: var(--brand-primary-soft);
+  color: var(--brand-primary-hover);
   padding: 2px 8px;
   border-radius: 999px;
   font-size: 12px;
 }
 
 .pos-reg__line--supply {
-  background: #fef3c7;
-  color: #92400e;
+  background: var(--color-warning-soft);
+  color: var(--color-warning-darker);
 }
 
 .pos-reg__name {
   font-weight: 600;
-  color: #1e293b;
+  color: var(--text-primary);
 }
 
 .pos-reg__meta {
   font-size: 12px;
-  color: #64748b;
+  color: var(--text-secondary);
   margin-top: 2px;
 }
 
 .pos-reg__owed {
   font-weight: 600;
-  color: #dc2626;
+  color: var(--color-danger-hover);
   font-size: 14px;
   white-space: nowrap;
 }
@@ -635,7 +635,7 @@ function handleSingleToggle(row) {
 .pos-cal__month {
   font-size: 15px;
   font-weight: 600;
-  color: #1e293b;
+  color: var(--text-primary);
   min-width: 110px;
   text-align: center;
 }
@@ -644,10 +644,10 @@ function handleSingleToggle(row) {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   font-size: 12px;
-  color: #64748b;
+  color: var(--text-secondary);
   text-align: center;
   padding: 4px 0;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .pos-cal__grid {
@@ -661,8 +661,8 @@ function handleSingleToggle(row) {
   position: relative;
   min-height: 62px;
   padding: 4px 6px;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
+  background: var(--neutral-0);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.15s;
@@ -672,8 +672,8 @@ function handleSingleToggle(row) {
 }
 
 .pos-cal__cell:hover {
-  border-color: #94a3b8;
-  background: #f8fafc;
+  border-color: var(--text-tertiary);
+  background: var(--bg-color);
 }
 
 .pos-cal__cell--out {
@@ -681,39 +681,39 @@ function handleSingleToggle(row) {
 }
 
 .pos-cal__cell--today {
-  border-color: #3b82f6;
+  border-color: var(--color-info);
 }
 
 .pos-cal__cell--today .pos-cal__day {
-  color: #2563eb;
+  color: var(--color-info-hover);
   font-weight: 700;
 }
 
 .pos-cal__cell--active {
-  background: #dbeafe !important;
-  border-color: #2563eb !important;
+  background: var(--color-info-soft) !important;
+  border-color: var(--color-info-hover) !important;
   box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.25);
 }
 
 .pos-cal__cell--has {
-  background: #fef2f2;
-  border-color: #fecaca;
+  background: var(--color-danger-soft);
+  border-color: var(--color-danger-soft);
 }
 
 .pos-cal__cell--has.pos-cal__cell--active {
-  background: #fee2e2 !important;
+  background: var(--color-danger-soft) !important;
 }
 
 .pos-cal__day {
   font-size: 13px;
   font-weight: 500;
-  color: #1e293b;
+  color: var(--text-primary);
 }
 
 .pos-cal__amt {
   font-size: 12px;
   font-weight: 700;
-  color: #dc2626;
+  color: var(--color-danger-hover);
   margin-top: auto;
 }
 
@@ -723,11 +723,11 @@ function handleSingleToggle(row) {
 
 .pos-cal__cnt {
   font-size: 10px;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .pos-cal__list {
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid var(--border-color);
   padding-top: 10px;
   margin-top: 6px;
 }
@@ -735,7 +735,7 @@ function handleSingleToggle(row) {
 .pos-cal__list-head {
   font-size: 13px;
   font-weight: 600;
-  color: #475569;
+  color: var(--neutral-600);
   padding: 4px 0 8px;
 }
 </style>

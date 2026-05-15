@@ -214,8 +214,8 @@ const deltaArrow = (value) => {
 }
 
 .funnel-panel {
-  background: #FFFFFF;
-  border: 1px solid #E2E8F0;
+  background: var(--neutral-0);
+  border: 1px solid var(--border-color);
   border-radius: 12px;
   padding: 16px;
 }
@@ -223,7 +223,7 @@ const deltaArrow = (value) => {
 .funnel-panel-title {
   font-size: 0.8rem;
   font-weight: 700;
-  color: #64748B;
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-bottom: 14px;
@@ -238,7 +238,7 @@ const deltaArrow = (value) => {
 
 .funnel-connector {
   text-align: center;
-  color: #CBD5E1;
+  color: var(--neutral-300);
   font-size: 0.65rem;
   line-height: 1;
   padding: 1px 0;
@@ -253,10 +253,10 @@ const deltaArrow = (value) => {
   border-left: 3px solid transparent;
 }
 
-.funnel-step--visit   { background: #EFF6FF; border-left-color: #3B82F6; }
-.funnel-step--deposit { background: #F0FDF4; border-left-color: #16A34A; }
-.funnel-step--enroll  { background: #EEF2FF; border-left-color: #6366F1; }
-.funnel-step--pending { background: #FFFBEB; border-left-color: #D97706; }
+.funnel-step--visit   { background: var(--color-info-soft); border-left-color: var(--color-info); }
+.funnel-step--deposit { background: #f0fdf4; border-left-color: var(--color-success-hover); }
+.funnel-step--enroll  { background: #eef2ff; border-left-color: #6366f1; }
+.funnel-step--pending { background: var(--color-warning-soft); border-left-color: var(--color-warning-hover); }
 
 .funnel-step-icon {
   display: flex;
@@ -267,10 +267,10 @@ const deltaArrow = (value) => {
   border-radius: 6px;
   flex-shrink: 0;
 }
-.funnel-step--visit   .funnel-step-icon { background: #DBEAFE; color: #1D4ED8; }
-.funnel-step--deposit .funnel-step-icon { background: #DCFCE7; color: #15803D; }
-.funnel-step--enroll  .funnel-step-icon { background: #E0E7FF; color: #4F46E5; }
-.funnel-step--pending .funnel-step-icon { background: #FEF3C7; color: #B45309; }
+.funnel-step--visit   .funnel-step-icon { background: var(--color-info-soft); color: var(--color-info-darker); }
+.funnel-step--deposit .funnel-step-icon { background: var(--color-success-soft); color: var(--color-success-darker); }
+.funnel-step--enroll  .funnel-step-icon { background: var(--brand-primary-soft); color: var(--brand-primary); }
+.funnel-step--pending .funnel-step-icon { background: var(--color-warning-soft); color: var(--color-warning-darker); }
 
 .funnel-step-body {
   display: flex;
@@ -282,7 +282,7 @@ const deltaArrow = (value) => {
 
 .funnel-step-label {
   font-size: 0.82rem;
-  color: #475569;
+  color: var(--neutral-600);
   font-weight: 500;
 }
 
@@ -290,10 +290,10 @@ const deltaArrow = (value) => {
   font-family: 'Fira Code', ui-monospace, monospace;
   font-size: 1.15rem;
   font-weight: 700;
-  color: #1E293B;
+  color: var(--text-primary);
   font-variant-numeric: tabular-nums;
 }
-.funnel-step-value--warn { color: #B45309; }
+.funnel-step-value--warn { color: var(--color-warning-darker); }
 
 /* ── MoM Grid ── */
 .funnel-mom-grid {
@@ -307,13 +307,13 @@ const deltaArrow = (value) => {
   flex-direction: column;
   gap: 4px;
   padding: 10px 12px;
-  background: #F8FAFC;
+  background: var(--bg-color);
   border-radius: 8px;
 }
 
 .mom-item-label {
   font-size: 0.72rem;
-  color: #94A3B8;
+  color: var(--text-tertiary);
 }
 
 .mom-item-value {
@@ -322,13 +322,13 @@ const deltaArrow = (value) => {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
-.mom-item-value--up      { color: #15803D; }
-.mom-item-value--down    { color: #DC2626; }
-.mom-item-value--neutral { color: #1E293B; }
+.mom-item-value--up      { color: var(--color-success-darker); }
+.mom-item-value--down    { color: var(--color-danger-hover); }
+.mom-item-value--neutral { color: var(--text-primary); }
 
 .mom-item-period {
   font-size: 0.82rem;
-  color: #475569;
+  color: var(--neutral-600);
   font-weight: 600;
 }
 </style>

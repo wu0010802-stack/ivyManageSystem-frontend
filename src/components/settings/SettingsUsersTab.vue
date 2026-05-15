@@ -249,7 +249,7 @@ onMounted(() => {
             <el-tag v-else-if="isUsingRoleDefault(row)" type="info" size="small">預設</el-tag>
             <el-tag v-else type="warning" size="small">自訂</el-tag>
           </template>
-          <span v-else style="color: #909399;">-</span>
+          <span v-else style="color: var(--text-tertiary);">-</span>
         </template>
       </el-table-column>
       <el-table-column prop="is_active" label="狀態" width="80">
@@ -290,7 +290,7 @@ onMounted(() => {
               :value="role"
             />
           </el-select>
-          <span v-if="userForm.role === 'teacher'" style="color: #909399; margin-left: 12px;">僅限教師專區</span>
+          <span v-if="userForm.role === 'teacher'" style="color: var(--text-tertiary); margin-left: 12px;">僅限教師專區</span>
         </el-form-item>
         <el-form-item v-if="userForm.role !== 'teacher'" label="權限">
           <div class="permission-section">
@@ -362,7 +362,7 @@ onMounted(() => {
               :value="role"
             />
           </el-select>
-          <span v-if="editUserForm.role === 'teacher'" style="color: #909399; margin-left: 12px;">僅限教師專區</span>
+          <span v-if="editUserForm.role === 'teacher'" style="color: var(--text-tertiary); margin-left: 12px;">僅限教師專區</span>
         </el-form-item>
         <el-form-item v-if="editUserForm.role !== 'teacher'" label="權限">
           <div class="permission-section">
@@ -425,7 +425,7 @@ onMounted(() => {
           <span>#/portal/login</span>
         </el-descriptions-item>
       </el-descriptions>
-      <div style="margin-top: 16px; color: #909399; font-size: 13px;">員工首次登入後將被要求修改密碼。</div>
+      <div style="margin-top: 16px; color: var(--text-tertiary); font-size: 13px;">員工首次登入後將被要求修改密碼。</div>
       <template #footer>
         <el-button type="primary" @click="credentialDialogVisible = false">關閉</el-button>
       </template>
@@ -456,7 +456,7 @@ onMounted(() => {
 .permission-group-title {
   font-weight: 600;
   margin-bottom: 8px;
-  color: #303133;
+  color: var(--text-primary);
 }
 
 .permission-checkboxes {
@@ -483,7 +483,7 @@ onMounted(() => {
 .split-permission-label {
   min-width: 80px;
   font-size: 14px;
-  color: #606266;
+  color: var(--text-secondary);
 }
 
 .split-permission-row .el-checkbox {

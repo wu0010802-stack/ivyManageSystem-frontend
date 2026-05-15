@@ -145,7 +145,7 @@ watch([() => props.data, () => props.metric], render)
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #909399;
+  color: var(--text-tertiary);
   font-size: 14px;
 }
 </style>

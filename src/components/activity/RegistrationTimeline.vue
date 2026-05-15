@@ -386,12 +386,12 @@ const nodes = computed(() => {
 .rt-title {
   font-weight: 600;
   font-size: 14px;
-  color: #303133;
+  color: var(--text-primary);
 }
 
 .rt-datetime {
   font-size: 12px;
-  color: #909399;
+  color: var(--text-tertiary);
   margin-left: auto;
 }
 
@@ -405,14 +405,14 @@ const nodes = computed(() => {
 }
 
 .rt-badge-done { color: #67c23a; background: #f0f9eb; border-color: #c2e7b0; }
-.rt-badge-current { color: #409eff; background: #ecf5ff; border-color: #b3d8ff; }
-.rt-badge-pending { color: #909399; background: #f4f4f5; border-color: #d3d4d6; }
+.rt-badge-current { color: var(--color-info); background: #ecf5ff; border-color: #b3d8ff; }
+.rt-badge-pending { color: var(--text-tertiary); background: #f4f4f5; border-color: #d3d4d6; }
 .rt-badge-warning { color: #e6a23c; background: #fdf6ec; border-color: #f5dab1; }
-.rt-badge-cancelled { color: #909399; background: #f4f4f5; border-color: #d3d4d6; }
+.rt-badge-cancelled { color: var(--text-tertiary); background: #f4f4f5; border-color: #d3d4d6; }
 
 .rt-subtitle {
   font-size: 12px;
-  color: #606266;
+  color: var(--text-secondary);
   margin-bottom: 6px;
 }
 
@@ -420,16 +420,16 @@ const nodes = computed(() => {
   margin: 0 0 6px;
   padding-left: 16px;
   font-size: 12px;
-  color: #606266;
+  color: var(--text-secondary);
   line-height: 1.7;
 }
 
 /* 節點顏色：套用 currentColor 到圓點 */
 .rt-done       { color: #67c23a; }
-.rt-current    { color: #409eff; }
-.rt-pending    { color: #c0c4cc; }
+.rt-current    { color: var(--color-info); }
+.rt-pending    { color: var(--neutral-300); }
 .rt-warning    { color: #e6a23c; }
-.rt-cancelled  { color: #909399; }
+.rt-cancelled  { color: var(--text-tertiary); }
 
 .rt-dot-pulse {
   box-shadow: 0 0 0 0 rgba(64, 158, 255, 0.55);
@@ -469,26 +469,26 @@ const nodes = computed(() => {
   opacity: 0.55;
   text-decoration: line-through;
   background: #f4f4f5 !important;
-  border-left-color: #909399 !important;
+  border-left-color: var(--text-tertiary) !important;
 }
 
 .rt-event-tag {
   font-weight: 600;
-  color: #303133;
+  color: var(--text-primary);
 }
 
 .rt-event-amount {
   font-variant-numeric: tabular-nums;
-  color: #303133;
+  color: var(--text-primary);
 }
 
 .rt-event-date {
-  color: #909399;
+  color: var(--text-tertiary);
 }
 
 .rt-event-note {
-  color: #606266;
+  color: var(--text-secondary);
   flex-basis: 100%;
-  font-size: 11px;
+  font-size: 12px;
 }
 </style>

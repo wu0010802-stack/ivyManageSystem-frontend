@@ -160,7 +160,7 @@ const chartOptions = {
         <el-table-column label="異常" min-width="120">
           <template #default="{ row }">
             <el-tag v-if="row.absence_alert" type="danger">連缺告警</el-tag>
-            <span v-else style="color: #909399">正常</span>
+            <span v-else style="color: var(--text-tertiary)">正常</span>
           </template>
         </el-table-column>
       </el-table>
@@ -199,7 +199,7 @@ const chartOptions = {
 }
 
 .summary-label {
-  color: #6b7280;
+  color: var(--text-secondary);
   font-size: 13px;
 }
 
@@ -210,10 +210,10 @@ const chartOptions = {
 }
 
 .summary-value.is-success { color: #166534; }
-.summary-value.is-primary { color: #1d4ed8; }
-.summary-value.is-warning { color: #b45309; }
-.summary-value.is-danger  { color: #b91c1c; }
-.summary-value.is-info    { color: #475569; }
+.summary-value.is-primary { color: var(--color-info-darker); }
+.summary-value.is-warning { color: var(--color-warning-darker); }
+.summary-value.is-danger  { color: var(--color-danger-darker); }
+.summary-value.is-info    { color: var(--neutral-600); }
 
 .chart-card,
 .alert-card {

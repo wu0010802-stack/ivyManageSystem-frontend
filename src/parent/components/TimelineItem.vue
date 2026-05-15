@@ -29,7 +29,7 @@ defineProps({ item: { type: Object, required: true } })
 .body { flex: 1; min-width: 0; }
 .row-top { display: flex; gap: 6px; align-items: baseline; margin-bottom: 2px; }
 .title { font-weight: 600; font-size: 14px; }
-.badge { color: #f59e0b; font-size: 12px; }
-.date { margin-left: auto; font-size: 11px; color: #9ca3af; flex-shrink: 0; }
-.summary { font-size: 13px; color: #4b5563; line-height: 1.4; }
+.badge { color: var(--color-warning); font-size: 12px; }
+.date { margin-left: auto; font-size: 12px; color: var(--text-tertiary); flex-shrink: 0; }
+.summary { font-size: 13px; color: var(--neutral-600); line-height: 1.4; }
 </style>

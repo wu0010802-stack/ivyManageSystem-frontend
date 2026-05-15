@@ -251,7 +251,7 @@ onUnmounted(() => {
     box-shadow: var(--shadow-sm);
   }
   50% {
-    box-shadow: 0 0 0 3px var(--color-primary, #409eff);
+    box-shadow: 0 0 0 3px var(--color-primary, var(--color-info));
   }
 }
 
@@ -262,7 +262,7 @@ onUnmounted(() => {
 @media (prefers-reduced-motion: reduce) {
   .day-card.day-card--highlight {
     animation: none;
-    box-shadow: 0 0 0 3px var(--color-primary, #409eff);
+    box-shadow: 0 0 0 3px var(--color-primary, var(--color-info));
   }
 }
 

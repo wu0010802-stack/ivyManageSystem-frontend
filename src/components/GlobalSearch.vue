@@ -381,7 +381,7 @@ defineExpose({ open })
   width: 16px;
   height: 16px;
   border: 2px solid var(--border-color-light, #e5e7eb);
-  border-top-color: var(--color-primary, #409eff);
+  border-top-color: var(--color-primary, var(--color-info));
   border-radius: 50%;
   animation: gs-spin 0.6s linear infinite;
   flex-shrink: 0;
@@ -392,7 +392,7 @@ defineExpose({ open })
 }
 
 .gs-esc-hint {
-  font-size: 11px;
+  font-size: 12px;
   padding: 2px 6px;
   border: 1px solid var(--border-color-light, #e5e7eb);
   border-radius: 4px;
@@ -411,7 +411,7 @@ defineExpose({ open })
 
 .gs-section-title {
   padding: 6px 16px 4px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -476,7 +476,7 @@ defineExpose({ open })
 
 .gs-footer kbd {
   font-family: inherit;
-  font-size: 11px;
+  font-size: 12px;
   padding: 1px 5px;
   border: 1px solid var(--border-color-light, #d1d5db);
   border-bottom-width: 2px;
@@ -509,7 +509,7 @@ defineExpose({ open })
 <style>
 .search-highlight {
   background-color: #fef08a;
-  color: #92400e;
+  color: var(--color-warning-darker);
   border-radius: 2px;
   padding: 0 1px;
   font-style: normal;

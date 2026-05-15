@@ -566,7 +566,7 @@ const doughnutChartOptions = {
   gap: 8px;
   align-items: center;
   font-size: 13px;
-  color: #909399;
+  color: var(--text-tertiary);
   margin-bottom: var(--space-5, 20px);
 }
 
@@ -585,7 +585,7 @@ const doughnutChartOptions = {
 
 .card-label {
   font-size: 13px;
-  color: #909399;
+  color: var(--text-tertiary);
   margin-bottom: 6px;
 }
 
@@ -593,13 +593,13 @@ const doughnutChartOptions = {
   font-size: 1.75rem;
   font-weight: 600;
   line-height: 1.2;
-  color: #303133;
+  color: var(--text-primary);
 }
 
 .card-sub {
   margin-top: 6px;
   font-size: 12px;
-  color: #909399;
+  color: var(--text-tertiary);
 }
 
 /* ===== Card (table & charts) ===== */
@@ -617,12 +617,12 @@ const doughnutChartOptions = {
 .card-header-title {
   font-size: 14px;
   font-weight: 600;
-  color: #303133;
+  color: var(--text-primary);
 }
 
 .card-header-meta {
   font-size: 12px;
-  color: #909399;
+  color: var(--text-tertiary);
 }
 
 /* ===== Stats Table ===== */
@@ -643,11 +643,11 @@ const doughnutChartOptions = {
   border-radius: 4px;
   overflow: hidden;
   display: flex;
-  background: #f0f2f5;
+  background: var(--neutral-100);
 }
 
 .ratio-male {
-  background: #409eff;
+  background: var(--color-info);
   transition: width 0.3s ease;
 }
 
@@ -659,13 +659,13 @@ const doughnutChartOptions = {
 .ratio-text {
   font-size: 12px;
   font-variant-numeric: tabular-nums;
-  color: #606266;
+  color: var(--text-secondary);
   min-width: 80px;
   text-align: right;
 }
 
 .ratio-empty {
-  color: #c0c4cc;
+  color: var(--neutral-300);
 }
 
 :deep(.row-subtotal) td {
@@ -676,7 +676,7 @@ const doughnutChartOptions = {
 :deep(.row-grand-total) td {
   background-color: #f5f7fa !important;
   font-weight: 700;
-  color: #303133;
+  color: var(--text-primary);
 }
 
 /* ===== Charts ===== */

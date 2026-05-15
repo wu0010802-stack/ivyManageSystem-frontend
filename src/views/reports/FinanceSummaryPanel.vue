@@ -52,10 +52,10 @@ const trendChartData = computed(() => {
   return {
     labels,
     datasets: [
-      { label: '收入', data: revenue, borderColor: '#67C23A', backgroundColor: 'rgba(103,194,58,0.1)', fill: true, tension: 0.3 },
-      { label: '退款', data: refund, borderColor: '#E6A23C', backgroundColor: 'rgba(230,162,60,0.1)', borderDash: [4, 4], tension: 0.3 },
-      { label: '支出', data: expense, borderColor: '#F56C6C', backgroundColor: 'rgba(245,108,108,0.1)', tension: 0.3 },
-      { label: '淨現金', data: net, borderColor: '#409EFF', backgroundColor: 'rgba(64,158,255,0.1)', borderWidth: 3, tension: 0.3 },
+      { label: '收入', data: revenue, borderColor: '#67c23a', backgroundColor: 'rgba(103,194,58,0.1)', fill: true, tension: 0.3 },
+      { label: '退款', data: refund, borderColor: '#e6a23c', backgroundColor: 'rgba(230,162,60,0.1)', borderDash: [4, 4], tension: 0.3 },
+      { label: '支出', data: expense, borderColor: '#f56c6c', backgroundColor: 'rgba(245,108,108,0.1)', tension: 0.3 },
+      { label: '淨現金', data: net, borderColor: '#409eff', backgroundColor: 'rgba(64,158,255,0.1)', borderWidth: 3, tension: 0.3 },
     ],
   }
 })
@@ -80,7 +80,7 @@ const revenuePieData = computed(() => {
     labels: cats.map(c => c.label),
     datasets: [{
       data: cats.map(c => c.amount),
-      backgroundColor: ['#67C23A', '#409EFF', '#9B59B6', '#E6A23C'],
+      backgroundColor: ['#67c23a', '#409eff', '#9b59b6', '#e6a23c'],
     }],
   }
 })
@@ -91,7 +91,7 @@ const expensePieData = computed(() => {
     labels: cats.map(c => c.label),
     datasets: [{
       data: cats.map(c => c.amount),
-      backgroundColor: ['#F56C6C', '#E6A23C', '#909399', '#9B59B6'],
+      backgroundColor: ['#f56c6c', '#e6a23c', '#909399', '#9b59b6'],
     }],
   }
 })
@@ -290,7 +290,7 @@ const exportXlsx = async () => {
 .kpi--green  { border-top-color: var(--color-success); }
 .kpi--orange { border-top-color: var(--color-warning); }
 .kpi--red    { border-top-color: var(--color-danger); }
-.kpi--blue   { border-top-color: #409EFF; }
+.kpi--blue   { border-top-color: var(--color-info); }
 .kpi-label { font-size: var(--text-sm); color: var(--text-secondary); margin-bottom: 6px; }
 .kpi-value { font-size: 22px; font-weight: 700; color: var(--text-primary); }
 .kpi-trend { font-size: 12px; font-weight: 600; margin-top: 4px; }
@@ -311,7 +311,7 @@ const exportXlsx = async () => {
 
 .link-btn {
   background: none; border: none; padding: 0;
-  color: #409EFF; cursor: pointer; font: inherit;
+  color: var(--color-info); cursor: pointer; font: inherit;
 }
 .link-btn:hover { text-decoration: underline; }
 </style>

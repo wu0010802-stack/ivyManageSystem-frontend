@@ -592,7 +592,7 @@ onMounted(async () => {
   font-size: var(--text-sm);
 }
 .risk-hint {
-  color: #d97706;
+  color: var(--color-warning-hover);
   font-size: var(--text-sm);
   margin-left: var(--space-2);
 }

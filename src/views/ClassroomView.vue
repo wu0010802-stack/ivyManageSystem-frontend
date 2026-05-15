@@ -737,7 +737,7 @@ onMounted(async () => {
 
 .section-label {
   font-size: 0.85rem;
-  color: #606266;
+  color: var(--text-secondary);
   margin-bottom: 6px;
 }
 
@@ -773,7 +773,7 @@ onMounted(async () => {
 }
 
 .text-muted {
-  color: #909399;
+  color: var(--text-tertiary);
 }
 
 .student-list {

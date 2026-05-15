@@ -140,7 +140,7 @@ const firstReceiptNo = computed(() => props.payments[0]?.receipt_no || '')
 .pay-receipt {
   grid-column: 1 / -1;
   color: var(--pt-text-disabled);
-  font-size: 11px;
+  font-size: 12px;
   font-family: ui-monospace, monospace;
 }
 

@@ -27,10 +27,10 @@ const attendanceChartData = computed(() => {
   return {
     labels: MONTH_LABELS,
     datasets: [
-      { label: '出勤率 (%)', data: rates, borderColor: '#409EFF', backgroundColor: 'rgba(64,158,255,0.1)', fill: true, tension: 0.3, yAxisID: 'y' },
-      { label: '遲到次數', data: late, borderColor: '#E6A23C', backgroundColor: 'rgba(230,162,60,0.1)', borderDash: [5, 5], tension: 0.3, yAxisID: 'y1' },
-      { label: '早退次數', data: early, borderColor: '#9B59B6', backgroundColor: 'rgba(155,89,182,0.1)', borderDash: [4, 4], tension: 0.3, yAxisID: 'y1' },
-      { label: '缺卡次數', data: miss, borderColor: '#F56C6C', backgroundColor: 'rgba(245,108,108,0.1)', borderDash: [3, 3], tension: 0.3, yAxisID: 'y1' },
+      { label: '出勤率 (%)', data: rates, borderColor: '#409eff', backgroundColor: 'rgba(64,158,255,0.1)', fill: true, tension: 0.3, yAxisID: 'y' },
+      { label: '遲到次數', data: late, borderColor: '#e6a23c', backgroundColor: 'rgba(230,162,60,0.1)', borderDash: [5, 5], tension: 0.3, yAxisID: 'y1' },
+      { label: '早退次數', data: early, borderColor: '#9b59b6', backgroundColor: 'rgba(155,89,182,0.1)', borderDash: [4, 4], tension: 0.3, yAxisID: 'y1' },
+      { label: '缺卡次數', data: miss, borderColor: '#f56c6c', backgroundColor: 'rgba(245,108,108,0.1)', borderDash: [3, 3], tension: 0.3, yAxisID: 'y1' },
     ],
   }
 })
@@ -50,7 +50,7 @@ const classroomChartData = computed(() => {
   const data = props.data.attendance_by_classroom || []
   const labels = data.map(d => d.classroom)
   const rates = data.map(d => d.rate)
-  const colors = rates.map(r => r >= 95 ? '#67C23A' : r >= 90 ? '#E6A23C' : '#F56C6C')
+  const colors = rates.map(r => r >= 95 ? '#67c23a' : r >= 90 ? '#e6a23c' : '#f56c6c')
   return { labels, datasets: [{ label: '出勤率 (%)', data: rates, backgroundColor: colors, borderRadius: 4 }] }
 })
 
@@ -69,9 +69,9 @@ const leaveChartData = computed(() => {
   return {
     labels: MONTH_LABELS,
     datasets: [
-      { label: '事假', data: personal, backgroundColor: '#E6A23C', stack: 'leaves' },
-      { label: '病假', data: sick, backgroundColor: '#409EFF', stack: 'leaves' },
-      { label: '特休', data: annual, backgroundColor: '#67C23A', stack: 'leaves' },
+      { label: '事假', data: personal, backgroundColor: '#e6a23c', stack: 'leaves' },
+      { label: '病假', data: sick, backgroundColor: '#409eff', stack: 'leaves' },
+      { label: '特休', data: annual, backgroundColor: '#67c23a', stack: 'leaves' },
       { label: '其他', data: other, backgroundColor: '#909399', stack: 'leaves' },
     ],
   }

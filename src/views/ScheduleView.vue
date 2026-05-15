@@ -568,7 +568,7 @@ const handleDailyShiftChange = async (dateStr, shiftTypeId) => {
 
     <!-- 排班批次匯入 Dialog -->
     <el-dialog v-model="shiftImportVisible" title="批次匯入排班" width="500px">
-      <p style="margin-bottom:12px; color: #606266; font-size: 13px;">
+      <p style="margin-bottom:12px; color: var(--text-secondary); font-size: 13px;">
         上傳 Excel 檔，格式：員工編號 | 員工姓名 | 班別名稱。
         匯入後將覆蓋當週 ({{ weekStart }}) 的週排班設定。
       </p>
@@ -668,13 +668,13 @@ export default {
 .week-label {
   font-size: var(--text-lg);
   font-weight: bold;
-  color: #303133;
+  color: var(--text-primary);
 }
 .spacer {
   flex: 1;
 }
 .text-muted {
-  color: #c0c4cc;
+  color: var(--neutral-300);
 }
 .mb-4 {
   margin-bottom: var(--space-4);

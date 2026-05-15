@@ -28,10 +28,10 @@ const salaryChartData = computed(() => {
   return {
     labels: MONTH_LABELS,
     datasets: [
-      { label: '應發總額', data: gross, backgroundColor: 'rgba(64,158,255,0.6)', borderColor: '#409EFF', borderWidth: 1, borderRadius: 4, order: 3 },
-      { label: '實發總額', data: net, type: 'line', borderColor: '#67C23A', backgroundColor: 'rgba(103,194,58,0.1)', fill: false, tension: 0.3, pointRadius: 4, order: 1 },
-      { label: '獎金', data: bonus, type: 'line', borderColor: '#E6A23C', backgroundColor: 'rgba(230,162,60,0.1)', fill: false, tension: 0.3, borderDash: [5, 5], pointRadius: 3, order: 2 },
-      { label: '加班費', data: ot, type: 'line', borderColor: '#9B59B6', backgroundColor: 'rgba(155,89,182,0.1)', fill: false, tension: 0.3, borderDash: [3, 3], pointRadius: 3, order: 2 },
+      { label: '應發總額', data: gross, backgroundColor: 'rgba(64,158,255,0.6)', borderColor: '#409eff', borderWidth: 1, borderRadius: 4, order: 3 },
+      { label: '實發總額', data: net, type: 'line', borderColor: '#67c23a', backgroundColor: 'rgba(103,194,58,0.1)', fill: false, tension: 0.3, pointRadius: 4, order: 1 },
+      { label: '獎金', data: bonus, type: 'line', borderColor: '#e6a23c', backgroundColor: 'rgba(230,162,60,0.1)', fill: false, tension: 0.3, borderDash: [5, 5], pointRadius: 3, order: 2 },
+      { label: '加班費', data: ot, type: 'line', borderColor: '#9b59b6', backgroundColor: 'rgba(155,89,182,0.1)', fill: false, tension: 0.3, borderDash: [3, 3], pointRadius: 3, order: 2 },
     ],
   }
 })
@@ -114,6 +114,6 @@ const totalGross = computed(() => {
 .kpi { text-align: center; padding: 12px 0; }
 .kpi-label { font-size: var(--text-sm); color: var(--text-secondary); margin-bottom: 6px; }
 .kpi-value { font-size: 22px; font-weight: 700; color: var(--text-primary); }
-.kpi-blue { color: #409EFF; }
+.kpi-blue { color: var(--color-info); }
 .kpi-orange { color: var(--color-warning); }
 </style>

@@ -59,6 +59,12 @@ export const PERMISSION_VALUES = {
   // 政府申報（Phase 4）— 對齊後端 Permission.GOV_REPORTS_VIEW/EXPORT
   GOV_REPORTS_VIEW: 2 ** 50,
   GOV_REPORTS_EXPORT: 2 ** 51,
+  // 教職員考核（Phase 1）— 後端 1<<55~59；位元 52-54 後端保留未用
+  APPRAISAL_READ: 2 ** 55,
+  APPRAISAL_EVENT_WRITE: 2 ** 56,
+  APPRAISAL_REVIEW: 2 ** 57,
+  APPRAISAL_ACCOUNTING: 2 ** 58,
+  APPRAISAL_FINALIZE: 2 ** 59,
 }
 
 export const ROUTE_PERMISSION_RULES = [

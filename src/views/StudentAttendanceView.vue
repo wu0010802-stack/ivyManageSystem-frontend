@@ -757,7 +757,7 @@ onMounted(async () => {
 
 .page-subtitle {
   margin-top: 4px;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .main-tabs {
@@ -787,7 +787,7 @@ onMounted(async () => {
 }
 
 .summary-label {
-  color: #6b7280;
+  color: var(--text-secondary);
   font-size: 13px;
 }
 
@@ -809,7 +809,7 @@ onMounted(async () => {
 }
 
 .summary-pair__label {
-  color: #64748b;
+  color: var(--text-secondary);
   font-size: 12px;
 }
 
@@ -820,43 +820,43 @@ onMounted(async () => {
 }
 
 .summary-value.is-success {
-  color: #15803d;
+  color: var(--color-success-darker);
 }
 
 .summary-value.is-primary {
-  color: #1d4ed8;
+  color: var(--color-info-darker);
 }
 
 .summary-value.is-warning {
-  color: #b45309;
+  color: var(--color-warning-darker);
 }
 
 .summary-value.is-danger {
-  color: #b91c1c;
+  color: var(--color-danger-darker);
 }
 
 .summary-value.is-info {
-  color: #475569;
+  color: var(--neutral-600);
 }
 
 .summary-pair__value.is-success {
-  color: #15803d;
+  color: var(--color-success-darker);
 }
 
 .summary-pair__value.is-primary {
-  color: #1d4ed8;
+  color: var(--color-info-darker);
 }
 
 .summary-pair__value.is-warning {
-  color: #b45309;
+  color: var(--color-warning-darker);
 }
 
 .summary-pair__value.is-danger {
-  color: #b91c1c;
+  color: var(--color-danger-darker);
 }
 
 .summary-pair__value.is-info {
-  color: #475569;
+  color: var(--neutral-600);
 }
 
 .row-actions {
@@ -902,7 +902,7 @@ onMounted(async () => {
 
 .muted-text,
 .empty-hint {
-  color: #94a3b8;
+  color: var(--text-tertiary);
 }
 
 .empty-hint {

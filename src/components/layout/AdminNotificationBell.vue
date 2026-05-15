@@ -275,11 +275,11 @@ onMounted(() => {
   margin-bottom: 18px;
 }
 .nf-hero__eyebrow {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #64748b;
+  color: var(--text-secondary);
   margin-bottom: 4px;
 }
 .nf-hero__headline {
@@ -292,7 +292,7 @@ onMounted(() => {
   font-size: 36px;
   font-weight: 800;
   line-height: 1;
-  color: #2563eb;
+  color: var(--color-info-hover);
 }
 .nf-hero__unit {
   font-size: 15px;
@@ -301,7 +301,7 @@ onMounted(() => {
 }
 .nf-hero__hint {
   font-size: 12px;
-  color: #64748b;
+  color: var(--text-secondary);
   line-height: 1.5;
 }
 
@@ -316,18 +316,18 @@ onMounted(() => {
   padding: 0 2px 8px;
 }
 .nf-section__title {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
-  color: #64748b;
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
 .nf-section__pill {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
-  color: #94a3b8;
-  background: #f1f5f9;
-  border: 1px solid #e2e8f0;
+  color: var(--text-tertiary);
+  background: var(--bg-color-soft);
+  border: 1px solid var(--border-color);
   border-radius: 999px;
   padding: 1px 8px;
 }
@@ -363,19 +363,19 @@ onMounted(() => {
 .nf-item__title {
   font-size: 14px;
   font-weight: 600;
-  color: #0f172a;
+  color: var(--neutral-900);
   line-height: 1.35;
 }
 .nf-item__sub {
   font-size: 12px;
-  color: #64748b;
+  color: var(--text-secondary);
   margin-top: 3px;
 }
 .nf-item__priority {
   margin-top: 5px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
-  color: #2563eb;
+  color: var(--color-info-hover);
 }
 
 .nf-item__end {
@@ -396,17 +396,17 @@ onMounted(() => {
   font-size: 17px;
   flex-shrink: 0;
 }
-.nf-icon--danger  { background: #fef2f2; color: #dc2626; }
-.nf-icon--warning { background: #fff7ed; color: #ea580c; }
-.nf-icon--primary { background: #eff6ff; color: #2563eb; }
-.nf-icon--success { background: #ecfdf5; color: #059669; }
+.nf-icon--danger  { background: var(--color-danger-soft); color: var(--color-danger-hover); }
+.nf-icon--warning { background: var(--color-warning-soft); color: #ea580c; }
+.nf-icon--primary { background: var(--color-info-soft); color: var(--color-info-hover); }
+.nf-icon--success { background: var(--color-success-soft); color: var(--color-success-hover); }
 
 /* ── Count Badge ────────────────────────────────── */
 .nf-count-badge {
   min-width: 26px;
   height: 26px;
   border-radius: 999px;
-  background: #ef4444;
+  background: var(--color-danger);
   color: #fff;
   display: inline-flex;
   align-items: center;
@@ -418,7 +418,7 @@ onMounted(() => {
 
 /* ── Chevron ────────────────────────────────────── */
 .nf-chevron {
-  color: #94a3b8;
+  color: var(--text-tertiary);
   font-size: 14px;
   flex-shrink: 0;
 }
@@ -458,11 +458,11 @@ onMounted(() => {
 .nf-reminder__label {
   font-size: 13px;
   font-weight: 500;
-  color: #334155;
+  color: var(--neutral-700);
 }
 .nf-reminder__meta {
-  font-size: 11px;
-  color: #94a3b8;
+  font-size: 12px;
+  color: var(--text-tertiary);
   margin-top: 2px;
 }
 
@@ -475,7 +475,7 @@ onMounted(() => {
   width: 52px;
   height: 52px;
   font-size: 22px;
-  color: #2563eb;
+  color: var(--color-info-hover);
   background: linear-gradient(135deg, #dbeafe 0%, #eff6ff 100%);
   border-radius: 16px;
   display: inline-flex;
@@ -486,12 +486,12 @@ onMounted(() => {
 .nf-empty__title {
   font-size: 14px;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--neutral-900);
   margin-bottom: 6px;
 }
 .nf-empty__sub {
   font-size: 12px;
-  color: #64748b;
+  color: var(--text-secondary);
   line-height: 1.5;
 }
 </style>

@@ -21,7 +21,7 @@
             :value="c.id"
           >
             <span>{{ c.name }}</span>
-            <span style="float: right; color: #999; font-size: 12px">
+            <span style="float: right; color: var(--text-tertiary); font-size: 12px">
               ${{ c.price }}｜{{ c.remaining > 0 ? `剩 ${c.remaining}` : (c.allow_waitlist ? '候補' : '額滿') }}
             </span>
           </el-option>

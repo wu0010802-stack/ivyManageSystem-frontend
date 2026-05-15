@@ -244,8 +244,8 @@ onMounted(() => {
 }
 
 .json-block {
-  background: #1e293b;
-  color: #e2e8f0;
+  background: var(--text-primary);
+  color: var(--border-color);
   padding: 16px;
   border-radius: 8px;
   font-size: 13px;

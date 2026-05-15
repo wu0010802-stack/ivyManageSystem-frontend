@@ -169,13 +169,13 @@ onMounted(async () => {
       <el-table-column label="領域" width="120" prop="domain">
         <template #default="{ row }">
           <span v-if="row.domain">{{ row.domain }}</span>
-          <span v-else style="color: #c0c4cc">-</span>
+          <span v-else style="color: var(--neutral-300)">-</span>
         </template>
       </el-table-column>
       <el-table-column label="評等" width="85">
         <template #default="{ row }">
           <el-tag v-if="row.rating" :type="RATING_TAG[row.rating]" size="small">{{ row.rating }}</el-tag>
-          <span v-else style="color: #c0c4cc">-</span>
+          <span v-else style="color: var(--neutral-300)">-</span>
         </template>
       </el-table-column>
       <el-table-column label="評量內容" min-width="160">
@@ -188,7 +188,7 @@ onMounted(async () => {
       <el-table-column label="評量日期" width="100" prop="assessment_date" />
     </el-table>
 
-    <div style="margin-top: 8px; font-size: 13px; color: #909399">
+    <div style="margin-top: 8px; font-size: 13px; color: var(--text-tertiary)">
       共 {{ total }} 筆紀錄
     </div>
 

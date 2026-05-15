@@ -659,7 +659,7 @@ onMounted(() => {
 }
 
 .hint {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--el-text-color-secondary);
   margin-left: 6px;
 }
@@ -725,14 +725,14 @@ onMounted(() => {
 .diff-pos { color: var(--el-color-success); }
 .diff-neg { color: var(--el-color-danger); }
 
-.text-blue { color: #409EFF; }
+.text-blue { color: var(--color-info); }
 .text-green { color: var(--el-color-success); }
 .text-danger { color: var(--el-color-danger); }
 .text-muted { color: var(--el-text-color-placeholder); }
 
 .json-block {
-  background: #1e293b;
-  color: #e2e8f0;
+  background: var(--text-primary);
+  color: var(--border-color);
   padding: 16px;
   border-radius: 8px;
   font-size: 13px;

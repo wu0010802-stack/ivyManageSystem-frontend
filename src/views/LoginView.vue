@@ -442,9 +442,9 @@ const handleLogin = async () => {
 }
 
 .login-footer .footer-tagline {
-  margin-bottom: 4px;
-  color: #1c1e21;
-  font-weight: 600;
+  margin-bottom: var(--space-1);
+  color: var(--text-primary);
+  font-weight: var(--font-weight-semibold);
 }
 
 @media (max-width: 900px) {

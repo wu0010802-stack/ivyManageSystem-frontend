@@ -83,7 +83,7 @@ onMounted(fetchLineConfig)
           show-password
           :placeholder="lineConfig.has_token ? '已設定（留空表示不更新）' : '請輸入 Channel Access Token'"
         />
-        <div style="font-size: 12px; color: #909399; margin-top: 4px;">
+        <div style="font-size: 12px; color: var(--text-tertiary); margin-top: 4px;">
           狀態：{{ lineConfig.has_token ? '已設定' : '尚未設定' }}
         </div>
       </el-form-item>
@@ -100,7 +100,7 @@ onMounted(fetchLineConfig)
           show-password
           :placeholder="lineConfig.has_secret ? '已設定（留空表示不更新）' : '請輸入 Channel Secret（Webhook 驗證用）'"
         />
-        <div style="font-size: 12px; color: #909399; margin-top: 4px;">
+        <div style="font-size: 12px; color: var(--text-tertiary); margin-top: 4px;">
           狀態：{{ lineConfig.has_secret ? '已設定' : '尚未設定' }}
         </div>
       </el-form-item>

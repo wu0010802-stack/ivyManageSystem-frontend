@@ -108,7 +108,7 @@ defineExpose({ open: viewAttachments })
 }
 
 .attach-filename {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-secondary);
   text-align: center;
   word-break: break-all;

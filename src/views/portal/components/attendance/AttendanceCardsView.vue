@@ -258,26 +258,26 @@ const formatDate = (day, month) => {
   display: inline-block;
   padding: 2px 6px;
   border-radius: 4px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   border: 1px solid transparent;
 }
 
 .request-badge.approved {
-  background-color: #ecfdf5;
+  background-color: var(--color-success-soft);
   color: var(--color-success);
   border-color: #a7f3d0;
 }
 
 .request-badge.rejected {
-  background-color: #fef2f2;
+  background-color: var(--color-danger-soft);
   color: var(--color-danger);
-  border-color: #fecaca;
+  border-color: var(--color-danger-soft);
 }
 
 .request-badge.pending {
-  background-color: #fff7ed;
+  background-color: var(--color-warning-soft);
   color: var(--color-warning);
   border-color: #fed7aa;
 }
