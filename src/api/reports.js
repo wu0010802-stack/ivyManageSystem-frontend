@@ -17,3 +17,13 @@ export const financeSummaryExportUrl = (year, month) => {
   if (month != null) qs.set('month', String(month))
   return `/reports/finance-summary/export?${qs.toString()}`
 }
+
+export const getAttendanceDetail = (year, { month = null, classroomId = null } = {}) => {
+  const params = { year }
+  if (month != null) params.month = month
+  if (classroomId != null) params.classroom_id = classroomId
+  return api.get('/reports/attendance/detail', { params })
+}
+
+export const getSalaryContributors = (year, month) =>
+  api.get('/reports/salary/contributors', { params: { year, month } })
