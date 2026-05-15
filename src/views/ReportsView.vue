@@ -3,11 +3,13 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getDashboard, getFinanceSummary } from '@/api/reports'
 import { apiError } from '@/utils/error'
-import { getUserInfo } from '@/utils/auth'
+import { getUserInfo, hasPermission } from '@/utils/auth'
 import OverviewPanel from './reports/OverviewPanel.vue'
 import FinanceSummaryPanel from './reports/FinanceSummaryPanel.vue'
 import AttendancePanel from './reports/AttendancePanel.vue'
 import SalaryPanel from './reports/SalaryPanel.vue'
+import FunnelPanel from '@/views/analytics/FunnelPanel.vue'
+import ChurnPanel from '@/views/analytics/ChurnPanel.vue'
 
 const viewerName = computed(() => {
   const info = getUserInfo()
@@ -17,6 +19,7 @@ const viewerName = computed(() => {
 const currentYear = new Date().getFullYear()
 const selectedYear = ref(currentYear)
 const activeTab = ref('overview')
+const canSeeAnalytics = computed(() => hasPermission('BUSINESS_ANALYTICS'))
 
 const dashboardLoading = ref(false)
 const financeLoading = ref(false)
@@ -84,6 +87,12 @@ onMounted(fetchAll)
       </el-tab-pane>
       <el-tab-pane label="薪資" name="salary">
         <SalaryPanel v-if="activeTab === 'salary'" :data="dashboardData" :finance="financeData" />
+      </el-tab-pane>
+      <el-tab-pane v-if="canSeeAnalytics" label="招生漏斗" name="funnel">
+        <FunnelPanel v-if="activeTab === 'funnel'" />
+      </el-tab-pane>
+      <el-tab-pane v-if="canSeeAnalytics" label="流失預警" name="churn">
+        <ChurnPanel v-if="activeTab === 'churn'" />
       </el-tab-pane>
     </el-tabs>
   </div>

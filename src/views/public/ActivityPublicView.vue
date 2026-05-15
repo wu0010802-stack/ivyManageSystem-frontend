@@ -20,273 +20,26 @@
       <symbol id="i-share" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" /></symbol>
     </svg>
 
-    <!-- Toast Container -->
-    <div class="toast-container" aria-live="polite" aria-atomic="true">
-      <div
-        v-for="t in toasts"
-        :key="t.id"
-        class="toast"
-        :class="t.type"
-        :role="t.type === 'error' ? 'alert' : 'status'"
-      >
-        <div class="toast-icon" v-html="TOAST_ICONS[t.type] || TOAST_ICONS.info" />
-        <div class="toast-content">
-          <div class="toast-message">{{ t.message }}</div>
-        </div>
-        <button type="button" class="toast-close" aria-label="關閉通知" @click="dismissToast(t.id)">&times;</button>
-      </div>
-    </div>
+    <!-- Toast Container（A1-P4 抽元件） -->
+    <ToastStack :toasts="toasts" @dismiss="dismissToast" />
 
-    <!-- Video Modal -->
-    <div
-      v-if="videoModal.visible"
-      class="modal-overlay is-visible"
-      role="dialog"
-      aria-modal="true"
-      @click.self="closeVideoModal"
-    >
-      <div class="modal-panel modal-panel--video">
-        <h3 class="modal-title">{{ videoModal.title }}</h3>
-        <button type="button" class="modal-close" aria-label="關閉影片" @click="closeVideoModal">
-          <svg width="18" height="18" aria-hidden="true"><use href="#i-close" /></svg>
-        </button>
-        <div class="video-wrapper">
-          <iframe
-            v-if="videoModal.youtubeId"
-            :src="`https://www.youtube.com/embed/${videoModal.youtubeId}?autoplay=1`"
-            frameborder="0"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowfullscreen
-            height="480"
-          />
-          <video v-else-if="videoModal.url" :src="videoModal.url" controls autoplay>
-            您的瀏覽器不支援影片播放
-          </video>
-        </div>
-      </div>
-    </div>
+    <!-- Video Modal（A1-P2 抽元件） -->
+    <VideoModal
+      :visible="videoModal.visible"
+      :title="videoModal.title"
+      :url="videoModal.url"
+      :youtube-id="videoModal.youtubeId"
+      @close="closeVideoModal"
+    />
 
-    <!-- Success Modal -->
-    <div
-      v-if="successModal.visible"
-      class="modal-overlay is-visible"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="successModalTitle"
-      @click.self="closeSuccessModal"
-    >
-      <div class="modal-panel modal-panel--success">
-        <div class="modal-header">
-          <h3 id="successModalTitle" class="modal-title">
-            <svg class="icon" width="22" height="22" aria-hidden="true"><use href="#i-check" /></svg>
-            報名資料已送出
-          </h3>
-          <button type="button" class="modal-close" aria-label="關閉視窗" @click="closeSuccessModal">
-            <svg width="18" height="18" aria-hidden="true"><use href="#i-close" /></svg>
-          </button>
-        </div>
-        <div class="modal-body">
-          <div class="success-brand-banner" aria-hidden="true">
-            <KawaiiStar :size="22" expression="wink" decorative class="success-brand-star success-brand-star--l" />
-            <BrandMark variant="mark-only" :size="64" />
-            <KawaiiStar :size="18" expression="smile" decorative class="success-brand-star success-brand-star--r" />
-          </div>
-          <p class="success-msg">{{ successModal.message }}</p>
+    <!-- Success Modal（A1-P5 抽元件） -->
+    <SuccessSummaryModal :summary="successModal" @close="closeSuccessModal" />
 
-          <div class="summary-block">
-            <div class="summary-row"><span class="summary-label">幼兒姓名</span><span class="summary-value">{{ successModal.studentName }}</span></div>
-            <div class="summary-row"><span class="summary-label">家長手機</span><span class="summary-value">{{ successModal.parentPhone }}</span></div>
-          </div>
-
-          <div v-if="successModal.enrolledCourses.length > 0" class="summary-section">
-            <div class="summary-section-title">
-              <svg class="icon" width="16" height="16" aria-hidden="true"><use href="#i-check" /></svg>
-              已報名課程（{{ successModal.enrolledCourses.length }}）
-            </div>
-            <ul class="summary-list">
-              <li v-for="c in successModal.enrolledCourses" :key="`e-${c.name}`">
-                <span>{{ c.name }}</span><span class="summary-amount">${{ c.price }}</span>
-              </li>
-            </ul>
-          </div>
-
-          <div v-if="successModal.waitlistCourses.length > 0" class="summary-section is-waitlist">
-            <div class="summary-section-title">
-              <svg class="icon" width="16" height="16" aria-hidden="true"><use href="#i-alert" /></svg>
-              候補課程（{{ successModal.waitlistCourses.length }}）
-            </div>
-            <ul class="summary-list">
-              <li v-for="c in successModal.waitlistCourses" :key="`w-${c.name}`">
-                <span>{{ c.name }}</span><span class="summary-amount summary-amount--muted">候補中</span>
-              </li>
-            </ul>
-            <p class="summary-note">候補課程不計入應繳金額，校方將儘快與您聯繫。</p>
-          </div>
-
-          <div v-if="successModal.selectedSupplies.length > 0" class="summary-section">
-            <div class="summary-section-title">加購項目</div>
-            <ul class="summary-list">
-              <li v-for="s in successModal.selectedSupplies" :key="`s-${s.name}`">
-                <span>{{ s.name }}</span><span class="summary-amount">${{ s.price }}</span>
-              </li>
-            </ul>
-          </div>
-
-          <div class="summary-total">
-            <span>預估應繳金額</span>
-            <strong>${{ successModal.totalAmount }}</strong>
-          </div>
-          <p class="summary-final-note">本金額不含候補課程；實際金額以園方確認後通知為準。</p>
-
-          <div v-if="successModal.queryToken" class="success-token-box">
-            <div class="token-title">查詢 / 編修專用連結</div>
-            <p class="token-hint">
-              請<strong>妥善保存以下查詢碼</strong>，後續查詢或修改報名資料時可免去輸入姓名/生日，僅需查詢碼 + 家長手機。
-            </p>
-            <div class="token-row">
-              <span class="token-label">查詢碼</span>
-              <input
-                class="token-input"
-                type="text"
-                readonly
-                :value="successModal.queryToken"
-                aria-label="報名查詢碼（唯讀，可選取複製）"
-                @focus="$event.target.select()"
-              />
-              <button
-                type="button"
-                class="btn-copy"
-                aria-label="複製查詢碼"
-                @click="copyToClipboard(successModal.queryToken, '查詢碼')"
-              >
-                <svg width="14" height="14" aria-hidden="true"><use href="#i-copy" /></svg>
-                複製
-              </button>
-            </div>
-            <div class="token-row">
-              <span class="token-label">編修連結</span>
-              <input
-                class="token-input token-input--link"
-                type="url"
-                readonly
-                :value="successModal.editUrl"
-                aria-label="編修連結（唯讀，可選取複製）"
-                @focus="$event.target.select()"
-              />
-              <button
-                type="button"
-                class="btn-copy"
-                aria-label="複製編修連結"
-                @click="copyToClipboard(successModal.editUrl, '連結')"
-              >
-                <svg width="14" height="14" aria-hidden="true"><use href="#i-copy" /></svg>
-                複製
-              </button>
-            </div>
-            <div v-if="canShare" class="token-share-row">
-              <button
-                type="button"
-                class="btn btn-outline btn-share"
-                @click="shareToken"
-              >
-                <svg width="16" height="16" aria-hidden="true"><use href="#i-share" /></svg>
-                分享給家人（Line / 訊息 / Email）
-              </button>
-            </div>
-            <div v-if="successModal.copyHint" class="token-copy-hint">
-              <svg width="12" height="12" aria-hidden="true"><use href="#i-check" /></svg>
-              {{ successModal.copyHint }}
-            </div>
-            <p class="token-warn">⚠ 連結含個資識別碼，請勿轉傳他人。</p>
-          </div>
-
-          <button type="button" class="btn btn-primary btn-block" @click="closeSuccessModal">完成</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Contact Modal -->
-    <div
-      v-if="contactModalVisible"
-      class="modal-overlay is-visible"
-      role="dialog"
-      aria-modal="true"
-      @click.self="closeContactModal"
-    >
-      <div class="modal-panel">
-        <div class="modal-header">
-          <h3 class="modal-title">
-            <svg class="icon" width="22" height="22" aria-hidden="true"><use href="#i-phone" /></svg>
-            聯絡主辦單位
-          </h3>
-          <button type="button" class="modal-close" aria-label="關閉視窗" @click="closeContactModal">
-            <svg width="18" height="18" aria-hidden="true"><use href="#i-close" /></svg>
-          </button>
-        </div>
-        <div class="modal-body">
-          <div class="contact-school-card">
-            <h4 class="contact-school-name">
-              <svg class="icon" width="22" height="22" aria-hidden="true"><use href="#i-school" /></svg>
-              常春藤義華校
-            </h4>
-            <div class="contact-school-detail">
-              <svg class="icon" width="16" height="16" aria-hidden="true"><use href="#i-pin" /></svg>
-              高雄市三民區義華路 68 號
-            </div>
-            <div class="contact-school-detail">
-              <svg class="icon" width="16" height="16" aria-hidden="true"><use href="#i-phone" /></svg>
-              電話：<a href="tel:+88673928366">(07) 392-8366</a>
-            </div>
-          </div>
-          <div class="contact-form-intro">
-            <svg class="icon" width="18" height="18" aria-hidden="true"><use href="#i-mail" /></svg>
-            您也可以透過以下表單留下問題，我們會儘快與您聯繫
-          </div>
-          <div class="field-group">
-            <label for="contactName">您的姓名 <span class="required-mark">*</span></label>
-            <input
-              id="contactName"
-              v-model="inquiry.name"
-              type="text"
-              class="input-text"
-              placeholder="請輸入您的姓名"
-              maxlength="50"
-              autocomplete="name"
-            />
-          </div>
-          <div class="field-group">
-            <label for="contactPhone">聯絡電話 <span class="required-mark">*</span></label>
-            <input
-              id="contactPhone"
-              v-model="inquiry.phone"
-              type="tel"
-              class="input-text"
-              placeholder="請輸入手機號碼 (09xxxxxxxx)"
-              inputmode="tel"
-              autocomplete="tel"
-              maxlength="15"
-            />
-          </div>
-          <div class="field-group">
-            <label for="contactQuestion">您的問題 <span class="required-mark">*</span></label>
-            <textarea
-              id="contactQuestion"
-              v-model="inquiry.question"
-              placeholder="請輸入您要詢問的問題"
-              rows="4"
-            />
-          </div>
-          <button
-            type="button"
-            class="btn btn-primary btn-block"
-            :disabled="inquirySubmitting"
-            @click="handleContactSubmit"
-          >
-            {{ inquirySubmitting ? '送出中…' : '送出提問' }}
-          </button>
-        </div>
-      </div>
-    </div>
+    <!-- Contact Modal（A1-P3 抽元件） -->
+    <ContactInquiryModal
+      v-model:visible="contactModalVisible"
+      @toast="(msg, type) => showToast(msg, type)"
+    />
 
     <div class="page-wrapper">
       <header class="page-header">
@@ -506,95 +259,19 @@
                     </div>
                   </div>
 
-                  <div class="form-section-step">
-                    <span class="step-num">2</span>
-                    <div class="step-title-col">
-                      <span class="step-title">選擇才藝課程</span>
-                      <span class="step-desc">可複選；剩餘名額即時顯示</span>
-                    </div>
-                  </div>
-
-                  <div class="form-row" :class="{ 'has-error': !!errors.courses }">
-                    <div class="form-label-col">
-                      <span class="form-label">
-                        <span class="required-mark">*</span>
-                        才藝課班別 <span class="en">Courses</span>
-                      </span>
-                    </div>
-                    <div class="form-input-col">
-                      <div
-                        id="courseListGroup"
-                        class="course-list-vertical"
-                        role="group"
-                        aria-label="才藝課程選項"
-                        tabindex="-1"
-                      >
-                        <div v-if="optionsLoading" class="empty-hint">載入中…</div>
-                        <div v-else-if="courses.length === 0" class="empty-hint">目前尚無可報名課程</div>
-                        <div
-                          v-for="course in courses"
-                          v-else
-                          :key="course.name"
-                          class="course-item"
-                          :class="{ 'course-item-disabled': availabilityState(course).full }"
-                          :title="availabilityState(course).full ? '此課程已額滿，無法再報名' : ''"
-                        >
-                          <label class="course-label">
-                            <input
-                              type="checkbox"
-                              name="course"
-                              :value="course.name"
-                              :disabled="availabilityState(course).full"
-                              :checked="form.selectedCourses.includes(course.name)"
-                              @change="toggleCourse(course); clearError('courses')"
-                            />
-                            <span class="course-text course-text--stacked">
-                              <span class="course-row-main">
-                                <span class="course-name">{{ course.name }}</span>
-                                <span
-                                  v-if="availabilityState(course).text"
-                                  class="qty-display"
-                                  :class="availabilityState(course).cssClass"
-                                >
-                                  {{ availabilityState(course).text }}
-                                </span>
-                              </span>
-                              <span class="course-row-meta">
-                                <span class="meta-chip meta-chip--price">
-                                  <template v-if="course.sessions">{{ course.sessions }} 堂 · </template>NT$ {{ course.price }}
-                                </span>
-                                <span v-if="formatSchedule(course)" class="meta-chip meta-chip--schedule">
-                                  <svg class="icon" width="12" height="12" aria-hidden="true"><use href="#i-calendar" /></svg>
-                                  {{ formatSchedule(course) }}
-                                </span>
-                                <span
-                                  v-for="(w, i) in courseAdvisory(course)"
-                                  :key="`${course.name}-adv-${i}`"
-                                  class="meta-chip meta-chip--advisory"
-                                  :class="`meta-chip--${w.severity}`"
-                                  role="status"
-                                >
-                                  <svg class="icon" width="12" height="12" aria-hidden="true"><use href="#i-alert" /></svg>
-                                  {{ w.message }}
-                                </span>
-                              </span>
-                            </span>
-                          </label>
-                          <button
-                            v-if="videos[course.name]"
-                            type="button"
-                            class="video-btn"
-                            :aria-label="`觀看 ${course.name} 介紹影片`"
-                            @click="openVideoModal(course.name, videos[course.name])"
-                          >
-                            <svg class="icon" aria-hidden="true"><use href="#i-play" /></svg>
-                            課程介紹
-                          </button>
-                        </div>
-                      </div>
-                      <div v-if="errors.courses" class="form-error-hint" role="alert">{{ errors.courses }}</div>
-                    </div>
-                  </div>
+                  <!-- A1-P7：Step 2 抽 CoursePickerSection 元件 -->
+                  <CoursePickerSection
+                    :courses="courses"
+                    :options-loading="optionsLoading"
+                    :selected-courses="form.selectedCourses"
+                    :videos="videos"
+                    :error-message="errors.courses"
+                    :availability-state="availabilityState"
+                    :format-schedule="formatSchedule"
+                    :course-advisory="courseAdvisory"
+                    @toggle="(course) => { toggleCourse(course); clearError('courses') }"
+                    @open-video="openVideoModal"
+                  />
 
                   <template v-if="supplies.length > 0">
                     <div class="form-section-step">
@@ -734,23 +411,23 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { publicRegister, publicCreateInquiry } from '@/api/activityPublic'
+import { publicRegister } from '@/api/activityPublic'
 import { usePublicActivityOptions } from '@/composables/usePublicActivityOptions'
 import { useActivityRegistrationTime } from '@/composables/useActivityRegistrationTime'
+import { useRegistrationWindow } from '@/composables/useRegistrationWindow'
 import { useActivityAvailability } from '@/composables/useActivityAvailability'
-import { toggleArrayItem } from '@/utils/arrayUtils'
-import KawaiiStar from '@/components/brand/KawaiiStar.vue'
-import LaurelWreath from '@/components/brand/LaurelWreath.vue'
-import BrandMark from '@/components/brand/BrandMark.vue'
+import { usePublicRegistrationForm } from '@/composables/usePublicRegistrationForm'
+import { useCourseAdvisory } from '@/composables/useCourseAdvisory'
+// KawaiiStar / LaurelWreath / BrandMark 已隨 SuccessSummaryModal 抽走（A1-P5）
+import VideoModal from './components/VideoModal.vue'
+import ContactInquiryModal from './components/ContactInquiryModal.vue'
+import ToastStack from './components/ToastStack.vue'
+import SuccessSummaryModal from './components/SuccessSummaryModal.vue'
+import CoursePickerSection from './components/CoursePickerSection.vue'
 
 const router = useRouter()
 
-const TOAST_ICONS = {
-  success: '<svg viewBox="0 0 24 24" fill="none" stroke="#0D9053" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>',
-  error: '<svg viewBox="0 0 24 24" fill="none" stroke="#DC2626" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>',
-  warning: '<svg viewBox="0 0 24 24" fill="none" stroke="#D97706" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>',
-  info: '<svg viewBox="0 0 24 24" fill="none" stroke="#1E3A8A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>',
-}
+// TOAST_ICONS 已搬至 ToastStack 元件（A1-P4）
 
 const { courses, supplies, classes, videos, loading: optionsLoading, loadOptions } = usePublicActivityOptions()
 const { timeInfo, loadTime } = useActivityRegistrationTime()
@@ -784,37 +461,24 @@ function onPosterError() {
   posterBroken.value = true
 }
 
-const form = reactive({
-  name: '',
-  birthday: '',
-  parent_phone: '',
-  class_name: '',
-  selectedCourses: [],
-  selectedSupplies: [],
-})
+// A1-P1：表單狀態 / 驗證 / 即時費用預覽 / 生日範圍 抽到 usePublicRegistrationForm
+const {
+  form,
+  errors,
+  phoneTouched,
+  parentPhoneError,
+  maxBirthdayISO,
+  minBirthdayISO,
+  feePreview,
+  validateForm,
+  clearError,
+  toggleCourse,
+  toggleSupply,
+  resetForm,
+  normalizeMobile,
+  FIELD_FOCUS_ORDER,
+} = usePublicRegistrationForm({ courses, supplies, availability })
 
-// 各欄位錯誤訊息（送出後填入；使用者開始修改時清除對應欄位）
-const errors = reactive({
-  name: '',
-  birthday: '',
-  parent_phone: '',
-  class_name: '',
-  courses: '',
-})
-
-const TW_MOBILE_RE = /^09\d{8}$/
-function normalizeMobile(raw) {
-  return String(raw || '').replace(/[\s\-().]/g, '')
-}
-// 手機 onBlur 後才即時校驗，避免使用者剛開始打字就被紅字干擾
-const phoneTouched = ref(false)
-const parentPhoneError = computed(() => {
-  if (errors.parent_phone) return errors.parent_phone
-  if (!phoneTouched.value || !form.parent_phone) return ''
-  return TW_MOBILE_RE.test(normalizeMobile(form.parent_phone))
-    ? ''
-    : '請輸入 09 開頭的 10 碼手機號碼'
-})
 const submitting = ref(false)
 const posterLoaded = ref(false)
 function onPosterLoad() { posterLoaded.value = true }
@@ -851,23 +515,8 @@ async function retryInit() {
   }
 }
 
-// ===== 生日輸入上下限（與後端 _validate_birthday_str 同步：20 年內、不可未來） =====
-function toISODate(d) {
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
-const maxBirthdayISO = computed(() => toISODate(new Date()))
-const minBirthdayISO = computed(() => {
-  const d = new Date()
-  d.setFullYear(d.getFullYear() - 20)
-  return toISODate(d)
-})
-
-// ===== 倒數時間 reactive tick（每 60 秒更新一次） =====
-const nowTick = ref(Date.now())
-let tickTimer = null
+// 生日上下限 / feePreview / toggleCourse / toggleSupply / validateForm / clearError /
+// resetForm 已抽至 usePublicRegistrationForm（A1-P1）。
 
 const toasts = ref([])
 let toastSeq = 0
@@ -880,203 +529,29 @@ function dismissToast(id) {
   toasts.value = toasts.value.filter((t) => t.id !== id)
 }
 
-// ===== 報名時段狀態 =====
-function formatCountdown(targetMs, nowMs) {
-  const diff = targetMs - nowMs
-  if (diff <= 0) return '即將開放'
-  const totalMinutes = Math.floor(diff / 60_000)
-  const days = Math.floor(totalMinutes / 1440)
-  const hours = Math.floor((totalMinutes % 1440) / 60)
-  const minutes = totalMinutes % 60
-  if (days >= 2) return `${days} 天`
-  if (days === 1) return `1 天 ${hours} 小時`
-  if (hours >= 1) return `${hours} 小時 ${minutes} 分`
-  return `${minutes} 分鐘`
-}
+// ===== 報名時段狀態（A1-P7 抽至 useRegistrationWindow） =====
+// nowTick / formatCountdown / noticeState / isRegistrationOpen /
+// submitButtonLabel / submitButtonDisabled 由 composable 提供；
+// composable 內自管 30s tick timer 的 onMounted/onUnmounted lifecycle。
+const {
+  noticeState,
+  isRegistrationOpen,
+  submitButtonLabel,
+  submitButtonDisabled,
+} = useRegistrationWindow({ timeInfo, submitting })
 
-const noticeState = computed(() => {
-  const settings = timeInfo.value || {}
-  const now = new Date(nowTick.value)
-  const openAt = settings.open_at ? new Date(settings.open_at) : null
-  const closeAt = settings.close_at ? new Date(settings.close_at) : null
+// 費用預覽 feePreview 已抽至 usePublicRegistrationForm（A1-P1）
 
-  if (!settings.is_open) {
-    return { variant: 'is-warning', title: '報名尚未開放', message: '目前尚未開放線上報名，請稍後再試。' }
-  }
-  if (openAt && now < openAt) {
-    return {
-      variant: 'is-warning',
-      title: '報名尚未開始',
-      message: `報名開始時間：${openAt.toLocaleString('zh-TW')}，距離開放還有 ${formatCountdown(openAt.getTime(), now.getTime())}。`,
-    }
-  }
-  if (closeAt && now > closeAt) {
-    return { variant: 'is-danger', title: '報名已截止', message: '感謝您的關注，本期報名已結束。' }
-  }
-  // 截止前 48 小時內：彈出收尾提醒（urgent close countdown）
-  if (closeAt) {
-    const diffHours = (closeAt - now) / 3_600_000
-    if (diffHours <= 48 && diffHours > 0) {
-      return {
-        variant: 'is-warning',
-        title: '報名即將截止',
-        message: `截止時間：${closeAt.toLocaleString('zh-TW')}，剩餘 ${formatCountdown(closeAt.getTime(), now.getTime())}，請儘速完成報名。`,
-      }
-    }
-  }
-  return null
-})
+// 課程顯示輔助（適齡 / 衝堂 / 名額狀態 / age helpers）抽至 useCourseAdvisory（A1-P6）
+const {
+  formatSchedule,
+  courseAdvisory,
+  selectedAdvisories,
+  availabilityState,
+} = useCourseAdvisory({ courses, availability, form })
 
-const isRegistrationOpen = computed(() => noticeState.value === null)
-
-const submitButtonLabel = computed(() => {
-  if (submitting.value) return '送出中…'
-  if (!isRegistrationOpen.value) return noticeState.value?.title || '報名未開放'
-  return '確認報名資料'
-})
-
-const submitButtonDisabled = computed(() => submitting.value || !isRegistrationOpen.value)
-
-// ===== 即時費用預覽（學費 + 用品分項合計） =====
-// 候補課程仍計入估算（與 successModal 行為對齊：候補實際不收費，但家長對「最大金額」需有預期）
-const feePreview = computed(() => {
-  const hasSelection = form.selectedCourses.length > 0 || form.selectedSupplies.length > 0
-  if (!hasSelection) return null
-  const coursesTotal = form.selectedCourses.reduce(
-    (sum, name) => sum + priceOf(name, courses.value),
-    0,
-  )
-  const suppliesTotal = form.selectedSupplies.reduce(
-    (sum, name) => sum + priceOf(name, supplies.value),
-    0,
-  )
-  // 統計候補課程數量供文案提示
-  const waitlistCount = form.selectedCourses.reduce((n, name) => {
-    const remaining = availability.value[name]
-    return remaining !== undefined && remaining <= 0 ? n + 1 : n
-  }, 0)
-  return {
-    coursesTotal,
-    suppliesTotal,
-    total: coursesTotal + suppliesTotal,
-    courseCount: form.selectedCourses.length,
-    supplyCount: form.selectedSupplies.length,
-    waitlistCount,
-  }
-})
-
-// ===== Phase 3：適齡 + 結構化時段檢核（警告但不阻擋送出） =====
-const WEEKDAY_LABELS = ['一', '二', '三', '四', '五', '六', '日']
-
-function ageMonthsFromBirthday(birthday) {
-  if (!birthday) return null
-  const b = new Date(birthday)
-  if (Number.isNaN(b.getTime())) return null
-  const now = new Date()
-  let months = (now.getFullYear() - b.getFullYear()) * 12 + (now.getMonth() - b.getMonth())
-  if (now.getDate() < b.getDate()) months -= 1
-  return months >= 0 ? months : null
-}
-const ageInMonths = computed(() => ageMonthsFromBirthday(form.birthday))
-
-function monthsToYearLabel(m) {
-  if (m == null) return ''
-  const y = Math.floor(m / 12)
-  const mo = m % 12
-  if (y === 0) return `${mo} 個月`
-  if (mo === 0) return `${y} 歲`
-  return `${y} 歲 ${mo} 個月`
-}
-
-function hasSchedule(c) {
-  return c && c.meeting_weekday != null && !!c.meeting_start_time && !!c.meeting_end_time
-}
-
-function formatSchedule(course) {
-  if (!hasSchedule(course)) return ''
-  return `週${WEEKDAY_LABELS[course.meeting_weekday]} ${course.meeting_start_time}–${course.meeting_end_time}`
-}
-
-function schedulesOverlap(a, b) {
-  if (!hasSchedule(a) || !hasSchedule(b)) return false
-  if (a.meeting_weekday !== b.meeting_weekday) return false
-  // "HH:MM" 字串字典序與時間序一致；半開區間判定重疊
-  return a.meeting_start_time < b.meeting_end_time && b.meeting_start_time < a.meeting_end_time
-}
-
-// 對單一課程算 advisory（適齡 + 衝堂）；僅在課程被勾選時計算衝堂
-function courseAdvisory(course) {
-  const warnings = []
-  const ageMonths = ageInMonths.value
-  if (ageMonths != null) {
-    if (course.min_age_months != null && ageMonths < course.min_age_months) {
-      warnings.push({
-        kind: 'age',
-        severity: 'warn',
-        message: `建議 ${monthsToYearLabel(course.min_age_months)} 以上`,
-      })
-    } else if (course.max_age_months != null && ageMonths > course.max_age_months) {
-      warnings.push({
-        kind: 'age',
-        severity: 'warn',
-        message: `建議 ${monthsToYearLabel(course.max_age_months)} 以下`,
-      })
-    }
-  }
-  if (form.selectedCourses.includes(course.name) && hasSchedule(course)) {
-    for (const otherName of form.selectedCourses) {
-      if (otherName === course.name) continue
-      const other = courses.value.find((c) => c.name === otherName)
-      if (other && schedulesOverlap(course, other)) {
-        warnings.push({
-          kind: 'conflict',
-          severity: 'danger',
-          message: `與「${otherName}」衝堂`,
-        })
-      }
-    }
-  }
-  return warnings
-}
-
-// 已勾選課程的 advisory 匯總（用於 fee-preview 下方提醒區塊）
-const selectedAdvisories = computed(() => {
-  const items = []
-  for (const name of form.selectedCourses) {
-    const course = courses.value.find((c) => c.name === name)
-    if (!course) continue
-    const w = courseAdvisory(course)
-    if (w.length > 0) items.push({ courseName: name, warnings: w })
-  }
-  return items
-})
-
-// ===== 名額狀態（顏色語意：充足→中性綠、≤3→紅、候補→黃、額滿→灰） =====
-function availabilityState(course) {
-  const remaining = availability.value[course.name]
-  if (remaining === undefined) {
-    return { text: '', cssClass: '', full: false }
-  }
-  if (remaining === -1) {
-    return { text: '已額滿', cssClass: 'is-full', full: true }
-  }
-  if (remaining <= 0) {
-    return { text: '額滿·可候補', cssClass: 'is-waiting', full: false }
-  }
-  if (remaining <= 3) {
-    return { text: `剩 ${remaining} 位`, cssClass: 'is-low', full: false }
-  }
-  return { text: `剩 ${remaining} 位`, cssClass: 'is-available', full: false }
-}
-
-function toggleCourse(course) {
-  if (availabilityState(course).full) return
-  toggleArrayItem(form.selectedCourses, course.name)
-}
-
-function toggleSupply(supply) {
-  toggleArrayItem(form.selectedSupplies, supply.name)
-}
+// toggleCourse / toggleSupply 已抽至 usePublicRegistrationForm（A1-P1）;
+// 額滿判定（availability=-1）規則在 composable 內,與 availabilityState 一致。
 
 // ===== 影片模態 =====
 const videoModal = reactive({ visible: false, title: '', url: '', youtubeId: null })
@@ -1093,41 +568,10 @@ function closeVideoModal() {
   videoModal.youtubeId = null
 }
 
-// ===== 聯絡模態 =====
+// ===== 聯絡模態 =====（A1-P3 抽至 ContactInquiryModal，本檔只保留 visible ref）
 const contactModalVisible = ref(false)
-const inquiry = reactive({ name: '', phone: '', question: '' })
-const inquirySubmitting = ref(false)
 function openContactModal() {
-  inquiry.name = ''
-  inquiry.phone = ''
-  inquiry.question = ''
   contactModalVisible.value = true
-}
-function closeContactModal() {
-  contactModalVisible.value = false
-}
-async function handleContactSubmit() {
-  if (inquirySubmitting.value) return
-  const name = inquiry.name.trim()
-  const phone = inquiry.phone.trim()
-  const question = inquiry.question.trim()
-  if (!name) return showToast('請輸入您的姓名', 'error')
-  if (!phone) return showToast('請輸入聯絡電話', 'error')
-  if (!question) return showToast('請輸入您的問題', 'error')
-  if (!/^09\d{8}$/.test(phone.replace(/-/g, ''))) {
-    return showToast('請輸入有效的手機號碼，例如 0912345678。', 'error')
-  }
-
-  inquirySubmitting.value = true
-  try {
-    const res = await publicCreateInquiry({ name, phone, question })
-    showToast(res?.data?.message || '感謝您的提問，我們會儘快回覆您！', 'success')
-    closeContactModal()
-  } catch (err) {
-    showToast(err.response?.data?.detail || '送出失敗', 'error')
-  } finally {
-    inquirySubmitting.value = false
-  }
 }
 
 // ===== 查詢 / 修改：使用同視窗路由（避免行動裝置 popup 被擋） =====
@@ -1197,98 +641,22 @@ function buildSuccessSummary({ name, parentPhone, message, waitlisted, waitlistC
   successModal.visible = true
 }
 
-async function copyToClipboard(text, label) {
-  try {
-    await navigator.clipboard.writeText(text)
-    successModal.copyHint = `已複製${label}`
-    setTimeout(() => { successModal.copyHint = '' }, 2500)
-  } catch {
-    successModal.copyHint = '複製失敗，請手動長按文字選取'
-    setTimeout(() => { successModal.copyHint = '' }, 4000)
-  }
-}
-
-// Web Share API（行動裝置：分享給配偶/長輩）
-const canShare = computed(() =>
-  typeof navigator !== 'undefined' && typeof navigator.share === 'function',
-)
-async function shareToken() {
-  if (!canShare.value) return
-  try {
-    await navigator.share({
-      title: '才藝報名查詢碼',
-      text: `查詢碼：${successModal.queryToken}\n編修連結：${successModal.editUrl}\n（請勿轉傳給校外人士，僅供家人留存）`,
-      url: successModal.editUrl,
-    })
-  } catch (err) {
-    // 使用者取消分享屬正常流程，不顯示錯誤
-    if (err && err.name !== 'AbortError') {
-      successModal.copyHint = '分享失敗，請改用複製按鈕'
-      setTimeout(() => { successModal.copyHint = '' }, 4000)
-    }
-  }
-}
+// copyToClipboard / shareToken / canShare 已抽至 SuccessSummaryModal（A1-P5）
 
 function closeSuccessModal() {
   successModal.visible = false
 }
 
-// ===== 表單驗證：一次收集所有錯誤、auto focus 第一個錯誤欄位 =====
-const FIELD_FOCUS_ORDER = ['name', 'birthday', 'parent_phone', 'class_name', 'courses']
+// ===== 表單驗證 =====
+// validateForm / clearError / errors / FIELD_FOCUS_ORDER 已抽至
+// usePublicRegistrationForm（A1-P1）。view 保留 focusFirstError 與
+// FIELD_ELEMENT_ID 因 DOM 操作仰賴 view 的元件 id。
 const FIELD_ELEMENT_ID = {
   name: 'studentName',
   birthday: 'studentBirthday',
   parent_phone: 'parentPhone',
   class_name: 'studentClass',
   courses: 'courseListGroup',
-}
-
-function clearError(field) {
-  if (errors[field]) errors[field] = ''
-}
-
-function validateForm() {
-  errors.name = ''
-  errors.birthday = ''
-  errors.parent_phone = ''
-  errors.class_name = ''
-  errors.courses = ''
-
-  const name = form.name.trim()
-  const birthday = form.birthday
-  const className = form.class_name
-  const parentPhone = normalizeMobile(form.parent_phone)
-
-  if (!name) errors.name = '請輸入幼兒姓名'
-
-  if (!birthday) {
-    errors.birthday = '請選擇幼兒生日'
-  } else {
-    const inputDate = new Date(birthday)
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    if (Number.isNaN(inputDate.getTime())) {
-      errors.birthday = '生日格式不正確'
-    } else if (inputDate > today) {
-      errors.birthday = '生日不可選擇未來日期'
-    } else {
-      const earliest = new Date(today)
-      earliest.setFullYear(earliest.getFullYear() - 20)
-      if (inputDate < earliest) errors.birthday = '生日超出合理範圍，請再次確認'
-    }
-  }
-
-  if (!parentPhone) {
-    errors.parent_phone = '請輸入家長手機號碼'
-  } else if (!TW_MOBILE_RE.test(parentPhone)) {
-    errors.parent_phone = '請輸入 09 開頭的 10 碼手機號碼'
-  }
-
-  if (!className) errors.class_name = '請選擇寶貝班級'
-
-  if (form.selectedCourses.length === 0) errors.courses = '請至少選擇一門才藝課'
-
-  return FIELD_FOCUS_ORDER.every((f) => !errors[f])
 }
 
 async function focusFirstError() {
@@ -1355,23 +723,15 @@ async function handleSubmitRegistration() {
   }
 }
 
-function resetForm() {
-  form.name = ''
-  form.birthday = ''
-  form.parent_phone = ''
-  form.class_name = ''
-  form.selectedCourses = []
-  form.selectedSupplies = []
-}
+// resetForm 已抽至 usePublicRegistrationForm（A1-P1）
 
 onMounted(async () => {
   await runInit()
   startPolling()
-  tickTimer = setInterval(() => { nowTick.value = Date.now() }, 30_000)
+  // A1-P7：30s tick 由 useRegistrationWindow 自管 lifecycle
 })
 onUnmounted(() => {
   stopPolling()
-  if (tickTimer) clearInterval(tickTimer)
 })
 </script>
 

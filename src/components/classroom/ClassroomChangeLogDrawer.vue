@@ -11,8 +11,10 @@ import {
 } from '@/api/studentChangeLogs'
 import { getCommunications } from '@/api/studentCommunications'
 import { getClassroomEnrollmentComposition } from '@/api/classrooms'
-import { apiError } from '@/utils/error'
+import { useErrorNotify } from '@/composables/useErrorNotify'
 import { dateToLocalISO } from '@/utils/format'
+
+const { notify } = useErrorNotify()
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -89,7 +91,7 @@ const fetchLogs = async () => {
     logs.value = res.data.items
     logsTotal.value = res.data.total
   } catch (e) {
-    ElMessage.error(apiError(e, '載入異動紀錄失敗'))
+    notify(e, 'ChangeLogDrawer:loadChanges', '載入異動紀錄失敗')
   } finally {
     logsLoading.value = false
   }
@@ -148,7 +150,7 @@ const handleExport = async () => {
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
   } catch (e) {
-    ElMessage.error(apiError(e, '匯出失敗'))
+    notify(e, 'ChangeLogDrawer:export', '匯出失敗')
   }
 }
 
@@ -171,7 +173,7 @@ const fetchCommunications = async () => {
     })
     communications.value = res.data.items
   } catch (e) {
-    ElMessage.error(apiError(e, '載入家長溝通紀錄失敗'))
+    notify(e, 'ChangeLogDrawer:loadCommunications', '載入家長溝通紀錄失敗')
   } finally {
     commsLoading.value = false
   }
@@ -202,7 +204,7 @@ const fetchComposition = async () => {
     const res = await getClassroomEnrollmentComposition(props.classroom.id)
     composition.value = res.data
   } catch (e) {
-    ElMessage.error(apiError(e, '載入身分比例失敗'))
+    notify(e, 'ChangeLogDrawer:loadComposition', '載入身分比例失敗')
   } finally {
     compLoading.value = false
   }
