@@ -57,6 +57,9 @@ const ICON_MAP = {
   person: 'person',
   contact: 'contacts',
   leave: 'event_busy',
+  trophy: 'emoji_events',
+  ruler: 'straighten',
+  user: 'person',
 }
 
 const SIZE_MAP = {
