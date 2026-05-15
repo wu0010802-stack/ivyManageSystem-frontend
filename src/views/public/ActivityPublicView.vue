@@ -20,273 +20,26 @@
       <symbol id="i-share" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" /></symbol>
     </svg>
 
-    <!-- Toast Container -->
-    <div class="toast-container" aria-live="polite" aria-atomic="true">
-      <div
-        v-for="t in toasts"
-        :key="t.id"
-        class="toast"
-        :class="t.type"
-        :role="t.type === 'error' ? 'alert' : 'status'"
-      >
-        <div class="toast-icon" v-html="TOAST_ICONS[t.type] || TOAST_ICONS.info" />
-        <div class="toast-content">
-          <div class="toast-message">{{ t.message }}</div>
-        </div>
-        <button type="button" class="toast-close" aria-label="關閉通知" @click="dismissToast(t.id)">&times;</button>
-      </div>
-    </div>
+    <!-- Toast Container（A1-P4 抽元件） -->
+    <ToastStack :toasts="toasts" @dismiss="dismissToast" />
 
-    <!-- Video Modal -->
-    <div
-      v-if="videoModal.visible"
-      class="modal-overlay is-visible"
-      role="dialog"
-      aria-modal="true"
-      @click.self="closeVideoModal"
-    >
-      <div class="modal-panel modal-panel--video">
-        <h3 class="modal-title">{{ videoModal.title }}</h3>
-        <button type="button" class="modal-close" aria-label="關閉影片" @click="closeVideoModal">
-          <svg width="18" height="18" aria-hidden="true"><use href="#i-close" /></svg>
-        </button>
-        <div class="video-wrapper">
-          <iframe
-            v-if="videoModal.youtubeId"
-            :src="`https://www.youtube.com/embed/${videoModal.youtubeId}?autoplay=1`"
-            frameborder="0"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowfullscreen
-            height="480"
-          />
-          <video v-else-if="videoModal.url" :src="videoModal.url" controls autoplay>
-            您的瀏覽器不支援影片播放
-          </video>
-        </div>
-      </div>
-    </div>
+    <!-- Video Modal（A1-P2 抽元件） -->
+    <VideoModal
+      :visible="videoModal.visible"
+      :title="videoModal.title"
+      :url="videoModal.url"
+      :youtube-id="videoModal.youtubeId"
+      @close="closeVideoModal"
+    />
 
-    <!-- Success Modal -->
-    <div
-      v-if="successModal.visible"
-      class="modal-overlay is-visible"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="successModalTitle"
-      @click.self="closeSuccessModal"
-    >
-      <div class="modal-panel modal-panel--success">
-        <div class="modal-header">
-          <h3 id="successModalTitle" class="modal-title">
-            <svg class="icon" width="22" height="22" aria-hidden="true"><use href="#i-check" /></svg>
-            報名資料已送出
-          </h3>
-          <button type="button" class="modal-close" aria-label="關閉視窗" @click="closeSuccessModal">
-            <svg width="18" height="18" aria-hidden="true"><use href="#i-close" /></svg>
-          </button>
-        </div>
-        <div class="modal-body">
-          <div class="success-brand-banner" aria-hidden="true">
-            <KawaiiStar :size="22" expression="wink" decorative class="success-brand-star success-brand-star--l" />
-            <BrandMark variant="mark-only" :size="64" />
-            <KawaiiStar :size="18" expression="smile" decorative class="success-brand-star success-brand-star--r" />
-          </div>
-          <p class="success-msg">{{ successModal.message }}</p>
+    <!-- Success Modal（A1-P5 抽元件） -->
+    <SuccessSummaryModal :summary="successModal" @close="closeSuccessModal" />
 
-          <div class="summary-block">
-            <div class="summary-row"><span class="summary-label">幼兒姓名</span><span class="summary-value">{{ successModal.studentName }}</span></div>
-            <div class="summary-row"><span class="summary-label">家長手機</span><span class="summary-value">{{ successModal.parentPhone }}</span></div>
-          </div>
-
-          <div v-if="successModal.enrolledCourses.length > 0" class="summary-section">
-            <div class="summary-section-title">
-              <svg class="icon" width="16" height="16" aria-hidden="true"><use href="#i-check" /></svg>
-              已報名課程（{{ successModal.enrolledCourses.length }}）
-            </div>
-            <ul class="summary-list">
-              <li v-for="c in successModal.enrolledCourses" :key="`e-${c.name}`">
-                <span>{{ c.name }}</span><span class="summary-amount">${{ c.price }}</span>
-              </li>
-            </ul>
-          </div>
-
-          <div v-if="successModal.waitlistCourses.length > 0" class="summary-section is-waitlist">
-            <div class="summary-section-title">
-              <svg class="icon" width="16" height="16" aria-hidden="true"><use href="#i-alert" /></svg>
-              候補課程（{{ successModal.waitlistCourses.length }}）
-            </div>
-            <ul class="summary-list">
-              <li v-for="c in successModal.waitlistCourses" :key="`w-${c.name}`">
-                <span>{{ c.name }}</span><span class="summary-amount summary-amount--muted">候補中</span>
-              </li>
-            </ul>
-            <p class="summary-note">候補課程不計入應繳金額，校方將儘快與您聯繫。</p>
-          </div>
-
-          <div v-if="successModal.selectedSupplies.length > 0" class="summary-section">
-            <div class="summary-section-title">加購項目</div>
-            <ul class="summary-list">
-              <li v-for="s in successModal.selectedSupplies" :key="`s-${s.name}`">
-                <span>{{ s.name }}</span><span class="summary-amount">${{ s.price }}</span>
-              </li>
-            </ul>
-          </div>
-
-          <div class="summary-total">
-            <span>預估應繳金額</span>
-            <strong>${{ successModal.totalAmount }}</strong>
-          </div>
-          <p class="summary-final-note">本金額不含候補課程；實際金額以園方確認後通知為準。</p>
-
-          <div v-if="successModal.queryToken" class="success-token-box">
-            <div class="token-title">查詢 / 編修專用連結</div>
-            <p class="token-hint">
-              請<strong>妥善保存以下查詢碼</strong>，後續查詢或修改報名資料時可免去輸入姓名/生日，僅需查詢碼 + 家長手機。
-            </p>
-            <div class="token-row">
-              <span class="token-label">查詢碼</span>
-              <input
-                class="token-input"
-                type="text"
-                readonly
-                :value="successModal.queryToken"
-                aria-label="報名查詢碼（唯讀，可選取複製）"
-                @focus="$event.target.select()"
-              />
-              <button
-                type="button"
-                class="btn-copy"
-                aria-label="複製查詢碼"
-                @click="copyToClipboard(successModal.queryToken, '查詢碼')"
-              >
-                <svg width="14" height="14" aria-hidden="true"><use href="#i-copy" /></svg>
-                複製
-              </button>
-            </div>
-            <div class="token-row">
-              <span class="token-label">編修連結</span>
-              <input
-                class="token-input token-input--link"
-                type="url"
-                readonly
-                :value="successModal.editUrl"
-                aria-label="編修連結（唯讀，可選取複製）"
-                @focus="$event.target.select()"
-              />
-              <button
-                type="button"
-                class="btn-copy"
-                aria-label="複製編修連結"
-                @click="copyToClipboard(successModal.editUrl, '連結')"
-              >
-                <svg width="14" height="14" aria-hidden="true"><use href="#i-copy" /></svg>
-                複製
-              </button>
-            </div>
-            <div v-if="canShare" class="token-share-row">
-              <button
-                type="button"
-                class="btn btn-outline btn-share"
-                @click="shareToken"
-              >
-                <svg width="16" height="16" aria-hidden="true"><use href="#i-share" /></svg>
-                分享給家人（Line / 訊息 / Email）
-              </button>
-            </div>
-            <div v-if="successModal.copyHint" class="token-copy-hint">
-              <svg width="12" height="12" aria-hidden="true"><use href="#i-check" /></svg>
-              {{ successModal.copyHint }}
-            </div>
-            <p class="token-warn">⚠ 連結含個資識別碼，請勿轉傳他人。</p>
-          </div>
-
-          <button type="button" class="btn btn-primary btn-block" @click="closeSuccessModal">完成</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Contact Modal -->
-    <div
-      v-if="contactModalVisible"
-      class="modal-overlay is-visible"
-      role="dialog"
-      aria-modal="true"
-      @click.self="closeContactModal"
-    >
-      <div class="modal-panel">
-        <div class="modal-header">
-          <h3 class="modal-title">
-            <svg class="icon" width="22" height="22" aria-hidden="true"><use href="#i-phone" /></svg>
-            聯絡主辦單位
-          </h3>
-          <button type="button" class="modal-close" aria-label="關閉視窗" @click="closeContactModal">
-            <svg width="18" height="18" aria-hidden="true"><use href="#i-close" /></svg>
-          </button>
-        </div>
-        <div class="modal-body">
-          <div class="contact-school-card">
-            <h4 class="contact-school-name">
-              <svg class="icon" width="22" height="22" aria-hidden="true"><use href="#i-school" /></svg>
-              常春藤義華校
-            </h4>
-            <div class="contact-school-detail">
-              <svg class="icon" width="16" height="16" aria-hidden="true"><use href="#i-pin" /></svg>
-              高雄市三民區義華路 68 號
-            </div>
-            <div class="contact-school-detail">
-              <svg class="icon" width="16" height="16" aria-hidden="true"><use href="#i-phone" /></svg>
-              電話：<a href="tel:+88673928366">(07) 392-8366</a>
-            </div>
-          </div>
-          <div class="contact-form-intro">
-            <svg class="icon" width="18" height="18" aria-hidden="true"><use href="#i-mail" /></svg>
-            您也可以透過以下表單留下問題，我們會儘快與您聯繫
-          </div>
-          <div class="field-group">
-            <label for="contactName">您的姓名 <span class="required-mark">*</span></label>
-            <input
-              id="contactName"
-              v-model="inquiry.name"
-              type="text"
-              class="input-text"
-              placeholder="請輸入您的姓名"
-              maxlength="50"
-              autocomplete="name"
-            />
-          </div>
-          <div class="field-group">
-            <label for="contactPhone">聯絡電話 <span class="required-mark">*</span></label>
-            <input
-              id="contactPhone"
-              v-model="inquiry.phone"
-              type="tel"
-              class="input-text"
-              placeholder="請輸入手機號碼 (09xxxxxxxx)"
-              inputmode="tel"
-              autocomplete="tel"
-              maxlength="15"
-            />
-          </div>
-          <div class="field-group">
-            <label for="contactQuestion">您的問題 <span class="required-mark">*</span></label>
-            <textarea
-              id="contactQuestion"
-              v-model="inquiry.question"
-              placeholder="請輸入您要詢問的問題"
-              rows="4"
-            />
-          </div>
-          <button
-            type="button"
-            class="btn btn-primary btn-block"
-            :disabled="inquirySubmitting"
-            @click="handleContactSubmit"
-          >
-            {{ inquirySubmitting ? '送出中…' : '送出提問' }}
-          </button>
-        </div>
-      </div>
-    </div>
+    <!-- Contact Modal（A1-P3 抽元件） -->
+    <ContactInquiryModal
+      v-model:visible="contactModalVisible"
+      @toast="(msg, type) => showToast(msg, type)"
+    />
 
     <div class="page-wrapper">
       <header class="page-header">
@@ -734,23 +487,20 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { publicRegister, publicCreateInquiry } from '@/api/activityPublic'
+import { publicRegister } from '@/api/activityPublic'
 import { usePublicActivityOptions } from '@/composables/usePublicActivityOptions'
 import { useActivityRegistrationTime } from '@/composables/useActivityRegistrationTime'
 import { useActivityAvailability } from '@/composables/useActivityAvailability'
 import { usePublicRegistrationForm } from '@/composables/usePublicRegistrationForm'
-import KawaiiStar from '@/components/brand/KawaiiStar.vue'
-import LaurelWreath from '@/components/brand/LaurelWreath.vue'
-import BrandMark from '@/components/brand/BrandMark.vue'
+// KawaiiStar / LaurelWreath / BrandMark 已隨 SuccessSummaryModal 抽走（A1-P5）
+import VideoModal from './components/VideoModal.vue'
+import ContactInquiryModal from './components/ContactInquiryModal.vue'
+import ToastStack from './components/ToastStack.vue'
+import SuccessSummaryModal from './components/SuccessSummaryModal.vue'
 
 const router = useRouter()
 
-const TOAST_ICONS = {
-  success: '<svg viewBox="0 0 24 24" fill="none" stroke="#0D9053" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>',
-  error: '<svg viewBox="0 0 24 24" fill="none" stroke="#DC2626" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>',
-  warning: '<svg viewBox="0 0 24 24" fill="none" stroke="#D97706" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>',
-  info: '<svg viewBox="0 0 24 24" fill="none" stroke="#1E3A8A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>',
-}
+// TOAST_ICONS 已搬至 ToastStack 元件（A1-P4）
 
 const { courses, supplies, classes, videos, loading: optionsLoading, loadOptions } = usePublicActivityOptions()
 const { timeInfo, loadTime } = useActivityRegistrationTime()
@@ -1037,41 +787,10 @@ function closeVideoModal() {
   videoModal.youtubeId = null
 }
 
-// ===== 聯絡模態 =====
+// ===== 聯絡模態 =====（A1-P3 抽至 ContactInquiryModal，本檔只保留 visible ref）
 const contactModalVisible = ref(false)
-const inquiry = reactive({ name: '', phone: '', question: '' })
-const inquirySubmitting = ref(false)
 function openContactModal() {
-  inquiry.name = ''
-  inquiry.phone = ''
-  inquiry.question = ''
   contactModalVisible.value = true
-}
-function closeContactModal() {
-  contactModalVisible.value = false
-}
-async function handleContactSubmit() {
-  if (inquirySubmitting.value) return
-  const name = inquiry.name.trim()
-  const phone = inquiry.phone.trim()
-  const question = inquiry.question.trim()
-  if (!name) return showToast('請輸入您的姓名', 'error')
-  if (!phone) return showToast('請輸入聯絡電話', 'error')
-  if (!question) return showToast('請輸入您的問題', 'error')
-  if (!/^09\d{8}$/.test(phone.replace(/-/g, ''))) {
-    return showToast('請輸入有效的手機號碼，例如 0912345678。', 'error')
-  }
-
-  inquirySubmitting.value = true
-  try {
-    const res = await publicCreateInquiry({ name, phone, question })
-    showToast(res?.data?.message || '感謝您的提問，我們會儘快回覆您！', 'success')
-    closeContactModal()
-  } catch (err) {
-    showToast(err.response?.data?.detail || '送出失敗', 'error')
-  } finally {
-    inquirySubmitting.value = false
-  }
 }
 
 // ===== 查詢 / 修改：使用同視窗路由（避免行動裝置 popup 被擋） =====
@@ -1141,37 +860,7 @@ function buildSuccessSummary({ name, parentPhone, message, waitlisted, waitlistC
   successModal.visible = true
 }
 
-async function copyToClipboard(text, label) {
-  try {
-    await navigator.clipboard.writeText(text)
-    successModal.copyHint = `已複製${label}`
-    setTimeout(() => { successModal.copyHint = '' }, 2500)
-  } catch {
-    successModal.copyHint = '複製失敗，請手動長按文字選取'
-    setTimeout(() => { successModal.copyHint = '' }, 4000)
-  }
-}
-
-// Web Share API（行動裝置：分享給配偶/長輩）
-const canShare = computed(() =>
-  typeof navigator !== 'undefined' && typeof navigator.share === 'function',
-)
-async function shareToken() {
-  if (!canShare.value) return
-  try {
-    await navigator.share({
-      title: '才藝報名查詢碼',
-      text: `查詢碼：${successModal.queryToken}\n編修連結：${successModal.editUrl}\n（請勿轉傳給校外人士，僅供家人留存）`,
-      url: successModal.editUrl,
-    })
-  } catch (err) {
-    // 使用者取消分享屬正常流程，不顯示錯誤
-    if (err && err.name !== 'AbortError') {
-      successModal.copyHint = '分享失敗，請改用複製按鈕'
-      setTimeout(() => { successModal.copyHint = '' }, 4000)
-    }
-  }
-}
+// copyToClipboard / shareToken / canShare 已抽至 SuccessSummaryModal（A1-P5）
 
 function closeSuccessModal() {
   successModal.visible = false
