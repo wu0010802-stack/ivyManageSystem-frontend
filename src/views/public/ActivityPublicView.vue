@@ -738,7 +738,7 @@ import { publicRegister, publicCreateInquiry } from '@/api/activityPublic'
 import { usePublicActivityOptions } from '@/composables/usePublicActivityOptions'
 import { useActivityRegistrationTime } from '@/composables/useActivityRegistrationTime'
 import { useActivityAvailability } from '@/composables/useActivityAvailability'
-import { toggleArrayItem } from '@/utils/arrayUtils'
+import { usePublicRegistrationForm } from '@/composables/usePublicRegistrationForm'
 import KawaiiStar from '@/components/brand/KawaiiStar.vue'
 import LaurelWreath from '@/components/brand/LaurelWreath.vue'
 import BrandMark from '@/components/brand/BrandMark.vue'
@@ -784,37 +784,24 @@ function onPosterError() {
   posterBroken.value = true
 }
 
-const form = reactive({
-  name: '',
-  birthday: '',
-  parent_phone: '',
-  class_name: '',
-  selectedCourses: [],
-  selectedSupplies: [],
-})
+// A1-P1：表單狀態 / 驗證 / 即時費用預覽 / 生日範圍 抽到 usePublicRegistrationForm
+const {
+  form,
+  errors,
+  phoneTouched,
+  parentPhoneError,
+  maxBirthdayISO,
+  minBirthdayISO,
+  feePreview,
+  validateForm,
+  clearError,
+  toggleCourse,
+  toggleSupply,
+  resetForm,
+  normalizeMobile,
+  FIELD_FOCUS_ORDER,
+} = usePublicRegistrationForm({ courses, supplies, availability })
 
-// 各欄位錯誤訊息（送出後填入；使用者開始修改時清除對應欄位）
-const errors = reactive({
-  name: '',
-  birthday: '',
-  parent_phone: '',
-  class_name: '',
-  courses: '',
-})
-
-const TW_MOBILE_RE = /^09\d{8}$/
-function normalizeMobile(raw) {
-  return String(raw || '').replace(/[\s\-().]/g, '')
-}
-// 手機 onBlur 後才即時校驗，避免使用者剛開始打字就被紅字干擾
-const phoneTouched = ref(false)
-const parentPhoneError = computed(() => {
-  if (errors.parent_phone) return errors.parent_phone
-  if (!phoneTouched.value || !form.parent_phone) return ''
-  return TW_MOBILE_RE.test(normalizeMobile(form.parent_phone))
-    ? ''
-    : '請輸入 09 開頭的 10 碼手機號碼'
-})
 const submitting = ref(false)
 const posterLoaded = ref(false)
 function onPosterLoad() { posterLoaded.value = true }
@@ -851,19 +838,8 @@ async function retryInit() {
   }
 }
 
-// ===== 生日輸入上下限（與後端 _validate_birthday_str 同步：20 年內、不可未來） =====
-function toISODate(d) {
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
-const maxBirthdayISO = computed(() => toISODate(new Date()))
-const minBirthdayISO = computed(() => {
-  const d = new Date()
-  d.setFullYear(d.getFullYear() - 20)
-  return toISODate(d)
-})
+// 生日上下限 / feePreview / toggleCourse / toggleSupply / validateForm / clearError /
+// resetForm 已抽至 usePublicRegistrationForm（A1-P1）。
 
 // ===== 倒數時間 reactive tick（每 60 秒更新一次） =====
 const nowTick = ref(Date.now())
@@ -937,33 +913,7 @@ const submitButtonLabel = computed(() => {
 
 const submitButtonDisabled = computed(() => submitting.value || !isRegistrationOpen.value)
 
-// ===== 即時費用預覽（學費 + 用品分項合計） =====
-// 候補課程仍計入估算（與 successModal 行為對齊：候補實際不收費，但家長對「最大金額」需有預期）
-const feePreview = computed(() => {
-  const hasSelection = form.selectedCourses.length > 0 || form.selectedSupplies.length > 0
-  if (!hasSelection) return null
-  const coursesTotal = form.selectedCourses.reduce(
-    (sum, name) => sum + priceOf(name, courses.value),
-    0,
-  )
-  const suppliesTotal = form.selectedSupplies.reduce(
-    (sum, name) => sum + priceOf(name, supplies.value),
-    0,
-  )
-  // 統計候補課程數量供文案提示
-  const waitlistCount = form.selectedCourses.reduce((n, name) => {
-    const remaining = availability.value[name]
-    return remaining !== undefined && remaining <= 0 ? n + 1 : n
-  }, 0)
-  return {
-    coursesTotal,
-    suppliesTotal,
-    total: coursesTotal + suppliesTotal,
-    courseCount: form.selectedCourses.length,
-    supplyCount: form.selectedSupplies.length,
-    waitlistCount,
-  }
-})
+// 費用預覽 feePreview 已抽至 usePublicRegistrationForm（A1-P1）
 
 // ===== Phase 3：適齡 + 結構化時段檢核（警告但不阻擋送出） =====
 const WEEKDAY_LABELS = ['一', '二', '三', '四', '五', '六', '日']
@@ -1069,14 +1019,8 @@ function availabilityState(course) {
   return { text: `剩 ${remaining} 位`, cssClass: 'is-available', full: false }
 }
 
-function toggleCourse(course) {
-  if (availabilityState(course).full) return
-  toggleArrayItem(form.selectedCourses, course.name)
-}
-
-function toggleSupply(supply) {
-  toggleArrayItem(form.selectedSupplies, supply.name)
-}
+// toggleCourse / toggleSupply 已抽至 usePublicRegistrationForm（A1-P1）;
+// 額滿判定（availability=-1）規則在 composable 內,與 availabilityState 一致。
 
 // ===== 影片模態 =====
 const videoModal = reactive({ visible: false, title: '', url: '', youtubeId: null })
@@ -1233,62 +1177,16 @@ function closeSuccessModal() {
   successModal.visible = false
 }
 
-// ===== 表單驗證：一次收集所有錯誤、auto focus 第一個錯誤欄位 =====
-const FIELD_FOCUS_ORDER = ['name', 'birthday', 'parent_phone', 'class_name', 'courses']
+// ===== 表單驗證 =====
+// validateForm / clearError / errors / FIELD_FOCUS_ORDER 已抽至
+// usePublicRegistrationForm（A1-P1）。view 保留 focusFirstError 與
+// FIELD_ELEMENT_ID 因 DOM 操作仰賴 view 的元件 id。
 const FIELD_ELEMENT_ID = {
   name: 'studentName',
   birthday: 'studentBirthday',
   parent_phone: 'parentPhone',
   class_name: 'studentClass',
   courses: 'courseListGroup',
-}
-
-function clearError(field) {
-  if (errors[field]) errors[field] = ''
-}
-
-function validateForm() {
-  errors.name = ''
-  errors.birthday = ''
-  errors.parent_phone = ''
-  errors.class_name = ''
-  errors.courses = ''
-
-  const name = form.name.trim()
-  const birthday = form.birthday
-  const className = form.class_name
-  const parentPhone = normalizeMobile(form.parent_phone)
-
-  if (!name) errors.name = '請輸入幼兒姓名'
-
-  if (!birthday) {
-    errors.birthday = '請選擇幼兒生日'
-  } else {
-    const inputDate = new Date(birthday)
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    if (Number.isNaN(inputDate.getTime())) {
-      errors.birthday = '生日格式不正確'
-    } else if (inputDate > today) {
-      errors.birthday = '生日不可選擇未來日期'
-    } else {
-      const earliest = new Date(today)
-      earliest.setFullYear(earliest.getFullYear() - 20)
-      if (inputDate < earliest) errors.birthday = '生日超出合理範圍，請再次確認'
-    }
-  }
-
-  if (!parentPhone) {
-    errors.parent_phone = '請輸入家長手機號碼'
-  } else if (!TW_MOBILE_RE.test(parentPhone)) {
-    errors.parent_phone = '請輸入 09 開頭的 10 碼手機號碼'
-  }
-
-  if (!className) errors.class_name = '請選擇寶貝班級'
-
-  if (form.selectedCourses.length === 0) errors.courses = '請至少選擇一門才藝課'
-
-  return FIELD_FOCUS_ORDER.every((f) => !errors[f])
 }
 
 async function focusFirstError() {
@@ -1355,14 +1253,7 @@ async function handleSubmitRegistration() {
   }
 }
 
-function resetForm() {
-  form.name = ''
-  form.birthday = ''
-  form.parent_phone = ''
-  form.class_name = ''
-  form.selectedCourses = []
-  form.selectedSupplies = []
-}
+// resetForm 已抽至 usePublicRegistrationForm（A1-P1）
 
 onMounted(async () => {
   await runInit()

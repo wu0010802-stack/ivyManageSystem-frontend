@@ -1,14 +1,39 @@
-import { ref, reactive, computed, watch } from 'vue'
-import { publicRegister } from '@/api/activityPublic'
-import { ElMessage, ElMessageBox } from 'element-plus'
+/**
+ * 公開頁報名表單狀態。從 ActivityPublicView.vue 抽出（A1 拆分 P1）。
+ *
+ * 包含 form / errors 雙 reactive、validate 規則、即時費用預覽、phone touched UX、
+ * 課程/用品 toggle 與生日上下限。不包含送出邏輯（handleSubmit 依賴 view 層 toast/
+ * modal/refresh，留在 view）。
+ *
+ * 使用：
+ *   const { form, errors, parentPhoneError, feePreview, validateForm,
+ *           clearError, toggleCourse, toggleSupply, resetForm,
+ *           normalizeMobile, maxBirthdayISO, minBirthdayISO }
+ *     = usePublicRegistrationForm({ courses, supplies, availability })
+ */
+
+import { reactive, ref, computed } from 'vue'
 import { toggleArrayItem } from '@/utils/arrayUtils'
 
-const DRAFT_KEY = 'activity_draft'
 const TW_MOBILE_RE = /^09\d{8}$/
 
-function normalizeMobile(raw) {
+export function normalizeMobile(raw) {
   return String(raw || '').replace(/[\s\-().]/g, '')
 }
+
+function toISODate(d) {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+function priceOf(name, source) {
+  const item = source.find((it) => it.name === name)
+  return Number(item?.price) || 0
+}
+
+const FIELD_FOCUS_ORDER = ['name', 'birthday', 'parent_phone', 'class_name', 'courses']
 
 export function usePublicRegistrationForm({ courses, supplies, availability }) {
   const form = reactive({
@@ -18,74 +43,120 @@ export function usePublicRegistrationForm({ courses, supplies, availability }) {
     class_name: '',
     selectedCourses: [],
     selectedSupplies: [],
-    notes: '',
   })
-  const submitting = ref(false)
-  const submitResult = ref(null)
-  const supplyExpanded = ref(true)
 
-  // 監聽表單變動，自動存入 localStorage
-  watch(
-    () => ({ ...form, selectedCourses: [...form.selectedCourses], selectedSupplies: [...form.selectedSupplies] }),
-    (val) => {
-      const hasContent = val.name || val.birthday || val.class_name || val.selectedCourses.length > 0
-      if (hasContent) {
-        sessionStorage.setItem(DRAFT_KEY, JSON.stringify(val))
-      }
-    },
-    { deep: true }
-  )
+  // 各欄位錯誤訊息（送出後填入；使用者開始修改時清除對應欄位）
+  const errors = reactive({
+    name: '',
+    birthday: '',
+    parent_phone: '',
+    class_name: '',
+    courses: '',
+  })
 
-  async function loadDraftIfExists() {
-    // 草稿含 PII（姓名/生日/手機）→ 改 sessionStorage 避免跨 tab 關閉後仍殘留；
-    // 同時清掉舊版本殘留的 localStorage 草稿（升級遷移）。
-    try { localStorage.removeItem(DRAFT_KEY) } catch { /* silent */ }
-    const raw = sessionStorage.getItem(DRAFT_KEY)
-    if (!raw) return
-    try {
-      const draft = JSON.parse(raw)
-      if (!draft.name && !draft.birthday) return
-      await ElMessageBox.confirm(
-        '偵測到未完成的報名草稿，是否繼續填寫？',
-        '繼續上次的報名',
-        { confirmButtonText: '繼續', cancelButtonText: '重新填寫', type: 'info' }
-      )
-      Object.assign(form, draft)
-    } catch {
-      // 使用者選擇重新填寫或解析失敗，清除草稿
-      sessionStorage.removeItem(DRAFT_KEY)
+  // 手機 onBlur 後才即時校驗,避免使用者剛開始打字就被紅字干擾
+  const phoneTouched = ref(false)
+
+  const parentPhoneError = computed(() => {
+    if (errors.parent_phone) return errors.parent_phone
+    if (!phoneTouched.value || !form.parent_phone) return ''
+    return TW_MOBILE_RE.test(normalizeMobile(form.parent_phone))
+      ? ''
+      : '請輸入 09 開頭的 10 碼手機號碼'
+  })
+
+  // 生日輸入上下限（與後端 _validate_birthday_str 同步：20 年內、不可未來）
+  const maxBirthdayISO = computed(() => toISODate(new Date()))
+  const minBirthdayISO = computed(() => {
+    const d = new Date()
+    d.setFullYear(d.getFullYear() - 20)
+    return toISODate(d)
+  })
+
+  // 即時費用預覽（學費 + 用品分項合計）
+  // 候補課程仍計入估算（候補實際不收費,但家長對「最大金額」需有預期）
+  const feePreview = computed(() => {
+    const hasSelection =
+      form.selectedCourses.length > 0 || form.selectedSupplies.length > 0
+    if (!hasSelection) return null
+    const coursesTotal = form.selectedCourses.reduce(
+      (sum, name) => sum + priceOf(name, courses.value),
+      0,
+    )
+    const suppliesTotal = form.selectedSupplies.reduce(
+      (sum, name) => sum + priceOf(name, supplies.value),
+      0,
+    )
+    const waitlistCount = form.selectedCourses.reduce((n, name) => {
+      const remaining = availability.value[name]
+      return remaining !== undefined && remaining <= 0 ? n + 1 : n
+    }, 0)
+    return {
+      coursesTotal,
+      suppliesTotal,
+      total: coursesTotal + suppliesTotal,
+      courseCount: form.selectedCourses.length,
+      supplyCount: form.selectedSupplies.length,
+      waitlistCount,
     }
+  })
+
+  function clearError(field) {
+    if (errors[field]) errors[field] = ''
   }
 
-  const phoneError = computed(() => {
-    if (!form.parent_phone) return ''
-    const normalized = normalizeMobile(form.parent_phone)
-    if (!TW_MOBILE_RE.test(normalized)) return '請輸入 09 開頭的 10 碼手機號碼'
-    return ''
-  })
+  function validateForm() {
+    errors.name = ''
+    errors.birthday = ''
+    errors.parent_phone = ''
+    errors.class_name = ''
+    errors.courses = ''
 
-  const canSubmit = computed(() =>
-    form.name.trim() &&
-    form.birthday &&
-    form.class_name &&
-    TW_MOBILE_RE.test(normalizeMobile(form.parent_phone)) &&
-    form.selectedCourses.length > 0
-  )
+    const name = form.name.trim()
+    const birthday = form.birthday
+    const className = form.class_name
+    const parentPhone = normalizeMobile(form.parent_phone)
 
-  const totalCost = computed(() => {
-    const courseCost = form.selectedCourses.reduce((sum, name) => {
-      const c = courses.value.find(c => c.name === name)
-      return sum + (c?.price || 0)
-    }, 0)
-    const supplyCost = form.selectedSupplies.reduce((sum, name) => {
-      const s = supplies.value.find(s => s.name === name)
-      return sum + (s?.price || 0)
-    }, 0)
-    return courseCost + supplyCost
-  })
+    if (!name) errors.name = '請輸入幼兒姓名'
 
+    if (!birthday) {
+      errors.birthday = '請選擇幼兒生日'
+    } else {
+      const inputDate = new Date(birthday)
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      if (Number.isNaN(inputDate.getTime())) {
+        errors.birthday = '生日格式不正確'
+      } else if (inputDate > today) {
+        errors.birthday = '生日不可選擇未來日期'
+      } else {
+        const earliest = new Date(today)
+        earliest.setFullYear(earliest.getFullYear() - 20)
+        if (inputDate < earliest)
+          errors.birthday = '生日超出合理範圍，請再次確認'
+      }
+    }
+
+    if (!parentPhone) {
+      errors.parent_phone = '請輸入家長手機號碼'
+    } else if (!TW_MOBILE_RE.test(parentPhone)) {
+      errors.parent_phone = '請輸入 09 開頭的 10 碼手機號碼'
+    }
+
+    if (!className) errors.class_name = '請選擇寶貝班級'
+
+    if (form.selectedCourses.length === 0)
+      errors.courses = '請至少選擇一門才藝課'
+
+    return FIELD_FOCUS_ORDER.every((f) => !errors[f])
+  }
+
+  /**
+   * 切換報名課程選擇。額滿（availability=-1）擋下；候補（=0）允許。
+   * 此規則與 view 的 availabilityState(course).full 一致。
+   */
   function toggleCourse(course) {
-    if (availability.value[course.name] < 0) return
+    if (availability.value[course.name] === -1) return
     toggleArrayItem(form.selectedCourses, course.name)
   }
 
@@ -100,35 +171,22 @@ export function usePublicRegistrationForm({ courses, supplies, availability }) {
     form.class_name = ''
     form.selectedCourses = []
     form.selectedSupplies = []
-    form.notes = ''
-    sessionStorage.removeItem(DRAFT_KEY)
-  }
-
-  async function handleSubmit(onSuccess) {
-    submitting.value = true
-    try {
-      const res = await publicRegister({
-        name: form.name.trim(),
-        birthday: form.birthday,
-        parent_phone: normalizeMobile(form.parent_phone),
-        class: form.class_name,
-        courses: form.selectedCourses.map((name) => ({ name, price: '' })),
-        supplies: form.selectedSupplies.map((name) => ({ name, price: '' })),
-        remark: form.notes.trim(),
-      })
-      submitResult.value = res.data
-      sessionStorage.removeItem(DRAFT_KEY)
-      if (onSuccess) await onSuccess()
-    } catch (err) {
-      ElMessage.error(err.response?.data?.detail || '報名失敗，請稍後再試')
-    } finally {
-      submitting.value = false
-    }
   }
 
   return {
-    form, submitting, submitResult, supplyExpanded,
-    canSubmit, totalCost, phoneError,
-    toggleCourse, toggleSupply, resetForm, handleSubmit, loadDraftIfExists,
+    form,
+    errors,
+    phoneTouched,
+    parentPhoneError,
+    maxBirthdayISO,
+    minBirthdayISO,
+    feePreview,
+    validateForm,
+    clearError,
+    toggleCourse,
+    toggleSupply,
+    resetForm,
+    normalizeMobile,
+    FIELD_FOCUS_ORDER,
   }
 }
