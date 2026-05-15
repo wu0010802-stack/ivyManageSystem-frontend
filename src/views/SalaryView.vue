@@ -7,15 +7,16 @@ import BonusConfigPanel from './salary/BonusConfigPanel.vue'
 import DisciplinaryPanel from './salary/DisciplinaryPanel.vue'
 import ArtTeacherPayrollPanel from './salary/ArtTeacherPayrollPanel.vue'
 import SystemSettingsPanel from './salary/SystemSettingsPanel.vue'
-import InsuranceBracketsPanel from './salary/InsuranceBracketsPanel.vue'
 import SalaryHistoryPanel from './salary/SalaryHistoryPanel.vue'
 import SalarySimulatePanel from './salary/SalarySimulatePanel.vue'
 import SalaryLogicPanel from './salary/SalaryLogicPanel.vue'
 import SalarySnapshotDialog from './salary/SalarySnapshotDialog.vue'
 import SalaryBreakdown from './salary/SalaryBreakdown.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
-import { apiError } from '@/utils/error'
+import { useErrorNotify } from '@/composables/useErrorNotify'
 import { downloadFile } from '@/utils/download'
+
+const { notify } = useErrorNotify()
 import { money } from '@/utils/format'
 import { hasPermission } from '@/utils/auth'
 
@@ -108,7 +109,7 @@ const calculateSalary = async () => {
     }
     await fetchSalaryRecords()
   } catch (error) {
-    ElMessage.error('計算失敗: ' + apiError(error, error.message))
+    notify(error, 'SalaryView:calculate', null, { prefix: '計算失敗' })
   } finally {
     loading.value = false
   }
@@ -127,7 +128,7 @@ const fetchFestivalBonus = async () => {
     bonusResults.value = response.data
     showBonusDialog.value = true
   } catch (error) {
-    ElMessage.error('取得獎金資料失敗: ' + apiError(error, error.message))
+    notify(error, 'SalaryView:bonusData', null, { prefix: '取得獎金資料失敗' })
   } finally {
     bonusLoading.value = false
   }
@@ -144,7 +145,7 @@ const fetchPeriodAccrual = async () => {
     periodAccrualKey.value = key
   } catch (error) {
     periodAccrualError.value = true
-    ElMessage.error('取得本期累積失敗: ' + apiError(error, error.message))
+    notify(error, 'SalaryView:periodAccrual', null, { prefix: '取得本期累積失敗' })
   } finally {
     periodAccrualLoading.value = false
   }
@@ -341,7 +342,7 @@ const saveManualAdjust = async () => {
         fetchSalaryRecords()
       }).catch(() => {})
     } else {
-      ElMessage.error('儲存編輯失敗: ' + apiError(error, error.message))
+      notify(error, 'SalaryView:saveEdit', null, { prefix: '儲存編輯失敗' })
     }
   } finally {
     editLoading.value = false
@@ -361,7 +362,7 @@ const openFieldBreakdown = async (row, field) => {
     fieldBreakdown.value = response.data
     showFieldBreakdownDialog.value = true
   } catch (error) {
-    ElMessage.error('載入欄位明細失敗: ' + apiError(error, error.message))
+    notify(error, 'SalaryView:loadFieldDetail', null, { prefix: '載入欄位明細失敗' })
   } finally {
     fieldBreakdownLoading.value = false
   }
@@ -671,11 +672,6 @@ onMounted(() => {
       <!-- 薪資設定 -->
       <el-tab-pane v-if="canReadSalarySettings" label="薪資設定" name="bonus">
         <BonusConfigPanel v-if="activeTab === 'bonus'" />
-      </el-tab-pane>
-
-      <!-- 勞健保級距表 -->
-      <el-tab-pane v-if="canReadSalarySettings" label="勞健保級距" name="insurance_brackets">
-        <InsuranceBracketsPanel v-if="activeTab === 'insurance_brackets'" />
       </el-tab-pane>
 
       <!-- 懲處記錄 -->

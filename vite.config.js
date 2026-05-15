@@ -16,6 +16,17 @@ function manualChunks(id) {
         return 'vue-core'
     }
 
+    // A2 baseline bug fix：Vite 動態 import 的 __vitePreload runtime helper
+    // 預設會被 rollup 自動放進「第一個用到它的 chunk」（實測落在 parent-app），
+    // 導致 admin-core / public-app 等其他用 dynamic import 的 chunk 必須
+    // static-import parent-app 取得 helper → 各 entry HTML 被迫 preload
+    // parent-app 整包（家長端的 LIFF SDK / styles 等）。
+    // 固定到 vue-core 後三個 entry 都共享同一份 helper，
+    // 不再連鎖拉入彼此的 chunk。
+    if (id.includes('vite/preload-helper')) {
+        return 'vue-core'
+    }
+
     if (!id.includes('node_modules') && !id.includes('/src/')) {
         return
     }
@@ -112,6 +123,15 @@ function manualChunks(id) {
 
     if (id.includes('chart.js') || id.includes('vue-chartjs')) {
         return 'chart-vendor'
+    }
+
+    // A3: echarts 整包約 300 KB raw / ~95 KB gz；MeasurementChart 內部 dynamic import
+    // → 落獨立 chunk，不會被 fall-through 推進主 vendor。
+    if (
+        id.includes('/node_modules/echarts/') ||
+        id.includes('/node_modules/zrender/')
+    ) {
+        return 'echarts'
     }
 
     if (id.includes('element-plus') || id.includes('@element-plus')) {
