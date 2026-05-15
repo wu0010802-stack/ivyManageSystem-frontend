@@ -12,6 +12,8 @@ import {
 } from '@/composables/useAcademicAffairsFilters'
 import AttendanceSection from '@/components/student/academic-affairs/AttendanceSection.vue'
 import LeaveSection from '@/components/student/academic-affairs/LeaveSection.vue'
+import AssessmentSection from '@/components/student/academic-affairs/AssessmentSection.vue'
+import IncidentSection from '@/components/student/academic-affairs/IncidentSection.vue'
 
 const termStore = useAcademicTermStore()
 const {
@@ -205,12 +207,8 @@ onMounted(async () => {
     <div class="sections-grid">
       <AttendanceSection />
       <LeaveSection />
-      <el-card shadow="never" class="section-placeholder">
-        <el-empty description="評量區塊（待掛載）" :image-size="60" />
-      </el-card>
-      <el-card shadow="never" class="section-placeholder">
-        <el-empty description="事件區塊（待掛載）" :image-size="60" />
-      </el-card>
+      <AssessmentSection :classrooms="classrooms" />
+      <IncidentSection :classrooms="classrooms" />
     </div>
   </div>
 </template>
