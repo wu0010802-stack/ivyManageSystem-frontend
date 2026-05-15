@@ -1,20 +1,36 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
+import { useCachedAsync } from '@/composables/useCachedAsync'
+import { getDashboard, getFinanceSummary } from '@/api/reports'
 import { Money, Coin, Wallet, TrendCharts, Calendar, Check, DataAnalysis } from '@element-plus/icons-vue'
 import { money } from '@/utils/format'
 
 const props = defineProps({
-  finance: {
-    type: Object,
-    default: () => null,
-  },
-  dashboard: {
-    type: Object,
-    default: () => ({}),
-  },
+  year: { type: Number, required: true },
 })
 
-const summary = computed(() => props.finance?.summary || {
+const dashboard = useCachedAsync(
+  `reports/dashboard:${props.year}`,
+  () => getDashboard({ year: props.year }).then(r => r.data),
+  { ttl: 300_000 }
+)
+const finance = useCachedAsync(
+  `reports/finance:${props.year}`,
+  () => getFinanceSummary(props.year).then(r => r.data),
+  { ttl: 300_000 }
+)
+
+watch(() => props.year, () => {
+  dashboard.refresh(false)
+  finance.refresh(false)
+})
+
+const loading = computed(() =>
+  (dashboard.pending.value && !dashboard.data.value) ||
+  (finance.pending.value && !finance.data.value)
+)
+
+const summary = computed(() => finance.data.value?.summary || {
   total_revenue: 0,
   total_refund: 0,
   net_revenue: 0,
@@ -22,10 +38,9 @@ const summary = computed(() => props.finance?.summary || {
   net_cashflow: 0,
 })
 
-// MoM：從 monthly_trend 找當月（系統月份）與上月，算變化百分比
 const currentMonth = new Date().getMonth() + 1
 const mom = computed(() => {
-  const trend = props.finance?.monthly_trend || []
+  const trend = finance.data.value?.monthly_trend || []
   if (!trend.length) return null
   const curr = trend.find(r => r.month === currentMonth) || null
   const prev = trend.find(r => r.month === currentMonth - 1) || null
@@ -49,9 +64,9 @@ const netClass = computed(() => {
 })
 
 const avgAttendanceRate = computed(() => {
-  const data = props.dashboard?.attendance_monthly || []
-  if (!data.length) return null
-  return (data.reduce((s, d) => s + (d.rate || 0), 0) / data.length).toFixed(1)
+  const arr = dashboard.data.value?.attendance_monthly || []
+  if (!arr.length) return null
+  return (arr.reduce((s, d) => s + (d.rate || 0), 0) / arr.length).toFixed(1)
 })
 
 const formatPct = (v) => {
@@ -62,7 +77,8 @@ const formatPct = (v) => {
 </script>
 
 <template>
-  <div class="overview">
+  <el-skeleton v-if="loading" :rows="10" animated />
+  <div v-else class="overview">
     <el-row :gutter="16" class="kpi-row">
       <el-col :xs="12" :sm="6">
         <el-card class="kpi-card kpi-card--blue" shadow="hover">
