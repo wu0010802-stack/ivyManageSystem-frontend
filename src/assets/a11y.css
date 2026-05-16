@@ -146,6 +146,39 @@ html.dark ::-webkit-scrollbar-thumb:hover {
   background: #64748b;
 }
 
+/* StatCard filled variant 在 light 下使用寫死 pastel hex bg（#eef0fd 等），dark
+ * 下會變成「淺底 + 翻轉後的亮 label」對比不足。改用 EP 對應的 *-light-9 系列
+ * （EP dark css 內已預先計算為深色 alpha tinted），label 拉回 text-secondary。 */
+html.dark .stat-card--filled.stat-card--primary { background: var(--el-color-primary-light-9); }
+html.dark .stat-card--filled.stat-card--success { background: var(--el-color-success-light-9); }
+html.dark .stat-card--filled.stat-card--warning { background: var(--el-color-warning-light-9); }
+html.dark .stat-card--filled.stat-card--danger  { background: var(--el-color-danger-light-9); }
+html.dark .stat-card--filled.stat-card--info    { background: var(--el-color-info-light-9); }
+html.dark .stat-card--filled .stat-card__label { color: var(--text-secondary); }
+html.dark .stat-card--filled.stat-card--primary .stat-card__value { color: var(--brand-primary); }
+html.dark .stat-card--filled.stat-card--success .stat-card__value { color: #6ee7b7; }
+html.dark .stat-card--filled.stat-card--warning .stat-card__value { color: #fcd34d; }
+html.dark .stat-card--filled.stat-card--danger  .stat-card__value { color: #fca5a5; }
+html.dark .stat-card--filled.stat-card--info    .stat-card__value { color: #93c5fd; }
+
+/* EP plain primary button 在 dark 下：main.css 用 var(--color-primary) !important
+ * 強蓋 bg 為 brand indigo（亮）導致與 EP 的 button text（藍 #409eff）對比差。
+ * 在 dark scope 內把 EP primary token 對齊 brand indigo（讓 button text 也走
+ * indigo），plain variant 顯式套深色背景，避免 main.css 的 !important 蓋掉。 */
+html.dark {
+  --el-color-primary: #818cf8;
+  --el-color-primary-dark-2: #a5b4fc;
+}
+html.dark .el-button--primary.is-plain {
+  background-color: rgba(129, 140, 248, 0.16) !important;
+  border-color: rgba(129, 140, 248, 0.45) !important;
+  color: #a5b4fc !important;
+}
+html.dark .el-button--primary.is-plain:hover {
+  background-color: rgba(129, 140, 248, 0.28) !important;
+  color: #c7d2fe !important;
+}
+
 /* AdminSidebar / PortalLayout 側欄在 light 下故意用 neutral 深階做「暗色側欄」
  * （background: var(--text-primary) / var(--neutral-900) / var(--neutral-700)）。
  * 翻 neutral 後它會吃到淺階變成「白底白字」。在 sidebar scope 內還原成 light
