@@ -82,6 +82,22 @@ export const exportAppraisalCycleXlsxUrl = (cycleId) =>
 export const exportAppraisalTransferRosterXlsxUrl = (cycleId) =>
   `${api.defaults.baseURL || '/api'}/appraisal/cycles/${cycleId}/transfer_roster.xlsx`
 
+// ============ Current Semester（M5 重構：當期狀態彙整）============
+
+export const getAppraisalCurrentCycle = (params = {}) =>
+  api.get('/appraisal/current', { params })
+
+export const getAppraisalCyclesByYear = (academicYear) =>
+  api.get(`/appraisal/by_year/${academicYear}`)
+
+export const getAppraisalAggregatedStatus = (cycleId) =>
+  api.get(`/appraisal/cycles/${cycleId}/aggregated_status`)
+
+export const syncAppraisalScoreItems = (cycleId, { dryRun = false } = {}) =>
+  api.post(`/appraisal/cycles/${cycleId}/sync_score_items`, null, {
+    params: { dry_run: dryRun },
+  })
+
 // ============ Deprecated（M1 重構後不再實作；保留 stub 讓舊 view 仍能 import）============
 // 舊 view 元件（CycleEventsSection / CycleSummariesSection / PenaltyCatalogPanel /
 // BonusRatesPanel）仍 import 這些函式名稱。實際呼叫會回傳 410 Gone。
