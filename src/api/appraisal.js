@@ -82,27 +82,28 @@ export const exportAppraisalCycleXlsxUrl = (cycleId) =>
 export const exportAppraisalTransferRosterXlsxUrl = (cycleId) =>
   `${api.defaults.baseURL || '/api'}/appraisal/cycles/${cycleId}/transfer_roster.xlsx`
 
-// ============ Deprecated（M1 重構後不再實作；保留 stub 讓舊 view 仍能 import）============
-// 舊 view 元件（CycleEventsSection / CycleSummariesSection / PenaltyCatalogPanel /
-// BonusRatesPanel）仍 import 這些函式名稱。實際呼叫會回傳 410 Gone。
+// ============ Current Semester（M5 重構：當期狀態彙整）============
 
-const _deprecated = (name) => () =>
-  Promise.reject(new Error(`${name} 已於 M1 重構移除，請改用新 API`))
+export const getAppraisalCurrentCycle = (params = {}) =>
+  api.get('/appraisal/current', { params })
 
-export const lockAppraisalCycle = _deprecated('lockAppraisalCycle')
-export const unlockAppraisalCycle = _deprecated('unlockAppraisalCycle')
-export const closeAppraisalCycle = _deprecated('closeAppraisalCycle')
-export const bulkInitAppraisalParticipants = _deprecated('bulkInitAppraisalParticipants')
-export const getAppraisalParticipant = _deprecated('getAppraisalParticipant')
-export const listAppraisalEvents = _deprecated('listAppraisalEvents')
-export const createAppraisalEvent = _deprecated('createAppraisalEvent')
-export const patchAppraisalEvent = _deprecated('patchAppraisalEvent')
-export const revertAppraisalEvent = _deprecated('revertAppraisalEvent')
-export const listPenaltyCatalog = _deprecated('listPenaltyCatalog')
-export const createPenaltyCatalogItem = _deprecated('createPenaltyCatalogItem')
-export const patchPenaltyCatalogItem = _deprecated('patchPenaltyCatalogItem')
-export const togglePenaltyCatalogItem = _deprecated('togglePenaltyCatalogItem')
-export const rejectAppraisalSummary = _deprecated('rejectAppraisalSummary')
-export const getAppraisalReport = _deprecated('getAppraisalReport')
-export const getPenaltyLog = _deprecated('getPenaltyLog')
-export const getParticipantSheet = _deprecated('getParticipantSheet')
+export const getAppraisalCyclesByYear = (academicYear) =>
+  api.get(`/appraisal/by_year/${academicYear}`)
+
+export const getAppraisalAggregatedStatus = (cycleId) =>
+  api.get(`/appraisal/cycles/${cycleId}/aggregated_status`)
+
+export const syncAppraisalScoreItems = (cycleId, { dryRun = false } = {}) =>
+  api.post(`/appraisal/cycles/${cycleId}/sync_score_items`, null, {
+    params: { dry_run: dryRun },
+  })
+
+// ============ Penalty Catalog stubs（baseline build fix）============
+// PenaltyCatalogPanel.vue 引用這兩個名稱，但後端目前未實作對應 endpoint；
+// 在 endpoint 落地前保留 stub 讓 import / build 不失敗。
+const _notImplemented = (name) => () =>
+  Promise.reject(new Error(`${name} 後端尚未實作`))
+
+export const listAppraisalPenaltyCatalog = _notImplemented('listAppraisalPenaltyCatalog')
+export const patchAppraisalPenaltyCatalog = _notImplemented('patchAppraisalPenaltyCatalog')
+

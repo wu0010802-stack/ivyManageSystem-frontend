@@ -2,13 +2,17 @@
 import { ref } from 'vue'
 import BonusRatesPanel from './components/BonusRatesPanel.vue'
 import PenaltyCatalogPanel from './components/PenaltyCatalogPanel.vue'
+import YearlyEnrollmentTargetSection from './YearlyEnrollmentTargetSection.vue'
 
-const activeTab = ref('bonus_rates')
+const activeTab = ref('enrollment_targets')
 </script>
 
 <template>
   <div class="appraisal-settings-view">
     <el-tabs v-model="activeTab">
+      <el-tab-pane label="學年目標人數" name="enrollment_targets">
+        <YearlyEnrollmentTargetSection v-if="activeTab === 'enrollment_targets'" />
+      </el-tab-pane>
       <el-tab-pane label="年終獎金率" name="bonus_rates">
         <BonusRatesPanel v-if="activeTab === 'bonus_rates'" />
       </el-tab-pane>
