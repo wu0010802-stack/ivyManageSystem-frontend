@@ -1,0 +1,381 @@
+<script setup>
+/**
+ * YearlyEnrollmentTargetSection — 學年度目標人數設定
+ *
+ * 上下學期 side-by-side 卡片明確區分目標人數，可分別編輯。
+ * 缺學期 cycle 時提供 placeholder 含「建立本學期週期」捷徑，
+ * 預設 base_score_calc_date 上 9/15、下 3/15。
+ */
+import { computed, onMounted, ref, watch } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Plus, Check } from '@element-plus/icons-vue'
+
+import {
+  getAppraisalCyclesByYear,
+  createAppraisalCycle,
+  patchAppraisalCycle,
+} from '@/api/appraisal'
+import { useErrorNotify } from '@/composables/useErrorNotify'
+import {
+  getCurrentAcademicTerm,
+  buildSchoolYearOptions,
+} from '@/utils/academic'
+
+const { notify } = useErrorNotify()
+
+const currentTerm = getCurrentAcademicTerm()
+const selectedYear = ref(currentTerm.school_year)
+const yearOptions = computed(() => buildSchoolYearOptions(currentTerm.school_year, 5))
+
+const cycles = ref([]) // 0-2 筆 CycleOut
+const loading = ref(false)
+
+const firstCycle = computed(() => cycles.value.find((c) => c.semester === 'FIRST') || null)
+const secondCycle = computed(() => cycles.value.find((c) => c.semester === 'SECOND') || null)
+
+async function load() {
+  loading.value = true
+  try {
+    const { data } = await getAppraisalCyclesByYear(selectedYear.value)
+    cycles.value = Array.isArray(data) ? data : []
+  } catch (e) {
+    notify(e, 'YearlyEnrollmentTargetSection:load', '載入學年週期失敗')
+    cycles.value = []
+  } finally {
+    loading.value = false
+  }
+}
+
+watch(selectedYear, load)
+onMounted(load)
+
+// ── 編輯模式 state（per semester）──────────────────────────
+const editing = ref({ FIRST: false, SECOND: false })
+const editForm = ref({
+  FIRST: { enrollment_target: 0, enrollment_actual: null },
+  SECOND: { enrollment_target: 0, enrollment_actual: null },
+})
+const savingSemester = ref({ FIRST: false, SECOND: false })
+
+function startEdit(cycle) {
+  editForm.value[cycle.semester] = {
+    enrollment_target: cycle.enrollment_target ?? 0,
+    enrollment_actual: cycle.enrollment_actual ?? null,
+  }
+  editing.value[cycle.semester] = true
+}
+
+function cancelEdit(semester) {
+  editing.value[semester] = false
+}
+
+async function saveEdit(cycle) {
+  const semester = cycle.semester
+  savingSemester.value[semester] = true
+  try {
+    await patchAppraisalCycle(cycle.id, {
+      enrollment_target: editForm.value[semester].enrollment_target,
+      enrollment_actual: editForm.value[semester].enrollment_actual,
+    })
+    ElMessage.success('已更新目標人數')
+    editing.value[semester] = false
+    await load()
+  } catch (e) {
+    notify(e, 'YearlyEnrollmentTargetSection:save', '更新失敗')
+  } finally {
+    savingSemester.value[semester] = false
+  }
+}
+
+// ── 建立學期 cycle ─────────────────────────────────────────
+const creating = ref({ FIRST: false, SECOND: false })
+
+function defaultDatesFor(schoolYear, semesterEnum) {
+  // schoolYear 為民國
+  const yearAD = Number(schoolYear) + 1911
+  if (semesterEnum === 'FIRST') {
+    return {
+      start_date: `${yearAD}-08-01`,
+      end_date: `${yearAD + 1}-01-31`,
+      base_score_calc_date: `${yearAD}-09-15`,
+    }
+  }
+  return {
+    start_date: `${yearAD + 1}-02-01`,
+    end_date: `${yearAD + 1}-07-31`,
+    base_score_calc_date: `${yearAD + 1}-03-15`,
+  }
+}
+
+async function createForSemester(semesterEnum) {
+  const label = semesterEnum === 'FIRST' ? '上' : '下'
+  try {
+    await ElMessageBox.confirm(
+      `將為 ${selectedYear.value} 學年度${label}學期建立考核週期，確定嗎？`,
+      '建立考核週期',
+      { type: 'info' },
+    )
+  } catch {
+    return
+  }
+  creating.value[semesterEnum] = true
+  try {
+    const dates = defaultDatesFor(selectedYear.value, semesterEnum)
+    await createAppraisalCycle({
+      academic_year: selectedYear.value,
+      semester: semesterEnum,
+      ...dates,
+      enrollment_target: 0,
+      enrollment_actual: null,
+    })
+    ElMessage.success('已建立')
+    await load()
+  } catch (e) {
+    notify(e, 'YearlyEnrollmentTargetSection:create', '建立失敗')
+  } finally {
+    creating.value[semesterEnum] = false
+  }
+}
+</script>
+
+<template>
+  <div class="yearly-target-section" v-loading="loading">
+    <div class="toolbar">
+      <label class="year-label">學年度</label>
+      <el-select
+        v-model="selectedYear"
+        style="width: 160px"
+        data-test="year-selector"
+      >
+        <el-option
+          v-for="y in yearOptions"
+          :key="y"
+          :value="y"
+          :label="`${y} 學年度`"
+        />
+      </el-select>
+    </div>
+
+    <div class="semester-grid">
+      <!-- 上學期 -->
+      <div class="semester-card" data-test="card-first">
+        <div class="semester-card__header">
+          <span class="semester-card__title">上學期 (FIRST)</span>
+          <el-tag v-if="firstCycle" size="small" type="success">已建立</el-tag>
+          <el-tag v-else size="small" type="info">未建立</el-tag>
+        </div>
+        <template v-if="firstCycle">
+          <template v-if="!editing.FIRST">
+            <el-descriptions :column="1" border size="small">
+              <el-descriptions-item label="目標人數">
+                {{ firstCycle.enrollment_target ?? '—' }}
+              </el-descriptions-item>
+              <el-descriptions-item label="實際註冊">
+                {{ firstCycle.enrollment_actual ?? '—' }}
+              </el-descriptions-item>
+              <el-descriptions-item label="基礎分數">
+                {{ firstCycle.base_score != null ? Number(firstCycle.base_score).toFixed(1) : '—' }}
+              </el-descriptions-item>
+              <el-descriptions-item label="基準日">
+                {{ firstCycle.base_score_calc_date || '—' }}
+              </el-descriptions-item>
+            </el-descriptions>
+            <div class="semester-card__actions">
+              <el-button
+                size="small"
+                type="primary"
+                data-test="edit-first-btn"
+                @click="startEdit(firstCycle)"
+              >
+                編輯
+              </el-button>
+            </div>
+          </template>
+          <template v-else>
+            <el-form label-width="100px" size="small">
+              <el-form-item label="目標人數">
+                <el-input-number
+                  v-model="editForm.FIRST.enrollment_target"
+                  :min="0"
+                  data-test="edit-first-target"
+                />
+              </el-form-item>
+              <el-form-item label="實際註冊">
+                <el-input-number
+                  v-model="editForm.FIRST.enrollment_actual"
+                  :min="0"
+                />
+              </el-form-item>
+            </el-form>
+            <div class="semester-card__actions">
+              <el-button size="small" @click="cancelEdit('FIRST')">取消</el-button>
+              <el-button
+                size="small"
+                type="primary"
+                :icon="Check"
+                :loading="savingSemester.FIRST"
+                data-test="save-first-btn"
+                @click="saveEdit(firstCycle)"
+              >
+                儲存
+              </el-button>
+            </div>
+          </template>
+        </template>
+        <template v-else>
+          <el-empty description="本學期尚未建立考核週期" :image-size="80">
+            <el-button
+              type="primary"
+              :icon="Plus"
+              :loading="creating.FIRST"
+              data-test="create-first-btn"
+              @click="createForSemester('FIRST')"
+            >
+              建立本學期週期
+            </el-button>
+          </el-empty>
+        </template>
+      </div>
+
+      <!-- 下學期 -->
+      <div class="semester-card" data-test="card-second">
+        <div class="semester-card__header">
+          <span class="semester-card__title">下學期 (SECOND)</span>
+          <el-tag v-if="secondCycle" size="small" type="success">已建立</el-tag>
+          <el-tag v-else size="small" type="info">未建立</el-tag>
+        </div>
+        <template v-if="secondCycle">
+          <template v-if="!editing.SECOND">
+            <el-descriptions :column="1" border size="small">
+              <el-descriptions-item label="目標人數">
+                {{ secondCycle.enrollment_target ?? '—' }}
+              </el-descriptions-item>
+              <el-descriptions-item label="實際註冊">
+                {{ secondCycle.enrollment_actual ?? '—' }}
+              </el-descriptions-item>
+              <el-descriptions-item label="基礎分數">
+                {{ secondCycle.base_score != null ? Number(secondCycle.base_score).toFixed(1) : '—' }}
+              </el-descriptions-item>
+              <el-descriptions-item label="基準日">
+                {{ secondCycle.base_score_calc_date || '—' }}
+              </el-descriptions-item>
+            </el-descriptions>
+            <div class="semester-card__actions">
+              <el-button
+                size="small"
+                type="primary"
+                data-test="edit-second-btn"
+                @click="startEdit(secondCycle)"
+              >
+                編輯
+              </el-button>
+            </div>
+          </template>
+          <template v-else>
+            <el-form label-width="100px" size="small">
+              <el-form-item label="目標人數">
+                <el-input-number
+                  v-model="editForm.SECOND.enrollment_target"
+                  :min="0"
+                  data-test="edit-second-target"
+                />
+              </el-form-item>
+              <el-form-item label="實際註冊">
+                <el-input-number
+                  v-model="editForm.SECOND.enrollment_actual"
+                  :min="0"
+                />
+              </el-form-item>
+            </el-form>
+            <div class="semester-card__actions">
+              <el-button size="small" @click="cancelEdit('SECOND')">取消</el-button>
+              <el-button
+                size="small"
+                type="primary"
+                :icon="Check"
+                :loading="savingSemester.SECOND"
+                data-test="save-second-btn"
+                @click="saveEdit(secondCycle)"
+              >
+                儲存
+              </el-button>
+            </div>
+          </template>
+        </template>
+        <template v-else>
+          <el-empty description="本學期尚未建立考核週期" :image-size="80">
+            <el-button
+              type="primary"
+              :icon="Plus"
+              :loading="creating.SECOND"
+              data-test="create-second-btn"
+              @click="createForSemester('SECOND')"
+            >
+              建立本學期週期
+            </el-button>
+          </el-empty>
+        </template>
+      </div>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.yearly-target-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.year-label {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.semester-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+@media (max-width: 720px) {
+  .semester-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.semester-card {
+  background: var(--neutral-0);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 200px;
+}
+
+.semester-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.semester-card__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.semester-card__actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+</style>
