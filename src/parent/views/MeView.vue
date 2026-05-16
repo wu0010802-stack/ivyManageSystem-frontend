@@ -11,6 +11,7 @@ import UserHeroCard from '../components/more/UserHeroCard.vue'
 import AppearanceSettings from '../components/more/AppearanceSettings.vue'
 import FeeSummaryCard from '../components/me/FeeSummaryCard.vue'
 import ChildrenList from '../components/me/ChildrenList.vue'
+import ParentIcon from '../components/ParentIcon.vue'
 
 const router = useRouter()
 const authStore = useParentAuthStore()
@@ -78,9 +79,9 @@ onMounted(async () => {
     <section class="prefs">
       <h2 class="title">偏好設定</h2>
       <router-link to="/notifications/preferences" class="pref-link">
-        <span class="icon" aria-hidden="true">🔔</span>
+        <ParentIcon name="bell" size="md" class="icon" />
         <span class="label">通知偏好</span>
-        <span class="chev" aria-hidden="true">›</span>
+        <ParentIcon name="chevron-right" size="sm" class="chev" />
       </router-link>
       <AppearanceSettings />
     </section>
@@ -115,8 +116,9 @@ onMounted(async () => {
   padding: var(--space-2, 8px) 0;
   text-decoration: none; color: inherit;
 }
+.pref-link .icon { color: var(--brand-primary); }
 .pref-link .label { flex: 1; }
-.pref-link .chev { color: var(--m3-on-surface-variant, var(--pt-text-placeholder)); font-size: 20px; }
+.pref-link .chev { color: var(--m3-on-surface-variant, var(--pt-text-placeholder)); }
 .logout {
   width: 100%;
   min-height: var(--touch-target-min, 44px);

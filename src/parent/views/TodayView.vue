@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getHomeSummary } from '../api/profile'
 import { useParentAuthStore } from '../stores/parentAuth'
@@ -16,9 +16,6 @@ import LaurelWreath from '@/components/brand/LaurelWreath.vue'
 
 const router = useRouter()
 const authStore = useParentAuthStore()
-
-const IA_V2_BANNER_KEY = 'parent_ia_v2_migration_banner_seen'
-const showMigrationBanner = ref(false)
 
 const { status: todayStatus, refresh: refreshToday } = useTodayStatusCache()
 const todayChildren = computed(() => todayStatus.value?.children || [])
@@ -45,35 +42,53 @@ const showPushCta = computed(() => me.value && !me.value.can_push)
 
 onMounted(() => {
   refreshToday()
-  if (typeof window !== 'undefined' && !localStorage.getItem(IA_V2_BANNER_KEY)) {
-    showMigrationBanner.value = true
-  }
 })
-
-function dismissBanner() {
-  showMigrationBanner.value = false
-  if (typeof window !== 'undefined') {
-    localStorage.setItem(IA_V2_BANNER_KEY, '1')
-  }
-}
 
 const { buckets } = useTodayTimeline({ summary, todayChildren })
 
-const todayDayLabel = computed(() => {
+const todayDateLine = computed(() => {
   const d = new Date()
-  return `${d.getMonth() + 1} 月 ${d.getDate()} 日`
+  const wd = ['日', '一', '二', '三', '四', '五', '六'][d.getDay()]
+  return `${d.getMonth() + 1} 月 ${d.getDate()} 日　星期${wd}`
 })
-const weekdayLabel = computed(() => {
-  const wd = ['日', '一', '二', '三', '四', '五', '六'][new Date().getDay()]
-  return `星期${wd}`
-})
-const greeting = computed(() => {
-  const h = new Date().getHours()
-  if (h < 5) return '夜深了'
-  if (h < 11) return '早安'
-  if (h < 14) return '午安'
-  if (h < 18) return '下午好'
-  return '晚安'
+
+function isOffDay() {
+  const d = new Date().getDay()
+  return d === 0 || d === 6
+}
+
+function childStatusLabel(c) {
+  if (!c) return isOffDay() ? '今天放假' : '尚未到校'
+  if (c.dismissal?.status === 'completed') return '已離園'
+  if (c.attendance) return c.attendance.status || '在園中'
+  if (c.leave) return '請假'
+  return isOffDay() ? '今天放假' : '尚未到校'
+}
+
+// hero = 今日狀態（以孩子為主角，不是問候家長）
+const hero = computed(() => {
+  const tc = todayChildren.value || []
+  if (tc.length === 0) {
+    if (!summaryData.value) return null
+    return {
+      kind: 'empty',
+      label: '尚未綁定子女',
+      note: '可從「我的」分頁加綁，或請園所協助。',
+    }
+  }
+  if (tc.length === 1) {
+    const c = tc[0]
+    return {
+      kind: 'single',
+      label: childStatusLabel(c),
+      note: [c.name, c.classroom_name].filter(Boolean).join('　·　') || null,
+    }
+  }
+  return {
+    kind: 'multi',
+    label: `今天 ${tc.length} 位小朋友`,
+    note: null,
+  }
 })
 
 async function pullRefresh() {
@@ -100,26 +115,10 @@ function go(path) {
         class="today-laurel"
         aria-hidden="true"
       />
-      <span class="today-weekday">{{ weekdayLabel }}</span>
-      <h1 class="today-day">{{ todayDayLabel }}</h1>
-      <p class="today-greeting">
-        {{ greeting }}，{{ me?.name || '家長' }}
-      </p>
+      <p class="today-date">{{ todayDateLine }}</p>
+      <h1 v-if="hero" class="today-hero">{{ hero.label }}</h1>
+      <p v-if="hero?.note" class="today-note">{{ hero.note }}</p>
     </header>
-
-    <div
-      v-if="showMigrationBanner"
-      class="ia-banner"
-      role="status"
-    >
-      <span>公告／出席已移至底部「家校」分頁</span>
-      <button
-        type="button"
-        class="ia-banner-close"
-        aria-label="關閉"
-        @click="dismissBanner"
-      >×</button>
-    </div>
 
     <PushCta v-if="showPushCta" @enable="go('/notifications/preferences')" />
 
@@ -158,12 +157,11 @@ function go(path) {
 
 .today-head {
   position: relative;
-  padding: var(--space-8, 32px) var(--space-4, 16px) var(--space-4, 16px);
+  padding: 28px var(--space-4, 16px) var(--space-3, 12px);
   overflow: hidden;
   isolation: isolate;
   display: flex;
   flex-direction: column;
-  gap: var(--space-1, 4px);
 }
 .today-laurel {
   position: absolute;
@@ -171,51 +169,26 @@ function go(path) {
   bottom: -36px;
   z-index: -1;
 }
-.today-weekday {
-  font-size: var(--text-xs, 12px);
-  font-weight: 800;
-  color: var(--brand-primary);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-.today-day {
+.today-date {
   margin: 0;
-  font-size: var(--text-4xl, 32px);
-  font-weight: 900;
-  line-height: 1.05;
-  letter-spacing: -0.02em;
+  font-size: var(--text-sm, 13px);
+  font-weight: 600;
+  color: var(--pt-text-muted);
+  letter-spacing: 0.02em;
+}
+.today-hero {
+  margin: var(--space-2, 8px) 0 0;
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
   color: var(--pt-text-strong);
 }
-.today-greeting {
+.today-note {
   margin: var(--space-2, 8px) 0 0;
   font-size: var(--text-base, 15px);
   color: var(--pt-text-muted);
-  font-weight: 600;
-}
-
-.ia-banner {
-  margin: 0 var(--space-4, 16px);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3, 12px);
-  padding: var(--space-3, 12px) var(--space-4, 16px);
-  background: var(--brand-tint-yellow, #fff7d6);
-  border-radius: var(--radius-md, 10px);
-  font-size: var(--text-sm, 13px);
-  font-weight: 600;
-  color: var(--pt-text-strong);
-}
-.ia-banner-close {
-  background: transparent;
-  border: 0;
-  font-size: 18px;
-  line-height: 1;
-  padding: 0 var(--space-2, 8px);
-  cursor: pointer;
-  color: var(--pt-text-muted);
-  min-height: var(--touch-target-min, 44px);
-  min-width: var(--touch-target-min, 44px);
+  font-weight: 500;
 }
 
 .skeleton-wrap {
@@ -230,8 +203,8 @@ function go(path) {
 }
 
 @media (min-width: 420px) {
-  .today-day {
-    font-size: 38px;
+  .today-hero {
+    font-size: 34px;
   }
 }
 </style>

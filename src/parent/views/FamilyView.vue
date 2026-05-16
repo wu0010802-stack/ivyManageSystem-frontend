@@ -50,14 +50,14 @@ const { data: summaryData, refresh: refreshSummary } = useCachedAsync(
 watch(selectedId, () => refreshTimeline(true))
 
 const ENTRIES = [
-  { key: 'contact_book', label: '聯絡簿', icon: 'notebook', tint: 'contact', path: '/contact-book' },
-  { key: 'attendance', label: '出席', icon: 'calendar', tint: 'attendance', path: '/attendance' },
-  { key: 'announcement', label: '公告', icon: 'megaphone', tint: 'announcement', path: '/announcements' },
-  { key: 'calendar', label: '本週', icon: 'calendar', tint: 'calendar', path: '/calendar' },
-  { key: 'leave', label: '請假', icon: 'clipboard', tint: 'leave', path: '/leaves' },
-  { key: 'medication', label: '用藥', icon: 'pill', tint: 'medication', path: '/medications' },
-  { key: 'activity', label: '才藝', icon: 'art', tint: 'activity', path: '/activity' },
-  { key: 'event_ack', label: '簽閱', icon: 'signature', tint: 'event', path: '/events' },
+  { key: 'contact_book', label: '聯絡簿', icon: 'notebook', path: '/contact-book' },
+  { key: 'attendance', label: '出席', icon: 'calendar', path: '/attendance' },
+  { key: 'announcement', label: '公告', icon: 'megaphone', path: '/announcements' },
+  { key: 'calendar', label: '本週', icon: 'calendar', path: '/calendar' },
+  { key: 'leave', label: '請假', icon: 'clipboard', path: '/leaves' },
+  { key: 'medication', label: '用藥', icon: 'pill', path: '/medications' },
+  { key: 'activity', label: '才藝', icon: 'art', path: '/activity' },
+  { key: 'event_ack', label: '簽閱', icon: 'signature', path: '/events' },
 ]
 
 const badges = computed(() => {

@@ -23,7 +23,6 @@ function badgeOf(key) {
         :key="e.key"
         :to="e.path"
         class="cell"
-        :data-tint="e.tint"
       >
         <span class="icon-wrap">
           <ParentIcon :name="e.icon" size="md" />
@@ -53,16 +52,27 @@ function badgeOf(key) {
   text-decoration: none; color: inherit;
   padding: var(--space-3, 12px) var(--space-1, 4px);
   border-radius: var(--radius-md, 10px);
-  background: var(--brand-tint-default, var(--neutral-50));
+  background: var(--ivy-leaf-bg, #f5fbe6);
   min-height: 72px;
+  transition: background 120ms ease;
 }
-.cell:active { transform: scale(0.96); }
+.cell:active {
+  background: var(--brand-primary-soft, #d4ffe7);
+  transform: scale(0.96);
+}
+.cell .parent-icon, .cell :deep(.parent-icon) {
+  color: var(--brand-primary);
+}
 .icon-wrap {
   position: relative;
   width: 32px; height: 32px;
   display: inline-flex; align-items: center; justify-content: center;
 }
-.label { font-size: var(--text-xs, 11px); }
+.label {
+  font-size: var(--text-xs, 11px);
+  color: var(--pt-text-body);
+  font-weight: 500;
+}
 .badge {
   position: absolute; top: -6px; right: -10px;
   background: var(--color-danger); color: var(--neutral-0);
@@ -71,14 +81,4 @@ function badgeOf(key) {
   line-height: 1.4; font-variant-numeric: tabular-nums;
   box-shadow: 0 0 0 2px var(--pt-surface-card, var(--neutral-0));
 }
-
-/* tint variants — 對應 IvyKids 童彩 6 色 */
-.cell[data-tint="contact"] { background: var(--brand-tint-mint, #e6f7f0); }
-.cell[data-tint="attendance"] { background: var(--brand-tint-sky, #e6f0fa); }
-.cell[data-tint="announcement"] { background: var(--brand-tint-yellow, #fff7d6); }
-.cell[data-tint="calendar"] { background: var(--brand-tint-pink, #fde6ee); }
-.cell[data-tint="leave"] { background: var(--brand-tint-peach, #ffe8d6); }
-.cell[data-tint="medication"] { background: var(--brand-tint-lavender, #ede6fa); }
-.cell[data-tint="activity"] { background: var(--brand-tint-mint, #e6f7f0); }
-.cell[data-tint="event"] { background: var(--brand-tint-yellow, #fff7d6); }
 </style>
