@@ -25,7 +25,8 @@ const form = reactive({
   month: currentMonth,
   late_count: null,
   early_leave_count: null,
-  missing_punch_count: null,
+  // missing_punch_count 已從表單移除：deduction.py:71 的 missing_punch_deduction
+  // 永遠是 0，調整缺卡次數不影響任何計算結果（會誤導用戶以為有效）。
   total_late_minutes: null,
   total_early_minutes: null,
   work_days: null,
@@ -38,8 +39,9 @@ const form = reactive({
 // ── 試算結果快取（sessionStorage）──────────────────────────────────────
 // 避免重新整理頁面或切換 tab 時丟失上一次試算結果；
 // 也能讓相同參數不再打 API（省 rate-limit + 後端 CPU）。
-const STORAGE_KEY_LAST = 'salary_simulate_last_v1'
-const STORAGE_KEY_CACHE = 'salary_simulate_cache_v1'
+// v2: 移除 missing_punch_count 欄位（deprecated）
+const STORAGE_KEY_LAST = 'salary_simulate_last_v2'
+const STORAGE_KEY_CACHE = 'salary_simulate_cache_v2'
 const CACHE_TTL_MS = 10 * 60 * 1000 // 10 分鐘
 const CACHE_MAX_ENTRIES = 20
 
@@ -50,7 +52,6 @@ const buildCacheKey = () => {
     m: form.month,
     lc: form.late_count,
     ec: form.early_leave_count,
-    mc: form.missing_punch_count,
     lm: form.total_late_minutes,
     em: form.total_early_minutes,
     wd: form.work_days,
@@ -115,7 +116,6 @@ const runSimulate = async ({ useCache = true } = {}) => {
         overrides: {
           late_count: form.late_count,
           early_leave_count: form.early_leave_count,
-          missing_punch_count: form.missing_punch_count,
           total_late_minutes: form.total_late_minutes,
           total_early_minutes: form.total_early_minutes,
           work_days: form.work_days,
@@ -172,7 +172,6 @@ const restoreLast = () => {
 const resetOverrides = () => {
   form.late_count = null
   form.early_leave_count = null
-  form.missing_punch_count = null
   form.total_late_minutes = null
   form.total_early_minutes = null
   form.work_days = null
@@ -191,6 +190,42 @@ const resetOverrides = () => {
 
 const hasActual = computed(() => result.value?.actual != null)
 
+// 「含獎金實領」= net_pay + festival_bonus + overtime_bonus。
+// net_salary 的公式 = gross_salary - 扣款，而 gross_salary 不含 festival_bonus /
+// overtime_bonus（engine.py:1764-1770），所以員工在發放月實際拿到的總額 = net_pay
+// + festival + overtime（festival/overtime 走獨立轉帳名冊）。與 SalaryView「含獎金實領」
+// 同公式，讓試算結果可直接對照員工最終到手金額。
+const computeTotalWithBonus = (obj) => {
+  if (!obj) return 0
+  return (obj.net_pay || 0) + (obj.festival_bonus || 0) + (obj.overtime_bonus || 0)
+}
+
+const augmentedSimulated = computed(() => {
+  if (!result.value) return null
+  return {
+    ...result.value.simulated,
+    total_with_bonus: computeTotalWithBonus(result.value.simulated),
+  }
+})
+
+const augmentedActual = computed(() => {
+  if (!result.value?.actual) return null
+  return {
+    ...result.value.actual,
+    total_with_bonus: computeTotalWithBonus(result.value.actual),
+  }
+})
+
+const augmentedDiff = computed(() => {
+  if (!result.value?.diff) return null
+  return {
+    ...result.value.diff,
+    total_with_bonus:
+      computeTotalWithBonus(result.value.simulated) -
+      computeTotalWithBonus(result.value.actual),
+  }
+})
+
 const COMPARE_FIELDS = [
   { key: 'base_salary', label: '底薪' },
   { key: 'festival_bonus', label: '節慶獎金' },
@@ -204,20 +239,20 @@ const COMPARE_FIELDS = [
   { key: 'pension_self', label: '勞退自提（扣）' },
   { key: 'late_deduction', label: '遲到扣款' },
   { key: 'early_leave_deduction', label: '早退扣款' },
-  { key: 'missing_punch_deduction', label: '缺卡扣款' },
   { key: 'leave_deduction', label: '請假扣款' },
   { key: 'absence_deduction', label: '曠職扣款' },
   { key: 'meeting_absence_deduction', label: '節慶獎金扣減' },
   { key: 'gross_salary', label: '應發月薪', bold: true },
   { key: 'total_deductions', label: '總扣款', bold: true },
-  { key: 'net_pay', label: '實領薪資', bold: true, highlight: true },
+  { key: 'net_pay', label: '實領薪資（主帳戶）', bold: true },
+  { key: 'total_with_bonus', label: '含獎金實領', bold: true, highlight: true },
 ]
 
 const diffColor = (key, val) => {
   if (val === 0) return ''
   // 扣款類：值增加 = 變差（紅），值減少 = 變好（綠）
   const isDeduction = ['total_deductions', 'late_deduction', 'early_leave_deduction',
-    'leave_deduction', 'absence_deduction', 'missing_punch_deduction'].includes(key)
+    'leave_deduction', 'absence_deduction'].includes(key)
   const positive = isDeduction ? val < 0 : val > 0
   return positive ? 'diff-pos' : 'diff-neg'
 }
@@ -294,9 +329,6 @@ onMounted(() => {
           <el-form-item label="早退分鐘">
             <el-input-number v-model="form.total_early_minutes" :min="0" controls-position="right" placeholder="自動" style="width: 100%" />
           </el-form-item>
-          <el-form-item label="缺卡次數">
-            <el-input-number v-model="form.missing_punch_count" :min="0" :max="31" :precision="0" controls-position="right" placeholder="自動" style="width: 100%" />
-          </el-form-item>
 
           <el-divider content-position="left">
             <span class="section-label">額外請假</span>
@@ -361,44 +393,65 @@ onMounted(() => {
             </div>
           </el-card>
 
-          <!-- 三大金額卡 -->
+          <!-- 實際記錄可能含人工調整，差異不全來自引擎邏輯 -->
+          <el-alert
+            v-if="hasActual"
+            type="info"
+            :closable="false"
+            show-icon
+            style="margin-top: 12px;"
+          >
+            <template #title>
+              <span style="font-size: 12px;">
+                「實際記錄」可能包含薪資管理頁的人工調整（如手改節慶獎金、扣款備註等）。
+                若某欄位「差異」不為零，可能來自引擎以外的人工輸入，並非試算錯誤。
+              </span>
+            </template>
+          </el-alert>
+
+          <!-- 三大金額卡：應發 / 扣款 / 含獎金實領（員工最終到手） -->
           <el-row :gutter="12" style="margin-top: 12px;">
             <el-col :span="8">
               <el-card class="summary-card" shadow="never" body-style="padding: 14px; text-align: center;">
                 <div class="sum-label">應發月薪（試算）</div>
-                <div class="sum-value text-blue">{{ money(result.simulated.gross_salary) }}</div>
+                <div class="sum-value text-blue">{{ money(augmentedSimulated.gross_salary) }}</div>
                 <div
-                  v-if="hasActual && result.diff.gross_salary !== 0"
+                  v-if="hasActual && augmentedDiff.gross_salary !== 0"
                   class="sum-diff"
-                  :class="diffColor('gross_salary', result.diff.gross_salary)"
+                  :class="diffColor('gross_salary', augmentedDiff.gross_salary)"
                 >
-                  {{ formatDiff(result.diff.gross_salary) }}
+                  {{ formatDiff(augmentedDiff.gross_salary) }}
                 </div>
               </el-card>
             </el-col>
             <el-col :span="8">
               <el-card class="summary-card" shadow="never" body-style="padding: 14px; text-align: center;">
                 <div class="sum-label">總扣款（試算）</div>
-                <div class="sum-value text-danger">{{ money(result.simulated.total_deductions) }}</div>
+                <div class="sum-value text-danger">{{ money(augmentedSimulated.total_deductions) }}</div>
                 <div
-                  v-if="hasActual && result.diff.total_deductions !== 0"
+                  v-if="hasActual && augmentedDiff.total_deductions !== 0"
                   class="sum-diff"
-                  :class="diffColor('total_deductions', result.diff.total_deductions)"
+                  :class="diffColor('total_deductions', augmentedDiff.total_deductions)"
                 >
-                  {{ formatDiff(result.diff.total_deductions) }}
+                  {{ formatDiff(augmentedDiff.total_deductions) }}
                 </div>
               </el-card>
             </el-col>
             <el-col :span="8">
               <el-card class="summary-card net-card" shadow="never" body-style="padding: 14px; text-align: center;">
-                <div class="sum-label">實領薪資（試算）</div>
-                <div class="sum-value text-green">{{ money(result.simulated.net_pay) }}</div>
-                <div
-                  v-if="hasActual && result.diff.net_pay !== 0"
-                  class="sum-diff"
-                  :class="diffColor('net_pay', result.diff.net_pay)"
+                <el-tooltip
+                  content="主帳戶實領 + 節慶獎金 + 超額獎金（後兩者獨立轉帳，員工最終到手總額）"
+                  placement="top"
                 >
-                  {{ formatDiff(result.diff.net_pay) }}
+                  <div class="sum-label">含獎金實領（試算）</div>
+                </el-tooltip>
+                <div class="sum-value text-green">{{ money(augmentedSimulated.total_with_bonus) }}</div>
+                <div
+                  v-if="hasActual && augmentedDiff.total_with_bonus !== 0"
+                  class="sum-diff"
+                  :class="diffColor('total_with_bonus', augmentedDiff.total_with_bonus)"
+                >
+                  {{ formatDiff(augmentedDiff.total_with_bonus) }}
                 </div>
               </el-card>
             </el-col>
@@ -421,31 +474,31 @@ onMounted(() => {
               <el-table-column label="試算結果" min-width="120">
                 <template #default="{ row }">
                   <strong v-if="row.highlight" class="text-green">
-                    {{ money(result.simulated[row.key] || 0) }}
+                    {{ money(augmentedSimulated[row.key] || 0) }}
                   </strong>
-                  <strong v-else-if="row.bold">{{ money(result.simulated[row.key] || 0) }}</strong>
-                  <span v-else>{{ money(result.simulated[row.key] || 0) }}</span>
+                  <strong v-else-if="row.bold">{{ money(augmentedSimulated[row.key] || 0) }}</strong>
+                  <span v-else>{{ money(augmentedSimulated[row.key] || 0) }}</span>
                 </template>
               </el-table-column>
 
               <el-table-column v-if="hasActual" label="實際記錄" min-width="120">
                 <template #default="{ row }">
                   <strong v-if="row.highlight" class="text-blue">
-                    {{ money(result.actual[row.key] || 0) }}
+                    {{ money(augmentedActual[row.key] || 0) }}
                   </strong>
-                  <strong v-else-if="row.bold">{{ money(result.actual[row.key] || 0) }}</strong>
-                  <span v-else>{{ money(result.actual[row.key] || 0) }}</span>
+                  <strong v-else-if="row.bold">{{ money(augmentedActual[row.key] || 0) }}</strong>
+                  <span v-else>{{ money(augmentedActual[row.key] || 0) }}</span>
                 </template>
               </el-table-column>
 
               <el-table-column v-if="hasActual" label="差異" width="110">
                 <template #default="{ row }">
                   <span
-                    v-if="result.diff && row.key in result.diff && result.diff[row.key] !== 0"
-                    :class="diffColor(row.key, result.diff[row.key])"
+                    v-if="augmentedDiff && row.key in augmentedDiff && augmentedDiff[row.key] !== 0"
+                    :class="diffColor(row.key, augmentedDiff[row.key])"
                     class="diff-val"
                   >
-                    {{ formatDiff(result.diff[row.key]) }}
+                    {{ formatDiff(augmentedDiff[row.key]) }}
                   </span>
                   <span v-else class="text-muted">-</span>
                 </template>
@@ -457,10 +510,9 @@ onMounted(() => {
           <el-card shadow="never" style="margin-top: 12px;">
             <template #header><span>考勤統計（試算輸入值）</span></template>
             <el-descriptions :column="3" border size="small">
-              <el-descriptions-item label="出勤天數">{{ result.simulated.late_count !== undefined ? form.work_days ?? '自動' : '-' }}</el-descriptions-item>
+              <el-descriptions-item label="出勤天數">{{ form.work_days ?? '自動' }}</el-descriptions-item>
               <el-descriptions-item label="遲到次數">{{ result.simulated.late_count }}</el-descriptions-item>
               <el-descriptions-item label="早退次數">{{ result.simulated.early_leave_count }}</el-descriptions-item>
-              <el-descriptions-item label="缺卡次數">{{ result.simulated.missing_punch_count }}</el-descriptions-item>
               <el-descriptions-item label="遲到扣款">
                 <span class="text-danger">{{ money(result.simulated.late_deduction) }}</span>
               </el-descriptions-item>
