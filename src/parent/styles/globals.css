@@ -208,17 +208,6 @@
   --pt-scrim: rgba(27, 68, 89, 0.45);  /* modal scrim 暖咖啡覆蓋 */
   --pt-backdrop-blur: 8px;
 
-  /* ============================================================
-   * IvyKids 字體 stack（Noto Sans TC + Apple/PingFang fallback）
-   * Display = Outfit (圓潤無襯線、現代感、字重 700+ 維持嚴肅)
-   * Body    = Quicksand（柔和、易讀）
-   * Hand    = Patrick Hand（手寫點綴，僅用於老師親筆 / 裝飾標）
-   * 中文同步用 Noto Sans TC，避免系統字體跳動
-   * ============================================================ */
-  --pt-font-display: 'Outfit', 'Noto Sans TC', -apple-system, BlinkMacSystemFont, 'PingFang TC', 'Helvetica Neue', sans-serif;
-  --pt-font-body:    'Quicksand', 'Noto Sans TC', -apple-system, BlinkMacSystemFont, 'PingFang TC', 'Helvetica Neue', sans-serif;
-  --pt-font-hand:    'Patrick Hand', 'Noto Sans TC', cursive;
-
   /* ---------------- IvyKids brand tokens (2026-05-07 rebrand) ----------------
    * Hex 來源：ivykids.tw 官網 CSS / favicon / about-b 教學理念 tile。
    * Spec：docs/superpowers/specs/2026-05-07-parent-ivykids-rebrand-design.md §3.2
