@@ -246,6 +246,9 @@ export function canAccessRoute(path) {
     return path.startsWith('/portal')
   }
 
+  // 個人資料頁：所有已登入的管理端帳號皆可存取（無需 permission gate）
+  if (path === '/profile') return true
+
   // admin 檢查路由權限
   if (path === '/overtime') {
     return hasPermission('OVERTIME_READ') || hasPermission('MEETINGS')

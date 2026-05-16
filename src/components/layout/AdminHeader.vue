@@ -193,6 +193,8 @@ const handleCommand = (command) => {
     ElMessage.success('已登出')
   } else if (command === 'settings') {
     router.push('/settings')
+  } else if (command === 'profile') {
+    router.push('/profile')
   }
 }
 </script>
