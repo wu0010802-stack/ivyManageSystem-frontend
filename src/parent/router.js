@@ -53,6 +53,12 @@ const router = createRouter({
       meta: { title: '對話', tab: 'messages', showBack: true },
     },
     {
+      path: '/assistant',
+      name: 'parent-assistant',
+      component: () => import('./views/AssistantView.vue'),
+      meta: { title: '常春藤小幫手', showBack: true },
+    },
+    {
       path: '/me',
       name: 'parent-me',
       component: () => import('./views/MeView.vue'),
