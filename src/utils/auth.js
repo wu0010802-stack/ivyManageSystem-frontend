@@ -147,14 +147,21 @@ export function isLoggedIn() {
   return Date.now() - validatedAt < SESSION_MAX_AGE_MS
 }
 
-const getRoutePermission = (path) => {
-  const sortedRules = [...ROUTE_PERMISSION_RULES].sort((a, b) => b.path.length - a.path.length)
-  const matched = sortedRules.find((rule) => (
-    rule.prefix
-      ? path === rule.path || path.startsWith(`${rule.path}/`)
-      : path === rule.path
-  ))
-  return matched?.permission || null
+const _matchRule = (rule, path) => (
+  rule.prefix
+    ? path === rule.path || path.startsWith(`${rule.path}/`)
+    : path === rule.path
+)
+
+// 取得所有匹配 path 的規則，並只回傳 path 長度最長一組（避免短前綴覆蓋具體路徑）。
+// 同一 path 可有多條規則（OR 語意，例如 /appraisal-management 接受 SETTINGS_READ 或 SALARY_READ）。
+const getRoutePermissions = (path) => {
+  const matched = ROUTE_PERMISSION_RULES.filter((rule) => _matchRule(rule, path))
+  if (matched.length === 0) return []
+  const maxLen = Math.max(...matched.map((r) => r.path.length))
+  return matched
+    .filter((r) => r.path.length === maxLen)
+    .map((r) => r.permission)
 }
 
 /**
@@ -246,25 +253,14 @@ export function canAccessRoute(path) {
     return path.startsWith('/portal')
   }
 
-  // admin 檢查路由權限
-  if (path === '/overtime') {
-    return hasPermission('OVERTIME_READ') || hasPermission('MEETINGS')
-  }
-
-  // 考核管理（含懲處記錄）— 原本懲處掛在 /salary（SALARY_READ）、考核設定掛在 /appraisal（SETTINGS_READ），
-  // 整合後為避免任一族群失去存取，採聯集授權。
-  if (path === '/appraisal-management') {
-    return hasPermission('SETTINGS_READ') || hasPermission('SALARY_READ')
-  }
-
   // Why: 改成 default-deny。未匹配權限規則時，若是公開路由（登入頁、公開報名等）放行，
   // 否則一律拒絕——避免日後新增頁面卻忘了加 ROUTE_PERMISSION_RULES 就形成隱性後門。
   if (_isPublicRoute(path)) return true
 
-  const permissionName = getRoutePermission(path)
-  if (!permissionName) return false
+  const perms = getRoutePermissions(path)
+  if (perms.length === 0) return false
 
-  return hasPermission(permissionName)
+  return perms.some((p) => hasPermission(p))
 }
 
 /**
@@ -285,9 +281,6 @@ export function getAllowedRoutes() {
     if (hasPermission(rule.permission) && !allowed.includes(rule.path)) {
       allowed.push(rule.path)
     }
-  }
-  if (hasPermission('OVERTIME_READ') || hasPermission('MEETINGS')) {
-    allowed.push('/overtime')
   }
   return allowed
 }

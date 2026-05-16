@@ -76,6 +76,10 @@
             <el-icon><Medal /></el-icon>
             <template #title>考核管理</template>
           </el-menu-item>
+          <el-menu-item v-if="canView.YEAR_END_READ" index="/year_end/cycles">
+            <el-icon><Trophy /></el-icon>
+            <template #title>年終獎金</template>
+          </el-menu-item>
           <el-menu-item v-if="canView.SALARY_READ" index="/gov-reports">
             <el-icon><Files /></el-icon>
             <template #title>政府申報匯出</template>
@@ -256,7 +260,7 @@ import {
   Money, User, School, OfficeBuilding, Bell, TrendCharts, Setting,
   Expand, Fold, DataAnalysis, Files,
   Star, StarFilled, Close, Collection, ChatDotRound, List, Van, CreditCard, Checked,
-  Warning, Medal
+  Warning, Medal, Trophy
 } from '@element-plus/icons-vue'
 import { PERMISSION_VALUES, getUserInfo } from '@/utils/auth'
 import { usePinnedPages } from '@/composables/usePinnedPages'

@@ -49,7 +49,7 @@ async function load() {
     summaries.value = (await listAppraisalSummaries(cycleId)).data
     catalog.value = (await listAppraisalCatalog()).data
   } catch (e) {
-    apiError(e, '載入失敗')
+    ElMessage.error(apiError(e, '載入失敗'))
   } finally {
     loading.value = false
   }
@@ -62,7 +62,7 @@ async function recompute() {
     ElMessage.success('重算完成')
     await load()
   } catch (e) {
-    apiError(e, '重算失敗')
+    ElMessage.error(apiError(e, '重算失敗'))
   } finally {
     busy.value = false
   }
@@ -77,7 +77,7 @@ async function sign(summary, stage) {
     ElMessage.success('簽核完成')
     await load()
   } catch (e) {
-    apiError(e, '簽核失敗')
+    ElMessage.error(apiError(e, '簽核失敗'))
   } finally {
     busy.value = false
   }
