@@ -98,27 +98,3 @@ export const syncAppraisalScoreItems = (cycleId, { dryRun = false } = {}) =>
     params: { dry_run: dryRun },
   })
 
-// ============ Deprecated（M1 重構後不再實作；保留 stub 讓舊 view 仍能 import）============
-// 舊 view 元件（CycleEventsSection / CycleSummariesSection / PenaltyCatalogPanel /
-// BonusRatesPanel）仍 import 這些函式名稱。實際呼叫會回傳 410 Gone。
-
-const _deprecated = (name) => () =>
-  Promise.reject(new Error(`${name} 已於 M1 重構移除，請改用新 API`))
-
-export const lockAppraisalCycle = _deprecated('lockAppraisalCycle')
-export const unlockAppraisalCycle = _deprecated('unlockAppraisalCycle')
-export const closeAppraisalCycle = _deprecated('closeAppraisalCycle')
-export const bulkInitAppraisalParticipants = _deprecated('bulkInitAppraisalParticipants')
-export const getAppraisalParticipant = _deprecated('getAppraisalParticipant')
-export const listAppraisalEvents = _deprecated('listAppraisalEvents')
-export const createAppraisalEvent = _deprecated('createAppraisalEvent')
-export const patchAppraisalEvent = _deprecated('patchAppraisalEvent')
-export const revertAppraisalEvent = _deprecated('revertAppraisalEvent')
-export const listPenaltyCatalog = _deprecated('listPenaltyCatalog')
-export const createPenaltyCatalogItem = _deprecated('createPenaltyCatalogItem')
-export const patchPenaltyCatalogItem = _deprecated('patchPenaltyCatalogItem')
-export const togglePenaltyCatalogItem = _deprecated('togglePenaltyCatalogItem')
-export const rejectAppraisalSummary = _deprecated('rejectAppraisalSummary')
-export const getAppraisalReport = _deprecated('getAppraisalReport')
-export const getPenaltyLog = _deprecated('getPenaltyLog')
-export const getParticipantSheet = _deprecated('getParticipantSheet')
