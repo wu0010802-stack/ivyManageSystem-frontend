@@ -33,7 +33,7 @@ function fmt(n) {
       </div>
     </div>
 
-    <p v-else class="empty">目前無待繳費用 ✨</p>
+    <p v-else class="empty">目前無待繳費用</p>
 
     <div class="actions">
       <router-link :to="detailHref" class="btn primary">查看明細</router-link>

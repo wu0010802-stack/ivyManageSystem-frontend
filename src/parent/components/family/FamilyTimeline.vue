@@ -41,7 +41,7 @@ function fmtTime(iso) {
       <SkeletonBlock variant="row" />
     </div>
 
-    <p v-else-if="items.length === 0" class="empty">目前沒有最新動態 ✨</p>
+    <p v-else-if="items.length === 0" class="empty">目前沒有最新動態</p>
 
     <ul v-else class="list">
       <li v-for="it in items" :key="it.id" class="row">
