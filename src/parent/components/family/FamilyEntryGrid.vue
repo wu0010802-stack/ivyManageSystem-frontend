@@ -15,7 +15,7 @@ function badgeOf(key) {
 <template>
   <section class="family-entry-grid" aria-labelledby="family-entry-grid-title">
     <header class="header">
-      <h2 id="family-entry-grid-title" class="title">📚 在園生活</h2>
+      <h2 id="family-entry-grid-title" class="title">在園生活</h2>
     </header>
     <div class="grid">
       <router-link

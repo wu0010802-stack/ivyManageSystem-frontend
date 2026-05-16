@@ -32,7 +32,7 @@ function fmtTime(iso) {
 <template>
   <section class="family-timeline" aria-labelledby="family-timeline-title">
     <header class="header">
-      <h2 id="family-timeline-title" class="title">📍 今日／最近</h2>
+      <h2 id="family-timeline-title" class="title">今日／最近</h2>
     </header>
 
     <div v-if="loading" data-testid="timeline-skeleton" class="skeleton">

@@ -4,6 +4,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { fetchChildMeasurementChart } from '../api/childMeasurements'
 import { toast } from '../utils/toast'
+import ParentIcon from '../components/ParentIcon.vue'
 
 let echarts = null
 
@@ -90,8 +91,8 @@ onBeforeUnmount(() => {
 <template>
   <div class="child-measurements-view">
     <header>
-      <button class="back-btn" @click="goBack">← 返回</button>
-      <h2>📏 量測曲線</h2>
+      <button class="back-btn" @click="goBack"><ParentIcon name="arrow-left" size="sm" />返回</button>
+      <h2>量測曲線</h2>
     </header>
 
     <div class="metric-tabs">
@@ -117,7 +118,12 @@ onBeforeUnmount(() => {
 .child-measurements-view { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
 header { display: flex; align-items: center; gap: 12px; }
 header > h2 { margin: 0; font-size: 17px; color: var(--m3-on-surface, var(--pt-text-strong)); }
-.back-btn { background: none; border: none; font-size: 14px; color: var(--m3-primary, var(--brand-primary)); }
+.back-btn {
+  background: none; border: none; font-size: 14px;
+  color: var(--m3-primary, var(--brand-primary));
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 0; cursor: pointer;
+}
 .metric-tabs { display: flex; gap: 8px; }
 .metric-tabs > button {
   flex: 1;

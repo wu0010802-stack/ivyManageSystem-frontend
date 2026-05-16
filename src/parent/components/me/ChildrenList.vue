@@ -1,7 +1,13 @@
 <script setup>
+import ParentIcon from '../ParentIcon.vue'
+
 defineProps({
   children: { type: Array, required: true },
 })
+
+function initialOf(name) {
+  return String(name || '孩').slice(0, 1)
+}
 </script>
 
 <template>
@@ -15,18 +21,18 @@ defineProps({
     <ul v-else class="list">
       <li v-for="c in children" :key="c.student_id" class="row">
         <router-link :to="`/children/${c.student_id}`" class="row-link">
-          <span class="avatar" aria-hidden="true">👶</span>
+          <span class="avatar" aria-hidden="true">{{ initialOf(c.name) }}</span>
           <span class="meta">
             <span class="name">{{ c.name }}</span>
             <span v-if="c.classroom_name" class="cls">{{ c.classroom_name }}</span>
           </span>
-          <span class="chev" aria-hidden="true">›</span>
+          <ParentIcon name="chevron-right" size="sm" class="chev" />
         </router-link>
       </li>
     </ul>
 
     <router-link to="/bind-additional" class="add-row">
-      <span class="add-icon" aria-hidden="true">＋</span>
+      <ParentIcon name="plus" size="sm" class="add-icon" />
       <span>加綁子女</span>
     </router-link>
   </section>
@@ -50,11 +56,19 @@ defineProps({
   text-decoration: none; color: inherit;
 }
 .row-link:active { background: var(--m3-primary-container, var(--brand-primary-soft)); }
-.avatar { font-size: 22px; }
-.meta { flex: 1; display: flex; flex-direction: column; }
+.avatar {
+  width: 36px; height: 36px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 12px;
+  background: var(--brand-primary-soft, var(--ivy-leaf-bg, #f5fbe6));
+  color: var(--brand-primary);
+  font-weight: 800;
+  font-size: 16px;
+}
+.meta { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 .name { font-weight: var(--font-weight-semibold, 600); }
 .cls { color: var(--m3-on-surface-variant, var(--pt-text-muted)); font-size: var(--text-xs, 11px); }
-.chev { color: var(--m3-on-surface-variant, var(--pt-text-placeholder)); font-size: 20px; }
+.chev { color: var(--m3-on-surface-variant, var(--pt-text-placeholder)); }
 .add-row {
   display: flex; align-items: center; gap: var(--space-2, 8px);
   min-height: var(--touch-target-min, 44px);
@@ -64,5 +78,5 @@ defineProps({
   text-decoration: none;
   font-weight: var(--font-weight-semibold, 600);
 }
-.add-icon { font-size: 20px; }
+.add-icon { color: var(--brand-primary); }
 </style>

@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { fetchChildPhotos } from '../api/childPhotos'
 import { toast } from '../utils/toast'
+import ParentIcon from '../components/ParentIcon.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -43,8 +44,8 @@ onMounted(load)
 <template>
   <div class="child-photos-view">
     <header>
-      <button class="back-btn" @click="goBack">← 返回</button>
-      <h2>📷 照片牆</h2>
+      <button class="back-btn" @click="goBack"><ParentIcon name="arrow-left" size="sm" />返回</button>
+      <h2>照片牆</h2>
       <span class="count">共 {{ total }} 張</span>
     </header>
 
@@ -74,7 +75,12 @@ onMounted(load)
 .child-photos-view { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
 header { display: flex; align-items: center; gap: 12px; }
 header > h2 { margin: 0; font-size: 17px; color: #0d9053; }
-.back-btn { background: none; border: none; font-size: 14px; color: #0d9053; }
+.back-btn {
+  background: none; border: none; font-size: 14px;
+  color: var(--brand-primary, #0d9053);
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 0; cursor: pointer;
+}
 .count { margin-left: auto; font-size: 13px; color: var(--text-secondary); }
 .placeholder { padding: 32px; text-align: center; color: var(--text-tertiary); }
 .grid {

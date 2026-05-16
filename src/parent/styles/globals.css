@@ -551,27 +551,3 @@ button {
   flex-shrink: 0;
 }
 
-/* ========== Shimmer（Skeleton Loading）==========
- * 取代純色塊：左→右光暈動畫，給家長等待時更現代的感覺。
- * reduced-motion 自動關閉動畫由全域規則處理。
- */
-@keyframes pt-shimmer {
-  0%   { background-position: -200px 0; }
-  100% { background-position: calc(200px + 100%) 0; }
-}
-
-.pt-shimmer {
-  background: linear-gradient(
-    90deg,
-    var(--pt-surface-mute, #f0f2f5) 0%,
-    var(--pt-surface-mute-soft, #f6f8fa) 50%,
-    var(--pt-surface-mute, #f0f2f5) 100%
-  );
-  background-size: 200px 100%;
-  background-repeat: no-repeat;
-  animation: pt-shimmer 1.4s ease-in-out infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .pt-shimmer { animation: none; }
-}
