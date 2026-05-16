@@ -392,9 +392,8 @@ const onMenuSelect = () => {
 }
 
 :deep(.el-menu-item.is-active) {
-  background: linear-gradient(90deg, var(--color-primary) 0%, var(--color-primary-soft) 100%);
+  background-color: var(--color-primary);
   color: #fff !important;
-  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
 }
 
 :deep(.el-menu-item .el-icon) {
