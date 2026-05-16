@@ -12,9 +12,11 @@ import { Refresh, Connection, Plus } from '@element-plus/icons-vue'
 
 import {
   getAppraisalCurrentCycle,
-  getAppraisalAggregatedStatus,
+  getAppraisalAllEmployeesStatus,
   syncAppraisalScoreItems,
   createAppraisalCycle,
+  addAppraisalParticipant,
+  bulkAddAppraisalParticipantsFromActive,
 } from '@/api/appraisal'
 import { useAcademicTermStore } from '@/stores/academicTerm'
 import { useErrorNotify } from '@/composables/useErrorNotify'
@@ -59,7 +61,7 @@ async function loadStatus() {
   }
   statusLoading.value = true
   try {
-    const { data } = await getAppraisalAggregatedStatus(currentCycle.value.id)
+    const { data } = await getAppraisalAllEmployeesStatus(currentCycle.value.id)
     aggregatedStatus.value = data
   } catch (e) {
     notify(e, 'CurrentSemesterOverview:fetchStatus', '載入彙整狀態失敗')
@@ -198,6 +200,62 @@ async function confirmSync() {
   }
 }
 
+// ── 加入考核 per-row + 一鍵加入 bulk ───────────────────────
+const hasNonParticipant = computed(() =>
+  participants.value.some((p) => p.is_participant === false),
+)
+
+const syncDisabledReason = computed(() =>
+  hasNonParticipant.value ? '請先把所有教師加入考核再同步' : '',
+)
+
+const addingRowEmployeeId = ref(null)
+const bulkAdding = ref(false)
+
+async function addRowToCycle(row) {
+  if (!currentCycle.value) return
+  addingRowEmployeeId.value = row.employee_id
+  try {
+    await addAppraisalParticipant(currentCycle.value.id, {
+      employee_id: row.employee_id,
+      role_group: row.role_group,
+      classroom_id: row.classroom_id,
+    })
+    ElMessage.success(`已將 ${row.employee_name} 加入考核`)
+    await loadStatus()
+  } catch (e) {
+    notify(e, 'CurrentSemesterOverview:addRow', '加入考核失敗')
+  } finally {
+    addingRowEmployeeId.value = null
+  }
+}
+
+async function bulkAddAll() {
+  if (!currentCycle.value) return
+  try {
+    await ElMessageBox.confirm(
+      '將把所有未加入的在職教師加入本學期考核，確定嗎？',
+      '一鍵加入全部教師',
+      { type: 'info' },
+    )
+  } catch {
+    return
+  }
+  bulkAdding.value = true
+  try {
+    const { data } = await bulkAddAppraisalParticipantsFromActive(
+      currentCycle.value.id,
+      null,
+    )
+    ElMessage.success(`已新增 ${data.created_count} 人、跳過 ${data.skipped_count} 人`)
+    await loadStatus()
+  } catch (e) {
+    notify(e, 'CurrentSemesterOverview:bulkAdd', '一鍵加入失敗')
+  } finally {
+    bulkAdding.value = false
+  }
+}
+
 // ── 建立本學期週期（D5 預設日期）──────────────────────────
 const creatingCycle = ref(false)
 
@@ -255,15 +313,39 @@ async function createCurrentCycle() {
       <AcademicTermSelector />
       <div class="toolbar__actions">
         <el-button
-          v-if="currentCycle"
-          type="primary"
-          :icon="Connection"
-          data-test="sync-score-btn"
-          @click="openSyncPreview"
+          v-if="currentCycle && hasNonParticipant"
+          type="success"
+          :icon="Plus"
+          :loading="bulkAdding"
+          data-test="bulk-add-btn"
+          @click="bulkAddAll"
         >
-          同步分數
+          一鍵加入全部教師
         </el-button>
-        <el-button :icon="Refresh" :loading="cycleLoading || statusLoading" @click="reloadAll">
+        <el-tooltip
+          v-if="currentCycle"
+          :content="syncDisabledReason"
+          :disabled="!hasNonParticipant"
+          placement="top"
+        >
+          <span>
+            <el-button
+              type="primary"
+              :icon="Connection"
+              :disabled="hasNonParticipant"
+              data-test="sync-score-btn"
+              @click="openSyncPreview"
+            >
+              同步分數
+            </el-button>
+          </span>
+        </el-tooltip>
+        <el-button
+          :icon="Refresh"
+          :loading="cycleLoading || statusLoading"
+          data-test="refresh-btn"
+          @click="reloadAll"
+        >
           重新整理
         </el-button>
       </div>
@@ -348,16 +430,48 @@ async function createCurrentCycle() {
         </el-table-column>
         <el-table-column label="班級留校率" width="120">
           <template #default="{ row }">
-            <span :data-test="`retention-${row.participant_id}`">{{ formatRetention(row) }}</span>
+            <span :data-test="`retention-${row.participant_id ?? 'emp' + row.employee_id}`">{{ formatRetention(row) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="才藝報名率" width="120">
           <template #default="{ row }">
-            <span :data-test="`activity-${row.participant_id}`">{{ formatActivity(row) }}</span>
+            <span :data-test="`activity-${row.participant_id ?? 'emp' + row.employee_id}`">{{ formatActivity(row) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="懲處數" width="100">
           <template #default="{ row }">{{ formatDisciplinary(row) }}</template>
+        </el-table-column>
+        <el-table-column label="考核狀態" width="160">
+          <template #default="{ row }">
+            <template v-if="row.is_participant">
+              <el-tag
+                type="success"
+                size="small"
+                :data-test="`status-tag-emp${row.employee_id}`"
+              >
+                已加入
+              </el-tag>
+            </template>
+            <template v-else>
+              <el-tag
+                type="info"
+                size="small"
+                :data-test="`status-tag-emp${row.employee_id}`"
+              >
+                未加入
+              </el-tag>
+              <el-button
+                size="small"
+                type="primary"
+                text
+                :loading="addingRowEmployeeId === row.employee_id"
+                :data-test="`add-btn-emp${row.employee_id}`"
+                @click="addRowToCycle(row)"
+              >
+                加入
+              </el-button>
+            </template>
+          </template>
         </el-table-column>
         <el-table-column label="操作" width="100" fixed="right">
           <template #default="{ row }">
@@ -365,7 +479,7 @@ async function createCurrentCycle() {
               size="small"
               type="primary"
               text
-              :data-test="`detail-btn-${row.participant_id}`"
+              :data-test="`detail-btn-${row.participant_id ?? 'emp' + row.employee_id}`"
               @click="openDetail(row)"
             >
               詳情
