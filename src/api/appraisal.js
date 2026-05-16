@@ -98,3 +98,12 @@ export const syncAppraisalScoreItems = (cycleId, { dryRun = false } = {}) =>
     params: { dry_run: dryRun },
   })
 
+// ============ Penalty Catalog stubs（baseline build fix）============
+// PenaltyCatalogPanel.vue 引用這兩個名稱，但後端目前未實作對應 endpoint；
+// 在 endpoint 落地前保留 stub 讓 import / build 不失敗。
+const _notImplemented = (name) => () =>
+  Promise.reject(new Error(`${name} 後端尚未實作`))
+
+export const listAppraisalPenaltyCatalog = _notImplemented('listAppraisalPenaltyCatalog')
+export const patchAppraisalPenaltyCatalog = _notImplemented('patchAppraisalPenaltyCatalog')
+

@@ -17,7 +17,6 @@ import {
   createAppraisalCycle,
 } from '@/api/appraisal'
 import { useAcademicTermStore } from '@/stores/academicTerm'
-import { useCachedAsync, invalidateCachedAsync } from '@/composables/useCachedAsync'
 import { useErrorNotify } from '@/composables/useErrorNotify'
 import AcademicTermSelector from '@/components/common/AcademicTermSelector.vue'
 import StatCard from '@/components/common/StatCard.vue'
@@ -28,20 +27,13 @@ const { notify } = useErrorNotify()
 
 // ── 後端 semester enum ────────────────────────────────────
 const toSemesterEnum = (n) => (Number(n) === 1 ? 'FIRST' : 'SECOND')
-const semesterLabel = (v) => (v === 'FIRST' ? '上學期' : '下學期')
 
 // ── 取得 current cycle（依 termStore 切換）────────────────
-const currentCycleKey = computed(
-  () => `appraisal:current:${termStore.school_year}:${termStore.semester}`,
-)
-
 const currentCycle = ref(null)
 const cycleLoading = ref(false)
-const cycleError = ref(null)
 
 async function fetchCurrentCycle() {
   cycleLoading.value = true
-  cycleError.value = null
   try {
     const { data } = await getAppraisalCurrentCycle({
       school_year: termStore.school_year,
@@ -49,7 +41,6 @@ async function fetchCurrentCycle() {
     })
     currentCycle.value = data
   } catch (e) {
-    cycleError.value = e
     notify(e, 'CurrentSemesterOverview:fetchCycle', '載入當期週期失敗')
     currentCycle.value = null
   } finally {
@@ -61,30 +52,15 @@ async function fetchCurrentCycle() {
 const aggregatedStatus = ref(null)
 const statusLoading = ref(false)
 
-const statusKey = computed(() =>
-  currentCycle.value ? `appraisal:status:${currentCycle.value.id}` : null,
-)
-
-let cachedStatus = null
-
-async function loadStatus(force = false) {
+async function loadStatus() {
   if (!currentCycle.value) {
     aggregatedStatus.value = null
     return
   }
-  const cycleId = currentCycle.value.id
-  cachedStatus = useCachedAsync(
-    `appraisal:status:${cycleId}`,
-    async () => {
-      const { data } = await getAppraisalAggregatedStatus(cycleId)
-      return data
-    },
-    { ttl: 60_000, immediate: false },
-  )
   statusLoading.value = true
   try {
-    const result = await cachedStatus.refresh(force)
-    aggregatedStatus.value = result
+    const { data } = await getAppraisalAggregatedStatus(currentCycle.value.id)
+    aggregatedStatus.value = data
   } catch (e) {
     notify(e, 'CurrentSemesterOverview:fetchStatus', '載入彙整狀態失敗')
   } finally {
@@ -92,18 +68,15 @@ async function loadStatus(force = false) {
   }
 }
 
-async function reloadAll(force = true) {
+async function reloadAll() {
   await fetchCurrentCycle()
-  if (currentCycle.value && force) {
-    invalidateCachedAsync(`appraisal:status:${currentCycle.value.id}`)
-  }
-  await loadStatus(force)
+  await loadStatus()
 }
 
 watch(
   () => `${termStore.school_year}-${termStore.semester}`,
   () => {
-    reloadAll(false)
+    reloadAll()
   },
   { immediate: true },
 )
@@ -217,7 +190,7 @@ async function confirmSync() {
       `同步完成：刪除 ${data.deleted_count} 筆、新增 ${data.inserted_count} 筆、保留人工 ${data.skipped_manual_count} 筆`,
     )
     previewDialogVisible.value = false
-    await loadStatus(true)
+    await loadStatus()
   } catch (e) {
     notify(e, 'CurrentSemesterOverview:syncConfirm', '同步分數失敗')
   } finally {
@@ -266,7 +239,7 @@ async function createCurrentCycle() {
       enrollment_actual: null,
     })
     ElMessage.success('考核週期已建立')
-    await reloadAll(true)
+    await reloadAll()
   } catch (e) {
     notify(e, 'CurrentSemesterOverview:createCycle', '建立週期失敗')
   } finally {
@@ -290,7 +263,7 @@ async function createCurrentCycle() {
         >
           同步分數
         </el-button>
-        <el-button :icon="Refresh" :loading="cycleLoading || statusLoading" @click="reloadAll(true)">
+        <el-button :icon="Refresh" :loading="cycleLoading || statusLoading" @click="reloadAll">
           重新整理
         </el-button>
       </div>
