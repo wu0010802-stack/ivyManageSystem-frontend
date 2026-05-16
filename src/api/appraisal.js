@@ -98,6 +98,14 @@ export const syncAppraisalScoreItems = (cycleId, { dryRun = false } = {}) =>
     params: { dry_run: dryRun },
   })
 
+export const getAppraisalAllEmployeesStatus = (cycleId) =>
+  api.get(`/appraisal/cycles/${cycleId}/all_employees_status`)
+
+export const bulkAddAppraisalParticipantsFromActive = (cycleId, employeeIds = null) =>
+  api.post(`/appraisal/cycles/${cycleId}/participants:bulk_from_active`, {
+    employee_ids: employeeIds,
+  })
+
 // ============ Penalty Catalog stubs（baseline build fix）============
 // PenaltyCatalogPanel.vue 引用這兩個名稱，但後端目前未實作對應 endpoint；
 // 在 endpoint 落地前保留 stub 讓 import / build 不失敗。
