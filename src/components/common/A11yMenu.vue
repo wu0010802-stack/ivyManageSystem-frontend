@@ -39,11 +39,11 @@
 
       <div class="a11y-section">
         <div class="a11y-row">
-          <span class="a11y-label">高對比</span>
+          <span class="a11y-label">深色模式</span>
           <el-switch
-            :model-value="store.contrast === 'high'"
-            data-testid="a11y-contrast-toggle"
-            @update:model-value="(v) => (store.contrast = v ? 'high' : 'normal')"
+            :model-value="store.theme === 'dark'"
+            data-testid="a11y-theme-toggle"
+            @update:model-value="(v) => (store.theme = v ? 'dark' : 'light')"
           />
         </div>
       </div>

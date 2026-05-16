@@ -60,27 +60,27 @@ describe('A11yMenu', () => {
     expect(store.fontSize).toBe('lg')
   })
 
-  it('點擊高對比 toggle 會更新 store.contrast 為 high', async () => {
+  it('點擊深色模式 toggle 會更新 store.theme 為 dark', async () => {
     const wrapper = makeWrapper()
     const store = useA11yPreferenceStore()
-    expect(store.contrast).toBe('normal')
+    expect(store.theme).toBe('light')
 
     await openPopover(wrapper)
-    $('a11y-contrast-toggle').click()
+    $('a11y-theme-toggle').click()
 
-    expect(store.contrast).toBe('high')
+    expect(store.theme).toBe('dark')
   })
 
   it('點擊 reset 把所有值回到預設', async () => {
     const wrapper = makeWrapper()
     const store = useA11yPreferenceStore()
     store.fontSize = 'xl'
-    store.contrast = 'high'
+    store.theme = 'dark'
 
     await openPopover(wrapper)
     $('a11y-reset').click()
 
     expect(store.fontSize).toBe('md')
-    expect(store.contrast).toBe('normal')
+    expect(store.theme).toBe('light')
   })
 })

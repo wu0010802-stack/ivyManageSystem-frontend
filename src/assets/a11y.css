@@ -58,22 +58,46 @@ html[class*="ivy-size-"] {
   --el-font-size-extra-large: calc(19px * var(--ivy-font-scale, 1));
 }
 
-/* ===== 高對比模式 ===== */
-html.ivy-contrast-high {
-  --el-text-color-primary: #000000;
-  --el-text-color-regular: #1a1d20;
-  --el-text-color-secondary: #2e3338;
-  --el-text-color-placeholder: #424850;
-  --el-border-color: #6b7280;
-  --el-border-color-light: #9ca3af;
-  --el-border-color-lighter: #d1d5db;
-  --el-color-primary: #1d4ed8;
-  --el-color-primary-light-9: #dbeafe;  /* 配合 primary 的高對比版底色 */
+/* ===== 深色模式（管理端 / 教師入口）=====
+ * 觸發：useA11yPreference 設 <html class="dark" data-theme="dark">。
+ * Element Plus 深色 token 由 `element-plus/theme-chalk/dark/css-vars.css` 提供，
+ * 本區段只覆寫自家 alias（main.css 內的 --bg-color / --text-* / --border-* 等）
+ * 與 design-tokens.css 內的 brand semantic 顏色。
+ */
+html.dark {
+  /* 自家 alias（main.css）：把 surface / text / border 翻成暗色 */
+  --bg-color: #0f172a;            /* slate-900 — body 背景 */
+  --bg-color-soft: #1e293b;       /* slate-800 — card hover / fill */
+  --surface-color: #1e293b;       /* slate-800 — el-card / popover 表面 */
+  --text-primary: #f1f5f9;        /* slate-100 */
+  --text-secondary: #cbd5e1;      /* slate-300 */
+  --text-tertiary: #94a3b8;       /* slate-400 */
+  --border-color: #334155;        /* slate-700 */
+  --border-color-light: #1e293b;
+
+  /* 卡片邊框換暗色 */
+  --card-border: 1px solid #334155;
+
+  /* semantic *-soft 在深底會太亮，降到帶 alpha 的色塊 */
+  --color-success-soft: rgba(16, 185, 129, 0.18);
+  --color-warning-soft: rgba(245, 158, 11, 0.18);
+  --color-danger-soft: rgba(239, 68, 68, 0.18);
+  --color-info-soft: rgba(59, 130, 246, 0.20);
+
+  /* brand 在深底用淺一點的 indigo 確保對比 */
+  --brand-primary: #818cf8;       /* indigo-400 */
+  --brand-primary-hover: #a5b4fc; /* indigo-300 */
+  --brand-primary-soft: rgba(129, 140, 248, 0.18);
 }
 
-html.ivy-contrast-high :focus-visible {
-  outline: 3px solid #000;
-  outline-offset: 2px;
+/* main.css 內的 .el-card / .el-table 是用 !important 覆寫 EP，
+ * 深色下要再壓一次背景，避免 EP dark 變數被自家 override 抹掉。 */
+html.dark .el-card {
+  background-color: var(--surface-color) !important;
+  color: var(--text-primary);
+}
+html.dark .el-table th.el-table__cell {
+  background-color: var(--bg-color-soft) !important;
 }
 
 /* ============================================================
