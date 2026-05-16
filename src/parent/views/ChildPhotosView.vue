@@ -44,7 +44,7 @@ onMounted(load)
   <div class="child-photos-view">
     <header>
       <button class="back-btn" @click="goBack">← 返回</button>
-      <h2>📷 照片牆</h2>
+      <h2>照片牆</h2>
       <span class="count">共 {{ total }} 張</span>
     </header>
 

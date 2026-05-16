@@ -91,7 +91,7 @@ onBeforeUnmount(() => {
   <div class="child-measurements-view">
     <header>
       <button class="back-btn" @click="goBack">← 返回</button>
-      <h2>📏 量測曲線</h2>
+      <h2>量測曲線</h2>
     </header>
 
     <div class="metric-tabs">

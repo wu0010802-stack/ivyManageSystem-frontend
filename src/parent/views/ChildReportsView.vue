@@ -39,7 +39,7 @@ onMounted(load)
   <div class="child-reports-view">
     <header>
       <button class="back-btn" @click="goBack">← 返回</button>
-      <h2>📄 歷次成長報告</h2>
+      <h2>歷次成長報告</h2>
     </header>
 
     <div v-if="loading" class="placeholder">載入中…</div>
