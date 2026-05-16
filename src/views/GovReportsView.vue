@@ -321,10 +321,10 @@ async function download(type) {
   color: #fff;
 }
 
-.report-icon.labor  { background: linear-gradient(135deg, #3b82f6, #2563eb); }
-.report-icon.health { background: linear-gradient(135deg, #10b981, #059669); }
-.report-icon.tax    { background: linear-gradient(135deg, #f59e0b, #d97706); }
-.report-icon.pension{ background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
+.report-icon.labor  { background-color: #2563eb; }
+.report-icon.health { background-color: #059669; }
+.report-icon.tax    { background-color: #d97706; }
+.report-icon.pension{ background-color: #7c3aed; }
 
 .report-title {
   font-size: 15px;
