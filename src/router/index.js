@@ -216,7 +216,7 @@ const router = createRouter({
         },
         {
             path: '/appraisal/cycles',
-            redirect: { path: '/appraisal-management', query: { tab: 'cycles' } },
+            redirect: { path: '/appraisal-management', query: { tab: 'history' } },
         },
         {
             path: '/appraisal/cycles/:id',
