@@ -7,10 +7,10 @@ describe('a11yPreference store', () => {
     setActivePinia(createPinia())
   })
 
-  it('預設值為 fontSize=md / contrast=normal / colorBlind=false', () => {
+  it('預設值為 fontSize=md / theme=light / colorBlind=false', () => {
     const store = useA11yPreferenceStore()
     expect(store.fontSize).toBe('md')
-    expect(store.contrast).toBe('normal')
+    expect(store.theme).toBe('light')
     expect(store.colorBlind).toBe(false)
   })
 
@@ -23,11 +23,11 @@ describe('a11yPreference store', () => {
   it('reset() 把所有偏好回到預設', () => {
     const store = useA11yPreferenceStore()
     store.fontSize = 'xl'
-    store.contrast = 'high'
+    store.theme = 'dark'
     store.colorBlind = true
     store.reset()
     expect(store.fontSize).toBe('md')
-    expect(store.contrast).toBe('normal')
+    expect(store.theme).toBe('light')
     expect(store.colorBlind).toBe(false)
   })
 })

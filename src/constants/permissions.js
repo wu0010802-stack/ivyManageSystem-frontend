@@ -127,10 +127,12 @@ export const ROUTE_PERMISSION_RULES = [
   { path: '/overtime', permission: 'MEETINGS' },
 ]
 
-// 不需要權限即可訪問的路由（登入頁、密碼變更、公開報名頁等）。
+// 不需要權限即可訪問的路由（登入頁、密碼變更、公開報名頁、已登入即可訪問的個人資料頁等）。
 // canAccessRoute 改為 default-deny，未匹配 ROUTE_PERMISSION_RULES 又不在此清單者一律拒絕，
 // 避免「忘記補規則 → 直接打 URL 進頁面」的隱性後門。
-export const PUBLIC_ROUTES = ['/login', '/change-password', '/portal/login']
+// 註：/profile 在 canAccessRoute 開頭 `if (!userInfo) return false` 已守住未登入，
+// 收進此清單表達「已登入即可訪問、無需 permission gate」語意。
+export const PUBLIC_ROUTES = ['/login', '/change-password', '/portal/login', '/profile']
 export const PUBLIC_ROUTE_PREFIXES = ['/public/']
 
 export const TEACHER_PORTAL_ROUTES = [

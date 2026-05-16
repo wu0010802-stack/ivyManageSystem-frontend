@@ -8,13 +8,13 @@ import { defineStore } from 'pinia'
  */
 export const useA11yPreferenceStore = defineStore('a11yPreference', {
   state: () => ({
-    fontSize: 'md',      // 'sm' | 'md' | 'lg' | 'xl'
-    contrast: 'normal',  // 'normal' | 'high'
-    colorBlind: false,   // Phase 3 才會在 UI 顯示，先保留欄位
+    fontSize: 'md',   // 'sm' | 'md' | 'lg' | 'xl'
+    theme: 'light',   // 'light' | 'dark'
+    colorBlind: false,
   }),
   actions: {
     reset() {
-      this.$patch({ fontSize: 'md', contrast: 'normal', colorBlind: false })
+      this.$patch({ fontSize: 'md', theme: 'light', colorBlind: false })
     },
   },
 })

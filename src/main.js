@@ -43,6 +43,7 @@ import { useA11yPreference } from '@/composables/useA11yPreference'
 
 import 'element-plus/theme-chalk/el-message-box.css'
 import 'element-plus/theme-chalk/el-message.css'
+import 'element-plus/theme-chalk/dark/css-vars.css'
 import './assets/design-tokens.css'
 import './assets/main.css'
 import './assets/a11y.css'

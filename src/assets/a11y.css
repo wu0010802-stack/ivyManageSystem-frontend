@@ -58,22 +58,139 @@ html[class*="ivy-size-"] {
   --el-font-size-extra-large: calc(19px * var(--ivy-font-scale, 1));
 }
 
-/* ===== 高對比模式 ===== */
-html.ivy-contrast-high {
-  --el-text-color-primary: #000000;
-  --el-text-color-regular: #1a1d20;
-  --el-text-color-secondary: #2e3338;
-  --el-text-color-placeholder: #424850;
-  --el-border-color: #6b7280;
-  --el-border-color-light: #9ca3af;
-  --el-border-color-lighter: #d1d5db;
-  --el-color-primary: #1d4ed8;
-  --el-color-primary-light-9: #dbeafe;  /* 配合 primary 的高對比版底色 */
+/* ===== 深色模式（管理端 / 教師入口）=====
+ * 觸發：useA11yPreference 設 <html class="dark" data-theme="dark">。
+ * Element Plus 深色 token 由 `element-plus/theme-chalk/dark/css-vars.css` 提供，
+ * 本區段只覆寫自家 alias（main.css 內的 --bg-color / --text-* / --border-* 等）
+ * 與 design-tokens.css 內的 brand semantic 顏色。
+ */
+html.dark {
+  /* ----- Neutral scale 翻轉 -----
+   * 為什麼整組 scale 翻：許多 component scoped style 直接用 var(--neutral-700)、
+   * var(--neutral-500) 當文字色，若只覆寫 alias（--text-primary 等），這些
+   * 寫法仍會拿到淺色 scale，深底配深字看不清。design-tokens.css 把 scale
+   * 寫死 hex，alias 在 main.css 才綁到 scale，所以翻 scale 一處同時帶動 alias
+   * 與直接引用兩種寫法。 */
+  --neutral-0: #0f172a;
+  --neutral-50: #1e293b;
+  --neutral-100: #334155;
+  --neutral-200: #475569;
+  --neutral-300: #64748b;
+  --neutral-400: #94a3b8;
+  --neutral-500: #cbd5e1;
+  --neutral-600: #e2e8f0;
+  --neutral-700: #f1f5f9;
+  --neutral-800: #f8fafc;
+  --neutral-900: #ffffff;
+
+  /* ----- 自家 alias 顯式釘住（避免被局部覆寫漂掉）----- */
+  --bg-color: #0f172a;
+  --bg-color-soft: #1e293b;
+  --surface-color: #1e293b;
+  --text-primary: #f1f5f9;
+  --text-secondary: #cbd5e1;
+  --text-tertiary: #94a3b8;
+  --border-color: #334155;
+  --border-color-light: #1e293b;
+  --card-border: 1px solid #334155;
+
+  /* auth/login 卡片在深色下也要看得到輪廓 */
+  --auth-bg: #0f172a;
+
+  /* semantic *-soft：深底用 alpha tinted 色塊，不用淺色 pastel */
+  --color-success-soft: rgba(16, 185, 129, 0.18);
+  --color-warning-soft: rgba(245, 158, 11, 0.18);
+  --color-danger-soft: rgba(239, 68, 68, 0.18);
+  --color-info-soft: rgba(59, 130, 246, 0.20);
+  --color-success-lighter: var(--color-success-soft);
+  --color-warning-lighter: var(--color-warning-soft);
+  --color-danger-lighter: var(--color-danger-soft);
+  --color-info-lighter: var(--color-info-soft);
+
+  /* brand 在深底用淺一階確保對比 */
+  --brand-primary: #818cf8;       /* indigo-400 */
+  --brand-primary-hover: #a5b4fc; /* indigo-300 */
+  --brand-primary-soft: rgba(129, 140, 248, 0.18);
+
+  /* color scheme hint — 讓 input 原生樣式、scrollbar 跟著深色 */
+  color-scheme: dark;
 }
 
-html.ivy-contrast-high :focus-visible {
-  outline: 3px solid #000;
-  outline-offset: 2px;
+/* main.css 內 .el-card / .el-table 用 !important 覆寫 EP token，
+ * 深色下需再壓一次背景，否則寫死的 var(--bg-color) 已在上方翻好色但
+ * .el-table 仍可能殘留 light header；對 EP 內 popover/dropdown/dialog
+ * 也補預設深色背景，避免 main.css alias 沒覆蓋到的子組件穿幫。 */
+html.dark .el-card {
+  background-color: var(--surface-color) !important;
+  color: var(--text-primary);
+}
+html.dark .el-table,
+html.dark .el-table th.el-table__cell,
+html.dark .el-table tr {
+  background-color: transparent !important;
+  color: var(--text-primary);
+}
+html.dark .el-table th.el-table__cell {
+  background-color: var(--bg-color-soft) !important;
+  color: var(--text-secondary) !important;
+}
+html.dark .el-table--enable-row-hover .el-table__body tr:hover > td.el-table__cell {
+  background-color: var(--bg-color-soft) !important;
+}
+
+/* 全站 scrollbar：light 下走 main.css 內 #cbd5e1，dark 下會太亮，調整為灰階深色 */
+html.dark ::-webkit-scrollbar-thumb {
+  background: #475569;
+}
+html.dark ::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
+/* StatCard filled variant 在 light 下使用寫死 pastel hex bg（#eef0fd 等），dark
+ * 下會變成「淺底 + 翻轉後的亮 label」對比不足。改用 EP 對應的 *-light-9 系列
+ * （EP dark css 內已預先計算為深色 alpha tinted），label 拉回 text-secondary。 */
+html.dark .stat-card--filled.stat-card--primary { background: var(--el-color-primary-light-9); }
+html.dark .stat-card--filled.stat-card--success { background: var(--el-color-success-light-9); }
+html.dark .stat-card--filled.stat-card--warning { background: var(--el-color-warning-light-9); }
+html.dark .stat-card--filled.stat-card--danger  { background: var(--el-color-danger-light-9); }
+html.dark .stat-card--filled.stat-card--info    { background: var(--el-color-info-light-9); }
+html.dark .stat-card--filled .stat-card__label { color: var(--text-secondary); }
+html.dark .stat-card--filled.stat-card--primary .stat-card__value { color: var(--brand-primary); }
+html.dark .stat-card--filled.stat-card--success .stat-card__value { color: #6ee7b7; }
+html.dark .stat-card--filled.stat-card--warning .stat-card__value { color: #fcd34d; }
+html.dark .stat-card--filled.stat-card--danger  .stat-card__value { color: #fca5a5; }
+html.dark .stat-card--filled.stat-card--info    .stat-card__value { color: #93c5fd; }
+
+/* EP plain primary button 在 dark 下：main.css 用 var(--color-primary) !important
+ * 強蓋 bg 為 brand indigo（亮）導致與 EP 的 button text（藍 #409eff）對比差。
+ * 在 dark scope 內把 EP primary token 對齊 brand indigo（讓 button text 也走
+ * indigo），plain variant 顯式套深色背景，避免 main.css 的 !important 蓋掉。 */
+html.dark {
+  --el-color-primary: #818cf8;
+  --el-color-primary-dark-2: #a5b4fc;
+}
+html.dark .el-button--primary.is-plain {
+  background-color: rgba(129, 140, 248, 0.16) !important;
+  border-color: rgba(129, 140, 248, 0.45) !important;
+  color: #a5b4fc !important;
+}
+html.dark .el-button--primary.is-plain:hover {
+  background-color: rgba(129, 140, 248, 0.28) !important;
+  color: #c7d2fe !important;
+}
+
+/* AdminSidebar / PortalLayout 側欄在 light 下故意用 neutral 深階做「暗色側欄」
+ * （background: var(--text-primary) / var(--neutral-900) / var(--neutral-700)）。
+ * 翻 neutral 後它會吃到淺階變成「白底白字」。在 sidebar scope 內還原成 light
+ * 的深階值，讓深色模式下 sidebar 仍維持暗色側欄與主區形成層次。 */
+html.dark .admin-sidebar,
+html.dark .portal-layout .el-aside {
+  --text-primary: #1e293b;
+  --text-secondary: #94a3b8;
+  --text-tertiary: #94a3b8;
+  --neutral-700: #334155;
+  --neutral-800: #1e293b;
+  --neutral-900: #0f172a;
 }
 
 /* ============================================================

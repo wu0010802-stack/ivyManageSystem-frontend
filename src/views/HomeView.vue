@@ -601,7 +601,7 @@ const showTodoSection = computed(
   padding: 18px 18px 14px;
   border-radius: 14px;
   border: 1px solid transparent;
-  background: #fff;
+  background: var(--surface-color);
   cursor: pointer;
   text-align: left;
   font: inherit;
@@ -688,9 +688,15 @@ const showTodoSection = computed(
   padding: 16px 20px;
   border-radius: 12px;
   background: var(--color-success-soft);
-  border: 1px solid #a7f3d0;
-  color: #065f46;
+  border: 1px solid var(--color-success-soft);
+  color: var(--color-success-darker);
   font-size: 13px;
+}
+
+/* dark 下 success-darker 是深綠在淺底會 OK，但 dark 我們的 success-soft 已改 alpha tint，
+   文字改用較亮的 success 主色確保對比 */
+html.dark .todo-empty {
+  color: var(--color-success);
 }
 
 .todo-empty__icon {

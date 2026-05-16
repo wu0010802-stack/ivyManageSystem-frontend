@@ -339,6 +339,7 @@ const breadcrumbItems = computed(() => {
         <FeesTab
           v-else-if="tab.name === 'fees'"
           :student-id="studentId"
+          :student-name="profile.basic?.name || ''"
           :active="activeTab === 'fees'"
         />
         <ActivityTab

@@ -39,13 +39,17 @@
 
       <div class="a11y-section">
         <div class="a11y-row">
-          <span class="a11y-label">高對比</span>
+          <span class="a11y-label">
+            深色模式
+            <el-tag size="small" type="warning" effect="plain" class="beta-tag">Beta</el-tag>
+          </span>
           <el-switch
-            :model-value="store.contrast === 'high'"
-            data-testid="a11y-contrast-toggle"
-            @update:model-value="(v) => (store.contrast = v ? 'high' : 'normal')"
+            :model-value="store.theme === 'dark'"
+            data-testid="a11y-theme-toggle"
+            @update:model-value="(v) => (store.theme = v ? 'dark' : 'light')"
           />
         </div>
+        <p class="a11y-hint">框架與主要頁面已適配，部分舊頁面仍在調整中</p>
       </div>
 
       <div class="a11y-section a11y-footer">
@@ -107,6 +111,23 @@ const sizeOptions = [
   font-size: 13px;
   color: var(--el-text-color-secondary);
   font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.beta-tag {
+  font-size: 10px;
+  height: 18px;
+  padding: 0 6px;
+  line-height: 1;
+}
+
+.a11y-hint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--el-text-color-placeholder);
+  line-height: 1.4;
 }
 
 .a11y-row {

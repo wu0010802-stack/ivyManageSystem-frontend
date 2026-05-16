@@ -5,7 +5,7 @@ import { useA11yPreferenceStore } from '@/stores/a11yPreference'
 const STORAGE_KEY = 'ivy.a11y'
 const SIZE_CLASSES = ['ivy-size-sm', 'ivy-size-md', 'ivy-size-lg', 'ivy-size-xl']
 const VALID_SIZES = ['sm', 'md', 'lg', 'xl']
-const VALID_CONTRASTS = ['normal', 'high']
+const VALID_THEMES = ['light', 'dark']
 
 let initialized = false
 
@@ -21,8 +21,12 @@ export function _resetForTests() {
  *
  * init() 會：
  *   1. 從 localStorage 讀回偏好（損壞則 fallback 預設）
- *   2. 套用對應的 class 到 <html>
- *   3. 註冊 watch：往後 store 變動會自動 persist + 重新套用 class
+ *   2. 套用對應的 class / data-theme 到 <html>
+ *   3. 註冊 watch：往後 store 變動會自動 persist + 重新套用
+ *
+ * Dark mode 套用方式：
+ *   - `<html class="dark">`：Element Plus 官方深色主題慣例
+ *   - `<html data-theme="dark">`：自家 design-tokens 與 parent token 共用慣例
  */
 export function useA11yPreference() {
   const store = useA11yPreferenceStore()
@@ -32,7 +36,9 @@ export function useA11yPreference() {
     const html = document.documentElement
     SIZE_CLASSES.forEach((c) => html.classList.remove(c))
     html.classList.add(`ivy-size-${store.fontSize}`)
-    html.classList.toggle('ivy-contrast-high', store.contrast === 'high')
+    const isDark = store.theme === 'dark'
+    html.classList.toggle('dark', isDark)
+    html.setAttribute('data-theme', isDark ? 'dark' : 'light')
     html.classList.toggle('ivy-cb-safe', store.colorBlind)
   }
 
@@ -53,7 +59,7 @@ export function useA11yPreference() {
         const parsed = JSON.parse(raw)
         if (parsed && typeof parsed === 'object') {
           if (VALID_SIZES.includes(parsed.fontSize)) store.fontSize = parsed.fontSize
-          if (VALID_CONTRASTS.includes(parsed.contrast)) store.contrast = parsed.contrast
+          if (VALID_THEMES.includes(parsed.theme)) store.theme = parsed.theme
           if (typeof parsed.colorBlind === 'boolean') store.colorBlind = parsed.colorBlind
         }
       }

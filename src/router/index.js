@@ -184,6 +184,12 @@ const router = createRouter({
             meta: { title: '系統設定' }
         },
         {
+            path: '/profile',
+            name: 'profile',
+            component: () => import('../views/AdminProfileView.vue'),
+            meta: { title: '個人資料' }
+        },
+        {
             path: '/gov-reports',
             name: 'gov-reports',
             component: () => import('../views/GovReportsView.vue'),
