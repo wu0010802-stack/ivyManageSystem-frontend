@@ -54,7 +54,7 @@ async function load() {
     specialBonuses.value = (await listSpecialBonuses(cycleId)).data
     classTargets.value = (await listClassEnrollmentTargets(cycleId)).data
   } catch (e) {
-    apiError(e, '載入失敗')
+    ElMessage.error(apiError(e, '載入失敗'))
   } finally {
     loading.value = false
   }
@@ -69,7 +69,7 @@ async function sign(s, stage) {
     ElMessage.success('簽核完成')
     await load()
   } catch (e) {
-    apiError(e, '簽核失敗')
+    ElMessage.error(apiError(e, '簽核失敗'))
   } finally {
     busy.value = false
   }

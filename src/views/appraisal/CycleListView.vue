@@ -45,7 +45,7 @@ async function load() {
     const { data } = await listAppraisalCycles()
     cycles.value = data
   } catch (e) {
-    apiError(e, '載入考核週期失敗')
+    ElMessage.error(apiError(e, '載入考核週期失敗'))
   } finally {
     loading.value = false
   }
@@ -59,7 +59,7 @@ async function submit() {
     createDialog.value = false
     await load()
   } catch (e) {
-    apiError(e, '建立失敗')
+    ElMessage.error(apiError(e, '建立失敗'))
   } finally {
     submitting.value = false
   }
@@ -84,7 +84,7 @@ async function doImport() {
     importDialog.value = false
     await load()
   } catch (e) {
-    apiError(e, '匯入失敗')
+    ElMessage.error(apiError(e, '匯入失敗'))
   } finally {
     submitting.value = false
   }

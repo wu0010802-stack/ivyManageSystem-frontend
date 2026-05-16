@@ -41,7 +41,7 @@ async function load() {
   try {
     cycles.value = (await listYearEndCycles()).data
   } catch (e) {
-    apiError(e, '載入失敗')
+    ElMessage.error(apiError(e, '載入失敗'))
   } finally {
     loading.value = false
   }
@@ -55,7 +55,7 @@ async function submit() {
     createDialog.value = false
     await load()
   } catch (e) {
-    apiError(e, '建立失敗')
+    ElMessage.error(apiError(e, '建立失敗'))
   } finally {
     busy.value = false
   }
@@ -83,7 +83,7 @@ async function doImport() {
     importDialog.value = false
     await load()
   } catch (e) {
-    apiError(e, '匯入失敗')
+    ElMessage.error(apiError(e, '匯入失敗'))
   } finally {
     busy.value = false
   }
