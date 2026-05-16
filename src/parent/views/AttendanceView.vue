@@ -99,7 +99,7 @@ function goToday() {
 // 出席/present/on_time → tint-calendar（綠）
 // 病假/事假/leave/absence → tint-leave（青綠）
 // 缺席/absent → tint-announcement（珊瑚紅）
-// 遲到/late/tardy → tint-money（黃）（已有 --pt-tint-late 但統一改用 tint-money 以符合 P6 規格）
+// 遲到/late/tardy → tint-money（黃，與一般出席區隔）
 const statusColor = (status) => {
   return {
     出席:   { bg: 'var(--pt-tint-calendar)',     color: 'var(--pt-tint-calendar-fg)' },

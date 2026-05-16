@@ -86,9 +86,8 @@
 
   /* ============================================================
    * Parent App 表面 / 背景 alias
-   * App body 改用 sky 漸層底（由 App.vue 套用），其餘維持白卡 + cream
+   * 維持白卡 + cream tint
    * ============================================================ */
-  --pt-surface-app:        var(--ivy-cream-bg, #fffce8); /* App body bg（IvyKids cream） */
   --pt-surface-card:       #ffffff; /* card 主背景 */
   --pt-surface-mute:       var(--ivy-leaf-bg, #f5fbe6); /* card divider / 弱化 */
   --pt-surface-mute-soft:  #fefcf3; /* hover / pressed 背景 */
@@ -116,7 +115,6 @@
   --pt-success-text:      #2d7c56;       /* success label */
   --pt-info-text:         #2d6f8e;       /* info chip */
   --pt-info-link:         #5ba8cc;       /* link 色 */
-  --pt-violet-bg:         #ebe0f5;       /* medication chip bg */
   --pt-violet-text:       #6e3f94;       /* medication chip text */
 
   color-scheme: light;
@@ -137,9 +135,6 @@
 
   /* danger hover：搭配 destructive button :active 視覺回饋 */
   --color-danger-hover: #c92626;  /* color-danger #ef4444 darken ~15% */
-
-  /* hero / brand 漸層上的文字色：light + dark 都白，避免 neutral-0 在 dark mode 落到 slate 後對比崩潰 */
-  --pt-on-hero: #ffffff;
 
   /* ============================================================
    * Elevation：Sky-tinted 暖陰影（取代冷藍灰）
@@ -165,12 +160,9 @@
   --pt-hairline: 1px solid rgba(91, 168, 204, 0.18);
 
   /* ============================================================
-   * 漸層 tokens（v2.1 配色）
+   * 漸層 tokens
    * ============================================================ */
-  --pt-gradient-brand:      linear-gradient(135deg, var(--ivy-green-deep) 0%, var(--ivy-green-bright) 100%);
-  --pt-gradient-brand-soft: linear-gradient(135deg, var(--ivy-leaf-bg) 0%, #d4ffe7 100%);
   --pt-gradient-warm:       linear-gradient(135deg, var(--ivy-tile-yellow-bg) 0%, var(--ivy-star-yellow) 100%);
-  --pt-gradient-info:       linear-gradient(135deg, var(--ivy-teal-soft) 0%, var(--ivy-teal-primary) 100%);
   /* Hero 漸層：IvyKids cream → leaf 嫩綠過渡，承接整體柔和奶油黃感 */
   --pt-gradient-hero:       linear-gradient(135deg, var(--ivy-cream-bg) 0%, var(--ivy-leaf-bg) 100%);
 
@@ -198,15 +190,9 @@
   --pt-severity-severe-bg: #fecaca;  --pt-severity-severe-fg: #991b1b;  /* 比 coral 更強，獨立紅 */
 
   /* ============================================================
-   * Late chip 專用 tint（與 warning 區隔）
-   * ============================================================ */
-  --pt-tint-late:    #fff4c9;  --pt-tint-late-fg: #7a6500;
-
-  /* ============================================================
-   * Backdrop / blur
+   * Backdrop
    * ============================================================ */
   --pt-scrim: rgba(27, 68, 89, 0.45);  /* modal scrim 暖咖啡覆蓋 */
-  --pt-backdrop-blur: 8px;
 
   /* ---------------- IvyKids brand tokens (2026-05-07 rebrand) ----------------
    * Hex 來源：ivykids.tw 官網 CSS / favicon / about-b 教學理念 tile。
@@ -237,31 +223,20 @@
    * 目標：把 LIFF 內的「一張張功能卡」整理成清楚的日常工作台。
    * ============================================================ */
   --pt-app-max-width: 560px;
-  --pt-page-gutter: clamp(16px, 4vw, 24px);
   --pt-page-gap: 18px;
   --pt-card-radius: 14px;
   --pt-control-radius: 12px;
-  --pt-dock-radius: 20px;
-  --pt-surface-toolbar: rgba(255, 252, 232, 0.98);
-  --pt-surface-dock: rgba(255, 255, 255, 0.98);
   --pt-surface-raised: #ffffff;
   --pt-surface-recessed: #f5fbe6;
-  --pt-surface-skyline: #edf8f5;
   --pt-page-border: rgba(20, 85, 85, 0.12);
   --pt-shadow-card:
     0 1px 0 rgba(255, 255, 255, 0.92) inset,
     0 10px 28px rgba(27, 68, 89, 0.08);
-  --pt-shadow-dock:
-    0 1px 0 rgba(255, 255, 255, 0.94) inset,
-    0 -10px 36px rgba(27, 68, 89, 0.12);
   --pt-shadow-press:
     0 1px 0 rgba(255, 255, 255, 0.9) inset,
     0 8px 18px rgba(27, 68, 89, 0.08);
-  --pt-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --pt-tint-brand: rgba(13, 144, 83, 0.10);
-  --pt-tint-brand-strong: rgba(13, 144, 83, 0.16);
   --pt-tint-sun: rgba(255, 222, 81, 0.28);
-  --pt-tint-coral: rgba(255, 139, 139, 0.16);
 }
 
 /* ============================================================
@@ -288,7 +263,6 @@
   --pt-text-disabled: #475569;
   --pt-text-hint: #475569;
 
-  --pt-surface-app:        var(--ivy-cream-bg);
   --pt-surface-card:       #1b2c3a;
   --pt-surface-mute:       var(--ivy-leaf-bg);
   --pt-surface-mute-soft:  #1b2c3a;
@@ -323,7 +297,6 @@
   --pt-success-text:      #a8e6cf;
   --pt-info-text:         #92c8e0;
   --pt-info-link:         #92c8e0;
-  --pt-violet-bg:         rgba(181, 140, 217, 0.22);
   --pt-violet-text:       #d4bce6;
 
   --pt-elev-1: 0 1px 2px rgba(0, 0, 0, 0.30), 0 1px 3px rgba(0, 0, 0, 0.20);
@@ -331,10 +304,7 @@
   --pt-elev-3: 0 12px 24px rgba(0, 0, 0, 0.40), 0 24px 48px rgba(0, 0, 0, 0.30);
   --pt-hairline: 1px solid rgba(255, 255, 255, 0.06);
 
-  --pt-gradient-brand:      linear-gradient(135deg, var(--ivy-green-deep) 0%, var(--ivy-green-bright) 100%);
-  --pt-gradient-brand-soft: linear-gradient(135deg, rgba(13, 144, 83, 0.20) 0%, rgba(13, 144, 83, 0.10) 100%);
   --pt-gradient-warm:       linear-gradient(135deg, var(--ivy-tile-yellow-bg) 0%, rgba(255, 222, 81, 0.14) 100%);
-  --pt-gradient-info:       linear-gradient(135deg, var(--ivy-teal-soft) 0%, rgba(77, 196, 196, 0.12) 100%);
   --pt-gradient-hero:       linear-gradient(135deg, var(--ivy-cream-bg) 0%, var(--ivy-leaf-bg) 100%);
 
   /* dark tint：對應 ivy-tile-* 配色（rgba 0.18 已在 ivy-tile-* 自帶 alpha） */
@@ -353,12 +323,9 @@
   --pt-severity-mod-bg:    rgba(255, 139, 139, 0.20); --pt-severity-mod-fg:    #ffb5ad;
   --pt-severity-severe-bg: rgba(239, 68, 68, 0.22);   --pt-severity-severe-fg: #fecaca;
 
-  --pt-tint-late: rgba(255, 217, 61, 0.20); --pt-tint-late-fg: #ffe285;
-
   --pt-scrim: rgba(15, 31, 42, 0.65);
 
   --color-danger-hover: #dc2626;  /* dark mode 用稍亮一階 */
-  --pt-on-hero: #ffffff;          /* dark mode 仍白 */
 
   /* IvyKids dark — 對應 light 段，rgba 0.18 軟化 tile bg */
   --ivy-green-deep:    #5aa842;
@@ -379,19 +346,13 @@
   --ivy-tile-green-bg:   rgba(90, 168, 66, 0.18);   --ivy-tile-green-fg:   #8bc34a;
   --ivy-tile-teal-bg:    rgba(77, 196, 196, 0.18);  --ivy-tile-teal-fg:    #4dc4c4;
 
-  --pt-surface-toolbar: rgba(31, 28, 20, 0.98);
-  --pt-surface-dock: rgba(27, 44, 58, 0.98);
   --pt-surface-raised: #1b2c3a;
   --pt-surface-recessed: #1a2418;
-  --pt-surface-skyline: #132736;
   --pt-page-border: rgba(255, 255, 255, 0.08);
   --pt-shadow-card: 0 10px 28px rgba(0, 0, 0, 0.28);
-  --pt-shadow-dock: 0 -10px 36px rgba(0, 0, 0, 0.32);
   --pt-shadow-press: 0 8px 18px rgba(0, 0, 0, 0.24);
   --pt-tint-brand: rgba(90, 168, 66, 0.16);
-  --pt-tint-brand-strong: rgba(90, 168, 66, 0.24);
   --pt-tint-sun: rgba(255, 230, 109, 0.16);
-  --pt-tint-coral: rgba(255, 154, 144, 0.18);
 }
 
 /* ========== Focus Visible ==========
