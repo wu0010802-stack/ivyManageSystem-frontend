@@ -169,9 +169,6 @@ const dialogStyle = computed(() => ({
   position: fixed;
   inset: 0;
   background: var(--pt-scrim, rgba(0, 0, 0, 0.32));
-  /* Backdrop blur — Soft UI Evolution 標誌：背景虛化突顯前景 */
-  -webkit-backdrop-filter: blur(var(--pt-backdrop-blur, 8px));
-  backdrop-filter: blur(var(--pt-backdrop-blur, 8px));
   display: flex;
   align-items: center;
   justify-content: center;

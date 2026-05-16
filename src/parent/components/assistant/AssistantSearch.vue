@@ -30,8 +30,7 @@ watch(() => props.modelValue, v => { local.value = v })
   position: sticky; top: 0; z-index: 5;
   display: flex; align-items: center; gap: 8px;
   padding: 10px 14px;
-  background: rgba(255,255,255,0.95);
-  backdrop-filter: blur(8px);
+  background: #fff;
   border-bottom: 1px solid #e5e7eb;
 }
 .material-symbols-rounded { color: #6b7280; font-size: 20px; }

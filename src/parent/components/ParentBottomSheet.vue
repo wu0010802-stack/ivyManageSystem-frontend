@@ -9,7 +9,7 @@
  *  - a11y：role="dialog"、aria-modal、aria-labelledby、focus trap、ESC 關閉、開啟時自動 focus 第一個可 focus 元素、關閉時還原焦點
  *  - body scroll lock（開啟時鎖定、關閉/卸載時還原）
  *  - safe-area-inset-bottom 適配；reduced-motion 下停用 transition/transform 動畫
- *  - 視覺：--pt-elev-3 + --pt-hairline + --pt-scrim + --pt-backdrop-blur
+ *  - 視覺：--pt-elev-3 + --pt-hairline + --pt-scrim
  *
  * Props：
  *  - modelValue / title / snapPoints / defaultSnap / dismissible / showHandle
@@ -306,8 +306,6 @@ const hasFooterSlot = computed(() => !!slots.footer)
   inset: 0;
   z-index: var(--z-modal-backdrop, 90);
   background: rgba(0, 0, 0, 0.32);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
   display: flex;
   align-items: flex-end;
   justify-content: center;

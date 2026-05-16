@@ -156,8 +156,7 @@ onMounted(async () => {
 .bottom-bar {
   position: fixed; bottom: 0; left: 0; right: 0;
   padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
-  background: rgba(255,255,255,0.95);
-  backdrop-filter: blur(8px);
+  background: #fff;
   border-top: 1px solid #e5e7eb;
 }
 .contact-btn {
