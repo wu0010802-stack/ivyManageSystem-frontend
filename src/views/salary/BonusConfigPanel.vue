@@ -1,7 +1,7 @@
 <script setup>
 import { reactive, ref, onMounted } from 'vue'
 import { getBonusConfig, updateBonusConfig, getGradeTargets, updateGradeTargets, getPositionSalary, updatePositionSalary, comparePositionSalary, syncPositionSalary, getTitles, updateTitle } from '@/api/config'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { hasPermission } from '@/utils/auth'
 
 const loadingBonus = ref(false)
@@ -61,12 +61,37 @@ const fetchGradeTargets = async () => {
 }
 
 const saveBonusConfig = async () => {
+  // bug sweep 2026-05-16 P1-5：BonusConfig 變更影響全員獎金基數，
+  // 後端對齊 PUT /insurance/brackets 要求 reason ≥10 字 + ACTIVITY_PAYMENT_APPROVE。
+  let reason
+  try {
+    const result = await ElMessageBox.prompt(
+      '此變更會影響全員獎金基數，請輸入異動原因（至少 10 個字）：',
+      '獎金設定變更原因',
+      {
+        confirmButtonText: '確認儲存',
+        cancelButtonText: '取消',
+        inputType: 'textarea',
+        inputValidator: (val) => {
+          if (!val || val.trim().length < 10) {
+            return '原因至少 10 個字'
+          }
+          return true
+        },
+      }
+    )
+    reason = result.value.trim()
+  } catch {
+    return // 使用者按取消
+  }
+
   loadingBonus.value = true
   try {
-    await updateBonusConfig(bonusConfig)
+    await updateBonusConfig({ ...bonusConfig, reason })
     ElMessage.success('薪資設定已儲存')
   } catch (error) {
-    ElMessage.error('薪資設定儲存失敗')
+    const detail = error?.response?.data?.detail
+    ElMessage.error(typeof detail === 'string' ? detail : '薪資設定儲存失敗')
   } finally {
     loadingBonus.value = false
   }
