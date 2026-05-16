@@ -7,9 +7,6 @@ vi.mock('@/utils/auth', () => ({
   PERMISSION_VALUES: {},
   getUserInfo: () => ({ permissions: 0xFFFFFFFF, name: 'admin' }),
 }))
-vi.mock('@/composables/usePinnedPages', () => ({
-  usePinnedPages: () => ({ pinnedPages: [], togglePin: vi.fn(), isPinned: () => false, unpin: vi.fn() }),
-}))
 
 const router = createRouter({
   history: createMemoryHistory(),
