@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { fetchChildReports, childReportDownloadUrl } from '../api/childReports'
 import { toast } from '../utils/toast'
+import ParentIcon from '../components/ParentIcon.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -38,7 +39,7 @@ onMounted(load)
 <template>
   <div class="child-reports-view">
     <header>
-      <button class="back-btn" @click="goBack">← 返回</button>
+      <button class="back-btn" @click="goBack"><ParentIcon name="arrow-left" size="sm" />返回</button>
       <h2>歷次成長報告</h2>
     </header>
 
@@ -75,7 +76,12 @@ header > h2 { margin: 0; font-size: 17px; color: #0d9053; }
   background: none;
   border: none;
   font-size: 14px;
-  color: #0d9053;
+  color: var(--brand-primary, #0d9053);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 0;
+  cursor: pointer;
 }
 .placeholder {
   padding: 32px 16px;
