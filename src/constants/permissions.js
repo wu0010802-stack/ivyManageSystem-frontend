@@ -59,12 +59,16 @@ export const PERMISSION_VALUES = {
   // 政府申報（Phase 4）— 對齊後端 Permission.GOV_REPORTS_VIEW/EXPORT
   GOV_REPORTS_VIEW: 2 ** 50,
   GOV_REPORTS_EXPORT: 2 ** 51,
-  // 教職員考核（Phase 1）— 後端 1<<55~59；位元 52-54 後端保留未用
+  // 教職員考核（Phase 1）— 後端 1<<55~59
   APPRAISAL_READ: 2 ** 55,
   APPRAISAL_EVENT_WRITE: 2 ** 56,
   APPRAISAL_REVIEW: 2 ** 57,
   APPRAISAL_ACCOUNTING: 2 ** 58,
   APPRAISAL_FINALIZE: 2 ** 59,
+  // 年終獎金結算 — 對齊後端 utils/permissions.py:96-98
+  YEAR_END_READ: 2 ** 52,
+  YEAR_END_WRITE: 2 ** 60,
+  YEAR_END_FINALIZE: 2 ** 61,
 }
 
 export const ROUTE_PERMISSION_RULES = [
@@ -111,6 +115,14 @@ export const ROUTE_PERMISSION_RULES = [
   { path: '/portfolio/medication-today', permission: 'STUDENTS_HEALTH_READ' },
   // 考核：navigation gate 暫掛 SETTINGS_READ；後端 router 用 APPRAISAL_* 細粒度守衛
   { path: '/appraisal', permission: 'SETTINGS_READ', prefix: true },
+  // 考核管理整合頁（顯示 SETTINGS_READ 或 SALARY_READ 任一即可）
+  { path: '/appraisal-management', permission: 'SETTINGS_READ' },
+  { path: '/appraisal-management', permission: 'SALARY_READ' },
+  // 年終獎金結算
+  { path: '/year_end', permission: 'YEAR_END_READ', prefix: true },
+  // 加班 / 會議整合頁（OVERTIME_READ 或 MEETINGS 任一）
+  { path: '/overtime', permission: 'OVERTIME_READ' },
+  { path: '/overtime', permission: 'MEETINGS' },
 ]
 
 // 不需要權限即可訪問的路由（登入頁、密碼變更、公開報名頁等）。
