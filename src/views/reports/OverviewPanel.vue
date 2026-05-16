@@ -81,10 +81,10 @@ const formatPct = (v) => {
   <div v-else class="overview">
     <el-row :gutter="16" class="kpi-row">
       <el-col :xs="12" :sm="6">
-        <el-card class="kpi-card kpi-card--blue" shadow="hover">
+        <el-card class="kpi-card kpi-card--blue" shadow="never">
           <div class="kpi-icon"><el-icon :size="22"><Coin /></el-icon></div>
           <div class="kpi-label">本年總收入</div>
-          <div class="kpi-value value-blue">{{ money(summary.total_revenue) }}</div>
+          <div class="kpi-value">{{ money(summary.total_revenue) }}</div>
           <div v-if="mom?.revenue != null" class="kpi-trend" :class="mom.revenue >= 0 ? 'up' : 'down'">
             {{ mom.revenue >= 0 ? '↑' : '↓' }} {{ formatPct(mom.revenue) }}
             <span class="kpi-trend-label">vs 上月</span>
@@ -93,18 +93,18 @@ const formatPct = (v) => {
         </el-card>
       </el-col>
       <el-col :xs="12" :sm="6">
-        <el-card class="kpi-card kpi-card--orange" shadow="hover">
+        <el-card class="kpi-card kpi-card--orange" shadow="never">
           <div class="kpi-icon"><el-icon :size="22"><Wallet /></el-icon></div>
           <div class="kpi-label">本年退款</div>
-          <div class="kpi-value value-orange">{{ money(summary.total_refund) }}</div>
+          <div class="kpi-value">{{ money(summary.total_refund) }}</div>
           <div class="kpi-sub">學費+才藝</div>
         </el-card>
       </el-col>
       <el-col :xs="12" :sm="6">
-        <el-card class="kpi-card kpi-card--red" shadow="hover">
+        <el-card class="kpi-card kpi-card--red" shadow="never">
           <div class="kpi-icon"><el-icon :size="22"><Money /></el-icon></div>
           <div class="kpi-label">本年總支出</div>
-          <div class="kpi-value value-red">{{ money(summary.total_expense) }}</div>
+          <div class="kpi-value">{{ money(summary.total_expense) }}</div>
           <div v-if="mom?.expense != null" class="kpi-trend" :class="mom.expense >= 0 ? 'up-warn' : 'down-good'">
             {{ mom.expense >= 0 ? '↑' : '↓' }} {{ formatPct(mom.expense) }}
             <span class="kpi-trend-label">vs 上月</span>
@@ -113,7 +113,7 @@ const formatPct = (v) => {
         </el-card>
       </el-col>
       <el-col :xs="12" :sm="6">
-        <el-card class="kpi-card kpi-card--green" shadow="hover">
+        <el-card class="kpi-card kpi-card--green" shadow="never">
           <div class="kpi-icon"><el-icon :size="22"><TrendCharts /></el-icon></div>
           <div class="kpi-label">本年淨現金</div>
           <div class="kpi-value" :class="netClass">{{ money(summary.net_cashflow) }}</div>
@@ -128,14 +128,14 @@ const formatPct = (v) => {
 
     <el-row :gutter="16">
       <el-col :xs="24" :sm="8">
-        <el-card class="kpi-card" shadow="hover">
+        <el-card class="kpi-card" shadow="never">
           <div class="kpi-icon"><el-icon :size="22"><Check /></el-icon></div>
           <div class="kpi-label">年度出勤率</div>
           <div class="kpi-value">{{ avgAttendanceRate != null ? `${avgAttendanceRate}%` : '-' }}</div>
         </el-card>
       </el-col>
       <el-col :xs="24" :sm="8">
-        <el-card class="kpi-card" shadow="hover">
+        <el-card class="kpi-card" shadow="never">
           <div class="kpi-icon"><el-icon :size="22"><DataAnalysis /></el-icon></div>
           <div class="kpi-label">淨營收</div>
           <div class="kpi-value">{{ money(summary.net_revenue) }}</div>
@@ -143,7 +143,7 @@ const formatPct = (v) => {
         </el-card>
       </el-col>
       <el-col :xs="24" :sm="8">
-        <el-card class="kpi-card" shadow="hover">
+        <el-card class="kpi-card" shadow="never">
           <div class="kpi-icon"><el-icon :size="22"><Calendar /></el-icon></div>
           <div class="kpi-label">收支比</div>
           <div class="kpi-value">
@@ -204,8 +204,7 @@ const formatPct = (v) => {
   margin-left: 4px;
 }
 
-.value-blue { color: var(--color-info); }
-.value-orange { color: var(--color-warning); }
+/* netClass 動態：正數綠／負數紅，提示營運盈虧；非裝飾性色，保留 */
 .value-red { color: var(--color-danger); }
 .value-green { color: var(--color-success); }
 </style>
