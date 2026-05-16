@@ -54,7 +54,7 @@ async function fetchData() {
   if (!props.studentId) return
   loading.value = true
   try {
-    const params = { student_id: props.studentId, page: 1, page_size: 200 }
+    const params = { student_id: props.studentId, page: 1, page_size: 100 }
     if (filterFrom.value) params.date_from = filterFrom.value
     if (filterTo.value) params.date_to = filterTo.value
     const res = await getStudentRecordsTimeline(params)

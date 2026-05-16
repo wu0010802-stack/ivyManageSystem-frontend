@@ -21,7 +21,7 @@ async function fetchData() {
   try {
     const { data } = await listStudentLeaves({
       student_id: props.studentId,
-      page_size: 200,
+      limit: 200,
     })
     items.value = data.items || data || []
   } catch (e) {
