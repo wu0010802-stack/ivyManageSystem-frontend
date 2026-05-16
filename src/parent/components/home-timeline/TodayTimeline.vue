@@ -9,7 +9,7 @@ const emit = defineEmits(['navigate'])
 </script>
 
 <template>
-  <div v-if="buckets.length" class="timeline pt-stagger" aria-label="今日動態">
+  <div v-if="buckets.length" class="timeline" aria-label="今日動態">
     <section
       v-for="b in buckets"
       :key="b.key"

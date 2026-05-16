@@ -572,31 +572,6 @@ button {
   animation: pt-shimmer 1.4s ease-in-out infinite;
 }
 
-/* ========== Stagger Entrance ==========
- * 列表/卡片進場動畫。套在父層加 .pt-stagger，子層自動 fade-up。
- * 用 CSS variable `--pt-stagger-delay` 控制每張卡的延遲。
- */
-@keyframes pt-fade-up {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-.pt-stagger > * {
-  animation: pt-fade-up 0.32s cubic-bezier(0.4, 0, 0.2, 1) both;
-  animation-delay: var(--pt-stagger-delay, 0ms);
-}
-.pt-stagger > *:nth-child(1) { animation-delay: 0ms; }
-.pt-stagger > *:nth-child(2) { animation-delay: 40ms; }
-.pt-stagger > *:nth-child(3) { animation-delay: 80ms; }
-.pt-stagger > *:nth-child(4) { animation-delay: 120ms; }
-.pt-stagger > *:nth-child(5) { animation-delay: 160ms; }
-.pt-stagger > *:nth-child(6) { animation-delay: 200ms; }
-.pt-stagger > *:nth-child(7) { animation-delay: 240ms; }
-.pt-stagger > *:nth-child(8) { animation-delay: 280ms; }
-/* 第 9 起固定 280ms 不再遞增（避免長列表進場拖很久） */
-.pt-stagger > *:nth-child(n+9) { animation-delay: 280ms; }
-
 @media (prefers-reduced-motion: reduce) {
   .pt-shimmer { animation: none; }
-  .pt-stagger > * { animation: none; }
 }
