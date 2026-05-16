@@ -65,39 +65,99 @@ html[class*="ivy-size-"] {
  * 與 design-tokens.css 內的 brand semantic 顏色。
  */
 html.dark {
-  /* 自家 alias（main.css）：把 surface / text / border 翻成暗色 */
-  --bg-color: #0f172a;            /* slate-900 — body 背景 */
-  --bg-color-soft: #1e293b;       /* slate-800 — card hover / fill */
-  --surface-color: #1e293b;       /* slate-800 — el-card / popover 表面 */
-  --text-primary: #f1f5f9;        /* slate-100 */
-  --text-secondary: #cbd5e1;      /* slate-300 */
-  --text-tertiary: #94a3b8;       /* slate-400 */
-  --border-color: #334155;        /* slate-700 */
-  --border-color-light: #1e293b;
+  /* ----- Neutral scale 翻轉 -----
+   * 為什麼整組 scale 翻：許多 component scoped style 直接用 var(--neutral-700)、
+   * var(--neutral-500) 當文字色，若只覆寫 alias（--text-primary 等），這些
+   * 寫法仍會拿到淺色 scale，深底配深字看不清。design-tokens.css 把 scale
+   * 寫死 hex，alias 在 main.css 才綁到 scale，所以翻 scale 一處同時帶動 alias
+   * 與直接引用兩種寫法。 */
+  --neutral-0: #0f172a;
+  --neutral-50: #1e293b;
+  --neutral-100: #334155;
+  --neutral-200: #475569;
+  --neutral-300: #64748b;
+  --neutral-400: #94a3b8;
+  --neutral-500: #cbd5e1;
+  --neutral-600: #e2e8f0;
+  --neutral-700: #f1f5f9;
+  --neutral-800: #f8fafc;
+  --neutral-900: #ffffff;
 
-  /* 卡片邊框換暗色 */
+  /* ----- 自家 alias 顯式釘住（避免被局部覆寫漂掉）----- */
+  --bg-color: #0f172a;
+  --bg-color-soft: #1e293b;
+  --surface-color: #1e293b;
+  --text-primary: #f1f5f9;
+  --text-secondary: #cbd5e1;
+  --text-tertiary: #94a3b8;
+  --border-color: #334155;
+  --border-color-light: #1e293b;
   --card-border: 1px solid #334155;
 
-  /* semantic *-soft 在深底會太亮，降到帶 alpha 的色塊 */
+  /* auth/login 卡片在深色下也要看得到輪廓 */
+  --auth-bg: #0f172a;
+
+  /* semantic *-soft：深底用 alpha tinted 色塊，不用淺色 pastel */
   --color-success-soft: rgba(16, 185, 129, 0.18);
   --color-warning-soft: rgba(245, 158, 11, 0.18);
   --color-danger-soft: rgba(239, 68, 68, 0.18);
   --color-info-soft: rgba(59, 130, 246, 0.20);
+  --color-success-lighter: var(--color-success-soft);
+  --color-warning-lighter: var(--color-warning-soft);
+  --color-danger-lighter: var(--color-danger-soft);
+  --color-info-lighter: var(--color-info-soft);
 
-  /* brand 在深底用淺一點的 indigo 確保對比 */
+  /* brand 在深底用淺一階確保對比 */
   --brand-primary: #818cf8;       /* indigo-400 */
   --brand-primary-hover: #a5b4fc; /* indigo-300 */
   --brand-primary-soft: rgba(129, 140, 248, 0.18);
+
+  /* color scheme hint — 讓 input 原生樣式、scrollbar 跟著深色 */
+  color-scheme: dark;
 }
 
-/* main.css 內的 .el-card / .el-table 是用 !important 覆寫 EP，
- * 深色下要再壓一次背景，避免 EP dark 變數被自家 override 抹掉。 */
+/* main.css 內 .el-card / .el-table 用 !important 覆寫 EP token，
+ * 深色下需再壓一次背景，否則寫死的 var(--bg-color) 已在上方翻好色但
+ * .el-table 仍可能殘留 light header；對 EP 內 popover/dropdown/dialog
+ * 也補預設深色背景，避免 main.css alias 沒覆蓋到的子組件穿幫。 */
 html.dark .el-card {
   background-color: var(--surface-color) !important;
   color: var(--text-primary);
 }
+html.dark .el-table,
+html.dark .el-table th.el-table__cell,
+html.dark .el-table tr {
+  background-color: transparent !important;
+  color: var(--text-primary);
+}
 html.dark .el-table th.el-table__cell {
   background-color: var(--bg-color-soft) !important;
+  color: var(--text-secondary) !important;
+}
+html.dark .el-table--enable-row-hover .el-table__body tr:hover > td.el-table__cell {
+  background-color: var(--bg-color-soft) !important;
+}
+
+/* 全站 scrollbar：light 下走 main.css 內 #cbd5e1，dark 下會太亮，調整為灰階深色 */
+html.dark ::-webkit-scrollbar-thumb {
+  background: #475569;
+}
+html.dark ::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
+/* AdminSidebar / PortalLayout 側欄在 light 下故意用 neutral 深階做「暗色側欄」
+ * （background: var(--text-primary) / var(--neutral-900) / var(--neutral-700)）。
+ * 翻 neutral 後它會吃到淺階變成「白底白字」。在 sidebar scope 內還原成 light
+ * 的深階值，讓深色模式下 sidebar 仍維持暗色側欄與主區形成層次。 */
+html.dark .admin-sidebar,
+html.dark .portal-layout .el-aside {
+  --text-primary: #1e293b;
+  --text-secondary: #94a3b8;
+  --text-tertiary: #94a3b8;
+  --neutral-700: #334155;
+  --neutral-800: #1e293b;
+  --neutral-900: #0f172a;
 }
 
 /* ============================================================
