@@ -65,7 +65,9 @@ export const PERMISSION_VALUES = {
   APPRAISAL_REVIEW: 2 ** 57,
   APPRAISAL_ACCOUNTING: 2 ** 58,
   APPRAISAL_FINALIZE: 2 ** 59,
-  // 年終獎金結算 — 對齊後端 utils/permissions.py:96-98
+  // 年終獎金結算（Phase 1）— 對齊後端 utils/permissions.py YEAR_END_READ/WRITE/FINALIZE
+  // bug sweep 2026-05-16 P0-1a：原本前端缺此 key，導致路由 /year_end 在 beforeEach
+  // 被 hard redirect 到 allowedRoutes[0]，整個年終模組全員不可達。
   YEAR_END_READ: 2 ** 52,
   YEAR_END_WRITE: 2 ** 60,
   YEAR_END_FINALIZE: 2 ** 61,
@@ -118,7 +120,7 @@ export const ROUTE_PERMISSION_RULES = [
   // 考核管理整合頁（顯示 SETTINGS_READ 或 SALARY_READ 任一即可）
   { path: '/appraisal-management', permission: 'SETTINGS_READ' },
   { path: '/appraisal-management', permission: 'SALARY_READ' },
-  // 年終獎金結算
+  // 年終獎金結算：navigation gate 用 YEAR_END_READ；後端 router 用 YEAR_END_* 細粒度守衛
   { path: '/year_end', permission: 'YEAR_END_READ', prefix: true },
   // 加班 / 會議整合頁（OVERTIME_READ 或 MEETINGS 任一）
   { path: '/overtime', permission: 'OVERTIME_READ' },
