@@ -817,14 +817,14 @@ html.dark .todo-empty {
 .action-circle--danger  { background: var(--color-danger-soft); color: var(--color-danger); }
 .action-circle--neutral { background: var(--bg-color-soft); color: var(--text-secondary); }
 
-.action-item:hover .action-circle--primary { background: var(--brand-primary); color: #fff; box-shadow: 0 4px 14px rgba(79,70,229,0.3); }
-.action-item:hover .action-circle--success { background: var(--color-success); color: #fff; box-shadow: 0 4px 14px rgba(16,185,129,0.3); }
-.action-item:hover .action-circle--warning { background: var(--color-warning-hover); color: #fff; box-shadow: 0 4px 14px rgba(217,119,6,0.3); }
-.action-item:hover .action-circle--info    { background: #0284c7; color: #fff; box-shadow: 0 4px 14px rgba(2,132,199,0.3); }
-.action-item:hover .action-circle--purple  { background: #7c3aed; color: #fff; box-shadow: 0 4px 14px rgba(124,58,237,0.3); }
-.action-item:hover .action-circle--pink    { background: #db2777; color: #fff; box-shadow: 0 4px 14px rgba(219,39,119,0.3); }
-.action-item:hover .action-circle--danger  { background: var(--color-danger); color: #fff; box-shadow: 0 4px 14px rgba(239,68,68,0.3); }
-.action-item:hover .action-circle--neutral { background: var(--text-secondary); color: #fff; box-shadow: 0 4px 14px rgba(100,116,139,0.3); }
+.action-item:hover .action-circle--primary { background: var(--brand-primary); color: #fff; }
+.action-item:hover .action-circle--success { background: var(--color-success); color: #fff; }
+.action-item:hover .action-circle--warning { background: var(--color-warning-hover); color: #fff; }
+.action-item:hover .action-circle--info    { background: #0284c7; color: #fff; }
+.action-item:hover .action-circle--purple  { background: #7c3aed; color: #fff; }
+.action-item:hover .action-circle--pink    { background: #db2777; color: #fff; }
+.action-item:hover .action-circle--danger  { background: var(--color-danger); color: #fff; }
+.action-item:hover .action-circle--neutral { background: var(--text-secondary); color: #fff; }
 
 /* ── 右欄卡片共用 ── */
 .card-header-row {
