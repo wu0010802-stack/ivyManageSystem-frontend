@@ -13,6 +13,7 @@ vi.mock('@/api/appraisal', () => ({
   previewAppraisalScore: vi.fn().mockResolvedValue({ data: { participants: [] } }),
   getManualEventCounts: vi.fn().mockResolvedValue({ data: { entries: [] } }),
   batchUpsertManualEventCounts: vi.fn().mockResolvedValue({ data: { ok: true } }),
+  listScoringRules: vi.fn().mockResolvedValue({ data: [] }),
 }))
 
 // ── Pinia store mock（可動態調整 school_year / semester）─

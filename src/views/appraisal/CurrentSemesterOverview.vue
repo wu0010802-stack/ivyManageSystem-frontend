@@ -17,6 +17,7 @@ import {
   createAppraisalCycle,
   addAppraisalParticipant,
   bulkAddAppraisalParticipantsFromActive,
+  listScoringRules,
 } from '@/api/appraisal'
 import { useAcademicTermStore } from '@/stores/academicTerm'
 import { useErrorNotify } from '@/composables/useErrorNotify'
@@ -72,9 +73,27 @@ async function loadStatus() {
   }
 }
 
+// ── 載入扣分規則（給 detail dialog tooltip 顯示）──────────
+const rulesByCode = ref({})
+async function loadRules() {
+  if (!currentCycle.value) {
+    rulesByCode.value = {}
+    return
+  }
+  try {
+    const { data } = await listScoringRules(currentCycle.value.base_score_calc_date)
+    const list = Array.isArray(data) ? data : (data?.rules || [])
+    rulesByCode.value = Object.fromEntries(list.map((r) => [r.item_code, r]))
+  } catch (e) {
+    // 失敗不影響主流程，rulesByCode 留空 dict tooltip 自動隱藏
+    rulesByCode.value = {}
+  }
+}
+
 async function reloadAll() {
   await fetchCurrentCycle()
   await loadStatus()
+  await loadRules()
 }
 
 watch(
@@ -568,6 +587,7 @@ const scorePreviewDialogVisible = ref(false)
       v-model:visible="detailDialogVisible"
       :participant="detailParticipant"
       :cycle="currentCycle"
+      :rules="rulesByCode"
     />
 
     <!-- 預覽分數計算 dialog -->
