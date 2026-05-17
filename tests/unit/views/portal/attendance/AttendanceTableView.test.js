@@ -82,18 +82,35 @@ describe('AttendanceTableView', () => {
     expect(w.text()).toContain('08:00')
   })
 
-  it('renders 8 rows per table (日期/星期/上班/下班/工時/狀態/請假/加班)', () => {
+  it('renders 6 tbody rows when usesShift is false (上班/下班/工時/狀態/請假/加班)', () => {
+    const w = mount(AttendanceTableView, {
+      props: { days: makeDays(), usesShift: false },
+      global: { stubs: STUBS },
+    })
+    const upperTable = w.findAll('table.att-table')[0]
+    // thead: 1 row (合併「日期+星期」於同 cell)
+    // tbody: 6 rows (上班/下班/工時/狀態/請假/加班)
+    expect(upperTable.findAll('thead tr').length).toBe(1)
+    expect(upperTable.findAll('tbody tr').length).toBe(6)
+  })
+
+  it('renders 7 tbody rows when usesShift is true (含 班表)', () => {
+    const w = mount(AttendanceTableView, {
+      props: { days: makeDays(), usesShift: true },
+      global: { stubs: STUBS },
+    })
+    const upperTable = w.findAll('table.att-table')[0]
+    expect(upperTable.findAll('tbody tr').length).toBe(7)
+  })
+
+  it('shows weekday inside the day header cell (合併日期+星期)', () => {
     const w = mount(AttendanceTableView, {
       props: { days: makeDays() },
       global: { stubs: STUBS },
     })
-    const upperTable = w.findAll('table.att-table')[0]
-    // thead: 1 row (日期)
-    // tbody: 7 rows (星期/上班/下班/工時/狀態/請假/加班)
-    const theadRows = upperTable.findAll('thead tr')
-    const tbodyRows = upperTable.findAll('tbody tr')
-    expect(theadRows.length).toBe(1)
-    expect(tbodyRows.length).toBe(7)
+    const firstDayHead = w.find('.day-head')
+    expect(firstDayHead.find('.day-head__num').text()).toBe('1')
+    expect(firstDayHead.find('.day-head__week').text()).toBe('週一')
   })
 
   it('does not render 班表 row when usesShift is false', () => {

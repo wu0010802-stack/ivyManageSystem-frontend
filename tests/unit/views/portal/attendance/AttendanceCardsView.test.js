@@ -47,10 +47,6 @@ const DAYS = [
 ]
 
 const STUBS = {
-  ElTag: {
-    template: '<span class="el-tag" :data-type="type"><slot /></span>',
-    props: ['type', 'size', 'effect'],
-  },
   ElTooltip: {
     template: '<span class="el-tooltip"><slot /></span>',
     props: ['content', 'placement'],
@@ -84,21 +80,27 @@ describe('AttendanceCardsView', () => {
     expect(cards[1].classes()).toContain('day-card--weekend')
   })
 
-  it('marks late card with day-card--late class', () => {
+  it('marks late card with day-card--anomaly class', () => {
     const w = mount(AttendanceCardsView, {
       props: { days: DAYS, month: 5 },
       global: { stubs: STUBS },
     })
     const cards = w.findAll('.day-card')
-    expect(cards[3].classes()).toContain('day-card--late')
+    expect(cards[3].classes()).toContain('day-card--anomaly')
   })
 
-  it('shows leave request badge when leave_requests present', () => {
+  it('shows leave request row with type label and hours', () => {
     const w = mount(AttendanceCardsView, {
       props: { days: DAYS, month: 5 },
       global: { stubs: STUBS },
     })
-    expect(w.text()).toContain('請假: 事假')
+    const requestRows = w.findAll('.request-row')
+    expect(requestRows.length).toBeGreaterThan(0)
+    const text = requestRows[0].text()
+    expect(text).toContain('請假')
+    expect(text).toContain('事假')
+    expect(text).toContain('8h')
+    expect(text).toContain('已核准')
   })
 
   it('renders punch-in/out times', () => {
@@ -118,11 +120,11 @@ describe('AttendanceCardsView', () => {
     expect(w.findAll('.day-card').length).toBe(0)
   })
 
-  it('shows status tag for late day', () => {
+  it('shows status pill for late day', () => {
     const w = mount(AttendanceCardsView, {
       props: { days: DAYS, month: 5 },
       global: { stubs: STUBS },
     })
-    expect(w.text()).toContain('遲5分')
+    expect(w.text()).toContain('遲 5m')
   })
 })

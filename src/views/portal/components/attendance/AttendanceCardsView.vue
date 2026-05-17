@@ -5,140 +5,164 @@ defineProps({
   month: { type: Number, default: null },
 })
 
-const getStatusTag = (day) => {
-  if (day.is_holiday) return { text: day.holiday_name, type: 'danger', effect: 'dark' }
-  if (day.is_weekend) return { text: day.weekday, type: 'info' }
-  if (day.leave_type_label) return { text: day.leave_type_label, type: 'info' }
-  if (day.is_late) return { text: `遲${day.late_minutes}分`, type: 'warning' }
-  if (day.is_missing_punch_in || day.is_missing_punch_out) return { text: '缺卡', type: 'danger' }
-  if (day.is_early_leave) return { text: '早退', type: 'warning' }
-  if (day.punch_in) return { text: '正常', type: 'success' }
-  return { text: '-', type: 'info' }
+function getStatusInfo(day) {
+  if (day.is_holiday) return { text: day.holiday_name || '假日', tone: 'holiday' }
+  // 週末 + 未打卡：左日期柱已顯示「週六/週日」，不再加 status pill
+  if (day.is_weekend && !day.punch_in) return null
+  if (day.leave_type_label) return { text: day.leave_type_label, tone: 'leave' }
+  if (day.is_missing_punch_in || day.is_missing_punch_out) return { text: '缺卡', tone: 'danger' }
+  if (day.is_late) return { text: `遲 ${day.late_minutes}m`, tone: 'warn' }
+  if (day.is_early_leave) return { text: '早退', tone: 'warn' }
+  if (day.punch_in) return { text: '正常', tone: 'ok' }
+  return null
 }
 
-const getLeaveDisplay = (day) => {
+function getLeaveDisplay(day) {
   if (!day.leave_requests || day.leave_requests.length === 0) return null
   const lv = day.leave_requests[0]
-  const statusIcon = lv.is_approved === true ? '✓' : lv.is_approved === false ? '✗' : '⏳'
+  const status = lv.is_approved === true ? 'approved' : lv.is_approved === false ? 'rejected' : 'pending'
   return {
     text: lv.leave_type_label,
-    statusIcon,
-    tooltip: `${lv.leave_type_label} ${lv.leave_hours}h\n${statusIcon === '✓' ? '已核准' : statusIcon === '✗' ? '已駁回' : '待審核'}${lv.reason ? '\n原因: ' + lv.reason : ''}`,
-    approved: lv.is_approved,
+    hours: lv.leave_hours,
+    status,
+    statusLabel: status === 'approved' ? '已核准' : status === 'rejected' ? '已駁回' : '待審核',
   }
 }
 
-const getOvertimeDisplay = (day) => {
+function getOvertimeDisplay(day) {
   if (!day.overtime_requests || day.overtime_requests.length === 0) return null
   const ot = day.overtime_requests[0]
-  const statusIcon = ot.is_approved === true ? '✓' : ot.is_approved === false ? '✗' : '⏳'
+  const status = ot.is_approved === true ? 'approved' : ot.is_approved === false ? 'rejected' : 'pending'
   return {
-    text: `${ot.hours}h`,
-    statusIcon,
-    tooltip: `${ot.overtime_type_label} ${ot.hours}h\n${statusIcon === '✓' ? '已核准' : statusIcon === '✗' ? '已駁回' : '待審核'}${ot.reason ? '\n原因: ' + ot.reason : ''}`,
-    approved: ot.is_approved,
+    text: ot.overtime_type_label,
+    hours: ot.hours,
+    status,
+    statusLabel: status === 'approved' ? '已核准' : status === 'rejected' ? '已駁回' : '待審核',
   }
 }
 
-const getWorkHoursClass = (day) => {
+function getWorkHoursClass(day) {
   if (!day.work_hours || day.is_weekend) return ''
-  if (day.work_hours < 8) return 'hours-short'
-  return 'hours-ok'
+  if (day.work_hours < 8) return 'val--warn'
+  return ''
 }
 
-const getApprovalLabel = (val) => {
-  if (val === true) return '已核准'
-  if (val === false) return '已駁回'
-  return '待審核'
-}
-
-const getApprovalClass = (val) => {
-  if (val === true) return 'approved'
-  if (val === false) return 'rejected'
-  return 'pending'
-}
-
-const formatShift = (day) => {
+function formatShift(day) {
   if (day.scheduled_start && day.scheduled_end) {
-    return `${day.scheduled_start}-${day.scheduled_end}`
+    return `${day.scheduled_start}–${day.scheduled_end}`
   }
-  return day.shift_name || (day.is_weekend ? '' : '-')
+  return day.shift_name || ''
 }
 
-const formatDate = (day, month) => {
-  const m = month != null ? String(month).padStart(2, '0') : '??'
+function dayCardClass(day) {
+  return {
+    'day-card--weekend': day.is_weekend,
+    'day-card--holiday': day.is_holiday,
+    'day-card--anomaly': day.is_late || day.is_missing_punch_in || day.is_missing_punch_out || day.is_early_leave,
+  }
+}
+
+function weekdayTone(day) {
+  if (day.is_holiday) return 'holiday'
+  if (day.is_weekend) return 'weekend'
+  return ''
+}
+
+function formatDay(day, month) {
+  const m = month != null ? String(month).padStart(2, '0') : ''
   return `${m}/${String(day.day).padStart(2, '0')}`
 }
 </script>
 
 <template>
-  <div class="mobile-cards">
-    <div
+  <div class="mobile-cards" role="list">
+    <article
       v-for="day in days"
       :key="day.day"
       :data-day="day.day"
       class="day-card"
-      :class="{
-        'day-card--weekend': day.is_weekend,
-        'day-card--holiday': day.is_holiday,
-        'day-card--late': day.is_late,
-      }"
+      :class="dayCardClass(day)"
+      role="listitem"
     >
-      <div class="day-card__header">
-        <div class="day-card__date">
-          <span class="day-num">{{ formatDate(day, month) }}</span>
-          <span class="day-weekday" :class="{ 'text-red': day.is_weekend || day.is_holiday }">{{ day.weekday }}</span>
-        </div>
-        <el-tag :type="getStatusTag(day).type" size="small" effect="plain">
-          {{ getStatusTag(day).text }}
-        </el-tag>
+      <!-- 左：日期柱 -->
+      <div class="day-card__date" :class="`day-card__date--${weekdayTone(day)}`">
+        <div class="day-card__day-num">{{ String(day.day).padStart(2, '0') }}</div>
+        <div class="day-card__weekday">週{{ day.weekday }}</div>
       </div>
 
-      <!-- Holiday banner -->
-      <div v-if="day.is_holiday" class="day-card__holiday-banner">
-        🎉 {{ day.holiday_name }}
-      </div>
+      <!-- 右：內容 -->
+      <div class="day-card__main">
+        <div class="day-card__top">
+          <span class="day-card__date-label">{{ formatDay(day, month) }}</span>
+          <span
+            v-if="getStatusInfo(day)"
+            class="status-pill"
+            :class="`status-pill--${getStatusInfo(day).tone}`"
+          >
+            <span
+              v-if="['ok','warn','danger','leave','holiday'].includes(getStatusInfo(day).tone)"
+              class="status-pill__dot"
+              aria-hidden="true"
+            />
+            {{ getStatusInfo(day).text }}
+          </span>
+        </div>
 
-      <!-- Punch info -->
-      <div class="day-card__body" v-if="!day.is_weekend || day.punch_in">
-        <div class="day-card__row">
-          <span class="row-label">上班</span>
-          <span :class="{ late: day.is_late }">{{ day.punch_in || '-' }}</span>
+        <!-- 假日：單行文字 -->
+        <div v-if="day.is_holiday" class="day-card__holiday">
+          {{ day.holiday_name }}
         </div>
-        <div class="day-card__row">
-          <span class="row-label">下班</span>
-          <span>{{ day.punch_out || '-' }}</span>
-        </div>
-        <div class="day-card__row" v-if="day.work_hours != null">
-          <span class="row-label">工時</span>
-          <span :class="getWorkHoursClass(day)">{{ day.work_hours }}h</span>
-        </div>
-        <div class="day-card__row" v-if="day.shift_name">
-          <span class="row-label">班表</span>
-          <span class="text-gray">{{ formatShift(day) }}</span>
-        </div>
-      </div>
 
-      <!-- Leave / Overtime requests -->
-      <div class="day-card__footer" v-if="getLeaveDisplay(day) || getOvertimeDisplay(day)">
-        <div v-if="getLeaveDisplay(day)" class="day-card__request">
-          <span class="request-badge" :class="getApprovalClass(getLeaveDisplay(day).approved)">
-            請假: {{ getLeaveDisplay(day).text }}
-          </span>
-          <span class="approval-text" :class="getApprovalClass(getLeaveDisplay(day).approved)">
-            {{ getApprovalLabel(getLeaveDisplay(day).approved) }}
-          </span>
+        <!-- 出勤資料：上班/下班/工時 同一行 -->
+        <div v-if="!day.is_weekend || day.punch_in" class="day-card__times">
+          <div class="time-block">
+            <span class="time-block__label">上班</span>
+            <span class="time-block__val" :class="{ 'val--warn': day.is_late }">
+              {{ day.punch_in || '—' }}
+            </span>
+          </div>
+          <div class="time-block">
+            <span class="time-block__label">下班</span>
+            <span class="time-block__val">{{ day.punch_out || '—' }}</span>
+          </div>
+          <div v-if="day.work_hours != null" class="time-block">
+            <span class="time-block__label">工時</span>
+            <span class="time-block__val" :class="getWorkHoursClass(day)">
+              {{ day.work_hours }}<span class="time-block__unit">h</span>
+            </span>
+          </div>
         </div>
-        <div v-if="getOvertimeDisplay(day)" class="day-card__request">
-          <span class="request-badge" :class="getApprovalClass(getOvertimeDisplay(day).approved)">
-            加班: {{ getOvertimeDisplay(day).text }}
-          </span>
-          <span class="approval-text" :class="getApprovalClass(getOvertimeDisplay(day).approved)">
-            {{ getApprovalLabel(getOvertimeDisplay(day).approved) }}
-          </span>
+
+        <!-- 班表：弱化次行 -->
+        <div v-if="day.shift_name || (day.scheduled_start && day.scheduled_end)" class="day-card__shift">
+          班表 · {{ formatShift(day) }}
+        </div>
+
+        <!-- 請假 / 加班：分行 badge -->
+        <div v-if="getLeaveDisplay(day) || getOvertimeDisplay(day)" class="day-card__requests">
+          <div v-if="getLeaveDisplay(day)" class="request-row">
+            <span class="request-row__type">請假</span>
+            <span class="request-row__text">
+              {{ getLeaveDisplay(day).text }}
+              <span class="request-row__hours">{{ getLeaveDisplay(day).hours }}h</span>
+            </span>
+            <span class="badge" :class="`badge--${getLeaveDisplay(day).status}`">
+              {{ getLeaveDisplay(day).statusLabel }}
+            </span>
+          </div>
+          <div v-if="getOvertimeDisplay(day)" class="request-row">
+            <span class="request-row__type">加班</span>
+            <span class="request-row__text">
+              {{ getOvertimeDisplay(day).text }}
+              <span class="request-row__hours">{{ getOvertimeDisplay(day).hours }}h</span>
+            </span>
+            <span class="badge" :class="`badge--${getOvertimeDisplay(day).status}`">
+              {{ getOvertimeDisplay(day).statusLabel }}
+            </span>
+          </div>
         </div>
       </div>
-    </div>
+    </article>
   </div>
 </template>
 
@@ -146,148 +170,274 @@ const formatDate = (day, month) => {
 .mobile-cards {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
-  margin-bottom: var(--space-6);
+  gap: var(--space-2);
 }
 
+/* ===== 卡片：去除 side-stripe，改為左日期柱 + 右內容 ===== */
 .day-card {
-  background: var(--surface-color);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
-  border: 1px solid var(--border-color);
+  display: flex;
+  background: var(--pt-surface-card, var(--surface-color));
+  border-radius: var(--radius-md);
+  border: var(--pt-hairline, 1px solid var(--neutral-200));
   overflow: hidden;
+  box-shadow: var(--pt-elev-1);
+  transition: box-shadow var(--transition-fast);
 }
 
 .day-card--weekend {
-  border-left: 4px solid var(--color-danger);
-  background-color: #fcfcfc;
+  background: var(--neutral-50);
 }
 
 .day-card--holiday {
-  border-left: 4px solid var(--color-warning);
-  background-color: #fffbf0;
+  background: var(--color-warning-soft);
 }
 
-.day-card--late {
-  border-left: 4px solid var(--color-warning);
+.day-card--anomaly {
+  border-color: var(--color-warning);
 }
 
-.day-card__header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--space-3) var(--space-4);
-  background: var(--bg-color);
-  border-bottom: 1px solid var(--border-color);
-}
-
+/* ===== 左：日期柱 ===== */
 .day-card__date {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-}
-
-.day-num {
-  font-size: var(--text-lg);
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
-.day-weekday {
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
-}
-
-.text-red { color: var(--color-danger); }
-.text-gray { color: var(--text-secondary); }
-
-.day-card__holiday-banner {
-  padding: 8px var(--space-4);
-  background: linear-gradient(135deg, #fff7ed, #ffedd5);
-  color: var(--color-warning);
-  font-weight: 600;
-  font-size: var(--text-sm);
-}
-
-.day-card__body {
-  padding: var(--space-3) var(--space-4);
-}
-
-.day-card__row {
-  display: flex;
-  justify-content: space-between;
-  padding: 4px 0;
-  font-size: var(--text-base);
-}
-
-.row-label {
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
-}
-
-.late {
-  color: var(--color-warning);
-  font-weight: 600;
-}
-
-.hours-short {
-  color: var(--color-danger);
-  font-weight: 600;
-}
-
-.hours-ok {
-  color: var(--color-success);
-}
-
-.day-card__footer {
-  padding: var(--space-3) var(--space-4);
-  border-top: 1px solid var(--border-color);
+  flex-shrink: 0;
+  width: 64px;
+  padding: var(--space-3) 0;
+  text-align: center;
+  background: rgba(15, 23, 42, 0.03);
+  border-right: 1px solid var(--neutral-100);
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  background-color: var(--bg-color);
+  justify-content: center;
+  gap: 2px;
 }
 
-.day-card__request {
+.day-card__day-num {
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--pt-text-strong, var(--text-primary));
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.day-card__weekday {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--pt-text-muted, var(--text-secondary));
+}
+
+.day-card__date--weekend {
+  background: rgba(15, 23, 42, 0.05);
+}
+
+.day-card__date--weekend .day-card__day-num,
+.day-card__date--weekend .day-card__weekday {
+  color: var(--pt-text-muted, var(--text-secondary));
+}
+
+.day-card__date--holiday {
+  background: rgba(245, 158, 11, 0.12);
+}
+
+.day-card__date--holiday .day-card__day-num,
+.day-card__date--holiday .day-card__weekday {
+  color: var(--color-warning-darker);
+}
+
+/* ===== 右：內容 ===== */
+.day-card__main {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-3) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.day-card__top {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: var(--space-2);
 }
 
-.request-badge {
-  display: inline-block;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 12px;
+.day-card__date-label {
+  font-size: var(--text-xs);
+  color: var(--pt-text-faint, var(--neutral-400));
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+.day-card__holiday {
+  font-size: var(--text-sm);
   font-weight: 600;
-  cursor: pointer;
-  border: 1px solid transparent;
+  color: var(--color-warning-darker);
 }
 
-.request-badge.approved {
-  background-color: var(--color-success-soft);
-  color: var(--color-success);
-  border-color: #a7f3d0;
+/* ===== 上班/下班/工時 同一行 ===== */
+.day-card__times {
+  display: flex;
+  gap: var(--space-5);
+  padding: 2px 0;
 }
 
-.request-badge.rejected {
-  background-color: var(--color-danger-soft);
-  color: var(--color-danger);
-  border-color: var(--color-danger-soft);
+.time-block {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
-.request-badge.pending {
-  background-color: var(--color-warning-soft);
-  color: var(--color-warning);
-  border-color: #fed7aa;
+.time-block__label {
+  font-size: 11px;
+  color: var(--pt-text-muted, var(--text-secondary));
+  font-weight: 500;
+  letter-spacing: 0.02em;
 }
 
-.approval-text {
+.time-block__val {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--pt-text-strong, var(--text-primary));
+  font-variant-numeric: tabular-nums;
+}
+
+.time-block__unit {
+  font-size: 0.75em;
+  font-weight: 500;
+  margin-left: 1px;
+  color: var(--pt-text-muted, var(--text-secondary));
+}
+
+.val--warn {
+  color: var(--color-warning-darker);
+}
+
+/* ===== 班表：弱化次行 ===== */
+.day-card__shift {
+  font-size: 11px;
+  color: var(--pt-text-muted, var(--text-secondary));
+  font-variant-numeric: tabular-nums;
+}
+
+/* ===== 請假 / 加班 row ===== */
+.day-card__requests {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--neutral-200);
+}
+
+.request-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.request-row__type {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--pt-text-muted, var(--text-secondary));
+  background: var(--neutral-100);
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+
+.request-row__text {
+  flex: 1;
+  min-width: 0;
+  color: var(--pt-text-body, var(--text-primary));
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.request-row__hours {
   font-size: var(--text-xs);
   font-weight: 600;
+  color: var(--pt-text-muted, var(--text-secondary));
+  font-variant-numeric: tabular-nums;
 }
 
-.approval-text.approved { color: var(--color-success); }
-.approval-text.rejected { color: var(--color-danger); }
-.approval-text.pending { color: var(--color-warning); }
+/* ===== Status pill：與 desktop 共用語言 ===== */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+}
+
+.status-pill__dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+.status-pill--ok {
+  color: var(--color-success-darker);
+  background: var(--color-success-soft);
+}
+
+.status-pill--warn {
+  color: var(--color-warning-darker);
+  background: var(--color-warning-soft);
+}
+
+.status-pill--danger {
+  color: var(--color-danger-darker);
+  background: var(--color-danger-soft);
+  font-weight: 600;
+}
+
+.status-pill--leave {
+  color: var(--color-info-darker);
+  background: var(--color-info-soft);
+}
+
+.status-pill--holiday {
+  color: var(--color-warning-darker);
+  background: transparent;
+  font-weight: 600;
+}
+
+.status-pill--weekend {
+  color: var(--pt-text-muted, var(--text-secondary));
+  background: transparent;
+  font-weight: 400;
+}
+
+/* ===== Badge 三段化：approved 灰 / pending 凸 / rejected outline ===== */
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.badge--approved {
+  background: var(--neutral-100);
+  color: var(--pt-text-muted, var(--text-secondary));
+  border: 1px solid var(--neutral-200);
+}
+
+.badge--pending {
+  background: var(--color-warning);
+  color: #fff;
+}
+
+.badge--rejected {
+  background: transparent;
+  color: var(--color-danger-darker);
+  border: 1px solid var(--color-danger);
+}
 </style>

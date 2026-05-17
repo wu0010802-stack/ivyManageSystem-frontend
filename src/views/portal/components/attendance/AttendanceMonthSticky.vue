@@ -85,13 +85,20 @@ defineEmits(['prev', 'next', 'today'])
 
 .sticky-bar__today {
   border: none;
-  background: var(--pt-tint-primary, #eef0fd);
-  color: var(--pt-tint-primary-fg, #4338ca);
-  padding: 6px 12px;
-  border-radius: 999px;
+  background: var(--brand-primary-soft, #eef0fd);
+  color: var(--brand-primary-hover, #4338ca);
+  padding: 6px 14px;
+  border-radius: var(--radius-full);
   font-size: var(--text-sm);
+  font-weight: 600;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+  transition: background var(--transition-fast);
+}
+
+.sticky-bar__today:hover {
+  background: var(--brand-primary);
+  color: #fff;
 }
 
 .sticky-bar-fade-enter-active,

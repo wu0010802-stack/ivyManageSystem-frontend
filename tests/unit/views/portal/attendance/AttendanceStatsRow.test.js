@@ -11,62 +11,91 @@ const SUMMARY = {
   leave_count: 4,
 }
 
-const STUBS = {
-  StatCard: {
-    template: '<div class="stat-card" :data-label="label" :data-value="String(value)" :data-color="color" :data-variant="variant">{{ label }} / {{ value }}</div>',
-    props: ['label', 'value', 'icon', 'color', 'variant'],
-  },
-}
-
 describe('AttendanceStatsRow', () => {
-  it('renders 6 StatCards', () => {
-    const w = mount(AttendanceStatsRow, { props: { summary: SUMMARY }, global: { stubs: STUBS } })
-    expect(w.findAll('.stat-card').length).toBe(6)
+  it('renders two primary metrics (出勤天數 / 平均工時)', () => {
+    const w = mount(AttendanceStatsRow, { props: { summary: SUMMARY } })
+    const metrics = w.findAll('.metric')
+    expect(metrics.length).toBe(2)
+    expect(metrics[0].text()).toContain('18')
+    expect(metrics[0].text()).toContain('出勤天數')
+    expect(metrics[1].text()).toContain('8.2')
+    expect(metrics[1].text()).toContain('平均工時')
   })
 
-  it('passes correct label and value to each card', () => {
-    const w = mount(AttendanceStatsRow, { props: { summary: SUMMARY }, global: { stubs: STUBS } })
-    const cards = w.findAll('.stat-card')
-    expect(cards[0].attributes('data-label')).toBe('出勤天數')
-    expect(cards[0].attributes('data-value')).toBe('18')
-    expect(cards[1].attributes('data-label')).toBe('平均工時(h)')
-    expect(cards[1].attributes('data-value')).toBe('8.2')
-  })
-
-  it('uses warning color for late and early leave stats', () => {
-    const w = mount(AttendanceStatsRow, { props: { summary: SUMMARY }, global: { stubs: STUBS } })
-    const cards = w.findAll('.stat-card')
-    expect(cards[2].attributes('data-color')).toBe('warning')  // late
-    expect(cards[3].attributes('data-color')).toBe('warning')  // early leave
-  })
-
-  it('uses danger color for missing punch stat', () => {
-    const w = mount(AttendanceStatsRow, { props: { summary: SUMMARY }, global: { stubs: STUBS } })
-    const cards = w.findAll('.stat-card')
-    expect(cards[4].attributes('data-color')).toBe('danger')
-    expect(cards[4].attributes('data-label')).toBe('缺卡次數')
-  })
-
-  it('uses info color for leave stat', () => {
-    const w = mount(AttendanceStatsRow, { props: { summary: SUMMARY }, global: { stubs: STUBS } })
-    const cards = w.findAll('.stat-card')
-    expect(cards[5].attributes('data-color')).toBe('info')
-    expect(cards[5].attributes('data-label')).toBe('請假天數')
-  })
-
-  it('uses filled variant for all cards', () => {
-    const w = mount(AttendanceStatsRow, { props: { summary: SUMMARY }, global: { stubs: STUBS } })
-    const cards = w.findAll('.stat-card')
-    cards.forEach((c) => {
-      expect(c.attributes('data-variant')).toBe('filled')
+  it('formats avg_work_hours to one decimal', () => {
+    const w = mount(AttendanceStatsRow, {
+      props: { summary: { ...SUMMARY, avg_work_hours: 7 } },
     })
+    expect(w.text()).toContain('7.0')
+  })
+
+  it('shows em-dash when avg_work_hours is null', () => {
+    const w = mount(AttendanceStatsRow, {
+      props: { summary: { ...SUMMARY, avg_work_hours: null } },
+    })
+    expect(w.text()).toContain('—')
+  })
+
+  it('renders anomaly chips for non-zero counts only', () => {
+    const w = mount(AttendanceStatsRow, { props: { summary: SUMMARY } })
+    const chips = w.findAll('.chip')
+    expect(chips.length).toBe(4)
+    const labels = chips.map((c) => c.text())
+    expect(labels.some((t) => t.includes('遲到') && t.includes('2'))).toBe(true)
+    expect(labels.some((t) => t.includes('早退') && t.includes('1'))).toBe(true)
+    expect(labels.some((t) => t.includes('缺卡') && t.includes('3'))).toBe(true)
+    expect(labels.some((t) => t.includes('請假') && t.includes('4'))).toBe(true)
+  })
+
+  it('uses danger tone for 缺卡 chip', () => {
+    const w = mount(AttendanceStatsRow, {
+      props: { summary: { ...SUMMARY, late_count: 0, early_leave_count: 0, leave_count: 0 } },
+    })
+    const chips = w.findAll('.chip')
+    expect(chips.length).toBe(1)
+    expect(chips[0].classes()).toContain('chip--danger')
+  })
+
+  it('uses warn tone for 遲到 and 早退 chips', () => {
+    const w = mount(AttendanceStatsRow, {
+      props: { summary: { ...SUMMARY, missing_punch_count: 0, leave_count: 0 } },
+    })
+    const chips = w.findAll('.chip')
+    chips.forEach((c) => expect(c.classes()).toContain('chip--warn'))
+  })
+
+  it('uses info tone for 請假 chip', () => {
+    const w = mount(AttendanceStatsRow, {
+      props: { summary: { ...SUMMARY, late_count: 0, early_leave_count: 0, missing_punch_count: 0 } },
+    })
+    const chips = w.findAll('.chip')
+    expect(chips.length).toBe(1)
+    expect(chips[0].classes()).toContain('chip--info')
+  })
+
+  it('shows "本月無異常" badge when all anomaly counts are zero', () => {
+    const w = mount(AttendanceStatsRow, {
+      props: {
+        summary: {
+          total_work_days: 22,
+          avg_work_hours: 8,
+          late_count: 0,
+          early_leave_count: 0,
+          missing_punch_count: 0,
+          leave_count: 0,
+        },
+      },
+    })
+    expect(w.find('.chip').exists()).toBe(false)
+    expect(w.find('.stats-strip__clean').text()).toContain('本月無異常')
   })
 
   it('handles missing summary fields gracefully (uses 0 fallback)', () => {
-    const w = mount(AttendanceStatsRow, { props: { summary: {} }, global: { stubs: STUBS } })
-    const cards = w.findAll('.stat-card')
-    cards.forEach((c) => {
-      expect(c.attributes('data-value')).toBe('0')
-    })
+    const w = mount(AttendanceStatsRow, { props: { summary: {} } })
+    const metrics = w.findAll('.metric')
+    expect(metrics[0].text()).toContain('0')
+    // no chips since all counts default to undefined > 0 → false
+    expect(w.find('.chip').exists()).toBe(false)
+    expect(w.find('.stats-strip__clean').exists()).toBe(true)
   })
 })
