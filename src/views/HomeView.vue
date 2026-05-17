@@ -178,16 +178,16 @@ const showTodoSection = computed(
     </el-row>
     <el-row v-else :gutter="20" class="stats-row">
       <el-col :xs="24" :sm="12" :md="6" class="mb-4">
-        <StatCard label="教職員總數" :value="stats.total" icon="User" color="primary" variant="filled" />
+        <StatCard label="教職員總數" :value="stats.total" icon="User" color="primary" />
       </el-col>
       <el-col :xs="24" :sm="12" :md="6" class="mb-4">
-        <StatCard label="教師人數" :value="stats.teachers" icon="Reading" color="success" variant="filled" />
+        <StatCard label="教師人數" :value="stats.teachers" icon="Reading" color="success" />
       </el-col>
       <el-col :xs="24" :sm="12" :md="6" class="mb-4">
-        <StatCard label="全校在籍人數" :value="studentCount" icon="UserFilled" color="warning" variant="filled" />
+        <StatCard label="全校在籍人數" :value="studentCount" icon="UserFilled" color="warning" />
       </el-col>
       <el-col :xs="24" :sm="12" :md="6" class="mb-4">
-        <StatCard label="其他人員" :value="stats.others" icon="More" color="info" variant="filled" />
+        <StatCard label="其他人員" :value="stats.others" icon="More" color="info" />
       </el-col>
     </el-row>
 
