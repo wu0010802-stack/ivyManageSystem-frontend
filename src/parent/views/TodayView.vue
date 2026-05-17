@@ -1,11 +1,13 @@
 <script setup>
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { getHomeSummary } from '../api/profile'
+import { getTodayContactBook } from '../api/contactBook'
 import { useParentAuthStore } from '../stores/parentAuth'
 import { useCachedAsync } from '@/composables/useCachedAsync'
 import { useTodayStatusCache } from '../composables/useTodayStatusCache'
 import { useTodayTimeline } from '../composables/useTodayTimeline'
+import { useChildSelection } from '../composables/useChildSelection'
 import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
 import PullToRefresh from '../components/PullToRefresh.vue'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
@@ -13,9 +15,11 @@ import TodayTimeline from '../components/home-timeline/TodayTimeline.vue'
 import PushCta from '../components/home/PushCta.vue'
 import ChildrenStrip from '../components/home/ChildrenStrip.vue'
 import LaurelWreath from '@/components/brand/LaurelWreath.vue'
+import ContactBookDayCard from '../components/contact-book/ContactBookDayCard.vue'
 
 const router = useRouter()
 const authStore = useParentAuthStore()
+const { selectedId: selectedStudentId, ensureSelected } = useChildSelection()
 
 const { status: todayStatus, refresh: refreshToday } = useTodayStatusCache()
 const todayChildren = computed(() => todayStatus.value?.children || [])
@@ -40,9 +44,44 @@ const children = computed(() => summaryData.value?.children || [])
 const summary = computed(() => summaryData.value?.summary || null)
 const showPushCta = computed(() => me.value && !me.value.can_push)
 
+const selectedChild = computed(() => {
+  const list = children.value || []
+  return list.find((c) => c.student_id === selectedStudentId.value) || list[0] || null
+})
+
+const contactBookEntry = ref(null)
+const contactBookLoading = ref(false)
+
+async function loadContactBook(force = false) {
+  const sid = selectedChild.value?.student_id
+  if (!sid) {
+    contactBookEntry.value = null
+    return
+  }
+  if (contactBookLoading.value) return
+  contactBookLoading.value = true
+  try {
+    const res = await getTodayContactBook(sid)
+    contactBookEntry.value = res.data?.entry || null
+  } catch {
+    contactBookEntry.value = null
+  } finally {
+    contactBookLoading.value = false
+  }
+}
+
 onMounted(() => {
   refreshToday()
 })
+
+watch(
+  () => children.value?.length,
+  () => {
+    ensureSelected(children.value || [])
+    loadContactBook()
+  },
+)
+watch(selectedStudentId, () => loadContactBook())
 
 const { buckets } = useTodayTimeline({ summary, todayChildren })
 
@@ -65,7 +104,6 @@ function childStatusLabel(c) {
   return isOffDay() ? '今天放假' : '尚未到校'
 }
 
-// hero = 今日狀態（以孩子為主角，不是問候家長）
 const hero = computed(() => {
   const tc = todayChildren.value || []
   if (tc.length === 0) {
@@ -92,12 +130,17 @@ const hero = computed(() => {
 })
 
 async function pullRefresh() {
-  await Promise.all([refreshSummary(true), refreshToday()])
+  await Promise.all([
+    refreshSummary(true),
+    refreshToday(),
+    loadContactBook(true),
+  ])
 }
 
 function refresh() {
   refreshSummary(true)
   refreshToday()
+  loadContactBook(true)
 }
 
 function go(path) {
@@ -121,6 +164,27 @@ function go(path) {
     </header>
 
     <PushCta v-if="showPushCta" @enable="go('/notifications/preferences')" />
+
+    <!-- 今日聯絡簿 hero card：家長最關心的「孩子今天過得好嗎」 -->
+    <section v-if="contactBookEntry && selectedChild" class="cb-hero">
+      <div class="cb-hero-head">
+        <p class="cb-hero-eyebrow">今日聯絡簿</p>
+        <router-link :to="`/contact-book/${contactBookEntry.id}`" class="cb-open">
+          查看完整
+          <span class="material-symbols-rounded" aria-hidden="true">arrow_forward</span>
+        </router-link>
+      </div>
+      <router-link
+        :to="`/contact-book/${contactBookEntry.id}`"
+        class="cb-card-link"
+      >
+        <ContactBookDayCard
+          :entry="contactBookEntry"
+          :student-name="selectedChild.name"
+          :classroom-name="selectedChild.classroom_name"
+        />
+      </router-link>
+    </section>
 
     <ChildrenStrip
       v-if="children.length > 1"
@@ -191,6 +255,52 @@ function go(path) {
   font-weight: 500;
 }
 
+/* 今日聯絡簿 hero 區 */
+.cb-hero { padding: 0 var(--space-4, 16px); }
+.cb-hero-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.cb-hero-eyebrow {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--pt-text-soft);
+}
+.cb-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: transparent;
+  border: none;
+  color: var(--brand-primary, #0d9053);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 0;
+}
+.cb-open .material-symbols-rounded {
+  font-size: 18px;
+  font-variation-settings: 'wght' 500;
+}
+
+.cb-card-link {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  transition: transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.cb-card-link:active { transform: scale(0.99); }
+.cb-card-link:focus-visible {
+  outline: 2px solid var(--brand-primary, #0d9053);
+  outline-offset: 3px;
+  border-radius: 20px;
+}
+
 .skeleton-wrap {
   display: flex;
   flex-direction: column;
@@ -200,6 +310,10 @@ function go(path) {
 
 .today-stream {
   padding: var(--space-2, 8px) var(--space-4, 16px) var(--space-12, 48px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cb-card-link { transition: none; }
 }
 
 @media (min-width: 420px) {

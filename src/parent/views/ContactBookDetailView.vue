@@ -7,41 +7,122 @@ import {
   getContactBookDetail,
   replyContactBook,
 } from '../api/contactBook'
+import { useChildrenStore } from '../stores/children'
 import { toast } from '../utils/toast'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
+import MoodBadge from '../components/contact-book/MoodBadge.vue'
+import TimelineRow from '../components/contact-book/TimelineRow.vue'
+import PhotoGrid from '../components/contact-book/PhotoGrid.vue'
 
 const route = useRoute()
-// vue-router 在同 component 跨參數導航時會復用實例；用 computed 讓 entryId 隨
-// route.params 變動，再 watch 觸發重抓，避免顯示前一筆 entry。
+// 子女資訊用於 hero 區的姓名/班級，缺 pinia 時 graceful（測試環境）。
+let childrenStore = null
+try {
+  childrenStore = useChildrenStore()
+} catch {
+  childrenStore = null
+}
+
 const entryId = computed(() => Number(route.params.entryId))
 const entry = ref(null)
 const replies = ref([])
 const newReply = ref('')
-const removeReplyTarget = ref(null) // 待刪除的 reply id 或 null
+const removeReplyTarget = ref(null)
 const removeReplyOpen = computed({
   get: () => removeReplyTarget.value !== null,
   set: (v) => { if (!v) removeReplyTarget.value = null },
 })
 const loading = ref(false)
 const submitting = ref(false)
+const acking = ref(false)
 
-// 心情 emoji 屬於內容語意（教師選的小孩當日情緒），保留 emoji。
-// 顯示時用 <span role="img" aria-label="..."> wrap，screen reader 才能正確念出。
-const MOOD_OPTIONS = {
-  happy: { emoji: '😄', text: '開心' },
-  normal: { emoji: '🙂', text: '普通' },
-  tired: { emoji: '😴', text: '想睡' },
-  sad: { emoji: '😢', text: '難過' },
-  sick: { emoji: '🤒', text: '不舒服' },
+const MOOD_LABEL = {
+  happy: '開心', normal: '普通', tired: '想睡', sad: '難過', sick: '不舒服',
 }
-
 const BOWEL_LABEL = {
-  none: '未排便',
-  normal: '正常',
-  loose: '稀',
-  constipated: '硬',
+  none: '未排便', normal: '正常', loose: '稀', constipated: '硬',
 }
+
+const studentInfo = computed(() => {
+  const items = childrenStore?.items || []
+  return items.find((c) => c.student_id === entry.value?.student_id) || null
+})
+
+const dateLine = computed(() => {
+  const raw = entry.value?.log_date
+  if (!raw) return ''
+  const [y, m, d] = raw.split('-').map(Number)
+  const date = new Date(y, m - 1, d)
+  const wd = ['日', '一', '二', '三', '四', '五', '六'][date.getDay()]
+  return `${y} 年 ${m} 月 ${d} 日　星期${wd}`
+})
+
+const timelineItems = computed(() => {
+  const e = entry.value
+  if (!e) return []
+  const out = []
+  if (e.mood) {
+    out.push({
+      type: 'mood',
+      icon: 'sentiment_satisfied',
+      tone: 'sun',
+      label: '今日心情',
+      value: MOOD_LABEL[e.mood] || e.mood,
+    })
+  }
+  if (e.meal_lunch != null || e.meal_snack != null) {
+    const parts = []
+    if (e.meal_lunch != null) parts.push(`午餐 ${e.meal_lunch} / 3 份`)
+    if (e.meal_snack != null) parts.push(`點心 ${e.meal_snack} / 3 份`)
+    out.push({
+      type: 'meal',
+      icon: 'restaurant',
+      tone: 'coral',
+      label: '飲食',
+      value: parts.join('・'),
+    })
+  }
+  if (e.nap_minutes != null) {
+    out.push({
+      type: 'nap',
+      icon: 'bedtime',
+      tone: 'grape',
+      label: '午睡',
+      value: `${e.nap_minutes} 分鐘`,
+    })
+  }
+  if (e.temperature_c != null) {
+    const t = Number(e.temperature_c)
+    const note = t >= 37.5 ? '（偏高，老師會持續觀察）' : ''
+    out.push({
+      type: 'temp',
+      icon: 'thermostat',
+      tone: t >= 37.5 ? 'coral' : 'green',
+      label: '體溫',
+      value: `${t}°C ${note}`,
+    })
+  }
+  if (e.bowel) {
+    out.push({
+      type: 'bowel',
+      icon: 'water_drop',
+      tone: 'sky',
+      label: '排便',
+      value: BOWEL_LABEL[e.bowel] || e.bowel,
+    })
+  }
+  if (e.learning_highlight) {
+    out.push({
+      type: 'learning',
+      icon: 'school',
+      tone: 'green',
+      label: '今天學到了',
+      detail: e.learning_highlight,
+    })
+  }
+  return out
+})
 
 async function fetchData() {
   loading.value = true
@@ -56,17 +137,17 @@ async function fetchData() {
   }
 }
 
-async function markRead() {
+async function manualAck() {
+  if (acking.value) return
+  acking.value = true
   try {
     const { data } = await ackContactBook(entryId.value)
-    if (entry.value) {
-      entry.value.my_acknowledged_at = data.read_at
-    }
-    if (!data.already_marked) {
-      toast.success('已標記為已讀')
-    }
+    if (entry.value) entry.value.my_acknowledged_at = data.read_at
+    if (!data.already_marked) toast.success('已簽收今日聯絡簿')
   } catch (err) {
-    toast.error(err?.displayMessage || '標記失敗')
+    toast.error(err?.displayMessage || '簽收失敗')
+  } finally {
+    acking.value = false
   }
 }
 
@@ -107,15 +188,23 @@ async function doRemoveReply() {
 
 async function loadAndMark() {
   await fetchData()
-  // 自動標記為已讀（家長一打開即視為閱讀）
   if (entry.value && !entry.value.my_acknowledged_at) {
-    await markRead()
+    await manualAck()
   }
 }
 
-onMounted(loadAndMark)
+onMounted(async () => {
+  if (childrenStore?.load) {
+    try {
+      const p = childrenStore.load()
+      if (p && typeof p.catch === 'function') p.catch(() => {})
+    } catch {
+      /* graceful — 缺 pinia 時不阻擋 detail 載入 */
+    }
+  }
+  await loadAndMark()
+})
 
-// vue-router 復用同 component 時切 :entryId 不會重 mount，必須以 watch 重抓。
 watch(entryId, async (newId, oldId) => {
   if (!newId || newId === oldId) return
   entry.value = null
@@ -123,106 +212,159 @@ watch(entryId, async (newId, oldId) => {
   newReply.value = ''
   await loadAndMark()
 })
+
+function formatReplyTime(iso) {
+  try {
+    const d = new Date(iso)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const diff = today.getTime() - new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+    const days = Math.round(diff / 86400000)
+    const time = d.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false })
+    if (days === 0) return `今天 ${time}`
+    if (days === 1) return `昨天 ${time}`
+    if (days < 7) return `${days} 天前 ${time}`
+    return d.toLocaleDateString('zh-TW') + ' ' + time
+  } catch {
+    return iso
+  }
+}
 </script>
 
 <template>
   <div class="detail">
-    <template v-if="loading">
-      <SkeletonBlock variant="card" :count="2" />
-    </template>
-    <div v-else-if="entry" class="card-wrap">
-      <div class="card">
-        <h2 class="title">{{ entry.log_date }} 聯絡簿</h2>
-
-        <div class="grid">
-          <div v-if="entry.mood" class="cell">
-            <label>心情</label>
-            <span v-if="MOOD_OPTIONS[entry.mood]">
-              {{ MOOD_OPTIONS[entry.mood].text }}
-              <span role="img" :aria-label="`心情：${MOOD_OPTIONS[entry.mood].text}`">{{ MOOD_OPTIONS[entry.mood].emoji }}</span>
-            </span>
-            <span v-else>{{ entry.mood }}</span>
-          </div>
-          <div v-if="entry.meal_lunch != null" class="cell">
-            <label>午餐</label>
-            <span>{{ entry.meal_lunch }} / 3 份</span>
-          </div>
-          <div v-if="entry.meal_snack != null" class="cell">
-            <label>點心</label>
-            <span>{{ entry.meal_snack }} / 3 份</span>
-          </div>
-          <div v-if="entry.nap_minutes != null" class="cell">
-            <label>午睡</label>
-            <span>{{ entry.nap_minutes }} 分鐘</span>
-          </div>
-          <div v-if="entry.bowel" class="cell">
-            <label>排便</label>
-            <span>{{ BOWEL_LABEL[entry.bowel] || entry.bowel }}</span>
-          </div>
-          <div v-if="entry.temperature_c != null" class="cell">
-            <label>體溫</label>
-            <span>{{ entry.temperature_c }}°C</span>
-          </div>
-        </div>
-
-        <div v-if="entry.teacher_note" class="block">
-          <h3>老師留言</h3>
-          <p>{{ entry.teacher_note }}</p>
-        </div>
-
-        <div v-if="entry.learning_highlight" class="block">
-          <h3>學習亮點</h3>
-          <p>{{ entry.learning_highlight }}</p>
-        </div>
-
-        <div v-if="(entry.photos || []).length" class="photos">
-          <a
-            v-for="p in entry.photos"
-            :key="p.id"
-            :href="p.display_url"
-            target="_blank"
-            rel="noopener"
-          >
-            <img :src="p.thumb_url || p.display_url" alt="聯絡簿照片" loading="lazy" decoding="async" />
-          </a>
-        </div>
+    <template v-if="loading && !entry">
+      <div class="skeleton-wrap">
+        <SkeletonBlock variant="card" :count="3" />
       </div>
+    </template>
 
-      <div class="card">
-        <h3>家長回覆</h3>
-        <ul v-if="replies.length" class="reply-list">
-          <li v-for="r in replies" :key="r.id">
-            <p class="body">{{ r.body }}</p>
-            <small class="meta">
-              {{ new Date(r.created_at).toLocaleString('zh-TW') }}
-              <button class="link-btn" @click="askRemoveReply(r.id)">刪除</button>
-            </small>
+    <template v-else-if="entry">
+      <!-- Hero：日期 + 名字 + 大心情徽章 -->
+      <header class="hero">
+        <p class="hero-date">{{ dateLine }}</p>
+        <div class="hero-row">
+          <MoodBadge :mood="entry.mood" size="lg" show-label />
+          <div class="hero-meta">
+            <h1 class="hero-name">{{ studentInfo?.name || '聯絡簿' }}</h1>
+            <p v-if="studentInfo?.classroom_name" class="hero-class">{{ studentInfo.classroom_name }}</p>
+          </div>
+        </div>
+      </header>
+
+      <!-- 時間軸：一天的故事 -->
+      <section v-if="timelineItems.length" class="card timeline-card">
+        <h2 class="card-title">
+          <span class="material-symbols-rounded" aria-hidden="true">timeline</span>
+          今天的故事
+        </h2>
+        <div class="timeline">
+          <TimelineRow
+            v-for="(item, i) in timelineItems"
+            :key="item.type"
+            :icon="item.icon"
+            :icon-tone="item.tone"
+            :label="item.label"
+            :value="item.value"
+            :detail="item.detail"
+            :hide-connector="i === timelineItems.length - 1 && !entry.teacher_note"
+          />
+        </div>
+      </section>
+
+      <!-- 老師留言：cream highlight 卡 -->
+      <section v-if="entry.teacher_note" class="card note-card">
+        <h2 class="card-title">
+          <span class="material-symbols-rounded" aria-hidden="true">format_quote</span>
+          老師留言
+        </h2>
+        <p class="note-body">{{ entry.teacher_note }}</p>
+      </section>
+
+      <!-- 照片牆 -->
+      <section v-if="(entry.photos || []).length" class="card photos-card">
+        <h2 class="card-title">
+          <span class="material-symbols-rounded" aria-hidden="true">photo_library</span>
+          今天的照片
+          <span class="title-count">{{ entry.photos.length }} 張</span>
+        </h2>
+        <PhotoGrid :photos="entry.photos" />
+      </section>
+
+      <!-- 簽收狀態 / 回覆 -->
+      <section class="card replies-card">
+        <header class="ack-bar">
+          <div class="ack-status">
+            <span v-if="entry.my_acknowledged_at" class="ack-badge is-read">
+              <span class="material-symbols-rounded" aria-hidden="true">check_circle</span>
+              已簽收
+            </span>
+            <span v-else class="ack-badge is-unread">
+              <span class="material-symbols-rounded" aria-hidden="true">circle</span>
+              尚未簽收
+            </span>
+          </div>
+          <button
+            v-if="!entry.my_acknowledged_at"
+            type="button"
+            class="ack-btn"
+            :disabled="acking"
+            @click="manualAck"
+          >
+            手動簽收
+          </button>
+        </header>
+
+        <h2 class="card-title with-divider">
+          <span class="material-symbols-rounded" aria-hidden="true">forum</span>
+          家長留言
+          <span v-if="replies.length" class="title-count">{{ replies.length }} 則</span>
+        </h2>
+
+        <ul v-if="replies.length" class="replies">
+          <li v-for="r in replies" :key="r.id" class="reply">
+            <div class="reply-body">{{ r.body }}</div>
+            <div class="reply-meta">
+              <span>{{ formatReplyTime(r.created_at) }}</span>
+              <button type="button" class="reply-delete link-btn" @click="askRemoveReply(r.id)">刪除</button>
+            </div>
           </li>
         </ul>
-        <p v-else class="hint">尚無回覆</p>
+        <p v-else class="reply-empty">
+          給老師留個訊息，孩子的成長故事更完整
+        </p>
 
-        <label for="contact-reply" class="sr-only">回覆內容</label>
-        <textarea
-          id="contact-reply"
-          v-model="newReply"
-          rows="3"
-          placeholder="留個訊息給老師（最多 500 字）"
-          maxlength="500"
-          autocomplete="off"
-        />
-        <div class="actions">
-          <span class="counter">{{ newReply.length }} / 500</span>
-          <button type="button" class="primary" :disabled="submitting" @click="submitReply">
-            送出回覆
-          </button>
+        <div class="composer">
+          <label for="reply-textarea" class="sr-only">回覆內容</label>
+          <textarea
+            id="reply-textarea"
+            v-model="newReply"
+            rows="2"
+            placeholder="想跟老師說的話…（最多 500 字）"
+            maxlength="500"
+            autocomplete="off"
+          />
+          <div class="composer-bar">
+            <span class="counter" :class="{ near: newReply.length > 450 }">{{ newReply.length }} / 500</span>
+            <button
+              type="button"
+              class="send-btn"
+              :disabled="submitting || !newReply.trim()"
+              @click="submitReply"
+            >
+              <span class="material-symbols-rounded" aria-hidden="true">send</span>
+              送出
+            </button>
+          </div>
         </div>
-      </div>
-    </div>
+      </section>
+    </template>
+
     <p v-else class="hint">找不到聯絡簿。</p>
 
     <ConfirmDialog
       v-model:open="removeReplyOpen"
-      title="確定刪除這則回覆？"
+      title="確定刪除這則留言？"
       message="刪除後無法還原。"
       confirm-label="刪除"
       destructive
@@ -232,51 +374,271 @@ watch(entryId, async (newId, oldId) => {
 </template>
 
 <style scoped>
-.detail { padding: 12px; }
-.hint { color: var(--pt-text-faint); text-align: center; padding: 24px 0; }
-.card {
-  background: var(--m3-surface-container-low, var(--pt-surface-card));
-  border-radius: 16px;
-  padding: 16px;
-  margin-bottom: 12px;
-  box-shadow: var(--pt-elev-1);
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 0 32px;
 }
-.title { margin: 0 0 12px; font-size: 17px; }
-.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
-.cell { padding: 8px; background: var(--pt-surface-mute-soft); border-radius: 6px; }
-.cell label { display: block; font-size: 12px; color: var(--pt-text-faint); margin-bottom: 2px; }
-.cell span { font-size: 14px; }
-.block { margin-top: 12px; }
-.block h3 { font-size: 14px; color: var(--m3-on-surface-variant, var(--pt-text-muted)); margin: 0 0 4px; }
-.block p { margin: 0; font-size: 14px; line-height: 1.6; white-space: pre-wrap; }
-.photos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 10px; }
-.photos img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 6px; }
-.reply-list { list-style: none; padding: 0; margin: 0 0 12px; }
-.reply-list li { padding: 8px 0; border-bottom: 1px solid var(--pt-border-light); }
-.reply-list .body { margin: 0 0 4px; font-size: 14px; }
-.reply-list .meta { font-size: 12px; color: var(--pt-text-faint); }
-.link-btn { background: none; border: none; color: var(--color-danger); margin-left: 8px; cursor: pointer; }
-textarea {
-  width: 100%;
-  border: 1px solid var(--pt-border-stronger);
-  border-radius: 6px;
-  padding: 8px;
-  font-family: inherit;
+.skeleton-wrap { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.hint { color: var(--pt-text-faint); text-align: center; padding: 32px 0; }
+
+/* Hero */
+.hero {
+  padding: 16px 20px 18px;
+  background:
+    linear-gradient(135deg, var(--cream, #fffcf2) 0%, var(--leaf-100, #dcf4e6) 100%);
+}
+.hero-date {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pt-text-muted);
+  letter-spacing: 0.02em;
+}
+.hero-row {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.hero-meta { flex: 1; min-width: 0; }
+.hero-name {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--pt-text-strong);
+  line-height: 1.1;
+}
+.hero-class {
+  margin: 4px 0 0;
   font-size: 14px;
-  box-sizing: border-box;
-  background: var(--m3-surface-container, var(--pt-surface-mute));
+  font-weight: 500;
+  color: var(--pt-text-muted);
 }
-.actions { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
-.counter { color: var(--pt-text-faint); font-size: 12px; }
-.primary {
-  background: var(--brand-primary);
-  color: var(--neutral-0);
+
+/* Card 通用 */
+.card {
+  margin: 0 16px;
+  background: var(--pt-surface-card, #fff);
+  border: 1px solid var(--pt-border-light, #ecf5f9);
+  border-radius: 18px;
+  padding: 16px 18px;
+}
+.card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 14px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--pt-text-strong);
+  letter-spacing: 0.01em;
+}
+.card-title .material-symbols-rounded {
+  font-size: 20px;
+  color: var(--brand-primary, #0d9053);
+  font-variation-settings: 'FILL' 1, 'wght' 500;
+}
+.title-count {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--pt-text-faint);
+  letter-spacing: 0.04em;
+}
+.card-title.with-divider {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--pt-border-light, #ecf5f9);
+}
+
+/* Timeline */
+.timeline {
+  display: flex;
+  flex-direction: column;
+  margin-left: 4px;
+}
+
+/* 老師留言 */
+.note-card {
+  background:
+    linear-gradient(180deg, var(--cream, #fffcf2) 0%, #ffffff 100%);
+  border-color: var(--sun-300, #ffe285);
+}
+.note-card .card-title .material-symbols-rounded { color: var(--sun-700, #c99500); }
+.note-body {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.75;
+  color: var(--pt-text-body);
+  white-space: pre-wrap;
+}
+
+/* Replies / Ack */
+.ack-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: -4px 0 12px;
+}
+.ack-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 999px;
+}
+.ack-badge .material-symbols-rounded {
+  font-size: 16px;
+  font-variation-settings: 'FILL' 1, 'wght' 600;
+}
+.ack-badge.is-read {
+  background: var(--leaf-100, #dcf4e6);
+  color: var(--brand-primary, #0d9053);
+}
+.ack-badge.is-unread {
+  background: var(--coral-100, #ffe3e0);
+  color: var(--coral-700, #b14545);
+}
+.ack-btn {
+  background: var(--brand-primary, #0d9053);
+  color: #fff;
   border: none;
   padding: 8px 16px;
-  border-radius: 6px;
-  font-size: 14px;
-  transition: background var(--transition-fast, 0.15s ease);
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 160ms ease, transform 120ms ease;
 }
-.primary:active { background: var(--brand-primary-hover); }
-.primary:disabled { background: var(--brand-primary-soft); color: var(--pt-text-disabled); cursor: not-allowed; }
+.ack-btn:active { transform: scale(0.97); background: var(--brand-primary-hover, #0caf76); }
+.ack-btn:disabled { background: var(--brand-primary-soft); color: var(--pt-text-disabled); cursor: not-allowed; }
+
+.replies {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.reply {
+  background: var(--cream, #fffcf2);
+  border: 1px solid var(--pt-border-light, #ecf5f9);
+  border-radius: 14px;
+  padding: 10px 14px;
+}
+.reply-body {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--pt-text-body);
+  white-space: pre-wrap;
+}
+.reply-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--pt-text-faint);
+}
+.reply-delete {
+  background: none;
+  border: none;
+  color: var(--coral-700, #b14545);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+}
+.reply-empty {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--pt-text-faint);
+  text-align: center;
+  padding: 16px 0;
+  font-style: italic;
+}
+
+.composer {
+  margin-top: 12px;
+  background: var(--pt-surface-mute-soft, #fefcf3);
+  border: 1px solid var(--pt-border-light, #ecf5f9);
+  border-radius: 14px;
+  padding: 10px 12px;
+}
+.composer textarea {
+  width: 100%;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--pt-text-body);
+  resize: vertical;
+  outline: none;
+  min-height: 48px;
+}
+.composer textarea::placeholder { color: var(--pt-text-placeholder); }
+
+.composer-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--pt-border-light, #ecf5f9);
+}
+.counter {
+  font-size: 12px;
+  color: var(--pt-text-faint);
+  letter-spacing: 0.02em;
+}
+.counter.near { color: var(--coral-700, #b14545); font-weight: 600; }
+.send-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--brand-primary, #0d9053);
+  color: #fff;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 160ms ease, transform 120ms ease;
+}
+.send-btn .material-symbols-rounded {
+  font-size: 16px;
+  font-variation-settings: 'FILL' 1, 'wght' 600;
+}
+.send-btn:active { transform: scale(0.97); background: var(--brand-primary-hover, #0caf76); }
+.send-btn:disabled {
+  background: var(--brand-primary-soft, #f5fbe6);
+  color: var(--pt-text-disabled, #c4d2d9);
+  cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ack-btn, .send-btn { transition: none; }
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  white-space: nowrap;
+  border: 0;
+}
 </style>

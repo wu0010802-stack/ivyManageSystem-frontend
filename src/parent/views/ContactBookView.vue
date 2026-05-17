@@ -5,11 +5,14 @@ import { useChildSelection } from '../composables/useChildSelection'
 import ChildSelector from '../components/ChildSelector.vue'
 import { getTodayContactBook, listContactBook } from '../api/contactBook'
 import { toast } from '../utils/toast'
-import ParentIcon from '../components/ParentIcon.vue'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import { useIncrementalRender } from '../composables/useIncrementalRender'
-import KawaiiStar from '@/components/brand/KawaiiStar.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import KawaiiStar from '@/components/brand/KawaiiStar.vue'
+
+import MonthDateStrip from '../components/contact-book/MonthDateStrip.vue'
+import ContactBookDayCard from '../components/contact-book/ContactBookDayCard.vue'
+import ContactBookListItem from '../components/contact-book/ContactBookListItem.vue'
 
 const childrenStore = useChildrenStore()
 const { selectedId: selectedStudentId, ensureSelected } = useChildSelection()
@@ -18,28 +21,47 @@ const today = ref(null)
 const history = ref([])
 const loading = ref(false)
 
-// 漸進渲染：歷史紀錄量大時不一次渲染整個 DOM
-const { visible: visibleHistory, sentinelRef, hasMore } = useIncrementalRender(
-  history,
-  { pageSize: 20 },
+const selectedChild = computed(() =>
+  (childrenStore.items || []).find((x) => x.student_id === selectedStudentId.value) || null,
 )
+const studentName = computed(() => selectedChild.value?.name || '')
+const classroomName = computed(() => selectedChild.value?.classroom_name || '')
 
-const studentName = computed(() => {
-  const c = (childrenStore.items || []).find(
-    (x) => x.student_id === selectedStudentId.value,
-  )
-  return c?.name || ''
+const historyWithoutToday = computed(() => {
+  if (!today.value) return history.value
+  return history.value.filter((e) => e.id !== today.value.id)
 })
 
-// 心情 emoji 屬於內容語意（教師選的小孩當日情緒），保留 emoji 並用
-// <span role="img" aria-label="..."> 包裝，方便 screen reader 念出。
-const MOOD_OPTIONS = {
-  happy: { emoji: '😄', text: '開心' },
-  normal: { emoji: '🙂', text: '普通' },
-  tired: { emoji: '😴', text: '想睡' },
-  sad: { emoji: '😢', text: '難過' },
-  sick: { emoji: '🤒', text: '不舒服' },
-}
+const allEntries = computed(() => {
+  const list = [...historyWithoutToday.value]
+  if (today.value) list.unshift(today.value)
+  return list
+})
+
+const groupedHistory = computed(() => {
+  const groups = { thisWeek: [], lastWeek: [], earlier: [] }
+  const now = new Date()
+  now.setHours(0, 0, 0, 0)
+  const weekStart = new Date(now)
+  weekStart.setDate(now.getDate() - now.getDay())
+  const lastWeekStart = new Date(weekStart)
+  lastWeekStart.setDate(weekStart.getDate() - 7)
+
+  for (const e of historyWithoutToday.value) {
+    if (!e?.log_date) continue
+    const [y, m, d] = e.log_date.split('-').map(Number)
+    const dt = new Date(y, m - 1, d)
+    if (dt >= weekStart) groups.thisWeek.push(e)
+    else if (dt >= lastWeekStart) groups.lastWeek.push(e)
+    else groups.earlier.push(e)
+  }
+  return groups
+})
+
+const { visible: visibleEarlier, sentinelRef, hasMore } = useIncrementalRender(
+  computed(() => groupedHistory.value.earlier),
+  { pageSize: 20 },
+)
 
 async function fetchAll() {
   if (!selectedStudentId.value) return
@@ -47,7 +69,7 @@ async function fetchAll() {
   try {
     const [todayRes, historyRes] = await Promise.all([
       getTodayContactBook(selectedStudentId.value),
-      listContactBook(selectedStudentId.value, { limit: 30 }),
+      listContactBook(selectedStudentId.value, { limit: 60 }),
     ])
     today.value = todayRes.data?.entry || null
     history.value = historyRes.data?.entries || []
@@ -65,150 +87,205 @@ onMounted(async () => {
 
 watch(selectedStudentId, fetchAll, { immediate: true })
 
-function moodInfo(m) {
-  return MOOD_OPTIONS[m] || null
+function entryHref(id) {
+  return `/contact-book/${id}`
 }
+
+function onDateSelect(iso) {
+  const e = allEntries.value.find((x) => x.log_date === iso)
+  if (e && typeof window !== 'undefined') {
+    window.location.hash = `#${entryHref(e.id)}`
+  }
+}
+
+const unreadCount = computed(() =>
+  allEntries.value.filter((e) => !e.my_acknowledged_at).length,
+)
+
+const hasAnyHistory = computed(() => historyWithoutToday.value.length > 0)
 </script>
 
 <template>
   <div class="cb">
     <ChildSelector />
 
-    <template v-if="loading">
-      <SkeletonBlock variant="card" :count="3" />
+    <MonthDateStrip
+      :entries="allEntries"
+      :selected-date="today?.log_date"
+      @select="onDateSelect"
+    />
+
+    <template v-if="loading && !today">
+      <div class="skeleton-wrap">
+        <SkeletonBlock variant="card" :count="2" />
+      </div>
     </template>
 
-    <section v-else>
-      <h3 class="section-title">今日聯絡簿</h3>
-      <router-link
-        v-if="today"
-        :to="`/contact-book/${today.id}`"
-        class="card today-card"
-      >
-        <div class="row">
-          <span
-            v-if="moodInfo(today.mood)"
-            class="emoji"
-            role="img"
-            :aria-label="`心情：${moodInfo(today.mood).text}`"
-          >{{ moodInfo(today.mood).emoji }}</span>
-          <div class="meta">
-            <strong>{{ studentName }} {{ today.log_date }}</strong>
-            <p v-if="today.teacher_note" class="preview">
-              {{ today.teacher_note }}
-            </p>
-          </div>
-          <span v-if="!today.my_acknowledged_at" class="dot dot-unread" />
-        </div>
-        <div class="chips">
-          <span v-if="today.meal_lunch != null" class="chip">午餐 {{ today.meal_lunch }}/3</span>
-          <span v-if="today.nap_minutes != null" class="chip">午睡 {{ today.nap_minutes }}min</span>
-          <span v-if="today.temperature_c != null" class="chip">體溫 {{ today.temperature_c }}°C</span>
-          <span v-if="(today.photos || []).length" class="chip chip-icon">
-            <ParentIcon name="camera" size="xs" />
-            {{ today.photos.length }}
-          </span>
-        </div>
-      </router-link>
-      <EmptyState
-        v-else
-        variant="mobile"
-        :icon="KawaiiStar"
-        :title="`${studentName} 今日尚無聯絡簿`"
-      />
+    <template v-else>
+      <section class="today-section">
+        <p class="section-eyebrow">
+          <span class="eyebrow-text">今日聯絡簿</span>
+          <span v-if="unreadCount > 0" class="unread-pill">{{ unreadCount }} 則未簽收</span>
+        </p>
+        <router-link
+          v-if="today"
+          :to="entryHref(today.id)"
+          class="today-card"
+        >
+          <ContactBookDayCard
+            :entry="today"
+            :student-name="studentName"
+            :classroom-name="classroomName"
+          />
+        </router-link>
+        <EmptyState
+          v-else
+          variant="mobile"
+          :icon="KawaiiStar"
+          :title="studentName ? `${studentName} 今天還沒有聯絡簿` : '尚未選擇子女'"
+          description="老師完成今日紀錄後會出現在這裡"
+        />
+      </section>
 
-      <h3 class="section-title section-title--history">歷史聯絡簿</h3>
+      <section v-if="hasAnyHistory" class="history-section">
+        <p class="section-eyebrow">
+          <span class="eyebrow-text">之前的紀錄</span>
+        </p>
+
+        <div v-if="groupedHistory.thisWeek.length" class="group">
+          <p class="group-title">本週</p>
+          <div class="group-list">
+            <router-link
+              v-for="e in groupedHistory.thisWeek"
+              :key="e.id"
+              :to="entryHref(e.id)"
+              class="history-card"
+            >
+              <ContactBookListItem :entry="e" />
+            </router-link>
+          </div>
+        </div>
+
+        <div v-if="groupedHistory.lastWeek.length" class="group">
+          <p class="group-title">上週</p>
+          <div class="group-list">
+            <router-link
+              v-for="e in groupedHistory.lastWeek"
+              :key="e.id"
+              :to="entryHref(e.id)"
+              class="history-card"
+            >
+              <ContactBookListItem :entry="e" />
+            </router-link>
+          </div>
+        </div>
+
+        <div v-if="groupedHistory.earlier.length" class="group">
+          <p class="group-title">更早</p>
+          <div class="group-list">
+            <router-link
+              v-for="e in visibleEarlier"
+              :key="e.id"
+              :to="entryHref(e.id)"
+              class="history-card"
+            >
+              <ContactBookListItem :entry="e" />
+            </router-link>
+          </div>
+          <div v-if="hasMore" ref="sentinelRef" class="render-sentinel" aria-hidden="true" />
+        </div>
+      </section>
+
       <EmptyState
-        v-if="history.length === 0"
+        v-else-if="today"
         variant="mobile"
         :icon="KawaiiStar"
-        title="還沒有歷史聯絡簿喔！"
+        title="還沒有歷史紀錄"
+        description="連續紀錄會慢慢累積出孩子的成長故事"
       />
-      <router-link
-        v-for="e in visibleHistory"
-        :key="e.id"
-        :to="`/contact-book/${e.id}`"
-        class="card history-card press-scale"
-      >
-        <div class="row">
-          <span
-            v-if="moodInfo(e.mood)"
-            class="emoji"
-            role="img"
-            :aria-label="`心情：${moodInfo(e.mood).text}`"
-          >{{ moodInfo(e.mood).emoji }}</span>
-          <div class="meta">
-            <strong>{{ e.log_date }}</strong>
-            <p v-if="e.teacher_note" class="preview">{{ e.teacher_note }}</p>
-          </div>
-          <span v-if="!e.my_acknowledged_at" class="dot dot-unread" />
-        </div>
-      </router-link>
-      <div v-if="hasMore" ref="sentinelRef" class="render-sentinel" aria-hidden="true" />
-    </section>
+    </template>
   </div>
 </template>
 
 <style scoped>
-.cb { padding: 0; }
-.section-title {
-  font-size: 12px;
-  color: var(--pt-text-soft);
-  margin: 0 0 10px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+.cb {
+  padding: 0 0 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
-.section-title--history { margin-top: 24px; }
-.hint { color: var(--pt-text-faint); text-align: center; padding: 16px 0; }
+.skeleton-wrap { padding: 8px 16px; display: flex; flex-direction: column; gap: 10px; }
 .render-sentinel { height: 1px; }
-.card {
-  background: var(--m3-surface-container-low, var(--pt-surface-card));
-  border: 1px solid var(--pt-page-border, var(--pt-border));
-  border-radius: 12px;
-  padding: 14px;
-  margin-bottom: 10px;
-  box-shadow: var(--m3-elev-1, var(--pt-shadow-card, var(--pt-elev-1)));
+
+.section-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 18px 16px 10px;
 }
-.today-card { border-color: var(--pt-border-strong); }
-.card.today-card,
-.card.history-card {
-  text-decoration: none;
-  color: inherit;
-  display: block;
-}
-.card.today-card:focus-visible,
-.card.history-card:focus-visible {
-  outline: 2px solid var(--brand-primary, #0d9053);
-  outline-offset: 2px;
-}
-.row { display: flex; align-items: center; gap: 10px; }
-.emoji { font-size: 24px; flex-shrink: 0; }
-.meta { flex: 1; min-width: 0; }
-.meta strong { display: block; font-size: 14px; }
-.preview {
-  margin: 2px 0 0;
-  font-size: 13px;
-  color: var(--pt-text-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-.dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-.dot-unread { background: var(--brand-primary); }
-.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-.chip {
+.eyebrow-text {
   font-size: 12px;
-  padding: 2px 8px;
-  border-radius: 12px;
-  background: var(--pt-surface-mute);
-  color: var(--pt-text-muted);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--pt-text-soft);
 }
-.chip-icon {
+.unread-pill {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--coral-100, #ffe3e0);
+  color: var(--coral-700, #b14545);
+}
+
+.today-section { padding: 0 16px; }
+.today-card {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  transition: transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.today-card:active { transform: scale(0.99); }
+.today-card:focus-visible {
+  outline: 2px solid var(--brand-primary, #0d9053);
+  outline-offset: 3px;
+  border-radius: 20px;
+}
+
+.history-section { margin-top: 8px; }
+.group { margin-top: 8px; }
+.group-title {
+  margin: 0 16px 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pt-text-faint);
+}
+.group-list {
+  background: var(--pt-surface-card, #fff);
+  border-radius: 16px;
+  margin: 0 16px;
+  overflow: hidden;
+  border: 1px solid var(--pt-border-light, #ecf5f9);
+}
+.group-list .history-card:last-child :deep(.item) {
+  border-bottom: none;
+}
+
+.history-card {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+}
+.history-card:focus-visible {
+  outline: 2px solid var(--brand-primary, #0d9053);
+  outline-offset: -2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .today-card { transition: none; }
 }
 </style>
