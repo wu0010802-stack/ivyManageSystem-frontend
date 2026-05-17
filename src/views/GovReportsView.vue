@@ -18,143 +18,121 @@
       </el-form>
     </el-card>
 
-    <!-- 申報項目卡片 -->
-    <el-row :gutter="20" class="report-grid">
+    <!-- 申報項目 tabs（取代原 4 張 identical-card-grid 反射） -->
+    <el-tabs v-model="activeReport" type="card" class="report-tabs">
+      <el-tab-pane name="labor">
+        <template #label>
+          <span class="report-tab-label"><el-icon><Document /></el-icon>勞保投保薪資</span>
+        </template>
+        <p class="report-desc">每月員工勞保費分攤明細（20% / 70% / 10%）</p>
+        <el-form label-width="80px" size="small" class="report-form" inline>
+          <el-form-item label="年月">
+            <el-date-picker
+              v-model="labor.period"
+              type="month"
+              format="YYYY年MM月"
+              value-format="YYYY-MM"
+              placeholder="選擇月份"
+              style="width:160px"
+            />
+          </el-form-item>
+          <el-form-item label="格式">
+            <el-radio-group v-model="labor.fmt">
+              <el-radio value="xlsx">Excel</el-radio>
+              <el-radio value="txt">TXT</el-radio>
+            </el-radio-group>
+          </el-form-item>
+          <el-form-item>
+            <el-button
+              type="primary" :loading="loading.labor"
+              :disabled="!labor.period"
+              @click="download('labor')"
+            >下載申報表</el-button>
+          </el-form-item>
+        </el-form>
+      </el-tab-pane>
 
-      <!-- 勞保投保薪資申報 -->
-      <el-col :xs="24" :sm="12" :lg="6">
-        <el-card class="report-card" shadow="never">
-          <div class="report-icon labor">
-            <el-icon :size="28"><Document /></el-icon>
-          </div>
-          <div class="report-title">勞保投保薪資申報</div>
-          <div class="report-desc">每月員工勞保費分攤明細（20% / 70% / 10%）</div>
+      <el-tab-pane name="health">
+        <template #label>
+          <span class="report-tab-label"><el-icon><FirstAidKit /></el-icon>健保名冊</span>
+        </template>
+        <p class="report-desc">每月員工健保費分攤明細（30% / 60%）及眷屬人數</p>
+        <el-form label-width="80px" size="small" class="report-form" inline>
+          <el-form-item label="年月">
+            <el-date-picker
+              v-model="health.period"
+              type="month"
+              format="YYYY年MM月"
+              value-format="YYYY-MM"
+              placeholder="選擇月份"
+              style="width:160px"
+            />
+          </el-form-item>
+          <el-form-item>
+            <el-button
+              type="primary" :loading="loading.health"
+              :disabled="!health.period"
+              @click="download('health')"
+            >下載申報表</el-button>
+          </el-form-item>
+        </el-form>
+      </el-tab-pane>
 
-          <el-form label-width="60px" size="small" class="report-form">
-            <el-form-item label="年月">
-              <el-date-picker
-                v-model="labor.period"
-                type="month"
-                format="YYYY年MM月"
-                value-format="YYYY-MM"
-                placeholder="選擇月份"
-                style="width:150px"
-              />
-            </el-form-item>
-            <el-form-item label="格式">
-              <el-radio-group v-model="labor.fmt">
-                <el-radio value="xlsx">Excel</el-radio>
-                <el-radio value="txt">TXT</el-radio>
-              </el-radio-group>
-            </el-form-item>
-          </el-form>
+      <el-tab-pane name="withholding">
+        <template #label>
+          <span class="report-tab-label"><el-icon><Money /></el-icon>扣繳憑單</span>
+        </template>
+        <p class="report-desc">全年薪資所得總額與估計扣繳稅額（財政部格式）</p>
+        <el-form label-width="80px" size="small" class="report-form" inline>
+          <el-form-item label="年度">
+            <el-date-picker
+              v-model="withholding.year"
+              type="year"
+              format="YYYY年"
+              value-format="YYYY"
+              placeholder="選擇年度"
+              style="width:150px"
+            />
+          </el-form-item>
+          <el-form-item label="扣繳單位">
+            <el-input v-model="withholding.employerId" placeholder="統一編號" style="width:160px" />
+          </el-form-item>
+          <el-form-item>
+            <el-button
+              type="primary" :loading="loading.withholding"
+              :disabled="!withholding.year"
+              @click="download('withholding')"
+            >下載申報表</el-button>
+          </el-form-item>
+        </el-form>
+      </el-tab-pane>
 
-          <el-button
-            type="primary" :loading="loading.labor"
-            :disabled="!labor.period"
-            @click="download('labor')"
-            class="download-btn"
-          >下載申報表</el-button>
-        </el-card>
-      </el-col>
-
-      <!-- 健保被保險人名冊 -->
-      <el-col :xs="24" :sm="12" :lg="6">
-        <el-card class="report-card" shadow="never">
-          <div class="report-icon health">
-            <el-icon :size="28"><FirstAidKit /></el-icon>
-          </div>
-          <div class="report-title">健保被保險人名冊</div>
-          <div class="report-desc">每月員工健保費分攤明細（30% / 60%）及眷屬人數</div>
-
-          <el-form label-width="60px" size="small" class="report-form">
-            <el-form-item label="年月">
-              <el-date-picker
-                v-model="health.period"
-                type="month"
-                format="YYYY年MM月"
-                value-format="YYYY-MM"
-                placeholder="選擇月份"
-                style="width:150px"
-              />
-            </el-form-item>
-          </el-form>
-
-          <el-button
-            type="primary" :loading="loading.health"
-            :disabled="!health.period"
-            @click="download('health')"
-            class="download-btn"
-          >下載申報表</el-button>
-        </el-card>
-      </el-col>
-
-      <!-- 扣繳憑單 -->
-      <el-col :xs="24" :sm="12" :lg="6">
-        <el-card class="report-card" shadow="never">
-          <div class="report-icon tax">
-            <el-icon :size="28"><Money /></el-icon>
-          </div>
-          <div class="report-title">扣繳憑單（年度）</div>
-          <div class="report-desc">全年薪資所得總額與估計扣繳稅額（財政部格式）</div>
-
-          <el-form label-width="60px" size="small" class="report-form">
-            <el-form-item label="年度">
-              <el-date-picker
-                v-model="withholding.year"
-                type="year"
-                format="YYYY年"
-                value-format="YYYY"
-                placeholder="選擇年度"
-                style="width:140px"
-              />
-            </el-form-item>
-            <el-form-item label="扣繳單位">
-              <el-input v-model="withholding.employerId" placeholder="統一編號" style="width:150px" />
-            </el-form-item>
-          </el-form>
-
-          <el-button
-            type="primary" :loading="loading.withholding"
-            :disabled="!withholding.year"
-            @click="download('withholding')"
-            class="download-btn"
-          >下載申報表</el-button>
-        </el-card>
-      </el-col>
-
-      <!-- 勞退提繳明細 -->
-      <el-col :xs="24" :sm="12" :lg="6">
-        <el-card class="report-card" shadow="never">
-          <div class="report-icon pension">
-            <el-icon :size="28"><Wallet /></el-icon>
-          </div>
-          <div class="report-title">勞退提繳明細</div>
-          <div class="report-desc">每月雇主 6% 提繳與員工自提金額對帳表</div>
-
-          <el-form label-width="60px" size="small" class="report-form">
-            <el-form-item label="年月">
-              <el-date-picker
-                v-model="pension.period"
-                type="month"
-                format="YYYY年MM月"
-                value-format="YYYY-MM"
-                placeholder="選擇月份"
-                style="width:150px"
-              />
-            </el-form-item>
-          </el-form>
-
-          <el-button
-            type="primary" :loading="loading.pension"
-            :disabled="!pension.period"
-            @click="download('pension')"
-            class="download-btn"
-          >下載申報表</el-button>
-        </el-card>
-      </el-col>
-
-    </el-row>
+      <el-tab-pane name="pension">
+        <template #label>
+          <span class="report-tab-label"><el-icon><Wallet /></el-icon>勞退提繳</span>
+        </template>
+        <p class="report-desc">每月雇主 6% 提繳與員工自提金額對帳表</p>
+        <el-form label-width="80px" size="small" class="report-form" inline>
+          <el-form-item label="年月">
+            <el-date-picker
+              v-model="pension.period"
+              type="month"
+              format="YYYY年MM月"
+              value-format="YYYY-MM"
+              placeholder="選擇月份"
+              style="width:160px"
+            />
+          </el-form-item>
+          <el-form-item>
+            <el-button
+              type="primary" :loading="loading.pension"
+              :disabled="!pension.period"
+              @click="download('pension')"
+            >下載申報表</el-button>
+          </el-form-item>
+        </el-form>
+      </el-tab-pane>
+    </el-tabs>
 
     <!-- 注意事項 -->
     <el-alert
@@ -185,6 +163,9 @@ import { getLaborInsurance, getHealthInsurance, getWithholding, getPension } fro
 import { FirstAidKit } from '@element-plus/icons-vue'
 
 const employer = reactive({ name: '', code: '' })
+
+// 目前作用中的申報項目（取代原 4 張並排 card 的 identical-grid 視覺）
+const activeReport = ref('labor')
 
 const labor = reactive({ period: null, fmt: 'xlsx' })
 const health = reactive({ period: null })
@@ -298,61 +279,33 @@ async function download(type) {
   font-size: 15px;
 }
 
-.report-grid {
+/* Phase B：4 張並排 identical-card-grid → el-tabs，與 ReportsView 一致
+   tabs 結構，避免 SaaS-cliché 反射；icon 仍隨 tab label 出現傳達語意 */
+.report-tabs {
   margin-bottom: 20px;
 }
-
-.report-card {
-  height: 100%;
-  border-radius: 10px;
-  text-align: center;
+.report-tabs :deep(.el-tabs__item) {
+  font-weight: 600;
+}
+.report-tabs :deep(.el-tabs__content) {
   padding: 8px 0;
-  margin-bottom: 16px;
 }
-
-.report-icon {
-  width: 56px;
-  height: 56px;
-  border-radius: 14px;
-  display: flex;
+.report-tab-label {
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  margin: 12px auto 14px;
-  color: #fff;
-}
-
-.report-icon.labor  { background-color: #2563eb; }
-.report-icon.health { background-color: #059669; }
-.report-icon.tax    { background-color: #d97706; }
-.report-icon.pension{ background-color: #7c3aed; }
-
-.report-title {
-  font-size: 15px;
-  font-weight: 700;
-  margin-bottom: 6px;
-  color: var(--el-text-color-primary);
+  gap: 6px;
 }
 
 .report-desc {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--el-text-color-secondary);
-  line-height: 1.5;
-  min-height: 36px;
-  margin-bottom: 14px;
-  padding: 0 8px;
-}
-
-.report-form {
-  text-align: left;
-  margin-bottom: 14px;
+  line-height: 1.6;
+  margin: 4px 0 16px;
+  padding: 0;
 }
 
 .report-form :deep(.el-form-item) {
   margin-bottom: 8px;
-}
-
-.download-btn {
-  width: 100%;
 }
 
 .notice-alert {
