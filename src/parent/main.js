@@ -18,6 +18,9 @@ import './styles/motion.css'
 // + 既有 IvyKids tokens（與 M3 共存，P4 view 改完後 P5 統一清理）。
 // 必須在 design-tokens.css 之後 import（因為它使用 token 變數）。
 import './styles/globals.css'
+// 共用 UI patterns（pt-eyebrow / pt-card / pt-list-group / pt-pill / pt-action-btn 等）
+// 2026-05-17 contact book redesign 大重構引入，跨 view 重用。
+import './styles/patterns.css'
 // 無障礙偏好（字級 / 高對比）覆寫，需在 globals.css 之後以便覆蓋。
 import '@/assets/a11y.css'
 
