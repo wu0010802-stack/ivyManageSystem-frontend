@@ -139,7 +139,20 @@ const handleLogin = async () => {
   align-items: center;
   justify-content: center;
   padding: clamp(32px, 6vw, 72px) 24px;
-  background: var(--auth-bg);
+  /* 教師端走暖奶油黃 + 極淡 IvyKids 綠 halo，呼應 brand 桂冠綠葉與奶油緞帶，
+   * 與管理端（冷色 slate）視覺拉開差距，傳達親切感。 */
+  background:
+    radial-gradient(
+      ellipse 75% 55% at 18% 12%,
+      rgba(90, 168, 66, 0.12) 0%,
+      transparent 60%
+    ),
+    radial-gradient(
+      ellipse 60% 50% at 88% 90%,
+      rgba(255, 222, 81, 0.18) 0%,
+      transparent 60%
+    ),
+    #fff9e8;
   color: var(--text-primary);
 }
 
@@ -160,7 +173,7 @@ const handleLogin = async () => {
 .brand-mark {
   width: min(100%, 440px);
   aspect-ratio: 1 / 1;
-  background: url('/images/login-bg.jpg') center / contain no-repeat;
+  background: url('/images/login-bg.png') center / contain no-repeat;
 }
 
 .login-panel {
