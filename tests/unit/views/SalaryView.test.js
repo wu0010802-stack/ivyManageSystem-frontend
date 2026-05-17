@@ -215,6 +215,35 @@ describe('SalaryView', () => {
       },
     })
 
+    manualAdjustSalary.mockResolvedValue({
+      data: {
+        record: {
+          id: 8,
+          employee_id: 1,
+          employee_name: '王小明',
+          festival_bonus: 1800,
+          overtime_bonus: 500,
+          overtime_pay: 1200,
+          supervisor_dividend: 1000,
+          meeting_overtime_pay: 800,
+          birthday_bonus: 0,
+          leave_deduction: 500,
+          late_deduction: 100,
+          early_leave_deduction: 0,
+          meeting_absence_deduction: 200,
+          absence_deduction: 0,
+          total_deduction: 3300,
+          net_salary: 35900,
+          remark: '手動編輯：節慶獎金、缺席扣款',
+          manual_overrides: [
+            { field: 'festival_bonus', value: 1800 },
+            { field: 'leave_deduction', value: 500 },
+          ],
+          version: 2,
+        },
+      },
+    })
+
     await wrapper.vm.$.setupState.calculateSalary()
     wrapper.vm.$.setupState.salaryRecords = [
       { id: 8, employee_id: 1, employee_name: '王小明', remark: '' },
@@ -222,6 +251,7 @@ describe('SalaryView', () => {
     const row = wrapper.vm.$.setupState.salaryResults[0]
 
     wrapper.vm.$.setupState.openEditDialog(row)
+    wrapper.vm.$.setupState.adjustmentReason = '節慶獎金實際應為 1800 元'
     wrapper.vm.$.setupState.editForm.festival_bonus = 1800
     wrapper.vm.$.setupState.editForm.leave_deduction = 500
     await wrapper.vm.$.setupState.saveManualAdjust()
@@ -233,6 +263,7 @@ describe('SalaryView', () => {
       expect.objectContaining({
         festival_bonus: 1800,
         leave_deduction: 500,
+        adjustment_reason: '節慶獎金實際應為 1800 元',
       }),
       // 第 3 參數為 version（If-Match 樂觀鎖），此測試資料未帶 version → null
       null,

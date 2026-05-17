@@ -109,6 +109,7 @@ vi.mock('element-plus', () => ({
   },
   ElMessageBox: {
     confirm: vi.fn(),
+    prompt: vi.fn(),
   },
 }))
 
@@ -329,21 +330,27 @@ describe('OvertimeView', () => {
       await wrapper.vm.$.setupState.approveOvertime({ id: 10 }, true)
       await flushPromises()
 
-      expect(approveOvertimeApi).toHaveBeenCalledWith(10, true)
+      expect(approveOvertimeApi).toHaveBeenCalledWith(10, { approved: true })
       expect(ElMessage.success).toHaveBeenCalledWith('已核准')
       expect(getOvertimes).toHaveBeenCalled()
     })
 
     it('approved=false 時顯示已駁回', async () => {
       approveOvertimeApi.mockResolvedValue({})
+      ElMessageBox.prompt.mockResolvedValue({ value: '事由不充分' })
       const wrapper = mountOvertimeView()
       await flushPromises()
       vi.clearAllMocks()
       getOvertimes.mockResolvedValue({ data: [] })
+      ElMessageBox.prompt.mockResolvedValue({ value: '事由不充分' })
 
       await wrapper.vm.$.setupState.approveOvertime({ id: 11 }, false)
       await flushPromises()
 
+      expect(approveOvertimeApi).toHaveBeenCalledWith(11, {
+        approved: false,
+        rejection_reason: '事由不充分',
+      })
       expect(ElMessage.success).toHaveBeenCalledWith('已駁回')
     })
   })
