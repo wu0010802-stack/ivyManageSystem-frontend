@@ -18,6 +18,7 @@
       <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></symbol>
       <symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></symbol>
       <symbol id="i-share" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" /></symbol>
+      <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></symbol>
     </svg>
 
     <!-- Toast Container（A1-P4 抽元件） -->
@@ -65,7 +66,7 @@
               <svg class="icon" width="14" height="14" aria-hidden="true"><use href="#i-calendar" /></svg>
               {{ displayEventDate }}
             </span>
-            <span v-if="displayAudience" class="page-meta-item">對象：{{ displayAudience }}</span>
+            <span v-if="displayAudience" class="page-meta-item">招生對象：{{ displayAudience }}</span>
           </div>
         </div>
       </header>
@@ -75,7 +76,7 @@
         <div
           v-if="noticeState"
           class="notice is-visible"
-          :class="noticeState.variant"
+          :class="[noticeState.variant, { 'is-sticky': noticeIsUrgent }]"
           role="status"
         >
           <svg class="notice-icon" width="24" height="24" aria-hidden="true"><use href="#i-alert" /></svg>
@@ -124,6 +125,29 @@
                   @load="onPosterLoad"
                   @error="onPosterError"
                 />
+                <div v-if="posterLoaded" class="poster-actions">
+                  <a
+                    class="poster-action"
+                    :href="posterSrc"
+                    :download="posterDownloadName"
+                    target="_blank"
+                    rel="noopener"
+                    aria-label="下載海報"
+                  >
+                    <svg class="icon" aria-hidden="true"><use href="#i-download" /></svg>
+                    下載
+                  </a>
+                  <button
+                    v-if="canSharePoster"
+                    type="button"
+                    class="poster-action"
+                    aria-label="分享海報給家人"
+                    @click="sharePoster"
+                  >
+                    <svg class="icon" aria-hidden="true"><use href="#i-share" /></svg>
+                    分享
+                  </button>
+                </div>
               </div>
               <div class="info-box">
                 <p class="info-intro">
@@ -133,10 +157,10 @@
                 </p>
                 <hr class="info-divider" />
                 <ul class="notice-list">
-                  <li>本學期課後才藝採線上報名，<strong>額滿為止</strong>。</li>
-                  <li>有搭娃娃車的寶貝，上才藝課當天<strong>煩請家長自行接回</strong>。</li>
-                  <li>若人數未達最低標準，則不予開課。</li>
-                  <li>如因疫情等不可抗力因素停課，將依規定比例退費。</li>
+                  <li>本學期才藝課線上報名，<strong>額滿為止</strong>。</li>
+                  <li>上才藝課當天，<strong>坐娃娃車的寶貝請爸媽自己來接喔</strong>。</li>
+                  <li>人數未達最低標準時，這門課會取消開課。</li>
+                  <li>遇到臨時停課（例如疫情）時，會依比例退費給您。</li>
                 </ul>
               </div>
             </div>
@@ -148,7 +172,7 @@
                   <span class="form-card-header-title">{{ displayFormCardTitle }}</span>
                 </div>
                 <div class="form-card-body">
-                  <div class="form-section-step">
+                  <div class="form-section-step" :class="{ 'is-active': activeStep === 1 }">
                     <span class="step-num">1</span>
                     <div class="step-title-col">
                       <span class="step-title">寶貝資料</span>
@@ -156,6 +180,7 @@
                     </div>
                   </div>
 
+                  <div class="form-grid-2col">
                   <div class="form-row" :class="{ 'has-error': !!errors.name }">
                     <div class="form-label-col">
                       <label class="form-label" for="studentName">
@@ -258,6 +283,7 @@
                       <div v-if="errors.class_name" id="studentClass-err" class="form-error-hint" role="alert">{{ errors.class_name }}</div>
                     </div>
                   </div>
+                  </div><!-- /.form-grid-2col -->
 
                   <!-- A1-P7：Step 2 抽 CoursePickerSection 元件 -->
                   <CoursePickerSection
@@ -269,12 +295,13 @@
                     :availability-state="availabilityState"
                     :format-schedule="formatSchedule"
                     :course-advisory="courseAdvisory"
+                    :is-active-step="activeStep === 2"
                     @toggle="(course) => { toggleCourse(course); clearError('courses') }"
                     @open-video="openVideoModal"
                   />
 
                   <template v-if="supplies.length > 0">
-                    <div class="form-section-step">
+                    <div class="form-section-step" :class="{ 'is-active': activeStep === 3 }">
                       <span class="step-num">3</span>
                       <div class="step-title-col">
                         <span class="step-title">加購用品</span>
@@ -339,51 +366,54 @@
                 </aside>
               </transition>
 
-              <transition name="fee-fade">
-                <aside v-if="feePreview" class="fee-preview" aria-live="polite" aria-label="費用預估">
-                  <div class="fee-preview-title">
-                    <svg class="icon" width="14" height="14" aria-hidden="true"><use href="#i-check" /></svg>
-                    費用預估
-                    <span class="fee-preview-count">
-                      <template v-if="feePreview.courseCount > 0">{{ feePreview.courseCount }} 堂課</template>
-                      <template v-if="feePreview.courseCount > 0 && feePreview.supplyCount > 0">．</template>
-                      <template v-if="feePreview.supplyCount > 0">{{ feePreview.supplyCount }} 項加購</template>
-                    </span>
-                  </div>
-                  <dl class="fee-preview-list">
-                    <div v-if="feePreview.courseCount > 0" class="fee-row">
-                      <dt>才藝課程小計</dt>
-                      <dd>NT$ {{ feePreview.coursesTotal.toLocaleString() }}</dd>
+              <!-- checkout-stick: 桌機把費用預覽 + 主送出鈕 sticky 在 viewport
+                   底部，家長勾課程時不用回滾才看到金額 / 送出 -->
+              <div class="checkout-stick">
+                <transition name="fee-fade">
+                  <aside v-if="feePreview" class="fee-preview" aria-live="polite" aria-label="費用預估">
+                    <div class="fee-preview-title">
+                      <svg class="icon" width="14" height="14" aria-hidden="true"><use href="#i-check" /></svg>
+                      費用預估
+                      <span class="fee-preview-count">
+                        <template v-if="feePreview.courseCount > 0">{{ feePreview.courseCount }} 堂課</template>
+                        <template v-if="feePreview.courseCount > 0 && feePreview.supplyCount > 0">．</template>
+                        <template v-if="feePreview.supplyCount > 0">{{ feePreview.supplyCount }} 項加購</template>
+                      </span>
                     </div>
-                    <div v-if="feePreview.supplyCount > 0" class="fee-row">
-                      <dt>用品加購小計</dt>
-                      <dd>NT$ {{ feePreview.suppliesTotal.toLocaleString() }}</dd>
+                    <dl class="fee-preview-list">
+                      <div v-if="feePreview.courseCount > 0" class="fee-row">
+                        <dt>才藝課程小計</dt>
+                        <dd>NT$ {{ feePreview.coursesTotal.toLocaleString() }}</dd>
+                      </div>
+                      <div v-if="feePreview.supplyCount > 0" class="fee-row">
+                        <dt>用品加購小計</dt>
+                        <dd>NT$ {{ feePreview.suppliesTotal.toLocaleString() }}</dd>
+                      </div>
+                      <div class="fee-row fee-row-total">
+                        <dt>預估應繳合計</dt>
+                        <dd>NT$ {{ feePreview.total.toLocaleString() }}</dd>
+                      </div>
+                    </dl>
+                    <div class="fee-preview-note">
+                      <template v-if="feePreview.waitlistCount > 0">
+                        含 {{ feePreview.waitlistCount }} 堂候補課程；候補課程實際不收費，校方確認後另行通知。
+                      </template>
+                      <template v-else>
+                        * 此為估算金額，實際應繳以校方確認後通知為準。
+                      </template>
                     </div>
-                    <div class="fee-row fee-row-total">
-                      <dt>預估應繳合計</dt>
-                      <dd>NT$ {{ feePreview.total.toLocaleString() }}</dd>
-                    </div>
-                  </dl>
-                  <div class="fee-preview-note">
-                    <template v-if="feePreview.waitlistCount > 0">
-                      含 {{ feePreview.waitlistCount }} 堂候補課程；候補課程實際不收費，校方確認後另行通知。
-                    </template>
-                    <template v-else>
-                      * 此為估算金額，實際應繳以校方確認後通知為準。
-                    </template>
-                  </div>
-                </aside>
-              </transition>
+                  </aside>
+                </transition>
 
-              <div class="submit-bar">
-                <button
-                  type="submit"
-                  class="btn btn-primary btn-submit"
-                  :disabled="submitButtonDisabled"
-                >
-                  {{ submitButtonLabel }}
-                  <span v-if="isRegistrationOpen && !submitting" class="btn-suffix">Submit</span>
-                </button>
+                <div class="submit-bar">
+                  <button
+                    type="submit"
+                    class="btn btn-primary btn-submit"
+                    :disabled="submitButtonDisabled"
+                  >
+                    {{ submitButtonLabel }}
+                  </button>
+                </div>
               </div>
 
               <div class="btn-actions-row">
@@ -459,6 +489,29 @@ const posterSrc = computed(() => {
 })
 function onPosterError() {
   posterBroken.value = true
+}
+
+// 海報下載 / 分享：給家長轉發給配偶或長輩
+const canSharePoster = computed(
+  () => typeof navigator !== 'undefined' && typeof navigator.share === 'function',
+)
+const posterDownloadName = computed(() => {
+  const base = (displayTitle.value || '常春藤才藝報名海報').replace(/[\\/:*?"<>|]/g, '_')
+  return `${base}.jpg`
+})
+async function sharePoster() {
+  if (!canSharePoster.value) return
+  try {
+    await navigator.share({
+      title: displayTitle.value,
+      text: '常春藤幼兒園才藝報名海報',
+      url: window.location.href,
+    })
+  } catch (err) {
+    if (err && err.name !== 'AbortError') {
+      showToast('分享失敗，請改用下載按鈕', 'error')
+    }
+  }
 }
 
 // A1-P1：表單狀態 / 驗證 / 即時費用預覽 / 生日範圍 抽到 usePublicRegistrationForm
@@ -552,6 +605,16 @@ const {
 
 // toggleCourse / toggleSupply 已抽至 usePublicRegistrationForm（A1-P1）;
 // 額滿判定（availability=-1）規則在 composable 內,與 availabilityState 一致。
+
+// 目前進行到的步驟（給 step header 用 .is-active 加亮，不影響表單行為）
+const activeStep = computed(() => {
+  if (!form.name || !form.birthday || !form.parent_phone || !form.class_name) return 1
+  if (form.selectedCourses.length === 0) return 2
+  return 3
+})
+
+// 報名截止 48h 內彈出的 noticeState 改 sticky，家長滑到底勾課程時仍可見倒數
+const noticeIsUrgent = computed(() => noticeState.value?.title === '報名即將截止')
 
 // ===== 影片模態 =====
 const videoModal = reactive({ visible: false, title: '', url: '', youtubeId: null })
@@ -938,14 +1001,27 @@ onUnmounted(() => {
   margin-bottom: var(--space-6);
   padding: var(--space-4) var(--space-5);
   border-radius: var(--radius-lg);
-  border-left: 4px solid var(--color-warning);
+  border: 1px solid rgba(217, 119, 6, 0.35);
   background-color: var(--color-warning-soft);
   gap: var(--space-3);
   align-items: flex-start;
 }
 .notice.is-visible { display: flex; }
-.notice.is-warning { border-left-color: var(--color-warning); background-color: var(--color-warning-soft); }
-.notice.is-danger { border-left-color: var(--color-danger); background-color: var(--color-danger-soft); }
+.notice.is-warning {
+  border-color: rgba(217, 119, 6, 0.35);
+  background-color: var(--color-warning-soft);
+}
+.notice.is-danger {
+  border-color: rgba(220, 38, 38, 0.35);
+  background-color: var(--color-danger-soft);
+}
+/* urgent close 倒數時 sticky 在頂端，家長滑下勾課程仍見得到剩餘時間 */
+.notice.is-sticky {
+  position: sticky;
+  top: var(--space-3);
+  z-index: 50;
+  box-shadow: 0 10px 28px rgba(217, 119, 6, 0.18);
+}
 .notice-icon { flex-shrink: 0; width: 24px; height: 24px; color: var(--color-warning); }
 .notice.is-danger .notice-icon { color: var(--color-danger); }
 .notice-content { flex: 1; min-width: 0; }
@@ -987,6 +1063,47 @@ onUnmounted(() => {
   border-radius: var(--radius-md);
   background-color: var(--color-surface-muted);
   transition: opacity var(--dur-base) var(--ease-out);
+}
+
+/* 海報右下角 hover 浮現的下載 / 分享 chip；行動裝置常駐顯示 */
+.poster-actions {
+  position: absolute;
+  right: var(--space-3);
+  bottom: var(--space-3);
+  display: flex;
+  gap: var(--space-2);
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out);
+  pointer-events: none;
+}
+.poster-wrapper:hover .poster-actions,
+.poster-wrapper:focus-within .poster-actions {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+.poster-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  color: var(--color-text);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.18);
+  transition: transform var(--dur-fast) var(--ease-out), background-color var(--dur-fast) var(--ease-out);
+}
+.poster-action:hover { background: #fff; transform: translateY(-1px); }
+.poster-action .icon, .poster-action svg { width: 14px; height: 14px; flex-shrink: 0; }
+@media (hover: none) {
+  .poster-actions { opacity: 1; transform: translateY(0); pointer-events: auto; }
+  .poster-action { padding: 4px 10px; font-size: 11px; }
 }
 .poster-wrapper.is-loading img { opacity: 0; }
 .poster-wrapper.is-loading::after {
@@ -1078,6 +1195,14 @@ onUnmounted(() => {
   border-bottom: 1px solid var(--color-border);
 }
 .form-section-step:first-child { padding-top: var(--space-3); }
+/* 當前進行步驟：填色 step-num + 強調 title，給家長清楚的進度感 */
+.form-section-step.is-active .step-num {
+  background-color: var(--color-primary);
+  color: var(--color-primary-contrast);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-soft);
+}
+.form-section-step.is-active .step-title { color: var(--color-primary); }
 .step-num {
   display: inline-flex;
   align-items: center;
@@ -1119,6 +1244,22 @@ onUnmounted(() => {
   border-bottom: 1px dashed var(--color-border);
 }
 .form-row:last-child { border-bottom: 0; }
+
+/* Step 1 兩欄並排 grid，桌機節省垂直空間 */
+.form-grid-2col {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: var(--space-5);
+}
+.form-grid-2col .form-row { padding: var(--space-3) 0; }
+/* 4 個欄位 = 兩列：最後一列（item 3、4）拿掉 dashed border */
+.form-grid-2col .form-row:nth-child(n+3) { border-bottom: 0; padding-bottom: 0; }
+@media (max-width: 768px) {
+  .form-grid-2col { grid-template-columns: 1fr; column-gap: 0; }
+  .form-grid-2col .form-row { padding: var(--space-4) 0; }
+  .form-grid-2col .form-row:nth-child(n+3) { border-bottom: 1px dashed var(--color-border); padding-bottom: var(--space-4); }
+  .form-grid-2col .form-row:last-child { border-bottom: 0; padding-bottom: 0; }
+}
 .form-label-col { display: flex; flex-direction: column; gap: 2px; }
 .form-label {
   display: inline-flex;
@@ -1593,6 +1734,27 @@ onUnmounted(() => {
 .btn-primary:disabled { background-color: var(--neutral-300); border-color: var(--neutral-300); color: var(--text-secondary); cursor: not-allowed; box-shadow: none; }
 .submit-bar { margin-top: var(--space-3); }
 .btn-submit { width: 100%; min-height: 56px; font-size: var(--fs-lg); }
+
+/* 桌機：fee-preview + submit-bar 一起 sticky 在 viewport 底，家長勾課程時不用
+   回滾才看到金額；mobile 維持 inline。注意不用 backdrop-filter（避免落入
+   glassmorphism 預設禁令），改用純白底 + 上下兩道 shadow 區隔。 */
+.checkout-stick { margin-top: var(--space-3); }
+@media (min-width: 769px) {
+  .checkout-stick {
+    position: sticky;
+    bottom: var(--space-3);
+    z-index: 30;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-3) var(--space-4);
+    box-shadow:
+      0 -2px 6px rgba(15, 23, 42, 0.04),
+      0 12px 28px rgba(15, 23, 42, 0.12);
+  }
+  .checkout-stick .fee-preview { margin-top: 0; }
+  .checkout-stick .submit-bar { margin-top: var(--space-3); }
+}
 .btn-block { width: 100%; }
 .btn-outline {
   background-color: var(--color-surface);
@@ -1602,8 +1764,37 @@ onUnmounted(() => {
 .btn-outline:hover:not(:disabled) { background-color: var(--color-primary); color: var(--color-primary-contrast); }
 .btn-outline--accent { color: var(--ivy-teal); border-color: var(--ivy-teal); }
 .btn-outline--accent:hover:not(:disabled) { background-color: var(--ivy-teal); color: var(--neutral-0); border-color: var(--ivy-teal); }
-.btn-actions-row { display: flex; gap: var(--space-3); margin-top: var(--space-3); }
-.btn-actions-row .btn { flex: 1; }
+.btn-actions-row {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: var(--space-3);
+}
+/* 副按鈕視覺壓低：text-link 風格，不跟主 submit 搶視覺重量 */
+.btn-actions-row .btn {
+  flex: 0 0 auto;
+  min-height: auto;
+  padding: 8px 12px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--color-text-muted);
+  font-weight: 500;
+  font-size: var(--fs-sm);
+  box-shadow: none;
+}
+.btn-actions-row .btn:hover:not(:disabled) {
+  background: var(--color-surface-muted);
+  border-color: transparent;
+  color: var(--color-text);
+  transform: none;
+  box-shadow: none;
+}
+.btn-actions-row .btn .icon,
+.btn-actions-row .btn svg {
+  width: 14px;
+  height: 14px;
+}
 
 /* Video Button — 獨立於 label 之外，避免與 checkbox 互動衝突 */
 .video-btn {
@@ -1637,64 +1828,9 @@ onUnmounted(() => {
   font-size: var(--fs-xs);
 }
 
-/* Toast */
-.toast-container {
-  position: fixed;
-  top: var(--space-5);
-  right: var(--space-5);
-  z-index: 9999;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  max-width: calc(100vw - 40px);
-  pointer-events: none;
-}
-.toast {
-  pointer-events: auto;
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-3);
-  min-width: 300px;
-  max-width: 440px;
-  padding: var(--space-4);
-  background: var(--color-surface);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-lg);
-  border-left: 4px solid var(--color-primary);
-  animation: toastSlideIn var(--dur-slow) var(--ease-out);
-}
-.toast.success { border-left-color: var(--color-success); }
-.toast.error { border-left-color: var(--color-danger); }
-.toast.warning { border-left-color: var(--color-warning); }
-.toast-icon {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  margin-top: 1px;
-}
-.toast-content { flex: 1; min-width: 0; }
-.toast-message { font-size: var(--fs-sm); line-height: 1.5; color: var(--color-text-muted); white-space: pre-line; word-break: break-word; }
-.toast-close {
-  flex-shrink: 0;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  background: none;
-  border: none;
-  border-radius: var(--radius-full);
-  color: var(--color-text-subtle);
-  font-size: 20px;
-  line-height: 1;
-  cursor: pointer;
-}
-.toast-close:hover { background-color: var(--color-surface-muted); color: var(--color-text); }
-@keyframes toastSlideIn {
-  from { transform: translateX(32px); opacity: 0; }
-  to { transform: translateX(0); opacity: 1; }
-}
+/* Toast 樣式已搬至 components/ToastStack.vue 自帶的 <style scoped>。
+   同時把原本 border-left: 4px solid 違反「side-stripe ban」的設計改成
+   background tint + 1px full border。 */
 
 /* Modal */
 .modal-overlay {
@@ -2138,5 +2274,486 @@ onUnmounted(() => {
 
   /* 行動裝置 success modal 的品牌 banner 縮小，避免擠壓內容 */
   .success-brand-banner { padding: var(--space-2) 0 var(--space-3); }
+}
+</style>
+
+<style>
+/* 非 scoped：上面的 <style scoped> 加的 data-v-* 不會落到 ContactInquiryModal /
+   SuccessSummaryModal 等子元件 DOM 上，導致 modal 顯示時 layout 整片失效。
+   這裡用 .public-activity-page ancestor 重新 export 一份共用規則；其他頁面
+   不會用到 .public-activity-page 這個 class，因此不會洩漏到 admin / portal。
+   CoursePickerSection / VideoModal / ToastStack 已各自 scoped，不重複寫。 */
+
+.public-activity-page .modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: none;
+  justify-content: center;
+  align-items: center;
+  padding: var(--space-5);
+  z-index: 2000;
+  animation: modalFadeIn var(--dur-base) var(--ease-out);
+}
+.public-activity-page .modal-overlay.is-visible { display: flex; }
+.public-activity-page .modal-panel {
+  position: relative;
+  width: 100%;
+  max-width: 520px;
+  max-height: 90vh;
+  overflow-y: auto;
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xl);
+  animation: modalSlideIn var(--dur-slow) var(--ease-out);
+}
+.public-activity-page .modal-panel--success { max-width: 560px; }
+.public-activity-page .modal-panel--success .modal-title { color: var(--color-success); }
+.public-activity-page .modal-panel--video { max-width: 900px; padding: var(--space-5); }
+.public-activity-page .modal-panel--video .modal-close {
+  position: absolute;
+  top: -46px;
+  right: 0;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: var(--shadow-md);
+}
+.public-activity-page .modal-panel--video .modal-title {
+  position: absolute;
+  top: -46px;
+  left: 0;
+  color: var(--neutral-0);
+  font-size: var(--fs-md);
+}
+.public-activity-page .video-wrapper {
+  width: 100%;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: #000;
+}
+.public-activity-page .video-wrapper video,
+.public-activity-page .video-wrapper iframe {
+  width: 100%;
+  max-height: 72vh;
+  display: block;
+  border: 0;
+}
+.public-activity-page .modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-5) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+}
+.public-activity-page .modal-title {
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  color: var(--color-primary);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.public-activity-page .modal-title .icon { color: var(--color-primary); }
+.public-activity-page .modal-close {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  background: var(--color-surface-muted);
+  border: none;
+  border-radius: var(--radius-full);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+.public-activity-page .modal-close:hover {
+  background-color: var(--color-danger-soft);
+  color: var(--color-danger);
+  transform: rotate(90deg);
+}
+.public-activity-page .modal-body { padding: var(--space-5); }
+
+/* Contact modal */
+.public-activity-page .contact-school-card {
+  padding: var(--space-4) var(--space-5);
+  background: linear-gradient(135deg, var(--color-primary-soft) 0%, var(--color-surface-muted) 100%);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-5);
+}
+.public-activity-page .contact-school-name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  color: var(--color-primary);
+  margin: 0 0 var(--space-3) 0;
+}
+.public-activity-page .contact-school-name .icon { color: var(--color-primary); }
+.public-activity-page .contact-school-detail {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--fs-sm);
+  color: var(--color-text-muted);
+  line-height: 1.6;
+  margin-top: var(--space-1);
+}
+.public-activity-page .contact-school-detail .icon { flex-shrink: 0; color: var(--color-primary); }
+.public-activity-page .contact-school-detail a { color: var(--color-primary); font-weight: 600; text-decoration: none; }
+.public-activity-page .contact-form-intro {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding-top: var(--space-4);
+  margin-bottom: var(--space-4);
+  border-top: 1px dashed var(--color-border);
+  font-size: var(--fs-sm);
+  color: var(--ivy-teal);
+  font-weight: 500;
+}
+.public-activity-page .contact-form-intro .icon { color: var(--ivy-teal); }
+.public-activity-page .field-group { margin-bottom: var(--space-4); }
+.public-activity-page .field-group:last-of-type { margin-bottom: var(--space-5); }
+.public-activity-page .field-group label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: var(--space-2);
+}
+.public-activity-page .field-group textarea {
+  width: 100%;
+  min-height: 100px;
+  padding: 10px 14px;
+  font-family: inherit;
+  font-size: var(--fs-md);
+  color: var(--color-text);
+  background-color: var(--color-surface);
+  border: 1.5px solid var(--color-border-muted);
+  border-radius: var(--radius-sm);
+  resize: vertical;
+  transition: border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+  line-height: 1.6;
+}
+.public-activity-page .field-group textarea:focus { outline: none; border-color: var(--color-primary); box-shadow: var(--focus-ring); }
+
+/* Success modal */
+.public-activity-page .success-brand-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-3) 0 var(--space-4);
+  margin-bottom: var(--space-2);
+  border-bottom: 1px dashed var(--color-border);
+}
+.public-activity-page .success-brand-star {
+  flex-shrink: 0;
+  animation: starFloat 4.2s ease-in-out infinite;
+}
+.public-activity-page .success-brand-star--l { animation-delay: -1.5s; }
+.public-activity-page .success-brand-star--r { animation-delay: -3s; }
+.public-activity-page .success-msg {
+  margin: 0 0 var(--space-4) 0;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-primary-soft);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-sm);
+  color: var(--color-text);
+  line-height: 1.6;
+}
+.public-activity-page .summary-block {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-4);
+  background: var(--color-surface-muted);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-sm);
+}
+.public-activity-page .summary-row { display: contents; }
+.public-activity-page .summary-label { color: var(--color-text-subtle); font-weight: 500; }
+.public-activity-page .summary-value { color: var(--color-text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.public-activity-page .summary-section { margin-bottom: var(--space-4); }
+.public-activity-page .summary-section-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--color-text);
+  margin-bottom: var(--space-2);
+}
+.public-activity-page .summary-section-title .icon { color: var(--color-primary); }
+.public-activity-page .summary-section.is-waitlist .summary-section-title .icon { color: var(--color-warning); }
+.public-activity-page .summary-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.public-activity-page .summary-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 10px var(--space-4);
+  font-size: var(--fs-sm);
+  color: var(--color-text);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border-muted);
+}
+.public-activity-page .summary-list li:last-child { border-bottom: 0; }
+.public-activity-page .summary-amount { color: var(--color-text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.public-activity-page .summary-amount--muted { color: var(--color-warning); font-weight: 600; }
+.public-activity-page .summary-note {
+  margin: var(--space-2) 0 0 0;
+  font-size: var(--fs-xs);
+  color: var(--color-warning);
+  line-height: 1.5;
+}
+.public-activity-page .summary-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-3) var(--space-4);
+  background: linear-gradient(135deg, var(--color-primary-soft) 0%, var(--color-surface-muted) 100%);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--fs-md);
+  font-weight: 600;
+  color: var(--color-text);
+}
+.public-activity-page .summary-total strong {
+  color: var(--color-primary);
+  font-size: var(--fs-xl);
+  font-variant-numeric: tabular-nums;
+}
+.public-activity-page .summary-final-note {
+  margin: var(--space-2) 0 var(--space-4) 0;
+  font-size: var(--fs-xs);
+  color: var(--color-text-subtle);
+  text-align: center;
+  line-height: 1.5;
+}
+
+/* Success modal token-box */
+.public-activity-page .success-token-box {
+  margin: var(--space-4) 0;
+  padding: var(--space-4);
+  background: var(--color-primary-soft);
+  border: 1.5px solid var(--color-primary);
+  border-radius: var(--radius-md);
+}
+.public-activity-page .token-title { font-weight: 700; color: var(--color-primary); margin-bottom: var(--space-2); }
+.public-activity-page .token-hint {
+  margin: 0 0 var(--space-3);
+  font-size: var(--fs-sm);
+  color: var(--color-text-muted);
+  line-height: 1.6;
+}
+.public-activity-page .token-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-muted);
+  border-radius: var(--radius-sm);
+}
+.public-activity-page .token-label {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--color-text-subtle);
+  min-width: 64px;
+}
+.public-activity-page .token-input {
+  flex: 1;
+  min-width: 0;
+  min-height: 32px;
+  padding: 6px 10px;
+  font-family: 'SF Mono', 'JetBrains Mono', Consolas, monospace;
+  font-size: var(--fs-sm);
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-muted);
+  border-radius: var(--radius-sm);
+  font-variant-ligatures: none;
+  letter-spacing: 0.02em;
+  user-select: all;
+  -webkit-user-select: all;
+}
+.public-activity-page .token-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(13, 144, 83, 0.2);
+}
+.public-activity-page .token-input--link { font-size: var(--fs-xs); }
+.public-activity-page .btn-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--color-primary-contrast);
+  background: var(--color-primary);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+  flex-shrink: 0;
+}
+.public-activity-page .btn-copy:hover { background: var(--color-primary-hover); }
+.public-activity-page .btn-copy:active { transform: scale(0.96); }
+.public-activity-page .btn-copy svg { flex-shrink: 0; }
+.public-activity-page .token-share-row { display: flex; margin-top: var(--space-3); }
+.public-activity-page .btn-share {
+  flex: 1;
+  min-height: 40px;
+  font-size: var(--fs-sm);
+  background: var(--color-surface);
+  color: var(--ivy-teal);
+  border-color: var(--ivy-teal);
+}
+.public-activity-page .btn-share:hover:not(:disabled) {
+  background: var(--ivy-teal);
+  color: var(--neutral-0);
+  border-color: var(--ivy-teal);
+}
+.public-activity-page .token-copy-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin: var(--space-2) 0;
+  padding: 6px 12px;
+  background: var(--color-primary-soft);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-xs);
+  color: var(--color-success);
+  font-weight: 600;
+}
+.public-activity-page .token-warn {
+  margin: var(--space-2) 0 0;
+  font-size: var(--fs-xs);
+  color: var(--color-warning);
+  font-weight: 600;
+}
+
+/* shared input/btn primitives — 子元件 modal 用到 */
+.public-activity-page .input-text,
+.public-activity-page .input-select {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 14px;
+  font-family: inherit;
+  font-size: var(--fs-md);
+  color: var(--color-text);
+  background-color: var(--color-surface);
+  border: 1.5px solid var(--color-border-muted);
+  border-radius: var(--radius-sm);
+  transition: border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+}
+.public-activity-page .input-text::placeholder { color: var(--color-text-subtle); }
+.public-activity-page .input-text:hover { border-color: var(--neutral-300); }
+.public-activity-page .input-text:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: var(--focus-ring);
+}
+.public-activity-page .required-mark { color: var(--color-required); font-weight: 700; }
+
+.public-activity-page .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 48px;
+  padding: 12px 20px;
+  font-family: inherit;
+  font-size: var(--fs-md);
+  font-weight: 600;
+  line-height: 1.2;
+  border: 1.5px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text);
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+  white-space: nowrap;
+}
+.public-activity-page .btn-primary {
+  background-color: var(--color-cta);
+  color: var(--color-cta-contrast);
+  border-color: var(--color-cta);
+  box-shadow: 0 6px 16px rgba(13, 144, 83, 0.25);
+}
+.public-activity-page .btn-primary:hover:not(:disabled) {
+  background-color: var(--color-cta-hover);
+  border-color: var(--color-cta-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 20px rgba(13, 144, 83, 0.30);
+}
+.public-activity-page .btn-primary:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 4px 10px rgba(13, 144, 83, 0.25);
+}
+.public-activity-page .btn-primary:disabled {
+  background-color: var(--neutral-300);
+  border-color: var(--neutral-300);
+  color: var(--text-secondary);
+  cursor: not-allowed;
+  box-shadow: none;
+}
+.public-activity-page .btn-block { width: 100%; }
+.public-activity-page .btn-outline {
+  background-color: var(--color-surface);
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+.public-activity-page .btn-outline:hover:not(:disabled) {
+  background-color: var(--color-primary);
+  color: var(--color-primary-contrast);
+}
+
+/* keyframes 在 <style scoped> 內會被 Vue 加 hash 後綴跨不過去，
+   這裡再定義一份不帶 hash 的給非 scoped 規則使用 */
+@keyframes modalFadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes modalSlideIn {
+  from { transform: translateY(24px) scale(0.96); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
+}
+@keyframes starFloat {
+  0%, 100% { transform: translateY(0) rotate(-4deg); }
+  50% { transform: translateY(-6px) rotate(6deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .public-activity-page .modal-overlay,
+  .public-activity-page .modal-panel,
+  .public-activity-page .success-brand-star { animation: none; }
 }
 </style>

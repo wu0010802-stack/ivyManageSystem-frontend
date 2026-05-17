@@ -39,3 +39,5 @@ defineEmits(['close'])
     </div>
   </div>
 </template>
+<!-- CSS 由 parent ActivityPublicView 的 non-scoped <style> 區塊以
+     `.public-activity-page` ancestor 提供（包含 modal-base 與 --video 變體）。 -->

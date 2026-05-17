@@ -26,7 +26,9 @@ export function usePublicActivityOptions() {
       ])
       courses.value = coursesRes.data
       supplies.value = suppliesRes.data
-      classes.value = classesRes.data
+      // 後端目前會回出重複班名（玫瑰/薔薇/百合 等），這裡 dedupe 保留首次出現順序
+      const rawClasses = Array.isArray(classesRes.data) ? classesRes.data : []
+      classes.value = Array.from(new Set(rawClasses))
       videos.value = videosRes.data
     } catch (e) {
       error.value = e

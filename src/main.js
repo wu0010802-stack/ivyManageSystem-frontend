@@ -57,4 +57,7 @@ app.use(router)
 useA11yPreference().init()
 initSyncBridge()
 
-app.mount('#app')
+// 等 router 解析首次 navigation 再 mount，避免 START_LOCATION race
+// 造成的 title 一閃「儀表板｜常春藤管理系統」與 AdminLayout 在 /public 路由
+// 短暫掛載而打 /api/notifications/summary。
+router.isReady().finally(() => app.mount('#app'))

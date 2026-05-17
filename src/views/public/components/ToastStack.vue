@@ -44,3 +44,91 @@ const TOAST_ICONS = {
     </div>
   </div>
 </template>
+
+<style scoped>
+/* Scoped 自帶：parent ActivityPublicView 的 <style scoped> 加的 data-v-* 不會
+   套到子元件 DOM；此處讓 .toast / .toast-icon 等內部元素 layout 與 type tint
+   正確套用。同時把原本 border-left: 4px 違反「絕對禁令」的 side-stripe 替換為
+   tint background + 1px full border，type cue 由 icon + 背景色一起傳達。 */
+
+.toast-container {
+  position: fixed;
+  top: var(--space-5);
+  right: var(--space-5);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-width: calc(100vw - 40px);
+  pointer-events: none;
+}
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  min-width: 300px;
+  max-width: 440px;
+  padding: var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-muted);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  animation: toastSlideIn var(--dur-slow) var(--ease-out);
+}
+.toast.success {
+  background: rgba(13, 144, 83, 0.06);
+  border-color: rgba(13, 144, 83, 0.22);
+}
+.toast.error {
+  background: rgba(220, 38, 38, 0.06);
+  border-color: rgba(220, 38, 38, 0.22);
+}
+.toast.warning {
+  background: rgba(217, 119, 6, 0.06);
+  border-color: rgba(217, 119, 6, 0.22);
+}
+.toast-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  margin-top: 1px;
+}
+.toast-content { flex: 1; min-width: 0; }
+.toast-message {
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  color: var(--color-text-muted);
+  white-space: pre-line;
+  word-break: break-word;
+}
+.toast-close {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: var(--radius-full);
+  color: var(--color-text-subtle);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+.toast-close:hover {
+  background-color: var(--color-surface-muted);
+  color: var(--color-text);
+}
+
+@keyframes toastSlideIn {
+  from { transform: translateX(32px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast { animation: none; }
+}
+</style>
