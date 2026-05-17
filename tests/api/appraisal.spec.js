@@ -32,6 +32,11 @@ import {
   getManualEventCounts,
   batchUpsertManualEventCounts,
   previewAppraisalScore,
+  rejectSummary,
+  commentSummary,
+  batchSignSummaries,
+  getSummaryLogs,
+  getSignStatusSummary,
 } from '@/api/appraisal'
 
 describe('appraisal.js — Phase 1 Calibrate endpoints', () => {
@@ -90,5 +95,51 @@ describe('appraisal.js — Phase 1 Calibrate endpoints', () => {
     mockPost.mockResolvedValueOnce({ data: { participants: [] } })
     await previewAppraisalScore(3)
     expect(mockPost).toHaveBeenCalledWith('/appraisal/cycles/3/score_preview')
+  })
+})
+
+describe('appraisal.js — Phase 2 Signing UX endpoints', () => {
+  beforeEach(() => {
+    mockGet.mockReset()
+    mockPost.mockReset()
+    mockPut.mockReset()
+  })
+
+  it('rejectSummary posts payload to /reject', async () => {
+    mockPost.mockResolvedValueOnce({ data: {} })
+    await rejectSummary(7, { reason: 'long enough reason', to_status: 'DRAFT' })
+    expect(mockPost).toHaveBeenCalledWith('/appraisal/summaries/7/reject', {
+      reason: 'long enough reason',
+      to_status: 'DRAFT',
+    })
+  })
+
+  it('commentSummary posts payload to /comment', async () => {
+    mockPost.mockResolvedValueOnce({ data: {} })
+    await commentSummary(7, 'note')
+    expect(mockPost).toHaveBeenCalledWith('/appraisal/summaries/7/comment', {
+      comment: 'note',
+    })
+  })
+
+  it('batchSignSummaries posts payload to :batch_sign', async () => {
+    mockPost.mockResolvedValueOnce({ data: { succeeded: [], failed: [] } })
+    await batchSignSummaries(3, [1, 2, 3], 'SUPERVISOR')
+    expect(mockPost).toHaveBeenCalledWith(
+      '/appraisal/cycles/3/summaries:batch_sign',
+      { summary_ids: [1, 2, 3], stage: 'SUPERVISOR' },
+    )
+  })
+
+  it('getSummaryLogs calls /logs', async () => {
+    mockGet.mockResolvedValueOnce({ data: [] })
+    await getSummaryLogs(7)
+    expect(mockGet).toHaveBeenCalledWith('/appraisal/summaries/7/logs')
+  })
+
+  it('getSignStatusSummary calls /sign_status_summary', async () => {
+    mockGet.mockResolvedValueOnce({ data: { counts: {}, buckets: [] } })
+    await getSignStatusSummary(3)
+    expect(mockGet).toHaveBeenCalledWith('/appraisal/cycles/3/sign_status_summary')
   })
 })
