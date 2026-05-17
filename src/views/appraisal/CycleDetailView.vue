@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Refresh, Download } from '@element-plus/icons-vue'
+
 import {
   listAppraisalParticipants,
   listAppraisalSummaries,
@@ -17,6 +18,13 @@ import {
 } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
 
+import KanbanView from './components/KanbanView.vue'
+import ListView from './components/ListView.vue'
+import RejectDialog from './components/RejectDialog.vue'
+import CommentDialog from './components/CommentDialog.vue'
+import BatchSignButton from './components/BatchSignButton.vue'
+import SummaryLogDrawer from './components/SummaryLogDrawer.vue'
+
 const route = useRoute()
 const router = useRouter()
 const cycleId = Number(route.params.id)
@@ -28,17 +36,18 @@ const catalog = ref([])
 const loading = ref(false)
 const busy = ref(false)
 
+const view = ref('kanban')
+const selectedIds = ref([])
+
 const summaryByParticipant = computed(() => {
   const m = {}
   for (const s of summaries.value) m[s.participant_id] = s
   return m
 })
 
-const gradeLabel = (g) =>
-  ({ OUTSTANDING: '優等', GOOD: '甲等', PASS: '乙等', WARN: '丙等', FAIL: '丁等' }[g] || g)
-
 const statusLabel = (s) =>
-  ({ DRAFT: '草稿', SUPERVISOR_SIGNED: '主管已簽', ACCOUNTING_SIGNED: '會計已簽', FINALIZED: '已核定' }[s] || s)
+  ({ DRAFT: '草稿', SUPERVISOR_SIGNED: '主管已簽',
+     ACCOUNTING_SIGNED: '會計已簽', FINALIZED: '已核定' }[s] || s)
 
 async function load() {
   loading.value = true
@@ -55,12 +64,18 @@ async function load() {
   }
 }
 
+const kanbanRef = ref(null)
+async function reload() {
+  await load()
+  if (kanbanRef.value?.reload) kanbanRef.value.reload()
+}
+
 async function recompute() {
   busy.value = true
   try {
     await recomputeAppraisalSummaries(cycleId)
     ElMessage.success('重算完成')
-    await load()
+    await reload()
   } catch (e) {
     ElMessage.error(apiError(e, '重算失敗'))
   } finally {
@@ -68,14 +83,14 @@ async function recompute() {
   }
 }
 
-async function sign(summary, stage) {
+async function sign({ summary, stage }) {
   busy.value = true
   try {
     if (stage === 'supervisor') await signSupervisorAppraisalSummary(summary.id)
     else if (stage === 'accounting') await signAccountingAppraisalSummary(summary.id)
     else if (stage === 'finalize') await finalizeAppraisalSummary(summary.id)
     ElMessage.success('簽核完成')
-    await load()
+    await reload()
   } catch (e) {
     ElMessage.error(apiError(e, '簽核失敗'))
   } finally {
@@ -83,17 +98,50 @@ async function sign(summary, stage) {
   }
 }
 
+const rejectDialogVisible = ref(false)
+const rejectTarget = ref(null)
+function openReject(summary) { rejectTarget.value = summary; rejectDialogVisible.value = true }
+
+const commentDialogVisible = ref(false)
+const commentTarget = ref(null)
+function openComment(summary) { commentTarget.value = summary; commentDialogVisible.value = true }
+
+const logDrawerVisible = ref(false)
+const logTargetId = ref(null)
+function openLog(summary) { logTargetId.value = summary.id; logDrawerVisible.value = true }
+
+function onKanbanAction({ action, summary }) {
+  if (action === 'sign') {
+    const stage = ({
+      DRAFT: 'supervisor',
+      SUPERVISOR_SIGNED: 'accounting',
+      ACCOUNTING_SIGNED: 'finalize',
+    })[summary.status]
+    if (stage) sign({ summary: { id: summary.id }, stage })
+  } else if (action === 'reject') openReject(summary)
+  else if (action === 'comment') openComment(summary)
+  else if (action === 'log') openLog(summary)
+}
+
+defineExpose({
+  view,
+  selectedIds,
+  openReject,
+  openComment,
+  openLog,
+})
+
 onMounted(load)
 </script>
 
 <template>
   <div class="cycle-detail">
-    <el-page-header @back="router.back()" content="半年考核明細" />
+    <el-page-header content="半年考核明細" @back="router.back()" />
     <div v-if="cycle" class="meta">
       <strong>{{ cycle.academic_year }} 學年</strong>
       {{ cycle.semester === 'FIRST' ? '上學期' : '下學期' }} ｜
       基準日 {{ cycle.base_score_calc_date }} ｜
-      基礎分數 {{ Number(cycle.base_score).toFixed(1) }} ｜
+      基礎分數 {{ Number(cycle.base_score).toFixed(2) }} ｜
       狀態 {{ statusLabel(cycle.status) }}
     </div>
 
@@ -101,60 +149,61 @@ onMounted(load)
       <el-button type="primary" :icon="Refresh" :loading="busy" @click="recompute">重算 Summary</el-button>
       <el-button :icon="Download" tag="a" :href="exportAppraisalCycleXlsxUrl(cycleId)">匯出考核表</el-button>
       <el-button :icon="Download" tag="a" :href="exportAppraisalTransferRosterXlsxUrl(cycleId)">轉帳名冊</el-button>
+
+      <span v-if="selectedIds.length > 0" class="batch-zone" data-test="batch-zone">
+        <BatchSignButton :cycle-id="cycleId" stage="SUPERVISOR" :selected-ids="selectedIds" @done="reload" />
+        <BatchSignButton :cycle-id="cycleId" stage="ACCOUNTING" :selected-ids="selectedIds" @done="reload" />
+        <BatchSignButton :cycle-id="cycleId" stage="FINALIZE" :selected-ids="selectedIds" @done="reload" />
+      </span>
+
+      <el-radio-group v-model="view" data-test="view-toggle" style="margin-left: auto;">
+        <el-radio-button value="kanban">看板</el-radio-button>
+        <el-radio-button value="list">列表</el-radio-button>
+      </el-radio-group>
     </div>
 
-    <el-table :data="participants" v-loading="loading" stripe>
-      <el-table-column label="員工 ID" prop="employee_id" width="100" />
-      <el-table-column label="角色群" prop="role_group" width="140" />
-      <el-table-column label="班級" prop="classroom_id" width="100" />
-      <el-table-column label="到職月數" prop="hire_months_in_cycle" width="100" />
-      <el-table-column label="不計算" width="100">
-        <template #default="{ row }">{{ row.is_excluded ? '是' : '' }}</template>
-      </el-table-column>
-      <el-table-column label="總分" width="100">
-        <template #default="{ row }">
-          <span v-if="summaryByParticipant[row.id]">
-            {{ Number(summaryByParticipant[row.id].total_score).toFixed(2) }}
-          </span>
-        </template>
-      </el-table-column>
-      <el-table-column label="等第" width="100">
-        <template #default="{ row }">
-          <span v-if="summaryByParticipant[row.id]">{{ gradeLabel(summaryByParticipant[row.id].grade) }}</span>
-        </template>
-      </el-table-column>
-      <el-table-column label="獎金" width="120">
-        <template #default="{ row }">
-          <span v-if="summaryByParticipant[row.id]">
-            {{ Number(summaryByParticipant[row.id].bonus_amount).toLocaleString() }}
-          </span>
-        </template>
-      </el-table-column>
-      <el-table-column label="簽核狀態" width="140">
-        <template #default="{ row }">
-          <el-tag v-if="summaryByParticipant[row.id]" size="small">
-            {{ statusLabel(summaryByParticipant[row.id].status) }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column label="簽核操作" width="260">
-        <template #default="{ row }">
-          <template v-if="summaryByParticipant[row.id]">
-            <el-button v-if="summaryByParticipant[row.id].status === 'DRAFT'"
-              size="small" @click="sign(summaryByParticipant[row.id], 'supervisor')">主管簽</el-button>
-            <el-button v-else-if="summaryByParticipant[row.id].status === 'SUPERVISOR_SIGNED'"
-              size="small" @click="sign(summaryByParticipant[row.id], 'accounting')">會計簽</el-button>
-            <el-button v-else-if="summaryByParticipant[row.id].status === 'ACCOUNTING_SIGNED'"
-              size="small" type="primary" @click="sign(summaryByParticipant[row.id], 'finalize')">核定</el-button>
-          </template>
-        </template>
-      </el-table-column>
-    </el-table>
+    <KanbanView
+      v-if="view === 'kanban'"
+      ref="kanbanRef"
+      :cycle-id="cycleId"
+      @action="onKanbanAction"
+      @selected-changed="(ids) => (selectedIds = ids)"
+    />
+
+    <ListView
+      v-else
+      :cycle-id="cycleId"
+      :participants="participants"
+      :summary-by-participant="summaryByParticipant"
+      :catalog="catalog"
+      v-model:selected-ids="selectedIds"
+      :busy="busy"
+      @sign="sign"
+      @reject="openReject"
+      @comment="openComment"
+      @open-log="openLog"
+    />
+
+    <RejectDialog
+      v-model:visible="rejectDialogVisible"
+      :summary="rejectTarget"
+      @rejected="reload"
+    />
+    <CommentDialog
+      v-model:visible="commentDialogVisible"
+      :summary="commentTarget"
+      @commented="reload"
+    />
+    <SummaryLogDrawer
+      v-model:visible="logDrawerVisible"
+      :summary-id="logTargetId"
+    />
   </div>
 </template>
 
 <style scoped>
 .cycle-detail { padding: 16px; }
 .meta { margin: 12px 0; padding: 12px; background: #f5f7fa; border-radius: 4px; }
-.toolbar { margin: 16px 0; display: flex; gap: 8px; }
+.toolbar { margin: 16px 0; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.batch-zone { display: flex; gap: 6px; }
 </style>
