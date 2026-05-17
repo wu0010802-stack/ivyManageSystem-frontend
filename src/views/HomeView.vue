@@ -119,7 +119,7 @@ const showTodoSection = computed(
     <section v-if="showTodoSection" class="todo-board" aria-label="今日待辦">
       <div class="section-header section-header--top">
         <div class="section-title-wrap">
-          <span class="section-dot section-dot--amber"></span>
+          <span class="section-dot"></span>
           <span class="section-title">今日待辦</span>
         </div>
         <span v-if="todoDataReady && todoTiles.length > 0" class="section-date-chip">
@@ -195,7 +195,7 @@ const showTodoSection = computed(
     <template v-if="showAttendance">
       <div class="section-header">
         <div class="section-title-wrap">
-          <span class="section-dot section-dot--blue"></span>
+          <span class="section-dot"></span>
           <span class="section-title">教師出勤狀況</span>
         </div>
         <span class="section-date-chip">{{ todayDateStr }}</span>
@@ -235,7 +235,7 @@ const showTodoSection = computed(
     >
       <div class="section-header">
         <div class="section-title-wrap">
-          <span class="section-dot section-dot--green"></span>
+          <span class="section-dot"></span>
           <span class="section-title">今日學生出勤狀況</span>
         </div>
         <span class="section-date-chip">{{ todayDateStr }}</span>
@@ -571,16 +571,15 @@ const showTodoSection = computed(
   color: var(--text-primary);
 }
 
+/* Phase B：section-dot 3 種色（amber 待辦 / blue 教師出勤 / green 學生出勤）
+   為散落的 skittles 反射；統一為 brand-primary，差異化交給 section title 文字 */
 .section-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
+  background: var(--brand-primary);
 }
-
-.section-dot--blue  { background: var(--brand-primary); }
-.section-dot--green { background: var(--color-success); }
-.section-dot--amber { background: var(--color-warning); }
 
 /* ── 今日待辦 todo board ── */
 .todo-board {

@@ -310,6 +310,9 @@ async function download(type) {
   margin-bottom: 16px;
 }
 
+/* Phase B：勞保藍 / 健保綠 / 國稅橘 / 勞退紫 4 色 icon pill 為 SaaS-AI
+   identical-card-grid 反射模式（4 張同尺寸卡 + 4 種色 icon），與 HomeView
+   action-circle 同源壓平。語意已由 title 文字傳達，色彩交給 brand-primary 統一。 */
 .report-icon {
   width: 56px;
   height: 56px;
@@ -318,13 +321,9 @@ async function download(type) {
   align-items: center;
   justify-content: center;
   margin: 12px auto 14px;
-  color: #fff;
+  background-color: var(--brand-primary-soft);
+  color: var(--brand-primary);
 }
-
-.report-icon.labor  { background-color: #2563eb; }
-.report-icon.health { background-color: #059669; }
-.report-icon.tax    { background-color: #d97706; }
-.report-icon.pension{ background-color: #7c3aed; }
 
 .report-title {
   font-size: 15px;
