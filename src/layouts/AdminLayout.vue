@@ -54,18 +54,31 @@ const closeSidebar = () => {
   sidebarOpen.value = false
 }
 
+// AdminLayout 即使被 App.vue 用 v-else 守住仍可能在 router 尚未 resolve 的
+// 初次 mount 短暫渲染，這時 route.path 還是 START_LOCATION ('/')。為避免
+// 公開頁/教師端/登入頁打到 admin-only 的 /api/notifications/summary，
+// 這裡再守一道 path-based guard。
+function isAdminContext(path) {
+  return (
+    !path.startsWith('/public') &&
+    !path.startsWith('/portal') &&
+    path !== '/login' &&
+    path !== '/change-password'
+  )
+}
+
 onMounted(() => {
   checkMobile()
   window.addEventListener('resize', checkMobile)
-  if (isLoggedIn()) notificationStore.fetchSummary()
+  if (isLoggedIn() && isAdminContext(route.path)) notificationStore.fetchSummary()
 })
 
 onUnmounted(() => {
   window.removeEventListener('resize', checkMobile)
 })
 
-watch(() => route.path, () => {
-  if (isLoggedIn()) notificationStore.fetchSummary()
+watch(() => route.path, (path) => {
+  if (isLoggedIn() && isAdminContext(path)) notificationStore.fetchSummary()
 })
 </script>
 
