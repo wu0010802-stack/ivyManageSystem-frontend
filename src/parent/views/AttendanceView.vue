@@ -34,8 +34,7 @@ const calendarDays = computed(() => {
   const firstDay = new Date(y, m - 1, 1)
   const lastDay = new Date(y, m, 0)
   const cells = []
-  // 補滿前面（週一為起點）→ 為簡化用週日為起點
-  const startWeekday = firstDay.getDay() // 0=Sun
+  const startWeekday = firstDay.getDay()
   for (let i = 0; i < startWeekday; i++) cells.push(null)
   for (let d = 1; d <= lastDay.getDate(); d++) {
     const dateStr = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
@@ -53,6 +52,8 @@ function selectCell(cell) {
   if (!cell) return
   selected.value = cell
 }
+
+const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
 
 async function fetchData() {
   if (!selectedId.value) return
@@ -72,42 +73,37 @@ async function fetchData() {
 }
 
 function prevMonth() {
-  if (month.value === 1) {
-    month.value = 12
-    year.value -= 1
-  } else {
-    month.value -= 1
-  }
+  if (month.value === 1) { month.value = 12; year.value -= 1 }
+  else { month.value -= 1 }
 }
-
 function nextMonth() {
-  if (month.value === 12) {
-    month.value = 1
-    year.value += 1
-  } else {
-    month.value += 1
-  }
+  if (month.value === 12) { month.value = 1; year.value += 1 }
+  else { month.value += 1 }
 }
-
 function goToday() {
   const d = new Date()
   year.value = d.getFullYear()
   month.value = d.getMonth() + 1
 }
 
-// status → IvyKids tint token mapping
-// 出席/present/on_time → tint-calendar（綠）
-// 病假/事假/leave/absence → tint-leave（青綠）
-// 缺席/absent → tint-announcement（珊瑚紅）
-// 遲到/late/tardy → tint-money（黃，與一般出席區隔）
-const statusColor = (status) => {
-  return {
-    出席:   { bg: 'var(--pt-tint-calendar)',     color: 'var(--pt-tint-calendar-fg)' },
-    缺席:   { bg: 'var(--pt-tint-announcement)', color: 'var(--pt-tint-announcement-fg)' },
-    病假:   { bg: 'var(--pt-tint-leave)',        color: 'var(--pt-tint-leave-fg)' },
-    事假:   { bg: 'var(--pt-tint-leave)',        color: 'var(--pt-tint-leave-fg)' },
-    遲到:   { bg: 'var(--pt-tint-money)',        color: 'var(--pt-tint-money-fg)' },
-  }[status] || { bg: 'var(--pt-surface-mute)', color: 'var(--pt-text-soft)' }
+// status → 色系 mapping（cream / leaf / coral / sun / sky）
+const STATUS_TONE = {
+  出席:  { tone: 'success', label: '出席' },
+  缺席:  { tone: 'danger',  label: '缺席' },
+  病假:  { tone: 'info',    label: '病假' },
+  事假:  { tone: 'info',    label: '事假' },
+  遲到:  { tone: 'warn',    label: '遲到' },
+}
+
+function cellClass(cell) {
+  if (!cell) return ''
+  const tone = STATUS_TONE[cell.info?.status]?.tone
+  return [
+    cell.info ? 'has' : '',
+    tone ? `tone-${tone}` : '',
+    selected.value?.date === cell.date ? 'is-selected' : '',
+    cell.date === todayStr ? 'is-today' : '',
+  ].filter(Boolean).join(' ')
 }
 
 onMounted(async () => {
@@ -118,74 +114,85 @@ onMounted(async () => {
 
 watch([selectedId, year, month], fetchData)
 
-async function pullRefresh() {
-  await fetchData()
-}
+async function pullRefresh() { await fetchData() }
 </script>
 
 <template>
-  <PullToRefresh :on-refresh="pullRefresh" class="attendance-view">
+  <PullToRefresh :on-refresh="pullRefresh" class="att-view">
     <ChildSelector />
 
-    <div class="month-bar">
-      <button class="nav" type="button" aria-label="上個月" @click="prevMonth">
-        <ParentIcon name="back" size="sm" />
-      </button>
-      <span class="month-label">{{ year }} 年 {{ month }} 月</span>
-      <button class="today-btn" type="button" @click="goToday">今天</button>
-      <button class="nav" type="button" aria-label="下個月" @click="nextMonth">
-        <ParentIcon name="chevron-right" size="sm" />
-      </button>
-    </div>
-
-    <div class="stats">
-      <span>已紀錄 {{ recordedDays }} 天</span>
-      <span v-if="counts.出席">出席 {{ counts.出席 }}</span>
-      <span v-if="counts.缺席">缺席 {{ counts.缺席 }}</span>
-      <span v-if="counts.病假">病假 {{ counts.病假 }}</span>
-      <span v-if="counts.事假">事假 {{ counts.事假 }}</span>
-      <span v-if="counts.遲到">遲到 {{ counts.遲到 }}</span>
-    </div>
-
-    <div class="weekday-row">
-      <div v-for="w in ['日', '一', '二', '三', '四', '五', '六']" :key="w">
-        {{ w }}
+    <!-- Hero：月份 + 出席摘要 -->
+    <header class="pt-page-hero att-hero">
+      <div class="month-row">
+        <button class="pt-icon-btn" type="button" aria-label="上個月" @click="prevMonth">
+          <ParentIcon name="back" size="sm" />
+        </button>
+        <div class="month-label">
+          <p class="month-eyebrow">出席紀錄</p>
+          <h1 class="month-title">{{ year }} 年 {{ month }} 月</h1>
+        </div>
+        <button class="pt-icon-btn" type="button" aria-label="下個月" @click="nextMonth">
+          <ParentIcon name="chevron-right" size="sm" />
+        </button>
       </div>
-    </div>
 
-    <div class="calendar">
-      <div
-        v-for="(cell, i) in calendarDays"
-        :key="i"
-        class="cell"
-        :class="{ filled: cell, has: cell?.info, selected: !!cell && selected?.date === cell.date }"
-        :style="cell?.info ? {
-          background: statusColor(cell.info.status).bg,
-          color: statusColor(cell.info.status).color,
-        } : {}"
-        @click="selectCell(cell)"
-      >
-        <template v-if="cell">
-          <span class="day">{{ cell.day }}</span>
-          <span v-if="cell.info" class="status-mini">{{ cell.info.status }}</span>
-        </template>
+      <div v-if="data" class="summary-row">
+        <span class="summary-total">已紀錄 <strong>{{ recordedDays }}</strong> 天</span>
+        <span v-if="counts.出席" class="pt-pill pt-pill-success">出席 {{ counts.出席 }}</span>
+        <span v-if="counts.病假" class="pt-pill pt-pill-info">病假 {{ counts.病假 }}</span>
+        <span v-if="counts.事假" class="pt-pill pt-pill-info">事假 {{ counts.事假 }}</span>
+        <span v-if="counts.遲到" class="pt-pill pt-pill-warn">遲到 {{ counts.遲到 }}</span>
+        <span v-if="counts.缺席" class="pt-pill pt-pill-danger">缺席 {{ counts.缺席 }}</span>
+        <button type="button" class="pt-ghost-btn today-btn" @click="goToday">回今天</button>
       </div>
-    </div>
+    </header>
 
-    <div v-if="selected?.info" class="detail">
+    <!-- 月曆主體 -->
+    <section class="calendar-wrap">
+      <div class="weekday-row">
+        <div v-for="w in ['日','一','二','三','四','五','六']" :key="w">{{ w }}</div>
+      </div>
+
+      <div class="calendar">
+        <div
+          v-for="(cell, i) in calendarDays"
+          :key="i"
+          class="cell"
+          :class="cellClass(cell)"
+          :role="cell ? 'button' : undefined"
+          :tabindex="cell ? 0 : -1"
+          :aria-label="cell ? `${cell.date}${cell.info ? ' ' + cell.info.status : ''}` : ''"
+          @click="selectCell(cell)"
+          @keydown.enter="selectCell(cell)"
+        >
+          <template v-if="cell">
+            <span class="day-num">{{ cell.day }}</span>
+            <span v-if="cell.info" class="dot" aria-hidden="true" />
+          </template>
+        </div>
+      </div>
+    </section>
+
+    <!-- Detail -->
+    <section v-if="selected?.info" class="pt-card detail">
       <div class="detail-row">
-        <span class="label">日期</span>
-        <span>{{ selected.date }}</span>
+        <span class="material-symbols-rounded" aria-hidden="true">calendar_today</span>
+        <span class="detail-label">日期</span>
+        <span class="detail-value">{{ selected.date }}</span>
       </div>
       <div class="detail-row">
-        <span class="label">狀態</span>
-        <span>{{ selected.info.status }}</span>
+        <span class="material-symbols-rounded" aria-hidden="true">how_to_reg</span>
+        <span class="detail-label">狀態</span>
+        <span class="pt-pill" :class="`pt-pill-${STATUS_TONE[selected.info.status]?.tone || 'info'}`">
+          {{ selected.info.status }}
+        </span>
       </div>
       <div v-if="selected.info.remark" class="detail-row">
-        <span class="label">備註</span>
-        <span>{{ selected.info.remark }}</span>
+        <span class="material-symbols-rounded" aria-hidden="true">edit_note</span>
+        <span class="detail-label">備註</span>
+        <span class="detail-value">{{ selected.info.remark }}</span>
       </div>
-    </div>
+    </section>
     <EmptyState
       v-else-if="selected"
       variant="inline"
@@ -195,165 +202,159 @@ async function pullRefresh() {
     <div v-if="loading && !data" class="skeleton-wrap">
       <SkeletonBlock variant="card" :count="2" />
     </div>
-    <div v-else-if="loading" class="loading-mask" aria-hidden="true" />
   </PullToRefresh>
 </template>
 
 <style scoped>
-.attendance-view {
-  position: relative;
-}
-.attendance-view :deep(.ptr-content) {
-  position: relative;
+.att-view :deep(.ptr-content) {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
+.skeleton-wrap { padding: 0 16px; display: flex; flex-direction: column; gap: 12px; }
 
-.month-bar {
+/* Hero */
+.att-hero { display: flex; flex-direction: column; gap: 12px; }
+.month-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  background: var(--m3-surface-container-low, var(--pt-surface-card));
-  border: 1px solid var(--pt-page-border, var(--pt-border));
-  border-radius: 12px;
-  padding: 8px;
-  box-shadow: var(--m3-elev-1, var(--pt-shadow-card, var(--pt-elev-1)));
+  gap: 12px;
 }
-
 .month-label {
   flex: 1;
   text-align: center;
-  font-size: 15px;
-  font-weight: 800;
-  color: var(--m3-on-surface, var(--pt-text-strong));
 }
-
-.nav {
-  width: var(--touch-target-min, 44px);
-  height: var(--touch-target-min, 44px);
-  border: none;
-  border-radius: 12px;
-  background: var(--pt-tint-brand, var(--brand-primary-soft));
-  color: var(--brand-primary);
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.today-btn {
-  min-height: var(--touch-target-min, 44px);
-  border: 1px solid var(--pt-page-border, var(--pt-border));
-  border-radius: 12px;
-  background: var(--pt-surface-raised, var(--pt-surface-card));
-  color: var(--m3-on-surface, var(--pt-text-strong));
-  font-size: 12px;
-  font-weight: 800;
-  padding: 0 12px;
-  cursor: pointer;
-}
-
-.stats {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  font-size: 12px;
-  color: var(--m3-on-surface-variant, var(--pt-text-muted));
-}
-
-.stats span {
-  background: var(--pt-surface-card, var(--neutral-0));
-  border: 1px solid var(--pt-page-border, var(--pt-border));
-  padding: 5px 10px;
-  border-radius: 999px;
+.month-eyebrow {
+  margin: 0;
+  font-size: 11px;
   font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--pt-text-muted);
+}
+.month-title {
+  margin: 2px 0 0;
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--pt-text-strong);
+  letter-spacing: -0.01em;
 }
 
+.summary-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.summary-total {
+  font-size: 13px;
+  color: var(--pt-text-muted);
+  font-weight: 500;
+}
+.summary-total strong { color: var(--pt-text-strong); }
+.today-btn { margin-left: auto; font-size: 12px; }
+
+/* Calendar */
+.calendar-wrap {
+  margin: 0 16px;
+  padding: 14px 12px;
+  background: var(--pt-surface-card, #fff);
+  border: 1px solid var(--pt-border-light, #ecf5f9);
+  border-radius: 18px;
+}
 .weekday-row {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   gap: 4px;
   text-align: center;
-  font-size: 12px;
-  color: var(--pt-text-placeholder);
-  padding: 0 2px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--pt-text-muted);
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
 }
 
 .calendar {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   gap: 4px;
-  background: var(--m3-surface-container-low, var(--pt-surface-card));
-  border: 1px solid var(--pt-page-border, var(--pt-border));
-  border-radius: 12px;
-  padding: 6px;
-  box-shadow: var(--m3-elev-1, var(--pt-shadow-card, var(--pt-elev-1)));
 }
-
 .cell {
   aspect-ratio: 1;
-  background: transparent;
-  border-radius: 11px;
+  border-radius: 12px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   font-size: 13px;
+  background: transparent;
+  position: relative;
   cursor: default;
+  transition: background 140ms ease, transform 120ms ease;
 }
-
-.cell.filled {
-  background: var(--pt-surface-recessed, var(--pt-surface-mute));
-  cursor: pointer;
+.cell:focus-visible {
+  outline: 2px solid var(--brand-primary, #0d9053);
+  outline-offset: 1px;
 }
-
 .cell.has {
-  font-weight: 600;
+  cursor: pointer;
+  background: var(--cream, #fffcf2);
+}
+.cell.has:hover { background: #fff6e0; }
+.cell.has:active { transform: scale(0.95); }
+
+.day-num { font-weight: 600; color: var(--pt-text-strong); line-height: 1; }
+.cell .dot {
+  position: absolute;
+  bottom: 6px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
 }
 
-.cell.selected {
-  outline: 2px solid var(--brand-primary);
-}
+.cell.tone-success { background: var(--leaf-100, #dcf4e6); }
+.cell.tone-success .dot { background: var(--brand-primary, #0d9053); }
+.cell.tone-danger  { background: var(--coral-100, #ffe3e0); }
+.cell.tone-danger .dot { background: var(--coral-600, #e96b6b); }
+.cell.tone-info    { background: var(--sky-100, #dceef5); }
+.cell.tone-info .dot { background: var(--sky-700, #2d6f8e); }
+.cell.tone-warn    { background: var(--sun-100, #fff4c9); }
+.cell.tone-warn .dot { background: var(--sun-700, #c99500); }
 
-.day {
-  line-height: 1;
+.cell.is-today {
+  outline: 2px solid var(--brand-primary, #0d9053);
+  outline-offset: -1px;
 }
-
-.status-mini {
-  font-size: 10px;
-  margin-top: 2px;
+.cell.is-selected {
+  box-shadow: 0 0 0 2px var(--brand-primary, #0d9053);
+  background: #fff !important;
+  transform: scale(1.04);
 }
+.cell.is-selected .day-num { color: var(--brand-primary, #0d9053); font-weight: 800; }
 
-.detail {
-  background: var(--m3-surface-container-low, var(--pt-surface-card));
-  border: 1px solid var(--pt-page-border, var(--pt-border));
-  border-radius: 12px;
-  padding: 14px 16px;
-  font-size: 14px;
-  box-shadow: var(--m3-elev-1, var(--pt-shadow-card, var(--pt-elev-1)));
-}
-
+/* Detail */
+.detail { display: flex; flex-direction: column; gap: 10px; }
 .detail-row {
   display: flex;
-  gap: 8px;
-  padding: 4px 0;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
 }
-
-.detail-row .label {
-  color: var(--pt-text-placeholder);
+.detail-row .material-symbols-rounded {
+  font-size: 20px;
+  color: var(--brand-primary, #0d9053);
+  font-variation-settings: 'FILL' 1, 'wght' 500;
+}
+.detail-label {
   width: 48px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--pt-text-muted);
+  letter-spacing: 0.04em;
 }
+.detail-value { color: var(--pt-text-body); }
 
-.loading-mask {
-  position: absolute;
-  inset: 0;
-  background: rgba(255, 255, 255, 0.4);
-  pointer-events: none;
-}
-
-.skeleton-wrap {
-  margin-top: 12px;
+@media (prefers-reduced-motion: reduce) {
+  .cell { transition: none; }
 }
 </style>

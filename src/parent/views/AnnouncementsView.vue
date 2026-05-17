@@ -5,13 +5,15 @@ import { toast } from '../utils/toast'
 import ParentIcon from '../components/ParentIcon.vue'
 import AppModal from '../components/AppModal.vue'
 import PullToRefresh from '../components/PullToRefresh.vue'
+import SkeletonBlock from '../components/SkeletonBlock.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
+import KawaiiStar from '@/components/brand/KawaiiStar.vue'
 import { useIncrementalRender } from '../composables/useIncrementalRender'
 
 const items = ref([])
 const loading = ref(false)
-const selected = ref(null) // 開啟詳情的公告
+const selected = ref(null)
 
-// 漸進渲染：列表 > 20 項時觸底自動載下一頁，避免一次渲染過多 DOM
 const { visible: visibleItems, sentinelRef, hasMore } = useIncrementalRender(
   items,
   { pageSize: 20 },
@@ -19,25 +21,16 @@ const { visible: visibleItems, sentinelRef, hasMore } = useIncrementalRender(
 
 const detailOpen = computed({
   get: () => selected.value !== null,
-  set: (v) => {
-    if (!v) selected.value = null
-  },
+  set: (v) => { if (!v) selected.value = null },
 })
 
-const PRIORITY_LABEL = {
-  normal: '一般',
-  important: '重要',
-  urgent: '緊急',
+const PRIORITY_META = {
+  normal:    { label: '一般', tone: 'info' },
+  important: { label: '重要', tone: 'warn' },
+  urgent:    { label: '緊急', tone: 'danger' },
 }
 
-const PRIORITY_COLOR = {
-  normal: { bg: 'var(--pt-tint-message)', color: 'var(--pt-tint-message-fg)' },
-  important: { bg: 'var(--pt-tint-contact)', color: 'var(--pt-tint-contact-fg)' },
-  urgent: {
-    bg: 'var(--m3-error, var(--color-danger))',
-    color: 'var(--m3-on-error, white)',
-  },
-}
+const unreadCount = computed(() => items.value.filter((x) => !x.is_read).length)
 
 async function fetchData() {
   loading.value = true
@@ -57,81 +50,103 @@ async function openDetail(item) {
     try {
       await markRead(item.id)
       item.is_read = true
-    } catch {
-      /* ignore — UI 已開啟詳情 */
-    }
+    } catch { /* ignore */ }
   }
 }
 
-function close() {
-  selected.value = null
-}
+function close() { selected.value = null }
 
-const formatTime = (s) =>
-  s ? s.replace('T', ' ').slice(0, 16) : ''
+const formatTime = (s) => s ? s.replace('T', ' ').slice(0, 16) : ''
+
+const formatRelative = (s) => {
+  if (!s) return ''
+  try {
+    const d = new Date(s.replace(' ', 'T'))
+    const now = new Date()
+    const diffMs = now - d
+    const min = Math.floor(diffMs / 60000)
+    if (min < 1) return '剛剛'
+    if (min < 60) return `${min} 分鐘前`
+    const hr = Math.floor(min / 60)
+    if (hr < 24) return `${hr} 小時前`
+    const day = Math.floor(hr / 24)
+    if (day < 7) return `${day} 天前`
+    return d.toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })
+  } catch { return formatTime(s) }
+}
 
 onMounted(fetchData)
 
-async function pullRefresh() {
-  await fetchData()
-}
+async function pullRefresh() { await fetchData() }
 </script>
 
 <template>
-  <PullToRefresh :on-refresh="pullRefresh" class="announcements-view">
-    <div v-if="!loading && items.length === 0" class="empty">目前沒有公告</div>
+  <PullToRefresh :on-refresh="pullRefresh" class="ann-view">
+    <header class="page-hero pt-page-hero">
+      <p class="pt-page-hero-eyebrow">園所公告</p>
+      <h1 class="pt-page-hero-title">學校的訊息</h1>
+      <p v-if="unreadCount > 0" class="pt-page-hero-note">
+        有 <strong>{{ unreadCount }}</strong> 則尚未閱讀
+      </p>
+      <p v-else-if="items.length" class="pt-page-hero-note">所有公告都看完了</p>
+    </header>
 
-    <div
-      v-for="item in visibleItems"
-      :key="item.id"
-      class="ann-card press-scale"
-      :class="{ unread: !item.is_read }"
-      @click="openDetail(item)"
-    >
-      <div class="ann-row">
-        <span
-          class="priority-tag"
-          :style="{
-            background: PRIORITY_COLOR[item.priority]?.bg,
-            color: PRIORITY_COLOR[item.priority]?.color,
-          }"
-        >
-          {{ PRIORITY_LABEL[item.priority] || item.priority }}
-        </span>
-        <span class="title">{{ item.title }}</span>
-        <span v-if="!item.is_read" class="unread-dot" />
+    <template v-if="loading && items.length === 0">
+      <div class="skeleton-wrap">
+        <SkeletonBlock variant="card" :count="3" />
       </div>
-      <div class="preview">{{ item.content || '' }}</div>
-      <div class="time">{{ formatTime(item.created_at) }}</div>
-    </div>
+    </template>
 
-    <!-- 漸進渲染哨點：觸碰視窗時載入下一批 -->
+    <EmptyState
+      v-else-if="items.length === 0"
+      variant="mobile"
+      :icon="KawaiiStar"
+      title="目前沒有公告"
+      description="園所有新訊息時會即時推送"
+    />
+
+    <section v-else class="feed pt-section-pad-x">
+      <article
+        v-for="item in visibleItems"
+        :key="item.id"
+        class="ann-card"
+        :class="{ unread: !item.is_read }"
+        role="button"
+        :tabindex="0"
+        @click="openDetail(item)"
+        @keydown.enter="openDetail(item)"
+        @keydown.space.prevent="openDetail(item)"
+      >
+        <div class="ann-row">
+          <span class="pt-pill" :class="`pt-pill-${PRIORITY_META[item.priority]?.tone || 'info'}`">
+            {{ PRIORITY_META[item.priority]?.label || item.priority }}
+          </span>
+          <span class="time">{{ formatRelative(item.created_at) }}</span>
+          <span v-if="!item.is_read" class="unread-dot" aria-label="未讀" />
+        </div>
+        <h2 class="title">{{ item.title }}</h2>
+        <p v-if="item.content" class="preview">{{ item.content }}</p>
+      </article>
+    </section>
+
     <div v-if="hasMore" ref="sentinelRef" class="render-sentinel" aria-hidden="true" />
 
-    <div v-if="loading" class="loading">載入中...</div>
-
     <!-- 詳情 modal -->
-    <AppModal
-      v-model:open="detailOpen"
-      labelled-by="announcement-detail-title"
-    >
+    <AppModal v-model:open="detailOpen" labelled-by="announcement-detail-title">
       <template v-if="selected">
         <div class="detail-header">
           <span
-            class="priority-tag"
-            :style="{
-              background: PRIORITY_COLOR[selected.priority]?.bg,
-              color: PRIORITY_COLOR[selected.priority]?.color,
-            }"
+            class="pt-pill"
+            :class="`pt-pill-${PRIORITY_META[selected.priority]?.tone || 'info'}`"
           >
-            {{ PRIORITY_LABEL[selected.priority] || selected.priority }}
+            {{ PRIORITY_META[selected.priority]?.label || selected.priority }}
           </span>
-          <span id="announcement-detail-title" class="detail-title">{{ selected.title }}</span>
           <button class="close" type="button" aria-label="關閉" @click="close">
             <ParentIcon name="close" size="sm" />
           </button>
         </div>
-        <div class="detail-time">{{ formatTime(selected.created_at) }}</div>
+        <h2 id="announcement-detail-title" class="detail-title">{{ selected.title }}</h2>
+        <p class="detail-time">{{ formatTime(selected.created_at) }}</p>
         <div class="detail-content">{{ selected.content }}</div>
       </template>
     </AppModal>
@@ -139,33 +154,40 @@ async function pullRefresh() {
 </template>
 
 <style scoped>
-.announcements-view :deep(.ptr-content) {
+.ann-view :deep(.ptr-content) {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.page-hero { margin-bottom: 4px; }
+.skeleton-wrap { padding: 0 16px; display: flex; flex-direction: column; gap: 12px; }
+
+.feed {
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
-.empty,
-.loading {
-  text-align: center;
-  padding: 40px 16px;
-  color: var(--pt-text-placeholder);
-}
-
 .render-sentinel { height: 1px; }
 
 .ann-card {
-  background: var(--m3-surface-container-low, var(--pt-surface-card, var(--neutral-0)));
-  border: 1px solid var(--pt-page-border, var(--pt-border));
-  border-radius: 12px;
-  padding: 14px;
+  background: var(--pt-surface-card, #fff);
+  border: 1px solid var(--pt-border-light, #ecf5f9);
+  border-radius: 16px;
+  padding: 14px 16px;
   cursor: pointer;
-  box-shadow: var(--m3-elev-1, var(--pt-shadow-card, var(--pt-elev-1)));
+  text-align: left;
+  transition: background 160ms ease, transform 120ms ease, border-color 160ms ease;
 }
+.ann-card:focus-visible {
+  outline: 2px solid var(--brand-primary, #0d9053);
+  outline-offset: 2px;
+}
+.ann-card:active { transform: scale(0.995); background: var(--pt-surface-mute-soft, #fefcf3); }
 
 .ann-card.unread {
-  border-color: color-mix(in srgb, var(--brand-primary) 38%, var(--pt-border));
-  background: linear-gradient(135deg, var(--pt-tint-brand, var(--brand-primary-tint)) 0%, var(--m3-surface-container-low, var(--pt-surface-card, var(--neutral-0))) 100%);
+  background: linear-gradient(135deg, var(--cream, #fffcf2) 0%, #ffffff 80%);
+  border-color: rgba(13, 144, 83, 0.16);
 }
 
 .ann-row {
@@ -173,98 +195,88 @@ async function pullRefresh() {
   align-items: center;
   gap: 8px;
 }
-
-.priority-tag {
-  padding: 3px 9px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 800;
-  white-space: nowrap;
-}
-
-.title {
+.time {
   flex: 1;
-  font-weight: 800;
-  color: var(--m3-on-surface, var(--pt-text-strong));
-  font-size: 15px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: 12px;
+  color: var(--pt-text-faint, #6b7280);
 }
-
 .unread-dot {
-  width: 8px;
-  height: 8px;
-  background: var(--brand-primary);
+  width: 9px;
+  height: 9px;
+  background: var(--coral-500, #ff8b8b);
   border-radius: 50%;
 }
 
+.title {
+  margin: 8px 0 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--pt-text-strong);
+  line-height: 1.35;
+  letter-spacing: -0.005em;
+}
+.ann-card:not(.unread) .title { font-weight: 600; }
+
 .preview {
-  margin-top: 6px;
-  color: var(--pt-text-soft);
-  font-size: 13px;
-  line-height: 1.4;
+  margin: 4px 0 0;
+  color: var(--pt-text-body, #4b5563);
+  font-size: 14px;
+  line-height: 1.55;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
 
-.time {
-  margin-top: 6px;
-  color: var(--pt-text-disabled);
-  font-size: 12px;
-}
-
 .detail-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--pt-border-light);
+  justify-content: space-between;
+  padding: 14px 18px 8px;
 }
-
 .detail-title {
-  flex: 1;
-  font-weight: 600;
-  font-size: 16px;
-  color: var(--m3-on-surface, var(--pt-text-strong));
+  margin: 0 18px;
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--pt-text-strong);
+  line-height: 1.4;
 }
-
 .close {
   position: relative;
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   border: none;
-  background: transparent;
-  color: var(--pt-text-placeholder);
+  background: var(--cream, #fffcf2);
+  border-radius: 50%;
+  color: var(--pt-text-muted);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
-/* 視覺保 28x28，pseudo-element 擴大可點區到 44x44 */
 .close::before {
   content: '';
   position: absolute;
   top: 50%;
   left: 50%;
-  width: var(--touch-target-min, 44px);
-  height: var(--touch-target-min, 44px);
+  width: 44px;
+  height: 44px;
   transform: translate(-50%, -50%);
 }
-
 .detail-time {
-  padding: 4px 16px 12px;
-  color: var(--pt-text-disabled);
+  margin: 4px 18px 14px;
+  color: var(--pt-text-faint);
   font-size: 12px;
 }
-
 .detail-content {
-  padding: 0 16px 20px;
+  padding: 0 18px 20px;
   white-space: pre-wrap;
-  line-height: 1.6;
-  color: var(--m3-on-surface, var(--pt-text-strong));
-  font-size: 14px;
+  line-height: 1.7;
+  color: var(--pt-text-body);
+  font-size: 15px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ann-card { transition: none; }
 }
 </style>

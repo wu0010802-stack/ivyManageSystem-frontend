@@ -1,12 +1,13 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { fetchChildReports, childReportDownloadUrl } from '../api/childReports'
 import { toast } from '../utils/toast'
-import ParentIcon from '../components/ParentIcon.vue'
+import SkeletonBlock from '../components/SkeletonBlock.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
+import KawaiiStar from '@/components/brand/KawaiiStar.vue'
 
 const route = useRoute()
-const router = useRouter()
 const studentId = computed(() => Number(route.params.studentId))
 
 const items = ref([])
@@ -29,85 +30,112 @@ function onDownload(report) {
   window.open(childReportDownloadUrl(studentId.value, report.id), '_blank')
 }
 
-function goBack() {
-  router.back()
+function formatDate(s) {
+  if (!s) return ''
+  try { return new Date(s).toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric' }) }
+  catch { return s }
 }
 
 onMounted(load)
 </script>
 
 <template>
-  <div class="child-reports-view">
-    <header>
-      <button class="back-btn" @click="goBack"><ParentIcon name="arrow-left" size="sm" />返回</button>
-      <h2>歷次成長報告</h2>
+  <div class="reports-view">
+    <header class="pt-page-hero">
+      <p class="pt-page-hero-eyebrow">成長報告</p>
+      <h1 class="pt-page-hero-title">歷次完整報告</h1>
+      <p class="pt-page-hero-note">期末由老師整理的學期回顧 PDF</p>
     </header>
 
-    <div v-if="loading" class="placeholder">載入中…</div>
-    <div v-else-if="items.length === 0" class="placeholder">
-      <p>目前還沒有成長報告</p>
-      <p class="hint">期末時老師會幫您準備</p>
-    </div>
-    <div v-else class="list">
-      <div v-for="r in items" :key="r.id" class="report-card">
-        <div class="info">
-          <div class="title">{{ r.period_label }}</div>
-          <div class="meta">{{ r.period_start }} ~ {{ r.period_end }}</div>
-          <div v-if="r.generated_at" class="meta">
-            生成：{{ new Date(r.generated_at).toLocaleDateString() }}
-          </div>
-        </div>
-        <button class="download-btn" @click="onDownload(r)">下載 PDF</button>
+    <template v-if="loading">
+      <div class="skeleton-wrap">
+        <SkeletonBlock variant="card" :count="2" />
       </div>
+    </template>
+
+    <EmptyState
+      v-else-if="items.length === 0"
+      variant="mobile"
+      :icon="KawaiiStar"
+      title="目前還沒有成長報告"
+      description="期末時老師會幫您準備"
+    />
+
+    <div v-else class="pt-stack-12 pt-section-pad-x">
+      <article v-for="r in items" :key="r.id" class="report-card">
+        <div class="report-icon" aria-hidden="true">
+          <span class="material-symbols-rounded">menu_book</span>
+        </div>
+        <div class="report-info">
+          <h2 class="report-title">{{ r.period_label }}</h2>
+          <p class="report-period">{{ r.period_start }} ~ {{ r.period_end }}</p>
+          <p v-if="r.generated_at" class="report-meta">生成於 {{ formatDate(r.generated_at) }}</p>
+        </div>
+        <button type="button" class="pt-action-btn download-btn" @click="onDownload(r)">
+          <span class="material-symbols-rounded" aria-hidden="true">download</span>
+          下載 PDF
+        </button>
+      </article>
     </div>
   </div>
 </template>
 
 <style scoped>
-.child-reports-view {
-  padding: 16px;
+.reports-view {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  padding-bottom: 24px;
 }
-header { display: flex; align-items: center; gap: 12px; }
-header > h2 { margin: 0; font-size: 17px; color: #0d9053; }
-.back-btn {
-  background: none;
-  border: none;
-  font-size: 14px;
+.skeleton-wrap { padding: 0 16px; display: flex; flex-direction: column; gap: 10px; }
+
+.report-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--pt-surface-card, #fff);
+  border: 1px solid var(--pt-border-light, #ecf5f9);
+  border-radius: 16px;
+  padding: 14px 14px 14px 16px;
+}
+.report-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--leaf-100, #dcf4e6);
   color: var(--brand-primary, #0d9053);
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 0;
-  cursor: pointer;
+  justify-content: center;
+  flex-shrink: 0;
 }
-.placeholder {
-  padding: 32px 16px;
-  text-align: center;
-  color: var(--text-tertiary);
+.report-icon .material-symbols-rounded {
+  font-size: 24px;
+  font-variation-settings: 'FILL' 1, 'wght' 500;
 }
-.placeholder .hint { font-size: 13px; margin-top: 4px; }
-.list { display: flex; flex-direction: column; gap: 10px; }
-.report-card {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: var(--m3-surface-container-low, var(--pt-surface-card));
-  border-radius: 12px;
-  padding: 14px;
-  box-shadow: var(--m3-elev-1, var(--pt-shadow-card, var(--pt-elev-1)));
+.report-info { flex: 1; min-width: 0; }
+.report-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--pt-text-strong);
+  line-height: 1.3;
 }
-.title { font-weight: 600; color: var(--m3-on-surface, var(--pt-text-strong)); }
-.meta { font-size: 13px; color: var(--m3-on-surface-variant, var(--pt-text-muted)); }
-.download-btn {
-  background: var(--m3-primary, var(--brand-primary));
-  color: #fff;
-  border: none;
-  padding: 8px 14px;
-  border-radius: 8px;
+.report-period {
+  margin: 2px 0 0;
   font-size: 13px;
-  font-weight: 600;
+  color: var(--pt-text-muted);
+  letter-spacing: 0.02em;
+}
+.report-meta {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: var(--pt-text-faint);
+}
+
+.download-btn {
+  flex-shrink: 0;
+  padding: 8px 14px;
+  font-size: 13px;
 }
 </style>

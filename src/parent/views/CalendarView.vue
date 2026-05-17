@@ -3,23 +3,23 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { getWeekAgenda } from '../api/calendar'
 import { toast } from '../utils/toast'
-import ParentIcon from '../components/ParentIcon.vue'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
+import KawaiiStar from '@/components/brand/KawaiiStar.vue'
 
 const router = useRouter()
 const data = ref(null)
 const loading = ref(false)
 const days = ref(7)
 
-// 注意：holiday 暫無沙灘 icon，先以 calendar 替代
 const CATEGORY_META = {
-  event: { icon: 'calendar', label: '活動', color: 'var(--pt-tint-activity-fg)' },
-  fee_due: { icon: 'money', label: '繳費截止', color: 'var(--pt-tint-money-fg)' },
-  announcement: { icon: 'megaphone', label: '公告', color: 'var(--pt-tint-announcement-fg)' },
-  holiday: { icon: 'calendar', label: '假日', color: 'var(--pt-tint-contact-fg)' },
-  contact_book: { icon: 'notebook', label: '聯絡簿', color: 'var(--pt-tint-contact-fg)' },
-  leave: { icon: 'clipboard', label: '請假', color: 'var(--pt-tint-leave-fg)' },
-  medication: { icon: 'pill', label: '用藥', color: 'var(--pt-tint-medication-fg)' },
+  event:         { icon: 'event',          tone: 'grape', label: '活動' },
+  fee_due:       { icon: 'payments',       tone: 'sun',   label: '繳費截止' },
+  announcement:  { icon: 'campaign',       tone: 'coral', label: '公告' },
+  holiday:       { icon: 'celebration',    tone: 'sky',   label: '假日' },
+  contact_book:  { icon: 'menu_book',      tone: 'leaf',  label: '聯絡簿' },
+  leave:         { icon: 'event_busy',     tone: 'sky',   label: '請假' },
+  medication:    { icon: 'medication',     tone: 'grape', label: '用藥' },
 }
 
 const groupedByDate = computed(() => {
@@ -47,7 +47,6 @@ async function fetchData() {
 }
 
 function gotoItem(it) {
-  // 後端同時送 kind / category（向後相容），新欄位優先
   const kind = it.kind || it.category
   const id = it.target_id ?? it.ref?.id
   if (kind === 'fee_due') router.push('/fees')
@@ -64,9 +63,9 @@ function dayLabel(iso) {
   today.setHours(0, 0, 0, 0)
   const diff = Math.round((d - today) / 86400000)
   const wd = ['日', '一', '二', '三', '四', '五', '六'][d.getDay()]
-  if (diff === 0) return `今日 (${iso} 週${wd})`
-  if (diff === 1) return `明日 (${iso} 週${wd})`
-  return `${iso} 週${wd}`
+  if (diff === 0) return { primary: '今天', secondary: `${iso} 星期${wd}`, isToday: true }
+  if (diff === 1) return { primary: '明天', secondary: `${iso} 星期${wd}`, isToday: false }
+  return { primary: `星期${wd}`, secondary: iso, isToday: false }
 }
 
 onMounted(fetchData)
@@ -74,51 +73,68 @@ onMounted(fetchData)
 
 <template>
   <div class="cal-view">
-    <div class="header">
-      <label for="cal-days" class="title">本週行程</label>
-      <select id="cal-days" v-model.number="days" class="days-select" @change="fetchData">
-        <option :value="3">3 天</option>
-        <option :value="7">7 天</option>
-        <option :value="14">14 天</option>
-      </select>
-    </div>
-
-    <template v-if="loading && !data">
-      <SkeletonBlock variant="card" :count="3" />
-    </template>
-
-    <div v-else-if="data && groupedByDate.length === 0" class="state">
-      未來 {{ days }} 天沒有特別行程
-    </div>
-
-    <template v-else-if="data">
-      <div v-for="g in groupedByDate" :key="g.date" class="day-block">
-        <div class="day-head">{{ dayLabel(g.date) }}</div>
+    <header class="pt-page-hero">
+      <p class="pt-page-hero-eyebrow">行事曆</p>
+      <h1 class="pt-page-hero-title">未來幾天</h1>
+      <div class="day-filter">
         <button
-          v-for="(it, i) in g.items"
-          :key="`${it.category}-${it.ref?.id}-${i}`"
+          v-for="d in [3, 7, 14]"
+          :key="d"
           type="button"
-          class="item"
-          @click="gotoItem(it)"
+          :class="{ active: days === d }"
+          @click="days = d; fetchData()"
         >
-          <span
-            class="dot"
-            :style="{ background: CATEGORY_META[it.category]?.color || 'var(--pt-text-placeholder)' }"
-          />
-          <span
-            class="icon"
-            :style="{ color: CATEGORY_META[it.category]?.color || 'var(--pt-text-placeholder)' }"
-          >
-            <ParentIcon :name="CATEGORY_META[it.category]?.icon || 'info'" size="sm" />
-          </span>
-          <span class="content">
-            <span class="t">{{ it.title }}</span>
-            <span v-if="it.subtitle" class="s">{{ it.subtitle }}</span>
-          </span>
-          <span v-if="it.requires_acknowledgment" class="badge">需簽閱</span>
+          {{ d }} 天
         </button>
       </div>
+    </header>
+
+    <template v-if="loading && !data">
+      <div class="skeleton-wrap">
+        <SkeletonBlock variant="card" :count="3" />
+      </div>
     </template>
+
+    <EmptyState
+      v-else-if="data && groupedByDate.length === 0"
+      variant="mobile"
+      :icon="KawaiiStar"
+      :title="`未來 ${days} 天沒有特別行程`"
+      description="園所行程更新後會出現在這裡"
+    />
+
+    <div v-else-if="data" class="pt-stack-12 pt-section-pad-x">
+      <section v-for="g in groupedByDate" :key="g.date" class="day-card">
+        <header class="day-head">
+          <div class="day-label">
+            <span class="day-primary" :class="{ 'is-today': dayLabel(g.date).isToday }">
+              {{ dayLabel(g.date).primary }}
+            </span>
+            <span class="day-secondary">{{ dayLabel(g.date).secondary }}</span>
+          </div>
+          <span class="day-count">{{ g.items.length }} 項</span>
+        </header>
+        <div class="items">
+          <button
+            v-for="(it, i) in g.items"
+            :key="`${it.category}-${it.ref?.id}-${i}`"
+            type="button"
+            class="item"
+            @click="gotoItem(it)"
+          >
+            <span class="cat-dot" :class="`tone-${CATEGORY_META[it.category]?.tone || 'leaf'}`" aria-hidden="true">
+              <span class="material-symbols-rounded">{{ CATEGORY_META[it.category]?.icon || 'info' }}</span>
+            </span>
+            <span class="content">
+              <span class="cat-label">{{ CATEGORY_META[it.category]?.label || it.category }}</span>
+              <span class="title">{{ it.title }}</span>
+              <span v-if="it.subtitle" class="subtitle">{{ it.subtitle }}</span>
+            </span>
+            <span v-if="it.requires_acknowledgment" class="pt-pill pt-pill-danger">需簽閱</span>
+          </button>
+        </div>
+      </section>
+    </div>
   </div>
 </template>
 
@@ -126,99 +142,139 @@ onMounted(fetchData)
 .cal-view {
   display: flex;
   flex-direction: column;
-  gap: var(--pt-page-gap, 18px);
+  gap: 14px;
+  padding-bottom: 24px;
 }
-.header {
+.skeleton-wrap { padding: 0 16px; display: flex; flex-direction: column; gap: 10px; }
+
+.day-filter {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+}
+.day-filter > button {
+  padding: 6px 14px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(13, 144, 83, 0.12);
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pt-text-body);
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 160ms ease;
+}
+.day-filter > button.active {
+  background: var(--brand-primary, #0d9053);
+  color: #fff;
+  border-color: var(--brand-primary, #0d9053);
+}
+
+.day-card {
+  background: var(--pt-surface-card, #fff);
+  border: 1px solid var(--pt-border-light, #ecf5f9);
+  border-radius: 18px;
+  overflow: hidden;
+}
+.day-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  background: var(--m3-surface-container-low, var(--pt-surface-card, var(--neutral-0)));
-  border: 1px solid var(--m3-outline-variant, var(--pt-page-border, var(--pt-border)));
-  border-radius: 12px;
-  padding: 12px 14px;
-  box-shadow: var(--m3-elev-1, var(--pt-shadow-card, var(--pt-elev-1)));
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--pt-border-light, #ecf5f9);
+  background: var(--cream, #fffcf2);
 }
-.title {
+.day-label { display: flex; flex-direction: column; gap: 2px; }
+.day-primary {
   font-size: 16px;
   font-weight: 800;
-  color: var(--m3-on-surface, var(--pt-text-strong));
+  color: var(--pt-text-strong);
 }
-.days-select {
-  min-height: var(--touch-target-min, 44px);
-  padding: 4px 10px;
-  font-size: 13px;
-  border: 1px solid var(--pt-border-strong);
-  border-radius: var(--pt-control-radius, 12px);
-  background: var(--pt-surface-raised, var(--pt-surface-card));
-  color: var(--m3-on-surface, var(--pt-text-strong));
+.day-primary.is-today { color: var(--brand-primary, #0d9053); }
+.day-secondary {
+  font-size: 11px;
+  color: var(--pt-text-muted);
+  letter-spacing: 0.04em;
 }
-.state {
-  text-align: center;
-  padding: 40px 16px;
-  color: var(--m3-on-surface-variant, var(--pt-text-placeholder));
+.day-count {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--pt-text-muted);
+  letter-spacing: 0.04em;
 }
-.day-block {
-  background: var(--m3-surface-container-low, var(--pt-surface-card, var(--neutral-0)));
-  border: 1px solid var(--m3-outline-variant, var(--pt-page-border, var(--pt-border)));
-  border-radius: 12px;
-  padding: 8px 0 4px;
-  box-shadow: var(--m3-elev-1, var(--pt-shadow-card, var(--pt-elev-1)));
-}
-.day-head {
-  padding: 8px 14px;
-  font-size: 12px;
-  color: var(--m3-on-surface-variant, var(--pt-text-soft));
-  font-weight: 800;
-  letter-spacing: 0.02em;
+
+.items {
+  display: flex;
+  flex-direction: column;
 }
 .item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   width: 100%;
-  padding: 10px 14px;
+  padding: 12px 16px;
   background: transparent;
   border: none;
-  border-top: 1px solid var(--pt-surface-mute-warm);
+  border-bottom: 1px solid var(--pt-border-light, #ecf5f9);
   text-align: left;
   cursor: pointer;
+  transition: background 160ms ease;
+  font-family: inherit;
 }
-.item:active {
-  background: var(--pt-surface-mute-soft);
-}
-.dot {
-  width: 6px;
-  height: 6px;
+.item:last-child { border-bottom: none; }
+.item:hover { background: var(--pt-surface-mute-soft, #fefcf3); }
+.item:active { background: var(--cream, #fffcf2); }
+
+.cat-dot {
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
-  flex-shrink: 0;
-}
-.icon {
-  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 }
+.cat-dot .material-symbols-rounded {
+  font-size: 18px;
+  font-variation-settings: 'FILL' 1, 'wght' 500;
+}
+.cat-dot.tone-leaf  { background: var(--leaf-100, #dcf4e6);  color: var(--brand-primary, #0d9053); }
+.cat-dot.tone-coral { background: var(--coral-100, #ffe3e0); color: var(--coral-700, #b14545); }
+.cat-dot.tone-grape { background: var(--grape-100, #ebe0f5); color: var(--grape-700, #6e3f94); }
+.cat-dot.tone-sun   { background: var(--sun-100, #fff4c9);   color: var(--sun-700, #c99500); }
+.cat-dot.tone-sky   { background: var(--sky-100, #dceef5);   color: var(--sky-700, #2d6f8e); }
+
 .content {
   flex: 1;
   display: flex;
   flex-direction: column;
+  gap: 1px;
+  min-width: 0;
 }
-.t {
+.cat-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--pt-text-muted);
+}
+.title {
   font-size: 14px;
-  color: var(--m3-on-surface, var(--pt-text-strong));
+  font-weight: 600;
+  color: var(--pt-text-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.s {
+.subtitle {
   font-size: 12px;
-  color: var(--m3-on-surface-variant, var(--pt-text-placeholder));
-  margin-top: 2px;
+  color: var(--pt-text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.badge {
-  font-size: 12px;
-  padding: 2px 6px;
-  background: var(--color-danger-soft);
-  color: var(--color-danger);
-  border-radius: 8px;
-  flex-shrink: 0;
+
+@media (prefers-reduced-motion: reduce) {
+  .day-filter > button, .item { transition: none; }
 }
 </style>

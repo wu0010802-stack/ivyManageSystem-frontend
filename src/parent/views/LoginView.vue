@@ -90,16 +90,24 @@ onMounted(() => startLogin())
 
 <template>
   <div class="login-view">
-    <BrandMark variant="full" :size="100" class="welcome-mark" />
+    <BrandMark variant="full" :size="120" class="welcome-mark" />
     <div class="login-card">
+      <p class="welcome-eyebrow">歡迎回到</p>
       <h1 class="title">常春藤家長</h1>
+
+      <div v-if="status === 'init' || status === 'loading'" class="loader">
+        <span class="loader-dot" />
+        <span class="loader-dot" />
+        <span class="loader-dot" />
+      </div>
+
       <p
         v-if="status === 'init'"
         class="hint"
         role="status"
         aria-live="polite"
       >
-        正在開啟 LINE 登入...
+        正在開啟 LINE 登入…
       </p>
       <p
         v-else-if="status === 'loading'"
@@ -107,17 +115,20 @@ onMounted(() => startLogin())
         role="status"
         aria-live="polite"
       >
-        驗證您的身分...
+        驗證您的身分…
       </p>
       <template v-else-if="status === 'error'">
         <p class="error" role="alert" aria-live="assertive">
           {{ errorMessage }}
         </p>
-        <button type="button" class="retry" @click="manualRetry">
+        <button type="button" class="pt-action-btn retry" @click="manualRetry">
+          <span class="material-symbols-rounded" aria-hidden="true">refresh</span>
           重試登入
         </button>
       </template>
     </div>
+
+    <p class="legal">本服務由常春藤幼兒園提供</p>
   </div>
 </template>
 
@@ -129,59 +140,98 @@ onMounted(() => startLogin())
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: var(--pt-gradient-hero);
+  background:
+    radial-gradient(ellipse at 50% 20%, rgba(13, 144, 83, 0.06), transparent 60%),
+    linear-gradient(180deg, var(--cream, #fffcf2) 0%, var(--leaf-100, #dcf4e6) 100%);
 }
 
 .welcome-mark {
-  margin: var(--space-6, 32px) auto var(--space-5, 24px);
+  margin: 24px auto 24px;
   display: block;
 }
 
 .login-card {
-  background: var(--neutral-0);
-  border-radius: 16px;
-  padding: 32px 24px;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 24px;
+  padding: 32px 28px;
   width: 100%;
   max-width: 360px;
   text-align: center;
-  background: var(--m3-surface-container-low, var(--pt-surface-card, var(--neutral-0)));
-  box-shadow: var(--m3-elev-1, var(--pt-elev-2));
-  border: var(--pt-hairline);
+  border: 1px solid rgba(13, 144, 83, 0.12);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 8px 24px rgba(13, 144, 83, 0.08),
+    0 24px 56px rgba(13, 144, 83, 0.10);
+}
+
+.welcome-eyebrow {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--pt-text-muted);
+  text-transform: uppercase;
 }
 
 .title {
-  margin: 0 0 24px;
-  font-size: 22px;
-  color: var(--m3-primary, var(--brand-primary));
+  margin: 4px 0 20px;
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--brand-primary, #0d9053);
+  letter-spacing: -0.01em;
+}
+
+.loader {
+  display: inline-flex;
+  gap: 6px;
+  margin: 12px 0;
+}
+.loader-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--brand-primary, #0d9053);
+  animation: loader-bounce 1.2s ease-in-out infinite;
+}
+.loader-dot:nth-child(2) { animation-delay: 0.15s; }
+.loader-dot:nth-child(3) { animation-delay: 0.30s; }
+
+@keyframes loader-bounce {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+  40% { transform: scale(1); opacity: 1; }
 }
 
 .hint {
-  color: var(--m3-on-surface-variant, var(--pt-text-muted));
+  color: var(--pt-text-muted);
   font-size: 14px;
+  margin: 4px 0 0;
 }
 
 .error {
-  color: var(--color-danger);
+  color: var(--coral-700, #b14545);
   font-size: 14px;
-  margin-bottom: 16px;
+  margin: 8px 0 16px;
   word-break: break-word;
+  background: var(--coral-100, #ffe3e0);
+  padding: 12px 14px;
+  border-radius: 12px;
+  text-align: left;
 }
 
 .retry {
   margin-top: 8px;
-  min-height: var(--touch-target-min, 44px);
-  padding: 10px 24px;
-  background: var(--m3-primary, var(--brand-primary));
-  color: var(--neutral-0);
-  border: none;
-  border-radius: var(--radius-md, 8px);
-  font-size: 15px;
-  font-weight: var(--font-weight-medium, 500);
-  cursor: pointer;
-  transition: background var(--transition-fast, 0.15s ease);
+  width: 100%;
+  min-height: 48px;
 }
 
-.retry:active {
-  background: var(--m3-primary-hover, var(--brand-primary-hover));
+.legal {
+  margin: 24px 0 0;
+  font-size: 11px;
+  color: var(--pt-text-faint);
+  letter-spacing: 0.02em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loader-dot { animation: none; opacity: 0.6; }
 }
 </style>

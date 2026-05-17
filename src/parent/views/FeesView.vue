@@ -191,14 +191,22 @@ async function pullRefresh() {
     <ChildSelector />
 
     <div v-if="myTotals" class="single-totals">
-      此學生：未繳 ${{ formatNum(myTotals.outstanding) }}・已繳 ${{ formatNum(myTotals.amount_paid) }}
+      <span class="material-symbols-rounded" aria-hidden="true">account_balance_wallet</span>
+      <span class="totals-text">
+        此學生：未繳 <strong>${{ formatNum(myTotals.outstanding) }}</strong>
+        ・已繳 ${{ formatNum(myTotals.amount_paid) }}
+      </span>
     </div>
 
     <div v-if="loading && records.length === 0" class="skeleton-wrap">
       <SkeletonBlock variant="card" :count="3" />
     </div>
 
-    <div v-else-if="!loading && records.length === 0" class="empty">尚無費用紀錄</div>
+    <div v-else-if="!loading && records.length === 0" class="pt-empty">
+      <span class="material-symbols-rounded" aria-hidden="true" style="font-size: 40px; color: var(--brand-primary);">payments</span>
+      <p class="pt-empty-title">尚無費用紀錄</p>
+      <p class="pt-empty-note">園所開立帳單後會出現在這裡</p>
+    </div>
 
     <FeeListGroup
       :records="records"
@@ -227,20 +235,25 @@ async function pullRefresh() {
 }
 
 .single-totals {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 16px;
   font-size: 13px;
-  color: var(--m3-on-surface-variant, var(--pt-text-muted));
-  background: var(--m3-surface-container-low, var(--pt-surface-card));
-  border: 1px solid var(--m3-outline-variant, var(--pt-border));
-  border-radius: var(--pt-control-radius, 12px);
-  padding: 10px 12px;
-  box-shadow: var(--m3-elev-1, var(--pt-shadow-card, var(--pt-elev-1)));
+  color: var(--pt-text-body);
+  background: var(--cream, #fffcf2);
+  border: 1px solid rgba(13, 144, 83, 0.12);
+  border-radius: 12px;
+  padding: 12px 14px;
 }
-
-.empty {
-  text-align: center;
-  padding: 40px 16px;
-  color: var(--pt-text-placeholder);
+.single-totals .material-symbols-rounded {
+  font-size: 22px;
+  color: var(--brand-primary, #0d9053);
+  font-variation-settings: 'FILL' 1, 'wght' 500;
+  flex-shrink: 0;
 }
+.totals-text { flex: 1; }
+.totals-text strong { color: var(--coral-700, #b14545); font-weight: 700; }
 
 .skeleton-wrap {
   display: flex;

@@ -315,7 +315,10 @@ async function pullRefresh() {
 
     <LeaveHero :summary="heroSummary">
       <template #action>
-        <button class="hero-cta" type="button" @click="openForm">＋ 申請請假</button>
+        <button class="pt-action-btn hero-cta" type="button" @click="openForm">
+          <span class="material-symbols-rounded" aria-hidden="true">add</span>
+          申請請假
+        </button>
       </template>
     </LeaveHero>
 
@@ -401,13 +404,10 @@ async function pullRefresh() {
 .render-sentinel { height: 1px; }
 
 .hero-cta {
-  background: var(--pt-surface-raised, rgba(255, 255, 255, 0.95));
-  color: var(--m3-primary, var(--brand-primary));
-  border: 1px solid var(--m3-outline-variant, var(--pt-page-border, var(--pt-border)));
-  padding: 8px 14px;
-  border-radius: 999px;
-  font-weight: 800;
-  cursor: pointer;
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--brand-primary, #0d9053);
+  border: 1px solid rgba(13, 144, 83, 0.18);
 }
-.hero-cta:hover { background: var(--neutral-0); }
+.hero-cta:hover { background: #fff; }
+.hero-cta:active { background: var(--cream, #fffcf2); }
 </style>

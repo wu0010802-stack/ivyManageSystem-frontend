@@ -17,25 +17,13 @@ const EVENT_LABELS = {
   attendance_alert: '出席異常',
 }
 
-// 通知類別 icon 圖示 → IvyKids tint 對應
-// messages→tint-message / announcements→tint-announcement / events→tint-event
-// medication（無本頁）/ fee→tint-money / leave→tint-leave / attendance→tint-pickup
-const EVENT_TINT = {
-  message_received:  'message',
-  announcement:      'announcement',
-  event_ack_required:'event',
-  fee_due:           'money',
-  leave_result:      'leave',
-  attendance_alert:  'pickup',
-}
-
-const EVENT_ICON = {
-  message_received:   '💬',
-  announcement:       '📢',
-  event_ack_required: '📅',
-  fee_due:            '💰',
-  leave_result:       '📋',
-  attendance_alert:   '🔔',
+const EVENT_META = {
+  message_received:   { icon: 'chat_bubble',  tone: 'leaf' },
+  announcement:       { icon: 'campaign',     tone: 'coral' },
+  event_ack_required: { icon: 'event',        tone: 'grape' },
+  fee_due:            { icon: 'payments',     tone: 'sun' },
+  leave_result:       { icon: 'event_busy',   tone: 'sky' },
+  attendance_alert:   { icon: 'notifications', tone: 'coral' },
 }
 
 const EVENT_HINTS = {
@@ -65,7 +53,7 @@ async function load() {
 
 async function toggle(ev) {
   const newVal = !prefs.value[ev]
-  prefs.value[ev] = newVal // 樂觀
+  prefs.value[ev] = newVal
   saving.value = true
   try {
     await updateNotificationPreferences({ [ev]: newVal })
@@ -82,26 +70,29 @@ onMounted(load)
 
 <template>
   <div class="prefs-view">
-    <h2>LINE 通知偏好</h2>
-    <p class="hint">關閉項目後，園所雖仍會在 App 內保留通知，但不再透過 LINE 推播。</p>
+    <header class="pt-page-hero">
+      <p class="pt-page-hero-eyebrow">LINE 通知偏好</p>
+      <h1 class="pt-page-hero-title">想收到哪些訊息？</h1>
+      <p class="pt-page-hero-note">關閉項目後，園所雖仍會在 App 內保留通知，但不再透過 LINE 推播。</p>
+    </header>
 
     <template v-if="loading">
-      <SkeletonBlock variant="card" :count="2" />
+      <div class="skeleton-wrap">
+        <SkeletonBlock variant="card" :count="2" />
+      </div>
     </template>
-    <div v-else class="list">
+    <div v-else class="pt-list-group">
       <label
         v-for="(label, ev) in EVENT_LABELS"
         :key="ev"
-        class="row"
+        class="pt-list-row row"
       >
-        <span
-          class="cat-icon"
-          :data-tint="EVENT_TINT[ev]"
-          :aria-hidden="true"
-        >{{ EVENT_ICON[ev] }}</span>
-        <div class="text">
-          <strong>{{ label }}</strong>
-          <span class="sub">{{ EVENT_HINTS[ev] }}</span>
+        <span class="cat-icon" :class="`tone-${EVENT_META[ev]?.tone || 'leaf'}`" aria-hidden="true">
+          <span class="material-symbols-rounded">{{ EVENT_META[ev]?.icon || 'notifications' }}</span>
+        </span>
+        <div class="pt-list-row-body">
+          <strong class="row-label">{{ label }}</strong>
+          <p class="row-sub">{{ EVENT_HINTS[ev] }}</p>
         </div>
         <M3Switch
           :model-value="prefs[ev] !== false"
@@ -115,47 +106,45 @@ onMounted(load)
 </template>
 
 <style scoped>
-.prefs-view { padding: 16px; }
-h2 { margin: 0 0 6px; font-size: 18px; }
-.hint { color: var(--pt-text-placeholder); font-size: 13px; margin-bottom: 16px; }
-.list { background: var(--neutral-0); border-radius: 8px; overflow: hidden; }
-.row {
-  display: flex; align-items: center; gap: 12px;
-  padding: 14px 16px; border-bottom: 1px solid var(--pt-surface-mute); cursor: pointer;
-}
-.row:last-child { border-bottom: none; }
-.text { flex: 1; display: flex; flex-direction: column; gap: 2px; }
-.text strong { font-size: 15px; color: var(--pt-text-strong); }
-.sub { font-size: 12px; color: var(--pt-text-placeholder); }
-/* 通知類別 icon dot — [data-tint] → IvyKids tint token */
-.cat-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+.prefs-view {
   display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 24px;
+}
+.skeleton-wrap { padding: 0 16px; display: flex; flex-direction: column; gap: 10px; }
+
+.row { cursor: pointer; }
+.cat-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
   flex-shrink: 0;
 }
-.cat-icon[data-tint='message']      { background: var(--pt-tint-message); }
-.cat-icon[data-tint='announcement'] { background: var(--pt-tint-announcement); }
-.cat-icon[data-tint='event']        { background: var(--pt-tint-event); }
-.cat-icon[data-tint='money']        { background: var(--pt-tint-money); }
-.cat-icon[data-tint='leave']        { background: var(--pt-tint-leave); }
-.cat-icon[data-tint='pickup']       { background: var(--pt-tint-pickup); }
-.cat-icon[data-tint='medication']   { background: var(--pt-tint-medication); }
+.cat-icon .material-symbols-rounded {
+  font-size: 22px;
+  font-variation-settings: 'FILL' 1, 'wght' 500;
+}
+.cat-icon.tone-leaf  { background: var(--leaf-100, #dcf4e6);  color: var(--brand-primary, #0d9053); }
+.cat-icon.tone-coral { background: var(--coral-100, #ffe3e0); color: var(--coral-700, #b14545); }
+.cat-icon.tone-grape { background: var(--grape-100, #ebe0f5); color: var(--grape-700, #6e3f94); }
+.cat-icon.tone-sun   { background: var(--sun-100, #fff4c9);   color: var(--sun-700, #c99500); }
+.cat-icon.tone-sky   { background: var(--sky-100, #dceef5);   color: var(--sky-700, #2d6f8e); }
 
-/* toggle on bg → var(--brand-primary) */
-input[type="checkbox"] {
-  width: 44px; height: 24px; appearance: none; background: var(--pt-text-hint);
-  border-radius: 12px; position: relative; cursor: pointer; transition: background .2s;
+.row-label {
+  display: block;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--pt-text-strong);
+  line-height: 1.3;
 }
-input[type="checkbox"]:checked { background: var(--brand-primary); }
-input[type="checkbox"]::before {
-  content: ''; width: 20px; height: 20px; background: var(--neutral-0);
-  border-radius: 10px; position: absolute; top: 2px; left: 2px;
-  transition: transform .2s;
+.row-sub {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--pt-text-muted);
+  line-height: 1.45;
 }
-input[type="checkbox"]:checked::before { transform: translateX(20px); }
 </style>

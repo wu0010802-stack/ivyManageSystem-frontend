@@ -8,6 +8,8 @@ import { listMedicationOrders } from '../api/medications'
 import { toast } from '../utils/toast'
 import { todayISO } from '@/utils/format'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
+import KawaiiStar from '@/components/brand/KawaiiStar.vue'
 
 const router = useRouter()
 const childrenStore = useChildrenStore()
@@ -20,6 +22,12 @@ const STATUS_LABEL = {
   administered: '已餵',
   skipped: '已跳過',
   correction: '已修正',
+}
+const STATUS_TONE = {
+  pending: 'warn',
+  administered: 'success',
+  skipped: 'info',
+  correction: 'violet',
 }
 
 const studentName = computed(() => {
@@ -66,9 +74,7 @@ function goDetail(orderId) {
   router.push({ path: `/medications/${orderId}` })
 }
 
-function statusLabel(s) {
-  return STATUS_LABEL[s] || s
-}
+function statusLabel(s) { return STATUS_LABEL[s] || s }
 
 const today = todayISO()
 </script>
@@ -76,63 +82,166 @@ const today = todayISO()
 <template>
   <div class="med-list">
     <ChildSelector />
-    <div class="header-row">
-      <button class="new-btn" @click="goNew">+ 新增</button>
+
+    <div class="pt-eyebrow-row">
+      <p class="pt-eyebrow">用藥紀錄</p>
+      <button type="button" class="pt-action-btn new-btn" @click="goNew">
+        <span class="material-symbols-rounded" aria-hidden="true">add</span>
+        新增
+      </button>
     </div>
 
-    <template v-if="loading">
-      <SkeletonBlock variant="card" :count="3" />
+    <template v-if="loading && items.length === 0">
+      <div class="skeleton-wrap">
+        <SkeletonBlock variant="card" :count="2" />
+      </div>
     </template>
-    <p v-else-if="items.length === 0" class="hint">{{ studentName }} 沒有用藥紀錄</p>
 
-    <div v-else class="cards">
-      <div
+    <EmptyState
+      v-else-if="items.length === 0"
+      variant="mobile"
+      :icon="KawaiiStar"
+      :title="studentName ? `${studentName} 沒有用藥紀錄` : '沒有用藥紀錄'"
+      description="如孩子需要在園所服用藥物，請點右上「新增」"
+    />
+
+    <div v-else class="cards pt-section-pad-x">
+      <button
         v-for="o in items"
         :key="o.id"
-        class="card"
+        type="button"
+        class="med-card"
         :class="{ today: o.order_date === today }"
         @click="goDetail(o.id)"
       >
-        <div class="card-row">
-          <strong>{{ o.medication_name }}</strong>
-          <span class="date">{{ o.order_date }}</span>
+        <div class="card-icon" aria-hidden="true">
+          <span class="material-symbols-rounded">medication</span>
         </div>
-        <div class="meta">
-          劑量 {{ o.dose }} · {{ (o.time_slots || []).join('、') }}
-          <span v-if="o.source === 'parent'" class="tag self">家長提交</span>
+        <div class="card-main">
+          <div class="card-head">
+            <strong class="med-name">{{ o.medication_name }}</strong>
+            <span class="date">{{ o.order_date }}</span>
+          </div>
+          <div class="meta">
+            <span>劑量 {{ o.dose }}</span>
+            <span class="dot-sep">·</span>
+            <span>{{ (o.time_slots || []).join('、') }}</span>
+            <span v-if="o.source === 'parent'" class="pt-pill pt-pill-info source-tag">家長提交</span>
+          </div>
+          <div v-if="o.logs?.length" class="logs">
+            <span
+              v-for="lg in o.logs"
+              :key="lg.id"
+              class="pt-pill"
+              :class="`pt-pill-${STATUS_TONE[lg.status] || 'info'}`"
+            >
+              {{ lg.scheduled_time }} · {{ statusLabel(lg.status) }}
+            </span>
+          </div>
         </div>
-        <div class="logs">
-          <span
-            v-for="lg in o.logs"
-            :key="lg.id"
-            class="slot"
-            :class="lg.status"
-          >{{ lg.scheduled_time }} · {{ statusLabel(lg.status) }}</span>
-        </div>
-      </div>
+      </button>
     </div>
   </div>
 </template>
 
 <style scoped>
-.med-list { padding: 0; }
-.header-row { display: flex; gap: 12px; align-items: center; justify-content: flex-end; margin-bottom: 14px; }
-.new-btn { min-height: var(--touch-target-min, 44px); padding: 8px 14px; background: var(--m3-primary, var(--brand-primary)); color: var(--neutral-0); border: none; border-radius: var(--pt-control-radius, 12px); font-size: 14px; font-weight: 800; transition: background var(--transition-fast, 0.15s ease), transform var(--transition-fast, 0.15s ease); }
-.new-btn:active { background: var(--brand-primary-hover); }
-.hint { color: var(--pt-text-placeholder); padding: 24px 0; text-align: center; }
-.cards { display: flex; flex-direction: column; gap: 10px; }
-.card { background: var(--m3-surface-container-low, var(--pt-surface-card, var(--neutral-0))); border-radius: 12px; padding: 14px; border: 1px solid var(--m3-outline-variant, var(--pt-page-border, var(--pt-border))); box-shadow: var(--m3-elev-1, var(--pt-shadow-card, var(--pt-elev-1))); cursor: pointer; }
-.card.today { border-color: color-mix(in srgb, var(--brand-primary) 34%, var(--pt-border)); background: linear-gradient(135deg, var(--pt-tint-brand, var(--brand-primary-soft)) 0%, var(--pt-surface-card, var(--neutral-0)) 100%); }
-.card-row { display: flex; justify-content: space-between; align-items: baseline; }
-.date { color: var(--pt-text-placeholder); font-size: 13px; }
-.meta { font-size: 13px; color: var(--m3-on-surface-variant, var(--pt-text-muted)); margin-top: 4px; }
-.tag { display: inline-block; padding: 1px 6px; margin-left: 6px; border-radius: 3px; font-size: 12px; }
-.tag.self { background: var(--pt-tint-money); color: var(--pt-tint-money-fg); }
-.logs { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 4px; }
-.slot { padding: 2px 8px; border-radius: 10px; font-size: 12px; background: var(--pt-surface-mute); color: var(--m3-on-surface-variant, var(--pt-text-muted)); }
-/* status pill：[data-status] 等效 class pattern */
-.slot.pending      { background: var(--pt-tint-money);        color: var(--pt-tint-money-fg); }
-.slot.administered { background: var(--pt-tint-calendar);     color: var(--pt-tint-calendar-fg); }
-.slot.skipped      { background: var(--pt-tint-pickup);       color: var(--pt-tint-pickup-fg); text-decoration: line-through; }
-.slot.correction   { background: var(--m3-tertiary-container, var(--pt-tint-medication));   color: var(--m3-on-tertiary-container, var(--pt-tint-medication-fg)); }
+.med-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 24px;
+}
+.skeleton-wrap { padding: 0 16px; display: flex; flex-direction: column; gap: 10px; }
+
+.new-btn {
+  margin-left: auto;
+  padding: 7px 14px;
+  font-size: 13px;
+}
+
+.cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.med-card {
+  display: flex;
+  gap: 12px;
+  background: var(--pt-surface-card, #fff);
+  border: 1px solid var(--pt-border-light, #ecf5f9);
+  border-radius: 16px;
+  padding: 14px;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 160ms ease, transform 120ms ease;
+}
+.med-card:hover { background: var(--pt-surface-mute-soft, #fefcf3); }
+.med-card:active { transform: scale(0.99); }
+.med-card.today {
+  background: linear-gradient(135deg, var(--cream, #fffcf2) 0%, #ffffff 70%);
+  border-color: var(--sun-300, #ffe285);
+}
+
+.card-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--grape-100, #ebe0f5);
+  color: var(--grape-700, #6e3f94);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.card-icon .material-symbols-rounded {
+  font-size: 22px;
+  font-variation-settings: 'FILL' 1, 'wght' 500;
+}
+
+.card-main { flex: 1; min-width: 0; }
+.card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.med-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--pt-text-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.date {
+  font-size: 12px;
+  color: var(--pt-text-faint);
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--pt-text-muted);
+}
+.dot-sep { color: var(--pt-text-faint); }
+.source-tag { margin-left: 4px; }
+
+.logs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .med-card { transition: none; }
+}
 </style>
