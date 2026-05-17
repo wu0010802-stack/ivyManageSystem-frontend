@@ -6,11 +6,13 @@
  * 出缺勤 / 班級留校率 / 才藝課 / 懲處紀錄。
  */
 import { computed } from 'vue'
+import { InfoFilled } from '@element-plus/icons-vue'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
   participant: { type: Object, default: null },
   cycle: { type: Object, default: null },
+  rules: { type: Object, default: () => ({}) },
 })
 
 const emit = defineEmits(['update:visible'])
@@ -93,6 +95,13 @@ const fmtDelta = (v) => {
               <span :class="['delta', { negative: Number(attendance.suggested_score_delta) < 0 }]">
                 {{ fmtDelta(attendance.suggested_score_delta) }}
               </span>
+              <el-tooltip v-if="props.rules.LATE_EARLY" placement="top">
+                <template #content>
+                  <div>規則：{{ props.rules.LATE_EARLY.rule_type }}</div>
+                  <div>參數：{{ JSON.stringify(props.rules.LATE_EARLY.rule_config) }}</div>
+                </template>
+                <el-icon class="info-icon"><InfoFilled /></el-icon>
+              </el-tooltip>
             </el-descriptions-item>
           </el-descriptions>
         </el-tab-pane>
@@ -112,6 +121,13 @@ const fmtDelta = (v) => {
               <span :class="['delta', { negative: Number(retention.suggested_score_delta) < 0 }]">
                 {{ fmtDelta(retention.suggested_score_delta) }}
               </span>
+              <el-tooltip v-if="props.rules.RETURNING_RATE_0315" placement="top">
+                <template #content>
+                  <div>規則：{{ props.rules.RETURNING_RATE_0315.rule_type }}</div>
+                  <div>參數：{{ JSON.stringify(props.rules.RETURNING_RATE_0315.rule_config) }}</div>
+                </template>
+                <el-icon class="info-icon"><InfoFilled /></el-icon>
+              </el-tooltip>
             </el-descriptions-item>
           </el-descriptions>
         </el-tab-pane>
@@ -130,6 +146,13 @@ const fmtDelta = (v) => {
               <span :class="['delta', { negative: Number(activity.suggested_score_delta) < 0 }]">
                 {{ fmtDelta(activity.suggested_score_delta) }}
               </span>
+              <el-tooltip v-if="props.rules.AFTER_CLASS_RATE" placement="top">
+                <template #content>
+                  <div>規則：{{ props.rules.AFTER_CLASS_RATE.rule_type }}</div>
+                  <div>參數：{{ JSON.stringify(props.rules.AFTER_CLASS_RATE.rule_config) }}</div>
+                </template>
+                <el-icon class="info-icon"><InfoFilled /></el-icon>
+              </el-tooltip>
             </el-descriptions-item>
           </el-descriptions>
         </el-tab-pane>
@@ -145,6 +168,13 @@ const fmtDelta = (v) => {
               <span :class="['delta', { negative: Number(disciplinary.suggested_score_delta) < 0 }]">
                 {{ fmtDelta(disciplinary.suggested_score_delta) }}
               </span>
+              <el-tooltip v-if="props.rules.REWARD_PUNISH" placement="top">
+                <template #content>
+                  <div>規則：{{ props.rules.REWARD_PUNISH.rule_type }}</div>
+                  <div>參數：{{ JSON.stringify(props.rules.REWARD_PUNISH.rule_config) }}</div>
+                </template>
+                <el-icon class="info-icon"><InfoFilled /></el-icon>
+              </el-tooltip>
             </span>
           </div>
           <el-table
@@ -215,5 +245,13 @@ const fmtDelta = (v) => {
 
 .delta.negative {
   color: var(--color-danger, #ef4444);
+}
+
+.info-icon {
+  margin-left: 6px;
+  color: var(--el-text-color-secondary);
+  cursor: help;
+  font-size: 14px;
+  vertical-align: middle;
 }
 </style>
