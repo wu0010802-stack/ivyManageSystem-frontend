@@ -1,26 +1,61 @@
 <script setup>
-/**
- * RuleHistoryDrawer — Task 18 minimal stub；Task 19 會實作完整版
- */
-defineProps({
+import { computed, ref, watch } from 'vue'
+import { ElMessage } from 'element-plus'
+
+import { getScoringRuleHistory } from '@/api/appraisal'
+import { apiError } from '@/utils/error'
+
+const props = defineProps({
   visible: { type: Boolean, default: false },
   itemCode: { type: String, default: null },
 })
-defineEmits(['update:visible'])
+const emit = defineEmits(['update:visible'])
+
+const drawerVisible = computed({
+  get: () => props.visible,
+  set: (v) => emit('update:visible', v),
+})
+
+const versions = ref([])
+const loading = ref(false)
+
+async function load() {
+  if (!props.itemCode) return
+  loading.value = true
+  try {
+    const { data } = await getScoringRuleHistory(props.itemCode)
+    versions.value = data
+  } catch (e) {
+    ElMessage.error(apiError(e, '載入歷史失敗'))
+  } finally {
+    loading.value = false
+  }
+}
+
+watch(() => [props.visible, props.itemCode], ([v]) => { if (v) load() }, { immediate: true })
 </script>
 
 <template>
-  <el-drawer
-    :model-value="visible"
-    @update:model-value="$emit('update:visible', $event)"
-    :title="`歷史 - ${itemCode || ''}`"
-    size="40%"
-    data-test="rule-history-drawer"
-  >
-    <div class="placeholder">Task 19 實作</div>
+  <el-drawer v-model="drawerVisible" :title="`規則歷史：${itemCode}`" size="40%"
+             data-test="rule-history-drawer">
+    <el-timeline v-loading="loading">
+      <el-timeline-item
+        v-for="v in versions" :key="v.id"
+        :timestamp="v.effective_from" placement="top"
+        :data-test="`history-item-${v.id}`"
+      >
+        <div class="version">
+          <div><strong>{{ v.rule_type }}</strong></div>
+          <pre>{{ JSON.stringify(v.rule_config, null, 2) }}</pre>
+          <div v-if="v.notes" class="notes">備註：{{ v.notes }}</div>
+        </div>
+      </el-timeline-item>
+      <el-empty v-if="!loading && versions.length === 0" description="尚無歷史版本" />
+    </el-timeline>
   </el-drawer>
 </template>
 
 <style scoped>
-.placeholder { color: var(--el-text-color-secondary); padding: 16px; }
+.version pre { background: var(--el-fill-color-light); padding: 8px; border-radius: 4px; font-size: 12px; }
+.notes { color: var(--el-text-color-secondary); font-size: 12px; margin-top: 4px; }
 </style>
