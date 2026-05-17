@@ -22,3 +22,9 @@ export const deleteFeeTemplate = (id) =>
 // ===== 依範本批量產生費用單 =====
 export const generateFeeRecords = (payload) =>
   api.post('/fees/generate', payload).then((res) => res.data)
+
+// ===== Stub (worktree-local only) — 2026-05-17 contact book redesign pilot
+// 真實 endpoint 在 user `refactor-fees-by-class` WIP 尚未 merge 到 main。
+// 本 stub 只為了讓 FeesTab.vue 在 pilot 分支上能編譯 / dev server 起得來。
+// user merge `refactor-fees-by-class` 後請刪除本行。
+export const getFeeAdjustments = () => Promise.resolve({ items: [] })
