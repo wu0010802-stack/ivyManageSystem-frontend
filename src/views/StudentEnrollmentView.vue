@@ -142,7 +142,7 @@
       <!-- ============ Tab 2：在籍記錄表 ============ -->
       <el-tab-pane label="在籍記錄表" name="roster">
         <div v-loading="rosterLoading">
-          <div v-if="roster" id="roster-print-area">
+          <div v-if="roster">
             <EnrollmentRosterTable :roster="roster" />
           </div>
           <el-empty
@@ -165,7 +165,8 @@
 import { ref, computed, onMounted, watch, defineAsyncComponent } from 'vue'
 import { ElMessage } from 'element-plus'
 import { RefreshRight, Printer } from '@element-plus/icons-vue'
-import { getEnrollmentStats, getEnrollmentOptions, getEnrollmentRoster } from '@/api/studentEnrollment'
+import { getEnrollmentStats, getEnrollmentOptions, getEnrollmentRoster, getEnrollmentRosterPdf } from '@/api/studentEnrollment'
+import { openPdfInNewTab } from '@/utils/printPdfWindow'
 import { hasPermission } from '@/utils/auth'
 import BonusDashboard from '@/components/enrollment/BonusDashboard.vue'
 
@@ -282,8 +283,17 @@ const onTabClick = (tab) => {
   }
 }
 
-const printRoster = () => {
-  window.print()
+const printRoster = async () => {
+  await openPdfInNewTab({
+    fetchBlob: async () => {
+      const res = await getEnrollmentRosterPdf(termParams())
+      return res.data
+    },
+    loadingText: '在籍花名冊載入中…',
+    onError: (err) => {
+      ElMessage.error(apiError(err, '載入花名冊 PDF 失敗'))
+    },
+  })
 }
 
 onMounted(async () => {
@@ -688,21 +698,5 @@ const doughnutChartOptions = {
   height: 340px;
   position: relative;
   padding: 8px 4px 0;
-}
-
-/* ===== Print ===== */
-@media print {
-  .page-header,
-  .page-meta,
-  .el-tabs__header,
-  .enrollment-tabs :deep(.el-tabs__header) {
-    display: none !important;
-  }
-  .enrollment-view {
-    padding: 0 !important;
-  }
-  #roster-print-area {
-    display: block !important;
-  }
 }
 </style>

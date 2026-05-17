@@ -479,45 +479,4 @@ tfoot tr:first-child td {
   font-size: 12px;
   color: var(--neutral-600);
 }
-
-/* ── 列印 ── */
-@media print {
-  .roster-wrapper { font-size: 12px; }
-  .roster-table td { padding: 2px 5px; }
-  .title-cell { font-size: 15px; padding-left: 8px !important; }
-  .date-cell { font-size: 12px; min-width: 60px; }
-  .class-num-cell { min-width: 58px; }
-  .row-label { min-width: 44px; }
-  .class-name-cell,
-  .teacher-cell,
-  .count-cell,
-  .grade-breakdown-cell { font-size: 12px; }
-  .seq-cell { font-size: 12px; min-width: 24px; }
-  .student-cell { min-width: 58px; max-width: 80px; }
-  .indigenous-mark { font-size: 9px; }
-  .grand-total-row td { font-size: 13px; padding-left: 12px !important; }
-
-  .roster-outer {
-    display: flex !important;
-    flex-direction: row !important;
-  }
-  .roster-scroll {
-    overflow: visible !important;
-    flex: 1;
-  }
-  .staff-panel {
-    width: 150px !important;
-    flex-shrink: 0;
-  }
-  /* 修正 sticky 在列印時不需要 */
-  .row-label,
-  .seq-cell {
-    position: static !important;
-  }
-}
-
-@page {
-  size: A4 landscape;
-  margin: 8mm;
-}
 </style>
