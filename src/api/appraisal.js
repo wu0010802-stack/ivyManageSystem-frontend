@@ -115,3 +115,23 @@ const _notImplemented = (name) => () =>
 export const listAppraisalPenaltyCatalog = _notImplemented('listAppraisalPenaltyCatalog')
 export const patchAppraisalPenaltyCatalog = _notImplemented('patchAppraisalPenaltyCatalog')
 
+// ============ Phase 1 Calibrate（scoring rules + manual counts + preview）============
+
+export const listScoringRules = (effective_on) =>
+  api.get('/appraisal/scoring_rules', { params: { effective_on } })
+
+export const getScoringRuleHistory = (item_code) =>
+  api.get('/appraisal/scoring_rules/history', { params: { item_code } })
+
+export const createScoringRule = (payload) =>
+  api.post('/appraisal/scoring_rules', payload)
+
+export const getManualEventCounts = (cycleId) =>
+  api.get(`/appraisal/cycles/${cycleId}/manual_event_counts`)
+
+export const batchUpsertManualEventCounts = (cycleId, entries) =>
+  api.put(`/appraisal/cycles/${cycleId}/manual_event_counts:batch`, { entries })
+
+export const previewAppraisalScore = (cycleId) =>
+  api.post(`/appraisal/cycles/${cycleId}/score_preview`)
+
