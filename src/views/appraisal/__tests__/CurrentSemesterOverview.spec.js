@@ -10,6 +10,9 @@ vi.mock('@/api/appraisal', () => ({
   createAppraisalCycle: vi.fn(),
   addAppraisalParticipant: vi.fn(),
   bulkAddAppraisalParticipantsFromActive: vi.fn(),
+  previewAppraisalScore: vi.fn().mockResolvedValue({ data: { participants: [] } }),
+  getManualEventCounts: vi.fn().mockResolvedValue({ data: { entries: [] } }),
+  batchUpsertManualEventCounts: vi.fn().mockResolvedValue({ data: { ok: true } }),
 }))
 
 // ── Pinia store mock（可動態調整 school_year / semester）─
@@ -153,6 +156,8 @@ const GLOBAL_STUBS = {
   'el-input-number': { template: '<input />' },
   'el-select': { template: '<div><slot /></div>' },
   'el-option': true,
+  'el-collapse': { template: '<div><slot /></div>' },
+  'el-collapse-item': { template: '<div><slot /></div>' },
   AcademicTermSelector: true,
   StatCard: {
     props: ['label', 'value'],
@@ -160,6 +165,14 @@ const GLOBAL_STUBS = {
     inheritAttrs: false,
   },
   AggregatedStatusDetailDialog: true,
+  ManualEventEntrySection: {
+    props: ['cycleId', 'participants', 'readonly'],
+    template: '<div data-test="manual-event-section" />',
+  },
+  ScorePreviewDialog: {
+    props: ['visible', 'cycleId'],
+    template: '<div v-if="visible" data-test="score-preview-dialog-stub" />',
+  },
 }
 
 const SAMPLE_CYCLE = {
@@ -480,5 +493,35 @@ describe('CurrentSemesterOverview', () => {
     const syncBtn = wrapper.find('[data-test="sync-score-btn"]')
     expect(syncBtn.exists()).toBe(true)
     expect(syncBtn.attributes('disabled')).toBeDefined()
+  })
+
+  // ── ScorePreviewDialog + ManualEventEntrySection 整合 ────
+  it('cycle 存在時 render ManualEventEntrySection 區塊', async () => {
+    getAppraisalCurrentCycle.mockResolvedValue({ data: SAMPLE_CYCLE })
+    getAppraisalAllEmployeesStatus.mockResolvedValue({ data: makeStatusFixture() })
+    const wrapper = await mountView()
+
+    expect(wrapper.find('[data-test="manual-event-section"]').exists()).toBe(true)
+  })
+
+  it('cycle 不存在時不 render ManualEventEntrySection', async () => {
+    getAppraisalCurrentCycle.mockResolvedValue({ data: null })
+    const wrapper = await mountView()
+
+    expect(wrapper.find('[data-test="manual-event-section"]').exists()).toBe(false)
+  })
+
+  it('點 preview-btn 後開啟 ScorePreviewDialog', async () => {
+    getAppraisalCurrentCycle.mockResolvedValue({ data: SAMPLE_CYCLE })
+    getAppraisalAllEmployeesStatus.mockResolvedValue({ data: makeStatusFixture() })
+    const wrapper = await mountView()
+
+    // 初始未開啟
+    expect(wrapper.find('[data-test="score-preview-dialog-stub"]').exists()).toBe(false)
+
+    await wrapper.find('[data-test="preview-btn"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="score-preview-dialog-stub"]').exists()).toBe(true)
   })
 })

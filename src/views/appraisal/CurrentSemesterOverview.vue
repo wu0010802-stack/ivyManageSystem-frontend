@@ -8,7 +8,7 @@
  */
 import { computed, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Refresh, Connection, Plus } from '@element-plus/icons-vue'
+import { Refresh, Connection, Plus, DataAnalysis } from '@element-plus/icons-vue'
 
 import {
   getAppraisalCurrentCycle,
@@ -23,6 +23,8 @@ import { useErrorNotify } from '@/composables/useErrorNotify'
 import AcademicTermSelector from '@/components/common/AcademicTermSelector.vue'
 import StatCard from '@/components/common/StatCard.vue'
 import AggregatedStatusDetailDialog from './AggregatedStatusDetailDialog.vue'
+import ManualEventEntrySection from './components/ManualEventEntrySection.vue'
+import ScorePreviewDialog from './components/ScorePreviewDialog.vue'
 
 const termStore = useAcademicTermStore()
 const { notify } = useErrorNotify()
@@ -304,6 +306,9 @@ async function createCurrentCycle() {
     creatingCycle.value = false
   }
 }
+
+// ── 預覽分數 dialog（與同步分數 preview 區隔）────────────
+const scorePreviewDialogVisible = ref(false)
 </script>
 
 <template>
@@ -321,6 +326,15 @@ async function createCurrentCycle() {
           @click="bulkAddAll"
         >
           一鍵加入全部教師
+        </el-button>
+        <el-button
+          v-if="currentCycle"
+          type="info"
+          :icon="DataAnalysis"
+          data-test="preview-btn"
+          @click="scorePreviewDialogVisible = true"
+        >
+          預覽分數
         </el-button>
         <el-tooltip
           v-if="currentCycle"
@@ -405,6 +419,16 @@ async function createCurrentCycle() {
           data-test="kpi-discipline"
         />
       </div>
+
+      <el-collapse class="manual-section" data-test="manual-section">
+        <el-collapse-item title="手填事件次數" name="manual">
+          <ManualEventEntrySection
+            :cycle-id="currentCycle.id"
+            :participants="participants"
+            :readonly="currentCycle.status !== 'OPEN'"
+          />
+        </el-collapse-item>
+      </el-collapse>
 
       <el-table
         :data="participants"
@@ -545,6 +569,12 @@ async function createCurrentCycle() {
       :participant="detailParticipant"
       :cycle="currentCycle"
     />
+
+    <!-- 預覽分數計算 dialog -->
+    <ScorePreviewDialog
+      v-model:visible="scorePreviewDialogVisible"
+      :cycle-id="currentCycle?.id ?? null"
+    />
   </div>
 </template>
 
@@ -585,6 +615,10 @@ async function createCurrentCycle() {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 12px;
+}
+
+.manual-section {
+  width: 100%;
 }
 
 .status-table {
