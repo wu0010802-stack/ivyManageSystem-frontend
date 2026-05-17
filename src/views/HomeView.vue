@@ -290,49 +290,49 @@ const showTodoSection = computed(
           </template>
           <div class="action-grid">
             <router-link to="/employees" class="action-item">
-              <div class="action-circle action-circle--primary">
+              <div class="action-circle">
                 <el-icon :size="22"><User /></el-icon>
               </div>
               <span>員工管理</span>
             </router-link>
             <router-link to="/students" class="action-item">
-              <div class="action-circle action-circle--warning">
+              <div class="action-circle">
                 <el-icon :size="22"><UserFilled /></el-icon>
               </div>
               <span>學生管理</span>
             </router-link>
             <router-link to="/attendance" class="action-item">
-              <div class="action-circle action-circle--success">
+              <div class="action-circle">
                 <el-icon :size="22"><Clock /></el-icon>
               </div>
               <span>出勤查詢</span>
             </router-link>
             <router-link to="/salary" class="action-item">
-              <div class="action-circle action-circle--info">
+              <div class="action-circle">
                 <el-icon :size="22"><Wallet /></el-icon>
               </div>
               <span>薪資管理</span>
             </router-link>
             <router-link to="/leaves" class="action-item">
-              <div class="action-circle action-circle--purple">
+              <div class="action-circle">
                 <el-icon :size="22"><Document /></el-icon>
               </div>
               <span>請假管理</span>
             </router-link>
             <router-link to="/activity/dashboard" class="action-item">
-              <div class="action-circle action-circle--pink">
+              <div class="action-circle">
                 <el-icon :size="22"><Trophy /></el-icon>
               </div>
               <span>活動管理</span>
             </router-link>
             <router-link to="/reports" class="action-item">
-              <div class="action-circle action-circle--danger">
+              <div class="action-circle">
                 <el-icon :size="22"><TrendCharts /></el-icon>
               </div>
               <span>報表統計</span>
             </router-link>
             <router-link to="/settings" class="action-item">
-              <div class="action-circle action-circle--neutral">
+              <div class="action-circle">
                 <el-icon :size="22"><Setting /></el-icon>
               </div>
               <span>系統設定</span>
@@ -798,6 +798,10 @@ html.dark .todo-empty {
   text-align: center;
 }
 
+/* Phase B 起手：8 種 tone variants 統一為單色 — 8 色彩虹 pill 是 SaaS-AI
+   first-order 反射模式（identical card grids + 8 個圓圈 icon 等距並排），
+   與 IvyKids 品牌的單一深綠 + 童彩 6 色「精緻使用」方向不一致。
+   差異化交給 label 文字，色彩只強調 primary action。 */
 .action-circle {
   width: 56px;
   height: 56px;
@@ -805,26 +809,14 @@ html.dark .todo-empty {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
+  background: var(--brand-primary-soft);
+  color: var(--brand-primary);
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
 }
-
-.action-circle--primary { background: var(--brand-primary-soft); color: var(--brand-primary); }
-.action-circle--success { background: var(--color-success-soft); color: var(--color-success); }
-.action-circle--warning { background: var(--color-warning-soft); color: var(--color-warning-hover); }
-.action-circle--info    { background: #e0f2fe; color: #0284c7; }
-.action-circle--purple  { background: #ede9fe; color: #7c3aed; }
-.action-circle--pink    { background: #fce7f3; color: #db2777; }
-.action-circle--danger  { background: var(--color-danger-soft); color: var(--color-danger); }
-.action-circle--neutral { background: var(--bg-color-soft); color: var(--text-secondary); }
-
-.action-item:hover .action-circle--primary { background: var(--brand-primary); color: #fff; }
-.action-item:hover .action-circle--success { background: var(--color-success); color: #fff; }
-.action-item:hover .action-circle--warning { background: var(--color-warning-hover); color: #fff; }
-.action-item:hover .action-circle--info    { background: #0284c7; color: #fff; }
-.action-item:hover .action-circle--purple  { background: #7c3aed; color: #fff; }
-.action-item:hover .action-circle--pink    { background: #db2777; color: #fff; }
-.action-item:hover .action-circle--danger  { background: var(--color-danger); color: #fff; }
-.action-item:hover .action-circle--neutral { background: var(--text-secondary); color: #fff; }
+.action-item:hover .action-circle {
+  background: var(--brand-primary);
+  color: #fff;
+}
 
 /* ── 右欄卡片共用 ── */
 .card-header-row {
