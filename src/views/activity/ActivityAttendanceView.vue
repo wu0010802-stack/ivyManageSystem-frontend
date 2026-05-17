@@ -302,7 +302,6 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Check, Delete, Printer } from '@element-plus/icons-vue'
 import {
@@ -312,22 +311,27 @@ import {
   getAttendanceSession,
   batchUpdateAttendance,
   exportAttendanceSession,
+  getAttendanceSessionRollPdf,
   getCourses,
 } from '@/api/activity'
 import { hasPermission } from '@/utils/auth'
 import { todayISO, dateToLocalISO } from '@/utils/format'
 import { useActivityAttendanceDrawer } from '@/composables/useActivityAttendanceDrawer'
-
-const router = useRouter()
+import { openPdfInNewTab } from '@/utils/printPdfWindow'
 
 const canWrite = computed(() => hasPermission('ACTIVITY_WRITE'))
 
-function openPrint(row) {
-  const href = router.resolve({
-    name: 'activity-attendance-print',
-    params: { sessionId: row.id },
-  }).href
-  window.open(href, '_blank', 'noopener')
+async function openPrint(row) {
+  await openPdfInNewTab({
+    fetchBlob: async () => {
+      const res = await getAttendanceSessionRollPdf(row.id)
+      return res.data
+    },
+    loadingText: '點名單載入中…',
+    onError: (err) => {
+      ElMessage.error(err?.message || '載入點名單失敗')
+    },
+  })
 }
 
 function openPrintForCurrent() {

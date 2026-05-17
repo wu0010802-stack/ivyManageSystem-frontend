@@ -4,10 +4,12 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   getPOSDailySummary,
   getPOSOutstandingByStudent,
+  getPOSReceiptPdf,
   getPOSRecentTransactions,
   getRegistrations,
   posCheckout,
 } from '@/api/activity'
+import { openPdfInNewTab } from '@/utils/printPdfWindow'
 import {
   CASH_METHOD,
   LARGE_AMOUNT_THRESHOLD,
@@ -385,8 +387,22 @@ export function usePOSCheckout() {
     }
   }
 
-  function printReceipt() {
-    window.print()
+  async function printReceipt() {
+    const receiptNo = lastReceipt.value?.receipt_no
+    if (!receiptNo) {
+      ElMessage.warning('找不到收據編號，無法列印')
+      return
+    }
+    await openPdfInNewTab({
+      fetchBlob: async () => {
+        const res = await getPOSReceiptPdf(receiptNo)
+        return res.data
+      },
+      loadingText: '收據載入中…',
+      onError: (err) => {
+        ElMessage.error(err?.message || '收據 PDF 載入失敗')
+      },
+    })
   }
 
   // 重印防抖：避免連點兩次送兩次列印

@@ -150,6 +150,10 @@ export const getPOSOutstandingByStudent = (q, limit = 100, opts = {}) => {
   return api.get('/activity/pos/outstanding-by-student', { params })
 }
 export const posCheckout = (payload) => api.post('/activity/pos/checkout', payload)
+export const getPOSReceiptPdf = (receiptNo) =>
+  api.get(`/activity/pos/receipts/${encodeURIComponent(receiptNo)}/print.pdf`, {
+    responseType: 'blob',
+  })
 export const getPOSDailySummary = (date) =>
   api.get('/activity/pos/daily-summary', { params: date ? { date } : {} })
 export const getPOSRecentTransactions = (params = {}) =>
@@ -197,6 +201,9 @@ export const batchUpdateAttendance = (id, records) =>
 
 export const exportAttendanceSession = (id) =>
   api.get(`/activity/attendance/sessions/${id}/export`, { responseType: 'blob' })
+
+export const getAttendanceSessionRollPdf = (id) =>
+  api.get(`/activity/attendance/sessions/${id}/roll.pdf`, { responseType: 'blob' })
 
 // Portal - 才藝點名
 export const getPortalAttendanceSessions = (params) =>

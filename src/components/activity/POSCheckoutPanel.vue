@@ -139,8 +139,6 @@
         <el-button type="primary" @click="printReceipt">重印收據</el-button>
       </template>
     </el-dialog>
-
-    <POSReceipt :receipt="lastReceipt" />
   </div>
 </template>
 
@@ -150,7 +148,6 @@ import { Printer, RefreshRight } from '@element-plus/icons-vue'
 
 import POSDailySummaryBar from '@/components/activity/POSDailySummaryBar.vue'
 import POSPaymentPanel from '@/components/activity/POSPaymentPanel.vue'
-import POSReceipt from '@/components/activity/POSReceipt.vue'
 import POSSearchPanel from '@/components/activity/POSSearchPanel.vue'
 import { getClassrooms } from '@/api/classrooms'
 import { usePOSCheckout } from '@/composables/usePOSCheckout'

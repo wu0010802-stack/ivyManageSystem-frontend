@@ -1,8 +1,9 @@
 <script setup>
 import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
-import { getAttendanceSheet } from '@/api/portal'
+import { ArrowLeft, ArrowRight, Printer } from '@element-plus/icons-vue'
+import { getAttendanceSheet, getAttendanceSheetPdf } from '@/api/portal'
+import { openPdfInNewTab } from '@/utils/printPdfWindow'
 import { getUserInfo } from '@/utils/auth'
 import { apiError } from '@/utils/error'
 import AttendanceMonthSticky from './components/attendance/AttendanceMonthSticky.vue'
@@ -83,6 +84,19 @@ const isViewingCurrentMonth = computed(() => {
 // isCurrentMonth：供 AttendanceMonthSticky prop 使用（與 isViewingCurrentMonth 同義）
 const isCurrentMonth = computed(() => isViewingCurrentMonth.value)
 
+const printSheet = async () => {
+  await openPdfInNewTab({
+    fetchBlob: async () => {
+      const res = await getAttendanceSheetPdf({ year: query.year, month: query.month })
+      return res.data
+    },
+    loadingText: '月考勤表載入中…',
+    onError: (err) => {
+      ElMessage.error(apiError(err, '載入考勤表 PDF 失敗'))
+    },
+  })
+}
+
 const scrollToToday = () => {
   if (!isViewingCurrentMonth.value) return
   const todayNum = new Date().getDate()
@@ -133,6 +147,7 @@ onUnmounted(() => {
           <el-button :icon="ArrowLeft" circle class="month-nav__btn" aria-label="上個月" @click="prevMonth" />
           <span class="month-label">{{ query.year }} 年 {{ String(query.month).padStart(2, '0') }} 月</span>
           <el-button :icon="ArrowRight" circle class="month-nav__btn" aria-label="下個月" @click="nextMonth" />
+          <el-button v-if="sheetData" :icon="Printer" @click="printSheet">列印</el-button>
         </div>
       </div>
       <div class="employee-info" v-if="sheetData">

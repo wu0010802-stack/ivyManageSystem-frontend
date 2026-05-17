@@ -15,6 +15,8 @@ export const updateProfile = (data) => api.put('/portal/profile', data)
 // ----- 考勤 -----
 export const getAttendanceSheet = (params) =>
   api.get('/portal/attendance-sheet', { params })
+export const getAttendanceSheetPdf = (params) =>
+  api.get('/portal/attendance-sheet.pdf', { params, responseType: 'blob' })
 
 // ----- 行事曆 -----
 export const getCalendar = (params) => api.get('/portal/calendar', { params })
