@@ -7,7 +7,7 @@ export const useAcademicTermStore = defineStore('academicTerm', {
     return { school_year, semester }
   },
   actions: {
-    setTerm(school_year, semester) {
+    setTerm(school_year: number, semester: number) {
       this.school_year = school_year
       this.semester = semester
     },

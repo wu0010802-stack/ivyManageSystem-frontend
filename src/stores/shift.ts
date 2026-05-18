@@ -6,6 +6,6 @@ export const useShiftStore = createFetchStore('shift', getShiftTypes, {
   methodName: 'fetchShiftTypes',
   errorMsg: '班別資料載入失敗',
   getters: {
-    activeShiftTypes: (state) => state.shiftTypes.filter(t => t.is_active),
+    activeShiftTypes: (state) => (state as { shiftTypes: { is_active: unknown }[] }).shiftTypes.filter((t: { is_active: unknown }) => t.is_active),
   },
 })

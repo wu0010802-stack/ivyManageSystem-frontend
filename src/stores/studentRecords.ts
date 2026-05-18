@@ -22,7 +22,13 @@ const baseStore = createKeyedFetchStore('studentRecords', getStudentRecordsTimel
   errorMsg: '學生紀錄載入失敗',
 })
 
-const KIND_HANDLERS = {
+type RecordKind = 'incident' | 'assessment' | 'change_log'
+
+const KIND_HANDLERS: Record<RecordKind, {
+  create: (data: unknown) => Promise<unknown>
+  update: (id: number, data: unknown) => Promise<unknown>
+  delete: (id: number) => Promise<unknown>
+}> = {
   incident: {
     create: apiCreateIncident,
     update: apiUpdateIncident,
@@ -40,8 +46,18 @@ const KIND_HANDLERS = {
   },
 }
 
+// 動態附加 mutation actions 的 store 型別
+type StoreWithMutations = ReturnType<typeof baseStore> & {
+  _mutationActionsAttached?: boolean
+  invalidateByStudent: (studentId: number) => void
+  invalidateByKind: (kind: RecordKind) => void
+  createRecord: (kind: RecordKind, payload: Record<string, unknown>) => Promise<Record<string, unknown>>
+  updateRecord: (kind: RecordKind, id: number, payload: Record<string, unknown>) => Promise<Record<string, unknown>>
+  deleteRecord: (kind: RecordKind, id: number, opts?: { student_id?: number }) => Promise<void>
+}
+
 export function useStudentRecordsStore() {
-  const store = baseStore()
+  const store = baseStore() as unknown as StoreWithMutations
 
   if (!store._mutationActionsAttached) {
     Object.assign(store, buildMutationActions(store))
@@ -50,53 +66,53 @@ export function useStudentRecordsStore() {
   return store
 }
 
-function buildMutationActions(store) {
+function buildMutationActions(store: StoreWithMutations) {
   return {
-    invalidateByStudent(studentId) {
+    invalidateByStudent(studentId: number) {
       store.patchLocal(
-        (item) => item && item.student_id === studentId,
+        (item: unknown) => !!(item && (item as { student_id: unknown }).student_id === studentId),
         () => ({}),
       )
       store.invalidateAll()
     },
 
-    invalidateByKind(kind) {
+    invalidateByKind(kind: RecordKind) {
       store.patchLocal(
-        (item) => item && item.type === kind,
+        (item: unknown) => !!(item && (item as { type: unknown }).type === kind),
         () => ({}),
       )
       store.invalidateAll()
     },
 
-    async createRecord(kind, payload) {
+    async createRecord(kind: RecordKind, payload: Record<string, unknown>) {
       const handler = KIND_HANDLERS[kind]
       if (!handler) throw new Error(`unknown record kind: ${kind}`)
-      const res = await handler.create(payload)
+      const res = await handler.create(payload) as { data?: Record<string, unknown> } | null
       const data = res?.data || {}
       const studentId = data.student_id ?? payload.student_id
       domainBus.emit(RECORD_EVENTS.CREATED, {
         kind,
-        student_id: studentId,
-        record_id: data.id,
+        student_id: studentId as number | undefined,
+        record_id: data.id as number | undefined,
       })
       return data
     },
 
-    async updateRecord(kind, id, payload) {
+    async updateRecord(kind: RecordKind, id: number, payload: Record<string, unknown>) {
       const handler = KIND_HANDLERS[kind]
       if (!handler) throw new Error(`unknown record kind: ${kind}`)
-      const res = await handler.update(id, payload)
+      const res = await handler.update(id, payload) as { data?: Record<string, unknown> } | null
       const data = res?.data || {}
       domainBus.emit(RECORD_EVENTS.UPDATED, {
         kind,
-        student_id: data.student_id ?? payload.student_id,
+        student_id: (data.student_id ?? payload.student_id) as number | undefined,
         record_id: id,
         patch: data,
       })
       return data
     },
 
-    async deleteRecord(kind, id, { student_id } = {}) {
+    async deleteRecord(kind: RecordKind, id: number, { student_id }: { student_id?: number } = {}) {
       const handler = KIND_HANDLERS[kind]
       if (!handler) throw new Error(`unknown record kind: ${kind}`)
       await handler.delete(id)

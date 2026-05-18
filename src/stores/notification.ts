@@ -2,9 +2,9 @@ import { defineStore } from 'pinia'
 import { getNotificationSummary } from '@/api/notifications'
 
 const SUMMARY_TTL_MS = 10_000
-let inflightSummaryRequest = null
+let inflightSummaryRequest: Promise<unknown> | null = null
 
-function findActionItem(summary, type) {
+function findActionItem(summary: { action_items?: { type: string; count?: number; breakdown?: Record<string, number> }[] } | null, type: string) {
   return (summary?.action_items || []).find((item) => item.type === type)
 }
 

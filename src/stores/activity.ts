@@ -3,8 +3,8 @@ import { getActivityStatsCharts, getActivityStatsSummary } from '@/api/activity'
 
 const SUMMARY_TTL_MS = 15_000
 const CHARTS_TTL_MS = 60_000
-let inflightSummaryRequest = null
-let inflightChartsRequest = null
+let inflightSummaryRequest: Promise<unknown> | null = null
+let inflightChartsRequest: Promise<unknown> | null = null
 
 /**
  * 課後才藝 store

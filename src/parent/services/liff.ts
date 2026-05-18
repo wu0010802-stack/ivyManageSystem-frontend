@@ -18,9 +18,9 @@ const LIFF_REFRESH_MARKER = 'parent_liff_token_refresh_marker'
 // id_token exp buffer：剩餘 < 60 秒視為需 refresh，避免送出途中過期
 const ID_TOKEN_REFRESH_BUFFER_SECONDS = 60
 
-let _initPromise = null
+let _initPromise: Promise<void> | null = null
 
-export function initLiff() {
+export function initLiff(): Promise<void> {
   if (_initPromise) return _initPromise
   if (!LIFF_ID) {
     _initPromise = Promise.reject(
@@ -36,18 +36,18 @@ export function initLiff() {
   return _initPromise
 }
 
-export function idTokenNeedsRefresh(payload, nowSec) {
+export function idTokenNeedsRefresh(payload: { exp?: number } | null | undefined, nowSec: number): boolean {
   if (!payload || typeof payload.exp !== 'number') return true
   return payload.exp - nowSec < ID_TOKEN_REFRESH_BUFFER_SECONDS
 }
 
-export function clearLiffTokenRefreshMarker() {
+export function clearLiffTokenRefreshMarker(): void {
   try {
     sessionStorage.removeItem(LIFF_REFRESH_MARKER)
   } catch (_) { /* sessionStorage 不可用（隱私模式）→ 忽略 */ }
 }
 
-export function forceLiffReloginOnce({ redirectUri, nowMs }) {
+export function forceLiffReloginOnce({ redirectUri, nowMs }: { redirectUri: string; nowMs: number }): boolean {
   // 同一 LIFF callback 來回只強制重 login 一次，避免無限 redirect
   try {
     if (sessionStorage.getItem(LIFF_REFRESH_MARKER)) return false

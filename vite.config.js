@@ -72,8 +72,8 @@ function manualChunks(id) {
         id.includes('/src/api/studentIncidents.ts') ||
         id.includes('/src/api/classrooms.ts') ||
         id.includes('/src/api/index.ts') ||
-        id.includes('/src/stores/_createFetchStore.js') ||
-        id.includes('/src/stores/employee.js') ||
+        id.includes('/src/stores/_createFetchStore.ts') ||
+        id.includes('/src/stores/employee.ts') ||
         id.includes('/src/utils/auth.ts') ||
         id.includes('/src/utils/error.ts') ||
         id.includes('/src/utils/errorHandler.ts') ||
@@ -85,7 +85,7 @@ function manualChunks(id) {
     if (
         id.includes('/src/views/activity/') ||
         id.includes('/src/api/activity.ts') ||
-        id.includes('/src/stores/activity.js')
+        id.includes('/src/stores/activity.ts')
     ) {
         return 'activity-admin'
     }

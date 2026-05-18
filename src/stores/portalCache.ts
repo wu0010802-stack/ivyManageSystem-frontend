@@ -2,6 +2,11 @@ import { defineStore } from 'pinia'
 
 const DEFAULT_TTL_MS = 5 * 60 * 1000 // 5 分鐘
 
+interface CacheEntry {
+  value: unknown
+  expiresAt: number
+}
+
 /**
  * Portal 共用本地 cache。
  *
@@ -18,22 +23,22 @@ const DEFAULT_TTL_MS = 5 * 60 * 1000 // 5 分鐘
 export const usePortalCache = defineStore('portalCache', {
   state: () => ({
     // entries: Map<namespace, Map<key, { value, expiresAt }>>
-    entries: new Map(),
+    entries: new Map<string, Map<string, CacheEntry>>(),
   }),
   actions: {
-    _ns(namespace) {
+    _ns(namespace: string): Map<string, CacheEntry> {
       let ns = this.entries.get(namespace)
       if (!ns) {
-        ns = new Map()
+        ns = new Map<string, CacheEntry>()
         this.entries.set(namespace, ns)
       }
       return ns
     },
-    set(namespace, key, value, { ttlMs = DEFAULT_TTL_MS } = {}) {
+    set(namespace: string, key: string | number, value: unknown, { ttlMs = DEFAULT_TTL_MS } = {}) {
       const ns = this._ns(namespace)
       ns.set(String(key), { value, expiresAt: Date.now() + ttlMs })
     },
-    get(namespace, key) {
+    get(namespace: string, key: string | number): unknown {
       const ns = this.entries.get(namespace)
       if (!ns) return undefined
       const entry = ns.get(String(key))
@@ -44,10 +49,10 @@ export const usePortalCache = defineStore('portalCache', {
       }
       return entry.value
     },
-    has(namespace, key) {
+    has(namespace: string, key: string | number) {
       return this.get(namespace, key) !== undefined
     },
-    invalidate(namespace, key = undefined) {
+    invalidate(namespace: string, key?: string | number) {
       if (key === undefined) {
         this.entries.delete(namespace)
         return

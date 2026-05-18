@@ -29,10 +29,17 @@ function uuid() {
   return Math.random().toString(36).slice(2) + Date.now().toString(36)
 }
 
+// 訊息 bucket（per thread）
+interface MessageBucket {
+  items: Record<string, unknown>[]
+  next_cursor: string | null
+  hasMore: boolean
+}
+
 export const useMessagesStore = defineStore('parentMessages', () => {
-  const threads = ref([])
+  const threads = ref<Record<string, unknown>[]>([])
   const threadsLoaded = ref(false)
-  const messagesByThread = ref({}) // thread_id → { items: [], next_cursor, hasMore }
+  const messagesByThread = ref<Record<string, MessageBucket>>({}) // thread_id → { items: [], next_cursor, hasMore }
   const unreadCount = ref(0)
 
   async function fetchThreads(force = false) {
@@ -42,8 +49,8 @@ export const useMessagesStore = defineStore('parentMessages', () => {
     threadsLoaded.value = true
   }
 
-  async function fetchMessages(threadId, { reset = false } = {}) {
-    const cur = messagesByThread.value[threadId] || {
+  async function fetchMessages(threadId: number, { reset = false } = {}) {
+    const cur: MessageBucket = messagesByThread.value[threadId] || {
       items: [],
       next_cursor: null,
       hasMore: true,
@@ -54,10 +61,10 @@ export const useMessagesStore = defineStore('parentMessages', () => {
       cur.hasMore = true
     }
     if (!cur.hasMore && !reset) return cur
-    const params = { limit: 30 }
+    const params: Record<string, unknown> = { limit: 30 }
     if (cur.next_cursor) params.cursor = cur.next_cursor
     const { data } = await listThreadMessages(threadId, params)
-    const newItems = data?.items || []
+    const newItems: Record<string, unknown>[] = data?.items || []
     // 後端回傳 desc（新→舊）；store 內部維持 desc 但 UI 渲染時會 reverse
     cur.items = [...cur.items, ...newItems]
     cur.next_cursor = data?.next_cursor || null
@@ -72,11 +79,11 @@ export const useMessagesStore = defineStore('parentMessages', () => {
    * @param body string
    * @param attachments File[]（可選）
    */
-  async function send(threadId, body, attachments = []) {
+  async function send(threadId: number, body: string, attachments: File[] = []) {
     const cri = uuid()
     // 樂觀占位
     const tempId = `tmp-${cri}`
-    const placeholder = {
+    const placeholder: Record<string, unknown> = {
       id: tempId,
       thread_id: threadId,
       sender_role: 'parent',
@@ -86,7 +93,7 @@ export const useMessagesStore = defineStore('parentMessages', () => {
       created_at: new Date().toISOString(),
       _pending: true,
     }
-    const cur = messagesByThread.value[threadId] || {
+    const cur: MessageBucket = messagesByThread.value[threadId] || {
       items: [],
       next_cursor: null,
       hasMore: false,
@@ -100,17 +107,18 @@ export const useMessagesStore = defineStore('parentMessages', () => {
         client_request_id: cri,
       })
       // 替換 placeholder
-      cur.items = cur.items.map((m) => (m.id === tempId ? data : m))
+      cur.items = cur.items.map((m) => (m.id === tempId ? (data as Record<string, unknown>) : m))
       messagesByThread.value = { ...messagesByThread.value, [threadId]: cur }
 
       // 上傳附件（一次一檔）
       for (const f of attachments) {
         try {
-          const { data: att } = await attachToMessage(threadId, data.id, f)
+          const serverMsg = data as Record<string, unknown>
+          const { data: att } = await attachToMessage(threadId, serverMsg.id as number, f)
           // 把 attachment append 到該 message
           cur.items = cur.items.map((m) =>
-            m.id === data.id
-              ? { ...m, attachments: [...(m.attachments || []), att] }
+            m.id === serverMsg.id
+              ? { ...m, attachments: [...((m.attachments as unknown[]) || []), att] }
               : m,
           )
           messagesByThread.value = {
@@ -130,7 +138,7 @@ export const useMessagesStore = defineStore('parentMessages', () => {
     }
   }
 
-  async function markRead(threadId) {
+  async function markRead(threadId: number) {
     await markThreadRead(threadId)
     // 更新本地 thread.unread_count = 0
     threads.value = threads.value.map((t) =>
@@ -139,10 +147,10 @@ export const useMessagesStore = defineStore('parentMessages', () => {
     await refreshUnread()
   }
 
-  async function recall(messageId) {
+  async function recall(messageId: number) {
     await recallMessage(messageId)
     // 把所有 thread 內對應 id 的 message 標 deleted
-    const updated = {}
+    const updated: Record<string, MessageBucket> = {}
     for (const [tid, bucket] of Object.entries(messagesByThread.value)) {
       bucket.items = bucket.items.map((m) =>
         m.id === messageId ? { ...m, deleted: true, body: null } : m,
@@ -155,7 +163,7 @@ export const useMessagesStore = defineStore('parentMessages', () => {
   async function refreshUnread() {
     try {
       const { data } = await getMessageUnreadCount()
-      unreadCount.value = data?.unread_count || 0
+      unreadCount.value = (data as Record<string, unknown>)?.unread_count as number || 0
     } catch {
       /* ignore */
     }
