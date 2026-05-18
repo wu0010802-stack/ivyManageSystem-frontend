@@ -70,6 +70,15 @@ function makeFixture() {
             total: 300000,
             is_subtotal: true,
           },
+          {
+            key: 'income_registration',
+            label: '費別切片：新生註冊費',
+            unit: 'amount',
+            monthly: [50000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            total: 50000,
+            is_subtotal: false,
+            is_breakdown: true,
+          },
         ],
       },
     ],
@@ -212,6 +221,21 @@ describe('MonthlyPnLPanel', () => {
     // 第 3 個 cell (index 2) = monthly[2] = 0
     expect(zeroSampleCells[2].classes()).not.toContain('cell-positive')
     expect(zeroSampleCells[2].classes()).not.toContain('cell-negative')
+  })
+
+  it('切片資訊列加上 row-breakdown class（縮排 + 柔色，避免被誤判為重複計算）', async () => {
+    mockGetMonthlyPnL.mockResolvedValueOnce(makeFixture())
+    const w = mount(MonthlyPnLPanel, {
+      props: { year: 2026 },
+      global: globalConfig,
+    })
+    await flushPromises()
+
+    const breakdownRow = w.find('tr[data-row-key="income_registration"]')
+    expect(breakdownRow.exists()).toBe(true)
+    expect(breakdownRow.classes()).toContain('row-breakdown')
+    // 切片列不應同時被當小計
+    expect(breakdownRow.classes()).not.toContain('row-subtotal')
   })
 
   it('小計列加上 row-subtotal class（用於粗體 + 淺底）', async () => {

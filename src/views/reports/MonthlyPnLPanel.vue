@@ -111,7 +111,10 @@ function netCellClass(v) {
             <tr
               v-for="row in section.rows"
               :key="`${section.key}-${row.key}`"
-              :class="{ 'row-subtotal': row.is_subtotal }"
+              :class="{
+                'row-subtotal': row.is_subtotal,
+                'row-breakdown': row.is_breakdown,
+              }"
               :data-row-key="row.key"
             >
               <th class="sticky-col row-label">{{ row.label }}</th>
@@ -274,6 +277,16 @@ function netCellClass(v) {
 }
 .row-subtotal .sticky-col {
   background: var(--el-fill-color-lighter);
+}
+
+/* 切片資訊列：縮排 + 柔色，視覺降階以免被誤判為重複計算 */
+.row-breakdown td,
+.row-breakdown th {
+  color: var(--el-text-color-secondary);
+  font-style: italic;
+}
+.row-breakdown .row-label {
+  padding-left: 24px;
 }
 
 /* 4 條合計尾列 */
