@@ -1,21 +1,48 @@
 import api from './index'
 
+/**
+ * Typed API surface for appraisal (考核管理).
+ *
+ * @typedef {import('./_generated/typed').AxiosResp<'/appraisal/cycles', 'get'>}                                  ListCyclesResp
+ * @typedef {import('./_generated/typed').ApiBody<'/appraisal/cycles', 'post'>}                                    CycleCreatePayload
+ * @typedef {import('./_generated/typed').AxiosResp<'/appraisal/cycles', 'post'>}                                 CreateCycleResp
+ * @typedef {import('./_generated/typed').ApiBody<'/appraisal/cycles/{cycle_id}', 'patch'>}                        CyclePatchPayload
+ * @typedef {import('./_generated/typed').AxiosResp<'/appraisal/cycles/{cycle_id}', 'patch'>}                     PatchCycleResp
+ * @typedef {import('./_generated/typed').AxiosResp<'/appraisal/catalog', 'get'>}                                  ListCatalogResp
+ * @typedef {import('./_generated/typed').AxiosResp<'/appraisal/cycles/{cycle_id}/participants', 'get'>}          ListParticipantsResp
+ */
+
 // ============ Cycles 考核週期 ============
 
+/** @returns {ListCyclesResp} */
 export const listAppraisalCycles = () => api.get('/appraisal/cycles')
 
+/**
+ * @param {CycleCreatePayload} payload
+ * @returns {CreateCycleResp}
+ */
 export const createAppraisalCycle = (payload) =>
   api.post('/appraisal/cycles', payload)
 
+/**
+ * @param {number} cycleId
+ * @param {CyclePatchPayload} payload
+ * @returns {PatchCycleResp}
+ */
 export const patchAppraisalCycle = (cycleId, payload) =>
   api.patch(`/appraisal/cycles/${cycleId}`, payload)
 
 // ============ Catalog（16 項加減分定義）============
 
+/** @returns {ListCatalogResp} */
 export const listAppraisalCatalog = () => api.get('/appraisal/catalog')
 
 // ============ Participants ============
 
+/**
+ * @param {number} cycleId
+ * @returns {ListParticipantsResp}
+ */
 export const listAppraisalParticipants = (cycleId) =>
   api.get(`/appraisal/cycles/${cycleId}/participants`)
 

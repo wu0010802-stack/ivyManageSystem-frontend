@@ -2,7 +2,7 @@ import axios from 'axios'
 import { setUserInfo, clearAuth } from '@/utils/auth'
 import { classifyError } from '@/utils/errorHandler'
 import { applyDedupe } from '@/utils/apiDedupe'
-import { captureException as sentryCapture } from '@/utils/sentry'
+import { captureException as sentryCapture, sanitizeUrl } from '@/utils/sentry'
 
 const api = axios.create({
     baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
@@ -85,10 +85,12 @@ api.interceptors.response.use(
 
         // Sentry 上報：>=500 server error 或 network error（無 response）；
         // 4xx 預期路徑（401/403/404/422 等）由 UI errorHandler 處理，不送 Sentry。
+        // url 走 sanitizeUrl 才送：path id 去識別 + query 內 PII（phone/email/id_number...）遮罩，
+        // 避免 ?phone=0912 / ?id_number=A1 等原樣灌進 Sentry extra。
         const status = error.response?.status
         if (!error.response || (typeof status === 'number' && status >= 500)) {
             sentryCapture(error, {
-                url: error.config?.url,
+                url: sanitizeUrl(error.config?.url),
                 method: error.config?.method,
                 status,
             }).catch(() => {})

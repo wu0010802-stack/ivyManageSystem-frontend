@@ -45,9 +45,52 @@ const PII_KEY_EXEMPT_SUBSTRINGS = [
 //   /api/students/123/measurements/45 → /api/students/:id/measurements/:id
 const URL_ID_RE = /\/(\d+)(?=\/|$|\?)/g
 
+/**
+ * Sanitize URL：path 中段純數字 → `:id`；query 內 PII key 值 → `[Filtered]`。
+ *
+ * Query 內 PII 過去完全繞過 scrubber（search?phone=0912 / ?id_number=A1 等都會
+ * 原樣進 Sentry）。改用 URLSearchParams 拆 path + query，path 跑既有 id 替換，
+ * query 用相同 denylist 做 key-based 遮罩，最後拼回。與後端 _sanitize_url 對齊。
+ */
 export function sanitizeUrl(url) {
   if (typeof url !== 'string' || !url) return url
-  return url.replace(URL_ID_RE, '/:id')
+  const qIdx = url.indexOf('?')
+  if (qIdx < 0) return url.replace(URL_ID_RE, '/:id')
+
+  const hashIdx = url.indexOf('#', qIdx)
+  const queryEnd = hashIdx < 0 ? url.length : hashIdx
+  const path = url.slice(0, qIdx)
+  const query = url.slice(qIdx + 1, queryEnd)
+  const fragment = hashIdx < 0 ? '' : url.slice(hashIdx)
+
+  const cleanedPath = path.replace(URL_ID_RE, '/:id')
+  if (!query) return cleanedPath + '?' + fragment
+
+  const params = new URLSearchParams(query)
+  const scrubbed = new URLSearchParams()
+  for (const [k, v] of params) {
+    scrubbed.append(k, keyIsPii(k) ? FILTERED : v)
+  }
+  return cleanedPath + '?' + scrubbed.toString() + fragment
+}
+
+/**
+ * employees.id / parents.id 對 Sentry 是擬個資（pseudonymous identifier）；
+ * FNV-1a 32-bit hash 保留 issue grouping 能力但移除直連性。
+ *
+ * 注意：後端用 blake2b（Python 內建），前端用 FNV-1a（同步、無依賴）；
+ * 兩邊 hash 不同是已知 trade-off。同個 user 在 FE/BE Sentry 會顯示為不同
+ * 字串 — 這沒問題，因為 FE/BE event 透過 entry tag 區分而非靠 user 對齊。
+ */
+export function hashUserId(value) {
+  if (value === null || value === undefined || value === '') return value
+  const s = String(value)
+  let hash = 2166136261
+  for (let i = 0; i < s.length; i++) {
+    hash ^= s.charCodeAt(i)
+    hash = Math.imul(hash, 16777619)
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0')
 }
 
 function keyIsPii(key) {
@@ -69,13 +112,31 @@ export function scrubMapping(obj) {
   return out
 }
 
+/**
+ * request.query_string 可能是 string 或 dict；前者 parse 後跑相同 denylist。
+ * 與後端 _scrub_query_string 對齊。
+ */
+export function scrubQueryString(value) {
+  if (typeof value === 'string') {
+    if (!value) return value
+    const params = new URLSearchParams(value)
+    const scrubbed = new URLSearchParams()
+    for (const [k, v] of params) {
+      scrubbed.append(k, keyIsPii(k) ? FILTERED : v)
+    }
+    return scrubbed.toString()
+  }
+  return scrubMapping(value)
+}
+
 export function scrubEvent(event) {
   if (!event || typeof event !== 'object') return event
 
   if (event.request && typeof event.request === 'object') {
     const req = event.request
     if (typeof req.url === 'string') req.url = sanitizeUrl(req.url)
-    for (const sect of ['headers', 'cookies', 'data', 'query_string', 'env']) {
+    if ('query_string' in req) req.query_string = scrubQueryString(req.query_string)
+    for (const sect of ['headers', 'cookies', 'data', 'env']) {
       if (sect in req) req[sect] = scrubMapping(req[sect])
     }
   }
@@ -86,6 +147,11 @@ export function scrubEvent(event) {
 
   for (const sect of ['extra', 'contexts', 'tags', 'user']) {
     if (sect in event) event[sect] = scrubMapping(event[sect])
+  }
+
+  // user.id 對映 employees.id / parents.id —— hash 化避免直連個人
+  if (event.user && typeof event.user === 'object' && 'id' in event.user) {
+    event.user.id = hashUserId(event.user.id)
   }
 
   if (event.breadcrumbs && Array.isArray(event.breadcrumbs.values)) {
@@ -109,6 +175,10 @@ export function scrubBreadcrumb(crumb) {
   }
   return crumb
 }
+
+// Module-level cache：init 成功後 captureException 可同步使用，避免每次重複
+// dynamic import 與「import resolve 前 context 已銷毀」造成的 lost event 風險。
+let _SentryRef = null
 
 /**
  * 初始化 Sentry，並掛到指定的 Vue app。
@@ -177,22 +247,25 @@ export async function initSentry(app, opts = {}) {
   if (opts.entry) {
     Sentry.setTag('entry', opts.entry)
   }
+  _SentryRef = Sentry
   return true
 }
 
 /**
  * 顯式上報 exception（供 axios interceptor 對 >=500 / network error 呼叫）。
- * Sentry 未 init 時是 no-op。
+ * Sentry 未 init / DSN 缺 / @sentry/vue 載入失敗 → no-op（_SentryRef 為 null）。
+ *
+ * 簽名仍為 async：sentry capture 失敗不該傳染回 caller，已有 caller 慣用
+ * `.catch(() => {})` 防呆。
  */
 export async function captureException(err, context = {}) {
-  if (!(import.meta.env.VITE_SENTRY_DSN || '').trim()) return
+  if (!_SentryRef) return
   try {
-    const Sentry = await import('@sentry/vue')
-    Sentry.withScope((scope) => {
+    _SentryRef.withScope((scope) => {
       for (const [k, v] of Object.entries(context)) {
         scope.setExtra(k, v)
       }
-      Sentry.captureException(err)
+      _SentryRef.captureException(err)
     })
   } catch {
     /* 上報失敗不能傳染 */
