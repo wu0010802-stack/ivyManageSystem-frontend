@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /**
  * 請假附件區塊（presentational + emits）。
  *
@@ -14,19 +14,33 @@
  */
 import ParentIcon from '@/parent/components/ParentIcon.vue'
 
-defineProps({
-  attachments: { type: Array, default: () => [] },
-  editable: { type: Boolean, default: false },
-  uploading: { type: Boolean, default: false },
-  urlResolver: { type: Function, required: true },
+interface Attachment {
+  id: number
+  original_filename?: string
+  [key: string]: unknown
+}
+
+withDefaults(defineProps<{
+  attachments?: Attachment[]
+  editable?: boolean
+  uploading?: boolean
+  urlResolver: (attachment: Attachment) => string
+}>(), {
+  attachments: () => [],
+  editable: false,
+  uploading: false,
 })
 
-const emit = defineEmits(['upload', 'remove'])
+const emit = defineEmits<{
+  'upload': [file: File]
+  'remove': [attachment: Attachment]
+}>()
 
-function onFileChange(e) {
-  const file = e.target.files?.[0]
+function onFileChange(e: Event): void {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
   // 先清空 value 確保使用者可再次選同一檔案
-  e.target.value = ''
+  input.value = ''
   if (!file) return
   emit('upload', file)
 }
