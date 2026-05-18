@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { reactive, ref, onMounted } from 'vue'
 import { getBonusConfig, updateBonusConfig, getGradeTargets, updateGradeTargets, getPositionSalary, updatePositionSalary, comparePositionSalary, syncPositionSalary, getTitles, updateTitle } from '@/api/config'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -34,7 +34,7 @@ const bonusConfig = reactive({
   art_teacher_festival: 2000,
 })
 
-const gradeTargets = ref([])
+const gradeTargets = ref<Record<string, unknown>[]>([])
 
 const fetchBonusConfig = async () => {
   loadingBonus.value = true
@@ -51,9 +51,9 @@ const fetchBonusConfig = async () => {
 const fetchGradeTargets = async () => {
   try {
     const response = await getGradeTargets()
-    gradeTargets.value = Object.entries(response.data).map(([name, data]) => ({
+    gradeTargets.value = Object.entries(response.data as Record<string, Record<string, unknown>>).map(([name, data]) => ({
       name,
-      ...data
+      ...data,
     }))
   } catch (error) {
     ElMessage.error('年級目標載入失敗')
@@ -80,7 +80,7 @@ const saveBonusConfig = async () => {
         },
       }
     )
-    reason = result.value.trim()
+    reason = (result as { value: string }).value.trim()
   } catch {
     return // 使用者按取消
   }
@@ -90,7 +90,7 @@ const saveBonusConfig = async () => {
     await updateBonusConfig({ ...bonusConfig, reason })
     ElMessage.success('薪資設定已儲存')
   } catch (error) {
-    const detail = error?.response?.data?.detail
+    const detail = (error as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
     ElMessage.error(typeof detail === 'string' ? detail : '薪資設定儲存失敗')
   } finally {
     loadingBonus.value = false
@@ -135,13 +135,13 @@ const positionSalary = reactive({
   principal: null,
 })
 const loadingPositionSalary = ref(false)
-const compareRows = ref([])
+const compareRows = ref<Record<string, unknown>[]>([])
 const compareOutOfSync = ref(0)
 const loadingCompare = ref(false)
 const syncingAll = ref(false)
-const syncingIds = ref(new Set())
+const syncingIds = ref(new Set<number>())
 
-const STANDARD_KEY_LABEL = {
+const STANDARD_KEY_LABEL: Record<string, string> = {
   head_teacher_a: '班導師 A 級', head_teacher_b: '班導師 B 級', head_teacher_c: '班導師 C 級',
   assistant_teacher_a: '副班導師 A 級', assistant_teacher_b: '副班導師 B 級', assistant_teacher_c: '副班導師 C 級',
   admin_staff: '行政', english_teacher: '美語', art_teacher: '藝術',
@@ -187,23 +187,23 @@ const fetchCompare = async () => {
   }
 }
 
-const syncOne = async (row) => {
-  syncingIds.value = new Set([...syncingIds.value, row.employee_id])
+const syncOne = async (row: Record<string, unknown>) => {
+  syncingIds.value = new Set([...syncingIds.value, row.employee_id as number])
   try {
-    await syncPositionSalary([row.employee_id])
-    ElMessage.success(`${row.name} 底薪已更新為 $${row.standard_salary.toLocaleString()}`)
+    await syncPositionSalary([row.employee_id as number])
+    ElMessage.success(`${row.name} 底薪已更新為 $${(row.standard_salary as number).toLocaleString()}`)
     await fetchCompare()
   } catch {
     ElMessage.error('同步失敗')
   } finally {
     const s = new Set(syncingIds.value)
-    s.delete(row.employee_id)
+    s.delete(row.employee_id as number)
     syncingIds.value = s
   }
 }
 
 // 階段 2-D：職稱→節慶獎金等級對應（job_titles.bonus_grade）
-const jobTitles = ref([])
+const jobTitles = ref<Record<string, unknown>[]>([])
 const loadingTitles = ref(false)
 const fetchJobTitles = async () => {
   loadingTitles.value = true
@@ -216,9 +216,9 @@ const fetchJobTitles = async () => {
     loadingTitles.value = false
   }
 }
-const updateTitleGrade = async (title) => {
+const updateTitleGrade = async (title: Record<string, unknown>) => {
   try {
-    await updateTitle(title.id, { name: title.name, bonus_grade: title.bonus_grade || null })
+    await updateTitle(title.id as number, { name: title.name, bonus_grade: title.bonus_grade || null })
     ElMessage.success(`${title.name} 等級已更新`)
   } catch {
     ElMessage.error(`${title.name} 更新失敗`)

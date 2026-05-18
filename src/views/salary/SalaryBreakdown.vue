@@ -47,27 +47,33 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { simulateSalary } from '@/api/salary'
 import { money } from '@/utils/format'
 
-const props = defineProps({
-  row: { type: Object, required: true },
-  year: { type: Number, required: true },
-  month: { type: Number, required: true },
-})
-const emit = defineEmits(['preview-changed', 'reset'])
+const props = defineProps<{
+  row: Record<string, unknown>
+  year: number
+  month: number
+}>()
+const emit = defineEmits<{
+  (e: 'preview-changed', value: { employee_id: unknown; simulated: unknown }): void
+  (e: 'reset', value: { employee_id: unknown }): void
+}>()
 
-const enrollment = computed(() => props.row?.breakdown?.enrollment ?? null)
+interface EnrollmentInfo { total: number; snapshot_date?: string; classroom_name?: string; grade_name?: string }
+interface PreviewResult { net_pay?: number; festival_bonus?: number; overtime_bonus?: number }
+
+const enrollment = computed(() => (props.row?.breakdown as Record<string, unknown>)?.enrollment as EnrollmentInfo ?? null)
 const assistantNames = computed(
-  () => props.row?.breakdown?.assistant?.by_classroom ?? []
+  () => ((props.row?.breakdown as Record<string, unknown>)?.assistant as Record<string, string[]>)?.by_classroom ?? []
 )
 
-const overrideCount = ref(enrollment.value?.total ?? 0)
-const preview = ref(null)
+const overrideCount = ref<number>(enrollment.value?.total ?? 0)
+const preview = ref<PreviewResult | null>(null)
 const simulating = ref(false)
 
 const router = useRouter()
@@ -75,12 +81,12 @@ const classroomLink = computed(() => router.resolve({ path: '/classrooms' }).hre
 
 const formattedSnapshot = computed(() => {
   const iso = enrollment.value?.snapshot_date
-  return iso ? iso.replaceAll('-', '/') : ''
+  return iso ? iso.replace(/-/g, '/') : ''
 })
 
 const netDiff = computed(() => {
   if (!preview.value) return 0
-  return Number(preview.value.net_pay ?? 0) - Number(props.row.net_pay ?? 0)
+  return Number(preview.value.net_pay ?? 0) - Number((props.row.net_pay as number | undefined) ?? 0)
 })
 const netDiffLabel = computed(() => {
   const diff = netDiff.value
@@ -93,12 +99,17 @@ const runSimulate = async () => {
   simulating.value = true
   try {
     const resp = await simulateSalary({
-      employee_id: props.row.employee_id,
+      employee_id: props.row.employee_id as number,
       year: props.year,
       month: props.month,
-      overrides: { enrollment_override: overrideCount.value },
+      overrides: {
+        enrollment_override: overrideCount.value,
+        extra_overtime_pay: 0,
+        extra_personal_leave_hours: 0,
+        extra_sick_leave_hours: 0,
+      },
     })
-    preview.value = resp.data?.simulated ?? null
+    preview.value = ((resp.data as Record<string, unknown>)?.simulated ?? null) as PreviewResult | null
     if (preview.value) {
       emit('preview-changed', {
         employee_id: props.row.employee_id,

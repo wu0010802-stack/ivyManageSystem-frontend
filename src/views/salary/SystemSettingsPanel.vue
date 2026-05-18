@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Check, Refresh } from '@element-plus/icons-vue'
@@ -9,33 +9,43 @@ import {
 import { apiError } from '@/utils/error'
 import { hasPermission } from '@/utils/auth'
 
+interface BankConfig {
+  config_key: string
+  config_value: string
+  description?: string
+  is_default?: boolean
+  _editValue: string
+  _dirty: boolean
+  [key: string]: unknown
+}
+
 const canEdit = ref(hasPermission('SETTINGS_WRITE'))
 
-const bankConfigs = ref([])
+const bankConfigs = ref<BankConfig[]>([])
 const loading = ref(false)
-const savingKey = ref(null)
+const savingKey = ref<string | null>(null)
 
 const fetchBankConfigs = async () => {
   loading.value = true
   try {
     const res = await listSystemConfigs('bank')
-    bankConfigs.value = (res.data.items || []).map((it) => ({
+    bankConfigs.value = ((res.data as { items?: Record<string, unknown>[] }).items || []).map((it) => ({
       ...it,
-      _editValue: it.config_value,
+      _editValue: it.config_value as string,
       _dirty: false,
-    }))
+    })) as BankConfig[]
   } catch (e) {
-    ElMessage.error('載入失敗：' + apiError(e, e.message))
+    ElMessage.error('載入失敗：' + apiError(e, (e as Error).message))
   } finally {
     loading.value = false
   }
 }
 
-const onValueChange = (cfg) => {
+const onValueChange = (cfg: BankConfig) => {
   cfg._dirty = cfg._editValue !== cfg.config_value
 }
 
-const saveConfig = async (cfg) => {
+const saveConfig = async (cfg: BankConfig) => {
   if (!cfg._dirty) return
   savingKey.value = cfg.config_key
   try {
@@ -43,18 +53,18 @@ const saveConfig = async (cfg) => {
       config_value: cfg._editValue,
     })
     Object.assign(cfg, res.data, {
-      _editValue: res.data.config_value,
+      _editValue: (res.data as { config_value: string }).config_value,
       _dirty: false,
     })
     ElMessage.success(`已更新「${cfg.description || cfg.config_key}」`)
   } catch (e) {
-    ElMessage.error('儲存失敗：' + apiError(e, e.message))
+    ElMessage.error('儲存失敗：' + apiError(e, (e as Error).message))
   } finally {
     savingKey.value = null
   }
 }
 
-const resetConfig = (cfg) => {
+const resetConfig = (cfg: BankConfig) => {
   cfg._editValue = cfg.config_value
   cfg._dirty = false
 }

@@ -1,20 +1,47 @@
-<script setup>
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+<script setup lang="ts">
+import { ref, reactive, computed, onMounted } from 'vue'
 import { simulateSalary, getEmployeeSalaryDebug } from '@/api/salary'
 import { useEmployeeStore } from '@/stores/employee'
 import { ElMessage } from 'element-plus'
 import { QuestionFilled } from '@element-plus/icons-vue'
 import { money } from '@/utils/format'
 
+interface EmployeeOption { id: number; name: string; title?: string; job_title?: string; is_active?: boolean; employee_type?: string }
+
+interface SimRow {
+  base_salary?: number
+  festival_bonus?: number
+  overtime_bonus?: number
+  overtime_pay?: number
+  supervisor_dividend?: number
+  meeting_overtime_pay?: number
+  birthday_bonus?: number
+  labor_insurance?: number
+  health_insurance?: number
+  pension_self?: number
+  late_deduction?: number
+  early_leave_deduction?: number
+  leave_deduction?: number
+  absence_deduction?: number
+  meeting_absence_deduction?: number
+  gross_salary?: number
+  total_deductions?: number
+  net_pay?: number
+  total_with_bonus?: number
+  late_count?: number
+  early_leave_count?: number
+  [key: string]: number | undefined
+}
+
 const employeeStore = useEmployeeStore()
 const employees = computed(() =>
-  employeeStore.employees.filter(e => e.is_active && e.employee_type !== 'hourly')
+  (employeeStore.employees as EmployeeOption[]).filter(e => e.is_active && e.employee_type !== 'hourly')
 )
 const loading = ref(false)
-const result = ref(null)
-const debugResult = ref(null)
+const result = ref<Record<string, unknown> | null>(null)
+const debugResult = ref<Record<string, unknown> | null>(null)
 
-const formatJson = (obj) => JSON.stringify(obj, null, 2)
+const formatJson = (obj: unknown) => JSON.stringify(obj, null, 2)
 
 const currentYear = new Date().getFullYear()
 const currentMonth = new Date().getMonth() + 1
@@ -63,7 +90,7 @@ const buildCacheKey = () => {
   return JSON.stringify(payload)
 }
 
-const readCache = () => {
+const readCache = (): Record<string, { ts: number; data: unknown }> => {
   try {
     return JSON.parse(sessionStorage.getItem(STORAGE_KEY_CACHE) || '{}') || {}
   } catch {
@@ -71,7 +98,7 @@ const readCache = () => {
   }
 }
 
-const writeCache = (cache) => {
+const writeCache = (cache: Record<string, { ts: number; data: unknown }>) => {
   try {
     sessionStorage.setItem(STORAGE_KEY_CACHE, JSON.stringify(cache))
   } catch {
@@ -79,14 +106,14 @@ const writeCache = (cache) => {
   }
 }
 
-const pruneCache = (cache) => {
+const pruneCache = (cache: Record<string, { ts: number; data: unknown }>) => {
   const entries = Object.entries(cache)
   const fresh = entries.filter(([, v]) => v && v.ts && Date.now() - v.ts < CACHE_TTL_MS)
   fresh.sort(([, a], [, b]) => b.ts - a.ts)
   return Object.fromEntries(fresh.slice(0, CACHE_MAX_ENTRIES))
 }
 
-const runSimulate = async ({ useCache = true } = {}) => {
+const runSimulate = async ({ useCache = true }: { useCache?: boolean } = {}) => {
   if (!form.employee_id) {
     ElMessage.warning('請先選擇員工')
     return
@@ -97,7 +124,7 @@ const runSimulate = async ({ useCache = true } = {}) => {
     const cache = pruneCache(readCache())
     const hit = cache[cacheKey]
     if (hit && hit.data) {
-      result.value = hit.data
+      result.value = hit.data as Record<string, unknown>
       persistLast(hit.data)
       ElMessage.success({ message: '已載入快取結果', duration: 1500 })
       return
@@ -131,20 +158,21 @@ const runSimulate = async ({ useCache = true } = {}) => {
         month: form.month,
       }).catch(() => null),
     ])
-    result.value = simRes.data
-    debugResult.value = dbgRes?.data || null
+    result.value = simRes.data as Record<string, unknown>
+    debugResult.value = (dbgRes as { data?: unknown } | null)?.data as Record<string, unknown> || null
     persistLast(simRes.data)
     const cache = pruneCache(readCache())
     cache[cacheKey] = { ts: Date.now(), data: simRes.data }
     writeCache(pruneCache(cache))
   } catch (e) {
-    ElMessage.error('試算失敗: ' + (e.response?.data?.detail || e.message))
+    const detail = (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
+    ElMessage.error('試算失敗: ' + (detail || (e as Error).message))
   } finally {
     loading.value = false
   }
 }
 
-const persistLast = (data) => {
+const persistLast = (data: unknown) => {
   try {
     sessionStorage.setItem(
       STORAGE_KEY_LAST,
@@ -194,7 +222,7 @@ const hasActual = computed(() => result.value?.actual != null)
 // 試算結果若節慶+超額同時為 0，且原本應該有獎金（actual 有值），多半是這條規則觸發。
 const bonusLikelyZeroedByLeave = computed(() => {
   if (!result.value) return false
-  const s = result.value.simulated
+  const s = result.value.simulated as SimRow | undefined
   if (!s) return false
   const bonusSum = (s.festival_bonus || 0) + (s.overtime_bonus || 0)
   if (bonusSum !== 0) return false
@@ -208,34 +236,34 @@ const bonusLikelyZeroedByLeave = computed(() => {
 // overtime_bonus（engine.py:1764-1770），所以員工在發放月實際拿到的總額 = net_pay
 // + festival + overtime（festival/overtime 走獨立轉帳名冊）。與 SalaryView「含獎金實領」
 // 同公式，讓試算結果可直接對照員工最終到手金額。
-const computeTotalWithBonus = (obj) => {
+const computeTotalWithBonus = (obj: SimRow | undefined | null): number => {
   if (!obj) return 0
   return (obj.net_pay || 0) + (obj.festival_bonus || 0) + (obj.overtime_bonus || 0)
 }
 
-const augmentedSimulated = computed(() => {
+const augmentedSimulated = computed<SimRow | null>(() => {
   if (!result.value) return null
   return {
-    ...result.value.simulated,
-    total_with_bonus: computeTotalWithBonus(result.value.simulated),
+    ...(result.value.simulated as SimRow),
+    total_with_bonus: computeTotalWithBonus(result.value.simulated as SimRow),
   }
 })
 
-const augmentedActual = computed(() => {
+const augmentedActual = computed<SimRow | null>(() => {
   if (!result.value?.actual) return null
   return {
-    ...result.value.actual,
-    total_with_bonus: computeTotalWithBonus(result.value.actual),
+    ...(result.value.actual as SimRow),
+    total_with_bonus: computeTotalWithBonus(result.value.actual as SimRow),
   }
 })
 
-const augmentedDiff = computed(() => {
+const augmentedDiff = computed<SimRow | null>(() => {
   if (!result.value?.diff) return null
   return {
-    ...result.value.diff,
+    ...(result.value.diff as SimRow),
     total_with_bonus:
-      computeTotalWithBonus(result.value.simulated) -
-      computeTotalWithBonus(result.value.actual),
+      computeTotalWithBonus(result.value.simulated as SimRow) -
+      computeTotalWithBonus(result.value.actual as SimRow),
   }
 })
 
@@ -261,7 +289,7 @@ const COMPARE_FIELDS = [
   { key: 'total_with_bonus', label: '含獎金實領', bold: true, highlight: true },
 ]
 
-const diffColor = (key, val) => {
+const diffColor = (key: string, val: number) => {
   if (val === 0) return ''
   // 扣款類：值增加 = 變差（紅），值減少 = 變好（綠）
   const isDeduction = ['total_deductions', 'late_deduction', 'early_leave_deduction',
@@ -270,10 +298,27 @@ const diffColor = (key, val) => {
   return positive ? 'diff-pos' : 'diff-neg'
 }
 
-const formatDiff = (val) => {
+const formatDiff = (val: number) => {
   if (val === 0) return '-'
   return (val > 0 ? '+' : '') + money(val)
 }
+
+// Template helpers for typed access to result sub-objects
+const resultEmployee = computed(() => (result.value?.employee as { name?: string; job_title?: string }) || {})
+const resultPeriod = computed(() => (result.value?.period as { year?: number; month?: number }) || {})
+const resultOverridesActive = computed(() => (result.value?.overrides_active as unknown[]) || [])
+
+// Typed debug result sub-objects for template
+const dbgEmployee = computed(() => (debugResult.value?.employee as Record<string, unknown>) || {})
+const dbgAttendance = computed(() => (debugResult.value?.attendance_summary as Record<string, unknown>) || {})
+const dbgDeductionCalc = computed(() => (debugResult.value?.deduction_calc as Record<string, unknown>) || {})
+const dbgLeaveBreakdown = computed(() => (debugResult.value?.leave_breakdown as Record<string, unknown>[]) || [])
+const dbgFestivalBonus = computed(() => (debugResult.value?.festival_bonus_detail as Record<string, unknown>) || {})
+const dbgMeeting = computed(() => (debugResult.value?.meeting as Record<string, unknown>) || {})
+const dbgInsurance = computed(() => (debugResult.value?.insurance as Record<string, unknown>) || {})
+const dbgLeaveDeductionTotal = computed(() => debugResult.value?.leave_deduction_total)
+const dbgOvertimePay = computed(() => debugResult.value?.overtime_pay)
+const dbgSupervisorDividend = computed(() => debugResult.value?.supervisor_dividend)
 
 onMounted(() => {
   employeeStore.fetchEmployees()
@@ -411,11 +456,11 @@ onMounted(() => {
           <!-- 員工 & 月份資訊列 -->
           <el-card class="info-bar" shadow="never" body-style="padding: 12px 16px;">
             <div class="info-row">
-              <span class="emp-name">{{ result.employee.name }}</span>
-              <el-tag size="small" type="">{{ result.employee.job_title }}</el-tag>
-              <span class="period-text">{{ result.period.year }} 年 {{ result.period.month }} 月</span>
-              <el-tag v-if="result.overrides_active.length" size="small" type="warning">
-                已覆蓋 {{ result.overrides_active.length }} 項參數
+              <span class="emp-name">{{ resultEmployee.name }}</span>
+              <el-tag size="small">{{ resultEmployee.job_title }}</el-tag>
+              <span class="period-text">{{ resultPeriod.year }} 年 {{ resultPeriod.month }} 月</span>
+              <el-tag v-if="resultOverridesActive.length" size="small" type="warning">
+                已覆蓋 {{ resultOverridesActive.length }} 項參數
               </el-tag>
               <el-tag v-if="!hasActual" size="small" type="info">尚無實際薪資記錄</el-tag>
               <el-tag v-else size="small" type="success">已與實際記錄對比</el-tag>
@@ -459,26 +504,26 @@ onMounted(() => {
             <el-col :span="8">
               <el-card class="summary-card" shadow="never" body-style="padding: 14px; text-align: center;">
                 <div class="sum-label">應發月薪（試算）</div>
-                <div class="sum-value text-blue">{{ money(augmentedSimulated.gross_salary) }}</div>
+                <div class="sum-value text-blue">{{ money(augmentedSimulated?.gross_salary) }}</div>
                 <div
-                  v-if="hasActual && augmentedDiff.gross_salary !== 0"
+                  v-if="hasActual && augmentedDiff?.gross_salary !== 0"
                   class="sum-diff"
-                  :class="diffColor('gross_salary', augmentedDiff.gross_salary)"
+                  :class="diffColor('gross_salary', augmentedDiff?.gross_salary ?? 0)"
                 >
-                  {{ formatDiff(augmentedDiff.gross_salary) }}
+                  {{ formatDiff(augmentedDiff?.gross_salary ?? 0) }}
                 </div>
               </el-card>
             </el-col>
             <el-col :span="8">
               <el-card class="summary-card" shadow="never" body-style="padding: 14px; text-align: center;">
                 <div class="sum-label">總扣款（試算）</div>
-                <div class="sum-value text-danger">{{ money(augmentedSimulated.total_deductions) }}</div>
+                <div class="sum-value text-danger">{{ money(augmentedSimulated?.total_deductions) }}</div>
                 <div
-                  v-if="hasActual && augmentedDiff.total_deductions !== 0"
+                  v-if="hasActual && augmentedDiff?.total_deductions !== 0"
                   class="sum-diff"
-                  :class="diffColor('total_deductions', augmentedDiff.total_deductions)"
+                  :class="diffColor('total_deductions', augmentedDiff?.total_deductions ?? 0)"
                 >
-                  {{ formatDiff(augmentedDiff.total_deductions) }}
+                  {{ formatDiff(augmentedDiff?.total_deductions ?? 0) }}
                 </div>
               </el-card>
             </el-col>
@@ -490,13 +535,13 @@ onMounted(() => {
                 >
                   <div class="sum-label">含獎金實領（試算）</div>
                 </el-tooltip>
-                <div class="sum-value text-green">{{ money(augmentedSimulated.total_with_bonus) }}</div>
+                <div class="sum-value text-green">{{ money(augmentedSimulated?.total_with_bonus) }}</div>
                 <div
-                  v-if="hasActual && augmentedDiff.total_with_bonus !== 0"
+                  v-if="hasActual && augmentedDiff?.total_with_bonus !== 0"
                   class="sum-diff"
-                  :class="diffColor('total_with_bonus', augmentedDiff.total_with_bonus)"
+                  :class="diffColor('total_with_bonus', augmentedDiff?.total_with_bonus ?? 0)"
                 >
-                  {{ formatDiff(augmentedDiff.total_with_bonus) }}
+                  {{ formatDiff(augmentedDiff?.total_with_bonus ?? 0) }}
                 </div>
               </el-card>
             </el-col>
@@ -519,20 +564,20 @@ onMounted(() => {
               <el-table-column label="試算結果" min-width="120">
                 <template #default="{ row }">
                   <strong v-if="row.highlight" class="text-green">
-                    {{ money(augmentedSimulated[row.key] || 0) }}
+                    {{ money(augmentedSimulated?.[row.key] || 0) }}
                   </strong>
-                  <strong v-else-if="row.bold">{{ money(augmentedSimulated[row.key] || 0) }}</strong>
-                  <span v-else>{{ money(augmentedSimulated[row.key] || 0) }}</span>
+                  <strong v-else-if="row.bold">{{ money(augmentedSimulated?.[row.key] || 0) }}</strong>
+                  <span v-else>{{ money(augmentedSimulated?.[row.key] || 0) }}</span>
                 </template>
               </el-table-column>
 
               <el-table-column v-if="hasActual" label="實際記錄" min-width="120">
                 <template #default="{ row }">
                   <strong v-if="row.highlight" class="text-blue">
-                    {{ money(augmentedActual[row.key] || 0) }}
+                    {{ money(augmentedActual?.[row.key] || 0) }}
                   </strong>
-                  <strong v-else-if="row.bold">{{ money(augmentedActual[row.key] || 0) }}</strong>
-                  <span v-else>{{ money(augmentedActual[row.key] || 0) }}</span>
+                  <strong v-else-if="row.bold">{{ money(augmentedActual?.[row.key] || 0) }}</strong>
+                  <span v-else>{{ money(augmentedActual?.[row.key] || 0) }}</span>
                 </template>
               </el-table-column>
 
@@ -540,10 +585,10 @@ onMounted(() => {
                 <template #default="{ row }">
                   <span
                     v-if="augmentedDiff && row.key in augmentedDiff && augmentedDiff[row.key] !== 0"
-                    :class="diffColor(row.key, augmentedDiff[row.key])"
+                    :class="diffColor(row.key, augmentedDiff[row.key] ?? 0)"
                     class="diff-val"
                   >
-                    {{ formatDiff(augmentedDiff[row.key]) }}
+                    {{ formatDiff(augmentedDiff[row.key] ?? 0) }}
                   </span>
                   <span v-else class="text-muted">-</span>
                 </template>
@@ -556,13 +601,13 @@ onMounted(() => {
             <template #header><span>考勤統計（試算輸入值）</span></template>
             <el-descriptions :column="3" border size="small">
               <el-descriptions-item label="出勤天數">{{ form.work_days ?? '自動' }}</el-descriptions-item>
-              <el-descriptions-item label="遲到次數">{{ result.simulated.late_count }}</el-descriptions-item>
-              <el-descriptions-item label="早退次數">{{ result.simulated.early_leave_count }}</el-descriptions-item>
+              <el-descriptions-item label="遲到次數">{{ augmentedSimulated?.late_count }}</el-descriptions-item>
+              <el-descriptions-item label="早退次數">{{ augmentedSimulated?.early_leave_count }}</el-descriptions-item>
               <el-descriptions-item label="遲到扣款">
-                <span class="text-danger">{{ money(result.simulated.late_deduction) }}</span>
+                <span class="text-danger">{{ money(augmentedSimulated?.late_deduction) }}</span>
               </el-descriptions-item>
               <el-descriptions-item label="早退扣款">
-                <span class="text-danger">{{ money(result.simulated.early_leave_deduction) }}</span>
+                <span class="text-danger">{{ money(augmentedSimulated?.early_leave_deduction) }}</span>
               </el-descriptions-item>
             </el-descriptions>
           </el-card>
@@ -577,15 +622,15 @@ onMounted(() => {
             <el-card shadow="never" style="margin-top: 12px;">
               <template #header><strong>員工資料</strong></template>
               <el-descriptions :column="3" border size="small">
-                <el-descriptions-item label="姓名">{{ debugResult.employee.name }}</el-descriptions-item>
-                <el-descriptions-item label="工號">{{ debugResult.employee.employee_id }}</el-descriptions-item>
-                <el-descriptions-item label="職稱">{{ debugResult.employee.title }}</el-descriptions-item>
-                <el-descriptions-item label="職位">{{ debugResult.employee.position }}</el-descriptions-item>
-                <el-descriptions-item label="主管職">{{ debugResult.employee.supervisor_role || '-' }}</el-descriptions-item>
-                <el-descriptions-item label="底薪">{{ debugResult.employee.base_salary?.toLocaleString() }}</el-descriptions-item>
-                <el-descriptions-item label="到職日">{{ debugResult.employee.hire_date }}</el-descriptions-item>
-                <el-descriptions-item label="投保薪資">{{ debugResult.employee.insurance_salary_level?.toLocaleString() }}</el-descriptions-item>
-                <el-descriptions-item label="眷屬數">{{ debugResult.employee.dependents }}</el-descriptions-item>
+                <el-descriptions-item label="姓名">{{ dbgEmployee.name }}</el-descriptions-item>
+                <el-descriptions-item label="工號">{{ dbgEmployee.employee_id }}</el-descriptions-item>
+                <el-descriptions-item label="職稱">{{ dbgEmployee.title }}</el-descriptions-item>
+                <el-descriptions-item label="職位">{{ dbgEmployee.position }}</el-descriptions-item>
+                <el-descriptions-item label="主管職">{{ dbgEmployee.supervisor_role || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="底薪">{{ (dbgEmployee.base_salary as number | undefined)?.toLocaleString() }}</el-descriptions-item>
+                <el-descriptions-item label="到職日">{{ dbgEmployee.hire_date }}</el-descriptions-item>
+                <el-descriptions-item label="投保薪資">{{ (dbgEmployee.insurance_salary_level as number | undefined)?.toLocaleString() }}</el-descriptions-item>
+                <el-descriptions-item label="眷屬數">{{ dbgEmployee.dependents }}</el-descriptions-item>
               </el-descriptions>
             </el-card>
 
@@ -593,18 +638,18 @@ onMounted(() => {
             <el-card shadow="never" style="margin-top: 12px;">
               <template #header><strong>出勤統計（DB）</strong></template>
               <el-descriptions :column="3" border size="small">
-                <el-descriptions-item label="出勤記錄數">{{ debugResult.attendance_summary.total_records }}</el-descriptions-item>
-                <el-descriptions-item label="遲到次數">{{ debugResult.attendance_summary.late_count }}</el-descriptions-item>
-                <el-descriptions-item label="早退次數">{{ debugResult.attendance_summary.early_leave_count }}</el-descriptions-item>
-                <el-descriptions-item label="遲到總分鐘">{{ debugResult.attendance_summary.total_late_minutes }}</el-descriptions-item>
-                <el-descriptions-item label="早退總分鐘">{{ debugResult.attendance_summary.total_early_minutes }}</el-descriptions-item>
-                <el-descriptions-item label="未打卡(上)">{{ debugResult.attendance_summary.missing_punch_in }}</el-descriptions-item>
-                <el-descriptions-item label="未打卡(下)">{{ debugResult.attendance_summary.missing_punch_out }}</el-descriptions-item>
+                <el-descriptions-item label="出勤記錄數">{{ dbgAttendance.total_records }}</el-descriptions-item>
+                <el-descriptions-item label="遲到次數">{{ dbgAttendance.late_count }}</el-descriptions-item>
+                <el-descriptions-item label="早退次數">{{ dbgAttendance.early_leave_count }}</el-descriptions-item>
+                <el-descriptions-item label="遲到總分鐘">{{ dbgAttendance.total_late_minutes }}</el-descriptions-item>
+                <el-descriptions-item label="早退總分鐘">{{ dbgAttendance.total_early_minutes }}</el-descriptions-item>
+                <el-descriptions-item label="未打卡(上)">{{ dbgAttendance.missing_punch_in }}</el-descriptions-item>
+                <el-descriptions-item label="未打卡(下)">{{ dbgAttendance.missing_punch_out }}</el-descriptions-item>
               </el-descriptions>
-              <div v-if="debugResult.attendance_summary.late_details?.length" style="margin-top: 12px;">
+              <div v-if="(dbgAttendance.late_details as unknown[] | undefined)?.length" style="margin-top: 12px;">
                 <strong>遲到明細 (分鐘):</strong>
                 <el-tag
-                  v-for="(m, i) in debugResult.attendance_summary.late_details"
+                  v-for="(m, i) in (dbgAttendance.late_details as number[])"
                   :key="i"
                   size="small"
                   :type="m >= 120 ? 'danger' : 'warning'"
@@ -619,14 +664,14 @@ onMounted(() => {
             <el-card shadow="never" style="margin-top: 12px;">
               <template #header><strong>考勤扣款計算</strong></template>
               <el-descriptions :column="2" border size="small">
-                <el-descriptions-item label="日薪">{{ debugResult.deduction_calc.daily_salary }}</el-descriptions-item>
-                <el-descriptions-item label="每分鐘費率">{{ debugResult.deduction_calc.per_minute_rate }}</el-descriptions-item>
-                <el-descriptions-item label="遲到扣款">{{ debugResult.deduction_calc.late_deduction }}</el-descriptions-item>
-                <el-descriptions-item label="早退扣款">{{ debugResult.deduction_calc.early_leave_deduction }}</el-descriptions-item>
+                <el-descriptions-item label="日薪">{{ dbgDeductionCalc.daily_salary }}</el-descriptions-item>
+                <el-descriptions-item label="每分鐘費率">{{ dbgDeductionCalc.per_minute_rate }}</el-descriptions-item>
+                <el-descriptions-item label="遲到扣款">{{ dbgDeductionCalc.late_deduction }}</el-descriptions-item>
+                <el-descriptions-item label="早退扣款">{{ dbgDeductionCalc.early_leave_deduction }}</el-descriptions-item>
               </el-descriptions>
-              <div v-if="debugResult.deduction_calc.late_deduction_detail?.length" style="margin-top: 12px;">
+              <div v-if="(dbgDeductionCalc.late_deduction_detail as unknown[] | undefined)?.length" style="margin-top: 12px;">
                 <strong>遲到扣款逐筆:</strong>
-                <el-table :data="debugResult.deduction_calc.late_deduction_detail" border size="small" style="margin-top: 8px">
+                <el-table :data="dbgDeductionCalc.late_deduction_detail as Record<string, unknown>[]" border size="small" style="margin-top: 8px">
                   <el-table-column prop="minutes" label="分鐘" width="80" />
                   <el-table-column prop="type" label="類型" width="160" />
                   <el-table-column prop="deduction" label="扣款" width="100" />
@@ -636,8 +681,8 @@ onMounted(() => {
 
             <!-- 請假明細 -->
             <el-card shadow="never" style="margin-top: 12px;">
-              <template #header><strong>請假扣款（合計: {{ debugResult.leave_deduction_total }}）</strong></template>
-              <el-table v-if="debugResult.leave_breakdown?.length" :data="debugResult.leave_breakdown" border size="small">
+              <template #header><strong>請假扣款（合計: {{ dbgLeaveDeductionTotal }}）</strong></template>
+              <el-table v-if="dbgLeaveBreakdown.length" :data="dbgLeaveBreakdown" border size="small">
                 <el-table-column prop="type" label="假別" width="100" />
                 <el-table-column prop="start" label="開始" width="120" />
                 <el-table-column prop="end" label="結束" width="120" />
@@ -651,21 +696,21 @@ onMounted(() => {
             <!-- 節慶獎金計算 -->
             <el-card shadow="never" style="margin-top: 12px;">
               <template #header><strong>節慶獎金計算</strong></template>
-              <template v-if="Object.keys(debugResult.festival_bonus_detail || {}).length">
+              <template v-if="Object.keys(dbgFestivalBonus).length">
                 <el-descriptions :column="3" border size="small">
-                  <el-descriptions-item label="類別">{{ debugResult.festival_bonus_detail.category || '-' }}</el-descriptions-item>
-                  <el-descriptions-item label="獎金基數">{{ debugResult.festival_bonus_detail.base?.toLocaleString() || 0 }}</el-descriptions-item>
-                  <el-descriptions-item label="在籍人數">{{ debugResult.festival_bonus_detail.enrollment || 0 }}</el-descriptions-item>
-                  <el-descriptions-item label="目標人數">{{ debugResult.festival_bonus_detail.target || 0 }}</el-descriptions-item>
-                  <el-descriptions-item label="達成率">{{ debugResult.festival_bonus_detail.ratio ? (debugResult.festival_bonus_detail.ratio * 100).toFixed(1) + '%' : '0%' }}</el-descriptions-item>
+                  <el-descriptions-item label="類別">{{ dbgFestivalBonus.category || '-' }}</el-descriptions-item>
+                  <el-descriptions-item label="獎金基數">{{ (dbgFestivalBonus.base as number | undefined)?.toLocaleString() || 0 }}</el-descriptions-item>
+                  <el-descriptions-item label="在籍人數">{{ dbgFestivalBonus.enrollment || 0 }}</el-descriptions-item>
+                  <el-descriptions-item label="目標人數">{{ dbgFestivalBonus.target || 0 }}</el-descriptions-item>
+                  <el-descriptions-item label="達成率">{{ dbgFestivalBonus.ratio ? ((dbgFestivalBonus.ratio as number) * 100).toFixed(1) + '%' : '0%' }}</el-descriptions-item>
                   <el-descriptions-item label="符合資格">
-                    <el-tag :type="debugResult.festival_bonus_detail.eligible ? 'success' : 'danger'" size="small">
-                      {{ debugResult.festival_bonus_detail.eligible ? '是' : '否' }}
+                    <el-tag :type="dbgFestivalBonus.eligible ? 'success' : 'danger'" size="small">
+                      {{ dbgFestivalBonus.eligible ? '是' : '否' }}
                     </el-tag>
                   </el-descriptions-item>
                   <el-descriptions-item label="節慶獎金">
                     <strong style="font-size: 16px; color: var(--el-color-primary);">
-                      ${{ (debugResult.festival_bonus_detail.result || 0).toLocaleString() }}
+                      ${{ ((dbgFestivalBonus.result as number) || 0).toLocaleString() }}
                     </strong>
                   </el-descriptions-item>
                   <el-descriptions-item label="發放月份">
@@ -682,10 +727,10 @@ onMounted(() => {
             <el-card shadow="never" style="margin-top: 12px;">
               <template #header><strong>園務會議</strong></template>
               <el-descriptions :column="2" border size="small">
-                <el-descriptions-item label="出席">{{ debugResult.meeting.attended }} 次</el-descriptions-item>
-                <el-descriptions-item label="缺席">{{ debugResult.meeting.absent }} 次</el-descriptions-item>
-                <el-descriptions-item label="每次加班費">{{ debugResult.meeting.overtime_pay_per_session }}</el-descriptions-item>
-                <el-descriptions-item label="每次缺席罰款">{{ debugResult.meeting.absence_penalty_per_session }}</el-descriptions-item>
+                <el-descriptions-item label="出席">{{ dbgMeeting.attended }} 次</el-descriptions-item>
+                <el-descriptions-item label="缺席">{{ dbgMeeting.absent }} 次</el-descriptions-item>
+                <el-descriptions-item label="每次加班費">{{ dbgMeeting.overtime_pay_per_session }}</el-descriptions-item>
+                <el-descriptions-item label="每次缺席罰款">{{ dbgMeeting.absence_penalty_per_session }}</el-descriptions-item>
               </el-descriptions>
             </el-card>
 
@@ -693,14 +738,14 @@ onMounted(() => {
             <el-card shadow="never" style="margin-top: 12px;">
               <template #header><strong>勞健保計算</strong></template>
               <el-descriptions :column="2" border size="small">
-                <el-descriptions-item label="投保金額">{{ debugResult.insurance.insured_amount?.toLocaleString() }}</el-descriptions-item>
-                <el-descriptions-item label="勞保(員工)">{{ debugResult.insurance.labor_employee }}</el-descriptions-item>
-                <el-descriptions-item label="勞保(雇主)">{{ debugResult.insurance.labor_employer }}</el-descriptions-item>
-                <el-descriptions-item label="健保(員工)">{{ debugResult.insurance.health_employee }}</el-descriptions-item>
-                <el-descriptions-item label="健保(雇主)">{{ debugResult.insurance.health_employer }}</el-descriptions-item>
-                <el-descriptions-item label="勞退(員工)">{{ debugResult.insurance.pension_employee }}</el-descriptions-item>
-                <el-descriptions-item label="勞退(雇主)">{{ debugResult.insurance.pension_employer }}</el-descriptions-item>
-                <el-descriptions-item label="員工代扣合計">{{ debugResult.insurance.total_employee_deduction }}</el-descriptions-item>
+                <el-descriptions-item label="投保金額">{{ (dbgInsurance.insured_amount as number | undefined)?.toLocaleString() }}</el-descriptions-item>
+                <el-descriptions-item label="勞保(員工)">{{ dbgInsurance.labor_employee }}</el-descriptions-item>
+                <el-descriptions-item label="勞保(雇主)">{{ dbgInsurance.labor_employer }}</el-descriptions-item>
+                <el-descriptions-item label="健保(員工)">{{ dbgInsurance.health_employee }}</el-descriptions-item>
+                <el-descriptions-item label="健保(雇主)">{{ dbgInsurance.health_employer }}</el-descriptions-item>
+                <el-descriptions-item label="勞退(員工)">{{ dbgInsurance.pension_employee }}</el-descriptions-item>
+                <el-descriptions-item label="勞退(雇主)">{{ dbgInsurance.pension_employer }}</el-descriptions-item>
+                <el-descriptions-item label="員工代扣合計">{{ dbgInsurance.total_employee_deduction }}</el-descriptions-item>
               </el-descriptions>
             </el-card>
 
@@ -708,8 +753,8 @@ onMounted(() => {
             <el-card shadow="never" style="margin-top: 12px;">
               <template #header><strong>其他</strong></template>
               <el-descriptions :column="2" border size="small">
-                <el-descriptions-item label="加班費">{{ debugResult.overtime_pay }}</el-descriptions-item>
-                <el-descriptions-item label="主管紅利">{{ debugResult.supervisor_dividend }}</el-descriptions-item>
+                <el-descriptions-item label="加班費">{{ dbgOvertimePay }}</el-descriptions-item>
+                <el-descriptions-item label="主管紅利">{{ dbgSupervisorDividend }}</el-descriptions-item>
               </el-descriptions>
             </el-card>
 
