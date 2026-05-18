@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /**
  * A1-P7：從 ActivityPublicView 抽出的 Step 2 課程選擇區塊。
  *
@@ -9,45 +9,67 @@
  */
 import { reactive, onUnmounted } from 'vue'
 
-defineProps({
-  courses: { type: Array, required: true },
-  optionsLoading: { type: Boolean, default: false },
-  selectedCourses: { type: Array, required: true },
-  videos: { type: Object, default: () => ({}) },
-  errorMessage: { type: String, default: '' },
-  availabilityState: { type: Function, required: true },
-  formatSchedule: { type: Function, required: true },
-  courseAdvisory: { type: Function, required: true },
-  isActiveStep: { type: Boolean, default: false },
+interface CourseItem {
+  name: string
+  price?: string | number
+  sessions?: number | string
+  [key: string]: unknown
+}
+interface AvailabilityResult { text: string; cssClass: string; full: boolean }
+interface AdvisoryChip { severity: string; message: string }
+
+withDefaults(defineProps<{
+  courses: CourseItem[]
+  optionsLoading?: boolean
+  selectedCourses: string[]
+  videos?: Record<string, string>
+  errorMessage?: string
+  availabilityState: (course: CourseItem) => AvailabilityResult
+  formatSchedule: (course: CourseItem) => string
+  courseAdvisory: (course: CourseItem) => AdvisoryChip[]
+  isActiveStep?: boolean
+}>(), {
+  optionsLoading: false,
+  videos: () => ({}),
+  errorMessage: '',
+  isActiveStep: false,
 })
 
-defineEmits(['toggle', 'open-video'])
+defineEmits<{
+  (e: 'toggle', course: CourseItem): void
+  (e: 'open-video', title: string, url: string): void
+}>()
 
 const PREVIEW_W = 320
 const PREVIEW_H = 180
 const HOVER_DELAY_MS = 600
 const EDGE_MARGIN = 8
 
-const hoverPreview = reactive({
+const hoverPreview = reactive<{
+  visible: boolean
+  courseName: string
+  embedUrl: string
+  style: { top: string; left: string }
+}>({
   visible: false,
   courseName: '',
   embedUrl: '',
   style: { top: '0px', left: '0px' },
 })
-let hoverTimer = null
+let hoverTimer: ReturnType<typeof setTimeout> | null = null
 
-function extractYoutubeId(url) {
+function extractYoutubeId(url: string): string | null {
   const m = String(url || '').match(
     /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([\w-]{11})/,
   )
   return m ? m[1] : null
 }
 
-function schedulePreview(courseName, url, event) {
+function schedulePreview(courseName: string, url: string, event: MouseEvent | FocusEvent) {
   cancelPreview()
   const id = extractYoutubeId(url)
   if (!id) return
-  const target = event.currentTarget
+  const target = event.currentTarget as HTMLElement
   hoverTimer = setTimeout(() => {
     const rect = target.getBoundingClientRect()
     let left = rect.right + EDGE_MARGIN

@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /**
  * A1-P4：從 ActivityPublicView 抽出的 toast 通知堆疊。
  *
@@ -9,12 +9,15 @@
  *
  * 設計：保留 SVG icon 內嵌（與原 view 一致避免 sprite 重複），icon 在元件內常數化。
  */
-defineProps({
-  toasts: { type: Array, required: true },
-})
-defineEmits(['dismiss'])
+interface Toast { id: number; message: string; type: string }
+defineProps<{
+  toasts: Toast[]
+}>()
+defineEmits<{
+  (e: 'dismiss', id: number): void
+}>()
 
-const TOAST_ICONS = {
+const TOAST_ICONS: Record<string, string> = {
   success: '<svg viewBox="0 0 24 24" fill="none" stroke="#0D9053" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>',
   error: '<svg viewBox="0 0 24 24" fill="none" stroke="#DC2626" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>',
   warning: '<svg viewBox="0 0 24 24" fill="none" stroke="#D97706" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>',

@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /**
  * A1-P3：從 ActivityPublicView 抽出的「聯絡主辦單位」modal。
  *
@@ -11,11 +11,16 @@
 import { ref, reactive, watch } from 'vue'
 import { publicCreateInquiry } from '@/api/activityPublic'
 
-const props = defineProps({
-  visible: { type: Boolean, default: false },
+const props = withDefaults(defineProps<{
+  visible?: boolean
+}>(), {
+  visible: false,
 })
 
-const emit = defineEmits(['update:visible', 'toast'])
+const emit = defineEmits<{
+  (e: 'update:visible', value: boolean): void
+  (e: 'toast', message: string, type: string): void
+}>()
 
 const inquiry = reactive({ name: '', phone: '', question: '' })
 const submitting = ref(false)
@@ -54,7 +59,7 @@ async function handleSubmit() {
     emit('toast', res?.data?.message || '感謝您的提問，我們會儘快回覆您！', 'success')
     close()
   } catch (err) {
-    emit('toast', err.response?.data?.detail || '送出失敗', 'error')
+    emit('toast', (err as { response?: { data?: { detail?: string } } }).response?.data?.detail || '送出失敗', 'error')
   } finally {
     submitting.value = false
   }

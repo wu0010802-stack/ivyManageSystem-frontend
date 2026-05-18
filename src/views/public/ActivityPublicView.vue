@@ -323,7 +323,7 @@
                             type="checkbox"
                             name="supply"
                             :value="supply.name"
-                            :checked="form.selectedSupplies.includes(supply.name)"
+                            :checked="selectedSupplies.includes(supply.name)"
                             @change="toggleSupply(supply)"
                           />
                           <span class="course-text">
@@ -438,7 +438,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { publicRegister } from '@/api/activityPublic'
@@ -459,27 +459,44 @@ const router = useRouter()
 
 // TOAST_ICONS 已搬至 ToastStack 元件（A1-P4）
 
-const { courses, supplies, classes, videos, loading: optionsLoading, loadOptions } = usePublicActivityOptions()
+interface CourseOption { name: string; price?: string | number; sessions?: number | string; [key: string]: unknown }
+interface SupplyOption { name: string; price?: string | number; [key: string]: unknown }
+
+const { courses: _courses, supplies: _supplies, classes: _classes, videos: _videos, loading: optionsLoading, loadOptions } = usePublicActivityOptions()
 const { timeInfo, loadTime } = useActivityRegistrationTime()
 const { availability, refresh: refreshAvailability, startPolling, stopPolling } = useActivityAvailability()
+
+// 強型別轉換：composable 回傳 unknown[]，view 用強型別 computed 供模板/函式使用
+const courses = computed(() => _courses.value as CourseOption[])
+const supplies = computed(() => _supplies.value as SupplyOption[])
+const classes = computed(() => (_classes.value as unknown[]).map(String))
+const videos = computed(() => _videos.value as Record<string, string>)
 
 // ===== 前台客製化顯示 =====
 const DEFAULT_POSTER = '/images/activity-poster.jpg'
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
 const posterBroken = ref(false)
 
-const displayTitle = computed(() => timeInfo.value?.page_title?.trim() || '114 下藝童趣｜課後才藝報名')
-const displayTermLabel = computed(() => timeInfo.value?.term_label?.trim() || '114 下學期')
-const displayEventDate = computed(() => timeInfo.value?.event_date_label?.trim() || '2026-02-23')
-const displayAudience = computed(() => timeInfo.value?.target_audience?.trim() || '本園在學幼兒')
+interface TimeInfoExtended {
+  is_open: boolean; open_at: string | null; close_at: string | null
+  page_title?: string; term_label?: string; event_date_label?: string
+  target_audience?: string; form_card_title?: string; poster_url?: string
+}
+// timeInfo 基礎型別只含 is_open/open_at/close_at，後端實際回傳更多欄位
+const timeInfoExt = computed(() => timeInfo.value as TimeInfoExtended)
+
+const displayTitle = computed(() => timeInfoExt.value?.page_title?.trim() || '114 下藝童趣｜課後才藝報名')
+const displayTermLabel = computed(() => timeInfoExt.value?.term_label?.trim() || '114 下學期')
+const displayEventDate = computed(() => timeInfoExt.value?.event_date_label?.trim() || '2026-02-23')
+const displayAudience = computed(() => timeInfoExt.value?.target_audience?.trim() || '本園在學幼兒')
 const displayFormCardTitle = computed(() => {
-  const custom = timeInfo.value?.form_card_title?.trim()
+  const custom = timeInfoExt.value?.form_card_title?.trim()
   if (custom) return custom
   return `${displayTitle.value.split('｜')[0]} · ${displayEventDate.value}`
 })
 const posterSrc = computed(() => {
   if (posterBroken.value) return DEFAULT_POSTER
-  const url = timeInfo.value?.poster_url
+  const url = timeInfoExt.value?.poster_url
   if (!url) return DEFAULT_POSTER
   // 後端路徑以 /api 起頭，若前端 baseURL 指向跨 host 後端則補 host
   if (url.startsWith('/api/') && API_BASE && API_BASE !== '/api') {
@@ -508,7 +525,7 @@ async function sharePoster() {
       url: window.location.href,
     })
   } catch (err) {
-    if (err && err.name !== 'AbortError') {
+    if (err && (err as { name?: string }).name !== 'AbortError') {
       showToast('分享失敗，請改用下載按鈕', 'error')
     }
   }
@@ -553,7 +570,7 @@ async function runInit() {
   } catch (err) {
     initState.value = 'error'
     initErrorMessage.value =
-      err?.response?.data?.detail || err?.message || '頁面初始化失敗，請稍後再試。'
+      (err as { response?: { data?: { detail?: string }; message?: string }; message?: string })?.response?.data?.detail || (err as Error)?.message || '頁面初始化失敗，請稍後再試。'
   }
 }
 
@@ -571,14 +588,15 @@ async function retryInit() {
 // 生日上下限 / feePreview / toggleCourse / toggleSupply / validateForm / clearError /
 // resetForm 已抽至 usePublicRegistrationForm（A1-P1）。
 
-const toasts = ref([])
+interface Toast { id: number; message: string; type: string }
+const toasts = ref<Toast[]>([])
 let toastSeq = 0
-function showToast(message, type = 'success', duration = 4500) {
+function showToast(message: string, type = 'success', duration = 4500) {
   const id = ++toastSeq
   toasts.value.push({ id, message, type })
   setTimeout(() => dismissToast(id), duration)
 }
-function dismissToast(id) {
+function dismissToast(id: number) {
   toasts.value = toasts.value.filter((t) => t.id !== id)
 }
 
@@ -606,6 +624,11 @@ const {
 // toggleCourse / toggleSupply 已抽至 usePublicRegistrationForm（A1-P1）;
 // 額滿判定（availability=-1）規則在 composable 內,與 availabilityState 一致。
 
+// form.selectedCourses / selectedSupplies 在 composable 內推斷為 never[]（空陣列無型別標注）；
+// 以強型別 computed 供模板 .includes() 使用，不改變實際 reactive 物件。
+const selectedCourses = computed(() => form.selectedCourses as string[])
+const selectedSupplies = computed(() => form.selectedSupplies as string[])
+
 // 目前進行到的步驟（給 step header 用 .is-active 加亮，不影響表單行為）
 const activeStep = computed(() => {
   if (!form.name || !form.birthday || !form.parent_phone || !form.class_name) return 1
@@ -617,8 +640,8 @@ const activeStep = computed(() => {
 const noticeIsUrgent = computed(() => noticeState.value?.title === '報名即將截止')
 
 // ===== 影片模態 =====
-const videoModal = reactive({ visible: false, title: '', url: '', youtubeId: null })
-function openVideoModal(title, url) {
+const videoModal = reactive<{ visible: boolean; title: string; url: string; youtubeId: string | null }>({ visible: false, title: '', url: '', youtubeId: null })
+function openVideoModal(title: string, url: string) {
   const match = String(url || '').match(/(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([\w-]{11})/)
   videoModal.title = title
   videoModal.url = url
@@ -643,36 +666,43 @@ function goToQuery() {
 }
 
 // ===== 送出成功 modal =====
-const successModal = reactive({
+interface CourseItem { name: string; price: number }
+const successModal = reactive<{
+  visible: boolean; studentName: string; parentPhone: string; message: string;
+  waitlisted: boolean; enrolledCourses: CourseItem[]; waitlistCourses: CourseItem[];
+  selectedSupplies: CourseItem[]; totalAmount: number; queryToken: string; editUrl: string; copyHint: string
+}>({
   visible: false,
   studentName: '',
   parentPhone: '',
   message: '',
   waitlisted: false,
-  enrolledCourses: [], // [{ name, price }]
-  waitlistCourses: [], // [{ name, price }]
-  selectedSupplies: [], // [{ name, price }]
+  enrolledCourses: [],
+  waitlistCourses: [],
+  selectedSupplies: [],
   totalAmount: 0,
-  // Phase 3：查詢碼 / 編修連結（後端 register response 一次性回，不再重發）
   queryToken: '',
   editUrl: '',
   copyHint: '',
 })
 
-function priceOf(name, source) {
+function priceOf(name: string, source: Array<{ name: string; price?: unknown }>) {
   const item = source.find((it) => it.name === name)
   return Number(item?.price) || 0
 }
 
-function buildSuccessSummary({ name, parentPhone, message, waitlisted, waitlistCourses, queryToken }) {
+function buildSuccessSummary({ name, parentPhone, message, waitlisted, waitlistCourses, queryToken }: {
+  name: string; parentPhone: string; message: string; waitlisted?: boolean;
+  waitlistCourses?: string[]; queryToken?: string
+}) {
   const waitlistSet = new Set(waitlistCourses || [])
-  const enrolledCourses = []
-  const waitlistOnes = []
+  const enrolledCourses: CourseItem[] = []
+  const waitlistOnes: CourseItem[] = []
   let total = 0
 
   form.selectedCourses.forEach((courseName) => {
     const price = priceOf(courseName, courses.value)
-    const item = { name: courseName, price }
+    const item: CourseItem = { name: courseName, price }
     if (waitlistSet.has(courseName)) {
       waitlistOnes.push(item)
     } else {
@@ -714,7 +744,7 @@ function closeSuccessModal() {
 // validateForm / clearError / errors / FIELD_FOCUS_ORDER 已抽至
 // usePublicRegistrationForm（A1-P1）。view 保留 focusFirstError 與
 // FIELD_ELEMENT_ID 因 DOM 操作仰賴 view 的元件 id。
-const FIELD_ELEMENT_ID = {
+const FIELD_ELEMENT_ID: Record<string, string> = {
   name: 'studentName',
   birthday: 'studentBirthday',
   parent_phone: 'parentPhone',
@@ -723,7 +753,7 @@ const FIELD_ELEMENT_ID = {
 }
 
 async function focusFirstError() {
-  const field = FIELD_FOCUS_ORDER.find((f) => errors[f])
+  const field = FIELD_FOCUS_ORDER.find((f) => (errors as Record<string, string>)[f])
   if (!field) return
   await nextTick()
   const el = document.getElementById(FIELD_ELEMENT_ID[field])
@@ -780,7 +810,7 @@ async function handleSubmitRegistration() {
     resetForm()
     await refreshAvailability()
   } catch (err) {
-    showToast(err.response?.data?.detail || '送出失敗', 'error')
+    showToast((err as { response?: { data?: { detail?: string } } }).response?.data?.detail || '送出失敗', 'error')
   } finally {
     submitting.value = false
   }

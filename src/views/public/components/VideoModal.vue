@@ -1,13 +1,20 @@
-<script setup>
+<script setup lang="ts">
 // A1-P2：從 ActivityPublicView 抽出的影片預覽 modal。
 // 接受 youtubeId 優先（嵌入 iframe）否則 url（HTML5 video）。
-defineProps({
-  visible: { type: Boolean, default: false },
-  title: { type: String, default: '' },
-  url: { type: String, default: '' },
-  youtubeId: { type: String, default: null },
+withDefaults(defineProps<{
+  visible?: boolean
+  title?: string
+  url?: string
+  youtubeId?: string | null
+}>(), {
+  visible: false,
+  title: '',
+  url: '',
+  youtubeId: null,
 })
-defineEmits(['close'])
+defineEmits<{
+  (e: 'close'): void
+}>()
 </script>
 
 <template>
