@@ -66,13 +66,13 @@
   </el-popover>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { View } from '@element-plus/icons-vue'
 import { useA11yPreferenceStore } from '@/stores/a11yPreference'
 
 const store = useA11yPreferenceStore()
 
-const sizeOptions = [
+const sizeOptions: { value: string; label: string; preview: string }[] = [
   { value: 'sm', label: '小', preview: '13px' },
   { value: 'md', label: '中', preview: '15px' },
   { value: 'lg', label: '大', preview: '17px' },

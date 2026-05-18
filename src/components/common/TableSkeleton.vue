@@ -9,13 +9,16 @@
   </div>
 </template>
 
-<script setup>
-const props = defineProps({
-  columns: { type: Number, default: 5 },
-  rows: { type: Number, default: 5 }
+<script setup lang="ts">
+const props = withDefaults(defineProps<{
+  columns?: number
+  rows?: number
+}>(), {
+  columns: 5,
+  rows: 5,
 })
 
-const getCellWidth = (index) => {
+const getCellWidth = (index: number): string => {
   // First column narrower (ID), last wider (actions)
   if (index === 1) return '60px'
   if (index === props.columns) return '120px'

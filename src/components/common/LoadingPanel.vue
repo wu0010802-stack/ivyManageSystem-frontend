@@ -25,24 +25,26 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, watch, onBeforeUnmount } from 'vue'
 
-const props = defineProps({
-  loading: { type: Boolean, default: false },
-  empty: { type: Boolean, default: false },
-  variant: {
-    type: String,
-    default: 'spinner',
-    validator: (v) => v === 'spinner' || v === 'skeleton',
-  },
-  delay: { type: Number, default: 120 },
-  minShowMs: { type: Number, default: 300 },
+const props = withDefaults(defineProps<{
+  loading?: boolean
+  empty?: boolean
+  variant?: 'spinner' | 'skeleton'
+  delay?: number
+  minShowMs?: number
+}>(), {
+  loading: false,
+  empty: false,
+  variant: 'spinner',
+  delay: 120,
+  minShowMs: 300,
 })
 
-const displayLoading = ref(false)
-let showTimer = null
-let hideTimer = null
+const displayLoading = ref<boolean>(false)
+let showTimer: ReturnType<typeof setTimeout> | null = null
+let hideTimer: ReturnType<typeof setTimeout> | null = null
 let shownAt = 0
 
 function clearShowTimer() {

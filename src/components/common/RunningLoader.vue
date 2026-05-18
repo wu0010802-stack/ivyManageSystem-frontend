@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 
 /**
@@ -11,18 +11,24 @@ import { computed } from 'vue'
  * 想換圖直接改 variant 數字即可。
  */
 
-const props = defineProps({
-  active: { type: Boolean, default: false },
-  label: { type: String, default: '載入中…' },
-  // 1 | 2 | 3，對應 public/images/loading-runner-{n}.gif
-  variant: { type: Number, default: 1 },
-  // 跑完一趟（左→右）的秒數
-  speed: { type: Number, default: 3.5 },
-  // backdrop 不透明度（0.7~0.8 之間視覺最舒適）
-  opacity: { type: Number, default: 0.78 },
+const props = withDefaults(defineProps<{
+  active?: boolean
+  label?: string
+  /** 1 | 2 | 3，對應 public/images/loading-runner-{n}.gif */
+  variant?: 1 | 2 | 3
+  /** 跑完一趟（左→右）的秒數 */
+  speed?: number
+  /** backdrop 不透明度（0.7~0.8 之間視覺最舒適） */
+  opacity?: number
+}>(), {
+  active: false,
+  label: '載入中…',
+  variant: 1,
+  speed: 3.5,
+  opacity: 0.78,
 })
 
-const GIF_SOURCES = {
+const GIF_SOURCES: Record<1 | 2 | 3, string> = {
   1: '/images/loading-runner-1.gif',
   2: '/images/loading-runner-2.gif',
   3: '/images/loading-runner-3.gif',

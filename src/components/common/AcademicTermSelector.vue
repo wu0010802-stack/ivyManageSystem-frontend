@@ -14,7 +14,7 @@
   </el-select>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 
 import { useAcademicTermStore } from '@/stores/academicTerm'
@@ -40,7 +40,7 @@ const options = computed(() => {
   }))
 })
 
-function handleChange(val) {
+function handleChange(val: string) {
   const opt = options.value.find((o) => o.value === val)
   if (opt) termStore.setTerm(opt.school_year, opt.semester)
 }

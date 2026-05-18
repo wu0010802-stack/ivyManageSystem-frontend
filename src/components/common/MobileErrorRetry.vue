@@ -1,19 +1,24 @@
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 
-const props = defineProps({
-  error: { type: [Error, Object, String, null], default: null },
-  fallbackMessage: { type: String, default: '載入失敗，請稍後再試' },
+const props = withDefaults(defineProps<{
+  error?: Error | { displayMessage?: string; message?: string } | string | null
+  fallbackMessage?: string
+}>(), {
+  error: null,
+  fallbackMessage: '載入失敗，請稍後再試',
 })
 
-defineEmits(['retry'])
+defineEmits<{
+  retry: []
+}>()
 
 const message = computed(() => {
   if (!props.error) return props.fallbackMessage
   if (typeof props.error === 'string') return props.error
   return (
-    props.error.displayMessage ||
-    props.error.message ||
+    (props.error as { displayMessage?: string }).displayMessage ||
+    (props.error as { message?: string }).message ||
     props.fallbackMessage
   )
 })

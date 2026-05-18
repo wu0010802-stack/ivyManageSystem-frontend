@@ -1,14 +1,33 @@
-<script setup>
-import { ACTION_LABELS, ACTION_TAG_TYPES } from '@/constants/approvalEnums'
+<script setup lang="ts">
+import { ACTION_LABELS as _ACTION_LABELS, ACTION_TAG_TYPES as _ACTION_TAG_TYPES } from '@/constants/approvalEnums'
 
-defineProps({
-  visible: { type: Boolean, default: false },
-  loading: { type: Boolean, default: false },
-  logs:    { type: Array,   default: () => [] },
+// Cast to Record<string, string> so template v-for with dynamic action key works
+const ACTION_LABELS = _ACTION_LABELS as Record<string, string>
+const ACTION_TAG_TYPES = _ACTION_TAG_TYPES as Record<string, 'primary' | 'success' | 'warning' | 'info' | 'danger'>
+
+interface ApprovalLog {
+  id: number
+  action: string
+  created_at?: string
+  approver_username?: string
+  approver_role?: string
+  comment?: string
+}
+
+withDefaults(defineProps<{
+  visible?: boolean
+  loading?: boolean
+  logs?: ApprovalLog[]
+}>(), {
+  visible: false,
+  loading: false,
+  logs: () => [],
 })
 
-const emit = defineEmits(['update:visible'])
-const updateVisible = (value) => emit('update:visible', value)
+const emit = defineEmits<{
+  'update:visible': [value: boolean]
+}>()
+const updateVisible = (value: boolean) => emit('update:visible', value)
 </script>
 
 <template>
