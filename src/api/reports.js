@@ -27,3 +27,8 @@ export const getAttendanceDetail = (year, { month = null, classroomId = null } =
 
 export const getSalaryContributors = (year, month) =>
   api.get('/reports/salary/contributors', { params: { year, month } })
+
+// 月度損益表（試算表 layout：12 月 × 22 列項目 + pending_items 附錄）
+// 後端契約：sections[].rows[].monthly[12] + totals.{income,refund,expense,net_cashflow}
+export const getMonthlyPnL = (year) =>
+  api.get('/reports/monthly-pnl', { params: { year } }).then(r => r.data)
