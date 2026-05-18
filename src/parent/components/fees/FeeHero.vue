@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /**
  * 費用 hero 卡：未繳合計 + 最近到期 + 跳到應繳 CTA（暖黃漸層 + 月桂葉右下）。
  * IvyKids rebrand 2026-05-07（Phase 4.3）
@@ -14,15 +14,22 @@
  */
 import LaurelWreath from '@/components/brand/LaurelWreath.vue'
 
-const props = defineProps({
-  unpaidTotal: { type: Number, default: 0 },
-  unpaidCount: { type: Number, default: 0 },
-  nearestDueDate: { type: String, default: '' },
-  overdueAmount: { type: Number, default: 0 },
+withDefaults(defineProps<{
+  unpaidTotal?: number
+  unpaidCount?: number
+  nearestDueDate?: string
+  overdueAmount?: number
+}>(), {
+  unpaidTotal: 0,
+  unpaidCount: 0,
+  nearestDueDate: '',
+  overdueAmount: 0,
 })
-const emit = defineEmits(['jump-unpaid'])
+const emit = defineEmits<{
+  'jump-unpaid': []
+}>()
 
-function fmt(n) { return Number(n).toLocaleString('en-US') }
+function fmt(n: number): string { return Number(n).toLocaleString('en-US') }
 </script>
 
 <template>

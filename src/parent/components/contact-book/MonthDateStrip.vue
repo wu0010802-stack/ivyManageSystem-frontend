@@ -1,13 +1,34 @@
-<script setup>
-import { computed, onMounted, onUnmounted, ref, watch, nextTick } from 'vue'
+<script setup lang="ts">
+import { computed, onMounted, onUnmounted, ref, watch, nextTick, type ComponentPublicInstance } from 'vue'
 import { localDateISO } from '../../utils/date'
 
-const props = defineProps({
-  entries: { type: Array, default: () => [] },
-  selectedDate: { type: String, default: null },
-  days: { type: Number, default: 21 },
+interface Entry {
+  log_date?: string
+  my_acknowledged_at?: string | null
+  [key: string]: unknown
+}
+
+interface DateChip {
+  iso: string
+  day: number
+  weekday: string
+  isToday: boolean
+  hasEntry: boolean
+  unread?: boolean
+}
+
+const props = withDefaults(defineProps<{
+  entries?: Entry[]
+  selectedDate?: string | null
+  days?: number
+}>(), {
+  entries: () => [],
+  selectedDate: null,
+  days: 21,
 })
-const emit = defineEmits(['select'])
+const emit = defineEmits<{
+  'select': [iso: string]
+}>()
 
 /**
  * 為什麼用 reactive `today` + 每 60s tick：
@@ -15,14 +36,14 @@ const emit = defineEmits(['select'])
  *   2. 原本 `toISOString().slice(0,10)` 會用 UTC，台灣凌晨 0~8 點會偏成「昨天」，
  *      導致當日聯絡簿紀錄對不到 today chip（P1-15）。改用 localDateISO。
  */
-function _startOfLocalDay(d = new Date()) {
+function _startOfLocalDay(d: Date = new Date()): Date {
   const x = new Date(d)
   x.setHours(0, 0, 0, 0)
   return x
 }
 
-const today = ref(_startOfLocalDay())
-let tickTimer = null
+const today = ref<Date>(_startOfLocalDay())
+let tickTimer: ReturnType<typeof setInterval> | null = null
 
 onMounted(() => {
   tickTimer = setInterval(() => {
@@ -40,8 +61,8 @@ onUnmounted(() => {
   }
 })
 
-const dateList = computed(() => {
-  const out = []
+const dateList = computed<DateChip[]>(() => {
+  const out: DateChip[] = []
   const base = today.value
   for (let i = props.days - 1; i >= 0; i--) {
     const d = new Date(base)
@@ -58,15 +79,15 @@ const dateList = computed(() => {
   return out
 })
 
-const entriesByDate = computed(() => {
-  const m = new Map()
+const entriesByDate = computed<Map<string, Entry>>(() => {
+  const m = new Map<string, Entry>()
   for (const e of props.entries || []) {
     if (e?.log_date) m.set(e.log_date, e)
   }
   return m
 })
 
-const list = computed(() =>
+const list = computed<DateChip[]>(() =>
   dateList.value.map((d) => ({
     ...d,
     hasEntry: entriesByDate.value.has(d.iso),
@@ -76,8 +97,8 @@ const list = computed(() =>
   })),
 )
 
-const stripRef = ref(null)
-const todayChipRef = ref(null)
+const stripRef = ref<HTMLElement | null>(null)
+const todayChipRef = ref<Element | ComponentPublicInstance | null>(null)
 
 onMounted(async () => {
   await nextTick()
@@ -89,8 +110,8 @@ watch(() => props.entries?.length, async () => {
   if (!props.selectedDate) scrollToToday()
 })
 
-function scrollToToday() {
-  const el = todayChipRef.value
+function scrollToToday(): void {
+  const el = todayChipRef.value as HTMLElement | null
   const strip = stripRef.value
   if (!el || !strip) return
   const reduce =
@@ -102,7 +123,7 @@ function scrollToToday() {
   })
 }
 
-function onPick(d) {
+function onPick(d: DateChip): void {
   if (!d.hasEntry && !d.isToday) return
   emit('select', d.iso)
 }

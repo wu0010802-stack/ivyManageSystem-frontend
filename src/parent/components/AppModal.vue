@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /**
  * 家長 App 共用 Modal 元件。
  *
@@ -22,36 +22,46 @@
  */
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 
-const props = defineProps({
-  open: { type: Boolean, default: false },
+const props = withDefaults(defineProps<{
+  open?: boolean
   /** modal 標題的 id，用來連結 aria-labelledby（無障礙必填） */
-  labelledBy: { type: String, default: null },
+  labelledBy?: string
   /** modal 描述的 id，用來連結 aria-describedby（可選） */
-  describedBy: { type: String, default: null },
+  describedBy?: string
   /** 點背景關閉 */
-  closeOnOverlay: { type: Boolean, default: true },
+  closeOnOverlay?: boolean
   /** Esc 關閉 */
-  closeOnEscape: { type: Boolean, default: true },
+  closeOnEscape?: boolean
   /** 自訂寬度上限 */
-  maxWidth: { type: String, default: '420px' },
+  maxWidth?: string
+}>(), {
+  open: false,
+  labelledBy: undefined,
+  describedBy: undefined,
+  closeOnOverlay: true,
+  closeOnEscape: true,
+  maxWidth: '420px',
 })
 
-const emit = defineEmits(['update:open', 'close'])
+const emit = defineEmits<{
+  'update:open': [value: boolean]
+  'close': []
+}>()
 
-const dialogRef = ref(null)
-const previouslyFocused = ref(null)
+const dialogRef = ref<HTMLElement | null>(null)
+const previouslyFocused = ref<Element | null>(null)
 
-function close() {
+function close(): void {
   emit('update:open', false)
   emit('close')
 }
 
-function onOverlayClick(e) {
+function onOverlayClick(e: MouseEvent): void {
   if (!props.closeOnOverlay) return
   if (e.target === e.currentTarget) close()
 }
 
-function onKeydown(e) {
+function onKeydown(e: KeyboardEvent): void {
   if (e.key === 'Escape' && props.closeOnEscape) {
     e.stopPropagation()
     close()
@@ -62,16 +72,16 @@ function onKeydown(e) {
   }
 }
 
-function getFocusableElements() {
+function getFocusableElements(): HTMLElement[] {
   if (!dialogRef.value) return []
   return Array.from(
-    dialogRef.value.querySelectorAll(
+    dialogRef.value.querySelectorAll<HTMLElement>(
       'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
     ),
   )
 }
 
-function trapFocus(e) {
+function trapFocus(e: KeyboardEvent): void {
   const focusable = getFocusableElements()
   if (focusable.length === 0) {
     e.preventDefault()
@@ -88,11 +98,11 @@ function trapFocus(e) {
   }
 }
 
-function lockBody() {
+function lockBody(): void {
   document.body.style.overflow = 'hidden'
 }
 
-function unlockBody() {
+function unlockBody(): void {
   document.body.style.overflow = ''
 }
 
@@ -113,8 +123,9 @@ watch(
     } else {
       unlockBody()
       // 還原焦點到開啟者
-      if (previouslyFocused.value && typeof previouslyFocused.value.focus === 'function') {
-        previouslyFocused.value.focus()
+      const prev = previouslyFocused.value as HTMLElement | null
+      if (prev && typeof prev.focus === 'function') {
+        prev.focus()
       }
     }
   },
@@ -126,11 +137,11 @@ onBeforeUnmount(() => {
   unlockBody()
 })
 
-const overlayStyle = computed(() => ({
+const overlayStyle = computed<Record<string, string>>(() => ({
   zIndex: 'var(--z-modal-backdrop, 90)',
 }))
 
-const dialogStyle = computed(() => ({
+const dialogStyle = computed<Record<string, string>>(() => ({
   maxWidth: props.maxWidth,
   zIndex: 'var(--z-modal, 100)',
 }))

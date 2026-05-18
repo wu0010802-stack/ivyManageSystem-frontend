@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref } from 'vue'
 
 /**
@@ -9,32 +9,40 @@ import { computed, ref } from 'vue'
  *
  * Spec: docs/superpowers/specs/2026-05-13-parent-material3-redesign-design.md §6.4
  */
-const props = defineProps({
-  modelValue: { type: [String, Number], default: '' },
-  variant: {
-    type: String,
-    default: 'filled',
-    validator: (v) => ['filled', 'outlined'].includes(v),
-  },
-  label: { type: String, default: '' },
-  placeholder: { type: String, default: '' },
-  supportingText: { type: String, default: '' },
-  error: { type: Boolean, default: false },
-  errorText: { type: String, default: '' },
-  disabled: { type: Boolean, default: false },
-  type: { type: String, default: 'text' },
+const props = withDefaults(defineProps<{
+  modelValue?: string | number
+  variant?: string
+  label?: string
+  placeholder?: string
+  supportingText?: string
+  error?: boolean
+  errorText?: string
+  disabled?: boolean
+  type?: string
+}>(), {
+  modelValue: '',
+  variant: 'filled',
+  label: '',
+  placeholder: '',
+  supportingText: '',
+  error: false,
+  errorText: '',
+  disabled: false,
+  type: 'text',
 })
 
-const emit = defineEmits(['update:modelValue'])
+const emit = defineEmits<{
+  'update:modelValue': [value: string]
+}>()
 
-const isFocused = ref(false)
+const isFocused = ref<boolean>(false)
 
-const hasValue = computed(
+const hasValue = computed<boolean>(
   () => props.modelValue !== '' && props.modelValue != null,
 )
-const labelFloating = computed(() => isFocused.value || hasValue.value)
+const labelFloating = computed<boolean>(() => isFocused.value || hasValue.value)
 
-const classes = computed(() => ({
+const classes = computed<Record<string, boolean>>(() => ({
   'm3-text-field': true,
   [`m3-text-field-${props.variant}`]: true,
   'is-focused': isFocused.value,
@@ -44,12 +52,12 @@ const classes = computed(() => ({
   'has-floating-label': labelFloating.value && !!props.label,
 }))
 
-const supportingDisplay = computed(() =>
+const supportingDisplay = computed<string>(() =>
   props.error && props.errorText ? props.errorText : props.supportingText,
 )
 
-function onInput(e) {
-  emit('update:modelValue', e.target.value)
+function onInput(e: Event): void {
+  emit('update:modelValue', (e.target as HTMLInputElement).value)
 }
 </script>
 

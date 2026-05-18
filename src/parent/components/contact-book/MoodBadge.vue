@@ -1,13 +1,17 @@
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 
-const props = defineProps({
-  mood: { type: String, default: null },
-  size: { type: String, default: 'md' },
-  showLabel: { type: Boolean, default: false },
+const props = withDefaults(defineProps<{
+  mood?: string | null
+  size?: string
+  showLabel?: boolean
+}>(), {
+  mood: null,
+  size: 'md',
+  showLabel: false,
 })
 
-const MOOD_MAP = {
+const MOOD_MAP: Record<string, { emoji: string; text: string; tone: string }> = {
   happy:  { emoji: '😄', text: '開心', tone: 'sun' },
   normal: { emoji: '🙂', text: '普通', tone: 'cream' },
   tired:  { emoji: '😴', text: '想睡', tone: 'grape' },
@@ -19,7 +23,7 @@ const MOOD_MAP = {
 // 原本 `info=null` → `v-if` 整個不渲染，使用者完全看不出有此欄位；
 // 改為渲染灰色 chip 表達「沒記錄」的語意，與其他 timeline row 一致。
 const FALLBACK = { emoji: '・', text: '未記錄', tone: 'muted' }
-const info = computed(() => MOOD_MAP[props.mood] || FALLBACK)
+const info = computed(() => (props.mood ? MOOD_MAP[props.mood] : null) || FALLBACK)
 </script>
 
 <template>

@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /**
  * 請假申請表單（presentational + v-model）。
  *
@@ -16,16 +16,37 @@
  *
  * 注意：本元件純 presentational，不接 store 也不打 API。
  */
-const props = defineProps({
-  modelValue: { type: Object, required: true },
-  children: { type: Array, default: () => [] },
-  pastLimit: { type: String, required: true },
-  futureLimit: { type: String, required: true },
-  submitting: { type: Boolean, default: false },
-})
-const emit = defineEmits(['update:modelValue', 'submit', 'cancel'])
+interface Child {
+  student_id: number
+  name?: string
+}
 
-function update(field, value) {
+interface LeaveFormData {
+  student_id?: number
+  leave_type?: string
+  start_date?: string
+  end_date?: string
+  reason?: string
+  [key: string]: unknown
+}
+
+const props = withDefaults(defineProps<{
+  modelValue: LeaveFormData
+  children?: Child[]
+  pastLimit: string
+  futureLimit: string
+  submitting?: boolean
+}>(), {
+  children: () => [],
+  submitting: false,
+})
+const emit = defineEmits<{
+  'update:modelValue': [value: LeaveFormData]
+  'submit': []
+  'cancel': []
+}>()
+
+function update(field: string, value: unknown): void {
   // 重新發射整個物件，避免父層遺漏其他欄位
   emit('update:modelValue', { ...props.modelValue, [field]: value })
 }
@@ -38,7 +59,7 @@ function update(field, value) {
       <select
         id="leave-student"
         :value="modelValue.student_id"
-        @change="update('student_id', Number($event.target.value))"
+        @change="update('student_id', Number(($event.target as HTMLSelectElement).value))"
       >
         <option
           v-for="c in children"
@@ -78,7 +99,7 @@ function update(field, value) {
         :value="modelValue.start_date"
         :min="pastLimit"
         :max="futureLimit"
-        @input="update('start_date', $event.target.value)"
+        @input="update('start_date', ($event.target as HTMLInputElement).value)"
       />
     </div>
     <div class="field">
@@ -89,7 +110,7 @@ function update(field, value) {
         :value="modelValue.end_date"
         :min="modelValue.start_date"
         :max="futureLimit"
-        @input="update('end_date', $event.target.value)"
+        @input="update('end_date', ($event.target as HTMLInputElement).value)"
       />
     </div>
     <div class="field">
@@ -100,7 +121,7 @@ function update(field, value) {
         rows="3"
         maxlength="500"
         autocomplete="off"
-        @input="update('reason', $event.target.value)"
+        @input="update('reason', ($event.target as HTMLTextAreaElement).value)"
       />
     </div>
     <div class="form-footer">

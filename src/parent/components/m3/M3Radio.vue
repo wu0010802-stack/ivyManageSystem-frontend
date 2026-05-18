@@ -1,28 +1,34 @@
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 
 /**
  * Material 3 Radio Button.
  * Spec: docs/superpowers/specs/2026-05-13-parent-material3-redesign-design.md §6.6
  */
-const props = defineProps({
-  modelValue: { default: null },
-  value: { required: true },
-  name: { type: String, default: '' },
-  disabled: { type: Boolean, default: false },
+const props = withDefaults(defineProps<{
+  modelValue?: unknown
+  value: unknown
+  name?: string
+  disabled?: boolean
+}>(), {
+  modelValue: undefined,
+  name: '',
+  disabled: false,
 })
 
-const emit = defineEmits(['update:modelValue'])
+const emit = defineEmits<{
+  'update:modelValue': [value: unknown]
+}>()
 
-const isSelected = computed(() => props.modelValue === props.value)
+const isSelected = computed<boolean>(() => props.modelValue === props.value)
 
-const classes = computed(() => ({
+const classes = computed<Record<string, boolean>>(() => ({
   'm3-radio': true,
   'is-selected': isSelected.value,
   'is-disabled': props.disabled,
 }))
 
-function onClick() {
+function onClick(): void {
   if (props.disabled) return
   if (!isSelected.value) {
     emit('update:modelValue', props.value)

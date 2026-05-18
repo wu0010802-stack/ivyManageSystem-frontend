@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /**
  * 才藝報名 BottomSheet（snap mid/full，預設 full）。
  *
@@ -16,20 +16,47 @@
  */
 import ParentBottomSheet from '@/parent/components/ParentBottomSheet.vue'
 
-const props = defineProps({
-  modelValue: { type: Boolean, required: true },
-  formData: { type: Object, required: true },
-  children: { type: Array, default: () => [] },
-  availableCourses: { type: Array, default: () => [] },
-  submitting: { type: Boolean, default: false },
-})
-const emit = defineEmits(['update:modelValue', 'update:form-data', 'submit'])
+interface Child {
+  student_id: number
+  name: string
+}
 
-function update(field, value) {
+interface Course {
+  id: number
+  name: string
+  price?: number
+  is_full?: boolean
+  allow_waitlist?: boolean
+}
+
+interface FormData {
+  student_id?: number
+  course_ids?: number[]
+  [key: string]: unknown
+}
+
+const props = withDefaults(defineProps<{
+  modelValue: boolean
+  formData: FormData
+  children?: Child[]
+  availableCourses?: Course[]
+  submitting?: boolean
+}>(), {
+  children: () => [],
+  availableCourses: () => [],
+  submitting: false,
+})
+const emit = defineEmits<{
+  'update:modelValue': [value: boolean]
+  'update:form-data': [value: FormData]
+  'submit': []
+}>()
+
+function update(field: string, value: unknown): void {
   emit('update:form-data', { ...props.formData, [field]: value })
 }
 
-function toggleCourse(id) {
+function toggleCourse(id: number): void {
   const ids = Array.isArray(props.formData.course_ids) ? [...props.formData.course_ids] : []
   const idx = ids.indexOf(id)
   if (idx >= 0) ids.splice(idx, 1)
@@ -52,7 +79,7 @@ function toggleCourse(id) {
         <select
           id="activity-student"
           :value="formData.student_id"
-          @change="update('student_id', Number($event.target.value))"
+          @change="update('student_id', Number(($event.target as HTMLSelectElement).value))"
         >
           <option
             v-for="c in children"

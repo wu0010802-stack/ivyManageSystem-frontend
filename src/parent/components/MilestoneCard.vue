@@ -1,10 +1,24 @@
-<script setup>
+<script setup lang="ts">
 import MilestoneReactionBar from './MilestoneReactionBar.vue'
 
-defineProps({
-  milestone: { type: Object, required: true },
-})
-const emit = defineEmits(['react'])
+interface Milestone {
+  id: number | string
+  icon?: string
+  title?: string
+  achieved_on?: string
+  occurred_at?: string
+  summary?: string
+  description?: string
+  parent_reaction?: string | null
+  [key: string]: unknown
+}
+
+const props = defineProps<{
+  milestone: Milestone
+}>()
+const emit = defineEmits<{
+  'react': [reaction: string]
+}>()
 </script>
 
 <template>

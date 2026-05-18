@@ -1,16 +1,38 @@
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 import ParentIcon from './ParentIcon.vue'
 
-const props = defineProps({
-  message: { type: Object, required: true },
-  canRecall: { type: Boolean, default: false },
-})
-const emit = defineEmits(['recall'])
+interface MessageAttachment {
+  id: number | string
+  url: string
+  thumb_url?: string
+  original_filename: string
+}
 
-const isMine = computed(() => props.message.sender_role === 'parent')
-const isPending = computed(() => props.message._pending === true)
-const time = computed(() => {
+interface Message {
+  id: number | string
+  sender_role?: string
+  _pending?: boolean
+  created_at?: string
+  deleted?: boolean
+  body?: string
+  attachments?: MessageAttachment[]
+  [key: string]: unknown
+}
+
+const props = withDefaults(defineProps<{
+  message: Message
+  canRecall?: boolean
+}>(), {
+  canRecall: false,
+})
+const emit = defineEmits<{
+  'recall': [id: number | string]
+}>()
+
+const isMine = computed<boolean>(() => props.message.sender_role === 'parent')
+const isPending = computed<boolean>(() => props.message._pending === true)
+const time = computed<string>(() => {
   if (!props.message.created_at) return ''
   const d = new Date(props.message.created_at)
   const hh = String(d.getHours()).padStart(2, '0')

@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /**
  * 家長首頁「我的孩子」清單區塊。
  *
@@ -10,16 +10,29 @@
 import ParentIcon from '../ParentIcon.vue'
 import CrownIcon from '@/components/brand/CrownIcon.vue'
 
-defineProps({
-  children: {
-    type: Array,
-    default: () => [],
-  },
+interface Child {
+  guardian_id: number
+  student_id: number
+  name?: string
+  classroom_name?: string
+  guardian_relation?: string
+  is_primary?: boolean
+  can_pickup?: boolean
+  lifecycle_status?: string
+  birthday?: string
+}
+
+withDefaults(defineProps<{
+  children?: Child[]
+}>(), {
+  children: () => [],
 })
 
-const emit = defineEmits(['navigate'])
+const emit = defineEmits<{
+  'navigate': [path: string]
+}>()
 
-const LIFECYCLE_LABELS = {
+const LIFECYCLE_LABELS: Record<string, string> = {
   active: '在學',
   enrolled: '在學',
   on_leave: '休學中',
@@ -29,11 +42,11 @@ const LIFECYCLE_LABELS = {
   prospect: '招生中',
 }
 
-function lifecycleLabel(s) {
-  return LIFECYCLE_LABELS[s] || s || ''
+function lifecycleLabel(s: string | undefined): string {
+  return (s ? LIFECYCLE_LABELS[s] : null) || s || ''
 }
 
-function isBirthdayToday(child) {
+function isBirthdayToday(child: Child): boolean {
   if (!child.birthday) return false
   const parts = String(child.birthday).split('-')
   if (parts.length < 3) return false

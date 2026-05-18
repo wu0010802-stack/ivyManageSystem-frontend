@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 import M3Icon from './m3/M3Icon.vue'
 import { mapIconName, mapIconSize } from '../utils/iconMapping'
@@ -15,14 +15,17 @@ import { mapIconName, mapIconSize } from '../utils/iconMapping'
  *   <ParentIcon name="home" size="md" />
  *   <ParentIcon name="close" size="lg" aria-label="關閉" />
  */
-const props = defineProps({
-  name: { type: String, required: true },
-  size: { type: String, default: 'md' },
-  decorative: { type: Boolean, default: true },
+const props = withDefaults(defineProps<{
+  name: string
+  size?: string
+  decorative?: boolean
+}>(), {
+  size: 'md',
+  decorative: true,
 })
 
-const m3Name = computed(() => mapIconName(props.name))
-const m3Size = computed(() => mapIconSize(props.size))
+const m3Name = computed<string>(() => mapIconName(props.name))
+const m3Size = computed<number>(() => mapIconSize(props.size))
 </script>
 
 <template>

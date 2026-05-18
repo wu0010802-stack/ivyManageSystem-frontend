@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /**
  * 請假 hero 卡：本學期請假天數彙總（cream/leaf 漸層 + 月桂葉 + KawaiiStar）。
  * IvyKids rebrand 2026-05-07（Phase 4.1）
@@ -10,15 +10,17 @@
 import LaurelWreath from '@/components/brand/LaurelWreath.vue'
 import KawaiiStar from '@/components/brand/KawaiiStar.vue'
 
-const props = defineProps({
-  summary: {
-    type: Object,
-    required: true,
-    // { total_used: number, by_type: { sick, personal, ... }, semester_label: string }
-  },
-})
+interface LeaveSummary {
+  total_used?: number
+  by_type?: Record<string, number>
+  semester_label?: string
+}
 
-const TYPE_LABEL = {
+defineProps<{
+  summary: LeaveSummary
+}>()
+
+const TYPE_LABEL: Record<string, string> = {
   sick: '病假',
   personal: '事假',
   official: '公假',

@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, useSlots } from 'vue'
 import M3Icon from './M3Icon.vue'
 
@@ -12,44 +12,51 @@ import M3Icon from './M3Icon.vue'
  *
  * Spec: docs/superpowers/specs/2026-05-13-parent-material3-redesign-design.md §4.4
  */
-const props = defineProps({
-  headline: { type: String, required: true },
-  supportingText: { type: String, default: '' },
-  overline: { type: String, default: '' },
-  leadingIcon: { type: String, default: '' },
-  trailingIcon: { type: String, default: '' },
-  clickable: { type: Boolean, default: false },
-  disabled: { type: Boolean, default: false },
+const props = withDefaults(defineProps<{
+  headline: string
+  supportingText?: string
+  overline?: string
+  leadingIcon?: string
+  trailingIcon?: string
+  clickable?: boolean
+  disabled?: boolean
+}>(), {
+  supportingText: '',
+  overline: '',
+  leadingIcon: '',
+  trailingIcon: '',
+  clickable: false,
+  disabled: false,
 })
 
-const emit = defineEmits(['click'])
+const emit = defineEmits<{
+  'click': [event: MouseEvent]
+}>()
 
 const slots = useSlots()
-const hasLeading = computed(() => !!slots.leading || !!props.leadingIcon)
-const hasTrailing = computed(() => !!slots.trailing || !!props.trailingIcon)
+const hasLeading = computed<boolean>(() => !!slots.leading || !!props.leadingIcon)
+const hasTrailing = computed<boolean>(() => !!slots.trailing || !!props.trailingIcon)
 
-const lineCount = computed(() => {
+const lineCount = computed<'one-line' | 'two-line' | 'three-line'>(() => {
   if (props.overline && props.supportingText) return 'three-line'
   if (props.supportingText || props.overline) return 'two-line'
   return 'one-line'
 })
 
-const classes = computed(() => ({
+const classes = computed<Record<string, boolean>>(() => ({
   'm3-list-item': true,
   [`m3-list-item-${lineCount.value}`]: true,
   'is-clickable': props.clickable,
   'is-disabled': props.disabled,
 }))
 
-const rootAttrs = computed(() =>
-  props.clickable && !props.disabled
-    ? { role: 'button', tabindex: '0' }
-    : props.clickable
-      ? { role: 'button', tabindex: '-1', 'aria-disabled': 'true' }
-      : {},
-)
+const rootAttrs = computed(() => {
+  if (props.clickable && !props.disabled) return { role: 'button', tabindex: 0 }
+  if (props.clickable) return { role: 'button', tabindex: -1, 'aria-disabled': true }
+  return {}
+})
 
-function onClick(e) {
+function onClick(e: MouseEvent): void {
   if (props.disabled) return
   emit('click', e)
 }

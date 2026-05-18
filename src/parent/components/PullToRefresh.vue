@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /**
  * 家長 App 下拉刷新元件。
  *
@@ -21,16 +21,20 @@
 import { computed, ref, watch } from 'vue'
 import { usePullToRefresh } from '../composables/usePullToRefresh'
 
-const props = defineProps({
+const props = withDefaults(defineProps<{
   /** 自訂門檻（px），預設 64 */
-  threshold: { type: Number, default: 64 },
+  threshold?: number
   /** 停用（例如某些 view 不要下拉刷新） */
-  disabled: { type: Boolean, default: false },
+  disabled?: boolean
   /** 刷新處理函式（可 async）。元件會 await 後才收 indicator */
-  onRefresh: { type: Function, default: null },
+  onRefresh?: (() => unknown) | null
+}>(), {
+  threshold: 64,
+  disabled: false,
+  onRefresh: null,
 })
 
-const dragging = ref(false)
+const dragging = ref<boolean>(false)
 
 const { rootRef, pullDistance, refreshing, armed, _triggerRefresh } = usePullToRefresh({
   threshold: props.threshold,
@@ -52,31 +56,31 @@ watch(pullDistance, (v, old) => {
 })
 
 // indicator 文字 / 狀態
-const phase = computed(() => {
+const phase = computed<string>(() => {
   if (refreshing.value) return 'loading'
   if (pullDistance.value >= props.threshold) return 'release'
   if (pullDistance.value > 0) return 'pulling'
   return 'idle'
 })
 
-const arrowRotation = computed(() => {
+const arrowRotation = computed<string>(() => {
   if (phase.value === 'release') return 'rotate(180deg)'
   // 隨拉動旋轉，0 → -180
   const ratio = Math.min(1, pullDistance.value / props.threshold)
   return `rotate(${-180 * ratio + 180}deg)`
 })
 
-const indicatorOpacity = computed(() => {
+const indicatorOpacity = computed<number>(() => {
   if (refreshing.value) return 1
   return Math.min(1, pullDistance.value / props.threshold)
 })
 
-const contentStyle = computed(() => ({
+const contentStyle = computed<Record<string, string>>(() => ({
   transform: `translate3d(0, ${pullDistance.value}px, 0)`,
   transition: dragging.value ? 'none' : 'transform 240ms cubic-bezier(0.4, 0, 0.2, 1)',
 }))
 
-const indicatorHeight = computed(() => `${pullDistance.value}px`)
+const indicatorHeight = computed<string>(() => `${pullDistance.value}px`)
 
 defineExpose({ _triggerRefresh })
 </script>

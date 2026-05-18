@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /**
  * 才藝報名狀態列表（presentational）。
  *
@@ -12,12 +12,34 @@
  *
  * 根節點帶 id="act-active" 提供 hero scrollIntoView 錨點。
  */
-const props = defineProps({
-  registrations: { type: Array, default: () => [] },
-  studentNameMap: { type: Map, default: () => new Map() },
-  courseStatusMap: { type: Object, default: () => ({}) },
+interface RegCourse {
+  course_id: number
+  course_name: string
+  status: string
+}
+
+interface Registration {
+  id: number
+  student_id: number
+  student_name?: string
+  school_year: number
+  semester: number
+  is_paid: boolean
+  courses: RegCourse[]
+}
+
+withDefaults(defineProps<{
+  registrations?: Registration[]
+  studentNameMap?: Map<number, string>
+  courseStatusMap?: Record<string, { label: string; color: { bg: string; color: string } }>
+}>(), {
+  registrations: () => [],
+  studentNameMap: () => new Map(),
+  courseStatusMap: () => ({}),
 })
-const emit = defineEmits(['confirm-promotion'])
+const emit = defineEmits<{
+  'confirm-promotion': [reg: Registration, course: RegCourse]
+}>()
 </script>
 
 <template>

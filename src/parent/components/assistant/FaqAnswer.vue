@@ -1,26 +1,38 @@
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 
-const props = defineProps({
-  item: { type: Object, required: true },
-})
+interface FaqAction {
+  type: 'route' | 'contact_teacher' | 'external'
+  label: string
+  path?: string
+  url?: string
+}
+
+interface FaqItem {
+  answer?: string
+  action?: FaqAction
+}
+
+const props = defineProps<{
+  item: FaqItem
+}>()
 
 const router = useRouter()
 
 marked.setOptions({ breaks: true, gfm: true })
 
-const answerHtml = computed(() => {
+const answerHtml = computed<string>(() => {
   const raw = marked.parse(props.item.answer || '')
-  return DOMPurify.sanitize(raw, { USE_PROFILES: { html: true } })
+  return DOMPurify.sanitize(raw as string, { USE_PROFILES: { html: true } })
 })
 
-function runAction() {
+function runAction(): void {
   const a = props.item.action
   if (!a) return
-  if (a.type === 'route') router.push(a.path)
+  if (a.type === 'route') router.push(a.path ?? '/')
   else if (a.type === 'contact_teacher') router.push('/messages')
   else if (a.type === 'external' && a.url) window.open(a.url, '_blank', 'noopener')
 }

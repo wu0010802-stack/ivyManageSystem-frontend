@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /**
  * 請假詳情 BottomSheet（snap mid/full）。
  *
@@ -9,17 +9,50 @@
 import ParentBottomSheet from '@/parent/components/ParentBottomSheet.vue'
 import LeaveAttachments from './LeaveAttachments.vue'
 
-const props = defineProps({
-  modelValue: { type: Boolean, required: true },
-  leave: { type: Object, default: null },
-  studentName: { type: String, default: '' },
-  timelineSteps: { type: Array, default: () => [] },
-  attUploading: { type: Boolean, default: false },
-  attEditable: { type: Boolean, default: false },
-  urlResolver: { type: Function, required: true },
+interface TimelineStep {
+  key: string
+  label: string
+  done: boolean
+  timestamp?: string
+}
+
+interface LeaveRecord {
+  leave_type?: string
+  start_date?: string
+  end_date?: string
+  reason?: string
+  review_note?: string
+  attachments?: Attachment[]
+  [key: string]: unknown
+}
+
+interface Attachment {
+  id: number
+  original_filename?: string
+  [key: string]: unknown
+}
+
+const props = withDefaults(defineProps<{
+  modelValue: boolean
+  leave?: LeaveRecord | null
+  studentName?: string
+  timelineSteps?: TimelineStep[]
+  attUploading?: boolean
+  attEditable?: boolean
+  urlResolver: (attachment: Attachment) => string
+}>(), {
+  leave: null,
+  studentName: '',
+  timelineSteps: () => [],
+  attUploading: false,
+  attEditable: false,
 })
 
-const emit = defineEmits(['update:modelValue', 'att-upload', 'att-remove'])
+const emit = defineEmits<{
+  'update:modelValue': [value: boolean]
+  'att-upload': [file: File]
+  'att-remove': [attachment: Attachment]
+}>()
 </script>
 
 <template>

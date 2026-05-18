@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /**
  * 二擇一確認對話框，取代 window.confirm()。M3 化版本。
  *
@@ -13,30 +13,40 @@ import { computed } from 'vue'
 import AppModal from './AppModal.vue'
 import M3Button from './m3/M3Button.vue'
 
-const props = defineProps({
-  open: { type: Boolean, default: false },
-  title: { type: String, required: true },
-  message: { type: String, default: '' },
-  confirmLabel: { type: String, default: '確定' },
-  cancelLabel: { type: String, default: '取消' },
-  destructive: { type: Boolean, default: false },
+const props = withDefaults(defineProps<{
+  open?: boolean
+  title: string
+  message?: string
+  confirmLabel?: string
+  cancelLabel?: string
+  destructive?: boolean
+}>(), {
+  open: false,
+  message: '',
+  confirmLabel: '確定',
+  cancelLabel: '取消',
+  destructive: false,
 })
 
-const emit = defineEmits(['update:open', 'confirm', 'cancel'])
+const emit = defineEmits<{
+  'update:open': [value: boolean]
+  'confirm': []
+  'cancel': []
+}>()
 
-const titleId = computed(
+const titleId = computed<string>(
   () => `confirm-title-${Math.random().toString(36).slice(2, 8)}`,
 )
-const messageId = computed(
+const messageId = computed<string>(
   () => `confirm-msg-${Math.random().toString(36).slice(2, 8)}`,
 )
 
-function onCancel() {
+function onCancel(): void {
   emit('update:open', false)
   emit('cancel')
 }
 
-function onConfirm() {
+function onConfirm(): void {
   emit('update:open', false)
   emit('confirm')
 }
@@ -46,7 +56,7 @@ function onConfirm() {
   <AppModal
     :open="open"
     :labelled-by="titleId"
-    :described-by="message ? messageId : null"
+    :described-by="message ? messageId : undefined"
     @update:open="(v) => emit('update:open', v)"
   >
     <div class="confirm-dialog">

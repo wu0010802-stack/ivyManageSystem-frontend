@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /**
  * 請假列表單筆卡片（presentational）。
  *
@@ -13,14 +13,32 @@
  *  - click(leave) — 整張卡點擊
  *  - cancel(leave) — 取消按鈕點擊
  */
-const props = defineProps({
-  leave: { type: Object, required: true },
-  studentName: { type: String, default: '' },
-  statusLabel: { type: String, required: true },
-  statusColor: { type: Object, default: null },
-  canCancel: { type: Boolean, default: false },
+interface LeaveRecord {
+  student_id?: number
+  leave_type?: string
+  start_date?: string
+  end_date?: string
+  reason?: string
+  review_note?: string
+  status?: string
+  [key: string]: unknown
+}
+
+const props = withDefaults(defineProps<{
+  leave: LeaveRecord
+  studentName?: string
+  statusLabel: string
+  statusColor?: { bg: string; color: string } | null
+  canCancel?: boolean
+}>(), {
+  studentName: '',
+  statusColor: null,
+  canCancel: false,
 })
-const emit = defineEmits(['click', 'cancel'])
+const emit = defineEmits<{
+  'click': [leave: LeaveRecord]
+  'cancel': [leave: LeaveRecord]
+}>()
 </script>
 
 <template>

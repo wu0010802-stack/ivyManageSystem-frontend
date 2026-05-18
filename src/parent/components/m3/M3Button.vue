@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, useSlots } from 'vue'
 
 /**
@@ -17,20 +17,20 @@ import { computed, useSlots } from 'vue'
  *
  * Spec: docs/superpowers/specs/2026-05-13-parent-material3-redesign-design.md §4.1
  */
-const props = defineProps({
-  variant: {
-    type: String,
-    default: 'filled',
-    validator: (v) => ['filled', 'tonal', 'outlined', 'text', 'elevated'].includes(v),
-  },
-  disabled: { type: Boolean, default: false },
-  type: { type: String, default: 'button' },
+const props = withDefaults(defineProps<{
+  variant?: string
+  disabled?: boolean
+  type?: 'button' | 'submit' | 'reset'
+}>(), {
+  variant: 'filled',
+  disabled: false,
+  type: 'button',
 })
 
 const slots = useSlots()
-const hasLeadingIcon = computed(() => !!slots.icon)
+const hasLeadingIcon = computed<boolean>(() => !!slots.icon)
 
-const classes = computed(() => ({
+const classes = computed<Record<string, boolean>>(() => ({
   'm3-button': true,
   [`m3-button-${props.variant}`]: true,
   'has-leading-icon': hasLeadingIcon.value,

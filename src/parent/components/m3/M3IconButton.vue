@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 import M3Icon from './M3Icon.vue'
 
@@ -15,27 +15,30 @@ import M3Icon from './M3Icon.vue'
  *
  * Spec: docs/superpowers/specs/2026-05-13-parent-material3-redesign-design.md §4.3
  */
-const props = defineProps({
-  variant: {
-    type: String,
-    default: 'standard',
-    validator: (v) => ['standard', 'filled', 'filled-tonal', 'outlined'].includes(v),
-  },
-  icon: { type: String, required: true },
-  iconSize: { type: Number, default: 24 },
-  iconFilled: { type: Boolean, default: false },
-  disabled: { type: Boolean, default: false },
+const props = withDefaults(defineProps<{
+  variant?: string
+  icon: string
+  iconSize?: number
+  iconFilled?: boolean
+  disabled?: boolean
+}>(), {
+  variant: 'standard',
+  iconSize: 24,
+  iconFilled: false,
+  disabled: false,
 })
 
-const emit = defineEmits(['click'])
+const emit = defineEmits<{
+  'click': [event: MouseEvent]
+}>()
 
-const classes = computed(() => ({
+const classes = computed<Record<string, boolean>>(() => ({
   'm3-icon-button': true,
   [`m3-icon-button-${props.variant}`]: true,
   'is-disabled': props.disabled,
 }))
 
-function handleClick(event) {
+function handleClick(event: MouseEvent): void {
   if (props.disabled) return
   emit('click', event)
 }

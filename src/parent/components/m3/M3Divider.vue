@@ -1,22 +1,25 @@
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 
 /**
  * Material 3 Divider.
  * Spec: docs/superpowers/specs/2026-05-13-parent-material3-redesign-design.md §4
  */
-const props = defineProps({
-  inset: { type: Boolean, default: false },
-  vertical: { type: Boolean, default: false },
+const props = withDefaults(defineProps<{
+  inset?: boolean
+  vertical?: boolean
+}>(), {
+  inset: false,
+  vertical: false,
 })
 
-const classes = computed(() => ({
+const classes = computed<Record<string, boolean>>(() => ({
   'm3-divider': true,
   'is-inset': props.inset,
   'is-vertical': props.vertical,
 }))
 
-const ariaOrientation = computed(() =>
+const ariaOrientation = computed<'vertical' | undefined>(() =>
   props.vertical ? 'vertical' : undefined,
 )
 </script>

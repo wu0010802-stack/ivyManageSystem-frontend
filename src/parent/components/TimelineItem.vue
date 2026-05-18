@@ -1,7 +1,18 @@
-<script setup>
+<script setup lang="ts">
 import KawaiiStar from '@/components/brand/KawaiiStar.vue'
 
-defineProps({ item: { type: Object, required: true } })
+interface TimelineItemData {
+  icon?: string
+  title?: string
+  occurred_at?: string
+  is_highlight?: boolean
+  summary?: string
+  [key: string]: unknown
+}
+
+defineProps<{
+  item: TimelineItemData
+}>()
 </script>
 
 <template>

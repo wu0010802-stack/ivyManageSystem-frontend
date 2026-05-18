@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 import M3Icon from './M3Icon.vue'
 
@@ -13,24 +13,22 @@ import M3Icon from './M3Icon.vue'
  *
  * Spec: docs/superpowers/specs/2026-05-13-parent-material3-redesign-design.md §5.3
  */
-const props = defineProps({
-  icon: { type: String, required: true },
-  variant: {
-    type: String,
-    default: 'primary',
-    validator: (v) => ['primary', 'secondary', 'tertiary', 'surface'].includes(v),
-  },
-  size: {
-    type: String,
-    default: 'regular',
-    validator: (v) => ['small', 'regular', 'large'].includes(v),
-  },
-  extended: { type: Boolean, default: false },
-  label: { type: String, default: '' },
-  disabled: { type: Boolean, default: false },
+const props = withDefaults(defineProps<{
+  icon: string
+  variant?: string
+  size?: string
+  extended?: boolean
+  label?: string
+  disabled?: boolean
+}>(), {
+  variant: 'primary',
+  size: 'regular',
+  extended: false,
+  label: '',
+  disabled: false,
 })
 
-const classes = computed(() => ({
+const classes = computed<Record<string, boolean>>(() => ({
   'm3-fab': true,
   [`m3-fab-${props.variant}`]: true,
   [`m3-fab-${props.size}`]: true,
@@ -38,15 +36,17 @@ const classes = computed(() => ({
   'is-disabled': props.disabled,
 }))
 
-const iconSize = computed(() => {
+const iconSize = computed<number>(() => {
   if (props.size === 'small') return 20
   if (props.size === 'large') return 36
   return 24
 })
 
-const emit = defineEmits(['click'])
+const emit = defineEmits<{
+  'click': [event: MouseEvent]
+}>()
 
-function onClick(e) {
+function onClick(e: MouseEvent): void {
   if (props.disabled) return
   emit('click', e)
 }

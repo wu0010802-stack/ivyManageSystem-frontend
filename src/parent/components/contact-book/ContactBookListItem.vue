@@ -1,22 +1,31 @@
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 import MoodBadge from './MoodBadge.vue'
 import ParentIcon from '../ParentIcon.vue'
 
-const props = defineProps({
-  entry: { type: Object, required: true },
-})
+interface ContactBookEntry {
+  log_date?: string
+  my_acknowledged_at?: string | null
+  mood?: string | null
+  photos?: unknown[]
+  teacher_note?: string
+  learning_highlight?: string
+}
 
-const isUnread = computed(() => !props.entry?.my_acknowledged_at)
-const photoCount = computed(() => (props.entry?.photos || []).length)
+const props = defineProps<{
+  entry: ContactBookEntry
+}>()
 
-const dateLabel = computed(() => {
+const isUnread = computed<boolean>(() => !props.entry?.my_acknowledged_at)
+const photoCount = computed<number>(() => (props.entry?.photos || []).length)
+
+const dateLabel = computed<string>(() => {
   const raw = props.entry?.log_date
   if (!raw) return ''
   const [y, m, d] = raw.split('-')
   return `${Number(m)}/${Number(d)}`
 })
-const weekdayLabel = computed(() => {
+const weekdayLabel = computed<string>(() => {
   const raw = props.entry?.log_date
   if (!raw) return ''
   const [y, m, d] = raw.split('-')
@@ -24,7 +33,7 @@ const weekdayLabel = computed(() => {
   return `星期${['日', '一', '二', '三', '四', '五', '六'][date.getDay()]}`
 })
 
-const previewText = computed(() => {
+const previewText = computed<string>(() => {
   const t = props.entry?.teacher_note || props.entry?.learning_highlight
   if (!t) return '老師尚未填寫留言'
   return t.length > 40 ? t.slice(0, 40) + '…' : t

@@ -1,18 +1,27 @@
-<script setup>
+<script setup lang="ts">
 import { ref } from 'vue'
 import ParentIcon from './ParentIcon.vue'
 import { toast } from '../utils/toast'
 
+interface SendPayload {
+  body: string
+  attachments: File[]
+  done: (ok?: boolean) => void
+}
+
 const MAX_FILES = 3
 const MAX_FILE_SIZE = 10 * 1024 * 1024
 
-const emit = defineEmits(['send'])
-const body = ref('')
-const files = ref([])
-const sending = ref(false)
+const emit = defineEmits<{
+  'send': [payload: SendPayload]
+}>()
+const body = ref<string>('')
+const files = ref<File[]>([])
+const sending = ref<boolean>(false)
 
-function onPick(e) {
-  const incoming = Array.from(e.target.files || [])
+function onPick(e: Event): void {
+  const input = e.target as HTMLInputElement
+  const incoming = Array.from(input.files || [])
   let droppedOversize = 0
   let droppedOverLimit = 0
   for (const f of incoming) {
@@ -33,20 +42,20 @@ function onPick(e) {
   if (droppedOverLimit > 0) {
     toast.warn(`最多 ${MAX_FILES} 個附件，多餘的已略過`)
   }
-  e.target.value = ''
+  input.value = ''
 }
 
-function removeFile(i) {
+function removeFile(i: number): void {
   files.value.splice(i, 1)
 }
 
-async function submit() {
+async function submit(): Promise<void> {
   if (!body.value.trim() && files.value.length === 0) return
   sending.value = true
   // done(success?: boolean) — 父層 onSend 在 catch 應呼叫 done(false)，避免失敗
   // 也清空 body/attachments 導致使用者輸入遺失而無法重送。
   try {
-    const success = await new Promise((resolve) => {
+    const success = await new Promise<boolean>((resolve) => {
       emit('send', {
         body: body.value.trim() || '(附件)',
         attachments: [...files.value],

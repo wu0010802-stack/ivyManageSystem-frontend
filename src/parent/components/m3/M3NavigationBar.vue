@@ -1,5 +1,13 @@
-<script setup>
+<script setup lang="ts">
 import M3Icon from './M3Icon.vue'
+
+interface NavItem {
+  key: string
+  icon: string
+  activeIcon?: string
+  label: string
+  badge?: number
+}
 
 /**
  * Material 3 Navigation Bar.
@@ -9,30 +17,26 @@ import M3Icon from './M3Icon.vue'
  *
  * Spec: docs/superpowers/specs/2026-05-13-parent-material3-redesign-design.md §5.1
  */
-const props = defineProps({
-  items: {
-    type: Array,
-    required: true,
-    validator: (arr) =>
-      Array.isArray(arr) &&
-      arr.every((it) => typeof it.key === 'string' && typeof it.icon === 'string'),
-  },
-  currentKey: { type: String, required: true },
-})
+const props = defineProps<{
+  items: NavItem[]
+  currentKey: string
+}>()
 
-const emit = defineEmits(['select'])
+const emit = defineEmits<{
+  'select': [key: string, item: NavItem]
+}>()
 
-function badgeLabel(badge) {
+function badgeLabel(badge: number | undefined): string | null {
   if (!badge || badge < 1) return null
   return badge > 99 ? '99+' : String(badge)
 }
 
-function iconName(item, isActive) {
+function iconName(item: NavItem, isActive: boolean): string {
   if (isActive && item.activeIcon) return item.activeIcon
   return item.icon
 }
 
-function onTabClick(item) {
+function onTabClick(item: NavItem): void {
   emit('select', item.key, item)
 }
 </script>
@@ -45,7 +49,7 @@ function onTabClick(item) {
       type="button"
       class="m3-nav-tab"
       :class="{ 'is-active': item.key === currentKey }"
-      :aria-current="item.key === currentKey ? 'page' : null"
+      :aria-current="item.key === currentKey ? 'page' : undefined"
       :aria-label="item.label"
       @click="onTabClick(item)"
     >

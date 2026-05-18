@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /**
  * 家長 App 共用骨架元件。
  *
@@ -20,16 +20,21 @@
  */
 import { computed } from 'vue'
 
-const props = defineProps({
-  variant: { type: String, default: 'line' }, // line / card / row
-  count: { type: Number, default: 1 },
-  width: { type: String, default: null },
-  height: { type: String, default: null },
+const props = withDefaults(defineProps<{
+  variant?: string // line / card / row
+  count?: number
+  width?: string | null
+  height?: string | null
+}>(), {
+  variant: 'line',
+  count: 1,
+  width: null,
+  height: null,
 })
 
-const items = computed(() => Array.from({ length: Math.max(1, props.count) }))
-const customStyle = computed(() => {
-  const s = {}
+const items = computed<undefined[]>(() => Array.from({ length: Math.max(1, props.count) }))
+const customStyle = computed<Record<string, string>>(() => {
+  const s: Record<string, string> = {}
   if (props.width) s.width = props.width
   if (props.height) s.height = props.height
   return s

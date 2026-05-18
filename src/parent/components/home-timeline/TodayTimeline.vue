@@ -1,11 +1,26 @@
-<script setup>
+<script setup lang="ts">
 import TodayTimelineItem from './TodayTimelineItem.vue'
 
-defineProps({
-  buckets: { type: Array, default: () => [] },
+interface TimelineEvent {
+  id: number | string
+  [key: string]: unknown
+}
+
+interface TimelineBucket {
+  key: string
+  label: string
+  items: TimelineEvent[]
+}
+
+withDefaults(defineProps<{
+  buckets?: TimelineBucket[]
+}>(), {
+  buckets: () => [],
 })
 
-const emit = defineEmits(['navigate'])
+const emit = defineEmits<{
+  'navigate': [path: string]
+}>()
 </script>
 
 <template>

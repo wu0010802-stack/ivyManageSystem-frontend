@@ -1,17 +1,22 @@
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 
-const props = defineProps({
-  outstanding: { type: Number, default: 0 },
-  overdue: { type: Number, default: 0 },
-  detailHref: { type: String, default: '/fees' },
-  historyHref: { type: String, default: '/fees' },
+const props = withDefaults(defineProps<{
+  outstanding?: number
+  overdue?: number
+  detailHref?: string
+  historyHref?: string
+}>(), {
+  outstanding: 0,
+  overdue: 0,
+  detailHref: '/fees',
+  historyHref: '/fees',
 })
 
-const hasOutstanding = computed(() => props.outstanding > 0)
-const hasOverdue = computed(() => props.overdue > 0)
+const hasOutstanding = computed<boolean>(() => props.outstanding > 0)
+const hasOverdue = computed<boolean>(() => props.overdue > 0)
 
-function fmt(n) {
+function fmt(n: number): string {
   return Number(n || 0).toLocaleString('en-US')
 }
 </script>

@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /**
  * 費用紀錄列表（presentational）。
  *
@@ -12,15 +12,30 @@
  *
  * 第一筆未繳/部分繳費的卡片會帶 data-unpaid-anchor，供 hero CTA scrollIntoView。
  */
-const props = defineProps({
-  records: { type: Array, required: true },
-  statusLabel: { type: Function, required: true },
-  statusColor: { type: Function, default: () => null },
-})
-const emit = defineEmits(['record-click'])
+interface FeeRecord {
+  id: number
+  fee_item_name: string
+  status: string
+  amount_due: number
+  amount_paid: number
+  outstanding: number
+  due_date?: string
+  period?: string
+}
 
-function fmt(n) { return Number(n).toLocaleString('en-US') }
-function isUnpaidAnchor(r, idx) {
+const props = withDefaults(defineProps<{
+  records: FeeRecord[]
+  statusLabel: (status: string) => string
+  statusColor?: (status: string) => { bg: string; color: string } | null
+}>(), {
+  statusColor: () => null,
+})
+const emit = defineEmits<{
+  'record-click': [record: FeeRecord]
+}>()
+
+function fmt(n: number): string { return Number(n).toLocaleString('en-US') }
+function isUnpaidAnchor(r: FeeRecord, idx: number): boolean {
   if (r.status !== 'unpaid' && r.status !== 'partial') return false
   return (
     props.records.findIndex((x) => x.status === 'unpaid' || x.status === 'partial') === idx
@@ -43,7 +58,7 @@ function isUnpaidAnchor(r, idx) {
         :data-status="r.status"
         :style="
           statusColor(r.status)
-            ? { background: statusColor(r.status).bg, color: statusColor(r.status).color }
+            ? { background: statusColor(r.status)?.bg, color: statusColor(r.status)?.color }
             : {}
         "
       >{{ statusLabel(r.status) }}</span>
