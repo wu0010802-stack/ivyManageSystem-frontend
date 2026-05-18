@@ -145,7 +145,7 @@ import {
   submitIep, approveIep, closeIep, exportIepPdf,
 } from '@/api/govMoe'
 import { getStudents } from '@/api/students'
-import { getClassrooms } from '@/api/classrooms'
+import { useClassroomStore } from '@/stores/classroom'
 import { getUserInfo } from '@/utils/auth'
 
 const currentUser = computed(() => getUserInfo() || {})
@@ -154,6 +154,7 @@ const canApprove = computed(() =>
   ['園長', '主任'].includes(currentUser.value.supervisor_role)
 )
 
+const classroomStore = useClassroomStore()
 const classrooms = ref([])
 const students = ref([])
 const ieps = ref([])
@@ -209,10 +210,10 @@ function iepStatusLabel(s) {
 }
 
 async function loadAll() {
-  const [c, s, i] = await Promise.all([
-    getClassrooms(), getStudents(), listIeps(),
+  const [, s, i] = await Promise.all([
+    classroomStore.fetchClassrooms(), getStudents(), listIeps(),
   ])
-  classrooms.value = c.data
+  classrooms.value = classroomStore.classrooms
   students.value = s.data
   ieps.value = i.data
 }

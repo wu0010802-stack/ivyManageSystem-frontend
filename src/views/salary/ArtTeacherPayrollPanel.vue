@@ -9,7 +9,7 @@ import {
   deleteArtPayroll,
   batchImportArtPayroll,
 } from '@/api/artTeacherPayroll'
-import { getEmployees } from '@/api/employees'
+import { useEmployeeStore } from '@/stores/employee'
 import { downloadFile } from '@/utils/download'
 import { apiError } from '@/utils/error'
 
@@ -63,10 +63,12 @@ const employeeTotals = computed(() => {
   return Array.from(map.values())
 })
 
+const employeeStore = useEmployeeStore()
+
 const fetchEmployees = async () => {
   try {
-    const res = await getEmployees({ active: true })
-    hourlyEmployees.value = (res.data || []).filter((e) => e.employee_type === 'hourly')
+    await employeeStore.fetchEmployees()
+    hourlyEmployees.value = (employeeStore.employees || []).filter((e) => e.employee_type === 'hourly')
   } catch {
     /* ignore */
   }

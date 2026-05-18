@@ -91,7 +91,7 @@ import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Monitor, Search, Setting, SwitchButton, User, ArrowDown } from '@element-plus/icons-vue'
-import { getEmployees } from '@/api/employees'
+import { useEmployeeStore } from '@/stores/employee'
 import { impersonate } from '@/api/auth'
 import { getUserInfo, clearAuth, setUserInfo } from '@/utils/auth'
 import GlobalSearch from '@/components/GlobalSearch.vue'
@@ -128,6 +128,7 @@ const canEnterPortal = computed(() => {
 const showEmployeePicker = ref(false)
 const employeeList = ref([])
 const empSearch = ref('')
+const employeeStore = useEmployeeStore()
 
 const filteredEmployees = computed(() =>
   empSearch.value
@@ -144,8 +145,8 @@ const goToPortal = async () => {
   } else {
     // 最高管理員：先載入員工清單再彈 dialog
     try {
-      const res = await getEmployees()
-      employeeList.value = res.data
+      await employeeStore.fetchEmployees()
+      employeeList.value = employeeStore.employees
     } catch {
       // silent
     }

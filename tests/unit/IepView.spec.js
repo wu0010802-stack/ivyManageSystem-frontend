@@ -18,9 +18,11 @@ vi.mock('@/api/students', () => ({
     data: [{ id: 1, name: '王小明', classroom_id: 1, disability_type: '自閉症' }],
   }),
 }))
-vi.mock('@/api/classrooms', () => ({
-  getClassrooms: vi.fn().mockResolvedValue({
-    data: [{ id: 1, name: 'A 班' }],
+const mockFetchClassrooms = vi.fn().mockResolvedValue(undefined)
+vi.mock('@/stores/classroom', () => ({
+  useClassroomStore: () => ({
+    classrooms: [{ id: 1, name: 'A 班' }],
+    fetchClassrooms: mockFetchClassrooms,
   }),
 }))
 vi.mock('@/utils/auth', () => ({
