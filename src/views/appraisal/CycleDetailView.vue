@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Refresh, Download } from '@element-plus/icons-vue'
@@ -37,8 +37,25 @@ const catalog = ref([])
 const loading = ref(false)
 const busy = ref(false)
 
-const view = ref('kanban')
+// P1-9：view 用 URL query 同步，F5 後保留、可分享。
+const VALID_VIEWS = ['kanban', 'list']
+const initialQueryView = route?.query?.view
+const initialView = VALID_VIEWS.includes(initialQueryView) ? initialQueryView : 'kanban'
+const view = ref(initialView)
 const selectedIds = ref([])
+
+// view 切換時：① 同步 URL query ② 清空 selectedIds（兩 view 的 id 來源不同）
+watch(view, (next) => {
+  selectedIds.value = []
+  if (router?.replace) {
+    router.replace({ query: { ...(route?.query || {}), view: next } })
+  }
+})
+
+// P1-14：以 ref<Array<id>> 追蹤每張卡正在簽核中的狀態，
+// 用 Set 包裝避免 race；toolbar busy 改為 isRecomputing 專用。
+const signingIds = ref([])
+const isSigning = (summaryId) => signingIds.value.includes(summaryId)
 
 const summaryByParticipant = computed(() => {
   const m = {}
@@ -92,6 +109,15 @@ async function reload() {
   if (kanbanRef.value?.reload) kanbanRef.value.reload()
 }
 
+// P1-14：背景非阻塞重新整理 kanban，不動 summaries / participants /
+// catalog（這些只在初次載入或 reject/comment/recompute 後才需要重撈）。
+function silentKanbanRefresh() {
+  if (kanbanRef.value?.reload) {
+    // 不 await — 不阻塞 UI；錯誤交給 kanban 自己的 try/catch
+    kanbanRef.value.reload()
+  }
+}
+
 async function recompute() {
   busy.value = true
   try {
@@ -105,18 +131,38 @@ async function recompute() {
   }
 }
 
+// P1-14：簽核成功後改採局部 patch + 背景 kanban refresh，
+// 不再觸發 4 個 API 全量 reload。
+const STAGE_TO_NEXT_STATUS = {
+  supervisor: 'SUPERVISOR_SIGNED',
+  accounting: 'ACCOUNTING_SIGNED',
+  finalize: 'FINALIZED',
+}
+
 async function sign({ summary, stage }) {
-  busy.value = true
+  const id = summary.id
+  // 重複 click 防護
+  if (signingIds.value.includes(id)) return
+  signingIds.value = [...signingIds.value, id]
   try {
-    if (stage === 'supervisor') await signSupervisorAppraisalSummary(summary.id)
-    else if (stage === 'accounting') await signAccountingAppraisalSummary(summary.id)
-    else if (stage === 'finalize') await finalizeAppraisalSummary(summary.id)
+    if (stage === 'supervisor') await signSupervisorAppraisalSummary(id)
+    else if (stage === 'accounting') await signAccountingAppraisalSummary(id)
+    else if (stage === 'finalize') await finalizeAppraisalSummary(id)
     ElMessage.success('簽核完成')
-    await reload()
+    // 局部 patch：更新本地 summaries 該筆的 status，UI 立刻反映新狀態
+    const nextStatus = STAGE_TO_NEXT_STATUS[stage]
+    if (nextStatus) {
+      const idx = summaries.value.findIndex((s) => s.id === id)
+      if (idx >= 0) {
+        summaries.value[idx] = { ...summaries.value[idx], status: nextStatus }
+      }
+    }
+    // 背景非阻塞 refresh kanban（其 buckets 結構獨立）
+    silentKanbanRefresh()
   } catch (e) {
     ElMessage.error(apiError(e, '簽核失敗'))
   } finally {
-    busy.value = false
+    signingIds.value = signingIds.value.filter((x) => x !== id)
   }
 }
 
@@ -151,6 +197,10 @@ defineExpose({
   openReject,
   openComment,
   openLog,
+  sign,
+  signingIds,
+  isSigning,
+  summaries,
 })
 
 onMounted(load)
