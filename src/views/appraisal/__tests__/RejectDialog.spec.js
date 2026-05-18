@@ -147,7 +147,10 @@ describe('RejectDialog', () => {
     expect(wrapper.vm.toStatus).toBe('DRAFT')
   })
 
-  it('reason < 10 字時不打 API 並發出 warning', async () => {
+  // P1-10：reason 字數驗證委派後端；前端不再 block 短字串。
+  // 測試 reason 為短字串時仍會呼叫 API（由後端 422 驗證並回 detail）。
+  it('reason 短字串時仍會呼叫 API（驗證委派後端）', async () => {
+    rejectSummary.mockResolvedValueOnce({ data: {} })
     const wrapper = mountDialog()
     await flushPromises()
     await wrapper.find('[data-test="reason-input"]').setValue('太短')
@@ -155,8 +158,11 @@ describe('RejectDialog', () => {
     await wrapper.find('[data-test="submit-btn"]').trigger('click')
     await flushPromises()
 
-    expect(rejectSummary).not.toHaveBeenCalled()
-    expect(ElMessage.warning).toHaveBeenCalled()
+    expect(rejectSummary).toHaveBeenCalledTimes(1)
+    expect(rejectSummary).toHaveBeenCalledWith(7, {
+      reason: '太短',
+      to_status: 'DRAFT',
+    })
   })
 
   it('完整 submit 呼叫 rejectSummary 並 emit rejected', async () => {

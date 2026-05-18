@@ -34,14 +34,34 @@ const ElDialogStub = defineComponent({
       : null
   },
 })
+// P1-6：BatchSignButton 失敗清單改用 scoped slot 顯示 employee_name +
+// shortError；stub 須把 row 傳給 #default。用 provide/inject 在 table
+// 對每個 row 設定 current-row，column 從 inject 拿並回傳給 slot。
+import { provide, inject } from 'vue'
 const ElTableStub = defineComponent({
   props: ['data'],
-  setup(props, { slots, attrs }) {
-    return () => h('table', { ...attrs }, slots.default?.())
+  setup(props, { slots }) {
+    return () => h(
+      'table',
+      (props.data || []).map((row) => {
+        const RowProvider = defineComponent({
+          setup(_, { slots: rs }) {
+            provide('current-row', row)
+            return () => h('tr', rs.default?.())
+          },
+        })
+        return h(RowProvider, null, { default: () => slots.default?.() })
+      }),
+    )
   },
 })
 const ElTableColumnStub = defineComponent({
-  setup(_, { slots }) { return () => h('td', slots.default?.()) },
+  setup(_, { slots }) {
+    return () => {
+      const row = inject('current-row', null)
+      return h('td', slots.default ? slots.default({ row }) : null)
+    }
+  },
 })
 
 const stubs = {
