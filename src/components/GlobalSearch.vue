@@ -114,7 +114,7 @@
   </Teleport>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Search, User, Avatar, Bell, Grid } from '@element-plus/icons-vue'
@@ -128,17 +128,27 @@ const router = useRouter()
 const employeeStore = useEmployeeStore()
 
 // ---------- state ----------
-const visible = ref(false)
-const query = ref('')
-const activeIndex = ref(-1)
-const isLoading = ref(false)
-const inputRef = ref(null)
-const resultsRef = ref(null)
+const visible = ref<boolean>(false)
+const query = ref<string>('')
+const activeIndex = ref<number>(-1)
+const isLoading = ref<boolean>(false)
+const inputRef = ref<HTMLInputElement | null>(null)
+const resultsRef = ref<HTMLElement | null>(null)
 
 // 公告快取（首次 fetch 後不重複請求）
-const announcementCache = ref(null)
+const announcementCache = ref<Record<string, unknown>[] | null>(null)
 // 學生搜尋結果（debounce 後更新）
-const studentResults = ref([])
+const studentResults = ref<Record<string, unknown>[]>([])
+
+// 員工條目型別（store 回傳 unknown[]，此處 cast 供搜尋用）
+interface EmployeeEntry {
+  id: number | string
+  name?: string
+  employee_id?: string | number
+  job_title?: string
+  department?: string
+  [key: string]: unknown
+}
 
 // ---------- 靜態頁面清單 ----------
 const ALL_PAGES = [
@@ -162,34 +172,34 @@ const ALL_PAGES = [
 ]
 
 // ---------- computed 搜尋結果 ----------
-const employeeResults = computed(() => {
+const employeeResults = computed((): Record<string, unknown>[] => {
   const q = query.value.trim()
   if (!q) return []
-  return employeeStore.employees
+  return (employeeStore.employees as EmployeeEntry[])
     .filter(e =>
       (e.name || '').includes(q) ||
       (e.employee_id || '').toString().includes(q) ||
       (e.job_title || '').includes(q)
     )
     .slice(0, 5)
-    .map(e => ({ ...e, _type: 'employee' }))
+    .map(e => ({ ...e, _type: 'employee' } as Record<string, unknown>))
 })
 
-const announcementResults = computed(() => {
+const announcementResults = computed((): Record<string, unknown>[] => {
   const q = query.value.trim()
   if (!q || !announcementCache.value) return []
   return announcementCache.value
-    .filter(a => (a.title || '').includes(q) || (a.content || '').includes(q))
+    .filter(a => ((a.title as string) || '').includes(q) || ((a.content as string) || '').includes(q))
     .slice(0, 3)
-    .map(a => ({ ...a, _type: 'announcement' }))
+    .map(a => ({ ...a, _type: 'announcement' } as Record<string, unknown>))
 })
 
-const pageResults = computed(() => {
+const pageResults = computed((): Record<string, unknown>[] => {
   const q = query.value.trim()
   if (!q) return []
   return ALL_PAGES
     .filter(p => canAccessRoute(p.accessPath || p.path) && p.title.includes(q))
-    .map(p => ({ ...p, _type: 'page' }))
+    .map(p => ({ ...p, _type: 'page' } as Record<string, unknown>))
 })
 
 // ---------- 全域扁平索引（鍵盤導航用）----------
@@ -201,8 +211,8 @@ const flatItems = computed(() => [
   ...pageResults.value,
 ])
 
-function flatIndex(section, localIdx) {
-  const offsets = {
+function flatIndex(section: string, localIdx: number) {
+  const offsets: Record<string, number> = {
     employee: 0,
     student: employeeResults.value.length,
     announcement: employeeResults.value.length + studentResults.value.length,
@@ -215,17 +225,18 @@ function flatIndex(section, localIdx) {
 async function loadAnnouncements() {
   if (announcementCache.value !== null) return
   try {
-    const res = await getAnnouncements()
-    announcementCache.value = res.data?.items ?? res.data ?? []
+    const res = await getAnnouncements({})
+    const resData = res.data as { items?: Record<string, unknown>[] } | Record<string, unknown>[] | null
+    announcementCache.value = (resData as { items?: Record<string, unknown>[] })?.items ?? (resData as Record<string, unknown>[]) ?? []
   } catch {
     announcementCache.value = []
   }
 }
 
 // debounce 學生搜尋
-let studentTimer = null
-function scheduleStudentSearch(q) {
-  clearTimeout(studentTimer)
+let studentTimer: ReturnType<typeof setTimeout> | null = null
+function scheduleStudentSearch(q: string) {
+  if (studentTimer !== null) clearTimeout(studentTimer)
   if (!q.trim()) {
     studentResults.value = []
     return
@@ -263,21 +274,21 @@ function open() {
 
 function close() {
   visible.value = false
-  clearTimeout(studentTimer)
+  if (studentTimer !== null) clearTimeout(studentTimer)
 }
 
 // ---------- 選擇項目 ----------
-function select(item) {
+function select(item: Record<string, unknown>) {
   const type = item._type
   if (type === 'employee') router.push('/employees')
   else if (type === 'student') router.push('/students')
   else if (type === 'announcement') router.push('/announcements')
-  else if (type === 'page') router.push(item.path)
+  else if (type === 'page') router.push(item.path as string)
   close()
 }
 
 // ---------- 鍵盤導航 ----------
-function onKeydown(e) {
+function onKeydown(e: KeyboardEvent) {
   const total = flatItems.value.length
   if (e.key === 'ArrowDown') {
     e.preventDefault()
@@ -305,7 +316,7 @@ function scrollActiveIntoView() {
 }
 
 // ---------- 全域快捷鍵 Ctrl+K / ⌘+K ----------
-function onGlobalKeydown(e) {
+function onGlobalKeydown(e: KeyboardEvent) {
   if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
     e.preventDefault()
     visible.value ? close() : open()
@@ -315,7 +326,7 @@ function onGlobalKeydown(e) {
 onMounted(() => window.addEventListener('keydown', onGlobalKeydown))
 onUnmounted(() => {
   window.removeEventListener('keydown', onGlobalKeydown)
-  clearTimeout(studentTimer)
+  if (studentTimer !== null) clearTimeout(studentTimer)
 })
 
 // ---------- 對外暴露 ----------
