@@ -172,6 +172,12 @@ const router = createRouter({
             meta: { title: '公告管理' }
         },
         {
+            path: '/vendor-payments',
+            name: 'vendor-payments',
+            component: () => import('../views/VendorPaymentView.vue'),
+            meta: { title: '廠商付款簽收' }
+        },
+        {
             path: '/audit-logs',
             name: 'audit-logs',
             component: () => import('../views/AuditLogView.vue'),

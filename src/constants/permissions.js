@@ -72,6 +72,9 @@ export const PERMISSION_VALUES = {
   YEAR_END_READ: 2 ** 52,
   YEAR_END_WRITE: 2 ** 60,
   YEAR_END_FINALIZE: 2 ** 61,
+  // 廠商付款簽收（園務行政）— 對齊後端 1<<54 / 1<<62
+  VENDOR_PAYMENT_READ: 2 ** 54,
+  VENDOR_PAYMENT_WRITE: 2 ** 62,
 }
 
 export const ROUTE_PERMISSION_RULES = [
@@ -126,6 +129,8 @@ export const ROUTE_PERMISSION_RULES = [
   // 加班 / 會議整合頁（OVERTIME_READ 或 MEETINGS 任一）
   { path: '/overtime', permission: 'OVERTIME_READ' },
   { path: '/overtime', permission: 'MEETINGS' },
+  // 廠商付款簽收（園務行政）
+  { path: '/vendor-payments', permission: 'VENDOR_PAYMENT_READ' },
 ]
 
 // 不需要權限即可訪問的路由（登入頁、密碼變更、公開報名頁、已登入即可訪問的個人資料頁等）。

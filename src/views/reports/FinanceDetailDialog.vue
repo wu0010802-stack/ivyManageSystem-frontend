@@ -44,9 +44,19 @@ watch(
 const tuitionRows = computed(() => data.value?.tuition || [])
 const activityRows = computed(() => data.value?.activity || [])
 const salaryRows = computed(() => data.value?.salary || [])
+const vendorRows = computed(() => data.value?.vendor_payment || [])
 
 const kindLabel = (k) => (k === 'payment' ? '繳費' : k === 'refund' ? '退款' : k)
 const kindTag = (k) => (k === 'payment' ? 'success' : 'warning')
+
+const PAYMENT_METHOD_LABEL = {
+  cash: '現金',
+  bank_transfer: '銀行匯款',
+  check: '支票',
+  linepay: 'LINE Pay',
+  other: '其他',
+}
+const methodLabel = (m) => PAYMENT_METHOD_LABEL[m] || m
 </script>
 
 <template>
@@ -114,6 +124,28 @@ const kindTag = (k) => (k === 'payment' ? 'success' : 'warning')
           <el-table-column label="封存" width="80" align="center">
             <template #default="{ row }">
               <el-tag v-if="row.is_finalized" size="small" type="info">已封存</el-tag>
+            </template>
+          </el-table-column>
+        </el-table>
+      </el-tab-pane>
+
+      <el-tab-pane :label="`廠商付款 (${vendorRows.length})`" name="vendor">
+        <el-table :data="vendorRows" border stripe max-height="480" size="small" empty-text="無資料">
+          <el-table-column prop="date" label="日期" width="110" />
+          <el-table-column prop="vendor_name" label="廠商" min-width="140" />
+          <el-table-column label="金額" width="110" align="right">
+            <template #default="{ row }">{{ money(row.amount) }}</template>
+          </el-table-column>
+          <el-table-column label="收付方式" width="110">
+            <template #default="{ row }">{{ methodLabel(row.payment_method) }}</template>
+          </el-table-column>
+          <el-table-column prop="description" label="項目/說明" min-width="140" />
+          <el-table-column prop="invoice_number" label="發票號" width="120" />
+          <el-table-column label="狀態" width="90" align="center">
+            <template #default="{ row }">
+              <el-tag :type="row.status === 'signed' ? 'success' : 'warning'" size="small">
+                {{ row.status === 'signed' ? '已簽收' : '待簽收' }}
+              </el-tag>
             </template>
           </el-table-column>
         </el-table>

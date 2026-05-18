@@ -30,6 +30,9 @@ const filters = reactive({
 // 避免點「#5」卻跳去列表頁這種假導航（其他 entity 只有列表頁）。
 const ENTITY_ROUTES = {
   student: (id) => (id ? { path: `/students/profile/${id}` } : null),
+  // 廠商付款：列表頁支援 ?highlight=<id> 自動開啟該筆編輯 dialog
+  vendor_payment: (id) =>
+    id ? { path: '/vendor-payments', query: { highlight: id } } : null,
 }
 
 // 高風險事件快篩：name → predicate(row) → boolean

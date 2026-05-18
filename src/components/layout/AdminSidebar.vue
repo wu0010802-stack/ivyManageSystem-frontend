@@ -147,6 +147,10 @@
             <el-icon><Calendar /></el-icon>
             <template #title>行事曆</template>
           </el-menu-item>
+          <el-menu-item v-if="canView.VENDOR_PAYMENT_READ" index="/vendor-payments">
+            <el-icon><Money /></el-icon>
+            <template #title>廠商付款簽收</template>
+          </el-menu-item>
         </el-sub-menu>
 
         <!-- 課後才藝 -->
@@ -305,7 +309,8 @@ const hasVisibleStatsItems = computed(() =>
 )
 
 const hasVisibleAdminItems = computed(() =>
-  canView.value.ANNOUNCEMENTS_READ || canView.value.CALENDAR
+  canView.value.ANNOUNCEMENTS_READ || canView.value.CALENDAR ||
+  canView.value.VENDOR_PAYMENT_READ
 )
 
 const hasVisibleActivityItems = computed(() =>
