@@ -70,6 +70,27 @@ npm run test:coverage  # 含覆蓋率報告
 
 ## 開發規範
 
+### TypeScript（新檔案一律用 TS）
+
+專案正在進行 JS→TS 全面遷移（spec: `docs/superpowers/specs/2026-05-18-frontend-js-to-ts-migration-design.md`），10 個 layer 分批轉。**任何新增程式碼都要用 TypeScript**，避免今天新檔變明天的技術債：
+
+**規則：**
+- **新檔案一律 `.ts`**：新 `src/api/<x>.ts`、`src/composables/<x>.ts`、`src/utils/<x>.ts`、`src/stores/<x>.ts`、`src/views/<x>.ts` 等
+- **新 SFC 一律 `<script setup lang="ts">`**：`src/views/*.vue`、`src/components/*.vue`、`src/parent/views/*.vue`、`src/parent/components/*.vue`
+- **修改現有 `.js` 不主動轉 TS**：保留給對應 layer migration 統一處理（避免半 .js 半 .ts 局部混亂），除非該 layer 已完成
+- **例外**：`vite.config.js`、`vitest.config.js`、`scripts/*.mjs` 等工具腳本維持 `.js`/`.mjs` 不必轉
+- **型別規範**：tsconfig 已 `strict: true`；**禁顯式 `: any`**，用 `: unknown` + narrow 或 `// @ts-expect-error TODO(ts-strict): <reason>` 過渡
+- **API 型別**：`src/api/*.ts` 用 `import type { ApiBody, ApiQuery, AxiosResp } from '@/api/_generated/typed'` 對應 OpenAPI schema（後端 `response_model=` 缺漏時 endpoint 回 `unknown`，可 `as Shape // TODO(ts-strict): waiting on backend response_model`）
+- **Vue 型別**：`defineProps<{ x: string }>()` / `defineEmits<{ change: [value: number] }>()` 用 type-based macros、`ref<T>(initial)` 顯式註型
+
+**檢驗：**
+- PR 前跑 `npm run typecheck`（warning 模式 — L9 收尾才阻擋 PR）
+- CI 已含 `Type check` step
+
+**遷移進度（2026-05-18）**：L0–L3 完成（**125/650 檔，19%**）；L4 composables 進行中。
+
+---
+
 ### 測試（Vitest）
 
 **哪些情境適合 TDD：**
