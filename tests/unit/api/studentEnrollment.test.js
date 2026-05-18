@@ -1,7 +1,7 @@
 /**
  * tests/unit/api/studentEnrollment.test.js
  *
- * 薄殼測試：驗 src/api/studentEnrollment.js wrapper 把 HTTP method/URL/params
+ * 薄殼測試：驗 src/api/studentEnrollment.ts wrapper 把 HTTP method/URL/params
  * 正確轉發給 @/api/index axios 實例。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'

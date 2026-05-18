@@ -1,7 +1,7 @@
 /**
  * tests/unit/api/monthlyFixedCost.test.js
  *
- * 驗證 src/api/monthlyFixedCost.js wrapper：
+ * 驗證 src/api/monthlyFixedCost.ts wrapper：
  *  - 4 個 endpoint 路徑與 method 正確（不重複加 /api 前綴）
  *  - get / put / delete 各自接 .data unwrap
  *  - batch 對應 PUT /monthly-fixed-costs/batch

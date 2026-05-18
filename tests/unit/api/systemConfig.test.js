@@ -1,7 +1,7 @@
 /**
  * tests/unit/api/systemConfig.test.js
  *
- * 驗證 src/api/systemConfig.js wrapper。
+ * 驗證 src/api/systemConfig.ts wrapper。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 

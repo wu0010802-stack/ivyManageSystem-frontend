@@ -1,7 +1,7 @@
 /**
  * tests/unit/api/salary.test.js
  *
- * 驗證 src/api/salary.js wrapper：HTTP method / URL / payload / 特殊 header / responseType。
+ * 驗證 src/api/salary.ts wrapper：HTTP method / URL / payload / 特殊 header / responseType。
  * 不驗薪資邏輯（不算金額），只驗參數轉發。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'

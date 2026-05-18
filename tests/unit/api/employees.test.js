@@ -1,7 +1,7 @@
 /**
  * tests/unit/api/employees.test.js
  *
- * 驗證 src/api/employees.js wrapper：HTTP method / URL / payload 對齊。
+ * 驗證 src/api/employees.ts wrapper：HTTP method / URL / payload 對齊。
  * 不驗業務邏輯（不算薪、不算 final salary），只驗參數轉發。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'

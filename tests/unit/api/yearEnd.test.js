@@ -1,7 +1,7 @@
 /**
  * tests/unit/api/yearEnd.test.js
  *
- * 驗證 src/api/yearEnd.js wrapper：HTTP method / URL / payload / multipart + params /
+ * 驗證 src/api/yearEnd.ts wrapper：HTTP method / URL / payload / multipart + params /
  * URL builder（exportYearEndSummaryXlsxUrl / exportYearEndTransferRosterXlsxUrl）。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'

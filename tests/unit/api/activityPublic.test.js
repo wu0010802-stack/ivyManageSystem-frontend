@@ -1,7 +1,7 @@
 /**
  * tests/unit/api/activityPublic.test.js
  *
- * 驗證 src/api/activityPublic.js wrapper。
+ * 驗證 src/api/activityPublic.ts wrapper。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 

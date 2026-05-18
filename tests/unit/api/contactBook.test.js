@@ -1,7 +1,7 @@
 /**
  * tests/unit/api/contactBook.test.js
  *
- * 驗證 src/api/contactBook.js wrapper。
+ * 驗證 src/api/contactBook.ts wrapper。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 

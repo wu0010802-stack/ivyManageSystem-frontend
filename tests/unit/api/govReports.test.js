@@ -1,7 +1,7 @@
 /**
  * tests/unit/api/govReports.test.js
  *
- * 驗證 src/api/govReports.js wrapper：四個下載端點皆為 GET + blob。
+ * 驗證 src/api/govReports.ts wrapper：四個下載端點皆為 GET + blob。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 

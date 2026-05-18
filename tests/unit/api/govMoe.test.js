@@ -1,7 +1,7 @@
 /**
  * tests/unit/api/govMoe.test.js
  *
- * 驗證 src/api/govMoe.js wrapper：HTTP method / URL / payload / blob 下載。
+ * 驗證 src/api/govMoe.ts wrapper：HTTP method / URL / payload / blob 下載。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 

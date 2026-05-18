@@ -1,7 +1,7 @@
 /**
  * tests/unit/api/meetings.test.js
  *
- * 驗證 src/api/meetings.js wrapper：HTTP method / URL / payload 對齊。
+ * 驗證 src/api/meetings.ts wrapper：HTTP method / URL / payload 對齊。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 

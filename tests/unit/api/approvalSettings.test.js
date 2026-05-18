@@ -1,7 +1,7 @@
 /**
  * tests/unit/api/approvalSettings.test.js
  *
- * 驗證 src/api/approvalSettings.js wrapper：HTTP method / URL / payload 對齊。
+ * 驗證 src/api/approvalSettings.ts wrapper：HTTP method / URL / payload 對齊。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 

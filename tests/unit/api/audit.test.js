@@ -1,7 +1,7 @@
 /**
  * tests/unit/api/audit.test.js
  *
- * 薄殼測試：驗證 src/api/audit.js wrapper（含 responseType: 'blob' 匯出端點）。
+ * 薄殼測試：驗證 src/api/audit.ts wrapper（含 responseType: 'blob' 匯出端點）。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 

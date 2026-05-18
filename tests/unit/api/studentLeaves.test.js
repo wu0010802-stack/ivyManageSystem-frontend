@@ -1,7 +1,7 @@
 /**
  * tests/unit/api/studentLeaves.test.js
  *
- * 薄殼測試：驗 src/api/studentLeaves.js wrapper 把 HTTP method/URL/params
+ * 薄殼測試：驗 src/api/studentLeaves.ts wrapper 把 HTTP method/URL/params
  * 正確轉發給 @/api/index axios 實例。後端 /api/student-leaves 唯讀。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'

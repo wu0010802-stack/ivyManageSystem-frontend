@@ -1,7 +1,7 @@
 /**
  * tests/unit/api/notifications.test.js
  *
- * 驗證 src/api/notifications.js wrapper：目前只有彙總 endpoint。
+ * 驗證 src/api/notifications.ts wrapper：目前只有彙總 endpoint。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 

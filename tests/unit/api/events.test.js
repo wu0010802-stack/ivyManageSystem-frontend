@@ -1,7 +1,7 @@
 /**
  * tests/unit/api/events.test.js
  *
- * 驗證 src/api/events.js wrapper：HTTP method / URL / payload / 特殊選項（blob、multipart）。
+ * 驗證 src/api/events.ts wrapper：HTTP method / URL / payload / 特殊選項（blob、multipart）。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 

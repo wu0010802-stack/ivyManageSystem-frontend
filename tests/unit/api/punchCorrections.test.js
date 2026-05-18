@@ -1,7 +1,7 @@
 /**
  * tests/unit/api/punchCorrections.test.js
  *
- * 驗證 src/api/punchCorrections.js wrapper：HTTP method / URL / payload。
+ * 驗證 src/api/punchCorrections.ts wrapper：HTTP method / URL / payload。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 

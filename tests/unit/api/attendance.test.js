@@ -1,7 +1,7 @@
 /**
  * tests/unit/api/attendance.test.js
  *
- * 驗證 src/api/attendance.js wrapper：HTTP method / URL / payload / multipart / blob。
+ * 驗證 src/api/attendance.ts wrapper：HTTP method / URL / payload / multipart / blob。
  * 不驗考勤計算邏輯。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'

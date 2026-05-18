@@ -1,7 +1,7 @@
 /**
  * tests/unit/api/overtimes.test.js
  *
- * 驗證 src/api/overtimes.js wrapper：HTTP method / URL / payload / multipart / blob。
+ * 驗證 src/api/overtimes.ts wrapper：HTTP method / URL / payload / multipart / blob。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 

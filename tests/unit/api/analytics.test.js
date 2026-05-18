@@ -1,7 +1,7 @@
 /**
  * tests/unit/api/analytics.test.js
  *
- * 驗證 src/api/analytics.js wrapper：funnel / 流失預警 / 流失歷史。
+ * 驗證 src/api/analytics.ts wrapper：funnel / 流失預警 / 流失歷史。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 

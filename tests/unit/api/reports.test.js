@@ -1,7 +1,7 @@
 /**
  * tests/unit/api/reports.test.js
  *
- * 驗證 src/api/reports.js wrapper。注意 financeSummaryExportUrl 是純字串組合，
+ * 驗證 src/api/reports.ts wrapper。注意 financeSummaryExportUrl 是純字串組合，
  * 不打 http，只驗 query string 與 month 省略條件。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
