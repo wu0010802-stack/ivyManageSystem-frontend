@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /**
  * IvyKids 綠緞帶容器 — 對齊官網 logo 內 "IVY KIDS" 緞帶。
  *
@@ -10,12 +10,10 @@ import { computed } from 'vue'
 
 defineOptions({ name: 'IvyRibbon' })
 
-const props = defineProps({
-  color: {
-    type: String,
-    default: 'green',
-    validator: (v) => ['green', 'teal'].includes(v),
-  },
+const props = withDefaults(defineProps<{
+  color?: 'green' | 'teal'
+}>(), {
+  color: 'green',
 })
 
 const bgFill = computed(() =>

@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /**
  * IvyKids 慶祝氣球組 — 用於生日、繳費完成、活動報名成功 toast。
  *
@@ -12,9 +12,12 @@
  */
 import { computed } from 'vue'
 
-const props = defineProps({
-  count: { type: Number, default: 3 },
-  colors: { type: Array, default: null },
+const props = withDefaults(defineProps<{
+  count?: number
+  colors?: string[] | null
+}>(), {
+  count: 3,
+  colors: null,
 })
 
 const DEFAULT_COLORS = [
