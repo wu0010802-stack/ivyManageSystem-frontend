@@ -1,23 +1,39 @@
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 import ParentIcon from '../ParentIcon.vue'
 import CrownIcon from '@/components/brand/CrownIcon.vue'
 
-const props = defineProps({
-  event: { type: Object, required: true },
-  isFirst: { type: Boolean, default: false },
-  isLast: { type: Boolean, default: false },
+interface TimelineEvent {
+  id?: number | string
+  path?: string
+  time?: string
+  primary?: string
+  secondary?: string
+  tone?: string
+  variant?: string
+  motif?: string
+}
+
+const props = withDefaults(defineProps<{
+  event: TimelineEvent
+  isFirst?: boolean
+  isLast?: boolean
+}>(), {
+  isFirst: false,
+  isLast: false,
 })
 
-const emit = defineEmits(['navigate'])
+const emit = defineEmits<{
+  'navigate': [path: string]
+}>()
 
-const dotClasses = computed(() => [
+const dotClasses = computed<string[]>(() => [
   'dot',
   `tone-${props.event.tone || 'neutral'}`,
   `variant-${props.event.variant || 'info'}`,
 ])
 
-function handle() {
+function handle(): void {
   if (props.event.path) emit('navigate', props.event.path)
 }
 </script>
