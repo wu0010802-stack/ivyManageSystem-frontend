@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Refresh, Download } from '@element-plus/icons-vue'
@@ -18,6 +18,7 @@ import {
 } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
 import { hasPermission } from '@/utils/auth'
+import { statusLabel, MSG } from './labels'
 
 import KanbanView from './components/KanbanView.vue'
 import ListView from './components/ListView.vue'
@@ -37,12 +38,37 @@ const catalog = ref([])
 const loading = ref(false)
 const busy = ref(false)
 
-const view = ref('kanban')
+// P1-9：view 用 URL query 同步，F5 後保留、可分享。
+const VALID_VIEWS = ['kanban', 'list']
+const initialQueryView = route?.query?.view
+const initialView = VALID_VIEWS.includes(initialQueryView) ? initialQueryView : 'kanban'
+const view = ref(initialView)
 const selectedIds = ref([])
+
+// view 切換時：① 同步 URL query ② 清空 selectedIds（兩 view 的 id 來源不同）
+watch(view, (next) => {
+  selectedIds.value = []
+  if (router?.replace) {
+    router.replace({ query: { ...(route?.query || {}), view: next } })
+  }
+})
+
+// P1-14：以 ref<Array<id>> 追蹤每張卡正在簽核中的狀態，
+// 用 Set 包裝避免 race；toolbar busy 改為 isRecomputing 專用。
+const signingIds = ref([])
+const isSigning = (summaryId) => signingIds.value.includes(summaryId)
 
 const summaryByParticipant = computed(() => {
   const m = {}
   for (const s of summaries.value) m[s.participant_id] = s
+  return m
+})
+
+// P1-6：以 summary.id 為 key，給 BatchSignButton 的失敗清單 dialog
+// 拿 employee_name 顯示而非裸 summary_id。
+const summariesById = computed(() => {
+  const m = {}
+  for (const s of summaries.value) m[s.id] = s
   return m
 })
 
@@ -59,9 +85,7 @@ const canBatchSign = computed(
 // 權限；UI 守衛保守用 OR 三個 sign 權限（任一即可顯示，後端會二次驗）。
 const canReject = computed(() => canBatchSign.value)
 
-const statusLabel = (s) =>
-  ({ DRAFT: '草稿', SUPERVISOR_SIGNED: '主管已簽',
-     ACCOUNTING_SIGNED: '會計已簽', FINALIZED: '已核定' }[s] || s)
+// statusLabel 從 ./labels 集中載入（P2 i18n 過渡）
 
 async function load() {
   loading.value = true
@@ -72,7 +96,7 @@ async function load() {
     summaries.value = (await listAppraisalSummaries(cycleId)).data
     catalog.value = (await listAppraisalCatalog()).data
   } catch (e) {
-    ElMessage.error(apiError(e, '載入失敗'))
+    ElMessage.error(apiError(e, MSG.load_failed))
   } finally {
     loading.value = false
   }
@@ -84,31 +108,76 @@ async function reload() {
   if (kanbanRef.value?.reload) kanbanRef.value.reload()
 }
 
+// P1-14：背景非阻塞重新整理 kanban，不動 summaries / participants /
+// catalog（這些只在初次載入或 reject/comment/recompute 後才需要重撈）。
+function silentKanbanRefresh() {
+  if (kanbanRef.value?.reload) {
+    // 不 await — 不阻塞 UI；錯誤交給 kanban 自己的 try/catch
+    kanbanRef.value.reload()
+  }
+}
+
 async function recompute() {
   busy.value = true
   try {
     await recomputeAppraisalSummaries(cycleId)
-    ElMessage.success('重算完成')
+    ElMessage.success(MSG.recompute_success)
     await reload()
   } catch (e) {
-    ElMessage.error(apiError(e, '重算失敗'))
+    ElMessage.error(apiError(e, MSG.recompute_failed))
   } finally {
     busy.value = false
   }
 }
 
+// P1-14：簽核成功後改採局部 patch + 背景 kanban refresh，
+// 不再觸發 4 個 API 全量 reload。
+const STAGE_TO_NEXT_STATUS = {
+  supervisor: 'SUPERVISOR_SIGNED',
+  accounting: 'ACCOUNTING_SIGNED',
+  finalize: 'FINALIZED',
+}
+
+// P1-14：reject 成功後局部 patch summary.status，避免 4 個 API 全 reload
+function onRejected({ summaryId, newStatus } = {}) {
+  if (summaryId && newStatus) {
+    const idx = summaries.value.findIndex((s) => s.id === summaryId)
+    if (idx >= 0) {
+      summaries.value[idx] = { ...summaries.value[idx], status: newStatus }
+    }
+  }
+  silentKanbanRefresh()
+}
+
+// P1-14：comment 不改 status，只刷 kanban（聊天計數等）
+function onCommented() {
+  silentKanbanRefresh()
+}
+
 async function sign({ summary, stage }) {
-  busy.value = true
+  const id = summary.id
+  // 重複 click 防護
+  if (signingIds.value.includes(id)) return
+  signingIds.value = [...signingIds.value, id]
   try {
-    if (stage === 'supervisor') await signSupervisorAppraisalSummary(summary.id)
-    else if (stage === 'accounting') await signAccountingAppraisalSummary(summary.id)
-    else if (stage === 'finalize') await finalizeAppraisalSummary(summary.id)
-    ElMessage.success('簽核完成')
-    await reload()
+    if (stage === 'supervisor') await signSupervisorAppraisalSummary(id)
+    else if (stage === 'accounting') await signAccountingAppraisalSummary(id)
+    else if (stage === 'finalize') await finalizeAppraisalSummary(id)
+    ElMessage.success(MSG.sign_success)
+    // 局部 patch：更新本地 summaries 該筆的 status，UI 立刻反映新狀態
+    const nextStatus = STAGE_TO_NEXT_STATUS[stage]
+    if (nextStatus) {
+      const idx = summaries.value.findIndex((s) => s.id === id)
+      if (idx >= 0) {
+        summaries.value[idx] = { ...summaries.value[idx], status: nextStatus }
+      }
+    }
+    // 背景非阻塞 refresh kanban（其 buckets 結構獨立）
+    silentKanbanRefresh()
   } catch (e) {
-    ElMessage.error(apiError(e, '簽核失敗'))
+    ElMessage.error(apiError(e, MSG.sign_failed))
   } finally {
-    busy.value = false
+    signingIds.value = signingIds.value.filter((x) => x !== id)
   }
 }
 
@@ -143,6 +212,10 @@ defineExpose({
   openReject,
   openComment,
   openLog,
+  sign,
+  signingIds,
+  isSigning,
+  summaries,
 })
 
 onMounted(load)
@@ -167,7 +240,7 @@ onMounted(load)
         :loading="busy"
         data-test="recompute-btn"
         @click="recompute"
-      >重算 Summary</el-button>
+      >{{ MSG.recompute_btn }}</el-button>
       <el-button :icon="Download" tag="a" :href="exportAppraisalCycleXlsxUrl(cycleId)">匯出考核表</el-button>
       <el-button :icon="Download" tag="a" :href="exportAppraisalTransferRosterXlsxUrl(cycleId)">轉帳名冊</el-button>
 
@@ -178,15 +251,18 @@ onMounted(load)
       >
         <BatchSignButton
           v-if="canSignSupervisor"
-          :cycle-id="cycleId" stage="SUPERVISOR" :selected-ids="selectedIds" @done="reload"
+          :cycle-id="cycleId" stage="SUPERVISOR" :selected-ids="selectedIds"
+          :summaries-map="summariesById" @done="reload"
         />
         <BatchSignButton
           v-if="canSignAccounting"
-          :cycle-id="cycleId" stage="ACCOUNTING" :selected-ids="selectedIds" @done="reload"
+          :cycle-id="cycleId" stage="ACCOUNTING" :selected-ids="selectedIds"
+          :summaries-map="summariesById" @done="reload"
         />
         <BatchSignButton
           v-if="canFinalize"
-          :cycle-id="cycleId" stage="FINALIZE" :selected-ids="selectedIds" @done="reload"
+          :cycle-id="cycleId" stage="FINALIZE" :selected-ids="selectedIds"
+          :summaries-map="summariesById" @done="reload"
         />
       </span>
 
@@ -212,6 +288,7 @@ onMounted(load)
       :catalog="catalog"
       v-model:selected-ids="selectedIds"
       :busy="busy"
+      :signing-ids="signingIds"
       :can-sign-supervisor="canSignSupervisor"
       :can-sign-accounting="canSignAccounting"
       :can-finalize="canFinalize"
@@ -225,12 +302,12 @@ onMounted(load)
     <RejectDialog
       v-model:visible="rejectDialogVisible"
       :summary="rejectTarget"
-      @rejected="reload"
+      @rejected="onRejected"
     />
     <CommentDialog
       v-model:visible="commentDialogVisible"
       :summary="commentTarget"
-      @commented="reload"
+      @commented="onCommented"
     />
     <SummaryLogDrawer
       v-model:visible="logDrawerVisible"

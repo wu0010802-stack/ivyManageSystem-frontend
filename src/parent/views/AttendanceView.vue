@@ -1,9 +1,11 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import ChildSelector from '../components/ChildSelector.vue'
 import { useChildrenStore } from '../stores/children'
 import { useChildSelection } from '../composables/useChildSelection'
+import { useAbortableFetch } from '../composables/useAbortableFetch'
 import { getMonthlyAttendance } from '../api/attendance'
+import { localDateISO } from '../utils/date'
 import { toast } from '../utils/toast'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import PullToRefresh from '../components/PullToRefresh.vue'
@@ -13,12 +15,32 @@ import EmptyState from '@/components/common/EmptyState.vue'
 const childrenStore = useChildrenStore()
 const { selectedId, ensureSelected } = useChildSelection()
 
-const today = new Date()
-const year = ref(today.getFullYear())
-const month = ref(today.getMonth() + 1)
+// P2-FE-Parent-6：原本 `today = new Date()` 是模組頂層 plain Date，
+// 跨午夜不會更新；且 `todayStr` 由各 `.getFullYear()...` 拼接，跨午夜
+// 也維持舊值。改 reactive ref + setInterval 每分鐘 tick（與 MonthDateStrip
+// P1-15 一致），日期改用共用 `localDateISO()` 避免 UTC slice 偏移。
+const initialNow = new Date()
+const year = ref(initialNow.getFullYear())
+const month = ref(initialNow.getMonth() + 1)
+const todayStr = ref(localDateISO(initialNow))
 
-const data = ref(null)
-const loading = ref(false)
+let todayInterval = null
+onMounted(() => {
+  todayInterval = setInterval(() => {
+    const next = localDateISO(new Date())
+    if (next !== todayStr.value) todayStr.value = next
+  }, 60 * 1000)
+})
+onBeforeUnmount(() => {
+  if (todayInterval) clearInterval(todayInterval)
+})
+
+// 切換小孩 / 月份時 abort 舊 request（P1-19）。
+const { data: attRes, error: attError, pending: loading, refresh: refreshAtt } =
+  useAbortableFetch((config) =>
+    getMonthlyAttendance(selectedId.value, year.value, month.value, config),
+  )
+const data = computed(() => attRes.value?.data || null)
 const dayMap = computed(() => {
   const m = new Map()
   for (const item of data.value?.items || []) m.set(item.date, item)
@@ -53,24 +75,18 @@ function selectCell(cell) {
   selected.value = cell
 }
 
-const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
-
 async function fetchData() {
   if (!selectedId.value) return
-  loading.value = true
   try {
-    const { data: res } = await getMonthlyAttendance(
-      selectedId.value,
-      year.value,
-      month.value,
-    )
-    data.value = res
-  } catch (err) {
-    toast.error(err?.displayMessage || '載入出席紀錄失敗')
-  } finally {
-    loading.value = false
+    await refreshAtt()
+  } catch {
+    /* error 由 watch 統一彈 toast */
   }
 }
+
+watch(attError, (err) => {
+  if (err) toast.error(err?.displayMessage || '載入出席紀錄失敗')
+})
 
 function prevMonth() {
   if (month.value === 1) { month.value = 12; year.value -= 1 }
@@ -102,7 +118,7 @@ function cellClass(cell) {
     cell.info ? 'has' : '',
     tone ? `tone-${tone}` : '',
     selected.value?.date === cell.date ? 'is-selected' : '',
-    cell.date === todayStr ? 'is-today' : '',
+    cell.date === todayStr.value ? 'is-today' : '',
   ].filter(Boolean).join(' ')
 }
 

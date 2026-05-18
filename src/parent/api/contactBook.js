@@ -6,13 +6,17 @@
 
 import api from './index'
 
-export function getTodayContactBook(studentId) {
-  return api.get('/parent/contact-book/today', { params: { student_id: studentId } })
+export function getTodayContactBook(studentId, config = {}) {
+  return api.get('/parent/contact-book/today', {
+    params: { student_id: studentId },
+    ...config,
+  })
 }
 
-export function listContactBook(studentId, { from, to, limit = 30 } = {}) {
+export function listContactBook(studentId, { from, to, limit = 30 } = {}, config = {}) {
   return api.get('/parent/contact-book', {
     params: { student_id: studentId, from, to, limit },
+    ...config,
   })
 }
 

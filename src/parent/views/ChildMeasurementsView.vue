@@ -101,9 +101,20 @@ async function render() {
   })
 }
 
-onMounted(load)
+// P2-FE-Parent-5：原本 chartInstance 沒有 resize listener，旋轉螢幕/容器
+// 寬度變化時 chart 不會自動 reflow（echarts.init 取的是 mount 當下的尺寸）。
+// 加 window resize listener + onBeforeUnmount 對應 remove。
+function handleResize() {
+  chartInstance?.resize()
+}
+
+onMounted(() => {
+  load()
+  window.addEventListener('resize', handleResize)
+})
 watch(metric, render)
 onBeforeUnmount(() => {
+  window.removeEventListener('resize', handleResize)
   chartInstance?.dispose()
   chartInstance = null
 })

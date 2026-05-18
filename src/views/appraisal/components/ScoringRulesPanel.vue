@@ -26,6 +26,15 @@ import RuleHistoryDrawer from './RuleHistoryDrawer.vue'
 const canEditRules = computed(() => hasPermission('APPRAISAL_RULE_WRITE'))
 
 const effectiveOn = ref(new Date().toISOString().slice(0, 10))
+
+// P1-12：effective_on 不可選過去日期（規則只能往前生效）。
+// disabled-date callback 接 Date 物件，回 true 表示禁用。
+function disablePastDates(d) {
+  if (!d) return false
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return d < today
+}
 const rules = ref([])
 const loading = ref(false)
 
@@ -94,7 +103,7 @@ function fmtRuleSummary(rule) {
 
 onMounted(load)
 
-defineExpose({ load })
+defineExpose({ load, disablePastDates })
 </script>
 
 <template>
@@ -104,6 +113,7 @@ defineExpose({ load })
         <el-date-picker
           v-model="effectiveOn"
           value-format="YYYY-MM-DD"
+          :disabled-date="disablePastDates"
           @change="load"
           data-test="effective-on-picker"
         />

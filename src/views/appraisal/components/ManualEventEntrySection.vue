@@ -59,9 +59,9 @@ const LABEL = MANUAL_LABEL
           <el-input-number
             v-if="row.participant_id"
             :model-value="getCount(row.participant_id, code)"
-            :step="0.5"
+            :step="1"
             :min="0"
-            :precision="2"
+            :precision="0"
             :disabled="readonly"
             :data-test="`count-${row.participant_id}-${code}`"
             @update:model-value="(v) => setCount(row.participant_id, code, v)"

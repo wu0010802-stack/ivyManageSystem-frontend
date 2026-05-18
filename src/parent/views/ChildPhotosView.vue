@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { fetchChildPhotos } from '../api/childPhotos'
 import { toast } from '../utils/toast'
@@ -15,6 +15,9 @@ const items = ref([])
 const total = ref(0)
 const loading = ref(false)
 const previewIdx = ref(null)
+const lightboxRef = ref(null)
+// 開啟 lightbox 前的焦點元素，關閉時還原（focus trap a11y）。
+let previousActiveElement = null
 
 async function load() {
   if (!studentId.value) return
@@ -30,10 +33,40 @@ async function load() {
   }
 }
 
-function openPreview(idx) { previewIdx.value = idx }
-function closePreview() { previewIdx.value = null }
+async function openPreview(idx) {
+  // 記住開啟前焦點所在的元素（通常就是被點擊的縮圖按鈕），關閉時還原。
+  previousActiveElement = typeof document !== 'undefined' ? document.activeElement : null
+  previewIdx.value = idx
+  // 等下一輪 render 後把焦點移入 lightbox 容器
+  await nextTick()
+  lightboxRef.value?.focus?.()
+}
+
+function closePreview() {
+  previewIdx.value = null
+  // 還原焦點
+  const target = previousActiveElement
+  previousActiveElement = null
+  if (target && typeof target.focus === 'function') {
+    nextTick(() => target.focus())
+  }
+}
 function prevImg() { if (previewIdx.value > 0) previewIdx.value-- }
 function nextImg() { if (previewIdx.value < items.value.length - 1) previewIdx.value++ }
+
+function onLightboxKeydown(e) {
+  if (previewIdx.value === null) return
+  if (e.key === 'Escape') {
+    e.preventDefault()
+    closePreview()
+  } else if (e.key === 'ArrowRight') {
+    e.preventDefault()
+    nextImg()
+  } else if (e.key === 'ArrowLeft') {
+    e.preventDefault()
+    prevImg()
+  }
+}
 
 onMounted(load)
 </script>
@@ -75,11 +108,16 @@ onMounted(load)
 
     <div
       v-if="previewIdx !== null"
+      ref="lightboxRef"
       class="lightbox"
       role="dialog"
       aria-modal="true"
+      aria-labelledby="lightbox-title"
+      tabindex="-1"
       @click.self="closePreview"
+      @keydown="onLightboxKeydown"
     >
+      <h2 id="lightbox-title" class="sr-only">放大檢視照片</h2>
       <button class="nav prev" :disabled="previewIdx === 0" aria-label="上一張" @click="prevImg">
         <span class="material-symbols-rounded" aria-hidden="true">chevron_left</span>
       </button>
@@ -139,6 +177,19 @@ onMounted(load)
   align-items: center;
   justify-content: center;
   z-index: 9999;
+}
+.lightbox:focus { outline: none; }
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 .lightbox img {
   max-width: 95vw;

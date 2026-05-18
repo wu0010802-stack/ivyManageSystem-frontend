@@ -15,11 +15,15 @@ const MOOD_MAP = {
   sick:   { emoji: '🤒', text: '不舒服', tone: 'coral' },
 }
 
-const info = computed(() => MOOD_MAP[props.mood] || null)
+// P2-FE-Parent-1：null / 未知 mood 回傳 fallback chip（灰色中性「未記錄」）。
+// 原本 `info=null` → `v-if` 整個不渲染，使用者完全看不出有此欄位；
+// 改為渲染灰色 chip 表達「沒記錄」的語意，與其他 timeline row 一致。
+const FALLBACK = { emoji: '・', text: '未記錄', tone: 'muted' }
+const info = computed(() => MOOD_MAP[props.mood] || FALLBACK)
 </script>
 
 <template>
-  <span v-if="info" class="mood-badge" :class="[`is-${size}`, `tone-${info.tone}`]">
+  <span class="mood-badge" :class="[`is-${size}`, `tone-${info.tone}`]">
     <span class="mood-emoji" role="img" :aria-label="`心情：${info.text}`">{{ info.emoji }}</span>
     <span v-if="showLabel" class="mood-label">{{ info.text }}</span>
   </span>
@@ -58,4 +62,10 @@ const info = computed(() => MOOD_MAP[props.mood] || null)
 .tone-grape  .mood-emoji { background: var(--grape-100, #ebe0f5); }
 .tone-sky    .mood-emoji { background: var(--sky-100, #dceef5); }
 .tone-coral  .mood-emoji { background: var(--coral-100, #ffe3e0); }
+.tone-muted  .mood-emoji {
+  background: var(--pt-surface-mute-soft, #f5f5f5);
+  color: var(--pt-text-faint, #9a9a9a);
+  border: 1px dashed var(--pt-border-light, #ecf5f9);
+}
+.tone-muted .mood-label { color: var(--pt-text-muted); font-weight: 500; }
 </style>

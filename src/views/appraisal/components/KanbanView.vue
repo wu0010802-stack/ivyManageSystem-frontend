@@ -4,6 +4,7 @@ import { ElMessage } from 'element-plus'
 
 import { getSignStatusSummary } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
+import { STATUS_LABEL } from '../labels'
 import KanbanColumn from './KanbanColumn.vue'
 
 const props = defineProps({
@@ -16,10 +17,10 @@ const loading = ref(false)
 const selectedIds = ref([])
 
 const COLUMN_DEFS = [
-  { status: 'DRAFT', label: '草稿', collapse: false },
-  { status: 'SUPERVISOR_SIGNED', label: '主管已簽', collapse: false },
-  { status: 'ACCOUNTING_SIGNED', label: '會計已簽', collapse: false },
-  { status: 'FINALIZED', label: '已核定', collapse: true },
+  { status: 'DRAFT', label: STATUS_LABEL.DRAFT, collapse: false },
+  { status: 'SUPERVISOR_SIGNED', label: STATUS_LABEL.SUPERVISOR_SIGNED, collapse: false },
+  { status: 'ACCOUNTING_SIGNED', label: STATUS_LABEL.ACCOUNTING_SIGNED, collapse: false },
+  { status: 'FINALIZED', label: STATUS_LABEL.FINALIZED, collapse: true },
 ]
 
 async function load() {

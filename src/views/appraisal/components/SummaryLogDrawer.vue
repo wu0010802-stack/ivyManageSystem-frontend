@@ -4,6 +4,8 @@ import { ElMessage } from 'element-plus'
 
 import { getSummaryLogs } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
+import { formatDateTimeTW } from '@/utils/format'
+import { ACTION_LABEL } from '../labels'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -34,22 +36,17 @@ async function load() {
 
 watch(() => [props.visible, props.summaryId], ([v]) => { if (v) load() }, { immediate: true })
 
-const ACTION_LABEL = {
-  SIGN_SUPERVISOR: '主管簽核',
-  SIGN_ACCOUNTING: '會計簽核',
-  FINALIZE: '核定',
-  REJECT: '退簽',
-  COMMENT: '留言',
-  RECOMPUTE: '重算',
-}
+// ACTION_LABEL 從 ../labels 集中載入（P2 i18n 過渡）
 
+// P1-11：三個簽核階段需可視區分（原本同色 success）。
+// 主管簽 / 會計簽 / 核定 用 primary / warning / success 三色。
 const ACTION_COLOR = {
-  SIGN_SUPERVISOR: 'success',
-  SIGN_ACCOUNTING: 'success',
+  SIGN_SUPERVISOR: 'primary',
+  SIGN_ACCOUNTING: 'warning',
   FINALIZE: 'success',
   REJECT: 'danger',
   COMMENT: 'info',
-  RECOMPUTE: 'warning',
+  RECOMPUTE: 'info',
 }
 </script>
 
@@ -58,12 +55,13 @@ const ACTION_COLOR = {
              data-test="summary-log-drawer">
     <el-timeline v-loading="loading">
       <el-timeline-item v-for="log in logs" :key="log.id"
-                        :timestamp="log.created_at" placement="top"
+                        :timestamp="formatDateTimeTW(log.created_at)" placement="top"
                         :type="ACTION_COLOR[log.action] || 'primary'"
                         :data-test="`log-item-${log.id}`">
         <div class="log-entry">
           <div>
-            <el-tag :type="ACTION_COLOR[log.action]" size="small">
+            <el-tag :type="ACTION_COLOR[log.action]" size="small"
+                    :data-test="`log-action-tag-${log.id}`">
               {{ ACTION_LABEL[log.action] || log.action }}
             </el-tag>
             <span class="actor">{{ log.actor_name || `user#${log.actor_id}` }}</span>

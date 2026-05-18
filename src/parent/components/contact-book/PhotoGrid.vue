@@ -25,14 +25,24 @@ const overflow = computed(() => Math.max(0, props.photos.length - 6))
   <div v-if="layout !== 'empty'" class="grid" :class="`layout-${layout}`">
     <a
       v-for="(p, i) in displayed"
-      :key="p.id"
+      :key="p.id || i"
       :href="p.display_url"
       target="_blank"
       rel="noopener"
       class="tile"
       :class="{ 'has-overflow': overflow > 0 && i === displayed.length - 1 }"
     >
-      <img :src="p.thumb_url || p.display_url" alt="聯絡簿照片" loading="lazy" decoding="async" />
+      <!--
+        P2-FE-Parent-3：alt 加序號 + 總數，screen reader 可知第幾張；分母用
+        `photos.length`（全部數量）而非 `displayed.length`，因為 overflow 之外
+        的照片在 a11y 上仍存在於 collection 中。
+      -->
+      <img
+        :src="p.thumb_url || p.display_url"
+        :alt="`聯絡簿照片 ${i + 1} / ${photos.length}`"
+        loading="lazy"
+        decoding="async"
+      />
       <span v-if="overflow > 0 && i === displayed.length - 1" class="overflow">+{{ overflow }}</span>
     </a>
   </div>

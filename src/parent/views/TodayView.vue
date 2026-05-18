@@ -72,6 +72,11 @@ async function loadContactBook(force = false) {
 
 onMounted(() => {
   refreshToday()
+  // useCachedAsync cache-hit 時 children 從一開始就有值，下方 watch（無
+  // immediate）不會 fire → 聯絡簿 hero card 永遠不會顯示。mount 時直接
+  // ensureSelected + loadContactBook 涵蓋此 case（P1-16）。
+  ensureSelected(children.value || [])
+  loadContactBook()
 })
 
 watch(

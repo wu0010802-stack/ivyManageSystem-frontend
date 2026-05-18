@@ -147,7 +147,10 @@ describe('RejectDialog', () => {
     expect(wrapper.vm.toStatus).toBe('DRAFT')
   })
 
-  it('reason < 10 字時不打 API 並發出 warning', async () => {
+  // P1-10：reason 字數驗證委派後端；前端不再 block 短字串。
+  // 測試 reason 為短字串時仍會呼叫 API（由後端 422 驗證並回 detail）。
+  it('reason 短字串時仍會呼叫 API（驗證委派後端）', async () => {
+    rejectSummary.mockResolvedValueOnce({ data: {} })
     const wrapper = mountDialog()
     await flushPromises()
     await wrapper.find('[data-test="reason-input"]').setValue('太短')
@@ -155,8 +158,11 @@ describe('RejectDialog', () => {
     await wrapper.find('[data-test="submit-btn"]').trigger('click')
     await flushPromises()
 
-    expect(rejectSummary).not.toHaveBeenCalled()
-    expect(ElMessage.warning).toHaveBeenCalled()
+    expect(rejectSummary).toHaveBeenCalledTimes(1)
+    expect(rejectSummary).toHaveBeenCalledWith(7, {
+      reason: '太短',
+      to_status: 'DRAFT',
+    })
   })
 
   it('完整 submit 呼叫 rejectSummary 並 emit rejected', async () => {
@@ -192,5 +198,24 @@ describe('RejectDialog', () => {
     // 也驗 DOM 上有 2 個 radio
     expect(wrapper.find('[data-test="radio-SUPERVISOR_SIGNED"]').exists()).toBe(true)
     expect(wrapper.find('[data-test="radio-DRAFT"]').exists()).toBe(true)
+  })
+
+  // P2-FE-3：API reject (422/500) → ElMessage.error，且 dialog 仍開著（讓 user 改錯重送）。
+  it('API rejects → 顯示錯誤訊息且 dialog 保持開啟、不 emit rejected', async () => {
+    rejectSummary.mockRejectedValueOnce({
+      response: { status: 422, data: { detail: 'reason 必須至少 10 字' } },
+    })
+    const wrapper = mountDialog()
+    await flushPromises()
+    await wrapper.find('[data-test="reason-input"]').setValue('短')
+    await flushPromises()
+    await wrapper.find('[data-test="submit-btn"]').trigger('click')
+    await flushPromises()
+
+    expect(rejectSummary).toHaveBeenCalledTimes(1)
+    expect(ElMessage.error).toHaveBeenCalled()
+    expect(wrapper.emitted('rejected')).toBeFalsy()
+    // dialog 仍應該開著（visible 沒有被 set false）
+    expect(wrapper.emitted('update:visible')).toBeFalsy()
   })
 })

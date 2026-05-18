@@ -34,14 +34,34 @@ const ElDialogStub = defineComponent({
       : null
   },
 })
+// P1-6：BatchSignButton 失敗清單改用 scoped slot 顯示 employee_name +
+// shortError；stub 須把 row 傳給 #default。用 provide/inject 在 table
+// 對每個 row 設定 current-row，column 從 inject 拿並回傳給 slot。
+import { provide, inject } from 'vue'
 const ElTableStub = defineComponent({
   props: ['data'],
-  setup(props, { slots, attrs }) {
-    return () => h('table', { ...attrs }, slots.default?.())
+  setup(props, { slots }) {
+    return () => h(
+      'table',
+      (props.data || []).map((row) => {
+        const RowProvider = defineComponent({
+          setup(_, { slots: rs }) {
+            provide('current-row', row)
+            return () => h('tr', rs.default?.())
+          },
+        })
+        return h(RowProvider, null, { default: () => slots.default?.() })
+      }),
+    )
   },
 })
 const ElTableColumnStub = defineComponent({
-  setup(_, { slots }) { return () => h('td', slots.default?.()) },
+  setup(_, { slots }) {
+    return () => {
+      const row = inject('current-row', null)
+      return h('td', slots.default ? slots.default({ row }) : null)
+    }
+  },
 })
 
 const stubs = {
@@ -94,5 +114,19 @@ describe('BatchSignButton', () => {
     await nextTick(); await nextTick(); await nextTick()
     expect(ElMessage.warning).toHaveBeenCalledWith(expect.stringContaining('成功 2 筆 / 失敗 1 筆'))
     expect(wrapper.find('[data-test="failed-dialog"]').exists()).toBe(true)
+  })
+
+  // P2-FE-3：API reject (422/500) → ElMessage.error 並且不開 failed dialog。
+  it('shows error toast and does not open failed dialog when API rejects', async () => {
+    ElMessageBox.confirm.mockResolvedValueOnce('confirm')
+    api.batchSignSummaries.mockRejectedValueOnce({
+      response: { status: 500, data: { detail: 'server error' } },
+    })
+    const wrapper = mount(BatchSignButton, mountOpts())
+    await wrapper.find('[data-test="batch-sign-btn"]').trigger('click')
+    await nextTick(); await nextTick(); await nextTick()
+    expect(ElMessage.error).toHaveBeenCalled()
+    expect(wrapper.find('[data-test="failed-dialog"]').exists()).toBe(false)
+    expect(wrapper.emitted('done')).toBeFalsy()
   })
 })

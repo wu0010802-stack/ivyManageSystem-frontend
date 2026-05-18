@@ -15,12 +15,18 @@ function onMenuClick(action) { emit('action', { action, summary: props.summary }
 
 // P0-A：依 APPRAISAL_* permission bit 個別守衛 dropdown 動作。
 // 簽核 / 退簽：任一 sign 權限即顯示（後端會依當前 stage 二次驗）。
-const canSign = computed(
+const hasAnySignPerm = computed(
   () => hasPermission('APPRAISAL_REVIEW')
     || hasPermission('APPRAISAL_ACCOUNTING')
     || hasPermission('APPRAISAL_FINALIZE'),
 )
-const canReject = canSign
+// P1-8：FINALIZED 已是終態，沒有下一個 stage，「簽核」option 必須隱藏
+// 否則點下去 CycleDetailView.onKanbanAction stage map 取不到值 silent
+// no-op，使用者以為系統壞了。退簽 (REJECT) 仍允許（FINALIZED → ACCOUNTING_SIGNED）。
+const canSign = computed(
+  () => hasAnySignPerm.value && props.summary?.status !== 'FINALIZED',
+)
+const canReject = hasAnySignPerm
 </script>
 
 <template>

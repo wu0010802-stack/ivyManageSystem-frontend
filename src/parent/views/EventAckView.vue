@@ -17,18 +17,30 @@ const studentId = ref(null)
 const signatureName = ref('')
 const padRef = ref(null)
 const submitting = ref(false)
+// P1-18：以 loading / notFound 三態取代「event null = 永遠 skeleton」的二態，
+// 避免事件已刪除 / route param 對不上時頁面永久卡 skeleton。
+const loading = ref(true)
+const notFound = ref(false)
 
 async function init() {
+  loading.value = true
+  notFound.value = false
   await childrenStore.load()
   studentId.value =
     Number(route.query.student_id) || childrenStore.items[0]?.student_id
   try {
     const { data } = await listEvents()
-    event.value = (data?.items || []).find(
+    const found = (data?.items || []).find(
       (e) => e.id === Number(route.params.eventId),
     )
+    event.value = found || null
+    notFound.value = !found
   } catch (err) {
     toast.error(err?.displayMessage || '載入事件失敗')
+    event.value = null
+    notFound.value = true
+  } finally {
+    loading.value = false
   }
 }
 
@@ -139,9 +151,16 @@ onMounted(init)
         </button>
       </div>
     </template>
-    <template v-else>
+    <template v-else-if="loading">
       <div class="skeleton-wrap">
         <SkeletonBlock variant="card" :count="2" />
+      </div>
+    </template>
+    <template v-else>
+      <div class="empty-state not-found">
+        <span class="material-symbols-rounded" aria-hidden="true">event_busy</span>
+        <p class="not-found-title">找不到此事件</p>
+        <p class="not-found-note">事件可能已被取消或連結已失效，請回到事件列表確認。</p>
       </div>
     </template>
   </div>
@@ -211,5 +230,32 @@ onMounted(init)
   width: 100%;
   min-height: 52px;
   font-size: 16px;
+}
+
+.empty-state.not-found {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--pt-text-muted);
+}
+.empty-state.not-found .material-symbols-rounded {
+  font-size: 48px;
+  color: var(--pt-text-faint);
+  margin-bottom: 4px;
+}
+.not-found-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--pt-text-strong);
+}
+.not-found-note {
+  margin: 0;
+  font-size: 14px;
+  max-width: 280px;
+  line-height: 1.5;
 }
 </style>
