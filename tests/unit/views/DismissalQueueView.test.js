@@ -33,6 +33,7 @@ vi.mock('@/utils/auth', () => ({
 const mockWs = {
   readyState: 1, // OPEN
   close: vi.fn(),
+  send: vi.fn(),
   onopen: null,
   onmessage: null,
   onerror: null,
@@ -84,6 +85,7 @@ describe('DismissalQueueView', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.clearAllMocks()
+    mockWs.send.mockClear()
     getDismissalCalls.mockResolvedValue({ data: [] })
     getClassrooms.mockResolvedValue({ data: [] })
   })
@@ -155,6 +157,16 @@ describe('DismissalQueueView', () => {
       payload: { ...SAMPLE_CALL, status: 'acknowledged' },
     })
     expect(wrapper.vm.calls[0].status).toBe('acknowledged')
+  })
+
+  it('收到後端 ping 訊息時應回送 pong，避免被 90 秒 idle 心跳踢掉', async () => {
+    mountView()
+    await nextTick()
+    // 模擬後端送來的 application-level ping
+    mockWs.onmessage({ data: JSON.stringify({ type: 'ping' }) })
+    expect(mockWs.send).toHaveBeenCalledTimes(1)
+    const payload = JSON.parse(mockWs.send.mock.calls[0][0])
+    expect(payload).toEqual({ type: 'pong' })
   })
 
   it('handleWsEvent: dismissal_call_cancelled 應從 active 列表移除', async () => {

@@ -148,6 +148,12 @@ const connectWs = () => {
   ws.onmessage = (e) => {
     try {
       const event = JSON.parse(e.data)
+      // 後端 _recv_loop 等 client 任何訊息回應，90 秒沒收就主動斷線。
+      // ping 來時必須回送任意訊息以維持連線存活。
+      if (event.type === 'ping') {
+        ws.send(JSON.stringify({ type: 'pong' }))
+        return
+      }
       handleWsEvent(event)
     } catch { /* ignore */ }
   }
