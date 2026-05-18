@@ -1,26 +1,29 @@
-<script setup>
-const props = defineProps({
-  visible: {
-    type: Boolean,
-    default: false,
-  },
-  loading: {
-    type: Boolean,
-    default: false,
-  },
-  result: {
-    type: Object,
-    default: null,
-  },
-  onFileChange: {
-    type: Function,
-    required: true,
-  },
+<script setup lang="ts">
+import type { UploadFile } from 'element-plus'
+
+interface ImportResult {
+  total: number
+  created: number
+  failed: number
+  errors?: string[]
+}
+
+const props = withDefaults(defineProps<{
+  visible?: boolean
+  loading?: boolean
+  result?: ImportResult | null
+  onFileChange: (file: UploadFile) => void
+}>(), {
+  visible: false,
+  loading: false,
+  result: null,
 })
 
-const emit = defineEmits(['update:visible'])
+const emit = defineEmits<{
+  (e: 'update:visible', value: boolean): void
+}>()
 
-const updateVisible = (value) => emit('update:visible', value)
+const updateVisible = (value: boolean) => emit('update:visible', value)
 </script>
 
 <template>

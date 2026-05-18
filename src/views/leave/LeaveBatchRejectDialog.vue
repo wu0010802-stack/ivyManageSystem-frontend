@@ -1,23 +1,22 @@
-<script setup>
-const props = defineProps({
-  visible: {
-    type: Boolean,
-    default: false,
-  },
-  loading: {
-    type: Boolean,
-    default: false,
-  },
-  reason: {
-    type: String,
-    default: '',
-  },
+<script setup lang="ts">
+const props = withDefaults(defineProps<{
+  visible?: boolean
+  loading?: boolean
+  reason?: string
+}>(), {
+  visible: false,
+  loading: false,
+  reason: '',
 })
 
-const emit = defineEmits(['update:visible', 'update:reason', 'confirm'])
+const emit = defineEmits<{
+  (e: 'update:visible', value: boolean): void
+  (e: 'update:reason', value: string): void
+  (e: 'confirm'): void
+}>()
 
-const updateVisible = (value) => emit('update:visible', value)
-const updateReason = (value) => emit('update:reason', value)
+const updateVisible = (value: boolean) => emit('update:visible', value)
+const updateReason = (value: string) => emit('update:reason', value)
 </script>
 
 <template>

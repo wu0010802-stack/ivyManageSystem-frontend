@@ -1,7 +1,8 @@
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import type { UploadFile } from 'element-plus'
 import { Plus, Refresh, Upload, Download } from '@element-plus/icons-vue'
 import {
   listYearEndCycles,
@@ -13,7 +14,7 @@ import {
 import { apiError } from '@/utils/error'
 
 const router = useRouter()
-const cycles = ref([])
+const cycles = ref<unknown[]>([])
 const loading = ref(false)
 const createDialog = ref(false)
 const importDialog = ref(false)
@@ -26,7 +27,15 @@ const form = ref({
   bonus_calc_date: '',
 })
 
-const importForm = ref({
+const importForm = ref<{
+  file: File | null
+  start_date: string
+  end_date: string
+  bonus_calc_date: string
+  org_rate_first: number
+  org_rate_second: number
+  enrollment_target: number
+}>({
   file: null,
   start_date: '',
   end_date: '',
@@ -133,7 +142,7 @@ onMounted(load)
       <el-form :model="importForm" label-width="160px">
         <el-form-item label="檔案 (.xls)">
           <el-upload :auto-upload="false" :show-file-list="true" :limit="1"
-            :on-change="(f) => (importForm.file = f.raw)">
+            :on-change="(f) => (importForm.file = f.raw ?? null)">
             <el-button>選擇檔案</el-button>
           </el-upload>
         </el-form-item>

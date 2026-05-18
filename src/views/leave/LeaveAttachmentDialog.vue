@@ -1,23 +1,25 @@
-<script setup>
+<script setup lang="ts">
 import { ref } from 'vue'
 import { getLeaveAttachment } from '@/api/leaves'
 import { ElMessage } from 'element-plus'
 
+interface AttachItem { name: string; url: string; isImage: boolean }
+
 const attachDialogVisible = ref(false)
-const attachItems = ref([])
+const attachItems = ref<AttachItem[]>([])
 const attachLoading = ref(false)
 
-const viewAttachments = async (row) => {
+const viewAttachments = async (row: { id: number; attachment_paths: string[] }) => {
   attachItems.value = []
   attachDialogVisible.value = true
   attachLoading.value = true
   try {
     attachItems.value = await Promise.all(
-      row.attachment_paths.map(filename =>
+      row.attachment_paths.map((filename: string) =>
         getLeaveAttachment(row.id, filename)
           .then(res => ({
             name: filename,
-            url: URL.createObjectURL(res.data),
+            url: URL.createObjectURL((res as { data: Blob }).data),
             isImage: /\.(jpg|jpeg|png|gif|heic|heif)$/i.test(filename),
           }))
       )

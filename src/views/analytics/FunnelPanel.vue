@@ -64,7 +64,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { BarChart, PieChart } from '@/views/reports/chartSetup'
@@ -72,20 +72,28 @@ import { fetchFunnel } from '@/api/analytics'
 import { useAnalyticsTimeRange } from '@/composables/useAnalyticsTimeRange'
 import { apiError } from '@/utils/error'
 
+interface Stage { label: string; count: number; key: string; rate_from_prev: number | null }
+interface FunnelData {
+  stages?: Stage[]
+  no_deposit_reasons?: Array<{ reason: string; count: number }>
+  by_source?: Array<{ source?: string; lead: number; enrolled: number }>
+  by_grade?: Array<{ grade?: string; lead: number; enrolled: number }>
+}
+
 const timeRange = useAnalyticsTimeRange('this_term')
 const presetValue = ref(timeRange.preset.value)
-const customRange = ref([])
+const customRange = ref<string[]>([])
 const gradeFilter = ref('')
 const sourceFilter = ref('')
 const loading = ref(false)
-const data = ref(null)
-const sliceMode = ref('source')
+const data = ref<FunnelData | null>(null)
+const sliceMode = ref<'source' | 'grade'>('source')
 
-const onPresetChange = (v) => {
+const onPresetChange = (v: string) => {
   timeRange.applyPreset(v)
   if (v !== 'custom') reload()
 }
-const onCustomChange = (range) => {
+const onCustomChange = (range: string[] | null) => {
   if (!range || range.length !== 2) return
   timeRange.applyCustom(range[0], range[1])
   reload()
@@ -143,9 +151,8 @@ const hasSlice = computed(() => {
 })
 const sliceChartData = computed(() => {
   const rows = (sliceMode.value === 'source' ? data.value?.by_source : data.value?.by_grade) || []
-  const key = sliceMode.value
   return {
-    labels: rows.map(r => r[key] || '—'),
+    labels: rows.map(r => (r as Record<string, string | number | undefined>)[sliceMode.value] as string || '—'),
     datasets: [
       { label: '線索', data: rows.map(r => r.lead), backgroundColor: '#409eff' },
       { label: '報名', data: rows.map(r => r.enrolled), backgroundColor: '#67c23a' },

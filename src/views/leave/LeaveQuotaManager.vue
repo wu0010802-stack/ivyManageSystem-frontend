@@ -1,17 +1,32 @@
-<script setup>
+<script setup lang="ts">
 import { ref, computed } from 'vue'
 import { getLeaveQuotas, initLeaveQuotas, updateLeaveQuota } from '@/api/leaves'
 import { ElMessage } from 'element-plus'
 import { useEmployeeStore } from '@/stores/employee'
 import { LEAVE_TYPES as leaveTypes } from '@/utils/leaves'
 
-const props = defineProps({
-  visible: Boolean,
-})
-const emit = defineEmits(['update:visible'])
+interface QuotaRow {
+  id: number
+  leave_type: string
+  leave_type_label: string
+  total_hours: number
+  used_hours: number
+  pending_hours: number
+  remaining_hours: number
+  note?: string
+  _editing: boolean
+  _newTotal: number
+}
+
+const props = defineProps<{
+  visible: boolean
+}>()
+const emit = defineEmits<{
+  (e: 'update:visible', value: boolean): void
+}>()
 
 const employeeStore = useEmployeeStore()
-const currentYear = new Date().getFullYear()
+const currentYear: number = new Date().getFullYear()
 
 const dialogModel = computed({
   get: () => props.visible,
@@ -19,8 +34,8 @@ const dialogModel = computed({
 })
 
 const quotaMgrYear = ref(new Date().getFullYear())
-const quotaMgrEmpId = ref(null)
-const quotaRows = ref([])
+const quotaMgrEmpId = ref<number | null>(null)
+const quotaRows = ref<QuotaRow[]>([])
 const quotaMgrLoading = ref(false)
 const quotaSaving = ref(false)
 
@@ -29,7 +44,7 @@ const loadQuotaMgr = async () => {
   quotaMgrLoading.value = true
   try {
     const res = await getLeaveQuotas({ employee_id: quotaMgrEmpId.value, year: quotaMgrYear.value })
-    quotaRows.value = res.data.map(r => ({ ...r, _editing: false, _newTotal: r.total_hours }))
+    quotaRows.value = (res as { data: Omit<QuotaRow, '_editing' | '_newTotal'>[] }).data.map(r => ({ ...r, _editing: false, _newTotal: r.total_hours }))
   } catch {
     ElMessage.error('載入配額失敗')
   } finally {
@@ -42,23 +57,29 @@ const initQuotas = async () => {
   quotaMgrLoading.value = true
   try {
     const res = await initLeaveQuotas({ employee_id: quotaMgrEmpId.value, year: quotaMgrYear.value })
-    quotaRows.value = res.data.map(r => ({ ...r, _editing: false, _newTotal: r.total_hours }))
+    quotaRows.value = (res as { data: Omit<QuotaRow, '_editing' | '_newTotal'>[] }).data.map(r => ({ ...r, _editing: false, _newTotal: r.total_hours }))
     ElMessage.success('已依勞基法初始化配額')
   } catch (err) {
-    ElMessage.error('初始化失敗：' + (err.response?.data?.detail || err.message))
+    ElMessage.error('初始化失敗：' + ((err as { response?: { data?: { detail?: string }; message?: string } }).response?.data?.detail || (err as Error).message))
   } finally {
     quotaMgrLoading.value = false
   }
 }
 
-const saveQuotaRow = async (row) => {
+type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger'
+const leaveTagType = (leaveType: string): ElTagType => {
+  const found = leaveTypes.find((t: { value: string; color?: string }) => t.value === leaveType)
+  return (found?.color as ElTagType | undefined) ?? 'info'
+}
+
+const saveQuotaRow = async (row: QuotaRow) => {
   quotaSaving.value = true
   try {
     const res = await updateLeaveQuota(row.id, { total_hours: row._newTotal, note: row.note })
-    Object.assign(row, res.data, { _editing: false, _newTotal: res.data.total_hours })
+    Object.assign(row, (res as { data: QuotaRow }).data, { _editing: false, _newTotal: (res as { data: QuotaRow }).data.total_hours })
     ElMessage.success('已儲存')
   } catch (err) {
-    ElMessage.error('儲存失敗：' + (err.response?.data?.detail || err.message))
+    ElMessage.error('儲存失敗：' + ((err as { response?: { data?: { detail?: string } } }).response?.data?.detail || (err as Error).message))
   } finally {
     quotaSaving.value = false
   }
@@ -103,7 +124,7 @@ const saveQuotaRow = async (row) => {
     >
       <el-table-column label="假別" width="130">
         <template #default="{ row }">
-          <el-tag :type="leaveTypes.find(t => t.value === row.leave_type)?.color || 'info'" size="small">
+          <el-tag :type="leaveTagType(row.leave_type)" size="small">
             {{ row.leave_type_label }}
           </el-tag>
         </template>

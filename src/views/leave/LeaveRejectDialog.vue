@@ -1,17 +1,19 @@
-<script setup>
+<script setup lang="ts">
 import { ref } from 'vue'
 import { approveLeave } from '@/api/leaves'
 import { ElMessage } from 'element-plus'
 import { apiError } from '@/utils/error'
 
-const emit = defineEmits(['rejected'])
+const emit = defineEmits<{
+  (e: 'rejected'): void
+}>()
 
 const rejectDialogVisible = ref(false)
-const rejectTarget = ref(null)
+const rejectTarget = ref<{ id: number } | null>(null)
 const rejectReason = ref('')
 const rejectLoading = ref(false)
 
-const openRejectDialog = (row) => {
+const openRejectDialog = (row: { id: number }) => {
   rejectTarget.value = row
   rejectReason.value = ''
   rejectDialogVisible.value = true
@@ -24,7 +26,7 @@ const confirmReject = async () => {
   }
   rejectLoading.value = true
   try {
-    await approveLeave(rejectTarget.value.id, {
+    await approveLeave(rejectTarget.value!.id, {
       approved: false,
       rejection_reason: rejectReason.value.trim(),
     })
@@ -32,7 +34,7 @@ const confirmReject = async () => {
     rejectDialogVisible.value = false
     emit('rejected')
   } catch (error) {
-    ElMessage.error('操作失敗：' + apiError(error, error.message))
+    ElMessage.error('操作失敗：' + apiError(error, (error as Error).message))
   } finally {
     rejectLoading.value = false
   }

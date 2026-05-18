@@ -8,15 +8,16 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, watch } from 'vue'
 import { useRoute, useRouter, RouterView } from 'vue-router'
+import type { TabPaneName } from 'element-plus'
 
 const route = useRoute()
 const router = useRouter()
 const activeTab = ref(route.path.endsWith('/churn') ? 'churn' : 'funnel')
 
-const onTabChange = (name) => {
+const onTabChange = (name: TabPaneName) => {
   router.push(`/analytics/${name}`)
 }
 
