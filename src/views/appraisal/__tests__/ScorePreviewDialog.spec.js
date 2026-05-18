@@ -65,6 +65,27 @@ const stubs = {
   ElTable: ElTableStub,
   ElTableColumn: ElTableColumnStub,
   ElButton: { template: '<button><slot /></button>' },
+  ElSwitch: {
+    props: ['modelValue', 'activeText'],
+    emits: ['update:modelValue'],
+    template:
+      '<label class="el-switch">' +
+      '<input type="checkbox" :checked="modelValue" ' +
+      '@change="$emit(\'update:modelValue\', $event.target.checked)" />' +
+      '{{ activeText }}</label>',
+  },
+  ElRadioGroup: {
+    props: ['modelValue'],
+    emits: ['update:modelValue'],
+    template: '<div class="el-radio-group"><slot /></div>',
+  },
+  ElRadioButton: {
+    props: ['label'],
+    template: '<button class="el-radio-button"><slot /></button>',
+  },
+  ElTooltip: {
+    template: '<span class="el-tooltip"><slot /></span>',
+  },
 }
 
 const mountOpts = (props = {}) => ({
@@ -147,5 +168,72 @@ describe('ScorePreviewDialog', () => {
     await flushPromises()
     expect(wrapper.find('[data-test="score-preview-dialog"]').exists()).toBe(false)
     expect(api.previewAppraisalScore).not.toHaveBeenCalled()
+  })
+
+  // 多參與者 fixture：用於合計、排序、過濾
+  const multiParticipantsFixture = {
+    cycle_id: 10,
+    on_date: '2026-01-01',
+    participants: [
+      {
+        participant_id: 1,
+        employee_name: 'Alice',
+        items: [
+          { item_code: 'LATE_EARLY', delta: '0.5', current_db_value: '0.5', raw_value: 2, note: '' },
+          { item_code: 'LEAVE', delta: '0.5', current_db_value: '0.5', raw_value: 1, note: '' },
+        ],
+      },
+      {
+        participant_id: 2,
+        employee_name: 'Bob',
+        items: [
+          { item_code: 'LATE_EARLY', delta: '-2.0', current_db_value: '-1.0', raw_value: 8, note: '異常多' },
+        ],
+      },
+      {
+        participant_id: 3,
+        employee_name: 'Charlie',
+        items: [
+          { item_code: 'OTHER', delta: '-0.5', current_db_value: '-0.5', raw_value: 1, note: '' },
+        ],
+      },
+    ],
+  }
+
+  it('renders 合計 column with sum of all deltas per participant', async () => {
+    api.previewAppraisalScore.mockResolvedValueOnce({ data: multiParticipantsFixture })
+    const wrapper = mount(ScorePreviewDialog, mountOpts())
+    await flushPromises()
+    await nextTick()
+    expect(wrapper.find('[data-test="total-1"]').text()).toBe('1')
+    expect(wrapper.find('[data-test="total-2"]').text()).toBe('-2')
+    expect(wrapper.find('[data-test="total-3"]').text()).toBe('-0.5')
+  })
+
+  it('default-sorts participants by abs(total) descending', async () => {
+    api.previewAppraisalScore.mockResolvedValueOnce({ data: multiParticipantsFixture })
+    const wrapper = mount(ScorePreviewDialog, mountOpts())
+    await flushPromises()
+    await nextTick()
+    const totals = wrapper.findAll('[data-test^="total-"]')
+    const ids = totals.map((el) => el.attributes('data-test').replace('total-', ''))
+    // Bob(|-2|=2) > Alice(|1|=1) > Charlie(|-0.5|=0.5)
+    expect(ids).toEqual(['2', '1', '3'])
+  })
+
+  it('「只看有變動」filters out participants without any diff', async () => {
+    api.previewAppraisalScore.mockResolvedValueOnce({ data: multiParticipantsFixture })
+    const wrapper = mount(ScorePreviewDialog, mountOpts())
+    await flushPromises()
+    await nextTick()
+    // 預設 3 人都顯示
+    expect(wrapper.findAll('[data-test^="total-"]').length).toBe(3)
+    // 打開過濾
+    await wrapper.find('[class~="el-switch"] input').setValue(true)
+    await nextTick()
+    // 只剩 Bob（current_db=-1.0 vs delta=-2.0 → hasDiff）
+    const totals = wrapper.findAll('[data-test^="total-"]')
+    expect(totals.length).toBe(1)
+    expect(totals[0].attributes('data-test')).toBe('total-2')
   })
 })
