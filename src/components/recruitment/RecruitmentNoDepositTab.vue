@@ -43,7 +43,7 @@
             @change="$emit('filter-change')"
           >
             <el-option label="高潛力優先" value="high" />
-            <el-option label="全部潛力" :value="null" />
+            <el-option label="全部潛力" value="" />
             <el-option label="中潛力" value="medium" />
             <el-option label="低潛力" value="low" />
           </el-select>
@@ -74,14 +74,14 @@
             inline-prompt
             active-text="逾 14 天"
             inactive-text="全部"
-            @change="$emit('update:overdue-days', $event ? 14 : null); $emit('filter-change')"
+            @change="onOverdueDaysChange"
           />
           <el-switch
             :model-value="Boolean(coldOnly)"
             inline-prompt
             active-text="冷名單"
             inactive-text="全部"
-            @change="$emit('update:cold-only', $event); $emit('filter-change')"
+            @change="onColdOnlyChange"
           />
           <span class="record-count">顯示 {{ records.length }} / {{ total }} 筆未預繳</span>
         </div>
@@ -95,7 +95,7 @@
           <template #default="{ row }">
             <el-tag
               v-if="getConvertibility(row.no_deposit_reason).type"
-              :type="getConvertibility(row.no_deposit_reason).type"
+              :type="(getConvertibility(row.no_deposit_reason).type as 'primary' | 'success' | 'warning' | 'info' | 'danger')"
               size="small"
             >{{ getConvertibility(row.no_deposit_reason).label }}</el-tag>
             <span v-else>—</span>
@@ -124,8 +124,9 @@
   </div>
 </template>
 
-<script setup>
-const CONVERTIBILITY = {
+<script setup lang="ts">
+interface ConvertibilityEntry { label: string; type: string }
+const CONVERTIBILITY: Record<string, ConvertibilityEntry> = {
   '時程未到／仍在觀望':        { label: '高', type: 'danger' },
   '課程／環境仍在評估':        { label: '高', type: 'danger' },
   '距離／地點因素':            { label: '中', type: 'warning' },
@@ -135,43 +136,63 @@ const CONVERTIBILITY = {
   '特殊需求／名額限制':         { label: '低', type: 'info' },
   '未註明／待追蹤':             { label: '—', type: '' },
 }
-const getConvertibility = (reason) => CONVERTIBILITY[reason] ?? { label: '—', type: '' }
-const daysSince = (isoStr) => {
-  if (!isoStr) return null
-  return Math.floor((Date.now() - new Date(isoStr)) / 86400000)
+const getConvertibility = (reason: unknown): ConvertibilityEntry =>
+  CONVERTIBILITY[String(reason)] ?? { label: '—', type: '' }
+const daysSince = (isoStr: unknown): number => {
+  if (!isoStr) return 0
+  return Math.floor((Date.now() - new Date(String(isoStr)).getTime()) / 86400000)
 }
 
-defineProps({
-  showCharts: { type: Boolean, required: true },
-  noDepositReasonBarData: { type: Object, default: null },
-  noDepositGradeBarData: { type: Object, default: null },
-  horizBarOptions: { type: Object, required: true },
-  noDepositGradeOptions: { type: Object, required: true },
-  barComponent: { type: [Object, Function], required: true },
-  reasonOptions: { type: Array, required: true },
-  grades: { type: Array, required: true },
-  summary: { type: Object, default: () => ({}) },
-  priority: { type: String, default: 'high' },
-  reason: { type: String, default: null },
-  grade: { type: String, default: null },
-  overdueDays: { type: Number, default: null },
-  coldOnly: { type: Boolean, default: false },
-  page: { type: Number, required: true },
-  pageSize: { type: Number, required: true },
-  total: { type: Number, required: true },
-  records: { type: Array, required: true },
-  loading: { type: Boolean, required: true },
-})
+const emit = defineEmits<{
+  'update:priority': [value: string]
+  'update:reason': [value: string | null]
+  'update:grade': [value: string | null]
+  'update:overdue-days': [value: number | null]
+  'update:cold-only': [value: boolean]
+  'filter-change': []
+  'page-change': [page: number]
+}>()
 
-defineEmits([
-  'update:priority',
-  'update:reason',
-  'update:grade',
-  'update:overdue-days',
-  'update:cold-only',
-  'filter-change',
-  'page-change',
-])
+const onOverdueDaysChange = (val: string | number | boolean) => {
+  emit('update:overdue-days', val ? 14 : null)
+  emit('filter-change')
+}
+
+const onColdOnlyChange = (val: string | number | boolean) => {
+  emit('update:cold-only', Boolean(val))
+  emit('filter-change')
+}
+
+withDefaults(defineProps<{
+  showCharts: boolean
+  noDepositReasonBarData?: Record<string, unknown> | null
+  noDepositGradeBarData?: Record<string, unknown> | null
+  horizBarOptions: Record<string, unknown>
+  noDepositGradeOptions: Record<string, unknown>
+  barComponent: Record<string, unknown> | ((...args: unknown[]) => unknown)
+  reasonOptions: string[]
+  grades: string[]
+  summary?: Record<string, unknown>
+  priority?: string
+  reason?: string | null
+  grade?: string | null
+  overdueDays?: number | null
+  coldOnly?: boolean
+  page: number
+  pageSize: number
+  total: number
+  records: Record<string, unknown>[]
+  loading: boolean
+}>(), {
+  noDepositReasonBarData: null,
+  noDepositGradeBarData: null,
+  summary: () => ({}),
+  priority: 'high',
+  reason: null,
+  grade: null,
+  overdueDays: null,
+  coldOnly: false,
+})
 </script>
 
 <style scoped>

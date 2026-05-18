@@ -141,21 +141,50 @@
   </div>
 </template>
 
-<script setup>
-defineProps({
-  canWrite: { type: Boolean, required: true },
-  showCharts: { type: Boolean, required: true },
-  periodsSummary: { type: Object, default: null },
-  periods: { type: Array, required: true },
-  loadingPeriods: { type: Boolean, required: true },
-  periodsTrendData: { type: Object, default: null },
-  periodsCountBarData: { type: Object, default: null },
-  lineOptions: { type: Object, required: true },
-  barOptions: { type: Object, required: true },
-  lineComponent: { type: [Object, Function], required: true },
-  barComponent: { type: [Object, Function], required: true },
-  fmtRate: { type: Function, required: true },
+<script setup lang="ts">
+interface PeriodRateEntry { period?: string; rate?: number }
+interface PeriodsSummary {
+  total_visit?: number
+  total_deposit?: number
+  total_enrolled?: number
+  total_not_enrolled_deposit?: number
+  total_enrolled_after_school?: number
+  visit_to_deposit_rate?: number
+  visit_to_enrolled_rate?: number
+  deposit_to_enrolled_rate?: number
+  effective_to_enrolled_rate?: number
+  total_net_enrolled?: number
+  best_visit_to_enrolled?: PeriodRateEntry
+  worst_visit_to_enrolled?: PeriodRateEntry
+  best_deposit_to_enrolled?: PeriodRateEntry
+  worst_deposit_to_enrolled?: PeriodRateEntry
+  by_grade?: unknown[]
+  [key: string]: unknown
+}
+
+withDefaults(defineProps<{
+  canWrite: boolean
+  showCharts: boolean
+  periodsSummary?: PeriodsSummary | null
+  periods: Record<string, unknown>[]
+  loadingPeriods: boolean
+  periodsTrendData?: Record<string, unknown> | null
+  periodsCountBarData?: Record<string, unknown> | null
+  lineOptions: Record<string, unknown>
+  barOptions: Record<string, unknown>
+  lineComponent: Record<string, unknown> | ((...args: unknown[]) => unknown)
+  barComponent: Record<string, unknown> | ((...args: unknown[]) => unknown)
+  fmtRate: (...args: unknown[]) => unknown
+}>(), {
+  periodsSummary: null,
+  periodsTrendData: null,
+  periodsCountBarData: null,
 })
 
-defineEmits(['open-add', 'sync', 'edit', 'delete'])
+defineEmits<{
+  'open-add': []
+  'sync': [id: unknown]
+  'edit': [row: Record<string, unknown>]
+  'delete': [id: unknown]
+}>()
 </script>

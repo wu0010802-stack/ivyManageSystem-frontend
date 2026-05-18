@@ -73,7 +73,7 @@
           target="_blank"
           rel="noreferrer"
         >
-          {{ form.campus_lat.toFixed(6) }}, {{ form.campus_lng.toFixed(6) }} →在地圖上確認
+          {{ (form.campus_lat ?? 0).toFixed(6) }}, {{ (form.campus_lng ?? 0).toFixed(6) }} →在地圖上確認
         </a>
       </div>
 
@@ -92,33 +92,47 @@
   </el-dialog>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { geocodeAddress as geocodeAddressViaNominatim } from '@/utils/geocoding'
 
-const props = defineProps({
-  visible: { type: Boolean, required: true },
-  form: { type: Object, required: true },
-  saving: { type: Boolean, default: false },
+interface CampusForm {
+  campus_name?: string | number | null
+  campus_address?: string | number | null
+  campus_lat?: number | null
+  campus_lng?: number | null
+  travel_mode?: string | number | null
+  [key: string]: unknown
+}
+
+const props = withDefaults(defineProps<{
+  visible: boolean
+  form: CampusForm
+  saving?: boolean
+}>(), {
+  saving: false,
 })
 
-defineEmits(['update:visible', 'save'])
+defineEmits<{
+  'update:visible': [value: boolean]
+  'save': []
+}>()
 
-const geocoding = ref(false)
-const geocodeDirty = ref(false)
+const geocoding = ref<boolean>(false)
+const geocodeDirty = ref<boolean>(false)
 
 const geocodeAddress = async () => {
-  const address = props.form?.campus_address
+  const address = props.form?.campus_address as string | undefined
   if (!address) return
   geocoding.value = true
   try {
     const hit = await geocodeAddressViaNominatim(address)
     if (hit) {
-      props.form.campus_lat = hit.lat
-      props.form.campus_lng = hit.lng
+      props.form.campus_lat = (hit as { lat: number }).lat
+      props.form.campus_lng = (hit as { lng: number }).lng
       geocodeDirty.value = false
-      ElMessage.success(`已定位：${hit.displayName}`)
+      ElMessage.success(`已定位：${(hit as { displayName?: string }).displayName}`)
     } else {
       ElMessage.warning('找不到此地址，請嘗試填寫更精確的地址（含縣市區），或直接手動輸入座標')
     }

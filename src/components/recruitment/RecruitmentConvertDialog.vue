@@ -72,33 +72,44 @@
   </el-dialog>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { convertRecruitmentRecord } from '@/api/recruitment'
 
-const props = defineProps({
-  modelValue: { type: Boolean, default: false },
-  visit: { type: Object, default: null },
-  classroomOptions: { type: Array, default: () => [] },
+interface ClassroomOption { id: number | string; name: string; [key: string]: unknown }
+interface Visit { id: number | string; gender?: string | null; [key: string]: unknown }
+
+const props = withDefaults(defineProps<{
+  modelValue?: boolean
+  visit?: Visit | null
+  classroomOptions?: ClassroomOption[]
+}>(), {
+  modelValue: false,
+  visit: null,
+  classroomOptions: () => [],
 })
-const emit = defineEmits(['update:modelValue', 'converted'])
+
+const emit = defineEmits<{
+  'update:modelValue': [value: boolean]
+  'converted': [data: Record<string, unknown>]
+}>()
 
 const visible = computed({
   get: () => props.modelValue,
-  set: (v) => emit('update:modelValue', v),
+  set: (v: boolean) => emit('update:modelValue', v),
 })
 
 const emptyForm = () => ({
   student_id_code: '',
-  gender: null,
+  gender: null as string | null,
   enrollment_date: '',
-  classroom_id: null,
+  classroom_id: null as number | string | null,
   initial_lifecycle_status: 'enrolled',
 })
 const form = reactive(emptyForm())
-const formRef = ref(null)
-const submitting = ref(false)
+const formRef = ref<{ validate: () => Promise<void>; clearValidate: () => void } | null>(null)
+const submitting = ref<boolean>(false)
 
 const rules = {
   student_id_code: [
@@ -127,7 +138,7 @@ watch(
 async function handleSubmit() {
   if (!props.visit) return
   try {
-    await formRef.value.validate()
+    await formRef.value?.validate()
   } catch {
     return
   }
@@ -140,12 +151,12 @@ async function handleSubmit() {
       classroom_id: form.classroom_id || null,
       initial_lifecycle_status: form.initial_lifecycle_status,
     }
-    const { data } = await convertRecruitmentRecord(props.visit.id, payload)
-    ElMessage.success(data.message || '已成功轉為正式學生')
-    emit('converted', data)
+    const { data } = await convertRecruitmentRecord(props.visit.id as number, payload)
+    ElMessage.success((data as { message?: string }).message || '已成功轉為正式學生')
+    emit('converted', data as Record<string, unknown>)
     visible.value = false
   } catch (err) {
-    ElMessage.error(err.displayMessage || '轉化失敗')
+    ElMessage.error((err as { displayMessage?: string }).displayMessage || '轉化失敗')
   } finally {
     submitting.value = false
   }

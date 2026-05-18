@@ -11,7 +11,7 @@
         @click="$emit('select', alert)"
       >
         <div class="alert-item-top">
-          <el-tag size="small" :type="tagType(alert.level)">{{ levelLabel(alert.level) }}</el-tag>
+          <el-tag size="small" :type="(tagType(alert.level) as 'primary' | 'success' | 'warning' | 'info' | 'danger')">{{ levelLabel(alert.level) }}</el-tag>
           <span class="alert-code">{{ alert.code }}</span>
         </div>
         <div class="alert-title">{{ alert.title }}</div>
@@ -22,24 +22,22 @@
   </el-card>
 </template>
 
-<script setup>
-defineProps({
-  alerts: { type: Array, default: () => [] },
+<script setup lang="ts">
+interface AlertItem { code?: string; level?: string; title?: string; message?: string; [key: string]: unknown }
+
+withDefaults(defineProps<{
+  alerts?: AlertItem[]
+}>(), {
+  alerts: () => [],
 })
 
-defineEmits(['select'])
+defineEmits<{ 'select': [alert: AlertItem] }>()
 
-const tagType = (level) => ({
-  danger: 'danger',
-  warning: 'warning',
-  info: 'info',
-}[level] || 'info')
+const TAG_TYPE_MAP: Record<string, string> = { danger: 'danger', warning: 'warning', info: 'info' }
+const LEVEL_LABEL_MAP: Record<string, string> = { danger: '高', warning: '中', info: '低' }
 
-const levelLabel = (level) => ({
-  danger: '高',
-  warning: '中',
-  info: '低',
-}[level] || '提示')
+const tagType = (level: unknown) => TAG_TYPE_MAP[String(level || '')] || 'info'
+const levelLabel = (level: unknown) => LEVEL_LABEL_MAP[String(level || '')] || '提示'
 </script>
 
 <style scoped>

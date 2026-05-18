@@ -154,23 +154,58 @@
   </el-dialog>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, watch } from 'vue'
 import { GRADES_ORDER } from '@/constants/recruitment'
 
-const props = defineProps({
-  visible: { type: Boolean, required: true },
-  mode: { type: String, default: 'add' },
-  form: { type: Object, required: true },
-  saving: { type: Boolean, default: false },
-  districtSuggestions: { type: Array, default: () => [] },
-  sourceSuggestions: { type: Array, default: () => [] },
-  referrerSuggestions: { type: Array, default: () => [] },
-  noDepositReasons: { type: Array, default: () => [] },
+interface VisitForm {
+  month_raw?: string | number | null
+  visit_date?: string | number | null
+  month?: string | number | null
+  seq_no?: string | number | null
+  child_name?: string | number | null
+  grade?: string | number | null
+  birthday?: string | number | null
+  phone?: string | number | null
+  district?: string | number | undefined
+  address?: string | number | null
+  source?: string | number | undefined
+  referrer?: string | number | undefined
+  has_deposit?: string | number | boolean
+  deposit_collector?: string | number | null
+  enrolled?: string | number | boolean
+  transfer_term?: string | number | boolean
+  no_deposit_reason?: string | number | null
+  no_deposit_reason_detail?: string | number | null
+  notes?: string | number | null
+  parent_response?: string | number | null
+  [key: string]: unknown
+}
+
+const props = withDefaults(defineProps<{
+  visible: boolean
+  mode?: string
+  form: VisitForm
+  saving?: boolean
+  districtSuggestions?: string[]
+  sourceSuggestions?: string[]
+  referrerSuggestions?: string[]
+  noDepositReasons?: string[]
+}>(), {
+  mode: 'add',
+  saving: false,
+  districtSuggestions: () => [],
+  sourceSuggestions: () => [],
+  referrerSuggestions: () => [],
+  noDepositReasons: () => [],
 })
 
-const emit = defineEmits(['update:visible', 'save'])
-const formRef = ref(null)
+const emit = defineEmits<{
+  'update:visible': [value: boolean]
+  'save': []
+}>()
+
+const formRef = ref<{ validate: () => Promise<void> } | null>(null)
 
 const formRules = {
   month: [{ required: true, message: '請選擇參觀日期', trigger: 'blur' }],
@@ -178,12 +213,12 @@ const formRules = {
 }
 
 // -------- 日期轉換（西元 ↔ 民國）--------
-const isoToRoc = (iso) => {
+const isoToRoc = (iso: string) => {
   if (!iso) return ''
   const [y, m, d] = iso.split('-')
   return `${parseInt(y) - 1911}.${m}.${d}`
 }
-const isoToRocMonth = (iso) => {
+const isoToRocMonth = (iso: string) => {
   if (!iso) return ''
   const [y, m] = iso.split('-')
   return `${parseInt(y) - 1911}.${m}`
@@ -193,9 +228,10 @@ const isoToRocMonth = (iso) => {
 watch(
   () => props.form.month_raw,
   (iso) => {
-    if (iso) {
-      props.form.visit_date = isoToRoc(iso)
-      props.form.month = isoToRocMonth(iso.substring(0, 7))
+    const isoStr = iso as string | null | undefined
+    if (isoStr) {
+      props.form.visit_date = isoToRoc(isoStr)
+      props.form.month = isoToRocMonth(isoStr.substring(0, 7))
     } else {
       props.form.visit_date = ''
       props.form.month = ''
@@ -204,7 +240,7 @@ watch(
 )
 
 // -------- autocomplete 建議列表 --------
-const _makeSuggestions = (list, query, cb) => {
+const _makeSuggestions = (list: string[], query: string, cb: (items: { value: string }[]) => void) => {
   const q = (query || '').trim().toLowerCase()
   const items = list
     .filter((v) => !q || v.toLowerCase().includes(q))
@@ -212,13 +248,15 @@ const _makeSuggestions = (list, query, cb) => {
   cb(items)
 }
 
-const districtQuery = (query, cb) => {
+const districtQuery = (query: string, cb: (items: { value: string }[]) => void) => {
   _makeSuggestions(props.districtSuggestions.filter(Boolean), query, cb)
 }
-const sourceQuery = (query, cb) => _makeSuggestions(props.sourceSuggestions, query, cb)
-const referrerQuery = (query, cb) => _makeSuggestions(props.referrerSuggestions, query, cb)
+const sourceQuery = (query: string, cb: (items: { value: string }[]) => void) =>
+  _makeSuggestions(props.sourceSuggestions, query, cb)
+const referrerQuery = (query: string, cb: (items: { value: string }[]) => void) =>
+  _makeSuggestions(props.referrerSuggestions, query, cb)
 
-const onDepositChange = (val) => {
+const onDepositChange = (val: unknown) => {
   if (val) {
     props.form.no_deposit_reason = null
     props.form.no_deposit_reason_detail = ''
@@ -228,7 +266,7 @@ const onDepositChange = (val) => {
 }
 
 const handleSave = async () => {
-  await formRef.value.validate()
+  await formRef.value?.validate()
   emit('save')
 }
 

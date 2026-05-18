@@ -38,23 +38,27 @@
   </el-dialog>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getMonths, addMonth, deleteMonth } from '@/api/recruitment'
 import { apiError } from '@/utils/error'
 
-const props = defineProps({
-  visible: { type: Boolean, required: true },
-})
+defineProps<{
+  visible: boolean
+}>()
 
-const emit = defineEmits(['update:visible', 'changed'])
+const emit = defineEmits<{
+  'update:visible': [value: boolean]
+  'changed': []
+}>()
 
-const registeredMonths = ref([])
-const newMonthInput = ref('')
-const saving = ref(false)
+interface MonthEntry { month: string; [key: string]: unknown }
+const registeredMonths = ref<MonthEntry[]>([])
+const newMonthInput = ref<string>('')
+const saving = ref<boolean>(false)
 
-const _validateMonthFormat = (v) => {
+const _validateMonthFormat = (v: string) => {
   const parts = v.trim().split('.')
   if (parts.length !== 2) return false
   const num = parseInt(parts[1], 10)
@@ -64,7 +68,7 @@ const _validateMonthFormat = (v) => {
 const loadMonths = async () => {
   try {
     const res = await getMonths()
-    registeredMonths.value = res.data
+    registeredMonths.value = (res.data as MonthEntry[]) || []
   } catch (e) {
     ElMessage.error(apiError(e, '載入月份失敗'))
   }
@@ -80,20 +84,21 @@ const handleAdd = async () => {
   saving.value = true
   try {
     const res = await addMonth(month)
-    registeredMonths.value.push(res.data)
+    registeredMonths.value.push(res.data as MonthEntry)
     registeredMonths.value.sort((a, b) => a.month.localeCompare(b.month))
     newMonthInput.value = ''
     ElMessage.success(`已登記月份 ${month}`)
     emit('changed')
   } catch (e) {
-    const msg = e.response?.status === 409 ? `月份 ${month} 已存在` : apiError(e, '新增失敗')
+    const axiosErr = e as { response?: { status?: number } }
+    const msg = axiosErr.response?.status === 409 ? `月份 ${month} 已存在` : apiError(e, '新增失敗')
     ElMessage.error(msg)
   } finally {
     saving.value = false
   }
 }
 
-const handleDelete = async (month) => {
+const handleDelete = async (month: string) => {
   try {
     await ElMessageBox.confirm(`確定刪除登記月份「${month}」？`, '確認刪除', {
       type: 'warning',
