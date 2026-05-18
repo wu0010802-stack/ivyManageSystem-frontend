@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue'
 import { MoreFilled } from '@element-plus/icons-vue'
+import { hasPermission } from '@/utils/auth'
 
 const props = defineProps({
   summary: { type: Object, required: true },
@@ -11,6 +12,15 @@ const emit = defineEmits(['update:selected', 'action'])
 
 function onCheckboxChange(v) { emit('update:selected', v) }
 function onMenuClick(action) { emit('action', { action, summary: props.summary }) }
+
+// P0-A：依 APPRAISAL_* permission bit 個別守衛 dropdown 動作。
+// 簽核 / 退簽：任一 sign 權限即顯示（後端會依當前 stage 二次驗）。
+const canSign = computed(
+  () => hasPermission('APPRAISAL_REVIEW')
+    || hasPermission('APPRAISAL_ACCOUNTING')
+    || hasPermission('APPRAISAL_FINALIZE'),
+)
+const canReject = canSign
 </script>
 
 <template>
@@ -23,8 +33,16 @@ function onMenuClick(action) { emit('action', { action, summary: props.summary }
         <el-icon class="menu-icon"><MoreFilled /></el-icon>
         <template #dropdown>
           <el-dropdown-menu>
-            <el-dropdown-item command="sign">簽核</el-dropdown-item>
-            <el-dropdown-item command="reject">退簽</el-dropdown-item>
+            <el-dropdown-item
+              v-if="canSign"
+              command="sign"
+              data-test="dropdown-item-sign"
+            >簽核</el-dropdown-item>
+            <el-dropdown-item
+              v-if="canReject"
+              command="reject"
+              data-test="dropdown-item-reject"
+            >退簽</el-dropdown-item>
             <el-dropdown-item command="comment">留言</el-dropdown-item>
             <el-dropdown-item command="log">看 log</el-dropdown-item>
           </el-dropdown-menu>
