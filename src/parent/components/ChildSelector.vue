@@ -1,12 +1,17 @@
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 import { useChildrenStore } from '../stores/children'
 import { useChildSelection } from '../composables/useChildSelection'
 
+interface Child {
+  student_id: number
+  name?: string
+}
+
 const childrenStore = useChildrenStore()
 const { selectedId, setSelected } = useChildSelection()
 
-const items = computed(() => childrenStore.items || [])
+const items = computed<Child[]>(() => (childrenStore.items as Child[]) || [])
 </script>
 
 <template>

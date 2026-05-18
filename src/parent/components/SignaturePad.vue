@@ -1,45 +1,49 @@
-<script setup>
+<script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue'
 
-const props = defineProps({
-  width: { type: Number, default: 320 },
-  height: { type: Number, default: 160 },
+const props = withDefaults(defineProps<{
+  width?: number
+  height?: number
+}>(), {
+  width: 320,
+  height: 160,
 })
 
-const canvas = ref(null)
-let ctx = null
+const canvas = ref<HTMLCanvasElement | null>(null)
+let ctx: CanvasRenderingContext2D | null = null
 let drawing = false
 let hasInk = false
 
-function pos(e) {
-  const rect = canvas.value.getBoundingClientRect()
-  const t = e.touches ? e.touches[0] : e
+function pos(e: MouseEvent | TouchEvent): { x: number; y: number } {
+  const rect = canvas.value!.getBoundingClientRect()
+  const t = 'touches' in e ? e.touches[0] : e
   return { x: t.clientX - rect.left, y: t.clientY - rect.top }
 }
 
-function onDown(e) {
+function onDown(e: MouseEvent | TouchEvent): void {
   e.preventDefault()
   drawing = true
   hasInk = true
   const p = pos(e)
-  ctx.beginPath()
-  ctx.moveTo(p.x, p.y)
+  ctx!.beginPath()
+  ctx!.moveTo(p.x, p.y)
 }
 
-function onMove(e) {
+function onMove(e: MouseEvent | TouchEvent): void {
   if (!drawing) return
   e.preventDefault()
   const p = pos(e)
-  ctx.lineTo(p.x, p.y)
-  ctx.stroke()
+  ctx!.lineTo(p.x, p.y)
+  ctx!.stroke()
 }
 
-function onUp() {
+function onUp(): void {
   drawing = false
 }
 
 onMounted(() => {
-  ctx = canvas.value.getContext('2d')
+  ctx = canvas.value!.getContext('2d')
+  if (!ctx) return
   ctx.lineWidth = 2.2
   ctx.lineCap = 'round'
   ctx.lineJoin = 'round'
@@ -50,19 +54,19 @@ onUnmounted(() => {
   drawing = false
 })
 
-function clear() {
-  if (!ctx) return
+function clear(): void {
+  if (!ctx || !canvas.value) return
   ctx.clearRect(0, 0, canvas.value.width, canvas.value.height)
   hasInk = false
 }
 
-function isEmpty() {
+function isEmpty(): boolean {
   return !hasInk
 }
 
-function toBlob() {
+function toBlob(): Promise<Blob | null> {
   return new Promise((resolve) => {
-    canvas.value.toBlob((b) => resolve(b), 'image/png')
+    canvas.value!.toBlob((b) => resolve(b), 'image/png')
   })
 }
 

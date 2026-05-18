@@ -1,13 +1,18 @@
 <!-- src/parent/components/MilestoneReactionBar.vue -->
-<script setup>
+<script setup lang="ts">
 import { REACTION_EMOJI } from '@/parent/api/childMilestones'
 
-defineProps({
-  current: { type: String, default: null },
+withDefaults(defineProps<{
+  current?: string | null
+}>(), {
+  current: null,
 })
-const emit = defineEmits(['select'])
+const emit = defineEmits<{
+  'select': [reaction: string]
+}>()
 
-const reactions = ['like', 'love', 'celebrate']
+const REACTION_EMOJI_MAP = REACTION_EMOJI as Record<string, string>
+const reactions: string[] = ['like', 'love', 'celebrate']
 </script>
 
 <template>
@@ -19,7 +24,7 @@ const reactions = ['like', 'love', 'celebrate']
       :class="{ active: current === r }"
       @click="emit('select', r)"
     >
-      {{ REACTION_EMOJI[r] }}
+      {{ REACTION_EMOJI_MAP[r] }}
     </button>
   </div>
 </template>

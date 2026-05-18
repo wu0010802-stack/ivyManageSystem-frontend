@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /**
  * 家長端連線狀態 banner。
  * - 離線：暖黃 money tint（--pt-tint-money）「目前離線，部分功能受限」
@@ -7,16 +7,18 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useConnectionStatus } from '@/parent/composables/useConnectionStatus'
 
-const props = defineProps({
-  wsBannerDelayMs: { type: Number, default: 3000 },
+const props = withDefaults(defineProps<{
+  wsBannerDelayMs?: number
+}>(), {
+  wsBannerDelayMs: 3000,
 })
 
 const { online, wsConnected } = useConnectionStatus()
-const wsBannerVisible = ref(false)
-let wsTimer = null
+const wsBannerVisible = ref<boolean>(false)
+let wsTimer: ReturnType<typeof setTimeout> | null = null
 
-function scheduleWsBanner() {
-  clearTimeout(wsTimer)
+function scheduleWsBanner(): void {
+  if (wsTimer !== null) clearTimeout(wsTimer)
   if (online.value && !wsConnected.value) {
     wsTimer = setTimeout(() => { wsBannerVisible.value = !wsConnected.value }, props.wsBannerDelayMs)
   } else {
@@ -29,21 +31,21 @@ scheduleWsBanner()
 // watch 變化
 watch([online, wsConnected], scheduleWsBanner)
 
-onBeforeUnmount(() => clearTimeout(wsTimer))
+onBeforeUnmount(() => { if (wsTimer !== null) clearTimeout(wsTimer) })
 
-const variant = computed(() => {
+const variant = computed<string | null>(() => {
   if (!online.value) return 'offline'
   if (wsBannerVisible.value) return 'ws'
   return null
 })
 
-const message = computed(() => {
+const message = computed<string>(() => {
   if (variant.value === 'offline') return '目前離線，部分功能受限'
   if (variant.value === 'ws') return '即時通知暫停，正在重連...'
   return ''
 })
 
-function retry() {
+function retry(): void {
   if (typeof window !== 'undefined') window.location.reload()
 }
 </script>

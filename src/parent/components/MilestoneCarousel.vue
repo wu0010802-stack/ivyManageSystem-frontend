@@ -1,17 +1,29 @@
-<script setup>
+<script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
 import { fetchChildMilestones, reactToMilestone } from '../api/childMilestones'
 import { toast } from '../utils/toast'
 import MilestoneCard from './MilestoneCard.vue'
 
-const props = defineProps({
-  studentId: { type: Number, required: true },
-})
+interface MilestoneItem {
+  id: number
+  icon?: string
+  title?: string
+  achieved_on?: string
+  occurred_at?: string
+  summary?: string
+  description?: string
+  parent_reaction?: string | null
+  [key: string]: unknown
+}
 
-const milestones = ref([])
-const loading = ref(false)
+const props = defineProps<{
+  studentId: number
+}>()
 
-async function load() {
+const milestones = ref<MilestoneItem[]>([])
+const loading = ref<boolean>(false)
+
+async function load(): Promise<void> {
   if (!props.studentId) {
     milestones.value = []
     return
@@ -25,13 +37,13 @@ async function load() {
   }
 }
 
-async function onReact(milestone, reaction) {
+async function onReact(milestone: MilestoneItem, reaction: string): Promise<void> {
   try {
     const r = await reactToMilestone(props.studentId, milestone.id, reaction)
     const idx = milestones.value.findIndex((m) => m.id === milestone.id)
-    if (idx >= 0) milestones.value[idx] = r.data
-  } catch (e) {
-    toast.error(e?.displayMessage || '回應失敗，請重試')
+    if (idx >= 0) milestones.value[idx] = r.data as MilestoneItem
+  } catch (e: unknown) {
+    toast.error((e as { displayMessage?: string })?.displayMessage || '回應失敗，請重試')
   }
 }
 

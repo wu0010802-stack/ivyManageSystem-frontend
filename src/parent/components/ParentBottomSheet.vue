@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /**
  * 家長端底部彈窗（snap points 進階版）。
  *
@@ -30,49 +30,54 @@
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useSlots, watch } from 'vue'
 
-const props = defineProps({
-  modelValue: { type: Boolean, default: false },
-  title: { type: String, default: '' },
-  snapPoints: {
-    type: Array,
-    default: () => ['mid', 'full'],
-    validator: (arr) => arr.every((s) => ['peek', 'mid', 'full'].includes(s)),
-  },
-  defaultSnap: {
-    type: String,
-    default: 'mid',
-    validator: (v) => ['peek', 'mid', 'full'].includes(v),
-  },
-  dismissible: { type: Boolean, default: true },
-  showHandle: { type: Boolean, default: true },
+type SnapPoint = 'peek' | 'mid' | 'full'
+
+const props = withDefaults(defineProps<{
+  modelValue?: boolean
+  title?: string
+  snapPoints?: SnapPoint[]
+  defaultSnap?: SnapPoint
+  dismissible?: boolean
+  showHandle?: boolean
+}>(), {
+  modelValue: false,
+  title: '',
+  snapPoints: () => ['mid', 'full'],
+  defaultSnap: 'mid',
+  dismissible: true,
+  showHandle: true,
 })
 
-const emit = defineEmits(['update:modelValue', 'close', 'snap-change'])
+const emit = defineEmits<{
+  'update:modelValue': [value: boolean]
+  'close': []
+  'snap-change': [snap: SnapPoint]
+}>()
 
 const slots = useSlots()
-const dialogRef = ref(null)
-const previouslyFocused = ref(null)
+const dialogRef = ref<HTMLElement | null>(null)
+const previouslyFocused = ref<Element | null>(null)
 const headerId = `pt-bsheet-${Math.random().toString(36).slice(2, 9)}`
 
-const SNAP_HEIGHT = { peek: '30vh', mid: '60vh', full: '92vh' }
+const SNAP_HEIGHT: Record<SnapPoint, string> = { peek: '30vh', mid: '60vh', full: '92vh' }
 // SNAP_ORDER 由上至下：full（最高）→ mid → peek（最低）。
 // 「向下吸附」= index + 1（變矮）；「向上吸附」= index - 1（變高）。
-const SNAP_ORDER = ['full', 'mid', 'peek']
-const currentSnap = ref(props.defaultSnap)
+const SNAP_ORDER: SnapPoint[] = ['full', 'mid', 'peek']
+const currentSnap = ref<SnapPoint>(props.defaultSnap)
 
-function setSnap(snap) {
+function setSnap(snap: SnapPoint): void {
   if (!props.snapPoints.includes(snap)) return
   currentSnap.value = snap
   emit('snap-change', snap)
 }
 
 // ---------- drag gesture ----------
-const dragStartY = ref(0)
-const dragStartTime = ref(0)
-const dragOffset = ref(0)
-const isDragging = ref(false)
+const dragStartY = ref<number>(0)
+const dragStartTime = ref<number>(0)
+const dragOffset = ref<number>(0)
+const isDragging = ref<boolean>(false)
 
-function onDragStart(e) {
+function onDragStart(e: PointerEvent): void {
   if (keyboardLocked.value) return
   isDragging.value = true
   dragStartY.value = e.clientY
@@ -83,13 +88,13 @@ function onDragStart(e) {
   window.addEventListener('pointercancel', onDragEnd, { once: true })
 }
 
-function onDragMove(e) {
+function onDragMove(e: PointerEvent): void {
   if (!isDragging.value) return
   // 上限 -200px：避免拖太上方造成不自然的飛離
   dragOffset.value = Math.max(-200, e.clientY - dragStartY.value)
 }
 
-function onDragEnd(e) {
+function onDragEnd(e: PointerEvent): void {
   window.removeEventListener('pointermove', onDragMove)
   if (!isDragging.value) return
   const delta = e.clientY - dragStartY.value
@@ -129,7 +134,7 @@ function onDragEnd(e) {
   }
 }
 
-const dialogTransform = computed(() =>
+const dialogTransform = computed<string>(() =>
   isDragging.value ? `translateY(${dragOffset.value}px)` : '',
 )
 
@@ -141,15 +146,15 @@ watch(
   { flush: 'pre' },
 )
 
-const snapHeight = computed(() => SNAP_HEIGHT[currentSnap.value])
+const snapHeight = computed<string>(() => SNAP_HEIGHT[currentSnap.value])
 
 // ---------- keyboard mode (visualViewport) ----------
 // 行動裝置鍵盤彈出時 visualViewport.height 會縮小；超過 100px 視為鍵盤開啟，
 // 自動切到 full（避免輸入框被鍵盤遮住）並鎖拖曳；鍵盤收回時解鎖（snap 不還原）。
-const keyboardLocked = ref(false)
-const initialVVHeight = ref(0)
+const keyboardLocked = ref<boolean>(false)
+const initialVVHeight = ref<number>(0)
 
-function onVVResize() {
+function onVVResize(): void {
   if (typeof window === 'undefined' || !window.visualViewport) return
   const delta = initialVVHeight.value - window.visualViewport.height
   if (delta > 100) {
@@ -171,21 +176,21 @@ onMounted(() => {
 
 defineExpose({ setSnap, isDraggingForTest: isDragging })
 
-function close() {
+function close(): void {
   emit('update:modelValue', false)
   emit('close')
 }
 
-function getFocusableElements() {
+function getFocusableElements(): HTMLElement[] {
   if (!dialogRef.value) return []
   return Array.from(
-    dialogRef.value.querySelectorAll(
+    dialogRef.value.querySelectorAll<HTMLElement>(
       'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
     ),
   ).filter((el) => !el.classList.contains('pt-bsheet-handle'))
 }
 
-function trapFocus(e) {
+function trapFocus(e: KeyboardEvent): void {
   const focusable = getFocusableElements()
   if (focusable.length === 0) {
     e.preventDefault()
@@ -206,7 +211,7 @@ function trapFocus(e) {
 import { useBodyLock } from '@/composables/useBodyLock'
 const { lock: lockBody, unlock: unlockBody } = useBodyLock()
 
-function onKeydown(e) {
+function onKeydown(e: KeyboardEvent): void {
   if (e.key === 'Escape' && props.dismissible) {
     e.stopPropagation()
     close()
@@ -227,8 +232,9 @@ watch(
       else dialogRef.value?.focus()
     } else {
       unlockBody()
-      if (previouslyFocused.value && typeof previouslyFocused.value.focus === 'function') {
-        previouslyFocused.value.focus()
+      const prev = previouslyFocused.value as HTMLElement | null
+      if (prev && typeof prev.focus === 'function') {
+        prev.focus()
       }
     }
   },
@@ -244,8 +250,8 @@ onBeforeUnmount(() => {
   }
 })
 
-const hasHeaderSlot = computed(() => !!slots.header)
-const hasFooterSlot = computed(() => !!slots.footer)
+const hasHeaderSlot = computed<boolean>(() => !!slots.header)
+const hasFooterSlot = computed<boolean>(() => !!slots.footer)
 </script>
 
 <template>
