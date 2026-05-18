@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /**
  * 繳費收據 BottomSheet（snap mid/full）。
  *
@@ -13,19 +13,49 @@ import { computed } from 'vue'
 import ParentBottomSheet from '@/parent/components/ParentBottomSheet.vue'
 import ParentIcon from '@/parent/components/ParentIcon.vue'
 
-const props = defineProps({
-  modelValue: { type: Boolean, required: true },
-  record: { type: Object, default: null },
-  payments: { type: Array, default: () => [] },
-  refunds: { type: Array, default: () => [] },
-  loading: { type: Boolean, default: false },
+interface FeeRecord {
+  fee_item_name: string
+  period?: string
+  [key: string]: unknown
+}
+
+interface Payment {
+  receipt_no?: string
+  payment_date?: string
+  payment_method?: string
+  amount?: number
+  [key: string]: unknown
+}
+
+interface Refund {
+  refunded_at?: string
+  reason?: string
+  amount?: number
+  [key: string]: unknown
+}
+
+const props = withDefaults(defineProps<{
+  modelValue: boolean
+  record?: FeeRecord | null
+  payments?: Payment[]
+  refunds?: Refund[]
+  loading?: boolean
+}>(), {
+  record: null,
+  payments: () => [],
+  refunds: () => [],
+  loading: false,
 })
 
-const emit = defineEmits(['update:modelValue', 'copy-info', 'copy-no'])
+const emit = defineEmits<{
+  'update:modelValue': [value: boolean]
+  'copy-info': [record: FeeRecord, payments: Payment[]]
+  'copy-no': [receiptNo: string]
+}>()
 
-function fmt(n) { return Number(n).toLocaleString('en-US') }
+function fmt(n: number | undefined): string { return Number(n ?? 0).toLocaleString('en-US') }
 
-const firstReceiptNo = computed(() => props.payments[0]?.receipt_no || '')
+const firstReceiptNo = computed<string>(() => (props.payments[0]?.receipt_no as string) || '')
 </script>
 
 <template>
