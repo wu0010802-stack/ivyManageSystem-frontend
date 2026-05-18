@@ -17,6 +17,7 @@ import {
   exportAppraisalTransferRosterXlsxUrl,
 } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
+import { hasPermission } from '@/utils/auth'
 
 import KanbanView from './components/KanbanView.vue'
 import ListView from './components/ListView.vue'
@@ -44,6 +45,19 @@ const summaryByParticipant = computed(() => {
   for (const s of summaries.value) m[s.participant_id] = s
   return m
 })
+
+// P0-A：依後端 APPRAISAL_* 細粒度 permission bit 守衛 UI 動作。
+// `canBatchSign` 任一階段簽核權限即可顯示批次區（個別按鈕再各自守衛）。
+const canRecompute = computed(() => hasPermission('APPRAISAL_EVENT_WRITE'))
+const canSignSupervisor = computed(() => hasPermission('APPRAISAL_REVIEW'))
+const canSignAccounting = computed(() => hasPermission('APPRAISAL_ACCOUNTING'))
+const canFinalize = computed(() => hasPermission('APPRAISAL_FINALIZE'))
+const canBatchSign = computed(
+  () => canSignSupervisor.value || canSignAccounting.value || canFinalize.value,
+)
+// 退簽：後端 endpoint 入口僅要 APPRAISAL_READ 但依當前 stage 再 check 對應 sign
+// 權限；UI 守衛保守用 OR 三個 sign 權限（任一即可顯示，後端會二次驗）。
+const canReject = computed(() => canBatchSign.value)
 
 const statusLabel = (s) =>
   ({ DRAFT: '草稿', SUPERVISOR_SIGNED: '主管已簽',
@@ -146,14 +160,34 @@ onMounted(load)
     </div>
 
     <div class="toolbar">
-      <el-button type="primary" :icon="Refresh" :loading="busy" @click="recompute">重算 Summary</el-button>
+      <el-button
+        v-if="canRecompute"
+        type="primary"
+        :icon="Refresh"
+        :loading="busy"
+        data-test="recompute-btn"
+        @click="recompute"
+      >重算 Summary</el-button>
       <el-button :icon="Download" tag="a" :href="exportAppraisalCycleXlsxUrl(cycleId)">匯出考核表</el-button>
       <el-button :icon="Download" tag="a" :href="exportAppraisalTransferRosterXlsxUrl(cycleId)">轉帳名冊</el-button>
 
-      <span v-if="selectedIds.length > 0" class="batch-zone" data-test="batch-zone">
-        <BatchSignButton :cycle-id="cycleId" stage="SUPERVISOR" :selected-ids="selectedIds" @done="reload" />
-        <BatchSignButton :cycle-id="cycleId" stage="ACCOUNTING" :selected-ids="selectedIds" @done="reload" />
-        <BatchSignButton :cycle-id="cycleId" stage="FINALIZE" :selected-ids="selectedIds" @done="reload" />
+      <span
+        v-if="selectedIds.length > 0 && canBatchSign"
+        class="batch-zone"
+        data-test="batch-zone"
+      >
+        <BatchSignButton
+          v-if="canSignSupervisor"
+          :cycle-id="cycleId" stage="SUPERVISOR" :selected-ids="selectedIds" @done="reload"
+        />
+        <BatchSignButton
+          v-if="canSignAccounting"
+          :cycle-id="cycleId" stage="ACCOUNTING" :selected-ids="selectedIds" @done="reload"
+        />
+        <BatchSignButton
+          v-if="canFinalize"
+          :cycle-id="cycleId" stage="FINALIZE" :selected-ids="selectedIds" @done="reload"
+        />
       </span>
 
       <el-radio-group v-model="view" data-test="view-toggle" style="margin-left: auto;">
@@ -178,6 +212,10 @@ onMounted(load)
       :catalog="catalog"
       v-model:selected-ids="selectedIds"
       :busy="busy"
+      :can-sign-supervisor="canSignSupervisor"
+      :can-sign-accounting="canSignAccounting"
+      :can-finalize="canFinalize"
+      :can-reject="canReject"
       @sign="sign"
       @reject="openReject"
       @comment="openComment"

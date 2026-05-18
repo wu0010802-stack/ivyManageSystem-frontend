@@ -17,6 +17,10 @@ import { Plus, Delete } from '@element-plus/icons-vue'
 
 import { createScoringRule } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
+import { hasPermission } from '@/utils/auth'
+
+// P0-A：建立規則由後端 APPRAISAL_RULE_WRITE 守衛，UI 對齊。
+const canEditRules = computed(() => hasPermission('APPRAISAL_RULE_WRITE'))
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -314,6 +318,7 @@ async function submit() {
         取消
       </el-button>
       <el-button
+        v-if="canEditRules"
         type="primary"
         :loading="submitting"
         data-test="submit-btn"

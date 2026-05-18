@@ -59,7 +59,8 @@ export const PERMISSION_VALUES = {
   // 政府申報（Phase 4）— 對齊後端 Permission.GOV_REPORTS_VIEW/EXPORT
   GOV_REPORTS_VIEW: 2 ** 50,
   GOV_REPORTS_EXPORT: 2 ** 51,
-  // 教職員考核（Phase 1）— 後端 1<<55~59
+  // 教職員考核（Phase 1）— 後端 1<<53、1<<55~59
+  APPRAISAL_RULE_WRITE: 2 ** 53,
   APPRAISAL_READ: 2 ** 55,
   APPRAISAL_EVENT_WRITE: 2 ** 56,
   APPRAISAL_REVIEW: 2 ** 57,

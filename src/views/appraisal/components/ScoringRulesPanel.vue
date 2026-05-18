@@ -14,12 +14,16 @@ import { Refresh, Edit, Clock } from '@element-plus/icons-vue'
 
 import { listScoringRules } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
+import { hasPermission } from '@/utils/auth'
 import {
   ITEM_CODE_LABELS,
   AUTO_ITEM_CODES as AUTO_CODES,
 } from '@/views/appraisal/scoreItemLabels'
 import RuleEditorDialog from './RuleEditorDialog.vue'
 import RuleHistoryDrawer from './RuleHistoryDrawer.vue'
+
+// P0-A：規則編輯由後端 APPRAISAL_RULE_WRITE 守衛，UI 對齊。
+const canEditRules = computed(() => hasPermission('APPRAISAL_RULE_WRITE'))
 
 const effectiveOn = ref(new Date().toISOString().slice(0, 10))
 const rules = ref([])
@@ -136,6 +140,7 @@ defineExpose({ load })
         </div>
         <div class="rule-card__actions">
           <el-button
+            v-if="canEditRules"
             size="small"
             :icon="Edit"
             :data-test="`edit-btn-${code}`"
