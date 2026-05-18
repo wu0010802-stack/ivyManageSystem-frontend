@@ -2,7 +2,7 @@ import api from './index'
 
 export const getFeesSummary = () => api.get('/parent/fees/summary')
 
-export const listFeeRecords = (studentId, period) =>
+export const listFeeRecords = (studentId: number, period?: string) =>
   api.get('/parent/fees/records', {
     params: {
       student_id: studentId,
@@ -10,5 +10,5 @@ export const listFeeRecords = (studentId, period) =>
     },
   })
 
-export const getFeePayments = (recordId) =>
+export const getFeePayments = (recordId: number) =>
   api.get(`/parent/fees/records/${recordId}/payments`)

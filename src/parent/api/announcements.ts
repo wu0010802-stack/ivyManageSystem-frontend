@@ -6,5 +6,5 @@ export const listAnnouncements = (params = {}) =>
 export const getUnreadCount = () =>
   api.get('/parent/announcements/unread-count')
 
-export const markRead = (id) =>
+export const markRead = (id: number) =>
   api.post(`/parent/announcements/${id}/read`)

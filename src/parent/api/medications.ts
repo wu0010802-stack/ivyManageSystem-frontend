@@ -13,18 +13,18 @@ export function listMedicationOrders(params = {}, config = {}) {
   return api.get('/parent/medication-orders', { params, ...config })
 }
 
-export function getMedicationOrder(orderId) {
+export function getMedicationOrder(orderId: number) {
   return api.get(`/parent/medication-orders/${orderId}`)
 }
 
 /**
- * @param {Object} payload {student_id, order_date, medication_name, dose, time_slots, note?, acknowledge_allergy_warning?}
+ * @param payload {student_id, order_date, medication_name, dose, time_slots, note?, acknowledge_allergy_warning?}
  */
-export function createMedicationOrder(payload) {
+export function createMedicationOrder(payload: unknown) {
   return api.post('/parent/medication-orders', payload)
 }
 
-export function uploadMedicationPhoto(orderId, file) {
+export function uploadMedicationPhoto(orderId: number, file: File) {
   const fd = new FormData()
   fd.append('file', file)
   return api.post(`/parent/medication-orders/${orderId}/photos`, fd, {
@@ -32,12 +32,12 @@ export function uploadMedicationPhoto(orderId, file) {
   })
 }
 
-export function deleteMedicationPhoto(orderId, attachmentId) {
+export function deleteMedicationPhoto(orderId: number, attachmentId: number) {
   return api.delete(`/parent/medication-orders/${orderId}/photos/${attachmentId}`)
 }
 
 /** 上傳事件簽收的手寫簽名圖（PNG）。 */
-export function uploadAckSignature(eventId, studentId, pngBlob) {
+export function uploadAckSignature(eventId: number, studentId: number, pngBlob: Blob) {
   const fd = new FormData()
   fd.append('file', pngBlob, 'signature.png')
   return api.post(

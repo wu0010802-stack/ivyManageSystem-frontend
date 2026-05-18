@@ -8,5 +8,5 @@ export const getHomeSummary = () => api.get('/parent/home/summary')
 
 export const getTodayStatus = () => api.get('/parent/home/today-status')
 
-export const getChildProfile = (studentId) =>
+export const getChildProfile = (studentId: number) =>
   api.get(`/parent/students/${studentId}/profile`)

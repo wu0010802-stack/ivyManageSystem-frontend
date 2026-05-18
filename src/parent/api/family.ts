@@ -5,5 +5,5 @@ import api from './index'
  * @param {number} studentId
  * @param {{ limit?: number }} opts
  */
-export const getFamilyTimeline = (studentId, { limit = 7 } = {}) =>
+export const getFamilyTimeline = (studentId: number, { limit = 7 }: { limit?: number } = {}) =>
   api.get('/parent/family/timeline', { params: { student_id: studentId, limit } })

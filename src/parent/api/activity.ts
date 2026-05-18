@@ -6,13 +6,13 @@ export const listCourses = (params = {}) =>
 export const myRegistrations = () =>
   api.get('/parent/activity/my-registrations')
 
-export const registerCourses = (payload) =>
+export const registerCourses = (payload: unknown) =>
   api.post('/parent/activity/register', payload)
 
-export const confirmPromotion = (registrationId, courseId) =>
+export const confirmPromotion = (registrationId: number, courseId: number) =>
   api.post(`/parent/activity/registrations/${registrationId}/confirm-promotion`, {
     course_id: courseId,
   })
 
-export const getRegistrationPayments = (registrationId) =>
+export const getRegistrationPayments = (registrationId: number) =>
   api.get(`/parent/activity/registrations/${registrationId}/payments`)

@@ -8,6 +8,6 @@ export function getNotificationPreferences() {
   return api.get('/parent/notifications/preferences')
 }
 
-export function updateNotificationPreferences(prefs) {
+export function updateNotificationPreferences(prefs: unknown) {
   return api.put('/parent/notifications/preferences', { prefs })
 }

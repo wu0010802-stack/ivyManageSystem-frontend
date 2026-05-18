@@ -9,19 +9,19 @@ export function listMessageThreads(params = {}) {
   return api.get('/parent/messages/threads', { params })
 }
 
-export function getMessageThread(threadId) {
+export function getMessageThread(threadId: number) {
   return api.get(`/parent/messages/threads/${threadId}`)
 }
 
-export function listThreadMessages(threadId, params = {}) {
+export function listThreadMessages(threadId: number, params: unknown = {}) {
   return api.get(`/parent/messages/threads/${threadId}/messages`, { params })
 }
 
-export function sendThreadMessage(threadId, payload) {
+export function sendThreadMessage(threadId: number, payload: unknown) {
   return api.post(`/parent/messages/threads/${threadId}/messages`, payload)
 }
 
-export function attachToMessage(threadId, messageId, file) {
+export function attachToMessage(threadId: number, messageId: number, file: File) {
   const fd = new FormData()
   fd.append('file', file)
   return api.post(
@@ -31,11 +31,11 @@ export function attachToMessage(threadId, messageId, file) {
   )
 }
 
-export function markThreadRead(threadId) {
+export function markThreadRead(threadId: number) {
   return api.post(`/parent/messages/threads/${threadId}/read`)
 }
 
-export function recallMessage(messageId) {
+export function recallMessage(messageId: number) {
   return api.post(`/parent/messages/messages/${messageId}/recall`)
 }
 
