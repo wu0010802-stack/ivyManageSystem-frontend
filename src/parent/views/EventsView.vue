@@ -35,6 +35,10 @@ const studentNameMap = computed(() => {
   return m
 })
 
+const needsAckCount = computed(() =>
+  items.value.filter((ev) => ev.requires_acknowledgment && ev.need_ack_student_ids?.length).length
+)
+
 async function fetchData() {
   loading.value = true
   try {
@@ -80,6 +84,16 @@ onMounted(async () => {
 
 <template>
   <div class="events-view">
+    <header class="pt-page-hero">
+      <p class="pt-page-hero-eyebrow">家長簽閱</p>
+      <h1 class="pt-page-hero-title">事件公告</h1>
+      <p class="pt-page-hero-note">
+        <template v-if="needsAckCount > 0">{{ needsAckCount }} 筆待簽閱</template>
+        <template v-else-if="items.length > 0">全數簽閱完成</template>
+        <template v-else>目前沒有事件</template>
+      </p>
+    </header>
+
     <EmptyState
       v-if="!loading && items.length === 0"
       variant="mobile"
@@ -89,11 +103,11 @@ onMounted(async () => {
     <div
       v-for="ev in items"
       :key="ev.id"
-      class="event-card"
+      class="event-card pt-card"
       :class="{ require: ev.requires_acknowledgment }"
     >
       <div class="event-row1">
-        <span class="event-type">{{ TYPE_LABEL[ev.event_type] || ev.event_type }}</span>
+        <span class="pt-pill pt-pill-info">{{ TYPE_LABEL[ev.event_type] || ev.event_type }}</span>
         <span class="event-title">{{ ev.title }}</span>
       </div>
       <div class="event-row2">
@@ -116,13 +130,12 @@ onMounted(async () => {
           </span>
         </div>
         <div v-if="ev.need_ack_student_ids?.length" class="ack-actions">
-          <!-- ack chip: pending state -->
-          <span class="ack-chip" data-status="pending">{{ ev.need_ack_student_ids.length }} 位待簽</span>
-          <button class="primary-btn" @click="openAck(ev)">
+          <span class="pt-pill pt-pill-warn">{{ ev.need_ack_student_ids.length }} 位待簽</span>
+          <button class="pt-action-btn" @click="openAck(ev)">
             快速簽閱
           </button>
           <button
-            class="secondary-btn icon-btn"
+            class="pt-ghost-btn"
             @click="router.push({ path: `/events/${ev.id}/ack`, query: { student_id: ev.need_ack_student_ids[0] } })"
           >
             <ParentIcon name="signature" size="sm" />
@@ -130,9 +143,7 @@ onMounted(async () => {
           </button>
         </div>
         <div v-else class="ack-done">
-          <!-- ack chip: signed state -->
-          <span class="ack-chip" data-status="signed">已全部簽閱</span>
-          <ParentIcon name="check" size="xs" />
+          <span class="pt-pill pt-pill-success">已全部簽閱</span>
         </div>
       </template>
     </div>
@@ -176,8 +187,8 @@ onMounted(async () => {
           </div>
         </div>
         <div class="ack-footer">
-          <button type="button" class="secondary-btn" @click="ackTarget = null">取消</button>
-          <button type="button" class="primary-btn" @click="submitAck">確認簽閱</button>
+          <button type="button" class="pt-ghost-btn" @click="ackTarget = null">取消</button>
+          <button type="button" class="pt-action-btn" @click="submitAck">確認簽閱</button>
         </div>
       </template>
     </AppModal>
@@ -185,23 +196,14 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.events-view {
-  display: flex;
-  flex-direction: column;
-  gap: var(--pt-page-gap, 18px);
-}
-
-.event-card {
-  background: var(--pt-surface-card, var(--neutral-0));
-  border: 1px solid var(--pt-page-border, var(--pt-border));
-  border-radius: 12px;
-  padding: 14px;
-  box-shadow: var(--m3-elev-1, var(--pt-shadow-card, var(--pt-elev-1)));
-}
+.events-view { padding-bottom: 24px; }
+.events-view > .pt-card + .pt-card { margin-top: 12px; }
+.events-view > .pt-page-hero + .pt-card,
+.events-view > .pt-page-hero + .empty-state + .pt-card { margin-top: 12px; }
 
 .event-card.require {
-  border-color: color-mix(in srgb, var(--pt-warning-text-mid) 36%, var(--pt-border));
-  background: linear-gradient(135deg, var(--pt-tint-sun, var(--color-warning-soft)) 0%, var(--pt-surface-card, var(--neutral-0)) 100%);
+  border-color: color-mix(in srgb, var(--pt-warning-text-mid) 36%, var(--pt-border-light, #ecf5f9));
+  background: linear-gradient(135deg, var(--pt-tint-sun, var(--color-warning-soft)) 0%, var(--pt-surface-card, #fff) 100%);
 }
 
 .event-row1 {
@@ -210,25 +212,16 @@ onMounted(async () => {
   align-items: center;
 }
 
-.event-type {
-  background: var(--pt-tint-event);
-  color: var(--pt-tint-event-fg);
-  padding: 1px 8px;
-  border-radius: 10px;
-  font-size: 12px;
-  font-weight: 800;
-}
-
 .event-title {
   flex: 1;
-  font-weight: 800;
-  color: var(--m3-on-surface, var(--pt-text-strong));
+  font-weight: 700;
+  color: var(--pt-text-strong);
   font-size: 15px;
 }
 
 .event-row2 {
   margin-top: 6px;
-  color: var(--m3-on-surface-variant, var(--pt-text-muted));
+  color: var(--pt-text-muted);
   font-size: 13px;
 }
 
@@ -257,28 +250,6 @@ onMounted(async () => {
   font-size: 12px;
 }
 
-/* ack status chip — [data-status] pattern */
-.ack-chip {
-  display: inline-block;
-  padding: 1px 8px;
-  border-radius: 10px;
-  font-size: 12px;
-  font-weight: 500;
-}
-.ack-chip[data-status='pending'] {
-  background: var(--pt-tint-money);
-  color: var(--pt-tint-money-fg);
-}
-.ack-chip[data-status='signed'],
-.ack-chip[data-status='acked'] {
-  background: var(--pt-tint-calendar);
-  color: var(--pt-tint-calendar-fg);
-}
-.ack-chip[data-status='expired'] {
-  background: var(--pt-tint-announcement);
-  color: var(--pt-tint-announcement-fg);
-}
-
 .ack-actions {
   margin-top: 8px;
   display: flex;
@@ -286,43 +257,9 @@ onMounted(async () => {
   gap: 8px;
 }
 
-.ack-done {
-  margin-top: 8px;
-  color: var(--brand-primary);
-  font-size: 12px;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
+.ack-done { margin-top: 8px; }
 
-.icon-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.primary-btn {
-  min-height: var(--touch-target-min, 44px);
-  padding: 8px 16px;
-  background: var(--brand-primary);
-  color: var(--neutral-0);
-  border: none;
-  border-radius: var(--pt-control-radius, 12px);
-  font-size: 14px;
-  font-weight: 800;
-}
-
-.secondary-btn {
-  min-height: var(--touch-target-min, 44px);
-  padding: 8px 16px;
-  background: var(--pt-surface-card, var(--neutral-0));
-  color: var(--m3-on-surface-variant, var(--pt-text-muted));
-  border: 1px solid var(--pt-border-strong);
-  border-radius: var(--pt-control-radius, 12px);
-  font-size: 14px;
-  font-weight: 800;
-}
-
+/* modal 內部 */
 .ack-header {
   display: flex;
   align-items: center;
@@ -374,7 +311,7 @@ onMounted(async () => {
 .field label {
   display: block;
   font-size: 13px;
-  color: var(--m3-on-surface-variant, var(--pt-text-muted));
+  color: var(--pt-text-muted);
   margin-bottom: 4px;
 }
 
