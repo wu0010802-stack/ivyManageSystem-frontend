@@ -95,7 +95,7 @@ onMounted(init)
       <button
         v-if="hasMore"
         type="button"
-        class="load-more"
+        class="pt-ghost-btn load-more"
         :disabled="loadingMore"
         @click="loadMore"
       >
@@ -137,7 +137,7 @@ onMounted(init)
   flex-direction: column;
   padding: var(--space-2, 8px) var(--space-4, 16px);
   background: var(--neutral-0, var(--neutral-0));
-  border-bottom: 1px solid var(--pt-border);
+  border-bottom: 1px solid var(--pt-border-light, #ecf5f9);
 }
 
 .thread-subtitle strong {
@@ -161,16 +161,6 @@ onMounted(init)
   display: block;
   margin: 0 auto 12px;
   min-height: var(--touch-target-min, 44px);
-  padding: var(--space-2, 6px) var(--space-4, 16px);
-  background: var(--neutral-0, var(--neutral-0));
-  border: 1px solid var(--pt-border-stronger);
-  border-radius: 14px;
-  font-size: var(--text-xs, 12px);
-  cursor: pointer;
 }
-
-.load-more:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
+.load-more:disabled { opacity: 0.5; cursor: not-allowed; }
 </style>
