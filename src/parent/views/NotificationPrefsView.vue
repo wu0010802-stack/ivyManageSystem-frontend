@@ -37,7 +37,11 @@ const EVENT_HINTS = {
 
 const prefs = ref({})
 const loading = ref(false)
-const saving = ref(false)
+// P2-FE-Parent-4：原本共用一個 `saving: ref(false)`，並發 toggle 任一鍵都
+// 會 disable 全部 switch；改 Map 鎖到 key 級。Vue 3 對 Map 是 reactive
+// collection（new Map 須直接 set/has，不是 prefs.value.{key}）。
+const saving = ref(new Map())
+function isSaving(ev) { return saving.value.has(ev) }
 
 async function load() {
   loading.value = true
@@ -52,16 +56,17 @@ async function load() {
 }
 
 async function toggle(ev) {
+  if (saving.value.has(ev)) return // 同 key 仍在處理 → ignore
   const newVal = !prefs.value[ev]
   prefs.value[ev] = newVal
-  saving.value = true
+  saving.value.set(ev, true)
   try {
     await updateNotificationPreferences({ [ev]: newVal })
   } catch (err) {
     prefs.value[ev] = !newVal
     toast.error(err?.displayMessage || '儲存失敗')
   } finally {
-    saving.value = false
+    saving.value.delete(ev)
   }
 }
 
@@ -96,7 +101,7 @@ onMounted(load)
         </div>
         <M3Switch
           :model-value="prefs[ev] !== false"
-          :disabled="saving"
+          :disabled="isSaving(ev)"
           :aria-label="label"
           @update:modelValue="toggle(ev)"
         />

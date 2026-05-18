@@ -1,7 +1,8 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { getWeekAgenda } from '../api/calendar'
+import { localDateISO } from '../utils/date'
 import { toast } from '../utils/toast'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
@@ -57,18 +58,36 @@ function gotoItem(it) {
   else if (kind === 'medication' && id) router.push(`/medications/${id}`)
 }
 
+// P2-FE-Parent-7：原本 `new Date(iso)` 對 'YYYY-MM-DD' 走 UTC midnight，
+// 跨午夜/跨時區會把今天判為昨天。改用 string compare 對 localDateISO，
+// 並用 split('-') 解析建構本地 Date 取 weekday，徹底避開 UTC trap。
+const todayStr = ref(localDateISO(new Date()))
+const tomorrowStr = computed(() => {
+  const [y, m, d] = todayStr.value.split('-').map(Number)
+  const dt = new Date(y, m - 1, d + 1)
+  return localDateISO(dt)
+})
+
+let todayInterval = null
+onMounted(() => {
+  fetchData()
+  todayInterval = setInterval(() => {
+    const next = localDateISO(new Date())
+    if (next !== todayStr.value) todayStr.value = next
+  }, 60 * 1000)
+})
+onBeforeUnmount(() => {
+  if (todayInterval) clearInterval(todayInterval)
+})
+
 function dayLabel(iso) {
-  const d = new Date(iso)
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const diff = Math.round((d - today) / 86400000)
-  const wd = ['日', '一', '二', '三', '四', '五', '六'][d.getDay()]
-  if (diff === 0) return { primary: '今天', secondary: `${iso} 星期${wd}`, isToday: true }
-  if (diff === 1) return { primary: '明天', secondary: `${iso} 星期${wd}`, isToday: false }
+  // 用 string compare 而非 `new Date(iso)`，避開 UTC 解析
+  const [y, m, d] = iso.split('-').map(Number)
+  const wd = ['日', '一', '二', '三', '四', '五', '六'][new Date(y, m - 1, d).getDay()]
+  if (iso === todayStr.value) return { primary: '今天', secondary: `${iso} 星期${wd}`, isToday: true }
+  if (iso === tomorrowStr.value) return { primary: '明天', secondary: `${iso} 星期${wd}`, isToday: false }
   return { primary: `星期${wd}`, secondary: iso, isToday: false }
 }
-
-onMounted(fetchData)
 </script>
 
 <template>
