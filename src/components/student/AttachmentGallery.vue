@@ -1,15 +1,17 @@
-<script setup>
+<script setup lang="ts">
 import { ref } from 'vue'
 import { ElImage, ElImageViewer } from 'element-plus'
 
-defineProps({
-  items: { type: Array, default: () => [] },
+withDefaults(defineProps<{
+  items?: Record<string, unknown>[]
+}>(), {
+  items: () => [],
 })
 
 const previewVisible = ref(false)
 const previewIndex = ref(0)
 
-function openPreview(idx) {
+function openPreview(idx: number) {
   previewIndex.value = idx
   previewVisible.value = true
 }
@@ -21,23 +23,23 @@ defineExpose({ previewVisible, openPreview })
   <div class="attachment-gallery">
     <div
       v-for="(item, idx) in items"
-      :key="item.id"
+      :key="item.id as PropertyKey"
       class="thumb"
       @click="openPreview(idx)"
     >
       <el-image
-        :src="item.thumb_url || item.display_url || item.url"
+        :src="(item.thumb_url || item.display_url || item.url) as string | undefined"
         fit="cover"
         lazy
       />
       <div class="meta">
-        <span class="date">{{ item.created_at?.slice(0, 10) }}</span>
+        <span class="date">{{ (item.created_at as string | undefined)?.slice(0, 10) }}</span>
       </div>
     </div>
 
     <el-image-viewer
       v-if="previewVisible"
-      :url-list="items.map((it) => it.display_url || it.url)"
+      :url-list="items.map((it) => (it.display_url || it.url) as string)"
       :initial-index="previewIndex"
       @close="previewVisible = false"
     />

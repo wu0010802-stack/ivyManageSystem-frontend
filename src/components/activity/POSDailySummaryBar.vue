@@ -46,15 +46,17 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { Money, RefreshLeft, Tickets, Wallet } from '@element-plus/icons-vue'
 
 import StatCard from '@/components/common/StatCard.vue'
 import { formatTWD } from '@/constants/pos'
 
-defineProps({
+withDefaults(defineProps<{
   // data 含 cash_warning / cash_in_drawer / cash_warning_threshold（spec H7）
-  data: { type: Object, default: null },
+  data?: Record<string, unknown> | null
+}>(), {
+  data: null,
 })
 </script>
 

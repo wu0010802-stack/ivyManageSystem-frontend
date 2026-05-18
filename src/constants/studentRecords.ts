@@ -5,7 +5,7 @@ export const DOMAINS = ['身體動作與健康', '語文', '認知', '社會', '
 
 export const RATINGS = ['優', '良', '需加強']
 
-export const RATING_TAG = {
+export const RATING_TAG: Record<string, string> = {
   '優': 'success',
   '良': 'warning',
   '需加強': 'danger',
@@ -16,14 +16,14 @@ export const INCIDENT_TYPES = ['身體健康', '意外受傷', '行為觀察', '
 
 export const SEVERITIES = ['輕微', '中度', '嚴重']
 
-export const INCIDENT_TYPE_TAG = {
+export const INCIDENT_TYPE_TAG: Record<string, string> = {
   '身體健康': 'warning',
   '意外受傷': 'danger',
   '行為觀察': 'info',
   '其他': '',
 }
 
-export const SEVERITY_TAG = {
+export const SEVERITY_TAG: Record<string, string> = {
   '輕微': 'success',
   '中度': 'warning',
   '嚴重': 'danger',

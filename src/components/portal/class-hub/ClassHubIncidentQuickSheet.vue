@@ -63,24 +63,36 @@
   </el-drawer>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getMyStudents } from '@/api/portal'
 import { createPortalIncident } from '@/api/studentIncidents'
 
-const props = defineProps({
-  show: { type: Boolean, default: false },
+interface Student { id: number | string; name?: string }
+
+const props = withDefaults(defineProps<{
+  show?: boolean
+}>(), {
+  show: false,
 })
-const emit = defineEmits(['update:show', 'done'])
+const emit = defineEmits<{
+  'update:show': [value: boolean]
+  'done': []
+}>()
 const router = useRouter()
 
-const students = ref([])
+const students = ref<Student[]>([])
 const submitting = ref(false)
 const error = ref('')
 
-const form = reactive({
+const form = reactive<{
+  student_id: number | string | null
+  incident_type: string
+  severity: string
+  description: string
+}>({
   student_id: null,
   incident_type: '行為觀察',
   severity: '輕微',
@@ -98,7 +110,7 @@ async function loadStudents() {
     if (Array.isArray(data.students)) {
       students.value = data.students
     } else if (Array.isArray(data.groups)) {
-      students.value = data.groups.flatMap((g) => g.students || [])
+      students.value = data.groups.flatMap((g: { students?: Student[] }) => g.students || [])
     } else {
       students.value = []
     }

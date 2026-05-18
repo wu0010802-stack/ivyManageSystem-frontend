@@ -167,14 +167,42 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getBonusDashboard } from '@/api/studentEnrollment'
 import { apiError } from '@/utils/error'
 
-const loading = ref(false)
-const data = ref(null)
+interface TeacherBonus {
+  employee_id: number
+  name: string
+  role: string
+  estimated_bonus: number
+  base_amount: number
+}
+
+interface ClassroomBonus {
+  classroom_id: number
+  classroom_name: string
+  grade_name: string
+  achievement_rate: number
+  status?: string
+  teachers: TeacherBonus[]
+}
+
+interface BonusDashboardData {
+  is_festival_month: boolean
+  school_wide: {
+    total_enrollment: number
+    total_target: number
+    achievement_rate: number
+    estimated_total_bonus: number
+  }
+  classrooms: ClassroomBonus[]
+}
+
+const loading = ref<boolean>(false)
+const data = ref<BonusDashboardData | null>(null)
 
 const today = new Date()
 const selectedMonth = ref(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`)
@@ -196,49 +224,49 @@ watch(selectedMonth, fetchData)
 
 onMounted(fetchData)
 
-const tableRows = computed(() => {
+const tableRows = computed<ClassroomBonus[]>(() => {
   if (!data.value) return []
   return [...data.value.classrooms].sort((a, b) => a.achievement_rate - b.achievement_rate)
 })
 
 const aboveCount = computed(() =>
-  data.value?.classrooms.filter(c => c.status === 'above').length ?? 0
+  data.value?.classrooms.filter((c: ClassroomBonus) => c.status === 'above').length ?? 0
 )
 const meetCount = computed(() =>
-  data.value?.classrooms.filter(c => !c.status || c.status === 'meet').length ?? 0
+  data.value?.classrooms.filter((c: ClassroomBonus) => !c.status || c.status === 'meet').length ?? 0
 )
 const belowCount = computed(() =>
-  data.value?.classrooms.filter(c => c.status === 'below').length ?? 0
+  data.value?.classrooms.filter((c: ClassroomBonus) => c.status === 'below').length ?? 0
 )
 
-const formatPct = (rate) => `${Math.round(rate * 100)}%`
-const formatMoney = (val) => `$${(val ?? 0).toLocaleString()}`
+const formatPct = (rate: number) => `${Math.round(rate * 100)}%`
+const formatMoney = (val: number | null | undefined) => `$${(val ?? 0).toLocaleString()}`
 
-const rateCardClass = (rate) => {
+const rateCardClass = (rate: number) => {
   if (rate >= 1) return 'summary-card--green'
   if (rate >= 0.8) return 'summary-card--orange'
   return 'summary-card--red'
 }
 
-const rateSubText = (rate) => {
+const rateSubText = (rate: number) => {
   if (rate >= 1) return '已達整體目標'
   if (rate >= 0.8) return '接近目標'
   return '尚未達標'
 }
 
-const progressColor = (rate) => {
+const progressColor = (rate: number) => {
   if (rate >= 1) return '#0d9053'
   if (rate >= 0.8) return '#f3c630'
   return '#f65265'
 }
 
-const tableRowClassName = ({ row }) => {
+const tableRowClassName = ({ row }: { row: ClassroomBonus }) => {
   if (row.status === 'above') return 'row-above'
   if (row.status === 'below') return 'row-below'
   return ''
 }
 
-const roleTagType = (role) => {
+const roleTagType = (role: string) => {
   if (role === '班導') return 'primary'
   if (role === '副班導') return 'success'
   return 'info'
@@ -256,7 +284,7 @@ const CHECK_ICON = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none">
 const MINUS_ICON = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none"><path d="M5 12h14" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>'
 const ALERT_ICON = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none"><path d="M12 8v5M12 17h.01" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/></svg>'
 
-const statusIcon = (status) => {
+const statusIcon = (status: string | undefined) => {
   if (status === 'above') return CHECK_ICON
   if (status === 'below') return ALERT_ICON
   return MINUS_ICON

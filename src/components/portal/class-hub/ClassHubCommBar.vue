@@ -25,15 +25,17 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 import { Message } from '@element-plus/icons-vue'
 import { hasPermission } from '@/utils/auth'
 
-defineProps({
-  messagesUnread: { type: Number, default: 0 },
+withDefaults(defineProps<{
+  messagesUnread?: number
+}>(), {
+  messagesUnread: 0,
 })
-defineEmits(['open-panel'])
+defineEmits<{ 'open-panel': [panel: string] }>()
 
 const canMessages = computed(() => hasPermission('PARENT_MESSAGES_WRITE'))
 </script>

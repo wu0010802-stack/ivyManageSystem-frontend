@@ -1,28 +1,30 @@
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 import { Money, Calendar, User, Warning, ArrowRight } from '@element-plus/icons-vue'
 
-const props = defineProps({
-  profile: { type: Object, required: true },
-})
-const emit = defineEmits(['goto-tab'])
+const props = defineProps<{
+  profile: Record<string, unknown>
+}>()
+const emit = defineEmits<{
+  'goto-tab': [tab: string]
+}>()
 
-const basic = computed(() => props.profile?.basic || {})
-const lifecycle = computed(() => props.profile?.lifecycle || {})
-const attendance = computed(() => props.profile?.attendance_summary || {})
-const fee = computed(() => props.profile?.fee_summary || {})
-const guardians = computed(() => props.profile?.guardians || [])
-const incidents = computed(() => props.profile?.incident_summary || [])
+const basic = computed(() => (props.profile?.basic as Record<string, unknown>) || {})
+const lifecycle = computed(() => (props.profile?.lifecycle as Record<string, unknown>) || {})
+const attendance = computed(() => (props.profile?.attendance_summary as Record<string, unknown>) || {})
+const fee = computed(() => (props.profile?.fee_summary as Record<string, unknown>) || {})
+const guardians = computed(() => (props.profile?.guardians as Record<string, unknown>[]) || [])
+const incidents = computed(() => (props.profile?.incident_summary as Record<string, unknown>[]) || [])
 
 const recentIncidents = computed(() => incidents.value.slice(0, 3))
 
-const attendanceCount = (status) => attendance.value?.by_status?.[status] || 0
+const attendanceCount = (status: string) => (attendance.value?.by_status as Record<string, number>)?.[status] || 0
 
 const primaryGuardian = computed(() =>
   guardians.value.find((g) => g.is_primary) || guardians.value[0] || null,
 )
 
-const formatDate = (iso) => {
+const formatDate = (iso: unknown) => {
   if (!iso) return '—'
   const s = String(iso)
   return s.length >= 10 ? s.slice(0, 10) : s
@@ -68,7 +70,7 @@ const formatDate = (iso) => {
           <div class="stat-value">${{ fee.total_due || 0 }}</div>
           <div class="stat-sub">
             已繳 ${{ fee.total_paid || 0 }}<br />
-            <span :class="{ 'text-danger': (fee.outstanding || 0) > 0 }">
+            <span :class="{ 'text-danger': ((fee.outstanding as number) || 0) > 0 }">
               未繳 ${{ fee.outstanding || 0 }}
             </span>
           </div>

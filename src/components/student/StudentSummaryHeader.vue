@@ -1,14 +1,23 @@
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 import { Warning, Phone, MoreFilled, SwitchButton, ArrowRight } from '@element-plus/icons-vue'
 import { hasPermission } from '@/utils/auth'
 
-const props = defineProps({
-  profile: { type: Object, default: null },
-  context: { type: String, default: 'students' }, // 'students' | 'classroom'
-  showOpenFullPage: { type: Boolean, default: false },
+const props = withDefaults(defineProps<{
+  profile?: Record<string, unknown> | null
+  context?: string
+  showOpenFullPage?: boolean
+}>(), {
+  profile: null,
+  context: 'students',
+  showOpenFullPage: false,
 })
-const emit = defineEmits(['lifecycle-click', 'edit-click', 'open-full-page', 'goto-link'])
+const emit = defineEmits<{
+  'lifecycle-click': []
+  'edit-click': []
+  'open-full-page': []
+  'goto-link': [cmd: string]
+}>()
 
 const canLifecycleWrite = computed(() => hasPermission('STUDENTS_LIFECYCLE_WRITE'))
 const canStudentsWrite = computed(() => hasPermission('STUDENTS_WRITE'))
@@ -32,22 +41,27 @@ const LIFECYCLE_TAG = {
   graduated: 'success',
 }
 
-const basic = computed(() => props.profile?.basic || {})
-const health = computed(() => props.profile?.health || {})
-const lifecycle = computed(() => props.profile?.lifecycle || {})
+const basic = computed(() => (props.profile?.basic as Record<string, unknown>) || {})
+const health = computed(() => (props.profile?.health as Record<string, unknown>) || {})
+const lifecycle = computed(() => (props.profile?.lifecycle as Record<string, unknown>) || {})
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const LIFECYCLE_LABELS_MAP: Record<string, string> = LIFECYCLE_LABELS as any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const LIFECYCLE_TAG_MAP: Record<string, string> = LIFECYCLE_TAG as any
 
 const lifecycleLabel = computed(() =>
-  LIFECYCLE_LABELS[lifecycle.value.status] || lifecycle.value.status || '—',
+  LIFECYCLE_LABELS_MAP[lifecycle.value.status as string] || lifecycle.value.status || '—',
 )
-const lifecycleTagType = computed(() =>
-  LIFECYCLE_TAG[lifecycle.value.status] || 'info',
+type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger'
+const lifecycleTagType = computed((): ElTagType =>
+  (LIFECYCLE_TAG_MAP[lifecycle.value.status as string] as ElTagType) || 'info',
 )
 
-const primaryGuardian = computed(() =>
-  (props.profile?.guardians || []).find((g) => g.is_primary)
-    || (props.profile?.guardians || [])[0]
-    || null,
-)
+const primaryGuardian = computed(() => {
+  const guardians = (props.profile?.guardians as Record<string, unknown>[]) || []
+  return guardians.find((g) => g.is_primary) || guardians[0] || null
+})
 
 const healthAlerts = computed(() => {
   const alerts = []
@@ -57,7 +71,7 @@ const healthAlerts = computed(() => {
   return alerts
 })
 
-const initial = computed(() => basic.value.name?.[0] || '?')
+const initial = computed(() => (basic.value.name as string | undefined)?.[0] || '?')
 
 const avatarColor = computed(() => {
   if (basic.value.gender === '男') return 'var(--el-color-primary)'

@@ -1,35 +1,77 @@
-<script setup>
+<script setup lang="ts">
 import { reactive, ref, watch, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useStudentStore } from '@/stores/student'
 import { STUDENT_STATUS_TAG_OPTIONS } from '@/utils/student'
 import { apiError } from '@/utils/error'
 
-const props = defineProps({
-  visible: { type: Boolean, default: false },
-  mode: { type: String, default: 'create' }, // 'create' | 'edit'
-  initial: { type: Object, default: null },
-  defaultClassroomId: { type: Number, default: null },
-  lockClassroom: { type: Boolean, default: false },
-  classroomOptions: { type: Array, default: () => [] },
+const props = withDefaults(defineProps<{
+  visible?: boolean
+  mode?: string
+  initial?: Record<string, unknown> | null
+  defaultClassroomId?: number | null
+  lockClassroom?: boolean
+  classroomOptions?: Record<string, unknown>[]
+}>(), {
+  visible: false,
+  mode: 'create',
+  initial: null,
+  defaultClassroomId: null,
+  lockClassroom: false,
+  classroomOptions: () => [],
 })
-const emit = defineEmits(['update:visible', 'saved'])
+const emit = defineEmits<{
+  'update:visible': [v: boolean]
+  'saved': [data: Record<string, unknown>]
+}>()
 
 const isEdit = computed(() => props.mode === 'edit')
 
-const formatClassroomLabel = (c) => {
+const formatClassroomLabel = (c: Record<string, unknown> | null) => {
   if (!c) return ''
-  const parts = [c.name]
-  if (c.semester_label) parts.push(c.semester_label)
-  if (c.grade_name) parts.push(c.grade_name)
+  const parts = [c.name as string]
+  if (c.semester_label) parts.push(c.semester_label as string)
+  if (c.grade_name) parts.push(c.grade_name as string)
   return parts.join('｜')
 }
 
-const formRef = ref(null)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const formRef = ref<any>(null)
 const submitting = ref(false)
-const govActive = ref([])  // 政府申報資料折疊區，預設關閉
+const govActive = ref<string[]>([])  // 政府申報資料折疊區，預設關閉
 
-const emptyForm = () => ({
+interface StudentForm {
+  id: number | null
+  student_id: string
+  name: string
+  gender: string | null
+  birthday: string
+  classroom_id: number | null
+  enrollment_date: string
+  parent_name: string
+  parent_phone: string
+  address: string
+  status_tag: string
+  allergy: string
+  medication: string
+  special_needs: string
+  emergency_contact_name: string
+  emergency_contact_phone: string
+  emergency_contact_relation: string
+  id_number: string
+  nationality: string
+  household_address: string
+  is_disadvantaged: boolean
+  low_income_status: string
+  indigenous_status: string
+  disability_type: string
+  disability_level: string
+  disability_cert_no: string
+  disability_cert_expiry: string | null
+  [key: string]: unknown
+}
+
+const emptyForm = (): StudentForm => ({
   id: null,
   student_id: '',
   name: '',
@@ -84,13 +126,13 @@ const close = () => emit('update:visible', false)
 
 const submit = async () => {
   if (!formRef.value) return
-  await formRef.value.validate(async (valid) => {
+  await formRef.value.validate(async (valid: boolean) => {
     if (!valid) return
     submitting.value = true
     try {
       const studentStore = useStudentStore()
       if (isEdit.value) {
-        await studentStore.updateStudent(form.id, form)
+        await studentStore.updateStudent(form.id as number, form)
       } else {
         await studentStore.createStudent(form)
       }
@@ -98,9 +140,11 @@ const submit = async () => {
       emit('saved', { ...form })
       close()
     } catch (error) {
-      const detail = error.response?.data?.detail
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const detail = (error as any)?.response?.data?.detail
       const msg = Array.isArray(detail)
-        ? detail.map((e) => e.msg).join('；')
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ? detail.map((e: any) => e.msg).join('；')
         : (detail ?? apiError(error, '操作失敗'))
       ElMessage.error(msg)
     } finally {
@@ -132,7 +176,7 @@ const submit = async () => {
         <el-input v-model="form.name" />
       </el-form-item>
       <el-form-item label="性別">
-        <el-radio-group v-model="form.gender">
+        <el-radio-group :model-value="form.gender ?? undefined" @update:model-value="(v: string | number | boolean | undefined) => (form.gender = (v as string) ?? null)">
           <el-radio value="男">男</el-radio>
           <el-radio value="女">女</el-radio>
         </el-radio-group>
@@ -157,9 +201,9 @@ const submit = async () => {
         >
           <el-option
             v-for="c in classroomOptions"
-            :key="c.id"
+            :key="c.id as PropertyKey"
             :label="formatClassroomLabel(c)"
-            :value="c.id"
+            :value="(c.id as number)"
           />
         </el-select>
       </el-form-item>

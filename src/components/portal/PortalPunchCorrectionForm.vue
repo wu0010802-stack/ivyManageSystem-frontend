@@ -1,10 +1,15 @@
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, computed } from 'vue'
 
-const emit = defineEmits(['submit', 'cancel'])
+const emit = defineEmits<{
+  'submit': [payload: Record<string, unknown>]
+  'cancel': []
+}>()
 
-defineProps({
-    loading: { type: Boolean, default: false },
+withDefaults(defineProps<{
+  loading?: boolean
+}>(), {
+  loading: false,
 })
 
 const correctionTypes = [
@@ -21,9 +26,10 @@ const form = reactive({
     reason: '',
 })
 
-const formRef = ref(null)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const formRef = ref<any>(null)
 
-const disabledDate = (time) => time.getTime() > Date.now()
+const disabledDate = (time: Date) => time.getTime() > Date.now()
 
 const showPunchIn = computed(() =>
     form.correction_type === 'punch_in' || form.correction_type === 'both'
@@ -37,7 +43,7 @@ const rules = {
     correction_type: [{ required: true, message: '請選擇補正類型', trigger: 'change' }],
 }
 
-const buildDatetime = (dateStr, timeStr) => {
+const buildDatetime = (dateStr: string, timeStr: string) => {
     if (!dateStr || !timeStr) return null
     return `${dateStr}T${timeStr}:00`
 }

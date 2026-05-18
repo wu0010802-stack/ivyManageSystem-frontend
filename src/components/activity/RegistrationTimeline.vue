@@ -55,17 +55,72 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 
-const props = defineProps({
-  registration: { type: Object, required: true },
-  payments: { type: Array, default: () => [] },
-  paidAmount: { type: Number, default: 0 },
-  paymentStatus: { type: String, default: 'unpaid' },
+interface TimelineEvent {
+  kind?: string
+  tag?: string
+  amount?: string
+  date?: string
+  note?: string
+  voided?: boolean
+}
+
+interface TimelineNode {
+  key: string
+  title: string
+  state: string
+  badge?: string | null
+  badgeType?: string | null
+  datetime?: string
+  subtitle?: string
+  meta?: (string | null)[]
+  events?: TimelineEvent[]
+}
+
+interface Payment {
+  type?: string
+  is_voided?: boolean
+  amount?: number | string
+  payment_date?: string
+  created_at?: string
+  payment_method?: string
+  operator?: string
+  notes?: string
+  void_reason?: string
+  voided_by?: string
+  [key: string]: unknown
+}
+
+interface Registration {
+  created_at?: string
+  parent_phone?: string
+  school_year?: number
+  semester?: number
+  class_name?: string
+  match_status?: string
+  pending_review?: boolean
+  reviewed_at?: string
+  reviewed_by?: string
+  courses?: { status: string; name: string; price?: number | string; confirm_deadline?: string }[]
+  total_amount?: number
+  is_active?: boolean
+  [key: string]: unknown
+}
+
+const props = withDefaults(defineProps<{
+  registration: Registration
+  payments?: Payment[]
+  paidAmount?: number
+  paymentStatus?: string
+}>(), {
+  payments: () => [],
+  paidAmount: 0,
+  paymentStatus: 'unpaid',
 })
 
-const MATCH_LABEL = {
+const MATCH_LABEL: Record<string, string> = {
   matched: '系統自動匹配',
   manual: '人工綁定學生',
   forced: '強行收件（校外生）',
@@ -74,23 +129,23 @@ const MATCH_LABEL = {
   unmatched: '舊資料、未比對',
 }
 
-function fmtDate(s) {
+function fmtDate(s: string | null | undefined) {
   if (!s) return ''
   // 2026-05-12 14:33:00 / ISO 都接受；只取到分
   const d = new Date(s)
   if (Number.isNaN(d.getTime())) return s
-  const pad = (n) => String(n).padStart(2, '0')
+  const pad = (n: number) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-function fmtMoney(n) {
+function fmtMoney(n: number | string | null | undefined) {
   if (n == null) return ''
   return `NT$ ${Number(n).toLocaleString()}`
 }
 
 // --- 五大主節點 ---
 
-const createdNode = computed(() => {
+const createdNode = computed((): TimelineNode => {
   const r = props.registration
   return {
     key: 'created',
@@ -105,7 +160,7 @@ const createdNode = computed(() => {
   }
 })
 
-const reviewNode = computed(() => {
+const reviewNode = computed((): TimelineNode => {
   const r = props.registration
   const status = r.match_status || 'unmatched'
   const label = MATCH_LABEL[status] || status
@@ -137,7 +192,7 @@ const reviewNode = computed(() => {
   }
 })
 
-const coursesNode = computed(() => {
+const coursesNode = computed((): TimelineNode => {
   const courses = props.registration.courses || []
   if (!courses.length) {
     return {
@@ -191,7 +246,7 @@ const coursesNode = computed(() => {
   }
 })
 
-const paymentsNode = computed(() => {
+const paymentsNode = computed((): TimelineNode => {
   const r = props.registration
   const total = r.total_amount ?? 0
   const paid = props.paidAmount || 0
@@ -242,7 +297,7 @@ const paymentsNode = computed(() => {
 })
 
 // --- 分支：退費 / voided（只在有資料時插入）---
-const refundNode = computed(() => {
+const refundNode = computed((): TimelineNode | null => {
   const refunds = (props.payments || []).filter((p) => p.type === 'refund' && !p.is_voided)
   if (!refunds.length) return null
   const totalRefund = refunds.reduce((s, r) => s + Number(r.amount || 0), 0)
@@ -262,7 +317,7 @@ const refundNode = computed(() => {
   }
 })
 
-const voidedNode = computed(() => {
+const voidedNode = computed((): TimelineNode | null => {
   const voided = (props.payments || []).filter((p) => p.is_voided)
   if (!voided.length) return null
   return {
@@ -286,7 +341,7 @@ const voidedNode = computed(() => {
 // --- 完結節點 ---
 // is_active 預設視為 true（後端 detail endpoint 已過濾 is_active=True，response 不含此欄位）；
 // 僅在明確傳入 false 時才判定為軟刪。
-const finalNode = computed(() => {
+const finalNode = computed((): TimelineNode => {
   const r = props.registration
   if (r.is_active === false) {
     return {
@@ -304,8 +359,8 @@ const finalNode = computed(() => {
   return { key: 'final', title: '進行中', state: 'pending' }
 })
 
-const nodes = computed(() => {
-  const main = [createdNode.value, reviewNode.value]
+const nodes = computed((): TimelineNode[] => {
+  const main: TimelineNode[] = [createdNode.value, reviewNode.value]
   // 拒絕後不再顯示後續流程
   if (props.registration.match_status === 'rejected') {
     main.push(finalNode.value)

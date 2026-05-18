@@ -22,7 +22,7 @@
           >
             <span>{{ c.name }}</span>
             <span style="float: right; color: var(--text-tertiary); font-size: 12px">
-              ${{ c.price }}｜{{ c.remaining > 0 ? `剩 ${c.remaining}` : (c.allow_waitlist ? '候補' : '額滿') }}
+              ${{ c.price }}｜{{ (c.remaining ?? 0) > 0 ? `剩 ${c.remaining}` : (c.allow_waitlist ? '候補' : '額滿') }}
             </span>
           </el-option>
         </el-select>
@@ -47,21 +47,40 @@
   </el-dialog>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { addRegistrationCourse } from '@/api/activity'
 
-const props = defineProps({
-  modelValue: { type: Boolean, default: false },
-  registrationId: { type: [String, Number], default: null },
-  courseOptions: { type: Array, default: () => [] },
-  enrolledCourseIds: { type: Array, default: () => [] }, // 已選課程 id（過濾用）
-})
-const emit = defineEmits(['update:modelValue', 'added'])
+interface CourseOption {
+  id: number | string
+  name: string
+  price?: number | string
+  capacity?: number
+  remaining?: number
+  allow_waitlist?: boolean
+  [key: string]: unknown
+}
 
-const addCourseId = ref(null)
-const adding = ref(false)
+const props = withDefaults(defineProps<{
+  modelValue?: boolean
+  registrationId?: string | number | null
+  courseOptions?: CourseOption[]
+  enrolledCourseIds?: (number | string)[]
+}>(), {
+  modelValue: false,
+  registrationId: null,
+  courseOptions: () => [],
+  enrolledCourseIds: () => [],
+})
+
+const emit = defineEmits<{
+  'update:modelValue': [value: boolean]
+  'added': []
+}>()
+
+const addCourseId = ref<number | string | null>(null)
+const adding = ref<boolean>(false)
 
 watch(
   () => props.modelValue,
@@ -79,7 +98,7 @@ const waitlistHint = computed(() => {
   if (!addCourseId.value) return ''
   const c = props.courseOptions.find((x) => x.id === addCourseId.value)
   if (!c) return ''
-  if (c.remaining > 0) return ''
+  if ((c.remaining ?? 0) > 0) return '' // remaining may be undefined, ?? 0 handles it
   if (c.allow_waitlist) return `課程「${c.name}」已額滿，新增後將進入候補`
   return `課程「${c.name}」已額滿且不開放候補，無法新增`
 })
@@ -88,12 +107,13 @@ async function handleAdd() {
   if (!props.registrationId || !addCourseId.value || adding.value) return
   adding.value = true
   try {
-    const res = await addRegistrationCourse(props.registrationId, addCourseId.value)
-    ElMessage.success(res.data.message || '課程新增成功')
+    const res = await addRegistrationCourse(props.registrationId as number, addCourseId.value as number)
+    ElMessage.success((res.data as { message?: string }).message || '課程新增成功')
     emit('update:modelValue', false)
     emit('added')
   } catch (e) {
-    ElMessage.error(e?.response?.data?.detail || '新增失敗')
+    const axiosErr = e as { response?: { data?: { detail?: string } } }
+    ElMessage.error(axiosErr?.response?.data?.detail || '新增失敗')
   } finally {
     adding.value = false
   }

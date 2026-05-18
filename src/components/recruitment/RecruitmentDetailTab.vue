@@ -141,7 +141,7 @@
     </el-table>
 
     <el-pagination
-      v-if="detailTotal > filters.page_size"
+      v-if="detailTotal > (filters.page_size ?? 0)"
       class="pagination"
       :current-page="filters.page"
       :page-size="filters.page_size"
@@ -152,31 +152,54 @@
   </el-card>
 </template>
 
-<script setup>
-const props = defineProps({
-  canWrite: { type: Boolean, required: true },
-  canConvert: { type: Boolean, default: false },
-  options: { type: Object, required: true },
-  filters: { type: Object, required: true },
-  detailData: { type: Array, required: true },
-  detailTotal: { type: Number, required: true },
-  loadingDetail: { type: Boolean, required: true },
-  rowClassName: { type: Function, required: true },
-})
-
-const emit = defineEmits([
-  'update-filter',
-  'filter-change',
-  'keyword-input',
-  'clear-filter',
-  'page-change',
-  'edit',
-  'delete',
-])
-
-const updateFilter = (field, value) => {
-  emit('update-filter', { [field]: value })
+<script setup lang="ts">
+interface DetailFilters {
+  month?: string | null
+  grade?: string | null
+  source?: string | null
+  referrer?: string | null
+  has_deposit?: boolean | null
+  no_deposit_reason?: string | null
+  keyword?: string | null
+  page?: number
+  page_size?: number
+  [key: string]: unknown
 }
 
+interface DetailOptions {
+  months?: string[]
+  grades?: string[]
+  sources?: string[]
+  referrers?: string[]
+  no_deposit_reasons?: string[]
+  [key: string]: unknown
+}
 
+const props = withDefaults(defineProps<{
+  canWrite: boolean
+  canConvert?: boolean
+  options: DetailOptions
+  filters: DetailFilters
+  detailData: Record<string, unknown>[]
+  detailTotal: number
+  loadingDetail: boolean
+  rowClassName: (row: Record<string, unknown>) => string
+}>(), {
+  canConvert: false,
+})
+
+const emit = defineEmits<{
+  'update-filter': [value: Record<string, unknown>]
+  'filter-change': []
+  'keyword-input': []
+  'clear-filter': []
+  'page-change': [page: number]
+  'edit': [row: Record<string, unknown>]
+  'convert': [row: Record<string, unknown>]
+  'delete': [id: unknown]
+}>()
+
+const updateFilter = (field: string, value: unknown) => {
+  emit('update-filter', { [field]: value })
+}
 </script>

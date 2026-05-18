@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /**
  * IvyKids kawaii 黃星星（手繪表情）— 對齊官網 logo / favicon 的星星 motif。
  *
@@ -9,14 +9,14 @@
  */
 import { computed } from 'vue'
 
-const props = defineProps({
-  size: { type: Number, default: 24 },
-  expression: {
-    type: String,
-    default: 'smile',
-    validator: (v) => ['smile', 'wink', 'sleep'].includes(v),
-  },
-  decorative: { type: Boolean, default: false },
+const props = withDefaults(defineProps<{
+  size?: number
+  expression?: 'smile' | 'wink' | 'sleep'
+  decorative?: boolean
+}>(), {
+  size: 24,
+  expression: 'smile',
+  decorative: false,
 })
 
 const mouthPath = computed(() => {
@@ -31,7 +31,7 @@ const eyeLeft = computed(() =>
 
 const ariaProps = computed(() =>
   props.decorative
-    ? { 'aria-hidden': 'true' }
+    ? { 'aria-hidden': true as const }
     : { role: 'img', 'aria-label': '星星徽章' },
 )
 </script>

@@ -17,14 +17,23 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { Select } from '@element-plus/icons-vue'
 
-defineProps({
-  supply: { type: Object, required: true },
-  selected: { type: Boolean, default: false },
+interface Supply {
+  name: string
+  price: number | string
+  [key: string]: unknown
+}
+
+withDefaults(defineProps<{
+  supply: Supply
+  selected?: boolean
+}>(), {
+  selected: false,
 })
-defineEmits(['toggle'])
+
+defineEmits<{ toggle: [] }>()
 </script>
 
 <style scoped>

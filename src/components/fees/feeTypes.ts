@@ -32,20 +32,22 @@ export const ADJ_TYPE_TO_COLUMN = Object.fromEntries(
 export const FEE_TYPE_LABELS = Object.fromEntries(FEE_TYPES.map((t) => [t.value, t.label]))
 
 // 把 records + adjustments 依 FEE_TYPES 分桶
-export function bucketByFeeType(records = [], adjustments = []) {
-  const fees = {}
-  const adjs = {}
+export function bucketByFeeType(records: Record<string, unknown>[] = [], adjustments: Record<string, unknown>[] = []) {
+  const fees: Record<string, Record<string, unknown>[]> = {}
+  const adjs: Record<string, Record<string, unknown>[]> = {}
   for (const ft of FEE_TYPES) {
     if (ft.source === 'record') fees[ft.value] = []
     else adjs[ft.value] = []
   }
   for (const r of records) {
-    const colKey = FEE_TYPE_BACKEND_TO_COLUMN[r.fee_type] || 'leave_or_other'
+    const feeType = r.fee_type as string
+    const colKey = (FEE_TYPE_BACKEND_TO_COLUMN as Record<string, string>)[feeType] || 'leave_or_other'
     if (!fees[colKey]) fees[colKey] = []
     fees[colKey].push(r)
   }
   for (const a of adjustments) {
-    const colKey = ADJ_TYPE_TO_COLUMN[a.adjustment_type] || 'leave_or_other'
+    const adjType = a.adjustment_type as string
+    const colKey = (ADJ_TYPE_TO_COLUMN as Record<string, string>)[adjType] || 'leave_or_other'
     if (!adjs[colKey]) adjs[colKey] = []
     adjs[colKey].push(a)
   }

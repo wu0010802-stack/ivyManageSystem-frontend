@@ -70,21 +70,45 @@
   </el-dialog>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, reactive, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import type { FormInstance } from 'element-plus'
 import { createFeeTemplate, updateFeeTemplate } from '@/api/fees'
 
-const props = defineProps({
-  modelValue: Boolean,
-  template: { type: Object, default: null },
-  grades: { type: Array, default: () => [] },
+interface Grade {
+  id: number
+  name: string
+}
+
+interface FeeTemplate {
+  id: number
+  grade_id: number | null
+  school_year: number
+  semester: number
+  fee_type: string
+  name: string
+  amount: number
+  due_date_offset_days?: number
+  breakdown?: { tuition?: number; meal?: number; transport?: number }
+}
+
+const props = withDefaults(defineProps<{
+  modelValue: boolean
+  template?: FeeTemplate | null
+  grades?: Grade[]
+}>(), {
+  template: null,
+  grades: () => [],
 })
-const emit = defineEmits(['update:modelValue', 'saved'])
+const emit = defineEmits<{
+  'update:modelValue': [value: boolean]
+  saved: []
+}>()
 
 const isEdit = computed(() => !!props.template)
-const saving = ref(false)
-const formRef = ref(null)
+const saving = ref<boolean>(false)
+const formRef = ref<FormInstance | null>(null)
 
 const form = reactive({
   grade_id: null,
@@ -114,7 +138,7 @@ const rules = {
   amount: [{ required: true, message: '請填金額', trigger: 'blur' }],
 }
 
-function formatMoney(n) {
+function formatMoney(n: number | null | undefined): string {
   return `NT$ ${Number(n || 0).toLocaleString()}`
 }
 
@@ -166,22 +190,24 @@ async function onSave() {
   }
   saving.value = true
   try {
-    const payload = { ...form }
+    const payload: typeof form & { breakdown?: { tuition: number; meal: number; transport: number } } = { ...form }
     if (form.fee_type === 'monthly') {
       payload.breakdown = { ...breakdown }
     }
     if (isEdit.value) {
       // 編輯不可變更 grade_id / school_year / semester / fee_type（後端 unique key）
       // 故只送 mutable 欄位
-      const { grade_id, school_year, semester, fee_type, ...editable } = payload
-      await updateFeeTemplate(props.template.id, editable)
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { grade_id: _gi, school_year: _sy, semester: _sm, fee_type: _ft, ...editable } = payload
+      await updateFeeTemplate((props.template as FeeTemplate).id, editable)
     } else {
       await createFeeTemplate(payload)
     }
     ElMessage.success(isEdit.value ? '已更新' : '已建立')
     emit('saved')
-  } catch (e) {
-    ElMessage.error(e.response?.data?.detail || e.displayMessage || '儲存失敗')
+  } catch (e: unknown) {
+    const err = e as { response?: { data?: { detail?: string } }; displayMessage?: string }
+    ElMessage.error(err.response?.data?.detail || err.displayMessage || '儲存失敗')
   } finally {
     saving.value = false
   }

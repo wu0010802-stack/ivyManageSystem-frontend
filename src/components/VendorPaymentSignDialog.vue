@@ -60,16 +60,22 @@
   </el-dialog>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, watch, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import { signVendorPayment } from '@/api/vendorPayment'
 
-const props = defineProps({
-  modelValue: { type: Boolean, default: false },
-  paymentId: { type: Number, default: null },
+const props = withDefaults(defineProps<{
+  modelValue?: boolean
+  paymentId?: number | null
+}>(), {
+  modelValue: false,
+  paymentId: null,
 })
-const emit = defineEmits(['update:modelValue', 'signed'])
+const emit = defineEmits<{
+  'update:modelValue': [value: boolean]
+  'signed': []
+}>()
 
 const visible = ref(props.modelValue)
 watch(
@@ -81,33 +87,34 @@ watch(
 )
 watch(visible, (v) => emit('update:modelValue', v))
 
-const activeTab = ref('drawn')
-const submitting = ref(false)
+const activeTab = ref<string>('drawn')
+const submitting = ref<boolean>(false)
 
 // ── 畫板 ──
-const canvasRef = ref(null)
-const drawing = ref(false)
+const canvasRef = ref<HTMLCanvasElement | null>(null)
+const drawing = ref<boolean>(false)
 let lastX = 0
 let lastY = 0
 let drawn = false
 
-function pointer(e) {
-  const rect = canvasRef.value.getBoundingClientRect()
-  const t = e.touches?.[0]
-  const x = (t ? t.clientX : e.clientX) - rect.left
-  const y = (t ? t.clientY : e.clientY) - rect.top
-  return [x, y]
+function pointer(e: MouseEvent | TouchEvent): [number, number] {
+  const rect = canvasRef.value!.getBoundingClientRect()
+  const touch = (e as TouchEvent).touches?.[0]
+  const clientX = touch ? touch.clientX : (e as MouseEvent).clientX
+  const clientY = touch ? touch.clientY : (e as MouseEvent).clientY
+  return [clientX - rect.left, clientY - rect.top]
 }
 
-function startDraw(e) {
+function startDraw(e: MouseEvent | TouchEvent) {
   if (!canvasRef.value) return
   drawing.value = true
   ;[lastX, lastY] = pointer(e)
 }
 
-function draw(e) {
-  if (!drawing.value) return
+function draw(e: MouseEvent | TouchEvent) {
+  if (!drawing.value || !canvasRef.value) return
   const ctx = canvasRef.value.getContext('2d')
+  if (!ctx) return
   const [x, y] = pointer(e)
   ctx.lineCap = 'round'
   ctx.lineJoin = 'round'
@@ -129,6 +136,7 @@ function endDraw() {
 function resetCanvas() {
   if (!canvasRef.value) return
   const ctx = canvasRef.value.getContext('2d')
+  if (!ctx) return
   ctx.fillStyle = '#fff'
   ctx.fillRect(0, 0, canvasRef.value.width, canvasRef.value.height)
   drawn = false
@@ -139,10 +147,10 @@ function clearCanvas() {
 }
 
 // ── 照片上傳 ──
-const photoPreview = ref('')
-const photoFile = ref(null)
+const photoPreview = ref<string>('')
+const photoFile = ref<File | null>(null)
 
-function handleUploadChange(file) {
+function handleUploadChange(file: { raw?: File; size?: number; name?: string }) {
   if (!file?.raw) return
   if (file.raw.size > 1024 * 1024) {
     ElMessage.warning('圖檔超過 1 MB，請壓縮後再試')
@@ -153,7 +161,7 @@ function handleUploadChange(file) {
   photoFile.value = file.raw
   const reader = new FileReader()
   reader.onload = (e) => {
-    photoPreview.value = e.target.result
+    photoPreview.value = (e.target?.result as string) ?? ''
   }
   reader.readAsDataURL(file.raw)
 }
@@ -179,7 +187,7 @@ async function submit() {
       ElMessage.warning('請先簽名')
       return
     }
-    dataUrl = canvasRef.value.toDataURL('image/png')
+    dataUrl = canvasRef.value!.toDataURL('image/png')
   } else {
     if (!photoPreview.value) {
       ElMessage.warning('請選擇照片')
@@ -198,7 +206,8 @@ async function submit() {
     emit('signed')
     visible.value = false
   } catch (e) {
-    ElMessage.error(e?.response?.data?.detail || '簽收失敗')
+    const axiosErr = e as { response?: { data?: { detail?: string } } }
+    ElMessage.error(axiosErr?.response?.data?.detail || '簽收失敗')
   } finally {
     submitting.value = false
   }

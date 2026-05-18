@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { apiError } from '@/utils/error'
@@ -8,16 +8,26 @@ import { buildStudentProfileLink } from '@/utils/studentLinks'
 
 const STATUS_OPTIONS = ['出席', '缺席', '病假', '事假', '遲到']
 
-const props = defineProps({
-  classroomId: { type: [Number, String, null], default: null },
-  date: { type: String, required: true },
-  classroomOptions: { type: Array, default: () => [] },
-  hideClassroomSelect: { type: Boolean, default: false },
-  hideDatePicker: { type: Boolean, default: false },
-  hint: { type: String, default: '這裡用於管理端手動補登或修正單班出席狀態，不是主要日常點名入口。' },
+const props = withDefaults(defineProps<{
+  classroomId?: number | string | null
+  date: string
+  classroomOptions?: Record<string, unknown>[]
+  hideClassroomSelect?: boolean
+  hideDatePicker?: boolean
+  hint?: string
+}>(), {
+  classroomId: null,
+  classroomOptions: () => [],
+  hideClassroomSelect: false,
+  hideDatePicker: false,
+  hint: '這裡用於管理端手動補登或修正單班出席狀態，不是主要日常點名入口。',
 })
 
-const emit = defineEmits(['update:classroomId', 'update:date', 'saved'])
+const emit = defineEmits<{
+  'update:classroomId': [v: number | string | null]
+  'update:date': [v: string]
+  'saved': [payload: { date: string; classroom_id: number | string | null }]
+}>()
 
 const localClassroomId = computed({
   get: () => props.classroomId,
@@ -28,7 +38,16 @@ const localDate = computed({
   set: (v) => emit('update:date', v),
 })
 
-const dailyRecords = ref([])
+interface AttendanceRecord {
+  student_id: number
+  student_no?: string
+  name?: string
+  id?: number
+  status: string
+  remark: string
+  [key: string]: unknown
+}
+const dailyRecords = ref<AttendanceRecord[]>([])
 const dailyLoading = ref(false)
 const saving = ref(false)
 
@@ -43,7 +62,8 @@ const fetchDaily = async () => {
       date: localDate.value,
       classroom_id: localClassroomId.value,
     })
-    dailyRecords.value = res.data.records.map((record) => ({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    dailyRecords.value = ((res as any).data?.records ?? []).map((record: any) => ({
       ...record,
       status: record.status ?? '出席',
       remark: record.remark ?? '',
@@ -55,7 +75,7 @@ const fetchDaily = async () => {
   }
 }
 
-const markAll = (status) => {
+const markAll = (status: string) => {
   dailyRecords.value.forEach((record) => {
     record.status = status
   })
@@ -107,9 +127,9 @@ defineExpose({ fetchDaily })
       >
         <el-option
           v-for="item in classroomOptions"
-          :key="item.value"
-          :label="item.label"
-          :value="item.value"
+          :key="item.value as PropertyKey"
+          :label="item.label as string"
+          :value="(item.value as number | string)"
         />
       </el-select>
       <el-date-picker
@@ -156,7 +176,7 @@ defineExpose({ fetchDaily })
         <template #default="{ row }">
           <router-link
             v-if="buildStudentProfileLink(row.student_id ?? row.id, 'attendance')"
-            :to="buildStudentProfileLink(row.student_id ?? row.id, 'attendance')"
+            :to="buildStudentProfileLink(row.student_id ?? row.id, 'attendance')!"
             class="student-link"
           >{{ row.name }}</router-link>
           <span v-else>{{ row.name }}</span>

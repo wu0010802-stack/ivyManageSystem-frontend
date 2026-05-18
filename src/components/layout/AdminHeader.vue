@@ -86,7 +86,7 @@
   </el-dialog>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -99,35 +99,48 @@ import { apiError } from '@/utils/error'
 import AdminNotificationBell from '@/components/layout/AdminNotificationBell.vue'
 import A11yMenu from '@/components/common/A11yMenu.vue'
 
-defineProps({
-  isMobile: { type: Boolean, default: false }
+withDefaults(defineProps<{
+  isMobile?: boolean
+}>(), {
+  isMobile: false,
 })
 
-const globalSearchRef = ref(null)
+interface EmployeeItem {
+  id: number
+  name?: string
+  employee_id?: string | number
+  job_title?: string
+  title?: string
+  position?: string
+}
+
+const globalSearchRef = ref<InstanceType<typeof GlobalSearch> | null>(null)
 const openSearch = () => globalSearchRef.value?.open()
-defineEmits(['toggle-sidebar'])
+defineEmits<{
+  'toggle-sidebar': []
+}>()
 
 const route = useRoute()
 const router = useRouter()
 
 const pageTitle = computed(() => route.meta?.title || '')
 
-const userInfo = computed(() => getUserInfo() || {})
-const displayName = computed(() => userInfo.value.name || '管理員')
-const displayRole = computed(() => userInfo.value.role === 'admin' ? 'Administrator' : userInfo.value.role || '')
+const userInfo = computed(() => (getUserInfo() || {}) as Record<string, unknown>)
+const displayName = computed(() => (userInfo.value.name as string | undefined) || '管理員')
+const displayRole = computed(() => userInfo.value.role === 'admin' ? 'Administrator' : (userInfo.value.role as string | undefined) || '')
 
 // 是否有員工記錄（行政/園長/主任）
 const hasEmployee = computed(() => userInfo.value.employee_id != null)
 
 // 所有 admin 相關角色都能看到「進入前台」按鈕
 const canEnterPortal = computed(() => {
-  const role = userInfo.value.role
-  return ['admin', 'hr', 'supervisor'].includes(role)
+  const role = userInfo.value.role as string | undefined
+  return ['admin', 'hr', 'supervisor'].includes(role ?? '')
 })
 
-const showEmployeePicker = ref(false)
-const employeeList = ref([])
-const empSearch = ref('')
+const showEmployeePicker = ref<boolean>(false)
+const employeeList = ref<EmployeeItem[]>([])
+const empSearch = ref<string>('')
 const employeeStore = useEmployeeStore()
 
 const filteredEmployees = computed(() =>
@@ -146,7 +159,7 @@ const goToPortal = async () => {
     // 最高管理員：先載入員工清單再彈 dialog
     try {
       await employeeStore.fetchEmployees()
-      employeeList.value = employeeStore.employees
+      employeeList.value = (employeeStore.employees as unknown as EmployeeItem[])
     } catch {
       // silent
     }
@@ -155,7 +168,7 @@ const goToPortal = async () => {
   }
 }
 
-const doImpersonate = async (employeeId) => {
+const doImpersonate = async (employeeId: number) => {
   try {
     const res = await impersonate(employeeId)
     // 後端已透過 Set-Cookie 設定 access_token + admin_token Cookie
@@ -167,7 +180,7 @@ const doImpersonate = async (employeeId) => {
   }
 }
 
-const handleCommand = (command) => {
+const handleCommand = (command: string) => {
   if (command === 'logout') {
     clearAuth()
     router.push('/login')

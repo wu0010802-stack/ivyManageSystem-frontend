@@ -1,16 +1,26 @@
-<script setup>
-defineProps({
-  title: { type: String, required: true },
-  count: { type: Number, default: null },
-  countType: { type: String, default: 'primary' },
-  loading: { type: Boolean, default: false },
-  errorMessage: { type: String, default: '' },
-  emptyDescription: { type: String, default: '沒有資料' },
-  showEmpty: { type: Boolean, default: false },
-  openFullRoute: { type: Object, default: null },
+<script setup lang="ts">
+type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger'
+
+withDefaults(defineProps<{
+  title: string
+  count?: number | null
+  countType?: ElTagType
+  loading?: boolean
+  errorMessage?: string
+  emptyDescription?: string
+  showEmpty?: boolean
+  openFullRoute?: Record<string, unknown> | null
+}>(), {
+  count: null,
+  countType: 'primary',
+  loading: false,
+  errorMessage: '',
+  emptyDescription: '沒有資料',
+  showEmpty: false,
+  openFullRoute: null,
 })
 
-defineEmits(['retry'])
+defineEmits<{ 'retry': [] }>()
 </script>
 
 <template>

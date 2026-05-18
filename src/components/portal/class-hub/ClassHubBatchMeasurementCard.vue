@@ -1,7 +1,9 @@
-<script setup>
-defineEmits(['open'])
-const props = defineProps({
-  lastMeasuredOn: { type: String, default: null },
+<script setup lang="ts">
+defineEmits<{ 'open': [] }>()
+const props = withDefaults(defineProps<{
+  lastMeasuredOn?: string | null
+}>(), {
+  lastMeasuredOn: null,
 })
 </script>
 

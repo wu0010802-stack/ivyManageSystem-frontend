@@ -54,18 +54,24 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import * as govMoe from '@/api/govMoe'
 
-const props = defineProps({ studentId: { type: Number, required: true } })
+const props = defineProps<{ studentId: number }>()
 
 const loading = ref(false)
-const docs = ref([])
+const docs = ref<Record<string, unknown>[]>([])
 const dialogVisible = ref(false)
-const editingId = ref(null)
-const formData = ref({
+const editingId = ref<number | null>(null)
+const formData = ref<{
+  doc_type: string
+  file_path: string
+  issued_date: string | null
+  expiry_date: string | null
+  notes: string
+}>({
   doc_type: '鑑定證明',
   file_path: '',
   issued_date: null,
@@ -77,7 +83,8 @@ async function load() {
   loading.value = true
   try {
     const { data } = await govMoe.listDisabilityDocs(props.studentId)
-    docs.value = data
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    docs.value = (data as any) || []
   } finally {
     loading.value = false
   }
@@ -89,9 +96,9 @@ function openAdd() {
   dialogVisible.value = true
 }
 
-function openEdit(row) {
-  editingId.value = row.id
-  formData.value = { ...row }
+function openEdit(row: Record<string, unknown>) {
+  editingId.value = row.id as number
+  formData.value = { ...(row as typeof formData.value) }
   dialogVisible.value = true
 }
 
@@ -108,9 +115,9 @@ async function onSave() {
   await load()
 }
 
-async function confirmDelete(row) {
+async function confirmDelete(row: Record<string, unknown>) {
   await ElMessageBox.confirm(`確認刪除「${row.doc_type}」？`, '提醒', { type: 'warning' })
-  await govMoe.deleteDisabilityDoc(row.id)
+  await govMoe.deleteDisabilityDoc(row.id as number)
   ElMessage.success('已刪除')
   await load()
 }

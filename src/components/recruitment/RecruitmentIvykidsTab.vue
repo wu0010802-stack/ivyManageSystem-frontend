@@ -216,7 +216,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -228,42 +228,64 @@ import {
 } from '@/api/recruitmentIvykids'
 import { apiError } from '@/utils/error'
 
-const props = defineProps({
-  barComponent: { type: [Object, Function], required: true },
-  showCharts:   { type: Boolean, required: true },
-  canWrite:     { type: Boolean, default: false },
+interface LastSyncCounts { inserted?: number; updated?: number; skipped?: number }
+interface SyncStatus {
+  sync_in_progress?: boolean
+  last_sync_status?: string
+  last_synced_at?: string | null
+  last_sync_counts?: LastSyncCounts | null
+  provider_label?: string
+  scheduler_enabled?: boolean
+  sync_interval_minutes?: number
+  [key: string]: unknown
+}
+interface BySourceEntry { source?: string; visit?: number; [key: string]: unknown }
+interface ByMonthEntry { month?: string; visit?: number; deposit?: number; [key: string]: unknown }
+
+withDefaults(defineProps<{
+  barComponent: Record<string, unknown> | ((...args: unknown[]) => unknown)
+  showCharts: boolean
+  canWrite?: boolean
+}>(), {
+  canWrite: false,
 })
 
 // ── 同步狀態 ──
-const syncStatus         = ref(null)
-const loadingStatus      = ref(false)
-const syncing            = ref(false)
-const deleting           = ref(false)
+const syncStatus         = ref<SyncStatus | null>(null)
+const loadingStatus      = ref<boolean>(false)
+const syncing            = ref<boolean>(false)
+const deleting           = ref<boolean>(false)
 
 // ── 統計資料 ──
-const ivkStats = ref({
+const ivkStats = ref<{
+  by_source: BySourceEntry[]
+  by_month: ByMonthEntry[]
+  total_visit: number
+  total_deposit: number
+  total_enrolled: number
+}>({
   by_source:     [],
   by_month:      [],
   total_visit:   0,
   total_deposit: 0,
   total_enrolled: 0,
 })
-const loadingStats = ref(false)
+const loadingStats = ref<boolean>(false)
 
 // ── 分頁記錄 ──
-const records       = ref([])
-const recordsTotal  = ref(0)
-const loadingRecords = ref(false)
-const recordsPage    = ref(1)
-const recordsPageSize = ref(50)
+const records       = ref<Record<string, unknown>[]>([])
+const recordsTotal  = ref<number>(0)
+const loadingRecords = ref<boolean>(false)
+const recordsPage    = ref<number>(1)
+const recordsPageSize = ref<number>(50)
 
 // ── 篩選 ──
-const filterSource = ref(null)
-const filterMonth  = ref(null)
+const filterSource = ref<string | null>(null)
+const filterMonth  = ref<string | null>(null)
 
 // ── 衍生選單 ──
-const sourceOptions = computed(() => ivkStats.value.by_source.map(d => d.source).filter(Boolean))
-const monthOptions  = computed(() => ivkStats.value.by_month.map(d => d.month))
+const sourceOptions = computed(() => ivkStats.value.by_source.map(d => d.source).filter(Boolean) as string[])
+const monthOptions  = computed(() => ivkStats.value.by_month.map(d => d.month).filter(Boolean) as string[])
 
 // ── 衍生 KPI ──
 const depositRate = computed(() => {
@@ -302,7 +324,7 @@ const sourceChartOptions = {
     legend: { display: false },
     tooltip: {
       callbacks: {
-        label: (ctx) => ` ${ctx.parsed.x} 人`,
+        label: (ctx: { parsed: { x: number } }) => ` ${ctx.parsed.x} 人`,
       },
     },
   },
@@ -377,7 +399,7 @@ const fetchSyncStatus = async () => {
   loadingStatus.value = true
   try {
     const res = await getRecruitmentIvykidsBackendStatus()
-    syncStatus.value = res.data
+    syncStatus.value = res.data as SyncStatus
   } catch (e) {
     ElMessage.error(apiError(e, '載入同步狀態失敗'))
   } finally {
@@ -389,7 +411,13 @@ const fetchIvykidsStats = async () => {
   loadingStats.value = true
   try {
     const res = await getRecruitmentIvykidsStats()
-    const d = res.data || {}
+    const d = (res.data || {}) as {
+      by_source?: BySourceEntry[]
+      by_month?: ByMonthEntry[]
+      total_visit?: number
+      total_deposit?: number
+      total_enrolled?: number
+    }
     ivkStats.value = {
       by_source:      Array.isArray(d.by_source) ? d.by_source : [],
       by_month:       Array.isArray(d.by_month)  ? d.by_month  : [],
@@ -407,12 +435,13 @@ const fetchIvykidsStats = async () => {
 const fetchRecords = async () => {
   loadingRecords.value = true
   try {
-    const params = { page: recordsPage.value, page_size: recordsPageSize.value }
+    const params: Record<string, unknown> = { page: recordsPage.value, page_size: recordsPageSize.value }
     if (filterSource.value) params.source = filterSource.value
     if (filterMonth.value)  params.month  = filterMonth.value
     const res = await getRecruitmentIvykidsRecords(params)
-    records.value      = res.data.records || []
-    recordsTotal.value = res.data.total   || 0
+    const data = res.data as { records?: Record<string, unknown>[]; total?: number }
+    records.value      = data.records || []
+    recordsTotal.value = data.total   || 0
   } catch (e) {
     ElMessage.error(apiError(e, '載入報名記錄失敗'))
   } finally {
@@ -425,7 +454,7 @@ const handleSync = async () => {
   syncing.value = true
   try {
     const res = await syncRecruitmentIvykidsBackend({})
-    ElMessage.success(res.data?.message || '同步完成')
+    ElMessage.success((res.data as { message?: string })?.message || '同步完成')
     await Promise.all([fetchSyncStatus(), fetchIvykidsStats()])
     recordsPage.value = 1
     await fetchRecords()
@@ -470,36 +499,38 @@ const onClearFilter = () => {
   fetchRecords()
 }
 
-const onPageChange = (page) => {
+const onPageChange = (page: number) => {
   recordsPage.value = page
   fetchRecords()
 }
 
-const onSizeChange = (size) => {
+const onSizeChange = (size: number) => {
   recordsPageSize.value = size
   recordsPage.value = 1
   fetchRecords()
 }
 
 // ── 顯示工具 ──
-const maskPhone = (phone) => {
+const maskPhone = (phone: unknown) => {
   if (!phone) return '—'
   const s = String(phone)
   if (s.length <= 6) return s
   return s.slice(0, 3) + '****' + s.slice(-3)
 }
 
-const statusTagType = (status) => {
-  if (!status) return 'info'
-  if (status.includes('已') || status.includes('確認')) return 'success'
-  if (status.includes('待') || status.includes('未'))   return 'warning'
-  if (status.includes('取消') || status.includes('拒')) return 'danger'
+const statusTagType = (status: unknown) => {
+  const s = String(status || '')
+  if (!s) return 'info'
+  if (s.includes('已') || s.includes('確認')) return 'success'
+  if (s.includes('待') || s.includes('未'))   return 'warning'
+  if (s.includes('取消') || s.includes('拒')) return 'danger'
   return 'info'
 }
 
-const rateClass = (pct) => {
-  if (pct >= 60) return 'rate-high'
-  if (pct >= 30) return 'rate-mid'
+const rateClass = (pct: number | null | undefined) => {
+  const n = Number(pct || 0)
+  if (n >= 60) return 'rate-high'
+  if (n >= 30) return 'rate-mid'
   return 'rate-low'
 }
 

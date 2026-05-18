@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Refresh } from '@element-plus/icons-vue'
@@ -7,14 +7,17 @@ import { hasPermission } from '@/utils/auth'
 import { apiError } from '@/utils/error'
 import CommunicationEditorDialog from '@/components/student/CommunicationEditorDialog.vue'
 
-const props = defineProps({
-  studentId: { type: Number, required: true },
-  active: { type: Boolean, default: true },
+const props = withDefaults(defineProps<{
+  studentId: number
+  active?: boolean
+}>(), {
+  active: true,
 })
 
 const canWrite = hasPermission('STUDENTS_WRITE')
 
-const COMM_TYPE_TAG = {
+type ElTagType = '' | 'primary' | 'success' | 'warning' | 'info' | 'danger'
+const COMM_TYPE_TAG: Record<string, ElTagType> = {
   電話: 'primary',
   LINE: 'success',
   面談: 'warning',
@@ -24,17 +27,18 @@ const COMM_TYPE_TAG = {
   其他: 'info',
 }
 
-const items = ref([])
+const items = ref<Record<string, unknown>[]>([])
 const loading = ref(false)
 const loaded = ref(false)
-const editorDialog = reactive({ visible: false, mode: 'create', initial: null })
+const editorDialog = reactive<{ visible: boolean; mode: string; initial: Record<string, unknown> | null }>({ visible: false, mode: 'create', initial: null })
 
 async function fetchData() {
   if (!props.studentId) return
   loading.value = true
   try {
     const res = await getCommunications({ student_id: props.studentId, page_size: 200 })
-    items.value = res.data.items || []
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    items.value = (res as any).data?.items || []
     loaded.value = true
   } catch (e) {
     ElMessage.error(apiError(e, '載入家長溝通紀錄失敗'))
@@ -57,16 +61,16 @@ const openCreate = () => {
   editorDialog.visible = true
 }
 
-const openEdit = (row) => {
+const openEdit = (row: Record<string, unknown>) => {
   editorDialog.initial = { ...row }
   editorDialog.mode = 'edit'
   editorDialog.visible = true
 }
 
-const handleDelete = async (row) => {
+const handleDelete = async (row: Record<string, unknown>) => {
   try {
     await ElMessageBox.confirm('確定要刪除這筆家長溝通紀錄？', '確認刪除', { type: 'warning' })
-    await deleteCommunication(row.id)
+    await deleteCommunication(row.id as number)
     ElMessage.success('刪除成功')
     fetchData()
   } catch (e) {
@@ -74,7 +78,7 @@ const handleDelete = async (row) => {
   }
 }
 
-const truncate = (text, len = 60) => {
+const truncate = (text: string | null | undefined, len = 60) => {
   if (!text) return ''
   return text.length > len ? text.slice(0, len) + '…' : text
 }
@@ -109,7 +113,7 @@ defineExpose({ refresh: fetchData })
       <el-table-column label="日期" prop="communication_date" width="120" />
       <el-table-column label="方式" width="90">
         <template #default="{ row }">
-          <el-tag :type="COMM_TYPE_TAG[row.communication_type] || 'info'" size="small">
+          <el-tag :type="COMM_TYPE_TAG[row.communication_type as string] || 'info'" size="small">
             {{ row.communication_type }}
           </el-tag>
         </template>

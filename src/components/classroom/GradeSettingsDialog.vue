@@ -1,25 +1,39 @@
-<script setup>
+<script setup lang="ts">
 import { ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getGrades, updateGrade } from '@/api/classrooms'
 import { apiError } from '@/utils/error'
 
-const props = defineProps({
-  visible: { type: Boolean, default: false },
-  canWrite: { type: Boolean, default: false },
-})
-const emit = defineEmits(['update:visible', 'updated'])
+interface Grade {
+  id: number
+  name?: string
+  age_range?: string
+  sort_order?: number
+  is_graduation_grade?: boolean
+}
 
-const grades = ref([])
+const props = withDefaults(defineProps<{
+  visible?: boolean
+  canWrite?: boolean
+}>(), {
+  visible: false,
+  canWrite: false,
+})
+const emit = defineEmits<{
+  'update:visible': [value: boolean]
+  'updated': []
+}>()
+
+const grades = ref<Grade[]>([])
 const loading = ref(false)
-const savingId = ref(null)
+const savingId = ref<number | null>(null)
 
 const fetchGrades = async () => {
   loading.value = true
   try {
     const res = await getGrades()
-    grades.value = (res.data || []).slice().sort(
-      (a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0),
+    grades.value = ((res.data || []) as Grade[]).slice().sort(
+      (a: Grade, b: Grade) => (a.sort_order ?? 0) - (b.sort_order ?? 0),
     )
   } catch (e) {
     ElMessage.error(apiError(e, '載入年級失敗'))
@@ -30,7 +44,7 @@ const fetchGrades = async () => {
 
 watch(() => props.visible, (v) => { if (v) fetchGrades() })
 
-const toggleGraduation = async (row, nextValue) => {
+const toggleGraduation = async (row: Grade, nextValue: boolean) => {
   if (!props.canWrite) return
   savingId.value = row.id
   try {
@@ -73,7 +87,7 @@ const close = () => emit('update:visible', false)
             :model-value="row.is_graduation_grade"
             :loading="savingId === row.id"
             :disabled="!canWrite || savingId === row.id"
-            @change="(v) => toggleGraduation(row, v)"
+            @change="(v) => toggleGraduation(row, v as boolean)"
           />
         </template>
       </el-table-column>

@@ -1,13 +1,13 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref } from 'vue'
 import { hasPermission } from '@/utils/auth'
 import PortfolioTab from '@/components/portfolio/PortfolioTab.vue'
 import HealthTab from '@/components/portfolio/HealthTab.vue'
 import MeasurementsSection from '@/components/portfolio/MeasurementsSection.vue'
 
-const props = defineProps({
-  studentId: { type: Number, required: true },
-})
+const props = defineProps<{
+  studentId: number
+}>()
 
 const canPortfolio = computed(() => hasPermission('PORTFOLIO_READ'))
 const canHealth = computed(() => hasPermission('STUDENTS_HEALTH_READ'))

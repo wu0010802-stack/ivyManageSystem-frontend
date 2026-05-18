@@ -34,7 +34,7 @@
   </el-drawer>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, reactive } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
@@ -42,17 +42,24 @@ import {
   batchSaveClassAttendance,
 } from '@/api/portal'
 
-const props = defineProps({
-  show: { type: Boolean, default: false },
+interface AttendanceRecord { student_id: number | string; name?: string; status?: string | null }
+
+const props = withDefaults(defineProps<{
+  show?: boolean
+}>(), {
+  show: false,
 })
-const emit = defineEmits(['update:show', 'done'])
+const emit = defineEmits<{
+  'update:show': [value: boolean]
+  'done': []
+}>()
 
 const loading = ref(false)
 const error = ref('')
-const pendingRecords = ref([]) // students with status==null
-const picks = reactive({}) // student_id -> selected status (optimistic UI)
-let cachedClassroomId = null
-let cachedDate = null
+const pendingRecords = ref<AttendanceRecord[]>([]) // students with status==null
+const picks = reactive<Record<string | number, string>>({}) // student_id -> selected status (optimistic UI)
+let cachedClassroomId: number | string | null = null
+let cachedDate: string | null = null
 
 function todayIso() {
   const d = new Date()
@@ -85,22 +92,24 @@ async function load() {
       date: cachedDate,
       classroom_id: cachedClassroomId,
     })
-    const records = (res.data?.records ?? res.records ?? []).filter(
-      (r) => !r.status,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const raw = res.data ?? (res as any)
+    const records: AttendanceRecord[] = (raw?.records ?? []).filter(
+      (r: AttendanceRecord) => !r.status,
     )
     pendingRecords.value = records
     // Reset picks for students newly loaded
     for (const r of records) {
       if (!(r.student_id in picks)) picks[r.student_id] = ''
     }
-  } catch (e) {
-    error.value = e?.message || '載入失敗'
+  } catch (e: unknown) {
+    error.value = (e instanceof Error ? e.message : null) || '載入失敗'
   } finally {
     loading.value = false
   }
 }
 
-async function onPick(studentId) {
+async function onPick(studentId: number | string) {
   const status = picks[studentId]
   if (!status) return
   // Save this single entry (batch endpoint accepts arrays — send one)

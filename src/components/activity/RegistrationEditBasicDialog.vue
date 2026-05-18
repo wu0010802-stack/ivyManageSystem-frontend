@@ -41,22 +41,50 @@
   </el-dialog>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { updateRegistrationBasic } from '@/api/activity'
 import { FIELD_RULES } from '@/constants/activity'
 
-const props = defineProps({
-  modelValue: { type: Boolean, default: false },
-  registrationId: { type: [String, Number], default: null },
-  initial: { type: Object, default: () => ({}) },
-  classroomOptions: { type: Array, default: () => [] },
-})
-const emit = defineEmits(['update:modelValue', 'saved'])
+interface ClassroomOption {
+  id?: number | string
+  name: string
+  [key: string]: unknown
+}
 
-const saving = ref(false)
-const form = reactive({
+interface Initial {
+  student_name?: string
+  birthday?: string
+  class_name?: string
+  email?: string
+  [key: string]: unknown
+}
+
+const props = withDefaults(defineProps<{
+  modelValue?: boolean
+  registrationId?: string | number | null
+  initial?: Initial
+  classroomOptions?: string[]
+}>(), {
+  modelValue: false,
+  registrationId: null,
+  initial: () => ({}),
+  classroomOptions: () => [],
+})
+
+const emit = defineEmits<{
+  'update:modelValue': [value: boolean]
+  'saved': []
+}>()
+
+const saving = ref<boolean>(false)
+const form = reactive<{
+  name: string
+  birthday: string
+  class_: string
+  email: string
+}>({
   name: '',
   birthday: '',
   class_: '',
@@ -80,7 +108,7 @@ async function handleSave() {
   if (!props.registrationId || !isValid.value || saving.value) return
   saving.value = true
   try {
-    await updateRegistrationBasic(props.registrationId, {
+    await updateRegistrationBasic(props.registrationId as number, {
       name: form.name.trim(),
       birthday: form.birthday,
       class: form.class_,
@@ -90,7 +118,8 @@ async function handleSave() {
     emit('update:modelValue', false)
     emit('saved')
   } catch (e) {
-    ElMessage.error(e?.response?.data?.detail || '更新失敗')
+    const axiosErr = e as { response?: { data?: { detail?: string } } }
+    ElMessage.error(axiosErr?.response?.data?.detail || '更新失敗')
   } finally {
     saving.value = false
   }

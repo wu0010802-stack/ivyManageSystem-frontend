@@ -12,13 +12,16 @@
   </div>
 </template>
 
-<script setup>
-defineProps({
-  label: { type: String, required: true },
-  value: { type: [String, Number], required: true },
-  icon: { type: [String, Object], required: true },
-  color: { type: String, default: 'primary', validator: v => ['primary', 'success', 'warning', 'danger', 'info'].includes(v) },
-  variant: { type: String, default: 'default', validator: v => ['default', 'filled'].includes(v) }
+<script setup lang="ts">
+withDefaults(defineProps<{
+  label: string
+  value: string | number
+  icon: string | object
+  color?: 'primary' | 'success' | 'warning' | 'danger' | 'info'
+  variant?: 'default' | 'filled'
+}>(), {
+  color: 'primary',
+  variant: 'default',
 })
 </script>
 

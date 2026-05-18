@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, computed, watch, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -24,29 +24,38 @@ import CommunicationTab from './tabs/CommunicationTab.vue'
 import StudentDisabilityDocsPanel from './StudentDisabilityDocsPanel.vue'
 import StudentEnrollmentCertButton from './StudentEnrollmentCertButton.vue'
 
-const props = defineProps({
-  studentId: { type: Number, default: null },
-  mode: { type: String, default: 'page' }, // 'page' | 'drawer'
-  context: { type: String, default: 'students' }, // 'students' | 'classroom'
-  defaultTab: { type: String, default: null },
-  classroomId: { type: Number, default: null },
-  // 同步 URL（page mode）
-  syncUrl: { type: Boolean, default: true },
-  // page mode 的 query 來源（從 from=classroom 帶過來）
-  fromContext: { type: String, default: '' },
-  fromClassroomId: { type: Number, default: null },
-  initialTab: { type: String, default: '' }, // 從 ?tab= 帶入
+const props = withDefaults(defineProps<{
+  studentId?: number | null
+  mode?: string
+  context?: string
+  defaultTab?: string | null
+  classroomId?: number | null
+  syncUrl?: boolean
+  fromContext?: string
+  fromClassroomId?: number | null
+  initialTab?: string
+}>(), {
+  studentId: null,
+  mode: 'page',
+  context: 'students',
+  defaultTab: null,
+  classroomId: null,
+  syncUrl: true,
+  fromContext: '',
+  fromClassroomId: null,
+  initialTab: '',
 })
-const emit = defineEmits([
-  'lifecycle-changed',
-  'student-updated',
-  'profile-loaded',
-])
+const emit = defineEmits<{
+  'lifecycle-changed': []
+  'student-updated': []
+  'profile-loaded': [data: unknown]
+}>()
 
 const router = useRouter()
 
-const profile = ref(null)
+const profile = ref<Record<string, unknown> | null>(null)
 const loading = ref(false)
+const safeStudentId = computed(() => props.studentId as number)
 
 const canPortfolioRead = computed(() => hasPermission('PORTFOLIO_READ'))
 const canHealthRead = computed(() => hasPermission('STUDENTS_HEALTH_READ'))
@@ -54,7 +63,7 @@ const canActivityRead = computed(() => hasPermission('ACTIVITY_READ'))
 const canFeesRead = computed(() => hasPermission('FEES_READ'))
 const canSpecialNeedsRead = computed(() => hasPermission('STUDENTS_SPECIAL_NEEDS_READ'))
 
-const defaultTabFor = (ctx) => (ctx === 'classroom' ? 'overview' : 'basic')
+const defaultTabFor = (ctx: string) => (ctx === 'classroom' ? 'overview' : 'basic')
 const LEGACY_TAB_MAP = {
   guardians: 'basic',
   milestones: 'growth_profile',
@@ -62,7 +71,7 @@ const LEGACY_TAB_MAP = {
   photo_gallery: 'growth_profile',
   growth_report: 'growth_profile',
 }
-const mapLegacyTab = (name) => LEGACY_TAB_MAP[name] || name
+const mapLegacyTab = (name: string) => (LEGACY_TAB_MAP as Record<string, string>)[name] || name
 // 4 個原獨立 tab 整併成 growth_profile 的 sub-tab，書籤連結 ?tab=<舊名>
 // 需要同時帶 ?sub=<舊名> 進 GrowthProfileTab（讀 route.query.sub）；否則
 // 舊書籤 ?tab=timeline / photo_gallery / growth_report 全部落到預設的
@@ -82,7 +91,7 @@ const initialGrowthSub = GROWTH_SUB_FROM_LEGACY.has(props.initialTab)
 const activeTab = ref(initialActive)
 
 const editDialogVisible = ref(false)
-const editInitial = ref(null)
+const editInitial = ref<Record<string, unknown> | null>(null)
 const editLoading = ref(false)
 const lifecycleDialogVisible = ref(false)
 
@@ -115,7 +124,8 @@ async function fetchProfile() {
     emit('profile-loaded', data)
   } catch (e) {
     profile.value = null
-    ElMessage.error(e.displayMessage || apiError(e, '讀取學生檔案失敗'))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ElMessage.error((e as any).displayMessage || apiError(e, '讀取學生檔案失敗'))
   } finally {
     loading.value = false
   }
@@ -181,12 +191,12 @@ busEvents.forEach((e) => domainBus.on(e, onProfileMutate))
 onUnmounted(() => busEvents.forEach((e) => domainBus.off(e, onProfileMutate)))
 
 // 教務紀錄 → 出席跳轉：攜帶日期區間給 AttendanceTab 預填篩選
-const attendanceDateRange = ref(null)
-function handleRecordsJumpTab(payload) {
+const attendanceDateRange = ref<[string, string] | null>(null)
+function handleRecordsJumpTab(payload: string | { tab?: string; query?: { from?: string; to?: string } }) {
   const target = typeof payload === 'string' ? payload : payload?.tab
   if (!target) return
-  if (target === 'attendance' && payload?.query) {
-    attendanceDateRange.value = [payload.query.from, payload.query.to]
+  if (target === 'attendance' && typeof payload !== 'string' && payload?.query) {
+    attendanceDateRange.value = [payload.query.from || '', payload.query.to || '']
   }
   activeTab.value = mapLegacyTab(target)
 }
@@ -210,7 +220,7 @@ const openEditDialog = async () => {
 
 const handleEditClick = () => openEditDialog()
 
-const handleGotoLink = (cmd) => {
+const handleGotoLink = (cmd: string) => {
   if (cmd === 'edit') {
     openEditDialog()
   } else if (cmd === 'attendance') {
@@ -260,15 +270,17 @@ const handleBack = () => {
 
 const breadcrumbItems = computed(() => {
   if (props.mode !== 'page') return []
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const name = (profile.value?.basic as any)?.name
   if (props.fromContext === 'classroom') {
     return [
       { label: '班級學生管理', path: '/classrooms' },
-      { label: profile.value?.basic?.name || '學生檔案' },
+      { label: name || '學生檔案' },
     ]
   }
   return [
     { label: '學生管理', path: '/students' },
-    { label: profile.value?.basic?.name || '學生檔案' },
+    { label: name || '學生檔案' },
   ]
 })
 </script>
@@ -283,7 +295,7 @@ const breadcrumbItems = computed(() => {
           <el-breadcrumb-item
             v-for="(c, idx) in breadcrumbItems"
             :key="idx"
-            :to="c.path ? { path: c.path } : null"
+            :to="c.path ? { path: c.path } : undefined"
           >{{ c.label }}</el-breadcrumb-item>
         </el-breadcrumb>
       </div>
@@ -325,44 +337,44 @@ const breadcrumbItems = computed(() => {
         />
         <AttendanceTab
           v-else-if="tab.name === 'attendance'"
-          :student-id="studentId"
+          :student-id="safeStudentId"
           :active="activeTab === 'attendance'"
           :external-date-range="attendanceDateRange"
         />
         <RecordsTab
           v-else-if="tab.name === 'records'"
-          :student-id="studentId"
-          :classroom-id="profile.basic?.classroom_id"
+          :student-id="safeStudentId"
+          :classroom-id="(profile.basic as Record<string, unknown>)?.classroom_id as number | undefined"
           :active="activeTab === 'records'"
           @jump-tab="handleRecordsJumpTab"
         />
         <FeesTab
           v-else-if="tab.name === 'fees'"
-          :student-id="studentId"
-          :student-name="profile.basic?.name || ''"
+          :student-id="safeStudentId"
+          :student-name="((profile.basic as Record<string, unknown>)?.name as string) || ''"
           :active="activeTab === 'fees'"
         />
         <ActivityTab
           v-else-if="tab.name === 'activity'"
-          :student-id="studentId"
+          :student-id="safeStudentId"
           :active="activeTab === 'activity'"
         />
         <HealthGrowthTab
           v-else-if="tab.name === 'health_growth'"
-          :student-id="studentId"
+          :student-id="safeStudentId"
         />
         <GrowthProfileTab
           v-else-if="tab.name === 'growth_profile'"
-          :student-id="studentId"
+          :student-id="safeStudentId"
           :sync-url="syncUrl"
         />
         <StudentDisabilityDocsPanel
           v-else-if="tab.name === 'disability_docs'"
-          :student-id="studentId"
+          :student-id="safeStudentId"
         />
         <CommunicationTab
           v-else-if="tab.name === 'communication'"
-          :student-id="studentId"
+          :student-id="safeStudentId"
           :active="activeTab === 'communication'"
         />
       </el-tab-pane>
@@ -382,7 +394,7 @@ const breadcrumbItems = computed(() => {
       v-if="profile && studentId"
       v-model="lifecycleDialogVisible"
       :student-id="studentId"
-      :current-status="profile.lifecycle?.status"
+      :current-status="(profile.lifecycle as Record<string, unknown>)?.status as string | undefined"
       @transitioned="handleLifecycleTransitioned"
     />
   </div>

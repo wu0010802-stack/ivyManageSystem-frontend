@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
@@ -16,26 +16,30 @@ import { FEE_TYPES, FEE_TYPE_LABELS, bucketByFeeType } from '@/components/fees/f
 import RefundSuggestModal from '@/components/fees/RefundSuggestModal.vue'
 import AdjustmentEditDialog from '@/components/fees/AdjustmentEditDialog.vue'
 
-const props = defineProps({
-  studentId: { type: Number, required: true },
-  studentName: { type: String, default: '' },
-  active: { type: Boolean, default: true },
+const props = withDefaults(defineProps<{
+  studentId: number
+  studentName?: string
+  active?: boolean
+}>(), {
+  studentName: '',
+  active: true,
 })
 
 const canRead = hasPermission('FEES_READ')
 const canWrite = hasPermission('FEES_WRITE')
 
-const RECORD_STATUS_LABEL = { paid: '已繳', partial: '部分', unpaid: '未繳' }
-const RECORD_STATUS_TYPE = { paid: 'success', partial: 'warning', unpaid: 'info' }
+type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger'
+const RECORD_STATUS_LABEL: Record<string, string> = { paid: '已繳', partial: '部分', unpaid: '未繳' }
+const RECORD_STATUS_TYPE: Record<string, ElTagType> = { paid: 'success', partial: 'warning', unpaid: 'info' }
 
 const ALL_PERIODS = '__all__'
 
 const loading = ref(false)
 const loaded = ref(false)
-const periodOptions = ref([])
+const periodOptions = ref<string[]>([])
 const period = ref(ALL_PERIODS)
-const records = ref([])
-const adjustments = ref([])
+const records = ref<Record<string, unknown>[]>([])
+const adjustments = ref<Record<string, unknown>[]>([])
 
 // ─── 預設期別：本學期（若 periodOptions 有），否則「全部」 ────────────────────
 async function loadPeriods() {
@@ -48,7 +52,7 @@ async function loadPeriods() {
       const current = `${term.school_year}-${term.semester}`
       if (periodOptions.value.includes(current)) period.value = current
     }
-  } catch (e) {
+  } catch (_e) {
     // 期別清單可選用，失敗時保留「全部」
   }
 }
@@ -57,8 +61,8 @@ async function fetchData() {
   if (!props.studentId || !canRead) return
   loading.value = true
   try {
-    const recParams = { student_id: props.studentId, page_size: 500 }
-    const adjParams = { student_id: props.studentId }
+    const recParams: Record<string, unknown> = { student_id: props.studentId, page_size: 500 }
+    const adjParams: Record<string, unknown> = { student_id: props.studentId }
     if (period.value && period.value !== ALL_PERIODS) {
       recParams.period = period.value
       adjParams.period = period.value
@@ -67,8 +71,10 @@ async function fetchData() {
       getFeeRecords(recParams),
       getFeeAdjustments(adjParams).catch(() => ({ items: [] })),
     ])
-    records.value = recRes?.items || []
-    adjustments.value = adjRes?.items || []
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    records.value = (recRes as any)?.items || []
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    adjustments.value = (adjRes as any)?.items || []
     loaded.value = true
   } catch (e) {
     ElMessage.error(apiError(e, '載入學費紀錄失敗'))
@@ -100,8 +106,8 @@ const buckets = computed(() => bucketByFeeType(records.value, adjustments.value)
 const recordRows = computed(() =>
   FEE_TYPES.filter((ft) => ft.source === 'record').map((ft) => {
     const recs = buckets.value.fees[ft.value] || []
-    const due = recs.reduce((s, r) => s + (r.amount_due || 0), 0)
-    const paid = recs.reduce((s, r) => s + (r.amount_paid || 0), 0)
+    const due = recs.reduce((s, r) => s + ((r.amount_due as number) || 0), 0)
+    const paid = recs.reduce((s, r) => s + ((r.amount_paid as number) || 0), 0)
     let status = 'unpaid'
     if (recs.length === 0) status = 'empty'
     else if (paid >= due && due > 0) status = 'paid'
@@ -113,7 +119,8 @@ const recordRows = computed(() =>
 const adjustmentRows = computed(() =>
   FEE_TYPES.filter((ft) => ft.source === 'adjustment').map((ft) => {
     const list = buckets.value.adjustments[ft.value] || []
-    const amount = list.reduce((s, a) => s + (a.amount || 0), 0)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const amount = list.reduce((s: number, a) => s + ((a.amount as number) || 0), 0)
     return { fee_type: ft.value, label: ft.label, adj_type: ft.adj_type, items: list, amount }
   }),
 )
@@ -128,8 +135,9 @@ const totals = computed(() => {
 
 // ─── 繳費 dialog（單筆 record） ───────────────────────────────────────────────
 const payDialogVisible = ref(false)
-const payingRecord = ref(null)
-const payFormRef = ref(null)
+const payingRecord = ref<Record<string, unknown> | null>(null)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const payFormRef = ref<any>(null)
 const saving = ref(false)
 const payForm = ref({ payment_date: '', amount_paid: 0, payment_method: '現金', notes: '' })
 const payRules = {
@@ -137,14 +145,14 @@ const payRules = {
   payment_method: [{ required: true, message: '請選擇繳費方式', trigger: 'change' }],
 }
 
-function openPayDialog(rec) {
+function openPayDialog(rec: Record<string, unknown>) {
   if (!canWrite) return
   payingRecord.value = rec
   payForm.value = {
-    payment_date: rec.payment_date || todayISO(),
-    amount_paid: rec.status === 'partial' ? rec.amount_paid : rec.amount_due,
-    payment_method: rec.payment_method || '現金',
-    notes: rec.notes || '',
+    payment_date: (rec.payment_date as string) || todayISO(),
+    amount_paid: rec.status === 'partial' ? (rec.amount_paid as number) : (rec.amount_due as number),
+    payment_method: (rec.payment_method as string) || '現金',
+    notes: (rec.notes as string) || '',
   }
   payDialogVisible.value = true
 }
@@ -154,7 +162,7 @@ async function submitPay() {
   if (!valid) return
   saving.value = true
   try {
-    await payFeeRecord(payingRecord.value.id, payForm.value)
+    await payFeeRecord(payingRecord.value!.id as number, payForm.value)
     ElMessage.success('繳費登記成功')
     payDialogVisible.value = false
     fetchData()
@@ -167,8 +175,8 @@ async function submitPay() {
 
 // ─── 退費 modal ───────────────────────────────────────────────────────────────
 const refundModalVisible = ref(false)
-const refundTarget = ref(null)
-function openRefundModal(rec) {
+const refundTarget = ref<Record<string, unknown> | null>(null)
+function openRefundModal(rec: Record<string, unknown>) {
   if (!canWrite) return
   refundTarget.value = rec
   refundModalVisible.value = true
@@ -176,13 +184,20 @@ function openRefundModal(rec) {
 
 // ─── 折抵編輯 dialog ──────────────────────────────────────────────────────────
 const adjDialogVisible = ref(false)
-const adjDialogStudent = ref(null)
+const adjDialogStudent = ref<Record<string, unknown> | null>(null)
 const adjDialogType = ref('')
-const adjDialogExisting = ref([])
+const adjDialogExisting = ref<Record<string, unknown>[]>([])
 
 const adjEditablePeriod = computed(() => period.value && period.value !== ALL_PERIODS)
 
-function openAdjustmentDialog(row) {
+// template helpers for typed access
+const payingRecordAmountDue = computed(() => (payingRecord.value?.amount_due as number) ?? 999999)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const refundTargetTyped = computed(() => refundTarget.value as any)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const adjDialogExistingTyped = computed(() => adjDialogExisting.value as any)
+
+function openAdjustmentDialog(row: Record<string, unknown>) {
   if (!canWrite) return
   if (!adjEditablePeriod.value) {
     ElMessage.warning('請先選擇具體學期後再編輯折抵')
@@ -193,8 +208,8 @@ function openAdjustmentDialog(row) {
     id: props.studentId,
     student_name: props.studentName || '學生',
   }
-  adjDialogType.value = row.adj_type
-  adjDialogExisting.value = row.items || []
+  adjDialogType.value = row.adj_type as string
+  adjDialogExisting.value = (row.items as Record<string, unknown>[]) || []
   adjDialogVisible.value = true
 }
 
@@ -295,14 +310,14 @@ defineExpose({
             <template #default="{ row }">
               <div v-if="row.records.length === 0" class="muted">—</div>
               <div v-else class="record-lines">
-                <div v-for="rec in row.records" :key="rec.id" class="record-line">
+                <div v-for="rec in (row.records as Record<string, unknown>[])" :key="rec.id as PropertyKey" class="record-line">
                   <span class="line-period">{{ rec.period || '-' }}</span>
                   <span class="line-name">{{ rec.fee_item_name || row.label }}</span>
                   <span class="line-amount">
-                    {{ (rec.amount_due || 0).toLocaleString() }} / {{ (rec.amount_paid || 0).toLocaleString() }}
+                    {{ ((rec.amount_due as number) || 0).toLocaleString() }} / {{ ((rec.amount_paid as number) || 0).toLocaleString() }}
                   </span>
-                  <el-tag :type="RECORD_STATUS_TYPE[rec.status] || 'info'" size="small">
-                    {{ RECORD_STATUS_LABEL[rec.status] || rec.status }}
+                  <el-tag :type="RECORD_STATUS_TYPE[rec.status as string] || 'info'" size="small">
+                    {{ RECORD_STATUS_LABEL[rec.status as string] || rec.status }}
                   </el-tag>
                   <el-button
                     v-if="canWrite && rec.status !== 'paid'"
@@ -312,7 +327,7 @@ defineExpose({
                     @click="openPayDialog(rec)"
                   >{{ rec.status === 'partial' ? '更新繳費' : '繳費' }}</el-button>
                   <el-button
-                    v-if="canWrite && (rec.amount_paid || 0) > 0"
+                    v-if="canWrite && ((rec.amount_paid as number) || 0) > 0"
                     size="small"
                     type="danger"
                     link
@@ -352,7 +367,7 @@ defineExpose({
             <template #default="{ row }">
               <span v-if="row.items.length === 0" class="muted">—</span>
               <span v-else>
-                {{ row.items.map((a) => a.reason || a.notes || '—').join('； ') }}
+                {{ (row.items as Record<string, unknown>[]).map((a) => a.reason || a.notes || '—').join('； ') }}
               </span>
             </template>
           </el-table-column>
@@ -382,7 +397,7 @@ defineExpose({
       <el-dialog v-model="payDialogVisible" title="登記繳費" width="420px" destroy-on-close>
         <div v-if="payingRecord">
           <p>
-            費用項目：{{ payingRecord.fee_item_name || FEE_TYPE_LABELS[payingRecord.fee_type] || payingRecord.fee_type }}
+            費用項目：{{ payingRecord.fee_item_name || (FEE_TYPE_LABELS as Record<string, string>)[payingRecord.fee_type as string] || payingRecord.fee_type }}
             — 應繳 <strong>{{ (payingRecord.amount_due || 0).toLocaleString() }} 元</strong>
           </p>
           <p v-if="payingRecord.status === 'partial'" class="hint">
@@ -402,7 +417,7 @@ defineExpose({
               <el-input-number
                 v-model="payForm.amount_paid"
                 :min="1"
-                :max="Math.min(payingRecord?.amount_due || 999999, 999999)"
+                :max="Math.min(payingRecordAmountDue, 999999)"
                 :step="1"
                 :precision="0"
                 style="width: 100%"
@@ -430,7 +445,7 @@ defineExpose({
       <RefundSuggestModal
         v-if="refundModalVisible"
         v-model="refundModalVisible"
-        :record="refundTarget"
+        :record="refundTargetTyped"
         @refunded="fetchData"
       />
 
@@ -441,7 +456,7 @@ defineExpose({
         :student="adjDialogStudent"
         :period="period === ALL_PERIODS ? '' : period"
         :adjustment-type="adjDialogType"
-        :existing="adjDialogExisting"
+        :existing="adjDialogExistingTyped"
         @saved="fetchData"
       />
     </template>

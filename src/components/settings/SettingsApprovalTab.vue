@@ -1,23 +1,30 @@
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { getApprovalPolicies, updateApprovalPolicies } from '@/api/approvalSettings'
 import { ElMessage } from 'element-plus'
 import { apiError } from '@/utils/error'
 
-const approvalPolicies = ref([])
-const loadingApproval = ref(false)
+interface ApprovalPolicy {
+  submitter_role: string
+  approver_roles: string
+  approver_roles_arr: string[]
+  is_active: boolean
+}
 
-const ROLE_HIERARCHY = { teacher: 1, supervisor: 2, hr: 3, admin: 4 }
-const ROLE_LABELS_MAP = { teacher: '教師', supervisor: '主管', hr: '人資', admin: '管理員' }
+const approvalPolicies = ref<ApprovalPolicy[]>([])
+const loadingApproval = ref<boolean>(false)
+
+const ROLE_HIERARCHY: Record<string, number> = { teacher: 1, supervisor: 2, hr: 3, admin: 4 }
+const ROLE_LABELS_MAP: Record<string, string> = { teacher: '教師', supervisor: '主管', hr: '人資', admin: '管理員' }
 const ALL_APPROVER_ROLES = ['supervisor', 'hr', 'admin']
 
 const fetchApprovalPolicies = async () => {
   loadingApproval.value = true
   try {
     const res = await getApprovalPolicies()
-    approvalPolicies.value = res.data.map(p => ({
+    approvalPolicies.value = res.data.map((p: { submitter_role: string; approver_roles: string; is_active: boolean }) => ({
       ...p,
-      approver_roles_arr: p.approver_roles.split(',').map(r => r.trim()).filter(Boolean),
+      approver_roles_arr: p.approver_roles.split(',').map((r: string) => r.trim()).filter(Boolean),
     }))
   } catch (error) {
     ElMessage.error('載入審核政策失敗')
@@ -26,11 +33,11 @@ const fetchApprovalPolicies = async () => {
   }
 }
 
-const isApproverRoleChecked = (policy, role) => {
+const isApproverRoleChecked = (policy: ApprovalPolicy, role: string) => {
   return policy.approver_roles_arr.includes(role)
 }
 
-const toggleApproverRole = (policy, role) => {
+const toggleApproverRole = (policy: ApprovalPolicy, role: string) => {
   const idx = policy.approver_roles_arr.indexOf(role)
   if (idx >= 0) {
     if (role === 'admin') {

@@ -50,7 +50,7 @@
   </el-dialog>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { createCommunication, updateCommunication } from '@/api/studentCommunications'
@@ -58,14 +58,22 @@ import { apiError } from '@/utils/error'
 
 const COMMUNICATION_TYPES = ['電話', 'LINE', '面談', 'Email', '家聯簿', '簡訊', '其他']
 
-const props = defineProps({
-  visible: { type: Boolean, default: false },
-  mode: { type: String, default: 'create' },
-  initial: { type: Object, default: null },
-  defaultStudentId: { type: Number, default: null },
+const props = withDefaults(defineProps<{
+  visible?: boolean
+  mode?: string
+  initial?: Record<string, unknown> | null
+  defaultStudentId?: number | null
+}>(), {
+  visible: false,
+  mode: 'create',
+  initial: null,
+  defaultStudentId: null,
 })
 
-const emit = defineEmits(['update:visible', 'submitted'])
+const emit = defineEmits<{
+  'update:visible': [v: boolean]
+  'submitted': []
+}>()
 
 const todayStr = () => {
   const d = new Date()
@@ -84,7 +92,7 @@ const empty = () => ({
 })
 
 const form = reactive(empty())
-const formRef = ref(null)
+const formRef = ref<any>(null)
 const submitting = ref(false)
 
 const formRules = {
@@ -95,12 +103,13 @@ const formRules = {
 
 const hydrate = () => {
   if (props.mode === 'edit' && props.initial) {
+    const init = props.initial
     Object.assign(form, {
-      communication_date: props.initial.communication_date || todayStr(),
-      communication_type: props.initial.communication_type || '電話',
-      topic: props.initial.topic || '',
-      content: props.initial.content || '',
-      follow_up: props.initial.follow_up || '',
+      communication_date: init.communication_date || todayStr(),
+      communication_type: init.communication_type || '電話',
+      topic: init.topic || '',
+      content: init.content || '',
+      follow_up: init.follow_up || '',
     })
   } else {
     Object.assign(form, empty())
@@ -134,7 +143,7 @@ const submit = async () => {
       })
       ElMessage.success('已新增家長溝通紀錄')
     } else {
-      await updateCommunication(props.initial.id, {
+      await updateCommunication(props.initial!.id as number, {
         communication_date: form.communication_date,
         communication_type: form.communication_type,
         topic: form.topic || null,

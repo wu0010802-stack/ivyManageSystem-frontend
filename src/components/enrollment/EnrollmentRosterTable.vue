@@ -198,15 +198,51 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 
-const props = defineProps({
-  roster: {
-    type: Object,
-    required: true,
-  },
-})
+interface RosterStudent {
+  name: string
+  status_tag?: string
+}
+
+interface RosterClass {
+  classroom_id: number
+  class_number: number
+  grade_name: string
+  class_name: string
+  head_teacher_name?: string | null
+  assistant_teacher_name?: string | null
+  art_teacher_name?: string | null
+  students: RosterStudent[]
+  total: number
+  old_count: number
+  new_count: number
+}
+
+interface GradeSummary {
+  grade_name: string
+  class_numbers: number[]
+  total: number
+  old_count: number
+  new_count: number
+}
+
+interface Roster {
+  school_year: number
+  semester: number
+  generated_date: string
+  classes: RosterClass[]
+  grade_summaries: GradeSummary[]
+  grand_total: number
+  old_grand_total: number
+  new_grand_total: number
+  staff_by_role: Record<string, { name: string }[]>
+}
+
+const props = defineProps<{
+  roster: Roster
+}>()
 
 const rosterTitle = computed(() => {
   const rawYear = props.roster.school_year
@@ -222,16 +258,18 @@ const maxStudentCount = computed(() => {
 
 // 各年級最後一班的 class_number，用於加粗右邊框
 const gradeLastClassNumbers = computed(() => {
-  const set = new Set()
+  const set = new Set<number>()
   for (const gs of props.roster.grade_summaries) {
-    if (gs.class_numbers.length) set.add(gs.class_numbers.at(-1))
+    if (gs.class_numbers.length) {
+      set.add(gs.class_numbers[gs.class_numbers.length - 1])
+    }
   }
   return set
 })
 
 // 年級簡稱：取年級名稱首字 + 班在年級內的序號
 const gradeClassIndex = computed(() => {
-  const map = {}
+  const map: Record<string, number> = {}
   for (const cls of props.roster.classes) {
     if (!map[cls.grade_name]) map[cls.grade_name] = 0
     map[cls.grade_name]++
@@ -240,13 +278,13 @@ const gradeClassIndex = computed(() => {
   return map
 })
 
-function shortGrade(gradeName, classNumber) {
+function shortGrade(gradeName: string, classNumber: number) {
   const idx = gradeClassIndex.value[`${gradeName}-${classNumber}`]
   const prefix = gradeName.charAt(0)
   return `${prefix}${idx}`
 }
 
-function studentTagClass(student) {
+function studentTagClass(student: RosterStudent | undefined) {
   if (!student) return ''
   switch (student.status_tag) {
     case '新生': return 'tag-new'

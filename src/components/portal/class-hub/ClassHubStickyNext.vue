@@ -22,17 +22,23 @@
   </div>
 </template>
 
-<script setup>
-defineProps({
-  next: {
-    type: Object,
-    default: null,
-    // Shape: { kind, student_name, detail, due_at, deep_link }
-  },
-})
-defineEmits(['jump'])
+<script setup lang="ts">
+interface NextTask {
+  kind?: string
+  student_name?: string
+  detail?: string
+  due_at?: string | null
+  deep_link?: string
+}
 
-function formatTime(iso) {
+withDefaults(defineProps<{
+  next?: NextTask | null
+}>(), {
+  next: null,
+})
+defineEmits<{ 'jump': [deepLink: string | undefined] }>()
+
+function formatTime(iso: string | null | undefined) {
   if (!iso) return ''
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return ''

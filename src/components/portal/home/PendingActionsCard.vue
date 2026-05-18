@@ -1,10 +1,19 @@
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 
-const props = defineProps({
-  actions: { type: Object, required: true },
-})
+interface PendingActions {
+  unread_messages?: number
+  pending_substitute?: number
+  pending_swap?: number
+  pending_anomaly_confirms?: number
+  unread_announcements?: number
+  [key: string]: unknown
+}
+
+const props = defineProps<{
+  actions: PendingActions
+}>()
 
 const router = useRouter()
 
@@ -46,7 +55,7 @@ const items = computed(() => [
   },
 ])
 
-function go(to) {
+function go(to: string) {
   router.push(to)
 }
 </script>

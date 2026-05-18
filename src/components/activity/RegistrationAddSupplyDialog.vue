@@ -36,30 +36,44 @@
   </el-dialog>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { addRegistrationSupply, getSupplies } from '@/api/activity'
 
-const props = defineProps({
-  modelValue: { type: Boolean, default: false },
-  registrationId: { type: [String, Number], default: null },
-  schoolYear: { type: Number, required: true },
-  semester: { type: Number, required: true },
-})
-const emit = defineEmits(['update:modelValue', 'added'])
+interface Supply {
+  id: number | string
+  name: string
+  price?: number
+  [key: string]: unknown
+}
 
-const supplyId = ref(null)
-const adding = ref(false)
-const loadingSupplies = ref(false)
-const supplies = ref([])
+const props = withDefaults(defineProps<{
+  modelValue?: boolean
+  registrationId?: string | number | null
+  schoolYear: number
+  semester: number
+}>(), {
+  modelValue: false,
+  registrationId: null,
+})
+
+const emit = defineEmits<{
+  'update:modelValue': [value: boolean]
+  'added': []
+}>()
+
+const supplyId = ref<number | string | null>(null)
+const adding = ref<boolean>(false)
+const loadingSupplies = ref<boolean>(false)
+const supplies = ref<Supply[]>([])
 
 async function loadSupplies() {
   if (supplies.value.length > 0) return
   loadingSupplies.value = true
   try {
     const res = await getSupplies({ school_year: props.schoolYear, semester: props.semester })
-    supplies.value = res.data.supplies || []
+    supplies.value = (res.data as { supplies?: Supply[] }).supplies || []
   } catch {
     ElMessage.warning('用品清單載入失敗')
   } finally {
@@ -87,12 +101,13 @@ async function handleAdd() {
   if (!props.registrationId || !supplyId.value || adding.value) return
   adding.value = true
   try {
-    await addRegistrationSupply(props.registrationId, supplyId.value)
+    await addRegistrationSupply(props.registrationId as number, supplyId.value as number)
     ElMessage.success('用品新增成功')
     emit('update:modelValue', false)
     emit('added')
   } catch (e) {
-    ElMessage.error(e?.response?.data?.detail || '新增失敗')
+    const axiosErr = e as { response?: { data?: { detail?: string } } }
+    ElMessage.error(axiosErr?.response?.data?.detail || '新增失敗')
   } finally {
     adding.value = false
   }

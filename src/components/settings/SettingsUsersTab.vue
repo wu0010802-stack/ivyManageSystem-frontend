@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import { getUsers, getPermissions, createUser, updateUser, deleteUser, resetPassword } from '@/api/auth'
@@ -15,17 +15,28 @@ import {
 const employeeStore = useEmployeeStore()
 const { employees } = storeToRefs(employeeStore)
 
-const users = ref([])
-const loadingUsers = ref(false)
-const userDialogVisible = ref(false)
-const userForm = reactive({ employee_id: null, username: '', password: '', role: 'teacher', permissions: -1 })
-const resetPasswordForm = reactive({ user_id: null, username: '', new_password: '' })
-const resetDialogVisible = ref(false)
-const editUserDialogVisible = ref(false)
-const editUserForm = reactive({ id: null, username: '', role: 'teacher', permissions: -1 })
-const credentialDialogVisible = ref(false)
-const createdCredentials = ref({ username: '', password: '' })
-const permissionDefinition = ref({ permissions: {}, groups: [], roles: {} })
+const users = ref<Record<string, unknown>[]>([])
+const loadingUsers = ref<boolean>(false)
+const userDialogVisible = ref<boolean>(false)
+const userForm = reactive<{ employee_id: number | null; username: string; password: string; role: string; permissions: number }>({ employee_id: null, username: '', password: '', role: 'teacher', permissions: -1 })
+const resetPasswordForm = reactive<{ user_id: number | null; username: string; new_password: string }>({ user_id: null, username: '', new_password: '' })
+const resetDialogVisible = ref<boolean>(false)
+const editUserDialogVisible = ref<boolean>(false)
+const editUserForm = reactive<{ id: number | null; username: string; role: string; permissions: number }>({ id: null, username: '', role: 'teacher', permissions: -1 })
+const credentialDialogVisible = ref<boolean>(false)
+const createdCredentials = ref<{ username: string; password: string }>({ username: '', password: '' })
+interface PermGroup {
+  name: string
+  permissions?: string[]
+  split_permissions?: { module: string; read: string; write: string }[]
+}
+
+interface RoleConfig {
+  label: string
+  permissions: number
+}
+
+const permissionDefinition = ref<{ permissions: Record<string, { label: string; value: number }>; groups: PermGroup[]; roles: Record<string, RoleConfig> }>({ permissions: {}, groups: [], roles: {} })
 
 const fetchUsers = async () => {
   loadingUsers.value = true
@@ -49,8 +60,9 @@ const fetchPermissionDefinition = async () => {
 }
 
 const availableEmployees = () => {
+  const empList = employees.value as { id: number; name: string; employee_id: string }[]
   const existingIds = new Set(users.value.map(u => u.employee_id))
-  return employees.value.filter(e => !existingIds.has(e.id))
+  return empList.filter(e => !existingIds.has(e.id))
 }
 
 const handleAddUser = () => {
@@ -69,7 +81,7 @@ const saveUser = async () => {
     return
   }
   try {
-    const payload = {
+    const payload: Record<string, unknown> = {
       employee_id: userForm.employee_id,
       username: userForm.username,
       password: userForm.password,
@@ -88,15 +100,15 @@ const saveUser = async () => {
   }
 }
 
-const copyText = (text) => {
+const copyText = (text: string) => {
   navigator.clipboard.writeText(text).then(() => {
     ElMessage.success('已複製')
   })
 }
 
-const handleResetPassword = (user) => {
-  resetPasswordForm.user_id = user.id
-  resetPasswordForm.username = user.username
+const handleResetPassword = (user: Record<string, unknown>) => {
+  resetPasswordForm.user_id = user.id as number
+  resetPasswordForm.username = user.username as string
   resetPasswordForm.new_password = ''
   resetDialogVisible.value = true
 }
@@ -107,7 +119,7 @@ const submitResetPassword = async () => {
     return
   }
   try {
-    await resetPassword(resetPasswordForm.user_id, resetPasswordForm.new_password)
+    await resetPassword(resetPasswordForm.user_id!, resetPasswordForm.new_password)
     ElMessage.success('密碼重設成功')
     resetDialogVisible.value = false
   } catch (error) {
@@ -115,11 +127,11 @@ const submitResetPassword = async () => {
   }
 }
 
-const handleDeleteUser = (user) => {
+const handleDeleteUser = (user: Record<string, unknown>) => {
   ElMessageBox.confirm(`確定刪除帳號 ${user.username}？`, '警告', { type: 'warning' })
     .then(async () => {
       try {
-        await deleteUser(user.id)
+        await deleteUser(user.id as number)
         ElMessage.success('帳號已刪除')
         fetchUsers()
       } catch (error) {
@@ -130,28 +142,29 @@ const handleDeleteUser = (user) => {
 
 const autoFillUsername = () => {
   if (userForm.employee_id) {
-    const emp = employees.value.find(e => e.id === userForm.employee_id)
+    const empList = employees.value as { id: number; name: string; employee_id: string }[]
+    const emp = empList.find(e => e.id === userForm.employee_id)
     if (emp && !userForm.username) {
       userForm.username = emp.employee_id || emp.name
     }
   }
 }
 
-const handleEditUser = (user) => {
-  editUserForm.id = user.id
-  editUserForm.username = user.username
-  editUserForm.role = user.role
-  editUserForm.permissions = user.permissions ?? -1
+const handleEditUser = (user: Record<string, unknown>) => {
+  editUserForm.id = user.id as number
+  editUserForm.username = user.username as string
+  editUserForm.role = user.role as string
+  editUserForm.permissions = (user.permissions as number) ?? -1
   editUserDialogVisible.value = true
 }
 
 const saveEditUser = async () => {
   try {
-    const payload = { role: editUserForm.role }
+    const payload: Record<string, unknown> = { role: editUserForm.role }
     if (editUserForm.role !== 'teacher' && !isUsingDefaultPermissions(editUserForm)) {
       payload.permissions = editUserForm.permissions
     }
-    await updateUser(editUserForm.id, payload)
+    await updateUser(editUserForm.id!, payload)
     ElMessage.success('使用者已更新')
     editUserDialogVisible.value = false
     fetchUsers()
@@ -160,17 +173,17 @@ const saveEditUser = async () => {
   }
 }
 
-const isPermissionChecked = (form, permName) => {
+const isPermissionChecked = (form: { permissions: number; role: string }, permName: string) => {
   if (form.permissions === -1) return true
-  const permValue = permissionDefinition.value.permissions[permName]?.value || 0
+  const permValue = (permissionDefinition.value.permissions[permName]?.value ?? 0) as number
   return permissionMaskHas(form.permissions, permValue)
 }
 
-const togglePermission = (form, permName) => {
-  const permValue = permissionDefinition.value.permissions[permName]?.value || 0
+const togglePermission = (form: { permissions: number; role: string }, permName: string) => {
+  const permValue = (permissionDefinition.value.permissions[permName]?.value ?? 0) as number
   if (form.permissions === -1) {
     const allPerms = permissionMaskCombine(
-      Object.values(permissionDefinition.value.permissions).map((p) => p.value),
+      Object.values(permissionDefinition.value.permissions).map((p) => p.value as number),
     )
     form.permissions = permissionMaskRemove(allPerms, permValue)
   } else if (permissionMaskHas(form.permissions, permValue)) {
@@ -180,20 +193,20 @@ const togglePermission = (form, permName) => {
   }
 }
 
-const selectAllPermissions = (form) => {
+const selectAllPermissions = (form: { permissions: number }) => {
   form.permissions = -1
 }
 
-const clearAllPermissions = (form) => {
+const clearAllPermissions = (form: { permissions: number }) => {
   form.permissions = 0
 }
 
-const getPermissionLabel = (permName) => {
+const getPermissionLabel = (permName: string) => {
   return permissionDefinition.value.permissions[permName]?.label || permName
 }
 
-const getRoleTagType = (role) => {
-  const types = {
+const getRoleTagType = (role: string): 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined => {
+  const types: Record<string, 'primary' | 'success' | 'warning' | 'info' | 'danger'> = {
     admin: 'danger',
     hr: 'warning',
     supervisor: 'success',
@@ -202,24 +215,24 @@ const getRoleTagType = (role) => {
   return types[role] ?? 'info'
 }
 
-const getRoleLabel = (role) => {
+const getRoleLabel = (role: string) => {
   return permissionDefinition.value.roles[role]?.label || role
 }
 
-const onRoleChange = (form) => {
+const onRoleChange = (form: { role: string; permissions: number }) => {
   const roleConfig = permissionDefinition.value.roles[form.role]
   if (roleConfig) {
     form.permissions = roleConfig.permissions
   }
 }
 
-const isUsingDefaultPermissions = (form) => {
+const isUsingDefaultPermissions = (form: { role: string; permissions: number }) => {
   const roleConfig = permissionDefinition.value.roles[form.role]
   return roleConfig && form.permissions === roleConfig.permissions
 }
 
-const isUsingRoleDefault = (row) => {
-  const roleConfig = permissionDefinition.value.roles[row.role]
+const isUsingRoleDefault = (row: Record<string, unknown>) => {
+  const roleConfig = permissionDefinition.value.roles[row.role as string]
   return roleConfig && row.permissions === roleConfig.permissions
 }
 

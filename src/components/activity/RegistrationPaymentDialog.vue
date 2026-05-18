@@ -64,7 +64,7 @@
   </el-dialog>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { addRegistrationPayment } from '@/api/activity'
@@ -72,21 +72,38 @@ import { computeOwed } from '@/constants/pos'
 import { FIELD_RULES, PAYMENT_METHODS } from '@/constants/activity'
 import { todayISO } from '@/utils/format'
 
-const props = defineProps({
-  modelValue: { type: Boolean, default: false },
-  type: { type: String, default: 'payment' }, // 'payment' | 'refund'
-  registrationId: { type: [String, Number], default: null },
-  studentName: { type: String, default: '' },
-  totalAmount: { type: Number, default: 0 },
-  paidAmount: { type: Number, default: 0 },
+const props = withDefaults(defineProps<{
+  modelValue?: boolean
+  type?: string
+  registrationId?: string | number | null
+  studentName?: string
+  totalAmount?: number
+  paidAmount?: number
+}>(), {
+  modelValue: false,
+  type: 'payment',
+  registrationId: null,
+  studentName: '',
+  totalAmount: 0,
+  paidAmount: 0,
 })
-const emit = defineEmits(['update:modelValue', 'submitted'])
 
-const saving = ref(false)
-const form = reactive({
+const emit = defineEmits<{
+  'update:modelValue': [value: boolean]
+  'submitted': []
+}>()
+
+const saving = ref<boolean>(false)
+const form = reactive<{
+  amount: number
+  payment_date: string
+  payment_method: string
+  notes: string
+  idempotency_key: string
+}>({
   amount: 0,
   payment_date: '',
-  payment_method: PAYMENT_METHODS[0],
+  payment_method: (PAYMENT_METHODS as string[])[0],
   notes: '',
   idempotency_key: '',
 })
@@ -105,7 +122,7 @@ watch(
       ? computeOwed(props.totalAmount, props.paidAmount)
       : props.paidAmount
     form.payment_date = todayISO()
-    form.payment_method = PAYMENT_METHODS[0]
+    form.payment_method = (PAYMENT_METHODS as string[])[0]
     form.notes = ''
     form.idempotency_key = genIdempotencyKey()
   }
@@ -141,7 +158,7 @@ async function handleSubmit() {
   }
   saving.value = true
   try {
-    await addRegistrationPayment(props.registrationId, {
+    await addRegistrationPayment(props.registrationId as number, {
       type: props.type,
       amount,
       payment_date: form.payment_date,
@@ -153,7 +170,8 @@ async function handleSubmit() {
     emit('update:modelValue', false)
     emit('submitted')
   } catch (e) {
-    ElMessage.error(e?.response?.data?.detail || '新增失敗')
+    const axiosErr = e as { response?: { data?: { detail?: string } } }
+    ElMessage.error(axiosErr?.response?.data?.detail || '新增失敗')
   } finally {
     saving.value = false
   }

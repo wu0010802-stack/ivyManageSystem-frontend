@@ -7,7 +7,7 @@
       <el-radio-group
         :model-value="checkoutType"
         size="small"
-        @update:model-value="$emit('update:checkoutType', $event)"
+        @update:model-value="onCheckoutTypeChange"
       >
         <el-radio-button value="payment">繳費</el-radio-button>
         <el-radio-button value="refund">退費</el-radio-button>
@@ -15,7 +15,7 @@
     </div>
 
     <!-- 已選取報名摘要 -->
-    <div v-if="!selectedItem" class="pos-payment__empty">
+    <div v-if="!selectedItemTyped" class="pos-payment__empty">
       <el-empty description="請從左側選擇一筆報名" :image-size="80" />
     </div>
 
@@ -27,11 +27,11 @@
       <div class="pos-payment__selected-head">
         <div>
           <div class="pos-payment__selected-name">
-            {{ selectedItem.student_name }}
-            <span class="pos-payment__selected-class">{{ selectedItem.class_name || '—' }}</span>
+            {{ selectedItemTyped.student_name }}
+            <span class="pos-payment__selected-class">{{ selectedItemTyped.class_name || '—' }}</span>
           </div>
           <div class="pos-payment__selected-meta">
-            應繳 {{ formatTWD(selectedItem.total_amount) }} · 已繳 {{ formatTWD(selectedItem.paid_amount) }}
+            應繳 {{ formatTWD(selectedItemTyped.total_amount) }} · 已繳 {{ formatTWD(selectedItemTyped.paid_amount) }}
           </div>
         </div>
         <el-button size="small" link :icon="Close" @click="$emit('clear-selection')">
@@ -40,11 +40,11 @@
       </div>
 
       <div
-        v-if="(selectedItem.courses && selectedItem.courses.length) || (selectedItem.supplies && selectedItem.supplies.length)"
+        v-if="(selectedItemTyped.courses && selectedItemTyped.courses.length) || (selectedItemTyped.supplies && selectedItemTyped.supplies.length)"
         class="pos-payment__selected-lines"
       >
         <div
-          v-for="(c, i) in selectedItem.courses"
+          v-for="(c, i) in selectedItemTyped.courses"
           :key="`c-${i}`"
           class="pos-payment__selected-line"
         >
@@ -53,7 +53,7 @@
           <span v-if="c.price" class="pos-payment__selected-line-price">{{ formatTWD(c.price) }}</span>
         </div>
         <div
-          v-for="(s, i) in selectedItem.supplies"
+          v-for="(s, i) in selectedItemTyped.supplies"
           :key="`s-${i}`"
           class="pos-payment__selected-line"
         >
@@ -68,16 +68,16 @@
           {{ isRefundMode ? '本次退費' : '本次收取' }}
         </span>
         <el-input-number
-          :model-value="selectedItem.amount_applied"
+          :model-value="selectedItemTyped.amount_applied"
           :min="1"
-          :max="isRefundMode ? (selectedItem.paid_amount || 1) : 999999"
+          :max="isRefundMode ? (selectedItemTyped.paid_amount || 1) : 999999"
           :step="1"
           :precision="0"
           :controls="false"
           size="small"
           class="pos-payment__applied-input"
           :class="{ 'pos-payment__applied-input--refund': isRefundMode }"
-          @update:model-value="(v) => $emit('update:appliedAmount', v)"
+          @update:model-value="(v) => $emit('update:appliedAmount', v ?? null)"
         />
       </div>
     </div>
@@ -118,7 +118,7 @@
     </el-alert>
 
     <div class="pos-payment__actions">
-      <el-button size="large" :disabled="!selectedItem" @click="$emit('clear')">
+      <el-button size="large" :disabled="!selectedItemTyped" @click="$emit('clear')">
         清空
       </el-button>
       <el-button
@@ -144,30 +144,65 @@
   </el-card>
 </template>
 
-<script setup>
+<script setup lang="ts">
+import { computed } from 'vue'
 import { Close } from '@element-plus/icons-vue'
 
 import { formatTWD } from '@/constants/pos'
 
-defineProps({
-  itemTotal: { type: Number, required: true },
-  selectedItem: { type: Object, default: null },
-  notes: { type: String, default: '' },
-  canSubmit: { type: Boolean, required: true },
-  refundApprovalBlocked: { type: Boolean, default: false },
-  submitting: { type: Boolean, required: true },
-  checkoutType: { type: String, default: 'payment' },
-  isRefundMode: { type: Boolean, default: false },
+interface SelectedCourse {
+  name?: string
+  price?: number | string
+  [key: string]: unknown
+}
+
+interface SelectedItem {
+  id?: unknown
+  student_name: string
+  class_name?: string
+  total_amount: number
+  paid_amount: number
+  owed?: number
+  amount_applied: number
+  courses?: SelectedCourse[]
+  supplies?: SelectedCourse[]
+  [key: string]: unknown
+}
+
+const props = withDefaults(defineProps<{
+  itemTotal: number
+  selectedItem?: Record<string, unknown> | null
+  notes?: string
+  canSubmit: boolean
+  refundApprovalBlocked?: boolean
+  submitting: boolean
+  checkoutType?: string
+  isRefundMode?: boolean
+}>(), {
+  selectedItem: null,
+  notes: '',
+  refundApprovalBlocked: false,
+  checkoutType: 'payment',
+  isRefundMode: false,
 })
 
-defineEmits([
-  'update:notes',
-  'update:checkoutType',
-  'update:appliedAmount',
-  'clear-selection',
-  'clear',
-  'submit',
-])
+// 將 Record<string, unknown> 轉型為可在模板直接存取的型別
+const selectedItemTyped = computed((): SelectedItem | null =>
+  props.selectedItem as SelectedItem | null
+)
+
+const emit = defineEmits<{
+  'update:notes': [value: string]
+  'update:checkoutType': [value: string | number | boolean]
+  'update:appliedAmount': [value: number | null]
+  'clear-selection': []
+  'clear': []
+  'submit': [payload?: { print?: boolean }]
+}>()
+
+function onCheckoutTypeChange(v: string | number | boolean | undefined) {
+  if (v !== undefined) emit('update:checkoutType', v)
+}
 </script>
 
 <style scoped>

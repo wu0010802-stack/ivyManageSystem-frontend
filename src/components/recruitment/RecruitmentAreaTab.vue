@@ -10,7 +10,7 @@
       <div class="area-header-meta">
         <span v-if="syncingMarket" class="area-sync-time">市場情報同步中…</span>
         <span v-else-if="marketSnapshot.synced_at" class="area-sync-time">
-          情報更新：{{ fmtSyncTime(marketSnapshot.synced_at) }}
+          情報更新：{{ fmtSyncTime(marketSnapshot.synced_at as string) }}
         </span>
       </div>
     </div>
@@ -64,7 +64,7 @@
             :key="row.district"
             class="district-card"
             :class="{ 'district-card--active': row.district === selectedDistrict }"
-            @click="emit('update:selectedDistrict', row.district === selectedDistrict ? '' : row.district)"
+            @click="emit('update:selectedDistrict', row.district === selectedDistrict ? '' : (row.district || ''))"
           >
             <!-- 行 1：區名 + 來源量 -->
             <div class="dc-row-top">
@@ -75,17 +75,17 @@
                   v-if="row.avg_travel_minutes != null"
                   class="dc-travel-badge"
                   :class="travelClass(row.avg_travel_minutes)"
-                >{{ row.avg_travel_minutes.toFixed(0) }} 分</span>
+                >{{ (row.avg_travel_minutes ?? 0).toFixed(0) }} 分</span>
               </div>
             </div>
 
             <!-- 行 2：預繳率進度條 -->
-            <div v-if="row.lead_count_90d > 0" class="dc-rate-row">
+            <div v-if="(row.lead_count_90d ?? 0) > 0" class="dc-rate-row">
               <div class="dc-rate-bar-bg">
                 <div
                   class="dc-rate-bar-fill"
                   :class="rateClass(row.deposit_rate_90d)"
-                  :style="{ width: `${Math.min(row.deposit_rate_90d, 100)}%` }"
+                  :style="{ width: `${Math.min(row.deposit_rate_90d ?? 0, 100)}%` }"
                 />
               </div>
               <span class="dc-rate-label">{{ fmtRate(row.deposit_rate_90d) }}</span>
@@ -132,7 +132,7 @@
                 </div>
                 <div v-if="row.population_density" class="dc-detail-item">
                   <span class="dc-detail-label">人口密度</span>
-                  <span class="dc-detail-value">{{ row.population_density.toFixed(0) }}</span>
+                  <span class="dc-detail-value">{{ (row.population_density ?? 0).toFixed(0) }}</span>
                 </div>
               </div>
               <!-- 市場機會判讀 -->
@@ -156,20 +156,20 @@
       <!-- 右側地圖區 -->
       <div class="area-map">
         <RecruitmentAddressHeatmap
-          :hotspots="hotspotsSummary.hotspots"
+          :hotspots="(hs.hotspots as any[]) || []"
           :campus="campus"
           :travel-bands="travelBands"
           :selected-district="selectedDistrict"
-          :records-with-address="hotspotsSummary.records_with_address"
-          :total-hotspots="hotspotsSummary.total_hotspots"
-          :geocoded-hotspots="hotspotsSummary.geocoded_hotspots"
-          :pending-hotspots="hotspotsSummary.pending_hotspots"
-          :stale-hotspots="hotspotsSummary.stale_hotspots"
-          :failed-hotspots="hotspotsSummary.failed_hotspots"
-          :provider-available="hotspotsSummary.provider_available"
-          :provider-name="hotspotsSummary.provider_name"
-          :school-lat="campus.campus_lat"
-          :school-lng="campus.campus_lng"
+          :records-with-address="(hs.records_with_address as number) || 0"
+          :total-hotspots="hs.total_hotspots as number"
+          :geocoded-hotspots="hs.geocoded_hotspots as number"
+          :pending-hotspots="hs.pending_hotspots as number"
+          :stale-hotspots="hs.stale_hotspots as number"
+          :failed-hotspots="hs.failed_hotspots as number"
+          :provider-available="hs.provider_available as boolean"
+          :provider-name="hs.provider_name as string | null"
+          :school-lat="(campus.campus_lat as number) || 0"
+          :school-lng="(campus.campus_lng as number) || 0"
           :can-write="canWrite"
           :syncing-mode="syncingMode"
           :nearby-schools="nearbySchools"
@@ -185,35 +185,62 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 import RecruitmentAddressHeatmap from './RecruitmentAddressHeatmap.vue'
 import IvyCampusCompetition from './IvyCampusCompetition.vue'
 
-const props = defineProps({
-  campus: { type: Object, required: true },
-  marketSnapshot: { type: Object, required: true },
-  hotspotsSummary: { type: Object, required: true },
-  travelBands: { type: Array, default: () => [10, 15, 20] },
-  selectedDistrict: { type: String, default: '' },
-  canWrite: { type: Boolean, default: false },
-  syncingMarket: { type: Boolean, default: false },
-  syncingMode: { type: String, default: '' },
-  nearbySchools: { type: Array, default: () => [] },
-  nearbySchoolsLoading: { type: Boolean, default: false },
-  nearbySchoolsAvailable: { type: Boolean, default: false },
-  nearbySchoolsMessage: { type: String, default: '' },
-  fmtPct: { type: Function, required: true },
-  loading: { type: Boolean, default: false },
+interface DistrictRow {
+  district?: string
+  lead_count_90d?: number
+  lead_count_30d?: number
+  competitor_count?: number
+  competitor_capacity?: number
+  population_0_6?: number
+  deposit_rate_90d?: number
+  avg_travel_minutes?: number | null
+  public_count?: number
+  private_count?: number
+  penalty_count?: number
+  population_density?: number
+  [key: string]: unknown
+}
+
+const props = withDefaults(defineProps<{
+  campus: Record<string, unknown>
+  marketSnapshot: Record<string, unknown>
+  hotspotsSummary: Record<string, unknown>
+  travelBands?: number[]
+  selectedDistrict?: string
+  canWrite?: boolean
+  syncingMarket?: boolean
+  syncingMode?: string
+  nearbySchools?: Record<string, unknown>[]
+  nearbySchoolsLoading?: boolean
+  nearbySchoolsAvailable?: boolean
+  nearbySchoolsMessage?: string
+  fmtPct: (...args: unknown[]) => unknown
+  loading?: boolean
+}>(), {
+  travelBands: () => [10, 15, 20],
+  selectedDistrict: '',
+  canWrite: false,
+  syncingMarket: false,
+  syncingMode: '',
+  nearbySchools: () => [],
+  nearbySchoolsLoading: false,
+  nearbySchoolsAvailable: false,
+  nearbySchoolsMessage: '',
+  loading: false,
 })
 
-const emit = defineEmits([
-  'sync',
-  'set-as-campus',
-  'update:selectedDistrict',
-])
+const emit = defineEmits<{
+  'sync': [mode?: string]
+  'set-as-campus': [data: Record<string, unknown>]
+  'update:selectedDistrict': [value: string]
+}>()
 
-const districts = computed(() => props.marketSnapshot.districts || [])
+const districts = computed((): DistrictRow[] => (props.marketSnapshot.districts as DistrictRow[]) || [])
 
 const activeDistrictCount = computed(() =>
   districts.value.filter(r => r.district !== '未填寫' && (r.lead_count_90d || 0) > 0).length
@@ -227,40 +254,42 @@ const totalCapacity = computed(() =>
   districts.value.reduce((sum, r) => sum + (r.competitor_capacity || 0), 0)
 )
 
-const saturationRate = (row) => {
+const saturationRate = (row: DistrictRow) => {
   if (!row.population_0_6 || !row.competitor_capacity) return null
   return Math.round((row.competitor_capacity / row.population_0_6) * 100)
 }
 
-const saturationClass = (rate) => {
-  if (rate >= 80) return 'dc-stat--danger'
-  if (rate >= 50) return 'dc-stat--warn'
+const saturationClass = (rate: number | null) => {
+  if (rate != null && rate >= 80) return 'dc-stat--danger'
+  if (rate != null && rate >= 50) return 'dc-stat--warn'
   return 'dc-stat--ok'
 }
 
-const rateClass = (rate) => {
-  if (rate >= 50) return 'dc-rate-bar-fill--green'
-  if (rate >= 25) return 'dc-rate-bar-fill--yellow'
+const rateClass = (rate: number | null | undefined) => {
+  const n = Number(rate || 0)
+  if (n >= 50) return 'dc-rate-bar-fill--green'
+  if (n >= 25) return 'dc-rate-bar-fill--yellow'
   return 'dc-rate-bar-fill--red'
 }
 
-const travelClass = (minutes) => {
-  if (minutes <= 10) return 'dc-travel-badge--green'
-  if (minutes <= 20) return 'dc-travel-badge--yellow'
+const travelClass = (minutes: number | null | undefined) => {
+  const m = Number(minutes || 0)
+  if (m <= 10) return 'dc-travel-badge--green'
+  if (m <= 20) return 'dc-travel-badge--yellow'
   return 'dc-travel-badge--orange'
 }
 
-const fmtRate = (rate) => {
+const fmtRate = (rate: number | null | undefined) => {
   if (rate == null || rate === 0) return '0%'
   return Number(rate).toFixed(1) + '%'
 }
 
-const fmtSyncTime = (iso) => {
+const fmtSyncTime = (iso: string) => {
   const d = new Date(iso)
   return d.toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
-const opportunityIcon = (row) => {
+const opportunityIcon = (row: DistrictRow) => {
   const sat = saturationRate(row)
   const rate = row.deposit_rate_90d || 0
   const leads = row.lead_count_90d || 0
@@ -270,7 +299,7 @@ const opportunityIcon = (row) => {
   return '-'
 }
 
-const opportunityText = (row) => {
+const opportunityText = (row: DistrictRow) => {
   const sat = saturationRate(row)
   const rate = row.deposit_rate_90d || 0
   const leads = row.lead_count_90d || 0
@@ -293,6 +322,28 @@ const opportunityText = (row) => {
     return `一般區域：90 天 ${leads} 人次、預繳率 ${fmtRate(rate)}`
   }
   return '暫無足夠資料做判讀'
+}
+
+// Typed accessors for hotspotsSummary to avoid unknown prop errors in template
+interface HotspotsSummaryTyped {
+  hotspots?: unknown[]
+  records_with_address?: number
+  total_hotspots?: number
+  geocoded_hotspots?: number
+  pending_hotspots?: number
+  stale_hotspots?: number
+  failed_hotspots?: number
+  provider_available?: boolean
+  provider_name?: string | null
+}
+const hs = computed((): HotspotsSummaryTyped => props.hotspotsSummary as HotspotsSummaryTyped)
+
+function onSelectDistrict(district: string | undefined) {
+  emit('update:selectedDistrict', district === props.selectedDistrict ? '' : (district || ''))
+}
+
+function onSyncEvent(mode?: string) {
+  emit('sync')
 }
 </script>
 

@@ -65,16 +65,16 @@
         <div class="funnel-mom-grid">
           <div class="mom-item">
             <span class="mom-item-label">參觀→預繳率</span>
-            <span class="mom-item-value" :class="deltaClass(monthOverMonth?.visit_to_deposit_rate?.delta)">
-              {{ deltaArrow(monthOverMonth?.visit_to_deposit_rate?.delta) }}
-              {{ formatDelta(monthOverMonth?.visit_to_deposit_rate?.delta) }}
+            <span class="mom-item-value" :class="deltaClass(typedMoM.visit_to_deposit_rate?.delta)">
+              {{ deltaArrow(typedMoM.visit_to_deposit_rate?.delta) }}
+              {{ formatDelta(typedMoM.visit_to_deposit_rate?.delta) }}
             </span>
           </div>
           <div class="mom-item">
             <span class="mom-item-label">參觀→註冊率</span>
-            <span class="mom-item-value" :class="deltaClass(monthOverMonth?.visit_to_enrolled_rate?.delta)">
-              {{ deltaArrow(monthOverMonth?.visit_to_enrolled_rate?.delta) }}
-              {{ formatDelta(monthOverMonth?.visit_to_enrolled_rate?.delta) }}
+            <span class="mom-item-value" :class="deltaClass(typedMoM.visit_to_enrolled_rate?.delta)">
+              {{ deltaArrow(typedMoM.visit_to_enrolled_rate?.delta) }}
+              {{ formatDelta(typedMoM.visit_to_enrolled_rate?.delta) }}
             </span>
           </div>
           <div class="mom-item">
@@ -83,7 +83,7 @@
           </div>
           <div class="mom-item">
             <span class="mom-item-label">對比月份</span>
-            <span class="mom-item-period">{{ monthOverMonth?.current_month || '—' }} / {{ monthOverMonth?.previous_month || '—' }}</span>
+            <span class="mom-item-period">{{ typedMoM.current_month || '—' }} / {{ typedMoM.previous_month || '—' }}</span>
           </div>
         </div>
       </div>
@@ -133,7 +133,7 @@
 
     <el-card style="margin-top:16px">
       <template #header>年度統計</template>
-      <el-table :data="stats.by_year" border stripe size="small">
+      <el-table :data="typedStats.by_year || []" border stripe size="small">
         <el-table-column label="年份" width="90">
           <template #default="{ row }">{{ row.year }}年</template>
         </el-table-column>
@@ -156,45 +156,63 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
+import { computed } from 'vue'
 import RecruitmentDecisionSummary from './RecruitmentDecisionSummary.vue'
 import RecruitmentAlertPanel from './RecruitmentAlertPanel.vue'
 import RecruitmentActionQueue from './RecruitmentActionQueue.vue'
 
-defineProps({
-  stats: { type: Object, required: true },
-  referenceMonth: { type: String, default: null },
-  decisionSummary: { type: Object, required: true },
-  funnelSnapshot: { type: Object, required: true },
-  monthOverMonth: { type: Object, required: true },
-  alerts: { type: Array, default: () => [] },
-  topActionQueue: { type: Array, default: () => [] },
-  showCharts: { type: Boolean, required: true },
-  monthlyTableData: { type: Array, required: true },
-  monthlyBarData: { type: Object, default: null },
-  monthlyRateData: { type: Object, default: null },
-  barOptions: { type: Object, required: true },
-  monthlyBarOptions: { type: Object, required: true },
-  lineOptions: { type: Object, required: true },
-  barComponent: { type: [Object, Function], required: true },
-  lineComponent: { type: [Object, Function], required: true },
-  fmtRate: { type: Function, required: true },
+const props = withDefaults(defineProps<{
+  stats: Record<string, unknown>
+  referenceMonth?: string | null
+  decisionSummary: Record<string, unknown>
+  funnelSnapshot: Record<string, unknown>
+  monthOverMonth: Record<string, unknown>
+  alerts?: Record<string, unknown>[]
+  topActionQueue?: Record<string, unknown>[]
+  showCharts: boolean
+  monthlyTableData: Record<string, unknown>[]
+  monthlyBarData?: Record<string, unknown> | null
+  monthlyRateData?: Record<string, unknown> | null
+  barOptions: Record<string, unknown>
+  monthlyBarOptions: Record<string, unknown>
+  lineOptions: Record<string, unknown>
+  barComponent: Record<string, unknown> | ((...args: unknown[]) => unknown)
+  lineComponent: Record<string, unknown> | ((...args: unknown[]) => unknown)
+  fmtRate: (...args: unknown[]) => unknown
+}>(), {
+  referenceMonth: null,
+  alerts: () => [],
+  topActionQueue: () => [],
+  monthlyBarData: null,
+  monthlyRateData: null,
 })
 
-defineEmits(['navigate'])
+defineEmits<{ 'navigate': [tab: unknown] }>()
 
-const formatDelta = (value) => {
+interface RateWithDelta { delta?: number }
+interface MonthOverMonthTyped {
+  visit_to_deposit_rate?: RateWithDelta
+  visit_to_enrolled_rate?: RateWithDelta
+  current_month?: string
+  previous_month?: string
+}
+
+const typedMoM = computed((): MonthOverMonthTyped => (props.monthOverMonth as MonthOverMonthTyped) ?? {})
+const typedStats = computed((): { by_year?: unknown[] } => (props.stats as { by_year?: unknown[] }) ?? {})
+
+const formatDelta = (value: unknown) => {
   const num = Number(value || 0)
   const sign = num > 0 ? '+' : ''
   return `${sign}${num.toFixed(1)}pt`
 }
 
-const deltaClass = (value) => {
+const deltaClass = (value: unknown) => {
   const n = Number(value || 0)
   return n > 0 ? 'mom-item-value--up' : n < 0 ? 'mom-item-value--down' : 'mom-item-value--neutral'
 }
 
-const deltaArrow = (value) => {
+const deltaArrow = (value: unknown) => {
   const n = Number(value || 0)
   return n > 0 ? '▲' : n < 0 ? '▼' : ''
 }

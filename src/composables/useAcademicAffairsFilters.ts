@@ -1,4 +1,5 @@
 import { computed, reactive, readonly } from 'vue'
+import type { InjectionKey } from 'vue'
 
 const startOfMonthISO = () => {
   const d = new Date()
@@ -59,4 +60,6 @@ export function useAcademicAffairsFilters(initial: { classroomId?: unknown; date
   }
 }
 
-export const ACADEMIC_AFFAIRS_FILTERS_KEY = Symbol('academic-affairs-filters')
+export type AcademicAffairsFiltersContext = ReturnType<typeof useAcademicAffairsFilters>
+
+export const ACADEMIC_AFFAIRS_FILTERS_KEY: InjectionKey<AcademicAffairsFiltersContext> = Symbol('academic-affairs-filters')

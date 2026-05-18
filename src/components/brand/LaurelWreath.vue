@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /**
  * IvyKids 月桂葉花環 — 對齊官網 logo 兩側對稱月桂葉。
  *
@@ -11,14 +11,14 @@ import { computed } from 'vue'
 
 defineOptions({ name: 'LaurelWreath' })
 
-const props = defineProps({
-  side: {
-    type: String,
-    default: 'full',
-    validator: (v) => ['left', 'right', 'full'].includes(v),
-  },
-  opacity: { type: Number, default: 0.18 },
-  size: { type: Number, default: 80 },
+const props = withDefaults(defineProps<{
+  side?: 'left' | 'right' | 'full'
+  opacity?: number
+  size?: number
+}>(), {
+  side: 'full',
+  opacity: 0.18,
+  size: 80,
 })
 
 const showLeft = computed(() => props.side === 'left' || props.side === 'full')

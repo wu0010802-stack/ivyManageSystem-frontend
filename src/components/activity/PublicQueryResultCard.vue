@@ -7,7 +7,7 @@
       </div>
       <div class="payment-info">
         <el-tag :type="paymentTagType" size="small">{{ paymentLabel }}</el-tag>
-        <span v-if="registration.total_amount > 0" class="payment-progress-text">
+        <span v-if="(registration.total_amount ?? 0) > 0" class="payment-progress-text">
           NT${{ registration.paid_amount?.toLocaleString() }} /
           NT${{ registration.total_amount?.toLocaleString() }}
         </span>
@@ -41,21 +41,46 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 import { PAYMENT_STATUS_TAG_TYPE, PAYMENT_STATUS_LABEL } from '@/constants/activity'
 
-const props = defineProps({
-  registration: { type: Object, required: true },
-  registrationOpen: { type: Boolean, default: false },
-})
-defineEmits(['edit', 'inquiry'])
+interface CourseItem {
+  name: string
+  status: string
+  waitlist_position?: number
+}
 
-const paymentTagType = computed(() =>
-  PAYMENT_STATUS_TAG_TYPE[props.registration.payment_status] || 'info'
-)
+interface Registration {
+  name: string
+  class_name?: string
+  payment_status?: string
+  total_amount?: number
+  paid_amount?: number
+  courses: CourseItem[]
+  supplies?: string[]
+  remark?: string
+  [key: string]: unknown
+}
+
+const props = withDefaults(defineProps<{
+  registration: Registration
+  registrationOpen?: boolean
+}>(), {
+  registrationOpen: false,
+})
+
+defineEmits<{
+  edit: []
+  inquiry: []
+}>()
+
+const paymentTagType = computed((): 'primary' | 'success' | 'warning' | 'info' | 'danger' => {
+  const t = (PAYMENT_STATUS_TAG_TYPE as Record<string, string>)[props.registration.payment_status ?? '']
+  return (t as 'primary' | 'success' | 'warning' | 'info' | 'danger') || 'info'
+})
 const paymentLabel = computed(() =>
-  PAYMENT_STATUS_LABEL[props.registration.payment_status] || '未繳費'
+  (PAYMENT_STATUS_LABEL as Record<string, string>)[props.registration.payment_status ?? ''] || '未繳費'
 )
 </script>
 

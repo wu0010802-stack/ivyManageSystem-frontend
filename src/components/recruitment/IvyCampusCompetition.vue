@@ -27,7 +27,7 @@
             <div class="ring-total">
               <span class="ring-total-val">{{ ring.total }}</span>
               <span class="ring-total-unit">間</span>
-              <span class="ring-capacity">容量 {{ ring.total_capacity.toLocaleString() }}</span>
+              <span class="ring-capacity">容量 {{ (ring.total_capacity ?? 0).toLocaleString() }}</span>
             </div>
 
             <div class="type-list">
@@ -53,14 +53,24 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { getCampusCompetition } from '@/api/recruitment'
 
-const loading = ref(true)
-const campuses = ref([])
+interface SchoolType { type?: string; count?: number; avg_fee?: number | null; penalty_count?: number }
+interface Ring { total?: number; total_capacity?: number; types?: SchoolType[] }
+interface Campus {
+  school_name?: string
+  district?: string
+  approved_capacity?: number | null
+  monthly_fee?: number | null
+  rings?: Record<string, Ring>
+}
 
-const TYPE_COLORS = {
+const loading = ref<boolean>(true)
+const campuses = ref<Campus[]>([])
+
+const TYPE_COLORS: Record<string, string> = {
   '常春藤': '#0f7b52',
   '公立': '#eab308',
   '非營利': '#7c3aed',
@@ -68,15 +78,15 @@ const TYPE_COLORS = {
   '私立': '#2563eb',
 }
 
-const typeColor = (type) => TYPE_COLORS[type] || '#64748b'
+const typeColor = (type: unknown) => TYPE_COLORS[String(type)] || '#64748b'
 
-const shortName = (name) =>
-  name.replace('高雄市私立', '').replace('幼兒園', '')
+const shortName = (name: unknown) =>
+  String(name || '').replace('高雄市私立', '').replace('幼兒園', '')
 
 onMounted(async () => {
   try {
     const res = await getCampusCompetition()
-    campuses.value = res.data?.campuses || []
+    campuses.value = ((res.data as { campuses?: Campus[] })?.campuses || [])
   } catch {
     // 靜默
   } finally {

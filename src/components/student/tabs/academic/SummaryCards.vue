@@ -1,17 +1,22 @@
-<script setup>
+<script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getAcademicSummary } from '@/api/studentRecords'
 import { apiError } from '@/utils/error'
 
-const props = defineProps({
-  studentId: { type: Number, required: true },
-  active: { type: Boolean, default: true },
+const props = withDefaults(defineProps<{
+  studentId: number
+  active?: boolean
+}>(), {
+  active: true,
 })
 
-const emit = defineEmits(['jump-tab', 'jump-section'])
+const emit = defineEmits<{
+  'jump-tab': [tab: string]
+  'jump-section': [section: string]
+}>()
 
-const summary = ref(null)
+const summary = ref<Record<string, unknown> | null>(null)
 const loading = ref(false)
 
 async function fetchSummary() {
@@ -19,7 +24,8 @@ async function fetchSummary() {
   loading.value = true
   try {
     const { data } = await getAcademicSummary(props.studentId)
-    summary.value = data
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    summary.value = (data as any) || null
   } catch (e) {
     summary.value = null
     ElMessage.error(apiError(e, '讀取教務摘要失敗'))
@@ -38,13 +44,14 @@ watch(
 
 const ratePercent = computed(() => {
   if (!summary.value) return '-'
-  const r = summary.value.attendance_rate ?? 0
+  const r = (summary.value.attendance_rate as number) ?? 0
   return `${Math.round(r * 1000) / 10}%`
 })
 
 const periodLabel = computed(() => {
   if (!summary.value) return ''
-  return `${summary.value.period.from} ~ ${summary.value.period.to}`
+  const period = summary.value.period as { from: string; to: string }
+  return `${period.from} ~ ${period.to}`
 })
 
 defineExpose({ refresh: fetchSummary })

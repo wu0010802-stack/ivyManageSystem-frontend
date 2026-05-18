@@ -1,7 +1,7 @@
-<script setup>
-defineProps({
-  item: { type: Object, required: true },
-})
+<script setup lang="ts">
+defineProps<{
+  item: Record<string, unknown>
+}>()
 </script>
 
 <template>

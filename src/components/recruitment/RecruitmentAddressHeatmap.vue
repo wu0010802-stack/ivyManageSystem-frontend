@@ -136,7 +136,7 @@
               v-for="school in mappedNearbySchools"
               :key="school.place_id || school.name"
               :label="school.name || '未命名幼兒園'"
-              :value="school.place_id || school.name"
+              :value="school.place_id || school.name || ''"
             />
           </el-select>
 
@@ -162,7 +162,7 @@
               v-for="school in topNearbySchools"
               :key="school.place_id || `${school.name}-${school.lat}-${school.lng}`"
               class="nearby-school-item nearby-school-item--clickable"
-              @click="panMapTo(school.lat, school.lng, school)"
+              @click="panMapTo(school.lat!, school.lng!, school)"
             >
               <div class="nearby-school-header">
                 <div class="nearby-school-name">{{ school.name || '未命名幼兒園' }}</div>
@@ -295,9 +295,9 @@
                       <span class="gov-detail-label">裁罰記錄</span>
                       <span
                         class="gov-detail-value"
-                        :class="preschoolGovData.penalties.length ? 'gov-status-warned' : (preschoolGovData.hasPenalty ? 'gov-status-warned' : 'gov-status-clean')"
+                        :class="preschoolGovData.penalties?.length ? 'gov-status-warned' : (preschoolGovData.hasPenalty ? 'gov-status-warned' : 'gov-status-clean')"
                       >
-                        <template v-if="preschoolGovData.penalties.length">{{ preschoolGovData.penalties.length }} 筆</template>
+                        <template v-if="preschoolGovData.penalties?.length">{{ preschoolGovData.penalties.length }} 筆</template>
                         <template v-else-if="preschoolGovData.hasPenalty">有（詳細內容未收錄）</template>
                         <template v-else>無</template>
                       </span>
@@ -326,51 +326,140 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onErrorCaptured, onMounted, ref, watch } from 'vue'
 import 'leaflet/dist/leaflet.css'
 // kiang 前端查詢已移除，所有資料由 nearby-kindergartens API 一次回傳
 import { syncGovKindergartens, getGovKindergartensSyncStatus, getGeocodePendingCount, geocodeCompetitorSchools, syncKiangData } from '@/api/recruitment'
 
-const props = defineProps({
-  hotspots: { type: Array, required: true },
-  campus: {
-    type: Object,
-    default: () => ({
-      campus_name: '本園',
-      campus_address: '',
-      campus_lat: null,
-      campus_lng: null,
-      travel_mode: 'driving',
-    }),
-  },
-  travelBands: { type: Array, default: () => [10, 15, 20] },
-  selectedDistrict: { type: String, default: '' },
-  recordsWithAddress: { type: Number, required: true },
-  totalHotspots: { type: Number, default: 0 },
-  geocodedHotspots: { type: Number, default: 0 },
-  pendingHotspots: { type: Number, default: 0 },
-  staleHotspots: { type: Number, default: 0 },
-  failedHotspots: { type: Number, default: 0 },
-  providerAvailable: { type: Boolean, default: false },
-  providerName: { type: String, default: null },
-  nearbySchools: { type: Array, default: () => [] },
-  nearbySchoolsLoading: { type: Boolean, default: false },
-  nearbySchoolsAvailable: { type: Boolean, default: false },
-  nearbySchoolsMessage: { type: String, default: '' },
-  schoolLat: { type: Number, required: true },
-  schoolLng: { type: Number, required: true },
-  canWrite: { type: Boolean, default: false },
-  syncingMode: { type: String, default: '' },
-  fmtPct: { type: Function, required: true },
+interface CampusProp {
+  campus_name?: string
+  campus_address?: string
+  campus_lat?: number | null
+  campus_lng?: number | null
+  travel_mode?: string
+  [key: string]: unknown
+}
+
+interface HotspotEntry {
+  address?: string
+  lat?: number
+  lng?: number
+  visit?: number
+  [key: string]: unknown
+}
+
+interface NearbySchool {
+  name?: string
+  place_id?: string
+  lat?: number
+  lng?: number
+  distance_km?: number
+  formatted_address?: string
+  school_type?: string
+  pre_public_type?: string
+  owner_name?: string | null
+  phone?: string | null
+  approved_capacity?: number | null
+  monthly_fee?: number | null
+  has_penalty?: boolean
+  approved_date?: string | null
+  total_area_sqm?: number | null
+  indoor_area_sqm?: number | null
+  outdoor_area_sqm?: number | null
+  floor?: number | null
+  website?: string | null
+  shuttle?: string | null
+  has_after_school?: boolean
+  is_active?: boolean
+  penalties?: unknown[]
+  rating?: number | null
+  user_rating_count?: number | null
+  [key: string]: unknown
+}
+
+// Minimal typings for third-party map APIs (no @types/leaflet or google.maps declarations available)
+// Using unknown with casts is the TS-safe way to handle dynamic map API objects.
+declare global { interface Window { google?: { maps?: Record<string, unknown> } } }
+
+interface GovData {
+  name?: string
+  principal?: string | null
+  phone?: string | null
+  address?: string | null
+  kind?: string | null
+  capacity?: number | null
+  monthlyFee?: number | null
+  hasPenalty?: boolean
+  approvedDate?: string | null
+  totalAreaSqm?: number | null
+  indoorAreaSqm?: number | null
+  outdoorAreaSqm?: number | null
+  floor?: number | null
+  website?: string | null
+  prePublicType?: string | null
+  shuttle?: string | null
+  afterSchool?: boolean
+  status?: string
+  penalties?: unknown[]
+}
+
+const props = withDefaults(defineProps<{
+  hotspots: HotspotEntry[]
+  campus?: CampusProp
+  travelBands?: number[]
+  selectedDistrict?: string
+  recordsWithAddress: number
+  totalHotspots?: number
+  geocodedHotspots?: number
+  pendingHotspots?: number
+  staleHotspots?: number
+  failedHotspots?: number
+  providerAvailable?: boolean
+  providerName?: string | null
+  nearbySchools?: NearbySchool[]
+  nearbySchoolsLoading?: boolean
+  nearbySchoolsAvailable?: boolean
+  nearbySchoolsMessage?: string
+  schoolLat: number
+  schoolLng: number
+  canWrite?: boolean
+  syncingMode?: string
+  fmtPct: (...args: unknown[]) => unknown
+}>(), {
+  campus: () => ({
+    campus_name: '本園',
+    campus_address: '',
+    campus_lat: null,
+    campus_lng: null,
+    travel_mode: 'driving',
+  }),
+  travelBands: () => [10, 15, 20],
+  selectedDistrict: '',
+  totalHotspots: 0,
+  geocodedHotspots: 0,
+  pendingHotspots: 0,
+  staleHotspots: 0,
+  failedHotspots: 0,
+  providerAvailable: false,
+  providerName: null,
+  nearbySchools: () => [],
+  nearbySchoolsLoading: false,
+  nearbySchoolsAvailable: false,
+  nearbySchoolsMessage: '',
+  canWrite: false,
+  syncingMode: '',
 })
 
-const emit = defineEmits(['sync', 'set-as-campus'])
+const emit = defineEmits<{
+  'sync': [mode?: string]
+  'set-as-campus': [data: Record<string, unknown>]
+}>()
 
 // ── 教育部幼兒園資料同步 ──
-const govSyncing = ref(false)
-const govSyncedAt = ref(null)
-const govSyncMessage = ref('')
+const govSyncing = ref<boolean>(false)
+const govSyncedAt = ref<string | null>(null)
+const govSyncMessage = ref<string>('')
 
 const fetchGovSyncStatus = async () => {
   try {
@@ -387,7 +476,7 @@ const fetchGovSyncStatus = async () => {
   }
 }
 
-let govSyncPoll = null
+let govSyncPoll: ReturnType<typeof setInterval> | null = null
 
 const handleGovSync = async () => {
   if (govSyncing.value) return
@@ -399,7 +488,7 @@ const handleGovSync = async () => {
     govSyncPoll = setInterval(async () => {
       await fetchGovSyncStatus()
       if (!govSyncing.value) {
-        clearInterval(govSyncPoll)
+        if (govSyncPoll !== null) clearInterval(govSyncPoll)
         govSyncPoll = null
         // 教育部同步完成後，自動檢查是否需要補全座標
         autoGeocodeIfNeeded()
@@ -508,14 +597,14 @@ const SCHOOL_TYPE_STYLES = {
 }
 const DEFAULT_SCHOOL_STYLE = { fill: '#64748b', stroke: '#475569', label: '其他' }
 
-const getSchoolTypeStyle = (type) => SCHOOL_TYPE_STYLES[type] ?? DEFAULT_SCHOOL_STYLE
+const getSchoolTypeStyle = (type: string | null | undefined) => SCHOOL_TYPE_STYLES[type as keyof typeof SCHOOL_TYPE_STYLES] ?? DEFAULT_SCHOOL_STYLE
 
 // ── 常春藤系列學校識別（最高優先） ──
 // 含「常春藤」或指定別名（如明華）的學校皆歸入此類
 const IVY_SCHOOL_KEYWORDS = ['常春藤']
 const IVY_SCHOOL_ALIASES  = ['明華幼兒園']
 
-const _isIvySchool = (name) => {
+const _isIvySchool = (name: unknown): boolean => {
   if (!name) return false
   const n = String(name).replace(/[\s　]/g, '')
   if (IVY_SCHOOL_KEYWORDS.some((kw) => n.includes(kw))) return true
@@ -524,7 +613,8 @@ const _isIvySchool = (name) => {
 }
 
 // ── Google Maps：熱點 SVG 圖示（單一小圓點） ──
-const makeGoogleHotspotIcon = (mapsApi) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const makeGoogleHotspotIcon = (mapsApi: any) => {
   const size = 8
   const cx = size / 2
   const svg = [
@@ -540,7 +630,8 @@ const makeGoogleHotspotIcon = (mapsApi) => {
 }
 
 // ── Google Maps：本園圖釘 ──
-const makeGoogleSchoolIcon = (mapsApi) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const makeGoogleSchoolIcon = (mapsApi: any) => {
   const svg = [
     `<svg xmlns="http://www.w3.org/2000/svg" width="30" height="38" viewBox="0 0 30 38">`,
     `<filter id="sh"><feDropShadow dx="0" dy="1" stdDeviation="1.5" flood-opacity="0.3"/></filter>`,
@@ -558,7 +649,8 @@ const makeGoogleSchoolIcon = (mapsApi) => {
 }
 
 // ── Google Maps：附近幼兒園圖示（依類型上色） ──
-const makeGoogleNearbySchoolIcon = (mapsApi, style = DEFAULT_SCHOOL_STYLE) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const makeGoogleNearbySchoolIcon = (mapsApi: any, style = DEFAULT_SCHOOL_STYLE) => {
   const svg = [
     `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 22 22">`,
     `<circle cx="11" cy="11" r="10" fill="${style.fill}" stroke="${style.stroke}" stroke-width="1.5" opacity="0.92"/>`,
@@ -572,11 +664,11 @@ const makeGoogleNearbySchoolIcon = (mapsApi, style = DEFAULT_SCHOOL_STYLE) => {
   }
 }
 
-const mapRef = ref(null)
+const mapRef = ref<HTMLElement | null>(null)
 const mapInitialized = ref(false)
 const setCampusSelected = ref('')
 const selectedGovDataKey = ref('')
-const preschoolGovData = ref(null)
+const preschoolGovData = ref<GovData | null>(null)
 const preschoolGovDataLoading = ref(false)
 const mapRenderRequested = ref(0)
 const googleMapsLoadFailed = ref(false)
@@ -613,8 +705,8 @@ const mapReady = computed(() =>
 const sortedNearbySchools = computed(() =>
   [...props.nearbySchools]
     .sort((a, b) => {
-      const aDistance = Number.isFinite(a?.distance_km) ? a.distance_km : Number.POSITIVE_INFINITY
-      const bDistance = Number.isFinite(b?.distance_km) ? b.distance_km : Number.POSITIVE_INFINITY
+      const aDistance = Number.isFinite(a?.distance_km) ? (a.distance_km as number) : Number.POSITIVE_INFINITY
+      const bDistance = Number.isFinite(b?.distance_km) ? (b.distance_km as number) : Number.POSITIVE_INFINITY
       if (aDistance !== bDistance) return aDistance - bDistance
       return String(a?.name || '').localeCompare(String(b?.name || ''), 'zh-Hant')
     })
@@ -631,7 +723,7 @@ const mappedNearbySchools = computed(() =>
  * 從 API 回傳的 school 物件直接取得分類標籤（同步、無 async）。
  * 優先順序：常春藤系列 > 準公共 > school_type（公立/私立/非營利）
  */
-const getSchoolType = (school) => {
+const getSchoolType = (school: NearbySchool | null | undefined): string | null => {
   if (!school) return null
   if (_isIvySchool(school.name)) return '常春藤'
   if (school.pre_public_type) return '準公共'
@@ -668,7 +760,7 @@ const HIGHLIGHT_SVG = [
   '</svg>',
 ].join('')
 
-const panMapTo = (lat, lng, school) => {
+const panMapTo = (lat: number, lng: number, school: NearbySchool | null | undefined) => {
   if (!mapInstance || !Number.isFinite(lat) || !Number.isFinite(lng)) return
   if (renderedMapProvider.value === 'google') {
     mapInstance.panTo({ lat, lng })
@@ -719,7 +811,7 @@ watch(filteredNearbySchools, (schools) => {
   if (schools.length !== 1) return
   const s = schools[0]
   if (Number.isFinite(s?.lat) && Number.isFinite(s?.lng)) {
-    panMapTo(s.lat, s.lng, s)
+    panMapTo(s.lat!, s.lng!, s)
   }
 })
 
@@ -755,24 +847,42 @@ const emptyDescription = computed(() => {
   return '目前沒有可顯示於地圖的地址座標'
 })
 
-let leafletPromise = null
-let leafletApi = null
-let googleMapsPromise = null
-let googleMapsApi = null
-let mapInstance = null
-let tileLayer = null
-let heatLayer = null
-let markerLayer = null
-let overlayLayer = null
-let nearbySchoolLayer = null
-let googleInfoWindow = null
-let googleOverlays = []
-let highlightMarker = null
+// These variables hold third-party map API instances (Leaflet / Google Maps).
+// Neither library ships TypeScript declarations, so we use explicit `unknown` typing
+// and cast at usage sites to satisfy `noImplicitAny`.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let leafletPromise: Promise<any> | null = null
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let leafletApi: any = null
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let googleMapsPromise: Promise<any> | null = null
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let googleMapsApi: any = null
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let mapInstance: any = null
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let tileLayer: any = null
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let heatLayer: any = null
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let markerLayer: any = null
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let overlayLayer: any = null
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let nearbySchoolLayer: any = null
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let googleInfoWindow: any = null
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let googleOverlays: any[] = []
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let highlightMarker: any = null
 let lastFittedBaseSignature = ''
-let leafletMoveHandler = null
-let googleIdleHandler = null
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let leafletMoveHandler: any = null
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let googleIdleHandler: any = null
 
-const markGoogleMapsUnavailable = (error) => {
+const markGoogleMapsUnavailable = (error: unknown) => {
   if (!prefersGoogleMap || googleMapsLoadFailed.value) return
   googleMapsLoadFailed.value = true
   googleMapsApi = null
@@ -784,7 +894,9 @@ const markGoogleMapsUnavailable = (error) => {
 const ensureLeaflet = async () => {
   if (leafletApi) return leafletApi
   if (!leafletPromise) {
-    leafletPromise = import('leaflet').then((module) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/ban-ts-comment
+    // @ts-ignore – leaflet has no @types package in this project
+    leafletPromise = import('leaflet').then((module: any) => {
       leafletApi = module.default ?? module
       return leafletApi
     })
@@ -832,7 +944,7 @@ const ensureGoogleMaps = async () => {
   return googleMapsPromise
 }
 
-const onSetCampusSelect = (val) => {
+const onSetCampusSelect = (val: string | number | boolean | undefined) => {
   if (!val) return
   const school = mappedNearbySchools.value.find((s) => (s.place_id || s.name) === val)
   if (school) {
@@ -841,8 +953,8 @@ const onSetCampusSelect = (val) => {
   setCampusSelected.value = ''
 }
 
-const toggleGovData = (school) => {
-  const key = school.place_id || school.name
+const toggleGovData = (school: NearbySchool) => {
+  const key = school.place_id || school.name || ''
   if (selectedGovDataKey.value === key) {
     selectedGovDataKey.value = ''
     preschoolGovData.value = null
@@ -874,22 +986,22 @@ const toggleGovData = (school) => {
   }
 }
 
-const starClass = (rating, index) => {
+const starClass = (rating: number, index: number) => {
   if (rating >= index) return 'star-full'
   if (rating >= index - 0.5) return 'star-half'
   return 'star-empty'
 }
 
-const sqmToPing = (sqm) => (Number(sqm) / 3.30579).toFixed(1)
+const sqmToPing = (sqm: number | null | undefined) => (Number(sqm) / 3.30579).toFixed(1)
 
-const escapeHtml = (text) => String(text ?? '')
-  .replaceAll('&', '&amp;')
-  .replaceAll('<', '&lt;')
-  .replaceAll('>', '&gt;')
-  .replaceAll('"', '&quot;')
-  .replaceAll("'", '&#39;')
+const escapeHtml = (text: unknown) => String(text ?? '')
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#39;')
 
-const statusLabel = (status) => {
+const statusLabel = (status: unknown) => {
   if (status === 'resolved') return '已定位'
   if (status === 'failed') return '失敗'
   return '待同步'
@@ -944,27 +1056,28 @@ const destroyMap = () => {
   mapInitialized.value = false
 }
 
-const hotspotPopupHtml = (hotspot) => [
+const hotspotPopupHtml = (hotspot: HotspotEntry) => [
   `<div class="map-popup">`,
   `<strong>${escapeHtml(hotspot.formatted_address || hotspot.address)}</strong>`,
   `<div>行政區：${escapeHtml(hotspot.district || '未填寫')}</div>`,
   `<div>參觀：${escapeHtml(hotspot.visit)} 筆</div>`,
   `<div>預繳率：${escapeHtml(props.fmtPct(hotspot.deposit, hotspot.visit))}</div>`,
-  hotspot.travel_minutes != null ? `<div>通勤：約 ${escapeHtml(hotspot.travel_minutes.toFixed(1))} 分鐘</div>` : '',
-  hotspot.land_use_label ? `<div>土地使用：${escapeHtml(hotspot.land_use_label)}</div>` : '',
+  hotspot.travel_minutes != null ? `<div>通勤：約 ${escapeHtml((hotspot.travel_minutes as number).toFixed(1))} 分鐘</div>` : '',
+  hotspot.land_use_label ? `<div>土地使用：${escapeHtml(hotspot.land_use_label as string)}</div>` : '',
   `</div>`,
 ].join('')
 
-const nearbySchoolPopupHtml = (school) => {
-  const ratingStars = school.rating != null
+const nearbySchoolPopupHtml = (school: NearbySchool) => {
+  const schoolRating = school.rating
+  const ratingStars = schoolRating != null
     ? Array.from({ length: 5 }, (_, i) => {
         const idx = i + 1
-        const cls = school.rating >= idx ? 'star-full' : school.rating >= idx - 0.5 ? 'star-half' : 'star-empty'
+        const cls = schoolRating >= idx ? 'star-full' : schoolRating >= idx - 0.5 ? 'star-half' : 'star-empty'
         return `<span class="star ${cls}">★</span>`
       }).join('')
     : ''
-  const ratingLine = school.rating != null
-    ? `<div class="popup-rating">${ratingStars} ${escapeHtml(school.rating.toFixed(1))}${school.user_rating_count != null ? ` <span class="popup-rating-count">（${school.user_rating_count.toLocaleString()} 則）</span>` : ''}</div>`
+  const ratingLine = schoolRating != null
+    ? `<div class="popup-rating">${ratingStars} ${escapeHtml(schoolRating.toFixed(1))}${school.user_rating_count != null ? ` <span class="popup-rating-count">（${school.user_rating_count.toLocaleString()} 則）</span>` : ''}</div>`
     : ''
   return [
     `<div class="map-popup">`,
@@ -1075,7 +1188,7 @@ const renderLeafletMap = async () => {
   mapInstance.invalidateSize()
 }
 
-const createGoogleMarkerIcon = ({ scale, fillColor, strokeColor, fillOpacity = 1, strokeWeight = 2 }) => ({
+const createGoogleMarkerIcon = ({ scale, fillColor, strokeColor, fillOpacity = 1, strokeWeight = 2 }: { scale: number; fillColor: string; strokeColor: string; fillOpacity?: number; strokeWeight?: number }) => ({
   path: googleMapsApi.SymbolPath.CIRCLE,
   scale,
   fillColor,
@@ -1084,7 +1197,7 @@ const createGoogleMarkerIcon = ({ scale, fillColor, strokeColor, fillOpacity = 1
   strokeWeight,
 })
 
-const openGoogleInfoWindow = (position, html) => {
+const openGoogleInfoWindow = (position: unknown, html: string) => {
   if (!googleInfoWindow || !mapInstance) return
   googleInfoWindow.setContent(html)
   googleInfoWindow.setPosition(position)
@@ -1117,7 +1230,7 @@ const renderGoogleMap = async () => {
 
   const bounds = new mapsApi.LatLngBounds()
   let pointCount = 0
-  const addBoundsPoint = (lat, lng) => {
+  const addBoundsPoint = (lat: number, lng: number) => {
     bounds.extend({ lat, lng })
     pointCount += 1
   }
@@ -1144,7 +1257,7 @@ const renderGoogleMap = async () => {
       clickable: false,
     })
     googleOverlays.push(marker)
-    addBoundsPoint(hotspot.lat, hotspot.lng)
+    addBoundsPoint(hotspot.lat!, hotspot.lng!)
   }
 
   for (const school of mappedNearbySchools.value) {

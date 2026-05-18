@@ -3,7 +3,7 @@
     <div class="pos-panel__header">
       <el-radio-group
         :model-value="mode"
-        @update:model-value="$emit('update:mode', $event)"
+        @update:model-value="onModeChange"
       >
         <el-radio-button
           v-for="m in modeOptions"
@@ -64,11 +64,11 @@
 
     <el-scrollbar class="pos-panel__results" v-loading="searching">
       <template v-if="mode === 'by-student'">
-        <div v-if="groups.length === 0 && searchQuery && !searching" class="pos-panel__empty">
+        <div v-if="typedGroups.length === 0 && searchQuery && !searching" class="pos-panel__empty">
           無結果
         </div>
         <div
-          v-for="g in groups"
+          v-for="g in typedGroups"
           :key="g.student_key"
           class="pos-group"
         >
@@ -89,12 +89,12 @@
             :key="reg.id"
             class="pos-reg"
             :class="{ 'pos-reg--selected': isSelected(reg.id) }"
-            @click="$emit('toggle', reg, g.student_name)"
+            @click="emit('toggle', reg, g.student_name || '')"
           >
             <el-checkbox
               :model-value="isSelected(reg.id)"
               @click.stop
-              @change="$emit('toggle', reg, g.student_name)"
+              @change="emit('toggle', reg, g.student_name || '')"
             />
             <div class="pos-reg__info">
               <div class="pos-reg__lines">
@@ -205,7 +205,7 @@
   </el-card>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { ArrowLeft, ArrowRight, Search } from '@element-plus/icons-vue'
 
@@ -221,17 +221,17 @@ function taipeiToday() {
     day: '2-digit',
   }).formatToParts(new Date())
   return {
-    year: Number(parts.find((p) => p.type === 'year').value),
-    month: Number(parts.find((p) => p.type === 'month').value) - 1,
-    day: Number(parts.find((p) => p.type === 'day').value),
+    year: Number(parts.find((p) => p.type === 'year')!.value),
+    month: Number(parts.find((p) => p.type === 'month')!.value) - 1,
+    day: Number(parts.find((p) => p.type === 'day')!.value),
   }
 }
 
-function pad2(n) {
+function pad2(n: number) {
   return String(n).padStart(2, '0')
 }
 
-function compactTWD(n) {
+function compactTWD(n: number | string | null | undefined) {
   const v = Number(n) || 0
   if (v <= 0) return ''
   if (v < 1000) return `$${v}`
@@ -242,27 +242,71 @@ function compactTWD(n) {
   return `$${Math.round(v / 1000)}k`
 }
 
-const props = defineProps({
-  mode: { type: String, required: true },
-  searchQuery: { type: String, required: true },
-  classroomFilter: { type: String, default: '' },
-  overdueOnly: { type: Boolean, default: false },
-  searching: { type: Boolean, default: false },
-  groups: { type: Array, default: () => [] },
-  registrations: { type: Array, default: () => [] },
-  selectedIds: { type: Array, default: () => [] },
-  isRefundMode: { type: Boolean, default: false },
-  classroomOptions: { type: Array, default: () => [] },
+interface RegistrationEntry {
+  id: number | string
+  student_name?: string
+  class_name?: string
+  total_amount?: number
+  paid_amount?: number
+  owed?: number
+  courses?: { name: string }[]
+  supplies?: { name: string }[]
+  course_names?: string
+  created_at?: string
+  [key: string]: unknown
+}
+
+interface GroupEntry {
+  student_key?: string
+  student_name?: string
+  class_name?: string
+  birthday?: string
+  group_owed_total?: number
+  registrations?: RegistrationEntry[]
+  [key: string]: unknown
+}
+
+const props = withDefaults(defineProps<{
+  mode: string
+  searchQuery: string
+  classroomFilter?: string
+  overdueOnly?: boolean
+  searching?: boolean
+  // Using Record<string, unknown>[] for compatibility with composable return types
+  groups?: Record<string, unknown>[]
+  registrations?: Record<string, unknown>[]
+  selectedIds?: (number | string)[]
+  isRefundMode?: boolean
+  classroomOptions?: string[]
+}>(), {
+  classroomFilter: '',
+  overdueOnly: false,
+  searching: false,
+  groups: () => [],
+  registrations: () => [],
+  selectedIds: () => [],
+  isRefundMode: false,
+  classroomOptions: () => [],
 })
 
-const emit = defineEmits([
-  'update:mode',
-  'update:searchQuery',
-  'update:classroomFilter',
-  'update:overdueOnly',
-  'search',
-  'toggle',
-])
+const emit = defineEmits<{
+  'update:mode': [value: string | number | boolean]
+  'update:searchQuery': [value: string | number | boolean]
+  'update:classroomFilter': [value: string | number | boolean | null | undefined]
+  'update:overdueOnly': [value: boolean | string | number]
+  'search': []
+  'toggle': [row: Record<string, unknown>, studentName: string]
+}>()
+
+function onModeChange(v: string | number | boolean | undefined) { if (v !== undefined) emit('update:mode', v) }
+
+// Typed views of props for template access — the props stay as Record<string,unknown>[]
+// to stay compatible with the composable's return type
+const typedGroups = computed((): GroupEntry[] => props.groups as GroupEntry[])
+const typedRegistrations = computed((): RegistrationEntry[] => props.registrations as RegistrationEntry[])
+const selectedDateRows = computed((): RegistrationEntry[] =>
+  (selectedDate.value ? dateMap.value.get(selectedDate.value)?.rows || [] : []) as RegistrationEntry[]
+)
 
 const modeOptions = POS_MODES
 
@@ -274,7 +318,7 @@ const placeholder = computed(() => {
     : '搜尋姓名 / 班級（依報名日期瀏覽）'
 })
 
-function extractDateKey(iso) {
+function extractDateKey(iso: string | null | undefined) {
   if (!iso) return ''
   // created_at 為 UTC ISO，以 Asia/Taipei 時區為準切出 YYYY-MM-DD
   const d = new Date(iso)
@@ -293,11 +337,11 @@ function extractDateKey(iso) {
 
 // 每日欠款彙總：Map<YYYY-MM-DD, { rows, amount }>
 const dateMap = computed(() => {
-  const m = new Map()
-  for (const row of props.registrations) {
+  const m = new Map<string, { rows: RegistrationEntry[]; amount: number }>()
+  for (const row of typedRegistrations.value) {
     const key = extractDateKey(row.created_at) || '未知'
     if (!m.has(key)) m.set(key, { rows: [], amount: 0 })
-    const g = m.get(key)
+    const g = m.get(key)!
     g.rows.push(row)
     g.amount += props.isRefundMode
       ? Number(row.paid_amount || 0)
@@ -371,11 +415,7 @@ const calendarCells = computed(() => {
   return cells
 })
 
-const selectedDateRows = computed(() =>
-  selectedDate.value ? dateMap.value.get(selectedDate.value)?.rows || [] : []
-)
-
-function shiftMonth(delta) {
+function shiftMonth(delta: number) {
   const { year, month } = currentMonth.value
   const newIdx = month + delta
   if (newIdx < 0) currentMonth.value = { year: year - 1, month: 11 }
@@ -390,7 +430,7 @@ function gotoToday() {
   selectedDate.value = `${t.year}-${pad2(t.month + 1)}-${pad2(t.day)}`
 }
 
-function selectDate(key) {
+function selectDate(key: string) {
   // 點到上／下月帶動月份切換
   const [y, m] = key.split('-').map(Number)
   if (y !== currentMonth.value.year || m - 1 !== currentMonth.value.month) {
@@ -401,7 +441,7 @@ function selectDate(key) {
 
 // 切換搜尋 / 班級 / 模式時，若選中日期已無對應資料則清掉
 watch(
-  () => [props.mode, props.registrations.length, props.classroomFilter, props.searchQuery],
+  () => [props.mode, typedRegistrations.value.length, props.classroomFilter, props.searchQuery],
   () => {
     if (!selectedDate.value) return
     if (!dateMap.value.has(selectedDate.value)) selectedDate.value = ''
@@ -409,19 +449,19 @@ watch(
 )
 
 const resultCount = computed(() =>
-  props.mode === 'by-student' ? props.groups.length : props.registrations.length
+  props.mode === 'by-student' ? typedGroups.value.length : typedRegistrations.value.length
 )
 
 const resultSummaryText = computed(() => {
-  if (props.mode === 'by-student') return `${props.groups.length} 位學生`
-  return `${props.registrations.length} 筆報名 · ${dateMap.value.size} 個日期`
+  if (props.mode === 'by-student') return `${typedGroups.value.length} 位學生`
+  return `${typedRegistrations.value.length} 筆報名 · ${dateMap.value.size} 個日期`
 })
 
 const totalAmount = computed(() => {
   if (props.mode === 'by-student') {
-    return props.groups.reduce((s, g) => s + (g.group_owed_total || 0), 0)
+    return typedGroups.value.reduce((s, g) => s + (g.group_owed_total || 0), 0)
   }
-  return props.registrations.reduce((s, r) => {
+  return typedRegistrations.value.reduce((s, r) => {
     const base = props.isRefundMode
       ? r.paid_amount || 0
       : computeOwed(r.total_amount, r.paid_amount)
@@ -429,12 +469,12 @@ const totalAmount = computed(() => {
   }, 0)
 })
 
-const isSelected = (id) => props.selectedIds.includes(id)
+const isSelected = (id: unknown) => props.selectedIds.includes(id as number | string)
 
-function handleSingleToggle(row) {
+function handleSingleToggle(row: RegistrationEntry) {
   // 依單筆模式的搜尋結果需要組成 owed / courses 給購物車
   const owed = computeOwed(row.total_amount, row.paid_amount)
-  const normalized = {
+  const normalized: Record<string, unknown> = {
     id: row.id,
     student_name: row.student_name,
     class_name: row.class_name || '',
@@ -444,10 +484,10 @@ function handleSingleToggle(row) {
     courses: (row.course_names || '')
       .split('、')
       .filter(Boolean)
-      .map((name) => ({ name, price: 0, status: 'enrolled' })),
+      .map((name: string) => ({ name, price: 0, status: 'enrolled' })),
     supplies: [],
   }
-  emit('toggle', normalized, row.student_name)
+  emit('toggle', normalized, row.student_name ?? '')
 }
 </script>
 

@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /**
  * IvyKids 皇冠 — 對齊官網 logo 的金色皇冠 motif。
  *
@@ -11,14 +11,14 @@ import { computed } from 'vue'
 
 defineOptions({ name: 'CrownIcon' })
 
-const props = defineProps({
-  size: { type: Number, default: 20 },
-  variant: {
-    type: String,
-    default: 'gold',
-    validator: (v) => ['gold', 'silver'].includes(v),
-  },
-  decorative: { type: Boolean, default: false },
+const props = withDefaults(defineProps<{
+  size?: number
+  variant?: 'gold' | 'silver'
+  decorative?: boolean
+}>(), {
+  size: 20,
+  variant: 'gold',
+  decorative: false,
 })
 
 const bodyFill = computed(() =>
@@ -31,7 +31,7 @@ const gemColor = computed(() => (props.variant === 'silver' ? '#33aaaa' : '#f652
 
 const ariaProps = computed(() =>
   props.decorative
-    ? { 'aria-hidden': 'true' }
+    ? { 'aria-hidden': true as const }
     : { role: 'img', 'aria-label': '皇冠' },
 )
 </script>

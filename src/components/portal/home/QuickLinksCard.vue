@@ -1,5 +1,6 @@
-<script setup>
+<script setup lang="ts">
 import { useRouter } from 'vue-router'
+import type { RouteLocationRaw } from 'vue-router'
 
 const router = useRouter()
 
@@ -13,7 +14,7 @@ const links = [
   { label: '才藝點名', to: { path: '/portal/activity', query: { tab: 'attendance' } }, tint: 'activity' },
 ]
 
-function go(to) {
+function go(to: RouteLocationRaw) {
   router.push(to)
 }
 </script>

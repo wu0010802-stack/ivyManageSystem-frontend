@@ -1,19 +1,44 @@
-<script setup>
+<script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { createMeasurement } from '@/api/portalMeasurements'
 
-const props = defineProps({
-  modelValue: { type: Boolean, required: true },
-  studentId: { type: [Number, String], required: true },
-  studentName: { type: String, default: '' },
-  prefill: { type: Object, default: null }, // { measured_on, height_cm, weight_kg, ... }
-})
-const emit = defineEmits(['update:modelValue', 'done', 'next'])
+interface Prefill {
+  measured_on?: string
+  height_cm?: string | number | null
+  weight_kg?: string | number | null
+  head_circumference_cm?: string | number | null
+  vision_left?: string | number | null
+  vision_right?: string | number | null
+  [key: string]: unknown
+}
+
+interface MeasurementForm {
+  measured_on: string
+  height_cm: string
+  weight_kg: string
+  head_circumference_cm: string
+  vision_left: string
+  vision_right: string
+  note: string
+  [key: string]: string
+}
+
+const props = defineProps<{
+  modelValue: boolean
+  studentId: number | string
+  studentName?: string
+  prefill?: Prefill | null
+}>()
+const emit = defineEmits<{
+  'update:modelValue': [value: boolean]
+  'done': []
+  'next': []
+}>()
 
 const today = () => new Date().toISOString().slice(0, 10)
 
-const form = ref({
+const form = ref<MeasurementForm>({
   measured_on: today(),
   height_cm: '',
   weight_kg: '',
@@ -53,7 +78,7 @@ const hasAnyValue = computed(() =>
   ),
 )
 
-const prefillHint = (key) => {
+const prefillHint = (key: string) => {
   if (!props.prefill) return ''
   const v = props.prefill[key]
   return v != null ? `上次 ${v}` : ''
@@ -63,19 +88,20 @@ async function submit() {
   if (!hasAnyValue.value || submitting.value) return
   submitting.value = true
   try {
-    const payload = {
+    const payload: Record<string, string> = {
       measured_on: form.value.measured_on,
     }
     for (const k of ['height_cm', 'weight_kg', 'head_circumference_cm', 'vision_left', 'vision_right']) {
       if (form.value[k] !== '' && form.value[k] != null) payload[k] = String(form.value[k])
     }
     if (form.value.note) payload.note = form.value.note
-    await createMeasurement(props.studentId, payload)
+    await createMeasurement(Number(props.studentId), payload)
     recorded.value = true
     emit('done')
     ElMessage.success('已記錄量測')
   } catch (e) {
-    ElMessage.error(e?.response?.data?.detail || '記錄失敗，請重試')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ElMessage.error((e as any)?.response?.data?.detail || '記錄失敗，請重試')
   } finally {
     submitting.value = false
   }

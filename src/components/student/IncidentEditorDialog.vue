@@ -14,7 +14,7 @@
           @change="onClassroomChange"
           style="width: 100%"
         >
-          <el-option v-for="c in classrooms" :key="c.id" :label="c.name" :value="c.id" />
+          <el-option v-for="c in classrooms" :key="c.id as PropertyKey" :label="c.name as string" :value="(c.id as number)" />
         </el-select>
       </el-form-item>
       <el-form-item label="學生 *">
@@ -25,7 +25,7 @@
           placeholder="選擇學生"
           style="width: 100%"
         >
-          <el-option v-for="s in studentOptions" :key="s.id" :label="s.name" :value="s.id" />
+          <el-option v-for="s in studentOptions" :key="s.id as PropertyKey" :label="s.name as string" :value="(s.id as number)" />
         </el-select>
       </el-form-item>
       <el-form-item label="事件類型 *">
@@ -64,7 +64,7 @@
   </el-dialog>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { INCIDENT_TYPES, SEVERITIES } from '@/constants/studentRecords'
@@ -72,19 +72,40 @@ import { getStudents } from '@/api/students'
 import { useStudentRecordsStore } from '@/stores/studentRecords'
 import { apiError } from '@/utils/error'
 
-const props = defineProps({
-  visible: { type: Boolean, default: false },
-  mode: { type: String, default: 'create' }, // 'create' | 'edit'
-  initial: { type: Object, default: null },
-  lockStudent: { type: Boolean, default: false },
-  defaultStudentId: { type: Number, default: null },
-  defaultClassroomId: { type: Number, default: null },
-  classrooms: { type: Array, default: () => [] },
+const props = withDefaults(defineProps<{
+  visible?: boolean
+  mode?: string
+  initial?: Record<string, unknown> | null
+  lockStudent?: boolean
+  defaultStudentId?: number | null
+  defaultClassroomId?: number | null
+  classrooms?: Record<string, unknown>[]
+}>(), {
+  visible: false,
+  mode: 'create',
+  initial: null,
+  lockStudent: false,
+  defaultStudentId: null,
+  defaultClassroomId: null,
+  classrooms: () => [],
 })
 
-const emit = defineEmits(['update:visible', 'submitted'])
+const emit = defineEmits<{
+  'update:visible': [v: boolean]
+  'submitted': [payload: { payload: Record<string, unknown>; saved: unknown }]
+}>()
 
-const empty = () => ({
+interface IncidentForm {
+  student_id: number | null
+  incident_type: string
+  severity: string
+  occurred_at: string
+  description: string
+  action_taken: string
+  parent_notified: boolean
+}
+
+const empty = (): IncidentForm => ({
   student_id: null,
   incident_type: '',
   severity: '',
@@ -94,18 +115,20 @@ const empty = () => ({
   parent_notified: false,
 })
 
-const form = reactive(empty())
-const pickedClassroomId = ref(null)
-const studentOptions = ref([])
+const form = reactive<IncidentForm>(empty())
+const pickedClassroomId = ref<number | null>(null)
+const studentOptions = ref<Record<string, unknown>[]>([])
 const studentsLoading = ref(false)
 const submitting = ref(false)
 
-const loadStudents = async (classroomId) => {
+const loadStudents = async (classroomId: number | null) => {
   if (!classroomId) { studentOptions.value = []; return }
   studentsLoading.value = true
   try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const res = await getStudents({ classroom_id: classroomId, is_active: true })
-    studentOptions.value = res.data.items || []
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    studentOptions.value = (res as any).data?.items || []
   } catch {
     ElMessage.error('載入學生資料失敗')
   } finally {
@@ -113,7 +136,7 @@ const loadStudents = async (classroomId) => {
   }
 }
 
-const onClassroomChange = async (cid) => {
+const onClassroomChange = async (cid: number | null) => {
   form.student_id = null
   await loadStudents(cid)
 }
@@ -124,12 +147,12 @@ const hydrate = () => {
       student_id: props.initial.student_id,
       incident_type: props.initial.incident_type || '',
       severity: props.initial.severity || '',
-      occurred_at: props.initial.occurred_at ? props.initial.occurred_at.slice(0, 19) : '',
+      occurred_at: props.initial.occurred_at ? (props.initial.occurred_at as string).slice(0, 19) : '',
       description: props.initial.description || '',
       action_taken: props.initial.action_taken || '',
       parent_notified: !!props.initial.parent_notified,
     })
-    pickedClassroomId.value = props.initial.classroom_id || props.defaultClassroomId || null
+    pickedClassroomId.value = (props.initial.classroom_id as number | null) || props.defaultClassroomId || null
     studentOptions.value = props.initial.student_name
       ? [{ id: props.initial.student_id, name: props.initial.student_name }]
       : []
@@ -179,7 +202,7 @@ const submit = async () => {
       saved = await recordsStore.createRecord('incident', payload)
       ElMessage.success('新增成功')
     } else {
-      saved = await recordsStore.updateRecord('incident', props.initial.id, payload)
+      saved = await recordsStore.updateRecord('incident', props.initial!.id as number, payload)
       ElMessage.success('更新成功')
     }
     emit('submitted', { payload, saved })

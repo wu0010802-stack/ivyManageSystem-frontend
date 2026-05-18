@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { hasPermission } from '@/utils/auth'
@@ -8,22 +8,23 @@ import {
 } from '@/api/studentGrowthReports'
 import GrowthReportGenerateDialog from '@/components/student/GrowthReportGenerateDialog.vue'
 
-const props = defineProps({
-  studentId: { type: Number, required: true },
-})
+const props = defineProps<{
+  studentId: number
+}>()
 
 const canPublish = computed(() => hasPermission('PORTFOLIO_PUBLISH'))
 
-const items = ref([])
+const items = ref<Record<string, unknown>[]>([])
 const loading = ref(false)
 const dialogVisible = ref(false)
-let pollTimer = null
+let pollTimer: ReturnType<typeof setInterval> | null = null
 
 async function reload() {
   loading.value = true
   try {
     const r = await listGrowthReports(props.studentId)
-    items.value = r.data.items
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    items.value = (r as any).data?.items || []
   } catch {
     ElMessage.error('讀取報告列表失敗')
   } finally {
@@ -53,11 +54,11 @@ function onCreated() {
   startPolling()
 }
 
-function onDownload(row) {
-  window.open(downloadGrowthReportUrl(props.studentId, row.id), '_blank')
+function onDownload(row: Record<string, unknown>) {
+  window.open(downloadGrowthReportUrl(props.studentId, row.id as number), '_blank')
 }
 
-async function onSendLine(row) {
+async function onSendLine(row: Record<string, unknown>) {
   try {
     await ElMessageBox.confirm(
       `確定要 LINE 推送「${row.period_label}」報告給家長？`,
@@ -65,15 +66,17 @@ async function onSendLine(row) {
     )
   } catch { return }
   try {
-    const r = await sendGrowthReportToLine(props.studentId, row.id)
-    ElMessage.success(`已推送 ${r.data.sent_count} 位家長`)
+    const r = await sendGrowthReportToLine(props.studentId, row.id as number)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ElMessage.success(`已推送 ${(r as any).data?.sent_count} 位家長`)
     reload()
   } catch (e) {
-    ElMessage.error(e?.response?.data?.detail || '推送失敗')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ElMessage.error((e as any)?.response?.data?.detail || '推送失敗')
   }
 }
 
-async function onDelete(row) {
+async function onDelete(row: Record<string, unknown>) {
   try {
     await ElMessageBox.confirm(
       `確定要刪除「${row.period_label}」報告？此操作不可復原`,
@@ -81,7 +84,7 @@ async function onDelete(row) {
     )
   } catch { return }
   try {
-    await deleteGrowthReport(props.studentId, row.id)
+    await deleteGrowthReport(props.studentId, row.id as number)
     ElMessage.success('已刪除')
     reload()
   } catch {
@@ -89,18 +92,22 @@ async function onDelete(row) {
   }
 }
 
-const STATUS_LABEL = {
+const STATUS_LABEL: Record<string, string> = {
   pending: '排隊中',
   generating: '生成中',
   ready: '已完成',
   failed: '失敗',
 }
-const STATUS_TYPE = {
+const STATUS_TYPE: Record<string, string> = {
   pending: 'info',
   generating: 'warning',
   ready: 'success',
   failed: 'danger',
 }
+
+type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger'
+function statusLabel(s: unknown) { return STATUS_LABEL[String(s ?? '')] || String(s ?? '') }
+function statusType(s: unknown): ElTagType | undefined { return (STATUS_TYPE[String(s ?? '')] as ElTagType) || undefined }
 
 onMounted(() => {
   reload().then(() => startPolling())
@@ -128,7 +135,7 @@ onBeforeUnmount(stopPolling)
       </el-table-column>
       <el-table-column label="狀態" width="100">
         <template #default="{ row }">
-          <el-tag :type="STATUS_TYPE[row.status] || ''">{{ STATUS_LABEL[row.status] || row.status }}</el-tag>
+          <el-tag :type="statusType(row.status)">{{ statusLabel(row.status) }}</el-tag>
         </template>
       </el-table-column>
       <el-table-column label="生成時間" width="160">

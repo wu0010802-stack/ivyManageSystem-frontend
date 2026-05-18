@@ -14,7 +14,7 @@
           @change="onClassroomChange"
           style="width: 100%"
         >
-          <el-option v-for="c in classrooms" :key="c.id" :label="c.name" :value="c.id" />
+          <el-option v-for="c in classrooms" :key="c.id as PropertyKey" :label="c.name as string" :value="(c.id as number)" />
         </el-select>
       </el-form-item>
       <el-form-item label="學生 *">
@@ -25,7 +25,7 @@
           placeholder="選擇學生"
           style="width: 100%"
         >
-          <el-option v-for="s in studentOptions" :key="s.id" :label="s.name" :value="s.id" />
+          <el-option v-for="s in studentOptions" :key="s.id as PropertyKey" :label="s.name as string" :value="(s.id as number)" />
         </el-select>
       </el-form-item>
       <el-form-item label="學期 *">
@@ -71,9 +71,9 @@
         >
           <el-option
             v-for="inc in incidentOptions"
-            :key="inc.id"
-            :label="`${inc.occurred_at?.slice(0, 10) || ''}　${inc.incident_type || ''}`"
-            :value="inc.id"
+            :key="inc.id as PropertyKey"
+            :label="`${(inc.occurred_at as string | undefined)?.slice(0, 10) || ''}　${inc.incident_type || ''}`"
+            :value="(inc.id as number)"
           />
         </el-select>
       </el-form-item>
@@ -85,7 +85,7 @@
   </el-dialog>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ASSESSMENT_TYPES, DOMAINS, RATINGS } from '@/constants/studentRecords'
@@ -94,19 +94,42 @@ import { getIncidents } from '@/api/studentIncidents'
 import { useStudentRecordsStore } from '@/stores/studentRecords'
 import { apiError } from '@/utils/error'
 
-const props = defineProps({
-  visible: { type: Boolean, default: false },
-  mode: { type: String, default: 'create' },
-  initial: { type: Object, default: null },
-  lockStudent: { type: Boolean, default: false },
-  defaultStudentId: { type: Number, default: null },
-  defaultClassroomId: { type: Number, default: null },
-  classrooms: { type: Array, default: () => [] },
+const props = withDefaults(defineProps<{
+  visible?: boolean
+  mode?: string
+  initial?: Record<string, unknown> | null
+  lockStudent?: boolean
+  defaultStudentId?: number | null
+  defaultClassroomId?: number | null
+  classrooms?: Record<string, unknown>[]
+}>(), {
+  visible: false,
+  mode: 'create',
+  initial: null,
+  lockStudent: false,
+  defaultStudentId: null,
+  defaultClassroomId: null,
+  classrooms: () => [],
 })
 
-const emit = defineEmits(['update:visible', 'submitted'])
+const emit = defineEmits<{
+  'update:visible': [v: boolean]
+  'submitted': [payload: { payload: Record<string, unknown>; saved: unknown }]
+}>()
 
-const empty = () => ({
+interface AssessmentForm {
+  student_id: number | null
+  semester: string
+  assessment_type: string
+  domain: string
+  rating: string
+  content: string
+  suggestions: string
+  assessment_date: string
+  related_incident_id: number | null
+}
+
+const empty = (): AssessmentForm => ({
   student_id: null,
   semester: '',
   assessment_type: '',
@@ -118,15 +141,15 @@ const empty = () => ({
   related_incident_id: null,
 })
 
-const form = reactive(empty())
-const pickedClassroomId = ref(null)
-const studentOptions = ref([])
+const form = reactive<AssessmentForm>(empty())
+const pickedClassroomId = ref<number | null>(null)
+const studentOptions = ref<Record<string, unknown>[]>([])
 const studentsLoading = ref(false)
 const submitting = ref(false)
-const incidentOptions = ref([])
+const incidentOptions = ref<Record<string, unknown>[]>([])
 const incidentsLoading = ref(false)
 
-const loadIncidents = async (studentId) => {
+const loadIncidents = async (studentId: number | null) => {
   if (!studentId) {
     incidentOptions.value = []
     return
@@ -134,7 +157,8 @@ const loadIncidents = async (studentId) => {
   incidentsLoading.value = true
   try {
     const res = await getIncidents({ student_id: studentId, limit: 50 })
-    incidentOptions.value = res.data?.items || []
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    incidentOptions.value = (res as any).data?.items || []
   } catch {
     incidentOptions.value = []
   } finally {
@@ -145,17 +169,19 @@ const loadIncidents = async (studentId) => {
 watch(
   () => form.student_id,
   (sid) => {
-    if (sid) loadIncidents(sid)
+    if (sid) loadIncidents(sid as number)
     else incidentOptions.value = []
   },
 )
 
-const loadStudents = async (classroomId) => {
+const loadStudents = async (classroomId: number | null) => {
   if (!classroomId) { studentOptions.value = []; return }
   studentsLoading.value = true
   try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const res = await getStudents({ classroom_id: classroomId, is_active: true })
-    studentOptions.value = res.data.items || []
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    studentOptions.value = (res as any).data?.items || []
   } catch {
     ElMessage.error('載入學生資料失敗')
   } finally {
@@ -163,27 +189,28 @@ const loadStudents = async (classroomId) => {
   }
 }
 
-const onClassroomChange = async (cid) => {
+const onClassroomChange = async (cid: number | null) => {
   form.student_id = null
   await loadStudents(cid)
 }
 
 const hydrate = () => {
   if (props.mode === 'edit' && props.initial) {
+    const init = props.initial
     Object.assign(form, {
-      student_id: props.initial.student_id,
-      semester: props.initial.semester || '',
-      assessment_type: props.initial.assessment_type || '',
-      domain: props.initial.domain || '',
-      rating: props.initial.rating || '',
-      content: props.initial.content || '',
-      suggestions: props.initial.suggestions || '',
-      assessment_date: props.initial.assessment_date || '',
-      related_incident_id: props.initial.related_incident_id ?? null,
+      student_id: init.student_id,
+      semester: init.semester || '',
+      assessment_type: init.assessment_type || '',
+      domain: init.domain || '',
+      rating: init.rating || '',
+      content: init.content || '',
+      suggestions: init.suggestions || '',
+      assessment_date: init.assessment_date || '',
+      related_incident_id: init.related_incident_id ?? null,
     })
-    pickedClassroomId.value = props.initial.classroom_id || props.defaultClassroomId || null
-    studentOptions.value = props.initial.student_name
-      ? [{ id: props.initial.student_id, name: props.initial.student_name }]
+    pickedClassroomId.value = (init.classroom_id as number | null) || props.defaultClassroomId || null
+    studentOptions.value = init.student_name
+      ? [{ id: init.student_id, name: init.student_name }]
       : []
   } else {
     Object.assign(form, empty())
@@ -233,7 +260,7 @@ const submit = async () => {
       saved = await recordsStore.createRecord('assessment', payload)
       ElMessage.success('新增成功')
     } else {
-      saved = await recordsStore.updateRecord('assessment', props.initial.id, payload)
+      saved = await recordsStore.updateRecord('assessment', props.initial!.id as number, payload)
       ElMessage.success('更新成功')
     }
     emit('submitted', { payload, saved })

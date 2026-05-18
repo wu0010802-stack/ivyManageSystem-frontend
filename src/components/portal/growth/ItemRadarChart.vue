@@ -1,14 +1,21 @@
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 import { RadarChart } from '@/views/reports/chartSetup'
 
-const props = defineProps({
-  items: { type: Array, required: true },
-})
+interface ScoreItem {
+  display_order?: number
+  label?: string
+  score_delta?: number | string
+  [key: string]: unknown
+}
+
+const props = defineProps<{
+  items: ScoreItem[]
+}>()
 
 const chartData = computed(() => {
   const sorted = [...props.items].sort(
-    (a, b) => a.display_order - b.display_order,
+    (a, b) => (a.display_order ?? 0) - (b.display_order ?? 0),
   )
   return {
     labels: sorted.map((it) => it.label),

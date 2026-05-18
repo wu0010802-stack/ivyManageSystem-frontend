@@ -1,17 +1,17 @@
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useOnlineStatus } from '@/composables/useOnlineStatus'
 import { countPending, OP_KINDS } from '@/utils/offlineQueue'
 
 const { isOnline } = useOnlineStatus(async () => {
   // 重新連線時更新一下 badge，實際同步由點名頁自行觸發
-  pendingCount.value = await countPending(OP_KINDS.CLASS_ATTENDANCE)
+  pendingCount.value = await countPending(OP_KINDS.CLASS_ATTENDANCE, undefined)
 })
 
-const pendingCount = ref(0)
+const pendingCount = ref<number>(0)
 
 onMounted(async () => {
-  pendingCount.value = await countPending(OP_KINDS.CLASS_ATTENDANCE)
+  pendingCount.value = await countPending(OP_KINDS.CLASS_ATTENDANCE, undefined)
 })
 </script>
 

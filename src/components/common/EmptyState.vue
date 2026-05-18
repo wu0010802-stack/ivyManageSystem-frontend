@@ -24,7 +24,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 /**
  * 共用空狀態元件。跨 admin/portal/parent 三 app。
  *
@@ -45,15 +45,16 @@
 import { computed } from 'vue'
 import { FolderOpened, WarningFilled } from '@element-plus/icons-vue'
 
-const props = defineProps({
-  icon: { type: [String, Object, Function], default: null },
-  title: { type: String, default: '暫無資料' },
-  description: { type: String, default: '' },
-  variant: {
-    type: String,
-    default: 'default',
-    validator: (v) => ['default', 'mobile', 'error', 'inline'].includes(v),
-  },
+const props = withDefaults(defineProps<{
+  icon?: string | object | ((...args: unknown[]) => unknown) | null
+  title?: string
+  description?: string
+  variant?: 'default' | 'mobile' | 'error' | 'inline'
+}>(), {
+  icon: null,
+  title: '暫無資料',
+  description: '',
+  variant: 'default',
 })
 
 const iconSize = computed(() => {
@@ -67,7 +68,10 @@ const iconSize = computed(() => {
 const iconType = computed(() => {
   const i = props.icon
   if (!i) return 'el'
-  if (typeof i === 'object' && (i.render || i.setup || i.template)) return 'component'
+  if (typeof i === 'object') {
+    const obj = i as Record<string, unknown>
+    if (obj.render || obj.setup || obj.template) return 'component'
+  }
   return 'el'
 })
 

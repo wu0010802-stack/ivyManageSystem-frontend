@@ -231,7 +231,7 @@
   </el-aside>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import {
@@ -243,26 +243,21 @@ import {
 } from '@element-plus/icons-vue'
 import { PERMISSION_VALUES, getUserInfo } from '@/utils/auth'
 
-const props = defineProps({
-  pendingApprovals: {
-    type: Number,
-    default: 0
-  },
-  pendingActivityInquiries: {
-    type: Number,
-    default: 0
-  },
-  isMobile: {
-    type: Boolean,
-    default: false
-  },
-  mobileOpen: {
-    type: Boolean,
-    default: false
-  }
+const props = withDefaults(defineProps<{
+  pendingApprovals?: number
+  pendingActivityInquiries?: number
+  isMobile?: boolean
+  mobileOpen?: boolean
+}>(), {
+  pendingApprovals: 0,
+  pendingActivityInquiries: 0,
+  isMobile: false,
+  mobileOpen: false,
 })
 
-const emit = defineEmits(['close-sidebar'])
+const emit = defineEmits<{
+  'close-sidebar': []
+}>()
 
 const route = useRoute()
 const isCollapse = ref(false)
@@ -281,7 +276,7 @@ const canView = computed(() => {
   }
 
   // 使用 BigInt 運算，避免高位元（≥ 2^31）在 JS 32-bit 有符號整數中溢位
-  const permsBig = BigInt(permissions)
+  const permsBig = BigInt(permissions as string | number | bigint | boolean)
   return Object.fromEntries(
     Object.entries(PERMISSION_VALUES).map(([name, value]) => {
       const valBig = BigInt(value)

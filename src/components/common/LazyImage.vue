@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /**
  * 家長端懶載圖片：IntersectionObserver + native loading="lazy" fallback。
  *
@@ -14,18 +14,23 @@
  */
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 
-const props = defineProps({
-  src: { type: String, required: true },
-  alt: { type: String, default: '' },
-  aspectRatio: { type: String, default: '1 / 1' },
-  rootMargin: { type: String, default: '200px' },
-  placeholder: { type: String, default: 'shimmer' },
+const props = withDefaults(defineProps<{
+  src: string
+  alt?: string
+  aspectRatio?: string
+  rootMargin?: string
+  placeholder?: string
+}>(), {
+  alt: '',
+  aspectRatio: '1 / 1',
+  rootMargin: '200px',
+  placeholder: 'shimmer',
 })
 
-const containerRef = ref(null)
-const inView = ref(false)
-const errored = ref(false)
-let observer = null
+const containerRef = ref<HTMLElement | null>(null)
+const inView = ref<boolean>(false)
+const errored = ref<boolean>(false)
+let observer: IntersectionObserver | null = null
 
 onMounted(() => {
   if (typeof window === 'undefined' || !('IntersectionObserver' in window)) {

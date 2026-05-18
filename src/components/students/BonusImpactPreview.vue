@@ -81,22 +81,52 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, watch, computed } from 'vue'
 import { Right } from '@element-plus/icons-vue'
 import { previewBonusImpact } from '@/api/students'
 
-const props = defineProps({
-  operation: { type: String, required: true },
-  classroomId: { type: Number, default: null },
-  sourceClassroomId: { type: Number, default: null },
-  studentCount: { type: Number, default: 1 },
+const props = withDefaults(defineProps<{
+  operation: string
+  classroomId?: number | null
+  sourceClassroomId?: number | null
+  studentCount?: number
+}>(), {
+  classroomId: null,
+  sourceClassroomId: null,
+  studentCount: 1,
 })
 
-const loading = ref(false)
-const result = ref(null)
-const error = ref('')
-let _timer = null
+interface TeacherImpact {
+  employee_id: number
+  name: string
+  role?: string
+  category?: string
+  current_bonus: number
+  projected_bonus: number
+  change: number
+  current_enrollment?: number
+  projected_enrollment?: number
+  target_enrollment?: number
+}
+
+interface ClassroomImpact {
+  classroom_id: number
+  classroom_name: string
+  grade_name: string
+  teachers: TeacherImpact[]
+}
+
+interface BonusPreviewResult {
+  is_festival_month: boolean
+  affected_classrooms?: ClassroomImpact[]
+  school_wide_impact?: TeacherImpact[]
+}
+
+const loading = ref<boolean>(false)
+const result = ref<BonusPreviewResult | null>(null)
+const error = ref<string>('')
+let _timer: ReturnType<typeof setTimeout> | null = null
 
 const visible = computed(() => {
   if (props.operation === 'add') return !!props.classroomId
@@ -130,7 +160,7 @@ const fetchPreview = async () => {
 watch(
   () => [props.operation, props.classroomId, props.sourceClassroomId, props.studentCount],
   () => {
-    clearTimeout(_timer)
+    if (_timer !== null) clearTimeout(_timer)
     _timer = setTimeout(fetchPreview, 400)
   },
   { immediate: true },

@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted, computed } from 'vue'
 import * as echarts from 'echarts/core'
 import { LineChart } from 'echarts/charts'
@@ -19,14 +19,19 @@ echarts.use([
   CanvasRenderer,
 ])
 
-const props = defineProps({
-  data: { type: Object, default: () => ({}) },
-  metric: { type: String, default: 'height' },
-  title: { type: String, default: '' },
+const props = withDefaults(defineProps<{
+  data?: Record<string, unknown>
+  metric?: string
+  title?: string
+}>(), {
+  data: () => ({}),
+  metric: 'height',
+  title: '',
 })
 
-const chartEl = ref(null)
-let chartInstance = null
+const chartEl = ref<HTMLElement | null>(null)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let chartInstance: any = null
 
 const yAxisLabel = computed(() => {
   if (['height', 'head_circumference'].includes(props.metric)) return 'cm'
@@ -35,7 +40,7 @@ const yAxisLabel = computed(() => {
 })
 
 const seriesName = computed(() => {
-  const MAP = {
+  const MAP: Record<string, string> = {
     height: '身高 (cm)',
     weight: '體重 (kg)',
     head_circumference: '頭圍 (cm)',
@@ -51,11 +56,16 @@ const isEmpty = computed(() => {
 })
 
 function buildOption() {
-  const points = (props.data?.[props.metric] || []).slice().sort((a, b) =>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rawData = (props.data?.[props.metric] as any[]) || []
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const points = rawData.slice().sort((a: any, b: any) =>
     a.x < b.x ? -1 : a.x > b.x ? 1 : 0
   )
-  const xData = points.map((p) => p.x)
-  const yData = points.map((p) => p.y)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const xData = points.map((p: any) => p.x)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const yData = points.map((p: any) => p.y)
 
   return {
     title: props.title
@@ -63,7 +73,8 @@ function buildOption() {
       : undefined,
     tooltip: {
       trigger: 'axis',
-      formatter: (params) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      formatter: (params: any) => {
         const p = Array.isArray(params) ? params[0] : params
         if (!p) return ''
         return `${p.axisValue}<br/>${seriesName.value}：${p.value}`

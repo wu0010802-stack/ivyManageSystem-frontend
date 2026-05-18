@@ -17,12 +17,16 @@
   </el-card>
 </template>
 
-<script setup>
-defineProps({
-  items: { type: Array, default: () => [] },
+<script setup lang="ts">
+interface ActionItem { code?: string; title?: string; description?: string; [key: string]: unknown }
+
+withDefaults(defineProps<{
+  items?: ActionItem[]
+}>(), {
+  items: () => [],
 })
 
-defineEmits(['select'])
+defineEmits<{ 'select': [item: ActionItem] }>()
 </script>
 
 <style scoped>

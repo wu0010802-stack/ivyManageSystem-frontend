@@ -1,8 +1,12 @@
-<script setup>
-defineProps({
-  icon: { type: String, default: '📭' },
-  title: { type: String, default: '暫無資料' },
-  description: { type: String, default: '' },
+<script setup lang="ts">
+withDefaults(defineProps<{
+  icon?: string
+  title?: string
+  description?: string
+}>(), {
+  icon: '📭',
+  title: '暫無資料',
+  description: '',
 })
 </script>
 

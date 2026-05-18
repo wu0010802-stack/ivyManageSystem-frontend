@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, inject, onMounted, onUnmounted, ref, watch } from 'vue'
 import { apiError } from '@/utils/error'
 import { getDailyAttendance } from '@/api/studentAttendance'
@@ -10,7 +10,15 @@ import SectionCard from './SectionCard.vue'
 const ctx = inject(ACADEMIC_AFFAIRS_FILTERS_KEY)
 if (!ctx) throw new Error('AttendanceSection 須在 StudentAcademicAffairsView 內使用')
 
-const records = ref([])
+interface AttendanceRow {
+  student_id?: number
+  student_no?: string
+  name?: string
+  status?: string
+  remark?: string
+  [key: string]: unknown
+}
+const records = ref<AttendanceRow[]>([])
 const loading = ref(false)
 const errorMessage = ref('')
 const batchDrawerOpen = ref(false)
@@ -35,12 +43,12 @@ const summary = computed(() => {
   return s
 })
 
-const statusType = (status) => {
+const statusType = (status: string | undefined) => {
   if (status === '出席') return 'success'
   if (status === '遲到') return 'warning'
   if (status === '缺席') return 'danger'
   if (status === '病假' || status === '事假') return 'info'
-  return ''
+  return undefined
 }
 
 const fetchDaily = async () => {
@@ -55,7 +63,8 @@ const fetchDaily = async () => {
       date: refDate.value,
       classroom_id: ctx.filters.classroomId,
     })
-    records.value = res.data?.records ?? []
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    records.value = (res as any).data?.records ?? []
   } catch (error) {
     errorMessage.value = apiError(error, '載入出席資料失敗')
     records.value = []
@@ -64,7 +73,7 @@ const fetchDaily = async () => {
   }
 }
 
-const onAttendanceChanged = (payload) => {
+const onAttendanceChanged = (payload: Record<string, unknown>) => {
   if (payload?.classroom_id === ctx.filters.classroomId && payload?.date === refDate.value) {
     fetchDaily()
   }
@@ -145,7 +154,7 @@ defineExpose({ fetchDaily })
       destroy-on-close
     >
       <AttendanceBatchPanel
-        :classroom-id="ctx.filters.classroomId"
+        :classroom-id="(ctx.filters.classroomId as number | null)"
         :date="refDate"
         hide-classroom-select
         hide-date-picker

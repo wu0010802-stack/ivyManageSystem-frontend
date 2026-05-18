@@ -26,8 +26,8 @@
       <el-table-column label="組成" min-width="200">
         <template #default="{ row }">
           <span v-if="row.breakdown" class="breakdown">
-            <span v-for="(v, k) in row.breakdown" :key="k">
-              {{ breakdownLabel(k) }}:{{ formatMoney(v) }}
+            <span v-for="(v, k) in row.breakdown" :key="String(k)">
+              {{ breakdownLabel(String(k)) }}:{{ formatMoney(v) }}
             </span>
           </span>
           <span v-else class="muted">—</span>
@@ -61,7 +61,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -72,13 +72,33 @@ import {
 import { getGrades } from '@/api/classrooms'
 import FeeTemplateDialog from './FeeTemplateDialog.vue'
 
-const filterYear = ref(114)
-const filterSemester = ref(1)
-const templates = ref([])
-const grades = ref([])
-const loading = ref(false)
-const dialogVisible = ref(false)
-const editingTemplate = ref(null)
+interface Grade {
+  id: number
+  name: string
+  sort_order?: number
+}
+
+interface FeeTemplate {
+  id: number
+  grade_id: number
+  grade_name?: string
+  school_year: number
+  semester: number
+  fee_type: string
+  name: string
+  amount: number
+  due_date_offset_days?: number
+  is_active: boolean
+  breakdown?: Record<string, number>
+}
+
+const filterYear = ref<number>(114)
+const filterSemester = ref<number>(1)
+const templates = ref<FeeTemplate[]>([])
+const grades = ref<Grade[]>([])
+const loading = ref<boolean>(false)
+const dialogVisible = ref<boolean>(false)
+const editingTemplate = ref<FeeTemplate | null>(null)
 
 const availableYears = computed(() => {
   // 民國年 = 西元年 - 1911
@@ -98,13 +118,13 @@ const BREAKDOWN_LABELS = {
   transport: '交通',
 }
 
-function feeTypeLabel(t) {
-  return FEE_TYPE_LABELS[t] || t
+function feeTypeLabel(t: string): string {
+  return (FEE_TYPE_LABELS as Record<string, string>)[t] || t
 }
-function breakdownLabel(k) {
-  return BREAKDOWN_LABELS[k] || k
+function breakdownLabel(k: string): string {
+  return (BREAKDOWN_LABELS as Record<string, string>)[k] || k
 }
-function formatMoney(n) {
+function formatMoney(n: number | null | undefined): string {
   return n != null ? `NT$ ${Number(n).toLocaleString()}` : '—'
 }
 
@@ -116,12 +136,13 @@ async function loadTemplates() {
       semester: filterSemester.value,
     })
     const gradeMap = Object.fromEntries(grades.value.map((g) => [g.id, g.name]))
-    templates.value = (list || []).map((t) => ({
+    templates.value = ((list || []) as FeeTemplate[]).map((t) => ({
       ...t,
       grade_name: gradeMap[t.grade_id] || `#${t.grade_id}`,
     }))
-  } catch (e) {
-    ElMessage.error(e.response?.data?.detail || '載入範本失敗')
+  } catch (e: unknown) {
+    const err = e as { response?: { data?: { detail?: string } } }
+    ElMessage.error(err.response?.data?.detail || '載入範本失敗')
   } finally {
     loading.value = false
   }
@@ -132,12 +153,12 @@ function openCreateDialog() {
   dialogVisible.value = true
 }
 
-function openEditDialog(row) {
+function openEditDialog(row: FeeTemplate) {
   editingTemplate.value = row
   dialogVisible.value = true
 }
 
-async function onDelete(row) {
+async function onDelete(row: FeeTemplate) {
   try {
     await ElMessageBox.confirm(`確認停用範本「${row.name}」?`, '提示', {
       type: 'warning',
@@ -149,8 +170,9 @@ async function onDelete(row) {
     await deleteFeeTemplate(row.id)
     ElMessage.success('已停用')
     loadTemplates()
-  } catch (e) {
-    ElMessage.error(e.response?.data?.detail || '停用失敗')
+  } catch (e: unknown) {
+    const err = e as { response?: { data?: { detail?: string } } }
+    ElMessage.error(err.response?.data?.detail || '停用失敗')
   }
 }
 
@@ -187,11 +209,12 @@ async function copyToNextSemester() {
         due_date_offset_days: t.due_date_offset_days,
       })
       copied++
-    } catch (e) {
-      if (e.response?.status === 409) {
+    } catch (e: unknown) {
+      const err = e as { response?: { status?: number; data?: { detail?: string } } }
+      if (err.response?.status === 409) {
         skipped++
       } else {
-        ElMessage.error(e.response?.data?.detail || '複製失敗')
+        ElMessage.error(err.response?.data?.detail || '複製失敗')
         throw e
       }
     }
@@ -206,11 +229,12 @@ async function copyToNextSemester() {
 onMounted(async () => {
   try {
     const res = await getGrades()
-    grades.value = (res.data || []).slice().sort(
+    grades.value = ((res as { data?: Grade[] }).data || []).slice().sort(
       (a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0),
     )
-  } catch (e) {
-    ElMessage.error(e.response?.data?.detail || '載入年級失敗')
+  } catch (e: unknown) {
+    const err = e as { response?: { data?: { detail?: string } } }
+    ElMessage.error(err.response?.data?.detail || '載入年級失敗')
   }
   loadTemplates()
 })

@@ -98,9 +98,9 @@
           >
             <el-option
               v-for="s in studentOptions"
-              :key="s.id"
-              :label="s.name"
-              :value="s.id"
+              :key="s.id as PropertyKey"
+              :label="s.name as string"
+              :value="s.id as number"
             />
           </el-select>
         </el-form-item>
@@ -147,7 +147,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useAcademicTermStore } from '@/stores/academicTerm'
@@ -160,8 +160,8 @@ import { getStudents } from '@/api/students'
 const termStore = useAcademicTermStore()
 const currentAcademicTerm = getCurrentAcademicTerm()
 
-const semLabel = (s) => (s === 1 ? '上學期' : '下學期')
-const makeTerm = (sy, sem) => ({ key: `${sy}-${sem}`, school_year: sy, semester: sem, label: `${sy}學年度 ${semLabel(sem)}` })
+const semLabel = (s: number) => (s === 1 ? '上學期' : '下學期')
+const makeTerm = (sy: number, sem: number) => ({ key: `${sy}-${sem}`, school_year: sy, semester: sem, label: `${sy}學年度 ${semLabel(sem)}` })
 
 const termOptions = computed(() => {
   const { school_year: cy, semester: cs } = currentAcademicTerm
@@ -195,32 +195,34 @@ const selectedTermKey = computed({
 })
 
 // ── 選項資料 ──────────────────────────────────────────
-const eventTypes = ref([])
-const reasonOptions = ref({})
+const eventTypes = ref<string[]>([])
+const reasonOptions = ref<Record<string, string[]>>({})
 
 const loadOptions = async () => {
   try {
     const res = await getChangeLogOptions()
-    eventTypes.value = res.data.event_types
-    reasonOptions.value = res.data.reason_options
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    eventTypes.value = (res as any).data?.event_types || []
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    reasonOptions.value = (res as any).data?.reason_options || {}
   } catch {
     eventTypes.value = ['入學', '復學', '退學', '轉出', '轉入', '畢業']
   }
 }
 
 // ── 列表資料 ──────────────────────────────────────────
-const logs = ref([])
+const logs = ref<Record<string, unknown>[]>([])
 const total = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(20)
 const loading = ref(false)
-const filterEventTypes = ref([])
-const summary = ref(null)
+const filterEventTypes = ref<string[]>([])
+const summary = ref<Record<string, unknown> | null>(null)
 
 const fetchLogs = async () => {
   loading.value = true
   try {
-    const params = {
+    const params: Record<string, unknown> = {
       school_year: termStore.school_year,
       semester: termStore.semester,
       page: currentPage.value,
@@ -231,9 +233,12 @@ const fetchLogs = async () => {
       getChangeLogs(params),
       getChangeLogsSummary({ school_year: termStore.school_year, semester: termStore.semester }),
     ])
-    logs.value = logsRes.data.items
-    total.value = logsRes.data.total
-    summary.value = summaryRes.data.summary
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    logs.value = (logsRes as any).data?.items || []
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    total.value = (logsRes as any).data?.total || 0
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    summary.value = (summaryRes as any).data?.summary || null
   } catch {
     ElMessage.error('載入異動紀錄失敗')
   } finally {
@@ -245,15 +250,16 @@ watch(selectedTermKey, () => { currentPage.value = 1; fetchLogs() })
 watch(filterEventTypes, () => { currentPage.value = 1; fetchLogs() })
 
 // ── 學生搜尋 ──────────────────────────────────────────
-const studentOptions = ref([])
+const studentOptions = ref<Record<string, unknown>[]>([])
 const studentSearchLoading = ref(false)
 
-const searchStudents = async (query) => {
+const searchStudents = async (query: string) => {
   if (!query) return
   studentSearchLoading.value = true
   try {
     const res = await getStudents({ search: query, page_size: 20 })
-    studentOptions.value = res.data.items || []
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    studentOptions.value = (res as any).data?.items || []
   } catch {
     studentOptions.value = []
   } finally {
@@ -265,8 +271,9 @@ const searchStudents = async (query) => {
 const dialogVisible = ref(false)
 const dialogMode = ref('create')
 const submitting = ref(false)
-const editingId = ref(null)
-const formRef = ref(null)
+const editingId = ref<number | null>(null)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const formRef = ref<any>(null)
 
 const defaultForm = () => ({
   termKey: `${termStore.school_year}-${termStore.semester}`,
@@ -277,7 +284,14 @@ const defaultForm = () => ({
   notes: '',
 })
 
-const form = ref(defaultForm())
+const form = ref<{
+  termKey: string
+  student_id: number | null
+  event_type: string
+  event_date: string
+  reason: string
+  notes: string
+}>(defaultForm())
 
 const formRules = {
   student_id: [{ required: true, message: '請選擇學生', trigger: 'change' }],
@@ -296,16 +310,16 @@ const openCreateDialog = () => {
   dialogVisible.value = true
 }
 
-const openEditDialog = (row) => {
+const openEditDialog = (row: Record<string, unknown>) => {
   dialogMode.value = 'edit'
-  editingId.value = row.id
+  editingId.value = row.id as number
   form.value = {
     termKey: `${row.school_year}-${row.semester}`,
-    student_id: row.student_id,
-    event_type: row.event_type,
-    event_date: row.event_date,
-    reason: row.reason || '',
-    notes: row.notes || '',
+    student_id: row.student_id as number,
+    event_type: row.event_type as string,
+    event_date: row.event_date as string,
+    reason: (row.reason as string) || '',
+    notes: (row.notes as string) || '',
   }
   dialogVisible.value = true
 }
@@ -334,7 +348,7 @@ const handleSubmit = async () => {
       })
       ElMessage.success('異動紀錄已新增')
     } else {
-      await updateChangeLog(editingId.value, {
+      await updateChangeLog(editingId.value as number, {
         event_type: form.value.event_type,
         event_date: form.value.event_date,
         reason: form.value.reason || undefined,
@@ -351,14 +365,14 @@ const handleSubmit = async () => {
   }
 }
 
-const handleDelete = async (row) => {
+const handleDelete = async (row: Record<string, unknown>) => {
   await ElMessageBox.confirm(`確定刪除「${row.student_name}」的${row.event_type}紀錄？`, '確認刪除', {
     type: 'warning',
     confirmButtonText: '刪除',
     confirmButtonClass: 'el-button--danger',
   })
   try {
-    await deleteChangeLog(row.id)
+    await deleteChangeLog(row.id as number)
     ElMessage.success('已刪除')
     fetchLogs()
   } catch {
@@ -367,9 +381,10 @@ const handleDelete = async (row) => {
 }
 
 // ── Tag 樣式 ──────────────────────────────────────────
-const eventTagType = (type) => {
-  const map = { 入學: 'success', 復學: 'success', 退學: 'danger', 轉出: 'warning', 轉入: 'primary', 畢業: 'info' }
-  return map[type] || ''
+type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger'
+const eventTagType = (type: unknown): ElTagType | undefined => {
+  const map: Record<string, ElTagType> = { 入學: 'success', 復學: 'success', 退學: 'danger', 轉出: 'warning', 轉入: 'primary', 畢業: 'info' }
+  return map[String(type ?? '')] || undefined
 }
 
 onMounted(async () => {

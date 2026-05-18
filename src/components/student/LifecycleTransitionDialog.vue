@@ -106,24 +106,31 @@
   </el-dialog>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { transitionStudentLifecycle } from '@/api/students'
 
-const props = defineProps({
-  modelValue: { type: Boolean, default: false },
-  studentId: { type: Number, default: null },
-  currentStatus: { type: String, default: 'active' },
+const props = withDefaults(defineProps<{
+  modelValue?: boolean
+  studentId?: number | null
+  currentStatus?: string
+}>(), {
+  modelValue: false,
+  studentId: null,
+  currentStatus: 'active',
 })
-const emit = defineEmits(['update:modelValue', 'transitioned'])
+const emit = defineEmits<{
+  'update:modelValue': [v: boolean]
+  'transitioned': [data: unknown]
+}>()
 
 const visible = computed({
   get: () => props.modelValue,
   set: (v) => emit('update:modelValue', v),
 })
 
-const STATUS_LABELS = {
+const STATUS_LABELS: Record<string, string> = {
   prospect: '招生中',
   enrolled: '已報到',
   active: '在學',
@@ -134,7 +141,7 @@ const STATUS_LABELS = {
 }
 
 // 合法轉移表（同步後端 ALLOWED_TRANSITIONS）
-const ALLOWED_TRANSITIONS = {
+const ALLOWED_TRANSITIONS: Record<string, string[]> = {
   prospect: ['enrolled', 'withdrawn'],
   enrolled: ['active', 'withdrawn'],
   active: ['on_leave', 'transferred', 'withdrawn', 'graduated'],
@@ -144,7 +151,7 @@ const ALLOWED_TRANSITIONS = {
   graduated: [],
 }
 
-const REASON_BY_TARGET = {
+const REASON_BY_TARGET: Record<string, string[]> = {
   on_leave: ['家庭因素', '健康因素', '其他'],
   active: ['復學', '其他'],
   withdrawn: ['家庭因素', '健康因素', '搬遷', '轉往他園', '其他'],
@@ -173,7 +180,7 @@ const isReactivate = computed(
 )
 
 const terminalWarning = computed(() => {
-  const map = {
+  const map: Record<string, string> = {
     withdrawn: '轉為「退學」將停用學生帳號、取消進行中接送通知，並軟刪該生當學期才藝報名。',
     transferred: '轉為「轉出」為終態，將停用學生帳號並取消進行中接送通知。',
     graduated: '轉為「畢業」為終態，將停用學生帳號並取消進行中接送通知。',
@@ -190,7 +197,8 @@ const emptyForm = () => ({
   notes: '',
 })
 const form = reactive(emptyForm())
-const formRef = ref(null)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const formRef = ref<any>(null)
 const submitting = ref(false)
 
 const formRules = {
@@ -226,12 +234,13 @@ async function handleSubmit() {
       reason: form.reason || null,
       notes: form.notes || null,
     }
-    const { data } = await transitionStudentLifecycle(props.studentId, payload)
+    const { data } = await transitionStudentLifecycle(props.studentId as number, payload)
     ElMessage.success(data.message || '狀態已更新')
     emit('transitioned', data)
     visible.value = false
   } catch (err) {
-    ElMessage.error(err.displayMessage || '狀態轉移失敗')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ElMessage.error((err as any).displayMessage || '狀態轉移失敗')
   } finally {
     submitting.value = false
   }

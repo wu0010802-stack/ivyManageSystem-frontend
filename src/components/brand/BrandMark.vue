@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /**
  * IvyKids logo 三層次封裝。
  *
@@ -7,23 +7,22 @@
  *   <BrandMark variant="full" :size="100" />     <!-- 完整版 + IVY KIDS 緞帶 -->
  *   <BrandMark variant="mark-only" :size="48" /> <!-- 只圖標無文字 -->
  */
-import { computed } from 'vue'
+import { computed, type CSSProperties } from 'vue'
 import LaurelWreath from './LaurelWreath.vue'
 import CrownIcon from './CrownIcon.vue'
 import IvyRibbon from './IvyRibbon.vue'
 
 defineOptions({ name: 'BrandMark' })
 
-const props = defineProps({
-  variant: {
-    type: String,
-    default: 'mini',
-    validator: (v) => ['mini', 'full', 'mark-only'].includes(v),
-  },
-  size: { type: Number, default: 32 },
+const props = withDefaults(defineProps<{
+  variant?: 'mini' | 'full' | 'mark-only'
+  size?: number
+}>(), {
+  variant: 'mini',
+  size: 32,
 })
 
-const containerStyle = computed(() => ({
+const containerStyle = computed((): CSSProperties => ({
   width: `${props.size}px`,
   height: `${props.size}px`,
   position: 'relative',

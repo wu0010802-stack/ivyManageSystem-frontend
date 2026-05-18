@@ -7,7 +7,7 @@
       </div>
       <div class="mom-badge" :class="momClass">
         <span class="mom-arrow" aria-hidden="true">{{ momArrow }}</span>
-        月比預繳率 {{ formatDelta(monthOverMonth?.visit_to_deposit_rate?.delta) }}
+        月比預繳率 {{ formatDelta(momDelta) }}
       </div>
     </div>
 
@@ -52,34 +52,38 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 
-const props = defineProps({
-  summary:        { type: Object,   required: true },
-  referenceMonth: { type: String,   default: null },
-  monthOverMonth: { type: Object,   default: () => ({}) },
-  fmtRate:        { type: Function, required: true },
+const props = withDefaults(defineProps<{
+  summary: Record<string, unknown>
+  referenceMonth?: string | null
+  monthOverMonth?: Record<string, unknown>
+  fmtRate: (...args: unknown[]) => unknown
+}>(), {
+  referenceMonth: null,
+  monthOverMonth: () => ({}),
 })
 
 const cards = computed(() => ([
-  { key: 'current_month', label: '本月',    snapshot: props.summary?.current_month || {} },
-  { key: 'rolling_30d',   label: '近 30 天', snapshot: props.summary?.rolling_30d   || {} },
-  { key: 'rolling_90d',   label: '近 90 天', snapshot: props.summary?.rolling_90d   || {} },
-  { key: 'ytd',           label: '年度累計', snapshot: props.summary?.ytd            || {} },
+  { key: 'current_month', label: '本月',    snapshot: (props.summary?.current_month as Record<string, unknown>) || {} },
+  { key: 'rolling_30d',   label: '近 30 天', snapshot: (props.summary?.rolling_30d as Record<string, unknown>)   || {} },
+  { key: 'rolling_90d',   label: '近 90 天', snapshot: (props.summary?.rolling_90d as Record<string, unknown>)   || {} },
+  { key: 'ytd',           label: '年度累計', snapshot: (props.summary?.ytd as Record<string, unknown>)            || {} },
 ]))
 
-const formatDelta = (value) => {
+const formatDelta = (value: unknown) => {
   const num = Number(value || 0)
   const sign = num > 0 ? '+' : ''
   return `${sign}${num.toFixed(1)}pt`
 }
 
-const momDelta   = computed(() => Number(props.monthOverMonth?.visit_to_deposit_rate?.delta || 0))
+const momOverMonth = props.monthOverMonth as { visit_to_deposit_rate?: { delta?: number } }
+const momDelta   = computed(() => Number((momOverMonth?.visit_to_deposit_rate?.delta) || 0))
 const momArrow   = computed(() => momDelta.value > 0 ? '▲' : momDelta.value < 0 ? '▼' : '–')
 const momClass   = computed(() => momDelta.value > 0 ? 'mom-badge--up' : momDelta.value < 0 ? 'mom-badge--down' : '')
 
-const rateClass = (rate) => {
+const rateClass = (rate: unknown) => {
   const n = Number(rate || 0)
   if (n >= 60) return 'dc-rate-value--high'
   if (n >= 30) return 'dc-rate-value--mid'

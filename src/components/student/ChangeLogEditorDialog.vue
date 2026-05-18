@@ -38,7 +38,7 @@
           style="width: 100%"
           clearable
         >
-          <el-option v-for="s in studentOptions" :key="s.id" :label="s.name" :value="s.id" />
+          <el-option v-for="s in studentOptions" :key="s.id as PropertyKey" :label="s.name as string" :value="(s.id as number)" />
         </el-select>
       </el-form-item>
       <el-form-item label="異動類型" prop="event_type">
@@ -74,7 +74,7 @@
   </el-dialog>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getCurrentAcademicTerm } from '@/utils/academic'
@@ -83,26 +83,36 @@ import { getStudents } from '@/api/students'
 import { useStudentRecordsStore } from '@/stores/studentRecords'
 import { todayISO, dateToLocalISO } from '@/utils/format'
 
-const isFutureDate = (d) => {
+const isFutureDate = (d: unknown) => {
   if (!(d instanceof Date)) return false
   return dateToLocalISO(d) > todayISO()
 }
 
-const props = defineProps({
-  visible: { type: Boolean, default: false },
-  mode: { type: String, default: 'create' },
-  initial: { type: Object, default: null },
-  lockStudent: { type: Boolean, default: false },
-  defaultStudentId: { type: Number, default: null },
-  defaultTermKey: { type: String, default: null }, // e.g. "114-2"
+const props = withDefaults(defineProps<{
+  visible?: boolean
+  mode?: string
+  initial?: Record<string, unknown> | null
+  lockStudent?: boolean
+  defaultStudentId?: number | null
+  defaultTermKey?: string | null
+}>(), {
+  visible: false,
+  mode: 'create',
+  initial: null,
+  lockStudent: false,
+  defaultStudentId: null,
+  defaultTermKey: null,
 })
 
-const emit = defineEmits(['update:visible', 'submitted'])
+const emit = defineEmits<{
+  'update:visible': [v: boolean]
+  'submitted': []
+}>()
 
 const currentTerm = getCurrentAcademicTerm()
 
-const semLabel = (s) => (s === 1 ? '上學期' : '下學期')
-const makeTerm = (sy, sem) => ({
+const semLabel = (s: number) => (s === 1 ? '上學期' : '下學期')
+const makeTerm = (sy: number, sem: number) => ({
   key: `${sy}-${sem}`,
   school_year: sy,
   semester: sem,
@@ -123,7 +133,16 @@ const allTermOptions = computed(() => {
 const defaultKey = () =>
   props.defaultTermKey || `${currentTerm.school_year}-${currentTerm.semester}`
 
-const empty = () => ({
+interface ChangeLogForm {
+  termKey: string
+  student_id: number | null
+  event_type: string
+  event_date: string
+  reason: string
+  notes: string
+}
+
+const empty = (): ChangeLogForm => ({
   termKey: defaultKey(),
   student_id: null,
   event_type: '',
@@ -132,8 +151,8 @@ const empty = () => ({
   notes: '',
 })
 
-const form = reactive(empty())
-const formRef = ref(null)
+const form = reactive<ChangeLogForm>(empty())
+const formRef = ref<any>(null)
 const submitting = ref(false)
 
 const formRules = {
@@ -142,7 +161,7 @@ const formRules = {
   event_date: [
     { required: true, message: '請選擇異動日期', trigger: 'change' },
     {
-      validator: (_rule, value, cb) => {
+      validator: (_rule: unknown, value: string, cb: (err?: Error) => void) => {
         if (value && value > todayISO()) {
           cb(new Error('補登只能選今天或過去的日期'))
         } else {
@@ -154,16 +173,19 @@ const formRules = {
   ],
 }
 
-const eventTypes = ref([])
-const reasonOptions = ref({})
+const eventTypes = ref<string[]>([])
+const reasonOptions = ref<Record<string, string[]>>({})
 const optionsLoaded = ref(false)
 
 const loadOptions = async () => {
   if (optionsLoaded.value) return
   try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const res = await getChangeLogOptions()
-    eventTypes.value = res.data.event_types
-    reasonOptions.value = res.data.reason_options
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    eventTypes.value = (res as any).data?.event_types || []
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    reasonOptions.value = (res as any).data?.reason_options || {}
   } catch {
     eventTypes.value = ['入學', '復學', '退學', '轉出', '轉入', '畢業']
   } finally {
@@ -175,15 +197,17 @@ const currentReasonOptions = computed(() =>
   form.event_type ? (reasonOptions.value[form.event_type] || []) : []
 )
 
-const studentOptions = ref([])
+const studentOptions = ref<Record<string, unknown>[]>([])
 const studentSearchLoading = ref(false)
 
-const searchStudents = async (query) => {
+const searchStudents = async (query: string) => {
   if (!query) return
   studentSearchLoading.value = true
   try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const res = await getStudents({ search: query, page_size: 20 })
-    studentOptions.value = res.data.items || []
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    studentOptions.value = (res as any).data?.items || []
   } catch {
     studentOptions.value = []
   } finally {
@@ -194,16 +218,17 @@ const searchStudents = async (query) => {
 const hydrate = async () => {
   await loadOptions()
   if (props.mode === 'edit' && props.initial) {
+    const init = props.initial
     Object.assign(form, {
-      termKey: `${props.initial.school_year}-${props.initial.semester}`,
-      student_id: props.initial.student_id,
-      event_type: props.initial.event_type || '',
-      event_date: props.initial.event_date || '',
-      reason: props.initial.reason || '',
-      notes: props.initial.notes || '',
+      termKey: `${init.school_year}-${init.semester}`,
+      student_id: init.student_id,
+      event_type: init.event_type || '',
+      event_date: init.event_date || '',
+      reason: init.reason || '',
+      notes: init.notes || '',
     })
-    studentOptions.value = props.initial.student_name
-      ? [{ id: props.initial.student_id, name: props.initial.student_name }]
+    studentOptions.value = init.student_name
+      ? [{ id: init.student_id, name: init.student_name }]
       : []
   } else {
     Object.assign(form, empty())
@@ -242,7 +267,7 @@ const submit = async () => {
       })
       ElMessage.success('異動紀錄已補登')
     } else {
-      await recordsStore.updateRecord('change_log', props.initial.id, {
+      await recordsStore.updateRecord('change_log', props.initial!.id as number, {
         event_type: form.event_type,
         event_date: form.event_date,
         reason: form.reason || undefined,
@@ -253,7 +278,7 @@ const submit = async () => {
     emit('submitted')
     emit('update:visible', false)
   } catch (err) {
-    const detail = err?.response?.data?.detail
+    const detail = (err as any)?.response?.data?.detail
     ElMessage.error(detail || (props.mode === 'create' ? '補登失敗' : '更新失敗'))
   } finally {
     submitting.value = false

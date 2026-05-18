@@ -66,21 +66,42 @@
   </el-dialog>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref } from 'vue'
 
-defineProps({
-  visible: { type: Boolean, required: true },
-  mode: { type: String, default: 'add' },
-  form: { type: Object, required: true },
-  saving: { type: Boolean, default: false },
+interface PeriodForm {
+  period_name?: string | number | null
+  visit_count?: number | null
+  deposit_count?: number | null
+  enrolled_count?: number | null
+  transfer_term_count?: number | null
+  effective_deposit_count?: number | null
+  not_enrolled_deposit?: number | null
+  enrolled_after_school?: number | null
+  sort_order?: number | null
+  notes?: string | number | null
+  [key: string]: unknown
+}
+
+withDefaults(defineProps<{
+  visible: boolean
+  mode?: string
+  form: PeriodForm
+  saving?: boolean
+}>(), {
+  mode: 'add',
+  saving: false,
 })
 
-const emit = defineEmits(['update:visible', 'save'])
-const formRef = ref(null)
+const emit = defineEmits<{
+  'update:visible': [value: boolean]
+  'save': []
+}>()
+
+const formRef = ref<{ validate: () => Promise<void> } | null>(null)
 
 const handleSave = async () => {
-  await formRef.value.validate()
+  await formRef.value?.validate()
   emit('save')
 }
 
