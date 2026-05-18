@@ -1,5 +1,23 @@
 import api from './index'
 
+/**
+ * Typed API surface for salary. Path templates match the OpenAPI spec
+ * (`{record_id}` etc.); JS may use any string template.
+ *
+ * @typedef {import('./_generated/typed').AxiosResp<'/salaries/calculate', 'post'>}                CalculateSalaryResp
+ * @typedef {import('./_generated/typed').AxiosResp<'/salaries/records', 'get'>}                  GetRecordsResp
+ * @typedef {import('./_generated/typed').AxiosResp<'/salaries/{record_id}/breakdown', 'get'>}    SalaryBreakdownResp
+ * @typedef {import('./_generated/typed').ApiBody<'/salaries/{record_id}/manual-adjust', 'put'>}   ManualAdjustPayload
+ * @typedef {import('./_generated/typed').AxiosResp<'/salaries/{record_id}/manual-adjust', 'put'>} ManualAdjustResp
+ * @typedef {import('./_generated/typed').ApiBody<'/salaries/simulate', 'post'>}                   SimulateSalaryPayload
+ * @typedef {import('./_generated/typed').AxiosResp<'/salaries/simulate', 'post'>}                SimulateSalaryResp
+ */
+
+/**
+ * @param {number} year
+ * @param {number} month
+ * @returns {CalculateSalaryResp}
+ */
 export const calculate = (year, month) =>
   api.post(`/salaries/calculate?year=${year}&month=${month}`)
 
@@ -9,15 +27,30 @@ export const getFestivalBonus = (year, month) =>
 export const getFestivalBonusPeriodAccrual = (year, month) =>
   api.get(`/salaries/festival-bonus/period-accrual?year=${year}&month=${month}`)
 
+/**
+ * @param {number} year
+ * @param {number} month
+ * @returns {GetRecordsResp}
+ */
 export const getRecords = (year, month) =>
   api.get(`/salaries/records?year=${year}&month=${month}`)
 
+/**
+ * @param {number} recordId
+ * @returns {SalaryBreakdownResp}
+ */
 export const getSalaryBreakdown = (recordId) =>
   api.get(`/salaries/${recordId}/breakdown`)
 
 export const getSalaryFieldBreakdown = (recordId, field) =>
   api.get(`/salaries/${recordId}/field-breakdown?field=${field}`)
 
+/**
+ * @param {number} recordId
+ * @param {ManualAdjustPayload} payload
+ * @param {number} [version]  optimistic concurrency token (sent as If-Match)
+ * @returns {ManualAdjustResp}
+ */
 export const manualAdjustSalary = (recordId, payload, version) => {
   const config = {}
   if (version != null) {
@@ -36,6 +69,10 @@ export const exportTransferRoster = (year, month, type) =>
     responseType: 'blob',
   })
 
+/**
+ * @param {SimulateSalaryPayload} payload
+ * @returns {SimulateSalaryResp}
+ */
 export const simulateSalary = (payload) => api.post('/salaries/simulate', payload)
 
 export const getSalaryLogic = () => api.get('/salaries/logic')
