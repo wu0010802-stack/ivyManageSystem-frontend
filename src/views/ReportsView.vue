@@ -4,6 +4,7 @@ import { getUserInfo, hasPermission } from '@/utils/auth'
 import OverviewPanel from './reports/OverviewPanel.vue'
 import FinanceSummaryPanel from './reports/FinanceSummaryPanel.vue'
 import MonthlyPnLPanel from './reports/MonthlyPnLPanel.vue'
+import MonthlyFixedCostPanel from './reports/MonthlyFixedCostPanel.vue'
 import AttendancePanel from './reports/AttendancePanel.vue'
 import SalaryPanel from './reports/SalaryPanel.vue'
 import FunnelPanel from '@/views/analytics/FunnelPanel.vue'
@@ -41,6 +42,9 @@ const canSeeAnalytics = computed(() => hasPermission('BUSINESS_ANALYTICS'))
       </el-tab-pane>
       <el-tab-pane label="月度損益表" name="monthly-pnl">
         <MonthlyPnLPanel v-if="activeTab === 'monthly-pnl'" :key="selectedYear" :year="selectedYear" />
+      </el-tab-pane>
+      <el-tab-pane label="固定支出登錄" name="fixed-cost">
+        <MonthlyFixedCostPanel v-if="activeTab === 'fixed-cost'" :key="selectedYear" :year="selectedYear" />
       </el-tab-pane>
       <el-tab-pane label="出勤" name="attendance">
         <AttendancePanel v-if="activeTab === 'attendance'" :key="selectedYear" :year="selectedYear" />
