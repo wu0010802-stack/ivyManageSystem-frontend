@@ -133,6 +133,14 @@ function buildPayload() {
 
 const submitting = ref(false)
 
+// P1-12：effective_from 不可早於今天（規則只能往前生效）。
+function disablePastDates(d) {
+  if (!d) return false
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return d < today
+}
+
 async function submit() {
   if (!form.value.effective_from) {
     ElMessage.warning('請選擇生效日期')
@@ -155,6 +163,8 @@ async function submit() {
     submitting.value = false
   }
 }
+
+defineExpose({ disablePastDates })
 </script>
 
 <template>
@@ -169,6 +179,7 @@ async function submit() {
         <el-date-picker
           v-model="form.effective_from"
           value-format="YYYY-MM-DD"
+          :disabled-date="disablePastDates"
           data-test="effective-from-input"
         />
         <span class="hint">不可早於今天</span>
