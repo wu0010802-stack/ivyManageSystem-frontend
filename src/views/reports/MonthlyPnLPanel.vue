@@ -1,22 +1,31 @@
-<script setup>
+<script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getMonthlyPnL } from '@/api/reports'
 import { apiError } from '@/utils/error'
 
-const props = defineProps({
-  year: { type: Number, required: true },
-})
+const props = defineProps<{
+  year: number
+}>()
 
 const loading = ref(false)
 const errorMsg = ref('')
-const data = ref(null)
+const data = ref<{
+  sections?: Array<{ key: string; label: string; rows?: Array<{ key: string; label: string; unit?: string; is_subtotal?: boolean; is_breakdown?: boolean; monthly?: (number | null)[]; total?: number | null }> }>
+  totals?: {
+    income_total?: { monthly: (number | null)[]; total: number | null }
+    refund_total?: { monthly: (number | null)[]; total: number | null }
+    expense_total?: { monthly: (number | null)[]; total: number | null }
+    net_cashflow?: { monthly: (number | null)[]; total: number | null }
+  }
+  pending_items?: string[]
+} | null>(null)
 
 const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1)
 
 // 千分位金額（無小數、無 $）。0 / null → '—'
 const amountFormatter = new Intl.NumberFormat('zh-TW')
-function formatCell(value, unit) {
+function formatCell(value: number | null | undefined, unit: string | undefined) {
   if (value == null) return '—'
   const num = Number(value)
   if (!Number.isFinite(num)) return '—'
@@ -77,7 +86,7 @@ const totalRows = computed(() => {
   return rows
 })
 
-function netCellClass(v) {
+function netCellClass(v: number | null | undefined) {
   if (v == null) return ''
   const num = Number(v)
   if (!Number.isFinite(num) || num === 0) return ''

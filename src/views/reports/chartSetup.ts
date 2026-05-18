@@ -1,8 +1,8 @@
 import { defineAsyncComponent } from 'vue'
 
 // Chart.js + vue-chartjs 延遲載入；多個 Panel 共用同一個 Promise
-let _chartReady = null
-export const ensureChartReady = () => {
+let _chartReady: Promise<void> | null = null
+export const ensureChartReady = (): Promise<void> => {
   if (!_chartReady) {
     _chartReady = import('chart.js').then(({
       Chart, CategoryScale, LinearScale, RadialLinearScale,

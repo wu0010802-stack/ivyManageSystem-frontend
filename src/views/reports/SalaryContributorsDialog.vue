@@ -1,16 +1,18 @@
-<script setup>
+<script setup lang="ts">
 import { ref, watch, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getSalaryContributors } from '@/api/reports'
 import { apiError } from '@/utils/error'
 import { money } from '@/utils/format'
 
-const props = defineProps({
-  modelValue: { type: Boolean, required: true },
-  year: { type: Number, required: true },
-  month: { type: Number, required: true },
-})
-const emit = defineEmits(['update:modelValue'])
+const props = defineProps<{
+  modelValue: boolean
+  year: number
+  month: number
+}>()
+const emit = defineEmits<{
+  (e: 'update:modelValue', value: boolean): void
+}>()
 
 const visible = computed({
   get: () => props.modelValue,
@@ -18,7 +20,7 @@ const visible = computed({
 })
 
 const loading = ref(false)
-const data = ref(null)
+const data = ref<{ top_gross?: unknown[]; top_overtime?: unknown[] } | null>(null)
 
 const load = async () => {
   if (!props.year || !props.month) return
@@ -43,7 +45,7 @@ watch(
 const topGross = computed(() => data.value?.top_gross || [])
 const topOvertime = computed(() => data.value?.top_overtime || [])
 
-const formatAmount = (v) => (v == null ? '—' : money(v))
+const formatAmount = (v: number | null | undefined) => (v == null ? '—' : money(v))
 </script>
 
 <template>

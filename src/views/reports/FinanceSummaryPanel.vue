@@ -1,24 +1,25 @@
-<script setup>
+<script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Download } from '@element-plus/icons-vue'
-import { LineChart, PieChart } from './chartSetup.js'
+import { LineChart, PieChart } from './chartSetup'
 import FinanceDetailDialog from './FinanceDetailDialog.vue'
 import { getFinanceSummary, financeSummaryExportUrl } from '@/api/reports'
 import { useCachedAsync } from '@/composables/useCachedAsync'
 import { apiError } from '@/utils/error'
 import { money } from '@/utils/format'
 import { downloadFile } from '@/utils/download'
+import type { ChartOptions } from 'chart.js'
 
-const props = defineProps({
-  year: { type: Number, required: true },
-})
+const props = defineProps<{
+  year: number
+}>()
 
 const exporting = ref(false)
-const selectedMonth = ref(null)
+const selectedMonth = ref<number | null>(null)
 
 const detailVisible = ref(false)
-const detailMonth = ref(null)
+const detailMonth = ref<number | null>(null)
 
 // 雙軌策略：
 // - selectedMonth === null：走 useCachedAsync，cache key 與 OverviewPanel/SalaryPanel
@@ -31,7 +32,7 @@ const yearLevel = useCachedAsync(
   () => getFinanceSummary(props.year).then(r => r.data),
   { ttl: 300_000, immediate: false }
 )
-const monthData = ref(null)
+const monthData = ref<unknown>(null)
 const monthLoading = ref(false)
 
 async function loadData() {
@@ -69,8 +70,9 @@ const months = Array.from({ length: 12 }, (_, i) => i + 1)
 
 const trendChartData = computed(() => {
   const trend = data.value?.monthly_trend || []
-  const byMonth = {}
-  trend.forEach(r => { byMonth[r.month] = r })
+  type TrendRow = { month: number; revenue: number; refund: number; expense: number; net: number }
+  const byMonth: Record<number, TrendRow> = {}
+  trend.forEach((r: TrendRow) => { byMonth[r.month] = r })
   const monthList = selectedMonth.value ? [selectedMonth.value] : months
   const labels = monthList.map(m => `${m}月`)
   const revenue = monthList.map(m => byMonth[m]?.revenue || 0)
@@ -90,20 +92,23 @@ const trendChartData = computed(() => {
 
 const trendChartOptions = {
   responsive: true, maintainAspectRatio: false,
-  interaction: { mode: 'index', intersect: false },
+  interaction: { mode: 'index' as const, intersect: false },
   plugins: {
-    legend: { position: 'top' },
+    legend: { position: 'top' as const },
     tooltip: {
-      callbacks: { label: (ctx) => `${ctx.dataset.label}: ${money(ctx.parsed.y)}` },
+      callbacks: {
+        label: (ctx: { dataset: { label: string }; parsed: { y: number } }) =>
+          `${ctx.dataset.label}: ${money(ctx.parsed.y)}`,
+      },
     },
   },
   scales: {
-    y: { beginAtZero: false, ticks: { callback: (v) => '$' + (v / 1000).toFixed(0) + 'k' } },
+    y: { beginAtZero: false, ticks: { callback: (v: number | string) => '$' + (Number(v) / 1000).toFixed(0) + 'k' } },
   },
-}
+} as unknown as ChartOptions<'line'>
 
 const revenuePieData = computed(() => {
-  const cats = data.value?.revenue_by_category || []
+  const cats: Array<{ label: string; amount: number }> = data.value?.revenue_by_category || []
   return {
     labels: cats.map(c => c.label),
     datasets: [{
@@ -114,7 +119,7 @@ const revenuePieData = computed(() => {
 })
 
 const expensePieData = computed(() => {
-  const cats = data.value?.expense_by_category || []
+  const cats: Array<{ label: string; amount: number }> = data.value?.expense_by_category || []
   return {
     labels: cats.map(c => c.label),
     datasets: [{
@@ -127,8 +132,12 @@ const expensePieData = computed(() => {
 const pieOptions = {
   responsive: true, maintainAspectRatio: false,
   plugins: {
-    legend: { position: 'bottom' },
-    tooltip: { callbacks: { label: (ctx) => `${ctx.label}: ${money(ctx.parsed)}` } },
+    legend: { position: 'bottom' as const },
+    tooltip: {
+      callbacks: {
+        label: (ctx: { label: string; parsed: number }) => `${ctx.label}: ${money(ctx.parsed)}`,
+      },
+    },
   },
 }
 
@@ -141,13 +150,14 @@ const summary = computed(() => data.value?.summary || {
 
 // MoM：比較當前系統月與上個月（僅在檢視整年時顯示；選某月時不顯示）
 const currentMonth = new Date().getMonth() + 1
+type TrendItem = { month: number; revenue: number; refund: number; expense: number; net: number }
 const mom = computed(() => {
   if (selectedMonth.value != null) return null
-  const trend = data.value?.monthly_trend || []
-  const curr = trend.find(r => r.month === currentMonth)
-  const prev = trend.find(r => r.month === currentMonth - 1)
+  const trend: TrendItem[] = data.value?.monthly_trend || []
+  const curr = trend.find((r: TrendItem) => r.month === currentMonth)
+  const prev = trend.find((r: TrendItem) => r.month === currentMonth - 1)
   if (!curr || !prev) return null
-  const pct = (a, b) => (b ? ((a - b) / b) * 100 : null)
+  const pct = (a: number, b: number) => (b ? ((a - b) / b) * 100 : null)
   return {
     revenue: pct(curr.revenue, prev.revenue),
     refund: pct(curr.refund, prev.refund),
@@ -156,13 +166,21 @@ const mom = computed(() => {
   }
 })
 
-const formatPct = (v) => {
+const formatPct = (v: number | null) => {
   if (v == null || !Number.isFinite(v)) return null
   const sign = v > 0 ? '+' : ''
   return `${sign}${v.toFixed(1)}%`
 }
 
-const openMonthDetail = (m) => {
+type CategoryRow = { label: string; amount: number }
+const hasRevenue = computed(() =>
+  ((data.value as Record<string, CategoryRow[]> | null)?.revenue_by_category || []).some(c => c.amount > 0)
+)
+const hasExpense = computed(() =>
+  ((data.value as Record<string, CategoryRow[]> | null)?.expense_by_category || []).some(c => c.amount > 0)
+)
+
+const openMonthDetail = (m: number) => {
   detailMonth.value = m
   detailVisible.value = true
 }
@@ -246,7 +264,7 @@ const exportXlsx = async () => {
         <el-card class="chart-card" shadow="hover">
           <template #header><span class="chart-title">收入分類</span></template>
           <div class="chart-container">
-            <PieChart v-if="(data?.revenue_by_category || []).some(c => c.amount > 0)" :data="revenuePieData" :options="pieOptions" />
+            <PieChart v-if="hasRevenue" :data="revenuePieData" :options="pieOptions" />
             <el-empty v-else description="無收入資料" :image-size="60" />
           </div>
         </el-card>
@@ -255,7 +273,7 @@ const exportXlsx = async () => {
         <el-card class="chart-card" shadow="hover">
           <template #header><span class="chart-title">支出分類</span></template>
           <div class="chart-container">
-            <PieChart v-if="(data?.expense_by_category || []).some(c => c.amount > 0)" :data="expensePieData" :options="pieOptions" />
+            <PieChart v-if="hasExpense" :data="expensePieData" :options="pieOptions" />
             <el-empty v-else description="無支出資料" :image-size="60" />
           </div>
         </el-card>

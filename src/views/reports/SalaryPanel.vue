@@ -1,15 +1,16 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useCachedAsync } from '@/composables/useCachedAsync'
 import { getDashboard, getFinanceSummary } from '@/api/reports'
-import { BarChart, MONTH_LABELS } from './chartSetup.js'
+import { BarChart, MONTH_LABELS } from './chartSetup'
 import { money } from '@/utils/format'
 import { getUserInfo } from '@/utils/auth'
 import SalaryContributorsDialog from './SalaryContributorsDialog.vue'
+import type { ChartData, ChartOptions } from 'chart.js'
 
-const props = defineProps({
-  year: { type: Number, required: true },
-})
+const props = defineProps<{
+  year: number
+}>()
 
 const dashboard = useCachedAsync(
   `reports/dashboard:${props.year}`,
@@ -41,23 +42,27 @@ const canSeeAmount = computed(() => {
 })
 
 // drill-down dialog state
-const contribDialog = ref({ visible: false, month: null })
+const contribDialog = ref<{ visible: boolean; month: number | null }>({ visible: false, month: null })
 
-function openContributors(monthIdx) {
+function openContributors(monthIdx: number) {
   contribDialog.value = { visible: true, month: monthIdx + 1 }
 }
 
 const salaryChartData = computed(() => {
-  const monthMap = {}
-  ;(data.value.salary_monthly || []).forEach(d => { monthMap[d.month] = d })
-  const gross = [], net = [], bonus = [], ot = []
+  const monthMap: Record<number, Record<string, number | null>> = {}
+  ;(data.value.salary_monthly || []).forEach((d: Record<string, number>) => { monthMap[d.month] = d })
+  const gross: (number | null)[] = []
+  const net: (number | null)[] = []
+  const bonus: (number | null)[] = []
+  const ot: (number | null)[] = []
   for (let m = 1; m <= 12; m++) {
     const d = monthMap[m]
-    gross.push(d ? d.total_gross : null)
-    net.push(d ? d.total_net : null)
-    bonus.push(d ? d.total_bonus : null)
-    ot.push(d ? d.total_overtime_pay : null)
+    gross.push(d ? d.total_gross as number : null)
+    net.push(d ? d.total_net as number : null)
+    bonus.push(d ? d.total_bonus as number : null)
+    ot.push(d ? d.total_overtime_pay as number : null)
   }
+  // Mixed bar+line chart: vue-chartjs Bar types don't cover `type: 'line'` in datasets — cast to unknown
   return {
     labels: MONTH_LABELS,
     datasets: [
@@ -66,16 +71,17 @@ const salaryChartData = computed(() => {
       { label: '獎金', data: bonus, type: 'line', borderColor: '#E6A23C', backgroundColor: 'rgba(230,162,60,0.1)', fill: false, tension: 0.3, borderDash: [5, 5], pointRadius: 3, order: 2 },
       { label: '加班費', data: ot, type: 'line', borderColor: '#9B59B6', backgroundColor: 'rgba(155,89,182,0.1)', fill: false, tension: 0.3, borderDash: [3, 3], pointRadius: 3, order: 2 },
     ],
-  }
+  } as unknown as ChartData<'bar', (number | null)[]>
 })
 
 const salaryChartOptions = computed(() => ({
   responsive: true, maintainAspectRatio: false,
   plugins: {
-    legend: { position: 'top' },
+    legend: { position: 'top' as const },
     tooltip: {
       callbacks: {
-        label: (ctx) => `${ctx.dataset.label}: $${ctx.parsed.y ? ctx.parsed.y.toLocaleString() : 0}`,
+        label: (ctx: { dataset: { label: string }; parsed: { y: number | null } }) =>
+          `${ctx.dataset.label}: $${ctx.parsed.y ? ctx.parsed.y.toLocaleString() : 0}`,
       },
     },
   },
@@ -83,24 +89,24 @@ const salaryChartOptions = computed(() => ({
     y: {
       beginAtZero: true,
       title: { display: true, text: '金額 (NTD)' },
-      ticks: { callback: (val) => '$' + (val / 1000).toFixed(0) + 'k' },
+      ticks: { callback: (val: number | string) => '$' + (Number(val) / 1000).toFixed(0) + 'k' },
     },
   },
   spanGaps: true,
-  onClick: (e, elements) => {
+  onClick: (_e: unknown, elements: Array<{ index: number }>) => {
     if (!elements.length) return
     openContributors(elements[0].index)
   },
-}))
+})) as unknown as ChartOptions<'bar'>
 
 const expenseCategories = computed(() => financeData.value?.expense_by_category || [])
 const totalEmployerBenefit = computed(() => {
-  const row = expenseCategories.value.find(c => c.category === 'employer_benefit')
-  return row?.amount || 0
+  const row = expenseCategories.value.find((c: Record<string, unknown>) => c.category === 'employer_benefit')
+  return (row?.amount as number) || 0
 })
 const totalGross = computed(() => {
-  const row = expenseCategories.value.find(c => c.category === 'salary_gross')
-  return row?.amount || 0
+  const row = expenseCategories.value.find((c: Record<string, unknown>) => c.category === 'salary_gross')
+  return (row?.amount as number) || 0
 })
 </script>
 

@@ -146,7 +146,7 @@ const trendChartData = computed(() => {
 const trendOptions = {
   responsive: true,
   maintainAspectRatio: false,
-  plugins: { legend: { position: 'bottom' } },
+  plugins: { legend: { position: 'bottom' as const } },
   scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
 }
 
@@ -161,7 +161,7 @@ const reasonChartData = computed(() => {
 const reasonOptions = {
   responsive: true,
   maintainAspectRatio: false,
-  indexAxis: 'y',
+  indexAxis: 'y' as const,
   plugins: { legend: { display: false } },
   scales: { x: { beginAtZero: true, ticks: { precision: 0 } } },
 }

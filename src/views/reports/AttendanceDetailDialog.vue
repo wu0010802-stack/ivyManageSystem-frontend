@@ -1,17 +1,23 @@
-<script setup>
+<script setup lang="ts">
 import { ref, watch, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getAttendanceDetail } from '@/api/reports'
 import { apiError } from '@/utils/error'
 
-const props = defineProps({
-  modelValue: { type: Boolean, required: true },
-  year: { type: Number, required: true },
-  month: { type: Number, default: null },
-  classroomId: { type: Number, default: null },
-  classroomName: { type: String, default: null },
+const props = withDefaults(defineProps<{
+  modelValue: boolean
+  year: number
+  month?: number | null
+  classroomId?: number | null
+  classroomName?: string | null
+}>(), {
+  month: null,
+  classroomId: null,
+  classroomName: null,
 })
-const emit = defineEmits(['update:modelValue'])
+const emit = defineEmits<{
+  (e: 'update:modelValue', value: boolean): void
+}>()
 
 const visible = computed({
   get: () => props.modelValue,
@@ -19,7 +25,7 @@ const visible = computed({
 })
 
 const loading = ref(false)
-const data = ref(null)
+const data = ref<{ records?: unknown[]; total_records?: number; truncated?: boolean } | null>(null)
 
 const load = async () => {
   if (!props.year) return
@@ -57,14 +63,15 @@ const title = computed(() => {
   return parts.join(' ')
 })
 
-const ANOMALY_LABELS = {
+type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger'
+const ANOMALY_LABELS: Record<string, string> = {
   late: '遲到',
   early_leave: '早退',
   missing_punch_in: '缺打上班',
   missing_punch_out: '缺打下班',
 }
 
-const ANOMALY_TAG_TYPE = {
+const ANOMALY_TAG_TYPE: Record<string, ElTagType> = {
   late: 'warning',
   early_leave: 'warning',
   missing_punch_in: 'danger',

@@ -1,13 +1,13 @@
-<script setup>
+<script setup lang="ts">
 import { computed, watch } from 'vue'
 import { useCachedAsync } from '@/composables/useCachedAsync'
 import { getDashboard, getFinanceSummary } from '@/api/reports'
 import { Money, Coin, Wallet, TrendCharts, Calendar, Check, DataAnalysis } from '@element-plus/icons-vue'
 import { money } from '@/utils/format'
 
-const props = defineProps({
-  year: { type: Number, required: true },
-})
+const props = defineProps<{
+  year: number
+}>()
 
 const dashboard = useCachedAsync(
   `reports/dashboard:${props.year}`,
@@ -42,10 +42,10 @@ const currentMonth = new Date().getMonth() + 1
 const mom = computed(() => {
   const trend = finance.data.value?.monthly_trend || []
   if (!trend.length) return null
-  const curr = trend.find(r => r.month === currentMonth) || null
-  const prev = trend.find(r => r.month === currentMonth - 1) || null
+  const curr = trend.find((r: Record<string, number>) => r.month === currentMonth) || null
+  const prev = trend.find((r: Record<string, number>) => r.month === currentMonth - 1) || null
   if (!curr || !prev) return null
-  const pct = (a, b) => {
+  const pct = (a: number, b: number) => {
     if (!b) return null
     return ((a - b) / b) * 100
   }
@@ -66,10 +66,10 @@ const netClass = computed(() => {
 const avgAttendanceRate = computed(() => {
   const arr = dashboard.data.value?.attendance_monthly || []
   if (!arr.length) return null
-  return (arr.reduce((s, d) => s + (d.rate || 0), 0) / arr.length).toFixed(1)
+  return (arr.reduce((s: number, d: Record<string, number>) => s + (d.rate || 0), 0) / arr.length).toFixed(1)
 })
 
-const formatPct = (v) => {
+const formatPct = (v: number | null): string | null => {
   if (v == null || !Number.isFinite(v)) return null
   const sign = v > 0 ? '+' : ''
   return `${sign}${v.toFixed(1)}%`
