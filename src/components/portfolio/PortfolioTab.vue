@@ -181,10 +181,11 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { UploadFilled } from '@element-plus/icons-vue'
+import type { UploadUserFile } from 'element-plus'
 import {
   listObservations,
   createObservation,
@@ -206,20 +207,44 @@ const DOMAINS = [
   '綜合',
 ]
 
-const props = defineProps({
-  studentId: { type: Number, required: true },
-})
+const props = defineProps<{
+  studentId: number
+}>()
 
-const loading = ref(false)
-const items = ref([])
-const canWrite = ref(hasPermission('PORTFOLIO_WRITE'))
+interface ObsAttachment {
+  id: number
+  url: string
+  display_url?: string
+  thumb_url?: string
+  original_filename: string
+}
+
+interface Observation {
+  id: number
+  observation_date: string
+  domain?: string
+  narrative: string
+  rating?: number
+  is_highlight: boolean
+  attachments?: ObsAttachment[]
+}
+
+const loading = ref<boolean>(false)
+const items = ref<Observation[]>([])
+const canWrite = ref<boolean>(hasPermission('PORTFOLIO_WRITE'))
 
 const filters = reactive({
   domain: '',
   highlightOnly: false,
 })
 
-const editor = reactive({
+const editor = reactive<{
+  visible: boolean
+  mode: string
+  saving: boolean
+  editingId: number | null
+  form: { observation_date: string; domain: string; narrative: string; rating: number; is_highlight: boolean }
+}>({
   visible: false,
   mode: 'create',
   saving: false,
@@ -233,7 +258,13 @@ const editor = reactive({
   },
 })
 
-const upload = reactive({
+const upload = reactive<{
+  visible: boolean
+  uploading: boolean
+  obsId: number | null
+  obsDate: string
+  fileList: UploadUserFile[]
+}>({
   visible: false,
   uploading: false,
   obsId: null,
@@ -250,7 +281,7 @@ const lightbox = reactive({
 async function reload() {
   loading.value = true
   try {
-    const params = {}
+    const params: Record<string, unknown> = {}
     if (filters.domain) params.domain = filters.domain
     if (filters.highlightOnly) params.highlight_only = true
     const r = await listObservations(props.studentId, params)
@@ -275,7 +306,7 @@ function openCreate() {
   editor.visible = true
 }
 
-function openEdit(obs) {
+function openEdit(obs: Observation) {
   editor.mode = 'edit'
   editor.editingId = obs.id
   editor.form = {
@@ -306,7 +337,7 @@ async function save() {
       await createObservation(props.studentId, payload)
       ElMessage.success('已新增')
     } else {
-      await updateObservation(props.studentId, editor.editingId, payload)
+      await updateObservation(props.studentId, editor.editingId!, payload)
       ElMessage.success('已更新')
     }
     editor.visible = false
@@ -318,7 +349,7 @@ async function save() {
   }
 }
 
-async function confirmDelete(obs) {
+async function confirmDelete(obs: Observation) {
   try {
     await ElMessageBox.confirm(
       '確定刪除這筆觀察紀錄？附件也會一併軟刪除。',
@@ -333,18 +364,18 @@ async function confirmDelete(obs) {
   }
 }
 
-function openUpload(obs) {
+function openUpload(obs: Observation) {
   upload.obsId = obs.id
   upload.obsDate = obs.observation_date
   upload.fileList = []
   upload.visible = true
 }
 
-function handleFileChange(_, fileList) {
+function handleFileChange(_: unknown, fileList: UploadUserFile[]) {
   upload.fileList = fileList
 }
 
-function handleFileRemove(_, fileList) {
+function handleFileRemove(_: unknown, fileList: UploadUserFile[]) {
   upload.fileList = fileList
 }
 
@@ -356,9 +387,9 @@ async function doUpload() {
     for (const wrapper of upload.fileList) {
       try {
         await uploadAttachment(
-          wrapper.raw,
+          wrapper.raw!,
           'observation',
-          upload.obsId
+          upload.obsId!
         )
         ok += 1
       } catch (e) {
@@ -374,7 +405,7 @@ async function doUpload() {
   }
 }
 
-function openLightbox(att) {
+function openLightbox(att: ObsAttachment) {
   lightbox.url = att.display_url || att.url
   lightbox.filename = att.original_filename
   lightbox.visible = true

@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { reactive, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { createShiftType, updateShiftType, deleteShiftType } from '@/api/shifts'
@@ -8,8 +8,8 @@ import { apiError } from '@/utils/error'
 
 const shiftStore = useShiftStore()
 const { shiftTypes, loading: loadingShifts } = storeToRefs(shiftStore)
-const shiftDialogVisible = ref(false)
-const shiftForm = reactive({ id: null, name: '', work_start: '08:00', work_end: '17:00', sort_order: 0 })
+const shiftDialogVisible = ref<boolean>(false)
+const shiftForm = reactive<{ id: number | null; name: string; work_start: string; work_end: string; sort_order: number }>({ id: null, name: '', work_start: '08:00', work_end: '17:00', sort_order: 0 })
 
 const handleAddShift = () => {
   shiftForm.id = null
@@ -20,20 +20,20 @@ const handleAddShift = () => {
   shiftDialogVisible.value = true
 }
 
-const handleEditShift = (row) => {
-  shiftForm.id = row.id
-  shiftForm.name = row.name
-  shiftForm.work_start = row.work_start
-  shiftForm.work_end = row.work_end
-  shiftForm.sort_order = row.sort_order
+const handleEditShift = (row: Record<string, unknown>) => {
+  shiftForm.id = row.id as number
+  shiftForm.name = row.name as string
+  shiftForm.work_start = row.work_start as string
+  shiftForm.work_end = row.work_end as string
+  shiftForm.sort_order = row.sort_order as number
   shiftDialogVisible.value = true
 }
 
-const handleDeleteShift = (row) => {
+const handleDeleteShift = (row: Record<string, unknown>) => {
   ElMessageBox.confirm(`確定刪除班別「${row.name}」？`, '警告', { type: 'warning' })
     .then(async () => {
       try {
-        await deleteShiftType(row.id)
+        await deleteShiftType(row.id as number)
         ElMessage.success('已刪除')
         shiftStore.refresh()
       } catch (error) {
@@ -67,7 +67,7 @@ const saveShift = async () => {
     <div class="tab-header">
       <el-button type="primary" @click="handleAddShift">新增班別</el-button>
     </div>
-    <el-table :data="shiftTypes" v-loading="loadingShifts" style="width: 100%; margin-top: 20px;">
+    <el-table :data="shiftTypes" v-loading="!!loadingShifts" style="width: 100%; margin-top: 20px;">
       <el-table-column prop="sort_order" label="排序" width="80" sortable />
       <el-table-column prop="name" label="班別名稱" />
       <el-table-column prop="work_start" label="上班時間" width="120" />

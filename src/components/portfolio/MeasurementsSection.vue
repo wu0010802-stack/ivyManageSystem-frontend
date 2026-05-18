@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { hasPermission } from '@/utils/auth'
@@ -10,9 +10,9 @@ import {
 import MeasurementChart from '@/components/student/MeasurementChart.vue'
 import MeasurementEditorDialog from '@/components/student/MeasurementEditorDialog.vue'
 
-const props = defineProps({
-  studentId: { type: Number, required: true },
-})
+const props = defineProps<{
+  studentId: number
+}>()
 
 const METRIC_OPTIONS = [
   { label: '身高', value: 'height' },
@@ -22,12 +22,12 @@ const METRIC_OPTIONS = [
   { label: '右眼視力', value: 'vision_right' },
 ]
 
-const list = ref([])
-const chart = ref({})
-const loading = ref(false)
-const dialogVisible = ref(false)
-const editing = ref(null)
-const metric = ref('height')
+const list = ref<Record<string, unknown>[]>([])
+const chart = ref<Record<string, unknown>>({})
+const loading = ref<boolean>(false)
+const dialogVisible = ref<boolean>(false)
+const editing = ref<Record<string, unknown> | undefined>(undefined)
+const metric = ref<string>('height')
 
 const canWrite = computed(() => hasPermission('PORTFOLIO_WRITE'))
 
@@ -41,38 +41,38 @@ async function reload() {
     list.value = listResp.data.items || []
     chart.value = chartResp.data || {}
   } catch (e) {
-    const msg = e?.response?.data?.detail || '載入量測紀錄失敗'
-    ElMessage.error(msg)
+    const axiosErr = e as { response?: { data?: { detail?: string } } }
+    ElMessage.error(axiosErr?.response?.data?.detail || '載入量測紀錄失敗')
   } finally {
     loading.value = false
   }
 }
 
 function onAdd() {
-  editing.value = null
+  editing.value = undefined
   dialogVisible.value = true
 }
 
-function onEdit(row) {
+function onEdit(row: Record<string, unknown>) {
   editing.value = { ...row }
   dialogVisible.value = true
 }
 
-async function onDelete(row) {
+async function onDelete(row: Record<string, unknown>) {
   try {
     await ElMessageBox.confirm('確定刪除這筆量測紀錄？', '刪除確認', { type: 'warning' })
-    await deleteMeasurement(props.studentId, row.id)
+    await deleteMeasurement(props.studentId, row.id as number)
     ElMessage.success('已刪除')
     await reload()
   } catch (e) {
     if (e !== 'cancel') {
-      const msg = e?.response?.data?.detail || '刪除失敗'
-      ElMessage.error(msg)
+      const axiosErr = e as { response?: { data?: { detail?: string } } }
+      ElMessage.error(axiosErr?.response?.data?.detail || '刪除失敗')
     }
   }
 }
 
-function formatNum(v) {
+function formatNum(v: number | null | undefined) {
   if (v === null || v === undefined) return '—'
   return Number(v).toFixed(2)
 }

@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { reactive, ref, onMounted } from 'vue'
 import { getLineConfig, updateLineConfig, testLineNotify } from '@/api/lineConfig'
 import { ElMessage } from 'element-plus'
@@ -12,8 +12,8 @@ const lineConfig = reactive({
   channel_access_token: '',
   channel_secret: '',
 })
-const loadingLine = ref(false)
-const testingLine = ref(false)
+const loadingLine = ref<boolean>(false)
+const testingLine = ref<boolean>(false)
 
 const fetchLineConfig = async () => {
   loadingLine.value = true
@@ -35,7 +35,7 @@ const fetchLineConfig = async () => {
 const saveLineConfig = async () => {
   loadingLine.value = true
   try {
-    const payload = {
+    const payload: Record<string, unknown> = {
       is_enabled: lineConfig.is_enabled,
       target_id: lineConfig.target_id || null,
     }

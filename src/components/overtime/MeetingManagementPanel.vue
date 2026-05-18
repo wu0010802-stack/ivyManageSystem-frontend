@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { getMeetings, getMeetingSummary, createBatch, updateMeeting, deleteMeeting } from '@/api/meetings'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -6,40 +6,42 @@ import { money } from '@/utils/format'
 import { useEmployeeStore } from '@/stores/employee'
 import { apiError } from '@/utils/error'
 
-const props = defineProps({
-  embedded: {
-    type: Boolean,
-    default: false,
-  },
-})
+const props = withDefaults(defineProps<{
+  embedded?: boolean
+}>(), { embedded: false })
 
 const currentYear = new Date().getFullYear()
 const currentMonth = new Date().getMonth() + 1
 
-const activeTab = ref('records')
-const loading = ref(false)
+const activeTab = ref<string>('records')
+const loading = ref<boolean>(false)
 
 const query = reactive({
   year: currentYear,
   month: currentMonth,
 })
 
-const meetingRecords = ref([])
+const meetingRecords = ref<Record<string, unknown>[]>([])
 const employeeStore = useEmployeeStore()
-const employees = computed(() => employeeStore.employees.filter(e => e.is_active !== false))
-const summaryData = ref([])
+const employees = computed(() => employeeStore.employees.filter((e: Record<string, unknown>) => e.is_active !== false))
+const summaryData = ref<Record<string, unknown>[]>([])
 
-const batchDialogVisible = ref(false)
+const batchDialogVisible = ref<boolean>(false)
 const batchForm = reactive({
   meeting_date: '',
   meeting_type: 'staff_meeting',
   remark: '',
   selectAll: true,
 })
-const employeeAttendance = ref([])
+const employeeAttendance = ref<{ id: number; name: string; attended: boolean }[]>([])
 
-const editDialogVisible = ref(false)
-const editForm = reactive({
+const editDialogVisible = ref<boolean>(false)
+const editForm = reactive<{
+  id: number | null
+  attended: boolean
+  overtime_hours: number
+  remark: string
+}>({
   id: null,
   attended: true,
   overtime_hours: 0,
@@ -71,12 +73,13 @@ const fetchSummary = async () => {
 }
 
 const groupedByDate = computed(() => {
-  const groups = {}
+  const groups: Record<string, Record<string, unknown>[]> = {}
   for (const record of meetingRecords.value) {
-    if (!groups[record.meeting_date]) {
-      groups[record.meeting_date] = []
+    const dateKey = record.meeting_date as string
+    if (!groups[dateKey]) {
+      groups[dateKey] = []
     }
-    groups[record.meeting_date].push(record)
+    groups[dateKey].push(record)
   }
 
   return Object.entries(groups)
@@ -84,9 +87,9 @@ const groupedByDate = computed(() => {
     .map(([date, records]) => ({
       date,
       records,
-      attended: records.filter(record => record.attended).length,
-      absent: records.filter(record => !record.attended).length,
-      total_pay: records.reduce((sum, record) => sum + (record.overtime_pay || 0), 0),
+      attended: records.filter((record) => record.attended).length,
+      absent: records.filter((record) => !record.attended).length,
+      total_pay: records.reduce((sum, record) => sum + ((record.overtime_pay as number) || 0), 0),
     }))
 })
 
@@ -95,7 +98,7 @@ const handleBatchCreate = () => {
   batchForm.meeting_type = 'staff_meeting'
   batchForm.remark = ''
   batchForm.selectAll = true
-  employeeAttendance.value = employees.value.map(employee => ({
+  employeeAttendance.value = (employees.value as { id: number; name: string }[]).map(employee => ({
     id: employee.id,
     name: employee.name,
     attended: true,
@@ -103,9 +106,9 @@ const handleBatchCreate = () => {
   batchDialogVisible.value = true
 }
 
-const toggleSelectAll = (value) => {
+const toggleSelectAll = (value: string | number | boolean) => {
   employeeAttendance.value.forEach(employee => {
-    employee.attended = value
+    employee.attended = !!value
   })
 }
 
@@ -148,23 +151,23 @@ const submitBatch = async () => {
     fetchRecords()
     if (activeTab.value === 'summary') fetchSummary()
   } catch (error) {
-    ElMessage.error(`建立失敗: ${apiError(error, error.message)}`)
+    ElMessage.error(`建立失敗: ${apiError(error, (error as Error).message)}`)
   } finally {
     loading.value = false
   }
 }
 
-const handleEdit = (row) => {
-  editForm.id = row.id
-  editForm.attended = row.attended
-  editForm.overtime_hours = row.overtime_hours || 0
-  editForm.remark = row.remark || ''
+const handleEdit = (row: Record<string, unknown>) => {
+  editForm.id = row.id as number
+  editForm.attended = row.attended as boolean
+  editForm.overtime_hours = (row.overtime_hours as number) || 0
+  editForm.remark = (row.remark as string) || ''
   editDialogVisible.value = true
 }
 
 const submitEdit = async () => {
   try {
-    await updateMeeting(editForm.id, {
+    await updateMeeting(editForm.id!, {
       attended: editForm.attended,
       overtime_hours: editForm.overtime_hours,
       remark: editForm.remark || null,
@@ -178,12 +181,12 @@ const submitEdit = async () => {
   }
 }
 
-const handleDelete = (row) => {
+const handleDelete = (row: Record<string, unknown>) => {
   ElMessageBox.confirm(`確定刪除 ${row.employee_name} 在 ${row.meeting_date} 的紀錄？`, '警告', {
     type: 'warning',
   }).then(async () => {
     try {
-      await deleteMeeting(row.id)
+      await deleteMeeting(row.id as number)
       ElMessage.success('刪除成功')
       fetchRecords()
       if (activeTab.value === 'summary') fetchSummary()
@@ -193,13 +196,13 @@ const handleDelete = (row) => {
   })
 }
 
-const handleDeleteDate = (dateStr) => {
+const handleDeleteDate = (dateStr: string) => {
   const records = meetingRecords.value.filter(record => record.meeting_date === dateStr)
   ElMessageBox.confirm(`確定刪除 ${dateStr} 的全部 ${records.length} 筆會議紀錄？`, '警告', {
     type: 'warning',
   }).then(async () => {
     try {
-      await Promise.all(records.map(record => deleteMeeting(record.id)))
+      await Promise.all(records.map(record => deleteMeeting(record.id as number)))
       ElMessage.success('刪除成功')
       fetchRecords()
     } catch (error) {

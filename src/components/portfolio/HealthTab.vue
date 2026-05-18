@@ -206,7 +206,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -221,15 +221,44 @@ import { hasPermission } from '@/utils/auth'
 import { apiError } from '@/utils/error'
 import { todayISO } from '@/utils/format'
 
-const props = defineProps({
-  studentId: { type: Number, required: true },
-})
+const props = defineProps<{
+  studentId: number
+}>()
 
-const allergies = ref([])
-const orders = ref([])
-const canWriteHealth = ref(hasPermission('STUDENTS_HEALTH_WRITE'))
+interface Allergy {
+  id: number
+  allergen: string
+  severity: string
+  reaction_symptom?: string
+  first_aid_note?: string
+  active: boolean
+}
 
-const allergyDialog = reactive({
+interface MedLog {
+  id: number
+  scheduled_time: string
+  status: string
+}
+
+interface MedOrder {
+  order_date: string
+  medication_name: string
+  dose: string
+  time_slots: string[]
+  logs: MedLog[]
+}
+
+const allergies = ref<Allergy[]>([])
+const orders = ref<MedOrder[]>([])
+const canWriteHealth = ref<boolean>(hasPermission('STUDENTS_HEALTH_WRITE'))
+
+const allergyDialog = reactive<{
+  visible: boolean
+  mode: string
+  saving: boolean
+  editingId: number | null
+  form: { allergen: string; severity: string; reaction_symptom: string; first_aid_note: string; active: boolean }
+}>({
   visible: false,
   mode: 'create',
   saving: false,
@@ -255,20 +284,21 @@ const medDialog = reactive({
   },
 })
 
-function severityType(s) {
+function severityType(s: string) {
   return s === 'severe' ? 'danger' : s === 'moderate' ? 'warning' : 'info'
 }
-function severityLabel(s) {
+function severityLabel(s: string) {
   return s === 'severe' ? '嚴重' : s === 'moderate' ? '中度' : '輕微'
 }
-function logStatusType(s) {
+function logStatusType(s: string) {
   return s === 'administered' ? 'success'
     : s === 'skipped' ? 'info'
     : s === 'correction' ? 'warning'
     : 'warning'
 }
-function logStatusLabel(s) {
-  return { pending: '待餵', administered: '已餵', skipped: '跳過', correction: '修正' }[s] || s
+function logStatusLabel(s: string) {
+  const map: Record<string, string> = { pending: '待餵', administered: '已餵', skipped: '跳過', correction: '修正' }
+  return map[s] || s
 }
 
 async function reload() {
@@ -284,7 +314,7 @@ async function reload() {
   }
 }
 
-function openAllergy(a = null) {
+function openAllergy(a: Allergy | null = null) {
   if (a) {
     allergyDialog.mode = 'edit'
     allergyDialog.editingId = a.id
@@ -321,7 +351,7 @@ async function saveAllergy() {
       await createAllergy(props.studentId, payload)
       ElMessage.success('已新增')
     } else {
-      await updateAllergy(props.studentId, allergyDialog.editingId, payload)
+      await updateAllergy(props.studentId, allergyDialog.editingId!, payload)
       ElMessage.success('已更新')
     }
     allergyDialog.visible = false
@@ -333,7 +363,7 @@ async function saveAllergy() {
   }
 }
 
-async function confirmDeleteAllergy(a) {
+async function confirmDeleteAllergy(a: Allergy) {
   try {
     await ElMessageBox.confirm(
       `確定刪除過敏紀錄「${a.allergen}」？`,
@@ -359,12 +389,12 @@ function openMedOrder() {
   medDialog.visible = true
 }
 
-function slotAsDate(slot) {
+function slotAsDate(slot: string) {
   // el-time-picker accepts string when value-format='HH:mm'
   return slot
 }
 
-function setSlot(idx, v) {
+function setSlot(idx: number, v: string | null) {
   medDialog.form.time_slots[idx] = v || ''
 }
 
