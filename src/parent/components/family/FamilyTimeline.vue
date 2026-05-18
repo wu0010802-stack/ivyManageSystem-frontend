@@ -1,12 +1,24 @@
-<script setup>
+<script setup lang="ts">
 import SkeletonBlock from '../SkeletonBlock.vue'
 
-defineProps({
-  items: { type: Array, required: true },
-  loading: { type: Boolean, default: false },
+interface TimelineItem {
+  id: number | string
+  kind: string
+  href: string
+  title: string
+  subtitle?: string
+  occurred_at?: string
+  is_pending?: boolean
+}
+
+withDefaults(defineProps<{
+  items: TimelineItem[]
+  loading?: boolean
+}>(), {
+  loading: false,
 })
 
-const ICONS = {
+const ICONS: Record<string, string> = {
   attendance: '📅',
   announcement: '📢',
   contact_book: '📒',
@@ -15,7 +27,7 @@ const ICONS = {
   leave_review: '📋',
 }
 
-function fmtTime(iso) {
+function fmtTime(iso: string | undefined): string {
   if (!iso) return ''
   const d = new Date(iso)
   if (isNaN(d.getTime())) return iso

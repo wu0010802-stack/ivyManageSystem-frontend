@@ -1,12 +1,21 @@
-<script setup>
+<script setup lang="ts">
 import ParentIcon from '../ParentIcon.vue'
 
-const props = defineProps({
-  entries: { type: Array, required: true },
-  badges: { type: Object, default: () => ({}) },
+interface FamilyEntry {
+  key: string
+  path: string
+  icon: string
+  label: string
+}
+
+const props = withDefaults(defineProps<{
+  entries: FamilyEntry[]
+  badges?: Record<string, number>
+}>(), {
+  badges: () => ({}),
 })
 
-function badgeOf(key) {
+function badgeOf(key: string): string | null {
   const v = props.badges?.[key]
   return typeof v === 'number' && v > 0 ? (v > 99 ? '99+' : String(v)) : null
 }
