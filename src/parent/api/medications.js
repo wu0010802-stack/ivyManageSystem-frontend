@@ -9,8 +9,8 @@
 
 import api from './index'
 
-export function listMedicationOrders(params = {}) {
-  return api.get('/parent/medication-orders', { params })
+export function listMedicationOrders(params = {}, config = {}) {
+  return api.get('/parent/medication-orders', { params, ...config })
 }
 
 export function getMedicationOrder(orderId) {

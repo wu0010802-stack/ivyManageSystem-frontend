@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useChildrenStore } from '../stores/children'
 import { useChildSelection } from '../composables/useChildSelection'
+import { useAbortableFetch } from '../composables/useAbortableFetch'
 import ChildSelector from '../components/ChildSelector.vue'
 import { listMedicationOrders } from '../api/medications'
 import { toast } from '../utils/toast'
@@ -14,8 +15,14 @@ import KawaiiStar from '@/components/brand/KawaiiStar.vue'
 const router = useRouter()
 const childrenStore = useChildrenStore()
 const { selectedId: selectedStudentId, ensureSelected } = useChildSelection()
-const items = ref([])
-const loading = ref(false)
+
+// 改用 useAbortableFetch：切換小孩時舊 request 自動 abort，
+// 避免「列表閃前一個孩子的資料」競態（P1-19）。
+const { data: medData, error: medError, pending: loading, refresh: refreshMed } =
+  useAbortableFetch((config) =>
+    listMedicationOrders({ student_id: selectedStudentId.value }, config),
+  )
+const items = computed(() => medData.value?.data?.items || [])
 
 const STATUS_LABEL = {
   pending: '待餵',
@@ -39,25 +46,24 @@ const studentName = computed(() => {
 
 async function fetchData() {
   if (!selectedStudentId.value) return
-  loading.value = true
   try {
-    const { data } = await listMedicationOrders({
-      student_id: selectedStudentId.value,
-    })
-    items.value = data?.items || []
-  } catch (err) {
-    toast.error(err?.displayMessage || '載入用藥單失敗')
-  } finally {
-    loading.value = false
+    await refreshMed()
+  } catch {
+    /* error 由 watch 統一彈 toast */
   }
 }
+
+watch(medError, (err) => {
+  if (err) toast.error(err?.displayMessage || '載入用藥單失敗')
+})
 
 onMounted(async () => {
   await childrenStore.load()
   ensureSelected(childrenStore.items)
+  fetchData()
 })
 
-watch(selectedStudentId, fetchData, { immediate: true })
+watch(selectedStudentId, fetchData)
 
 function goNew() {
   if ((childrenStore.items || []).length === 0) {

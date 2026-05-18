@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import ChildSelector from '../components/ChildSelector.vue'
 import { useChildrenStore } from '../stores/children'
 import { useChildSelection } from '../composables/useChildSelection'
+import { useAbortableFetch } from '../composables/useAbortableFetch'
 import { getMonthlyAttendance } from '../api/attendance'
 import { toast } from '../utils/toast'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
@@ -17,8 +18,12 @@ const today = new Date()
 const year = ref(today.getFullYear())
 const month = ref(today.getMonth() + 1)
 
-const data = ref(null)
-const loading = ref(false)
+// 切換小孩 / 月份時 abort 舊 request（P1-19）。
+const { data: attRes, error: attError, pending: loading, refresh: refreshAtt } =
+  useAbortableFetch((config) =>
+    getMonthlyAttendance(selectedId.value, year.value, month.value, config),
+  )
+const data = computed(() => attRes.value?.data || null)
 const dayMap = computed(() => {
   const m = new Map()
   for (const item of data.value?.items || []) m.set(item.date, item)
@@ -57,20 +62,16 @@ const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart
 
 async function fetchData() {
   if (!selectedId.value) return
-  loading.value = true
   try {
-    const { data: res } = await getMonthlyAttendance(
-      selectedId.value,
-      year.value,
-      month.value,
-    )
-    data.value = res
-  } catch (err) {
-    toast.error(err?.displayMessage || '載入出席紀錄失敗')
-  } finally {
-    loading.value = false
+    await refreshAtt()
+  } catch {
+    /* error 由 watch 統一彈 toast */
   }
 }
+
+watch(attError, (err) => {
+  if (err) toast.error(err?.displayMessage || '載入出席紀錄失敗')
+})
 
 function prevMonth() {
   if (month.value === 1) { month.value = 12; year.value -= 1 }

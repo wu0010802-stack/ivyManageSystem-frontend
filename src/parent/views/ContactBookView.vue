@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useChildrenStore } from '../stores/children'
 import { useChildSelection } from '../composables/useChildSelection'
+import { useAbortableFetch } from '../composables/useAbortableFetch'
 import ChildSelector from '../components/ChildSelector.vue'
 import { getTodayContactBook, listContactBook } from '../api/contactBook'
 import { toast } from '../utils/toast'
@@ -19,9 +20,22 @@ const router = useRouter()
 const childrenStore = useChildrenStore()
 const { selectedId: selectedStudentId, ensureSelected } = useChildSelection()
 
-const today = ref(null)
-const history = ref([])
-const loading = ref(false)
+// 切換小孩時舊 request 自動 abort，避免新舊小孩聯絡簿錯亂（P1-19）。
+const { data: cbBundle, error: cbError, pending: loading, refresh: refreshCb } =
+  useAbortableFetch(async (config) => {
+    const sid = selectedStudentId.value
+    if (!sid) return { today: null, entries: [] }
+    const [todayRes, historyRes] = await Promise.all([
+      getTodayContactBook(sid, config),
+      listContactBook(sid, { limit: 60 }, config),
+    ])
+    return {
+      today: todayRes.data?.entry || null,
+      entries: historyRes.data?.entries || [],
+    }
+  })
+const today = computed(() => cbBundle.value?.today || null)
+const history = computed(() => cbBundle.value?.entries || [])
 
 const selectedChild = computed(() =>
   (childrenStore.items || []).find((x) => x.student_id === selectedStudentId.value) || null,
@@ -30,8 +44,9 @@ const studentName = computed(() => selectedChild.value?.name || '')
 const classroomName = computed(() => selectedChild.value?.classroom_name || '')
 
 const historyWithoutToday = computed(() => {
-  if (!today.value) return history.value
-  return history.value.filter((e) => e.id !== today.value.id)
+  const t = today.value
+  if (!t) return history.value
+  return history.value.filter((e) => e.id !== t.id)
 })
 
 const allEntries = computed(() => {
@@ -67,20 +82,16 @@ const { visible: visibleEarlier, sentinelRef, hasMore } = useIncrementalRender(
 
 async function fetchAll() {
   if (!selectedStudentId.value) return
-  loading.value = true
   try {
-    const [todayRes, historyRes] = await Promise.all([
-      getTodayContactBook(selectedStudentId.value),
-      listContactBook(selectedStudentId.value, { limit: 60 }),
-    ])
-    today.value = todayRes.data?.entry || null
-    history.value = historyRes.data?.entries || []
-  } catch (err) {
-    toast.error(err?.displayMessage || '載入聯絡簿失敗')
-  } finally {
-    loading.value = false
+    await refreshCb()
+  } catch {
+    /* error 由 watch 統一彈 toast */
   }
 }
+
+watch(cbError, (err) => {
+  if (err) toast.error(err?.displayMessage || '載入聯絡簿失敗')
+})
 
 onMounted(async () => {
   await childrenStore.load()
