@@ -1,11 +1,19 @@
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 
-const props = defineProps({
-  photos: { type: Array, default: () => [] },
+interface Photo {
+  id?: number
+  thumb_url?: string
+  display_url: string
+}
+
+const props = withDefaults(defineProps<{
+  photos?: Photo[]
+}>(), {
+  photos: () => [],
 })
 
-const layout = computed(() => {
+const layout = computed<string>(() => {
   const n = props.photos.length
   if (n === 0) return 'empty'
   if (n === 1) return 'one'
@@ -14,11 +22,11 @@ const layout = computed(() => {
   return 'grid'
 })
 
-const displayed = computed(() => {
+const displayed = computed<Photo[]>(() => {
   if (props.photos.length <= 6) return props.photos
   return props.photos.slice(0, 6)
 })
-const overflow = computed(() => Math.max(0, props.photos.length - 6))
+const overflow = computed<number>(() => Math.max(0, props.photos.length - 6))
 </script>
 
 <template>

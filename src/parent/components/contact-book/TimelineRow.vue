@@ -1,13 +1,18 @@
-<script setup>
-const props = defineProps({
-  icon: { type: String, required: true },
-  iconTone: { type: String, default: 'green' },
-  label: { type: String, required: true },
-  // P2-FE-Parent-2：Vue 3 prop type 不接受 `null` constructor；改用
-  // `default: null` 表達「可空」。原寫法會跳 [Vue warn]: Invalid prop type。
-  value: { type: [String, Number], default: null },
-  detail: { type: String, default: null },
-  hideConnector: { type: Boolean, default: false },
+<script setup lang="ts">
+// P2-FE-Parent-2：Vue 3 prop type 不接受 `null` constructor；改用
+// `default: null` 表達「可空」。原寫法會跳 [Vue warn]: Invalid prop type。
+withDefaults(defineProps<{
+  icon: string
+  iconTone?: string
+  label: string
+  value?: string | number | null
+  detail?: string | null
+  hideConnector?: boolean
+}>(), {
+  iconTone: 'green',
+  value: null,
+  detail: null,
+  hideConnector: false,
 })
 </script>
 

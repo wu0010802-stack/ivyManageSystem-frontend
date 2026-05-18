@@ -1,15 +1,36 @@
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 import MoodBadge from './MoodBadge.vue'
 import ParentIcon from '../ParentIcon.vue'
 
-const props = defineProps({
-  entry: { type: Object, required: true },
-  studentName: { type: String, default: '' },
-  classroomName: { type: String, default: '' },
+interface EntryPhoto {
+  id?: number
+  thumb_url?: string
+  display_url: string
+}
+
+interface ContactBookEntry {
+  log_date?: string
+  my_acknowledged_at?: string | null
+  mood?: string | null
+  photos?: EntryPhoto[]
+  teacher_note?: string
+  learning_highlight?: string
+  meal_lunch?: number | null
+  nap_minutes?: number | null
+  temperature_c?: number | null
+}
+
+const props = withDefaults(defineProps<{
+  entry: ContactBookEntry
+  studentName?: string
+  classroomName?: string
+}>(), {
+  studentName: '',
+  classroomName: '',
 })
 
-const dateFormatted = computed(() => {
+const dateFormatted = computed<string>(() => {
   const raw = props.entry?.log_date
   if (!raw) return ''
   const [y, m, d] = raw.split('-')
@@ -18,11 +39,11 @@ const dateFormatted = computed(() => {
   return `${Number(m)} 月 ${Number(d)} 日　星期${wd}`
 })
 
-const isUnread = computed(() => !props.entry?.my_acknowledged_at)
-const photoCount = computed(() => (props.entry?.photos || []).length)
-const previewPhotos = computed(() => (props.entry?.photos || []).slice(0, 3))
+const isUnread = computed<boolean>(() => !props.entry?.my_acknowledged_at)
+const photoCount = computed<number>(() => (props.entry?.photos || []).length)
+const previewPhotos = computed<EntryPhoto[]>(() => (props.entry?.photos || []).slice(0, 3))
 
-const teacherNoteShort = computed(() => {
+const teacherNoteShort = computed<string | null>(() => {
   const note = props.entry?.teacher_note
   if (!note) return null
   return note.length > 80 ? note.slice(0, 80) + '…' : note
@@ -30,7 +51,7 @@ const teacherNoteShort = computed(() => {
 
 const stats = computed(() => {
   const e = props.entry || {}
-  const out = []
+  const out: { key: string; label: string; value: string | number; icon: string }[] = []
   if (e.meal_lunch != null) out.push({ key: 'lunch', label: '午餐', value: `${e.meal_lunch}/3`, icon: 'restaurant' })
   if (e.nap_minutes != null) out.push({ key: 'nap', label: '午睡', value: `${e.nap_minutes} 分`, icon: 'bedtime' })
   if (e.temperature_c != null) out.push({ key: 'temp', label: '體溫', value: `${e.temperature_c}°`, icon: 'thermostat' })
