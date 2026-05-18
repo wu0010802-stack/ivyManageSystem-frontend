@@ -12,9 +12,7 @@ export function apiError(error: unknown, fallback = '操作失敗') {
         || fallback
 }
 
-type ErrorDetail = { message?: string; code?: string; context?: { fields?: unknown[]; suggested?: unknown } }
-
-const EMPLOYEE_ERROR_HANDLERS: Record<string, (detail: ErrorDetail) => { type: string; message?: string; fields?: unknown[]; action?: { label: string; value: unknown } | null }> = {
+const EMPLOYEE_ERROR_HANDLERS: Record<string, (detail: { message?: string; code?: string; context?: { fields?: unknown[]; suggested?: unknown } }) => { type: string; message?: string; fields?: unknown[]; action?: { label: string; value: unknown } | null }> = {
     SELF_FINANCE_EDIT_FORBIDDEN: (detail) => ({
         type: 'warning',
         message: detail.message,
@@ -43,7 +41,7 @@ const EMPLOYEE_ERROR_HANDLERS: Record<string, (detail: ErrorDetail) => { type: s
  * 結構化失敗（無 code）走 fallback。
  */
 export function mapEmployeeError(error: unknown) {
-    const e = error as { errorDetail?: ErrorDetail; response?: { data?: { detail?: ErrorDetail } }; message?: string } | null
+    const e = error as { errorDetail?: { message?: string; code?: string; context?: { fields?: unknown[]; suggested?: unknown } }; response?: { data?: { detail?: { message?: string; code?: string; context?: { fields?: unknown[]; suggested?: unknown } } } }; message?: string } | null
     const detail = e?.errorDetail || e?.response?.data?.detail
     if (detail && typeof detail === 'object' && detail.code) {
         const handler = EMPLOYEE_ERROR_HANDLERS[detail.code]
