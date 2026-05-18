@@ -29,17 +29,30 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { Select } from '@element-plus/icons-vue'
 
-defineProps({
-  course: { type: Object, required: true },
-  selected: { type: Boolean, default: false },
-  disabled: { type: Boolean, default: false },
-  availability: { type: Number, default: undefined },
-  videoUrl: { type: String, default: null },
+interface Course {
+  name: string
+  sessions?: string | number
+  price: number | string
+  [key: string]: unknown
+}
+
+withDefaults(defineProps<{
+  course: Course
+  selected?: boolean
+  disabled?: boolean
+  availability?: number
+  videoUrl?: string | null
+}>(), {
+  selected: false,
+  disabled: false,
+  availability: undefined,
+  videoUrl: null,
 })
-defineEmits(['toggle'])
+
+defineEmits<{ toggle: [] }>()
 </script>
 
 <style scoped>

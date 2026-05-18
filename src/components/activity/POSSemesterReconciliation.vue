@@ -199,7 +199,7 @@
       <el-table-column label="繳費狀態" width="100">
         <template #default="{ row }">
           <el-tag
-            :type="PAYMENT_STATUS_TAG_TYPE[row.payment_status] || 'info'"
+            :type="(PAYMENT_STATUS_TAG_TYPE[row.payment_status] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger'"
             size="small"
           >
             {{ PAYMENT_STATUS_LABEL[row.payment_status] || row.payment_status }}
@@ -209,7 +209,7 @@
       <el-table-column label="簽核狀態" width="110">
         <template #default="{ row }">
           <el-tag
-            :type="APPROVAL_STATUS_TAG_TYPE[row.approval_status] || 'info'"
+            :type="(APPROVAL_STATUS_TAG_TYPE[row.approval_status] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger'"
             size="small"
           >
             {{ APPROVAL_STATUS_LABEL[row.approval_status] || row.approval_status }}
@@ -228,7 +228,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
@@ -247,28 +247,37 @@ import StatCard from '@/components/common/StatCard.vue'
 import { getClassrooms } from '@/api/classrooms'
 import { getPOSSemesterReconciliation } from '@/api/activity'
 import {
-  APPROVAL_STATUS_LABEL,
-  APPROVAL_STATUS_TAG_TYPE,
-  PAYMENT_STATUS_LABEL,
-  PAYMENT_STATUS_TAG_TYPE,
+  APPROVAL_STATUS_LABEL as _APPROVAL_STATUS_LABEL,
+  APPROVAL_STATUS_TAG_TYPE as _APPROVAL_STATUS_TAG_TYPE,
+  PAYMENT_STATUS_LABEL as _PAYMENT_STATUS_LABEL,
+  PAYMENT_STATUS_TAG_TYPE as _PAYMENT_STATUS_TAG_TYPE,
 } from '@/constants/activity'
+
+const APPROVAL_STATUS_LABEL = _APPROVAL_STATUS_LABEL as Record<string, string>
+const APPROVAL_STATUS_TAG_TYPE = _APPROVAL_STATUS_TAG_TYPE as Record<string, string>
+const PAYMENT_STATUS_LABEL = _PAYMENT_STATUS_LABEL as Record<string, string>
+const PAYMENT_STATUS_TAG_TYPE = _PAYMENT_STATUS_TAG_TYPE as Record<string, string>
 import { formatTWD } from '@/constants/pos'
 import { useAcademicTermStore } from '@/stores/academicTerm'
 
 const termStore = useAcademicTermStore()
 
-const loading = ref(false)
-const items = ref([])
-const totals = ref({})
-const classroomOptions = ref([])
+const loading = ref<boolean>(false)
+const items = ref<Record<string, unknown>[]>([])
+const totals = ref<{ offline_paid_amount?: number; [key: string]: unknown }>({})
+const classroomOptions = ref<string[]>([])
 
-const filters = reactive({
+const filters = reactive<{
+  classroom_name: string
+  payment_status: string
+  approval_status: string
+}>({
   classroom_name: '',
   payment_status: '',
   approval_status: '',
 })
 
-function formatDate(iso) {
+function formatDate(iso: string | null | undefined) {
   if (!iso) return '—'
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return iso
@@ -286,7 +295,7 @@ function formatDate(iso) {
 async function reload() {
   loading.value = true
   try {
-    const params = {
+    const params: Record<string, unknown> = {
       school_year: termStore.school_year,
       semester: termStore.semester,
     }
@@ -294,12 +303,14 @@ async function reload() {
     if (filters.payment_status) params.payment_status = filters.payment_status
     if (filters.approval_status) params.approval_status = filters.approval_status
     const res = await getPOSSemesterReconciliation(params)
-    items.value = res.data?.items || []
-    totals.value = res.data?.totals || {}
+    const resData = res.data as { items?: Record<string, unknown>[]; totals?: Record<string, unknown> }
+    items.value = resData?.items || []
+    totals.value = resData?.totals || {}
   } catch (err) {
     items.value = []
     totals.value = {}
-    ElMessage.error(err?.response?.data?.detail || '讀取學期對帳失敗')
+    const axiosErr = err as { response?: { data?: { detail?: string } } }
+    ElMessage.error(axiosErr?.response?.data?.detail || '讀取學期對帳失敗')
   } finally {
     loading.value = false
   }
@@ -310,10 +321,10 @@ async function loadClassroomOptions() {
     const res = await getClassrooms({
       school_year: termStore.school_year,
       semester: termStore.semester,
-      is_active: true,
-    })
-    const rows = res.data?.items || res.data || []
-    classroomOptions.value = rows.map((c) => c.name).filter(Boolean)
+    } as Parameters<typeof getClassrooms>[0])
+    const resData = res.data as { items?: { name?: string }[] } | { name?: string }[] | null
+    const rows = (resData as { items?: { name?: string }[] })?.items ?? (resData as { name?: string }[]) ?? []
+    classroomOptions.value = rows.map((c: { name?: string }) => c.name).filter((n): n is string => !!n)
   } catch {
     classroomOptions.value = []
   }

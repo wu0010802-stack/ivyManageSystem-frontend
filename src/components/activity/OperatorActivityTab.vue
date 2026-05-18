@@ -65,23 +65,24 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 
 import { getPOSOperatorActivity } from '@/api/activity'
 
-const days = ref(30)
-const rows = ref([])
-const loading = ref(false)
+const days = ref<number>(30)
+const rows = ref<Record<string, unknown>[]>([])
+const loading = ref<boolean>(false)
 
 async function reload() {
   loading.value = true
   try {
     const { data } = await getPOSOperatorActivity(days.value)
-    rows.value = data?.operators || []
+    rows.value = (data as { operators?: Record<string, unknown>[] })?.operators || []
   } catch (e) {
-    ElMessage.error(e?.response?.data?.detail || '載入失敗')
+    const axiosErr = e as { response?: { data?: { detail?: string } } }
+    ElMessage.error(axiosErr?.response?.data?.detail || '載入失敗')
   } finally {
     loading.value = false
   }

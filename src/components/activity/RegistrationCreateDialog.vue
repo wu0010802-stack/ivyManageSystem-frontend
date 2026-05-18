@@ -81,26 +81,51 @@
   </el-dialog>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { createRegistration, getSupplies } from '@/api/activity'
 import { FIELD_RULES } from '@/constants/activity'
 
-const props = defineProps({
-  modelValue: { type: Boolean, default: false },
-  schoolYear: { type: Number, required: true },
-  semester: { type: Number, required: true },
-  classroomOptions: { type: Array, default: () => [] },
-  courseOptions: { type: Array, default: () => [] },
+interface OptionItem {
+  id?: number | string
+  name: string
+  price?: number | string
+  remaining?: number
+  capacity?: number
+  [key: string]: unknown
+}
+
+const props = withDefaults(defineProps<{
+  modelValue?: boolean
+  schoolYear: number
+  semester: number
+  classroomOptions?: string[]
+  courseOptions?: OptionItem[]
+}>(), {
+  modelValue: false,
+  classroomOptions: () => [],
+  courseOptions: () => [],
 })
-const emit = defineEmits(['update:modelValue', 'created'])
 
-const creating = ref(false)
-const loadingSupplies = ref(false)
-const supplyOptions = ref([])
+const emit = defineEmits<{
+  'update:modelValue': [value: boolean]
+  'created': []
+}>()
 
-const form = reactive({
+const creating = ref<boolean>(false)
+const loadingSupplies = ref<boolean>(false)
+const supplyOptions = ref<OptionItem[]>([])
+
+const form = reactive<{
+  name: string
+  birthday: string
+  class_: string
+  email: string
+  courseNames: string[]
+  supplyNames: string[]
+  remark: string
+}>({
   name: '',
   birthday: '',
   class_: '',
@@ -125,7 +150,7 @@ async function loadSupplies() {
   loadingSupplies.value = true
   try {
     const res = await getSupplies({ school_year: props.schoolYear, semester: props.semester })
-    supplyOptions.value = res.data.supplies || []
+    supplyOptions.value = (res.data as { supplies?: OptionItem[] }).supplies || []
   } catch {
     ElMessage.warning('用品清單載入失敗')
   } finally {
@@ -156,11 +181,11 @@ const totalAmount = computed(() => {
   let sum = 0
   for (const n of form.courseNames) {
     const c = props.courseOptions.find((x) => x.name === n)
-    if (c) sum += c.price || 0
+    if (c) sum += Number(c.price) || 0
   }
   for (const n of form.supplyNames) {
     const s = supplyOptions.value.find((x) => x.name === n)
-    if (s) sum += s.price || 0
+    if (s) sum += Number(s.price) || 0
   }
   return sum
 })
@@ -181,13 +206,14 @@ async function handleCreate() {
       semester: props.semester,
     }
     const res = await createRegistration(payload)
-    ElMessage.success(res.data.message || '新增成功')
+    ElMessage.success((res.data as { message?: string }).message || '新增成功')
     emit('update:modelValue', false)
     // 強制下次開啟時重新載入用品（本次新增可能影響庫存）
     supplyOptions.value = []
     emit('created')
   } catch (e) {
-    ElMessage.error(e?.response?.data?.detail || '新增失敗')
+    const axiosErr = e as { response?: { data?: { detail?: string } } }
+    ElMessage.error(axiosErr?.response?.data?.detail || '新增失敗')
   } finally {
     creating.value = false
   }

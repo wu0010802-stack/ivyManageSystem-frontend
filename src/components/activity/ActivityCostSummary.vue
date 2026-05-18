@@ -5,10 +5,10 @@
   </div>
 </template>
 
-<script setup>
-defineProps({
-  totalCost: { type: Number, required: true },
-})
+<script setup lang="ts">
+defineProps<{
+  totalCost: number
+}>()
 </script>
 
 <style scoped>

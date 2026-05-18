@@ -29,7 +29,7 @@
         :refund-approval-blocked="refundApprovalBlocked"
         :submitting="submitting"
         class="pos-panel-wrap__col"
-        @update:applied-amount="updateSelectedAmount"
+        @update:applied-amount="(v) => updateSelectedAmount(v ?? 0)"
         @clear-selection="clearSelection"
         @clear="resetTransactionInputs"
         @submit="handleSubmit"
@@ -126,7 +126,7 @@
         </div>
         <div class="pos-panel-wrap__receipt-items">
           <div
-            v-for="item in lastReceipt.items || []"
+            v-for="item in receiptItems"
             :key="item.registration_id"
           >
             {{ item.student_name }}（{{ item.class_name || '—' }}） ×
@@ -142,7 +142,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { Printer, RefreshRight } from '@element-plus/icons-vue'
 
@@ -154,8 +154,10 @@ import { usePOSCheckout } from '@/composables/usePOSCheckout'
 import { formatTWD, toChineseAmount } from '@/constants/pos'
 import { useAcademicTermStore } from '@/stores/academicTerm'
 
-const props = defineProps({
-  onAfterCheckout: { type: Function, default: null },
+const props = withDefaults(defineProps<{
+  onAfterCheckout?: ((...args: unknown[]) => unknown) | null
+}>(), {
+  onAfterCheckout: null,
 })
 
 const {
@@ -193,13 +195,24 @@ const {
 } = usePOSCheckout()
 
 // 搜尋面板的 selected-ids 仍以陣列接口呈現，單筆模式下至多一個元素
-const selectedIds = computed(() => (selectedItem.value ? [selectedItem.value.id] : []))
+const selectedIds = computed((): (number | string)[] => (selectedItem.value ? [selectedItem.value.id as number | string] : []))
 
-function handleToggle(row, studentName) {
+interface ReceiptItem {
+  registration_id?: string | number
+  student_name?: string
+  class_name?: string
+  amount_applied?: number
+}
+// 收據明細：將 lastReceipt.items (unknown) cast 為具名型別，供模板安全存取
+const receiptItems = computed((): ReceiptItem[] =>
+  ((lastReceipt.value?.items as ReceiptItem[]) ?? [])
+)
+
+function handleToggle(row: Record<string, unknown>, studentName: string) {
   selectItem(row, studentName)
 }
 
-async function handleSubmit(payload = {}) {
+async function handleSubmit(payload: { print?: boolean } = {}) {
   const { print = true } = payload
   await doSubmit({
     print,
@@ -207,7 +220,7 @@ async function handleSubmit(payload = {}) {
   })
 }
 
-function formatTime(iso) {
+function formatTime(iso: string | null | undefined) {
   if (!iso) return '—'
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return iso.slice(11, 16)
@@ -221,16 +234,16 @@ function formatTime(iso) {
 
 const termStore = useAcademicTermStore()
 
-const classroomOptions = ref([])
+const classroomOptions = ref<string[]>([])
 async function loadClassroomOptions() {
   try {
     const res = await getClassrooms({
       school_year: termStore.school_year,
       semester: termStore.semester,
-      is_active: true,
-    })
-    const rows = res.data?.items || res.data || []
-    classroomOptions.value = rows.map((c) => c.name).filter(Boolean)
+    } as Parameters<typeof getClassrooms>[0])
+    const rows = (res.data as { items?: { name?: string }[] } | { name?: string }[] | null)
+    const list = (rows as { items?: { name?: string }[] })?.items ?? (rows as { name?: string }[]) ?? []
+    classroomOptions.value = list.map((c: { name?: string }) => c.name).filter((n): n is string => !!n)
   } catch {
     classroomOptions.value = []
   }
