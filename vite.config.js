@@ -163,9 +163,11 @@ export default defineConfig({
         vue(),
         AutoImport({
             resolvers: [ElementPlusResolver()],
+            dts: true,
         }),
         Components({
             resolvers: [ElementPlusResolver()],
+            dts: true,
         }),
         VitePWA({
             registerType: 'autoUpdate',          // 有新版本時自動更新 SW
