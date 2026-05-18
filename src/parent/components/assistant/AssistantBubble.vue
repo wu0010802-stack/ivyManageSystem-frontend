@@ -1,7 +1,7 @@
-<script setup>
-const props = defineProps({
-  role: { type: String, required: true, validator: v => ['assistant', 'user'].includes(v) },
-})
+<script setup lang="ts">
+defineProps<{
+  role: 'assistant' | 'user'
+}>()
 </script>
 
 <template>

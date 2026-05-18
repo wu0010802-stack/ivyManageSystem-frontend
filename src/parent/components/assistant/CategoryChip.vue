@@ -1,8 +1,17 @@
-<script setup>
-defineProps({
-  category: { type: Object, required: true }, // { id, label, icon, color }
-})
-defineEmits(['click'])
+<script setup lang="ts">
+interface Category {
+  id: number | string
+  label: string
+  icon: string
+  color: string
+}
+
+defineProps<{
+  category: Category
+}>()
+defineEmits<{
+  'click': [category: Category]
+}>()
 </script>
 
 <template>

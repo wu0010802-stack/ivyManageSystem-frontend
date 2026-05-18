@@ -1,8 +1,15 @@
-<script setup>
-defineProps({
-  item: { type: Object, required: true },
-})
-defineEmits(['click'])
+<script setup lang="ts">
+interface FaqQuestion {
+  question: string
+  [key: string]: unknown
+}
+
+defineProps<{
+  item: FaqQuestion
+}>()
+defineEmits<{
+  'click': [item: FaqQuestion]
+}>()
 </script>
 
 <template>

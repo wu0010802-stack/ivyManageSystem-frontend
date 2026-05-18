@@ -1,15 +1,19 @@
-<script setup>
+<script setup lang="ts">
 import { ref, watch } from 'vue'
 
-const props = defineProps({
-  modelValue: { type: String, default: '' },
+const props = withDefaults(defineProps<{
+  modelValue?: string
+}>(), {
+  modelValue: '',
 })
-const emit = defineEmits(['update:modelValue'])
+const emit = defineEmits<{
+  'update:modelValue': [value: string]
+}>()
 
-const local = ref(props.modelValue)
-let timer = null
+const local = ref<string>(props.modelValue)
+let timer: ReturnType<typeof setTimeout> | null = null
 watch(local, v => {
-  clearTimeout(timer)
+  clearTimeout(timer ?? undefined)
   timer = setTimeout(() => emit('update:modelValue', v), 150)
 })
 watch(() => props.modelValue, v => { local.value = v })
