@@ -2298,6 +2298,9 @@ export interface paths {
          *     - effective_from 不可早於今天
          *     - rule_config 依 rule_type 二次 validate
          *     - (item_code, effective_from) UNIQUE 衝突回 409
+         *
+         *     bug sweep 2026-05-18 P2：用 today_taipei() 取台灣時區「今日」，避免 server
+         *     部署在 UTC 時午夜前後的 ±8h 偏差讓 admin 在凌晨無法建明天生效的規則。
          */
         post: operations["create_scoring_rule_api_appraisal_scoring_rules_post"];
         delete?: never;
@@ -2340,6 +2343,10 @@ export interface paths {
          * @description 留言：寫 AppraisalSummaryLog action=COMMENT，status 不變。
          *
          *     入口門檻 APPRAISAL_READ；空 comment 由 Pydantic min_length=1 攔截。
+         *
+         *     bug sweep 2026-05-18 P2：comment 是「留言」非「核可」，但仍與 sign/reject 共用
+         *     同一 log 表 + 同樣會被審計追溯。為保持 audit trail 行為一致，禁止本人對自己
+         *     的考核 summary 留言（避免自簽自評的灰色地帶；確需發聲改走 reject/sign 對應端點）。
          */
         post: operations["comment_summary_api_appraisal_summaries__summary_id__comment_post"];
         delete?: never;
@@ -5796,6 +5803,76 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/monthly-fixed-costs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Monthly Fixed Costs
+         * @description 列出指定年度所有月度固定費用條目（依 month、category 排序）。
+         *
+         *     回傳前端用於組裝 12×8 試算表；未登錄的 (month, category) 不會出現在 list 中，
+         *     前端自行補成 0/empty input。
+         */
+        get: operations["list_monthly_fixed_costs_api_monthly_fixed_costs_get"];
+        /**
+         * Upsert Monthly Fixed Cost
+         * @description 單筆 upsert by (year, month, category)。
+         */
+        put: operations["upsert_monthly_fixed_cost_api_monthly_fixed_costs_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/monthly-fixed-costs/{cost_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Monthly Fixed Cost
+         * @description 刪除單筆月度固定費用。
+         */
+        delete: operations["delete_monthly_fixed_cost_api_monthly_fixed_costs__cost_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/monthly-fixed-costs/batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Batch Upsert Monthly Fixed Costs
+         * @description 批次 upsert 整年某幾筆條目。整批 atomic，任何一筆失敗整批回滾。
+         *
+         *     前端「儲存全部」按鈕只送 dirty 條目，避免無謂寫入。重複 (month, category)
+         *     視為錯誤（同一鍵不應送兩次）。
+         */
+        put: operations["batch_upsert_monthly_fixed_costs_api_monthly_fixed_costs_batch_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/notifications/summary": {
         parameters: {
             query?: never;
@@ -7901,6 +7978,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/portal/my-appraisals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List My Appraisals
+         * @description 歷年考核清單。未 FINALIZED 不回分數。
+         */
+        get: operations["list_my_appraisals_api_portal_my_appraisals_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/my-appraisals/{cycle_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * My Appraisal Detail
+         * @description 單期完整明細；非 FINALIZED → 403。
+         */
+        get: operations["my_appraisal_detail_api_portal_my_appraisals__cycle_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/my-appraisals/trend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * My Appraisals Trend
+         * @description 折線圖資料 — 只回 FINALIZED 且未 rejected 期，按時間 ASC。
+         */
+        get: operations["my_appraisals_trend_api_portal_my_appraisals_trend_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/portal/my-class-assessments": {
         parameters: {
             query?: never;
@@ -9498,6 +9635,33 @@ export interface paths {
          *     避免 supervisor / 自訂 REPORTS 角色透過匯出取得逐員實發名冊。
          */
         get: operations["export_finance_summary_api_reports_finance_summary_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/reports/monthly-pnl": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Monthly Pnl
+         * @description 月度損益表：試算表 layout，4 section × 12 月 × row + totals + pending_items。
+         *
+         *     Phase 1 範圍：只整合已有資料來源的 ~22 列；未整合的 user 自家詞彙、紅利細項、
+         *     固定費用、個別廠商分項落於 pending_items（不假裝填 0）。
+         *
+         *     快取：sub-category `reports_monthly_pnl`，TTL 30 分；與 /finance-summary 共用
+         *     `utils.finance_cache.invalidate_finance_summary_cache()` 失效掛鉤，所有 fees /
+         *     salary / activity / vendor_payments write 路徑會一併失效兩個快取。
+         */
+        get: operations["get_monthly_pnl_api_reports_monthly_pnl_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -11411,6 +11575,115 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/vendor-payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Vendor Payments */
+        get: operations["list_vendor_payments_api_vendor_payments_get"];
+        put?: never;
+        /** Create Vendor Payment */
+        post: operations["create_vendor_payment_api_vendor_payments_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vendor-payments/{payment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Vendor Payment */
+        get: operations["get_vendor_payment_api_vendor_payments__payment_id__get"];
+        /** Update Vendor Payment */
+        put: operations["update_vendor_payment_api_vendor_payments__payment_id__put"];
+        post?: never;
+        /** Delete Vendor Payment */
+        delete: operations["delete_vendor_payment_api_vendor_payments__payment_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vendor-payments/{payment_id}/attachments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upload Attachment */
+        post: operations["upload_attachment_api_vendor_payments__payment_id__attachments_post"];
+        /** Delete Attachment Endpoint */
+        delete: operations["delete_attachment_endpoint_api_vendor_payments__payment_id__attachments_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vendor-payments/{payment_id}/attachments/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download Attachment */
+        get: operations["download_attachment_api_vendor_payments__payment_id__attachments_download_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vendor-payments/{payment_id}/sign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sign Vendor Payment
+         * @description 簽收：解析 base64 → 寫 storage → 更新狀態。pending 才能簽收。
+         */
+        post: operations["sign_vendor_payment_api_vendor_payments__payment_id__sign_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/vendor-payments/{payment_id}/signature": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Signature Image */
+        get: operations["get_signature_image_api_vendor_payments__payment_id__signature_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/year_end/cycles": {
         parameters: {
             query?: never;
@@ -12298,6 +12571,11 @@ export interface components {
              * @enum {string}
              */
             owner_type: "observation" | "report" | "medication_order";
+        };
+        /** Body_upload_attachment_api_vendor_payments__payment_id__attachments_post */
+        Body_upload_attachment_api_vendor_payments__payment_id__attachments_post: {
+            /** File */
+            file: string;
         };
         /** Body_upload_attendance_api_attendance_upload_post */
         Body_upload_attendance_api_attendance_upload_post: {
@@ -14880,6 +15158,180 @@ export interface components {
             /** Month */
             month: string;
         };
+        /** MonthlyFixedCostBatchEntry */
+        MonthlyFixedCostBatchEntry: {
+            /** Amount */
+            amount: number | string;
+            /**
+             * Category
+             * @enum {string}
+             */
+            category: "rent" | "office_petty_cash" | "kitchen_petty_cash" | "meals" | "water" | "electricity" | "phone" | "old_pension_reserve";
+            /** Month */
+            month: number;
+            /** Notes */
+            notes?: string | null;
+        };
+        /** MonthlyFixedCostBatchUpsert */
+        MonthlyFixedCostBatchUpsert: {
+            /** Entries */
+            entries: components["schemas"]["MonthlyFixedCostBatchEntry"][];
+            /** Year */
+            year: number;
+        };
+        /** MonthlyFixedCostUpsert */
+        MonthlyFixedCostUpsert: {
+            /** Amount */
+            amount: number | string;
+            /**
+             * Category
+             * @enum {string}
+             */
+            category: "rent" | "office_petty_cash" | "kitchen_petty_cash" | "meals" | "water" | "electricity" | "phone" | "old_pension_reserve";
+            /** Month */
+            month: number;
+            /** Notes */
+            notes?: string | null;
+            /** Year */
+            year: number;
+        };
+        /** MyAppraisalDetailOut */
+        MyAppraisalDetailOut: {
+            /** Academic Year */
+            academic_year: number;
+            /** Base Score */
+            base_score: string;
+            /** Bonus Amount */
+            bonus_amount: string;
+            /** Cycle Id */
+            cycle_id: number;
+            /** Event Score Sum */
+            event_score_sum: string;
+            /** Finalized At */
+            finalized_at?: string | null;
+            /** Grade */
+            grade: string;
+            /** Role Group */
+            role_group: string;
+            /** Score Items */
+            score_items: components["schemas"]["MyScoreItemOut"][];
+            /**
+             * Semester
+             * @enum {string}
+             */
+            semester: "FIRST" | "SECOND";
+            /** Summary Status */
+            summary_status: string;
+            /** Total Score */
+            total_score: string;
+        };
+        /** MyAppraisalListItem */
+        MyAppraisalListItem: {
+            /** Academic Year */
+            academic_year: number;
+            /** Bonus Amount */
+            bonus_amount?: string | null;
+            /** Cycle Id */
+            cycle_id: number;
+            /**
+             * Cycle Status
+             * @enum {string}
+             */
+            cycle_status: "OPEN" | "LOCKED" | "CLOSED";
+            /**
+             * End Date
+             * Format: date
+             */
+            end_date: string;
+            /** Exclude Reason */
+            exclude_reason?: string | null;
+            /** Grade */
+            grade?: ("OUTSTANDING" | "GOOD" | "PASS" | "WARN" | "FAIL") | null;
+            /** Is Excluded */
+            is_excluded: boolean;
+            /**
+             * Is Rejected
+             * @default false
+             */
+            is_rejected: boolean;
+            /**
+             * Is Visible
+             * @default false
+             */
+            is_visible: boolean;
+            /** Participant Id */
+            participant_id: number;
+            /** Role Group */
+            role_group: string;
+            /**
+             * Semester
+             * @enum {string}
+             */
+            semester: "FIRST" | "SECOND";
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+            /** Summary Status */
+            summary_status?: ("DRAFT" | "SUPERVISOR_SIGNED" | "ACCOUNTING_SIGNED" | "FINALIZED") | null;
+            /** Total Score */
+            total_score?: string | null;
+        };
+        /** MyAppraisalListOut */
+        MyAppraisalListOut: {
+            /** Items */
+            items: components["schemas"]["MyAppraisalListItem"][];
+        };
+        /** MyScoreItemOut */
+        MyScoreItemOut: {
+            /** Display Order */
+            display_order: number;
+            /** Item Code */
+            item_code: string;
+            /** Label */
+            label: string;
+            /** Note */
+            note?: string | null;
+            /** Raw Value */
+            raw_value?: string | null;
+            /** Score Delta */
+            score_delta: string;
+            /** Sequence No */
+            sequence_no: number;
+            /**
+             * Sign
+             * @enum {string}
+             */
+            sign: "POSITIVE" | "NEGATIVE" | "NEUTRAL";
+        };
+        /** MyTrendOut */
+        MyTrendOut: {
+            /** Points */
+            points: components["schemas"]["MyTrendPoint"][];
+        };
+        /** MyTrendPoint */
+        MyTrendPoint: {
+            /** Academic Year */
+            academic_year: number;
+            /** Base Score */
+            base_score: string;
+            /** Cycle Id */
+            cycle_id: number;
+            /** Event Score Sum */
+            event_score_sum: string;
+            /** Grade */
+            grade: string;
+            /** Label */
+            label: string;
+            /**
+             * Semester
+             * @enum {string}
+             */
+            semester: "FIRST" | "SECOND";
+            /** Total Score */
+            total_score: string;
+        };
         /** ObservationCreate */
         ObservationCreate: {
             /** Domain */
@@ -16757,6 +17209,56 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /** VendorPaymentCreate */
+        VendorPaymentCreate: {
+            /** Amount */
+            amount: number | string;
+            /** Description */
+            description?: string | null;
+            /** Invoice Number */
+            invoice_number?: string | null;
+            /** Notes */
+            notes?: string | null;
+            /**
+             * Payment Date
+             * Format: date
+             */
+            payment_date: string;
+            /**
+             * Payment Method
+             * @enum {string}
+             */
+            payment_method: "cash" | "bank_transfer" | "check" | "linepay" | "other";
+            /** Vendor Name */
+            vendor_name: string;
+        };
+        /** VendorPaymentSignRequest */
+        VendorPaymentSignRequest: {
+            /** Signature Data */
+            signature_data: string;
+            /**
+             * Signature Kind
+             * @enum {string}
+             */
+            signature_kind: "drawn" | "photo";
+        };
+        /** VendorPaymentUpdate */
+        VendorPaymentUpdate: {
+            /** Amount */
+            amount?: number | string | null;
+            /** Description */
+            description?: string | null;
+            /** Invoice Number */
+            invoice_number?: string | null;
+            /** Notes */
+            notes?: string | null;
+            /** Payment Date */
+            payment_date?: string | null;
+            /** Payment Method */
+            payment_method?: ("cash" | "bank_transfer" | "check" | "linepay" | "other") | null;
+            /** Vendor Name */
+            vendor_name?: string | null;
         };
         /**
          * VoidPaymentRequest
@@ -27343,6 +27845,134 @@ export interface operations {
             };
         };
     };
+    list_monthly_fixed_costs_api_monthly_fixed_costs_get: {
+        parameters: {
+            query: {
+                year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upsert_monthly_fixed_cost_api_monthly_fixed_costs_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MonthlyFixedCostUpsert"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_monthly_fixed_cost_api_monthly_fixed_costs__cost_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cost_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    batch_upsert_monthly_fixed_costs_api_monthly_fixed_costs_batch_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MonthlyFixedCostBatchUpsert"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_notification_summary_api_notifications_summary_get: {
         parameters: {
             query?: never;
@@ -30763,6 +31393,77 @@ export interface operations {
             };
         };
     };
+    list_my_appraisals_api_portal_my_appraisals_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyAppraisalListOut"];
+                };
+            };
+        };
+    };
+    my_appraisal_detail_api_portal_my_appraisals__cycle_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cycle_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyAppraisalDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    my_appraisals_trend_api_portal_my_appraisals_trend_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyTrendOut"];
+                };
+            };
+        };
+    };
     get_my_class_assessments_api_portal_my_class_assessments_get: {
         parameters: {
             query?: {
@@ -33606,6 +34307,37 @@ export interface operations {
         parameters: {
             query: {
                 month?: number | null;
+                year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_monthly_pnl_api_reports_monthly_pnl_get: {
+        parameters: {
+            query: {
                 year: number;
             };
             header?: never;
@@ -37561,6 +38293,340 @@ export interface operations {
             header?: never;
             path: {
                 key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_vendor_payments_api_vendor_payments_get: {
+        parameters: {
+            query?: {
+                end_date?: string | null;
+                page?: number;
+                page_size?: number;
+                payment_method?: ("cash" | "bank_transfer" | "check" | "linepay" | "other") | null;
+                start_date?: string | null;
+                status?: ("pending" | "signed") | null;
+                vendor_name?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_vendor_payment_api_vendor_payments_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VendorPaymentCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_vendor_payment_api_vendor_payments__payment_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                payment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_vendor_payment_api_vendor_payments__payment_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                payment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VendorPaymentUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_vendor_payment_api_vendor_payments__payment_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                payment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_attachment_api_vendor_payments__payment_id__attachments_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                payment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_attachment_api_vendor_payments__payment_id__attachments_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_attachment_endpoint_api_vendor_payments__payment_id__attachments_delete: {
+        parameters: {
+            query: {
+                key: string;
+            };
+            header?: never;
+            path: {
+                payment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_attachment_api_vendor_payments__payment_id__attachments_download_get: {
+        parameters: {
+            query: {
+                key: string;
+            };
+            header?: never;
+            path: {
+                payment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sign_vendor_payment_api_vendor_payments__payment_id__sign_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                payment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VendorPaymentSignRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_signature_image_api_vendor_payments__payment_id__signature_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                payment_id: number;
             };
             cookie?: never;
         };
