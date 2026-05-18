@@ -1,7 +1,7 @@
 /**
  * 教師端家長訊息 store。
  *
- * 仿 src/parent/stores/messages.js 設計：thread 列表 + cursor 分頁 + 樂觀送出 + 撤回。
+ * 仿 src/parent/stores/messages.ts 設計：thread 列表 + cursor 分頁 + 樂觀送出 + 撤回。
  * sender_role 為 'teacher'。
  */
 
@@ -25,10 +25,17 @@ function uuid() {
   return Math.random().toString(36).slice(2) + Date.now().toString(36)
 }
 
+// 訊息 bucket（per thread）
+interface MessageBucket {
+  items: Record<string, unknown>[]
+  next_cursor: string | null
+  hasMore: boolean
+}
+
 export const usePortalMessagesStore = defineStore('portalMessages', () => {
-  const threads = ref([])
+  const threads = ref<Record<string, unknown>[]>([])
   const threadsLoaded = ref(false)
-  const messagesByThread = ref({}) // thread_id → { items, next_cursor, hasMore }
+  const messagesByThread = ref<Record<string, MessageBucket>>({}) // thread_id → { items, next_cursor, hasMore }
   const unreadCount = ref(0)
 
   async function fetchThreads(force = false) {
@@ -38,8 +45,8 @@ export const usePortalMessagesStore = defineStore('portalMessages', () => {
     threadsLoaded.value = true
   }
 
-  async function fetchMessages(threadId, { reset = false } = {}) {
-    const cur = messagesByThread.value[threadId] || {
+  async function fetchMessages(threadId: number, { reset = false } = {}) {
+    const cur: MessageBucket = messagesByThread.value[threadId] || {
       items: [],
       next_cursor: null,
       hasMore: true,
@@ -50,10 +57,10 @@ export const usePortalMessagesStore = defineStore('portalMessages', () => {
       cur.hasMore = true
     }
     if (!cur.hasMore && !reset) return cur
-    const params = { limit: 30 }
+    const params: Record<string, unknown> = { limit: 30 }
     if (cur.next_cursor) params.cursor = cur.next_cursor
     const { data } = await listMessages(threadId, params)
-    const newItems = data?.items || []
+    const newItems: Record<string, unknown>[] = data?.items || []
     cur.items = [...cur.items, ...newItems]
     cur.next_cursor = data?.next_cursor || null
     cur.hasMore = !!data?.next_cursor
@@ -64,10 +71,10 @@ export const usePortalMessagesStore = defineStore('portalMessages', () => {
   /**
    * 教師回覆既有 thread。樂觀送出。
    */
-  async function send(threadId, body, attachments = []) {
+  async function send(threadId: number, body: string, attachments: File[] = []) {
     const cri = uuid()
     const tempId = `tmp-${cri}`
-    const placeholder = {
+    const placeholder: Record<string, unknown> = {
       id: tempId,
       thread_id: threadId,
       sender_role: 'teacher',
@@ -77,7 +84,7 @@ export const usePortalMessagesStore = defineStore('portalMessages', () => {
       created_at: new Date().toISOString(),
       _pending: true,
     }
-    const cur = messagesByThread.value[threadId] || {
+    const cur: MessageBucket = messagesByThread.value[threadId] || {
       items: [],
       next_cursor: null,
       hasMore: false,
@@ -90,15 +97,16 @@ export const usePortalMessagesStore = defineStore('portalMessages', () => {
         body,
         client_request_id: cri,
       })
-      cur.items = cur.items.map((m) => (m.id === tempId ? data : m))
+      cur.items = cur.items.map((m) => (m.id === tempId ? (data as Record<string, unknown>) : m))
       messagesByThread.value = { ...messagesByThread.value, [threadId]: cur }
 
       for (const f of attachments) {
         try {
-          const { data: att } = await attachToMessage(threadId, data.id, f)
+          const { data: att } = await attachToMessage(threadId, (data as Record<string, unknown>).id as number, f)
+          const serverMsg = data as Record<string, unknown>
           cur.items = cur.items.map((m) =>
-            m.id === data.id
-              ? { ...m, attachments: [...(m.attachments || []), att] }
+            m.id === serverMsg.id
+              ? { ...m, attachments: [...((m.attachments as unknown[]) || []), att] }
               : m,
           )
           messagesByThread.value = {
@@ -120,7 +128,7 @@ export const usePortalMessagesStore = defineStore('portalMessages', () => {
   /**
    * 教師主動發起新 thread + 第一則訊息。
    */
-  async function startThread({ studentId, parentUserId, body }) {
+  async function startThread({ studentId, parentUserId, body }: { studentId: number; parentUserId: number; body: string }) {
     const cri = uuid()
     const { data } = await createThread({
       student_id: studentId,
@@ -129,11 +137,11 @@ export const usePortalMessagesStore = defineStore('portalMessages', () => {
       client_request_id: cri,
     })
     // 把新 thread 加到列表頂端
-    threads.value = [data.thread, ...threads.value]
+    threads.value = [(data as Record<string, unknown>).thread as Record<string, unknown>, ...threads.value]
     return data
   }
 
-  async function markRead(threadId) {
+  async function markRead(threadId: number) {
     await markThreadRead(threadId)
     threads.value = threads.value.map((t) =>
       t.id === threadId ? { ...t, unread_count: 0 } : t,
@@ -141,9 +149,9 @@ export const usePortalMessagesStore = defineStore('portalMessages', () => {
     await refreshUnread()
   }
 
-  async function recall(messageId) {
+  async function recall(messageId: number) {
     await recallMessage(messageId)
-    const updated = {}
+    const updated: Record<string, MessageBucket> = {}
     for (const [tid, bucket] of Object.entries(messagesByThread.value)) {
       bucket.items = bucket.items.map((m) =>
         m.id === messageId ? { ...m, deleted: true, body: null } : m,
@@ -156,7 +164,7 @@ export const usePortalMessagesStore = defineStore('portalMessages', () => {
   async function refreshUnread() {
     try {
       const { data } = await getUnreadCount()
-      unreadCount.value = data?.unread_count || 0
+      unreadCount.value = (data as Record<string, unknown>)?.unread_count as number || 0
     } catch {
       /* ignore */
     }

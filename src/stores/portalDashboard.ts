@@ -10,10 +10,10 @@ import { getHomeSummary } from '../api/portalHome'
 const TTL_MS = 60_000
 
 export const usePortalDashboardStore = defineStore('portalDashboard', () => {
-  const summary = ref(null)
+  const summary = ref<unknown>(null)
   const lastFetchedAt = ref(0)
   const loading = ref(false)
-  const error = ref(null)
+  const error = ref<unknown>(null)
 
   function isFresh() {
     return summary.value && Date.now() - lastFetchedAt.value < TTL_MS

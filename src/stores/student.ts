@@ -13,8 +13,18 @@ const baseStore = createKeyedFetchStore('student', getStudents, {
   errorMsg: '學生資料載入失敗',
 })
 
+// 動態附加 mutation actions 的 store 型別
+type StoreWithMutations = ReturnType<typeof baseStore> & {
+  _mutationActionsAttached?: boolean
+  createStudent: (payload: Record<string, unknown>) => Promise<Record<string, unknown>>
+  updateStudent: (id: number, payload: Record<string, unknown>) => Promise<unknown>
+  graduateStudent: (id: number, payload: Record<string, unknown>) => Promise<unknown>
+  bulkTransfer: (args: { student_ids: number[]; target_classroom_id: number; source_classroom_id?: number | null }) => Promise<unknown>
+  transitionLifecycle: (id: number, payload: Record<string, unknown>) => Promise<unknown>
+}
+
 export function useStudentStore() {
-  const store = baseStore()
+  const store = baseStore() as unknown as StoreWithMutations
 
   if (!store._mutationActionsAttached) {
     Object.assign(store, buildMutationActions(store))
@@ -23,21 +33,21 @@ export function useStudentStore() {
   return store
 }
 
-function buildMutationActions(store) {
+function buildMutationActions(store: StoreWithMutations) {
   return {
-    async createStudent(payload) {
+    async createStudent(payload: Record<string, unknown>) {
       const res = await apiCreateStudent(payload)
-      const created = res?.data ?? {}
+      const created = (res?.data ?? {}) as Record<string, unknown>
       domainBus.emit(STUDENT_EVENTS.CREATED, {
-        id: created.id,
-        classroom_id: created.classroom_id ?? payload.classroom_id ?? null,
+        id: created.id as number,
+        classroom_id: (created.classroom_id ?? payload.classroom_id ?? null) as number | null,
       })
       return created
     },
 
-    async updateStudent(id, payload) {
+    async updateStudent(id: number, payload: Record<string, unknown>) {
       const snapshots = store.patchLocal(
-        (s) => s && s.id === id,
+        (s: unknown) => !!(s && (s as { id: unknown }).id === id),
         () => payload,
       )
       try {
@@ -51,9 +61,9 @@ function buildMutationActions(store) {
       }
     },
 
-    async graduateStudent(id, payload) {
-      const target = store.byId(id)
-      const fromStatus = target?.lifecycle_status || null
+    async graduateStudent(id: number, payload: Record<string, unknown>) {
+      const target = store.byId(id) as Record<string, unknown> | null
+      const fromStatus = (target?.lifecycle_status as string) || null
       const res = await apiGraduateStudent(id, payload)
       domainBus.emit(STUDENT_EVENTS.LIFECYCLE_CHANGED, {
         id,
@@ -63,7 +73,7 @@ function buildMutationActions(store) {
       return res?.data
     },
 
-    async bulkTransfer({ student_ids, target_classroom_id, source_classroom_id = null }) {
+    async bulkTransfer({ student_ids, target_classroom_id, source_classroom_id = null }: { student_ids: number[]; target_classroom_id: number; source_classroom_id?: number | null }) {
       const res = await apiBulkTransferStudents({
         student_ids,
         target_classroom_id,
@@ -76,14 +86,14 @@ function buildMutationActions(store) {
       return res?.data
     },
 
-    async transitionLifecycle(id, payload) {
-      const target = store.byId(id)
-      const fromStatus = target?.lifecycle_status || null
+    async transitionLifecycle(id: number, payload: Record<string, unknown>) {
+      const target = store.byId(id) as Record<string, unknown> | null
+      const fromStatus = (target?.lifecycle_status as string) || null
       const res = await apiTransitionLifecycle(id, payload)
       domainBus.emit(STUDENT_EVENTS.LIFECYCLE_CHANGED, {
         id,
         from_status: fromStatus,
-        to_status: payload?.to_status ?? null,
+        to_status: (payload?.to_status as string) ?? null,
       })
       return res?.data
     },
