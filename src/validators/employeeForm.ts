@@ -4,9 +4,9 @@ import {
     PENSION_SELF_RATE_MAX,
 } from '@/constants/laborCompliance'
 
-const fmtNTD = (n) => `NT$${Number(n).toLocaleString()}`
+const fmtNTD = (n: unknown) => `NT$${Number(n).toLocaleString()}`
 
-export function validateInsuranceVsBase(insurance, base, employeeType) {
+export function validateInsuranceVsBase(insurance: unknown, base: unknown, employeeType: unknown) {
     if (employeeType !== 'regular') return null
     const ins = Number(insurance) || 0
     const b = Number(base) || 0
@@ -17,7 +17,7 @@ export function validateInsuranceVsBase(insurance, base, employeeType) {
     return null
 }
 
-export function validateBaseSalary(baseSalary, employeeType) {
+export function validateBaseSalary(baseSalary: unknown, employeeType: unknown) {
     if (employeeType !== 'regular') return null
     const b = Number(baseSalary) || 0
     if (b > 0 && b < MINIMUM_MONTHLY_WAGE) {
@@ -26,7 +26,7 @@ export function validateBaseSalary(baseSalary, employeeType) {
     return null
 }
 
-export function validateHourlyRate(hourlyRate, employeeType) {
+export function validateHourlyRate(hourlyRate: unknown, employeeType: unknown) {
     if (employeeType !== 'hourly') return null
     const r = Number(hourlyRate) || 0
     if (r > 0 && r < MINIMUM_HOURLY_WAGE) {
@@ -35,7 +35,7 @@ export function validateHourlyRate(hourlyRate, employeeType) {
     return null
 }
 
-export function validatePensionSelfRate(rate) {
+export function validatePensionSelfRate(rate: unknown) {
     const r = Number(rate)
     if (Number.isNaN(r)) return '勞退自提範圍為 0% ~ 6%'
     if (r < 0 || r > PENSION_SELF_RATE_MAX) {
@@ -44,13 +44,13 @@ export function validatePensionSelfRate(rate) {
     return null
 }
 
-export function pensionRateToPercent(rate) {
+export function pensionRateToPercent(rate: unknown) {
     const r = Number(rate)
     if (!r || Number.isNaN(r)) return 0
     return Math.round(r * 10000) / 100
 }
 
-export function pensionPercentToRate(percent) {
+export function pensionPercentToRate(percent: unknown) {
     const p = Number(percent)
     if (!p || Number.isNaN(p)) return 0
     return Math.round(p * 10000) / 1000000
