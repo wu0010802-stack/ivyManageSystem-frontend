@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /**
  * 家長 More 頁「外觀 + 無障礙」偏好設定區塊。
  *
@@ -16,13 +16,13 @@ import { useA11y } from '../../composables/useA11y'
 const { preference: themePref, setPreference: setTheme } = useTheme()
 const { fontSize, highContrast, setFontSize, setHighContrast } = useA11y()
 
-const THEME_OPTIONS = [
+const THEME_OPTIONS: { key: string; label: string }[] = [
   { key: 'system', label: '跟隨系統' },
   { key: 'light', label: '亮色' },
   { key: 'dark', label: '深色' },
 ]
 
-const FONT_SIZE_OPTIONS = [
+const FONT_SIZE_OPTIONS: { key: string; label: string }[] = [
   { key: 'sm', label: '小' },
   { key: 'md', label: '中' },
   { key: 'lg', label: '大' },

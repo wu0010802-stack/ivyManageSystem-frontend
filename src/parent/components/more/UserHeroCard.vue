@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /**
  * 家長 More 頁 hero 卡：頭像 + 名字 + 子女列表 + LINE 推播狀態 badge。
  *
@@ -18,12 +18,18 @@ import ParentIcon from '../ParentIcon.vue'
 import LaurelWreath from '@/components/brand/LaurelWreath.vue'
 import KawaiiStar from '@/components/brand/KawaiiStar.vue'
 
-defineProps({
-  userName: { type: String, default: '家長' },
-  avatarInitial: { type: String, default: '家' },
-  childrenLabel: { type: String, default: '尚未綁定' },
-  canPush: { type: Boolean, default: false },
-  pushStatusKnown: { type: Boolean, default: false },
+withDefaults(defineProps<{
+  userName?: string
+  avatarInitial?: string
+  childrenLabel?: string
+  canPush?: boolean
+  pushStatusKnown?: boolean
+}>(), {
+  userName: '家長',
+  avatarInitial: '家',
+  childrenLabel: '尚未綁定',
+  canPush: false,
+  pushStatusKnown: false,
 })
 </script>
 
