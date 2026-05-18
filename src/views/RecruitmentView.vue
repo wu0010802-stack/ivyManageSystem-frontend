@@ -467,7 +467,7 @@ import RecruitmentNoDepositTab from '@/components/recruitment/RecruitmentNoDepos
 import RecruitmentPeriodsTab from '@/components/recruitment/RecruitmentPeriodsTab.vue'
 import RecruitmentDetailTab from '@/components/recruitment/RecruitmentDetailTab.vue'
 import RecruitmentConvertDialog from '@/components/recruitment/RecruitmentConvertDialog.vue'
-import { getClassrooms } from '@/api/classrooms'
+import { useClassroomStore } from '@/stores/classroom'
 import { useRouter } from 'vue-router'
 import RecruitmentMonthDialog from '@/components/recruitment/RecruitmentMonthDialog.vue'
 import RecruitmentRecordDialog from '@/components/recruitment/RecruitmentRecordDialog.vue'
@@ -525,14 +525,12 @@ const router = useRouter()
 const convertDialogVisible = ref(false)
 const convertTargetVisit = ref(null)
 const classroomOptions = ref([])
-let classroomsLoaded = false
+const classroomStore = useClassroomStore()
 
 async function loadClassroomsOnce() {
-  if (classroomsLoaded) return
   try {
-    const { data } = await getClassrooms({ is_active: true })
-    classroomOptions.value = data?.items || data || []
-    classroomsLoaded = true
+    await classroomStore.fetchClassrooms()
+    classroomOptions.value = classroomStore.classrooms || []
   } catch (err) {
     // 失敗靜默：不阻擋 dialog 開啟，使用者仍可不選班級
     classroomOptions.value = []

@@ -83,6 +83,14 @@ vi.mock('@/utils/error', () => ({
   apiError: vi.fn((_err, fallback) => fallback),
 }))
 
+const mockFetchClassrooms = vi.fn().mockResolvedValue(undefined)
+vi.mock('@/stores/classroom', () => ({
+  useClassroomStore: () => ({
+    classrooms: [],
+    fetchClassrooms: mockFetchClassrooms,
+  }),
+}))
+
 vi.mock('@/utils/download', () => ({
   downloadFile: (...args) => downloadFile(...args),
 }))

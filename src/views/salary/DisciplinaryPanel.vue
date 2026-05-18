@@ -8,7 +8,7 @@ import {
   updateDisciplinaryAction,
   deleteDisciplinaryAction,
 } from '@/api/disciplinary'
-import { getEmployees } from '@/api/employees'
+import { useEmployeeStore } from '@/stores/employee'
 import { apiError } from '@/utils/error'
 
 const TYPE_OPTIONS = [
@@ -45,10 +45,12 @@ const applyTypeDefault = () => {
   if (opt && !form.deduction_amount) form.deduction_amount = opt.defaultAmount
 }
 
+const employeeStore = useEmployeeStore()
+
 const fetchEmployees = async () => {
   try {
-    const res = await getEmployees({ active: true })
-    employees.value = res.data || []
+    await employeeStore.fetchEmployees()
+    employees.value = employeeStore.employees || []
   } catch (e) {
     /* 不阻擋主流程 */
   }
