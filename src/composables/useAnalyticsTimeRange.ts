@@ -1,11 +1,9 @@
 import { ref, computed } from 'vue'
 
 const PRESETS = ['this_month', 'last_month', 'this_term', 'last_term',
-                  'this_academic_year', 'custom'] as const
+                  'this_academic_year', 'custom']
 
-type Preset = typeof PRESETS[number]
-
-const PRESET_LABELS: Record<Preset, string> = {
+const PRESET_LABELS: Record<string, string> = {
   this_month: '本月',
   last_month: '上月',
   this_term: '本學期',
@@ -77,7 +75,7 @@ export function useAnalyticsTimeRange(initialPreset = 'this_term') {
   const end = ref('')
 
   const applyPreset = (p: string) => {
-    if (!(PRESETS as readonly string[]).includes(p)) return
+    if (!PRESETS.includes(p)) return
     preset.value = p
     if (p === 'custom') return
     const r = rangeFromPreset(p)
@@ -93,7 +91,7 @@ export function useAnalyticsTimeRange(initialPreset = 'this_term') {
     end.value = e
   }
 
-  const label = computed(() => PRESET_LABELS[preset.value as Preset] || '自訂')
+  const label = computed(() => PRESET_LABELS[preset.value] || '自訂')
 
   applyPreset(initialPreset)
 
