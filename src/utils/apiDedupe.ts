@@ -1,4 +1,6 @@
-function stableStringify(obj) {
+import type { AxiosInstance, AxiosRequestConfig } from 'axios'
+
+function stableStringify(obj: unknown): string {
   if (obj === null || obj === undefined) return ''
   if (typeof obj !== 'object') return String(obj)
   if (Array.isArray(obj)) {
@@ -6,11 +8,11 @@ function stableStringify(obj) {
   }
   const keys = Object.keys(obj).sort()
   return '{' + keys
-    .map((k) => JSON.stringify(k) + ':' + stableStringify(obj[k]))
+    .map((k) => JSON.stringify(k) + ':' + stableStringify((obj as Record<string, unknown>)[k]))
     .join(',') + '}'
 }
 
-function buildKey(method, url, payload) {
+function buildKey(method: string, url: unknown, payload: unknown) {
   const m = (method || 'get').toUpperCase()
   const body = payload == null ? '' : stableStringify(payload)
   return `${m} ${url || ''} ${body}`
@@ -28,11 +30,11 @@ const READ_METHODS = new Set(['get', 'head'])
  *   結果快取請走 store TTL 或 SW runtimeCache。
  * - config.meta.allowConcurrent=true 可繞過去重。
  */
-export function applyDedupe(instance) {
-  const inflight = new Map()
+export function applyDedupe(instance: AxiosInstance) {
+  const inflight = new Map<string, Promise<unknown>>()
 
-  const run = (key, config, original) => {
-    if (config?.meta?.allowConcurrent) return original()
+  const run = (key: string, config: AxiosRequestConfig & { meta?: { allowConcurrent?: boolean } }, original: () => Promise<unknown>) => {
+    if ((config as Record<string, unknown>)?.['meta'] && ((config as Record<string, unknown>)['meta'] as Record<string, unknown>)?.['allowConcurrent']) return original()
     const existing = inflight.get(key)
     if (existing) return existing
     const p = original().finally(() => inflight.delete(key))
@@ -42,8 +44,8 @@ export function applyDedupe(instance) {
 
   // post / put / patch: (url, data, config)
   for (const method of ['post', 'put', 'patch']) {
-    const original = instance[method].bind(instance)
-    instance[method] = function (url, data, config) {
+    const original = (instance as unknown as Record<string, (url: string, data?: unknown, config?: AxiosRequestConfig) => Promise<unknown>>)[method].bind(instance)
+    ;(instance as unknown as Record<string, unknown>)[method] = function (url: string, data: unknown, config: AxiosRequestConfig) {
       const key = buildKey(method, url, data)
       return run(key, config || {}, () => original(url, data, config))
     }
@@ -52,7 +54,7 @@ export function applyDedupe(instance) {
   // delete: (url, config)，data 可在 config.data
   {
     const original = instance.delete.bind(instance)
-    instance.delete = function (url, config) {
+    ;(instance as unknown as Record<string, unknown>)['delete'] = function (url: string, config: AxiosRequestConfig & { data?: unknown }) {
       const cfg = config || {}
       const key = buildKey('delete', url, cfg.data)
       return run(key, cfg, () => original(url, config))
@@ -61,8 +63,8 @@ export function applyDedupe(instance) {
 
   // get / head: (url, config)，dedupe key 用 url + params
   for (const method of ['get', 'head']) {
-    const original = instance[method].bind(instance)
-    instance[method] = function (url, config) {
+    const original = (instance as unknown as Record<string, (url: string, config?: AxiosRequestConfig) => Promise<unknown>>)[method].bind(instance)
+    ;(instance as unknown as Record<string, unknown>)[method] = function (url: string, config: AxiosRequestConfig & { params?: unknown }) {
       const cfg = config || {}
       const key = buildKey(method, url, cfg.params)
       return run(key, cfg, () => original(url, config))
@@ -71,22 +73,22 @@ export function applyDedupe(instance) {
 
   // 直接呼叫 instance(config) 或 instance.request(config)
   const originalRequest = instance.request.bind(instance)
-  instance.request = function (configOrUrl, maybeConfig) {
-    const config =
+  ;(instance as unknown as Record<string, unknown>)['request'] = function (configOrUrl: string | AxiosRequestConfig, maybeConfig?: AxiosRequestConfig) {
+    const config: AxiosRequestConfig =
       typeof configOrUrl === 'string'
         ? { ...(maybeConfig || {}), url: configOrUrl }
         : (configOrUrl || {})
 
-    const method = (config.method || 'get').toLowerCase()
+    const method = ((config.method || 'get') as string).toLowerCase()
     if (MUTATING_METHODS.has(method)) {
       const key = buildKey(method, config.url, config.data)
-      return run(key, config, () => originalRequest(configOrUrl, maybeConfig))
+      return run(key, config, () => originalRequest(config))
     }
     if (READ_METHODS.has(method)) {
       const key = buildKey(method, config.url, config.params)
-      return run(key, config, () => originalRequest(configOrUrl, maybeConfig))
+      return run(key, config, () => originalRequest(config))
     }
-    return originalRequest(configOrUrl, maybeConfig)
+    return originalRequest(config)
   }
 
   return instance

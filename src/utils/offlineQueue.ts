@@ -5,12 +5,13 @@
  * 目前僅供教師點名使用；若未來要支援其他寫入，增加 `kind` 區分。
  */
 import { openDB } from 'idb'
+import type { IDBPDatabase } from 'idb'
 
 const DB_NAME = 'ivy-offline'
 const DB_VERSION = 1
 const STORE = 'pending_ops'
 
-let _dbPromise = null
+let _dbPromise: Promise<IDBPDatabase> | null = null
 
 function getDB() {
     if (!_dbPromise) {
@@ -46,7 +47,7 @@ function genId() {
  * @param {Object} [op.meta] - UI 顯示用（教師姓名、班級、日期等）
  * @returns {Promise<Object>} 含 id、created_at、status='pending'
  */
-export async function enqueueOp({ kind, payload, userId, meta = {} }) {
+export async function enqueueOp({ kind, payload, userId, meta = {} }: { kind: string; payload: unknown; userId: number | string; meta?: Record<string, unknown> }) {
     if (userId === undefined || userId === null) {
         throw new Error('enqueueOp 需要 userId 以避免共享裝置跨使用者送出')
     }
@@ -77,23 +78,23 @@ export async function enqueueOp({ kind, payload, userId, meta = {} }) {
  * @param {string} [opts.status] - 預設只回傳 'pending'，傳入 null 取全部
  * @param {number|string} [opts.userId] - 指定過濾的使用者 id；傳 null 表示不過濾
  */
-export async function listOps({ kind, status = 'pending', userId } = {}) {
+export async function listOps({ kind, status = 'pending', userId }: { kind?: string; status?: string | null; userId?: number | string | null } = {}) {
     const db = await getDB()
     const all = await db.getAll(STORE)
-    return all.filter((op) => {
-        if (status && op.status !== status) return false
-        if (kind && op.kind !== kind) return false
-        if (userId !== undefined && userId !== null && op.user_id !== userId) return false
+    return all.filter((op: Record<string, unknown>) => {
+        if (status && op['status'] !== status) return false
+        if (kind && op['kind'] !== kind) return false
+        if (userId !== undefined && userId !== null && op['user_id'] !== userId) return false
         return true
-    }).sort((a, b) => a.created_at.localeCompare(b.created_at))
+    }).sort((a: Record<string, unknown>, b: Record<string, unknown>) => (a['created_at'] as string).localeCompare(b['created_at'] as string))
 }
 
-export async function getOp(id) {
+export async function getOp(id: string) {
     const db = await getDB()
     return db.get(STORE, id)
 }
 
-export async function removeOp(id) {
+export async function removeOp(id: string) {
     const db = await getDB()
     await db.delete(STORE, id)
 }
@@ -101,7 +102,7 @@ export async function removeOp(id) {
 /**
  * 更新 op 狀態（例如標記為 failed_permanent 或累計 attempts）。
  */
-export async function updateOp(id, patch) {
+export async function updateOp(id: string, patch: Record<string, unknown>) {
     const db = await getDB()
     const current = await db.get(STORE, id)
     if (!current) return null
@@ -110,7 +111,7 @@ export async function updateOp(id, patch) {
     return next
 }
 
-export async function countPending(kind, userId) {
+export async function countPending(kind: string, userId: number | string | undefined) {
     const ops = await listOps({ kind, status: 'pending', userId })
     return ops.length
 }
@@ -123,13 +124,13 @@ export async function countPending(kind, userId) {
  * @param {string} [kind]
  * @returns {Promise<Array>} 不屬於 currentUserId 的 pending ops
  */
-export async function listOtherUsersPendingOps(currentUserId, kind) {
+export async function listOtherUsersPendingOps(currentUserId: number | string, kind?: string) {
     const db = await getDB()
     const all = await db.getAll(STORE)
-    return all.filter((op) => {
-        if (op.status !== 'pending') return false
-        if (kind && op.kind !== kind) return false
-        return op.user_id !== currentUserId
+    return all.filter((op: Record<string, unknown>) => {
+        if (op['status'] !== 'pending') return false
+        if (kind && op['kind'] !== kind) return false
+        return op['user_id'] !== currentUserId
     })
 }
 

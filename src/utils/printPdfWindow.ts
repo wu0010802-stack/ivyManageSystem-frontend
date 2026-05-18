@@ -14,7 +14,7 @@
 // loadingText: 可選，新分頁載入中顯示的文字（預設「PDF 載入中…」）
 // onError: 可選，錯誤回呼
 
-export async function openPdfInNewTab({ fetchBlob, loadingText = 'PDF 載入中…', onError } = {}) {
+export async function openPdfInNewTab({ fetchBlob, loadingText = 'PDF 載入中…', onError }: { fetchBlob?: () => Promise<Blob>; loadingText?: string; onError?: (err: unknown) => void } = {}) {
   if (typeof window === 'undefined') return null
   const win = window.open('', '_blank')
   if (!win) {
@@ -25,8 +25,9 @@ export async function openPdfInNewTab({ fetchBlob, loadingText = 'PDF 載入中�
     `<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><title>載入中…</title></head><body style="font-family:sans-serif;padding:24px;color:#555">${loadingText}</body></html>`
   )
 
-  let blobUrl = null
+  let blobUrl: string | null = null
   try {
+    if (!fetchBlob) throw new Error('fetchBlob not provided')
     const blob = await fetchBlob()
     blobUrl = URL.createObjectURL(blob)
     win.addEventListener(

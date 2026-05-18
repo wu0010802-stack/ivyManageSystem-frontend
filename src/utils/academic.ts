@@ -20,7 +20,7 @@ export function getCurrentAcademicTerm() {
  * @param {any} value
  * @returns {number}
  */
-export function normalizeSchoolYear(value) {
+export function normalizeSchoolYear(value: unknown) {
   const normalized = Number(value)
   return Number.isFinite(normalized) ? normalized : getCurrentAcademicTerm().school_year
 }
@@ -31,8 +31,8 @@ export function normalizeSchoolYear(value) {
  * @param {number} [range=5] - 前後各幾年
  * @returns {number[]} 由大到小排列
  */
-export function buildSchoolYearOptions(currentYear, range = 5) {
-  const years = new Set()
+export function buildSchoolYearOptions(currentYear: number, range = 5) {
+  const years = new Set<number>()
   for (let i = -range; i <= range; i++) {
     years.add(currentYear + i)
   }

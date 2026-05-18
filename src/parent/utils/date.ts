@@ -14,7 +14,7 @@
  * @param {Date} d
  * @returns {string} `YYYY-MM-DD`（本地時區）
  */
-export function localDateISO(d) {
+export function localDateISO(d: Date) {
   if (!(d instanceof Date) || Number.isNaN(d.getTime())) return ''
   const y = d.getFullYear()
   const m = String(d.getMonth() + 1).padStart(2, '0')

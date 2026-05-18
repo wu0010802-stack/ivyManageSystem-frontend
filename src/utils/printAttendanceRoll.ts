@@ -5,7 +5,7 @@
 
 import { openPdfInNewTab } from './printPdfWindow'
 
-export async function openAttendanceRollPrintWindow({ fetchBlob, onError } = {}) {
+export async function openAttendanceRollPrintWindow({ fetchBlob, onError }: { fetchBlob?: () => Promise<Blob>; onError?: (err: unknown) => void } = {}) {
   return openPdfInNewTab({
     fetchBlob,
     loadingText: '點名單載入中…',

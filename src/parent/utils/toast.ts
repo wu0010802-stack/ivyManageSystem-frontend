@@ -53,10 +53,10 @@ const TYPE_STYLES = {
   },
 }
 
-function show(message, type = 'info', duration = DEFAULT_DURATION) {
+function show(message: string, type = 'info', duration = DEFAULT_DURATION) {
   // error 走 alert region，讓 SR 立刻打斷
   const container = ensureContainer(type === 'error')
-  const c = TYPE_STYLES[type] || TYPE_STYLES.info
+  const c = (TYPE_STYLES as Record<string, { bg: string; color: string }>)[type] || TYPE_STYLES.info
   const el = document.createElement('div')
   el.textContent = message
   el.style.cssText = `
@@ -75,10 +75,10 @@ function show(message, type = 'info', duration = DEFAULT_DURATION) {
 }
 
 export const toast = {
-  success: (msg, d) => show(msg, 'success', d),
-  error: (msg, d) => show(msg, 'error', d),
-  warn: (msg, d) => show(msg, 'warn', d),
-  info: (msg, d) => show(msg, 'info', d),
+  success: (msg: string, d?: number) => show(msg, 'success', d),
+  error: (msg: string, d?: number) => show(msg, 'error', d),
+  warn: (msg: string, d?: number) => show(msg, 'warn', d),
+  info: (msg: string, d?: number) => show(msg, 'info', d),
 }
 
 // 注入 keyframes 一次（reduced-motion 由 globals.css 統一處理）

@@ -10,7 +10,7 @@ import {
 
 export { PERMISSION_VALUES, ROUTE_PERMISSION_RULES }
 
-function _isPublicRoute(path) {
+function _isPublicRoute(path: string) {
   if (PUBLIC_ROUTES.includes(path)) return true
   return PUBLIC_ROUTE_PREFIXES.some((prefix) => path.startsWith(prefix))
 }
@@ -19,8 +19,8 @@ const USER_INFO_KEY = 'userInfo'
 const SESSION_VALIDATED_AT_KEY = 'auth_session_validated_at'
 const SESSION_MAX_AGE_MS = 14 * 60 * 1000
 
-let cachedUserInfoRaw = null
-let cachedUserInfo = null
+let cachedUserInfoRaw: string | null = null
+let cachedUserInfo: Record<string, unknown> | null = null
 
 function _setSessionValidatedAt(timestamp = Date.now()) {
   sessionStorage.setItem(SESSION_VALIDATED_AT_KEY, String(timestamp))
@@ -42,7 +42,7 @@ export function getToken() {
   return null // httpOnly Cookie，JS 無法讀取
 }
 
-export function setToken(_token) {
+export function setToken(_token: unknown) {
   // no-op: Token 由後端 Set-Cookie 管理
 }
 
@@ -62,16 +62,16 @@ export function getUserInfo() {
     return null
   }
 
-  const parsed = JSON.parse(str)
+  const parsed = JSON.parse(str) as Record<string, unknown>
   cachedUserInfoRaw = str
   cachedUserInfo = parsed
   return parsed
 }
 
-export function setUserInfo(info) {
+export function setUserInfo(info: unknown) {
   const serialized = JSON.stringify(info)
   cachedUserInfoRaw = serialized
-  cachedUserInfo = info
+  cachedUserInfo = info as Record<string, unknown>
   localStorage.setItem(USER_INFO_KEY, serialized)
   _setSessionValidatedAt()
 }
@@ -80,7 +80,7 @@ export function hasStoredUserInfo() {
   return !!localStorage.getItem(USER_INFO_KEY)
 }
 
-export function clearAuth(options = {}) {
+export function clearAuth(options: { notifyServer?: boolean } = {}) {
   const { notifyServer = true } = options
   cachedUserInfoRaw = null
   cachedUserInfo = null
@@ -133,7 +133,7 @@ function _purgeOfflineQueue() {
 export function clearMustChangePassword() {
   const info = getUserInfo()
   if (info) {
-    info.must_change_password = false
+    info['must_change_password'] = false
     setUserInfo(info)
   }
 }
@@ -147,7 +147,7 @@ export function isLoggedIn() {
   return Date.now() - validatedAt < SESSION_MAX_AGE_MS
 }
 
-const _matchRule = (rule, path) => (
+const _matchRule = (rule: { path: string; prefix?: boolean }, path: string) => (
   rule.prefix
     ? path === rule.path || path.startsWith(`${rule.path}/`)
     : path === rule.path
@@ -155,7 +155,7 @@ const _matchRule = (rule, path) => (
 
 // 取得所有匹配 path 的規則，並只回傳 path 長度最長一組（避免短前綴覆蓋具體路徑）。
 // 同一 path 可有多條規則（OR 語意，例如 /appraisal-management 接受 SETTINGS_READ 或 SALARY_READ）。
-const getRoutePermissions = (path) => {
+const getRoutePermissions = (path: string) => {
   const matched = ROUTE_PERMISSION_RULES.filter((rule) => _matchRule(rule, path))
   if (matched.length === 0) return []
   const maxLen = Math.max(...matched.map((r) => r.path.length))
@@ -169,26 +169,26 @@ const getRoutePermissions = (path) => {
  * @param {string} permissionName - 權限名稱 (如 'EMPLOYEES_READ')
  * @returns {boolean}
  */
-export function hasPermission(permissionName) {
+export function hasPermission(permissionName: string) {
   const userInfo = getUserInfo()
   if (!userInfo) return false
 
   // teacher 角色只能存取 Portal
-  if (userInfo.role === 'teacher') return false
+  if (userInfo['role'] === 'teacher') return false
 
   // admin 角色檢查 permissions
-  const permissions = userInfo.permissions
+  const permissions = userInfo['permissions']
   // -1 或 null/undefined 表示全部權限
   if (permissions === -1 || permissions === null || permissions === undefined) {
     return true
   }
 
-  const permValue = PERMISSION_VALUES[permissionName]
+  const permValue = (PERMISSION_VALUES as Record<string, number>)[permissionName]
   if (!permValue) return false
 
   // 使用 BigInt 運算，避免高位元（≥ 1<<31）在 JS 32-bit 運算中溢位
   const permBig = BigInt(permValue)
-  const permsBig = BigInt(permissions)
+  const permsBig = BigInt(permissions as number)
   return (permsBig & permBig) === permBig
 }
 
@@ -197,7 +197,7 @@ export function hasPermission(permissionName) {
  * @param {string} moduleName - 模組基礎名稱 (如 'EMPLOYEES')
  * @returns {boolean}
  */
-export function hasWritePermission(moduleName) {
+export function hasWritePermission(moduleName: string) {
   return hasPermission(`${moduleName}_WRITE`)
 }
 
@@ -205,13 +205,13 @@ export function hasWritePermission(moduleName) {
 // JS `&`/`|` 強制 32-bit 整數運算，遇到 ≥ 1<<32 的位元會溢位／truncate。
 // 任何「以位元組合 mask」的場景一律走這幾個 helper，避免分散使用 `& bit`。
 
-const _toBig = (v) => {
+const _toBig = (v: unknown): bigint => {
   if (v === null || v === undefined) return 0n
-  return typeof v === 'bigint' ? v : BigInt(v)
+  return typeof v === 'bigint' ? v : BigInt(v as number | string | boolean)
 }
 
 /** 檢查 mask 是否包含 value 對應的位元（BigInt 安全）。 */
-export function permissionMaskHas(mask, value) {
+export function permissionMaskHas(mask: unknown, value: unknown) {
   if (mask === -1) return true
   const m = _toBig(mask)
   const v = _toBig(value)
@@ -219,21 +219,21 @@ export function permissionMaskHas(mask, value) {
 }
 
 /** 在 mask 加上 value 位元；回傳的數值仍為 Number，供 API payload 使用。 */
-export function permissionMaskAdd(mask, value) {
+export function permissionMaskAdd(mask: unknown, value: unknown) {
   const m = _toBig(mask)
   const v = _toBig(value)
   return Number(m | v)
 }
 
 /** 從 mask 移除 value 位元（保留其他位元）。 */
-export function permissionMaskRemove(mask, value) {
+export function permissionMaskRemove(mask: unknown, value: unknown) {
   const m = _toBig(mask)
   const v = _toBig(value)
   return Number(m & ~v)
 }
 
 /** 把多個位元值 OR 起來；用於「全選」場景。 */
-export function permissionMaskCombine(values) {
+export function permissionMaskCombine(values: unknown[]) {
   let acc = 0n
   for (const v of values) acc |= _toBig(v)
   return Number(acc)
@@ -244,12 +244,12 @@ export function permissionMaskCombine(values) {
  * @param {string} path - 路由路徑
  * @returns {boolean}
  */
-export function canAccessRoute(path) {
+export function canAccessRoute(path: string) {
   const userInfo = getUserInfo()
   if (!userInfo) return false
 
   // teacher 只能存取 Portal 路由
-  if (userInfo.role === 'teacher') {
+  if (userInfo['role'] === 'teacher') {
     return path.startsWith('/portal')
   }
 
@@ -271,12 +271,12 @@ export function getAllowedRoutes() {
   const userInfo = getUserInfo()
   if (!userInfo) return []
 
-  if (userInfo.role === 'teacher') {
+  if (userInfo['role'] === 'teacher') {
     return [...TEACHER_PORTAL_ROUTES]
   }
 
   // admin
-  const allowed = []
+  const allowed: string[] = []
   for (const rule of ROUTE_PERMISSION_RULES) {
     if (hasPermission(rule.permission) && !allowed.includes(rule.path)) {
       allowed.push(rule.path)

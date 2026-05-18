@@ -6,7 +6,7 @@
  * @param {number} month - 月份（1-based）
  * @returns {string[]}   - YYYY-MM-DD 字串陣列
  */
-export const getMonthWeeks = (year, month) => {
+export const getMonthWeeks = (year: number, month: number) => {
   const result = []
   let d = new Date(year, month - 1, 1)
   // 找到第一個週一

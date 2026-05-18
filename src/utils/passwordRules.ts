@@ -5,8 +5,8 @@ export const PASSWORD_RULES = [
   '至少包含 1 個數字',
 ]
 
-export const validatePasswordStrength = (_, value, callback) => {
-  const password = value || ''
+export const validatePasswordStrength = (_: unknown, value: unknown, callback: (err?: Error) => void) => {
+  const password = (value as string) || ''
   if (!password) {
     callback(new Error('請輸入新密碼'))
     return

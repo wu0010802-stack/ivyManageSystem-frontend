@@ -3,7 +3,7 @@
  * @param {Array} arr - 要操作的陣列（直接 mutate）
  * @param {string} name - 要切換的值
  */
-export function toggleArrayItem(arr, name) {
+export function toggleArrayItem(arr: unknown[], name: unknown) {
   const idx = arr.indexOf(name)
   if (idx >= 0) {
     arr.splice(idx, 1)

@@ -52,7 +52,7 @@ const URL_ID_RE = /\/(\d+)(?=\/|$|\?)/g
  * 原樣進 Sentry）。改用 URLSearchParams 拆 path + query，path 跑既有 id 替換，
  * query 用相同 denylist 做 key-based 遮罩，最後拼回。與後端 _sanitize_url 對齊。
  */
-export function sanitizeUrl(url) {
+export function sanitizeUrl(url: unknown) {
   if (typeof url !== 'string' || !url) return url
   const qIdx = url.indexOf('?')
   if (qIdx < 0) return url.replace(URL_ID_RE, '/:id')
@@ -82,7 +82,7 @@ export function sanitizeUrl(url) {
  * 兩邊 hash 不同是已知 trade-off。同個 user 在 FE/BE Sentry 會顯示為不同
  * 字串 — 這沒問題，因為 FE/BE event 透過 entry tag 區分而非靠 user 對齊。
  */
-export function hashUserId(value) {
+export function hashUserId(value: unknown) {
   if (value === null || value === undefined || value === '') return value
   const s = String(value)
   let hash = 2166136261
@@ -93,7 +93,7 @@ export function hashUserId(value) {
   return (hash >>> 0).toString(16).padStart(8, '0')
 }
 
-function keyIsPii(key) {
+function keyIsPii(key: unknown) {
   if (typeof key !== 'string') return false
   const lk = key.toLowerCase()
   // Exempt 先檢查：被誤判為 PII 的系統/metric 欄位放行
@@ -101,11 +101,11 @@ function keyIsPii(key) {
   return PII_KEY_SUBSTRINGS.some((needle) => lk.includes(needle))
 }
 
-export function scrubMapping(obj) {
+export function scrubMapping(obj: unknown): unknown {
   if (obj === null || obj === undefined) return obj
   if (Array.isArray(obj)) return obj.map((item) => scrubMapping(item))
   if (typeof obj !== 'object') return obj
-  const out = {}
+  const out: Record<string, unknown> = {}
   for (const [k, v] of Object.entries(obj)) {
     out[k] = keyIsPii(k) ? FILTERED : scrubMapping(v)
   }
@@ -116,7 +116,7 @@ export function scrubMapping(obj) {
  * request.query_string 可能是 string 或 dict；前者 parse 後跑相同 denylist。
  * 與後端 _scrub_query_string 對齊。
  */
-export function scrubQueryString(value) {
+export function scrubQueryString(value: unknown) {
   if (typeof value === 'string') {
     if (!value) return value
     const params = new URLSearchParams(value)
@@ -129,56 +129,59 @@ export function scrubQueryString(value) {
   return scrubMapping(value)
 }
 
-export function scrubEvent(event) {
+export function scrubEvent(event: unknown) {
   if (!event || typeof event !== 'object') return event
+  const ev = event as Record<string, unknown>
 
-  if (event.request && typeof event.request === 'object') {
-    const req = event.request
-    if (typeof req.url === 'string') req.url = sanitizeUrl(req.url)
-    if ('query_string' in req) req.query_string = scrubQueryString(req.query_string)
+  if (ev['request'] && typeof ev['request'] === 'object') {
+    const req = ev['request'] as Record<string, unknown>
+    if (typeof req['url'] === 'string') req['url'] = sanitizeUrl(req['url'])
+    if ('query_string' in req) req['query_string'] = scrubQueryString(req['query_string'])
     for (const sect of ['headers', 'cookies', 'data', 'env']) {
       if (sect in req) req[sect] = scrubMapping(req[sect])
     }
   }
 
-  if (typeof event.transaction === 'string') {
-    event.transaction = sanitizeUrl(event.transaction)
+  if (typeof ev['transaction'] === 'string') {
+    ev['transaction'] = sanitizeUrl(ev['transaction'])
   }
 
   for (const sect of ['extra', 'contexts', 'tags', 'user']) {
-    if (sect in event) event[sect] = scrubMapping(event[sect])
+    if (sect in ev) ev[sect] = scrubMapping(ev[sect])
   }
 
   // user.id 對映 employees.id / parents.id —— hash 化避免直連個人
-  if (event.user && typeof event.user === 'object' && 'id' in event.user) {
-    event.user.id = hashUserId(event.user.id)
+  if (ev['user'] && typeof ev['user'] === 'object' && 'id' in (ev['user'] as object)) {
+    (ev['user'] as Record<string, unknown>)['id'] = hashUserId((ev['user'] as Record<string, unknown>)['id'])
   }
 
-  if (event.breadcrumbs && Array.isArray(event.breadcrumbs.values)) {
-    for (const crumb of event.breadcrumbs.values) {
+  if (ev['breadcrumbs'] && Array.isArray((ev['breadcrumbs'] as Record<string, unknown>)['values'])) {
+    for (const crumb of (ev['breadcrumbs'] as Record<string, unknown[]>)['values']) {
       if (crumb && typeof crumb === 'object') {
-        if (crumb.data) crumb.data = scrubMapping(crumb.data)
-        if (typeof crumb.message === 'string') {
-          crumb.message = sanitizeUrl(crumb.message)
+        const c = crumb as Record<string, unknown>
+        if (c['data']) c['data'] = scrubMapping(c['data'])
+        if (typeof c['message'] === 'string') {
+          c['message'] = sanitizeUrl(c['message'])
         }
       }
     }
   }
-  return event
+  return ev
 }
 
-export function scrubBreadcrumb(crumb) {
+export function scrubBreadcrumb(crumb: unknown) {
   if (!crumb || typeof crumb !== 'object') return crumb
-  if (crumb.data) crumb.data = scrubMapping(crumb.data)
-  if (typeof crumb.message === 'string') {
-    crumb.message = sanitizeUrl(crumb.message)
+  const c = crumb as Record<string, unknown>
+  if (c['data']) c['data'] = scrubMapping(c['data'])
+  if (typeof c['message'] === 'string') {
+    c['message'] = sanitizeUrl(c['message'])
   }
-  return crumb
+  return c
 }
 
 // Module-level cache：init 成功後 captureException 可同步使用，避免每次重複
 // dynamic import 與「import resolve 前 context 已銷毀」造成的 lost event 風險。
-let _SentryRef = null
+let _SentryRef: unknown = null
 
 /**
  * 初始化 Sentry，並掛到指定的 Vue app。
@@ -189,7 +192,7 @@ let _SentryRef = null
  * @param {import('vue-router').Router} [opts.router] — 可選，會自動加 routing instrumentation
  * @returns {Promise<boolean>} — true 表示已 init；false 表示 DSN 缺或載入失敗
  */
-export async function initSentry(app, opts = {}) {
+export async function initSentry(app: unknown, opts: { entry?: string; router?: unknown } = {}) {
   const dsn = (import.meta.env.VITE_SENTRY_DSN || '').trim()
   if (!dsn) return false
 
@@ -209,6 +212,7 @@ export async function initSentry(app, opts = {}) {
   if (!Number.isFinite(tracesRate)) tracesRate = 0.1
 
   Sentry.init({
+    // @ts-expect-error TODO(ts-strict): app is unknown at call site; Sentry expects Vue App
     app,
     dsn,
     environment: env,
@@ -219,7 +223,9 @@ export async function initSentry(app, opts = {}) {
     attachStacktrace: true,
     // Vue errorHandler 由 @sentry/vue 整合自動掛上；同時抓 promise rejection
     // 與 window.onerror
+    // @ts-expect-error TODO(ts-strict): scrubEvent returns unknown; Sentry expects typed event
     beforeSend: (event) => scrubEvent(event),
+    // @ts-expect-error TODO(ts-strict): scrubBreadcrumb returns unknown; Sentry expects typed crumb
     beforeBreadcrumb: (crumb) => scrubBreadcrumb(crumb),
     denyUrls: [
       /^chrome-extension:\/\//,
@@ -258,14 +264,15 @@ export async function initSentry(app, opts = {}) {
  * 簽名仍為 async：sentry capture 失敗不該傳染回 caller，已有 caller 慣用
  * `.catch(() => {})` 防呆。
  */
-export async function captureException(err, context = {}) {
+export async function captureException(err: unknown, context: Record<string, unknown> = {}) {
   if (!_SentryRef) return
+  const sentry = _SentryRef as { withScope: (fn: (scope: { setExtra: (k: string, v: unknown) => void }) => void) => void; captureException: (err: unknown) => void }
   try {
-    _SentryRef.withScope((scope) => {
+    sentry.withScope((scope) => {
       for (const [k, v] of Object.entries(context)) {
         scope.setExtra(k, v)
       }
-      _SentryRef.captureException(err)
+      sentry.captureException(err)
     })
   } catch {
     /* 上報失敗不能傳染 */
