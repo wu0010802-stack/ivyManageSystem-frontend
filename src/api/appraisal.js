@@ -135,3 +135,20 @@ export const batchUpsertManualEventCounts = (cycleId, entries) =>
 export const previewAppraisalScore = (cycleId) =>
   api.post(`/appraisal/cycles/${cycleId}/score_preview`)
 
+// ============ Phase 2 Signing UX（reject / comment / batch_sign / logs / status_summary）============
+
+export const rejectSummary = (summaryId, payload) =>
+  api.post(`/appraisal/summaries/${summaryId}/reject`, payload)
+
+export const commentSummary = (summaryId, comment) =>
+  api.post(`/appraisal/summaries/${summaryId}/comment`, { comment })
+
+export const batchSignSummaries = (cycleId, summary_ids, stage) =>
+  api.post(`/appraisal/cycles/${cycleId}/summaries:batch_sign`, { summary_ids, stage })
+
+export const getSummaryLogs = (summaryId) =>
+  api.get(`/appraisal/summaries/${summaryId}/logs`)
+
+export const getSignStatusSummary = (cycleId) =>
+  api.get(`/appraisal/cycles/${cycleId}/sign_status_summary`)
+
