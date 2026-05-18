@@ -41,14 +41,12 @@ watch(() => props.visible, (v) => {
 }, { immediate: true })
 
 async function submit() {
-  if (reason.value.length < 10) {
-    ElMessage.warning('退簽原因至少 10 字')
-    return
-  }
   if (!toStatus.value) {
     ElMessage.warning('請選擇退簽目標')
     return
   }
+  // P1-10：reason 字數驗證委派給後端（避免前後端契約耦合）；
+  // 失敗時後端回 422，由 apiError 取出 detail 訊息顯示給使用者。
   submitting.value = true
   try {
     await rejectSummary(props.summary.id, {
@@ -89,10 +87,12 @@ async function submit() {
           v-model="reason"
           type="textarea"
           :rows="4"
-          placeholder="至少 10 字"
+          maxlength="500"
+          show-word-limit
+          placeholder="請填寫退簽原因"
           data-test="reason-input"
         />
-        <span class="counter">{{ reason.length }} / 10</span>
+        <span class="counter">{{ reason.length }} / 500</span>
       </el-form-item>
     </el-form>
     <template #footer>
