@@ -26,13 +26,13 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getChanges } from '@/api/activity'
 import { formatActivityDate } from '@/utils/format'
 
-const list = ref([])
+const list = ref<Record<string, unknown>[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
@@ -45,8 +45,9 @@ async function fetchList() {
       skip: (page.value - 1) * pageSize.value,
       limit: pageSize.value,
     })
-    list.value = res.data.items
-    total.value = res.data.total
+    const data = res.data as { items: Record<string, unknown>[]; total: number }
+    list.value = data.items
+    total.value = data.total
   } catch {
     ElMessage.error('載入失敗')
   } finally {

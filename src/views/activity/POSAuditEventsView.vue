@@ -58,25 +58,28 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 
 import OperatorActivityTab from '@/components/activity/OperatorActivityTab.vue'
 import { getPOSUnlockEvents } from '@/api/activity'
 
+interface UnlockEvent { id: string | number; occurred_at?: string; action?: string; close_date?: string; unlocker_username?: string; unlocker_role?: string; comment?: string }
+
 const activeTab = ref('unlock')
 const days = ref(30)
-const events = ref([])
+const events = ref<UnlockEvent[]>([])
 const loadingUnlock = ref(false)
 
 async function loadUnlock() {
   loadingUnlock.value = true
   try {
     const { data } = await getPOSUnlockEvents(days.value)
-    events.value = data?.events || []
+    events.value = ((data as { events?: UnlockEvent[] })?.events || [])
   } catch (e) {
-    ElMessage.error(e?.response?.data?.detail || '載入失敗')
+    const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+    ElMessage.error(detail || '載入失敗')
   } finally {
     loadingUnlock.value = false
   }

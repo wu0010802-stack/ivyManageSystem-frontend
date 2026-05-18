@@ -378,7 +378,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -405,43 +405,55 @@ import {
 import { getUserInfo, hasPermission } from '@/utils/auth'
 import { todayISO, offsetISO, formatDateTimeTW, formatTimeTW } from '@/utils/format'
 
+type ApiErr = { response?: { data?: { detail?: string } } }
+
+interface DailyDetail {
+  is_approved?: boolean; approver_username?: string; approved_at?: string
+  actual_cash_count?: number | null; cash_variance?: number | null; note?: string
+  payment_total?: number; refund_total?: number; net_total?: number; transaction_count?: number
+  by_method?: Record<string, number>
+}
+interface PendingRow { date: string; transaction_count?: number; payment_total?: number; refund_total?: number; net_total?: number }
+interface ReconItem { date: string; is_approved?: boolean; transaction_count?: number; payment_total?: number; refund_total?: number; net_total?: number; expected_cash?: number; actual_cash?: number | null; variance?: number | null }
+interface ReconTotals { payment_total?: number; refund_total?: number; net_total?: number; variance_total?: number | null }
+
 const canApprove = computed(() => hasPermission('ACTIVITY_PAYMENT_APPROVE'))
 
 const activeTab = ref('daily')
 
 const selectedDate = ref(todayISO())
-const pending = ref([])
+const pending = ref<PendingRow[]>([])
 const loadingPending = ref(false)
 
-const detail = ref(null)
+const detail = ref<DailyDetail | null>(null)
 const loadingDetail = ref(false)
 const submitting = ref(false)
 
-const dailyTransactions = ref([])
+const dailyTransactions = ref<Record<string, unknown>[]>([])
 const loadingTx = ref(false)
 
-const reconciliation = reactive({ items: [], totals: {} })
+const reconciliation = reactive<{ items: ReconItem[]; totals: Partial<ReconTotals> }>({ items: [], totals: {} })
 const loadingRecon = ref(false)
 
-const form = reactive({
+const form = reactive<{ actualCashCount: number | null; note: string }>({
   actualCashCount: null,
   note: '',
 })
 
-const methodEntries = computed(() => {
+const methodEntries = computed((): [string, number][] => {
   if (!detail.value || !detail.value.by_method) return []
-  return Object.entries(detail.value.by_method).sort((a, b) => a[0].localeCompare(b[0]))
+  return (Object.entries(detail.value.by_method) as [string, number][]).sort((a, b) => a[0].localeCompare(b[0]))
 })
 
 const cashInSystem = computed(() => detail.value?.by_method?.[CASH_METHOD] ?? 0)
 
 const cashVariancePreview = computed(() => {
   const v = form.actualCashCount
-  if (v === null || v === undefined || v === '') return null
+  if (v === null || v === undefined) return null
   return Number(v) - cashInSystem.value
 })
 
-function disableFuture(d) {
+function disableFuture(d: Date) {
   return d.getTime() > Date.now()
 }
 
@@ -455,9 +467,9 @@ async function loadPending() {
   loadingPending.value = true
   try {
     const res = await getPOSDailyClosePending()
-    pending.value = res.data?.pending || []
+    pending.value = (res.data as { pending?: PendingRow[] })?.pending || []
   } catch (err) {
-    ElMessage.error(err?.response?.data?.detail || '讀取待簽核日期失敗')
+    ElMessage.error((err as ApiErr)?.response?.data?.detail || '讀取待簽核日期失敗')
   } finally {
     loadingPending.value = false
   }
@@ -468,13 +480,13 @@ async function loadDetail() {
   loadingDetail.value = true
   try {
     const res = await getPOSDailyCloseStatus(selectedDate.value)
-    detail.value = res.data
-    if (detail.value.is_approved) {
+    detail.value = res.data as DailyDetail
+    if (detail.value?.is_approved) {
       resetForm()
     }
   } catch (err) {
     detail.value = null
-    ElMessage.error(err?.response?.data?.detail || '讀取簽核狀態失敗')
+    ElMessage.error((err as ApiErr)?.response?.data?.detail || '讀取簽核狀態失敗')
   } finally {
     loadingDetail.value = false
   }
@@ -489,10 +501,10 @@ async function loadDailyTransactions() {
       limit: 100,
       include_system: true,
     })
-    dailyTransactions.value = res.data?.transactions || []
+    dailyTransactions.value = (res.data as { transactions?: Record<string, unknown>[] })?.transactions || []
   } catch (err) {
     dailyTransactions.value = []
-    ElMessage.error(err?.response?.data?.detail || '讀取當日交易失敗')
+    ElMessage.error((err as ApiErr)?.response?.data?.detail || '讀取當日交易失敗')
   } finally {
     loadingTx.value = false
   }
@@ -502,10 +514,10 @@ async function loadReconciliation() {
   loadingRecon.value = true
   try {
     const res = await getPOSReconciliation(offsetISO(-29), todayISO())
-    reconciliation.items = res.data?.items || []
-    reconciliation.totals = res.data?.totals || {}
+    reconciliation.items = (res.data as { items?: ReconItem[] })?.items || []
+    reconciliation.totals = (res.data as { totals?: Partial<ReconTotals> })?.totals || {}
   } catch (err) {
-    ElMessage.error(err?.response?.data?.detail || '讀取對帳資料失敗')
+    ElMessage.error((err as ApiErr)?.response?.data?.detail || '讀取對帳資料失敗')
   } finally {
     loadingRecon.value = false
   }
@@ -520,7 +532,7 @@ async function refreshAll() {
   ])
 }
 
-function handlePendingSelect(row) {
+function handlePendingSelect(row: PendingRow | null) {
   if (row?.date) selectedDate.value = row.date
 }
 
@@ -534,7 +546,7 @@ async function handleApprove() {
   const expectedCash = Number(cashInSystem.value) || 0
   if (
     expectedCash >= CASH_COUNT_REQUIRED_THRESHOLD
-    && (cash == null || cash === '')
+    && cash == null
   ) {
     ElMessage.warning(
       `當日預期現金 ${formatTWD(expectedCash)} ≥ ${formatTWD(
@@ -543,7 +555,7 @@ async function handleApprove() {
     )
     return
   }
-  const variance = cash == null ? null : cash - cashInSystem.value
+  const variance = cash == null ? null : Number(cash) - cashInSystem.value
   const warnMsg =
     variance != null && variance !== 0
       ? `偵測到現金差異 ${variance > 0 ? '+' : ''}${formatTWD(variance)}，仍要簽核嗎？`
@@ -564,7 +576,8 @@ async function handleApprove() {
       note: form.note || null,
       actual_cash_count: cash == null ? null : Number(cash),
     })
-    const warnings = (data && data.warnings) || []
+    const approveData = data as { warnings?: string[] }
+    const warnings = approveData?.warnings || []
     warnings.forEach((w) => {
       ElMessage.warning({ message: w, duration: 6000, showClose: true })
     })
@@ -572,7 +585,7 @@ async function handleApprove() {
     resetForm()
     await refreshAll()
   } catch (err) {
-    ElMessage.error(err?.response?.data?.detail || '簽核失敗')
+    ElMessage.error((err as ApiErr)?.response?.data?.detail || '簽核失敗')
   } finally {
     submitting.value = false
   }
@@ -581,7 +594,7 @@ async function handleApprove() {
 async function handleUnlock() {
   if (!canApprove.value) return
 
-  const userInfo = getUserInfo()
+  const userInfo = getUserInfo() as { username?: string; role?: string } | null
   const myUsername = userInfo?.username || ''
   const myRole = userInfo?.role || ''
   const originalApprover = detail.value?.approver_username || ''
@@ -624,20 +637,20 @@ async function handleUnlock() {
   return doUnlock({ isOverride: true, minLen: 30 })
 }
 
-async function doUnlock({ isOverride, minLen }) {
-  let reason
+async function doUnlock({ isOverride, minLen }: { isOverride: boolean; minLen: number }) {
+  let reason: string
   try {
-    const res = await ElMessageBox.prompt(
+    const res = (await ElMessageBox.prompt(
       `請輸入解鎖原因（≥ ${minLen} 字）：`,
       isOverride ? 'Override 原因' : '解鎖原因',
       {
         inputType: 'textarea',
         confirmButtonText: '確認解鎖',
         cancelButtonText: '取消',
-        inputValidator: (v) =>
+        inputValidator: (v: string) =>
           (v || '').trim().length >= minLen || `至少 ${minLen} 字`,
       }
-    )
+    )) as { value: string }
     reason = (res.value || '').trim()
   } catch {
     return
@@ -649,22 +662,23 @@ async function doUnlock({ isOverride, minLen }) {
       reason,
       is_admin_override: isOverride,
     })
+    const unlockData = data as { notification_delivered?: boolean; live_diff?: Record<string, number> }
     ElMessage.success(isOverride ? '已 override 解鎖；通知已發送' : '已解鎖')
-    if (data && data.notification_delivered === false) {
+    if (unlockData && unlockData.notification_delivered === false) {
       ElMessage.warning({
         message: '原簽核人未綁定 LINE，未收到自動通知；請私下告知對方。',
         duration: 6000,
       })
     }
     // spec H2: 顯示實況 vs 簽核當下 snapshot 差異，幫解鎖人理解「為什麼帳變了」
-    const diff = data?.live_diff
+    const diff = unlockData?.live_diff
     if (diff) {
       const hasDelta =
         diff.payment_total_diff !== 0 ||
         diff.refund_total_diff !== 0 ||
         diff.transaction_count_diff !== 0
       if (hasDelta) {
-        const sign = (n) => (n > 0 ? `+${n}` : `${n}`)
+        const sign = (n: number) => (n > 0 ? `+${n}` : `${n}`)
         const lines = [
           `📊 簽核當下 snapshot vs 解鎖當下實況差異：`,
           `• 收款 NT$${diff.original_payment_total} → NT$${diff.live_payment_total}（${sign(diff.payment_total_diff)}）`,
@@ -681,7 +695,7 @@ async function doUnlock({ isOverride, minLen }) {
     }
     await refreshAll()
   } catch (err) {
-    ElMessage.error(err?.response?.data?.detail || '解鎖失敗')
+    ElMessage.error((err as ApiErr)?.response?.data?.detail || '解鎖失敗')
   } finally {
     submitting.value = false
   }

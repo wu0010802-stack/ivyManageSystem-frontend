@@ -170,8 +170,8 @@
       <template v-else-if="drawerSession">
         <!-- 進度條 -->
         <el-progress
-          :percentage="drawerSession.total > 0 ? Math.round(((drawerPresentCount + drawerAbsentCount) / drawerSession.total) * 100) : 0"
-          :format="() => `已點名 ${drawerPresentCount + drawerAbsentCount} / ${drawerSession.total} 人`"
+          :percentage="(drawerSession?.total ?? 0) > 0 ? Math.round(((drawerPresentCount + drawerAbsentCount) / (drawerSession?.total ?? 1)) * 100) : 0"
+          :format="() => `已點名 ${drawerPresentCount + drawerAbsentCount} / ${drawerSession?.total ?? 0} 人`"
           style="margin-bottom: 10px"
         />
 
@@ -188,7 +188,7 @@
             />
           </el-space>
           <el-space>
-            <el-tag type="info">共 {{ drawerSession.total }} 位</el-tag>
+            <el-tag type="info">共 {{ drawerSession?.total ?? 0 }} 位</el-tag>
             <el-tag type="success">出席 {{ drawerPresentCount }}</el-tag>
             <el-tag type="danger">缺席 {{ drawerAbsentCount }}</el-tag>
             <el-tag type="warning">未點名 {{ drawerUnmarkedCount }}</el-tag>
@@ -300,7 +300,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Check, Delete, Printer } from '@element-plus/icons-vue'
@@ -319,39 +319,45 @@ import { todayISO, dateToLocalISO } from '@/utils/format'
 import { useActivityAttendanceDrawer } from '@/composables/useActivityAttendanceDrawer'
 import { openPdfInNewTab } from '@/utils/printPdfWindow'
 
+interface CourseOption { id: number; name: string }
+interface SessionRow { id: number; course_name?: string; session_date?: string; recorded_count?: number; present_count?: number; notes?: string; created_by?: string }
+interface AttendanceGroup { classroom_id: number | null; classroom_name?: string; students: Record<string, unknown>[] }
+// Extended session shape returned by the API (superset of composable's SessionData)
+interface SessionDetail { id: unknown; course_name: string; session_date: string; students: Record<string, unknown>[]; total?: number; groups?: AttendanceGroup[] }
+
 const canWrite = computed(() => hasPermission('ACTIVITY_WRITE'))
 
-async function openPrint(row) {
+async function openPrint(row: { id: number }) {
   await openPdfInNewTab({
     fetchBlob: async () => {
       const res = await getAttendanceSessionRollPdf(row.id)
       return res.data
     },
     loadingText: '點名單載入中…',
-    onError: (err) => {
-      ElMessage.error(err?.message || '載入點名單失敗')
+    onError: (err: unknown) => {
+      ElMessage.error((err as Error)?.message || '載入點名單失敗')
     },
   })
 }
 
 function openPrintForCurrent() {
-  if (drawerSession.value?.id) openPrint({ id: drawerSession.value.id })
+  if (drawerSession.value?.id) openPrint({ id: drawerSession.value.id as unknown as number })
 }
 
 const loading = ref(false)
-const sessions = ref([])
-const deletingId = ref(null)
-const courses = ref([])
+const sessions = ref<SessionRow[]>([])
+const deletingId = ref<number | null>(null)
+const courses = ref<CourseOption[]>([])
 
-const filterCourseId = ref(null)
-const filterStartDate = ref(null)
-const filterEndDate = ref(null)
-const quickRange = ref(null)
+const filterCourseId = ref<number | null>(null)
+const filterStartDate = ref<string | null>(null)
+const filterEndDate = ref<string | null>(null)
+const quickRange = ref<string | null>(null)
 
 // 新增場次
 const createDialogVisible = ref(false)
 const createLoading = ref(false)
-const createForm = ref({ course_id: null, session_date: null, notes: '' })
+const createForm = ref<{ course_id: number | null; session_date: string | null; notes: string }>({ course_id: null, session_date: null, notes: '' })
 
 // 按班級分組：預設開啟；切換時重新呼叫 API（帶不同 group_by）
 const GROUP_PREF_KEY = 'activity_attendance_group_by_classroom'
@@ -360,13 +366,13 @@ const groupByClassroom = ref(
     ? localStorage.getItem(GROUP_PREF_KEY) !== '0'
     : true
 )
-const activeGroups = ref([])
+const activeGroups = ref<string[]>([])
 
 // 點名 Drawer（共用 composable）
 const {
   drawerVisible,
   drawerLoading,
-  drawerSession,
+  drawerSession: _drawerSession,
   saveLoading,
   sortedStudents,
   drawerTitle,
@@ -377,16 +383,16 @@ const {
   reloadCurrentSession,
   setAllPresent,
   handleSave,
-} = useActivityAttendanceDrawer({
-  getSessionFn: getAttendanceSession,
-  updateFn: batchUpdateAttendance,
-})
+// @ts-expect-error TODO(ts-strict): composable expects generic fn signatures; actual api fns are compatible at runtime
+} = useActivityAttendanceDrawer({ getSessionFn: getAttendanceSession, updateFn: batchUpdateAttendance })
+// Cast to extended type that includes total/groups returned by API
+const drawerSession = _drawerSession as import('vue').Ref<SessionDetail | null>
 
-function currentGroupParams() {
+function currentGroupParams(): Record<string, string> {
   return groupByClassroom.value ? { group_by: 'classroom' } : {}
 }
 
-async function openDrawer(row) {
+async function openDrawer(row: SessionRow) {
   await openDrawerRaw(row, currentGroupParams())
   syncActiveGroups()
 }
@@ -396,7 +402,7 @@ function syncActiveGroups() {
   activeGroups.value = groups.map(g => String(g.classroom_id ?? 'unassigned'))
 }
 
-async function onGroupToggle(val) {
+async function onGroupToggle(val: string | number | boolean) {
   if (typeof localStorage !== 'undefined') {
     localStorage.setItem(GROUP_PREF_KEY, val ? '1' : '0')
   }
@@ -404,12 +410,12 @@ async function onGroupToggle(val) {
   syncActiveGroups()
 }
 
-function setGroupPresent(group, value) {
-  (group.students || []).forEach(s => { s.is_present = value })
+function setGroupPresent(group: AttendanceGroup, value: boolean) {
+  (group.students || []).forEach(s => { (s as Record<string, unknown>).is_present = value })
 }
 
 // 快速日期範圍
-function setQuickRange(range) {
+function setQuickRange(range: string) {
   quickRange.value = range
   const today = new Date()
   if (range === 'today') {
@@ -440,12 +446,13 @@ function onManualDateChange() {
 async function loadSessions() {
   loading.value = true
   try {
-    const params = {}
+    const params: Record<string, unknown> = {}
     if (filterCourseId.value) params.course_id = filterCourseId.value
     if (filterStartDate.value) params.start_date = filterStartDate.value
     if (filterEndDate.value) params.end_date = filterEndDate.value
     const res = await getAttendanceSessions(params)
-    sessions.value = res.data?.items ?? (Array.isArray(res.data) ? res.data : [])
+    const data = res.data as { items?: SessionRow[] } | SessionRow[]
+    sessions.value = (data as { items?: SessionRow[] })?.items ?? (Array.isArray(data) ? data : [])
   } catch {
     ElMessage.error('載入場次失敗')
   } finally {
@@ -456,7 +463,7 @@ async function loadSessions() {
 async function loadCourses() {
   try {
     const res = await getCourses()
-    courses.value = res.data?.courses ?? []
+    courses.value = (res.data as { courses?: CourseOption[] })?.courses ?? []
   } catch {
     // silent
   }
@@ -495,14 +502,14 @@ async function handleCreate() {
     createDialogVisible.value = false
     loadSessions()
   } catch (e) {
-    const msg = e?.response?.data?.detail || '建立失敗'
+    const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '建立失敗'
     ElMessage.error(msg)
   } finally {
     createLoading.value = false
   }
 }
 
-async function handleDelete(row) {
+async function handleDelete(row: SessionRow) {
   try {
     await ElMessageBox.confirm(
       `確定刪除「${row.course_name}」${row.session_date} 的場次及所有點名記錄？`,
@@ -526,12 +533,13 @@ async function handleDelete(row) {
 
 async function handleExport() {
   if (!drawerSession.value) return
+  const session = { id: drawerSession.value.id as unknown as number, course_name: drawerSession.value.course_name, session_date: drawerSession.value.session_date }
   try {
-    const res = await exportAttendanceSession(drawerSession.value.id)
-    const url = URL.createObjectURL(res.data)
+    const res = await exportAttendanceSession(session.id)
+    const url = URL.createObjectURL(res.data as Blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `點名_${drawerSession.value.course_name}_${drawerSession.value.session_date}.xlsx`
+    a.download = `點名_${session.course_name}_${session.session_date}.xlsx`
     a.click()
     URL.revokeObjectURL(url)
   } catch {

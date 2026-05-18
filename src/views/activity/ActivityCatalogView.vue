@@ -15,7 +15,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ActivityCourseView from './ActivityCourseView.vue'
@@ -25,15 +25,17 @@ const route = useRoute()
 const router = useRouter()
 
 const VALID_TABS = ['courses', 'supplies']
-const initialTab = VALID_TABS.includes(route.query.tab) ? route.query.tab : 'courses'
+const queryTab = route.query.tab as string | undefined
+const initialTab = queryTab && VALID_TABS.includes(queryTab) ? queryTab : 'courses'
 const activeTab = ref(initialTab)
 
-function handleTabChange(tab) {
+function handleTabChange(tab: string | number) {
+  const tabStr = String(tab)
   const nextQuery = { ...route.query }
-  if (tab === 'courses') {
+  if (tabStr === 'courses') {
     delete nextQuery.tab
   } else {
-    nextQuery.tab = tab
+    nextQuery.tab = tabStr
   }
   router.replace({ query: nextQuery })
 }
@@ -41,9 +43,10 @@ function handleTabChange(tab) {
 watch(
   () => route.query.tab,
   (next) => {
-    if (VALID_TABS.includes(next) && next !== activeTab.value) {
-      activeTab.value = next
-    } else if (!next && activeTab.value !== 'courses') {
+    const nextStr = next as string | undefined
+    if (nextStr && VALID_TABS.includes(nextStr) && nextStr !== activeTab.value) {
+      activeTab.value = nextStr
+    } else if (!nextStr && activeTab.value !== 'courses') {
       activeTab.value = 'courses'
     }
   }

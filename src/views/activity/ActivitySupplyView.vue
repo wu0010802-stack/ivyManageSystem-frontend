@@ -38,21 +38,23 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getSupplies, createSupply, updateSupply, deleteSupply } from '@/api/activity'
 import AcademicTermSelector from '@/components/common/AcademicTermSelector.vue'
 import { useAcademicTermStore } from '@/stores/academicTerm'
 
+interface Supply { id: number; name: string; price: number }
+
 const termStore = useAcademicTermStore()
 
-const supplies = ref([])
+const supplies = ref<Supply[]>([])
 const loading = ref(false)
 const dialogVisible = ref(false)
 const saving = ref(false)
-const editingId = ref(null)
-const form = ref({ name: '', price: 0 })
+const editingId = ref<number | null>(null)
+const form = ref<{ name: string; price: number }>({ name: '', price: 0 })
 
 async function fetchSupplies() {
   loading.value = true
@@ -61,7 +63,7 @@ async function fetchSupplies() {
       school_year: termStore.school_year,
       semester: termStore.semester,
     })
-    supplies.value = res.data.supplies
+    supplies.value = (res.data as { supplies: Supply[] }).supplies
   } catch {
     ElMessage.error('載入失敗')
   } finally {
@@ -77,7 +79,7 @@ function openCreate() {
   dialogVisible.value = true
 }
 
-function openEdit(row) {
+function openEdit(row: Supply) {
   editingId.value = row.id
   form.value = { name: row.name, price: row.price }
   dialogVisible.value = true
@@ -99,13 +101,14 @@ async function handleSave() {
     dialogVisible.value = false
     fetchSupplies()
   } catch (e) {
-    ElMessage.error(e?.response?.data?.detail || '操作失敗')
+    const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+    ElMessage.error(detail || '操作失敗')
   } finally {
     saving.value = false
   }
 }
 
-async function handleDelete(row) {
+async function handleDelete(row: Supply) {
   try {
     await ElMessageBox.confirm(`確定要停用用品「${row.name}」嗎？`, '確認停用', {
       type: 'warning',
@@ -116,7 +119,10 @@ async function handleDelete(row) {
     ElMessage.success('用品已停用')
     fetchSupplies()
   } catch (e) {
-    if (e !== 'cancel') ElMessage.error(e?.response?.data?.detail || '停用失敗')
+    if (e !== 'cancel') {
+      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      ElMessage.error(detail || '停用失敗')
+    }
   }
 }
 
