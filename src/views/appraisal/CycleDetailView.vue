@@ -46,6 +46,14 @@ const summaryByParticipant = computed(() => {
   return m
 })
 
+// P1-6：以 summary.id 為 key，給 BatchSignButton 的失敗清單 dialog
+// 拿 employee_name 顯示而非裸 summary_id。
+const summariesById = computed(() => {
+  const m = {}
+  for (const s of summaries.value) m[s.id] = s
+  return m
+})
+
 // P0-A：依後端 APPRAISAL_* 細粒度 permission bit 守衛 UI 動作。
 // `canBatchSign` 任一階段簽核權限即可顯示批次區（個別按鈕再各自守衛）。
 const canRecompute = computed(() => hasPermission('APPRAISAL_EVENT_WRITE'))
@@ -178,15 +186,18 @@ onMounted(load)
       >
         <BatchSignButton
           v-if="canSignSupervisor"
-          :cycle-id="cycleId" stage="SUPERVISOR" :selected-ids="selectedIds" @done="reload"
+          :cycle-id="cycleId" stage="SUPERVISOR" :selected-ids="selectedIds"
+          :summaries-map="summariesById" @done="reload"
         />
         <BatchSignButton
           v-if="canSignAccounting"
-          :cycle-id="cycleId" stage="ACCOUNTING" :selected-ids="selectedIds" @done="reload"
+          :cycle-id="cycleId" stage="ACCOUNTING" :selected-ids="selectedIds"
+          :summaries-map="summariesById" @done="reload"
         />
         <BatchSignButton
           v-if="canFinalize"
-          :cycle-id="cycleId" stage="FINALIZE" :selected-ids="selectedIds" @done="reload"
+          :cycle-id="cycleId" stage="FINALIZE" :selected-ids="selectedIds"
+          :summaries-map="summariesById" @done="reload"
         />
       </span>
 
