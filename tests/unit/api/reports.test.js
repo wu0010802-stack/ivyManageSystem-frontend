@@ -117,4 +117,15 @@ describe('reports api', () => {
       params: { year: 114, month: 5 },
     })
   })
+
+  it('getMonthlyPnL GET /reports/monthly-pnl with year param and unwraps .data', async () => {
+    const payload = { year: 2026, sections: [], totals: {}, pending_items: [] }
+    mockGet.mockResolvedValueOnce({ data: payload })
+    const result = await mod.getMonthlyPnL(2026)
+    expect(mockGet).toHaveBeenCalledWith('/reports/monthly-pnl', {
+      params: { year: 2026 },
+    })
+    // 與其他 wrapper 不同：getMonthlyPnL 直接 .then(r => r.data)，不回 axios envelope
+    expect(result).toBe(payload)
+  })
 })
