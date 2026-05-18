@@ -83,41 +83,72 @@ onMounted(fetchOrder)
     <template v-if="loading">
       <SkeletonBlock variant="card" :count="2" />
     </template>
-    <div v-else-if="order">
-      <h2>{{ order.medication_name }}</h2>
-      <p class="meta">{{ order.order_date }} · 劑量 {{ order.dose }}</p>
-      <p v-if="order.note" class="note">備註：{{ order.note }}</p>
+    <template v-else-if="order">
+      <header class="pt-page-hero">
+        <p class="pt-page-hero-eyebrow">用藥單</p>
+        <h1 class="pt-page-hero-title">{{ order.medication_name }}</h1>
+        <p class="pt-page-hero-note">{{ order.order_date }} · 劑量 {{ order.dose }}</p>
+      </header>
 
-      <h3>餵藥時段</h3>
-      <ul class="logs">
-        <li v-for="lg in order.logs" :key="lg.id">
-          <span class="time">{{ lg.scheduled_time }}</span>
-          <span class="status" :class="lg.status">{{ STATUS_LABEL[lg.status] }}</span>
-          <span v-if="lg.administered_at" class="ts">{{ lg.administered_at }}</span>
-          <span v-else-if="lg.skipped_reason" class="reason">{{ lg.skipped_reason }}</span>
-        </li>
-      </ul>
+      <section v-if="order.note" class="pt-card">
+        <h2 class="pt-card-title">
+          <span class="material-symbols-rounded">sticky_note_2</span>
+          備註
+        </h2>
+        <p class="note">{{ order.note }}</p>
+      </section>
 
-      <h3>藥袋／處方照</h3>
-      <div v-if="order.photos.length === 0" class="hint">尚未上傳</div>
-      <div v-else class="photos">
-        <div v-for="p in order.photos" :key="p.id" class="photo">
-          <img :src="p.thumb_url || p.url" :alt="p.original_filename" loading="lazy" decoding="async" />
-          <button
-            type="button"
-            class="del"
-            :aria-label="`刪除 ${p.original_filename}`"
-            @click="askRemovePhoto(p)"
-          >
-            ×
-          </button>
+      <section class="pt-card">
+        <h2 class="pt-card-title">
+          <span class="material-symbols-rounded">schedule</span>
+          餵藥時段
+          <span class="pt-card-title-count">{{ order.logs?.length || 0 }}</span>
+        </h2>
+        <ul class="pt-list-group">
+          <li v-for="lg in order.logs" :key="lg.id" class="pt-list-row">
+            <span class="time">{{ lg.scheduled_time }}</span>
+            <span
+              class="pt-pill"
+              :class="{
+                'pt-pill-warn': lg.status === 'pending',
+                'pt-pill-success': lg.status === 'administered',
+                'pt-pill-danger': lg.status === 'skipped',
+                'pt-pill-info': lg.status === 'correction',
+              }"
+            >{{ STATUS_LABEL[lg.status] }}</span>
+            <span class="pt-list-row-body sub-meta">
+              <span v-if="lg.administered_at">{{ lg.administered_at }}</span>
+              <span v-else-if="lg.skipped_reason">{{ lg.skipped_reason }}</span>
+            </span>
+          </li>
+        </ul>
+      </section>
+
+      <section class="pt-card">
+        <h2 class="pt-card-title">
+          <span class="material-symbols-rounded">photo_library</span>
+          藥袋／處方照
+          <span class="pt-card-title-count">{{ order.photos.length }} / 5</span>
+        </h2>
+        <div v-if="order.photos.length === 0" class="hint">尚未上傳</div>
+        <div v-else class="photos">
+          <div v-for="p in order.photos" :key="p.id" class="photo">
+            <img :src="p.thumb_url || p.url" :alt="p.original_filename" loading="lazy" decoding="async" />
+            <button
+              type="button"
+              class="del"
+              :aria-label="`刪除 ${p.original_filename}`"
+              @click="askRemovePhoto(p)"
+            >×</button>
+          </div>
         </div>
-      </div>
-      <label class="upload-btn" v-if="order.photos.length < 5">
-        <input type="file" accept="image/*,application/pdf" @change="onPhotoPick" hidden :disabled="uploading" />
-        {{ uploading ? '上傳中…' : '+ 加照片' }}
-      </label>
-    </div>
+        <label v-if="order.photos.length < 5" class="pt-action-btn upload-btn">
+          <input type="file" accept="image/*,application/pdf" @change="onPhotoPick" hidden :disabled="uploading" />
+          <span class="material-symbols-rounded">add_photo_alternate</span>
+          {{ uploading ? '上傳中…' : '加照片' }}
+        </label>
+      </section>
+    </template>
 
     <ConfirmDialog
       v-model:open="removeOpen"
@@ -131,25 +162,26 @@ onMounted(fetchOrder)
 </template>
 
 <style scoped>
-.med-detail { padding: 16px; }
-h2 { margin: 0 0 4px; }
-h3 { margin-top: 16px; font-size: 14px; color: var(--m3-on-surface-variant, var(--pt-text-muted)); }
-.meta { color: var(--pt-text-placeholder); font-size: 13px; }
-.note { background: var(--pt-surface-note); padding: 8px; border-radius: 6px; font-size: 13px; }
-.logs { list-style: none; padding: 0; }
-.logs li { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--m3-outline-variant, var(--pt-border-light)); font-size: 14px; }
-.time { font-weight: bold; min-width: 50px; }
-.status { padding: 2px 8px; border-radius: 10px; font-size: 12px; }
-/* status chip：[data-status] 等效 class pattern */
-.status.pending      { background: var(--pt-tint-money);        color: var(--pt-tint-money-fg); }
-.status.administered { background: var(--pt-tint-calendar);     color: var(--pt-tint-calendar-fg); }
-.status.skipped      { background: var(--pt-tint-pickup);       color: var(--pt-tint-pickup-fg); }
-.status.correction   { background: var(--m3-tertiary-container, var(--pt-tint-medication));   color: var(--m3-on-tertiary-container, var(--pt-tint-medication-fg)); }
-.ts, .reason { color: var(--pt-text-placeholder); font-size: 12px; }
-.hint { color: var(--pt-text-placeholder); padding: 12px 0; }
-.photos { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.med-detail { padding-bottom: 24px; }
+.med-detail > .pt-page-hero + .pt-card { margin-top: 12px; }
+.med-detail > .pt-card + .pt-card { margin-top: 12px; }
+
+.note {
+  margin: 0;
+  background: var(--pt-surface-note);
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  color: var(--pt-text-strong);
+}
+
+.pt-list-row .time { font-weight: 700; min-width: 56px; color: var(--pt-text-strong); }
+.pt-list-row .sub-meta { color: var(--pt-text-faint); font-size: 12px; }
+
+.hint { color: var(--pt-text-placeholder); padding: 4px 0; font-size: 13px; }
+.photos { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
 .photo { position: relative; }
-.photo img { width: 80px; height: 80px; object-fit: cover; border-radius: 6px; }
+.photo img { width: 80px; height: 80px; object-fit: cover; border-radius: 10px; }
 .photo .del {
   position: absolute;
   top: -6px;
@@ -164,8 +196,7 @@ h3 { margin-top: 16px; font-size: 14px; color: var(--m3-on-surface-variant, var(
   line-height: 1;
   cursor: pointer;
 }
-/* 視覺保 24x24，pseudo-element 擴大可點區到 44x44（WCAG 2.1）。
- * .del 已是 position: absolute，::before 以 .del 為定位錨點。 */
+/* 視覺保 24x24，pseudo-element 擴大可點區到 44x44（WCAG 2.1）。 */
 .photo .del::before {
   content: '';
   position: absolute;
@@ -175,6 +206,5 @@ h3 { margin-top: 16px; font-size: 14px; color: var(--m3-on-surface-variant, var(
   height: var(--touch-target-min, 44px);
   transform: translate(-50%, -50%);
 }
-.upload-btn { display: inline-block; padding: 8px 16px; background: var(--m3-primary, var(--brand-primary)); color: var(--neutral-0); border-radius: 6px; cursor: pointer; margin-top: 12px; font-size: 14px; transition: background var(--transition-fast, 0.15s ease); }
-.upload-btn:active { background: var(--brand-primary-hover); }
+.upload-btn { margin-top: 12px; }
 </style>

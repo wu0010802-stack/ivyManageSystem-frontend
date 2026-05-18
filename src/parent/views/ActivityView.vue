@@ -226,7 +226,9 @@ async function pullRefresh() {
     </div>
 
     <template v-if="tab === 'my'">
-      <div v-if="!loading && filteredRegs.length === 0" class="empty">尚無報名</div>
+      <div v-if="!loading && filteredRegs.length === 0" class="pt-empty">
+        <div class="pt-empty-title">尚無報名</div>
+      </div>
       <RegistrationStatusList
         v-else
         :registrations="filteredRegs"
@@ -238,12 +240,14 @@ async function pullRefresh() {
 
     <template v-else>
       <div class="toolbar">
-        <button class="primary-btn icon-btn" @click="openRegister">
+        <button class="pt-action-btn" @click="openRegister">
           <ParentIcon name="plus" size="sm" />
           開始報名
         </button>
       </div>
-      <div v-if="!loading && courses.length === 0" class="empty">目前沒有開放的課程</div>
+      <div v-if="!loading && courses.length === 0" class="pt-empty">
+        <div class="pt-empty-title">目前沒有開放的課程</div>
+      </div>
       <ActivityCardList v-else :courses="courses" />
     </template>
 
@@ -281,46 +285,24 @@ async function pullRefresh() {
   background: transparent;
   border: 1px solid transparent;
   font-size: 14px;
-  font-weight: 800;
+  font-weight: 700;
   color: var(--pt-text-soft);
   border-radius: 14px;
   cursor: pointer;
+  transition: background 160ms ease, color 160ms ease;
 }
+
+.tab-btn:hover { background: var(--pt-surface-mute-soft, #fefcf3); }
 
 .tab-btn.active {
   background: var(--pt-surface-raised, var(--neutral-0));
-  border-color: var(--pt-page-border, var(--pt-border));
-  color: var(--m3-primary, var(--brand-primary));
+  border-color: var(--pt-border-light, #ecf5f9);
+  color: var(--brand-primary);
   box-shadow: var(--pt-shadow-press, var(--pt-elev-1));
 }
 
 .toolbar {
   display: flex;
   justify-content: flex-end;
-}
-
-.primary-btn {
-  min-height: var(--touch-target-min, 44px);
-  padding: 8px 16px;
-  background: var(--m3-primary, var(--brand-primary));
-  color: var(--neutral-0);
-  border: none;
-  border-radius: var(--pt-control-radius, 12px);
-  font-size: 14px;
-  font-weight: 800;
-}
-
-.primary-btn:disabled { opacity: 0.5; }
-
-.icon-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.empty {
-  text-align: center;
-  padding: 40px 16px;
-  color: var(--pt-text-placeholder);
 }
 </style>

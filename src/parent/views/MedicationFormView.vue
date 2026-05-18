@@ -127,89 +127,113 @@ function cancelAllergy() {
 
 <template>
   <div class="med-form">
-    <h2 id="med-form-title">新增用藥單</h2>
+    <header class="pt-page-hero">
+      <p class="pt-page-hero-eyebrow">新增用藥單</p>
+      <h1 id="med-form-title" class="pt-page-hero-title">填寫服藥資訊</h1>
+      <p class="pt-page-hero-note">老師收到後會依時段協助餵藥</p>
+    </header>
 
-    <label for="med-student">子女</label>
-    <select id="med-student" v-model="form.student_id">
-      <option v-for="c in studentOptions" :key="c.student_id" :value="c.student_id">{{ c.name }}</option>
-    </select>
+    <section class="pt-card">
+      <h2 class="pt-card-title">
+        <span class="material-symbols-rounded">child_care</span>
+        基本資料
+      </h2>
 
-    <label for="med-date">用藥日期</label>
-    <input id="med-date" type="date" v-model="form.order_date" />
+      <label for="med-student">子女</label>
+      <select id="med-student" v-model="form.student_id">
+        <option v-for="c in studentOptions" :key="c.student_id" :value="c.student_id">{{ c.name }}</option>
+      </select>
 
-    <label for="med-name">藥名</label>
-    <input
-      id="med-name"
-      v-model="form.medication_name"
-      placeholder="例：退燒藥 / Amoxicillin 250mg"
-      maxlength="100"
-      autocomplete="off"
-    />
+      <label for="med-date">用藥日期</label>
+      <input id="med-date" type="date" v-model="form.order_date" />
 
-    <label for="med-dose">劑量</label>
-    <input
-      id="med-dose"
-      v-model="form.dose"
-      placeholder="例：5ml / 1顆"
-      maxlength="50"
-      autocomplete="off"
-    />
+      <label for="med-name">藥名</label>
+      <input
+        id="med-name"
+        v-model="form.medication_name"
+        placeholder="例：退燒藥 / Amoxicillin 250mg"
+        maxlength="100"
+        autocomplete="off"
+      />
 
-    <label>用藥時段</label>
-    <div class="slots">
-      <div v-for="(_, i) in form.time_slots" :key="i" class="slot-row">
-        <input :id="`med-time-${i}`" type="time" v-model="form.time_slots[i]" />
+      <label for="med-dose">劑量</label>
+      <input
+        id="med-dose"
+        v-model="form.dose"
+        placeholder="例：5ml / 1顆"
+        maxlength="50"
+        autocomplete="off"
+      />
+    </section>
+
+    <section class="pt-card">
+      <h2 class="pt-card-title">
+        <span class="material-symbols-rounded">schedule</span>
+        用藥時段
+        <span class="pt-card-title-count">{{ form.time_slots.length }} / 10</span>
+      </h2>
+      <div class="slots">
+        <div v-for="(_, i) in form.time_slots" :key="i" class="slot-row">
+          <input :id="`med-time-${i}`" type="time" v-model="form.time_slots[i]" />
+          <button
+            type="button"
+            class="pt-icon-btn del-btn"
+            :aria-label="`移除第 ${i + 1} 個時段`"
+            @click="removeSlot(i)"
+            :disabled="form.time_slots.length === 1"
+          >
+            <ParentIcon name="close" size="sm" />
+          </button>
+        </div>
         <button
           type="button"
-          class="del-btn touch-target"
-          :aria-label="`移除第 ${i + 1} 個時段`"
-          @click="removeSlot(i)"
-          :disabled="form.time_slots.length === 1"
+          class="add-slot"
+          @click="addSlot"
+          :disabled="form.time_slots.length >= 10"
         >
-          <ParentIcon name="close" size="sm" />
+          <ParentIcon name="plus" size="sm" />
+          新增時段
         </button>
       </div>
-      <button
-        type="button"
-        class="add-slot"
-        @click="addSlot"
-        :disabled="form.time_slots.length >= 10"
-      >
-        <ParentIcon name="plus" size="sm" />
-        新增時段
-      </button>
-    </div>
+    </section>
 
-    <label for="med-note">備註</label>
-    <textarea
-      id="med-note"
-      v-model="form.note"
-      placeholder="飯後服用 / 冷藏…"
-      rows="2"
-      maxlength="500"
-    />
+    <section class="pt-card">
+      <h2 class="pt-card-title">
+        <span class="material-symbols-rounded">attach_file</span>
+        備註與照片
+      </h2>
 
-    <label for="med-files">藥袋／處方照（最多 3 張）</label>
-    <input id="med-files" type="file" accept="image/*,application/pdf" multiple @change="onPick" />
-    <ul class="files">
-      <li v-for="(f, i) in photoFiles" :key="i">
-        <span>{{ f.name }} ({{ Math.round(f.size / 1024) }}KB)</span>
-        <button
-          type="button"
-          class="touch-target"
-          :aria-label="`移除 ${f.name}`"
-          @click="removePhoto(i)"
-        >
-          移除
-        </button>
-      </li>
-    </ul>
+      <label for="med-note">備註</label>
+      <textarea
+        id="med-note"
+        v-model="form.note"
+        placeholder="飯後服用 / 冷藏…"
+        rows="2"
+        maxlength="500"
+      />
+
+      <label for="med-files">藥袋／處方照（最多 3 張）</label>
+      <input id="med-files" type="file" accept="image/*,application/pdf" multiple @change="onPick" />
+      <ul class="files">
+        <li v-for="(f, i) in photoFiles" :key="i">
+          <span>{{ f.name }} ({{ Math.round(f.size / 1024) }}KB)</span>
+          <button
+            type="button"
+            class="pt-ghost-btn"
+            :aria-label="`移除 ${f.name}`"
+            @click="removePhoto(i)"
+          >
+            移除
+          </button>
+        </li>
+      </ul>
+    </section>
 
     <div class="actions">
-      <button type="button" class="cancel" @click="router.back()">取消</button>
+      <button type="button" class="pt-ghost-btn cancel-btn" @click="router.back()">取消</button>
       <button
         type="button"
-        class="submit"
+        class="pt-action-btn submit-btn"
         :disabled="submitting"
         @click="submit(false)"
       >
@@ -238,7 +262,7 @@ function cancelAllergy() {
         </ul>
         <p class="hint">仍要送出嗎？老師端會看到此用藥單，請務必確認與兒科醫師討論過。</p>
         <div class="modal-actions">
-          <button type="button" class="cancel-modal" @click="cancelAllergy">取消</button>
+          <button type="button" class="pt-ghost-btn cancel-modal" @click="cancelAllergy">取消</button>
           <button type="button" class="confirm-modal" @click="confirmAllergy">仍要送出</button>
         </div>
       </div>
@@ -247,64 +271,62 @@ function cancelAllergy() {
 </template>
 
 <style scoped>
-.med-form {
-  padding: var(--space-4, 16px);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2, 8px);
-}
+.med-form { padding-bottom: 24px; }
+.med-form > .pt-page-hero + .pt-card { margin-top: 12px; }
+.med-form > .pt-card + .pt-card { margin-top: 12px; }
 
-h2 {
-  margin: 0 0 var(--space-3, 12px);
-  font-size: var(--text-xl, 18px);
-  color: var(--m3-on-surface, var(--pt-text-strong));
-}
-
-label {
+.pt-card label {
+  display: block;
   font-size: var(--text-sm, 13px);
-  color: var(--m3-on-surface-variant, var(--pt-text-muted));
-  margin-top: var(--space-2, 8px);
+  color: var(--pt-text-muted);
+  margin-top: var(--space-3, 12px);
+  margin-bottom: var(--space-1, 4px);
   font-weight: var(--font-weight-medium, 500);
 }
+.pt-card label:first-of-type { margin-top: 0; }
 
-input,
-select,
-textarea {
+.pt-card input,
+.pt-card select,
+.pt-card textarea {
+  width: 100%;
   padding: 10px;
   min-height: var(--touch-target-min, 44px);
-  border: 1px solid var(--pt-text-hint);
-  border-radius: var(--radius-md, 6px);
+  border: 1px solid var(--pt-border-strong);
+  border-radius: var(--radius-md, 8px);
   font-size: var(--text-base, 14px);
   font-family: inherit;
+  background: var(--pt-surface-card, #fff);
+}
+.pt-card input:focus-visible,
+.pt-card select:focus-visible,
+.pt-card textarea:focus-visible {
+  outline: none;
+  border-color: var(--brand-primary);
+  box-shadow: 0 0 0 2px var(--brand-primary-soft);
 }
 
-textarea {
-  min-height: 60px;
-}
+.pt-card textarea { min-height: 60px; }
 
 .slots {
   display: flex;
   flex-direction: column;
   gap: var(--space-2, 6px);
+  margin-top: 4px;
 }
 
 .slot-row {
   display: flex;
-  gap: var(--space-2, 6px);
+  gap: var(--space-2, 8px);
   align-items: center;
 }
 
-.slot-row input {
-  flex: 1;
-}
+.slot-row input { flex: 1; }
 
 .del-btn {
   background: var(--color-danger-soft);
   color: var(--color-danger);
-  border: none;
-  border-radius: var(--radius-sm, 4px);
+  border-color: var(--color-danger-soft);
 }
-
 .del-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
@@ -316,12 +338,12 @@ textarea {
   justify-content: center;
   gap: 4px;
   min-height: var(--touch-target-min, 44px);
-  padding: var(--space-2, 6px);
-  background: var(--pt-surface-mute);
-  border: 1px dashed var(--pt-text-disabled);
-  border-radius: var(--radius-sm, 4px);
+  padding: var(--space-2, 8px);
+  background: var(--pt-surface-mute, #f5fbe6);
+  border: 1px dashed var(--pt-border-strong);
+  border-radius: 10px;
   font-size: var(--text-sm, 13px);
-  color: var(--m3-on-surface-variant, var(--pt-text-muted));
+  color: var(--pt-text-muted);
   cursor: pointer;
 }
 
@@ -333,6 +355,7 @@ textarea {
 .files {
   list-style: none;
   padding: 0;
+  margin: 8px 0 0;
   font-size: var(--text-sm, 13px);
 }
 
@@ -343,46 +366,14 @@ textarea {
   padding: var(--space-1, 4px) 0;
 }
 
-.files button {
-  background: transparent;
-  border: 1px solid var(--pt-border-strong);
-  border-radius: var(--radius-sm, 4px);
-  padding: 0 var(--space-3, 12px);
-  font-size: var(--text-sm, 13px);
-  color: var(--m3-on-surface-variant, var(--pt-text-muted));
-  cursor: pointer;
-}
-
 .actions {
   display: flex;
   gap: var(--space-2, 8px);
-  margin-top: var(--space-4, 16px);
+  margin: var(--space-4, 16px) 16px 0;
 }
 
-.actions button {
-  flex: 1;
-  min-height: var(--touch-target-min, 44px);
-  padding: 10px;
-  border-radius: var(--radius-md, 6px);
-  border: none;
-  font-size: var(--text-lg, 15px);
-  cursor: pointer;
-}
-
-.cancel {
-  background: var(--pt-surface-mute);
-  color: var(--m3-on-surface, var(--pt-text-strong));
-}
-
-.submit {
-  background: var(--m3-primary, var(--brand-primary));
-  color: var(--neutral-0);
-}
-
-.submit:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
+.cancel-btn,
+.submit-btn { flex: 1; }
 
 /* ===== 過敏 modal 內容（AppModal 提供 dialog 框架） ===== */
 .allergy-modal {

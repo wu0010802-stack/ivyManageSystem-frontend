@@ -65,12 +65,6 @@ function goContactTeacher() {
 
 onMounted(async () => {
   await load()
-  // 初始問候
-  push({
-    role: 'assistant',
-    kind: 'text',
-    payload: '您好！我是常春藤小幫手 👋 想了解什麼呢？選一個分類或直接輸入問題吧！',
-  })
   if (categories.value.length) {
     push({ role: 'assistant', kind: 'categories', payload: categories.value })
   }
@@ -79,6 +73,12 @@ onMounted(async () => {
 
 <template>
   <div class="assistant-view">
+    <header class="pt-page-hero">
+      <p class="pt-page-hero-eyebrow">常春藤小幫手</p>
+      <h1 class="pt-page-hero-title">想問什麼呢？</h1>
+      <p class="pt-page-hero-note">先選分類或直接輸入問題</p>
+    </header>
+
     <AssistantSearch v-model="query" />
 
     <!-- 搜尋結果 overlay -->
@@ -130,7 +130,7 @@ onMounted(async () => {
 
     <!-- 底部固定按鈕 -->
     <div class="bottom-bar">
-      <button class="contact-btn" @click="goContactTeacher">
+      <button class="pt-action-btn contact-btn" @click="goContactTeacher">
         <span class="material-symbols-rounded">chat</span>
         找不到答案？聯絡老師
       </button>
@@ -141,34 +141,24 @@ onMounted(async () => {
 <style scoped>
 .assistant-view {
   min-height: 100vh;
-  background: #f9fafb;
-  padding-bottom: 70px;
-  display: flex; flex-direction: column;
+  background: var(--pt-surface-mute-soft, #fefcf3);
+  padding-bottom: 80px;
+  display: flex;
+  flex-direction: column;
 }
-.messages, .search-results {
-  flex: 1;
-  padding: 16px 14px;
-}
+.messages, .search-results { flex: 1; padding: 16px 14px; }
 .search-results { display: flex; flex-direction: column; gap: 8px; }
 .chip-grid { display: flex; flex-wrap: wrap; gap: 8px; }
 .chip-stack { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
-.hint { color: #6b7280; font-size: 14px; padding: 8px 4px; }
+.hint { color: var(--pt-text-faint, #6b7280); font-size: 14px; padding: 8px 4px; }
 .bottom-bar {
-  position: fixed; bottom: 0; left: 0; right: 0;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
   padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
-  background: #fff;
-  border-top: 1px solid #e5e7eb;
+  background: var(--pt-surface-card, #fff);
+  border-top: 1px solid var(--pt-border-light, #ecf5f9);
 }
-.contact-btn {
-  width: 100%;
-  padding: 12px;
-  background: #0d9053;
-  color: #fff;
-  border: none;
-  border-radius: 12px;
-  font-size: 15px; font-weight: 500;
-  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  cursor: pointer;
-}
-.contact-btn:active { background: #086e3f; }
+.contact-btn { width: 100%; }
 </style>
