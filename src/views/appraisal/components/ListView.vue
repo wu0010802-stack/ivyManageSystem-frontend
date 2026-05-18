@@ -6,6 +6,8 @@ const props = defineProps({
   catalog: { type: Array, default: () => [] },
   selectedIds: { type: Array, default: () => [] },
   busy: { type: Boolean, default: false },
+  // P1-14：parent 注入正在簽核中的 summary id 清單，per-row loading。
+  signingIds: { type: Array, default: () => [] },
   // P0-A：parent (CycleDetailView) 注入 APPRAISAL_* permission 旗標，
   // 守衛 sign / reject action 按鈕；未注入時預設 false（保守）。
   canSignSupervisor: { type: Boolean, default: false },
@@ -13,6 +15,13 @@ const props = defineProps({
   canFinalize: { type: Boolean, default: false },
   canReject: { type: Boolean, default: false },
 })
+
+function isRowSigning(summaryId) {
+  return props.signingIds.includes(summaryId)
+}
+function rowBusy(summaryId) {
+  return props.busy || isRowSigning(summaryId)
+}
 const emit = defineEmits(['sign', 'reject', 'comment', 'open-log', 'update:selected-ids'])
 
 const gradeLabel = (g) =>
@@ -92,7 +101,8 @@ function openLog(summary) { emit('open-log', summary) }
           <template v-if="summaryByParticipant[row.id].status === 'DRAFT'">
             <el-button
               v-if="canSignSupervisor"
-              size="small" :disabled="busy"
+              size="small" :disabled="rowBusy(summaryByParticipant[row.id].id)"
+              :loading="isRowSigning(summaryByParticipant[row.id].id)"
               :data-test="`sign-btn-${row.id}`"
               @click="sign(summaryByParticipant[row.id], 'supervisor')"
             >主管簽</el-button>
@@ -100,13 +110,15 @@ function openLog(summary) { emit('open-log', summary) }
           <template v-else-if="summaryByParticipant[row.id].status === 'SUPERVISOR_SIGNED'">
             <el-button
               v-if="canSignAccounting"
-              size="small" :disabled="busy"
+              size="small" :disabled="rowBusy(summaryByParticipant[row.id].id)"
+              :loading="isRowSigning(summaryByParticipant[row.id].id)"
               :data-test="`sign-btn-${row.id}`"
               @click="sign(summaryByParticipant[row.id], 'accounting')"
             >會計簽</el-button>
             <el-button
               v-if="canReject"
-              size="small" type="danger" text :disabled="busy"
+              size="small" type="danger" text
+              :disabled="rowBusy(summaryByParticipant[row.id].id)"
               :data-test="`reject-btn-${row.id}`"
               @click="reject(summaryByParticipant[row.id])"
             >退簽</el-button>
@@ -114,13 +126,16 @@ function openLog(summary) { emit('open-log', summary) }
           <template v-else-if="summaryByParticipant[row.id].status === 'ACCOUNTING_SIGNED'">
             <el-button
               v-if="canFinalize"
-              size="small" type="primary" :disabled="busy"
+              size="small" type="primary"
+              :disabled="rowBusy(summaryByParticipant[row.id].id)"
+              :loading="isRowSigning(summaryByParticipant[row.id].id)"
               :data-test="`sign-btn-${row.id}`"
               @click="sign(summaryByParticipant[row.id], 'finalize')"
             >核定</el-button>
             <el-button
               v-if="canReject"
-              size="small" type="danger" text :disabled="busy"
+              size="small" type="danger" text
+              :disabled="rowBusy(summaryByParticipant[row.id].id)"
               :data-test="`reject-btn-${row.id}`"
               @click="reject(summaryByParticipant[row.id])"
             >退簽</el-button>
@@ -128,7 +143,8 @@ function openLog(summary) { emit('open-log', summary) }
           <template v-else-if="summaryByParticipant[row.id].status === 'FINALIZED'">
             <el-button
               v-if="canReject"
-              size="small" type="danger" text :disabled="busy"
+              size="small" type="danger" text
+              :disabled="rowBusy(summaryByParticipant[row.id].id)"
               :data-test="`reject-btn-${row.id}`"
               @click="reject(summaryByParticipant[row.id])"
             >退簽</el-button>

@@ -273,6 +273,7 @@ onMounted(load)
       :catalog="catalog"
       v-model:selected-ids="selectedIds"
       :busy="busy"
+      :signing-ids="signingIds"
       :can-sign-supervisor="canSignSupervisor"
       :can-sign-accounting="canSignAccounting"
       :can-finalize="canFinalize"
