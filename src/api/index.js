@@ -2,6 +2,7 @@ import axios from 'axios'
 import { setUserInfo, clearAuth } from '@/utils/auth'
 import { classifyError } from '@/utils/errorHandler'
 import { applyDedupe } from '@/utils/apiDedupe'
+import { captureException as sentryCapture } from '@/utils/sentry'
 
 const api = axios.create({
     baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
@@ -81,6 +82,17 @@ api.interceptors.response.use(
             error.errorDetail = null
         }
         error.errorType = classifyError(error)
+
+        // Sentry 上報：>=500 server error 或 network error（無 response）；
+        // 4xx 預期路徑（401/403/404/422 等）由 UI errorHandler 處理，不送 Sentry。
+        const status = error.response?.status
+        if (!error.response || (typeof status === 'number' && status >= 500)) {
+            sentryCapture(error, {
+                url: error.config?.url,
+                method: error.config?.method,
+                status,
+            }).catch(() => {})
+        }
 
         return Promise.reject(error)
     }

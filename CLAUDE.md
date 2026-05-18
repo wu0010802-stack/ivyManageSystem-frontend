@@ -40,6 +40,10 @@ npm run test:coverage  # 含覆蓋率報告
 | `VITE_API_BASE_URL` | 後端 API 基底路徑，未設時預設 `/api` |
 | `VITE_GOOGLE_MAPS_API_KEY` | 設定後招生熱點圖改走 Google Maps；未設定維持 Leaflet + OpenStreetMap fallback。前端 key 應於 Google Console 設定 HTTP referrer 限制與只開 `Maps JavaScript API` |
 | `VITE_LIFF_ID` | LINE LIFF App ID，家長入口（parent portal）需要；未設定家長端 LINE 綁定/登入流程會失效 |
+| `VITE_SENTRY_DSN` | Sentry browser SDK DSN；缺值時 `src/utils/sentry.js` 完全 no-op |
+| `VITE_SENTRY_ENVIRONMENT` | Sentry environment tag，預設 fallback 到 `import.meta.env.MODE` |
+| `VITE_SENTRY_TRACES_SAMPLE_RATE` | trace 抽樣率（0~1，預設 0.1） |
+| `SENTRY_AUTH_TOKEN` / `SENTRY_ORG` / `SENTRY_PROJECT` | build-time（非 VITE_）；三者齊備時 vite build 才產 hidden source map 並上傳，否則 plugin disable
 
 ---
 
@@ -140,3 +144,16 @@ npm run test:coverage  # 含覆蓋率報告
 - 回應語言：一律使用**繁體中文**
 - 權限位元運算：禁止 `mask & PERMISSION_VALUES.X` 直接寫法（≥ 1<<32 的位元會被 32-bit truncate）；改用 `@/utils/auth` 的 `hasPermission` / `permissionMaskHas` / `permissionMaskAdd` / `permissionMaskRemove` / `permissionMaskCombine`，這些 helper 內部以 BigInt 運算。
 - 升級依賴後必須跑 `npm audit --production --audit-level=moderate`；CI 會 enforce。dev-only 套件的 transitive CVE（如 `vite-plugin-pwa`）需評估是否要 force 升級。
+
+---
+
+## 錯誤監控（Sentry）
+
+`src/utils/sentry.js` 提供 `initSentry(app, { entry })` 與 `captureException(err, context)`。
+
+- **啟用條件**：`VITE_SENTRY_DSN` 設定才生效；缺值時整支模組 no-op，三 entry boot 不受影響
+- **三 entry 都接上**：`src/main.js`（admin）/ `src/parent/main.js` / `src/public/main.js`；每個 entry 用 `entry: 'admin'|'parent'|'public'` tag 區分
+- **axios 攔截器**：`src/api/index.js` 對 `>=500` 與 network error 顯式上報；4xx（401/403/404/422 等）視為預期路徑由 UI errorHandler 處理，**不**送 Sentry
+- **PII 過濾**：60+ 欄位 denylist + URL path id sanitize，與後端 `_PII_KEY_SUBSTRINGS` 對齊；新增欄位需同步前後端與測試（`tests/unit/utils/sentry.test.js`）
+- **source map**：vite build 預設不產 .map（避免外洩程式結構）；需要 source map 給 Sentry 解 stack 時，在 build env 設 `SENTRY_AUTH_TOKEN` + `SENTRY_ORG` + `SENTRY_PROJECT`，plugin 會用 `sourcemap: 'hidden'` 產 map → 上傳 Sentry → 從 dist 刪除
+- **不要在元件 catch 內手動呼叫 `captureException`**：Vue errorHandler / global onerror / unhandledrejection 已被 SDK 自動 hook；axios 攔截器也已涵蓋。重複手動上報會雙報炸 quota

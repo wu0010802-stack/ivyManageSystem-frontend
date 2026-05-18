@@ -5,6 +5,11 @@ import { VitePWA } from 'vite-plugin-pwa'
 import AutoImport from 'unplugin-auto-import/vite'
 import Components from 'unplugin-vue-components/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
+import { sentryVitePlugin } from '@sentry/vite-plugin'
+
+// Sentry source map 上傳：只有設好 SENTRY_AUTH_TOKEN/ORG/PROJECT 才實際上傳；
+// 缺 token 時 plugin disable，build 也不產 source map（避免 dist 留下 .map）。
+const SENTRY_UPLOAD_ENABLED = !!process.env.SENTRY_AUTH_TOKEN
 
 function manualChunks(id) {
     // Vite SFC helper（plugin-vue:export-helper）固定到 vue-core。
@@ -161,6 +166,23 @@ export default defineConfig({
         }),
         Components({
             resolvers: [ElementPlusResolver()],
+        }),
+        // Sentry source map 上傳：必須放在所有 build plugin 之後，且只在
+        // SENTRY_AUTH_TOKEN/ORG/PROJECT 三者都設好時實際 upload。disable=true
+        // 時 plugin 是 no-op，不會 fail build。
+        sentryVitePlugin({
+            org: process.env.SENTRY_ORG,
+            project: process.env.SENTRY_PROJECT,
+            authToken: process.env.SENTRY_AUTH_TOKEN,
+            disable: !SENTRY_UPLOAD_ENABLED,
+            silent: !SENTRY_UPLOAD_ENABLED,
+            sourcemaps: {
+                // 上傳成功後刪掉 .map，避免 dist 包含 source map 外洩程式結構
+                filesToDeleteAfterUpload: ['./dist/**/*.map'],
+            },
+            release: {
+                name: process.env.SENTRY_RELEASE,
+            },
         }),
         VitePWA({
             registerType: 'autoUpdate',          // 有新版本時自動更新 SW
@@ -447,7 +469,10 @@ export default defineConfig({
     },
     build: {
         chunkSizeWarningLimit: 500,
-        sourcemap: false, // 避免正式環境外洩程式碼結構與原始檔路徑
+        // 缺 SENTRY_AUTH_TOKEN：sourcemap=false（既有行為，避免 dist 含 .map）。
+        // 有 token：sourcemap='hidden'（產 map 但 bundle 末尾不寫 //# sourceMappingURL 引用，
+        // 之後由 sentryVitePlugin 上傳並依 filesToDeleteAfterUpload 刪除。
+        sourcemap: SENTRY_UPLOAD_ENABLED ? 'hidden' : false,
         rollupOptions: {
             // multi-page：管理端 + 家長 LIFF App + 公開報名頁 三個獨立 entry
             // dev/prod 路徑：

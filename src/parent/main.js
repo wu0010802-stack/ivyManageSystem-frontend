@@ -28,12 +28,17 @@ import { useParentAuthStore } from './stores/parentAuth'
 import { getMe } from './api/profile'
 import { initTheme } from './composables/useTheme'
 import { initA11y } from './composables/useA11y'
+import { initSentry } from '@/utils/sentry'
 
 // Theme + A11y 應在第一次 paint 前套用，避免閃爍
 initTheme()
 initA11y()
 
 const app = createApp(App)
+
+// Sentry init（缺 VITE_SENTRY_DSN 時 no-op）；non-blocking
+initSentry(app, { entry: 'parent' })
+
 app.use(createPinia())
 app.use(router)
 

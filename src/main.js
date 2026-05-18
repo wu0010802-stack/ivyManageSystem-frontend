@@ -40,6 +40,7 @@ import App from './App.vue'
 import router from './router'
 import { initSyncBridge } from './stores/syncBridge'
 import { useA11yPreference } from '@/composables/useA11yPreference'
+import { initSentry } from '@/utils/sentry'
 
 import 'element-plus/theme-chalk/el-message-box.css'
 import 'element-plus/theme-chalk/el-message.css'
@@ -50,6 +51,10 @@ import './assets/a11y.css'
 import './styles/portal/soft-ui.css'
 
 const app = createApp(App)
+
+// Sentry init（缺 VITE_SENTRY_DSN 時 no-op）；non-blocking，boot 期間極早期
+// 的 error 可能漏在 Sentry hook 接管前 — 視為可接受 trade-off。
+initSentry(app, { entry: 'admin' })
 
 app.use(createPinia())
 app.use(router)

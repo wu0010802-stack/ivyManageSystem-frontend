@@ -13,10 +13,15 @@ import { createApp } from 'vue'
 
 import App from './App.vue'
 import router from './router'
+import { initSentry } from '@/utils/sentry'
 
 // 設計 tokens（字級 / 間距 / 圓角 / 顏色）與 admin / parent 共用同一份基礎尺度
 import '@/assets/design-tokens.css'
 
 const app = createApp(App)
+
+// Sentry init（缺 VITE_SENTRY_DSN 時 no-op）；non-blocking
+initSentry(app, { entry: 'public' })
+
 app.use(router)
 app.mount('#app')
