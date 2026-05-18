@@ -73,30 +73,57 @@
   </el-dialog>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { suggestRefund, refundFeeRecord } from '@/api/fees'
 
-const props = defineProps({
-  modelValue: Boolean,
-  record: Object,
-})
-const emit = defineEmits(['update:modelValue', 'refunded'])
+interface FeeRecord {
+  id: number
+  student_name?: string
+  fee_item_name?: string
+  fee_type?: string
+  amount_due?: number
+  amount_paid?: number
+}
+
+interface RefundSuggestion {
+  suggested_amount: number
+  calc_method?: string
+  calc_payload?: { formula?: string }
+  warnings?: string[]
+}
+
+const props = defineProps<{
+  modelValue: boolean
+  record?: FeeRecord | null
+}>()
+const emit = defineEmits<{
+  'update:modelValue': [value: boolean]
+  refunded: []
+}>()
 
 const FEE_TYPE_LABELS = {
   registration: '註冊費', miscellaneous: '雜費', monthly: '月費',
   material: '代購品', insurance: '保險費', custom: '其他',
 }
 
-const feeTypeLabel = computed(() => FEE_TYPE_LABELS[props.record?.fee_type] || '其他')
-const isBlocked = computed(() => ['material', 'insurance'].includes(props.record?.fee_type))
+const feeTypeLabel = computed(() => (FEE_TYPE_LABELS as Record<string, string>)[props.record?.fee_type ?? ''] || '其他')
+const isBlocked = computed(() => ['material', 'insurance'].includes(props.record?.fee_type ?? ''))
 
-const suggestion = ref(null)
-const suggesting = ref(false)
-const submitting = ref(false)
+const suggestion = ref<RefundSuggestion | null>(null)
+const suggesting = ref<boolean>(false)
+const submitting = ref<boolean>(false)
 
-const form = reactive({
+const form = reactive<{
+  withdrawal_date: Date | null
+  T_total_override: number | null
+  T_served_override: number | null
+  fee_type: string | null
+  amount: number
+  reason: string
+  notes: string
+}>({
   withdrawal_date: null,
   T_total_override: null,
   T_served_override: null,
@@ -108,7 +135,7 @@ const form = reactive({
 
 watch(() => props.record, (r) => {
   if (r) {
-    form.fee_type = r.fee_type
+    form.fee_type = r.fee_type ?? null
     form.amount = 0
     form.reason = ''
     form.notes = ''
@@ -123,12 +150,13 @@ const canSubmit = computed(() =>
 async function onSuggest() {
   suggesting.value = true
   try {
-    const payload = { withdrawal_date: format(form.withdrawal_date) }
+    const payload: Record<string, unknown> = { withdrawal_date: format(form.withdrawal_date) }
     if (form.T_total_override) payload.T_total_override = form.T_total_override
     if (form.T_served_override) payload.T_served_override = form.T_served_override
-    suggestion.value = await suggestRefund(props.record.id, payload)
-  } catch (e) {
-    ElMessage.error(e.response?.data?.detail || '計算失敗')
+    suggestion.value = await suggestRefund((props.record as FeeRecord).id, payload) as RefundSuggestion
+  } catch (e: unknown) {
+    const err = e as { response?: { data?: { detail?: string } } }
+    ElMessage.error(err.response?.data?.detail || '計算失敗')
   } finally {
     suggesting.value = false
   }
@@ -141,7 +169,7 @@ function applySuggested() {
 async function onSubmit() {
   submitting.value = true
   try {
-    await refundFeeRecord(props.record.id, {
+    await refundFeeRecord((props.record as FeeRecord).id, {
       amount: form.amount,
       reason: form.reason,
       notes: form.notes,
@@ -151,14 +179,15 @@ async function onSubmit() {
     ElMessage.success('已建立退費')
     emit('refunded')
     emit('update:modelValue', false)
-  } catch (e) {
-    ElMessage.error(e.response?.data?.detail || '退費失敗')
+  } catch (e: unknown) {
+    const err = e as { response?: { data?: { detail?: string } } }
+    ElMessage.error(err.response?.data?.detail || '退費失敗')
   } finally {
     submitting.value = false
   }
 }
 
-function format(d) {
+function format(d: Date | string | null): string | null {
   if (!d) return null
   const dt = d instanceof Date ? d : new Date(d)
   return dt.toISOString().slice(0, 10)

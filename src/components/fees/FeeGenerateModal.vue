@@ -60,13 +60,24 @@
   </el-dialog>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { generateFeeRecords } from '@/api/fees'
 
-const props = defineProps({ modelValue: Boolean })
-const emit = defineEmits(['update:modelValue', 'generated'])
+interface PreviewResult {
+  created: number
+  skipped: number
+  preview?: Record<string, unknown>[]
+}
+
+const props = defineProps<{
+  modelValue: boolean
+}>()
+const emit = defineEmits<{
+  'update:modelValue': [value: boolean]
+  generated: [result: PreviewResult]
+}>()
 
 const form = reactive({
   school_year: new Date().getFullYear() - 1911,
@@ -74,9 +85,9 @@ const form = reactive({
   fee_types: ['registration', 'miscellaneous'],
 })
 
-const loading = ref(false)
-const confirming = ref(false)
-const preview = ref(null)
+const loading = ref<boolean>(false)
+const confirming = ref<boolean>(false)
+const preview = ref<PreviewResult | null>(null)
 
 async function onPreview() {
   if (!form.fee_types.length) {
@@ -86,8 +97,9 @@ async function onPreview() {
   loading.value = true
   try {
     preview.value = await generateFeeRecords({ ...form, dry_run: true })
-  } catch (e) {
-    ElMessage.error(e.response?.data?.detail || '預覽失敗')
+  } catch (e: unknown) {
+    const err = e as { response?: { data?: { detail?: string } } }
+    ElMessage.error(err.response?.data?.detail || '預覽失敗')
   } finally {
     loading.value = false
   }
@@ -100,8 +112,9 @@ async function onConfirm() {
     ElMessage.success(`已產生 ${result.created} 筆,跳過 ${result.skipped} 筆`)
     emit('generated', result)
     emit('update:modelValue', false)
-  } catch (e) {
-    ElMessage.error(e.response?.data?.detail || '產生失敗')
+  } catch (e: unknown) {
+    const err = e as { response?: { data?: { detail?: string } } }
+    ElMessage.error(err.response?.data?.detail || '產生失敗')
   } finally {
     confirming.value = false
   }

@@ -165,18 +165,20 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getFeeRecords, getFeeRefunds, getFeePeriods } from '@/api/fees'
 import RefundSuggestModal from '@/components/fees/RefundSuggestModal.vue'
 
-const props = defineProps({
-  periodOptions: { type: Array, default: () => [] },
+const props = withDefaults(defineProps<{
+  periodOptions?: string[]
+}>(), {
+  periodOptions: () => [],
 })
 
 // ─── 期別選項（優先用 prop，否則自己 fetch） ─────────────────────────────────
-const localPeriods = ref([])
+const localPeriods = ref<string[]>([])
 const effectivePeriodOptions = computed(() =>
   props.periodOptions && props.periodOptions.length > 0
     ? props.periodOptions
@@ -186,7 +188,7 @@ const effectivePeriodOptions = computed(() =>
 async function ensurePeriods() {
   if (props.periodOptions && props.periodOptions.length > 0) return
   try {
-    localPeriods.value = await getFeePeriods()
+    localPeriods.value = await getFeePeriods() as string[]
   } catch {
     // 非致命：toolbar 仍可用學生姓名搜尋
   }
@@ -200,13 +202,13 @@ const filter = reactive({
   period: '',
   student_name: '',
 })
-const refundedRows = ref([])
-const expandedRowKeys = ref([])
-const loading = ref(false)
-const scannedCount = ref(0)
+const refundedRows = ref<FeeRecord[]>([])
+const expandedRowKeys = ref<string[]>([])
+const loading = ref<boolean>(false)
+const scannedCount = ref<number>(0)
 
 function _buildRecordParams() {
-  const params = { page: 1, page_size: FAN_OUT_LIMIT }
+  const params: Record<string, unknown> = { page: 1, page_size: FAN_OUT_LIMIT }
   if (filter.period) params.period = filter.period
   if (filter.student_name) params.student_name = filter.student_name
   return params
@@ -216,8 +218,8 @@ function _buildRecordParams() {
  * 對每筆 record 並發呼叫 getFeeRefunds，限制 concurrency。
  * 每筆失敗不阻斷整體（Promise.allSettled）。
  */
-async function _fetchRefundsForRecords(records) {
-  const results = new Array(records.length).fill(null)
+async function _fetchRefundsForRecords(records: FeeRecord[]) {
+  const results: (Record<string, unknown> | null)[] = new Array(records.length).fill(null)
   let cursor = 0
 
   async function worker() {
@@ -226,7 +228,7 @@ async function _fetchRefundsForRecords(records) {
       cursor += 1
       const rec = records[idx]
       try {
-        results[idx] = await getFeeRefunds(rec.id)
+        results[idx] = await getFeeRefunds(rec.id as number)
       } catch {
         results[idx] = null
       }
@@ -247,47 +249,48 @@ async function loadRefundedRecords() {
   try {
     const params = _buildRecordParams()
     const res = await getFeeRecords(params)
-    const records = res?.items || []
+    const records: FeeRecord[] = (res as { items?: FeeRecord[] })?.items || []
     scannedCount.value = records.length
 
     // 只挑「有已繳金額」的 records 跑 refunds 查詢（沒繳費的不可能退費）
     const paidRecords = records.filter((r) => (r.amount_paid || 0) > 0)
     const refundResps = await _fetchRefundsForRecords(paidRecords)
 
-    const rows = []
+    const rows: FeeRecord[] = []
     paidRecords.forEach((rec, idx) => {
       const resp = refundResps[idx]
-      const refunds = resp?.refunds || []
+      const refunds = (resp as { refunds?: Record<string, unknown>[] })?.refunds || []
       if (refunds.length === 0) return
       rows.push({
         ...rec,
         _refunds: refunds,
-        _total_refunded: resp.total_refunded || refunds.reduce((s, r) => s + (r.amount || 0), 0),
-        _latest_refund_at: refunds[0]?.refunded_at || null,
+        _total_refunded: (resp as { total_refunded?: number })?.total_refunded || refunds.reduce((s, r) => s + ((r.amount as number) || 0), 0),
+        _latest_refund_at: (refunds[0] as { refunded_at?: string })?.refunded_at || null,
       })
     })
 
     refundedRows.value = rows
     expandedRowKeys.value = []
-  } catch (err) {
-    ElMessage.error(err?.response?.data?.detail || '載入退費紀錄失敗')
+  } catch (err: unknown) {
+    const e = err as { response?: { data?: { detail?: string } } }
+    ElMessage.error(e?.response?.data?.detail || '載入退費紀錄失敗')
   } finally {
     loading.value = false
   }
 }
 
-function onExpandChange(row, expandedRows) {
-  expandedRowKeys.value = expandedRows.map((r) => r.id)
+function onExpandChange(_row: unknown, expandedRows: { id: number }[]) {
+  expandedRowKeys.value = expandedRows.map((r) => String(r.id))
 }
 
 // ─── 新增退費入口：record picker ───────────────────────────────────────────
-const pickerVisible = ref(false)
-const pickerLoading = ref(false)
+const pickerVisible = ref<boolean>(false)
+const pickerLoading = ref<boolean>(false)
 const pickerFilter = reactive({
   period: '',
   student_name: '',
 })
-const pickerCandidates = ref([])
+const pickerCandidates = ref<FeeRecord[]>([])
 
 function openNewRefundDialog() {
   pickerFilter.period = filter.period || ''
@@ -299,30 +302,40 @@ function openNewRefundDialog() {
 async function loadPickerCandidates() {
   pickerLoading.value = true
   try {
-    const params = { page: 1, page_size: 50 }
+    const params: Record<string, unknown> = { page: 1, page_size: 50 }
     if (pickerFilter.period) params.period = pickerFilter.period
     if (pickerFilter.student_name) params.student_name = pickerFilter.student_name
     const res = await getFeeRecords(params)
     // 只列「已繳金額 > 0」的（才能退費）
-    pickerCandidates.value = (res?.items || []).filter((r) => (r.amount_paid || 0) > 0)
-  } catch (err) {
-    ElMessage.error(err?.response?.data?.detail || '搜尋費用記錄失敗')
+    pickerCandidates.value = ((res as { items?: FeeRecord[] })?.items || []).filter((r) => ((r.amount_paid as number) || 0) > 0)
+  } catch (err: unknown) {
+    const e = err as { response?: { data?: { detail?: string } } }
+    ElMessage.error(e?.response?.data?.detail || '搜尋費用記錄失敗')
   } finally {
     pickerLoading.value = false
   }
 }
 
-function onPickRecord(row) {
+function onPickRecord(row: FeeRecord) {
   pickerVisible.value = false
   refundTarget.value = row
   refundModalVisible.value = true
 }
 
 // ─── 退費 modal ────────────────────────────────────────────────────────────
-const refundModalVisible = ref(false)
-const refundTarget = ref(null)
+interface FeeRecord {
+  id: number
+  student_name?: string
+  fee_item_name?: string
+  fee_type?: string
+  amount_due?: number
+  amount_paid?: number
+  [key: string]: unknown
+}
+const refundModalVisible = ref<boolean>(false)
+const refundTarget = ref<FeeRecord | null>(null)
 
-function openRefundForRow(row) {
+function openRefundForRow(row: FeeRecord) {
   // 從「再次退費」按鈕進入：直接帶 row 開 modal
   refundTarget.value = row
   refundModalVisible.value = true
@@ -334,7 +347,7 @@ function onRefunded() {
 }
 
 // ─── 工具 ─────────────────────────────────────────────────────────────────
-function formatDateTime(iso) {
+function formatDateTime(iso: string | null | undefined): string {
   if (!iso) return '—'
   try {
     const dt = new Date(iso)
@@ -354,9 +367,9 @@ function formatDateTime(iso) {
 watch(() => filter.period, () => loadRefundedRecords())
 
 // 學生姓名 300ms debounce
-let _searchTimer = null
+let _searchTimer: ReturnType<typeof setTimeout> | null = null
 watch(() => filter.student_name, () => {
-  clearTimeout(_searchTimer)
+  clearTimeout(_searchTimer ?? undefined)
   _searchTimer = setTimeout(() => loadRefundedRecords(), 300)
 })
 

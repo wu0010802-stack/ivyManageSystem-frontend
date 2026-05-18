@@ -7,15 +7,24 @@
   分支會跳出佔位提示（家長端不受影響）。
   user merge `refactor-fees-by-class` 後請 `git rm` 本檔。
 -->
-<script setup>
-defineProps({
-  modelValue: { type: Boolean, default: false },
-  student: { type: Object, default: null },
-  period: { type: String, default: '' },
-  adjustmentType: { type: String, default: '' },
-  existing: { type: Object, default: null },
+<script setup lang="ts">
+withDefaults(defineProps<{
+  modelValue?: boolean
+  student?: Record<string, unknown> | null
+  period?: string
+  adjustmentType?: string
+  existing?: Record<string, unknown> | null
+}>(), {
+  modelValue: false,
+  student: null,
+  period: '',
+  adjustmentType: '',
+  existing: null,
 })
-defineEmits(['update:modelValue', 'saved'])
+defineEmits<{
+  'update:modelValue': [value: boolean]
+  saved: []
+}>()
 </script>
 
 <template>

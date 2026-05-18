@@ -103,7 +103,7 @@
     <!-- 統計摘要 -->
     <div class="summary-bar" v-if="summary">
       <el-tag type="info" size="large">總筆數：{{ summary.total_count }}</el-tag>
-      <el-tag type="default" size="large">總應繳：{{ summary.total_due.toLocaleString() }} 元</el-tag>
+      <el-tag size="large">總應繳：{{ summary.total_due.toLocaleString() }} 元</el-tag>
       <el-tag type="success" size="large">已收：{{ summary.total_paid.toLocaleString() }} 元</el-tag>
       <el-tag type="success" size="large">已繳：{{ summary.paid_count }} 人</el-tag>
       <el-tag type="warning" size="large">部分繳費：{{ summary.partial_count }} 人</el-tag>
@@ -165,21 +165,55 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import type { FormInstance } from 'element-plus'
 import { getFeeRecords, payFeeRecord, getFeeSummary } from '@/api/fees'
 import { todayISO } from '@/utils/format'
 import RefundSuggestModal from '@/components/fees/RefundSuggestModal.vue'
 
-const props = defineProps({
-  periodOptions: { type: Array, default: () => [] },
-  classrooms: { type: Array, default: () => [] },
+interface Classroom {
+  id: number
+  name: string
+}
+
+interface FeeRow {
+  id: number
+  student_name: string
+  classroom_name: string
+  fee_item_name: string
+  period: string
+  amount_due: number
+  amount_paid: number
+  status: string
+  payment_date?: string
+  payment_method?: string
+  notes?: string
+  fee_type?: string
+}
+
+interface FeeSummary {
+  total_count: number
+  total_due: number
+  total_paid: number
+  paid_count: number
+  partial_count: number
+  unpaid_count: number
+  total_unpaid: number
+}
+
+const props = withDefaults(defineProps<{
+  periodOptions?: string[]
+  classrooms?: Classroom[]
+}>(), {
+  periodOptions: () => [],
+  classrooms: () => [],
 })
 
 // ─── 繳費記錄 ─────────────────────────────────────────────────────────────────
-const feeRecords = ref([])
-const recordsLoading = ref(false)
+const feeRecords = ref<FeeRow[]>([])
+const recordsLoading = ref<boolean>(false)
 const emptyRecordFilter = () => ({
   period: '',
   classroom_name: '',
@@ -187,13 +221,13 @@ const emptyRecordFilter = () => ({
   student_name: '',
 })
 const recordFilter = ref(emptyRecordFilter())
-const recordPage = ref(1)
-const recordPageSize = ref(50)
-const recordTotal = ref(0)
-const summary = ref(null)
+const recordPage = ref<number>(1)
+const recordPageSize = ref<number>(50)
+const recordTotal = ref<number>(0)
+const summary = ref<FeeSummary | null>(null)
 
 function _buildRecordParams() {
-  const params = { page: recordPage.value, page_size: recordPageSize.value }
+  const params: Record<string, unknown> = { page: recordPage.value, page_size: recordPageSize.value }
   if (recordFilter.value.period) params.period = recordFilter.value.period
   if (recordFilter.value.classroom_name) params.classroom_name = recordFilter.value.classroom_name
   if (recordFilter.value.status) params.status = recordFilter.value.status
@@ -209,9 +243,9 @@ async function fetchRecords() {
       getFeeRecords(params),
       getFeeSummary(params),
     ])
-    feeRecords.value = res.items
-    recordTotal.value = res.total
-    summary.value = sum
+    feeRecords.value = (res as { items: FeeRow[] }).items
+    recordTotal.value = (res as { total: number }).total
+    summary.value = sum as FeeSummary
   } catch {
     ElMessage.error('載入費用記錄失敗')
   } finally {
@@ -225,9 +259,9 @@ function searchRecords() {
 }
 
 // 學生姓名即時搜尋（300ms debounce）
-let _feeSearchTimer = null
-watch(() => recordFilter.value.student_name, (val) => {
-  clearTimeout(_feeSearchTimer)
+let _feeSearchTimer: ReturnType<typeof setTimeout> | null = null
+watch(() => recordFilter.value.student_name, () => {
+  clearTimeout(_feeSearchTimer ?? undefined)
   _feeSearchTimer = setTimeout(() => {
     recordPage.value = 1
     fetchRecords()
@@ -240,23 +274,23 @@ function resetRecordFilters() {
   return fetchRecords()
 }
 
-function getRecordStatusLabel(status) {
+function getRecordStatusLabel(status: string): string {
   if (status === 'paid') return '已繳'
   if (status === 'partial') return '部分繳費'
   return '未繳'
 }
 
-function getRecordStatusType(status) {
+function getRecordStatusType(status: string): 'success' | 'warning' | 'info' {
   if (status === 'paid') return 'success'
   if (status === 'partial') return 'warning'
   return 'info'
 }
 
 // ─── 登記繳費 ─────────────────────────────────────────────────────────────────
-const payDialogVisible = ref(false)
-const payingRecord = ref(null)
-const payFormRef = ref(null)
-const saving = ref(false)
+const payDialogVisible = ref<boolean>(false)
+const payingRecord = ref<FeeRow | null>(null)
+const payFormRef = ref<FormInstance | null>(null)
+const saving = ref<boolean>(false)
 const payForm = ref({
   payment_date: '',
   amount_paid: 0,
@@ -268,7 +302,7 @@ const payRules = {
   payment_method: [{ required: true, message: '請選擇繳費方式', trigger: 'change' }],
 }
 
-function openPayDialog(row) {
+function openPayDialog(row: FeeRow) {
   payingRecord.value = row
   payForm.value = {
     payment_date: todayISO(),
@@ -284,23 +318,33 @@ async function submitPay() {
   if (!valid) return
   saving.value = true
   try {
-    await payFeeRecord(payingRecord.value.id, payForm.value)
+    await payFeeRecord((payingRecord.value as FeeRow).id, payForm.value)
     ElMessage.success('繳費登記成功')
     payDialogVisible.value = false
     fetchRecords()
-  } catch (err) {
-    ElMessage.error(err?.response?.data?.detail || '登記繳費失敗')
+  } catch (err: unknown) {
+    const e = err as { response?: { data?: { detail?: string } } }
+    ElMessage.error(e?.response?.data?.detail || '登記繳費失敗')
   } finally {
     saving.value = false
   }
 }
 
 // ─── 退費（Phase 3：自動建議計算 modal） ───────────────────────────────────────
-const refundModalVisible = ref(false)
-const refundTarget = ref(null)
+interface FeeRecord {
+  id: number
+  student_name?: string
+  fee_item_name?: string
+  fee_type?: string
+  amount_due?: number
+  amount_paid?: number
+  [key: string]: unknown
+}
+const refundModalVisible = ref<boolean>(false)
+const refundTarget = ref<FeeRecord | null>(null)
 
-function openRefundModal(row) {
-  refundTarget.value = row
+function openRefundModal(row: FeeRow) {
+  refundTarget.value = row as unknown as FeeRecord
   refundModalVisible.value = true
 }
 
