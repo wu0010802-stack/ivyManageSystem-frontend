@@ -17,8 +17,8 @@
 
     <ClassHubTaskRow
       v-for="task in slot.tasks"
-      :key="task.kind + (task.due_at || '')"
-      :kind="task.kind"
+      :key="(task.kind ?? '') + (task.due_at || '')"
+      :kind="task.kind ?? ''"
       :count="task.count"
       :action-mode="task.action_mode"
       @open-sheet="$emit('open-sheet', task)"
@@ -30,25 +30,39 @@
   </el-card>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 import ClassHubTaskRow from './ClassHubTaskRow.vue'
 
-const SLOT_META = {
+interface SlotTask {
+  kind?: string
+  count?: number
+  action_mode?: string
+  due_at?: string | null
+}
+
+interface TimeSlot {
+  slot_id?: string
+  tasks: SlotTask[]
+}
+
+const SLOT_META: Record<string, { icon: string; label: string; start: string; end: string }> = {
   morning:   { icon: '🌅', label: '早晨', start: '07:00', end: '09:00' },
   forenoon:  { icon: '☀',  label: '上午', start: '09:00', end: '12:00' },
   noon:      { icon: '🍱', label: '午間', start: '12:00', end: '14:00' },
   afternoon: { icon: '🌆', label: '下午', start: '14:00', end: '18:00' },
 }
 
-const props = defineProps({
-  slot: { type: Object, required: true }, // { slot_id, tasks }
-  isCurrent: { type: Boolean, default: false },
+const props = withDefaults(defineProps<{
+  slot: TimeSlot
+  isCurrent?: boolean
+}>(), {
+  isCurrent: false,
 })
-defineEmits(['open-sheet', 'jump-page'])
+defineEmits<{ 'open-sheet': [task: SlotTask]; 'jump-page': [task: SlotTask] }>()
 
 const slotMeta = computed(
-  () => SLOT_META[props.slot.slot_id] ?? { icon: '•', label: props.slot.slot_id, start: '', end: '' }
+  () => SLOT_META[props.slot.slot_id ?? ''] ?? { icon: '•', label: props.slot.slot_id ?? '', start: '', end: '' }
 )
 </script>
 

@@ -1,15 +1,20 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { ElDrawer, ElTabs, ElTabPane, ElTag, ElEmpty, ElMessage } from 'element-plus'
 import { View, Hide } from '@element-plus/icons-vue'
 import { usePortalStudent } from '@/composables/usePortalStudent'
 import { apiError } from '@/utils/error'
 
-const props = defineProps({
-  modelValue: { type: Boolean, default: false },
-  studentId: { type: [Number, null], default: null },
+const props = withDefaults(defineProps<{
+  modelValue?: boolean
+  studentId?: number | null
+}>(), {
+  modelValue: false,
+  studentId: null,
 })
-const emit = defineEmits(['update:modelValue'])
+const emit = defineEmits<{
+  'update:modelValue': [value: boolean]
+}>()
 
 const open = computed({
   get: () => props.modelValue,
@@ -47,13 +52,15 @@ watch(
   { immediate: true },
 )
 
-const student = computed(() => detail.value?.student ?? {})
-const classroom = computed(() => detail.value?.classroom ?? null)
-const guardians = computed(() => detail.value?.guardians ?? [])
-const health = computed(() => detail.value?.health ?? { allergies: [], recent_medication_orders: [] })
-const attendanceMonth = computed(() => detail.value?.attendance_this_month ?? {})
-const attendance30d = computed(() => detail.value?.attendance_30d?.summary ?? {})
-const transferHistory = computed(() => detail.value?.transfer_history ?? [])
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const detailAny = computed(() => detail.value as any)
+const student = computed(() => detailAny.value?.student ?? {})
+const classroom = computed(() => detailAny.value?.classroom ?? null)
+const guardians = computed(() => detailAny.value?.guardians ?? [])
+const health = computed(() => detailAny.value?.health ?? { allergies: [], recent_medication_orders: [] })
+const attendanceMonth = computed(() => detailAny.value?.attendance_this_month ?? {})
+const attendance30d = computed(() => detailAny.value?.attendance_30d?.summary ?? {})
+const transferHistory = computed(() => detailAny.value?.transfer_history ?? [])
 
 const ageLabel = computed(() => {
   const b = student.value.birthday
@@ -76,22 +83,23 @@ const ageLabel = computed(() => {
   return `${years}歲${months}個月`
 })
 
-function genderLabel(g) {
+function genderLabel(g: string | undefined | null) {
   if (g === 'M' || g === '男') return '男'
   if (g === 'F' || g === '女') return '女'
   return g || ''
 }
 
-function lifecycleLabel(s) {
-  const map = { active: '在學', graduated: '畢業', withdrawn: '離校', transferred: '轉學' }
-  return map[s] || s || '—'
+function lifecycleLabel(s: string | undefined | null) {
+  const map: Record<string, string> = { active: '在學', graduated: '畢業', withdrawn: '離校', transferred: '轉學' }
+  return (s && map[s]) || s || '—'
 }
 
-function severityLabel(s) {
-  return { mild: '輕', moderate: '中', severe: '重' }[s] || s
+function severityLabel(s: string | undefined | null) {
+  const map: Record<string, string> = { mild: '輕', moderate: '中', severe: '重' }
+  return (s && map[s]) || s || ''
 }
 
-async function onRevealPhone(target, guardianId = null) {
+async function onRevealPhone(target: string, guardianId: number | string | null = null) {
   try {
     await revealPhone({ studentId: props.studentId, target, guardianId })
   } catch (e) {
@@ -99,10 +107,10 @@ async function onRevealPhone(target, guardianId = null) {
   }
 }
 
-function displayedPhone({ masked, target, guardianId = null }) {
+function displayedPhone({ masked, target, guardianId = null }: { masked?: string | null; target: string; guardianId?: number | string | null }) {
   return getRevealedPhone(target, guardianId) || masked || '—'
 }
-function isRevealed(target, guardianId = null) {
+function isRevealed(target: string, guardianId: number | string | null = null) {
   return Boolean(getRevealedPhone(target, guardianId))
 }
 </script>

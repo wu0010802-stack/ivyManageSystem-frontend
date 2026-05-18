@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
@@ -7,8 +7,10 @@ import {
   getMyLeaveAttachment,
 } from '@/api/portal'
 
-const props = defineProps({
-  refreshTrigger: { type: Number, default: 0 },
+const props = withDefaults(defineProps<{
+  refreshTrigger?: number
+}>(), {
+  refreshTrigger: 0,
 })
 
 const now = new Date()
@@ -18,15 +20,17 @@ const query = reactive({
 })
 
 const loading = ref(false)
-const leaves = ref([])
+const leaves = ref<Record<string, unknown>[]>([])
 
-const substituteStatusLabel = (status) => {
-  const map = { not_required: '—', pending: '待回應', accepted: '已接受', rejected: '已拒絕', waived: '主管略過' }
-  return map[status] || status
+const substituteStatusLabel = (status: unknown) => {
+  const s = String(status ?? '')
+  const map: Record<string, string> = { not_required: '—', pending: '待回應', accepted: '已接受', rejected: '已拒絕', waived: '主管略過' }
+  return map[s] || s
 }
-const substituteStatusType = (status) => {
-  const map = { not_required: 'info', pending: 'warning', accepted: 'success', rejected: 'danger', waived: 'info' }
-  return map[status] || ''
+const substituteStatusType = (status: unknown): 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined => {
+  const s = String(status ?? '')
+  const map: Record<string, 'primary' | 'success' | 'warning' | 'info' | 'danger'> = { not_required: 'info', pending: 'warning', accepted: 'success', rejected: 'danger', waived: 'info' }
+  return map[s] || undefined
 }
 
 const fetchLeaves = async () => {
@@ -47,16 +51,17 @@ watch(() => props.refreshTrigger, () => {
 
 // ── 附件預覽 ──
 const attachDialogVisible = ref(false)
-const attachItems = ref([])
+const attachItems = ref<{ name: string; url: string; isImage: boolean }[]>([])
 const attachLoading = ref(false)
 
-const viewAttachments = async (row) => {
+const viewAttachments = async (row: Record<string, unknown>) => {
   attachItems.value = []
   attachDialogVisible.value = true
   attachLoading.value = true
   try {
-    for (const filename of row.attachment_paths) {
-      const res = await getMyLeaveAttachment(row.id, filename)
+    const paths = (row.attachment_paths as string[]) || []
+    for (const filename of paths) {
+      const res = await getMyLeaveAttachment(row.id as number, filename)
       const isImage = /\.(jpg|jpeg|png|gif|heic|heif)$/i.test(filename)
       attachItems.value.push({
         name: filename,
@@ -79,32 +84,35 @@ const closeAttachDialog = () => {
 
 // ── 補充附件 ──
 const supplementDialogVisible = ref(false)
-const supplementLeave = ref(null)
-const supplementFileList = ref([])
+const supplementLeave = ref<Record<string, unknown> | null>(null)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const supplementFileList = ref<any[]>([])
 const supplementLoading = ref(false)
 
-const openSupplement = (row) => {
+const openSupplement = (row: Record<string, unknown>) => {
   supplementLeave.value = row
   supplementFileList.value = []
   supplementDialogVisible.value = true
 }
 
-const handleSupplementChange = (file, newList) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const handleSupplementChange = (file: any, newList: any[]) => {
   const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/heic', 'application/pdf']
   const maxSize = 5 * 1024 * 1024
   if (!allowed.includes(file.raw?.type) && !file.name.match(/\.(heic|heif)$/i)) {
     ElMessage.error(`${file.name}：僅支援 JPG、PNG、GIF、HEIC、PDF`)
-    supplementFileList.value = newList.filter(f => f.uid !== file.uid)
+    supplementFileList.value = newList.filter((f: any) => f.uid !== file.uid)
     return
   }
   if ((file.raw?.size ?? 0) > maxSize) {
     ElMessage.error(`${file.name} 超過 5 MB 限制`)
-    supplementFileList.value = newList.filter(f => f.uid !== file.uid)
+    supplementFileList.value = newList.filter((f: any) => f.uid !== file.uid)
   }
 }
 
 const handleSupplementExceed = () => {
-  const remaining = 5 - (supplementLeave.value?.attachment_paths?.length ?? 0)
+  const paths = supplementLeave.value?.attachment_paths
+  const remaining = 5 - (Array.isArray(paths) ? paths.length : 0)
   ElMessage.warning(`最多再補充 ${remaining} 個附件`)
 }
 
@@ -113,13 +121,14 @@ const submitSupplement = async () => {
   supplementLoading.value = true
   try {
     const formData = new FormData()
-    supplementFileList.value.forEach(f => formData.append('files', f.raw))
-    await uploadMyLeaveAttachments(supplementLeave.value.id, formData)
+    supplementFileList.value.forEach((f: any) => formData.append('files', f.raw))
+    await uploadMyLeaveAttachments(supplementLeave.value!.id as number, formData)
     ElMessage.success('附件已補充')
     supplementDialogVisible.value = false
     fetchLeaves()
   } catch (e) {
-    ElMessage.error(e.response?.data?.detail || '上傳失敗')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ElMessage.error((e as any).response?.data?.detail || '上傳失敗')
   } finally {
     supplementLoading.value = false
   }
@@ -228,12 +237,12 @@ defineExpose({ fetchLeaves })
   <!-- 補充附件 Dialog -->
   <el-dialog v-model="supplementDialogVisible" title="補充附件" width="480px">
     <el-alert type="info" :closable="false" style="margin-bottom:12px">
-      目前已有 {{ supplementLeave?.attachment_paths?.length ?? 0 }} 個附件，最多可補充至 5 個
+      目前已有 {{ (supplementLeave?.attachment_paths as string[] | undefined)?.length ?? 0 }} 個附件，最多可補充至 5 個
     </el-alert>
     <el-upload
       v-model:file-list="supplementFileList"
       :auto-upload="false"
-      :limit="5 - (supplementLeave?.attachment_paths?.length ?? 0)"
+      :limit="5 - ((supplementLeave?.attachment_paths as string[] | undefined)?.length ?? 0)"
       accept=".jpg,.jpeg,.png,.gif,.heic,.heif,.pdf"
       multiple list-type="text"
       :on-change="handleSupplementChange"

@@ -1,33 +1,39 @@
-<script setup>
+<script setup lang="ts">
 import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
 
-const props = defineProps({
-  disabled: { type: Boolean, default: false },
-  placeholder: { type: String, default: '輸入訊息…' },
+const props = withDefaults(defineProps<{
+  disabled?: boolean
+  placeholder?: string
+}>(), {
+  disabled: false,
+  placeholder: '輸入訊息…',
 })
-const emit = defineEmits(['send'])
+const emit = defineEmits<{
+  'send': [payload: { body: string; attachments: File[]; done: (ok?: boolean) => void }]
+}>()
 
 const body = ref('')
-const files = ref([])
+const files = ref<File[]>([])
 const sending = ref(false)
 
 const ALLOWED_EXT = ['.jpg', '.jpeg', '.png', '.heic', '.heif', '.pdf']
 
-function onPickFile(e) {
-  const fs = Array.from(e.target.files || [])
+function onPickFile(e: Event) {
+  const input = e.target as HTMLInputElement
+  const fs = Array.from(input.files || [])
   for (const f of fs) {
-    const ext = f.name.includes('.') ? '.' + f.name.split('.').pop().toLowerCase() : ''
+    const ext = f.name.includes('.') ? '.' + f.name.split('.').pop()!.toLowerCase() : ''
     if (!ALLOWED_EXT.includes(ext)) {
       ElMessage.warning(`不支援的檔案格式：${f.name}`)
       continue
     }
     files.value.push(f)
   }
-  e.target.value = ''
+  input.value = ''
 }
 
-function removeFile(idx) {
+function removeFile(idx: number) {
   files.value.splice(idx, 1)
 }
 

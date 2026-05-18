@@ -43,20 +43,35 @@
   </el-drawer>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { listToday, administer, skipLog } from '@/api/portalMedications'
 
-defineProps({
-  show: { type: Boolean, default: false },
+interface MedItem {
+  log_id: number | string
+  scheduled_time?: string
+  student_name?: string
+  medication_name?: string
+  dose?: string
+  note?: string | null
+  status?: string
+}
+
+withDefaults(defineProps<{
+  show?: boolean
+}>(), {
+  show: false,
 })
-const emit = defineEmits(['update:show', 'done'])
+const emit = defineEmits<{
+  'update:show': [value: boolean]
+  'done': []
+}>()
 
 const loading = ref(false)
-const working = ref(null)
+const working = ref<number | string | null>(null)
 const error = ref('')
-const pending = ref([])
+const pending = ref<MedItem[]>([])
 
 async function load() {
   loading.value = true
@@ -70,17 +85,17 @@ async function load() {
       }
     }
     pending.value = items
-  } catch (e) {
-    error.value = e?.message || '載入失敗'
+  } catch (e: unknown) {
+    error.value = (e instanceof Error ? e.message : null) || '載入失敗'
   } finally {
     loading.value = false
   }
 }
 
-async function onAdminister(logId) {
+async function onAdminister(logId: number | string) {
   working.value = logId
   try {
-    await administer(logId, {})
+    await administer(Number(logId), {})
     pending.value = pending.value.filter((i) => i.log_id !== logId)
     emit('done')
     ElMessage.success('已執行')
@@ -91,7 +106,7 @@ async function onAdminister(logId) {
   }
 }
 
-async function onSkip(logId) {
+async function onSkip(logId: number | string) {
   let reason = ''
   try {
     const result = await ElMessageBox.prompt('未執行原因（必填）', '備註', {
@@ -99,13 +114,14 @@ async function onSkip(logId) {
       cancelButtonText: '取消',
       inputValidator: (v) => (v && v.trim() ? true : '請輸入原因'),
     })
-    reason = result.value?.trim() || ''
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    reason = (result as any).value?.trim() || ''
   } catch {
     return // user cancelled
   }
   working.value = logId
   try {
-    await skipLog(logId, { reason })
+    await skipLog(Number(logId), { reason })
     pending.value = pending.value.filter((i) => i.log_id !== logId)
     emit('done')
     ElMessage.success('已標記為未執行')

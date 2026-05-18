@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /**
  * 教師端底部彈窗（snap points 進階版）。
  *
@@ -30,37 +30,42 @@
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useSlots, watch } from 'vue'
 
-const props = defineProps({
-  modelValue: { type: Boolean, default: false },
-  title: { type: String, default: '' },
-  snapPoints: {
-    type: Array,
-    default: () => ['mid', 'full'],
-    validator: (arr) => arr.every((s) => ['peek', 'mid', 'full'].includes(s)),
-  },
-  defaultSnap: {
-    type: String,
-    default: 'mid',
-    validator: (v) => ['peek', 'mid', 'full'].includes(v),
-  },
-  dismissible: { type: Boolean, default: true },
-  showHandle: { type: Boolean, default: true },
+type SnapPoint = 'peek' | 'mid' | 'full'
+
+const props = withDefaults(defineProps<{
+  modelValue?: boolean
+  title?: string
+  snapPoints?: SnapPoint[]
+  defaultSnap?: SnapPoint
+  dismissible?: boolean
+  showHandle?: boolean
+}>(), {
+  modelValue: false,
+  title: '',
+  snapPoints: () => ['mid', 'full'],
+  defaultSnap: 'mid',
+  dismissible: true,
+  showHandle: true,
 })
 
-const emit = defineEmits(['update:modelValue', 'close', 'snap-change'])
+const emit = defineEmits<{
+  'update:modelValue': [value: boolean]
+  'close': []
+  'snap-change': [snap: SnapPoint]
+}>()
 
 const slots = useSlots()
-const dialogRef = ref(null)
-const previouslyFocused = ref(null)
+const dialogRef = ref<HTMLElement | null>(null)
+const previouslyFocused = ref<HTMLElement | null>(null)
 const headerId = `pt-bsheet-${Math.random().toString(36).slice(2, 9)}`
 
-const SNAP_HEIGHT = { peek: '30vh', mid: '60vh', full: '92vh' }
+const SNAP_HEIGHT: Record<SnapPoint, string> = { peek: '30vh', mid: '60vh', full: '92vh' }
 // SNAP_ORDER 由上至下：full（最高）→ mid → peek（最低）。
 // 「向下吸附」= index + 1（變矮）；「向上吸附」= index - 1（變高）。
-const SNAP_ORDER = ['full', 'mid', 'peek']
-const currentSnap = ref(props.defaultSnap)
+const SNAP_ORDER: SnapPoint[] = ['full', 'mid', 'peek']
+const currentSnap = ref<SnapPoint>(props.defaultSnap)
 
-function setSnap(snap) {
+function setSnap(snap: SnapPoint) {
   if (!props.snapPoints.includes(snap)) return
   currentSnap.value = snap
   emit('snap-change', snap)
@@ -72,7 +77,7 @@ const dragStartTime = ref(0)
 const dragOffset = ref(0)
 const isDragging = ref(false)
 
-function onDragStart(e) {
+function onDragStart(e: PointerEvent) {
   if (keyboardLocked.value) return
   isDragging.value = true
   dragStartY.value = e.clientY
@@ -83,13 +88,13 @@ function onDragStart(e) {
   window.addEventListener('pointercancel', onDragEnd, { once: true })
 }
 
-function onDragMove(e) {
+function onDragMove(e: PointerEvent) {
   if (!isDragging.value) return
   // 上限 -200px：避免拖太上方造成不自然的飛離
   dragOffset.value = Math.max(-200, e.clientY - dragStartY.value)
 }
 
-function onDragEnd(e) {
+function onDragEnd(e: PointerEvent) {
   window.removeEventListener('pointermove', onDragMove)
   if (!isDragging.value) return
   const delta = e.clientY - dragStartY.value
@@ -176,16 +181,16 @@ function close() {
   emit('close')
 }
 
-function getFocusableElements() {
+function getFocusableElements(): HTMLElement[] {
   if (!dialogRef.value) return []
   return Array.from(
-    dialogRef.value.querySelectorAll(
+    dialogRef.value.querySelectorAll<HTMLElement>(
       'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
     ),
   ).filter((el) => !el.classList.contains('pt-bsheet-handle'))
 }
 
-function trapFocus(e) {
+function trapFocus(e: KeyboardEvent) {
   const focusable = getFocusableElements()
   if (focusable.length === 0) {
     e.preventDefault()
@@ -207,7 +212,7 @@ function trapFocus(e) {
 import { useBodyLock } from '@/composables/useBodyLock'
 const { lock: lockBody, unlock: unlockBody } = useBodyLock()
 
-function onKeydown(e) {
+function onKeydown(e: KeyboardEvent) {
   if (e.key === 'Escape' && props.dismissible) {
     e.stopPropagation()
     close()
@@ -220,7 +225,7 @@ watch(
   () => props.modelValue,
   async (isOpen) => {
     if (isOpen) {
-      previouslyFocused.value = document.activeElement
+      previouslyFocused.value = document.activeElement as HTMLElement | null
       lockBody()
       await nextTick()
       const focusable = getFocusableElements()

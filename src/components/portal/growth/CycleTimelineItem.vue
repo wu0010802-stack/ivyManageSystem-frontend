@@ -1,20 +1,41 @@
-<script setup>
+<script setup lang="ts">
 import { ref } from 'vue'
 import { gradeStyle, cycleLabel } from '@/composables/usePortalAppraisal'
 import ItemRadarChart from './ItemRadarChart.vue'
 import ScoreItemsTable from './ScoreItemsTable.vue'
 
-const props = defineProps({
-  item: { type: Object, required: true },
-  fetchDetail: { type: Function, required: true },
-})
+interface ScoreItem { label?: string; sign?: string; score_delta?: number | string | null; raw_value?: unknown; note?: string | null; [key: string]: unknown }
+
+interface AppraisalCycle {
+  cycle_id?: number | string
+  academic_year?: number | string
+  semester?: number | string
+  is_visible?: boolean
+  is_excluded?: boolean
+  is_rejected?: boolean
+  exclude_reason?: string
+  summary_status?: string
+  total_score?: number | string
+  grade?: string
+  [key: string]: unknown
+}
+
+interface CycleDetail {
+  score_items?: ScoreItem[]
+  [key: string]: unknown
+}
+
+const props = defineProps<{
+  item: AppraisalCycle
+  fetchDetail: (cycleId: number | string) => Promise<unknown>
+}>()
 
 const expanded = ref(false)
-const detail = ref(null)
+const detail = ref<CycleDetail | null>(null)
 const loading = ref(false)
-const error = ref(null)
+const error = ref<string | null>(null)
 
-const label = `${cycleLabel(props.item.academic_year, props.item.semester)}`
+const label = `${cycleLabel(props.item.academic_year ?? '', String(props.item.semester ?? ''))}`
 
 const toggle = async () => {
   // 未 FINALIZED 不可展開
@@ -23,17 +44,20 @@ const toggle = async () => {
   if (expanded.value && !detail.value) {
     loading.value = true
     try {
+      if (props.item.cycle_id == null) return
       const resp = await props.fetchDetail(props.item.cycle_id)
-      detail.value = resp.data
-    } catch (e) {
-      error.value = e.response?.data?.detail || '載入失敗'
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      detail.value = (resp as any)?.data ?? resp
+    } catch (e: unknown) {
+      const axErr = e as { response?: { data?: { detail?: string } } }
+      error.value = axErr?.response?.data?.detail || '載入失敗'
     } finally {
       loading.value = false
     }
   }
 }
 
-const statusLabel = (item) => {
+const statusLabel = (item: AppraisalCycle) => {
   if (item.is_excluded) return `未列入考核（${item.exclude_reason || ''}）`
   if (item.is_rejected) return '考核退簽中'
   if (item.is_visible) return '已核定'
@@ -50,8 +74,8 @@ const statusLabel = (item) => {
       <span
         v-if="item.is_visible"
         class="grade-chip"
-        :style="{ background: gradeStyle(item.grade).color }"
-      >{{ gradeStyle(item.grade).label }}</span>
+        :style="{ background: gradeStyle(item.grade ?? '').color }"
+      >{{ gradeStyle(item.grade ?? '').label }}</span>
       <span v-else class="status-chip">{{ statusLabel(item) }}</span>
       <span class="chevron" :class="{ open: expanded }">▸</span>
     </button>
@@ -59,8 +83,10 @@ const statusLabel = (item) => {
       <div v-if="loading" class="loading">載入中…</div>
       <div v-else-if="error" class="error">{{ error }}</div>
       <template v-else-if="detail">
-        <ItemRadarChart :items="detail.score_items" />
-        <ScoreItemsTable :items="detail.score_items" />
+        <!-- eslint-disable-next-line @typescript-eslint/no-explicit-any -->
+        <ItemRadarChart :items="(detail.score_items ?? []) as any[]" />
+        <!-- eslint-disable-next-line @typescript-eslint/no-explicit-any -->
+        <ScoreItemsTable :items="(detail.score_items ?? []) as any[]" />
       </template>
     </div>
   </article>

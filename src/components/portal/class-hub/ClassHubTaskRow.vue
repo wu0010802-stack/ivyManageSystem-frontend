@@ -33,10 +33,10 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 
-const KIND_META = {
+const KIND_META: Record<string, { icon: string; label: string }> = {
   attendance:   { icon: '📋', label: '到園點名' },
   medication:   { icon: '💊', label: '用藥執行' },
   observation:  { icon: '🔍', label: '課堂觀察' },
@@ -44,12 +44,15 @@ const KIND_META = {
   contact_book: { icon: '📓', label: '每日聯絡簿' },
 }
 
-const props = defineProps({
-  kind: { type: String, required: true },
-  count: { type: Number, default: 0 },
-  actionMode: { type: String, default: 'sheet' },
+const props = withDefaults(defineProps<{
+  kind: string
+  count?: number
+  actionMode?: string
+}>(), {
+  count: 0,
+  actionMode: 'sheet',
 })
-defineEmits(['open-sheet', 'jump-page'])
+defineEmits<{ 'open-sheet': []; 'jump-page': [] }>()
 
 const meta = computed(
   () => KIND_META[props.kind] ?? { icon: '•', label: props.kind }

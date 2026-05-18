@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 
 /**
@@ -10,16 +10,14 @@ import { computed } from 'vue'
  *
  * Phase 6 會由 useOfflineQueue 注入 count + status。
  */
-const props = defineProps({
-  count: { type: Number, required: true },
-  status: {
-    type: String,
-    default: 'pending',
-    validator: (v) => ['pending', 'failed'].includes(v),
-  },
+const props = withDefaults(defineProps<{
+  count: number
+  status?: 'pending' | 'failed'
+}>(), {
+  status: 'pending',
 })
 
-defineEmits(['click'])
+defineEmits<{ 'click': [] }>()
 
 const display = computed(() => (props.count > 99 ? '99+' : String(props.count)))
 const visible = computed(() => props.count > 0)

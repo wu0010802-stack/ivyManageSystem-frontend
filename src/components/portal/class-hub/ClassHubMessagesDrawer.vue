@@ -26,18 +26,18 @@
 
       <div class="thread-list">
         <p v-if="!store.threadsLoaded" class="empty">讀取中…</p>
-        <p v-else-if="store.threads.length === 0" class="empty">
+        <p v-else-if="typedThreads.length === 0" class="empty">
           尚無對話。點選「+ 新訊息」主動聯繫家長。
         </p>
         <button
-          v-for="t in store.threads"
+          v-for="t in typedThreads"
           :key="t.id"
           class="thread-row pt-card"
           @click="onThreadClick(t)"
         >
           <div class="row-top">
             <strong>{{ t.student_name || '學生' }}</strong>
-            <span v-if="t.unread_count > 0" class="unread-dot">{{ t.unread_count }}</span>
+            <span v-if="(t.unread_count ?? 0) > 0" class="unread-dot">{{ t.unread_count }}</span>
           </div>
           <div class="row-mid">
             <span class="parent">家長：{{ t.parent_name || '—' }}</span>
@@ -79,9 +79,9 @@
           <el-select v-model="selectedClassroomId" placeholder="選擇班級" style="width: 100%">
             <el-option
               v-for="c in classrooms"
-              :key="c.classroom_id"
+              :key="c.classroom_id ?? ''"
               :label="c.classroom_name"
-              :value="c.classroom_id"
+              :value="(c.classroom_id as number | string)"
             />
           </el-select>
         </el-form-item>
@@ -124,7 +124,7 @@
   </el-drawer>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
 import { usePortalMessagesStore } from '@/stores/portalMessages'
@@ -133,15 +133,42 @@ import { getMyStudents } from '@/api/portal'
 import MessageBubble from '@/components/portal/messages/MessageBubble.vue'
 import MessageComposer from '@/components/portal/messages/MessageComposer.vue'
 
-const props = defineProps({
-  modelValue: { type: Boolean, default: false },
-  threadId: { type: Number, default: null },
+interface Thread {
+  id: number
+  student_name?: string
+  parent_name?: string
+  unread_count?: number
+  last_message_preview?: string
+  last_message_at?: string | null
+  [key: string]: unknown
+}
+
+interface ClassroomStudent {
+  id: number | string
+  name?: string
+  parent_name?: string
+  [key: string]: unknown
+}
+
+interface ClassroomEntry {
+  classroom_id?: number | string
+  classroom_name?: string
+  students?: ClassroomStudent[]
+  [key: string]: unknown
+}
+
+const props = withDefaults(defineProps<{
+  modelValue?: boolean
+  threadId?: number | null
+}>(), {
+  modelValue: false,
+  threadId: null,
 })
-const emit = defineEmits([
-  'update:modelValue',
-  'open-thread',
-  'close-thread',
-])
+const emit = defineEmits<{
+  'update:modelValue': [value: boolean]
+  'open-thread': [id: number]
+  'close-thread': []
+}>()
 
 const store = usePortalMessagesStore()
 
@@ -165,13 +192,15 @@ const drawerTitle = computed(() =>
   currentView.value === 'list' ? '家長訊息' : '',
 )
 
+const typedThreads = computed(() => store.threads as unknown as Thread[])
 const activeThread = computed(() =>
-  store.threads.find((t) => t.id === props.threadId),
+  typedThreads.value.find((t) => t.id === props.threadId),
 )
 const bucket = computed(
-  () => store.messagesByThread[props.threadId] || { items: [], hasMore: false },
+  () => store.messagesByThread[props.threadId as unknown as string] || { items: [], hasMore: false },
 )
-const orderedMessages = computed(() => [...bucket.value.items].reverse())
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const orderedMessages = computed(() => [...bucket.value.items].reverse() as any[])
 
 // drawer 第一次開啟時 fetch threads；之後由 store 維持
 async function onOpen() {
@@ -194,7 +223,7 @@ watch(
   { immediate: true },
 )
 
-function onThreadClick(t) {
+function onThreadClick(t: { id: number }) {
   emit('open-thread', t.id)
 }
 
@@ -202,30 +231,33 @@ function emitBackToList() {
   emit('close-thread')
 }
 
-async function onSend({ body, attachments, done }) {
+async function onSend({ body, attachments, done }: { body: string; attachments: File[]; done?: (ok?: boolean) => void }) {
   try {
-    await store.send(props.threadId, body, attachments)
+    await store.send(props.threadId as number, body, attachments)
     done?.(true)
   } catch (e) {
-    ElMessage.error(e?.response?.data?.detail || '送出失敗')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ElMessage.error((e as any)?.response?.data?.detail || '送出失敗')
     done?.(false)
   }
 }
 
-async function onRecall(messageId) {
+async function onRecall(messageId: number | string | undefined) {
+  if (messageId == null) return
   try {
-    await store.recall(messageId)
+    await store.recall(messageId as number)
     ElMessage.success('已撤回')
   } catch (e) {
-    ElMessage.error(e?.response?.data?.detail || '撤回失敗')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ElMessage.error((e as any)?.response?.data?.detail || '撤回失敗')
   }
 }
 
 async function loadMore() {
-  await store.fetchMessages(props.threadId)
+  await store.fetchMessages(props.threadId as number)
 }
 
-function fmtTime(iso) {
+function fmtTime(iso: string | null | undefined) {
   if (!iso) return ''
   const d = new Date(iso)
   return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
@@ -233,14 +265,14 @@ function fmtTime(iso) {
 
 // 新對話 dialog state
 const showNewDialog = ref(false)
-const classrooms = ref([])
-const selectedClassroomId = ref(null)
-const selectedStudentId = ref(null)
+const classrooms = ref<ClassroomEntry[]>([])
+const selectedClassroomId = ref<number | null>(null)
+const selectedStudentId = ref<number | null>(null)
 const parentUserIdInput = ref('')
 const newBody = ref('')
 const sending = ref(false)
 
-const studentsInSelected = computed(() => {
+const studentsInSelected = computed<ClassroomStudent[]>(() => {
   const c = classrooms.value.find((cr) => cr.classroom_id === selectedClassroomId.value)
   return c?.students || []
 })
@@ -250,7 +282,8 @@ async function openNew() {
   if (classrooms.value.length === 0) {
     try {
       const res = await getMyStudents()
-      classrooms.value = res.data?.classrooms || []
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      classrooms.value = (res.data?.classrooms || []) as ClassroomEntry[]
     } catch (e) {
       ElMessage.error('讀取班級學生失敗')
     }
@@ -273,9 +306,11 @@ async function submitNew() {
     newBody.value = ''
     selectedStudentId.value = null
     parentUserIdInput.value = ''
-    emit('open-thread', data.thread.id)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    emit('open-thread', (data as any).thread.id)
   } catch (e) {
-    ElMessage.error(e?.response?.data?.detail || '發送失敗')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ElMessage.error((e as any)?.response?.data?.detail || '發送失敗')
   } finally {
     sending.value = false
   }

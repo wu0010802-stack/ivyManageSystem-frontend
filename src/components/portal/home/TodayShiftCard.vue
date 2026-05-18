@@ -1,8 +1,17 @@
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 
-const props = defineProps({
-  today: { type: Object, default: () => ({}) },
+interface TodayData {
+  date?: string | null
+  shift?: { name?: string; work_start?: string; work_end?: string } | null
+  attendance?: { punch_in_at?: string | null; punch_out_at?: string | null; is_anomaly?: boolean } | null
+  [key: string]: unknown
+}
+
+const props = withDefaults(defineProps<{
+  today?: TodayData
+}>(), {
+  today: () => ({}),
 })
 
 const dateLabel = computed(() => {
@@ -23,7 +32,7 @@ const punchInLabel = computed(() => formatTime(props.today?.attendance?.punch_in
 const punchOutLabel = computed(() => formatTime(props.today?.attendance?.punch_out_at))
 const isAnomaly = computed(() => Boolean(props.today?.attendance?.is_anomaly))
 
-function formatTime(iso) {
+function formatTime(iso: string | null | undefined) {
   if (!iso) return '—'
   const d = new Date(iso)
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`

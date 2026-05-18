@@ -1,18 +1,37 @@
-<script setup>
-defineProps({
-    requests: { type: Array, required: true },
-    respondLoading: { type: Boolean, default: false },
+<script setup lang="ts">
+interface SubstituteRequest {
+  id: number | string
+  requester_name?: string
+  leave_type_label?: string
+  substitute_status?: string
+  start_date?: string
+  end_date?: string
+  leave_hours?: number | string
+  reason?: string | null
+  [key: string]: unknown
+}
+
+const props = withDefaults(defineProps<{
+  requests: SubstituteRequest[]
+  respondLoading?: boolean
+}>(), {
+  respondLoading: false,
 })
 
-const emit = defineEmits(['respond'])
+const emit = defineEmits<{
+  'respond': [id: number | string, action: string]
+}>()
 
-const statusLabel = (s) => ({
-    pending: '待回應', accepted: '已接受', rejected: '已拒絕', waived: '主管略過', not_required: '—',
-}[s] || s)
+const statusLabel = (s: string | undefined | null) => ({
+  pending: '待回應', accepted: '已接受', rejected: '已拒絕', waived: '主管略過', not_required: '—',
+} as Record<string, string>)[s ?? ''] || s || ''
 
-const statusTagType = (s) => ({
+const statusTagType = (s: string | undefined | null): 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined => {
+  const map: Record<string, 'primary' | 'success' | 'warning' | 'info' | 'danger'> = {
     pending: 'warning', accepted: 'success', rejected: 'danger', waived: 'info', not_required: 'info',
-}[s] || '')
+  }
+  return (s && map[s]) || undefined
+}
 </script>
 
 <template>

@@ -1,15 +1,26 @@
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 import { gradeStyle, cycleLabel } from '@/composables/usePortalAppraisal'
 
-const props = defineProps({
-  item: { type: Object, required: true },
-  delta: { type: Number, default: null },
+interface SummaryItem {
+  grade?: string
+  academic_year?: number | string
+  semester?: number | string
+  total_score?: number | string
+  bonus_amount?: number | string
+  [key: string]: unknown
+}
+
+const props = withDefaults(defineProps<{
+  item: SummaryItem
+  delta?: number | null
+}>(), {
+  delta: null,
 })
 
-const style = computed(() => gradeStyle(props.item.grade))
+const style = computed(() => gradeStyle(props.item.grade ?? ''))
 const label = computed(() =>
-  cycleLabel(props.item.academic_year, props.item.semester),
+  cycleLabel(props.item.academic_year ?? '', String(props.item.semester ?? '')),
 )
 
 const deltaText = computed(() => {

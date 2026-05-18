@@ -1,26 +1,40 @@
-<script setup>
+<script setup lang="ts">
 import { ref, watch, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getMeasurementsLatest, createMeasurement } from '@/api/portalMeasurements'
 
-const props = defineProps({
-  modelValue: { type: Boolean, required: true },
-})
-const emit = defineEmits(['update:modelValue', 'done'])
+interface MeasurementRow {
+  student_id: number | string
+  name?: string
+  height_cm: string | number
+  weight_kg: string | number
+  last_measurement?: { measured_on?: string; height_cm?: string | number | null; weight_kg?: string | number | null } | null
+  status: 'idle' | 'sending' | 'ok' | 'failed'
+  error: string
+}
+
+const props = defineProps<{
+  modelValue: boolean
+}>()
+const emit = defineEmits<{
+  'update:modelValue': [value: boolean]
+  'done': []
+}>()
 
 const today = () => new Date().toISOString().slice(0, 10)
 
 const measuredOn = ref(today())
-const rows = ref([]) // { student_id, name, height_cm, weight_kg, last_measurement, status, error }
+const rows = ref<MeasurementRow[]>([])
 const loading = ref(false)
 const submitting = ref(false)
-const progress = ref({ done: 0, total: 0 })
+const progress = ref<{ done: number; total: number }>({ done: 0, total: 0 })
 
 async function load() {
   loading.value = true
   try {
     const { data } = await getMeasurementsLatest()
-    rows.value = data.map((r) => ({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    rows.value = data.map((r: any) => ({
       student_id: r.student_id,
       name: r.name,
       height_cm: '',
@@ -53,18 +67,19 @@ const filledRows = computed(() =>
 const canSubmit = computed(() => filledRows.value.length > 0 && !submitting.value)
 const failedRows = computed(() => rows.value.filter((r) => r.status === 'failed'))
 
-async function submitRow(row) {
+async function submitRow(row: MeasurementRow) {
   row.status = 'sending'
   row.error = ''
-  const payload = { measured_on: measuredOn.value }
+  const payload: Record<string, string> = { measured_on: measuredOn.value }
   if (row.height_cm !== '') payload.height_cm = String(row.height_cm)
   if (row.weight_kg !== '') payload.weight_kg = String(row.weight_kg)
   try {
-    await createMeasurement(row.student_id, payload)
+    await createMeasurement(Number(row.student_id), payload)
     row.status = 'ok'
   } catch (e) {
     row.status = 'failed'
-    row.error = e?.response?.data?.detail || '未知錯誤'
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    row.error = (e as any)?.response?.data?.detail || '未知錯誤'
   }
 }
 

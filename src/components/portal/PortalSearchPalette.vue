@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { Search } from '@element-plus/icons-vue'
@@ -22,7 +22,13 @@ const COMMANDS = [
 ]
 
 const query = ref('')
-const results = ref({
+const results = ref<{
+  students: Record<string, unknown>[]
+  guardians: Record<string, unknown>[]
+  messages: Record<string, unknown>[]
+  contact_book: Record<string, unknown>[]
+  announcements: Record<string, unknown>[]
+}>({
   students: [],
   guardians: [],
   messages: [],
@@ -31,9 +37,9 @@ const results = ref({
 })
 const loading = ref(false)
 const activeIndex = ref(0)
-const inputRef = ref(null)
+const inputRef = ref<HTMLInputElement | null>(null)
 
-let debounceTimer = null
+let debounceTimer: ReturnType<typeof setTimeout> | null = null
 
 const commandResults = computed(() => {
   const q = query.value.trim().toLowerCase()
@@ -92,12 +98,13 @@ watch(query, (q) => {
   }, 300)
 })
 
-function selectItem(item) {
+function selectItem(item: { kind: string; payload: Record<string, unknown> } | null | undefined) {
   if (!item) return
   closePalette()
   switch (item.kind) {
     case 'command':
-      router.push(item.payload.route)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      router.push(item.payload.route as any)
       break
     case 'student':
       router.push(`/portal/students/${item.payload.id}/detail`)
@@ -106,18 +113,18 @@ function selectItem(item) {
       router.push(`/portal/students/${item.payload.student_id}/detail#guardians`)
       break
     case 'message':
-      router.push({ path: '/portal/messages', query: { thread_id: item.payload.thread_id } })
+      router.push({ path: '/portal/messages', query: { thread_id: item.payload.thread_id as string } })
       break
     case 'contact_book':
-      router.push({ path: '/portal/contact-book', query: { log_date: item.payload.log_date } })
+      router.push({ path: '/portal/contact-book', query: { log_date: item.payload.log_date as string } })
       break
     case 'announcement':
-      router.push({ path: '/portal/announcements', query: { id: item.payload.id } })
+      router.push({ path: '/portal/announcements', query: { id: item.payload.id as string } })
       break
   }
 }
 
-function onKeydown(e) {
+function onKeydown(e: KeyboardEvent) {
   if (e.key === 'Escape') {
     e.preventDefault()
     closePalette()

@@ -1,16 +1,34 @@
-<script setup>
+<script setup lang="ts">
 import { ref, watch, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { createMilestone } from '@/api/portalMilestones'
 
-const props = defineProps({
-  modelValue: { type: Boolean, required: true },
-  studentId: { type: [Number, String], required: true },
-  studentName: { type: String, default: '' },
-})
-const emit = defineEmits(['update:modelValue', 'done', 'next'])
+interface MilestoneType {
+  value: string
+  emoji: string
+  label: string
+}
 
-const TYPES = [
+interface MilestoneForm {
+  milestone_type: string
+  achieved_on: string
+  title: string
+  description: string
+  icon: string | null
+}
+
+const props = defineProps<{
+  modelValue: boolean
+  studentId: number | string
+  studentName?: string
+}>()
+const emit = defineEmits<{
+  'update:modelValue': [value: boolean]
+  'done': []
+  'next': []
+}>()
+
+const TYPES: MilestoneType[] = [
   { value: 'birthday', emoji: '🎂', label: '生日' },
   { value: 'first_day', emoji: '🌱', label: '入學第一天' },
   { value: 'perfect_attendance_month', emoji: '🏆', label: '全勤月' },
@@ -20,11 +38,11 @@ const TYPES = [
   { value: 'graduation', emoji: '🎓', label: '畢業' },
   { value: 'custom', emoji: '✨', label: '自訂' },
 ]
-const ICON_OPTIONS = ['🎂', '🌟', '🏆', '🎓', '🎨', '🎵']
+const ICON_OPTIONS: string[] = ['🎂', '🌟', '🏆', '🎓', '🎨', '🎵']
 
 const today = () => new Date().toISOString().slice(0, 10)
 
-const form = ref({
+const form = ref<MilestoneForm>({
   milestone_type: '',
   achieved_on: today(),
   title: '',
@@ -58,19 +76,20 @@ async function submit() {
   if (!canSubmit.value) return
   submitting.value = true
   try {
-    const payload = {
+    const payload: Record<string, string> = {
       milestone_type: form.value.milestone_type,
       achieved_on: form.value.achieved_on,
       title: form.value.title.trim(),
     }
     if (form.value.description) payload.description = form.value.description
     if (form.value.icon) payload.icon = form.value.icon
-    await createMilestone(props.studentId, payload)
+    await createMilestone(Number(props.studentId), payload)
     recorded.value = true
     emit('done')
     ElMessage.success('已記里程碑')
   } catch (e) {
-    ElMessage.error(e?.response?.data?.detail || '記錄失敗')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ElMessage.error((e as any)?.response?.data?.detail || '記錄失敗')
   } finally {
     submitting.value = false
   }

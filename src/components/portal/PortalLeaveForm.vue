@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
@@ -17,11 +17,16 @@ import {
 import { apiError } from '@/utils/error'
 import { useLeaveHoursCalculator } from '@/composables/useLeaveHoursCalculator'
 
-const props = defineProps({
-  allEmployees: { type: Array, default: () => [] },
+const props = withDefaults(defineProps<{
+  allEmployees?: Record<string, unknown>[]
+}>(), {
+  allEmployees: () => [],
 })
 
-const emit = defineEmits(['cancel', 'submitted'])
+const emit = defineEmits<{
+  'cancel': []
+  'submitted': []
+}>()
 
 const form = reactive({
   leave_type: '',
@@ -33,9 +38,11 @@ const form = reactive({
   is_hospitalized: false,
 })
 
-const formRef = ref(null)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const formRef = ref<any>(null)
 const submitLoading = ref(false)
-const fileList = ref([])
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const fileList = ref<any[]>([])
 const uploadRef = ref(null)
 
 const _QUOTA_TYPES_LOCAL = new Set(['annual', 'sick', 'menstrual', 'personal', 'family_care'])
@@ -49,15 +56,17 @@ const {
 } = useLeaveHoursCalculator({
   form,
   formRef,
-  fetchWorkdayHoursFn: (start, end) => getMyWorkdayHours({ start_date: start, end_date: end }),
-  fetchQuotaFn: async (leaveType, year) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  fetchWorkdayHoursFn: ((start: string, end: string) => getMyWorkdayHours({ start_date: start, end_date: end })) as any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  fetchQuotaFn: (async (leaveType: string, year?: number) => {
     if (!leaveType || !_QUOTA_TYPES_LOCAL.has(leaveType)) return null
     const res = await getMyQuotas(year ? { year } : undefined)
-    return res.data.find(q => q.leave_type === leaveType) || null
-  },
+    return res.data.find((q: any) => q.leave_type === leaveType) || null
+  }) as any,
 })
 
-const disabledEndDate = (time) => {
+const disabledEndDate = (time: Date) => {
   if (!form.start_date) return false
   const s = new Date(form.start_date)
   s.setHours(0, 0, 0, 0)
@@ -75,7 +84,7 @@ const requestedCalendarDays = computed(() =>
 const attachmentRequired = computed(() =>
   leaveRequiresAttachment(form.start_date, form.end_date)
 )
-const selectedLeaveRule = computed(() => LEAVE_RULE_HINTS[form.leave_type] || '')
+const selectedLeaveRule = computed(() => (LEAVE_RULE_HINTS as Record<string, string>)[form.leave_type] || '')
 const attachmentHint = computed(() => {
   if (!form.start_date || !form.end_date) return '請假超過 2 天時需檢附證明附件'
   return attachmentRequired.value
@@ -84,6 +93,10 @@ const attachmentHint = computed(() => {
 })
 
 const canSubmit = computed(() => !quotaExceeded.value)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const quotaInfoAny = computed(() => quotaInfo.value as any)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const breakdownAny = computed(() => calcBreakdown.value as any[])
 
 const rules = {
   leave_type: [{ required: true, message: '請選擇假別', trigger: 'change' }],
@@ -92,7 +105,8 @@ const rules = {
   leave_hours: [
     { required: true, message: '請輸入時數', trigger: 'blur' },
     {
-      validator: (rule, value, callback) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      validator: (_rule: unknown, value: number, callback: (err?: Error) => void) => {
         if (value < 0.5) callback(new Error('請假時數至少 0.5 小時'))
         else if (Math.round(value * 2) !== value * 2) callback(new Error('請假時數必須為 0.5 小時的倍數'))
         else callback()
@@ -120,17 +134,18 @@ const handleExceed = () => {
   ElMessage.warning(`最多上傳 5 個附件`)
 }
 
-const handleAttachChange = (file, newFileList) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const handleAttachChange = (file: any, newFileList: any[]) => {
   const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/heic', 'application/pdf']
   const maxSize = 5 * 1024 * 1024
   if (!allowed.includes(file.raw?.type) && !file.name.match(/\.(heic|heif)$/i)) {
     ElMessage.error(`${file.name}：僅支援 JPG、PNG、GIF、HEIC、PDF 格式`)
-    fileList.value = newFileList.filter(f => f.uid !== file.uid)
+    fileList.value = newFileList.filter((f: any) => f.uid !== file.uid)
     return
   }
   if ((file.raw?.size ?? 0) > maxSize) {
     ElMessage.error(`${file.name} 超過 5 MB 限制`)
-    fileList.value = newFileList.filter(f => f.uid !== file.uid)
+    fileList.value = newFileList.filter((f: any) => f.uid !== file.uid)
   }
 }
 
@@ -181,7 +196,8 @@ const submitLeave = async () => {
     })
     const leaveId = res.data.id
 
-    const rawFiles = fileList.value.map(f => f.raw).filter(Boolean)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rawFiles: File[] = fileList.value.map((f: any) => f.raw).filter((f: any): f is File => !!f)
     if (rawFiles.length > 0) {
       const formData = new FormData()
       rawFiles.forEach(f => formData.append('files', f))
@@ -211,14 +227,14 @@ const submitLeave = async () => {
           <span v-if="quotaLoading" style="color: var(--el-color-info);">
             <el-icon class="is-loading" style="vertical-align:middle;"><Loading /></el-icon> 查詢配額…
           </span>
-          <template v-else-if="quotaInfo">
-            <el-tag size="small" :type="quotaInfo.remaining_hours <= 0 ? 'danger' : quotaInfo.remaining_hours < 16 ? 'warning' : 'success'" style="margin-right:6px;">
-              剩餘 {{ quotaInfo.remaining_hours }}h
+          <template v-else-if="quotaInfoAny">
+            <el-tag size="small" :type="quotaInfoAny.remaining_hours <= 0 ? 'danger' : quotaInfoAny.remaining_hours < 16 ? 'warning' : 'success'" style="margin-right:6px;">
+              剩餘 {{ quotaInfoAny.remaining_hours }}h
             </el-tag>
             <span style="color:var(--el-text-color-secondary);">
-              已用 {{ quotaInfo.used_hours }}h
-              <template v-if="quotaInfo.pending_hours > 0">／待審 {{ quotaInfo.pending_hours }}h</template>
-              ／總計 {{ quotaInfo.total_hours }}h
+              已用 {{ quotaInfoAny.used_hours }}h
+              <template v-if="quotaInfoAny.pending_hours > 0">／待審 {{ quotaInfoAny.pending_hours }}h</template>
+              ／總計 {{ quotaInfoAny.total_hours }}h
             </span>
             <div v-if="afterApplyRemaining !== null" style="margin-top: 5px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
               <span style="color: var(--el-text-color-secondary);">本次申請 {{ form.leave_hours }}h 後剩餘：</span>
@@ -312,15 +328,15 @@ const submitLeave = async () => {
         <el-alert
           v-if="quotaExceeded"
           type="error"
-          :title="`配額不足，無法送出：申請 ${form.leave_hours}h，超出可用額度 ${Math.round((form.leave_hours - quotaInfo.remaining_hours) * 10) / 10}h`"
+          :title="`配額不足，無法送出：申請 ${form.leave_hours}h，超出可用額度 ${Math.round((form.leave_hours - (quotaInfoAny?.remaining_hours ?? 0)) * 10) / 10}h`"
           show-icon :closable="false"
           style="margin-top: 6px;"
         />
       </el-form-item>
 
-      <el-form-item v-if="!calcLoading && calcBreakdown.length && calcBreakdown.length <= 14" label="每日明細">
+      <el-form-item v-if="!calcLoading && breakdownAny.length && breakdownAny.length <= 14" label="每日明細">
         <div class="portal-breakdown">
-          <div v-for="day in calcBreakdown" :key="day.date" class="pb-row" :class="day.type">
+          <div v-for="day in breakdownAny" :key="day.date" class="pb-row" :class="day.type">
             <span class="pb-date">{{ day.date }}</span>
             <el-tag size="small" :type="day.type==='workday' ? 'info' : day.type==='holiday' ? 'danger' : 'info'" class="pb-tag">
               {{ day.type==='workday' ? (day.shift||'預設班')+(day.work_start?` ${day.work_start}–${day.work_end}`:'') : day.type==='holiday' ? day.holiday_name : '週末' }}
@@ -337,7 +353,7 @@ const submitLeave = async () => {
           placeholder="請選擇代理人（選填）"
           style="width: 100%;"
         >
-          <el-option v-for="emp in allEmployees" :key="emp.id" :label="emp.name" :value="emp.id" />
+          <el-option v-for="emp in allEmployees" :key="(emp.id as number | string)" :label="(emp.name as string)" :value="(emp.id as number | string)" />
         </el-select>
         <div style="margin-top: 4px; font-size: 12px; color: var(--el-text-color-secondary);">
           選填：指定代理人後，需代理人接受後主管才能核准假單

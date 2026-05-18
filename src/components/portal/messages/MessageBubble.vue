@@ -1,12 +1,33 @@
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 
-const props = defineProps({
-  message: { type: Object, required: true },
-  ownRole: { type: String, default: 'teacher' },
+interface MessageAttachment {
+  id?: number | string
+  url?: string
+  original_filename?: string
+}
+
+interface Message {
+  id?: number | string
+  sender_role?: string
+  created_at?: string | null
+  deleted?: boolean
+  body?: string
+  _pending?: boolean
+  attachments?: MessageAttachment[]
+  [key: string]: unknown
+}
+
+const props = withDefaults(defineProps<{
+  message: Message
+  ownRole?: string
+}>(), {
+  ownRole: 'teacher',
 })
 
-const emit = defineEmits(['recall'])
+const emit = defineEmits<{
+  'recall': [messageId: number | string | undefined]
+}>()
 
 const isOwn = computed(() => props.message.sender_role === props.ownRole)
 const time = computed(() => {

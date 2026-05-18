@@ -1,10 +1,31 @@
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 
-const props = defineProps({
-  card: { type: Object, required: true },
-})
+interface ContactBook {
+  roster?: number
+  published?: number
+  percentage?: number
+  draft?: number
+}
+
+interface ClassroomCard {
+  classroom_id?: number | string
+  classroom_name?: string
+  student_count?: number
+  contact_book?: ContactBook
+  attendance_called_today?: boolean
+  pending_dismissal_calls?: number
+  pending_medications_today?: number
+  consecutive_absences?: { student_id?: number; student_name?: string; days?: number }[]
+  upcoming_birthdays_7d?: { student_id?: number; student_name?: string; days_until?: number }[]
+  allergy_alerts?: { student_id?: number; student_name?: string; allergens?: { allergen?: string }[] }[]
+  [key: string]: unknown
+}
+
+const props = defineProps<{
+  card: ClassroomCard
+}>()
 
 const router = useRouter()
 

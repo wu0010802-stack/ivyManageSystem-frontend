@@ -1,10 +1,16 @@
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 import { LineChart } from '@/views/reports/chartSetup'
 
-const props = defineProps({
-  points: { type: Array, required: true },
-})
+interface TrendPoint {
+  label?: string
+  total_score?: number | string
+  [key: string]: unknown
+}
+
+const props = defineProps<{
+  points: TrendPoint[]
+}>()
 
 const chartData = computed(() => ({
   labels: props.points.map((p) => p.label),
@@ -31,7 +37,8 @@ const chartOptions = {
       max: 100,
       ticks: { stepSize: 10 },
       grid: {
-        color: (ctx) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        color: (ctx: any) => {
           // 等第帶：90/80/70/60 加深
           if ([60, 70, 80, 90].includes(ctx.tick.value)) return '#9ca3af'
           return '#e5e7eb'

@@ -1,13 +1,18 @@
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, computed, watch } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { getMyWorkdayHours } from '@/api/portal'
 import { OVERTIME_TYPES as overtimeTypes } from '@/constants/approvalEnums'
 
-const emit = defineEmits(['submit', 'cancel'])
+const emit = defineEmits<{
+  'submit': [payload: Record<string, unknown>]
+  'cancel': []
+}>()
 
-defineProps({
-    loading: { type: Boolean, default: false },
+withDefaults(defineProps<{
+  loading?: boolean
+}>(), {
+  loading: false,
 })
 
 const form = reactive({
@@ -22,9 +27,11 @@ const form = reactive({
 const typeDetecting = ref(false)
 const typeHint = ref('')
 const timeError = ref('')
-const formRef = ref(null)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const formRef = ref<any>(null)
 
-const rules = {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const rules: Record<string, any[]> = {
     overtime_date: [{ required: true, message: '請選擇日期', trigger: 'change' }],
     overtime_type: [{ required: true, message: '請選擇類型', trigger: 'change' }],
     hours: [
@@ -115,7 +122,7 @@ const submit = async () => {
         return
     }
     if (form.hours < 0.5) return
-    const payload = {
+    const payload: Record<string, unknown> = {
         overtime_date: form.overtime_date,
         overtime_type: form.overtime_type,
         hours: form.hours,

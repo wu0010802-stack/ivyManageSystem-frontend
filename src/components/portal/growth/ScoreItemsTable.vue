@@ -1,9 +1,18 @@
-<script setup>
-defineProps({
-  items: { type: Array, required: true },
-})
+<script setup lang="ts">
+interface ScoreItem {
+  label?: string
+  sign?: string
+  score_delta?: number | string | null
+  raw_value?: unknown
+  note?: string | null
+  [key: string]: unknown
+}
 
-const signClass = (sign, delta) => {
+defineProps<{
+  items: ScoreItem[]
+}>()
+
+const signClass = (sign: unknown, delta: unknown) => {
   const n = Number(delta)
   if (n > 0) return 'sign-positive'
   if (n < 0) return 'sign-negative'
