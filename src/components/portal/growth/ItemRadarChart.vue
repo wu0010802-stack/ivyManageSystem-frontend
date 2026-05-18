@@ -1,39 +1,6 @@
 <script setup>
-import { computed, defineAsyncComponent } from 'vue'
-
-// 共用 chartSetup 的 ensureChartReady 並追加雷達 controller
-let _radarReady = null
-const ensureRadarReady = () => {
-  if (!_radarReady) {
-    _radarReady = import('chart.js').then(
-      ({
-        Chart,
-        RadialLinearScale,
-        PointElement,
-        LineElement,
-        Filler,
-        Tooltip,
-        Legend,
-      }) => {
-        Chart.register(
-          RadialLinearScale,
-          PointElement,
-          LineElement,
-          Filler,
-          Tooltip,
-          Legend,
-        )
-      },
-    )
-  }
-  return _radarReady
-}
-
-const RadarChart = defineAsyncComponent(() =>
-  ensureRadarReady().then(() =>
-    import('vue-chartjs').then((m) => m.Radar),
-  ),
-)
+import { computed } from 'vue'
+import { RadarChart } from '@/views/reports/chartSetup'
 
 const props = defineProps({
   items: { type: Array, required: true },

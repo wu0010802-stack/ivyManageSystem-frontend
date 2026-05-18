@@ -5,12 +5,14 @@ let _chartReady = null
 export const ensureChartReady = () => {
   if (!_chartReady) {
     _chartReady = import('chart.js').then(({
-      Chart, CategoryScale, LinearScale, PointElement, LineElement,
-      BarElement, ArcElement, Title, Tooltip, Legend, Filler,
+      Chart, CategoryScale, LinearScale, RadialLinearScale,
+      PointElement, LineElement, BarElement, ArcElement,
+      Title, Tooltip, Legend, Filler,
     }) => {
       Chart.register(
-        CategoryScale, LinearScale, PointElement, LineElement,
-        BarElement, ArcElement, Title, Tooltip, Legend, Filler,
+        CategoryScale, LinearScale, RadialLinearScale,
+        PointElement, LineElement, BarElement, ArcElement,
+        Title, Tooltip, Legend, Filler,
       )
     })
   }
@@ -25,6 +27,9 @@ export const BarChart = defineAsyncComponent(() =>
 )
 export const PieChart = defineAsyncComponent(() =>
   ensureChartReady().then(() => import('vue-chartjs').then(m => m.Pie)),
+)
+export const RadarChart = defineAsyncComponent(() =>
+  ensureChartReady().then(() => import('vue-chartjs').then(m => m.Radar)),
 )
 
 export const MONTH_LABELS = [

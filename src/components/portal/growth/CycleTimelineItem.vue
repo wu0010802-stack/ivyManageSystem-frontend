@@ -50,7 +50,7 @@ const statusLabel = (item) => {
       <span
         v-if="item.is_visible"
         class="grade-chip"
-        :class="gradeStyle(item.grade).className"
+        :style="{ background: gradeStyle(item.grade).color }"
       >{{ gradeStyle(item.grade).label }}</span>
       <span v-else class="status-chip">{{ statusLabel(item) }}</span>
       <span class="chevron" :class="{ open: expanded }">▸</span>
@@ -93,12 +93,6 @@ const statusLabel = (item) => {
   color: #fff;
   font-size: 0.85rem;
 }
-.grade-outstanding { background: #1e7e34; }
-.grade-good { background: #2563eb; }
-.grade-pass { background: #a16207; }
-.grade-warn { background: #c2410c; }
-.grade-fail { background: #b91c1c; }
-.grade-unknown { background: #6b7280; }
 .status-chip {
   padding: 2px 10px;
   border-radius: 999px;

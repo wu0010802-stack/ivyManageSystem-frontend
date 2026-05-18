@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
-import { nextTick } from 'vue'
+import { mount, flushPromises } from '@vue/test-utils'
 import {
   computeDelta,
   cycleLabel,
@@ -101,14 +100,65 @@ describe('PortalGrowthView — empty / all-pending', () => {
         },
       },
     })
-    // 等 fetchAll Promise.all 解析 + 渲染
-    await nextTick()
-    await nextTick()
-    await nextTick()
+    await flushPromises()
     const html = wrapper.html()
     expect(html).toContain('歷年紀錄')
     expect(html).toContain('考核進行中')
     // TrendChart 不該出現（全 DRAFT 時）
     expect(html).not.toContain('歷年趨勢')
+  })
+})
+
+describe('PortalGrowthView — has-finalized', () => {
+  it('renders TrendChart and LatestSummaryCard when at least one cycle is finalized', async () => {
+    vi.resetModules()
+    vi.doMock('@/api/portalAppraisal', () => ({
+      getMyAppraisals: vi.fn(() =>
+        Promise.resolve({
+          data: {
+            items: [
+              {
+                cycle_id: 1, academic_year: 114, semester: 'FIRST',
+                start_date: '2025-08-01', end_date: '2026-01-31',
+                cycle_status: 'CLOSED', participant_id: 1, role_group: 'HEAD_TEACHER',
+                is_excluded: false, exclude_reason: null,
+                summary_status: 'FINALIZED', is_rejected: false, is_visible: true,
+                total_score: '90', grade: 'OUTSTANDING', bonus_amount: '8000',
+              },
+            ],
+          },
+        }),
+      ),
+      getMyAppraisalTrend: vi.fn(() =>
+        Promise.resolve({
+          data: {
+            points: [
+              { cycle_id: 1, academic_year: 114, semester: 'FIRST',
+                label: '114上', total_score: '90', base_score: '70',
+                event_score_sum: '20', grade: 'OUTSTANDING' },
+            ],
+          },
+        }),
+      ),
+      getMyAppraisalDetail: vi.fn(),
+    }))
+    const { default: PortalGrowthView } = await import(
+      '@/views/portal/PortalGrowthView.vue'
+    )
+    const wrapper = mount(PortalGrowthView, {
+      global: {
+        stubs: {
+          'el-button': true,
+          TrendChart: true,
+          LatestSummaryCard: true,
+          CycleTimelineItem: true,
+        },
+      },
+    })
+    await flushPromises()
+    const html = wrapper.html()
+    expect(html).toContain('歷年趨勢')
+    expect(html).toContain('latest-summary-card-stub')
+    expect(html).toContain('trend-chart-stub')
   })
 })

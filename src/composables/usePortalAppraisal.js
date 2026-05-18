@@ -42,10 +42,11 @@ export function gradeStyle(grade) {
 export function computeDelta(items, index) {
   const current = items[index]
   if (!current || !current.is_visible) return null
+  if (current.total_score == null) return null
   for (let i = index + 1; i < items.length; i++) {
-    if (items[i].is_visible) {
-      const a = Number(current.total_score ?? 0)
-      const b = Number(items[i].total_score ?? 0)
+    if (items[i].is_visible && items[i].total_score != null) {
+      const a = Number(current.total_score)
+      const b = Number(items[i].total_score)
       return Number((a - b).toFixed(2))
     }
   }

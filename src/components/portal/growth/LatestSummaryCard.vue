@@ -35,7 +35,7 @@ const deltaClass = computed(() => {
     </header>
     <div class="score-row">
       <div class="score">{{ item.total_score }}</div>
-      <div class="grade-chip" :class="style.className">{{ style.label }}等</div>
+      <div class="grade-chip" :style="{ background: style.color }">{{ style.label }}等</div>
     </div>
     <div class="meta">
       <span class="bonus">獎金 ${{ Number(item.bonus_amount).toLocaleString() }}</span>
@@ -76,12 +76,6 @@ header {
   font-weight: 600;
   color: #fff;
 }
-.grade-outstanding { background: #1e7e34; }
-.grade-good { background: #2563eb; }
-.grade-pass { background: #a16207; }
-.grade-warn { background: #c2410c; }
-.grade-fail { background: #b91c1c; }
-.grade-unknown { background: #6b7280; }
 .meta {
   display: flex;
   justify-content: space-between;
