@@ -8,6 +8,8 @@
 import { computed } from 'vue'
 import { InfoFilled } from '@element-plus/icons-vue'
 
+import { summarizeRule } from './ruleSummary'
+
 const props = defineProps({
   visible: { type: Boolean, default: false },
   participant: { type: Object, default: null },
@@ -66,6 +68,7 @@ const fmtDelta = (v) => {
   if (Number.isNaN(n)) return v
   return n > 0 ? `+${n.toFixed(2)}` : n.toFixed(2)
 }
+
 </script>
 
 <template>
@@ -97,8 +100,11 @@ const fmtDelta = (v) => {
               </span>
               <el-tooltip v-if="props.rules.LATE_EARLY" placement="top">
                 <template #content>
-                  <div>規則：{{ props.rules.LATE_EARLY.rule_type }}</div>
-                  <div>參數：{{ JSON.stringify(props.rules.LATE_EARLY.rule_config) }}</div>
+                  <div
+                    v-for="line in summarizeRule(props.rules.LATE_EARLY)"
+                    :key="line"
+                    data-test="rule-summary-line"
+                  >{{ line }}</div>
                 </template>
                 <el-icon class="info-icon"><InfoFilled /></el-icon>
               </el-tooltip>
@@ -123,8 +129,11 @@ const fmtDelta = (v) => {
               </span>
               <el-tooltip v-if="props.rules.RETURNING_RATE_0315" placement="top">
                 <template #content>
-                  <div>規則：{{ props.rules.RETURNING_RATE_0315.rule_type }}</div>
-                  <div>參數：{{ JSON.stringify(props.rules.RETURNING_RATE_0315.rule_config) }}</div>
+                  <div
+                    v-for="line in summarizeRule(props.rules.RETURNING_RATE_0315)"
+                    :key="line"
+                    data-test="rule-summary-line"
+                  >{{ line }}</div>
                 </template>
                 <el-icon class="info-icon"><InfoFilled /></el-icon>
               </el-tooltip>
@@ -148,8 +157,11 @@ const fmtDelta = (v) => {
               </span>
               <el-tooltip v-if="props.rules.AFTER_CLASS_RATE" placement="top">
                 <template #content>
-                  <div>規則：{{ props.rules.AFTER_CLASS_RATE.rule_type }}</div>
-                  <div>參數：{{ JSON.stringify(props.rules.AFTER_CLASS_RATE.rule_config) }}</div>
+                  <div
+                    v-for="line in summarizeRule(props.rules.AFTER_CLASS_RATE)"
+                    :key="line"
+                    data-test="rule-summary-line"
+                  >{{ line }}</div>
                 </template>
                 <el-icon class="info-icon"><InfoFilled /></el-icon>
               </el-tooltip>
@@ -170,8 +182,11 @@ const fmtDelta = (v) => {
               </span>
               <el-tooltip v-if="props.rules.REWARD_PUNISH" placement="top">
                 <template #content>
-                  <div>規則：{{ props.rules.REWARD_PUNISH.rule_type }}</div>
-                  <div>參數：{{ JSON.stringify(props.rules.REWARD_PUNISH.rule_config) }}</div>
+                  <div
+                    v-for="line in summarizeRule(props.rules.REWARD_PUNISH)"
+                    :key="line"
+                    data-test="rule-summary-line"
+                  >{{ line }}</div>
                 </template>
                 <el-icon class="info-icon"><InfoFilled /></el-icon>
               </el-tooltip>
