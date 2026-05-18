@@ -163,7 +163,7 @@ function netCellClass(v) {
         show-icon
       >
         <template #title>
-          以下項目尚未自動整合，可至「廠商付款」模組（<a href="#/admin/vendor-payments">/admin/vendor-payments</a>）登錄
+          以下項目尚未自動整合，可至「廠商付款」模組（<router-link :to="{ name: 'vendor-payments' }">廠商付款簽收</router-link>）登錄
         </template>
         <ul class="pending-list">
           <li v-for="(item, idx) in pendingItems" :key="idx">{{ item }}</li>
