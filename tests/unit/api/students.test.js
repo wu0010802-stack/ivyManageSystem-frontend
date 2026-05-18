@@ -1,7 +1,7 @@
 /**
  * tests/unit/api/students.test.js
  *
- * 薄殼測試：驗證 src/api/students.js 每個 exported function 的 method/URL/payload。
+ * 薄殼測試：驗證 src/api/students.ts 每個 exported function 的 method/URL/payload。
  * 涵蓋學生 CRUD + lifecycle 轉移 + guardian 管理 + LINE LIFF 綁定碼。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'

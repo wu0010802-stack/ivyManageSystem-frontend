@@ -1,7 +1,7 @@
 /**
  * tests/unit/api/shifts.test.js
  *
- * 驗證 src/api/shifts.js wrapper：HTTP method / URL / payload / blob / multipart / inline query。
+ * 驗證 src/api/shifts.ts wrapper：HTTP method / URL / payload / blob / multipart / inline query。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 

@@ -66,12 +66,12 @@ function manualChunks(id) {
     // ⚠ 加新檔案前先 grep 確認無 element-plus 引用；EP 引用會把 element-plus
     // chunk 拉成 admin-core 的硬依賴，違反 admin-core 的「entry-only」定位。
     if (
-        id.includes('/src/api/auth.js') ||
-        id.includes('/src/api/employees.js') ||
-        id.includes('/src/api/studentAssessments.js') ||
-        id.includes('/src/api/studentIncidents.js') ||
-        id.includes('/src/api/classrooms.js') ||
-        id.includes('/src/api/index.js') ||
+        id.includes('/src/api/auth.ts') ||
+        id.includes('/src/api/employees.ts') ||
+        id.includes('/src/api/studentAssessments.ts') ||
+        id.includes('/src/api/studentIncidents.ts') ||
+        id.includes('/src/api/classrooms.ts') ||
+        id.includes('/src/api/index.ts') ||
         id.includes('/src/stores/_createFetchStore.js') ||
         id.includes('/src/stores/employee.js') ||
         id.includes('/src/utils/auth.ts') ||
@@ -84,7 +84,7 @@ function manualChunks(id) {
 
     if (
         id.includes('/src/views/activity/') ||
-        id.includes('/src/api/activity.js') ||
+        id.includes('/src/api/activity.ts') ||
         id.includes('/src/stores/activity.js')
     ) {
         return 'activity-admin'
@@ -93,7 +93,7 @@ function manualChunks(id) {
     // Portal（教師入口）獨立 chunk，管理端不需要下載
     if (
         id.includes('/src/views/portal/') ||
-        id.includes('/src/api/portal.js')
+        id.includes('/src/api/portal.ts')
     ) {
         return 'portal'
     }

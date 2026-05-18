@@ -1,7 +1,7 @@
 /**
  * tests/unit/api/disciplinary.test.js
  *
- * 驗證 src/api/disciplinary.js wrapper。
+ * 驗證 src/api/disciplinary.ts wrapper。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 

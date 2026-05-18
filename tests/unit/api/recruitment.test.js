@@ -1,7 +1,7 @@
 /**
  * tests/unit/api/recruitment.test.js
  *
- * 驗證 src/api/recruitment.js wrapper：HTTP method / URL / payload / params / blob。
+ * 驗證 src/api/recruitment.ts wrapper：HTTP method / URL / payload / params / blob。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 

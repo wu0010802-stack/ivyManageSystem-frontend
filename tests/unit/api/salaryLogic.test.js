@@ -2,7 +2,7 @@
  * tests/unit/api/salaryLogic.test.js
  *
  * 薪資邏輯與員工薪資 debug 端點 wrapper 的契約測試。
- * 過去這兩個 wrapper 在 src/api/dev.js 打 /dev/salary-logic、/dev/employee-salary-debug，
+ * 過去這兩個 wrapper 在 src/api/dev.ts 打 /dev/salary-logic、/dev/employee-salary-debug，
  * 在 ENV 不在白名單的環境下後端不掛 dev_router → 前端 404。修復後改打正式
  * /salaries/* 路徑，本檔釘住 wrapper 的目標路徑避免回歸。
  */

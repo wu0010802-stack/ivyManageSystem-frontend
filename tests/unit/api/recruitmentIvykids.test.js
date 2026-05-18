@@ -1,7 +1,7 @@
 /**
  * tests/unit/api/recruitmentIvykids.test.js
  *
- * 驗證 src/api/recruitmentIvykids.js wrapper：HTTP method / URL / payload。
+ * 驗證 src/api/recruitmentIvykids.ts wrapper：HTTP method / URL / payload。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 

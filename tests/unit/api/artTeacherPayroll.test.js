@@ -1,7 +1,7 @@
 /**
  * tests/unit/api/artTeacherPayroll.test.js
  *
- * 驗證 src/api/artTeacherPayroll.js wrapper。
+ * 驗證 src/api/artTeacherPayroll.ts wrapper。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 

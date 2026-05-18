@@ -1,7 +1,7 @@
 /**
  * tests/unit/api/fees.test.js
  *
- * 薄殼測試：涵蓋 src/api/fees.js 中「非 templates」端點。
+ * 薄殼測試：涵蓋 src/api/fees.ts 中「非 templates」端點。
  * templates 端點（getFeeTemplates / createFeeTemplate / updateFeeTemplate /
  * deleteFeeTemplate）已由 tests/api/fees-templates.spec.js 涵蓋，此處不重複。
  */

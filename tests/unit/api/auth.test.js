@@ -1,7 +1,7 @@
 /**
  * tests/unit/api/auth.test.js
  *
- * 驗證 src/api/auth.js 各 wrapper 的 HTTP method / URL / payload。
+ * 驗證 src/api/auth.ts 各 wrapper 的 HTTP method / URL / payload。
  * 因為整個 @/api/index 都被 mock，axios interceptor 不會觸發，
  * 不會有任何 token / cookie 副作用。
  */

@@ -1,7 +1,7 @@
 /**
  * tests/unit/api/classrooms.test.js
  *
- * 驗證 src/api/classrooms.js wrapper：HTTP method / URL / payload。
+ * 驗證 src/api/classrooms.ts wrapper：HTTP method / URL / payload。
  * 包含 PATCH 與 alias（getTeachers === getTeacherOptions）。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'

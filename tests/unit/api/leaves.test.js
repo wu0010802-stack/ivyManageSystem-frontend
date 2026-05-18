@@ -1,7 +1,7 @@
 /**
  * tests/unit/api/leaves.test.js
  *
- * 驗證 src/api/leaves.js wrapper：HTTP method / URL / payload / multipart / blob / null body。
+ * 驗證 src/api/leaves.ts wrapper：HTTP method / URL / payload / multipart / blob / null body。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 

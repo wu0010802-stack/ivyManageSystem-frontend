@@ -1,7 +1,7 @@
 /**
  * tests/unit/api/appraisal.test.js
  *
- * 驗證 src/api/appraisal.js 各 wrapper 的 HTTP method / URL / payload 形狀。
+ * 驗證 src/api/appraisal.ts 各 wrapper 的 HTTP method / URL / payload 形狀。
  * 不驗業務邏輯，只驗薄殼有把參數正確轉發到 api client。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'

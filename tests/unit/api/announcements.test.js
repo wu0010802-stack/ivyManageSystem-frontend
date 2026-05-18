@@ -1,7 +1,7 @@
 /**
  * tests/unit/api/announcements.test.js
  *
- * 薄殼測試：驗證 src/api/announcements.js 每個 exported function 把參數正確
+ * 薄殼測試：驗證 src/api/announcements.ts 每個 exported function 把參數正確
  * 轉發到 axios wrapper（method/URL/params/body 形狀）。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'

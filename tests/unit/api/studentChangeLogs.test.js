@@ -1,7 +1,7 @@
 /**
  * tests/unit/api/studentChangeLogs.test.js
  *
- * 薄殼測試：驗 src/api/studentChangeLogs.js wrapper 把 HTTP method/URL/params/body
+ * 薄殼測試：驗 src/api/studentChangeLogs.ts wrapper 把 HTTP method/URL/params/body
  * 正確轉發給 @/api/index axios 實例。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'

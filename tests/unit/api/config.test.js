@@ -1,7 +1,7 @@
 /**
  * tests/unit/api/config.test.js
  *
- * 薄殼測試：驗證 src/api/config.js 每個 exported function 的 method/URL/payload。
+ * 薄殼測試：驗證 src/api/config.ts 每個 exported function 的 method/URL/payload。
  * 涵蓋職稱、考勤規則、勞健保費率、獎金設定、班級目標、職位標準底薪。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'

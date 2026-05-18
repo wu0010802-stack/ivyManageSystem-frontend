@@ -1,7 +1,7 @@
 /**
  * tests/unit/api/dismissalCalls.test.js
  *
- * 驗證 src/api/dismissalCalls.js wrapper（HTTP 端點 + WS_CLOSE 常數）。
+ * 驗證 src/api/dismissalCalls.ts wrapper（HTTP 端點 + WS_CLOSE 常數）。
  * 不測 createDismissalWebSocket 本體（涉及 WebSocket / location 依賴）。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
