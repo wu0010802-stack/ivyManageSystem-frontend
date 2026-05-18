@@ -11,6 +11,8 @@
         "test": "vitest run",
         "test:watch": "vitest",
         "test:coverage": "vitest run --coverage",
+        "typecheck": "vue-tsc --noEmit",
+        "typecheck:watch": "vue-tsc --noEmit --watch",
         "parent:audit": "bash scripts/parent-audit-grep.sh",
         "gen:m3-tokens": "node scripts/gen-m3-tokens.mjs > src/parent/styles/m3-tokens.css",
         "gen:api": "openapi-typescript ../ivy-backend/openapi.json -o src/api/_generated/schema.d.ts --alphabetize",
