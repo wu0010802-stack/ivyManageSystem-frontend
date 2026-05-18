@@ -10,7 +10,7 @@ import { ref } from 'vue'
 import { getMyChildren } from '../api/profile'
 
 export const useChildrenStore = defineStore('parentChildren', () => {
-  const items = ref([])
+  const items = ref<unknown[]>([])
   const loaded = ref(false)
   const loading = ref(false)
   const error = ref('')
@@ -25,7 +25,7 @@ export const useChildrenStore = defineStore('parentChildren', () => {
       items.value = data?.items || []
       loaded.value = true
     } catch (err) {
-      error.value = err?.displayMessage || '載入失敗'
+      error.value = (err as { displayMessage?: string })?.displayMessage || '載入失敗'
     } finally {
       loading.value = false
     }

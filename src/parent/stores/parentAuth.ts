@@ -10,7 +10,7 @@ import { ref } from 'vue'
 
 const STORAGE_KEY = 'parent_user_v1'
 
-function loadUser() {
+function loadUser(): unknown {
   try {
     const raw = sessionStorage.getItem(STORAGE_KEY)
     return raw ? JSON.parse(raw) : null
@@ -19,7 +19,7 @@ function loadUser() {
   }
 }
 
-function saveUser(user) {
+function saveUser(user: unknown): void {
   try {
     if (user) sessionStorage.setItem(STORAGE_KEY, JSON.stringify(user))
     else sessionStorage.removeItem(STORAGE_KEY)
@@ -29,9 +29,9 @@ function saveUser(user) {
 }
 
 export const useParentAuthStore = defineStore('parentAuth', () => {
-  const user = ref(loadUser())
+  const user = ref<unknown>(loadUser())
 
-  function setUser(u) {
+  function setUser(u: unknown) {
     user.value = u
     saveUser(u)
   }
