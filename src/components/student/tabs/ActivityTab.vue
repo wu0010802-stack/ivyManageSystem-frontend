@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
@@ -6,14 +6,16 @@ import { getRegistrations } from '@/api/activity'
 import { hasPermission } from '@/utils/auth'
 import { apiError } from '@/utils/error'
 
-const props = defineProps({
-  studentId: { type: Number, required: true },
-  active: { type: Boolean, default: true },
+const props = withDefaults(defineProps<{
+  studentId: number
+  active?: boolean
+}>(), {
+  active: true,
 })
 
 const canRead = hasPermission('ACTIVITY_READ')
 
-const items = ref([])
+const items = ref<Record<string, unknown>[]>([])
 const loading = ref(false)
 const loaded = ref(false)
 
@@ -22,7 +24,8 @@ async function fetchData() {
   loading.value = true
   try {
     const res = await getRegistrations({ student_id: props.studentId, limit: 100 })
-    items.value = res.data.items || []
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    items.value = (res as any).data?.items || []
     loaded.value = true
   } catch (e) {
     ElMessage.error(apiError(e, '載入才藝報名紀錄失敗'))
@@ -39,22 +42,23 @@ watch(
   { immediate: true },
 )
 
-const formatSemesterLabel = (row) => {
+const formatSemesterLabel = (row: Record<string, unknown>) => {
   if (row?.school_year && row?.semester) {
     return `${row.school_year} 學年 ${row.semester === 1 ? '上' : '下'}學期`
   }
   return '-'
 }
 
-const paymentStatusLabel = (row) => {
-  const total = row.total_amount || 0
-  const paid = row.paid_amount || 0
+type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger'
+const paymentStatusLabel = (row: Record<string, unknown>): { label: string; type: ElTagType } => {
+  const total = (row.total_amount as number) || 0
+  const paid = (row.paid_amount as number) || 0
   if (total > 0 && paid >= total) return { label: '已繳費', type: 'success' }
   if (paid > 0) return { label: '部分繳費', type: 'warning' }
   return { label: '未繳費', type: 'info' }
 }
 
-const formatTimestamp = (iso) => {
+const formatTimestamp = (iso: unknown) => {
   if (!iso) return '-'
   const s = String(iso)
   return s.length >= 16 ? s.slice(0, 16).replace('T', ' ') : s

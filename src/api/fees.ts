@@ -27,4 +27,5 @@ export const generateFeeRecords = (payload: unknown) =>
 // 真實 endpoint 在 user `refactor-fees-by-class` WIP 尚未 merge 到 main。
 // 本 stub 只為了讓 FeesTab.vue 在 pilot 分支上能編譯 / dev server 起得來。
 // user merge `refactor-fees-by-class` 後請刪除本行。
-export const getFeeAdjustments = () => Promise.resolve({ items: [] })
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export const getFeeAdjustments = (_params?: unknown) => Promise.resolve({ items: [] })

@@ -1,26 +1,40 @@
-<script setup>
+<script setup lang="ts">
 import { ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { createMeasurement, updateMeasurement } from '@/api/studentMeasurements'
 
 // 幼兒園學童常見範圍；超出時提示確認以避免誤輸入污染成長曲線
-const PLAUSIBLE_RANGES = {
+const PLAUSIBLE_RANGES: Record<string, { min: number; max: number; label: string }> = {
   height_cm: { min: 40, max: 180, label: '身高' },
   weight_kg: { min: 2, max: 80, label: '體重' },
   head_circumference_cm: { min: 25, max: 60, label: '頭圍' },
 }
 
-const props = defineProps({
-  modelValue: { type: Boolean, default: false },
-  studentId: { type: Number, required: true },
-  measurement: { type: Object, default: null },
+const props = withDefaults(defineProps<{
+  modelValue?: boolean
+  studentId: number
+  measurement?: Record<string, unknown> | null
+}>(), {
+  modelValue: false,
+  measurement: null,
 })
 
-const emit = defineEmits(['update:modelValue', 'saved'])
+const emit = defineEmits<{
+  'update:modelValue': [v: boolean]
+  'saved': [data: unknown]
+}>()
 
 const saving = ref(false)
 
-const form = ref({
+const form = ref<{
+  measured_on: string
+  height_cm: number | null
+  weight_kg: number | null
+  head_circumference_cm: number | null
+  vision_left: number | null
+  vision_right: number | null
+  note: string
+}>({
   measured_on: '',
   height_cm: null,
   weight_kg: null,
@@ -34,7 +48,7 @@ function todayISO() {
   return new Date().toISOString().slice(0, 10)
 }
 
-function toNullableNumber(v) {
+function toNullableNumber(v: unknown): number | null {
   if (v === null || v === undefined || v === '') return null
   const n = Number(v)
   return isNaN(n) ? null : n
@@ -42,16 +56,16 @@ function toNullableNumber(v) {
 
 watch(
   () => props.measurement,
-  (m) => {
+  (m: Record<string, unknown> | null | undefined) => {
     if (m) {
       form.value = {
-        measured_on: m.measured_on || todayISO(),
-        height_cm: m.height_cm ?? null,
-        weight_kg: m.weight_kg ?? null,
-        head_circumference_cm: m.head_circumference_cm ?? null,
-        vision_left: m.vision_left ?? null,
-        vision_right: m.vision_right ?? null,
-        note: m.note || '',
+        measured_on: (m.measured_on as string) || todayISO(),
+        height_cm: (m.height_cm as number | null) ?? null,
+        weight_kg: (m.weight_kg as number | null) ?? null,
+        head_circumference_cm: (m.head_circumference_cm as number | null) ?? null,
+        vision_left: (m.vision_left as number | null) ?? null,
+        vision_right: (m.vision_right as number | null) ?? null,
+        note: (m.note as string) || '',
       }
     } else {
       form.value = {
@@ -68,23 +82,23 @@ watch(
   { immediate: true }
 )
 
-function disableFutureDates(date) {
+function disableFutureDates(date: Date) {
   return date > new Date()
 }
 
 async function submit() {
   const { height_cm, weight_kg, head_circumference_cm, vision_left, vision_right } = form.value
   const hasAnyValue = [height_cm, weight_kg, head_circumference_cm, vision_left, vision_right].some(
-    (v) => v !== null && v !== undefined && v !== ''
+    (v) => v !== null && v !== undefined
   )
   if (!hasAnyValue) {
     ElMessage.warning('請至少填入一項量測數值')
     return
   }
 
-  const outliers = []
+  const outliers: string[] = []
   for (const [field, range] of Object.entries(PLAUSIBLE_RANGES)) {
-    const raw = form.value[field]
+    const raw = (form.value as Record<string, unknown>)[field]
     if (raw === null || raw === undefined || raw === '') continue
     const n = Number(raw)
     if (isNaN(n)) continue
@@ -118,7 +132,7 @@ async function submit() {
 
     let result
     if (props.measurement?.id) {
-      result = await updateMeasurement(props.studentId, props.measurement.id, payload)
+      result = await updateMeasurement(props.studentId, props.measurement.id as number, payload)
       ElMessage.success('已更新量測紀錄')
     } else {
       result = await createMeasurement(props.studentId, payload)
@@ -128,7 +142,8 @@ async function submit() {
     emit('update:modelValue', false)
     emit('saved', result.data)
   } catch (e) {
-    const msg = e?.response?.data?.detail || '儲存失敗，請稍後再試'
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const msg = (e as any)?.response?.data?.detail || '儲存失敗，請稍後再試'
     ElMessage.error(msg)
   } finally {
     saving.value = false

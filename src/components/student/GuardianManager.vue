@@ -125,7 +125,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -137,22 +137,33 @@ import {
 } from '@/api/students'
 import { hasPermission } from '@/utils/auth'
 
-const props = defineProps({
-  studentId: { type: Number, required: true },
-})
-const emit = defineEmits(['change'])
+const props = defineProps<{ studentId: number }>()
+const emit = defineEmits<{ 'change': [] }>()
 
 const relationOptions = ['父親', '母親', '祖父', '祖母', '外公', '外婆', '監護人', '其他']
 const canWrite = computed(() => hasPermission('GUARDIANS_WRITE'))
 
-const guardians = ref([])
+interface Guardian {
+  id?: number | null
+  name: string
+  phone?: string | null
+  email?: string | null
+  relation?: string | null
+  is_primary: boolean
+  is_emergency: boolean
+  can_pickup: boolean
+  custody_note?: string | null
+  sort_order: number
+  [key: string]: unknown
+}
+const guardians = ref<Guardian[]>([])
 const loading = ref(false)
 const dialogVisible = ref(false)
 const dialogMode = ref('create')
 const saving = ref(false)
-const formRef = ref(null)
+const formRef = ref<any>(null)
 
-const emptyForm = () => ({
+const emptyForm = (): Guardian => ({
   id: null,
   name: '',
   phone: '',
@@ -175,7 +186,8 @@ const formRules = {
       trigger: 'blur',
     },
   ],
-  email: [{ type: 'email', message: 'Email 格式不正確', trigger: 'blur' }],
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  email: [{ type: 'email' as any, message: 'Email 格式不正確', trigger: 'blur' }],
 }
 
 const primaryGuardian = computed(() => guardians.value.find((g) => g.is_primary) || null)
@@ -185,9 +197,10 @@ async function fetchGuardians() {
   loading.value = true
   try {
     const { data } = await listGuardians(props.studentId)
-    guardians.value = data.items || []
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    guardians.value = (data as any).items || []
   } catch (err) {
-    ElMessage.error(err.displayMessage || '讀取監護人失敗')
+    ElMessage.error((err as any).displayMessage || '讀取監護人失敗')
   } finally {
     loading.value = false
   }
@@ -206,7 +219,7 @@ function openCreateDialog() {
   dialogVisible.value = true
 }
 
-function openEditDialog(row) {
+function openEditDialog(row: Guardian) {
   dialogMode.value = 'edit'
   Object.assign(form, { ...emptyForm(), ...row })
   dialogVisible.value = true
@@ -231,7 +244,7 @@ async function handleSave() {
       await createGuardian(props.studentId, payload)
       ElMessage.success('新增成功')
     } else {
-      const id = payload.id
+      const id = payload.id as number
       delete payload.id
       await updateGuardian(id, payload)
       ElMessage.success('更新成功')
@@ -240,13 +253,13 @@ async function handleSave() {
     await fetchGuardians()
     emit('change')
   } catch (err) {
-    ElMessage.error(err.displayMessage || '儲存失敗')
+    ElMessage.error((err as any).displayMessage || '儲存失敗')
   } finally {
     saving.value = false
   }
 }
 
-async function handleDelete(row) {
+async function handleDelete(row: Guardian) {
   try {
     await ElMessageBox.confirm(
       `確定要刪除監護人「${row.name}」嗎？`,
@@ -257,12 +270,13 @@ async function handleDelete(row) {
     return
   }
   try {
-    await deleteGuardian(row.id)
+    await deleteGuardian(row.id as number)
     ElMessage.success('已刪除')
     await fetchGuardians()
     emit('change')
   } catch (err) {
-    ElMessage.error(err.displayMessage || '刪除失敗')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ElMessage.error((err as any).displayMessage || '刪除失敗')
   }
 }
 
@@ -271,7 +285,7 @@ const bindingCodeVisible = ref(false)
 const bindingCode = ref('')
 const bindingCodeExpiresAt = ref('')
 
-async function handleIssueBindingCode(row) {
+async function handleIssueBindingCode(row: Record<string, unknown>) {
   try {
     await ElMessageBox.confirm(
       `確定要為「${row.name}」簽發 LINE 綁定碼嗎？\n明碼僅顯示一次，請務必當下抄寫並當面交給家長。`,
@@ -282,14 +296,15 @@ async function handleIssueBindingCode(row) {
     return
   }
   try {
-    const { data } = await createGuardianBindingCode(row.id)
+    const { data } = await createGuardianBindingCode(row.id as number)
     bindingCode.value = data?.code || ''
     bindingCodeExpiresAt.value = data?.expires_at
       ? data.expires_at.replace('T', ' ').slice(0, 16)
       : ''
     bindingCodeVisible.value = true
   } catch (err) {
-    ElMessage.error(err.displayMessage || '簽發失敗')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ElMessage.error((err as any).displayMessage || '簽發失敗')
   }
 }
 

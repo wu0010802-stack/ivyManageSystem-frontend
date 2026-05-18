@@ -1,18 +1,18 @@
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { listMilestones, deleteMilestone, MILESTONE_TYPES, autoDetectMilestones } from '@/api/studentMilestones'
 import { hasPermission } from '@/utils/auth'
 import MilestoneEditorDialog from '../MilestoneEditorDialog.vue'
 
-const props = defineProps({
-  studentId: { type: Number, required: true },
-})
+const props = defineProps<{
+  studentId: number
+}>()
 
-const list = ref([])
+const list = ref<Record<string, unknown>[]>([])
 const loading = ref(false)
 const dialogVisible = ref(false)
-const editing = ref(null)
+const editing = ref<Record<string, unknown> | null>(null)
 const filterType = ref('')
 
 const canWrite = hasPermission('PORTFOLIO_WRITE')
@@ -23,7 +23,8 @@ async function onAutoDetect() {
   autoDetecting.value = true
   try {
     const r = await autoDetectMilestones(props.studentId)
-    const { created_count, skipped_existing } = r.data
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { created_count, skipped_existing } = (r as any).data
     ElMessage.success(`偵測完成：新增 ${created_count} 筆，跳過 ${skipped_existing} 筆已存在`)
     await reload()
   } catch (e) {
@@ -33,8 +34,9 @@ async function onAutoDetect() {
   }
 }
 
-function typeMeta(t) {
-  return MILESTONE_TYPES.find((x) => x.value === t) || {}
+function typeMeta(t: string) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (MILESTONE_TYPES as any[]).find((x: any) => x.value === t) || {}
 }
 
 async function reload() {
@@ -44,9 +46,11 @@ async function reload() {
       limit: 200,
       milestone_type: filterType.value || undefined,
     })
-    list.value = resp.data.items
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    list.value = (resp as any).data?.items || []
   } catch (e) {
-    const msg = e?.response?.data?.detail || '載入失敗'
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const msg = (e as any)?.response?.data?.detail || '載入失敗'
     ElMessage.error(msg)
   } finally {
     loading.value = false
@@ -64,12 +68,12 @@ function openCreate() {
   dialogVisible.value = true
 }
 
-function openEdit(item) {
+function openEdit(item: Record<string, unknown>) {
   editing.value = item
   dialogVisible.value = true
 }
 
-async function handleDelete(item) {
+async function handleDelete(item: Record<string, unknown>) {
   try {
     await ElMessageBox.confirm(
       `確定要刪除「${item.title}」這個里程碑嗎？`,
@@ -81,11 +85,12 @@ async function handleDelete(item) {
   }
 
   try {
-    await deleteMilestone(props.studentId, item.id)
+    await deleteMilestone(props.studentId, item.id as number)
     ElMessage.success('已刪除里程碑')
     await reload()
   } catch (e) {
-    const msg = e?.response?.data?.detail || '刪除失敗'
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const msg = (e as any)?.response?.data?.detail || '刪除失敗'
     ElMessage.error(msg)
   }
 }
@@ -138,15 +143,15 @@ function handleSaved() {
       <div v-else class="milestone-grid">
         <el-card
           v-for="item in list"
-          :key="item.id"
+          :key="item.id as PropertyKey"
           shadow="hover"
           class="milestone-card"
         >
           <!-- Card header -->
           <div class="card-header">
-            <span class="card-icon">{{ item.icon || typeMeta(item.milestone_type).icon || '✨' }}</span>
+            <span class="card-icon">{{ item.icon || typeMeta(item.milestone_type as string).icon || '✨' }}</span>
             <el-tag size="small" class="type-badge">
-              {{ typeMeta(item.milestone_type).label || item.milestone_type }}
+              {{ typeMeta(item.milestone_type as string).label || item.milestone_type }}
             </el-tag>
             <span class="achieved-date">{{ item.achieved_on }}</span>
           </div>

@@ -22,13 +22,13 @@
   </span>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { generateCertificate } from '@/api/govMoe'
 import { hasPermission } from '@/utils/auth'
 
-const props = defineProps({ studentId: { type: Number, required: true } })
+const props = defineProps<{ studentId: number }>()
 
 const canIssue = computed(() => hasPermission('GOV_REPORTS_EXPORT'))
 
@@ -59,7 +59,7 @@ async function submit() {
     ElMessage.success(`已開立 ${data.serial}`)
     open.value = false
   } catch (e) {
-    ElMessage.error(e.response?.data?.detail || '開立失敗')
+    ElMessage.error((e as any).response?.data?.detail || '開立失敗')
   } finally {
     loading.value = false
   }

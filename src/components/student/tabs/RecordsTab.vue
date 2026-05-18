@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, computed, watch, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Refresh } from '@element-plus/icons-vue'
@@ -18,35 +18,40 @@ import ChangeLogEditorDialog from '@/components/student/ChangeLogEditorDialog.vu
 import SummaryCards from '@/components/student/tabs/academic/SummaryCards.vue'
 import LeaveSection from '@/components/student/tabs/academic/LeaveSection.vue'
 
-const props = defineProps({
-  studentId: { type: Number, required: true },
-  classroomId: { type: Number, default: null },
-  active: { type: Boolean, default: true },
+const props = withDefaults(defineProps<{
+  studentId: number
+  classroomId?: number | null
+  active?: boolean
+}>(), {
+  classroomId: null,
+  active: true,
 })
 
-const emit = defineEmits(['jump-tab'])
+const emit = defineEmits<{
+  'jump-tab': [payload: string | { tab: string; query?: Record<string, string> }]
+}>()
 
 const canWrite = hasPermission('STUDENTS_WRITE')
 
 const TYPE_TAG_COLOR = { incident: 'danger', assessment: 'success', change_log: 'warning' }
 const TYPE_LABEL = { incident: '事件', assessment: '評量', change_log: '異動' }
 
-const items = ref([])
+const items = ref<Record<string, unknown>[]>([])
 const loading = ref(false)
 const loaded = ref(false)
 const viewMode = ref('timeline') // 'timeline' | 'table'
 const tableTab = ref('incident')
-const dateRange = ref([])
-const filterFrom = ref(null)
-const filterTo = ref(null)
+const dateRange = ref<string[]>([])
+const filterFrom = ref<string | null>(null)
+const filterTo = ref<string | null>(null)
 
-const incidentDialog = reactive({ visible: false, mode: 'create', initial: null })
-const assessmentDialog = reactive({ visible: false, mode: 'create', initial: null })
-const changeLogDialog = reactive({ visible: false, mode: 'create', initial: null })
+const incidentDialog = reactive<{ visible: boolean; mode: string; initial: Record<string, unknown> | null }>({ visible: false, mode: 'create', initial: null })
+const assessmentDialog = reactive<{ visible: boolean; mode: string; initial: Record<string, unknown> | null }>({ visible: false, mode: 'create', initial: null })
+const changeLogDialog = reactive<{ visible: boolean; mode: string; initial: Record<string, unknown> | null }>({ visible: false, mode: 'create', initial: null })
 
 const grouped = computed(() => {
-  const g = { incident: [], assessment: [], change_log: [] }
-  for (const it of items.value) if (g[it.record_type]) g[it.record_type].push(it)
+  const g: Record<string, Record<string, unknown>[]> = { incident: [], assessment: [], change_log: [] }
+  for (const it of items.value) if (g[it.record_type as string]) g[it.record_type as string].push(it)
   return g
 })
 
@@ -54,11 +59,12 @@ async function fetchData() {
   if (!props.studentId) return
   loading.value = true
   try {
-    const params = { student_id: props.studentId, page: 1, page_size: 100 }
+    const params: Record<string, unknown> = { student_id: props.studentId, page: 1, page_size: 100 }
     if (filterFrom.value) params.date_from = filterFrom.value
     if (filterTo.value) params.date_to = filterTo.value
     const res = await getStudentRecordsTimeline(params)
-    items.value = res.data.items || []
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    items.value = (res as any).data?.items || []
     loaded.value = true
   } catch (e) {
     ElMessage.error(apiError(e, '載入紀錄失敗'))
@@ -80,7 +86,7 @@ const busEvents = [RECORD_EVENTS.CREATED, RECORD_EVENTS.UPDATED, RECORD_EVENTS.D
 busEvents.forEach((e) => domainBus.on(e, onBusRefresh))
 onUnmounted(() => busEvents.forEach((e) => domainBus.off(e, onBusRefresh)))
 
-const handleDateRangeChange = (v) => {
+const handleDateRangeChange = (v: string[] | null) => {
   filterFrom.value = v?.[0] || null
   filterTo.value = v?.[1] || null
   fetchData()
@@ -93,12 +99,12 @@ const resetFilters = () => {
   fetchData()
 }
 
-const isMutable = (row) => {
+const isMutable = (row: Record<string, unknown>) => {
   if (row?.record_type !== 'change_log') return true
-  return (row.payload?.source || 'manual') === 'manual'
+  return ((row.payload as Record<string, unknown>)?.source || 'manual') === 'manual'
 }
 
-const openCreate = (type) => {
+const openCreate = (type: string) => {
   if (type === 'incident') {
     incidentDialog.initial = null
     incidentDialog.mode = 'create'
@@ -114,8 +120,8 @@ const openCreate = (type) => {
   }
 }
 
-const openEdit = (row) => {
-  const p = row.payload || {}
+const openEdit = (row: Record<string, unknown>) => {
+  const p = (row.payload as Record<string, unknown>) || {}
   if (row.record_type === 'incident') {
     incidentDialog.initial = {
       id: row.record_id,
@@ -164,12 +170,14 @@ const openEdit = (row) => {
   }
 }
 
-const handleDelete = async (row) => {
-  const msg = `確定要刪除這筆${TYPE_LABEL[row.record_type]}紀錄？`
+const handleDelete = async (row: Record<string, unknown>) => {
+  const recType = row.record_type as string
+  const msg = `確定要刪除這筆${(TYPE_LABEL as Record<string, string>)[recType]}紀錄？`
   try {
     await ElMessageBox.confirm(msg, '確認刪除', { type: 'warning' })
     const store = useStudentRecordsStore()
-    await store.deleteRecord(row.record_type, row.record_id, { student_id: row.student_id })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await store.deleteRecord(recType as any, row.record_id as number, { student_id: row.student_id as number })
     ElMessage.success('刪除成功')
     fetchData()
   } catch (e) {
@@ -177,25 +185,45 @@ const handleDelete = async (row) => {
   }
 }
 
-const formatTimestamp = (iso) => {
+const formatTimestamp = (iso: unknown) => {
   if (!iso) return '-'
   const s = String(iso)
   return s.length >= 16 ? s.slice(0, 16).replace('T', ' ') : s
 }
 
-const truncate = (text, len = 60) => {
+const truncate = (text: string | null | undefined, len = 60) => {
   if (!text) return ''
   return text.length > len ? text.slice(0, len) + '…' : text
 }
 
-const summaryRef = ref(null)
+// template helper: look up tag types from unknown-typed row fields
+const TYPE_TAG_COLOR_MAP: Record<string, string> = TYPE_TAG_COLOR
+const TYPE_LABEL_MAP: Record<string, string> = TYPE_LABEL
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const INCIDENT_TYPE_TAG_MAP: Record<string, string> = INCIDENT_TYPE_TAG as any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const SEVERITY_TAG_MAP: Record<string, string> = SEVERITY_TAG as any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const RATING_TAG_MAP: Record<string, string> = RATING_TAG as any
 
-function handleJumpSection(section) {
+type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger'
+function rowTypeTagColor(v: unknown): ElTagType { return (TYPE_TAG_COLOR_MAP[String(v ?? '')] as ElTagType) || 'primary' }
+function rowTypeTagColorOrEmpty(v: unknown): ElTagType | undefined { return (TYPE_TAG_COLOR_MAP[String(v ?? '')] as ElTagType) || undefined }
+function rowTypeLabel(v: unknown) { return TYPE_LABEL_MAP[String(v ?? '')] || String(v ?? '') }
+function incidentTypeTag(v: unknown): ElTagType | undefined { return (INCIDENT_TYPE_TAG_MAP[String(v ?? '')] as ElTagType) || undefined }
+function severityTag(v: unknown): ElTagType | undefined { return (SEVERITY_TAG_MAP[String(v ?? '')] as ElTagType) || undefined }
+function ratingTag(v: unknown): ElTagType | undefined { return (RATING_TAG_MAP[String(v ?? '')] as ElTagType) || undefined }
+function rowPayload(row: Record<string, unknown>) { return (row.payload as Record<string, unknown>) || {} }
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const summaryRef = ref<any>(null)
+
+function handleJumpSection(section: string) {
   viewMode.value = 'table'
   tableTab.value = section
 }
 
-function handleJumpAttendance(payload) {
+function handleJumpAttendance(payload: Record<string, string>) {
   emit('jump-tab', { tab: 'attendance', query: payload })
 }
 
@@ -262,34 +290,34 @@ defineExpose({
         <el-timeline-item
           v-for="row in items"
           :key="`${row.record_type}-${row.record_id}`"
-          :type="TYPE_TAG_COLOR[row.record_type] || 'primary'"
+          :type="rowTypeTagColor(row.record_type)"
           :timestamp="formatTimestamp(row.occurred_at)"
           placement="top"
         >
           <div class="record-card">
             <div class="record-head">
-              <el-tag :type="TYPE_TAG_COLOR[row.record_type] || ''" size="small">
-                {{ TYPE_LABEL[row.record_type] }}
+              <el-tag :type="rowTypeTagColorOrEmpty(row.record_type)" size="small">
+                {{ rowTypeLabel(row.record_type) }}
               </el-tag>
               <template v-if="row.record_type === 'incident'">
-                <el-tag v-if="row.payload?.incident_type" size="small" :type="INCIDENT_TYPE_TAG[row.payload.incident_type] || ''">
-                  {{ row.payload.incident_type }}
+                <el-tag v-if="rowPayload(row).incident_type" size="small" :type="incidentTypeTag(rowPayload(row).incident_type)">
+                  {{ rowPayload(row).incident_type }}
                 </el-tag>
-                <el-tag v-if="row.payload?.severity" size="small" :type="SEVERITY_TAG[row.payload.severity] || ''">
-                  {{ row.payload.severity }}
+                <el-tag v-if="rowPayload(row).severity" size="small" :type="severityTag(rowPayload(row).severity)">
+                  {{ rowPayload(row).severity }}
                 </el-tag>
-                <el-tag v-if="row.payload?.parent_notified" type="success" size="small">已通知家長</el-tag>
+                <el-tag v-if="rowPayload(row).parent_notified" type="success" size="small">已通知家長</el-tag>
               </template>
               <template v-else-if="row.record_type === 'assessment'">
-                <el-tag v-if="row.payload?.domain" size="small">{{ row.payload.domain }}</el-tag>
-                <el-tag v-if="row.payload?.rating" size="small" :type="RATING_TAG[row.payload.rating] || ''">
-                  {{ row.payload.rating }}
+                <el-tag v-if="rowPayload(row).domain" size="small">{{ rowPayload(row).domain }}</el-tag>
+                <el-tag v-if="rowPayload(row).rating" size="small" :type="ratingTag(rowPayload(row).rating)">
+                  {{ rowPayload(row).rating }}
                 </el-tag>
-                <el-tag v-if="row.payload?.assessment_type" type="info" size="small">{{ row.payload.assessment_type }}</el-tag>
+                <el-tag v-if="rowPayload(row).assessment_type" type="info" size="small">{{ rowPayload(row).assessment_type }}</el-tag>
               </template>
               <template v-else-if="row.record_type === 'change_log'">
-                <el-tag v-if="row.payload?.event_type" size="small" type="warning">{{ row.payload.event_type }}</el-tag>
-                <el-tag v-if="row.payload?.source === 'lifecycle'" size="small" type="info">系統</el-tag>
+                <el-tag v-if="rowPayload(row).event_type" size="small" type="warning">{{ rowPayload(row).event_type }}</el-tag>
+                <el-tag v-if="rowPayload(row).source === 'lifecycle'" size="small" type="info">系統</el-tag>
                 <el-tag v-else size="small" effect="plain">補登</el-tag>
               </template>
               <div class="record-actions">
@@ -308,16 +336,16 @@ defineExpose({
             </div>
             <div class="record-body">
               <template v-if="row.record_type === 'incident'">
-                <div>{{ row.payload?.description }}</div>
-                <div v-if="row.payload?.action_taken" class="sub">處理：{{ row.payload.action_taken }}</div>
+                <div>{{ rowPayload(row).description }}</div>
+                <div v-if="rowPayload(row).action_taken" class="sub">處理：{{ rowPayload(row).action_taken }}</div>
               </template>
               <template v-else-if="row.record_type === 'assessment'">
-                <div>{{ row.payload?.content }}</div>
-                <div v-if="row.payload?.suggestions" class="sub">建議：{{ row.payload.suggestions }}</div>
+                <div>{{ rowPayload(row).content }}</div>
+                <div v-if="rowPayload(row).suggestions" class="sub">建議：{{ rowPayload(row).suggestions }}</div>
               </template>
               <template v-else-if="row.record_type === 'change_log'">
-                <div v-if="row.payload?.reason">原因：{{ row.payload.reason }}</div>
-                <div v-if="row.payload?.notes" class="sub">備註：{{ row.payload.notes }}</div>
+                <div v-if="rowPayload(row).reason">原因：{{ rowPayload(row).reason }}</div>
+                <div v-if="rowPayload(row).notes" class="sub">備註：{{ rowPayload(row).notes }}</div>
               </template>
             </div>
           </div>
@@ -334,36 +362,36 @@ defineExpose({
           </el-table-column>
           <el-table-column label="類型" width="100">
             <template #default="{ row }">
-              <el-tag v-if="row.payload?.incident_type" :type="INCIDENT_TYPE_TAG[row.payload.incident_type] || ''" size="small">
-                {{ row.payload.incident_type }}
+              <el-tag v-if="rowPayload(row).incident_type" :type="incidentTypeTag(rowPayload(row).incident_type)" size="small">
+                {{ rowPayload(row).incident_type }}
               </el-tag>
             </template>
           </el-table-column>
           <el-table-column label="嚴重度" width="90">
             <template #default="{ row }">
-              <el-tag v-if="row.payload?.severity" :type="SEVERITY_TAG[row.payload.severity] || ''" size="small">
-                {{ row.payload.severity }}
+              <el-tag v-if="rowPayload(row).severity" :type="severityTag(rowPayload(row).severity)" size="small">
+                {{ rowPayload(row).severity }}
               </el-tag>
               <span v-else class="sub">-</span>
             </template>
           </el-table-column>
           <el-table-column label="描述" min-width="220">
             <template #default="{ row }">
-              <el-tooltip :content="row.payload?.description || ''" placement="top" :show-after="500">
-                <span>{{ truncate(row.payload?.description || '') }}</span>
+              <el-tooltip :content="String(rowPayload(row).description || '')" placement="top" :show-after="500">
+                <span>{{ truncate(rowPayload(row).description as string | null) }}</span>
               </el-tooltip>
             </template>
           </el-table-column>
           <el-table-column label="處理" min-width="160">
             <template #default="{ row }">
-              <el-tooltip :content="row.payload?.action_taken || ''" placement="top" :show-after="500">
-                <span>{{ truncate(row.payload?.action_taken || '') }}</span>
+              <el-tooltip :content="String(rowPayload(row).action_taken || '')" placement="top" :show-after="500">
+                <span>{{ truncate(rowPayload(row).action_taken as string | null) }}</span>
               </el-tooltip>
             </template>
           </el-table-column>
           <el-table-column label="家長" width="80" align="center">
             <template #default="{ row }">
-              <el-tag v-if="row.payload?.parent_notified" type="success" size="small">已通知</el-tag>
+              <el-tag v-if="rowPayload(row).parent_notified" type="success" size="small">已通知</el-tag>
               <span v-else class="sub">-</span>
             </template>
           </el-table-column>
@@ -379,38 +407,38 @@ defineExpose({
       <el-tab-pane :label="`評量（${grouped.assessment.length}）`" name="assessment">
         <el-table :data="grouped.assessment" stripe size="small" max-height="500">
           <el-table-column label="日期" width="110">
-            <template #default="{ row }">{{ row.payload?.assessment_date || '-' }}</template>
+            <template #default="{ row }">{{ rowPayload(row).assessment_date || '-' }}</template>
           </el-table-column>
           <el-table-column label="學期" width="100">
-            <template #default="{ row }">{{ row.payload?.semester || '-' }}</template>
+            <template #default="{ row }">{{ rowPayload(row).semester || '-' }}</template>
           </el-table-column>
           <el-table-column label="類型" width="90">
             <template #default="{ row }">
-              <el-tag v-if="row.payload?.assessment_type" type="info" size="small">{{ row.payload.assessment_type }}</el-tag>
+              <el-tag v-if="rowPayload(row).assessment_type" type="info" size="small">{{ rowPayload(row).assessment_type }}</el-tag>
             </template>
           </el-table-column>
           <el-table-column label="領域" width="130">
-            <template #default="{ row }">{{ row.payload?.domain || '-' }}</template>
+            <template #default="{ row }">{{ rowPayload(row).domain || '-' }}</template>
           </el-table-column>
           <el-table-column label="評等" width="80">
             <template #default="{ row }">
-              <el-tag v-if="row.payload?.rating" :type="RATING_TAG[row.payload.rating] || ''" size="small">
-                {{ row.payload.rating }}
+              <el-tag v-if="rowPayload(row).rating" :type="ratingTag(rowPayload(row).rating)" size="small">
+                {{ rowPayload(row).rating }}
               </el-tag>
               <span v-else class="sub">-</span>
             </template>
           </el-table-column>
           <el-table-column label="內容" min-width="220">
             <template #default="{ row }">
-              <el-tooltip :content="row.payload?.content || ''" placement="top" :show-after="500">
-                <span>{{ truncate(row.payload?.content || '') }}</span>
+              <el-tooltip :content="String(rowPayload(row).content || '')" placement="top" :show-after="500">
+                <span>{{ truncate(rowPayload(row).content as string | null) }}</span>
               </el-tooltip>
             </template>
           </el-table-column>
           <el-table-column label="建議" min-width="160">
             <template #default="{ row }">
-              <el-tooltip :content="row.payload?.suggestions || ''" placement="top" :show-after="500">
-                <span>{{ truncate(row.payload?.suggestions || '') }}</span>
+              <el-tooltip :content="String(rowPayload(row).suggestions || '')" placement="top" :show-after="500">
+                <span>{{ truncate(rowPayload(row).suggestions as string | null) }}</span>
               </el-tooltip>
             </template>
           </el-table-column>
@@ -434,39 +462,39 @@ defineExpose({
       <el-tab-pane :label="`異動（${grouped.change_log.length}）`" name="change_log">
         <el-table :data="grouped.change_log" stripe size="small" max-height="500">
           <el-table-column label="異動日期" width="110">
-            <template #default="{ row }">{{ row.payload?.event_date || '-' }}</template>
+            <template #default="{ row }">{{ rowPayload(row).event_date || '-' }}</template>
           </el-table-column>
           <el-table-column label="學年" width="80">
-            <template #default="{ row }">{{ row.payload?.school_year || '-' }}</template>
+            <template #default="{ row }">{{ rowPayload(row).school_year || '-' }}</template>
           </el-table-column>
           <el-table-column label="學期" width="70">
             <template #default="{ row }">
-              <span v-if="row.payload?.semester">{{ row.payload.semester === 1 ? '上' : '下' }}</span>
+              <span v-if="rowPayload(row).semester">{{ rowPayload(row).semester === 1 ? '上' : '下' }}</span>
               <span v-else class="sub">-</span>
             </template>
           </el-table-column>
           <el-table-column label="異動類型" width="110">
             <template #default="{ row }">
-              <el-tag v-if="row.payload?.event_type" type="warning" size="small">{{ row.payload.event_type }}</el-tag>
+              <el-tag v-if="rowPayload(row).event_type" type="warning" size="small">{{ rowPayload(row).event_type }}</el-tag>
             </template>
           </el-table-column>
           <el-table-column label="來源" width="80">
             <template #default="{ row }">
-              <el-tag v-if="row.payload?.source === 'lifecycle'" size="small" type="info">系統</el-tag>
+              <el-tag v-if="rowPayload(row).source === 'lifecycle'" size="small" type="info">系統</el-tag>
               <el-tag v-else size="small" effect="plain">補登</el-tag>
             </template>
           </el-table-column>
           <el-table-column label="原因" min-width="160">
             <template #default="{ row }">
-              <el-tooltip :content="row.payload?.reason || ''" placement="top" :show-after="500">
-                <span>{{ truncate(row.payload?.reason || '') }}</span>
+              <el-tooltip :content="String(rowPayload(row).reason || '')" placement="top" :show-after="500">
+                <span>{{ truncate(rowPayload(row).reason as string | null) }}</span>
               </el-tooltip>
             </template>
           </el-table-column>
           <el-table-column label="備註" min-width="160">
             <template #default="{ row }">
-              <el-tooltip :content="row.payload?.notes || ''" placement="top" :show-after="500">
-                <span>{{ truncate(row.payload?.notes || '') }}</span>
+              <el-tooltip :content="String(rowPayload(row).notes || '')" placement="top" :show-after="500">
+                <span>{{ truncate(rowPayload(row).notes as string | null) }}</span>
               </el-tooltip>
             </template>
           </el-table-column>

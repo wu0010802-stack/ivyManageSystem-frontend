@@ -1,18 +1,21 @@
-<script setup>
+<script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import { getAttendanceByStudent } from '@/api/studentAttendance'
 import { apiError } from '@/utils/error'
 
-const props = defineProps({
-  studentId: { type: Number, required: true },
-  active: { type: Boolean, default: true },
-  // 從 LeaveSection → 看出席 帶入的日期區間 [from, to]
-  externalDateRange: { type: Array, default: null },
+const props = withDefaults(defineProps<{
+  studentId: number
+  active?: boolean
+  externalDateRange?: [string, string] | null
+}>(), {
+  active: true,
+  externalDateRange: null,
 })
 
-const ATTENDANCE_TAG = {
+type ElTagType = '' | 'primary' | 'success' | 'warning' | 'info' | 'danger'
+const ATTENDANCE_TAG: Record<string, ElTagType> = {
   出席: 'success',
   缺席: 'danger',
   病假: 'warning',
@@ -20,19 +23,21 @@ const ATTENDANCE_TAG = {
   遲到: 'warning',
 }
 
-const items = ref([])
-const counts = ref({})
+const items = ref<Record<string, unknown>[]>([])
+const counts = ref<Record<string, number>>({})
 const loading = ref(false)
 const loaded = ref(false)
-const filterRange = ref([])
+const filterRange = ref<string[]>([])
 
 async function fetchData() {
   if (!props.studentId) return
   loading.value = true
   try {
     const res = await getAttendanceByStudent(props.studentId, { limit: 200 })
-    items.value = res.data.items || []
-    counts.value = res.data.counts || {}
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    items.value = (res as any).data?.items || []
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    counts.value = (res as any).data?.counts || {}
     loaded.value = true
   } catch (e) {
     ElMessage.error(apiError(e, '載入每日出席失敗'))
@@ -63,10 +68,10 @@ watch(
 const filteredItems = computed(() => {
   if (!filterRange.value || filterRange.value.length !== 2) return items.value
   const [from, to] = filterRange.value
-  return items.value.filter((r) => r.date >= from && r.date <= to)
+  return items.value.filter((r) => (r.date as string) >= from && (r.date as string) <= to)
 })
 
-const isInRange = (date) => {
+const isInRange = (date: string) => {
   if (!filterRange.value || filterRange.value.length !== 2) return false
   return date >= filterRange.value[0] && date <= filterRange.value[1]
 }
@@ -115,7 +120,7 @@ defineExpose({ refresh: fetchData })
       <el-table-column label="日期" prop="date" width="130" />
       <el-table-column label="狀態" width="100">
         <template #default="{ row }">
-          <el-tag :type="ATTENDANCE_TAG[row.status] || 'info'" size="small">{{ row.status }}</el-tag>
+          <el-tag :type="ATTENDANCE_TAG[row.status as string] || 'info'" size="small">{{ row.status }}</el-tag>
         </template>
       </el-table-column>
       <el-table-column label="備註" prop="remark" min-width="200">

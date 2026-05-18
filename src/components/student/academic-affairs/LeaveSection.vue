@@ -1,11 +1,11 @@
-<script setup>
+<script setup lang="ts">
 import { computed, inject, ref, watch } from 'vue'
 import { apiError } from '@/utils/error'
 import { listStudentLeaves } from '@/api/studentLeaves'
 import { ACADEMIC_AFFAIRS_FILTERS_KEY } from '@/composables/useAcademicAffairsFilters'
 import SectionCard from './SectionCard.vue'
 
-const STATUS_MAP = {
+const STATUS_MAP: Record<string, { label: string; type: string }> = {
   approved: { label: '已成立', type: 'success' },
   cancelled: { label: '已取消', type: 'info' },
   pending: { label: '待審', type: 'warning' },
@@ -15,7 +15,17 @@ const STATUS_MAP = {
 const ctx = inject(ACADEMIC_AFFAIRS_FILTERS_KEY)
 if (!ctx) throw new Error('LeaveSection 須在 StudentAcademicAffairsView 內使用')
 
-const items = ref([])
+interface LeaveItem {
+  student_id?: number
+  start_date?: string
+  end_date?: string
+  status?: string
+  leave_type?: string
+  reason?: string
+  student_name?: string
+  [key: string]: unknown
+}
+const items = ref<LeaveItem[]>([])
 const loading = ref(false)
 const errorMessage = ref('')
 
@@ -31,7 +41,7 @@ const filtered = computed(() => {
   })
 })
 
-const formatDate = (s) => (s ? s.replace(/T.*/, '') : '')
+const formatDate = (s: string | undefined | null) => (s ? s.replace(/T.*/, '') : '')
 
 const fetchLeaves = async () => {
   if (!ctx.filters.classroomId) {
@@ -92,8 +102,8 @@ watch(
       <el-table-column label="原因" prop="reason" min-width="140" show-overflow-tooltip />
       <el-table-column label="狀態" width="80" align="center">
         <template #default="{ row }">
-          <el-tag size="small" :type="STATUS_MAP[row.status]?.type || 'info'">
-            {{ STATUS_MAP[row.status]?.label || row.status }}
+          <el-tag size="small" :type="(STATUS_MAP[row.status as string]?.type as any) || 'info'">
+            {{ STATUS_MAP[row.status as string]?.label || row.status }}
           </el-tag>
         </template>
       </el-table-column>

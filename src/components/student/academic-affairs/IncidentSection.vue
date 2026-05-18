@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { inject, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { apiError } from '@/utils/error'
@@ -13,16 +13,18 @@ import SectionCard from './SectionCard.vue'
 const ctx = inject(ACADEMIC_AFFAIRS_FILTERS_KEY)
 if (!ctx) throw new Error('IncidentSection 須在 StudentAcademicAffairsView 內使用')
 
-const props = defineProps({
-  classrooms: { type: Array, default: () => [] },
+const props = withDefaults(defineProps<{
+  classrooms?: Record<string, unknown>[]
+}>(), {
+  classrooms: () => [],
 })
 
-const records = ref([])
+const records = ref<Record<string, unknown>[]>([])
 const loading = ref(false)
 const errorMessage = ref('')
 const dialogVisible = ref(false)
 const dialogMode = ref('create')
-const dialogInitial = ref(null)
+const dialogInitial = ref<Record<string, unknown> | null>(null)
 
 const fetchIncidents = async () => {
   if (!ctx.filters.classroomId) {
@@ -32,7 +34,7 @@ const fetchIncidents = async () => {
   loading.value = true
   errorMessage.value = ''
   try {
-    const params = {
+    const params: Record<string, unknown> = {
       classroom_id: ctx.filters.classroomId,
       start_date: ctx.startDate.value,
       end_date: ctx.endDate.value,
@@ -50,20 +52,20 @@ const fetchIncidents = async () => {
   }
 }
 
-const formatDateTime = (v) => (v ? v.replace('T', ' ').slice(0, 16) : '')
+const formatDateTime = (v: string | undefined | null) => (v ? v.replace('T', ' ').slice(0, 16) : '')
 
 const openCreate = () => {
   dialogMode.value = 'create'
   dialogInitial.value = null
   dialogVisible.value = true
 }
-const openEdit = (row) => {
+const openEdit = (row: Record<string, unknown>) => {
   dialogMode.value = 'edit'
   dialogInitial.value = { ...row }
   dialogVisible.value = true
 }
 
-const removeRow = async (row) => {
+const removeRow = async (row: Record<string, unknown>) => {
   try {
     await ElMessageBox.confirm(
       `確定刪除 ${row.student_name || ''} 的此筆事件?`,
@@ -75,14 +77,14 @@ const removeRow = async (row) => {
   }
   try {
     const store = useStudentRecordsStore()
-    await store.deleteRecord('incident', row.id, { student_id: row.student_id })
+    await store.deleteRecord('incident', row.id as number, { student_id: row.student_id as number })
     ElMessage.success('刪除成功')
   } catch (error) {
     ElMessage.error(apiError(error, '刪除失敗'))
   }
 }
 
-const onRecordEvent = ({ kind }) => {
+const onRecordEvent = ({ kind }: { kind: string }) => {
   if (kind === 'incident') fetchIncidents()
 }
 
@@ -149,14 +151,14 @@ defineExpose({ fetchIncidents })
       <el-table-column label="學生" prop="student_name" width="100" />
       <el-table-column label="類型" width="100" align="center">
         <template #default="{ row }">
-          <el-tag size="small" :type="INCIDENT_TYPE_TAG[row.incident_type] || ''">
+          <el-tag size="small" :type="(INCIDENT_TYPE_TAG[row.incident_type as string] as any) || undefined">
             {{ row.incident_type }}
           </el-tag>
         </template>
       </el-table-column>
       <el-table-column label="嚴重度" width="80" align="center">
         <template #default="{ row }">
-          <el-tag size="small" :type="SEVERITY_TAG[row.severity] || ''">{{ row.severity }}</el-tag>
+          <el-tag size="small" :type="(SEVERITY_TAG[row.severity as string] as any) || undefined">{{ row.severity }}</el-tag>
         </template>
       </el-table-column>
       <el-table-column label="描述" prop="description" min-width="160" show-overflow-tooltip />
@@ -180,8 +182,8 @@ defineExpose({ fetchIncidents })
       :mode="dialogMode"
       :initial="dialogInitial"
       :classrooms="props.classrooms"
-      :default-classroom-id="ctx.filters.classroomId"
-      :default-student-id="ctx.filters.studentId"
+      :default-classroom-id="(ctx.filters.classroomId as number | null)"
+      :default-student-id="(ctx.filters.studentId as number | null)"
       :lock-student="!!ctx.filters.studentId && dialogMode === 'create'"
     />
   </SectionCard>

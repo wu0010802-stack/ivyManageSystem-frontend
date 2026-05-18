@@ -1,21 +1,26 @@
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 import { TIMELINE_SOURCE_TYPES } from '@/api/studentTimeline'
 
-const props = defineProps({
-  modelValue: {
-    type: Object,
-    default: () => ({ types: [], since: null, until: null }),
-  },
+interface FilterValue {
+  types: string[]
+  since: string | null
+  until: string | null
+}
+
+const props = withDefaults(defineProps<{
+  modelValue?: FilterValue
+}>(), {
+  modelValue: () => ({ types: [], since: null, until: null }),
 })
-const emit = defineEmits(['update:modelValue'])
+const emit = defineEmits<{ 'update:modelValue': [v: FilterValue] }>()
 
 const filters = computed({
   get: () => props.modelValue,
   set: (v) => emit('update:modelValue', v),
 })
 
-function toggleType(type) {
+function toggleType(type: string) {
   const current = new Set(filters.value.types || [])
   if (current.has(type)) current.delete(type)
   else current.add(type)

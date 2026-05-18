@@ -1,20 +1,30 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { createGrowthReport } from '@/api/studentGrowthReports'
 
-const props = defineProps({
-  modelValue: { type: Boolean, default: false },
-  studentId: { type: Number, required: true },
+const props = withDefaults(defineProps<{
+  modelValue?: boolean
+  studentId: number
+}>(), {
+  modelValue: false,
 })
-const emit = defineEmits(['update:modelValue', 'created'])
+const emit = defineEmits<{
+  'update:modelValue': [v: boolean]
+  'created': [data: unknown]
+}>()
 
 const visible = computed({
   get: () => props.modelValue,
   set: (v) => emit('update:modelValue', v),
 })
 
-const form = ref({
+const form = ref<{
+  period_label: string
+  period_start: string | null
+  period_end: string | null
+  teacher_narrative: string
+}>({
   period_label: '',
   period_start: null,
   period_end: null,
@@ -48,7 +58,7 @@ async function onSubmit() {
     emit('created', r.data)
     visible.value = false
   } catch (e) {
-    ElMessage.error(e?.response?.data?.detail || '建立失敗')
+    ElMessage.error((e as any)?.response?.data?.detail || '建立失敗')
   } finally {
     submitting.value = false
   }

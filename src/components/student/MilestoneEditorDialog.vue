@@ -1,15 +1,21 @@
-<script setup>
+<script setup lang="ts">
 import { ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { createMilestone, updateMilestone, MILESTONE_TYPES } from '@/api/studentMilestones'
 
-const props = defineProps({
-  modelValue: { type: Boolean, default: false },
-  studentId: { type: Number, required: true },
-  milestone: { type: Object, default: null },
+const props = withDefaults(defineProps<{
+  modelValue?: boolean
+  studentId: number
+  milestone?: Record<string, unknown> | null
+}>(), {
+  modelValue: false,
+  milestone: null,
 })
 
-const emit = defineEmits(['update:modelValue', 'saved'])
+const emit = defineEmits<{
+  'update:modelValue': [v: boolean]
+  'saved': [data: unknown]
+}>()
 
 const saving = ref(false)
 
@@ -25,25 +31,27 @@ const form = ref({
   description: '',
 })
 
-function getDefaultIcon(type) {
-  const found = MILESTONE_TYPES.find((t) => t.value === type)
-  return found ? found.icon : '✨'
+function getDefaultIcon(type: string): string {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const found = MILESTONE_TYPES.find((t: any) => t.value === type)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return found ? (found as any).icon : '✨'
 }
 
-function handleTypeChange(val) {
+function handleTypeChange(val: string) {
   form.value.icon = getDefaultIcon(val)
 }
 
 watch(
   () => props.milestone,
-  (m) => {
+  (m: Record<string, unknown> | null | undefined) => {
     if (m) {
       form.value = {
-        milestone_type: m.milestone_type || 'custom',
-        achieved_on: m.achieved_on || todayISO(),
-        title: m.title || '',
-        icon: m.icon || getDefaultIcon(m.milestone_type || 'custom'),
-        description: m.description || '',
+        milestone_type: (m.milestone_type as string) || 'custom',
+        achieved_on: (m.achieved_on as string) || todayISO(),
+        title: (m.title as string) || '',
+        icon: (m.icon as string) || getDefaultIcon((m.milestone_type as string) || 'custom'),
+        description: (m.description as string) || '',
       }
     } else {
       form.value = {
@@ -58,7 +66,7 @@ watch(
   { immediate: true }
 )
 
-function disableFutureDates(date) {
+function disableFutureDates(date: Date) {
   return date > new Date()
 }
 
@@ -80,7 +88,7 @@ async function submit() {
 
     let result
     if (props.milestone?.id) {
-      result = await updateMilestone(props.studentId, props.milestone.id, payload)
+      result = await updateMilestone(props.studentId, props.milestone.id as number, payload)
       ElMessage.success('已更新里程碑')
     } else {
       result = await createMilestone(props.studentId, payload)
@@ -90,7 +98,8 @@ async function submit() {
     emit('update:modelValue', false)
     emit('saved', result.data)
   } catch (e) {
-    const msg = e?.response?.data?.detail || '儲存失敗，請稍後再試'
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const msg = (e as any)?.response?.data?.detail || '儲存失敗，請稍後再試'
     ElMessage.error(msg)
   } finally {
     saving.value = false

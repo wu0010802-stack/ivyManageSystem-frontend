@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import MilestonesTab from './MilestonesTab.vue'
@@ -6,9 +6,11 @@ import TimelineTab from './TimelineTab.vue'
 import PhotoGalleryTab from './PhotoGalleryTab.vue'
 import GrowthReportTab from './GrowthReportTab.vue'
 
-const props = defineProps({
-  studentId: { type: Number, required: true },
-  syncUrl: { type: Boolean, default: true },
+const props = withDefaults(defineProps<{
+  studentId: number
+  syncUrl?: boolean
+}>(), {
+  syncUrl: true,
 })
 
 const SUB_TABS = [

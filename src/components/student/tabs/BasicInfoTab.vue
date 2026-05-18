@@ -1,16 +1,18 @@
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 import { hasPermission } from '@/utils/auth'
 import GuardianManager from '@/components/student/GuardianManager.vue'
 
-const props = defineProps({
-  profile: { type: Object, required: true },
-})
-const emit = defineEmits(['guardians-changed'])
+const props = defineProps<{
+  profile: Record<string, unknown>
+}>()
+const emit = defineEmits<{
+  'guardians-changed': []
+}>()
 
-const basic = computed(() => props.profile?.basic || {})
-const health = computed(() => props.profile?.health || {})
-const studentId = computed(() => basic.value?.id || null)
+const basic = computed(() => (props.profile?.basic as Record<string, unknown>) || {})
+const health = computed(() => (props.profile?.health as Record<string, unknown>) || {})
+const studentId = computed(() => (basic.value?.id as number | null) || null)
 const canGuardiansRead = computed(() => hasPermission('GUARDIANS_READ'))
 </script>
 
