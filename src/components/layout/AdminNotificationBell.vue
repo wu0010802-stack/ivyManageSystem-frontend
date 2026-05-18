@@ -48,7 +48,7 @@
               <div class="nf-item__body">
                 <div class="nf-item__title">{{ item.title }}</div>
                 <div class="nf-item__sub">共 {{ item.count }} 筆待處理</div>
-                <div class="nf-item__priority">{{ priorityLabel[item.priority] || '待查看' }}</div>
+                <div class="nf-item__priority">{{ priorityLabel[item.priority ?? ''] || '待查看' }}</div>
               </div>
               <div class="nf-item__end">
                 <span class="nf-count-badge">{{ item.count }}</span>
@@ -143,7 +143,7 @@
               <div class="nf-item__body">
                 <div class="nf-item__title">{{ item.title }}</div>
                 <div class="nf-item__sub">共 {{ item.count }} 筆待處理</div>
-                <div class="nf-item__priority">{{ priorityLabel[item.priority] || '待查看' }}</div>
+                <div class="nf-item__priority">{{ priorityLabel[item.priority ?? ''] || '待查看' }}</div>
               </div>
               <div class="nf-item__end">
                 <span class="nf-count-badge">{{ item.count }}</span>
@@ -188,7 +188,7 @@
   </template>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, markRaw, onMounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useRouter } from 'vue-router'
@@ -198,32 +198,57 @@ import {
 } from '@element-plus/icons-vue'
 import { useNotificationStore } from '@/stores/notification'
 
-defineProps({
-  isMobile: { type: Boolean, default: false },
+interface NotificationItem {
+  type: string
+  title?: string
+  count?: number
+  priority?: string
+  route?: string | null
+}
+
+interface ReminderSubItem {
+  label?: string
+  meta?: string
+  date?: string
+}
+
+interface ReminderGroup {
+  type: string
+  title?: string
+  route?: string | null
+  items?: ReminderSubItem[]
+}
+
+withDefaults(defineProps<{
+  isMobile?: boolean
+}>(), {
+  isMobile: false,
 })
 
 const router = useRouter()
 const notificationStore = useNotificationStore()
-const popoverVisible = ref(false)
-const drawerVisible = ref(false)
+const popoverVisible = ref<boolean>(false)
+const drawerVisible = ref<boolean>(false)
 
-const { badgeCount, actionItems, reminders } = storeToRefs(notificationStore)
+const { badgeCount } = storeToRefs(notificationStore)
+const actionItems = computed(() => notificationStore.actionItems as NotificationItem[])
+const reminders = computed(() => notificationStore.reminders as ReminderGroup[])
 const isEmpty = computed(() => !actionItems.value.length && !reminders.value.length)
 
-const itemMeta = {
+const itemMeta: Record<string, { icon: object; tone: string }> = {
   approval: { icon: markRaw(Document), tone: 'danger' },
   activity_inquiry: { icon: markRaw(Message), tone: 'warning' },
   calendar: { icon: markRaw(Calendar), tone: 'primary' },
   probation: { icon: markRaw(User), tone: 'success' },
 }
 
-const priorityLabel = {
+const priorityLabel: Record<string, string> = {
   high: '立即處理',
   medium: '建議今日處理',
   low: '可稍後查看',
 }
 
-const handleNavigate = (route) => {
+const handleNavigate = (route: string | null | undefined) => {
   popoverVisible.value = false
   drawerVisible.value = false
   if (route) router.push(route)
