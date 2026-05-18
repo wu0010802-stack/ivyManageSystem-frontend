@@ -24,8 +24,13 @@ vi.mock('element-plus', () => ({
   ElMessage: { error: vi.fn(), success: vi.fn(), warning: vi.fn() },
 }))
 vi.mock('vue-router', () => ({
-  useRoute: () => ({ params: { id: '5' } }),
-  useRouter: () => ({ back: vi.fn() }),
+  useRoute: () => ({ params: { id: '5' }, query: {} }),
+  useRouter: () => ({ back: vi.fn(), replace: vi.fn() }),
+}))
+
+// P0-A 守衛：spec 需 mock hasPermission，否則 batch-zone / 重算按鈕被隱藏
+vi.mock('@/utils/auth', () => ({
+  hasPermission: vi.fn().mockReturnValue(true),
 }))
 
 const stubs = {

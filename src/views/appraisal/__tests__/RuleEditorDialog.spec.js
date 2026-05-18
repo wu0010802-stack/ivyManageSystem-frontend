@@ -7,6 +7,11 @@ vi.mock('@/api/appraisal', () => ({
   createScoringRule: vi.fn().mockResolvedValue({ data: { id: 99 } }),
 }))
 
+// P0-A 守衛：spec 需 mock hasPermission，否則 canEditRules=false 隱藏 submit-btn
+vi.mock('@/utils/auth', () => ({
+  hasPermission: vi.fn().mockReturnValue(true),
+}))
+
 vi.mock('element-plus', () => ({
   ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
 }))

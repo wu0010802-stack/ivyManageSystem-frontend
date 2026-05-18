@@ -9,6 +9,11 @@ vi.mock('@/api/appraisal', () => ({
   getScoringRuleHistory: vi.fn().mockResolvedValue({ data: [] }),
 }))
 
+// P0-A 守衛：spec 需 mock hasPermission，否則 canEditRules=false 隱藏編輯按鈕
+vi.mock('@/utils/auth', () => ({
+  hasPermission: vi.fn().mockReturnValue(true),
+}))
+
 vi.mock('element-plus', () => ({
   ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
 }))
