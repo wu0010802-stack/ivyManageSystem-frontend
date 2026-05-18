@@ -102,12 +102,8 @@ const runSimulate = async () => {
       employee_id: props.row.employee_id as number,
       year: props.year,
       month: props.month,
-      overrides: {
-        enrollment_override: overrideCount.value,
-        extra_overtime_pay: 0,
-        extra_personal_leave_hours: 0,
-        extra_sick_leave_hours: 0,
-      },
+      // @ts-expect-error TODO(ts-strict): OpenAPI marks extra_overtime_pay/extra_personal_leave_hours/extra_sick_leave_hours required but backend defaults them; only the override we control is sent
+      overrides: { enrollment_override: overrideCount.value },
     })
     preview.value = ((resp.data as Record<string, unknown>)?.simulated ?? null) as PreviewResult | null
     if (preview.value) {

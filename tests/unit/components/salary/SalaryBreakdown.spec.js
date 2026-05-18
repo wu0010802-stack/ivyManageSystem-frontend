@@ -136,7 +136,7 @@ describe('SalaryBreakdown', () => {
       employee_id: 42,
       year: 2026,
       month: 5,
-      overrides: { enrollment_override: 25, extra_overtime_pay: 0, extra_personal_leave_hours: 0, extra_sick_leave_hours: 0 },
+      overrides: { enrollment_override: 25 },
     })
   })
 
