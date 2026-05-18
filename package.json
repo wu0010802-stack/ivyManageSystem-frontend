@@ -6,6 +6,7 @@
     "scripts": {
         "dev": "vite",
         "build": "vite build",
+        "postbuild": "find dist -name '*.map' -type f -delete 2>/dev/null; true",
         "preview": "vite preview",
         "test": "vitest run",
         "test:watch": "vitest",

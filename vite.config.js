@@ -167,23 +167,6 @@ export default defineConfig({
         Components({
             resolvers: [ElementPlusResolver()],
         }),
-        // Sentry source map 上傳：必須放在所有 build plugin 之後，且只在
-        // SENTRY_AUTH_TOKEN/ORG/PROJECT 三者都設好時實際 upload。disable=true
-        // 時 plugin 是 no-op，不會 fail build。
-        sentryVitePlugin({
-            org: process.env.SENTRY_ORG,
-            project: process.env.SENTRY_PROJECT,
-            authToken: process.env.SENTRY_AUTH_TOKEN,
-            disable: !SENTRY_UPLOAD_ENABLED,
-            silent: !SENTRY_UPLOAD_ENABLED,
-            sourcemaps: {
-                // 上傳成功後刪掉 .map，避免 dist 包含 source map 外洩程式結構
-                filesToDeleteAfterUpload: ['./dist/**/*.map'],
-            },
-            release: {
-                name: process.env.SENTRY_RELEASE,
-            },
-        }),
         VitePWA({
             registerType: 'autoUpdate',          // 有新版本時自動更新 SW
             // 不放 images/ivy-kids-loading.png（324 KB）：放進 includeAssets 會被 SW
@@ -459,6 +442,24 @@ export default defineConfig({
                     },
                     // 注意：POST（請假/加班申請）由 Workbox 預設排除，不會快取
                 ],
+            },
+        }),
+        // Sentry source map 上傳：放最後一個 plugin，確保看到 VitePWA 產出的最終 bundle
+        // （PWA 在前能避免 SW precache manifest 把 .map 收進去）。只在
+        // SENTRY_AUTH_TOKEN/ORG/PROJECT 三者都設好時實際 upload；disable=true
+        // 時 plugin 是 no-op，不會 fail build。
+        sentryVitePlugin({
+            org: process.env.SENTRY_ORG,
+            project: process.env.SENTRY_PROJECT,
+            authToken: process.env.SENTRY_AUTH_TOKEN,
+            disable: !SENTRY_UPLOAD_ENABLED,
+            silent: !SENTRY_UPLOAD_ENABLED,
+            sourcemaps: {
+                // 上傳成功後刪掉 .map，避免 dist 包含 source map 外洩程式結構
+                filesToDeleteAfterUpload: ['./dist/**/*.map'],
+            },
+            release: {
+                name: process.env.SENTRY_RELEASE,
             },
         }),
     ],

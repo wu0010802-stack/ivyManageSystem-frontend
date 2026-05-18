@@ -5,6 +5,8 @@ import {
   scrubMapping,
   scrubEvent,
   scrubBreadcrumb,
+  scrubQueryString,
+  hashUserId,
   initSentry,
   captureException,
 } from '@/utils/sentry'
@@ -47,6 +49,44 @@ describe('sanitizeUrl', () => {
     expect(sanitizeUrl('')).toBe('')
     expect(sanitizeUrl(null)).toBe(null)
     expect(sanitizeUrl(undefined)).toBe(undefined)
+  })
+
+  it('filters PII values in query string', () => {
+    // regression：query 內 PII key 過去完全繞過 scrubber，現在應遮值。
+    const result = sanitizeUrl('/api/students/search?phone=0912345678')
+    expect(result).not.toContain('0912345678')
+    expect(result).toContain('phone=')
+    expect(result).toContain('Filtered')
+  })
+
+  it('keeps non-PII metric keys in query intact', () => {
+    expect(sanitizeUrl('/api/salary/preview?year=2026&month=5')).toBe(
+      '/api/salary/preview?year=2026&month=5'
+    )
+  })
+
+  it('handles mixed PII + metric in query', () => {
+    const result = sanitizeUrl(
+      '/api/students/search?email=alice@example.com&id_number=A123456789&year=2026'
+    )
+    expect(result).not.toContain('alice@example.com')
+    expect(result).not.toContain('A123456789')
+    expect(result).toContain('year=2026')
+  })
+
+  it('handles path id + query PII together', () => {
+    const result = sanitizeUrl('/api/students/123?phone=0912345678')
+    expect(result.startsWith('/api/students/:id?')).toBe(true)
+    expect(result).not.toContain('0912345678')
+  })
+
+  it('handles full URL with query PII', () => {
+    const result = sanitizeUrl(
+      'https://x.com/api/students/123?phone=0912&include=name'
+    )
+    expect(result.startsWith('https://x.com/api/students/:id?')).toBe(true)
+    expect(result).not.toContain('0912')
+    expect(result).toContain('include=name')
   })
 })
 
@@ -213,11 +253,34 @@ describe('scrubEvent', () => {
     }
     const res = scrubEvent(ev)
     expect(res.user.email).toBe('[Filtered]')
-    expect(res.user.id).toBe(1)
+    // user.id 對映 employees.id / parents.id —— hash 化避免直連個人
+    expect(res.user.id).toBe(hashUserId(1))
+    expect(res.user.id).not.toBe(1)
     expect(res.extra.base_salary).toBe('[Filtered]')
     expect(res.extra.note).toBe('ok')
     expect(res.contexts.runtime.name).toBe('chrome')
     expect(res.contexts.user.phone).toBe('[Filtered]')
+  })
+
+  it('hashes string user.id', () => {
+    const res = scrubEvent({ user: { id: 'U-12345' } })
+    expect(res.user.id).toBe(hashUserId('U-12345'))
+    expect(res.user.id).toHaveLength(8) // FNV-1a 32-bit → 8 hex chars
+  })
+
+  it('leaves null user.id alone', () => {
+    const res = scrubEvent({ user: { id: null, email: 'x@y.com' } })
+    expect(res.user.id).toBe(null)
+    expect(res.user.email).toBe('[Filtered]')
+  })
+
+  it('scrubs request.query_string string form', () => {
+    const ev = {
+      request: { url: '/x', query_string: 'phone=0912&year=2026' },
+    }
+    const res = scrubEvent(ev)
+    expect(res.request.query_string).not.toContain('0912')
+    expect(res.request.query_string).toContain('year=2026')
   })
 
   it('non-object passthrough', () => {
@@ -235,6 +298,52 @@ describe('scrubBreadcrumb', () => {
     expect(res.message).toBe('GET /api/fees/records/:id')
     expect(res.data.id_number).toBe('[Filtered]')
     expect(res.data.okay).toBe(true)
+  })
+})
+
+describe('scrubQueryString', () => {
+  it('filters PII value in string form', () => {
+    const res = scrubQueryString('phone=0912345678&name=Alice')
+    expect(res).not.toContain('0912345678')
+    expect(res).toContain('name=Alice')
+  })
+
+  it('preserves non-PII keys', () => {
+    expect(scrubQueryString('year=2026&month=5')).toBe('year=2026&month=5')
+  })
+
+  it('falls through to scrubMapping for dict form', () => {
+    expect(scrubQueryString({ phone: '0912', ok: 'yes' })).toEqual({
+      phone: '[Filtered]',
+      ok: 'yes',
+    })
+  })
+
+  it('empty string passthrough', () => {
+    expect(scrubQueryString('')).toBe('')
+  })
+})
+
+describe('hashUserId', () => {
+  it('hashes int to 8-char hex', () => {
+    const h = hashUserId(1)
+    expect(typeof h).toBe('string')
+    expect(h).toHaveLength(8)
+    expect(/^[0-9a-f]{8}$/.test(h)).toBe(true)
+  })
+
+  it('hashes string deterministically', () => {
+    expect(hashUserId('U-99')).toBe(hashUserId('U-99'))
+  })
+
+  it('different ids yield different hashes', () => {
+    expect(hashUserId(1)).not.toBe(hashUserId(2))
+  })
+
+  it('passes through null / undefined / empty', () => {
+    expect(hashUserId(null)).toBe(null)
+    expect(hashUserId(undefined)).toBe(undefined)
+    expect(hashUserId('')).toBe('')
   })
 })
 
