@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /**
  * 家長首頁推播 CTA 卡片。
  *
@@ -11,9 +11,11 @@
  */
 import ParentIcon from '../ParentIcon.vue'
 
-const emit = defineEmits(['enable'])
+const emit = defineEmits<{
+  'enable': []
+}>()
 
-function onClick() {
+function onClick(): void {
   emit('enable')
 }
 </script>
