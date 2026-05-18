@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /**
  * 才藝 hero 卡：三段統計（進行中報名 / 待繳活動費 / 即將開課）
  * 藍青資訊漸層 + 月桂葉左上。
@@ -14,14 +14,20 @@
  */
 import LaurelWreath from '@/components/brand/LaurelWreath.vue'
 
-const props = defineProps({
-  activeRegistrations: { type: Number, default: 0 },
-  unpaidActivityFee: { type: Number, default: 0 },
-  upcomingCount: { type: Number, default: 0 },
+const props = withDefaults(defineProps<{
+  activeRegistrations?: number
+  unpaidActivityFee?: number
+  upcomingCount?: number
+}>(), {
+  activeRegistrations: 0,
+  unpaidActivityFee: 0,
+  upcomingCount: 0,
 })
-const emit = defineEmits(['scroll-section'])
+const emit = defineEmits<{
+  'scroll-section': [key: string]
+}>()
 
-function fmt(n) { return Number(n).toLocaleString('en-US') }
+function fmt(n: number): string { return Number(n).toLocaleString('en-US') }
 </script>
 
 <template>

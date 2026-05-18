@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /**
  * 可報名才藝課程卡片列表（presentational）。
  *
@@ -9,8 +9,24 @@
  *
  * 注：目前後端 course response 無 poster/image 欄位，故未使用 LazyImage。
  */
-defineProps({
-  courses: { type: Array, default: () => [] },
+interface Course {
+  id: number
+  name: string
+  price?: number
+  school_year: number
+  semester: number
+  sessions?: number
+  capacity: number
+  enrolled_count: number
+  is_full: boolean
+  allow_waitlist: boolean
+  description?: string
+}
+
+withDefaults(defineProps<{
+  courses?: Course[]
+}>(), {
+  courses: () => [],
 })
 </script>
 
