@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 import M3Icon from './M3Icon.vue'
 
@@ -13,40 +13,45 @@ import M3Icon from './M3Icon.vue'
  *
  * Spec: docs/superpowers/specs/2026-05-13-parent-material3-redesign-design.md §4.5
  */
-const props = defineProps({
-  variant: {
-    type: String,
-    default: 'assist',
-    validator: (v) => ['assist', 'filter', 'input', 'suggestion'].includes(v),
-  },
-  selected: { type: Boolean, default: false },
-  icon: { type: String, default: '' },
-  removable: { type: Boolean, default: false },
-  disabled: { type: Boolean, default: false },
+const props = withDefaults(defineProps<{
+  variant?: string
+  selected?: boolean
+  icon?: string
+  removable?: boolean
+  disabled?: boolean
+}>(), {
+  variant: 'assist',
+  selected: false,
+  icon: '',
+  removable: false,
+  disabled: false,
 })
 
-const emit = defineEmits(['click', 'remove'])
+const emit = defineEmits<{
+  'click': [event: MouseEvent]
+  'remove': [event: Event]
+}>()
 
-const showLeadingCheck = computed(
+const showLeadingCheck = computed<boolean>(
   () => props.variant === 'filter' && props.selected,
 )
-const leadingIconName = computed(() =>
+const leadingIconName = computed<string>(() =>
   showLeadingCheck.value ? 'check' : props.icon,
 )
-const hasLeading = computed(() => !!leadingIconName.value)
+const hasLeading = computed<boolean>(() => !!leadingIconName.value)
 
-const classes = computed(() => ({
+const classes = computed<Record<string, boolean>>(() => ({
   'm3-chip': true,
   [`m3-chip-${props.variant}`]: true,
   'is-selected': props.selected,
   'is-disabled': props.disabled,
 }))
 
-function onClick(e) {
+function onClick(e: MouseEvent): void {
   if (props.disabled) return
   emit('click', e)
 }
-function onRemove(e) {
+function onRemove(e: Event): void {
   e.stopPropagation()
   if (props.disabled) return
   emit('remove', e)

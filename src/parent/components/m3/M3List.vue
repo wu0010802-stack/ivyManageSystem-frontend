@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /**
  * Material 3 List wrapper.
  * Spec: docs/superpowers/specs/2026-05-13-parent-material3-redesign-design.md §4.4

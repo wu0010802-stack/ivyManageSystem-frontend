@@ -1,5 +1,17 @@
-<script setup>
+<script setup lang="ts">
 import { computed, watch, onBeforeUnmount } from 'vue'
+
+interface SnackbarAction {
+  label: string
+  onClick: () => void
+}
+
+interface Snackbar {
+  id: string | number
+  message: string
+  duration?: number
+  action?: SnackbarAction
+}
 
 /**
  * Material 3 Snackbar host container.
@@ -9,17 +21,19 @@ import { computed, watch, onBeforeUnmount } from 'vue'
  *
  * Spec: docs/superpowers/specs/2026-05-13-parent-material3-redesign-design.md §6.3
  */
-const props = defineProps({
-  snackbars: { type: Array, required: true },
-})
+const props = defineProps<{
+  snackbars: Snackbar[]
+}>()
 
-const emit = defineEmits(['dismiss'])
+const emit = defineEmits<{
+  'dismiss': [id: string | number]
+}>()
 
-const current = computed(() => props.snackbars[0] || null)
+const current = computed<Snackbar | null>(() => props.snackbars[0] || null)
 
-let dismissTimer = null
+let dismissTimer: ReturnType<typeof setTimeout> | null = null
 
-function clearTimer() {
+function clearTimer(): void {
   if (dismissTimer) {
     clearTimeout(dismissTimer)
     dismissTimer = null
@@ -39,11 +53,11 @@ watch(
   { immediate: true },
 )
 
-function onActionClick() {
+function onActionClick(): void {
   if (current.value?.action?.onClick) {
     current.value.action.onClick()
   }
-  emit('dismiss', current.value.id)
+  emit('dismiss', current.value!.id)
 }
 
 onBeforeUnmount(clearTimer)

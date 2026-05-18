@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 import M3IconButton from './M3IconButton.vue'
 
@@ -16,23 +16,24 @@ import M3IconButton from './M3IconButton.vue'
  *
  * Spec: docs/superpowers/specs/2026-05-13-parent-material3-redesign-design.md §5.2
  */
-const props = defineProps({
-  variant: {
-    type: String,
-    default: 'small',
-    validator: (v) => ['center-aligned', 'small', 'large'].includes(v),
-  },
-  title: { type: String, default: '' },
-  showBack: { type: Boolean, default: false },
-  onBack: { type: Function, default: null },
+const props = withDefaults(defineProps<{
+  variant?: string
+  title?: string
+  showBack?: boolean
+  onBack?: (() => void) | null
+}>(), {
+  variant: 'small',
+  title: '',
+  showBack: false,
+  onBack: null,
 })
 
-const classes = computed(() => ({
+const classes = computed<Record<string, boolean>>(() => ({
   'm3-top-app-bar': true,
   [`m3-top-app-bar-${props.variant}`]: true,
 }))
 
-function onBackClick() {
+function onBackClick(): void {
   if (props.onBack) props.onBack()
 }
 </script>

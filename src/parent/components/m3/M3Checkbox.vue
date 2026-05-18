@@ -1,31 +1,37 @@
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 
 /**
  * Material 3 Checkbox.
  * Spec: docs/superpowers/specs/2026-05-13-parent-material3-redesign-design.md §6.6
  */
-const props = defineProps({
-  modelValue: { type: Boolean, default: false },
-  indeterminate: { type: Boolean, default: false },
-  disabled: { type: Boolean, default: false },
+const props = withDefaults(defineProps<{
+  modelValue?: boolean
+  indeterminate?: boolean
+  disabled?: boolean
+}>(), {
+  modelValue: false,
+  indeterminate: false,
+  disabled: false,
 })
 
-const emit = defineEmits(['update:modelValue'])
+const emit = defineEmits<{
+  'update:modelValue': [value: boolean]
+}>()
 
-const ariaChecked = computed(() => {
+const ariaChecked = computed<'mixed' | 'true' | 'false'>(() => {
   if (props.indeterminate) return 'mixed'
   return props.modelValue ? 'true' : 'false'
 })
 
-const classes = computed(() => ({
+const classes = computed<Record<string, boolean>>(() => ({
   'm3-checkbox': true,
   'is-checked': props.modelValue,
   'is-indeterminate': props.indeterminate,
   'is-disabled': props.disabled,
 }))
 
-function onClick() {
+function onClick(): void {
   if (props.disabled) return
   emit('update:modelValue', !props.modelValue)
 }

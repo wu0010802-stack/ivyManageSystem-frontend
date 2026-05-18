@@ -1,6 +1,12 @@
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 import M3Icon from './M3Icon.vue'
+
+interface SegmentItem {
+  value: string
+  label: string
+  icon?: string
+}
 
 /**
  * Material 3 Segmented Button.
@@ -9,30 +15,27 @@ import M3Icon from './M3Icon.vue'
  *
  * Spec: docs/superpowers/specs/2026-05-13-parent-material3-redesign-design.md §6.5
  */
-const props = defineProps({
-  modelValue: {
-    type: [String, Array],
-    default: '',
-  },
-  items: {
-    type: Array,
-    required: true,
-    validator: (arr) =>
-      Array.isArray(arr) && arr.every((it) => 'value' in it && 'label' in it),
-  },
-  multiple: { type: Boolean, default: false },
+const props = withDefaults(defineProps<{
+  modelValue?: string | string[]
+  items: SegmentItem[]
+  multiple?: boolean
+}>(), {
+  modelValue: '',
+  multiple: false,
 })
 
-const emit = defineEmits(['update:modelValue'])
+const emit = defineEmits<{
+  'update:modelValue': [value: string | string[]]
+}>()
 
-function isSelected(value) {
+function isSelected(value: string): boolean {
   if (props.multiple) {
     return Array.isArray(props.modelValue) && props.modelValue.includes(value)
   }
   return props.modelValue === value
 }
 
-function onSegmentClick(value) {
+function onSegmentClick(value: string): void {
   if (props.multiple) {
     const cur = Array.isArray(props.modelValue) ? [...props.modelValue] : []
     const idx = cur.indexOf(value)

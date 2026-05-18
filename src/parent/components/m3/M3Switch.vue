@@ -1,24 +1,29 @@
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 
 /**
  * Material 3 Switch.
  * Spec: docs/superpowers/specs/2026-05-13-parent-material3-redesign-design.md §6.6
  */
-const props = defineProps({
-  modelValue: { type: Boolean, default: false },
-  disabled: { type: Boolean, default: false },
+const props = withDefaults(defineProps<{
+  modelValue?: boolean
+  disabled?: boolean
+}>(), {
+  modelValue: false,
+  disabled: false,
 })
 
-const emit = defineEmits(['update:modelValue'])
+const emit = defineEmits<{
+  'update:modelValue': [value: boolean]
+}>()
 
-const classes = computed(() => ({
+const classes = computed<Record<string, boolean>>(() => ({
   'm3-switch': true,
   'is-checked': props.modelValue,
   'is-disabled': props.disabled,
 }))
 
-function onClick() {
+function onClick(): void {
   if (props.disabled) return
   emit('update:modelValue', !props.modelValue)
 }

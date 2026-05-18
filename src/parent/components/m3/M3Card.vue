@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 
 /**
@@ -14,28 +14,28 @@ import { computed } from 'vue'
  *
  * Spec: docs/superpowers/specs/2026-05-13-parent-material3-redesign-design.md §4.2
  */
-const props = defineProps({
-  variant: {
-    type: String,
-    default: 'elevated',
-    validator: (v) => ['elevated', 'filled', 'outlined'].includes(v),
-  },
-  clickable: { type: Boolean, default: false },
-  padding: { type: String, default: '16px' },
+const props = withDefaults(defineProps<{
+  variant?: string
+  clickable?: boolean
+  padding?: string
+}>(), {
+  variant: 'elevated',
+  clickable: false,
+  padding: '16px',
 })
 
-const classes = computed(() => ({
+const classes = computed<Record<string, boolean>>(() => ({
   'm3-card': true,
   [`m3-card-${props.variant}`]: true,
   'is-clickable': props.clickable,
 }))
 
-const style = computed(() => ({ padding: props.padding }))
+const style = computed<Record<string, string>>(() => ({ padding: props.padding }))
 
 const rootAttrs = computed(() =>
   props.clickable
-    ? { role: 'button', tabindex: '0' }
-    : {},
+    ? ({ role: 'button', tabindex: '0' } as Record<string, string>)
+    : ({} as Record<string, string>),
 )
 </script>
 

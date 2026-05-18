@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, useAttrs } from 'vue'
 
 /**
@@ -16,17 +16,21 @@ import { computed, useAttrs } from 'vue'
  *
  * Icon 名清單：https://fonts.google.com/icons?icon.set=Material+Symbols&icon.style=Rounded
  */
-const props = defineProps({
-  name: { type: String, required: true },
-  size: { type: [Number, String], default: 24 },
-  filled: { type: Boolean, default: false },
-  weight: { type: [Number, String], default: 400 },
+const props = withDefaults(defineProps<{
+  name: string
+  size?: number | string
+  filled?: boolean
+  weight?: number | string
+}>(), {
+  size: 24,
+  filled: false,
+  weight: 400,
 })
 
 const attrs = useAttrs()
-const isDecorative = computed(() => attrs['aria-label'] == null)
+const isDecorative = computed<boolean>(() => attrs['aria-label'] == null)
 
-const iconStyle = computed(() => {
+const iconStyle = computed<Record<string, string | number>>(() => {
   const fontSize = typeof props.size === 'number' ? `${props.size}px` : props.size
   const fill = props.filled ? 1 : 0
   return {
