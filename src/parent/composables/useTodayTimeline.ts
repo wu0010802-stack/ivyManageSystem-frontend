@@ -8,7 +8,7 @@ const BUCKET_LABEL = {
 }
 const BUCKET_ORDER = ['morning', 'noon', 'afternoon', 'later']
 
-function formatTime(iso) {
+function formatTime(iso: string | null | undefined) {
   if (!iso) return null
   try {
     const d = new Date(iso)
@@ -19,7 +19,7 @@ function formatTime(iso) {
   }
 }
 
-function hourFrom(iso) {
+function hourFrom(iso: string | null | undefined) {
   if (!iso) return null
   try {
     const d = new Date(iso)
@@ -30,7 +30,7 @@ function hourFrom(iso) {
   }
 }
 
-function bucketFromHour(h) {
+function bucketFromHour(h: number | null) {
   if (h == null) return null
   if (h >= 6 && h < 12) return 'morning'
   if (h >= 12 && h < 14) return 'noon'
@@ -38,12 +38,12 @@ function bucketFromHour(h) {
   return 'later'
 }
 
-function formatMoney(n) {
+function formatMoney(n: number | null | undefined) {
   if (!n) return '0'
   return n.toLocaleString('en-US')
 }
 
-function isBirthdayToday(birthday) {
+function isBirthdayToday(birthday: string | null | undefined) {
   if (!birthday) return false
   const parts = String(birthday).split('-')
   if (parts.length < 3) return false
@@ -52,7 +52,7 @@ function isBirthdayToday(birthday) {
   return d.getMonth() + 1 === m && d.getDate() === day
 }
 
-function dismissalLabel(status) {
+function dismissalLabel(status: string | null | undefined) {
   if (status === 'pending') return '老師處理中'
   if (status === 'acknowledged') return '老師已收到'
   if (status === 'completed') return '已接送'
@@ -62,13 +62,19 @@ function dismissalLabel(status) {
 // 把後端 summary + today-status 攤平成依時段桶分組的事件流。
 // 桶子：morning (6-12) / noon (12-14) / afternoon (14-18) / later (其餘)
 // 每個 event：{ id, bucket, variant: 'past'|'pending'|'info', time, primary, secondary, tone, path, motif? }
-export function useTodayTimeline({ summary, todayChildren }) {
+export function useTodayTimeline({ summary, todayChildren }: { summary: { value: Record<string, unknown> | null | undefined }; todayChildren: { value: Record<string, unknown>[] | null | undefined } }) {
   const events = computed(() => {
     const out = []
     const summaryV = summary.value
     const childrenStatus = todayChildren.value || []
 
-    for (const c of childrenStatus) {
+    for (const _c of childrenStatus) {
+      const c = _c as {
+        student_id: unknown; name: string; birthday?: string; classroom_name?: string;
+        attendance?: { status?: string }; leave?: { type?: string };
+        medication?: { has_order?: boolean; order_count?: number };
+        dismissal?: { status?: string; completed_at?: string; requested_at?: string; acknowledged_at?: string }
+      }
       const crown = isBirthdayToday(c.birthday) ? 'crown' : null
 
       if (c.attendance) {
@@ -142,82 +148,88 @@ export function useTodayTimeline({ summary, todayChildren }) {
       }
     }
 
-    const fees = summaryV?.fees
-    if (fees?.outstanding_count > 0) {
+    type SummaryShape = {
+      fees?: { outstanding_count?: number; outstanding?: number; overdue?: number }
+      pending_event_acks?: number; unread_messages?: number; pending_activity_promotions?: number
+      unread_announcements?: number; recent_leave_reviews?: number
+    }
+    const sv = summaryV as SummaryShape | null | undefined
+    const fees = sv?.fees
+    if ((fees?.outstanding_count ?? 0) > 0) {
       out.push({
         id: 'fees',
         bucket: 'later',
         variant: 'pending',
         time: null,
-        primary: `待繳費 NT$ ${formatMoney(fees.outstanding)}`,
-        secondary: fees.overdue > 0
-          ? `逾期 NT$ ${formatMoney(fees.overdue)}`
-          : `${fees.outstanding_count} 筆`,
-        tone: fees.overdue > 0 ? 'danger' : 'money',
+        primary: `待繳費 NT$ ${formatMoney(fees?.outstanding)}`,
+        secondary: (fees?.overdue ?? 0) > 0
+          ? `逾期 NT$ ${formatMoney(fees?.overdue)}`
+          : `${fees?.outstanding_count} 筆`,
+        tone: (fees?.overdue ?? 0) > 0 ? 'danger' : 'money',
         path: '/fees',
       })
     }
 
-    if (summaryV?.pending_event_acks > 0) {
+    if ((sv?.pending_event_acks ?? 0) > 0) {
       out.push({
         id: 'acks',
         bucket: 'later',
         variant: 'pending',
         time: null,
         primary: '待簽閱事件',
-        secondary: `${summaryV.pending_event_acks} 件`,
+        secondary: `${sv?.pending_event_acks} 件`,
         tone: 'event',
         path: '/events',
       })
     }
 
-    if (summaryV?.unread_messages > 0) {
+    if ((sv?.unread_messages ?? 0) > 0) {
       out.push({
         id: 'messages',
         bucket: 'later',
         variant: 'pending',
         time: null,
         primary: '未讀訊息',
-        secondary: `${summaryV.unread_messages} 則`,
+        secondary: `${sv?.unread_messages} 則`,
         tone: 'message',
         path: '/messages',
       })
     }
 
-    if (summaryV?.pending_activity_promotions > 0) {
+    if ((sv?.pending_activity_promotions ?? 0) > 0) {
       out.push({
         id: 'promotions',
         bucket: 'later',
         variant: 'pending',
         time: null,
         primary: '才藝候補待確認',
-        secondary: `${summaryV.pending_activity_promotions} 件`,
+        secondary: `${sv?.pending_activity_promotions} 件`,
         tone: 'activity',
         path: '/activity',
       })
     }
 
-    if (summaryV?.unread_announcements > 0) {
+    if ((sv?.unread_announcements ?? 0) > 0) {
       out.push({
         id: 'announcements',
         bucket: 'later',
         variant: 'info',
         time: null,
         primary: '未讀公告',
-        secondary: `${summaryV.unread_announcements} 則`,
+        secondary: `${sv?.unread_announcements} 則`,
         tone: 'announcement',
         path: '/announcements',
       })
     }
 
-    if (summaryV?.recent_leave_reviews > 0) {
+    if ((sv?.recent_leave_reviews ?? 0) > 0) {
       out.push({
         id: 'leaveReviews',
         bucket: 'later',
         variant: 'info',
         time: null,
         primary: '最近請假審核結果',
-        secondary: `${summaryV.recent_leave_reviews} 件`,
+        secondary: `${sv?.recent_leave_reviews} 件`,
         tone: 'leave',
         path: '/leaves',
       })
@@ -229,18 +241,19 @@ export function useTodayTimeline({ summary, todayChildren }) {
   // 依 bucket 分組；空桶不渲染。
   // 桶內排序：past → pending → info；有 time 的依時間升冪。
   const buckets = computed(() => {
-    const order = { past: 0, pending: 1, info: 2 }
-    const sortInBucket = (a, b) => {
-      if (order[a.variant] !== order[b.variant]) return order[a.variant] - order[b.variant]
+    const order: Record<string, number> = { past: 0, pending: 1, info: 2 }
+    const sortInBucket = (a: { variant: string; time?: string | null }, b: { variant: string; time?: string | null }) => {
+      if (order[a.variant] !== order[b.variant]) return (order[a.variant] ?? 99) - (order[b.variant] ?? 99)
       if (a.time && b.time) return a.time.localeCompare(b.time)
       if (a.time) return -1
       if (b.time) return 1
       return 0
     }
+    const bucketLabel = BUCKET_LABEL as Record<string, string>
     return BUCKET_ORDER
       .map((key) => {
-        const items = events.value.filter((e) => e.bucket === key).sort(sortInBucket)
-        return { key, label: BUCKET_LABEL[key], items }
+        const items = events.value.filter((e) => (e as { bucket: string }).bucket === key).sort(sortInBucket)
+        return { key, label: bucketLabel[key], items }
       })
       .filter((b) => b.items.length > 0)
   })

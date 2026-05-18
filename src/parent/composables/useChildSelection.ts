@@ -18,7 +18,7 @@ function loadStored() {
   }
 }
 
-function saveStored(id) {
+function saveStored(id: number | null) {
   try {
     if (id) sessionStorage.setItem(STORAGE_KEY, String(id))
     else sessionStorage.removeItem(STORAGE_KEY)
@@ -32,11 +32,11 @@ const selectedId = ref(loadStored())
 watch(selectedId, (v) => saveStored(v))
 
 export function useChildSelection() {
-  const setSelected = (id) => {
+  const setSelected = (id: number | null | undefined) => {
     selectedId.value = id ? Number(id) : null
   }
 
-  const ensureSelected = (children) => {
+  const ensureSelected = (children: { student_id: number }[]) => {
     if (!children || children.length === 0) {
       selectedId.value = null
       return null
@@ -49,7 +49,7 @@ export function useChildSelection() {
     return ids[0]
   }
 
-  const selectedChild = (children) =>
+  const selectedChild = (children: { value?: { student_id: number }[] | null }) =>
     computed(() => children.value?.find((c) => c.student_id === selectedId.value) || null)
 
   return {

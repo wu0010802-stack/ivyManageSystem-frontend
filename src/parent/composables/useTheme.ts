@@ -23,7 +23,7 @@ const preference = ref(loadPreference())
 function loadPreference() {
   if (typeof localStorage === 'undefined') return 'system'
   const v = localStorage.getItem(STORAGE_KEY)
-  return VALID.has(v) ? v : 'system'
+  return VALID.has(v as string) ? (v as string) : 'system'
 }
 
 function getSystemPrefersDark() {
@@ -31,7 +31,7 @@ function getSystemPrefersDark() {
   return window.matchMedia('(prefers-color-scheme: dark)').matches
 }
 
-function applyToDOM(pref) {
+function applyToDOM(pref: string) {
   if (typeof document === 'undefined') return
   const root = document.documentElement
   const effective =
@@ -54,7 +54,7 @@ export function useTheme() {
     return getSystemPrefersDark() ? 'dark' : 'light'
   })
 
-  function setPreference(next) {
+  function setPreference(next: string) {
     if (!VALID.has(next)) return
     preference.value = next
     if (typeof localStorage !== 'undefined') {
@@ -64,8 +64,8 @@ export function useTheme() {
   }
 
   // 在元件中監聽 system 變化（preference=system 時會 reactive 更新 effective）
-  let mql = null
-  let onChange = null
+  let mql: MediaQueryList | null = null
+  let onChange: (() => void) | null = null
   onMounted(() => {
     if (typeof window === 'undefined' || !window.matchMedia) return
     mql = window.matchMedia('(prefers-color-scheme: dark)')

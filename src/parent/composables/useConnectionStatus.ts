@@ -9,7 +9,7 @@ import { ref } from 'vue'
 
 const online = ref(typeof navigator !== 'undefined' ? navigator.onLine : true)
 const wsConnected = ref(false)
-const lastDisconnectAt = ref(null)
+const lastDisconnectAt = ref<number | null>(null)
 
 let bound = false
 function ensureBound() {
@@ -27,7 +27,7 @@ function ensureBound() {
 export function useConnectionStatus() {
   ensureBound()
 
-  function registerWs(ws) {
+  function registerWs(ws: { addEventListener?: (type: string, handler: () => void) => void } | null | undefined) {
     if (!ws || typeof ws.addEventListener !== 'function') return
     ws.addEventListener('open', () => { wsConnected.value = true })
     ws.addEventListener('close', () => {

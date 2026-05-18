@@ -14,34 +14,36 @@
  * axios v1 原生支援 `{ signal }`；元件 unmount 時自動 abort。
  *
  * @template T
- * @param {(config: { signal: AbortSignal }) => Promise<T>} fetcher
+ * @param {(config: AxiosRequestConfig) => Promise<T>} fetcher
  * @param {Object} [options]
  * @param {T|null} [options.initialData=null]
  * @returns {{ data: import('vue').Ref<T|null>, error: import('vue').Ref<Error|null>, pending: import('vue').Ref<boolean>, refresh: () => Promise<T|null>, abort: () => void }}
  */
 
 import { onUnmounted, ref } from 'vue'
+import type { AxiosRequestConfig } from 'axios'
 
-function _isAbortError(err) {
+function _isAbortError(err: unknown) {
   if (!err) return false
+  const e = err as { name?: string; code?: string; __CANCEL__?: boolean }
   // axios canceled: err.name === 'CanceledError' or err.code === 'ERR_CANCELED'
   // fetch / DOM AbortController: err.name === 'AbortError'
   return (
-    err.name === 'CanceledError' ||
-    err.name === 'AbortError' ||
-    err.code === 'ERR_CANCELED' ||
-    err.__CANCEL__ === true
+    e.name === 'CanceledError' ||
+    e.name === 'AbortError' ||
+    e.code === 'ERR_CANCELED' ||
+    e.__CANCEL__ === true
   )
 }
 
-export function useAbortableFetch(fetcher, options = {}) {
+export function useAbortableFetch<T = unknown>(fetcher: (config: AxiosRequestConfig) => Promise<T>, options: { initialData?: T | null } = {}) {
   const { initialData = null } = options
 
-  const data = ref(initialData)
-  const error = ref(null)
+  const data = ref<T | null>(initialData as T | null)
+  const error = ref<unknown>(null)
   const pending = ref(false)
 
-  let controller = null
+  let controller: AbortController | null = null
 
   function abort() {
     if (controller) {
@@ -50,7 +52,7 @@ export function useAbortableFetch(fetcher, options = {}) {
     }
   }
 
-  async function refresh() {
+  async function refresh(): Promise<T | null> {
     // 切換前先 abort 舊的
     abort()
     const ac = new AbortController()

@@ -4,9 +4,9 @@ import { getFaq } from '@/parent/api/assistant'
 const STORAGE_KEY = 'parent_faq_v1'
 
 export function useFaq() {
-  const faq = ref(null)
+  const faq = ref<unknown>(null)
   const loading = ref(false)
-  const error = ref(null)
+  const error = ref<unknown>(null)
 
   function readCache() {
     try {

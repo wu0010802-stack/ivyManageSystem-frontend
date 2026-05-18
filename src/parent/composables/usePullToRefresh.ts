@@ -27,7 +27,7 @@ const DEFAULT_THRESHOLD = 64
 const SNAP_HEIGHT = 56
 const MAX_PULL = 140
 
-function dampen(dy) {
+function dampen(dy: number) {
   if (dy <= 0) return 0
   // 阻尼：起始 0.55，超過 200px 後逐漸接近 0
   const factor = Math.max(0.15, 0.55 - dy / 2400)
@@ -44,8 +44,13 @@ export function usePullToRefresh({
   threshold = DEFAULT_THRESHOLD,
   scrollEl = null,
   enabled = () => true,
+}: {
+  onRefresh?: (() => void | Promise<void>) | null
+  threshold?: number
+  scrollEl?: (() => HTMLElement | null) | HTMLElement | null
+  enabled?: () => boolean
 } = {}) {
-  const rootRef = ref(null)
+  const rootRef = ref<HTMLElement | null>(null)
   const pullDistance = ref(0)
   const refreshing = ref(false)
   // armed = touchstart 時 scroll 在最頂、且尚未取消，才允許進入 pulling
@@ -62,7 +67,7 @@ export function usePullToRefresh({
     return window.scrollY || document.documentElement.scrollTop || 0
   }
 
-  function onTouchStart(e) {
+  function onTouchStart(e: TouchEvent) {
     if (refreshing.value || !enabled()) {
       armed.value = false
       return
@@ -78,7 +83,7 @@ export function usePullToRefresh({
     lastY = startY
   }
 
-  function onTouchMove(e) {
+  function onTouchMove(e: TouchEvent) {
     if (!armed.value || refreshing.value) return
     if (!e.touches || e.touches.length === 0) return
     const y = e.touches[0].clientY

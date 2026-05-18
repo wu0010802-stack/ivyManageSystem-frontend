@@ -7,7 +7,9 @@
  *   - answer.includes(token)    +1
  * Tokens：query 用空白拆 + 中文逐字（聯集，去重）。
  */
-export function score(item, query) {
+type FaqItem = { question?: string; answer?: string; keywords?: string[] }
+
+export function score(item: FaqItem, query: string) {
   const q = (query || '').toLowerCase().trim()
   if (!q) return 0
   const tokens = [
@@ -20,7 +22,7 @@ export function score(item, query) {
 
   const question = (item.question || '').toLowerCase()
   const answer = (item.answer || '').toLowerCase()
-  const keywords = (item.keywords || []).map(k => (k || '').toLowerCase())
+  const keywords = (item.keywords || []).map((k: string) => (k || '').toLowerCase())
 
   let s = 0
   for (const t of tokens) {
@@ -33,11 +35,11 @@ export function score(item, query) {
   return s
 }
 
-export function searchFaq(items, query, limit = 8) {
+export function searchFaq(items: FaqItem[], query: string, limit = 8) {
   return (items || [])
-    .map(item => ({ item, s: score(item, query) }))
-    .filter(x => x.s > 0)
-    .sort((a, b) => b.s - a.s)
+    .map((item: FaqItem) => ({ item, s: score(item, query) }))
+    .filter((x: { item: FaqItem; s: number }) => x.s > 0)
+    .sort((a: { s: number }, b: { s: number }) => b.s - a.s)
     .slice(0, limit)
-    .map(x => x.item)
+    .map((x: { item: FaqItem }) => x.item)
 }

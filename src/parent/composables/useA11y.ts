@@ -26,7 +26,7 @@ const highContrast = ref(loadHighContrast())
 function loadFontSize() {
   if (typeof localStorage === 'undefined') return 'md'
   const v = localStorage.getItem(SIZE_KEY)
-  return VALID_SIZES.has(v) ? v : 'md'
+  return VALID_SIZES.has(v as string) ? (v as string) : 'md'
 }
 
 function loadHighContrast() {
@@ -51,7 +51,7 @@ export function initA11y() {
 }
 
 export function useA11y() {
-  function setFontSize(size) {
+  function setFontSize(size: string) {
     if (!VALID_SIZES.has(size)) return
     fontSize.value = size
     if (typeof localStorage !== 'undefined') {
@@ -60,7 +60,7 @@ export function useA11y() {
     applyToDOM()
   }
 
-  function setHighContrast(enabled) {
+  function setHighContrast(enabled: boolean) {
     highContrast.value = !!enabled
     if (typeof localStorage !== 'undefined') {
       localStorage.setItem(HC_KEY, enabled ? '1' : '0')

@@ -17,9 +17,9 @@
  *
  * items 變動（例：refresh 後新陣列）會自動 reset 到第 1 頁。
  */
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch, type Ref } from 'vue'
 
-export function useIncrementalRender(itemsRef, opts = {}) {
+export function useIncrementalRender(itemsRef: Ref<unknown[]>, opts: { pageSize?: number; initialPages?: number; rootMargin?: string } = {}) {
   const pageSize = opts.pageSize ?? 20
   const initialPages = opts.initialPages ?? 1
   const rootMargin = opts.rootMargin ?? '200px' // 提前 200px 觸發載入
@@ -50,7 +50,7 @@ export function useIncrementalRender(itemsRef, opts = {}) {
     if (newItems !== oldItems) reset()
   })
 
-  let observer = null
+  let observer: IntersectionObserver | null = null
 
   onMounted(() => {
     if (typeof IntersectionObserver === 'undefined') return
@@ -64,8 +64,8 @@ export function useIncrementalRender(itemsRef, opts = {}) {
     watch(
       sentinelRef,
       (el, oldEl) => {
-        if (oldEl) observer.unobserve(oldEl)
-        if (el) observer.observe(el)
+        if (oldEl) observer?.unobserve(oldEl)
+        if (el) observer?.observe(el)
       },
       { immediate: true },
     )

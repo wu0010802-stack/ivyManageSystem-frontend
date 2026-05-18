@@ -17,11 +17,11 @@ const SWR_TTL_MS = 300_000
 const CHANNEL_NAME = 'parent-today-status'
 
 // 模組層 singleton state
-const status = ref(null)
+const status = ref<unknown>(null)
 const loading = ref(false)
-const error = ref(null)
-let channel = null
-let inflight = null
+const error = ref<unknown>(null)
+let channel: BroadcastChannel | null = null
+let inflight: Promise<unknown> | null = null
 
 function readCache() {
   try {
@@ -31,13 +31,13 @@ function readCache() {
   } catch { return null }
 }
 
-function writeCache(payload) {
+function writeCache(payload: unknown) {
   try {
     sessionStorage.setItem(CACHE_KEY, JSON.stringify({ payload, cachedAt: Date.now() }))
   } catch {/* quota */}
 }
 
-function age(cache) { return cache ? Date.now() - cache.cachedAt : Infinity }
+function age(cache: { cachedAt: number } | null) { return cache ? Date.now() - cache.cachedAt : Infinity }
 
 async function _fetch() {
   loading.value = true
