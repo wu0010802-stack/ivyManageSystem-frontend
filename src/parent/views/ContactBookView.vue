@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { useChildrenStore } from '../stores/children'
 import { useChildSelection } from '../composables/useChildSelection'
 import ChildSelector from '../components/ChildSelector.vue'
@@ -14,6 +15,7 @@ import MonthDateStrip from '../components/contact-book/MonthDateStrip.vue'
 import ContactBookDayCard from '../components/contact-book/ContactBookDayCard.vue'
 import ContactBookListItem from '../components/contact-book/ContactBookListItem.vue'
 
+const router = useRouter()
 const childrenStore = useChildrenStore()
 const { selectedId: selectedStudentId, ensureSelected } = useChildSelection()
 
@@ -92,10 +94,12 @@ function entryHref(id) {
 }
 
 function onDateSelect(iso) {
+  // P1-17：原本用 window.location.hash 強塞 URL 會觸發 vue-router 重新 resolve
+  // 但不會走正常的路由 transition（也不會更新 navigation guards / scroll-restore），
+  // 改用具名路由 + entryId param（router.js 註冊為 `:entryId`）。
   const e = allEntries.value.find((x) => x.log_date === iso)
-  if (e && typeof window !== 'undefined') {
-    window.location.hash = `#${entryHref(e.id)}`
-  }
+  if (!e) return
+  router.push({ name: 'parent-contact-book-detail', params: { entryId: e.id } })
 }
 
 const unreadCount = computed(() =>
