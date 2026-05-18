@@ -1,5 +1,6 @@
 <script setup>
-import { computed, onMounted, ref, watch, nextTick } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch, nextTick } from 'vue'
+import { localDateISO } from '../../utils/date'
 
 const props = defineProps({
   entries: { type: Array, default: () => [] },
@@ -8,20 +9,49 @@ const props = defineProps({
 })
 const emit = defineEmits(['select'])
 
-const today = new Date()
-today.setHours(0, 0, 0, 0)
+/**
+ * 為什麼用 reactive `today` + 每 60s tick：
+ *   1. 跨午夜時 chip 仍要正確標 is-today（停留在頁面整夜的家長 case）。
+ *   2. 原本 `toISOString().slice(0,10)` 會用 UTC，台灣凌晨 0~8 點會偏成「昨天」，
+ *      導致當日聯絡簿紀錄對不到 today chip（P1-15）。改用 localDateISO。
+ */
+function _startOfLocalDay(d = new Date()) {
+  const x = new Date(d)
+  x.setHours(0, 0, 0, 0)
+  return x
+}
+
+const today = ref(_startOfLocalDay())
+let tickTimer = null
+
+onMounted(() => {
+  tickTimer = setInterval(() => {
+    const next = _startOfLocalDay()
+    if (next.getTime() !== today.value.getTime()) {
+      today.value = next
+    }
+  }, 60_000)
+})
+
+onUnmounted(() => {
+  if (tickTimer) {
+    clearInterval(tickTimer)
+    tickTimer = null
+  }
+})
 
 const dateList = computed(() => {
   const out = []
+  const base = today.value
   for (let i = props.days - 1; i >= 0; i--) {
-    const d = new Date(today)
-    d.setDate(today.getDate() - i)
-    const iso = d.toISOString().slice(0, 10)
+    const d = new Date(base)
+    d.setDate(base.getDate() - i)
+    const iso = localDateISO(d)
     out.push({
       iso,
       day: d.getDate(),
       weekday: ['日', '一', '二', '三', '四', '五', '六'][d.getDay()],
-      isToday: d.getTime() === today.getTime(),
+      isToday: d.getTime() === base.getTime(),
       hasEntry: false,
     })
   }
