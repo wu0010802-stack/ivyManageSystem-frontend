@@ -17,19 +17,26 @@
   </el-card>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { Warning } from '@element-plus/icons-vue'
 import * as govMoe from '@/api/govMoe'
 
+interface DisabilityStudent {
+  id: number | string
+  name?: string
+  disability_cert_expiry?: string
+  days_remaining?: number
+}
+
 const total = ref(0)
-const students = ref([])
+const students = ref<DisabilityStudent[]>([])
 
 onMounted(async () => {
   try {
     const { data } = await govMoe.getDisabilityExpiryWidget(30)
-    total.value = data.total
-    students.value = data.students
+    total.value = (data.total as number) || 0
+    students.value = (data.students as DisabilityStudent[]) || []
   } catch (e) {
     // silently ignore (admin perm may be absent)
     total.value = 0
