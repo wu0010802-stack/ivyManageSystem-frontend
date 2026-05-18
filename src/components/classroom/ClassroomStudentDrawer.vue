@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -17,13 +17,43 @@ import { domainBus, STUDENT_EVENTS } from '@/utils/domainBus'
 import StudentEditDialog from '@/components/student/StudentEditDialog.vue'
 import StudentDetailPanel from '@/components/student/StudentDetailPanel.vue'
 
-const props = defineProps({
-  visible: { type: Boolean, default: false },
-  classroom: { type: Object, default: null },
-  loading: { type: Boolean, default: false },
+interface StudentRecord {
+  [key: string]: unknown
+  id: number
+  name?: string
+  student_id?: string
+  gender?: string
+  is_active?: boolean
+  status?: string
+  allergy?: string
+  medication?: string
+  special_needs?: string
+}
+
+interface ClassroomProp {
+  id?: number
+  name?: string
+  grade_name?: string
+  semester_label?: string
+  is_active?: boolean
+  capacity?: number
+  students?: StudentRecord[]
+}
+
+const props = withDefaults(defineProps<{
+  visible?: boolean
+  classroom?: ClassroomProp | null
+  loading?: boolean
+}>(), {
+  visible: false,
+  classroom: null,
+  loading: false,
 })
 
-const emit = defineEmits(['update:visible', 'student-updated'])
+const emit = defineEmits<{
+  'update:visible': [value: boolean]
+  'student-updated': []
+}>()
 
 const router = useRouter()
 
@@ -46,7 +76,7 @@ const visibleStudents = computed(() => {
     : activeStudents.value
   return base.filter((s) => {
     const matchSearch = !studentSearch.value
-      || s.name.includes(studentSearch.value)
+      || (s.name || '').includes(studentSearch.value)
       || s.student_id?.includes(studentSearch.value)
     const matchGender = !studentGenderFilter.value || s.gender === studentGenderFilter.value
     return matchSearch && matchGender
@@ -66,15 +96,15 @@ const studentStats = computed(() => {
   )
 })
 
-const avatarBgColor = (gender) => {
+const avatarBgColor = (gender: string | undefined) => {
   if (gender === '男') return 'var(--el-color-primary)'
   if (gender === '女') return '#e91e8c'
   return '#909399'
 }
 
-const hasHealthAlert = (s) => s.allergy || s.medication || s.special_needs
+const hasHealthAlert = (s: StudentRecord) => s.allergy || s.medication || s.special_needs
 
-const healthAlertText = (s) =>
+const healthAlertText = (s: StudentRecord) =>
   [
     s.allergy && `過敏：${s.allergy}`,
     s.medication && `用藥：${s.medication}`,
@@ -84,13 +114,13 @@ const healthAlertText = (s) =>
     .join('／')
 
 // ── 詳情選擇 ────────────────────────────────────────
-const selectedStudentId = ref(null)
+const selectedStudentId = ref<number | null>(null)
 const selectedStudent = computed(() =>
   visibleStudents.value.find((s) => s.id === selectedStudentId.value)
     || (props.classroom?.students || []).find((s) => s.id === selectedStudentId.value)
     || null,
 )
-const handleSelectStudent = (student) => {
+const handleSelectStudent = (student: StudentRecord) => {
   selectedStudentId.value = student.id
 }
 
@@ -120,16 +150,16 @@ const mobileShowDetail = computed(() => isMobile.value && selectedStudentId.valu
 
 // ── 學生新增/編輯 dialog ────────────────────────────
 const editDialogVisible = ref(false)
-const editMode = ref('create') // 'create' | 'edit'
-const editInitial = ref(null)
+const editMode = ref<'create' | 'edit'>('create')
+const editInitial = ref<Record<string, unknown> | undefined>(undefined)
 
 const handleStudentAdd = () => {
-  editInitial.value = null
+  editInitial.value = undefined
   editMode.value = 'create'
   editDialogVisible.value = true
 }
 
-const handleStudentEdit = (student) => {
+const handleStudentEdit = (student: StudentRecord) => {
   editInitial.value = { ...student }
   editMode.value = 'edit'
   editDialogVisible.value = true
@@ -141,8 +171,9 @@ const handleEditSaved = () => emit('student-updated')
 const { confirmDelete: handleStudentDelete } = useConfirmDelete({
   endpoint: '/students',
   onSuccess: (row) => {
-    domainBus.emit(STUDENT_EVENTS.DELETED, { id: row?.id })
-    if (selectedStudentId.value === row?.id) selectedStudentId.value = null
+    const rowId = (row as { id?: number })?.id
+    domainBus.emit(STUDENT_EVENTS.DELETED, { id: rowId })
+    if (selectedStudentId.value === rowId) selectedStudentId.value = null
     emit('student-updated')
   },
   successMsg: '刪除成功',

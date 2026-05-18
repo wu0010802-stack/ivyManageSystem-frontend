@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, computed, watch, defineAsyncComponent } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Download } from '@element-plus/icons-vue'
@@ -16,18 +16,51 @@ import { dateToLocalISO } from '@/utils/format'
 
 const { notify } = useErrorNotify()
 
-const props = defineProps({
-  visible: { type: Boolean, default: false },
-  classroom: { type: Object, default: null },
+interface ClassroomProp {
+  id?: number
+  name?: string
+  students?: { length?: number }[]
+}
+
+interface ChangeLog {
+  id?: number
+  event_date?: string
+  event_type?: string
+  student_name?: string
+  classroom_name?: string
+  to_classroom_name?: string
+  from_classroom_name?: string
+  reason?: string
+  notes?: string
+}
+
+interface CommunicationLog {
+  id?: number
+  communication_date?: string
+  communication_type?: string
+  student_name?: string
+  topic?: string
+  content?: string
+  follow_up?: string
+}
+
+const props = withDefaults(defineProps<{
+  visible?: boolean
+  classroom?: ClassroomProp | null
+}>(), {
+  visible: false,
+  classroom: null,
 })
-const emit = defineEmits(['update:visible'])
-const updateVisible = (v) => emit('update:visible', v)
+const emit = defineEmits<{
+  'update:visible': [value: boolean]
+}>()
+const updateVisible = (v: boolean) => emit('update:visible', v)
 
 // ── 學期 ───────────────────────────────────────
 const termStore = useAcademicTermStore()
 const currentTerm = getCurrentAcademicTerm()
-const semLabel = (s) => (s === 1 ? '上學期' : '下學期')
-const makeTerm = (sy, sem) => ({
+const semLabel = (s: number) => (s === 1 ? '上學期' : '下學期')
+const makeTerm = (sy: number, sem: number) => ({
   key: `${sy}-${sem}`,
   school_year: sy,
   semester: sem,
@@ -58,17 +91,19 @@ const activeTab = ref('timeline')
 
 // ── 異動時間軸 ─────────────────────────────────
 const EVENT_TYPES = ['入學', '復學', '退學', '轉出', '轉入', '畢業', '休學']
-const filterEventTypes = ref([])
-const logs = ref([])
+const filterEventTypes = ref<string[]>([])
+const logs = ref<ChangeLog[]>([])
 const logsLoading = ref(false)
-const summary = ref(null)
+const summary = ref<Record<string, number> | null>(null)
 const logsTotal = ref(0)
 const logsPage = ref(1)
 const LOGS_PAGE_SIZE = 50
 
-const eventTagType = (type) => {
-  const map = { 入學: 'success', 復學: 'success', 退學: 'danger', 轉出: 'warning', 轉入: 'primary', 畢業: 'info', 休學: 'info' }
-  return map[type] || ''
+const eventTagType = (type: string | undefined): 'success' | 'danger' | 'warning' | 'primary' | 'info' | undefined => {
+  const map: Record<string, 'success' | 'danger' | 'warning' | 'primary' | 'info'> = {
+    入學: 'success', 復學: 'success', 退學: 'danger', 轉出: 'warning', 轉入: 'primary', 畢業: 'info', 休學: 'info',
+  }
+  return type ? map[type] : undefined
 }
 
 const termParams = () => ({
@@ -81,7 +116,7 @@ const fetchLogs = async () => {
   if (!props.classroom?.id) return
   logsLoading.value = true
   try {
-    const params = {
+    const params: Record<string, unknown> = {
       ...termParams(),
       page: logsPage.value,
       page_size: LOGS_PAGE_SIZE,
@@ -116,7 +151,7 @@ const statsCards = computed(() => {
   return { enter, leave, net: enter - leave, retention }
 })
 
-const eventText = (log) => {
+const eventText = (log: ChangeLog) => {
   const name = log.student_name || '—'
   switch (log.event_type) {
     case '入學':
@@ -137,7 +172,7 @@ const eventText = (log) => {
 
 const handleExport = async () => {
   try {
-    const params = { ...termParams() }
+    const params: Record<string, unknown> = { ...termParams() }
     if (filterEventTypes.value.length) params.event_type = filterEventTypes.value
     const res = await exportChangeLogs(params)
     const blob = new Blob([res.data], { type: 'text/csv;charset=utf-8' })
@@ -155,7 +190,7 @@ const handleExport = async () => {
 }
 
 // ── 家長溝通 ─────────────────────────────────
-const communications = ref([])
+const communications = ref<CommunicationLog[]>([])
 const commsLoading = ref(false)
 
 const fetchCommunications = async () => {
@@ -180,7 +215,7 @@ const fetchCommunications = async () => {
 }
 
 // ── 身分比例 ─────────────────────────────────
-let _chartReady = null
+let _chartReady: Promise<void> | null = null
 const ensureChartReady = () => {
   if (!_chartReady) {
     _chartReady = import('chart.js').then(({
@@ -195,13 +230,13 @@ const DoughnutChart = defineAsyncComponent(() =>
   ensureChartReady().then(() => import('vue-chartjs').then(m => m.Doughnut))
 )
 
-const composition = ref(null)
+const composition = ref<{ total?: number; counts?: Record<string, number> } | null>(null)
 const compLoading = ref(false)
 const fetchComposition = async () => {
   if (!props.classroom?.id) return
   compLoading.value = true
   try {
-    const res = await getClassroomEnrollmentComposition(props.classroom.id)
+    const res = await getClassroomEnrollmentComposition(props.classroom.id as number)
     composition.value = res.data
   } catch (e) {
     notify(e, 'ChangeLogDrawer:loadComposition', '載入身分比例失敗')
@@ -233,7 +268,7 @@ const doughnutData = computed(() => {
   }
 })
 
-const doughnutOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+const doughnutOptions = { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' as const } } }
 
 // ── drawer 開關時 / 學期切換 / filter 變化 → 重新載入 ──
 const reloadAll = () => {
