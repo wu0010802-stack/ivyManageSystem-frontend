@@ -66,6 +66,14 @@ jobs:
         continue-on-error: true
 
       - name: Build check
+        env:
+          # Sentry sourcemap 上傳：vite.config.js 用 SENTRY_AUTH_TOKEN 作為 enable gate；
+          # 三 secret 全空時 sentryVitePlugin disable=true、sourcemap=false（dist 不含 .map）。
+          # User 在 Settings → Secrets 各別設好後自動開啟上傳。
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+          SENTRY_RELEASE: ${{ github.sha }}
         run: npm run build
 
   openapi-drift:
