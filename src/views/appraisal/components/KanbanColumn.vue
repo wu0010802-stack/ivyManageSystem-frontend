@@ -1,26 +1,34 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref } from 'vue'
 import SummaryCard from './SummaryCard.vue'
 
-const props = defineProps({
-  status: { type: String, required: true },
-  label: { type: String, required: true },
-  summaries: { type: Array, default: () => [] },
-  selectedIds: { type: Array, default: () => [] },
-  collapsedByDefault: { type: Boolean, default: false },
+interface Summary { id: number; [key: string]: unknown }
+
+const props = defineProps<{
+  status: string
+  label: string
+  summaries?: Summary[]
+  selectedIds?: number[]
+  collapsedByDefault?: boolean
+}>()
+const emit = defineEmits<{
+  'toggle-select': [payload: { summaryId: number; selected: boolean }]
+  'select-all': [payload: { status: string; selected: boolean }]
+  'action': [payload: unknown]
+}>()
+
+const collapsed = ref((props.collapsedByDefault ?? false) && (props.summaries?.length ?? 0) > 5)
+const allSelected = computed(() => {
+  const sums = props.summaries ?? []
+  const ids = props.selectedIds ?? []
+  return sums.length > 0 && sums.every(s => ids.includes(s.id))
 })
-const emit = defineEmits(['toggle-select', 'select-all', 'action'])
 
-const collapsed = ref(props.collapsedByDefault && props.summaries.length > 5)
-const allSelected = computed(() =>
-  props.summaries.length > 0 && props.summaries.every(s => props.selectedIds.includes(s.id)),
-)
-
-function onCardSelectChange(summaryId, v) {
+function onCardSelectChange(summaryId: number, v: boolean) {
   emit('toggle-select', { summaryId, selected: v })
 }
-function onSelectAll(v) {
-  emit('select-all', { status: props.status, selected: v })
+function onSelectAll(v: string | number | boolean) {
+  emit('select-all', { status: props.status, selected: Boolean(v) })
 }
 </script>
 
@@ -29,18 +37,18 @@ function onSelectAll(v) {
     <div class="col-header">
       <el-checkbox :model-value="allSelected" @update:model-value="onSelectAll"
                    :data-test="`col-select-all-${status}`" />
-      <span class="col-label">{{ label }} ({{ summaries.length }})</span>
+      <span class="col-label">{{ label }} ({{ summaries?.length ?? 0 }})</span>
       <el-button text @click="collapsed = !collapsed">
         {{ collapsed ? '展開' : '收合' }}
       </el-button>
     </div>
     <div v-if="!collapsed" class="col-body" :data-test="`col-body-${status}`">
       <SummaryCard
-        v-for="summary in summaries"
+        v-for="summary in (summaries ?? [])"
         :key="summary.id"
         :summary="summary"
-        :selected="selectedIds.includes(summary.id)"
-        @update:selected="(v) => onCardSelectChange(summary.id, v)"
+        :selected="(selectedIds ?? []).includes(summary.id)"
+        @update:selected="(v) => onCardSelectChange(summary.id, v as boolean)"
         @action="(payload) => emit('action', payload)"
       />
     </div>

@@ -1,29 +1,31 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 
 import { getScoringRuleHistory } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
 
-const props = defineProps({
-  visible: { type: Boolean, default: false },
-  itemCode: { type: String, default: null },
-})
-const emit = defineEmits(['update:visible'])
+interface RuleVersion { id: number; rule_type?: string; rule_config?: Record<string, unknown>; effective_from?: string; notes?: string }
+
+const props = defineProps<{
+  visible?: boolean
+  itemCode?: string | null
+}>()
+const emit = defineEmits<{ 'update:visible': [value: boolean] }>()
 
 const drawerVisible = computed({
-  get: () => props.visible,
-  set: (v) => emit('update:visible', v),
+  get: () => props.visible ?? false,
+  set: (v: boolean) => emit('update:visible', v),
 })
 
-const versions = ref([])
+const versions = ref<RuleVersion[]>([])
 const loading = ref(false)
 
 async function load() {
   if (!props.itemCode) return
   loading.value = true
   try {
-    const { data } = await getScoringRuleHistory(props.itemCode)
+    const { data } = await getScoringRuleHistory(props.itemCode as string)
     versions.value = data
   } catch (e) {
     ElMessage.error(apiError(e, '載入歷史失敗'))

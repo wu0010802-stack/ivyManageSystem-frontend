@@ -1,4 +1,5 @@
 import { ref, computed, watch } from 'vue'
+import type { Ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getManualEventCounts, batchUpsertManualEventCounts } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
@@ -13,7 +14,7 @@ export const MANUAL_ITEM_CODES = [
   'OTHER',
 ]
 
-export const MANUAL_LABEL = {
+export const MANUAL_LABEL: Record<string, string> = {
   SCHOOL_MEETING_ABSENCE: '園務會議',
   INSTITUTION_MEETING_0913: '機構會議9/13',
   INSTITUTION_MEETING_1115: '機構會議11/15',
@@ -23,9 +24,11 @@ export const MANUAL_LABEL = {
   OTHER: '其他',
 }
 
-export function useManualEventEntry(cycleIdRef) {
-  const counts = ref({})
-  const original = ref({})
+type CountMap = Record<string, Record<string, number>>
+
+export function useManualEventEntry(cycleIdRef: Ref<number | null | undefined>) {
+  const counts = ref<CountMap>({})
+  const original = ref<CountMap>({})
   const loading = ref(false)
   const saving = ref(false)
 
@@ -34,13 +37,15 @@ export function useManualEventEntry(cycleIdRef) {
     loading.value = true
     try {
       const { data } = await getManualEventCounts(cycleIdRef.value)
-      const m = {}
-      for (const e of data.entries) {
-        if (!m[e.participant_id]) m[e.participant_id] = {}
-        m[e.participant_id][e.item_code] = Number(e.count)
+      const m: CountMap = {}
+      const entries = (data as { entries?: { participant_id: number | string; item_code: string; count: number | string }[] }).entries ?? []
+      for (const e of entries) {
+        const pid = String(e.participant_id)
+        if (!m[pid]) m[pid] = {}
+        m[pid][e.item_code] = Number(e.count)
       }
-      counts.value = JSON.parse(JSON.stringify(m))
-      original.value = JSON.parse(JSON.stringify(m))
+      counts.value = JSON.parse(JSON.stringify(m)) as CountMap
+      original.value = JSON.parse(JSON.stringify(m)) as CountMap
     } catch (e) {
       ElMessage.error(apiError(e, '載入手填事件失敗'))
     } finally {
@@ -49,7 +54,7 @@ export function useManualEventEntry(cycleIdRef) {
   }
 
   const dirtyEntries = computed(() => {
-    const out = []
+    const out: { participant_id: number; item_code: string; count: number }[] = []
     for (const pid of Object.keys(counts.value)) {
       for (const code of MANUAL_ITEM_CODES) {
         const cur = counts.value[pid]?.[code] ?? 0
@@ -69,7 +74,7 @@ export function useManualEventEntry(cycleIdRef) {
     }
     saving.value = true
     try {
-      await batchUpsertManualEventCounts(cycleIdRef.value, dirtyEntries.value)
+      await batchUpsertManualEventCounts(cycleIdRef.value!, dirtyEntries.value)
       ElMessage.success(`已儲存 ${dirtyEntries.value.length} 筆變更`)
       await load()
     } catch (e) {
@@ -79,13 +84,14 @@ export function useManualEventEntry(cycleIdRef) {
     }
   }
 
-  function getCount(pid, code) {
-    return counts.value[pid]?.[code] ?? 0
+  function getCount(pid: string | number, code: string) {
+    return counts.value[String(pid)]?.[code] ?? 0
   }
 
-  function setCount(pid, code, value) {
-    if (!counts.value[pid]) counts.value[pid] = {}
-    counts.value[pid][code] = value
+  function setCount(pid: string | number, code: string, value: number) {
+    const key = String(pid)
+    if (!counts.value[key]) counts.value[key] = {}
+    counts.value[key][code] = value
   }
 
   watch(cycleIdRef, () => load(), { immediate: true })

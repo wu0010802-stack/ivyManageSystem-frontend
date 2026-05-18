@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Refresh, Edit } from '@element-plus/icons-vue'
@@ -8,14 +8,28 @@ import {
 } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
 
-const items = ref([])
+interface PenaltyItem {
+  id: number
+  code?: string
+  category?: string
+  subcategory?: string
+  description?: string
+  default_event_type?: string
+  default_score_delta?: number | string
+  severity_max?: number
+  display_order?: number
+  is_active?: boolean
+  [key: string]: unknown
+}
+
+const items = ref<PenaltyItem[]>([])
 const loading = ref(false)
 const showInactive = ref(false)
 const categoryFilter = ref('')
 
 const dialogVisible = ref(false)
 const submitting = ref(false)
-const editTarget = ref(null)
+const editTarget = ref<PenaltyItem | null>(null)
 const form = reactive({
   default_score_delta: 0,
   severity_max: 1,
@@ -33,10 +47,10 @@ const categoryOptions = [
   { value: 'MERIT', label: '功績' },
   { value: 'SPECIAL', label: '特別事件' },
 ]
-const categoryLabel = (v) =>
+const categoryLabel = (v: string) =>
   categoryOptions.find((o) => o.value === v)?.label || v
 
-const eventTypeLabel = {
+const eventTypeLabel: Record<string, string> = {
   MAJOR_MERIT: '大功',
   MINOR_MERIT: '小功',
   COMMENDATION: '嘉獎',
@@ -53,9 +67,10 @@ const sortedItems = computed(() => {
     arr = arr.filter((i) => i.category === categoryFilter.value)
   }
   return [...arr].sort((a, b) => {
-    if (a.category !== b.category) return a.category.localeCompare(b.category)
-    if (a.display_order !== b.display_order)
-      return a.display_order - b.display_order
+    const ac = a.category ?? '', bc = b.category ?? ''
+    if (ac !== bc) return ac.localeCompare(bc)
+    const ad = a.display_order ?? 0, bd = b.display_order ?? 0
+    if (ad !== bd) return ad - bd
     return a.id - b.id
   })
 })
@@ -63,10 +78,10 @@ const sortedItems = computed(() => {
 const fetchItems = async () => {
   loading.value = true
   try {
-    const res = await listAppraisalPenaltyCatalog({
+    const res = await (listAppraisalPenaltyCatalog as (p: Record<string, unknown>) => Promise<{ data: unknown }>)({
       active_only: !showInactive.value,
     })
-    items.value = res.data || []
+    items.value = ((res.data || []) as PenaltyItem[])
   } catch (error) {
     ElMessage.error(apiError(error, '載入扣分目錄失敗'))
   } finally {
@@ -74,25 +89,25 @@ const fetchItems = async () => {
   }
 }
 
-const openEdit = (row) => {
+const openEdit = (row: PenaltyItem) => {
   editTarget.value = row
   form.default_score_delta = Number(row.default_score_delta)
-  form.severity_max = row.severity_max
-  form.display_order = row.display_order
-  form.is_active = row.is_active
+  form.severity_max = row.severity_max ?? 1
+  form.display_order = row.display_order ?? 0
+  form.is_active = row.is_active ?? true
   dialogVisible.value = true
 }
 
 const submitForm = async () => {
   submitting.value = true
   try {
-    const res = await patchAppraisalPenaltyCatalog(editTarget.value.id, {
+    const res = await (patchAppraisalPenaltyCatalog as (id: number, p: Record<string, unknown>) => Promise<{ data: unknown }>)(editTarget.value!.id, {
       default_score_delta: form.default_score_delta,
       severity_max: form.severity_max,
       display_order: form.display_order,
       is_active: form.is_active,
     })
-    const updated = res.data
+    const updated = res.data as PenaltyItem
     const idx = items.value.findIndex((i) => i.id === updated.id)
     if (idx >= 0) items.value[idx] = updated
     ElMessage.success('已更新')
@@ -105,11 +120,11 @@ const submitForm = async () => {
 }
 
 // is_active inline switch（只送 is_active 一個欄位）
-const toggleActive = async (row, val) => {
+const toggleActive = async (row: PenaltyItem, val: boolean) => {
   try {
-    const res = await patchAppraisalPenaltyCatalog(row.id, { is_active: val })
+    const res = await (patchAppraisalPenaltyCatalog as (id: number, p: Record<string, unknown>) => Promise<{ data: unknown }>)(row.id, { is_active: val })
     const idx = items.value.findIndex((i) => i.id === row.id)
-    if (idx >= 0) items.value[idx] = res.data
+    if (idx >= 0) items.value[idx] = res.data as PenaltyItem
     ElMessage.success(val ? '已啟用' : '已停用')
   } catch (error) {
     // 失敗時恢復原值
@@ -181,7 +196,7 @@ onMounted(fetchItems)
         <template #default="{ row }">
           <el-switch
             v-model="row.is_active"
-            @change="(val) => toggleActive(row, val)"
+            @change="(val) => toggleActive(row, val as boolean)"
           />
         </template>
       </el-table-column>

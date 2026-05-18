@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /**
  * YearlyEnrollmentTargetSection — 學年度目標人數設定
  *
@@ -21,23 +21,35 @@ import {
   buildSchoolYearOptions,
 } from '@/utils/academic'
 
+interface CycleEntry {
+  id: number
+  semester?: string
+  enrollment_target?: number | null
+  enrollment_actual?: number | null
+  base_score?: number | null
+  base_score_calc_date?: string
+  [key: string]: unknown
+}
+
+type SemesterKey = 'FIRST' | 'SECOND'
+
 const { notify } = useErrorNotify()
 
 const currentTerm = getCurrentAcademicTerm()
 const selectedYear = ref(currentTerm.school_year)
 const yearOptions = computed(() => buildSchoolYearOptions(currentTerm.school_year, 5))
 
-const cycles = ref([]) // 0-2 筆 CycleOut
+const cycles = ref<CycleEntry[]>([]) // 0-2 筆 CycleOut
 const loading = ref(false)
 
-const firstCycle = computed(() => cycles.value.find((c) => c.semester === 'FIRST') || null)
-const secondCycle = computed(() => cycles.value.find((c) => c.semester === 'SECOND') || null)
+const firstCycle = computed<CycleEntry | null>(() => cycles.value.find((c) => c.semester === 'FIRST') || null)
+const secondCycle = computed<CycleEntry | null>(() => cycles.value.find((c) => c.semester === 'SECOND') || null)
 
 async function load() {
   loading.value = true
   try {
     const { data } = await getAppraisalCyclesByYear(selectedYear.value)
-    cycles.value = Array.isArray(data) ? data : []
+    cycles.value = (Array.isArray(data) ? data : []) as CycleEntry[]
   } catch (e) {
     notify(e, 'YearlyEnrollmentTargetSection:load', '載入學年週期失敗')
     cycles.value = []
@@ -50,27 +62,28 @@ watch(selectedYear, load)
 onMounted(load)
 
 // ── 編輯模式 state（per semester）──────────────────────────
-const editing = ref({ FIRST: false, SECOND: false })
-const editForm = ref({
+const editing = ref<Record<SemesterKey, boolean>>({ FIRST: false, SECOND: false })
+const editForm = ref<Record<SemesterKey, { enrollment_target: number; enrollment_actual: number | null }>>({
   FIRST: { enrollment_target: 0, enrollment_actual: null },
   SECOND: { enrollment_target: 0, enrollment_actual: null },
 })
-const savingSemester = ref({ FIRST: false, SECOND: false })
+const savingSemester = ref<Record<SemesterKey, boolean>>({ FIRST: false, SECOND: false })
 
-function startEdit(cycle) {
-  editForm.value[cycle.semester] = {
+function startEdit(cycle: CycleEntry) {
+  const semester = cycle.semester as SemesterKey
+  editForm.value[semester] = {
     enrollment_target: cycle.enrollment_target ?? 0,
     enrollment_actual: cycle.enrollment_actual ?? null,
   }
-  editing.value[cycle.semester] = true
+  editing.value[semester] = true
 }
 
-function cancelEdit(semester) {
+function cancelEdit(semester: SemesterKey) {
   editing.value[semester] = false
 }
 
-async function saveEdit(cycle) {
-  const semester = cycle.semester
+async function saveEdit(cycle: CycleEntry) {
+  const semester = cycle.semester as SemesterKey
   savingSemester.value[semester] = true
   try {
     await patchAppraisalCycle(cycle.id, {
@@ -88,9 +101,9 @@ async function saveEdit(cycle) {
 }
 
 // ── 建立學期 cycle ─────────────────────────────────────────
-const creating = ref({ FIRST: false, SECOND: false })
+const creating = ref<Record<SemesterKey, boolean>>({ FIRST: false, SECOND: false })
 
-function defaultDatesFor(schoolYear, semesterEnum) {
+function defaultDatesFor(schoolYear: number, semesterEnum: SemesterKey) {
   // schoolYear 為民國
   const yearAD = Number(schoolYear) + 1911
   if (semesterEnum === 'FIRST') {
@@ -107,7 +120,7 @@ function defaultDatesFor(schoolYear, semesterEnum) {
   }
 }
 
-async function createForSemester(semesterEnum) {
+async function createForSemester(semesterEnum: SemesterKey) {
   const label = semesterEnum === 'FIRST' ? '上' : '下'
   try {
     await ElMessageBox.confirm(
