@@ -37,7 +37,7 @@ async function submit() {
 <template>
   <div class="bind-add-view">
     <BrandMark variant="full" :size="100" class="welcome-mark" />
-    <div class="card">
+    <div class="card pt-card">
       <h2 class="title">加綁第二個小孩</h2>
       <p class="desc">
         請輸入由園所提供的另一張綁定碼。完成後，新的小孩將會出現在您的子女清單中。
@@ -57,7 +57,7 @@ async function submit() {
         />
       </div>
       <button
-        class="submit"
+        class="pt-action-btn submit-btn"
         type="button"
         :disabled="submitting"
         @click="submit"
@@ -81,16 +81,14 @@ async function submit() {
 
 .welcome-mark {
   margin: var(--space-6, 32px) auto var(--space-5, 24px);
-  display: block;}
+  display: block;
+}
 
 .card {
-  background: var(--m3-surface-container-low, var(--pt-surface-card, var(--neutral-0)));
-  border-radius: 16px;
-  padding: 28px 22px;
-  width: 100%;
   max-width: 360px;
+  width: 100%;
   box-shadow: var(--m3-elev-1, var(--pt-elev-2));
-  border: var(--pt-hairline);
+  margin: 0;
 }
 
 .title {
@@ -125,27 +123,8 @@ async function submit() {
   box-shadow: 0 0 0 2px var(--brand-primary-soft);
 }
 
-.submit {
-  margin-top: 16px;
+.submit-btn {
   width: 100%;
-  min-height: var(--touch-target-min, 44px);
-  padding: 12px;
-  background: var(--m3-primary, var(--brand-primary));
-  color: var(--neutral-0);
-  border: none;
-  border-radius: var(--radius-md, 8px);
-  font-size: 16px;
-  font-weight: var(--font-weight-medium, 500);
-  cursor: pointer;
-  transition: background var(--transition-fast, 0.15s ease);
-}
-
-.submit:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.submit:active:not(:disabled) {
-  background: var(--brand-primary-hover);
+  margin-top: 16px;
 }
 </style>
