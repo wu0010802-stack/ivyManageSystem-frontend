@@ -1,4 +1,4 @@
-// src/parent/api/childMeasurements.js
+// src/parent/api/childMeasurements.ts
 import api from './index'
 
 export const fetchChildMeasurements = (studentId: number, params: unknown = {}) =>

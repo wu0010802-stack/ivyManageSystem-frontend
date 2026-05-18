@@ -5,10 +5,13 @@
  * 而非管理端 /login）。Cookie httpOnly 由瀏覽器自動攜帶，路徑 /api 共用。
  */
 
-import axios, { type AxiosInstance, type InternalAxiosRequestConfig } from 'axios'
+import axios, { type AxiosError, type AxiosInstance, type InternalAxiosRequestConfig } from 'axios'
 import { applyDedupe } from '@/utils/apiDedupe'
 
 declare module 'axios' {
+  interface AxiosError {
+    displayMessage?: string | null
+  }
   interface InternalAxiosRequestConfig {
     metadata?: { startedAt: number }
     _retried?: boolean
@@ -84,7 +87,7 @@ api.interceptors.response.use(
     }
     return response
   },
-  async (error) => {
+  async (error: AxiosError) => {
     const originalRequest = error.config as (InternalAxiosRequestConfig & { _retried?: boolean }) | undefined
     const url = originalRequest?.url || ''
     const isAuthEndpoint =
@@ -135,8 +138,8 @@ api.interceptors.response.use(
       _redirectToLogin()
     }
 
-    error.displayMessage =
-      error.response?.data?.detail || error.response?.data?.message || null
+    const data = error.response?.data as { detail?: string; message?: string } | undefined
+    error.displayMessage = data?.detail || data?.message || null
     return Promise.reject(error)
   },
 )

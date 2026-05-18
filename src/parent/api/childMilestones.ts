@@ -1,4 +1,4 @@
-// src/parent/api/childMilestones.js
+// src/parent/api/childMilestones.ts
 import api from './index'
 
 export const fetchChildMilestones = (studentId: number, params: unknown = {}) =>
