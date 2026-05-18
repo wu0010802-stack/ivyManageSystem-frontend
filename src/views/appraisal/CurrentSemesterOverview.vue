@@ -594,6 +594,7 @@ const scorePreviewDialogVisible = ref(false)
     <ScorePreviewDialog
       v-model:visible="scorePreviewDialogVisible"
       :cycle-id="currentCycle?.id ?? null"
+      @request-sync="openSyncPreview"
     />
   </div>
 </template>

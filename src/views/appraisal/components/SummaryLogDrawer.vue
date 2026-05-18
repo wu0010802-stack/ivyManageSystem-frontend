@@ -5,6 +5,7 @@ import { ElMessage } from 'element-plus'
 import { getSummaryLogs } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
 import { formatDateTimeTW } from '@/utils/format'
+import { ACTION_LABEL } from '../labels'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -35,14 +36,7 @@ async function load() {
 
 watch(() => [props.visible, props.summaryId], ([v]) => { if (v) load() }, { immediate: true })
 
-const ACTION_LABEL = {
-  SIGN_SUPERVISOR: '主管簽核',
-  SIGN_ACCOUNTING: '會計簽核',
-  FINALIZE: '核定',
-  REJECT: '退簽',
-  COMMENT: '留言',
-  RECOMPUTE: '重算',
-}
+// ACTION_LABEL 從 ../labels 集中載入（P2 i18n 過渡）
 
 // P1-11：三個簽核階段需可視區分（原本同色 success）。
 // 主管簽 / 會計簽 / 核定 用 primary / warning / success 三色。

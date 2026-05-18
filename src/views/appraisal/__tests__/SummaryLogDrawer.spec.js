@@ -86,4 +86,17 @@ describe('SummaryLogDrawer', () => {
     expect(api.getSummaryLogs).toHaveBeenCalledTimes(2)
     expect(api.getSummaryLogs).toHaveBeenLastCalledWith(99)
   })
+
+  // P2-FE-3：API reject → ElMessage.error + empty state（沒有 logs 顯示）
+  it('shows error toast when API rejects', async () => {
+    const { ElMessage } = await import('element-plus')
+    api.getSummaryLogs.mockRejectedValueOnce({
+      response: { status: 500, data: { detail: 'server error' } },
+    })
+    const wrapper = mount(SummaryLogDrawer, mountOpts())
+    await nextTick(); await nextTick()
+    expect(ElMessage.error).toHaveBeenCalled()
+    // 沒有 log item
+    expect(wrapper.find('[data-test^="log-item-"]').exists()).toBe(false)
+  })
 })

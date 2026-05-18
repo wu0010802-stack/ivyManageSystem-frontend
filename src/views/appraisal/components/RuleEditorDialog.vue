@@ -41,6 +41,16 @@ const RULE_TYPE_OPTIONS = [
   { value: 'DISCIPLINARY_TIERED', label: '懲處分級（REWARD_PUNISH 專用）' },
 ]
 
+// P2-FE-5：input_field 限定枚舉，避免 free text 與後端 rule_applier 取值不同步。
+// 後端 services/appraisal/rule_applier.py 雖以 item_code 分流取值（input_field
+// 目前是 informational），但已知的合法值僅這 4 個；改為下拉避免錯字。
+const INPUT_FIELD_OPTIONS = [
+  { value: 'retention_rate', label: '留校率 retention_rate' },
+  { value: 'activity_rate', label: '才藝報名率 activity_rate' },
+  { value: 'late_count', label: '遲到次數 late_count' },
+  { value: 'leave_days', label: '請假天數 leave_days' },
+]
+
 const DEFAULT_FORM = () => ({
   rule_type: 'PER_UNIT',
   effective_from: '',
@@ -141,6 +151,17 @@ function disablePastDates(d) {
   return d < today
 }
 
+// P2-FE-5：tier min 嚴格單調遞增（不可重複也不可下降）。
+// 後端 services/appraisal/rule_applier.apply_tier 雖會 sort 後取最高匹配，
+// 但人工輸入時若 min 亂序代表設定者意圖不清，應在送出前阻擋。
+function validateTiersMonotonic(tiers) {
+  const mins = tiers.map((t) => Number(t.min))
+  for (let i = 1; i < mins.length; i++) {
+    if (!(mins[i] > mins[i - 1])) return false
+  }
+  return true
+}
+
 async function submit() {
   if (!form.value.effective_from) {
     ElMessage.warning('請選擇生效日期')
@@ -149,6 +170,10 @@ async function submit() {
   if (form.value.rule_type === 'TIER') {
     if (!form.value.tiers.some((t) => Number(t.min) === 0)) {
       ElMessage.warning('階梯式必須有一條 min=0 兜底')
+      return
+    }
+    if (!validateTiersMonotonic(form.value.tiers)) {
+      ElMessage.warning('階梯 min 必須由小到大嚴格遞增（不可重複或下降）')
       return
     }
   }
@@ -164,7 +189,7 @@ async function submit() {
   }
 }
 
-defineExpose({ disablePastDates })
+defineExpose({ disablePastDates, validateTiersMonotonic })
 </script>
 
 <template>
@@ -209,11 +234,18 @@ defineExpose({ disablePastDates })
 
       <template v-if="form.rule_type === 'TIER'">
         <el-form-item label="輸入欄位" data-test="tier-section">
-          <el-input
+          <el-select
             v-model="form.input_field"
-            placeholder="retention_rate / activity_rate"
+            placeholder="請選擇輸入欄位"
             data-test="tier-input-field"
-          />
+          >
+            <el-option
+              v-for="o in INPUT_FIELD_OPTIONS"
+              :key="o.value"
+              :value="o.value"
+              :label="o.label"
+            />
+          </el-select>
         </el-form-item>
         <el-form-item label="階梯">
           <div
@@ -256,10 +288,18 @@ defineExpose({ disablePastDates })
 
       <template v-if="form.rule_type === 'FLAT_THRESHOLD'">
         <el-form-item label="輸入欄位" data-test="flat-section">
-          <el-input
+          <el-select
             v-model="form.input_field"
+            placeholder="請選擇輸入欄位"
             data-test="flat-input-field"
-          />
+          >
+            <el-option
+              v-for="o in INPUT_FIELD_OPTIONS"
+              :key="o.value"
+              :value="o.value"
+              :label="o.label"
+            />
+          </el-select>
         </el-form-item>
         <el-form-item label="閾值">
           <el-input-number

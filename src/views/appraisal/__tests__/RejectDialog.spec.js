@@ -199,4 +199,23 @@ describe('RejectDialog', () => {
     expect(wrapper.find('[data-test="radio-SUPERVISOR_SIGNED"]').exists()).toBe(true)
     expect(wrapper.find('[data-test="radio-DRAFT"]').exists()).toBe(true)
   })
+
+  // P2-FE-3：API reject (422/500) → ElMessage.error，且 dialog 仍開著（讓 user 改錯重送）。
+  it('API rejects → 顯示錯誤訊息且 dialog 保持開啟、不 emit rejected', async () => {
+    rejectSummary.mockRejectedValueOnce({
+      response: { status: 422, data: { detail: 'reason 必須至少 10 字' } },
+    })
+    const wrapper = mountDialog()
+    await flushPromises()
+    await wrapper.find('[data-test="reason-input"]').setValue('短')
+    await flushPromises()
+    await wrapper.find('[data-test="submit-btn"]').trigger('click')
+    await flushPromises()
+
+    expect(rejectSummary).toHaveBeenCalledTimes(1)
+    expect(ElMessage.error).toHaveBeenCalled()
+    expect(wrapper.emitted('rejected')).toBeFalsy()
+    // dialog 仍應該開著（visible 沒有被 set false）
+    expect(wrapper.emitted('update:visible')).toBeFalsy()
+  })
 })

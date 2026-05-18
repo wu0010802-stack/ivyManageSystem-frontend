@@ -17,7 +17,9 @@ const props = defineProps({
   visible: { type: Boolean, default: false },
   cycleId: { type: Number, default: null },
 })
-const emit = defineEmits(['update:visible'])
+// P2-FE-4：emit `request-sync` 讓 parent 直接觸發同步分數流程
+// （不在本 dialog 內呼 confirm — 保留 parent 既有 dry-run preview UX）。
+const emit = defineEmits(['update:visible', 'request-sync'])
 
 const dialogVisible = computed({
   get: () => props.visible,
@@ -87,6 +89,12 @@ const filteredParticipants = computed(() => {
   )
 })
 
+function onRequestSync() {
+  // P2-FE-4：關閉本 dialog 後再 emit，避免兩個 dialog 同時顯示。
+  dialogVisible.value = false
+  emit('request-sync')
+}
+
 function tooltipLines(row, code) {
   const it = itemByCode(row, code)
   if (!it) return []
@@ -112,8 +120,9 @@ function tooltipLines(row, code) {
     data-test="score-preview-dialog"
   >
     <div v-loading="loading">
-      <el-alert type="info" :closable="false" class="preview-alert">
-        紅色標示 = 與目前系統中的分數不同；確認後請按下方「同步分數」寫入。
+      <el-alert type="warning" :closable="false" class="preview-alert">
+        此為 dry-run 預覽，<strong>未寫入資料庫</strong>。紅色標示 = 與目前系統分數不同；
+        要實際寫入請點下方「同步分數」進入確認流程。
       </el-alert>
       <div class="preview-toolbar">
         <el-switch
@@ -180,7 +189,14 @@ function tooltipLines(row, code) {
       </el-table>
     </div>
     <template #footer>
-      <el-button @click="dialogVisible = false">關閉</el-button>
+      <el-button data-test="close-btn" @click="dialogVisible = false">關閉</el-button>
+      <el-button
+        type="primary"
+        data-test="request-sync-btn"
+        @click="onRequestSync"
+      >
+        同步分數
+      </el-button>
     </template>
   </el-dialog>
 </template>

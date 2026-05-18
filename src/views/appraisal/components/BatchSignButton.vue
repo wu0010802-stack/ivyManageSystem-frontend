@@ -4,6 +4,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 
 import { batchSignSummaries } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
+import { STAGE_LABEL } from '../labels'
 
 const props = defineProps({
   cycleId: { type: Number, required: true },
@@ -28,11 +29,7 @@ function shortError(err) {
   return s.length > 120 ? s.slice(0, 120) + '…' : s
 }
 
-const STAGE_LABEL = {
-  SUPERVISOR: '主管簽',
-  ACCOUNTING: '會計簽',
-  FINALIZE: '核定',
-}
+// STAGE_LABEL 從 ../labels 集中載入（P2 i18n 過渡）
 
 const submitting = ref(false)
 const failedList = ref([])
@@ -86,7 +83,12 @@ async function submit() {
                @click="submit">
       {{ buttonLabel }}
     </el-button>
+    <!--
+      P2-FE-2 A11y：el-dialog 預設已 aria-modal=true + focus trap（內建 trapFocus
+      directive），毋需手寫；此註解作為審計痕跡。
+    -->
     <el-dialog v-model="failedDialogVisible" title="批次簽核失敗清單" width="500px"
+               aria-label="批次簽核失敗清單 dialog"
                data-test="failed-dialog">
       <el-table :data="failedList" max-height="320">
         <el-table-column label="員工" width="160">

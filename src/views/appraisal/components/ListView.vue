@@ -1,4 +1,6 @@
 <script setup>
+import { statusLabel as labelStatus } from '../labels'
+
 const props = defineProps({
   cycleId: { type: Number, required: true },
   participants: { type: Array, default: () => [] },
@@ -27,9 +29,7 @@ const emit = defineEmits(['sign', 'reject', 'comment', 'open-log', 'update:selec
 const gradeLabel = (g) =>
   ({ OUTSTANDING: '優等', GOOD: '甲等', PASS: '乙等', WARN: '丙等', FAIL: '丁等' }[g] || g)
 
-const statusLabel = (s) =>
-  ({ DRAFT: '草稿', SUPERVISOR_SIGNED: '主管已簽',
-     ACCOUNTING_SIGNED: '會計已簽', FINALIZED: '已核定' }[s] || s)
+const statusLabel = labelStatus
 
 function isSelected(summaryId) {
   return props.selectedIds.includes(summaryId)

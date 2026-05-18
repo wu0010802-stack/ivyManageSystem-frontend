@@ -18,6 +18,7 @@ import {
 } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
 import { hasPermission } from '@/utils/auth'
+import { statusLabel, MSG } from './labels'
 
 import KanbanView from './components/KanbanView.vue'
 import ListView from './components/ListView.vue'
@@ -84,9 +85,7 @@ const canBatchSign = computed(
 // 權限；UI 守衛保守用 OR 三個 sign 權限（任一即可顯示，後端會二次驗）。
 const canReject = computed(() => canBatchSign.value)
 
-const statusLabel = (s) =>
-  ({ DRAFT: '草稿', SUPERVISOR_SIGNED: '主管已簽',
-     ACCOUNTING_SIGNED: '會計已簽', FINALIZED: '已核定' }[s] || s)
+// statusLabel 從 ./labels 集中載入（P2 i18n 過渡）
 
 async function load() {
   loading.value = true
@@ -97,7 +96,7 @@ async function load() {
     summaries.value = (await listAppraisalSummaries(cycleId)).data
     catalog.value = (await listAppraisalCatalog()).data
   } catch (e) {
-    ElMessage.error(apiError(e, '載入失敗'))
+    ElMessage.error(apiError(e, MSG.load_failed))
   } finally {
     loading.value = false
   }
@@ -122,10 +121,10 @@ async function recompute() {
   busy.value = true
   try {
     await recomputeAppraisalSummaries(cycleId)
-    ElMessage.success('重算完成')
+    ElMessage.success(MSG.recompute_success)
     await reload()
   } catch (e) {
-    ElMessage.error(apiError(e, '重算失敗'))
+    ElMessage.error(apiError(e, MSG.recompute_failed))
   } finally {
     busy.value = false
   }
@@ -148,7 +147,7 @@ async function sign({ summary, stage }) {
     if (stage === 'supervisor') await signSupervisorAppraisalSummary(id)
     else if (stage === 'accounting') await signAccountingAppraisalSummary(id)
     else if (stage === 'finalize') await finalizeAppraisalSummary(id)
-    ElMessage.success('簽核完成')
+    ElMessage.success(MSG.sign_success)
     // 局部 patch：更新本地 summaries 該筆的 status，UI 立刻反映新狀態
     const nextStatus = STAGE_TO_NEXT_STATUS[stage]
     if (nextStatus) {
@@ -160,7 +159,7 @@ async function sign({ summary, stage }) {
     // 背景非阻塞 refresh kanban（其 buckets 結構獨立）
     silentKanbanRefresh()
   } catch (e) {
-    ElMessage.error(apiError(e, '簽核失敗'))
+    ElMessage.error(apiError(e, MSG.sign_failed))
   } finally {
     signingIds.value = signingIds.value.filter((x) => x !== id)
   }
@@ -225,7 +224,7 @@ onMounted(load)
         :loading="busy"
         data-test="recompute-btn"
         @click="recompute"
-      >重算 Summary</el-button>
+      >{{ MSG.recompute_btn }}</el-button>
       <el-button :icon="Download" tag="a" :href="exportAppraisalCycleXlsxUrl(cycleId)">匯出考核表</el-button>
       <el-button :icon="Download" tag="a" :href="exportAppraisalTransferRosterXlsxUrl(cycleId)">轉帳名冊</el-button>
 

@@ -115,4 +115,18 @@ describe('BatchSignButton', () => {
     expect(ElMessage.warning).toHaveBeenCalledWith(expect.stringContaining('成功 2 筆 / 失敗 1 筆'))
     expect(wrapper.find('[data-test="failed-dialog"]').exists()).toBe(true)
   })
+
+  // P2-FE-3：API reject (422/500) → ElMessage.error 並且不開 failed dialog。
+  it('shows error toast and does not open failed dialog when API rejects', async () => {
+    ElMessageBox.confirm.mockResolvedValueOnce('confirm')
+    api.batchSignSummaries.mockRejectedValueOnce({
+      response: { status: 500, data: { detail: 'server error' } },
+    })
+    const wrapper = mount(BatchSignButton, mountOpts())
+    await wrapper.find('[data-test="batch-sign-btn"]').trigger('click')
+    await nextTick(); await nextTick(); await nextTick()
+    expect(ElMessage.error).toHaveBeenCalled()
+    expect(wrapper.find('[data-test="failed-dialog"]').exists()).toBe(false)
+    expect(wrapper.emitted('done')).toBeFalsy()
+  })
 })
