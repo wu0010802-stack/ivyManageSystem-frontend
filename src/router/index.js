@@ -474,6 +474,12 @@ const router = createRouter({
                     meta: { title: '學期評量' },
                 },
                 {
+                    path: 'growth',
+                    name: 'portal-growth',
+                    component: () => import('../views/portal/PortalGrowthView.vue'),
+                    meta: { title: '我的成長軌跡' },
+                },
+                {
                     path: 'dismissal-calls',
                     name: 'portal-dismissal-calls',
                     component: () => import('../views/portal/PortalDismissalCallsView.vue'),

@@ -8,14 +8,14 @@ const router = createRouter({
   routes: [{ path: '/:pathMatch(.*)*', component: { template: '<div />' } }],
 })
 
-// QuickLinksCard 是 hardcoded 6 個連結，使用 .link-tile class 的 button
-const EXPECTED_LABELS = ['班級學生', '課堂觀察', '用藥執行', '事件紀錄', '學期評量', '才藝點名']
+// QuickLinksCard 是 hardcoded 7 個連結，使用 .link-tile class 的 button
+const EXPECTED_LABELS = ['班級學生', '課堂觀察', '用藥執行', '事件紀錄', '學期評量', '成長軌跡', '才藝點名']
 
 describe('QuickLinksCard', () => {
-  it('renders 6 link tiles', () => {
+  it('renders 7 link tiles', () => {
     const w = mount(QuickLinksCard, { global: { plugins: [router] } })
     const tiles = w.findAll('.link-tile')
-    expect(tiles.length).toBe(6)
+    expect(tiles.length).toBe(7)
   })
 
   it('renders all expected link labels', () => {
@@ -47,14 +47,14 @@ describe('QuickLinksCard', () => {
     const push = vi.spyOn(router, 'push')
     const w = mount(QuickLinksCard, { global: { plugins: [router] } })
     const tiles = w.findAll('.link-tile')
-    // tiles[5] = 才藝點名 → { path: '/portal/activity', query: { tab: 'attendance' } }
-    await tiles[5].trigger('click')
+    // tiles[6] = 才藝點名 → { path: '/portal/activity', query: { tab: 'attendance' } }
+    await tiles[6].trigger('click')
     expect(push).toHaveBeenCalledWith({ path: '/portal/activity', query: { tab: 'attendance' } })
   })
 
   it('each tile has a tint dot element', () => {
     const w = mount(QuickLinksCard, { global: { plugins: [router] } })
     const dots = w.findAll('.tile-dot')
-    expect(dots.length).toBe(6)
+    expect(dots.length).toBe(7)
   })
 })

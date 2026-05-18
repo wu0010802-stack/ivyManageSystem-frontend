@@ -9,6 +9,7 @@ const links = [
   { label: '用藥執行', to: '/portal/medications', tint: 'medication' },
   { label: '事件紀錄', to: '/portal/incidents', tint: 'announcement' },
   { label: '學期評量', to: '/portal/assessments', tint: 'contact' },
+  { label: '成長軌跡', to: '/portal/growth', tint: 'event' },
   { label: '才藝點名', to: { path: '/portal/activity', query: { tab: 'attendance' } }, tint: 'activity' },
 ]
 
