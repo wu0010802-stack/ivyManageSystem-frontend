@@ -1,11 +1,17 @@
-<script setup>
+<script setup lang="ts">
 import ParentIcon from '../ParentIcon.vue'
 
-defineProps({
-  children: { type: Array, required: true },
-})
+interface Child {
+  student_id: number
+  name?: string
+  classroom_name?: string
+}
 
-function initialOf(name) {
+defineProps<{
+  children: Child[]
+}>()
+
+function initialOf(name: string | undefined): string {
   return String(name || '孩').slice(0, 1)
 }
 </script>
