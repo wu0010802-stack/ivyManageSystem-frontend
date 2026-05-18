@@ -55,7 +55,9 @@ async function submit() {
       to_status: toStatus.value,
     })
     ElMessage.success(MSG.reject_success)
-    emit('rejected')
+    // P1-14：emit payload 含 summaryId + newStatus 讓 parent 局部 patch summaries
+    // 取代全 reload；fallback to_status 為 'DRAFT'（理論上不會 null）
+    emit('rejected', { summaryId: props.summary.id, newStatus: toStatus.value })
     dialogVisible.value = false
   } catch (e) {
     ElMessage.error(apiError(e, MSG.reject_failed))

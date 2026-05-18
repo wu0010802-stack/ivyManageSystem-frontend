@@ -138,6 +138,22 @@ const STAGE_TO_NEXT_STATUS = {
   finalize: 'FINALIZED',
 }
 
+// P1-14：reject 成功後局部 patch summary.status，避免 4 個 API 全 reload
+function onRejected({ summaryId, newStatus } = {}) {
+  if (summaryId && newStatus) {
+    const idx = summaries.value.findIndex((s) => s.id === summaryId)
+    if (idx >= 0) {
+      summaries.value[idx] = { ...summaries.value[idx], status: newStatus }
+    }
+  }
+  silentKanbanRefresh()
+}
+
+// P1-14：comment 不改 status，只刷 kanban（聊天計數等）
+function onCommented() {
+  silentKanbanRefresh()
+}
+
 async function sign({ summary, stage }) {
   const id = summary.id
   // 重複 click 防護
@@ -286,12 +302,12 @@ onMounted(load)
     <RejectDialog
       v-model:visible="rejectDialogVisible"
       :summary="rejectTarget"
-      @rejected="reload"
+      @rejected="onRejected"
     />
     <CommentDialog
       v-model:visible="commentDialogVisible"
       :summary="commentTarget"
-      @commented="reload"
+      @commented="onCommented"
     />
     <SummaryLogDrawer
       v-model:visible="logDrawerVisible"
