@@ -43,8 +43,8 @@ function manualChunks(id) {
     // ⚠ 只放 element-plus-free 的檔案；download.js / useConfirmDelete.js 等用 ElMessage
     // 的檔案不能放進來，否則家長 bundle 會被迫拉 element-plus chunk。
     if (
-        id.includes('/src/utils/format.js') ||
-        id.includes('/src/utils/apiDedupe.js') ||
+        id.includes('/src/utils/format.ts') ||
+        id.includes('/src/utils/apiDedupe.ts') ||
         id.includes('/src/composables/useCachedAsync.js') ||
         id.includes('/src/components/common/MobileErrorRetry.vue')
     ) {
@@ -74,9 +74,9 @@ function manualChunks(id) {
         id.includes('/src/api/index.js') ||
         id.includes('/src/stores/_createFetchStore.js') ||
         id.includes('/src/stores/employee.js') ||
-        id.includes('/src/utils/auth.js') ||
-        id.includes('/src/utils/error.js') ||
-        id.includes('/src/utils/errorHandler.js') ||
+        id.includes('/src/utils/auth.ts') ||
+        id.includes('/src/utils/error.ts') ||
+        id.includes('/src/utils/errorHandler.ts') ||
         id.includes('/src/constants/permissions.ts')
     ) {
         return 'admin-core'

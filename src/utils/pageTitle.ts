@@ -2,7 +2,7 @@ const ADMIN_APP_TITLE = '常春藤管理系統'
 const PORTAL_APP_TITLE = '常春藤教師入口'
 const PUBLIC_APP_TITLE = '常春藤才藝報名'
 
-function getAppTitle(route) {
+function getAppTitle(route: { path?: string; meta?: Record<string, unknown> } | null | undefined) {
   const path = route?.path || ''
 
   if (route?.meta?.portal || path.startsWith('/portal')) {
@@ -16,7 +16,7 @@ function getAppTitle(route) {
   return ADMIN_APP_TITLE
 }
 
-function getPageTitle(route) {
+function getPageTitle(route: { path?: string; meta?: Record<string, unknown> } | null | undefined) {
   const explicitTitle = route?.meta?.title
   if (explicitTitle) return explicitTitle
 
@@ -29,7 +29,7 @@ function getPageTitle(route) {
   return null
 }
 
-export function buildDocumentTitle(route) {
+export function buildDocumentTitle(route: { path?: string; meta?: Record<string, unknown> } | null | undefined) {
   const appTitle = getAppTitle(route)
   const pageTitle = getPageTitle(route)
 
@@ -38,7 +38,7 @@ export function buildDocumentTitle(route) {
     : appTitle
 }
 
-export function applyPageTitle(route, documentRef = document) {
+export function applyPageTitle(route: { path?: string; meta?: Record<string, unknown> } | null | undefined, documentRef = document) {
   const title = buildDocumentTitle(route)
   const appTitle = getAppTitle(route)
 

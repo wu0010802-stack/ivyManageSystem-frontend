@@ -6,7 +6,7 @@
  * @param {string} keyword - 搜尋關鍵字
  * @returns {string} 含 HTML 標記的字串
  */
-export function highlight(text, keyword) {
+export function highlight(text: unknown, keyword: string) {
   if (text === null || text === undefined) return ''
   const safeText = String(text)
     .replace(/&/g, '&amp;')

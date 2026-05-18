@@ -6,7 +6,7 @@ import {
 
 const fmtNTD = (n: unknown) => `NT$${Number(n).toLocaleString()}`
 
-export function validateInsuranceVsBase(insurance: unknown, base: unknown, employeeType: unknown) {
+export function validateInsuranceVsBase(insurance: unknown, base: unknown, employeeType: string) {
     if (employeeType !== 'regular') return null
     const ins = Number(insurance) || 0
     const b = Number(base) || 0
@@ -17,7 +17,7 @@ export function validateInsuranceVsBase(insurance: unknown, base: unknown, emplo
     return null
 }
 
-export function validateBaseSalary(baseSalary: unknown, employeeType: unknown) {
+export function validateBaseSalary(baseSalary: unknown, employeeType: string) {
     if (employeeType !== 'regular') return null
     const b = Number(baseSalary) || 0
     if (b > 0 && b < MINIMUM_MONTHLY_WAGE) {
@@ -26,7 +26,7 @@ export function validateBaseSalary(baseSalary: unknown, employeeType: unknown) {
     return null
 }
 
-export function validateHourlyRate(hourlyRate: unknown, employeeType: unknown) {
+export function validateHourlyRate(hourlyRate: unknown, employeeType: string) {
     if (employeeType !== 'hourly') return null
     const r = Number(hourlyRate) || 0
     if (r > 0 && r < MINIMUM_HOURLY_WAGE) {

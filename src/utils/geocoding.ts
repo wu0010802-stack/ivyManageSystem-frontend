@@ -26,7 +26,7 @@ let _lastCallAt = 0
  * @param {string} [opts.acceptLanguage='zh-Hant-TW,zh-TW;q=0.9']
  * @returns {Promise<{ lat: number, lng: number, displayName: string } | null>}
  */
-export async function geocodeAddress(address, opts = {}) {
+export async function geocodeAddress(address: string, opts: { countryCodes?: string; acceptLanguage?: string } = {}) {
   if (!address || !address.trim()) return null
 
   const now = Date.now()

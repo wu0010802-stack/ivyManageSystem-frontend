@@ -57,7 +57,7 @@ export const LEAVE_RULE_HINTS = {
  * 把 'YYYY-MM-DD' 或 'YYYY-MM-DD HH:MM:SS' 字串解析為瀏覽器本地零點的 Date。
  * 直接 `new Date('YYYY-MM-DD')` 會被 JS 引擎視為 UTC，跨負時區會少一天。
  */
-const parseDateLocal = (input) => {
+const parseDateLocal = (input: unknown) => {
   if (!input) return null
   if (input instanceof Date) {
     const d = new Date(input)
@@ -70,22 +70,22 @@ const parseDateLocal = (input) => {
   return new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10), 0, 0, 0, 0)
 }
 
-export const getRequestedCalendarDays = (startDate, endDate) => {
+export const getRequestedCalendarDays = (startDate: unknown, endDate: unknown) => {
   if (!startDate || !endDate) return 0
   const start = parseDateLocal(startDate)
   const end = parseDateLocal(endDate)
   if (!start || !end || end < start) return 0
-  return Math.floor((end - start) / 86400000) + 1
+  return Math.floor((end.getTime() - start.getTime()) / 86400000) + 1
 }
 
-export const leaveRequiresAttachment = (startDate, endDate) =>
+export const leaveRequiresAttachment = (startDate: unknown, endDate: unknown) =>
   getRequestedCalendarDays(startDate, endDate) > 2
 
 /**
  * 檢查請假申請是否違反業務規則（病假 4h 倍數、事假提前 2 日）。
  * 回傳違規訊息陣列；caller 可選擇 hard block 或 confirm 後繼續。
  */
-export const validateLeaveRules = ({ leave_type, leave_hours, start_date } = {}) => {
+export const validateLeaveRules = ({ leave_type, leave_hours, start_date }: { leave_type?: string; leave_hours?: unknown; start_date?: unknown } = {}) => {
   const violations = []
   if (leave_type === 'sick' && Number(leave_hours) > 0 && Number(leave_hours) % 4 !== 0) {
     violations.push('病假必須以 4 小時為單位申請')
@@ -95,7 +95,7 @@ export const validateLeaveRules = ({ leave_type, leave_hours, start_date } = {})
     const today = new Date()
     today.setHours(0, 0, 0, 0)
     if (start) {
-      const diffDays = Math.floor((start - today) / 86400000)
+      const diffDays = Math.floor((start.getTime() - today.getTime()) / 86400000)
       if (diffDays < 2) violations.push('事假需至少提前 2 日提出申請')
     }
   }

@@ -21,16 +21,17 @@ export const ErrorType = Object.freeze({
   UNKNOWN: 'unknown',
 })
 
-export function classifyError(error) {
+export function classifyError(error: unknown) {
   if (!error) return ErrorType.UNKNOWN
+  const e = error as { code?: string; name?: string; response?: { status: number } }
 
-  if (error.code === 'ERR_CANCELED' || error.name === 'CanceledError') {
+  if (e.code === 'ERR_CANCELED' || e.name === 'CanceledError') {
     return ErrorType.CANCELED
   }
-  if (error.code === 'ECONNABORTED') return ErrorType.TIMEOUT
-  if (!error.response) return ErrorType.NETWORK_ERROR
+  if (e.code === 'ECONNABORTED') return ErrorType.TIMEOUT
+  if (!e.response) return ErrorType.NETWORK_ERROR
 
-  const status = error.response.status
+  const status = e.response.status
   if (status === 401) return ErrorType.UNAUTHORIZED
   if (status === 403) return ErrorType.FORBIDDEN
   if (status === 404) return ErrorType.NOT_FOUND
@@ -63,20 +64,21 @@ const DEFAULT_MESSAGES = {
  * 2. 依錯誤分類的預設訊息
  * 3. caller 提供的 fallback
  */
-export function getErrorMessage(error, fallback = null) {
+export function getErrorMessage(error: unknown, fallback: string | null = null) {
   if (!error) return fallback || DEFAULT_MESSAGES[ErrorType.UNKNOWN]
+  const e = error as { displayMessage?: string; response?: { data?: { detail?: unknown; message?: unknown } } }
 
   // interceptor 已正規化
-  if (error.displayMessage) return error.displayMessage
+  if (e.displayMessage) return e.displayMessage
 
-  const fromDetail = error.response?.data?.detail
+  const fromDetail = e.response?.data?.detail
   if (typeof fromDetail === 'string') return fromDetail
   if (Array.isArray(fromDetail) && fromDetail.length) {
     // FastAPI 驗證錯誤陣列
-    return fromDetail[0]?.msg || fallback || DEFAULT_MESSAGES[ErrorType.VALIDATION]
+    return (fromDetail[0] as { msg?: string })?.msg || fallback || DEFAULT_MESSAGES[ErrorType.VALIDATION]
   }
 
-  const fromMessage = error.response?.data?.message
+  const fromMessage = e.response?.data?.message
   if (typeof fromMessage === 'string') return fromMessage
 
   const type = classifyError(error)
@@ -86,6 +88,6 @@ export function getErrorMessage(error, fallback = null) {
 /**
  * 判斷錯誤是否應該「靜默忽略」（例如 request 被 AbortController 取消）。
  */
-export function isSilentError(error) {
+export function isSilentError(error: unknown) {
   return classifyError(error) === ErrorType.CANCELED
 }

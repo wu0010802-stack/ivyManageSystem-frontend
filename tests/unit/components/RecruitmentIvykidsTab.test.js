@@ -40,7 +40,7 @@ const flushPromises = async () => {
 
 const routerSource = readFileSync(resolve(process.cwd(), 'src/router/index.js'), 'utf8')
 const sidebarSource = readFileSync(resolve(process.cwd(), 'src/components/layout/AdminSidebar.vue'), 'utf8')
-// 2026-04 重構：ROUTE_PERMISSION_RULES 從 src/utils/auth.js 移到 src/constants/permissions.ts
+// 2026-04 重構：ROUTE_PERMISSION_RULES 從 src/utils/auth.ts 移到 src/constants/permissions.ts
 const permissionsSource = readFileSync(resolve(process.cwd(), 'src/constants/permissions.ts'), 'utf8')
 
 describe('RecruitmentIvykidsTab', () => {
