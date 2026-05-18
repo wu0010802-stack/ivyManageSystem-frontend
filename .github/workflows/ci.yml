@@ -49,7 +49,7 @@ jobs:
       - name: Checkout ivy-backend (sibling)
         uses: actions/checkout@v4
         with:
-          repository: ${{ github.repository_owner }}/ivy-backend
+          repository: ${{ github.repository_owner }}/ivyManageSystem-backend
           path: ivy-backend
           token: ${{ secrets.IVY_CROSS_REPO_TOKEN }}
 
