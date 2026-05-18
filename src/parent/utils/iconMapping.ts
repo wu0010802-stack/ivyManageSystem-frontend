@@ -69,10 +69,10 @@ const SIZE_MAP = {
   lg: 28,
 }
 
-export function mapIconName(name) {
-  return ICON_MAP[name] ?? name
+export function mapIconName(name: string) {
+  return (ICON_MAP as Record<string, string>)[name] ?? name
 }
 
-export function mapIconSize(size) {
-  return SIZE_MAP[size] ?? 22
+export function mapIconSize(size: string) {
+  return (SIZE_MAP as Record<string, number>)[size] ?? 22
 }

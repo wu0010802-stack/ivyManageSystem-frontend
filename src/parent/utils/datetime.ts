@@ -10,11 +10,11 @@
 const TZ = 'Asia/Taipei'
 const LOCALE = 'zh-Hant-TW'
 
-function toDate(input) {
+function toDate(input: unknown) {
   if (!input) return null
-  if (input instanceof Date) return isNaN(input) ? null : input
-  const d = new Date(input)
-  return isNaN(d) ? null : d
+  if (input instanceof Date) return isNaN(input.getTime()) ? null : input
+  const d = new Date(input as string | number)
+  return isNaN(d.getTime()) ? null : d
 }
 
 const TIME_FMT = new Intl.DateTimeFormat(LOCALE, {
@@ -48,7 +48,7 @@ const DATETIME_FMT = new Intl.DateTimeFormat(LOCALE, {
 })
 
 /** 今日顯示 HH:mm，其他日顯示 M/D（聊天/通知列表用） */
-export function fmtTimeOrDate(input) {
+export function fmtTimeOrDate(input: unknown) {
   const d = toDate(input)
   if (!d) return ''
   const today = new Date()
@@ -63,25 +63,25 @@ export function fmtTimeOrDate(input) {
 }
 
 /** HH:mm */
-export function fmtTime(input) {
+export function fmtTime(input: unknown) {
   const d = toDate(input)
   return d ? TIME_FMT.format(d) : ''
 }
 
 /** M/D */
-export function fmtShortDate(input) {
+export function fmtShortDate(input: unknown) {
   const d = toDate(input)
   return d ? SHORT_DATE_FMT.format(d) : ''
 }
 
 /** YYYY/MM/DD */
-export function fmtDate(input) {
+export function fmtDate(input: unknown) {
   const d = toDate(input)
   return d ? FULL_DATE_FMT.format(d) : ''
 }
 
 /** YYYY/MM/DD HH:mm */
-export function fmtDateTime(input) {
+export function fmtDateTime(input: unknown) {
   const d = toDate(input)
   return d ? DATETIME_FMT.format(d) : ''
 }
@@ -90,11 +90,11 @@ export function fmtDateTime(input) {
  * 相對時間文案（剛才 / N 分鐘前 / N 小時前 / 昨天 / M/D）。
  * 給訊息 / 通知列表用。
  */
-export function fmtRelative(input) {
+export function fmtRelative(input: unknown) {
   const d = toDate(input)
   if (!d) return ''
   const now = new Date()
-  const diffMs = now - d
+  const diffMs = now.getTime() - d.getTime()
   const diffMin = Math.round(diffMs / 60000)
   if (diffMin < 1) return '剛才'
   if (diffMin < 60) return `${diffMin} 分鐘前`
