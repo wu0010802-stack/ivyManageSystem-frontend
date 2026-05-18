@@ -11,6 +11,7 @@ import { ElMessage } from 'element-plus'
 
 import { previewAppraisalScore } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
+import { ITEM_CODE_LABELS, ITEM_CODES_ORDER } from '@/views/appraisal/scoreItemLabels'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -45,15 +46,6 @@ watch(
   { immediate: true },
 )
 
-const ITEM_CODES_ORDER = [
-  'LATE_EARLY', 'MISSING_PUNCH', 'LEAVE',
-  'RETURNING_RATE_0915', 'RETURNING_RATE_0315',
-  'AFTER_CLASS_RATE', 'REWARD_PUNISH',
-  'SCHOOL_MEETING_ABSENCE', 'INSTITUTION_MEETING_0913',
-  'INSTITUTION_MEETING_1115', 'SELF_IMPROVEMENT_ACTIVITY',
-  'CHILD_ACCIDENT', 'CLASS_HEADCOUNT_BONUS', 'OTHER',
-]
-
 function itemByCode(participant, code) {
   return participant.items?.find((i) => i.item_code === code)
 }
@@ -74,7 +66,7 @@ function hasDiff(item) {
   >
     <div v-loading="loading">
       <el-alert type="info" :closable="false" class="preview-alert">
-        紅色標示 = 與目前 DB 中的值不同；確認後請按下方「同步分數」寫入。
+        紅色標示 = 與目前系統中的分數不同；確認後請按下方「同步分數」寫入。
       </el-alert>
       <el-table
         v-if="data"
@@ -88,8 +80,8 @@ function hasDiff(item) {
         <el-table-column
           v-for="code in ITEM_CODES_ORDER"
           :key="code"
-          :label="code"
-          width="90"
+          :label="ITEM_CODE_LABELS[code] || code"
+          :min-width="110"
         >
           <template #default="{ row }">
             <span

@@ -14,31 +14,12 @@ import { Refresh, Edit, Clock } from '@element-plus/icons-vue'
 
 import { listScoringRules } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
+import {
+  ITEM_CODE_LABELS,
+  AUTO_ITEM_CODES as AUTO_CODES,
+} from '@/views/appraisal/scoreItemLabels'
 import RuleEditorDialog from './RuleEditorDialog.vue'
 import RuleHistoryDrawer from './RuleHistoryDrawer.vue'
-
-const ITEM_CODE_LABELS = {
-  LATE_EARLY: '遲到 / 早退',
-  MISSING_PUNCH: '未打卡',
-  LEAVE: '請假',
-  RETURNING_RATE_0915: '9/15 留校率（學期初）',
-  RETURNING_RATE_0315: '3/15 留校率（學期末）',
-  AFTER_CLASS_RATE: '才藝報名率',
-  REWARD_PUNISH: '獎懲（警告/小過/大過）',
-  SCHOOL_MEETING_ABSENCE: '園務會議缺席',
-  INSTITUTION_MEETING_0913: '9/13 機構會議研習',
-  INSTITUTION_MEETING_1115: '11/15 機構會議研習',
-  SELF_IMPROVEMENT_ACTIVITY: '自強活動',
-  CHILD_ACCIDENT: '幼兒意外',
-  CLASS_HEADCOUNT_BONUS: '帶班人數加分',
-  OTHER: '其他',
-}
-
-const AUTO_CODES = new Set([
-  'LATE_EARLY', 'MISSING_PUNCH', 'LEAVE',
-  'RETURNING_RATE_0915', 'RETURNING_RATE_0315',
-  'AFTER_CLASS_RATE', 'REWARD_PUNISH',
-])
 
 const effectiveOn = ref(new Date().toISOString().slice(0, 10))
 const rules = ref([])
