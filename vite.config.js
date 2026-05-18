@@ -77,7 +77,7 @@ function manualChunks(id) {
         id.includes('/src/utils/auth.js') ||
         id.includes('/src/utils/error.js') ||
         id.includes('/src/utils/errorHandler.js') ||
-        id.includes('/src/constants/permissions.js')
+        id.includes('/src/constants/permissions.ts')
     ) {
         return 'admin-core'
     }
