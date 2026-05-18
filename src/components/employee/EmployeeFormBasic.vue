@@ -1,5 +1,5 @@
 <!-- src/components/employee/EmployeeFormBasic.vue -->
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 import { Lock } from '@element-plus/icons-vue'
 import { SALARY_SENSITIVE_FIELDS } from '@/constants/employeeFields'
@@ -7,20 +7,69 @@ import {
   POSITION_OPTIONS, SUPERVISOR_ROLE_OPTIONS, EMPLOYEE_TYPE_OPTIONS,
 } from '@/constants/employee'
 
-const props = defineProps({
-  form: { type: Object, required: true },
-  bureauJobTitleOptions: { type: Array, default: () => [] },
-  classroomOptions: { type: Array, default: () => [] },
-  isSelfEdit: { type: Boolean, default: false },
-  pendingSuggestion: { type: Boolean, default: false },
-  suggestedSalary: { type: Number, default: null },
+interface SelectOption {
+  value?: string | number
+  label?: string
+  id: string | number
+  name?: string
+  grade_name?: string
+}
+
+export interface EmployeeFormBasicData {
+  employee_id?: string
+  name?: string
+  job_title_id?: number | string | null
+  title?: string
+  position?: string
+  bonus_grade?: string
+  employee_type?: string
+  supervisor_role?: string
+  department?: string
+  gender?: string
+  hire_date?: string
+  probation_end_date?: string
+  birthday?: string
+  id_number?: string
+  birth_date?: string
+  national_id?: string
+  classroom_id?: number | null
+  phone?: string
+  dependents?: number | null
+  email?: string
+  address?: string
+  emergency_contact?: string
+  emergency_contact_name?: string
+  emergency_contact_phone?: string
+  emergency_phone?: string
+  work_start_time?: string
+  work_end_time?: string
+  staff_role_category?: string
+  teacher_cert_no?: string
+  teacher_cert_type?: string
+  notes?: string
+  [key: string]: unknown
+}
+
+const props = withDefaults(defineProps<{
+  form: EmployeeFormBasicData
+  bureauJobTitleOptions?: SelectOption[]
+  classroomOptions?: SelectOption[]
+  isSelfEdit?: boolean
+  pendingSuggestion?: boolean
+  suggestedSalary?: number | null
+}>(), {
+  bureauJobTitleOptions: () => [],
+  classroomOptions: () => [],
+  isSelfEdit: false,
+  pendingSuggestion: false,
+  suggestedSalary: null,
 })
 
 // 敏感欄位在 self-edit 模式下要呈現唯讀文字 + 鎖頭
-const isLocked = (field) => props.isSelfEdit && SALARY_SENSITIVE_FIELDS.includes(field)
+const isLocked = (field: string) => props.isSelfEdit && SALARY_SENSITIVE_FIELDS.includes(field)
 
 // readonly 顯示用 helper
-const fmt = (v) => {
+const fmt = (v: string | number | null | undefined) => {
   if (v == null || v === '') return '—'
   return v
 }

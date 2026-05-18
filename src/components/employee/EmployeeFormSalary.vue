@@ -1,30 +1,62 @@
 <!-- src/components/employee/EmployeeFormSalary.vue -->
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 import { Lock, WarningFilled } from '@element-plus/icons-vue'
 import { pensionRateToPercent, pensionPercentToRate } from '@/validators/employeeForm'
 
-const props = defineProps({
-    form: { type: Object, required: true },
-    isReadonly: { type: Boolean, default: false },
-    readonlyReason: { type: String, default: '' },
-    pendingSuggestion: { type: Boolean, default: false },
-    suggestedSalary: { type: Number, default: null },
-    insuranceError: { type: String, default: null },
-})
-const emit = defineEmits(['apply-suggestion', 'dismiss-suggestion', 'sync-insurance'])
+export interface EmployeeFormSalaryData {
+  base_salary?: number | null
+  hourly_rate?: number | null
+  insurance_salary_level?: number | null
+  pension_self_rate?: number | null
+  bank_code?: string
+  bank_account?: string
+  bank_account_name?: string
+  no_employment_insurance?: boolean
+  health_exempt?: boolean
+  skip_payroll_bonuses?: boolean
+  bypass_standard_base?: boolean
+  skip_payroll_transfer?: boolean
+  unreported_for_tax?: boolean
+  extra_dependents_quarterly?: number | null
+  insurance_salary_override_reason?: string
+  labor_insured_salary?: number | null
+  health_insured_salary?: number | null
+  pension_insured_salary?: number | null
+  contract_base_salary?: number | null
+}
 
-const fmtNTD = (n) => `NT$${Number(n).toLocaleString()}`
+const props = withDefaults(defineProps<{
+  form: EmployeeFormSalaryData
+  isReadonly?: boolean
+  readonlyReason?: string
+  pendingSuggestion?: boolean
+  suggestedSalary?: number | null
+  insuranceError?: string | null
+}>(), {
+  isReadonly: false,
+  readonlyReason: '',
+  pendingSuggestion: false,
+  suggestedSalary: null,
+  insuranceError: null,
+})
+const emit = defineEmits<{
+  'apply-suggestion': []
+  'dismiss-suggestion': []
+  'sync-insurance': []
+}>()
+
+const fmtNTD = (n: number | null | undefined) => `NT$${Number(n).toLocaleString()}`
 
 // 勞退百分比雙向綁定（0-0.06 ↔ 0-6%）
 const pensionPercent = computed({
-    get: () => pensionRateToPercent(props.form.pension_self_rate),
-    set: (v) => { props.form.pension_self_rate = pensionPercentToRate(v) },
+    get: () => pensionRateToPercent(props.form.pension_self_rate ?? 0),
+    set: (v: number) => { props.form.pension_self_rate = pensionPercentToRate(v) },
 })
 
-const fmtRO = (v, currency = false) => {
+const fmtRO = (v: number | string | null | undefined, currency = false) => {
     if (v == null || v === '') return '—'
-    return currency ? fmtNTD(v) : v
+    return currency ? fmtNTD(v as number) : v
 }
 </script>
 
@@ -93,7 +125,7 @@ const fmtRO = (v, currency = false) => {
     <!-- 投保級距 / 勞退自提 -->
     <el-row :gutter="20">
         <el-col :span="12">
-            <el-form-item label="投保級距" prop="insurance_salary_level" :error="insuranceError">
+            <el-form-item label="投保級距" prop="insurance_salary_level" :error="insuranceError ?? undefined">
                 <template v-if="isReadonly">
                     <span class="readonly-text">{{ fmtRO(form.insurance_salary_level, true) }} <el-icon><Lock /></el-icon></span>
                 </template>

@@ -1,22 +1,34 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 
-const props = defineProps({
-    modelValue: { type: Boolean, required: true },
-    title: { type: String, default: '即將儲存的變更' },
-    changes: { type: Object, required: true },  // { field: { before, after } }
-    requireConfirm: { type: Boolean, default: false },
-    fieldLabels: { type: Object, default: () => ({}) },
-    // 後端 finance_guards 對 base_salary / hourly_rate / insurance_salary_level
-    // 變動要求 adjustment_reason（≥5 字）；前端在儲存薪資時開啟此旗標讓使用者填原因。
-    requireReason: { type: Boolean, default: false },
-    reasonMinLength: { type: Number, default: 5 },
+interface ChangeEntry {
+  before?: unknown
+  after?: unknown
+}
+
+const props = withDefaults(defineProps<{
+  modelValue: boolean
+  title?: string
+  changes: Record<string, ChangeEntry>
+  requireConfirm?: boolean
+  fieldLabels?: Record<string, string>
+  requireReason?: boolean
+  reasonMinLength?: number
+}>(), {
+  title: '即將儲存的變更',
+  requireConfirm: false,
+  fieldLabels: () => ({}),
+  requireReason: false,
+  reasonMinLength: 5,
 })
-const emit = defineEmits(['update:modelValue', 'confirm'])
+const emit = defineEmits<{
+  'update:modelValue': [value: boolean]
+  'confirm': [reason: string | null]
+}>()
 
 const visible = computed({
     get: () => props.modelValue,
-    set: (v) => emit('update:modelValue', v),
+    set: (v: boolean) => emit('update:modelValue', v),
 })
 
 const reason = ref('')
@@ -31,7 +43,7 @@ const reasonInvalid = computed(() => {
     return reason.value.trim().length < props.reasonMinLength
 })
 
-const fmt = (v) => {
+const fmt = (v: unknown) => {
     if (v == null || v === '') return '（空）'
     if (typeof v === 'number') return v.toLocaleString()
     return String(v)
