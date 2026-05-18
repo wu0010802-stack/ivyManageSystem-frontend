@@ -83,10 +83,17 @@ describe('StudentFeeView', () => {
     expect(getClassrooms).toHaveBeenCalled()
   })
 
-  it('預設 activeTab 為 templates', async () => {
+  it('預設 activeTab 為 records', async () => {
     const wrapper = mountFeeView()
     await flushPromises()
-    expect(wrapper.vm.$.setupState.activeTab).toBe('templates')
+    expect(wrapper.vm.$.setupState.activeTab).toBe('records')
+  })
+
+  it('mounted 時自動觸發子元件 fetchRecords（預設即在繳費記錄）', async () => {
+    FeeRecordsTabModule.__fetchRecords.mockClear()
+    mountFeeView()
+    await flushPromises()
+    expect(FeeRecordsTabModule.__fetchRecords).toHaveBeenCalled()
   })
 
   it('渲染三個 tab 子元件：費用範本 / 繳費記錄 / 退費管理', async () => {
@@ -101,9 +108,11 @@ describe('StudentFeeView', () => {
   it('切換至「繳費記錄」Tab 時呼叫子元件 fetchRecords', async () => {
     const wrapper = mountFeeView()
     await flushPromises()
+    // 預設已在 records；先切走再切回，驗證 watch(activeTab)
+    wrapper.vm.$.setupState.activeTab = 'templates'
+    await nextTick()
     FeeRecordsTabModule.__fetchRecords.mockClear()
 
-    // 觸發 watch(activeTab)
     wrapper.vm.$.setupState.activeTab = 'records'
     await nextTick()
     await flushPromises()

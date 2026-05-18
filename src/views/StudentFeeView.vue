@@ -43,7 +43,7 @@ import FeeRecordsTab from '@/components/fees/FeeRecordsTab.vue'
 import FeeRefundsTab from '@/components/fees/FeeRefundsTab.vue'
 
 // ─── Tab 狀態 ────────────────────────────────────────────────────────────────
-const activeTab = ref('templates')
+const activeTab = ref('records')
 const periodOptions = ref([])
 
 // ─── 子元件 ref（records tab） ──────────────────────────────────────────────
@@ -69,6 +69,7 @@ watch(activeTab, (val) => {
 onMounted(() => {
   fetchFeePeriods()
   classroomStore.fetchClassrooms()
+  feeRecordsTabRef.value?.fetchRecords()
 })
 </script>
 
