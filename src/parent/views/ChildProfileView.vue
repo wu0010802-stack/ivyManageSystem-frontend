@@ -110,7 +110,7 @@ onMounted(() => {
 <template>
   <div class="profile-view">
     <!-- 成長里程碑 carousel -->
-    <section class="card growth-section" aria-labelledby="growth-milestones-title">
+    <section class="pt-card growth-section" aria-labelledby="growth-milestones-title">
       <h2 id="growth-milestones-title" class="section-title">
         <ParentIcon name="trophy" size="sm" />
         成長里程碑
@@ -119,7 +119,7 @@ onMounted(() => {
     </section>
 
     <!-- 最新動態 timeline feed -->
-    <section class="card growth-section" aria-labelledby="growth-timeline-title">
+    <section class="pt-card growth-section" aria-labelledby="growth-timeline-title">
       <h2 id="growth-timeline-title" class="section-title">
         <ParentIcon name="notebook" size="sm" />
         最新動態
@@ -168,7 +168,7 @@ onMounted(() => {
         </div>
       </section>
 
-      <section class="card">
+      <section class="pt-card">
         <div class="sub-info">
           <span>學號 {{ data.student.student_no || '—' }}</span>
           <span v-if="data.student.gender">・{{ data.student.gender }}</span>
@@ -184,7 +184,7 @@ onMounted(() => {
         </div>
       </section>
 
-      <section class="card" aria-labelledby="guardians-title">
+      <section class="pt-card" aria-labelledby="guardians-title">
         <h2 id="guardians-title" class="section-title">監護人 / 接送人</h2>
         <div v-if="!data.guardians.length" class="empty">尚未登記</div>
         <div v-for="g in data.guardians" :key="g.id" class="guardian-row">
@@ -193,14 +193,14 @@ onMounted(() => {
             <span v-if="g.relation" class="guardian-rel">（{{ g.relation }}）</span>
           </div>
           <div class="guardian-tags">
-            <span v-if="g.is_self" class="tag self">您本人</span>
-            <span v-if="g.is_primary" class="tag primary">主要聯絡人</span>
-            <span v-if="g.can_pickup" class="tag pickup">可接送</span>
+            <span v-if="g.is_self" class="pt-pill pt-pill-info">您本人</span>
+            <span v-if="g.is_primary" class="pt-pill pt-pill-success">主要聯絡人</span>
+            <span v-if="g.can_pickup" class="pt-pill pt-pill-warn">可接送</span>
           </div>
         </div>
       </section>
 
-      <section class="card" aria-labelledby="allergies-title">
+      <section class="pt-card" aria-labelledby="allergies-title">
         <h2 id="allergies-title" class="section-title">過敏 / 用藥提醒</h2>
         <div v-if="!data.allergies.length" class="empty">尚未登記</div>
         <div
@@ -211,10 +211,11 @@ onMounted(() => {
           <div class="allergy-head">
             <span class="allergen">{{ a.allergen }}</span>
             <span
-              class="severity"
-              :style="{
-                background: SEVERITY_COLOR[a.severity]?.bg,
-                color: SEVERITY_COLOR[a.severity]?.color,
+              class="pt-pill"
+              :class="{
+                'pt-pill-success': a.severity === 'mild',
+                'pt-pill-warn': a.severity === 'moderate',
+                'pt-pill-danger': a.severity === 'severe',
               }"
             >{{ SEVERITY_LABEL[a.severity] || a.severity }}</span>
           </div>
@@ -224,13 +225,13 @@ onMounted(() => {
       </section>
 
       <!-- 修改申請：走訊息給導師，不直接寫 DB -->
-      <section class="card change-card" aria-labelledby="change-card-title">
+      <section class="pt-card change-card" aria-labelledby="change-card-title">
         <h2 id="change-card-title" class="section-title">資料有誤？</h2>
         <p class="change-text">
           孩子個人資料、過敏資訊、接送人資訊如有錯誤或變更，請透過訊息聯絡導師處理；
           不會在此頁直接修改，以確保校方記錄一致。
         </p>
-        <button class="primary-btn" type="button" @click="goMessages">
+        <button class="pt-action-btn change-btn" type="button" @click="goMessages">
           <ParentIcon name="envelope" size="sm" />
           開啟訊息聯絡導師
         </button>
@@ -238,7 +239,7 @@ onMounted(() => {
     </template>
 
     <!-- 最新照片 -->
-    <section class="card growth-section" aria-labelledby="photos-title">
+    <section class="pt-card growth-section" aria-labelledby="photos-title">
       <div class="section-header">
         <h2 id="photos-title" class="section-title">
           <ParentIcon name="camera" size="sm" />
@@ -278,24 +279,24 @@ onMounted(() => {
     </section>
 
     <!-- 成長量測 -->
-    <section class="card growth-section" aria-labelledby="measurements-title">
+    <section class="pt-card growth-section" aria-labelledby="measurements-title">
       <h2 id="measurements-title" class="section-title">
         <ParentIcon name="ruler" size="sm" />
         成長量測
       </h2>
-      <button class="link-btn" type="button" @click="goMeasurements">
+      <button class="pt-ghost-btn link-btn" type="button" @click="goMeasurements">
         查看身高/體重曲線
         <ParentIcon name="chevron-right" size="xs" />
       </button>
     </section>
 
     <!-- 歷次報告 -->
-    <section class="card growth-section" aria-labelledby="reports-title">
+    <section class="pt-card growth-section" aria-labelledby="reports-title">
       <h2 id="reports-title" class="section-title">
         <ParentIcon name="document" size="sm" />
         歷次報告
       </h2>
-      <button class="link-btn" type="button" @click="goReports">
+      <button class="pt-ghost-btn link-btn" type="button" @click="goReports">
         查看歷次成長報告
         <ParentIcon name="chevron-right" size="xs" />
       </button>
@@ -376,14 +377,7 @@ onMounted(() => {
   margin-top: 2px;
 }
 
-/* ── info card ───────────────────────────────── */
-.card {
-  background: var(--m3-surface-container-low, var(--pt-surface-card, var(--neutral-0)));
-  border: 1px solid var(--pt-page-border, var(--pt-border));
-  border-radius: 16px;
-  padding: 15px;
-  box-shadow: var(--m3-elev-1, var(--pt-shadow-card, var(--pt-elev-1)));
-}
+/* ── info card：吃 .pt-card 不再自家 background/border/radius ───── */
 .sub-info {
   font-size: 13px;
   color: var(--pt-text-placeholder);
@@ -451,26 +445,6 @@ onMounted(() => {
   gap: 4px;
   flex-wrap: wrap;
 }
-.tag {
-  font-size: 12px;
-  padding: 3px 9px;
-  border-radius: 999px;
-  background: var(--pt-surface-mute);
-  color: var(--pt-text-soft);
-  font-weight: 700;
-}
-.tag.self {
-  background: var(--color-info-soft);
-  color: var(--pt-info-text);
-}
-.tag.primary {
-  background: var(--color-success-soft);
-  color: var(--pt-success-text);
-}
-.tag.pickup {
-  background: var(--color-warning-soft);
-  color: var(--pt-warning-text);
-}
 .allergy-row {
   padding: 8px 0;
   border-top: 1px solid var(--pt-surface-mute-warm);
@@ -487,19 +461,14 @@ onMounted(() => {
   font-weight: 600;
   color: var(--m3-on-surface, var(--pt-text-strong));
 }
-.severity {
-  font-size: 12px;
-  padding: 2px 8px;
-  border-radius: 10px;
-}
 .allergy-text {
   margin-top: 4px;
   font-size: 13px;
   color: var(--m3-on-surface-variant, var(--pt-text-muted));
 }
-.change-card {
+.pt-card.change-card {
   background: var(--pt-tint-sun, var(--color-warning-soft));
-  border: 1px solid color-mix(in srgb, var(--pt-warning-text) 28%, transparent);
+  border-color: color-mix(in srgb, var(--pt-warning-text) 28%, transparent);
 }
 .change-text {
   font-size: 13px;
@@ -507,25 +476,7 @@ onMounted(() => {
   margin: 0 0 10px;
   line-height: 1.5;
 }
-.primary-btn {
-  width: 100%;
-  min-height: 44px;
-  padding: 10px;
-  background: var(--m3-primary, var(--brand-primary));
-  color: var(--neutral-0);
-  border: none;
-  border-radius: var(--pt-control-radius, 12px);
-  font-size: 14px;
-  font-weight: 600;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  transition: background var(--transition-fast, 0.15s ease);
-}
-.primary-btn:active {
-  background: var(--brand-primary-hover);
-}
+.change-btn { width: 100%; }
 .growth-section .section-title {
   font-size: 1rem; /* 16px */
   font-weight: 700;
@@ -574,16 +525,11 @@ onMounted(() => {
   cursor: default;
 }
 .link-btn {
-  background: #f3f4f6;
-  border: none;
-  border-radius: 8px;
+  background: var(--pt-surface-mute, #f5fbe6);
   padding: 10px 16px;
   font-size: 14px;
-  color: #0d9053;
-  font-weight: 600;
-  cursor: pointer;
 }
-.link-btn:hover { background: #e5e7eb; }
+.link-btn:hover { background: var(--leaf-100, #dcf4e6); }
 .section-header {
   display: flex;
   align-items: center;
