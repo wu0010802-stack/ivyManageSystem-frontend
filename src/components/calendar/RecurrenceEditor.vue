@@ -72,23 +72,7 @@ import {
   ElDatePicker,
 } from 'element-plus'
 
-interface WeeklyRule {
-  type: 'weekly'
-  weekday: number
-  until: string
-}
-interface MonthlyDayRule {
-  type: 'monthly_day'
-  day: number
-  until: string
-}
-interface MonthlyNthRule {
-  type: 'monthly_nth'
-  nth: number
-  weekday: number
-  until: string
-}
-type RecurrenceRule = WeeklyRule | MonthlyDayRule | MonthlyNthRule
+import type { RecurrenceRule, WeeklyRule, MonthlyDayRule, MonthlyNthRule } from './types'
 
 const props = defineProps<{ modelValue: RecurrenceRule | null }>()
 const emit = defineEmits<{ 'update:modelValue': [RecurrenceRule | null] }>()

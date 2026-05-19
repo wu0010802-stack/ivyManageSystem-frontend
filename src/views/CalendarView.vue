@@ -9,6 +9,7 @@ import { CALENDAR_LAYERS, LAYER_LABELS, LAYER_COLORS } from '@/constants/calenda
 import { downloadFile } from '@/utils/download'
 import { apiError } from '@/utils/error'
 import RecurrenceEditor from '@/components/calendar/RecurrenceEditor.vue'
+import type { RecurrenceRule } from '@/components/calendar/types'
 
 interface CalendarEvent {
   id: number
@@ -78,6 +79,7 @@ const form = reactive<{
   start_time: string
   end_time: string
   location: string
+  recurrence_rule: RecurrenceRule | null
 }>({
   id: null,
   title: '',

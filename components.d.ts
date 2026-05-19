@@ -200,6 +200,7 @@ declare module 'vue' {
     RecruitmentPeriodDialog: typeof import('./src/components/recruitment/RecruitmentPeriodDialog.vue')['default']
     RecruitmentPeriodsTab: typeof import('./src/components/recruitment/RecruitmentPeriodsTab.vue')['default']
     RecruitmentRecordDialog: typeof import('./src/components/recruitment/RecruitmentRecordDialog.vue')['default']
+    RecurrenceEditor: typeof import('./src/components/calendar/RecurrenceEditor.vue')['default']
     RefundSuggestModal: typeof import('./src/components/fees/RefundSuggestModal.vue')['default']
     RegistrationAddCourseDialog: typeof import('./src/components/activity/RegistrationAddCourseDialog.vue')['default']
     RegistrationAddSupplyDialog: typeof import('./src/components/activity/RegistrationAddSupplyDialog.vue')['default']
