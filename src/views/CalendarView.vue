@@ -1,9 +1,29 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { useRouter } from 'vue-router'
 import { createEvent, deleteEvent, getCalendarFeed, updateEvent } from '@/api/events'
+import { getAdminFeed } from '@/api/calendar'
+import { useCalendarLayers } from '@/composables/useCalendarLayers'
+import { CALENDAR_LAYERS, LAYER_LABELS, LAYER_COLORS } from '@/constants/calendarLayers'
 import { downloadFile } from '@/utils/download'
 import { apiError } from '@/utils/error'
+
+const router = useRouter()
+const {
+  enabledLayers,
+  groupByDate,
+  enableAll,
+  disableAll,
+  setItems,
+} = useCalendarLayers()
+
+const selectedLayerArr = computed({
+  get: () => [...enabledLayers.value],
+  set: (v) => {
+    enabledLayers.value = new Set(v)
+  },
+})
 
 const loading = ref(false)
 const events = ref([])
@@ -123,6 +143,25 @@ const exportHolidays = () => {
   downloadFile(`/exports/holidays?year=${currentYear.value}`, `${currentYear.value}年國定假日.xlsx`)
 }
 
+const monthRange = computed(() => {
+  const yr = currentYear.value
+  const mo = String(currentMonth.value).padStart(2, '0')
+  const lastDay = String(daysInMonth.value).padStart(2, '0')
+  return { from: `${yr}-${mo}-01`, to: `${yr}-${mo}-${lastDay}` }
+})
+
+const fetchAdminFeed = async () => {
+  try {
+    const { from, to } = monthRange.value
+    const resp = await getAdminFeed(from, to)
+    setItems(resp.data.items)
+  } catch (error) {
+    // 軟失敗：admin_feed 失敗不影響既有 SchoolEvent 顯示
+    console.error('[calendar] getAdminFeed failed', error)
+    setItems([])
+  }
+}
+
 const fetchEvents = async () => {
   loading.value = true
   try {
@@ -134,6 +173,28 @@ const fetchEvents = async () => {
   } finally {
     loading.value = false
   }
+  // 平行附加：非 event layer
+  fetchAdminFeed()
+}
+
+const nonEventItemsForCell = (dateStr) => {
+  if (!dateStr) return []
+  return (groupByDate.value[dateStr] || []).filter((x) => x.layer !== 'event')
+}
+
+const onLayerItemClick = (item) => {
+  if (item.link) {
+    router.push(item.link)
+  }
+}
+
+const openCellPopover = (dateStr) => {
+  const items = nonEventItemsForCell(dateStr)
+  ElMessageBox.alert(
+    items.map((it) => `${LAYER_LABELS[it.layer]}：${it.title}`).join('\n') || '無項目',
+    dateStr,
+    { type: 'info', confirmButtonText: '關閉' },
+  ).catch(() => { /* user cancel */ })
 }
 
 const prevMonth = () => {
@@ -276,6 +337,22 @@ onMounted(fetchEvents)
         <el-button size="small" style="margin-left: 12px" @click="goToday">今天</el-button>
       </div>
 
+      <div class="calendar-layer-toggle">
+        <el-checkbox-group v-model="selectedLayerArr" size="small">
+          <el-checkbox
+            v-for="layer in CALENDAR_LAYERS"
+            :key="layer"
+            :value="layer"
+            :style="{ '--layer-dot': LAYER_COLORS[layer] }"
+          >
+            <span class="layer-dot" />
+            {{ LAYER_LABELS[layer] }}
+          </el-checkbox>
+        </el-checkbox-group>
+        <el-button size="small" link @click="enableAll">全選</el-button>
+        <el-button size="small" link @click="disableAll">清除</el-button>
+      </div>
+
       <div class="calendar-grid">
         <div v-for="day in ['一', '二', '三', '四', '五', '六', '日']" :key="day" class="calendar-header">
           {{ day }}
@@ -303,6 +380,31 @@ onMounted(fetchEvents)
             </div>
             <div v-if="cell.events.length > 3" class="event-more">
               +{{ cell.events.length - 3 }} 更多
+            </div>
+          </div>
+          <div v-if="cell.day && nonEventItemsForCell(cell.date).length" class="cell-other-layers">
+            <template
+              v-for="(it, idx) in nonEventItemsForCell(cell.date)"
+              :key="`${it.layer}-${it.id}`"
+            >
+              <el-tooltip
+                v-if="idx < 4"
+                :content="`${LAYER_LABELS[it.layer]}：${it.title}`"
+                placement="top"
+              >
+                <div
+                  class="layer-strip"
+                  :style="{ background: it.color }"
+                  @click.stop="onLayerItemClick(it)"
+                />
+              </el-tooltip>
+            </template>
+            <div
+              v-if="nonEventItemsForCell(cell.date).length > 4"
+              class="layer-more"
+              @click.stop="openCellPopover(cell.date)"
+            >
+              +{{ nonEventItemsForCell(cell.date).length - 4 }}
             </div>
           </div>
         </div>
@@ -569,6 +671,53 @@ onMounted(fetchEvents)
 .event-more {
   font-size: 12px;
   color: var(--text-tertiary);
+}
+
+.calendar-layer-toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  margin-bottom: var(--space-3);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--bg-color-soft);
+  flex-wrap: wrap;
+}
+
+.layer-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--layer-dot);
+  margin-right: 4px;
+  vertical-align: middle;
+}
+
+.cell-other-layers {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 2px;
+}
+
+.layer-strip {
+  height: 4px;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.layer-strip:hover {
+  opacity: 0.8;
+}
+
+.layer-more {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  text-align: right;
+  padding-right: 2px;
 }
 
 .legend {
