@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -9,11 +9,14 @@ import PortalStudentDrawer from '@/components/portal/students/PortalStudentDrawe
 import PortalMeasurementSheet from '@/components/portal/sheets/PortalMeasurementSheet.vue'
 import PortalMilestoneSheet from '@/components/portal/sheets/PortalMilestoneSheet.vue'
 
-const sheets = ref({ measurement: false, milestone: false })
-const sheetTarget = ref({ studentId: null, studentName: '' })
+interface Student { id: number; name?: string; birthday?: string; gender?: string; parent_name?: string; student_id?: string; lifecycle_status?: string; attendance_rate?: number; parent_phone_masked?: string; [key: string]: unknown }
+interface Classroom { classroom_id?: number; classroom_name?: string; student_count?: number; students?: Student[]; [key: string]: unknown }
 
-function onCardCommand(cmd, student) {
-  sheetTarget.value = { studentId: student.id, studentName: student.name }
+const sheets = ref({ measurement: false, milestone: false })
+const sheetTarget = ref<{ studentId: number | null; studentName: string }>({ studentId: null, studentName: '' })
+
+function onCardCommand(cmd: string, student: Student) {
+  sheetTarget.value = { studentId: student.id, studentName: student.name ?? '' }
   if (cmd === 'measurement') sheets.value.measurement = true
   else if (cmd === 'milestone') sheets.value.milestone = true
 }
@@ -22,29 +25,29 @@ const route = useRoute()
 const router = useRouter()
 
 const loading = ref(false)
-const data = ref({ classrooms: [], total_students: 0, employee_name: '' })
-const activeClassroom = ref(null)
+const data = ref<{ classrooms: Classroom[]; total_students: number; employee_name: string }>({ classrooms: [], total_students: 0, employee_name: '' })
+const activeClassroom = ref<number | null>(null)
 const searchText = ref('')
 
 const drawerOpen = ref(false)
-const selectedStudentId = ref(null)
+const selectedStudentId = ref<number | null>(null)
 
 // 列表卡片內 parent_phone 揭露的本地狀態（key: studentId）
-const revealedParentPhones = ref(new Map())
-const revealingId = ref(null)
+const revealedParentPhones = ref(new Map<number, string>())
+const revealingId = ref<number | null>(null)
 
 const fetchStudents = async () => {
   loading.value = true
   try {
     const res = await getMyStudents()
-    data.value = res.data
+    data.value = res.data as { classrooms: Classroom[]; total_students: number; employee_name: string }
     if (res.data.classrooms.length > 0 && !activeClassroom.value) {
-      activeClassroom.value = res.data.classrooms[0].classroom_id
+      activeClassroom.value = (res.data.classrooms[0].classroom_id as number | undefined) ?? null
     }
     // 若 URL 帶 ?student=xx 就自動開
     const sid = Number(route.query.student)
     if (sid) {
-      selectedStudentId.value = sid
+      selectedStudentId.value = sid as number
       drawerOpen.value = true
     }
   } catch (error) {
@@ -63,12 +66,12 @@ const currentClassroom = computed(() => {
 
 const filteredStudents = computed(() => {
   if (!currentClassroom.value) return []
-  const students = currentClassroom.value.students
+  const students = currentClassroom.value.students ?? []
   if (!searchText.value) return students
   const keyword = searchText.value.toLowerCase()
   return students.filter(
     (s) =>
-      s.name.toLowerCase().includes(keyword) ||
+      (s.name ?? '').toLowerCase().includes(keyword) ||
       (s.parent_name && s.parent_name.toLowerCase().includes(keyword)) ||
       (s.student_id && s.student_id.toLowerCase().includes(keyword)),
   )
@@ -76,9 +79,9 @@ const filteredStudents = computed(() => {
 
 const ageMap = computed(() => {
   const today = new Date()
-  const map = new Map()
+  const map = new Map<number, string>()
   for (const cls of data.value.classrooms) {
-    for (const s of cls.students) {
+    for (const s of (cls.students ?? [])) {
       if (!s.birthday) {
         map.set(s.id, '')
         continue
@@ -103,35 +106,37 @@ const ageMap = computed(() => {
   return map
 })
 
-function genderLabel(g) {
+type TagType = 'primary' | 'success' | 'warning' | 'info' | 'danger'
+
+function genderLabel(g: string | undefined): string {
   if (g === 'M' || g === '男') return '男'
   if (g === 'F' || g === '女') return '女'
   return g || ''
 }
-function genderTagType(g) {
+function genderTagType(g: string | undefined): TagType {
   if (g === 'M' || g === '男') return 'primary'
   if (g === 'F' || g === '女') return 'danger'
   return 'info'
 }
-function lifecycleLabel(s) {
+function lifecycleLabel(s: string | undefined): string {
   return (
-    {
+    ({
       active: '在學',
       graduated: '畢業',
       withdrawn: '離校',
       transferred: '轉學',
-    }[s] || ''
+    } as Record<string, string>)[s ?? ''] || ''
   )
 }
 
-function attendanceLevel(rate) {
+function attendanceLevel(rate: number | null | undefined): string {
   if (rate == null) return 'unknown'
   if (rate >= 95) return 'high'
   if (rate >= 85) return 'mid'
   return 'low'
 }
 
-function openDrawer(student) {
+function openDrawer(student: Student) {
   selectedStudentId.value = student.id
   drawerOpen.value = true
   router.replace({ query: { ...route.query, student: student.id } })
@@ -146,13 +151,13 @@ watch(drawerOpen, (v) => {
   }
 })
 
-async function revealParentPhone(student, ev) {
+async function revealParentPhone(student: Student, ev?: MouseEvent) {
   ev?.stopPropagation()
   if (revealedParentPhones.value.has(student.id)) return
   revealingId.value = student.id
   try {
     const res = await revealPortalStudentPhone(student.id, { target: 'parent' })
-    const phone = res.data?.phone
+    const phone = (res.data as { phone?: string })?.phone
     if (phone) {
       const next = new Map(revealedParentPhones.value)
       next.set(student.id, phone)
@@ -165,7 +170,7 @@ async function revealParentPhone(student, ev) {
   }
 }
 
-function displayedParentPhone(student) {
+function displayedParentPhone(student: Student): string {
   return (
     revealedParentPhones.value.get(student.id) ||
     student.parent_phone_masked ||
@@ -183,12 +188,12 @@ onMounted(fetchStudents)
     </div>
 
     <template v-else>
-      <el-tabs v-model="activeClassroom" type="card" class="classroom-tabs">
+      <el-tabs v-model="(activeClassroom as string | number)" type="card" class="classroom-tabs">
         <el-tab-pane
           v-for="cr in data.classrooms"
           :key="cr.classroom_id"
           :label="`${cr.classroom_name} (${cr.student_count}人)`"
-          :name="cr.classroom_id"
+          :name="(cr.classroom_id as string | number)"
         />
       </el-tabs>
 
@@ -249,7 +254,7 @@ onMounted(fetchStudents)
           <div class="row meta">
             <span>學號 {{ s.student_id || '—' }}</span>
             <span class="dot">・</span>
-            <span>{{ ageMap.get(s.id) || '—' }}</span>
+            <span>{{ ageMap.get(s.id) ?? '—' }}</span>
             <el-tag
               v-if="lifecycleLabel(s.lifecycle_status)"
               size="small"
@@ -261,7 +266,7 @@ onMounted(fetchStudents)
 
           <div class="row attendance">
             <div class="att-label">本月出席</div>
-            <div class="att-value" :class="`att-${attendanceLevel(s.attendance_rate_this_month)}`">
+            <div class="att-value" :class="`att-${attendanceLevel(s.attendance_rate_this_month as number | null | undefined)}`">
               {{ s.attendance_rate_this_month != null ? `${s.attendance_rate_this_month}%` : '—' }}
             </div>
             <div v-if="s.last_absent_date" class="att-last">
@@ -312,12 +317,12 @@ onMounted(fetchStudents)
 
     <PortalMeasurementSheet
       v-model="sheets.measurement"
-      :student-id="sheetTarget.studentId"
+      :student-id="(sheetTarget.studentId as number | string)"
       :student-name="sheetTarget.studentName"
     />
     <PortalMilestoneSheet
       v-model="sheets.milestone"
-      :student-id="sheetTarget.studentId"
+      :student-id="(sheetTarget.studentId as number | string)"
       :student-name="sheetTarget.studentName"
     />
   </div>

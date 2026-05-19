@@ -1,24 +1,30 @@
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getMyClassIncidents, createPortalIncident } from '@/api/studentIncidents'
 import api from '@/api/index'
-import { INCIDENT_TYPES, SEVERITIES, INCIDENT_TYPE_TAG as TYPE_TAG, SEVERITY_TAG } from '@/constants/studentRecords'
+import { INCIDENT_TYPES, SEVERITIES, INCIDENT_TYPE_TAG as _TYPE_TAG, SEVERITY_TAG as _SEVERITY_TAG } from '@/constants/studentRecords'
+
+type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
+const TYPE_TAG = _TYPE_TAG as Record<string, ElTagType>
+const SEVERITY_TAG = _SEVERITY_TAG as Record<string, ElTagType>
 import { usePortalFromHub } from '@/composables/usePortalFromHub'
 
 const { fromHub, backToHub } = usePortalFromHub()
 
 // ── 班級/學生 ─────────────────────────────────────────
-const classrooms = ref([])      // [{ classroom_id, classroom_name, students: [...] }]
-const activeClassroom = ref(null)
+interface ClassroomStudent { id: number; name: string; [key: string]: unknown }
+interface ClassroomItem { classroom_id: number; classroom_name: string; students: ClassroomStudent[] }
+const classrooms = ref<ClassroomItem[]>([])      // [{ classroom_id, classroom_name, students: [...] }]
+const activeClassroom = ref('')
 const classLoading = ref(false)
 
 // ── 事件列表 ──────────────────────────────────────────
-const incidents = ref([])
+const incidents = ref<Record<string, unknown>[]>([])
 const total = ref(0)
 const loading = ref(false)
-const filterType = ref(null)
-const filterDateRange = ref([])
+const filterType = ref<string | null>(null)
+const filterDateRange = ref<string[]>([])
 
 // ── Dialog ────────────────────────────────────────────
 const dialogVisible = ref(false)
@@ -35,7 +41,7 @@ const emptyForm = () => ({
 })
 const form = reactive(emptyForm())
 
-const currentStudents = ref([])
+const currentStudents = ref<ClassroomStudent[]>([])
 
 const fetchMyStudents = async () => {
   classLoading.value = true
@@ -53,8 +59,8 @@ const fetchMyStudents = async () => {
   }
 }
 
-const onTabChange = (cid) => {
-  const cr = classrooms.value.find(c => String(c.classroom_id) === cid)
+const onTabChange = (cid: string | number) => {
+  const cr = classrooms.value.find(c => String(c.classroom_id) === String(cid))
   currentStudents.value = cr ? cr.students : []
   filterType.value = null
   filterDateRange.value = []
@@ -65,7 +71,7 @@ const fetchIncidents = async () => {
   if (!activeClassroom.value) return
   loading.value = true
   try {
-    const params = { classroom_id: Number(activeClassroom.value), limit: 100 }
+    const params: { classroom_id: number; limit: number; incident_type?: string; start_date?: string; end_date?: string } = { classroom_id: Number(activeClassroom.value), limit: 100 }
     if (filterType.value) params.incident_type = filterType.value
     if (filterDateRange.value?.length === 2) {
       params.start_date = filterDateRange.value[0]
@@ -107,13 +113,13 @@ const submitForm = async () => {
     dialogVisible.value = false
     fetchIncidents()
   } catch (e) {
-    ElMessage.error(e.response?.data?.detail || '新增失敗')
+    ElMessage.error((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '新增失敗')
   } finally {
     formLoading.value = false
   }
 }
 
-const truncate = (text, len = 60) => {
+const truncate = (text: string, len = 60) => {
   if (!text) return ''
   return text.length > len ? text.slice(0, len) + '…' : text
 }

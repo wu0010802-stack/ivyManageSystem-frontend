@@ -1,6 +1,7 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { Bell, Camera, Delete } from '@element-plus/icons-vue'
+import type { UploadRequestOptions } from 'element-plus'
 
 const props = defineProps({
   modelValue: { type: Boolean, required: true },
@@ -93,7 +94,7 @@ const photos = computed(() => props.entry?.photos || [])
 
 function buildPayload() {
   const f = form.value
-  const norm = (v) => (v === '' || v === undefined ? null : v)
+  const norm = (v: unknown) => (v === '' || v === undefined ? null : v)
   return {
     mood: norm(f.mood),
     meal_lunch: norm(f.meal_lunch),
@@ -112,6 +113,11 @@ function handleSaveDraft() {
 
 function handlePublish() {
   emit('publish', buildPayload(), props.entry?.version ?? 0)
+}
+
+function handleUploadPhoto(opts: UploadRequestOptions): Promise<unknown> {
+  emit('upload-photo', opts)
+  return Promise.resolve()
 }
 
 function handleClose() {
@@ -227,7 +233,7 @@ function handleClose() {
           <el-upload
             :auto-upload="true"
             :show-file-list="false"
-            :http-request="(opts) => $emit('upload-photo', opts)"
+            :http-request="handleUploadPhoto"
             accept=".jpg,.jpeg,.png,.heic,.heif"
           >
             <el-button :icon="Camera" :loading="photoUploading">

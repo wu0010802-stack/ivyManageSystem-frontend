@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getMyOvertimes, createMyOvertime, deleteMyOvertime } from '@/api/portal'
@@ -12,7 +12,7 @@ const { isMobile } = useIsMobile()
 
 const loading = ref(false)
 const submitLoading = ref(false)
-const overtimes = ref([])
+const overtimes = ref<Record<string, unknown>[]>([])
 
 const now = new Date()
 const query = reactive({
@@ -38,7 +38,7 @@ const openForm = () => {
     showForm.value = true
 }
 
-const submitOvertime = async (payload) => {
+const submitOvertime = async (payload: Record<string, unknown>) => {
     submitLoading.value = true
     try {
         const res = await createMyOvertime(payload)
@@ -55,7 +55,7 @@ const submitOvertime = async (payload) => {
     }
 }
 
-const withdrawOvertime = async (id) => {
+const withdrawOvertime = async (id: number) => {
     try {
         await deleteMyOvertime(id)
         ElMessage.success('加班申請已撤回')
@@ -65,8 +65,8 @@ const withdrawOvertime = async (id) => {
     }
 }
 
-const totalHours = () => overtimes.value.reduce((sum, o) => sum + o.hours, 0)
-const totalPay = () => overtimes.value.reduce((sum, o) => sum + (o.overtime_pay || 0), 0)
+const totalHours = () => overtimes.value.reduce((sum, o) => sum + ((o.hours as number) || 0), 0)
+const totalPay = () => overtimes.value.reduce((sum, o) => sum + ((o.overtime_pay as number) || 0), 0)
 
 onMounted(fetchOvertimes)
 </script>

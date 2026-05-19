@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, computed, toRef, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getMySchedule, getSwapRequests, getSwapCandidates, createSwapRequest, respondToSwap, cancelSwapRequest } from '@/api/portal'
@@ -17,18 +17,22 @@ const query = reactive({
   month: now.getMonth() + 1,
 })
 
+interface DayObj { day?: number; date: string; is_weekend?: boolean; shift_name?: string; work_start?: string; work_end?: string; is_override?: boolean; [key: string]: unknown }
+interface SwapRequest { is_mine?: boolean; id?: number; [key: string]: unknown }
+interface SwapCandidate { employee_id?: number; name?: string; shift_name?: string; work_start?: string; work_end?: string; has_pending_swap?: boolean; [key: string]: unknown }
+
 // Schedule data
-const scheduleData = ref(null)
+const scheduleData = ref<{ days: { date: string; day: number; weekday?: string }[] } | null>(null)
 
 // Swap requests
-const swapRequests = ref([])
+const swapRequests = ref<SwapRequest[]>([])
 const swapLoading = ref(false)
 
 // Create swap dialog
 const showSwapDialog = ref(false)
 const swapInitialDate = ref('')
 const swapSubmitLoading = ref(false)
-const candidates = ref([])
+const candidates = ref<SwapCandidate[]>([])
 const candidatesLoading = ref(false)
 
 const WEEKDAY_NAMES = ['日', '一', '二', '三', '四', '五', '六']
@@ -42,26 +46,26 @@ const { calendarWeeks, isToday, isFutureDate } = useScheduleCalendar(
 
 // ============ 行動裝置偵測 ============
 const isMobile = ref(false)
-let mqList = null
-const onMqChange = (e) => { isMobile.value = e.matches }
+let mqList: MediaQueryList | null = null
+const onMqChange = (e: MediaQueryListEvent) => { isMobile.value = e.matches }
 
 // ============ Day Detail BottomSheet（mobile only）============
 const showDaySheet = ref(false)
-const selectedDay = ref(null)
+const selectedDay = ref<DayObj | null>(null)
 
-const onCellClick = (day) => {
+const onCellClick = (day: DayObj) => {
   if (!day || !isMobile.value) return
   selectedDay.value = day
   showDaySheet.value = true
 }
 
-const onSwapClick = (day) => {
+const onSwapClick = (day: DayObj) => {
   openSwapDialog(day.date)
 }
 
 const selectedDayLabel = computed(() => {
   const d = selectedDay.value
-  if (!d) return ''
+  if (!d?.date) return ''
   const [, m, dd] = d.date.split('-')
   const w = WEEKDAY_NAMES[new Date(d.date).getDay()]
   return `${m}/${dd}（星期${w}）`
@@ -70,7 +74,7 @@ const selectedDayLabel = computed(() => {
 const canSwapSelected = computed(() => {
   const d = selectedDay.value
   if (!d) return false
-  return !!d.shift_name && isFutureDate(d.date) && !d.is_weekend
+  return !!d.shift_name && isFutureDate(d.date ?? '') && !d.is_weekend
 })
 
 const swapDisabledReason = computed(() => {
@@ -78,14 +82,14 @@ const swapDisabledReason = computed(() => {
   if (!d) return ''
   if (!d.shift_name) return '此日無排班，不需申請換班'
   if (d.is_weekend) return '週末無排班，不需申請換班'
-  if (!isFutureDate(d.date)) return '換班僅限今日（含）之後的日期'
+  if (!isFutureDate(d.date ?? '')) return '換班僅限今日（含）之後的日期'
   return ''
 })
 
 const swapFromSheet = () => {
   if (!selectedDay.value) return
   showDaySheet.value = false
-  openSwapDialog(selectedDay.value.date)
+  openSwapDialog(selectedDay.value.date ?? '')
 }
 
 // ============ Fetch Schedule ============
@@ -93,7 +97,7 @@ const fetchSchedule = async () => {
   loading.value = true
   try {
     const res = await getMySchedule({ year: query.year, month: query.month })
-    scheduleData.value = res.data
+    scheduleData.value = res.data as { days: { date: string; day: number; weekday?: string }[] }
   } catch (error) {
     ElMessage.error('載入排班失敗')
   } finally {
@@ -122,7 +126,7 @@ const sentRequests = computed(() =>
 )
 
 // ============ Create Swap ============
-const openSwapDialog = (dateStr) => {
+const openSwapDialog = (dateStr: string) => {
   swapInitialDate.value = dateStr || ''
   candidates.value = []
   showSwapDialog.value = true
@@ -131,7 +135,7 @@ const openSwapDialog = (dateStr) => {
   }
 }
 
-const fetchCandidates = async (dateStr) => {
+const fetchCandidates = async (dateStr: string) => {
   candidatesLoading.value = true
   try {
     const res = await getSwapCandidates({ date: dateStr })
@@ -143,7 +147,7 @@ const fetchCandidates = async (dateStr) => {
   }
 }
 
-const submitSwap = async (payload) => {
+const submitSwap = async (payload: { swap_date: string; target_id: number | null; reason: string }) => {
   swapSubmitLoading.value = true
   try {
     await createSwapRequest({
@@ -162,7 +166,7 @@ const submitSwap = async (payload) => {
 }
 
 // ============ Respond / Cancel ============
-const respondSwap = async (id, action) => {
+const respondSwap = async (id: number, action: string) => {
   const label = action === 'accept' ? '接受' : '拒絕'
   try {
     await ElMessageBox.confirm(`確定要${label}此換班申請？`, '確認', { type: 'warning' })
@@ -171,27 +175,29 @@ const respondSwap = async (id, action) => {
     fetchSwapRequests()
     fetchSchedule()
   } catch (e) {
+    const err = e as { response?: { data?: { detail?: string } } }
     if (e !== 'cancel') {
-      ElMessage.error(e.response?.data?.detail || `${label}失敗`)
+      ElMessage.error(err.response?.data?.detail || `${label}失敗`)
     }
   }
 }
 
-const cancelSwap = async (id) => {
+const cancelSwap = async (id: number) => {
   try {
     await ElMessageBox.confirm('確定要撤銷此換班申請？', '確認', { type: 'warning' })
     await cancelSwapRequest(id)
     ElMessage.success('已撤銷')
     fetchSwapRequests()
   } catch (e) {
+    const err = e as { response?: { data?: { detail?: string } } }
     if (e !== 'cancel') {
-      ElMessage.error(e.response?.data?.detail || '撤銷失敗')
+      ElMessage.error(err.response?.data?.detail || '撤銷失敗')
     }
   }
 }
 
 // ============ Month Navigation ============
-const changeMonth = (offset) => {
+const changeMonth = (offset: number) => {
   let y = query.year
   let m = query.month + offset
   if (m > 12) { m = 1; y++ }

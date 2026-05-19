@@ -1,18 +1,29 @@
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getPortalAnnouncements, markAnnouncementRead } from '@/api/portal'
 import { apiError } from '@/utils/error'
 
+interface Announcement {
+  id: number
+  title: string
+  content: string
+  priority: string
+  is_read: boolean
+  is_pinned: boolean
+  created_by_name: string
+  created_at: string
+}
 const loading = ref(false)
-const announcements = ref([])
+const announcements = ref<Announcement[]>([])
 const totalAnnouncements = ref(0)
 const currentPage = ref(1)
 const pageSize = 20
-const expandedId = ref(null)
+const expandedId = ref<number | null>(null)
 const noMore = ref(false)
 
-const priorityConfig = {
+type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger'
+const priorityConfig: Record<string, { label: string; type: ElTagType }> = {
   normal: { label: '一般', type: 'info' },
   important: { label: '重要', type: 'warning' },
   urgent: { label: '緊急', type: 'danger' },
@@ -44,7 +55,7 @@ const loadMore = () => {
   }
 }
 
-const toggleExpand = async (ann) => {
+const toggleExpand = async (ann: Announcement) => {
   if (expandedId.value === ann.id) {
     expandedId.value = null
     return
@@ -61,7 +72,7 @@ const toggleExpand = async (ann) => {
   }
 }
 
-const formatDate = (isoStr) => {
+const formatDate = (isoStr: string) => {
   if (!isoStr) return ''
   const d = new Date(isoStr)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`

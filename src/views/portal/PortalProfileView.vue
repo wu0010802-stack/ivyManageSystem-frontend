@@ -1,6 +1,7 @@
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+// @ts-expect-error TODO(ts-strict): qrcode has no type declaration
 import QRCode from 'qrcode'
 import { getProfile, updateProfile } from '@/api/portal'
 import { getMyLineBinding, updateMyLineBinding, deleteMyLineBinding } from '@/api/lineBinding'
@@ -18,7 +19,25 @@ const checkMobile = () => { isMobile.value = window.innerWidth < 768 }
 onMounted(() => window.addEventListener('resize', checkMobile))
 onUnmounted(() => window.removeEventListener('resize', checkMobile))
 
-const profile = ref({})
+interface ProfileData {
+  employee_id?: string | number
+  name?: string
+  job_title?: string
+  position?: string
+  classroom?: string
+  hire_date?: string
+  work_start_time?: string
+  work_end_time?: string
+  phone?: string | null
+  address?: string | null
+  emergency_contact_name?: string | null
+  emergency_contact_phone?: string | null
+  bank_code?: string | null
+  bank_account?: string | null
+  bank_account_name?: string | null
+  [key: string]: unknown
+}
+const profile = ref<ProfileData>({})
 
 const form = reactive({
   phone: '',
@@ -43,7 +62,7 @@ const fetchProfile = async () => {
   }
 }
 
-const syncForm = (data) => {
+const syncForm = (data: ProfileData) => {
   form.phone = data.phone || ''
   form.address = data.address || ''
   form.emergency_contact_name = data.emergency_contact_name || ''
@@ -86,7 +105,7 @@ const saveProfile = async () => {
 }
 
 // ---- LINE 綁定 ----
-const lineUserId = ref(null)
+const lineUserId = ref<string | null>(null)
 const lineBindInput = ref('')
 const loadingLine = ref(false)
 const savingLine = ref(false)
@@ -129,7 +148,7 @@ const fetchLineBinding = async () => {
   }
 }
 
-const maskLineId = (id) => {
+const maskLineId = (id: string) => {
   if (!id) return ''
   return id.slice(0, 4) + '****' + id.slice(-4)
 }

@@ -1,21 +1,42 @@
-<script setup>
+<script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { listToday, administer, skipLog } from '@/api/portalMedications'
 import { broadcastDashboardInvalidate } from '@/composables/usePortalDashboard'
 
-const groups = ref([])
-const date = ref(null)
+interface MedicationItem {
+  log_id: number | string
+  student_name: string
+  medication_name: string
+  dose: string
+  status: string
+  scheduled_time?: string
+  note?: string | null
+  source?: string
+  administered_at?: string | null
+  administered_by_name?: string | null
+  skipped_reason?: string | null
+  [key: string]: unknown
+}
+interface ClassroomGroup {
+  classroom_id: number
+  classroom_name: string
+  stats: { pending: number; administered: number; skipped: number }
+  items: MedicationItem[]
+}
+const groups = ref<ClassroomGroup[]>([])
+const date = ref<string | null>(null)
 const loading = ref(false)
 
 async function load() {
   loading.value = true
   try {
     const { data } = await listToday()
-    groups.value = data.groups || []
-    date.value = data.date
+    const d = data as { groups?: ClassroomGroup[]; date?: string }
+    groups.value = d.groups || []
+    date.value = d.date || null
   } catch (e) {
-    ElMessage.error(e?.response?.data?.detail || '讀取失敗')
+    ElMessage.error((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '讀取失敗')
   } finally {
     loading.value = false
   }
@@ -23,7 +44,7 @@ async function load() {
 
 onMounted(load)
 
-async function onAdminister(item) {
+async function onAdminister(item: MedicationItem) {
   try {
     await ElMessageBox.confirm(
       `確認執行：${item.student_name} ${item.medication_name} ${item.dose}`,
@@ -34,17 +55,17 @@ async function onAdminister(item) {
     return
   }
   try {
-    await administer(item.log_id, {})
+    await administer(item.log_id as number, {})
     ElMessage.success('已執行')
     broadcastDashboardInvalidate()
     await load()
   } catch (e) {
-    ElMessage.error(e?.response?.data?.detail || '執行失敗')
+    ElMessage.error((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '執行失敗')
   }
 }
 
-async function onSkip(item) {
-  let reason
+async function onSkip(item: MedicationItem) {
+  let reason: string
   try {
     const result = await ElMessageBox.prompt(
       `略過原因（${item.student_name} ${item.medication_name}）`,
@@ -55,22 +76,23 @@ async function onSkip(item) {
         inputValidator: (v) => !!(v && v.trim()) || '請輸入原因',
       },
     )
-    reason = result.value
+    reason = (result as { value: string }).value
   } catch {
     return
   }
   try {
-    await skipLog(item.log_id, { reason })
+    await skipLog(item.log_id as number, { reason })
     ElMessage.success('已略過')
     broadcastDashboardInvalidate()
     await load()
   } catch (e) {
-    ElMessage.error(e?.response?.data?.detail || '略過失敗')
+    ElMessage.error((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '略過失敗')
   }
 }
 
-function statusLabel(s) {
-  return { pending: '待執行', administered: '已執行', skipped: '已略過' }[s] || s
+const STATUS_LABEL: Record<string, string> = { pending: '待執行', administered: '已執行', skipped: '已略過' }
+function statusLabel(s: string) {
+  return STATUS_LABEL[s] || s
 }
 </script>
 

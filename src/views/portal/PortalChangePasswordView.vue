@@ -1,7 +1,7 @@
-<script setup>
+<script setup lang="ts">
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, type FormInstance } from 'element-plus'
 import { changePassword } from '@/api/auth'
 import { clearMustChangePassword, getUserInfo } from '@/utils/auth'
 import { PASSWORD_RULES, validatePasswordStrength } from '@/utils/passwordRules'
@@ -9,7 +9,7 @@ import { apiError } from '@/utils/error'
 
 const router = useRouter()
 const loading = ref(false)
-const formRef = ref(null)
+const formRef = ref<FormInstance | null>(null)
 const userInfo = getUserInfo()
 
 const form = reactive({
@@ -18,7 +18,7 @@ const form = reactive({
   confirm_password: '',
 })
 
-const validateConfirm = (_, value, callback) => {
+const validateConfirm = (_: unknown, value: string, callback: (err?: Error) => void) => {
   if (value !== form.new_password) {
     callback(new Error('兩次輸入的密碼不一致'))
   } else {
@@ -40,7 +40,7 @@ const rules = {
 
 const handleSubmit = async () => {
   try {
-    await formRef.value.validate()
+    await formRef.value?.validate()
   } catch {
     return
   }

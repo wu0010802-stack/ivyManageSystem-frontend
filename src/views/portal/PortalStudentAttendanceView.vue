@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, watch, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
@@ -29,22 +29,25 @@ import StudentRollcallTable from './components/studentAttendance/StudentRollcall
 import StudentMonthlyStats from './components/studentAttendance/StudentMonthlyStats.vue'
 import StudentOfflinePanel from './components/studentAttendance/StudentOfflinePanel.vue'
 
-const classrooms = ref([])
+interface ClassroomEntry { classroom_id?: number; classroom_name?: string; [key: string]: unknown }
+interface AttendanceRecord { student_id?: number; status?: string; remark?: string; [key: string]: unknown }
+
+const classrooms = ref<ClassroomEntry[]>([])
 const activeTab = ref('daily')
-const classroomId = ref(null)
+const classroomId = ref<number | null>(null)
 const dailyDate = ref(todayISO())
-const dailyRecords = ref([])
+const dailyRecords = ref<AttendanceRecord[]>([])
 const dailyLoading = ref(false)
 const saveLoading = ref(false)
 const monthPicker = ref(thisMonthISO())
-const monthlyData = ref(null)
+const monthlyData = ref<Record<string, unknown> | null>(null)
 const monthlyLoading = ref(false)
 const pendingCount = ref(0)
-const reviewOps = ref([])
+const reviewOps = ref<Record<string, unknown>[]>([])
 const otherUserOpsCount = ref(0)
 const syncing = ref(false)
 
-const currentUserId = () => getUserInfo()?.id ?? null
+const currentUserId = (): string | number | null => (getUserInfo()?.id as string | number | undefined) ?? null
 
 const refreshPendingCount = async () => {
   const uid = currentUserId()
@@ -98,12 +101,12 @@ const { isOnline } = useOnlineStatus(() => syncQueue({ silent: false }))
 
 const onSyncNow = () => syncQueue({ silent: false })
 
-const dismissReviewOp = async (id) => {
+const dismissReviewOp = async (id: number | string) => {
   await ElMessageBox.confirm('確定要丟棄這筆離線點名？（無法復原）', '丟棄暫存', {
     type: 'warning',
   }).catch(() => null).then(async (ok) => {
     if (!ok) return
-    await removeOp(id)
+    await removeOp(String(id))
     await refreshPendingCount()
     ElMessage.success('已丟棄')
   })
@@ -113,7 +116,7 @@ const fetchClassrooms = async () => {
   try {
     const res = await getMyStudents()
     classrooms.value = res.data.classrooms || []
-    if (classrooms.value.length > 0) classroomId.value = classrooms.value[0].classroom_id
+    if (classrooms.value.length > 0) classroomId.value = classrooms.value[0].classroom_id ?? null
   } catch {
     ElMessage.error('載入班級資料失敗')
   }
@@ -127,7 +130,7 @@ const fetchDailyAttendance = async () => {
       date: dailyDate.value,
       classroom_id: classroomId.value,
     })
-    dailyRecords.value = res.data.records.map((record) => ({
+    dailyRecords.value = (res.data.records as AttendanceRecord[]).map((record) => ({
       ...record,
       status: record.status || '出席',
       remark: record.remark || '',
@@ -140,7 +143,7 @@ const fetchDailyAttendance = async () => {
 }
 
 // onUpdateStatus：mutate 本機狀態，儲存由「儲存點名」按鈕觸發（批次）
-const onUpdateStatus = ({ student_id, status, remark }) => {
+const onUpdateStatus = ({ student_id, status, remark }: { student_id: number | undefined; status: string; remark: string }) => {
   const record = dailyRecords.value.find((r) => r.student_id === student_id)
   if (record) {
     record.status = status
@@ -148,7 +151,7 @@ const onUpdateStatus = ({ student_id, status, remark }) => {
   }
 }
 
-const onQuickSetAll = (status) => {
+const onQuickSetAll = (status: string) => {
   dailyRecords.value.forEach((record) => {
     record.status = status
   })
@@ -281,10 +284,10 @@ onMounted(async () => {
     >
       <template #title>有 {{ reviewOps.length }} 筆離線點名無法自動同步，請人工處理：</template>
       <ul class="review-list">
-        <li v-for="op in reviewOps" :key="op.id">
-          {{ op.meta?.date }} · {{ op.meta?.classroom_name || '未知班級' }} · {{ op.meta?.count }} 筆
+        <li v-for="op in reviewOps" :key="op.id as number">
+          {{ (op.meta as Record<string, unknown>)?.date }} · {{ (op.meta as Record<string, unknown>)?.classroom_name || '未知班級' }} · {{ (op.meta as Record<string, unknown>)?.count }} 筆
           ｜原因：{{ op.last_error || '未知' }}
-          <el-button link type="danger" size="small" @click="dismissReviewOp(op.id)">丟棄</el-button>
+          <el-button link type="danger" size="small" @click="dismissReviewOp(op.id as number)">丟棄</el-button>
         </li>
       </ul>
     </el-alert>
@@ -324,7 +327,7 @@ onMounted(async () => {
       <template #monthly>
         <StudentMonthlyStats
           v-model:month-picker="monthPicker"
-          :data="monthlyData"
+          :data="monthlyData ?? undefined"
           :loading="monthlyLoading"
           @export-csv="exportMonthly"
         />

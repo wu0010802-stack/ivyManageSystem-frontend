@@ -1,5 +1,6 @@
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, onMounted, nextTick } from 'vue'
+import type { FormInstance } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { User, Lock } from '@element-plus/icons-vue'
@@ -9,9 +10,9 @@ import { apiError } from '@/utils/error'
 
 const router = useRouter()
 const loading = ref(false)
-const loginForm = ref(null)
-const usernameInput = ref(null)
-const passwordInput = ref(null)
+const loginForm = ref<FormInstance | null>(null)
+const usernameInput = ref<HTMLInputElement | null>(null)
+const passwordInput = ref<HTMLInputElement | null>(null)
 
 onMounted(() => {
   requestAnimationFrame(() => {
@@ -37,7 +38,7 @@ const focusFirstInvalid = async () => {
 
 const handleLogin = async () => {
   try {
-    await loginForm.value.validate()
+    await loginForm.value?.validate()
   } catch {
     focusFirstInvalid()
     return

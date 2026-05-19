@@ -1,14 +1,19 @@
-<script setup>
+<script setup lang="ts">
 import { Camera, Edit } from '@element-plus/icons-vue'
 
-defineProps({
-  item: { type: Object, required: true },
-  moodEmoji: { type: Object, required: true },
-})
+interface EntryRecord { published_at?: string | null; mood?: string; teacher_note?: string; photos?: unknown[]; [key: string]: unknown }
+interface ItemEntry { student_name?: string; entry?: EntryRecord | null; [key: string]: unknown }
 
-defineEmits(['click'])
+defineProps<{
+  item: ItemEntry
+  moodEmoji: Record<string, string>
+}>()
 
-function statusOf(entry) {
+defineEmits<{ 'click': [item: ItemEntry] }>()
+
+type TagType = 'primary' | 'success' | 'warning' | 'info' | 'danger'
+
+function statusOf(entry: EntryRecord | null | undefined): { label: string; type: TagType } {
   if (!entry) return { label: '未填', type: 'info' }
   if (entry.published_at) return { label: '已發布', type: 'success' }
   return { label: '草稿', type: 'warning' }
@@ -29,7 +34,7 @@ function statusOf(entry) {
     </div>
     <div class="card-body">
       <div class="card-mood">
-        <span v-if="item.entry?.mood" class="mood-emoji">{{ moodEmoji[item.entry.mood] || '🙂' }}</span>
+        <span v-if="item.entry?.mood" class="mood-emoji">{{ moodEmoji[item.entry.mood!] || '🙂' }}</span>
         <span v-else class="mood-empty">—</span>
       </div>
       <div class="card-meta">

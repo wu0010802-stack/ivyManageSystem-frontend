@@ -5,7 +5,7 @@
       @open-panel="onOpenPanel"
     />
 
-    <ClassHubStickyNext :next="data?.sticky_next" @jump="jumpDeep" />
+    <ClassHubStickyNext :next="stickyNext" @jump="(dl) => jumpDeep(dl || '')" />
 
     <ClassHubBatchMeasurementCard
       :last-measured-on="lastBatchMeasuredOn"
@@ -17,7 +17,7 @@
         {{ data?.classroom_name || '今日工作台' }}
       </h2>
       <span v-if="data?.fetched_at" class="class-hub__updated">
-        最後更新 {{ formatTime(data.fetched_at) }}
+        最後更新 {{ formatTime(data.fetched_at as string | null | undefined) }}
       </span>
       <el-button :loading="loading" size="small" @click="manualRefresh">
         手動刷新
@@ -33,7 +33,7 @@
 
     <template v-else>
       <ClassHubTimeSlotCard
-        v-for="slot in data.slots"
+        v-for="slot in slots"
         :key="slot.slot_id"
         :slot="slot"
         :is-current="slot.slot_id === currentSlotId"
@@ -71,7 +71,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, reactive, ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
@@ -90,7 +90,12 @@ import ClassHubBatchMeasurementCard from '@/components/portal/class-hub/ClassHub
 import PortalBatchMeasurementSheet from '@/components/portal/sheets/PortalBatchMeasurementSheet.vue'
 import { getMeasurementsLatest } from '@/api/portalMeasurements'
 
-const { data, loading, refresh, decrementCount } = usePortalClassHub()
+const { data, loading, refresh, decrementCount } = usePortalClassHub() as {
+  data: import('vue').Ref<Record<string, unknown> | null>
+  loading: import('vue').Ref<boolean>
+  refresh: () => Promise<void>
+  decrementCount: (key: string) => void
+}
 const router = useRouter()
 const messagesStore = usePortalMessagesStore()
 const { unreadCount: messagesUnread } = storeToRefs(messagesStore)
@@ -105,15 +110,23 @@ const {
 
 const canMessages = computed(() => hasPermission('PARENT_MESSAGES_WRITE'))
 
+// Typed accessors for data fields
+interface NextTask { kind?: string; student_name?: string; detail?: string; due_at?: string | null; deep_link?: string }
+interface SlotTask { kind?: string; count?: number; action_mode?: string; due_at?: string | null }
+interface TimeSlot { slot_id?: string; tasks: SlotTask[] }
+
+const stickyNext = computed(() => (data.value?.sticky_next ?? null) as NextTask | null)
+const slots = computed(() => ((data.value?.slots ?? []) as unknown) as TimeSlot[])
+
 const batchSheetOpen = ref(false)
-const lastBatchMeasuredOn = ref(null)
+const lastBatchMeasuredOn = ref<string | null>(null)
 
 async function refreshLastBatchDate() {
   try {
     const { data: latestData } = await getMeasurementsLatest()
-    const dates = latestData
+    const dates = (latestData as { last_measurement?: { measured_on?: string } }[])
       .map((r) => r.last_measurement?.measured_on)
-      .filter(Boolean)
+      .filter((d): d is string => Boolean(d))
       .sort()
     lastBatchMeasuredOn.value = dates.length > 0 ? dates[dates.length - 1] : null
   } catch (_) {
@@ -146,7 +159,7 @@ async function refreshMessagesUnread() {
 
 // Re-evaluate which slot is current every minute
 const nowTick = ref(Date.now())
-let tickTimer = null
+let tickTimer: ReturnType<typeof setInterval> | null = null
 onMounted(() => {
   tickTimer = setInterval(() => {
     nowTick.value = Date.now()
@@ -174,31 +187,31 @@ function manualRefresh() {
   refreshMessagesUnread()
 }
 
-function onOpenSheet(task) {
+function onOpenSheet(task: SlotTask) {
   if (task.kind === 'attendance') sheets.attendance = true
   else if (task.kind === 'medication') sheets.medication = true
   else if (task.kind === 'incident') sheets.incident = true
 }
 
-function onSheetDone(countKey) {
+function onSheetDone(countKey: string) {
   decrementCount(countKey)
 }
 
-function onJumpPage(task) {
-  const map = {
+function onJumpPage(task: SlotTask) {
+  const map: Record<string, string> = {
     observation: '/portal/observations',
     contact_book: '/portal/contact-book',
   }
-  const target = map[task.kind]
+  const target = task.kind ? map[task.kind] : undefined
   if (target) router.push(`${target}?from=hub`)
 }
 
-function jumpDeep(deepLink) {
+function jumpDeep(deepLink: string) {
   if (!deepLink) return
   router.push(deepLink)
 }
 
-function formatTime(iso) {
+function formatTime(iso: string | null | undefined) {
   if (!iso) return ''
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return ''
@@ -208,11 +221,11 @@ function formatTime(iso) {
 }
 
 // drawer 控制
-function onOpenPanel(name) {
+function onOpenPanel(name: string) {
   openPanel(name)
 }
 
-function onMessagesDrawerToggle(val) {
+function onMessagesDrawerToggle(val: boolean) {
   if (!val) closePanel()
 }
 

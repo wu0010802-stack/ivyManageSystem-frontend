@@ -1,11 +1,34 @@
-<script setup>
-defineProps({
-  days: { type: Array, required: true },
-  // 用於顯示日期：'MM/DD' 格式需要月份
-  month: { type: Number, default: null },
-})
+<script setup lang="ts">
+interface LeaveRequest { leave_type_label?: string; leave_hours?: number; is_approved?: boolean | null }
+interface OvertimeRequest { overtime_type_label?: string; hours?: number; is_approved?: boolean | null }
+interface DayEntry {
+  day: number
+  weekday?: string
+  is_holiday?: boolean
+  holiday_name?: string
+  is_weekend?: boolean
+  punch_in?: string | null
+  punch_out?: string | null
+  work_hours?: number | null
+  is_late?: boolean
+  late_minutes?: number
+  is_early_leave?: boolean
+  is_missing_punch_in?: boolean
+  is_missing_punch_out?: boolean
+  leave_type_label?: string
+  shift_name?: string
+  scheduled_start?: string
+  scheduled_end?: string
+  leave_requests?: LeaveRequest[]
+  overtime_requests?: OvertimeRequest[]
+}
 
-function getStatusInfo(day) {
+defineProps<{
+  days: DayEntry[]
+  month?: number | null
+}>()
+
+function getStatusInfo(day: DayEntry) {
   if (day.is_holiday) return { text: day.holiday_name || '假日', tone: 'holiday' }
   // 週末 + 未打卡：左日期柱已顯示「週六/週日」，不再加 status pill
   if (day.is_weekend && !day.punch_in) return null
@@ -17,7 +40,7 @@ function getStatusInfo(day) {
   return null
 }
 
-function getLeaveDisplay(day) {
+function getLeaveDisplay(day: DayEntry) {
   if (!day.leave_requests || day.leave_requests.length === 0) return null
   const lv = day.leave_requests[0]
   const status = lv.is_approved === true ? 'approved' : lv.is_approved === false ? 'rejected' : 'pending'
@@ -29,7 +52,7 @@ function getLeaveDisplay(day) {
   }
 }
 
-function getOvertimeDisplay(day) {
+function getOvertimeDisplay(day: DayEntry) {
   if (!day.overtime_requests || day.overtime_requests.length === 0) return null
   const ot = day.overtime_requests[0]
   const status = ot.is_approved === true ? 'approved' : ot.is_approved === false ? 'rejected' : 'pending'
@@ -41,20 +64,20 @@ function getOvertimeDisplay(day) {
   }
 }
 
-function getWorkHoursClass(day) {
+function getWorkHoursClass(day: DayEntry) {
   if (!day.work_hours || day.is_weekend) return ''
   if (day.work_hours < 8) return 'val--warn'
   return ''
 }
 
-function formatShift(day) {
+function formatShift(day: DayEntry) {
   if (day.scheduled_start && day.scheduled_end) {
     return `${day.scheduled_start}–${day.scheduled_end}`
   }
   return day.shift_name || ''
 }
 
-function dayCardClass(day) {
+function dayCardClass(day: DayEntry) {
   return {
     'day-card--weekend': day.is_weekend,
     'day-card--holiday': day.is_holiday,
@@ -62,13 +85,13 @@ function dayCardClass(day) {
   }
 }
 
-function weekdayTone(day) {
+function weekdayTone(day: DayEntry) {
   if (day.is_holiday) return 'holiday'
   if (day.is_weekend) return 'weekend'
   return ''
 }
 
-function formatDay(day, month) {
+function formatDay(day: DayEntry, month: number | null | undefined) {
   const m = month != null ? String(month).padStart(2, '0') : ''
   return `${m}/${String(day.day).padStart(2, '0')}`
 }
@@ -97,14 +120,14 @@ function formatDay(day, month) {
           <span
             v-if="getStatusInfo(day)"
             class="status-pill"
-            :class="`status-pill--${getStatusInfo(day).tone}`"
+            :class="`status-pill--${getStatusInfo(day)?.tone ?? ''}`"
           >
             <span
-              v-if="['ok','warn','danger','leave','holiday'].includes(getStatusInfo(day).tone)"
+              v-if="['ok','warn','danger','leave','holiday'].includes(getStatusInfo(day)?.tone ?? '')"
               class="status-pill__dot"
               aria-hidden="true"
             />
-            {{ getStatusInfo(day).text }}
+            {{ getStatusInfo(day)?.text }}
           </span>
         </div>
 
@@ -143,21 +166,21 @@ function formatDay(day, month) {
           <div v-if="getLeaveDisplay(day)" class="request-row">
             <span class="request-row__type">請假</span>
             <span class="request-row__text">
-              {{ getLeaveDisplay(day).text }}
-              <span class="request-row__hours">{{ getLeaveDisplay(day).hours }}h</span>
+              {{ getLeaveDisplay(day)?.text }}
+              <span class="request-row__hours">{{ getLeaveDisplay(day)?.hours }}h</span>
             </span>
-            <span class="badge" :class="`badge--${getLeaveDisplay(day).status}`">
-              {{ getLeaveDisplay(day).statusLabel }}
+            <span class="badge" :class="`badge--${getLeaveDisplay(day)?.status}`">
+              {{ getLeaveDisplay(day)?.statusLabel }}
             </span>
           </div>
           <div v-if="getOvertimeDisplay(day)" class="request-row">
             <span class="request-row__type">加班</span>
             <span class="request-row__text">
-              {{ getOvertimeDisplay(day).text }}
-              <span class="request-row__hours">{{ getOvertimeDisplay(day).hours }}h</span>
+              {{ getOvertimeDisplay(day)?.text }}
+              <span class="request-row__hours">{{ getOvertimeDisplay(day)?.hours }}h</span>
             </span>
-            <span class="badge" :class="`badge--${getOvertimeDisplay(day).status}`">
-              {{ getOvertimeDisplay(day).statusLabel }}
+            <span class="badge" :class="`badge--${getOvertimeDisplay(day)?.status}`">
+              {{ getOvertimeDisplay(day)?.statusLabel }}
             </span>
           </div>
         </div>

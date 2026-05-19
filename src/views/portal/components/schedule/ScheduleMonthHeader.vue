@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 defineProps({
   year: { type: Number, required: true },
   month: { type: Number, required: true },

@@ -1,10 +1,10 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref, reactive, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getSalaryPreview } from '@/api/portal'
 
 const loading = ref(false)
-const salaryData = ref(null)
+const salaryData = ref<Record<string, unknown> | null>(null)
 
 // 後端 salary_status: finalized / draft / recalc_pending / none
 // 草稿/重算中不回傳 salary 欄位細節,前端依狀態顯示對應提示。
@@ -14,7 +14,7 @@ const STATUS_MESSAGES = {
   draft: { title: '薪資草稿尚未結算', desc: '本月薪資已計算但尚未結算,完成結算後即可查看明細' },
   recalc_pending: { title: '薪資需重算', desc: '相關資料(請假/加班/設定)異動,等待主管完成重算與結算' },
 }
-const statusMessage = computed(() => STATUS_MESSAGES[salaryData.value?.salary_status] || STATUS_MESSAGES.none)
+const statusMessage = computed(() => (STATUS_MESSAGES as Record<string, { title: string; desc: string }>)[(salaryData.value?.salary_status as string) || ''] || STATUS_MESSAGES.none)
 
 const isMobile = ref(window.innerWidth < 768)
 const checkMobile = () => { isMobile.value = window.innerWidth < 768 }
@@ -51,6 +51,9 @@ const nextMonth = () => {
   fetchSalary()
 }
 
+const attendanceStats = computed(() => salaryData.value?.attendance_stats as Record<string, unknown> | undefined)
+const salary = computed(() => salaryData.value?.salary as Record<string, unknown> | undefined)
+
 onMounted(fetchSalary)
 </script>
 
@@ -71,100 +74,100 @@ onMounted(fetchSalary)
         <h3>出勤統計</h3>
         <div class="stats-row">
           <div class="stat-item">
-            <div class="stat-value blue">{{ salaryData.attendance_stats.work_days }}</div>
+            <div class="stat-value blue">{{ attendanceStats?.work_days }}</div>
             <div class="stat-label">出勤天數</div>
           </div>
           <div class="stat-item">
-            <div class="stat-value orange">{{ salaryData.attendance_stats.late_count }}</div>
+            <div class="stat-value orange">{{ attendanceStats?.late_count }}</div>
             <div class="stat-label">遲到次數</div>
           </div>
           <div class="stat-item">
-            <div class="stat-value orange">{{ salaryData.attendance_stats.early_leave_count }}</div>
+            <div class="stat-value orange">{{ attendanceStats?.early_leave_count }}</div>
             <div class="stat-label">早退次數</div>
           </div>
           <div class="stat-item">
-            <div class="stat-value red">{{ salaryData.attendance_stats.missing_punch_count }}</div>
+            <div class="stat-value red">{{ attendanceStats?.missing_punch_count }}</div>
             <div class="stat-label">缺卡次數</div>
           </div>
           <div class="stat-item">
-            <div class="stat-value gray">{{ salaryData.attendance_stats.leave_days }}</div>
+            <div class="stat-value gray">{{ attendanceStats?.leave_days }}</div>
             <div class="stat-label">請假天數</div>
           </div>
           <div class="stat-item">
-            <div class="stat-value gray">{{ salaryData.attendance_stats.leave_hours }}h</div>
+            <div class="stat-value gray">{{ attendanceStats?.leave_hours }}h</div>
             <div class="stat-label">請假時數</div>
           </div>
         </div>
       </el-card>
 
       <!-- Salary Breakdown -->
-      <el-card v-if="salaryData?.salary" class="salary-card">
+      <el-card v-if="salary" class="salary-card">
         <h3>薪資明細</h3>
         <el-descriptions :column="isMobile ? 1 : 2" border>
           <el-descriptions-item label="底薪">
-            NT$ {{ salaryData.salary.base_salary?.toLocaleString() || 0 }}
+            NT$ {{ salary?.base_salary?.toLocaleString() || 0 }}
           </el-descriptions-item>
           <el-descriptions-item label="獎金合計（不含主管紅利）">
-            NT$ {{ salaryData.salary.total_bonus?.toLocaleString() || 0 }}
+            NT$ {{ salary?.total_bonus?.toLocaleString() || 0 }}
           </el-descriptions-item>
           <el-descriptions-item label="主管紅利">
-            NT$ {{ salaryData.salary.supervisor_dividend?.toLocaleString() || 0 }}
+            NT$ {{ salary?.supervisor_dividend?.toLocaleString() || 0 }}
           </el-descriptions-item>
           <el-descriptions-item label="加班費">
-            NT$ {{ salaryData.salary.overtime_pay?.toLocaleString() || 0 }}
+            NT$ {{ salary?.overtime_pay?.toLocaleString() || 0 }}
           </el-descriptions-item>
           <el-descriptions-item label="園務會議加班">
-            NT$ {{ salaryData.salary.meeting_overtime_pay?.toLocaleString() || 0 }}
+            NT$ {{ salary?.meeting_overtime_pay?.toLocaleString() || 0 }}
           </el-descriptions-item>
         </el-descriptions>
 
         <h4 style="margin-top: 20px;">扣款明細</h4>
         <el-descriptions :column="isMobile ? 1 : 2" border>
           <el-descriptions-item label="勞保費">
-            -NT$ {{ salaryData.salary.labor_insurance?.toLocaleString() || 0 }}
+            -NT$ {{ salary?.labor_insurance?.toLocaleString() || 0 }}
           </el-descriptions-item>
           <el-descriptions-item label="健保費">
-            -NT$ {{ salaryData.salary.health_insurance?.toLocaleString() || 0 }}
+            -NT$ {{ salary?.health_insurance?.toLocaleString() || 0 }}
           </el-descriptions-item>
           <el-descriptions-item label="勞退自提">
-            -NT$ {{ salaryData.salary.pension_employee?.toLocaleString() || 0 }}
+            -NT$ {{ salary?.pension_employee?.toLocaleString() || 0 }}
           </el-descriptions-item>
           <el-descriptions-item label="遲到扣款">
-            -NT$ {{ salaryData.salary.late_deduction?.toLocaleString() || 0 }}
+            -NT$ {{ salary?.late_deduction?.toLocaleString() || 0 }}
           </el-descriptions-item>
           <el-descriptions-item label="早退扣款">
-            -NT$ {{ salaryData.salary.early_leave_deduction?.toLocaleString() || 0 }}
+            -NT$ {{ salary?.early_leave_deduction?.toLocaleString() || 0 }}
           </el-descriptions-item>
           <el-descriptions-item label="請假扣款">
-            -NT$ {{ salaryData.salary.leave_deduction?.toLocaleString() || 0 }}
+            -NT$ {{ salary?.leave_deduction?.toLocaleString() || 0 }}
           </el-descriptions-item>
           <el-descriptions-item label="其他扣款">
-            -NT$ {{ salaryData.salary.other_deduction?.toLocaleString() || 0 }}
+            -NT$ {{ salary?.other_deduction?.toLocaleString() || 0 }}
           </el-descriptions-item>
           <el-descriptions-item label="扣款合計">
-            <span class="text-danger">-NT$ {{ salaryData.salary.total_deduction?.toLocaleString() || 0 }}</span>
+            <span class="text-danger">-NT$ {{ salary?.total_deduction?.toLocaleString() || 0 }}</span>
           </el-descriptions-item>
         </el-descriptions>
 
         <h4 style="margin-top: 20px;">節慶 / 獨立獎金調整</h4>
         <el-descriptions :column="isMobile ? 1 : 2" border>
           <el-descriptions-item label="節慶獎金">
-            NT$ {{ salaryData.salary.festival_bonus?.toLocaleString() || 0 }}
+            NT$ {{ salary?.festival_bonus?.toLocaleString() || 0 }}
           </el-descriptions-item>
           <el-descriptions-item label="超額獎金">
-            NT$ {{ salaryData.salary.overtime_bonus?.toLocaleString() || 0 }}
+            NT$ {{ salary?.overtime_bonus?.toLocaleString() || 0 }}
           </el-descriptions-item>
           <el-descriptions-item label="會議缺席扣減">
-            <span class="text-warning">-NT$ {{ salaryData.salary.meeting_absence_deduction?.toLocaleString() || 0 }}</span>
+            <span class="text-warning">-NT$ {{ salary?.meeting_absence_deduction?.toLocaleString() || 0 }}</span>
           </el-descriptions-item>
           <el-descriptions-item label="獨立獎金淨額">
-            NT$ {{ ((salaryData.salary.festival_bonus || 0) + (salaryData.salary.overtime_bonus || 0) - (salaryData.salary.meeting_absence_deduction || 0)).toLocaleString() }}
+            NT$ {{ (((salary?.festival_bonus as number) || 0) + ((salary?.overtime_bonus as number) || 0) - ((salary?.meeting_absence_deduction as number) || 0)).toLocaleString() }}
           </el-descriptions-item>
         </el-descriptions>
 
         <div class="net-salary-box">
           <span class="net-label">實發金額</span>
-          <span class="net-value">NT$ {{ salaryData.salary.net_salary?.toLocaleString() || 0 }}</span>
+          <span class="net-value">NT$ {{ salary?.net_salary?.toLocaleString() || 0 }}</span>
         </div>
 
         <el-tag type="success" style="margin-top: 12px;">已結算</el-tag>

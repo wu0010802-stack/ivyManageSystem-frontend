@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import OfflineQueueBadge from '@/components/portal/OfflineQueueBadge.vue'
 
 defineProps({

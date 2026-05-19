@@ -1,24 +1,24 @@
-<script setup>
+<script setup lang="ts">
 import { Refresh } from '@element-plus/icons-vue'
 
-defineProps({
-  classroomId: { type: Number, default: null },
-  classroomOptions: { type: Array, required: true },
-  logDate: { type: String, required: true },
-  loading: { type: Boolean, default: false },
-  batchBusy: { type: Boolean, default: false },
-  showOnlyUnpublished: { type: Boolean, default: false },
-})
+defineProps<{
+  classroomId?: number | null
+  classroomOptions: { value: number | string; label: string }[]
+  logDate: string
+  loading?: boolean
+  batchBusy?: boolean
+  showOnlyUnpublished?: boolean
+}>()
 
-defineEmits([
-  'update:classroomId',
-  'update:logDate',
-  'update:showOnlyUnpublished',
-  'refresh',
-  'open-template',
-  'open-batch',
-  'open-copy',
-])
+defineEmits<{
+  'update:classroomId': [value: number | null]
+  'update:logDate': [value: string]
+  'update:showOnlyUnpublished': [value: boolean]
+  'refresh': []
+  'open-template': []
+  'open-batch': []
+  'open-copy': []
+}>()
 </script>
 
 <template>
@@ -61,7 +61,7 @@ defineEmits([
       <el-divider direction="vertical" />
       <el-checkbox
         :model-value="showOnlyUnpublished"
-        @update:model-value="$emit('update:showOnlyUnpublished', $event)"
+        @update:model-value="(v) => $emit('update:showOnlyUnpublished', !!v)"
       >
         只看未發布
       </el-checkbox>

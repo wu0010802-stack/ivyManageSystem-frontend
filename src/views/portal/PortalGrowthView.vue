@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { onMounted } from 'vue'
 import { usePortalAppraisal } from '@/composables/usePortalAppraisal'
 import LatestSummaryCard from '@/components/portal/growth/LatestSummaryCard.vue'
@@ -6,15 +6,21 @@ import TrendChart from '@/components/portal/growth/TrendChart.vue'
 import CycleTimelineItem from '@/components/portal/growth/CycleTimelineItem.vue'
 
 const {
-  items,
-  trend,
+  items: _items,
+  trend: _trend,
   loading,
   error,
   emptyState,
-  latest,
+  latest: _latest,
   fetchAll,
-  fetchDetail,
+  fetchDetail: _fetchDetail,
 } = usePortalAppraisal()
+interface SummaryItem { grade?: string; academic_year?: number | string; semester?: number | string; total_score?: number | string; bonus_amount?: number | string; [key: string]: unknown }
+interface AppraisalCycleItem { cycle_id?: number | string; academic_year?: number | string; semester?: number | string; is_visible?: boolean; is_excluded?: boolean; is_rejected?: boolean; exclude_reason?: string; summary_status?: string; total_score?: number | string; grade?: string; [key: string]: unknown }
+const items = _items as unknown as AppraisalCycleItem[]
+const trend = _trend as unknown as Record<string, unknown>[]
+const latest = _latest as unknown as { item: SummaryItem; delta: number | null } | null
+const fetchDetail = _fetchDetail as unknown as (cycleId: string | number) => Promise<unknown>
 
 onMounted(fetchAll)
 </script>
@@ -29,7 +35,7 @@ onMounted(fetchAll)
     </header>
 
     <div v-if="error" class="error-banner">
-      載入失敗：{{ error.message || '請稍後再試' }}
+      載入失敗：{{ (error as Record<string, unknown>)?.message || '請稍後再試' }}
     </div>
 
     <div v-if="loading && !items.length" class="loading-state">

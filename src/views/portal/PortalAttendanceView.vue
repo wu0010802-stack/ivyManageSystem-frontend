@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft, ArrowRight, Printer } from '@element-plus/icons-vue'
@@ -20,7 +20,29 @@ const query = reactive({
   month: now.getMonth() + 1,
 })
 
-const sheetData = ref(null)
+interface DayEntry {
+  day: number
+  weekday?: string
+  is_holiday?: boolean
+  holiday_name?: string
+  is_weekend?: boolean
+  punch_in?: string | null
+  punch_out?: string | null
+  work_hours?: number | null
+  is_late?: boolean
+  late_minutes?: number
+  is_early_leave?: boolean
+  is_missing_punch_in?: boolean
+  is_missing_punch_out?: boolean
+  leave_type_label?: string
+  shift_name?: string
+  scheduled_start?: string
+  scheduled_end?: string
+  leave_requests?: Record<string, unknown>[]
+  overtime_requests?: Record<string, unknown>[]
+}
+interface SheetData { employee_name?: string; summary?: Record<string, unknown>; days?: DayEntry[]; uses_shift?: boolean; [key: string]: unknown }
+const sheetData = ref<SheetData | null>(null)
 const viewMode = ref('table') // 'table' or 'cards'
 const sheetCache = new Map() // key: 'YYYY-M'，唯讀 View 快取可永久保留
 
@@ -44,7 +66,7 @@ const fetchSheet = async (force = false) => {
     sheetData.value = res.data
     sheetCache.set(key, res.data)
   } catch (error) {
-    ElMessage.error('載入失敗: ' + apiError(error, error.message))
+    ElMessage.error('載入失敗: ' + apiError(error, (error as Error)?.message ?? '錯誤'))
   } finally {
     loading.value = false
   }
@@ -74,7 +96,7 @@ const nextMonth = () => {
 // header-card 滑出 viewport 後再顯示，避免 sticky bar 與 header 同時出現重複資訊
 const topSentinel = ref(null)
 const showStickyBar = ref(false)
-let stickyObserver = null
+let stickyObserver: IntersectionObserver | null = null
 
 const isViewingCurrentMonth = computed(() => {
   const t = new Date()
@@ -163,7 +185,7 @@ onUnmounted(() => {
     <!-- Summary Stats -->
     <el-card v-if="sheetData" class="summary-card">
       <h3>本月出勤統計</h3>
-      <AttendanceStatsRow :summary="sheetData.summary" />
+      <AttendanceStatsRow :summary="sheetData.summary || {}" />
     </el-card>
 
     <!-- ===== Table View (Desktop) ===== -->

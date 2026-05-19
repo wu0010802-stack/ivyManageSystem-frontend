@@ -1,21 +1,29 @@
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 import { COURSE_STATUS_TAG_TYPE } from '@/constants/activity'
 import { formatActivityDate } from '@/utils/format'
 
-const props = defineProps({
-  data: { type: Object, default: null },  // { summary, registrations, classrooms }
-  activeClass: { type: String, default: null },
-  loading: { type: Boolean, default: false },
-})
+interface Registration { class_name?: string; [key: string]: unknown }
+interface ActivityData {
+  summary?: Record<string, unknown>
+  registrations?: Registration[]
+  classrooms?: string[]
+  [key: string]: unknown
+}
 
-defineEmits(['update:activeClass'])
+const props = defineProps<{
+  data?: ActivityData | null
+  activeClass?: string | null
+  loading?: boolean
+}>()
+
+defineEmits<{ 'update:activeClass': [value: string] }>()
 
 const summary = computed(() => props.data?.summary || null)
 const registrations = computed(() => {
   if (!props.data) return []
-  if (!props.activeClass) return props.data.registrations
-  return props.data.registrations.filter(r => r.class_name === props.activeClass)
+  if (!props.activeClass) return props.data.registrations ?? []
+  return (props.data.registrations ?? []).filter((r: Registration) => r.class_name === props.activeClass)
 })
 const classrooms = computed(() => props.data?.classrooms || [])
 const showClassTabs = computed(() => classrooms.value.length > 1)
@@ -54,8 +62,8 @@ const showClassTabs = computed(() => classrooms.value.length > 1)
     <!-- 班級切換 Tabs（多班時顯示） -->
     <el-tabs
       v-if="showClassTabs"
-      :model-value="activeClass"
-      @update:model-value="$emit('update:activeClass', $event)"
+      :model-value="(activeClass as string)"
+      @update:model-value="(v) => $emit('update:activeClass', String(v))"
       style="margin-top: 16px"
     >
       <el-tab-pane
@@ -72,7 +80,7 @@ const showClassTabs = computed(() => classrooms.value.length > 1)
       border
       stripe
       style="margin-top: 12px"
-      v-loading="loading"
+      v-loading="loading ?? false"
     >
       <el-table-column label="學生" prop="student_name" min-width="90" />
       <el-table-column label="班級" prop="class_name" width="90" align="center" />
@@ -82,7 +90,7 @@ const showClassTabs = computed(() => classrooms.value.length > 1)
           <el-tag
             v-for="(c, idx) in row.courses"
             :key="idx"
-            :type="COURSE_STATUS_TAG_TYPE[c.status] || 'info'"
+            :type="((COURSE_STATUS_TAG_TYPE as Record<string, string>)[c.status as string] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger'"
             size="small"
             style="margin: 2px"
           >

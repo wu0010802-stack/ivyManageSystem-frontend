@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /**
  * ScheduleSwapDialog — 換班申請表單
  *
@@ -21,16 +21,22 @@
 import { computed, ref, watch } from 'vue'
 import TeacherBottomSheet from '@/components/portal/TeacherBottomSheet.vue'
 
-const props = defineProps({
-  modelValue:        { type: Boolean, required: true },
-  isMobile:          { type: Boolean, default: false },
-  initialDate:       { type: String, default: '' },
-  candidates:        { type: Array, default: () => [] },
-  candidatesLoading: { type: Boolean, default: false },
-  loading:           { type: Boolean, default: false },
-})
+interface SwapCandidate { employee_id?: number; name?: string; shift_name?: string; work_start?: string; work_end?: string; has_pending_swap?: boolean; [key: string]: unknown }
 
-const emit = defineEmits(['update:modelValue', 'date-change', 'submit'])
+const props = defineProps<{
+  modelValue: boolean
+  isMobile?: boolean
+  initialDate?: string
+  candidates?: SwapCandidate[]
+  candidatesLoading?: boolean
+  loading?: boolean
+}>()
+
+const emit = defineEmits<{
+  'update:modelValue': [val: boolean]
+  'date-change': [dateStr: string]
+  submit: [payload: { swap_date: string; target_id: number | null; reason: string }]
+}>()
 
 const visible = computed({
   get: () => props.modelValue,
@@ -58,7 +64,7 @@ watch(
   { immediate: true }
 )
 
-const onDateChange = (val) => {
+const onDateChange = (val: string) => {
   form.value.target_id = null
   emit('date-change', val)
 }
@@ -66,7 +72,7 @@ const onDateChange = (val) => {
 // 今天凌晨，用於停用過去日期
 const todayMidnight = new Date()
 todayMidnight.setHours(0, 0, 0, 0)
-const disabledDate = (d) => d < todayMidnight
+const disabledDate = (d: Date) => d < todayMidnight
 
 function submit() {
   if (!form.value.date || !form.value.target_id) return
@@ -112,9 +118,9 @@ const canSubmit = computed(() => !!form.value.date && !!form.value.target_id)
           >
             <el-option
               v-for="c in candidates"
-              :key="c.employee_id"
+              :key="c.employee_id as number"
               :label="`${c.name} (${c.shift_name}${c.work_start ? ' ' + c.work_start + '~' + c.work_end : ''})`"
-              :value="c.employee_id"
+              :value="c.employee_id as number"
               :disabled="c.has_pending_swap"
             >
               <span>{{ c.name }}</span>
@@ -170,9 +176,9 @@ const canSubmit = computed(() => !!form.value.date && !!form.value.target_id)
         >
           <el-option
             v-for="c in candidates"
-            :key="c.employee_id"
+            :key="c.employee_id as number"
             :label="`${c.name} (${c.shift_name}${c.work_start ? ' ' + c.work_start + '~' + c.work_end : ''})`"
-            :value="c.employee_id"
+            :value="c.employee_id as number"
             :disabled="c.has_pending_swap"
           >
             <span>{{ c.name }}</span>
