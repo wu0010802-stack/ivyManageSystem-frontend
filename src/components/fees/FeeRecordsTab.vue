@@ -203,7 +203,7 @@ interface FeeSummary {
   total_unpaid: number
 }
 
-const props = withDefaults(defineProps<{
+withDefaults(defineProps<{
   periodOptions?: string[]
   classrooms?: Classroom[]
 }>(), {

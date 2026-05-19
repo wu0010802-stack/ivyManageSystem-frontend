@@ -230,7 +230,7 @@ const handleImport = async () => {
       importReplaceExisting.value,
     )
     importResult.value = res.data
-    const { imported, skipped, errors } = res.data
+    const { imported, skipped } = res.data
     if (skipped > 0) {
       ElMessage.warning(`已匯入 ${imported} 筆；${skipped} 筆失敗（見下方明細）`)
     } else {

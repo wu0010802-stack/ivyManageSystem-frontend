@@ -215,10 +215,6 @@ const getRoleTagType = (role: string): 'primary' | 'success' | 'warning' | 'info
   return types[role] ?? 'info'
 }
 
-const getRoleLabel = (role: string) => {
-  return permissionDefinition.value.roles[role]?.label || role
-}
-
 const onRoleChange = (form: { role: string; permissions: number }) => {
   const roleConfig = permissionDefinition.value.roles[form.role]
   if (roleConfig) {

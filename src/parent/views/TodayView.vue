@@ -53,7 +53,7 @@ const selectedChild = computed(() => {
 const contactBookEntry = ref<Record<string, unknown> | null>(null)
 const contactBookLoading = ref(false)
 
-async function loadContactBook(force = false) {
+async function loadContactBook(_force = false) {
   const sid = selectedChild.value?.student_id
   if (!sid) {
     contactBookEntry.value = null

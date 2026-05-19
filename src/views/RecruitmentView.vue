@@ -439,7 +439,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, defineAsyncComponent, watch } from 'vue'
+import { ref, computed, onMounted, defineAsyncComponent } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   getRecruitmentRecords,
@@ -451,9 +451,6 @@ import {
   updatePeriod,
   deletePeriod,
   syncPeriod,
-  getMonths,
-  addMonth,
-  deleteMonth,
 } from '@/api/recruitment'
 import { apiError } from '@/utils/error'
 import { hasPermission } from '@/utils/auth'
@@ -461,7 +458,6 @@ import { useRecruitmentDashboard } from '@/composables/useRecruitmentDashboard'
 import { useRecruitmentArea, createEmptyCampus } from '@/composables/useRecruitmentArea'
 import { useRecruitmentPeriods } from '@/composables/useRecruitmentPeriods'
 import RecruitmentOverviewTab from '@/components/recruitment/RecruitmentOverviewTab.vue'
-import RecruitmentAddressHeatmap from '@/components/recruitment/RecruitmentAddressHeatmap.vue'
 import RecruitmentAreaTab from '@/components/recruitment/RecruitmentAreaTab.vue'
 import RecruitmentNoDepositTab from '@/components/recruitment/RecruitmentNoDepositTab.vue'
 import RecruitmentPeriodsTab from '@/components/recruitment/RecruitmentPeriodsTab.vue'
@@ -507,10 +503,6 @@ const Bar = defineAsyncComponent(() =>
 const Line = defineAsyncComponent(() =>
   ensureChartReady().then(() => import('vue-chartjs').then(m => m.Line))
 )
-const Doughnut = defineAsyncComponent(() =>
-  ensureChartReady().then(() => import('vue-chartjs').then(m => m.Doughnut))
-)
-
 // -------- 常數 --------
 const AREA_HOTSPOT_DISPLAY_LIMIT = 200
 const AREA_HOTSPOT_SYNC_BATCH_SIZE = 20
@@ -629,7 +621,6 @@ const {
   stats,
   options,
   loadingStats,
-  optionsLoaded,
   exportingExcel,
   referenceMonth,
   invalidateOptions,
@@ -659,10 +650,9 @@ const {
   campusDialogVisible,
   campusForm,
   loadAreaTab: loadAreaData,
-  fetchNearbySchools,
   handleAreaHotspotSync: syncAreaHotspotsAction,
   handleMarketSync: syncMarketAction,
-  openCampusDialog: openCampusDialogAction,
+  openCampusDialog,
   handleCampusSave: saveCampusSettingAction,
 } = useRecruitmentArea({
   notifyError: (message) => ElMessage.error(message),
@@ -873,10 +863,6 @@ const handleMarketSync = async () => {
 }
 
 
-const openCampusDialog = () => {
-  openCampusDialogAction()
-}
-
 const handleSetAsCampus = async (data: Record<string, unknown>) => {
   const lat = data.lat as number
   const lng = data.lng as number
@@ -895,10 +881,6 @@ const handleCampusSave = async () => {
   const ok = await saveCampusSettingAction()
   if (ok) areaLoaded.value = true
 }
-
-const campusGeocodedOk = computed(() =>
-  campusSetting.value?.campus_lat != null && campusSetting.value?.campus_lng != null
-)
 
 // 地址 → 座標 geocode 已搬到 RecruitmentCampusDialog.vue
 
@@ -1167,29 +1149,10 @@ const fmtPct = (deposit: number, visit: number) => {
   return (deposit / visit * 100).toFixed(1) + '%'
 }
 
-const rateBarClass = (rate: number) => {
-  if (rate >= 50) return 'rate-bar-fill--green'
-  if (rate >= 25) return 'rate-bar-fill--yellow'
-  return 'rate-bar-fill--red'
-}
-
-const travelBadgeClass = (minutes: number | null) => {
-  if (minutes == null) return ''
-  if (minutes <= 10) return 'travel-badge--green'
-  if (minutes <= 20) return 'travel-badge--yellow'
-  return 'travel-badge--orange'
-}
-
 /** 將後端回傳的百分比數值格式化為字串，如 51.8 → "51.8%" */
 const fmtRate = (rate: number | null | undefined) => {
   if (rate == null || rate === 0) return '0%'
   return Number(rate).toFixed(1) + '%'
-}
-
-/** 期間標籤縮短：114.09.16~115.03.15 → 114.09~115.03 */
-const shortPeriodLabel = (name: string) => {
-  const m = name.match(/(\d{3}\.\d{2})\.\d{2}[~-](\d{3}\.\d{2})\.\d{2}/)
-  return m ? `${m[1]}~${m[2]}` : name.slice(0, 12)
 }
 
 const depositRowClass = (row: Record<string, unknown>) => row.has_deposit ? 'deposit-row' : ''
@@ -1216,18 +1179,12 @@ const {
   periodsCountBarData,
   noDepositReasonBarData,
   noDepositGradeBarData,
-  areaBarData,
-  areaDepositRateBarData,
-  areaRateBarOptions,
-  areaActiveDistrictCount,
   barOptions,
   horizBarOptions,
   percentBarOptions,
   percentHorizBarOptions,
-  lineOptions,
   percentLineOptions,
   noDepositGradeBarOptions,
-  doughnutOptions,
 } = useRecruitmentCharts({
   stats: stats as unknown as Parameters<typeof useRecruitmentCharts>[0]['stats'],
   periodsSummary: periodsSummary as unknown as Parameters<typeof useRecruitmentCharts>[0]['periodsSummary'],
@@ -1306,6 +1263,9 @@ const castFmtPct = computed((): UnknownFn => fmtPct as UnknownFn)
 import type { ChartOptions } from 'chart.js'
 const castChartOpts = (opts: Record<string, unknown>): ChartOptions<'bar'> =>
   opts as unknown as ChartOptions<'bar'>
+
+// 供測試直接呼叫（VTU wrapper.vm.openCampusDialog）
+defineExpose({ openCampusDialog })
 </script>
 
 <style scoped>

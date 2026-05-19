@@ -130,12 +130,6 @@ const rules = {
 }
 
 const dialogTitle = computed(() => (isEdit.value ? '編輯班級' : '新增班級'))
-const getStudentPreview = (classroom: ClassroomRow) => classroom.student_preview || []
-const getRemainingStudentCount = (classroom: ClassroomRow) => Math.max(
-  0,
-  (classroom.current_count || 0) - getStudentPreview(classroom).length,
-)
-
 const getCapacityStatus = (classroom: ClassroomRow) => {
   const count = classroom.current_count || 0
   const capacity = classroom.capacity || 1
@@ -248,10 +242,6 @@ const openStudentDrawer = async (classroom: ClassroomRow) => {
   } finally {
     classroomDrawerLoading.value = false
   }
-}
-
-const closeStudentDrawer = () => {
-  classroomDrawerVisible.value = false
 }
 
 const openChangeLogDrawer = (classroom: ClassroomRow) => {

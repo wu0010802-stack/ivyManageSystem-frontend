@@ -123,7 +123,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { UploadFile, UploadRawFile } from 'element-plus'
+import type { UploadRawFile } from 'element-plus'
 import {
   getRegistrationTime,
   updateRegistrationTime,

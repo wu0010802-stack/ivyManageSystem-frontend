@@ -14,7 +14,7 @@
  */
 import LaurelWreath from '@/components/brand/LaurelWreath.vue'
 
-const props = withDefaults(defineProps<{
+withDefaults(defineProps<{
   activeRegistrations?: number
   unpaidActivityFee?: number
   upcomingCount?: number

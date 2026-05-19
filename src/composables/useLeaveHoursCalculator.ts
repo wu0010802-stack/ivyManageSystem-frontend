@@ -4,8 +4,6 @@ import { useLeaveQuota } from './useLeaveQuota'
 import { useMinuteSnapping } from './useMinuteSnapping'
 import { useLeaveHintFormatter } from './useLeaveHintFormatter'
 
-const QUOTA_TYPES = new Set(['annual', 'sick', 'menstrual', 'personal', 'family_care'])
-
 export function useLeaveHoursCalculator({ form, formRef, fetchWorkdayHoursFn = null, fetchQuotaFn = null }: { form: Record<string, unknown>; formRef: { value?: { clearValidate?: () => void } } | null | undefined; fetchWorkdayHoursFn?: ((...args: unknown[]) => Promise<unknown>) | null; fetchQuotaFn?: ((...args: unknown[]) => Promise<unknown>) | null }) {
   const calculator = useWorkdayCalculator({ form, fetchFn: fetchWorkdayHoursFn })
   const quota = useLeaveQuota({ form, fetchFn: fetchQuotaFn })

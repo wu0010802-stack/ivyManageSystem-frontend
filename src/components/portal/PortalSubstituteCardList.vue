@@ -11,7 +11,7 @@ interface SubstituteRequest {
   [key: string]: unknown
 }
 
-const props = withDefaults(defineProps<{
+withDefaults(defineProps<{
   requests: SubstituteRequest[]
   respondLoading?: boolean
 }>(), {

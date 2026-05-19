@@ -338,13 +338,6 @@ interface HotspotsSummaryTyped {
 }
 const hs = computed((): HotspotsSummaryTyped => props.hotspotsSummary as HotspotsSummaryTyped)
 
-function onSelectDistrict(district: string | undefined) {
-  emit('update:selectedDistrict', district === props.selectedDistrict ? '' : (district || ''))
-}
-
-function onSyncEvent(mode?: string) {
-  emit('sync')
-}
 </script>
 
 <style scoped>

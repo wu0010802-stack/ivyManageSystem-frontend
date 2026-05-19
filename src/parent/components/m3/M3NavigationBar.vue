@@ -17,7 +17,7 @@ interface NavItem {
  *
  * Spec: docs/superpowers/specs/2026-05-13-parent-material3-redesign-design.md §5.1
  */
-const props = defineProps<{
+defineProps<{
   items: NavItem[]
   currentKey: string
 }>()

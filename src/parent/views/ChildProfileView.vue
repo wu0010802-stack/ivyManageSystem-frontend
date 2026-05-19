@@ -30,11 +30,6 @@ const data = ref<Record<string, unknown> | null>(null)
 const loading = ref(false)
 
 const SEVERITY_LABEL: Record<string, string> = { mild: '輕度', moderate: '中度', severe: '嚴重' }
-const SEVERITY_COLOR: Record<string, { bg: string; color: string }> = {
-  mild:     { bg: 'var(--pt-severity-mild-bg)',     color: 'var(--pt-severity-mild-fg)' },
-  moderate: { bg: 'var(--pt-severity-mod-bg)',      color: 'var(--pt-severity-mod-fg)' },
-  severe:   { bg: 'var(--pt-severity-severe-bg)',   color: 'var(--pt-severity-severe-fg)' },
-}
 
 async function fetchData() {
   if (!studentId.value) return

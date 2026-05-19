@@ -32,7 +32,7 @@ interface Attachment {
   [key: string]: unknown
 }
 
-const props = withDefaults(defineProps<{
+withDefaults(defineProps<{
   modelValue: boolean
   leave?: LeaveRecord | null
   studentName?: string

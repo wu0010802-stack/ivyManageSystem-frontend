@@ -28,7 +28,6 @@ const {
   showAttendance,
   showApprovals,
   showCalendar,
-  showEmployees,
   showStudents,
   stats,
   studentCount,

@@ -217,7 +217,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, type Component } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   getRecruitmentIvykidsBackendStatus,
@@ -243,7 +243,7 @@ interface BySourceEntry { source?: string; visit?: number; [key: string]: unknow
 interface ByMonthEntry { month?: string; visit?: number; deposit?: number; [key: string]: unknown }
 
 withDefaults(defineProps<{
-  barComponent: Record<string, unknown> | ((...args: unknown[]) => unknown)
+  barComponent: Component
   showCharts: boolean
   canWrite?: boolean
 }>(), {

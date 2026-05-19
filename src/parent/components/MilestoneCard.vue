@@ -13,7 +13,7 @@ interface Milestone {
   [key: string]: unknown
 }
 
-const props = defineProps<{
+defineProps<{
   milestone: Milestone
 }>()
 const emit = defineEmits<{

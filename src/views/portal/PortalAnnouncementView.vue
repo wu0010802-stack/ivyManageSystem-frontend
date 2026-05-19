@@ -17,7 +17,6 @@ interface Announcement {
 const loading = ref(false)
 const announcements = ref<Announcement[]>([])
 const totalAnnouncements = ref(0)
-const currentPage = ref(1)
 const pageSize = 20
 const expandedId = ref<number | null>(null)
 const noMore = ref(false)

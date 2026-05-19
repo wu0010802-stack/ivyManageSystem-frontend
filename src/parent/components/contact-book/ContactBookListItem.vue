@@ -22,7 +22,7 @@ const photoCount = computed<number>(() => (props.entry?.photos || []).length)
 const dateLabel = computed<string>(() => {
   const raw = props.entry?.log_date
   if (!raw) return ''
-  const [y, m, d] = raw.split('-')
+  const [, m, d] = raw.split('-')
   return `${Number(m)}/${Number(d)}`
 })
 const weekdayLabel = computed<string>(() => {

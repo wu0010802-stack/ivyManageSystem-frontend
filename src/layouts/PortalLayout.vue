@@ -222,10 +222,6 @@ onUnmounted(() => {
   document.removeEventListener('visibilitychange', onVisibilityChange)
 })
 
-const toggleSidebar = () => {
-  sidebarOpen.value = !sidebarOpen.value
-}
-
 const closeSidebar = () => {
   if (isMobile.value) sidebarOpen.value = false
 }

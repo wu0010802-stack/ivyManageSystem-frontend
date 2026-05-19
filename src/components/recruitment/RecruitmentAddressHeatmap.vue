@@ -675,7 +675,6 @@ const googleMapsLoadFailed = ref(false)
 const renderedMapProvider = ref('')
 const prefersGoogleMap = Boolean(GOOGLE_MAPS_BROWSER_API_KEY)
 const usingGoogleMap = computed(() => prefersGoogleMap && !googleMapsLoadFailed.value)
-const providerLabel = computed(() => props.providerName ? props.providerName.toUpperCase() : '未設定')
 const mapProviderLabel = computed(() => usingGoogleMap.value ? 'Google Maps' : 'OpenStreetMap')
 const mapFallbackMessage = computed(() => {
   if (usingGoogleMap.value) return ''
@@ -879,8 +878,6 @@ let highlightMarker: any = null
 let lastFittedBaseSignature = ''
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let leafletMoveHandler: any = null
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let googleIdleHandler: any = null
 
 const markGoogleMapsUnavailable = (error: unknown) => {
   if (!prefersGoogleMap || googleMapsLoadFailed.value) return
@@ -1001,12 +998,6 @@ const escapeHtml = (text: unknown) => String(text ?? '')
   .replace(/"/g, '&quot;')
   .replace(/'/g, '&#39;')
 
-const statusLabel = (status: unknown) => {
-  if (status === 'resolved') return '已定位'
-  if (status === 'failed') return '失敗'
-  return '待同步'
-}
-
 const clearGoogleOverlays = () => {
   googleOverlays.forEach((overlay) => {
     if (overlay && typeof overlay.setMap === 'function') {
@@ -1035,7 +1026,6 @@ const destroyMap = () => {
     markerLayer = null
     overlayLayer = null
     nearbySchoolLayer = null
-    googleIdleHandler = null
     if (mapRef.value) {
       mapRef.value.innerHTML = ''
     }
@@ -1055,17 +1045,6 @@ const destroyMap = () => {
   renderedMapProvider.value = ''
   mapInitialized.value = false
 }
-
-const hotspotPopupHtml = (hotspot: HotspotEntry) => [
-  `<div class="map-popup">`,
-  `<strong>${escapeHtml(hotspot.formatted_address || hotspot.address)}</strong>`,
-  `<div>行政區：${escapeHtml(hotspot.district || '未填寫')}</div>`,
-  `<div>參觀：${escapeHtml(hotspot.visit)} 筆</div>`,
-  `<div>預繳率：${escapeHtml(props.fmtPct(hotspot.deposit, hotspot.visit))}</div>`,
-  hotspot.travel_minutes != null ? `<div>通勤：約 ${escapeHtml((hotspot.travel_minutes as number).toFixed(1))} 分鐘</div>` : '',
-  hotspot.land_use_label ? `<div>土地使用：${escapeHtml(hotspot.land_use_label as string)}</div>` : '',
-  `</div>`,
-].join('')
 
 const nearbySchoolPopupHtml = (school: NearbySchool) => {
   const schoolRating = school.rating
@@ -1123,7 +1102,6 @@ const renderLeafletMap = async () => {
   nearbySchoolLayer?.clearLayers?.()
 
   const bounds = []
-  const maxVisit = Math.max(...mappedHotspots.value.map((h) => h.visit || 0), 1)
 
   // ── 本園圖釘（SVG divIcon） ──
   const campusIcon = L.divIcon({
@@ -1187,15 +1165,6 @@ const renderLeafletMap = async () => {
   }
   mapInstance.invalidateSize()
 }
-
-const createGoogleMarkerIcon = ({ scale, fillColor, strokeColor, fillOpacity = 1, strokeWeight = 2 }: { scale: number; fillColor: string; strokeColor: string; fillOpacity?: number; strokeWeight?: number }) => ({
-  path: googleMapsApi.SymbolPath.CIRCLE,
-  scale,
-  fillColor,
-  fillOpacity,
-  strokeColor,
-  strokeWeight,
-})
 
 const openGoogleInfoWindow = (position: unknown, html: string) => {
   if (!googleInfoWindow || !mapInstance) return

@@ -4,7 +4,6 @@ import { useCachedAsync } from '@/composables/useCachedAsync'
 import { getDashboard, getFinanceSummary } from '@/api/reports'
 import { BarChart, MONTH_LABELS } from './chartSetup'
 import { money } from '@/utils/format'
-import { getUserInfo } from '@/utils/auth'
 import SalaryContributorsDialog from './SalaryContributorsDialog.vue'
 import type { ChartData, ChartOptions } from 'chart.js'
 
@@ -34,12 +33,6 @@ const loading = computed(() =>
   (dashboard.pending.value && !dashboard.data.value) ||
   (finance.pending.value && !finance.data.value)
 )
-
-// canSeeAmount：admin/hr 看完整金額，其他 role 顯「—」（後端遮罩決定，前端僅 UI label 用）
-const canSeeAmount = computed(() => {
-  const info = getUserInfo()
-  return info?.role === 'admin' || info?.role === 'hr'
-})
 
 // drill-down dialog state
 const contribDialog = ref<{ visible: boolean; month: number | null }>({ visible: false, month: null })

@@ -22,8 +22,6 @@ import { useCrudDialog, useConfirmDelete } from '@/composables'
 import { downloadFile } from '@/utils/download'
 import { mapEmployeeError } from '@/utils/error'
 import {
-  POSITION_OPTIONS,
-  SUPERVISOR_ROLE_OPTIONS,
   OFFICIAL_JOB_TITLE_NAMES,
   TITLE_TO_GRADE,
   POSITION_SALARY_KEY,

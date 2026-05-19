@@ -12,7 +12,7 @@ defineProps<{
   items: ScoreItem[]
 }>()
 
-const signClass = (sign: unknown, delta: unknown) => {
+const signClass = (_sign: unknown, delta: unknown) => {
   const n = Number(delta)
   if (n > 0) return 'sign-positive'
   if (n < 0) return 'sign-negative'

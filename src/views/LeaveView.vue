@@ -11,7 +11,6 @@ import { useApprovalModule } from '@/composables/useApprovalModule'
 import { downloadFile } from '@/utils/download'
 import { apiError } from '@/utils/error'
 import { LEAVE_TYPES as leaveTypes, LEAVE_RULE_HINTS, validateLeaveRules } from '@/utils/leaves'
-import { money } from '@/utils/format'
 import LeaveAttachmentDialog from './leave/LeaveAttachmentDialog.vue'
 import ApprovalLogDrawer from '@/components/common/ApprovalLogDrawer.vue'
 import LeaveBatchRejectDialog from './leave/LeaveBatchRejectDialog.vue'
@@ -71,7 +70,7 @@ const formRules: Partial<Record<string, FormItemRule | FormItemRule[]>> = {
     { required: true, type: 'number', message: '請填寫請假時數', trigger: 'change' },
     {
       type: 'number',
-      validator: (rule: unknown, value: number, callback: (err?: Error) => void) => {
+      validator: (_rule: unknown, value: number, callback: (err?: Error) => void) => {
         if (value < 0.5) callback(new Error('請假時數至少 0.5 小時'))
         else if (Math.round(value * 2) !== value * 2) callback(new Error('請假時數必須為 0.5 小時的倍數'))
         else callback()
@@ -307,13 +306,13 @@ const saveLeave = async () => {
   }
 }
 
-const { confirmDelete: deleteLeave, deleting: deleteLeaveLoading } = useConfirmDelete({
+const { confirmDelete: deleteLeave } = useConfirmDelete({
   endpoint: '/leaves',
   onSuccess: fetchLeaves,
   successMsg: '已刪除',
 })
 
-const { execute: executeApproval, isLoading: approveActionLoading } = useApprovalOperation({
+const { execute: executeApproval } = useApprovalOperation({
   apiFn: approveLeaveApi as (id: unknown, payload: unknown) => Promise<unknown>,
   onSuccess: fetchLeaves,
 })

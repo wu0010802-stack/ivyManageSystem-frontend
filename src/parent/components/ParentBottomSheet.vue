@@ -250,7 +250,6 @@ onBeforeUnmount(() => {
   }
 })
 
-const hasHeaderSlot = computed<boolean>(() => !!slots.header)
 const hasFooterSlot = computed<boolean>(() => !!slots.footer)
 </script>
 

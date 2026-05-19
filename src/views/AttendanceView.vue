@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, computed, watch, onMounted } from 'vue'
+import { ref, reactive, computed, watch } from 'vue'
 import { uploadFile, uploadCsv, getRecords, getSummary, deleteMonthRecords as deleteMonthRecordsApi, getAnomalyList, batchConfirmAnomalies, exportAnomalies, exportEmployeeAttendance } from '@/api/attendance'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { UploadFilled, Search } from '@element-plus/icons-vue'
@@ -63,8 +63,6 @@ const handleCsvImport = async () => {
 
     // Detect separator (tab or comma)
     const separator = lines[0].includes('\t') ? '\t' : ','
-    const headers = lines[0].split(separator).map(h => h.trim())
-
     const records = []
     for (let i = 1; i < lines.length; i++) {
       const cols = lines[i].split(separator).map(c => c.trim())

@@ -178,7 +178,6 @@ const {
   clearSelection,
   updateSelectedAmount,
   resetTransactionInputs,
-  paymentMethod,
   notes,
   canSubmit,
   refundApprovalBlocked,

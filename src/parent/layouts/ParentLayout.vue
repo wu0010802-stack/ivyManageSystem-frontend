@@ -32,7 +32,7 @@ const currentTab = computed(() => (route.meta?.tab as string) || '')
  * （/messages/123，meta.tab 仍為 'messages'）點 messages tab，仍應
  * 走 router 正常導回 /messages（不阻止預設行為）。
  */
-function onTabSelect(key: string, item: { key: string; icon: string; label: string; badge?: number; path?: string }) {
+function onTabSelect(_key: string, item: { key: string; icon: string; label: string; badge?: number; path?: string }) {
   if (route.path === item.path) {
     const reduce =
       typeof window !== 'undefined' &&
