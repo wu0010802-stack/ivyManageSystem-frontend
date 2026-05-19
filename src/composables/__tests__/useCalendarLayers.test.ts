@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { useCalendarLayers } from '../useCalendarLayers'
+import { useCalendarLayers, toFullCalendarEvents } from '../useCalendarLayers'
 import type { CalendarFeedItem } from '@/api/calendar'
 
 const STORAGE_KEY = 'calendar.enabledLayers'
@@ -69,5 +69,84 @@ describe('useCalendarLayers', () => {
     expect(enabledLayers.value.size).toBe(0)
     enableAll()
     expect(enabledLayers.value.size).toBe(6)
+  })
+
+  it('groupByDate strips time portion when start is an ISO datetime', () => {
+    const { setItems, groupByDate } = useCalendarLayers()
+    setItems([
+      {
+        layer: 'event',
+        id: 1,
+        title: 'meeting',
+        start: '2026-05-19T09:30:00',
+        end: '2026-05-19T11:00:00',
+        all_day: false,
+        color: '#000',
+        link: null,
+        meta: {},
+      },
+    ])
+    expect(groupByDate.value['2026-05-19']).toHaveLength(1)
+  })
+
+  it('fullCalendarEvents wraps filteredItems', () => {
+    const { setItems, fullCalendarEvents } = useCalendarLayers()
+    setItems([makeItem('event', '2026-05-01')])
+    expect(fullCalendarEvents.value).toHaveLength(1)
+    expect(fullCalendarEvents.value[0].id).toBe('event:event-2026-05-01')
+  })
+})
+
+describe('toFullCalendarEvents', () => {
+  it('emits unique id `{layer}:{id}`', () => {
+    const out = toFullCalendarEvents([
+      { layer: 'event', id: 7, title: 'a', start: '2026-05-19', end: '2026-05-19', all_day: true, color: '#000', link: null, meta: {} },
+    ])
+    expect(out[0].id).toBe('event:7')
+  })
+
+  it('omits end for single-day all-day events', () => {
+    const out = toFullCalendarEvents([
+      { layer: 'event', id: 1, title: 'a', start: '2026-05-19', end: '2026-05-19', all_day: true, color: '#000', link: null, meta: {} },
+    ])
+    expect(out[0].end).toBeUndefined()
+    expect(out[0].allDay).toBe(true)
+  })
+
+  it('shifts end +1 day for multi-day all-day events (FC exclusive)', () => {
+    const out = toFullCalendarEvents([
+      { layer: 'event', id: 1, title: 'a', start: '2026-05-19', end: '2026-05-21', all_day: true, color: '#000', link: null, meta: {} },
+    ])
+    expect(out[0].end).toBe('2026-05-22')
+  })
+
+  it('passes datetime through unchanged for timed events', () => {
+    const out = toFullCalendarEvents([
+      { layer: 'event', id: 1, title: 'a', start: '2026-05-19T09:30:00', end: '2026-05-19T11:00:00', all_day: false, color: '#000', link: null, meta: {} },
+    ])
+    expect(out[0].start).toBe('2026-05-19T09:30:00')
+    expect(out[0].end).toBe('2026-05-19T11:00:00')
+    expect(out[0].allDay).toBe(false)
+  })
+
+  it('only event layer is editable (draggable)', () => {
+    const out = toFullCalendarEvents([
+      { layer: 'event', id: 1, title: 'a', start: '2026-05-19', end: '2026-05-19', all_day: true, color: '#000', link: null, meta: {} },
+      { layer: 'leave', id: 2, title: 'b', start: '2026-05-19', end: '2026-05-19', all_day: true, color: '#0ea5e9', link: null, meta: {} },
+    ])
+    expect(out[0].editable).toBe(true)
+    expect(out[1].editable).toBe(false)
+  })
+
+  it('forwards layer/link/meta/rawId to extendedProps', () => {
+    const out = toFullCalendarEvents([
+      { layer: 'leave', id: '7@2026-05-19', title: 'a', start: '2026-05-19', end: '2026-05-19', all_day: true, color: '#0ea5e9', link: '/leaves?id=7', meta: { status: 'approved' } },
+    ])
+    expect(out[0].extendedProps).toEqual({
+      layer: 'leave',
+      link: '/leaves?id=7',
+      meta: { status: 'approved' },
+      rawId: '7@2026-05-19',
+    })
   })
 })

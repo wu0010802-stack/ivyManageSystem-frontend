@@ -126,6 +126,13 @@ function manualChunks(id) {
         return 'leaflet'
     }
 
+    // FullCalendar 6 + 4 view plugin (~180 KB raw / ~60 KB gz) 只在 CalendarView.vue
+    // 動態 import 用到。抽到獨立 chunk 避免 fall-through 到 vendor，
+    // 讓非行事曆頁面（admin home / employees / salary ...）不必載入這包。
+    if (id.includes('/node_modules/@fullcalendar/')) {
+        return 'fullcalendar'
+    }
+
     if (id.includes('chart.js') || id.includes('vue-chartjs')) {
         return 'chart-vendor'
     }

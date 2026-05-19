@@ -13,7 +13,8 @@ export interface CalendarFeedItem {
   layer: CalendarLayer
   id: number | string
   title: string
-  start: string // YYYY-MM-DD
+  // "YYYY-MM-DD" (all-day) 或 "YYYY-MM-DDTHH:MM:SS" (Phase B 時段事件)
+  start: string
   end: string
   all_day: boolean
   color: string

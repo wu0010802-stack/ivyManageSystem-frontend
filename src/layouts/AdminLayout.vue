@@ -17,11 +17,7 @@
 
       <el-main>
         <div class="content-container">
-          <RouterView v-slot="{ Component }">
-            <transition name="fade-transform" mode="out-in">
-              <component v-if="Component" :is="Component" :key="route.path" />
-            </transition>
-          </RouterView>
+          <RouterView />
         </div>
       </el-main>
     </el-container>
@@ -29,17 +25,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
 import AdminSidebar from '../components/layout/AdminSidebar.vue'
 import AdminHeader from '../components/layout/AdminHeader.vue'
 import { isLoggedIn } from '@/utils/auth'
 import { useNotificationStore } from '@/stores/notification'
 
+const NOTIFICATION_POLL_MS = 60_000
+
 const route = useRoute()
 const notificationStore = useNotificationStore()
 const isMobile = ref(false)
 const sidebarOpen = ref(false)
+let pollTimer: ReturnType<typeof setInterval> | null = null
 
 const checkMobile = () => {
   isMobile.value = window.innerWidth < 768
@@ -67,18 +66,25 @@ function isAdminContext(path: string): boolean {
   )
 }
 
+function refreshNotifications() {
+  if (isLoggedIn() && isAdminContext(route.path)) notificationStore.fetchSummary()
+}
+
 onMounted(() => {
   checkMobile()
   window.addEventListener('resize', checkMobile)
-  if (isLoggedIn() && isAdminContext(route.path)) notificationStore.fetchSummary()
+  refreshNotifications()
+  // Why: 切頁不再觸發 fetchSummary（避免每次 navigation 多一支 API 等待），改用
+  // 固定 60 秒輪詢；store 本身有 10s TTL + in-flight dedupe 守住，重複請求不會炸後端。
+  pollTimer = setInterval(refreshNotifications, NOTIFICATION_POLL_MS)
 })
 
 onUnmounted(() => {
   window.removeEventListener('resize', checkMobile)
-})
-
-watch(() => route.path, (path: string) => {
-  if (isLoggedIn() && isAdminContext(path)) notificationStore.fetchSummary()
+  if (pollTimer !== null) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
 })
 </script>
 
@@ -117,17 +123,6 @@ watch(() => route.path, (path: string) => {
   background-color: rgba(15, 23, 42, 0.5);
   backdrop-filter: blur(2px);
   z-index: 1999;
-}
-
-/* Page Transitions */
-.fade-transform-enter-active,
-.fade-transform-leave-active {
-  transition: opacity var(--transition-slow);
-}
-
-.fade-transform-enter-from,
-.fade-transform-leave-to {
-  opacity: 0;
 }
 
 @media (max-width: 767px) {

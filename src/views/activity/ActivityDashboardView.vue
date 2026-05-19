@@ -313,9 +313,11 @@ watch(selectedTermKey, fetchTable)
 
 onMounted(async () => {
   loading.value = true
+  // Why: summary 15s/charts 60s TTL 已足夠新鮮，切回 dashboard 不需每次強制重抓；
+  // table 隨 selectedTermKey watch 取得 term-specific 資料，不走 cache。
   await Promise.all([
-    activityStore.fetchSummary({ force: true }),
-    activityStore.fetchCharts({ force: true }),
+    activityStore.fetchSummary(),
+    activityStore.fetchCharts(),
   ])
   loading.value = false
   await fetchTable()

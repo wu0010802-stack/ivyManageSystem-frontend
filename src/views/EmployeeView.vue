@@ -400,10 +400,10 @@ const exportEmployees = () => {
   downloadFile('/exports/employees', '員工名冊.xlsx')
 }
 
-const fetchEmployees = async () => {
+const fetchEmployees = async (force = true) => {
   loading.value = true
   try {
-    await employeeStore.fetchEmployees(true)
+    await employeeStore.fetchEmployees(force)
   } catch (error) {
     ElMessage.error('載入員工資料失敗')
   } finally {
@@ -464,7 +464,7 @@ const salaryReadonlyReason = computed(() => {
 
 const { confirmDelete: handleDelete, deleting: deleteLoading } = useConfirmDelete({
   endpoint: '/employees',
-  onSuccess: fetchEmployees,
+  onSuccess: () => fetchEmployees(),
   successMsg: '刪除成功',
 })
 
@@ -807,7 +807,9 @@ const currentPensionSelfRatePct = computed(() =>
 )
 
 onMounted(async () => {
-  fetchEmployees()
+  // Why: 切回此頁時走 store TTL（5 分鐘）避免每次重抓員工清單；CRUD 完成的 callback 仍會
+  // force=true 觸發即時更新（saveBasic / createEmployee / offboard / 編輯成功等路徑）。
+  fetchEmployees(false)
   configStore.fetchJobTitles()
   classroomStore.fetchClassrooms()
   try {

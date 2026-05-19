@@ -12809,10 +12809,7 @@ export interface components {
             all_day: boolean;
             /** Color */
             color: string;
-            /**
-             * End
-             * Format: date
-             */
+            /** End */
             end: string;
             /** Id */
             id: number | string;
@@ -12827,10 +12824,7 @@ export interface components {
             meta?: {
                 [key: string]: unknown;
             };
-            /**
-             * Start
-             * Format: date
-             */
+            /** Start */
             start: string;
             /** Title */
             title: string;
