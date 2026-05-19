@@ -41,11 +41,14 @@ describe('auth utilities', () => {
             expect(getUserInfo()).toEqual(user)
         })
 
-        it('getUserInfo 遇到非法 JSON 拋出 SyntaxError', () => {
-            // JSON.parse 無 try-catch，目前設計是讓上層攔截；
-            // 此測試鎖定例外類型，避免描述與行為不一致。
+        it('壞 JSON 在 module import 時 silent 視為無資料，避免 boot crash', async () => {
+            // userInfo 改為 module-level shallowRef 後，rehydrate 在 import 時做一次。
+            // 若此時拋例外整個 app 無法 boot，故改為 silent fallback：壞掉的
+            // localStorage 條目視同沒登入，使用者會被 route guard 導去登入頁。
             localStorage.setItem('userInfo', '{invalid json}')
-            expect(() => getUserInfo()).toThrow(SyntaxError)
+            vi.resetModules()
+            const fresh = await import('@/utils/auth')
+            expect(fresh.getUserInfo()).toBeNull()
         })
     })
 

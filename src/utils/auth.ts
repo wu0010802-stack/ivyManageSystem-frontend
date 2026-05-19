@@ -1,5 +1,6 @@
 // Token 已改由後端 httpOnly Cookie 管理，JS 無法存取。
 // 保留函式簽名供向下相容，但不再操作 localStorage。
+import { shallowRef } from 'vue'
 import {
   PERMISSION_VALUES,
   ROUTE_PERMISSION_RULES,
@@ -19,8 +20,20 @@ const USER_INFO_KEY = 'userInfo'
 const SESSION_VALIDATED_AT_KEY = 'auth_session_validated_at'
 const SESSION_MAX_AGE_MS = 14 * 60 * 1000
 
-let cachedUserInfoRaw: string | null = null
-let cachedUserInfo: Record<string, unknown> | null = null
+// 響應式 user info 來源：refresh / setUserInfo 後，任何 computed(() => hasPermission(...))
+// 或 computed(() => getUserInfo()) 會自動重算，不需要 F5。
+// 用 shallowRef：只有整個物件被替換時才觸發，比 ref 省 deep-reactive 開銷。
+function _readFromStorage(): Record<string, unknown> | null {
+  const str = localStorage.getItem(USER_INFO_KEY)
+  if (!str) return null
+  try {
+    return JSON.parse(str) as Record<string, unknown>
+  } catch {
+    return null
+  }
+}
+
+const _userInfoRef = shallowRef<Record<string, unknown> | null>(_readFromStorage())
 
 function _setSessionValidatedAt(timestamp = Date.now()) {
   sessionStorage.setItem(SESSION_VALIDATED_AT_KEY, String(timestamp))
@@ -51,39 +64,22 @@ export function removeToken() {
 }
 
 export function getUserInfo() {
-  const str = localStorage.getItem(USER_INFO_KEY)
-  if (str === cachedUserInfoRaw) {
-    return cachedUserInfo
-  }
-
-  if (!str) {
-    cachedUserInfoRaw = null
-    cachedUserInfo = null
-    return null
-  }
-
-  const parsed = JSON.parse(str) as Record<string, unknown>
-  cachedUserInfoRaw = str
-  cachedUserInfo = parsed
-  return parsed
+  return _userInfoRef.value
 }
 
 export function setUserInfo(info: unknown) {
-  const serialized = JSON.stringify(info)
-  cachedUserInfoRaw = serialized
-  cachedUserInfo = info as Record<string, unknown>
-  localStorage.setItem(USER_INFO_KEY, serialized)
+  _userInfoRef.value = info as Record<string, unknown>
+  localStorage.setItem(USER_INFO_KEY, JSON.stringify(info))
   _setSessionValidatedAt()
 }
 
 export function hasStoredUserInfo() {
-  return !!localStorage.getItem(USER_INFO_KEY)
+  return _userInfoRef.value !== null
 }
 
 export function clearAuth(options: { notifyServer?: boolean } = {}) {
   const { notifyServer = true } = options
-  cachedUserInfoRaw = null
-  cachedUserInfo = null
+  _userInfoRef.value = null
   localStorage.removeItem(USER_INFO_KEY)
   _clearSessionValidatedAt()
   // 公開報名草稿含 PII（姓名/生日/手機），登出時一併清除
@@ -131,10 +127,10 @@ function _purgeOfflineQueue() {
 }
 
 export function clearMustChangePassword() {
-  const info = getUserInfo()
+  const info = _userInfoRef.value
   if (info) {
-    info['must_change_password'] = false
-    setUserInfo(info)
+    // 用整個物件替換才會觸發 shallowRef，不能 in-place mutate
+    setUserInfo({ ...info, must_change_password: false })
   }
 }
 

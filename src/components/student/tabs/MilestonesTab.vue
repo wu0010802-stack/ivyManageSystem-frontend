@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { listMilestones, deleteMilestone, MILESTONE_TYPES, autoDetectMilestones } from '@/api/studentMilestones'
 import { hasPermission } from '@/utils/auth'
@@ -15,7 +15,7 @@ const dialogVisible = ref(false)
 const editing = ref<Record<string, unknown> | null>(null)
 const filterType = ref('')
 
-const canWrite = hasPermission('PORTFOLIO_WRITE')
+const canWrite = computed(() => hasPermission('PORTFOLIO_WRITE'))
 
 const autoDetecting = ref(false)
 

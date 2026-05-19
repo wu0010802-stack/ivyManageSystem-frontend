@@ -22,8 +22,8 @@ const employeeStore = useEmployeeStore()
 const route = useRoute()
 const router = useRouter()
 
-const canViewOvertime = hasPermission('OVERTIME_READ')
-const canViewMeetings = hasPermission('MEETINGS')
+const canViewOvertime = computed(() => hasPermission('OVERTIME_READ'))
+const canViewMeetings = computed(() => hasPermission('MEETINGS'))
 const activeSection = ref('overtime')
 
 const loading = ref(false)
@@ -91,14 +91,14 @@ watch([() => form.start_time, () => form.end_time, () => form.hours], checkOvert
 const { dialogVisible, isEdit, openCreate, openEdit, closeDialog } = useCrudDialog({ resetForm, populateForm })
 
 const resolveSectionFromRoute = () => {
-  if (route.query.tab === 'meetings' && canViewMeetings) return 'meetings'
-  if (canViewOvertime) return 'overtime'
-  if (canViewMeetings) return 'meetings'
+  if (route.query.tab === 'meetings' && canViewMeetings.value) return 'meetings'
+  if (canViewOvertime.value) return 'overtime'
+  if (canViewMeetings.value) return 'meetings'
   return 'overtime'
 }
 
 const fetchOvertimes = async () => {
-  if (!canViewOvertime) return
+  if (!canViewOvertime.value) return
   loading.value = true
   try {
     const params = { year: query.year, month: query.month }
@@ -113,7 +113,7 @@ const fetchOvertimes = async () => {
 }
 
 const fetchPendingOvertimes = () => {
-  if (!canViewOvertime) return
+  if (!canViewOvertime.value) return
   return silentFetchPending()
 }
 

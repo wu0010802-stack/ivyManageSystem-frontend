@@ -1,12 +1,12 @@
 <script setup>
-import { reactive, ref, onMounted } from 'vue'
+import { reactive, ref, computed, onMounted } from 'vue'
 import { getBonusConfig, updateBonusConfig, getGradeTargets, updateGradeTargets, getPositionSalary, updatePositionSalary, comparePositionSalary, syncPositionSalary, getTitles, updateTitle } from '@/api/config'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { hasPermission } from '@/utils/auth'
 
 const loadingBonus = ref(false)
 const activeBonusTab = ref('overtime')
-const canReadSalarySettings = hasPermission('SETTINGS_READ')
+const canReadSalarySettings = computed(() => hasPermission('SETTINGS_READ'))
 
 const bonusConfig = reactive({
   head_teacher_ab: 0,
@@ -251,7 +251,7 @@ const saveAllBonusSettings = async () => {
 }
 
 onMounted(() => {
-  if (!canReadSalarySettings) return
+  if (!canReadSalarySettings.value) return
   fetchBonusConfig()
   fetchGradeTargets()
   fetchPositionSalary()

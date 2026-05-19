@@ -31,7 +31,7 @@ const emit = defineEmits<{
   'jump-tab': [payload: string | { tab: string; query?: Record<string, string> }]
 }>()
 
-const canWrite = hasPermission('STUDENTS_WRITE')
+const canWrite = computed(() => hasPermission('STUDENTS_WRITE'))
 
 const TYPE_TAG_COLOR = { incident: 'danger', assessment: 'success', change_log: 'warning' }
 const TYPE_LABEL = { incident: '事件', assessment: '評量', change_log: '異動' }

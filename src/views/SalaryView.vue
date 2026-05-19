@@ -46,9 +46,9 @@ const showFieldBreakdownDialog = ref(false)
 const fieldBreakdownLoading = ref(false)
 const fieldBreakdown = ref(null)
 const activeTab = ref('calculate')
-const canReadSalarySettings = hasPermission('SETTINGS_READ')
-const canReadEmployees = hasPermission('EMPLOYEES_READ')
-const canWriteSalary = hasPermission('SALARY_WRITE')
+const canReadSalarySettings = computed(() => hasPermission('SETTINGS_READ'))
+const canReadEmployees = computed(() => hasPermission('EMPLOYEES_READ'))
+const canWriteSalary = computed(() => hasPermission('SALARY_WRITE'))
 const MONEY_KEYS = new Set([
   'bonusBase',
   'result',

@@ -42,8 +42,8 @@ const classroomDrawerLoading = ref(false)
 const drawerClassroom = ref(null)
 const changeLogDrawerVisible = ref(false)
 const changeLogClassroom = ref(null)
-const canWrite = hasPermission('CLASSROOMS_WRITE')
-const canReadStudents = hasPermission('STUDENTS_READ')
+const canWrite = computed(() => hasPermission('CLASSROOMS_WRITE'))
+const canReadStudents = computed(() => hasPermission('STUDENTS_READ'))
 
 const filterSchoolYear = computed({
   get: () => termStore.school_year,
@@ -225,8 +225,8 @@ const openCreate = async () => {
 }
 
 const openStudentDrawer = async (classroom) => {
-  if (!canReadStudents) {
-    if (canWrite) await openEdit(classroom)
+  if (!canReadStudents.value) {
+    if (canWrite.value) await openEdit(classroom)
     return
   }
   classroomDrawerVisible.value = true

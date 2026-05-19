@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, watch } from 'vue'
+import { ref, reactive, computed, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Refresh } from '@element-plus/icons-vue'
 import { getCommunications, deleteCommunication } from '@/api/studentCommunications'
@@ -14,7 +14,7 @@ const props = withDefaults(defineProps<{
   active: true,
 })
 
-const canWrite = hasPermission('STUDENTS_WRITE')
+const canWrite = computed(() => hasPermission('STUDENTS_WRITE'))
 
 type ElTagType = '' | 'primary' | 'success' | 'warning' | 'info' | 'danger'
 const COMM_TYPE_TAG: Record<string, ElTagType> = {

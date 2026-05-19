@@ -57,7 +57,7 @@ const emit = defineEmits<{
 
 const router = useRouter()
 
-const canWriteStudents = hasPermission('STUDENTS_WRITE')
+const canWriteStudents = computed(() => hasPermission('STUDENTS_WRITE'))
 
 // ── 名冊篩選 ────────────────────────────────────────
 const studentSearch = ref('')

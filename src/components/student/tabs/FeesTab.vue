@@ -25,8 +25,8 @@ const props = withDefaults(defineProps<{
   active: true,
 })
 
-const canRead = hasPermission('FEES_READ')
-const canWrite = hasPermission('FEES_WRITE')
+const canRead = computed(() => hasPermission('FEES_READ'))
+const canWrite = computed(() => hasPermission('FEES_WRITE'))
 
 type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger'
 const RECORD_STATUS_LABEL: Record<string, string> = { paid: '已繳', partial: '部分', unpaid: '未繳' }
@@ -58,7 +58,7 @@ async function loadPeriods() {
 }
 
 async function fetchData() {
-  if (!props.studentId || !canRead) return
+  if (!props.studentId || !canRead.value) return
   loading.value = true
   try {
     const recParams: Record<string, unknown> = { student_id: props.studentId, page_size: 500 }
@@ -146,7 +146,7 @@ const payRules = {
 }
 
 function openPayDialog(rec: Record<string, unknown>) {
-  if (!canWrite) return
+  if (!canWrite.value) return
   payingRecord.value = rec
   payForm.value = {
     payment_date: (rec.payment_date as string) || todayISO(),
@@ -177,7 +177,7 @@ async function submitPay() {
 const refundModalVisible = ref(false)
 const refundTarget = ref<Record<string, unknown> | null>(null)
 function openRefundModal(rec: Record<string, unknown>) {
-  if (!canWrite) return
+  if (!canWrite.value) return
   refundTarget.value = rec
   refundModalVisible.value = true
 }
@@ -198,7 +198,7 @@ const refundTargetTyped = computed(() => refundTarget.value as any)
 const adjDialogExistingTyped = computed(() => adjDialogExisting.value as any)
 
 function openAdjustmentDialog(row: Record<string, unknown>) {
-  if (!canWrite) return
+  if (!canWrite.value) return
   if (!adjEditablePeriod.value) {
     ElMessage.warning('請先選擇具體學期後再編輯折抵')
     return

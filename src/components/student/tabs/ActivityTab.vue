@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import { getRegistrations } from '@/api/activity'
@@ -13,14 +13,14 @@ const props = withDefaults(defineProps<{
   active: true,
 })
 
-const canRead = hasPermission('ACTIVITY_READ')
+const canRead = computed(() => hasPermission('ACTIVITY_READ'))
 
 const items = ref<Record<string, unknown>[]>([])
 const loading = ref(false)
 const loaded = ref(false)
 
 async function fetchData() {
-  if (!props.studentId || !canRead) return
+  if (!props.studentId || !canRead.value) return
   loading.value = true
   try {
     const res = await getRegistrations({ student_id: props.studentId, limit: 100 })
