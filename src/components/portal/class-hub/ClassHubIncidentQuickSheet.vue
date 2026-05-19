@@ -72,7 +72,7 @@ import { createPortalIncident } from '@/api/studentIncidents'
 
 interface Student { id: number | string; name?: string }
 
-const props = withDefaults(defineProps<{
+withDefaults(defineProps<{
   show?: boolean
 }>(), {
   show: false,

@@ -30,7 +30,7 @@ interface StudentItem {
 
 const termStore = useAcademicTermStore()
 const filtersCtx = useAcademicAffairsFilters()
-const { filters, startDate, endDate, setClassroom, setDateRange, setStudent } = filtersCtx
+const { filters, setClassroom, setDateRange, setStudent } = filtersCtx
 
 provide(ACADEMIC_AFFAIRS_FILTERS_KEY, filtersCtx)
 

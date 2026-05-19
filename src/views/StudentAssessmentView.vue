@@ -188,8 +188,6 @@ const truncate = (text: string | null | undefined, len = 60) => {
 const ratingTagType = (rating: unknown): ElTagType =>
   (RATING_TAG as Record<string, string>)[String(rating)] as ElTagType
 
-const deleteAssessmentById = async (row: Record<string, unknown>) => handleDelete(row)
-
 onMounted(() => {
   classroomStore.fetchClassrooms()
   fetchAssessments()

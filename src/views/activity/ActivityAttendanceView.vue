@@ -383,8 +383,11 @@ const {
   reloadCurrentSession,
   setAllPresent,
   handleSave,
-// @ts-expect-error TODO(ts-strict): composable expects generic fn signatures; actual api fns are compatible at runtime
-} = useActivityAttendanceDrawer({ getSessionFn: getAttendanceSession, updateFn: batchUpdateAttendance })
+} = useActivityAttendanceDrawer({
+  // Wrap typed API fns to match the composable's generic (unknown-arg) contract
+  getSessionFn: (id, params) => getAttendanceSession(id as number, params),
+  updateFn: (id, records) => batchUpdateAttendance(id as number, records),
+})
 // Cast to extended type that includes total/groups returned by API
 const drawerSession = _drawerSession as import('vue').Ref<SessionDetail | null>
 

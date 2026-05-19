@@ -185,10 +185,6 @@ async function openDetail(item: LeaveItem) {
   }
 }
 
-function closeDetail() {
-  detail.value = null
-}
-
 async function onAttUpload(file: File) {
   if (!file || !detail.value) return
   detailUploading.value = true

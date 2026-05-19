@@ -8,7 +8,6 @@ import { getOvertimes, approveOvertime as approveOvertimeApi } from '@/api/overt
 import { getCorrections, approveCorrection as approveCorrectionApi } from '@/api/punchCorrections'
 import { LEAVE_TYPE_MAP as leaveTypeMap } from '@/utils/leaves'
 import { money, formatDate, formatTime } from '@/utils/format'
-import { apiError } from '@/utils/error'
 import { useFetchPending, useApprovalOperation } from '@/composables'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
 import { ROLE_TAG_MAP, OVERTIME_TYPE_MAP, CORRECTION_TYPE_MAP, SUBSTITUTE_STATUS_MAP } from '@/constants/approvalEnums'

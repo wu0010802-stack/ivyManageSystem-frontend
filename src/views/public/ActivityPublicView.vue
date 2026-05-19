@@ -624,9 +624,8 @@ const {
 // toggleCourse / toggleSupply 已抽至 usePublicRegistrationForm（A1-P1）;
 // 額滿判定（availability=-1）規則在 composable 內,與 availabilityState 一致。
 
-// form.selectedCourses / selectedSupplies 在 composable 內推斷為 never[]（空陣列無型別標注）；
+// form.selectedSupplies 在 composable 內推斷為 never[]（空陣列無型別標注）；
 // 以強型別 computed 供模板 .includes() 使用，不改變實際 reactive 物件。
-const selectedCourses = computed(() => form.selectedCourses as string[])
 const selectedSupplies = computed(() => form.selectedSupplies as string[])
 
 // 目前進行到的步驟（給 step header 用 .is-active 加亮，不影響表單行為）

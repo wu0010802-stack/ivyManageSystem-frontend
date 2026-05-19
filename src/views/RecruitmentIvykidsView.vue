@@ -17,7 +17,6 @@
       </div>
     </div>
 
-    <!-- @ts-expect-error TODO(ts-strict): AsyncComponent not assignable to tab's barComponent prop -->
     <RecruitmentIvykidsTab
       :bar-component="Bar"
       :show-charts="true"

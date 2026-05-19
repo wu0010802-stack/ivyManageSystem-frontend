@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { computed } from 'vue'
 import M3Icon from './M3Icon.vue'
 
 interface SegmentItem {

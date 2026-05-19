@@ -13,7 +13,7 @@ import { computed } from 'vue'
 import AppModal from './AppModal.vue'
 import M3Button from './m3/M3Button.vue'
 
-const props = withDefaults(defineProps<{
+withDefaults(defineProps<{
   open?: boolean
   title: string
   message?: string

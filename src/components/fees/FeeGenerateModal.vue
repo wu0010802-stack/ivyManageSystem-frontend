@@ -71,7 +71,7 @@ interface PreviewResult {
   preview?: Record<string, unknown>[]
 }
 
-const props = defineProps<{
+defineProps<{
   modelValue: boolean
 }>()
 const emit = defineEmits<{

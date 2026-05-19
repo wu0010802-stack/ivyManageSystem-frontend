@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import MilestonesTab from './MilestonesTab.vue'
 import TimelineTab from './TimelineTab.vue'

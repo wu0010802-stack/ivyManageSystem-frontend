@@ -57,7 +57,6 @@ export function usePullToRefresh({
   const armed = ref(false)
 
   let startY = 0
-  let lastY = 0
   let pulling = false
 
   function getScrollTop() {
@@ -80,7 +79,6 @@ export function usePullToRefresh({
     armed.value = true
     pulling = false
     startY = e.touches[0].clientY
-    lastY = startY
   }
 
   function onTouchMove(e: TouchEvent) {
@@ -107,7 +105,6 @@ export function usePullToRefresh({
     }
 
     pulling = true
-    lastY = y
 
     // 阻止預設下拉（iOS overscroll bounce / Android Chrome refresh）
     if (e.cancelable) e.preventDefault()

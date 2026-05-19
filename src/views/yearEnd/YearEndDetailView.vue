@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Refresh, Download } from '@element-plus/icons-vue'
@@ -31,15 +31,6 @@ const classTargets = ref<unknown[]>([])
 const loading = ref(false)
 const busy = ref(false)
 const tab = ref('settlements')
-
-const bonusByEmp = computed(() => {
-  const m: Record<number, SpecialBonus[]> = {}
-  for (const b of specialBonuses.value) {
-    if (!m[b.employee_id]) m[b.employee_id] = []
-    m[b.employee_id].push(b)
-  }
-  return m
-})
 
 const statusLabel = (s: string) =>
   (({

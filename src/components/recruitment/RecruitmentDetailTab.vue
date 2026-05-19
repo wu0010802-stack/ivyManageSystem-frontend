@@ -175,7 +175,7 @@ interface DetailOptions {
   [key: string]: unknown
 }
 
-const props = withDefaults(defineProps<{
+withDefaults(defineProps<{
   canWrite: boolean
   canConvert?: boolean
   options: DetailOptions

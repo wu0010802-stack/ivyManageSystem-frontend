@@ -2,7 +2,6 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import type { UploadFile } from 'element-plus'
 import { Plus, Refresh, Upload, Download } from '@element-plus/icons-vue'
 import {
   listYearEndCycles,

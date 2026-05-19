@@ -61,9 +61,8 @@ jobs:
       - name: Run tests
         run: npm run test
 
-      - name: Type check（過渡期 warning 模式，不阻擋 PR；L9 收尾改 blocking）
+      - name: Type check（TS strict — L9 起改 blocking，TS errors 阻擋 PR）
         run: npm run typecheck
-        continue-on-error: true
 
       - name: Build check
         env:

@@ -17,7 +17,7 @@ import {
 import { apiError } from '@/utils/error'
 import { useLeaveHoursCalculator } from '@/composables/useLeaveHoursCalculator'
 
-const props = withDefaults(defineProps<{
+withDefaults(defineProps<{
   allEmployees?: Record<string, unknown>[]
 }>(), {
   allEmployees: () => [],
@@ -50,7 +50,7 @@ const _QUOTA_TYPES_LOCAL = new Set(['annual', 'sick', 'menstrual', 'personal', '
 const {
   calcHint, calcBreakdown, calcLoading,
   leaveMode, leaveSingleDate,
-  quotaInfo, quotaLoading, quotaExceeded, QUOTA_TYPES,
+  quotaInfo, quotaLoading, quotaExceeded,
   calcTooltipHtml, officeHoursWarning,
   resetCalculatorState,
 } = useLeaveHoursCalculator({

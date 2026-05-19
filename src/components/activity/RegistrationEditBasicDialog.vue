@@ -47,12 +47,6 @@ import { ElMessage } from 'element-plus'
 import { updateRegistrationBasic } from '@/api/activity'
 import { FIELD_RULES } from '@/constants/activity'
 
-interface ClassroomOption {
-  id?: number | string
-  name: string
-  [key: string]: unknown
-}
-
 interface Initial {
   student_name?: string
   birthday?: string

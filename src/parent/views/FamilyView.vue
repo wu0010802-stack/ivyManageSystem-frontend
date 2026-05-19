@@ -27,7 +27,6 @@ const {
   pending: timelinePending,
   refresh: refreshTimeline,
 } = useCachedAsync(
-  // @ts-expect-error TODO(ts-strict): useCachedAsync key is string; passing ComputedRef works at runtime via Vue's reactivity but doesn't match the declared type
   cacheKey,
   async () => {
     if (!selectedId.value) return []

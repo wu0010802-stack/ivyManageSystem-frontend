@@ -5,7 +5,7 @@ import PortfolioTab from '@/components/portfolio/PortfolioTab.vue'
 import HealthTab from '@/components/portfolio/HealthTab.vue'
 import MeasurementsSection from '@/components/portfolio/MeasurementsSection.vue'
 
-const props = defineProps<{
+defineProps<{
   studentId: number
 }>()
 

@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, computed, watch, defineAsyncComponent } from 'vue'
-import { ElMessage } from 'element-plus'
 import { Download } from '@element-plus/icons-vue'
 import { useAcademicTermStore } from '@/stores/academicTerm'
 import { getCurrentAcademicTerm } from '@/utils/academic'

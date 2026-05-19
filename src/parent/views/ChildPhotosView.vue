@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { fetchChildPhotos } from '../api/childPhotos'
 import { toast } from '../utils/toast'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
@@ -16,7 +16,6 @@ interface PhotoItem {
 }
 
 const route = useRoute()
-const router = useRouter()
 const studentId = computed(() => Number(route.params.studentId))
 
 const items = ref<PhotoItem[]>([])

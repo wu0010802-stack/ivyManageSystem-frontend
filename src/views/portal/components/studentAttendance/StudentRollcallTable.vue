@@ -1,7 +1,7 @@
 <script setup lang="ts">
 interface RollcallStudent { student_id?: number; student_no?: string; name?: string; status?: string; remark?: string; [key: string]: unknown }
 
-const props = defineProps<{
+defineProps<{
   students: RollcallStudent[]
   loading?: boolean
 }>()

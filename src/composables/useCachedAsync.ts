@@ -22,7 +22,7 @@
  * }}
  */
 
-import { computed, onUnmounted, ref, shallowRef } from 'vue'
+import { computed, onUnmounted, ref, shallowRef, toValue, type MaybeRefOrGetter } from 'vue'
 
 interface CacheEntry<T> {
   data: T | null
@@ -38,11 +38,14 @@ export function _resetCacheForTesting() {
 }
 
 export function useCachedAsync<T = unknown>(
-  key: string,
+  keySource: MaybeRefOrGetter<string>,
   fetcher: (signal: AbortSignal) => Promise<T>,
   options: { ttl?: number; immediate?: boolean; initialData?: T | null } = {}
 ) {
   const { ttl = 60_000, immediate = true, initialData = null } = options
+
+  const resolveKey = () => toValue(keySource)
+  const key = resolveKey()
 
   const entry = (_cache.get(key) as CacheEntry<T> | undefined) || { data: initialData, fetchedAt: 0, inflight: null }
   if (!_cache.has(key)) _cache.set(key, entry as CacheEntry<unknown>)
@@ -60,14 +63,16 @@ export function useCachedAsync<T = unknown>(
   let controller: AbortController | null = null
 
   function _syncFromCache() {
-    const e = _cache.get(key) as CacheEntry<T> | undefined
+    const currentKey = resolveKey()
+    const e = _cache.get(currentKey) as CacheEntry<T> | undefined
     if (!e) return
     data.value = e.data
     fetchedAt.value = e.fetchedAt
   }
 
   async function refresh(force = false): Promise<T | null | undefined> {
-    const e = _cache.get(key) as CacheEntry<T> | undefined
+    const currentKey = resolveKey()
+    const e = _cache.get(currentKey) as CacheEntry<T> | undefined
 
     // 共用 inflight：避免多 caller 同 key 重複 fetch
     if (e?.inflight) {
@@ -93,18 +98,19 @@ export function useCachedAsync<T = unknown>(
 
     controller = new AbortController()
     const promise: Promise<T | null | undefined> = (async () => {
+      const k = resolveKey()
       try {
         const result = await fetcher(controller!.signal)
         if (controller!.signal.aborted) return data.value
         data.value = result
         fetchedAt.value = Date.now()
-        _cache.set(key, { data: result as unknown, fetchedAt: fetchedAt.value, inflight: null })
+        _cache.set(k, { data: result as unknown, fetchedAt: fetchedAt.value, inflight: null })
         return result
       } catch (err) {
         if (controller!.signal.aborted) return data.value
         error.value = err
         // 失敗時不更新 cache（保留舊資料）
-        const cur = _cache.get(key)
+        const cur = _cache.get(k)
         if (cur) cur.inflight = null
         throw err
       } finally {
@@ -112,9 +118,10 @@ export function useCachedAsync<T = unknown>(
       }
     })()
 
-    const cur: CacheEntry<unknown> = _cache.get(key) || { data: data.value as unknown, fetchedAt: fetchedAt.value, inflight: null }
+    const currentKey2 = resolveKey()
+    const cur: CacheEntry<unknown> = _cache.get(currentKey2) || { data: data.value as unknown, fetchedAt: fetchedAt.value, inflight: null }
     cur.inflight = promise as Promise<unknown>
-    _cache.set(key, cur)
+    _cache.set(currentKey2, cur)
 
     try {
       return await promise
@@ -124,7 +131,7 @@ export function useCachedAsync<T = unknown>(
   }
 
   function invalidate() {
-    _cache.delete(key)
+    _cache.delete(resolveKey())
     fetchedAt.value = 0
   }
 

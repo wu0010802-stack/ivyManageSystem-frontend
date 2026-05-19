@@ -44,7 +44,7 @@ import {
 
 interface AttendanceRecord { student_id: number | string; name?: string; status?: string | null }
 
-const props = withDefaults(defineProps<{
+withDefaults(defineProps<{
   show?: boolean
 }>(), {
   show: false,

@@ -573,7 +573,7 @@ async function restoreSessionIfNeeded(to: RouteLocationNormalized) {
 }
 
 // Auth guard
-router.beforeEach(async (to, from, next) => {
+router.beforeEach(async (to, _from, next) => {
     startRouteLoading()
 
     let { loggedIn, userInfo } = await restoreSessionIfNeeded(to)

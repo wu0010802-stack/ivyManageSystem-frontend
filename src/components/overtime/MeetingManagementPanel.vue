@@ -6,7 +6,7 @@ import { money } from '@/utils/format'
 import { useEmployeeStore } from '@/stores/employee'
 import { apiError } from '@/utils/error'
 
-const props = withDefaults(defineProps<{
+withDefaults(defineProps<{
   embedded?: boolean
 }>(), { embedded: false })
 
