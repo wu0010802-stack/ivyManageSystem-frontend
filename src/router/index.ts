@@ -1,11 +1,9 @@
-import { createRouter, createWebHashHistory } from 'vue-router'
+import { createRouter, createWebHashHistory, type RouteRecordRaw, type RouteLocationNormalized } from 'vue-router'
 import { refreshSession } from '@/api/auth'
 import { startRouteLoading, finishRouteLoading } from '@/composables/useRouteLoading'
 import { isLoggedIn, canAccessRoute, getUserInfo, getAllowedRoutes, hasStoredUserInfo, setUserInfo, clearAuth } from '@/utils/auth'
 
-const router = createRouter({
-    history: createWebHashHistory(),
-    routes: [
+const routes: RouteRecordRaw[] = [
         // ============ Admin Routes ============
         {
             path: '/',
@@ -541,10 +539,14 @@ const router = createRouter({
                 },
             ],
         },
-    ]
+]
+
+const router = createRouter({
+    history: createWebHashHistory(),
+    routes,
 })
 
-async function restoreSessionIfNeeded(to) {
+async function restoreSessionIfNeeded(to: RouteLocationNormalized) {
     const needsProtectedSession = Boolean(to.meta.requiresAuth) || (!to.meta.noAuth && !to.meta.portal)
 
     if (!needsProtectedSession || isLoggedIn() || !hasStoredUserInfo()) {

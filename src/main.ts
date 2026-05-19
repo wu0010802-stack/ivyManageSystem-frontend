@@ -1,4 +1,4 @@
-import { createApp } from 'vue'
+import { createApp, type App as VueApp } from 'vue'
 import { createPinia } from 'pinia'
 
 // PWA 升級自救：偵測到 chunk hash 已被新部署移除（dynamic import 失敗、
@@ -50,7 +50,7 @@ import './assets/main.css'
 import './assets/a11y.css'
 import './styles/portal/soft-ui.css'
 
-const app = createApp(App)
+const app: VueApp = createApp(App)
 
 // Sentry init（缺 VITE_SENTRY_DSN 時 no-op）；non-blocking，boot 期間極早期
 // 的 error 可能漏在 Sentry hook 接管前 — 視為可接受 trade-off。
