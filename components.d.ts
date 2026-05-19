@@ -33,6 +33,7 @@ declare module 'vue' {
     BonusDashboard: typeof import('./src/components/enrollment/BonusDashboard.vue')['default']
     BonusImpactPreview: typeof import('./src/components/students/BonusImpactPreview.vue')['default']
     BrandMark: typeof import('./src/components/brand/BrandMark.vue')['default']
+    CalendarToolbar: typeof import('./src/components/calendar/CalendarToolbar.vue')['default']
     ChangeLogEditorDialog: typeof import('./src/components/student/ChangeLogEditorDialog.vue')['default']
     ClassHubAttendanceSheet: typeof import('./src/components/portal/class-hub/ClassHubAttendanceSheet.vue')['default']
     ClassHubBatchMeasurementCard: typeof import('./src/components/portal/class-hub/ClassHubBatchMeasurementCard.vue')['default']
