@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useChildrenStore } from '../stores/children'
 import { useChildSelection } from '../composables/useChildSelection'
@@ -23,27 +23,48 @@ import LeaveHero from '../components/leaves/LeaveHero.vue'
 import { useIncrementalRender } from '../composables/useIncrementalRender'
 import EmptyState from '@/components/common/EmptyState.vue'
 
+interface LeaveItem {
+  id: number
+  student_id: number
+  leave_type?: string
+  start_date?: string
+  end_date?: string
+  status: string
+  duration_days?: number | string
+  created_at?: string
+  reviewed_at?: string
+  updated_at?: string
+  [key: string]: unknown
+}
+
+interface Attachment {
+  id: number
+  thumb_key?: string
+  display_key?: string
+  storage_key?: string
+}
+
 const childrenStore = useChildrenStore()
 const { selectedId, ensureSelected } = useChildSelection()
-const items = ref([])
+const items = ref<LeaveItem[]>([])
 const loading = ref(false)
 const showForm = ref(false)
 const submitting = ref(false)
 
 // 二階段確認 state（取代 window.confirm）
-const removeAttTarget = ref(null) // 待刪除附件 attachment 或 null
-const cancelTarget = ref(null) // 待取消的請假 item 或 null
+const removeAttTarget = ref<Attachment | null>(null)
+const cancelTarget = ref<LeaveItem | null>(null)
 
 const removeAttOpen = computed({
   get: () => removeAttTarget.value !== null,
-  set: (v) => {
+  set: (v: boolean) => {
     if (!v) removeAttTarget.value = null
   },
 })
 
 const cancelOpen = computed({
   get: () => cancelTarget.value !== null,
-  set: (v) => {
+  set: (v: boolean) => {
     if (!v) cancelTarget.value = null
   },
 })
@@ -55,14 +76,14 @@ const cancelTitle = computed(() => {
   return `確定取消「${name} ${item.leave_type} ${item.start_date}」？`
 })
 
-const STATUS_LABEL = {
+const STATUS_LABEL: Record<string, string> = {
   approved: '已成立',
   cancelled: '已取消',
   // 相容歷史資料（migration 跑前的紀錄）
   pending: '已成立',
   rejected: '已成立',
 }
-const STATUS_COLOR = {
+const STATUS_COLOR: Record<string, { bg: string; color: string }> = {
   approved: { bg: 'var(--brand-primary-soft)', color: 'var(--pt-success-text)' },
   cancelled: { bg: 'var(--pt-surface-mute)', color: 'var(--pt-text-soft)' },
   pending: { bg: 'var(--brand-primary-soft)', color: 'var(--pt-success-text)' },
@@ -81,17 +102,25 @@ const pastLimitStr = (() => {
   return dateToLocalISO(d)
 })()
 
-const form = ref({
-  student_id: null,
+const form = ref<{
+  student_id?: number
+  leave_type: string
+  start_date: string
+  end_date: string
+  reason: string
+}>({
+  student_id: undefined,
   leave_type: '病假',
   start_date: todayStr.value,
   end_date: todayStr.value,
   reason: '',
 })
 
+const childrenItemsTyped = computed(() => (childrenStore.items || []) as { student_id: number; name?: string }[])
+
 const studentNameMap = computed(() => {
-  const m = new Map()
-  for (const c of childrenStore.items || []) m.set(c.student_id, c.name)
+  const m = new Map<number, string>()
+  for (const c of (childrenStore.items || []) as { student_id: number; name?: string }[]) m.set(c.student_id, c.name || '')
   return m
 })
 
@@ -114,13 +143,13 @@ function currentSemesterRange(today = new Date()) {
 const heroSummary = computed(() => {
   const { start, end, label } = currentSemesterRange()
   const inSemester = (filteredItems.value ?? []).filter((l) => {
-    const d = new Date(l.start_date)
+    const d = new Date(l.start_date || '')
     return l.status !== 'rejected' && l.status !== 'cancelled' && d >= start && d <= end
   })
-  const by_type = {}
+  const by_type: Record<string, number> = {}
   let total = 0
   for (const l of inSemester) {
-    const t = l.leave_type
+    const t = l.leave_type || ''
     const days = Number(l.duration_days) || 0
     by_type[t] = (by_type[t] || 0) + days
     total += days
@@ -133,24 +162,26 @@ const {
   visible: visibleLeaves,
   sentinelRef: leavesSentinel,
   hasMore: hasMoreLeaves,
-} = useIncrementalRender(filteredItems, { pageSize: 20 })
+} = useIncrementalRender(filteredItems as unknown as import('vue').Ref<unknown[]>, { pageSize: 20 })
+const visibleLeavesTyped = computed(() => visibleLeaves.value as LeaveItem[])
 
-const detail = ref(null)
+const detail = ref<LeaveItem | null>(null)
 const detailUploading = ref(false)
 
 const detailOpen = computed({
   get: () => detail.value !== null,
-  set: (v) => {
+  set: (v: boolean) => {
     if (!v) detail.value = null
   },
 })
 
-async function openDetail(item) {
+async function openDetail(item: LeaveItem) {
   try {
     const { data } = await getLeave(item.id)
-    detail.value = data
+    detail.value = data as LeaveItem
   } catch (err) {
-    toast.error(err?.displayMessage || '載入失敗')
+    const e = err as Record<string, unknown>
+    toast.error(String(e?.displayMessage || '載入失敗'))
   }
 }
 
@@ -158,22 +189,23 @@ function closeDetail() {
   detail.value = null
 }
 
-async function onAttUpload(file) {
+async function onAttUpload(file: File) {
   if (!file || !detail.value) return
   detailUploading.value = true
   try {
     await uploadLeaveAttachment(detail.value.id, file)
     toast.success('已上傳')
     const { data } = await getLeave(detail.value.id)
-    detail.value = data
+    detail.value = data as LeaveItem
   } catch (err) {
-    toast.error(err?.displayMessage || '上傳失敗')
+    const e = err as Record<string, unknown>
+    toast.error(String(e?.displayMessage || '上傳失敗'))
   } finally {
     detailUploading.value = false
   }
 }
 
-function askRemoveAttachment(att) {
+function askRemoveAttachment(att: Attachment) {
   if (!detail.value) return
   removeAttTarget.value = att
 }
@@ -186,26 +218,27 @@ async function doRemoveAttachment() {
     await deleteLeaveAttachment(detail.value.id, att.id)
     toast.success('已刪除')
     const { data } = await getLeave(detail.value.id)
-    detail.value = data
+    detail.value = data as LeaveItem
   } catch (err) {
-    toast.error(err?.displayMessage || '刪除失敗')
+    const e = err as Record<string, unknown>
+    toast.error(String(e?.displayMessage || '刪除失敗'))
   }
 }
 
-function attUrl(att) {
+function attUrl(att: Attachment) {
   // 走家長端下載 endpoint，後端會做 IDOR 守衛
   const key = att.thumb_key || att.display_key || att.storage_key
   return `/api/parent/uploads/portfolio/${key}`
 }
 
-const TIMELINE_STEPS = [
+const TIMELINE_STEPS: { key: string; label: string; match: (item: LeaveItem) => boolean }[] = [
   { key: 'created', label: '已送出', match: () => true },
   {
     key: 'approved',
     label: '已成立',
     // cancel 規則要求 status 必須先是 approved 才能取消，所以 cancelled
     // 紀錄歷史上一定經過 approved；pending/rejected 為相容歷史資料
-    match: (item) => ['approved', 'cancelled', 'pending', 'rejected'].includes(item.status),
+    match: (item) => ['approved', 'cancelled', 'pending', 'rejected'].includes(item.status || ''),
   },
   {
     key: 'cancelled',
@@ -214,14 +247,14 @@ const TIMELINE_STEPS = [
   },
 ]
 
-function timelineSteps(item) {
+function timelineSteps(item: LeaveItem | null) {
   if (!item) return []
   return TIMELINE_STEPS.map((step) => {
     const done = step.match(item)
-    let timestamp = null
-    if (step.key === 'created') timestamp = item.created_at
-    else if (step.key === 'approved') timestamp = item.reviewed_at || item.updated_at
-    else if (step.key === 'cancelled') timestamp = item.updated_at
+    let timestamp: string | undefined
+    if (step.key === 'created') timestamp = item.created_at as string | undefined
+    else if (step.key === 'approved') timestamp = (item.reviewed_at || item.updated_at) as string | undefined
+    else if (step.key === 'cancelled') timestamp = item.updated_at as string | undefined
     return { ...step, done, timestamp }
   })
 }
@@ -230,21 +263,23 @@ async function fetchData() {
   loading.value = true
   try {
     const { data } = await listLeaves()
-    items.value = data?.items || []
+    items.value = (data as { items?: LeaveItem[] })?.items || []
   } catch (err) {
-    toast.error(err?.displayMessage || '載入失敗')
+    const e = err as Record<string, unknown>
+    toast.error(String(e?.displayMessage || '載入失敗'))
   } finally {
     loading.value = false
   }
 }
 
 function openForm() {
-  if ((childrenStore.items || []).length === 0) {
+  const childItems = (childrenStore.items || []) as { student_id: number }[]
+  if (childItems.length === 0) {
     toast.warn('尚未綁定子女')
     return
   }
   form.value = {
-    student_id: selectedId.value || childrenStore.items[0].student_id,
+    student_id: selectedId.value || childItems[0].student_id,
     leave_type: '病假',
     start_date: todayStr.value,
     end_date: todayStr.value,
@@ -258,7 +293,7 @@ async function submit() {
     toast.warn('請選擇學生')
     return
   }
-  if (form.value.end_date < form.value.start_date) {
+  if ((form.value.end_date || '') < (form.value.start_date || '')) {
     toast.warn('結束日不可早於起始日')
     return
   }
@@ -275,13 +310,14 @@ async function submit() {
     showForm.value = false
     fetchData()
   } catch (err) {
-    toast.error(err?.displayMessage || '送出失敗')
+    const e = err as Record<string, unknown>
+    toast.error(String(e?.displayMessage || '送出失敗'))
   } finally {
     submitting.value = false
   }
 }
 
-function askCancel(item) {
+function askCancel(item: LeaveItem) {
   cancelTarget.value = item
 }
 
@@ -294,13 +330,14 @@ async function doCancel() {
     toast.success('已取消')
     fetchData()
   } catch (err) {
-    toast.error(err?.displayMessage || '取消失敗')
+    const e = err as Record<string, unknown>
+    toast.error(String(e?.displayMessage || '取消失敗'))
   }
 }
 
 onMounted(async () => {
   await childrenStore.load()
-  ensureSelected(childrenStore.items)
+  ensureSelected(childrenStore.items as { student_id: number }[])
   fetchData()
 })
 
@@ -329,13 +366,13 @@ async function pullRefresh() {
     />
 
     <LeaveListCard
-      v-for="item in visibleLeaves"
+      v-for="item in visibleLeavesTyped"
       :key="item.id"
       :leave="item"
       :student-name="studentNameMap.get(item.student_id) || ''"
       :status-label="STATUS_LABEL[item.status] || item.status"
       :status-color="STATUS_COLOR[item.status] || null"
-      :can-cancel="item.status === 'approved' && item.start_date > todayStr"
+      :can-cancel="item.status === 'approved' && (item.start_date || '') > todayStr"
       @click="openDetail(item)"
       @cancel="askCancel(item)"
     />
@@ -349,7 +386,7 @@ async function pullRefresh() {
       :student-name="detail ? (studentNameMap.get(detail.student_id) || '') : ''"
       :timeline-steps="detail ? timelineSteps(detail) : []"
       :att-uploading="detailUploading"
-      :att-editable="!!detail && detail.status === 'approved' && detail.start_date > todayStr"
+      :att-editable="!!detail && detail.status === 'approved' && (detail.start_date || '') > todayStr"
       :url-resolver="attUrl"
       @att-upload="onAttUpload"
       @att-remove="askRemoveAttachment"
@@ -364,7 +401,7 @@ async function pullRefresh() {
     >
       <LeaveForm
         v-model="form"
-        :children="childrenStore.items || []"
+        :children="childrenItemsTyped"
         :past-limit="pastLimitStr"
         :future-limit="futureLimitStr"
         :submitting="submitting"

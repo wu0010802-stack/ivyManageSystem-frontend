@@ -1,19 +1,21 @@
-<script setup>
+<script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { fetchChildMeasurementChart } from '../api/childMeasurements'
 import { toast } from '../utils/toast'
 
-let echarts = null
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let echarts: any = null
 
 const route = useRoute()
 const studentId = computed(() => Number(route.params.studentId))
 
 const metric = ref('height')
-const chartData = ref({ height: [], weight: [] })
+const chartData = ref<{ height: { x: string; y: number | string }[]; weight: { x: string; y: number | string }[] }>({ height: [], weight: [] })
 const loading = ref(false)
-const chartEl = ref(null)
-let chartInstance = null
+const chartEl = ref<HTMLElement | null>(null)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let chartInstance: any = null
 
 const METRIC_OPTIONS = [
   { value: 'height', label: '身高', unit: 'cm', icon: 'height' },
@@ -21,7 +23,7 @@ const METRIC_OPTIONS = [
 ]
 
 const currentMetric = computed(() => METRIC_OPTIONS.find((o) => o.value === metric.value))
-const currentSeries = computed(() => chartData.value[metric.value] || [])
+const currentSeries = computed(() => (chartData.value as Record<string, { x: string; y: number | string }[]>)[metric.value] || [])
 
 const latestValue = computed(() => {
   const s = currentSeries.value
@@ -44,7 +46,8 @@ async function load() {
     chartData.value = r.data
     await render()
   } catch (e) {
-    toast.error(e?.displayMessage || '載入失敗')
+    const err = e as Record<string, unknown>
+    toast.error(String(err?.displayMessage || '載入失敗'))
   } finally {
     loading.value = false
   }

@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { bindAdditional } from '../api/auth'
@@ -26,8 +26,9 @@ async function submit() {
     childrenStore.invalidate()
     await childrenStore.load(true)
     router.replace('/home')
-  } catch (err) {
-    toast.error(err?.displayMessage || '綁定碼無效或已被使用')
+  } catch (err: unknown) {
+    const e = err as Record<string, unknown>
+    toast.error(String(e?.displayMessage || '綁定碼無效或已被使用'))
   } finally {
     submitting.value = false
   }
@@ -48,7 +49,7 @@ async function submit() {
           id="bind-add-code"
           v-model="code"
           type="text"
-          inputmode="latin"
+          :inputmode="('latin' as any)"
           autocapitalize="characters"
           autocomplete="one-time-code"
           placeholder="例：ABCD1234"

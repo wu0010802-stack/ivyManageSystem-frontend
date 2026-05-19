@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useFaq } from '@/parent/composables/useFaq'
@@ -13,25 +13,36 @@ import TypingIndicator from '@/parent/components/assistant/TypingIndicator.vue'
 const router = useRouter()
 const { faq, loading, load } = useFaq()
 const query = ref('')
-const messages = ref([])  // { id, role, kind, payload }
+type Msg = { id: number; role: 'user' | 'assistant'; kind: string; payload?: unknown }
+const messages = ref<Msg[]>([])
+// Template helpers to safely cast payload for v-for iteration
+function asCategoryList(p: unknown) { return p as FaqCategory[] }
+function asQuestionList(p: unknown) { return p as FaqItem[] }
+function asFaqItem(p: unknown) { return p as FaqItem }
+function asQuestion(item: FaqItem): { question: string; [key: string]: unknown } {
+  return item as unknown as { question: string; [key: string]: unknown }
+}
 let nextId = 1
 
-const items = computed(() => faq.value?.items || [])
-const categories = computed(() => faq.value?.categories || [])
+type FaqItem = { id?: unknown; question?: string; answer?: string; keywords?: string[]; category?: unknown; [key: string]: unknown }
+type FaqCategory = { id: number | string; label: string; icon: string; color: string }
+const faqData = computed(() => faq.value as Record<string, unknown> | null)
+const items = computed(() => (faqData.value?.items as FaqItem[]) || [])
+const categories = computed(() => (faqData.value?.categories as FaqCategory[]) || [])
 const searchResults = computed(() =>
   query.value.trim() ? searchFaq(items.value, query.value, 8) : []
 )
 
-function push(msg) {
+function push(msg: Omit<Msg, 'id'>) {
   messages.value.push({ id: nextId++, ...msg })
 }
 
-function userBubble(text) {
-  push({ role: 'user', kind: 'text', payload: text })
+function userBubble(text: string) {
+  push({ role: 'user' as const, kind: 'text', payload: text })
 }
 
-async function withTyping(thenFn) {
-  const typingMsg = { role: 'assistant', kind: 'typing' }
+async function withTyping(thenFn: () => void) {
+  const typingMsg = { role: 'assistant' as const, kind: 'typing' }
   push(typingMsg)
   await new Promise(r => setTimeout(r, 400 + Math.random() * 200))
   // 移除 typing
@@ -39,23 +50,23 @@ async function withTyping(thenFn) {
   thenFn()
 }
 
-function chooseCategory(cat) {
-  userBubble(cat.label)
+function chooseCategory(cat: FaqCategory | Record<string, unknown>) {
+  userBubble(String((cat as FaqCategory).label || ''))
   withTyping(() => {
     const inCat = items.value.filter(x => x.category === cat.id)
     push({
-      role: 'assistant',
+      role: 'assistant' as const,
       kind: 'text',
       payload: `關於「${cat.label}」，這些是常見問題：`,
     })
-    push({ role: 'assistant', kind: 'questions', payload: inCat })
+    push({ role: 'assistant' as const, kind: 'questions', payload: inCat })
   })
 }
 
-function chooseQuestion(item) {
-  userBubble(item.question)
+function chooseQuestion(item: FaqItem | { question: string; [key: string]: unknown }) {
+  userBubble((item as FaqItem).question || '')
   withTyping(() => {
-    push({ role: 'assistant', kind: 'answer', payload: item })
+    push({ role: 'assistant' as const, kind: 'answer', payload: item })
   })
 }
 
@@ -66,7 +77,7 @@ function goContactTeacher() {
 onMounted(async () => {
   await load()
   if (categories.value.length) {
-    push({ role: 'assistant', kind: 'categories', payload: categories.value })
+    push({ role: 'assistant' as const, kind: 'categories', payload: categories.value })
   }
 })
 </script>
@@ -86,9 +97,9 @@ onMounted(async () => {
       <div v-if="loading && searchResults.length === 0" class="hint">載入中…</div>
       <div v-else-if="searchResults.length === 0" class="hint">沒有找到相關問題</div>
       <QuestionChip
-        v-for="r in searchResults"
-        :key="r.id"
-        :item="r"
+        v-for="(r, idx) in searchResults"
+        :key="idx"
+        :item="asQuestion(r)"
         @click="(item) => { query = ''; chooseQuestion(item); }"
       />
     </div>
@@ -105,7 +116,7 @@ onMounted(async () => {
         <template v-else-if="m.kind === 'categories'">
           <div class="chip-grid">
             <CategoryChip
-              v-for="c in m.payload"
+              v-for="c in asCategoryList(m.payload)"
               :key="c.id"
               :category="c"
               @click="chooseCategory"
@@ -115,15 +126,15 @@ onMounted(async () => {
         <template v-else-if="m.kind === 'questions'">
           <div class="chip-stack">
             <QuestionChip
-              v-for="q in m.payload"
-              :key="q.id"
-              :item="q"
+              v-for="q in asQuestionList(m.payload)"
+              :key="q.id as string"
+              :item="asQuestion(q)"
               @click="chooseQuestion"
             />
           </div>
         </template>
         <template v-else-if="m.kind === 'answer'">
-          <FaqAnswer :item="m.payload" />
+          <FaqAnswer :item="asFaqItem(m.payload)" />
         </template>
       </AssistantBubble>
     </div>

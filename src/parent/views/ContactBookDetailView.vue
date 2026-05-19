@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import {
@@ -15,9 +15,32 @@ import MoodBadge from '../components/contact-book/MoodBadge.vue'
 import TimelineRow from '../components/contact-book/TimelineRow.vue'
 import PhotoGrid from '../components/contact-book/PhotoGrid.vue'
 
+interface Reply {
+  id: number | string
+  body?: string
+  created_at?: string
+}
+
+interface CbEntry {
+  student_id?: number
+  log_date?: string
+  my_acknowledged_at?: string | null
+  mood?: string
+  meal_lunch?: number | null
+  meal_snack?: number | null
+  nap_minutes?: number | null
+  temperature_c?: number | null
+  bowel?: string
+  learning_highlight?: string
+  teacher_note?: string
+  photos?: unknown[]
+  replies?: Reply[]
+  [key: string]: unknown
+}
+
 const route = useRoute()
 // 子女資訊用於 hero 區的姓名/班級，缺 pinia 時 graceful（測試環境）。
-let childrenStore = null
+let childrenStore: ReturnType<typeof useChildrenStore> | null = null
 try {
   childrenStore = useChildrenStore()
 } catch {
@@ -25,27 +48,27 @@ try {
 }
 
 const entryId = computed(() => Number(route.params.entryId))
-const entry = ref(null)
-const replies = ref([])
+const entry = ref<CbEntry | null>(null)
+const replies = ref<Reply[]>([])
 const newReply = ref('')
-const removeReplyTarget = ref(null)
+const removeReplyTarget = ref<number | string | null>(null)
 const removeReplyOpen = computed({
   get: () => removeReplyTarget.value !== null,
-  set: (v) => { if (!v) removeReplyTarget.value = null },
+  set: (v: boolean) => { if (!v) removeReplyTarget.value = null },
 })
 const loading = ref(false)
 const submitting = ref(false)
 const acking = ref(false)
 
-const MOOD_LABEL = {
+const MOOD_LABEL: Record<string, string> = {
   happy: '開心', normal: '普通', tired: '想睡', sad: '難過', sick: '不舒服',
 }
-const BOWEL_LABEL = {
+const BOWEL_LABEL: Record<string, string> = {
   none: '未排便', normal: '正常', loose: '稀', constipated: '硬',
 }
 
 const studentInfo = computed(() => {
-  const items = childrenStore?.items || []
+  const items = ((childrenStore?.items || []) as { student_id: number; name?: string; classroom_name?: string }[])
   return items.find((c) => c.student_id === entry.value?.student_id) || null
 })
 
@@ -61,7 +84,7 @@ const dateLine = computed(() => {
 const timelineItems = computed(() => {
   const e = entry.value
   if (!e) return []
-  const out = []
+  const out: { type: string; icon: string; tone: string; label: string; value?: string; detail?: string }[] = []
   if (e.mood) {
     out.push({
       type: 'mood',
@@ -72,7 +95,7 @@ const timelineItems = computed(() => {
     })
   }
   if (e.meal_lunch != null || e.meal_snack != null) {
-    const parts = []
+    const parts: string[] = []
     if (e.meal_lunch != null) parts.push(`午餐 ${e.meal_lunch} / 3 份`)
     if (e.meal_snack != null) parts.push(`點心 ${e.meal_snack} / 3 份`)
     out.push({
@@ -128,10 +151,11 @@ async function fetchData() {
   loading.value = true
   try {
     const { data } = await getContactBookDetail(entryId.value)
-    entry.value = data
-    replies.value = data?.replies || []
+    entry.value = data as CbEntry
+    replies.value = (data as CbEntry)?.replies || []
   } catch (err) {
-    toast.error(err?.displayMessage || '載入失敗')
+    const e = err as Record<string, unknown>
+    toast.error(String(e?.displayMessage || '載入失敗'))
   } finally {
     loading.value = false
   }
@@ -142,10 +166,11 @@ async function manualAck() {
   acking.value = true
   try {
     const { data } = await ackContactBook(entryId.value)
-    if (entry.value) entry.value.my_acknowledged_at = data.read_at
-    if (!data.already_marked) toast.success('已簽收今日聯絡簿')
+    if (entry.value) entry.value.my_acknowledged_at = (data as { read_at?: string })?.read_at ?? null
+    if (!(data as { already_marked?: boolean })?.already_marked) toast.success('已簽收今日聯絡簿')
   } catch (err) {
-    toast.error(err?.displayMessage || '簽收失敗')
+    const e = err as Record<string, unknown>
+    toast.error(String(e?.displayMessage || '簽收失敗'))
   } finally {
     acking.value = false
   }
@@ -161,16 +186,17 @@ async function submitReply() {
   submitting.value = true
   try {
     const { data } = await replyContactBook(entryId.value, body)
-    replies.value.push(data)
+    replies.value.push(data as Reply)
     newReply.value = ''
   } catch (err) {
-    toast.error(err?.displayMessage || '送出失敗')
+    const e = err as Record<string, unknown>
+    toast.error(String(e?.displayMessage || '送出失敗'))
   } finally {
     submitting.value = false
   }
 }
 
-function askRemoveReply(replyId) {
+function askRemoveReply(replyId: number | string) {
   removeReplyTarget.value = replyId
 }
 
@@ -179,10 +205,11 @@ async function doRemoveReply() {
   removeReplyTarget.value = null
   if (!replyId) return
   try {
-    await deleteContactBookReply(entryId.value, replyId)
+    await deleteContactBookReply(entryId.value, Number(replyId))
     replies.value = replies.value.filter((r) => r.id !== replyId)
   } catch (err) {
-    toast.error(err?.displayMessage || '刪除失敗')
+    const e = err as Record<string, unknown>
+    toast.error(String(e?.displayMessage || '刪除失敗'))
   }
 }
 
@@ -197,7 +224,7 @@ onMounted(async () => {
   if (childrenStore?.load) {
     try {
       const p = childrenStore.load()
-      if (p && typeof p.catch === 'function') p.catch(() => {})
+      if (p && typeof (p as Promise<unknown>).catch === 'function') (p as Promise<unknown>).catch(() => {})
     } catch {
       /* graceful — 缺 pinia 時不阻擋 detail 載入 */
     }
@@ -213,7 +240,7 @@ watch(entryId, async (newId, oldId) => {
   await loadAndMark()
 })
 
-function formatReplyTime(iso) {
+function formatReplyTime(iso: string) {
   try {
     const d = new Date(iso)
     const today = new Date()
@@ -286,9 +313,9 @@ function formatReplyTime(iso) {
         <h2 class="card-title">
           <span class="material-symbols-rounded" aria-hidden="true">photo_library</span>
           今天的照片
-          <span class="title-count">{{ entry.photos.length }} 張</span>
+          <span class="title-count">{{ (entry.photos || []).length }} 張</span>
         </h2>
-        <PhotoGrid :photos="entry.photos" />
+        <PhotoGrid :photos="(entry.photos || []) as never[]" />
       </section>
 
       <!-- 簽收狀態 / 回覆 -->
@@ -325,7 +352,7 @@ function formatReplyTime(iso) {
           <li v-for="r in replies" :key="r.id" class="reply">
             <div class="reply-body">{{ r.body }}</div>
             <div class="reply-meta">
-              <span>{{ formatReplyTime(r.created_at) }}</span>
+              <span>{{ formatReplyTime(r.created_at || '') }}</span>
               <button type="button" class="reply-delete link-btn" @click="askRemoveReply(r.id)">刪除</button>
             </div>
           </li>

@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useMessagesStore } from '../stores/messages'
@@ -9,18 +9,30 @@ import EmptyState from '@/components/common/EmptyState.vue'
 import KawaiiStar from '@/components/brand/KawaiiStar.vue'
 import { fmtTimeOrDate } from '../utils/datetime'
 
+interface Thread {
+  id: number | string
+  teacher_name?: string
+  student_name?: string
+  last_message_at?: string
+  last_message_preview?: string
+  unread_count: number
+}
+
 const router = useRouter()
 const messagesStore = useMessagesStore()
+
+const threads = computed(() => (messagesStore.threads || []) as unknown as Thread[])
 
 async function init() {
   try {
     await messagesStore.fetchThreads(true)
   } catch (err) {
-    toast.error(err?.displayMessage || '載入失敗')
+    const e = err as Record<string, unknown>
+    toast.error(String(e?.displayMessage || '載入失敗'))
   }
 }
 
-function openThread(t) {
+function openThread(t: Thread) {
   router.push({ path: `/messages/${t.id}` })
 }
 
@@ -29,7 +41,7 @@ async function pullRefresh() {
 }
 
 const totalUnread = computed(() =>
-  (messagesStore.threads || []).reduce((acc, t) => acc + (t.unread_count || 0), 0),
+  threads.value.reduce((acc: number, t: Thread) => acc + (t.unread_count || 0), 0),
 )
 
 onMounted(init)
@@ -43,7 +55,7 @@ onMounted(init)
       <p v-if="totalUnread > 0" class="pt-page-hero-note">
         有 <strong>{{ totalUnread }}</strong> 則尚未閱讀
       </p>
-      <p v-else-if="messagesStore.threads.length > 0" class="pt-page-hero-note">
+      <p v-else-if="threads.length > 0" class="pt-page-hero-note">
         所有訊息都看完了
       </p>
     </header>
@@ -55,7 +67,7 @@ onMounted(init)
     </template>
 
     <EmptyState
-      v-else-if="messagesStore.threads.length === 0"
+      v-else-if="threads.length === 0"
       variant="mobile"
       :icon="KawaiiStar"
       title="目前沒有訊息"
@@ -64,7 +76,7 @@ onMounted(init)
 
     <div v-else class="thread-list pt-list-group">
       <button
-        v-for="t in messagesStore.threads"
+        v-for="t in threads"
         :key="t.id"
         type="button"
         class="thread-row pt-list-row"

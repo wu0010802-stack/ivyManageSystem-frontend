@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import {
@@ -10,20 +10,45 @@ import { toast } from '../utils/toast'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 
+interface MedPhoto {
+  id: number
+  thumb_url?: string
+  url?: string
+  original_filename?: string
+}
+
+interface MedLog {
+  id: number
+  scheduled_time?: string
+  status: string
+  administered_at?: string
+  skipped_reason?: string
+}
+
+interface MedOrder {
+  id: number
+  medication_name?: string
+  order_date?: string
+  dose?: string
+  note?: string
+  logs?: MedLog[]
+  photos: MedPhoto[]
+}
+
 const route = useRoute()
-const order = ref(null)
+const order = ref<MedOrder | null>(null)
 const loading = ref(false)
 const uploading = ref(false)
-const removeTarget = ref(null) // 待刪除的 attachment 或 null
+const removeTarget = ref<MedPhoto | null>(null)
 
 const removeOpen = computed({
   get: () => removeTarget.value !== null,
-  set: (v) => {
+  set: (v: boolean) => {
     if (!v) removeTarget.value = null
   },
 })
 
-const STATUS_LABEL = {
+const STATUS_LABEL: Record<string, string> = {
   pending: '待餵',
   administered: '已餵',
   skipped: '已跳過',
@@ -33,45 +58,49 @@ const STATUS_LABEL = {
 async function fetchOrder() {
   loading.value = true
   try {
-    const { data } = await getMedicationOrder(route.params.id)
-    order.value = data
+    const { data } = await getMedicationOrder(Number(route.params.id))
+    order.value = data as MedOrder
   } catch (err) {
-    toast.error(err?.displayMessage || '載入失敗')
+    const e = err as Record<string, unknown>
+    toast.error(String(e?.displayMessage || '載入失敗'))
   } finally {
     loading.value = false
   }
 }
 
-async function onPhotoPick(e) {
-  const file = e.target.files?.[0]
-  e.target.value = ''
-  if (!file) return
+async function onPhotoPick(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file || !order.value) return
   uploading.value = true
   try {
     await uploadMedicationPhoto(order.value.id, file)
     toast.success('已上傳')
     await fetchOrder()
   } catch (err) {
-    toast.error(err?.displayMessage || '上傳失敗')
+    const er = err as Record<string, unknown>
+    toast.error(String(er?.displayMessage || '上傳失敗'))
   } finally {
     uploading.value = false
   }
 }
 
-function askRemovePhoto(att) {
+function askRemovePhoto(att: MedPhoto) {
   removeTarget.value = att
 }
 
 async function doRemovePhoto() {
   const att = removeTarget.value
   removeTarget.value = null
-  if (!att) return
+  if (!att || !order.value) return
   try {
     await deleteMedicationPhoto(order.value.id, att.id)
     toast.success('已刪除')
     await fetchOrder()
   } catch (err) {
-    toast.error(err?.displayMessage || '刪除失敗')
+    const e = err as Record<string, unknown>
+    toast.error(String(e?.displayMessage || '刪除失敗'))
   }
 }
 

@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useChildrenStore } from '../stores/children'
@@ -8,21 +8,45 @@ import ParentIcon from '../components/ParentIcon.vue'
 import AppModal from '../components/AppModal.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 
+interface EventItem {
+  id: number
+  title?: string
+  event_type: string
+  event_date?: string
+  end_date?: string
+  is_all_day?: boolean
+  start_time?: string
+  end_time?: string
+  location?: string
+  description?: string
+  requires_acknowledgment?: boolean
+  ack_deadline?: string
+  acked_student_ids?: (number | string)[]
+  need_ack_student_ids?: (number | string)[]
+  [key: string]: unknown
+}
+
+interface AckTarget {
+  event: EventItem
+  student_id: number | string
+  signature_name: string
+}
+
 const router = useRouter()
 
 const childrenStore = useChildrenStore()
-const items = ref([])
+const items = ref<EventItem[]>([])
 const loading = ref(false)
-const ackTarget = ref(null) // { event, student_id, signature_name }
+const ackTarget = ref<AckTarget | null>(null)
 
 const ackModalOpen = computed({
   get: () => ackTarget.value !== null,
-  set: (v) => {
+  set: (v: boolean) => {
     if (!v) ackTarget.value = null
   },
 })
 
-const TYPE_LABEL = {
+const TYPE_LABEL: Record<string, string> = {
   meeting: '會議',
   activity: '活動',
   holiday: '假日',
@@ -30,8 +54,8 @@ const TYPE_LABEL = {
 }
 
 const studentNameMap = computed(() => {
-  const m = new Map()
-  for (const c of childrenStore.items || []) m.set(c.student_id, c.name)
+  const m = new Map<number | string, string>()
+  for (const c of (childrenStore.items || []) as { student_id: number; name?: string }[]) m.set(c.student_id, c.name || '')
   return m
 })
 
@@ -43,15 +67,16 @@ async function fetchData() {
   loading.value = true
   try {
     const { data } = await listEvents()
-    items.value = data?.items || []
+    items.value = (data as { items?: EventItem[] })?.items || []
   } catch (err) {
-    toast.error(err?.displayMessage || '載入失敗')
+    const e = err as Record<string, unknown>
+    toast.error(String(e?.displayMessage || '載入失敗'))
   } finally {
     loading.value = false
   }
 }
 
-function openAck(event) {
+function openAck(event: EventItem) {
   if (!event.need_ack_student_ids?.length) return
   ackTarget.value = {
     event,
@@ -72,7 +97,8 @@ async function submitAck() {
     ackTarget.value = null
     fetchData()
   } catch (err) {
-    toast.error(err?.displayMessage || '簽閱失敗')
+    const e = err as Record<string, unknown>
+    toast.error(String(e?.displayMessage || '簽閱失敗'))
   }
 }
 

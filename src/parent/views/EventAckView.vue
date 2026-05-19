@@ -1,5 +1,5 @@
-<script setup>
-import { onMounted, ref } from 'vue'
+<script setup lang="ts">
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useChildrenStore } from '../stores/children'
 import { acknowledgeEvent, listEvents } from '../api/events'
@@ -8,14 +8,29 @@ import SignaturePad from '../components/SignaturePad.vue'
 import { toast } from '../utils/toast'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 
+interface EventItem {
+  id: number
+  title?: string
+  event_type?: string
+  event_date?: string
+  description?: string
+  [key: string]: unknown
+}
+
+interface SignaturePadRef {
+  isEmpty(): boolean
+  toBlob(): Promise<Blob | null>
+}
+
 const route = useRoute()
 const router = useRouter()
 const childrenStore = useChildrenStore()
 
-const event = ref(null)
-const studentId = ref(null)
+const event = ref<EventItem | null>(null)
+const studentId = ref<number | null>(null)
+const childrenItems = computed(() => (childrenStore.items || []) as { student_id: number; name?: string }[])
 const signatureName = ref('')
-const padRef = ref(null)
+const padRef = ref<SignaturePadRef | null>(null)
 const submitting = ref(false)
 // P1-18：以 loading / notFound 三態取代「event null = 永遠 skeleton」的二態，
 // 避免事件已刪除 / route param 對不上時頁面永久卡 skeleton。
@@ -26,17 +41,19 @@ async function init() {
   loading.value = true
   notFound.value = false
   await childrenStore.load()
+  const firstChild = (childrenStore.items as { student_id: number }[])[0]
   studentId.value =
-    Number(route.query.student_id) || childrenStore.items[0]?.student_id
+    Number(route.query.student_id) || firstChild?.student_id || null
   try {
     const { data } = await listEvents()
-    const found = (data?.items || []).find(
+    const found = ((data as { items?: EventItem[] })?.items || []).find(
       (e) => e.id === Number(route.params.eventId),
     )
     event.value = found || null
     notFound.value = !found
   } catch (err) {
-    toast.error(err?.displayMessage || '載入事件失敗')
+    const e = err as Record<string, unknown>
+    toast.error(String(e?.displayMessage || '載入事件失敗'))
     event.value = null
     notFound.value = true
   } finally {
@@ -49,6 +66,7 @@ async function submit() {
     toast.warn('請選擇子女')
     return
   }
+  if (!event.value) return
   submitting.value = true
   let ackOk = false
   try {
@@ -58,7 +76,8 @@ async function submit() {
     })
     ackOk = true
   } catch (err) {
-    toast.error(err?.displayMessage || '簽收失敗')
+    const e = err as Record<string, unknown>
+    toast.error(String(e?.displayMessage || '簽收失敗'))
     submitting.value = false
     return
   }
@@ -66,11 +85,12 @@ async function submit() {
   if (padRef.value && !padRef.value.isEmpty()) {
     try {
       const blob = await padRef.value.toBlob()
-      if (blob) {
-        await uploadAckSignature(event.value.id, studentId.value, blob)
+      if (blob && event.value) {
+        await uploadAckSignature(event.value.id, studentId.value!, blob)
       }
     } catch (err) {
-      toast.warn(err?.displayMessage || '已簽收，但簽名上傳失敗，請於事件詳情頁補上')
+      const e = err as Record<string, unknown>
+      toast.warn(String(e?.displayMessage || '已簽收，但簽名上傳失敗，請於事件詳情頁補上'))
       submitting.value = false
       router.replace({ path: '/events' })
       return
@@ -116,7 +136,7 @@ onMounted(init)
         <div class="field">
           <label for="ack-student">由哪一位子女簽收</label>
           <select id="ack-student" v-model.number="studentId">
-            <option v-for="c in childrenStore.items || []" :key="c.student_id" :value="c.student_id">{{ c.name }}</option>
+            <option v-for="c in childrenItems" :key="c.student_id" :value="c.student_id">{{ c.name }}</option>
           </select>
         </div>
 

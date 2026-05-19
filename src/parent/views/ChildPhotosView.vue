@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, nextTick, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { fetchChildPhotos } from '../api/childPhotos'
@@ -7,17 +7,25 @@ import SkeletonBlock from '../components/SkeletonBlock.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import KawaiiStar from '@/components/brand/KawaiiStar.vue'
 
+interface PhotoItem {
+  id: number | string
+  thumb_url?: string
+  display_url?: string
+  url?: string
+  filename?: string
+}
+
 const route = useRoute()
 const router = useRouter()
 const studentId = computed(() => Number(route.params.studentId))
 
-const items = ref([])
+const items = ref<PhotoItem[]>([])
 const total = ref(0)
 const loading = ref(false)
-const previewIdx = ref(null)
-const lightboxRef = ref(null)
+const previewIdx = ref<number | null>(null)
+const lightboxRef = ref<HTMLElement | null>(null)
 // 開啟 lightbox 前的焦點元素，關閉時還原（focus trap a11y）。
-let previousActiveElement = null
+let previousActiveElement: Element | null = null
 
 async function load() {
   if (!studentId.value) return
@@ -27,13 +35,14 @@ async function load() {
     items.value = r.data.items || []
     total.value = r.data.total || 0
   } catch (e) {
-    toast.error(e?.displayMessage || '載入失敗')
+    const err = e as Record<string, unknown>
+    toast.error(String(err?.displayMessage || '載入失敗'))
   } finally {
     loading.value = false
   }
 }
 
-async function openPreview(idx) {
+async function openPreview(idx: number) {
   // 記住開啟前焦點所在的元素（通常就是被點擊的縮圖按鈕），關閉時還原。
   previousActiveElement = typeof document !== 'undefined' ? document.activeElement : null
   previewIdx.value = idx
@@ -47,14 +56,14 @@ function closePreview() {
   // 還原焦點
   const target = previousActiveElement
   previousActiveElement = null
-  if (target && typeof target.focus === 'function') {
-    nextTick(() => target.focus())
+  if (target && typeof (target as HTMLElement).focus === 'function') {
+    nextTick(() => (target as HTMLElement).focus())
   }
 }
-function prevImg() { if (previewIdx.value > 0) previewIdx.value-- }
-function nextImg() { if (previewIdx.value < items.value.length - 1) previewIdx.value++ }
+function prevImg() { if (previewIdx.value !== null && previewIdx.value > 0) previewIdx.value-- }
+function nextImg() { if (previewIdx.value !== null && previewIdx.value < items.value.length - 1) previewIdx.value++ }
 
-function onLightboxKeydown(e) {
+function onLightboxKeydown(e: KeyboardEvent) {
   if (previewIdx.value === null) return
   if (e.key === 'Escape') {
     e.preventDefault()

@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import {
   getNotificationPreferences,
@@ -8,7 +8,7 @@ import { toast } from '../utils/toast'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import M3Switch from '../components/m3/M3Switch.vue'
 
-const EVENT_LABELS = {
+const EVENT_LABELS: Record<string, string> = {
   message_received: '老師訊息',
   announcement: '園所公告',
   event_ack_required: '事件待簽',
@@ -17,7 +17,7 @@ const EVENT_LABELS = {
   attendance_alert: '出席異常',
 }
 
-const EVENT_META = {
+const EVENT_META: Record<string, { icon: string; tone: string }> = {
   message_received:   { icon: 'chat_bubble',  tone: 'leaf' },
   announcement:       { icon: 'campaign',     tone: 'coral' },
   event_ack_required: { icon: 'event',        tone: 'grape' },
@@ -26,7 +26,7 @@ const EVENT_META = {
   attendance_alert:   { icon: 'notifications', tone: 'coral' },
 }
 
-const EVENT_HINTS = {
+const EVENT_HINTS: Record<string, string> = {
   message_received: '老師主動傳訊或回覆時通知',
   announcement: '園所發布新公告時通知',
   event_ack_required: '有事件需要您簽收時通知',
@@ -35,27 +35,28 @@ const EVENT_HINTS = {
   attendance_alert: '孩子出席異常時提醒',
 }
 
-const prefs = ref({})
+const prefs = ref<Record<string, boolean>>({})
 const loading = ref(false)
 // P2-FE-Parent-4：原本共用一個 `saving: ref(false)`，並發 toggle 任一鍵都
 // 會 disable 全部 switch；改 Map 鎖到 key 級。Vue 3 對 Map 是 reactive
 // collection（new Map 須直接 set/has，不是 prefs.value.{key}）。
-const saving = ref(new Map())
-function isSaving(ev) { return saving.value.has(ev) }
+const saving = ref<Map<string, boolean>>(new Map())
+function isSaving(ev: string) { return saving.value.has(ev) }
 
 async function load() {
   loading.value = true
   try {
     const { data } = await getNotificationPreferences()
-    prefs.value = { ...data.prefs }
+    prefs.value = { ...(data as { prefs?: Record<string, boolean> }).prefs }
   } catch (err) {
-    toast.error(err?.displayMessage || '載入失敗')
+    const e = err as Record<string, unknown>
+    toast.error(String(e?.displayMessage || '載入失敗'))
   } finally {
     loading.value = false
   }
 }
 
-async function toggle(ev) {
+async function toggle(ev: string) {
   if (saving.value.has(ev)) return // 同 key 仍在處理 → ignore
   const newVal = !prefs.value[ev]
   prefs.value[ev] = newVal
@@ -64,7 +65,8 @@ async function toggle(ev) {
     await updateNotificationPreferences({ [ev]: newVal })
   } catch (err) {
     prefs.value[ev] = !newVal
-    toast.error(err?.displayMessage || '儲存失敗')
+    const e = err as Record<string, unknown>
+    toast.error(String(e?.displayMessage || '儲存失敗'))
   } finally {
     saving.value.delete(ev)
   }

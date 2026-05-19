@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { listAnnouncements, markRead } from '../api/announcements'
 import { toast } from '../utils/toast'
@@ -10,21 +10,20 @@ import EmptyState from '@/components/common/EmptyState.vue'
 import KawaiiStar from '@/components/brand/KawaiiStar.vue'
 import { useIncrementalRender } from '../composables/useIncrementalRender'
 
-const items = ref([])
+type AnnItem = { id: number | string; priority: string; is_read: boolean; created_at: string; title: string; content?: string }
+const items = ref<AnnItem[]>([])
 const loading = ref(false)
-const selected = ref(null)
+const selected = ref<AnnItem | null>(null)
 
-const { visible: visibleItems, sentinelRef, hasMore } = useIncrementalRender(
-  items,
-  { pageSize: 20 },
-)
+const { visible: _visibleRaw, sentinelRef, hasMore } = useIncrementalRender(items as unknown as import('vue').Ref<unknown[]>, { pageSize: 20 })
+const visibleItems = computed(() => _visibleRaw.value as AnnItem[])
 
 const detailOpen = computed({
   get: () => selected.value !== null,
   set: (v) => { if (!v) selected.value = null },
 })
 
-const PRIORITY_META = {
+const PRIORITY_META: Record<string, { label: string; tone: string }> = {
   normal:    { label: '一般', tone: 'info' },
   important: { label: '重要', tone: 'warn' },
   urgent:    { label: '緊急', tone: 'danger' },
@@ -36,19 +35,21 @@ async function fetchData() {
   loading.value = true
   try {
     const { data } = await listAnnouncements({ limit: 50 })
-    items.value = data?.items || []
-  } catch (err) {
-    toast.error(err?.displayMessage || '載入失敗')
+    items.value = (data?.items || []) as AnnItem[]
+  } catch (err: unknown) {
+    const e = err as Record<string, unknown>
+    toast.error(String(e?.displayMessage || '載入失敗'))
   } finally {
     loading.value = false
   }
 }
 
-async function openDetail(item) {
+async function openDetail(item: AnnItem) {
   selected.value = item
   if (!item.is_read) {
     try {
-      await markRead(item.id)
+      await markRead(item.id as number)
+      item.is_read = true
       item.is_read = true
     } catch { /* ignore */ }
   }
@@ -56,14 +57,14 @@ async function openDetail(item) {
 
 function close() { selected.value = null }
 
-const formatTime = (s) => s ? s.replace('T', ' ').slice(0, 16) : ''
+const formatTime = (s: string | null | undefined) => s ? s.replace('T', ' ').slice(0, 16) : ''
 
-const formatRelative = (s) => {
+const formatRelative = (s: string | null | undefined) => {
   if (!s) return ''
   try {
     const d = new Date(s.replace(' ', 'T'))
     const now = new Date()
-    const diffMs = now - d
+    const diffMs = now.getTime() - d.getTime()
     const min = Math.floor(diffMs / 60000)
     if (min < 1) return '剛剛'
     if (min < 60) return `${min} 分鐘前`

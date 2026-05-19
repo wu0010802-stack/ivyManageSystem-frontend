@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { bind } from '../api/auth'
@@ -13,7 +13,7 @@ const code = ref('')
 const submitting = ref(false)
 const errorMessage = ref('')
 
-const nameHint = computed(() => route.query.name_hint || '')
+const nameHint = computed(() => String(route.query.name_hint || ''))
 
 const trimmedCode = computed(() => code.value.trim().toUpperCase())
 
@@ -32,8 +32,9 @@ async function submit() {
     } else {
       errorMessage.value = '綁定失敗，請聯絡園所'
     }
-  } catch (err) {
-    errorMessage.value = err?.displayMessage || '綁定碼無效或已過期'
+  } catch (err: unknown) {
+    const e = err as Record<string, unknown>
+    errorMessage.value = String(e?.displayMessage || '綁定碼無效或已過期')
   } finally {
     submitting.value = false
   }
@@ -58,7 +59,7 @@ async function submit() {
           id="bind-code"
           v-model="code"
           type="text"
-          inputmode="latin"
+          :inputmode="('latin' as any)"
           autocapitalize="characters"
           autocomplete="one-time-code"
           placeholder="例：ABCD1234"
