@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useChildrenStore } from '../stores/children'
@@ -16,6 +16,13 @@ import MonthDateStrip from '../components/contact-book/MonthDateStrip.vue'
 import ContactBookDayCard from '../components/contact-book/ContactBookDayCard.vue'
 import ContactBookListItem from '../components/contact-book/ContactBookListItem.vue'
 
+interface CbEntry {
+  id: number | string
+  log_date?: string
+  my_acknowledged_at?: string | null
+  [key: string]: unknown
+}
+
 const router = useRouter()
 const childrenStore = useChildrenStore()
 const { selectedId: selectedStudentId, ensureSelected } = useChildSelection()
@@ -30,15 +37,15 @@ const { data: cbBundle, error: cbError, pending: loading, refresh: refreshCb } =
       listContactBook(sid, { limit: 60 }, config),
     ])
     return {
-      today: todayRes.data?.entry || null,
-      entries: historyRes.data?.entries || [],
+      today: (todayRes.data?.entry || null) as CbEntry | null,
+      entries: (historyRes.data?.entries || []) as CbEntry[],
     }
   })
-const today = computed(() => cbBundle.value?.today || null)
-const history = computed(() => cbBundle.value?.entries || [])
+const today = computed(() => (cbBundle.value?.today as CbEntry | null) || null)
+const history = computed(() => (cbBundle.value?.entries as CbEntry[]) || [])
 
 const selectedChild = computed(() =>
-  (childrenStore.items || []).find((x) => x.student_id === selectedStudentId.value) || null,
+  ((childrenStore.items || []) as { student_id: number; name?: string; classroom_name?: string }[]).find((x) => x.student_id === selectedStudentId.value) || null,
 )
 const studentName = computed(() => selectedChild.value?.name || '')
 const classroomName = computed(() => selectedChild.value?.classroom_name || '')
@@ -50,13 +57,13 @@ const historyWithoutToday = computed(() => {
 })
 
 const allEntries = computed(() => {
-  const list = [...historyWithoutToday.value]
+  const list: CbEntry[] = [...historyWithoutToday.value]
   if (today.value) list.unshift(today.value)
   return list
 })
 
 const groupedHistory = computed(() => {
-  const groups = { thisWeek: [], lastWeek: [], earlier: [] }
+  const groups: { thisWeek: CbEntry[]; lastWeek: CbEntry[]; earlier: CbEntry[] } = { thisWeek: [], lastWeek: [], earlier: [] }
   const now = new Date()
   now.setHours(0, 0, 0, 0)
   const weekStart = new Date(now)
@@ -66,7 +73,7 @@ const groupedHistory = computed(() => {
 
   for (const e of historyWithoutToday.value) {
     if (!e?.log_date) continue
-    const [y, m, d] = e.log_date.split('-').map(Number)
+    const [y, m, d] = (e.log_date as string).split('-').map(Number)
     const dt = new Date(y, m - 1, d)
     if (dt >= weekStart) groups.thisWeek.push(e)
     else if (dt >= lastWeekStart) groups.lastWeek.push(e)
@@ -76,9 +83,10 @@ const groupedHistory = computed(() => {
 })
 
 const { visible: visibleEarlier, sentinelRef, hasMore } = useIncrementalRender(
-  computed(() => groupedHistory.value.earlier),
+  computed(() => groupedHistory.value.earlier) as unknown as import('vue').Ref<unknown[]>,
   { pageSize: 20 },
 )
+const visibleEarlierTyped = computed(() => visibleEarlier.value as CbEntry[])
 
 async function fetchAll() {
   if (!selectedStudentId.value) return
@@ -90,27 +98,28 @@ async function fetchAll() {
 }
 
 watch(cbError, (err) => {
-  if (err) toast.error(err?.displayMessage || '載入聯絡簿失敗')
+  const e = err as Record<string, unknown> | null
+  if (e) toast.error(String(e?.displayMessage || '載入聯絡簿失敗'))
 })
 
 onMounted(async () => {
   await childrenStore.load()
-  ensureSelected(childrenStore.items)
+  ensureSelected(childrenStore.items as { student_id: number }[])
 })
 
 watch(selectedStudentId, fetchAll, { immediate: true })
 
-function entryHref(id) {
+function entryHref(id: number | string) {
   return `/contact-book/${id}`
 }
 
-function onDateSelect(iso) {
+function onDateSelect(iso: string) {
   // P1-17：原本用 window.location.hash 強塞 URL 會觸發 vue-router 重新 resolve
   // 但不會走正常的路由 transition（也不會更新 navigation guards / scroll-restore），
   // 改用具名路由 + entryId param（router.js 註冊為 `:entryId`）。
   const e = allEntries.value.find((x) => x.log_date === iso)
   if (!e) return
-  router.push({ name: 'parent-contact-book-detail', params: { entryId: e.id } })
+  router.push({ name: 'parent-contact-book-detail', params: { entryId: e.id as string | number } })
 }
 
 const unreadCount = computed(() =>
@@ -199,7 +208,7 @@ const hasAnyHistory = computed(() => historyWithoutToday.value.length > 0)
           <p class="group-title">更早</p>
           <div class="group-list">
             <router-link
-              v-for="e in visibleEarlier"
+              v-for="e in visibleEarlierTyped"
               :key="e.id"
               :to="entryHref(e.id)"
               class="history-card"

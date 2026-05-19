@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useMessagesStore } from '../stores/messages'
@@ -8,18 +8,28 @@ import MessageComposer from '../components/MessageComposer.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import { toast } from '../utils/toast'
 
+interface ThreadInfo {
+  teacher_name?: string
+  student_name?: string
+}
+
+interface MessageItem {
+  id: number | string
+  [key: string]: unknown
+}
+
 const route = useRoute()
 const messagesStore = useMessagesStore()
 
 const threadId = computed(() => Number(route.params.threadId))
-const thread = ref(null)
+const thread = ref<ThreadInfo | null>(null)
 const loadingMore = ref(false)
-const recallTarget = ref(null) // 待撤回的 messageId 或 null
+const recallTarget = ref<number | string | null>(null) // 待撤回的 messageId 或 null
 
-const messages = computed(() => {
+const messages = computed<MessageItem[]>(() => {
   const bucket = messagesStore.messagesByThread[threadId.value]
   // store 是新→舊；UI 顯示舊→新
-  return [...(bucket?.items || [])].reverse()
+  return ([...(bucket?.items || [])].reverse()) as MessageItem[]
 })
 const hasMore = computed(() => {
   const bucket = messagesStore.messagesByThread[threadId.value]
@@ -29,12 +39,13 @@ const hasMore = computed(() => {
 async function init() {
   try {
     const { data } = await getMessageThread(threadId.value)
-    thread.value = data
+    thread.value = data as ThreadInfo
     await messagesStore.fetchMessages(threadId.value, { reset: true })
     // 進入即標已讀
     await messagesStore.markRead(threadId.value)
   } catch (err) {
-    toast.error(err?.displayMessage || '載入失敗')
+    const e = err as Record<string, unknown>
+    toast.error(String(e?.displayMessage || '載入失敗'))
   }
 }
 
@@ -48,23 +59,24 @@ async function loadMore() {
   }
 }
 
-async function onSend({ body, attachments, done }) {
+async function onSend({ body, attachments, done }: { body: string; attachments?: File[]; done: (ok: boolean) => void }) {
   try {
     await messagesStore.send(threadId.value, body, attachments)
     done(true)
   } catch (err) {
-    toast.error(err?.displayMessage || '送出失敗')
+    const e = err as Record<string, unknown>
+    toast.error(String(e?.displayMessage || '送出失敗'))
     done(false)
   }
 }
 
-function askRecall(messageId) {
+function askRecall(messageId: number | string) {
   recallTarget.value = messageId
 }
 
 const recallOpen = computed({
   get: () => recallTarget.value !== null,
-  set: (v) => {
+  set: (v: boolean) => {
     if (!v) recallTarget.value = null
   },
 })
@@ -74,9 +86,10 @@ async function doRecall() {
   recallTarget.value = null
   if (!id) return
   try {
-    await messagesStore.recall(id)
+    await messagesStore.recall(Number(id))
   } catch (err) {
-    toast.error(err?.displayMessage || '撤回失敗')
+    const e = err as Record<string, unknown>
+    toast.error(String(e?.displayMessage || '撤回失敗'))
   }
 }
 

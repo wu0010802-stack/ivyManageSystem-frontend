@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useChildrenStore } from '../stores/children'
@@ -12,6 +12,22 @@ import SkeletonBlock from '../components/SkeletonBlock.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import KawaiiStar from '@/components/brand/KawaiiStar.vue'
 
+interface MedLog {
+  id: number | string
+  scheduled_time?: string
+  status: string
+}
+
+interface MedOrder {
+  id: number | string
+  medication_name?: string
+  order_date?: string
+  dose?: string
+  time_slots?: string[]
+  source?: string
+  logs?: MedLog[]
+}
+
 const router = useRouter()
 const childrenStore = useChildrenStore()
 const { selectedId: selectedStudentId, ensureSelected } = useChildSelection()
@@ -22,15 +38,15 @@ const { data: medData, error: medError, pending: loading, refresh: refreshMed } 
   useAbortableFetch((config) =>
     listMedicationOrders({ student_id: selectedStudentId.value }, config),
   )
-const items = computed(() => medData.value?.data?.items || [])
+const items = computed(() => ((medData.value as { data?: { items?: MedOrder[] } })?.data?.items) || [])
 
-const STATUS_LABEL = {
+const STATUS_LABEL: Record<string, string> = {
   pending: '待餵',
   administered: '已餵',
   skipped: '已跳過',
   correction: '已修正',
 }
-const STATUS_TONE = {
+const STATUS_TONE: Record<string, string> = {
   pending: 'warn',
   administered: 'success',
   skipped: 'info',
@@ -38,7 +54,7 @@ const STATUS_TONE = {
 }
 
 const studentName = computed(() => {
-  const c = (childrenStore.items || []).find(
+  const c = ((childrenStore.items || []) as { student_id: number; name?: string }[]).find(
     (x) => x.student_id === selectedStudentId.value,
   )
   return c?.name || ''
@@ -54,19 +70,20 @@ async function fetchData() {
 }
 
 watch(medError, (err) => {
-  if (err) toast.error(err?.displayMessage || '載入用藥單失敗')
+  const e = err as Record<string, unknown> | null
+  if (e) toast.error(String(e?.displayMessage || '載入用藥單失敗'))
 })
 
 onMounted(async () => {
   await childrenStore.load()
-  ensureSelected(childrenStore.items)
+  ensureSelected(childrenStore.items as { student_id: number }[])
   fetchData()
 })
 
 watch(selectedStudentId, fetchData)
 
 function goNew() {
-  if ((childrenStore.items || []).length === 0) {
+  if (((childrenStore.items || []) as unknown[]).length === 0) {
     toast.warn('尚未綁定子女')
     return
   }
@@ -76,11 +93,11 @@ function goNew() {
   })
 }
 
-function goDetail(orderId) {
+function goDetail(orderId: number | string) {
   router.push({ path: `/medications/${orderId}` })
 }
 
-function statusLabel(s) { return STATUS_LABEL[s] || s }
+function statusLabel(s: string) { return STATUS_LABEL[s] || s }
 
 const today = todayISO()
 </script>

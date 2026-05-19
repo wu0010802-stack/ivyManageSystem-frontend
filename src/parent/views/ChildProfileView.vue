@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getChildProfile } from '../api/profile'
@@ -13,7 +13,7 @@ import MilestoneCarousel from '../components/MilestoneCarousel.vue'
 import TimelineItem from '../components/TimelineItem.vue'
 import { useChildTimeline } from '../composables/useChildTimeline'
 
-function isBirthdayToday(child) {
+function isBirthdayToday(child: { birthday?: string | null } | null | undefined) {
   if (!child?.birthday) return false
   const parts = String(child.birthday).split('-')
   if (parts.length < 3) return false
@@ -26,11 +26,11 @@ const route = useRoute()
 const router = useRouter()
 const studentId = computed(() => Number(route.params.studentId))
 
-const data = ref(null)
+const data = ref<Record<string, unknown> | null>(null)
 const loading = ref(false)
 
-const SEVERITY_LABEL = { mild: '輕度', moderate: '中度', severe: '嚴重' }
-const SEVERITY_COLOR = {
+const SEVERITY_LABEL: Record<string, string> = { mild: '輕度', moderate: '中度', severe: '嚴重' }
+const SEVERITY_COLOR: Record<string, { bg: string; color: string }> = {
   mild:     { bg: 'var(--pt-severity-mild-bg)',     color: 'var(--pt-severity-mild-fg)' },
   moderate: { bg: 'var(--pt-severity-mod-bg)',      color: 'var(--pt-severity-mod-fg)' },
   severe:   { bg: 'var(--pt-severity-severe-bg)',   color: 'var(--pt-severity-severe-fg)' },
@@ -43,7 +43,8 @@ async function fetchData() {
     const { data: d } = await getChildProfile(studentId.value)
     data.value = d
   } catch (err) {
-    toast.error(err?.displayMessage || '載入失敗')
+    const e = err as Record<string, unknown>
+    toast.error(String(e?.displayMessage || '載入失敗'))
   } finally {
     loading.value = false
   }
@@ -52,9 +53,10 @@ async function fetchData() {
 function goMessages() {
   // 把建議文字塞到 sessionStorage，MessagesView 進去後可預填（若未實作 prefill 也只是個無害值）
   try {
+    const student = data.value?.student as { name?: string } | null | undefined
     sessionStorage.setItem(
       'parent_message_prefill',
-      `想反應 ${data.value?.student?.name || '孩子'} 的資料修改，內容：`,
+      `想反應 ${student?.name || '孩子'} 的資料修改，內容：`,
     )
   } catch {
     /* ignore */
@@ -74,7 +76,7 @@ function goMeasurements() {
   router.push(`/children/${studentId.value}/measurements`)
 }
 
-const photos = ref([])
+const photos = ref<{ id: number | string; thumb_url?: string; display_url?: string; url?: string }[]>([])
 const photosLoading = ref(false)
 const photosError = ref(false)
 async function loadPhotos() {
@@ -90,6 +92,21 @@ async function loadPhotos() {
     photosLoading.value = false
   }
 }
+
+// Typed accessors so template doesn't operate on `unknown`
+interface TimelineItemTyped { icon?: string; title?: string; occurred_at?: string; is_highlight?: boolean; summary?: string; id?: unknown; [key: string]: unknown }
+interface StudentInfo { name?: string; student_no?: string; gender?: string; birthday?: string | null }
+interface TeacherInfo { role: string; label: string; name?: string }
+interface GuardianInfo { id: number | string; name?: string; relation?: string; is_self?: boolean; is_primary?: boolean; can_pickup?: boolean }
+interface AllergyInfo { id: number | string; allergen?: string; severity: string; reaction_symptom?: string; first_aid_note?: string }
+interface ClassroomInfo { name?: string }
+
+const typedTimelineItems = computed(() => timelineItems.value as TimelineItemTyped[])
+const profileStudent = computed(() => (data.value?.student as StudentInfo | undefined) || null)
+const profileTeachers = computed(() => (data.value?.teachers as TeacherInfo[] | undefined) || [])
+const profileGuardians = computed(() => (data.value?.guardians as GuardianInfo[] | undefined) || [])
+const profileAllergies = computed(() => (data.value?.allergies as AllergyInfo[] | undefined) || [])
+const profileClassroom = computed(() => (data.value?.classroom as ClassroomInfo | undefined) || null)
 
 // 成長動態 timeline feed
 const {
@@ -133,7 +150,7 @@ onMounted(() => {
       <div v-else-if="timelineLoading && !timelineItems.length" class="empty">載入中…</div>
       <div v-else-if="timelineItems.length === 0" class="empty">最近沒有動態</div>
       <div v-else class="feed">
-        <TimelineItem v-for="item in timelineItems" :key="item.id" :item="item" />
+        <TimelineItem v-for="item in typedTimelineItems" :key="item.id as string" :item="item" />
         <button v-if="nextCursor" class="load-more-btn" :disabled="timelineLoading" @click="loadMore">
           {{ timelineLoading ? '載入中…' : '載入更多' }}
         </button>
@@ -151,33 +168,33 @@ onMounted(() => {
         <div class="child-hero-inner">
           <div class="child-avatar-wrap">
             <CrownIcon
-              v-if="isBirthdayToday(data.student)"
+              v-if="isBirthdayToday(profileStudent)"
               :size="22"
               decorative
               class="child-crown"
             />
             <div class="child-avatar" aria-hidden="true">
-              <template v-if="data.student?.name">{{ data.student.name.charAt(0) }}</template>
+              <template v-if="profileStudent?.name">{{ profileStudent.name.charAt(0) }}</template>
               <ParentIcon v-else name="user" size="lg" />
             </div>
           </div>
           <div class="child-info">
-            <div class="child-name">{{ data.student?.name || '寶貝' }}</div>
-            <div class="child-meta">{{ data.classroom?.name || '' }}</div>
+            <div class="child-name">{{ profileStudent?.name || '寶貝' }}</div>
+            <div class="child-meta">{{ profileClassroom?.name || '' }}</div>
           </div>
         </div>
       </section>
 
       <section class="pt-card">
         <div class="sub-info">
-          <span>學號 {{ data.student.student_no || '—' }}</span>
-          <span v-if="data.student.gender">・{{ data.student.gender }}</span>
-          <span v-if="data.student.birthday">・{{ data.student.birthday }}</span>
+          <span>學號 {{ profileStudent?.student_no || '—' }}</span>
+          <span v-if="profileStudent?.gender">・{{ profileStudent.gender }}</span>
+          <span v-if="profileStudent?.birthday">・{{ profileStudent.birthday }}</span>
         </div>
-        <div v-if="data.teachers.length" class="row">
+        <div v-if="profileTeachers.length" class="row">
           <span class="label">老師</span>
           <span class="teachers">
-            <span v-for="t in data.teachers" :key="t.role" class="teacher-tag">
+            <span v-for="t in profileTeachers" :key="t.role" class="teacher-tag">
               {{ t.label }}：{{ t.name || '—' }}
             </span>
           </span>
@@ -186,8 +203,8 @@ onMounted(() => {
 
       <section class="pt-card" aria-labelledby="guardians-title">
         <h2 id="guardians-title" class="section-title">監護人 / 接送人</h2>
-        <div v-if="!data.guardians.length" class="empty">尚未登記</div>
-        <div v-for="g in data.guardians" :key="g.id" class="guardian-row">
+        <div v-if="!profileGuardians.length" class="empty">尚未登記</div>
+        <div v-for="g in profileGuardians" :key="g.id" class="guardian-row">
           <div>
             <span class="guardian-name">{{ g.name }}</span>
             <span v-if="g.relation" class="guardian-rel">（{{ g.relation }}）</span>
@@ -202,9 +219,9 @@ onMounted(() => {
 
       <section class="pt-card" aria-labelledby="allergies-title">
         <h2 id="allergies-title" class="section-title">過敏 / 用藥提醒</h2>
-        <div v-if="!data.allergies.length" class="empty">尚未登記</div>
+        <div v-if="!profileAllergies.length" class="empty">尚未登記</div>
         <div
-          v-for="a in data.allergies"
+          v-for="a in profileAllergies"
           :key="a.id"
           class="allergy-row"
         >

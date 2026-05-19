@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { getWeekAgenda } from '../api/calendar'
@@ -8,12 +8,24 @@ import SkeletonBlock from '../components/SkeletonBlock.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import KawaiiStar from '@/components/brand/KawaiiStar.vue'
 
+interface AgendaItem {
+  date?: string
+  kind?: string
+  category?: string
+  target_id?: unknown
+  ref?: { id?: unknown }
+  title?: string
+  subtitle?: string
+  requires_acknowledgment?: boolean
+  [key: string]: unknown
+}
+
 const router = useRouter()
-const data = ref(null)
+const data = ref<{ items?: AgendaItem[] } | null>(null)
 const loading = ref(false)
 const days = ref(7)
 
-const CATEGORY_META = {
+const CATEGORY_META: Record<string, { icon: string; tone: string; label: string }> = {
   event:         { icon: 'event',          tone: 'grape', label: '活動' },
   fee_due:       { icon: 'payments',       tone: 'sun',   label: '繳費截止' },
   announcement:  { icon: 'campaign',       tone: 'coral', label: '公告' },
@@ -25,10 +37,11 @@ const CATEGORY_META = {
 
 const groupedByDate = computed(() => {
   if (!data.value?.items) return []
-  const groups = new Map()
+  const groups = new Map<string, AgendaItem[]>()
   for (const it of data.value.items) {
-    if (!groups.has(it.date)) groups.set(it.date, [])
-    groups.get(it.date).push(it)
+    const key = it.date || ''
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key)!.push(it)
   }
   return Array.from(groups.entries())
     .sort((a, b) => (a[0] < b[0] ? -1 : 1))
@@ -41,13 +54,14 @@ async function fetchData() {
     const { data: d } = await getWeekAgenda(days.value)
     data.value = d
   } catch (err) {
-    toast.error(err?.displayMessage || '載入行事曆失敗')
+    const e = err as Record<string, unknown>
+    toast.error(String(e?.displayMessage || '載入行事曆失敗'))
   } finally {
     loading.value = false
   }
 }
 
-function gotoItem(it) {
+function gotoItem(it: AgendaItem) {
   const kind = it.kind || it.category
   const id = it.target_id ?? it.ref?.id
   if (kind === 'fee_due') router.push('/fees')
@@ -68,7 +82,7 @@ const tomorrowStr = computed(() => {
   return localDateISO(dt)
 })
 
-let todayInterval = null
+let todayInterval: ReturnType<typeof setInterval> | null = null
 onMounted(() => {
   fetchData()
   todayInterval = setInterval(() => {
@@ -80,7 +94,7 @@ onBeforeUnmount(() => {
   if (todayInterval) clearInterval(todayInterval)
 })
 
-function dayLabel(iso) {
+function dayLabel(iso: string) {
   // 用 string compare 而非 `new Date(iso)`，避開 UTC 解析
   const [y, m, d] = iso.split('-').map(Number)
   const wd = ['日', '一', '二', '三', '四', '五', '六'][new Date(y, m - 1, d).getDay()]
@@ -141,11 +155,11 @@ function dayLabel(iso) {
             class="item"
             @click="gotoItem(it)"
           >
-            <span class="cat-dot" :class="`tone-${CATEGORY_META[it.category]?.tone || 'leaf'}`" aria-hidden="true">
-              <span class="material-symbols-rounded">{{ CATEGORY_META[it.category]?.icon || 'info' }}</span>
+            <span class="cat-dot" :class="`tone-${CATEGORY_META[it.category || '']?.tone || 'leaf'}`" aria-hidden="true">
+              <span class="material-symbols-rounded">{{ CATEGORY_META[it.category || '']?.icon || 'info' }}</span>
             </span>
             <span class="content">
-              <span class="cat-label">{{ CATEGORY_META[it.category]?.label || it.category }}</span>
+              <span class="cat-label">{{ CATEGORY_META[it.category || '']?.label || it.category }}</span>
               <span class="title">{{ it.title }}</span>
               <span v-if="it.subtitle" class="subtitle">{{ it.subtitle }}</span>
             </span>

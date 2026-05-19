@@ -1,5 +1,5 @@
 
-<script setup>
+<script setup lang="ts">
 import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -17,16 +17,30 @@ import PortalSearchPalette from '@/components/portal/PortalSearchPalette.vue'
 import { usePortalSearch, installPortalSearchKeyboard } from '@/composables/usePortalSearch'
 import { Search } from '@element-plus/icons-vue'
 
+interface UserInfo {
+  name?: string
+  role?: string
+  [key: string]: unknown
+}
+
+interface EmployeeItem {
+  id: number | string
+  name?: string
+  employee_id?: string
+}
+
 const { openPalette } = usePortalSearch()
 installPortalSearchKeyboard()
 
 const route = useRoute()
 const router = useRouter()
 const activeIndex = computed(() => route.path)
-const userInfo = computed(() => getUserInfo() || {})
+const userInfo = computed<UserInfo>(() => (getUserInfo() || {}) as UserInfo)
 
 const showPasswordDialog = ref(false)
-const passwordForm = ref({ old_password: '', new_password: '', confirm_password: '' })
+const passwordForm = ref<{ old_password: string; new_password: string; confirm_password: string }>(
+  { old_password: '', new_password: '', confirm_password: '' }
+)
 const passwordLoading = ref(false)
 
 // Mobile sidebar
@@ -65,8 +79,8 @@ let lastCountsRefreshAt = 0
 const fetchUnreadCount = async () => {
   try {
     const res = await getUnreadCount()
-    unreadCount.value = res.data.unread_count || 0
-  } catch (e) {
+    unreadCount.value = (res.data as Record<string, unknown>)?.unread_count as number || 0
+  } catch {
     // Silent fail
   }
 }
@@ -74,8 +88,8 @@ const fetchUnreadCount = async () => {
 const fetchSwapPendingCount = async () => {
   try {
     const res = await getSwapPendingCount()
-    swapPendingCount.value = res.data.pending_count || 0
-  } catch (e) {
+    swapPendingCount.value = (res.data as Record<string, unknown>)?.pending_count as number || 0
+  } catch {
     // Silent fail
   }
 }
@@ -83,8 +97,8 @@ const fetchSwapPendingCount = async () => {
 const fetchSubstitutePendingCount = async () => {
   try {
     const res = await getSubstitutePendingCount()
-    substitutePendingCount.value = res.data.pending_count || 0
-  } catch (e) {
+    substitutePendingCount.value = (res.data as Record<string, unknown>)?.pending_count as number || 0
+  } catch {
     // Silent fail
   }
 }
@@ -92,8 +106,8 @@ const fetchSubstitutePendingCount = async () => {
 const fetchDismissalPendingCount = async () => {
   try {
     const res = await getPortalPendingCount()
-    dismissalPendingCount.value = res.data.count || 0
-  } catch (e) {
+    dismissalPendingCount.value = (res.data as Record<string, unknown>)?.count as number || 0
+  } catch {
     // Silent fail
   }
 }
@@ -101,8 +115,8 @@ const fetchDismissalPendingCount = async () => {
 const fetchMessagesUnreadCount = async () => {
   try {
     const res = await getMessagesUnreadCount()
-    messagesUnreadCount.value = res.data.unread_count || 0
-  } catch (e) {
+    messagesUnreadCount.value = (res.data as Record<string, unknown>)?.unread_count as number || 0
+  } catch {
     // 沒有 PARENT_MESSAGES_WRITE 權限會 403，靜默忽略
   }
 }
@@ -110,7 +124,7 @@ const fetchMessagesUnreadCount = async () => {
 const fetchHubPendingCount = async () => {
   try {
     const data = await getTodayHub()
-    const c = data.counts || {}
+    const c = (data as Record<string, unknown>)?.counts as Record<string, number> | undefined || {}
     hubPendingCount.value =
       (c.attendance_pending || 0) +
       (c.medications_pending || 0) +
@@ -122,7 +136,7 @@ const fetchHubPendingCount = async () => {
   }
 }
 
-const refreshPortalCounts = ({ force = false } = {}) => {
+const refreshPortalCounts = ({ force = false }: { force?: boolean } = {}) => {
   if (!force && Date.now() - lastCountsRefreshAt < COUNTS_TTL_MS) return
   lastCountsRefreshAt = Date.now()
   fetchUnreadCount()
@@ -146,7 +160,7 @@ const onVisibilityChange = () => {
 }
 
 // PWA 安裝提示
-const deferredPrompt = ref(null)
+const deferredPrompt = ref<Event | null>(null)
 const showInstallBanner = ref(false)
 
 window.addEventListener('beforeinstallprompt', (e) => {
@@ -157,8 +171,10 @@ window.addEventListener('beforeinstallprompt', (e) => {
 
 const installPWA = async () => {
   if (!deferredPrompt.value) return
-  deferredPrompt.value.prompt()
-  await deferredPrompt.value.userChoice
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const prompt = deferredPrompt.value as any
+  prompt.prompt()
+  await prompt.userChoice
   deferredPrompt.value = null
   showInstallBanner.value = false
 }
@@ -226,28 +242,29 @@ const showSwitcher = computed(() =>
 // 返回後台：自身是 admin/hr/supervisor，或處於冒充狀態
 const showBackToAdmin = computed(() => {
   const role = userInfo.value.role
-  return ['admin', 'hr', 'supervisor'].includes(role) || isImpersonating.value
+  return ['admin', 'hr', 'supervisor'].includes(role as string) || isImpersonating.value
 })
 
-const employeeList = ref([])
+const employeeList = ref<EmployeeItem[]>([])
 
 const fetchEmployees = async () => {
   if (userInfo.value.role !== 'admin' && !isImpersonating.value) return
   // 冒充狀態下後端用 admin_token Cookie 驗證；axios instance 預設帶 cookies。
   try {
     const res = await getEmployees()
-    employeeList.value = res.data
+    employeeList.value = res.data as EmployeeItem[]
   } catch {
     // silent
   }
 }
 
-const handleSwitchUser = async (employeeId) => {
+const handleSwitchUser = async (employeeId: number | string) => {
   try {
-    const res = await impersonate(employeeId)
-    setUserInfo(res.data.user)
+    const res = await impersonate(Number(employeeId))
+    const user = (res.data as Record<string, unknown>).user as UserInfo
+    setUserInfo(user)
     isImpersonating.value = true
-    ElMessage.success(`已切換為：${res.data.user.name}`)
+    ElMessage.success(`已切換為：${user.name}`)
     window.location.reload()
   } catch (error) {
     ElMessage.error(apiError(error, '切換失敗'))
@@ -262,8 +279,9 @@ const goBackToAdmin = async () => {
   }
   try {
     const res = await endImpersonate()
+    const user = (res.data as Record<string, unknown>).user as UserInfo
     // 後端已清除 admin_token Cookie 並將 access_token 還原為管理員
-    setUserInfo(res.data.user)
+    setUserInfo(user)
     isImpersonating.value = false
     router.push('/')
   } catch (error) {
@@ -274,7 +292,7 @@ const goBackToAdmin = async () => {
   }
 }
 
-const handleCommand = (cmd) => {
+const handleCommand = (cmd: string) => {
   if (cmd === 'logout') {
     isImpersonating.value = false
     clearAuth()

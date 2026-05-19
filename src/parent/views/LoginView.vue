@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import {
@@ -14,12 +14,14 @@ import BrandMark from '@/components/brand/BrandMark.vue'
 const router = useRouter()
 const authStore = useParentAuthStore()
 
-const status = ref('init') // init / loading / error
+const status = ref<'init' | 'loading' | 'error'>('init')
 const errorMessage = ref('')
 
-function isIdTokenExpiredError(err) {
-  const detail = err?.response?.data?.detail || ''
-  return err?.response?.status === 401 && /id_token|LINE/i.test(detail)
+function isIdTokenExpiredError(err: unknown) {
+  const e = err as Record<string, unknown> | null | undefined
+  const resp = e?.response as Record<string, unknown> | undefined
+  const detail = (resp?.data as Record<string, unknown>)?.detail || ''
+  return resp?.status === 401 && /id_token|LINE/i.test(String(detail))
 }
 
 async function startLogin({ forceFresh = false } = {}) {
@@ -27,10 +29,10 @@ async function startLogin({ forceFresh = false } = {}) {
   errorMessage.value = ''
   try {
     await initLiff()
-  } catch (err) {
+  } catch (err: unknown) {
     status.value = 'error'
     errorMessage.value =
-      err?.message || 'LIFF 初始化失敗，請確認 VITE_LIFF_ID 設定'
+      (err instanceof Error ? err.message : String(err)) || 'LIFF 初始化失敗，請確認 VITE_LIFF_ID 設定'
     return
   }
 
@@ -65,7 +67,7 @@ async function startLogin({ forceFresh = false } = {}) {
     } else {
       throw new Error('伺服器回應未預期狀態')
     }
-  } catch (err) {
+  } catch (err: unknown) {
     // id_token 過期 → 自動嘗試一次完整 OAuth 重認證
     // helper 內 sessionStorage marker 確保同 callback window 內只重 login 一次
     if (
@@ -74,9 +76,10 @@ async function startLogin({ forceFresh = false } = {}) {
     ) {
       return
     }
+    const e = err as Record<string, unknown>
     status.value = 'error'
     errorMessage.value =
-      err?.displayMessage || err?.message || '登入失敗，請稍後再試'
+      String(e?.displayMessage || e?.message || '登入失敗，請稍後再試')
   }
 }
 

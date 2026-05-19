@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { logout } from '../api/auth'
@@ -16,7 +16,7 @@ const router = useRouter()
 const authStore = useParentAuthStore()
 const childrenStore = useChildrenStore()
 
-const me = ref(null)
+const me = ref<Record<string, unknown> | null>(null)
 const showLogoutConfirm = ref(false)
 const loggingOut = ref(false)
 
@@ -34,12 +34,14 @@ const fees = computed(() => summaryData.value?.summary?.fees || null)
 const outstanding = computed(() => fees.value?.outstanding || 0)
 const overdue = computed(() => fees.value?.overdue || 0)
 
+const childrenTyped = computed(() => (childrenStore.items || []) as { student_id: number; name?: string; classroom_name?: string }[])
+
 const childrenLabel = computed(() => {
-  const names = (childrenStore.items || []).map(c => c.name)
+  const names = childrenTyped.value.map(c => c.name || '')
   return names.length ? names.join('、') : '尚未綁定'
 })
-const avatarInitial = computed(() => (me.value?.name || '家').charAt(0))
-const userName = computed(() => me.value?.name || '家長')
+const avatarInitial = computed(() => (String(me.value?.name || '家')).charAt(0))
+const userName = computed(() => String(me.value?.name || '家長'))
 
 function askLogout() { showLogoutConfirm.value = true }
 
@@ -55,7 +57,7 @@ async function doLogout() {
 }
 
 onMounted(async () => {
-  me.value = authStore.user
+  me.value = authStore.user as Record<string, unknown> | null
   await childrenStore.load()
 })
 
@@ -77,7 +79,7 @@ const PREFS = [
 
     <FeeSummaryCard :outstanding="outstanding" :overdue="overdue" />
 
-    <ChildrenList :children="childrenStore.items || []" />
+    <ChildrenList :children="childrenTyped" />
 
     <div class="pt-eyebrow-row">
       <p class="pt-eyebrow">偏好設定</p>

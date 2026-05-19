@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, ref, useId } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useChildrenStore } from '../stores/children'
@@ -11,6 +11,11 @@ import { todayISO } from '@/utils/format'
 import ParentIcon from '../components/ParentIcon.vue'
 import AppModal from '../components/AppModal.vue'
 
+interface AllergyWarning {
+  code?: string
+  allergens?: { id: number | string; allergen?: string; severity?: string; reaction_symptom?: string }[]
+}
+
 const route = useRoute()
 const router = useRouter()
 const childrenStore = useChildrenStore()
@@ -19,10 +24,17 @@ const allergyTitleId = useId()
 const allergyDescId = useId()
 
 const submitting = ref(false)
-const allergyWarning = ref(null) // { allergens: [...] } 出現時顯示確認彈框
-const photoFiles = ref([]) // File[]
+const allergyWarning = ref<AllergyWarning | null>(null)
+const photoFiles = ref<File[]>([])
 
-const form = ref({
+const form = ref<{
+  student_id: number | null
+  order_date: string
+  medication_name: string
+  dose: string
+  time_slots: string[]
+  note: string
+}>({
   student_id: null,
   order_date: todayISO(),
   medication_name: '',
@@ -31,11 +43,11 @@ const form = ref({
   note: '',
 })
 
-const studentOptions = computed(() => childrenStore.items || [])
+const studentOptions = computed(() => (childrenStore.items || []) as { student_id: number; name?: string }[])
 
 const allergyModalOpen = computed({
   get: () => allergyWarning.value !== null,
-  set: (v) => {
+  set: (v: boolean) => {
     if (!v) allergyWarning.value = null
   },
 })
@@ -52,15 +64,16 @@ function addSlot() {
   form.value.time_slots.push('12:00')
 }
 
-function removeSlot(i) {
+function removeSlot(i: number) {
   if (form.value.time_slots.length === 1) return
   form.value.time_slots.splice(i, 1)
 }
 
-function onPick(e) {
-  const incoming = Array.from(e.target.files || [])
+function onPick(e: Event) {
+  const input = e.target as HTMLInputElement
+  const incoming = Array.from(input.files || [])
   // 簡單前置檢查：max 3、size < 10MB
-  const valid = []
+  const valid: File[] = []
   for (const f of incoming) {
     if (valid.length + photoFiles.value.length >= 3) break
     if (f.size > 10 * 1024 * 1024) {
@@ -70,10 +83,10 @@ function onPick(e) {
     valid.push(f)
   }
   photoFiles.value = [...photoFiles.value, ...valid]
-  e.target.value = ''
+  input.value = ''
 }
 
-function removePhoto(i) {
+function removePhoto(i: number) {
   photoFiles.value.splice(i, 1)
 }
 
@@ -93,22 +106,26 @@ async function submit(forceAcknowledge = false) {
       acknowledge_allergy_warning: forceAcknowledge,
     }
     const { data } = await createMedicationOrder(payload)
+    const createdId = Number((data as { id: number | string }).id)
     // 連續上傳照片
     for (const f of photoFiles.value) {
       try {
-        await uploadMedicationPhoto(data.id, f)
+        await uploadMedicationPhoto(createdId, f)
       } catch (err) {
-        toast.warn(`${f.name} 上傳失敗：${err?.displayMessage || ''}`)
+        const e = err as Record<string, unknown>
+        toast.warn(`${f.name} 上傳失敗：${String(e?.displayMessage || '')}`)
       }
     }
     toast.success('已送出')
-    router.replace({ path: `/medications/${data.id}` })
+    router.replace({ path: `/medications/${createdId}` })
   } catch (err) {
-    const detail = err?.response?.data?.detail
+    const e = err as Record<string, unknown>
+    const errData = (e?.response as Record<string, unknown>)?.data as Record<string, unknown> | undefined
+    const detail = errData?.detail as AllergyWarning | undefined
     if (detail && detail.code === 'ALLERGY_WARNING') {
       allergyWarning.value = detail
     } else {
-      toast.error(err?.displayMessage || '送出失敗')
+      toast.error(String(e?.displayMessage || '送出失敗'))
     }
   } finally {
     submitting.value = false

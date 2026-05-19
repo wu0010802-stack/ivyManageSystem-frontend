@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { getHomeSummary } from '../api/profile'
@@ -22,7 +22,8 @@ const authStore = useParentAuthStore()
 const { selectedId: selectedStudentId, ensureSelected } = useChildSelection()
 
 const { status: todayStatus, refresh: refreshToday } = useTodayStatusCache()
-const todayChildren = computed(() => todayStatus.value?.children || [])
+const todayStatusData = computed(() => todayStatus.value as { children?: Record<string, unknown>[] } | null)
+const todayChildren = computed(() => todayStatusData.value?.children || [])
 
 const {
   data: summaryData,
@@ -45,11 +46,11 @@ const summary = computed(() => summaryData.value?.summary || null)
 const showPushCta = computed(() => me.value && !me.value.can_push)
 
 const selectedChild = computed(() => {
-  const list = children.value || []
+  const list: { student_id: number; name?: string; classroom_name?: string }[] = children.value || []
   return list.find((c) => c.student_id === selectedStudentId.value) || list[0] || null
 })
 
-const contactBookEntry = ref(null)
+const contactBookEntry = ref<Record<string, unknown> | null>(null)
 const contactBookLoading = ref(false)
 
 async function loadContactBook(force = false) {
@@ -101,10 +102,12 @@ function isOffDay() {
   return d === 0 || d === 6
 }
 
-function childStatusLabel(c) {
+function childStatusLabel(c: Record<string, unknown> | null | undefined) {
   if (!c) return isOffDay() ? '今天放假' : '尚未到校'
-  if (c.dismissal?.status === 'completed') return '已離園'
-  if (c.attendance) return c.attendance.status || '在園中'
+  const dismissal = c.dismissal as { status?: string } | null | undefined
+  if (dismissal?.status === 'completed') return '已離園'
+  const attendance = c.attendance as { status?: string } | null | undefined
+  if (c.attendance) return attendance?.status || '在園中'
   if (c.leave) return '請假'
   return isOffDay() ? '今天放假' : '尚未到校'
 }
@@ -148,7 +151,7 @@ function refresh() {
   loadContactBook(true)
 }
 
-function go(path) {
+function go(path: string) {
   router.push(path)
 }
 </script>

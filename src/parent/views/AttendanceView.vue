@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import ChildSelector from '../components/ChildSelector.vue'
 import { useChildrenStore } from '../stores/children'
@@ -24,7 +24,7 @@ const year = ref(initialNow.getFullYear())
 const month = ref(initialNow.getMonth() + 1)
 const todayStr = ref(localDateISO(initialNow))
 
-let todayInterval = null
+let todayInterval: ReturnType<typeof setInterval> | null = null
 onMounted(() => {
   todayInterval = setInterval(() => {
     const next = localDateISO(new Date())
@@ -38,12 +38,15 @@ onBeforeUnmount(() => {
 // 切換小孩 / 月份時 abort 舊 request（P1-19）。
 const { data: attRes, error: attError, pending: loading, refresh: refreshAtt } =
   useAbortableFetch((config) =>
-    getMonthlyAttendance(selectedId.value, year.value, month.value, config),
+    getMonthlyAttendance(selectedId.value!, year.value, month.value, config),
   )
 const data = computed(() => attRes.value?.data || null)
 const dayMap = computed(() => {
-  const m = new Map()
-  for (const item of data.value?.items || []) m.set(item.date, item)
+  const m = new Map<string, { status?: string; remark?: string }>()
+  for (const item of data.value?.items || []) {
+    const it = item as { date: string; status?: string; remark?: string }
+    m.set(it.date, it)
+  }
   return m
 })
 
@@ -69,8 +72,8 @@ const calendarDays = computed(() => {
   return cells
 })
 
-const selected = ref(null)
-function selectCell(cell) {
+const selected = ref<{ date: string; day: number; info: { status?: string; remark?: string } | null } | null>(null)
+function selectCell(cell: typeof selected.value) {
   if (!cell) return
   selected.value = cell
 }
@@ -84,8 +87,9 @@ async function fetchData() {
   }
 }
 
-watch(attError, (err) => {
-  if (err) toast.error(err?.displayMessage || '載入出席紀錄失敗')
+watch(attError, (err: unknown) => {
+  const e = err as Record<string, unknown> | null
+  if (e) toast.error(String(e?.displayMessage || '載入出席紀錄失敗'))
 })
 
 function prevMonth() {
@@ -103,7 +107,7 @@ function goToday() {
 }
 
 // status → 色系 mapping（cream / leaf / coral / sun / sky）
-const STATUS_TONE = {
+const STATUS_TONE: Record<string, { tone: string; label: string }> = {
   出席:  { tone: 'success', label: '出席' },
   缺席:  { tone: 'danger',  label: '缺席' },
   病假:  { tone: 'info',    label: '病假' },
@@ -111,9 +115,10 @@ const STATUS_TONE = {
   遲到:  { tone: 'warn',    label: '遲到' },
 }
 
-function cellClass(cell) {
+function cellClass(cell: typeof selected.value) {
   if (!cell) return ''
-  const tone = STATUS_TONE[cell.info?.status]?.tone
+  const status = cell.info?.status
+  const tone = status ? STATUS_TONE[status]?.tone : undefined
   return [
     cell.info ? 'has' : '',
     tone ? `tone-${tone}` : '',
@@ -124,7 +129,7 @@ function cellClass(cell) {
 
 onMounted(async () => {
   await childrenStore.load()
-  ensureSelected(childrenStore.items)
+  ensureSelected(childrenStore.items as { student_id: number }[])
   fetchData()
 })
 
@@ -199,7 +204,7 @@ async function pullRefresh() { await fetchData() }
       <div class="detail-row">
         <span class="material-symbols-rounded" aria-hidden="true">how_to_reg</span>
         <span class="detail-label">狀態</span>
-        <span class="pt-pill" :class="`pt-pill-${STATUS_TONE[selected.info.status]?.tone || 'info'}`">
+        <span class="pt-pill" :class="`pt-pill-${STATUS_TONE[selected.info.status ?? '']?.tone || 'info'}`">
           {{ selected.info.status }}
         </span>
       </div>

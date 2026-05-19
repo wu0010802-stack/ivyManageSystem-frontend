@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import ChildSelector from '../components/ChildSelector.vue'
 import FeeHero from '../components/fees/FeeHero.vue'
@@ -15,44 +15,70 @@ import { toast } from '../utils/toast'
 import PullToRefresh from '../components/PullToRefresh.vue'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 
+interface FeeRecord {
+  id: number
+  status: string
+  due_date?: string
+  fee_item_name: string
+  period?: string
+  student_name?: string
+  amount_due: number
+  amount_paid: number
+  outstanding: number
+  [key: string]: unknown
+}
+
+interface Payment {
+  payment_date?: string
+  payment_method?: string
+  amount?: number
+  receipt_no?: string
+}
+
+interface FeeDetail {
+  record: FeeRecord
+  payments: Payment[]
+  refunds: unknown[]
+}
+
 const childrenStore = useChildrenStore()
 const { selectedId, ensureSelected } = useChildSelection()
 
-const summary = ref(null)
-const records = ref([])
+const summary = ref<Record<string, unknown> | null>(null)
+const records = ref<FeeRecord[]>([])
 const loading = ref(false)
-const detail = ref(null) // { record, payments, refunds }
+const detail = ref<FeeDetail | null>(null)
 const detailLoading = ref(false)
 
 const detailOpen = computed({
   get: () => detail.value !== null,
-  set: (v) => {
+  set: (v: boolean) => {
     if (!v) detail.value = null
   },
 })
 
-const STATUS_LABEL = {
+const STATUS_LABEL: Record<string, string> = {
   unpaid: '未繳',
   partial: '部分繳費',
   paid: '已繳清',
 }
-const STATUS_COLOR = {
+const STATUS_COLOR: Record<string, { bg: string; color: string }> = {
   unpaid: { bg: 'var(--color-danger-soft)', color: 'var(--m3-error, var(--color-danger))' },
   partial: { bg: 'var(--color-warning-soft)', color: 'var(--m3-tertiary, var(--pt-warning-text))' },
   paid: { bg: 'var(--brand-primary-soft)', color: 'var(--m3-primary, var(--pt-success-text))' },
 }
 
 const childTotals = computed(() => {
-  const map = new Map()
-  for (const item of summary.value?.by_student || []) map.set(item.student_id, item)
+  const map = new Map<number, unknown>()
+  for (const item of (summary.value?.by_student as { student_id: number }[]) || []) map.set(item.student_id, item)
   return map
 })
 
-const myTotals = computed(() => childTotals.value.get(selectedId.value) || null)
+const myTotals = computed(() => (childTotals.value.get(selectedId.value!) as Record<string, unknown> | undefined) || null)
 
 // hero 用：以 summary.totals 與本學生未繳紀錄拼出 hero props
-const unpaidTotal = computed(() => Number(summary.value?.totals?.outstanding ?? 0))
-const overdueAmount = computed(() => Number(summary.value?.totals?.overdue ?? 0))
+const unpaidTotal = computed(() => Number((summary.value?.totals as Record<string, unknown>)?.outstanding ?? 0))
+const overdueAmount = computed(() => Number((summary.value?.totals as Record<string, unknown>)?.overdue ?? 0))
 const unpaidRecords = computed(() =>
   records.value.filter((r) => r.status === 'unpaid' || r.status === 'partial'),
 )
@@ -77,9 +103,10 @@ function onJumpUnpaid() {
 async function fetchSummary() {
   try {
     const { data } = await getFeesSummary()
-    summary.value = data
+    summary.value = data as Record<string, unknown>
   } catch (err) {
-    toast.error(err?.displayMessage || '載入失敗')
+    const e = err as Record<string, unknown>
+    toast.error(String(e?.displayMessage || '載入失敗'))
   }
 }
 
@@ -88,31 +115,33 @@ async function fetchRecords() {
   loading.value = true
   try {
     const { data } = await listFeeRecords(selectedId.value)
-    records.value = data?.items || []
+    records.value = (data as { items?: FeeRecord[] })?.items || []
   } catch (err) {
-    toast.error(err?.displayMessage || '載入失敗')
+    const e = err as Record<string, unknown>
+    toast.error(String(e?.displayMessage || '載入失敗'))
   } finally {
     loading.value = false
   }
 }
 
-async function openDetail(record) {
+async function openDetail(record: FeeRecord) {
   detail.value = { record, payments: [], refunds: [] }
   detailLoading.value = true
   try {
     const { data } = await getFeePayments(record.id)
-    detail.value.payments = data?.payments || []
-    detail.value.refunds = data?.refunds || []
+    detail.value!.payments = (data as { payments?: Payment[] })?.payments || []
+    detail.value!.refunds = (data as { refunds?: unknown[] })?.refunds || []
   } catch (err) {
-    toast.error(err?.displayMessage || '載入失敗')
+    const e = err as Record<string, unknown>
+    toast.error(String(e?.displayMessage || '載入失敗'))
   } finally {
     detailLoading.value = false
   }
 }
 
-const formatNum = (n) => (n ?? 0).toLocaleString()
+const formatNum = (n: number | null | undefined) => (n ?? 0).toLocaleString()
 
-async function copyText(text) {
+async function copyText(text: string | null | undefined) {
   if (!text) return
   try {
     if (navigator.clipboard) {
@@ -137,7 +166,7 @@ async function copyText(text) {
   }
 }
 
-function buildReceiptText(record, payments) {
+function buildReceiptText(record: FeeRecord, payments: Payment[]) {
   const lines = [
     `${record.fee_item_name}（${record.period}）`,
     `學生：${record.student_name || '—'}`,
@@ -156,16 +185,16 @@ function buildReceiptText(record, payments) {
   return lines.join('\n')
 }
 
-function onCopyInfo(record, payments) {
+function onCopyInfo(record: FeeRecord, payments: Payment[]) {
   copyText(buildReceiptText(record, payments))
 }
-function onCopyNo(no) {
+function onCopyNo(no: string | null | undefined) {
   copyText(no)
 }
 
 onMounted(async () => {
   await childrenStore.load()
-  ensureSelected(childrenStore.items)
+  ensureSelected(childrenStore.items as { student_id: number }[])
   fetchSummary()
   fetchRecords()
 })
@@ -193,8 +222,8 @@ async function pullRefresh() {
     <div v-if="myTotals" class="single-totals">
       <span class="material-symbols-rounded" aria-hidden="true">account_balance_wallet</span>
       <span class="totals-text">
-        此學生：未繳 <strong>${{ formatNum(myTotals.outstanding) }}</strong>
-        ・已繳 ${{ formatNum(myTotals.amount_paid) }}
+        此學生：未繳 <strong>${{ formatNum(myTotals.outstanding as number) }}</strong>
+        ・已繳 ${{ formatNum(myTotals.amount_paid as number) }}
       </span>
     </div>
 
@@ -212,16 +241,16 @@ async function pullRefresh() {
       :records="records"
       :status-label="(s) => STATUS_LABEL[s] || s"
       :status-color="(s) => STATUS_COLOR[s] || null"
-      @record-click="openDetail"
+      @record-click="(r) => { openDetail(r as FeeRecord) }"
     />
 
     <FeeReceiptSheet
       v-model="detailOpen"
       :record="detail?.record"
       :payments="detail?.payments || []"
-      :refunds="detail?.refunds || []"
+      :refunds="(detail?.refunds || []) as never[]"
       :loading="detailLoading"
-      @copy-info="onCopyInfo"
+      @copy-info="(r, p) => onCopyInfo(r as FeeRecord, p as Payment[])"
       @copy-no="onCopyNo"
     />
   </PullToRefresh>

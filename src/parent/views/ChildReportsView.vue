@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { fetchChildReports, childReportDownloadUrl } from '../api/childReports'
@@ -7,10 +7,18 @@ import SkeletonBlock from '../components/SkeletonBlock.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import KawaiiStar from '@/components/brand/KawaiiStar.vue'
 
+interface Report {
+  id: number | string
+  period_label?: string
+  period_start?: string
+  period_end?: string
+  generated_at?: string
+}
+
 const route = useRoute()
 const studentId = computed(() => Number(route.params.studentId))
 
-const items = ref([])
+const items = ref<Report[]>([])
 const loading = ref(false)
 
 async function load() {
@@ -20,17 +28,18 @@ async function load() {
     const r = await fetchChildReports(studentId.value)
     items.value = r.data.items || []
   } catch (e) {
-    toast.error(e?.displayMessage || '載入失敗')
+    const err = e as Record<string, unknown>
+    toast.error(String(err?.displayMessage || '載入失敗'))
   } finally {
     loading.value = false
   }
 }
 
-function onDownload(report) {
-  window.open(childReportDownloadUrl(studentId.value, report.id), '_blank')
+function onDownload(report: Report) {
+  window.open(childReportDownloadUrl(studentId.value, Number(report.id)), '_blank')
 }
 
-function formatDate(s) {
+function formatDate(s: string | null | undefined) {
   if (!s) return ''
   try { return new Date(s).toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric' }) }
   catch { return s }

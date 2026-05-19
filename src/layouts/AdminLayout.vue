@@ -28,7 +28,7 @@
   </el-container>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
 import AdminSidebar from '../components/layout/AdminSidebar.vue'
@@ -58,7 +58,7 @@ const closeSidebar = () => {
 // 初次 mount 短暫渲染，這時 route.path 還是 START_LOCATION ('/')。為避免
 // 公開頁/教師端/登入頁打到 admin-only 的 /api/notifications/summary，
 // 這裡再守一道 path-based guard。
-function isAdminContext(path) {
+function isAdminContext(path: string): boolean {
   return (
     !path.startsWith('/public') &&
     !path.startsWith('/portal') &&
@@ -77,7 +77,7 @@ onUnmounted(() => {
   window.removeEventListener('resize', checkMobile)
 })
 
-watch(() => route.path, (path) => {
+watch(() => route.path, (path: string) => {
   if (isLoggedIn() && isAdminContext(path)) notificationStore.fetchSummary()
 })
 </script>

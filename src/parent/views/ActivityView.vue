@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useChildrenStore } from '../stores/children'
 import { useChildSelection } from '../composables/useChildSelection'
@@ -17,27 +17,42 @@ import { toast } from '../utils/toast'
 import ParentIcon from '../components/ParentIcon.vue'
 import PullToRefresh from '../components/PullToRefresh.vue'
 
+interface RegCourse { course_id: number; course_name: string; status: string; price?: number; price_snapshot?: unknown }
+interface Registration { id: number; student_id: number; student_name?: string; school_year: number; semester: number; is_paid: boolean; courses: RegCourse[] }
+interface Course { id: number; name: string; price?: number; school_year: number; semester: number; capacity: number; enrolled_count: number; is_full: boolean; allow_waitlist: boolean; sessions?: number; description?: string; price_snapshot?: unknown }
+
 const childrenStore = useChildrenStore()
 const { selectedId, ensureSelected } = useChildSelection()
 const tab = ref('my') // my / new
 
-const courses = ref([])
-const myRegs = ref([])
+const courses = ref<Course[]>([])
+const myRegs = ref<Registration[]>([])
 const loading = ref(false)
 const submitting = ref(false)
 const showRegister = ref(false)
 
-// 報名表單
-const form = ref({
-  student_id: null,
+// 報名表單（符合 ActivityRegisterSheet FormData interface）
+const form = ref<{
+  student_id?: number
+  school_year?: number | null
+  semester?: string | null
+  course_ids?: number[]
+  [key: string]: unknown
+}>({
+  student_id: undefined,
   school_year: null,
   semester: null,
   course_ids: [],
 })
 
+const childrenTyped = computed(() => (childrenStore.items || []) as { student_id: number; name: string }[])
+
 const studentNameMap = computed(() => {
-  const m = new Map()
-  for (const c of childrenStore.items || []) m.set(c.student_id, c.name)
+  const m = new Map<number, string>()
+  for (const c of childrenStore.items || []) {
+    const child = c as { student_id: number; name: string }
+    m.set(child.student_id, child.name)
+  }
   return m
 })
 
@@ -66,7 +81,7 @@ const unpaidActivityFee = computed(() =>
     .filter((r) => !r.is_paid)
     .reduce((s, r) => {
       const total = (r.courses || []).reduce(
-        (a, c) => a + Number(c.price_snapshot ?? c.price ?? 0),
+        (a, c) => a + Number((c as unknown as { price_snapshot?: unknown; price?: number }).price_snapshot ?? c.price ?? 0),
         0,
       )
       return s + total
@@ -81,8 +96,9 @@ async function fetchMy() {
   try {
     const { data } = await myRegistrations()
     myRegs.value = data?.items || []
-  } catch (err) {
-    toast.error(err?.displayMessage || '載入失敗')
+  } catch (err: unknown) {
+    const e = err as Record<string, unknown>
+    toast.error(String(e?.displayMessage || '載入失敗'))
   } finally {
     loading.value = false
   }
@@ -93,8 +109,9 @@ async function fetchCourses() {
   try {
     const { data } = await listCourses()
     courses.value = data?.items || []
-  } catch (err) {
-    toast.error(err?.displayMessage || '載入失敗')
+  } catch (err: unknown) {
+    const e = err as Record<string, unknown>
+    toast.error(String(e?.displayMessage || '載入失敗'))
   } finally {
     loading.value = false
   }
@@ -112,9 +129,9 @@ function openRegister() {
   // 預設帶入第一門課的學期
   const c0 = courses.value[0]
   form.value = {
-    student_id: selectedId.value || childrenStore.items[0].student_id,
+    student_id: selectedId.value ?? (childrenStore.items[0] as { student_id: number }).student_id,
     school_year: c0.school_year,
-    semester: c0.semester,
+    semester: String(c0.semester),
     course_ids: [],
   }
   showRegister.value = true
@@ -124,7 +141,7 @@ const filteredCourses = computed(() =>
   courses.value.filter(
     (c) =>
       c.school_year === form.value.school_year &&
-      c.semester === form.value.semester,
+      String(c.semester) === form.value.semester,
   ),
 )
 
@@ -133,7 +150,7 @@ async function submitRegister() {
     toast.warn('請選擇學生')
     return
   }
-  if (!form.value.course_ids.length) {
+  if (!(form.value.course_ids?.length)) {
     toast.warn('請至少選一門課')
     return
   }
@@ -143,30 +160,32 @@ async function submitRegister() {
       student_id: Number(form.value.student_id),
       school_year: form.value.school_year,
       semester: form.value.semester,
-      course_ids: form.value.course_ids.map(Number),
+      course_ids: (form.value.course_ids ?? []).map(Number),
       supply_ids: [],
     })
     toast.success('報名成功')
     showRegister.value = false
     fetchMy()
-  } catch (err) {
-    toast.error(err?.displayMessage || '報名失敗')
+  } catch (err: unknown) {
+    const e = err as Record<string, unknown>
+    toast.error(String(e?.displayMessage || '報名失敗'))
   } finally {
     submitting.value = false
   }
 }
 
-async function onConfirmPromotion(reg, rc) {
+async function onConfirmPromotion(reg: Registration, rc: RegCourse) {
   try {
     await confirmPromotion(reg.id, rc.course_id)
     toast.success('已確認轉正式')
     fetchMy()
-  } catch (err) {
-    toast.error(err?.displayMessage || '確認失敗')
+  } catch (err: unknown) {
+    const e = err as Record<string, unknown>
+    toast.error(String(e?.displayMessage || '確認失敗'))
   }
 }
 
-function onScrollSection(key) {
+function onScrollSection(key: string) {
   if (key === 'active') {
     tab.value = 'my'
     requestAnimationFrame(() =>
@@ -192,7 +211,7 @@ function onScrollSection(key) {
 
 onMounted(async () => {
   await childrenStore.load()
-  ensureSelected(childrenStore.items)
+  ensureSelected(childrenStore.items as { student_id: number }[])
   fetchMy()
   fetchCourses()
 })
@@ -254,7 +273,7 @@ async function pullRefresh() {
     <ActivityRegisterSheet
       v-model="showRegister"
       v-model:form-data="form"
-      :children="childrenStore.items || []"
+      :children="childrenTyped"
       :available-courses="filteredCourses"
       :submitting="submitting"
       @submit="submitRegister"
