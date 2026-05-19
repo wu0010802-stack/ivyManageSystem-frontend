@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useParentAuthStore } from '../stores/parentAuth'
@@ -9,13 +9,22 @@ import M3NavigationBar from '../components/m3/M3NavigationBar.vue'
 import ConnectionBanner from '../components/ConnectionBanner.vue'
 import BrandMark from '@/components/brand/BrandMark.vue'
 
+interface TabItem {
+  key: string
+  label: string
+  icon: string
+  activeIcon: string
+  path: string
+  badge?: number
+}
+
 const route = useRoute()
 const router = useRouter()
 const authStore = useParentAuthStore()
 
 const isPublic = computed(() => route.meta?.public === true)
 const hideTabBar = computed(() => route.meta?.hideTabBar === true)
-const currentTab = computed(() => route.meta?.tab || '')
+const currentTab = computed(() => (route.meta?.tab as string) || '')
 
 /**
  * 點再次點 active tab → scroll-to-top。
@@ -23,7 +32,7 @@ const currentTab = computed(() => route.meta?.tab || '')
  * （/messages/123，meta.tab 仍為 'messages'）點 messages tab，仍應
  * 走 router 正常導回 /messages（不阻止預設行為）。
  */
-function onTabSelect(key, item) {
+function onTabSelect(key: string, item: { key: string; icon: string; label: string; badge?: number; path?: string }) {
   if (route.path === item.path) {
     const reduce =
       typeof window !== 'undefined' &&
@@ -32,13 +41,13 @@ function onTabSelect(key, item) {
     window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' })
     return
   }
-  router.push(item.path)
+  if (item.path) router.push(item.path)
 }
 
 const unread = ref(0)
 const unreadMessages = ref(0)
 
-const TABS = computed(() => [
+const TABS = computed<TabItem[]>(() => [
   {
     key: 'home',
     label: '首頁',
@@ -78,8 +87,8 @@ async function refreshUnread() {
       getUnreadCount(),
       getMessageUnreadCount(),
     ])
-    unread.value = a?.unread_count || 0
-    unreadMessages.value = m?.unread_count || 0
+    unread.value = (a as Record<string, unknown>)?.unread_count as number || 0
+    unreadMessages.value = (m as Record<string, unknown>)?.unread_count as number || 0
   } catch {
     /* ignore */
   }
@@ -88,7 +97,7 @@ async function refreshUnread() {
 onMounted(refreshUnread)
 watch(() => route.fullPath, refreshUnread)
 
-const headerTitle = computed(() => route.meta?.title || '常春藤家長')
+const headerTitle = computed(() => route.meta?.title as string || '常春藤家長')
 const headerShowBack = computed(() => route.meta?.showBack === true)
 
 function onBack() {
