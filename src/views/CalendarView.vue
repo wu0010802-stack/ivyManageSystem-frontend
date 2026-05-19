@@ -308,6 +308,12 @@ const onEventClick = (arg: EventClickArg) => {
   if (link) router.push(link)
 }
 
+const fmtHHMM = (d: Date) => {
+  const h = String(d.getHours()).padStart(2, '0')
+  const m = String(d.getMinutes()).padStart(2, '0')
+  return `${h}:${m}`
+}
+
 const onEventDrop = async (info: EventDropArg) => {
   const layer = info.event.extendedProps.layer as CalendarLayer | undefined
   if (layer !== 'event') {
@@ -341,8 +347,20 @@ const onEventDrop = async (info: EventDropArg) => {
     if (newEnd === newStart) newEnd = null
   }
 
+  // 在 timeGridWeek/Day 拖時段事件時，同步送 start_time/end_time，
+  // 否則 BE 不會改 time 欄位，前端 refetch 後事件會跳回原時段。
+  const payload: Record<string, unknown> = {
+    event_date: newStart,
+    end_date: newEnd,
+  }
+  if (!info.event.allDay && info.event.start) {
+    payload.is_all_day = false
+    payload.start_time = fmtHHMM(info.event.start)
+    payload.end_time = info.event.end ? fmtHHMM(info.event.end) : null
+  }
+
   try {
-    await updateEvent(pk, { event_date: newStart, end_date: newEnd })
+    await updateEvent(pk, payload)
     ElMessage.success('已更新事件日期')
     refreshAll()
   } catch (error) {
@@ -377,13 +395,10 @@ const calendarOptions = computed<CalendarOptions>(() => ({
   eventDrop: onEventDrop,
 }))
 
-// 依賴 enabledLayers 來變更—讀一次以建立依賴鏈（CalendarToolbar 雙向綁定）
-const _layerDep = computed(() => enabledLayers.value)
-void _layerDep
-
-onMounted(() => {
-  // 初始 viewRange 由 FullCalendar 的 datesSet 觸發；無需在這先 fetch
-})
+// 初始 viewRange 由 FullCalendar 的 datesSet 觸發；無需在這先 fetch
+// fullCalendarEvents → filteredItems → enabledLayers 是純 computed chain，
+// 重新計算會自動串到 FC events option。
+onMounted(() => {})
 </script>
 
 <template>
