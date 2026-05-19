@@ -89,6 +89,46 @@ describe('EmployeeView', () => {
     classroomStore.classrooms = []
   })
 
+  it('onMounted honors store TTL by calling fetchEmployees(false)', async () => {
+    mount(EmployeeView, {
+      global: {
+        directives: { loading: () => {} },
+        stubs: {
+          EmptyState: true,
+          TableSkeleton: true,
+          Plus: true,
+          'el-input': { template: '<input />' },
+          'el-button': { template: '<button><slot /></button>' },
+          'el-icon': true,
+          'el-card': { template: '<div><slot /></div>' },
+          'el-table': { template: '<div><slot /></div>' },
+          'el-table-column': true,
+          'el-dialog': { template: '<div><slot /><slot name="footer" /></div>' },
+          'el-form': { template: '<form><slot /></form>' },
+          'el-form-item': { props: ['label'], template: '<div>{{ label }}<slot /></div>' },
+          'el-tabs': { template: '<div><slot /></div>' },
+          'el-tab-pane': { template: '<div><slot /></div>' },
+          'el-row': { template: '<div><slot /></div>' },
+          'el-col': { template: '<div><slot /></div>' },
+          'el-select': { template: '<div><slot /></div>' },
+          'el-option': true,
+          'el-input-number': true,
+          'el-time-select': true,
+          'el-date-picker': { props: ['modelValue'], template: '<input :value="modelValue || \'\'" />' },
+          'el-divider': true,
+          'el-tag': { template: '<span><slot /></span>' },
+          'el-descriptions': { template: '<div><slot /></div>' },
+          'el-descriptions-item': { props: ['label'], template: '<div>{{ label }}:<slot /></div>' },
+        },
+      },
+    })
+    await flushPromises()
+    await nextTick()
+
+    expect(employeeStore.fetchEmployees).toHaveBeenCalledTimes(1)
+    expect(employeeStore.fetchEmployees).toHaveBeenCalledWith(false)
+  })
+
   it('renders birthday field in form and detail dialog', async () => {
     const wrapper = mount(EmployeeView, {
       global: {
