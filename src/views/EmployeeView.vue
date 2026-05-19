@@ -464,7 +464,7 @@ const salaryReadonlyReason = computed(() => {
 
 const { confirmDelete: handleDelete, deleting: deleteLoading } = useConfirmDelete({
   endpoint: '/employees',
-  onSuccess: fetchEmployees,
+  onSuccess: () => fetchEmployees(),
   successMsg: '刪除成功',
 })
 
