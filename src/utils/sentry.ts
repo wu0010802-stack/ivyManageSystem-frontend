@@ -15,7 +15,8 @@
 
 import type { App } from 'vue'
 // @sentry/vue 是 runtime dynamic import；型別僅在 dev/build 時靜態引用，不增加 bundle。
-import type { ErrorEvent as SentryErrorEvent, Breadcrumb } from '@sentry/core'
+// 用直接依賴 @sentry/vue（而非 transitive @sentry/core）確保 lockfile prune 不會斷掉型別。
+import type { ErrorEvent as SentryErrorEvent, Breadcrumb } from '@sentry/vue'
 
 // PII 欄位 denylist（與後端 utils/sentry_init.py 保持一致）
 const PII_KEY_SUBSTRINGS = [
