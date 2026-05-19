@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import {
-  Calendar,
   CircleCheckFilled,
   Clock,
   Document,
@@ -17,6 +16,23 @@ import {
 import StatCard from '@/components/common/StatCard.vue'
 import { useDashboardSections } from '@/composables'
 import DisabilityExpirySection from '@/components/dashboard/DisabilityExpirySection.vue'
+import QuickAddMenu, { type QuickAddDialogType } from '@/components/dashboard/QuickAddMenu.vue'
+import QuickOvertimeDialog from '@/components/dashboard/quick-add/QuickOvertimeDialog.vue'
+import QuickLeaveDialog from '@/components/dashboard/quick-add/QuickLeaveDialog.vue'
+import QuickStudentDialog from '@/components/dashboard/quick-add/QuickStudentDialog.vue'
+import QuickAnnouncementDialog from '@/components/dashboard/quick-add/QuickAnnouncementDialog.vue'
+import QuickClassroomDialog from '@/components/dashboard/quick-add/QuickClassroomDialog.vue'
+
+const quickAddDialogs = ref<Record<QuickAddDialogType, boolean>>({
+  overtime: false,
+  leave: false,
+  student: false,
+  announcement: false,
+  classroom: false,
+})
+const openQuickAdd = (type: QuickAddDialogType) => {
+  quickAddDialogs.value[type] = true
+}
 
 const {
   loading,
@@ -119,9 +135,8 @@ const typedEventTagType = eventTagType as EventTagTypeMap
         <h1 class="dashboard-header__greeting">{{ greeting }}，{{ userName }}</h1>
         <p class="dashboard-header__sub">{{ todayDateStr }} &nbsp;·&nbsp; 今天需要處理什麼</p>
       </div>
-      <div class="dashboard-header__date-badge">
-        <el-icon style="margin-right:4px;"><Calendar /></el-icon>
-        {{ todayDateStr }}
+      <div class="dashboard-header__actions">
+        <QuickAddMenu @open="openQuickAdd" />
       </div>
     </div>
 
@@ -506,6 +521,13 @@ const typedEventTagType = eventTagType as EventTagTypeMap
 
       </el-col>
     </el-row>
+
+    <!-- 快速新增 dialogs -->
+    <QuickOvertimeDialog v-model:visible="quickAddDialogs.overtime" />
+    <QuickLeaveDialog v-model:visible="quickAddDialogs.leave" />
+    <QuickStudentDialog v-model:visible="quickAddDialogs.student" />
+    <QuickAnnouncementDialog v-model:visible="quickAddDialogs.announcement" />
+    <QuickClassroomDialog v-model:visible="quickAddDialogs.classroom" />
   </div>
 </template>
 
@@ -539,8 +561,10 @@ const typedEventTagType = eventTagType as EventTagTypeMap
   color: var(--text-secondary);
 }
 
-.dashboard-header__date-badge {
-  display: none; /* 移除右側重複日期，標題已顯示 */
+.dashboard-header__actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
 }
 
 .dashboard-placeholder-card {
