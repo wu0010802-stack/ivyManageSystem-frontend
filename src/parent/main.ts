@@ -1,4 +1,4 @@
-import { createApp } from 'vue'
+import { createApp, type App as VueApp } from 'vue'
 import { createPinia } from 'pinia'
 
 import App from './App.vue'
@@ -34,7 +34,7 @@ import { initSentry } from '@/utils/sentry'
 initTheme()
 initA11y()
 
-const app = createApp(App)
+const app: VueApp = createApp(App)
 
 // Sentry init（缺 VITE_SENTRY_DSN 時 no-op）；non-blocking
 initSentry(app, { entry: 'parent' })
@@ -48,8 +48,8 @@ app.use(router)
 // （新分頁、隱私視窗、瀏覽器重啟）時會誤判未登入。
 // 因此首次進非公開頁時先 probe `/parent/me` 一次，成功則 hydrate store；失敗（401）由
 // axios interceptor 處理重導，guard 直接放行讓 interceptor 接手即可。
-let bootProbe = null
-async function ensureSessionProbed(authStore) {
+let bootProbe: Promise<void> | null = null
+async function ensureSessionProbed(authStore: ReturnType<typeof useParentAuthStore>) {
   if (authStore.isAuthed()) return
   if (!bootProbe) {
     bootProbe = getMe()

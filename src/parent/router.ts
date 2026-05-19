@@ -1,8 +1,6 @@
-import { createRouter, createWebHashHistory } from 'vue-router'
+import { createRouter, createWebHashHistory, type RouteRecordRaw } from 'vue-router'
 
-const router = createRouter({
-  history: createWebHashHistory(),
-  routes: [
+const routes: RouteRecordRaw[] = [
     { path: '/', redirect: '/home' },
     {
       path: '/login',
@@ -174,7 +172,11 @@ const router = createRouter({
       path: '/:pathMatch(.*)*',
       redirect: '/home',
     },
-  ],
+]
+
+const router = createRouter({
+  history: createWebHashHistory(),
+  routes,
 })
 
 router.beforeEach((to) => {
