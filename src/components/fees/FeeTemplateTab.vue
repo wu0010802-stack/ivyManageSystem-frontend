@@ -1,261 +1,447 @@
 <template>
   <div class="fee-template-tab">
     <div class="toolbar">
-      <el-select v-model="filterYear" placeholder="學年" style="width: 130px" @change="loadTemplates">
-        <el-option v-for="y in availableYears" :key="y" :value="y" :label="`${y} 學年度`" />
-      </el-select>
-      <el-select v-model="filterSemester" placeholder="學期" style="width: 110px" @change="loadTemplates">
-        <el-option :value="1" label="上學期" />
-        <el-option :value="2" label="下學期" />
-      </el-select>
-      <el-button type="primary" @click="openCreateDialog">新增範本</el-button>
-      <el-button :disabled="!templates.length" @click="copyToNextSemester">
-        複製到下學期
-      </el-button>
+      <div class="filters">
+        <el-select v-model="filterYear" placeholder="學年" style="width: 130px">
+          <el-option v-for="y in availableYears" :key="y" :value="y" :label="`${y} 學年度`" />
+        </el-select>
+        <el-select v-model="filterSemester" placeholder="學期" style="width: 110px">
+          <el-option :value="1" label="上學期" />
+          <el-option :value="2" label="下學期" />
+        </el-select>
+      </div>
+      <div class="view-actions">
+        <!-- TODO(fees-overview): FeeQuickEditDialog 子元件在 stash 半成品內未隨附，先移除「編輯費用設定」入口 -->
+        <el-button text @click="expandAll">展開全部</el-button>
+        <el-button text @click="collapseAll">收合全部</el-button>
+        <el-button @click="loadOverview">重新載入</el-button>
+      </div>
     </div>
 
-    <el-table :data="templates" v-loading="loading" border>
-      <el-table-column label="年級" prop="grade_name" min-width="90" />
-      <el-table-column label="費用類型" min-width="90">
-        <template #default="{ row }">{{ feeTypeLabel(row.fee_type) }}</template>
-      </el-table-column>
-      <el-table-column label="名稱" prop="name" min-width="160" />
-      <el-table-column label="金額" align="right" width="110">
-        <template #default="{ row }">{{ formatMoney(row.amount) }}</template>
-      </el-table-column>
-      <el-table-column label="組成" min-width="200">
-        <template #default="{ row }">
-          <span v-if="row.breakdown" class="breakdown">
-            <span v-for="(v, k) in row.breakdown" :key="String(k)">
-              {{ breakdownLabel(String(k)) }}:{{ formatMoney(v) }}
-            </span>
-          </span>
-          <span v-else class="muted">—</span>
-        </template>
-      </el-table-column>
-      <el-table-column label="繳費期限" width="100">
-        <template #default="{ row }">{{ row.due_date_offset_days }} 天</template>
-      </el-table-column>
-      <el-table-column label="狀態" width="80" align="center">
-        <template #default="{ row }">
-          <el-tag :type="row.is_active ? 'success' : 'info'" size="small">
-            {{ row.is_active ? '啟用' : '停用' }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column label="操作" width="160" align="center" fixed="right">
-        <template #default="{ row }">
-          <el-button size="small" @click="openEditDialog(row)">編輯</el-button>
-          <el-button size="small" type="danger" @click="onDelete(row)">停用</el-button>
-        </template>
-      </el-table-column>
-    </el-table>
+    <div v-loading="overviewLoading" class="overview">
+      <el-alert
+        v-if="!overviewLoading && templates.length === 0"
+        type="warning"
+        :closable="false"
+        show-icon
+      >
+        該學期尚未建立任何費用範本。
+      </el-alert>
+      <el-empty
+        v-else-if="!overviewLoading && gradeSections.length === 0"
+        description="目前沒有班級資料"
+      />
 
-    <FeeTemplateDialog
-      v-if="dialogVisible"
-      v-model="dialogVisible"
-      :template="editingTemplate"
-      :grades="grades"
-      @saved="onSaved"
-    />
+      <div v-else class="grade-list">
+        <section
+          v-for="grade in gradeSections"
+          :key="grade.grade_id || grade.grade_name"
+          class="grade-section"
+        >
+          <header class="grade-header">
+            <div class="grade-title">
+              <span class="grade-name">{{ grade.grade_name }}</span>
+              <el-tag size="small">{{ grade.classrooms.length }} 班</el-tag>
+              <el-tag size="small" type="info">{{ grade.total_students }} 位學生</el-tag>
+              <el-tag v-if="!grade.has_any_template" size="small" type="warning">
+                該年級尚無範本
+              </el-tag>
+            </div>
+            <div class="grade-totals">
+              <span>每生小計 <strong>{{ grade.per_student_total.toLocaleString() }}</strong></span>
+              <span>年級合計 <strong>{{ grade.grade_total.toLocaleString() }}</strong></span>
+            </div>
+          </header>
+
+          <el-collapse v-model="expandedClassrooms[grade.grade_id || grade.grade_name]">
+            <el-collapse-item
+              v-for="cls in grade.classrooms"
+              :key="cls.classroom_id"
+              :name="cls.classroom_id"
+            >
+              <template #title>
+                <div class="class-collapse-title">
+                  <div class="class-title">
+                    <span class="class-name">{{ cls.classroom_name }}</span>
+                    <el-tag size="small" type="info">{{ cls.students.length }} 位學生</el-tag>
+                  </div>
+                  <div class="class-totals">
+                    <span>每生 {{ cls.per_student_total.toLocaleString() }}</span>
+                    <span>班級合計 <strong>{{ cls.class_total.toLocaleString() }}</strong></span>
+                  </div>
+                </div>
+              </template>
+
+              <el-table :data="cls.students" border size="small" stripe>
+                <el-table-column label="學號" prop="student_no" width="100" />
+                <el-table-column label="學生" prop="student_name" min-width="110" />
+                <el-table-column
+                  v-for="col in cls.columns"
+                  :key="col.fee_type"
+                  align="center"
+                  min-width="130"
+                >
+                  <template #header>
+                    <div class="col-header">
+                      <span>{{ col.label }}</span>
+                      <span v-if="col.detail" class="col-detail">{{ col.detail }}</span>
+                    </div>
+                  </template>
+                  <template #default>
+                    <span v-if="col.amount == null" class="muted">—</span>
+                    <span v-else>{{ col.amount.toLocaleString() }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="合計" width="120" align="right" fixed="right">
+                  <template #default>
+                    <strong>{{ cls.per_student_total.toLocaleString() }}</strong>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </el-collapse-item>
+          </el-collapse>
+        </section>
+      </div>
+    </div>
   </div>
 </template>
 
-<script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import {
-  getFeeTemplates,
-  deleteFeeTemplate,
-  createFeeTemplate,
-} from '@/api/fees'
-import { getGrades } from '@/api/classrooms'
-import FeeTemplateDialog from './FeeTemplateDialog.vue'
+<script setup>
+import { ref, computed, onMounted, watch } from 'vue'
+import { ElMessage } from 'element-plus'
+import { getFeeTemplates } from '@/api/fees'
+import { getGrades, getClassrooms } from '@/api/classrooms'
+import { getStudents } from '@/api/students'
+import { getCurrentAcademicTerm } from '@/utils/academic'
 
-interface Grade {
-  id: number
-  name: string
-  sort_order?: number
+const _initTerm = getCurrentAcademicTerm()
+const filterYear = ref(_initTerm.school_year)
+const filterSemester = ref(_initTerm.semester)
+
+// 各年級下哪些班級被展開（key = grade_id 或 grade_name，value = classroom_id 陣列）
+const expandedClassrooms = ref({})
+
+function expandAll() {
+  const map = {}
+  for (const g of gradeSections.value) {
+    map[g.grade_id || g.grade_name] = g.classrooms.map((c) => c.classroom_id)
+  }
+  expandedClassrooms.value = map
+}
+function collapseAll() {
+  expandedClassrooms.value = {}
 }
 
-interface FeeTemplate {
-  id: number
-  grade_id: number
-  grade_name?: string
-  school_year: number
-  semester: number
-  fee_type: string
-  name: string
-  amount: number
-  due_date_offset_days?: number
-  is_active: boolean
-  breakdown?: Record<string, number>
-}
+const templates = ref([])
+const grades = ref([])
+const classroomsList = ref([])
+const studentsList = ref([])
+const overviewLoading = ref(false)
 
-const filterYear = ref<number>(114)
-const filterSemester = ref<number>(1)
-const templates = ref<FeeTemplate[]>([])
-const grades = ref<Grade[]>([])
-const loading = ref<boolean>(false)
-const dialogVisible = ref<boolean>(false)
-const editingTemplate = ref<FeeTemplate | null>(null)
+// 月費展開為幾個月（與後端 _semester_months 一致：上下學期皆 6 個月）
+const MONTHS_PER_SEMESTER = 6
 
 const availableYears = computed(() => {
-  // 民國年 = 西元年 - 1911
   const current = new Date().getFullYear() - 1911
   return [current - 1, current, current + 1]
 })
 
+// 註：學費等同於註冊費，不另設欄位
 const FEE_TYPE_LABELS = {
   registration: '註冊費',
   miscellaneous: '雜費',
   monthly: '月費',
+  transport: '交通費',
+  summer_uniform: '夏制',
+  summer_sports: '夏運',
 }
 
-const BREAKDOWN_LABELS = {
-  tuition: '學費',
-  meal: '餐點',
-  transport: '交通',
-}
+// 月費仍是唯一會展開為 6 個月的類型
+const OVERVIEW_FEE_TYPES = [
+  'registration', 'miscellaneous', 'monthly', 'transport',
+  'summer_uniform', 'summer_sports',
+]
 
-function feeTypeLabel(t: string): string {
-  return (FEE_TYPE_LABELS as Record<string, string>)[t] || t
-}
-function breakdownLabel(k: string): string {
-  return (BREAKDOWN_LABELS as Record<string, string>)[k] || k
-}
-function formatMoney(n: number | null | undefined): string {
+function formatMoney(n) {
   return n != null ? `NT$ ${Number(n).toLocaleString()}` : '—'
 }
 
-async function loadTemplates() {
-  loading.value = true
+async function loadOverview() {
+  overviewLoading.value = true
   try {
-    const list = await getFeeTemplates({
+    const params = {
       school_year: filterYear.value,
       semester: filterSemester.value,
-    })
+    }
+    const [tplList, clsRes, stuRes] = await Promise.all([
+      getFeeTemplates(params),
+      getClassrooms({ ...params, current_only: false, include_inactive: false }),
+      getStudents({ ...params, is_active: true, limit: 500, skip: 0 }),
+    ])
     const gradeMap = Object.fromEntries(grades.value.map((g) => [g.id, g.name]))
-    templates.value = ((list || []) as FeeTemplate[]).map((t) => ({
+    templates.value = (tplList || []).map((t) => ({
       ...t,
       grade_name: gradeMap[t.grade_id] || `#${t.grade_id}`,
     }))
-  } catch (e: unknown) {
-    const err = e as { response?: { data?: { detail?: string } } }
-    ElMessage.error(err.response?.data?.detail || '載入範本失敗')
+    const clsData = clsRes?.data ?? clsRes
+    classroomsList.value = Array.isArray(clsData) ? clsData : (clsData?.items || [])
+    const stuData = stuRes?.data ?? stuRes
+    studentsList.value = stuData?.items || []
+  } catch (e) {
+    ElMessage.error(e.response?.data?.detail || '載入總覽失敗')
   } finally {
-    loading.value = false
+    overviewLoading.value = false
   }
 }
 
-function openCreateDialog() {
-  editingTemplate.value = null
-  dialogVisible.value = true
-}
+watch([filterYear, filterSemester], () => loadOverview())
 
-function openEditDialog(row: FeeTemplate) {
-  editingTemplate.value = row
-  dialogVisible.value = true
-}
-
-async function onDelete(row: FeeTemplate) {
-  try {
-    await ElMessageBox.confirm(`確認停用範本「${row.name}」?`, '提示', {
-      type: 'warning',
-    })
-  } catch {
-    return
+// 樞紐：班級 → 學生 × fee_type ───────────────────────────────────────────
+const templateByGradeType = computed(() => {
+  const m = new Map()
+  for (const t of templates.value) {
+    if (!t.is_active) continue
+    m.set(`${t.grade_id}:${t.fee_type}`, t)
   }
-  try {
-    await deleteFeeTemplate(row.id)
-    ElMessage.success('已停用')
-    loadTemplates()
-  } catch (e: unknown) {
-    const err = e as { response?: { data?: { detail?: string } } }
-    ElMessage.error(err.response?.data?.detail || '停用失敗')
+  return m
+})
+
+const studentsByClassroom = computed(() => {
+  const m = new Map()
+  for (const s of studentsList.value) {
+    if (!s.classroom_id) continue
+    if (!m.has(s.classroom_id)) m.set(s.classroom_id, [])
+    m.get(s.classroom_id).push(s)
   }
-}
+  return m
+})
 
-function onSaved() {
-  dialogVisible.value = false
-  loadTemplates()
-}
-
-async function copyToNextSemester() {
-  try {
-    await ElMessageBox.confirm(
-      `將 ${filterYear.value}-${filterSemester.value} 所有啟用範本複製到下學期?`,
-      '複製範本',
-      { type: 'info' },
+function buildClassroomSection(cls) {
+  const students = (studentsByClassroom.value.get(cls.id) || [])
+    .slice()
+    .sort((a, b) =>
+      (a.student_id || '').localeCompare(b.student_id || '') ||
+      (a.name || '').localeCompare(b.name || '', 'zh-Hant'),
     )
-  } catch {
-    return
-  }
-  const nextYear = filterSemester.value === 1 ? filterYear.value : filterYear.value + 1
-  const nextSem = filterSemester.value === 1 ? 2 : 1
-  let copied = 0
-  let skipped = 0
-  for (const t of templates.value.filter((x) => x.is_active)) {
-    try {
-      await createFeeTemplate({
-        grade_id: t.grade_id,
-        school_year: nextYear,
-        semester: nextSem,
-        fee_type: t.fee_type,
-        // 若原名稱含類似「114-1」的字串就替換，否則保留原名
-        name: t.name.replace(/\d+-[12]/, `${nextYear}-${nextSem}`),
-        amount: t.amount,
-        breakdown: t.breakdown,
-        due_date_offset_days: t.due_date_offset_days,
-      })
-      copied++
-    } catch (e: unknown) {
-      const err = e as { response?: { status?: number; data?: { detail?: string } } }
-      if (err.response?.status === 409) {
-        skipped++
-      } else {
-        ElMessage.error(err.response?.data?.detail || '複製失敗')
-        throw e
+
+  const columns = OVERVIEW_FEE_TYPES.map((ft) => {
+    const tpl = templateByGradeType.value.get(`${cls.grade_id}:${ft}`)
+    if (!tpl) return { fee_type: ft, label: FEE_TYPE_LABELS[ft], amount: null, detail: '無範本' }
+    if (ft === 'monthly') {
+      const total = (tpl.amount || 0) * MONTHS_PER_SEMESTER
+      return {
+        fee_type: ft,
+        label: FEE_TYPE_LABELS[ft],
+        amount: total,
+        detail: `${formatMoney(tpl.amount)} × ${MONTHS_PER_SEMESTER} 月`,
       }
     }
+    return { fee_type: ft, label: FEE_TYPE_LABELS[ft], amount: tpl.amount, detail: null }
+  })
+  const perStudentTotal = columns.reduce((s, c) => s + (c.amount || 0), 0)
+  const hasAnyTemplate = columns.some((c) => c.amount != null)
+
+  return {
+    classroom_id: cls.id,
+    classroom_name: cls.name,
+    grade_id: cls.grade_id,
+    grade_name: cls.grade_name,
+    students: students.map((s) => ({
+      student_id: s.id,
+      student_no: s.student_id,
+      student_name: s.name,
+    })),
+    columns,
+    per_student_total: perStudentTotal,
+    class_total: perStudentTotal * students.length,
+    has_any_template: hasAnyTemplate,
   }
-  ElMessage.success(`已複製 ${copied} 筆,跳過 ${skipped} 筆`)
-  // 切換到目的學期讓 user 看到結果
-  filterYear.value = nextYear
-  filterSemester.value = nextSem
-  loadTemplates()
 }
+
+// grade_id → sort_order（無 sort_order 時退化為陣列 index，仍保留穩定順序）
+const gradeOrderMap = computed(() => {
+  const m = new Map()
+  grades.value.forEach((g, idx) => m.set(g.id, g.sort_order ?? idx))
+  return m
+})
+
+// 樞紐：依年級分組，年級下列出各班（班級預設折疊）
+const gradeSections = computed(() => {
+  const groups = new Map()
+  for (const cls of classroomsList.value) {
+    const key = cls.grade_id ?? `__nograde_${cls.grade_name || '未分年級'}`
+    if (!groups.has(key)) {
+      groups.set(key, {
+        grade_id: cls.grade_id ?? null,
+        grade_name: cls.grade_name || '未分年級',
+        grade_sort:
+          cls.grade_id != null
+            ? gradeOrderMap.value.get(cls.grade_id) ?? Number.MAX_SAFE_INTEGER - 1
+            : Number.MAX_SAFE_INTEGER,
+        classrooms: [],
+      })
+    }
+    groups.get(key).classrooms.push(buildClassroomSection(cls))
+  }
+
+  const sections = []
+  for (const g of groups.values()) {
+    g.classrooms.sort((a, b) =>
+      (a.classroom_name || '').localeCompare(b.classroom_name || '', 'zh-Hant'),
+    )
+    const totalStudents = g.classrooms.reduce((s, c) => s + c.students.length, 0)
+    const perStudentTotal = g.classrooms[0]?.per_student_total ?? 0
+    const gradeTotal = g.classrooms.reduce((s, c) => s + c.class_total, 0)
+    const hasAnyTemplate = g.classrooms.some((c) => c.has_any_template)
+    sections.push({
+      grade_id: g.grade_id,
+      grade_name: g.grade_name,
+      grade_sort: g.grade_sort,
+      classrooms: g.classrooms,
+      total_students: totalStudents,
+      per_student_total: perStudentTotal,
+      grade_total: gradeTotal,
+      has_any_template: hasAnyTemplate,
+    })
+  }
+  // 年級依 grade_id（grades 排序）排，沒 grade_id 的擺最後
+  sections.sort((a, b) => a.grade_sort - b.grade_sort)
+  return sections
+})
 
 onMounted(async () => {
   try {
     const res = await getGrades()
-    grades.value = ((res as { data?: Grade[] }).data || []).slice().sort(
+    grades.value = (res.data || []).slice().sort(
       (a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0),
     )
-  } catch (e: unknown) {
-    const err = e as { response?: { data?: { detail?: string } } }
-    ElMessage.error(err.response?.data?.detail || '載入年級失敗')
+  } catch (e) {
+    ElMessage.error(e.response?.data?.detail || '載入年級失敗')
   }
-  loadTemplates()
+  loadOverview()
+})
+
+defineExpose({
+  filterYear,
+  filterSemester,
+  loadOverview,
+  gradeSections,
+  expandedClassrooms,
+  expandAll,
+  collapseAll,
 })
 </script>
 
 <style scoped>
 .fee-template-tab {
   padding-top: var(--space-2, 8px);
+  font-variant-numeric: tabular-nums;
 }
 .toolbar {
   display: flex;
+  justify-content: space-between;
+  align-items: center;
   gap: var(--space-3, 12px);
   margin-bottom: var(--space-4, 16px);
   flex-wrap: wrap;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--el-bg-color, #fff);
+  padding: var(--space-2, 8px) 0;
+  border-bottom: 1px solid var(--el-border-color-lighter, #e4e7ed);
 }
-.breakdown span {
-  display: inline-block;
-  margin-right: 8px;
-  font-size: 12px;
+.filters {
+  display: flex;
+  gap: var(--space-3, 12px);
+  align-items: center;
+  flex-wrap: wrap;
+}
+.view-actions {
+  display: flex;
+  gap: var(--space-2, 8px);
+}
+
+.overview {
+  min-height: 120px;
+}
+.grade-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5, 20px);
+}
+.grade-section {
+  border: 1px solid var(--el-border-color, #dcdfe6);
+  border-radius: 10px;
+  padding: var(--space-3, 12px);
+  background: var(--el-bg-color, #fff);
+}
+.grade-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3, 12px);
+  margin-bottom: var(--space-3, 12px);
+  padding-bottom: var(--space-2, 8px);
+  border-bottom: 2px solid var(--el-border-color-lighter, #e4e7ed);
+}
+.grade-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2, 8px);
+}
+.grade-name {
+  font-weight: 700;
+  font-size: var(--text-xl, 18px);
+  color: var(--el-color-primary, #409eff);
+}
+.grade-totals {
+  display: flex;
+  gap: var(--space-4, 16px);
+  font-size: var(--text-sm, 13px);
   color: var(--text-secondary, #555);
 }
+
+.class-collapse-title {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3, 12px);
+  width: 100%;
+  padding-right: var(--space-3, 12px);
+}
+.class-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2, 8px);
+}
+.class-name {
+  font-weight: 600;
+  font-size: var(--text-base, 14px);
+}
+.class-totals {
+  display: flex;
+  gap: var(--space-3, 12px);
+  font-size: var(--text-sm, 13px);
+  color: var(--text-secondary, #555);
+}
+
+.col-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.2;
+}
+.col-detail {
+  font-size: 11px;
+  color: var(--text-tertiary, #999);
+  font-weight: normal;
+}
+
 .muted {
   color: var(--text-tertiary, #999);
 }

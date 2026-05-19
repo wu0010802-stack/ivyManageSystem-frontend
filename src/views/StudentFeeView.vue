@@ -1,19 +1,15 @@
 <template>
   <div class="student-fee-view">
     <div class="page-header">
-      <h2>學費管理</h2>
+      <div class="title-row">
+        <h2>學費管理</h2>
+        <p class="subtitle">查看與管理本學期各班級學生的應收費用與繳費狀態</p>
+      </div>
     </div>
 
     <el-tabs v-model="activeTab" type="card">
       <!-- ================================================================
-           Tab 1：費用範本
-      ================================================================ -->
-      <el-tab-pane label="費用範本" name="templates">
-        <FeeTemplateTab />
-      </el-tab-pane>
-
-      <!-- ================================================================
-           Tab 2：繳費記錄
+           Tab 1：繳費記錄（主要工作面板）
       ================================================================ -->
       <el-tab-pane label="繳費記錄" name="records">
         <FeeRecordsTab
@@ -21,6 +17,13 @@
           :period-options="periodOptions"
           :classrooms="classrooms"
         />
+      </el-tab-pane>
+
+      <!-- ================================================================
+           Tab 2：費用總覽（依範本計算每生應繳）
+      ================================================================ -->
+      <el-tab-pane label="費用總覽" name="templates">
+        <FeeTemplateTab />
       </el-tab-pane>
 
       <!-- ================================================================
@@ -43,6 +46,7 @@ import FeeRecordsTab from '@/components/fees/FeeRecordsTab.vue'
 import FeeRefundsTab from '@/components/fees/FeeRefundsTab.vue'
 
 // ─── Tab 狀態 ────────────────────────────────────────────────────────────────
+// 預設「繳費記錄」（日常工作面板）；範本/總覽為輔助檢視
 const activeTab = ref('records')
 const periodOptions = ref([])
 
@@ -69,7 +73,7 @@ watch(activeTab, (val) => {
 onMounted(() => {
   fetchFeePeriods()
   classroomStore.fetchClassrooms()
-  feeRecordsTabRef.value?.fetchRecords()
+  if (activeTab.value === 'records') feeRecordsTabRef.value?.fetchRecords()
 })
 </script>
 
@@ -82,9 +86,22 @@ onMounted(() => {
   margin-bottom: var(--space-4);
 }
 
+.page-header .title-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .page-header h2 {
   margin: 0;
   font-size: var(--text-2xl);
   font-weight: 700;
+  color: var(--text-primary, #1e293b);
+}
+
+.page-header .subtitle {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-secondary, #64748b);
 }
 </style>
