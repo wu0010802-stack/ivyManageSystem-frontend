@@ -330,7 +330,23 @@ const saveManualAdjust = async () => {
     )
     const updated = (response.data as { record?: Record<string, unknown> }).record
     if (updated && editingRow.value) {
-      Object.assign(editingRow.value, updated)
+      Object.assign(editingRow.value, {
+        festival_bonus: updated.festival_bonus,
+        overtime_bonus: updated.overtime_bonus,
+        overtime_pay: updated.overtime_pay,
+        supervisor_dividend: updated.supervisor_dividend,
+        meeting_overtime_pay: updated.meeting_overtime_pay,
+        birthday_bonus: updated.birthday_bonus,
+        leave_deduction: updated.leave_deduction,
+        late_deduction: updated.late_deduction,
+        early_leave_deduction: updated.early_leave_deduction,
+        meeting_absence_deduction: updated.meeting_absence_deduction,
+        absence_deduction: updated.absence_deduction,
+        total_deductions: updated.total_deduction,
+        net_pay: updated.net_salary,
+        remark: updated.remark,
+        manual_overrides: Array.isArray(updated.manual_overrides) ? updated.manual_overrides : [],
+      })
     }
     const recordIndex = salaryRecords.value.findIndex(item => item.id === record.id)
     if (recordIndex >= 0 && updated) {
