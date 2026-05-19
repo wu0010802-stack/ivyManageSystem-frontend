@@ -70,24 +70,30 @@ npm run test:coverage  # 含覆蓋率報告
 
 ## 開發規範
 
-### TypeScript（新檔案一律用 TS）
+### TypeScript（**全 codebase TS-only**）
 
-專案正在進行 JS→TS 全面遷移（spec: `docs/superpowers/specs/2026-05-18-frontend-js-to-ts-migration-design.md`），10 個 layer 分批轉。**任何新增程式碼都要用 TypeScript**，避免今天新檔變明天的技術債：
+`src/` 業務碼已 100% TypeScript（2026-05-19 完成 L0–L9 全遷移，spec: `docs/superpowers/specs/2026-05-18-frontend-js-to-ts-migration-design.md`）。**不允許新增 `.js` 業務檔**：
 
-**規則：**
-- **新檔案一律 `.ts`**：新 `src/api/<x>.ts`、`src/composables/<x>.ts`、`src/utils/<x>.ts`、`src/stores/<x>.ts`、`src/views/<x>.ts` 等
-- **新 SFC 一律 `<script setup lang="ts">`**：`src/views/*.vue`、`src/components/*.vue`、`src/parent/views/*.vue`、`src/parent/components/*.vue`
-- **修改現有 `.js` 不主動轉 TS**：保留給對應 layer migration 統一處理（避免半 .js 半 .ts 局部混亂），除非該 layer 已完成
-- **例外**：`vite.config.js`、`vitest.config.js`、`scripts/*.mjs` 等工具腳本維持 `.js`/`.mjs` 不必轉
-- **型別規範**：tsconfig 已 `strict: true`；**禁顯式 `: any`**，用 `: unknown` + narrow 或 `// @ts-expect-error TODO(ts-strict): <reason>` 過渡
+**強制規則（tsconfig + CI 已強制）：**
+- `tsconfig.json` `allowJs: false` — `src/` 下新增 `.js` 直接 typecheck 失敗
+- `tsconfig.json` `strict: true` + `noUnusedLocals: true` + `noUnusedParameters: true`
+- CI `Type check` step **blocking**（移除 `continue-on-error` 後 typecheck error 直接擋 PR）
+
+**新增程式碼規則：**
+- **業務檔一律 `.ts`**：`src/api/<x>.ts` / `src/composables/<x>.ts` / `src/utils/<x>.ts` / `src/stores/<x>.ts` / `src/views/<x>.ts` / `src/components/<x>.ts`
+- **新 SFC 一律 `<script setup lang="ts">`**：`src/**/*.vue` 全套件已 `lang="ts"`
+- **禁顯式 `: any` / `as any`**：用 `: unknown` + narrow 或 `// @ts-expect-error TODO(ts-strict): <reason>` 過渡（目前 codebase 0 處標註）
+- **新增 type alias / interface 須節制**：spec 接受 pragmatic exception（同檔 3+ 處用 + inline 嚴重損 DX），但 single-use shape 應 inline
+- **Vue 型別**：`defineProps<{ x: string }>()` / `defineEmits<{ change: [value: number] }>()` 用 type-based macros、`ref<T>(initial)` 顯式註型、預設值用 `withDefaults`
 - **API 型別**：`src/api/*.ts` 用 `import type { ApiBody, ApiQuery, AxiosResp } from '@/api/_generated/typed'` 對應 OpenAPI schema（後端 `response_model=` 缺漏時 endpoint 回 `unknown`，可 `as Shape // TODO(ts-strict): waiting on backend response_model`）
-- **Vue 型別**：`defineProps<{ x: string }>()` / `defineEmits<{ change: [value: number] }>()` 用 type-based macros、`ref<T>(initial)` 顯式註型
+
+**例外可保留 `.js`/`.mjs`**：
+- 工具腳本：`vite.config.js`、`vitest.config.js`、`scripts/*.mjs`
+- 測試：`tests/**/*.{test,spec}.js`（vitest 仍支援 .js test 與 .ts source 共存）
 
 **檢驗：**
-- PR 前跑 `npm run typecheck`（warning 模式 — L9 收尾才阻擋 PR）
-- CI 已含 `Type check` step
-
-**遷移進度（2026-05-18）**：L0–L3 完成（**125/650 檔，19%**）；L4 composables 進行中。
+- 本地：`npm run typecheck` 必過、`npm test` 必綠
+- CI：`Type check` step blocking，PR 必過才能 merge
 
 ---
 
