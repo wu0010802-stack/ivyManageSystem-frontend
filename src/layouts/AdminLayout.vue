@@ -17,11 +17,7 @@
 
       <el-main>
         <div class="content-container">
-          <RouterView v-slot="{ Component }">
-            <transition name="fade-transform" mode="out-in">
-              <component v-if="Component" :is="Component" :key="route.path" />
-            </transition>
-          </RouterView>
+          <RouterView />
         </div>
       </el-main>
     </el-container>
@@ -117,17 +113,6 @@ watch(() => route.path, (path: string) => {
   background-color: rgba(15, 23, 42, 0.5);
   backdrop-filter: blur(2px);
   z-index: 1999;
-}
-
-/* Page Transitions */
-.fade-transform-enter-active,
-.fade-transform-leave-active {
-  transition: opacity var(--transition-slow);
-}
-
-.fade-transform-enter-from,
-.fade-transform-leave-to {
-  opacity: 0;
 }
 
 @media (max-width: 767px) {
