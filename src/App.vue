@@ -1,5 +1,5 @@
 
-<script setup>
+<script setup lang="ts">
 import { computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import AdminLayout from './layouts/AdminLayout.vue'

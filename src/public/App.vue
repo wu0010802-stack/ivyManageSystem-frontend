@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /**
  * A2 公開頁 app shell。
  *

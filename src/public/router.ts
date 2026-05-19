@@ -9,9 +9,9 @@
  * 轉發到 public.html 即可（fallback 仍可走 admin index.html，
  * 不破壞既有部署）。
  */
-import { createRouter, createWebHashHistory } from 'vue-router'
+import { createRouter, createWebHashHistory, type RouteRecordRaw } from 'vue-router'
 
-const routes = [
+const routes: RouteRecordRaw[] = [
   {
     path: '/',
     redirect: '/activity',

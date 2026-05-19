@@ -1,5 +1,5 @@
 /**
- * src/utils/sentry.js — Sentry browser SDK 初始化與 PII 過濾。
+ * src/utils/sentry.ts — Sentry browser SDK 初始化與 PII 過濾。
  *
  * 行為：
  * - 缺 VITE_SENTRY_DSN 時 initSentry() no-op；DSN 是唯一啟用開關
@@ -12,6 +12,11 @@
  * 配合 src/api/index.js axios interceptor 對 >=500 與 network error 顯式
  * captureException（4xx 預期路徑由 UI errorHandler 處理，不送 Sentry）。
  */
+
+import type { App } from 'vue'
+// @sentry/vue 是 runtime dynamic import；型別僅在 dev/build 時靜態引用，不增加 bundle。
+// 用直接依賴 @sentry/vue（而非 transitive @sentry/core）確保 lockfile prune 不會斷掉型別。
+import type { ErrorEvent as SentryErrorEvent, Breadcrumb } from '@sentry/vue'
 
 // PII 欄位 denylist（與後端 utils/sentry_init.py 保持一致）
 const PII_KEY_SUBSTRINGS = [
@@ -192,7 +197,7 @@ let _SentryRef: unknown = null
  * @param {import('vue-router').Router} [opts.router] — 可選，會自動加 routing instrumentation
  * @returns {Promise<boolean>} — true 表示已 init；false 表示 DSN 缺或載入失敗
  */
-export async function initSentry(app: unknown, opts: { entry?: string; router?: unknown } = {}) {
+export async function initSentry(app: App, opts: { entry?: string; router?: unknown } = {}) {
   const dsn = (import.meta.env.VITE_SENTRY_DSN || '').trim()
   if (!dsn) return false
 
@@ -212,7 +217,6 @@ export async function initSentry(app: unknown, opts: { entry?: string; router?: 
   if (!Number.isFinite(tracesRate)) tracesRate = 0.1
 
   Sentry.init({
-    // @ts-expect-error TODO(ts-strict): app is unknown at call site; Sentry expects Vue App
     app,
     dsn,
     environment: env,
@@ -223,10 +227,8 @@ export async function initSentry(app: unknown, opts: { entry?: string; router?: 
     attachStacktrace: true,
     // Vue errorHandler 由 @sentry/vue 整合自動掛上；同時抓 promise rejection
     // 與 window.onerror
-    // @ts-expect-error TODO(ts-strict): scrubEvent returns unknown; Sentry expects typed event
-    beforeSend: (event) => scrubEvent(event),
-    // @ts-expect-error TODO(ts-strict): scrubBreadcrumb returns unknown; Sentry expects typed crumb
-    beforeBreadcrumb: (crumb) => scrubBreadcrumb(crumb),
+    beforeSend: (event) => scrubEvent(event) as SentryErrorEvent | null,
+    beforeBreadcrumb: (crumb) => scrubBreadcrumb(crumb) as Breadcrumb | null,
     denyUrls: [
       /^chrome-extension:\/\//,
       /^moz-extension:\/\//,

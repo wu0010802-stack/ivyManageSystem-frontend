@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import ParentLayout from './layouts/ParentLayout.vue'
@@ -18,7 +18,7 @@ import ParentLayout from './layouts/ParentLayout.vue'
 const router = useRouter()
 const transitionName = ref('parent-fade')
 
-function pathDepth(p) {
+function pathDepth(p: string | undefined | null): number {
   if (!p) return 0
   return p.split('/').filter(Boolean).length
 }
