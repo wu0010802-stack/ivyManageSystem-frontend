@@ -1,4 +1,5 @@
 import api from './index'
+import type { ApiBody, ApiQuery, AxiosResp } from './_generated/typed'
 
 // --- Disability Documents (Phase 1) ---
 export const listDisabilityDocs = (studentId: number) =>
@@ -52,3 +53,20 @@ export const closeIep = (id: number) => api.put(`/gov-moe/iep/${id}/close`)
 export const cloneIep = (id: number, payload: unknown) => api.post(`/gov-moe/iep/${id}/clone`, payload)
 export const exportIepPdf = (id: number) =>
   api.get(`/gov-moe/iep/${id}/export`, { responseType: 'blob' })
+
+// --- Monthly Enrollment Report (Phase 2) ---
+export const generateMonthlyReport = (
+  payload: ApiBody<'/gov-moe/monthly/generate', 'post'>,
+): AxiosResp<'/gov-moe/monthly/generate', 'post'> =>
+  api.post('/gov-moe/monthly/generate', payload)
+
+export const getMonthlyReport = (
+  params: ApiQuery<'/gov-moe/monthly', 'get'>,
+): AxiosResp<'/gov-moe/monthly', 'get'> =>
+  api.get('/gov-moe/monthly', { params })
+
+export const exportMonthlyReport = (params: { year: number; month: number }) =>
+  api.get('/gov-moe/monthly/export', {
+    params: { ...params, format: 'xlsx' },
+    responseType: 'blob',
+  })
