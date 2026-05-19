@@ -8,6 +8,7 @@ import { useCalendarLayers } from '@/composables/useCalendarLayers'
 import { CALENDAR_LAYERS, LAYER_LABELS, LAYER_COLORS } from '@/constants/calendarLayers'
 import { downloadFile } from '@/utils/download'
 import { apiError } from '@/utils/error'
+import RecurrenceEditor from '@/components/calendar/RecurrenceEditor.vue'
 
 const router = useRouter()
 const {
@@ -56,6 +57,7 @@ const form = reactive({
   start_time: '',
   end_time: '',
   location: '',
+  recurrence_rule: null,
 })
 
 const selectedEvent = ref(null)
@@ -72,6 +74,7 @@ const resetForm = () => {
   form.start_time = ''
   form.end_time = ''
   form.location = ''
+  form.recurrence_rule = null
 }
 
 const currentYear = computed(() => currentDate.value.getFullYear())
@@ -249,6 +252,7 @@ const openEvent = (event) => {
     start_time: event.start_time || '',
     end_time: event.end_time || '',
     location: event.location || '',
+    recurrence_rule: event.recurrence_rule ?? null,
   })
   dialogVisible.value = true
 }
@@ -270,6 +274,7 @@ const saveEvent = async () => {
       start_time: form.is_all_day ? null : (form.start_time || null),
       end_time: form.is_all_day ? null : (form.end_time || null),
       location: form.location || null,
+      recurrence_rule: form.recurrence_rule || null,
     }
     if (isEdit.value) {
       await updateEvent(form.id, payload)
@@ -505,6 +510,9 @@ onMounted(fetchEvents)
         </el-form-item>
         <el-form-item label="地點">
           <el-input v-model="form.location" placeholder="例：會議室A" />
+        </el-form-item>
+        <el-form-item label="重複">
+          <RecurrenceEditor v-model="form.recurrence_rule" />
         </el-form-item>
         <el-form-item label="說明">
           <el-input v-model="form.description" type="textarea" :rows="3" placeholder="事件說明..." />
