@@ -217,6 +217,12 @@ const routes: RouteRecordRaw[] = [
             component: () => import('@/views/admin/gov-reports/IepView.vue'),
             meta: { title: 'IEP 個別化教育計畫' },
         },
+        {
+            path: '/admin/gov-reports/monthly',
+            name: 'AdminGovReportsMonthly',
+            component: () => import('@/views/admin/gov-reports/MonthlyReportView.vue'),
+            meta: { title: '月度幼生在園統計' },
+        },
         // ============ 教職員考核 ============
         {
             path: '/appraisal-management',
