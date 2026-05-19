@@ -3316,6 +3316,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/calendar/admin_feed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Admin Feed */
+        get: operations["get_admin_feed_api_calendar_admin_feed_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/classrooms": {
         parameters: {
             query?: never;
@@ -3831,46 +3848,6 @@ export interface paths {
         post?: never;
         /** Delete Job Title */
         delete: operations["delete_job_title_api_config_titles__title_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/dev/employee-salary-debug": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Debug Employee Salary
-         * @description 模擬計算單一員工薪資並回傳完整明細（dev 別名，正式請改打 /api/salaries/employee-salary-debug）。
-         */
-        get: operations["debug_employee_salary_api_dev_employee_salary_debug_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/dev/salary-logic": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Salary Logic
-         * @description 傾印目前的薪資計算邏輯與所有參數設定（dev 別名，正式請改打 /api/salaries/logic）。
-         */
-        get: operations["get_salary_logic_api_dev_salary_logic_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -4965,6 +4942,57 @@ export interface paths {
         /** Submit Iep */
         put: operations["submit_iep_api_gov_moe_iep__iep_id__submit_put"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/gov-moe/monthly": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Monthly Report */
+        get: operations["get_monthly_report_api_gov_moe_monthly_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/gov-moe/monthly/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export Monthly Report */
+        get: operations["export_monthly_report_api_gov_moe_monthly_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/gov-moe/monthly/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Generate Monthly Report */
+        post: operations["generate_monthly_report_api_gov_moe_monthly_generate_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6693,9 +6721,9 @@ export interface paths {
          *     - me: 個人資料 + 推播可達性（同 /me）
          *     - children: 監護學生清單（同 /my-children）
          *     - summary:
-         *         - unread_announcements: int
-         *         - fees: { outstanding, overdue, due_soon, outstanding_count, ... }
-         *         - pending_event_acks: int
+         *     - unread_announcements: int
+         *     - fees: { outstanding, overdue, due_soon, outstanding_count, ... }
+         *     - pending_event_acks: int
          */
         get: operations["home_summary_api_parent_home_summary_get"];
         put?: never;
@@ -6723,15 +6751,15 @@ export interface paths {
          *     {
          *       "date": "2026-05-01",
          *       "children": [
-         *         {
-         *           "student_id": int,
-         *           "name": str,
-         *           "classroom_name": str | None,
-         *           "attendance": { "status": "出席" | ... } | null,
-         *           "leave": { "id": int, "type": "病假" | "事假", "status": "approved" } | null,
-         *           "medication": { "order_count": int, "has_order": bool },
-         *           "dismissal": { "id": int, "status": "pending|acknowledged|completed", "requested_at": iso } | null,
-         *         }, ...
+         *     {
+         *       "student_id": int,
+         *       "name": str,
+         *       "classroom_name": str | None,
+         *       "attendance": { "status": "出席" | ... } | null,
+         *       "leave": { "id": int, "type": "病假" | "事假", "status": "approved" } | null,
+         *       "medication": { "order_count": int, "has_order": bool },
+         *       "dismissal": { "id": int, "status": "pending|acknowledged|completed", "requested_at": iso } | null,
+         *     }, ...
          *       ]
          *     }
          *     ```
@@ -12769,6 +12797,62 @@ export interface components {
             /** Week Start Date */
             week_start_date: string;
         };
+        /**
+         * CalendarFeedItem
+         * @description 單筆行事曆事件，統一 envelope。
+         */
+        CalendarFeedItem: {
+            /**
+             * All Day
+             * @default true
+             */
+            all_day: boolean;
+            /** Color */
+            color: string;
+            /**
+             * End
+             * Format: date
+             */
+            end: string;
+            /** Id */
+            id: number | string;
+            /**
+             * Layer
+             * @enum {string}
+             */
+            layer: "event" | "holiday" | "leave" | "activity" | "appraisal" | "meeting";
+            /** Link */
+            link?: string | null;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            };
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            /** Title */
+            title: string;
+        };
+        /**
+         * CalendarFeedResponse
+         * @description admin_feed 回應主體。
+         */
+        CalendarFeedResponse: {
+            /**
+             * From
+             * Format: date
+             */
+            from: string;
+            /** Items */
+            items: components["schemas"]["CalendarFeedItem"][];
+            /**
+             * To
+             * Format: date
+             */
+            to: string;
+        };
         /** CampusSettingPayload */
         CampusSettingPayload: {
             /**
@@ -14156,6 +14240,10 @@ export interface components {
             is_all_day: boolean;
             /** Location */
             location?: string | null;
+            /** Recurrence Rule */
+            recurrence_rule?: {
+                [key: string]: unknown;
+            } | null;
             /** Start Time */
             start_time?: string | null;
             /** Title */
@@ -14177,6 +14265,10 @@ export interface components {
             is_all_day?: boolean | null;
             /** Location */
             location?: string | null;
+            /** Recurrence Rule */
+            recurrence_rule?: {
+                [key: string]: unknown;
+            } | null;
             /** Start Time */
             start_time?: string | null;
             /** Title */
@@ -14362,6 +14454,34 @@ export interface components {
             period_start: string;
             /** Teacher Narrative */
             teacher_narrative?: string | null;
+        };
+        /** GenerateRequest */
+        GenerateRequest: {
+            /** Month */
+            month: number;
+            /** Year */
+            year: number;
+        };
+        /** GenerateResponse */
+        GenerateResponse: {
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
+            /** Generated By */
+            generated_by: string;
+            /** Month */
+            month: number;
+            /** Rows Generated */
+            rows_generated: number;
+            /**
+             * Snapshot Date
+             * Format: date
+             */
+            snapshot_date: string;
+            /** Year */
+            year: number;
         };
         /**
          * Grade
@@ -22896,6 +23016,39 @@ export interface operations {
             };
         };
     };
+    get_admin_feed_api_calendar_admin_feed_get: {
+        parameters: {
+            query: {
+                from: string;
+                layers?: string | null;
+                to: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarFeedResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_classrooms_api_classrooms_get: {
         parameters: {
             query?: {
@@ -23889,59 +24042,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    debug_employee_salary_api_dev_employee_salary_debug_get: {
-        parameters: {
-            query: {
-                employee_id: number;
-                month: number;
-                year: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_salary_logic_api_dev_salary_logic_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
                 };
             };
         };
@@ -26359,6 +26459,104 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IepOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_monthly_report_api_gov_moe_monthly_get: {
+        parameters: {
+            query: {
+                month: number;
+                year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_monthly_report_api_gov_moe_monthly_export_get: {
+        parameters: {
+            query: {
+                format?: "xlsx";
+                month: number;
+                year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    generate_monthly_report_api_gov_moe_monthly_generate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GenerateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerateResponse"];
                 };
             };
             /** @description Validation Error */
