@@ -1,15 +1,28 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, shallowRef } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRouter } from 'vue-router'
+import FullCalendar from '@fullcalendar/vue3'
+import dayGridPlugin from '@fullcalendar/daygrid'
+import timeGridPlugin from '@fullcalendar/timegrid'
+import listPlugin from '@fullcalendar/list'
+import interactionPlugin from '@fullcalendar/interaction'
+import zhTwLocale from '@fullcalendar/core/locales/zh-tw'
+import type {
+  CalendarOptions,
+  DatesSetArg,
+  EventClickArg,
+  EventDropArg,
+} from '@fullcalendar/core'
 import { createEvent, deleteEvent, getCalendarFeed, updateEvent } from '@/api/events'
 import { getAdminFeed } from '@/api/calendar'
 import { useCalendarLayers } from '@/composables/useCalendarLayers'
-import { CALENDAR_LAYERS, LAYER_LABELS, LAYER_COLORS } from '@/constants/calendarLayers'
 import { downloadFile } from '@/utils/download'
 import { apiError } from '@/utils/error'
+import CalendarToolbar from '@/components/calendar/CalendarToolbar.vue'
 import RecurrenceEditor from '@/components/calendar/RecurrenceEditor.vue'
 import type { RecurrenceRule } from '@/components/calendar/types'
+import type { CalendarLayer } from '@/api/calendar'
 
 interface CalendarEvent {
   id: number
@@ -23,6 +36,7 @@ interface CalendarEvent {
   start_time?: string
   end_time?: string
   is_read_only?: boolean
+  recurrence_rule?: RecurrenceRule | null
   [key: string]: unknown
 }
 
@@ -34,19 +48,9 @@ interface OfficialSync {
 const router = useRouter()
 const {
   enabledLayers,
-  groupByDate,
-  enableAll,
-  disableAll,
+  fullCalendarEvents,
   setItems,
 } = useCalendarLayers()
-
-import type { CalendarLayer } from '@/api/calendar'
-const selectedLayerArr = computed<CalendarLayer[]>({
-  get: () => [...enabledLayers.value],
-  set: (v: CalendarLayer[]) => {
-    enabledLayers.value = new Set(v)
-  },
-})
 
 const loading = ref(false)
 const events = ref<CalendarEvent[]>([])
@@ -55,9 +59,18 @@ const dialogVisible = ref(false)
 const detailVisible = ref(false)
 const isEdit = ref(false)
 const officialSync = ref<OfficialSync | null>(null)
+const searchText = ref('')
 
-const now = new Date()
-const currentDate = ref(new Date(now.getFullYear(), now.getMonth(), 1))
+const calendarRef = shallowRef<InstanceType<typeof FullCalendar> | null>(null)
+
+// FC 當前可見區間（datesSet 維護），用於決定 admin_feed window + export 月份
+const viewRange = ref<{ start: Date; end: Date }>({
+  start: new Date(),
+  end: new Date(),
+})
+
+const currentYear = computed(() => viewRange.value.start.getFullYear())
+const currentMonth = computed(() => viewRange.value.start.getMonth() + 1)
 
 const eventTypes = [
   { value: 'meeting', label: '會議', color: '#409eff' },
@@ -95,7 +108,6 @@ const form = reactive<{
 })
 
 const selectedEvent = ref<CalendarEvent | null>(null)
-const searchText = ref('')
 
 const resetForm = () => {
   form.id = null
@@ -110,10 +122,6 @@ const resetForm = () => {
   form.location = ''
   form.recurrence_rule = null
 }
-
-const currentYear = computed(() => currentDate.value.getFullYear())
-const currentMonth = computed(() => currentDate.value.getMonth() + 1)
-const monthLabel = computed(() => `${currentYear.value} 年 ${currentMonth.value} 月`)
 
 const officialSyncAlertType = computed(() => {
   if (officialSync.value?.warning) return 'warning'
@@ -135,43 +143,6 @@ const filteredEvents = computed(() => {
   )
 })
 
-const daysInMonth = computed(() => new Date(currentYear.value, currentMonth.value, 0).getDate())
-
-const firstDayOfWeek = computed(() => {
-  const day = new Date(currentYear.value, currentMonth.value - 1, 1).getDay()
-  return day === 0 ? 6 : day - 1
-})
-
-const calendarDays = computed(() => {
-  const yr = currentYear.value
-  const mo = String(currentMonth.value).padStart(2, '0')
-  const totalDays = daysInMonth.value
-
-  // 預建日期→事件 Map，避免對每天都做 O(n) 線性掃描
-  const eventsByDate = new Map()
-  for (const event of events.value) {
-    const start = event.event_date
-    const end = event.end_date || event.event_date
-    for (let d = 1; d <= totalDays; d += 1) {
-      const dateStr = `${yr}-${mo}-${String(d).padStart(2, '0')}`
-      if (dateStr >= start && dateStr <= end) {
-        if (!eventsByDate.has(dateStr)) eventsByDate.set(dateStr, [])
-        eventsByDate.get(dateStr).push(event)
-      }
-    }
-  }
-
-  const days = []
-  for (let i = 0; i < firstDayOfWeek.value; i += 1) {
-    days.push({ day: null, events: [] })
-  }
-  for (let day = 1; day <= totalDays; day += 1) {
-    const dateStr = `${yr}-${mo}-${String(day).padStart(2, '0')}`
-    days.push({ day, date: dateStr, events: eventsByDate.get(dateStr) || [] })
-  }
-  return days
-})
-
 const exportCalendar = () => {
   downloadFile(`/exports/calendar?year=${currentYear.value}&month=${currentMonth.value}`, `${currentYear.value}年${currentMonth.value}月行事曆.xlsx`)
 }
@@ -180,20 +151,23 @@ const exportHolidays = () => {
   downloadFile(`/exports/holidays?year=${currentYear.value}`, `${currentYear.value}年國定假日.xlsx`)
 }
 
-const monthRange = computed(() => {
-  const yr = currentYear.value
-  const mo = String(currentMonth.value).padStart(2, '0')
-  const lastDay = String(daysInMonth.value).padStart(2, '0')
-  return { from: `${yr}-${mo}-01`, to: `${yr}-${mo}-${lastDay}` }
-})
+// FC 給 end 是 exclusive — 在拉資料窗口時減一天得到 inclusive end
+const fmtDate = (d: Date) => {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
 
-const fetchAdminFeed = async () => {
+const fetchAdminFeed = async (start: Date, end: Date) => {
   try {
-    const { from, to } = monthRange.value
-    const resp = await getAdminFeed(from, to)
+    const fromStr = fmtDate(start)
+    const toExclusive = new Date(end)
+    toExclusive.setDate(toExclusive.getDate() - 1)
+    const toStr = fmtDate(toExclusive)
+    const resp = await getAdminFeed(fromStr, toStr)
     setItems(resp.data.items)
   } catch (error) {
-    // 軟失敗：admin_feed 失敗不影響既有 SchoolEvent 顯示
     console.error('[calendar] getAdminFeed failed', error)
     setItems([])
   }
@@ -211,51 +185,11 @@ const fetchEvents = async () => {
   } finally {
     loading.value = false
   }
-  // 平行附加：非 event layer
-  fetchAdminFeed()
 }
 
-const nonEventItemsForCell = (dateStr: string | null | undefined) => {
-  if (!dateStr) return []
-  return (groupByDate.value[dateStr] || []).filter((x: { layer: string }) => x.layer !== 'event')
-}
-
-const onLayerItemClick = (item: { link?: string | null }) => {
-  if (item.link) {
-    router.push(item.link)
-  }
-}
-
-const openCellPopover = (dateStr: string) => {
-  const items = nonEventItemsForCell(dateStr)
-  ElMessageBox.alert(
-    items.map((it) => `${LAYER_LABELS[it.layer]}：${it.title}`).join('\n') || '無項目',
-    dateStr,
-    { type: 'info', confirmButtonText: '關閉' },
-  ).catch(() => { /* user cancel */ })
-}
-
-const prevMonth = () => {
-  currentDate.value = new Date(currentYear.value, currentMonth.value - 2, 1)
+const refreshAll = () => {
   fetchEvents()
-}
-
-const nextMonth = () => {
-  currentDate.value = new Date(currentYear.value, currentMonth.value, 1)
-  fetchEvents()
-}
-
-const goToday = () => {
-  const current = new Date()
-  currentDate.value = new Date(current.getFullYear(), current.getMonth(), 1)
-  fetchEvents()
-}
-
-const isToday = (dateStr: string | null | undefined) => {
-  if (!dateStr) return false
-  const current = new Date()
-  const todayStr = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}-${String(current.getDate()).padStart(2, '0')}`
-  return dateStr === todayStr
+  fetchAdminFeed(viewRange.value.start, viewRange.value.end)
 }
 
 const handleAdd = (dateStr: string | null | undefined) => {
@@ -297,7 +231,6 @@ const saveEvent = async () => {
     ElMessage.warning('請填寫標題與日期')
     return
   }
-
   try {
     const payload = {
       title: form.title,
@@ -319,7 +252,7 @@ const saveEvent = async () => {
       ElMessage.success('事件已新增')
     }
     dialogVisible.value = false
-    await fetchEvents()
+    refreshAll()
   } catch (error) {
     ElMessage.error(apiError(error, '操作失敗'))
   }
@@ -339,7 +272,7 @@ const handleDelete = async (event: CalendarEvent) => {
   try {
     await deleteEvent(event.id)
     ElMessage.success('事件已刪除')
-    await fetchEvents()
+    refreshAll()
   } catch (error) {
     ElMessage.error(apiError(error, '刪除失敗'))
   } finally {
@@ -347,7 +280,110 @@ const handleDelete = async (event: CalendarEvent) => {
   }
 }
 
-onMounted(fetchEvents)
+// ===== FullCalendar callbacks =====
+
+const onDatesSet = (arg: DatesSetArg) => {
+  viewRange.value = { start: arg.start, end: arg.end }
+  // 月份變化時：若新月份和上次 fetchEvents 不同，重撈 events
+  // 同時撈當前 view window 的 admin_feed
+  fetchAdminFeed(arg.start, arg.end)
+  fetchEvents()
+}
+
+const onEventClick = (arg: EventClickArg) => {
+  const layer = arg.event.extendedProps.layer as CalendarLayer | undefined
+  const rawId = arg.event.extendedProps.rawId
+  const link = arg.event.extendedProps.link as string | null | undefined
+
+  if (layer === 'event') {
+    // Phase C 展開的重複事件 id 為 "{pk}@{date}"——取 pk 部分
+    const pk = typeof rawId === 'string' ? Number(rawId.split('@')[0]) : Number(rawId)
+    const ev = events.value.find((e) => e.id === pk)
+    if (ev) {
+      openEvent(ev)
+      return
+    }
+  }
+  // 其他 layer：有 link 就導頁
+  if (link) router.push(link)
+}
+
+const onEventDrop = async (info: EventDropArg) => {
+  const layer = info.event.extendedProps.layer as CalendarLayer | undefined
+  if (layer !== 'event') {
+    info.revert()
+    ElMessage.warning('此項目不能拖拉改期')
+    return
+  }
+  const rawId = info.event.extendedProps.rawId
+  const pk = typeof rawId === 'string' ? Number(rawId.split('@')[0]) : Number(rawId)
+  if (!pk || Number.isNaN(pk)) {
+    info.revert()
+    return
+  }
+
+  const start = info.event.start
+  if (!start) {
+    info.revert()
+    return
+  }
+  const newStart = fmtDate(start)
+  // FC all-day end 是 exclusive；timed end 是 inclusive
+  let newEnd: string | null = null
+  if (info.event.end) {
+    if (info.event.allDay) {
+      const e = new Date(info.event.end)
+      e.setDate(e.getDate() - 1)
+      newEnd = fmtDate(e)
+    } else {
+      newEnd = fmtDate(info.event.end)
+    }
+    if (newEnd === newStart) newEnd = null
+  }
+
+  try {
+    await updateEvent(pk, { event_date: newStart, end_date: newEnd })
+    ElMessage.success('已更新事件日期')
+    refreshAll()
+  } catch (error) {
+    info.revert()
+    ElMessage.error(apiError(error, '更新失敗，已還原'))
+  }
+}
+
+const calendarOptions = computed<CalendarOptions>(() => ({
+  plugins: [dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin],
+  initialView: 'dayGridMonth',
+  locale: zhTwLocale,
+  headerToolbar: {
+    left: 'prev,next today',
+    center: 'title',
+    right: 'dayGridMonth,timeGridWeek,timeGridDay,listWeek',
+  },
+  buttonText: {
+    today: '今天',
+    month: '月',
+    week: '週',
+    day: '日',
+    list: '列表',
+  },
+  height: 'auto',
+  events: fullCalendarEvents.value,
+  editable: true, // 全域開拖；個別 event 用 editable: false 鎖
+  eventStartEditable: true,
+  eventDurationEditable: false,
+  datesSet: onDatesSet,
+  eventClick: onEventClick,
+  eventDrop: onEventDrop,
+}))
+
+// 依賴 enabledLayers 來變更—讀一次以建立依賴鏈（CalendarToolbar 雙向綁定）
+const _layerDep = computed(() => enabledLayers.value)
+void _layerDep
+
+onMounted(() => {
+  // 初始 viewRange 由 FullCalendar 的 datesSet 觸發；無需在這先 fetch
+})
 </script>
 
 <template>
@@ -370,92 +406,8 @@ onMounted(fetchEvents)
     />
 
     <el-card class="calendar-card">
-      <div class="calendar-nav">
-        <el-button @click="prevMonth" :icon="'ArrowLeft'" circle size="small" />
-        <h3 class="month-label">{{ monthLabel }}</h3>
-        <el-button @click="nextMonth" :icon="'ArrowRight'" circle size="small" />
-        <el-button size="small" style="margin-left: 12px" @click="goToday">今天</el-button>
-      </div>
-
-      <div class="calendar-layer-toggle">
-        <el-checkbox-group v-model="selectedLayerArr" size="small">
-          <el-checkbox
-            v-for="layer in CALENDAR_LAYERS"
-            :key="layer"
-            :value="layer"
-            :style="{ '--layer-dot': LAYER_COLORS[layer] }"
-          >
-            <span class="layer-dot" />
-            {{ LAYER_LABELS[layer] }}
-          </el-checkbox>
-        </el-checkbox-group>
-        <el-button size="small" link @click="enableAll">全選</el-button>
-        <el-button size="small" link @click="disableAll">清除</el-button>
-      </div>
-
-      <div class="calendar-grid">
-        <div v-for="day in ['一', '二', '三', '四', '五', '六', '日']" :key="day" class="calendar-header">
-          {{ day }}
-        </div>
-        <div
-          v-for="(cell, idx) in calendarDays"
-          :key="idx"
-          class="calendar-cell"
-          :class="{ empty: !cell.day, today: isToday(cell.date) }"
-          @dblclick="cell.day && handleAdd(cell.date)"
-        >
-          <div v-if="cell.day" class="cell-day">{{ cell.day }}</div>
-          <div v-if="cell.events.length" class="cell-events">
-            <div
-              v-for="event in cell.events.slice(0, 3)"
-              :key="event.id"
-              class="event-dot"
-              :class="{ 'event-dot--readonly': event.is_read_only }"
-              :style="{ backgroundColor: eventTypeMap[event.event_type]?.color || '#909399' }"
-              :title="event.title"
-              @click.stop="openEvent(event)"
-            >
-              <span v-if="event.is_official" class="event-dot__flag">官</span>
-              {{ event.title.length > 6 ? `${event.title.slice(0, 6)}…` : event.title }}
-            </div>
-            <div v-if="cell.events.length > 3" class="event-more">
-              +{{ cell.events.length - 3 }} 更多
-            </div>
-          </div>
-          <div v-if="cell.day && nonEventItemsForCell(cell.date).length" class="cell-other-layers">
-            <template
-              v-for="(it, idx) in nonEventItemsForCell(cell.date)"
-              :key="`${it.layer}-${it.id}`"
-            >
-              <el-tooltip
-                v-if="idx < 4"
-                :content="`${LAYER_LABELS[it.layer]}：${it.title}`"
-                placement="top"
-              >
-                <div
-                  class="layer-strip"
-                  :style="{ background: it.color }"
-                  @click.stop="onLayerItemClick(it)"
-                />
-              </el-tooltip>
-            </template>
-            <div
-              v-if="nonEventItemsForCell(cell.date).length > 4"
-              class="layer-more"
-              @click.stop="openCellPopover(cell.date)"
-            >
-              +{{ nonEventItemsForCell(cell.date).length - 4 }}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="legend">
-        <span v-for="item in eventTypes" :key="item.value" class="legend-item">
-          <span class="legend-dot" :style="{ backgroundColor: item.color }"></span>
-          {{ item.label }}
-        </span>
-      </div>
+      <CalendarToolbar v-model="enabledLayers" />
+      <FullCalendar ref="calendarRef" :options="calendarOptions" />
     </el-card>
 
     <el-card style="margin-top: 20px">
@@ -609,182 +561,6 @@ onMounted(fetchEvents)
   overflow: visible;
 }
 
-.calendar-nav {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  margin-bottom: var(--space-4);
-}
-
-.month-label {
-  margin: 0;
-  min-width: 140px;
-  text-align: center;
-}
-
-.calendar-grid {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-}
-
-.calendar-header {
-  padding: 8px;
-  text-align: center;
-  font-weight: bold;
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
-  background: var(--bg-color-soft);
-  border-bottom: 1px solid var(--border-color);
-}
-
-.calendar-cell {
-  min-height: 90px;
-  padding: 4px 6px;
-  border-right: 1px solid var(--border-color);
-  border-bottom: 1px solid var(--border-color);
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.calendar-cell:hover:not(.empty) {
-  background: var(--bg-color-soft);
-}
-
-.calendar-cell.empty {
-  background: var(--bg-color);
-  cursor: default;
-}
-
-.calendar-cell.today {
-  background: #ecf5ff;
-}
-
-.calendar-cell.today .cell-day {
-  color: var(--color-info);
-  font-weight: bold;
-}
-
-.cell-day {
-  font-size: var(--text-sm);
-  color: var(--text-primary);
-  margin-bottom: 2px;
-}
-
-.cell-events {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.event-dot {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  color: #fff;
-  padding: 1px 4px;
-  border-radius: 3px;
-  cursor: pointer;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.event-dot--readonly {
-  opacity: 0.92;
-}
-
-.event-dot__flag {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 14px;
-  height: 14px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.18);
-  font-size: 10px;
-}
-
-.event-dot:hover {
-  opacity: 0.85;
-}
-
-.event-more {
-  font-size: 12px;
-  color: var(--text-tertiary);
-}
-
-.calendar-layer-toggle {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 12px;
-  margin-bottom: var(--space-3);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  background: var(--bg-color-soft);
-  flex-wrap: wrap;
-}
-
-.layer-dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--layer-dot);
-  margin-right: 4px;
-  vertical-align: middle;
-}
-
-.cell-other-layers {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin-top: 2px;
-}
-
-.layer-strip {
-  height: 4px;
-  border-radius: 2px;
-  cursor: pointer;
-}
-
-.layer-strip:hover {
-  opacity: 0.8;
-}
-
-.layer-more {
-  font-size: 10px;
-  color: var(--text-tertiary);
-  cursor: pointer;
-  text-align: right;
-  padding-right: 2px;
-}
-
-.legend {
-  display: flex;
-  gap: var(--space-4);
-  margin-top: var(--space-3);
-  padding-top: 8px;
-  border-top: 1px solid var(--border-color);
-}
-
-.legend-item {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: var(--text-xs);
-  color: var(--text-secondary);
-}
-
-.legend-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-}
-
 .list-header {
   display: flex;
   justify-content: space-between;
@@ -805,5 +581,16 @@ onMounted(fetchEvents)
 .readonly-label {
   color: var(--text-tertiary);
   font-size: 12px;
+}
+
+/* FullCalendar 自帶 CSS variables，可在這客製按鈕色 */
+:deep(.fc) {
+  --fc-button-bg-color: var(--el-color-primary, #409eff);
+  --fc-button-border-color: var(--el-color-primary, #409eff);
+  --fc-button-hover-bg-color: var(--el-color-primary-light-3, #66b1ff);
+  --fc-button-hover-border-color: var(--el-color-primary-light-3, #66b1ff);
+  --fc-button-active-bg-color: var(--el-color-primary-dark-2, #337ecc);
+  --fc-button-active-border-color: var(--el-color-primary-dark-2, #337ecc);
+  --fc-today-bg-color: rgba(64, 158, 255, 0.06);
 }
 </style>
