@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 import {
   Calendar,
@@ -52,7 +52,7 @@ const {
 const todoTiles = computed(() => {
   const tiles = []
 
-  if (showApprovals.value) {
+  if (showApprovals) {
     const pendingLeaves = approvalSummary.value?.pending_leaves ?? 0
     if (pendingLeaves > 0) {
       tiles.push({ key: 'leaves', label: '待審請假', count: pendingLeaves, tone: 'warning', path: '/approvals' })
@@ -63,15 +63,15 @@ const todoTiles = computed(() => {
     }
   }
 
-  if (showAttendance.value && attendanceAnomalies.value) {
-    const count = attendanceAnomalies.value.anomalies?.length ?? 0
+  if (showAttendance && attendanceAnomalies.value) {
+    const count = (attendanceAnomalies.value as { anomalies?: unknown[] }).anomalies?.length ?? 0
     if (count > 0) {
       tiles.push({ key: 'anomalies', label: '今日打卡異常', count, tone: 'danger', path: '/attendance' })
     }
   }
 
-  if (showStudents.value && studentAttendanceSummary.value) {
-    const unmarked = studentAttendanceSummary.value.unmarked_count ?? 0
+  if (showStudents && studentAttendanceSummary.value) {
+    const unmarked = (studentAttendanceSummary.value as { unmarked_count?: number }).unmarked_count ?? 0
     if (unmarked > 0) {
       tiles.push({ key: 'unmarked', label: '學生未點名', count: unmarked, tone: 'danger', path: '/student-attendance' })
     }
@@ -83,15 +83,26 @@ const todoTiles = computed(() => {
 // 任何待辦資料尚未到齊則顯示骨架；都到齊且為 0 才顯示「全部清空」
 const todoDataReady = computed(() => {
   if (isFirstLoad.value && loading.value) return false
-  if (showApprovals.value && approvalSummary.value == null) return false
-  if (showAttendance.value && !deferredSections.anomalies?.loaded) return false
-  if (showStudents.value && !deferredSections.studentAttendance?.loaded) return false
+  if (showApprovals && approvalSummary.value == null) return false
+  if (showAttendance && !deferredSections.anomalies?.loaded) return false
+  if (showStudents && !deferredSections.studentAttendance?.loaded) return false
   return true
 })
 
 const showTodoSection = computed(
-  () => showApprovals.value || showAttendance.value || showStudents.value
+  () => showApprovals || showAttendance || showStudents
 )
+
+// Type helpers for composable data with loose types
+interface TodayStats { total_employees: number; present_count: number; late_count: number; missing_count: number }
+interface StudentAttendanceSummaryData { total_students: number; recorded_count: number; on_campus_count: number; unmarked_count: number; present_count: number; late_count: number; absent_count: number; leave_count: number; record_completion_rate: number }
+interface AttendanceAnomaliesData { anomalies: { employee_id: unknown; anomaly_type: unknown; employee_name: unknown; late_minutes: unknown }[] }
+interface EventTagTypeMap { [key: string]: 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined }
+
+const typedTodayStats = computed(() => todayStats.value as TodayStats | null)
+const typedStudentAttendanceSummary = computed(() => studentAttendanceSummary.value as StudentAttendanceSummaryData | null)
+const typedAttendanceAnomalies = computed(() => attendanceAnomalies.value as AttendanceAnomaliesData | null)
+const typedEventTagType = eventTagType as EventTagTypeMap
 </script>
 
 <template>
@@ -200,7 +211,7 @@ const showTodoSection = computed(
         </div>
         <span class="section-date-chip">{{ todayDateStr }}</span>
       </div>
-      <el-row v-if="isFirstLoad && !todayStats" :gutter="20" class="stats-row" aria-busy="true">
+      <el-row v-if="isFirstLoad && !typedTodayStats" :gutter="20" class="stats-row" aria-busy="true">
         <el-col v-for="i in 4" :key="i" :xs="24" :sm="12" :md="6" class="mb-4">
           <div class="stat-skeleton">
             <div class="skeleton-pulse stat-skeleton__icon" />
@@ -211,18 +222,18 @@ const showTodoSection = computed(
           </div>
         </el-col>
       </el-row>
-      <el-row v-else-if="todayStats" :gutter="20" class="stats-row">
+      <el-row v-else-if="typedTodayStats" :gutter="20" class="stats-row">
         <el-col :xs="24" :sm="12" :md="6" class="mb-4">
-          <StatCard label="今日應出勤" :value="todayStats.total_employees" icon="Calendar" color="primary" />
+          <StatCard label="今日應出勤" :value="typedTodayStats.total_employees" icon="Calendar" color="primary" />
         </el-col>
         <el-col :xs="24" :sm="12" :md="6" class="mb-4">
-          <StatCard label="已出勤" :value="todayStats.present_count" :icon="Select" color="success" />
+          <StatCard label="已出勤" :value="typedTodayStats.present_count" :icon="Select" color="success" />
         </el-col>
         <el-col :xs="24" :sm="12" :md="6" class="mb-4">
-          <StatCard label="遲到" :value="todayStats.late_count" icon="AlarmClock" color="warning" />
+          <StatCard label="遲到" :value="typedTodayStats.late_count" icon="AlarmClock" color="warning" />
         </el-col>
         <el-col :xs="24" :sm="12" :md="6" class="mb-4">
-          <StatCard label="未打卡" :value="todayStats.missing_count" icon="Warning" color="danger" />
+          <StatCard label="未打卡" :value="typedTodayStats.missing_count" icon="Warning" color="danger" />
         </el-col>
       </el-row>
     </template>
@@ -240,29 +251,29 @@ const showTodoSection = computed(
         </div>
         <span class="section-date-chip">{{ todayDateStr }}</span>
       </div>
-      <template v-if="studentAttendanceSummary">
+      <template v-if="typedStudentAttendanceSummary">
         <el-row :gutter="20" class="stats-row">
           <el-col :xs="24" :sm="12" :md="6" class="mb-4">
-            <StatCard label="今日在籍學生" :value="studentAttendanceSummary.total_students" icon="UserFilled" color="primary" />
+            <StatCard label="今日在籍學生" :value="typedStudentAttendanceSummary.total_students" icon="UserFilled" color="primary" />
           </el-col>
           <el-col :xs="24" :sm="12" :md="6" class="mb-4">
-            <StatCard label="已點名" :value="studentAttendanceSummary.recorded_count" icon="EditPen" color="success" />
+            <StatCard label="已點名" :value="typedStudentAttendanceSummary.recorded_count" icon="EditPen" color="success" />
           </el-col>
           <el-col :xs="24" :sm="12" :md="6" class="mb-4">
-            <StatCard label="到校" :value="studentAttendanceSummary.on_campus_count" icon="CircleCheck" color="warning" />
+            <StatCard label="到校" :value="typedStudentAttendanceSummary.on_campus_count" icon="CircleCheck" color="warning" />
           </el-col>
           <el-col :xs="24" :sm="12" :md="6" class="mb-4">
-            <StatCard label="未點名" :value="studentAttendanceSummary.unmarked_count" icon="Warning" color="danger" />
+            <StatCard label="未點名" :value="typedStudentAttendanceSummary.unmarked_count" icon="Warning" color="danger" />
           </el-col>
         </el-row>
         <el-card class="no-hover student-summary-bar">
           <div class="student-summary-bar__inner">
             <div class="student-summary-bar__stats">
-              <span><strong>{{ studentAttendanceSummary.present_count }}</strong> 出席</span>
-              <span><strong>{{ studentAttendanceSummary.late_count }}</strong> 遲到</span>
-              <span><strong>{{ studentAttendanceSummary.absent_count }}</strong> 缺席</span>
-              <span><strong>{{ studentAttendanceSummary.leave_count }}</strong> 請假</span>
-              <span class="student-summary-bar__rate">點名完成率 <strong>{{ studentAttendanceSummary.record_completion_rate }}%</strong></span>
+              <span><strong>{{ typedStudentAttendanceSummary.present_count }}</strong> 出席</span>
+              <span><strong>{{ typedStudentAttendanceSummary.late_count }}</strong> 遲到</span>
+              <span><strong>{{ typedStudentAttendanceSummary.absent_count }}</strong> 缺席</span>
+              <span><strong>{{ typedStudentAttendanceSummary.leave_count }}</strong> 請假</span>
+              <span class="student-summary-bar__rate">點名完成率 <strong>{{ typedStudentAttendanceSummary.record_completion_rate }}%</strong></span>
             </div>
             <el-button link size="small" @click="navigateTo('/student-attendance')">
               前往學生出席紀錄 →
@@ -415,8 +426,8 @@ const showTodoSection = computed(
             <div class="card-header-row">
               <span class="card-header-title">今日打卡異常</span>
               <el-badge
-                v-if="attendanceAnomalies && attendanceAnomalies.anomalies.length > 0"
-                :value="attendanceAnomalies.anomalies.length"
+                v-if="typedAttendanceAnomalies && typedAttendanceAnomalies.anomalies.length > 0"
+                :value="typedAttendanceAnomalies.anomalies.length"
                 type="warning"
               />
             </div>
@@ -424,19 +435,19 @@ const showTodoSection = computed(
           <div v-if="!deferredSections.anomalies.loaded" class="dashboard-card-loading text-secondary">
             正在整理今日異常紀錄...
           </div>
-          <div v-else-if="attendanceAnomalies && attendanceAnomalies.anomalies.length === 0" class="approval-done">
+          <div v-else-if="typedAttendanceAnomalies && typedAttendanceAnomalies.anomalies.length === 0" class="approval-done">
             <el-icon class="approval-done__icon"><CircleCheckFilled /></el-icon>
             <span>今日無異常紀錄</span>
           </div>
-          <div v-else-if="attendanceAnomalies" class="anomaly-list">
+          <div v-else-if="typedAttendanceAnomalies" class="anomaly-list">
             <div
-              v-for="(item, idx) in attendanceAnomalies.anomalies"
+              v-for="(item, idx) in typedAttendanceAnomalies.anomalies"
               :key="`${item.employee_id}-${item.anomaly_type}-${idx}`"
               class="anomaly-item"
             >
               <span class="anomaly-name">{{ item.employee_name }}</span>
-              <el-tag :type="anomalyTagType(item.anomaly_type)" effect="plain" size="small">
-                {{ anomalyLabel(item.anomaly_type, item.late_minutes) }}
+              <el-tag :type="(anomalyTagType(item.anomaly_type as string) as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined)" effect="plain" size="small">
+                {{ anomalyLabel(item.anomaly_type as string, item.late_minutes as number) }}
               </el-tag>
             </div>
           </div>
@@ -470,9 +481,9 @@ const showTodoSection = computed(
           <div v-else class="events-list">
             <div v-for="group in groupedEvents" :key="group.label" class="event-group">
               <div class="event-group__date">{{ group.label }}</div>
-              <div v-for="ev in group.events" :key="ev.id" class="event-item">
+              <div v-for="ev in group.events" :key="ev.id as string | number" class="event-item">
                 <el-tag
-                  :type="eventTagType[ev.event_type] ?? 'info'"
+                  :type="typedEventTagType[ev.event_type as string] ?? 'info'"
                   effect="plain"
                   size="small"
                   class="event-item__tag"

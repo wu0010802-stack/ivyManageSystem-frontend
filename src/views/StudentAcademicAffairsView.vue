@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, provide, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { apiError } from '@/utils/error'
@@ -15,25 +15,28 @@ import LeaveSection from '@/components/student/academic-affairs/LeaveSection.vue
 import AssessmentSection from '@/components/student/academic-affairs/AssessmentSection.vue'
 import IncidentSection from '@/components/student/academic-affairs/IncidentSection.vue'
 
+interface ClassroomItem {
+  id: number
+  name: string
+  [key: string]: unknown
+}
+
+interface StudentItem {
+  id: number
+  name: string
+  student_no?: string
+  [key: string]: unknown
+}
+
 const termStore = useAcademicTermStore()
-const {
-  filters,
-  startDate,
-  endDate,
-  setClassroom,
-  setDateRange,
-  setStudent,
-} = useAcademicAffairsFilters()
+const filtersCtx = useAcademicAffairsFilters()
+const { filters, startDate, endDate, setClassroom, setDateRange, setStudent } = filtersCtx
 
-provide(ACADEMIC_AFFAIRS_FILTERS_KEY, {
-  filters,
-  startDate,
-  endDate,
-})
+provide(ACADEMIC_AFFAIRS_FILTERS_KEY, filtersCtx)
 
-const classrooms = ref([])
+const classrooms = ref<ClassroomItem[]>([])
 const classroomsLoading = ref(false)
-const students = ref([])
+const students = ref<StudentItem[]>([])
 const studentsLoading = ref(false)
 
 const classroomOptions = computed(() =>
@@ -46,6 +49,11 @@ const studentOptions = computed(() =>
     value: s.id,
   })),
 )
+
+// Typed accessors for filters (composable uses `unknown` but el-select needs typed model-value)
+const selectedClassroomId = computed(() => filters.classroomId as number | null)
+const selectedStudentId = computed(() => filters.studentId as number | null)
+const selectedDateRange = computed(() => filters.dateRange as string[])
 
 const dateRangeShortcuts = [
   {
@@ -93,7 +101,7 @@ const fetchClassrooms = async () => {
       semester: termStore.semester,
       include_inactive: false,
     })
-    classrooms.value = res.data ?? []
+    classrooms.value = (res.data ?? []) as ClassroomItem[]
     if (!filters.classroomId && classrooms.value[0]) {
       setClassroom(classrooms.value[0].id)
     } else if (filters.classroomId && !classrooms.value.find((c) => c.id === filters.classroomId)) {
@@ -116,7 +124,7 @@ const fetchStudents = async () => {
   try {
     const res = await getStudents({ classroom_id: filters.classroomId })
     const raw = res.data ?? []
-    students.value = Array.isArray(raw) ? raw : raw.items ?? []
+    students.value = (Array.isArray(raw) ? raw : (raw as { items?: StudentItem[] }).items ?? []) as StudentItem[]
   } catch (error) {
     ElMessage.error(apiError(error, '載入學生清單失敗'))
     students.value = []
@@ -152,7 +160,7 @@ onMounted(async () => {
         <div class="filter-item">
           <span class="filter-label">班級</span>
           <el-select
-            :model-value="filters.classroomId"
+            :model-value="selectedClassroomId"
             placeholder="選擇班級"
             filterable
             :loading="classroomsLoading"
@@ -170,7 +178,7 @@ onMounted(async () => {
         <div class="filter-item">
           <span class="filter-label">日期區間</span>
           <el-date-picker
-            :model-value="filters.dateRange"
+            :model-value="selectedDateRange"
             type="daterange"
             value-format="YYYY-MM-DD"
             range-separator="至"
@@ -184,7 +192,7 @@ onMounted(async () => {
         <div class="filter-item">
           <span class="filter-label">學生 (選填)</span>
           <el-select
-            :model-value="filters.studentId"
+            :model-value="selectedStudentId"
             placeholder="全班"
             filterable
             clearable

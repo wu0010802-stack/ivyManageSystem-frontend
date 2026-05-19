@@ -33,7 +33,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getFeePeriods } from '@/api/fees'
@@ -44,10 +44,10 @@ import FeeRefundsTab from '@/components/fees/FeeRefundsTab.vue'
 
 // ─── Tab 狀態 ────────────────────────────────────────────────────────────────
 const activeTab = ref('records')
-const periodOptions = ref([])
+const periodOptions = ref<string[]>([])
 
 // ─── 子元件 ref（records tab） ──────────────────────────────────────────────
-const feeRecordsTabRef = ref(null)
+const feeRecordsTabRef = ref<{ fetchRecords?: () => void } | null>(null)
 
 // ─── 班級列表（供子元件下拉選單） ──────────────────────────────────────────
 const classroomStore = useClassroomStore()
@@ -55,7 +55,7 @@ const classrooms = computed(() => classroomStore.classrooms)
 
 async function fetchFeePeriods() {
   try {
-    periodOptions.value = await getFeePeriods()
+    periodOptions.value = (await getFeePeriods()) as string[]
   } catch {
     ElMessage.error('載入學期列表失敗')
   }
@@ -63,13 +63,13 @@ async function fetchFeePeriods() {
 
 // ─── 切換 Tab 時自動載入 ──────────────────────────────────────────────────────
 watch(activeTab, (val) => {
-  if (val === 'records') feeRecordsTabRef.value?.fetchRecords()
+  if (val === 'records') feeRecordsTabRef.value?.fetchRecords?.()
 })
 
 onMounted(() => {
   fetchFeePeriods()
   classroomStore.fetchClassrooms()
-  feeRecordsTabRef.value?.fetchRecords()
+  feeRecordsTabRef.value?.fetchRecords?.()
 })
 </script>
 

@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -9,9 +9,9 @@ import { apiError } from '@/utils/error'
 
 const router = useRouter()
 const loading = ref(false)
-const loginForm = ref(null)
-const usernameInput = ref(null)
-const passwordInput = ref(null)
+const loginForm = ref<{ validate: () => Promise<void> } | null>(null)
+const usernameInput = ref<{ focus?: () => void } | null>(null)
+const passwordInput = ref<{ focus?: () => void } | null>(null)
 
 onMounted(() => {
   requestAnimationFrame(() => {
@@ -37,7 +37,7 @@ const focusFirstInvalid = async () => {
 
 const handleLogin = async () => {
   try {
-    await loginForm.value.validate()
+    await loginForm.value?.validate()
   } catch {
     focusFirstInvalid()
     return
@@ -47,16 +47,17 @@ const handleLogin = async () => {
   try {
     const res = await login(form.username, form.password)
 
-    if (res.data.user.role !== 'admin') {
+    const userData = res.data as { user: { role: string; name: string }; must_change_password?: boolean }
+    if (userData.user.role !== 'admin') {
       ElMessage.error('權限不足，僅管理員可登入後台')
       usernameInput.value?.focus?.()
       return
     }
 
     // Token 已由後端透過 httpOnly Cookie 設定，前端只需儲存 userInfo
-    setUserInfo({ ...res.data.user, must_change_password: !!res.data.must_change_password })
-    ElMessage.success(`歡迎回來，${res.data.user.name}`)
-    router.push(res.data.must_change_password ? '/change-password' : '/')
+    setUserInfo({ ...userData.user, must_change_password: !!userData.must_change_password })
+    ElMessage.success(`歡迎回來，${userData.user.name}`)
+    router.push(userData.must_change_password ? '/change-password' : '/')
   } catch (error) {
     ElMessage.error(apiError(error, '登入失敗，請確認帳號密碼'))
     passwordInput.value?.focus?.()

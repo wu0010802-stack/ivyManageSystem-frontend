@@ -242,7 +242,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -264,15 +264,21 @@ import VendorPaymentSignDialog from '@/components/VendorPaymentSignDialog.vue'
 
 const paymentMethodOptions = PAYMENT_METHOD_OPTIONS
 
-const canWrite = computed(() => hasPermission(PERMISSION_VALUES.VENDOR_PAYMENT_WRITE))
+const canWrite = computed(() => hasPermission(String(PERMISSION_VALUES.VENDOR_PAYMENT_WRITE)))
 
-const items = ref([])
+interface Attachment { key: string; filename: string; size: number }
+const items = ref<Record<string, unknown>[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
 const loading = ref(false)
 
-const filters = reactive({
+const filters = reactive<{
+  dateRange: string[] | null
+  vendor_name: string
+  status: string
+  payment_method: string
+}>({
   dateRange: null,
   vendor_name: '',
   status: '',
@@ -280,9 +286,22 @@ const filters = reactive({
 })
 
 const dialogVisible = ref(false)
-const editingId = ref(null)
+const editingId = ref<number | null>(null)
 const saving = ref(false)
-const form = reactive({
+const form = reactive<{
+  payment_date: string
+  vendor_name: string
+  amount: number
+  payment_method: string
+  description: string
+  invoice_number: string
+  notes: string
+  attachments: Attachment[]
+  status: string
+  signer_name: string | null
+  signed_at: string | null
+  has_signature: boolean
+}>({
   payment_date: '',
   vendor_name: '',
   amount: 0,
@@ -298,7 +317,7 @@ const form = reactive({
 })
 
 const signDialogVisible = ref(false)
-const signingId = ref(null)
+const signingId = ref<number | null>(null)
 
 const downloadAttachmentUrl = downloadVendorPaymentAttachmentUrl
 const signatureUrl = vendorPaymentSignatureUrl
@@ -306,7 +325,7 @@ const signatureUrl = vendorPaymentSignatureUrl
 async function fetchList() {
   loading.value = true
   try {
-    const params = {
+    const params: Record<string, unknown> = {
       page: page.value,
       page_size: pageSize.value,
     }
@@ -322,7 +341,8 @@ async function fetchList() {
     items.value = res.data.items
     total.value = res.data.total
   } catch (e) {
-    ElMessage.error(e?.response?.data?.detail || '載入失敗')
+    const err = e as { response?: { data?: { detail?: string } } }
+    ElMessage.error(err?.response?.data?.detail || '載入失敗')
   } finally {
     loading.value = false
   }
@@ -351,8 +371,8 @@ function openCreate() {
   dialogVisible.value = true
 }
 
-function openEdit(row) {
-  editingId.value = row.id
+function openEdit(row: Record<string, unknown>) {
+  editingId.value = row.id as number | null
   Object.assign(form, {
     payment_date: row.payment_date,
     vendor_name: row.vendor_name,
@@ -370,8 +390,8 @@ function openEdit(row) {
   dialogVisible.value = true
 }
 
-function openSign(row) {
-  signingId.value = row.id
+function openSign(row: Record<string, unknown>) {
+  signingId.value = row.id as number | null
   signDialogVisible.value = true
 }
 
@@ -400,49 +420,53 @@ async function handleSave() {
     dialogVisible.value = false
     fetchList()
   } catch (e) {
-    ElMessage.error(e?.response?.data?.detail || '操作失敗')
+    const err = e as { response?: { data?: { detail?: string } } }
+    ElMessage.error(err?.response?.data?.detail || '操作失敗')
   } finally {
     saving.value = false
   }
 }
 
-async function handleDelete(row) {
+async function handleDelete(row: Record<string, unknown>) {
   try {
     await ElMessageBox.confirm(
       `確定刪除「${row.vendor_name}」付款紀錄？此動作無法復原。`,
       '確認刪除',
       { type: 'warning', confirmButtonText: '確定刪除', confirmButtonClass: 'el-button--danger' }
     )
-    await deleteVendorPayment(row.id)
+    await deleteVendorPayment(row.id as number)
     ElMessage.success('已刪除')
     fetchList()
   } catch (e) {
-    if (e !== 'cancel') ElMessage.error(e?.response?.data?.detail || '刪除失敗')
+    const err = e as { response?: { data?: { detail?: string } } }
+    if (e !== 'cancel') ElMessage.error(err?.response?.data?.detail || '刪除失敗')
   }
 }
 
-async function handleAttachmentUpload({ file }) {
+async function handleAttachmentUpload({ file }: { file: File }) {
   if (!editingId.value) return
   const fd = new FormData()
   fd.append('file', file)
   try {
     const res = await uploadVendorPaymentAttachment(editingId.value, fd)
-    form.attachments = [...(form.attachments || []), res.data]
+    form.attachments = [...(form.attachments || []), res.data as Attachment]
     ElMessage.success('附件已上傳')
     fetchList()
   } catch (e) {
-    ElMessage.error(e?.response?.data?.detail || '上傳失敗')
+    const err = e as { response?: { data?: { detail?: string } } }
+    ElMessage.error(err?.response?.data?.detail || '上傳失敗')
   }
 }
 
-async function removeAttachment(key) {
+async function removeAttachment(key: string) {
   try {
     await ElMessageBox.confirm('確定刪除此附件？', '確認刪除', { type: 'warning' })
-    await deleteVendorPaymentAttachment(editingId.value, key)
+    await deleteVendorPaymentAttachment(editingId.value as number, key)
     form.attachments = (form.attachments || []).filter((a) => a.key !== key)
     fetchList()
   } catch (e) {
-    if (e !== 'cancel') ElMessage.error(e?.response?.data?.detail || '刪除失敗')
+    const err = e as { response?: { data?: { detail?: string } } }
+    if (e !== 'cancel') ElMessage.error(err?.response?.data?.detail || '刪除失敗')
   }
 }
 
@@ -450,14 +474,14 @@ function onSigned() {
   fetchList()
 }
 
-function formatSize(bytes) {
+function formatSize(bytes: number) {
   if (!bytes) return '0 B'
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / 1024 / 1024).toFixed(2)} MB`
 }
 
-function formatDateTime(iso) {
+function formatDateTime(iso: string | null | undefined) {
   if (!iso) return '—'
   return new Date(iso).toLocaleString('zh-TW')
 }

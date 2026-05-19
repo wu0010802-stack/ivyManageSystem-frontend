@@ -1,18 +1,37 @@
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getAuditLogs, getAuditLogsMeta, exportAuditLogs } from '@/api/audit'
 import { ElMessage } from 'element-plus'
 
+type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
+
+interface AuditLog {
+  id: number
+  entity_type: string
+  entity_id?: number | string | null
+  action: string
+  username?: string
+  ip_address?: string
+  created_at?: string
+  changes?: Record<string, unknown>
+  [key: string]: unknown
+}
+
+interface MetaOption {
+  value: string
+  label: string
+}
+
 const router = useRouter()
 
 const loading = ref(false)
 const exporting = ref(false)
-const logs = ref([])
+const logs = ref<AuditLog[]>([])
 const total = ref(0)
 
-const entityTypes = ref([])
-const actionTypes = ref([])
+const entityTypes = ref<MetaOption[]>([])
+const actionTypes = ref<MetaOption[]>([])
 
 const filters = reactive({
   entity_type: '',
@@ -28,17 +47,17 @@ const filters = reactive({
 
 // entity_type → 前端路由生成函式。只對「有 id 專屬詳情頁」的資源建連結，
 // 避免點「#5」卻跳去列表頁這種假導航（其他 entity 只有列表頁）。
-const ENTITY_ROUTES = {
+const ENTITY_ROUTES: Record<string, (id: number | string | null | undefined) => { path: string; query?: Record<string, string | number> } | null> = {
   student: (id) => (id ? { path: `/students/profile/${id}` } : null),
   // 廠商付款：列表頁支援 ?highlight=<id> 自動開啟該筆編輯 dialog
   vendor_payment: (id) =>
-    id ? { path: '/vendor-payments', query: { highlight: id } } : null,
+    id ? { path: '/vendor-payments', query: { highlight: String(id) } } : null,
 }
 
 // 高風險事件快篩：name → predicate(row) → boolean
 // 客端過濾（changes 是 JSONB，server 端篩成本較高）；同時回傳該按鈕是否要先設 entity_type。
 // Why: 業主驗收要求「請假/加班/學費/退款/大額異動/強制放行/已核准後修改」可一鍵篩出
-const RISK_QUICK_FILTERS = [
+const RISK_QUICK_FILTERS: { key: string; label: string; entityType: string; predicate: (row: AuditLog) => boolean }[] = [
   { key: 'leave', label: '請假', entityType: 'leave', predicate: () => true },
   { key: 'overtime', label: '加班', entityType: 'overtime', predicate: () => true },
   { key: 'fee', label: '學費', entityType: 'fee', predicate: () => true },
@@ -46,14 +65,14 @@ const RISK_QUICK_FILTERS = [
     key: 'refund',
     label: '退款',
     entityType: 'fee',
-    predicate: (row) => row.changes?.action === 'fee_refund',
+    predicate: (row) => (row.changes as { action?: string })?.action === 'fee_refund',
   },
   {
     key: 'large_amount',
     label: '大額金流',
     entityType: '',
     predicate: (row) => {
-      const c = row.changes || {}
+      const c = (row.changes || {}) as Record<string, unknown>
       // 任何金額類欄位 > 5000 視為大額；含 fee_pay/fee_refund/cumulative_refund_after
       const candidates = [c.delta, c.refund_amount, c.cumulative_refund_after, c.new_paid]
       return candidates.some((v) => typeof v === 'number' && Math.abs(v) >= 5000)
@@ -64,7 +83,7 @@ const RISK_QUICK_FILTERS = [
     label: '強制放行',
     entityType: '',
     predicate: (row) => {
-      const tags = row.changes?.risk_tags || []
+      const tags = ((row.changes as { risk_tags?: string[] })?.risk_tags) || []
       return tags.includes('force_overlap') || tags.includes('force_without_substitute')
     },
   },
@@ -73,13 +92,13 @@ const RISK_QUICK_FILTERS = [
     label: '已核准後修改',
     entityType: '',
     predicate: (row) => {
-      const c = row.changes || {}
+      const c = (row.changes || {}) as Record<string, unknown>
       // 三條軌跡都算：(1) approve 流程中駁回已核准 (2) 修改觸發退審 (3) 批次中含此類
       if (c.is_reject_of_approved) return true
       if (c.action === 'leave_update' || c.action === 'overtime_update') {
         return c.was_approved === true
       }
-      if (c.high_risk_count && c.high_risk_count > 0) return true
+      if (c.high_risk_count && (c.high_risk_count as number) > 0) return true
       return false
     },
   },
@@ -101,7 +120,7 @@ const RISK_QUICK_FILTERS = [
 const activeRiskFilter = ref('')
 
 const buildFilterParams = () => {
-  const params = {}
+  const params: Record<string, unknown> = {}
   if (filters.entity_type) params.entity_type = filters.entity_type
   if (filters.action) params.action = filters.action
   if (filters.username) params.username = filters.username
@@ -115,9 +134,10 @@ const buildFilterParams = () => {
 const fetchMeta = async () => {
   try {
     const res = await getAuditLogsMeta()
-    entityTypes.value = res.data.entity_types
-    actionTypes.value = res.data.actions
-  } catch (error) {
+    const d = res.data as { entity_types: MetaOption[]; actions: MetaOption[] }
+    entityTypes.value = d.entity_types
+    actionTypes.value = d.actions
+  } catch {
     // meta 抓不到不影響查詢
   }
 }
@@ -131,10 +151,11 @@ const fetchLogs = async () => {
       page_size: filters.page_size,
     }
     const res = await getAuditLogs(params)
-    logs.value = res.data.items
-    total.value = res.data.total
+    const d = res.data as { items: AuditLog[]; total: number }
+    logs.value = d.items
+    total.value = d.total
   } catch (error) {
-    if (error.response?.status === 403) {
+    if ((error as { response?: { status?: number } }).response?.status === 403) {
       ElMessage.error('需要管理員權限')
     } else {
       ElMessage.error('載入操作紀錄失敗')
@@ -166,7 +187,7 @@ const handleReset = () => {
   fetchLogs()
 }
 
-const applyRiskFilter = (key) => {
+const applyRiskFilter = (key: string) => {
   if (activeRiskFilter.value === key) {
     // 再次點擊取消
     activeRiskFilter.value = ''
@@ -191,42 +212,42 @@ const displayedLogs = computed(() => {
 })
 
 // 高風險旗標：用於行內顯示警示徽章
-const getRiskBadges = (row) => {
-  const c = row.changes || {}
-  const badges = []
-  const tags = c.risk_tags || []
+const getRiskBadges = (row: AuditLog) => {
+  const c = (row.changes || {}) as Record<string, unknown>
+  const badges: { type: ElTagType; label: string }[] = []
+  const tags = (c.risk_tags as string[]) || []
   if (tags.includes('force_overlap')) badges.push({ type: 'danger', label: '強制重疊' })
   if (tags.includes('force_without_substitute'))
     badges.push({ type: 'danger', label: '無代理人' })
   if (tags.includes('reject_of_approved'))
-    badges.push({ type: 'warning', label: '駁回已核准' })
+    badges.push({ type: 'warning' as ElTagType, label: '駁回已核准' })
   if (c.action === 'leave_update' && c.was_approved)
-    badges.push({ type: 'warning', label: '修改已核准' })
+    badges.push({ type: 'warning' as ElTagType, label: '修改已核准' })
   if (c.action === 'overtime_update' && c.was_approved)
-    badges.push({ type: 'warning', label: '修改已核准' })
-  if (c.action === 'fee_refund') badges.push({ type: 'info', label: '退款' })
+    badges.push({ type: 'warning' as ElTagType, label: '修改已核准' })
+  if (c.action === 'fee_refund') badges.push({ type: 'info' as ElTagType, label: '退款' })
   // 大額金流（本次本筆 > 5000）
   const amounts = [c.delta, c.refund_amount, c.new_paid]
   if (amounts.some((v) => typeof v === 'number' && Math.abs(v) >= 5000))
-    badges.push({ type: 'danger', label: '大額' })
+    badges.push({ type: 'danger' as ElTagType, label: '大額' })
   return badges
 }
 
-const handlePageChange = (page) => {
+const handlePageChange = (page: number) => {
   filters.page = page
   fetchLogs()
 }
 
-const handlePageSizeChange = (size) => {
+const handlePageSizeChange = (size: number) => {
   filters.page_size = size
   filters.page = 1
   fetchLogs()
 }
 
-const setQuickRange = (kind) => {
+const setQuickRange = (kind: string) => {
   const now = new Date()
-  const pad = (n) => String(n).padStart(2, '0')
-  const fmt = (d) =>
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const fmt = (d: Date) =>
     `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 
   if (kind === 'today') {
@@ -258,7 +279,7 @@ const handleExport = async () => {
     const a = document.createElement('a')
     a.href = url
     const now = new Date()
-    const pad = (n) => String(n).padStart(2, '0')
+    const pad = (n: number) => String(n).padStart(2, '0')
     a.download = `audit_logs_${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}.csv`
     document.body.appendChild(a)
     a.click()
@@ -267,24 +288,25 @@ const handleExport = async () => {
     ElMessage.success('匯出成功')
   } catch (error) {
     // 超過上限的 400 response 是 blob，要讀取才能看 detail
-    if (error.response?.status === 400 && error.response?.data instanceof Blob) {
+    const err = error as { response?: { status?: number; data?: unknown } }
+    if (err.response?.status === 400 && err.response?.data instanceof Blob) {
       try {
-        const text = await error.response.data.text()
-        const body = JSON.parse(text)
+        const text = await (err.response.data as Blob).text()
+        const body = JSON.parse(text) as { detail?: string }
         ElMessage.error(body.detail || '匯出失敗')
       } catch (_) {
         ElMessage.error('匯出失敗')
       }
     } else {
-      ElMessage.error(error.response?.data?.detail || '匯出失敗')
+      ElMessage.error((err.response?.data as { detail?: string })?.detail || '匯出失敗')
     }
   } finally {
     exporting.value = false
   }
 }
 
-const getActionTag = (action) => {
-  const map = {
+const getActionTag = (action: string) => {
+  const map: Record<string, { type: ElTagType; label: string }> = {
     CREATE: { type: 'success', label: '新增' },
     UPDATE: { type: 'warning', label: '修改' },
     DELETE: { type: 'danger', label: '刪除' },
@@ -301,32 +323,32 @@ const getActionTag = (action) => {
     BLOCKED_UPDATE: { type: 'danger', label: '拒絕修改' },
     BLOCKED_DELETE: { type: 'danger', label: '拒絕刪除' },
   }
-  return map[action] || { type: 'info', label: action }
+  return map[action] || { type: 'info' as ElTagType, label: action }
 }
 
 const entityLabelMap = computed(() => {
-  const m = {}
+  const m: Record<string, string> = {}
   for (const e of entityTypes.value) m[e.value] = e.label
   return m
 })
 
-const getEntityLabel = (type) => entityLabelMap.value[type] || type
+const getEntityLabel = (type: string) => entityLabelMap.value[type] || type
 
-const formatTime = (iso) => {
+const formatTime = (iso: string | undefined) => {
   if (!iso) return '-'
   const d = new Date(iso)
-  const pad = (n) => String(n).padStart(2, '0')
+  const pad = (n: number) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }
 
-const formatValue = (v) => {
+const formatValue = (v: unknown) => {
   if (v === null || v === undefined) return '—'
   if (typeof v === 'boolean') return v ? '是' : '否'
   if (typeof v === 'object') return JSON.stringify(v)
   return String(v)
 }
 
-const hasChanges = (row) => {
+const hasChanges = (row: AuditLog) => {
   const c = row.changes
   return c && typeof c === 'object' && Object.keys(c).length > 0
 }
@@ -334,16 +356,17 @@ const hasChanges = (row) => {
 // changes 結構不一致：舊紀錄是 {field: {before, after}}（auth/employees/classrooms），
 // 新紀錄則是 {action, ..., diff: {...}, risk_tags: [...]}（leave/overtime/fee）。
 // 此 helper 把兩種都拆成 nested-diff（before/after）+ flat-fields（單值），讓 expand 一致。
-const splitChanges = (row) => {
-  const c = row.changes || {}
-  const nestedDiff = []
-  const flatFields = []
-  const meta = {}
+const splitChanges = (row: AuditLog) => {
+  const c = (row.changes || {}) as Record<string, unknown>
+  const nestedDiff: { field: string; before: unknown; after: unknown }[] = []
+  const flatFields: { field: string; value: unknown }[] = []
+  const meta: Record<string, unknown> = {}
   // 先處理新格式：c.diff 內為 {field: {before, after}}
   if (c.diff && typeof c.diff === 'object') {
-    for (const [field, v] of Object.entries(c.diff)) {
+    for (const [field, v] of Object.entries(c.diff as Record<string, unknown>)) {
       if (v && typeof v === 'object' && 'before' in v && 'after' in v) {
-        nestedDiff.push({ field, before: v.before, after: v.after })
+        const entry = v as { before: unknown; after: unknown }
+        nestedDiff.push({ field, before: entry.before, after: entry.after })
       }
     }
   }
@@ -351,7 +374,8 @@ const splitChanges = (row) => {
   for (const [k, v] of Object.entries(c)) {
     if (k === 'diff' || k === 'before' || k === 'after') continue
     if (v && typeof v === 'object' && 'before' in v && 'after' in v) {
-      nestedDiff.push({ field: k, before: v.before, after: v.after })
+      const entry = v as { before: unknown; after: unknown }
+      nestedDiff.push({ field: k, before: entry.before, after: entry.after })
     } else if (k === 'risk_tags' || k === 'failed' || k === 'requested_ids' || k === 'succeeded_ids' || k === 'approval_log_ids' || k === 'sampled_student_ids') {
       // 這些是結構化資料，放 meta 分區呈現
       meta[k] = v
@@ -361,24 +385,26 @@ const splitChanges = (row) => {
   }
   // 新格式專用：if c.before/c.after 都是物件，攤平成 nestedDiff
   if (c.before && c.after && typeof c.before === 'object' && typeof c.after === 'object') {
-    for (const k of Object.keys(c.before)) {
-      if (c.before[k] !== c.after[k]) {
-        nestedDiff.push({ field: k, before: c.before[k], after: c.after[k] })
+    const before = c.before as Record<string, unknown>
+    const after = c.after as Record<string, unknown>
+    for (const k of Object.keys(before)) {
+      if (before[k] !== after[k]) {
+        nestedDiff.push({ field: k, before: before[k], after: after[k] })
       }
     }
   }
   return { nestedDiff, flatFields, meta }
 }
 
-const resolveRoute = (row) => {
+const resolveRoute = (row: AuditLog) => {
   const fn = ENTITY_ROUTES[row.entity_type]
   if (!fn) return null
   return fn(row.entity_id)
 }
 
-const canNavigate = (row) => !!resolveRoute(row)
+const canNavigate = (row: AuditLog) => !!resolveRoute(row)
 
-const goToEntity = (row) => {
+const goToEntity = (row: AuditLog) => {
   const to = resolveRoute(row)
   if (to) router.push(to)
 }

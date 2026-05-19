@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, onMounted, computed, watch, nextTick } from 'vue'
 import { useDebounceFn, useMediaQuery } from '@vueuse/core'
 import { Loading, User, Plus } from '@element-plus/icons-vue'
@@ -35,9 +35,10 @@ import { hasPermission, getUserInfo } from '@/utils/auth'
 import { useEmployeeFormDirty } from '@/composables/useEmployeeFormDirty'
 import { BASIC_TAB_FIELDS, SALARY_TAB_FIELDS } from '@/constants/employeeFields'
 import { validateInsuranceVsBase } from '@/validators/employeeForm'
-import EmployeeFormBasic from '@/components/employee/EmployeeFormBasic.vue'
+import EmployeeFormBasic, { type EmployeeFormBasicData } from '@/components/employee/EmployeeFormBasic.vue'
 import EmployeeFormSalary from '@/components/employee/EmployeeFormSalary.vue'
 import EmployeeChangesPreviewDialog from '@/components/employee/EmployeeChangesPreviewDialog.vue'
+import type { ApiBody } from '@/api/_generated/typed'
 
 const employeeStore = useEmployeeStore()
 const classroomStore = useClassroomStore()
@@ -47,9 +48,9 @@ const isMobile = useMediaQuery('(max-width: 767px)')
 const configStore = useConfigStore()
 
 const loading = ref(false)
-const currentDetail = ref({})
+const currentDetail = ref<Record<string, unknown>>({})
 const detailDialogVisible = ref(false)
-const formRef = ref(null)
+const formRef = ref<{ validate: () => Promise<void> } | null>(null)
 
 // ── 權限 ──────────────────────────────────────────────
 const canWriteEmployees = computed(() => hasPermission('EMPLOYEES_WRITE'))
@@ -60,24 +61,69 @@ const rules = {
   name: [{ required: true, message: '請輸入姓名', trigger: 'blur' }]
 }
 
-const positionSalaryConfig = ref(null)
-const suggestedSalary = ref(null)
+const positionSalaryConfig = ref<Record<string, number> | null>(null)
+const suggestedSalary = ref<number | null>(null)
 
-const detectRole = (position) => {
+const detectRole = (position: string | null | undefined) => {
   if (!position) return null
   if (position.includes('班導') && !position.includes('副')) return 'head'
   if (position.includes('副班導')) return 'assistant'
   return null
 }
 
-const titleToGrade = (jobTitleId) => {
+const titleToGrade = (jobTitleId: number | null | undefined) => {
   if (!jobTitleId || !configStore.jobTitles) return null
-  const jt = configStore.jobTitles.find(t => t.id === jobTitleId)
+  const jt = (configStore.jobTitles as { id: number; name: string }[]).find(t => t.id === jobTitleId)
   if (!jt) return null
-  return TITLE_TO_GRADE[jt.name] || null
+  return (TITLE_TO_GRADE as Record<string, string>)[jt.name] || null
 }
 
-const form = reactive({
+interface EmployeeForm {
+  id: number | null
+  employee_id: string
+  name: string
+  id_number: string
+  employee_type: string
+  job_title_id: number | null
+  position: string
+  supervisor_role: string | null
+  bonus_grade: string | null
+  department: string
+  phone: string
+  address: string
+  emergency_contact_name: string
+  emergency_contact_phone: string
+  hire_date: string
+  probation_end_date: string
+  birthday: string
+  classroom_id: number | null
+  base_salary: number
+  hourly_rate: number
+  insurance_salary_level: number
+  pension_self_rate: number
+  dependents: number
+  bank_code: string
+  bank_account: string
+  bank_account_name: string
+  work_start_time: string
+  work_end_time: string
+  no_employment_insurance: boolean
+  health_exempt: boolean
+  skip_payroll_bonuses: boolean
+  skip_payroll_transfer: boolean
+  unreported_for_tax: boolean
+  extra_dependents_quarterly: number
+  insurance_salary_override_reason: string
+  bypass_standard_base: boolean
+  labor_insured_salary: number | null
+  health_insured_salary: number | null
+  pension_insured_salary: number | null
+  staff_role_category: string
+  teacher_cert_no: string
+  teacher_cert_type: string
+}
+
+const form = reactive<EmployeeForm>({
   id: null,
   employee_id: '',
   name: '',
@@ -127,15 +173,16 @@ const form = reactive({
 
 // ── 編輯 dialog tab + dirty tracking ─────────────────
 const activeTab = ref('basic')
-const { reset: resetDirty, basicDirty, salaryDirty } = useEmployeeFormDirty(form, BASIC_TAB_FIELDS, SALARY_TAB_FIELDS)
+const { reset: resetDirty, basicDirty, salaryDirty } = useEmployeeFormDirty(form as unknown as Record<string, unknown>, [...BASIC_TAB_FIELDS] as string[], [...SALARY_TAB_FIELDS] as string[])
 
 // ── 薪資變更預覽對話框 ────────────────────────────────
 // 後端 finance_guards：底薪 / 時薪 / 投保級距變動需 adjustment_reason；
 // 大額（合計 > 1000）還需 ACTIVITY_PAYMENT_APPROVE 權限。
 const SALARY_AMOUNT_FIELDS = ['base_salary', 'hourly_rate', 'insurance_salary_level']
+interface ChangeEntry { before?: unknown; after?: unknown }
 const previewDialog = reactive({
-  visible: false, title: '', changes: {}, requireConfirm: false,
-  requireReason: false, onConfirm: null,
+  visible: false, title: '', changes: {} as Record<string, ChangeEntry>, requireConfirm: false,
+  requireReason: false, onConfirm: null as ((reason: string | null) => void) | null,
 })
 
 // ── 自動建議薪資 ──────────────────────────────────────
@@ -163,20 +210,22 @@ const FIELD_LABELS = {
   id_number: '身分證字號',
 }
 
-const dirtyToPayload = (diff) =>
+const dirtyToPayload = (diff: Record<string, { after: unknown }>) =>
   Object.fromEntries(Object.entries(diff).map(([k, v]) => [k, v.after]))
 
-const showError = (err) => {
+const showError = (err: unknown) => {
   const m = mapEmployeeError(err)
-  ElMessage({ type: m.type || 'error', message: m.message, duration: 5000 })
+  if (m.type === 'success') ElMessage.success(m.message)
+  else if (m.type === 'warning') ElMessage.warning(m.message)
+  else ElMessage.error(m.message)
 }
 
 const bureauJobTitleOptions = computed(() => {
-  const titles = configStore.jobTitles || []
+  const titles = (configStore.jobTitles || []) as { id: number; name: string }[]
   const titleMap = new Map(titles.map(item => [item.name, item]))
   const official = OFFICIAL_JOB_TITLE_NAMES
     .map(name => titleMap.get(name))
-    .filter(Boolean)
+    .filter((item): item is { id: number; name: string } => Boolean(item))
 
   const current = titles.find(item => item.id === form.job_title_id)
   if (current && !official.some(item => item.id === current.id)) {
@@ -196,7 +245,7 @@ watch([() => form.job_title_id, () => form.position, () => form.bonus_grade], ()
     const key = `${role === 'head' ? 'head_teacher' : 'assistant_teacher'}_${grade}`
     salary = positionSalaryConfig.value[key] ?? null
   } else {
-    const key = POSITION_SALARY_KEY[form.position]
+    const key = (POSITION_SALARY_KEY as Record<string, string>)[form.position]
     salary = key ? (positionSalaryConfig.value[key] ?? null) : null
   }
   suggestedSalary.value = salary
@@ -225,43 +274,62 @@ const syncInsuranceToBase = () => {
 }
 
 // 查詢某員工對應的標準薪俸（詳情頁用）
-const standardSalaryFor = (emp) => {
+const standardSalaryFor = (emp: Record<string, unknown>) => {
   if (!positionSalaryConfig.value || !emp) return null
   const cfg = positionSalaryConfig.value
-  const pos = emp.position || ''
+  const pos = (emp.position as string) || ''
   const role = detectRole(pos)
   if (role) {
-    const titleName = emp.job_title_name || emp.title || ''
-    const grade = (emp.bonus_grade || TITLE_TO_GRADE[titleName] || '').toLowerCase()
+    const titleName = (emp.job_title_name as string) || (emp.title as string) || ''
+    const grade = ((emp.bonus_grade as string) || (TITLE_TO_GRADE as Record<string, string>)[titleName] || '').toLowerCase()
     if (grade) {
       const key = `${role === 'head' ? 'head_teacher' : 'assistant_teacher'}_${grade}`
       return cfg[key] ?? null
     }
     return null
   }
-  const key = POSITION_SALARY_KEY[pos]
+  const key = (POSITION_SALARY_KEY as Record<string, string>)[pos]
   return key ? (cfg[key] ?? null) : null
+}
+
+type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
+
+interface EmployeeRow {
+  id: number
+  employee_id?: string
+  name?: string
+  is_active?: boolean
+  resign_date?: string
+  [key: string]: unknown
+}
+
+interface FinalSalaryPreview {
+  base_salary?: number
+  proration_note?: string
+  gross_salary?: number
+  total_deduction?: number
+  net_salary?: number
 }
 
 // ── 辦理離職 ──────────────────────────────────────
 const offboardVisible = ref(false)
-const offboardTarget = ref(null)  // 目標員工資料
+const offboardTarget = ref<EmployeeRow | null>(null)
 const offboardForm = reactive({ resign_date: '', resign_reason: '' })
 const offboardLoading = ref(false)
-const finalSalaryPreview = ref(null)
+const finalSalaryPreview = ref<FinalSalaryPreview | null>(null)
 const finalSalaryLoading = ref(false)
 
-const getEmployeeStatus = (emp) => {
+const getEmployeeStatus = (emp: Record<string, unknown>): { label: string; type: ElTagType } => {
   const today = todayISO()
   if (!emp.is_active) return { label: '已離職', type: 'info' }
-  if (emp.resign_date && emp.resign_date > today) {
+  if (emp.resign_date && (emp.resign_date as string) > today) {
     return { label: `待離職・${emp.resign_date}`, type: 'warning' }
   }
   return { label: '在職', type: 'success' }
 }
 
-const openOffboard = (emp) => {
-  offboardTarget.value = emp
+const openOffboard = (emp: Record<string, unknown>) => {
+  offboardTarget.value = emp as EmployeeRow
   offboardForm.resign_date = ''
   offboardForm.resign_reason = ''
   finalSalaryPreview.value = null
@@ -274,7 +342,7 @@ const fetchFinalSalary = async () => {
   finalSalaryLoading.value = true
   try {
     const res = await getFinalSalaryPreview(offboardTarget.value.id, { year: parseInt(year), month: parseInt(month) })
-    finalSalaryPreview.value = res.data
+    finalSalaryPreview.value = res.data as FinalSalaryPreview
   } catch {
     finalSalaryPreview.value = null
   } finally {
@@ -294,12 +362,13 @@ const submitOffboard = async () => {
   }
   offboardLoading.value = true
   try {
-    await offboard(offboardTarget.value.id, offboardForm)
+    await offboard(offboardTarget.value!.id, offboardForm)
     ElMessage.success('離職資料已更新')
     offboardVisible.value = false
     fetchEmployees()
   } catch (err) {
-    ElMessage.error('辦理離職失敗: ' + (err.response?.data?.detail || err.message))
+    const e = err as { response?: { data?: { detail?: string } }; message?: string }
+    ElMessage.error('辦理離職失敗: ' + (e.response?.data?.detail || e.message))
   } finally {
     offboardLoading.value = false
   }
@@ -310,10 +379,10 @@ const debouncedSearch = ref('')
 const updateSearch = useDebounceFn((val) => { debouncedSearch.value = val }, 300)
 watch(searchQuery, updateSearch)
 
-const searchResults = ref(null) // null = 用 store；有值 = 搜尋結果
+const searchResults = ref<Record<string, unknown>[] | null>(null) // null = 用 store；有值 = 搜尋結果
 
 const filteredEmployees = computed(() =>
-  searchResults.value !== null ? searchResults.value : employeeStore.employees
+  searchResults.value !== null ? searchResults.value : (employeeStore.employees as Record<string, unknown>[])
 )
 
 watch(debouncedSearch, async (val) => {
@@ -323,7 +392,7 @@ watch(debouncedSearch, async (val) => {
   }
   try {
     const res = await getEmployees({ search: val })
-    searchResults.value = res.data
+    searchResults.value = res.data as Record<string, unknown>[]
   } catch {
     ElMessage.error('搜尋員工失敗')
   }
@@ -345,10 +414,11 @@ const fetchEmployees = async () => {
 }
 
 const resetForm = () => {
-  Object.keys(form).forEach(key => {
-    if (typeof form[key] === 'boolean') form[key] = false
-    else if (typeof form[key] === 'number') form[key] = 0
-    else form[key] = ''
+  const f = form as unknown as Record<string, unknown>
+  Object.keys(f).forEach(key => {
+    if (typeof f[key] === 'boolean') f[key] = false
+    else if (typeof f[key] === 'number') f[key] = 0
+    else f[key] = ''
   })
   form.id = null
   form.job_title_id = null
@@ -365,7 +435,7 @@ const resetForm = () => {
   suggestedSalary.value = null
 }
 
-const populateForm = (row) => {
+const populateForm = (row: Record<string, unknown>) => {
   Object.assign(form, row)
   form.base_salary = Number(row.base_salary)
   form.hourly_rate = Number(row.hourly_rate)
@@ -400,7 +470,7 @@ const { confirmDelete: handleDelete, deleting: deleteLoading } = useConfirmDelet
   successMsg: '刪除成功',
 })
 
-const attendanceRecords = ref([])
+const attendanceRecords = ref<Record<string, unknown>[]>([])
 const attendanceMonth = ref(thisMonthISO()) // YYYY-MM
 // ... existing variables
 
@@ -409,30 +479,31 @@ const fetchAttendance = async () => {
   const [year, month] = attendanceMonth.value.split('-')
   try {
     const response = await getAttendanceRecords({
-      employee_id: currentDetail.value.id,
+      employee_id: currentDetail.value.id as number,
       year: parseInt(year),
       month: parseInt(month)
     })
-    attendanceRecords.value = response.data
+    attendanceRecords.value = response.data as Record<string, unknown>[]
   } catch (error) {
     ElMessage.error('載入出勤紀錄失敗')
   }
 }
 
-const getAttendanceStatusType = (status) => {
+const getAttendanceStatusType = (status: string): ElTagType => {
   if (status === 'normal') return 'success'
   if (status.includes('late') || status.includes('early')) return 'warning'
   return 'danger'
 }
 
-const editAttendance = (row) => {
+const editAttendance = (row: Record<string, unknown>) => {
   ElMessageBox.prompt('請輸入新的上/下班時間 (格式: HH:MM,HH:MM)', '編輯出勤', {
     confirmButtonText: '確定',
     cancelButtonText: '取消',
     inputValue: `${row.punch_in || ''},${row.punch_out || ''}`,
     inputPattern: /^([0-1]?[0-9]|2[0-3]):[0-5][0-9],([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/,
     inputErrorMessage: '時間格式不正確'
-  }).then(async ({ value }) => {
+  }).then(async (result) => {
+     const value = (result as unknown as { value: string }).value
      const [inTime, outTime] = value.split(',')
      // Call API to save (using existing upload-csv endpoint logic w/ wrapper or new endpoint if we made one?)
      // Reusing the logic from app.js: wrap in upload payload
@@ -443,7 +514,7 @@ const editAttendance = (row) => {
            department: "Manual",
            employee_number: currentDetail.value.employee_id,
            name: currentDetail.value.name,
-           date: row.date.replace(/-/g, '/'),
+           date: (row.date as string).replace(/-/g, '/'),
            weekday: "",
            punch_in: inTime,
            punch_out: outTime
@@ -459,12 +530,12 @@ const editAttendance = (row) => {
   }).catch(() => {})
 }
 
-const deleteAttendance = (row) => {
+const deleteAttendance = (row: Record<string, unknown>) => {
    ElMessageBox.confirm(`確定要刪除 ${row.date} 的出勤紀錄嗎？`, '警告', {
       type: 'warning'
    }).then(async () => {
       try {
-         await deleteEmployeeDateRecord(currentDetail.value.id, row.date)
+         await deleteEmployeeDateRecord(currentDetail.value.id as number, row.date as string)
          ElMessage.success('已刪除')
          fetchAttendance()
       } catch (err) {
@@ -475,33 +546,33 @@ const deleteAttendance = (row) => {
 
 // ── 詳情對話框 tab 切換 / lazy loading ──────────────
 const activeDetailTab = ref('personal')
-const loadedTabs = ref(new Set())
-const educations = ref([])
-const certificates = ref([])
-const contracts = ref([])
+const loadedTabs = ref(new Set<string | number>())
+const educations = ref<Record<string, unknown>[]>([])
+const certificates = ref<Record<string, unknown>[]>([])
+const contracts = ref<Record<string, unknown>[]>([])
 
-const employeeTypeLabel = (v) => {
+const employeeTypeLabel = (v: unknown) => {
   const opt = EMPLOYEE_TYPE_OPTIONS.find(o => o.value === v)
-  return opt ? opt.label : (v || '-')
+  return opt ? opt.label : ((v as string) || '-')
 }
 
 const fetchEducations = async () => {
   if (!currentDetail.value.id) return
-  const res = await listEmployeeEducations(currentDetail.value.id)
-  educations.value = res.data
+  const res = await listEmployeeEducations(currentDetail.value.id as number)
+  educations.value = res.data as Record<string, unknown>[]
 }
 const fetchCertificates = async () => {
   if (!currentDetail.value.id) return
-  const res = await listEmployeeCertificates(currentDetail.value.id)
-  certificates.value = res.data
+  const res = await listEmployeeCertificates(currentDetail.value.id as number)
+  certificates.value = res.data as Record<string, unknown>[]
 }
 const fetchContracts = async () => {
   if (!currentDetail.value.id) return
-  const res = await listEmployeeContracts(currentDetail.value.id)
-  contracts.value = res.data
+  const res = await listEmployeeContracts(currentDetail.value.id as number)
+  contracts.value = res.data as Record<string, unknown>[]
 }
 
-const onDetailTabChange = async (name) => {
+const onDetailTabChange = async (name: string | number) => {
   if (loadedTabs.value.has(name)) return
   try {
     if (name === 'education') await fetchEducations()
@@ -515,15 +586,16 @@ const onDetailTabChange = async (name) => {
 }
 
 // ── 學歷 / 證照 / 合約 共用子對話框 ──────────────────
+type SubDialogKind = 'education' | 'certificate' | 'contract' | null
 const subDialog = reactive({
   visible: false,
   isEdit: false,
-  kind: null, // 'education' | 'certificate' | 'contract'
-  form: {},
+  kind: null as SubDialogKind,
+  form: {} as Record<string, unknown>,
 })
 const subDialogTitle = computed(() => {
-  const kindLabel = { education: '學歷', certificate: '證照', contract: '合約' }[subDialog.kind] || ''
-  return `${subDialog.isEdit ? '編輯' : '新增'}${kindLabel}`
+  const kindLabel: Record<string, string> = { education: '學歷', certificate: '證照', contract: '合約' }
+  return `${subDialog.isEdit ? '編輯' : '新增'}${subDialog.kind ? (kindLabel[subDialog.kind] || '') : ''}`
 })
 
 const openEduCreate = () => {
@@ -534,7 +606,7 @@ const openEduCreate = () => {
   }
   subDialog.visible = true
 }
-const openEduEdit = (row) => {
+const openEduEdit = (row: Record<string, unknown>) => {
   subDialog.kind = 'education'; subDialog.isEdit = true
   subDialog.form = { ...row }
   subDialog.visible = true
@@ -547,7 +619,7 @@ const openCertCreate = () => {
   }
   subDialog.visible = true
 }
-const openCertEdit = (row) => {
+const openCertEdit = (row: Record<string, unknown>) => {
   subDialog.kind = 'certificate'; subDialog.isEdit = true
   subDialog.form = { ...row }
   subDialog.visible = true
@@ -560,59 +632,65 @@ const openContractCreate = () => {
   }
   subDialog.visible = true
 }
-const openContractEdit = (row) => {
+const openContractEdit = (row: Record<string, unknown>) => {
   subDialog.kind = 'contract'; subDialog.isEdit = true
   subDialog.form = { ...row }
   subDialog.visible = true
 }
 
 const submitSub = async () => {
-  const id = currentDetail.value.id
+  const id = currentDetail.value.id as number
   if (!id) return
-  const payload = { ...subDialog.form }
+  const formData = subDialog.form
+  const subId = formData.id as number
   try {
     if (subDialog.kind === 'education') {
-      if (!payload.school_name) return ElMessage.warning('請輸入學校名稱')
-      if (subDialog.isEdit) await updateEmployeeEducation(id, payload.id, payload)
-      else await createEmployeeEducation(id, payload)
+      if (!formData.school_name) return ElMessage.warning('請輸入學校名稱')
+      const edu = formData as unknown as ApiBody<'/employees/{employee_id}/educations', 'post'>
+      if (subDialog.isEdit) await updateEmployeeEducation(id, subId, edu as unknown as ApiBody<'/employees/{employee_id}/educations/{edu_id}', 'put'>)
+      else await createEmployeeEducation(id, edu)
       await fetchEducations()
     } else if (subDialog.kind === 'certificate') {
-      if (!payload.certificate_name) return ElMessage.warning('請輸入證照名稱')
-      if (subDialog.isEdit) await updateEmployeeCertificate(id, payload.id, payload)
-      else await createEmployeeCertificate(id, payload)
+      if (!formData.certificate_name) return ElMessage.warning('請輸入證照名稱')
+      const cert = formData as unknown as ApiBody<'/employees/{employee_id}/certificates', 'post'>
+      if (subDialog.isEdit) await updateEmployeeCertificate(id, subId, cert as unknown as ApiBody<'/employees/{employee_id}/certificates/{cert_id}', 'put'>)
+      else await createEmployeeCertificate(id, cert)
       await fetchCertificates()
     } else if (subDialog.kind === 'contract') {
-      if (!payload.contract_type) return ElMessage.warning('請選擇合約類型')
-      if (!payload.start_date) return ElMessage.warning('請選擇合約起始日')
-      if (subDialog.isEdit) await updateEmployeeContract(id, payload.id, payload)
-      else await createEmployeeContract(id, payload)
+      if (!formData.contract_type) return ElMessage.warning('請選擇合約類型')
+      if (!formData.start_date) return ElMessage.warning('請選擇合約起始日')
+      const contract = formData as unknown as ApiBody<'/employees/{employee_id}/contracts', 'post'>
+      if (subDialog.isEdit) await updateEmployeeContract(id, subId, contract as unknown as ApiBody<'/employees/{employee_id}/contracts/{contract_id}', 'put'>)
+      else await createEmployeeContract(id, contract)
       await fetchContracts()
     }
     subDialog.visible = false
     ElMessage.success('儲存成功')
   } catch (err) {
-    ElMessage.error('儲存失敗：' + (err.response?.data?.detail || err.message))
+    const e = err as { response?: { data?: { detail?: string } }; message?: string }
+    ElMessage.error('儲存失敗：' + (e.response?.data?.detail || e.message))
   }
 }
 
-const confirmDeleteSub = (kind, row) => {
+const confirmDeleteSub = (kind: string, row: Record<string, unknown>) => {
   ElMessageBox.confirm('確定刪除此筆記錄？', '警告', { type: 'warning' }).then(async () => {
-    const id = currentDetail.value.id
+    const id = currentDetail.value.id as number
     try {
-      if (kind === 'education') { await deleteEmployeeEducation(id, row.id); await fetchEducations() }
-      else if (kind === 'certificate') { await deleteEmployeeCertificate(id, row.id); await fetchCertificates() }
-      else if (kind === 'contract') { await deleteEmployeeContract(id, row.id); await fetchContracts() }
+      if (kind === 'education') { await deleteEmployeeEducation(id, row.id as number); await fetchEducations() }
+      else if (kind === 'certificate') { await deleteEmployeeCertificate(id, row.id as number); await fetchCertificates() }
+      else if (kind === 'contract') { await deleteEmployeeContract(id, row.id as number); await fetchContracts() }
       ElMessage.success('已刪除')
     } catch (err) {
-      ElMessage.error('刪除失敗：' + (err.response?.data?.detail || err.message))
+      const e = err as { response?: { data?: { detail?: string } }; message?: string }
+      ElMessage.error('刪除失敗：' + (e.response?.data?.detail || e.message))
     }
   }).catch(() => {})
 }
 
-const handleDetail = async (row) => {
+const handleDetail = async (row: Record<string, unknown>) => {
   try {
-    const response = await getEmployee(row.id)
-    currentDetail.value = response.data
+    const response = await getEmployee(row.id as number)
+    currentDetail.value = response.data as Record<string, unknown>
     // 重置 lazy loading 狀態；個人/職務/薪資直接從 currentDetail 讀取，不需 fetch
     loadedTabs.value = new Set(['personal', 'job', 'salary'])
     activeDetailTab.value = 'personal'
@@ -631,13 +709,13 @@ const handleDetail = async (row) => {
 const saveCreate = async () => {
   if (!formRef.value) return
   form.supervisor_role = form.supervisor_role || null
-  form.bonus_grade = form.bonus_grade ? form.bonus_grade.toUpperCase() : null
-  if (form.bonus_grade && !['A', 'B', 'C'].includes(form.bonus_grade)) {
+  form.bonus_grade = form.bonus_grade ? (form.bonus_grade as string).toUpperCase() : null
+  if (form.bonus_grade && !['A', 'B', 'C'].includes(form.bonus_grade as string)) {
     ElMessage.error('獎金等級覆蓋僅接受 A / B / C')
     return
   }
-  await formRef.value.validate(async (valid) => {
-    if (!valid) return
+  try {
+    await formRef.value.validate()
     try {
       await createEmployee(form)
       ElMessage.success('員工已新增')
@@ -646,7 +724,9 @@ const saveCreate = async () => {
     } catch (err) {
       showError(err)
     }
-  })
+  } catch {
+    // validation failed, form shows error messages
+  }
 }
 
 // ── 基本資料更新（只送 dirty fields）────────────────
@@ -657,7 +737,7 @@ const saveBasic = async () => {
     return
   }
   try {
-    await updateEmployeeBasic(form.id, payload)
+    await updateEmployeeBasic(form.id!, payload)
     ElMessage.success(`基本資料已更新（${Object.keys(payload).length} 個欄位）`)
     await fetchEmployees()
     resetDirty(form)
@@ -675,7 +755,7 @@ const submitSalary = async (adjustmentReason = null) => {
   }
   if (adjustmentReason) payload.adjustment_reason = adjustmentReason
   try {
-    await updateEmployeeSalary(form.id, payload)
+    await updateEmployeeSalary(form.id!, payload)
     ElMessage.success(`薪資資料已更新（${Object.keys(payload).length} 個欄位）`)
     await fetchEmployees()
     resetDirty(form)
@@ -713,13 +793,28 @@ const showBasicPreview = () => {
   })
 }
 
+// computed helpers for template — avoids repeated null checks & arithmetic type errors
+const currentStandardSalary = computed(() => standardSalaryFor(currentDetail.value))
+const formAsBasicData = computed(() => form as unknown as EmployeeFormBasicData)
+const classroomOptions = computed(() => classroomStore.classrooms as { id: number; name: string }[])
+
+interface EduForm { school_name?: string; major?: string; degree?: string; graduation_date?: string | null; is_highest?: boolean; remark?: string }
+interface CertForm { certificate_name?: string; issuer?: string; certificate_number?: string; issued_date?: string | null; expiry_date?: string | null; remark?: string }
+interface ContractForm { contract_type?: string; start_date?: string | null; end_date?: string | null; salary_at_contract?: number | null; remark?: string }
+const subEduForm = computed(() => subDialog.form as unknown as EduForm)
+const subCertForm = computed(() => subDialog.form as unknown as CertForm)
+const subContractForm = computed(() => subDialog.form as unknown as ContractForm)
+const currentPensionSelfRatePct = computed(() =>
+  ((currentDetail.value.pension_self_rate as number || 0) * 100).toFixed(1)
+)
+
 onMounted(async () => {
   fetchEmployees()
   configStore.fetchJobTitles()
   classroomStore.fetchClassrooms()
   try {
     const res = await getPositionSalary()
-    positionSalaryConfig.value = res.data
+    positionSalaryConfig.value = res.data as Record<string, number>
   } catch {}
 })
 </script>
@@ -787,9 +882,9 @@ onMounted(async () => {
         <el-tabs type="border-card" v-model="activeTab">
           <el-tab-pane label="基本資料" name="basic">
             <EmployeeFormBasic
-              :form="form"
+              :form="formAsBasicData"
               :bureau-job-title-options="bureauJobTitleOptions"
-              :classroom-options="classroomStore.classrooms"
+              :classroom-options="classroomOptions"
               :is-self-edit="isSelfEdit"
               :pending-suggestion="pendingSuggestion"
               :suggested-salary="suggestedSalary"
@@ -853,7 +948,7 @@ onMounted(async () => {
       :require-confirm="previewDialog.requireConfirm"
       :require-reason="previewDialog.requireReason"
       :field-labels="FIELD_LABELS"
-      @confirm="previewDialog.onConfirm?.($event)"
+      @confirm="previewDialog.onConfirm && previewDialog.onConfirm($event)"
     />
 
     <!-- Detail Dialog：桌機左右欄、手機全螢幕單欄 -->
@@ -929,24 +1024,24 @@ onMounted(async () => {
               <el-descriptions :column="isMobile ? 1 : 2" border>
                 <el-descriptions-item label="基本薪資">
                   <span>{{ Number(currentDetail.base_salary).toLocaleString() }}</span>
-                  <template v-if="standardSalaryFor(currentDetail) !== null">
+                  <template v-if="currentStandardSalary !== null">
                     <span style="color:var(--text-tertiary);font-size:12px;margin-left:8px">
-                      標準：{{ standardSalaryFor(currentDetail).toLocaleString() }}
+                      標準：{{ currentStandardSalary!.toLocaleString() }}
                     </span>
                     <el-tag
-                      v-if="Number(currentDetail.base_salary) !== standardSalaryFor(currentDetail)"
+                      v-if="Number(currentDetail.base_salary) !== currentStandardSalary"
                       size="small"
-                      :type="Number(currentDetail.base_salary) > standardSalaryFor(currentDetail) ? 'success' : 'warning'"
+                      :type="Number(currentDetail.base_salary) > currentStandardSalary! ? 'success' : 'warning'"
                       style="margin-left:6px"
                     >
-                      {{ Number(currentDetail.base_salary) > standardSalaryFor(currentDetail) ? '↑ 高於標準' : '↓ 低於標準' }}
+                      {{ Number(currentDetail.base_salary) > currentStandardSalary! ? '↑ 高於標準' : '↓ 低於標準' }}
                     </el-tag>
                     <el-tag v-else size="small" type="info" style="margin-left:6px">符合標準</el-tag>
                   </template>
                 </el-descriptions-item>
                 <el-descriptions-item label="投保級距">{{ currentDetail.insurance_salary_level }}</el-descriptions-item>
                 <el-descriptions-item label="時薪">{{ currentDetail.hourly_rate }}</el-descriptions-item>
-                <el-descriptions-item label="勞退自提">{{ ((currentDetail.pension_self_rate || 0) * 100).toFixed(1) }}%</el-descriptions-item>
+                <el-descriptions-item label="勞退自提">{{ currentPensionSelfRatePct }}%</el-descriptions-item>
                 <el-descriptions-item label="銀行資訊" :span="2">
                   {{ currentDetail.bank_code }} - {{ currentDetail.bank_account }}
                   <span v-if="currentDetail.bank_account_name">（{{ currentDetail.bank_account_name }}）</span>
@@ -1095,90 +1190,90 @@ onMounted(async () => {
       <!-- 學歷 -->
       <el-form v-if="subDialog.kind === 'education'" label-width="110px">
         <el-form-item label="學校名稱" required>
-          <el-input v-model="subDialog.form.school_name" />
+          <el-input v-model="subEduForm.school_name" />
         </el-form-item>
         <el-form-item label="科系">
-          <el-input v-model="subDialog.form.major" />
+          <el-input v-model="subEduForm.major" />
         </el-form-item>
         <el-form-item label="學位" required>
-          <el-select v-model="subDialog.form.degree" style="width:100%">
+          <el-select v-model="subEduForm.degree" style="width:100%">
             <el-option v-for="d in DEGREE_OPTIONS" :key="d" :label="d" :value="d" />
           </el-select>
         </el-form-item>
         <el-form-item label="畢業日期">
           <el-date-picker
-            v-model="subDialog.form.graduation_date"
+            v-model="subEduForm.graduation_date"
             type="date" value-format="YYYY-MM-DD" style="width:100%" clearable
           />
         </el-form-item>
         <el-form-item label="最高學歷">
-          <el-switch v-model="subDialog.form.is_highest" />
+          <el-switch v-model="subEduForm.is_highest" />
           <span style="margin-left:10px;font-size:12px;color:var(--text-tertiary)">
             標記後，該員工其他學歷的「最高」會自動取消
           </span>
         </el-form-item>
         <el-form-item label="備註">
-          <el-input v-model="subDialog.form.remark" type="textarea" :rows="2" maxlength="255" />
+          <el-input v-model="subEduForm.remark" type="textarea" :rows="2" maxlength="255" />
         </el-form-item>
       </el-form>
 
       <!-- 證照 -->
       <el-form v-else-if="subDialog.kind === 'certificate'" label-width="110px">
         <el-form-item label="證照名稱" required>
-          <el-input v-model="subDialog.form.certificate_name" />
+          <el-input v-model="subCertForm.certificate_name" />
         </el-form-item>
         <el-form-item label="頒發機構">
-          <el-input v-model="subDialog.form.issuer" />
+          <el-input v-model="subCertForm.issuer" />
         </el-form-item>
         <el-form-item label="證照編號">
-          <el-input v-model="subDialog.form.certificate_number" />
+          <el-input v-model="subCertForm.certificate_number" />
         </el-form-item>
         <el-form-item label="取得日期">
           <el-date-picker
-            v-model="subDialog.form.issued_date"
+            v-model="subCertForm.issued_date"
             type="date" value-format="YYYY-MM-DD" style="width:100%" clearable
           />
         </el-form-item>
         <el-form-item label="到期日">
           <el-date-picker
-            v-model="subDialog.form.expiry_date"
+            v-model="subCertForm.expiry_date"
             type="date" value-format="YYYY-MM-DD" style="width:100%" clearable
             placeholder="空值表示永久有效"
           />
         </el-form-item>
         <el-form-item label="備註">
-          <el-input v-model="subDialog.form.remark" type="textarea" :rows="2" maxlength="255" />
+          <el-input v-model="subCertForm.remark" type="textarea" :rows="2" maxlength="255" />
         </el-form-item>
       </el-form>
 
       <!-- 合約 -->
       <el-form v-else-if="subDialog.kind === 'contract'" label-width="110px">
         <el-form-item label="合約類型" required>
-          <el-select v-model="subDialog.form.contract_type" style="width:100%">
+          <el-select v-model="subContractForm.contract_type" style="width:100%">
             <el-option v-for="t in CONTRACT_TYPE_OPTIONS" :key="t" :label="t" :value="t" />
           </el-select>
         </el-form-item>
         <el-form-item label="起始日" required>
           <el-date-picker
-            v-model="subDialog.form.start_date"
+            v-model="subContractForm.start_date"
             type="date" value-format="YYYY-MM-DD" style="width:100%"
           />
         </el-form-item>
         <el-form-item label="結束日">
           <el-date-picker
-            v-model="subDialog.form.end_date"
+            v-model="subContractForm.end_date"
             type="date" value-format="YYYY-MM-DD" style="width:100%" clearable
             placeholder="空值表示未定"
           />
         </el-form-item>
         <el-form-item label="簽約薪資">
           <el-input-number
-            v-model="subDialog.form.salary_at_contract"
+            v-model="subContractForm.salary_at_contract"
             :min="0" style="width:100%"
           />
         </el-form-item>
         <el-form-item label="備註">
-          <el-input v-model="subDialog.form.remark" type="textarea" :rows="2" maxlength="255" />
+          <el-input v-model="subContractForm.remark" type="textarea" :rows="2" maxlength="255" />
         </el-form-item>
       </el-form>
 

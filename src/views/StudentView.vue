@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getStudents } from '@/api/students'
@@ -18,18 +18,21 @@ import { domainBus, STUDENT_EVENTS } from '@/utils/domainBus'
 
 const route = useRoute()
 const router = useRouter()
-const students = ref([])
-const classrooms = ref([])
+interface StudentRow { id: number; classroom_id?: number | null; name?: string; [key: string]: unknown }
+interface ClassroomRow { id: number; name: string; school_year?: number; semester?: number; semester_label?: string; grade_name?: string; [key: string]: unknown }
+
+const students = ref<StudentRow[]>([])
+const classrooms = ref<ClassroomRow[]>([])
 const totalStudents = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(50)
 const loading = ref(false)
-const selectedStudents = ref([])
+const selectedStudents = ref<StudentRow[]>([])
 const searchQuery = ref('')
 const debouncedSearch = ref('')
 const activeTab = ref('active')  // 'active' | 'graduated'
 const transferDialogVisible = ref(false)
-const transferTargetClassroomId = ref(null)
+const transferTargetClassroomId = ref<number | null>(null)
 const transferSourceClassroomId = computed(() => {
   if (!selectedStudents.value.length) return null
   return selectedStudents.value[0].classroom_id ?? null
@@ -40,7 +43,7 @@ const handledRouteActionKey = ref('')
 const currentAcademicTerm = getCurrentAcademicTerm()
 const filterSchoolYear = ref(currentAcademicTerm.school_year)
 const filterSemester = ref(currentAcademicTerm.semester)
-const filterClassroomId = ref(null)
+const filterClassroomId = ref<number | null>(null)
 const semesterOptions = [
   { label: '上學期（8 月 - 1 月）', value: 1 },
   { label: '下學期（2 月 - 7 月）', value: 2 },
@@ -48,21 +51,21 @@ const semesterOptions = [
 
 // 畢業/轉出 dialog
 const graduateDialogVisible = ref(false)
-const graduateTarget = ref(null)
-const graduateFormRef = ref(null)
+const graduateTarget = ref<StudentRow | null>(null)
+const graduateFormRef = ref<{ validate: (cb: (valid: boolean) => void) => void } | null>(null)
 const graduateForm = reactive({ graduation_date: '', status: '已畢業', reason: '', notes: '' })
 const graduateRules = {
   graduation_date: [{ required: true, message: '請選擇離園日期', trigger: 'change' }],
   status: [{ required: true, message: '請選擇類型', trigger: 'change' }]
 }
-const GRADUATE_REASON_OPTIONS = {
+const GRADUATE_REASON_OPTIONS: Record<string, string[]> = {
   已畢業: ['正常畢業'],
   已轉出: ['家庭因素', '健康因素', '搬遷', '轉往他園', '其他'],
 }
 watch(() => graduateForm.status, () => { graduateForm.reason = '' })
-let _searchTimer = null
+let _searchTimer: ReturnType<typeof setTimeout> | null = null
 watch(searchQuery, (val) => {
-  clearTimeout(_searchTimer)
+  if (_searchTimer) clearTimeout(_searchTimer)
   _searchTimer = setTimeout(() => { debouncedSearch.value = val }, 300)
 })
 onUnmounted(() => {
@@ -72,8 +75,8 @@ onUnmounted(() => {
 // 學生新增/編輯 dialog（用 StudentEditDialog 統一）
 const editDialogVisible = ref(false)
 const editMode = ref('create') // 'create' | 'edit'
-const editInitial = ref(null)
-const pendingClassroomId = ref(null) // 從 route action create 帶入的預設班級
+const editInitial = ref<StudentRow | null>(null)
+const pendingClassroomId = ref<number | null>(null) // 從 route action create 帶入的預設班級
 
 const schoolYearOptions = computed(() => {
   const years = new Set(buildSchoolYearOptions(currentAcademicTerm.school_year))
@@ -82,7 +85,7 @@ const schoolYearOptions = computed(() => {
   return Array.from(years).sort((a, b) => b - a)
 })
 
-const classroomLabel = (classroom) => {
+const classroomLabel = (classroom: ClassroomRow | undefined) => {
   if (!classroom) return '-'
   return `${classroom.name}｜${classroom.semester_label || '-'}｜${classroom.grade_name || '未設定年級'}`
 }
@@ -121,9 +124,9 @@ const fetchActiveCallIds = async () => {
   try {
     const res = await getDismissalCalls({ status: undefined })
     const activeIds = new Set(
-      (res.data || [])
-        .filter(c => c.status === 'pending' || c.status === 'acknowledged')
-        .map(c => c.student_id)
+      ((res.data || []) as Record<string, unknown>[])
+        .filter((c) => c.status === 'pending' || c.status === 'acknowledged')
+        .map((c) => c.student_id)
     )
     activeCallStudentIds.value = activeIds
   } catch {
@@ -156,7 +159,7 @@ const fetchStudents = async () => {
   }
 }
 
-const handleNotifyDismissal = async (row) => {
+const handleNotifyDismissal = async (row: StudentRow) => {
   if (!row.classroom_id) {
     ElMessage.warning('此學生尚未分班，無法發送接送通知')
     return
@@ -178,7 +181,7 @@ const handleTabChange = () => {
   fetchStudents()
 }
 
-const openGraduateDialog = (row) => {
+const openGraduateDialog = (row: StudentRow) => {
   graduateTarget.value = row
   graduateForm.graduation_date = ''
   graduateForm.status = '已畢業'
@@ -193,8 +196,8 @@ const submitGraduate = async () => {
     if (!valid) return
     try {
       const studentStore = useStudentStore()
-      await studentStore.graduateStudent(graduateTarget.value.id, graduateForm)
-      ElMessage.success(`已將「${graduateTarget.value.name}」設為${graduateForm.status}`)
+      await studentStore.graduateStudent(graduateTarget.value!.id, graduateForm)
+      ElMessage.success(`已將「${graduateTarget.value!.name}」設為${graduateForm.status}`)
       graduateDialogVisible.value = false
       fetchStudents()
     } catch (error) {
@@ -203,19 +206,19 @@ const submitGraduate = async () => {
   })
 }
 
-const handlePageChange = (page) => {
+const handlePageChange = (page: number) => {
   currentPage.value = page
   fetchStudents()
 }
 
-const handleSizeChange = (size) => {
+const handleSizeChange = (size: number) => {
   pageSize.value = size
   currentPage.value = 1
   fetchStudents()
 }
 
-const classroomName = (id) => classroomLabel(classrooms.value.find(c => c.id === id))
-const handleSelectionChange = (rows) => {
+const classroomName = (id: number) => classroomLabel(classrooms.value.find((c) => c.id === id))
+const handleSelectionChange = (rows: StudentRow[]) => {
   selectedStudents.value = rows
 }
 const openTransferDialog = () => {
@@ -244,7 +247,7 @@ const submitTransfer = async () => {
   }
 }
 
-const openProfile = (row) => {
+const openProfile = (row: StudentRow) => {
   router.push({ name: 'student-profile', params: { id: row.id } })
 }
 
@@ -255,7 +258,7 @@ const handleAdd = () => {
   editDialogVisible.value = true
 }
 
-const handleEdit = (row) => {
+const handleEdit = (row: StudentRow) => {
   editInitial.value = { ...row }
   pendingClassroomId.value = row.classroom_id || null
   editMode.value = 'edit'
@@ -269,8 +272,8 @@ const handleEditSaved = () => {
 
 const { confirmDelete: handleDelete, deleting: deleteLoading } = useConfirmDelete({
   endpoint: '/students',
-  onSuccess: (row) => {
-    domainBus.emit(STUDENT_EVENTS.DELETED, { id: row?.id })
+  onSuccess: (row: unknown) => {
+    domainBus.emit(STUDENT_EVENTS.DELETED, { id: (row as { id?: number })?.id })
     fetchStudents()
   },
   successMsg: '刪除成功',
@@ -298,7 +301,7 @@ const handleRouteAction = async () => {
 
   if (route.query.action === 'create' && route.query.classroom_id) {
     pendingClassroomId.value = Number(route.query.classroom_id)
-    editInitial.value = { classroom_id: pendingClassroomId.value }
+    editInitial.value = { id: 0, classroom_id: pendingClassroomId.value }
     editMode.value = 'create'
     editDialogVisible.value = true
     handledRouteActionKey.value = actionKey
@@ -325,7 +328,7 @@ const handleRouteAction = async () => {
 const loadClassrooms = async () => {
   try {
     const res = await getClassrooms({ current_only: false })
-    classrooms.value = res.data
+    classrooms.value = res.data as ClassroomRow[]
   } catch {
     ElMessage.error('載入班級資料失敗')
   }

@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useShiftStore } from '@/stores/shift'
 import SettingsShiftTab from '@/components/settings/SettingsShiftTab.vue'

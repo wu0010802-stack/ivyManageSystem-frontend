@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getIncidents, createIncident, updateIncident, deleteIncident } from '@/api/studentIncidents'
@@ -8,15 +8,17 @@ import { INCIDENT_TYPES, SEVERITIES, INCIDENT_TYPE_TAG as TYPE_TAG, SEVERITY_TAG
 import { apiError } from '@/utils/error'
 import { buildStudentProfileLink } from '@/utils/studentLinks'
 
+type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
+
 // ── 篩選 ────────────────────────────────────────────────
 const classroomStore = useClassroomStore()
-const classrooms = computed(() => classroomStore.classrooms)
-const filterClassroom = ref(null)
-const filterType = ref(null)
-const filterDateRange = ref([])
+const classrooms = computed(() => classroomStore.classrooms as { id: number; name: string }[])
+const filterClassroom = ref<number | null>(null)
+const filterType = ref<string | null>(null)
+const filterDateRange = ref<string[]>([])
 
 // ── 表格 ────────────────────────────────────────────────
-const incidents = ref([])
+const incidents = ref<Record<string, unknown>[]>([])
 const total = ref(0)
 const loading = ref(false)
 const currentPage = ref(1)
@@ -27,7 +29,15 @@ const dialogVisible = ref(false)
 const dialogMode = ref('create') // 'create' | 'edit'
 const formLoading = ref(false)
 
-const emptyForm = () => ({
+const emptyForm = (): {
+  student_id: number | null
+  incident_type: string
+  severity: string
+  occurred_at: string
+  description: string
+  action_taken: string
+  parent_notified: boolean
+} => ({
   student_id: null,
   incident_type: '',
   severity: '',
@@ -38,17 +48,17 @@ const emptyForm = () => ({
 })
 
 const form = reactive(emptyForm())
-const editId = ref(null)
+const editId = ref<number | null>(null)
 
 // 新增/編輯 Dialog 的班級/學生選擇
-const dialogClassroom = ref(null)
-const dialogStudents = ref([])
+const dialogClassroom = ref<number | null>(null)
+const dialogStudents = ref<{ id: number; name: string }[]>([])
 const dialogStudentsLoading = ref(false)
 
 const fetchIncidents = async () => {
   loading.value = true
   try {
-    const params = {
+    const params: Record<string, unknown> = {
       skip: (currentPage.value - 1) * pageSize.value,
       limit: pageSize.value,
     }
@@ -73,13 +83,13 @@ const handleSearch = () => {
   fetchIncidents()
 }
 
-const handlePageChange = (page) => {
+const handlePageChange = (page: number) => {
   currentPage.value = page
   fetchIncidents()
 }
 
 // 當 Dialog 班級改變時，載入學生
-const onDialogClassroomChange = async (cid) => {
+const onDialogClassroomChange = async (cid: number | null) => {
   form.student_id = null
   dialogStudents.value = []
   if (!cid) return
@@ -103,20 +113,20 @@ const openCreate = () => {
   dialogVisible.value = true
 }
 
-const openEdit = (row) => {
+const openEdit = (row: Record<string, unknown>) => {
   Object.assign(form, {
-    student_id: row.student_id,
-    incident_type: row.incident_type,
-    severity: row.severity || '',
-    occurred_at: row.occurred_at ? row.occurred_at.slice(0, 16) : '',
-    description: row.description,
-    action_taken: row.action_taken || '',
-    parent_notified: row.parent_notified,
+    student_id: (row.student_id as number | null) ?? null,
+    incident_type: String(row.incident_type ?? ''),
+    severity: String(row.severity ?? ''),
+    occurred_at: row.occurred_at ? String(row.occurred_at).slice(0, 16) : '',
+    description: String(row.description ?? ''),
+    action_taken: String(row.action_taken ?? ''),
+    parent_notified: Boolean(row.parent_notified),
   })
   // 預先設定班級以顯示學生
-  dialogClassroom.value = row.classroom_id
-  dialogStudents.value = [{ id: row.student_id, name: row.student_name }]
-  editId.value = row.id
+  dialogClassroom.value = (row.classroom_id as number | null) ?? null
+  dialogStudents.value = [{ id: row.student_id as number, name: String(row.student_name ?? '') }]
+  editId.value = row.id as number | null
   dialogMode.value = 'edit'
   dialogVisible.value = true
 }
@@ -143,7 +153,7 @@ const submitForm = async () => {
       await createIncident(payload)
       ElMessage.success('新增成功')
     } else {
-      await updateIncident(editId.value, payload)
+      await updateIncident(editId.value!, payload)
       ElMessage.success('更新成功')
     }
     dialogVisible.value = false
@@ -156,10 +166,10 @@ const submitForm = async () => {
 }
 
 // 通知家長開關（表格內直接更新）
-const toggleParentNotified = async (row) => {
+const toggleParentNotified = async (row: Record<string, unknown>) => {
   const newVal = !row.parent_notified
   try {
-    await updateIncident(row.id, {
+    await updateIncident(row.id as number, {
       parent_notified: newVal,
       parent_notified_at: newVal ? new Date().toISOString() : null,
     })
@@ -171,14 +181,14 @@ const toggleParentNotified = async (row) => {
   }
 }
 
-const handleDelete = async (row) => {
+const handleDelete = async (row: Record<string, unknown>) => {
   try {
     await ElMessageBox.confirm(
       `確定要刪除「${row.student_name}」的事件紀錄嗎？`,
       '確認刪除',
       { type: 'warning' }
     )
-    await deleteIncident(row.id)
+    await deleteIncident(row.id as number)
     ElMessage.success('刪除成功')
     fetchIncidents()
   } catch (e) {
@@ -186,7 +196,12 @@ const handleDelete = async (row) => {
   }
 }
 
-const truncate = (text, len = 60) => {
+const incidentTypeTagType = (t: unknown): ElTagType =>
+  (TYPE_TAG as Record<string, string>)[String(t)] as ElTagType
+const severityTagType = (s: unknown): ElTagType =>
+  (SEVERITY_TAG as Record<string, string>)[String(s)] as ElTagType
+
+const truncate = (text: string | null | undefined, len = 60) => {
   if (!text) return ''
   return text.length > len ? text.slice(0, len) + '…' : text
 }
@@ -247,7 +262,7 @@ onMounted(() => {
           <template #default="{ row }">
             <router-link
               v-if="buildStudentProfileLink(row.student_id, 'records')"
-              :to="buildStudentProfileLink(row.student_id, 'records')"
+              :to="buildStudentProfileLink(row.student_id, 'records')!"
               class="student-link"
             >{{ row.student_name }}</router-link>
             <span v-else>{{ row.student_name }}</span>
@@ -255,12 +270,12 @@ onMounted(() => {
         </el-table-column>
         <el-table-column label="事件類型" width="100">
           <template #default="{ row }">
-            <el-tag :type="TYPE_TAG[row.incident_type]" size="small">{{ row.incident_type }}</el-tag>
+            <el-tag :type="incidentTypeTagType(row.incident_type)" size="small">{{ row.incident_type }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="嚴重程度" width="90">
           <template #default="{ row }">
-            <el-tag v-if="row.severity" :type="SEVERITY_TAG[row.severity]" size="small">{{ row.severity }}</el-tag>
+            <el-tag v-if="row.severity" :type="severityTagType(row.severity)" size="small">{{ row.severity }}</el-tag>
             <span v-else>-</span>
           </template>
         </el-table-column>

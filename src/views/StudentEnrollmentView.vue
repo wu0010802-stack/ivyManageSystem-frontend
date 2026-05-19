@@ -161,7 +161,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted, watch, defineAsyncComponent } from 'vue'
 import { ElMessage } from 'element-plus'
 import { RefreshRight, Printer } from '@element-plus/icons-vue'
@@ -175,8 +175,18 @@ import { useAcademicTermStore } from '@/stores/academicTerm'
 import { apiError } from '@/utils/error'
 import EnrollmentRosterTable from '@/components/enrollment/EnrollmentRosterTable.vue'
 
+// --- Type interfaces ---
+interface TermOption { school_year: number; semester: number; label: string }
+interface GradeClassStat { class_name: string; male: number; female: number; total: number }
+interface GradeStat { grade_name: string; male: number; female: number; total: number; classes: GradeClassStat[] }
+interface EnrollmentSummary { total: number; male: number; female: number; class_count: number }
+interface EnrollmentStats {
+  school_year: number; semester: number; semester_label: string
+  summary: EnrollmentSummary; by_grade: GradeStat[]
+}
+
 // Chart.js 延遲載入
-let _chartReady = null
+let _chartReady: Promise<void> | null = null
 const ensureChartReady = () => {
   if (!_chartReady) {
     _chartReady = import('chart.js').then(({
@@ -199,12 +209,17 @@ const DoughnutChart = defineAsyncComponent(() =>
 // ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
+interface RosterStudent { name: string; status_tag?: string }
+interface RosterClass { classroom_id: number; class_number: number; grade_name: string; class_name: string; head_teacher_name?: string | null; assistant_teacher_name?: string | null; art_teacher_name?: string | null; students: RosterStudent[]; total: number; old_count: number; new_count: number }
+interface GradeSummary { grade_name: string; class_numbers: number[]; total: number; old_count: number; new_count: number }
+interface RosterData { school_year: number; semester: number; generated_date: string; classes: RosterClass[]; grade_summaries: GradeSummary[]; grand_total: number; old_grand_total: number; new_grand_total: number; staff_by_role: Record<string, { name: string }[]> }
+
 const termStore = useAcademicTermStore()
 const loading = ref(false)
 const rosterLoading = ref(false)
-const stats = ref(null)
-const roster = ref(null)
-const termOptions = ref([])
+const stats = ref<EnrollmentStats | null>(null)
+const roster = ref<RosterData | null>(null)
+const termOptions = ref<TermOption[]>([])
 const activeTab = ref('stats')
 
 const selectedTerm = computed({
@@ -221,7 +236,7 @@ const selectedTerm = computed({
 const fetchOptions = async () => {
   try {
     const res = await getEnrollmentOptions()
-    termOptions.value = res.data
+    termOptions.value = res.data as TermOption[]
     const key = selectedTerm.value
     const found = termOptions.value.some(
       (o) => `${o.school_year}-${o.semester}` === key,
@@ -244,7 +259,7 @@ const fetchStats = async () => {
   loading.value = true
   try {
     const res = await getEnrollmentStats(termParams())
-    stats.value = res.data
+    stats.value = res.data as EnrollmentStats
   } catch (e) {
     ElMessage.error(apiError(e, '載入在籍統計失敗'))
   } finally {
@@ -256,7 +271,7 @@ const fetchRoster = async () => {
   rosterLoading.value = true
   try {
     const res = await getEnrollmentRoster(termParams())
-    roster.value = res.data
+    roster.value = res.data as unknown as RosterData
   } catch (e) {
     ElMessage.error(apiError(e, '載入在籍記錄表失敗'))
   } finally {
@@ -277,7 +292,8 @@ const onRefresh = () => {
   else fetchRoster()
 }
 
-const onTabClick = (tab) => {
+const onTabClick = (pane: unknown) => {
+  const tab = pane as { paneName?: string }
   if (tab.paneName === 'roster' && !roster.value) {
     fetchRoster()
   }
@@ -310,7 +326,7 @@ const summaryCards = computed(() => {
   const male = s?.male ?? 0
   const female = s?.female ?? 0
   const cls = s?.class_count ?? 0
-  const pct = (n) => (total > 0 ? `${Math.round((n / total) * 100)}%` : '—')
+  const pct = (n: number) => (total > 0 ? `${Math.round((n / total) * 100)}%` : '—')
   const avg = cls > 0 ? Math.round(total / cls) : null
   return [
     {
@@ -345,7 +361,7 @@ const classCount = computed(() => {
   return stats.value.by_grade.reduce((s, g) => s + g.classes.length, 0)
 })
 
-const ratioPct = (n, total) => (total > 0 ? `${Math.round((n / total) * 100)}%` : '0%')
+const ratioPct = (n: number, total: number) => (total > 0 ? `${Math.round((n / total) * 100)}%` : '0%')
 
 // ---------------------------------------------------------------------------
 // 表格資料（展開 + 年級小計 + 全園總計）
@@ -385,27 +401,28 @@ const tableData = computed(() => {
   return rows
 })
 
-const spanMethod = ({ row, column, rowIndex, columnIndex }) => {
+const spanMethod = ({ row, rowIndex, columnIndex }: { row: Record<string, unknown>; rowIndex: number; columnIndex: number }) => {
   if (row.type === 'subtotal' || row.type === 'grand_total') {
     if (columnIndex === 0) return { rowspan: 1, colspan: 2 }
     if (columnIndex === 1) return { rowspan: 0, colspan: 0 }
-    return
+    return undefined
   }
-  if (columnIndex !== 0) return
+  if (columnIndex !== 0) return undefined
   if (row.type === 'class') {
     const gradeRows = tableData.value.filter(
-      r => r.type === 'class' && r.grade_name === row.grade_name
+      (r) => r.type === 'class' && r.grade_name === row.grade_name
     )
     const firstIdx = tableData.value.indexOf(gradeRows[0])
     if (rowIndex === firstIdx) {
-      return { rowspan: row._gradeClassCount, colspan: 1 }
+      return { rowspan: row._gradeClassCount as number, colspan: 1 }
     } else {
       return { rowspan: 0, colspan: 0 }
     }
   }
+  return undefined
 }
 
-const rowClassName = ({ row }) => {
+const rowClassName = ({ row }: { row: Record<string, unknown> }) => {
   if (row.type === 'subtotal') return 'row-subtotal'
   if (row.type === 'grand_total') return 'row-grand-total'
   return ''
@@ -452,7 +469,7 @@ const barChartData = computed(() => {
   }
 })
 
-const barChartOptions = {
+const _barChartOptionsRaw = {
   responsive: true,
   maintainAspectRatio: false,
   scales: {
@@ -470,8 +487,8 @@ const barChartOptions = {
   },
   plugins: {
     legend: {
-      position: 'top',
-      align: 'end',
+      position: 'top' as const,
+      align: 'end' as const,
       labels: {
         color: '#303133',
         font: { size: 12 },
@@ -479,12 +496,12 @@ const barChartOptions = {
         boxWidth: 12,
         boxHeight: 12,
         usePointStyle: true,
-        pointStyle: 'circle',
+        pointStyle: 'circle' as const,
       },
     },
     tooltip: {
       backgroundColor: 'rgba(48, 49, 51, 0.92)',
-      titleFont: { size: 12, weight: '600' },
+      titleFont: { size: 12, weight: '600' as const },
       bodyFont: { size: 12 },
       padding: 10,
       cornerRadius: 4,
@@ -492,6 +509,8 @@ const barChartOptions = {
     },
   },
 }
+
+const barChartOptions = _barChartOptionsRaw as unknown as Record<string, unknown>
 
 // ---------------------------------------------------------------------------
 // 圓餅圖
@@ -503,7 +522,7 @@ const doughnutChartData = computed(() => {
     datasets: [
       {
         data: stats.value.by_grade.map(g => g.total),
-        backgroundColor: stats.value.by_grade.map((_, i) => CHART_PALETTE[i % CHART_PALETTE.length]),
+        backgroundColor: stats.value.by_grade.map((_: GradeStat, i: number) => CHART_PALETTE[i % CHART_PALETTE.length]),
         borderColor: '#ffffff',
         borderWidth: 2,
         hoverOffset: 4,
@@ -518,7 +537,7 @@ const doughnutChartOptions = {
   cutout: '60%',
   plugins: {
     legend: {
-      position: 'bottom',
+      position: 'bottom' as const,
       labels: {
         color: '#303133',
         font: { size: 12 },
@@ -534,8 +553,8 @@ const doughnutChartOptions = {
       padding: 10,
       cornerRadius: 4,
       callbacks: {
-        label: (ctx) => {
-          const total = ctx.dataset.data.reduce((s, v) => s + v, 0)
+        label: (ctx: { dataset: { data: number[] }; parsed: number; label: string }) => {
+          const total = ctx.dataset.data.reduce((s: number, v: number) => s + v, 0)
           const pct = total > 0 ? Math.round((ctx.parsed / total) * 100) : 0
           return ` ${ctx.label}：${ctx.parsed} 人（${pct}%）`
         },
@@ -543,6 +562,7 @@ const doughnutChartOptions = {
     },
   },
 }
+
 </script>
 
 <style scoped>

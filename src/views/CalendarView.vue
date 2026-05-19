@@ -1,17 +1,37 @@
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { createEvent, deleteEvent, getCalendarFeed, updateEvent } from '@/api/events'
 import { downloadFile } from '@/utils/download'
 import { apiError } from '@/utils/error'
 
+interface CalendarEvent {
+  id: number
+  title: string
+  event_date: string
+  end_date?: string | null
+  event_type: string
+  description?: string
+  location?: string
+  is_all_day: boolean
+  start_time?: string
+  end_time?: string
+  is_read_only?: boolean
+  [key: string]: unknown
+}
+
+interface OfficialSync {
+  warning?: string
+  [key: string]: unknown
+}
+
 const loading = ref(false)
-const events = ref([])
+const events = ref<CalendarEvent[]>([])
 const deleting = ref(false)
 const dialogVisible = ref(false)
 const detailVisible = ref(false)
 const isEdit = ref(false)
-const officialSync = ref(null)
+const officialSync = ref<OfficialSync | null>(null)
 
 const now = new Date()
 const currentDate = ref(new Date(now.getFullYear(), now.getMonth(), 1))
@@ -25,7 +45,18 @@ const eventTypes = [
 ]
 const eventTypeMap = Object.fromEntries(eventTypes.map((item) => [item.value, item]))
 
-const form = reactive({
+const form = reactive<{
+  id: number | null
+  title: string
+  description: string
+  event_date: string
+  end_date: string | null
+  event_type: string
+  is_all_day: boolean
+  start_time: string
+  end_time: string
+  location: string
+}>({
   id: null,
   title: '',
   description: '',
@@ -38,7 +69,7 @@ const form = reactive({
   location: '',
 })
 
-const selectedEvent = ref(null)
+const selectedEvent = ref<CalendarEvent | null>(null)
 const searchText = ref('')
 
 const resetForm = () => {
@@ -127,8 +158,9 @@ const fetchEvents = async () => {
   loading.value = true
   try {
     const res = await getCalendarFeed({ year: currentYear.value, month: currentMonth.value })
-    events.value = res.data.events
-    officialSync.value = res.data.official_sync
+    const d = res.data as { events: CalendarEvent[]; official_sync?: OfficialSync }
+    events.value = d.events
+    officialSync.value = d.official_sync ?? null
   } catch (error) {
     ElMessage.error(apiError(error, '載入失敗'))
   } finally {
@@ -152,26 +184,26 @@ const goToday = () => {
   fetchEvents()
 }
 
-const isToday = (dateStr) => {
+const isToday = (dateStr: string | null | undefined) => {
   if (!dateStr) return false
   const current = new Date()
   const todayStr = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}-${String(current.getDate()).padStart(2, '0')}`
   return dateStr === todayStr
 }
 
-const handleAdd = (dateStr) => {
+const handleAdd = (dateStr: string | null | undefined) => {
   isEdit.value = false
   resetForm()
   if (dateStr) form.event_date = dateStr
   dialogVisible.value = true
 }
 
-const showDetail = (event) => {
+const showDetail = (event: CalendarEvent) => {
   selectedEvent.value = event
   detailVisible.value = true
 }
 
-const openEvent = (event) => {
+const openEvent = (event: CalendarEvent) => {
   if (event.is_read_only) {
     showDetail(event)
     return
@@ -211,7 +243,7 @@ const saveEvent = async () => {
       location: form.location || null,
     }
     if (isEdit.value) {
-      await updateEvent(form.id, payload)
+      await updateEvent(form.id!, payload)
       ElMessage.success('事件已更新')
     } else {
       await createEvent(payload)
@@ -224,7 +256,7 @@ const saveEvent = async () => {
   }
 }
 
-const handleDelete = async (event) => {
+const handleDelete = async (event: CalendarEvent) => {
   try {
     await ElMessageBox.confirm(`確定要刪除「${event.title}」？`, '確認刪除', {
       confirmButtonText: '刪除',

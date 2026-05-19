@@ -17,6 +17,7 @@
       </div>
     </div>
 
+    <!-- @ts-expect-error TODO(ts-strict): AsyncComponent not assignable to tab's barComponent prop -->
     <RecruitmentIvykidsTab
       :bar-component="Bar"
       :show-charts="true"
@@ -25,12 +26,12 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, defineAsyncComponent } from 'vue'
 import { hasPermission } from '@/utils/auth'
 import RecruitmentIvykidsTab from '@/components/recruitment/RecruitmentIvykidsTab.vue'
 
-let chartReadyPromise = null
+let chartReadyPromise: Promise<void> | null = null
 const ensureChartReady = () => {
   if (!chartReadyPromise) {
     chartReadyPromise = import('chart.js').then(({

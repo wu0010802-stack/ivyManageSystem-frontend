@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -14,37 +14,65 @@ import { useClassroomStore } from '@/stores/classroom'
 import { Top } from '@element-plus/icons-vue'
 import { apiError } from '@/utils/error'
 
+type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
+
+interface AnnouncementItem {
+  id: number
+  title: string
+  content: string
+  priority: string
+  is_pinned: boolean
+  recipient_ids?: number[]
+  recipient_count?: number
+  read_count?: number
+  read_preview?: { employee_id: number; name: string }[]
+  readers?: { employee_id: number; name: string; read_at: string }[]
+  created_by_name?: string
+  created_at?: string
+  [key: string]: unknown
+}
+
 const loading = ref(false)
-const announcements = ref([])
+const announcements = ref<AnnouncementItem[]>([])
 const dialogVisible = ref(false)
 const isEdit = ref(false)
 const employeeStore = useEmployeeStore()
 const classroomStore = useClassroomStore()
 const employeeOptions = computed(() =>
-  employeeStore.employees.map(e => ({
+  (employeeStore.employees as { id: number; name: string; department?: string; job_title?: string }[]).map(e => ({
     value: e.id,
     label: `${e.name}（${e.department || e.job_title || ''}）`,
   }))
 )
 const classroomOptions = computed(() =>
-  (classroomStore.classrooms || []).map(c => ({
+  ((classroomStore.classrooms || []) as { id: number; name: string }[]).map(c => ({
     value: c.id,
     label: c.name,
   }))
 )
 
-const priorityOptions = [
+const priorityOptions: { value: string; label: string; type: ElTagType }[] = [
   { value: 'normal', label: '一般', type: 'info' },
   { value: 'important', label: '重要', type: 'warning' },
   { value: 'urgent', label: '緊急', type: 'danger' },
 ]
 
-const priorityMap = Object.fromEntries(priorityOptions.map(p => [p.value, p]))
+const priorityMap: Record<string, { value: string; label: string; type: ElTagType }> = Object.fromEntries(priorityOptions.map(p => [p.value, p]))
 
 // parent_visibility: 'off' | 'all' | 'classroom'
 // 後端 scope 支援 all/classroom/student/guardian；前端先涵蓋常用三種，
 // student/guardian 細粒度待後續補（model 已就位，PUT 結構可向下相容）
-const form = reactive({
+const form = reactive<{
+  id: number | null
+  title: string
+  content: string
+  priority: string
+  is_pinned: boolean
+  restrict_recipients: boolean
+  target_employee_ids: number[]
+  parent_visibility: string
+  parent_target_classroom_ids: number[]
+}>({
   id: null,
   title: '',
   content: '',
@@ -71,8 +99,8 @@ const resetForm = () => {
 const fetchAnnouncements = async () => {
   loading.value = true
   try {
-    const res = await getAnnouncements()
-    announcements.value = res.data.items || []
+    const res = await getAnnouncements({})
+    announcements.value = (res.data as { items?: AnnouncementItem[] }).items || []
   } catch (error) {
     ElMessage.error(apiError(error, '載入失敗'))
   } finally {
@@ -86,7 +114,7 @@ const openAdd = () => {
   dialogVisible.value = true
 }
 
-const openEdit = async (row) => {
+const openEdit = async (row: AnnouncementItem) => {
   form.id = row.id
   form.title = row.title
   form.content = row.content
@@ -101,14 +129,14 @@ const openEdit = async (row) => {
   dialogVisible.value = true
   try {
     const res = await getAnnouncementParentRecipients(row.id)
-    const items = res.data?.items || []
+    const items: { scope: string; classroom_id?: number }[] = (res.data as { items?: { scope: string; classroom_id?: number }[] })?.items || []
     if (items.length === 0) {
       form.parent_visibility = 'off'
     } else if (items.some(it => it.scope === 'all')) {
       form.parent_visibility = 'all'
     } else if (items.every(it => it.scope === 'classroom' && it.classroom_id)) {
       form.parent_visibility = 'classroom'
-      form.parent_target_classroom_ids = items.map(it => it.classroom_id)
+      form.parent_target_classroom_ids = items.map(it => it.classroom_id as number)
     } else {
       // 含 student/guardian scope 的進階設定，前端 UI 暫無對應，視為「自訂」唯讀
       form.parent_visibility = 'custom'
@@ -151,7 +179,7 @@ const handleSubmit = async () => {
     const recipientIds = form.restrict_recipients ? form.target_employee_ids : []
     let announcementId = form.id
     if (isEdit.value) {
-      await updateAnnouncement(form.id, {
+      await updateAnnouncement(form.id!, {
         title: form.title,
         content: form.content,
         priority: form.priority,
@@ -166,7 +194,8 @@ const handleSubmit = async () => {
         is_pinned: form.is_pinned,
         target_employee_ids: recipientIds.length > 0 ? recipientIds : null,
       })
-      announcementId = res.data?.id ?? res.data?.announcement?.id ?? null
+      const resData = res.data as { id?: number; announcement?: { id?: number } }
+      announcementId = resData?.id ?? resData?.announcement?.id ?? null
     }
 
     // 家長端 scope 同步（plan A.5）
@@ -191,7 +220,7 @@ const handleSubmit = async () => {
   }
 }
 
-const handleDelete = async (row) => {
+const handleDelete = async (row: AnnouncementItem) => {
   try {
     await ElMessageBox.confirm(`確定要刪除公告「${row.title}」嗎？`, '確認刪除', {
       confirmButtonText: '刪除',
@@ -202,13 +231,13 @@ const handleDelete = async (row) => {
     ElMessage.success('公告已刪除')
     fetchAnnouncements()
   } catch (e) {
-    if (e !== 'cancel') {
+    if (e !== 'cancel' && (e as { message?: string })?.message !== 'cancel') {
       ElMessage.error('刪除失敗')
     }
   }
 }
 
-const togglePin = async (row) => {
+const togglePin = async (row: AnnouncementItem) => {
   try {
     await updateAnnouncement(row.id, { is_pinned: !row.is_pinned })
     ElMessage.success(row.is_pinned ? '已取消置頂' : '已置頂')
@@ -218,15 +247,15 @@ const togglePin = async (row) => {
   }
 }
 
-const formatDate = (isoStr) => {
+const formatDate = (isoStr: string | undefined) => {
   if (!isoStr) return ''
   const d = new Date(isoStr)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
-const getReadPreview = (row) => row.read_preview || []
+const getReadPreview = (row: AnnouncementItem) => row.read_preview || []
 
-const getRemainingReaders = (row) => Math.max(
+const getRemainingReaders = (row: AnnouncementItem) => Math.max(
   0,
   (row.read_count || 0) - getReadPreview(row).length,
 )

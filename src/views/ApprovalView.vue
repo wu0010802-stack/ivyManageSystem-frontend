@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -33,11 +33,14 @@ const totalPending = computed(() =>
   pendingLeaves.value.length + pendingOvertimes.value.length + pendingPunchCorrections.value.length
 )
 
-const formatDateTime = (value) => (value ? formatDate(value) : '-')
-const formatSubmitterRole = (role) => roleTagMap[role]?.label || role || '未設定'
-const submitterRoleType = (role) => roleTagMap[role]?.type || 'info'
+type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
+type StatusMap = Record<string, { label: string; type: string }>
 
-const formatDeductionRatio = (ratio) => {
+const formatDateTime = (value: string | null | undefined) => (value ? formatDate(value) : '-')
+const formatSubmitterRole = (role: string) => (roleTagMap as StatusMap)[role]?.label || role || '未設定'
+const submitterRoleType = (role: string): ElTagType => ((roleTagMap as StatusMap)[role]?.type as ElTagType) || 'info'
+
+const formatDeductionRatio = (ratio: number | null | undefined) => {
   if (ratio === null || ratio === undefined) return '-'
   if (Number(ratio) === 0) return '不扣薪'
   if (Number(ratio) === 1) return '全扣'
@@ -45,9 +48,9 @@ const formatDeductionRatio = (ratio) => {
   return `${Math.round(Number(ratio) * 100)}%`
 }
 
-const substituteStatusLabel = (status) => substituteStatusMap[status]?.label || status || '—'
-const substituteStatusType = (status) => substituteStatusMap[status]?.type || 'info'
-const hasAttachments = (row) => Array.isArray(row.attachment_paths) && row.attachment_paths.length > 0
+const substituteStatusLabel = (status: string) => (substituteStatusMap as StatusMap)[status]?.label || status || '—'
+const substituteStatusType = (status: string): ElTagType => ((substituteStatusMap as StatusMap)[status]?.type as ElTagType) || 'info'
+const hasAttachments = (row: Record<string, unknown>) => Array.isArray(row.attachment_paths) && (row.attachment_paths as unknown[]).length > 0
 
 const goToLeaveManagement = () => router.push({ name: 'leaves' })
 const goToOvertimeManagement = () => router.push({ name: 'overtime' })
@@ -63,26 +66,27 @@ const fetchAll = async () => {
   }
 }
 
-const { execute: executeLeaveApproval }      = useApprovalOperation({ apiFn: approveLeaveApi,      onSuccess: fetchPendingLeaves })
-const { execute: executeOvertimeApproval }   = useApprovalOperation({ apiFn: approveOvertimeApi,   onSuccess: fetchPendingOvertimes })
-const { execute: executeCorrectionApproval } = useApprovalOperation({ apiFn: approveCorrectionApi, onSuccess: fetchPendingCorrections })
+type ApprovalFn = (id: unknown, payload: unknown) => Promise<unknown>
+const { execute: executeLeaveApproval }      = useApprovalOperation({ apiFn: approveLeaveApi as ApprovalFn,      onSuccess: fetchPendingLeaves })
+const { execute: executeOvertimeApproval }   = useApprovalOperation({ apiFn: approveOvertimeApi as ApprovalFn,   onSuccess: fetchPendingOvertimes })
+const { execute: executeCorrectionApproval } = useApprovalOperation({ apiFn: approveCorrectionApi as ApprovalFn, onSuccess: fetchPendingCorrections })
 
-const approveLeave = async (row, approved) => {
-  const payload = { approved }
+const approveLeave = async (row: Record<string, unknown>, approved: boolean) => {
+  const payload: { approved: boolean; rejection_reason?: string; force_without_substitute?: boolean } = { approved }
   if (!approved) {
     try {
-      const { value } = await ElMessageBox.prompt('請填寫駁回原因', '駁回請假申請', {
+      const result = await ElMessageBox.prompt('請填寫駁回原因', '駁回請假申請', {
         confirmButtonText: '確認駁回',
         cancelButtonText: '取消',
         inputType: 'textarea',
         inputPattern: /\S+/,
         inputErrorMessage: '請填寫駁回原因',
       })
-      payload.rejection_reason = value.trim()
+      payload.rejection_reason = (result as { value: string }).value.trim()
     } catch {
       return
     }
-  } else if (['pending', 'rejected'].includes(row.substitute_status)) {
+  } else if (['pending', 'rejected'].includes(row.substitute_status as string)) {
     try {
       const warningText = row.substitute_status === 'pending'
         ? '代理人尚未接受此代理請求，仍要直接核准嗎？'
@@ -100,18 +104,18 @@ const approveLeave = async (row, approved) => {
   await executeLeaveApproval(row.id, payload, approved ? '請假已核准' : '請假已駁回')
 }
 
-const approveOvertime = async (row, approved) => {
-  const payload = { approved }
+const approveOvertime = async (row: Record<string, unknown>, approved: boolean) => {
+  const payload: { approved: boolean; rejection_reason?: string } = { approved }
   if (!approved) {
     try {
-      const { value } = await ElMessageBox.prompt('請填寫駁回原因（至少 3 個字）', '駁回加班申請', {
+      const result = await ElMessageBox.prompt('請填寫駁回原因（至少 3 個字）', '駁回加班申請', {
         confirmButtonText: '確認駁回',
         cancelButtonText: '取消',
         inputType: 'textarea',
         inputPattern: /\S{3,}/,
         inputErrorMessage: '請填寫駁回原因（至少 3 個字）',
       })
-      payload.rejection_reason = value.trim()
+      payload.rejection_reason = (result as { value: string }).value.trim()
     } catch {
       return
     }
@@ -119,17 +123,17 @@ const approveOvertime = async (row, approved) => {
   await executeOvertimeApproval(row.id, payload, approved ? '加班已核准' : '加班已駁回')
 }
 
-const approveCorrection = async (row, approved) => {
-  const payload = { approved }
+const approveCorrection = async (row: Record<string, unknown>, approved: boolean) => {
+  const payload: { approved: boolean; rejection_reason?: string } = { approved }
   if (!approved) {
     try {
-      const { value } = await ElMessageBox.prompt('請填寫駁回原因', '駁回補打卡申請', {
+      const result = await ElMessageBox.prompt('請填寫駁回原因', '駁回補打卡申請', {
         confirmButtonText: '確認駁回',
         cancelButtonText: '取消',
         inputPattern: /.+/,
         inputErrorMessage: '請填寫駁回原因',
       })
-      payload.rejection_reason = value
+      payload.rejection_reason = (result as { value: string }).value
     } catch {
       return
     }
@@ -137,18 +141,20 @@ const approveCorrection = async (row, approved) => {
   await executeCorrectionApproval(row.id, payload, approved ? '補打卡已核准，考勤已更新' : '補打卡已駁回')
 }
 
+interface AttachItem { name: string; url: string; isImage: boolean }
+
 const attachDialogVisible = ref(false)
-const attachItems = ref([])
+const attachItems = ref<AttachItem[]>([])
 const attachLoading = ref(false)
 
-const viewAttachments = async (row) => {
+const viewAttachments = async (row: Record<string, unknown>) => {
   attachItems.value = []
   attachDialogVisible.value = true
   attachLoading.value = true
   try {
     attachItems.value = await Promise.all(
-      row.attachment_paths.map((filename) =>
-        getLeaveAttachment(row.id, filename)
+      (row.attachment_paths as string[]).map((filename) =>
+        getLeaveAttachment(row.id as number, filename)
           .then((res) => ({
             name: filename,
             url: URL.createObjectURL(res.data),
@@ -168,6 +174,12 @@ const closeAttachDialog = () => {
   attachItems.value = []
   attachDialogVisible.value = false
 }
+
+const leaveTypeTagType = (leaveType: string): ElTagType => ((leaveTypeMap as StatusMap)[leaveType]?.type as ElTagType) || 'info'
+const overtimeTypeTagType = (type: string): ElTagType => ((overtimeTypeMap as StatusMap)[type]?.type as ElTagType) || 'info'
+const overtimeTypeLabel = (type: string) => (overtimeTypeMap as StatusMap)[type]?.label || type
+const correctionTypeTagType = (type: string): ElTagType => ((correctionTypeMap as StatusMap)[type]?.type as ElTagType) || 'info'
+const correctionTypeLabel = (type: string) => (correctionTypeMap as StatusMap)[type]?.label || type
 
 onMounted(fetchAll)
 </script>
@@ -278,8 +290,8 @@ onMounted(fetchAll)
         </el-table-column>
         <el-table-column label="假別" width="90">
           <template #default="{ row }">
-            <el-tag :type="leaveTypeMap[row.leave_type]?.type || 'info'" size="small">
-              {{ leaveTypeMap[row.leave_type]?.label || row.leave_type }}
+            <el-tag :type="leaveTypeTagType(row.leave_type)" size="small">
+              {{ (leaveTypeMap as StatusMap)[row.leave_type]?.label || row.leave_type }}
             </el-tag>
           </template>
         </el-table-column>
@@ -401,8 +413,8 @@ onMounted(fetchAll)
         <el-table-column label="類型 / 時段" min-width="180">
           <template #default="{ row }">
             <div class="cell-stack">
-              <el-tag :type="overtimeTypeMap[row.overtime_type]?.type || 'info'" size="small">
-                {{ overtimeTypeMap[row.overtime_type]?.label || row.overtime_type }}
+              <el-tag :type="overtimeTypeTagType(row.overtime_type)" size="small">
+                {{ overtimeTypeLabel(row.overtime_type) }}
               </el-tag>
               <span class="cell-muted">{{ row.start_time || '-' }} ~ {{ row.end_time || '-' }}</span>
             </div>
@@ -488,8 +500,8 @@ onMounted(fetchAll)
         <el-table-column prop="attendance_date" label="考勤日期" width="120" />
         <el-table-column label="補正類型" width="110">
           <template #default="{ row }">
-            <el-tag :type="correctionTypeMap[row.correction_type]?.type || 'info'" size="small">
-              {{ correctionTypeMap[row.correction_type]?.label || row.correction_type_label }}
+            <el-tag :type="correctionTypeTagType(row.correction_type)" size="small">
+              {{ correctionTypeLabel(row.correction_type) || row.correction_type_label }}
             </el-tag>
           </template>
         </el-table-column>

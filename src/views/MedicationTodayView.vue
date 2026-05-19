@@ -95,7 +95,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
@@ -106,29 +106,56 @@ import {
 import { hasPermission } from '@/utils/auth'
 import { apiError } from '@/utils/error'
 
+interface MedicationLog {
+  id: number | string
+  scheduled_time?: string
+  status: string
+  administered_at?: string
+  skipped_reason?: string
+  correction_of?: number | string | null
+  [key: string]: unknown
+}
+
+interface MedicationOrder {
+  id: number | string
+  student_name?: string
+  medication_name?: string
+  dose?: string
+  note?: string
+  logs: MedicationLog[]
+  [key: string]: unknown
+}
+
 const loading = ref(false)
-const orders = ref([])
+const orders = ref<MedicationOrder[]>([])
 const summary = reactive({ pending: 0, administered: 0, skipped: 0 })
 
 const canAdminister = computed(() => hasPermission('STUDENTS_MEDICATION_ADMINISTER'))
 
-const skipDialog = reactive({
+const skipDialog = reactive<{
+  visible: boolean
+  saving: boolean
+  logId: number | null
+  reason: string
+}>({
   visible: false,
   saving: false,
   logId: null,
   reason: '',
 })
 
-function statusTag(s) {
+type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
+function statusTag(s: string): ElTagType {
   return s === 'administered' ? 'success'
     : s === 'skipped' ? 'info'
     : s === 'correction' ? 'warning'
     : 'warning'
 }
-function statusLabel(s) {
-  return { pending: '待餵', administered: '已餵', skipped: '跳過', correction: '修正' }[s] || s
+const STATUS_LABEL_MAP: Record<string, string> = { pending: '待餵', administered: '已餵', skipped: '跳過', correction: '修正' }
+function statusLabel(s: string) {
+  return STATUS_LABEL_MAP[s] || s
 }
-function formatTime(iso) {
+function formatTime(iso: string) {
   if (!iso) return ''
   try {
     const d = new Date(iso)
@@ -142,7 +169,7 @@ async function reload() {
   loading.value = true
   try {
     const r = await getTodayMedication()
-    orders.value = r.data.orders || []
+    orders.value = ((r.data as { orders?: MedicationOrder[] }).orders || []) as MedicationOrder[]
     summary.pending = r.data.pending || 0
     summary.administered = r.data.administered || 0
     summary.skipped = r.data.skipped || 0
@@ -153,9 +180,9 @@ async function reload() {
   }
 }
 
-async function doAdminister(logId) {
+async function doAdminister(logId: number | string) {
   try {
-    await administerMedication(logId, {})
+    await administerMedication(logId as number, {})
     ElMessage.success('已標記餵藥')
     await reload()
   } catch (e) {
@@ -163,8 +190,8 @@ async function doAdminister(logId) {
   }
 }
 
-function openSkip(logId) {
-  skipDialog.logId = logId
+function openSkip(logId: number | string) {
+  skipDialog.logId = Number(logId)
   skipDialog.reason = ''
   skipDialog.visible = true
 }
@@ -176,7 +203,7 @@ async function doSkip() {
   }
   skipDialog.saving = true
   try {
-    await skipMedication(skipDialog.logId, {
+    await skipMedication(skipDialog.logId!, {
       skipped_reason: skipDialog.reason.trim(),
     })
     ElMessage.success('已記錄跳過')

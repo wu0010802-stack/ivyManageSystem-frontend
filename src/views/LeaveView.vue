@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { getLeaves, createLeave, updateLeave, approveLeave as approveLeaveApi, batchApproveLeaves, getLeaveImportTemplate, importLeaves } from '@/api/leaves'
 import { useApprovalPolicyStore } from '@/stores/approvalPolicy'
@@ -24,12 +24,12 @@ const { currentYear, query } = useDateQuery()
 const employeeStore = useEmployeeStore()
 
 const loading = ref(false)
-const leaveRecords = ref([])
-const formRef = ref(null)
+const leaveRecords = ref<Record<string, unknown>[]>([])
+const formRef = ref<{ validate: () => Promise<boolean>; clearValidate?: () => void } | null>(null)
 
 // 子元件 ref
-const attachRef = ref(null)
-const rejectRef = ref(null)
+const attachRef = ref<{ open: (row: { id: number; attachment_paths: string[] }) => void } | null>(null)
+const rejectRef = ref<{ open: (row: Record<string, unknown>) => void } | null>(null)
 
 // 行事曆 / 配額 Dialog 的顯示控制
 const activeTab = ref('list')
@@ -39,7 +39,16 @@ const ATTACHMENT_HINTS = {
   default: '請假超過 2 天時，核准前需補上證明附件',
 }
 
-const form = reactive({
+const form = reactive<{
+  id: number | null
+  employee_id: number | string | null
+  leave_type: string
+  start_date: string
+  end_date: string
+  leave_hours: number
+  reason: string
+  is_hospitalized: boolean
+}>({
   id: null,
   employee_id: null,
   leave_type: 'personal',
@@ -50,9 +59,10 @@ const form = reactive({
   is_hospitalized: false,
 })
 
-const selectedLeaveRule = computed(() => LEAVE_RULE_HINTS[form.leave_type] || '')
+const selectedLeaveRule = computed(() => (LEAVE_RULE_HINTS as Record<string, string>)[form.leave_type] || '')
 
-const formRules = {
+import type { FormItemRule } from 'element-plus'
+const formRules: Partial<Record<string, FormItemRule | FormItemRule[]>> = {
   employee_id: [{ required: true, message: '請選擇員工', trigger: 'change' }],
   leave_type: [{ required: true, message: '請選擇假別', trigger: 'change' }],
   start_date: [{ required: true, message: '請選擇開始時間', trigger: 'change' }],
@@ -61,7 +71,7 @@ const formRules = {
     { required: true, type: 'number', message: '請填寫請假時數', trigger: 'change' },
     {
       type: 'number',
-      validator: (rule, value, callback) => {
+      validator: (rule: unknown, value: number, callback: (err?: Error) => void) => {
         if (value < 0.5) callback(new Error('請假時數至少 0.5 小時'))
         else if (Math.round(value * 2) !== value * 2) callback(new Error('請假時數必須為 0.5 小時的倍數'))
         else callback()
@@ -87,10 +97,10 @@ const {
   resetCalculatorState,
   getExpectedMaxHours,
   populateFormFromRecord,
-} = useLeaveHoursCalculator({ form, formRef })
+} = useLeaveHoursCalculator({ form: form as Record<string, unknown>, formRef: formRef as { value?: { clearValidate?: () => void } } | null })
 
 // 結束日期不得早於開始日期
-const disabledEndDate = (time) => {
+const disabledEndDate = (time: Date) => {
   if (!form.start_date) return false
   const s = new Date(form.start_date)
   s.setHours(0, 0, 0, 0)
@@ -134,7 +144,7 @@ const {
   canApprove,
 } = useApprovalModule({
   docType: 'leave',
-  batchApproveFn: batchApproveLeaves,
+  batchApproveFn: batchApproveLeaves as (ids: unknown[], approved: boolean, reason?: string) => Promise<{ data: { succeeded: { length: number }[]; failed: { id: unknown; reason: string }[] } }>,
   fetchFn: () => fetchLeaves(),
   recordLabel: '請假記錄',
 })
@@ -142,7 +152,13 @@ const {
 // ── Excel 匯入 ──
 const importVisible = ref(false)
 const importLoading = ref(false)
-const importResult = ref(null)
+interface LeaveImportResult {
+  total: number
+  created: number
+  failed: number
+  errors?: string[]
+}
+const importResult = ref<LeaveImportResult | null>(null)
 
 const downloadImportTemplate = async () => {
   try {
@@ -158,7 +174,8 @@ const downloadImportTemplate = async () => {
   }
 }
 
-const handleImportFile = async (file) => {
+const handleImportFile = async (file: { raw?: File }) => {
+  if (!file.raw) return false
   importLoading.value = true
   importResult.value = null
   try {
@@ -171,7 +188,8 @@ const handleImportFile = async (file) => {
       fetchLeaves()
     }
   } catch (err) {
-    ElMessage.error('匯入失敗：' + (err.response?.data?.detail || err.message))
+    const e = err as { response?: { data?: { detail?: string } }; message?: string }
+    ElMessage.error('匯入失敗：' + (e.response?.data?.detail || e.message))
   } finally {
     importLoading.value = false
   }
@@ -181,7 +199,7 @@ const handleImportFile = async (file) => {
 const fetchLeaves = async () => {
   loading.value = true
   try {
-    const params = { year: query.year, month: query.month }
+    const params: Record<string, unknown> = { year: query.year, month: query.month }
     if (query.employee_id) params.employee_id = query.employee_id
     if (statusFilter.value) params.status = statusFilter.value
     const response = await getLeaves(params)
@@ -255,7 +273,7 @@ const saveLeave = async () => {
     // 病假時帶 is_hospitalized 區分雙桶（未住院 240h / 住院 2080h）；其他假別後端忽略
     const isSick = form.leave_type === 'sick'
     if (isEdit.value) {
-      await updateLeave(form.id, {
+      await updateLeave(form.id!, {
         leave_type: form.leave_type,
         start_date: sd,
         start_time: st || null,
@@ -283,7 +301,7 @@ const saveLeave = async () => {
     closeDialog()
     fetchLeaves()
   } catch (error) {
-    ElMessage.error('儲存失敗: ' + apiError(error, error.message))
+    ElMessage.error('儲存失敗: ' + apiError(error, (error as Error).message))
   } finally {
     saveLoading.value = false
   }
@@ -296,13 +314,13 @@ const { confirmDelete: deleteLeave, deleting: deleteLeaveLoading } = useConfirmD
 })
 
 const { execute: executeApproval, isLoading: approveActionLoading } = useApprovalOperation({
-  apiFn: approveLeaveApi,
+  apiFn: approveLeaveApi as (id: unknown, payload: unknown) => Promise<unknown>,
   onSuccess: fetchLeaves,
 })
 
-const approveLeave = async (row) => {
-  const payload = { approved: true }
-  if (['pending', 'rejected'].includes(row.substitute_status)) {
+const approveLeave = async (row: Record<string, unknown>) => {
+  const payload: { approved: boolean; force_without_substitute?: boolean } = { approved: true }
+  if (['pending', 'rejected'].includes(row.substitute_status as string)) {
     const warningText = row.substitute_status === 'pending'
       ? '代理人尚未接受此代理請求，仍要直接核准嗎？'
       : '代理人已拒絕此代理請求，仍要直接核准嗎？'
@@ -320,11 +338,11 @@ const approveLeave = async (row) => {
   await executeApproval(row.id, payload, '已核准')
 }
 
-const cancelApprove = (row) =>
+const cancelApprove = (row: Record<string, unknown>) =>
   executeApproval(row.id, { approved: false, rejection_reason: '取消核准' }, '已取消核准')
 
 // 行操作的「更多」dropdown：把次要/危險動作集中收斂，降低表格視覺密度
-function handleRowCommand(cmd, row) {
+function handleRowCommand(cmd: string, row: Record<string, unknown>) {
   switch (cmd) {
     case 'reject':
       rejectRef.value?.open(row)
@@ -336,7 +354,7 @@ function handleRowCommand(cmd, row) {
       openEdit(row)
       break
     case 'logs':
-      openApprovalLogs(row)
+      openApprovalLogs(row as { id: unknown })
       break
     case 'delete':
       deleteLeave(row)
@@ -344,9 +362,20 @@ function handleRowCommand(cmd, row) {
   }
 }
 
-const getLeaveTypeTag = (type) => {
+const getLeaveTypeTag = (type: string) => {
   return leaveTypes.find(t => t.value === type) || { label: type, color: '' }
 }
+
+// Template helper: open attachment dialog with typed row
+const openAttachment = (row: Record<string, unknown>) =>
+  attachRef.value?.open(row as unknown as { id: number; attachment_paths: string[] })
+
+// quotaInfo typed helper for template access
+interface QuotaInfoTyped { remaining_hours: number; used_hours: number; pending_hours: number; total_hours: number }
+const typedQuotaInfo = computed(() => quotaInfo.value as QuotaInfoTyped | null)
+
+// approvalLogs cast for ApprovalLogDrawer (its ApprovalLog type is component-local)
+const castApprovalLogsLeave = computed(() => approvalLogs.value as unknown as { id: number; action: string; created_at?: string; approver_username?: string; approver_role?: string }[])
 
 // ── 審核流程（approvalPolicyStore 仍需 onMounted 中呼叫 fetchPolicies）──────
 const approvalPolicyStore = useApprovalPolicyStore()
@@ -422,7 +451,7 @@ onMounted(() => {
       <el-table-column prop="employee_name" label="員工" width="100" />
       <el-table-column label="假別" width="100">
         <template #default="scope">
-          <el-tag :type="getLeaveTypeTag(scope.row.leave_type).color" size="small">
+          <el-tag :type="(getLeaveTypeTag(scope.row.leave_type as string).color as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined)" size="small">
             {{ scope.row.leave_type_label }}
           </el-tag>
         </template>
@@ -453,7 +482,7 @@ onMounted(() => {
               link
               type="primary"
               size="small"
-              @click="attachRef.open(scope.row)"
+              @click="openAttachment(scope.row)"
             >
               <el-icon><Paperclip /></el-icon>
               {{ scope.row.attachment_paths.length }}
@@ -479,9 +508,9 @@ onMounted(() => {
               <span style="font-size:12px;">{{ scope.row.substitute_employee_name }}</span>
               <el-tag
                 size="small"
-                :type="{ not_required:'info', pending:'warning', accepted:'success', rejected:'danger', waived:'info' }[scope.row.substitute_status] || 'info'"
+                :type="(({ not_required:'info', pending:'warning', accepted:'success', rejected:'danger', waived:'info' } as Record<string, string>)[scope.row.substitute_status as string] || 'info') as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined"
                 style="margin-left:4px;"
-              >{{ { not_required:'—', pending:'待回應', accepted:'已接受', rejected:'已拒絕', waived:'主管略過' }[scope.row.substitute_status] || scope.row.substitute_status }}</el-tag>
+              >{{ ({ not_required:'—', pending:'待回應', accepted:'已接受', rejected:'已拒絕', waived:'主管略過' } as Record<string, string>)[scope.row.substitute_status as string] || scope.row.substitute_status }}</el-tag>
             </template>
             <span v-else style="color:var(--el-text-color-secondary);font-size:12px;">—</span>
           </template>
@@ -586,20 +615,20 @@ onMounted(() => {
             <span v-if="quotaLoading" style="color: var(--el-color-info);">
               <el-icon class="is-loading" style="vertical-align: middle;"><Loading /></el-icon> 查詢配額…
             </span>
-            <template v-else-if="quotaInfo">
+            <template v-else-if="typedQuotaInfo">
               <el-tag
                 size="small"
-                :type="quotaInfo.remaining_hours <= 0 ? 'danger' : quotaInfo.remaining_hours < 16 ? 'warning' : 'success'"
+                :type="typedQuotaInfo.remaining_hours <= 0 ? 'danger' : typedQuotaInfo.remaining_hours < 16 ? 'warning' : 'success'"
                 style="margin-right: 6px;"
               >
-                剩餘 {{ quotaInfo.remaining_hours }}h
+                剩餘 {{ typedQuotaInfo.remaining_hours }}h
               </el-tag>
               <span style="color: var(--el-text-color-secondary);">
-                已核准 {{ quotaInfo.used_hours }}h
-                <template v-if="quotaInfo.pending_hours > 0">
-                  ／待審 {{ quotaInfo.pending_hours }}h
+                已核准 {{ typedQuotaInfo.used_hours }}h
+                <template v-if="typedQuotaInfo.pending_hours > 0">
+                  ／待審 {{ typedQuotaInfo.pending_hours }}h
                 </template>
-                ／總計 {{ quotaInfo.total_hours }}h
+                ／總計 {{ typedQuotaInfo.total_hours }}h
               </span>
             </template>
             <span v-else-if="form.employee_id && !QUOTA_TYPES.has(form.leave_type)" style="color: var(--el-text-color-placeholder);">
@@ -692,7 +721,7 @@ onMounted(() => {
           <el-alert
             v-if="quotaExceeded"
             type="warning"
-            :title="`剩餘配額不足：剩餘 ${quotaInfo.remaining_hours}h，本次申請 ${form.leave_hours}h`"
+            :title="`剩餘配額不足：剩餘 ${typedQuotaInfo?.remaining_hours ?? 0}h，本次申請 ${form.leave_hours}h`"
             show-icon
             :closable="false"
             style="margin-top: 6px;"
@@ -715,8 +744,8 @@ onMounted(() => {
                 class="bd-tag"
               >
                 {{ day.type === 'workday'
-                  ? (day.shift || '預設班') + (day.work_start ? ` ${day.work_start}–${day.work_end}` : '')
-                  : day.type === 'holiday' ? day.holiday_name
+                  ? ((day as Record<string, unknown>).shift || '預設班') + (day.work_start ? ` ${day.work_start}–${day.work_end}` : '')
+                  : day.type === 'holiday' ? (day as Record<string, unknown>).holiday_name
                   : '週末' }}
               </el-tag>
               <span class="bd-hours">
@@ -753,7 +782,7 @@ onMounted(() => {
     <ApprovalLogDrawer
       v-model:visible="approvalLogDrawerVisible"
       :loading="approvalLogLoading"
-      :logs="approvalLogs"
+      :logs="castApprovalLogsLeave"
     />
   </div>
 </template>

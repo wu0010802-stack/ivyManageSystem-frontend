@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import CurrentSemesterOverview from './appraisal/CurrentSemesterOverview.vue'
@@ -11,27 +11,29 @@ const router = useRouter()
 
 const VALID_TABS = ['current', 'history', 'settings', 'disciplinary']
 const DEFAULT_TAB = 'current'
-const LEGACY_TAB_MAP = { cycles: 'history' }
+const LEGACY_TAB_MAP: Record<string, string> = { cycles: 'history' }
 
-const resolveTab = (raw) => {
-  if (raw && LEGACY_TAB_MAP[raw]) return LEGACY_TAB_MAP[raw]
-  return VALID_TABS.includes(raw) ? raw : DEFAULT_TAB
+const resolveTab = (raw: string | string[] | null | undefined): string => {
+  const r = Array.isArray(raw) ? raw[0] : raw
+  if (r && LEGACY_TAB_MAP[r]) return LEGACY_TAB_MAP[r]
+  return r && VALID_TABS.includes(r) ? r : DEFAULT_TAB
 }
 
-const activeTab = ref(resolveTab(route.query.tab))
+const activeTab = ref(resolveTab(route.query.tab as string))
 
 watch(() => route.query.tab, (next) => {
-  const resolved = resolveTab(next)
+  const resolved = resolveTab(next as string | null)
   if (resolved !== activeTab.value) activeTab.value = resolved
   // 一次性 redirect legacy tab 名稱到新名稱（保留 query 內其他欄位）
-  if (next && LEGACY_TAB_MAP[next]) {
+  const nextStr = Array.isArray(next) ? next[0] : next
+  if (nextStr && LEGACY_TAB_MAP[nextStr]) {
     router.replace({ query: { ...route.query, tab: resolved } })
   }
 })
 
-const onTabChange = (name) => {
+const onTabChange = (name: string | number) => {
   if (route.query.tab === name) return
-  router.replace({ query: { ...route.query, tab: name } })
+  router.replace({ query: { ...route.query, tab: String(name) } })
 }
 </script>
 
