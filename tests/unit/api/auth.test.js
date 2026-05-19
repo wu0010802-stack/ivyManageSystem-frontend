@@ -50,6 +50,39 @@ describe('auth api', () => {
     expect(mockPost).toHaveBeenCalledWith('/auth/refresh')
   })
 
+  it('refreshSession dedupes concurrent calls into a single request', async () => {
+    let resolveRefresh
+    mockPost.mockReturnValueOnce(new Promise((r) => { resolveRefresh = r }))
+
+    const p1 = mod.refreshSession()
+    const p2 = mod.refreshSession()
+    const p3 = mod.refreshSession()
+
+    expect(mockPost).toHaveBeenCalledTimes(1)
+
+    resolveRefresh({ data: { user: { id: 1 } } })
+    const [r1, r2, r3] = await Promise.all([p1, p2, p3])
+    expect(r1).toBe(r2)
+    expect(r2).toBe(r3)
+  })
+
+  it('refreshSession after settle fires a fresh request', async () => {
+    mockPost.mockResolvedValueOnce({ data: { user: { id: 1 } } })
+    await mod.refreshSession()
+    mockPost.mockResolvedValueOnce({ data: { user: { id: 2 } } })
+    await mod.refreshSession()
+    expect(mockPost).toHaveBeenCalledTimes(2)
+  })
+
+  it('refreshSession resets inflight after rejection', async () => {
+    mockPost.mockRejectedValueOnce(new Error('network'))
+    await expect(mod.refreshSession()).rejects.toThrow('network')
+
+    mockPost.mockResolvedValueOnce({ data: { user: { id: 1 } } })
+    await mod.refreshSession()
+    expect(mockPost).toHaveBeenCalledTimes(2)
+  })
+
   it('changePassword POST /auth/change-password with payload passthrough', async () => {
     const payload = { old_password: 'old', new_password: 'newSecret9' }
     await mod.changePassword(payload)
