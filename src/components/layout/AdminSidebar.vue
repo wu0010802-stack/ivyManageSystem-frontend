@@ -59,6 +59,10 @@
             <el-icon><Files /></el-icon>
             <template #title>政府申報匯出</template>
           </el-menu-item>
+          <el-menu-item v-if="canView.SALARY_READ" index="/admin/gov-reports/monthly">
+            <el-icon><DataAnalysis /></el-icon>
+            <template #title>月度月報</template>
+          </el-menu-item>
           <el-menu-item v-if="canView.ATTENDANCE_READ" index="/attendance">
             <el-icon><Clock /></el-icon>
             <template #title>出勤管理</template>
