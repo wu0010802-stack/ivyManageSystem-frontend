@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /**
  * CurrentSemesterOverview — 當期考核狀態總覽
  *
@@ -27,14 +27,66 @@ import AggregatedStatusDetailDialog from './AggregatedStatusDetailDialog.vue'
 import ManualEventEntrySection from './components/ManualEventEntrySection.vue'
 import ScorePreviewDialog from './components/ScorePreviewDialog.vue'
 
+interface CurrentCycle {
+  id: number
+  base_score_calc_date?: string
+  status?: string
+  [key: string]: unknown
+}
+
+interface AttendanceInfo {
+  late_count?: number
+  early_leave_count?: number
+  missing_punch_count?: number
+  leave_days?: number
+}
+
+interface RetentionInfo {
+  classroom_name?: string
+  retention_rate?: number | string | null
+}
+
+interface ActivityInfo {
+  activity_rate?: number | string | null
+}
+
+interface DisciplinaryInfo {
+  warning_count?: number
+  minor_count?: number
+  major_count?: number
+}
+
+interface ParticipantRow {
+  employee_id?: number
+  employee_name?: string
+  role_group?: string
+  is_participant?: boolean
+  classroom_id?: number | null
+  participant_id?: number | null
+  attendance?: AttendanceInfo
+  retention?: RetentionInfo | null
+  activity?: ActivityInfo | null
+  disciplinary?: DisciplinaryInfo
+  [key: string]: unknown
+}
+
+interface AggregatedStatus { participants?: ParticipantRow[] }
+
+interface SyncPreviewData {
+  deleted_count?: number
+  inserted_count?: number
+  skipped_manual_count?: number
+  items?: Record<string, unknown>[]
+}
+
 const termStore = useAcademicTermStore()
 const { notify } = useErrorNotify()
 
 // ── 後端 semester enum ────────────────────────────────────
-const toSemesterEnum = (n) => (Number(n) === 1 ? 'FIRST' : 'SECOND')
+const toSemesterEnum = (n: number | string) => (Number(n) === 1 ? 'FIRST' : 'SECOND')
 
 // ── 取得 current cycle（依 termStore 切換）────────────────
-const currentCycle = ref(null)
+const currentCycle = ref<CurrentCycle | null>(null)
 const cycleLoading = ref(false)
 
 async function fetchCurrentCycle() {
@@ -44,7 +96,7 @@ async function fetchCurrentCycle() {
       school_year: termStore.school_year,
       semester: termStore.semester,
     })
-    currentCycle.value = data
+    currentCycle.value = data as CurrentCycle
   } catch (e) {
     notify(e, 'CurrentSemesterOverview:fetchCycle', '載入當期週期失敗')
     currentCycle.value = null
@@ -54,7 +106,7 @@ async function fetchCurrentCycle() {
 }
 
 // ── 取得 aggregated_status（cycle 存在才打）────────────────
-const aggregatedStatus = ref(null)
+const aggregatedStatus = ref<AggregatedStatus | null>(null)
 const statusLoading = ref(false)
 
 async function loadStatus() {
@@ -65,7 +117,7 @@ async function loadStatus() {
   statusLoading.value = true
   try {
     const { data } = await getAppraisalAllEmployeesStatus(currentCycle.value.id)
-    aggregatedStatus.value = data
+    aggregatedStatus.value = data as AggregatedStatus
   } catch (e) {
     notify(e, 'CurrentSemesterOverview:fetchStatus', '載入彙整狀態失敗')
   } finally {
@@ -74,15 +126,15 @@ async function loadStatus() {
 }
 
 // ── 載入扣分規則（給 detail dialog tooltip 顯示）──────────
-const rulesByCode = ref({})
+const rulesByCode = ref<Record<string, unknown>>({})
 async function loadRules() {
   if (!currentCycle.value) {
     rulesByCode.value = {}
     return
   }
   try {
-    const { data } = await listScoringRules(currentCycle.value.base_score_calc_date)
-    const list = Array.isArray(data) ? data : (data?.rules || [])
+    const { data } = await listScoringRules(currentCycle.value.base_score_calc_date ?? "")
+    const list: { item_code?: string; [key: string]: unknown }[] = Array.isArray(data) ? data : ((data as { rules?: unknown[] })?.rules || [])
     rulesByCode.value = Object.fromEntries(list.map((r) => [r.item_code, r]))
   } catch (e) {
     // 失敗不影響主流程，rulesByCode 留空 dict tooltip 自動隱藏
@@ -105,7 +157,7 @@ watch(
 )
 
 // ── KPI 計算 ──────────────────────────────────────────────
-const participants = computed(() => aggregatedStatus.value?.participants || [])
+const participants = computed<ParticipantRow[]>(() => aggregatedStatus.value?.participants || [])
 
 const employeeCount = computed(() => participants.value.length)
 
@@ -125,7 +177,7 @@ const avgRetention = computed(() => {
     (p) => p.retention && p.retention.retention_rate != null,
   )
   if (!list.length) return '—'
-  const sum = list.reduce((acc, p) => acc + Number(p.retention.retention_rate || 0), 0)
+  const sum = list.reduce((acc, p) => acc + Number(p.retention?.retention_rate || 0), 0)
   return `${(sum / list.length).toFixed(1)}%`
 })
 
@@ -137,7 +189,7 @@ const totalDisciplinary = computed(() => {
 })
 
 // ── 員工狀態表 row 格式化 ─────────────────────────────────
-const ROLE_GROUP_LABEL = {
+const ROLE_GROUP_LABEL: Record<string, string> = {
   HEAD_TEACHER: '正導師',
   ASSISTANT_TEACHER: '副導師',
   SUPERVISOR: '主管',
@@ -148,26 +200,26 @@ const ROLE_GROUP_LABEL = {
 // 不屬於班級 scope 的 role（不顯示留校率 / 才藝報名率）
 const NON_CLASSROOM_ROLES = new Set(['SUPERVISOR', 'STAFF', 'COOK'])
 
-function isClassroomScoped(row) {
-  return !NON_CLASSROOM_ROLES.has(row.role_group)
+function isClassroomScoped(row: ParticipantRow) {
+  return !NON_CLASSROOM_ROLES.has(row.role_group ?? '')
 }
 
-function formatAttendance(row) {
+function formatAttendance(row: ParticipantRow) {
   const a = row.attendance || {}
   return `遲${a.late_count || 0}/早${a.early_leave_count || 0}/未${a.missing_punch_count || 0}/假${a.leave_days || 0}`
 }
 
-function formatRetention(row) {
+function formatRetention(row: ParticipantRow) {
   if (!isClassroomScoped(row) || !row.retention || row.retention.retention_rate == null) return '—'
   return `${Number(row.retention.retention_rate).toFixed(1)}%`
 }
 
-function formatActivity(row) {
+function formatActivity(row: ParticipantRow) {
   if (!isClassroomScoped(row) || !row.activity || row.activity.activity_rate == null) return '—'
   return `${Number(row.activity.activity_rate).toFixed(1)}%`
 }
 
-function formatDisciplinary(row) {
+function formatDisciplinary(row: ParticipantRow) {
   const d = row.disciplinary || {}
   const total = (d.warning_count || 0) + (d.minor_count || 0) + (d.major_count || 0)
   return total
@@ -175,9 +227,9 @@ function formatDisciplinary(row) {
 
 // ── 詳情 dialog ────────────────────────────────────────────
 const detailDialogVisible = ref(false)
-const detailParticipant = ref(null)
+const detailParticipant = ref<ParticipantRow | null>(null)
 
-function openDetail(row) {
+function openDetail(row: ParticipantRow) {
   detailParticipant.value = row
   detailDialogVisible.value = true
 }
@@ -185,7 +237,7 @@ function openDetail(row) {
 // ── 同步分數流程 ──────────────────────────────────────────
 const previewDialogVisible = ref(false)
 const previewLoading = ref(false)
-const previewData = ref(null)
+const previewData = ref<SyncPreviewData | null>(null)
 const confirmLoading = ref(false)
 
 async function openSyncPreview() {
@@ -195,7 +247,7 @@ async function openSyncPreview() {
   previewData.value = null
   try {
     const { data } = await syncAppraisalScoreItems(currentCycle.value.id, { dryRun: true })
-    previewData.value = data
+    previewData.value = data as SyncPreviewData
   } catch (e) {
     notify(e, 'CurrentSemesterOverview:syncPreview', '預覽同步分數失敗')
     previewDialogVisible.value = false
@@ -209,8 +261,9 @@ async function confirmSync() {
   confirmLoading.value = true
   try {
     const { data } = await syncAppraisalScoreItems(currentCycle.value.id, { dryRun: false })
+    const d = data as SyncPreviewData
     ElMessage.success(
-      `同步完成：刪除 ${data.deleted_count} 筆、新增 ${data.inserted_count} 筆、保留人工 ${data.skipped_manual_count} 筆`,
+      `同步完成：刪除 ${d.deleted_count} 筆、新增 ${d.inserted_count} 筆、保留人工 ${d.skipped_manual_count} 筆`,
     )
     previewDialogVisible.value = false
     await loadStatus()
@@ -230,17 +283,17 @@ const syncDisabledReason = computed(() =>
   hasNonParticipant.value ? '請先把所有教師加入考核再同步' : '',
 )
 
-const addingRowEmployeeId = ref(null)
+const addingRowEmployeeId = ref<number | null>(null)
 const bulkAdding = ref(false)
 
-async function addRowToCycle(row) {
+async function addRowToCycle(row: ParticipantRow) {
   if (!currentCycle.value) return
-  addingRowEmployeeId.value = row.employee_id
+  addingRowEmployeeId.value = row.employee_id ?? null
   try {
     await addAppraisalParticipant(currentCycle.value.id, {
-      employee_id: row.employee_id,
-      role_group: row.role_group,
-      classroom_id: row.classroom_id,
+      employee_id: row.employee_id!,
+      role_group: row.role_group!,
+      classroom_id: row.classroom_id ?? null,
     })
     ElMessage.success(`已將 ${row.employee_name} 加入考核`)
     await loadStatus()
@@ -268,7 +321,8 @@ async function bulkAddAll() {
       currentCycle.value.id,
       null,
     )
-    ElMessage.success(`已新增 ${data.created_count} 人、跳過 ${data.skipped_count} 人`)
+    const d = data as { created_count?: number; skipped_count?: number }
+    ElMessage.success(`已新增 ${d.created_count} 人、跳過 ${d.skipped_count} 人`)
     await loadStatus()
   } catch (e) {
     notify(e, 'CurrentSemesterOverview:bulkAdd', '一鍵加入失敗')
@@ -280,7 +334,7 @@ async function bulkAddAll() {
 // ── 建立本學期週期（D5 預設日期）──────────────────────────
 const creatingCycle = ref(false)
 
-function defaultDatesFor(schoolYear, semester) {
+function defaultDatesFor(schoolYear: number, semester: number | string) {
   // school_year 為民國
   const yearAD = Number(schoolYear) + 1911
   if (Number(semester) === 1) {

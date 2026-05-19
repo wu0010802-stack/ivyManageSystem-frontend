@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus, Refresh } from '@element-plus/icons-vue'
@@ -8,7 +8,10 @@ import {
 } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
 
-const rates = ref([])
+type ApiErr = { response?: { data?: { detail?: string } } }
+interface BonusRate { effective_from?: string; role_group?: string; grade?: string; base_amount?: number }
+
+const rates = ref<BonusRate[]>([])
 const loading = ref(false)
 const dialogVisible = ref(false)
 const submitting = ref(false)
@@ -18,7 +21,7 @@ const roleGroupOptions = [
   { value: 'HEAD_TEACHER', label: '主教' },
   { value: 'ASSISTANT', label: '助教' },
 ]
-const roleGroupLabel = (v) =>
+const roleGroupLabel = (v: string) =>
   roleGroupOptions.find((o) => o.value === v)?.label || v
 
 const gradeOptions = [
@@ -28,8 +31,8 @@ const gradeOptions = [
   { value: 'WARN', label: '丙' },
   { value: 'FAIL', label: '丁' },
 ]
-const gradeLabel = (v) => gradeOptions.find((o) => o.value === v)?.label || v
-const gradeTagType = {
+const gradeLabel = (v: string) => gradeOptions.find((o) => o.value === v)?.label || v
+const gradeTagType: Record<string, string> = {
   OUTSTANDING: 'success',
   GOOD: 'success',
   PASS: '',
@@ -39,16 +42,16 @@ const gradeTagType = {
 
 const sortedRates = computed(() =>
   [...rates.value].sort((a, b) => {
-    if (a.effective_from !== b.effective_from)
-      return a.effective_from < b.effective_from ? 1 : -1
-    if (a.role_group !== b.role_group)
-      return a.role_group.localeCompare(b.role_group)
-    return a.grade.localeCompare(b.grade)
+    const af = a.effective_from ?? '', bf = b.effective_from ?? ''
+    if (af !== bf) return af < bf ? 1 : -1
+    const ar = a.role_group ?? '', br = b.role_group ?? ''
+    if (ar !== br) return ar.localeCompare(br)
+    return (a.grade ?? '').localeCompare(b.grade ?? '')
   }),
 )
 
 const form = reactive({
-  effective_from: null,
+  effective_from: null as string | null,
   role_group: 'HEAD_TEACHER',
   grade: 'GOOD',
   base_amount: 0,
@@ -65,7 +68,7 @@ const fetchRates = async () => {
   loading.value = true
   try {
     const res = await listAppraisalBonusRates()
-    rates.value = res.data || []
+    rates.value = (res.data || []) as BonusRate[]
   } catch (error) {
     ElMessage.error(apiError(error, '載入獎金率失敗'))
   } finally {
@@ -99,7 +102,8 @@ const submitForm = async () => {
     dialogVisible.value = false
     fetchRates()
   } catch (error) {
-    if (error.response?.data?.detail?.startsWith('bonus_rate_conflict')) {
+    const err = error as ApiErr
+    if (err?.response?.data?.detail?.startsWith('bonus_rate_conflict')) {
       ElMessage.error('同生效日 + 角色群 + 等第 已存在版本')
     } else {
       ElMessage.error(apiError(error, '新增失敗'))
@@ -144,7 +148,7 @@ onMounted(fetchRates)
       <el-table-column label="等第" width="100" align="center">
         <template #default="{ row }">
           <el-tag
-            :type="gradeTagType[row.grade] || ''"
+            :type="(gradeTagType[row.grade] || undefined) as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined"
             disable-transitions
             size="small"
           >{{ gradeLabel(row.grade) }}</el-tag>

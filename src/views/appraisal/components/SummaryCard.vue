@@ -1,17 +1,22 @@
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 import { MoreFilled } from '@element-plus/icons-vue'
 import { hasPermission } from '@/utils/auth'
 
-const props = defineProps({
-  summary: { type: Object, required: true },
-  selected: { type: Boolean, default: false },
-  showMenu: { type: Boolean, default: true },
-})
-const emit = defineEmits(['update:selected', 'action'])
+interface Summary { id: number; employee_name?: string; status?: string; total_score?: number; grade?: string; bonus_amount?: number; [key: string]: unknown }
 
-function onCheckboxChange(v) { emit('update:selected', v) }
-function onMenuClick(action) { emit('action', { action, summary: props.summary }) }
+const props = defineProps<{
+  summary: Summary
+  selected?: boolean
+  showMenu?: boolean
+}>()
+const emit = defineEmits<{
+  'update:selected': [value: boolean]
+  'action': [payload: { action: string; summary: Summary }]
+}>()
+
+function onCheckboxChange(v: string | number | boolean) { emit('update:selected', Boolean(v)) }
+function onMenuClick(action: string) { emit('action', { action, summary: props.summary }) }
 
 // P0-A：依 APPRAISAL_* permission bit 個別守衛 dropdown 動作。
 // 簽核 / 退簽：任一 sign 權限即顯示（後端會依當前 stage 二次驗）。

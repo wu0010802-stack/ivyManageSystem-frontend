@@ -398,7 +398,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import {
@@ -412,25 +412,61 @@ import { usePublicActivityOptions } from '@/composables/usePublicActivityOptions
 import { useActivityAvailability } from '@/composables/useActivityAvailability'
 import { toggleArrayItem } from '@/utils/arrayUtils'
 
-const TOAST_ICONS = {
+interface Toast { id: number; message: string; type: string }
+interface CourseEntry {
+  name: string
+  status: string
+  waitlist_position?: number | null
+  waitlist_total?: number | null
+  confirm_deadline?: string | null
+  course_id?: number
+  price?: number | string
+}
+interface QueryResult {
+  id: number
+  name: string
+  birthday: string
+  class_name?: string
+  parent_phone?: string
+  total_amount?: number | string
+  paid_amount?: number | string
+  updated_at?: string
+  courses?: CourseEntry[]
+  supplies?: Array<string | { name: string }>
+  field_state?: {
+    class_source?: string
+    class_editable?: boolean
+    review_state?: string
+  }
+}
+
+const TOAST_ICONS: Record<string, string> = {
   success: '<svg viewBox="0 0 24 24" fill="none" stroke="#15803d" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>',
   error: '<svg viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>',
   warning: '<svg viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>',
   info: '<svg viewBox="0 0 24 24" fill="none" stroke="#1e3a8a" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>',
 }
 
-const { courses, supplies, classes, loadOptions } = usePublicActivityOptions()
+interface CourseOption { name: string; price?: string | number; [key: string]: unknown }
+interface SupplyOption { name: string; price?: string | number; [key: string]: unknown }
+
+const { courses: _courses, supplies: _supplies, classes: _classes, loadOptions } = usePublicActivityOptions()
 const { availability, refresh: refreshAvailability, startPolling, stopPolling } =
   useActivityAvailability()
+
+// 強型別轉換：composable 回傳 unknown[]，view 以強型別 computed 供模板 / 函式使用
+const courses = computed(() => _courses.value as CourseOption[])
+const supplies = computed(() => _supplies.value as SupplyOption[])
+const classes = computed(() => (_classes.value as unknown[]).map(String))
 
 // 查詢模式：'token' 用查詢碼+手機（Phase 3）；'fields' 用姓名+生日+手機（向後相容）
 // 預設 'fields'（最小驚訝：既有家長進來看到熟悉 UI）；URL 帶 ?token= 時 onMounted 切到 token 模式
 const route = useRoute()
-const queryMode = ref('fields')
+const queryMode = ref<'fields' | 'token'>('fields')
 
 const queryForm = reactive({ token: '', name: '', birthday: '', parent_phone: '' })
 const queryLoading = ref(false)
-const queryResult = ref(null)
+const queryResult = ref<QueryResult | null>(null)
 const searchError = ref('')
 const nameTouched = ref(false)
 const birthdayTouched = ref(false)
@@ -439,7 +475,7 @@ const tokenTouched = ref(false)
 const tokenValid = computed(() => queryForm.token.trim().length >= 8)
 
 const TW_MOBILE_RE = /^09\d{8}$/
-function normalizeMobile(raw) {
+function normalizeMobile(raw: string): string {
   return String(raw || '').replace(/[\s\-().]/g, '')
 }
 const phoneValid = computed(() =>
@@ -448,8 +484,8 @@ const phoneValid = computed(() =>
 
 const editForm = reactive({
   class_name: '',
-  selectedCourses: [],
-  selectedSupplies: [],
+  selectedCourses: [] as string[],
+  selectedSupplies: [] as string[],
   new_parent_phone: '',
 })
 const editSubmitting = ref(false)
@@ -459,14 +495,14 @@ const newPhoneValid = computed(() => {
   return raw === '' || TW_MOBILE_RE.test(raw)
 })
 
-const toasts = ref([])
+const toasts = ref<Toast[]>([])
 let toastSeq = 0
-function showToast(message, type = 'success', duration = 4500) {
+function showToast(message: string, type = 'success', duration = 4500) {
   const id = ++toastSeq
   toasts.value.push({ id, message, type })
   setTimeout(() => dismissToast(id), duration)
 }
-function dismissToast(id) {
+function dismissToast(id: number) {
   toasts.value = toasts.value.filter((t) => t.id !== id)
 }
 
@@ -493,7 +529,7 @@ const birthdayValid = computed(() => {
   return true
 })
 
-function statusBadgeFor(name) {
+function statusBadgeFor(name: string): string {
   if (!queryResult.value) return ''
   const entry = (queryResult.value.courses || []).find((c) => c.name === name)
   if (!entry) return ''
@@ -535,9 +571,9 @@ const classEditable = computed(() => fieldState.value.class_editable === true)
 // 估算修改後課程狀態 — 與後端 _attach_courses 對齊：刪後重插時依「現有名額」決定。
 // 因此 availability 優先於原狀態（例：原本 waitlist、現在退一位空出 → 估為 enrolled）。
 // availability[name]：>0 有名額（enrolled）、=0 無名額但開候補（waitlist）、<0 已滿不開候補。
-function estimatedCourseStatus(courseName) {
-  const remaining = availability.value?.[courseName]
-  if (remaining > 0) return 'enrolled'
+function estimatedCourseStatus(courseName: string): string {
+  const remaining = (availability.value as Record<string, number> | null)?.[courseName]
+  if (remaining !== undefined && remaining > 0) return 'enrolled'
   if (remaining === 0) return 'waitlist'
   if (remaining === undefined) {
     const orig = (queryResult.value?.courses || []).find((c) => c.name === courseName)
@@ -578,7 +614,7 @@ const feePreview = computed(() => {
 
 const saveBlocked = computed(() => Boolean(feePreview.value?.wouldOverpay))
 
-function formatDeadline(iso) {
+function formatDeadline(iso: string | null | undefined): string {
   if (!iso) return '—'
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return '—'
@@ -590,7 +626,7 @@ function formatDeadline(iso) {
   return `${y}-${m}-${day} ${hh}:${mm}`
 }
 
-function formatCountdown(iso) {
+function formatCountdown(iso: string | null | undefined): string {
   if (!iso) return ''
   const diffMs = new Date(iso).getTime() - Date.now()
   if (diffMs <= 0) return '已逾期'
@@ -599,53 +635,53 @@ function formatCountdown(iso) {
   return hours >= 1 ? `剩 ${hours} 小時` : `剩 ${mins} 分鐘`
 }
 
-const promotionSubmitting = ref(null)
+const promotionSubmitting = ref<number | null>(null)
 
-async function handleConfirmPromotion(item) {
-  promotionSubmitting.value = item.course_id
+async function handleConfirmPromotion(item: CourseEntry) {
+  promotionSubmitting.value = item.course_id ?? null
   try {
     const phonePayload = normalizeMobile(queryForm.parent_phone)
-    const res = await publicConfirmPromotion(queryResult.value.id, item.course_id, {
-      name: queryResult.value.name,
-      birthday: queryResult.value.birthday || queryForm.birthday,
+    const res = await publicConfirmPromotion(queryResult.value!.id, item.course_id!, {
+      name: queryResult.value!.name,
+      birthday: queryResult.value!.birthday || queryForm.birthday,
       parent_phone: phonePayload,
     })
-    showToast(res?.data?.message || '已確認升為正式', 'success')
+    showToast((res as { data?: { message?: string } })?.data?.message || '已確認升為正式', 'success')
     // 重新查詢以更新狀態
     const refreshed = await publicQueryRegistration(
-      queryResult.value.name,
-      queryResult.value.birthday || queryForm.birthday,
+      queryResult.value!.name,
+      queryResult.value!.birthday || queryForm.birthday,
       phonePayload,
     )
-    hydrateResult(refreshed.data)
+    hydrateResult((refreshed as { data: QueryResult }).data)
   } catch (err) {
-    showToast(err.response?.data?.detail || '確認失敗', 'error')
+    showToast((err as { response?: { data?: { detail?: string } } }).response?.data?.detail || '確認失敗', 'error')
   } finally {
     promotionSubmitting.value = null
   }
 }
 
-async function handleDeclinePromotion(item) {
+async function handleDeclinePromotion(item: CourseEntry) {
   if (!window.confirm(`確定要放棄「${item.name}」的正式名額？\n放棄後將遞補給下一位候補，無法復原。`)) {
     return
   }
-  promotionSubmitting.value = item.course_id
+  promotionSubmitting.value = item.course_id ?? null
   try {
     const phonePayload = normalizeMobile(queryForm.parent_phone)
-    const res = await publicDeclinePromotion(queryResult.value.id, item.course_id, {
-      name: queryResult.value.name,
-      birthday: queryResult.value.birthday || queryForm.birthday,
+    const res = await publicDeclinePromotion(queryResult.value!.id, item.course_id!, {
+      name: queryResult.value!.name,
+      birthday: queryResult.value!.birthday || queryForm.birthday,
       parent_phone: phonePayload,
     })
-    showToast(res?.data?.message || '已放棄該名額', 'warning')
+    showToast((res as { data?: { message?: string } })?.data?.message || '已放棄該名額', 'warning')
     const refreshed = await publicQueryRegistration(
-      queryResult.value.name,
-      queryResult.value.birthday || queryForm.birthday,
+      queryResult.value!.name,
+      queryResult.value!.birthday || queryForm.birthday,
       phonePayload,
     )
-    hydrateResult(refreshed.data)
+    hydrateResult((refreshed as { data: QueryResult }).data)
   } catch (err) {
-    showToast(err.response?.data?.detail || '放棄失敗', 'error')
+    showToast((err as { response?: { data?: { detail?: string } } }).response?.data?.detail || '放棄失敗', 'error')
   } finally {
     promotionSubmitting.value = null
   }
@@ -667,9 +703,9 @@ async function handleQuery() {
         queryForm.token.trim(),
         normalizeMobile(queryForm.parent_phone),
       )
-      hydrateResult(res.data)
+      hydrateResult((res as { data: QueryResult }).data)
     } catch (err) {
-      searchError.value = err.response?.data?.detail
+      searchError.value = (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
         || '查無對應報名，請確認查詢碼與手機號碼是否正確。'
     } finally {
       queryLoading.value = false
@@ -691,17 +727,17 @@ async function handleQuery() {
       queryForm.birthday,
       normalizeMobile(queryForm.parent_phone)
     )
-    hydrateResult(res.data)
+    hydrateResult((res as { data: QueryResult }).data)
   } catch (err) {
     // 通用錯誤：404 / 403 均一律顯示同樣訊息，不透露哪一欄錯
-    searchError.value = err.response?.data?.detail
+    searchError.value = (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
       || '查無對應報名，請確認三項資料是否與報名時一致。'
   } finally {
     queryLoading.value = false
   }
 }
 
-function hydrateResult(data) {
+function hydrateResult(data: QueryResult) {
   queryResult.value = data
   editForm.class_name = data.class_name || ''
   editForm.selectedCourses = (data.courses || []).map((c) => c.name)
@@ -713,18 +749,18 @@ function hydrateResult(data) {
 }
 
 // 用當前 mode 重新查一次（給 stale 409 / 儲存後 refresh 共用）
-async function refetchCurrent(phoneOverride) {
+async function refetchCurrent(phoneOverride?: string): Promise<QueryResult> {
   const phone = phoneOverride || normalizeMobile(queryForm.parent_phone)
   if (queryMode.value === 'token' && queryForm.token) {
     const r = await publicQueryByToken(queryForm.token.trim(), phone)
-    return r.data
+    return (r as { data: QueryResult }).data
   }
   const r = await publicQueryRegistration(
     queryResult.value?.name || queryForm.name.trim(),
     queryResult.value?.birthday || queryForm.birthday,
     phone,
   )
-  return r.data
+  return (r as { data: QueryResult }).data
 }
 
 async function handleSaveChanges() {
@@ -757,10 +793,10 @@ async function handleSaveChanges() {
       return { name, price: String(s?.price ?? 0) }
     })
 
-    const payload = {
-      id: queryResult.value.id,
-      name: queryResult.value.name,
-      birthday: queryResult.value.birthday || queryForm.birthday,
+    const payload: Record<string, unknown> = {
+      id: queryResult.value!.id,
+      name: queryResult.value!.name,
+      birthday: queryResult.value!.birthday || queryForm.birthday,
       parent_phone: oldPhone,
       class: editForm.class_name,
       courses: coursesPayload,
@@ -770,21 +806,22 @@ async function handleSaveChanges() {
       payload.new_parent_phone = newPhoneRaw
     }
     // 樂觀鎖：把當前查詢回來的 updated_at 帶回去，後端比對不符即拒（409）
-    if (queryResult.value.updated_at) {
-      payload.if_unmodified_since = queryResult.value.updated_at
+    if (queryResult.value!.updated_at) {
+      payload.if_unmodified_since = queryResult.value!.updated_at
     }
     const res = await publicUpdateRegistration(payload)
 
-    showToast(res?.data?.message || '資料更新成功！', 'success')
+    showToast((res as { data?: { message?: string } })?.data?.message || '資料更新成功！', 'success')
     if (phoneWillChange) {
       queryForm.parent_phone = newPhoneRaw
     }
     // 後端 update response 已含完整 registration（含 field_state 與新 updated_at），
     // 直接 hydrate 即可，不需再打一次 publicQueryRegistration。
-    hydrateResult(res.data)
+    hydrateResult((res as { data: QueryResult }).data)
   } catch (err) {
-    const status = err.response?.status
-    const detail = err.response?.data?.detail
+    const apiErr = err as { response?: { status?: number; data?: { detail?: string } } }
+    const status = apiErr.response?.status
+    const detail = apiErr.response?.data?.detail
     // 409 stale：資料已被校方更新。提示家長 + 自動重抓最新狀態，但不自動重送
     // （家長要重新確認新狀態下的修改是否仍合理）。
     if (status === 409 && typeof detail === 'string' && detail.includes('資料已被校方更新')) {
@@ -794,7 +831,7 @@ async function handleSaveChanges() {
         const refreshed = await refetchCurrent(oldPhone)
         hydrateResult(refreshed)
       } catch (refreshErr) {
-        showToast(refreshErr.response?.data?.detail || '重新整理失敗，請手動重新查詢', 'error')
+        showToast((refreshErr as { response?: { data?: { detail?: string } } }).response?.data?.detail || '重新整理失敗，請手動重新查詢', 'error')
       }
       return
     }
@@ -817,8 +854,8 @@ watch(
 // 編修連結上的 ?token= 會出現在 referer / 連結預覽縮圖等周邊；加 noindex 與
 // no-referrer，避免搜尋引擎索引 / 點外連結時把 token 帶到第三方站。
 function applyTokenPagePrivacyMeta() {
-  const ensureMeta = (name, content) => {
-    let m = document.head.querySelector(`meta[name="${name}"]`)
+  const ensureMeta = (name: string, content: string) => {
+    let m = document.head.querySelector(`meta[name="${name}"]`) as HTMLMetaElement | null
     if (!m) {
       m = document.createElement('meta')
       m.setAttribute('name', name)
@@ -842,7 +879,7 @@ onMounted(async () => {
     await Promise.all([loadOptions(), refreshAvailability()])
     startPolling(30000)
   } catch (err) {
-    showToast(err?.response?.data?.detail || '無法載入頁面資料', 'error')
+    showToast((err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '無法載入頁面資料', 'error')
   }
 })
 

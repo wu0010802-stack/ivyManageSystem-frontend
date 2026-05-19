@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, computed } from 'vue'
 import { getUserInfo, hasPermission } from '@/utils/auth'
 import OverviewPanel from './reports/OverviewPanel.vue'

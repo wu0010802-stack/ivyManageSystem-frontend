@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref } from 'vue'
 import BonusRatesPanel from './components/BonusRatesPanel.vue'
 import PenaltyCatalogPanel from './components/PenaltyCatalogPanel.vue'

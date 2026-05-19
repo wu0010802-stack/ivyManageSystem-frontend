@@ -1,19 +1,20 @@
-<script setup>
-const props = defineProps({
-  students: { type: Array, required: true },
-  // students[*] = { student_id, student_no, name, status, remark, ... }
-  loading: { type: Boolean, default: false },
-})
+<script setup lang="ts">
+interface RollcallStudent { student_id?: number; student_no?: string; name?: string; status?: string; remark?: string; [key: string]: unknown }
 
-const emit = defineEmits([
-  'update-status',  // ({ student_id, status, remark })
-  'quick-set-all', // (status: '出席' | '缺席')
-])
+const props = defineProps<{
+  students: RollcallStudent[]
+  loading?: boolean
+}>()
+
+const emit = defineEmits<{
+  'update-status': [payload: { student_id: number | undefined; status: string; remark: string }]
+  'quick-set-all': [status: string]
+}>()
 
 // 點名狀態選項（依原 view 的 STATUSES 常數對齊）
 const STATUS_OPTIONS = ['出席', '缺席', '病假', '事假', '遲到']
 
-function onStatusChange(student, value) {
+function onStatusChange(student: RollcallStudent, value: string) {
   emit('update-status', {
     student_id: student.student_id,
     status: value,
@@ -21,17 +22,17 @@ function onStatusChange(student, value) {
   })
 }
 
-function onRemarkChange(student, value) {
+function onRemarkChange(student: RollcallStudent, value: string) {
   emit('update-status', {
     student_id: student.student_id,
-    status: student.status,
+    status: student.status ?? '',
     remark: value,
   })
 }
 </script>
 
 <template>
-  <div class="rollcall-table" v-loading="loading">
+  <div class="rollcall-table" v-loading="loading ?? false">
     <div v-if="!students.length" class="empty-state">
       尚無學生
     </div>
@@ -58,7 +59,7 @@ function onRemarkChange(student, value) {
           <el-radio-group
             :model-value="s.status"
             size="small"
-            @update:model-value="onStatusChange(s, $event)"
+            @update:model-value="(v) => onStatusChange(s, String(v))"
           >
             <el-radio-button
               v-for="opt in STATUS_OPTIONS"

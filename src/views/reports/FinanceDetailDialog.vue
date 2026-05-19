@@ -1,16 +1,20 @@
-<script setup>
+<script setup lang="ts">
 import { ref, watch, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getFinanceSummaryDetail } from '@/api/reports'
 import { apiError } from '@/utils/error'
 import { money } from '@/utils/format'
 
-const props = defineProps({
-  modelValue: { type: Boolean, required: true },
-  year: { type: Number, required: true },
-  month: { type: Number, default: null },
+const props = withDefaults(defineProps<{
+  modelValue: boolean
+  year: number
+  month?: number | null
+}>(), {
+  month: null,
 })
-const emit = defineEmits(['update:modelValue'])
+const emit = defineEmits<{
+  (e: 'update:modelValue', value: boolean): void
+}>()
 
 const visible = computed({
   get: () => props.modelValue,
@@ -18,7 +22,7 @@ const visible = computed({
 })
 
 const loading = ref(false)
-const data = ref(null)
+const data = ref<{ tuition?: unknown[]; activity?: unknown[]; salary?: unknown[]; vendor_payment?: unknown[] } | null>(null)
 const activeTab = ref('tuition')
 
 const load = async () => {
@@ -46,17 +50,18 @@ const activityRows = computed(() => data.value?.activity || [])
 const salaryRows = computed(() => data.value?.salary || [])
 const vendorRows = computed(() => data.value?.vendor_payment || [])
 
-const kindLabel = (k) => (k === 'payment' ? '繳費' : k === 'refund' ? '退款' : k)
-const kindTag = (k) => (k === 'payment' ? 'success' : 'warning')
+type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger'
+const kindLabel = (k: string) => (k === 'payment' ? '繳費' : k === 'refund' ? '退款' : k)
+const kindTag = (k: string): ElTagType => (k === 'payment' ? 'success' : 'warning')
 
-const PAYMENT_METHOD_LABEL = {
+const PAYMENT_METHOD_LABEL: Record<string, string> = {
   cash: '現金',
   bank_transfer: '銀行匯款',
   check: '支票',
   linepay: 'LINE Pay',
   other: '其他',
 }
-const methodLabel = (m) => PAYMENT_METHOD_LABEL[m] || m
+const methodLabel = (m: string) => PAYMENT_METHOD_LABEL[m] || m
 </script>
 
 <template>

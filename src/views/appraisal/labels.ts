@@ -64,10 +64,10 @@ export const MSG = {
 }
 
 // 工具函式 — null/unknown key 回傳 raw code，UI 仍可顯示
-export function statusLabel(s) {
-  return STATUS_LABEL[s] || s
+export function statusLabel(s: string) {
+  return (STATUS_LABEL as Record<string, string>)[s] || s
 }
 
-export function actionLabel(a) {
-  return ACTION_LABEL[a] || a
+export function actionLabel(a: string) {
+  return (ACTION_LABEL as Record<string, string>)[a] || a
 }

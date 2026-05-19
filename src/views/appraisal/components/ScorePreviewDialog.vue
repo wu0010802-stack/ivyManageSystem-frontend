@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /**
  * ScorePreviewDialog — 預覽分數計算
  *
@@ -13,21 +13,28 @@ import { previewAppraisalScore } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
 import { ITEM_CODE_LABELS, ITEM_CODES_ORDER } from '@/views/appraisal/scoreItemLabels'
 
-const props = defineProps({
-  visible: { type: Boolean, default: false },
-  cycleId: { type: Number, default: null },
-})
+interface ScoreItem { item_code?: string; delta?: number | string | null; current_db_value?: number | string | null; raw_value?: unknown; note?: string }
+interface PreviewParticipant { participant_id?: number; employee_name?: string; items?: ScoreItem[] }
+interface PreviewData { participants?: PreviewParticipant[] }
+
+const props = defineProps<{
+  visible?: boolean
+  cycleId?: number | null
+}>()
 // P2-FE-4：emit `request-sync` 讓 parent 直接觸發同步分數流程
 // （不在本 dialog 內呼 confirm — 保留 parent 既有 dry-run preview UX）。
-const emit = defineEmits(['update:visible', 'request-sync'])
+const emit = defineEmits<{
+  'update:visible': [value: boolean]
+  'request-sync': []
+}>()
 
 const dialogVisible = computed({
-  get: () => props.visible,
-  set: (v) => emit('update:visible', v),
+  get: () => props.visible ?? false,
+  set: (v: boolean) => emit('update:visible', v),
 })
 
 const loading = ref(false)
-const data = ref(null)
+const data = ref<PreviewData | null>(null)
 const showDiffOnly = ref(false)
 const sortMode = ref('total')
 
@@ -36,7 +43,7 @@ async function load() {
   loading.value = true
   try {
     const r = await previewAppraisalScore(props.cycleId)
-    data.value = r.data
+    data.value = r.data as PreviewData
   } catch (e) {
     ElMessage.error(apiError(e, '預覽失敗'))
   } finally {
@@ -50,17 +57,17 @@ watch(
   { immediate: true },
 )
 
-function itemByCode(participant, code) {
+function itemByCode(participant: PreviewParticipant, code: string) {
   return participant.items?.find((i) => i.item_code === code)
 }
 
-function hasDiff(item) {
+function hasDiff(item: ScoreItem | undefined) {
   if (!item) return false
   if (item.current_db_value == null) return false
   return Number(item.current_db_value) !== Number(item.delta)
 }
 
-function participantTotal(p) {
+function participantTotal(p: PreviewParticipant) {
   let sum = 0
   for (const it of p?.items ?? []) {
     const n = Number(it.delta)
@@ -69,7 +76,7 @@ function participantTotal(p) {
   return sum
 }
 
-function fmtNum(n) {
+function fmtNum(n: number) {
   if (!Number.isFinite(n)) return '0'
   return String(Math.round(n * 100) / 100)
 }
@@ -95,10 +102,10 @@ function onRequestSync() {
   emit('request-sync')
 }
 
-function tooltipLines(row, code) {
+function tooltipLines(row: PreviewParticipant, code: string) {
   const it = itemByCode(row, code)
   if (!it) return []
-  const lines = []
+  const lines: string[] = []
   if (it.raw_value != null && it.raw_value !== '') {
     lines.push(`原始值：${it.raw_value}`)
   }
@@ -150,7 +157,7 @@ function tooltipLines(row, code) {
         <el-table-column
           v-for="code in ITEM_CODES_ORDER"
           :key="code"
-          :label="ITEM_CODE_LABELS[code] || code"
+          :label="(ITEM_CODE_LABELS as Record<string, string>)[code] || code"
           :min-width="110"
         >
           <template #default="{ row }">

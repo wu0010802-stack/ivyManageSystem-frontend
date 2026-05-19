@@ -54,22 +54,22 @@
         <RecruitmentOverviewTab
           :stats="stats"
           :reference-month="referenceMonth"
-          :decision-summary="stats.decision_summary"
-          :funnel-snapshot="stats.funnel_snapshot"
-          :month-over-month="stats.month_over_month"
-          :alerts="stats.alerts"
-          :top-action-queue="stats.top_action_queue"
+          :decision-summary="statsDecisionSummary"
+          :funnel-snapshot="statsFunnelSnapshot"
+          :month-over-month="statsMonthOverMonth"
+          :alerts="statsAlerts"
+          :top-action-queue="statsTopActionQueue"
           :show-charts="isChartTabActive('overview')"
           :monthly-table-data="monthlyTableData"
           :monthly-bar-data="monthlyBarData"
           :monthly-rate-data="monthlyRateData"
-          :bar-options="barOptions"
-          :monthly-bar-options="monthlyBarOptions"
-          :line-options="percentLineOptions"
-          :bar-component="Bar"
-          :line-component="Line"
-          :fmt-rate="fmtRate"
-          @navigate="handleDashboardTarget"
+          :bar-options="(barOptions as Record<string, unknown>)"
+          :monthly-bar-options="(monthlyBarOptions as Record<string, unknown>)"
+          :line-options="(percentLineOptions as Record<string, unknown>)"
+          :bar-component="castBarComponent"
+          :line-component="castLineComponent"
+          :fmt-rate="castFmtRate"
+          @navigate="(e) => handleDashboardTarget(e as Record<string, unknown>)"
         />
       </el-tab-pane>
 
@@ -79,24 +79,24 @@
           <el-card class="chart-card">
             <template #header>各班別參觀人數</template>
             <div class="chart-box">
-              <Bar v-if="isChartTabActive('class') && classBarData" :data="classBarData" :options="classBarOptions" />
+              <Bar v-if="isChartTabActive('class') && classBarData" :data="classBarData" :options="castChartOpts(classBarOptions)" />
             </div>
           </el-card>
           <el-card class="chart-card">
             <template #header>各班別預繳率</template>
             <div class="chart-box">
-              <Bar v-if="isChartTabActive('class') && classRateData" :data="classRateData" :options="percentHorizBarOptions" />
+              <Bar v-if="isChartTabActive('class') && classRateData" :data="classRateData" :options="castChartOpts(percentHorizBarOptions)" />
             </div>
           </el-card>
         </div>
         <el-card style="margin-bottom:16px">
           <template #header>班別統計</template>
-          <el-table :data="stats.by_grade" border stripe size="small">
+          <el-table :data="statsByGrade" border stripe size="small">
             <el-table-column prop="grade" label="班別" width="100" />
             <el-table-column prop="visit" label="參觀人數" align="center" width="100" />
             <el-table-column prop="deposit" label="預繳人數" align="center" width="100" />
             <el-table-column label="預繳率" align="center" width="100">
-              <template #default="{ row }">{{ fmtPct(row.deposit, row.visit) }}</template>
+              <template #default="{ row }">{{ fmtPct(Number(row.deposit), Number(row.visit)) }}</template>
             </el-table-column>
           </el-table>
         </el-card>
@@ -123,25 +123,25 @@
           <el-card class="chart-card">
             <template #header>各來源參觀人數排名</template>
             <div class="chart-box chart-box-tall">
-              <Bar v-if="isChartTabActive('source') && sourceBarData" :data="sourceBarData" :options="sourceClickBarOptions" />
+              <Bar v-if="isChartTabActive('source') && sourceBarData" :data="sourceBarData" :options="castChartOpts(sourceClickBarOptions)" />
             </div>
           </el-card>
           <el-card class="chart-card">
             <template #header>各來源預繳率</template>
             <div class="chart-box chart-box-tall">
-              <Bar v-if="isChartTabActive('source') && sourceRateData" :data="sourceRateData" :options="percentHorizBarOptions" />
+              <Bar v-if="isChartTabActive('source') && sourceRateData" :data="sourceRateData" :options="castChartOpts(percentHorizBarOptions)" />
             </div>
           </el-card>
         </div>
         <el-card>
           <template #header>來源排名明細</template>
-          <el-table :data="stats.by_source" border stripe size="small">
+          <el-table :data="statsBySource" border stripe size="small">
             <el-table-column type="index" label="#" width="50" />
             <el-table-column prop="source" label="來源" min-width="120" />
             <el-table-column prop="visit" label="參觀人數" align="center" width="100" />
             <el-table-column prop="deposit" label="預繳人數" align="center" width="100" />
             <el-table-column label="預繳率" align="center" width="100">
-              <template #default="{ row }">{{ fmtPct(row.deposit, row.visit) }}</template>
+              <template #default="{ row }">{{ fmtPct(Number(row.deposit), Number(row.visit)) }}</template>
             </el-table-column>
           </el-table>
         </el-card>
@@ -153,30 +153,30 @@
           <el-card class="chart-card">
             <template #header>接待人員參觀量</template>
             <div class="chart-box">
-              <Bar v-if="isChartTabActive('staff') && staffBarData" :data="staffBarData" :options="barOptions" />
+              <Bar v-if="isChartTabActive('staff') && staffBarData" :data="staffBarData" :options="castChartOpts(barOptions)" />
             </div>
           </el-card>
           <el-card class="chart-card">
             <template #header>接待人員預繳率</template>
             <div class="chart-box">
-              <Bar v-if="isChartTabActive('staff') && staffRateData" :data="staffRateData" :options="percentBarOptions" />
+              <Bar v-if="isChartTabActive('staff') && staffRateData" :data="staffRateData" :options="castChartOpts(percentBarOptions)" />
             </div>
           </el-card>
         </div>
         <el-card style="margin-bottom:16px">
           <template #header>接待人員統計</template>
-          <el-table :data="stats.by_referrer" border stripe size="small">
+          <el-table :data="statsByReferrer" border stripe size="small">
             <el-table-column prop="referrer" label="接待人員" width="120" />
             <el-table-column prop="visit" label="參觀人數" align="center" width="100" />
             <el-table-column prop="deposit" label="預繳人數" align="center" width="100" />
             <el-table-column label="預繳率" align="center" width="100">
-              <template #default="{ row }">{{ fmtPct(row.deposit, row.visit) }}</template>
+              <template #default="{ row }">{{ fmtPct(Number(row.deposit), Number(row.visit)) }}</template>
             </el-table-column>
           </el-table>
         </el-card>
         <el-card style="margin-bottom:16px">
           <template #header>接待人員 × 各年級預繳率</template>
-          <el-table :data="stats.by_referrer" border stripe size="small">
+          <el-table :data="statsByReferrer" border stripe size="small">
             <el-table-column prop="referrer" label="接待人員" width="120" fixed="left" />
             <el-table-column
               v-for="g in GRADES_ORDER"
@@ -186,20 +186,20 @@
               width="120"
             >
               <template #default="{ row }">
-                <template v-if="row.by_grade && row.by_grade[g]">
-                  {{ row.by_grade[g].visit }}人 / {{ fmtPct(row.by_grade[g].deposit, row.by_grade[g].visit) }}
+                <template v-if="row.by_grade && (row.by_grade as Record<string, Record<string, number>>)[g]">
+                  {{ (row.by_grade as Record<string, Record<string, number>>)[g].visit }}人 / {{ fmtPct((row.by_grade as Record<string, Record<string, number>>)[g].deposit, (row.by_grade as Record<string, Record<string, number>>)[g].visit) }}
                 </template>
                 <span v-else>—</span>
               </template>
             </el-table-column>
           </el-table>
         </el-card>
-        <el-card v-if="stats.referrer_source_cross && stats.referrer_source_cross.referrers">
+        <el-card v-if="referrerSourceCross.referrers && referrerSourceCross.referrers.length">
           <template #header>介紹者 × 來源 交叉分析</template>
-          <el-table :data="stats.referrer_source_cross.referrers" border stripe size="small" style="overflow-x:auto">
+          <el-table :data="referrerSourceCross.referrers" border stripe size="small" style="overflow-x:auto">
             <el-table-column prop="referrer" label="介紹者" width="110" fixed="left" />
             <el-table-column
-              v-for="src in stats.referrer_source_cross.sources"
+              v-for="src in referrerSourceCross.sources"
               :key="src"
               :label="src"
               align="center"
@@ -231,7 +231,7 @@
           :nearby-schools-loading="loadingNearbySchools"
           :nearby-schools-available="nearbySchoolsAvailable"
           :nearby-schools-message="nearbySchoolsMessage"
-          :fmt-pct="fmtPct"
+          :fmt-pct="castFmtPct"
           :loading="loadingAreaHotspots || loadingMarket"
           @sync="handleAreaHotspotSync"
           @set-as-campus="handleSetAsCampus"
@@ -247,7 +247,7 @@
           :horiz-bar-options="horizBarOptions"
           :no-deposit-grade-options="noDepositGradeBarOptions"
           :bar-component="Bar"
-          :reason-options="options.no_deposit_reasons"
+          :reason-options="noDepositReasonOptions"
           :grades="GRADES_ORDER"
           :summary="ndSummary"
           :priority="ndFilter.priority"
@@ -287,11 +287,11 @@
             <div class="kpi-label">其中未預繳</div>
           </el-card>
           <el-card class="kpi-card kpi-blue" shadow="hover">
-            <div class="kpi-value">{{ fmtPct(stats.chuannian_deposit, stats.chuannian_visit) }}</div>
+            <div class="kpi-value">{{ fmtPct(Number(stats.chuannian_deposit), Number(stats.chuannian_visit)) }}</div>
             <div class="kpi-label">童年綠地預繳率</div>
           </el-card>
           <el-card class="kpi-card" shadow="hover">
-            <div class="kpi-value">{{ fmtPct(stats.chuannian_visit, stats.total_visit) }}</div>
+            <div class="kpi-value">{{ fmtPct(Number(stats.chuannian_visit), Number(stats.total_visit)) }}</div>
             <div class="kpi-label">佔總參觀比例</div>
           </el-card>
         </div>
@@ -300,13 +300,13 @@
           <el-card class="chart-card">
             <template #header>預計就讀月份分佈（參觀 vs 預繳）</template>
             <div class="chart-box chart-box-tall">
-              <Bar v-if="isChartTabActive('chuannian') && chuannianExpectedBarData" :data="chuannianExpectedBarData" :options="barOptions" />
+              <Bar v-if="isChartTabActive('chuannian') && chuannianExpectedBarData" :data="chuannianExpectedBarData" :options="castChartOpts(barOptions)" />
             </div>
           </el-card>
           <el-card class="chart-card">
             <template #header>童年綠地各班別分佈</template>
             <div class="chart-box chart-box-tall">
-              <Bar v-if="isChartTabActive('chuannian') && chuannianGradeBarData" :data="chuannianGradeBarData" :options="horizBarOptions" />
+              <Bar v-if="isChartTabActive('chuannian') && chuannianGradeBarData" :data="chuannianGradeBarData" :options="castChartOpts(horizBarOptions)" />
             </div>
           </el-card>
         </div>
@@ -315,8 +315,8 @@
           <el-card>
             <template #header>預計就讀月份明細</template>
             <el-table
-              v-if="stats.chuannian_by_expected && stats.chuannian_by_expected.length"
-              :data="stats.chuannian_by_expected"
+              v-if="chuannianByExpected.length"
+              :data="chuannianByExpected"
               border stripe size="small"
             >
               <el-table-column prop="expected_month" label="預計就讀月份" min-width="140" />
@@ -334,8 +334,8 @@
           <el-card>
             <template #header>童年綠地各班別統計</template>
             <el-table
-              v-if="stats.chuannian_by_grade && stats.chuannian_by_grade.length"
-              :data="stats.chuannian_by_grade"
+              v-if="chuannianByGrade.length"
+              :data="chuannianByGrade"
               border stripe size="small"
             >
               <el-table-column prop="grade" label="班別" width="100" />
@@ -354,20 +354,20 @@
         <RecruitmentPeriodsTab
           :can-write="canWrite"
           :show-charts="isChartTabActive('periods')"
-          :periods-summary="periodsSummary"
-          :periods="periods"
+          :periods-summary="(periodsSummary as unknown as Record<string, unknown> | null)"
+          :periods="(periods as Record<string, unknown>[])"
           :loading-periods="loadingPeriods"
           :periods-trend-data="periodsTrendData"
           :periods-count-bar-data="periodsCountBarData"
-          :line-options="percentLineOptions"
-          :bar-options="barOptions"
-          :line-component="Line"
-          :bar-component="Bar"
-          :fmt-rate="fmtRate"
+          :line-options="(percentLineOptions as Record<string, unknown>)"
+          :bar-options="(barOptions as Record<string, unknown>)"
+          :line-component="castLineComponent"
+          :bar-component="castBarComponent"
+          :fmt-rate="castFmtRate"
           @open-add="openPeriodAdd"
-          @sync="handlePeriodSync"
+          @sync="(id) => handlePeriodSync(id as number)"
           @edit="openPeriodEdit"
-          @delete="handlePeriodDelete"
+          @delete="(id) => handlePeriodDelete(id as number)"
         />
       </el-tab-pane>
 
@@ -388,7 +388,7 @@
           @clear-filter="clearFilter"
           @page-change="onPageChange"
           @edit="openEditDialog"
-          @delete="handleDelete"
+          @delete="(id) => handleDelete(id as number)"
           @convert="openConvertDialog"
         />
       </el-tab-pane>
@@ -407,9 +407,9 @@
       :form="form"
       :saving="saving"
       :district-suggestions="districtSuggestions"
-      :source-suggestions="options.sources || []"
-      :referrer-suggestions="options.referrers || []"
-      :no-deposit-reasons="options.no_deposit_reasons || []"
+      :source-suggestions="((options.sources as string[] | undefined) || [])"
+      :referrer-suggestions="((options.referrers as string[] | undefined) || [])"
+      :no-deposit-reasons="((options.no_deposit_reasons as string[] | undefined) || [])"
       @save="handleSave"
     />
 
@@ -431,14 +431,14 @@
 
     <RecruitmentConvertDialog
       v-model="convertDialogVisible"
-      :visit="convertTargetVisit"
+      :visit="castConvertVisit"
       :classroom-options="classroomOptions"
       @converted="onConverted"
     />
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted, defineAsyncComponent, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -483,8 +483,8 @@ import {
 
 
 // -------- Chart.js 延遲載入 --------
-let _chartReady = null
-const ensureChartReady = () => {
+let _chartReady: Promise<void> | null = null
+const ensureChartReady = (): Promise<void> => {
   if (!_chartReady) {
     _chartReady = import('chart.js').then(({
       Chart, CategoryScale, LinearScale, BarElement,
@@ -523,21 +523,21 @@ const canConvert = computed(() => hasPermission('RECRUITMENT_CONVERT'))
 // -------- 轉化為學生 --------
 const router = useRouter()
 const convertDialogVisible = ref(false)
-const convertTargetVisit = ref(null)
-const classroomOptions = ref([])
+const convertTargetVisit = ref<Record<string, unknown> | null>(null)
+const classroomOptions = ref<{ id: number; name: string }[]>([])
 const classroomStore = useClassroomStore()
 
 async function loadClassroomsOnce() {
   try {
     await classroomStore.fetchClassrooms()
-    classroomOptions.value = classroomStore.classrooms || []
-  } catch (err) {
+    classroomOptions.value = (classroomStore.classrooms as { id: number; name: string }[]) || []
+  } catch {
     // 失敗靜默：不阻擋 dialog 開啟，使用者仍可不選班級
     classroomOptions.value = []
   }
 }
 
-async function openConvertDialog(row) {
+async function openConvertDialog(row: Record<string, unknown>) {
   if (row?.enrolled) {
     ElMessage.warning('此訪視已標記為已報到')
     return
@@ -547,10 +547,11 @@ async function openConvertDialog(row) {
   convertDialogVisible.value = true
 }
 
-function onConverted(result) {
+function onConverted(result: Record<string, unknown>) {
   // 更新此筆訪視記錄的 enrolled 狀態
   if (convertTargetVisit.value) {
-    const target = detailData.value.find((r) => r.id === convertTargetVisit.value.id)
+    const targetId = convertTargetVisit.value.id
+    const target = detailData.value.find((r) => r.id === targetId)
     if (target) target.enrolled = true
   }
   // 提供跳轉學生檔案的選項
@@ -560,7 +561,7 @@ function onConverted(result) {
     { confirmButtonText: '查看檔案', cancelButtonText: '留在本頁', type: 'success' },
   )
     .then(() => {
-      router.push({ name: 'student-profile', params: { id: result.student_id } })
+      router.push({ name: 'student-profile', params: { id: String(result.student_id) } })
     })
     .catch(() => { /* 留在本頁 */ })
 }
@@ -577,18 +578,37 @@ const periodsLoaded = ref(false)
 
 const savingPeriod = ref(false)
 
-const detailData = ref([])
+const detailData = ref<Record<string, unknown>[]>([])
 const detailTotal = ref(0)
-const filter = ref({
+const filter = ref<{
+  month: string | null
+  grade: string | null
+  source: string | null
+  referrer: string | null
+  has_deposit: boolean | null
+  no_deposit_reason: string | null
+  keyword: string
+  page: number
+  page_size: number
+  [key: string]: unknown
+}>({
   month: null, grade: null, source: null, referrer: null,
   has_deposit: null, no_deposit_reason: null, keyword: '',
   page: 1, page_size: 50,
 })
 
 // 未預繳分析
-const ndData = ref([])
+const ndData = ref<Record<string, unknown>[]>([])
 const ndTotal = ref(0)
-const emptyNDFilter = () => ({
+const emptyNDFilter = (): {
+  priority: string
+  reason: string | null
+  grade: string | null
+  overdue_days: number | null
+  cold_only: boolean
+  page: number
+  page_size: number
+} => ({
   priority: 'high',
   reason: null,
   grade: null,
@@ -664,9 +684,9 @@ const {
   notifyError: (message) => ElMessage.error(message),
 })
 
-let debounceTimer = null
+let debounceTimer: ReturnType<typeof setTimeout> | null = null
 const fetchDetailDebounced = () => {
-  clearTimeout(debounceTimer)
+  if (debounceTimer !== null) clearTimeout(debounceTimer)
   debounceTimer = setTimeout(() => fetchDetail(), 400)
 }
 
@@ -678,13 +698,34 @@ const invalidateLazyTabs = () => {
 
 }
 
-const isChartTabActive = (tabName) => activeTab.value === tabName
+const isChartTabActive = (tabName: string) => activeTab.value === tabName
 
 // -------- 訪視記錄 Dialog --------
 const dialogVisible = ref(false)
 const dialogMode = ref('add')
-const editingId = ref(null)
-const emptyForm = () => ({
+const editingId = ref<number | null>(null)
+const emptyForm = (): {
+  month: string
+  month_raw: string | null
+  seq_no: string
+  visit_date: string
+  child_name: string
+  birthday: string | null
+  grade: string | null
+  phone: string
+  address: string
+  district: string
+  source: string
+  referrer: string
+  deposit_collector: string
+  has_deposit: boolean
+  enrolled: boolean
+  transfer_term: boolean
+  no_deposit_reason: string | null
+  no_deposit_reason_detail: string
+  notes: string
+  parent_response: string
+} => ({
   month: '', month_raw: null, seq_no: '', visit_date: '', child_name: '',
   birthday: null, grade: null, phone: '', address: '',
   district: '', source: '', referrer: '', deposit_collector: '',
@@ -697,7 +738,7 @@ const form = ref(emptyForm())
 // -------- 近五年期間 Dialog --------
 const periodDialogVisible = ref(false)
 const periodDialogMode = ref('add')
-const editingPeriodId = ref(null)
+const editingPeriodId = ref<number | null>(null)
 const emptyPeriodForm = () => ({
   period_name: '', visit_count: 0, deposit_count: 0,
   enrolled_count: 0, transfer_term_count: 0, effective_deposit_count: 0,
@@ -717,14 +758,14 @@ const handleMonthsChanged = async () => {
 }
 
 // -------- 日期轉換（僅保留 openEditDialog 還需要的兩個）--------
-const rocDateToISO = (roc) => {
+const rocDateToISO = (roc: string) => {
   if (!roc) return null
   const parts = roc.split('.')
   if (parts.length < 3) return null
   const year = parseInt(parts[0]) + 1911
   return `${year}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`
 }
-const rocMonthToISO = (rm) => {
+const rocMonthToISO = (rm: string) => {
   if (!rm) return null
   const parts = rm.split('.')
   if (parts.length < 2) return null
@@ -734,14 +775,16 @@ const rocMonthToISO = (rm) => {
 
 // 訪視記錄對話框內的 form helpers（watch / _makeSuggestions / onDepositChange）
 // 已搬到 RecruitmentRecordDialog.vue；這裡僅保留 district 建議清單的 computed。
-const districtSuggestions = computed(
-  () => (stats.value.by_district || []).map((d) => d.district).filter(Boolean),
+const districtSuggestions = computed((): string[] =>
+  ((stats.value.by_district as { district?: string }[] | undefined) || [])
+    .map((d) => d.district)
+    .filter((d): d is string => typeof d === 'string')
 )
 
 const fetchDetail = async () => {
   loadingDetail.value = true
   try {
-    const params = { page: filter.value.page, page_size: filter.value.page_size }
+    const params: Record<string, unknown> = { page: filter.value.page, page_size: filter.value.page_size }
     if (filter.value.month) params.month = filter.value.month
     if (filter.value.grade) params.grade = filter.value.grade
     if (filter.value.source) params.source = filter.value.source
@@ -766,7 +809,7 @@ const fetchDetail = async () => {
 const fetchNoDeposit = async () => {
   loadingND.value = true
   try {
-    const params = { page: ndFilter.value.page, page_size: ndFilter.value.page_size }
+    const params: Record<string, unknown> = { page: ndFilter.value.page, page_size: ndFilter.value.page_size }
     if (ndFilter.value.priority) params.priority = ndFilter.value.priority
     if (ndFilter.value.reason) params.reason = ndFilter.value.reason
     if (ndFilter.value.grade) params.grade = ndFilter.value.grade
@@ -834,7 +877,10 @@ const openCampusDialog = () => {
   openCampusDialogAction()
 }
 
-const handleSetAsCampus = async ({ lat, lng, name, address }) => {
+const handleSetAsCampus = async (data: Record<string, unknown>) => {
+  const lat = data.lat as number
+  const lng = data.lng as number
+  const address = data.address as string | undefined
   campusForm.value = {
     ...campusSetting.value,
     campus_lat: lat,
@@ -860,17 +906,17 @@ onMounted(() => {
   loadDashboard()
 })
 
-const handleReferenceMonthChange = async (value) => {
+const handleReferenceMonthChange = async (value: string | null) => {
   await setReferenceMonth(value || null)
 }
 
-const onTabClick = async (tab) => {
-  if (tab?.paneName) activeTab.value = tab.paneName
-  if (tab.paneName === 'detail' && !detailLoaded.value) await loadDetailTab()
-  if (tab.paneName === 'nodeposit' && !ndLoaded.value) await loadNoDepositTab()
-  if (tab.paneName === 'area' && !areaLoaded.value) await loadAreaTab()
-  if (tab.paneName === 'periods' && !periodsLoaded.value) await loadPeriodsTab()
-
+const onTabClick = async (tab: { paneName?: string | number }) => {
+  const paneName = tab?.paneName ? String(tab.paneName) : ''
+  if (paneName) activeTab.value = paneName
+  if (paneName === 'detail' && !detailLoaded.value) await loadDetailTab()
+  if (paneName === 'nodeposit' && !ndLoaded.value) await loadNoDepositTab()
+  if (paneName === 'area' && !areaLoaded.value) await loadAreaTab()
+  if (paneName === 'periods' && !periodsLoaded.value) await loadPeriodsTab()
 }
 
 // -------- 篩選 --------
@@ -883,14 +929,14 @@ const clearFilter = () => {
   fetchDetail()
 }
 
-const updateDetailFilter = (patch) => {
+const updateDetailFilter = (patch: Record<string, unknown>) => {
   filter.value = {
     ...filter.value,
     ...patch,
   }
 }
 
-const drillToDetail = (patch) => {
+const drillToDetail = (patch: Record<string, unknown>) => {
   filter.value = {
     month: null, grade: null, source: null, referrer: null,
     has_deposit: null, no_deposit_reason: null, keyword: '',
@@ -913,9 +959,9 @@ const applyNoDepositFilter = async (patch = {}) => {
   await loadNoDepositTab(true)
 }
 
-const handleDashboardTarget = async (target = {}) => {
-  const targetTab = target.target_tab
-  const targetFilter = target.target_filter || {}
+const handleDashboardTarget = async (target: Record<string, unknown> = {}) => {
+  const targetTab = target.target_tab as string | undefined
+  const targetFilter = (target.target_filter || {}) as Record<string, unknown>
 
   if (targetTab === 'detail') {
     filter.value = {
@@ -943,11 +989,11 @@ const handleDashboardTarget = async (target = {}) => {
   if (targetTab === 'area') {
     activeTab.value = 'area'
     await loadAreaTab()
-    if (targetFilter.district) selectedMarketDistrict.value = targetFilter.district
+    if (targetFilter.district) selectedMarketDistrict.value = String(targetFilter.district)
   }
 }
 
-const onPageChange = (page) => {
+const onPageChange = (page: number) => {
   filter.value.page = page
   fetchDetail()
 }
@@ -957,7 +1003,7 @@ const onNoDepositFilterChange = () => {
   fetchNoDeposit()
 }
 
-const onNDPageChange = (page) => {
+const onNDPageChange = (page: number) => {
   ndFilter.value.page = page
   fetchNoDeposit()
 }
@@ -971,24 +1017,32 @@ const openAddDialog = async () => {
   dialogVisible.value = true
 }
 
-const openEditDialog = async (row) => {
+const openEditDialog = async (row: Record<string, unknown>) => {
   await fetchOptions()
   form.value = {
-    month: row.month,
-    month_raw: rocDateToISO(row.visit_date) ?? rocMonthToISO(row.month),  // 優先用完整日期還原
-    seq_no: row.seq_no,
-    visit_date: row.visit_date ?? '',
-    child_name: row.child_name, birthday: row.birthday,
-    grade: row.grade, phone: row.phone, address: row.address,
-    district: row.district, source: row.source, referrer: row.referrer,
-    deposit_collector: row.deposit_collector, has_deposit: row.has_deposit,
-    enrolled: row.enrolled ?? false, transfer_term: row.transfer_term ?? false,
-    no_deposit_reason: row.no_deposit_reason ?? null,
-    no_deposit_reason_detail: row.no_deposit_reason_detail ?? '',
-    notes: row.notes, parent_response: row.parent_response,
+    month: String(row.month ?? ''),
+    month_raw: rocDateToISO(String(row.visit_date ?? '')) ?? rocMonthToISO(String(row.month ?? '')),
+    seq_no: String(row.seq_no ?? ''),
+    visit_date: String(row.visit_date ?? ''),
+    child_name: String(row.child_name ?? ''),
+    birthday: (row.birthday ?? null) as string | null,
+    grade: (row.grade ?? null) as string | null,
+    phone: String(row.phone ?? ''),
+    address: String(row.address ?? ''),
+    district: String(row.district ?? ''),
+    source: String(row.source ?? ''),
+    referrer: String(row.referrer ?? ''),
+    deposit_collector: String(row.deposit_collector ?? ''),
+    has_deposit: Boolean(row.has_deposit),
+    enrolled: Boolean(row.enrolled ?? false),
+    transfer_term: Boolean(row.transfer_term ?? false),
+    no_deposit_reason: (row.no_deposit_reason ?? null) as string | null,
+    no_deposit_reason_detail: String(row.no_deposit_reason_detail ?? ''),
+    notes: String(row.notes ?? ''),
+    parent_response: String(row.parent_response ?? ''),
   }
   dialogMode.value = 'edit'
-  editingId.value = row.id
+  editingId.value = row.id as number | null
   dialogVisible.value = true
 }
 
@@ -1002,7 +1056,7 @@ const handleSave = async () => {
       await createRecruitmentRecord(payload)
       ElMessage.success('新增成功')
     } else {
-      await updateRecruitmentRecord(editingId.value, payload)
+      await updateRecruitmentRecord(editingId.value!, payload)
       ElMessage.success('更新成功')
     }
     dialogVisible.value = false
@@ -1020,7 +1074,7 @@ const handleSave = async () => {
   }
 }
 
-const handleDelete = async (id) => {
+const handleDelete = async (id: number) => {
   await ElMessageBox.confirm('確定刪除此筆記錄？', '確認', { type: 'warning', center: true })
   try {
     await deleteRecruitmentRecord(id)
@@ -1045,21 +1099,21 @@ const openPeriodAdd = () => {
   periodDialogVisible.value = true
 }
 
-const openPeriodEdit = (row) => {
+const openPeriodEdit = (row: Record<string, unknown>) => {
   periodForm.value = {
-    period_name: row.period_name,
-    visit_count: row.visit_count,
-    deposit_count: row.deposit_count,
-    enrolled_count: row.enrolled_count,
-    transfer_term_count: row.transfer_term_count,
-    effective_deposit_count: row.effective_deposit_count,
-    not_enrolled_deposit: row.not_enrolled_deposit,
-    enrolled_after_school: row.enrolled_after_school,
-    notes: row.notes ?? '',
-    sort_order: row.sort_order,
+    period_name: String(row.period_name ?? ''),
+    visit_count: Number(row.visit_count ?? 0),
+    deposit_count: Number(row.deposit_count ?? 0),
+    enrolled_count: Number(row.enrolled_count ?? 0),
+    transfer_term_count: Number(row.transfer_term_count ?? 0),
+    effective_deposit_count: Number(row.effective_deposit_count ?? 0),
+    not_enrolled_deposit: Number(row.not_enrolled_deposit ?? 0),
+    enrolled_after_school: Number(row.enrolled_after_school ?? 0),
+    notes: String(row.notes ?? ''),
+    sort_order: Number(row.sort_order ?? 0),
   }
   periodDialogMode.value = 'edit'
-  editingPeriodId.value = row.id
+  editingPeriodId.value = row.id as number | null
   periodDialogVisible.value = true
 }
 
@@ -1071,7 +1125,7 @@ const handlePeriodSave = async () => {
       await createPeriod(periodForm.value)
       ElMessage.success('新增成功')
     } else {
-      await updatePeriod(editingPeriodId.value, periodForm.value)
+      await updatePeriod(editingPeriodId.value!, periodForm.value)
       ElMessage.success('更新成功')
     }
     periodDialogVisible.value = false
@@ -1084,7 +1138,7 @@ const handlePeriodSave = async () => {
   }
 }
 
-const handlePeriodDelete = async (id) => {
+const handlePeriodDelete = async (id: number) => {
   await ElMessageBox.confirm('確定刪除此期間記錄？', '確認', { type: 'warning' })
   try {
     await deletePeriod(id)
@@ -1096,7 +1150,7 @@ const handlePeriodDelete = async (id) => {
   }
 }
 
-const handlePeriodSync = async (id) => {
+const handlePeriodSync = async (id: number) => {
   try {
     await syncPeriod(id)
     ElMessage.success('期間數據已從訪視明細更新')
@@ -1108,18 +1162,18 @@ const handlePeriodSync = async (id) => {
 }
 
 // -------- 輔助函式 --------
-const fmtPct = (deposit, visit) => {
+const fmtPct = (deposit: number, visit: number) => {
   if (!visit) return '0%'
   return (deposit / visit * 100).toFixed(1) + '%'
 }
 
-const rateBarClass = (rate) => {
+const rateBarClass = (rate: number) => {
   if (rate >= 50) return 'rate-bar-fill--green'
   if (rate >= 25) return 'rate-bar-fill--yellow'
   return 'rate-bar-fill--red'
 }
 
-const travelBadgeClass = (minutes) => {
+const travelBadgeClass = (minutes: number | null) => {
   if (minutes == null) return ''
   if (minutes <= 10) return 'travel-badge--green'
   if (minutes <= 20) return 'travel-badge--yellow'
@@ -1127,18 +1181,18 @@ const travelBadgeClass = (minutes) => {
 }
 
 /** 將後端回傳的百分比數值格式化為字串，如 51.8 → "51.8%" */
-const fmtRate = (rate) => {
+const fmtRate = (rate: number | null | undefined) => {
   if (rate == null || rate === 0) return '0%'
   return Number(rate).toFixed(1) + '%'
 }
 
 /** 期間標籤縮短：114.09.16~115.03.15 → 114.09~115.03 */
-const shortPeriodLabel = (name) => {
+const shortPeriodLabel = (name: string) => {
   const m = name.match(/(\d{3}\.\d{2})\.\d{2}[~-](\d{3}\.\d{2})\.\d{2}/)
   return m ? `${m[1]}~${m[2]}` : name.slice(0, 12)
 }
 
-const depositRowClass = ({ row }) => row.has_deposit ? 'deposit-row' : ''
+const depositRowClass = (row: Record<string, unknown>) => row.has_deposit ? 'deposit-row' : ''
 
 // -------- 圖表資料 & options（全部從 composable 取得）--------
 const {
@@ -1175,8 +1229,8 @@ const {
   noDepositGradeBarOptions,
   doughnutOptions,
 } = useRecruitmentCharts({
-  stats,
-  periodsSummary,
+  stats: stats as unknown as Parameters<typeof useRecruitmentCharts>[0]['stats'],
+  periodsSummary: periodsSummary as unknown as Parameters<typeof useRecruitmentCharts>[0]['periodsSummary'],
   marketSnapshot,
   drillToDetail: (patch) => drillToDetail(patch),
 })
@@ -1189,6 +1243,69 @@ const currentCampus = computed(() => ({
   campus_lat: marketSnapshot.value.campus?.campus_lat ?? campusSetting.value.campus_lat ?? FALLBACK_SCHOOL_LAT,
   campus_lng: marketSnapshot.value.campus?.campus_lng ?? campusSetting.value.campus_lng ?? FALLBACK_SCHOOL_LNG,
 }))
+
+// -------- 接待分析：交叉分析 computed helper（解決 stats.referrer_source_cross 為 unknown 的 template 型別問題）--------
+interface ReferrerSourceCross {
+  referrers?: Record<string, unknown>[]
+  sources?: string[]
+}
+const referrerSourceCross = computed((): ReferrerSourceCross =>
+  (stats.value.referrer_source_cross as ReferrerSourceCross | undefined) ?? {}
+)
+
+// -------- stats arrays 型別轉換（stats 為 Record<string,unknown>，各欄位 .value 為 unknown）--------
+const statsByGrade = computed((): Record<string, unknown>[] =>
+  (stats.value.by_grade as Record<string, unknown>[] | undefined) ?? []
+)
+const statsBySource = computed((): Record<string, unknown>[] =>
+  (stats.value.by_source as Record<string, unknown>[] | undefined) ?? []
+)
+const statsByReferrer = computed((): Record<string, unknown>[] =>
+  (stats.value.by_referrer as Record<string, unknown>[] | undefined) ?? []
+)
+const statsDecisionSummary = computed((): Record<string, unknown> =>
+  (stats.value.decision_summary as Record<string, unknown> | undefined) ?? {}
+)
+const statsFunnelSnapshot = computed((): Record<string, unknown> =>
+  (stats.value.funnel_snapshot as Record<string, unknown> | undefined) ?? {}
+)
+const statsMonthOverMonth = computed((): Record<string, unknown> =>
+  (stats.value.month_over_month as Record<string, unknown> | undefined) ?? {}
+)
+const statsAlerts = computed((): Record<string, unknown>[] =>
+  (stats.value.alerts as Record<string, unknown>[] | undefined) ?? []
+)
+const statsTopActionQueue = computed((): Record<string, unknown>[] =>
+  (stats.value.top_action_queue as Record<string, unknown>[] | undefined) ?? []
+)
+
+// -------- 未預繳：chuannian 相關 arrays（解決 stats.chuannian_by_expected 為 unknown 的問題）--------
+const chuannianByExpected = computed((): Record<string, unknown>[] =>
+  (stats.value.chuannian_by_expected as Record<string, unknown>[] | undefined) ?? []
+)
+const chuannianByGrade = computed((): Record<string, unknown>[] =>
+  (stats.value.chuannian_by_grade as Record<string, unknown>[] | undefined) ?? []
+)
+
+// -------- options 型別轉換 --------
+const noDepositReasonOptions = computed((): string[] =>
+  (options.value.no_deposit_reasons as string[] | undefined) ?? []
+)
+
+// -------- component / function 型別轉換（template 不支援複雜 union function 型別）--------
+type UnknownFn = (...args: unknown[]) => unknown
+type ComponentLike = Record<string, unknown> | UnknownFn
+type VisitLike = { id: number | string; [key: string]: unknown }
+const castConvertVisit = computed((): VisitLike | null => convertTargetVisit.value as VisitLike | null)
+const castBarComponent = computed((): ComponentLike => Bar as ComponentLike)
+const castLineComponent = computed((): ComponentLike => Line as ComponentLike)
+const castFmtRate = computed((): UnknownFn => fmtRate as UnknownFn)
+const castFmtPct = computed((): UnknownFn => fmtPct as UnknownFn)
+
+// chart options 轉型（vue-chartjs 要求 ChartOptions<T>，composable 回傳 Record<string,unknown>）
+import type { ChartOptions } from 'chart.js'
+const castChartOpts = (opts: Record<string, unknown>): ChartOptions<'bar'> =>
+  opts as unknown as ChartOptions<'bar'>
 </script>
 
 <style scoped>

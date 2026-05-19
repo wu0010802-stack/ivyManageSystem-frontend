@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 import { usePortalDashboard } from '@/composables/usePortalDashboard'
 import PendingActionsCard from '@/components/portal/home/PendingActionsCard.vue'
@@ -17,10 +17,12 @@ const greeting = computed(() => {
   return '晚安'
 })
 
-const me = computed(() => summary.value?.me || {})
-const today = computed(() => summary.value?.today || {})
-const classrooms = computed(() => summary.value?.classrooms || [])
-const actions = computed(() => summary.value?.actions || {})
+interface DashboardSummary { me?: Record<string, unknown>; today?: Record<string, unknown>; classrooms?: Record<string, unknown>[]; actions?: Record<string, unknown>; message?: string }
+const summaryData = summary as import('vue').Ref<DashboardSummary | null>
+const me = computed(() => summaryData.value?.me || {})
+const today = computed(() => summaryData.value?.today || {})
+const classrooms = computed(() => summaryData.value?.classrooms || [])
+const actions = computed(() => summaryData.value?.actions || {})
 </script>
 
 <template>
@@ -33,7 +35,7 @@ const actions = computed(() => summary.value?.actions || {})
       <el-button :loading="loading" plain @click="refresh">重新整理</el-button>
     </header>
 
-    <div v-if="error" class="error-banner">載入失敗：{{ error.message || '請稍後再試' }}</div>
+    <div v-if="error" class="error-banner">載入失敗：{{ (error as Record<string, unknown>).message || '請稍後再試' }}</div>
 
     <div v-if="!summary && loading" class="loading-state">
       <div class="pt-shimmer skeleton-block" v-for="i in 3" :key="i"></div>
@@ -48,7 +50,7 @@ const actions = computed(() => summary.value?.actions || {})
         <p v-if="!classrooms.length" class="empty">您目前未綁定任何班級</p>
         <ClassroomOpsCard
           v-for="c in classrooms"
-          :key="c.classroom_id"
+          :key="(c.classroom_id as PropertyKey)"
           :card="c"
         />
       </div>

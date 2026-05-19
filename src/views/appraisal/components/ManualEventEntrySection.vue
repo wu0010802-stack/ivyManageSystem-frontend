@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 import {
   useManualEventEntry,
@@ -6,13 +6,13 @@ import {
   MANUAL_LABEL,
 } from '../composables/useManualEventEntry'
 
-const props = defineProps({
-  cycleId: { type: Number, default: null },
-  participants: { type: Array, default: () => [] },
-  readonly: { type: Boolean, default: false },
-})
+const props = defineProps<{
+  cycleId?: number | null
+  participants?: Record<string, unknown>[]
+  readonly?: boolean
+}>()
 
-const cycleIdRef = computed(() => props.cycleId)
+const cycleIdRef = computed(() => props.cycleId ?? null)
 const { dirtyEntries, loading, saving, getCount, setCount, saveAll } =
   useManualEventEntry(cycleIdRef)
 
@@ -64,7 +64,7 @@ const LABEL = MANUAL_LABEL
             :precision="0"
             :disabled="readonly"
             :data-test="`count-${row.participant_id}-${code}`"
-            @update:model-value="(v) => setCount(row.participant_id, code, v)"
+            @update:model-value="(v) => setCount(row.participant_id!, code, v as number)"
           />
           <span v-else>—</span>
         </template>

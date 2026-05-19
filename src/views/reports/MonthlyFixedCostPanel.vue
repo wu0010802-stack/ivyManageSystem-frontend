@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, computed, watch, reactive } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
@@ -8,9 +8,9 @@ import {
 import { apiError } from '@/utils/error'
 import { hasPermission } from '@/utils/auth'
 
-const props = defineProps({
-  year: { type: Number, required: true },
-})
+const props = defineProps<{
+  year: number
+}>()
 
 const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1)
 
@@ -37,7 +37,7 @@ const errorMsg = ref('')
 // isDirty = original !== current（嚴格不等）；空字串、null 視為「未登錄」用 null 統一表示
 const cellState = reactive(new Map())
 
-function cellKey(month, category) {
+function cellKey(month: number, category: string) {
   return `${month}-${category}`
 }
 
@@ -77,11 +77,11 @@ watch(() => props.year, load, { immediate: true })
 
 // 取得 cell 當下值（用於 input v-model）。注意：reactive Map 需透過 method 取，
 // 直接 cellState.get() 在 template 不會自動追蹤；改用 computed wrapper。
-function getCurrent(month, category) {
+function getCurrent(month: number, category: string) {
   return cellState.get(cellKey(month, category))?.current ?? null
 }
 
-function setCurrent(month, category, raw) {
+function setCurrent(month: number, category: string, raw: string | number | null) {
   const key = cellKey(month, category)
   const entry = cellState.get(key)
   if (!entry) return
@@ -99,7 +99,7 @@ function setCurrent(month, category, raw) {
   cellState.set(key, { original: entry.original, current: next })
 }
 
-function isDirty(month, category) {
+function isDirty(month: number, category: string) {
   const e = cellState.get(cellKey(month, category))
   if (!e) return false
   return e.current !== e.original
@@ -129,7 +129,7 @@ const dirtyEntries = computed(() => {
 const dirtyCount = computed(() => dirtyEntries.value.length)
 
 // 月度合計（read-only 顯示用，跨 8 category 加總）
-function monthTotal(month) {
+function monthTotal(month: number) {
   let sum = 0
   let any = false
   for (const c of CATEGORIES) {
@@ -144,7 +144,7 @@ function monthTotal(month) {
 }
 
 // category 合計（read-only 顯示用，跨 12 月加總）
-function categoryTotal(category) {
+function categoryTotal(category: string) {
   let sum = 0
   let any = false
   for (const m of MONTHS) {
@@ -172,7 +172,7 @@ const grandTotal = computed(() => {
 })
 
 const amountFormatter = new Intl.NumberFormat('zh-TW')
-function formatTotal(v) {
+function formatTotal(v: number | null | undefined) {
   if (v == null || !Number.isFinite(Number(v))) return '—'
   return amountFormatter.format(Number(v))
 }
@@ -272,7 +272,7 @@ async function saveAll() {
                 :value="getCurrent(m, c.key) ?? ''"
                 :disabled="!canWrite || saving"
                 :placeholder="c.defaultAmount != null ? amountFormatter.format(c.defaultAmount) : ''"
-                @input="setCurrent(m, c.key, $event.target.value)"
+                @input="setCurrent(m, c.key, ($event.target as HTMLInputElement).value)"
               />
             </td>
             <td class="cell-num col-total" :data-row-total="c.key">

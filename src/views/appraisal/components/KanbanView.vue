@@ -1,5 +1,5 @@
-<script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+<script setup lang="ts">
+import { ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 
 import { getSignStatusSummary } from '@/api/appraisal'
@@ -7,14 +7,18 @@ import { apiError } from '@/utils/error'
 import { STATUS_LABEL } from '../labels'
 import KanbanColumn from './KanbanColumn.vue'
 
-const props = defineProps({
-  cycleId: { type: Number, required: true },
-})
-const emit = defineEmits(['action', 'selected-changed'])
+interface Summary { id: number; status: string; [key: string]: unknown }
+interface Bucket { status: string; summaries: Summary[] }
 
-const data = ref({ counts: {}, buckets: [] })
+const props = defineProps<{ cycleId: number }>()
+const emit = defineEmits<{
+  'action': [payload: unknown]
+  'selected-changed': [ids: number[]]
+}>()
+
+const data = ref<{ counts: Record<string, number>; buckets: Bucket[] }>({ counts: {}, buckets: [] })
 const loading = ref(false)
-const selectedIds = ref([])
+const selectedIds = ref<number[]>([])
 
 const COLUMN_DEFS = [
   { status: 'DRAFT', label: STATUS_LABEL.DRAFT, collapse: false },
@@ -27,7 +31,7 @@ async function load() {
   loading.value = true
   try {
     const r = await getSignStatusSummary(props.cycleId)
-    data.value = r.data
+    data.value = r.data as { counts: Record<string, number>; buckets: Bucket[] }
   } catch (e) {
     ElMessage.error(apiError(e, '載入看板失敗'))
   } finally {
@@ -39,12 +43,12 @@ watch(() => props.cycleId, () => { selectedIds.value = []; load() }, { immediate
 
 defineExpose({ reload: load })
 
-function summariesByStatus(status) {
+function summariesByStatus(status: string): Summary[] {
   const b = data.value.buckets.find(b => b.status === status)
   return b?.summaries || []
 }
 
-function toggleSelect({ summaryId, selected }) {
+function toggleSelect({ summaryId, selected }: { summaryId: number; selected: boolean }) {
   if (selected) {
     if (!selectedIds.value.includes(summaryId)) selectedIds.value = [...selectedIds.value, summaryId]
   } else {
@@ -53,7 +57,7 @@ function toggleSelect({ summaryId, selected }) {
   emit('selected-changed', selectedIds.value)
 }
 
-function selectAll({ status, selected }) {
+function selectAll({ status, selected }: { status: string; selected: boolean }) {
   const ids = summariesByStatus(status).map(s => s.id)
   if (selected) {
     selectedIds.value = [...new Set([...selectedIds.value, ...ids])]

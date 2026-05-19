@@ -1,31 +1,41 @@
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getSalaryLogic } from '@/api/salary'
 
 const loading = ref(false)
-const logicData = ref(null)
+const logicData = ref<Record<string, unknown> | null>(null)
 
-const formulaVerification = computed(() => logicData.value?.formula_verification || null)
-const officialChecks = computed(() => formulaVerification.value?.official_checks || [])
-const sampleBracketChecks = computed(() => formulaVerification.value?.sample_bracket_checks || [])
+const formulaVerification = computed(() => (logicData.value?.formula_verification as Record<string, unknown> | null) || null)
+const officialChecks = computed(() => (formulaVerification.value?.official_checks as Array<{ match: boolean; item?: unknown; system_value?: unknown; official_value?: unknown }>) || [])
+const sampleBracketChecks = computed(() => (formulaVerification.value?.sample_bracket_checks as Array<{ match: boolean; [key: string]: unknown }>) || [])
 const allOfficialChecksPass = computed(() =>
   officialChecks.value.every(item => item.match) && sampleBracketChecks.value.every(item => item.match)
 )
+
+// Template helpers — cast unknown sub-objects to typed records
+const attendanceFormulas = computed(() => (formulaVerification.value?.attendance_formulas as Array<{ item: string; formula: string; note?: string }>) || [])
+const insuranceFormulas = computed(() => (formulaVerification.value?.insurance_formulas as Array<{ item: string; formula: string; note?: string }>) || [])
+const officialSources = computed(() => (formulaVerification.value?.official_sources as Array<{ url: string; label: string }>) || [])
+const attendancePolicyDb = computed(() => (logicData.value?.attendance_policy_db as { default_work_start?: unknown; default_work_end?: unknown; festival_bonus_months?: unknown }) || null)
+const leaveDeductionRules = computed(() => logicData.value?.leave_deduction_rules as Record<string, { label?: string; ratio?: unknown; note?: string }> || {})
+const gradeTargetsDb = computed(() => (logicData.value?.grade_targets_db as Record<string, unknown>[]) || [])
+const shiftTypes = computed(() => (logicData.value?.shift_types as Record<string, unknown>[]) || [])
 
 const fetchLogic = async () => {
   loading.value = true
   try {
     const res = await getSalaryLogic()
-    logicData.value = res.data
+    logicData.value = res.data as Record<string, unknown>
   } catch (e) {
-    ElMessage.error('載入失敗: ' + (e.response?.data?.detail || e.message))
+    const detail = (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
+    ElMessage.error('載入失敗: ' + (detail || (e as Error).message))
   } finally {
     loading.value = false
   }
 }
 
-const formatJson = (obj) => JSON.stringify(obj, null, 2)
+const formatJson = (obj: unknown) => JSON.stringify(obj, null, 2)
 
 onMounted(() => {
   fetchLogic()
@@ -62,7 +72,7 @@ onMounted(() => {
 
       <el-card class="section-card" v-if="formulaVerification">
         <template #header><strong>考勤公式</strong></template>
-        <el-table :data="formulaVerification.attendance_formulas" border size="small">
+        <el-table :data="attendanceFormulas" border size="small">
           <el-table-column prop="item" label="項目" width="140" />
           <el-table-column prop="formula" label="公式" min-width="260">
             <template #default="{ row }"><code>{{ row.formula }}</code></template>
@@ -73,7 +83,7 @@ onMounted(() => {
 
       <el-card class="section-card" v-if="formulaVerification">
         <template #header><strong>勞健保 / 勞退公式</strong></template>
-        <el-table :data="formulaVerification.insurance_formulas" border size="small">
+        <el-table :data="insuranceFormulas" border size="small">
           <el-table-column prop="item" label="項目" width="180" />
           <el-table-column prop="formula" label="公式" min-width="260">
             <template #default="{ row }"><code>{{ row.formula }}</code></template>
@@ -129,7 +139,7 @@ onMounted(() => {
 
         <div class="source-links">
           <a
-            v-for="source in formulaVerification.official_sources"
+            v-for="source in officialSources"
             :key="source.url"
             :href="source.url"
             target="_blank"
@@ -143,10 +153,10 @@ onMounted(() => {
       <!-- 考勤政策 -->
       <el-card class="section-card">
         <template #header><strong>考勤政策 (DB)</strong></template>
-        <el-descriptions :column="2" border size="small" v-if="logicData.attendance_policy_db">
-          <el-descriptions-item label="預設上班">{{ logicData.attendance_policy_db.default_work_start }}</el-descriptions-item>
-          <el-descriptions-item label="預設下班">{{ logicData.attendance_policy_db.default_work_end }}</el-descriptions-item>
-          <el-descriptions-item label="節慶獎金入職月數">{{ logicData.attendance_policy_db.festival_bonus_months }}</el-descriptions-item>
+        <el-descriptions :column="2" border size="small" v-if="attendancePolicyDb">
+          <el-descriptions-item label="預設上班">{{ attendancePolicyDb.default_work_start }}</el-descriptions-item>
+          <el-descriptions-item label="預設下班">{{ attendancePolicyDb.default_work_end }}</el-descriptions-item>
+          <el-descriptions-item label="節慶獎金入職月數">{{ attendancePolicyDb.festival_bonus_months }}</el-descriptions-item>
         </el-descriptions>
         <el-empty v-else description="未設定" />
       </el-card>
@@ -154,7 +164,7 @@ onMounted(() => {
       <!-- 請假扣薪 -->
       <el-card class="section-card">
         <template #header><strong>請假扣薪規則</strong></template>
-        <el-table :data="Object.entries(logicData.leave_deduction_rules).map(([k,v]) => ({code:k,...v}))" border size="small">
+        <el-table :data="Object.entries(leaveDeductionRules).map(([k, v]) => ({ code: k, ...v }))" border size="small">
           <el-table-column prop="code" label="代碼" width="100" />
           <el-table-column prop="label" label="假別" width="100" />
           <el-table-column prop="ratio" label="扣薪比例" width="100" />
@@ -172,7 +182,7 @@ onMounted(() => {
       <!-- 年級目標 -->
       <el-card class="section-card">
         <template #header><strong>年級目標人數 (DB)</strong></template>
-        <el-table :data="logicData.grade_targets_db" border size="small" v-if="logicData.grade_targets_db.length">
+        <el-table :data="gradeTargetsDb" border size="small" v-if="gradeTargetsDb.length">
           <el-table-column prop="grade_name" label="年級" width="80" />
           <el-table-column prop="festival_two_teachers" label="節慶(雙導)" width="100" />
           <el-table-column prop="festival_one_teacher" label="節慶(單導)" width="100" />
@@ -199,7 +209,7 @@ onMounted(() => {
       <!-- 班別 -->
       <el-card class="section-card">
         <template #header><strong>班別設定</strong></template>
-        <el-table :data="logicData.shift_types" border size="small">
+        <el-table :data="shiftTypes" border size="small">
           <el-table-column prop="id" label="ID" width="60" />
           <el-table-column prop="name" label="名稱" width="140" />
           <el-table-column prop="work_start" label="上班" width="80" />

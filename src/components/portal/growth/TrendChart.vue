@@ -48,7 +48,7 @@ const chartOptions = {
   },
   plugins: {
     legend: { display: false },
-    tooltip: { mode: 'index', intersect: false },
+    tooltip: { mode: 'index' as const, intersect: false },
   },
 }
 </script>

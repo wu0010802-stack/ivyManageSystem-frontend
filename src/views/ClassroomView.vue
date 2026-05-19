@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { onMounted, reactive, ref, watch, computed } from 'vue'
 import {
   createClassroom,
@@ -20,28 +20,33 @@ import { apiError } from '@/utils/error'
 import ClassroomStudentDrawer from '@/components/classroom/ClassroomStudentDrawer.vue'
 import ClassroomChangeLogDrawer from '@/components/classroom/ClassroomChangeLogDrawer.vue'
 
+interface ClassroomRow { id: number; name: string; class_code?: string | null; school_year: number; semester: number; semester_label?: string; grade_id?: number | null; grade_name?: string; capacity?: number; current_count?: number; is_active?: boolean; head_teacher_id?: number | null; assistant_teacher_id?: number | null; english_teacher_id?: number | null; art_teacher_id?: number | null; head_teacher_name?: string | null; assistant_teacher_name?: string | null; english_teacher_name?: string | null; art_teacher_name?: string | null; student_preview?: Record<string, unknown>[]; students?: Record<string, unknown>[]; [key: string]: unknown }
+interface GradeRow { id: number; name: string; sort_order?: number; [key: string]: unknown }
+interface TeacherOption { id: number; name: string; [key: string]: unknown }
+interface PromotionRow { source_classroom_id: number; source_name: string; source_grade_id: number | null; source_grade_name: string; target_name: string; target_grade_id: number | null; copy_teachers: boolean; move_students: boolean }
+
 const classroomStore = useClassroomStore()
 const termStore = useAcademicTermStore()
 const currentAcademicTerm = getCurrentAcademicTerm()
-const classrooms = ref([])
-const grades = ref([])
-const teachers = ref([])
-const availableSchoolYears = ref([])
+const classrooms = ref<ClassroomRow[]>([])
+const grades = ref<GradeRow[]>([])
+const teachers = ref<TeacherOption[]>([])
+const availableSchoolYears = ref<number[]>([])
 const loading = ref(false)
 const detailLoading = ref(false)
 const dialogVisible = ref(false)
 const promotionLoading = ref(false)
 const isAutoPromoting = ref(false)
-const promotionRows = ref([])
-const formRef = ref(null)
+const promotionRows = ref<PromotionRow[]>([])
+const formRef = ref<{ validate: (cb: (valid: boolean) => void) => void } | null>(null)
 const isEdit = ref(false)
 const showInactive = ref(false)
-const currentClassroom = ref(null)
+const currentClassroom = ref<ClassroomRow | null>(null)
 const classroomDrawerVisible = ref(false)
 const classroomDrawerLoading = ref(false)
-const drawerClassroom = ref(null)
+const drawerClassroom = ref<ClassroomRow | null>(null)
 const changeLogDrawerVisible = ref(false)
-const changeLogClassroom = ref(null)
+const changeLogClassroom = ref<ClassroomRow | null>(null)
 const canWrite = computed(() => hasPermission('CLASSROOMS_WRITE'))
 const canReadStudents = computed(() => hasPermission('STUDENTS_READ'))
 
@@ -58,7 +63,7 @@ const semesterOptions = [
   { label: '下學期（2 月 - 7 月）', value: 2 },
 ]
 const schoolYearOptions = computed(() => {
-  const years = new Set(buildSchoolYearOptions(currentAcademicTerm.school_year, 1))
+  const years = new Set<number>(buildSchoolYearOptions(currentAcademicTerm.school_year, 1))
   availableSchoolYears.value.forEach((year) => years.add(Number(year)))
   years.add(normalizeSchoolYear(filterSchoolYear.value))
   return Array.from(years).sort((a, b) => b - a)
@@ -67,7 +72,7 @@ const schoolYearOptions = computed(() => {
 // 僅顯示上一學期、本學期、下一學期的選擇器
 const termOptions = computed(() => {
   const { school_year: cy, semester: cs } = currentAcademicTerm
-  const semLabel = (s) => (s === 1 ? '上學期' : '下學期')
+  const semLabel = (s: number) => (s === 1 ? '上學期' : '下學期')
   const prevTerm = cs === 1 ? { school_year: cy - 1, semester: 2 } : { school_year: cy, semester: 1 }
   const nextTerm = cs === 1 ? { school_year: cy, semester: 2 } : { school_year: cy + 1, semester: 1 }
   return [
@@ -84,7 +89,7 @@ const selectedTermKey = computed({
     filterSemester.value = s
   },
 })
-const nextAcademicTerm = (schoolYear, semester) => (
+const nextAcademicTerm = (schoolYear: number, semester: number) => (
   semester === 1
     ? { school_year: schoolYear, semester: 2 }
     : { school_year: schoolYear + 1, semester: 1 }
@@ -92,7 +97,7 @@ const nextAcademicTerm = (schoolYear, semester) => (
 const sortedGrades = computed(() =>
   [...grades.value].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)),
 )
-const isGraduationRow = (row) => !row.target_grade_id
+const isGraduationRow = (row: PromotionRow) => !row.target_grade_id
 const promotionForm = reactive({
   source_school_year: currentAcademicTerm.school_year,
   source_semester: currentAcademicTerm.semester,
@@ -100,7 +105,11 @@ const promotionForm = reactive({
   target_semester: nextAcademicTerm(currentAcademicTerm.school_year, currentAcademicTerm.semester).semester,
 })
 
-const form = reactive({
+const form = reactive<{
+  id: number | null; name: string; class_code: string; school_year: number; semester: number
+  grade_id: number | null; capacity: number; head_teacher_id: number | null
+  assistant_teacher_id: number | null; english_teacher_id: number | null; is_active: boolean
+}>({
   id: null,
   name: '',
   class_code: '',
@@ -121,13 +130,13 @@ const rules = {
 }
 
 const dialogTitle = computed(() => (isEdit.value ? '編輯班級' : '新增班級'))
-const getStudentPreview = (classroom) => classroom.student_preview || []
-const getRemainingStudentCount = (classroom) => Math.max(
+const getStudentPreview = (classroom: ClassroomRow) => classroom.student_preview || []
+const getRemainingStudentCount = (classroom: ClassroomRow) => Math.max(
   0,
   (classroom.current_count || 0) - getStudentPreview(classroom).length,
 )
 
-const getCapacityStatus = (classroom) => {
+const getCapacityStatus = (classroom: ClassroomRow) => {
   const count = classroom.current_count || 0
   const capacity = classroom.capacity || 1
   if (count >= capacity) return 'full'
@@ -158,7 +167,7 @@ const fetchClassrooms = async () => {
       school_year: normalizeSchoolYear(filterSchoolYear.value),
       semester: filterSemester.value,
     })
-    classrooms.value = response.data
+    classrooms.value = response.data as ClassroomRow[]
     if (classrooms.value.length === 0 && !isAutoPromoting.value) {
       isAutoPromoting.value = true
       try {
@@ -181,7 +190,7 @@ const fetchAvailableSchoolYears = async () => {
       current_only: false,
     })
     availableSchoolYears.value = [...new Set(
-      (response.data || [])
+      ((response.data || []) as ClassroomRow[])
         .map((item) => Number(item.school_year))
         .filter((year) => Number.isFinite(year)),
     )]
@@ -196,14 +205,14 @@ const fetchOptions = async () => {
       getGrades(),
       getTeacherOptions(),
     ])
-    grades.value = gradesRes.data
-    teachers.value = teachersRes.data
+    grades.value = gradesRes.data as GradeRow[]
+    teachers.value = teachersRes.data as TeacherOption[]
   } catch (error) {
     ElMessage.error(apiError(error, '載入班級選項失敗'))
   }
 }
 
-const populateForm = (data) => {
+const populateForm = (data: ClassroomRow) => {
   form.id = data.id
   form.name = data.name || ''
   form.class_code = data.class_code || ''
@@ -224,7 +233,7 @@ const openCreate = async () => {
   dialogVisible.value = true
 }
 
-const openStudentDrawer = async (classroom) => {
+const openStudentDrawer = async (classroom: ClassroomRow) => {
   if (!canReadStudents.value) {
     if (canWrite.value) await openEdit(classroom)
     return
@@ -233,7 +242,7 @@ const openStudentDrawer = async (classroom) => {
   classroomDrawerLoading.value = true
   try {
     const response = await getClassroom(classroom.id)
-    drawerClassroom.value = response.data
+    drawerClassroom.value = response.data as ClassroomRow
   } catch (error) {
     ElMessage.error(apiError(error, '載入班級學生資料失敗'))
   } finally {
@@ -245,7 +254,7 @@ const closeStudentDrawer = () => {
   classroomDrawerVisible.value = false
 }
 
-const openChangeLogDrawer = (classroom) => {
+const openChangeLogDrawer = (classroom: ClassroomRow) => {
   changeLogClassroom.value = classroom
   changeLogDrawerVisible.value = true
 }
@@ -254,13 +263,13 @@ const handleStudentUpdated = async () => {
   if (drawerClassroom.value) await openStudentDrawer(drawerClassroom.value)
 }
 
-const openEdit = async (classroom) => {
+const openEdit = async (classroom: ClassroomRow) => {
   detailLoading.value = true
   try {
     await fetchOptions()
     const response = await getClassroom(classroom.id)
-    currentClassroom.value = response.data
-    populateForm(response.data)
+    currentClassroom.value = response.data as ClassroomRow
+    populateForm(response.data as ClassroomRow)
     isEdit.value = true
     dialogVisible.value = true
   } catch (error) {
@@ -280,7 +289,7 @@ const shouldAdvanceGrade = () => (
   && normalizeSchoolYear(promotionForm.target_school_year) > normalizeSchoolYear(promotionForm.source_school_year)
 )
 
-const findNextGradeId = (gradeId) => {
+const findNextGradeId = (gradeId: number | null): number | null => {
   if (!shouldAdvanceGrade()) return gradeId
   const currentIndex = sortedGrades.value.findIndex((grade) => grade.id === gradeId)
   if (currentIndex < 0) return null
@@ -295,13 +304,13 @@ const loadPromotionRows = async () => {
       semester: promotionForm.source_semester,
       include_inactive: false,
     })
-    promotionRows.value = (response.data || []).map((classroom) => ({
+    promotionRows.value = ((response.data || []) as ClassroomRow[]).map((classroom) => ({
       source_classroom_id: classroom.id,
       source_name: classroom.name,
-      source_grade_id: classroom.grade_id,
+      source_grade_id: classroom.grade_id ?? null,
       source_grade_name: classroom.grade_name || '未設定年級',
-      target_name: findNextGradeId(classroom.grade_id) ? classroom.name : '',
-      target_grade_id: findNextGradeId(classroom.grade_id),
+      target_name: findNextGradeId(classroom.grade_id ?? null) ? classroom.name : '',
+      target_grade_id: findNextGradeId(classroom.grade_id ?? null),
       copy_teachers: true,
       move_students: true,
     }))
@@ -326,7 +335,7 @@ const autoPromoteIfNeeded = async () => {
       semester: prevTerm.semester,
       include_inactive: false,
     })
-    if (!prevRes.data?.length) return
+    if (!(prevRes.data as unknown[])?.length) return
 
     promotionForm.source_school_year = prevTerm.school_year
     promotionForm.source_semester = prevTerm.semester
@@ -383,9 +392,9 @@ const submitForm = async () => {
 
     try {
       if (isEdit.value) {
-        await updateClassroom(form.id, payload)
+        await updateClassroom(form.id!, payload)
       } else {
-        await createClassroom(payload)
+        await createClassroom(payload as Parameters<typeof createClassroom>[0])
       }
       ElMessage.success(isEdit.value ? '班級更新成功' : '班級新增成功')
       closeDialog()
@@ -397,7 +406,7 @@ const submitForm = async () => {
   })
 }
 
-const handleDelete = async (classroom) => {
+const handleDelete = async (classroom: ClassroomRow) => {
   try {
     await ElMessageBox.confirm(
       `確定要停用「${classroom.name}」嗎？`,
@@ -433,6 +442,9 @@ onMounted(async () => {
   await fetchOptions()
   await fetchClassrooms()
 })
+
+interface ClassroomDrawerProp { id?: number; name?: string; grade_name?: string; semester_label?: string; is_active?: boolean; capacity?: number; students?: { id: number; name?: string; gender?: string; [key: string]: unknown }[] }
+const castDrawerClassroom = computed((): ClassroomDrawerProp | null => drawerClassroom.value as unknown as ClassroomDrawerProp | null)
 </script>
 
 <template>
@@ -636,7 +648,7 @@ onMounted(async () => {
           <div class="student-list">
             <el-tag
               v-for="student in currentClassroom.students"
-              :key="student.id"
+              :key="student.id as string | number"
               class="student-tag"
               :type="student.gender === 'male' ? 'primary' : 'danger'"
               effect="plain"
@@ -658,7 +670,7 @@ onMounted(async () => {
 
     <ClassroomStudentDrawer
       v-model:visible="classroomDrawerVisible"
-      :classroom="drawerClassroom"
+      :classroom="castDrawerClassroom"
       :loading="classroomDrawerLoading"
       @student-updated="handleStudentUpdated"
     />

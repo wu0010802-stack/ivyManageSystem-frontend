@@ -1,30 +1,30 @@
-<script setup>
-const props = defineProps({
-  visible: {
-    type: Boolean,
-    default: false,
-  },
-  loading: {
-    type: Boolean,
-    default: false,
-  },
-  logs: {
-    type: Array,
-    default: () => [],
-  },
-  actionLabels: {
-    type: Object,
-    required: true,
-  },
-  actionTagTypes: {
-    type: Object,
-    required: true,
-  },
+<script setup lang="ts">
+interface ApprovalLog {
+  id: number
+  created_at?: string
+  action: string
+  approver_username: string
+  approver_role: string
+  comment?: string
+}
+
+const props = withDefaults(defineProps<{
+  visible?: boolean
+  loading?: boolean
+  logs?: ApprovalLog[]
+  actionLabels: Record<string, string>
+  actionTagTypes: Record<string, 'primary' | 'success' | 'warning' | 'info' | 'danger' | ''>
+}>(), {
+  visible: false,
+  loading: false,
+  logs: () => [],
 })
 
-const emit = defineEmits(['update:visible'])
+const emit = defineEmits<{
+  (e: 'update:visible', value: boolean): void
+}>()
 
-const updateVisible = (value) => emit('update:visible', value)
+const updateVisible = (value: boolean) => emit('update:visible', value)
 </script>
 
 <template>

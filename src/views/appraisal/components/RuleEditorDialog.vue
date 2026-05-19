@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /**
  * RuleEditorDialog — 建立新版規則（4 rule_type 子表單）
  *
@@ -19,19 +19,42 @@ import { createScoringRule } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
 import { hasPermission } from '@/utils/auth'
 
+interface ExistingRule {
+  rule_type?: string
+  notes?: string
+  rule_config?: {
+    per_unit_delta?: number
+    tiers?: { min: number; delta: number }[]
+    input_field?: string
+    threshold?: number
+    above_delta?: number
+    below_delta?: number
+    warning_delta?: number
+    minor_delta?: number
+    major_delta?: number
+    [key: string]: unknown
+  }
+  [key: string]: unknown
+}
+
+interface TierRow { min: number; delta: number }
+
 // P0-A：建立規則由後端 APPRAISAL_RULE_WRITE 守衛，UI 對齊。
 const canEditRules = computed(() => hasPermission('APPRAISAL_RULE_WRITE'))
 
-const props = defineProps({
-  visible: { type: Boolean, default: false },
-  itemCode: { type: String, default: null },
-  existingRule: { type: Object, default: null },
-})
-const emit = defineEmits(['update:visible', 'created'])
+const props = defineProps<{
+  visible?: boolean
+  itemCode?: string | null
+  existingRule?: ExistingRule | null
+}>()
+const emit = defineEmits<{
+  'update:visible': [value: boolean]
+  'created': []
+}>()
 
 const dialogVisible = computed({
-  get: () => props.visible,
-  set: (v) => emit('update:visible', v),
+  get: () => props.visible ?? false,
+  set: (v: boolean) => emit('update:visible', v),
 })
 
 const RULE_TYPE_OPTIONS = [
@@ -51,7 +74,22 @@ const INPUT_FIELD_OPTIONS = [
   { value: 'leave_days', label: '請假天數 leave_days' },
 ]
 
-const DEFAULT_FORM = () => ({
+interface RuleForm {
+  rule_type: string
+  effective_from: string
+  per_unit_delta: number
+  tiers: TierRow[]
+  input_field: string
+  threshold: number
+  above_delta: number
+  below_delta: number
+  warning_delta: number
+  minor_delta: number
+  major_delta: number
+  notes: string
+}
+
+const DEFAULT_FORM = (): RuleForm => ({
   rule_type: 'PER_UNIT',
   effective_from: '',
   per_unit_delta: 0,
@@ -66,7 +104,7 @@ const DEFAULT_FORM = () => ({
   notes: '',
 })
 
-const form = ref(DEFAULT_FORM())
+const form = ref<RuleForm>(DEFAULT_FORM())
 
 watch(
   () => props.visible,
@@ -76,7 +114,7 @@ watch(
     form.value = DEFAULT_FORM()
     const r = props.existingRule
     if (!r) return
-    form.value.rule_type = r.rule_type
+    form.value.rule_type = r.rule_type || 'PER_UNIT'
     form.value.notes = r.notes || ''
     if (r.rule_type === 'PER_UNIT') {
       form.value.per_unit_delta = Number(r.rule_config?.per_unit_delta ?? 0)
@@ -103,13 +141,13 @@ function addTier() {
   form.value.tiers.push({ min: 0, delta: 0 })
 }
 
-function removeTier(i) {
+function removeTier(i: number) {
   form.value.tiers.splice(i, 1)
 }
 
 function buildPayload() {
-  const base = {
-    item_code: props.itemCode,
+  const base: Record<string, unknown> = {
+    item_code: props.itemCode ?? null,
     effective_from: form.value.effective_from,
     rule_type: form.value.rule_type,
     notes: form.value.notes || null,
@@ -144,7 +182,7 @@ function buildPayload() {
 const submitting = ref(false)
 
 // P1-12：effective_from 不可早於今天（規則只能往前生效）。
-function disablePastDates(d) {
+function disablePastDates(d: Date | null) {
   if (!d) return false
   const today = new Date()
   today.setHours(0, 0, 0, 0)
@@ -154,7 +192,7 @@ function disablePastDates(d) {
 // P2-FE-5：tier min 嚴格單調遞增（不可重複也不可下降）。
 // 後端 services/appraisal/rule_applier.apply_tier 雖會 sort 後取最高匹配，
 // 但人工輸入時若 min 亂序代表設定者意圖不清，應在送出前阻擋。
-function validateTiersMonotonic(tiers) {
+function validateTiersMonotonic(tiers: TierRow[]) {
   const mins = tiers.map((t) => Number(t.min))
   for (let i = 1; i < mins.length; i++) {
     if (!(mins[i] > mins[i - 1])) return false

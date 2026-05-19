@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /**
  * ScoringRulesPanel — 14 規則卡 + 切換生效日 + 開編輯 dialog / 歷史 drawer
  *
@@ -27,27 +27,36 @@ const canEditRules = computed(() => hasPermission('APPRAISAL_RULE_WRITE'))
 
 const effectiveOn = ref(new Date().toISOString().slice(0, 10))
 
+interface ScoringRule {
+  item_code?: string
+  rule_type?: string
+  rule_config?: Record<string, unknown>
+  effective_from?: string
+  notes?: string
+  [key: string]: unknown
+}
+
 // P1-12：effective_on 不可選過去日期（規則只能往前生效）。
 // disabled-date callback 接 Date 物件，回 true 表示禁用。
-function disablePastDates(d) {
+function disablePastDates(d: Date | null) {
   if (!d) return false
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   return d < today
 }
-const rules = ref([])
+const rules = ref<ScoringRule[]>([])
 const loading = ref(false)
 
-const editingItemCode = ref(null)
-const editingExistingRule = ref(null)
+const editingItemCode = ref<string | null>(null)
+const editingExistingRule = ref<ScoringRule | null>(null)
 const editorVisible = ref(false)
 
-const historyItemCode = ref(null)
+const historyItemCode = ref<string | null>(null)
 const historyVisible = ref(false)
 
 const rulesByCode = computed(() => {
-  const m = {}
-  for (const r of rules.value) m[r.item_code] = r
+  const m: Record<string, ScoringRule> = {}
+  for (const r of rules.value) if (r.item_code) m[r.item_code] = r
   return m
 })
 
@@ -57,7 +66,7 @@ async function load() {
   loading.value = true
   try {
     const res = await listScoringRules(effectiveOn.value)
-    rules.value = res.data || []
+    rules.value = (res.data || []) as ScoringRule[]
   } catch (e) {
     ElMessage.error(apiError(e, '載入規則失敗'))
   } finally {
@@ -65,13 +74,13 @@ async function load() {
   }
 }
 
-function openEditor(itemCode) {
+function openEditor(itemCode: string) {
   editingItemCode.value = itemCode
   editingExistingRule.value = rulesByCode.value[itemCode] || null
   editorVisible.value = true
 }
 
-function openHistory(itemCode) {
+function openHistory(itemCode: string) {
   historyItemCode.value = itemCode
   historyVisible.value = true
 }
@@ -81,22 +90,21 @@ function onRuleCreated() {
   load()
 }
 
-function fmtRuleSummary(rule) {
+function fmtRuleSummary(rule: ScoringRule | null | undefined) {
   if (!rule) return '尚未設定'
+  const cfg = rule.rule_config || {}
   if (rule.rule_type === 'PER_UNIT') {
-    return `每次 ${rule.rule_config.per_unit_delta} 分`
+    return `每次 ${cfg.per_unit_delta} 分`
   }
   if (rule.rule_type === 'TIER') {
-    const n = Array.isArray(rule.rule_config.tiers) ? rule.rule_config.tiers.length : 0
+    const n = Array.isArray(cfg.tiers) ? (cfg.tiers as unknown[]).length : 0
     return `階梯式（${n} 階）`
   }
   if (rule.rule_type === 'FLAT_THRESHOLD') {
-    const c = rule.rule_config
-    return `≥${c.threshold} → ${c.above_delta} / <${c.threshold} → ${c.below_delta}`
+    return `≥${cfg.threshold} → ${cfg.above_delta} / <${cfg.threshold} → ${cfg.below_delta}`
   }
   if (rule.rule_type === 'DISCIPLINARY_TIERED') {
-    const c = rule.rule_config
-    return `警告 ${c.warning_delta} / 小過 ${c.minor_delta} / 大過 ${c.major_delta}`
+    return `警告 ${cfg.warning_delta} / 小過 ${cfg.minor_delta} / 大過 ${cfg.major_delta}`
   }
   return ''
 }
@@ -136,7 +144,7 @@ defineExpose({ load, disablePastDates })
         :data-test="`rule-card-${code}`"
       >
         <div class="rule-card__header">
-          <span class="rule-card__label">{{ ITEM_CODE_LABELS[code] }}</span>
+          <span class="rule-card__label">{{ (ITEM_CODE_LABELS as Record<string, string>)[code] }}</span>
           <el-tag
             size="small"
             :type="AUTO_CODES.has(code) ? 'success' : 'info'"

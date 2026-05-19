@@ -263,7 +263,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { CopyDocument, VideoPlay } from '@element-plus/icons-vue'
@@ -272,27 +272,43 @@ import { copyCoursesFromPrevious, getCourses, createCourse, updateCourse, delete
 import AcademicTermSelector from '@/components/common/AcademicTermSelector.vue'
 import { useAcademicTermStore } from '@/stores/academicTerm'
 
+interface Course {
+  id: number; name: string; price: number; sessions?: number | null; capacity: number
+  allow_waitlist: boolean; video_url?: string; description?: string
+  min_age_months?: number | null; max_age_months?: number | null
+  meeting_weekday?: number | null; meeting_start_time?: string; meeting_end_time?: string
+  enrolled?: number; waitlist_count?: number
+}
+interface WaitlistItem { registration_id: number; student_name?: string; class_name?: string; waitlist_position?: number }
+interface EnrolledItem { position?: number; student_name?: string; class_name?: string }
+
+interface CourseForm {
+  name: string; price: number; sessions: number | null; capacity: number; allow_waitlist: boolean
+  video_url: string; description: string; min_age_months: number | null; max_age_months: number | null
+  meeting_weekday: number | null; meeting_start_time: string; meeting_end_time: string
+}
+
 const termStore = useAcademicTermStore()
 
 const WEEKDAY_LABELS = ['一', '二', '三', '四', '五', '六', '日']
-function formatSchedule(row) {
+function formatSchedule(row: Course) {
   if (row.meeting_weekday == null || !row.meeting_start_time || !row.meeting_end_time) {
     return ''
   }
   return `週${WEEKDAY_LABELS[row.meeting_weekday]} ${row.meeting_start_time}–${row.meeting_end_time}`
 }
 
-const courses = ref([])
+const courses = ref<Course[]>([])
 const loading = ref(false)
-const deletingId = ref(null)
+const deletingId = ref<number | null>(null)
 const dialogVisible = ref(false)
 const saving = ref(false)
-const editingId = ref(null)
+const editingId = ref<number | null>(null)
 const copyDialogVisible = ref(false)
 const copying = ref(false)
-const copyForm = ref({ source_school_year: null, source_semester: 1 })
+const copyForm = ref<{ source_school_year: number | null; source_semester: number }>({ source_school_year: null, source_semester: 1 })
 
-const defaultForm = () => ({
+const defaultForm = (): CourseForm => ({
   name: '',
   price: 0,
   sessions: null,
@@ -307,14 +323,19 @@ const defaultForm = () => ({
   meeting_start_time: '',
   meeting_end_time: '',
 })
-const form = ref(defaultForm())
+const form = ref<CourseForm>(defaultForm())
 
 const waitlistDrawer = ref(false)
-const waitlistCourse = ref(null)
-const waitlistItems = ref([])
+const waitlistCourse = ref<{ id: number; name: string } | null>(null)
+const waitlistItems = ref<WaitlistItem[]>([])
 const waitlistLoading = ref(false)
 
-const promoteDialog = reactive({
+const promoteDialog = reactive<{
+  open: boolean
+  registration: WaitlistItem | null
+  submitting: boolean
+  error: string
+}>({
   open: false,
   registration: null,
   submitting: false,
@@ -322,17 +343,17 @@ const promoteDialog = reactive({
 })
 
 const enrolledDrawer = ref(false)
-const enrolledCourse = ref(null)
-const enrolledItems = ref([])
+const enrolledCourse = ref<{ id: number; name: string } | null>(null)
+const enrolledItems = ref<EnrolledItem[]>([])
 const enrolledLoading = ref(false)
 
-async function openEnrolled(row) {
+async function openEnrolled(row: Course) {
   enrolledCourse.value = { id: row.id, name: row.name }
   enrolledDrawer.value = true
   enrolledLoading.value = true
   try {
     const res = await getCourseEnrolled(row.id)
-    enrolledItems.value = res.data.items
+    enrolledItems.value = (res.data as { items: EnrolledItem[] }).items
   } catch {
     ElMessage.error('載入報名名單失敗')
   } finally {
@@ -340,13 +361,13 @@ async function openEnrolled(row) {
   }
 }
 
-async function openWaitlist(row) {
+async function openWaitlist(row: Course) {
   waitlistCourse.value = { id: row.id, name: row.name }
   waitlistDrawer.value = true
   waitlistLoading.value = true
   try {
     const res = await getCourseWaitlist(row.id)
-    waitlistItems.value = res.data.items
+    waitlistItems.value = (res.data as { items: WaitlistItem[] }).items
   } catch {
     ElMessage.error('載入候補名單失敗')
   } finally {
@@ -354,7 +375,7 @@ async function openWaitlist(row) {
   }
 }
 
-function openPromoteDialog(reg) {
+function openPromoteDialog(reg: WaitlistItem) {
   promoteDialog.registration = reg
   promoteDialog.error = ''
   promoteDialog.open = true
@@ -373,16 +394,16 @@ async function confirmPromote() {
   try {
     await promoteWaitlist(
       promoteDialog.registration.registration_id,
-      waitlistCourse.value.id,
+      waitlistCourse.value!.id,
     )
     ElMessage.success(`${promoteDialog.registration.student_name} 已升為正式報名`)
     promoteDialog.open = false
     promoteDialog.registration = null
-    const res = await getCourseWaitlist(waitlistCourse.value.id)
-    waitlistItems.value = res.data.items
+    const res = await getCourseWaitlist(waitlistCourse.value!.id)
+    waitlistItems.value = (res.data as { items: WaitlistItem[] }).items
     await fetchCourses()
   } catch (e) {
-    promoteDialog.error = e?.response?.data?.detail || '升位失敗，請稍後再試'
+    promoteDialog.error = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '升位失敗，請稍後再試'
   } finally {
     promoteDialog.submitting = false
   }
@@ -395,7 +416,7 @@ async function fetchCourses() {
       school_year: termStore.school_year,
       semester: termStore.semester,
     })
-    courses.value = res.data.courses
+    courses.value = (res.data as { courses: Course[] }).courses
   } catch {
     ElMessage.error('載入失敗')
   } finally {
@@ -427,11 +448,11 @@ async function handleCopy() {
       target_school_year: termStore.school_year,
       target_semester: termStore.semester,
     })
-    ElMessage.success(res.data.message)
+    ElMessage.success((res.data as { message: string }).message)
     copyDialogVisible.value = false
     fetchCourses()
   } catch (e) {
-    ElMessage.error(e?.response?.data?.detail || '複製失敗')
+    ElMessage.error((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '複製失敗')
   } finally {
     copying.value = false
   }
@@ -443,12 +464,12 @@ function openCreate() {
   dialogVisible.value = true
 }
 
-function openEdit(row) {
+function openEdit(row: Course) {
   editingId.value = row.id
   form.value = {
     name: row.name,
     price: row.price,
-    sessions: row.sessions,
+    sessions: row.sessions ?? null,
     capacity: row.capacity,
     allow_waitlist: row.allow_waitlist,
     video_url: row.video_url || '',
@@ -492,13 +513,13 @@ async function handleSave() {
     dialogVisible.value = false
     fetchCourses()
   } catch (e) {
-    ElMessage.error(e?.response?.data?.detail || '操作失敗')
+    ElMessage.error((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '操作失敗')
   } finally {
     saving.value = false
   }
 }
 
-async function handleDelete(row) {
+async function handleDelete(row: Course) {
   try {
     await ElMessageBox.confirm(`確定要停用課程「${row.name}」嗎？`, '確認停用', {
       type: 'warning',
@@ -514,7 +535,7 @@ async function handleDelete(row) {
     ElMessage.success('課程已停用')
     fetchCourses()
   } catch (e) {
-    ElMessage.error(e?.response?.data?.detail || '停用失敗')
+    ElMessage.error((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '停用失敗')
   } finally {
     deletingId.value = null
   }

@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /**
  * AggregatedStatusDetailDialog — 單員工四項彙整詳情
  *
@@ -10,17 +10,21 @@ import { InfoFilled } from '@element-plus/icons-vue'
 
 import { summarizeRule } from './ruleSummary'
 
-const props = defineProps({
-  visible: { type: Boolean, default: false },
-  participant: { type: Object, default: null },
-  cycle: { type: Object, default: null },
-  rules: { type: Object, default: () => ({}) },
-})
+interface DisciplinaryInfo { warning_count?: number; minor_count?: number; major_count?: number; suggested_score_delta?: number | string; actions?: Record<string, unknown>[]; [key: string]: unknown }
+interface Participant { employee_name?: string; role_group?: string; attendance?: Record<string, unknown>; retention?: Record<string, unknown> | null; activity?: Record<string, unknown> | null; disciplinary?: DisciplinaryInfo; [key: string]: unknown }
+interface Cycle { [key: string]: unknown }
 
-const emit = defineEmits(['update:visible'])
+const props = defineProps<{
+  visible?: boolean
+  participant?: Participant | null
+  cycle?: Cycle | null
+  rules?: Record<string, unknown>
+}>()
+
+const emit = defineEmits<{ 'update:visible': [value: boolean] }>()
 
 const NON_CLASSROOM_ROLES = new Set(['SUPERVISOR', 'STAFF', 'COOK'])
-const ROLE_GROUP_LABEL = {
+const ROLE_GROUP_LABEL: Record<string, string> = {
   HEAD_TEACHER: '正導師',
   ASSISTANT_TEACHER: '副導師',
   SUPERVISOR: '主管',
@@ -28,21 +32,21 @@ const ROLE_GROUP_LABEL = {
   COOK: '廚工',
 }
 
-const ACTION_TYPE_LABEL = {
+const ACTION_TYPE_LABEL: Record<string, string> = {
   warning: '警告',
   minor: '小過',
   major: '大過',
 }
 
-const ACTION_TYPE_TAG = {
+const ACTION_TYPE_TAG: Record<string, string> = {
   warning: '',
   minor: 'warning',
   major: 'danger',
 }
 
 const dialogVisible = computed({
-  get: () => props.visible,
-  set: (v) => emit('update:visible', v),
+  get: () => props.visible ?? false,
+  set: (v: boolean) => emit('update:visible', v),
 })
 
 const title = computed(() => {
@@ -54,18 +58,20 @@ const title = computed(() => {
 
 const isClassroomScoped = computed(() => {
   if (!props.participant) return false
-  return !NON_CLASSROOM_ROLES.has(props.participant.role_group)
+  return !NON_CLASSROOM_ROLES.has(props.participant.role_group ?? '')
 })
 
 const attendance = computed(() => props.participant?.attendance || {})
 const retention = computed(() => props.participant?.retention || null)
 const activity = computed(() => props.participant?.activity || null)
-const disciplinary = computed(() => props.participant?.disciplinary || { actions: [] })
+const disciplinary = computed<DisciplinaryInfo>(() => props.participant?.disciplinary || { actions: [] })
 
-const fmtDelta = (v) => {
+const safeRules = (): Record<string, unknown> => props.rules ?? {}
+
+const fmtDelta = (v: unknown) => {
   if (v == null || v === '') return '0'
   const n = Number(v)
-  if (Number.isNaN(n)) return v
+  if (Number.isNaN(n)) return String(v)
   return n > 0 ? `+${n.toFixed(2)}` : n.toFixed(2)
 }
 
@@ -82,7 +88,7 @@ const fmtDelta = (v) => {
       <el-descriptions :column="2" border size="small" class="meta">
         <el-descriptions-item label="員工">{{ participant.employee_name }}</el-descriptions-item>
         <el-descriptions-item label="角色">
-          {{ ROLE_GROUP_LABEL[participant.role_group] || participant.role_group }}
+          {{ ROLE_GROUP_LABEL[participant.role_group ?? ''] || participant.role_group }}
         </el-descriptions-item>
       </el-descriptions>
 
@@ -98,10 +104,10 @@ const fmtDelta = (v) => {
               <span :class="['delta', { negative: Number(attendance.suggested_score_delta) < 0 }]">
                 {{ fmtDelta(attendance.suggested_score_delta) }}
               </span>
-              <el-tooltip v-if="props.rules.LATE_EARLY" placement="top">
+              <el-tooltip v-if="safeRules().LATE_EARLY" placement="top">
                 <template #content>
                   <div
-                    v-for="line in summarizeRule(props.rules.LATE_EARLY)"
+                    v-for="line in summarizeRule(safeRules().LATE_EARLY)"
                     :key="line"
                     data-test="rule-summary-line"
                   >{{ line }}</div>
@@ -127,10 +133,10 @@ const fmtDelta = (v) => {
               <span :class="['delta', { negative: Number(retention.suggested_score_delta) < 0 }]">
                 {{ fmtDelta(retention.suggested_score_delta) }}
               </span>
-              <el-tooltip v-if="props.rules.RETURNING_RATE_0315" placement="top">
+              <el-tooltip v-if="safeRules().RETURNING_RATE_0315" placement="top">
                 <template #content>
                   <div
-                    v-for="line in summarizeRule(props.rules.RETURNING_RATE_0315)"
+                    v-for="line in summarizeRule(safeRules().RETURNING_RATE_0315)"
                     :key="line"
                     data-test="rule-summary-line"
                   >{{ line }}</div>
@@ -155,10 +161,10 @@ const fmtDelta = (v) => {
               <span :class="['delta', { negative: Number(activity.suggested_score_delta) < 0 }]">
                 {{ fmtDelta(activity.suggested_score_delta) }}
               </span>
-              <el-tooltip v-if="props.rules.AFTER_CLASS_RATE" placement="top">
+              <el-tooltip v-if="safeRules().AFTER_CLASS_RATE" placement="top">
                 <template #content>
                   <div
-                    v-for="line in summarizeRule(props.rules.AFTER_CLASS_RATE)"
+                    v-for="line in summarizeRule(safeRules().AFTER_CLASS_RATE)"
                     :key="line"
                     data-test="rule-summary-line"
                   >{{ line }}</div>
@@ -180,10 +186,10 @@ const fmtDelta = (v) => {
               <span :class="['delta', { negative: Number(disciplinary.suggested_score_delta) < 0 }]">
                 {{ fmtDelta(disciplinary.suggested_score_delta) }}
               </span>
-              <el-tooltip v-if="props.rules.REWARD_PUNISH" placement="top">
+              <el-tooltip v-if="safeRules().REWARD_PUNISH" placement="top">
                 <template #content>
                   <div
-                    v-for="line in summarizeRule(props.rules.REWARD_PUNISH)"
+                    v-for="line in summarizeRule(safeRules().REWARD_PUNISH)"
                     :key="line"
                     data-test="rule-summary-line"
                   >{{ line }}</div>
@@ -201,7 +207,7 @@ const fmtDelta = (v) => {
             <el-table-column label="日期" prop="action_date" width="120" />
             <el-table-column label="類型" width="100">
               <template #default="{ row }">
-                <el-tag :type="ACTION_TYPE_TAG[row.action_type]" size="small">
+                <el-tag :type="(ACTION_TYPE_TAG[row.action_type] || undefined) as 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined" size="small">
                   {{ ACTION_TYPE_LABEL[row.action_type] || row.action_type }}
                 </el-tag>
               </template>

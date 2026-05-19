@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
@@ -18,24 +18,26 @@ const { isMobile } = useIsMobile()
 // ── 代理人相關 ──
 const employeeStore = useEmployeeStore()
 const allEmployees = computed(() => employeeStore.employees)
-const mySubstituteRequests = ref([])
+interface SubstituteRequest { id: number | string; requester_name?: string; leave_type_label?: string; substitute_status?: string; start_date?: string; end_date?: string; leave_hours?: number | string; reason?: string | null; created_at?: string; [key: string]: unknown }
+const mySubstituteRequests = ref<SubstituteRequest[]>([])
 const substituteLoading = ref(false)
 const respondLoading = ref(false)
-const substituteSectionRef = ref(null)
+const substituteSectionRef = ref<{ $el?: HTMLElement } | null>(null)
 
-const substituteStatusLabel = (status) => {
-  const map = { not_required: '—', pending: '待回應', accepted: '已接受', rejected: '已拒絕', waived: '主管略過' }
+type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
+const substituteStatusLabel = (status: string) => {
+  const map: Record<string, string> = { not_required: '—', pending: '待回應', accepted: '已接受', rejected: '已拒絕', waived: '主管略過' }
   return map[status] || status
 }
-const substituteStatusType = (status) => {
-  const map = { not_required: 'info', pending: 'warning', accepted: 'success', rejected: 'danger', waived: 'info' }
-  return map[status] || ''
+const substituteStatusType = (status: string): ElTagType => {
+  const map: Record<string, ElTagType> = { not_required: 'info', pending: 'warning', accepted: 'success', rejected: 'danger', waived: 'info' }
+  return map[status]
 }
 
 const fetchSubstituteRequests = async () => {
   substituteLoading.value = true
   try {
-    const res = await getMySubstituteRequests()
+    const res = await (getMySubstituteRequests as unknown as () => Promise<{ data: SubstituteRequest[] }>)()
     mySubstituteRequests.value = res.data || []
   } catch {
     ElMessage.error('載入代理請求失敗')
@@ -49,10 +51,10 @@ const pendingSubstituteCount = computed(() =>
 )
 
 const sortedSubstituteRequests = computed(() => {
-  const statusRank = { pending: 0, accepted: 1, rejected: 2 }
+  const statusRank: Record<string, number> = { pending: 0, accepted: 1, rejected: 2 }
   return [...mySubstituteRequests.value].sort((left, right) => {
-    const leftRank = statusRank[left.substitute_status] ?? 99
-    const rightRank = statusRank[right.substitute_status] ?? 99
+    const leftRank = statusRank[left.substitute_status ?? ''] ?? 99
+    const rightRank = statusRank[right.substitute_status ?? ''] ?? 99
     if (leftRank !== rightRank) return leftRank - rightRank
     return new Date(right.created_at || 0).getTime() - new Date(left.created_at || 0).getTime()
   })
@@ -68,28 +70,30 @@ watch(pendingSubstituteCount, emitSubstituteCountChanged)
 
 const scrollToSubstituteRequests = async () => {
   await nextTick()
-  const target = substituteSectionRef.value?.$el || substituteSectionRef.value
+  const ref = substituteSectionRef.value
+  const target = (ref && '$el' in ref ? ref.$el : ref) as HTMLElement | undefined
   target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
-const handleSubstituteRespond = async (leaveId, action) => {
+const handleSubstituteRespond = async (leaveId: number | string, action: string) => {
   respondLoading.value = true
   try {
-    await respondToSubstitute(leaveId, { action })
+    await respondToSubstitute(Number(leaveId), { action })
     ElMessage.success(action === 'accept' ? '已接受代理請求' : '已拒絕代理請求')
     await fetchSubstituteRequests()
     emitSubstituteCountChanged()
   } catch (e) {
-    ElMessage.error(e.response?.data?.detail || '操作失敗')
+    ElMessage.error((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '操作失敗')
   } finally {
     respondLoading.value = false
   }
 }
 
-const onSubstituteRespond = (leaveId, action) => handleSubstituteRespond(leaveId, action)
+const onSubstituteRespond = (leaveId: number | string, action: string) => handleSubstituteRespond(leaveId, action)
 
 // ── 假單統計 ──
-const leaveStats = ref(null)
+interface LeaveStats { hire_date?: string; seniority_years?: number; seniority_months?: number; annual_leave_quota?: number; annual_leave_used_days?: number; [key: string]: unknown }
+const leaveStats = ref<LeaveStats | null>(null)
 
 const fetchLeaveStats = async () => {
   try {
@@ -111,11 +115,11 @@ const onLeaveFormSubmitted = () => {
 }
 
 // ── PortalLeaveList ref（供 onMounted 初次 fetch）──
-const leaveListRef = ref(null)
+const leaveListRef = ref<{ fetchLeaves?: () => Promise<void> } | null>(null)
 
 onMounted(() => {
   Promise.all([
-    leaveListRef.value?.fetchLeaves(),
+    leaveListRef.value?.fetchLeaves?.() ?? Promise.resolve(),
     fetchLeaveStats(),
     employeeStore.fetchEmployees(),
     fetchSubstituteRequests(),
@@ -165,7 +169,7 @@ onMounted(() => {
         </div>
         <div class="stat-item">
           <div class="stat-label">剩餘可用 (概算)</div>
-          <div class="stat-value">{{ Math.max(0, leaveStats.annual_leave_quota - leaveStats.annual_leave_used_days) }} 天</div>
+          <div class="stat-value">{{ Math.max(0, (leaveStats.annual_leave_quota ?? 0) - (leaveStats.annual_leave_used_days ?? 0)) }} 天</div>
         </div>
       </div>
     </el-card>

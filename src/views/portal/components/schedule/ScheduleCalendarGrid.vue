@@ -1,12 +1,18 @@
-<script setup>
-defineProps({
-  weeks: { type: Array, required: true },       // calendarWeeks：Array<Array<DayObj|null>>
-  isToday: { type: Function, required: true },   // (day) => boolean
-  isFutureDate: { type: Function, required: true }, // (dateStr) => boolean
-  isMobile: { type: Boolean, default: false },   // 行動裝置模式：隱藏換班按鈕、啟用 tappable
-})
+<script setup lang="ts">
+interface DayObj { day?: number; date: string; is_weekend?: boolean; shift_name?: string; work_start?: string; work_end?: string; is_override?: boolean; [key: string]: unknown }
 
-const emit = defineEmits(['cell-click', 'swap-click'])
+defineProps<{
+  weeks: (DayObj | null)[][]
+  isToday: (day: { date: string } | null) => boolean
+  isFutureDate: (dateStr: string) => boolean
+  isMobile?: boolean
+}>()
+
+const emit = defineEmits<{
+  'cell-click': [day: DayObj]
+  'swap-click': [day: DayObj]
+}>()
+
 
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
 </script>
@@ -49,7 +55,7 @@ const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
           <!-- 換班按鈕：desktop only；mobile 改走 cell-click BottomSheet -->
           <!-- 用 div 攔截 click 冒泡，避免同時觸發 cell-click -->
           <div
-            v-if="day.shift_name && isFutureDate(day.date) && !day.is_weekend"
+            v-if="day.shift_name && isFutureDate(day.date ?? '') && !day.is_weekend"
             class="cell-swap-btn-wrap"
             @click.stop
           >

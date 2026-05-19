@@ -153,7 +153,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, reactive } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Document, Money, Wallet } from '@element-plus/icons-vue'
@@ -162,24 +162,26 @@ import { getLaborInsurance, getHealthInsurance, getWithholding, getPension } fro
 // 補 Element Plus 未直接 export 的 icon
 import { FirstAidKit } from '@element-plus/icons-vue'
 
+type ReportType = 'labor' | 'health' | 'withholding' | 'pension'
+
 const employer = reactive({ name: '', code: '' })
 
 // 目前作用中的申報項目（取代原 4 張並排 card 的 identical-grid 視覺）
 const activeReport = ref('labor')
 
-const labor = reactive({ period: null, fmt: 'xlsx' })
-const health = reactive({ period: null })
-const withholding = reactive({ year: null, employerId: '' })
-const pension = reactive({ period: null })
+const labor = reactive<{ period: string | null; fmt: string }>({ period: null, fmt: 'xlsx' })
+const health = reactive<{ period: string | null }>({ period: null })
+const withholding = reactive<{ year: string | null; employerId: string }>({ year: null, employerId: '' })
+const pension = reactive<{ period: string | null }>({ period: null })
 
-const loading = reactive({ labor: false, health: false, withholding: false, pension: false })
+const loading = reactive<Record<ReportType, boolean>>({ labor: false, health: false, withholding: false, pension: false })
 
-function _parsePeriod(period) {
+function _parsePeriod(period: string) {
   const [y, m] = period.split('-')
   return { year: parseInt(y), month: parseInt(m) }
 }
 
-function _triggerDownload(blob, filename) {
+function _triggerDownload(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
@@ -188,13 +190,14 @@ function _triggerDownload(blob, filename) {
   URL.revokeObjectURL(url)
 }
 
-async function download(type) {
+async function download(type: ReportType) {
   loading[type] = true
   try {
-    let res, filename
+    let res: { data: Blob } | undefined
+    let filename: string | undefined
 
     if (type === 'labor') {
-      const { year, month } = _parsePeriod(labor.period)
+      const { year, month } = _parsePeriod(labor.period!)
       res = await getLaborInsurance({
         year, month,
         fmt: labor.fmt,
@@ -205,7 +208,7 @@ async function download(type) {
       filename = `勞保投保薪資申報_${year}${String(month).padStart(2,'0')}.${ext}`
 
     } else if (type === 'health') {
-      const { year, month } = _parsePeriod(health.period)
+      const { year, month } = _parsePeriod(health.period!)
       res = await getHealthInsurance({
         year, month,
         employer_name: employer.name || undefined,
@@ -215,14 +218,14 @@ async function download(type) {
 
     } else if (type === 'withholding') {
       res = await getWithholding({
-        year: parseInt(withholding.year),
+        year: parseInt(withholding.year!),
         employer_name: employer.name || undefined,
         employer_id: withholding.employerId || undefined,
       })
       filename = `扣繳憑單_${withholding.year}.xlsx`
 
     } else if (type === 'pension') {
-      const { year, month } = _parsePeriod(pension.period)
+      const { year, month } = _parsePeriod(pension.period!)
       res = await getPension({
         year, month,
         employer_name: employer.name || undefined,
@@ -231,10 +234,12 @@ async function download(type) {
       filename = `勞退提繳明細_${year}${String(month).padStart(2,'0')}.xlsx`
     }
 
-    _triggerDownload(res.data, filename)
-    ElMessage.success('下載成功')
+    if (res && filename) {
+      _triggerDownload(res.data, filename)
+      ElMessage.success('下載成功')
+    }
   } catch (err) {
-    const status = err.response?.status
+    const status = (err as { response?: { status?: number } }).response?.status
     if (status === 429) {
       ElMessage.warning('匯出過於頻繁，請稍後再試')
     } else {

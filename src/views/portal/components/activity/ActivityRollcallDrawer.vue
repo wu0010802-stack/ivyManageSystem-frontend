@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 defineProps({
   modelValue: { type: Boolean, required: true },
   drawerTitle: { type: String, default: '點名' },

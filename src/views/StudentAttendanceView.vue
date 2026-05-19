@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Bar } from 'vue-chartjs'
@@ -34,7 +34,7 @@ const currentAcademicTerm = getCurrentAcademicTerm()
 
 const termOptions = computed(() => {
   const { school_year: cy, semester: cs } = currentAcademicTerm
-  const semLabel = (s) => (s === 1 ? '上學期' : '下學期')
+  const semLabel = (s: number) => (s === 1 ? '上學期' : '下學期')
   const prevTerm = cs === 1 ? { school_year: cy - 1, semester: 2 } : { school_year: cy, semester: 1 }
   const nextTerm = cs === 1 ? { school_year: cy, semester: 2 } : { school_year: cy + 1, semester: 1 }
   return [
@@ -52,24 +52,49 @@ const selectedTermKey = computed({
   },
 })
 
-const termClassrooms = ref([])
+interface ClassroomOption { id: number; name: string }
+interface OverviewTotals {
+  total_students: number
+  recorded_count: number
+  on_campus_count: number
+  unmarked_count: number
+  record_completion_rate: number
+  attendance_rate: number
+}
+interface OverviewData {
+  classrooms: Record<string, unknown>[]
+  totals: OverviewTotals
+}
+interface MonthlyData {
+  students: Record<string, unknown>[]
+  alerts: Record<string, unknown>[]
+  classroom_attendance_rate: number
+  classroom_record_completion_rate: number
+  school_days_count: number
+  classroom_name?: string
+  year?: number
+  month?: number
+  [key: string]: unknown
+}
+
+const termClassrooms = ref<ClassroomOption[]>([])
 const activeTab = ref('overview')
 
 const overviewDate = ref(TODAY)
-const overviewData = ref(null)
+const overviewData = ref<OverviewData | null>(null)
 const overviewLoading = ref(false)
 
 const detailDrawerVisible = ref(false)
-const detailClassroom = ref(null)
-const detailRecords = ref([])
+const detailClassroom = ref<Record<string, unknown> | null>(null)
+const detailRecords = ref<Record<string, unknown>[]>([])
 const detailLoading = ref(false)
 
-const editClassroomId = ref(null)
+const editClassroomId = ref<number | null>(null)
 const editDate = ref(TODAY)
 
-const monthlyClassroomId = ref(null)
+const monthlyClassroomId = ref<number | null>(null)
 const monthPicker = ref(TODAY.slice(0, 7))
-const monthlyData = ref(null)
+const monthlyData = ref<MonthlyData | null>(null)
 const monthlyLoading = ref(false)
 
 const classroomOptions = computed(() =>
@@ -86,7 +111,7 @@ const fetchTermClassrooms = async () => {
       semester: termStore.semester,
       include_inactive: false,
     })
-    termClassrooms.value = res.data
+    termClassrooms.value = res.data as ClassroomOption[]
   } catch {
     termClassrooms.value = []
   }
@@ -143,11 +168,11 @@ const monthlySummaryCards = computed(() => {
 const chartData = computed(() => {
   const students = monthlyStudents.value
   if (!students.length) return null
-  const labels = []
-  const data = []
+  const labels: string[] = []
+  const data: number[] = []
   for (const student of students) {
-    labels.push(student.name)
-    data.push(student.attendance_rate)
+    labels.push(String(student.name ?? ''))
+    data.push(Number(student.attendance_rate ?? 0))
   }
   return {
     labels,
@@ -162,7 +187,7 @@ const chartOptions = {
     legend: { display: false },
     tooltip: {
       callbacks: {
-        label: (context) => `${context.raw}%`,
+        label: (context: { raw: unknown }) => `${context.raw}%`,
       },
     },
   },
@@ -171,7 +196,7 @@ const chartOptions = {
       beginAtZero: true,
       max: 100,
       ticks: {
-        callback: (value) => `${value}%`,
+        callback: (value: unknown) => `${value}%`,
       },
     },
   },
@@ -217,7 +242,7 @@ const fetchOverview = async () => {
   }
 }
 
-const fetchDetailRecords = async (classroomId) => {
+const fetchDetailRecords = async (classroomId: number) => {
   detailLoading.value = true
   try {
     const res = await getDailyAttendance({
@@ -250,12 +275,12 @@ const fetchMonthly = async () => {
   }
 }
 
-const onAttendanceSaved = async ({ classroom_id }) => {
-  const refreshTasks = []
+const onAttendanceSaved = async ({ classroom_id }: { date: string; classroom_id: number | string | null }) => {
+  const refreshTasks: Promise<void>[] = []
   if (overviewDate.value === editDate.value) {
     refreshTasks.push(fetchOverview())
     if (detailDrawerVisible.value && detailClassroom.value?.classroom_id === classroom_id) {
-      refreshTasks.push(fetchDetailRecords(classroom_id))
+      refreshTasks.push(fetchDetailRecords(Number(classroom_id)))
     }
   }
   if (refreshTasks.length) await Promise.all(refreshTasks)
@@ -270,20 +295,20 @@ const exportMonthly = () => {
   )
 }
 
-const openDetailDrawer = async (row) => {
+const openDetailDrawer = async (row: Record<string, unknown>) => {
   detailClassroom.value = row
   detailDrawerVisible.value = true
-  await fetchDetailRecords(row.classroom_id)
+  await fetchDetailRecords(row.classroom_id as number)
 }
 
-const goToMonthlyAnalysis = (row) => {
-  monthlyClassroomId.value = row.classroom_id
+const goToMonthlyAnalysis = (row: Record<string, unknown>) => {
+  monthlyClassroomId.value = row.classroom_id as number
   monthPicker.value = overviewDate.value.slice(0, 7)
   activeTab.value = 'monthly'
 }
 
-const goToDailyEdit = (row) => {
-  editClassroomId.value = row.classroom_id
+const goToDailyEdit = (row: Record<string, unknown>) => {
+  editClassroomId.value = row.classroom_id as number
   editDate.value = overviewDate.value
   activeTab.value = 'edit'
 }
@@ -294,21 +319,22 @@ const goToEditFromDrawer = () => {
   detailDrawerVisible.value = false
 }
 
-const rollcallStatusMeta = (status) => {
+type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
+const rollcallStatusMeta = (status: unknown): { label: string; type: ElTagType } => {
   if (status === 'complete') return { label: '已完成', type: 'success' }
   if (status === 'partial') return { label: '部分完成', type: 'warning' }
   return { label: '未開始', type: 'info' }
 }
 
-const detailStatusType = (status) => {
+const detailStatusType = (status: unknown): ElTagType => {
   if (status === '出席') return 'success'
   if (status === '遲到') return 'warning'
   if (status === '缺席') return 'danger'
   if (status === '病假' || status === '事假') return 'info'
-  return ''
+  return undefined
 }
 
-const formatDateTime = (value) => {
+const formatDateTime = (value: string | null | undefined) => {
   if (!value) return '尚未更新'
   return value.replace('T', ' ').slice(0, 16)
 }
@@ -322,7 +348,7 @@ watch(overviewDate, async () => {
     await fetchOverview()
   }
   if (detailDrawerVisible.value && detailClassroom.value) {
-    await fetchDetailRecords(detailClassroom.value.classroom_id)
+    await fetchDetailRecords(detailClassroom.value.classroom_id as number)
   }
 })
 
@@ -499,7 +525,7 @@ onMounted(async () => {
               <div v-if="alertStudents.length" class="alert-list">
                 <el-tag
                   v-for="student in alertStudents"
-                  :key="student.student_id"
+                  :key="student.student_id as string | number"
                   type="danger"
                   effect="dark"
                 >
@@ -520,7 +546,7 @@ onMounted(async () => {
                 <template #default="{ row }">
                   <router-link
                     v-if="buildStudentProfileLink(row.student_id ?? row.id, 'attendance')"
-                    :to="buildStudentProfileLink(row.student_id ?? row.id, 'attendance')"
+                    :to="buildStudentProfileLink(row.student_id ?? row.id, 'attendance')!"
                     class="student-link"
                   >{{ row.name }}</router-link>
                   <span v-else>{{ row.name }}</span>
@@ -595,7 +621,7 @@ onMounted(async () => {
           <template #default="{ row }">
             <router-link
               v-if="buildStudentProfileLink(row.student_id ?? row.id, 'attendance')"
-              :to="buildStudentProfileLink(row.student_id ?? row.id, 'attendance')"
+              :to="buildStudentProfileLink(row.student_id ?? row.id, 'attendance')!"
               class="student-link"
             >{{ row.name }}</router-link>
             <span v-else>{{ row.name }}</span>

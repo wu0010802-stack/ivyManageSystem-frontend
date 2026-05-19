@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 import { Bar } from 'vue-chartjs'
 import {
@@ -12,13 +12,26 @@ import {
 
 ChartJS.register(BarElement, CategoryScale, LinearScale, Tooltip, Legend)
 
-const props = defineProps({
-  data: { type: Object, default: null },   // monthlyData
-  monthPicker: { type: String, default: '' },
-  loading: { type: Boolean, default: false },
-})
+interface MonthlyStudent { name?: string; attendance_rate?: number; [key: string]: unknown }
+interface MonthlyData {
+  classroom_attendance_rate?: number
+  classroom_record_completion_rate?: number
+  school_days_count?: number
+  students?: MonthlyStudent[]
+  alerts?: Record<string, unknown>[]
+  [key: string]: unknown
+}
 
-const emit = defineEmits(['update:monthPicker', 'export-csv'])
+const props = defineProps<{
+  data?: MonthlyData | null
+  monthPicker?: string
+  loading?: boolean
+}>()
+
+const emit = defineEmits<{
+  'update:monthPicker': [value: string]
+  'export-csv': []
+}>()
 
 // 4 個 summary 卡（對齊原 view summaryCards computed）
 const summaryCards = computed(() => {
@@ -39,11 +52,11 @@ const alertStudents = computed(() => props.data?.alerts ?? [])
 const chartData = computed(() => {
   if (!monthlyStudents.value.length) return null
   return {
-    labels: monthlyStudents.value.map((s) => s.name),
+    labels: monthlyStudents.value.map((s) => s.name ?? ''),
     datasets: [
       {
         label: '出席率',
-        data: monthlyStudents.value.map((s) => s.attendance_rate),
+        data: monthlyStudents.value.map((s) => s.attendance_rate ?? null),
         backgroundColor: '#2f855a',
         borderRadius: 6,
       },
@@ -58,7 +71,7 @@ const chartOptions = {
     legend: { display: false },
     tooltip: {
       callbacks: {
-        label: (context) => `${context.raw}%`,
+        label: (context: { raw: unknown }) => `${context.raw}%`,
       },
     },
   },
@@ -67,7 +80,7 @@ const chartOptions = {
       beginAtZero: true,
       max: 100,
       ticks: {
-        callback: (value) => `${value}%`,
+        callback: (value: string | number) => `${value}%`,
       },
     },
   },
@@ -75,7 +88,7 @@ const chartOptions = {
 </script>
 
 <template>
-  <div class="monthly-stats" v-loading="loading">
+  <div class="monthly-stats" v-loading="loading ?? false">
     <div class="stats-header">
       <el-date-picker
         :model-value="monthPicker"
@@ -124,7 +137,7 @@ const chartOptions = {
         <div v-if="alertStudents.length" class="alert-list">
           <el-tag
             v-for="student in alertStudents"
-            :key="student.student_id"
+            :key="(student.student_id as PropertyKey)"
             type="danger"
             effect="dark"
           >

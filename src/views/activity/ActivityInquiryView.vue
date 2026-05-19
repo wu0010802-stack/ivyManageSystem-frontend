@@ -78,7 +78,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Check } from '@element-plus/icons-vue'
@@ -86,25 +86,27 @@ import { getInquiries, markInquiryRead, deleteInquiry, replyInquiry } from '@/ap
 import { useActivityStore } from '@/stores/activity'
 import { formatActivityDate } from '@/utils/format'
 
+interface Inquiry { id: number; is_read: boolean; reply?: string; [key: string]: unknown }
+
 const activityStore = useActivityStore()
-const list = ref([])
+const list = ref<Inquiry[]>([])
 const total = ref(0)
-const deletingId = ref(null)
+const deletingId = ref<number | null>(null)
 const page = ref(1)
 const pageSize = ref(20)
 const loading = ref(false)
-const readFilter = ref(null)
+const readFilter = ref<boolean | null>(null)
 
 const unreadCount = computed(() => list.value.filter((i) => !i.is_read).length)
 
 const replyDialog = ref(false)
-const replyTarget = ref(null)
+const replyTarget = ref<Inquiry | null>(null)
 const replyText = ref('')
 const replying = ref(false)
 
-function openReplyDialog(row) {
+function openReplyDialog(row: Inquiry) {
   replyTarget.value = row
-  replyText.value = row.reply || ''
+  replyText.value = (row.reply as string) || ''
   replyDialog.value = true
 }
 
@@ -112,7 +114,7 @@ async function handleReply() {
   if (!replyText.value.trim()) return ElMessage.warning('請輸入回覆內容')
   replying.value = true
   try {
-    await replyInquiry(replyTarget.value.id, { reply: replyText.value.trim() })
+    await replyInquiry(replyTarget.value!.id, { reply: replyText.value.trim() })
     ElMessage.success('回覆成功')
     replyDialog.value = false
     fetchList()
@@ -127,7 +129,7 @@ async function handleReply() {
 async function fetchList() {
   loading.value = true
   try {
-    const params = {
+    const params: Record<string, unknown> = {
       skip: (page.value - 1) * pageSize.value,
       limit: pageSize.value,
     }
@@ -135,8 +137,9 @@ async function fetchList() {
       params.is_read = readFilter.value
     }
     const res = await getInquiries(params)
-    list.value = res.data.items
-    total.value = res.data.total
+    const data = res.data as { items: Inquiry[]; total: number }
+    list.value = data.items
+    total.value = data.total
   } catch {
     ElMessage.error('載入失敗')
   } finally {
@@ -144,7 +147,7 @@ async function fetchList() {
   }
 }
 
-async function handleMarkRead(row) {
+async function handleMarkRead(row: Inquiry) {
   try {
     await markInquiryRead(row.id)
     row.is_read = true
@@ -155,7 +158,7 @@ async function handleMarkRead(row) {
   }
 }
 
-async function handleDelete(row) {
+async function handleDelete(row: Inquiry) {
   try {
     await ElMessageBox.confirm('確定要刪除此提問嗎？', '確認刪除', {
       type: 'warning',

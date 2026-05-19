@@ -1,10 +1,37 @@
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 
-const props = defineProps({
-  days: { type: Array, required: true },
-  usesShift: { type: Boolean, default: false },
-})
+interface LeaveRequest { leave_type_label?: string; leave_hours?: number; is_approved?: boolean | null; reason?: string }
+interface OvertimeRequest { overtime_type_label?: string; hours?: number; is_approved?: boolean | null; reason?: string }
+interface DayEntry {
+  day: number
+  weekday?: string
+  is_holiday?: boolean
+  holiday_name?: string
+  is_weekend?: boolean
+  punch_in?: string | null
+  punch_out?: string | null
+  work_hours?: number | null
+  is_late?: boolean
+  late_minutes?: number
+  is_early_leave?: boolean
+  is_missing_punch_in?: boolean
+  is_missing_punch_out?: boolean
+  leave_type_label?: string
+  shift_name?: string
+  scheduled_start?: string
+  scheduled_end?: string
+  leave_requests?: LeaveRequest[]
+  overtime_requests?: OvertimeRequest[]
+}
+
+interface DayDisplay { text: string; tone: string }
+interface RequestDisplay { text: string; tooltip: string; status: string }
+
+const props = defineProps<{
+  days: DayEntry[]
+  usesShift?: boolean
+}>()
 
 // Split days into upper (1-15) and lower (16-end) rows for the grid
 const upperDays = computed(() => props.days.slice(0, 15))
@@ -12,7 +39,7 @@ const lowerDays = computed(() => props.days.slice(15))
 
 // 預計算每天的請假/加班顯示資訊
 const dayDisplayMap = computed(() => {
-  const map = new Map()
+  const map = new Map<number, { leave: RequestDisplay | null; overtime: RequestDisplay | null; status: DayDisplay }>()
   for (const day of props.days) {
     map.set(day.day, {
       leave: getLeaveDisplay(day),
@@ -23,9 +50,9 @@ const dayDisplayMap = computed(() => {
   return map
 })
 
-function getStatusInfo(day) {
+function getStatusInfo(day: DayEntry): DayDisplay {
   if (day.is_holiday) return { text: day.holiday_name || '假', tone: 'holiday' }
-  if (day.is_weekend) return { text: day.weekday, tone: 'weekend' }
+  if (day.is_weekend) return { text: day.weekday ?? '', tone: 'weekend' }
   if (day.leave_type_label) return { text: day.leave_type_label, tone: 'leave' }
   if (day.is_missing_punch_in || day.is_missing_punch_out) return { text: '缺卡', tone: 'danger' }
   if (day.is_late) return { text: `遲${day.late_minutes}`, tone: 'warn' }
@@ -34,19 +61,19 @@ function getStatusInfo(day) {
   return { text: '', tone: 'empty' }
 }
 
-function getLeaveDisplay(day) {
+function getLeaveDisplay(day: DayEntry): RequestDisplay | null {
   if (!day.leave_requests || day.leave_requests.length === 0) return null
   const lv = day.leave_requests[0]
   const status = lv.is_approved === true ? 'approved' : lv.is_approved === false ? 'rejected' : 'pending'
   const statusText = status === 'approved' ? '已核准' : status === 'rejected' ? '已駁回' : '待審核'
   return {
-    text: lv.leave_type_label,
-    tooltip: `${lv.leave_type_label} ${lv.leave_hours}h\n${statusText}${lv.reason ? '\n原因: ' + lv.reason : ''}`,
+    text: lv.leave_type_label ?? '',
+    tooltip: `${lv.leave_type_label ?? ''} ${lv.leave_hours ?? ''}h\n${statusText}${lv.reason ? '\n原因: ' + lv.reason : ''}`,
     status,
   }
 }
 
-function getOvertimeDisplay(day) {
+function getOvertimeDisplay(day: DayEntry): RequestDisplay | null {
   if (!day.overtime_requests || day.overtime_requests.length === 0) return null
   const ot = day.overtime_requests[0]
   const status = ot.is_approved === true ? 'approved' : ot.is_approved === false ? 'rejected' : 'pending'
@@ -58,20 +85,20 @@ function getOvertimeDisplay(day) {
   }
 }
 
-function getWorkHoursClass(day) {
+function getWorkHoursClass(day: DayEntry) {
   if (!day.work_hours || day.is_weekend) return ''
   if (day.work_hours < 8) return 'hours-short'
   return ''
 }
 
-function formatShift(day) {
+function formatShift(day: DayEntry) {
   if (day.scheduled_start && day.scheduled_end) {
     return `${day.scheduled_start}-${day.scheduled_end}`
   }
   return day.shift_name || ''
 }
 
-function dayHeaderClass(day) {
+function dayHeaderClass(day: DayEntry) {
   return {
     'is-weekend': day.is_weekend,
     'is-holiday': day.is_holiday,
@@ -134,11 +161,11 @@ function dayHeaderClass(day) {
             <span
               v-if="dayDisplayMap.get(day.day)?.status.text"
               class="status-pill"
-              :class="`status-pill--${dayDisplayMap.get(day.day).status.tone}`"
+              :class="`status-pill--${dayDisplayMap.get(day.day)!.status.tone}`"
             >
-              <span v-if="['ok','warn','danger','leave','holiday'].includes(dayDisplayMap.get(day.day).status.tone)"
+              <span v-if="['ok','warn','danger','leave','holiday'].includes(dayDisplayMap.get(day.day)!.status.tone)"
                     class="status-pill__dot" aria-hidden="true"></span>
-              {{ dayDisplayMap.get(day.day).status.text }}
+              {{ dayDisplayMap.get(day.day)?.status.text }}
             </span>
           </td>
         </tr>
@@ -148,11 +175,11 @@ function dayHeaderClass(day) {
               :class="dayHeaderClass(day)">
             <el-tooltip
               v-if="dayDisplayMap.get(day.day)?.leave"
-              :content="dayDisplayMap.get(day.day).leave.tooltip"
+              :content="dayDisplayMap.get(day.day)?.leave?.tooltip"
               placement="top"
             >
-              <span class="badge" :class="`badge--${dayDisplayMap.get(day.day).leave.status}`">
-                {{ dayDisplayMap.get(day.day).leave.text }}
+              <span class="badge" :class="`badge--${dayDisplayMap.get(day.day)?.leave?.status}`">
+                {{ dayDisplayMap.get(day.day)?.leave?.text }}
               </span>
             </el-tooltip>
             <template v-else>{{ day.is_weekend ? '' : '·' }}</template>
@@ -164,11 +191,11 @@ function dayHeaderClass(day) {
               :class="dayHeaderClass(day)">
             <el-tooltip
               v-if="dayDisplayMap.get(day.day)?.overtime"
-              :content="dayDisplayMap.get(day.day).overtime.tooltip"
+              :content="dayDisplayMap.get(day.day)?.overtime?.tooltip"
               placement="top"
             >
-              <span class="badge" :class="`badge--${dayDisplayMap.get(day.day).overtime.status}`">
-                {{ dayDisplayMap.get(day.day).overtime.text }}
+              <span class="badge" :class="`badge--${dayDisplayMap.get(day.day)?.overtime?.status}`">
+                {{ dayDisplayMap.get(day.day)?.overtime?.text }}
               </span>
             </el-tooltip>
             <template v-else>{{ day.is_weekend ? '' : '·' }}</template>
@@ -230,11 +257,11 @@ function dayHeaderClass(day) {
             <span
               v-if="dayDisplayMap.get(day.day)?.status.text"
               class="status-pill"
-              :class="`status-pill--${dayDisplayMap.get(day.day).status.tone}`"
+              :class="`status-pill--${dayDisplayMap.get(day.day)!.status.tone}`"
             >
-              <span v-if="['ok','warn','danger','leave','holiday'].includes(dayDisplayMap.get(day.day).status.tone)"
+              <span v-if="['ok','warn','danger','leave','holiday'].includes(dayDisplayMap.get(day.day)!.status.tone)"
                     class="status-pill__dot" aria-hidden="true"></span>
-              {{ dayDisplayMap.get(day.day).status.text }}
+              {{ dayDisplayMap.get(day.day)?.status.text }}
             </span>
           </td>
         </tr>
@@ -244,11 +271,11 @@ function dayHeaderClass(day) {
               :class="dayHeaderClass(day)">
             <el-tooltip
               v-if="dayDisplayMap.get(day.day)?.leave"
-              :content="dayDisplayMap.get(day.day).leave.tooltip"
+              :content="dayDisplayMap.get(day.day)?.leave?.tooltip"
               placement="top"
             >
-              <span class="badge" :class="`badge--${dayDisplayMap.get(day.day).leave.status}`">
-                {{ dayDisplayMap.get(day.day).leave.text }}
+              <span class="badge" :class="`badge--${dayDisplayMap.get(day.day)?.leave?.status}`">
+                {{ dayDisplayMap.get(day.day)?.leave?.text }}
               </span>
             </el-tooltip>
             <template v-else>{{ day.is_weekend ? '' : '·' }}</template>
@@ -260,11 +287,11 @@ function dayHeaderClass(day) {
               :class="dayHeaderClass(day)">
             <el-tooltip
               v-if="dayDisplayMap.get(day.day)?.overtime"
-              :content="dayDisplayMap.get(day.day).overtime.tooltip"
+              :content="dayDisplayMap.get(day.day)?.overtime?.tooltip"
               placement="top"
             >
-              <span class="badge" :class="`badge--${dayDisplayMap.get(day.day).overtime.status}`">
-                {{ dayDisplayMap.get(day.day).overtime.text }}
+              <span class="badge" :class="`badge--${dayDisplayMap.get(day.day)?.overtime?.status}`">
+                {{ dayDisplayMap.get(day.day)?.overtime?.text }}
               </span>
             </el-tooltip>
             <template v-else>{{ day.is_weekend ? '' : '·' }}</template>

@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, watch, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -10,29 +10,33 @@ import {
 import { apiError } from '@/utils/error'
 import { money } from '@/utils/format'
 
-const props = defineProps({
-  modelValue: { type: Boolean, required: true },
-  year: { type: Number, required: true },
-  month: { type: Number, required: true },
-  canWrite: { type: Boolean, default: false },
-})
-const emit = defineEmits(['update:modelValue'])
+type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
+
+const props = defineProps<{
+  modelValue: boolean
+  year: number
+  month: number
+  canWrite?: boolean
+}>()
+const emit = defineEmits<{
+  (e: 'update:modelValue', value: boolean): void
+}>()
 
 const visible = computed({
   get: () => props.modelValue,
-  set: (v) => emit('update:modelValue', v),
+  set: (v: boolean) => emit('update:modelValue', v),
 })
 
-const snapshots = ref([])
+const snapshots = ref<Record<string, unknown>[]>([])
 const loading = ref(false)
 const detailVisible = ref(false)
 const detailLoading = ref(false)
-const detailData = ref(null)
+const detailData = ref<Record<string, unknown> | null>(null)
 const diffVisible = ref(false)
 const diffLoading = ref(false)
-const diffData = ref(null)
+const diffData = ref<Record<string, unknown> | null>(null)
 
-const TYPE_LABEL = {
+const TYPE_LABEL: Record<string, { text: string; type: ElTagType }> = {
   month_end: { text: '月底快照', type: 'success' },
   finalize: { text: '封存快照', type: 'warning' },
   manual: { text: '手動快照', type: 'info' },
@@ -43,7 +47,7 @@ const loadList = async () => {
   loading.value = true
   try {
     const res = await listSalarySnapshots(props.year, props.month)
-    snapshots.value = res.data?.snapshots || []
+    snapshots.value = (res.data as { snapshots?: Record<string, unknown>[] })?.snapshots || []
   } catch (e) {
     apiError(e, '讀取快照列表失敗')
   } finally {
@@ -58,19 +62,19 @@ watch(
   }
 )
 
-const formatDateTime = (iso) => {
+const formatDateTime = (iso: string | null | undefined) => {
   if (!iso) return '-'
   const d = new Date(iso)
-  const pad = (n) => String(n).padStart(2, '0')
+  const pad = (n: number) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-const openDetail = async (row) => {
+const openDetail = async (row: Record<string, unknown>) => {
   detailVisible.value = true
   detailLoading.value = true
   try {
-    const res = await getSalarySnapshot(row.id)
-    detailData.value = res.data
+    const res = await getSalarySnapshot(row.id as number)
+    detailData.value = res.data as Record<string, unknown>
   } catch (e) {
     apiError(e, '讀取快照詳情失敗')
   } finally {
@@ -78,12 +82,12 @@ const openDetail = async (row) => {
   }
 }
 
-const openDiff = async (row) => {
+const openDiff = async (row: Record<string, unknown>) => {
   diffVisible.value = true
   diffLoading.value = true
   try {
-    const res = await getSnapshotDiff(row.id)
-    diffData.value = res.data
+    const res = await getSnapshotDiff(row.id as number)
+    diffData.value = res.data as Record<string, unknown>
   } catch (e) {
     apiError(e, '讀取差異失敗')
   } finally {
@@ -92,22 +96,20 @@ const openDiff = async (row) => {
 }
 
 const triggerManualSnapshot = async () => {
-  if (!snapshots.value && snapshots.value.length === 0) {
-    // 即使 0 也允許觸發；後端會回 404 if no records
-  }
+  // 即使 0 也允許觸發；後端會回 404 if no records
   try {
-    const { value: remark } = await ElMessageBox.prompt(
+    const { value: remark } = (await ElMessageBox.prompt(
       '請輸入快照備註（用於辨識這次手動補拍的原因）',
       `為 ${props.year}/${props.month} 手動補拍快照`,
       {
         inputPlaceholder: '例：發薪前留底',
-        inputValidator: (v) => (v && v.length <= 500) || '請輸入 500 字內的備註',
+        inputValidator: (v: string) => (v && v.length <= 500) || '請輸入 500 字內的備註',
         confirmButtonText: '建立快照',
         cancelButtonText: '取消',
       }
-    )
+    )) as { value: string }
     const res = await createManualSnapshot(props.year, props.month, { remark })
-    ElMessage.success(res.data?.message || '快照建立成功')
+    ElMessage.success((res.data as { message?: string })?.message || '快照建立成功')
     await loadList()
   } catch (e) {
     if (e === 'cancel') return
@@ -115,7 +117,7 @@ const triggerManualSnapshot = async () => {
   }
 }
 
-const DETAIL_ROWS = [
+const DETAIL_ROWS: [string, string][] = [
   ['base_salary', '底薪'],
   ['festival_bonus', '節慶獎金'],
   ['overtime_bonus', '超額獎金'],
@@ -137,9 +139,9 @@ const DETAIL_ROWS = [
   ['net_salary', '實發金額'],
 ]
 
-const FIELD_LABEL = Object.fromEntries(DETAIL_ROWS)
+const FIELD_LABEL: Record<string, string> = Object.fromEntries(DETAIL_ROWS)
 
-const formatDiffValue = (v) => (v == null ? '-' : money(v))
+const formatDiffValue = (v: unknown) => (v == null ? '-' : money(v as number))
 </script>
 
 <template>
@@ -161,8 +163,8 @@ const formatDiffValue = (v) => (v == null ? '-' : money(v))
     >
       <el-table-column label="類型" width="110">
         <template #default="{ row }">
-          <el-tag :type="TYPE_LABEL[row.snapshot_type]?.type || ''">
-            {{ TYPE_LABEL[row.snapshot_type]?.text || row.snapshot_type }}
+          <el-tag :type="TYPE_LABEL[row.snapshot_type as string]?.type">
+            {{ TYPE_LABEL[row.snapshot_type as string]?.text || row.snapshot_type }}
           </el-tag>
         </template>
       </el-table-column>
@@ -197,10 +199,10 @@ const formatDiffValue = (v) => (v == null ? '-' : money(v))
             {{ detailData.salary_year }} 年 {{ detailData.salary_month }} 月
           </el-descriptions-item>
           <el-descriptions-item label="類型">
-            {{ TYPE_LABEL[detailData.snapshot_type]?.text || detailData.snapshot_type }}
+            {{ TYPE_LABEL[detailData.snapshot_type as string]?.text || detailData.snapshot_type }}
           </el-descriptions-item>
           <el-descriptions-item label="捕捉時間">
-            {{ formatDateTime(detailData.captured_at) }}
+            {{ formatDateTime(detailData.captured_at as string | null | undefined) }}
           </el-descriptions-item>
           <el-descriptions-item label="觸發者">{{ detailData.captured_by || '-' }}</el-descriptions-item>
           <el-descriptions-item label="來源版本">v{{ detailData.source_version ?? '-' }}</el-descriptions-item>
@@ -212,7 +214,7 @@ const formatDiffValue = (v) => (v == null ? '-' : money(v))
             :key="key"
             :label="label"
           >
-            {{ money(detailData[key]) }}
+            {{ money(detailData[key] as number | null | undefined) }}
           </el-descriptions-item>
         </el-descriptions>
       </div>
@@ -225,10 +227,10 @@ const formatDiffValue = (v) => (v == null ? '-' : money(v))
           <p v-if="!diffData.has_current_record" class="warn-text">
             ⚠ 當前無對應 SalaryRecord（可能已刪除）
           </p>
-          <p v-else-if="diffData.changes.length === 0" class="muted">
+          <p v-else-if="(diffData.changes as unknown[] | undefined)?.length === 0" class="muted">
             快照與目前狀態完全一致，沒有差異。
           </p>
-          <el-table v-else :data="diffData.changes" border stripe max-height="400">
+          <el-table v-else :data="diffData.changes as Record<string, unknown>[]" border stripe max-height="400">
             <el-table-column label="欄位" width="180">
               <template #default="{ row }">
                 {{ FIELD_LABEL[row.field] || row.field }}

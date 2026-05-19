@@ -1,10 +1,11 @@
-<script setup>
+<script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { getHistory } from '@/api/salary'
 import { ElMessage } from 'element-plus'
 import { useEmployeeStore } from '@/stores/employee'
 import { money } from '@/utils/format'
 import { Line } from 'vue-chartjs'
+import type { ChartOptions } from 'chart.js'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -19,19 +20,33 @@ import {
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, ChartTitle, Tooltip, Legend, Filler)
 
+interface HistoryRow {
+  year: number
+  month: number
+  net_salary: number
+  gross_salary: number
+  base_salary: number
+  total_bonus: number
+  labor_insurance: number
+  health_insurance: number
+  attendance_deduction: number
+  leave_deduction: number
+  total_deduction: number
+}
+
 const employeeStore = useEmployeeStore()
 const historyLoading = ref(false)
-const selectedEmployeeId = ref(null)
+const selectedEmployeeId = ref<number | null>(null)
 const historyMonths = ref(12)
-const historyData = ref([])
+const historyData = ref<HistoryRow[]>([])
 
 const fetchHistory = async () => {
   if (!selectedEmployeeId.value) return
   historyLoading.value = true
   try {
     const response = await getHistory({ employee_id: selectedEmployeeId.value, months: historyMonths.value })
-    historyData.value = response.data.reverse()
-  } catch (error) {
+    historyData.value = (response.data as HistoryRow[]).reverse()
+  } catch {
     ElMessage.error('載入歷史資料失敗')
   } finally {
     historyLoading.value = false
@@ -75,10 +90,11 @@ const chartOptions = {
   responsive: true,
   maintainAspectRatio: false,
   plugins: {
-    legend: { position: 'top' },
+    legend: { position: 'top' as const },
     tooltip: {
       callbacks: {
-        label: (ctx) => `${ctx.dataset.label}: $${ctx.parsed.y?.toLocaleString() || 0}`
+        label: (ctx: { dataset: { label?: string }; parsed: { y?: number } }) =>
+          `${ctx.dataset.label}: $${ctx.parsed.y?.toLocaleString() || 0}`
       }
     }
   },
@@ -86,11 +102,11 @@ const chartOptions = {
     y: {
       beginAtZero: false,
       ticks: {
-        callback: (val) => '$' + val.toLocaleString()
+        callback: (val: number | string) => '$' + Number(val).toLocaleString()
       }
     }
   }
-}
+} as unknown as ChartOptions<'line'>
 
 onMounted(() => {
   employeeStore.fetchEmployees()

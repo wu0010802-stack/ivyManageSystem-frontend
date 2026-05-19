@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -16,20 +16,24 @@ import {
 } from '@/api/yearEnd'
 import { apiError } from '@/utils/error'
 
+interface Settlement { id: number; employee_id: number; status: string; total_amount?: number | string; [key: string]: unknown }
+interface SpecialBonus { id: number; employee_id: number; bonus_type: string; period_label: string; amount: number | string; classroom_id?: number }
+interface YearEndCycle { id: number; academic_year: number; bonus_calc_date: string; status: string }
+
 const route = useRoute()
 const router = useRouter()
 const cycleId = Number(route.params.id)
 
-const cycle = ref(null)
-const settlements = ref([])
-const specialBonuses = ref([])
-const classTargets = ref([])
+const cycle = ref<YearEndCycle | null>(null)
+const settlements = ref<Settlement[]>([])
+const specialBonuses = ref<SpecialBonus[]>([])
+const classTargets = ref<unknown[]>([])
 const loading = ref(false)
 const busy = ref(false)
 const tab = ref('settlements')
 
 const bonusByEmp = computed(() => {
-  const m = {}
+  const m: Record<number, SpecialBonus[]> = {}
   for (const b of specialBonuses.value) {
     if (!m[b.employee_id]) m[b.employee_id] = []
     m[b.employee_id].push(b)
@@ -37,19 +41,19 @@ const bonusByEmp = computed(() => {
   return m
 })
 
-const statusLabel = (s) =>
-  ({
+const statusLabel = (s: string) =>
+  (({
     DRAFT: '草稿',
     SUPERVISOR_SIGNED: '主管已簽',
     ACCOUNTING_SIGNED: '會計已簽',
     FINALIZED: '已核定',
-  }[s] || s)
+  } as Record<string, string>)[s] || s)
 
 async function load() {
   loading.value = true
   try {
-    const cycles = (await listYearEndCycles()).data
-    cycle.value = cycles.find((c) => c.id === cycleId) || null
+    const cycles = (await listYearEndCycles()).data as YearEndCycle[]
+    cycle.value = cycles.find((c) => c.id === cycleId) ?? null
     settlements.value = (await listYearEndSettlements(cycleId)).data
     specialBonuses.value = (await listSpecialBonuses(cycleId)).data
     classTargets.value = (await listClassEnrollmentTargets(cycleId)).data
@@ -60,7 +64,7 @@ async function load() {
   }
 }
 
-async function sign(s, stage) {
+async function sign(s: Settlement, stage: string) {
   busy.value = true
   try {
     if (stage === 'supervisor') await signSupervisorSettlement(s.id)

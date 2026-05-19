@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Edit, Delete, Download, Upload } from '@element-plus/icons-vue'
@@ -17,15 +17,17 @@ const currentYear = new Date().getFullYear()
 const currentMonth = new Date().getMonth() + 1
 const query = reactive({ year: currentYear, month: currentMonth })
 
-const items = ref([])
-const hourlyEmployees = ref([])
+interface EmployeeOption { id: number; name: string; employee_type?: string }
+
+const items = ref<Record<string, unknown>[]>([])
+const hourlyEmployees = ref<EmployeeOption[]>([])
 const loading = ref(false)
 
 const dialogVisible = ref(false)
-const dialogMode = ref('create')
+const dialogMode = ref<'create' | 'edit'>('create')
 const form = reactive({
-  id: null,
-  employee_id: null,
+  id: null as number | null,
+  employee_id: null as number | null,
   salary_year: currentYear,
   salary_month: currentMonth,
   subject: '',
@@ -48,17 +50,17 @@ const previewTotal = computed(() => {
 })
 
 const grandTotal = computed(() =>
-  items.value.reduce((sum, it) => sum + (it.total_amount || 0), 0),
+  items.value.reduce((sum, it) => sum + ((it.total_amount as number) || 0), 0),
 )
 
 const employeeTotals = computed(() => {
-  const map = new Map()
+  const map = new Map<number, { name: string; total: number }>()
   for (const it of items.value) {
-    const key = it.employee_id
+    const key = it.employee_id as number
     if (!map.has(key)) {
-      map.set(key, { name: it.employee_name, total: 0 })
+      map.set(key, { name: it.employee_name as string, total: 0 })
     }
-    map.get(key).total += it.total_amount || 0
+    map.get(key)!.total += (it.total_amount as number) || 0
   }
   return Array.from(map.values())
 })
@@ -68,7 +70,7 @@ const employeeStore = useEmployeeStore()
 const fetchEmployees = async () => {
   try {
     await employeeStore.fetchEmployees()
-    hourlyEmployees.value = (employeeStore.employees || []).filter((e) => e.employee_type === 'hourly')
+    hourlyEmployees.value = ((employeeStore.employees || []) as EmployeeOption[]).filter((e) => e.employee_type === 'hourly')
   } catch {
     /* ignore */
   }
@@ -80,7 +82,7 @@ const fetchList = async () => {
     const res = await listArtPayroll(query.year, query.month)
     items.value = res.data.items || []
   } catch (e) {
-    ElMessage.error('載入失敗：' + apiError(e, e.message))
+    ElMessage.error('載入失敗：' + apiError(e, (e as Error).message))
   } finally {
     loading.value = false
   }
@@ -102,7 +104,7 @@ const openCreate = () => {
   dialogVisible.value = true
 }
 
-const openEdit = (row) => {
+const openEdit = (row: Record<string, unknown>) => {
   dialogMode.value = 'edit'
   Object.assign(form, {
     id: row.id,
@@ -145,7 +147,7 @@ const handleSave = async () => {
       })
       ElMessage.success('新增成功')
     } else {
-      await updateArtPayroll(form.id, {
+      await updateArtPayroll(form.id!, {
         subject: form.subject,
         classroom_label: form.classroom_label || null,
         hours: form.hours,
@@ -159,11 +161,11 @@ const handleSave = async () => {
     dialogVisible.value = false
     fetchList()
   } catch (e) {
-    ElMessage.error('儲存失敗：' + apiError(e, e.message))
+    ElMessage.error('儲存失敗：' + apiError(e, (e as Error).message))
   }
 }
 
-const handleDelete = async (row) => {
+const handleDelete = async (row: Record<string, unknown>) => {
   try {
     await ElMessageBox.confirm(
       `確定刪除 ${row.employee_name} ${row.subject}${row.classroom_label || ''}（總 ${row.total_amount} 元）？`,
@@ -174,11 +176,11 @@ const handleDelete = async (row) => {
     return
   }
   try {
-    await deleteArtPayroll(row.id)
+    await deleteArtPayroll(row.id as number)
     ElMessage.success('刪除成功')
     fetchList()
   } catch (e) {
-    ElMessage.error('刪除失敗：' + apiError(e, e.message))
+    ElMessage.error('刪除失敗：' + apiError(e, (e as Error).message))
   }
 }
 
@@ -198,9 +200,9 @@ const downloadTemplate = () => {
 }
 
 const importDialogVisible = ref(false)
-const importFile = ref(null)
+const importFile = ref<File | null>(null)
 const importReplaceExisting = ref(false)
-const importResult = ref(null)
+const importResult = ref<{ total: number; imported: number; skipped: number; errors: Array<{ row: number; message: string }> } | null>(null)
 const importLoading = ref(false)
 
 const openImportDialog = () => {
@@ -210,8 +212,8 @@ const openImportDialog = () => {
   importDialogVisible.value = true
 }
 
-const handleFileChange = (file) => {
-  importFile.value = file.raw
+const handleFileChange = (file: { raw?: File }) => {
+  if (file.raw) importFile.value = file.raw
 }
 
 const handleImport = async () => {
@@ -236,7 +238,7 @@ const handleImport = async () => {
     }
     fetchList()
   } catch (e) {
-    ElMessage.error('匯入失敗：' + apiError(e, e.message))
+    ElMessage.error('匯入失敗：' + apiError(e, (e as Error).message))
   } finally {
     importLoading.value = false
   }

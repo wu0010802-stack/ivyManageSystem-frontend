@@ -49,10 +49,10 @@
         <el-tab-pane label="狀況評估" name="status">
           <el-form label-width="120px" :disabled="readonly">
             <el-form-item label="目前發展狀況">
-              <el-input v-model="form.current_status" type="textarea" rows="4" />
+              <el-input v-model="form.current_status" type="textarea" :rows="4" />
             </el-form-item>
             <el-form-item label="長期目標">
-              <el-input v-model="form.long_term_goals" type="textarea" rows="3" />
+              <el-input v-model="form.long_term_goals" type="textarea" :rows="3" />
             </el-form-item>
           </el-form>
         </el-tab-pane>
@@ -96,10 +96,10 @@
         <el-tab-pane label="評估" name="eval">
           <el-form label-width="120px" :disabled="readonly">
             <el-form-item label="期中評估">
-              <el-input v-model="form.mid_term_evaluation" type="textarea" rows="4" />
+              <el-input v-model="form.mid_term_evaluation" type="textarea" :rows="4" />
             </el-form-item>
             <el-form-item label="期末評估">
-              <el-input v-model="form.final_evaluation" type="textarea" rows="4" />
+              <el-input v-model="form.final_evaluation" type="textarea" :rows="4" />
             </el-form-item>
           </el-form>
         </el-tab-pane>
@@ -137,7 +137,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, watch, onMounted, reactive } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -148,21 +148,48 @@ import { getStudents } from '@/api/students'
 import { useClassroomStore } from '@/stores/classroom'
 import { getUserInfo } from '@/utils/auth'
 
-const currentUser = computed(() => getUserInfo() || {})
+interface ShortTermGoal { goal: string; criteria: string; due_date: string | null; status: string }
+interface TeamMember { role: string; name: string }
+interface IepRecord {
+  id: number
+  student_id: number
+  school_year: number
+  semester: number
+  status: string
+  current_status?: string
+  long_term_goals?: string
+  short_term_goals?: ShortTermGoal[]
+  mid_term_evaluation?: string
+  final_evaluation?: string
+  iep_team_members?: TeamMember[]
+  meeting_dates?: { initial?: string | null; mid?: string | null; final?: string | null }
+}
+
+const currentUser = computed(() => (getUserInfo() || {}) as Record<string, unknown>)
 const canApprove = computed(() =>
   currentUser.value.role === 'admin' ||
-  ['園長', '主任'].includes(currentUser.value.supervisor_role)
+  ['園長', '主任'].includes(currentUser.value.supervisor_role as string)
 )
 
 const classroomStore = useClassroomStore()
-const classrooms = ref([])
-const students = ref([])
-const ieps = ref([])
-const filterClassroom = ref(null)
-const selectedStudent = ref(null)
+const classrooms = ref<Array<{ id: number; name: string }>>([])
+const students = ref<unknown[]>([])
+const ieps = ref<IepRecord[]>([])
+const filterClassroom = ref<number | null>(null)
+const selectedStudent = ref<{ id: number; name: string } | null>(null)
 const period = reactive({ year: new Date().getFullYear(), semester: 1 })
 const activeTab = ref('status')
-const form = reactive({
+const form = reactive<{
+  current_status: string
+  long_term_goals: string
+  short_term_goals: ShortTermGoal[]
+  mid_term_evaluation: string
+  final_evaluation: string
+  iep_team_members: TeamMember[]
+  meeting_dates_initial: string | null
+  meeting_dates_mid: string | null
+  meeting_dates_final: string | null
+}>({
   current_status: '', long_term_goals: '',
   short_term_goals: [], mid_term_evaluation: '', final_evaluation: '',
   iep_team_members: [],
@@ -170,14 +197,15 @@ const form = reactive({
 })
 
 const filteredStudents = computed(() =>
-  students.value.filter(s =>
-    s.disability_type &&
-    (!filterClassroom.value || s.classroom_id === filterClassroom.value)
-  )
+  (students.value as Array<{ id: number; name: string; disability_type?: string; classroom_id?: number }>)
+    .filter(s =>
+      s.disability_type &&
+      (!filterClassroom.value || s.classroom_id === filterClassroom.value)
+    )
 )
 
 const iepStatusByStudent = computed(() => {
-  const m = {}
+  const m: Record<number, string> = {}
   for (const i of ieps.value) {
     if (i.school_year === period.year && i.semester === period.semester) {
       m[i.student_id] = i.status
@@ -196,29 +224,30 @@ const readonly = computed(() =>
   !currentIep.value || ['approved', 'closed'].includes(currentIep.value.status)
 )
 
-function statusTagType(s) {
-  return ({
+type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger'
+function statusTagType(s: string | undefined): ElTagType {
+  return (({
     draft: 'info', pending_review: 'warning',
-    approved: 'success', closed: '',
-  })[s] || 'info'
+    approved: 'success', closed: 'info',
+  } as Record<string, ElTagType>)[s ?? '']) ?? 'info'
 }
-function iepStatusLabel(s) {
-  return ({
+function iepStatusLabel(s: string | undefined) {
+  return (({
     draft: '草稿', pending_review: '待審',
     approved: '已核准', closed: '已結案',
-  })[s] || ''
+  } as Record<string, string>)[s ?? '']) ?? ''
 }
 
 async function loadAll() {
   const [, s, i] = await Promise.all([
-    classroomStore.fetchClassrooms(), getStudents(), listIeps(),
+    classroomStore.fetchClassrooms(false), getStudents({}), listIeps(),
   ])
-  classrooms.value = classroomStore.classrooms
-  students.value = s.data
-  ieps.value = i.data
+  classrooms.value = classroomStore.classrooms as Array<{ id: number; name: string }>
+  students.value = (s as { data: unknown[] }).data
+  ieps.value = (i as { data: IepRecord[] }).data
 }
 
-function selectStudent(s) {
+function selectStudent(s: { id: number; name: string }) {
   selectedStudent.value = s
   syncFormFromIep()
 }
@@ -267,7 +296,7 @@ function payloadFromForm() {
 
 async function onCreate() {
   await createIep({
-    student_id: selectedStudent.value.id,
+    student_id: selectedStudent.value!.id,
     school_year: period.year, semester: period.semester,
     ...payloadFromForm(),
   })
@@ -277,7 +306,7 @@ async function onCreate() {
 
 async function onClone() {
   try {
-    const src = ieps.value.find(i => i.student_id === selectedStudent.value.id)
+    const src = ieps.value.find(i => i.student_id === selectedStudent.value!.id)
     if (!src) {
       ElMessage.warning('找不到可複製的上學期 IEP'); return
     }
@@ -287,42 +316,42 @@ async function onClone() {
     await loadAll(); syncFormFromIep()
     ElMessage.success('已複製為新草稿（評估已清空）')
   } catch (e) {
-    if (e.response?.status === 409) ElMessage.warning('本學期已有 IEP')
+    if ((e as { response?: { status?: number } }).response?.status === 409) ElMessage.warning('本學期已有 IEP')
     else throw e
   }
 }
 
 async function save() {
-  await updateIep(currentIep.value.id, payloadFromForm())
+  await updateIep(currentIep.value!.id, payloadFromForm())
   await loadAll()
   ElMessage.success('已儲存')
 }
 
 async function onSubmit() {
-  await submitIep(currentIep.value.id); await loadAll()
+  await submitIep(currentIep.value!.id); await loadAll()
 }
 async function onApprove() {
   await ElMessageBox.confirm('核准此 IEP？', '核准確認')
-  await approveIep(currentIep.value.id); await loadAll()
+  await approveIep(currentIep.value!.id); await loadAll()
 }
 async function onClose() {
-  await closeIep(currentIep.value.id); await loadAll()
+  await closeIep(currentIep.value!.id); await loadAll()
 }
 async function onExport() {
-  const { data } = await exportIepPdf(currentIep.value.id)
-  const url = URL.createObjectURL(data)
+  const { data } = await exportIepPdf(currentIep.value!.id)
+  const url = URL.createObjectURL(data as Blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `IEP_${selectedStudent.value.name}_${period.year}-${period.semester}.pdf`
+  a.download = `IEP_${selectedStudent.value!.name}_${period.year}-${period.semester}.pdf`
   a.click(); URL.revokeObjectURL(url)
 }
 
 function addGoal() {
   form.short_term_goals.push({ goal: '', criteria: '', due_date: null, status: 'active' })
 }
-function removeGoal(i) { form.short_term_goals.splice(i, 1) }
+function removeGoal(i: number) { form.short_term_goals.splice(i, 1) }
 function addMember() { form.iep_team_members.push({ role: '', name: '' }) }
-function removeMember(i) { form.iep_team_members.splice(i, 1) }
+function removeMember(i: number) { form.iep_team_members.splice(i, 1) }
 
 onMounted(loadAll)
 </script>

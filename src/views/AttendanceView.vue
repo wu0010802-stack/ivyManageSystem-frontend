@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { uploadFile, uploadCsv, getRecords, getSummary, deleteMonthRecords as deleteMonthRecordsApi, getAnomalyList, batchConfirmAnomalies, exportAnomalies, exportEmployeeAttendance } from '@/api/attendance'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -14,11 +14,21 @@ const currentYear = new Date().getFullYear()
 const currentMonth = new Date().getMonth() + 1
 
 // ---- Upload ----
+interface UploadResult {
+  success?: number
+  failed?: number
+  anomaly_count?: number
+  summary?: Record<string, unknown>[]
+  errors?: string[]
+  anomalies?: (string | Record<string, unknown>)[]
+  message?: string
+  results?: unknown
+}
 const uploading = ref(false)
-const uploadResult = ref(null)
+const uploadResult = ref<UploadResult | null>(null)
 const csvText = ref('')
 
-const handleExcelUpload = async (options) => {
+const handleExcelUpload = async (options: { file: File }) => {
   uploading.value = true
   uploadResult.value = null
   try {
@@ -91,8 +101,8 @@ const handleCsvImport = async () => {
 const query = reactive({ year: currentYear, month: currentMonth })
 const loadingRecords = ref(false)
 const hasQueried = ref(false)
-const attendanceRecords = ref([])
-const summaryData = ref([])
+const attendanceRecords = ref<Record<string, unknown>[]>([])
+const summaryData = ref<Record<string, unknown>[]>([])
 
 const fetchRecords = async () => {
   loadingRecords.value = true
@@ -144,13 +154,13 @@ const deleteMonthRecords = () => {
   }).catch(() => {})
 }
 
-const getStatusType = (row) => {
+const getStatusType = (row: Record<string, unknown>) => {
   if (row.status === 'normal') return 'success'
   if (row.is_late || row.is_early_leave) return 'warning'
   return 'danger'
 }
 
-const getStatusLabel = (row) => {
+const getStatusLabel = (row: Record<string, unknown>) => {
   const parts = []
   if (row.is_late) parts.push(`遲到${row.late_minutes}分`)
   if (row.is_early_leave) parts.push(`早退${row.early_leave_minutes}分`)
@@ -163,7 +173,7 @@ const getStatusLabel = (row) => {
 const anomalyQuery = reactive({ year: currentYear, month: currentMonth, status: 'all' })
 const loadingAnomalies = ref(false)
 const anomalyData = ref({ total: 0, pending: 0, confirmed: 0, items: [] })
-const selectedAnomalies = ref([])
+const selectedAnomalies = ref<Record<string, unknown>[]>([])
 const anomalyTable = ref(null)
 
 const ACTION_LABELS = {
@@ -174,15 +184,15 @@ const ACTION_LABELS = {
   admin_waive: '管理員豁免',
 }
 
-const getActionTagType = (action) => {
+const getActionTagType = (action: string | null | undefined) => {
   if (!action) return 'warning'
   if (action === 'admin_waive' || action === 'use_pto') return 'success'
   if (action === 'dispute') return 'danger'
   return 'info'
 }
 
-const getActionLabel = (action) => {
-  return action ? (ACTION_LABELS[action] || action) : '待處理'
+const getActionLabel = (action: string | null | undefined) => {
+  return action ? (ACTION_LABELS[action as keyof typeof ACTION_LABELS] || action) : '待處理'
 }
 
 const fetchAnomalies = async () => {
@@ -202,11 +212,11 @@ const fetchAnomalies = async () => {
   }
 }
 
-const handleAnomalySelectionChange = (selection) => {
+const handleAnomalySelectionChange = (selection: Record<string, unknown>[]) => {
   selectedAnomalies.value = selection
 }
 
-const doBatchConfirm = async (action) => {
+const doBatchConfirm = async (action: string) => {
   if (!selectedAnomalies.value.length) {
     ElMessage.warning('請先勾選要處理的異常記錄')
     return
@@ -252,7 +262,7 @@ watch(activeTab, (tab) => {
 })
 
 // Employee dropdown filter for records table
-const selectedEmployeeId = ref(null)
+const selectedEmployeeId = ref<string | number | null>(null)
 const uniqueEmployees = computed(() => {
   const map = new Map()
   for (const r of attendanceRecords.value) {
@@ -422,7 +432,7 @@ const handlePersonalExport = async () => {
               style="width: 150px; margin-left: auto;"
               clearable
             >
-              <el-option :value="null" label="全部員工" />
+              <el-option value="" label="全部員工" />
               <el-option
                 v-for="emp in uniqueEmployees"
                 :key="emp.id"

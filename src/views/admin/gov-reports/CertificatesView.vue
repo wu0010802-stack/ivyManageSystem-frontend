@@ -25,18 +25,18 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { listCertificateHistory } from '@/api/govMoe'
 
-const filters = ref({ student_id: '', range: [] })
-const rows = ref([])
+const filters = ref<{ student_id: string; range: string[] }>({ student_id: '', range: [] })
+const rows = ref<unknown[]>([])
 const loading = ref(false)
 
 async function load() {
   loading.value = true
   try {
-    const params = {}
+    const params: Record<string, string> = {}
     if (filters.value.student_id) params.student_id = filters.value.student_id
     if (filters.value.range?.[0]) params.since = filters.value.range[0]
     if (filters.value.range?.[1]) params.until = filters.value.range[1]

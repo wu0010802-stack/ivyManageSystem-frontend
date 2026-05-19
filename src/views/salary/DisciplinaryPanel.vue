@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Edit, Delete } from '@element-plus/icons-vue'
@@ -17,16 +17,18 @@ const TYPE_OPTIONS = [
   { value: 'major', label: '大過', defaultAmount: 0 },
 ]
 
-const items = ref([])
-const employees = ref([])
+interface EmployeeOption { id: number; name: string }
+
+const items = ref<Record<string, unknown>[]>([])
+const employees = ref<EmployeeOption[]>([])
 const loading = ref(false)
-const filters = reactive({ employeeId: null, pendingOnly: false })
+const filters = reactive<{ employeeId: number | null; pendingOnly: boolean }>({ employeeId: null, pendingOnly: false })
 
 const dialogVisible = ref(false)
-const dialogMode = ref('create') // create | edit
+const dialogMode = ref<'create' | 'edit'>('create')
 const form = reactive({
-  id: null,
-  employee_id: null,
+  id: null as number | null,
+  employee_id: null as number | null,
   action_date: new Date().toISOString().slice(0, 10),
   action_type: 'warning',
   deduction_amount: 0,
@@ -38,7 +40,9 @@ const editingApplied = computed(() => {
   return !!row?.applied_to_salary_id
 })
 
-const typeLabel = (t) => TYPE_OPTIONS.find((o) => o.value === t)?.label || t
+
+
+const typeLabel = (t: string) => TYPE_OPTIONS.find((o) => o.value === t)?.label || t
 
 const applyTypeDefault = () => {
   const opt = TYPE_OPTIONS.find((o) => o.value === form.action_type)
@@ -50,8 +54,8 @@ const employeeStore = useEmployeeStore()
 const fetchEmployees = async () => {
   try {
     await employeeStore.fetchEmployees()
-    employees.value = employeeStore.employees || []
-  } catch (e) {
+    employees.value = (employeeStore.employees || []) as EmployeeOption[]
+  } catch {
     /* 不阻擋主流程 */
   }
 }
@@ -59,13 +63,13 @@ const fetchEmployees = async () => {
 const fetchList = async () => {
   loading.value = true
   try {
-    const params = {}
+    const params: Record<string, unknown> = {}
     if (filters.employeeId) params.employee_id = filters.employeeId
     if (filters.pendingOnly) params.pending_only = true
     const res = await listDisciplinaryActions(params)
     items.value = res.data.items || []
   } catch (e) {
-    ElMessage.error('載入懲處列表失敗：' + apiError(e, e.message))
+    ElMessage.error('載入懲處列表失敗：' + apiError(e, (e as Error).message))
   } finally {
     loading.value = false
   }
@@ -82,14 +86,14 @@ const openCreate = () => {
   dialogVisible.value = true
 }
 
-const openEdit = (row) => {
+const openEdit = (row: Record<string, unknown>) => {
   dialogMode.value = 'edit'
-  form.id = row.id
-  form.employee_id = row.employee_id
-  form.action_date = row.action_date
-  form.action_type = row.action_type
-  form.deduction_amount = row.deduction_amount
-  form.reason = row.reason || ''
+  form.id = row.id as number | null
+  form.employee_id = row.employee_id as number | null
+  form.action_date = row.action_date as string
+  form.action_type = row.action_type as string
+  form.deduction_amount = row.deduction_amount as number
+  form.reason = (row.reason as string) || ''
   dialogVisible.value = true
 }
 
@@ -109,26 +113,26 @@ const handleSave = async () => {
       })
       ElMessage.success('新增懲處成功')
     } else {
-      const payload = { reason: form.reason || null }
+      const payload: Record<string, unknown> = { reason: form.reason || null }
       if (!editingApplied.value) {
         payload.action_date = form.action_date
         payload.action_type = form.action_type
         payload.deduction_amount = form.deduction_amount || 0
       }
-      await updateDisciplinaryAction(form.id, payload)
+      await updateDisciplinaryAction(form.id!, payload)
       ElMessage.success('更新成功')
     }
     dialogVisible.value = false
     fetchList()
   } catch (e) {
-    ElMessage.error('儲存失敗：' + apiError(e, e.message))
+    ElMessage.error('儲存失敗：' + apiError(e, (e as Error).message))
   }
 }
 
-const handleDelete = async (row) => {
+const handleDelete = async (row: Record<string, unknown>) => {
   try {
     await ElMessageBox.confirm(
-      `確定刪除 ${row.employee_name} ${row.action_date} 的${typeLabel(row.action_type)}？`,
+      `確定刪除 ${row.employee_name} ${row.action_date} 的${typeLabel(row.action_type as string)}？`,
       '確認刪除',
       { type: 'warning' },
     )
@@ -136,18 +140,18 @@ const handleDelete = async (row) => {
     return
   }
   try {
-    await deleteDisciplinaryAction(row.id)
+    await deleteDisciplinaryAction(row.id as number)
     ElMessage.success('刪除成功')
     fetchList()
   } catch (e) {
-    ElMessage.error('刪除失敗：' + apiError(e, e.message))
+    ElMessage.error('刪除失敗：' + apiError(e, (e as Error).message))
   }
 }
 
-const formatAppliedStatus = (row) => {
+const formatAppliedStatus = (row: Record<string, unknown>) => {
   if (!row.applied_to_salary_id) return '待抵扣'
-  const amount = row.applied_amount || 0
-  if (amount < row.deduction_amount) {
+  const amount = (row.applied_amount as number) || 0
+  if (amount < (row.deduction_amount as number)) {
     return `已抵扣 ${amount} 元（獎金不足截斷）`
   }
   return `已抵扣 ${amount} 元`

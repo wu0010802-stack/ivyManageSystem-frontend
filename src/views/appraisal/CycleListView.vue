@@ -1,7 +1,7 @@
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { Plus, Refresh, Upload, Download } from '@element-plus/icons-vue'
 import {
   listAppraisalCycles,
@@ -11,10 +11,13 @@ import {
   exportAppraisalTransferRosterXlsxUrl,
 } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
+import type { UploadRawFile } from 'element-plus'
+
+interface Cycle { id: number; academic_year?: number; semester?: string; base_score_calc_date?: string; base_score?: number; enrollment_actual?: number | null; enrollment_target?: number | null; status?: string }
 
 const router = useRouter()
 const loading = ref(false)
-const cycles = ref([])
+const cycles = ref<Cycle[]>([])
 const createDialog = ref(false)
 const importDialog = ref(false)
 const submitting = ref(false)
@@ -26,24 +29,24 @@ const form = ref({
   end_date: '',
   base_score_calc_date: '',
   enrollment_target: 160,
-  enrollment_actual: null,
+  enrollment_actual: null as number | null,
 })
 
 const importForm = ref({
-  file: null,
+  file: null as UploadRawFile | null,
   start_date: '',
   end_date: '',
   base_score_calc_date: '',
 })
 
-const semesterLabel = (v) => (v === 'FIRST' ? '上學期' : '下學期')
-const statusLabel = (v) => ({ OPEN: '進行中', LOCKED: '已鎖定', CLOSED: '已封存' }[v] || v)
+const semesterLabel = (v: string) => (v === 'FIRST' ? '上學期' : '下學期')
+const statusLabel = (v: string) => ({ OPEN: '進行中', LOCKED: '已鎖定', CLOSED: '已封存' } as Record<string, string>)[v] || v
 
 async function load() {
   loading.value = true
   try {
     const { data } = await listAppraisalCycles()
-    cycles.value = data
+    cycles.value = data as unknown as Cycle[]
   } catch (e) {
     ElMessage.error(apiError(e, '載入考核週期失敗'))
   } finally {
@@ -54,7 +57,7 @@ async function load() {
 async function submit() {
   submitting.value = true
   try {
-    await createAppraisalCycle(form.value)
+    await createAppraisalCycle({ ...form.value, semester: form.value.semester as 'FIRST' | 'SECOND' })
     ElMessage.success('建立成功')
     createDialog.value = false
     await load()
@@ -72,14 +75,15 @@ async function doImport() {
   }
   submitting.value = true
   try {
-    const { data } = await importAppraisalExcel(importForm.value.file, {
+    const { data } = await importAppraisalExcel(importForm.value.file!, {
       startDate: importForm.value.start_date,
       endDate: importForm.value.end_date,
       baseScoreCalcDate: importForm.value.base_score_calc_date,
     })
+    const result = data as { participants_created: number; participants_updated: number; score_items_upserted: number; skipped_unresolved_names: string[] }
     ElMessage.success(
-      `匯入完成：新增 ${data.participants_created} 位、更新 ${data.participants_updated} 位、` +
-        `score_items ${data.score_items_upserted} 筆，跳過 ${data.skipped_unresolved_names.length} 位未匹配員工`
+      `匯入完成：新增 ${result.participants_created} 位、更新 ${result.participants_updated} 位、` +
+        `score_items ${result.score_items_upserted} 筆，跳過 ${result.skipped_unresolved_names.length} 位未匹配員工`
     )
     importDialog.value = false
     await load()
@@ -159,7 +163,7 @@ onMounted(load)
       <el-form :model="importForm" label-width="120px">
         <el-form-item label="檔案 (.xls/.xlsx)">
           <el-upload :auto-upload="false" :show-file-list="true" :limit="1"
-            :on-change="(f) => (importForm.file = f.raw)">
+            :on-change="(f) => (importForm.file = f.raw ?? null)">
             <el-button>選擇檔案</el-button>
           </el-upload>
         </el-form-item>

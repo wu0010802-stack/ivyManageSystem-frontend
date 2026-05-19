@@ -221,7 +221,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -236,21 +236,31 @@ import {
   searchActivityStudents,
 } from '@/api/activity'
 
+interface PendingRow { id: number; match_status?: string; student_name?: string; birthday?: string; parent_phone?: string; class_name?: string; reviewed_at?: string; created_at?: string; reviewed_by?: string; remark?: string }
+interface StudentCandidate { id: number; student_id?: string; name?: string; birthday?: string; classroom_name?: string; parent_phone?: string }
+
 const router = useRouter()
 
-const filters = reactive({
+const filters = reactive<{ school_year: number | undefined; semester: number | undefined; search: string }>({
   school_year: undefined,
   semester: undefined,
   search: '',
 })
 
-const items = ref([])
+const items = ref<PendingRow[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
 const loading = ref(false)
 
-const matchDialog = reactive({
+const matchDialog = reactive<{
+  visible: boolean
+  row: PendingRow | null
+  searchQuery: string
+  candidates: StudentCandidate[]
+  selected: StudentCandidate | null
+  loading: boolean
+}>({
   visible: false,
   row: null,
   searchQuery: '',
@@ -259,9 +269,15 @@ const matchDialog = reactive({
   loading: false,
 })
 
-const editDialog = reactive({
+const editDialog = reactive<{
+  visible: boolean
+  action: 'rematch' | 'force'
+  row: PendingRow | null
+  submitting: boolean
+  form: { name: string; birthday: string; parent_phone: string }
+}>({
   visible: false,
-  action: 'rematch', // 'rematch' | 'force'
+  action: 'rematch',
   row: null,
   submitting: false,
   form: {
@@ -271,11 +287,11 @@ const editDialog = reactive({
   },
 })
 
-function isRejected(row) {
+function isRejected(row: PendingRow) {
   return row?.match_status === 'rejected'
 }
 
-function rowClassName({ row }) {
+function rowClassName({ row }: { row: PendingRow }) {
   return isRejected(row) ? 'row-rejected' : ''
 }
 
@@ -283,7 +299,7 @@ function goBack() {
   router.push({ name: 'activity-registrations' })
 }
 
-function formatTime(iso) {
+function formatTime(iso: string | undefined) {
   if (!iso) return ''
   const d = new Date(iso)
   return d.toLocaleString('zh-TW', { hour12: false })
@@ -292,7 +308,7 @@ function formatTime(iso) {
 async function loadList() {
   loading.value = true
   try {
-    const params = {
+    const params: Record<string, unknown> = {
       skip: (page.value - 1) * pageSize.value,
       limit: pageSize.value,
       status: 'all',
@@ -302,16 +318,18 @@ async function loadList() {
     if (filters.search?.trim()) params.search = filters.search.trim()
 
     const res = await listPendingRegistrations(params)
-    items.value = res.data?.items || []
-    total.value = res.data?.total || 0
+    const data = res.data as { items?: PendingRow[]; total?: number }
+    items.value = data?.items || []
+    total.value = data?.total || 0
   } catch (err) {
-    ElMessage.error(err.response?.data?.detail || '載入清單失敗')
+    const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+    ElMessage.error(detail || '載入清單失敗')
   } finally {
     loading.value = false
   }
 }
 
-function openMatchDialog(row) {
+function openMatchDialog(row: PendingRow) {
   matchDialog.row = row
   matchDialog.searchQuery = row.student_name || ''
   matchDialog.candidates = []
@@ -320,7 +338,7 @@ function openMatchDialog(row) {
   if (matchDialog.searchQuery) runSearch()
 }
 
-let searchTimer = null
+let searchTimer: ReturnType<typeof setTimeout> | null = null
 function debouncedSearch() {
   if (searchTimer) clearTimeout(searchTimer)
   searchTimer = setTimeout(runSearch, 250)
@@ -335,9 +353,10 @@ async function runSearch() {
   matchDialog.loading = true
   try {
     const res = await searchActivityStudents(q, 20)
-    matchDialog.candidates = res.data?.items || []
+    matchDialog.candidates = (res.data as { items?: StudentCandidate[] })?.items || []
   } catch (err) {
-    ElMessage.error(err.response?.data?.detail || '搜尋學生失敗')
+    const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+    ElMessage.error(detail || '搜尋學生失敗')
   } finally {
     matchDialog.loading = false
   }
@@ -351,11 +370,12 @@ async function confirmMatch() {
     matchDialog.visible = false
     await loadList()
   } catch (err) {
-    ElMessage.error(err.response?.data?.detail || '匹配失敗')
+    const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+    ElMessage.error(detail || '匹配失敗')
   }
 }
 
-function openEditDialog(row, action) {
+function openEditDialog(row: PendingRow, action: 'rematch' | 'force') {
   editDialog.action = action
   editDialog.row = row
   editDialog.form.name = row.student_name || ''
@@ -363,17 +383,17 @@ function openEditDialog(row, action) {
   editDialog.form.parent_phone = row.parent_phone || ''
   editDialog.visible = true
 }
-function openRematchDialog(row) {
+function openRematchDialog(row: PendingRow) {
   openEditDialog(row, 'rematch')
 }
-function openForceDialog(row) {
+function openForceDialog(row: PendingRow) {
   openEditDialog(row, 'force')
 }
 
 async function confirmEdit() {
   if (!editDialog.row) return
   const row = editDialog.row
-  const payload = {}
+  const payload: Record<string, string> = {}
   const name = editDialog.form.name?.trim()
   const birthday = editDialog.form.birthday || ''
   const phone = editDialog.form.parent_phone?.trim()
@@ -385,14 +405,14 @@ async function confirmEdit() {
   try {
     if (editDialog.action === 'force') {
       const res = await forceAcceptRegistration(row.id, payload)
-      if (res.data?.field_changed) {
+      if ((res.data as { field_changed?: boolean })?.field_changed) {
         ElMessage.success('已強行收件並保留修改後的資料')
       } else {
         ElMessage.success('已強行收件（標記：forced）')
       }
     } else {
       const res = await rematchRegistration(row.id, payload)
-      const data = res.data || {}
+      const data = res.data as { matched?: boolean; field_changed?: boolean }
       if (data.matched) {
         ElMessage.success('重新比對成功，已自動綁定在校生')
       } else if (data.field_changed) {
@@ -404,15 +424,16 @@ async function confirmEdit() {
     editDialog.visible = false
     await loadList()
   } catch (err) {
-    ElMessage.error(err.response?.data?.detail || '操作失敗')
+    const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+    ElMessage.error(detail || '操作失敗')
   } finally {
     editDialog.submitting = false
   }
 }
 
-async function handleReject(row) {
+async function handleReject(row: PendingRow) {
   try {
-    const { value: reason } = await ElMessageBox.prompt(
+    const result = (await ElMessageBox.prompt(
       `確認將「${row.student_name}」視為資料不符拒絕？（原因將寫入 audit log）`,
       '拒絕報名',
       {
@@ -420,24 +441,25 @@ async function handleReject(row) {
         confirmButtonText: '確認拒絕',
         cancelButtonText: '取消',
         type: 'warning',
-        inputValidator: (val) => {
+        inputValidator: (val: string) => {
           const t = (val || '').trim()
           if (t.length < 2) return '請填寫拒絕原因（至少 2 字）'
           if (t.length > 200) return '不得超過 200 字'
           return true
         },
       }
-    )
-    await rejectRegistration(row.id, reason.trim())
+    )) as { value: string }
+    await rejectRegistration(row.id, result.value.trim())
     ElMessage.success('已拒絕該筆報名（同頁可見，需要時可復原）')
     await loadList()
   } catch (err) {
     if (err === 'cancel') return
-    ElMessage.error(err.response?.data?.detail || '拒絕失敗')
+    const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+    ElMessage.error(detail || '拒絕失敗')
   }
 }
 
-async function handleRestore(row) {
+async function handleRestore(row: PendingRow) {
   try {
     await ElMessageBox.confirm(
       `確認將「${row.student_name}」復原至待審核？`,
@@ -453,7 +475,8 @@ async function handleRestore(row) {
     await loadList()
   } catch (err) {
     if (err === 'cancel') return
-    ElMessage.error(err.response?.data?.detail || '復原失敗')
+    const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+    ElMessage.error(detail || '復原失敗')
   }
 }
 

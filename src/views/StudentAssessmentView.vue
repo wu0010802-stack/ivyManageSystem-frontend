@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getAssessments, createAssessment, updateAssessment, deleteAssessment } from '@/api/studentAssessments'
@@ -8,15 +8,17 @@ import { ASSESSMENT_TYPES, DOMAINS, RATINGS, RATING_TAG } from '@/constants/stud
 import { apiError } from '@/utils/error'
 import { buildStudentProfileLink } from '@/utils/studentLinks'
 
+type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
+
 // ── 篩選 ────────────────────────────────────────────────
 const classroomStore = useClassroomStore()
-const classrooms = computed(() => classroomStore.classrooms)
-const filterClassroom = ref(null)
-const filterSemester = ref(null)
-const filterType = ref(null)
+const classrooms = computed(() => classroomStore.classrooms as { id: number; name: string }[])
+const filterClassroom = ref<number | null>(null)
+const filterSemester = ref<string | null>(null)
+const filterType = ref<string | null>(null)
 
 // ── 表格 ────────────────────────────────────────────────
-const assessments = ref([])
+const assessments = ref<Record<string, unknown>[]>([])
 const total = ref(0)
 const loading = ref(false)
 const currentPage = ref(1)
@@ -27,7 +29,16 @@ const dialogVisible = ref(false)
 const dialogMode = ref('create') // 'create' | 'edit'
 const formLoading = ref(false)
 
-const emptyForm = () => ({
+const emptyForm = (): {
+  student_id: number | null
+  semester: string
+  assessment_type: string
+  domain: string
+  rating: string
+  content: string
+  suggestions: string
+  assessment_date: string
+} => ({
   student_id: null,
   semester: '',
   assessment_type: '',
@@ -39,17 +50,17 @@ const emptyForm = () => ({
 })
 
 const form = reactive(emptyForm())
-const editId = ref(null)
+const editId = ref<number | null>(null)
 
 // 新增/編輯 Dialog 的班級/學生選擇
-const dialogClassroom = ref(null)
-const dialogStudents = ref([])
+const dialogClassroom = ref<number | null>(null)
+const dialogStudents = ref<{ id: number; name: string }[]>([])
 const dialogStudentsLoading = ref(false)
 
 const fetchAssessments = async () => {
   loading.value = true
   try {
-    const params = {
+    const params: Record<string, unknown> = {
       skip: (currentPage.value - 1) * pageSize.value,
       limit: pageSize.value,
     }
@@ -71,13 +82,13 @@ const handleSearch = () => {
   fetchAssessments()
 }
 
-const handlePageChange = (page) => {
+const handlePageChange = (page: number) => {
   currentPage.value = page
   fetchAssessments()
 }
 
 // 當 Dialog 班級改變時，載入學生
-const onDialogClassroomChange = async (cid) => {
+const onDialogClassroomChange = async (cid: number | null) => {
   form.student_id = null
   dialogStudents.value = []
   if (!cid) return
@@ -101,20 +112,20 @@ const openCreate = () => {
   dialogVisible.value = true
 }
 
-const openEdit = (row) => {
+const openEdit = (row: Record<string, unknown>) => {
   Object.assign(form, {
-    student_id: row.student_id,
-    semester: row.semester || '',
-    assessment_type: row.assessment_type || '',
-    domain: row.domain || '',
-    rating: row.rating || '',
-    content: row.content || '',
-    suggestions: row.suggestions || '',
-    assessment_date: row.assessment_date || '',
+    student_id: (row.student_id as number | null) ?? null,
+    semester: String(row.semester ?? ''),
+    assessment_type: String(row.assessment_type ?? ''),
+    domain: String(row.domain ?? ''),
+    rating: String(row.rating ?? ''),
+    content: String(row.content ?? ''),
+    suggestions: String(row.suggestions ?? ''),
+    assessment_date: String(row.assessment_date ?? ''),
   })
-  dialogClassroom.value = row.classroom_id
-  dialogStudents.value = [{ id: row.student_id, name: row.student_name }]
-  editId.value = row.id
+  dialogClassroom.value = (row.classroom_id as number | null) ?? null
+  dialogStudents.value = [{ id: row.student_id as number, name: String(row.student_name ?? '') }]
+  editId.value = row.id as number | null
   dialogMode.value = 'edit'
   dialogVisible.value = true
 }
@@ -142,7 +153,7 @@ const submitForm = async () => {
       await createAssessment(payload)
       ElMessage.success('新增成功')
     } else {
-      await updateAssessment(editId.value, payload)
+      await updateAssessment(editId.value!, payload)
       ElMessage.success('更新成功')
     }
     dialogVisible.value = false
@@ -154,14 +165,14 @@ const submitForm = async () => {
   }
 }
 
-const handleDelete = async (row) => {
+const handleDelete = async (row: Record<string, unknown>) => {
   try {
     await ElMessageBox.confirm(
       `確定要刪除「${row.student_name}」的評量記錄嗎？`,
       '確認刪除',
       { type: 'warning' }
     )
-    await deleteAssessment(row.id)
+    await deleteAssessment(row.id as number)
     ElMessage.success('刪除成功')
     fetchAssessments()
   } catch (e) {
@@ -169,10 +180,15 @@ const handleDelete = async (row) => {
   }
 }
 
-const truncate = (text, len = 60) => {
+const truncate = (text: string | null | undefined, len = 60) => {
   if (!text) return ''
   return text.length > len ? text.slice(0, len) + '…' : text
 }
+
+const ratingTagType = (rating: unknown): ElTagType =>
+  (RATING_TAG as Record<string, string>)[String(rating)] as ElTagType
+
+const deleteAssessmentById = async (row: Record<string, unknown>) => handleDelete(row)
 
 onMounted(() => {
   classroomStore.fetchClassrooms()
@@ -217,7 +233,7 @@ onMounted(() => {
           <template #default="{ row }">
             <router-link
               v-if="buildStudentProfileLink(row.student_id, 'records')"
-              :to="buildStudentProfileLink(row.student_id, 'records')"
+              :to="buildStudentProfileLink(row.student_id, 'records')!"
               class="student-link"
             >{{ row.student_name }}</router-link>
             <span v-else>{{ row.student_name }}</span>
@@ -237,7 +253,7 @@ onMounted(() => {
         </el-table-column>
         <el-table-column label="評等" width="90">
           <template #default="{ row }">
-            <el-tag v-if="row.rating" :type="RATING_TAG[row.rating]" size="small">{{ row.rating }}</el-tag>
+            <el-tag v-if="row.rating" :type="ratingTagType(row.rating)" size="small">{{ row.rating }}</el-tag>
             <span v-else style="color: var(--neutral-300)">-</span>
           </template>
         </el-table-column>

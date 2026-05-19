@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /**
  * A1-P5：從 ActivityPublicView 抽出的「報名成功」摘要 modal。
  *
@@ -17,12 +17,29 @@ import { computed } from 'vue'
 import KawaiiStar from '@/components/brand/KawaiiStar.vue'
 import BrandMark from '@/components/brand/BrandMark.vue'
 
-const props = defineProps({
-  summary: { type: Object, required: true },
-})
-defineEmits(['close'])
+interface CourseItem { name: string; price: number }
+interface Summary {
+  visible: boolean
+  message: string
+  studentName: string
+  parentPhone: string
+  enrolledCourses: CourseItem[]
+  waitlistCourses: CourseItem[]
+  selectedSupplies: CourseItem[]
+  totalAmount: number
+  queryToken: string
+  editUrl: string
+  copyHint: string
+}
 
-async function copyToClipboard(text, label) {
+const props = defineProps<{
+  summary: Summary
+}>()
+defineEmits<{
+  (e: 'close'): void
+}>()
+
+async function copyToClipboard(text: string, label: string) {
   try {
     await navigator.clipboard.writeText(text)
     props.summary.copyHint = `已複製${label}`
@@ -49,7 +66,7 @@ async function shareToken() {
     })
   } catch (err) {
     // 使用者取消分享屬正常流程,不顯示錯誤
-    if (err && err.name !== 'AbortError') {
+    if (err && (err as { name?: string }).name !== 'AbortError') {
       props.summary.copyHint = '分享失敗，請改用複製按鈕'
       setTimeout(() => { props.summary.copyHint = '' }, 4000)
     }
@@ -142,7 +159,7 @@ async function shareToken() {
               readonly
               :value="summary.queryToken"
               aria-label="報名查詢碼（唯讀，可選取複製）"
-              @focus="$event.target.select()"
+              @focus="($event.target as HTMLInputElement | null)?.select()"
             />
             <button
               type="button"
@@ -162,7 +179,7 @@ async function shareToken() {
               readonly
               :value="summary.editUrl"
               aria-label="編修連結（唯讀，可選取複製）"
-              @focus="$event.target.select()"
+              @focus="($event.target as HTMLInputElement | null)?.select()"
             />
             <button
               type="button"

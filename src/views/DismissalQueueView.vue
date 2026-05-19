@@ -1,26 +1,47 @@
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getDismissalCalls, cancelDismissalCall, createDismissalCall } from '@/api/dismissalCalls'
 import { useClassroomStore } from '@/stores/classroom'
 import { getStudents } from '@/api/students'
-import { getUserInfo } from '@/utils/auth'
+
+type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
+
+interface DismissalCall {
+  id: number
+  student_name: string
+  classroom_name: string
+  status: string
+  requested_at?: string
+  requested_by_name?: string
+  acknowledged_at?: string
+  completed_at?: string
+  note?: string
+  [key: string]: unknown
+}
+
+interface StudentItem {
+  id: number
+  name: string
+  classroom_id: number
+  [key: string]: unknown
+}
 
 // ─── 狀態 ───────────────────────────────────────────────
-const calls = ref([])
+const calls = ref<DismissalCall[]>([])
 const loading = ref(false)
 const classroomStore = useClassroomStore()
 const classrooms = computed(() => classroomStore.classrooms)
 
 // 篩選
 const filterStatus = ref('active') // active=pending+acknowledged | completed | cancelled | all
-const filterClassroomId = ref(null)
+const filterClassroomId = ref<number | null>(null)
 
 // 建立通知 dialog
 const createDialogVisible = ref(false)
 const createLoading = ref(false)
-const studentList = ref([])
-const createForm = ref({ student_id: null, classroom_id: null, note: '' })
+const studentList = ref<StudentItem[]>([])
+const createForm = ref<{ student_id: number | null; classroom_id: number | null; note: string }>({ student_id: null, classroom_id: null, note: '' })
 const createFilterClassroomId = ref(null)
 
 const filteredStudentOptions = computed(() => {
@@ -29,17 +50,17 @@ const filteredStudentOptions = computed(() => {
 })
 
 const classroomNameMap = computed(() =>
-  Object.fromEntries(classrooms.value.map(c => [c.id, c.name]))
+  Object.fromEntries((classrooms.value as { id: number; name: string }[]).map(c => [c.id, c.name]))
 )
 
-const studentLabel = (s) => {
+const studentLabel = (s: StudentItem) => {
   const cName = classroomNameMap.value[s.classroom_id]
   return cName ? `${s.name}（${cName}）` : s.name
 }
 
 // WebSocket
-let ws = null
-let wsReconnectTimer = null
+let ws: WebSocket | null = null
+let wsReconnectTimer: ReturnType<typeof setTimeout> | null = null
 let wsReconnectCount = 0
 const WS_MAX_RETRIES = 5
 const wsConnected = ref(false)
@@ -48,14 +69,14 @@ const wsConnected = ref(false)
 const fetchCalls = async () => {
   loading.value = true
   try {
-    const params = {}
+    const params: Record<string, unknown> = {}
     if (filterClassroomId.value) params.classroom_id = filterClassroomId.value
     if (filterStatus.value !== 'all') {
       // active = pending + acknowledged，後端支援逗號分隔多狀態，一次查詢
       params.status = filterStatus.value === 'active' ? 'pending,acknowledged' : filterStatus.value
     }
     const res = await getDismissalCalls(params)
-    calls.value = res.data || []
+    calls.value = (res.data || []) as DismissalCall[]
   } catch (e) {
     ElMessage.error('載入接送通知失敗')
   } finally {
@@ -64,7 +85,7 @@ const fetchCalls = async () => {
 }
 
 // ─── 取消通知 ────────────────────────────────────────────
-const handleCancel = async (call) => {
+const handleCancel = async (call: DismissalCall) => {
   try {
     await ElMessageBox.confirm(
       `確定要取消 ${call.student_name} 的接送通知嗎？`,
@@ -76,7 +97,7 @@ const handleCancel = async (call) => {
     fetchCalls()
   } catch (e) {
     if (e === 'cancel') return
-    ElMessage.error(e.response?.data?.detail || '取消失敗')
+    ElMessage.error((e as { response?: { data?: { detail?: string } } }).response?.data?.detail || '取消失敗')
   }
 }
 
@@ -87,9 +108,10 @@ const openCreateDialog = async () => {
   studentList.value = []
   try {
     const res = await getStudents({ is_active: true, limit: 500 })
-    studentList.value = res.data.items || []
+    studentList.value = ((res.data as { items?: StudentItem[] }).items || []) as StudentItem[]
   } catch (e) {
-    ElMessage.error('載入學生清單失敗：' + (e.response?.data?.detail || e.message))
+    const err = e as { response?: { data?: { detail?: string } }; message?: string }
+    ElMessage.error('載入學生清單失敗：' + (err.response?.data?.detail || err.message))
   }
   createDialogVisible.value = true
 }
@@ -104,7 +126,7 @@ watch(createFilterClassroomId, (newVal) => {
   }
 })
 
-const onStudentSelect = (studentId) => {
+const onStudentSelect = (studentId: number) => {
   const s = studentList.value.find(s => s.id === studentId)
   if (s) createForm.value.classroom_id = s.classroom_id
 }
@@ -125,7 +147,7 @@ const submitCreate = async () => {
     createDialogVisible.value = false
     fetchCalls()
   } catch (e) {
-    ElMessage.error(e.response?.data?.detail || '建立失敗')
+    ElMessage.error((e as { response?: { data?: { detail?: string } } }).response?.data?.detail || '建立失敗')
   } finally {
     createLoading.value = false
   }
@@ -151,7 +173,7 @@ const connectWs = () => {
       // 後端 _recv_loop 等 client 任何訊息回應，90 秒沒收就主動斷線。
       // ping 來時必須回送任意訊息以維持連線存活。
       if (event.type === 'ping') {
-        ws.send(JSON.stringify({ type: 'pong' }))
+        ws!.send(JSON.stringify({ type: 'pong' }))
         return
       }
       handleWsEvent(event)
@@ -170,7 +192,7 @@ const connectWs = () => {
   }
 }
 
-const handleWsEvent = (event) => {
+const handleWsEvent = (event: { type: string; payload: DismissalCall }) => {
   const { type, payload } = event
   if (type === 'dismissal_call_created') {
     // 若目前顯示 active，prepend
@@ -197,21 +219,23 @@ const handleWsEvent = (event) => {
 }
 
 // ─── 狀態標籤 ────────────────────────────────────────────
-const statusLabel = (status) => ({
+const STATUS_LABEL_MAP: Record<string, string> = {
   pending: '待老師確認',
   acknowledged: '老師已收到',
   completed: '已放學',
   cancelled: '已取消',
-}[status] || status)
+}
+const statusLabel = (status: string) => STATUS_LABEL_MAP[status] || status
 
-const statusType = (status) => ({
+const STATUS_TYPE_MAP: Record<string, ElTagType> = {
   pending: 'warning',
   acknowledged: 'primary',
   completed: 'success',
   cancelled: 'info',
-}[status] || '')
+}
+const statusType = (status: string): ElTagType => STATUS_TYPE_MAP[status]
 
-const formatTime = (dt) => {
+const formatTime = (dt: string | undefined) => {
   if (!dt) return '-'
   return new Date(dt).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })
 }

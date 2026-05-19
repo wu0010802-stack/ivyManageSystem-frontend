@@ -1,7 +1,8 @@
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { getAssignments, saveAssignments, getDaily, saveDaily, deleteDaily, getSwapHistory, getShiftImportTemplate, importShifts, exportShifts } from '@/api/shifts'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { ArrowRight, Loading } from '@element-plus/icons-vue'
 import { getMonthWeeks } from '@/utils/scheduleUtils'
 import { useEmployeeStore } from '@/stores/employee'
 import { useShiftStore } from '@/stores/shift'
@@ -9,16 +10,20 @@ import { storeToRefs } from 'pinia'
 import { apiError } from '@/utils/error'
 
 // --- State ---
+interface AssignmentEntry { shift_type_id: number | null; notes: string | null }
+interface EmployeeRow { id: number; name: string; is_active?: boolean; classroom_id?: number | null; [key: string]: unknown }
+interface ShiftImportResult { failed: number; total: number; upserted: number; errors?: string[] }
+
 const loading = ref(false)
 const saving = ref(false)
 const employeeStore = useEmployeeStore()
 const shiftStore = useShiftStore()
 const { employees } = storeToRefs(employeeStore)
 const { activeShiftTypes: shiftTypes } = storeToRefs(shiftStore)
-const assignments = ref({}) // { employee_id: { shift_type_id, notes } }
+const assignments = ref<Record<string | number, AssignmentEntry>>({}) // { employee_id: { shift_type_id, notes } }
 
 // Week selector - default to current week's Monday
-const getMonday = (d) => {
+const getMonday = (d: Date) => {
   const date = new Date(d)
   const day = date.getDay()
   const diff = date.getDate() - day + (day === 0 ? -6 : 1)
@@ -26,7 +31,7 @@ const getMonday = (d) => {
   return date
 }
 
-const formatDate = (d) => {
+const formatDate = (d: Date) => {
   const y = d.getFullYear()
   const m = String(d.getMonth() + 1).padStart(2, '0')
   const dd = String(d.getDate()).padStart(2, '0')
@@ -45,7 +50,7 @@ const weekLabel = computed(() => {
 
 // Filter: only show active employees with classroom assignment (teachers)
 const teacherEmployees = computed(() => {
-  return employees.value.filter(e => e.is_active && e.classroom_id)
+  return (employees.value as EmployeeRow[]).filter((e) => e.is_active && e.classroom_id)
 })
 
 const fetchAssignments = async () => {
@@ -53,8 +58,8 @@ const fetchAssignments = async () => {
   try {
     const res = await getAssignments({ week_start: weekStart.value })
     // Build map: employee_id -> assignment
-    const map = {}
-    for (const a of res.data) {
+    const map: Record<string | number, AssignmentEntry> = {}
+    for (const a of (res.data as { employee_id: number; shift_type_id: number | null; notes: string | null }[])) {
       map[a.employee_id] = { shift_type_id: a.shift_type_id, notes: a.notes }
     }
     assignments.value = map
@@ -66,14 +71,14 @@ const fetchAssignments = async () => {
 }
 
 // --- Week Navigation ---
-const changeWeek = (offset) => {
+const changeWeek = (offset: number) => {
   const d = new Date(weekStart.value)
   d.setDate(d.getDate() + offset * 7)
   weekStart.value = formatDate(d)
   fetchAssignments()
 }
 
-const onWeekChange = (val) => {
+const onWeekChange = (val: string) => {
   // Align to Monday
   const d = new Date(val)
   weekStart.value = formatDate(getMonday(d))
@@ -81,11 +86,11 @@ const onWeekChange = (val) => {
 }
 
 // --- Assignment ---
-const getAssignment = (empId) => {
+const getAssignment = (empId: number): number | null => {
   return assignments.value[empId]?.shift_type_id || null
 }
 
-const setAssignment = (empId, shiftTypeId) => {
+const setAssignment = (empId: number, shiftTypeId: number | null) => {
   if (!assignments.value[empId]) {
     assignments.value[empId] = { shift_type_id: null, notes: '' }
   }
@@ -98,7 +103,7 @@ const shiftTypeMap = computed(() => {
   return map
 })
 
-const getShiftInfo = (shiftTypeId) => shiftTypeMap.value.get(shiftTypeId)
+const getShiftInfo = (shiftTypeId: number | null) => shiftTypeId != null ? shiftTypeMap.value.get(shiftTypeId) : undefined
 
 // --- Save ---
 const saveAll = async () => {
@@ -128,15 +133,15 @@ const saveAll = async () => {
 // --- 排班複製 ---
 
 // 複製指定來源週排班到當前週的 local state（需手動儲存）
-const copyFromWeek = async (sourceWeekStart) => {
+const copyFromWeek = async (sourceWeekStart: string) => {
   try {
     const res = await getAssignments({ week_start: sourceWeekStart })
     if (res.data.length === 0) {
       ElMessage.warning('來源週無排班資料')
       return
     }
-    const map = {}
-    for (const a of res.data) {
+    const map: Record<string | number, AssignmentEntry> = {}
+    for (const a of (res.data as { employee_id: number; shift_type_id: number | null; notes: string | null }[])) {
       map[a.employee_id] = { shift_type_id: a.shift_type_id, notes: a.notes }
     }
     assignments.value = map
@@ -201,7 +206,7 @@ const copyPrevMonth = async () => {
       if (res.data.length === 0) continue // 來源週無資料，跳過不清空目標
       await saveAssignments({
         week_start_date: targetWeeks[i],
-        assignments: res.data.map(a => ({
+        assignments: (res.data as { employee_id: number; shift_type_id: number | null; notes: string | null }[]).map((a) => ({
           employee_id: a.employee_id,
           shift_type_id: a.shift_type_id,
           notes: a.notes,
@@ -225,9 +230,9 @@ onMounted(async () => {
 
 // --- Daily Shift Dialog ---
 const dailyDialogVisible = ref(false)
-const currentEmployee = ref(null)
-const dailyShifts = ref([]) // list of daily shifts from API
-const dailyShiftMap = ref({}) // date -> shift_type_id
+const currentEmployee = ref<EmployeeRow | null>(null)
+const dailyShifts = ref<Record<string, unknown>[]>([]) // list of daily shifts from API
+const dailyShiftMap = ref<Record<string, Record<string, unknown>>>({}) // date -> shift record
 
 // Generate dates for current week (Mon-Fri)
 const currentWeekDates = computed(() => {
@@ -242,13 +247,13 @@ const currentWeekDates = computed(() => {
   return dates
 })
 
-const getDayName = (dateStr) => {
+const getDayName = (dateStr: string) => {
   const d = new Date(dateStr)
   const days = ['日', '一', '二', '三', '四', '五', '六']
   return days[d.getDay()]
 }
 
-const openDailyDialog = async (emp) => {
+const openDailyDialog = async (emp: EmployeeRow) => {
   currentEmployee.value = emp
   dailyDialogVisible.value = true
   dailyShiftMap.value = {} // reset
@@ -270,11 +275,11 @@ const fetchDailyShiftsForDialog = async () => {
       employee_id: currentEmployee.value.id
     })
     
-    dailyShifts.value = res.data
+    dailyShifts.value = res.data as Record<string, unknown>[]
     // Map to date -> id
-    const map = {}
-    for (const ds of res.data) {
-      map[ds.date] = ds
+    const map: Record<string, Record<string, unknown>> = {}
+    for (const ds of (res.data as Record<string, unknown>[])) {
+      map[ds.date as string] = ds
     }
     dailyShiftMap.value = map
   } catch {
@@ -282,19 +287,19 @@ const fetchDailyShiftsForDialog = async () => {
   }
 }
 
-const getDailyShiftId = (dateStr) => {
+const getDailyShiftId = (dateStr: string): number | null => {
   const ds = dailyShiftMap.value[dateStr]
-  return ds ? ds.shift_type_id : null
+  return ds ? (ds.shift_type_id as number | null) : null
 }
 
-const getDailyShiftRecordId = (dateStr) => {
+const getDailyShiftRecordId = (dateStr: string): number | null => {
   const ds = dailyShiftMap.value[dateStr]
-  return ds ? ds.id : null
+  return ds ? (ds.id as number) : null
 }
 
 // --- Swap History ---
 const activeTab = ref('schedule')
-const swapHistory = ref([])
+const swapHistory = ref<Record<string, unknown>[]>([])
 const swapLoading = ref(false)
 const swapFilter = reactive({
   start_date: '',
@@ -305,7 +310,7 @@ const swapFilter = reactive({
 const fetchSwapHistory = async () => {
   swapLoading.value = true
   try {
-    const params = {}
+    const params: Record<string, string> = {}
     if (swapFilter.start_date) params.start_date = swapFilter.start_date
     if (swapFilter.end_date) params.end_date = swapFilter.end_date
     if (swapFilter.status) params.status = swapFilter.status
@@ -318,24 +323,26 @@ const fetchSwapHistory = async () => {
   }
 }
 
-const onTabChange = (tab) => {
+const onTabChange = (tab: string | number) => {
   if (tab === 'swap-history') {
     fetchSwapHistory()
   }
 }
 
-const swapStatusLabel = (status) => {
-  return { pending: '待回覆', accepted: '已接受', rejected: '已拒絕', cancelled: '已撤銷' }[status] || status
+const swapStatusLabel = (status: string) => {
+  return ({ pending: '待回覆', accepted: '已接受', rejected: '已拒絕', cancelled: '已撤銷' } as Record<string, string>)[status] || status
 }
 
-const swapStatusType = (status) => {
-  return { pending: 'warning', accepted: 'success', rejected: 'danger', cancelled: 'info' }[status] || 'info'
+type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
+const swapStatusType = (status: string): ElTagType => {
+  const map: Record<string, ElTagType> = { pending: 'warning', accepted: 'success', rejected: 'danger', cancelled: 'info' }
+  return map[status] ?? 'info'
 }
 
 // --- 排班 Excel 匯入/匯出 ---
 const shiftImportVisible = ref(false)
 const shiftImportLoading = ref(false)
-const shiftImportResult = ref(null)
+const shiftImportResult = ref<ShiftImportResult | null>(null)
 
 const downloadShiftTemplate = async () => {
   try {
@@ -365,7 +372,8 @@ const exportCurrentWeekShifts = async () => {
   }
 }
 
-const handleShiftImportFile = async (file) => {
+const handleShiftImportFile = async (file: { raw?: File }) => {
+  if (!file.raw) return
   const formData = new FormData()
   formData.append('file', file.raw)
   shiftImportLoading.value = true
@@ -386,7 +394,7 @@ const handleShiftImportFile = async (file) => {
   }
 }
 
-const handleDailyShiftChange = async (dateStr, shiftTypeId) => {
+const handleDailyShiftChange = async (dateStr: string, shiftTypeId: number | null) => {
   if (!currentEmployee.value) return
   
   try {
@@ -401,7 +409,7 @@ const handleDailyShiftChange = async (dateStr, shiftTypeId) => {
     } else {
       // Delete if exists
       const recordId = getDailyShiftRecordId(dateStr)
-      if (recordId) {
+      if (recordId != null) {
         await deleteDaily(recordId)
         ElMessage.success('已清除每日排班 (恢復預設)')
       }
@@ -648,12 +656,6 @@ const handleDailyShiftChange = async (dateStr, shiftTypeId) => {
   </div>
 </template>
 
-<script>
-import { ArrowRight, Loading } from '@element-plus/icons-vue'
-export default {
-  components: { ArrowRight, Loading }
-}
-</script>
 
 <style scoped>
 .control-panel {

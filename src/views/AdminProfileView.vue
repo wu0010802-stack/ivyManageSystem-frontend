@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -10,22 +10,40 @@ import { PASSWORD_RULES, validatePasswordStrength } from '@/utils/passwordRules'
 import { useErrorNotify } from '@/composables/useErrorNotify'
 import { apiError } from '@/utils/error'
 
+interface ProfileData {
+  employee_id?: string | number
+  name?: string
+  phone?: string
+  address?: string
+  emergency_contact_name?: string
+  emergency_contact_phone?: string
+  bank_code?: string
+  bank_account?: string
+  bank_account_name?: string
+  classroom?: string
+  hire_date?: string
+  work_start_time?: string
+  work_end_time?: string
+  [key: string]: unknown
+}
+
 const router = useRouter()
 const { notify } = useErrorNotify()
 
 const userInfo = computed(() => getUserInfo() || {})
-const hasEmployee = computed(() => userInfo.value.employee_id != null)
+const hasEmployee = computed(() => (userInfo.value as { employee_id?: unknown }).employee_id != null)
 
 const roleLabel = computed(() => {
-  const map = { admin: '系統管理員', hr: '人事', supervisor: '主管', teacher: '教師' }
-  return userInfo.value.role_label || map[userInfo.value.role] || userInfo.value.role || '-'
+  const map: Record<string, string> = { admin: '系統管理員', hr: '人事', supervisor: '主管', teacher: '教師' }
+  const u = userInfo.value as { role_label?: string; role?: string }
+  return u.role_label || (u.role ? map[u.role] : undefined) || u.role || '-'
 })
 
 // ────────────── 員工詳細資料（reuse portal /profile） ──────────────
 const loading = ref(false)
 const saving = ref(false)
 const isEditing = ref(false)
-const profile = ref({})
+const profile = ref<ProfileData>({})
 
 const form = reactive({
   phone: '',
@@ -37,7 +55,7 @@ const form = reactive({
   bank_account_name: '',
 })
 
-const syncForm = (data) => {
+const syncForm = (data: ProfileData) => {
   form.phone = data.phone || ''
   form.address = data.address || ''
   form.emergency_contact_name = data.emergency_contact_name || ''
@@ -52,8 +70,8 @@ const fetchProfile = async () => {
   loading.value = true
   try {
     const res = await getProfile()
-    profile.value = res.data
-    syncForm(res.data)
+    profile.value = res.data as ProfileData
+    syncForm(res.data as ProfileData)
   } catch (error) {
     notify(error, 'AdminProfile:load', '載入個人資料失敗')
   } finally {
@@ -87,7 +105,7 @@ const saveProfile = async () => {
 }
 
 // ────────────── 修改密碼 ──────────────
-const pwdFormRef = ref(null)
+const pwdFormRef = ref<{ validate: () => Promise<void> } | null>(null)
 const pwdSaving = ref(false)
 const pwdForm = reactive({
   old_password: '',
@@ -95,7 +113,7 @@ const pwdForm = reactive({
   confirm_password: '',
 })
 
-const validateConfirm = (_, value, callback) => {
+const validateConfirm = (_: unknown, value: string, callback: (err?: Error) => void) => {
   if (value !== pwdForm.new_password) callback(new Error('兩次輸入的密碼不一致'))
   else callback()
 }
@@ -114,7 +132,7 @@ const pwdRules = {
 
 const submitPassword = async () => {
   try {
-    await pwdFormRef.value.validate()
+    await pwdFormRef.value?.validate()
   } catch {
     return
   }
@@ -141,13 +159,13 @@ const submitPassword = async () => {
 }
 
 // ────────────── LINE Bot 綁定 ──────────────
-const lineUserId = ref(null)
+const lineUserId = ref<string | null>(null)
 const lineBindInput = ref('')
 const loadingLine = ref(false)
 const savingLine = ref(false)
 const LINE_ID_RE = /^U[0-9a-f]{32}$/
 
-const maskLineId = (id) => id ? id.slice(0, 4) + '****' + id.slice(-4) : ''
+const maskLineId = (id: string) => id ? id.slice(0, 4) + '****' + id.slice(-4) : ''
 
 const fetchLineBinding = async () => {
   if (!hasEmployee.value) return

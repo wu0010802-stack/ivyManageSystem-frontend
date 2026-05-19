@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { onMounted, ref, watch, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -10,8 +10,11 @@ const props = defineProps({
   studentId: { type: [String, Number], required: true },
 })
 
+interface Guardian { id?: number; name?: string; relation?: string; is_primary?: boolean; is_emergency?: boolean; can_pickup?: boolean; phone?: string; email?: string; user_id?: number; [key: string]: unknown }
+interface StudentDetail { student?: Record<string, unknown>; classroom?: { name?: string; [key: string]: unknown }; health?: Record<string, unknown>; guardians?: Guardian[]; attendance_30d?: Record<string, unknown>; recent_observations_30d?: Record<string, unknown>[]; recent_assessments?: Record<string, unknown>[]; recent_incidents_30d?: Record<string, unknown>[]; contact_book_recent?: Record<string, unknown>[]; [key: string]: unknown }
+
 const router = useRouter()
-const detail = ref(null)
+const detail = ref<StudentDetail | null>(null)
 const sheets = ref({ measurement: false, milestone: false })
 
 function openMeasurementSheet() {
@@ -21,7 +24,7 @@ function openMilestoneSheet() {
   sheets.value.milestone = true
 }
 const loading = ref(false)
-const error = ref(null)
+const error = ref<unknown>(null)
 const activeTab = ref('health')
 
 async function load() {
@@ -32,7 +35,7 @@ async function load() {
     detail.value = data
   } catch (e) {
     error.value = e
-    ElMessage.error(e?.response?.data?.detail || '讀取失敗')
+    ElMessage.error((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '讀取失敗')
   } finally {
     loading.value = false
   }
@@ -42,7 +45,7 @@ onMounted(load)
 watch(() => props.studentId, load)
 
 const ageLabel = computed(() => {
-  const bday = detail.value?.student?.birthday
+  const bday = detail.value?.student?.birthday as string | undefined
   if (!bday) return ''
   const b = new Date(bday)
   const now = new Date()
@@ -59,6 +62,16 @@ const ageLabel = computed(() => {
 const primaryGuardian = computed(() =>
   detail.value?.guardians?.find((g) => g.is_primary) || detail.value?.guardians?.[0] || null,
 )
+
+// Typed accessor helpers for template
+const studentInfo = computed(() => detail.value?.student as Record<string, unknown> | undefined)
+const classroomInfo = computed(() => detail.value?.classroom)
+const healthInfo = computed(() => detail.value?.health as Record<string, unknown> | undefined)
+const attendance30d = computed(() => detail.value?.attendance_30d as Record<string, unknown> | undefined)
+const observations = computed(() => detail.value?.recent_observations_30d as Record<string, unknown>[] | undefined)
+const assessments = computed(() => detail.value?.recent_assessments as Record<string, unknown>[] | undefined)
+const incidents = computed(() => detail.value?.recent_incidents_30d as Record<string, unknown>[] | undefined)
+const contactBookRecent = computed(() => detail.value?.contact_book_recent as Record<string, unknown>[] | undefined)
 
 function goMessages() {
   router.push('/portal/messages')
@@ -86,20 +99,20 @@ function back() {
       <!-- Header -->
       <div class="header pt-card-elevated">
         <div class="title-row">
-          <h2>{{ detail.student.name }}</h2>
+          <h2>{{ (studentInfo as Record<string, unknown>)?.name }}</h2>
           <span class="age">{{ ageLabel }}</span>
-          <el-tag v-if="detail.student.lifecycle_status" size="small">
-            {{ detail.student.lifecycle_status }}
+          <el-tag v-if="(studentInfo as Record<string, unknown>)?.lifecycle_status" size="small">
+            {{ (studentInfo as Record<string, unknown>)?.lifecycle_status }}
           </el-tag>
         </div>
         <p class="meta">
-          班級：{{ detail.classroom?.name || '—' }}
-          ｜ 生日：{{ detail.student.birthday || '—' }}
+          班級：{{ classroomInfo?.name || '—' }}
+          ｜ 生日：{{ (studentInfo as Record<string, unknown>)?.birthday || '—' }}
           ｜ 主要家長：{{ primaryGuardian?.name || '—' }}（{{ primaryGuardian?.phone || '—' }}）
         </p>
-        <div v-if="detail.health.allergies.length" class="warn-row">
+        <div v-if="(healthInfo?.allergies as Record<string, unknown>[] | undefined)?.length" class="warn-row">
           ⚠ 過敏：
-          <span v-for="a in detail.health.allergies" :key="a.id" class="chip danger">
+          <span v-for="a in (healthInfo?.allergies as Record<string, unknown>[])" :key="a.id as number" class="chip danger">
             {{ a.allergen }}（{{ a.severity }}）
           </span>
         </div>
@@ -116,9 +129,9 @@ function back() {
         <el-tab-pane label="健康" name="health">
           <div class="pt-card panel">
             <h4>過敏</h4>
-            <p v-if="!detail.health.allergies.length" class="empty">無紀錄</p>
+            <p v-if="!(healthInfo?.allergies as Record<string, unknown>[] | undefined)?.length" class="empty">無紀錄</p>
             <ul v-else class="list">
-              <li v-for="a in detail.health.allergies" :key="a.id">
+              <li v-for="a in (healthInfo?.allergies as Record<string, unknown>[])" :key="a.id as number">
                 <strong>{{ a.allergen }}</strong>（{{ a.severity }}）
                 <span v-if="a.reaction" class="note">— {{ a.reaction }}</span>
                 <p v-if="a.first_aid_note" class="aid">{{ a.first_aid_note }}</p>
@@ -126,17 +139,17 @@ function back() {
             </ul>
 
             <h4>用藥單（近 7 天）</h4>
-            <p v-if="!detail.health.recent_medication_orders.length" class="empty">無紀錄</p>
+            <p v-if="!(healthInfo?.recent_medication_orders as Record<string, unknown>[] | undefined)?.length" class="empty">無紀錄</p>
             <ul v-else class="list">
-              <li v-for="o in detail.health.recent_medication_orders" :key="o.id">
+              <li v-for="o in (healthInfo?.recent_medication_orders as Record<string, unknown>[])" :key="o.id as number">
                 <strong>{{ o.order_date }}</strong> · {{ o.medication_name }} · {{ o.dose }}
-                ｜ 時段：{{ (o.time_slots || []).join('、') }}
+                ｜ 時段：{{ ((o.time_slots as string[] | undefined) || []).join('、') }}
                 <span class="source-tag">{{ o.source === 'parent' ? '家長' : '老師' }}</span>
               </li>
             </ul>
 
             <h4>特殊需求</h4>
-            <p>{{ detail.student.special_needs || '無' }}</p>
+            <p>{{ (studentInfo as Record<string, unknown>)?.special_needs || '無' }}</p>
           </div>
         </el-tab-pane>
 
@@ -144,15 +157,15 @@ function back() {
           <div class="pt-card panel">
             <h4>近 30 天統計</h4>
             <div class="stat-row">
-              <span class="stat"><b>{{ detail.attendance_30d.summary.present }}</b> 出席</span>
-              <span class="stat"><b>{{ detail.attendance_30d.summary.absent }}</b> 缺席</span>
-              <span class="stat"><b>{{ detail.attendance_30d.summary.late }}</b> 遲到</span>
-              <span class="stat"><b>{{ detail.attendance_30d.summary.leave }}</b> 請假</span>
+              <span class="stat"><b>{{ (attendance30d?.summary as Record<string, unknown>)?.present }}</b> 出席</span>
+              <span class="stat"><b>{{ (attendance30d?.summary as Record<string, unknown>)?.absent }}</b> 缺席</span>
+              <span class="stat"><b>{{ (attendance30d?.summary as Record<string, unknown>)?.late }}</b> 遲到</span>
+              <span class="stat"><b>{{ (attendance30d?.summary as Record<string, unknown>)?.leave }}</b> 請假</span>
             </div>
             <h4>每日明細</h4>
-            <p v-if="!detail.attendance_30d.by_day.length" class="empty">無紀錄</p>
+            <p v-if="!(attendance30d?.by_day as Record<string, unknown>[] | undefined)?.length" class="empty">無紀錄</p>
             <ul v-else class="list compact">
-              <li v-for="d in detail.attendance_30d.by_day" :key="d.date">
+              <li v-for="d in (attendance30d?.by_day as Record<string, unknown>[])" :key="d.date as string">
                 <span class="date">{{ d.date }}</span>
                 <span :class="['status-tag', d.status]">{{ d.status }}</span>
                 <span v-if="d.remark" class="note">— {{ d.remark }}</span>
@@ -163,11 +176,11 @@ function back() {
 
         <el-tab-pane label="觀察" name="observations">
           <div class="pt-card panel">
-            <p v-if="!detail.recent_observations_30d.length" class="empty">
+            <p v-if="!observations?.length" class="empty">
               近 30 天無觀察紀錄
             </p>
             <ul v-else class="list">
-              <li v-for="o in detail.recent_observations_30d" :key="o.id">
+              <li v-for="o in observations" :key="o.id as number">
                 <strong>{{ o.observation_date }}</strong>
                 <span v-if="o.domain" class="domain-tag">{{ o.domain }}</span>
                 <span v-if="o.is_highlight" class="highlight">✨ 成長亮點</span>
@@ -179,9 +192,9 @@ function back() {
 
         <el-tab-pane label="評量" name="assessments">
           <div class="pt-card panel">
-            <p v-if="!detail.recent_assessments.length" class="empty">無學期評量紀錄</p>
+            <p v-if="!assessments?.length" class="empty">無學期評量紀錄</p>
             <ul v-else class="list">
-              <li v-for="a in detail.recent_assessments" :key="a.id">
+              <li v-for="a in assessments" :key="a.id as number">
                 <strong>{{ a.semester }} {{ a.assessment_type }}</strong>
                 <span v-if="a.domain" class="domain-tag">{{ a.domain }}</span>
                 <span v-if="a.rating">：{{ a.rating }}</span>
@@ -193,11 +206,11 @@ function back() {
 
         <el-tab-pane label="事件" name="incidents">
           <div class="pt-card panel">
-            <p v-if="!detail.recent_incidents_30d.length" class="empty">
+            <p v-if="!incidents?.length" class="empty">
               近 30 天無事件紀錄
             </p>
             <ul v-else class="list">
-              <li v-for="i in detail.recent_incidents_30d" :key="i.id">
+              <li v-for="i in incidents" :key="i.id as number">
                 <strong>{{ i.incident_date }}</strong>
                 <span :class="['severity-tag', i.severity]">{{ i.type }}</span>
                 <span v-if="i.severity">（{{ i.severity }}）</span>
@@ -209,9 +222,9 @@ function back() {
 
         <el-tab-pane label="聯絡簿" name="contact-book">
           <div class="pt-card panel">
-            <p v-if="!detail.contact_book_recent.length" class="empty">無聯絡簿紀錄</p>
+            <p v-if="!contactBookRecent?.length" class="empty">無聯絡簿紀錄</p>
             <ul v-else class="list">
-              <li v-for="c in detail.contact_book_recent" :key="c.id">
+              <li v-for="c in contactBookRecent" :key="c.id as number">
                 <strong>{{ c.log_date }}</strong>
                 <span v-if="c.published_at" class="published-tag">已發布</span>
                 <span v-else class="draft-tag">草稿</span>
@@ -243,12 +256,12 @@ function back() {
   <PortalMeasurementSheet
     v-model="sheets.measurement"
     :student-id="studentId"
-    :student-name="detail?.student?.name || ''"
+    :student-name="(studentInfo?.name as string | undefined) || ''"
   />
   <PortalMilestoneSheet
     v-model="sheets.milestone"
     :student-id="studentId"
-    :student-name="detail?.student?.name || ''"
+    :student-name="(studentInfo?.name as string | undefined) || ''"
   />
 </template>
 

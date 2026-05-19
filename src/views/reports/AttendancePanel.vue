@@ -1,13 +1,13 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useCachedAsync } from '@/composables/useCachedAsync'
 import { getDashboard } from '@/api/reports'
-import { LineChart, BarChart, MONTH_LABELS } from './chartSetup.js'
+import { LineChart, BarChart, MONTH_LABELS } from './chartSetup'
 import AttendanceDetailDialog from './AttendanceDetailDialog.vue'
 
-const props = defineProps({
-  year: { type: Number, required: true },
-})
+const props = defineProps<{
+  year: number
+}>()
 
 const dashboard = useCachedAsync(
   `reports/dashboard:${props.year}`,
@@ -24,23 +24,28 @@ const data = computed(() => dashboard.data.value || {
 })
 
 // 班級多選 filter（client-side）
-const selectedClassrooms = ref([])
+const selectedClassrooms = ref<number[]>([])
 const classroomOptions = computed(() =>
-  (data.value.attendance_by_classroom || []).map(d => ({
+  (data.value.attendance_by_classroom || []).map((d: { classroom_id: number; classroom: string }) => ({
     id: d.classroom_id,
     name: d.classroom,
   })),
 )
 
 // drill-down dialog state
-const detailDialog = ref({
+const detailDialog = ref<{
+  visible: boolean
+  month: number | null
+  classroomId: number | null
+  classroomName: string | null
+}>({
   visible: false,
   month: null,
   classroomId: null,
   classroomName: null,
 })
 
-function openMonthDetail(monthIdx) {
+function openMonthDetail(monthIdx: number) {
   detailDialog.value = {
     visible: true,
     month: monthIdx + 1,
@@ -49,8 +54,8 @@ function openMonthDetail(monthIdx) {
   }
 }
 
-function openClassroomDetail(arrIdx) {
-  const arr = filteredClassroomData.value._rawData
+function openClassroomDetail(arrIdx: number) {
+  const arr = filteredClassroomData.value._rawData as Array<{ classroom_id: number; classroom: string; rate: number }> | undefined
   if (!arr || arrIdx >= arr.length) return
   const row = arr[arrIdx]
   detailDialog.value = {
@@ -62,15 +67,18 @@ function openClassroomDetail(arrIdx) {
 }
 
 const attendanceChartData = computed(() => {
-  const monthMap = {}
-  ;(data.value.attendance_monthly || []).forEach(d => { monthMap[d.month] = d })
-  const rates = [], late = [], early = [], miss = []
+  const monthMap: Record<number, { rate?: number; late?: number; early_leave?: number; missing?: number }> = {}
+  ;(data.value.attendance_monthly || []).forEach((d: { month: number; rate?: number; late?: number; early_leave?: number; missing?: number }) => { monthMap[d.month] = d })
+  const rates: (number | null)[] = []
+  const late: (number | null)[] = []
+  const early: (number | null)[] = []
+  const miss: (number | null)[] = []
   for (let m = 1; m <= 12; m++) {
     const d = monthMap[m]
-    rates.push(d ? d.rate : null)
-    late.push(d ? d.late : null)
-    early.push(d ? d.early_leave : null)
-    miss.push(d ? d.missing : null)
+    rates.push(d?.rate ?? null)
+    late.push(d?.late ?? null)
+    early.push(d?.early_leave ?? null)
+    miss.push(d?.missing ?? null)
   }
   return {
     labels: MONTH_LABELS,
@@ -85,14 +93,14 @@ const attendanceChartData = computed(() => {
 
 const attendanceChartOptions = computed(() => ({
   responsive: true, maintainAspectRatio: false,
-  interaction: { mode: 'index', intersect: false },
-  plugins: { legend: { position: 'top' }, title: { display: false } },
+  interaction: { mode: 'index' as const, intersect: false },
+  plugins: { legend: { position: 'top' as const }, title: { display: false } },
   scales: {
-    y: { type: 'linear', position: 'left', min: 0, max: 100, title: { display: true, text: '出勤率 (%)' } },
-    y1: { type: 'linear', position: 'right', min: 0, grid: { drawOnChartArea: false }, title: { display: true, text: '次數' } },
+    y: { type: 'linear' as const, position: 'left' as const, min: 0, max: 100, title: { display: true, text: '出勤率 (%)' } },
+    y1: { type: 'linear' as const, position: 'right' as const, min: 0, grid: { drawOnChartArea: false }, title: { display: true, text: '次數' } },
   },
   spanGaps: true,
-  onClick: (e, elements) => {
+  onClick: (_e: unknown, elements: Array<{ index: number }>) => {
     if (!elements.length) return
     openMonthDetail(elements[0].index)
   },
@@ -100,7 +108,7 @@ const attendanceChartOptions = computed(() => ({
 
 // 班級長條圖：套用 client-side filter
 const filteredClassroomData = computed(() => {
-  const arr = data.value.attendance_by_classroom || []
+  const arr = (data.value.attendance_by_classroom || []) as Array<{ classroom_id: number; classroom: string; rate: number }>
   const filtered = selectedClassrooms.value.length === 0
     ? arr
     : arr.filter(d => selectedClassrooms.value.includes(d.classroom_id))
@@ -115,17 +123,17 @@ const filteredClassroomData = computed(() => {
 })
 
 const classroomChartOptions = computed(() => ({
-  responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+  responsive: true, maintainAspectRatio: false, indexAxis: 'y' as const,
   plugins: { legend: { display: false } },
   scales: { x: { min: 0, max: 100, title: { display: true, text: '出勤率 (%)' } } },
-  onClick: (e, elements) => {
+  onClick: (_e: unknown, elements: Array<{ index: number }>) => {
     if (!elements.length) return
     openClassroomDetail(elements[0].index)
   },
 }))
 
 const leaveChartData = computed(() => {
-  const arr = data.value.leave_monthly || []
+  const arr = (data.value.leave_monthly || []) as Array<{ personal?: number; sick?: number; annual?: number; menstrual?: number; maternity?: number; paternity?: number }>
   const personal = arr.map(d => d.personal || 0)
   const sick = arr.map(d => d.sick || 0)
   const annual = arr.map(d => d.annual || 0)
@@ -143,7 +151,7 @@ const leaveChartData = computed(() => {
 
 const leaveChartOptions = {
   responsive: true, maintainAspectRatio: false,
-  plugins: { legend: { position: 'top' } },
+  plugins: { legend: { position: 'top' as const } },
   scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true, title: { display: true, text: '次數' } } },
 }
 </script>

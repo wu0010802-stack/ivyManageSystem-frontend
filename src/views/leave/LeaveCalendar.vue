@@ -1,29 +1,51 @@
-<script setup>
+<script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { getLeaves } from '@/api/leaves'
 import { ElMessage } from 'element-plus'
 import { useEmployeeStore } from '@/stores/employee'
 import { LEAVE_TYPES as leaveTypes } from '@/utils/leaves'
 
-const props = defineProps({
-  activeTab: String,
-})
+interface LeaveRecord {
+  id: number
+  is_approved: boolean | null
+  start_date: string
+  end_date: string
+  leave_type: string
+  leave_type_label: string
+  employee_name: string
+  start_time?: string
+  end_time?: string
+  leave_hours: number
+  reason?: string
+}
+
+interface CalCell {
+  day: number | null
+  date?: string
+  isWeekend?: boolean
+  isToday?: boolean
+  leaves: LeaveRecord[]
+}
+
+const props = defineProps<{
+  activeTab?: string
+}>()
 
 const employeeStore = useEmployeeStore()
 
 const calYear  = ref(new Date().getFullYear())
 const calMonth = ref(new Date().getMonth() + 1)
 const calLoading     = ref(false)
-const calendarLeaves = ref([])
-const calFilterEmp   = ref(null)
+const calendarLeaves = ref<LeaveRecord[]>([])
+const calFilterEmp   = ref<number | null>(null)
 
 // 詳情 Dialog
 const calDetailDate    = ref('')
-const calDetailLeaves  = ref([])
+const calDetailLeaves  = ref<LeaveRecord[]>([])
 const calDetailVisible = ref(false)
 
 // 假別顏色對應（左邊框色）
-const LEAVE_COLOR_MAP = {
+const LEAVE_COLOR_MAP: Record<string, string> = {
   personal:        '#e6a23c',
   sick:            '#409eff',
   menstrual:       '#a78bfa',
@@ -40,14 +62,17 @@ const LEAVE_COLOR_MAP = {
   parental_unpaid: '#64748b',
 }
 
-const getLeaveTypeTag = (type) => {
-  return leaveTypes.find(t => t.value === type) || { label: type, color: '' }
+type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger'
+const getLeaveTypeTag = (type: string): { label: string; color: ElTagType } => {
+  const found = leaveTypes.find((t: { value: string; color?: string }) => t.value === type)
+  if (found) return found as { label: string; color: ElTagType }
+  return { label: type, color: 'info' }
 }
 
 const fetchCalendar = async () => {
   calLoading.value = true
   try {
-    const params = { year: calYear.value, month: calMonth.value }
+    const params: Record<string, unknown> = { year: calYear.value, month: calMonth.value }
     if (calFilterEmp.value) params.employee_id = calFilterEmp.value
     const res = await getLeaves(params)
     calendarLeaves.value = res.data
@@ -88,7 +113,7 @@ const calendarGrid = computed(() => {
   const month = calMonth.value
 
   // 依日期建立 "誰在這天請假" 的 map
-  const byDate = {}
+  const byDate: Record<string, LeaveRecord[]> = {}
   for (const lv of calendarLeaves.value) {
     if (lv.is_approved === false) continue   // 已駁回不顯示
     const start      = new Date(lv.start_date + 'T00:00:00')
@@ -111,8 +136,8 @@ const calendarGrid = computed(() => {
   const firstDow    = new Date(year, month - 1, 1).getDay()
   const daysInMonth = new Date(year, month, 0).getDate()
 
-  const cells = []
-  for (let i = 0; i < firstDow; i++) cells.push({ day: null })
+  const cells: CalCell[] = []
+  for (let i = 0; i < firstDow; i++) cells.push({ day: null, leaves: [] })
   for (let d = 1; d <= daysInMonth; d++) {
     const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`
     const dow = new Date(year, month - 1, d).getDay()
@@ -124,18 +149,18 @@ const calendarGrid = computed(() => {
       leaves:    byDate[dateStr] || [],
     })
   }
-  while (cells.length % 7 !== 0) cells.push({ day: null })
+  while (cells.length % 7 !== 0) cells.push({ day: null, leaves: [] })
 
   // 切成週
-  const weeks = []
+  const weeks: CalCell[][] = []
   for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7))
   return weeks
 })
 
 // 點擊日期格子 → 開啟詳情 Dialog
-const openCalDetail = (cell) => {
+const openCalDetail = (cell: CalCell) => {
   if (!cell.day || !cell.leaves.length) return
-  calDetailDate.value   = cell.date
+  calDetailDate.value   = cell.date ?? ''
   calDetailLeaves.value = cell.leaves
   calDetailVisible.value = true
 }

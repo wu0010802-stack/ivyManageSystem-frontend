@@ -97,7 +97,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -105,23 +105,36 @@ import {
   markSubsidyPaid, rejectSubsidy, exportSubsidies,
 } from '@/api/govMoe'
 
-const filters = ref({ employee_id: '', status_filter: '', range: [] })
-const rows = ref([])
+interface SubsidyRow {
+  id: number
+  subsidy_type: string
+  employee_id: number
+  period_start: string
+  period_end: string
+  amount_requested: number | string
+  amount_approved?: number | string
+  status: string
+  notes?: string
+}
+
+const filters = ref<{ employee_id: string; status_filter: string; range: string[] }>({ employee_id: '', status_filter: '', range: [] })
+const rows = ref<SubsidyRow[]>([])
 const loading = ref(false)
-const statusOptions = [
+const statusOptions: Array<{ value: string; label: string }> = [
   { value: 'draft', label: '草稿' },
   { value: 'submitted', label: '待核' },
   { value: 'approved', label: '已核' },
   { value: 'paid', label: '已撥款' },
   { value: 'rejected', label: '退回' },
 ]
-const TYPE_LABEL = { teacher_extra: '特教加給', assistant_hourly: '助理鐘點費' }
-const typeLabel = (t) => TYPE_LABEL[t] || t
-const statusLabel = (s) => statusOptions.find(o => o.value === s)?.label || s
-const statusTagType = (s) => ({
+const TYPE_LABEL: Record<string, string> = { teacher_extra: '特教加給', assistant_hourly: '助理鐘點費' }
+const typeLabel = (t: string) => TYPE_LABEL[t] || t
+const statusLabel = (s: string) => statusOptions.find(o => o.value === s)?.label || s
+type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger'
+const statusTagType = (s: string): ElTagType => (({
   draft: 'info', submitted: 'warning', approved: 'success',
   paid: 'primary', rejected: 'danger',
-}[s] || '')
+} as Record<string, ElTagType>)[s]) ?? 'info'
 
 const summary = computed(() => {
   const requested = rows.value.reduce((a, r) => a + Number(r.amount_requested || 0), 0)
@@ -134,7 +147,7 @@ const summary = computed(() => {
 async function load() {
   loading.value = true
   try {
-    const params = {}
+    const params: Record<string, unknown> = {}
     if (filters.value.employee_id) params.employee_id = filters.value.employee_id
     if (filters.value.status_filter) params.status_filter = filters.value.status_filter
     if (filters.value.range?.[0]) params.since = filters.value.range[0]
@@ -145,7 +158,10 @@ async function load() {
 }
 
 const createOpen = ref(false)
-const createForm = ref({
+const createForm = ref<{
+  subsidy_type: string; employee_id: number;
+  range: string[]; hours_or_rate: number | null; amount_requested: number; notes: string
+}>({
   subsidy_type: 'teacher_extra', employee_id: 1,
   range: [], hours_or_rate: null, amount_requested: 0, notes: '',
 })
@@ -170,38 +186,38 @@ async function submitCreate() {
     createOpen.value = false
     await load()
   } catch (e) {
-    ElMessage.error(e.response?.data?.detail || '建立失敗')
+    ElMessage.error((e as { response?: { data?: { detail?: string } } }).response?.data?.detail || '建立失敗')
   } finally { submitting.value = false }
 }
 
-async function onSubmit(row) { await submitSubsidy(row.id); await load() }
+async function onSubmit(row: SubsidyRow) { await submitSubsidy(row.id); await load() }
 const approveOpen = ref(false)
-const approveTarget = ref(null)
+const approveTarget = ref<SubsidyRow | null>(null)
 const approveForm = ref({ amount_approved: 0, notes: '' })
-function onApprove(row) {
+function onApprove(row: SubsidyRow) {
   approveTarget.value = row
-  approveForm.value = { amount_approved: row.amount_requested, notes: '' }
+  approveForm.value = { amount_approved: Number(row.amount_requested), notes: '' }
   approveOpen.value = true
 }
 async function submitApprove() {
-  await approveSubsidy(approveTarget.value.id, approveForm.value)
+  await approveSubsidy(approveTarget.value!.id, approveForm.value)
   approveOpen.value = false; await load()
 }
-async function onMarkPaid(row) {
+async function onMarkPaid(row: SubsidyRow) {
   await ElMessageBox.confirm(`確認 ${row.id} 已撥款？`, '撥款確認')
   await markSubsidyPaid(row.id, { paid_at: new Date().toISOString() })
   await load()
 }
-async function onReject(row) {
+async function onReject(row: SubsidyRow) {
   await ElMessageBox.confirm('確認退回？', '退回確認')
   await rejectSubsidy(row.id); await load()
 }
 async function onExport() {
-  const params = {}
+  const params: Record<string, string> = {}
   if (filters.value.range?.[0]) params.since = filters.value.range[0]
   if (filters.value.range?.[1]) params.until = filters.value.range[1]
   const { data } = await exportSubsidies(params)
-  const url = URL.createObjectURL(data)
+  const url = URL.createObjectURL(data as Blob)
   const a = document.createElement('a')
   a.href = url; a.download = '義華幼兒園_特教加給.xlsx'; a.click()
   URL.revokeObjectURL(url)

@@ -1,11 +1,12 @@
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getAnomalies, confirmAnomaly as confirmAnomalyApi } from '@/api/portal'
 import { apiError } from '@/utils/error'
 
+interface AnomalyEntry { id: number; type?: string; confirmed?: boolean; date?: string; weekday?: string; type_label?: string; detail?: string; estimated_deduction?: number | string; selected_action?: string; remark?: string; submitting?: boolean; [key: string]: unknown }
 const loading = ref(false)
-const anomalies = ref([])
+const anomalies = ref<AnomalyEntry[]>([])
 
 const now = new Date()
 const query = reactive({
@@ -17,7 +18,7 @@ const fetchAnomalies = async () => {
   loading.value = true
   try {
     const res = await getAnomalies({ year: query.year, month: query.month })
-    anomalies.value = res.data.map(a => ({ ...a, selected_action: '', remark: '', submitting: false }))
+    anomalies.value = (res.data as Record<string, unknown>[]).map((a) => ({ ...a, selected_action: '', remark: '', submitting: false }) as AnomalyEntry)
   } catch (error) {
     ElMessage.error('載入失敗')
   } finally {
@@ -25,7 +26,7 @@ const fetchAnomalies = async () => {
   }
 }
 
-const confirmAnomaly = async (anomaly) => {
+const confirmAnomaly = async (anomaly: AnomalyEntry) => {
   if (!anomaly.selected_action) {
     ElMessage.warning('請選擇處理方式')
     return

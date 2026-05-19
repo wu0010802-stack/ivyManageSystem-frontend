@@ -1,11 +1,14 @@
-<script setup>
-defineProps({
-  activeTab: { type: String, required: true }, // 'daily' | 'monthly'
-  classrooms: { type: Array, required: true },
-  classroomId: { type: [Number, null], default: null },
-})
+<script setup lang="ts">
+defineProps<{
+  activeTab: string
+  classrooms: { classroom_id?: number; classroom_name?: string; [key: string]: unknown }[]
+  classroomId?: number | null
+}>()
 
-defineEmits(['update:activeTab', 'update:classroomId'])
+defineEmits<{
+  'update:activeTab': [value: string]
+  'update:classroomId': [value: number | null]
+}>()
 </script>
 
 <template>
@@ -13,7 +16,7 @@ defineEmits(['update:activeTab', 'update:classroomId'])
     <div class="tabs-header">
       <el-radio-group
         :model-value="activeTab"
-        @update:model-value="$emit('update:activeTab', $event)"
+        @update:model-value="(v) => $emit('update:activeTab', String(v))"
       >
         <el-radio-button label="daily">日點名</el-radio-button>
         <el-radio-button label="monthly">月統計</el-radio-button>
@@ -29,7 +32,7 @@ defineEmits(['update:activeTab', 'update:classroomId'])
           v-for="c in classrooms"
           :key="c.classroom_id"
           :label="c.classroom_name"
-          :value="c.classroom_id"
+          :value="(c.classroom_id as string | number | boolean | object)"
         />
       </el-select>
     </div>

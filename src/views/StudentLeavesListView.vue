@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { listStudentLeaves } from '@/api/studentLeaves'
@@ -6,24 +6,25 @@ import { useClassroomStore } from '@/stores/classroom'
 import { apiError } from '@/utils/error'
 import { buildStudentProfileLink } from '@/utils/studentLinks'
 
-const STATUS_OPTIONS = [
+type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
+const STATUS_OPTIONS: { value: string; label: string; type: ElTagType }[] = [
   { value: 'approved', label: '已成立', type: 'success' },
   { value: 'cancelled', label: '已取消', type: 'info' },
 ]
-const STATUS_MAP = Object.fromEntries(STATUS_OPTIONS.map(s => [s.value, s]))
+const STATUS_MAP: Record<string, { value: string; label: string; type: ElTagType }> = Object.fromEntries(STATUS_OPTIONS.map(s => [s.value, s]))
 
-const filters = reactive({
+const filters = reactive<{ status: string; classroom_id: number | null }>({
   status: 'approved',
   classroom_id: null,
 })
 const loading = ref(false)
-const items = ref([])
+const items = ref<Record<string, unknown>[]>([])
 const classroomStore = useClassroomStore()
 
 const fetchLeaves = async () => {
   loading.value = true
   try {
-    const params = { status: filters.status, limit: 200 }
+    const params: { status: string; limit: number; classroom_id?: number } = { status: filters.status, limit: 200 }
     if (filters.classroom_id) params.classroom_id = filters.classroom_id
     const res = await listStudentLeaves(params)
     items.value = res.data?.items || []
@@ -35,7 +36,7 @@ const fetchLeaves = async () => {
   }
 }
 
-const formatDate = (s) => (s ? s.replace(/T.*/, '') : '')
+const formatDate = (s: string) => (s ? s.replace(/T.*/, '') : '')
 
 onMounted(() => {
   fetchLeaves()
@@ -87,7 +88,7 @@ onMounted(() => {
         <template #default="{ row }">
           <router-link
             v-if="buildStudentProfileLink(row.student_id, 'records')"
-            :to="buildStudentProfileLink(row.student_id, 'records')"
+            :to="buildStudentProfileLink(row.student_id, 'records')!"
             class="student-link"
           >{{ row.student_name }}</router-link>
           <span v-else>{{ row.student_name }}</span>

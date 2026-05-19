@@ -120,14 +120,27 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import type { UploadFile, UploadRawFile } from 'element-plus'
 import {
   getRegistrationTime,
   updateRegistrationTime,
   uploadActivityPoster,
 } from '@/api/activity'
+
+interface SettingsForm {
+  is_open: boolean
+  open_at: string | null
+  close_at: string | null
+  page_title: string
+  term_label: string
+  event_date_label: string
+  target_audience: string
+  form_card_title: string
+  poster_url: string
+}
 
 const DEFAULT_POSTER = '/images/activity-poster.jpg'
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
@@ -137,7 +150,7 @@ const saving = ref(false)
 const uploading = ref(false)
 const savedAt = ref('')
 
-const form = ref({
+const form = ref<SettingsForm>({
   is_open: false,
   open_at: null,
   close_at: null,
@@ -170,7 +183,7 @@ async function fetchSettings() {
   loading.value = true
   try {
     const res = await getRegistrationTime()
-    const d = res.data || {}
+    const d = res.data as Partial<SettingsForm>
     form.value = {
       is_open: d.is_open ?? false,
       open_at: d.open_at || null,
@@ -190,7 +203,7 @@ async function fetchSettings() {
   }
 }
 
-function beforePosterUpload(file) {
+function beforePosterUpload(file: UploadRawFile) {
   const okType = /\.(jpe?g|png|gif|webp)$/i.test(file.name)
   if (!okType) {
     ElMessage.error('僅支援 jpg / jpeg / png / gif / webp')
@@ -204,15 +217,16 @@ function beforePosterUpload(file) {
   return true
 }
 
-async function handlePosterUpload({ file }) {
+async function handlePosterUpload({ file }: { file: UploadRawFile }) {
   uploading.value = true
   try {
     const res = await uploadActivityPoster(file)
-    form.value.poster_url = res.data?.poster_url || ''
+    form.value.poster_url = (res.data as { poster_url?: string })?.poster_url || ''
     posterBroken.value = false
     ElMessage.success('海報已更新')
   } catch (e) {
-    ElMessage.error(e?.response?.data?.detail || '上傳失敗')
+    const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+    ElMessage.error(detail || '上傳失敗')
   } finally {
     uploading.value = false
   }
@@ -252,7 +266,8 @@ async function handleSave() {
     ElMessage.success('設定已儲存')
     savedAt.value = new Date().toLocaleString('zh-TW')
   } catch (e) {
-    ElMessage.error(e?.response?.data?.detail || '儲存失敗')
+    const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+    ElMessage.error(detail || '儲存失敗')
   } finally {
     saving.value = false
   }

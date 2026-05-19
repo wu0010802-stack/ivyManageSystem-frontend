@@ -1,12 +1,15 @@
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getCalendar } from '@/api/portal'
 import { apiError } from '@/utils/error'
 
+interface CalendarEvent { id?: number; event_date?: string; end_date?: string; event_type?: string; event_type_label?: string; title?: string; is_all_day?: boolean; start_time?: string; end_time?: string; location?: string; is_official?: boolean; [key: string]: unknown }
+interface OfficialSync { warning?: string; [key: string]: unknown }
+
 const loading = ref(false)
-const events = ref([])
-const officialSync = ref(null)
+const events = ref<CalendarEvent[]>([])
+const officialSync = ref<OfficialSync | null>(null)
 
 const now = new Date()
 const currentDate = ref(new Date(now.getFullYear(), now.getMonth(), 1))
@@ -60,8 +63,8 @@ const calendarDays = computed(() => {
   // 預建日期→事件 Map，避免對每天都做 O(n) 線性掃描
   const eventsByDate = new Map()
   for (const ev of events.value) {
-    const start = ev.event_date
-    const end = ev.end_date || ev.event_date
+    const start = ev.event_date ?? ''
+    const end = ev.end_date || (ev.event_date ?? '')
     for (let d = 1; d <= totalDays; d++) {
       const dateStr = `${yr}-${mo}-${String(d).padStart(2, '0')}`
       if (dateStr >= start && dateStr <= end) {
@@ -96,7 +99,7 @@ const goToday = () => {
   fetchEvents()
 }
 
-const isToday = (dateStr) => {
+const isToday = (dateStr: string) => {
   if (!dateStr) return false
   const today = new Date()
   const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
@@ -105,8 +108,8 @@ const isToday = (dateStr) => {
 
 // Detail dialog
 const detailVisible = ref(false)
-const selectedEvent = ref(null)
-const showDetail = (ev) => {
+const selectedEvent = ref<CalendarEvent | null>(null)
+const showDetail = (ev: CalendarEvent) => {
   selectedEvent.value = ev
   detailVisible.value = true
 }
@@ -141,7 +144,7 @@ onMounted(fetchEvents)
         v-for="(cell, idx) in calendarDays"
         :key="idx"
         class="calendar-cell"
-        :class="{ 'empty': !cell.day, 'today': isToday(cell.date) }"
+        :class="{ 'empty': !cell.day, 'today': cell.date ? isToday(cell.date) : false }"
       >
         <div class="cell-day" v-if="cell.day">{{ cell.day }}</div>
         <div class="cell-events" v-if="cell.events.length">
@@ -180,7 +183,7 @@ onMounted(fetchEvents)
         @click="showDetail(ev)"
       >
         <div class="event-card-left">
-          <span class="event-type-bar" :style="{ backgroundColor: eventTypeMap[ev.event_type]?.color || '#909399' }"></span>
+          <span class="event-type-bar" :style="{ backgroundColor: eventTypeMap[ev.event_type ?? '']?.color || '#909399' }"></span>
         </div>
         <div class="event-card-body">
           <div class="event-card-title">{{ ev.title }}</div>
@@ -198,7 +201,7 @@ onMounted(fetchEvents)
         >
           官方
         </el-tag>
-        <el-tag :color="eventTypeMap[ev.event_type]?.color" effect="dark" size="small" style="border: none; color: #fff">
+        <el-tag :color="eventTypeMap[ev.event_type ?? '']?.color" effect="dark" size="small" style="border: none; color: #fff">
           {{ ev.event_type_label }}
         </el-tag>
       </div>
@@ -211,7 +214,7 @@ onMounted(fetchEvents)
         <el-descriptions :column="1" border>
           <el-descriptions-item label="標題">{{ selectedEvent.title }}</el-descriptions-item>
           <el-descriptions-item label="類型">
-            <el-tag :color="eventTypeMap[selectedEvent.event_type]?.color" effect="dark" size="small" style="border: none; color: #fff">
+            <el-tag :color="eventTypeMap[selectedEvent.event_type ?? '']?.color" effect="dark" size="small" style="border: none; color: #fff">
               {{ selectedEvent.event_type_label }}
             </el-tag>
             <el-tag v-if="selectedEvent.is_official" type="info" effect="plain" size="small" style="margin-left: 8px">

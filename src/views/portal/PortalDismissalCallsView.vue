@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Bell, Mute, Refresh } from '@element-plus/icons-vue'
@@ -8,14 +8,16 @@ import {
   completeDismissalCall,
 } from '@/api/dismissalCalls'
 
+interface DismissalCall { id: number; student_name?: string; classroom_name?: string; status?: string; [key: string]: unknown }
+
 // ─── 狀態 ───────────────────────────────────────────────
-const activeCalls = ref([])   // pending + acknowledged
+const activeCalls = ref<DismissalCall[]>([])   // pending + acknowledged
 const loading = ref(false)
 
 // WebSocket 與連線狀態
-let ws = null
-let wsReconnectTimer = null
-let pollingTimer = null
+let ws: WebSocket | null = null
+let wsReconnectTimer: ReturnType<typeof setTimeout> | null = null
+let pollingTimer: ReturnType<typeof setInterval> | null = null
 const WS_MAX_RETRIES = 5
 const wsConnected = ref(false)
 const wsReconnectCount = ref(0)
@@ -38,12 +40,12 @@ const toggleMute = () => {
 }
 
 // 用 Web Audio API 合成短 beep，避免額外音檔依賴
-let audioCtx = null
+let audioCtx: AudioContext | null = null
 const playBeep = () => {
   if (muted.value) return
   try {
     if (!audioCtx) {
-      const Ctx = window.AudioContext || window.webkitAudioContext
+      const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
       if (!Ctx) return
       audioCtx = new Ctx()
     }
@@ -80,20 +82,21 @@ const fetchCalls = async () => {
 }
 
 // ─── 確認已收到 ──────────────────────────────────────────
-const handleAcknowledge = async (call) => {
+const handleAcknowledge = async (call: DismissalCall) => {
   try {
     await acknowledgeDismissalCall(call.id)
     const idx = activeCalls.value.findIndex(c => c.id === call.id)
     if (idx !== -1) activeCalls.value[idx].status = 'acknowledged'
   } catch (e) {
-    ElMessage.error(e.response?.data?.detail || '操作失敗')
+    const err = e as { response?: { data?: { detail?: string } } }
+    ElMessage.error(err.response?.data?.detail || '操作失敗')
   }
 }
 
 // ─── 確認已放學 ──────────────────────────────────────────
 // 此操作無法撤銷（後端無 reverse-complete 端點，且家長端會收到放學通知），
 // 因此先二次確認再送出。
-const handleComplete = async (call) => {
+const handleComplete = async (call: DismissalCall) => {
   try {
     await ElMessageBox.confirm(
       `確定 ${call.student_name}（${call.classroom_name}）已交給家長放學？\n此操作無法撤銷，家長端將收到放學通知。`,
@@ -112,7 +115,8 @@ const handleComplete = async (call) => {
     activeCalls.value = activeCalls.value.filter(c => c.id !== call.id)
     ElMessage.success('已標記為放學')
   } catch (e) {
-    ElMessage.error(e.response?.data?.detail || '操作失敗')
+    const err = e as { response?: { data?: { detail?: string } } }
+    ElMessage.error(err.response?.data?.detail || '操作失敗')
   }
 }
 
@@ -149,7 +153,7 @@ const connectWs = () => {
       // 後端 _recv_loop 等 client 任何訊息回應，90 秒沒收就主動斷線。
       // ping 來時必須回送任意訊息以維持連線存活。
       if (event.type === 'ping') {
-        ws.send(JSON.stringify({ type: 'pong' }))
+        ws?.send(JSON.stringify({ type: 'pong' }))
         return
       }
       handleWsEvent(event)
@@ -176,7 +180,7 @@ const reloadPage = () => {
   location.reload()
 }
 
-const handleWsEvent = (event) => {
+const handleWsEvent = (event: { type: string; payload: DismissalCall }) => {
   const { type, payload } = event
   if (type === 'dismissal_call_created') {
     activeCalls.value.unshift(payload)
@@ -197,7 +201,7 @@ const handleWsEvent = (event) => {
 }
 
 // ─── 瀏覽器推播 ──────────────────────────────────────────
-const notifyBrowser = (call) => {
+const notifyBrowser = (call: DismissalCall) => {
   if (Notification.permission === 'granted') {
     new Notification('接送通知', {
       body: `${call.student_name}（${call.classroom_name}）等待接送`,
@@ -213,7 +217,7 @@ const requestNotificationPermission = () => {
 }
 
 // ─── 工具函式 ────────────────────────────────────────────
-const formatTime = (dt) => {
+const formatTime = (dt: string | null | undefined) => {
   if (!dt) return '-'
   const d = new Date(dt)
   return d.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })
@@ -296,7 +300,7 @@ onUnmounted(() => {
         <div class="call-info">
           <div class="student-name">{{ call.student_name }}</div>
           <div class="classroom-name">{{ call.classroom_name }}</div>
-          <div class="call-time">通知時間：{{ formatTime(call.requested_at) }}</div>
+          <div class="call-time">通知時間：{{ formatTime(call.requested_at as string | null | undefined) }}</div>
           <div v-if="call.note" class="call-note">備註：{{ call.note }}</div>
         </div>
         <div class="call-actions">

@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -27,23 +27,27 @@ import CommentDialog from './components/CommentDialog.vue'
 import BatchSignButton from './components/BatchSignButton.vue'
 import SummaryLogDrawer from './components/SummaryLogDrawer.vue'
 
+interface Cycle { id: number; academic_year?: number; semester?: string; base_score_calc_date?: string; base_score?: number; status?: string; [key: string]: unknown }
+interface Participant { id: number; employee_id?: number; role_group?: string; employee_name?: string; [key: string]: unknown }
+interface Summary { id: number; participant_id?: number; status?: string; total_score?: number; grade?: string; bonus_amount?: number; employee_name?: string; [key: string]: unknown }
+
 const route = useRoute()
 const router = useRouter()
 const cycleId = Number(route.params.id)
 
-const cycle = ref(null)
-const participants = ref([])
-const summaries = ref([])
-const catalog = ref([])
+const cycle = ref<Cycle | null>(null)
+const participants = ref<Participant[]>([])
+const summaries = ref<Summary[]>([])
+const catalog = ref<unknown[]>([])
 const loading = ref(false)
 const busy = ref(false)
 
 // P1-9：view 用 URL query 同步，F5 後保留、可分享。
 const VALID_VIEWS = ['kanban', 'list']
-const initialQueryView = route?.query?.view
+const initialQueryView = String(route?.query?.view ?? '')
 const initialView = VALID_VIEWS.includes(initialQueryView) ? initialQueryView : 'kanban'
 const view = ref(initialView)
-const selectedIds = ref([])
+const selectedIds = ref<number[]>([])
 
 // view 切換時：① 同步 URL query ② 清空 selectedIds（兩 view 的 id 來源不同）
 watch(view, (next) => {
@@ -55,19 +59,19 @@ watch(view, (next) => {
 
 // P1-14：以 ref<Array<id>> 追蹤每張卡正在簽核中的狀態，
 // 用 Set 包裝避免 race；toolbar busy 改為 isRecomputing 專用。
-const signingIds = ref([])
-const isSigning = (summaryId) => signingIds.value.includes(summaryId)
+const signingIds = ref<number[]>([])
+const isSigning = (summaryId: number) => signingIds.value.includes(summaryId)
 
 const summaryByParticipant = computed(() => {
-  const m = {}
-  for (const s of summaries.value) m[s.participant_id] = s
+  const m: Record<number, Summary> = {}
+  for (const s of summaries.value) if (s.participant_id != null) m[s.participant_id] = s
   return m
 })
 
 // P1-6：以 summary.id 為 key，給 BatchSignButton 的失敗清單 dialog
 // 拿 employee_name 顯示而非裸 summary_id。
 const summariesById = computed(() => {
-  const m = {}
+  const m: Record<number, Summary> = {}
   for (const s of summaries.value) m[s.id] = s
   return m
 })
@@ -90,11 +94,11 @@ const canReject = computed(() => canBatchSign.value)
 async function load() {
   loading.value = true
   try {
-    const cycles = (await listAppraisalCycles()).data
+    const cycles = (await listAppraisalCycles()).data as unknown as Cycle[]
     cycle.value = cycles.find((c) => c.id === cycleId) || null
-    participants.value = (await listAppraisalParticipants(cycleId)).data
-    summaries.value = (await listAppraisalSummaries(cycleId)).data
-    catalog.value = (await listAppraisalCatalog()).data
+    participants.value = (await listAppraisalParticipants(cycleId)).data as Participant[]
+    summaries.value = (await listAppraisalSummaries(cycleId)).data as Summary[]
+    catalog.value = (await listAppraisalCatalog()).data as unknown[]
   } catch (e) {
     ElMessage.error(apiError(e, MSG.load_failed))
   } finally {
@@ -102,7 +106,7 @@ async function load() {
   }
 }
 
-const kanbanRef = ref(null)
+const kanbanRef = ref<{ reload?: () => void } | null>(null)
 async function reload() {
   await load()
   if (kanbanRef.value?.reload) kanbanRef.value.reload()
@@ -139,7 +143,7 @@ const STAGE_TO_NEXT_STATUS = {
 }
 
 // P1-14：reject 成功後局部 patch summary.status，避免 4 個 API 全 reload
-function onRejected({ summaryId, newStatus } = {}) {
+function onRejected({ summaryId, newStatus }: { summaryId?: number; newStatus?: string } = {}) {
   if (summaryId && newStatus) {
     const idx = summaries.value.findIndex((s) => s.id === summaryId)
     if (idx >= 0) {
@@ -154,7 +158,7 @@ function onCommented() {
   silentKanbanRefresh()
 }
 
-async function sign({ summary, stage }) {
+async function sign({ summary, stage }: { summary: { id: number }; stage: string }) {
   const id = summary.id
   // 重複 click 防護
   if (signingIds.value.includes(id)) return
@@ -165,7 +169,7 @@ async function sign({ summary, stage }) {
     else if (stage === 'finalize') await finalizeAppraisalSummary(id)
     ElMessage.success(MSG.sign_success)
     // 局部 patch：更新本地 summaries 該筆的 status，UI 立刻反映新狀態
-    const nextStatus = STAGE_TO_NEXT_STATUS[stage]
+    const nextStatus = (STAGE_TO_NEXT_STATUS as Record<string, string>)[stage]
     if (nextStatus) {
       const idx = summaries.value.findIndex((s) => s.id === id)
       if (idx >= 0) {
@@ -182,28 +186,32 @@ async function sign({ summary, stage }) {
 }
 
 const rejectDialogVisible = ref(false)
-const rejectTarget = ref(null)
-function openReject(summary) { rejectTarget.value = summary; rejectDialogVisible.value = true }
+const rejectTarget = ref<Summary | null>(null)
+function openReject(summary: Summary) { rejectTarget.value = summary; rejectDialogVisible.value = true }
 
 const commentDialogVisible = ref(false)
-const commentTarget = ref(null)
-function openComment(summary) { commentTarget.value = summary; commentDialogVisible.value = true }
+const commentTarget = ref<Summary | null>(null)
+function openComment(summary: Summary) { commentTarget.value = summary; commentDialogVisible.value = true }
 
 const logDrawerVisible = ref(false)
-const logTargetId = ref(null)
-function openLog(summary) { logTargetId.value = summary.id; logDrawerVisible.value = true }
+const logTargetId = ref<number | null>(null)
+function openLog(summary: Summary) { logTargetId.value = summary.id; logDrawerVisible.value = true }
 
-function onKanbanAction({ action, summary }) {
+function onKanbanAction({ action, summary }: { action: string; summary: Summary }) {
   if (action === 'sign') {
     const stage = ({
       DRAFT: 'supervisor',
       SUPERVISOR_SIGNED: 'accounting',
       ACCOUNTING_SIGNED: 'finalize',
-    })[summary.status]
+    } as Record<string, string>)[summary.status ?? '']
     if (stage) sign({ summary: { id: summary.id }, stage })
   } else if (action === 'reject') openReject(summary)
   else if (action === 'comment') openComment(summary)
   else if (action === 'log') openLog(summary)
+}
+
+function onKanbanActionPayload(payload: unknown) {
+  onKanbanAction(payload as { action: string; summary: Summary })
 }
 
 defineExpose({
@@ -229,7 +237,7 @@ onMounted(load)
       {{ cycle.semester === 'FIRST' ? '上學期' : '下學期' }} ｜
       基準日 {{ cycle.base_score_calc_date }} ｜
       基礎分數 {{ Number(cycle.base_score).toFixed(2) }} ｜
-      狀態 {{ statusLabel(cycle.status) }}
+      狀態 {{ statusLabel(cycle.status ?? '') }}
     </div>
 
     <div class="toolbar">
@@ -276,7 +284,7 @@ onMounted(load)
       v-if="view === 'kanban'"
       ref="kanbanRef"
       :cycle-id="cycleId"
-      @action="onKanbanAction"
+      @action="onKanbanActionPayload"
       @selected-changed="(ids) => (selectedIds = ids)"
     />
 

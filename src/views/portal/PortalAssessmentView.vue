@@ -1,21 +1,26 @@
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getMyClassAssessments, createPortalAssessment } from '@/api/studentAssessments'
 import api from '@/api/index'
-import { ASSESSMENT_TYPES, DOMAINS, RATINGS, RATING_TAG } from '@/constants/studentRecords'
+import { ASSESSMENT_TYPES, DOMAINS, RATINGS, RATING_TAG as _RATING_TAG } from '@/constants/studentRecords'
+
+type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
+const RATING_TAG = _RATING_TAG as Record<string, ElTagType>
 
 // ── 班級/學生 ─────────────────────────────────────────
-const classrooms = ref([])      // [{ classroom_id, classroom_name, students: [...] }]
-const activeClassroom = ref(null)
+interface ClassroomStudent { id: number; name: string; [key: string]: unknown }
+interface ClassroomItem { classroom_id: number; classroom_name: string; students: ClassroomStudent[] }
+const classrooms = ref<ClassroomItem[]>([])      // [{ classroom_id, classroom_name, students: [...] }]
+const activeClassroom = ref('')
 const classLoading = ref(false)
 
 // ── 評量列表 ──────────────────────────────────────────
-const assessments = ref([])
+const assessments = ref<Record<string, unknown>[]>([])
 const total = ref(0)
 const loading = ref(false)
-const filterSemester = ref(null)
-const filterType = ref(null)
+const filterSemester = ref<string | null>(null)
+const filterType = ref<string | null>(null)
 
 // ── Dialog ────────────────────────────────────────────
 const dialogVisible = ref(false)
@@ -33,7 +38,7 @@ const emptyForm = () => ({
 })
 const form = reactive(emptyForm())
 
-const currentStudents = ref([])
+const currentStudents = ref<ClassroomStudent[]>([])
 
 const fetchMyStudents = async () => {
   classLoading.value = true
@@ -51,8 +56,8 @@ const fetchMyStudents = async () => {
   }
 }
 
-const onTabChange = (cid) => {
-  const cr = classrooms.value.find(c => String(c.classroom_id) === cid)
+const onTabChange = (cid: string | number) => {
+  const cr = classrooms.value.find(c => String(c.classroom_id) === String(cid))
   currentStudents.value = cr ? cr.students : []
   filterSemester.value = null
   filterType.value = null
@@ -63,7 +68,7 @@ const fetchAssessments = async () => {
   if (!activeClassroom.value) return
   loading.value = true
   try {
-    const params = { classroom_id: Number(activeClassroom.value), limit: 100 }
+    const params: { classroom_id: number; limit: number; semester?: string; assessment_type?: string } = { classroom_id: Number(activeClassroom.value), limit: 100 }
     if (filterSemester.value) params.semester = filterSemester.value
     if (filterType.value) params.assessment_type = filterType.value
     const res = await getMyClassAssessments(params)
@@ -103,13 +108,13 @@ const submitForm = async () => {
     dialogVisible.value = false
     fetchAssessments()
   } catch (e) {
-    ElMessage.error(e.response?.data?.detail || '新增失敗')
+    ElMessage.error((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '新增失敗')
   } finally {
     formLoading.value = false
   }
 }
 
-const truncate = (text, len = 60) => {
+const truncate = (text: string, len = 60) => {
   if (!text) return ''
   return text.length > len ? text.slice(0, len) + '…' : text
 }

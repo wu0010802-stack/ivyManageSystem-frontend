@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getOvertimes, createOvertime, updateOvertime, approveOvertime as approveOvertimeApi, batchApproveOvertimes, getOvertimeImportTemplate, importOvertimes } from '@/api/overtimes'
@@ -27,11 +27,21 @@ const canViewMeetings = computed(() => hasPermission('MEETINGS'))
 const activeSection = ref('overtime')
 
 const loading = ref(false)
-const overtimeRecords = ref([])
+const overtimeRecords = ref<Record<string, unknown>[]>([])
 const { items: pendingRecords, fetch: silentFetchPending } = useFetchPending(getOvertimes)
 
 
-const form = reactive({
+const form = reactive<{
+  id: number | null
+  employee_id: string | number | null
+  overtime_date: string
+  overtime_type: string
+  start_time: string
+  end_time: string
+  hours: number
+  reason: string
+  use_comp_leave: boolean
+}>({
   id: null,
   employee_id: null,
   overtime_date: '',
@@ -55,16 +65,16 @@ const resetForm = () => {
   form.use_comp_leave = false
 }
 
-const populateForm = (row) => {
-  form.id = row.id
-  form.employee_id = row.employee_id
-  form.overtime_date = row.overtime_date
-  form.overtime_type = row.overtime_type
-  form.start_time = row.start_time || ''
-  form.end_time = row.end_time || ''
-  form.hours = row.hours
-  form.reason = row.reason || ''
-  form.use_comp_leave = row.use_comp_leave || false
+const populateForm = (row: Record<string, unknown>) => {
+  form.id = (row.id as number | null) ?? null
+  form.employee_id = (row.employee_id as string | number | null) ?? null
+  form.overtime_date = String(row.overtime_date ?? '')
+  form.overtime_type = String(row.overtime_type ?? 'weekday')
+  form.start_time = String(row.start_time ?? '')
+  form.end_time = String(row.end_time ?? '')
+  form.hours = Number(row.hours ?? 1)
+  form.reason = String(row.reason ?? '')
+  form.use_comp_leave = Boolean(row.use_comp_leave)
 }
 
 // 起迄時間 vs 時數一致性檢查
@@ -101,7 +111,7 @@ const fetchOvertimes = async () => {
   if (!canViewOvertime.value) return
   loading.value = true
   try {
-    const params = { year: query.year, month: query.month }
+    const params: Record<string, unknown> = { year: query.year, month: query.month }
     if (query.employee_id) params.employee_id = query.employee_id
     const response = await getOvertimes(params)
     overtimeRecords.value = Array.isArray(response.data) ? response.data : []
@@ -155,7 +165,7 @@ const saveOvertime = async () => {
     if (isEdit.value) {
       // 後端 OvertimeUpdate 禁止翻轉 use_comp_leave（2026-05-11 P2-14），update payload 必須剔除
       const { employee_id, use_comp_leave: _useCompLeave, ...updatePayload } = payload
-      const resp = await updateOvertime(form.id, updatePayload)
+      const resp = await updateOvertime(form.id!, updatePayload)
       ElMessage.success(`加班記錄已更新，加班費: $${resp.data.overtime_pay?.toLocaleString() || 0}`)
     } else {
       const resp = await createOvertime(payload)
@@ -164,7 +174,7 @@ const saveOvertime = async () => {
     closeDialog()
     await refreshAllData()
   } catch (error) {
-    ElMessage.error('儲存失敗: ' + apiError(error, error.message))
+    ElMessage.error('儲存失敗: ' + apiError(error, (error as Error).message))
   } finally {
     saveOvertimeLoading.value = false
   }
@@ -181,21 +191,21 @@ const { confirmDelete: deleteOvertime, deleting: deleteOvertimeLoading } = useCo
 })
 
 const { execute: executeApproval } = useApprovalOperation({
-  apiFn: approveOvertimeApi,
+  apiFn: approveOvertimeApi as (id: unknown, payload: unknown) => Promise<unknown>,
   onSuccess: refreshAllData,
 })
-const approveOvertime = async (row, approved) => {
-  const payload = { approved }
+const approveOvertime = async (row: Record<string, unknown>, approved: boolean) => {
+  const payload: { approved: boolean; rejection_reason?: string } = { approved }
   if (!approved) {
     try {
-      const { value } = await ElMessageBox.prompt('請填寫駁回原因（至少 3 個字）', '駁回加班申請', {
+      const result = await ElMessageBox.prompt('請填寫駁回原因（至少 3 個字）', '駁回加班申請', {
         confirmButtonText: '確認駁回',
         cancelButtonText: '取消',
         inputType: 'textarea',
         inputPattern: /\S{3,}/,
         inputErrorMessage: '請填寫駁回原因（至少 3 個字）',
       })
-      payload.rejection_reason = value.trim()
+      payload.rejection_reason = (result as unknown as { value: string }).value.trim()
     } catch {
       return
     }
@@ -206,9 +216,9 @@ const approveOvertime = async (row, approved) => {
 
 const overtimeSummary = computed(() =>
   overtimeRecords.value.reduce(
-    (acc, r) => {
-      acc.totalHours += r.hours || 0
-      acc.totalPay += r.overtime_pay || 0
+    (acc: { totalHours: number; totalPay: number }, r) => {
+      acc.totalHours += Number(r.hours) || 0
+      acc.totalPay += Number(r.overtime_pay) || 0
       return acc
     },
     { totalHours: 0, totalPay: 0 },
@@ -231,7 +241,7 @@ const {
   canApprove,
 } = useApprovalModule({
   docType: 'overtime',
-  batchApproveFn: batchApproveOvertimes,
+  batchApproveFn: batchApproveOvertimes as (ids: unknown[], approved: boolean, reason?: string) => Promise<{ data: { succeeded: { length: number }[]; failed: { id: unknown; reason: string }[] } }>,
   fetchFn: refreshAllData,
   recordLabel: '加班記錄',
 })
@@ -239,7 +249,13 @@ const {
 // ── Excel 匯入 ──
 const importVisible = ref(false)
 const importLoading = ref(false)
-const importResult = ref(null)
+interface ImportResult {
+  total: number
+  created: number
+  failed: number
+  errors?: string[]
+}
+const importResult = ref<ImportResult | null>(null)
 
 const downloadImportTemplate = async () => {
   try {
@@ -255,7 +271,8 @@ const downloadImportTemplate = async () => {
   }
 }
 
-const handleImportFile = async (file) => {
+const handleImportFile = async (file: { raw?: File }) => {
+  if (!file.raw) return false
   importLoading.value = true
   importResult.value = null
   try {
@@ -268,12 +285,16 @@ const handleImportFile = async (file) => {
       await refreshAllData()
     }
   } catch (err) {
-    ElMessage.error('匯入失敗：' + (err.response?.data?.detail || err.message))
+    const e = err as { response?: { data?: { detail?: string } }; message?: string }
+    ElMessage.error('匯入失敗：' + (e.response?.data?.detail || e.message))
   } finally {
     importLoading.value = false
   }
   return false
 }
+
+// approvalLogs cast for ApprovalLogDrawer (its ApprovalLog type is component-local)
+const castApprovalLogs = computed(() => approvalLogs.value as unknown as { id: number; action: string; created_at?: string; approver_username?: string; approver_role?: string }[])
 
 // ── 審核流程（approvalPolicyStore 仍需 onMounted 中呼叫 fetchPolicies）──────
 const approvalPolicyStore = useApprovalPolicyStore()
@@ -560,7 +581,7 @@ watch(activeSection, async (value) => {
     <ApprovalLogDrawer
       v-model:visible="approvalLogDrawerVisible"
       :loading="approvalLogLoading"
-      :logs="approvalLogs"
+      :logs="castApprovalLogs"
     />
   </div>
 </template>

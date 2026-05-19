@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, watch, onMounted } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { ElMessage } from 'element-plus'
@@ -42,7 +42,7 @@ const fetchCorrections = async () => {
 
 const openForm = () => { showForm.value = true }
 
-const submitCorrection = async (payload) => {
+const submitCorrection = async (payload: Record<string, unknown>) => {
   submitLoading.value = true
   try {
     await createMyPunchCorrection(payload)
@@ -56,25 +56,25 @@ const submitCorrection = async (payload) => {
   }
 }
 
-const statusTagType = (status) => {
+const statusTagType = (status: string) => {
   if (status === 'approved') return 'success'
   if (status === 'rejected') return 'danger'
   return 'warning'
 }
 
-const statusLabel = (status) => {
+const statusLabel = (status: string) => {
   if (status === 'approved') return '已核准'
   if (status === 'rejected') return '已駁回'
   return '待核准'
 }
 
-const correctionTypeTagType = (type) => {
+const correctionTypeTagType = (type: string) => {
   if (type === 'punch_in') return 'warning'
   if (type === 'punch_out') return 'info'
   return 'danger'
 }
 
-const formatTime = (isoStr) => {
+const formatTime = (isoStr: string | null | undefined) => {
   if (!isoStr) return '-'
   return isoStr.slice(11, 16)
 }

@@ -72,7 +72,7 @@
     </el-card>
 
     <!-- 出席率統計 -->
-    <el-row :gutter="16" v-if="attendanceStats && attendanceStats.by_course.length > 0" style="margin-top: 16px;">
+    <el-row :gutter="16" v-if="attendanceStats && attendanceStats.by_course && attendanceStats.by_course.length > 0" style="margin-top: 16px;">
       <el-col :xs="24">
         <el-card>
           <template #header>
@@ -112,7 +112,7 @@
               <span class="bar-date">{{ item.date }}</span>
               <el-progress
                 :percentage="Math.min(100, (item.count / maxDaily) * 100)"
-                :format="() => item.count"
+                :format="() => String(item.count)"
                 status=""
               />
             </div>
@@ -134,7 +134,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useActivityStore } from '@/stores/activity'
@@ -144,13 +144,26 @@ import { getActivityDashboardTable, exportDashboardTable } from '@/api/activity'
 import { FULL_ATTENDANCE_BONUS } from '@/constants/activity'
 import { ElMessage } from 'element-plus'
 
+interface DashboardClassroom { courses?: Record<number, number>; [key: string]: unknown }
+interface DashboardGrade {
+  grade_name: string
+  target_percent: number
+  classrooms: DashboardClassroom[]
+  subtotal: { bonus?: number; points?: string | number; [key: string]: unknown }
+}
+interface DashboardData {
+  grades: DashboardGrade[]
+  courses: { id: number; name: string }[]
+  grand_total: Record<string, unknown>
+}
+
 const activityStore = useActivityStore()
 const termStore = useAcademicTermStore()
 const currentAcademicTerm = getCurrentAcademicTerm()
 
 const semesterOptions = computed(() => {
   const { school_year: cy, semester: cs } = currentAcademicTerm
-  const semLabel = (s) => (s === 1 ? '上學期' : '下學期')
+  const semLabel = (s: number) => (s === 1 ? '上學期' : '下學期')
   const prevTerm = cs === 1 ? { school_year: cy - 1, semester: 2 } : { school_year: cy, semester: 1 }
   const nextTerm = cs === 1 ? { school_year: cy, semester: 2 } : { school_year: cy + 1, semester: 1 }
   return [
@@ -162,7 +175,7 @@ const semesterOptions = computed(() => {
 
 const selectedTermKey = computed({
   get: () => `${termStore.school_year}-${termStore.semester}`,
-  set: (val) => {
+  set: (val: string) => {
     const [y, s] = val.split('-').map(Number)
     termStore.setTerm(y, s)
   },
@@ -171,13 +184,14 @@ const selectedTermKey = computed({
 const loading = ref(false)
 const loadingTable = ref(false)
 const exportingTable = ref(false)
-const dashboardData = ref(null)
+const dashboardData = ref<DashboardData | null>(null)
 
 const { stats } = storeToRefs(activityStore)
-const statistics = computed(() => stats.value?.statistics || {})
-const dailyStats = computed(() => stats.value?.charts?.daily || [])
-const topCourses = computed(() => stats.value?.charts?.topCourses || [])
-const attendanceStats = computed(() => stats.value?.attendance_stats || null)
+const _statsAny = computed(() => stats.value as unknown as Record<string, unknown> | null)
+const statistics = computed(() => (_statsAny.value?.statistics as Record<string, unknown> | undefined) || {})
+const dailyStats = computed(() => (_statsAny.value?.charts as { daily?: { date: string; count: number }[] } | undefined)?.daily || [])
+const topCourses = computed(() => (_statsAny.value?.charts as { topCourses?: { name: string; count: number }[] } | undefined)?.topCourses || [])
+const attendanceStats = computed(() => (_statsAny.value?.attendance_stats as { avg_attendance_rate?: number; total_sessions?: number; by_course?: Record<string, unknown>[] } | undefined) ?? null)
 const maxDaily = computed(() => Math.max(1, ...dailyStats.value.map((d) => d.count)))
 
 const avgAttendanceRate = computed(() => {
@@ -185,30 +199,33 @@ const avgAttendanceRate = computed(() => {
   return rate != null ? `${Math.round(rate * 100)}%` : '-'
 })
 
-const statCards = computed(() => [
-  { label: '總報名數', value: statistics.value.totalRegistrations ?? '-' },
-  { label: '正式報名', value: statistics.value.totalEnrollments ?? '-' },
-  { label: '候補人數', value: statistics.value.totalWaitlist ?? '-' },
-  { label: '今日新增', value: statistics.value.todayNewRegistrations ?? '-' },
-  { label: '總收入（已繳）', value: statistics.value.totalRevenue != null ? `$${statistics.value.totalRevenue.toLocaleString()}` : '-' },
-  { label: '待繳金額', value: statistics.value.totalUnpaid != null ? `$${statistics.value.totalUnpaid.toLocaleString()}` : '-' },
-  { label: '報名率', value: statistics.value.enrollmentRate != null ? `${statistics.value.enrollmentRate}%` : '-' },
-  { label: '平均出席率', value: avgAttendanceRate.value },
-  { label: '未讀提問', value: statistics.value.unreadInquiries ?? '-' },
-])
+const statCards = computed(() => {
+  const st = statistics.value as Record<string, number | null | undefined>
+  return [
+    { label: '總報名數', value: st.totalRegistrations ?? '-' },
+    { label: '正式報名', value: st.totalEnrollments ?? '-' },
+    { label: '候補人數', value: st.totalWaitlist ?? '-' },
+    { label: '今日新增', value: st.todayNewRegistrations ?? '-' },
+    { label: '總收入（已繳）', value: st.totalRevenue != null ? `$${st.totalRevenue.toLocaleString()}` : '-' },
+    { label: '待繳金額', value: st.totalUnpaid != null ? `$${st.totalUnpaid.toLocaleString()}` : '-' },
+    { label: '報名率', value: st.enrollmentRate != null ? `${st.enrollmentRate}%` : '-' },
+    { label: '平均出席率', value: avgAttendanceRate.value },
+    { label: '未讀提問', value: st.unreadInquiries ?? '-' },
+  ]
+})
 
 // Why: 後端回傳 grades > classrooms 的樹狀結構，但 el-table 只接受平面陣列。
 // 透過此 computed 將每個年級的「各班列 + 小計列」展開，並標記 rowSpan / isFirstOfGrade
 // 給 objectSpanMethod 用來合併「獎金」「積分」這兩欄（同年級共用一個值）。
 const flattenedTableData = computed(() => {
-    if (!dashboardData.value) return [];
-    const data = [];
+    if (!dashboardData.value) return []
+    const data: Record<string, unknown>[] = []
     for (const grade of dashboardData.value.grades) {
-        const classCount = grade.classrooms.length;
-        if (classCount === 0) continue;
-        const rowSpan = classCount + 1; // +1 給該年級的小計列
-        const bonusLabel = grade.subtotal.bonus === FULL_ATTENDANCE_BONUS ? '100%' : '';
-        const pointsLabel = grade.subtotal.points || '';
+        const classCount = grade.classrooms.length
+        if (classCount === 0) continue
+        const rowSpan = classCount + 1 // +1 給該年級的小計列
+        const bonusLabel = grade.subtotal.bonus === FULL_ATTENDANCE_BONUS ? '100%' : ''
+        const pointsLabel = grade.subtotal.points || ''
 
         grade.classrooms.forEach((cls, idx) => {
             data.push({
@@ -220,8 +237,8 @@ const flattenedTableData = computed(() => {
                 rowSpan,
                 bonus: bonusLabel,
                 points: pointsLabel,
-            });
-        });
+            })
+        })
 
         data.push({
             ...grade.subtotal,
@@ -234,7 +251,7 @@ const flattenedTableData = computed(() => {
             rowSpan: 0,
             bonus: bonusLabel,
             points: pointsLabel,
-        });
+        })
     }
 
     data.push({
@@ -245,37 +262,37 @@ const flattenedTableData = computed(() => {
         gradeName: '',
         bonus: '',
         points: '',
-    });
+    })
 
-    return data;
-});
+    return data
+})
 
-const getCourseCount = (row, courseId) => {
-    const courses = row.courses || {};
-    const count = courses[courseId];
-    return count > 0 ? count : '';
-};
+const getCourseCount = (row: Record<string, unknown>, courseId: number): number | string => {
+    const courses = row.courses as Record<number, number> | undefined || {}
+    const count = courses[courseId]
+    return count > 0 ? count : ''
+}
 
-const objectSpanMethod = ({ row, column, rowIndex, columnIndex }) => {
+const objectSpanMethod = ({ row, column }: { row: Record<string, unknown>; column: { property?: string }; rowIndex: number; columnIndex: number }) => {
     // Columns: bonus is property "bonus", points is "points"
     if (column.property === 'bonus' || column.property === 'points') {
         if (row.rowType === 'grand_total') {
-            return { rowspan: 1, colspan: 1 };
+            return { rowspan: 1, colspan: 1 }
         }
         if (row.isFirstOfGrade) {
             return {
-                rowspan: row.rowSpan,
+                rowspan: row.rowSpan as number,
                 colspan: 1
-            };
+            }
         } else {
             return {
                 rowspan: 0,
                 colspan: 0
-            };
+            }
         }
     }
-    return { rowspan: 1, colspan: 1 };
-};
+    return { rowspan: 1, colspan: 1 }
+}
 
 const fetchTable = async () => {
   loadingTable.value = true
@@ -284,7 +301,7 @@ const fetchTable = async () => {
       school_year: termStore.school_year,
       semester: termStore.semester,
     })
-    dashboardData.value = res.data
+    dashboardData.value = res.data as DashboardData
   } catch {
     ElMessage.error('資料載入失敗，請重新整理')
   } finally {
@@ -311,7 +328,7 @@ async function handleExportTable() {
       school_year: termStore.school_year,
       semester: termStore.semester,
     })
-    const url = URL.createObjectURL(new Blob([res.data]))
+    const url = URL.createObjectURL(new Blob([res.data as BlobPart]))
     const a = document.createElement('a')
     a.href = url
     const localDate = new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-')

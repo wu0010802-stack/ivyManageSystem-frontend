@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 
@@ -7,25 +7,27 @@ import { apiError } from '@/utils/error'
 import { formatDateTimeTW } from '@/utils/format'
 import { ACTION_LABEL } from '../labels'
 
-const props = defineProps({
-  visible: { type: Boolean, default: false },
-  summaryId: { type: Number, default: null },
-})
-const emit = defineEmits(['update:visible'])
+interface SummaryLog { id: number; action?: string; created_at?: string; actor_name?: string; actor_id?: number; from_status?: string; to_status?: string; reason?: string; comment?: string }
+
+const props = defineProps<{
+  visible?: boolean
+  summaryId?: number | null
+}>()
+const emit = defineEmits<{ 'update:visible': [value: boolean] }>()
 
 const drawerVisible = computed({
-  get: () => props.visible,
-  set: (v) => emit('update:visible', v),
+  get: () => props.visible ?? false,
+  set: (v: boolean) => emit('update:visible', v),
 })
 
-const logs = ref([])
+const logs = ref<SummaryLog[]>([])
 const loading = ref(false)
 
 async function load() {
   if (!props.summaryId) return
   loading.value = true
   try {
-    const { data } = await getSummaryLogs(props.summaryId)
+    const { data } = await getSummaryLogs(props.summaryId as number)
     logs.value = data
   } catch (e) {
     ElMessage.error(apiError(e, '載入簽核軌跡失敗'))
@@ -40,7 +42,8 @@ watch(() => [props.visible, props.summaryId], ([v]) => { if (v) load() }, { imme
 
 // P1-11：三個簽核階段需可視區分（原本同色 success）。
 // 主管簽 / 會計簽 / 核定 用 primary / warning / success 三色。
-const ACTION_COLOR = {
+type TagType = 'primary' | 'success' | 'warning' | 'info' | 'danger'
+const ACTION_COLOR: Record<string, TagType> = {
   SIGN_SUPERVISOR: 'primary',
   SIGN_ACCOUNTING: 'warning',
   FINALIZE: 'success',
@@ -56,13 +59,13 @@ const ACTION_COLOR = {
     <el-timeline v-loading="loading">
       <el-timeline-item v-for="log in logs" :key="log.id"
                         :timestamp="formatDateTimeTW(log.created_at)" placement="top"
-                        :type="ACTION_COLOR[log.action] || 'primary'"
+                        :type="ACTION_COLOR[log.action ?? ''] || 'primary'"
                         :data-test="`log-item-${log.id}`">
         <div class="log-entry">
           <div>
-            <el-tag :type="ACTION_COLOR[log.action]" size="small"
+            <el-tag :type="ACTION_COLOR[log.action ?? '']" size="small"
                     :data-test="`log-action-tag-${log.id}`">
-              {{ ACTION_LABEL[log.action] || log.action }}
+              {{ (ACTION_LABEL as Record<string, string>)[log.action ?? ''] || log.action }}
             </el-tag>
             <span class="actor">{{ log.actor_name || `user#${log.actor_id}` }}</span>
           </div>

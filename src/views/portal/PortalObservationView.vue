@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -21,19 +21,22 @@ const DOMAINS = [
   { value: '綜合', short: '綜合' },
 ]
 
-const classrooms = ref([])
-const allStudents = ref([])
-const studentId = ref(null)
+interface ClassroomEntry { classroom_id?: number; classroom_name?: string; students?: { id: number; name: string }[]; [key: string]: unknown }
+interface StudentOption { id: number; name: string; classroom_name: string }
+interface ObservationEntry { id: number; observation_date?: string; domain?: string; is_highlight?: boolean; narrative?: string; [key: string]: unknown }
+const classrooms = ref<ClassroomEntry[]>([])
+const allStudents = ref<StudentOption[]>([])
+const studentId = ref<number | null>(null)
 const lockedStudent = ref(false) // 從學生個案頁進入時鎖定
 
 const today = new Date().toISOString().slice(0, 10)
 const formDate = ref(today)
-const formDomain = ref(null)
+const formDomain = ref<string | null>(null)
 const formNarrative = ref('')
 const formIsHighlight = ref(false)
-const formRating = ref(null)
+const formRating = ref<number | null>(null)
 
-const recent = ref([])
+const recent = ref<ObservationEntry[]>([])
 const loadingRecent = ref(false)
 const submitting = ref(false)
 
@@ -41,11 +44,11 @@ async function loadStudents() {
   try {
     const { data } = await getMyStudents()
     classrooms.value = data?.classrooms || []
-    allStudents.value = (data?.classrooms || []).flatMap((c) =>
-      (c.students || []).map((s) => ({
+    allStudents.value = ((data?.classrooms || []) as ClassroomEntry[]).flatMap((c) =>
+      ((c.students || []) as { id: number; name: string }[]).map((s) => ({
         id: s.id,
         name: s.name,
-        classroom_name: c.classroom_name,
+        classroom_name: c.classroom_name ?? '',
       })),
     )
   } catch (e) {
@@ -80,7 +83,7 @@ onMounted(async () => {
   // 若從學生個案頁帶入 student_id，鎖定
   const sid = route.query.student_id
   if (sid) {
-    studentId.value = Number(sid)
+    studentId.value = Number(Array.isArray(sid) ? sid[0] : sid)
     lockedStudent.value = true
   }
   await loadRecent()
@@ -110,7 +113,7 @@ async function submit() {
     formRating.value = null
     await loadRecent()
   } catch (e) {
-    ElMessage.error(e?.response?.data?.detail || '送出失敗')
+    ElMessage.error((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '送出失敗')
   } finally {
     submitting.value = false
   }
@@ -170,7 +173,7 @@ async function submit() {
         </el-form-item>
 
         <el-form-item label="評分">
-          <el-rate v-model="formRating" :max="5" allow-half clearable />
+          <el-rate v-model="(formRating as number)" :max="5" allow-half clearable />
           <span class="hint">（選填）</span>
         </el-form-item>
 

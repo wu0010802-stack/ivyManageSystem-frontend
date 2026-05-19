@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 
@@ -6,15 +6,18 @@ import { commentSummary } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
 import { MSG } from '../labels'
 
-const props = defineProps({
-  visible: { type: Boolean, default: false },
-  summary: { type: Object, default: null },
-})
-const emit = defineEmits(['update:visible', 'commented'])
+const props = defineProps<{
+  visible?: boolean
+  summary?: Record<string, unknown> | null
+}>()
+const emit = defineEmits<{
+  'update:visible': [value: boolean]
+  'commented': []
+}>()
 
 const dialogVisible = computed({
-  get: () => props.visible,
-  set: (v) => emit('update:visible', v),
+  get: () => props.visible ?? false,
+  set: (v: boolean) => emit('update:visible', v),
 })
 
 const comment = ref('')
@@ -29,7 +32,7 @@ async function submit() {
   }
   submitting.value = true
   try {
-    await commentSummary(props.summary.id, comment.value)
+    await commentSummary(props.summary?.id as number, comment.value)
     ElMessage.success(MSG.comment_success)
     emit('commented')
     dialogVisible.value = false

@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 
@@ -6,24 +6,29 @@ import { rejectSummary } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
 import { REJECT_TARGET_LABEL, MSG } from '../labels'
 
-const props = defineProps({
-  visible: { type: Boolean, default: false },
-  summary: { type: Object, default: null },
-})
-const emit = defineEmits(['update:visible', 'rejected'])
+interface Summary { id?: number; status?: string; employee_name?: string; [key: string]: unknown }
+
+const props = defineProps<{
+  visible?: boolean
+  summary?: Summary | null
+}>()
+const emit = defineEmits<{
+  'update:visible': [value: boolean]
+  'rejected': [payload: { summaryId: number; newStatus: string }]
+}>()
 
 const dialogVisible = computed({
-  get: () => props.visible,
-  set: (v) => emit('update:visible', v),
+  get: () => props.visible ?? false,
+  set: (v: boolean) => emit('update:visible', v),
 })
 
 const reason = ref('')
-const toStatus = ref(null)
+const toStatus = ref<string>('')
 const submitting = ref(false)
 
 const toStatusOptions = computed(() => {
   if (!props.summary) return []
-  const opts = []
+  const opts: { value: string; label: string }[] = []
   const s = props.summary.status
   if (s === 'SUPERVISOR_SIGNED') opts.push({ value: 'DRAFT', label: REJECT_TARGET_LABEL.DRAFT })
   if (s === 'ACCOUNTING_SIGNED') {
@@ -37,7 +42,7 @@ const toStatusOptions = computed(() => {
 watch(() => props.visible, (v) => {
   if (v) {
     reason.value = ''
-    toStatus.value = toStatusOptions.value[0]?.value || null
+    toStatus.value = toStatusOptions.value[0]?.value || ''
   }
 }, { immediate: true })
 
@@ -50,14 +55,14 @@ async function submit() {
   // 失敗時後端回 422，由 apiError 取出 detail 訊息顯示給使用者。
   submitting.value = true
   try {
-    await rejectSummary(props.summary.id, {
+    await rejectSummary(props.summary?.id as number, {
       reason: reason.value,
       to_status: toStatus.value,
     })
     ElMessage.success(MSG.reject_success)
     // P1-14：emit payload 含 summaryId + newStatus 讓 parent 局部 patch summaries
     // 取代全 reload；fallback to_status 為 'DRAFT'（理論上不會 null）
-    emit('rejected', { summaryId: props.summary.id, newStatus: toStatus.value })
+    emit('rejected', { summaryId: props.summary?.id as number, newStatus: toStatus.value || 'DRAFT' })
     dialogVisible.value = false
   } catch (e) {
     ElMessage.error(apiError(e, MSG.reject_failed))

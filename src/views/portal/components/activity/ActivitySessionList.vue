@@ -1,28 +1,30 @@
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 
-const props = defineProps({
-  sessions: { type: Array, required: true },
-  filterCourseId: { type: [Number, null], default: null },
-  filterStartDate: { type: String, default: null },
-  filterEndDate: { type: String, default: null },
-  activeMonth: { type: [String, null], default: null },
-  loading: { type: Boolean, default: false },
-})
+interface Session { course_id?: number; course_name?: string; [key: string]: unknown }
 
-defineEmits([
-  'update:filterCourseId',
-  'update:filterStartDate',
-  'update:filterEndDate',
-  'set-month',
-  'manual-date-change',
-  'open-rollcall',
-])
+const props = defineProps<{
+  sessions: Session[]
+  filterCourseId?: number | null
+  filterStartDate?: string | null
+  filterEndDate?: string | null
+  activeMonth?: string | null
+  loading?: boolean
+}>()
+
+defineEmits<{
+  'update:filterCourseId': [value: number | null]
+  'update:filterStartDate': [value: string | null]
+  'update:filterEndDate': [value: string | null]
+  'set-month': [value: string]
+  'manual-date-change': []
+  'open-rollcall': [session: Session]
+}>()
 
 const courses = computed(() => {
-  const map = new Map()
+  const map = new Map<number | string, { id: number | string | undefined; name: string | undefined }>()
   props.sessions.forEach(s => {
-    if (!map.has(s.course_id)) {
+    if (s.course_id != null && !map.has(s.course_id)) {
       map.set(s.course_id, { id: s.course_id, name: s.course_name })
     }
   })
@@ -52,7 +54,7 @@ const filteredSessions = computed(() => {
             v-for="c in courses"
             :key="c.id"
             :label="c.name"
-            :value="c.id"
+            :value="(c.id as string | number | boolean | object)"
           />
         </el-select>
       </el-col>

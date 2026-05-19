@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 /**
  * ScheduleSwapTable — 換班申請雙 tab 表格
  *
@@ -11,22 +11,23 @@
  *  - respond(id, action)  action: 'accept' | 'reject'
  *  - cancel(id)
  */
-defineProps({
-  receivedRequests: { type: Array, required: true },
-  sentRequests: { type: Array, required: true },
-  loading: { type: Boolean, default: false },
-})
+defineProps<{
+  receivedRequests: Record<string, unknown>[]
+  sentRequests: Record<string, unknown>[]
+  loading?: boolean
+}>()
 
-defineEmits([
-  'respond',  // (requestId, action: 'accept' | 'reject')
-  'cancel',   // (requestId)
-])
+defineEmits<{
+  respond: [id: number, action: 'accept' | 'reject']
+  cancel: [id: number]
+}>()
 
-const statusTagType = (status) =>
-  ({ pending: 'warning', accepted: 'success', rejected: 'danger', cancelled: 'info' }[status] || 'info')
+type TagType = 'primary' | 'success' | 'warning' | 'info' | 'danger'
+const statusTagType = (status: string): TagType =>
+  (({ pending: 'warning', accepted: 'success', rejected: 'danger', cancelled: 'info' } as Record<string, TagType>)[status] || 'info') as TagType
 
-const statusLabel = (status) =>
-  ({ pending: '待回覆', accepted: '已接受', rejected: '已拒絕', cancelled: '已撤銷' }[status] || status)
+const statusLabel = (status: string) =>
+  ({ pending: '待回覆', accepted: '已接受', rejected: '已拒絕', cancelled: '已撤銷' } as Record<string, string>)[status] || status
 </script>
 
 <template>
@@ -35,7 +36,7 @@ const statusLabel = (status) =>
       <div style="overflow-x: auto">
         <el-table
           :data="receivedRequests"
-          v-loading="loading"
+          v-loading="loading ?? false"
           empty-text="目前沒有收到的換班申請"
         >
           <el-table-column prop="swap_date" label="換班日期" width="120" />
@@ -69,7 +70,7 @@ const statusLabel = (status) =>
       <div style="overflow-x: auto">
         <el-table
           :data="sentRequests"
-          v-loading="loading"
+          v-loading="loading ?? false"
           empty-text="目前沒有發起的換班申請"
         >
           <el-table-column prop="swap_date" label="換班日期" width="120" />

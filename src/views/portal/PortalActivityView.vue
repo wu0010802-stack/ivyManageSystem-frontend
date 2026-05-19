@@ -34,14 +34,14 @@
         @update:filter-end-date="filterEndDate = $event"
         @set-month="setMonth"
         @manual-date-change="onManualDateChange"
-        @open-rollcall="openDrawer"
+        @open-rollcall="openRollcall"
       />
 
       <ActivityRollcallDrawer
         v-model="drawerVisible"
         :drawer-title="drawerTitle"
         :drawer-loading="drawerLoading"
-        :drawer-session="drawerSession"
+        :drawer-session="drawerSession || undefined"
         :sorted-students="sortedStudents"
         :save-loading="saveLoading"
         :drawer-present-count="drawerPresentCount"
@@ -54,7 +54,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -74,12 +74,13 @@ const route = useRoute()
 const router = useRouter()
 
 const VALID_TABS = ['registrations', 'attendance']
-const initialTab = VALID_TABS.includes(route.query.tab) ? route.query.tab : 'registrations'
+const initialTab = VALID_TABS.includes(route.query.tab as string) ? (route.query.tab as string) : 'registrations'
 const mainTab = ref(initialTab)
 
 // ── 課程報名 Tab ──
+interface RegistrationData { classrooms: string[]; [key: string]: unknown }
 const loading = ref(false)
-const data = ref(null)
+const data = ref<RegistrationData | null>(null)
 const activeClass = ref('')
 
 async function loadRegistrations() {
@@ -100,11 +101,12 @@ async function loadRegistrations() {
 // ── 課程點名 Tab ──
 const attendanceLoading = ref(false)
 const attendanceLoaded = ref(false)
-const sessions = ref([])
-const filterCourseId = ref(null)
-const filterStartDate = ref(null)
-const filterEndDate = ref(null)
-const activeMonth = ref('current')
+interface ActivitySession { course_id?: number; course_name?: string; [key: string]: unknown }
+const sessions = ref<ActivitySession[]>([])
+const filterCourseId = ref<number | null>(null)
+const filterStartDate = ref<string | null>(null)
+const filterEndDate = ref<string | null>(null)
+const activeMonth = ref<string | null>('current')
 
 const {
   drawerVisible,
@@ -120,11 +122,11 @@ const {
   setAllPresent,
   handleSave,
 } = useActivityAttendanceDrawer({
-  getSessionFn: getPortalAttendanceSession,
-  updateFn: batchUpdatePortalAttendance,
+  getSessionFn: getPortalAttendanceSession as unknown as (...args: unknown[]) => Promise<{ data: { id: unknown; course_name: string; session_date: string; students: { registration_id: unknown; is_present: boolean | null; attendance_notes?: string }[] } }>,
+  updateFn: batchUpdatePortalAttendance as unknown as (...args: unknown[]) => Promise<unknown>,
 })
 
-function _monthBounds(offset) {
+function _monthBounds(offset: number) {
   const today = new Date()
   const y = today.getFullYear()
   const m = today.getMonth() + offset
@@ -134,7 +136,7 @@ function _monthBounds(offset) {
   }
 }
 
-function setMonth(which) {
+function setMonth(which: string) {
   activeMonth.value = which
   const offset = which === 'prev' ? -1 : which === 'next' ? 1 : 0
   const { start, end } = _monthBounds(offset)
@@ -155,7 +157,7 @@ function applyFilter() {
 async function loadAttendanceSessions() {
   attendanceLoading.value = true
   try {
-    const params = {}
+    const params: Record<string, string> = {}
     if (filterStartDate.value) params.start_date = filterStartDate.value
     if (filterEndDate.value) params.end_date = filterEndDate.value
     const res = await getPortalAttendanceSessions(params)
@@ -174,9 +176,14 @@ function ensureAttendanceLoaded() {
   }
 }
 
-function handleTabChange(tab) {
-  router.replace({ query: { ...route.query, tab } })
-  if (tab === 'attendance') {
+function openRollcall(session: { course_id?: number; course_name?: string; [key: string]: unknown }) {
+  openDrawer(session as unknown as { id: unknown })
+}
+
+function handleTabChange(tab: string | number) {
+  const tabStr = String(tab)
+  router.replace({ query: { ...route.query, tab: tabStr } })
+  if (tabStr === 'attendance') {
     ensureAttendanceLoaded()
   }
 }
@@ -184,9 +191,10 @@ function handleTabChange(tab) {
 watch(
   () => route.query.tab,
   (newTab) => {
-    if (VALID_TABS.includes(newTab) && newTab !== mainTab.value) {
-      mainTab.value = newTab
-      if (newTab === 'attendance') ensureAttendanceLoaded()
+    const tab = newTab as string | null
+    if (tab && VALID_TABS.includes(tab) && tab !== mainTab.value) {
+      mainTab.value = tab
+      if (tab === 'attendance') ensureAttendanceLoaded()
     }
   }
 )

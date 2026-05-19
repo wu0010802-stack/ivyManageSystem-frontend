@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
@@ -27,6 +27,12 @@ import EmptyState from '@/components/common/EmptyState.vue'
 
 const { fromHub, backToHub } = usePortalFromHub()
 
+interface Photo { id: number; url?: string; [key: string]: unknown }
+interface EntryRecord { id: number; published_at?: string | null; photos?: Photo[]; version?: number; [key: string]: unknown }
+interface ClassroomEntry { classroom_id?: number; classroom_name?: string; [key: string]: unknown }
+interface ItemEntry { student_id: number; student_name?: string; entry?: EntryRecord | null; [key: string]: unknown }
+interface Completion { roster: number; draft: number; published: number; missing: number }
+
 const MOOD_EMOJI = {
   happy: '😄',
   normal: '🙂',
@@ -35,25 +41,25 @@ const MOOD_EMOJI = {
   sick: '🤒',
 }
 
-const classrooms = ref([])
+const classrooms = ref<ClassroomEntry[]>([])
 const classroomLoading = ref(false)
-const selectedClassroomId = ref(null)
+const selectedClassroomId = ref<number | null>(null)
 const selectedDate = ref(todayISO())
 
-const items = ref([]) // [{ student_id, student_name, entry }]
-const completion = ref({ roster: 0, draft: 0, published: 0, missing: 0 })
+const items = ref<ItemEntry[]>([]) // [{ student_id, student_name, entry }]
+const completion = ref<Completion>({ roster: 0, draft: 0, published: 0, missing: 0 })
 const listLoading = ref(false)
 
 // Drawer state
 const drawerVisible = ref(false)
-const drawerStudent = ref(null) // { student_id, student_name }
-const drawerEntry = ref(null) // server entry or null
+const drawerStudent = ref<{ student_id: number; student_name?: string } | null>(null)
+const drawerEntry = ref<EntryRecord | null>(null) // server entry or null
 const drawerSaving = ref(false)
 const drawerPublishing = ref(false)
 const drawerPhotoUploading = ref(false)
 
 const classroomOptions = computed(() =>
-  classrooms.value.map((c) => ({ label: c.classroom_name, value: c.classroom_id })),
+  classrooms.value.map((c) => ({ label: c.classroom_name ?? '', value: c.classroom_id ?? 0 })),
 )
 
 const completionPercent = computed(() => {
@@ -68,7 +74,7 @@ async function fetchClassrooms() {
     const res = await getMyStudents()
     classrooms.value = res.data?.classrooms || []
     if (classrooms.value.length > 0 && !selectedClassroomId.value) {
-      selectedClassroomId.value = classrooms.value[0].classroom_id
+      selectedClassroomId.value = classrooms.value[0].classroom_id ?? null
     }
   } catch (err) {
     notify(err, 'PortalContactBook:loadClassrooms', '載入班級失敗')
@@ -94,7 +100,7 @@ async function fetchClassDay() {
   }
 }
 
-function openDrawer(item) {
+function openDrawer(item: ItemEntry) {
   drawerStudent.value = { student_id: item.student_id, student_name: item.student_name }
   drawerEntry.value = item.entry ? { ...item.entry } : null
   drawerVisible.value = true
@@ -107,10 +113,11 @@ function closeDrawer() {
 }
 
 // ── 統一 save / publish 失敗處理（含 409 衝突局部寫回） ────────────────
-function handleSaveError(err) {
-  if (err?.response?.status === 409) {
-    const detail = err.response.data?.detail
-    const currentEntry = typeof detail === 'object' && detail ? detail.current_entry : null
+function handleSaveError(err: unknown) {
+  const e = err as { response?: { status?: number; data?: { detail?: unknown } } }
+  if (e?.response?.status === 409) {
+    const detail = e.response?.data?.detail
+    const currentEntry = typeof detail === 'object' && detail ? (detail as Record<string, unknown>).current_entry as EntryRecord | null : null
     if (currentEntry) {
       // 局部寫回：用後端最新版本覆蓋本地，不再 fetchClassDay 整撈
       const idx = items.value.findIndex((i) => i.entry?.id === currentEntry.id)
@@ -127,14 +134,14 @@ function handleSaveError(err) {
   }
 }
 
-async function handleSaveDraft(formPayload, version) {
+async function handleSaveDraft(formPayload: Record<string, unknown>, version: unknown) {
   if (!drawerStudent.value) return
   drawerSaving.value = true
   try {
     if (drawerEntry.value?.id) {
       // 既有 entry：PUT + If-Match，樂觀更新本地
-      const res = await updateEntry(drawerEntry.value.id, formPayload, version)
-      const updated = res.data
+      const res = await updateEntry(drawerEntry.value.id, formPayload, version as number | null | undefined)
+      const updated = res.data as EntryRecord
       const idx = items.value.findIndex((i) => i.entry?.id === updated.id)
       if (idx >= 0) items.value[idx].entry = updated
       drawerEntry.value = updated
@@ -146,12 +153,14 @@ async function handleSaveDraft(formPayload, version) {
         log_date: selectedDate.value,
         items: [{ student_id: drawerStudent.value.student_id, ...formPayload }],
       })
-      const entryId = res.data?.entry_ids?.[0]
+      const entryIds = (res.data as Record<string, unknown>)?.entry_ids as unknown[] | undefined
+      const entryId = entryIds?.[0]
       if (!entryId) {
         ElMessage.warning('儲存成功但無法取得 ID，請刷新後再上傳照片')
       } else {
         await fetchClassDay()
-        const created = items.value.find((it) => it.student_id === drawerStudent.value.student_id)
+        const student = drawerStudent.value
+        const created = items.value.find((it) => it.student_id === student.student_id)
         drawerEntry.value = created?.entry ? { ...created.entry } : null
       }
       ElMessage.success('草稿已建立')
@@ -163,7 +172,7 @@ async function handleSaveDraft(formPayload, version) {
   }
 }
 
-async function handlePublish(formPayload, version) {
+async function handlePublish(formPayload: Record<string, unknown>, version: unknown) {
   if (!drawerEntry.value?.id) {
     ElMessage.warning('請先儲存草稿')
     return
@@ -184,15 +193,15 @@ async function handlePublish(formPayload, version) {
   drawerPublishing.value = true
   try {
     // 先 update 欄位（若有變），樂觀更新本地
-    const updateRes = await updateEntry(drawerEntry.value.id, formPayload, version)
-    const afterUpdate = updateRes.data
+    const updateRes = await updateEntry(drawerEntry.value.id, formPayload, version as number | null | undefined)
+    const afterUpdate = updateRes.data as EntryRecord
     const uidx = items.value.findIndex((i) => i.entry?.id === afterUpdate.id)
     if (uidx >= 0) items.value[uidx].entry = afterUpdate
     drawerEntry.value = afterUpdate
 
     // 再 publish
     const pubRes = await publishEntry(drawerEntry.value.id)
-    const published = pubRes.data
+    const published = pubRes.data as EntryRecord
     const pidx = items.value.findIndex((i) => i.entry?.id === published.id)
     if (pidx >= 0) items.value[pidx].entry = published
     drawerEntry.value = published
@@ -204,7 +213,7 @@ async function handlePublish(formPayload, version) {
   }
 }
 
-async function handlePhotoUpload(opts) {
+async function handlePhotoUpload(opts: { file: File }) {
   if (!drawerEntry.value?.id) {
     ElMessage.warning('請先儲存草稿後再上傳照片')
     return
@@ -214,12 +223,13 @@ async function handlePhotoUpload(opts) {
     const fd = new FormData()
     fd.append('file', opts.file)
     const res = await uploadPhoto(drawerEntry.value.id, fd)
-    const newPhoto = res.data
+    const newPhoto = res.data as Photo
     // 樂觀更新：append photo
-    drawerEntry.value.photos = [...(drawerEntry.value.photos || []), newPhoto]
-    const idx = items.value.findIndex((i) => i.entry?.id === drawerEntry.value.id)
+    const entry = drawerEntry.value
+    entry.photos = [...(entry.photos || []), newPhoto]
+    const idx = items.value.findIndex((i) => i.entry?.id === entry.id)
     if (idx >= 0 && items.value[idx].entry) {
-      items.value[idx].entry.photos = [...(items.value[idx].entry.photos || []), newPhoto]
+      items.value[idx].entry!.photos = [...(items.value[idx].entry!.photos || []), newPhoto]
     }
     ElMessage.success('照片已上傳')
   } catch (err) {
@@ -229,7 +239,7 @@ async function handlePhotoUpload(opts) {
   }
 }
 
-async function handleDeletePhoto(att) {
+async function handleDeletePhoto(att: Photo) {
   if (!drawerEntry.value?.id) return
   try {
     await ElMessageBox.confirm('確定刪除此照片？', '刪除照片', { type: 'warning' })
@@ -239,10 +249,11 @@ async function handleDeletePhoto(att) {
   try {
     await deletePhoto(drawerEntry.value.id, att.id)
     // 樂觀更新：filter 掉 photo
-    drawerEntry.value.photos = (drawerEntry.value.photos || []).filter((p) => p.id !== att.id)
-    const idx = items.value.findIndex((i) => i.entry?.id === drawerEntry.value.id)
+    const entry = drawerEntry.value
+    entry.photos = (entry.photos || []).filter((p) => p.id !== att.id)
+    const idx = items.value.findIndex((i) => i.entry?.id === entry.id)
     if (idx >= 0 && items.value[idx].entry?.photos) {
-      items.value[idx].entry.photos = items.value[idx].entry.photos.filter((p) => p.id !== att.id)
+      items.value[idx].entry!.photos = items.value[idx].entry!.photos!.filter((p) => p.id !== att.id)
     }
     ElMessage.success('已刪除')
   } catch (err) {
@@ -253,7 +264,7 @@ async function handleDeletePhoto(att) {
 // ── 範本與批次操作 ────────────────────────────────────────────────
 const tpls = useContactBookTemplates()
 const showTemplateDialog = ref(false)
-const selectedTemplateId = ref(null)
+const selectedTemplateId = ref<number | string | null>(null)
 const showOnlyUnpublished = ref(false)
 const batchBusy = ref(false)
 
@@ -307,7 +318,7 @@ async function handleApplyTemplateToClass() {
   // 找出當日所有未發布的 entry id
   const draftEntryIds = items.value
     .filter((it) => it.entry && !it.entry.published_at)
-    .map((it) => it.entry.id)
+    .map((it) => it.entry!.id)
   if (!draftEntryIds.length) {
     ElMessage.warning('無可套用的草稿（請先建立草稿或複製昨日）')
     return
@@ -319,8 +330,9 @@ async function handleApplyTemplateToClass() {
       entry_ids: draftEntryIds,
       only_fill_blank: true,
     })
-    const totalChanged = res.data.results.reduce(
-      (acc, r) => acc + (r.changed_fields?.length || 0),
+    const results = (res.data as Record<string, unknown>).results as { changed_fields?: unknown[] }[]
+    const totalChanged = results.reduce(
+      (acc: number, r) => acc + (r.changed_fields?.length || 0),
       0,
     )
     ElMessage.success(`已套用範本，共改動 ${totalChanged} 個欄位`)
@@ -337,7 +349,7 @@ async function handleApplyTemplateToClass() {
 async function handleBatchPublish() {
   const draftEntryIds = items.value
     .filter((it) => it.entry && !it.entry.published_at)
-    .map((it) => it.entry.id)
+    .map((it) => it.entry!.id)
   if (!draftEntryIds.length) {
     ElMessage.warning('沒有可發布的草稿')
     return
@@ -383,7 +395,7 @@ watch([selectedClassroomId, selectedDate], () => {
     </div>
 
     <ContactBookFilterBar
-      v-model:classroom-id="selectedClassroomId"
+      v-model:classroom-id="(selectedClassroomId as number | undefined)"
       v-model:log-date="selectedDate"
       v-model:show-only-unpublished="showOnlyUnpublished"
       :classroom-options="classroomOptions"
@@ -424,14 +436,14 @@ watch([selectedClassroomId, selectedDate], () => {
         :key="it.student_id"
         :item="it"
         :mood-emoji="MOOD_EMOJI"
-        @click="openDrawer"
+        @click="(it) => openDrawer(it as ItemEntry)"
       />
     </div>
 
     <!-- Drawer：單筆編輯 -->
     <ContactBookEntryDrawer
       v-model="drawerVisible"
-      :entry="drawerEntry"
+      :entry="drawerEntry ?? undefined"
       :student-name="drawerStudent?.student_name || ''"
       :saving="drawerSaving"
       :publishing="drawerPublishing"
@@ -452,11 +464,11 @@ watch([selectedClassroomId, selectedDate], () => {
         title="尚無範本"
         description="可先到管理介面建立個人或園所共用範本。"
       />
-      <el-radio-group v-else v-model="selectedTemplateId" class="tpl-list">
+      <el-radio-group v-else v-model="(selectedTemplateId as string | number | boolean | undefined)" class="tpl-list">
         <el-radio
           v-for="t in tpls.templates.value"
-          :key="t.id"
-          :value="t.id"
+          :key="(t.id as PropertyKey)"
+          :value="(t.id as string | number | boolean | undefined)"
           class="tpl-row"
         >
           <strong>{{ t.name }}</strong>

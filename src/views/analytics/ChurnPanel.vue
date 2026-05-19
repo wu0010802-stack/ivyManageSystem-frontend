@@ -69,7 +69,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -78,28 +78,33 @@ import { fetchAtRisk, fetchChurnHistory } from '@/api/analytics'
 import { apiError } from '@/utils/error'
 
 const router = useRouter()
+interface ChurnHistory {
+  monthly?: Array<{ year: number; month: number; withdrawn: number; transferred: number }>
+  by_reason?: Array<{ reason: string; count: number }>
+}
 const riskLoading = ref(false)
 const historyLoading = ref(false)
-const riskList = ref([])
-const history = ref(null)
+const riskList = ref<unknown[]>([])
+const history = ref<ChurnHistory | null>(null)
 
-const statusLabel = (s) => ({
+const statusLabel = (s: string) => (({
   active: '在學', on_leave: '休學中',
-}[s] || s)
+} as Record<string, string>)[s] || s)
 
-const severityType = (s) => ({
+type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger'
+const severityType = (s: string): ElTagType => (({
   high: 'danger', medium: 'warning', low: 'info',
-}[s] || 'info')
+} as Record<string, ElTagType>)[s]) ?? 'info'
 
-const severityLabel = (s) => ({
+const severityLabel = (s: string) => (({
   high: '高', medium: '中', low: '低',
-}[s] || s)
+} as Record<string, string>)[s] || s)
 
-const signalTypeLabel = (t) => ({
+const signalTypeLabel = (t: string) => (({
   consecutive_absence: '連續缺勤',
   long_on_leave: '長期休學',
   fee_overdue: '學費逾期',
-}[t] || t)
+} as Record<string, string>)[t] || t)
 
 const loadAtRisk = async () => {
   riskLoading.value = true
@@ -141,7 +146,7 @@ const trendChartData = computed(() => {
 const trendOptions = {
   responsive: true,
   maintainAspectRatio: false,
-  plugins: { legend: { position: 'bottom' } },
+  plugins: { legend: { position: 'bottom' as const } },
   scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
 }
 
@@ -156,12 +161,12 @@ const reasonChartData = computed(() => {
 const reasonOptions = {
   responsive: true,
   maintainAspectRatio: false,
-  indexAxis: 'y',
+  indexAxis: 'y' as const,
   plugins: { legend: { display: false } },
   scales: { x: { beginAtZero: true, ticks: { precision: 0 } } },
 }
 
-const goToStudent = (id) => {
+const goToStudent = (id: number) => {
   router.push({ name: 'student-profile', params: { id } })
 }
 

@@ -249,8 +249,8 @@
           </el-table-column>
           <el-table-column label="狀態" width="150" align="center">
             <template #default="{ row }">
-              <el-tag :type="COURSE_STATUS_TAG_TYPE[row.status] || 'info'" size="small">
-                {{ COURSE_STATUS_LABEL[row.status] || row.status }}
+              <el-tag :type="courseStatusTagType(row.status)" size="small">
+                {{ courseStatusLabel(row.status) }}
               </el-tag>
               <div
                 v-if="row.status === 'promoted_pending' && row.confirm_deadline"
@@ -314,8 +314,8 @@
         <el-timeline>
           <el-timeline-item
             v-for="ch in detail.changes"
-            :key="ch.id"
-            :timestamp="formatActivityDate(ch.created_at)"
+            :key="ch.id as string"
+            :timestamp="formatActivityDate(ch.created_at as string)"
           >
             <strong>{{ ch.change_type }}</strong>：{{ ch.description }}
             <span v-if="ch.changed_by" class="change-by">（{{ ch.changed_by }}）</span>
@@ -372,7 +372,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -404,7 +404,27 @@ import RegistrationCreateDialog from '@/components/activity/RegistrationCreateDi
 import RegistrationAddCourseDialog from '@/components/activity/RegistrationAddCourseDialog.vue'
 import RegistrationAddSupplyDialog from '@/components/activity/RegistrationAddSupplyDialog.vue'
 
+type ApiErr = { response?: { data?: { detail?: string }; status?: number } }
+
+interface RegistrationRow { id: number; student_name?: string; payment_status?: string; [key: string]: unknown }
+interface PaymentRecord { id: number; type: string; amount: number; payment_date?: string; payment_method?: string; notes?: string; is_voided?: boolean; void_reason?: string }
+interface PaymentInfo { total_amount?: number; paid_amount?: number; payment_status?: string; records?: PaymentRecord[] }
+interface RegistrationCourse { id: number; course_id: number; name: string; price?: number; status: string; confirm_deadline?: string }
+interface RegistrationSupply { id: number; name?: string; price?: number }
+interface RegistrationDetail {
+  id: number; student_name?: string; class_name?: string; birthday?: string; parent_phone?: string; email?: string; created_at?: string; remark?: string
+  total_amount?: number; courses?: RegistrationCourse[]; supplies?: RegistrationSupply[]; changes?: Record<string, unknown>[]
+  [key: string]: unknown
+}
+
 const canWrite = computed(() => hasPermission('ACTIVITY_WRITE'))
+
+function courseStatusTagType(status: string): ElTagType {
+  return ((COURSE_STATUS_TAG_TYPE as Record<string, string>)[status] || 'info') as ElTagType
+}
+function courseStatusLabel(status: string) {
+  return (COURSE_STATUS_LABEL as Record<string, string>)[status] || status
+}
 const termStore = useAcademicTermStore()
 const router = useRouter()
 
@@ -413,7 +433,7 @@ async function loadPendingCount() {
   if (!canWrite.value) return
   try {
     const res = await listPendingRegistrations({ skip: 0, limit: 1 })
-    pendingCount.value = res.data?.total || 0
+    pendingCount.value = (res.data as { total?: number })?.total || 0
   } catch {
     pendingCount.value = 0
   }
@@ -426,7 +446,8 @@ function goToPublic() {
   window.open(url, '_blank', 'noopener')
 }
 
-const MATCH_STATUS_TAG = {
+type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
+const MATCH_STATUS_TAG: Record<string, { label: string; type: ElTagType }> = {
   matched: { label: '系統自動', type: 'success' },
   manual: { label: '人工指定', type: 'primary' },
   pending: { label: '待審核', type: 'warning' },
@@ -434,7 +455,7 @@ const MATCH_STATUS_TAG = {
   unmatched: { label: '未比對', type: 'info' },
   forced: { label: '強行收件', type: 'danger' },
 }
-function matchStatusTag(status) {
+function matchStatusTag(status: string): { label: string; type: ElTagType } {
   return MATCH_STATUS_TAG[status] || { label: status || '—', type: 'info' }
 }
 
@@ -444,10 +465,14 @@ const formatDeadlineHint = countdownLabel
 const {
   list, total, page, pageSize, loading,
   searchText, paymentFilter, courseFilter, classroomFilter,
-  courseOptions, classroomOptions,
+  courseOptions: _courseOptions, classroomOptions: _classroomOptions,
   selectedIds, savingBatch,
   initFromQuery, fetchList, handleSearch, batchMarkPaid, loadOptions,
 } = useActivityRegistration()
+// Cast composable's unknown[] to the specific types expected by child components
+interface CourseOptionItem { id: number | string; name: string; price?: number | string; remaining?: number; capacity?: number; [key: string]: unknown }
+const courseOptions = _courseOptions as import('vue').Ref<CourseOptionItem[]>
+const classroomOptions = _classroomOptions as import('vue').Ref<string[]>
 
 // ── 篩選輔助 ──
 const hasActiveFilters = computed(() =>
@@ -463,11 +488,16 @@ function resetFilters() {
 }
 
 // ── 報名時間 banner ──
-const regTimeInfo = ref({ is_open: false, open_at: null, close_at: null })
-const { banner: regTimeBanner } = useCountdownBanner(regTimeInfo)
+type AlertType = 'success' | 'warning' | 'info' | 'error'
+const regTimeInfo = ref<{ is_open: boolean; open_at: string | null; close_at: string | null }>({ is_open: false, open_at: null, close_at: null })
+const { banner: _regTimeBanner } = useCountdownBanner(regTimeInfo)
+const regTimeBanner = computed(() => {
+  if (!_regTimeBanner.value) return null
+  return { ..._regTimeBanner.value, type: _regTimeBanner.value.type as AlertType }
+})
 
 const drawerVisible = ref(false)
-const detail = ref(null)
+const detail = ref<RegistrationDetail | null>(null)
 const loadingDetail = ref(false)
 // Why: 防止使用者快速點兩列、或關閉 drawer 後 in-flight 請求覆蓋 detail/paymentInfo
 const drawerSeq = ref(0)
@@ -475,26 +505,26 @@ watch(drawerVisible, (v) => { if (!v) drawerSeq.value++ })
 const remarkText = ref('')
 const savingPromote = ref(false)
 const savingRemark = ref(false)
-const withdrawingCourseId = ref(null)
+const withdrawingCourseId = ref<number | null>(null)
 const exporting = ref(false)
 
-const tableRef = ref(null)
+const tableRef = ref<{ clearSelection: () => void } | null>(null)
 
 // ── 繳費相關 state ──
 const loadingPayments = ref(false)
-const paymentInfo = ref({ total_amount: 0, paid_amount: 0, payment_status: 'unpaid', records: [] })
-const deletingPaymentId = ref(null)
-const deletingRegistrationId = ref(null)
+const paymentInfo = ref<PaymentInfo>({ total_amount: 0, paid_amount: 0, payment_status: 'unpaid', records: [] })
+const deletingPaymentId = ref<number | null>(null)
+const deletingRegistrationId = ref<number | null>(null)
 const paymentDialogVisible = ref(false)
-const paymentDialogType = ref('payment') // 'payment' | 'refund'
+const paymentDialogType = ref<'payment' | 'refund'>('payment')
 
 // ── 繳費狀態 helper（使用 constants）──
-const paymentTagType = (row) => PAYMENT_STATUS_TAG_TYPE[row.payment_status] || 'info'
-const paymentTagLabel = (row) => PAYMENT_STATUS_LABEL[row.payment_status] || '未繳費'
-const paymentTagTypeByStatus = (status) => PAYMENT_STATUS_TAG_TYPE[status] || 'info'
-const paymentStatusLabel = (status) => PAYMENT_STATUS_LABEL[status] || '未繳費'
+const paymentTagType = (row: RegistrationRow): ElTagType => ((PAYMENT_STATUS_TAG_TYPE as Record<string, string>)[row.payment_status as string] || 'info') as ElTagType
+const paymentTagLabel = (row: RegistrationRow) => (PAYMENT_STATUS_LABEL as Record<string, string>)[row.payment_status as string] || '未繳費'
+const paymentTagTypeByStatus = (status: string | undefined): ElTagType => ((PAYMENT_STATUS_TAG_TYPE as Record<string, string>)[status ?? ''] || 'info') as ElTagType
+const paymentStatusLabel = (status: string | undefined) => (PAYMENT_STATUS_LABEL as Record<string, string>)[status ?? ''] || '未繳費'
 
-async function openDetail(row) {
+async function openDetail(row: RegistrationRow) {
   const seq = ++drawerSeq.value
   drawerVisible.value = true
   detail.value = null
@@ -504,34 +534,34 @@ async function openDetail(row) {
   try {
     const detailRes = await getRegistrationDetail(row.id)
     if (seq !== drawerSeq.value) return
-    detail.value = detailRes.data
-    remarkText.value = detailRes.data.remark || ''
+    detail.value = detailRes.data as RegistrationDetail
+    remarkText.value = (detailRes.data as RegistrationDetail).remark || ''
     await loadPayments(row.id, seq)
   } catch (e) {
     if (seq === drawerSeq.value) {
-      ElMessage.error(e?.response?.data?.detail || '載入詳情失敗，請稍後重試')
+      ElMessage.error((e as ApiErr)?.response?.data?.detail || '載入詳情失敗，請稍後重試')
     }
   } finally {
     if (seq === drawerSeq.value) loadingDetail.value = false
   }
 }
 
-async function loadPayments(registrationId, seq = drawerSeq.value) {
+async function loadPayments(registrationId: number, seq = drawerSeq.value) {
   loadingPayments.value = true
   try {
     const res = await getRegistrationPayments(registrationId)
     if (seq !== drawerSeq.value) return
-    paymentInfo.value = res.data
+    paymentInfo.value = res.data as PaymentInfo
   } catch (e) {
     if (seq === drawerSeq.value) {
-      ElMessage.warning(e?.response?.data?.detail || '繳費資訊載入失敗')
+      ElMessage.warning((e as ApiErr)?.response?.data?.detail || '繳費資訊載入失敗')
     }
   } finally {
     if (seq === drawerSeq.value) loadingPayments.value = false
   }
 }
 
-function openPaymentDialog(type) {
+function openPaymentDialog(type: 'payment' | 'refund') {
   // Why: 繳費資訊未載入完成時，computeOwed 會用到 paid_amount=0 預填全額，
   // 使用者誤送出將造成超繳。
   if (loadingPayments.value) {
@@ -550,12 +580,12 @@ async function onPaymentSubmitted() {
   fetchList()
 }
 
-async function handleDeletePayment(rec) {
+async function handleDeletePayment(rec: PaymentRecord) {
   // 軟刪除（voiding）：需具備「才藝課收款簽核」權限，且強制填寫原因（≥5 字）
   // 原紀錄會保留供稽核；paid_amount 會重新計算排除已 voided 的紀錄。
-  let reasonResult
+  let reasonResult: { value: string }
   try {
-    reasonResult = await ElMessageBox.prompt(
+    reasonResult = (await ElMessageBox.prompt(
       `將軟刪此${rec.type === 'payment' ? '繳費' : '退費'}記錄（NT$${rec.amount}）。` +
         `\n\n請輸入操作原因（至少 ${FIELD_RULES.voidReasonMin} 字，例：單據誤植、客戶退款後重開）。` +
         '\n原紀錄會保留於資料庫供稽核，不會真正刪除。',
@@ -567,7 +597,7 @@ async function handleDeletePayment(rec) {
         inputErrorMessage: `原因必須 ${FIELD_RULES.voidReasonMin}-${FIELD_RULES.voidReasonMax} 個字，不可敷衍`,
         confirmButtonClass: 'el-button--danger',
       }
-    )
+    )) as { value: string }
   } catch {
     return
   }
@@ -584,7 +614,7 @@ async function handleDeletePayment(rec) {
     fetchList()
   } catch (e) {
     if (seq === drawerSeq.value) {
-      ElMessage.error(e?.response?.data?.detail || '軟刪失敗')
+      ElMessage.error((e as ApiErr)?.response?.data?.detail || '軟刪失敗')
     }
   } finally {
     deletingPaymentId.value = null
@@ -608,7 +638,7 @@ async function saveRemark() {
   }
 }
 
-async function handlePromote(course) {
+async function handlePromote(course: RegistrationCourse) {
   if (!detail.value) return
   const targetId = detail.value.id
   const seq = drawerSeq.value
@@ -619,20 +649,20 @@ async function handlePromote(course) {
     ElMessage.success('已升為正式報名')
     const res = await getRegistrationDetail(targetId)
     if (seq !== drawerSeq.value) return
-    detail.value = res.data
+    detail.value = res.data as RegistrationDetail
     // 升正式後總金額可能改變，重新載入繳費資訊
     await loadPayments(targetId, seq)
     fetchList()
   } catch (e) {
     if (seq === drawerSeq.value) {
-      ElMessage.error(e?.response?.data?.detail || '升正式失敗')
+      ElMessage.error((e as ApiErr)?.response?.data?.detail || '升正式失敗')
     }
   } finally {
     savingPromote.value = false
   }
 }
 
-async function handleWithdrawCourse(course) {
+async function handleWithdrawCourse(course: RegistrationCourse) {
   if (!detail.value) return
   try {
     await ElMessageBox.confirm(
@@ -646,7 +676,7 @@ async function handleWithdrawCourse(course) {
   await doWithdrawCourse(course, false)
 }
 
-async function doWithdrawCourse(course, forceRefund, refundReason) {
+async function doWithdrawCourse(course: RegistrationCourse, forceRefund: boolean, refundReason?: string) {
   if (!detail.value) return
   const targetId = detail.value.id
   const seq = drawerSeq.value
@@ -661,17 +691,18 @@ async function doWithdrawCourse(course, forceRefund, refundReason) {
     )
     const res = await getRegistrationDetail(targetId)
     if (seq !== drawerSeq.value) return
-    detail.value = res.data
+    detail.value = res.data as RegistrationDetail
     await loadPayments(targetId, seq)
     fetchList()
   } catch (e) {
     // 409：退課後將超繳，需二次確認以 force_refund=true 自動沖帳；
     // 後端要求自動沖帳必填 refund_reason（≥5 字），故此處用 prompt 收原因。
-    if (e?.response?.status === 409 && !forceRefund) {
-      const detailMsg = e?.response?.data?.detail || '退課將產生超繳'
-      let reasonResult
+    const err = e as ApiErr
+    if (err?.response?.status === 409 && !forceRefund) {
+      const detailMsg = err?.response?.data?.detail || '退課將產生超繳'
+      let reasonResult: { value: string }
       try {
-        reasonResult = await ElMessageBox.prompt(
+        reasonResult = (await ElMessageBox.prompt(
           `${detailMsg}\n\n按「確認退課並沖帳」後會自動寫一筆退費沖帳紀錄（付款方式：系統補齊），原繳費歷史保留。` +
             `\n\n請輸入沖帳原因（至少 ${FIELD_RULES.voidReasonMin} 字，會寫入退費紀錄供稽核）：`,
           '需要確認自動沖帳',
@@ -682,7 +713,7 @@ async function doWithdrawCourse(course, forceRefund, refundReason) {
             inputPattern: VOID_REASON_PATTERN,
             inputErrorMessage: `原因必須 ${FIELD_RULES.voidReasonMin}-${FIELD_RULES.voidReasonMax} 個字，不可敷衍`,
           }
-        )
+        )) as { value: string }
       } catch {
         withdrawingCourseId.value = null
         return
@@ -691,13 +722,13 @@ async function doWithdrawCourse(course, forceRefund, refundReason) {
       await doWithdrawCourse(course, true, reason)
       return
     }
-    ElMessage.error(e?.response?.data?.detail || '退課失敗')
+    ElMessage.error(err?.response?.data?.detail || '退課失敗')
   } finally {
     withdrawingCourseId.value = null
   }
 }
 
-async function handleDelete(row) {
+async function handleDelete(row: RegistrationRow) {
   try {
     await ElMessageBox.confirm(`確定要刪除「${row.student_name}」的報名資料嗎？`, '確認刪除', {
       type: 'warning',
@@ -710,7 +741,7 @@ async function handleDelete(row) {
   await doDeleteRegistration(row, false)
 }
 
-async function doDeleteRegistration(row, forceRefund, refundReason) {
+async function doDeleteRegistration(row: RegistrationRow, forceRefund: boolean, refundReason?: string) {
   deletingRegistrationId.value = row.id
   try {
     await deleteRegistration(row.id, { forceRefund, refundReason })
@@ -720,11 +751,12 @@ async function doDeleteRegistration(row, forceRefund, refundReason) {
   } catch (e) {
     // 409：報名尚有已繳金額，需二次確認以 force_refund=true 自動沖帳；
     // 後端要求自動沖帳必填 refund_reason（≥5 字），故此處用 prompt 收原因。
-    if (e?.response?.status === 409 && !forceRefund) {
-      const detailMsg = e?.response?.data?.detail || '報名尚有已繳金額'
-      let reasonResult
+    const err = e as ApiErr
+    if (err?.response?.status === 409 && !forceRefund) {
+      const detailMsg = err?.response?.data?.detail || '報名尚有已繳金額'
+      let reasonResult: { value: string }
       try {
-        reasonResult = await ElMessageBox.prompt(
+        reasonResult = (await ElMessageBox.prompt(
           `${detailMsg}\n\n按「確認刪除並沖帳」後會自動寫退費沖帳紀錄（付款方式：系統補齊），原繳費歷史保留。` +
             `\n\n請輸入沖帳原因（至少 ${FIELD_RULES.voidReasonMin} 字，會寫入退費紀錄供稽核）：`,
           '需要確認自動沖帳',
@@ -736,7 +768,7 @@ async function doDeleteRegistration(row, forceRefund, refundReason) {
             inputErrorMessage: `原因必須 ${FIELD_RULES.voidReasonMin}-${FIELD_RULES.voidReasonMax} 個字，不可敷衍`,
             confirmButtonClass: 'el-button--danger',
           }
-        )
+        )) as { value: string }
       } catch {
         deletingRegistrationId.value = null
         return
@@ -745,13 +777,13 @@ async function doDeleteRegistration(row, forceRefund, refundReason) {
       await doDeleteRegistration(row, true, reason)
       return
     }
-    ElMessage.error(e?.response?.data?.detail || '刪除失敗')
+    ElMessage.error(err?.response?.data?.detail || '刪除失敗')
   } finally {
     deletingRegistrationId.value = null
   }
 }
 
-function handleSelectionChange(rows) {
+function handleSelectionChange(rows: RegistrationRow[]) {
   selectedIds.value = rows.map(r => r.id)
 }
 
@@ -760,7 +792,7 @@ function clearSelection() {
   selectedIds.value = []
 }
 
-async function handleBatchMarkPaid(isPaid) {
+async function handleBatchMarkPaid(isPaid: boolean) {
   await batchMarkPaid(isPaid, () => {
     tableRef.value?.clearSelection()
   })
@@ -775,7 +807,7 @@ async function handleExport() {
       course_id: courseFilter.value || undefined,
       classroom_name: classroomFilter.value || undefined,
     })
-    const url = URL.createObjectURL(new Blob([res.data]))
+    const url = URL.createObjectURL(new Blob([res.data as BlobPart]))
     const a = document.createElement('a')
     a.href = url
     const localDate = new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-')
@@ -812,7 +844,7 @@ function openEditBasicDialog() {
 async function onEditBasicSaved() {
   if (!detail.value) return
   const res = await getRegistrationDetail(detail.value.id)
-  detail.value = res.data
+  detail.value = res.data as RegistrationDetail
   fetchList()
 }
 
@@ -833,14 +865,14 @@ async function onCourseAdded() {
     loadPayments(targetId, seq),
   ])
   if (seq !== drawerSeq.value) return
-  detail.value = d.data
+  detail.value = d.data as RegistrationDetail
   loadOptions()
   fetchList()
 }
 
 // ── 新增用品 ─────────────────────────────────────────────
 const addSupplyDialogVisible = ref(false)
-const deletingSupplyId = ref(null)
+const deletingSupplyId = ref<number | null>(null)
 
 function openAddSupplyDialog() {
   addSupplyDialogVisible.value = true
@@ -855,11 +887,11 @@ async function onSupplyAdded() {
     loadPayments(targetId, seq),
   ])
   if (seq !== drawerSeq.value) return
-  detail.value = d.data
+  detail.value = d.data as RegistrationDetail
   fetchList()
 }
 
-async function handleRemoveSupply(row) {
+async function handleRemoveSupply(row: RegistrationSupply) {
   if (!detail.value) return
   try {
     await ElMessageBox.confirm(
@@ -873,7 +905,7 @@ async function handleRemoveSupply(row) {
   await doRemoveSupply(row, false)
 }
 
-async function doRemoveSupply(row, forceRefund, refundReason) {
+async function doRemoveSupply(row: RegistrationSupply, forceRefund: boolean, refundReason?: string) {
   if (!detail.value) return
   const targetId = detail.value.id
   const seq = drawerSeq.value
@@ -889,16 +921,17 @@ async function doRemoveSupply(row, forceRefund, refundReason) {
       loadPayments(targetId, seq),
     ])
     if (seq !== drawerSeq.value) return
-    detail.value = d.data
+    detail.value = d.data as RegistrationDetail
     fetchList()
   } catch (e) {
     // 409：移除用品後將超繳，需二次確認以 force_refund=true 自動沖帳；
     // 後端要求自動沖帳必填 refund_reason（≥5 字），故此處用 prompt 收原因。
-    if (e?.response?.status === 409 && !forceRefund) {
-      const detailMsg = e?.response?.data?.detail || '移除用品將產生超繳'
-      let reasonResult
+    const err = e as ApiErr
+    if (err?.response?.status === 409 && !forceRefund) {
+      const detailMsg = err?.response?.data?.detail || '移除用品將產生超繳'
+      let reasonResult: { value: string }
       try {
-        reasonResult = await ElMessageBox.prompt(
+        reasonResult = (await ElMessageBox.prompt(
           `${detailMsg}\n\n按「確認移除並沖帳」後會自動寫一筆退費沖帳紀錄（付款方式：系統補齊），原繳費歷史保留。` +
             `\n\n請輸入沖帳原因（至少 ${FIELD_RULES.voidReasonMin} 字，會寫入退費紀錄供稽核）：`,
           '需要確認自動沖帳',
@@ -910,7 +943,7 @@ async function doRemoveSupply(row, forceRefund, refundReason) {
             inputErrorMessage: `原因必須 ${FIELD_RULES.voidReasonMin}-${FIELD_RULES.voidReasonMax} 個字，不可敷衍`,
             confirmButtonClass: 'el-button--danger',
           }
-        )
+        )) as { value: string }
       } catch {
         deletingSupplyId.value = null
         return
@@ -920,7 +953,7 @@ async function doRemoveSupply(row, forceRefund, refundReason) {
       return
     }
     if (seq === drawerSeq.value) {
-      ElMessage.error(e?.response?.data?.detail || '移除失敗')
+      ElMessage.error(err?.response?.data?.detail || '移除失敗')
     }
   } finally {
     deletingSupplyId.value = null
@@ -934,7 +967,7 @@ onMounted(async () => {
   loadPendingCount()
   try {
     const res = await getRegistrationTime()
-    regTimeInfo.value = res.data
+    regTimeInfo.value = res.data as { is_open: boolean; open_at: string | null; close_at: string | null }
   } catch {
     // 靜默失敗
   }

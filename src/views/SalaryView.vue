@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
 import { calculate, getFestivalBonus, getRecords, getSalaryFieldBreakdown, manualAdjustSalary, getFestivalBonusPeriodAccrual } from '@/api/salary'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -27,24 +27,34 @@ const query = reactive({
   month: currentMonth
 })
 
+interface SalaryRow { employee_id?: string | number; employee_name?: string; remark?: string; manual_overrides?: string[]; [key: string]: unknown }
+interface BonusRow { festivalBonus?: number; employee?: { employee_name?: string }; title?: string; [key: string]: unknown }
+interface PeriodAccrualData {
+  is_distribution_month?: boolean; period_start_year?: number; period_start_month?: number
+  current_year?: number; current_month?: number; distribution_month?: number
+  rows?: { monthly: { year: number; month: number; [key: string]: unknown }[]; [key: string]: unknown }[]
+}
+interface FieldBreakdown { employee?: { employee_name?: string; employee_code?: string; job_title?: string; year?: number; month?: number }; title?: string; rows?: Record<string, unknown>[]; columns?: { key: string; label?: string; [key: string]: unknown }[]; note?: string; summary?: Record<string, unknown> }
+interface SalaryRecord { id?: number; employee_id?: string | number; employee_name?: string; calculated_at?: string; version?: number; remark?: string; manual_overrides?: string[]; [key: string]: unknown }
+
 const loading = ref(false)
 const bonusLoading = ref(false)
 const hasCalculated = ref(false)
-const lastCalculatedAt = ref(null)
-const dbCalculatedAt = ref(null)
-const salaryResults = ref([])
+const lastCalculatedAt = ref<Date | null>(null)
+const dbCalculatedAt = ref<string | null>(null)
+const salaryResults = ref<SalaryRow[]>([])
 // 暫存每員工 simulate 預覽結果，供未來在主表列顯示「試算中」徽章使用；目前僅儲存不消費
-const previewMap = ref({})
-const bonusResults = ref([])
+const previewMap = ref<Record<string, unknown>>({})
+const bonusResults = ref<BonusRow[]>([])
 const showBonusDialog = ref(false)
 const bonusDialogTab = ref('single')  // 'single' | 'accrual'
 const periodAccrualLoading = ref(false)
-const periodAccrualData = ref(null)
-const periodAccrualKey = ref(null)   // cache key `${year}-${month}`
+const periodAccrualData = ref<PeriodAccrualData | null>(null)
+const periodAccrualKey = ref<string | null>(null)   // cache key `${year}-${month}`
 const periodAccrualError = ref(false)
 const showFieldBreakdownDialog = ref(false)
 const fieldBreakdownLoading = ref(false)
-const fieldBreakdown = ref(null)
+const fieldBreakdown = ref<FieldBreakdown | null>(null)
 const activeTab = ref('calculate')
 const canReadSalarySettings = computed(() => hasPermission('SETTINGS_READ'))
 const canReadEmployees = computed(() => hasPermission('EMPLOYEES_READ'))
@@ -62,8 +72,8 @@ const MONEY_KEYS = new Set([
 const showSnapshotDialog = ref(false)
 const showEditDialog = ref(false)
 const editLoading = ref(false)
-const editingRow = ref(null)
-const editingVersion = ref(null)
+const editingRow = ref<SalaryRow | null>(null)
+const editingVersion = ref<number | null>(null)
 const adjustmentReason = ref('')
 const editForm = reactive({
   festival_bonus: 0,
@@ -97,8 +107,9 @@ const calculateSalary = async () => {
   loading.value = true
   try {
     const response = await calculate(query.year, query.month)
-    const { results, errors } = response.data
-    salaryResults.value = results
+    const data = response.data as { results?: SalaryRow[]; errors?: { employee_name?: string; error?: string }[] }
+    const { results, errors } = data
+    salaryResults.value = results || []
     hasCalculated.value = true
     lastCalculatedAt.value = new Date()
     if (errors && errors.length > 0) {
@@ -125,7 +136,7 @@ const fetchFestivalBonus = async () => {
   bonusLoading.value = true
   try {
     const response = await getFestivalBonus(query.year, query.month)
-    bonusResults.value = response.data
+    bonusResults.value = (response.data as BonusRow[]) || []
     showBonusDialog.value = true
   } catch (error) {
     notify(error, 'SalaryView:bonusData', null, { prefix: '取得獎金資料失敗' })
@@ -141,7 +152,7 @@ const fetchPeriodAccrual = async () => {
   periodAccrualError.value = false
   try {
     const response = await getFestivalBonusPeriodAccrual(query.year, query.month)
-    periodAccrualData.value = response.data
+    periodAccrualData.value = response.data as PeriodAccrualData
     periodAccrualKey.value = key
   } catch (error) {
     periodAccrualError.value = true
@@ -151,33 +162,36 @@ const fetchPeriodAccrual = async () => {
   }
 }
 
-const onBonusTabChange = (tab) => {
+const onBonusTabChange = (tab: string | number) => {
   if (tab === 'accrual') fetchPeriodAccrual()
 }
 
-const onPreviewChanged = ({ employee_id, simulated }) => {
-  previewMap.value[employee_id] = simulated
+const onPreviewChanged = ({ employee_id, simulated }: { employee_id: unknown; simulated: unknown }) => {
+  previewMap.value[String(employee_id)] = simulated
 }
-const onResetPreview = ({ employee_id }) => {
-  delete previewMap.value[employee_id]
+const onResetPreview = ({ employee_id }: { employee_id: unknown }) => {
+  delete previewMap.value[String(employee_id)]
 }
 
-const formatAccrualMonthLabel = (m, currentYear) => {
+const formatAccrualMonthLabel = (m: { year?: number; month?: number }, currentYr: number | undefined) => {
   // 同年只顯示月份，跨年顯示「YYYY/MM」避免 1 月查詢時混淆
-  return m.year === currentYear ? `${m.month} 月` : `${m.year}/${m.month}`
+  return m.year === currentYr ? `${m.month} 月` : `${m.year}/${m.month}`
 }
 
-const findMonthlyEntry = (row, year, month) => {
-  return row.monthlyMap?.get(`${year}-${month}`) || null
+interface MonthlyEntry { year?: number; month?: number; festival_bonus?: number; overtime_bonus?: number; meeting_absence_deduction?: number; [key: string]: unknown }
+const findMonthlyEntry = (row: Record<string, unknown>, year: number, month: number): MonthlyEntry | null => {
+  return (row.monthlyMap as Map<string, MonthlyEntry> | undefined)?.get(`${year}-${month}`) || null
 }
 
 const accrualColumnMonths = computed(() => {
   const d = periodAccrualData.value
   if (!d || d.is_distribution_month || !d.period_start_year) return []
-  const months = []
+  const months: { year: number; month: number }[] = []
   let y = d.period_start_year
-  let m = d.period_start_month
-  while (y < d.current_year || (y === d.current_year && m <= d.current_month)) {
+  let m = d.period_start_month ?? 1
+  const curY = d.current_year ?? y
+  const curM = d.current_month ?? m
+  while (y < curY || (y === curY && m <= curM)) {
     months.push({ year: y, month: m })
     m += 1
     if (m > 12) { m = 1; y += 1 }
@@ -195,7 +209,7 @@ const accrualRowsWithMap = computed(() => {
 })
 
 // ---- Salary Records (for export) ----
-const salaryRecords = ref([])
+const salaryRecords = ref<SalaryRecord[]>([])
 
 // O(1) lookup map: employee_id → record
 const salaryRecordsMap = computed(() => {
@@ -218,15 +232,17 @@ const salaryRecordsByName = computed(() => {
 const fetchSalaryRecords = async () => {
   try {
     const response = await getRecords(query.year, query.month)
-    salaryRecords.value = response.data
-    const timestamps = response.data.map(r => r.calculated_at).filter(Boolean)
+    const records = (response.data as SalaryRecord[]) || []
+    salaryRecords.value = records
+    const timestamps = records.map(r => r.calculated_at).filter((t): t is string => Boolean(t))
     if (timestamps.length) {
-      dbCalculatedAt.value = timestamps.sort().at(-1)
+      const sorted = timestamps.sort()
+      dbCalculatedAt.value = sorted[sorted.length - 1] ?? null
     }
     if (salaryResults.value.length > 0) {
       // 使用 Map 合併 remark + manual_overrides，O(n) 取代 O(n²)
       // manual_overrides 從 records 帶過來,讓「人工調整」icon 在重算後仍正確顯示
-      const recordMap = new Map(response.data.map(r => [r.employee_id, r]))
+      const recordMap = new Map(records.map(r => [r.employee_id, r]))
       salaryResults.value = salaryResults.value.map((row) => {
         const record = recordMap.get(row.employee_id)
         if (!record) return row
@@ -236,9 +252,9 @@ const fetchSalaryRecords = async () => {
           manual_overrides: Array.isArray(record.manual_overrides) ? record.manual_overrides : [],
         }
       })
-    } else if (response.data.length > 0) {
+    } else if (records.length > 0) {
       // 頁面重整後從 DB records 重建計算結果（records 已包含前端所需的欄位別名）
-      salaryResults.value = response.data
+      salaryResults.value = records
       hasCalculated.value = true
     }
   } catch (error) {
@@ -246,27 +262,27 @@ const fetchSalaryRecords = async () => {
   }
 }
 
-const getRecordId = (employeeName) => {
+const getRecordId = (employeeName: string) => {
   return salaryRecordsByName.value.get(employeeName)?.id ?? null
 }
 
-const getRecordForRow = (row) => {
+const getRecordForRow = (row: SalaryRow | null | undefined) => {
   if (row?.employee_id != null) {
     return salaryRecordsMap.value.get(row.employee_id) || null
   }
-  return salaryRecordsByName.value.get(row?.employee_name) || null
+  return salaryRecordsByName.value.get(row?.employee_name ?? '') || null
 }
 
 // 判斷該欄位是否為人工調整(對應後端 SalaryRecord.manual_overrides)
 // 表頁列(row)與後端 SalaryRecord 的欄位名一致(欄位 key 同時是 EDITABLE_SALARY_FIELDS key),
 // 故直接用 key 比對即可。
-const isManualOverride = (row, fieldKey) => {
+const isManualOverride = (row: SalaryRow, fieldKey: string) => {
   const overrides = row?.manual_overrides
   return Array.isArray(overrides) && overrides.includes(fieldKey)
 }
 
-const exportPdf = (row) => {
-  const recordId = getRecordForRow(row)?.id || getRecordId(row.employee_name)
+const exportPdf = (row: SalaryRow) => {
+  const recordId = getRecordForRow(row)?.id || getRecordId(row.employee_name ?? '')
   if (!recordId) {
     ElMessage.warning('請先計算薪資後再匯出')
     return
@@ -274,7 +290,7 @@ const exportPdf = (row) => {
   downloadFile(`/salaries/${recordId}/export?format=pdf`, `薪資單_${row.employee_name}.pdf`)
 }
 
-const openEditDialog = (row) => {
+const openEditDialog = (row: SalaryRow) => {
   const record = getRecordForRow(row)
   if (!record?.id) {
     ElMessage.warning('請先計算薪資後再編輯')
@@ -283,8 +299,9 @@ const openEditDialog = (row) => {
   editingRow.value = row
   editingVersion.value = record.version ?? null
   adjustmentReason.value = ''
+  const ef = editForm as Record<string, unknown>
   for (const field of editableFieldList) {
-    editForm[field.key] = row[field.key] || 0
+    ef[field.key] = row[field.key] || 0
   }
   showEditDialog.value = true
 }
@@ -301,47 +318,51 @@ const saveManualAdjust = async () => {
 
   editLoading.value = true
   try {
-    const payload = { adjustment_reason: reason }
+    const payload: Record<string, unknown> = { adjustment_reason: reason }
+    const ef = editForm as Record<string, unknown>
     for (const field of editableFieldList) {
-      payload[field.key] = Number(editForm[field.key] || 0)
+      payload[field.key] = Number(ef[field.key] || 0)
     }
     const response = await manualAdjustSalary(
-      record.id,
-      payload,
+      record.id!,
+      payload as Parameters<typeof manualAdjustSalary>[1],
       editingVersion.value ?? record.version ?? null
     )
-    const updated = response.data.record
-    Object.assign(editingRow.value, {
-      festival_bonus: updated.festival_bonus,
-      overtime_bonus: updated.overtime_bonus,
-      overtime_pay: updated.overtime_pay,
-      supervisor_dividend: updated.supervisor_dividend,
-      meeting_overtime_pay: updated.meeting_overtime_pay,
-      birthday_bonus: updated.birthday_bonus,
-      leave_deduction: updated.leave_deduction,
-      late_deduction: updated.late_deduction,
-      early_leave_deduction: updated.early_leave_deduction,
-      meeting_absence_deduction: updated.meeting_absence_deduction,
-      absence_deduction: updated.absence_deduction,
-      total_deductions: updated.total_deduction,
-      net_pay: updated.net_salary,
-      remark: updated.remark,
-      manual_overrides: Array.isArray(updated.manual_overrides) ? updated.manual_overrides : [],
-    })
+    const updated = (response.data as { record?: Record<string, unknown> }).record
+    if (updated && editingRow.value) {
+      Object.assign(editingRow.value, {
+        festival_bonus: updated.festival_bonus,
+        overtime_bonus: updated.overtime_bonus,
+        overtime_pay: updated.overtime_pay,
+        supervisor_dividend: updated.supervisor_dividend,
+        meeting_overtime_pay: updated.meeting_overtime_pay,
+        birthday_bonus: updated.birthday_bonus,
+        leave_deduction: updated.leave_deduction,
+        late_deduction: updated.late_deduction,
+        early_leave_deduction: updated.early_leave_deduction,
+        meeting_absence_deduction: updated.meeting_absence_deduction,
+        absence_deduction: updated.absence_deduction,
+        total_deductions: updated.total_deduction,
+        net_pay: updated.net_salary,
+        remark: updated.remark,
+        manual_overrides: Array.isArray(updated.manual_overrides) ? updated.manual_overrides : [],
+      })
+    }
     const recordIndex = salaryRecords.value.findIndex(item => item.id === record.id)
-    if (recordIndex >= 0) {
+    if (recordIndex >= 0 && updated) {
       salaryRecords.value[recordIndex] = {
         ...salaryRecords.value[recordIndex],
         ...updated,
       }
     }
-    editingVersion.value = updated.version ?? null
+    editingVersion.value = (updated?.version as number) ?? null
     ElMessage.success('薪資金額已更新')
     showEditDialog.value = false
   } catch (error) {
-    if (error?.response?.status === 409) {
+    const e = error as { response?: { status?: number; data?: { detail?: string } } }
+    if (e?.response?.status === 409) {
       ElMessageBox.alert(
-        error.response.data?.detail || '此筆薪資已被他人修改，請重新整理後再編輯',
+        e.response.data?.detail || '此筆薪資已被他人修改，請重新整理後再編輯',
         '版本衝突',
         { confirmButtonText: '重新載入', type: 'warning' }
       ).then(() => {
@@ -356,7 +377,7 @@ const saveManualAdjust = async () => {
   }
 }
 
-const openFieldBreakdown = async (row, field) => {
+const openFieldBreakdown = async (row: SalaryRow, field: string) => {
   const record = getRecordForRow(row)
   if (!record?.id) {
     ElMessage.warning('請先計算薪資後再查看明細')
@@ -365,8 +386,8 @@ const openFieldBreakdown = async (row, field) => {
 
   fieldBreakdownLoading.value = true
   try {
-    const response = await getSalaryFieldBreakdown(record.id, field)
-    fieldBreakdown.value = response.data
+    const response = await getSalaryFieldBreakdown(record.id!, field)
+    fieldBreakdown.value = response.data as FieldBreakdown
     showFieldBreakdownDialog.value = true
   } catch (error) {
     notify(error, 'SalaryView:loadFieldDetail', null, { prefix: '載入欄位明細失敗' })
@@ -390,8 +411,8 @@ const ROSTER_TYPE_LABELS = {
   art_teacher: '才藝老師',
 }
 
-const exportTransferRoster = (type) => {
-  const label = ROSTER_TYPE_LABELS[type] || type
+const exportTransferRoster = (type: string) => {
+  const label = (ROSTER_TYPE_LABELS as Record<string, string>)[type] || type
   const filename = `${query.year}年${String(query.month).padStart(2, '0')}月_${label}轉帳名冊.xlsx`
   downloadFile(
     `/salaries/${query.year}/${query.month}/transfer-roster?type=${type}`,
@@ -399,7 +420,7 @@ const exportTransferRoster = (type) => {
   )
 }
 
-const pct = (val) => {
+const pct = (val: number | null | undefined) => {
   if (!val && val !== 0) return '0.0%'
   return (val * 100).toFixed(1) + '%'
 }
@@ -414,7 +435,7 @@ const fieldBreakdownTitle = computed(() => {
   return `${fieldBreakdown.value.title}｜${employee.employee_name}｜${employee.year} 年 ${employee.month} 月`
 })
 
-const renderFieldBreakdownValue = (row, column) => {
+const renderFieldBreakdownValue = (row: Record<string, unknown>, column: { key: string }) => {
   const value = row?.[column.key]
   if (value === null || value === undefined || value === '') return '-'
   if (MONEY_KEYS.has(column.key)) return money(value)
@@ -423,10 +444,10 @@ const renderFieldBreakdownValue = (row, column) => {
   return value
 }
 
-const formatDateTime = (value) => {
+const formatDateTime = (value: string | Date | null) => {
   if (!value) return ''
   const d = typeof value === 'string' ? new Date(value) : value
-  const pad = n => String(n).padStart(2, '0')
+  const pad = (n: number) => String(n).padStart(2, '0')
   return `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }
 
@@ -850,10 +871,10 @@ onMounted(() => {
       <div v-loading="fieldBreakdownLoading">
         <template v-if="fieldBreakdown">
           <el-descriptions :column="2" border class="breakdown-meta">
-            <el-descriptions-item label="姓名">{{ fieldBreakdown.employee.employee_name }}</el-descriptions-item>
-            <el-descriptions-item label="員工編號">{{ fieldBreakdown.employee.employee_code }}</el-descriptions-item>
-            <el-descriptions-item label="職稱">{{ fieldBreakdown.employee.job_title || '-' }}</el-descriptions-item>
-            <el-descriptions-item label="月份">{{ fieldBreakdown.employee.year }} 年 {{ fieldBreakdown.employee.month }} 月</el-descriptions-item>
+            <el-descriptions-item label="姓名">{{ fieldBreakdown.employee?.employee_name }}</el-descriptions-item>
+            <el-descriptions-item label="員工編號">{{ fieldBreakdown.employee?.employee_code }}</el-descriptions-item>
+            <el-descriptions-item label="職稱">{{ fieldBreakdown.employee?.job_title || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="月份">{{ fieldBreakdown.employee?.year }} 年 {{ fieldBreakdown.employee?.month }} 月</el-descriptions-item>
           </el-descriptions>
 
           <el-table :data="fieldBreakdown.rows" border max-height="480" stripe class="field-breakdown-table">
@@ -894,7 +915,7 @@ onMounted(() => {
       <el-form label-width="120px" class="salary-edit-form">
         <div class="salary-edit-grid">
           <el-form-item v-for="field in editableFieldList" :key="field.key" :label="field.label">
-            <el-input-number v-model="editForm[field.key]" :min="0" :step="100" controls-position="right" />
+            <el-input-number v-model="(editForm as Record<string, number>)[field.key]" :min="0" :step="100" controls-position="right" />
           </el-form-item>
         </div>
         <el-form-item label="調整原因" required>
