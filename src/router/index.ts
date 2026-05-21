@@ -52,8 +52,8 @@ const routes: RouteRecordRaw[] = [
         {
             path: '/students',
             name: 'students',
-            component: () => import('../views/StudentView.vue'),
-            meta: { title: '學生管理' }
+            component: () => import('../views/StudentWorkbenchView.vue'),
+            meta: { title: '學生' }
         },
         {
             path: '/students/profile/:id',
@@ -87,9 +87,7 @@ const routes: RouteRecordRaw[] = [
         },
         {
             path: '/student-academic-affairs',
-            name: 'student-academic-affairs',
-            component: () => import('../views/StudentAcademicAffairsView.vue'),
-            meta: { title: '學生教務管理' }
+            redirect: '/students',
         },
         {
             path: '/portfolio/medication-today',
