@@ -56,7 +56,7 @@ const message = computed(() => {
 }
 .mobile-error-retry__btn {
   padding: 8px 24px;
-  background: #3f7d48;
+  background: var(--brand-primary);
   color: #fff;
   border: none;
   border-radius: 6px;

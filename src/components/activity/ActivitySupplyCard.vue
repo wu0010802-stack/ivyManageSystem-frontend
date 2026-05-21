@@ -49,15 +49,15 @@ defineEmits<{ toggle: [] }>()
   gap: 10px;
 }
 .course-card:last-child { margin-bottom: 0; }
-.course-card.selected { border-color: #3f7d48; background: #f0faf1; }
+.course-card.selected { border-color: var(--brand-primary); background: var(--brand-primary-soft); }
 .course-check {
   width: 24px; height: 24px;
   display: flex; align-items: center; justify-content: center;
-  color: #3f7d48; flex-shrink: 0;
+  color: var(--brand-primary); flex-shrink: 0;
 }
 .empty-check { width: 18px; height: 18px; border: 2px solid #ccc; border-radius: 4px; }
 .course-info { flex: 1; min-width: 0; }
 .course-name { font-size: 15px; font-weight: 500; color: var(--text-primary); }
 .course-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
-.course-price { font-size: 15px; font-weight: 600; color: #3f7d48; }
+.course-price { font-size: 15px; font-weight: 600; color: var(--brand-primary); }
 </style>

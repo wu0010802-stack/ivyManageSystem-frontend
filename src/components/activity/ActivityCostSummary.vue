@@ -29,6 +29,6 @@ defineProps<{
 .cost-value {
   font-size: 18px;
   font-weight: 700;
-  color: #3f7d48;
+  color: var(--brand-primary);
 }
 </style>
