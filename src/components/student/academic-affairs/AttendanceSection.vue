@@ -105,7 +105,6 @@ defineExpose({ fetchDaily })
     :error-message="errorMessage"
     :empty-description="ctx.filters.classroomId ? '當日沒有資料' : '請先選擇班級'"
     :show-empty="filteredRows.length === 0"
-    :open-full-route="{ name: 'student-attendance' }"
     @retry="fetchDaily"
   >
     <template #titleExtra v-if="refDate">{{ refDate }}</template>

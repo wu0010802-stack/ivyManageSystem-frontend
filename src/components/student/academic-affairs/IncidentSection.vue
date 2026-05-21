@@ -123,7 +123,6 @@ defineExpose({ fetchIncidents })
     :error-message="errorMessage"
     :empty-description="ctx.filters.classroomId ? '期間內沒有事件紀錄' : '請先選擇班級'"
     :show-empty="records.length === 0"
-    :open-full-route="{ name: 'student-incidents' }"
     @retry="fetchIncidents"
   >
     <template #actions>

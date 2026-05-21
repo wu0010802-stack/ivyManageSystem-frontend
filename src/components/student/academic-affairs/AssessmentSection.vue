@@ -123,7 +123,6 @@ defineExpose({ fetchAssessments })
     :error-message="errorMessage"
     :empty-description="ctx.filters.classroomId ? '期間內沒有評量資料' : '請先選擇班級'"
     :show-empty="filteredRows.length === 0"
-    :open-full-route="{ name: 'student-assessments' }"
     @retry="fetchAssessments"
   >
     <template #actions>
