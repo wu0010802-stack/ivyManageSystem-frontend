@@ -11,7 +11,7 @@ import IncidentEditorDialog from '@/components/student/IncidentEditorDialog.vue'
 import SectionCard from './SectionCard.vue'
 
 const ctx = inject(ACADEMIC_AFFAIRS_FILTERS_KEY)
-if (!ctx) throw new Error('IncidentSection 須在 StudentAcademicAffairsView 內使用')
+if (!ctx) throw new Error('IncidentSection 須在 TodayTasksPanel 內使用')
 
 const props = withDefaults(defineProps<{
   classrooms?: Record<string, unknown>[]

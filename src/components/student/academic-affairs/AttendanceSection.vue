@@ -8,7 +8,7 @@ import AttendanceBatchPanel from './AttendanceBatchPanel.vue'
 import SectionCard from './SectionCard.vue'
 
 const ctx = inject(ACADEMIC_AFFAIRS_FILTERS_KEY)
-if (!ctx) throw new Error('AttendanceSection 須在 StudentAcademicAffairsView 內使用')
+if (!ctx) throw new Error('AttendanceSection 須在 TodayTasksPanel 內使用')
 
 interface AttendanceRow {
   student_id?: number

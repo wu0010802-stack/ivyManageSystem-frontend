@@ -13,7 +13,7 @@ const STATUS_MAP: Record<string, { label: string; type: string }> = {
 }
 
 const ctx = inject(ACADEMIC_AFFAIRS_FILTERS_KEY)
-if (!ctx) throw new Error('LeaveSection 須在 StudentAcademicAffairsView 內使用')
+if (!ctx) throw new Error('LeaveSection 須在 TodayTasksPanel 內使用')
 
 interface LeaveItem {
   student_id?: number
