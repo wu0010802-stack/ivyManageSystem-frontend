@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { reactive, nextTick } from 'vue'
 import { shallowMount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import StudentView from '@/views/StudentView.vue'
+import StudentListPanel from '@/components/student/workbench/StudentListPanel.vue'
 
 const route = reactive({
   query: {
@@ -54,7 +54,7 @@ const flushPromises = async () => {
   await Promise.resolve()
 }
 
-describe('StudentView', () => {
+describe('StudentListPanel', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.clearAllMocks()
@@ -67,7 +67,7 @@ describe('StudentView', () => {
   })
 
   it('uses route query to preload academic term and classroom filters', async () => {
-    shallowMount(StudentView, {
+    shallowMount(StudentListPanel, {
       global: {
         directives: {
           loading: () => {},
