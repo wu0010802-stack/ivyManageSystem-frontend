@@ -14,6 +14,7 @@ import SkeletonBlock from '../components/SkeletonBlock.vue'
 import TodayTimeline from '../components/home-timeline/TodayTimeline.vue'
 import PushCta from '../components/home/PushCta.vue'
 import ChildrenStrip from '../components/home/ChildrenStrip.vue'
+import PendingSignBanner from '../components/home/PendingSignBanner.vue'
 import LaurelWreath from '@/components/brand/LaurelWreath.vue'
 import ContactBookDayCard from '../components/contact-book/ContactBookDayCard.vue'
 
@@ -44,6 +45,10 @@ const me = computed(() => summaryData.value?.me || null)
 const children = computed(() => summaryData.value?.children || [])
 const summary = computed(() => summaryData.value?.summary || null)
 const showPushCta = computed(() => me.value && !me.value.can_push)
+const pendingSignCount = computed(() => {
+  const v = (summary.value as { pending_event_acks?: unknown } | null)?.pending_event_acks
+  return typeof v === 'number' ? v : 0
+})
 
 const selectedChild = computed(() => {
   const list: { student_id: number; name?: string; classroom_name?: string }[] = children.value || []
@@ -158,6 +163,8 @@ function go(path: string) {
 
 <template>
   <PullToRefresh :on-refresh="pullRefresh" class="today-view">
+    <PendingSignBanner :count="pendingSignCount" />
+
     <header class="today-head">
       <LaurelWreath
         side="right"
@@ -217,6 +224,14 @@ function go(path: string) {
     <section v-else class="today-stream">
       <TodayTimeline :buckets="buckets" @navigate="go" />
     </section>
+
+    <footer class="today-footer">
+      <router-link to="/calendar" class="today-footer-link">
+        <span class="material-symbols-rounded" aria-hidden="true">calendar_month</span>
+        <span>行事曆</span>
+        <span class="material-symbols-rounded today-footer-chevron" aria-hidden="true">chevron_right</span>
+      </router-link>
+    </footer>
   </PullToRefresh>
 </template>
 
@@ -317,7 +332,37 @@ function go(path: string) {
 }
 
 .today-stream {
-  padding: var(--space-2, 8px) var(--space-4, 16px) var(--space-12, 48px);
+  padding: var(--space-2, 8px) var(--space-4, 16px) var(--space-3, 12px);
+}
+
+.today-footer {
+  padding: 0 var(--space-4, 16px) var(--space-12, 48px);
+}
+.today-footer-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  border-radius: 14px;
+  background: var(--m3-surface-container, #ebefe8);
+  color: var(--pt-text-strong, #2a2520);
+  text-decoration: none;
+  font-size: 15px;
+  font-weight: 600;
+  transition: background-color 120ms ease;
+}
+.today-footer-link:hover {
+  background: var(--m3-surface-container-high, #e1e8df);
+}
+.today-footer-link .material-symbols-rounded {
+  font-size: 22px;
+  color: var(--brand-primary, #0d9053);
+  font-variation-settings: 'wght' 500;
+}
+.today-footer-chevron {
+  margin-left: auto;
+  font-size: 20px !important;
+  color: var(--pt-text-muted, #6b5e54) !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
