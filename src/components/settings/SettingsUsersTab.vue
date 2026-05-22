@@ -6,10 +6,10 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { useEmployeeStore } from '@/stores/employee'
 import { apiError } from '@/utils/error'
 import {
-  permissionMaskAdd,
-  permissionMaskCombine,
-  permissionMaskHas,
-  permissionMaskRemove,
+  permissionsAdd,
+  permissionsCombine,
+  permissionsHave,
+  permissionsRemove,
 } from '@/utils/auth'
 
 const employeeStore = useEmployeeStore()
@@ -18,11 +18,11 @@ const { employees } = storeToRefs(employeeStore)
 const users = ref<Record<string, unknown>[]>([])
 const loadingUsers = ref<boolean>(false)
 const userDialogVisible = ref<boolean>(false)
-const userForm = reactive<{ employee_id: number | null; username: string; password: string; role: string; permissions: number }>({ employee_id: null, username: '', password: '', role: 'teacher', permissions: -1 })
+const userForm = reactive<{ employee_id: number | null; username: string; password: string; role: string; permission_names: string[] }>({ employee_id: null, username: '', password: '', role: 'teacher', permission_names: ['*'] })
 const resetPasswordForm = reactive<{ user_id: number | null; username: string; new_password: string }>({ user_id: null, username: '', new_password: '' })
 const resetDialogVisible = ref<boolean>(false)
 const editUserDialogVisible = ref<boolean>(false)
-const editUserForm = reactive<{ id: number | null; username: string; role: string; permissions: number }>({ id: null, username: '', role: 'teacher', permissions: -1 })
+const editUserForm = reactive<{ id: number | null; username: string; role: string; permission_names: string[] }>({ id: null, username: '', role: 'teacher', permission_names: ['*'] })
 const credentialDialogVisible = ref<boolean>(false)
 const createdCredentials = ref<{ username: string; password: string }>({ username: '', password: '' })
 interface PermGroup {
@@ -33,10 +33,10 @@ interface PermGroup {
 
 interface RoleConfig {
   label: string
-  permissions: number
+  permissions: string[]
 }
 
-const permissionDefinition = ref<{ permissions: Record<string, { label: string; value: number }>; groups: PermGroup[]; roles: Record<string, RoleConfig> }>({ permissions: {}, groups: [], roles: {} })
+const permissionDefinition = ref<{ permissions: Record<string, { label: string; value: string }>; groups: PermGroup[]; roles: Record<string, RoleConfig> }>({ permissions: {}, groups: [], roles: {} })
 
 const fetchUsers = async () => {
   loadingUsers.value = true
@@ -70,7 +70,7 @@ const handleAddUser = () => {
   userForm.username = ''
   userForm.password = ''
   userForm.role = 'teacher'
-  userForm.permissions = -1
+  userForm.permission_names = ['*']
   employeeStore.fetchEmployees()
   userDialogVisible.value = true
 }
@@ -88,7 +88,7 @@ const saveUser = async () => {
       role: userForm.role,
     }
     if (!isUsingDefaultPermissions(userForm)) {
-      payload.permissions = userForm.permissions
+      payload.permission_names = userForm.permission_names
     }
     await createUser(payload)
     userDialogVisible.value = false
@@ -154,7 +154,7 @@ const handleEditUser = (user: Record<string, unknown>) => {
   editUserForm.id = user.id as number
   editUserForm.username = user.username as string
   editUserForm.role = user.role as string
-  editUserForm.permissions = (user.permissions as number) ?? -1
+  editUserForm.permission_names = (user.permission_names as string[] | null) ?? ['*']
   editUserDialogVisible.value = true
 }
 
@@ -162,7 +162,7 @@ const saveEditUser = async () => {
   try {
     const payload: Record<string, unknown> = { role: editUserForm.role }
     if (editUserForm.role !== 'teacher' && !isUsingDefaultPermissions(editUserForm)) {
-      payload.permissions = editUserForm.permissions
+      payload.permission_names = editUserForm.permission_names
     }
     await updateUser(editUserForm.id!, payload)
     ElMessage.success('使用者已更新')
@@ -173,32 +173,28 @@ const saveEditUser = async () => {
   }
 }
 
-const isPermissionChecked = (form: { permissions: number; role: string }, permName: string) => {
-  if (form.permissions === -1) return true
-  const permValue = (permissionDefinition.value.permissions[permName]?.value ?? 0) as number
-  return permissionMaskHas(form.permissions, permValue)
+const isPermissionChecked = (form: { permission_names: string[]; role: string }, permName: string) => {
+  return permissionsHave(form.permission_names, permName)
 }
 
-const togglePermission = (form: { permissions: number; role: string }, permName: string) => {
-  const permValue = (permissionDefinition.value.permissions[permName]?.value ?? 0) as number
-  if (form.permissions === -1) {
-    const allPerms = permissionMaskCombine(
-      Object.values(permissionDefinition.value.permissions).map((p) => p.value as number),
-    )
-    form.permissions = permissionMaskRemove(allPerms, permValue)
-  } else if (permissionMaskHas(form.permissions, permValue)) {
-    form.permissions = permissionMaskRemove(form.permissions, permValue)
+const togglePermission = (form: { permission_names: string[]; role: string }, permName: string) => {
+  // 從 wildcard 切換成具體勾選：展開所有 perm 再扣掉這個
+  if (form.permission_names.includes('*')) {
+    const allPerms = permissionsCombine([Object.keys(permissionDefinition.value.permissions)])
+    form.permission_names = permissionsRemove(allPerms, permName)
+  } else if (form.permission_names.includes(permName)) {
+    form.permission_names = permissionsRemove(form.permission_names, permName)
   } else {
-    form.permissions = permissionMaskAdd(form.permissions, permValue)
+    form.permission_names = permissionsAdd(form.permission_names, permName)
   }
 }
 
-const selectAllPermissions = (form: { permissions: number }) => {
-  form.permissions = -1
+const selectAllPermissions = (form: { permission_names: string[] }) => {
+  form.permission_names = ['*']
 }
 
-const clearAllPermissions = (form: { permissions: number }) => {
-  form.permissions = 0
+const clearAllPermissions = (form: { permission_names: string[] }) => {
+  form.permission_names = []
 }
 
 const getPermissionLabel = (permName: string) => {
@@ -215,21 +211,31 @@ const getRoleTagType = (role: string): 'primary' | 'success' | 'warning' | 'info
   return types[role] ?? 'info'
 }
 
-const onRoleChange = (form: { role: string; permissions: number }) => {
+const onRoleChange = (form: { role: string; permission_names: string[] }) => {
   const roleConfig = permissionDefinition.value.roles[form.role]
   if (roleConfig) {
-    form.permissions = roleConfig.permissions
+    form.permission_names = [...roleConfig.permissions]
   }
 }
 
-const isUsingDefaultPermissions = (form: { role: string; permissions: number }) => {
+const _arraysEqualAsSet = (a: string[] | null | undefined, b: string[] | null | undefined): boolean => {
+  if (!a || !b) return a === b
+  if (a.length !== b.length) return false
+  const setA = new Set(a)
+  return b.every((x) => setA.has(x))
+}
+
+const isUsingDefaultPermissions = (form: { role: string; permission_names: string[] }) => {
   const roleConfig = permissionDefinition.value.roles[form.role]
-  return roleConfig && form.permissions === roleConfig.permissions
+  return !!roleConfig && _arraysEqualAsSet(form.permission_names, roleConfig.permissions)
 }
 
 const isUsingRoleDefault = (row: Record<string, unknown>) => {
   const roleConfig = permissionDefinition.value.roles[row.role as string]
-  return roleConfig && row.permissions === roleConfig.permissions
+  if (!roleConfig) return false
+  // row.permission_names 為 null 代表後端 resolve 用角色預設 → 視為「預設」
+  if (row.permission_names == null) return true
+  return _arraysEqualAsSet(row.permission_names as string[], roleConfig.permissions)
 }
 
 onMounted(() => {
@@ -254,7 +260,7 @@ onMounted(() => {
       <el-table-column label="權限" width="120">
         <template #default="{ row }">
           <template v-if="row.role !== 'teacher'">
-            <el-tag v-if="row.permissions === -1" type="success" size="small">全部</el-tag>
+            <el-tag v-if="Array.isArray(row.permission_names) && row.permission_names.includes('*')" type="success" size="small">全部</el-tag>
             <el-tag v-else-if="isUsingRoleDefault(row)" type="info" size="small">預設</el-tag>
             <el-tag v-else type="warning" size="small">自訂</el-tag>
           </template>

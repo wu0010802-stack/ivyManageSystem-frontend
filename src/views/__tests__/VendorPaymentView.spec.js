@@ -64,9 +64,9 @@ vi.mock('@/api/vendorPayment', async () => {
 
 vi.mock('@/utils/auth', () => ({
   hasPermission: vi.fn().mockReturnValue(true),
-  PERMISSION_VALUES: {
-    VENDOR_PAYMENT_READ: 2 ** 54,
-    VENDOR_PAYMENT_WRITE: 2 ** 62,
+  PERMISSION_NAMES: {
+    VENDOR_PAYMENT_READ: 'VENDOR_PAYMENT_READ',
+    VENDOR_PAYMENT_WRITE: 'VENDOR_PAYMENT_WRITE',
   },
 }))
 

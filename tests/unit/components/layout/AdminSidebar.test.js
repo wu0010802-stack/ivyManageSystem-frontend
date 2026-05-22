@@ -4,8 +4,8 @@ import { createRouter, createMemoryHistory } from 'vue-router'
 import AdminSidebar from '@/components/layout/AdminSidebar.vue'
 
 vi.mock('@/utils/auth', () => ({
-  PERMISSION_VALUES: {},
-  getUserInfo: () => ({ permissions: 0xFFFFFFFF, name: 'admin' }),
+  PERMISSION_NAMES: { DASHBOARD: 'DASHBOARD' },
+  getUserInfo: () => ({ permission_names: ['*'], name: 'admin' }),
 }))
 
 const router = createRouter({
