@@ -6,6 +6,7 @@ import { useChildSelection } from '../composables/useChildSelection'
 import { useAbortableFetch } from '../composables/useAbortableFetch'
 import ChildSelector from '../components/ChildSelector.vue'
 import { getTodayContactBook, listContactBook } from '../api/contactBook'
+import type { ContactBookEntry as CbEntry } from '../api/contactBook'
 import { toast } from '../utils/toast'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import { useIncrementalRender } from '../composables/useIncrementalRender'
@@ -15,13 +16,6 @@ import KawaiiStar from '@/components/brand/KawaiiStar.vue'
 import MonthDateStrip from '../components/contact-book/MonthDateStrip.vue'
 import ContactBookDayCard from '../components/contact-book/ContactBookDayCard.vue'
 import ContactBookListItem from '../components/contact-book/ContactBookListItem.vue'
-
-interface CbEntry {
-  id: number | string
-  log_date?: string
-  my_acknowledged_at?: string | null
-  [key: string]: unknown
-}
 
 const router = useRouter()
 const childrenStore = useChildrenStore()
@@ -123,7 +117,7 @@ function onDateSelect(iso: string) {
 }
 
 const unreadCount = computed(() =>
-  allEntries.value.filter((e) => !e.my_acknowledged_at).length,
+  allEntries.value.filter((e) => !e.isRead).length,
 )
 
 const hasAnyHistory = computed(() => historyWithoutToday.value.length > 0)
@@ -149,7 +143,7 @@ const hasAnyHistory = computed(() => historyWithoutToday.value.length > 0)
       <section class="today-section">
         <p class="section-eyebrow">
           <span class="eyebrow-text">今日聯絡簿</span>
-          <span v-if="unreadCount > 0" class="unread-pill">{{ unreadCount }} 則未簽收</span>
+          <span v-if="unreadCount > 0" class="unread-pill">{{ unreadCount }} 則未讀</span>
         </p>
         <router-link
           v-if="today"
