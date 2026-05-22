@@ -6,6 +6,8 @@ import { getHomeSummary } from '../api/profile'
 import { useParentAuthStore } from '../stores/parentAuth'
 import { useChildrenStore } from '../stores/children'
 import { useCachedAsync } from '@/composables/useCachedAsync'
+import { useDataExport } from '../composables/useDataExport'
+import AppModal from '../components/AppModal.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import UserHeroCard from '../components/more/UserHeroCard.vue'
 import AppearanceSettings from '../components/more/AppearanceSettings.vue'
@@ -19,6 +21,24 @@ const childrenStore = useChildrenStore()
 const me = ref<Record<string, unknown> | null>(null)
 const showLogoutConfirm = ref(false)
 const loggingOut = ref(false)
+
+const showExportDialog = ref(false)
+const exportError = ref<'rate_limited' | 'too_large' | null>(null)
+const { downloading, downloadExport } = useDataExport()
+
+async function handleExport(): Promise<void> {
+  exportError.value = null
+  try {
+    const result = await downloadExport()
+    if (result.ok) {
+      showExportDialog.value = false
+    } else {
+      exportError.value = result.reason
+    }
+  } catch {
+    // 其他錯誤已由 axios interceptor displayMessage 處理
+  }
+}
 
 const { data: summaryData } = useCachedAsync(
   'parent/home/summary',
@@ -101,6 +121,22 @@ const PREFS = [
         </span>
         <span class="material-symbols-rounded chev" aria-hidden="true">chevron_right</span>
       </router-link>
+
+      <button
+        class="pt-list-row export-row"
+        type="button"
+        data-testid="open-export-dialog"
+        @click="showExportDialog = true"
+      >
+        <span class="pref-icon" aria-hidden="true">
+          <span class="material-symbols-rounded">download</span>
+        </span>
+        <span class="pt-list-row-body">
+          <span class="pref-label">下載我的個人資料</span>
+          <span class="pref-hint">匯出個人及孩子的所有園所紀錄</span>
+        </span>
+        <span class="material-symbols-rounded chev" aria-hidden="true">chevron_right</span>
+      </button>
     </div>
 
     <AppearanceSettings />
@@ -119,6 +155,48 @@ const PREFS = [
       destructive
       @confirm="doLogout"
     />
+
+    <AppModal
+      v-model:open="showExportDialog"
+      labelled-by="export-dialog-title"
+      described-by="export-dialog-desc"
+    >
+      <div class="export-dialog">
+        <h2 id="export-dialog-title" class="export-dialog-title">下載個人資料</h2>
+        <p id="export-dialog-desc" class="export-dialog-body">
+          將下載您與孩子在園所的所有紀錄（JSON 格式）。
+        </p>
+        <ul class="export-dialog-list">
+          <li>包含聯絡簿、出席、請假、繳費、投藥、相片連結、訊息、成長報告</li>
+          <li>每小時限下載 1 次</li>
+          <li>檔案上限 50MB</li>
+        </ul>
+        <p v-if="exportError === 'rate_limited'" class="export-dialog-error" role="alert">
+          請於稍後再試（每小時限 1 次）
+        </p>
+        <p v-if="exportError === 'too_large'" class="export-dialog-error" role="alert">
+          資料量超過 50MB，請聯絡園所協助匯出
+        </p>
+        <div class="export-dialog-actions">
+          <button
+            class="export-cancel"
+            type="button"
+            @click="showExportDialog = false"
+          >
+            取消
+          </button>
+          <button
+            class="export-confirm"
+            type="button"
+            :disabled="downloading"
+            data-testid="confirm-export"
+            @click="handleExport"
+          >
+            {{ downloading ? '下載中…' : '確認下載' }}
+          </button>
+        </div>
+      </div>
+    </AppModal>
   </div>
 </template>
 
@@ -195,4 +273,83 @@ const PREFS = [
 @media (prefers-reduced-motion: reduce) {
   .logout { transition: none; }
 }
+
+/* ===== 匯出 row ===== */
+.export-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+  padding: 12px 16px;
+}
+.export-row:active { background: var(--pt-surface-hover, rgba(0,0,0,.04)); }
+
+/* ===== 匯出 dialog ===== */
+.export-dialog {
+  padding: 24px 20px 20px;
+}
+.export-dialog-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--pt-text-strong);
+  margin: 0 0 10px;
+}
+.export-dialog-body {
+  font-size: 14px;
+  color: var(--pt-text-body, var(--pt-text-strong));
+  margin: 0 0 8px;
+}
+.export-dialog-list {
+  font-size: 13px;
+  color: var(--pt-text-muted);
+  padding-left: 18px;
+  margin: 0 0 12px;
+  line-height: 1.7;
+}
+.export-dialog-error {
+  font-size: 13px;
+  color: var(--coral-700, #b14545);
+  background: var(--coral-50, #fff5f5);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin: 0 0 12px;
+}
+.export-dialog-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+.export-cancel {
+  padding: 10px 18px;
+  border-radius: 10px;
+  border: 1px solid var(--pt-hairline-color, #e5e7eb);
+  background: none;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  color: var(--pt-text-muted);
+}
+.export-cancel:active { background: var(--pt-surface-hover, rgba(0,0,0,.04)); }
+.export-confirm {
+  padding: 10px 18px;
+  border-radius: 10px;
+  border: none;
+  background: var(--brand-primary, #0d9053);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 160ms ease;
+}
+.export-confirm:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.export-confirm:not(:disabled):active { opacity: 0.85; }
 </style>
