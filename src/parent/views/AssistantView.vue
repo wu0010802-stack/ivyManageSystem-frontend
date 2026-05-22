@@ -83,13 +83,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="assistant-view">
-    <header class="pt-page-hero">
-      <p class="pt-page-hero-eyebrow">常春藤小幫手</p>
-      <h1 class="pt-page-hero-title">想問什麼呢？</h1>
-      <p class="pt-page-hero-note">先選分類或直接輸入問題</p>
-    </header>
-
+  <div class="assistant-view assistant-modal">
     <AssistantSearch v-model="query" />
 
     <!-- 搜尋結果 overlay -->
@@ -156,6 +150,10 @@ onMounted(async () => {
   padding-bottom: 80px;
   display: flex;
   flex-direction: column;
+}
+/* modal 樣式：移除 page hero，搜尋框直接接 topbar */
+.assistant-modal {
+  padding-top: 8px;
 }
 .messages, .search-results { flex: 1; padding: 16px 14px; }
 .search-results { display: flex; flex-direction: column; gap: 8px; }

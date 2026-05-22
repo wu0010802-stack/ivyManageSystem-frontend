@@ -8,6 +8,7 @@ import PullToRefresh from '../components/PullToRefresh.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import KawaiiStar from '@/components/brand/KawaiiStar.vue'
 import { fmtTimeOrDate } from '../utils/datetime'
+import MessagesSearchBar from '../components/messages/MessagesSearchBar.vue'
 
 interface Thread {
   id: number | string
@@ -49,6 +50,8 @@ onMounted(init)
 
 <template>
   <PullToRefresh :on-refresh="pullRefresh" class="messages-view">
+    <MessagesSearchBar />
+
     <header class="pt-page-hero">
       <p class="pt-page-hero-eyebrow">家校訊息</p>
       <h1 class="pt-page-hero-title">老師與您的對話</h1>
