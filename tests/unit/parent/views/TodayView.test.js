@@ -60,8 +60,13 @@ function mountWith(summary, today) {
         MobileErrorRetry: true,
         TodayTimeline: true,
         PushCta: true,
-        ChildrenStrip: { props: ['children'], template: '<div class="children-strip-stub" :data-count="children.length"></div>' },
+        ChildrenStrip: {
+          props: ['children', 'selectedId'],
+          emits: ['select', 'navigate'],
+          template: '<div class="children-strip-stub" :data-count="children.length" :data-selected="selectedId"></div>',
+        },
         LaurelWreath: true,
+        ChildContextHeader: { props: ['variant'], template: '<div class="cch-stub" :data-variant="variant"></div>' },
         ContactBookDayCard: { props: ['entry', 'studentName', 'classroomName'], template: '<div class="cb-card-stub" :data-entry-id="entry?.id"></div>' },
         RouterLink: { template: '<a><slot /></a>', props: ['to'] },
       },
@@ -139,7 +144,7 @@ describe('TodayView hero - 以孩子今日狀態為主角', () => {
     expect(w.find('.today-hero').text()).toBe('已離園')
   })
 
-  it('多孩子：hero 顯示「今天 N 位小朋友」，ChildrenStrip 接力', async () => {
+  it('多孩子：hero 渲染 ChildContextHeader（hero variant）+ ChildrenStrip 接力，不再顯示「今天 N 位」聚合文案', async () => {
     const w = mountWith(
       { me: { name: '王太太' }, children: [{ student_id: 1, name: '小明' }, { student_id: 2, name: '小華' }], summary: {} },
       { children: [
@@ -148,7 +153,12 @@ describe('TodayView hero - 以孩子今日狀態為主角', () => {
       ] },
     )
     await flushPromises()
-    expect(w.find('.today-hero').text()).toBe('今天 2 位小朋友')
+    // 新行為：hero 區渲染 ChildContextHeader stub variant=hero
+    expect(w.find('.cch-stub[data-variant="hero"]').exists()).toBe(true)
+    // 不再有「今天 N 位」聚合文案
+    expect(w.text()).not.toContain('今天 2 位小朋友')
+    // ChildrenStrip 接力顯示
+    expect(w.find('.children-strip-stub').exists()).toBe(true)
     expect(w.find('.children-strip-stub').attributes('data-count')).toBe('2')
   })
 
