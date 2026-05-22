@@ -11,6 +11,9 @@ import { applyDedupe } from '@/utils/apiDedupe'
 declare module 'axios' {
   interface AxiosError {
     displayMessage?: string | null
+    // 後端 BusinessError envelope 的完整 detail：{ code, message, request_id, ...extra }
+    // 與 admin src/api/index.ts 一致用 unknown，元件以 type guard 或 cast 取 code
+    errorDetail?: unknown
   }
   interface InternalAxiosRequestConfig {
     metadata?: { startedAt: number }
@@ -138,8 +141,21 @@ api.interceptors.response.use(
       _redirectToLogin()
     }
 
-    const data = error.response?.data as { detail?: string; message?: string } | undefined
-    error.displayMessage = data?.detail || data?.message || null
+    // 正規化錯誤訊息：對齊 admin (src/api/index.ts) 對 BusinessError envelope 的處理
+    // 後端兩種 shape：
+    //   1) HTTPException：{ detail: "字串" }
+    //   2) BusinessError envelope：{ detail: { code, message, request_id, ...extra } }
+    // 後者若直接 String(data?.detail) 會變 "[object Object]"，因此須拆 detail.message。
+    const data = error.response?.data as { detail?: unknown; message?: string } | undefined
+    const rawDetail = data?.detail
+    if (rawDetail && typeof rawDetail === 'object' && (rawDetail as Record<string, unknown>).message) {
+      const obj = rawDetail as Record<string, unknown>
+      error.displayMessage = (obj.message as string) || null
+      error.errorDetail = obj
+    } else {
+      error.displayMessage = (rawDetail as string | null | undefined) || data?.message || null
+      error.errorDetail = null
+    }
     return Promise.reject(error)
   },
 )

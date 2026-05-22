@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import type { AxiosError } from 'axios'
 import { bind } from '../api/auth'
 import { useParentAuthStore } from '../stores/parentAuth'
 import BrandMark from '@/components/brand/BrandMark.vue'
@@ -12,13 +13,20 @@ const authStore = useParentAuthStore()
 const code = ref('')
 const submitting = ref(false)
 const errorMessage = ref('')
+// 後端 BusinessError code：BIND_CODE_NOT_FOUND / EXPIRED / USED；其他失敗為空字串
+const errorCode = ref('')
 
 const nameHint = computed(() => String(route.query.name_hint || ''))
-
 const trimmedCode = computed(() => code.value.trim().toUpperCase())
+// EXPIRED / USED 才需要「聯絡園所索取新碼」CTA；NOT_FOUND 只需提示重新輸入
+const needsNewCode = computed(
+  () => errorCode.value === 'BIND_CODE_EXPIRED' || errorCode.value === 'BIND_CODE_USED',
+)
+const schoolPhone = (import.meta.env.VITE_SCHOOL_PHONE as string | undefined) || ''
 
 async function submit() {
   errorMessage.value = ''
+  errorCode.value = ''
   if (!trimmedCode.value) {
     errorMessage.value = '請輸入綁定碼'
     return
@@ -33,11 +41,19 @@ async function submit() {
       errorMessage.value = '綁定失敗，請聯絡園所'
     }
   } catch (err: unknown) {
-    const e = err as Record<string, unknown>
+    const e = err as AxiosError
+    const detail = e?.errorDetail as { code?: string } | null | undefined
+    errorCode.value = String(detail?.code || '')
     errorMessage.value = String(e?.displayMessage || '綁定碼無效或已過期')
   } finally {
     submitting.value = false
   }
+}
+
+function resetForRetry() {
+  code.value = ''
+  errorMessage.value = ''
+  errorCode.value = ''
 }
 </script>
 
@@ -78,6 +94,25 @@ async function submit() {
         <span class="material-symbols-rounded" aria-hidden="true">error</span>
         {{ errorMessage }}
       </p>
+
+      <div v-if="needsNewCode" class="recovery-actions">
+        <a
+          v-if="schoolPhone"
+          :href="`tel:${schoolPhone}`"
+          class="pt-action-btn recovery-call"
+        >
+          <span class="material-symbols-rounded" aria-hidden="true">call</span>
+          聯絡園所 {{ schoolPhone }}
+        </a>
+        <button
+          type="button"
+          class="pt-action-btn recovery-retry"
+          @click="resetForRetry"
+        >
+          <span class="material-symbols-rounded" aria-hidden="true">restart_alt</span>
+          我已重新拿碼
+        </button>
+      </div>
 
       <button
         class="pt-action-btn submit"
@@ -199,6 +234,31 @@ async function submit() {
 .error .material-symbols-rounded {
   font-size: 18px;
   font-variation-settings: 'FILL' 1, 'wght' 500;
+}
+
+.recovery-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+.recovery-call,
+.recovery-retry {
+  width: 100%;
+  min-height: 44px;
+  font-size: 14px;
+  background: rgba(13, 144, 83, 0.08);
+  color: var(--brand-primary, #0d9053);
+  border: 1px solid rgba(13, 144, 83, 0.2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-decoration: none;
+  border-radius: 12px;
+}
+.recovery-retry {
+  background: transparent;
 }
 
 .submit {
