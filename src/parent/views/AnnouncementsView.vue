@@ -2,12 +2,11 @@
 import { computed, onMounted, ref } from 'vue'
 import { listAnnouncements, markRead } from '../api/announcements'
 import { toast } from '../utils/toast'
-import ParentIcon from '../components/ParentIcon.vue'
-import AppModal from '../components/AppModal.vue'
 import PullToRefresh from '../components/PullToRefresh.vue'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import KawaiiStar from '@/components/brand/KawaiiStar.vue'
+import AnnouncementDetailModal from '../components/announcements/AnnouncementDetailModal.vue'
 import { useIncrementalRender } from '../composables/useIncrementalRender'
 
 type AnnItem = { id: number | string; priority: string; is_read: boolean; created_at: string; title: string; content?: string }
@@ -55,10 +54,6 @@ async function openDetail(item: AnnItem) {
   }
 }
 
-function close() { selected.value = null }
-
-const formatTime = (s: string | null | undefined) => s ? s.replace('T', ' ').slice(0, 16) : ''
-
 const formatRelative = (s: string | null | undefined) => {
   if (!s) return ''
   try {
@@ -73,7 +68,7 @@ const formatRelative = (s: string | null | undefined) => {
     const day = Math.floor(hr / 24)
     if (day < 7) return `${day} 天前`
     return d.toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })
-  } catch { return formatTime(s) }
+  } catch { return s ? s.replace('T', ' ').slice(0, 16) : '' }
 }
 
 onMounted(fetchData)
@@ -132,25 +127,8 @@ async function pullRefresh() { await fetchData() }
 
     <div v-if="hasMore" ref="sentinelRef" class="render-sentinel" aria-hidden="true" />
 
-    <!-- 詳情 modal -->
-    <AppModal v-model:open="detailOpen" labelled-by="announcement-detail-title">
-      <template v-if="selected">
-        <div class="detail-header">
-          <span
-            class="pt-pill"
-            :class="`pt-pill-${PRIORITY_META[selected.priority]?.tone || 'info'}`"
-          >
-            {{ PRIORITY_META[selected.priority]?.label || selected.priority }}
-          </span>
-          <button class="close" type="button" aria-label="關閉" @click="close">
-            <ParentIcon name="close" size="sm" />
-          </button>
-        </div>
-        <h2 id="announcement-detail-title" class="detail-title">{{ selected.title }}</h2>
-        <p class="detail-time">{{ formatTime(selected.created_at) }}</p>
-        <div class="detail-content">{{ selected.content }}</div>
-      </template>
-    </AppModal>
+    <!-- 詳情 modal（與 MessagesView 共享） -->
+    <AnnouncementDetailModal v-model="detailOpen" :announcement="selected" />
   </PullToRefresh>
 </template>
 
@@ -227,54 +205,6 @@ async function pullRefresh() { await fetchData() }
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-}
-
-.detail-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 18px 8px;
-}
-.detail-title {
-  margin: 0 18px;
-  font-weight: 700;
-  font-size: 18px;
-  color: var(--pt-text-strong);
-  line-height: 1.4;
-}
-.close {
-  position: relative;
-  width: 32px;
-  height: 32px;
-  border: none;
-  background: var(--cream, #fffcf2);
-  border-radius: 50%;
-  color: var(--pt-text-muted);
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-.close::before {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 44px;
-  height: 44px;
-  transform: translate(-50%, -50%);
-}
-.detail-time {
-  margin: 4px 18px 14px;
-  color: var(--pt-text-faint);
-  font-size: 12px;
-}
-.detail-content {
-  padding: 0 18px 20px;
-  white-space: pre-wrap;
-  line-height: 1.7;
-  color: var(--pt-text-body);
-  font-size: 15px;
 }
 
 @media (prefers-reduced-motion: reduce) {
