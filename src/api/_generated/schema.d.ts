@@ -6790,6 +6790,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/parent/me/data-export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Data Export
+         * @description 家長下載自身及子女的全部個人資料（個資法 §10 查閱複製權）。
+         *
+         *     rate-limit：每 user_id 每 1 小時限 1 次。
+         *     50 MB 上限：超出則 413（建議聯絡園所協助）。
+         */
+        get: operations["get_data_export_api_parent_me_data_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/parent/measurements": {
         parameters: {
             query?: never;
@@ -29474,6 +29497,26 @@ export interface operations {
         };
     };
     get_me_api_parent_me_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    get_data_export_api_parent_me_data_export_get: {
         parameters: {
             query?: never;
             header?: never;
