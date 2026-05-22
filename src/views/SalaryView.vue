@@ -81,6 +81,7 @@ interface AyePayoutItem {
   period_label: string
   amount: string
   source_ref: string | null
+  calc_meta?: { appraisal_cycle_id?: number; [k: string]: unknown }
 }
 const ayeBreakdownVisible = ref(false)
 const ayeBreakdownItems = ref<AyePayoutItem[]>([])
@@ -986,8 +987,8 @@ onMounted(() => {
         <li v-for="item in ayeBreakdownItems" :key="item.period_label + ':' + item.bonus_type">
           <strong>{{ item.period_label }}</strong>：NT${{ item.amount }}
           <a
-            v-if="item.source_ref?.startsWith('appraisal_summary:')"
-            :href="`/appraisal/cycles/${item.source_ref.split(':')[1]}`"
+            v-if="item.calc_meta?.appraisal_cycle_id"
+            :href="`/appraisal/cycles/${item.calc_meta.appraisal_cycle_id}`"
             target="_blank"
           >→ 查看 cycle</a>
         </li>

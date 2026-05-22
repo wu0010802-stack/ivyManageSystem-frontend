@@ -34,4 +34,9 @@ describe('SalaryView appraisal_year_end_bonus integration', () => {
   it('imports listAppraisalPayouts for breakdown dialog', () => {
     expect(src).toContain('listAppraisalPayouts')
   })
+
+  it('uses calc_meta.appraisal_cycle_id for cycle link not source_ref', () => {
+    expect(src).toContain('calc_meta')
+    expect(src).toMatch(/calc_meta\?\.appraisal_cycle_id|calc_meta\.appraisal_cycle_id/)
+  })
 })
