@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
 import { calculate, getFestivalBonus, getRecords, getSalaryFieldBreakdown, manualAdjustSalary, getFestivalBonusPeriodAccrual } from '@/api/salary'
+import { listAppraisalPayouts } from '@/api/yearEnd'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, InfoFilled, SuccessFilled, Picture, Edit, Download } from '@element-plus/icons-vue'
 import BonusConfigPanel from './salary/BonusConfigPanel.vue'
@@ -71,6 +72,31 @@ const MONEY_KEYS = new Set([
 ])
 const showSnapshotDialog = ref(false)
 const showEditDialog = ref(false)
+
+// ---- Appraisal Year-End Bonus Breakdown Dialog ----
+interface AyePayoutItem {
+  id: number
+  employee_id: number
+  bonus_type: string
+  period_label: string
+  amount: string
+  source_ref: string | null
+}
+const ayeBreakdownVisible = ref(false)
+const ayeBreakdownItems = ref<AyePayoutItem[]>([])
+const ayeBreakdownYear = ref<number>(0)
+
+async function openAppraisalYearEndBreakdown(row: { employee_id: number; year: number }) {
+  try {
+    const res = await listAppraisalPayouts(row.year)
+    const items = (res.data as AyePayoutItem[]).filter((i) => i.employee_id === row.employee_id)
+    ayeBreakdownItems.value = items
+    ayeBreakdownYear.value = row.year
+    ayeBreakdownVisible.value = true
+  } catch {
+    // 失敗靜默：UI 仍可關閉 dialog
+  }
+}
 const editLoading = ref(false)
 const editingRow = ref<SalaryRow | null>(null)
 const editingVersion = ref<number | null>(null)
@@ -551,6 +577,19 @@ onMounted(() => {
                 </el-tooltip>
               </template>
             </el-table-column>
+            <el-table-column prop="appraisal_year_end_bonus" label="考核年終獎金" width="120">
+              <template #default="scope">
+                <button
+                  v-if="scope.row.month === 2 && Number(scope.row.appraisal_year_end_bonus) > 0"
+                  type="button"
+                  class="cell-link text-link-primary"
+                  @click="openAppraisalYearEndBreakdown(scope.row)"
+                >
+                  {{ money(scope.row.appraisal_year_end_bonus) }}
+                </button>
+                <span v-else>{{ money(scope.row.appraisal_year_end_bonus) || '—' }}</span>
+              </template>
+            </el-table-column>
             <el-table-column label="加班津貼" width="100">
               <template #default="scope">
                 <button type="button" class="cell-link text-link-primary" @click="openFieldBreakdown(scope.row, 'overtime_pay')">
@@ -682,7 +721,7 @@ onMounted(() => {
                 </el-tooltip>
               </template>
               <template #default="scope">
-                <strong style="color: var(--el-color-success);">{{ money((scope.row.net_pay || 0) + (scope.row.festival_bonus || 0) + (scope.row.overtime_bonus || 0)) }}</strong>
+                <strong style="color: var(--el-color-success);">{{ money((scope.row.net_pay || 0) + (scope.row.festival_bonus || 0) + (scope.row.overtime_bonus || 0) + (scope.row.appraisal_year_end_bonus || 0)) }}</strong>
               </template>
             </el-table-column>
             <el-table-column label="編輯紀錄" min-width="220">
@@ -941,6 +980,20 @@ onMounted(() => {
       :month="query.month"
       :can-write="canWriteSalary"
     />
+
+    <el-dialog v-model="ayeBreakdownVisible" title="考核年終獎金明細" width="400">
+      <ul v-if="ayeBreakdownItems.length">
+        <li v-for="item in ayeBreakdownItems" :key="item.period_label + ':' + item.bonus_type">
+          <strong>{{ item.period_label }}</strong>：NT${{ item.amount }}
+          <a
+            v-if="item.source_ref?.startsWith('appraisal_summary:')"
+            :href="`/appraisal/cycles/${item.source_ref.split(':')[1]}`"
+            target="_blank"
+          >→ 查看 cycle</a>
+        </li>
+      </ul>
+      <p v-else>無資料</p>
+    </el-dialog>
   </div>
 </template>
 
