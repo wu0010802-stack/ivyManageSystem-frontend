@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import { useChildrenStore } from '../stores/children'
 import { useChildSelection } from '../composables/useChildSelection'
 import { useAbortableFetch } from '../composables/useAbortableFetch'
-import ChildSelector from '../components/ChildSelector.vue'
+import ChildContextHeader from '../components/ChildContextHeader.vue'
 import { listMedicationOrders } from '../api/medications'
 import { toast } from '../utils/toast'
 import { todayISO } from '@/utils/format'
@@ -104,7 +104,7 @@ const today = todayISO()
 
 <template>
   <div class="med-list">
-    <ChildSelector />
+    <ChildContextHeader variant="page" />
 
     <div class="pt-eyebrow-row">
       <p class="pt-eyebrow">用藥紀錄</p>

@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useChildrenStore } from '../stores/children'
 import { useChildSelection } from '../composables/useChildSelection'
-import ChildSelector from '../components/ChildSelector.vue'
+import ChildContextHeader from '../components/ChildContextHeader.vue'
 import ActivityHero from '../components/activity/ActivityHero.vue'
 import ActivityCardList from '../components/activity/ActivityCardList.vue'
 import ActivityRegisterSheet from '../components/activity/ActivityRegisterSheet.vue'
@@ -230,7 +230,7 @@ async function pullRefresh() {
       @scroll-section="onScrollSection"
     />
 
-    <ChildSelector v-if="tab === 'my'" />
+    <ChildContextHeader v-if="tab === 'my'" variant="page" />
     <div class="tab-row">
       <button
         class="tab-btn"

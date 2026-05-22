@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import ChildSelector from '../components/ChildSelector.vue'
+import ChildContextHeader from '../components/ChildContextHeader.vue'
 import { useChildrenStore } from '../stores/children'
 import { useChildSelection } from '../composables/useChildSelection'
 import { useAbortableFetch } from '../composables/useAbortableFetch'
@@ -140,7 +140,7 @@ async function pullRefresh() { await fetchData() }
 
 <template>
   <PullToRefresh :on-refresh="pullRefresh" class="att-view">
-    <ChildSelector />
+    <ChildContextHeader variant="page" />
 
     <!-- Hero：月份 + 出席摘要 -->
     <header class="pt-page-hero att-hero">

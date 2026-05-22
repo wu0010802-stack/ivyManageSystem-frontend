@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import ChildSelector from '../components/ChildSelector.vue'
+import ChildContextHeader from '../components/ChildContextHeader.vue'
 import FeeHero from '../components/fees/FeeHero.vue'
 import FeeListGroup from '../components/fees/FeeListGroup.vue'
 import FeeReceiptSheet from '../components/fees/FeeReceiptSheet.vue'
@@ -217,7 +217,7 @@ async function pullRefresh() {
       @jump-unpaid="onJumpUnpaid"
     />
 
-    <ChildSelector />
+    <ChildContextHeader variant="page" />
 
     <div v-if="myTotals" class="single-totals">
       <span class="material-symbols-rounded" aria-hidden="true">account_balance_wallet</span>
