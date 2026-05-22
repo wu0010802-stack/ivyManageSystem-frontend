@@ -2,23 +2,12 @@
 import { computed } from 'vue'
 import MoodBadge from './MoodBadge.vue'
 import ParentIcon from '../ParentIcon.vue'
+import type { ContactBookEntry } from '../../api/contactBook'
 
 interface EntryPhoto {
   id?: number
   thumb_url?: string
   display_url: string
-}
-
-interface ContactBookEntry {
-  log_date?: string
-  my_acknowledged_at?: string | null
-  mood?: string | null
-  photos?: EntryPhoto[]
-  teacher_note?: string
-  learning_highlight?: string
-  meal_lunch?: number | null
-  nap_minutes?: number | null
-  temperature_c?: number | null
 }
 
 const props = withDefaults(defineProps<{
@@ -39,9 +28,10 @@ const dateFormatted = computed<string>(() => {
   return `${Number(m)} 月 ${Number(d)} 日　星期${wd}`
 })
 
-const isUnread = computed<boolean>(() => !props.entry?.my_acknowledged_at)
+const isUnread = computed<boolean>(() => !props.entry?.isRead)
 const photoCount = computed<number>(() => (props.entry?.photos || []).length)
-const previewPhotos = computed<EntryPhoto[]>(() => (props.entry?.photos || []).slice(0, 3))
+// Facade's `photos` is `unknown[]` for forward-compat; narrow here at the access boundary.
+const previewPhotos = computed<EntryPhoto[]>(() => ((props.entry?.photos ?? []) as EntryPhoto[]).slice(0, 3))
 
 const teacherNoteShort = computed<string | null>(() => {
   const note = props.entry?.teacher_note
@@ -67,8 +57,8 @@ const stats = computed(() => {
       <div class="hero-head">
         <h2 class="name">
           <span class="name-text">{{ studentName }}</span>
-          <span v-if="isUnread" class="unread-dot" aria-label="尚未簽收" />
-          <span v-else class="read-check" aria-label="已簽收">
+          <span v-if="isUnread" class="unread-dot" aria-label="尚未閱讀" />
+          <span v-else class="read-check" aria-label="已讀">
             <ParentIcon name="check" size="xs" :decorative="false" />
           </span>
         </h2>
