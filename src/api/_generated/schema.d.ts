@@ -21,6 +21,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/academic-terms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Terms
+         * @description 列出所有學年學期，依學年學期倒序排列。
+         */
+        get: operations["list_terms_api_academic_terms_get"];
+        put?: never;
+        /**
+         * Create Term
+         * @description 新增學年學期設定。
+         */
+        post: operations["create_term_api_academic_terms_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/academic-terms/{term_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update Term
+         * @description 更新學年學期設定。
+         */
+        put: operations["update_term_api_academic_terms__term_id__put"];
+        post?: never;
+        /**
+         * Delete Term
+         * @description 刪除學年學期設定。
+         */
+        delete: operations["delete_term_api_academic_terms__term_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/academic-terms/current": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Current Term
+         * @description 回傳今日所在學期（查無回 null）。
+         */
+        get: operations["current_term_api_academic_terms_current_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/activity/attendance/sessions": {
         parameters: {
             query?: never;
@@ -3853,6 +3921,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/dev/employee-salary-debug": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Debug Employee Salary
+         * @description 模擬計算單一員工薪資並回傳完整明細（dev 別名，正式請改打 /api/salaries/employee-salary-debug）。
+         */
+        get: operations["debug_employee_salary_api_dev_employee_salary_debug_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dev/salary-logic": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Salary Logic
+         * @description 傾印目前的薪資計算邏輯與所有參數設定（dev 別名，正式請改打 /api/salaries/logic）。
+         */
+        get: operations["get_salary_logic_api_dev_salary_logic_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/disciplinary-actions": {
         parameters: {
             query?: never;
@@ -4736,6 +4844,69 @@ export interface paths {
          * @description 軟刪除(is_active=False),保留歷史記錄。
          */
         delete: operations["delete_fee_template_api_fees_templates__template_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/funnel/board": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Board
+         * @description 4 階段看板資料。
+         *
+         *     Phase A 不做時間範圍過濾 — 抓全部 visits 推導 stage（資料量小可承受）。
+         *     Phase B 若需要過濾，加 month range filter。
+         */
+        get: operations["get_board_funnel_board_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/funnel/visits/{visit_id}/timeline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Timeline
+         * @description Union of recruitment_event_log + student_change_logs, sorted by time.
+         */
+        get: operations["get_timeline_funnel_visits__visit_id__timeline_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/funnel/visits/{visit_id}/transition": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Transition
+         * @description State machine driver — dynamic permission check based on from/to stage.
+         */
+        post: operations["post_transition_funnel_visits__visit_id__transition_post"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -9502,7 +9673,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Convert Recruitment Record To Student
+         * [deprecated] 改用 POST /recruitment/funnel/visits/{visit_id}/transition
+         * @deprecated
          * @description 將招生訪視記錄轉化為正式學生（原子操作）。
          */
         post: operations["convert_recruitment_record_to_student_api_recruitment_records__record_id__convert_post"];
@@ -11987,6 +12159,49 @@ export interface components {
             /** Token */
             token: string;
         };
+        /** AcademicTermIn */
+        AcademicTermIn: {
+            /**
+             * End Date
+             * Format: date
+             */
+            end_date: string;
+            /**
+             * School Year
+             * @description 民國學年
+             */
+            school_year: number;
+            /** Semester */
+            semester: number;
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+        };
+        /** AcademicTermOut */
+        AcademicTermOut: {
+            /** Created At */
+            created_at: string | null;
+            /**
+             * End Date
+             * Format: date
+             */
+            end_date: string;
+            /** Id */
+            id: number;
+            /** School Year */
+            school_year: number;
+            /** Semester */
+            semester: number;
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+            /** Updated At */
+            updated_at: string | null;
+        };
         /** AckRequest */
         AckRequest: {
             /** Signature Name */
@@ -14402,6 +14617,49 @@ export interface components {
             month: number;
             /** Year */
             year: number;
+        };
+        /** FunnelBoardOut */
+        FunnelBoardOut: {
+            /** Stages */
+            stages: {
+                [key: string]: components["schemas"]["FunnelCard"][];
+            };
+            summary: components["schemas"]["FunnelSummary"];
+        };
+        /** FunnelCard */
+        FunnelCard: {
+            /** Child Name */
+            child_name: string;
+            /**
+             * Current Stage
+             * @enum {string}
+             */
+            current_stage: "visited" | "deposited" | "enrolled" | "active";
+            /** Deposited At */
+            deposited_at: string | null;
+            /** District */
+            district: string | null;
+            /** Grade */
+            grade: string | null;
+            /** Phone */
+            phone: string | null;
+            /** Source */
+            source: string | null;
+            /** Student Id */
+            student_id: number | null;
+            /** Visit Id */
+            visit_id: number;
+        };
+        /** FunnelSummary */
+        FunnelSummary: {
+            /** Active Count */
+            active_count: number;
+            /** Deposited Count */
+            deposited_count: number;
+            /** Enrolled Count */
+            enrolled_count: number;
+            /** Visited Count */
+            visited_count: number;
         };
         /** GenerateCertRequest */
         GenerateCertRequest: {
@@ -16831,11 +17089,11 @@ export interface components {
         };
         /**
          * SpecialBonusType
-         * @description 8 種特別獎金 + 1 通用類型。
+         * @description 9 種特別獎金 + 1 通用類型。
          *
          *     對應 Excel「年終獎金總表」B 欄各列：
-         *       APPRAISAL_HALF_BONUS_FIRST  : 113上(或 N 上)考核獎金 — 來自 appraisal_summaries
-         *       APPRAISAL_HALF_BONUS_SECOND : 113下(或 N 下)考核獎金 — 來自 appraisal_summaries
+         *       APPRAISAL_HALF_BONUS_FIRST  : 較早那一筆（年終發放時對應「上學年下學期 = N-1.下」）— 來自 appraisal_summaries
+         *       APPRAISAL_HALF_BONUS_SECOND : 較晚那一筆（年終發放時對應「本學年上學期 = N.上」）— 來自 appraisal_summaries
          *       SEMESTER_DIVIDEND_FIRST     : N上學期紅利（舊生 500 + 才藝 1000）
          *       SEMESTER_DIVIDEND_SECOND    : N下學期紅利
          *       AFTER_CLASS_AWARD           : N上鼓勵推動才藝班獎金（按班級人數）
@@ -16843,6 +17101,9 @@ export interface components {
          *       EXCESS_ENROLLMENT           : N上超額獎金（每月超額幼生）
          *       FESTIVAL_DIFF               : N.8-N+1.01 節慶獎金差額（多退少補，可為負）
          *       CUSTOM                      : 其他客製化（保留擴充用）
+         *
+         *     ⚠️ APPRAISAL_HALF_BONUS_FIRST/SECOND 的 FIRST/SECOND 是「時間順序」（FIRST=較早=前一學年下學期，SECOND=較晚=本學年上學期），
+         *     與 AppraisalCycle.Semester.FIRST/SECOND（學期上下）正好相反。由 services/year_end/appraisal_sync.py 依 calendar payout year 自動 map。
          * @enum {string}
          */
         SpecialBonusType: "APPRAISAL_HALF_BONUS_FIRST" | "APPRAISAL_HALF_BONUS_SECOND" | "SEMESTER_DIVIDEND_FIRST" | "SEMESTER_DIVIDEND_SECOND" | "AFTER_CLASS_AWARD" | "TEACHING_EXTRA" | "EXCESS_ENROLLMENT" | "FESTIVAL_DIFF" | "CUSTOM";
@@ -17288,6 +17549,67 @@ export interface components {
             /** Semester */
             semester: number;
         };
+        /** TimelineEvent */
+        TimelineEvent: {
+            /** Actor User Id */
+            actor_user_id: number | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Event Type */
+            event_type: string;
+            /** From Stage */
+            from_stage: string | null;
+            /** Reason */
+            reason: string | null;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "recruitment" | "student";
+            /** To Stage */
+            to_stage: string | null;
+        };
+        /** TimelineOut */
+        TimelineOut: {
+            /** Events */
+            events: components["schemas"]["TimelineEvent"][];
+        };
+        /** TransitionIn */
+        TransitionIn: {
+            /** Classroom Id */
+            classroom_id?: number | null;
+            /** Reason */
+            reason?: string | null;
+            /**
+             * To Stage
+             * @enum {string}
+             */
+            to_stage: "visited" | "deposited" | "enrolled" | "active";
+        };
+        /** TransitionOut */
+        TransitionOut: {
+            /** Event Log Id */
+            event_log_id: number;
+            /**
+             * From Stage
+             * @enum {string}
+             */
+            from_stage: "visited" | "deposited" | "enrolled" | "active";
+            /** Student Id */
+            student_id: number | null;
+            /**
+             * To Stage
+             * @enum {string}
+             */
+            to_stage: "visited" | "deposited" | "enrolled" | "active";
+            /** Visit Id */
+            visit_id: number;
+            /** Warnings */
+            warnings?: string[];
+        };
         /**
          * UnfinalizeSalaryRequest
          * @description 解除單筆薪資封存的請求 schema。
@@ -17483,6 +17805,147 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    list_terms_api_academic_terms_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AcademicTermOut"][];
+                };
+            };
+        };
+    };
+    create_term_api_academic_terms_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AcademicTermIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AcademicTermOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_term_api_academic_terms__term_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                term_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AcademicTermIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AcademicTermOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_term_api_academic_terms__term_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                term_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    current_term_api_academic_terms_current_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AcademicTermOut"] | null;
                 };
             };
         };
@@ -24040,6 +24503,59 @@ export interface operations {
             };
         };
     };
+    debug_employee_salary_api_dev_employee_salary_debug_get: {
+        parameters: {
+            query: {
+                employee_id: number;
+                month: number;
+                year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_salary_logic_api_dev_salary_logic_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
     list_actions_api_disciplinary_actions_get: {
         parameters: {
             query?: {
@@ -25966,6 +26482,104 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_board_funnel_board_get: {
+        parameters: {
+            query?: {
+                school_year?: number | null;
+                semester?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FunnelBoardOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_timeline_funnel_visits__visit_id__timeline_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                visit_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimelineOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_transition_funnel_visits__visit_id__transition_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                visit_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransitionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransitionOut"];
                 };
             };
             /** @description Validation Error */
