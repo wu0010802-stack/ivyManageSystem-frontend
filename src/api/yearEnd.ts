@@ -1,4 +1,5 @@
 import api from './index'
+import type { ApiBody, AxiosResp } from './_generated/typed'
 
 // ============ Year-End Cycles 年終週期 ============
 
@@ -82,3 +83,19 @@ export const exportYearEndSummaryXlsxUrl = (cycleId: number) =>
 
 export const exportYearEndTransferRosterXlsxUrl = (cycleId: number) =>
   `${api.defaults.baseURL || '/api'}/year_end/cycles/${cycleId}/transfer_roster.xlsx`
+
+// ============ Appraisal Payout ============
+
+export const previewAppraisalPayout = (year: number): AxiosResp<'/year_end/appraisal-payout/preview', 'get'> =>
+  api.get('/year_end/appraisal-payout/preview', { params: { year } })
+
+export const generateAppraisalPayout = (
+  data: ApiBody<'/year_end/appraisal-payout/generate', 'post'>
+): AxiosResp<'/year_end/appraisal-payout/generate', 'post'> =>
+  api.post('/year_end/appraisal-payout/generate', data)
+
+export const listAppraisalPayouts = (year: number): AxiosResp<'/year_end/appraisal-payout', 'get'> =>
+  api.get('/year_end/appraisal-payout', { params: { year } })
+
+export const voidAppraisalPayouts = (year: number): AxiosResp<'/year_end/appraisal-payout/{year}', 'delete'> =>
+  api.delete(`/year_end/appraisal-payout/${year}`, { params: { confirm: true } })
