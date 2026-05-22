@@ -58,7 +58,7 @@ const ENTRIES = [
   { key: 'medication', label: '用藥', icon: 'pill', path: '/medications' },
   { key: 'activity', label: '才藝', icon: 'art', path: '/activity' },
   { key: 'event_ack', label: '簽閱', icon: 'signature', path: '/events' },
-  { key: 'assistant', label: '小幫手', icon: 'chat', path: '/assistant' },
+  { key: 'assistant', label: '常見問題', icon: 'help', path: '/assistant' },
 ]
 
 const badges = computed(() => {

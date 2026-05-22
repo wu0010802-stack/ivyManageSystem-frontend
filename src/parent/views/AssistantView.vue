@@ -3,143 +3,101 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useFaq } from '@/parent/composables/useFaq'
 import { searchFaq } from '@/parent/composables/useFaqSearch'
-import AssistantBubble from '@/parent/components/assistant/AssistantBubble.vue'
 import AssistantSearch from '@/parent/components/assistant/AssistantSearch.vue'
 import CategoryChip from '@/parent/components/assistant/CategoryChip.vue'
-import QuestionChip from '@/parent/components/assistant/QuestionChip.vue'
 import FaqAnswer from '@/parent/components/assistant/FaqAnswer.vue'
-import TypingIndicator from '@/parent/components/assistant/TypingIndicator.vue'
+
+type FaqItem = { id?: unknown; question?: string; answer?: string; keywords?: string[]; category?: unknown; [key: string]: unknown }
+type FaqCategory = { id: number | string; label: string; icon: string; color: string }
 
 const router = useRouter()
 const { faq, loading, load } = useFaq()
 const query = ref('')
-type Msg = { id: number; role: 'user' | 'assistant'; kind: string; payload?: unknown }
-const messages = ref<Msg[]>([])
-// Template helpers to safely cast payload for v-for iteration
-function asCategoryList(p: unknown) { return p as FaqCategory[] }
-function asQuestionList(p: unknown) { return p as FaqItem[] }
-function asFaqItem(p: unknown) { return p as FaqItem }
-function asQuestion(item: FaqItem): { question: string; [key: string]: unknown } {
-  return item as unknown as { question: string; [key: string]: unknown }
-}
-let nextId = 1
+const selectedCategoryId = ref<number | string | null>(null)
+const expandedKey = ref<string | null>(null)
 
-type FaqItem = { id?: unknown; question?: string; answer?: string; keywords?: string[]; category?: unknown; [key: string]: unknown }
-type FaqCategory = { id: number | string; label: string; icon: string; color: string }
 const faqData = computed(() => faq.value as Record<string, unknown> | null)
 const items = computed(() => (faqData.value?.items as FaqItem[]) || [])
 const categories = computed(() => (faqData.value?.categories as FaqCategory[]) || [])
-const searchResults = computed(() =>
-  query.value.trim() ? searchFaq(items.value, query.value, 8) : []
-)
 
-function push(msg: Omit<Msg, 'id'>) {
-  messages.value.push({ id: nextId++, ...msg })
+const filteredItems = computed<FaqItem[]>(() => {
+  if (query.value.trim()) {
+    return searchFaq(items.value, query.value, 20) as FaqItem[]
+  }
+  if (selectedCategoryId.value !== null) {
+    return items.value.filter(x => x.category === selectedCategoryId.value)
+  }
+  return items.value
+})
+
+function itemKey(item: FaqItem): string {
+  return String(item.id ?? item.question ?? '')
 }
 
-function userBubble(text: string) {
-  push({ role: 'user' as const, kind: 'text', payload: text })
+function toggleCategory(cat: FaqCategory) {
+  selectedCategoryId.value = selectedCategoryId.value === cat.id ? null : cat.id
+  expandedKey.value = null
 }
 
-async function withTyping(thenFn: () => void) {
-  const typingMsg = { role: 'assistant' as const, kind: 'typing' }
-  push(typingMsg)
-  await new Promise(r => setTimeout(r, 400 + Math.random() * 200))
-  // 移除 typing
-  messages.value = messages.value.filter(m => m.kind !== 'typing')
-  thenFn()
-}
-
-function chooseCategory(cat: FaqCategory | Record<string, unknown>) {
-  userBubble(String((cat as FaqCategory).label || ''))
-  withTyping(() => {
-    const inCat = items.value.filter(x => x.category === cat.id)
-    push({
-      role: 'assistant' as const,
-      kind: 'text',
-      payload: `關於「${cat.label}」，這些是常見問題：`,
-    })
-    push({ role: 'assistant' as const, kind: 'questions', payload: inCat })
-  })
-}
-
-function chooseQuestion(item: FaqItem | { question: string; [key: string]: unknown }) {
-  userBubble((item as FaqItem).question || '')
-  withTyping(() => {
-    push({ role: 'assistant' as const, kind: 'answer', payload: item })
-  })
+function toggleQuestion(item: FaqItem) {
+  const k = itemKey(item)
+  expandedKey.value = expandedKey.value === k ? null : k
 }
 
 function goContactTeacher() {
   router.push('/messages')
 }
 
-onMounted(async () => {
-  await load()
-  if (categories.value.length) {
-    push({ role: 'assistant' as const, kind: 'categories', payload: categories.value })
-  }
-})
+onMounted(load)
 </script>
 
 <template>
   <div class="assistant-view">
     <header class="pt-page-hero">
-      <p class="pt-page-hero-eyebrow">常春藤小幫手</p>
-      <h1 class="pt-page-hero-title">想問什麼呢？</h1>
-      <p class="pt-page-hero-note">先選分類或直接輸入問題</p>
+      <p class="pt-page-hero-eyebrow">常見問題</p>
+      <h1 class="pt-page-hero-title">這裡找答案</h1>
+      <p class="pt-page-hero-note">選分類或直接搜尋，找不到再聯絡老師</p>
     </header>
 
     <AssistantSearch v-model="query" />
 
-    <!-- 搜尋結果 overlay -->
-    <div v-if="query.trim()" class="search-results">
-      <div v-if="loading && searchResults.length === 0" class="hint">載入中…</div>
-      <div v-else-if="searchResults.length === 0" class="hint">沒有找到相關問題</div>
-      <QuestionChip
-        v-for="(r, idx) in searchResults"
-        :key="idx"
-        :item="asQuestion(r)"
-        @click="(item) => { query = ''; chooseQuestion(item); }"
-      />
-    </div>
-
-    <!-- 聊天訊息 -->
-    <div v-else class="messages">
-      <AssistantBubble
-        v-for="m in messages"
-        :key="m.id"
-        :role="m.role"
+    <div v-if="!query.trim() && categories.length" class="category-rail">
+      <div
+        v-for="c in categories"
+        :key="c.id"
+        class="cat-wrap"
+        :class="{ selected: c.id === selectedCategoryId }"
       >
-        <template v-if="m.kind === 'text'">{{ m.payload }}</template>
-        <template v-else-if="m.kind === 'typing'"><TypingIndicator /></template>
-        <template v-else-if="m.kind === 'categories'">
-          <div class="chip-grid">
-            <CategoryChip
-              v-for="c in asCategoryList(m.payload)"
-              :key="c.id"
-              :category="c"
-              @click="chooseCategory"
-            />
-          </div>
-        </template>
-        <template v-else-if="m.kind === 'questions'">
-          <div class="chip-stack">
-            <QuestionChip
-              v-for="q in asQuestionList(m.payload)"
-              :key="q.id as string"
-              :item="asQuestion(q)"
-              @click="chooseQuestion"
-            />
-          </div>
-        </template>
-        <template v-else-if="m.kind === 'answer'">
-          <FaqAnswer :item="asFaqItem(m.payload)" />
-        </template>
-      </AssistantBubble>
+        <CategoryChip :category="c" @click="toggleCategory" />
+      </div>
     </div>
 
-    <!-- 底部固定按鈕 -->
+    <div class="faq-list">
+      <div v-if="loading && filteredItems.length === 0" class="hint">載入中…</div>
+      <div v-else-if="!loading && filteredItems.length === 0" class="hint">
+        {{ query.trim() ? '沒有找到相關問題' : '尚無常見問題' }}
+      </div>
+      <div
+        v-for="item in filteredItems"
+        :key="itemKey(item)"
+        class="faq-item"
+        :class="{ open: expandedKey === itemKey(item) }"
+      >
+        <button
+          type="button"
+          class="faq-question"
+          :aria-expanded="expandedKey === itemKey(item)"
+          @click="toggleQuestion(item)"
+        >
+          <span>{{ item.question }}</span>
+          <span class="material-symbols-rounded chev">expand_more</span>
+        </button>
+        <div v-if="expandedKey === itemKey(item)" class="faq-body">
+          <FaqAnswer :item="item" />
+        </div>
+      </div>
+    </div>
+
     <div class="bottom-bar">
       <button class="pt-action-btn contact-btn" @click="goContactTeacher">
         <span class="material-symbols-rounded">chat</span>
@@ -157,11 +115,69 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
 }
-.messages, .search-results { flex: 1; padding: 16px 14px; }
-.search-results { display: flex; flex-direction: column; gap: 8px; }
-.chip-grid { display: flex; flex-wrap: wrap; gap: 8px; }
-.chip-stack { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
-.hint { color: var(--pt-text-faint, #6b7280); font-size: 14px; padding: 8px 4px; }
+.category-rail {
+  display: flex;
+  gap: 8px;
+  padding: 12px 14px;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+}
+.category-rail::-webkit-scrollbar { display: none; }
+.cat-wrap {
+  scroll-snap-align: start;
+  flex-shrink: 0;
+}
+.cat-wrap.selected :deep(.chip) {
+  background: color-mix(in oklab, var(--chip-color, #0d9053) 14%, #fff);
+}
+.faq-list {
+  flex: 1;
+  padding: 4px 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.hint {
+  color: var(--pt-text-faint, #6b7280);
+  font-size: 14px;
+  padding: 24px 4px;
+  text-align: center;
+}
+.faq-item {
+  background: var(--pt-surface-card, #fff);
+  border: 1px solid var(--pt-border-light, #ecf5f9);
+  border-radius: 14px;
+  overflow: hidden;
+}
+.faq-item.open {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+.faq-question {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--pt-text, #1f2937);
+}
+.faq-question .chev {
+  transition: transform 0.15s;
+  color: var(--pt-text-faint, #6b7280);
+}
+.faq-item.open .faq-question .chev {
+  transform: rotate(180deg);
+}
+.faq-body {
+  padding: 12px 16px 14px;
+  border-top: 1px solid var(--pt-border-light, #ecf5f9);
+}
 .bottom-bar {
   position: fixed;
   bottom: 0;

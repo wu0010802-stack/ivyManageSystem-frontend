@@ -54,7 +54,7 @@ const routes: RouteRecordRaw[] = [
       path: '/assistant',
       name: 'parent-assistant',
       component: () => import('./views/AssistantView.vue'),
-      meta: { title: '常春藤小幫手', showBack: true },
+      meta: { title: '常見問題', showBack: true },
     },
     {
       path: '/me',
