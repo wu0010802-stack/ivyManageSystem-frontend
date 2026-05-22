@@ -2,7 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { getHomeSummary } from '../api/profile'
-import { getTodayContactBook } from '../api/contactBook'
+import { getTodayContactBook, type ContactBookEntry } from '../api/contactBook'
 import { useParentAuthStore } from '../stores/parentAuth'
 import { useCachedAsync } from '@/composables/useCachedAsync'
 import { useTodayStatusCache } from '../composables/useTodayStatusCache'
@@ -50,7 +50,7 @@ const selectedChild = computed(() => {
   return list.find((c) => c.student_id === selectedStudentId.value) || list[0] || null
 })
 
-const contactBookEntry = ref<Record<string, unknown> | null>(null)
+const contactBookEntry = ref<ContactBookEntry | null>(null)
 const contactBookLoading = ref(false)
 
 async function loadContactBook(_force = false) {
