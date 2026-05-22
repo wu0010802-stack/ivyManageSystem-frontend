@@ -1,11 +1,9 @@
 <script setup lang="ts">
 /**
- * 家長首頁「我的孩子」清單區塊。
+ * 家長首頁「我的孩子」selector cards。
  *
- * 接受 children 陣列，渲染每位子女卡片（姓名 / 班級 / 關係 / 標籤）。
- * 為純呈現元件，路由由父層透過 `@navigate="go"` 接住。
- *
- * lifecycle 標籤對應表內嵌於本元件，避免父層仍須提供 helper。
+ * 點卡片本體 = 切換 selected child（emit select）。
+ * 點右上 IconButton = 進 child profile（emit navigate）。
  */
 import ParentIcon from '../ParentIcon.vue'
 import CrownIcon from '@/components/brand/CrownIcon.vue'
@@ -24,11 +22,14 @@ interface Child {
 
 withDefaults(defineProps<{
   children?: Child[]
+  selectedId?: number | null
 }>(), {
   children: () => [],
+  selectedId: null,
 })
 
 const emit = defineEmits<{
+  'select': [studentId: number]
   'navigate': [path: string]
 }>()
 
@@ -54,6 +55,11 @@ function isBirthdayToday(child: Child): boolean {
   const d = new Date()
   return d.getMonth() + 1 === m && d.getDate() === day
 }
+
+function openProfile(e: Event, c: Child) {
+  e.stopPropagation()
+  emit('navigate', `/children/${c.student_id}`)
+}
 </script>
 
 <template>
@@ -71,7 +77,9 @@ function isBirthdayToday(child: Child): boolean {
         :key="c.guardian_id"
         type="button"
         class="child-card press-scale"
-        @click="emit('navigate', `/children/${c.student_id}`)"
+        :class="{ 'child-card--active': selectedId === c.student_id }"
+        :aria-pressed="selectedId === c.student_id"
+        @click="emit('select', c.student_id)"
       >
         <span class="child-avatar-wrap">
           <CrownIcon
@@ -85,7 +93,15 @@ function isBirthdayToday(child: Child): boolean {
         <span class="child-copy">
           <span class="child-row">
             <span class="child-name">{{ c.name }}</span>
-            <ParentIcon name="chevron-right" size="sm" class="child-arrow" />
+            <button
+              type="button"
+              class="child-profile-icon"
+              data-action="open-profile"
+              aria-label="查看孩子資料"
+              @click="(e) => openProfile(e, c)"
+            >
+              <ParentIcon name="user" size="sm" />
+            </button>
           </span>
           <span class="child-classroom">{{ c.classroom_name || '未分班' }}</span>
           <span class="child-meta">
@@ -141,16 +157,17 @@ function isBirthdayToday(child: Child): boolean {
   gap: 12px;
   scroll-snap-align: start;
   cursor: pointer;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
 }
 .child-card:active {
   background: var(--pt-surface-mute-soft);
 }
-.child-arrow {
-  color: var(--pt-text-disabled);
-  background: transparent;
-  padding: 0;
-  flex-shrink: 0;
+.child-card--active {
+  border-color: var(--brand-primary);
+  border-width: 2px;
+  box-shadow: 0 0 0 3px var(--brand-primary-soft);
 }
+
 .child-row {
   display: flex;
   justify-content: space-between;
@@ -162,6 +179,25 @@ function isBirthdayToday(child: Child): boolean {
   font-weight: var(--font-weight-semibold, 600);
   color: var(--pt-text-strong);
 }
+.child-profile-icon {
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  border-radius: 12px;
+  color: var(--pt-text-soft);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.child-profile-icon:hover { background: var(--pt-surface-mute-soft); color: var(--brand-primary); }
+.child-profile-icon:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 2px;
+}
+
 .child-classroom { font-size: var(--text-sm, 13px); color: var(--pt-text-faint); }
 .child-meta {
   margin-top: 10px;
