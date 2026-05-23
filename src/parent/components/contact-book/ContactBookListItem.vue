@@ -5,7 +5,7 @@ import ParentIcon from '../ParentIcon.vue'
 
 interface ContactBookEntry {
   log_date?: string
-  my_acknowledged_at?: string | null
+  isRead?: boolean
   mood?: string | null
   photos?: unknown[]
   teacher_note?: string
@@ -16,7 +16,7 @@ const props = defineProps<{
   entry: ContactBookEntry
 }>()
 
-const isUnread = computed<boolean>(() => !props.entry?.my_acknowledged_at)
+const isUnread = computed<boolean>(() => !props.entry?.isRead)
 const photoCount = computed<number>(() => (props.entry?.photos || []).length)
 
 const dateLabel = computed<string>(() => {
@@ -54,7 +54,7 @@ const previewText = computed<string>(() => {
         <span>{{ photoCount }} 張</span>
       </div>
     </div>
-    <span v-if="isUnread" class="unread-dot" aria-label="未簽收" />
+    <span v-if="isUnread" class="unread-dot" aria-label="未讀" />
     <ParentIcon v-else name="chevron-right" size="sm" />
   </div>
 </template>

@@ -4,7 +4,7 @@ import { localDateISO } from '../../utils/date'
 
 interface Entry {
   log_date?: string
-  my_acknowledged_at?: string | null
+  isRead?: boolean
   [key: string]: unknown
 }
 
@@ -93,7 +93,7 @@ const list = computed<DateChip[]>(() =>
     hasEntry: entriesByDate.value.has(d.iso),
     unread:
       entriesByDate.value.has(d.iso) &&
-      !entriesByDate.value.get(d.iso)?.my_acknowledged_at,
+      !entriesByDate.value.get(d.iso)?.isRead,
   })),
 )
 

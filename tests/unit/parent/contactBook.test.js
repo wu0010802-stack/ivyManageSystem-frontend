@@ -65,6 +65,81 @@ describe('parent contact-book API', () => {
       '/parent/contact-book/99/replies/5',
     )
   })
+
+  describe('domain shape mapping', () => {
+    it('getTodayContactBook 把 my_acknowledged_at 轉為 readAt/isRead', async () => {
+      apiMock.get.mockResolvedValue({
+        data: {
+          entry: {
+            id: 1,
+            log_date: '2026-05-22',
+            my_acknowledged_at: '2026-05-22T14:32:00',
+            mood: 'happy',
+          },
+        },
+      })
+      const res = await getTodayContactBook(42)
+      expect(res.data.entry).toMatchObject({
+        id: 1,
+        readAt: '2026-05-22T14:32:00',
+        isRead: true,
+        mood: 'happy',
+      })
+      expect(res.data.entry).not.toHaveProperty('my_acknowledged_at')
+    })
+
+    it('getTodayContactBook entry=null 時不爆', async () => {
+      apiMock.get.mockResolvedValue({ data: { entry: null } })
+      const res = await getTodayContactBook(42)
+      expect(res.data.entry).toBeNull()
+    })
+
+    it('listContactBook 對 entries[] 逐筆轉換', async () => {
+      apiMock.get.mockResolvedValue({
+        data: {
+          entries: [
+            { id: 1, my_acknowledged_at: null },
+            { id: 2, my_acknowledged_at: '2026-05-22T10:00:00' },
+          ],
+        },
+      })
+      const res = await listContactBook(7)
+      expect(res.data.entries).toEqual([
+        expect.objectContaining({ id: 1, readAt: null, isRead: false }),
+        expect.objectContaining({ id: 2, readAt: '2026-05-22T10:00:00', isRead: true }),
+      ])
+      res.data.entries.forEach((e) => {
+        expect(e).not.toHaveProperty('my_acknowledged_at')
+      })
+    })
+
+    it('getContactBookDetail 轉換單筆 entry', async () => {
+      apiMock.get.mockResolvedValue({
+        data: { id: 99, my_acknowledged_at: '2026-05-22T08:00:00', mood: 'ok' },
+      })
+      const res = await getContactBookDetail(99)
+      expect(res.data).toMatchObject({ id: 99, readAt: '2026-05-22T08:00:00', isRead: true })
+      expect(res.data).not.toHaveProperty('my_acknowledged_at')
+    })
+
+    it('ackContactBook 轉換 read_at/already_marked → readAt/alreadyMarked', async () => {
+      apiMock.post.mockResolvedValue({
+        data: { read_at: '2026-05-22T14:32:00', already_marked: false },
+      })
+      const res = await ackContactBook(99)
+      expect(res.data).toEqual({ readAt: '2026-05-22T14:32:00', alreadyMarked: false })
+      expect(res.data).not.toHaveProperty('read_at')
+      expect(res.data).not.toHaveProperty('already_marked')
+    })
+
+    it('ackContactBook already_marked=true 路徑', async () => {
+      apiMock.post.mockResolvedValue({
+        data: { already_marked: true, read_at: '2026-05-22T08:00:00' },
+      })
+      const res = await ackContactBook(99)
+      expect(res.data).toEqual({ readAt: '2026-05-22T08:00:00', alreadyMarked: true })
+    })
+  })
 })
 
 

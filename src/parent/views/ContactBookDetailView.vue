@@ -7,6 +7,7 @@ import {
   getContactBookDetail,
   replyContactBook,
 } from '../api/contactBook'
+import type { ContactBookEntry as CbEntry } from '../api/contactBook'
 import { useChildrenStore } from '../stores/children'
 import { toast } from '../utils/toast'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
@@ -19,23 +20,6 @@ interface Reply {
   id: number | string
   body?: string
   created_at?: string
-}
-
-interface CbEntry {
-  student_id?: number
-  log_date?: string
-  my_acknowledged_at?: string | null
-  mood?: string
-  meal_lunch?: number | null
-  meal_snack?: number | null
-  nap_minutes?: number | null
-  temperature_c?: number | null
-  bowel?: string
-  learning_highlight?: string
-  teacher_note?: string
-  photos?: unknown[]
-  replies?: Reply[]
-  [key: string]: unknown
 }
 
 const route = useRoute()
@@ -152,7 +136,7 @@ async function fetchData() {
   try {
     const { data } = await getContactBookDetail(entryId.value)
     entry.value = data as CbEntry
-    replies.value = (data as CbEntry)?.replies || []
+    replies.value = ((data as CbEntry)?.replies as Reply[] | undefined) || []
   } catch (err) {
     const e = err as Record<string, unknown>
     toast.error(String(e?.displayMessage || '載入失敗'))
@@ -161,16 +145,19 @@ async function fetchData() {
   }
 }
 
-async function manualAck() {
+async function markAsRead() {
   if (acking.value) return
   acking.value = true
   try {
     const { data } = await ackContactBook(entryId.value)
-    if (entry.value) entry.value.my_acknowledged_at = (data as { read_at?: string })?.read_at ?? null
-    if (!(data as { already_marked?: boolean })?.already_marked) toast.success('已簽收今日聯絡簿')
+    if (entry.value) {
+      entry.value.readAt = data.readAt
+      entry.value.isRead = true
+    }
+    // 已讀軌：成功不跳 toast（被動行為，與「已讀」語意一致）
   } catch (err) {
     const e = err as Record<string, unknown>
-    toast.error(String(e?.displayMessage || '簽收失敗'))
+    toast.error(String(e?.displayMessage || '標記失敗，請重試'))
   } finally {
     acking.value = false
   }
@@ -215,8 +202,8 @@ async function doRemoveReply() {
 
 async function loadAndMark() {
   await fetchData()
-  if (entry.value && !entry.value.my_acknowledged_at) {
-    await manualAck()
+  if (entry.value && !entry.value.isRead) {
+    await markAsRead()
   }
 }
 
@@ -239,6 +226,16 @@ watch(entryId, async (newId, oldId) => {
   newReply.value = ''
   await loadAndMark()
 })
+
+function formatTime(iso: string | null): string {
+  if (!iso) return ''
+  try {
+    const d = new Date(iso)
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  } catch {
+    return ''
+  }
+}
 
 function formatReplyTime(iso: string) {
   try {
@@ -318,27 +315,27 @@ function formatReplyTime(iso: string) {
         <PhotoGrid :photos="(entry.photos || []) as never[]" />
       </section>
 
-      <!-- 簽收狀態 / 回覆 -->
+      <!-- 已讀狀態 / 回覆 -->
       <section class="card replies-card">
         <header class="ack-bar">
           <div class="ack-status">
-            <span v-if="entry.my_acknowledged_at" class="ack-badge is-read">
+            <span v-if="entry.isRead" class="read-badge is-read">
               <span class="material-symbols-rounded" aria-hidden="true">check_circle</span>
-              已簽收
+              已讀 · {{ formatTime(entry.readAt) }}
             </span>
-            <span v-else class="ack-badge is-unread">
+            <span v-else class="read-badge is-pending">
               <span class="material-symbols-rounded" aria-hidden="true">circle</span>
-              尚未簽收
+              尚未閱讀
             </span>
           </div>
           <button
-            v-if="!entry.my_acknowledged_at"
+            v-if="!entry.isRead"
             type="button"
-            class="ack-btn"
+            class="read-btn"
             :disabled="acking"
-            @click="manualAck"
+            @click="markAsRead"
           >
-            手動簽收
+            標為已讀
           </button>
         </header>
 
@@ -511,7 +508,7 @@ function formatReplyTime(iso: string) {
   gap: 12px;
   margin: -4px 0 12px;
 }
-.ack-badge {
+.read-badge {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -519,20 +516,21 @@ function formatReplyTime(iso: string) {
   font-weight: 600;
   padding: 6px 12px;
   border-radius: 999px;
+  transition: background-color 200ms ease, color 200ms ease;
 }
-.ack-badge .material-symbols-rounded {
+.read-badge .material-symbols-rounded {
   font-size: 16px;
   font-variation-settings: 'FILL' 1, 'wght' 600;
 }
-.ack-badge.is-read {
-  background: var(--leaf-100, #dcf4e6);
-  color: var(--brand-primary, #0d9053);
+.read-badge.is-read {
+  background-color: var(--pt-color-success-bg, var(--leaf-100, #e8f5e9));
+  color: var(--pt-color-success, var(--brand-primary, #2e7d32));
 }
-.ack-badge.is-unread {
+.read-badge.is-pending {
   background: var(--coral-100, #ffe3e0);
   color: var(--coral-700, #b14545);
 }
-.ack-btn {
+.read-btn {
   background: var(--brand-primary, #0d9053);
   color: #fff;
   border: none;
@@ -543,8 +541,8 @@ function formatReplyTime(iso: string) {
   cursor: pointer;
   transition: background 160ms ease, transform 120ms ease;
 }
-.ack-btn:active { transform: scale(0.97); background: var(--brand-primary-hover, #0caf76); }
-.ack-btn:disabled { background: var(--brand-primary-soft); color: var(--pt-text-disabled); cursor: not-allowed; }
+.read-btn:active { transform: scale(0.97); background: var(--brand-primary-hover, #0caf76); }
+.read-btn:disabled { background: var(--brand-primary-soft); color: var(--pt-text-disabled); cursor: not-allowed; }
 
 .replies {
   list-style: none;
@@ -654,7 +652,7 @@ function formatReplyTime(iso: string) {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ack-btn, .send-btn { transition: none; }
+  .read-badge, .read-btn, .send-btn { transition: none; }
 }
 
 .sr-only {
