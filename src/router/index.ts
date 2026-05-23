@@ -255,6 +255,12 @@ const routes: RouteRecordRaw[] = [
             component: () => import('../views/yearEnd/YearEndDetailView.vue'),
             meta: { title: '年終結算明細' }
         },
+        {
+            path: '/year-end/appraisal-payout',
+            name: 'YearEndAppraisalPayout',
+            component: () => import('../views/yearEnd/AppraisalPayoutView.vue'),
+            meta: { title: '考核年終 payout', requiresAuth: true, permission: 'APPRAISAL_FINALIZE' },
+        },
 
         // ============ 學費管理 ============
         {

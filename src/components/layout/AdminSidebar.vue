@@ -55,6 +55,10 @@
             <el-icon><Trophy /></el-icon>
             <template #title>年終獎金</template>
           </el-menu-item>
+          <el-menu-item v-if="canView.APPRAISAL_FINALIZE" index="/year-end/appraisal-payout">
+            <el-icon><Medal /></el-icon>
+            <template #title>考核年終 payout</template>
+          </el-menu-item>
           <el-menu-item v-if="canView.SALARY_READ" index="/gov-reports">
             <el-icon><Files /></el-icon>
             <template #title>政府申報匯出</template>

@@ -11907,6 +11907,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/year_end/appraisal-payout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Payouts */
+        get: operations["list_payouts_api_year_end_appraisal_payout_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/year_end/appraisal-payout/{year}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Payouts */
+        delete: operations["delete_payouts_api_year_end_appraisal_payout__year__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/year_end/appraisal-payout/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Post Generate */
+        post: operations["post_generate_api_year_end_appraisal_payout_generate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/year_end/appraisal-payout/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Preview */
+        get: operations["get_preview_api_year_end_appraisal_payout_preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/year_end/cycles": {
         parameters: {
             query?: never;
@@ -16026,6 +16094,77 @@ export interface components {
              * @description 當 is_paid=False 時必填，≥ 5 字；留於沖帳紀錄 notes
              */
             refund_reason?: string | null;
+        };
+        /** PayoutGenerateRequest */
+        PayoutGenerateRequest: {
+            /** Included Inactive Employee Ids */
+            included_inactive_employee_ids?: number[];
+            /** Year */
+            year: number;
+        };
+        /** PayoutGenerateResult */
+        PayoutGenerateResult: {
+            /** Affected Employee Count */
+            affected_employee_count: number;
+            /** Cycle Id */
+            cycle_id: number;
+            /** Generated Count */
+            generated_count: number;
+            /** Skipped Inactive Count */
+            skipped_inactive_count: number;
+            /** Total Amount */
+            total_amount: string;
+            /** Warnings */
+            warnings?: string[];
+        };
+        /**
+         * PayoutItem
+         * @description 已生成的 special_bonus_item 顯示 schema。
+         */
+        PayoutItem: {
+            /** Amount */
+            amount: string;
+            /** Bonus Type */
+            bonus_type: string;
+            /** Calc Meta */
+            calc_meta: {
+                [key: string]: unknown;
+            };
+            /** Employee Id */
+            employee_id: number;
+            /** Id */
+            id: number;
+            /** Period Label */
+            period_label: string;
+            /** Source Ref */
+            source_ref?: string | null;
+        };
+        /** PayoutPreviewRow */
+        PayoutPreviewRow: {
+            /** Earlier Amount */
+            earlier_amount: string;
+            /** Earlier Cycle Finalized */
+            earlier_cycle_finalized: boolean;
+            /** Earlier Summary Id */
+            earlier_summary_id?: number | null;
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+            /** Is Inactive */
+            is_inactive: boolean;
+            /** Later Amount */
+            later_amount: string;
+            /** Later Cycle Finalized */
+            later_cycle_finalized: boolean;
+            /** Later Summary Id */
+            later_summary_id?: number | null;
+            /** Role Group */
+            role_group: string;
+            /** Total Amount */
+            total_amount: string;
+            /** Warnings */
+            warnings?: string[];
         };
         /** PayRequest */
         PayRequest: {
@@ -39488,6 +39627,134 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_payouts_api_year_end_appraisal_payout_get: {
+        parameters: {
+            query: {
+                year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayoutItem"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_payouts_api_year_end_appraisal_payout__year__delete: {
+        parameters: {
+            query?: {
+                confirm?: boolean;
+            };
+            header?: never;
+            path: {
+                year: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_generate_api_year_end_appraisal_payout_generate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PayoutGenerateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayoutGenerateResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_preview_api_year_end_appraisal_payout_preview_get: {
+        parameters: {
+            query: {
+                year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayoutPreviewRow"][];
                 };
             };
             /** @description Validation Error */
