@@ -145,12 +145,12 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="academic-affairs-page">
-    <div class="page-header">
+  <div class="today-tasks-panel">
+    <div class="panel-header">
       <div>
-        <h2>學生教務管理</h2>
-        <p class="page-subtitle">
-          整合出席、請假、評量與事件四個模組，依班級與日期區間同步顯示。
+        <h2>今日任務池</h2>
+        <p class="panel-subtitle">
+          出席、請假、評量、事件四個區塊，依班級與日期區間同步顯示。
         </p>
       </div>
     </div>
@@ -222,11 +222,11 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.academic-affairs-page {
+.today-tasks-panel {
   padding: 16px 0;
 }
 
-.page-header {
+.panel-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -234,7 +234,7 @@ onMounted(async () => {
   flex-wrap: wrap;
 }
 
-.page-subtitle {
+.panel-subtitle {
   margin-top: 4px;
   color: #64748b;
 }

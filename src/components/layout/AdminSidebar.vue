@@ -81,11 +81,11 @@
           </el-menu-item>
         </el-sub-menu>
 
-        <!-- 學生教務 -->
+        <!-- 學生與班級 -->
         <el-sub-menu v-if="hasVisibleStudentItems" index="group-students">
           <template #title>
             <el-icon><School /></el-icon>
-            <span>學生教務</span>
+            <span>學生與班級</span>
           </template>
           <el-menu-item v-if="canView.CLASSROOMS_READ" index="/classrooms">
             <el-icon><OfficeBuilding /></el-icon>
@@ -93,11 +93,7 @@
           </el-menu-item>
           <el-menu-item v-if="canView.STUDENTS_READ" index="/students">
             <el-icon><User /></el-icon>
-            <template #title>學生管理</template>
-          </el-menu-item>
-          <el-menu-item v-if="canView.STUDENTS_READ" index="/student-academic-affairs">
-            <el-icon><Calendar /></el-icon>
-            <template #title>學生教務管理</template>
+            <template #title>學生</template>
           </el-menu-item>
           <el-menu-item v-if="canView.STUDENTS_READ" index="/student-enrollment">
             <el-icon><TrendCharts /></el-icon>

@@ -11,7 +11,7 @@ import AssessmentEditorDialog from '@/components/student/AssessmentEditorDialog.
 import SectionCard from './SectionCard.vue'
 
 const ctx = inject(ACADEMIC_AFFAIRS_FILTERS_KEY)
-if (!ctx) throw new Error('AssessmentSection 須在 StudentAcademicAffairsView 內使用')
+if (!ctx) throw new Error('AssessmentSection 須在 TodayTasksPanel 內使用')
 
 const props = withDefaults(defineProps<{
   classrooms?: Record<string, unknown>[]
@@ -123,7 +123,6 @@ defineExpose({ fetchAssessments })
     :error-message="errorMessage"
     :empty-description="ctx.filters.classroomId ? '期間內沒有評量資料' : '請先選擇班級'"
     :show-empty="filteredRows.length === 0"
-    :open-full-route="{ name: 'student-assessments' }"
     @retry="fetchAssessments"
   >
     <template #actions>

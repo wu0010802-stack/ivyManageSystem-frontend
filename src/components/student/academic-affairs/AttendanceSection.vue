@@ -8,7 +8,7 @@ import AttendanceBatchPanel from './AttendanceBatchPanel.vue'
 import SectionCard from './SectionCard.vue'
 
 const ctx = inject(ACADEMIC_AFFAIRS_FILTERS_KEY)
-if (!ctx) throw new Error('AttendanceSection 須在 StudentAcademicAffairsView 內使用')
+if (!ctx) throw new Error('AttendanceSection 須在 TodayTasksPanel 內使用')
 
 interface AttendanceRow {
   student_id?: number
@@ -105,7 +105,6 @@ defineExpose({ fetchDaily })
     :error-message="errorMessage"
     :empty-description="ctx.filters.classroomId ? '當日沒有資料' : '請先選擇班級'"
     :show-empty="filteredRows.length === 0"
-    :open-full-route="{ name: 'student-attendance' }"
     @retry="fetchDaily"
   >
     <template #titleExtra v-if="refDate">{{ refDate }}</template>

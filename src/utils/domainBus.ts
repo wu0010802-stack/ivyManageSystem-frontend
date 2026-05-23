@@ -44,7 +44,7 @@ export type DomainEventMap = {
   /**
    * 學生刪除。
    * 注意：部分 .vue emit 站點取 row?.id（可能 undefined），故 id 允許 undefined。
-   * @loosened row?.id 在 ClassroomStudentDrawer / StudentView 為 number | undefined
+   * @loosened row?.id 在 ClassroomStudentDrawer / StudentListPanel 為 number | undefined
    */
   'student:deleted': { id: number | undefined }
   /** 學生批次轉班 */
