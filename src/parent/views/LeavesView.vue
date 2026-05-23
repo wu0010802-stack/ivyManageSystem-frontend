@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useChildrenStore } from '../stores/children'
 import { useChildSelection } from '../composables/useChildSelection'
-import ChildSelector from '../components/ChildSelector.vue'
+import ChildContextHeader from '../components/ChildContextHeader.vue'
 import {
   listLeaves,
   createLeave,
@@ -344,7 +344,7 @@ async function pullRefresh() {
 
 <template>
   <PullToRefresh :on-refresh="pullRefresh" class="leaves-view">
-    <ChildSelector />
+    <ChildContextHeader variant="page" />
 
     <LeaveHero :summary="heroSummary">
       <template #action>

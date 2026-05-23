@@ -40,7 +40,7 @@ describe('ContactBookView today-card a11y', () => {
     const wrapper = mount(ContactBookView, {
       global: {
         stubs: {
-          ChildSelector: true,
+          ChildContextHeader: true,
           SkeletonBlock: true,
           ParentIcon: true,
           KawaiiStar: true,
@@ -73,7 +73,7 @@ describe('ContactBookView today-card a11y', () => {
     const wrapper = mount(ContactBookView, {
       global: {
         stubs: {
-          ChildSelector: true,
+          ChildContextHeader: true,
           SkeletonBlock: true,
           ParentIcon: true,
           KawaiiStar: true,

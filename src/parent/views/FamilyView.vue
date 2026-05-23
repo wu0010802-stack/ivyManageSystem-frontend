@@ -5,7 +5,7 @@ import { useChildSelection } from '../composables/useChildSelection'
 import { useCachedAsync } from '@/composables/useCachedAsync'
 import { getFamilyTimeline } from '../api/family'
 import { getHomeSummary } from '../api/profile'
-import ChildSelector from '../components/ChildSelector.vue'
+import ChildContextHeader from '../components/ChildContextHeader.vue'
 import PullToRefresh from '../components/PullToRefresh.vue'
 import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
 import FamilyTimeline from '../components/family/FamilyTimeline.vue'
@@ -77,7 +77,7 @@ async function pullRefresh() {
 
 <template>
   <PullToRefresh :on-refresh="pullRefresh" class="family-view">
-    <ChildSelector />
+    <ChildContextHeader variant="page" />
 
     <MobileErrorRetry
       v-if="timelineError && !timelineData"

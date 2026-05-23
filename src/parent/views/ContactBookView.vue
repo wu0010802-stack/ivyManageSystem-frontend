@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import { useChildrenStore } from '../stores/children'
 import { useChildSelection } from '../composables/useChildSelection'
 import { useAbortableFetch } from '../composables/useAbortableFetch'
-import ChildSelector from '../components/ChildSelector.vue'
+import ChildContextHeader from '../components/ChildContextHeader.vue'
 import { getTodayContactBook, listContactBook } from '../api/contactBook'
 import type { ContactBookEntry as CbEntry } from '../api/contactBook'
 import { toast } from '../utils/toast'
@@ -125,7 +125,7 @@ const hasAnyHistory = computed(() => historyWithoutToday.value.length > 0)
 
 <template>
   <div class="cb">
-    <ChildSelector />
+    <ChildContextHeader variant="page" />
 
     <MonthDateStrip
       :entries="allEntries"

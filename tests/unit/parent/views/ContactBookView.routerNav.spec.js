@@ -58,7 +58,7 @@ describe('ContactBookView — MonthDateStrip select 走 vue-router 不再用 loc
     const wrapper = mount(ContactBookView, {
       global: {
         stubs: {
-          ChildSelector: true,
+          ChildContextHeader: true,
           SkeletonBlock: true,
           ParentIcon: true,
           KawaiiStar: true,
@@ -91,7 +91,7 @@ describe('ContactBookView — MonthDateStrip select 走 vue-router 不再用 loc
     const wrapper = mount(ContactBookView, {
       global: {
         stubs: {
-          ChildSelector: true,
+          ChildContextHeader: true,
           SkeletonBlock: true,
           ParentIcon: true,
           KawaiiStar: true,

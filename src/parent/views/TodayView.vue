@@ -14,12 +14,13 @@ import SkeletonBlock from '../components/SkeletonBlock.vue'
 import TodayTimeline from '../components/home-timeline/TodayTimeline.vue'
 import PushCta from '../components/home/PushCta.vue'
 import ChildrenStrip from '../components/home/ChildrenStrip.vue'
+import ChildContextHeader from '../components/ChildContextHeader.vue'
 import LaurelWreath from '@/components/brand/LaurelWreath.vue'
 import ContactBookDayCard from '../components/contact-book/ContactBookDayCard.vue'
 
 const router = useRouter()
 const authStore = useParentAuthStore()
-const { selectedId: selectedStudentId, ensureSelected } = useChildSelection()
+const { selectedId: selectedStudentId, ensureSelected, setSelected } = useChildSelection()
 
 const { status: todayStatus, refresh: refreshToday } = useTodayStatusCache()
 const todayStatusData = computed(() => todayStatus.value as { children?: Record<string, unknown>[] } | null)
@@ -112,6 +113,11 @@ function childStatusLabel(c: Record<string, unknown> | null | undefined) {
   return isOffDay() ? '今天放假' : '尚未到校'
 }
 
+const selectedTodayChild = computed(() => {
+  const tc = todayChildren.value || []
+  return tc.find((c) => (c as { student_id?: number }).student_id === selectedStudentId.value) || null
+})
+
 const hero = computed(() => {
   const tc = todayChildren.value || []
   if (tc.length === 0) {
@@ -130,9 +136,10 @@ const hero = computed(() => {
       note: [c.name, c.classroom_name].filter(Boolean).join('　·　') || null,
     }
   }
+  // 多寶家庭：顯示 selected 單孩 status，ChildContextHeader 自行顯示姓名/班級
   return {
     kind: 'multi',
-    label: `今天 ${tc.length} 位小朋友`,
+    label: childStatusLabel(selectedTodayChild.value),
     note: null,
   }
 })
@@ -167,6 +174,7 @@ function go(path: string) {
         aria-hidden="true"
       />
       <p class="today-date">{{ todayDateLine }}</p>
+      <ChildContextHeader v-if="children.length >= 1" variant="hero" class="today-cch" />
       <h1 v-if="hero" class="today-hero">{{ hero.label }}</h1>
       <p v-if="hero?.note" class="today-note">{{ hero.note }}</p>
     </header>
@@ -197,6 +205,8 @@ function go(path: string) {
     <ChildrenStrip
       v-if="children.length > 1"
       :children="children"
+      :selected-id="selectedStudentId"
+      @select="setSelected"
       @navigate="go"
     />
 
@@ -247,6 +257,9 @@ function go(path: string) {
   font-weight: 600;
   color: var(--pt-text-muted);
   letter-spacing: 0.02em;
+}
+.today-cch {
+  margin-top: var(--space-3, 12px);
 }
 .today-hero {
   margin: var(--space-2, 8px) 0 0;
