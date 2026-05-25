@@ -1,14 +1,15 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed, watch, nextTick } from 'vue'
 import { useDebounceFn, useMediaQuery } from '@vueuse/core'
-import { Loading, User, Plus } from '@element-plus/icons-vue'
+import { User, Plus } from '@element-plus/icons-vue'
 import {
-  getEmployee, getEmployees, createEmployee, offboard, getFinalSalaryPreview,
+  getEmployee, getEmployees, createEmployee,
   listEmployeeEducations, createEmployeeEducation, updateEmployeeEducation, deleteEmployeeEducation,
   listEmployeeCertificates, createEmployeeCertificate, updateEmployeeCertificate, deleteEmployeeCertificate,
   listEmployeeContracts, createEmployeeContract, updateEmployeeContract, deleteEmployeeContract,
   updateEmployeeBasic, updateEmployeeSalary,
 } from '@/api/employees'
+import OffboardingModal from '@/components/offboarding/OffboardingModal.vue'
 import { getRecords as getAttendanceRecords, uploadCsv, deleteEmployeeDateRecord } from '@/api/attendance'
 import { getPositionSalary } from '@/api/config'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -301,21 +302,9 @@ interface EmployeeRow {
   [key: string]: unknown
 }
 
-interface FinalSalaryPreview {
-  base_salary?: number
-  proration_note?: string
-  gross_salary?: number
-  total_deduction?: number
-  net_salary?: number
-}
-
 // ── 辦理離職 ──────────────────────────────────────
 const offboardVisible = ref(false)
 const offboardTarget = ref<EmployeeRow | null>(null)
-const offboardForm = reactive({ resign_date: '', resign_reason: '' })
-const offboardLoading = ref(false)
-const finalSalaryPreview = ref<FinalSalaryPreview | null>(null)
-const finalSalaryLoading = ref(false)
 
 const getEmployeeStatus = (emp: Record<string, unknown>): { label: string; type: ElTagType } => {
   const today = todayISO()
@@ -328,48 +317,7 @@ const getEmployeeStatus = (emp: Record<string, unknown>): { label: string; type:
 
 const openOffboard = (emp: Record<string, unknown>) => {
   offboardTarget.value = emp as EmployeeRow
-  offboardForm.resign_date = ''
-  offboardForm.resign_reason = ''
-  finalSalaryPreview.value = null
   offboardVisible.value = true
-}
-
-const fetchFinalSalary = async () => {
-  if (!offboardTarget.value || !offboardForm.resign_date) return
-  const [year, month] = offboardForm.resign_date.split('-')
-  finalSalaryLoading.value = true
-  try {
-    const res = await getFinalSalaryPreview(offboardTarget.value.id, { year: parseInt(year), month: parseInt(month) })
-    finalSalaryPreview.value = res.data as FinalSalaryPreview
-  } catch {
-    finalSalaryPreview.value = null
-  } finally {
-    finalSalaryLoading.value = false
-  }
-}
-
-watch(() => offboardForm.resign_date, (val) => {
-  if (val) fetchFinalSalary()
-  else finalSalaryPreview.value = null
-})
-
-const submitOffboard = async () => {
-  if (!offboardForm.resign_date) {
-    ElMessage.warning('請選擇離職日期')
-    return
-  }
-  offboardLoading.value = true
-  try {
-    await offboard(offboardTarget.value!.id, offboardForm)
-    ElMessage.success('離職資料已更新')
-    offboardVisible.value = false
-    fetchEmployees()
-  } catch (err) {
-    const e = err as { response?: { data?: { detail?: string } }; message?: string }
-    ElMessage.error('辦理離職失敗: ' + (e.response?.data?.detail || e.message))
-  } finally {
-    offboardLoading.value = false
-  }
 }
 
 const searchQuery = ref('')
@@ -1282,62 +1230,14 @@ onMounted(async () => {
         <el-button type="primary" @click="submitSub">儲存</el-button>
       </template>
     </el-dialog>
-    <!-- Offboard Dialog -->
-    <el-dialog v-model="offboardVisible" title="辦理離職" width="560px">
-      <el-form label-width="100px">
-        <el-form-item label="員工">
-          <strong>{{ offboardTarget?.name }}</strong>（{{ offboardTarget?.employee_id }}）
-        </el-form-item>
-        <el-form-item label="離職日期" required>
-          <el-date-picker
-            v-model="offboardForm.resign_date"
-            type="date"
-            placeholder="選擇離職日期（可為未來日期）"
-            style="width: 100%"
-            value-format="YYYY-MM-DD"
-          />
-        </el-form-item>
-        <el-form-item label="離職原因">
-          <el-input
-            v-model="offboardForm.resign_reason"
-            type="textarea"
-            :rows="3"
-            placeholder="選填"
-            maxlength="200"
-            show-word-limit
-          />
-        </el-form-item>
-
-        <!-- 最終薪資預覽 -->
-        <el-divider content-position="left">最終薪資預覽</el-divider>
-        <div v-if="finalSalaryLoading" style="text-align:center;padding:12px">
-          <el-icon class="is-loading"><Loading /></el-icon> 計算中...
-        </div>
-        <template v-else-if="finalSalaryPreview">
-          <el-descriptions :column="2" border size="small">
-            <el-descriptions-item label="底薪">
-              NT${{ finalSalaryPreview.base_salary?.toLocaleString() }}
-              <span v-if="finalSalaryPreview.proration_note" style="color:#e6a23c;font-size:12px;margin-left:6px">
-                （{{ finalSalaryPreview.proration_note }}）
-              </span>
-            </el-descriptions-item>
-            <el-descriptions-item label="應發合計">NT${{ finalSalaryPreview.gross_salary?.toLocaleString() }}</el-descriptions-item>
-            <el-descriptions-item label="各項扣款">NT${{ finalSalaryPreview.total_deduction?.toLocaleString() }}</el-descriptions-item>
-            <el-descriptions-item label="預估實發" :span="2">
-              <strong style="color:#67c23a;font-size:16px">NT${{ finalSalaryPreview.net_salary?.toLocaleString() }}</strong>
-            </el-descriptions-item>
-          </el-descriptions>
-        </template>
-        <div v-else-if="offboardForm.resign_date" style="color:var(--text-tertiary);font-size:13px;padding:8px 0">
-          薪資預覽無法取得（請確認薪資引擎已啟用）
-        </div>
-        <div v-else style="color:#bbb;font-size:13px;padding:8px 0">請先選擇離職日期以顯示薪資預覽</div>
-      </el-form>
-      <template #footer>
-        <el-button @click="offboardVisible = false">取消</el-button>
-        <el-button type="danger" :loading="offboardLoading" @click="submitOffboard">確認辦理離職</el-button>
-      </template>
-    </el-dialog>
+    <!-- Offboard Modal -->
+    <OffboardingModal
+      v-if="offboardTarget"
+      v-model="offboardVisible"
+      :employee-id="offboardTarget.id"
+      :employee-name="offboardTarget.name || ''"
+      @success="() => fetchEmployees()"
+    />
   </div>
 </template>
 

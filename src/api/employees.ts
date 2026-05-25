@@ -13,12 +13,6 @@ export const createEmployee = (data: ApiBody<'/employees', 'post'>): AxiosResp<'
 export const updateEmployee = (id: number, data: ApiBody<'/employees/{employee_id}', 'put'>): AxiosResp<'/employees/{employee_id}', 'put'> =>
     api.put(`/employees/${id}`, data)
 
-export const offboard = (id: number, data: ApiBody<'/employees/{employee_id}/offboard', 'post'>): AxiosResp<'/employees/{employee_id}/offboard', 'post'> =>
-    api.post(`/employees/${id}/offboard`, data)
-
-export const getFinalSalaryPreview = (id: number, params?: ApiQuery<'/employees/{employee_id}/final-salary-preview', 'get'>): AxiosResp<'/employees/{employee_id}/final-salary-preview', 'get'> =>
-    api.get(`/employees/${id}/final-salary-preview`, { params })
-
 // ============ Diff-only updates ============
 // Why: 後端 require_not_self_edit 比對 update_data.keys()，前端必須只送
 // 真正異動的欄位才不會誤觸守衛（即使值相同也算 touch）。
