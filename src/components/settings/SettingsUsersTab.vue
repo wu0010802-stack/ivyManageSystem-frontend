@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed, nextTick, type Ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { getUsers, getPermissions, createUser, updateUser, deleteUser, resetPassword } from '@/api/auth'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -12,8 +12,24 @@ import {
   permissionsRemove,
 } from '@/utils/auth'
 
+const ROLE_ICONS: Record<string, string> = {
+  admin: '👑',
+  principal: '🏫',
+  supervisor: '📋',
+  hr: '💼',
+  accountant: '💰',
+  teacher: '📚',
+  parent: '👨‍👩‍👧',
+}
+
+const ROLE_ORDER = ['admin', 'principal', 'supervisor', 'hr', 'accountant', 'teacher', 'parent']
+
+const advancedExpanded = ref<boolean>(false)
+
+interface EmployeeItem { id: number; name: string; employee_id: string }
+
 const employeeStore = useEmployeeStore()
-const { employees } = storeToRefs(employeeStore)
+const { employees } = storeToRefs(employeeStore) as unknown as { employees: Ref<EmployeeItem[]> }
 
 const users = ref<Record<string, unknown>[]>([])
 const loadingUsers = ref<boolean>(false)
@@ -34,6 +50,7 @@ interface PermGroup {
 interface RoleConfig {
   label: string
   permissions: string[]
+  description?: string
 }
 
 const permissionDefinition = ref<{ permissions: Record<string, { label: string; value: string }>; groups: PermGroup[]; roles: Record<string, RoleConfig> }>({ permissions: {}, groups: [], roles: {} })
@@ -60,7 +77,7 @@ const fetchPermissionDefinition = async () => {
 }
 
 const availableEmployees = () => {
-  const empList = employees.value as { id: number; name: string; employee_id: string }[]
+  const empList = employees.value
   const existingIds = new Set(users.value.map(u => u.employee_id))
   return empList.filter(e => !existingIds.has(e.id))
 }
@@ -71,6 +88,7 @@ const handleAddUser = () => {
   userForm.password = ''
   userForm.role = 'teacher'
   userForm.permission_names = ['*']
+  advancedExpanded.value = false
   employeeStore.fetchEmployees()
   userDialogVisible.value = true
 }
@@ -142,8 +160,7 @@ const handleDeleteUser = (user: Record<string, unknown>) => {
 
 const autoFillUsername = () => {
   if (userForm.employee_id) {
-    const empList = employees.value as { id: number; name: string; employee_id: string }[]
-    const emp = empList.find(e => e.id === userForm.employee_id)
+    const emp = employees.value.find(e => e.id === userForm.employee_id)
     if (emp && !userForm.username) {
       userForm.username = emp.employee_id || emp.name
     }
@@ -156,6 +173,7 @@ const handleEditUser = (user: Record<string, unknown>) => {
   editUserForm.role = user.role as string
   editUserForm.permission_names = (user.permission_names as string[] | null) ?? ['*']
   editUserDialogVisible.value = true
+  nextTick(() => _openEditExpander())
 }
 
 const saveEditUser = async () => {
@@ -186,6 +204,10 @@ const togglePermission = (form: { permission_names: string[]; role: string }, pe
     form.permission_names = permissionsRemove(form.permission_names, permName)
   } else {
     form.permission_names = permissionsAdd(form.permission_names, permName)
+  }
+  // 若新狀態為偏離，強制展開
+  if (deviationCount.value > 0) {
+    advancedExpanded.value = true
   }
 }
 
@@ -238,6 +260,50 @@ const isUsingRoleDefault = (row: Record<string, unknown>) => {
   return _arraysEqualAsSet(row.permission_names as string[], roleConfig.permissions)
 }
 
+const _activeForm = computed<{ role: string; permission_names: string[] } | null>(() => {
+  if (userDialogVisible.value) return userForm
+  if (editUserDialogVisible.value) return editUserForm
+  return null
+})
+
+const deviationCount = computed<number>(() => {
+  const form = _activeForm.value
+  if (!form) return 0
+  const roleConfig = permissionDefinition.value.roles[form.role]
+  if (!roleConfig) return 0
+  const tpl = roleConfig.permissions
+  if (form.permission_names.includes('*')) {
+    return tpl.includes('*') ? 0 : Object.keys(permissionDefinition.value.permissions).length
+  }
+  if (tpl.includes('*')) {
+    // role 預設是 wildcard 但 form 是顯式清單
+    return Object.keys(permissionDefinition.value.permissions).length - form.permission_names.length
+  }
+  const tplSet = new Set(tpl)
+  const formSet = new Set(form.permission_names)
+  let count = 0
+  for (const p of form.permission_names) if (!tplSet.has(p)) count++
+  for (const p of tpl) if (!formSet.has(p)) count++
+  return count
+})
+
+const selectRoleCard = (form: { role: string; permission_names: string[] }, roleKey: string) => {
+  if (roleKey === 'parent') return  // disabled
+  form.role = roleKey
+  onRoleChange(form)
+  advancedExpanded.value = false
+}
+
+const restoreDefault = (form: { role: string; permission_names: string[] }) => {
+  onRoleChange(form)
+  advancedExpanded.value = false
+}
+
+// 開啟編輯 dialog 時依偏離狀態決定 expander 初始
+const _openEditExpander = () => {
+  advancedExpanded.value = deviationCount.value > 0
+}
+
 onMounted(() => {
   fetchUsers()
   fetchPermissionDefinition()
@@ -253,31 +319,31 @@ onMounted(() => {
       <el-table-column prop="username" label="帳號" width="150" />
       <el-table-column prop="employee_name" label="員工姓名" width="120" />
       <el-table-column prop="role" label="角色" width="120">
-        <template #default="{ row }">
-          <el-tag :type="getRoleTagType(row.role)">{{ row.role_label || row.role }}</el-tag>
+        <template #default="{ row } = {}">
+          <el-tag :type="getRoleTagType(row?.role)">{{ row?.role_label || row?.role }}</el-tag>
         </template>
       </el-table-column>
       <el-table-column label="權限" width="120">
-        <template #default="{ row }">
-          <template v-if="row.role !== 'teacher'">
-            <el-tag v-if="Array.isArray(row.permission_names) && row.permission_names.includes('*')" type="success" size="small">全部</el-tag>
-            <el-tag v-else-if="isUsingRoleDefault(row)" type="info" size="small">預設</el-tag>
+        <template #default="{ row } = {}">
+          <template v-if="row?.role !== 'teacher'">
+            <el-tag v-if="Array.isArray(row?.permission_names) && row?.permission_names.includes('*')" type="success" size="small">全部</el-tag>
+            <el-tag v-else-if="row && isUsingRoleDefault(row)" type="info" size="small">預設</el-tag>
             <el-tag v-else type="warning" size="small">自訂</el-tag>
           </template>
           <span v-else style="color: var(--text-tertiary);">-</span>
         </template>
       </el-table-column>
       <el-table-column prop="is_active" label="狀態" width="80">
-        <template #default="{ row }">
-          <el-tag :type="row.is_active ? 'success' : 'info'" size="small">{{ row.is_active ? '啟用' : '停用' }}</el-tag>
+        <template #default="{ row } = {}">
+          <el-tag :type="row?.is_active ? 'success' : 'info'" size="small">{{ row?.is_active ? '啟用' : '停用' }}</el-tag>
         </template>
       </el-table-column>
       <el-table-column prop="last_login" label="最後登入" width="180" />
       <el-table-column label="操作" width="220">
-        <template #default="{ row }">
-          <el-button link type="primary" @click="handleEditUser(row)">編輯</el-button>
-          <el-button link type="primary" @click="handleResetPassword(row)">重設密碼</el-button>
-          <el-button link type="danger" @click="handleDeleteUser(row)">刪除</el-button>
+        <template #default="{ row } = {}">
+          <el-button v-if="row" link type="primary" @click="handleEditUser(row)">編輯</el-button>
+          <el-button v-if="row" link type="primary" @click="handleResetPassword(row)">重設密碼</el-button>
+          <el-button v-if="row" link type="danger" @click="handleDeleteUser(row)">刪除</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -297,45 +363,94 @@ onMounted(() => {
           <el-input v-model="userForm.password" type="password" placeholder="初始密碼" show-password />
         </el-form-item>
         <el-form-item label="角色">
-          <el-select v-model="userForm.role" @change="onRoleChange(userForm)" style="width: 200px;">
-            <el-option
-              v-for="(config, role) in permissionDefinition.roles"
-              :key="role"
-              :label="config.label"
-              :value="role"
-            />
-          </el-select>
-          <span v-if="userForm.role === 'teacher'" style="color: var(--text-tertiary); margin-left: 12px;">僅限教師專區</span>
-        </el-form-item>
-        <el-form-item v-if="userForm.role !== 'teacher'" label="權限">
-          <div class="permission-section">
-            <div class="permission-actions">
-              <el-button size="small" @click="selectAllPermissions(userForm)">全選</el-button>
-              <el-button size="small" @click="clearAllPermissions(userForm)">清除</el-button>
-            </div>
-            <div v-for="group in permissionDefinition.groups" :key="group.name" class="permission-group">
-              <div class="permission-group-title">{{ group.name }}</div>
-              <div class="permission-checkboxes">
-                <el-checkbox
-                  v-for="perm in (group.permissions || [])"
-                  :key="perm"
-                  :model-value="isPermissionChecked(userForm, perm)"
-                  @change="togglePermission(userForm, perm)"
-                >
-                  {{ getPermissionLabel(perm) }}
-                </el-checkbox>
+          <div v-if="userDialogVisible" class="role-cards-grid">
+            <div
+              v-for="roleKey in ROLE_ORDER"
+              :key="roleKey"
+              class="role-card"
+              :data-role="roleKey"
+              :class="{
+                'role-card--active': userForm.role === roleKey,
+                'is-disabled': roleKey === 'parent',
+              }"
+              :title="roleKey === 'parent' ? '家長帳號請從家長端 LIFF 綁定' : ''"
+              @click="selectRoleCard(userForm, roleKey)"
+            >
+              <div class="role-card__icon">{{ ROLE_ICONS[roleKey] || '👤' }}</div>
+              <div class="role-card__label">{{ permissionDefinition.roles[roleKey]?.label || roleKey }}</div>
+              <div class="role-card__desc">{{ permissionDefinition.roles[roleKey]?.description || '' }}</div>
+              <div class="role-card__count">
+                <el-tag size="small" :type="roleKey === 'admin' ? 'danger' : 'info'">
+                  {{ permissionDefinition.roles[roleKey]?.permissions?.includes('*') ? '全部' : `${permissionDefinition.roles[roleKey]?.permissions?.length ?? 0} 條` }}
+                </el-tag>
               </div>
-              <div v-if="group.split_permissions" class="split-permission-list">
-                <div v-for="sp in group.split_permissions" :key="sp.read" class="split-permission-row">
-                  <span class="split-permission-label">{{ sp.module }}</span>
-                  <el-checkbox
-                    :model-value="isPermissionChecked(userForm, sp.read)"
-                    @change="togglePermission(userForm, sp.read)"
-                  >檢視</el-checkbox>
-                  <el-checkbox
-                    :model-value="isPermissionChecked(userForm, sp.write)"
-                    @change="togglePermission(userForm, sp.write)"
-                  >編輯</el-checkbox>
+            </div>
+          </div>
+        </el-form-item>
+
+        <el-form-item v-if="userForm.role !== 'teacher' && userForm.role !== 'parent'" label="權限">
+          <div class="advanced-tuning">
+            <div class="advanced-tuning__header">
+              <button
+                type="button"
+                class="advanced-tuning-toggle"
+                @click="advancedExpanded = !advancedExpanded"
+              >
+                <span>{{ advancedExpanded ? '▼' : '▶' }} 進階微調</span>
+                <el-tag
+                  class="deviation-badge"
+                  :type="deviationCount > 0 ? 'warning' : 'info'"
+                  size="small"
+                >
+                  {{ deviationCount > 0 ? `已偏離 ${deviationCount} 項` : '預設' }}
+                </el-tag>
+              </button>
+              <el-button
+                v-if="deviationCount > 0"
+                class="restore-default-btn"
+                link
+                type="primary"
+                size="small"
+                @click="restoreDefault(userForm)"
+              >
+                ↻ 還原預設
+              </el-button>
+            </div>
+            <div v-show="advancedExpanded" class="advanced-tuning-content">
+              <div class="permission-section">
+                <div class="permission-actions">
+                  <el-button size="small" @click="selectAllPermissions(userForm)">全選</el-button>
+                  <el-button size="small" @click="clearAllPermissions(userForm)">清除</el-button>
+                </div>
+                <div v-for="group in permissionDefinition.groups" :key="group.name" class="permission-group">
+                  <div class="permission-group-title">{{ group.name }}</div>
+                  <div class="permission-checkboxes">
+                    <el-checkbox
+                      v-for="perm in (group.permissions || [])"
+                      :key="perm"
+                      :model-value="isPermissionChecked(userForm, perm)"
+                      @change="togglePermission(userForm, perm)"
+                    >
+                      {{ getPermissionLabel(perm) }}
+                    </el-checkbox>
+                  </div>
+                  <div v-if="group.split_permissions" class="split-permission-list">
+                    <div v-for="sp in group.split_permissions" :key="sp.read" class="split-permission-row">
+                      <span class="split-permission-label">{{ sp.module }}</span>
+                      <el-checkbox
+                        :model-value="isPermissionChecked(userForm, sp.read)"
+                        @change="togglePermission(userForm, sp.read)"
+                      >
+                        <span style="display:none">{{ sp.module }}</span>檢視
+                      </el-checkbox>
+                      <el-checkbox
+                        :model-value="isPermissionChecked(userForm, sp.write)"
+                        @change="togglePermission(userForm, sp.write)"
+                      >
+                        <span style="display:none">{{ sp.module }}</span>編輯
+                      </el-checkbox>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -369,45 +484,94 @@ onMounted(() => {
           <el-input :model-value="editUserForm.username" disabled />
         </el-form-item>
         <el-form-item label="角色">
-          <el-select v-model="editUserForm.role" @change="onRoleChange(editUserForm)" style="width: 200px;">
-            <el-option
-              v-for="(config, role) in permissionDefinition.roles"
-              :key="role"
-              :label="config.label"
-              :value="role"
-            />
-          </el-select>
-          <span v-if="editUserForm.role === 'teacher'" style="color: var(--text-tertiary); margin-left: 12px;">僅限教師專區</span>
-        </el-form-item>
-        <el-form-item v-if="editUserForm.role !== 'teacher'" label="權限">
-          <div class="permission-section">
-            <div class="permission-actions">
-              <el-button size="small" @click="selectAllPermissions(editUserForm)">全選</el-button>
-              <el-button size="small" @click="clearAllPermissions(editUserForm)">清除</el-button>
-            </div>
-            <div v-for="group in permissionDefinition.groups" :key="group.name" class="permission-group">
-              <div class="permission-group-title">{{ group.name }}</div>
-              <div class="permission-checkboxes">
-                <el-checkbox
-                  v-for="perm in (group.permissions || [])"
-                  :key="perm"
-                  :model-value="isPermissionChecked(editUserForm, perm)"
-                  @change="togglePermission(editUserForm, perm)"
-                >
-                  {{ getPermissionLabel(perm) }}
-                </el-checkbox>
+          <div v-if="editUserDialogVisible" class="role-cards-grid">
+            <div
+              v-for="roleKey in ROLE_ORDER"
+              :key="roleKey"
+              class="role-card"
+              :data-role="roleKey"
+              :class="{
+                'role-card--active': editUserForm.role === roleKey,
+                'is-disabled': roleKey === 'parent',
+              }"
+              :title="roleKey === 'parent' ? '家長帳號請從家長端 LIFF 綁定' : ''"
+              @click="selectRoleCard(editUserForm, roleKey)"
+            >
+              <div class="role-card__icon">{{ ROLE_ICONS[roleKey] || '👤' }}</div>
+              <div class="role-card__label">{{ permissionDefinition.roles[roleKey]?.label || roleKey }}</div>
+              <div class="role-card__desc">{{ permissionDefinition.roles[roleKey]?.description || '' }}</div>
+              <div class="role-card__count">
+                <el-tag size="small" :type="roleKey === 'admin' ? 'danger' : 'info'">
+                  {{ permissionDefinition.roles[roleKey]?.permissions?.includes('*') ? '全部' : `${permissionDefinition.roles[roleKey]?.permissions?.length ?? 0} 條` }}
+                </el-tag>
               </div>
-              <div v-if="group.split_permissions" class="split-permission-list">
-                <div v-for="sp in group.split_permissions" :key="sp.read" class="split-permission-row">
-                  <span class="split-permission-label">{{ sp.module }}</span>
-                  <el-checkbox
-                    :model-value="isPermissionChecked(editUserForm, sp.read)"
-                    @change="togglePermission(editUserForm, sp.read)"
-                  >檢視</el-checkbox>
-                  <el-checkbox
-                    :model-value="isPermissionChecked(editUserForm, sp.write)"
-                    @change="togglePermission(editUserForm, sp.write)"
-                  >編輯</el-checkbox>
+            </div>
+          </div>
+        </el-form-item>
+
+        <el-form-item v-if="editUserForm.role !== 'teacher' && editUserForm.role !== 'parent'" label="權限">
+          <div class="advanced-tuning">
+            <div class="advanced-tuning__header">
+              <button
+                type="button"
+                class="advanced-tuning-toggle"
+                @click="advancedExpanded = !advancedExpanded"
+              >
+                <span>{{ advancedExpanded ? '▼' : '▶' }} 進階微調</span>
+                <el-tag
+                  class="deviation-badge"
+                  :type="deviationCount > 0 ? 'warning' : 'info'"
+                  size="small"
+                >
+                  {{ deviationCount > 0 ? `已偏離 ${deviationCount} 項` : '預設' }}
+                </el-tag>
+              </button>
+              <el-button
+                v-if="deviationCount > 0"
+                class="restore-default-btn"
+                link
+                type="primary"
+                size="small"
+                @click="restoreDefault(editUserForm)"
+              >
+                ↻ 還原預設
+              </el-button>
+            </div>
+            <div v-show="advancedExpanded" class="advanced-tuning-content">
+              <div class="permission-section">
+                <div class="permission-actions">
+                  <el-button size="small" @click="selectAllPermissions(editUserForm)">全選</el-button>
+                  <el-button size="small" @click="clearAllPermissions(editUserForm)">清除</el-button>
+                </div>
+                <div v-for="group in permissionDefinition.groups" :key="group.name" class="permission-group">
+                  <div class="permission-group-title">{{ group.name }}</div>
+                  <div class="permission-checkboxes">
+                    <el-checkbox
+                      v-for="perm in (group.permissions || [])"
+                      :key="perm"
+                      :model-value="isPermissionChecked(editUserForm, perm)"
+                      @change="togglePermission(editUserForm, perm)"
+                    >
+                      {{ getPermissionLabel(perm) }}
+                    </el-checkbox>
+                  </div>
+                  <div v-if="group.split_permissions" class="split-permission-list">
+                    <div v-for="sp in group.split_permissions" :key="sp.read" class="split-permission-row">
+                      <span class="split-permission-label">{{ sp.module }}</span>
+                      <el-checkbox
+                        :model-value="isPermissionChecked(editUserForm, sp.read)"
+                        @change="togglePermission(editUserForm, sp.read)"
+                      >
+                        <span style="display:none">{{ sp.module }}</span>檢視
+                      </el-checkbox>
+                      <el-checkbox
+                        :model-value="isPermissionChecked(editUserForm, sp.write)"
+                        @change="togglePermission(editUserForm, sp.write)"
+                      >
+                        <span style="display:none">{{ sp.module }}</span>編輯
+                      </el-checkbox>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -503,5 +667,94 @@ onMounted(() => {
 
 .split-permission-row .el-checkbox {
   margin-right: 0;
+}
+
+.role-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  width: 100%;
+}
+
+@media (max-width: 720px) {
+  .role-cards-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.role-card {
+  padding: 12px;
+  border: 2px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  background: #fff;
+  text-align: center;
+}
+
+.role-card:hover:not(.is-disabled) {
+  border-color: var(--el-color-primary-light-5);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.role-card--active {
+  border-color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+}
+
+.role-card.is-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.role-card__icon {
+  font-size: 24px;
+  margin-bottom: 4px;
+}
+
+.role-card__label {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.role-card__desc {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin: 6px 0 8px;
+  min-height: 28px;
+  line-height: 1.3;
+}
+
+.role-card__count {
+  display: flex;
+  justify-content: center;
+}
+
+.advanced-tuning {
+  width: 100%;
+}
+
+.advanced-tuning__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.advanced-tuning-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: none;
+  padding: 4px 0;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.advanced-tuning-toggle:hover {
+  color: var(--el-color-primary);
 }
 </style>
