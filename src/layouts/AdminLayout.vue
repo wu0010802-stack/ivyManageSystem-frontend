@@ -7,6 +7,7 @@
     <AdminSidebar
       :pending-approvals="notificationStore.approvalCount"
       :pending-activity-inquiries="notificationStore.activityInquiryCount"
+      :pending-high-risk-audit="unackHighRiskCount"
       :is-mobile="isMobile"
       :mobile-open="sidebarOpen"
       @close-sidebar="closeSidebar"
@@ -31,11 +32,13 @@ import AdminSidebar from '../components/layout/AdminSidebar.vue'
 import AdminHeader from '../components/layout/AdminHeader.vue'
 import { isLoggedIn } from '@/utils/auth'
 import { useNotificationStore } from '@/stores/notification'
+import { useHighRiskAuditCount } from '@/composables/useHighRiskAuditCount'
 
 const NOTIFICATION_POLL_MS = 60_000
 
 const route = useRoute()
 const notificationStore = useNotificationStore()
+const { unackCount: unackHighRiskCount } = useHighRiskAuditCount()
 const isMobile = ref(false)
 const sidebarOpen = ref(false)
 let pollTimer: ReturnType<typeof setInterval> | null = null

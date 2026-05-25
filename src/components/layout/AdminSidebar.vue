@@ -7,7 +7,7 @@
         <span v-if="!isCollapse" class="logo-text">常春藤管理系統</span>
       </transition>
     </div>
-    
+
     <el-scrollbar>
       <el-menu
         :default-active="activeMenu"
@@ -20,20 +20,22 @@
         background-color="#1e293b"
         @select="onMenuSelect"
       >
-        <!-- 首頁區域 - 不摺疊 -->
+        <!-- 1. 儀表板 -->
         <el-menu-item v-if="canView.DASHBOARD" index="/">
           <el-icon><DataBoard /></el-icon>
           <template #title>儀表板</template>
         </el-menu-item>
-        <el-menu-item v-if="canView.APPROVALS" index="/approvals">
+
+        <!-- 2. 工作台 (合併簽核 + 高風險事件) -->
+        <el-menu-item v-if="canView.APPROVALS" index="/workbench">
           <el-icon><Finished /></el-icon>
           <template #title>
-            審核工作台
-            <el-badge v-if="pendingApprovals > 0" :value="pendingApprovals" :max="99" class="menu-badge" />
+            工作台
+            <el-badge v-if="workbenchBadge > 0" :value="workbenchBadge" :max="99" class="menu-badge" />
           </template>
         </el-menu-item>
 
-        <!-- 假勤管理 -->
+        <!-- 3. 人事薪資 -->
         <el-sub-menu v-if="hasVisibleLeaveItems" index="group-leave">
           <template #title>
             <el-icon><Clock /></el-icon>
@@ -47,10 +49,6 @@
             <el-icon><Money /></el-icon>
             <template #title>薪資管理</template>
           </el-menu-item>
-          <el-menu-item v-if="canView.SETTINGS_READ || canView.SALARY_READ" index="/appraisal-management">
-            <el-icon><Medal /></el-icon>
-            <template #title>考核管理</template>
-          </el-menu-item>
           <el-menu-item v-if="canView.YEAR_END_READ" index="/year_end/cycles">
             <el-icon><Trophy /></el-icon>
             <template #title>年終獎金</template>
@@ -58,14 +56,6 @@
           <el-menu-item v-if="canView.APPRAISAL_FINALIZE" index="/year-end/appraisal-payout">
             <el-icon><Medal /></el-icon>
             <template #title>考核年終 payout</template>
-          </el-menu-item>
-          <el-menu-item v-if="canView.SALARY_READ" index="/gov-reports">
-            <el-icon><Files /></el-icon>
-            <template #title>政府申報匯出</template>
-          </el-menu-item>
-          <el-menu-item v-if="canView.SALARY_READ" index="/admin/gov-reports/monthly">
-            <el-icon><DataAnalysis /></el-icon>
-            <template #title>月度月報</template>
           </el-menu-item>
           <el-menu-item v-if="canView.ATTENDANCE_READ" index="/attendance">
             <el-icon><Clock /></el-icon>
@@ -85,7 +75,7 @@
           </el-menu-item>
         </el-sub-menu>
 
-        <!-- 學生與班級 -->
+        <!-- 4. 學生與班級 (不動) -->
         <el-sub-menu v-if="hasVisibleStudentItems" index="group-students">
           <template #title>
             <el-icon><School /></el-icon>
@@ -113,7 +103,7 @@
           </el-menu-item>
         </el-sub-menu>
 
-        <!-- 園務統計 -->
+        <!-- 5. 園務統計 (只剩招生統計 + 官網報名) -->
         <el-sub-menu v-if="hasVisibleStatsItems" index="group-stats">
           <template #title>
             <el-icon><TrendCharts /></el-icon>
@@ -127,17 +117,9 @@
             <el-icon><Document /></el-icon>
             <template #title>官網報名</template>
           </el-menu-item>
-          <el-menu-item v-if="canView.REPORTS" index="/reports">
-            <el-icon><Files /></el-icon>
-            <template #title>報表統計</template>
-          </el-menu-item>
-          <el-menu-item v-if="canView.BUSINESS_ANALYTICS" index="/analytics">
-            <el-icon><DataAnalysis /></el-icon>
-            <template #title>經營分析</template>
-          </el-menu-item>
         </el-sub-menu>
 
-        <!-- 園務行政 -->
+        <!-- 6. 園務行政 (不動) -->
         <el-sub-menu v-if="hasVisibleAdminItems" index="group-admin">
           <template #title>
             <el-icon><Files /></el-icon>
@@ -157,7 +139,7 @@
           </el-menu-item>
         </el-sub-menu>
 
-        <!-- 課後才藝 -->
+        <!-- 7. 課後才藝 (移除修改紀錄 + 報名時間設定) -->
         <el-sub-menu v-if="hasVisibleActivityItems" index="group-activity">
           <template #title>
             <el-icon><Star /></el-icon>
@@ -190,21 +172,45 @@
               <el-badge v-if="pendingActivityInquiries > 0" :value="pendingActivityInquiries" :max="99" class="menu-badge" />
             </template>
           </el-menu-item>
-          <el-menu-item v-if="canView.ACTIVITY_WRITE" index="/activity/settings">
-            <el-icon><Timer /></el-icon>
-            <template #title>報名時間設定</template>
-          </el-menu-item>
-          <el-menu-item v-if="canView.ACTIVITY_READ" index="/activity/changes">
-            <el-icon><List /></el-icon>
-            <template #title>修改紀錄</template>
-          </el-menu-item>
           <el-menu-item v-if="canView.ACTIVITY_READ" index="/activity/attendance">
             <el-icon><Checked /></el-icon>
             <template #title>點名管理</template>
           </el-menu-item>
         </el-sub-menu>
 
-        <!-- 系統設定 -->
+        <!-- 8. 報表 (新一級，收查詢類) -->
+        <el-sub-menu v-if="hasVisibleReportsItems" index="group-reports">
+          <template #title>
+            <el-icon><DataAnalysis /></el-icon>
+            <span>報表</span>
+          </template>
+          <el-menu-item v-if="canView.AUDIT_LOGS" index="/audit-logs">
+            <el-icon><Document /></el-icon>
+            <template #title>操作紀錄</template>
+          </el-menu-item>
+          <el-menu-item v-if="canView.ACTIVITY_READ" index="/activity/changes">
+            <el-icon><List /></el-icon>
+            <template #title>修改紀錄</template>
+          </el-menu-item>
+          <el-menu-item v-if="canView.SALARY_READ" index="/admin/gov-reports/monthly">
+            <el-icon><DataAnalysis /></el-icon>
+            <template #title>月度月報</template>
+          </el-menu-item>
+          <el-menu-item v-if="canView.SALARY_READ" index="/gov-reports">
+            <el-icon><Files /></el-icon>
+            <template #title>政府申報匯出</template>
+          </el-menu-item>
+          <el-menu-item v-if="canView.REPORTS" index="/reports">
+            <el-icon><Files /></el-icon>
+            <template #title>報表統計</template>
+          </el-menu-item>
+          <el-menu-item v-if="canView.BUSINESS_ANALYTICS" index="/analytics">
+            <el-icon><DataAnalysis /></el-icon>
+            <template #title>經營分析</template>
+          </el-menu-item>
+        </el-sub-menu>
+
+        <!-- 9. 系統設定 (移除操作紀錄，新增考核管理 + 報名時間設定) -->
         <el-sub-menu v-if="hasVisibleSettingsItems" index="group-settings">
           <template #title>
             <el-icon><Setting /></el-icon>
@@ -214,9 +220,13 @@
             <el-icon><Setting /></el-icon>
             <template #title>一般設定</template>
           </el-menu-item>
-          <el-menu-item v-if="canView.AUDIT_LOGS" index="/audit-logs">
-            <el-icon><Document /></el-icon>
-            <template #title>操作紀錄</template>
+          <el-menu-item v-if="canView.SETTINGS_READ || canView.SALARY_READ" index="/appraisal-management">
+            <el-icon><Medal /></el-icon>
+            <template #title>考核管理</template>
+          </el-menu-item>
+          <el-menu-item v-if="canView.ACTIVITY_WRITE" index="/activity/settings">
+            <el-icon><Timer /></el-icon>
+            <template #title>報名時間設定</template>
           </el-menu-item>
         </el-sub-menu>
       </el-menu>
@@ -250,11 +260,13 @@ import { PERMISSION_NAMES, getUserInfo } from '@/utils/auth'
 const props = withDefaults(defineProps<{
   pendingApprovals?: number
   pendingActivityInquiries?: number
+  pendingHighRiskAudit?: number
   isMobile?: boolean
   mobileOpen?: boolean
 }>(), {
   pendingApprovals: 0,
   pendingActivityInquiries: 0,
+  pendingHighRiskAudit: 0,
   isMobile: false,
   mobileOpen: false,
 })
@@ -291,12 +303,17 @@ const canView = computed(() => {
 
 const activeMenu = computed(() => route.path)
 
+// 工作台 badge = 待簽核 + 高風險未確認
+const workbenchBadge = computed(() =>
+  (props.pendingApprovals ?? 0) + (props.pendingHighRiskAudit ?? 0)
+)
+
 // 檢查子選單是否有任何可見項目
 const hasVisibleLeaveItems = computed(() =>
   canView.value.EMPLOYEES_READ || canView.value.SALARY_READ || canView.value.SALARY_WRITE ||
   canView.value.ATTENDANCE_READ || canView.value.LEAVES_READ ||
   canView.value.OVERTIME_READ || canView.value.MEETINGS ||
-  canView.value.SCHEDULE || canView.value.SETTINGS_READ
+  canView.value.SCHEDULE || canView.value.YEAR_END_READ || canView.value.APPRAISAL_FINALIZE
 )
 
 const hasVisibleStudentItems = computed(() =>
@@ -304,7 +321,7 @@ const hasVisibleStudentItems = computed(() =>
 )
 
 const hasVisibleStatsItems = computed(() =>
-  canView.value.RECRUITMENT_READ || canView.value.REPORTS || canView.value.BUSINESS_ANALYTICS
+  canView.value.RECRUITMENT_READ
 )
 
 const hasVisibleAdminItems = computed(() =>
@@ -313,11 +330,16 @@ const hasVisibleAdminItems = computed(() =>
 )
 
 const hasVisibleActivityItems = computed(() =>
-  canView.value.ACTIVITY_READ || canView.value.ACTIVITY_WRITE
+  canView.value.ACTIVITY_READ || canView.value.ACTIVITY_WRITE || canView.value.ACTIVITY_PAYMENT_APPROVE
+)
+
+const hasVisibleReportsItems = computed(() =>
+  canView.value.AUDIT_LOGS || canView.value.ACTIVITY_READ ||
+  canView.value.SALARY_READ || canView.value.REPORTS || canView.value.BUSINESS_ANALYTICS
 )
 
 const hasVisibleSettingsItems = computed(() =>
-  canView.value.SETTINGS_READ || canView.value.AUDIT_LOGS
+  canView.value.SETTINGS_READ || canView.value.SALARY_READ || canView.value.ACTIVITY_WRITE
 )
 
 const toggleCollapse = () => {
