@@ -259,12 +259,12 @@ import {
   PAYMENT_METHOD_OPTIONS,
   paymentMethodLabel,
 } from '@/api/vendorPayment'
-import { hasPermission, PERMISSION_VALUES } from '@/utils/auth'
+import { hasPermission, PERMISSION_NAMES } from '@/utils/auth'
 import VendorPaymentSignDialog from '@/components/VendorPaymentSignDialog.vue'
 
 const paymentMethodOptions = PAYMENT_METHOD_OPTIONS
 
-const canWrite = computed(() => hasPermission(String(PERMISSION_VALUES.VENDOR_PAYMENT_WRITE)))
+const canWrite = computed(() => hasPermission(PERMISSION_NAMES.VENDOR_PAYMENT_WRITE))
 
 interface Attachment { key: string; filename: string; size: number }
 const items = ref<Record<string, unknown>[]>([])

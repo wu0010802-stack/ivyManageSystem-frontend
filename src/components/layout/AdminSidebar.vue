@@ -245,7 +245,7 @@ import {
   Star, Collection, ChatDotRound, List, Van, CreditCard, Checked,
   Medal, Trophy
 } from '@element-plus/icons-vue'
-import { PERMISSION_VALUES, getUserInfo } from '@/utils/auth'
+import { PERMISSION_NAMES, getUserInfo } from '@/utils/auth'
 
 const props = withDefaults(defineProps<{
   pendingApprovals?: number
@@ -274,18 +274,18 @@ const canView = computed(() => {
     return {}
   }
 
-  const permissions = userInfo.permissions
-  if (permissions === -1 || permissions === null || permissions === undefined) {
-    return Object.fromEntries(Object.keys(PERMISSION_VALUES).map((name) => [name, true]))
+  const permNames = userInfo.permission_names as string[] | null | undefined
+  // 後端 resolve 失敗或刻意未設 → 視為無權限（lockdown），避免空 sidebar 反而誤露功能
+  if (!permNames) {
+    return Object.fromEntries(Object.keys(PERMISSION_NAMES).map((name) => [name, false]))
   }
-
-  // 使用 BigInt 運算，避免高位元（≥ 2^31）在 JS 32-bit 有符號整數中溢位
-  const permsBig = BigInt(permissions as string | number | bigint | boolean)
+  // wildcard：全開
+  if (permNames.includes('*')) {
+    return Object.fromEntries(Object.keys(PERMISSION_NAMES).map((name) => [name, true]))
+  }
+  const permSet = new Set(permNames)
   return Object.fromEntries(
-    Object.entries(PERMISSION_VALUES).map(([name, value]) => {
-      const valBig = BigInt(value)
-      return [name, (permsBig & valBig) === valBig]
-    })
+    Object.keys(PERMISSION_NAMES).map((name) => [name, permSet.has(name)])
   )
 })
 

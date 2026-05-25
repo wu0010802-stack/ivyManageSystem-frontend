@@ -1,16 +1,15 @@
 /**
- * 登入 → 權限 → 路由存取 整合流程測試
+ * 登入 → 權限 → 路由存取 整合流程測試（text[] 版本）
  *
  * 測試重點：
  *   1. 未登入（無 userInfo）時，所有管理端功能都被拒絕
  *   2. teacher 只能存取 portal 路由
- *   3. admin 依 permissions bit mask 控制可存取的功能與路由
- *   4. getAllowedRoutes 根據角色與 permissions 回傳正確清單
+ *   3. admin 依 permission_names 控制可存取的功能與路由
+ *   4. getAllowedRoutes 根據角色與 permission_names 回傳正確清單
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  getUserInfo,
   setUserInfo,
   clearAuth,
   isLoggedIn,
@@ -18,12 +17,7 @@ import {
   hasWritePermission,
   canAccessRoute,
   getAllowedRoutes,
-  PERMISSION_VALUES,
 } from '@/utils/auth'
-
-function buildPermissions(...permNames) {
-  return permNames.reduce((acc, name) => acc + PERMISSION_VALUES[name], 0)
-}
 
 describe('登入 → 權限 → 路由整合流程', () => {
   beforeEach(() => {
@@ -52,9 +46,7 @@ describe('登入 → 權限 → 路由整合流程', () => {
       expect(canAccessRoute('/overtime')).toBe(false)
     })
 
-    it('canAccessRoute 未登入時所有路由（含 /login）均回傳 false', () => {
-      // canAccessRoute 以 userInfo 為守衛，未登入一律 false；
-      // /login 路由是由 Vue Router 守衛另外放行，不依賴此函式
+    it('canAccessRoute 未登入時 /login 也回傳 false（Vue Router 守衛另外放行）', () => {
       expect(canAccessRoute('/login')).toBe(false)
     })
 
@@ -67,7 +59,12 @@ describe('登入 → 權限 → 路由整合流程', () => {
 
   describe('teacher 角色', () => {
     beforeEach(() => {
-      setUserInfo({ id: 'T001', name: '陳老師', role: 'teacher', permissions: 0 })
+      setUserInfo({
+        id: 'T001',
+        name: '陳老師',
+        role: 'teacher',
+        permission_names: [],
+      })
     })
 
     it('isLoggedIn 回傳 true', () => {
@@ -99,11 +96,16 @@ describe('登入 → 權限 → 路由整合流程', () => {
     })
   })
 
-  // ── admin 角色 — 超級管理者（permissions = -1）─────────────────────────────
+  // ── admin 角色 — 超級管理者（permission_names = ['*']）─────────────────────
 
-  describe('admin — 超級管理者 (permissions = -1)', () => {
+  describe("admin — 超級管理者 (permission_names = ['*'])", () => {
     beforeEach(() => {
-      setUserInfo({ id: 'A001', name: '管理員', role: 'admin', permissions: -1 })
+      setUserInfo({
+        id: 'A001',
+        name: '管理員',
+        role: 'admin',
+        permission_names: ['*'],
+      })
     })
 
     it('hasPermission 任何權限均回傳 true', () => {
@@ -128,14 +130,14 @@ describe('登入 → 權限 → 路由整合流程', () => {
     })
   })
 
-  // ── admin 角色 — 部分權限（bit mask）─────────────────────────────────────────
+  // ── admin 角色 — 部分權限（list[str]）──────────────────────────────────────
 
-  describe('admin — 部分權限（bit mask）', () => {
+  describe('admin — 部分權限（list[str]）', () => {
     it('僅有 LEAVES_READ 時可存取 /leaves，不可存取 /salary', () => {
       setUserInfo({
         id: 'A002',
         role: 'admin',
-        permissions: buildPermissions('LEAVES_READ'),
+        permission_names: ['LEAVES_READ'],
       })
 
       expect(hasPermission('LEAVES_READ')).toBe(true)
@@ -148,7 +150,7 @@ describe('登入 → 權限 → 路由整合流程', () => {
       setUserInfo({
         id: 'A003',
         role: 'admin',
-        permissions: buildPermissions('LEAVES_READ'),
+        permission_names: ['LEAVES_READ'],
       })
 
       expect(hasPermission('LEAVES_READ')).toBe(true)
@@ -160,7 +162,7 @@ describe('登入 → 權限 → 路由整合流程', () => {
       setUserInfo({
         id: 'A004',
         role: 'admin',
-        permissions: buildPermissions('LEAVES_READ', 'LEAVES_WRITE'),
+        permission_names: ['LEAVES_READ', 'LEAVES_WRITE'],
       })
 
       expect(hasPermission('LEAVES_READ')).toBe(true)
@@ -171,10 +173,9 @@ describe('登入 → 權限 → 路由整合流程', () => {
       setUserInfo({
         id: 'A005',
         role: 'admin',
-        permissions: buildPermissions('MEETINGS'),
+        permission_names: ['MEETINGS'],
       })
 
-      // OVERTIME_READ 無，但 MEETINGS 有
       expect(hasPermission('OVERTIME_READ')).toBe(false)
       expect(hasPermission('MEETINGS')).toBe(true)
       expect(canAccessRoute('/overtime')).toBe(true)
@@ -184,7 +185,7 @@ describe('登入 → 權限 → 路由整合流程', () => {
       setUserInfo({
         id: 'A006',
         role: 'admin',
-        permissions: buildPermissions('LEAVES_READ'),
+        permission_names: ['LEAVES_READ'],
       })
 
       expect(canAccessRoute('/overtime')).toBe(false)
@@ -194,7 +195,7 @@ describe('登入 → 權限 → 路由整合流程', () => {
       setUserInfo({
         id: 'A007',
         role: 'admin',
-        permissions: buildPermissions('LEAVES_READ', 'EMPLOYEES_READ'),
+        permission_names: ['LEAVES_READ', 'EMPLOYEES_READ'],
       })
 
       const routes = getAllowedRoutes()
@@ -209,7 +210,7 @@ describe('登入 → 權限 → 路由整合流程', () => {
 
   describe('clearAuth 後狀態', () => {
     it('登入後 clearAuth 可正確清除所有狀態', () => {
-      setUserInfo({ id: 'A001', role: 'admin', permissions: -1 })
+      setUserInfo({ id: 'A001', role: 'admin', permission_names: ['*'] })
       expect(isLoggedIn()).toBe(true)
       expect(hasPermission('SALARY_READ')).toBe(true)
 
@@ -222,31 +223,29 @@ describe('登入 → 權限 → 路由整合流程', () => {
     })
   })
 
-  // ── permissions = null/undefined（舊資料相容）──────────────────────────────
+  // ── permission_names 為 null（resolve 在後端） ─────────────────────────────
 
-  describe('permissions 為 null 或 undefined（全權限相容模式）', () => {
-    it('permissions = null 時 admin hasPermission 回傳 true', () => {
-      setUserInfo({ id: 'A008', role: 'admin', permissions: null })
-      expect(hasPermission('SALARY_READ')).toBe(true)
-    })
-
-    it('permissions = undefined 時 admin hasPermission 回傳 true', () => {
-      setUserInfo({ id: 'A009', role: 'admin' })  // permissions 未設定
-      expect(hasPermission('LEAVES_READ')).toBe(true)
+  describe('permission_names 為 null', () => {
+    it('null 視為無顯式權限，hasPermission 回傳 false', () => {
+      setUserInfo({ id: 'A008', role: 'admin', permission_names: null })
+      expect(hasPermission('SALARY_READ')).toBe(false)
     })
   })
 
   // ── 無效或未知的 permissionName ────────────────────────────────────────────
 
   describe('無效或未知的 permissionName', () => {
-    it('permissions = -1（超級管理者）時，未知名稱也回傳 true（全開模式）', () => {
-      // permissions = -1 表示全部開放，不做 bit 檢查，直接 return true
-      setUserInfo({ id: 'A010', role: 'admin', permissions: -1 })
+    it("wildcard（permission_names=['*']）時，未知名稱也回傳 true", () => {
+      setUserInfo({ id: 'A010', role: 'admin', permission_names: ['*'] })
       expect(hasPermission('NONEXISTENT_PERMISSION')).toBe(true)
     })
 
-    it('部分 permissions 時，未知名稱回傳 false（找不到對應 bit value）', () => {
-      setUserInfo({ id: 'A011', role: 'admin', permissions: buildPermissions('LEAVES_READ') })
+    it('部分 permissions 時，未知名稱回傳 false', () => {
+      setUserInfo({
+        id: 'A011',
+        role: 'admin',
+        permission_names: ['LEAVES_READ'],
+      })
       expect(hasPermission('NONEXISTENT_PERMISSION')).toBe(false)
     })
   })

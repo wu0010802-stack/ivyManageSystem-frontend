@@ -6,10 +6,9 @@ import {
   getAllowedRoutes,
   setUserInfo,
   clearAuth,
-  PERMISSION_VALUES,
 } from '@/utils/auth'
 
-describe('權限位元邏輯（BigInt 正確性）', () => {
+describe('權限邏輯（text[] 版本）', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: true })))
     clearAuth({ notifyServer: false })
@@ -22,81 +21,68 @@ describe('權限位元邏輯（BigInt 正確性）', () => {
       expect(hasPermission('EMPLOYEES_READ')).toBe(false)
     })
 
-    it('teacher 角色對任何管理端權限都回傳 false', () => {
-      setUserInfo({ role: 'teacher', permissions: -1 })
+    it("teacher 角色對任何管理端權限都回傳 false（即便擁有 wildcard）", () => {
+      setUserInfo({ role: 'teacher', permission_names: ['*'] })
       expect(hasPermission('EMPLOYEES_READ')).toBe(false)
       expect(hasPermission('SALARY_WRITE')).toBe(false)
     })
 
-    it('admin + permissions=-1 時一律回傳 true（super admin）', () => {
-      setUserInfo({ role: 'admin', permissions: -1 })
+    it("admin + permission_names=['*'] 時一律回傳 true（super admin）", () => {
+      setUserInfo({ role: 'admin', permission_names: ['*'] })
       expect(hasPermission('EMPLOYEES_READ')).toBe(true)
       expect(hasPermission('SALARY_WRITE')).toBe(true)
       expect(hasPermission('RECRUITMENT_WRITE')).toBe(true)
     })
 
-    it('permissions 為 null / undefined 時視為全權限', () => {
-      setUserInfo({ role: 'admin', permissions: null })
-      expect(hasPermission('EMPLOYEES_READ')).toBe(true)
-
-      setUserInfo({ role: 'admin', permissions: undefined })
-      expect(hasPermission('EMPLOYEES_READ')).toBe(true)
+    it('permission_names = null 時回傳 false（resolve 在後端，前端 null 視為無顯式權限）', () => {
+      setUserInfo({ role: 'admin', permission_names: null })
+      expect(hasPermission('EMPLOYEES_READ')).toBe(false)
     })
 
-    it('單一低位權限（EMPLOYEES_READ = 1<<8）能正確辨識', () => {
-      setUserInfo({
-        role: 'admin',
-        permissions: PERMISSION_VALUES.EMPLOYEES_READ,
-      })
+    it('permission_names = undefined 時回傳 false', () => {
+      setUserInfo({ role: 'admin' })
+      expect(hasPermission('EMPLOYEES_READ')).toBe(false)
+    })
+
+    it('單一權限 EMPLOYEES_READ 能正確辨識', () => {
+      setUserInfo({ role: 'admin', permission_names: ['EMPLOYEES_READ'] })
       expect(hasPermission('EMPLOYEES_READ')).toBe(true)
       expect(hasPermission('EMPLOYEES_WRITE')).toBe(false)
       expect(hasPermission('SALARY_READ')).toBe(false)
     })
 
-    it('組合低位權限用 OR 合併可同時擁有多項', () => {
-      const combined =
-        PERMISSION_VALUES.EMPLOYEES_READ | PERMISSION_VALUES.SALARY_READ
-      setUserInfo({ role: 'admin', permissions: combined })
+    it('組合權限可同時擁有多項', () => {
+      setUserInfo({
+        role: 'admin',
+        permission_names: ['EMPLOYEES_READ', 'SALARY_READ'],
+      })
       expect(hasPermission('EMPLOYEES_READ')).toBe(true)
       expect(hasPermission('SALARY_READ')).toBe(true)
       expect(hasPermission('EMPLOYEES_WRITE')).toBe(false)
     })
 
-    it('高位權限（DISMISSAL_CALLS_READ = 2**29）能用 BigInt 正確辨識', () => {
+    it("過去高位權限（DISMISSAL_CALLS_READ / RECRUITMENT_WRITE）改成字串後不需 BigInt", () => {
       setUserInfo({
         role: 'admin',
-        permissions: PERMISSION_VALUES.DISMISSAL_CALLS_READ,
+        permission_names: ['DISMISSAL_CALLS_READ'],
       })
       expect(hasPermission('DISMISSAL_CALLS_READ')).toBe(true)
       expect(hasPermission('DISMISSAL_CALLS_WRITE')).toBe(false)
-    })
 
-    it('極高位權限（RECRUITMENT_WRITE = 2**34）在 32-bit 溢位情況下仍正確', () => {
-      // 2**34 無法用 32-bit 整數表示，必須走 BigInt 路徑
       setUserInfo({
         role: 'admin',
-        permissions: PERMISSION_VALUES.RECRUITMENT_WRITE,
+        permission_names: ['RECRUITMENT_WRITE'],
       })
       expect(hasPermission('RECRUITMENT_WRITE')).toBe(true)
       expect(hasPermission('RECRUITMENT_READ')).toBe(false)
       expect(hasPermission('FEES_WRITE')).toBe(false)
     })
 
-    it('低位與高位權限混合組合時兩邊皆可辨識', () => {
-      const combined =
-        PERMISSION_VALUES.EMPLOYEES_READ +
-        PERMISSION_VALUES.RECRUITMENT_READ
-      setUserInfo({ role: 'admin', permissions: combined })
-      expect(hasPermission('EMPLOYEES_READ')).toBe(true)
-      expect(hasPermission('RECRUITMENT_READ')).toBe(true)
-      expect(hasPermission('EMPLOYEES_WRITE')).toBe(false)
-    })
-
     it('未知權限名稱回傳 false 不拋錯', () => {
-      setUserInfo({ role: 'admin', permissions: -1 })
-      // super admin 對未知名稱會通過早期回傳 true 因 permissions === -1
-      // 所以切成具體權限的 user 測試
-      setUserInfo({ role: 'admin', permissions: PERMISSION_VALUES.EMPLOYEES_READ })
+      setUserInfo({
+        role: 'admin',
+        permission_names: ['EMPLOYEES_READ'],
+      })
       expect(hasPermission('NOT_A_REAL_PERMISSION')).toBe(false)
     })
   })
@@ -105,7 +91,7 @@ describe('權限位元邏輯（BigInt 正確性）', () => {
     it('自動組合 _WRITE 後綴並檢查', () => {
       setUserInfo({
         role: 'admin',
-        permissions: PERMISSION_VALUES.SALARY_WRITE,
+        permission_names: ['SALARY_WRITE'],
       })
       expect(hasWritePermission('SALARY')).toBe(true)
       expect(hasWritePermission('EMPLOYEES')).toBe(false)
@@ -114,7 +100,7 @@ describe('權限位元邏輯（BigInt 正確性）', () => {
 
   describe('canAccessRoute', () => {
     it('teacher 只能訪問 /portal 開頭的路由', () => {
-      setUserInfo({ role: 'teacher', permissions: 0 })
+      setUserInfo({ role: 'teacher', permission_names: [] })
       expect(canAccessRoute('/portal')).toBe(true)
       expect(canAccessRoute('/portal/attendance')).toBe(true)
       expect(canAccessRoute('/employees')).toBe(false)
@@ -124,24 +110,22 @@ describe('權限位元邏輯（BigInt 正確性）', () => {
     it('/overtime 特殊規則：OVERTIME_READ 或 MEETINGS 其一即可', () => {
       setUserInfo({
         role: 'admin',
-        permissions: PERMISSION_VALUES.MEETINGS,
+        permission_names: ['MEETINGS'],
       })
       expect(canAccessRoute('/overtime')).toBe(true)
 
       setUserInfo({
         role: 'admin',
-        permissions: PERMISSION_VALUES.OVERTIME_READ,
+        permission_names: ['OVERTIME_READ'],
       })
       expect(canAccessRoute('/overtime')).toBe(true)
 
-      setUserInfo({ role: 'admin', permissions: 0 })
+      setUserInfo({ role: 'admin', permission_names: [] })
       expect(canAccessRoute('/overtime')).toBe(false)
     })
 
     it('公開路由（/login、/change-password、/public/*）放行；未知路由預設拒絕', () => {
-      // 改為 default-deny：登入相關頁面與 /public/ 才預設允許，
-      // 其他未匹配 ROUTE_PERMISSION_RULES 的路由一律拒絕，避免隱性後門。
-      setUserInfo({ role: 'admin', permissions: 0 })
+      setUserInfo({ role: 'admin', permission_names: [] })
       expect(canAccessRoute('/login')).toBe(true)
       expect(canAccessRoute('/change-password')).toBe(true)
       expect(canAccessRoute('/public/activity')).toBe(true)
@@ -153,10 +137,10 @@ describe('權限位元邏輯（BigInt 正確性）', () => {
       expect(canAccessRoute('/portal')).toBe(false)
     })
 
-    it('招生管理路由需要 RECRUITMENT_READ（高位元）', () => {
+    it('招生管理路由需要 RECRUITMENT_READ', () => {
       setUserInfo({
         role: 'admin',
-        permissions: PERMISSION_VALUES.RECRUITMENT_READ,
+        permission_names: ['RECRUITMENT_READ'],
       })
       expect(canAccessRoute('/recruitment')).toBe(true)
       expect(canAccessRoute('/recruitment-ivykids')).toBe(true)
@@ -166,7 +150,7 @@ describe('權限位元邏輯（BigInt 正確性）', () => {
 
   describe('getAllowedRoutes', () => {
     it('teacher 取得 portal 路由完整清單', () => {
-      setUserInfo({ role: 'teacher', permissions: 0 })
+      setUserInfo({ role: 'teacher', permission_names: [] })
       const routes = getAllowedRoutes()
       expect(routes).toContain('/portal')
       expect(routes).toContain('/portal/attendance')
@@ -174,8 +158,8 @@ describe('權限位元邏輯（BigInt 正確性）', () => {
       expect(routes).not.toContain('/employees')
     })
 
-    it('super admin（permissions=-1）取得全部管理端路由', () => {
-      setUserInfo({ role: 'admin', permissions: -1 })
+    it("super admin（permission_names=['*']）取得全部管理端路由", () => {
+      setUserInfo({ role: 'admin', permission_names: ['*'] })
       const routes = getAllowedRoutes()
       expect(routes).toContain('/')
       expect(routes).toContain('/employees')
@@ -186,8 +170,7 @@ describe('權限位元邏輯（BigInt 正確性）', () => {
     it('部分權限時只回傳對應路由', () => {
       setUserInfo({
         role: 'admin',
-        permissions:
-          PERMISSION_VALUES.EMPLOYEES_READ | PERMISSION_VALUES.SALARY_READ,
+        permission_names: ['EMPLOYEES_READ', 'SALARY_READ'],
       })
       const routes = getAllowedRoutes()
       expect(routes).toContain('/employees')
@@ -199,6 +182,34 @@ describe('權限位元邏輯（BigInt 正確性）', () => {
     it('未登入時回傳空陣列', () => {
       const routes = getAllowedRoutes()
       expect(routes).toEqual([])
+    })
+  })
+
+  describe('localStorage 跨版本 schema 嗅探', () => {
+    it("舊版 schema（含 'permissions' 且無 'permission_names'）會在模組載入時被清除", async () => {
+      // 模擬部署前的舊 userInfo
+      localStorage.setItem(
+        'userInfo',
+        JSON.stringify({ id: 'A001', role: 'admin', permissions: -1 })
+      )
+      vi.resetModules()
+      const fresh = await import('@/utils/auth')
+      expect(fresh.getUserInfo()).toBeNull()
+      expect(localStorage.getItem('userInfo')).toBeNull()
+    })
+
+    it("新版 schema（含 'permission_names'）保留", async () => {
+      localStorage.setItem(
+        'userInfo',
+        JSON.stringify({ id: 'A002', role: 'admin', permission_names: ['*'] })
+      )
+      vi.resetModules()
+      const fresh = await import('@/utils/auth')
+      expect(fresh.getUserInfo()).toMatchObject({
+        id: 'A002',
+        role: 'admin',
+        permission_names: ['*'],
+      })
     })
   })
 })

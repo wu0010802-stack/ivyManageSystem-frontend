@@ -2,14 +2,14 @@
 // 保留函式簽名供向下相容，但不再操作 localStorage。
 import { shallowRef } from 'vue'
 import {
-  PERMISSION_VALUES,
+  PERMISSION_NAMES,
   ROUTE_PERMISSION_RULES,
   TEACHER_PORTAL_ROUTES,
   PUBLIC_ROUTES,
   PUBLIC_ROUTE_PREFIXES,
 } from '@/constants/permissions'
 
-export { PERMISSION_VALUES, ROUTE_PERMISSION_RULES }
+export { PERMISSION_NAMES, ROUTE_PERMISSION_RULES }
 
 function _isPublicRoute(path: string) {
   if (PUBLIC_ROUTES.includes(path)) return true
@@ -32,6 +32,21 @@ function _readFromStorage(): Record<string, unknown> | null {
     return null
   }
 }
+
+// 跨版本 localStorage 嗅探：若 userInfo 仍是舊 bigint mask schema
+// （含 `permissions` 但無 `permission_names`），清掉以免下游 hasPermission 拿到錯誤型別。
+// 部署後第一次開瀏覽器會強制 redirect 到登入頁。
+function _purgeStaleUserInfo() {
+  const stored = _readFromStorage()
+  if (
+    stored &&
+    'permissions' in stored &&
+    !('permission_names' in stored)
+  ) {
+    localStorage.removeItem(USER_INFO_KEY)
+  }
+}
+_purgeStaleUserInfo()
 
 const _userInfoRef = shallowRef<Record<string, unknown> | null>(_readFromStorage())
 
@@ -162,85 +177,61 @@ const getRoutePermissions = (path: string) => {
 
 /**
  * 檢查使用者是否擁有指定權限
- * @param {string} permissionName - 權限名稱 (如 'EMPLOYEES_READ')
- * @returns {boolean}
+ * @param permissionName - 權限名稱 (如 'EMPLOYEES_READ')
  */
-export function hasPermission(permissionName: string) {
+export function hasPermission(permissionName: string): boolean {
   const userInfo = getUserInfo()
   if (!userInfo) return false
 
   // teacher 角色只能存取 Portal
   if (userInfo['role'] === 'teacher') return false
 
-  // admin 角色檢查 permissions
-  const permissions = userInfo['permissions']
-  // -1 或 null/undefined 表示全部權限
-  if (permissions === -1 || permissions === null || permissions === undefined) {
-    return true
-  }
-
-  const permValue = (PERMISSION_VALUES as Record<string, number>)[permissionName]
-  if (!permValue) return false
-
-  // 使用 BigInt 運算，避免高位元（≥ 1<<31）在 JS 32-bit 運算中溢位
-  const permBig = BigInt(permValue)
-  const permsBig = BigInt(permissions as number)
-  return (permsBig & permBig) === permBig
+  const perms = userInfo['permission_names'] as string[] | null | undefined
+  if (perms == null) return false  // resolve 在後端；前端 null = 無顯式權限
+  if (perms.includes('*')) return true
+  return perms.includes(permissionName)
 }
 
 /**
  * 檢查使用者是否擁有指定模組的寫入權限
- * @param {string} moduleName - 模組基礎名稱 (如 'EMPLOYEES')
- * @returns {boolean}
+ * @param moduleName - 模組基礎名稱 (如 'EMPLOYEES')
  */
-export function hasWritePermission(moduleName: string) {
+export function hasWritePermission(moduleName: string): boolean {
   return hasPermission(`${moduleName}_WRITE`)
 }
 
-// ── BigInt 安全的 permission mask 運算（INFO-1）─────────────────────
-// JS `&`/`|` 強制 32-bit 整數運算，遇到 ≥ 1<<32 的位元會溢位／truncate。
-// 任何「以位元組合 mask」的場景一律走這幾個 helper，避免分散使用 `& bit`。
+// ── 權限名稱集合運算（取代舊 BigInt mask 版本） ──
+// 後端從 bigint mask 改為 text[]；前端統一在此檔做 Set 運算，
+// 不再散落各處 `& bit` / `BigInt(...)`。
 
-const _toBig = (v: unknown): bigint => {
-  if (v === null || v === undefined) return 0n
-  return typeof v === 'bigint' ? v : BigInt(v as number | string | boolean)
+/** 檢查 perms 是否包含 name（含 wildcard '*' 快徑）。 */
+export function permissionsHave(perms: string[] | null | undefined, name: string): boolean {
+  if (!perms) return false
+  if (perms.includes('*')) return true
+  return perms.includes(name)
 }
 
-/** 檢查 mask 是否包含 value 對應的位元（BigInt 安全）。 */
-export function permissionMaskHas(mask: unknown, value: unknown) {
-  if (mask === -1) return true
-  const m = _toBig(mask)
-  const v = _toBig(value)
-  return (m & v) === v && v !== 0n
+/** 在 perms 加上 name，自動去重；回傳新 array（input 不變）。 */
+export function permissionsAdd(perms: string[], name: string): string[] {
+  if (perms.includes(name)) return [...perms]
+  return [...perms, name]
 }
 
-/** 在 mask 加上 value 位元；回傳的數值仍為 Number，供 API payload 使用。 */
-export function permissionMaskAdd(mask: unknown, value: unknown) {
-  const m = _toBig(mask)
-  const v = _toBig(value)
-  return Number(m | v)
+/** 從 perms 移除 name（保留其他）；回傳新 array。 */
+export function permissionsRemove(perms: string[], name: string): string[] {
+  return perms.filter((p) => p !== name)
 }
 
-/** 從 mask 移除 value 位元（保留其他位元）。 */
-export function permissionMaskRemove(mask: unknown, value: unknown) {
-  const m = _toBig(mask)
-  const v = _toBig(value)
-  return Number(m & ~v)
-}
-
-/** 把多個位元值 OR 起來；用於「全選」場景。 */
-export function permissionMaskCombine(values: unknown[]) {
-  let acc = 0n
-  for (const v of values) acc |= _toBig(v)
-  return Number(acc)
+/** 把多個 array 合併去重；用於「全選」場景。 */
+export function permissionsCombine(arrays: string[][]): string[] {
+  return Array.from(new Set(arrays.flat()))
 }
 
 /**
  * 檢查使用者是否可存取指定路由
- * @param {string} path - 路由路徑
- * @returns {boolean}
+ * @param path - 路由路徑
  */
-export function canAccessRoute(path: string) {
+export function canAccessRoute(path: string): boolean {
   const userInfo = getUserInfo()
   if (!userInfo) return false
 
@@ -261,9 +252,8 @@ export function canAccessRoute(path: string) {
 
 /**
  * 取得使用者所有允許的路由
- * @returns {string[]}
  */
-export function getAllowedRoutes() {
+export function getAllowedRoutes(): string[] {
   const userInfo = getUserInfo()
   if (!userInfo) return []
 
