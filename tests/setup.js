@@ -1,5 +1,9 @@
-import { vi } from 'vitest'
+import { vi, afterEach } from 'vitest'
+import { enableAutoUnmount } from '@vue/test-utils'
 import 'fake-indexeddb/auto'
+
+// 自動在每個 test 後 unmount 所有 wrapper，避免 DOM 累積污染下一個 test
+enableAutoUnmount(afterEach)
 
 // Node.js 22+ 內建 localStorage 與 happy-dom/jsdom 衝突
 // 手動提供完整的 localStorage mock
