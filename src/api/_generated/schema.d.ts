@@ -6109,6 +6109,53 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/offboarding/{employee_id}/certificate.pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Certificate Pdf
+         * @description admin 取離職證明 PDF。
+         *
+         *     gated by EMPLOYEES_READ；record 不存在或 certificate_pdf_path 空
+         *     → 404 CERTIFICATE_NOT_FOUND；檔案不存在 → 404 CERTIFICATE_FILE_MISSING。
+         */
+        get: operations["get_certificate_pdf_api_offboarding__employee_id__certificate_pdf_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/offboarding/{employee_id}/magic-link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Magic Link
+         * @description admin 產 magic-link token（30 天 / 3 次上限）。覆寫舊 hash（重發即作廢前一個）。
+         */
+        post: operations["post_magic_link_api_offboarding__employee_id__magic_link_post"];
+        /**
+         * Delete Magic Link
+         * @description admin 撤 magic-link token。
+         */
+        delete: operations["delete_magic_link_api_offboarding__employee_id__magic_link_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/offboarding/{employee_id}/nhi-unenroll": {
         parameters: {
             query?: never;
@@ -6171,6 +6218,39 @@ export interface paths {
          *     _ERROR_TO_STATUS 映射回 4xx/5xx。
          */
         post: operations["process_offboarding_endpoint_api_offboarding__employee_id__process_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/offboarding/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download Offboarding Bundle
+         * @description **公開無 auth** download endpoint。
+         *
+         *     以 magic-link token 串流 ZIP 離職包（離職證明 PDF + 12 月薪資 PDF + 出勤 CSV）。
+         *     驗失敗統一 410 Gone，不暴露差異原因（防 enumeration）。
+         *
+         *     Security headers：
+         *     - Content-Disposition: attachment（強制下載，不在瀏覽器 inline render）
+         *     - X-Content-Type-Options: nosniff（防 MIME sniffing）
+         *     - Cache-Control: no-store（代理 / CDN 不快取含 PII 的 ZIP）
+         *
+         *     TODO follow-up：uvicorn access log token redaction（ASGI middleware 攔 query string
+         *     或 --access-log False）。目前 endpoint 本身不 echo token 到 logger，但 uvicorn
+         *     預設 access log 會記完整 URL（含 ?token=...），建議後續 PR 加 ASGI middleware
+         *     做 query string sanitize 或改用 --access-log False。
+         */
+        get: operations["download_offboarding_bundle_api_offboarding_download_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -15529,6 +15609,30 @@ export interface components {
             /** Username */
             username: string;
         };
+        /** MagicLinkResponse */
+        MagicLinkResponse: {
+            /** Download Url */
+            download_url: string;
+            /** Employee Id */
+            employee_id: number;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Token */
+            token: string;
+        };
+        /** MagicLinkRevokeResponse */
+        MagicLinkRevokeResponse: {
+            /** Employee Id */
+            employee_id: number;
+            /**
+             * Revoked At
+             * Format: date-time
+             */
+            revoked_at: string;
+        };
         /** ManualEventCountBatchIn */
         ManualEventCountBatchIn: {
             /** Entries */
@@ -15959,6 +16063,15 @@ export interface components {
             leave_snapshot_at: string | null;
             /** Magic Link Active */
             magic_link_active: boolean;
+            /**
+             * Magic Link Download Count
+             * @default 0
+             */
+            magic_link_download_count: number;
+            /** Magic Link Expires At */
+            magic_link_expires_at?: string | null;
+            /** Magic Link Last Used At */
+            magic_link_last_used_at?: string | null;
             /** Nhi Unenroll Submitted At */
             nhi_unenroll_submitted_at: string | null;
             /**
@@ -29214,6 +29327,99 @@ export interface operations {
             };
         };
     };
+    get_certificate_pdf_api_offboarding__employee_id__certificate_pdf_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                employee_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_magic_link_api_offboarding__employee_id__magic_link_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                employee_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MagicLinkResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_magic_link_api_offboarding__employee_id__magic_link_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                employee_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MagicLinkRevokeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     patch_nhi_unenroll_api_offboarding__employee_id__nhi_unenroll_patch: {
         parameters: {
             query?: never;
@@ -29306,6 +29512,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OffboardingProcessResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_offboarding_bundle_api_offboarding_download_get: {
+        parameters: {
+            query: {
+                token: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
