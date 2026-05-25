@@ -89,6 +89,8 @@ export const ROUTE_PERMISSION_RULES = [
   { path: '/announcements', permission: 'ANNOUNCEMENTS_READ' },
   { path: '/reports', permission: 'REPORTS' },
   { path: '/gov-reports', permission: 'REPORTS' },
+  // /admin/gov-reports/{monthly,certificates,subsidies,iep} 對齊後端 GOV_REPORTS_VIEW 守衛
+  { path: '/admin/gov-reports', permission: 'GOV_REPORTS_VIEW', prefix: true },
   { path: '/audit-logs', permission: 'AUDIT_LOGS' },
   { path: '/settings', permission: 'SETTINGS_READ' },
   { path: '/dismissal-queue', permission: 'DISMISSAL_CALLS_READ' },
