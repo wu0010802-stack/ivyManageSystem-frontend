@@ -69,6 +69,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/academic-terms/{term_id}/set-current": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set Current Term
+         * @description admin「正式開新學期」翻牌。
+         *
+         *     流程（同 transaction）：
+         *     1. 找 new term (term_id) — 不存在 → 404
+         *     2. 找舊 is_current term (可能 None) — 與 new term 相同 → 409 no-op
+         *     3. UPDATE 舊 row.is_current=false（若有），UPDATE new row.is_current=true
+         *     4. flush 讓 partial unique index 立刻檢查 singleton
+         *     5. fire_term_changed(old, new, session) — 三個 subscriber 同 session 串註執行
+         */
+        post: operations["set_current_term_api_academic_terms__term_id__set_current_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/academic-terms/current": {
         parameters: {
             query?: never;
@@ -2829,7 +2856,10 @@ export interface paths {
         };
         /**
          * Get Attendance Calendar
-         * @description 取得員工月出勤日曆資料
+         * @description 取得員工月出勤日曆資料。
+         *
+         *     核心邏輯委由 _get_attendance_calendar_new() 實作，此 endpoint 僅負責
+         *     驗證員工存在並管理 session 生命週期。
          */
         get: operations["get_attendance_calendar_api_attendance_calendar_get"];
         put?: never;
@@ -3921,46 +3951,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/dev/employee-salary-debug": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Debug Employee Salary
-         * @description 模擬計算單一員工薪資並回傳完整明細（dev 別名，正式請改打 /api/salaries/employee-salary-debug）。
-         */
-        get: operations["debug_employee_salary_api_dev_employee_salary_debug_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/dev/salary-logic": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Salary Logic
-         * @description 傾印目前的薪資計算邏輯與所有參數設定（dev 別名，正式請改打 /api/salaries/logic）。
-         */
-        get: operations["get_salary_logic_api_dev_salary_logic_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/disciplinary-actions": {
         parameters: {
             query?: never;
@@ -4243,7 +4233,12 @@ export interface paths {
         put?: never;
         /**
          * Offboard Employee
-         * @description 辦理離職：設定離職日與離職原因，若離職日 <= 今天則同步設 is_active = False
+         * @description [DEPRECATED] 改用 POST /api/offboarding/{id}/process。
+         *
+         *     本 endpoint 保留作 deprecation passthrough，前端切完後（Phase 3）移除。
+         *     行為委由 services.offboarding.orchestrator.process_offboarding 統一執行（含
+         *     Employee.resign_date 設定、is_active 更新、User revoke、leave snapshot、
+         *     appraisal mark 等），response shape 保持向後相容。
          */
         post: operations["offboard_employee_api_employees__employee_id__offboard_post"];
         delete?: never;
@@ -6086,6 +6081,96 @@ export interface paths {
         get: operations["get_notification_summary_api_notifications_summary_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/offboarding/{employee_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Offboarding Detail
+         * @description 取得員工離職 checklist 完整紀錄。
+         *
+         *     gated by EMPLOYEES_READ；record 不存在回 404 OFFBOARDING_RECORD_NOT_FOUND。
+         */
+        get: operations["get_offboarding_detail_api_offboarding__employee_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/offboarding/{employee_id}/nhi-unenroll": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Patch Nhi Unenroll
+         * @description 手動標記全民健保退保申報狀態。
+         *
+         *     submitted=true → 設 nhi_unenroll_submitted_at = now()
+         *     submitted=false → 清空（設 None）
+         *     gated by EMPLOYEES_WRITE。
+         */
+        patch: operations["patch_nhi_unenroll_api_offboarding__employee_id__nhi_unenroll_patch"];
+        trace?: never;
+    };
+    "/offboarding/{employee_id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Offboarding
+         * @description 預覽離職將執行的動作（純讀，不寫 DB）。
+         */
+        post: operations["preview_offboarding_api_offboarding__employee_id__preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/offboarding/{employee_id}/process": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Process Offboarding Endpoint
+         * @description 一鍵離職主處理 endpoint。
+         *
+         *     串接 orchestrator 的 4 step（mark_appraisal / snapshot_leave /
+         *     prefill_leave_payout / revoke_user），失敗時 rollback 並依
+         *     _ERROR_TO_STATUS 映射回 4xx/5xx。
+         */
+        post: operations["process_offboarding_endpoint_api_offboarding__employee_id__process_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -12281,6 +12366,8 @@ export interface components {
             end_date: string;
             /** Id */
             id: number;
+            /** Is Current */
+            is_current: boolean;
             /** School Year */
             school_year: number;
             /** Semester */
@@ -12590,6 +12677,15 @@ export interface components {
             only_fill_blank: boolean;
             /** Template Id */
             template_id: number;
+        };
+        /** AppraisalInFlightCycle */
+        AppraisalInFlightCycle: {
+            /** Current Score */
+            current_score?: number | null;
+            /** Cycle Id */
+            cycle_id: number;
+            /** Cycle Name */
+            cycle_name: string;
         };
         /** AssessmentCreate */
         AssessmentCreate: {
@@ -13869,8 +13965,8 @@ export interface components {
             employee_id?: number | null;
             /** Password */
             password: string;
-            /** Permissions */
-            permissions?: number | null;
+            /** Permission Names */
+            permission_names?: string[] | null;
             /**
              * Role
              * @default teacher
@@ -15347,6 +15443,15 @@ export interface components {
             /** Substitute Employee Id */
             substitute_employee_id?: number | null;
         };
+        /** LeaveSnapshotPreview */
+        LeaveSnapshotPreview: {
+            /** Daily Wage */
+            daily_wage: number;
+            /** Payout Amount */
+            payout_amount: number;
+            /** Special Leave Days */
+            special_leave_days: number;
+        };
         /** LeaveUpdate */
         LeaveUpdate: {
             /**
@@ -15795,6 +15900,11 @@ export interface components {
             /** Total Score */
             total_score: string;
         };
+        /** NhiUnenrollRequest */
+        NhiUnenrollRequest: {
+            /** Submitted */
+            submitted: boolean;
+        };
         /** ObservationCreate */
         ObservationCreate: {
             /** Domain */
@@ -15826,6 +15936,111 @@ export interface components {
             observation_date?: string | null;
             /** Rating */
             rating?: number | null;
+        };
+        /** OffboardingDetailResponse */
+        OffboardingDetailResponse: {
+            /** Appraisal Marked At */
+            appraisal_marked_at: string | null;
+            /** Certificate Generated At */
+            certificate_generated_at: string | null;
+            /** Certificate Pdf Path */
+            certificate_pdf_path: string | null;
+            /** Closed At */
+            closed_at: string | null;
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+            /** Leave Balance Snapshot */
+            leave_balance_snapshot: {
+                [key: string]: unknown;
+            } | null;
+            /** Leave Snapshot At */
+            leave_snapshot_at: string | null;
+            /** Magic Link Active */
+            magic_link_active: boolean;
+            /** Nhi Unenroll Submitted At */
+            nhi_unenroll_submitted_at: string | null;
+            /**
+             * Opened At
+             * Format: date-time
+             */
+            opened_at: string;
+            /** Opened By User Id */
+            opened_by_user_id: number;
+            /**
+             * Resign Date
+             * Format: date
+             */
+            resign_date: string;
+            /** Resign Reason */
+            resign_reason: string | null;
+            /** User Revoked At */
+            user_revoked_at: string | null;
+        };
+        /** OffboardingPreview */
+        OffboardingPreview: {
+            /** Appraisal In Flight Cycles */
+            appraisal_in_flight_cycles: components["schemas"]["AppraisalInFlightCycle"][];
+            /** Certificate Pdf Ready To Generate */
+            certificate_pdf_ready_to_generate: boolean;
+            leave_snapshot: components["schemas"]["LeaveSnapshotPreview"];
+            salary_record_target: components["schemas"]["SalaryRecordTarget"];
+            /** User Account Will Be Revoked */
+            user_account_will_be_revoked: boolean;
+        };
+        /** OffboardingPreviewRequest */
+        OffboardingPreviewRequest: {
+            /**
+             * Resign Date
+             * Format: date
+             */
+            resign_date: string;
+            /** Resign Reason */
+            resign_reason?: string | null;
+        };
+        /** OffboardingPreviewResponse */
+        OffboardingPreviewResponse: {
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+            preview: components["schemas"]["OffboardingPreview"];
+            /**
+             * Resign Date
+             * Format: date
+             */
+            resign_date: string;
+            /** Warnings */
+            warnings?: string[];
+        };
+        /** OffboardingProcessRequest */
+        OffboardingProcessRequest: {
+            /**
+             * Resign Date
+             * Format: date
+             */
+            resign_date: string;
+            /** Resign Reason */
+            resign_reason?: string | null;
+        };
+        /** OffboardingProcessResponse */
+        OffboardingProcessResponse: {
+            /** Certificate Download Url */
+            certificate_download_url?: string | null;
+            /** Employee Id */
+            employee_id: number;
+            /** Is Active */
+            is_active: boolean;
+            /**
+             * Resign Date
+             * Format: date
+             */
+            resign_date: string;
+            /** Steps */
+            steps: components["schemas"]["StepResultModel"][];
+            /** User Account Revoked */
+            user_account_revoked: boolean;
         };
         /** OffboardRequest */
         OffboardRequest: {
@@ -16882,6 +17097,17 @@ export interface components {
             /** Supervisor Dividend */
             supervisor_dividend?: number | null;
         };
+        /** SalaryRecordTarget */
+        SalaryRecordTarget: {
+            /** Exists */
+            exists: boolean;
+            /** Month */
+            month: number;
+            /** Will Be Marked Stale */
+            will_be_marked_stale: boolean;
+            /** Year */
+            year: number;
+        };
         /**
          * SalarySimulateOverride
          * @description 薪資試算覆蓋參數（None = 使用 DB 實際資料）
@@ -17273,6 +17499,24 @@ export interface components {
         StaffEntry: {
             /** Name */
             name: string;
+        };
+        /** StepResultModel */
+        StepResultModel: {
+            /** Completed At */
+            completed_at?: string | null;
+            /** Error */
+            error?: string | null;
+            /** Payload */
+            payload?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "completed" | "skipped" | "failed";
+            /** Step */
+            step: string;
         };
         /** StudentBulkTransfer */
         StudentBulkTransfer: {
@@ -17790,8 +18034,8 @@ export interface components {
         UpdateUserRequest: {
             /** Is Active */
             is_active?: boolean | null;
-            /** Permissions */
-            permissions?: number | null;
+            /** Permission Names */
+            permission_names?: string[] | null;
             /** Role */
             role?: string | null;
         };
@@ -18079,6 +18323,37 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_current_term_api_academic_terms__term_id__set_current_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                term_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AcademicTermOut"];
                 };
             };
             /** @description Validation Error */
@@ -24665,59 +24940,6 @@ export interface operations {
             };
         };
     };
-    debug_employee_salary_api_dev_employee_salary_debug_get: {
-        parameters: {
-            query: {
-                employee_id: number;
-                month: number;
-                year: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_salary_logic_api_dev_salary_logic_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
     list_actions_api_disciplinary_actions_get: {
         parameters: {
             query?: {
@@ -28957,6 +29179,142 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    get_offboarding_detail_api_offboarding__employee_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                employee_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OffboardingDetailResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_nhi_unenroll_api_offboarding__employee_id__nhi_unenroll_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                employee_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NhiUnenrollRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_offboarding_api_offboarding__employee_id__preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                employee_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OffboardingPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OffboardingPreviewResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    process_offboarding_endpoint_api_offboarding__employee_id__process_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                employee_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OffboardingProcessRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OffboardingProcessResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
