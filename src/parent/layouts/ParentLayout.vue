@@ -6,8 +6,10 @@ import { getUnreadCount } from '../api/announcements'
 import { getMessageUnreadCount } from '../api/messages'
 import M3TopAppBar from '../components/m3/M3TopAppBar.vue'
 import M3NavigationBar from '../components/m3/M3NavigationBar.vue'
+import M3IconButton from '../components/m3/M3IconButton.vue'
 import ConnectionBanner from '../components/ConnectionBanner.vue'
 import BrandMark from '@/components/brand/BrandMark.vue'
+import MeDrawer from '../components/layout/MeDrawer.vue'
 
 interface TabItem {
   key: string
@@ -61,24 +63,18 @@ const TABS = computed<TabItem[]>(() => [
     icon: 'chat_bubble',
     activeIcon: 'chat_bubble',
     path: '/messages',
-    badge: unreadMessages.value,
+    badge: unreadMessages.value + unread.value,
   },
   {
-    key: 'family',
-    label: '家校',
-    icon: 'school',
-    activeIcon: 'school',
-    path: '/family',
-    badge: unread.value,
-  },
-  {
-    key: 'me',
-    label: '我的',
-    icon: 'person',
-    activeIcon: 'person',
-    path: '/me',
+    key: 'admin',
+    label: '事務',
+    icon: 'assignment',
+    activeIcon: 'assignment',
+    path: '/admin',
   },
 ])
+
+const drawerOpen = ref(false)
 
 async function refreshUnread() {
   if (!authStore.isAuthed()) return
@@ -118,13 +114,22 @@ function onBack() {
       :on-back="onBack"
       variant="small"
     >
-      <!-- 主分頁（home/messages/family/me）無 showBack，需要 BrandMark 補位；
+      <!-- 主分頁（home/messages/admin）無 showBack，需要 BrandMark 補位；
            深層頁有 back button 不用蓋。CLAUDE.md 列為 polish 階段 acceptance：
            保留 LaurelWreath/CrownIcon brand。bug sweep round 4 (2026-05-14) F-FE-3。 -->
       <template v-if="!headerShowBack" #leading>
         <BrandMark variant="mini" :size="28" />
       </template>
+      <template #actions>
+        <M3IconButton
+          icon="account_circle"
+          aria-label="開啟個人選單"
+          @click="drawerOpen = true"
+        />
+      </template>
     </M3TopAppBar>
+
+    <MeDrawer v-if="!isPublic" v-model="drawerOpen" />
 
     <div v-if="!isPublic" class="parent-conn-slot">
       <ConnectionBanner />

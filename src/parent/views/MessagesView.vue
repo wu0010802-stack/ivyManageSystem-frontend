@@ -1,13 +1,16 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useMessagesStore } from '../stores/messages'
+import { listAnnouncements, markRead } from '../api/announcements'
 import { toast } from '../utils/toast'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import PullToRefresh from '../components/PullToRefresh.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import KawaiiStar from '@/components/brand/KawaiiStar.vue'
 import { fmtTimeOrDate } from '../utils/datetime'
+import MessagesSearchBar from '../components/messages/MessagesSearchBar.vue'
+import AnnouncementDetailModal from '../components/announcements/AnnouncementDetailModal.vue'
 
 interface Thread {
   id: number | string
@@ -18,87 +21,207 @@ interface Thread {
   unread_count: number
 }
 
+interface Announcement {
+  id: number | string
+  priority: string
+  is_read: boolean
+  created_at: string
+  title: string
+  content?: string
+}
+
+type InboxItem =
+  | { kind: 'thread'; key: string; sortMs: number; data: Thread }
+  | { kind: 'announce'; key: string; sortMs: number; data: Announcement }
+
 const router = useRouter()
 const messagesStore = useMessagesStore()
 
+const announcements = ref<Announcement[]>([])
+const announcementsLoaded = ref(false)
+const selectedAnnouncement = ref<Announcement | null>(null)
+const detailOpen = computed({
+  get: () => selectedAnnouncement.value !== null,
+  set: (v) => { if (!v) selectedAnnouncement.value = null },
+})
+
 const threads = computed(() => (messagesStore.threads || []) as unknown as Thread[])
 
-async function init() {
+function parseMs(s: string | null | undefined): number {
+  if (!s) return 0
+  const v = Date.parse(s.replace(' ', 'T'))
+  return Number.isFinite(v) ? v : 0
+}
+
+const inboxItems = computed<InboxItem[]>(() => {
+  const out: InboxItem[] = []
+  for (const t of threads.value) {
+    out.push({
+      kind: 'thread',
+      key: `t-${t.id}`,
+      sortMs: parseMs(t.last_message_at),
+      data: t,
+    })
+  }
+  for (const a of announcements.value) {
+    out.push({
+      kind: 'announce',
+      key: `a-${a.id}`,
+      sortMs: parseMs(a.created_at),
+      data: a,
+    })
+  }
+  return out.sort((x, y) => y.sortMs - x.sortMs)
+})
+
+const totalUnread = computed(() => {
+  const t = threads.value.reduce((acc, x) => acc + (x.unread_count || 0), 0)
+  const a = announcements.value.filter((x) => !x.is_read).length
+  return t + a
+})
+
+const fullyLoaded = computed(() => messagesStore.threadsLoaded && announcementsLoaded.value)
+
+async function fetchAnnouncements() {
   try {
-    await messagesStore.fetchThreads(true)
+    const { data } = await listAnnouncements({ limit: 50 })
+    announcements.value = ((data as { items?: Announcement[] })?.items || [])
   } catch (err) {
     const e = err as Record<string, unknown>
-    toast.error(String(e?.displayMessage || '載入失敗'))
+    toast.error(String(e?.displayMessage || '載入公告失敗'))
+  } finally {
+    announcementsLoaded.value = true
   }
+}
+
+async function init() {
+  await Promise.all([
+    (async () => {
+      try {
+        await messagesStore.fetchThreads(true)
+      } catch (err) {
+        const e = err as Record<string, unknown>
+        toast.error(String(e?.displayMessage || '載入訊息失敗'))
+      }
+    })(),
+    fetchAnnouncements(),
+  ])
 }
 
 function openThread(t: Thread) {
   router.push({ path: `/messages/${t.id}` })
 }
 
-async function pullRefresh() {
-  await messagesStore.fetchThreads(true)
+async function openAnnounce(a: Announcement) {
+  selectedAnnouncement.value = a
+  if (!a.is_read) {
+    try {
+      await markRead(a.id as number)
+      a.is_read = true
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
-const totalUnread = computed(() =>
-  threads.value.reduce((acc: number, t: Thread) => acc + (t.unread_count || 0), 0),
-)
+async function pullRefresh() {
+  await Promise.all([
+    messagesStore.fetchThreads(true),
+    fetchAnnouncements(),
+  ])
+}
 
 onMounted(init)
 </script>
 
 <template>
   <PullToRefresh :on-refresh="pullRefresh" class="messages-view">
+    <MessagesSearchBar />
+
     <header class="pt-page-hero">
-      <p class="pt-page-hero-eyebrow">家校訊息</p>
-      <h1 class="pt-page-hero-title">老師與您的對話</h1>
+      <p class="pt-page-hero-eyebrow">家校通訊</p>
+      <h1 class="pt-page-hero-title">訊息與公告</h1>
       <p v-if="totalUnread > 0" class="pt-page-hero-note">
         有 <strong>{{ totalUnread }}</strong> 則尚未閱讀
       </p>
-      <p v-else-if="threads.length > 0" class="pt-page-hero-note">
-        所有訊息都看完了
+      <p v-else-if="inboxItems.length > 0" class="pt-page-hero-note">
+        都看完了
       </p>
     </header>
 
-    <template v-if="!messagesStore.threadsLoaded">
+    <template v-if="!fullyLoaded">
       <div class="skeleton-wrap">
         <SkeletonBlock variant="row" :count="4" />
       </div>
     </template>
 
     <EmptyState
-      v-else-if="threads.length === 0"
+      v-else-if="inboxItems.length === 0"
       variant="mobile"
       :icon="KawaiiStar"
       title="目前沒有訊息"
-      description="老師有訊息時會出現在這裡"
+      description="老師或園所有新訊息時會出現在這裡"
     />
 
     <div v-else class="thread-list pt-list-group">
-      <button
-        v-for="t in threads"
-        :key="t.id"
-        type="button"
-        class="thread-row pt-list-row"
-        :class="{ unread: t.unread_count > 0 }"
-        @click="openThread(t)"
-      >
-        <div class="avatar" aria-hidden="true">{{ (t.teacher_name || '老師').slice(0, 1) }}</div>
-        <div class="pt-list-row-body">
-          <div class="row1">
-            <strong>{{ t.teacher_name || '老師' }}</strong>
-            <span class="time">{{ fmtTimeOrDate(t.last_message_at) }}</span>
+      <template v-for="item in inboxItems" :key="item.key">
+        <!-- 老師私訊 -->
+        <button
+          v-if="item.kind === 'thread'"
+          type="button"
+          class="thread-row pt-list-row"
+          :class="{ unread: item.data.unread_count > 0 }"
+          @click="openThread(item.data)"
+        >
+          <div class="avatar avatar-teacher" aria-hidden="true">
+            {{ (item.data.teacher_name || '老師').slice(0, 1) }}
           </div>
-          <div class="row2">
-            <span class="student">{{ t.student_name }}</span>
-            <span class="preview">{{ t.last_message_preview || '尚無訊息' }}</span>
+          <div class="pt-list-row-body">
+            <div class="row1">
+              <strong>{{ item.data.teacher_name || '老師' }}</strong>
+              <span class="time">{{ fmtTimeOrDate(item.data.last_message_at) }}</span>
+            </div>
+            <div class="row2">
+              <span class="student">{{ item.data.student_name }}</span>
+              <span class="preview">{{ item.data.last_message_preview || '尚無訊息' }}</span>
+            </div>
           </div>
-        </div>
-        <span v-if="t.unread_count > 0" class="badge" :aria-label="`${t.unread_count} 則未讀`">
-          {{ t.unread_count }}
-        </span>
-      </button>
+          <span
+            v-if="item.data.unread_count > 0"
+            class="badge"
+            :aria-label="`${item.data.unread_count} 則未讀`"
+          >
+            {{ item.data.unread_count }}
+          </span>
+        </button>
+
+        <!-- 公告 -->
+        <button
+          v-else
+          type="button"
+          class="thread-row pt-list-row announce-row"
+          :class="{ unread: !item.data.is_read }"
+          @click="openAnnounce(item.data)"
+        >
+          <div class="avatar avatar-announce" aria-hidden="true">
+            <span class="material-symbols-rounded">campaign</span>
+          </div>
+          <div class="pt-list-row-body">
+            <div class="row1">
+              <strong>{{ item.data.title }}</strong>
+              <span class="time">{{ fmtTimeOrDate(item.data.created_at) }}</span>
+            </div>
+            <div class="row2">
+              <span class="tag-broadcast">全班</span>
+              <span class="preview">{{ item.data.content || '園所公告' }}</span>
+            </div>
+          </div>
+          <span v-if="!item.data.is_read" class="unread-dot" aria-label="未讀" />
+        </button>
+      </template>
     </div>
+
+    <AnnouncementDetailModal v-model="detailOpen" :announcement="selectedAnnouncement" />
   </PullToRefresh>
 </template>
 
@@ -126,15 +249,27 @@ onMounted(init)
 .thread-row.unread {
   background: linear-gradient(90deg, var(--cream, #fffcf2) 0%, var(--pt-surface-card, #fff) 70%);
 }
+
 .avatar {
   width: 44px; height: 44px;
   border-radius: 16px;
-  background: var(--leaf-100, #dcf4e6);
-  color: var(--brand-primary, #0d9053);
   display: flex; align-items: center; justify-content: center;
   font-weight: 800; font-size: 17px;
   flex-shrink: 0;
 }
+.avatar-teacher {
+  background: var(--leaf-100, #dcf4e6);
+  color: var(--brand-primary, #0d9053);
+}
+.avatar-announce {
+  background: var(--m3-secondary-container, #d3e8d3);
+  color: var(--m3-on-secondary-container, #0e1f12);
+}
+.avatar-announce .material-symbols-rounded {
+  font-size: 22px;
+  font-variation-settings: 'wght' 500;
+}
+
 .row1 { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .row1 strong {
   color: var(--pt-text-strong);
@@ -165,6 +300,16 @@ onMounted(init)
   font-weight: 600;
   flex-shrink: 0;
 }
+.tag-broadcast {
+  display: inline-flex;
+  padding: 1px 7px;
+  background: var(--m3-tertiary-container, #cfe5ec);
+  color: var(--m3-on-tertiary-container, #001f26);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
 .preview {
   color: var(--pt-text-muted);
   flex: 1;
@@ -186,6 +331,13 @@ onMounted(init)
   font-size: 11px;
   font-weight: 700;
   border-radius: 11px;
+  flex-shrink: 0;
+}
+.unread-dot {
+  width: 9px;
+  height: 9px;
+  background: var(--coral-500, #ff8b8b);
+  border-radius: 50%;
   flex-shrink: 0;
 }
 </style>

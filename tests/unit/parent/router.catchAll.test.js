@@ -24,15 +24,15 @@ describe('router catch-all', () => {
   })
 })
 
-describe('router meta.tab — IA v2 Phase 3 深層頁高亮對應 tab', () => {
+// IA v3（2026-05-22）將 4 tab 重組為 home/messages/admin/me（family 砍掉）
+describe('router meta.tab — IA v3 深層頁高亮對應 tab', () => {
   it('每個深層頁都有 meta.tab，且為四個 tab key 之一', async () => {
-    // 動態載入真實 router 以拿到完整 routes
     const { default: router } = await import('@/parent/router')
     const routes = router.options.routes
 
-    const validTabs = new Set(['home', 'messages', 'family', 'me'])
+    const validTabs = new Set(['home', 'messages', 'admin', 'me'])
 
-    // Phase 3 起，所有深層頁都應有 meta.tab，使對應 tab 高亮
+    // IA v3 後，所有深層頁都應有 meta.tab；assistant 因走 modal 不需 tab
     const deepPaths = [
       '/leaves',
       '/fees',
@@ -56,8 +56,7 @@ describe('router meta.tab — IA v2 Phase 3 深層頁高亮對應 tab', () => {
       expect(validTabs.has(r.meta.tab), `${p} meta.tab=${r.meta.tab} 須為 4 tab key 之一`).toBe(true)
     }
 
-    // 主 tab 路由仍保留 tab
-    const tabPaths = ['/home', '/attendance', '/announcements', '/messages', '/messages/:threadId', '/me']
+    const tabPaths = ['/home', '/attendance', '/announcements', '/messages', '/messages/:threadId', '/me', '/admin']
     for (const p of tabPaths) {
       const r = routes.find((x) => x.path === p)
       expect(r.meta?.tab, `${p} 應保留 meta.tab`).toBeDefined()

@@ -7,21 +7,23 @@ async function buildRouter() {
   return createRouter({ history: createMemoryHistory(), routes })
 }
 
-describe('parent router IA v2 — deep-link tab association', () => {
+// IA v3（2026-05-22）：4 tab = home / messages / admin / me（family 砍掉）
+// 對映規則見 docs/superpowers/specs/2026-05-22-parent-ia-restructure-design.md §5.1
+describe('parent router IA v3 — deep-link tab association', () => {
   it.each([
     ['/home', 'home'],
+    ['/contact-book', 'home'],
+    ['/calendar', 'home'],
     ['/messages', 'messages'],
-    ['/family', 'family'],
+    ['/announcements', 'messages'],
+    ['/admin', 'admin'],
+    ['/leaves', 'admin'],
+    ['/fees', 'admin'],
+    ['/medications', 'admin'],
+    ['/activity', 'admin'],
+    ['/events', 'admin'],
+    ['/attendance', 'admin'],
     ['/me', 'me'],
-    ['/contact-book', 'family'],
-    ['/calendar', 'family'],
-    ['/leaves', 'family'],
-    ['/medications', 'family'],
-    ['/activity', 'family'],
-    ['/events', 'family'],
-    ['/announcements', 'family'],
-    ['/attendance', 'family'],
-    ['/fees', 'me'],
     ['/notifications/preferences', 'me'],
     ['/bind-additional', 'me'],
   ])('深層頁 %s 對應 tab %s', async (path, expectedTab) => {

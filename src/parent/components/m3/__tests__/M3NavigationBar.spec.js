@@ -5,7 +5,7 @@ import M3NavigationBar from '../M3NavigationBar.vue'
 const ITEMS = [
   { key: 'home', label: '首頁', icon: 'home', path: '/home' },
   { key: 'messages', label: '訊息', icon: 'chat', path: '/messages', badge: 3 },
-  { key: 'family', label: '家校', icon: 'school', path: '/family' },
+  { key: 'admin', label: '事務', icon: 'assignment', path: '/admin' },
   { key: 'me', label: '我的', icon: 'person', path: '/me' },
 ]
 
@@ -96,8 +96,8 @@ describe('M3NavigationBar', () => {
     await w.findAll('.m3-nav-tab')[2].trigger('click')
     const emitted = w.emitted('select')
     expect(emitted).toHaveLength(1)
-    expect(emitted[0][0]).toBe('family')
-    expect(emitted[0][1]).toMatchObject({ key: 'family', label: '家校' })
+    expect(emitted[0][0]).toBe('admin')
+    expect(emitted[0][1]).toMatchObject({ key: 'admin', label: '事務' })
   })
 
   it('activeIcon 覆寫 active 狀態的 icon name', () => {
