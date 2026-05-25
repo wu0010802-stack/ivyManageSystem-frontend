@@ -262,6 +262,14 @@ const routes: RouteRecordRaw[] = [
             meta: { title: '考核年終 payout', requiresAuth: true, permission: 'APPRAISAL_FINALIZE' },
         },
 
+        // ============ 離職管理 ============
+        {
+            path: '/admin/offboarding',
+            name: 'admin-offboarding',
+            component: () => import('@/views/admin/OffboardingView.vue'),
+            meta: { title: '離職管理', requiresAuth: true, permission: 'EMPLOYEES_READ' },
+        },
+
         // ============ 學費管理 ============
         {
             path: '/fees',

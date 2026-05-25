@@ -43,6 +43,10 @@
             <el-icon><User /></el-icon>
             <template #title>員工管理</template>
           </el-menu-item>
+          <el-menu-item v-if="canView.EMPLOYEES_READ" index="/admin/offboarding">
+            <el-icon><SwitchButton /></el-icon>
+            <template #title>離職管理</template>
+          </el-menu-item>
           <el-menu-item v-if="canView.SALARY_READ" index="/salary">
             <el-icon><Money /></el-icon>
             <template #title>薪資管理</template>
@@ -243,7 +247,7 @@ import {
   Money, User, School, OfficeBuilding, Bell, TrendCharts, Setting,
   Expand, Fold, DataAnalysis, Files,
   Star, Collection, ChatDotRound, List, Van, CreditCard, Checked,
-  Medal, Trophy
+  Medal, Trophy, SwitchButton
 } from '@element-plus/icons-vue'
 import { PERMISSION_NAMES, getUserInfo } from '@/utils/auth'
 
