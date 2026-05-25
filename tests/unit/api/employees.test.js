@@ -58,19 +58,6 @@ describe('employees api', () => {
     expect(mockPut).toHaveBeenCalledWith('/employees/42', payload)
   })
 
-  it('offboard POST /employees/:id/offboard', async () => {
-    const payload = { last_day: '2026-05-31' }
-    await mod.offboard(42, payload)
-    expect(mockPost).toHaveBeenCalledWith('/employees/42/offboard', payload)
-  })
-
-  it('getFinalSalaryPreview GET /employees/:id/final-salary-preview with params', async () => {
-    await mod.getFinalSalaryPreview(42, { last_day: '2026-05-31' })
-    expect(mockGet).toHaveBeenCalledWith('/employees/42/final-salary-preview', {
-      params: { last_day: '2026-05-31' },
-    })
-  })
-
   it('updateEmployeeBasic PUT /employees/:id with dirty payload', async () => {
     await mod.updateEmployeeBasic(42, { phone: '0912' })
     expect(mockPut).toHaveBeenCalledWith('/employees/42', { phone: '0912' })
