@@ -13,9 +13,27 @@ const routes: RouteRecordRaw[] = [
         },
         {
             path: '/approvals',
-            name: 'approvals',
-            component: () => import('../views/ApprovalView.vue'),
-            meta: { title: '審核工作台' }
+            redirect: '/workbench/approvals',
+        },
+        {
+            path: '/workbench',
+            component: () => import('../views/workbench/WorkbenchLayout.vue'),
+            redirect: '/workbench/approvals',
+            meta: { title: '工作台' },
+            children: [
+                {
+                    path: 'approvals',
+                    name: 'WorkbenchApprovals',
+                    component: () => import('../views/workbench/WorkbenchApprovalsView.vue'),
+                    meta: { title: '待簽核' },
+                },
+                {
+                    path: 'high-risk',
+                    name: 'WorkbenchHighRisk',
+                    component: () => import('../views/workbench/WorkbenchHighRiskView.vue'),
+                    meta: { title: '高風險事件' },
+                },
+            ],
         },
         {
             path: '/reports',

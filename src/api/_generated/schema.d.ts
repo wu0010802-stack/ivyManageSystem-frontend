@@ -3090,6 +3090,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/audit-logs/{audit_id}/ack": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 標記單筆 audit 為已 ack
+         * @description 將單筆高風險事件標為已讀（idempotent：重複呼叫不覆寫首次 timestamp）。
+         */
+        post: operations["ack_audit_api_audit_logs__audit_id__ack_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/audit-logs/ack-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 標記所有高風險未 ack 為已 ack
+         * @description 批次將時間窗內所有未 ack 高風險事件標為已讀。
+         */
+        post: operations["ack_all_audits_api_audit_logs_ack_all_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/audit-logs/export": {
         parameters: {
             query?: never;
@@ -3102,6 +3142,26 @@ export interface paths {
          * @description 匯出操作審計紀錄為 CSV。上限 10000 筆，超過請縮小篩選範圍。
          */
         get: operations["export_audit_logs_api_audit_logs_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/audit-logs/high-risk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 高風險 audit 事件列表（紅點用）
+         * @description 列出時間窗內高風險 audit 事件，含 unack_count 供前端紅點顯示。
+         */
+        get: operations["get_high_risk_audits_api_audit_logs_high_risk_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3267,7 +3327,7 @@ export interface paths {
         };
         /**
          * Get Permissions
-         * @description 取得權限定義（供前端渲染 UI）
+         * @description 取得權限定義（供前端渲染 UI）— 從 DB 拉，admin runtime 改動立即生效。
          */
         get: operations["get_permissions_api_auth_permissions_get"];
         put?: never;
@@ -4233,12 +4293,7 @@ export interface paths {
         put?: never;
         /**
          * Offboard Employee
-         * @description [DEPRECATED] 改用 POST /api/offboarding/{id}/process。
-         *
-         *     本 endpoint 保留作 deprecation passthrough，前端切完後（Phase 3）移除。
-         *     行為委由 services.offboarding.orchestrator.process_offboarding 統一執行（含
-         *     Employee.resign_date 設定、is_active 更新、User revoke、leave snapshot、
-         *     appraisal mark 等），response shape 保持向後相容。
+         * @description 辦理離職：設定離職日與離職原因，若離職日 <= 今天則同步設 is_active = False
          */
         post: operations["offboard_employee_api_employees__employee_id__offboard_post"];
         delete?: never;
@@ -6087,176 +6142,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/offboarding/{employee_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Offboarding Detail
-         * @description 取得員工離職 checklist 完整紀錄。
-         *
-         *     gated by EMPLOYEES_READ；record 不存在回 404 OFFBOARDING_RECORD_NOT_FOUND。
-         */
-        get: operations["get_offboarding_detail_api_offboarding__employee_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/offboarding/{employee_id}/certificate.pdf": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Certificate Pdf
-         * @description admin 取離職證明 PDF。
-         *
-         *     gated by EMPLOYEES_READ；record 不存在或 certificate_pdf_path 空
-         *     → 404 CERTIFICATE_NOT_FOUND；檔案不存在 → 404 CERTIFICATE_FILE_MISSING。
-         */
-        get: operations["get_certificate_pdf_api_offboarding__employee_id__certificate_pdf_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/offboarding/{employee_id}/magic-link": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Post Magic Link
-         * @description admin 產 magic-link token（30 天 / 3 次上限）。覆寫舊 hash（重發即作廢前一個）。
-         */
-        post: operations["post_magic_link_api_offboarding__employee_id__magic_link_post"];
-        /**
-         * Delete Magic Link
-         * @description admin 撤 magic-link token。
-         */
-        delete: operations["delete_magic_link_api_offboarding__employee_id__magic_link_delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/offboarding/{employee_id}/nhi-unenroll": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /**
-         * Patch Nhi Unenroll
-         * @description 手動標記全民健保退保申報狀態。
-         *
-         *     submitted=true → 設 nhi_unenroll_submitted_at = now()
-         *     submitted=false → 清空（設 None）
-         *     gated by EMPLOYEES_WRITE。
-         */
-        patch: operations["patch_nhi_unenroll_api_offboarding__employee_id__nhi_unenroll_patch"];
-        trace?: never;
-    };
-    "/offboarding/{employee_id}/preview": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Preview Offboarding
-         * @description 預覽離職將執行的動作（純讀，不寫 DB）。
-         */
-        post: operations["preview_offboarding_api_offboarding__employee_id__preview_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/offboarding/{employee_id}/process": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Process Offboarding Endpoint
-         * @description 一鍵離職主處理 endpoint。
-         *
-         *     串接 orchestrator 的 4 step（mark_appraisal / snapshot_leave /
-         *     prefill_leave_payout / revoke_user），失敗時 rollback 並依
-         *     _ERROR_TO_STATUS 映射回 4xx/5xx。
-         */
-        post: operations["process_offboarding_endpoint_api_offboarding__employee_id__process_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/offboarding/download": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Download Offboarding Bundle
-         * @description **公開無 auth** download endpoint。
-         *
-         *     以 magic-link token 串流 ZIP 離職包（離職證明 PDF + 12 月薪資 PDF + 出勤 CSV）。
-         *     驗失敗統一 410 Gone，不暴露差異原因（防 enumeration）。
-         *
-         *     Security headers：
-         *     - Content-Disposition: attachment（強制下載，不在瀏覽器 inline render）
-         *     - X-Content-Type-Options: nosniff（防 MIME sniffing）
-         *     - Cache-Control: no-store（代理 / CDN 不快取含 PII 的 ZIP）
-         *
-         *     TODO follow-up：uvicorn access log token redaction（ASGI middleware 攔 query string
-         *     或 --access-log False）。目前 endpoint 本身不 echo token 到 logger，但 uvicorn
-         *     預設 access log 會記完整 URL（含 ?token=...），建議後續 PR 加 ASGI middleware
-         *     做 query string sanitize 或改用 --access-log False。
-         */
-        get: operations["download_offboarding_bundle_api_offboarding_download_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/overtimes": {
         parameters: {
             query?: never;
@@ -7670,6 +7555,41 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/permissions/definitions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Permission Definition */
+        post: operations["create_permission_definition_api_permissions_definitions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/permissions/definitions/{code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update Permission Definition */
+        put: operations["update_permission_definition_api_permissions_definitions__code__put"];
+        post?: never;
+        /** Delete Permission Definition */
+        delete: operations["delete_permission_definition_api_permissions_definitions__code__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -10081,6 +10001,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/roles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Role */
+        post: operations["create_role_api_roles_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/roles/{code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update Role */
+        put: operations["update_role_api_roles__code__put"];
+        post?: never;
+        /** Delete Role */
+        delete: operations["delete_role_api_roles__code__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/salaries/{record_id}/audit-log": {
         parameters: {
             query?: never;
@@ -11355,6 +11310,7 @@ export interface paths {
          *     副作用：轉入終態 (withdrawn/transferred/graduated) 時：
          *     - 取消該生進行中的接送通知 + WS 廣播
          *     - 軟刪該生當學期才藝報名
+         *     - 標記 AuditMiddleware soft-delete summary（request 傳入 set_lifecycle_status）
          */
         post: operations["transition_student_lifecycle_api_students__student_id__lifecycle_post"];
         delete?: never;
@@ -12460,6 +12416,11 @@ export interface components {
             /** Updated At */
             updated_at: string | null;
         };
+        /** AckAllResponse */
+        AckAllResponse: {
+            /** Acknowledged Count */
+            acknowledged_count: number;
+        };
         /** AckRequest */
         AckRequest: {
             /** Signature Name */
@@ -12758,15 +12719,6 @@ export interface components {
             /** Template Id */
             template_id: number;
         };
-        /** AppraisalInFlightCycle */
-        AppraisalInFlightCycle: {
-            /** Current Score */
-            current_score?: number | null;
-            /** Cycle Id */
-            cycle_id: number;
-            /** Cycle Name */
-            cycle_name: string;
-        };
         /** AssessmentCreate */
         AssessmentCreate: {
             /**
@@ -12930,6 +12882,35 @@ export interface components {
             records: components["schemas"]["AttendanceCSVRow"][];
             /** Year */
             year: number;
+        };
+        /** AuditLogHighRiskItem */
+        AuditLogHighRiskItem: {
+            /** Acknowledged At */
+            acknowledged_at?: string | null;
+            /** Acknowledged By */
+            acknowledged_by?: number | null;
+            /** Action */
+            action: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Entity Id */
+            entity_id?: string | null;
+            /** Entity Type */
+            entity_type: string;
+            /** Id */
+            id: number;
+            /**
+             * Risk Kind
+             * @enum {string}
+             */
+            risk_kind: "hard_delete" | "blocked" | "permission_change";
+            /** Summary */
+            summary: string;
+            /** Username */
+            username: string;
         };
         /** AutoDetectPayload */
         AutoDetectPayload: {
@@ -15119,6 +15100,15 @@ export interface components {
             /** Sort Order */
             sort_order?: number | null;
         };
+        /** HighRiskListResponse */
+        HighRiskListResponse: {
+            /** Items */
+            items: components["schemas"]["AuditLogHighRiskItem"][];
+            /** Total */
+            total: number;
+            /** Unack Count */
+            unack_count: number;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -15523,15 +15513,6 @@ export interface components {
             /** Substitute Employee Id */
             substitute_employee_id?: number | null;
         };
-        /** LeaveSnapshotPreview */
-        LeaveSnapshotPreview: {
-            /** Daily Wage */
-            daily_wage: number;
-            /** Payout Amount */
-            payout_amount: number;
-            /** Special Leave Days */
-            special_leave_days: number;
-        };
         /** LeaveUpdate */
         LeaveUpdate: {
             /**
@@ -15608,30 +15589,6 @@ export interface components {
             password: string;
             /** Username */
             username: string;
-        };
-        /** MagicLinkResponse */
-        MagicLinkResponse: {
-            /** Download Url */
-            download_url: string;
-            /** Employee Id */
-            employee_id: number;
-            /**
-             * Expires At
-             * Format: date-time
-             */
-            expires_at: string;
-            /** Token */
-            token: string;
-        };
-        /** MagicLinkRevokeResponse */
-        MagicLinkRevokeResponse: {
-            /** Employee Id */
-            employee_id: number;
-            /**
-             * Revoked At
-             * Format: date-time
-             */
-            revoked_at: string;
         };
         /** ManualEventCountBatchIn */
         ManualEventCountBatchIn: {
@@ -16004,11 +15961,6 @@ export interface components {
             /** Total Score */
             total_score: string;
         };
-        /** NhiUnenrollRequest */
-        NhiUnenrollRequest: {
-            /** Submitted */
-            submitted: boolean;
-        };
         /** ObservationCreate */
         ObservationCreate: {
             /** Domain */
@@ -16040,120 +15992,6 @@ export interface components {
             observation_date?: string | null;
             /** Rating */
             rating?: number | null;
-        };
-        /** OffboardingDetailResponse */
-        OffboardingDetailResponse: {
-            /** Appraisal Marked At */
-            appraisal_marked_at: string | null;
-            /** Certificate Generated At */
-            certificate_generated_at: string | null;
-            /** Certificate Pdf Path */
-            certificate_pdf_path: string | null;
-            /** Closed At */
-            closed_at: string | null;
-            /** Employee Id */
-            employee_id: number;
-            /** Employee Name */
-            employee_name: string;
-            /** Leave Balance Snapshot */
-            leave_balance_snapshot: {
-                [key: string]: unknown;
-            } | null;
-            /** Leave Snapshot At */
-            leave_snapshot_at: string | null;
-            /** Magic Link Active */
-            magic_link_active: boolean;
-            /**
-             * Magic Link Download Count
-             * @default 0
-             */
-            magic_link_download_count: number;
-            /** Magic Link Expires At */
-            magic_link_expires_at?: string | null;
-            /** Magic Link Last Used At */
-            magic_link_last_used_at?: string | null;
-            /** Nhi Unenroll Submitted At */
-            nhi_unenroll_submitted_at: string | null;
-            /**
-             * Opened At
-             * Format: date-time
-             */
-            opened_at: string;
-            /** Opened By User Id */
-            opened_by_user_id: number;
-            /**
-             * Resign Date
-             * Format: date
-             */
-            resign_date: string;
-            /** Resign Reason */
-            resign_reason: string | null;
-            /** User Revoked At */
-            user_revoked_at: string | null;
-        };
-        /** OffboardingPreview */
-        OffboardingPreview: {
-            /** Appraisal In Flight Cycles */
-            appraisal_in_flight_cycles: components["schemas"]["AppraisalInFlightCycle"][];
-            /** Certificate Pdf Ready To Generate */
-            certificate_pdf_ready_to_generate: boolean;
-            leave_snapshot: components["schemas"]["LeaveSnapshotPreview"];
-            salary_record_target: components["schemas"]["SalaryRecordTarget"];
-            /** User Account Will Be Revoked */
-            user_account_will_be_revoked: boolean;
-        };
-        /** OffboardingPreviewRequest */
-        OffboardingPreviewRequest: {
-            /**
-             * Resign Date
-             * Format: date
-             */
-            resign_date: string;
-            /** Resign Reason */
-            resign_reason?: string | null;
-        };
-        /** OffboardingPreviewResponse */
-        OffboardingPreviewResponse: {
-            /** Employee Id */
-            employee_id: number;
-            /** Employee Name */
-            employee_name: string;
-            preview: components["schemas"]["OffboardingPreview"];
-            /**
-             * Resign Date
-             * Format: date
-             */
-            resign_date: string;
-            /** Warnings */
-            warnings?: string[];
-        };
-        /** OffboardingProcessRequest */
-        OffboardingProcessRequest: {
-            /**
-             * Resign Date
-             * Format: date
-             */
-            resign_date: string;
-            /** Resign Reason */
-            resign_reason?: string | null;
-        };
-        /** OffboardingProcessResponse */
-        OffboardingProcessResponse: {
-            /** Certificate Download Url */
-            certificate_download_url?: string | null;
-            /** Employee Id */
-            employee_id: number;
-            /** Is Active */
-            is_active: boolean;
-            /**
-             * Resign Date
-             * Format: date
-             */
-            resign_date: string;
-            /** Steps */
-            steps: components["schemas"]["StepResultModel"][];
-            /** User Account Revoked */
-            user_account_revoked: boolean;
         };
         /** OffboardRequest */
         OffboardRequest: {
@@ -16588,6 +16426,29 @@ export interface components {
             transfer_term_count?: number | null;
             /** Visit Count */
             visit_count?: number | null;
+        };
+        /** PermissionDefinitionIn */
+        PermissionDefinitionIn: {
+            /** Code */
+            code: string;
+            /** Description */
+            description?: string | null;
+            /**
+             * Group Name
+             * @default 自訂
+             */
+            group_name: string;
+            /** Label */
+            label: string;
+        };
+        /** PermissionDefinitionUpdate */
+        PermissionDefinitionUpdate: {
+            /** Description */
+            description?: string | null;
+            /** Group Name */
+            group_name?: string | null;
+            /** Label */
+            label?: string | null;
         };
         /** PolicyItem */
         PolicyItem: {
@@ -17130,6 +16991,26 @@ export interface components {
          * @enum {string}
          */
         RoleGroup: "SUPERVISOR" | "HEAD_TEACHER" | "ASSISTANT" | "STAFF" | "COOK";
+        /** RoleIn */
+        RoleIn: {
+            /** Code */
+            code: string;
+            /** Description */
+            description?: string | null;
+            /** Label */
+            label: string;
+            /** Permissions */
+            permissions?: string[];
+        };
+        /** RoleUpdate */
+        RoleUpdate: {
+            /** Description */
+            description?: string | null;
+            /** Label */
+            label?: string | null;
+            /** Permissions */
+            permissions?: string[] | null;
+        };
         /** RosterResponse */
         RosterResponse: {
             /** Classes */
@@ -17209,17 +17090,6 @@ export interface components {
             special_bonus?: number | null;
             /** Supervisor Dividend */
             supervisor_dividend?: number | null;
-        };
-        /** SalaryRecordTarget */
-        SalaryRecordTarget: {
-            /** Exists */
-            exists: boolean;
-            /** Month */
-            month: number;
-            /** Will Be Marked Stale */
-            will_be_marked_stale: boolean;
-            /** Year */
-            year: number;
         };
         /**
          * SalarySimulateOverride
@@ -17612,24 +17482,6 @@ export interface components {
         StaffEntry: {
             /** Name */
             name: string;
-        };
-        /** StepResultModel */
-        StepResultModel: {
-            /** Completed At */
-            completed_at?: string | null;
-            /** Error */
-            error?: string | null;
-            /** Payload */
-            payload?: {
-                [key: string]: unknown;
-            } | null;
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "completed" | "skipped" | "failed";
-            /** Step */
-            step: string;
         };
         /** StudentBulkTransfer */
         StudentBulkTransfer: {
@@ -23548,6 +23400,68 @@ export interface operations {
             };
         };
     };
+    ack_audit_api_audit_logs__audit_id__ack_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                audit_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ack_all_audits_api_audit_logs_ack_all_post: {
+        parameters: {
+            query?: {
+                days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AckAllResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     export_audit_logs_api_audit_logs_export_get: {
         parameters: {
             query?: {
@@ -23572,6 +23486,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_high_risk_audits_api_audit_logs_high_risk_get: {
+        parameters: {
+            query?: {
+                days?: number;
+                limit?: number;
+                unack_only?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HighRiskListResponse"];
                 };
             };
             /** @description Validation Error */
@@ -29296,266 +29243,6 @@ export interface operations {
             };
         };
     };
-    get_offboarding_detail_api_offboarding__employee_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                employee_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OffboardingDetailResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_certificate_pdf_api_offboarding__employee_id__certificate_pdf_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                employee_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    post_magic_link_api_offboarding__employee_id__magic_link_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                employee_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MagicLinkResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_magic_link_api_offboarding__employee_id__magic_link_delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                employee_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MagicLinkRevokeResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    patch_nhi_unenroll_api_offboarding__employee_id__nhi_unenroll_patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                employee_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["NhiUnenrollRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    preview_offboarding_api_offboarding__employee_id__preview_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                employee_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["OffboardingPreviewRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OffboardingPreviewResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    process_offboarding_endpoint_api_offboarding__employee_id__process_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                employee_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["OffboardingProcessRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OffboardingProcessResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    download_offboarding_bundle_api_offboarding_download_get: {
-        parameters: {
-            query: {
-                token: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     get_overtimes_api_overtimes_get: {
         parameters: {
             query?: {
@@ -31840,6 +31527,105 @@ export interface operations {
             header?: never;
             path: {
                 key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_permission_definition_api_permissions_definitions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PermissionDefinitionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_permission_definition_api_permissions_definitions__code__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PermissionDefinitionUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_permission_definition_api_permissions_definitions__code__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
             };
             cookie?: never;
         };
@@ -35957,6 +35743,105 @@ export interface operations {
             };
             header?: never;
             path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_role_api_roles_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RoleIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_role_api_roles__code__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RoleUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_role_api_roles__code__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                code: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
