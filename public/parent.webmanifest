@@ -1,0 +1,16 @@
+{
+  "name": "常春藤家長 App",
+  "short_name": "家長 App",
+  "description": "常春藤幼兒園家長端",
+  "theme_color": "#0d9053",
+  "background_color": "#ffffff",
+  "display": "standalone",
+  "orientation": "portrait",
+  "start_url": "/parent.html",
+  "scope": "/parent/",
+  "icons": [
+    { "src": "/parent-pwa-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/parent-pwa-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/parent-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
