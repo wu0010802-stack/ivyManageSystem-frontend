@@ -52,5 +52,10 @@ export async function getEarliestExpiringGrantForEmployee(
   const own = grants
     .filter((g) => g.employee_id === employeeId)
     .sort((a, b) => a.expires_at.localeCompare(b.expires_at))
-  return own[0] ?? null
+  const earliest = own[0]
+  if (!earliest) return null
+  return {
+    expires_at: earliest.expires_at,
+    unexpired_hours: earliest.unexpired_hours,
+  }
 }

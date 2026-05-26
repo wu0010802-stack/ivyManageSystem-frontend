@@ -18,7 +18,7 @@ vi.mock('@/api/index', () => ({
   },
 }))
 
-import { listUpcomingGrants, listUpcomingAnniversaries, listPayoutHistory, runSchedulerNow } from '@/api/leaveQuotaExpiry'
+import { listUpcomingGrants, listUpcomingAnniversaries, listPayoutHistory, runSchedulerNow, getEarliestExpiringGrantForEmployee } from '@/api/leaveQuotaExpiry'
 
 describe('api/leaveQuotaExpiry endpoints', () => {
   beforeEach(() => {
@@ -48,5 +48,38 @@ describe('api/leaveQuotaExpiry endpoints', () => {
     mockPost.mockResolvedValueOnce({ data: { comp_summary: {}, cutover_summary: {} } })
     await runSchedulerNow()
     expect(mockPost).toHaveBeenCalledWith('/leave-quota-expiry/run-now')
+  })
+})
+
+describe('api/leaveQuotaExpiry helpers', () => {
+  beforeEach(() => {
+    mockGet.mockReset()
+  })
+
+  it('getEarliestExpiringGrantForEmployee filters by employee_id and returns earliest grant', async () => {
+    const grants = [
+      { employee_id: 101, expires_at: '2026-06-15', unexpired_hours: 8 },
+      { employee_id: 101, expires_at: '2026-05-30', unexpired_hours: 16 },
+      { employee_id: 102, expires_at: '2026-05-20', unexpired_hours: 24 },
+    ]
+    mockGet.mockResolvedValueOnce({ data: { grants } })
+    const result = await getEarliestExpiringGrantForEmployee(101)
+    expect(mockGet).toHaveBeenCalledWith('/leave-quota-expiry/upcoming', { params: { days: 365 } })
+    expect(result).toEqual({ expires_at: '2026-05-30', unexpired_hours: 16 })
+  })
+
+  it('getEarliestExpiringGrantForEmployee returns null when no grants for employee', async () => {
+    const grants = [
+      { employee_id: 102, expires_at: '2026-06-15', unexpired_hours: 8 },
+    ]
+    mockGet.mockResolvedValueOnce({ data: { grants } })
+    const result = await getEarliestExpiringGrantForEmployee(101)
+    expect(result).toBeNull()
+  })
+
+  it('getEarliestExpiringGrantForEmployee returns null when grants list is empty', async () => {
+    mockGet.mockResolvedValueOnce({ data: { grants: [] } })
+    const result = await getEarliestExpiringGrantForEmployee(101)
+    expect(result).toBeNull()
   })
 })
