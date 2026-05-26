@@ -33,6 +33,16 @@ export function runSchedulerNow() {
   >
 }
 
+/**
+ * 撈某張 SalaryRecord 的未休折現明細（含 logs 證據鏈：來源/時數/時薪/金額/基準日）。
+ * Permission: HR (SALARY_READ) 或員工本人。
+ */
+export function getUnusedLeavePayoutDetail(salaryRecordId: number) {
+  return api.get(`/salaries/${salaryRecordId}/unused-leave-payout-detail`) as Promise<
+    AxiosResp<'/salaries/{record_id}/unused-leave-payout-detail', 'get'>
+  >
+}
+
 export interface EarliestExpiringGrant {
   expires_at: string
   unexpired_hours: number
