@@ -32,3 +32,25 @@ export function runSchedulerNow() {
     AxiosResp<'/leave-quota-expiry/run-now', 'post'>
   >
 }
+
+export interface EarliestExpiringGrant {
+  expires_at: string
+  unexpired_hours: number
+}
+
+/**
+ * 查詢員工最早到期的 active grant（前端 LeaveQuotaManager 補休 row 用）。
+ * 從 listUpcomingGrants(365) 過濾 employee_id 後取 expires_at 最小。
+ */
+export async function getEarliestExpiringGrantForEmployee(
+  employeeId: number,
+): Promise<EarliestExpiringGrant | null> {
+  const res = await listUpcomingGrants(365)
+  const grants = (res.data as { grants: Array<{
+    employee_id: number; expires_at: string; unexpired_hours: number
+  }> }).grants
+  const own = grants
+    .filter((g) => g.employee_id === employeeId)
+    .sort((a, b) => a.expires_at.localeCompare(b.expires_at))
+  return own[0] ?? null
+}

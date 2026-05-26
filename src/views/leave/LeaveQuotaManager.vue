@@ -2,8 +2,10 @@
 import { ref, computed } from 'vue'
 import { getLeaveQuotas, initLeaveQuotas, updateLeaveQuota } from '@/api/leaves'
 import { ElMessage } from 'element-plus'
+import { Warning } from '@element-plus/icons-vue'
 import { useEmployeeStore } from '@/stores/employee'
 import { LEAVE_TYPES as leaveTypes } from '@/utils/leaves'
+import { getEarliestExpiringGrantForEmployee, type EarliestExpiringGrant } from '@/api/leaveQuotaExpiry'
 
 interface QuotaRow {
   id: number
@@ -38,6 +40,7 @@ const quotaMgrEmpId = ref<number | null>(null)
 const quotaRows = ref<QuotaRow[]>([])
 const quotaMgrLoading = ref(false)
 const quotaSaving = ref(false)
+const earliestExpiringGrant = ref<EarliestExpiringGrant | null>(null)
 
 const loadQuotaMgr = async () => {
   if (!quotaMgrEmpId.value) return
@@ -45,6 +48,12 @@ const loadQuotaMgr = async () => {
   try {
     const res = await getLeaveQuotas({ employee_id: quotaMgrEmpId.value, year: quotaMgrYear.value })
     quotaRows.value = (res as { data: Omit<QuotaRow, '_editing' | '_newTotal'>[] }).data.map(r => ({ ...r, _editing: false, _newTotal: r.total_hours }))
+    const hasCompensatory = quotaRows.value.some((r) => r.leave_type === 'compensatory')
+    if (hasCompensatory) {
+      earliestExpiringGrant.value = await getEarliestExpiringGrantForEmployee(quotaMgrEmpId.value)
+    } else {
+      earliestExpiringGrant.value = null
+    }
   } catch {
     ElMessage.error('載入配額失敗')
   } finally {
@@ -150,7 +159,7 @@ const saveQuotaRow = async (row: QuotaRow) => {
           </span>
         </template>
       </el-table-column>
-      <el-table-column label="剩餘（h）" width="90" align="center">
+      <el-table-column label="剩餘（h）" width="120" align="center">
         <template #default="{ row }">
           <el-tag
             size="small"
@@ -158,6 +167,15 @@ const saveQuotaRow = async (row: QuotaRow) => {
           >
             {{ row.remaining_hours }}h
           </el-tag>
+          <el-tooltip
+            v-if="row.leave_type === 'compensatory' && earliestExpiringGrant"
+            :content="`最早到期：${earliestExpiringGrant.expires_at}（${earliestExpiringGrant.unexpired_hours}h）`"
+            placement="top"
+          >
+            <el-icon class="warn-icon" style="margin-left: 4px; color: var(--el-color-warning); vertical-align: middle;">
+              <Warning />
+            </el-icon>
+          </el-tooltip>
         </template>
       </el-table-column>
       <el-table-column label="備註" prop="note" min-width="140" show-overflow-tooltip />
