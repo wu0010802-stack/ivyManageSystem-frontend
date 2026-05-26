@@ -198,16 +198,16 @@ ALTER TABLE parent_messages ADD COLUMN client_uuid UUID NULL;
 CREATE UNIQUE INDEX ix_parent_messages_client_uuid
     ON parent_messages (client_uuid) WHERE client_uuid IS NOT NULL;
 
-ALTER TABLE contact_book_replies ADD COLUMN client_uuid UUID NULL;
-CREATE UNIQUE INDEX ix_contact_book_replies_client_uuid
-    ON contact_book_replies (client_uuid) WHERE client_uuid IS NOT NULL;
+ALTER TABLE student_contact_book_replies ADD COLUMN client_uuid UUID NULL;
+CREATE UNIQUE INDEX ix_student_contact_book_replies_client_uuid
+    ON student_contact_book_replies (client_uuid) WHERE client_uuid IS NOT NULL;
 
-ALTER TABLE student_leaves ADD COLUMN client_uuid UUID NULL;
-CREATE UNIQUE INDEX ix_student_leaves_client_uuid
-    ON student_leaves (client_uuid) WHERE client_uuid IS NOT NULL;
+ALTER TABLE student_leave_requests ADD COLUMN client_uuid UUID NULL;
+CREATE UNIQUE INDEX ix_student_leave_requests_client_uuid
+    ON student_leave_requests (client_uuid) WHERE client_uuid IS NOT NULL;
 ```
 
-**Partial UNIQUE** 不影響舊紀錄（`client_uuid IS NULL` 時不受 UNIQUE 約束）。表名以 plan 階段實機 grep 為準。
+**Partial UNIQUE** 不影響舊紀錄（`client_uuid IS NULL` 時不受 UNIQUE 約束）。表名以 plan 階段實機 grep 校正過：`parent_messages` / `student_contact_book_replies` / `student_leave_requests`。
 
 **3 router endpoint 改造**：
 - accept `client_uuid: Optional[UUID]` 欄位
