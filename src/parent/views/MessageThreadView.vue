@@ -38,8 +38,6 @@ const hasMore = computed(() => {
   return !!bucket?.hasMore
 })
 
-const DRAFT_KEY = computed(() => `parent-msg-draft-${threadId.value}`)
-
 async function init() {
   try {
     const { data } = await getMessageThread(threadId.value)
@@ -69,7 +67,6 @@ async function onSend({ body, attachments, done }: { body: string; attachments?:
   if (navigator.onLine) {
     try {
       await messagesStore.send(threadId.value, body, attachments)
-      sessionStorage.removeItem(DRAFT_KEY.value)
       done(true)
     } catch (err) {
       const e = err as Record<string, unknown>
@@ -81,8 +78,7 @@ async function onSend({ body, attachments, done }: { body: string; attachments?:
 
   // 離線分流
   if (hasAttachment) {
-    sessionStorage.setItem(DRAFT_KEY.value, body)
-    toast.warn('需連線才能上傳附件，文字已暫存草稿，下次進此對話可恢復')
+    toast.warn('需連線才能上傳附件，請連線後再試')
     done(false)
     return
   }
@@ -93,7 +89,6 @@ async function onSend({ body, attachments, done }: { body: string; attachments?:
       payload: { thread_id: threadId.value, body },
       meta: { thread_id: threadId.value, content_preview: body.slice(0, 20) },
     })
-    sessionStorage.removeItem(DRAFT_KEY.value)
     toast.success('已暫存，連線後自動送出')
     done(true)
     flushParentQueue(OP_KINDS.PARENT_MESSAGE).catch(() => {})
@@ -128,12 +123,6 @@ async function doRecall() {
 }
 
 onMounted(async () => {
-  // prefill sessionStorage 草稿（離線時有附件被阻擋後暫存的文字）
-  // MessageComposer 的 input ref 由元件內部管理，透過 store 預填需額外機制；
-  // 此處暫存供 MessageComposer 以 v-model 或 prop 取用（view 目前無直接 input ref，
-  // 需 MessageComposer 自行從 sessionStorage 讀 DRAFT_KEY — 未來可擴充）
-  void DRAFT_KEY.value // reactive 觸發
-
   await init()
   flushParentQueue(OP_KINDS.PARENT_MESSAGE).catch(() => {})
 })

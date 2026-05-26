@@ -67,7 +67,7 @@ export async function enqueueParent(args: ParentEnqueueArgs) {
 
 const SAVE_FN_BY_KIND: Record<ParentOpKind, (payload: Record<string, unknown>) => Promise<unknown>> = {
   [OP_KINDS.PARENT_MESSAGE]: (p) => sendThreadMessage(p['thread_id'] as number, p),
-  [OP_KINDS.CONTACT_BOOK_REPLY]: (p) => replyContactBook(p['entry_id'] as number, p),
+  [OP_KINDS.CONTACT_BOOK_REPLY]: (p) => replyContactBook(p['entry_id'] as number, p['body'] as string),
   [OP_KINDS.CONTACT_BOOK_ACK]: (p) => ackContactBook(p['entry_id'] as number),
   [OP_KINDS.EVENT_ACK]: (p) => acknowledgeEvent(p['event_id'] as number, p),
   [OP_KINDS.PARENT_LEAVE_REQUEST]: (p) => createLeave(p),
