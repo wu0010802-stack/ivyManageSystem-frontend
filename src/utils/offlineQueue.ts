@@ -139,6 +139,11 @@ export async function clearAll() {
     await db.clear(STORE)
 }
 
+/** テスト専用：DB 接続キャッシュをリセット（fake-indexeddb を再初期化した後に呼ぶ） */
+export function _resetDbForTests() {
+    _dbPromise = null
+}
+
 export const OP_KINDS = Object.freeze({
     CLASS_ATTENDANCE: 'class_attendance',
     // 家長端 offline queue（spec 2026-05-26）
