@@ -7,6 +7,7 @@ import SettingsApprovalTab from '@/components/settings/SettingsApprovalTab.vue'
 import SettingsLineTab from '@/components/settings/SettingsLineTab.vue'
 import SettingsAcademicTermsTab from '@/components/settings/SettingsAcademicTermsTab.vue'
 import SettingsPermissionsTab from '@/components/settings/SettingsPermissionsTab.vue'
+import SettingsObservabilityTab from '@/components/settings/SettingsObservabilityTab.vue'
 
 const activeTab = ref('shifts')
 const shiftStore = useShiftStore()
@@ -38,6 +39,9 @@ onMounted(() => {
       </el-tab-pane>
       <el-tab-pane label="學年/學期" name="academic-terms" lazy>
         <SettingsAcademicTermsTab />
+      </el-tab-pane>
+      <el-tab-pane label="排程觀測" name="observability" lazy>
+        <SettingsObservabilityTab v-if="activeTab === 'observability'" />
       </el-tab-pane>
     </el-tabs>
   </div>
