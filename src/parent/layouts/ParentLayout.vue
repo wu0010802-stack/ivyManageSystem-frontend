@@ -10,6 +10,7 @@ import M3IconButton from '../components/m3/M3IconButton.vue'
 import ConnectionBanner from '../components/ConnectionBanner.vue'
 import BrandMark from '@/components/brand/BrandMark.vue'
 import MeDrawer from '../components/layout/MeDrawer.vue'
+import ParentOfflineIndicator from '../components/ParentOfflineIndicator.vue'
 
 interface TabItem {
   key: string
@@ -149,6 +150,9 @@ function onBack() {
       :current-key="currentTab"
       @select="onTabSelect"
     />
+
+    <!-- 離線同步狀態 indicator：position:fixed 浮於底部，不受頁面 transition 影響 -->
+    <ParentOfflineIndicator />
   </div>
 </template>
 
