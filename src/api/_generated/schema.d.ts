@@ -8611,6 +8611,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/portal/me/comp-leave-grants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List My Comp Leave Grants
+         * @description 員工自助入口：補休 grant ledger 全狀態明細（active / expired / revoked）。
+         *
+         *     Response 200:
+         *     {
+         *         "grants": [
+         *             {
+         *                 "grant_id": int,
+         *                 "granted_hours": float,
+         *                 "consumed_hours": float,
+         *                 "remaining_hours": float,
+         *                 "granted_at": "YYYY-MM-DD",
+         *                 "expires_at": "YYYY-MM-DD",
+         *                 "status": str,
+         *                 "expired_at": "YYYY-MM-DDTHH:MM:SS" | null,
+         *             },
+         *             ...
+         *         ]
+         *     }
+         *
+         *     Order: granted_at DESC（最近的在前）
+         */
+        get: operations["list_my_comp_leave_grants_api_portal_me_comp_leave_grants_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/portal/me/leave-quota-expiry": {
         parameters: {
             query?: never;
@@ -8637,6 +8676,45 @@ export interface paths {
          *     }
          */
         get: operations["get_my_leave_quota_expiry_api_portal_me_leave_quota_expiry_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/me/payout-history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List My Payout History
+         * @description 員工自助入口：未休假折算工資兌現紀錄（含 source_type）。
+         *
+         *     Response 200:
+         *     {
+         *         "logs": [
+         *             {
+         *                 "log_id": int,
+         *                 "source_type": str,        # comp_grant_expiry / annual_anniversary / offboarding
+         *                 "hours": float,
+         *                 "hourly_wage": float,
+         *                 "amount": float,
+         *                 "wage_basis_date": "YYYY-MM-DD",
+         *                 "salary_period": "YYYY-MM",
+         *                 "meta": dict,
+         *             },
+         *             ...
+         *         ]
+         *     }
+         *
+         *     Order: created_at DESC（最新在前）
+         */
+        get: operations["list_my_payout_history_api_portal_me_payout_history_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -14413,6 +14491,11 @@ export interface components {
         /** CreateLeaveRequest */
         CreateLeaveRequest: {
             /**
+             * Client Request Id
+             * @description 前端產生的 UUID，partial UNIQUE 提供冪等性
+             */
+            client_request_id?: string | null;
+            /**
              * End Date
              * Format: date
              */
@@ -17528,6 +17611,11 @@ export interface components {
         ReplyCreate: {
             /** Body */
             body: string;
+            /**
+             * Client Request Id
+             * @description 前端產生的 UUID，partial UNIQUE 提供冪等性
+             */
+            client_request_id?: string | null;
         };
         /** ReplyMessage */
         ReplyMessage: {
@@ -33839,7 +33927,47 @@ export interface operations {
             };
         };
     };
+    list_my_comp_leave_grants_api_portal_me_comp_leave_grants_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
     get_my_leave_quota_expiry_api_portal_me_leave_quota_expiry_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    list_my_payout_history_api_portal_me_payout_history_get: {
         parameters: {
             query?: never;
             header?: never;

@@ -96,6 +96,9 @@ const actions = computed(() => summaryData.value?.actions || {})
             下個結算月：{{ leaveQuotaInfo.expected_payout_month }}
             <span class="hint">（未休將自動折算工資）</span>
           </div>
+          <div class="history-link-row">
+            <router-link to="/portal/leave-history" class="history-link">查看詳細歷史 →</router-link>
+          </div>
         </div>
       </el-card>
 
@@ -205,5 +208,16 @@ const actions = computed(() => summaryData.value?.actions || {})
 }
 .hint {
   color: var(--pt-text-muted);
+}
+.history-link-row {
+  margin-top: var(--space-1);
+}
+.history-link {
+  font-size: var(--text-sm);
+  color: var(--el-color-primary);
+  text-decoration: none;
+}
+.history-link:hover {
+  text-decoration: underline;
 }
 </style>
