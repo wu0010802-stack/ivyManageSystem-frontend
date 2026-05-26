@@ -1,7 +1,7 @@
 # 家長端 LIFF PWA + 離線寫入佇列設計
 
 **Date**: 2026-05-26
-**Status**: Spec — pending plan
+**Status**: Phase 2 complete / pending user merge + push（Phase 0 spike skipped by user, Phase 1+2 implemented + automated tests green）
 **Repos affected**: ivy-frontend（主體）+ ivy-backend（Phase 2 前置 task）
 **Related memory**: [[project_parent_line_refresh_token_2026_05_03]]（30 天 LINE refresh token）
 
