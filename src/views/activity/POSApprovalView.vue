@@ -75,10 +75,10 @@
             <span>{{ selectedDate }} 簽核狀態</span>
             <el-tag
               v-if="detail"
-              :type="detail.is_approved ? 'success' : 'info'"
+              :type="detail.status === 'approved' ? 'success' : 'info'"
               size="small"
             >
-              {{ detail.is_approved ? '已簽核' : '未簽核' }}
+              {{ detail.status === 'approved' ? '已簽核' : '未簽核' }}
             </el-tag>
           </div>
         </template>
@@ -196,7 +196,7 @@
           </div>
 
           <!-- 已簽核：展示結果 + 解鎖按鈕 -->
-          <div v-if="detail.is_approved" class="pos-approval__approved">
+          <div v-if="detail.status === 'approved'" class="pos-approval__approved">
             <div class="pos-approval__info-row">
               <span>簽核人</span>
               <strong>{{ detail.approver_username || '—' }}</strong>
@@ -320,8 +320,8 @@
         <el-table-column label="日期" prop="date" width="110" />
         <el-table-column label="狀態" width="90">
           <template #default="{ row }">
-            <el-tag :type="row.is_approved ? 'success' : 'info'" size="small">
-              {{ row.is_approved ? '已簽核' : '未簽核' }}
+            <el-tag :type="row.status === 'approved' ? 'success' : 'info'" size="small">
+              {{ row.status === 'approved' ? '已簽核' : '未簽核' }}
             </el-tag>
           </template>
         </el-table-column>
@@ -407,14 +407,15 @@ import { todayISO, offsetISO, formatDateTimeTW, formatTimeTW } from '@/utils/for
 
 type ApiErr = { response?: { data?: { detail?: string } } }
 
+type PosApprovalStatus = 'approved' | 'pending'
 interface DailyDetail {
-  is_approved?: boolean; approver_username?: string; approved_at?: string
+  status?: PosApprovalStatus; approver_username?: string; approved_at?: string
   actual_cash_count?: number | null; cash_variance?: number | null; note?: string
   payment_total?: number; refund_total?: number; net_total?: number; transaction_count?: number
   by_method?: Record<string, number>
 }
 interface PendingRow { date: string; transaction_count?: number; payment_total?: number; refund_total?: number; net_total?: number }
-interface ReconItem { date: string; is_approved?: boolean; transaction_count?: number; payment_total?: number; refund_total?: number; net_total?: number; expected_cash?: number; actual_cash?: number | null; variance?: number | null }
+interface ReconItem { date: string; status?: PosApprovalStatus; transaction_count?: number; payment_total?: number; refund_total?: number; net_total?: number; expected_cash?: number; actual_cash?: number | null; variance?: number | null }
 interface ReconTotals { payment_total?: number; refund_total?: number; net_total?: number; variance_total?: number | null }
 
 const canApprove = computed(() => hasPermission('ACTIVITY_PAYMENT_APPROVE'))
@@ -481,7 +482,7 @@ async function loadDetail() {
   try {
     const res = await getPOSDailyCloseStatus(selectedDate.value)
     detail.value = res.data as DailyDetail
-    if (detail.value?.is_approved) {
+    if (detail.value?.status === 'approved') {
       resetForm()
     }
   } catch (err) {

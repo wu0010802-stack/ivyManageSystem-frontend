@@ -1,6 +1,7 @@
 <script setup lang="ts">
-interface LeaveRequest { leave_type_label?: string; leave_hours?: number; is_approved?: boolean | null }
-interface OvertimeRequest { overtime_type_label?: string; hours?: number; is_approved?: boolean | null }
+import type { ApprovalStatus } from '@/constants/approvalStatus'
+interface LeaveRequest { leave_type_label?: string; leave_hours?: number; status?: ApprovalStatus }
+interface OvertimeRequest { overtime_type_label?: string; hours?: number; status?: ApprovalStatus }
 interface DayEntry {
   day: number
   weekday?: string
@@ -43,7 +44,7 @@ function getStatusInfo(day: DayEntry) {
 function getLeaveDisplay(day: DayEntry) {
   if (!day.leave_requests || day.leave_requests.length === 0) return null
   const lv = day.leave_requests[0]
-  const status = lv.is_approved === true ? 'approved' : lv.is_approved === false ? 'rejected' : 'pending'
+  const status = lv.status ?? 'pending'
   return {
     text: lv.leave_type_label,
     hours: lv.leave_hours,
@@ -55,7 +56,7 @@ function getLeaveDisplay(day: DayEntry) {
 function getOvertimeDisplay(day: DayEntry) {
   if (!day.overtime_requests || day.overtime_requests.length === 0) return null
   const ot = day.overtime_requests[0]
-  const status = ot.is_approved === true ? 'approved' : ot.is_approved === false ? 'rejected' : 'pending'
+  const status = ot.status ?? 'pending'
   return {
     text: ot.overtime_type_label,
     hours: ot.hours,
