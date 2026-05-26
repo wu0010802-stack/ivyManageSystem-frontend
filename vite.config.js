@@ -45,6 +45,7 @@ function manualChunks(id) {
     if (
         id.includes('/src/utils/format.ts') ||
         id.includes('/src/utils/apiDedupe.ts') ||
+        id.includes('/src/utils/offlineQueue.ts') ||
         id.includes('/src/composables/useCachedAsync.ts') ||
         id.includes('/src/components/common/MobileErrorRetry.vue')
     ) {

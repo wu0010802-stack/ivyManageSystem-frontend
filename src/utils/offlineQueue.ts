@@ -141,7 +141,15 @@ export async function clearAll() {
 
 export const OP_KINDS = Object.freeze({
     CLASS_ATTENDANCE: 'class_attendance',
+    // 家長端 offline queue（spec 2026-05-26）
+    PARENT_MESSAGE: 'parent_message',
+    CONTACT_BOOK_REPLY: 'contact_book_reply',
+    CONTACT_BOOK_ACK: 'contact_book_ack',
+    EVENT_ACK: 'event_ack',
+    PARENT_LEAVE_REQUEST: 'parent_leave_request',
 })
+
+export type OpKind = typeof OP_KINDS[keyof typeof OP_KINDS]
 
 export const OP_STATUS = Object.freeze({
     PENDING: 'pending',
