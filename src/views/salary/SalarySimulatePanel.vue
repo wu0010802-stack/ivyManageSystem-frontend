@@ -18,6 +18,7 @@ interface SimRow {
   birthday_bonus?: number
   labor_insurance?: number
   health_insurance?: number
+  supplementary_health_employee?: number
   pension_self?: number
   late_deduction?: number
   early_leave_deduction?: number
@@ -277,6 +278,7 @@ const COMPARE_FIELDS = [
   { key: 'birthday_bonus', label: '生日禮金' },
   { key: 'labor_insurance', label: '勞保（扣）' },
   { key: 'health_insurance', label: '健保（扣）' },
+  { key: 'supplementary_health_employee', label: '二代健保補充保費' },
   { key: 'pension_self', label: '勞退自提（扣）' },
   { key: 'late_deduction', label: '遲到扣款' },
   { key: 'early_leave_deduction', label: '早退扣款' },
