@@ -77,6 +77,7 @@ const sizeOptions: { value: string; label: string; preview: string }[] = [
   { value: 'md', label: '中', preview: '15px' },
   { value: 'lg', label: '大', preview: '17px' },
   { value: 'xl', label: '特大', preview: '19px' },
+  { value: '2xl', label: '巨大', preview: '22px' },
 ]
 </script>
 
