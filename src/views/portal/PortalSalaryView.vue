@@ -129,6 +129,12 @@ onMounted(fetchSalary)
           <el-descriptions-item label="健保費">
             -NT$ {{ salary?.health_insurance?.toLocaleString() || 0 }}
           </el-descriptions-item>
+          <el-descriptions-item
+            v-if="(salary?.supplementary_health_employee as number) > 0"
+            label="二代健保補充保費"
+          >
+            -NT$ {{ (salary?.supplementary_health_employee as number)?.toLocaleString() || 0 }}
+          </el-descriptions-item>
           <el-descriptions-item label="勞退自提">
             -NT$ {{ salary?.pension_employee?.toLocaleString() || 0 }}
           </el-descriptions-item>

@@ -2,7 +2,7 @@
  * 家長 App 無障礙偏好（字級 / 高對比）composable。
  *
  * 偏好項目：
- *  - fontSize: 'sm' | 'md' | 'lg' | 'xl'（預設 'md' = 100%）
+ *  - fontSize: 'sm' | 'md' | 'lg' | 'xl' | '2xl'（預設 'md' = 100%）
  *  - highContrast: boolean（預設 false）
  *
  * 透過 <html class="ivy-size-* [ivy-contrast-high]"> 套用，由
@@ -18,7 +18,7 @@ import { onMounted, ref } from 'vue'
 
 const SIZE_KEY = 'parent-font-size'
 const HC_KEY = 'parent-high-contrast'
-const VALID_SIZES = new Set(['sm', 'md', 'lg', 'xl'])
+const VALID_SIZES = new Set(['sm', 'md', 'lg', 'xl', '2xl'])
 
 const fontSize = ref(loadFontSize())
 const highContrast = ref(loadHighContrast())
@@ -78,7 +78,7 @@ export function useA11y() {
   })
 
   return {
-    fontSize, // ref<'sm'|'md'|'lg'|'xl'>
+    fontSize, // ref<'sm'|'md'|'lg'|'xl'|'2xl'>
     highContrast, // ref<boolean>
     setFontSize,
     setHighContrast,

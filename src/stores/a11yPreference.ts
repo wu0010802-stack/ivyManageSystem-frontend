@@ -8,7 +8,7 @@ import { defineStore } from 'pinia'
  */
 export const useA11yPreferenceStore = defineStore('a11yPreference', {
   state: () => ({
-    fontSize: 'md',   // 'sm' | 'md' | 'lg' | 'xl'
+    fontSize: 'md',   // 'sm' | 'md' | 'lg' | 'xl' | '2xl'
     theme: 'light',   // 'light' | 'dark'
     colorBlind: false,
   }),

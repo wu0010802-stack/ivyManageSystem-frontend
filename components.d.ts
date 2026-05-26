@@ -152,6 +152,7 @@ declare module 'vue' {
     LatestSummaryCard: typeof import('./src/components/portal/growth/LatestSummaryCard.vue')['default']
     LaurelWreath: typeof import('./src/components/brand/LaurelWreath.vue')['default']
     LazyImage: typeof import('./src/components/common/LazyImage.vue')['default']
+    LeaveQuotaExpiryTab: typeof import('./src/components/leave/LeaveQuotaExpiryTab.vue')['default']
     LeaveSection: typeof import('./src/components/student/academic-affairs/LeaveSection.vue')['default']
     LifecycleTransitionDialog: typeof import('./src/components/student/LifecycleTransitionDialog.vue')['default']
     LoadingPanel: typeof import('./src/components/common/LoadingPanel.vue')['default']

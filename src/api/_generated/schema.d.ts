@@ -5730,6 +5730,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/leave-quota-expiry/anniversaries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Upcoming Anniversaries
+         * @description 列出未來 N 天內滿週年（特休週年 cutover）的在職員工。
+         *
+         *     使用 Python-side 過濾：撈所有在職員工後逐一比對，員工數 ≤200 時性能 OK。
+         *     只列入職已滿 6 個月（180 天）以上的員工，過濾掉試用期尚短者。
+         */
+        get: operations["list_upcoming_anniversaries_api_leave_quota_expiry_anniversaries_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/leave-quota-expiry/payout-history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Payout History
+         * @description 列出 unused_leave_payout_log 結算歷史（最新在前）。
+         */
+        get: operations["list_payout_history_api_leave_quota_expiry_payout_history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/leave-quota-expiry/run-now": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run Scheduler Now
+         * @description 手動 trigger 補休到期 + 特休週年 cutover scheduler（idempotent 重跑安全）。
+         *
+         *     與 asyncio scheduler 呼叫相同的 service 函式，savepoint 隔離單員工失敗。
+         *     加 try_scheduler_lock 防並發 double-pay：同日多 worker POST 只有一個會成功。
+         */
+        post: operations["run_scheduler_now_api_leave_quota_expiry_run_now_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/leave-quota-expiry/upcoming": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Upcoming Expiring Grants
+         * @description 列出未來 N 天內到期的 active 補休 grant。
+         */
+        get: operations["list_upcoming_expiring_grants_api_leave_quota_expiry_upcoming_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/leaves": {
         parameters: {
             query?: never;
@@ -28920,6 +29006,119 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SchedulerMetricsResponse"];
+                };
+            };
+        };
+    };
+    list_upcoming_anniversaries_api_leave_quota_expiry_anniversaries_get: {
+        parameters: {
+            query?: {
+                days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_payout_history_api_leave_quota_expiry_payout_history_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_scheduler_now_api_leave_quota_expiry_run_now_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    list_upcoming_expiring_grants_api_leave_quota_expiry_upcoming_get: {
+        parameters: {
+            query?: {
+                days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

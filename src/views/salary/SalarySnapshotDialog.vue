@@ -127,6 +127,7 @@ const DETAIL_ROWS: [string, string][] = [
   ['supervisor_dividend', '主管紅利'],
   ['labor_insurance_employee', '勞保（員工）'],
   ['health_insurance_employee', '健保（員工）'],
+  ['supplementary_health_employee', '二代健保補充保費'],
   ['pension_employee', '勞退自提'],
   ['late_deduction', '遲到扣款'],
   ['early_leave_deduction', '早退扣款'],
