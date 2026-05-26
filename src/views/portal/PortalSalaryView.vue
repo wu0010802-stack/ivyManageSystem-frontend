@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, reactive, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import { InfoFilled } from '@element-plus/icons-vue'
 import { getSalaryPreview } from '@/api/portal'
 
 const loading = ref(false)
@@ -154,6 +155,27 @@ onMounted(fetchSalary)
             <span class="text-danger">-NT$ {{ salary?.total_deduction?.toLocaleString() || 0 }}</span>
           </el-descriptions-item>
         </el-descriptions>
+
+        <!-- 未休折現加給：後端回傳 unused_leave_payout > 0 時才顯示 -->
+        <template v-if="(salary?.unused_leave_payout as number) > 0">
+          <h4 style="margin-top: 20px;">未休假折現</h4>
+          <el-descriptions :column="isMobile ? 1 : 2" border>
+            <el-descriptions-item label="未休折現加給">
+              <el-tooltip
+                content="補休到期、特休週年或離職結算折算的未休假加給，已計入實發金額"
+                placement="top"
+                effect="light"
+              >
+                <span style="cursor: help;">
+                  NT$ {{ (salary?.unused_leave_payout as number)?.toLocaleString() || 0 }}
+                  <el-icon style="vertical-align: middle; color: var(--el-color-info); width: 12px; height: 12px;">
+                    <InfoFilled />
+                  </el-icon>
+                </span>
+              </el-tooltip>
+            </el-descriptions-item>
+          </el-descriptions>
+        </template>
 
         <h4 style="margin-top: 20px;">節慶 / 獨立獎金調整</h4>
         <el-descriptions :column="isMobile ? 1 : 2" border>

@@ -13,6 +13,7 @@ import SalaryLogicPanel from './salary/SalaryLogicPanel.vue'
 import SalarySnapshotDialog from './salary/SalarySnapshotDialog.vue'
 import SalaryBreakdown from './salary/SalaryBreakdown.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import UnusedLeavePayoutTooltip from '@/components/salary/UnusedLeavePayoutTooltip.vue'
 import { useErrorNotify } from '@/composables/useErrorNotify'
 import { downloadFile } from '@/utils/download'
 
@@ -708,6 +709,21 @@ onMounted(() => {
             <el-table-column label="總扣款" width="100">
               <template #default="scope">
                 <span class="text-danger">{{ money(scope.row.total_deductions) }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="未休折現" width="120" align="right">
+              <template #header>
+                <el-tooltip content="補休到期、特休週年、離職結算產生的未休假折現加給，已計入實領" placement="top">
+                  <span>未休折現 <el-icon :size="12"><InfoFilled /></el-icon></span>
+                </el-tooltip>
+              </template>
+              <template #default="scope">
+                <UnusedLeavePayoutTooltip
+                  v-if="(scope.row.unused_leave_payout as number) > 0 && getRecordForRow(scope.row)?.id"
+                  :salary-record-id="(getRecordForRow(scope.row)?.id as number)"
+                  :amount="scope.row.unused_leave_payout as number"
+                />
+                <span v-else class="text-muted">—</span>
               </template>
             </el-table-column>
             <el-table-column label="實領" width="120">
