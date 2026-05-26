@@ -3,8 +3,8 @@ import { storeToRefs } from 'pinia'
 import { useA11yPreferenceStore } from '@/stores/a11yPreference'
 
 const STORAGE_KEY = 'ivy.a11y'
-const SIZE_CLASSES = ['ivy-size-sm', 'ivy-size-md', 'ivy-size-lg', 'ivy-size-xl']
-const VALID_SIZES = ['sm', 'md', 'lg', 'xl']
+const SIZE_CLASSES = ['ivy-size-sm', 'ivy-size-md', 'ivy-size-lg', 'ivy-size-xl', 'ivy-size-2xl']
+const VALID_SIZES = ['sm', 'md', 'lg', 'xl', '2xl']
 const VALID_THEMES = ['light', 'dark']
 
 let initialized = false
