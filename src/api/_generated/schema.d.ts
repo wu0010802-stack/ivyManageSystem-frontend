@@ -5730,6 +5730,92 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/leave-quota-expiry/anniversaries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Upcoming Anniversaries
+         * @description 列出未來 N 天內滿週年（特休週年 cutover）的在職員工。
+         *
+         *     使用 Python-side 過濾：撈所有在職員工後逐一比對，員工數 ≤200 時性能 OK。
+         *     只列入職已滿 6 個月（180 天）以上的員工，過濾掉試用期尚短者。
+         */
+        get: operations["list_upcoming_anniversaries_api_leave_quota_expiry_anniversaries_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/leave-quota-expiry/payout-history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Payout History
+         * @description 列出 unused_leave_payout_log 結算歷史（最新在前）。
+         */
+        get: operations["list_payout_history_api_leave_quota_expiry_payout_history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/leave-quota-expiry/run-now": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run Scheduler Now
+         * @description 手動 trigger 補休到期 + 特休週年 cutover scheduler（idempotent 重跑安全）。
+         *
+         *     與 asyncio scheduler 呼叫相同的 service 函式，savepoint 隔離單員工失敗。
+         *     加 try_scheduler_lock 防並發 double-pay：同日多 worker POST 只有一個會成功。
+         */
+        post: operations["run_scheduler_now_api_leave_quota_expiry_run_now_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/leave-quota-expiry/upcoming": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Upcoming Expiring Grants
+         * @description 列出未來 N 天內到期的 active 補休 grant。
+         */
+        get: operations["list_upcoming_expiring_grants_api_leave_quota_expiry_upcoming_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/leaves": {
         parameters: {
             query?: never;
@@ -8525,6 +8611,118 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/portal/me/comp-leave-grants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List My Comp Leave Grants
+         * @description 員工自助入口：補休 grant ledger 全狀態明細（active / expired / revoked）。
+         *
+         *     Response 200:
+         *     {
+         *         "grants": [
+         *             {
+         *                 "grant_id": int,
+         *                 "granted_hours": float,
+         *                 "consumed_hours": float,
+         *                 "remaining_hours": float,
+         *                 "granted_at": "YYYY-MM-DD",
+         *                 "expires_at": "YYYY-MM-DD",
+         *                 "status": str,
+         *                 "expired_at": "YYYY-MM-DDTHH:MM:SS" | null,
+         *             },
+         *             ...
+         *         ]
+         *     }
+         *
+         *     Order: granted_at DESC（最近的在前）
+         */
+        get: operations["list_my_comp_leave_grants_api_portal_me_comp_leave_grants_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/me/leave-quota-expiry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get My Leave Quota Expiry
+         * @description 員工自助入口：補休結餘 + 最早到期 grant + 下個週年 + 預計結算月。
+         *
+         *     用途：前端顯示「您有 N 小時補休即將於 YYYY-MM-DD 到期，
+         *     預計於 YYYY-MM 結算月兌現」之提醒 widget。
+         *
+         *     Response 200:
+         *     {
+         *         "compensatory_balance": float,
+         *         "earliest_expiring_grant": {
+         *             "expires_at": "YYYY-MM-DD",
+         *             "unexpired_hours": float,
+         *         } | null,
+         *         "next_anniversary": "YYYY-MM-DD" | null,
+         *         "expected_payout_month": "YYYY-MM" | null,
+         *     }
+         */
+        get: operations["get_my_leave_quota_expiry_api_portal_me_leave_quota_expiry_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/me/payout-history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List My Payout History
+         * @description 員工自助入口：未休假折算工資兌現紀錄（含 source_type）。
+         *
+         *     Response 200:
+         *     {
+         *         "logs": [
+         *             {
+         *                 "log_id": int,
+         *                 "source_type": str,        # comp_grant_expiry / annual_anniversary / offboarding
+         *                 "hours": float,
+         *                 "hourly_wage": float,
+         *                 "amount": float,
+         *                 "wage_basis_date": "YYYY-MM-DD",
+         *                 "salary_period": "YYYY-MM",
+         *                 "meta": dict,
+         *             },
+         *             ...
+         *         ]
+         *     }
+         *
+         *     Order: created_at DESC（最新在前）
+         */
+        get: operations["list_my_payout_history_api_portal_me_payout_history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/portal/medications/today": {
         parameters: {
             query?: never;
@@ -10416,6 +10614,34 @@ export interface paths {
          *     成功時於 ETag / X-Record-Version header 回傳新版本。
          */
         put: operations["manual_adjust_salary_api_salaries__record_id__manual_adjust_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/salaries/{record_id}/unused-leave-payout-detail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Unused Leave Payout Detail
+         * @description 查詢單筆薪資的未休假折算工資明細。
+         *
+         *     權限：HR（SALARY_READ + admin/hr role）或員工本人（自己的薪資記錄）。
+         *
+         *     回傳欄位：
+         *     - salary_record_id：薪資記錄 id
+         *     - employee_id：員工 id
+         *     - total_amount：未休假折算總額（= SalaryRecord.unused_leave_payout）
+         *     - logs：各 source_type 明細列表
+         */
+        get: operations["get_unused_leave_payout_detail_api_salaries__record_id__unused_leave_payout_detail_get"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -14265,6 +14491,11 @@ export interface components {
         /** CreateLeaveRequest */
         CreateLeaveRequest: {
             /**
+             * Client Request Id
+             * @description 前端產生的 UUID，partial UNIQUE 提供冪等性
+             */
+            client_request_id?: string | null;
+            /**
              * End Date
              * Format: date
              */
@@ -17380,6 +17611,11 @@ export interface components {
         ReplyCreate: {
             /** Body */
             body: string;
+            /**
+             * Client Request Id
+             * @description 前端產生的 UUID，partial UNIQUE 提供冪等性
+             */
+            client_request_id?: string | null;
         };
         /** ReplyMessage */
         ReplyMessage: {
@@ -28924,6 +29160,119 @@ export interface operations {
             };
         };
     };
+    list_upcoming_anniversaries_api_leave_quota_expiry_anniversaries_get: {
+        parameters: {
+            query?: {
+                days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_payout_history_api_leave_quota_expiry_payout_history_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_scheduler_now_api_leave_quota_expiry_run_now_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    list_upcoming_expiring_grants_api_leave_quota_expiry_upcoming_get: {
+        parameters: {
+            query?: {
+                days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_leaves_api_leaves_get: {
         parameters: {
             query?: {
@@ -33578,6 +33927,66 @@ export interface operations {
             };
         };
     };
+    list_my_comp_leave_grants_api_portal_me_comp_leave_grants_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    get_my_leave_quota_expiry_api_portal_me_leave_quota_expiry_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    list_my_payout_history_api_portal_me_payout_history_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
     list_today_medications_api_portal_medications_today_get: {
         parameters: {
             query?: {
@@ -36894,6 +37303,37 @@ export interface operations {
                 "application/json": components["schemas"]["SalaryManualAdjustRequest"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_unused_leave_payout_detail_api_salaries__record_id__unused_leave_payout_detail_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
