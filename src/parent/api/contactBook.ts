@@ -134,8 +134,11 @@ export async function ackContactBook(entryId: number) {
   return { ...res, data: toAckResponse(res.data || {}) }
 }
 
-export function replyContactBook(entryId: number, body: unknown) {
-  return api.post(`/parent/contact-book/${entryId}/reply`, { body })
+export function replyContactBook(
+  entryId: number,
+  payload: { body: string; client_request_id?: string },
+) {
+  return api.post(`/parent/contact-book/${entryId}/reply`, payload)
 }
 
 export function deleteContactBookReply(entryId: number, replyId: number) {

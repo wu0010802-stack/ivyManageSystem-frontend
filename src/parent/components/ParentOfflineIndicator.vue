@@ -20,7 +20,8 @@ const reviewCount = ref(0)
 const reviewOps = ref<Record<string, unknown>[]>([])
 
 async function refresh() {
-  const uid = authStore.user?.user_id
+  const user = authStore.user as { user_id?: number | string } | null
+  const uid = user?.user_id
   if (!uid) {
     pendingCount.value = 0
     reviewCount.value = 0

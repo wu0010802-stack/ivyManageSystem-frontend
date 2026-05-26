@@ -220,7 +220,7 @@ async function submitReply() {
   }
 
   try {
-    const { data } = await replyContactBook(entryId.value, body)
+    const { data } = await replyContactBook(entryId.value, { body })
     replies.value.push(data as Reply)
     newReply.value = ''
   } catch (err) {
