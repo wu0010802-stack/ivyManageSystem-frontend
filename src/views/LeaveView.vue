@@ -18,6 +18,8 @@ import LeaveImportDialog from './leave/LeaveImportDialog.vue'
 import LeaveQuotaManager from './leave/LeaveQuotaManager.vue'
 import LeaveRejectDialog from './leave/LeaveRejectDialog.vue'
 import LeaveCalendar from './leave/LeaveCalendar.vue'
+import LeaveQuotaExpiryTab from '@/components/leave/LeaveQuotaExpiryTab.vue'
+import { hasPermission } from '@/utils/auth'
 
 const { currentYear, query } = useDateQuery()
 const employeeStore = useEmployeeStore()
@@ -582,6 +584,15 @@ onMounted(() => {
       <el-tab-pane name="calendar">
         <template #label><el-icon><Calendar /></el-icon> 行事曆</template>
         <LeaveCalendar :activeTab="activeTab" />
+      </el-tab-pane>
+
+      <!-- ─── 到期管理 Tab ─── -->
+      <el-tab-pane
+        v-if="hasPermission('LEAVES_READ') || hasPermission('SALARY_READ')"
+        label="到期管理"
+        name="expiry"
+      >
+        <LeaveQuotaExpiryTab v-if="activeTab === 'expiry'" />
       </el-tab-pane>
 
     </el-tabs>
