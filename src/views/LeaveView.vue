@@ -18,6 +18,8 @@ import LeaveImportDialog from './leave/LeaveImportDialog.vue'
 import LeaveQuotaManager from './leave/LeaveQuotaManager.vue'
 import LeaveRejectDialog from './leave/LeaveRejectDialog.vue'
 import LeaveCalendar from './leave/LeaveCalendar.vue'
+import LeaveQuotaExpiryTab from '@/components/leave/LeaveQuotaExpiryTab.vue'
+import { hasPermission } from '@/utils/auth'
 
 const { currentYear, query } = useDateQuery()
 const employeeStore = useEmployeeStore()
@@ -491,8 +493,8 @@ onMounted(() => {
         </el-table-column>
         <el-table-column label="審核" width="120">
           <template #default="scope">
-            <el-tag v-if="scope.row.is_approved === true" type="success" size="small">已核准</el-tag>
-            <template v-else-if="scope.row.is_approved === false">
+            <el-tag v-if="scope.row.status === 'approved'" type="success" size="small">已核准</el-tag>
+            <template v-else-if="scope.row.status === 'rejected'">
               <el-tag type="danger" size="small">已駁回</el-tag>
               <el-tooltip v-if="scope.row.rejection_reason" :content="scope.row.rejection_reason" placement="top">
                 <el-icon style="margin-left:4px;color:var(--el-color-danger);cursor:help;vertical-align:middle;"><InfoFilled /></el-icon>
@@ -529,11 +531,11 @@ onMounted(() => {
         <el-table-column label="操作" width="180" fixed="right">
           <template #default="scope">
             <!-- 主動作：依狀態決定，最常用的操作直接外露 -->
-            <template v-if="scope.row.is_approved === null && canApprove(scope.row)">
+            <template v-if="scope.row.status === 'pending' && canApprove(scope.row)">
               <el-button type="success" size="small" link @click="approveLeave(scope.row)">核准</el-button>
             </template>
             <el-button
-              v-else-if="scope.row.is_approved === false && canApprove(scope.row)"
+              v-else-if="scope.row.status === 'rejected' && canApprove(scope.row)"
               type="success"
               size="small"
               link
@@ -553,17 +555,17 @@ onMounted(() => {
               <template #dropdown>
                 <el-dropdown-menu>
                   <el-dropdown-item
-                    v-if="scope.row.is_approved === null && canApprove(scope.row)"
+                    v-if="scope.row.status === 'pending' && canApprove(scope.row)"
                     command="reject"
                   >駁回</el-dropdown-item>
                   <el-dropdown-item
-                    v-if="scope.row.is_approved === true && canApprove(scope.row)"
+                    v-if="scope.row.status === 'approved' && canApprove(scope.row)"
                     command="cancel-approve"
                   >取消核准</el-dropdown-item>
                   <!-- 編輯：當主動作是「核准」（待審/已駁回 且可核准）時補上入口，
                        審核者常需在核准前先修錯字。其他情況主動作就是編輯，無需重複。 -->
                   <el-dropdown-item
-                    v-if="scope.row.is_approved !== true && canApprove(scope.row)"
+                    v-if="scope.row.status !== 'approved' && canApprove(scope.row)"
                     command="edit"
                   >編輯</el-dropdown-item>
                   <el-dropdown-item command="logs">審核紀錄</el-dropdown-item>
@@ -582,6 +584,15 @@ onMounted(() => {
       <el-tab-pane name="calendar">
         <template #label><el-icon><Calendar /></el-icon> 行事曆</template>
         <LeaveCalendar :activeTab="activeTab" />
+      </el-tab-pane>
+
+      <!-- ─── 到期管理 Tab ─── -->
+      <el-tab-pane
+        v-if="hasPermission('LEAVES_READ') || hasPermission('SALARY_READ')"
+        label="到期管理"
+        name="expiry"
+      >
+        <LeaveQuotaExpiryTab v-if="activeTab === 'expiry'" />
       </el-tab-pane>
 
     </el-tabs>

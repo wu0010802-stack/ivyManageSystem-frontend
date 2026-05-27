@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-interface LeaveRequest { leave_type_label?: string; leave_hours?: number; is_approved?: boolean | null; reason?: string }
-interface OvertimeRequest { overtime_type_label?: string; hours?: number; is_approved?: boolean | null; reason?: string }
+import type { ApprovalStatus } from '@/constants/approvalStatus'
+interface LeaveRequest { leave_type_label?: string; leave_hours?: number; status?: ApprovalStatus; reason?: string }
+interface OvertimeRequest { overtime_type_label?: string; hours?: number; status?: ApprovalStatus; reason?: string }
 interface DayEntry {
   day: number
   weekday?: string
@@ -64,7 +65,7 @@ function getStatusInfo(day: DayEntry): DayDisplay {
 function getLeaveDisplay(day: DayEntry): RequestDisplay | null {
   if (!day.leave_requests || day.leave_requests.length === 0) return null
   const lv = day.leave_requests[0]
-  const status = lv.is_approved === true ? 'approved' : lv.is_approved === false ? 'rejected' : 'pending'
+  const status = lv.status ?? 'pending'
   const statusText = status === 'approved' ? '已核准' : status === 'rejected' ? '已駁回' : '待審核'
   return {
     text: lv.leave_type_label ?? '',
@@ -76,7 +77,7 @@ function getLeaveDisplay(day: DayEntry): RequestDisplay | null {
 function getOvertimeDisplay(day: DayEntry): RequestDisplay | null {
   if (!day.overtime_requests || day.overtime_requests.length === 0) return null
   const ot = day.overtime_requests[0]
-  const status = ot.is_approved === true ? 'approved' : ot.is_approved === false ? 'rejected' : 'pending'
+  const status = ot.status ?? 'pending'
   const statusText = status === 'approved' ? '已核准' : status === 'rejected' ? '已駁回' : '待審核'
   return {
     text: `${ot.hours}h`,

@@ -35,6 +35,7 @@ vi.mock('@/api/approvalSettings', () => ({
 let mockUserInfo = { role: 'admin', permissions: -1 }
 vi.mock('@/utils/auth', () => ({
   getUserInfo: () => mockUserInfo,
+  hasPermission: () => true,
 }))
 
 // ── store mock ─────────────────────────────────────────────────────────────

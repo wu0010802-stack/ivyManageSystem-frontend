@@ -5938,7 +5938,7 @@ export interface paths {
         put?: never;
         /**
          * Import Leaves
-         * @description 批次匯入請假申請（建立草稿假單，is_approved=None，需後續人工審核）
+         * @description 批次匯入請假申請（建立草稿假單，status='pending'，需後續人工審核）
          */
         post: operations["import_leaves_api_leaves_import_post"];
         delete?: never;
@@ -6597,7 +6597,7 @@ export interface paths {
         put?: never;
         /**
          * Import Overtimes
-         * @description 批次匯入加班申請（建立草稿加班單，is_approved=None，需後續人工審核）
+         * @description 批次匯入加班申請（建立草稿加班單，status='pending'，需後續人工審核）
          */
         post: operations["import_overtimes_api_overtimes_import_post"];
         delete?: never;

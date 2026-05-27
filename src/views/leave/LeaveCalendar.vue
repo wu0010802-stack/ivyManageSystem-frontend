@@ -4,10 +4,11 @@ import { getLeaves } from '@/api/leaves'
 import { ElMessage } from 'element-plus'
 import { useEmployeeStore } from '@/stores/employee'
 import { LEAVE_TYPES as leaveTypes } from '@/utils/leaves'
+import type { ApprovalStatus } from '@/constants/approvalStatus'
 
 interface LeaveRecord {
   id: number
-  is_approved: boolean | null
+  status: ApprovalStatus
   start_date: string
   end_date: string
   leave_type: string
@@ -115,7 +116,7 @@ const calendarGrid = computed(() => {
   // 依日期建立 "誰在這天請假" 的 map
   const byDate: Record<string, LeaveRecord[]> = {}
   for (const lv of calendarLeaves.value) {
-    if (lv.is_approved === false) continue   // 已駁回不顯示
+    if (lv.status === 'rejected') continue   // 已駁回不顯示
     const start      = new Date(lv.start_date + 'T00:00:00')
     const end        = new Date(lv.end_date   + 'T00:00:00')
     const monthStart = new Date(year, month - 1, 1)
@@ -255,7 +256,7 @@ watch(calFilterEmp, () => {
             v-for="lv in cell.leaves.slice(0, 4)"
             :key="lv.id"
             class="cal-event"
-            :class="{ 'is-pending': lv.is_approved === null }"
+            :class="{ 'is-pending': lv.status === 'pending' }"
             :style="{ borderLeftColor: LEAVE_COLOR_MAP[lv.leave_type] || '#ccc' }"
           >
             <span class="cal-event-name">{{ lv.employee_name }}</span>
@@ -295,8 +296,8 @@ watch(calFilterEmp, () => {
       </el-table-column>
       <el-table-column label="狀態" width="80" align="center">
         <template #default="{ row }">
-          <el-tag v-if="row.is_approved === true"  type="success" size="small">已核准</el-tag>
-          <el-tag v-else-if="row.is_approved === false" type="danger" size="small">已駁回</el-tag>
+          <el-tag v-if="row.status === 'approved'"  type="success" size="small">已核准</el-tag>
+          <el-tag v-else-if="row.status === 'rejected'" type="danger" size="small">已駁回</el-tag>
           <el-tag v-else type="info" size="small">待審核</el-tag>
         </template>
       </el-table-column>
