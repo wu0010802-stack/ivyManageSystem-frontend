@@ -48,6 +48,7 @@ html.ivy-size-sm { --ivy-font-scale: 0.93; }   /* ~14px body */
 html.ivy-size-md { --ivy-font-scale: 1; }      /*  15px body（與 :root 同） */
 html.ivy-size-lg { --ivy-font-scale: 1.13; }   /* ~17px body */
 html.ivy-size-xl { --ivy-font-scale: 1.27; }   /* ~19px body */
+html.ivy-size-2xl { --ivy-font-scale: 1.5; }   /* ~22.5px body — 長輩友善 */
 
 html[class*="ivy-size-"] {
   --el-font-size-extra-small: calc(13px * var(--ivy-font-scale, 1));

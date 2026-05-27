@@ -33,12 +33,12 @@ describe('AppearanceSettings', () => {
     a11yState.setHighContrast.mockReset()
   })
 
-  it('渲染外觀 + 無障礙兩個 group，含 3 個 theme + 4 個 size + hc toggle', () => {
+  it('渲染外觀 + 無障礙兩個 group，含 3 個 theme + 5 個 size + hc toggle', () => {
     const wrapper = mount(AppearanceSettings)
     expect(wrapper.text()).toContain('外觀')
     expect(wrapper.text()).toContain('無障礙')
     expect(wrapper.findAll('.theme-btn')).toHaveLength(3)
-    expect(wrapper.findAll('.size-btn')).toHaveLength(4)
+    expect(wrapper.findAll('.size-btn')).toHaveLength(5)
     expect(wrapper.find('.hc-toggle').exists()).toBe(true)
   })
 
@@ -53,7 +53,7 @@ describe('AppearanceSettings', () => {
     expect(themeButtons[2].attributes('aria-checked')).toBe('true')
 
     const sizeButtons = wrapper.findAll('.size-btn')
-    // size order: sm / md / lg / xl
+    // size order: sm / md / lg / xl / 2xl
     expect(sizeButtons[2].classes()).toContain('active')
 
     expect(wrapper.find('.hc-toggle').classes()).toContain('active')

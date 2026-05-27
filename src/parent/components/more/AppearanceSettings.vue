@@ -4,7 +4,7 @@
  *
  * 內含：
  *  - 主題切換：跟隨系統 / 亮色 / 深色（呼叫 useTheme）
- *  - 字級：sm / md / lg / xl（呼叫 useA11y）
+ *  - 字級：sm / md / lg / xl / 2xl（呼叫 useA11y）
  *  - 高對比 toggle（呼叫 useA11y）
  *
  * 自包含元件：直接 import composables，無 props/emits。
@@ -27,6 +27,7 @@ const FONT_SIZE_OPTIONS: { key: string; label: string }[] = [
   { key: 'md', label: '中' },
   { key: 'lg', label: '大' },
   { key: 'xl', label: '特大' },
+  { key: '2xl', label: '巨大' },
 ]
 </script>
 
