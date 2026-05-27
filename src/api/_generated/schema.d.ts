@@ -45,26 +45,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/academic-terms/current": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Current Term
-         * @description 回傳今日所在學期（查無回 null）。
-         */
-        get: operations["current_term_api_academic_terms_current_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/academic-terms/{term_id}": {
         parameters: {
             query?: never;
@@ -110,6 +90,26 @@ export interface paths {
          *     5. fire_term_changed(old, new, session) — 三個 subscriber 同 session 串註執行
          */
         post: operations["set_current_term_api_academic_terms__term_id__set_current_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/academic-terms/current": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Current Term
+         * @description 回傳今日所在學期（查無回 null）。
+         */
+        get: operations["current_term_api_academic_terms_current_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -369,26 +369,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/activity/courses/copy-from-previous": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Copy Courses From Previous
-         * @description 一鍵複製某學期的所有課程到另一學期（已存在同名課程跳過）。
-         */
-        post: operations["copy_courses_from_previous_api_activity_courses_copy_from_previous_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/activity/courses/{course_id}": {
         parameters: {
             query?: never;
@@ -451,6 +431,26 @@ export interface paths {
         get: operations["get_course_waitlist_api_activity_courses__course_id__waitlist_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/activity/courses/copy-from-previous": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Copy Courses From Previous
+         * @description 一鍵複製某學期的所有課程到另一學期（已存在同名課程跳過）。
+         */
+        post: operations["copy_courses_from_previous_api_activity_courses_copy_from_previous_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -600,26 +600,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/activity/pos/daily-close/pending": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Pending Daily Closes
-         * @description 列出指定區間內『有交易但未簽核』的日期，供老闆批次處理積壓日結。
-         */
-        get: operations["pending_daily_closes_api_activity_pos_daily_close_pending_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/activity/pos/daily-close/{date_str}": {
         parameters: {
             query?: never;
@@ -647,6 +627,26 @@ export interface paths {
          *     凍結於 ApprovalLog.comment 與 audit_changes，便於對帳查核。
          */
         delete: operations["unlock_daily_close_api_activity_pos_daily_close__date_str__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/activity/pos/daily-close/pending": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Pending Daily Closes
+         * @description 列出指定區間內『有交易但未簽核』的日期，供老闆批次處理積壓日結。
+         */
+        get: operations["pending_daily_closes_api_activity_pos_daily_close_pending_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1146,98 +1146,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/activity/registrations/batch-payment": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Batch Update Payment
-         * @description 批次標記為已繳費（僅此方向；未繳費全額沖帳已禁用）
-         *
-         *     Why: 批次把一串報名「標記未繳費」會一次寫多筆全額 refund，誤操作後果嚴重且
-         *     不可部分回滾。schema 層已禁止 is_paid=False（進到這裡一律是 True）；
-         *     若需把某筆退費，請改用 PUT /registrations/{id}/payment（帶
-         *     confirm_refund_amount）或 DELETE /payments/{id} 軟刪對應繳費。
-         *
-         *     併發保護：`.with_for_update()` 鎖住目標 registration，避免兩個客戶端同時
-         *     呼叫造成重複寫 payment_record 或 lost update。
-         */
-        put: operations["batch_update_payment_api_activity_registrations_batch_payment_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/activity/registrations/export": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Export Registrations
-         * @description 匯出報名名單為 Excel
-         */
-        get: operations["export_registrations_api_activity_registrations_export_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/activity/registrations/payment-report": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Export Payment Report
-         * @description 匯出繳費帳務報表（兩個工作表：繳費總覽 + 繳費明細）
-         */
-        get: operations["export_payment_report_api_activity_registrations_payment_report_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/activity/registrations/pending": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Pending Registrations
-         * @description 取得待審核 / 已拒絕報名清單（合併於同一頁）。
-         *
-         *     status=pending：pending_review=true、is_active=true
-         *     status=rejected：match_status='rejected'、is_active=false
-         *     status=all（預設）：兩者聯集，前端以 match_status / is_active 判斷顯示
-         */
-        get: operations["list_pending_registrations_api_activity_registrations_pending_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/activity/registrations/{registration_id}": {
         parameters: {
             query?: never;
@@ -1612,6 +1520,98 @@ export interface paths {
          * @description 管理員手動將候補或 promoted_pending 直接升為正式報名（跳過 24h 確認窗）。
          */
         put: operations["promote_waitlist_api_activity_registrations__registration_id__waitlist_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/activity/registrations/batch-payment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Batch Update Payment
+         * @description 批次標記為已繳費（僅此方向；未繳費全額沖帳已禁用）
+         *
+         *     Why: 批次把一串報名「標記未繳費」會一次寫多筆全額 refund，誤操作後果嚴重且
+         *     不可部分回滾。schema 層已禁止 is_paid=False（進到這裡一律是 True）；
+         *     若需把某筆退費，請改用 PUT /registrations/{id}/payment（帶
+         *     confirm_refund_amount）或 DELETE /payments/{id} 軟刪對應繳費。
+         *
+         *     併發保護：`.with_for_update()` 鎖住目標 registration，避免兩個客戶端同時
+         *     呼叫造成重複寫 payment_record 或 lost update。
+         */
+        put: operations["batch_update_payment_api_activity_registrations_batch_payment_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/activity/registrations/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Registrations
+         * @description 匯出報名名單為 Excel
+         */
+        get: operations["export_registrations_api_activity_registrations_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/activity/registrations/payment-report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Payment Report
+         * @description 匯出繳費帳務報表（兩個工作表：繳費總覽 + 繳費明細）
+         */
+        get: operations["export_payment_report_api_activity_registrations_payment_report_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/activity/registrations/pending": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Pending Registrations
+         * @description 取得待審核 / 已拒絕報名清單（合併於同一頁）。
+         *
+         *     status=pending：pending_review=true、is_active=true
+         *     status=rejected：match_status='rejected'、is_active=false
+         *     status=all（預設）：兩者聯集，前端以 match_status / is_active 判斷顯示
+         */
+        get: operations["list_pending_registrations_api_activity_registrations_pending_get"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -2040,26 +2040,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/appraisal/cycles/import_excel": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Import Excel
-         * @description 上傳半年考核 Excel（.xls 或 .xlsx）→ 建立/更新 cycle/participants/score_items/summaries。
-         */
-        post: operations["import_excel_api_appraisal_cycles_import_excel_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/appraisal/cycles/{cycle_id}": {
         parameters: {
             query?: never;
@@ -2383,6 +2363,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/appraisal/cycles/import_excel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Excel
+         * @description 上傳半年考核 Excel（.xls 或 .xlsx）→ 建立/更新 cycle/participants/score_items/summaries。
+         */
+        post: operations["import_excel_api_appraisal_cycles_import_excel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/appraisal/participants/{participant_id}/score_items": {
         parameters: {
             query?: never;
@@ -2663,50 +2663,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/art-teacher-payroll/batch-import": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Batch Import
-         * @description 批次匯入才藝薪資明細。
-         *
-         *     Excel 欄位：員工姓名 / 工號(選填) / 科目 / 班級備註 / 時數 / 鐘點費 / 超額 / 加給活動 / 備註
-         *
-         *     回傳：{total, imported, skipped, errors:[{row, message}]}
-         */
-        post: operations["batch_import_api_art_teacher_payroll_batch_import_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/art-teacher-payroll/import-template": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Download Import Template
-         * @description 下載批次匯入範本 xlsx。
-         */
-        get: operations["download_import_template_api_art_teacher_payroll_import_template_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/art-teacher-payroll/{entry_id}": {
         parameters: {
             query?: never;
@@ -2743,6 +2699,50 @@ export interface paths {
          * @description 匯出才藝老師薪資清冊 xlsx（對齊《義華薪資》才藝老師 sheet）。
          */
         get: operations["export_roster_api_art_teacher_payroll__year___month__roster_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/art-teacher-payroll/batch-import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Batch Import
+         * @description 批次匯入才藝薪資明細。
+         *
+         *     Excel 欄位：員工姓名 / 工號(選填) / 科目 / 班級備註 / 時數 / 鐘點費 / 超額 / 加給活動 / 備註
+         *
+         *     回傳：{total, imported, skipped, errors:[{row, message}]}
+         */
+        post: operations["batch_import_api_art_teacher_payroll_batch_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/art-teacher-payroll/import-template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download Import Template
+         * @description 下載批次匯入範本 xlsx。
+         */
+        get: operations["download_import_template_api_art_teacher_payroll_import_template_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3118,6 +3118,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/audit-logs/{audit_id}/ack": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 標記單筆 audit 為已 ack
+         * @description 將單筆高風險事件標為已讀（idempotent：重複呼叫不覆寫首次 timestamp）。
+         */
+        post: operations["ack_audit_api_audit_logs__audit_id__ack_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/audit-logs/ack-all": {
         parameters: {
             query?: never;
@@ -3192,26 +3212,6 @@ export interface paths {
         get: operations["get_audit_logs_meta_api_audit_logs_meta_get"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/audit-logs/{audit_id}/ack": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * 標記單筆 audit 為已 ack
-         * @description 將單筆高風險事件標為已讀（idempotent：重複呼叫不覆寫首次 timestamp）。
-         */
-        post: operations["ack_audit_api_audit_logs__audit_id__ack_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3543,6 +3543,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/classrooms/{classroom_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Classroom
+         * @description 取得單一班級詳細資料（含學生列表）
+         */
+        get: operations["get_classroom_api_classrooms__classroom_id__get"];
+        /**
+         * Update Classroom
+         * @description 更新班級資料
+         */
+        put: operations["update_classroom_api_classrooms__classroom_id__put"];
+        post?: never;
+        /**
+         * Delete Classroom
+         * @description 停用班級。若仍有在學學生，則拒絕停用。
+         */
+        delete: operations["delete_classroom_api_classrooms__classroom_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/classrooms/{classroom_id}/enrollment-composition": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Classroom Enrollment Composition
+         * @description 取得班級在籍學生的特殊身分比例（當前快照）。
+         *
+         *     目前版本只回傳當前快照；未來若需要時間軸（按月點回放），需整合
+         *     StudentChangeLog 的 enter/leave 事件與 status_tag 的歷史變化。
+         */
+        get: operations["get_classroom_enrollment_composition_api_classrooms__classroom_id__enrollment_composition_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/classrooms/clone-term": {
         parameters: {
             query?: never;
@@ -3595,57 +3646,6 @@ export interface paths {
          * @description 取得可指派教師清單。
          */
         get: operations["get_teacher_options_api_classrooms_teacher_options_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/classrooms/{classroom_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Classroom
-         * @description 取得單一班級詳細資料（含學生列表）
-         */
-        get: operations["get_classroom_api_classrooms__classroom_id__get"];
-        /**
-         * Update Classroom
-         * @description 更新班級資料
-         */
-        put: operations["update_classroom_api_classrooms__classroom_id__put"];
-        post?: never;
-        /**
-         * Delete Classroom
-         * @description 停用班級。若仍有在學學生，則拒絕停用。
-         */
-        delete: operations["delete_classroom_api_classrooms__classroom_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/classrooms/{classroom_id}/enrollment-composition": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Classroom Enrollment Composition
-         * @description 取得班級在籍學生的特殊身分比例（當前快照）。
-         *
-         *     目前版本只回傳當前快照；未來若需要時間軸（按月點回放），需整合
-         *     StudentChangeLog 的 enter/leave 事件與 status_tag 的歷史變化。
-         */
-        get: operations["get_classroom_enrollment_composition_api_classrooms__classroom_id__enrollment_composition_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4039,6 +4039,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/dev/employee-salary-debug": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Debug Employee Salary
+         * @description 模擬計算單一員工薪資並回傳完整明細（dev 別名，正式請改打 /api/salaries/employee-salary-debug）。
+         */
+        get: operations["debug_employee_salary_api_dev_employee_salary_debug_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dev/salary-logic": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Salary Logic
+         * @description 傾印目前的薪資計算邏輯與所有參數設定（dev 別名，正式請改打 /api/salaries/logic）。
+         */
+        get: operations["get_salary_logic_api_dev_salary_logic_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/disciplinary-actions": {
         parameters: {
             query?: never;
@@ -4148,26 +4188,6 @@ export interface paths {
          * @description 新增員工
          */
         post: operations["create_employee_api_employees_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/employees/probation-alerts": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Probation Alerts
-         * @description 取得試用期即將到期的員工（預設 60 天內）
-         */
-        get: operations["get_probation_alerts_api_employees_probation_alerts_get"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4355,6 +4375,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/employees/probation-alerts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Probation Alerts
+         * @description 取得試用期即將到期的員工（預設 60 天內）
+         */
+        get: operations["get_probation_alerts_api_employees_probation_alerts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/events": {
         parameters: {
             query?: never;
@@ -4374,6 +4414,34 @@ export interface paths {
          */
         post: operations["create_event_api_events_post"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/events/{event_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Event
+         * @description 取得單一事件
+         */
+        get: operations["get_event_api_events__event_id__get"];
+        /**
+         * Update Event
+         * @description 更新行事曆事件
+         */
+        put: operations["update_event_api_events__event_id__put"];
+        post?: never;
+        /**
+         * Delete Event
+         * @description 刪除行事曆事件（軟刪除）
+         */
+        delete: operations["delete_event_api_events__event_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -4439,34 +4507,6 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/events/{event_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Event
-         * @description 取得單一事件
-         */
-        get: operations["get_event_api_events__event_id__get"];
-        /**
-         * Update Event
-         * @description 更新行事曆事件
-         */
-        put: operations["update_event_api_events__event_id__put"];
-        post?: never;
-        /**
-         * Delete Event
-         * @description 刪除行事曆事件（軟刪除）
-         */
-        delete: operations["delete_event_api_events__event_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -4995,23 +5035,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/gov-moe/certificates/history": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List History */
-        get: operations["list_history_api_gov_moe_certificates_history_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/gov-moe/certificates/{student_id}/generate": {
         parameters: {
             query?: never;
@@ -5023,6 +5046,23 @@ export interface paths {
         put?: never;
         /** Generate Certificate */
         post: operations["generate_certificate_api_gov_moe_certificates__student_id__generate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/gov-moe/certificates/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List History */
+        get: operations["list_history_api_gov_moe_certificates_history_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -5271,23 +5311,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/gov-moe/subsidies/export": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Export Subsidies */
-        get: operations["export_subsidies_api_gov_moe_subsidies_export_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/gov-moe/subsidies/{sub_id}": {
         parameters: {
             query?: never;
@@ -5366,6 +5389,23 @@ export interface paths {
         get?: never;
         /** Submit Subsidy */
         put: operations["submit_subsidy_api_gov_moe_subsidies__sub_id__submit_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/gov-moe/subsidies/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export Subsidies */
+        get: operations["export_subsidies_api_gov_moe_subsidies_export_get"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -5800,6 +5840,73 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/leaves/{leave_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update Leave
+         * @description 更新請假記錄。若記錄已核准，修改後自動退回「待審核」狀態以符合稽核要求。
+         */
+        put: operations["update_leave_api_leaves__leave_id__put"];
+        post?: never;
+        /**
+         * Delete Leave
+         * @description 刪除請假記錄
+         */
+        delete: operations["delete_leave_api_leaves__leave_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/leaves/{leave_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Approve Leave
+         * @description 核准/駁回請假。駁回時 rejection_reason 為必填。
+         */
+        put: operations["approve_leave_api_leaves__leave_id__approve_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/leaves/{leave_id}/attachments/{filename}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Leave Attachment
+         * @description 取得假單附件（管理後台）。
+         *
+         *     backend 為 local：直接 stream bytes（既有行為）
+         *     backend 為 supabase：302 redirect 到 signed URL（TTL 預設 1 小時）
+         */
+        get: operations["get_leave_attachment_api_leaves__leave_id__attachments__filename__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/leaves/batch-approve": {
         parameters: {
             query?: never;
@@ -5880,6 +5987,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/leaves/quotas/{quota_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update Leave Quota
+         * @description 手動調整配額（例如主管核准額外特休）
+         */
+        put: operations["update_leave_quota_api_leaves_quotas__quota_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/leaves/quotas/init": {
         parameters: {
             query?: never;
@@ -5903,26 +6030,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/leaves/quotas/{quota_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Update Leave Quota
-         * @description 手動調整配額（例如主管核准額外特休）
-         */
-        put: operations["update_leave_quota_api_leaves_quotas__quota_id__put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/leaves/workday-hours": {
         parameters: {
             query?: never;
@@ -5940,73 +6047,6 @@ export interface paths {
          *     - 無排班資料時預設 8h/天
          */
         get: operations["get_workday_hours_api_leaves_workday_hours_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/leaves/{leave_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Update Leave
-         * @description 更新請假記錄。若記錄已核准，修改後自動退回「待審核」狀態以符合稽核要求。
-         */
-        put: operations["update_leave_api_leaves__leave_id__put"];
-        post?: never;
-        /**
-         * Delete Leave
-         * @description 刪除請假記錄
-         */
-        delete: operations["delete_leave_api_leaves__leave_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/leaves/{leave_id}/approve": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Approve Leave
-         * @description 核准/駁回請假。駁回時 rejection_reason 為必填。
-         */
-        put: operations["approve_leave_api_leaves__leave_id__approve_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/leaves/{leave_id}/attachments/{filename}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Leave Attachment
-         * @description 取得假單附件（管理後台）。
-         *
-         *     backend 為 local：直接 stream bytes（既有行為）
-         *     backend 為 supabase：302 redirect 到 signed URL（TTL 預設 1 小時）
-         */
-        get: operations["get_leave_attachment_api_leaves__leave_id__attachments__filename__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -6127,6 +6167,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/meetings/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update Meeting
+         * @description 更新園務會議記錄
+         */
+        put: operations["update_meeting_api_meetings__record_id__put"];
+        post?: never;
+        /**
+         * Delete Meeting
+         * @description 刪除園務會議記錄
+         */
+        delete: operations["delete_meeting_api_meetings__record_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/meetings/batch": {
         parameters: {
             query?: never;
@@ -6167,30 +6231,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/meetings/{record_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Update Meeting
-         * @description 更新園務會議記錄
-         */
-        put: operations["update_meeting_api_meetings__record_id__put"];
-        post?: never;
-        /**
-         * Delete Meeting
-         * @description 刪除園務會議記錄
-         */
-        delete: operations["delete_meeting_api_meetings__record_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/monthly-fixed-costs": {
         parameters: {
             query?: never;
@@ -6213,6 +6253,26 @@ export interface paths {
         put: operations["upsert_monthly_fixed_cost_api_monthly_fixed_costs_put"];
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/monthly-fixed-costs/{cost_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Monthly Fixed Cost
+         * @description 刪除單筆月度固定費用。
+         */
+        delete: operations["delete_monthly_fixed_cost_api_monthly_fixed_costs__cost_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -6241,26 +6301,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/monthly-fixed-costs/{cost_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Delete Monthly Fixed Cost
-         * @description 刪除單筆月度固定費用。
-         */
-        delete: operations["delete_monthly_fixed_cost_api_monthly_fixed_costs__cost_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/notifications/summary": {
         parameters: {
             query?: never;
@@ -6273,39 +6313,6 @@ export interface paths {
          * @description 聚合後台待辦與提醒通知。
          */
         get: operations["get_notification_summary_api_notifications_summary_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/offboarding/download": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Download Offboarding Bundle
-         * @description **公開無 auth** download endpoint。
-         *
-         *     以 magic-link token 串流 ZIP 離職包（離職證明 PDF + 12 月薪資 PDF + 出勤 CSV）。
-         *     驗失敗統一 410 Gone，不暴露差異原因（防 enumeration）。
-         *
-         *     Security headers：
-         *     - Content-Disposition: attachment（強制下載，不在瀏覽器 inline render）
-         *     - X-Content-Type-Options: nosniff（防 MIME sniffing）
-         *     - Cache-Control: no-store（代理 / CDN 不快取含 PII 的 ZIP）
-         *
-         *     TODO follow-up：uvicorn access log token redaction（ASGI middleware 攔 query string
-         *     或 --access-log False）。目前 endpoint 本身不 echo token 到 logger，但 uvicorn
-         *     預設 access log 會記完整 URL（含 ?token=...），建議後續 PR 加 ASGI middleware
-         *     做 query string sanitize 或改用 --access-log False。
-         */
-        get: operations["download_offboarding_bundle_api_offboarding_download_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -6451,6 +6458,39 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/offboarding/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download Offboarding Bundle
+         * @description **公開無 auth** download endpoint。
+         *
+         *     以 magic-link token 串流 ZIP 離職包（離職證明 PDF + 12 月薪資 PDF + 出勤 CSV）。
+         *     驗失敗統一 410 Gone，不暴露差異原因（防 enumeration）。
+         *
+         *     Security headers：
+         *     - Content-Disposition: attachment（強制下載，不在瀏覽器 inline render）
+         *     - X-Content-Type-Options: nosniff（防 MIME sniffing）
+         *     - Cache-Control: no-store（代理 / CDN 不快取含 PII 的 ZIP）
+         *
+         *     TODO follow-up：uvicorn access log token redaction（ASGI middleware 攔 query string
+         *     或 --access-log False）。目前 endpoint 本身不 echo token 到 logger，但 uvicorn
+         *     預設 access log 會記完整 URL（含 ?token=...），建議後續 PR 加 ASGI middleware
+         *     做 query string sanitize 或改用 --access-log False。
+         */
+        get: operations["download_offboarding_bundle_api_offboarding_download_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/overtimes": {
         parameters: {
             query?: never;
@@ -6469,6 +6509,57 @@ export interface paths {
          * @description 新增加班記錄（自動計算加班費）
          */
         post: operations["create_overtime_api_overtimes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/overtimes/{overtime_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update Overtime
+         * @description 更新加班記錄。若記錄已核准，修改後自動退回「待審核」狀態以符合稽核要求。
+         */
+        put: operations["update_overtime_api_overtimes__overtime_id__put"];
+        post?: never;
+        /**
+         * Delete Overtime
+         * @description 刪除加班記錄
+         */
+        delete: operations["delete_overtime_api_overtimes__overtime_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/overtimes/{overtime_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Approve Overtime
+         * @description 核准/駁回加班；核准後自動重算該員工當月薪資，補休模式核准後自動累積配額。
+         *
+         *     audit P1（2026-05-07）：駁回（approved=False）必填 rejection_reason
+         *     （≥3 字），對齊 leaves / punch_corrections 既有要求；避免管理員惡意
+         *     零原因駁回他人加班費。reason 落 ApprovalLog.comment（OvertimeRecord
+         *     無 rejection_reason 欄位）。
+         *
+         *     P1-6 修補（2026-05-11）：body 優先；無 body 才回退 query parameter。
+         */
+        put: operations["approve_overtime_api_overtimes__overtime_id__approve_put"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -6528,57 +6619,6 @@ export interface paths {
          */
         get: operations["get_overtime_import_template_api_overtimes_import_template_get"];
         put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/overtimes/{overtime_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Update Overtime
-         * @description 更新加班記錄。若記錄已核准，修改後自動退回「待審核」狀態以符合稽核要求。
-         */
-        put: operations["update_overtime_api_overtimes__overtime_id__put"];
-        post?: never;
-        /**
-         * Delete Overtime
-         * @description 刪除加班記錄
-         */
-        delete: operations["delete_overtime_api_overtimes__overtime_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/overtimes/{overtime_id}/approve": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Approve Overtime
-         * @description 核准/駁回加班；核准後自動重算該員工當月薪資，補休模式核准後自動累積配額。
-         *
-         *     audit P1（2026-05-07）：駁回（approved=False）必填 rejection_reason
-         *     （≥3 字），對齊 leaves / punch_corrections 既有要求；避免管理員惡意
-         *     零原因駁回他人加班費。reason 落 ApprovalLog.comment（OvertimeRecord
-         *     無 rejection_reason 欄位）。
-         *
-         *     P1-6 修補（2026-05-11）：body 優先；無 body 才回退 query parameter。
-         */
-        put: operations["approve_overtime_api_overtimes__overtime_id__approve_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -6697,23 +6737,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/parent/announcements/unread-count": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Unread Count */
-        get: operations["unread_count_api_parent_announcements_unread_count_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/parent/announcements/{announcement_id}/read": {
         parameters: {
             query?: never;
@@ -6728,6 +6751,23 @@ export interface paths {
          * @description 冪等標記為已讀。若家長對此公告無可見權，回 403。
          */
         post: operations["mark_read_api_parent_announcements__announcement_id__read_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/parent/announcements/unread-count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Unread Count */
+        get: operations["unread_count_api_parent_announcements_unread_count_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -6953,26 +6993,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/parent/contact-book/today": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Today
-         * @description 取得指定子女今日已發布的聯絡簿（沒有 entry / 仍為草稿時 entry 回 null）。
-         */
-        get: operations["get_today_api_parent_contact_book_today_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/parent/contact-book/{entry_id}": {
         parameters: {
             query?: never;
@@ -7047,6 +7067,26 @@ export interface paths {
          * @description 家長簡短回覆。
          */
         post: operations["reply_api_parent_contact_book__entry_id__reply_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/parent/contact-book/today": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Today
+         * @description 取得指定子女今日已發布的聯絡簿（沒有 entry / 仍為草稿時 entry 回 null）。
+         */
+        get: operations["get_today_api_parent_contact_book_today_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -8206,6 +8246,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/portal/contact-book/{entry_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update Entry
+         * @description 單筆編輯。若帶 If-Match 需與目前 version 相符。
+         */
+        put: operations["update_entry_api_portal_contact_book__entry_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/contact-book/{entry_id}/photos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload Photo
+         * @description 為聯絡簿上傳照片（一次一張）。
+         */
+        post: operations["upload_photo_api_portal_contact_book__entry_id__photos_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/contact-book/{entry_id}/photos/{attachment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Photo
+         * @description 軟刪聯絡簿照片。
+         */
+        delete: operations["delete_photo_api_portal_contact_book__entry_id__photos__attachment_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/contact-book/{entry_id}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Publish Endpoint
+         * @description 發布單筆聯絡簿，觸發 WS 廣播 + LINE 推播。
+         */
+        post: operations["publish_endpoint_api_portal_contact_book__entry_id__publish_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/portal/contact-book/apply-template": {
         parameters: {
             query?: never;
@@ -8371,86 +8491,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/portal/contact-book/{entry_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Update Entry
-         * @description 單筆編輯。若帶 If-Match 需與目前 version 相符。
-         */
-        put: operations["update_entry_api_portal_contact_book__entry_id__put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/portal/contact-book/{entry_id}/photos": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Upload Photo
-         * @description 為聯絡簿上傳照片（一次一張）。
-         */
-        post: operations["upload_photo_api_portal_contact_book__entry_id__photos_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/portal/contact-book/{entry_id}/photos/{attachment_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Delete Photo
-         * @description 軟刪聯絡簿照片。
-         */
-        delete: operations["delete_photo_api_portal_contact_book__entry_id__photos__attachment_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/portal/contact-book/{entry_id}/publish": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Publish Endpoint
-         * @description 發布單筆聯絡簿，觸發 WS 廣播 + LINE 推播。
-         */
-        post: operations["publish_endpoint_api_portal_contact_book__entry_id__publish_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/portal/dismissal-calls": {
         parameters: {
             query?: never;
@@ -8463,26 +8503,6 @@ export interface paths {
          * @description 列出我的班級今日的 pending + acknowledged 通知。
          */
         get: operations["portal_list_dismissal_calls_api_portal_dismissal_calls_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/portal/dismissal-calls/pending-count": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Portal Pending Count
-         * @description 我的班級今日 pending 狀態通知數量。
-         */
-        get: operations["portal_pending_count_api_portal_dismissal_calls_pending_count_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -8525,6 +8545,26 @@ export interface paths {
          * @description 老師確認學生已放學（acknowledged → completed）。
          */
         post: operations["portal_complete_api_portal_dismissal_calls__call_id__complete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/dismissal-calls/pending-count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Portal Pending Count
+         * @description 我的班級今日 pending 狀態通知數量。
+         */
+        get: operations["portal_pending_count_api_portal_dismissal_calls_pending_count_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -8726,26 +8766,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/portal/my-appraisals/trend": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * My Appraisals Trend
-         * @description 折線圖資料 — 只回 FINALIZED 且未 rejected 期，按時間 ASC。
-         */
-        get: operations["my_appraisals_trend_api_portal_my_appraisals_trend_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/portal/my-appraisals/{cycle_id}": {
         parameters: {
             query?: never;
@@ -8758,6 +8778,26 @@ export interface paths {
          * @description 單期完整明細；非 FINALIZED → 403。
          */
         get: operations["my_appraisal_detail_api_portal_my_appraisals__cycle_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/my-appraisals/trend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * My Appraisals Trend
+         * @description 折線圖資料 — 只回 FINALIZED 且未 rejected 期，按時間 ASC。
+         */
+        get: operations["my_appraisals_trend_api_portal_my_appraisals_trend_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -9379,33 +9419,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/portal/students/measurements-latest": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Students Measurements Latest
-         * @description 回傳教師班級內所有學生 + 每位的「上次量測」摘要。
-         *
-         *     - 排除終態學生（graduated/withdrawn/transferred）
-         *     - 從未量測 → last_measurement = None
-         *     - 同日多筆 → 取 id 最大者
-         *     - 不分頁；單班通常 ≤ 30 人
-         *
-         *     用途：批次量測 sheet 的預填參考。
-         */
-        get: operations["get_students_measurements_latest_api_portal_students_measurements_latest_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/portal/students/{student_id}/detail": {
         parameters: {
             query?: never;
@@ -9448,6 +9461,33 @@ export interface paths {
          *     用 write_audit_in_session 在同交易寫 AuditLog（audit 與 commit 共生死）。
          */
         post: operations["reveal_student_phone_api_portal_students__student_id__reveal_phone_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/students/measurements-latest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Students Measurements Latest
+         * @description 回傳教師班級內所有學生 + 每位的「上次量測」摘要。
+         *
+         *     - 排除終態學生（graduated/withdrawn/transferred）
+         *     - 從未量測 → last_measurement = None
+         *     - 同日多筆 → 取 id 最大者
+         *     - 不分頁；單班通常 ≤ 30 人
+         *
+         *     用途：批次量測 sheet 的預填參考。
+         */
+        get: operations["get_students_measurements_latest_api_portal_students_measurements_latest_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -10098,26 +10138,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/recruitment/periods/summary": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Periods Summary
-         * @description 近五年整體量體 KPI + 班別轉換分析
-         */
-        get: operations["get_periods_summary_api_recruitment_periods_summary_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/recruitment/periods/{period_id}": {
         parameters: {
             query?: never;
@@ -10150,6 +10170,26 @@ export interface paths {
          * @description 從訪視明細自動計算並更新指定期間的統計數字（依期間名稱解析月份範圍）
          */
         post: operations["sync_period_from_visits_api_recruitment_periods__period_id__sync_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/recruitment/periods/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Periods Summary
+         * @description 近五年整體量體 KPI + 班別轉換分析
+         */
+        get: operations["get_periods_summary_api_recruitment_periods_summary_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -10452,6 +10492,178 @@ export interface paths {
         post?: never;
         /** Delete Role */
         delete: operations["delete_role_api_roles__code__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/salaries/{record_id}/audit-log": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Salary Audit Log
+         * @description 查詢單筆薪資的操作歷史（來源：通用 AuditLog 表）。
+         */
+        get: operations["get_salary_audit_log_api_salaries__record_id__audit_log_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/salaries/{record_id}/breakdown": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Salary Breakdown
+         * @description 查詢單筆薪資明細。
+         */
+        get: operations["get_salary_breakdown_api_salaries__record_id__breakdown_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/salaries/{record_id}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Salary Slip
+         * @description 匯出單人薪資單 PDF
+         */
+        get: operations["export_salary_slip_api_salaries__record_id__export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/salaries/{record_id}/field-breakdown": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Salary Field Breakdown
+         * @description 查詢單筆薪資指定欄位明細。
+         */
+        get: operations["get_salary_field_breakdown_api_salaries__record_id__field_breakdown_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/salaries/{record_id}/finalize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Unfinalize Salary
+         * @description 解除單筆薪資封存（危險操作，要求 reason + ACTIVITY_PAYMENT_APPROVE）
+         */
+        delete: operations["unfinalize_salary_api_salaries__record_id__finalize_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/salaries/{record_id}/manual-adjust": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Manual Adjust Salary
+         * @description 手動調整單筆薪資記錄。
+         *
+         *     若請求帶有 If-Match header，需與目前 record.version 相符才能寫入（樂觀鎖）。
+         *     不帶 If-Match 時允許寫入（舊版前端相容），仍會累加版本號。
+         *     成功時於 ETag / X-Record-Version header 回傳新版本。
+         */
+        put: operations["manual_adjust_salary_api_salaries__record_id__manual_adjust_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/salaries/{record_id}/unused-leave-payout-detail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Unused Leave Payout Detail
+         * @description 查詢單筆薪資的未休假折算工資明細。
+         *
+         *     權限：HR（SALARY_READ + admin/hr role）或員工本人（自己的薪資記錄）。
+         *
+         *     回傳欄位：
+         *     - salary_record_id：薪資記錄 id
+         *     - employee_id：員工 id
+         *     - total_amount：未休假折算總額（= SalaryRecord.unused_leave_payout）
+         *     - logs：各 source_type 明細列表
+         */
+        get: operations["get_unused_leave_payout_detail_api_salaries__record_id__unused_leave_payout_detail_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/salaries/{year}/{month}/transfer-roster": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Transfer Roster
+         * @description 匯出指定月份的銀行轉帳名冊 xlsx。
+         */
+        get: operations["export_transfer_roster_api_salaries__year___month__transfer_roster_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -10790,178 +11002,6 @@ export interface paths {
          * @description 比對快照與當前 SalaryRecord 的欄位差異。
          */
         get: operations["get_salary_snapshot_diff_api_salaries_snapshots__snapshot_id__diff_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/salaries/{record_id}/audit-log": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Salary Audit Log
-         * @description 查詢單筆薪資的操作歷史（來源：通用 AuditLog 表）。
-         */
-        get: operations["get_salary_audit_log_api_salaries__record_id__audit_log_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/salaries/{record_id}/breakdown": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Salary Breakdown
-         * @description 查詢單筆薪資明細。
-         */
-        get: operations["get_salary_breakdown_api_salaries__record_id__breakdown_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/salaries/{record_id}/export": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Export Salary Slip
-         * @description 匯出單人薪資單 PDF
-         */
-        get: operations["export_salary_slip_api_salaries__record_id__export_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/salaries/{record_id}/field-breakdown": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Salary Field Breakdown
-         * @description 查詢單筆薪資指定欄位明細。
-         */
-        get: operations["get_salary_field_breakdown_api_salaries__record_id__field_breakdown_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/salaries/{record_id}/finalize": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Unfinalize Salary
-         * @description 解除單筆薪資封存（危險操作，要求 reason + ACTIVITY_PAYMENT_APPROVE）
-         */
-        delete: operations["unfinalize_salary_api_salaries__record_id__finalize_delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/salaries/{record_id}/manual-adjust": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Manual Adjust Salary
-         * @description 手動調整單筆薪資記錄。
-         *
-         *     若請求帶有 If-Match header，需與目前 record.version 相符才能寫入（樂觀鎖）。
-         *     不帶 If-Match 時允許寫入（舊版前端相容），仍會累加版本號。
-         *     成功時於 ETag / X-Record-Version header 回傳新版本。
-         */
-        put: operations["manual_adjust_salary_api_salaries__record_id__manual_adjust_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/salaries/{record_id}/unused-leave-payout-detail": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Unused Leave Payout Detail
-         * @description 查詢單筆薪資的未休假折算工資明細。
-         *
-         *     權限：HR（SALARY_READ + admin/hr role）或員工本人（自己的薪資記錄）。
-         *
-         *     回傳欄位：
-         *     - salary_record_id：薪資記錄 id
-         *     - employee_id：員工 id
-         *     - total_amount：未休假折算總額（= SalaryRecord.unused_leave_payout）
-         *     - logs：各 source_type 明細列表
-         */
-        get: operations["get_unused_leave_payout_detail_api_salaries__record_id__unused_leave_payout_detail_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/salaries/{year}/{month}/transfer-roster": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Export Transfer Roster
-         * @description 匯出指定月份的銀行轉帳名冊 xlsx。
-         */
-        get: operations["export_transfer_roster_api_salaries__year___month__transfer_roster_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -11498,255 +11538,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/students/bulk-transfer": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Bulk Transfer Students
-         * @description 批次轉班。
-         *
-         *     Scope（audit 2026-05-07 P0 #4）：限定 admin/hr/supervisor。teacher 不可
-         *     把任何學生轉到任何班，包含自己班的學生（避免「擅自把學生踢到其他班」型
-         *     舞弊）。
-         *
-         *     audit（2026-05-07 P1）：在 request.state.audit_changes 寫入 student_ids
-         *     與 from→to classroom 摘要，讓 AuditMiddleware 把這次大規模轉班動作的
-         *     細節寫入 audit_logs（既有 StudentClassroomTransfer 是逐筆業務 audit，
-         *     本處再多一層整體動作軌跡，事後篩 entity_type=student 可一次撈到）。
-         */
-        post: operations["bulk_transfer_students_api_students_bulk_transfer_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/students/change-logs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Change Logs
-         * @description 取得學生異動紀錄列表（分頁）
-         */
-        get: operations["get_change_logs_api_students_change_logs_get"];
-        put?: never;
-        /**
-         * Create Change Log
-         * @description 手動補登學生異動紀錄（僅寫入稽核紀錄，不會改學生狀態）。
-         *
-         *     - 強制 source='manual'
-         *     - 限制 event_date <= 今天：未來事件請走 /students/{id}/lifecycle
-         */
-        post: operations["create_change_log_api_students_change_logs_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/students/change-logs/export": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Export Change Logs
-         * @description 匯出異動紀錄為 CSV，上限 5000 筆。
-         */
-        get: operations["export_change_logs_api_students_change_logs_export_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/students/change-logs/options": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Change Log Options
-         * @description 取得 event_type 與對應 reason 選項（供前端下拉）
-         */
-        get: operations["get_change_log_options_api_students_change_logs_options_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/students/change-logs/summary": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Change Logs Summary
-         * @description 取得指定學期各異動類型數量統計（可選以班級維度過濾）
-         */
-        get: operations["get_change_logs_summary_api_students_change_logs_summary_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/students/change-logs/{log_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Update Change Log
-         * @description 編輯異動紀錄（僅限手動補登的紀錄）
-         */
-        put: operations["update_change_log_api_students_change_logs__log_id__put"];
-        post?: never;
-        /**
-         * Delete Change Log
-         * @description 刪除異動紀錄（僅限手動補登的紀錄）
-         */
-        delete: operations["delete_change_log_api_students_change_logs__log_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/students/communications": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Communications
-         * @description 查詢家長溝通紀錄（分頁，支援 student_id / classroom_id 過濾）
-         */
-        get: operations["list_communications_api_students_communications_get"];
-        put?: never;
-        /**
-         * Create Communication
-         * @description 新增家長溝通紀錄
-         */
-        post: operations["create_communication_api_students_communications_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/students/communications/options": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Options
-         * @description 取得溝通方式選項（供前端下拉）
-         */
-        get: operations["get_options_api_students_communications_options_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/students/communications/{log_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Update Communication
-         * @description 編輯家長溝通紀錄
-         */
-        put: operations["update_communication_api_students_communications__log_id__put"];
-        post?: never;
-        /**
-         * Delete Communication
-         * @description 刪除家長溝通紀錄
-         */
-        delete: operations["delete_communication_api_students_communications__log_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/students/guardians/{guardian_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Delete Guardian
-         * @description 軟刪除監護人。
-         */
-        delete: operations["delete_guardian_api_students_guardians__guardian_id__delete"];
-        options?: never;
-        head?: never;
-        /** Update Guardian */
-        patch: operations["update_guardian_api_students_guardians__guardian_id__patch"];
-        trace?: never;
-    };
-    "/students/records": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Student Records Timeline
-         * @description 跨三模型的學生紀錄時間軸（事件 / 評量 / 異動）。
-         */
-        get: operations["get_student_records_timeline_api_students_records_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/students/{student_id}": {
         parameters: {
             query?: never;
@@ -12035,6 +11826,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/students/{student_id}/measurements/{m_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Measurement */
+        delete: operations["delete_measurement_api_students__student_id__measurements__m_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Measurement */
+        patch: operations["update_measurement_api_students__student_id__measurements__m_id__patch"];
+        trace?: never;
+    };
     "/students/{student_id}/measurements/chart-data": {
         parameters: {
             query?: never;
@@ -12062,24 +11871,6 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
-        trace?: never;
-    };
-    "/students/{student_id}/measurements/{m_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Delete Measurement */
-        delete: operations["delete_measurement_api_students__student_id__measurements__m_id__delete"];
-        options?: never;
-        head?: never;
-        /** Update Measurement */
-        patch: operations["update_measurement_api_students__student_id__measurements__m_id__patch"];
         trace?: never;
     };
     "/students/{student_id}/medication-orders": {
@@ -12138,23 +11929,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/students/{student_id}/milestones/auto-detect": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Auto Detect Milestones */
-        post: operations["auto_detect_milestones_api_students__student_id__milestones_auto_detect_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/students/{student_id}/milestones/{m_id}": {
         parameters: {
             query?: never;
@@ -12171,6 +11945,23 @@ export interface paths {
         head?: never;
         /** Update Milestone */
         patch: operations["update_milestone_api_students__student_id__milestones__m_id__patch"];
+        trace?: never;
+    };
+    "/students/{student_id}/milestones/auto-detect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Auto Detect Milestones */
+        post: operations["auto_detect_milestones_api_students__student_id__milestones_auto_detect_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/students/{student_id}/observations": {
@@ -12250,6 +12041,255 @@ export interface paths {
         };
         /** Get Timeline */
         get: operations["get_timeline_api_students__student_id__timeline_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/students/bulk-transfer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bulk Transfer Students
+         * @description 批次轉班。
+         *
+         *     Scope（audit 2026-05-07 P0 #4）：限定 admin/hr/supervisor。teacher 不可
+         *     把任何學生轉到任何班，包含自己班的學生（避免「擅自把學生踢到其他班」型
+         *     舞弊）。
+         *
+         *     audit（2026-05-07 P1）：在 request.state.audit_changes 寫入 student_ids
+         *     與 from→to classroom 摘要，讓 AuditMiddleware 把這次大規模轉班動作的
+         *     細節寫入 audit_logs（既有 StudentClassroomTransfer 是逐筆業務 audit，
+         *     本處再多一層整體動作軌跡，事後篩 entity_type=student 可一次撈到）。
+         */
+        post: operations["bulk_transfer_students_api_students_bulk_transfer_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/students/change-logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Change Logs
+         * @description 取得學生異動紀錄列表（分頁）
+         */
+        get: operations["get_change_logs_api_students_change_logs_get"];
+        put?: never;
+        /**
+         * Create Change Log
+         * @description 手動補登學生異動紀錄（僅寫入稽核紀錄，不會改學生狀態）。
+         *
+         *     - 強制 source='manual'
+         *     - 限制 event_date <= 今天：未來事件請走 /students/{id}/lifecycle
+         */
+        post: operations["create_change_log_api_students_change_logs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/students/change-logs/{log_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update Change Log
+         * @description 編輯異動紀錄（僅限手動補登的紀錄）
+         */
+        put: operations["update_change_log_api_students_change_logs__log_id__put"];
+        post?: never;
+        /**
+         * Delete Change Log
+         * @description 刪除異動紀錄（僅限手動補登的紀錄）
+         */
+        delete: operations["delete_change_log_api_students_change_logs__log_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/students/change-logs/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Change Logs
+         * @description 匯出異動紀錄為 CSV，上限 5000 筆。
+         */
+        get: operations["export_change_logs_api_students_change_logs_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/students/change-logs/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Change Log Options
+         * @description 取得 event_type 與對應 reason 選項（供前端下拉）
+         */
+        get: operations["get_change_log_options_api_students_change_logs_options_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/students/change-logs/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Change Logs Summary
+         * @description 取得指定學期各異動類型數量統計（可選以班級維度過濾）
+         */
+        get: operations["get_change_logs_summary_api_students_change_logs_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/students/communications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Communications
+         * @description 查詢家長溝通紀錄（分頁，支援 student_id / classroom_id 過濾）
+         */
+        get: operations["list_communications_api_students_communications_get"];
+        put?: never;
+        /**
+         * Create Communication
+         * @description 新增家長溝通紀錄
+         */
+        post: operations["create_communication_api_students_communications_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/students/communications/{log_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update Communication
+         * @description 編輯家長溝通紀錄
+         */
+        put: operations["update_communication_api_students_communications__log_id__put"];
+        post?: never;
+        /**
+         * Delete Communication
+         * @description 刪除家長溝通紀錄
+         */
+        delete: operations["delete_communication_api_students_communications__log_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/students/communications/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Options
+         * @description 取得溝通方式選項（供前端下拉）
+         */
+        get: operations["get_options_api_students_communications_options_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/students/guardians/{guardian_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Guardian
+         * @description 軟刪除監護人。
+         */
+        delete: operations["delete_guardian_api_students_guardians__guardian_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Guardian */
+        patch: operations["update_guardian_api_students_guardians__guardian_id__patch"];
+        trace?: never;
+    };
+    "/students/records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Student Records Timeline
+         * @description 跨三模型的學生紀錄時間軸（事件 / 評量 / 異動）。
+         */
+        get: operations["get_student_records_timeline_api_students_records_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -12494,6 +12534,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/year_end/appraisal-payout/{year}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Payouts */
+        delete: operations["delete_payouts_api_year_end_appraisal_payout__year__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/year_end/appraisal-payout/generate": {
         parameters: {
             query?: never;
@@ -12528,23 +12585,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/year_end/appraisal-payout/{year}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Delete Payouts */
-        delete: operations["delete_payouts_api_year_end_appraisal_payout__year__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/year_end/cycles": {
         parameters: {
             query?: never;
@@ -12557,23 +12597,6 @@ export interface paths {
         put?: never;
         /** Create Cycle */
         post: operations["create_cycle_api_year_end_cycles_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/year_end/cycles/import_excel": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Import Excel */
-        post: operations["import_excel_api_year_end_cycles_import_excel_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -12738,6 +12761,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/year_end/cycles/import_excel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Import Excel */
+        post: operations["import_excel_api_year_end_cycles_import_excel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/year_end/settlements/{settlement_id}/finalize": {
         parameters: {
             query?: never;
@@ -12793,6 +12833,33 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** _PromotionActionPayload */
+        _PromotionActionPayload: {
+            /** Birthday */
+            birthday: string;
+            /** Name */
+            name: string;
+            /** Parent Phone */
+            parent_phone: string;
+        };
+        /**
+         * _PublicQueryByTokenPayload
+         * @description 以查詢碼 + 家長手機查詢報名（Phase 3）。
+         *
+         *     威脅模型：token 是 convenience layer（家長拿到後免記憶/換手機後仍能查），
+         *     不是 security layer。phone 仍是必要第二因素，避免 token 從家長 LINE 截圖
+         *     被轉傳後直接被陌生人讀取資料。
+         *
+         *     schema 故意不設 min_length — 422 與 404 的 status code 差異會洩漏「token 是否
+         *     合法格式」的 oracle。攻擊者就算送 1 char token，後端 hash 也比不上，回統一 404。
+         *     max_length 保留是為防 DoS 級超長 payload。
+         */
+        _PublicQueryByTokenPayload: {
+            /** Parent Phone */
+            parent_phone: string;
+            /** Token */
+            token: string;
+        };
         /** AcademicTermIn */
         AcademicTermIn: {
             /**
@@ -12944,6 +13011,11 @@ export interface components {
             /** Reason */
             reason?: string | null;
         };
+        /** AdministerPayload */
+        AdministerPayload: {
+            /** Note */
+            note?: string | null;
+        };
         /**
          * AdminRegistrationBasicUpdate
          * @description 後台編輯報名基本欄位（不含課程/用品/備註）。
@@ -12994,11 +13066,6 @@ export interface components {
              * @default []
              */
             supplies: components["schemas"]["PublicSupplyItem"][];
-        };
-        /** AdministerPayload */
-        AdministerPayload: {
-            /** Note */
-            note?: string | null;
         };
         /** AggregatedStatusOut */
         AggregatedStatusOut: {
@@ -13095,6 +13162,39 @@ export interface components {
             action: string;
             /** Remark */
             remark?: string | null;
+        };
+        /** ApproveRequest */
+        api__gov_moe__subsidies__ApproveRequest: {
+            /** Amount Approved */
+            amount_approved: number | string;
+            /** Notes */
+            notes?: string | null;
+        };
+        /** ApproveRequest */
+        api__leaves__ApproveRequest: {
+            /** Approved */
+            approved: boolean;
+            /**
+             * Force Overlap
+             * @default false
+             */
+            force_overlap: boolean;
+            /** Force Overlap Reason */
+            force_overlap_reason?: string | null;
+            /**
+             * Force Without Substitute
+             * @default false
+             */
+            force_without_substitute: boolean;
+            /** Rejection Reason */
+            rejection_reason?: string | null;
+        };
+        /** ApproveRequest */
+        api__punch_corrections__ApproveRequest: {
+            /** Approved */
+            approved: boolean;
+            /** Rejection Reason */
+            rejection_reason?: string | null;
         };
         /** ApplyTemplatePayload */
         ApplyTemplatePayload: {
@@ -13988,42 +14088,6 @@ export interface components {
             /** Suggested Score Delta */
             suggested_score_delta: string;
         };
-        /** ClassRosterData */
-        ClassRosterData: {
-            /** Art Teacher Name */
-            art_teacher_name: string | null;
-            /** Assistant Teacher Name */
-            assistant_teacher_name: string | null;
-            /** Class Name */
-            class_name: string;
-            /** Class Number */
-            class_number: number;
-            /** Classroom Id */
-            classroom_id: number;
-            /** Grade Name */
-            grade_name: string;
-            /** Head Teacher Name */
-            head_teacher_name: string | null;
-            /** New Count */
-            new_count: number;
-            /** Old Count */
-            old_count: number;
-            /** Students */
-            students: components["schemas"]["RosterStudent"][];
-            /** Total */
-            total: number;
-        };
-        /** ClassStats */
-        ClassStats: {
-            /** Class Name */
-            class_name: string;
-            /** Female */
-            female: number;
-            /** Male */
-            male: number;
-            /** Total */
-            total: number;
-        };
         /** ClassroomCloneTerm */
         ClassroomCloneTerm: {
             /**
@@ -14144,6 +14208,42 @@ export interface components {
             school_year?: number | null;
             /** Semester */
             semester?: number | null;
+        };
+        /** ClassRosterData */
+        ClassRosterData: {
+            /** Art Teacher Name */
+            art_teacher_name: string | null;
+            /** Assistant Teacher Name */
+            assistant_teacher_name: string | null;
+            /** Class Name */
+            class_name: string;
+            /** Class Number */
+            class_number: number;
+            /** Classroom Id */
+            classroom_id: number;
+            /** Grade Name */
+            grade_name: string;
+            /** Head Teacher Name */
+            head_teacher_name: string | null;
+            /** New Count */
+            new_count: number;
+            /** Old Count */
+            old_count: number;
+            /** Students */
+            students: components["schemas"]["RosterStudent"][];
+            /** Total */
+            total: number;
+        };
+        /** ClassStats */
+        ClassStats: {
+            /** Class Name */
+            class_name: string;
+            /** Female */
+            female: number;
+            /** Male */
+            male: number;
+            /** Total */
+            total: number;
         };
         /** CommentIn */
         CommentIn: {
@@ -15503,11 +15603,6 @@ export interface components {
             /** Sort Order */
             sort_order?: number | null;
         };
-        /** HTTPValidationError */
-        HTTPValidationError: {
-            /** Detail */
-            detail?: components["schemas"]["ValidationError"][];
-        };
         /** HighRiskListResponse */
         HighRiskListResponse: {
             /** Items */
@@ -15516,6 +15611,11 @@ export interface components {
             total: number;
             /** Unack Count */
             unack_count: number;
+        };
+        /** HTTPValidationError */
+        HTTPValidationError: {
+            /** Detail */
+            detail?: components["schemas"]["ValidationError"][];
         };
         /** IepCloneRequest */
         IepCloneRequest: {
@@ -16434,13 +16534,6 @@ export interface components {
             /** Rating */
             rating?: number | null;
         };
-        /** OffboardRequest */
-        OffboardRequest: {
-            /** Resign Date */
-            resign_date: string;
-            /** Resign Reason */
-            resign_reason?: string | null;
-        };
         /** OffboardingDetailResponse */
         OffboardingDetailResponse: {
             /** Appraisal Marked At */
@@ -16554,6 +16647,13 @@ export interface components {
             steps: components["schemas"]["StepResultModel"][];
             /** User Account Revoked */
             user_account_revoked: boolean;
+        };
+        /** OffboardRequest */
+        OffboardRequest: {
+            /** Resign Date */
+            resign_date: string;
+            /** Resign Reason */
+            resign_reason?: string | null;
         };
         /** OrgYearSettingsCreate */
         OrgYearSettingsCreate: {
@@ -16687,54 +16787,6 @@ export interface components {
             /** Start Time */
             start_time?: string | null;
         };
-        /** POSCheckoutItem */
-        POSCheckoutItem: {
-            /**
-             * Amount
-             * @description 本次此筆收取金額（正整數，上限 NT$999,999）
-             */
-            amount: number;
-            /** Registration Id */
-            registration_id: number;
-        };
-        /** POSCheckoutRequest */
-        POSCheckoutRequest: {
-            /**
-             * Idempotency Key
-             * @description 冪等 key，同 key 在 10 分鐘內重送視為重試，回傳先前結果
-             */
-            idempotency_key?: string | null;
-            /** Items */
-            items: components["schemas"]["POSCheckoutItem"][];
-            /**
-             * Notes
-             * @default
-             */
-            notes: string;
-            /**
-             * Payment Date
-             * Format: date
-             */
-            payment_date: string;
-            /**
-             * Payment Method
-             * @description 目前 POS 僅支援現金；payment_method 欄位保留供未來擴充
-             * @default 現金
-             * @constant
-             */
-            payment_method: "現金";
-            /**
-             * Tendered
-             * @description 客戶實付（僅現金有意義，上限 NT$9,999,999）
-             */
-            tendered?: number | null;
-            /**
-             * Type
-             * @default payment
-             * @enum {string}
-             */
-            type: "payment" | "refund";
-        };
         /** ParentMedicationOrderCreate */
         ParentMedicationOrderCreate: {
             /**
@@ -16839,31 +16891,6 @@ export interface components {
             retention: components["schemas"]["ClassRetentionAggregateOut"];
             role_group: components["schemas"]["RoleGroup"];
         };
-        /** PayRequest */
-        PayRequest: {
-            /**
-             * Amount Paid
-             * @description 累計已繳金額（None=全額；上限 NT$999,999）
-             */
-            amount_paid?: number | null;
-            /**
-             * Idempotency Key
-             * @description 繳費冪等鍵（全域唯一；同 key 重送視為重試並回放先前結果）
-             */
-            idempotency_key?: string | null;
-            /**
-             * Notes
-             * @default
-             */
-            notes: string | null;
-            /**
-             * Payment Date
-             * Format: date
-             */
-            payment_date: string;
-            /** Payment Method */
-            payment_method: string;
-        };
         /** PaymentUpdate */
         PaymentUpdate: {
             /**
@@ -16959,6 +16986,31 @@ export interface components {
             total_amount: string;
             /** Warnings */
             warnings?: string[];
+        };
+        /** PayRequest */
+        PayRequest: {
+            /**
+             * Amount Paid
+             * @description 累計已繳金額（None=全額；上限 NT$999,999）
+             */
+            amount_paid?: number | null;
+            /**
+             * Idempotency Key
+             * @description 繳費冪等鍵（全域唯一；同 key 重送視為重試並回放先前結果）
+             */
+            idempotency_key?: string | null;
+            /**
+             * Notes
+             * @default
+             */
+            notes: string | null;
+            /**
+             * Payment Date
+             * Format: date
+             */
+            payment_date: string;
+            /** Payment Method */
+            payment_method: string;
         };
         /** PeriodCreate */
         PeriodCreate: {
@@ -17086,6 +17138,54 @@ export interface components {
         PortalBatchAttendanceUpdate: {
             /** Records */
             records: components["schemas"]["PortalAttendanceRecordItem"][];
+        };
+        /** POSCheckoutItem */
+        POSCheckoutItem: {
+            /**
+             * Amount
+             * @description 本次此筆收取金額（正整數，上限 NT$999,999）
+             */
+            amount: number;
+            /** Registration Id */
+            registration_id: number;
+        };
+        /** POSCheckoutRequest */
+        POSCheckoutRequest: {
+            /**
+             * Idempotency Key
+             * @description 冪等 key，同 key 在 10 分鐘內重送視為重試，回傳先前結果
+             */
+            idempotency_key?: string | null;
+            /** Items */
+            items: components["schemas"]["POSCheckoutItem"][];
+            /**
+             * Notes
+             * @default
+             */
+            notes: string;
+            /**
+             * Payment Date
+             * Format: date
+             */
+            payment_date: string;
+            /**
+             * Payment Method
+             * @description 目前 POS 僅支援現金；payment_method 欄位保留供未來擴充
+             * @default 現金
+             * @constant
+             */
+            payment_method: "現金";
+            /**
+             * Tendered
+             * @description 客戶實付（僅現金有意義，上限 NT$9,999,999）
+             */
+            tendered?: number | null;
+            /**
+             * Type
+             * @default payment
+             * @enum {string}
+             */
+            type: "payment" | "refund";
         };
         /**
          * PositionSalarySyncRequest
@@ -18770,66 +18870,6 @@ export interface components {
          * @enum {string}
          */
         YearEndSettlementStatus: "DRAFT" | "SUPERVISOR_SIGNED" | "ACCOUNTING_SIGNED" | "FINALIZED";
-        /** _PromotionActionPayload */
-        _PromotionActionPayload: {
-            /** Birthday */
-            birthday: string;
-            /** Name */
-            name: string;
-            /** Parent Phone */
-            parent_phone: string;
-        };
-        /**
-         * _PublicQueryByTokenPayload
-         * @description 以查詢碼 + 家長手機查詢報名（Phase 3）。
-         *
-         *     威脅模型：token 是 convenience layer（家長拿到後免記憶/換手機後仍能查），
-         *     不是 security layer。phone 仍是必要第二因素，避免 token 從家長 LINE 截圖
-         *     被轉傳後直接被陌生人讀取資料。
-         *
-         *     schema 故意不設 min_length — 422 與 404 的 status code 差異會洩漏「token 是否
-         *     合法格式」的 oracle。攻擊者就算送 1 char token，後端 hash 也比不上，回統一 404。
-         *     max_length 保留是為防 DoS 級超長 payload。
-         */
-        _PublicQueryByTokenPayload: {
-            /** Parent Phone */
-            parent_phone: string;
-            /** Token */
-            token: string;
-        };
-        /** ApproveRequest */
-        api__gov_moe__subsidies__ApproveRequest: {
-            /** Amount Approved */
-            amount_approved: number | string;
-            /** Notes */
-            notes?: string | null;
-        };
-        /** ApproveRequest */
-        api__leaves__ApproveRequest: {
-            /** Approved */
-            approved: boolean;
-            /**
-             * Force Overlap
-             * @default false
-             */
-            force_overlap: boolean;
-            /** Force Overlap Reason */
-            force_overlap_reason?: string | null;
-            /**
-             * Force Without Substitute
-             * @default false
-             */
-            force_without_substitute: boolean;
-            /** Rejection Reason */
-            rejection_reason?: string | null;
-        };
-        /** ApproveRequest */
-        api__punch_corrections__ApproveRequest: {
-            /** Approved */
-            approved: boolean;
-            /** Rejection Reason */
-            rejection_reason?: string | null;
-        };
     };
     responses: never;
     parameters: never;
@@ -18908,26 +18948,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    current_term_api_academic_terms_current_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AcademicTermOut"] | null;
                 };
             };
         };
@@ -19031,14 +19051,34 @@ export interface operations {
             };
         };
     };
+    current_term_api_academic_terms_current_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AcademicTermOut"] | null;
+                };
+            };
+        };
+    };
     list_sessions_api_activity_attendance_sessions_get: {
         parameters: {
             query?: {
                 course_id?: number | null;
-                start_date?: string | null;
                 end_date?: string | null;
-                skip?: number;
                 limit?: number;
+                skip?: number;
+                start_date?: string | null;
             };
             header?: never;
             path?: never;
@@ -19359,8 +19399,8 @@ export interface operations {
     get_changes_api_activity_changes_get: {
         parameters: {
             query?: {
-                skip?: number;
                 limit?: number;
+                skip?: number;
             };
             header?: never;
             path?: never;
@@ -19411,10 +19451,10 @@ export interface operations {
     get_courses_api_activity_courses_get: {
         parameters: {
             query?: {
-                skip?: number;
                 limit?: number;
                 school_year?: number | null;
                 semester?: number | null;
+                skip?: number;
             };
             header?: never;
             path?: never;
@@ -19452,39 +19492,6 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["CourseCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    copy_courses_from_previous_api_activity_courses_copy_from_previous_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CopyCoursesRequest"];
             };
         };
         responses: {
@@ -19667,6 +19674,39 @@ export interface operations {
             };
         };
     };
+    copy_courses_from_previous_api_activity_courses_copy_from_previous_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CopyCoursesRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_dashboard_table_api_activity_dashboard_table_get: {
         parameters: {
             query?: {
@@ -19735,8 +19775,8 @@ export interface operations {
         parameters: {
             query?: {
                 is_read?: boolean;
-                skip?: number;
                 limit?: number;
+                skip?: number;
             };
             header?: never;
             path?: never;
@@ -19894,40 +19934,6 @@ export interface operations {
             };
         };
     };
-    pending_daily_closes_api_activity_pos_daily_close_pending_get: {
-        parameters: {
-            query?: {
-                /** @description YYYY-MM-DD，預設 30 天前 */
-                start_date?: string | null;
-                /** @description YYYY-MM-DD，預設今日 */
-                end_date?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     get_daily_close_api_activity_pos_daily_close__date_str__get: {
         parameters: {
             query?: never;
@@ -20029,6 +20035,40 @@ export interface operations {
             };
         };
     };
+    pending_daily_closes_api_activity_pos_daily_close_pending_get: {
+        parameters: {
+            query?: {
+                /** @description YYYY-MM-DD，預設今日 */
+                end_date?: string | null;
+                /** @description YYYY-MM-DD，預設 30 天前 */
+                start_date?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     pos_daily_summary_api_activity_pos_daily_summary_get: {
         parameters: {
             query?: {
@@ -20064,15 +20104,15 @@ export interface operations {
     outstanding_by_student_api_activity_pos_outstanding_by_student_get: {
         parameters: {
             query?: {
-                /** @description 關鍵字模糊搜尋（姓名 / 班級 / 家長手機）；留空則列出全部 */
-                q?: string | null;
-                limit?: number;
-                /** @description outstanding=未結清(paid<total)，refundable=已繳>0(供退費使用) */
-                filter?: "outstanding" | "refundable";
                 /** @description 精確班級名稱過濾（下拉選單用） */
                 classroom?: string | null;
+                /** @description outstanding=未結清(paid<total)，refundable=已繳>0(供退費使用) */
+                filter?: "outstanding" | "refundable";
+                limit?: number;
                 /** @description 只列報名超過 14 天仍未結清的『逾期』項目 */
                 overdue_only?: boolean;
+                /** @description 關鍵字模糊搜尋（姓名 / 班級 / 家長手機）；留空則列出全部 */
+                q?: string | null;
                 school_year?: number | null;
                 semester?: number | null;
             };
@@ -20138,9 +20178,9 @@ export interface operations {
             query?: {
                 /** @description YYYY-MM-DD，預設今日 */
                 date?: string | null;
-                limit?: number;
                 /** @description 是否一併列出系統沖帳（notes 無 [POS-...] 標記的 payment_records，例如學生離園自動沖帳） */
                 include_system?: boolean;
+                limit?: number;
             };
             header?: never;
             path?: never;
@@ -20172,9 +20212,9 @@ export interface operations {
         parameters: {
             query: {
                 /** @description YYYY-MM-DD */
-                start_date: string;
-                /** @description YYYY-MM-DD */
                 end_date: string;
+                /** @description YYYY-MM-DD */
+                start_date: string;
             };
             header?: never;
             path?: never;
@@ -20205,12 +20245,12 @@ export interface operations {
     pos_semester_reconciliation_api_activity_pos_semester_reconciliation_get: {
         parameters: {
             query?: {
-                school_year?: number | null;
-                semester?: number | null;
-                classroom_name?: string | null;
-                payment_status?: ("paid" | "partial" | "unpaid" | "overpaid") | null;
                 /** @description fully_approved / partially_approved / pending_approval / no_payment */
                 approval_status?: string | null;
+                classroom_name?: string | null;
+                payment_status?: ("paid" | "partial" | "unpaid" | "overpaid") | null;
+                school_year?: number | null;
+                semester?: number | null;
             };
             header?: never;
             path?: never;
@@ -20385,8 +20425,8 @@ export interface operations {
     public_query_registration_api_activity_public_query_get: {
         parameters: {
             query: {
-                name: string;
                 birthday: string;
+                name: string;
                 parent_phone: string;
             };
             header?: never;
@@ -20506,8 +20546,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                registration_id: number;
                 course_id: number;
+                registration_id: number;
             };
             cookie?: never;
         };
@@ -20542,8 +20582,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                registration_id: number;
                 course_id: number;
+                registration_id: number;
             };
             cookie?: never;
         };
@@ -20629,16 +20669,16 @@ export interface operations {
     get_registrations_api_activity_registrations_get: {
         parameters: {
             query?: {
-                skip?: number;
-                limit?: number;
-                search?: string | null;
-                payment_status?: string | null;
-                course_id?: number | null;
                 classroom_name?: string | null;
-                school_year?: number | null;
-                semester?: number | null;
-                match_status?: string | null;
+                course_id?: number | null;
                 include_inactive?: boolean;
+                limit?: number;
+                match_status?: string | null;
+                payment_status?: string | null;
+                school_year?: number | null;
+                search?: string | null;
+                semester?: number | null;
+                skip?: number;
                 /** @description 指定在校學生 ID，查詢其歷史報名紀錄 */
                 student_id?: number | null;
             };
@@ -20683,143 +20723,6 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    batch_update_payment_api_activity_registrations_batch_payment_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["BatchPaymentUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    export_registrations_api_activity_registrations_export_get: {
-        parameters: {
-            query?: {
-                search?: string | null;
-                payment_status?: string | null;
-                course_id?: number | null;
-                classroom_name?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    export_payment_report_api_activity_registrations_payment_report_get: {
-        parameters: {
-            query?: {
-                search?: string | null;
-                payment_status?: string | null;
-                course_id?: number | null;
-                classroom_name?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_pending_registrations_api_activity_registrations_pending_get: {
-        parameters: {
-            query?: {
-                skip?: number;
-                limit?: number;
-                search?: string | null;
-                school_year?: number | null;
-                semester?: number | null;
-                status?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -20985,8 +20888,8 @@ export interface operations {
             };
             header?: never;
             path: {
-                registration_id: number;
                 course_id: number;
+                registration_id: number;
             };
             cookie?: never;
         };
@@ -21188,8 +21091,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                registration_id: number;
                 payment_id: number;
+                registration_id: number;
             };
             cookie?: never;
         };
@@ -21491,6 +21394,143 @@ export interface operations {
             };
         };
     };
+    batch_update_payment_api_activity_registrations_batch_payment_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BatchPaymentUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_registrations_api_activity_registrations_export_get: {
+        parameters: {
+            query?: {
+                classroom_name?: string | null;
+                course_id?: number | null;
+                payment_status?: string | null;
+                search?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_payment_report_api_activity_registrations_payment_report_get: {
+        parameters: {
+            query?: {
+                classroom_name?: string | null;
+                course_id?: number | null;
+                payment_status?: string | null;
+                search?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_pending_registrations_api_activity_registrations_pending_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                school_year?: number | null;
+                search?: string | null;
+                semester?: number | null;
+                skip?: number;
+                status?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     upload_activity_poster_api_activity_settings_poster_post: {
         parameters: {
             query?: never;
@@ -21640,8 +21680,8 @@ export interface operations {
     admin_search_students_api_activity_students_search_get: {
         parameters: {
             query: {
-                q: string;
                 limit?: number;
+                q: string;
             };
             header?: never;
             path?: never;
@@ -21672,10 +21712,10 @@ export interface operations {
     get_supplies_api_activity_supplies_get: {
         parameters: {
             query?: {
-                skip?: number;
                 limit?: number;
                 school_year?: number | null;
                 semester?: number | null;
+                skip?: number;
             };
             header?: never;
             path?: never;
@@ -21876,12 +21916,12 @@ export interface operations {
     get_funnel_api_analytics_funnel_get: {
         parameters: {
             query: {
-                /** @description 區間起（含） */
-                start: string;
                 /** @description 區間迄（含） */
                 end: string;
                 grade?: string | null;
                 source?: string | null;
+                /** @description 區間起（含） */
+                start: string;
             };
             header?: never;
             path?: never;
@@ -22282,43 +22322,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CycleOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    import_excel_api_appraisal_cycles_import_excel_post: {
-        parameters: {
-            query: {
-                start_date: string;
-                end_date: string;
-                base_score_calc_date: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "multipart/form-data": components["schemas"]["Body_import_excel_api_appraisal_cycles_import_excel_post"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ImportResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -22850,6 +22853,43 @@ export interface operations {
             };
         };
     };
+    import_excel_api_appraisal_cycles_import_excel_post: {
+        parameters: {
+            query: {
+                base_score_calc_date: string;
+                end_date: string;
+                start_date: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_import_excel_api_appraisal_cycles_import_excel_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_score_items_api_appraisal_participants__participant_id__score_items_get: {
         parameters: {
             query?: never;
@@ -23214,9 +23254,9 @@ export interface operations {
     get_approval_logs_api_approval_settings_logs_get: {
         parameters: {
             query?: {
+                doc_id?: number | null;
                 /** @description leave / overtime / punch_correction */
                 doc_type?: string | null;
-                doc_id?: number | null;
             };
             header?: never;
             path?: never;
@@ -23320,9 +23360,9 @@ export interface operations {
     list_entries_api_art_teacher_payroll_get: {
         parameters: {
             query: {
-                year: number;
-                month: number;
                 employee_id?: number | null;
+                month: number;
+                year: number;
             };
             header?: never;
             path?: never;
@@ -23379,64 +23419,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    batch_import_api_art_teacher_payroll_batch_import_post: {
-        parameters: {
-            query: {
-                year: number;
-                month: number;
-                /** @description True=匯入前先刪除該月所有 entries（整月覆寫，避免重複） */
-                replace_existing?: boolean;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "multipart/form-data": components["schemas"]["Body_batch_import_api_art_teacher_payroll_batch_import_post"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    download_import_template_api_art_teacher_payroll_import_template_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
                 };
             };
         };
@@ -23512,8 +23494,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                year: number;
                 month: number;
+                year: number;
             };
             cookie?: never;
         };
@@ -23535,6 +23517,64 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    batch_import_api_art_teacher_payroll_batch_import_post: {
+        parameters: {
+            query: {
+                month: number;
+                /** @description True=匯入前先刪除該月所有 entries（整月覆寫，避免重複） */
+                replace_existing?: boolean;
+                year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_batch_import_api_art_teacher_payroll_batch_import_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_import_template_api_art_teacher_payroll_import_template_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };
@@ -23610,9 +23650,9 @@ export interface operations {
     get_attendance_anomalies_api_attendance_anomalies_get: {
         parameters: {
             query: {
-                year: number;
                 month: number;
                 status?: string;
+                year: number;
             };
             header?: never;
             path?: never;
@@ -23676,9 +23716,9 @@ export interface operations {
     export_attendance_anomalies_api_attendance_anomalies_export_get: {
         parameters: {
             query: {
-                year: number;
                 month: number;
                 status?: string;
+                year: number;
             };
             header?: never;
             path?: never;
@@ -23709,8 +23749,8 @@ export interface operations {
     download_anomaly_report_api_attendance_anomaly_report_get: {
         parameters: {
             query: {
-                year: number;
                 month: number;
+                year: number;
             };
             header?: never;
             path?: never;
@@ -23742,8 +23782,8 @@ export interface operations {
         parameters: {
             query: {
                 employee_id: number;
-                year: number;
                 month: number;
+                year: number;
             };
             header?: never;
             path?: never;
@@ -23809,8 +23849,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                employee_id: number;
                 date: string;
+                employee_id: number;
             };
             cookie?: never;
         };
@@ -23839,9 +23879,9 @@ export interface operations {
     get_attendance_records_api_attendance_records_get: {
         parameters: {
             query: {
-                year: number;
-                month: number;
                 employee_id?: number | null;
+                month: number;
+                year: number;
             };
             header?: never;
             path?: never;
@@ -23874,8 +23914,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                employee_id: number;
                 date_str: string;
+                employee_id: number;
             };
             cookie?: never;
         };
@@ -23906,8 +23946,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                year: number;
                 month: number;
+                year: number;
             };
             cookie?: never;
         };
@@ -23936,8 +23976,8 @@ export interface operations {
     get_attendance_summary_api_attendance_summary_get: {
         parameters: {
             query: {
-                year: number;
                 month: number;
+                year: number;
             };
             header?: never;
             path?: never;
@@ -24074,18 +24114,49 @@ export interface operations {
     get_audit_logs_api_audit_logs_get: {
         parameters: {
             query?: {
+                action?: string | null;
+                end_at?: string | null;
+                entity_id?: string | null;
+                entity_type?: string | null;
+                ip_address?: string | null;
                 page?: number;
                 page_size?: number;
-                entity_type?: string | null;
-                action?: string | null;
-                username?: string | null;
-                entity_id?: string | null;
-                ip_address?: string | null;
                 start_at?: string | null;
-                end_at?: string | null;
+                username?: string | null;
             };
             header?: never;
             path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ack_audit_api_audit_logs__audit_id__ack_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                audit_id: number;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -24144,13 +24215,13 @@ export interface operations {
     export_audit_logs_api_audit_logs_export_get: {
         parameters: {
             query?: {
-                entity_type?: string | null;
                 action?: string | null;
-                username?: string | null;
+                end_at?: string | null;
                 entity_id?: string | null;
+                entity_type?: string | null;
                 ip_address?: string | null;
                 start_at?: string | null;
-                end_at?: string | null;
+                username?: string | null;
             };
             header?: never;
             path?: never;
@@ -24182,8 +24253,8 @@ export interface operations {
         parameters: {
             query?: {
                 days?: number;
-                unack_only?: boolean;
                 limit?: number;
+                unack_only?: boolean;
             };
             header?: never;
             path?: never;
@@ -24227,37 +24298,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
-                };
-            };
-        };
-    };
-    ack_audit_api_audit_logs__audit_id__ack_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                audit_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -24651,8 +24691,8 @@ export interface operations {
     get_bonus_dashboard_api_bonus_preview_dashboard_get: {
         parameters: {
             query?: {
-                year?: number | null;
                 month?: number | null;
+                year?: number | null;
             };
             header?: never;
             path?: never;
@@ -24684,8 +24724,8 @@ export interface operations {
         parameters: {
             query: {
                 from: string;
-                to: string;
                 layers?: string | null;
+                to: string;
             };
             header?: never;
             path?: never;
@@ -24716,10 +24756,10 @@ export interface operations {
     get_classrooms_api_classrooms_get: {
         parameters: {
             query?: {
+                current_only?: boolean;
                 include_inactive?: boolean;
                 school_year?: number | null;
                 semester?: number | null;
-                current_only?: boolean;
             };
             header?: never;
             path?: never;
@@ -24776,92 +24816,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    clone_classrooms_to_term_api_classrooms_clone_term_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ClassroomCloneTerm"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    promote_classrooms_to_academic_year_api_classrooms_promote_academic_year_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ClassroomPromoteAcademicYear"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_teacher_options_api_classrooms_teacher_options_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
                 };
             };
         };
@@ -24990,6 +24944,92 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clone_classrooms_to_term_api_classrooms_clone_term_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClassroomCloneTerm"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    promote_classrooms_to_academic_year_api_classrooms_promote_academic_year_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClassroomPromoteAcademicYear"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_teacher_options_api_classrooms_teacher_options_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };
@@ -25710,14 +25750,67 @@ export interface operations {
             };
         };
     };
+    debug_employee_salary_api_dev_employee_salary_debug_get: {
+        parameters: {
+            query: {
+                employee_id: number;
+                month: number;
+                year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_salary_logic_api_dev_salary_logic_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
     list_actions_api_disciplinary_actions_get: {
         parameters: {
             query?: {
                 employee_id?: number | null;
-                start_date?: string | null;
                 end_date?: string | null;
                 /** @description 僅顯示未抵扣 */
                 pending_only?: boolean;
+                start_date?: string | null;
             };
             header?: never;
             path?: never;
@@ -25847,11 +25940,11 @@ export interface operations {
     list_dismissal_calls_api_dismissal_calls_get: {
         parameters: {
             query?: {
-                /** @description YYYY-MM-DD，預設今日 */
-                target_date?: string | null;
+                classroom_id?: number | null;
                 /** @description pending/acknowledged/completed/cancelled */
                 status?: string | null;
-                classroom_id?: number | null;
+                /** @description YYYY-MM-DD，預設今日 */
+                target_date?: string | null;
             };
             header?: never;
             path?: never;
@@ -25946,9 +26039,9 @@ export interface operations {
     get_employees_api_employees_get: {
         parameters: {
             query?: {
-                skip?: number;
                 limit?: number;
                 search?: string | null;
+                skip?: number;
             };
             header?: never;
             path?: never;
@@ -25991,37 +26084,6 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_probation_alerts_api_employees_probation_alerts_get: {
-        parameters: {
-            query?: {
-                days?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -26208,8 +26270,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                employee_id: number;
                 cert_id: number;
+                employee_id: number;
             };
             cookie?: never;
         };
@@ -26244,8 +26306,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                employee_id: number;
                 cert_id: number;
+                employee_id: number;
             };
             cookie?: never;
         };
@@ -26342,8 +26404,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                employee_id: number;
                 contract_id: number;
+                employee_id: number;
             };
             cookie?: never;
         };
@@ -26378,8 +26440,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                employee_id: number;
                 contract_id: number;
+                employee_id: number;
             };
             cookie?: never;
         };
@@ -26476,8 +26538,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                employee_id: number;
                 edu_id: number;
+                employee_id: number;
             };
             cookie?: never;
         };
@@ -26512,8 +26574,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                employee_id: number;
                 edu_id: number;
+                employee_id: number;
             };
             cookie?: never;
         };
@@ -26542,8 +26604,8 @@ export interface operations {
     final_salary_preview_api_employees__employee_id__final_salary_preview_get: {
         parameters: {
             query: {
-                year: number;
                 month: number;
+                year: number;
             };
             header?: never;
             path: {
@@ -26608,12 +26670,43 @@ export interface operations {
             };
         };
     };
+    get_probation_alerts_api_employees_probation_alerts_get: {
+        parameters: {
+            query?: {
+                days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_events_api_events_get: {
         parameters: {
             query?: {
-                year?: number | null;
-                month?: number | null;
                 event_type?: string | null;
+                month?: number | null;
+                year?: number | null;
             };
             header?: never;
             path?: never;
@@ -26670,94 +26763,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_calendar_feed_api_events_calendar_feed_get: {
-        parameters: {
-            query: {
-                year: number;
-                month: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    import_holidays_api_events_holidays_import_post: {
-        parameters: {
-            query?: {
-                force?: boolean;
-                force_reason?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "multipart/form-data": components["schemas"]["Body_import_holidays_api_events_holidays_import_post"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_holiday_import_template_api_events_holidays_import_template_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
                 };
             };
         };
@@ -26859,11 +26864,99 @@ export interface operations {
             };
         };
     };
+    get_calendar_feed_api_events_calendar_feed_get: {
+        parameters: {
+            query: {
+                month: number;
+                year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_holidays_api_events_holidays_import_post: {
+        parameters: {
+            query?: {
+                force?: boolean;
+                force_reason?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_import_holidays_api_events_holidays_import_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_holiday_import_template_api_events_holidays_import_template_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
     export_attendance_api_exports_attendance_get: {
         parameters: {
             query: {
-                year: number;
                 month: number;
+                year: number;
             };
             header?: never;
             path?: never;
@@ -26894,8 +26987,8 @@ export interface operations {
     export_calendar_api_exports_calendar_get: {
         parameters: {
             query: {
-                year: number;
                 month: number;
+                year: number;
             };
             header?: never;
             path?: never;
@@ -26927,8 +27020,8 @@ export interface operations {
         parameters: {
             query: {
                 employee_id: number;
-                year: number;
                 month: number;
+                year: number;
             };
             header?: never;
             path?: never;
@@ -27011,8 +27104,8 @@ export interface operations {
     export_leaves_api_exports_leaves_get: {
         parameters: {
             query: {
-                year: number;
                 month: number;
+                year: number;
             };
             header?: never;
             path?: never;
@@ -27043,8 +27136,8 @@ export interface operations {
     export_overtimes_api_exports_overtimes_get: {
         parameters: {
             query: {
-                year: number;
                 month: number;
+                year: number;
             };
             header?: never;
             path?: never;
@@ -27127,9 +27220,9 @@ export interface operations {
     list_adjustments_api_fees_adjustments_get: {
         parameters: {
             query?: {
+                adjustment_type?: string | null;
                 period?: string | null;
                 student_id?: number | null;
-                adjustment_type?: string | null;
             };
             header?: never;
             path?: never;
@@ -27312,13 +27405,13 @@ export interface operations {
     list_fee_records_api_fees_records_get: {
         parameters: {
             query?: {
-                period?: string | null;
                 classroom_name?: string | null;
-                status?: string | null;
-                student_name?: string | null;
-                student_id?: number | null;
                 page?: number;
                 page_size?: number;
+                period?: string | null;
+                status?: string | null;
+                student_id?: number | null;
+                student_name?: string | null;
             };
             header?: never;
             path?: never;
@@ -27485,8 +27578,8 @@ export interface operations {
     fee_summary_api_fees_summary_get: {
         parameters: {
             query?: {
-                period?: string | null;
                 classroom_name?: string | null;
+                period?: string | null;
                 status?: string | null;
                 student_name?: string | null;
             };
@@ -27519,10 +27612,10 @@ export interface operations {
     list_fee_templates_api_fees_templates_get: {
         parameters: {
             query?: {
-                school_year?: number | null;
-                semester?: number | null;
                 fee_type?: string | null;
                 is_active?: boolean | null;
+                school_year?: number | null;
+                semester?: number | null;
             };
             header?: never;
             path?: never;
@@ -27747,39 +27840,6 @@ export interface operations {
             };
         };
     };
-    list_history_api_gov_moe_certificates_history_get: {
-        parameters: {
-            query?: {
-                student_id?: number | null;
-                since?: string | null;
-                until?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CertificateOut"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     generate_certificate_api_gov_moe_certificates__student_id__generate_post: {
         parameters: {
             query?: never;
@@ -27802,6 +27862,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CertificateOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_history_api_gov_moe_certificates_history_get: {
+        parameters: {
+            query?: {
+                since?: string | null;
+                student_id?: number | null;
+                until?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CertificateOut"][];
                 };
             };
             /** @description Validation Error */
@@ -27977,9 +28070,9 @@ export interface operations {
     list_iep_api_gov_moe_iep_get: {
         parameters: {
             query?: {
-                student_id?: number | null;
                 school_year?: number | null;
                 semester?: number | null;
+                student_id?: number | null;
             };
             header?: never;
             path?: never;
@@ -28237,8 +28330,8 @@ export interface operations {
     get_monthly_report_api_gov_moe_monthly_get: {
         parameters: {
             query: {
-                year: number;
                 month: number;
+                year: number;
             };
             header?: never;
             path?: never;
@@ -28269,9 +28362,9 @@ export interface operations {
     export_monthly_report_api_gov_moe_monthly_export_get: {
         parameters: {
             query: {
-                year: number;
-                month: number;
                 format?: "xlsx";
+                month: number;
+                year: number;
             };
             header?: never;
             path?: never;
@@ -28336,8 +28429,8 @@ export interface operations {
         parameters: {
             query?: {
                 employee_id?: number | null;
-                status_filter?: string | null;
                 since?: string | null;
+                status_filter?: string | null;
                 until?: string | null;
             };
             header?: never;
@@ -28386,39 +28479,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SubsidyOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    export_subsidies_api_gov_moe_subsidies_export_get: {
-        parameters: {
-            query?: {
-                since?: string | null;
-                until?: string | null;
-                employee_id?: number | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -28599,17 +28659,50 @@ export interface operations {
             };
         };
     };
+    export_subsidies_api_gov_moe_subsidies_export_get: {
+        parameters: {
+            query?: {
+                employee_id?: number | null;
+                since?: string | null;
+                until?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     export_health_insurance_api_gov_reports_health_insurance_get: {
         parameters: {
             query: {
-                year: number;
-                month: number;
-                employer_name?: string;
                 employer_code?: string;
+                employer_name?: string;
                 /** @description 繞過封存守衛（需金流簽核權限+force_reason） */
                 force?: boolean;
                 /** @description force=true 時必填的繞過原因 */
                 force_reason?: string | null;
+                month: number;
+                year: number;
             };
             header?: never;
             path?: never;
@@ -28640,20 +28733,20 @@ export interface operations {
     export_labor_insurance_api_gov_reports_labor_insurance_get: {
         parameters: {
             query: {
-                /** @description 申報年份 */
-                year: number;
-                /** @description 申報月份 */
-                month: number;
-                /** @description xlsx（Excel）或 txt（純文字） */
-                fmt?: string;
-                /** @description 投保單位名稱 */
-                employer_name?: string;
                 /** @description 投保單位代號 */
                 employer_code?: string;
+                /** @description 投保單位名稱 */
+                employer_name?: string;
+                /** @description xlsx（Excel）或 txt（純文字） */
+                fmt?: string;
                 /** @description 繞過封存守衛（需金流簽核權限+force_reason） */
                 force?: boolean;
                 /** @description force=true 時必填的繞過原因 */
                 force_reason?: string | null;
+                /** @description 申報月份 */
+                month: number;
+                /** @description 申報年份 */
+                year: number;
             };
             header?: never;
             path?: never;
@@ -28684,14 +28777,14 @@ export interface operations {
     export_pension_api_gov_reports_pension_get: {
         parameters: {
             query: {
-                year: number;
-                month: number;
-                employer_name?: string;
                 employer_code?: string;
+                employer_name?: string;
                 /** @description 繞過封存守衛（需金流簽核權限+force_reason） */
                 force?: boolean;
                 /** @description force=true 時必填的繞過原因 */
                 force_reason?: string | null;
+                month: number;
+                year: number;
             };
             header?: never;
             path?: never;
@@ -28722,13 +28815,13 @@ export interface operations {
     export_withholding_api_gov_reports_withholding_get: {
         parameters: {
             query: {
-                year: number;
-                employer_name?: string;
                 employer_id?: string;
+                employer_name?: string;
                 /** @description 繞過封存守衛（需金流簽核權限+force_reason） */
                 force?: boolean;
                 /** @description force=true 時必填的繞過原因 */
                 force_reason?: string | null;
+                year: number;
             };
             header?: never;
             path?: never;
@@ -28985,8 +29078,8 @@ export interface operations {
     calculate_insurance_api_insurance_calculate_get: {
         parameters: {
             query: {
-                salary: number;
                 dependents?: number;
+                salary: number;
             };
             header?: never;
             path?: never;
@@ -29184,9 +29277,9 @@ export interface operations {
         parameters: {
             query?: {
                 employee_id?: number | null;
-                year?: number | null;
                 month?: number | null;
                 status?: string | null;
+                year?: number | null;
             };
             header?: never;
             path?: never;
@@ -29229,225 +29322,6 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    batch_approve_leaves_api_leaves_batch_approve_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LeaveBatchApproveRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    import_leaves_api_leaves_import_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "multipart/form-data": components["schemas"]["Body_import_leaves_api_leaves_import_post"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_leave_import_template_api_leaves_import_template_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    get_leave_quotas_api_leaves_quotas_get: {
-        parameters: {
-            query?: {
-                employee_id?: number | null;
-                year?: number | null;
-                leave_type?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    init_leave_quotas_api_leaves_quotas_init_post: {
-        parameters: {
-            query: {
-                employee_id: number;
-                year?: number | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_leave_quota_api_leaves_quotas__quota_id__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                quota_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["QuotaUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_workday_hours_api_leaves_workday_hours_get: {
-        parameters: {
-            query: {
-                employee_id: number;
-                start_date: string;
-                end_date: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -29572,9 +29446,228 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                leave_id: number;
                 filename: string;
+                leave_id: number;
             };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    batch_approve_leaves_api_leaves_batch_approve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LeaveBatchApproveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_leaves_api_leaves_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_import_leaves_api_leaves_import_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_leave_import_template_api_leaves_import_template_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    get_leave_quotas_api_leaves_quotas_get: {
+        parameters: {
+            query?: {
+                employee_id?: number | null;
+                leave_type?: string | null;
+                year?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_leave_quota_api_leaves_quotas__quota_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                quota_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QuotaUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    init_leave_quotas_api_leaves_quotas_init_post: {
+        parameters: {
+            query: {
+                employee_id: number;
+                year?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_workday_hours_api_leaves_workday_hours_get: {
+        parameters: {
+            query: {
+                employee_id: number;
+                end_date: string;
+                start_date: string;
+            };
+            header?: never;
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;
@@ -29744,9 +29837,9 @@ export interface operations {
     get_meetings_api_meetings_get: {
         parameters: {
             query: {
-                year: number;
-                month: number;
                 employee_id?: number | null;
+                month: number;
+                year: number;
             };
             header?: never;
             path?: never;
@@ -29807,71 +29900,6 @@ export interface operations {
             };
         };
     };
-    create_meetings_batch_api_meetings_batch_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MeetingBatchCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_meeting_summary_api_meetings_summary_get: {
-        parameters: {
-            query: {
-                year: number;
-                month: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     update_meeting_api_meetings__record_id__put: {
         parameters: {
             query?: never;
@@ -29914,6 +29942,71 @@ export interface operations {
             path: {
                 record_id: number;
             };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_meetings_batch_api_meetings_batch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MeetingBatchCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_meeting_summary_api_meetings_summary_get: {
+        parameters: {
+            query: {
+                month: number;
+                year: number;
+            };
+            header?: never;
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;
@@ -30002,18 +30095,16 @@ export interface operations {
             };
         };
     };
-    batch_upsert_monthly_fixed_costs_api_monthly_fixed_costs_batch_put: {
+    delete_monthly_fixed_cost_api_monthly_fixed_costs__cost_id__delete: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                cost_id: number;
+            };
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MonthlyFixedCostBatchUpsert"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -30035,16 +30126,18 @@ export interface operations {
             };
         };
     };
-    delete_monthly_fixed_cost_api_monthly_fixed_costs__cost_id__delete: {
+    batch_upsert_monthly_fixed_costs_api_monthly_fixed_costs_batch_put: {
         parameters: {
             query?: never;
             header?: never;
-            path: {
-                cost_id: number;
-            };
+            path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MonthlyFixedCostBatchUpsert"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -30082,37 +30175,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
-                };
-            };
-        };
-    };
-    download_offboarding_bundle_api_offboarding_download_get: {
-        parameters: {
-            query: {
-                token: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -30346,13 +30408,44 @@ export interface operations {
             };
         };
     };
+    download_offboarding_bundle_api_offboarding_download_get: {
+        parameters: {
+            query: {
+                token: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_overtimes_api_overtimes_get: {
         parameters: {
             query?: {
                 employee_id?: number | null;
-                year?: number | null;
                 month?: number | null;
                 status?: string | null;
+                year?: number | null;
             };
             header?: never;
             path?: never;
@@ -30409,92 +30502,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    batch_approve_overtimes_api_overtimes_batch_approve_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["OvertimeBatchApproveRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    import_overtimes_api_overtimes_import_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "multipart/form-data": components["schemas"]["Body_import_overtimes_api_overtimes_import_post"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_overtime_import_template_api_overtimes_import_template_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
                 };
             };
         };
@@ -30600,6 +30607,92 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    batch_approve_overtimes_api_overtimes_batch_approve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OvertimeBatchApproveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_overtimes_api_overtimes_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_import_overtimes_api_overtimes_import_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_overtime_import_template_api_overtimes_import_template_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };
@@ -30758,11 +30851,42 @@ export interface operations {
     list_announcements_api_parent_announcements_get: {
         parameters: {
             query?: {
-                skip?: number;
                 limit?: number;
+                skip?: number;
             };
             header?: never;
             path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_read_api_parent_announcements__announcement_id__read_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                announcement_id: number;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -30807,37 +30931,6 @@ export interface operations {
             };
         };
     };
-    mark_read_api_parent_announcements__announcement_id__read_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                announcement_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     get_faq_api_parent_assistant_faq_get: {
         parameters: {
             query?: never;
@@ -30861,9 +30954,9 @@ export interface operations {
     get_daily_attendance_api_parent_attendance_daily_get: {
         parameters: {
             query: {
-                student_id: number;
                 /** @description YYYY-MM-DD；不填則為今天 */
                 date?: string | null;
+                student_id: number;
             };
             header?: never;
             path?: never;
@@ -30894,9 +30987,9 @@ export interface operations {
     get_monthly_attendance_api_parent_attendance_monthly_get: {
         parameters: {
             query: {
+                month: number;
                 student_id: number;
                 year: number;
-                month: number;
             };
             header?: never;
             path?: never;
@@ -31064,9 +31157,9 @@ export interface operations {
     get_month_agenda_api_parent_calendar_month_get: {
         parameters: {
             query: {
-                year: number;
                 month: number;
                 student_id?: number | null;
+                year: number;
             };
             header?: never;
             path?: never;
@@ -31130,41 +31223,10 @@ export interface operations {
     list_history_api_parent_contact_book_get: {
         parameters: {
             query: {
-                student_id: number;
                 from?: string | null;
-                to?: string | null;
                 limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_today_api_parent_contact_book_today_get: {
-        parameters: {
-            query: {
                 student_id: number;
+                to?: string | null;
             };
             header?: never;
             path?: never;
@@ -31321,6 +31383,37 @@ export interface operations {
             };
         };
     };
+    get_today_api_parent_contact_book_today_get: {
+        parameters: {
+            query: {
+                student_id: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_events_api_parent_events_get: {
         parameters: {
             query?: never;
@@ -31416,8 +31509,8 @@ export interface operations {
     family_timeline_api_parent_family_timeline_get: {
         parameters: {
             query: {
-                student_id: number;
                 limit?: number;
+                student_id: number;
             };
             header?: never;
             path?: never;
@@ -31448,8 +31541,8 @@ export interface operations {
     list_records_api_parent_fees_records_get: {
         parameters: {
             query: {
-                student_id: number;
                 period?: string | null;
+                student_id: number;
             };
             header?: never;
             path?: never;
@@ -31677,8 +31770,8 @@ export interface operations {
     parent_list_measurements_api_parent_measurements_get: {
         parameters: {
             query: {
-                student_id: number;
                 months?: number;
+                student_id: number;
             };
             header?: never;
             path?: never;
@@ -31711,8 +31804,8 @@ export interface operations {
     parent_measurement_chart_api_parent_measurements_chart_data_get: {
         parameters: {
             query: {
-                student_id: number;
                 months?: number;
+                student_id: number;
             };
             header?: never;
             path?: never;
@@ -31745,8 +31838,8 @@ export interface operations {
     list_medication_orders_api_parent_medication_orders_get: {
         parameters: {
             query: {
-                student_id: number;
                 from?: string | null;
+                student_id: number;
                 to?: string | null;
             };
             header?: never;
@@ -31879,8 +31972,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                order_id: number;
                 attachment_id: number;
+                order_id: number;
             };
             cookie?: never;
         };
@@ -32074,8 +32167,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                thread_id: number;
                 message_id: number;
+                thread_id: number;
             };
             cookie?: never;
         };
@@ -32159,8 +32252,8 @@ export interface operations {
     parent_list_milestones_api_parent_milestones_get: {
         parameters: {
             query: {
-                student_id: number;
                 limit?: number;
+                student_id: number;
             };
             header?: never;
             path?: never;
@@ -32340,9 +32433,9 @@ export interface operations {
     parent_list_photos_api_parent_photos_get: {
         parameters: {
             query: {
-                student_id: number;
-                skip?: number;
                 limit?: number;
+                skip?: number;
+                student_id: number;
             };
             header?: never;
             path?: never;
@@ -32496,8 +32589,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                leave_id: number;
                 attachment_id: number;
+                leave_id: number;
             };
             cookie?: never;
         };
@@ -32588,13 +32681,13 @@ export interface operations {
     parent_get_timeline_api_parent_timeline_get: {
         parameters: {
             query: {
-                /** @description 學生 id */
-                student_id: number;
-                since?: string | null;
-                until?: string | null;
-                types?: string | null;
                 cursor?: string | null;
                 limit?: number;
+                since?: string | null;
+                /** @description 學生 id */
+                student_id: number;
+                types?: string | null;
+                until?: string | null;
             };
             header?: never;
             path?: never;
@@ -32758,8 +32851,8 @@ export interface operations {
         parameters: {
             query?: {
                 course_id?: number | null;
-                start_date?: string | null;
                 end_date?: string | null;
+                start_date?: string | null;
             };
             header?: never;
             path?: never;
@@ -32878,8 +32971,8 @@ export interface operations {
     get_portal_announcements_api_portal_announcements_get: {
         parameters: {
             query?: {
-                skip?: number;
                 limit?: number;
+                skip?: number;
             };
             header?: never;
             path?: never;
@@ -32941,8 +33034,8 @@ export interface operations {
     get_anomalies_api_portal_anomalies_get: {
         parameters: {
             query: {
-                year: number;
                 month: number;
+                year: number;
             };
             header?: never;
             path?: never;
@@ -33041,8 +33134,8 @@ export interface operations {
     get_attendance_sheet_api_portal_attendance_sheet_get: {
         parameters: {
             query: {
-                year: number;
                 month: number;
+                year: number;
             };
             header?: never;
             path?: never;
@@ -33073,8 +33166,8 @@ export interface operations {
     print_attendance_sheet_pdf_api_portal_attendance_sheet_pdf_get: {
         parameters: {
             query: {
-                year: number;
                 month: number;
+                year: number;
             };
             header?: never;
             path?: never;
@@ -33105,8 +33198,8 @@ export interface operations {
     get_portal_calendar_api_portal_calendar_get: {
         parameters: {
             query: {
-                year: number;
                 month: number;
+                year: number;
             };
             header?: never;
             path?: never;
@@ -33195,6 +33288,141 @@ export interface operations {
             };
             header?: never;
             path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_entry_api_portal_contact_book__entry_id__put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path: {
+                entry_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ContactBookEntryFields"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_photo_api_portal_contact_book__entry_id__photos_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entry_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_photo_api_portal_contact_book__entry_id__photos_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_photo_api_portal_contact_book__entry_id__photos__attachment_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                attachment_id: number;
+                entry_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    publish_endpoint_api_portal_contact_book__entry_id__publish_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entry_id: number;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -33544,162 +33772,7 @@ export interface operations {
             };
         };
     };
-    update_entry_api_portal_contact_book__entry_id__put: {
-        parameters: {
-            query?: never;
-            header?: {
-                "If-Match"?: string | null;
-            };
-            path: {
-                entry_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ContactBookEntryFields"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    upload_photo_api_portal_contact_book__entry_id__photos_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                entry_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "multipart/form-data": components["schemas"]["Body_upload_photo_api_portal_contact_book__entry_id__photos_post"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_photo_api_portal_contact_book__entry_id__photos__attachment_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                entry_id: number;
-                attachment_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    publish_endpoint_api_portal_contact_book__entry_id__publish_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                entry_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     portal_list_dismissal_calls_api_portal_dismissal_calls_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    portal_pending_count_api_portal_dismissal_calls_pending_count_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -33777,6 +33850,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    portal_pending_count_api_portal_dismissal_calls_pending_count_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };
@@ -33945,26 +34038,6 @@ export interface operations {
             };
         };
     };
-    my_appraisals_trend_api_portal_my_appraisals_trend_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MyTrendOut"];
-                };
-            };
-        };
-    };
     my_appraisal_detail_api_portal_my_appraisals__cycle_id__get: {
         parameters: {
             query?: never;
@@ -33996,14 +34069,34 @@ export interface operations {
             };
         };
     };
+    my_appraisals_trend_api_portal_my_appraisals_trend_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyTrendOut"];
+                };
+            };
+        };
+    };
     get_my_class_assessments_api_portal_my_class_assessments_get: {
         parameters: {
             query?: {
-                classroom_id?: number | null;
-                semester?: string | null;
                 assessment_type?: string | null;
-                skip?: number;
+                classroom_id?: number | null;
                 limit?: number;
+                semester?: string | null;
+                skip?: number;
             };
             header?: never;
             path?: never;
@@ -34034,9 +34127,9 @@ export interface operations {
     get_my_class_attendance_api_portal_my_class_attendance_get: {
         parameters: {
             query: {
+                classroom_id: number;
                 /** @description YYYY-MM-DD */
                 date: string;
-                classroom_id: number;
             };
             header?: never;
             path?: never;
@@ -34068,8 +34161,8 @@ export interface operations {
         parameters: {
             query: {
                 classroom_id: number;
-                year: number;
                 month: number;
+                year: number;
             };
             header?: never;
             path?: never;
@@ -34101,8 +34194,8 @@ export interface operations {
         parameters: {
             query: {
                 classroom_id: number;
-                year: number;
                 month: number;
+                year: number;
             };
             header?: never;
             path?: never;
@@ -34134,13 +34227,13 @@ export interface operations {
         parameters: {
             query?: {
                 classroom_id?: number | null;
-                incident_type?: string | null;
-                /** @description YYYY-MM-DD */
-                start_date?: string | null;
                 /** @description YYYY-MM-DD */
                 end_date?: string | null;
-                skip?: number;
+                incident_type?: string | null;
                 limit?: number;
+                skip?: number;
+                /** @description YYYY-MM-DD */
+                start_date?: string | null;
             };
             header?: never;
             path?: never;
@@ -34191,10 +34284,10 @@ export interface operations {
     get_my_leaves_api_portal_my_leaves_get: {
         parameters: {
             query: {
-                year: number;
+                limit?: number;
                 month: number;
                 skip?: number;
-                limit?: number;
+                year: number;
             };
             header?: never;
             path?: never;
@@ -34295,8 +34388,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                leave_id: number;
                 filename: string;
+                leave_id: number;
             };
             cookie?: never;
         };
@@ -34327,8 +34420,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                leave_id: number;
                 filename: string;
+                leave_id: number;
             };
             cookie?: never;
         };
@@ -34392,10 +34485,10 @@ export interface operations {
     get_my_overtimes_api_portal_my_overtimes_get: {
         parameters: {
             query: {
-                year: number;
+                limit?: number;
                 month: number;
                 skip?: number;
-                limit?: number;
+                year: number;
             };
             header?: never;
             path?: never;
@@ -34490,8 +34583,8 @@ export interface operations {
     get_my_punch_corrections_api_portal_my_punch_corrections_get: {
         parameters: {
             query?: {
-                year?: number | null;
                 month?: number | null;
+                year?: number | null;
             };
             header?: never;
             path?: never;
@@ -34586,8 +34679,8 @@ export interface operations {
     get_my_schedule_api_portal_my_schedule_get: {
         parameters: {
             query: {
-                year: number;
                 month: number;
+                year: number;
             };
             header?: never;
             path?: never;
@@ -34681,8 +34774,8 @@ export interface operations {
     get_my_workday_hours_api_portal_my_workday_hours_get: {
         parameters: {
             query: {
-                start_date: string;
                 end_date: string;
+                start_date: string;
             };
             header?: never;
             path?: never;
@@ -34911,8 +35004,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                thread_id: number;
                 message_id: number;
+                thread_id: number;
             };
             cookie?: never;
         };
@@ -35122,8 +35215,8 @@ export interface operations {
     get_salary_preview_api_portal_salary_preview_get: {
         parameters: {
             query: {
-                year: number;
                 month: number;
+                year: number;
             };
             header?: never;
             path?: never;
@@ -35178,26 +35271,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_students_measurements_latest_api_portal_students_measurements_latest_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
                 };
             };
         };
@@ -35264,6 +35337,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_students_measurements_latest_api_portal_students_measurements_latest_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };
@@ -35503,11 +35596,11 @@ export interface operations {
     list_punch_corrections_api_punch_corrections_get: {
         parameters: {
             query?: {
+                employee_id?: number | null;
+                month?: number | null;
                 /** @description pending / approved / rejected */
                 status?: string | null;
                 year?: number | null;
-                month?: number | null;
-                employee_id?: number | null;
             };
             header?: never;
             path?: never;
@@ -35573,8 +35666,8 @@ export interface operations {
     get_recruitment_address_hotspots_api_recruitment_address_hotspots_get: {
         parameters: {
             query?: {
-                limit?: number;
                 dataset_scope?: string;
+                limit?: number;
             };
             header?: never;
             path?: never;
@@ -35606,9 +35699,9 @@ export interface operations {
         parameters: {
             query?: {
                 batch_size?: number;
+                dataset_scope?: string;
                 limit?: number;
                 sync_mode?: string;
-                dataset_scope?: string;
             };
             header?: never;
             path?: never;
@@ -35788,14 +35881,14 @@ export interface operations {
                 city?: string | null;
                 /** @description 行政區篩選，如「三民區」 */
                 district?: string | null;
-                /** @description 設立別篩選，如「私立」 */
-                school_type?: string | null;
-                /** @description 準公共篩選，如「有」 */
-                pre_public?: string | null;
-                /** @description 園所名稱關鍵字搜尋 */
-                search?: string | null;
                 page?: number;
                 page_size?: number;
+                /** @description 準公共篩選，如「有」 */
+                pre_public?: string | null;
+                /** @description 設立別篩選，如「私立」 */
+                school_type?: string | null;
+                /** @description 園所名稱關鍵字搜尋 */
+                search?: string | null;
             };
             header?: never;
             path?: never;
@@ -35912,9 +36005,9 @@ export interface operations {
         parameters: {
             query?: {
                 month?: string | null;
-                source?: string | null;
                 page?: number;
                 page_size?: number;
+                source?: string | null;
             };
             header?: never;
             path?: never;
@@ -36184,18 +36277,18 @@ export interface operations {
     get_nearby_kindergartens_api_recruitment_nearby_kindergartens_get: {
         parameters: {
             query?: {
+                /** @description 視野東界經度 */
+                east?: number;
+                /** @description 視野北界緯度 */
+                north?: number;
+                /** @description 以本園為圓心的查詢半徑（向下相容） */
+                radius_km?: number;
                 /** @description 視野南界緯度 */
                 south?: number;
                 /** @description 視野西界經度 */
                 west?: number;
-                /** @description 視野北界緯度 */
-                north?: number;
-                /** @description 視野東界經度 */
-                east?: number;
                 /** @description 地圖縮放等級 */
                 zoom?: number;
-                /** @description 以本園為圓心的查詢半徑（向下相容） */
-                radius_km?: number;
             };
             header?: never;
             path?: never;
@@ -36226,14 +36319,14 @@ export interface operations {
     get_no_deposit_analysis_api_recruitment_no_deposit_analysis_get: {
         parameters: {
             query?: {
-                reason?: string | null;
-                grade?: string | null;
-                priority?: string | null;
-                overdue_days?: number | null;
                 cold_only?: boolean | null;
                 dataset_scope?: string;
+                grade?: string | null;
+                overdue_days?: number | null;
                 page?: number;
                 page_size?: number;
+                priority?: string | null;
+                reason?: string | null;
             };
             header?: never;
             path?: never;
@@ -36327,37 +36420,6 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_periods_summary_api_recruitment_periods_summary_get: {
-        parameters: {
-            query?: {
-                dataset_scope?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -36471,19 +36533,50 @@ export interface operations {
             };
         };
     };
+    get_periods_summary_api_recruitment_periods_summary_get: {
+        parameters: {
+            query?: {
+                dataset_scope?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_recruitment_records_api_recruitment_records_get: {
         parameters: {
             query?: {
-                month?: string | null;
-                grade?: string | null;
-                source?: string | null;
-                referrer?: string | null;
-                has_deposit?: boolean | null;
-                no_deposit_reason?: string | null;
-                keyword?: string | null;
                 dataset_scope?: string;
+                grade?: string | null;
+                has_deposit?: boolean | null;
+                keyword?: string | null;
+                month?: string | null;
+                no_deposit_reason?: string | null;
                 page?: number;
                 page_size?: number;
+                referrer?: string | null;
+                source?: string | null;
             };
             header?: never;
             path?: never;
@@ -36646,8 +36739,8 @@ export interface operations {
     get_recruitment_stats_api_recruitment_stats_get: {
         parameters: {
             query?: {
-                reference_month?: string | null;
                 dataset_scope?: string;
+                reference_month?: string | null;
             };
             header?: never;
             path?: never;
@@ -36678,8 +36771,8 @@ export interface operations {
     export_recruitment_stats_api_recruitment_stats_export_get: {
         parameters: {
             query?: {
-                reference_month?: string | null;
                 dataset_scope?: string;
+                reference_month?: string | null;
             };
             header?: never;
             path?: never;
@@ -36710,9 +36803,9 @@ export interface operations {
     get_attendance_detail_api_reports_attendance_detail_get: {
         parameters: {
             query: {
-                year: number;
-                month?: number | null;
                 classroom_id?: number | null;
+                month?: number | null;
+                year: number;
             };
             header?: never;
             path?: never;
@@ -36774,8 +36867,8 @@ export interface operations {
     get_finance_summary_api_reports_finance_summary_get: {
         parameters: {
             query: {
-                year: number;
                 month?: number | null;
+                year: number;
             };
             header?: never;
             path?: never;
@@ -36806,8 +36899,8 @@ export interface operations {
     get_finance_summary_detail_api_reports_finance_summary_detail_get: {
         parameters: {
             query: {
-                year: number;
                 month: number;
+                year: number;
             };
             header?: never;
             path?: never;
@@ -36838,8 +36931,8 @@ export interface operations {
     export_finance_summary_api_reports_finance_summary_export_get: {
         parameters: {
             query: {
-                year: number;
                 month?: number | null;
+                year: number;
             };
             header?: never;
             path?: never;
@@ -36901,8 +36994,8 @@ export interface operations {
     get_salary_contributors_api_reports_salary_contributors_get: {
         parameters: {
             query: {
-                year: number;
                 month: number;
+                year: number;
             };
             header?: never;
             path?: never;
@@ -37004,554 +37097,6 @@ export interface operations {
             header?: never;
             path: {
                 code: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    calculate_salaries_alt_api_salaries_calculate_post: {
-        parameters: {
-            query: {
-                /** @description Calculate for which year */
-                year: number;
-                /** @description Calculate for which month */
-                month: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    calculate_salaries_async_start_api_salaries_calculate_async_post: {
-        parameters: {
-            query: {
-                year: number;
-                month: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_salary_calc_job_api_salaries_calculate_jobs__job_id__get: {
-        parameters: {
-            query?: {
-                /** @description 包含 results 列表 */
-                include_results?: boolean;
-            };
-            header?: never;
-            path: {
-                job_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_employee_salary_debug_api_salaries_employee_salary_debug_get: {
-        parameters: {
-            query: {
-                employee_id: number;
-                year: number;
-                month: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    export_all_salaries_api_salaries_export_all_get: {
-        parameters: {
-            query: {
-                year: number;
-                month: number;
-                format?: string;
-                /** @description 是否包含未封存或待重算（needs_recalc）薪資；預設 False 只匯出可信任的封存資料。 */
-                include_pending?: boolean;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_festival_bonus_api_salaries_festival_bonus_get: {
-        parameters: {
-            query: {
-                year: number;
-                month: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_festival_bonus_period_accrual_api_salaries_festival_bonus_period_accrual_get: {
-        parameters: {
-            query: {
-                year: number;
-                month: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    finalize_salary_month_api_salaries_finalize_month_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["FinalizeMonthRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_salary_history_api_salaries_history_get: {
-        parameters: {
-            query: {
-                employee_id: number;
-                months?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_salary_history_all_api_salaries_history_all_get: {
-        parameters: {
-            query: {
-                year: number;
-                skip?: number;
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_salary_logic_api_salaries_logic_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    get_salary_records_api_salaries_records_get: {
-        parameters: {
-            query: {
-                year: number;
-                month: number;
-                skip?: number;
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    simulate_salary_api_salaries_simulate_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SalarySimulateRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_salary_snapshots_api_salaries_snapshots_get: {
-        parameters: {
-            query: {
-                year: number;
-                month: number;
-                employee_id?: number | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_manual_salary_snapshot_api_salaries_snapshots_post: {
-        parameters: {
-            query: {
-                year: number;
-                month: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ManualSnapshotRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_salary_snapshot_api_salaries_snapshots__snapshot_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                snapshot_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_salary_snapshot_diff_api_salaries_snapshots__snapshot_id__diff_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                snapshot_id: number;
             };
             cookie?: never;
         };
@@ -37818,8 +37363,556 @@ export interface operations {
             };
             header?: never;
             path: {
-                year: number;
                 month: number;
+                year: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    calculate_salaries_alt_api_salaries_calculate_post: {
+        parameters: {
+            query: {
+                /** @description Calculate for which month */
+                month: number;
+                /** @description Calculate for which year */
+                year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    calculate_salaries_async_start_api_salaries_calculate_async_post: {
+        parameters: {
+            query: {
+                month: number;
+                year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_salary_calc_job_api_salaries_calculate_jobs__job_id__get: {
+        parameters: {
+            query?: {
+                /** @description 包含 results 列表 */
+                include_results?: boolean;
+            };
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_employee_salary_debug_api_salaries_employee_salary_debug_get: {
+        parameters: {
+            query: {
+                employee_id: number;
+                month: number;
+                year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_all_salaries_api_salaries_export_all_get: {
+        parameters: {
+            query: {
+                format?: string;
+                /** @description 是否包含未封存或待重算（needs_recalc）薪資；預設 False 只匯出可信任的封存資料。 */
+                include_pending?: boolean;
+                month: number;
+                year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_festival_bonus_api_salaries_festival_bonus_get: {
+        parameters: {
+            query: {
+                month: number;
+                year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_festival_bonus_period_accrual_api_salaries_festival_bonus_period_accrual_get: {
+        parameters: {
+            query: {
+                month: number;
+                year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    finalize_salary_month_api_salaries_finalize_month_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FinalizeMonthRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_salary_history_api_salaries_history_get: {
+        parameters: {
+            query: {
+                employee_id: number;
+                months?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_salary_history_all_api_salaries_history_all_get: {
+        parameters: {
+            query: {
+                limit?: number;
+                skip?: number;
+                year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_salary_logic_api_salaries_logic_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    get_salary_records_api_salaries_records_get: {
+        parameters: {
+            query: {
+                limit?: number;
+                month: number;
+                skip?: number;
+                year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    simulate_salary_api_salaries_simulate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SalarySimulateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_salary_snapshots_api_salaries_snapshots_get: {
+        parameters: {
+            query: {
+                employee_id?: number | null;
+                month: number;
+                year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_manual_salary_snapshot_api_salaries_snapshots_post: {
+        parameters: {
+            query: {
+                month: number;
+                year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ManualSnapshotRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_salary_snapshot_api_salaries_snapshots__snapshot_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                snapshot_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_salary_snapshot_diff_api_salaries_snapshots__snapshot_id__diff_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                snapshot_id: number;
             };
             cookie?: never;
         };
@@ -37912,9 +38005,9 @@ export interface operations {
     get_daily_shifts_api_shifts_daily_get: {
         parameters: {
             query: {
-                start_date: string;
-                end_date: string;
                 employee_id?: number | null;
+                end_date: string;
+                start_date: string;
             };
             header?: never;
             path?: never;
@@ -38065,8 +38158,8 @@ export interface operations {
     get_swap_history_api_shifts_swap_history_get: {
         parameters: {
             query?: {
-                start_date?: string | null;
                 end_date?: string | null;
+                start_date?: string | null;
                 status?: string | null;
             };
             header?: never;
@@ -38217,12 +38310,12 @@ export interface operations {
     list_assessments_api_student_assessments_get: {
         parameters: {
             query?: {
-                student_id?: number | null;
-                classroom_id?: number | null;
-                semester?: string | null;
                 assessment_type?: string | null;
-                skip?: number;
+                classroom_id?: number | null;
                 limit?: number;
+                semester?: string | null;
+                skip?: number;
+                student_id?: number | null;
             };
             header?: never;
             path?: never;
@@ -38352,9 +38445,9 @@ export interface operations {
     get_daily_attendance_api_student_attendance_get: {
         parameters: {
             query: {
+                classroom_id: number;
                 /** @description YYYY-MM-DD */
                 date: string;
-                classroom_id: number;
             };
             header?: never;
             path?: never;
@@ -38438,12 +38531,12 @@ export interface operations {
     get_attendance_by_student_api_student_attendance_by_student_get: {
         parameters: {
             query: {
-                student_id: number;
                 /** @description YYYY-MM-DD */
                 date_from?: string | null;
                 /** @description YYYY-MM-DD */
                 date_to?: string | null;
                 limit?: number;
+                student_id: number;
             };
             header?: never;
             path?: never;
@@ -38474,9 +38567,9 @@ export interface operations {
     export_student_attendance_api_student_attendance_export_get: {
         parameters: {
             query: {
-                year: number;
-                month: number;
                 classroom_id?: number | null;
+                month: number;
+                year: number;
             };
             header?: never;
             path?: never;
@@ -38508,8 +38601,8 @@ export interface operations {
         parameters: {
             query: {
                 classroom_id: number;
-                year: number;
                 month: number;
+                year: number;
             };
             header?: never;
             path?: never;
@@ -38692,15 +38785,15 @@ export interface operations {
     list_incidents_api_student_incidents_get: {
         parameters: {
             query?: {
-                student_id?: number | null;
                 classroom_id?: number | null;
-                incident_type?: string | null;
-                /** @description YYYY-MM-DD */
-                start_date?: string | null;
                 /** @description YYYY-MM-DD */
                 end_date?: string | null;
-                skip?: number;
+                incident_type?: string | null;
                 limit?: number;
+                skip?: number;
+                /** @description YYYY-MM-DD */
+                start_date?: string | null;
+                student_id?: number | null;
             };
             header?: never;
             path?: never;
@@ -38830,9 +38923,9 @@ export interface operations {
     list_leaves_api_student_leaves_get: {
         parameters: {
             query?: {
-                status?: string;
                 classroom_id?: number | null;
                 limit?: number;
+                status?: string;
             };
             header?: never;
             path?: never;
@@ -38863,13 +38956,13 @@ export interface operations {
     get_students_api_students_get: {
         parameters: {
             query?: {
-                skip?: number;
-                limit?: number;
                 classroom_id?: number | null;
-                school_year?: number | null;
-                semester?: number | null;
-                search?: string | null;
                 is_active?: boolean | null;
+                limit?: number;
+                school_year?: number | null;
+                search?: string | null;
+                semester?: number | null;
+                skip?: number;
             };
             header?: never;
             path?: never;
@@ -38912,528 +39005,6 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    bulk_transfer_students_api_students_bulk_transfer_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["StudentBulkTransfer"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_change_logs_api_students_change_logs_get: {
-        parameters: {
-            query?: {
-                school_year?: number | null;
-                semester?: number | null;
-                event_type?: string[] | null;
-                /** @description 同時比對 classroom_id / from_classroom_id / to_classroom_id（語意：與此班級相關的所有異動） */
-                classroom_id?: number | null;
-                student_id?: number | null;
-                page?: number;
-                page_size?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_change_log_api_students_change_logs_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ChangeLogCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    export_change_logs_api_students_change_logs_export_get: {
-        parameters: {
-            query?: {
-                school_year?: number | null;
-                semester?: number | null;
-                event_type?: string[] | null;
-                /** @description 同時比對 classroom_id / from_classroom_id / to_classroom_id */
-                classroom_id?: number | null;
-                student_id?: number | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_change_log_options_api_students_change_logs_options_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    get_change_logs_summary_api_students_change_logs_summary_get: {
-        parameters: {
-            query?: {
-                school_year?: number | null;
-                semester?: number | null;
-                /** @description 同時比對 classroom_id / from_classroom_id / to_classroom_id（語意：與此班級相關的所有異動） */
-                classroom_id?: number | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_change_log_api_students_change_logs__log_id__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                log_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ChangeLogUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_change_log_api_students_change_logs__log_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                log_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_communications_api_students_communications_get: {
-        parameters: {
-            query?: {
-                student_id?: number | null;
-                classroom_id?: number | null;
-                communication_type?: string | null;
-                date_from?: string | null;
-                date_to?: string | null;
-                page?: number;
-                page_size?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_communication_api_students_communications_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CommunicationCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_options_api_students_communications_options_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    update_communication_api_students_communications__log_id__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                log_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CommunicationUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_communication_api_students_communications__log_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                log_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_guardian_api_students_guardians__guardian_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                guardian_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_guardian_api_students_guardians__guardian_id__patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                guardian_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["GuardianUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_student_records_timeline_api_students_records_get: {
-        parameters: {
-            query?: {
-                /** @description 可多選：incident / assessment / change_log。未指定代表全部。 */
-                type?: string[] | null;
-                classroom_id?: number | null;
-                student_id?: number | null;
-                date_from?: string | null;
-                date_to?: string | null;
-                school_year?: number | null;
-                semester?: number | null;
-                page?: number;
-                page_size?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -39660,8 +39231,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                student_id: number;
                 alg_id: number;
+                student_id: number;
             };
             cookie?: never;
         };
@@ -39694,8 +39265,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                student_id: number;
                 alg_id: number;
+                student_id: number;
             };
             cookie?: never;
         };
@@ -39730,12 +39301,12 @@ export interface operations {
     list_student_attachments_api_students__student_id__attachments_get: {
         parameters: {
             query?: {
+                limit?: number;
                 /** @description 篩選單一 owner_type */
                 owner_type?: string | null;
                 since?: string | null;
-                until?: string | null;
                 skip?: number;
-                limit?: number;
+                until?: string | null;
             };
             header?: never;
             path: {
@@ -39805,8 +39376,8 @@ export interface operations {
     list_growth_reports_api_students__student_id__growth_reports_get: {
         parameters: {
             query?: {
-                skip?: number;
                 limit?: number;
+                skip?: number;
             };
             header?: never;
             path: {
@@ -39880,8 +39451,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                student_id: number;
                 report_id: number;
+                student_id: number;
             };
             cookie?: never;
         };
@@ -39914,8 +39485,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                student_id: number;
                 report_id: number;
+                student_id: number;
             };
             cookie?: never;
         };
@@ -39944,8 +39515,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                student_id: number;
                 report_id: number;
+                student_id: number;
             };
             cookie?: never;
         };
@@ -39976,8 +39547,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                student_id: number;
                 report_id: number;
+                student_id: number;
             };
             cookie?: never;
         };
@@ -40114,9 +39685,9 @@ export interface operations {
         parameters: {
             query?: {
                 from?: string | null;
-                to?: string | null;
-                skip?: number;
                 limit?: number;
+                skip?: number;
+                to?: string | null;
             };
             header?: never;
             path: {
@@ -40185,48 +39756,13 @@ export interface operations {
             };
         };
     };
-    chart_data_api_students__student_id__measurements_chart_data_get: {
-        parameters: {
-            query?: {
-                months?: number;
-            };
-            header?: never;
-            path: {
-                student_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     delete_measurement_api_students__student_id__measurements__m_id__delete: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                student_id: number;
                 m_id: number;
+                student_id: number;
             };
             cookie?: never;
         };
@@ -40255,8 +39791,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                student_id: number;
                 m_id: number;
+                student_id: number;
             };
             cookie?: never;
         };
@@ -40265,6 +39801,41 @@ export interface operations {
                 "application/json": components["schemas"]["MeasurementUpdate"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    chart_data_api_students__student_id__measurements_chart_data_get: {
+        parameters: {
+            query?: {
+                months?: number;
+            };
+            header?: never;
+            path: {
+                student_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -40365,8 +39936,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                student_id: number;
                 order_id: number;
+                student_id: number;
             };
             cookie?: never;
         };
@@ -40397,11 +39968,11 @@ export interface operations {
     list_milestones_api_students__student_id__milestones_get: {
         parameters: {
             query?: {
-                milestone_type?: string | null;
                 from?: string | null;
-                to?: string | null;
-                skip?: number;
                 limit?: number;
+                milestone_type?: string | null;
+                skip?: number;
+                to?: string | null;
             };
             header?: never;
             path: {
@@ -40470,6 +40041,74 @@ export interface operations {
             };
         };
     };
+    delete_milestone_api_students__student_id__milestones__m_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                m_id: number;
+                student_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_milestone_api_students__student_id__milestones__m_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                m_id: number;
+                student_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MilestoneUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     auto_detect_milestones_api_students__student_id__milestones_auto_detect_post: {
         parameters: {
             query?: never;
@@ -40507,83 +40146,15 @@ export interface operations {
             };
         };
     };
-    delete_milestone_api_students__student_id__milestones__m_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                student_id: number;
-                m_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_milestone_api_students__student_id__milestones__m_id__patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                student_id: number;
-                m_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MilestoneUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     list_observations_api_students__student_id__observations_get: {
         parameters: {
             query?: {
-                from?: string | null;
-                to?: string | null;
                 domain?: string | null;
+                from?: string | null;
                 highlight_only?: boolean;
-                skip?: number;
                 limit?: number;
+                skip?: number;
+                to?: string | null;
             };
             header?: never;
             path: {
@@ -40657,8 +40228,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                student_id: number;
                 obs_id: number;
+                student_id: number;
             };
             cookie?: never;
         };
@@ -40691,8 +40262,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                student_id: number;
                 obs_id: number;
+                student_id: number;
             };
             cookie?: never;
         };
@@ -40727,10 +40298,10 @@ export interface operations {
     get_student_profile_api_students__student_id__profile_get: {
         parameters: {
             query?: {
-                timeline_limit?: number;
-                incident_limit?: number;
                 /** @description None 表示聚合所有歷史費用 */
                 fee_period?: string | null;
+                incident_limit?: number;
+                timeline_limit?: number;
             };
             header?: never;
             path: {
@@ -40763,12 +40334,12 @@ export interface operations {
     get_timeline_api_students__student_id__timeline_get: {
         parameters: {
             query?: {
-                since?: string | null;
-                until?: string | null;
-                /** @description comma-separated source types */
-                types?: string | null;
                 cursor?: string | null;
                 limit?: number;
+                since?: string | null;
+                /** @description comma-separated source types */
+                types?: string | null;
+                until?: string | null;
             };
             header?: never;
             path: {
@@ -40787,6 +40358,528 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    bulk_transfer_students_api_students_bulk_transfer_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StudentBulkTransfer"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_change_logs_api_students_change_logs_get: {
+        parameters: {
+            query?: {
+                /** @description 同時比對 classroom_id / from_classroom_id / to_classroom_id（語意：與此班級相關的所有異動） */
+                classroom_id?: number | null;
+                event_type?: string[] | null;
+                page?: number;
+                page_size?: number;
+                school_year?: number | null;
+                semester?: number | null;
+                student_id?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_change_log_api_students_change_logs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeLogCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_change_log_api_students_change_logs__log_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                log_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeLogUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_change_log_api_students_change_logs__log_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                log_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_change_logs_api_students_change_logs_export_get: {
+        parameters: {
+            query?: {
+                /** @description 同時比對 classroom_id / from_classroom_id / to_classroom_id */
+                classroom_id?: number | null;
+                event_type?: string[] | null;
+                school_year?: number | null;
+                semester?: number | null;
+                student_id?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_change_log_options_api_students_change_logs_options_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    get_change_logs_summary_api_students_change_logs_summary_get: {
+        parameters: {
+            query?: {
+                /** @description 同時比對 classroom_id / from_classroom_id / to_classroom_id（語意：與此班級相關的所有異動） */
+                classroom_id?: number | null;
+                school_year?: number | null;
+                semester?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_communications_api_students_communications_get: {
+        parameters: {
+            query?: {
+                classroom_id?: number | null;
+                communication_type?: string | null;
+                date_from?: string | null;
+                date_to?: string | null;
+                page?: number;
+                page_size?: number;
+                student_id?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_communication_api_students_communications_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CommunicationCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_communication_api_students_communications__log_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                log_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CommunicationUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_communication_api_students_communications__log_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                log_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_options_api_students_communications_options_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    delete_guardian_api_students_guardians__guardian_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                guardian_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_guardian_api_students_guardians__guardian_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                guardian_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GuardianUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_student_records_timeline_api_students_records_get: {
+        parameters: {
+            query?: {
+                classroom_id?: number | null;
+                date_from?: string | null;
+                date_to?: string | null;
+                page?: number;
+                page_size?: number;
+                school_year?: number | null;
+                semester?: number | null;
+                student_id?: number | null;
+                /** @description 可多選：incident / assessment / change_log。未指定代表全部。 */
+                type?: string[] | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -40983,13 +41076,13 @@ export interface operations {
     list_vendor_payments_api_vendor_payments_get: {
         parameters: {
             query?: {
-                start_date?: string | null;
                 end_date?: string | null;
-                vendor_name?: string | null;
-                status?: ("pending" | "signed") | null;
-                payment_method?: ("cash" | "bank_transfer" | "check" | "linepay" | "other") | null;
                 page?: number;
                 page_size?: number;
+                payment_method?: ("cash" | "bank_transfer" | "check" | "linepay" | "other") | null;
+                start_date?: string | null;
+                status?: ("pending" | "signed") | null;
+                vendor_name?: string | null;
             };
             header?: never;
             path?: never;
@@ -41345,6 +41438,39 @@ export interface operations {
             };
         };
     };
+    delete_payouts_api_year_end_appraisal_payout__year__delete: {
+        parameters: {
+            query?: {
+                confirm?: boolean;
+            };
+            header?: never;
+            path: {
+                year: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     post_generate_api_year_end_appraisal_payout_generate_post: {
         parameters: {
             query?: never;
@@ -41409,39 +41535,6 @@ export interface operations {
             };
         };
     };
-    delete_payouts_api_year_end_appraisal_payout__year__delete: {
-        parameters: {
-            query?: {
-                confirm?: boolean;
-            };
-            header?: never;
-            path: {
-                year: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     list_cycles_api_year_end_cycles_get: {
         parameters: {
             query?: never;
@@ -41482,46 +41575,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["YearEndCycleOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    import_excel_api_year_end_cycles_import_excel_post: {
-        parameters: {
-            query: {
-                start_date: string;
-                end_date: string;
-                bonus_calc_date: string;
-                org_achievement_rate_first?: number | string;
-                org_achievement_rate_second?: number | string;
-                enrollment_target?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "multipart/form-data": components["schemas"]["Body_import_excel_api_year_end_cycles_import_excel_post"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["YearEndImportResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -41696,8 +41749,8 @@ export interface operations {
     list_special_bonuses_api_year_end_cycles__cycle_id__special_bonuses_get: {
         parameters: {
             query?: {
-                employee_id?: number | null;
                 bonus_type?: components["schemas"]["SpecialBonusType"] | null;
+                employee_id?: number | null;
             };
             header?: never;
             path: {
@@ -41869,6 +41922,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_excel_api_year_end_cycles_import_excel_post: {
+        parameters: {
+            query: {
+                bonus_calc_date: string;
+                end_date: string;
+                enrollment_target?: number;
+                org_achievement_rate_first?: number | string;
+                org_achievement_rate_second?: number | string;
+                start_date: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_import_excel_api_year_end_cycles_import_excel_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["YearEndImportResultOut"];
                 };
             };
             /** @description Validation Error */
