@@ -42,16 +42,27 @@ export function classifyError(error: unknown) {
   return ErrorType.UNKNOWN
 }
 
-const DEFAULT_MESSAGES = {
+/**
+ * 各 ErrorType 對應的預設使用者友善訊息。
+ *
+ * 由 `getErrorMessage` 與 axios interceptor (`src/api/index.ts`,
+ * `src/parent/api/index.ts`) 共用：當後端沒有提供 `detail` 訊息時，
+ * interceptor 會 fallback 到此表，避免顯示 axios 預設的
+ * `Request failed with status code 500` 給使用者。
+ *
+ * SERVER_ERROR / NETWORK_ERROR / TIMEOUT 的文案經產品設計確認，
+ * 內文需指向「稍後再試 / 檢查網路 / 聯絡園所」等可操作 hint。
+ */
+export const DEFAULT_MESSAGES: Record<string, string> = {
   [ErrorType.UNAUTHORIZED]: '登入逾期，請重新登入',
   [ErrorType.FORBIDDEN]: '權限不足，無法執行此操作',
   [ErrorType.NOT_FOUND]: '找不到資源',
   [ErrorType.VALIDATION]: '送出資料驗證失敗',
   [ErrorType.CONFLICT]: '資料衝突，請重新整理後再試',
   [ErrorType.RATE_LIMITED]: '請求過於頻繁，請稍後再試',
-  [ErrorType.SERVER_ERROR]: '伺服器錯誤，請稍後再試',
-  [ErrorType.NETWORK_ERROR]: '網路連線異常，請檢查網路',
-  [ErrorType.TIMEOUT]: '請求逾時，請稍後再試',
+  [ErrorType.SERVER_ERROR]: '服務暫時無法使用，請稍後再試。若持續發生請聯絡園所',
+  [ErrorType.NETWORK_ERROR]: '網路連線異常，請檢查網路後重試',
+  [ErrorType.TIMEOUT]: '伺服器回應逾時，請稍後再試',
   [ErrorType.CANCELED]: '操作已取消',
   [ErrorType.UNKNOWN]: '操作失敗',
 }

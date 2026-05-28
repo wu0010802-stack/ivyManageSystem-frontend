@@ -4,6 +4,7 @@ import {
   classifyError,
   getErrorMessage,
   isSilentError,
+  DEFAULT_MESSAGES,
 } from '@/utils/errorHandler'
 
 const axiosError = (status, data = {}) => ({
@@ -70,7 +71,9 @@ describe('getErrorMessage', () => {
   })
 
   it('detail 無訊息時回傳分類預設訊息', () => {
-    expect(getErrorMessage(axiosError(500))).toBe('伺服器錯誤，請稍後再試')
+    expect(getErrorMessage(axiosError(500))).toBe(
+      '服務暫時無法使用，請稍後再試。若持續發生請聯絡園所',
+    )
     expect(getErrorMessage(axiosError(403))).toBe('權限不足，無法執行此操作')
   })
 
@@ -85,7 +88,36 @@ describe('getErrorMessage', () => {
 
   it('空 detail 陣列退回狀態碼的分類預設訊息', () => {
     const err = axiosError(500, { detail: [] })
-    expect(getErrorMessage(err)).toBe('伺服器錯誤，請稍後再試')
+    expect(getErrorMessage(err)).toBe(
+      '服務暫時無法使用，請稍後再試。若持續發生請聯絡園所',
+    )
+  })
+})
+
+describe('DEFAULT_MESSAGES（friendly fallback 文案）', () => {
+  it('SERVER_ERROR 為對使用者友善的文字（含 後援聯絡園所 hint）', () => {
+    expect(DEFAULT_MESSAGES[ErrorType.SERVER_ERROR]).toBe(
+      '服務暫時無法使用，請稍後再試。若持續發生請聯絡園所',
+    )
+  })
+
+  it('NETWORK_ERROR 為網路提示文字', () => {
+    expect(DEFAULT_MESSAGES[ErrorType.NETWORK_ERROR]).toBe(
+      '網路連線異常，請檢查網路後重試',
+    )
+  })
+
+  it('TIMEOUT 文案明確指向逾時重試', () => {
+    expect(DEFAULT_MESSAGES[ErrorType.TIMEOUT]).toBe(
+      '伺服器回應逾時，請稍後再試',
+    )
+  })
+
+  it('涵蓋所有 ErrorType', () => {
+    for (const t of Object.values(ErrorType)) {
+      expect(typeof DEFAULT_MESSAGES[t]).toBe('string')
+      expect(DEFAULT_MESSAGES[t].length).toBeGreaterThan(0)
+    }
   })
 })
 
