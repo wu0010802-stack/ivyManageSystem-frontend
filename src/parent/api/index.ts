@@ -7,6 +7,7 @@
 
 import axios, { type AxiosError, type AxiosInstance, type InternalAxiosRequestConfig } from 'axios'
 import { applyDedupe } from '@/utils/apiDedupe'
+import { classifyError, DEFAULT_MESSAGES } from '@/utils/errorHandler'
 
 declare module 'axios' {
   interface AxiosError {
@@ -146,14 +147,19 @@ api.interceptors.response.use(
     //   1) HTTPException：{ detail: "字串" }
     //   2) BusinessError envelope：{ detail: { code, message, request_id, ...extra } }
     // 後者若直接 String(data?.detail) 會變 "[object Object]"，因此須拆 detail.message。
+    //
+    // Phase 5 friendly-error（spec §5.1）：
+    // 對 5xx / network / timeout 等無 detail 場景，fallback 到 DEFAULT_MESSAGES[errorType]
+    // 取代原本顯示 axios 預設 "Request failed with status code 500"。
     const data = error.response?.data as { detail?: unknown; message?: string } | undefined
     const rawDetail = data?.detail
+    const friendlyFallback = DEFAULT_MESSAGES[classifyError(error)] ?? null
     if (rawDetail && typeof rawDetail === 'object' && (rawDetail as Record<string, unknown>).message) {
       const obj = rawDetail as Record<string, unknown>
-      error.displayMessage = (obj.message as string) || null
+      error.displayMessage = (obj.message as string) || friendlyFallback
       error.errorDetail = obj
     } else {
-      error.displayMessage = (rawDetail as string | null | undefined) || data?.message || null
+      error.displayMessage = (rawDetail as string | null | undefined) || data?.message || friendlyFallback
       error.errorDetail = null
     }
     return Promise.reject(error)

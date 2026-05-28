@@ -1,7 +1,7 @@
 import axios from 'axios'
 import type { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios'
 import { setUserInfo, clearAuth } from '@/utils/auth'
-import { classifyError } from '@/utils/errorHandler'
+import { classifyError, DEFAULT_MESSAGES } from '@/utils/errorHandler'
 import { applyDedupe } from '@/utils/apiDedupe'
 import { captureException as sentryCapture, sanitizeUrl } from '@/utils/sentry'
 
@@ -84,18 +84,28 @@ api.interceptors.response.use(
             _redirectToLogin()
         }
 
-        // 正規化 UI 顯示用錯誤訊息，避免各元件重複解析 response 結構
+        // 正規化 UI 顯示用錯誤訊息，避免各元件重複解析 response 結構。
+        //
+        // 優先序（Phase 5 friendly-error 落地，spec §5.1）：
+        // 1. envelope: detail.message（BusinessError）
+        // 2. detail: 字串（HTTPException）
+        // 3. responseData.message（少數舊 router 直接回 {message}）
+        // 4. DEFAULT_MESSAGES[errorType]（5xx / network / timeout / 4xx 友善 fallback）
+        // 5. null（最終 fallback，caller 自帶 fallback 文案）
         const responseData = error.response?.data as Record<string, unknown> | undefined
         const rawDetail = responseData?.detail
+        error.errorType = classifyError(error)
+        const friendlyFallback = DEFAULT_MESSAGES[error.errorType] ?? null
         if (rawDetail && typeof rawDetail === 'object' && (rawDetail as Record<string, unknown>).message) {
             // structured detail：把 message 摳出，保留完整物件供 mapEmployeeError 取用
             error.displayMessage = (rawDetail as Record<string, unknown>).message as string
             error.errorDetail = rawDetail  // 含 code / context
         } else {
-            error.displayMessage = (rawDetail as string | null | undefined) || (responseData?.message as string | null | undefined) || null
+            error.displayMessage = (rawDetail as string | null | undefined)
+                || (responseData?.message as string | null | undefined)
+                || friendlyFallback
             error.errorDetail = null
         }
-        error.errorType = classifyError(error)
 
         // Sentry 上報：>=500 server error 或 network error（無 response）；
         // 4xx 預期路徑（401/403/404/422 等）由 UI errorHandler 處理，不送 Sentry。
