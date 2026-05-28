@@ -13170,6 +13170,92 @@ export interface components {
             /** Title */
             title: string;
         };
+        /**
+         * AnnouncementItemOut
+         * @description 單筆公告（管理員列表用，含 readers/recipient 統計）。
+         */
+        AnnouncementItemOut: {
+            /** Content */
+            content: unknown;
+            /** Created At */
+            created_at?: unknown;
+            /** Created By */
+            created_by?: unknown;
+            /** Created By Name */
+            created_by_name: unknown;
+            /** Has More Readers */
+            has_more_readers: unknown;
+            /** Id */
+            id: unknown;
+            /** Is Pinned */
+            is_pinned: unknown;
+            /** Priority */
+            priority: unknown;
+            /** Read Count */
+            read_count: unknown;
+            /** Read Preview */
+            read_preview: unknown;
+            /** Readers */
+            readers: unknown;
+            /** Recipient Count */
+            recipient_count: unknown;
+            /** Recipient Ids */
+            recipient_ids: unknown;
+            /** Title */
+            title: unknown;
+            /** Updated At */
+            updated_at?: unknown;
+        };
+        /**
+         * AnnouncementListOut
+         * @description GET /announcements 分頁回傳。
+         */
+        AnnouncementListOut: {
+            /** Items */
+            items: unknown;
+            /** Total */
+            total: unknown;
+        };
+        /**
+         * AnnouncementParentRecipientItemOut
+         * @description 家長端對象單筆（_serialize_parent_recipient 對應）。
+         */
+        AnnouncementParentRecipientItemOut: {
+            /** Classroom Id */
+            classroom_id?: unknown;
+            /** Guardian Id */
+            guardian_id?: unknown;
+            /** Id */
+            id: unknown;
+            /** Scope */
+            scope: unknown;
+            /** Student Id */
+            student_id?: unknown;
+        };
+        /**
+         * AnnouncementParentRecipientsOut
+         * @description GET / PUT /announcements/{id}/parent-recipients 共用 envelope。
+         */
+        AnnouncementParentRecipientsOut: {
+            /** Announcement Id */
+            announcement_id: unknown;
+            /** Items */
+            items: unknown;
+            /** Total */
+            total: unknown;
+        };
+        /**
+         * AnnouncementReaderItemOut
+         * @description 單筆已讀者明細（list_announcements 內嵌）。
+         */
+        AnnouncementReaderItemOut: {
+            /** Employee Id */
+            employee_id?: unknown;
+            /** Name */
+            name: unknown;
+            /** Read At */
+            read_at?: unknown;
+        };
         /** AnnouncementUpdate */
         AnnouncementUpdate: {
             /** Content */
@@ -13189,6 +13275,26 @@ export interface components {
             action: string;
             /** Remark */
             remark?: string | null;
+        };
+        /** CertificateOut */
+        api__gov_moe__certificates__CertificateOut: {
+            /** Copies */
+            copies: number;
+            /** Id */
+            id: number;
+            /**
+             * Issue Date
+             * Format: date
+             */
+            issue_date: string;
+            /** Pdf Base64 */
+            pdf_base64?: string | null;
+            /** Purpose */
+            purpose: string;
+            /** Serial */
+            serial: string;
+            /** Student Id */
+            student_id: number;
         };
         /** ApproveRequest */
         api__gov_moe__subsidies__ApproveRequest: {
@@ -13446,6 +13552,88 @@ export interface components {
             summary: string;
             /** Username */
             username: string;
+        };
+        /**
+         * AuthAdminUserItemOut
+         * @description GET /users 後台使用者列表單筆。
+         */
+        AuthAdminUserItemOut: {
+            /** Employee Id */
+            employee_id?: unknown;
+            /** Employee Name */
+            employee_name: unknown;
+            /** Id */
+            id: unknown;
+            /** Is Active */
+            is_active: unknown;
+            /** Last Login */
+            last_login?: unknown;
+            /** Permission Names */
+            permission_names: unknown;
+            /** Role */
+            role: unknown;
+            /** Role Label */
+            role_label: unknown;
+            /** Username */
+            username: unknown;
+        };
+        /**
+         * AuthLoginResultOut
+         * @description POST /login 成功回傳：使用者 + must_change_password 旗標 + cookie。
+         */
+        AuthLoginResultOut: {
+            /** Must Change Password */
+            must_change_password: unknown;
+            user: unknown;
+        };
+        /**
+         * AuthMessageOut
+         * @description logout / change_password message-only response。
+         */
+        AuthMessageOut: {
+            /** Message */
+            message: unknown;
+        };
+        /**
+         * AuthPermissionsDefinitionOut
+         * @description GET /permissions 權限定義（DB-driven，admin runtime 改動立即生效）。
+         */
+        AuthPermissionsDefinitionOut: {
+            /** Groups */
+            groups: unknown;
+            /** Permissions */
+            permissions: unknown;
+            /** Roles */
+            roles: unknown;
+        };
+        /**
+         * AuthUserOut
+         * @description 登入態使用者基本資訊（login / refresh / impersonate / end_impersonate / get_me 共用）。
+         */
+        AuthUserOut: {
+            /** Employee Id */
+            employee_id?: unknown;
+            /** Id */
+            id: unknown;
+            /** Name */
+            name: unknown;
+            /** Permission Names */
+            permission_names: unknown;
+            /** Role */
+            role: unknown;
+            /** Role Label */
+            role_label: unknown;
+            /** Title */
+            title?: unknown;
+            /** Username */
+            username: unknown;
+        };
+        /**
+         * AuthUserResultOut
+         * @description impersonate / refresh / end_impersonate 共用：{user: AuthUserOut}。
+         */
+        AuthUserResultOut: {
+            user: unknown;
         };
         /** AutoDetectPayload */
         AutoDetectPayload: {
@@ -13920,26 +14108,6 @@ export interface components {
             /** Remark */
             remark?: string | null;
         };
-        /** CertificateOut */
-        CertificateOut: {
-            /** Copies */
-            copies: number;
-            /** Id */
-            id: number;
-            /**
-             * Issue Date
-             * Format: date
-             */
-            issue_date: string;
-            /** Pdf Base64 */
-            pdf_base64?: string | null;
-            /** Purpose */
-            purpose: string;
-            /** Serial */
-            serial: string;
-            /** Student Id */
-            student_id: number;
-        };
         /** CertificateUpdate */
         CertificateUpdate: {
             /** Certificate Name */
@@ -14353,6 +14521,28 @@ export interface components {
             /** Course Id */
             course_id: number;
         };
+        /**
+         * ContactBookApplyTemplateItem
+         * @description apply_template 單筆套用結果。
+         */
+        ContactBookApplyTemplateItem: {
+            /** Changed Fields */
+            changed_fields: unknown;
+            /** Entry Id */
+            entry_id: unknown;
+            /** Version */
+            version: unknown;
+        };
+        /**
+         * ContactBookApplyTemplateOut
+         * @description POST /portal/contact-book/apply-template — 範本套用結果列表。
+         */
+        ContactBookApplyTemplateOut: {
+            /** Results */
+            results: unknown;
+            /** Template Id */
+            template_id: unknown;
+        };
         /** ContactBookBatchItem */
         ContactBookBatchItem: {
             /** Bowel */
@@ -14386,6 +14576,66 @@ export interface components {
              */
             log_date: string;
         };
+        /**
+         * ContactBookBatchPublishItem
+         * @description batch_publish 單筆結果（status="ok" 或 "error" + message）。
+         */
+        ContactBookBatchPublishItem: {
+            /** Entry Id */
+            entry_id: unknown;
+            /** Message */
+            message?: unknown;
+            /** Status */
+            status: unknown;
+        };
+        /**
+         * ContactBookBatchPublishOut
+         * @description POST /portal/contact-book/batch-publish — 批次發布結果。
+         */
+        ContactBookBatchPublishOut: {
+            /** Results */
+            results: unknown;
+            /** Success Count */
+            success_count: unknown;
+        };
+        /**
+         * ContactBookBatchUpsertOut
+         * @description POST /portal/contact-book/batch — 班級表式批次 upsert 回傳。
+         */
+        ContactBookBatchUpsertOut: {
+            /** Classroom Id */
+            classroom_id: unknown;
+            /** Entry Ids */
+            entry_ids: unknown;
+            /** Log Date */
+            log_date: unknown;
+        };
+        /**
+         * ContactBookCompletion
+         * @description 班級當日聯絡簿完成度（compute_class_completion 回傳）。
+         */
+        ContactBookCompletion: {
+            /** Draft */
+            draft: unknown;
+            /** Missing */
+            missing: unknown;
+            /** Published */
+            published: unknown;
+            /** Roster */
+            roster: unknown;
+        };
+        /**
+         * ContactBookCopyYesterdayOut
+         * @description POST /portal/contact-book/copy-from-yesterday — 複製昨日草稿結果。
+         */
+        ContactBookCopyYesterdayOut: {
+            /** Classroom Id */
+            classroom_id: unknown;
+            /** Created */
+            created: unknown;
+            /** Target Date */
+            target_date: unknown;
+        };
         /** ContactBookEntryFields */
         ContactBookEntryFields: {
             /** Bowel */
@@ -14405,6 +14655,117 @@ export interface components {
             /** Temperature C */
             temperature_c?: number | null;
         };
+        /**
+         * ContactBookEntryOut
+         * @description 聯絡簿單筆 entry payload（_entry_to_dict 序列化結果）。
+         *
+         *     回傳於：
+         *     - PUT /portal/contact-book/{id}（單筆編輯）
+         *     - POST /portal/contact-book/{id}/publish（發布）
+         *     - 被 ContactBookListItem.entry 內嵌
+         */
+        ContactBookEntryOut: {
+            /** Bowel */
+            bowel?: unknown;
+            /** Classroom Id */
+            classroom_id: unknown;
+            /** Created At */
+            created_at?: unknown;
+            /** Id */
+            id: unknown;
+            /** Learning Highlight */
+            learning_highlight?: unknown;
+            /** Log Date */
+            log_date?: unknown;
+            /** Meal Lunch */
+            meal_lunch?: unknown;
+            /** Meal Snack */
+            meal_snack?: unknown;
+            /** Mood */
+            mood?: unknown;
+            /** Nap Minutes */
+            nap_minutes?: unknown;
+            /** Photos */
+            photos?: unknown;
+            /** Published At */
+            published_at?: unknown;
+            /** Student Id */
+            student_id: unknown;
+            /** Teacher Note */
+            teacher_note?: unknown;
+            /** Temperature C */
+            temperature_c?: unknown;
+            /** Updated At */
+            updated_at?: unknown;
+            /** Version */
+            version: unknown;
+        };
+        /**
+         * ContactBookListItem
+         * @description list_classroom_day 內每位學生一筆。
+         */
+        ContactBookListItem: {
+            entry?: unknown;
+            /** Student Id */
+            student_id: unknown;
+            /** Student Name */
+            student_name: unknown;
+        };
+        /**
+         * ContactBookListOut
+         * @description GET /portal/contact-book — 某班某日聯絡簿列表。
+         */
+        ContactBookListOut: {
+            /** Classroom Id */
+            classroom_id: unknown;
+            completion: unknown;
+            /** Items */
+            items: unknown;
+            /** Log Date */
+            log_date: unknown;
+        };
+        /**
+         * ContactBookPhotoOut
+         * @description 單張照片回傳。POST /{id}/photos 的 response，並用於 entry.photos 內。
+         */
+        ContactBookPhotoOut: {
+            /** Display Url */
+            display_url?: unknown;
+            /** Id */
+            id: unknown;
+            /** Original Filename */
+            original_filename?: unknown;
+            /** Thumb Url */
+            thumb_url?: unknown;
+        };
+        /**
+         * ContactBookUnpublishedItem
+         * @description list_unpublished 內單筆草稿（精簡欄位 + 學生姓名）。
+         */
+        ContactBookUnpublishedItem: {
+            /** Id */
+            id: unknown;
+            /** Student Id */
+            student_id: unknown;
+            /** Student Name */
+            student_name?: unknown;
+            /** Updated At */
+            updated_at?: unknown;
+            /** Version */
+            version: unknown;
+        };
+        /**
+         * ContactBookUnpublishedOut
+         * @description GET /portal/contact-book/unpublished — 草稿列表（便於批次發布）。
+         */
+        ContactBookUnpublishedOut: {
+            /** Classroom Id */
+            classroom_id: unknown;
+            /** Items */
+            items: unknown;
+            /** Log Date */
+            log_date: unknown;
+        };
         /** ContractCreate */
         ContractCreate: {
             /** Contract Type */
@@ -14417,6 +14778,33 @@ export interface components {
             salary_at_contract?: number | null;
             /** Start Date */
             start_date: string;
+        };
+        /**
+         * ContractOut
+         * @description 單筆員工合約 (對應 _contract_to_dict)。
+         *
+         *     遮罩語意：salary_at_contract 由 router 端依 can_view_salary_of()
+         *     判斷是否遮罩為 None（與 salary.py 同門檻）。
+         */
+        ContractOut: {
+            /** Contract Type */
+            contract_type: unknown;
+            /** Created At */
+            created_at?: unknown;
+            /** Employee Id */
+            employee_id: unknown;
+            /** End Date */
+            end_date?: unknown;
+            /** Id */
+            id: unknown;
+            /** Remark */
+            remark?: unknown;
+            /** Salary At Contract */
+            salary_at_contract?: unknown;
+            /** Start Date */
+            start_date?: unknown;
+            /** Updated At */
+            updated_at?: unknown;
         };
         /** ContractUpdate */
         ContractUpdate: {
@@ -14531,6 +14919,158 @@ export interface components {
             /** Video Url */
             video_url?: string | null;
         };
+        /**
+         * CourseCreateResultOut
+         * @description POST /courses 201 回應。
+         *
+         *     與 MutationResultOut 差異：多 school_year / semester 兩個 echo 欄位
+         *     （前端建立後立即用此值切換 list 視圖）。
+         */
+        CourseCreateResultOut: {
+            /** Id */
+            id: unknown;
+            /** Message */
+            message: unknown;
+            /** School Year */
+            school_year: unknown;
+            /** Semester */
+            semester: unknown;
+        };
+        /**
+         * CourseDetailOut
+         * @description GET /courses/{course_id} 詳情（不含報名統計）。
+         *
+         *     router 目前未回 sessions/school_year/semester 等欄（與 list 不同）；
+         *     保留現狀避免 silent strip。
+         */
+        CourseDetailOut: {
+            /** Allow Waitlist */
+            allow_waitlist: unknown;
+            /** Capacity */
+            capacity?: unknown;
+            /** Description */
+            description: unknown;
+            /** Id */
+            id: unknown;
+            /** Name */
+            name: unknown;
+            /** Price */
+            price: unknown;
+            /** Sessions */
+            sessions?: unknown;
+            /** Video Url */
+            video_url: unknown;
+        };
+        /**
+         * CourseEnrolledItemOut
+         * @description GET /courses/{course_id}/enrolled 單筆正式報名名單條目。
+         */
+        CourseEnrolledItemOut: {
+            /** Class Name */
+            class_name?: unknown;
+            /** Course Record Id */
+            course_record_id: unknown;
+            /** Position */
+            position: unknown;
+            /** Registration Id */
+            registration_id: unknown;
+            /** Student Name */
+            student_name: unknown;
+        };
+        /**
+         * CourseEnrolledOut
+         * @description GET /courses/{course_id}/enrolled 完整回應。
+         */
+        CourseEnrolledOut: {
+            /** Course Id */
+            course_id: unknown;
+            /** Course Name */
+            course_name: unknown;
+            /** Items */
+            items: unknown;
+        };
+        /**
+         * CourseListItemOut
+         * @description GET /courses 單筆（含報名統計）。
+         *
+         *     router 已把 meeting_start_time / meeting_end_time 序列化成 "HH:MM" str
+         *     （與 PublicCoursesItemOut 同 pattern）；此處用 Optional[str] 直接接，
+         *     避免 from_attributes 對應到 ORM Time 又被再序列化成 ISO。
+         */
+        CourseListItemOut: {
+            /** Allow Waitlist */
+            allow_waitlist: unknown;
+            /** Capacity */
+            capacity: unknown;
+            /** Description */
+            description: unknown;
+            /** Enrolled */
+            enrolled: unknown;
+            /** Id */
+            id: unknown;
+            /** Max Age Months */
+            max_age_months?: unknown;
+            /** Meeting End Time */
+            meeting_end_time?: unknown;
+            /** Meeting Start Time */
+            meeting_start_time?: unknown;
+            /** Meeting Weekday */
+            meeting_weekday?: unknown;
+            /** Min Age Months */
+            min_age_months?: unknown;
+            /** Name */
+            name: unknown;
+            /** Price */
+            price: unknown;
+            /** Promoted Pending */
+            promoted_pending: unknown;
+            /** Remaining */
+            remaining: unknown;
+            /** School Year */
+            school_year: unknown;
+            /** Semester */
+            semester: unknown;
+            /** Sessions */
+            sessions?: unknown;
+            /** Video Url */
+            video_url: unknown;
+            /** Waitlist Count */
+            waitlist_count: unknown;
+        };
+        /**
+         * CourseListOut
+         * @description GET /courses 分頁回應（含 total + 學期 echo）。
+         */
+        CourseListOut: {
+            /** Courses */
+            courses: unknown;
+            /** Limit */
+            limit: unknown;
+            /** School Year */
+            school_year: unknown;
+            /** Semester */
+            semester: unknown;
+            /** Skip */
+            skip: unknown;
+            /** Total */
+            total: unknown;
+        };
+        /**
+         * CoursesCopyResultOut
+         * @description POST /courses/copy-from-previous 201 回應。
+         *
+         *     來源學期無課程時走 short-circuit：created=0, skipped=0, created_ids=[]。
+         */
+        CoursesCopyResultOut: {
+            /** Created */
+            created: unknown;
+            /** Created Ids */
+            created_ids: unknown;
+            /** Message */
+            message: unknown;
+            /** Skipped */
+            skipped: unknown;
+        };
         /** CourseUpdate */
         CourseUpdate: {
             /** Allow Waitlist */
@@ -14557,6 +15097,34 @@ export interface components {
             sessions?: number | null;
             /** Video Url */
             video_url?: string | null;
+        };
+        /**
+         * CourseWaitlistItemOut
+         * @description GET /courses/{course_id}/waitlist 單筆候補名單條目。
+         */
+        CourseWaitlistItemOut: {
+            /** Class Name */
+            class_name?: unknown;
+            /** Course Record Id */
+            course_record_id: unknown;
+            /** Registration Id */
+            registration_id: unknown;
+            /** Student Name */
+            student_name: unknown;
+            /** Waitlist Position */
+            waitlist_position: unknown;
+        };
+        /**
+         * CourseWaitlistOut
+         * @description GET /courses/{course_id}/waitlist 完整回應。
+         */
+        CourseWaitlistOut: {
+            /** Course Id */
+            course_id: unknown;
+            /** Course Name */
+            course_name: unknown;
+            /** Items */
+            items: unknown;
         };
         /** CreateLeaveRequest */
         CreateLeaveRequest: {
@@ -14726,6 +15294,30 @@ export interface components {
             notes?: string | null;
             /** Shift Type Id */
             shift_type_id: number;
+        };
+        /**
+         * DailyShiftOut
+         * @description 每日排班單筆 (GET /daily)。
+         */
+        DailyShiftOut: {
+            /** Date */
+            date: unknown;
+            /** Employee Id */
+            employee_id: unknown;
+            /** Employee Name */
+            employee_name: unknown;
+            /** Id */
+            id: unknown;
+            /** Notes */
+            notes: unknown;
+            /** Shift Type Id */
+            shift_type_id: unknown;
+            /** Shift Type Name */
+            shift_type_name: unknown;
+            /** Work End */
+            work_end: unknown;
+            /** Work Start */
+            work_start: unknown;
         };
         /** DashboardClassroom */
         DashboardClassroom: {
@@ -14945,6 +15537,32 @@ export interface components {
             remark?: string | null;
             /** School Name */
             school_name: string;
+        };
+        /**
+         * EducationOut
+         * @description 單筆員工學歷 (對應 _edu_to_dict)。
+         */
+        EducationOut: {
+            /** Created At */
+            created_at?: unknown;
+            /** Degree */
+            degree: unknown;
+            /** Employee Id */
+            employee_id: unknown;
+            /** Graduation Date */
+            graduation_date?: unknown;
+            /** Id */
+            id: unknown;
+            /** Is Highest */
+            is_highest: unknown;
+            /** Major */
+            major?: unknown;
+            /** Remark */
+            remark?: unknown;
+            /** School Name */
+            school_name: unknown;
+            /** Updated At */
+            updated_at?: unknown;
         };
         /** EducationUpdate */
         EducationUpdate: {
@@ -15345,6 +15963,72 @@ export interface components {
             /** Subject */
             subject?: string | null;
         };
+        /**
+         * EventCalendarFeedItemOut
+         * @description ``build_admin_calendar_feed`` events[] 單筆（superset）。
+         *
+         *     包含人工事件（``_school_event_to_feed_dict``）與官方假日/補班日
+         *     （``_official_item_to_feed_dict``）兩種 producer 共用的欄位集合；官方
+         *     item 的 ``id`` 為 ``"{kind}-{int}"`` 字串，人工事件為 int → 用 ``int | str``。
+         */
+        EventCalendarFeedItemOut: {
+            /** Description */
+            description?: unknown;
+            /** End Date */
+            end_date?: unknown;
+            /** End Time */
+            end_time?: unknown;
+            /** Event Date */
+            event_date: unknown;
+            /** Event Type */
+            event_type: unknown;
+            /** Event Type Label */
+            event_type_label: unknown;
+            /** Id */
+            id: unknown;
+            /** Is All Day */
+            is_all_day: unknown;
+            /** Is Official */
+            is_official: unknown;
+            /** Is Read Only */
+            is_read_only: unknown;
+            /** Location */
+            location?: unknown;
+            /** Official Kind */
+            official_kind?: unknown;
+            /** Start Time */
+            start_time?: unknown;
+            /** Title */
+            title: unknown;
+        };
+        /**
+         * EventCalendarFeedOut
+         * @description ``GET /events/calendar-feed`` 回傳（= ``build_admin_calendar_feed`` 結果）。
+         */
+        EventCalendarFeedOut: {
+            /** Events */
+            events: unknown;
+            /** Month */
+            month: unknown;
+            official_sync: unknown;
+            /** Year */
+            year: unknown;
+        };
+        /**
+         * EventCalendarOfficialSyncOut
+         * @description ``build_admin_calendar_feed`` 中 ``official_sync`` 區塊（與
+         *     ``get_cached_official_sync_status`` shape 一致）。
+         */
+        EventCalendarOfficialSyncOut: {
+            /** Last Synced At */
+            last_synced_at?: unknown;
+            /** Status */
+            status: unknown;
+            /** Used Cache */
+            used_cache: unknown;
+            /** Warning */
+            warning?: unknown;
+        };
         /** EventCreate */
         EventCreate: {
             /** Description */
@@ -15378,6 +16062,81 @@ export interface components {
             start_time?: string | null;
             /** Title */
             title: string;
+        };
+        /**
+         * EventMutationResultOut
+         * @description create_event / update_event 回傳 — 同 EventOut 並多 ``message`` 提示。
+         *
+         *     繼承 EventOut 保留全部 event 欄位（前端目前不依賴但保留兼容性，避免
+         *     從 ``{message, id}`` 強縮減造成既有 e2e/log 噪音）。
+         */
+        EventMutationResultOut: {
+            /** Created At */
+            created_at?: unknown;
+            /** Description */
+            description?: unknown;
+            /** End Date */
+            end_date?: unknown;
+            /** End Time */
+            end_time?: unknown;
+            /** Event Date */
+            event_date: unknown;
+            /** Event Type */
+            event_type: unknown;
+            /** Event Type Label */
+            event_type_label: unknown;
+            /** Id */
+            id: unknown;
+            /** Is All Day */
+            is_all_day: unknown;
+            /** Location */
+            location?: unknown;
+            /** Message */
+            message: unknown;
+            /** Recurrence Rule */
+            recurrence_rule?: unknown;
+            /** Start Time */
+            start_time?: unknown;
+            /** Title */
+            title: unknown;
+            /** Updated At */
+            updated_at?: unknown;
+        };
+        /**
+         * EventOut
+         * @description 單筆行事曆事件（對應 router 端 ``_event_to_dict``）。
+         *
+         *     日期欄位皆為 router 已 ``.isoformat()`` 後的 str；recurrence_rule 為 JSON dict。
+         */
+        EventOut: {
+            /** Created At */
+            created_at?: unknown;
+            /** Description */
+            description?: unknown;
+            /** End Date */
+            end_date?: unknown;
+            /** End Time */
+            end_time?: unknown;
+            /** Event Date */
+            event_date: unknown;
+            /** Event Type */
+            event_type: unknown;
+            /** Event Type Label */
+            event_type_label: unknown;
+            /** Id */
+            id: unknown;
+            /** Is All Day */
+            is_all_day: unknown;
+            /** Location */
+            location?: unknown;
+            /** Recurrence Rule */
+            recurrence_rule?: unknown;
+            /** Start Time */
+            start_time?: unknown;
+            /** Title */
+            title: unknown;
+            /** Updated At */
+            updated_at?: unknown;
         };
         /** EventUpdate */
         EventUpdate: {
@@ -15543,6 +16302,45 @@ export interface components {
             month: number;
             /** Year */
             year: number;
+        };
+        /**
+         * FinalSalaryPreviewOut
+         * @description GET /employees/{id}/final-salary-preview 離職薪資預覽（含未休特休折算）。
+         *
+         *     口徑：薪資引擎 preview_salary_calculation（不寫 DB）+ 月中離職折算 note
+         *     + 勞基法 §38(4) 未休特休工資。SALARY_READ + self-or-FULL_SALARY_ROLES。
+         */
+        FinalSalaryPreviewOut: {
+            /** Base Salary */
+            base_salary: unknown;
+            /** Contracted Base Salary */
+            contracted_base_salary: unknown;
+            /** Festival Bonus */
+            festival_bonus: unknown;
+            /** Gross Salary */
+            gross_salary: unknown;
+            /** Health Insurance */
+            health_insurance: unknown;
+            /** Labor Insurance */
+            labor_insurance: unknown;
+            /** Month */
+            month: unknown;
+            /** Net Salary */
+            net_salary: unknown;
+            /** Net Salary With Unused Annual */
+            net_salary_with_unused_annual: unknown;
+            /** Pension */
+            pension: unknown;
+            /** Proration Note */
+            proration_note?: unknown;
+            /** Total Deduction */
+            total_deduction: unknown;
+            /** Unused Annual Leave Compensation */
+            unused_annual_leave_compensation: unknown;
+            /** Unused Annual Leave Hours */
+            unused_annual_leave_hours: unknown;
+            /** Year */
+            year: unknown;
         };
         /** FunnelBoardOut */
         FunnelBoardOut: {
@@ -15840,6 +16638,25 @@ export interface components {
             total: number;
             /** Unack Count */
             unack_count: number;
+        };
+        /**
+         * HolidayImportResultOut
+         * @description ``POST /events/holidays/import`` 回傳。
+         *
+         *     對齊 router 端 ``results`` dict shape：total / upserted / failed / errors /
+         *     stale_marked（成功才會有；失敗或全部都 raise 中斷時 commit 路徑未跑到）。
+         */
+        HolidayImportResultOut: {
+            /** Errors */
+            errors: unknown;
+            /** Failed */
+            failed: unknown;
+            /** Stale Marked */
+            stale_marked?: unknown;
+            /** Total */
+            total: unknown;
+            /** Upserted */
+            upserted: unknown;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -16334,6 +17151,33 @@ export interface components {
              * @enum {string}
              */
             to_status: "prospect" | "enrolled" | "active" | "on_leave" | "transferred" | "withdrawn" | "graduated";
+        };
+        /**
+         * LiffLoginNeedBindingOut
+         * @description POST /liff-login 未綁定分支：核發 bind 暫時 token，前端引導去 /bind。
+         */
+        LiffLoginNeedBindingOut: {
+            /** Line User Id */
+            line_user_id: unknown;
+            /** Name Hint */
+            name_hint?: unknown;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            status: "need_binding";
+        };
+        /**
+         * LiffLoginOkOut
+         * @description POST /liff-login 既綁定家長分支：直接核發 access+refresh token。
+         */
+        LiffLoginOkOut: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            status: "ok";
+            user: unknown;
         };
         /** LiffLoginRequest */
         LiffLoginRequest: {
@@ -16922,6 +17766,70 @@ export interface components {
              * @enum {string}
              */
             sign: "POSITIVE" | "NEGATIVE" | "NEUTRAL";
+        };
+        /**
+         * MyStudentsClassroomBlock
+         * @description my-students 一個班級 + 學生 list。
+         */
+        MyStudentsClassroomBlock: {
+            /** Classroom Id */
+            classroom_id: unknown;
+            /** Classroom Name */
+            classroom_name: unknown;
+            /** Role */
+            role: unknown;
+            /** Student Count */
+            student_count: unknown;
+            /** Students */
+            students: unknown;
+        };
+        /**
+         * MyStudentsOut
+         * @description GET /my-students 教師班級聚合 response。
+         */
+        MyStudentsOut: {
+            /** Classrooms */
+            classrooms: unknown;
+            /** Employee Name */
+            employee_name: unknown;
+            /** Total Students */
+            total_students: unknown;
+        };
+        /**
+         * MyStudentsStudentItem
+         * @description my-students 內單一學生欄位（精簡 + 健康/出席聚合）。
+         */
+        MyStudentsStudentItem: {
+            /** Attendance Rate This Month */
+            attendance_rate_this_month?: unknown;
+            /** Birthday */
+            birthday?: unknown;
+            /** Enrollment Date */
+            enrollment_date?: unknown;
+            /** Gender */
+            gender?: unknown;
+            /** Has Health Alert */
+            has_health_alert?: unknown;
+            /** Health Alert Count */
+            health_alert_count?: unknown;
+            /** Id */
+            id: unknown;
+            /** Last Absent Date */
+            last_absent_date?: unknown;
+            /** Lifecycle Status */
+            lifecycle_status?: unknown;
+            /** Name */
+            name: unknown;
+            /** Notes */
+            notes?: unknown;
+            /** Parent Name */
+            parent_name?: unknown;
+            /** Parent Phone Masked */
+            parent_phone_masked?: unknown;
+            /** Status Tag */
+            status_tag?: unknown;
+            /** Student Id */
+            student_id: unknown;
         };
         /** MyTrendOut */
         MyTrendOut: {
@@ -17593,6 +18501,145 @@ export interface components {
             /** Payment Method */
             payment_method: string;
         };
+        /**
+         * PendingRegistrationActionResultOut
+         * @description match / reject / restore 共用 {message, registration_id} shape。
+         *
+         *     不用 _common.MutationResultOut 因為欄位名為 `registration_id` 非 `id`
+         *     （重用會 silent rename 前端欄位）。
+         */
+        PendingRegistrationActionResultOut: {
+            /** Message */
+            message: unknown;
+            /** Registration Id */
+            registration_id: unknown;
+        };
+        /**
+         * PendingRegistrationForceAcceptResultOut
+         * @description POST /registrations/{id}/force-accept 回應。
+         *
+         *     matched 永遠 False（強制收件跳過比對），forced 永遠 True，
+         *     field_changed 代表 body 是否同時修正三欄。
+         */
+        PendingRegistrationForceAcceptResultOut: {
+            /** Field Changed */
+            field_changed: unknown;
+            /** Forced */
+            forced: unknown;
+            /** Matched */
+            matched: unknown;
+            /** Message */
+            message: unknown;
+            /** Registration Id */
+            registration_id: unknown;
+        };
+        /**
+         * PendingRegistrationItemOut
+         * @description GET /registrations/pending items[] 單筆。
+         *
+         *     對應 _serialize_pending_item 的輸出 dict shape：
+         *     - 缺 STUDENTS_READ → birthday / classroom_id 被遮成 None
+         *     - 缺 GUARDIANS_READ → parent_phone / email 被遮成 None
+         */
+        PendingRegistrationItemOut: {
+            /** Birthday */
+            birthday?: unknown;
+            /** Class Name */
+            class_name?: unknown;
+            /** Classroom Id */
+            classroom_id?: unknown;
+            /** Created At */
+            created_at?: unknown;
+            /** Email */
+            email?: unknown;
+            /** Id */
+            id: unknown;
+            /** Match Status */
+            match_status?: unknown;
+            /** Parent Phone */
+            parent_phone?: unknown;
+            /** Pending Review */
+            pending_review?: unknown;
+            /** Remark */
+            remark: unknown;
+            /** Reviewed At */
+            reviewed_at?: unknown;
+            /** Reviewed By */
+            reviewed_by?: unknown;
+            /** School Year */
+            school_year?: unknown;
+            /** Semester */
+            semester?: unknown;
+            /** Student Name */
+            student_name: unknown;
+        };
+        /**
+         * PendingRegistrationListOut
+         * @description GET /registrations/pending 列表 + 分頁 + 學期 + status echo。
+         */
+        PendingRegistrationListOut: {
+            /** Items */
+            items: unknown;
+            /** Limit */
+            limit: unknown;
+            /** School Year */
+            school_year: unknown;
+            /** Semester */
+            semester: unknown;
+            /** Skip */
+            skip: unknown;
+            /** Status */
+            status: unknown;
+            /** Total */
+            total: unknown;
+        };
+        /**
+         * PendingRegistrationRematchResultOut
+         * @description POST /registrations/{id}/rematch 回應。
+         *
+         *     matched=True 代表三欄比對成功；field_changed=True 代表 body 帶入新欄位修正。
+         */
+        PendingRegistrationRematchResultOut: {
+            /** Field Changed */
+            field_changed: unknown;
+            /** Matched */
+            matched: unknown;
+            /** Message */
+            message: unknown;
+            /** Registration Id */
+            registration_id: unknown;
+        };
+        /**
+         * PendingRegistrationsSearchStudentItemOut
+         * @description GET /students/search items[] 單筆（搜尋後台在籍學生）。
+         *
+         *     F-027：caller 必有 STUDENTS_READ（否則 403），所有 PII 欄一律顯示。
+         *     student_id 為學號字串（Student.student_id），id 為 PK int。
+         */
+        PendingRegistrationsSearchStudentItemOut: {
+            /** Birthday */
+            birthday?: unknown;
+            /** Classroom Id */
+            classroom_id?: unknown;
+            /** Classroom Name */
+            classroom_name?: unknown;
+            /** Id */
+            id: unknown;
+            /** Name */
+            name: unknown;
+            /** Parent Phone */
+            parent_phone?: unknown;
+            /** Student Id */
+            student_id?: unknown;
+        };
+        /**
+         * PendingRegistrationsSearchStudentsOut
+         * @description GET /students/search 完整回應（僅 items，無分頁；router 端 limit 上限 50）。
+         */
+        PendingRegistrationsSearchStudentsOut: {
+            /** Items */
+            items: unknown;
+        };
         /** PeriodCreate */
         PeriodCreate: {
             /**
@@ -17809,6 +18856,186 @@ export interface components {
             type: "payment" | "refund";
         };
         /**
+         * PosCloseHistoryOut
+         * @description GET /audit/pos-close-history 完整回應。
+         */
+        PosCloseHistoryOut: {
+            /** Close Date */
+            close_date: unknown;
+            /** Count */
+            count: unknown;
+            /** Snapshots */
+            snapshots: unknown;
+        };
+        /**
+         * PosCloseHistorySnapshotOut
+         * @description GET /audit/pos-close-history snapshots[] 單筆（spec H3）。
+         *
+         *     每次 unlock 前的完整快照（含 by_method JSON、現金盤點等），供「當時帳長什麼樣」稽核。
+         */
+        PosCloseHistorySnapshotOut: {
+            /** Actual Cash Count */
+            actual_cash_count?: unknown;
+            /** Approve Note */
+            approve_note?: unknown;
+            /** Approved At */
+            approved_at?: unknown;
+            /** Approver Role */
+            approver_role?: unknown;
+            /** Approver Username */
+            approver_username?: unknown;
+            /** By Method */
+            by_method: unknown;
+            /** Cash Variance */
+            cash_variance?: unknown;
+            /** Close Date */
+            close_date: unknown;
+            /** Id */
+            id: unknown;
+            /** Is Admin Override */
+            is_admin_override: unknown;
+            /** Net Total */
+            net_total: unknown;
+            /** Payment Total */
+            payment_total: unknown;
+            /** Refund Total */
+            refund_total: unknown;
+            /** Transaction Count */
+            transaction_count: unknown;
+            /** Unlock Reason */
+            unlock_reason?: unknown;
+            /** Unlocked At */
+            unlocked_at?: unknown;
+            /** Unlocked By */
+            unlocked_by?: unknown;
+            /** Unlocked By Role */
+            unlocked_by_role?: unknown;
+        };
+        /**
+         * PosDailyCloseApproveOut
+         * @description POST /pos/daily-close/{date} 201 回應。
+         *
+         *     繼承 PosDailyCloseOut 並加上 warnings — 簽核者 = 當日 POS 操作者時的軟提醒。
+         */
+        PosDailyCloseApproveOut: {
+            /** Actual Cash Count */
+            actual_cash_count?: unknown;
+            /** Approved At */
+            approved_at?: unknown;
+            /** Approver Username */
+            approver_username?: unknown;
+            /** By Method */
+            by_method: unknown;
+            /** Cash Variance */
+            cash_variance?: unknown;
+            /** Date */
+            date: unknown;
+            /** Is Approved */
+            is_approved: unknown;
+            /** Net Total */
+            net_total: unknown;
+            /** Note */
+            note?: unknown;
+            /** Payment Total */
+            payment_total: unknown;
+            /** Refund Total */
+            refund_total: unknown;
+            /** Status */
+            status: unknown;
+            /** Transaction Count */
+            transaction_count: unknown;
+            /** Warnings */
+            warnings?: unknown;
+        };
+        /**
+         * PosDailyCloseLiveDiffOut
+         * @description unlock_daily_close 回應內 live_diff 結構（spec H2）。
+         *
+         *     解鎖後實況 vs 原 snapshot 差異，幫解鎖人即時掌握「為什麼帳變了」。
+         *     compute_daily_snapshot 失敗時 router 端直接回 live_diff=None。
+         */
+        PosDailyCloseLiveDiffOut: {
+            /** Live Net Total */
+            live_net_total: unknown;
+            /** Live Payment Total */
+            live_payment_total: unknown;
+            /** Live Refund Total */
+            live_refund_total: unknown;
+            /** Live Transaction Count */
+            live_transaction_count: unknown;
+            /** Net Total Diff */
+            net_total_diff: unknown;
+            /** Original Net Total */
+            original_net_total: unknown;
+            /** Original Payment Total */
+            original_payment_total: unknown;
+            /** Original Refund Total */
+            original_refund_total: unknown;
+            /** Original Transaction Count */
+            original_transaction_count: unknown;
+            /** Payment Total Diff */
+            payment_total_diff: unknown;
+            /** Refund Total Diff */
+            refund_total_diff: unknown;
+            /** Transaction Count Diff */
+            transaction_count_diff: unknown;
+        };
+        /**
+         * PosDailyCloseOut
+         * @description GET /pos/daily-close/{date} 回應。
+         *
+         *     含已簽核（_serialize_close）與未簽核即時 preview（_live_preview）兩 path 共用 shape；
+         *     未簽核時 is_approved=False / approver_username=None / approved_at=None /
+         *     actual_cash_count=None / cash_variance=None。
+         *     by_method 為 method→net_amount mapping（含「現金」key）。
+         */
+        PosDailyCloseOut: {
+            /** Actual Cash Count */
+            actual_cash_count?: unknown;
+            /** Approved At */
+            approved_at?: unknown;
+            /** Approver Username */
+            approver_username?: unknown;
+            /** By Method */
+            by_method: unknown;
+            /** Cash Variance */
+            cash_variance?: unknown;
+            /** Date */
+            date: unknown;
+            /** Is Approved */
+            is_approved: unknown;
+            /** Net Total */
+            net_total: unknown;
+            /** Note */
+            note?: unknown;
+            /** Payment Total */
+            payment_total: unknown;
+            /** Refund Total */
+            refund_total: unknown;
+            /** Status */
+            status: unknown;
+            /** Transaction Count */
+            transaction_count: unknown;
+        };
+        /**
+         * PosDailyCloseUnlockOut
+         * @description DELETE /pos/daily-close/{date} 解鎖回應。
+         *
+         *     notification_delivered 表示原簽核人是否有有效 LINE 綁定（active + line_user_id +
+         *     line_follow_confirmed_at）；client 據此決定是否私下告知對方。
+         */
+        PosDailyCloseUnlockOut: {
+            /** Close Date */
+            close_date: unknown;
+            /** Is Admin Override */
+            is_admin_override: unknown;
+            live_diff?: unknown;
+            /** Notification Delivered */
+            notification_delivered: unknown;
+            /** Unlocked At */
+            unlocked_at: unknown;
+        };
+        /**
          * PositionSalarySyncRequest
          * @description 職位薪資同步請求。
          *
@@ -17865,6 +19092,173 @@ export interface components {
             nurse?: number | null;
             /** Principal */
             principal?: number | null;
+        };
+        /**
+         * PosOperatorActivityItemOut
+         * @description GET /audit/operator-activity operators[] 單筆。
+         */
+        PosOperatorActivityItemOut: {
+            /** Last Activity At */
+            last_activity_at?: unknown;
+            /** Operator */
+            operator: unknown;
+            /** Payment Count */
+            payment_count: unknown;
+            /** Refund Count */
+            refund_count: unknown;
+            /** Total Count */
+            total_count: unknown;
+            user?: unknown;
+        };
+        /**
+         * PosOperatorActivityOut
+         * @description GET /audit/operator-activity 完整回應。
+         */
+        PosOperatorActivityOut: {
+            /** Count */
+            count: unknown;
+            /** Days */
+            days: unknown;
+            /** Operators */
+            operators: unknown;
+        };
+        /**
+         * PosOperatorUserOut
+         * @description list_operator_activity operators[].user 內嵌結構。
+         *
+         *     無對應 User row 的 operator 字串以 user=null 回傳（前端紅標提醒已停用 / 共用殘留）。
+         */
+        PosOperatorUserOut: {
+            /** Display Name */
+            display_name: unknown;
+            /** Employee Id */
+            employee_id?: unknown;
+            /** Id */
+            id: unknown;
+            /** Is Active */
+            is_active: unknown;
+            /** Role */
+            role?: unknown;
+        };
+        /**
+         * PosPendingDailyCloseItemOut
+         * @description GET /pos/daily-close/pending pending[] 單筆。
+         */
+        PosPendingDailyCloseItemOut: {
+            /** Date */
+            date: unknown;
+            /** Net Total */
+            net_total: unknown;
+            /** Payment Total */
+            payment_total: unknown;
+            /** Refund Total */
+            refund_total: unknown;
+            /** Transaction Count */
+            transaction_count: unknown;
+        };
+        /**
+         * PosPendingDailyClosesOut
+         * @description GET /pos/daily-close/pending 完整回應。
+         */
+        PosPendingDailyClosesOut: {
+            /** End Date */
+            end_date: unknown;
+            /** Pending */
+            pending: unknown;
+            /** Start Date */
+            start_date: unknown;
+        };
+        /**
+         * PosReconciliationItemOut
+         * @description GET /pos/reconciliation items[] 單筆。
+         *
+         *     已簽核日用 snapshot、未簽核日即時算；expected_cash 來自 by_method[現金]，
+         *     actual_cash / variance 僅已簽核日才有值。
+         */
+        PosReconciliationItemOut: {
+            /** Actual Cash */
+            actual_cash?: unknown;
+            /** Date */
+            date: unknown;
+            /** Expected Cash */
+            expected_cash: unknown;
+            /** Is Approved */
+            is_approved: unknown;
+            /** Net Total */
+            net_total: unknown;
+            /** Payment Total */
+            payment_total: unknown;
+            /** Refund Total */
+            refund_total: unknown;
+            /** Status */
+            status: unknown;
+            /** Transaction Count */
+            transaction_count: unknown;
+            /** Variance */
+            variance?: unknown;
+        };
+        /**
+         * PosReconciliationOut
+         * @description GET /pos/reconciliation 完整回應。
+         */
+        PosReconciliationOut: {
+            /** End Date */
+            end_date: unknown;
+            /** Items */
+            items: unknown;
+            /** Start Date */
+            start_date: unknown;
+            totals: unknown;
+        };
+        /**
+         * PosReconciliationTotalsOut
+         * @description GET /pos/reconciliation totals 區段。
+         *
+         *     variance_total 在區間內無任何已簽核日填現金盤點時為 None（沒任何 variance 可加）。
+         */
+        PosReconciliationTotalsOut: {
+            /** Net Total */
+            net_total: unknown;
+            /** Payment Total */
+            payment_total: unknown;
+            /** Refund Total */
+            refund_total: unknown;
+            /** Variance Total */
+            variance_total?: unknown;
+        };
+        /**
+         * PosUnlockEventItemOut
+         * @description GET /audit/pos-unlock-events events[] 單筆。
+         *
+         *     close_date 解析自 ApprovalLog.doc_id（YYYYMMDD int）；非法 doc_id 時為 None。
+         */
+        PosUnlockEventItemOut: {
+            /** Action */
+            action: unknown;
+            /** Close Date */
+            close_date?: unknown;
+            /** Comment */
+            comment?: unknown;
+            /** Id */
+            id: unknown;
+            /** Occurred At */
+            occurred_at?: unknown;
+            /** Unlocker Role */
+            unlocker_role?: unknown;
+            /** Unlocker Username */
+            unlocker_username?: unknown;
+        };
+        /**
+         * PosUnlockEventsOut
+         * @description GET /audit/pos-unlock-events 完整回應。
+         */
+        PosUnlockEventsOut: {
+            /** Count */
+            count: unknown;
+            /** Days */
+            days: unknown;
+            /** Events */
+            events: unknown;
         };
         /** PreferenceUpdate */
         PreferenceUpdate: {
@@ -17924,6 +19318,46 @@ export interface components {
             name: string;
         };
         /**
+         * PublicCoursesItemOut
+         * @description GET /public/courses 單筆。
+         *
+         *     router 已把 meeting_start_time/meeting_end_time 序列化成 "HH:MM"，
+         *     這裡用 Optional[str] 直接接（不要用 time，否則 from_attributes 會
+         *     對應到 ORM 的 Time 物件，產出再序列化變 ISO）。
+         */
+        PublicCoursesItemOut: {
+            /** Frequency */
+            frequency: unknown;
+            /** Max Age Months */
+            max_age_months?: unknown;
+            /** Meeting End Time */
+            meeting_end_time?: unknown;
+            /** Meeting Start Time */
+            meeting_start_time?: unknown;
+            /** Meeting Weekday */
+            meeting_weekday?: unknown;
+            /** Min Age Months */
+            min_age_months?: unknown;
+            /** Name */
+            name: unknown;
+            /** Price */
+            price: unknown;
+            /** Sessions */
+            sessions?: unknown;
+        };
+        /**
+         * PublicFieldStateOut
+         * @description 前端 UI hint：班級欄位可改/不可改的衍生狀態。
+         */
+        PublicFieldStateOut: {
+            /** Class Editable */
+            class_editable: unknown;
+            /** Class Source */
+            class_source: unknown;
+            /** Review State */
+            review_state: unknown;
+        };
+        /**
          * PublicInquiryPayload
          * @description LOW-4：附 honeypot（hp）+ 時間戳（ts）兩個 alias 欄位。
          */
@@ -17941,6 +19375,79 @@ export interface components {
             phone: string;
             /** Question */
             question: string;
+        };
+        /**
+         * PublicRegisterResultOut
+         * @description POST /public/register response（含 honeypot silent / silent-success / 真實成功 三 path 同 shape）。
+         *
+         *     query_token 為明文 token 只在這次回給家長一次，後續走 /public/query-by-token 用。
+         */
+        PublicRegisterResultOut: {
+            /** Id */
+            id: unknown;
+            /** Message */
+            message: unknown;
+            /** Query Token */
+            query_token: unknown;
+            /** Waitlist Courses */
+            waitlist_courses: unknown;
+            /** Waitlisted */
+            waitlisted: unknown;
+        };
+        /**
+         * PublicRegistrationCourseOut
+         * @description /public/query 與 /public/update 的 courses[] 單筆。
+         */
+        PublicRegistrationCourseOut: {
+            /** Confirm Deadline */
+            confirm_deadline?: unknown;
+            /** Course Id */
+            course_id: unknown;
+            /** Name */
+            name: unknown;
+            /** Price */
+            price: unknown;
+            /** Status */
+            status: unknown;
+            /** Waitlist Position */
+            waitlist_position?: unknown;
+            /** Waitlist Total */
+            waitlist_total?: unknown;
+        };
+        /**
+         * PublicRegistrationDetailOut
+         * @description /public/query、/public/query-by-token、/public/update 共用 response。
+         *
+         *     /public/update 多帶一個 message 欄位（成功提示），query 系列為 None。
+         */
+        PublicRegistrationDetailOut: {
+            /** Birthday */
+            birthday?: unknown;
+            /** Class Name */
+            class_name?: unknown;
+            /** Courses */
+            courses: unknown;
+            field_state: unknown;
+            /** Id */
+            id: unknown;
+            /** Is Paid */
+            is_paid: unknown;
+            /** Message */
+            message?: unknown;
+            /** Name */
+            name: unknown;
+            /** Paid Amount */
+            paid_amount: unknown;
+            /** Payment Status */
+            payment_status: unknown;
+            /** Remark */
+            remark: unknown;
+            /** Supplies */
+            supplies: unknown;
+            /** Total Amount */
+            total_amount: unknown;
+            /** Updated At */
+            updated_at?: unknown;
         };
         /** PublicRegistrationPayload */
         PublicRegistrationPayload: {
@@ -17975,6 +19482,42 @@ export interface components {
              * @default []
              */
             supplies: components["schemas"]["PublicSupplyItem"][];
+        };
+        /**
+         * PublicRegistrationTimeOut
+         * @description GET /public/registration-time response。
+         *
+         *     所有顯示欄位皆 Optional：settings 為 None 時整批回 None。
+         */
+        PublicRegistrationTimeOut: {
+            /** Close At */
+            close_at?: unknown;
+            /** Event Date Label */
+            event_date_label?: unknown;
+            /** Form Card Title */
+            form_card_title?: unknown;
+            /** Is Open */
+            is_open: unknown;
+            /** Open At */
+            open_at?: unknown;
+            /** Page Title */
+            page_title?: unknown;
+            /** Poster Url */
+            poster_url?: unknown;
+            /** Target Audience */
+            target_audience?: unknown;
+            /** Term Label */
+            term_label?: unknown;
+        };
+        /**
+         * PublicSuppliesItemOut
+         * @description GET /public/supplies 單筆。
+         */
+        PublicSuppliesItemOut: {
+            /** Name */
+            name: unknown;
+            /** Price */
+            price: unknown;
         };
         /** PublicSupplyItem */
         PublicSupplyItem: {
@@ -18181,6 +19724,55 @@ export interface components {
             reason: string;
         };
         /**
+         * RefundSuggestionItem
+         * @description 單一退費 item（course 或 supply）建議值。spec §7。
+         */
+        RefundSuggestionItem: {
+            /** Amount Due */
+            amount_due: number;
+            /** Calc Method */
+            calc_method: string;
+            /** Calc Payload */
+            calc_payload: {
+                [key: string]: unknown;
+            };
+            /** Name */
+            name: string;
+            /**
+             * Suggested Amount
+             * @description None=無法計算
+             */
+            suggested_amount?: number | null;
+            /**
+             * Target Id
+             * @description course_id 或 supply_id
+             */
+            target_id: number;
+            /**
+             * Type
+             * @description course | supply
+             */
+            type: string;
+            /** Warnings */
+            warnings?: string[];
+        };
+        /**
+         * RefundSuggestionResponse
+         * @description GET /registrations/{id}/refund-suggestion 回應 schema。spec §7。
+         */
+        RefundSuggestionResponse: {
+            /** Computed At */
+            computed_at: string;
+            /** Items */
+            items: components["schemas"]["RefundSuggestionItem"][];
+            /** Registration Id */
+            registration_id: number;
+            /** Total Amount Due */
+            total_amount_due: number;
+            /** Total Suggested Amount */
+            total_suggested_amount: number;
+        };
+        /**
          * RefundSuggestRequest
          * @description 退費建議請求：依學生離園日與費用類型自動計算退費金額。
          *
@@ -18210,6 +19802,205 @@ export interface components {
             student_id: number;
             /** Supply Ids */
             supply_ids?: number[];
+        };
+        /**
+         * RegistrationBasicUpdateResultOut
+         * @description PUT /registrations/{id} 基本資料更新回應（含 diff 筆數）。
+         */
+        RegistrationBasicUpdateResultOut: {
+            /** Changed */
+            changed: unknown;
+            /** Message */
+            message: unknown;
+        };
+        /**
+         * RegistrationCreateResultOut
+         * @description POST /registrations admin 新增報名回應（含候補資訊）。
+         */
+        RegistrationCreateResultOut: {
+            /** Id */
+            id: unknown;
+            /** Message */
+            message: unknown;
+            /** Waitlist Courses */
+            waitlist_courses: unknown;
+            /** Waitlisted */
+            waitlisted: unknown;
+        };
+        /**
+         * RegistrationDetailChangeOut
+         * @description GET /registrations/{id} changes[] 單筆稽核紀錄。
+         */
+        RegistrationDetailChangeOut: {
+            /** Change Type */
+            change_type: unknown;
+            /** Changed By */
+            changed_by?: unknown;
+            /** Created At */
+            created_at?: unknown;
+            /** Description */
+            description: unknown;
+            /** Id */
+            id: unknown;
+        };
+        /**
+         * RegistrationDetailCourseOut
+         * @description GET /registrations/{id} courses[] 單筆。
+         */
+        RegistrationDetailCourseOut: {
+            /** Confirm Deadline */
+            confirm_deadline?: unknown;
+            /** Course Id */
+            course_id: unknown;
+            /** Id */
+            id: unknown;
+            /** Name */
+            name: unknown;
+            /** Price */
+            price: unknown;
+            /** Status */
+            status: unknown;
+        };
+        /**
+         * RegistrationDetailOut
+         * @description GET /registrations/{id} 詳情（含 courses / supplies / changes 三 nested list）。
+         */
+        RegistrationDetailOut: {
+            /** Birthday */
+            birthday?: unknown;
+            /** Changes */
+            changes: unknown;
+            /** Class Name */
+            class_name?: unknown;
+            /** Classroom Id */
+            classroom_id?: unknown;
+            /** Courses */
+            courses: unknown;
+            /** Created At */
+            created_at?: unknown;
+            /** Email */
+            email?: unknown;
+            /** Id */
+            id: unknown;
+            /** Is Paid */
+            is_paid: unknown;
+            /** Match Status */
+            match_status?: unknown;
+            /** Paid Amount */
+            paid_amount: unknown;
+            /** Parent Phone */
+            parent_phone?: unknown;
+            /** Payment Status */
+            payment_status: unknown;
+            /** Pending Review */
+            pending_review?: unknown;
+            /** Remark */
+            remark: unknown;
+            /** Reviewed At */
+            reviewed_at?: unknown;
+            /** Reviewed By */
+            reviewed_by?: unknown;
+            /** Student Id */
+            student_id?: unknown;
+            /** Student Name */
+            student_name: unknown;
+            /** Supplies */
+            supplies: unknown;
+            /** Total Amount */
+            total_amount: unknown;
+            /** Updated At */
+            updated_at?: unknown;
+        };
+        /**
+         * RegistrationDetailSupplyOut
+         * @description GET /registrations/{id} supplies[] 單筆。
+         */
+        RegistrationDetailSupplyOut: {
+            /** Id */
+            id: unknown;
+            /** Name */
+            name: unknown;
+            /** Price */
+            price: unknown;
+            /** Supply Id */
+            supply_id: unknown;
+        };
+        /**
+         * RegistrationListItemOut
+         * @description GET /registrations items[] 單筆。
+         *
+         *     缺 STUDENTS_READ / GUARDIANS_READ 對應 PII 欄會被 router 端遮成 None
+         *     （student_id / birthday / classroom_id / parent_phone / email）。
+         */
+        RegistrationListItemOut: {
+            /** Birthday */
+            birthday?: unknown;
+            /** Class Name */
+            class_name?: unknown;
+            /** Classroom Id */
+            classroom_id?: unknown;
+            /** Course Count */
+            course_count: unknown;
+            /** Course Names */
+            course_names: unknown;
+            /** Created At */
+            created_at?: unknown;
+            /** Email */
+            email?: unknown;
+            /** Id */
+            id: unknown;
+            /** Is Active */
+            is_active: unknown;
+            /** Is Paid */
+            is_paid: unknown;
+            /** Match Status */
+            match_status?: unknown;
+            /** Paid Amount */
+            paid_amount: unknown;
+            /** Parent Phone */
+            parent_phone?: unknown;
+            /** Payment Status */
+            payment_status: unknown;
+            /** Pending Review */
+            pending_review?: unknown;
+            /** Remark */
+            remark: unknown;
+            /** Reviewed At */
+            reviewed_at?: unknown;
+            /** Reviewed By */
+            reviewed_by?: unknown;
+            /** School Year */
+            school_year?: unknown;
+            /** Semester */
+            semester?: unknown;
+            /** Student Id */
+            student_id?: unknown;
+            /** Student Name */
+            student_name: unknown;
+            /** Supply Count */
+            supply_count: unknown;
+            /** Total Amount */
+            total_amount: unknown;
+            /** Updated At */
+            updated_at?: unknown;
+        };
+        /**
+         * RegistrationListOut
+         * @description GET /registrations 列表 + 分頁 + 學期 echo。
+         */
+        RegistrationListOut: {
+            /** Items */
+            items: unknown;
+            /** Limit */
+            limit: unknown;
+            /** School Year */
+            school_year?: unknown;
+            /** Semester */
+            semester?: unknown;
+            /** Skip */
+            skip: unknown;
+            /** Total */
+            total: unknown;
         };
         /** RegistrationMatchRequest */
         RegistrationMatchRequest: {
@@ -18543,6 +20334,32 @@ export interface components {
             /** Summaries Upserted */
             summaries_upserted: number;
         };
+        /**
+         * CertificateOut
+         * @description 單筆員工證照 (對應 _cert_to_dict)。
+         */
+        schemas__employees_docs__CertificateOut: {
+            /** Certificate Name */
+            certificate_name: unknown;
+            /** Certificate Number */
+            certificate_number?: unknown;
+            /** Created At */
+            created_at?: unknown;
+            /** Employee Id */
+            employee_id: unknown;
+            /** Expiry Date */
+            expiry_date?: unknown;
+            /** Id */
+            id: unknown;
+            /** Issued Date */
+            issued_date?: unknown;
+            /** Issuer */
+            issuer?: unknown;
+            /** Remark */
+            remark?: unknown;
+            /** Updated At */
+            updated_at?: unknown;
+        };
         /** SchoolWideImpact */
         SchoolWideImpact: {
             /** Category */
@@ -18749,6 +20566,89 @@ export interface components {
             /** Year End Cycle Id */
             year_end_cycle_id: number;
         };
+        /**
+         * ShiftAssignmentOut
+         * @description 每週排班單筆 (GET /assignments)。
+         */
+        ShiftAssignmentOut: {
+            /** Employee Id */
+            employee_id: unknown;
+            /** Employee Name */
+            employee_name: unknown;
+            /** Id */
+            id: unknown;
+            /** Notes */
+            notes: unknown;
+            /** Shift Type Id */
+            shift_type_id?: unknown;
+            /** Shift Type Name */
+            shift_type_name: unknown;
+            /** Week Start Date */
+            week_start_date: unknown;
+            /** Work End */
+            work_end: unknown;
+            /** Work Start */
+            work_start: unknown;
+        };
+        /**
+         * ShiftAssignmentSaveResultOut
+         * @description POST /assignments 批次儲存回傳。
+         *
+         *     warnings 僅在有員工超時才出現；無超時則欄位省略（router 端條件 set）。
+         */
+        ShiftAssignmentSaveResultOut: {
+            /** Message */
+            message: unknown;
+            /** Warnings */
+            warnings?: unknown;
+            /** Week Start Date */
+            week_start_date: unknown;
+        };
+        /**
+         * ShiftImportResultOut
+         * @description POST /import Excel 批次匯入回傳。
+         *
+         *     Note: shifts import 用 total/saved/failed:int/errors:list[str] shape，
+         *     與 overtimes import (total/created/failed/errors) 命名不同；不可共用。
+         */
+        ShiftImportResultOut: {
+            /** Errors */
+            errors: unknown;
+            /** Failed */
+            failed: unknown;
+            /** Saved */
+            saved: unknown;
+            /** Total */
+            total: unknown;
+        };
+        /**
+         * ShiftSwapHistoryOut
+         * @description 換班歷史單筆 (GET /swap-history)。
+         */
+        ShiftSwapHistoryOut: {
+            /** Created At */
+            created_at?: unknown;
+            /** Id */
+            id: unknown;
+            /** Reason */
+            reason?: unknown;
+            /** Requester Name */
+            requester_name: unknown;
+            /** Requester Shift */
+            requester_shift: unknown;
+            /** Status */
+            status: unknown;
+            /** Swap Date */
+            swap_date: unknown;
+            /** Target Name */
+            target_name: unknown;
+            /** Target Remark */
+            target_remark?: unknown;
+            /** Target Responded At */
+            target_responded_at?: unknown;
+            /** Target Shift */
+            target_shift: unknown;
+        };
         /** ShiftTypeCreate */
         ShiftTypeCreate: {
             /** Name */
@@ -18762,6 +20662,24 @@ export interface components {
             work_end: string;
             /** Work Start */
             work_start: string;
+        };
+        /**
+         * ShiftTypeOut
+         * @description 班別模板單筆 (GET /types list / POST /types / PUT /types/{id})。
+         */
+        ShiftTypeOut: {
+            /** Id */
+            id: unknown;
+            /** Is Active */
+            is_active: unknown;
+            /** Name */
+            name: unknown;
+            /** Sort Order */
+            sort_order: unknown;
+            /** Work End */
+            work_end: unknown;
+            /** Work Start */
+            work_start: unknown;
         };
         /** ShiftTypeUpdate */
         ShiftTypeUpdate: {
@@ -18967,6 +20885,225 @@ export interface components {
             status_tag?: string | null;
             /** Student Id */
             student_id: string;
+        };
+        /** StudentDetailAllergy */
+        StudentDetailAllergy: {
+            /** Allergen */
+            allergen: unknown;
+            /** First Aid Note */
+            first_aid_note?: unknown;
+            /** Id */
+            id: unknown;
+            /** Reaction */
+            reaction?: unknown;
+            /** Severity */
+            severity?: unknown;
+        };
+        /** StudentDetailAssessment */
+        StudentDetailAssessment: {
+            /** Assessment Date */
+            assessment_date?: unknown;
+            /** Assessment Type */
+            assessment_type?: unknown;
+            /** Domain */
+            domain?: unknown;
+            /** Id */
+            id: unknown;
+            /** Rating */
+            rating?: unknown;
+            /** Semester */
+            semester?: unknown;
+        };
+        /** StudentDetailAttendance30d */
+        StudentDetailAttendance30d: {
+            /** By Day */
+            by_day: unknown;
+            summary: unknown;
+        };
+        /** StudentDetailAttendanceDay */
+        StudentDetailAttendanceDay: {
+            /** Date */
+            date: unknown;
+            /** Remark */
+            remark?: unknown;
+            /** Status */
+            status: unknown;
+        };
+        /** StudentDetailAttendanceSummary */
+        StudentDetailAttendanceSummary: {
+            /** Absent */
+            absent?: unknown;
+            /** Late */
+            late?: unknown;
+            /** Leave */
+            leave?: unknown;
+            /** Present */
+            present?: unknown;
+        };
+        /** StudentDetailAttendanceThisMonth */
+        StudentDetailAttendanceThisMonth: {
+            /** Last Absent Date */
+            last_absent_date?: unknown;
+            /** Rate */
+            rate?: unknown;
+        };
+        /** StudentDetailClassroom */
+        StudentDetailClassroom: {
+            /** Id */
+            id: unknown;
+            /** Name */
+            name: unknown;
+            /** Viewer Role */
+            viewer_role?: unknown;
+        };
+        /** StudentDetailContactBook */
+        StudentDetailContactBook: {
+            /** Id */
+            id: unknown;
+            /** Log Date */
+            log_date: unknown;
+            /** Mood */
+            mood?: unknown;
+            /** Published At */
+            published_at?: unknown;
+            /** Teacher Note */
+            teacher_note?: unknown;
+        };
+        /** StudentDetailGuardian */
+        StudentDetailGuardian: {
+            /** Can Pickup */
+            can_pickup: unknown;
+            /** Email */
+            email?: unknown;
+            /** Id */
+            id: unknown;
+            /** Is Emergency */
+            is_emergency: unknown;
+            /** Is Primary */
+            is_primary: unknown;
+            /** Name */
+            name: unknown;
+            /** Phone Masked */
+            phone_masked?: unknown;
+            /** Relation */
+            relation?: unknown;
+            /** User Id */
+            user_id?: unknown;
+        };
+        /** StudentDetailHealth */
+        StudentDetailHealth: {
+            /** Allergies */
+            allergies: unknown;
+            /** Recent Medication Orders */
+            recent_medication_orders: unknown;
+        };
+        /** StudentDetailIncident */
+        StudentDetailIncident: {
+            /** Description */
+            description?: unknown;
+            /** Id */
+            id: unknown;
+            /** Incident Date */
+            incident_date?: unknown;
+            /** Severity */
+            severity?: unknown;
+            /** Type */
+            type?: unknown;
+        };
+        /** StudentDetailMedicationOrder */
+        StudentDetailMedicationOrder: {
+            /** Dose */
+            dose?: unknown;
+            /** Id */
+            id: unknown;
+            /** Medication Name */
+            medication_name: unknown;
+            /** Note */
+            note?: unknown;
+            /** Order Date */
+            order_date: unknown;
+            /** Source */
+            source?: unknown;
+            /** Time Slots */
+            time_slots?: unknown;
+        };
+        /** StudentDetailObservation */
+        StudentDetailObservation: {
+            /** Domain */
+            domain?: unknown;
+            /** Id */
+            id: unknown;
+            /** Is Highlight */
+            is_highlight?: unknown;
+            /** Narrative */
+            narrative?: unknown;
+            /** Observation Date */
+            observation_date?: unknown;
+            /** Rating */
+            rating?: unknown;
+        };
+        /**
+         * StudentDetailOut
+         * @description GET /students/{id}/detail 學生彙總頁 response。
+         */
+        StudentDetailOut: {
+            attendance_30d: unknown;
+            attendance_this_month: unknown;
+            classroom?: unknown;
+            /** Contact Book Recent */
+            contact_book_recent: unknown;
+            /** Guardians */
+            guardians: unknown;
+            health: unknown;
+            /** Recent Assessments */
+            recent_assessments: unknown;
+            /** Recent Incidents 30D */
+            recent_incidents_30d: unknown;
+            /** Recent Observations 30D */
+            recent_observations_30d: unknown;
+            student: unknown;
+            /** Transfer History */
+            transfer_history: unknown;
+        };
+        /**
+         * StudentDetailStudent
+         * @description detail 內 student 基本資料區（紅線：不回 address）。
+         */
+        StudentDetailStudent: {
+            /** Allergy Text */
+            allergy_text?: unknown;
+            /** Birthday */
+            birthday?: unknown;
+            /** Emergency Contact Name */
+            emergency_contact_name?: unknown;
+            /** Emergency Contact Phone Masked */
+            emergency_contact_phone_masked?: unknown;
+            /** Emergency Contact Relation */
+            emergency_contact_relation?: unknown;
+            /** Enrollment Date */
+            enrollment_date?: unknown;
+            /** Gender */
+            gender?: unknown;
+            /** Id */
+            id: unknown;
+            /** Lifecycle Status */
+            lifecycle_status?: unknown;
+            /** Medication Text */
+            medication_text?: unknown;
+            /** Name */
+            name: unknown;
+            /** Notes */
+            notes?: unknown;
+            /** Parent Name */
+            parent_name?: unknown;
+            /** Parent Phone Masked */
+            parent_phone_masked?: unknown;
+            /** Special Needs */
+            special_needs?: unknown;
+            /** Status Tag */
+            status_tag?: unknown;
+            /** Student Id */
+            student_id: unknown;
         };
         /** StudentGraduate */
         StudentGraduate: {
@@ -19582,6 +21719,45 @@ export interface components {
              */
             reason: string;
         };
+        /**
+         * WaitlistSweepResultOut
+         * @description POST /waitlist/sweep-expired 候補過期掃描結果。
+         *
+         *     expired / reminded / final_reminded 由 activity_service.sweep_expired_pending_promotions
+         *     回傳，含家長 T-24h 與 T-6h 提醒推送計數。
+         */
+        WaitlistSweepResultOut: {
+            /** Expired */
+            expired: unknown;
+            /** Final Reminded */
+            final_reminded: unknown;
+            /** Message */
+            message: unknown;
+            /** Reminded */
+            reminded: unknown;
+        };
+        /**
+         * WeeklyHoursWarningOut
+         * @description 週工時超時預警單筆 (POST /assignments warnings 子項)。
+         *
+         *     對齊 utils/schedule_utils.build_weekly_warning 回傳 shape。
+         */
+        WeeklyHoursWarningOut: {
+            /** Calculated Hours */
+            calculated_hours: unknown;
+            /** Code */
+            code: unknown;
+            /** Employee Id */
+            employee_id: unknown;
+            /** Employee Name */
+            employee_name: unknown;
+            /** Limit Hours */
+            limit_hours: unknown;
+            /** Message */
+            message: unknown;
+            /** Week Start */
+            week_start: unknown;
+        };
         /** YearEndCycleCreate */
         YearEndCycleCreate: {
             /** Academic Year */
@@ -20101,7 +22277,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PosOperatorActivityOut"];
                 };
             };
             /** @description Validation Error */
@@ -20133,7 +22309,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PosCloseHistoryOut"];
                 };
             };
             /** @description Validation Error */
@@ -20165,7 +22341,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PosUnlockEventsOut"];
                 };
             };
             /** @description Validation Error */
@@ -20251,7 +22427,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["CourseListOut"];
                 };
             };
             /** @description Validation Error */
@@ -20284,7 +22460,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["CourseCreateResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -20315,7 +22491,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["CourseDetailOut"];
                 };
             };
             /** @description Validation Error */
@@ -20350,7 +22526,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeleteResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -20381,7 +22557,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeleteResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -20412,7 +22588,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["CourseEnrolledOut"];
                 };
             };
             /** @description Validation Error */
@@ -20443,7 +22619,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["CourseWaitlistOut"];
                 };
             };
             /** @description Validation Error */
@@ -20476,7 +22652,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["CoursesCopyResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -20734,7 +22910,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PosDailyCloseOut"];
                 };
             };
             /** @description Validation Error */
@@ -20769,7 +22945,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PosDailyCloseApproveOut"];
                 };
             };
             /** @description Validation Error */
@@ -20804,7 +22980,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PosDailyCloseUnlockOut"];
                 };
             };
             /** @description Validation Error */
@@ -20838,7 +23014,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PosPendingDailyClosesOut"];
                 };
             };
             /** @description Validation Error */
@@ -21011,7 +23187,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PosReconciliationOut"];
                 };
             };
             /** @description Validation Error */
@@ -21076,7 +23252,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": string[];
                 };
             };
         };
@@ -21096,7 +23272,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": {
+                        [key: string]: string;
+                    };
                 };
             };
         };
@@ -21116,7 +23294,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PublicCoursesItemOut"][];
                 };
             };
         };
@@ -21136,7 +23314,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": {
+                        [key: string]: number;
+                    };
                 };
             };
         };
@@ -21160,7 +23340,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeleteResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -21224,7 +23404,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PublicRegistrationDetailOut"];
                 };
             };
             /** @description Validation Error */
@@ -21257,7 +23437,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PublicRegistrationDetailOut"];
                 };
             };
             /** @description Validation Error */
@@ -21290,7 +23470,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PublicRegisterResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -21319,7 +23499,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PublicRegistrationTimeOut"];
                 };
             };
         };
@@ -21346,7 +23526,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeleteResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -21382,7 +23562,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeleteResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -21411,7 +23591,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PublicSuppliesItemOut"][];
                 };
             };
         };
@@ -21435,7 +23615,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PublicRegistrationDetailOut"];
                 };
             };
             /** @description Validation Error */
@@ -21477,7 +23657,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["RegistrationListOut"];
                 };
             };
             /** @description Validation Error */
@@ -21510,7 +23690,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["RegistrationCreateResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -21541,7 +23721,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["RegistrationDetailOut"];
                 };
             };
             /** @description Validation Error */
@@ -21576,7 +23756,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["RegistrationBasicUpdateResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -21612,7 +23792,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeleteResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -21719,7 +23899,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PendingRegistrationForceAcceptResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -21754,7 +23934,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PendingRegistrationActionResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -21922,7 +24102,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["RefundSuggestionResponse"];
                 };
             };
             /** @description Validation Error */
@@ -21957,7 +24137,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PendingRegistrationActionResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -21992,7 +24172,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeleteResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -22027,7 +24207,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PendingRegistrationRematchResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -22058,7 +24238,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PendingRegistrationActionResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -22163,7 +24343,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeleteResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -22300,7 +24480,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PendingRegistrationListOut"];
                 };
             };
             /** @description Validation Error */
@@ -22478,7 +24658,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PendingRegistrationsSearchStudentsOut"];
                 };
             };
             /** @description Validation Error */
@@ -22640,7 +24820,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["WaitlistSweepResultOut"];
                 };
             };
         };
@@ -22750,7 +24930,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AnnouncementListOut"];
                 };
             };
             /** @description Validation Error */
@@ -22783,7 +24963,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["MutationResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -22818,7 +24998,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeleteResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -22849,7 +25029,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeleteResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -22880,7 +25060,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AnnouncementParentRecipientsOut"];
                 };
             };
             /** @description Validation Error */
@@ -22915,7 +25095,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AnnouncementParentRecipientsOut"];
                 };
             };
             /** @description Validation Error */
@@ -25102,7 +27282,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AuthMessageOut"];
                 };
             };
             /** @description Validation Error */
@@ -25131,7 +27311,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AuthUserResultOut"];
                 };
             };
         };
@@ -25155,7 +27335,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AuthUserResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -25188,7 +27368,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AuthLoginResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -25217,7 +27397,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AuthMessageOut"];
                 };
             };
         };
@@ -25237,7 +27417,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AuthUserOut"];
                 };
             };
         };
@@ -25257,7 +27437,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AuthPermissionsDefinitionOut"];
                 };
             };
         };
@@ -25277,7 +27457,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AuthUserResultOut"];
                 };
             };
         };
@@ -25297,7 +27477,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AuthAdminUserItemOut"][];
                 };
             };
         };
@@ -26783,7 +28963,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["EmployeeOut"][];
                 };
             };
             /** @description Validation Error */
@@ -26944,7 +29124,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["schemas__employees_docs__CertificateOut"][];
                 };
             };
             /** @description Validation Error */
@@ -26979,7 +29159,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["schemas__employees_docs__CertificateOut"];
                 };
             };
             /** @description Validation Error */
@@ -27015,7 +29195,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["schemas__employees_docs__CertificateOut"];
                 };
             };
             /** @description Validation Error */
@@ -27078,7 +29258,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ContractOut"][];
                 };
             };
             /** @description Validation Error */
@@ -27113,7 +29293,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ContractOut"];
                 };
             };
             /** @description Validation Error */
@@ -27149,7 +29329,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ContractOut"];
                 };
             };
             /** @description Validation Error */
@@ -27212,7 +29392,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["EducationOut"][];
                 };
             };
             /** @description Validation Error */
@@ -27247,7 +29427,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["EducationOut"];
                 };
             };
             /** @description Validation Error */
@@ -27283,7 +29463,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["EducationOut"];
                 };
             };
             /** @description Validation Error */
@@ -27349,7 +29529,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["FinalSalaryPreviewOut"];
                 };
             };
             /** @description Validation Error */
@@ -27448,7 +29628,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["EventOut"][];
                 };
             };
             /** @description Validation Error */
@@ -27481,7 +29661,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["EventMutationResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -27512,7 +29692,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["EventOut"];
                 };
             };
             /** @description Validation Error */
@@ -27547,7 +29727,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["EventMutationResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -27610,7 +29790,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["EventCalendarFeedOut"];
                 };
             };
             /** @description Validation Error */
@@ -27646,7 +29826,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["HolidayImportResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -28589,7 +30769,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CertificateOut"];
+                    "application/json": components["schemas"]["api__gov_moe__certificates__CertificateOut"];
                 };
             };
             /** @description Validation Error */
@@ -28622,7 +30802,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CertificateOut"][];
+                    "application/json": components["schemas"]["api__gov_moe__certificates__CertificateOut"][];
                 };
             };
             /** @description Validation Error */
@@ -31844,7 +34024,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["LiffLoginOkOut"] | components["schemas"]["LiffLoginNeedBindingOut"];
                 };
             };
             /** @description Validation Error */
@@ -34040,7 +36220,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ContactBookListOut"];
                 };
             };
             /** @description Validation Error */
@@ -34077,7 +36257,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ContactBookEntryOut"];
                 };
             };
             /** @description Validation Error */
@@ -34112,7 +36292,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ContactBookPhotoOut"];
                 };
             };
             /** @description Validation Error */
@@ -34144,7 +36324,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeleteResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -34175,7 +36355,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ContactBookEntryOut"];
                 };
             };
             /** @description Validation Error */
@@ -34208,7 +36388,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ContactBookApplyTemplateOut"];
                 };
             };
             /** @description Validation Error */
@@ -34241,7 +36421,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ContactBookBatchUpsertOut"];
                 };
             };
             /** @description Validation Error */
@@ -34274,7 +36454,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ContactBookBatchPublishOut"];
                 };
             };
             /** @description Validation Error */
@@ -34307,7 +36487,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ContactBookCopyYesterdayOut"];
                 };
             };
             /** @description Validation Error */
@@ -34500,7 +36680,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ContactBookUnpublishedOut"];
                 };
             };
             /** @description Validation Error */
@@ -35467,7 +37647,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["MyStudentsOut"];
                 };
             };
             /** @description Validation Error */
@@ -36034,7 +38214,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["StudentDetailOut"];
                 };
             };
             /** @description Validation Error */
@@ -38695,7 +40875,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ShiftAssignmentOut"][];
                 };
             };
             /** @description Validation Error */
@@ -38728,7 +40908,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ShiftAssignmentSaveResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -38761,7 +40941,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DailyShiftOut"][];
                 };
             };
             /** @description Validation Error */
@@ -38794,7 +40974,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeleteResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -38861,7 +41041,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ShiftImportResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -38914,7 +41094,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ShiftSwapHistoryOut"][];
                 };
             };
             /** @description Validation Error */
@@ -38943,7 +41123,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ShiftTypeOut"][];
                 };
             };
         };
@@ -38967,7 +41147,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ShiftTypeOut"];
                 };
             };
             /** @description Validation Error */
@@ -39002,7 +41182,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ShiftTypeOut"];
                 };
             };
             /** @description Validation Error */
