@@ -1,11 +1,26 @@
 import axios from 'axios'
 import type { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios'
 import { ElMessage } from 'element-plus'
-import router from '@/router'
 import { setUserInfo, clearAuth } from '@/utils/auth'
 import { classifyError, DEFAULT_MESSAGES } from '@/utils/errorHandler'
 import { applyDedupe } from '@/utils/apiDedupe'
 import { captureException as sentryCapture, sanitizeUrl } from '@/utils/sentry'
+
+// Lazy router import：直接 top-level import 會把 createRouter side effect 拉進
+// 所有 import @/api 的測試（不少測試只 partial-mock vue-router 而沒 export
+// createRouter），導致一票既有測試在 module load 階段就炸。
+// 改成內部 cached promise，第一次遇到 503+MAINTENANCE_MODE 時才動態 import。
+type RouterShape = {
+    replace: (to: { path: string; query?: Record<string, string | undefined> }) => unknown
+    currentRoute: { value: { path: string } }
+}
+let _routerPromise: Promise<RouterShape> | null = null
+async function getRouter(): Promise<RouterShape> {
+    if (!_routerPromise) {
+        _routerPromise = import('@/router').then((m) => m.default as RouterShape)
+    }
+    return _routerPromise
+}
 
 // Extend axios types to cover the extra fields we attach in the interceptor.
 declare module 'axios' {
@@ -100,8 +115,9 @@ api.interceptors.response.use(
             const ksObj = killSwitchRaw as { code?: unknown; message?: unknown }
             if (ksObj.code === 'MAINTENANCE_MODE') {
                 // 已在 /maintenance 不重複 replace，避免本頁 refresh probe 觸發無窮 redirect
-                if (router.currentRoute.value.path !== '/maintenance') {
-                    router.replace({
+                const r = await getRouter()
+                if (r.currentRoute.value.path !== '/maintenance') {
+                    r.replace({
                         path: '/maintenance',
                         query: { message: typeof ksObj.message === 'string' ? ksObj.message : undefined },
                     })

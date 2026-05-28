@@ -8,8 +8,21 @@
 import axios, { type AxiosError, type AxiosInstance, type InternalAxiosRequestConfig } from 'axios'
 import { applyDedupe } from '@/utils/apiDedupe'
 import { classifyError, DEFAULT_MESSAGES } from '@/utils/errorHandler'
-import parentRouter from '@/parent/router'
 import { toast } from '@/parent/utils/toast'
+
+// Lazy router import：避免將 createRouter side effect 灌進所有 partial-mock
+// vue-router 的既有測試（同 src/api/index.ts 處理方式）。
+type ParentRouterShape = {
+  replace: (to: { path: string; query?: Record<string, string | undefined> }) => unknown
+  currentRoute: { value: { path: string } }
+}
+let _parentRouterPromise: Promise<ParentRouterShape> | null = null
+async function getParentRouter(): Promise<ParentRouterShape> {
+  if (!_parentRouterPromise) {
+    _parentRouterPromise = import('@/parent/router').then((m) => m.default as ParentRouterShape)
+  }
+  return _parentRouterPromise
+}
 
 declare module 'axios' {
   interface AxiosError {
@@ -153,8 +166,9 @@ api.interceptors.response.use(
     if (error.response?.status === 503 && ksRaw && typeof ksRaw === 'object') {
       const ksObj = ksRaw as { code?: unknown; message?: unknown }
       if (ksObj.code === 'MAINTENANCE_MODE') {
-        if (parentRouter.currentRoute.value.path !== '/maintenance') {
-          parentRouter.replace({
+        const r = await getParentRouter()
+        if (r.currentRoute.value.path !== '/maintenance') {
+          r.replace({
             path: '/maintenance',
             query: { message: typeof ksObj.message === 'string' ? ksObj.message : undefined },
           })
