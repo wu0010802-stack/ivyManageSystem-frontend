@@ -169,6 +169,14 @@ const routes: RouteRecordRaw[] = [
       meta: { title: '事務', tab: 'admin' },
     },
     {
+      // kill-switch redirect target；axios interceptor 偵測 503 + MAINTENANCE_MODE 時 router.replace 進來。
+      // public + hideTabBar：beforeEach 不要求登入、layout 隱藏底部 tab bar（與 /login / /bind 同 pattern）
+      path: '/maintenance',
+      name: 'parent-maintenance',
+      component: () => import('./views/MaintenanceView.vue'),
+      meta: { title: '系統維護中', public: true, hideTabBar: true },
+    },
+    {
       path: '/:pathMatch(.*)*',
       redirect: '/home',
     },
