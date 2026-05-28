@@ -4039,46 +4039,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/dev/employee-salary-debug": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Debug Employee Salary
-         * @description 模擬計算單一員工薪資並回傳完整明細（dev 別名，正式請改打 /api/salaries/employee-salary-debug）。
-         */
-        get: operations["debug_employee_salary_api_dev_employee_salary_debug_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/dev/salary-logic": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Salary Logic
-         * @description 傾印目前的薪資計算邏輯與所有參數設定（dev 別名，正式請改打 /api/salaries/logic）。
-         */
-        get: operations["get_salary_logic_api_dev_salary_logic_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/disciplinary-actions": {
         parameters: {
             query?: never;
@@ -12853,6 +12813,11 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** _ProbationAlertCounts */
+        _ProbationAlertCounts: {
+            /** Next Month */
+            next_month: unknown;
+        };
         /** _PromotionActionPayload */
         _PromotionActionPayload: {
             /** Birthday */
@@ -13131,6 +13096,48 @@ export interface components {
              */
             severity: "mild" | "moderate" | "severe";
         };
+        /**
+         * AllergyDeleteOut
+         * @description DELETE /students/{id}/allergies/{alg_id} 回傳。
+         */
+        AllergyDeleteOut: {
+            /** Message */
+            message: unknown;
+        };
+        /**
+         * AllergyListOut
+         * @description GET /students/{id}/allergies 回傳。
+         */
+        AllergyListOut: {
+            /** Items */
+            items: unknown;
+            /** Total */
+            total: unknown;
+        };
+        /**
+         * AllergyOut
+         * @description 過敏紀錄單筆 (對應 _allergy_to_dict)。
+         */
+        AllergyOut: {
+            /** Active */
+            active: unknown;
+            /** Allergen */
+            allergen: unknown;
+            /** Created At */
+            created_at?: unknown;
+            /** First Aid Note */
+            first_aid_note?: unknown;
+            /** Id */
+            id: unknown;
+            /** Reaction Symptom */
+            reaction_symptom?: unknown;
+            /** Severity */
+            severity?: unknown;
+            /** Student Id */
+            student_id: unknown;
+            /** Updated At */
+            updated_at?: unknown;
+        };
         /** AllergyUpdate */
         AllergyUpdate: {
             /** Active */
@@ -13288,6 +13295,16 @@ export interface components {
             notes?: string | null;
             /** Shift Type Id */
             shift_type_id?: number | null;
+        };
+        /**
+         * AttachmentUploadResultOut
+         * @description POST /portal/my-leaves/{id}/attachments — 上傳附件回傳。
+         */
+        AttachmentUploadResultOut: {
+            /** Attachments */
+            attachments: unknown;
+            /** Message */
+            message: unknown;
         };
         /** AttendanceAggregateOut */
         AttendanceAggregateOut: {
@@ -13508,6 +13525,27 @@ export interface components {
             failed: components["schemas"]["BatchSignErrorItem"][];
             /** Succeeded */
             succeeded: number[];
+        };
+        /**
+         * BindAdditionalChildOut
+         * @description POST /bind-additional 綁定多個小孩成功回傳。
+         */
+        BindAdditionalChildOut: {
+            /** Guardian Id */
+            guardian_id: unknown;
+            /** Status */
+            status: unknown;
+            /** Student Id */
+            student_id: unknown;
+        };
+        /**
+         * BindFirstChildOut
+         * @description POST /bind 首次綁定成功回傳。
+         */
+        BindFirstChildOut: {
+            /** Status */
+            status: unknown;
+            user: unknown;
         };
         /** BindRequest */
         BindRequest: {
@@ -14229,6 +14267,18 @@ export interface components {
             /** Semester */
             semester?: number | null;
         };
+        /**
+         * ClassroomUpdateResultOut
+         * @description PUT /classrooms/{id} 回傳 — message + id + name。
+         */
+        ClassroomUpdateResultOut: {
+            /** Id */
+            id: unknown;
+            /** Message */
+            message: unknown;
+            /** Name */
+            name: unknown;
+        };
         /** ClassRosterData */
         ClassRosterData: {
             /** Art Teacher Name */
@@ -14744,6 +14794,14 @@ export interface components {
              */
             sort_order: number;
         };
+        /**
+         * DeleteResultOut
+         * @description 純 message DELETE 回傳 — {message}。
+         */
+        DeleteResultOut: {
+            /** Message */
+            message: unknown;
+        };
         /** DisabilityDocCreate */
         DisabilityDocCreate: {
             /** Doc Type */
@@ -15032,6 +15090,98 @@ export interface components {
              * @default 08:00
              */
             work_start_time: string;
+        };
+        /**
+         * EmployeeOut
+         * @description 員工列表 / 詳情共用 response 形狀。
+         *
+         *     遮罩語意：
+         *     - id_number / bank_account_name / bank_code：當 caller 無 SALARY_WRITE，
+         *       router 會傳 masked str 或 None
+         *     - base_salary / hourly_rate / insurance_salary_level / pension_self_rate：
+         *       當 caller 無 admin/hr 也非 self，router 會傳 None
+         */
+        EmployeeOut: {
+            /** Address */
+            address?: unknown;
+            /** Bank Account */
+            bank_account?: unknown;
+            /** Bank Account Name */
+            bank_account_name?: unknown;
+            /** Bank Code */
+            bank_code?: unknown;
+            /** Base Salary */
+            base_salary?: unknown;
+            /** Birthday */
+            birthday?: unknown;
+            /** Bonus Grade */
+            bonus_grade?: unknown;
+            /** Bypass Standard Base */
+            bypass_standard_base?: unknown;
+            /** Classroom Id */
+            classroom_id?: unknown;
+            /** Classroom Name */
+            classroom_name?: unknown;
+            /** Dependents */
+            dependents?: unknown;
+            /** Emergency Contact Name */
+            emergency_contact_name?: unknown;
+            /** Emergency Contact Phone */
+            emergency_contact_phone?: unknown;
+            /** Employee Id */
+            employee_id: unknown;
+            /** Employee Type */
+            employee_type: unknown;
+            /** Extra Dependents Quarterly */
+            extra_dependents_quarterly?: unknown;
+            /** Health Exempt */
+            health_exempt?: unknown;
+            /** Hire Date */
+            hire_date?: unknown;
+            /** Hourly Rate */
+            hourly_rate?: unknown;
+            /** Id */
+            id: unknown;
+            /** Id Number */
+            id_number?: unknown;
+            /** Insurance Salary Level */
+            insurance_salary_level?: unknown;
+            /** Insurance Salary Override Reason */
+            insurance_salary_override_reason?: unknown;
+            /** Is Active */
+            is_active: unknown;
+            /** Job Title Id */
+            job_title_id?: unknown;
+            /** Name */
+            name: unknown;
+            /** No Employment Insurance */
+            no_employment_insurance?: unknown;
+            /** Pension Self Rate */
+            pension_self_rate?: unknown;
+            /** Phone */
+            phone?: unknown;
+            /** Position */
+            position?: unknown;
+            /** Probation End Date */
+            probation_end_date?: unknown;
+            /** Resign Date */
+            resign_date?: unknown;
+            /** Resign Reason */
+            resign_reason?: unknown;
+            /** Skip Payroll Bonuses */
+            skip_payroll_bonuses?: unknown;
+            /** Skip Payroll Transfer */
+            skip_payroll_transfer?: unknown;
+            /** Supervisor Role */
+            supervisor_role?: unknown;
+            /** Title */
+            title?: unknown;
+            /** Unreported For Tax */
+            unreported_for_tax?: unknown;
+            /** Work End Time */
+            work_end_time?: unknown;
+            /** Work Start Time */
+            work_start_time?: unknown;
         };
         /** EmployeeUpdate */
         EmployeeUpdate: {
@@ -15523,6 +15673,24 @@ export interface components {
          * @enum {string}
          */
         Grade: "OUTSTANDING" | "GOOD" | "PASS" | "WARN" | "FAIL";
+        /**
+         * GradeOut
+         * @description 年級 (GET /grades list 單筆 / PATCH /grades/{id} 回傳)。
+         *
+         *     PATCH 不回 age_range / sort_order，這兩欄為 Optional。
+         */
+        GradeOut: {
+            /** Age Range */
+            age_range?: unknown;
+            /** Id */
+            id: unknown;
+            /** Is Graduation Grade */
+            is_graduation_grade: unknown;
+            /** Name */
+            name: unknown;
+            /** Sort Order */
+            sort_order?: unknown;
+        };
         /** GradeRosterSummary */
         GradeRosterSummary: {
             /** Class Numbers */
@@ -15606,6 +15774,42 @@ export interface components {
              * @default 0
              */
             sort_order: number;
+        };
+        /**
+         * GuardianListOut
+         * @description GET /students/{id}/guardians 回傳 — {items}。
+         */
+        GuardianListOut: {
+            /** Items */
+            items: unknown;
+        };
+        /**
+         * GuardianOut
+         * @description 單筆監護人資料 (對應 _serialize_guardian)。
+         */
+        GuardianOut: {
+            /** Can Pickup */
+            can_pickup: unknown;
+            /** Custody Note */
+            custody_note?: unknown;
+            /** Email */
+            email?: unknown;
+            /** Id */
+            id: unknown;
+            /** Is Emergency */
+            is_emergency: unknown;
+            /** Is Primary */
+            is_primary: unknown;
+            /** Name */
+            name?: unknown;
+            /** Phone */
+            phone?: unknown;
+            /** Relation */
+            relation?: unknown;
+            /** Sort Order */
+            sort_order?: unknown;
+            /** Student Id */
+            student_id: unknown;
         };
         /** GuardianUpdate */
         GuardianUpdate: {
@@ -15753,6 +15957,18 @@ export interface components {
             /** Employee Id */
             employee_id: number;
         };
+        /**
+         * ImportFailureItem
+         * @description Excel import 單筆失敗紀錄（caller 自訂 data shape）。
+         */
+        ImportFailureItem: {
+            /** Data */
+            data?: unknown;
+            /** Error */
+            error: unknown;
+            /** Row */
+            row?: unknown;
+        };
         /** ImportRecord */
         ImportRecord: {
             /** 介紹者 */
@@ -15785,21 +16001,6 @@ export interface components {
             "\u96FB\u8A2A\u5F8C\u5BB6\u9577\u56DE\u61C9"?: string | null;
             /** 電話 */
             "\u96FB\u8A71"?: string | null;
-        };
-        /** ImportResultOut */
-        ImportResultOut: {
-            /** Cycle Id */
-            cycle_id: number;
-            /** Participants Created */
-            participants_created: number;
-            /** Participants Updated */
-            participants_updated: number;
-            /** Score Items Upserted */
-            score_items_upserted: number;
-            /** Skipped Unresolved Names */
-            skipped_unresolved_names: string[];
-            /** Summaries Upserted */
-            summaries_upserted: number;
         };
         /** IncidentCreate */
         IncidentCreate: {
@@ -15965,6 +16166,34 @@ export interface components {
             /** Name */
             name: string;
         };
+        /**
+         * LastMeasurement
+         * @description 單筆量測快照；string 值對齊 router 內 `str(Decimal)` 序列化.
+         */
+        LastMeasurement: {
+            /** Head Circumference Cm */
+            head_circumference_cm?: unknown;
+            /** Height Cm */
+            height_cm?: unknown;
+            /** Measured On */
+            measured_on: unknown;
+            /** Vision Left */
+            vision_left?: unknown;
+            /** Vision Right */
+            vision_right?: unknown;
+            /** Weight Kg */
+            weight_kg?: unknown;
+        };
+        /**
+         * LeaveApproveResultOut
+         * @description PUT /leaves/{id}/approve 回傳。
+         */
+        LeaveApproveResultOut: {
+            /** Message */
+            message: unknown;
+            /** Warning */
+            warning?: unknown;
+        };
         /** LeaveBatchApproveRequest */
         LeaveBatchApproveRequest: {
             /** Approved */
@@ -16079,6 +16308,18 @@ export interface components {
             start_date?: string | null;
             /** Start Time */
             start_time?: string | null;
+        };
+        /**
+         * LeaveUpdateResultOut
+         * @description PUT /leaves/{id} 回傳。
+         *
+         *     has been-approved leave 改動會觸發 reset_to_pending（前端要顯示重送審 hint）。
+         */
+        LeaveUpdateResultOut: {
+            /** Message */
+            message: unknown;
+            /** Reset To Pending */
+            reset_to_pending?: unknown;
         };
         /** LifecycleTransitionRequest */
         LifecycleTransitionRequest: {
@@ -16267,6 +16508,34 @@ export interface components {
             /** Weight Kg */
             weight_kg?: number | string | null;
         };
+        /**
+         * MedicationLogOut
+         * @description 單筆用藥執行紀錄 (對應 _log_to_dict)。
+         */
+        MedicationLogOut: {
+            /** Administered At */
+            administered_at?: unknown;
+            /** Administered By */
+            administered_by?: unknown;
+            /** Correction Of */
+            correction_of?: unknown;
+            /** Created At */
+            created_at?: unknown;
+            /** Id */
+            id: unknown;
+            /** Note */
+            note?: unknown;
+            /** Order Id */
+            order_id: unknown;
+            /** Scheduled Time */
+            scheduled_time?: unknown;
+            /** Skipped */
+            skipped: unknown;
+            /** Skipped Reason */
+            skipped_reason?: unknown;
+            /** Status */
+            status: unknown;
+        };
         /** MedicationOrderCreate */
         MedicationOrderCreate: {
             /** Dose */
@@ -16282,6 +16551,76 @@ export interface components {
             order_date: string;
             /** Time Slots */
             time_slots: string[];
+        };
+        /**
+         * MedicationOrderListOut
+         * @description GET /students/{id}/medication-orders 回傳。
+         */
+        MedicationOrderListOut: {
+            /** Items */
+            items: unknown;
+            /** Total */
+            total: unknown;
+        };
+        /**
+         * MedicationOrderOut
+         * @description 單份用藥單 (對應 _order_to_dict)。
+         */
+        MedicationOrderOut: {
+            /** Created At */
+            created_at?: unknown;
+            /** Created By */
+            created_by?: unknown;
+            /** Dose */
+            dose?: unknown;
+            /** Id */
+            id: unknown;
+            /** Logs */
+            logs: unknown;
+            /** Medication Name */
+            medication_name: unknown;
+            /** Note */
+            note?: unknown;
+            /** Order Date */
+            order_date: unknown;
+            /** Source */
+            source?: unknown;
+            /** Student Id */
+            student_id: unknown;
+            /** Time Slots */
+            time_slots: unknown;
+        };
+        /**
+         * MedicationOrderWithStudentOut
+         * @description today-medication 加 student_name + classroom_id 兩欄。
+         */
+        MedicationOrderWithStudentOut: {
+            /** Classroom Id */
+            classroom_id?: unknown;
+            /** Created At */
+            created_at?: unknown;
+            /** Created By */
+            created_by?: unknown;
+            /** Dose */
+            dose?: unknown;
+            /** Id */
+            id: unknown;
+            /** Logs */
+            logs: unknown;
+            /** Medication Name */
+            medication_name: unknown;
+            /** Note */
+            note?: unknown;
+            /** Order Date */
+            order_date: unknown;
+            /** Source */
+            source?: unknown;
+            /** Student Id */
+            student_id: unknown;
+            /** Student Name */
+            student_name?: unknown;
+            /** Time Slots */
+            time_slots: unknown;
         };
         /**
          * MeetingBatchCreate
@@ -16304,6 +16643,16 @@ export interface components {
             meeting_type: string;
             /** Remark */
             remark?: string | null;
+        };
+        /**
+         * MeetingBatchCreateOut
+         * @description POST /meetings/batch — 批次建立會議紀錄回傳。
+         */
+        MeetingBatchCreateOut: {
+            /** Count */
+            count: unknown;
+            /** Message */
+            message: unknown;
         };
         /** MeetingRecordCreate */
         MeetingRecordCreate: {
@@ -16334,6 +16683,16 @@ export interface components {
             overtime_hours?: number | null;
             /** Remark */
             remark?: string | null;
+        };
+        /**
+         * MessageRecallOut
+         * @description POST /messages/{id}/recall — 撤回訊息回傳 {status, deleted_at}。
+         */
+        MessageRecallOut: {
+            /** Deleted At */
+            deleted_at: unknown;
+            /** Status */
+            status: unknown;
         };
         /** MilestoneCreate */
         MilestoneCreate: {
@@ -16368,6 +16727,14 @@ export interface components {
         MonthCreate: {
             /** Month */
             month: string;
+        };
+        /**
+         * MonthDeleteOut
+         * @description DELETE /months/{month} 回傳。
+         */
+        MonthDeleteOut: {
+            /** Deleted */
+            deleted: unknown;
         };
         /** MonthlyFixedCostBatchEntry */
         MonthlyFixedCostBatchEntry: {
@@ -16405,6 +16772,26 @@ export interface components {
             notes?: string | null;
             /** Year */
             year: number;
+        };
+        /**
+         * MonthOptionOut
+         * @description 招生月份 — GET /months list 單筆 / POST /months 回傳。
+         */
+        MonthOptionOut: {
+            /** Id */
+            id: unknown;
+            /** Month */
+            month: unknown;
+        };
+        /**
+         * MutationResultOut
+         * @description POST/PUT/DELETE 成功回傳的共用 shape — {message, id}。
+         */
+        MutationResultOut: {
+            /** Id */
+            id: unknown;
+            /** Message */
+            message: unknown;
         };
         /** MyAppraisalDetailOut */
         MyAppraisalDetailOut: {
@@ -16493,6 +16880,26 @@ export interface components {
         MyAppraisalListOut: {
             /** Items */
             items: components["schemas"]["MyAppraisalListItem"][];
+        };
+        /**
+         * MyLeaveStatsOut
+         * @description GET /portal/my-leave-stats — 教師本人特休統計。
+         */
+        MyLeaveStatsOut: {
+            /** Annual Leave Quota */
+            annual_leave_quota: unknown;
+            /** Annual Leave Used Days */
+            annual_leave_used_days: unknown;
+            /** End Of Calculation */
+            end_of_calculation: unknown;
+            /** Hire Date */
+            hire_date?: unknown;
+            /** Seniority Months */
+            seniority_months: unknown;
+            /** Seniority Years */
+            seniority_years: unknown;
+            /** Start Of Calculation */
+            start_of_calculation: unknown;
         };
         /** MyScoreItemOut */
         MyScoreItemOut: {
@@ -16701,6 +17108,34 @@ export interface components {
             /** Resign Reason */
             resign_reason?: string | null;
         };
+        /**
+         * OffboardResultOut
+         * @description POST /employees/{id}/offboard 向後相容 shape（deprecated endpoint）。
+         */
+        OffboardResultOut: {
+            /** Id */
+            id: unknown;
+            /** Is Active */
+            is_active: unknown;
+            /** Message */
+            message: unknown;
+            /** Name */
+            name: unknown;
+            /** Resign Date */
+            resign_date: unknown;
+            /** Resign Reason */
+            resign_reason?: unknown;
+            /** User Account Revoked */
+            user_account_revoked: unknown;
+        };
+        /**
+         * OkStatusOut
+         * @description 純 {status: "ok"} 共用 shape (家長端常用)。
+         */
+        OkStatusOut: {
+            /** Status */
+            status: unknown;
+        };
         /** OrgYearSettingsCreate */
         OrgYearSettingsCreate: {
             /** Enrollment Actual */
@@ -16761,6 +17196,23 @@ export interface components {
             /** Rejection Reason */
             rejection_reason?: string | null;
         };
+        /**
+         * OvertimeApproveResultOut
+         * @description PUT /overtimes/{id}/approve 回傳。
+         *
+         *     核准 use_comp_leave=True 的單會發放補休配額（comp_leave_hours_granted）。
+         *     後續薪資重算 → salary_recalculated + 可能 warning。
+         */
+        OvertimeApproveResultOut: {
+            /** Comp Leave Hours Granted */
+            comp_leave_hours_granted?: unknown;
+            /** Message */
+            message: unknown;
+            /** Salary Recalculated */
+            salary_recalculated?: unknown;
+            /** Warning */
+            warning?: unknown;
+        };
         /** OvertimeBatchApproveRequest */
         OvertimeBatchApproveRequest: {
             /** Approved */
@@ -16818,6 +17270,49 @@ export interface components {
              */
             use_comp_leave: boolean;
         };
+        /**
+         * OvertimeCreateResultOut
+         * @description POST /overtimes 回傳 — 新增成功 + 計算出的加班費。
+         */
+        OvertimeCreateResultOut: {
+            /** Id */
+            id: unknown;
+            /** Message */
+            message: unknown;
+            /** Overtime Pay */
+            overtime_pay?: unknown;
+        };
+        /**
+         * OvertimeDeleteResultOut
+         * @description DELETE /overtimes/{id} 回傳。
+         *
+         *     刪除已核准單 trigger 薪資重算 → salary_recalculated + 可能 warning。
+         */
+        OvertimeDeleteResultOut: {
+            /** Message */
+            message: unknown;
+            /** Salary Recalculated */
+            salary_recalculated?: unknown;
+            /** Warning */
+            warning?: unknown;
+        };
+        /**
+         * OvertimeImportResultOut
+         * @description POST /overtimes/import Excel 批次匯入回傳。
+         *
+         *     Note: overtimes import 用 total/created/failed:int/errors:list[str] shape，
+         *     與 leaves import {succeeded:int, failed:list} 不同；不可共用 _common.ImportResultOut。
+         */
+        OvertimeImportResultOut: {
+            /** Created */
+            created: unknown;
+            /** Errors */
+            errors: unknown;
+            /** Failed */
+            failed: unknown;
+            /** Total */
+            total: unknown;
+        };
         /** OvertimeUpdate */
         OvertimeUpdate: {
             /** End Time */
@@ -16832,6 +17327,25 @@ export interface components {
             reason?: string | null;
             /** Start Time */
             start_time?: string | null;
+        };
+        /**
+         * OvertimeUpdateResultOut
+         * @description PUT /overtimes/{id} 回傳。
+         *
+         *     若改到已核准的單，會自動退回「待審核」（reset_to_pending=True），
+         *     並 trigger 薪資重算（salary_recalculated + 可能的 warning）。
+         */
+        OvertimeUpdateResultOut: {
+            /** Message */
+            message: unknown;
+            /** Overtime Pay */
+            overtime_pay?: unknown;
+            /** Reset To Pending */
+            reset_to_pending?: unknown;
+            /** Salary Recalculated */
+            salary_recalculated?: unknown;
+            /** Warning */
+            warning?: unknown;
         };
         /** ParentMedicationOrderCreate */
         ParentMedicationOrderCreate: {
@@ -16875,6 +17389,27 @@ export interface components {
         ParentRecipientsUpdate: {
             /** Recipients */
             recipients: components["schemas"]["ParentRecipientItem"][];
+        };
+        /**
+         * ParentRefreshOut
+         * @description POST /refresh access+refresh token rotation 成功回傳。
+         */
+        ParentRefreshOut: {
+            /** Status */
+            status: unknown;
+            user: unknown;
+        };
+        /**
+         * ParentUserInfo
+         * @description 家長使用者基本資訊（bind/refresh 共用 user 欄位）。
+         */
+        ParentUserInfo: {
+            /** Name */
+            name: unknown;
+            /** Role */
+            role: unknown;
+            /** User Id */
+            user_id: unknown;
         };
         /** ParticipantCreate */
         ParticipantCreate: {
@@ -17105,6 +17640,46 @@ export interface components {
              */
             visit_count: number;
         };
+        /**
+         * PeriodOut
+         * @description 招生期間 — 對應 _period_to_dict shape。
+         */
+        PeriodOut: {
+            /** Created At */
+            created_at?: unknown;
+            /** Deposit Count */
+            deposit_count: unknown;
+            /** Deposit To Enrolled Rate */
+            deposit_to_enrolled_rate: unknown;
+            /** Effective Deposit Count */
+            effective_deposit_count: unknown;
+            /** Effective To Enrolled Rate */
+            effective_to_enrolled_rate: unknown;
+            /** Enrolled After School */
+            enrolled_after_school: unknown;
+            /** Enrolled Count */
+            enrolled_count: unknown;
+            /** Id */
+            id: unknown;
+            /** Not Enrolled Deposit */
+            not_enrolled_deposit: unknown;
+            /** Notes */
+            notes?: unknown;
+            /** Period Name */
+            period_name: unknown;
+            /** Sort Order */
+            sort_order: unknown;
+            /** Transfer Term Count */
+            transfer_term_count: unknown;
+            /** Updated At */
+            updated_at?: unknown;
+            /** Visit Count */
+            visit_count: unknown;
+            /** Visit To Deposit Rate */
+            visit_to_deposit_rate: unknown;
+            /** Visit To Enrolled Rate */
+            visit_to_enrolled_rate: unknown;
+        };
         /** PeriodUpdate */
         PeriodUpdate: {
             /** Deposit Count */
@@ -17301,6 +17876,31 @@ export interface components {
                 [key: string]: boolean;
             };
         };
+        /**
+         * ProbationAlertItem
+         * @description 試用期警示單筆員工。
+         */
+        ProbationAlertItem: {
+            /** Days Remaining */
+            days_remaining: unknown;
+            /** Employee Id */
+            employee_id: unknown;
+            /** Id */
+            id: unknown;
+            /** Name */
+            name: unknown;
+            /** Probation End Date */
+            probation_end_date: unknown;
+        };
+        /**
+         * ProbationAlertResponseOut
+         * @description GET /employees/probation-alerts 回傳。
+         */
+        ProbationAlertResponseOut: {
+            alerts: unknown;
+            /** Employees */
+            employees: unknown;
+        };
         /** ProfileUpdate */
         ProfileUpdate: {
             /** Address */
@@ -17440,6 +18040,22 @@ export interface components {
              * @description like / love / celebrate
              */
             reaction: string;
+        };
+        /**
+         * RecruitmentOptionsOut
+         * @description GET /recruitment/options — 篩選用 dropdown 選項集合。
+         */
+        RecruitmentOptionsOut: {
+            /** Grades */
+            grades: unknown;
+            /** Months */
+            months: unknown;
+            /** No Deposit Reasons */
+            no_deposit_reasons: unknown;
+            /** Referrers */
+            referrers: unknown;
+            /** Sources */
+            sources: unknown;
         };
         /** RecruitmentVisitCreate */
         RecruitmentVisitCreate: {
@@ -17678,6 +18294,18 @@ export interface components {
             /** New Password */
             new_password: string;
         };
+        /**
+         * RevealPhoneOut
+         * @description POST /students/{id}/reveal-phone 揭露電話。
+         */
+        RevealPhoneOut: {
+            /** Guardian Id */
+            guardian_id?: unknown;
+            /** Phone */
+            phone: unknown;
+            /** Target */
+            target: unknown;
+        };
         /** RevealPhoneRequest */
         RevealPhoneRequest: {
             /** Guardian Id */
@@ -17889,6 +18517,31 @@ export interface components {
             };
             /** Worker Pid */
             worker_pid: number;
+        };
+        /**
+         * ImportResultOut
+         * @description Excel 批次匯入回傳共用 shape — {succeeded, failed}。
+         */
+        schemas___common__ImportResultOut: {
+            /** Failed */
+            failed: unknown;
+            /** Succeeded */
+            succeeded: unknown;
+        };
+        /** ImportResultOut */
+        schemas__appraisal__ImportResultOut: {
+            /** Cycle Id */
+            cycle_id: number;
+            /** Participants Created */
+            participants_created: number;
+            /** Participants Updated */
+            participants_updated: number;
+            /** Score Items Upserted */
+            score_items_upserted: number;
+            /** Skipped Unresolved Names */
+            skipped_unresolved_names: string[];
+            /** Summaries Upserted */
+            summaries_upserted: number;
         };
         /** SchoolWideImpact */
         SchoolWideImpact: {
@@ -18329,6 +18982,19 @@ export interface components {
              */
             status: "已畢業" | "已轉出";
         };
+        /**
+         * StudentMeasurementSnapshotItem
+         * @description GET /students/measurements-latest list 單筆。
+         */
+        StudentMeasurementSnapshotItem: {
+            /** Classroom Id */
+            classroom_id?: unknown;
+            last_measurement?: unknown;
+            /** Name */
+            name: unknown;
+            /** Student Id */
+            student_id: unknown;
+        };
         /** StudentUpdate */
         StudentUpdate: {
             /** Address */
@@ -18471,12 +19137,28 @@ export interface components {
             /** Related Student Ids */
             related_student_ids?: number[] | null;
         };
+        /**
+         * SubstitutePendingCountOut
+         * @description GET /portal/substitute-pending-count — 教師端代理待回應計數。
+         */
+        SubstitutePendingCountOut: {
+            /** Pending Count */
+            pending_count: unknown;
+        };
         /** SubstituteRespond */
         SubstituteRespond: {
             /** Action */
             action: string;
             /** Remark */
             remark?: string | null;
+        };
+        /**
+         * SubstituteRespondOut
+         * @description POST /portal/my-leaves/{id}/substitute-respond — 代理回應。
+         */
+        SubstituteRespondOut: {
+            /** Message */
+            message: unknown;
         };
         /** SummaryLogOut */
         SummaryLogOut: {
@@ -18633,6 +19315,30 @@ export interface components {
             /** Target Enrollment */
             target_enrollment: number;
         };
+        /**
+         * TeacherOptionOut
+         * @description GET /classrooms/teacher-options 單筆。
+         */
+        TeacherOptionOut: {
+            /** Id */
+            id: unknown;
+            /** Name */
+            name: unknown;
+        };
+        /**
+         * TeacherOut
+         * @description GET /teachers list 內單筆。
+         */
+        TeacherOut: {
+            /** Employee Id */
+            employee_id: unknown;
+            /** Id */
+            id: unknown;
+            /** Name */
+            name: unknown;
+            /** Title */
+            title?: unknown;
+        };
         /** TeacherReplyRequest */
         TeacherReplyRequest: {
             /** Body */
@@ -18720,6 +19426,22 @@ export interface components {
             /** Events */
             events: components["schemas"]["TimelineEvent"][];
         };
+        /**
+         * TodayMedicationSummaryOut
+         * @description GET /portfolio/today-medication 回傳。
+         */
+        TodayMedicationSummaryOut: {
+            /** Administered */
+            administered: unknown;
+            /** Date */
+            date: unknown;
+            /** Orders */
+            orders: unknown;
+            /** Pending */
+            pending: unknown;
+            /** Skipped */
+            skipped: unknown;
+        };
         /** TransitionIn */
         TransitionIn: {
             /** Classroom Id */
@@ -18766,6 +19488,14 @@ export interface components {
              * @description 解封原因（至少 10 字）。會寫入 record.remark 與 audit_summary，供日後稽核回溯為何重開結帳鎖定。
              */
             reason: string;
+        };
+        /**
+         * UnreadCountOut
+         * @description {unread_count: int} 共用 shape (家長端通知 / 訊息常用)。
+         */
+        UnreadCountOut: {
+            /** Unread Count */
+            unread_count: unknown;
         };
         /** UpdateUserRequest */
         UpdateUserRequest: {
@@ -22929,7 +23659,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ImportResultOut"];
+                    "application/json": components["schemas"]["schemas__appraisal__ImportResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -23376,7 +24106,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeleteResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -23684,9 +24414,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["DeleteResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -24593,7 +25321,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["MutationResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -24628,7 +25356,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeleteResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -24659,7 +25387,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeleteResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -24694,7 +25422,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeleteResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -24859,7 +25587,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["MutationResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -24925,7 +25653,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ClassroomUpdateResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -24956,7 +25684,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["MutationResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -25082,7 +25810,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["TeacherOptionOut"][];
                 };
             };
         };
@@ -25803,59 +26531,6 @@ export interface operations {
             };
         };
     };
-    debug_employee_salary_api_dev_employee_salary_debug_get: {
-        parameters: {
-            query: {
-                employee_id: number;
-                month: number;
-                year: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_salary_logic_api_dev_salary_logic_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
     list_actions_api_disciplinary_actions_get: {
         parameters: {
             query?: {
@@ -26141,7 +26816,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["MutationResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -26172,7 +26847,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["EmployeeOut"];
                 };
             };
             /** @description Validation Error */
@@ -26207,7 +26882,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["MutationResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -26238,7 +26913,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["MutationResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -26372,7 +27047,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeleteResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -26506,7 +27181,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeleteResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -26640,7 +27315,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeleteResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -26709,7 +27384,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["OffboardResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -26740,7 +27415,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ProbationAlertResponseOut"];
                 };
             };
             /** @description Validation Error */
@@ -26903,7 +27578,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeleteResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -28917,7 +29592,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["GradeOut"][];
                 };
             };
         };
@@ -28943,7 +29618,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["GradeOut"];
                 };
             };
             /** @description Validation Error */
@@ -29003,7 +29678,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["OkStatusOut"];
                 };
             };
         };
@@ -29399,7 +30074,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["MutationResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -29434,7 +30109,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["LeaveUpdateResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -29465,7 +30140,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeleteResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -29500,7 +30175,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["LeaveApproveResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -29598,7 +30273,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["schemas___common__ImportResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -29817,9 +30492,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["MedicationLogOut"];
                 };
             };
             /** @description Validation Error */
@@ -29854,9 +30527,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["MedicationLogOut"];
                 };
             };
             /** @description Validation Error */
@@ -29891,9 +30562,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["MedicationLogOut"];
                 };
             };
             /** @description Validation Error */
@@ -29959,7 +30628,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["MutationResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -29994,7 +30663,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeleteResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -30025,7 +30694,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeleteResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -30058,7 +30727,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["MeetingBatchCreateOut"];
                 };
             };
             /** @description Validation Error */
@@ -30185,7 +30854,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeleteResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -30565,7 +31234,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["OvertimeCreateResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -30600,7 +31269,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["OvertimeUpdateResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -30631,7 +31300,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["OvertimeDeleteResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -30670,7 +31339,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["OvertimeApproveResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -30736,7 +31405,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["OvertimeImportResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -30876,7 +31545,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["OkStatusOut"];
                 };
             };
             /** @description Validation Error */
@@ -30970,7 +31639,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["OkStatusOut"];
                 };
             };
             /** @description Validation Error */
@@ -30999,7 +31668,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["UnreadCountOut"];
                 };
             };
         };
@@ -31109,7 +31778,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["BindFirstChildOut"];
                 };
             };
             /** @description Validation Error */
@@ -31142,7 +31811,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["BindAdditionalChildOut"];
                 };
             };
             /** @description Validation Error */
@@ -31222,7 +31891,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ParentRefreshOut"];
                 };
             };
         };
@@ -32089,7 +32758,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["MessageRecallOut"];
                 };
             };
             /** @description Validation Error */
@@ -32288,7 +32957,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["OkStatusOut"];
                 };
             };
             /** @description Validation Error */
@@ -32317,7 +32986,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["UnreadCountOut"];
                 };
             };
         };
@@ -32675,7 +33344,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["OkStatusOut"];
                 };
             };
             /** @description Validation Error */
@@ -32706,7 +33375,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["OkStatusOut"];
                 };
             };
             /** @description Validation Error */
@@ -34349,7 +35018,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["MyLeaveStatsOut"];
                 };
             };
         };
@@ -34407,7 +35076,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["MutationResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -34442,7 +35111,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AttachmentUploadResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -34506,7 +35175,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeleteResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -34541,7 +35210,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SubstituteRespondOut"];
                 };
             };
             /** @description Validation Error */
@@ -34893,7 +35562,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["MessageRecallOut"];
                 };
             };
             /** @description Validation Error */
@@ -35125,7 +35794,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["OkStatusOut"];
                 };
             };
             /** @description Validation Error */
@@ -35154,7 +35823,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["UnreadCountOut"];
                 };
             };
         };
@@ -35400,7 +36069,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["RevealPhoneOut"];
                 };
             };
             /** @description Validation Error */
@@ -35429,7 +36098,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["StudentMeasurementSnapshotItem"][];
                 };
             };
         };
@@ -35449,7 +36118,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SubstitutePendingCountOut"];
                 };
             };
         };
@@ -35659,9 +36328,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["TodayMedicationSummaryOut"];
                 };
             };
         };
@@ -35722,7 +36389,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeleteResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -36278,7 +36945,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["MonthOptionOut"][];
                 };
             };
         };
@@ -36302,7 +36969,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["MonthOptionOut"];
                 };
             };
             /** @description Validation Error */
@@ -36333,7 +37000,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["MonthDeleteOut"];
                 };
             };
             /** @description Validation Error */
@@ -36444,7 +37111,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["RecruitmentOptionsOut"];
                 };
             };
             /** @description Validation Error */
@@ -36473,7 +37140,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PeriodOut"][];
                 };
             };
         };
@@ -36497,7 +37164,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PeriodOut"];
                 };
             };
             /** @description Validation Error */
@@ -36532,7 +37199,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PeriodOut"];
                 };
             };
             /** @description Validation Error */
@@ -36592,7 +37259,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PeriodOut"];
                 };
             };
             /** @description Validation Error */
@@ -38158,7 +38825,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeleteResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -38366,7 +39033,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeleteResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -39082,7 +39749,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["MutationResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -39148,7 +39815,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["MutationResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -39179,7 +39846,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["MutationResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -39246,9 +39913,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["AllergyListOut"];
                 };
             };
             /** @description Validation Error */
@@ -39283,9 +39948,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["AllergyOut"];
                 };
             };
             /** @description Validation Error */
@@ -39317,9 +39980,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["AllergyDeleteOut"];
                 };
             };
             /** @description Validation Error */
@@ -39355,9 +40016,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["AllergyOut"];
                 };
             };
             /** @description Validation Error */
@@ -39432,7 +40091,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["MutationResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -39670,7 +40329,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["GuardianListOut"];
                 };
             };
             /** @description Validation Error */
@@ -39705,7 +40364,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["GuardianOut"];
                 };
             };
             /** @description Validation Error */
@@ -39740,7 +40399,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["MutationResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -39951,9 +40610,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["MedicationOrderListOut"];
                 };
             };
             /** @description Validation Error */
@@ -39988,9 +40645,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["MedicationOrderOut"];
                 };
             };
             /** @description Validation Error */
@@ -40022,9 +40677,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["MedicationOrderOut"];
                 };
             };
             /** @description Validation Error */
@@ -40534,7 +41187,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["MutationResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -40569,7 +41222,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["MutationResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -40600,7 +41253,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["MutationResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -40877,7 +41530,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["MutationResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -40912,7 +41565,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["GuardianOut"];
                 };
             };
             /** @description Validation Error */
@@ -41079,7 +41732,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["TeacherOut"][];
                 };
             };
         };
@@ -41202,7 +41855,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["MutationResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -41268,7 +41921,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeleteResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -41299,7 +41952,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeleteResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -41367,7 +42020,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeleteResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -41435,7 +42088,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeleteResultOut"];
                 };
             };
             /** @description Validation Error */
