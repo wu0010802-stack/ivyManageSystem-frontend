@@ -399,8 +399,9 @@ const routes: RouteRecordRaw[] = [
             path: '/maintenance',
             name: 'maintenance',
             component: () => import('../views/MaintenanceView.vue'),
-            // public + noAuth：beforeEach 不擋；hideNav 給 layout 隱藏側邊欄/頂欄
-            meta: { title: '系統維護中', noAuth: true, public: true, hideNav: true }
+            // noAuth：beforeEach guard 不擋；bare：App.vue 直接 RouterView 不套 AdminLayout
+            // public + hideNav 為其它 layer 共用旗標（hideNav 目前未被消費，留作未來擴充標註）
+            meta: { title: '系統維護中', noAuth: true, public: true, bare: true, hideNav: true }
         },
 
         // ============ Admin Login / Change Password ============
