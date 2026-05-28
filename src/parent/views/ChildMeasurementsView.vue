@@ -1,21 +1,20 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
+import type { ChartData, ChartOptions } from 'chart.js'
+import { LineChart } from '@/composables/useChartJs'
 import { fetchChildMeasurementChart } from '../api/childMeasurements'
 import { toast } from '../utils/toast'
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let echarts: any = null
 
 const route = useRoute()
 const studentId = computed(() => Number(route.params.studentId))
 
 const metric = ref('height')
-const chartData = ref<{ height: { x: string; y: number | string }[]; weight: { x: string; y: number | string }[] }>({ height: [], weight: [] })
+const chartData = ref<{
+  height: { x: string; y: number | string }[]
+  weight: { x: string; y: number | string }[]
+}>({ height: [], weight: [] })
 const loading = ref(false)
-const chartEl = ref<HTMLElement | null>(null)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let chartInstance: any = null
 
 const METRIC_OPTIONS = [
   { value: 'height', label: '身高', unit: 'cm', icon: 'height' },
@@ -23,7 +22,9 @@ const METRIC_OPTIONS = [
 ]
 
 const currentMetric = computed(() => METRIC_OPTIONS.find((o) => o.value === metric.value))
-const currentSeries = computed(() => (chartData.value as Record<string, { x: string; y: number | string }[]>)[metric.value] || [])
+const currentSeries = computed(
+  () => (chartData.value as Record<string, { x: string; y: number | string }[]>)[metric.value] || [],
+)
 
 const latestValue = computed(() => {
   const s = currentSeries.value
@@ -38,13 +39,85 @@ const trend = computed(() => {
   return Number((latestValue.value - firstValue.value).toFixed(1))
 })
 
+const currentColor = computed(() => (metric.value === 'height' ? '#0d9053' : '#33aaaa'))
+const currentFill = computed(() =>
+  metric.value === 'height' ? 'rgba(13,144,83,0.08)' : 'rgba(51,170,170,0.08)',
+)
+
+const isEmpty = computed(() => currentSeries.value.length === 0)
+
+const lineData = computed<ChartData<'line', (number | null)[]>>(() => ({
+  labels: currentSeries.value.map((p) => p.x),
+  datasets: [
+    {
+      label: currentMetric.value?.label ?? '',
+      data: currentSeries.value.map((p) => {
+        const n = Number(p.y)
+        return Number.isFinite(n) ? n : null
+      }),
+      borderColor: currentColor.value,
+      backgroundColor: currentFill.value,
+      borderWidth: 2.5,
+      tension: 0.3,
+      pointStyle: 'circle',
+      pointRadius: 6,
+      pointBackgroundColor: currentColor.value,
+      pointBorderColor: currentColor.value,
+      fill: 'origin',
+    },
+  ],
+}))
+
+const lineOptions = computed<ChartOptions<'line'>>(() => ({
+  responsive: true,
+  maintainAspectRatio: false,
+  layout: { padding: { top: 4, left: 4, right: 4, bottom: 4 } },
+  plugins: {
+    legend: { display: false },
+    tooltip: {
+      backgroundColor: '#fffcf2',
+      borderColor: 'rgba(13,144,83,0.18)',
+      borderWidth: 1,
+      titleColor: '#392a1c',
+      bodyColor: '#392a1c',
+      titleFont: { size: 12 },
+      bodyFont: { size: 12 },
+      padding: 8,
+      callbacks: {
+        title: (items) => items[0]?.label ?? '',
+        label: (ctx) =>
+          `${currentMetric.value?.label ?? ''}：${ctx.parsed.y} ${currentMetric.value?.unit ?? ''}`,
+      },
+    },
+  },
+  scales: {
+    x: {
+      type: 'category',
+      ticks: {
+        maxRotation: 30,
+        minRotation: 30,
+        font: { size: 10 },
+        color: '#6b7280',
+      },
+      grid: { display: false },
+      border: { color: '#dceef5' },
+    },
+    y: {
+      type: 'linear',
+      beginAtZero: false,
+      ticks: { font: { size: 10 }, color: '#6b7280' },
+      grid: { color: '#f1f5ee' },
+      border: { display: false },
+    },
+  },
+}))
+
 async function load() {
   if (!studentId.value) return
   loading.value = true
   try {
     const r = await fetchChildMeasurementChart(studentId.value, 24)
     chartData.value = r.data
-    await render()
   } catch (e) {
     const err = e as Record<string, unknown>
     toast.error(String(err?.displayMessage || '載入失敗'))
@@ -53,74 +126,7 @@ async function load() {
   }
 }
 
-async function ensureEcharts() {
-  if (echarts) return
-  const core = await import('echarts/core')
-  const { LineChart } = await import('echarts/charts')
-  const { GridComponent, TooltipComponent } = await import('echarts/components')
-  const { CanvasRenderer } = await import('echarts/renderers')
-  core.use([LineChart, GridComponent, TooltipComponent, CanvasRenderer])
-  echarts = core
-}
-
-async function render() {
-  await ensureEcharts()
-  if (!chartEl.value) return
-  if (!chartInstance) chartInstance = echarts.init(chartEl.value)
-  const series = currentSeries.value
-  const color = metric.value === 'height' ? '#0d9053' : '#33aaaa'
-  chartInstance.setOption({
-    grid: { top: 16, left: 40, right: 16, bottom: 36 },
-    tooltip: {
-      trigger: 'axis',
-      backgroundColor: '#fffcf2',
-      borderColor: 'rgba(13, 144, 83, 0.18)',
-      textStyle: { color: '#392a1c', fontSize: 12 },
-    },
-    xAxis: {
-      type: 'category',
-      data: series.map((p) => p.x),
-      axisLabel: { rotate: 30, fontSize: 10, color: '#6b7280' },
-      axisLine: { lineStyle: { color: '#dceef5' } },
-      axisTick: { show: false },
-    },
-    yAxis: {
-      type: 'value',
-      scale: true,
-      axisLabel: { fontSize: 10, color: '#6b7280' },
-      axisLine: { show: false },
-      splitLine: { lineStyle: { color: '#f1f5ee' } },
-    },
-    series: [{
-      type: 'line',
-      smooth: true,
-      symbol: 'circle',
-      symbolSize: 6,
-      data: series.map((p) => Number(p.y)),
-      itemStyle: { color },
-      lineStyle: { width: 2.5, color },
-      areaStyle: { color: color, opacity: 0.08 },
-    }],
-  })
-}
-
-// P2-FE-Parent-5：原本 chartInstance 沒有 resize listener，旋轉螢幕/容器
-// 寬度變化時 chart 不會自動 reflow（echarts.init 取的是 mount 當下的尺寸）。
-// 加 window resize listener + onBeforeUnmount 對應 remove。
-function handleResize() {
-  chartInstance?.resize()
-}
-
-onMounted(() => {
-  load()
-  window.addEventListener('resize', handleResize)
-})
-watch(metric, render)
-onBeforeUnmount(() => {
-  window.removeEventListener('resize', handleResize)
-  chartInstance?.dispose()
-  chartInstance = null
-})
+onMounted(load)
 </script>
 
 <template>
@@ -151,8 +157,10 @@ onBeforeUnmount(() => {
     </div>
 
     <div class="pt-card chart-card">
-      <div ref="chartEl" class="chart" />
-      <p v-if="!loading && currentSeries.length === 0" class="empty-msg">
+      <div class="chart">
+        <LineChart v-if="!isEmpty" :data="lineData" :options="lineOptions" />
+      </div>
+      <p v-if="!loading && isEmpty" class="empty-msg">
         尚無 {{ currentMetric?.label }} 紀錄
       </p>
     </div>
