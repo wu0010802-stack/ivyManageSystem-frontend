@@ -1,0 +1,51 @@
+version: 2
+updates:
+  # npm dependencies
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Taipei"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "frontend"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+    groups:
+      fullcalendar:
+        patterns:
+          - "@fullcalendar/*"
+      sentry:
+        patterns:
+          - "@sentry/*"
+      vue-core:
+        patterns:
+          - "vue"
+          - "vue-router"
+          - "pinia"
+      vitest-suite:
+        patterns:
+          - "vitest"
+          - "@vitest/*"
+          - "@vue/test-utils"
+      typescript-tooling:
+        patterns:
+          - "typescript"
+          - "vue-tsc"
+          - "@vue/tsconfig"
+          - "@types/*"
+
+  # GitHub Actions third-party action 監控
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    labels:
+      - "dependencies"
+      - "ci"
+    commit-message:
+      prefix: "chore(ci)"
