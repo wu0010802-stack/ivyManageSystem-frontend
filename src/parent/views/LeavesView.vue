@@ -12,6 +12,7 @@ import {
   getLeave,
 } from '../api/leaves'
 import { toast } from '../utils/toast'
+import { useFriendlyError } from '@/composables/useFriendlyError'
 import { todayISO, dateToLocalISO } from '@/utils/format'
 import ParentBottomSheet from '../components/ParentBottomSheet.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
@@ -46,6 +47,20 @@ interface Attachment {
 
 const childrenStore = useChildrenStore()
 const { selectedId, ensureSelected } = useChildSelection()
+const { getFriendly } = useFriendlyError()
+
+/**
+ * 將 error 透過 useFriendlyError 對應至 toast，組 message + nextStep 為單行字串。
+ * 對齊 ContactBookView 行為：level 決定 toast variant；無 nextStep 仍可用 fallback。
+ */
+function _toastFriendly(err: unknown, fallback: string) {
+  const f = getFriendly(err)
+  const msg = f.message || fallback
+  const text = f.nextStep ? `${msg}｜${f.nextStep}` : msg
+  if (f.level === 'info') toast.info(text)
+  else if (f.level === 'warning') toast.warn(text)
+  else toast.error(text)
+}
 const items = ref<LeaveItem[]>([])
 const loading = ref(false)
 const showForm = ref(false)
@@ -180,8 +195,7 @@ async function openDetail(item: LeaveItem) {
     const { data } = await getLeave(item.id)
     detail.value = data as LeaveItem
   } catch (err) {
-    const e = err as Record<string, unknown>
-    toast.error(String(e?.displayMessage || '載入失敗'))
+    _toastFriendly(err, '載入失敗')
   }
 }
 
@@ -194,8 +208,7 @@ async function onAttUpload(file: File) {
     const { data } = await getLeave(detail.value.id)
     detail.value = data as LeaveItem
   } catch (err) {
-    const e = err as Record<string, unknown>
-    toast.error(String(e?.displayMessage || '上傳失敗'))
+    _toastFriendly(err, '上傳失敗')
   } finally {
     detailUploading.value = false
   }
@@ -216,8 +229,7 @@ async function doRemoveAttachment() {
     const { data } = await getLeave(detail.value.id)
     detail.value = data as LeaveItem
   } catch (err) {
-    const e = err as Record<string, unknown>
-    toast.error(String(e?.displayMessage || '刪除失敗'))
+    _toastFriendly(err, '刪除失敗')
   }
 }
 
@@ -261,8 +273,7 @@ async function fetchData() {
     const { data } = await listLeaves()
     items.value = (data as { items?: LeaveItem[] })?.items || []
   } catch (err) {
-    const e = err as Record<string, unknown>
-    toast.error(String(e?.displayMessage || '載入失敗'))
+    _toastFriendly(err, '載入失敗')
   } finally {
     loading.value = false
   }
@@ -306,8 +317,7 @@ async function submit() {
     showForm.value = false
     fetchData()
   } catch (err) {
-    const e = err as Record<string, unknown>
-    toast.error(String(e?.displayMessage || '送出失敗'))
+    _toastFriendly(err, '送出失敗')
   } finally {
     submitting.value = false
   }
@@ -326,8 +336,7 @@ async function doCancel() {
     toast.success('已取消')
     fetchData()
   } catch (err) {
-    const e = err as Record<string, unknown>
-    toast.error(String(e?.displayMessage || '取消失敗'))
+    _toastFriendly(err, '取消失敗')
   }
 }
 
