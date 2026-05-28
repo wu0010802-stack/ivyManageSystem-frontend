@@ -125,15 +125,15 @@ onMounted(fetchOvertimes)
                     <el-table-column prop="reason" label="原因" />
                     <el-table-column label="狀態" width="100">
                         <template #default="{ row }">
-                            <el-tag v-if="row.is_approved === true" type="success" size="small">已核准</el-tag>
-                            <el-tag v-else-if="row.is_approved === false" type="danger" size="small">已駁回</el-tag>
+                            <el-tag v-if="row.status === 'approved'" type="success" size="small">已核准</el-tag>
+                            <el-tag v-else-if="row.status === 'rejected'" type="danger" size="small">已駁回</el-tag>
                             <el-tag v-else type="warning" size="small">待核准</el-tag>
                         </template>
                     </el-table-column>
                     <el-table-column label="操作" width="90">
                         <template #default="{ row }">
                             <el-popconfirm
-                                v-if="row.is_approved === null || row.is_approved === undefined"
+                                v-if="row.status === 'pending'"
                                 title="確定撤回此加班申請？"
                                 confirm-button-text="撤回"
                                 cancel-button-text="取消"

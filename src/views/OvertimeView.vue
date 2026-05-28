@@ -446,15 +446,15 @@ watch(activeSection, async (value) => {
           <el-table-column prop="reason" label="原因" min-width="120" show-overflow-tooltip />
           <el-table-column label="審核" width="100">
             <template #default="scope">
-              <el-tag v-if="scope.row.is_approved === true" type="success" size="small">已核准</el-tag>
-              <el-tag v-else-if="scope.row.is_approved === false" type="danger" size="small">已駁回</el-tag>
+              <el-tag v-if="scope.row.status === 'approved'" type="success" size="small">已核准</el-tag>
+              <el-tag v-else-if="scope.row.status === 'rejected'" type="danger" size="small">已駁回</el-tag>
               <el-tag v-else type="warning" size="small">待審核</el-tag>
             </template>
           </el-table-column>
           <el-table-column label="操作" width="240" fixed="right">
             <template #default="scope">
-              <el-button v-if="scope.row.is_approved !== true && canApprove(scope.row)" type="success" size="small" link @click="approveOvertime(scope.row, true)">核准</el-button>
-              <el-button v-if="scope.row.is_approved !== false && canApprove(scope.row)" type="warning" size="small" link @click="approveOvertime(scope.row, false)">駁回</el-button>
+              <el-button v-if="scope.row.status !== 'approved' && canApprove(scope.row)" type="success" size="small" link @click="approveOvertime(scope.row, true)">核准</el-button>
+              <el-button v-if="scope.row.status !== 'rejected' && canApprove(scope.row)" type="warning" size="small" link @click="approveOvertime(scope.row, false)">駁回</el-button>
               <el-button type="primary" size="small" link @click="openEdit(scope.row)">編輯</el-button>
               <el-button type="danger" size="small" link @click="deleteOvertime(scope.row)" :loading="deleteOvertimeLoading">刪除</el-button>
               <el-button type="info" size="small" link @click="openApprovalLogs(scope.row)">記錄</el-button>

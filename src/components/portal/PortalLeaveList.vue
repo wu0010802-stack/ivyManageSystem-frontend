@@ -171,7 +171,7 @@ defineExpose({ fetchLeaves })
             </el-button>
             <span v-else class="text-secondary" style="font-size: 12px;">—</span>
             <el-button
-              v-if="row.is_approved === null"
+              v-if="row.status === 'pending'"
               link type="primary" size="small"
               @click="openSupplement(row)"
             >補件</el-button>
@@ -179,8 +179,8 @@ defineExpose({ fetchLeaves })
         </el-table-column>
         <el-table-column label="狀態" width="120">
           <template #default="{ row }">
-            <el-tag v-if="row.is_approved === true" type="success" size="small">已核准</el-tag>
-            <template v-else-if="row.is_approved === false">
+            <el-tag v-if="row.status === 'approved'" type="success" size="small">已核准</el-tag>
+            <template v-else-if="row.status === 'rejected'">
               <el-tag type="danger" size="small">已駁回</el-tag>
               <el-tooltip v-if="row.rejection_reason" :content="`駁回原因：${row.rejection_reason}`" placement="top">
                 <el-icon style="margin-left:4px;color:var(--el-color-danger);cursor:help;vertical-align:middle;"><InfoFilled /></el-icon>

@@ -41,7 +41,7 @@ const DAYS = [
     is_late: false, late_minutes: 0, is_early_leave: false,
     is_missing_punch_in: false, is_missing_punch_out: false,
     leave_type_label: '事假', shift_name: null, scheduled_start: null, scheduled_end: null,
-    leave_requests: [{ leave_type_label: '事假', leave_hours: 8, is_approved: true, reason: '' }],
+    leave_requests: [{ leave_type_label: '事假', leave_hours: 8, status: 'approved', reason: '' }],
     overtime_requests: [],
   },
 ]
