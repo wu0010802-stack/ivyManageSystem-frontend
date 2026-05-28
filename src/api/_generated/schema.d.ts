@@ -12902,6 +12902,21 @@ export interface components {
             /** Student Id */
             student_id: number;
         };
+        /**
+         * ActivityAttendanceBatchUpdateResultOut
+         * @description PUT /attendance/sessions/{id}/records 批次點名 upsert 回應。
+         *
+         *     updated = 實際寫入（既有報名）筆數；skipped = 已退課 / 已駁回 / 未報該課
+         *     被過濾掉的筆數。前端據此顯示「成功 N 筆，跳過 M 筆」。
+         */
+        ActivityAttendanceBatchUpdateResultOut: {
+            /** Ok */
+            ok: unknown;
+            /** Skipped */
+            skipped: unknown;
+            /** Updated */
+            updated: unknown;
+        };
         /** ActivityRateAggregateOut */
         ActivityRateAggregateOut: {
             /** Activity Rate */
@@ -12914,6 +12929,150 @@ export interface components {
             registered_for_activity: number;
             /** Suggested Score Delta */
             suggested_score_delta: string;
+        };
+        /**
+         * ActivitySessionCreateResultOut
+         * @description POST /attendance/sessions 201 回應（單筆 session 完整欄位）。
+         *
+         *     與 list item 同型但無統計欄（剛建立 recorded/present 皆 0，前端不依賴）。
+         */
+        ActivitySessionCreateResultOut: {
+            /** Course Id */
+            course_id: unknown;
+            /** Course Name */
+            course_name: unknown;
+            /** Created At */
+            created_at?: unknown;
+            /** Created By */
+            created_by?: unknown;
+            /** Id */
+            id: unknown;
+            /** Notes */
+            notes: unknown;
+            /** Session Date */
+            session_date: unknown;
+        };
+        /**
+         * ActivitySessionDeleteResultOut
+         * @description DELETE /attendance/sessions/{id} 回應。
+         *
+         *     沿用既有 {"ok": True} shape，未改商業邏輯。
+         *     不用 _common.OkStatusOut（欄位是 status:str）或 DeleteResultOut（message:str），
+         *     重用會 silent rename 前端欄位。
+         */
+        ActivitySessionDeleteResultOut: {
+            /** Ok */
+            ok: unknown;
+        };
+        /**
+         * ActivitySessionDetailOut
+         * @description GET /attendance/sessions/{id} 詳情。
+         *
+         *     groups 僅當 query group_by=classroom 時 router 才回，否則為 None。
+         */
+        ActivitySessionDetailOut: {
+            /** Absent Count */
+            absent_count: unknown;
+            /** Course Id */
+            course_id: unknown;
+            /** Course Name */
+            course_name: unknown;
+            /** Created At */
+            created_at?: unknown;
+            /** Created By */
+            created_by?: unknown;
+            /** Groups */
+            groups?: unknown;
+            /** Id */
+            id: unknown;
+            /** Notes */
+            notes: unknown;
+            /** Present Count */
+            present_count: unknown;
+            /** Session Date */
+            session_date: unknown;
+            /** Students */
+            students: unknown;
+            /** Total */
+            total: unknown;
+        };
+        /**
+         * ActivitySessionGroupOut
+         * @description get_session_detail group_by=classroom 時 groups[] 單筆。
+         *
+         *     classroom_id=None 代表「未分班」（router 端永遠排在 groups 末尾）。
+         */
+        ActivitySessionGroupOut: {
+            /** Classroom Id */
+            classroom_id?: unknown;
+            /** Classroom Name */
+            classroom_name: unknown;
+            /** Students */
+            students: unknown;
+        };
+        /**
+         * ActivitySessionListItemOut
+         * @description GET /attendance/sessions items[] 單筆（含出席統計）。
+         *
+         *     course_name 為 ActivityCourse.name 顯示，非 PII（課程名）。
+         *     created_by 為操作者 username，非家長/學生 PII。
+         */
+        ActivitySessionListItemOut: {
+            /** Course Id */
+            course_id: unknown;
+            /** Course Name */
+            course_name: unknown;
+            /** Created At */
+            created_at?: unknown;
+            /** Created By */
+            created_by?: unknown;
+            /** Id */
+            id: unknown;
+            /** Notes */
+            notes: unknown;
+            /** Present Count */
+            present_count: unknown;
+            /** Recorded Count */
+            recorded_count: unknown;
+            /** Session Date */
+            session_date?: unknown;
+        };
+        /**
+         * ActivitySessionListOut
+         * @description GET /attendance/sessions 分頁回應。
+         */
+        ActivitySessionListOut: {
+            /** Items */
+            items: unknown;
+            /** Limit */
+            limit: unknown;
+            /** Skip */
+            skip: unknown;
+            /** Total */
+            total: unknown;
+        };
+        /**
+         * ActivitySessionStudentItemOut
+         * @description get_session_detail / groups[] 共用的學生點名行。
+         *
+         *     is_present=None 代表「未點名」（與 False=缺席 必須區分，前端依此決定顯示）。
+         *     class_name 由 router 端融合：優先真實 Classroom.name，否則 ActivityRegistration.class_name 快照，皆無則空字串。
+         */
+        ActivitySessionStudentItemOut: {
+            /** Attendance Notes */
+            attendance_notes: unknown;
+            /** Class Name */
+            class_name: unknown;
+            /** Classroom Id */
+            classroom_id?: unknown;
+            /** Is Present */
+            is_present?: unknown;
+            /** Registration Id */
+            registration_id: unknown;
+            /** Student Id */
+            student_id?: unknown;
+            /** Student Name */
+            student_name: unknown;
         };
         /**
          * AddCourseRequest
@@ -18807,6 +18966,152 @@ export interface components {
             /** Records */
             records: components["schemas"]["PortalAttendanceRecordItem"][];
         };
+        /**
+         * PortalParentMessageAttachmentOut
+         * @description 訊息附件單筆（_attachment_to_dict 序列化結果）。
+         *
+         *     回傳於：
+         *     - POST /threads/{id}/messages/{mid}/attach 的 response（單張）
+         *     - 被 PortalParentMessageOut.attachments 內嵌
+         */
+        PortalParentMessageAttachmentOut: {
+            /** Display Url */
+            display_url?: unknown;
+            /** Id */
+            id: unknown;
+            /** Mime Type */
+            mime_type?: unknown;
+            /** Original Filename */
+            original_filename?: unknown;
+            /** Size Bytes */
+            size_bytes?: unknown;
+            /** Thumb Url */
+            thumb_url?: unknown;
+            /** Url */
+            url?: unknown;
+        };
+        /**
+         * PortalParentMessageCreateThreadOut
+         * @description POST /portal/parent-messages/threads — 教師發起新 thread + 第一則訊息。
+         *
+         *     嵌套 shape：thread summary + 第一則 message + idempotent_replay。
+         */
+        PortalParentMessageCreateThreadOut: {
+            /** Idempotent Replay */
+            idempotent_replay: unknown;
+            message: unknown;
+            thread: unknown;
+        };
+        /**
+         * PortalParentMessageListOut
+         * @description GET /portal/parent-messages/threads/{id}/messages — cursor pagination
+         *     訊息列表（DESC by id）。
+         */
+        PortalParentMessageListOut: {
+            /** Items */
+            items: unknown;
+            /** Next Cursor */
+            next_cursor?: unknown;
+        };
+        /**
+         * PortalParentMessageOut
+         * @description 單則訊息（_message_to_dict 序列化結果）。
+         *
+         *     回傳於：
+         *     - PortalParentMessageListOut.items 元素
+         *     - PortalParentMessageCreateThreadOut.message
+         *     - PortalParentMessageReplyOut 透過繼承共用欄位
+         */
+        PortalParentMessageOut: {
+            /** Attachments */
+            attachments?: unknown;
+            /** Body */
+            body?: unknown;
+            /** Client Request Id */
+            client_request_id?: unknown;
+            /** Created At */
+            created_at?: unknown;
+            /** Deleted */
+            deleted: unknown;
+            /** Id */
+            id: unknown;
+            /** Sender Role */
+            sender_role: unknown;
+            /** Sender User Id */
+            sender_user_id: unknown;
+            /** Source */
+            source: unknown;
+            /** Thread Id */
+            thread_id: unknown;
+        };
+        /**
+         * PortalParentMessageReplyOut
+         * @description POST /portal/parent-messages/threads/{id}/messages — 教師回覆。
+         *
+         *     Flat shape：繼承 PortalParentMessageOut 所有欄位 + idempotent_replay。
+         *     對應 router 端 `{**_message_to_dict(...), "idempotent_replay": replayed}`。
+         */
+        PortalParentMessageReplyOut: {
+            /** Attachments */
+            attachments?: unknown;
+            /** Body */
+            body?: unknown;
+            /** Client Request Id */
+            client_request_id?: unknown;
+            /** Created At */
+            created_at?: unknown;
+            /** Deleted */
+            deleted: unknown;
+            /** Id */
+            id: unknown;
+            /** Idempotent Replay */
+            idempotent_replay: unknown;
+            /** Sender Role */
+            sender_role: unknown;
+            /** Sender User Id */
+            sender_user_id: unknown;
+            /** Source */
+            source: unknown;
+            /** Thread Id */
+            thread_id: unknown;
+        };
+        /**
+         * PortalParentMessageThreadListOut
+         * @description GET /portal/parent-messages/threads — cursor pagination thread 列表。
+         */
+        PortalParentMessageThreadListOut: {
+            /** Items */
+            items: unknown;
+            /** Next Cursor */
+            next_cursor?: unknown;
+        };
+        /**
+         * PortalParentMessageThreadOut
+         * @description 單筆 thread summary（_thread_summary 序列化結果）。
+         *
+         *     回傳於：
+         *     - GET /threads/{id}（單筆）
+         *     - PortalParentMessageThreadListOut.items 元素
+         *     - PortalParentMessageCreateThreadOut.thread
+         */
+        PortalParentMessageThreadOut: {
+            /** Id */
+            id: unknown;
+            /** Last Message At */
+            last_message_at?: unknown;
+            /** Last Message Preview */
+            last_message_preview?: unknown;
+            /** Parent Name */
+            parent_name?: unknown;
+            /** Parent User Id */
+            parent_user_id: unknown;
+            /** Student Id */
+            student_id: unknown;
+            /** Student Name */
+            student_name?: unknown;
+            /** Unread Count */
+            unread_count: unknown;
+        };
         /** POSCheckoutItem */
         POSCheckoutItem: {
             /**
@@ -19600,6 +19905,102 @@ export interface components {
             /** Sources */
             sources: unknown;
         };
+        /**
+         * RecruitmentRecordConvertOut
+         * @description POST /recruitment/records/{record_id}/convert — 招生訪視 → 正式學生轉化結果。
+         *
+         *     本 endpoint 已 deprecated（改用 POST /recruitment/funnel/visits/{visit_id}/transition），
+         *     保留 schema 維持向後相容。
+         */
+        RecruitmentRecordConvertOut: {
+            /** Change Log Id */
+            change_log_id?: unknown;
+            /** Message */
+            message: unknown;
+            /** Primary Guardian Id */
+            primary_guardian_id?: unknown;
+            /** Recruitment Visit Id */
+            recruitment_visit_id: unknown;
+            /** Student Id */
+            student_id: unknown;
+        };
+        /**
+         * RecruitmentRecordImportResultOut
+         * @description POST /recruitment/import — Excel 批次匯入結果。
+         *
+         *     與 _common.ImportResultOut 不同：本 endpoint 僅回計數，不回失敗明細
+         *     （match shared._to_dict 既有行為，避免破壞既有前端契約）。
+         */
+        RecruitmentRecordImportResultOut: {
+            /** Inserted */
+            inserted: unknown;
+            /** Skipped */
+            skipped: unknown;
+        };
+        /**
+         * RecruitmentRecordListOut
+         * @description GET /recruitment/records — 分頁回傳。
+         */
+        RecruitmentRecordListOut: {
+            /** Page */
+            page: unknown;
+            /** Page Size */
+            page_size: unknown;
+            /** Records */
+            records: unknown;
+            /** Total */
+            total: unknown;
+        };
+        /**
+         * RecruitmentRecordOut
+         * @description 招生訪視紀錄單筆 — 對應 api/recruitment/shared._to_dict shape。
+         */
+        RecruitmentRecordOut: {
+            /** Address */
+            address?: unknown;
+            /** Birthday */
+            birthday?: unknown;
+            /** Child Name */
+            child_name?: unknown;
+            /** Created At */
+            created_at?: unknown;
+            /** Deposit Collector */
+            deposit_collector?: unknown;
+            /** District */
+            district?: unknown;
+            /** Enrolled */
+            enrolled?: unknown;
+            /** Grade */
+            grade?: unknown;
+            /** Has Deposit */
+            has_deposit?: unknown;
+            /** Id */
+            id: unknown;
+            /** Month */
+            month?: unknown;
+            /** No Deposit Reason */
+            no_deposit_reason?: unknown;
+            /** No Deposit Reason Detail */
+            no_deposit_reason_detail?: unknown;
+            /** Notes */
+            notes?: unknown;
+            /** Parent Response */
+            parent_response?: unknown;
+            /** Phone */
+            phone?: unknown;
+            /** Referrer */
+            referrer?: unknown;
+            /** Seq No */
+            seq_no?: unknown;
+            /** Source */
+            source?: unknown;
+            /** Transfer Term */
+            transfer_term?: unknown;
+            /** Updated At */
+            updated_at?: unknown;
+            /** Visit Date */
+            visit_date?: unknown;
+        };
         /** RecruitmentVisitCreate */
         RecruitmentVisitCreate: {
             /** Address */
@@ -20279,6 +20680,46 @@ export interface components {
             /** Year */
             year: number;
         };
+        /**
+         * ScheduleDayItem
+         * @description my-schedule 內某一日的排班資訊。
+         */
+        ScheduleDayItem: {
+            /** Date */
+            date: unknown;
+            /** Day */
+            day: unknown;
+            /** Is Makeup Workday */
+            is_makeup_workday: unknown;
+            /** Is Override */
+            is_override: unknown;
+            /** Is Weekend */
+            is_weekend: unknown;
+            /** Shift Name */
+            shift_name?: unknown;
+            /** Shift Type Id */
+            shift_type_id?: unknown;
+            /** Weekday */
+            weekday: unknown;
+            /** Work End */
+            work_end?: unknown;
+            /** Work Start */
+            work_start?: unknown;
+        };
+        /**
+         * ScheduleMyScheduleOut
+         * @description GET /portal/my-schedule — 教師當月排班。
+         */
+        ScheduleMyScheduleOut: {
+            /** Days */
+            days: unknown;
+            /** Employee Name */
+            employee_name: unknown;
+            /** Month */
+            month: unknown;
+            /** Year */
+            year: unknown;
+        };
         /** SchedulerMetric */
         SchedulerMetric: {
             /** Consecutive Failures */
@@ -20308,6 +20749,114 @@ export interface components {
             };
             /** Worker Pid */
             worker_pid: number;
+        };
+        /**
+         * ScheduleSwapCandidateOut
+         * @description GET /portal/swap-candidates list 單筆（其他老師當日班別）。
+         */
+        ScheduleSwapCandidateOut: {
+            /** Employee Id */
+            employee_id: unknown;
+            /** Has Pending Swap */
+            has_pending_swap: unknown;
+            /** Name */
+            name: unknown;
+            /** Shift Name */
+            shift_name: unknown;
+            /** Shift Type Id */
+            shift_type_id?: unknown;
+            /** Work End */
+            work_end?: unknown;
+            /** Work Start */
+            work_start?: unknown;
+        };
+        /**
+         * ScheduleSwapCreateOut
+         * @description POST /portal/swap-requests — 發起換班申請。
+         *
+         *     warnings 為週工時超時非阻斷預警（雙方任一週工時超勞基法上限即附加）。
+         */
+        ScheduleSwapCreateOut: {
+            /** Id */
+            id: unknown;
+            /** Message */
+            message: unknown;
+            /** Warnings */
+            warnings?: unknown;
+        };
+        /**
+         * ScheduleSwapPendingCountOut
+         * @description GET /portal/swap-pending-count — 待回覆換班數（badge 用）。
+         */
+        ScheduleSwapPendingCountOut: {
+            /** Pending Count */
+            pending_count: unknown;
+        };
+        /**
+         * ScheduleSwapRequestOut
+         * @description GET /portal/swap-requests list 單筆（自己發起 + 收到的換班申請）。
+         */
+        ScheduleSwapRequestOut: {
+            /** Created At */
+            created_at?: unknown;
+            /** Id */
+            id: unknown;
+            /** Is Mine */
+            is_mine: unknown;
+            /** Reason */
+            reason?: unknown;
+            /** Requester Id */
+            requester_id: unknown;
+            /** Requester Name */
+            requester_name: unknown;
+            /** Requester Shift */
+            requester_shift: unknown;
+            /** Status */
+            status: unknown;
+            /** Swap Date */
+            swap_date: unknown;
+            /** Target Id */
+            target_id: unknown;
+            /** Target Name */
+            target_name: unknown;
+            /** Target Remark */
+            target_remark?: unknown;
+            /** Target Responded At */
+            target_responded_at?: unknown;
+            /** Target Shift */
+            target_shift: unknown;
+        };
+        /**
+         * ScheduleSwapRespondOut
+         * @description POST /portal/swap-requests/{id}/respond — 接受/拒絕回傳。
+         *
+         *     接受時 warnings 為週工時超時非阻斷預警；拒絕時無 warnings。
+         */
+        ScheduleSwapRespondOut: {
+            /** Message */
+            message: unknown;
+            /** Warnings */
+            warnings?: unknown;
+        };
+        /**
+         * ScheduleWeeklyHoursWarning
+         * @description 週工時超時 warning（utils/schedule_utils.check_weekly_hours_warning）。
+         */
+        ScheduleWeeklyHoursWarning: {
+            /** Calculated Hours */
+            calculated_hours: unknown;
+            /** Code */
+            code: unknown;
+            /** Employee Id */
+            employee_id: unknown;
+            /** Employee Name */
+            employee_name: unknown;
+            /** Limit Hours */
+            limit_hours: unknown;
+            /** Message */
+            message: unknown;
+            /** Week Start */
+            week_start: unknown;
         };
         /**
          * ImportResultOut
@@ -22051,7 +22600,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ActivitySessionListOut"];
                 };
             };
             /** @description Validation Error */
@@ -22084,7 +22633,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ActivitySessionCreateResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -22117,7 +22666,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ActivitySessionDetailOut"];
                 };
             };
             /** @description Validation Error */
@@ -22148,7 +22697,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ActivitySessionDeleteResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -22214,7 +22763,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ActivityAttendanceBatchUpdateResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -37616,7 +38165,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ScheduleMyScheduleOut"];
                 };
             };
             /** @description Validation Error */
@@ -37774,7 +38323,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PortalParentMessageThreadListOut"];
                 };
             };
             /** @description Validation Error */
@@ -37807,7 +38356,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PortalParentMessageCreateThreadOut"];
                 };
             };
             /** @description Validation Error */
@@ -37838,7 +38387,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PortalParentMessageThreadOut"];
                 };
             };
             /** @description Validation Error */
@@ -37872,7 +38421,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PortalParentMessageListOut"];
                 };
             };
             /** @description Validation Error */
@@ -37907,7 +38456,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PortalParentMessageReplyOut"];
                 };
             };
             /** @description Validation Error */
@@ -37943,7 +38492,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PortalParentMessageAttachmentOut"];
                 };
             };
             /** @description Validation Error */
@@ -38320,7 +38869,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ScheduleSwapCandidateOut"][];
                 };
             };
             /** @description Validation Error */
@@ -38349,7 +38898,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ScheduleSwapPendingCountOut"];
                 };
             };
         };
@@ -38369,7 +38918,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ScheduleSwapRequestOut"][];
                 };
             };
         };
@@ -38393,7 +38942,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ScheduleSwapCreateOut"];
                 };
             };
             /** @description Validation Error */
@@ -38424,7 +38973,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeleteResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -38459,7 +39008,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ScheduleSwapRespondOut"];
                 };
             };
             /** @description Validation Error */
@@ -38907,7 +39456,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["RecruitmentRecordImportResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -39510,7 +40059,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["RecruitmentRecordListOut"];
                 };
             };
             /** @description Validation Error */
@@ -39543,7 +40092,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["RecruitmentRecordOut"];
                 };
             };
             /** @description Validation Error */
@@ -39578,7 +40127,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["RecruitmentRecordOut"];
                 };
             };
             /** @description Validation Error */
@@ -39642,7 +40191,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["RecruitmentRecordConvertOut"];
                 };
             };
             /** @description Validation Error */
