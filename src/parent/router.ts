@@ -63,6 +63,13 @@ const routes: RouteRecordRaw[] = [
       meta: { title: '我的', tab: 'me' },
     },
     {
+      // P0c-3 個人資料權利專區（個資法 §3 五權 UX）
+      path: '/me/privacy-rights',
+      name: 'parent-privacy-rights',
+      component: () => import('./views/PrivacyRightsView.vue'),
+      meta: { title: '個人資料權利', tab: 'me' },
+    },
+    {
       path: '/more',
       redirect: '/me',
     },

@@ -84,6 +84,8 @@ onMounted(async () => {
 const PREFS = [
   { key: 'notifications', label: '通知偏好', icon: 'notifications', path: '/notifications/preferences', hint: '推播 / 訊息 / 公告' },
   { key: 'fees', label: '費用查詢', icon: 'payments', path: '/fees', hint: '繳費紀錄與證明' },
+  // P0c-3 法規/個資權利 (個資法 §3 五權)
+  { key: 'privacy_rights', label: '個人資料權利', icon: 'gpp_good', path: '/me/privacy-rights', hint: '同意紀錄 / 申請刪除 / 更正 / 停止處理' },
 ]
 </script>
 
