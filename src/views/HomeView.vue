@@ -16,6 +16,8 @@ import {
 import StatCard from '@/components/common/StatCard.vue'
 import { useDashboardSections } from '@/composables'
 import DisabilityExpirySection from '@/components/dashboard/DisabilityExpirySection.vue'
+import IntegrationsHealthCard from '@/components/dashboard/IntegrationsHealthCard.vue'
+import { hasPermission } from '@/utils/auth'
 import QuickAddMenu, { type QuickAddDialogType } from '@/components/dashboard/QuickAddMenu.vue'
 import QuickOvertimeDialog from '@/components/dashboard/quick-add/QuickOvertimeDialog.vue'
 import QuickLeaveDialog from '@/components/dashboard/quick-add/QuickLeaveDialog.vue'
@@ -60,6 +62,9 @@ const {
   anomalyTagType,
   navigateTo,
 } = useDashboardSections()
+
+// 外部整合健康徽章：AUDIT_LOGS 權限才看得到（與 /api/internal/integrations/health 對齊）
+const showIntegrationsHealth = hasPermission('AUDIT_LOGS')
 
 // 今日待辦：把分散在右欄/出勤摘要的「需要處理」數字升為頁面前段第一視覺
 // Why: 既有 dashboard 全是統計數字（系統有什麼），把待審/異常/未點名前置成
@@ -428,6 +433,9 @@ const typedEventTagType = eventTagType as EventTagTypeMap
 
         <!-- 身障鑑定即將到期 -->
         <DisabilityExpirySection />
+
+        <!-- 外部整合健康徽章（Phase 4 P1 resilience；AUDIT_LOGS 權限） -->
+        <IntegrationsHealthCard v-if="showIntegrationsHealth" />
 
         <!-- 今日打卡異常 -->
         <div

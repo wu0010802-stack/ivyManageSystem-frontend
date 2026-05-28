@@ -3446,7 +3446,7 @@ export interface paths {
         get?: never;
         /**
          * Reset Password
-         * @description 重設密碼
+         * @description 重設密碼（admin 代為操作）
          */
         put: operations["reset_password_api_auth_users__user_id__reset_password_put"];
         post?: never;
@@ -5704,6 +5704,26 @@ export interface paths {
          * @description 匯入勞健保級距表
          */
         post: operations["import_insurance_table_api_insurance_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/internal/integrations/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Integrations Health
+         * @description 回傳外部整合系統的即時健康狀態。
+         */
+        get: operations["get_integrations_health_api_internal_integrations_health_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -15254,6 +15274,11 @@ export interface components {
             /** Student Id */
             student_id: string;
         };
+        /** ExternalHttpHealth */
+        ExternalHttpHealth: {
+            /** Breaker */
+            breaker: string;
+        };
         /**
          * FaqAction
          * @description FAQ 答案附帶的 CTA 動作。
@@ -15919,6 +15944,12 @@ export interface components {
              */
             table_type: string;
         };
+        /** IntegrationsHealthResponse */
+        IntegrationsHealthResponse: {
+            external_http: components["schemas"]["ExternalHttpHealth"];
+            line: components["schemas"]["LineHealth"];
+            supabase: components["schemas"]["SupabaseHealth"];
+        };
         /** IvykidsBackendSyncPayload */
         IvykidsBackendSyncPayload: {
             /**
@@ -16094,6 +16125,21 @@ export interface components {
             is_enabled?: boolean | null;
             /** Target Id */
             target_id?: string | null;
+        };
+        /** LineHealth */
+        LineHealth: {
+            /** Breaker */
+            breaker: string;
+            /** Retry Final Failed 24H */
+            retry_final_failed_24h: number;
+            /** Retry Pending */
+            retry_pending: number;
+            /** Token Consecutive Failures */
+            token_consecutive_failures: number;
+            /** Token Healthy */
+            token_healthy: boolean | null;
+            /** Token Last Check At */
+            token_last_check_at: string | null;
         };
         /** LoginRequest */
         LoginRequest: {
@@ -18485,6 +18531,13 @@ export interface components {
          * @enum {string}
          */
         SummaryStatus: "DRAFT" | "SUPERVISOR_SIGNED" | "ACCOUNTING_SIGNED" | "FINALIZED";
+        /** SupabaseHealth */
+        SupabaseHealth: {
+            /** Breaker */
+            breaker: string;
+            /** Pending Uploads */
+            pending_uploads: number;
+        };
         /** SupplyCreate */
         SupplyCreate: {
             /** Name */
@@ -29136,6 +29189,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_integrations_health_api_internal_integrations_health_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationsHealthResponse"];
                 };
             };
         };

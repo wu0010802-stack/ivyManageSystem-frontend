@@ -145,6 +145,7 @@ declare module 'vue' {
     HealthTab: typeof import('./src/components/portfolio/HealthTab.vue')['default']
     IncidentEditorDialog: typeof import('./src/components/student/IncidentEditorDialog.vue')['default']
     IncidentSection: typeof import('./src/components/student/academic-affairs/IncidentSection.vue')['default']
+    IntegrationsHealthCard: typeof import('./src/components/dashboard/IntegrationsHealthCard.vue')['default']
     ItemRadarChart: typeof import('./src/components/portal/growth/ItemRadarChart.vue')['default']
     IvyCampusCompetition: typeof import('./src/components/recruitment/IvyCampusCompetition.vue')['default']
     IvyRibbon: typeof import('./src/components/brand/IvyRibbon.vue')['default']
