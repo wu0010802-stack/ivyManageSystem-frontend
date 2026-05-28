@@ -9,13 +9,21 @@ import {
 } from '../services/liff'
 import { liffLogin } from '../api/auth'
 import { useParentAuthStore } from '../stores/parentAuth'
+import { useFriendlyError } from '@/composables/useFriendlyError'
+import type { FriendlyError } from '@/utils/errorCodeRegistry'
 import BrandMark from '@/components/brand/BrandMark.vue'
 
 const router = useRouter()
 const authStore = useParentAuthStore()
+const { getFriendly } = useFriendlyError()
 
 const status = ref<'init' | 'loading' | 'error'>('init')
-const errorMessage = ref('')
+// friendly error 狀態：含 message + nextStep（命中 LINE_BINDING_* / LINE_PROFILE_FETCH_FAILED）
+const errorState = ref<FriendlyError | null>(null)
+
+function _setLocalError(message: string, nextStep?: string) {
+  errorState.value = { message, nextStep, level: 'error' }
+}
 
 function isIdTokenExpiredError(err: unknown) {
   const e = err as Record<string, unknown> | null | undefined
@@ -26,13 +34,15 @@ function isIdTokenExpiredError(err: unknown) {
 
 async function startLogin({ forceFresh = false } = {}) {
   status.value = 'init'
-  errorMessage.value = ''
+  errorState.value = null
   try {
     await initLiff()
   } catch (err: unknown) {
     status.value = 'error'
-    errorMessage.value =
-      (err instanceof Error ? err.message : String(err)) || 'LIFF 初始化失敗，請確認 VITE_LIFF_ID 設定'
+    _setLocalError(
+      (err instanceof Error ? err.message : String(err)) || 'LIFF 初始化失敗，請確認 VITE_LIFF_ID 設定',
+      '請重新開啟 LIFF 頁面；持續發生請聯絡園所',
+    )
     return
   }
 
@@ -76,10 +86,10 @@ async function startLogin({ forceFresh = false } = {}) {
     ) {
       return
     }
-    const e = err as Record<string, unknown>
     status.value = 'error'
-    errorMessage.value =
-      String(e?.displayMessage || e?.message || '登入失敗，請稍後再試')
+    // useFriendlyError 處理 LINE_BINDING_EXPIRED / LINE_BINDING_NOT_FOUND /
+    // LINE_PROFILE_FETCH_FAILED 等 envelope code；未知 code fallback displayMessage
+    errorState.value = getFriendly(err)
   }
 }
 
@@ -120,10 +130,22 @@ onMounted(() => startLogin())
       >
         驗證您的身分…
       </p>
-      <template v-else-if="status === 'error'">
-        <p class="error" role="alert" aria-live="assertive">
-          {{ errorMessage }}
-        </p>
+      <template v-else-if="status === 'error' && errorState">
+        <div
+          class="error"
+          role="alert"
+          aria-live="assertive"
+          data-testid="login-error"
+        >
+          <p class="error-message">{{ errorState.message }}</p>
+          <p
+            v-if="errorState.nextStep"
+            class="error-next-step"
+            data-testid="login-error-next-step"
+          >
+            💡 {{ errorState.nextStep }}
+          </p>
+        </div>
         <button type="button" class="pt-action-btn retry" @click="manualRetry">
           <span class="material-symbols-rounded" aria-hidden="true">refresh</span>
           重試登入
@@ -219,6 +241,19 @@ onMounted(() => startLogin())
   padding: 12px 14px;
   border-radius: 12px;
   text-align: left;
+}
+.error .error-message {
+  margin: 0;
+  font-weight: 500;
+}
+.error .error-next-step {
+  margin: 6px 0 0;
+  padding-top: 6px;
+  border-top: 1px dashed var(--coral-300, #ffb5ad);
+  color: var(--pt-text-body, #5a4a4a);
+  font-weight: 400;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .retry {
