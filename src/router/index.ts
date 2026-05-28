@@ -394,6 +394,15 @@ const routes: RouteRecordRaw[] = [
             meta: { title: '查詢 / 修改報名', noAuth: true },
         },
 
+        // ============ Maintenance（kill-switch redirect target，雙端共用 admin entry） ============
+        {
+            path: '/maintenance',
+            name: 'maintenance',
+            component: () => import('../views/MaintenanceView.vue'),
+            // public + noAuth：beforeEach 不擋；hideNav 給 layout 隱藏側邊欄/頂欄
+            meta: { title: '系統維護中', noAuth: true, public: true, hideNav: true }
+        },
+
         // ============ Admin Login / Change Password ============
         {
             path: '/login',
