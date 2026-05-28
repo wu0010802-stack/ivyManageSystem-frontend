@@ -137,15 +137,6 @@ function manualChunks(id) {
         return 'chart-vendor'
     }
 
-    // A3: echarts 整包約 300 KB raw / ~95 KB gz；MeasurementChart 內部 dynamic import
-    // → 落獨立 chunk，不會被 fall-through 推進主 vendor。
-    if (
-        id.includes('/node_modules/echarts/') ||
-        id.includes('/node_modules/zrender/')
-    ) {
-        return 'echarts'
-    }
-
     if (id.includes('element-plus') || id.includes('@element-plus')) {
         return 'element-plus'
     }
