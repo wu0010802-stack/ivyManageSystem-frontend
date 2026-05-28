@@ -1,5 +1,7 @@
 import axios from 'axios'
 import type { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios'
+import { ElMessage } from 'element-plus'
+import router from '@/router'
 import { setUserInfo, clearAuth } from '@/utils/auth'
 import { classifyError, DEFAULT_MESSAGES } from '@/utils/errorHandler'
 import { applyDedupe } from '@/utils/apiDedupe'
@@ -82,6 +84,41 @@ api.interceptors.response.use(
         // 非 401 或已重試過仍失敗
         if (error.response?.status === 401 && !isAuthEndpoint) {
             _redirectToLogin()
+        }
+
+        // Phase 4 kill switch（spec §4.4）：
+        // 503 + envelope code === 'MAINTENANCE_MODE' → router.replace(/maintenance)
+        // 503 + code === 'READ_ONLY_MODE' → ElMessage.warning（讓使用者知道編輯被擋）
+        // 都立即 reject，不再進 displayMessage normalization（避免重複顯示通用文案）
+        const killSwitchDetail = error.response?.data as { detail?: unknown } | undefined
+        const killSwitchRaw = killSwitchDetail?.detail
+        if (
+            error.response?.status === 503
+            && killSwitchRaw
+            && typeof killSwitchRaw === 'object'
+        ) {
+            const ksObj = killSwitchRaw as { code?: unknown; message?: unknown }
+            if (ksObj.code === 'MAINTENANCE_MODE') {
+                // 已在 /maintenance 不重複 replace，避免本頁 refresh probe 觸發無窮 redirect
+                if (router.currentRoute.value.path !== '/maintenance') {
+                    router.replace({
+                        path: '/maintenance',
+                        query: { message: typeof ksObj.message === 'string' ? ksObj.message : undefined },
+                    })
+                }
+                // 仍要把 error 標好 displayMessage 給可能直接看 error 的呼叫者
+                error.displayMessage = typeof ksObj.message === 'string' ? ksObj.message : '系統維護中，請稍後再試'
+                error.errorDetail = ksObj
+                error.errorType = classifyError(error)
+                return Promise.reject(error)
+            }
+            if (ksObj.code === 'READ_ONLY_MODE') {
+                ElMessage.warning(typeof ksObj.message === 'string' ? ksObj.message : '系統暫時唯讀，編輯功能暫不可用')
+                error.displayMessage = typeof ksObj.message === 'string' ? ksObj.message : '系統暫時唯讀，編輯功能暫不可用'
+                error.errorDetail = ksObj
+                error.errorType = classifyError(error)
+                return Promise.reject(error)
+            }
         }
 
         // 正規化 UI 顯示用錯誤訊息，避免各元件重複解析 response 結構。
