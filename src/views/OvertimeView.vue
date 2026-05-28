@@ -5,6 +5,7 @@ import { getOvertimes, createOvertime, updateOvertime, approveOvertime as approv
 import { useApprovalPolicyStore } from '@/stores/approvalPolicy'
 import { hasPermission } from '@/utils/auth'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Plus, Check, Close, UploadFilled, Loading, Warning } from '@element-plus/icons-vue'
 import { useEmployeeStore } from '@/stores/employee'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
 import LoadingPanel from '@/components/common/LoadingPanel.vue'

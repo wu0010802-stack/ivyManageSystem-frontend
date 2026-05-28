@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { getLeaveAttachment } from '@/api/leaves'
 import { ElMessage } from 'element-plus'
+import { Loading, Document } from '@element-plus/icons-vue'
 
 interface AttachItem { name: string; url: string; isImage: boolean }
 

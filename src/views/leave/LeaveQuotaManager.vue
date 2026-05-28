@@ -2,7 +2,7 @@
 import { ref, computed } from 'vue'
 import { getLeaveQuotas, initLeaveQuotas, updateLeaveQuota } from '@/api/leaves'
 import { ElMessage } from 'element-plus'
-import { Warning } from '@element-plus/icons-vue'
+import { Warning, QuestionFilled } from '@element-plus/icons-vue'
 import { useEmployeeStore } from '@/stores/employee'
 import { LEAVE_TYPES as leaveTypes } from '@/utils/leaves'
 import { getEarliestExpiringGrantForEmployee, type EarliestExpiringGrant } from '@/api/leaveQuotaExpiry'

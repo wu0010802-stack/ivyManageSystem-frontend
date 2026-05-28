@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { UploadFile } from 'element-plus'
+import { UploadFilled, Loading } from '@element-plus/icons-vue'
 
 interface ImportResult {
   total: number

@@ -2,6 +2,7 @@
 import { ref, computed, watch } from 'vue'
 import { getLeaves } from '@/api/leaves'
 import { ElMessage } from 'element-plus'
+import { ArrowLeft, ArrowRight, Loading } from '@element-plus/icons-vue'
 import { useEmployeeStore } from '@/stores/employee'
 import { LEAVE_TYPES as leaveTypes } from '@/utils/leaves'
 
