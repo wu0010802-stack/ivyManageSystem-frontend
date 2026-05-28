@@ -8,6 +8,8 @@
 import axios, { type AxiosError, type AxiosInstance, type InternalAxiosRequestConfig } from 'axios'
 import { applyDedupe } from '@/utils/apiDedupe'
 import { classifyError, DEFAULT_MESSAGES } from '@/utils/errorHandler'
+import parentRouter from '@/parent/router'
+import { toast } from '@/parent/utils/toast'
 
 declare module 'axios' {
   interface AxiosError {
@@ -140,6 +142,33 @@ api.interceptors.response.use(
       // 重打仍 401 才導去登入；先前邏輯會在第三、四個並發請求拿不到 refresh
       // share 而誤登出，這裡僅針對「真正重試後仍失敗」的請求觸發。
       _redirectToLogin()
+    }
+
+    // Phase 4 kill switch（spec §4.4）：
+    // 503 + envelope code === 'MAINTENANCE_MODE' → parentRouter.replace(/maintenance)
+    // 503 + 'READ_ONLY_MODE' → toast.warn（家長端不拉 element-plus）
+    // 都立即 reject，不進 displayMessage normalization
+    const ksDetail = error.response?.data as { detail?: unknown } | undefined
+    const ksRaw = ksDetail?.detail
+    if (error.response?.status === 503 && ksRaw && typeof ksRaw === 'object') {
+      const ksObj = ksRaw as { code?: unknown; message?: unknown }
+      if (ksObj.code === 'MAINTENANCE_MODE') {
+        if (parentRouter.currentRoute.value.path !== '/maintenance') {
+          parentRouter.replace({
+            path: '/maintenance',
+            query: { message: typeof ksObj.message === 'string' ? ksObj.message : undefined },
+          })
+        }
+        error.displayMessage = typeof ksObj.message === 'string' ? ksObj.message : '系統維護中，請稍後再回來'
+        error.errorDetail = ksObj
+        return Promise.reject(error)
+      }
+      if (ksObj.code === 'READ_ONLY_MODE') {
+        toast.warn(typeof ksObj.message === 'string' ? ksObj.message : '系統暫時唯讀，編輯功能暫不可用')
+        error.displayMessage = typeof ksObj.message === 'string' ? ksObj.message : '系統暫時唯讀，編輯功能暫不可用'
+        error.errorDetail = ksObj
+        return Promise.reject(error)
+      }
     }
 
     // 正規化錯誤訊息：對齊 admin (src/api/index.ts) 對 BusinessError envelope 的處理
