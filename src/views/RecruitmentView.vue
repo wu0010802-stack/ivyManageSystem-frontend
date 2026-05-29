@@ -720,6 +720,7 @@ const emptyForm = (): {
   no_deposit_reason_detail: string
   notes: string
   parent_response: string
+  geocoding_consent: boolean
 } => ({
   month: '', month_raw: null, seq_no: '', visit_date: '', child_name: '',
   birthday: null, grade: null, phone: '', address: '',
@@ -727,6 +728,7 @@ const emptyForm = (): {
   has_deposit: false, enrolled: false, transfer_term: false,
   no_deposit_reason: null, no_deposit_reason_detail: '',
   notes: '', parent_response: '',
+  geocoding_consent: false,
 })
 const form = ref(emptyForm())
 
@@ -1027,6 +1029,7 @@ const openEditDialog = async (row: Record<string, unknown>) => {
     no_deposit_reason_detail: String(row.no_deposit_reason_detail ?? ''),
     notes: String(row.notes ?? ''),
     parent_response: String(row.parent_response ?? ''),
+    geocoding_consent: Boolean(row.geocoding_consent ?? false),
   }
   dialogMode.value = 'edit'
   editingId.value = row.id as number | null
