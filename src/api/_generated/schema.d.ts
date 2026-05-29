@@ -3380,8 +3380,77 @@ export interface paths {
          * @description 以現有 token（可為剛過期）換發新 token。
          *     寬限期內的過期 token 仍可刷新，超過則需重新登入。
          *     Token 來源：httpOnly Cookie 或 Authorization header。
+         *
+         *     Spec F 整合：若 staff_refresh_token cookie 存在，走 rotation 路徑（新 access +
+         *     新 refresh cookie）；否則 fallback 既有 JWT grace period 路徑（向下相容）。
          */
         post: operations["refresh_token_api_auth_refresh_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List My Sessions
+         * @description 列出目前使用者的所有 active StaffRefreshToken family，含 is_current 標記當前裝置。
+         *
+         *     Spec F §3.4 (audit P1 #11)
+         */
+        get: operations["list_my_sessions_api_auth_sessions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/sessions/{family_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke Session
+         * @description Per-session revoke：撤銷指定 family 的所有 token（其他 family 不影響）。
+         *
+         *     Spec F §3.4 (audit P1 #11)
+         */
+        delete: operations["revoke_session_api_auth_sessions__family_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/sessions/logout-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Logout All Sessions
+         * @description Logout-all：revoke 所有 family + bump token_version + clear self cookies。
+         *
+         *     Spec F §3.4 (audit P1 #11)
+         */
+        post: operations["logout_all_sessions_api_auth_sessions_logout_all_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5563,6 +5632,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/health/schedulers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Schedulers Health
+         * @description 檢查所有 scheduler heartbeat lag。
+         *
+         *     無權限端點（UptimeRobot 公開可打）。
+         *     200 = 全綠；503 = 至少一個 scheduler lag > 2 × expected_interval。
+         *     啟動後尚未跑過（last_success_at IS NULL）的視為「未滿足 lag 條件」，回 200。
+         */
+        get: operations["schedulers_health_health_schedulers_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/insurance/brackets": {
         parameters: {
             query?: never;
@@ -5704,6 +5797,29 @@ export interface paths {
         get: operations["get_scheduler_metrics_api_internal_metrics_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/internal/uptime-webhook": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Uptime Webhook
+         * @description 收 UptimeRobot 告警 → 推 LINE 群。
+         *
+         *     token 用 query param（free tier UptimeRobot 不支援 custom header）。
+         *     payload 為 UptimeRobot 標準 JSON：{monitorFriendlyName, alertType, alertDetails}。
+         */
+        post: operations["uptime_webhook_api_internal_uptime_webhook_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -7340,6 +7456,68 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/parent/me/consent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Write Consent
+         * @description 寫入一次同意 / 撤回事件。同一 scope 多次寫入皆為獨立 log。
+         */
+        post: operations["write_consent_api_parent_me_consent_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/parent/me/consents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List My Consents
+         * @description 列當前家長各 scope 最新同意狀態 + 完整 history。
+         */
+        get: operations["list_my_consents_api_parent_me_consents_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/parent/me/correct-request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit Correct Request
+         * @description 個資法 §3.2 補充更正權：申請更正欄位 + 新值 + 理由。
+         *
+         *     *不立即更新欄位* — admin review 後執行（避免家長直接改身分證等敏感欄位 IDOR）。
+         */
+        post: operations["submit_correct_request_api_parent_me_correct_request_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/parent/me/data-export": {
         parameters: {
             query?: never;
@@ -7357,6 +7535,72 @@ export interface paths {
         get: operations["get_data_export_api_parent_me_data_export_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/parent/me/delete-request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit Delete Request
+         * @description 個資法 §3.5 刪除權：申請刪除子女或自己資料。
+         *
+         *     送出 → pending queue → admin review。
+         *     *不立即硬刪* — 學生資料涉合班/出席/費用稽核需保留稅務 7 年。
+         */
+        post: operations["submit_delete_request_api_parent_me_delete_request_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/parent/me/dsr-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List My Dsr Requests
+         * @description 查自己歷次 DSR 申請（含 pending + 已決議），最新在前。
+         */
+        get: operations["list_my_dsr_requests_api_parent_me_dsr_requests_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/parent/me/opt-out": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit Opt Out Request
+         * @description 個資法 §3.3 停止處理利用權：申請停止特定 scope 的資料處理。
+         *
+         *     比 consent 撤回更具法律意義（撤回是「現在不同意」，opt-out 是「請求停止」)。
+         *     *opt-out 主要 surface 是 consent 撤回 + 此申請副本作為法律備案*。
+         */
+        post: operations["submit_opt_out_request_api_parent_me_opt_out_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -7717,6 +7961,26 @@ export interface paths {
         };
         /** Parent List Photos */
         get: operations["parent_list_photos_api_parent_photos_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/parent/policies/current": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Current Policy
+         * @description 回當前生效的最新 policy_version。
+         */
+        get: operations["get_current_policy_api_parent_policies_current_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -8878,6 +9142,26 @@ export interface paths {
          * @description 教師查看自己班級學生的事件紀錄
          */
         get: operations["get_my_class_incidents_api_portal_my_class_incidents_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/portal/my-data-export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get My Data Export
+         * @description 員工下載自身完整資料 JSON（個資法 §3.1 查閱複製權）。
+         */
+        get: operations["get_my_data_export_api_portal_my_data_export_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -11845,6 +12129,32 @@ export interface paths {
          *     }
          */
         get: operations["chart_data_api_students__student_id__measurements_chart_data_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/students/{student_id}/medical": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Student Medical
+         * @description 讀取兒童醫療欄位（過敏 / 用藥 / 特殊需求）。
+         *
+         *     法源：個資法 §6 特種個資。每次取用必記入 medical_access_log，
+         *     與 audit_log 獨立稽核 trail，含 reason ≥10 字 gate。
+         *
+         *     權限：STUDENTS_HEALTH_READ
+         *     回 fields: allergy / medication / special_needs（ORM 透明解密）
+         */
+        get: operations["get_student_medical_api_students__student_id__medical_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -15056,6 +15366,49 @@ export interface components {
             /** Course Id */
             course_id: number;
         };
+        /** ConsentEventIn */
+        ConsentEventIn: {
+            /**
+             * Consented
+             * @description true=同意, false=撤回
+             */
+            consented: boolean;
+            /**
+             * Note
+             * @description 撤回理由
+             */
+            note?: string | null;
+            /**
+             * Policy Version Id
+             * @description 同意基於哪個 policy_version
+             */
+            policy_version_id: number;
+            /**
+             * Scope
+             * @description 同意範疇
+             */
+            scope: string;
+        };
+        /** ConsentEventOut */
+        ConsentEventOut: {
+            /** Consented */
+            consented: boolean;
+            /** Consented At */
+            consented_at: string;
+            /** Id */
+            id: number;
+            /** Policy Version Id */
+            policy_version_id: number;
+            /** Scope */
+            scope: string;
+        };
+        /** ConsentsResponseOut */
+        ConsentsResponseOut: {
+            /** Current Status */
+            current_status: components["schemas"]["ScopeStatusOut"][];
+            /** History */
+            history: components["schemas"]["ConsentEventOut"][];
+        };
         /**
          * ContactBookApplyTemplateItem
          * @description apply_template 單筆套用結果。
@@ -15477,6 +15830,34 @@ export interface components {
             skipped: boolean;
             /** Skipped Reason */
             skipped_reason?: string | null;
+        };
+        /** CorrectRequestIn */
+        CorrectRequestIn: {
+            /**
+             * Field Name
+             * @description 要更正的欄位名（如 phone / address）
+             */
+            field_name: string;
+            /**
+             * New Value
+             * @description 新值（字串化）
+             */
+            new_value: string;
+            /**
+             * Reason
+             * @description 更正理由（≥5 字）
+             */
+            reason: string;
+            /**
+             * Subject Entity Id
+             * @description 目標 entity ID
+             */
+            subject_entity_id: number;
+            /**
+             * Subject Entity Type
+             * @description 'student' / 'guardian'
+             */
+            subject_entity_type: string;
         };
         /** CourseCreate */
         CourseCreate: {
@@ -15982,6 +16363,24 @@ export interface components {
              */
             sort_order: number;
         };
+        /** DeleteRequestIn */
+        DeleteRequestIn: {
+            /**
+             * Reason
+             * @description 申請刪除原因（≥5 字）
+             */
+            reason: string;
+            /**
+             * Subject Entity Id
+             * @description 目標 entity ID
+             */
+            subject_entity_id: number;
+            /**
+             * Subject Entity Type
+             * @description 刪除目標：'student' / 'guardian'（自己 = guardian）
+             */
+            subject_entity_type: string;
+        };
         /**
          * DeleteResultOut
          * @description 純 message DELETE 回傳 — {message}。
@@ -16115,6 +16514,31 @@ export interface components {
             note?: string | null;
             /** Student Id */
             student_id: number;
+        };
+        /** DsrRequestOut */
+        DsrRequestOut: {
+            /** Decided At */
+            decided_at: string | null;
+            /** Decision Note */
+            decision_note: string | null;
+            /** Field Name */
+            field_name: string | null;
+            /** Id */
+            id: number;
+            /** Reason */
+            reason: string | null;
+            /** Request Type */
+            request_type: string;
+            /** Scope */
+            scope: string | null;
+            /** Status */
+            status: string;
+            /** Subject Entity Id */
+            subject_entity_id: number | null;
+            /** Subject Entity Type */
+            subject_entity_type: string | null;
+            /** Submitted At */
+            submitted_at: string;
         };
         /** EducationCreate */
         EducationCreate: {
@@ -17919,6 +18343,14 @@ export interface components {
             /** Username */
             username: string;
         };
+        /**
+         * LogoutAllSessionsOut
+         * @description POST /sessions/logout-all — Logout all + bump token_version.
+         */
+        LogoutAllSessionsOut: {
+            /** Logout All */
+            logout_all: unknown;
+        };
         /** MagicLinkResponse */
         MagicLinkResponse: {
             /** Download Url */
@@ -18869,6 +19301,16 @@ export interface components {
         OkStatusOut: {
             /** Status */
             status: unknown;
+        };
+        /** OptOutRequestIn */
+        OptOutRequestIn: {
+            /** Reason */
+            reason?: string | null;
+            /**
+             * Scope
+             * @description 要停止處理的 scope（對齊 consent scope）
+             */
+            scope: string;
         };
         /** OrgYearSettingsCreate */
         OrgYearSettingsCreate: {
@@ -20029,6 +20471,19 @@ export interface components {
             /** Policies */
             policies: components["schemas"]["PolicyItem"][];
         };
+        /** PolicyVersionOut */
+        PolicyVersionOut: {
+            /** Document Path */
+            document_path: string;
+            /** Effective At */
+            effective_at: string;
+            /** Id */
+            id: number;
+            /** Summary */
+            summary: string | null;
+            /** Version */
+            version: string;
+        };
         /** PortalAttendanceRecordItem */
         PortalAttendanceRecordItem: {
             /** Is Present */
@@ -20045,6 +20500,34 @@ export interface components {
         PortalBatchAttendanceUpdate: {
             /** Records */
             records: components["schemas"]["PortalAttendanceRecordItem"][];
+        };
+        /**
+         * PortalMyDataExportOut
+         * @description GET /portal/my-data-export 員工自身完整資料 JSON download.
+         *
+         *     FastAPI 對 Response(content=...) bypass validation；本 schema 主要用於
+         *     OpenAPI codegen 讓前端 type 對得上。多 nested 結構，用 dict[str, Any]
+         *     彈性允許 backend 慢慢補強型別。
+         */
+        PortalMyDataExportOut: {
+            /** Appraisals */
+            appraisals: unknown;
+            /** Attendance */
+            attendance: unknown;
+            /** Employee */
+            employee: unknown;
+            /** Exported At */
+            exported_at: unknown;
+            /** Exported By User Id */
+            exported_by_user_id: unknown;
+            /** Leaves */
+            leaves: unknown;
+            /** Overtimes */
+            overtimes: unknown;
+            /** Salary Records */
+            salary_records: unknown;
+            /** Schema Version */
+            schema_version: unknown;
         };
         /**
          * PortalParentMessageAttachmentOut
@@ -21670,6 +22153,12 @@ export interface components {
              * @default false
              */
             enrolled: boolean;
+            /**
+             * Geocoding Consent
+             * @description 家長已口頭同意以本住址進行招生區位分析（送至 Google Maps）；業主決議預設不勾。
+             * @default false
+             */
+            geocoding_consent: boolean;
             /** Grade */
             grade?: string | null;
             /**
@@ -21717,6 +22206,11 @@ export interface components {
             district?: string | null;
             /** Enrolled */
             enrolled?: boolean | null;
+            /**
+             * Geocoding Consent
+             * @description None=不修改；True/False=修改 consent_at（True=寫 now()；False=寫 NULL）
+             */
+            geocoding_consent?: boolean | null;
             /** Grade */
             grade?: string | null;
             /** Has Deposit */
@@ -22158,6 +22652,14 @@ export interface components {
             target: string;
         };
         /**
+         * RevokeSessionOut
+         * @description DELETE /sessions/{family_id} — Per-session revoke.
+         */
+        RevokeSessionOut: {
+            /** Revoked */
+            revoked: unknown;
+        };
+        /**
          * RoleGroup
          * @description 考核角色分群 — 對應獎金率分群 + 班級績效適用性。
          *
@@ -22239,6 +22741,278 @@ export interface components {
             /** Status Tag */
             status_tag: string | null;
         };
+        /**
+         * SalaryDetailAuditLogItemOut
+         * @description 單筆稽核記錄。
+         */
+        SalaryDetailAuditLogItemOut: {
+            /** Action */
+            action: unknown;
+            /** Created At */
+            created_at?: unknown;
+            /** Id */
+            id: unknown;
+            /** Summary */
+            summary?: unknown;
+            /** Username */
+            username?: unknown;
+        };
+        /**
+         * SalaryDetailAuditLogOut
+         * @description GET /salaries/{id}/audit-log — 薪資操作歷史。
+         */
+        SalaryDetailAuditLogOut: {
+            /** Items */
+            items: unknown;
+            /** Record Id */
+            record_id: unknown;
+        };
+        /**
+         * SalaryDetailBonusesOut
+         * @description 薪資明細 — 獎金區塊。
+         */
+        SalaryDetailBonusesOut: {
+            /** Birthday Bonus */
+            birthday_bonus: unknown;
+            /** Festival Bonus */
+            festival_bonus: unknown;
+            /** Overtime Bonus */
+            overtime_bonus: unknown;
+            /** Supervisor Dividend */
+            supervisor_dividend: unknown;
+        };
+        /**
+         * SalaryDetailBreakdownOut
+         * @description GET /salaries/{id}/breakdown — 單筆薪資明細。
+         */
+        SalaryDetailBreakdownOut: {
+            bonuses: unknown;
+            deductions: unknown;
+            earnings: unknown;
+            employee: unknown;
+            /** Manual Overrides */
+            manual_overrides?: unknown;
+            summary: unknown;
+        };
+        /**
+         * SalaryDetailDeductionsOut
+         * @description 薪資明細 — 扣款區塊。
+         */
+        SalaryDetailDeductionsOut: {
+            /** Absence Deduction */
+            absence_deduction: unknown;
+            /** Early Leave Deduction */
+            early_leave_deduction: unknown;
+            /** Health Insurance */
+            health_insurance: unknown;
+            /** Labor Insurance */
+            labor_insurance: unknown;
+            /** Late Deduction */
+            late_deduction: unknown;
+            /** Leave Deduction */
+            leave_deduction: unknown;
+            /** Meeting Absence Deduction */
+            meeting_absence_deduction: unknown;
+            /** Pension */
+            pension: unknown;
+            /** Supplementary Health Employee */
+            supplementary_health_employee: unknown;
+            /** Total Deduction */
+            total_deduction: unknown;
+        };
+        /**
+         * SalaryDetailEarningsOut
+         * @description 薪資明細 — 應領區塊。
+         */
+        SalaryDetailEarningsOut: {
+            /** Base Salary */
+            base_salary: unknown;
+            /** Gross Salary */
+            gross_salary: unknown;
+            /** Meeting Overtime Pay */
+            meeting_overtime_pay: unknown;
+            /** Overtime Pay */
+            overtime_pay: unknown;
+        };
+        /**
+         * SalaryDetailEmployeeOut
+         * @description 薪資明細 / 欄位明細 共用的員工資訊區塊。
+         */
+        SalaryDetailEmployeeOut: {
+            /** Employee Code */
+            employee_code: unknown;
+            /** Employee Name */
+            employee_name: unknown;
+            /** Job Title */
+            job_title?: unknown;
+            /** Month */
+            month: unknown;
+            /** Record Id */
+            record_id: unknown;
+            /** Year */
+            year: unknown;
+        };
+        /**
+         * SalaryDetailFieldBreakdownOut
+         * @description GET /salaries/{id}/field-breakdown — 單欄位明細。
+         *
+         *     rows 為動態 shape（依 field 而異：item/value/remark 或 name/matched/...），
+         *     用 dict[str, Any] 接住，前端 a11y 仰賴 columns 描述 row schema。
+         */
+        SalaryDetailFieldBreakdownOut: {
+            /** Columns */
+            columns: unknown;
+            employee: unknown;
+            /** Field */
+            field: unknown;
+            /** Note */
+            note?: unknown;
+            /** Rows */
+            rows: unknown;
+            summary: unknown;
+            /** Title */
+            title: unknown;
+        };
+        /**
+         * SalaryDetailFieldColumnOut
+         * @description 欄位明細 — table column header。
+         */
+        SalaryDetailFieldColumnOut: {
+            /** Key */
+            key: unknown;
+            /** Label */
+            label: unknown;
+        };
+        /**
+         * SalaryDetailFieldSummaryOut
+         * @description 欄位明細 — summary 區塊（amount 為該欄位最終金額）。
+         */
+        SalaryDetailFieldSummaryOut: {
+            /** Amount */
+            amount: unknown;
+        };
+        /**
+         * SalaryDetailSummaryOut
+         * @description 薪資明細 — 結算區塊。
+         */
+        SalaryDetailSummaryOut: {
+            /** Bonus Amount */
+            bonus_amount: unknown;
+            /** Bonus Separate */
+            bonus_separate: unknown;
+            /** Net Salary */
+            net_salary: unknown;
+        };
+        /**
+         * SalaryDetailUnusedLeavePayoutLogOut
+         * @description 未休假折算工資單筆 log。
+         */
+        SalaryDetailUnusedLeavePayoutLogOut: {
+            /** Amount */
+            amount: unknown;
+            /** Hourly Wage */
+            hourly_wage: unknown;
+            /** Hours */
+            hours: unknown;
+            /** Log Id */
+            log_id: unknown;
+            /** Meta */
+            meta?: unknown;
+            /** Source Type */
+            source_type: unknown;
+            /** Wage Basis Date */
+            wage_basis_date: unknown;
+        };
+        /**
+         * SalaryDetailUnusedLeavePayoutOut
+         * @description GET /salaries/{id}/unused-leave-payout-detail — 未休假折算工資明細。
+         */
+        SalaryDetailUnusedLeavePayoutOut: {
+            /** Employee Id */
+            employee_id: unknown;
+            /** Logs */
+            logs: unknown;
+            /** Salary Record Id */
+            salary_record_id: unknown;
+            /** Total Amount */
+            total_amount: unknown;
+        };
+        /**
+         * SalaryHistoryAllEmployeeOut
+         * @description GET /salaries/history-all 內單筆員工（被 SalaryHistoryAllOut.items 內嵌）。
+         */
+        SalaryHistoryAllEmployeeOut: {
+            /** Employee Id */
+            employee_id: unknown;
+            /** Employee Name */
+            employee_name: unknown;
+            /** Months */
+            months: unknown;
+        };
+        /**
+         * SalaryHistoryAllMonthOut
+         * @description GET /salaries/history-all 內每月份單筆摘要（被 SalaryHistoryAllEmployeeOut.months 內嵌）。
+         */
+        SalaryHistoryAllMonthOut: {
+            /** Gross Salary */
+            gross_salary: unknown;
+            /** Month */
+            month: unknown;
+            /** Net Salary */
+            net_salary: unknown;
+        };
+        /**
+         * SalaryHistoryAllOut
+         * @description GET /salaries/history-all 回傳 wrapper（分頁 + 依員工分組）。
+         */
+        SalaryHistoryAllOut: {
+            /** Items */
+            items: unknown;
+            /** Limit */
+            limit: unknown;
+            /** Skip */
+            skip: unknown;
+            /** Total */
+            total: unknown;
+        };
+        /**
+         * SalaryHistoryItemOut
+         * @description GET /salaries/history 單筆（單員工 N 月歷史）。
+         *
+         *     對應 `records.py:get_salary_history` 迴圈內組裝的 dict shape。
+         */
+        SalaryHistoryItemOut: {
+            /** Attendance Deduction */
+            attendance_deduction: unknown;
+            /** Base Salary */
+            base_salary: unknown;
+            /** Gross Salary */
+            gross_salary: unknown;
+            /** Health Insurance */
+            health_insurance: unknown;
+            /** Id */
+            id: unknown;
+            /** Labor Insurance */
+            labor_insurance: unknown;
+            /** Leave Deduction */
+            leave_deduction: unknown;
+            /** Month */
+            month: unknown;
+            /** Net Pay */
+            net_pay: unknown;
+            /** Net Salary */
+            net_salary: unknown;
+            /** Supplementary Health Employee */
+            supplementary_health_employee: unknown;
+            /** Total Bonus */
+            total_bonus: unknown;
+            /** Total Deduction */
+            total_deduction: unknown;
+            /** Total Deductions */
+            total_deductions: unknown;
+            /** Year */
+            year: unknown;
+        };
         /** SalaryManualAdjustRequest */
         SalaryManualAdjustRequest: {
             /** Absence Deduction */
@@ -22284,6 +23058,96 @@ export interface components {
             special_bonus?: number | null;
             /** Supervisor Dividend */
             supervisor_dividend?: number | null;
+        };
+        /**
+         * SalaryRecordItemOut
+         * @description GET /salaries/records 單筆。
+         *
+         *     對應 `records.py:get_salary_records` 迴圈內組裝的 dict shape。
+         */
+        SalaryRecordItemOut: {
+            /** Absence Deduction */
+            absence_deduction: unknown;
+            /** Attendance Deduction */
+            attendance_deduction: unknown;
+            /** Base Salary */
+            base_salary: unknown;
+            /** Birthday Bonus */
+            birthday_bonus: unknown;
+            /** Breakdown */
+            breakdown?: unknown;
+            /** Breakdown Stale */
+            breakdown_stale: unknown;
+            /** Calculated At */
+            calculated_at?: unknown;
+            /** Early Leave Deduction */
+            early_leave_deduction: unknown;
+            /** Employee Code */
+            employee_code: unknown;
+            /** Employee Id */
+            employee_id: unknown;
+            /** Employee Name */
+            employee_name: unknown;
+            /** Festival Bonus */
+            festival_bonus: unknown;
+            /** Finalized At */
+            finalized_at?: unknown;
+            /** Finalized By */
+            finalized_by?: unknown;
+            /** Gross Salary */
+            gross_salary: unknown;
+            /** Health Insurance */
+            health_insurance: unknown;
+            /** Id */
+            id: unknown;
+            /** Is Finalized */
+            is_finalized: unknown;
+            /** Job Title */
+            job_title: unknown;
+            /** Labor Insurance */
+            labor_insurance: unknown;
+            /** Late Deduction */
+            late_deduction: unknown;
+            /** Leave Deduction */
+            leave_deduction: unknown;
+            /** Manual Overrides */
+            manual_overrides?: unknown;
+            /** Meeting Absence Deduction */
+            meeting_absence_deduction: unknown;
+            /** Meeting Overtime Pay */
+            meeting_overtime_pay: unknown;
+            /** Missing Punch Deduction */
+            missing_punch_deduction: unknown;
+            /** Net Pay */
+            net_pay: unknown;
+            /** Net Salary */
+            net_salary: unknown;
+            /** Other Deduction */
+            other_deduction: unknown;
+            /** Overtime Bonus */
+            overtime_bonus: unknown;
+            /** Overtime Pay */
+            overtime_pay: unknown;
+            /** Pension */
+            pension: unknown;
+            /** Pension Self */
+            pension_self: unknown;
+            /** Performance Bonus */
+            performance_bonus: unknown;
+            /** Remark */
+            remark?: unknown;
+            /** Special Bonus */
+            special_bonus: unknown;
+            /** Supervisor Dividend */
+            supervisor_dividend: unknown;
+            /** Supplementary Health Employee */
+            supplementary_health_employee: unknown;
+            /** Total Deduction */
+            total_deduction: unknown;
+            /** Total Deductions */
+            total_deductions: unknown;
+            /** Version */
+            version: unknown;
         };
         /** SalaryRecordTarget */
         SalaryRecordTarget: {
@@ -22349,6 +23213,201 @@ export interface components {
             year: number;
         };
         /**
+         * SalarySnapshotCreateResultOut
+         * @description 手動補拍快照成功回傳 — `{message, count, captured_by}`。
+         *
+         *     不重用 `_common.MutationResultOut`（其 shape 為 `{message, id}`）；
+         *     本 endpoint 為批次建立，沒有單一 id，且 router 額外回傳 `captured_by`
+         *     供前端 audit 顯示。
+         */
+        SalarySnapshotCreateResultOut: {
+            /** Captured By */
+            captured_by?: unknown;
+            /** Count */
+            count: unknown;
+            /** Message */
+            message: unknown;
+        };
+        /**
+         * SalarySnapshotDetailOut
+         * @description 單筆快照完整欄位（summary + 全部 SalaryRecord 反射複製欄位）。
+         *
+         *     Payload 欄位來源：service ``_PAYLOAD_COLUMNS``（SalarySnapshot 與
+         *     SalaryRecord 欄位交集，扣掉 metadata）。SalarySnapshot model 目前未含
+         *     ``supplementary_health_employee`` / ``appraisal_year_end_bonus`` /
+         *     ``unused_leave_payout`` — 故本 schema 也不暴露。新增 SalaryRecord/Snapshot
+         *     Money 欄位時須同步補上對應欄位（PR checklist 提醒）。
+         */
+        SalarySnapshotDetailOut: {
+            /** Absence Deduction */
+            absence_deduction?: unknown;
+            /** Absent Count */
+            absent_count?: unknown;
+            /** Attendance Policy Id */
+            attendance_policy_id?: unknown;
+            /** Base Salary */
+            base_salary?: unknown;
+            /** Birthday Bonus */
+            birthday_bonus?: unknown;
+            /** Bonus Amount */
+            bonus_amount?: unknown;
+            /** Bonus Config Id */
+            bonus_config_id?: unknown;
+            /** Bonus Separate */
+            bonus_separate?: unknown;
+            /** Captured At */
+            captured_at?: unknown;
+            /** Captured By */
+            captured_by?: unknown;
+            /** Early Leave Count */
+            early_leave_count?: unknown;
+            /** Early Leave Deduction */
+            early_leave_deduction?: unknown;
+            /** Employee Id */
+            employee_id: unknown;
+            /** Employee Name */
+            employee_name?: unknown;
+            /** Festival Bonus */
+            festival_bonus?: unknown;
+            /** Gross Salary */
+            gross_salary?: unknown;
+            /** Health Insurance Employee */
+            health_insurance_employee?: unknown;
+            /** Health Insurance Employer */
+            health_insurance_employer?: unknown;
+            /** Hourly Rate */
+            hourly_rate?: unknown;
+            /** Hourly Total */
+            hourly_total?: unknown;
+            /** Id */
+            id: unknown;
+            /** Labor Insurance Employee */
+            labor_insurance_employee?: unknown;
+            /** Labor Insurance Employer */
+            labor_insurance_employer?: unknown;
+            /** Late Count */
+            late_count?: unknown;
+            /** Late Deduction */
+            late_deduction?: unknown;
+            /** Leave Deduction */
+            leave_deduction?: unknown;
+            /** Meeting Absence Deduction */
+            meeting_absence_deduction?: unknown;
+            /** Meeting Overtime Pay */
+            meeting_overtime_pay?: unknown;
+            /** Missing Punch Count */
+            missing_punch_count?: unknown;
+            /** Missing Punch Deduction */
+            missing_punch_deduction?: unknown;
+            /** Net Salary */
+            net_salary?: unknown;
+            /** Other Deduction */
+            other_deduction?: unknown;
+            /** Overtime Bonus */
+            overtime_bonus?: unknown;
+            /** Overtime Pay */
+            overtime_pay?: unknown;
+            /** Pension Employee */
+            pension_employee?: unknown;
+            /** Pension Employer */
+            pension_employer?: unknown;
+            /** Performance Bonus */
+            performance_bonus?: unknown;
+            /** Remark */
+            remark?: unknown;
+            /** Salary Month */
+            salary_month: unknown;
+            /** Salary Record Id */
+            salary_record_id?: unknown;
+            /** Salary Year */
+            salary_year: unknown;
+            /** Snapshot Remark */
+            snapshot_remark?: unknown;
+            /** Snapshot Type */
+            snapshot_type: unknown;
+            /** Source Version */
+            source_version?: unknown;
+            /** Special Bonus */
+            special_bonus?: unknown;
+            /** Supervisor Dividend */
+            supervisor_dividend?: unknown;
+            /** Total Deduction */
+            total_deduction?: unknown;
+            /** Work Hours */
+            work_hours?: unknown;
+        };
+        /**
+         * SalarySnapshotDiffChangeOut
+         * @description 單一欄位變動（snapshot vs current SalaryRecord）。
+         *
+         *     `snapshot` / `current` 來源為任意 SalaryRecord/Snapshot column 值
+         *     （Money / Int / Bool / Text / None），形態異質故用 ``Any``。
+         */
+        SalarySnapshotDiffChangeOut: {
+            /** Current */
+            current?: unknown;
+            /** Field */
+            field: unknown;
+            /** Snapshot */
+            snapshot?: unknown;
+        };
+        /**
+         * SalarySnapshotDiffOut
+         * @description 快照與當前 SalaryRecord 的欄位差異對比結果。
+         */
+        SalarySnapshotDiffOut: {
+            /** Changes */
+            changes: unknown;
+            /** Current Record Id */
+            current_record_id?: unknown;
+            /** Current Version */
+            current_version?: unknown;
+            /** Has Current Record */
+            has_current_record: unknown;
+            /** Snapshot Id */
+            snapshot_id: unknown;
+        };
+        /**
+         * SalarySnapshotListOut
+         * @description 列表端點 wrapper。
+         */
+        SalarySnapshotListOut: {
+            /** Snapshots */
+            snapshots: unknown;
+        };
+        /**
+         * SalarySnapshotSummaryOut
+         * @description 列表端點用的精簡 metadata（對應 service `_snapshot_summary()`）。
+         *
+         *     `captured_at` 由 service 用 ``.isoformat()`` 轉成 str；無 tz 處理交由 service。
+         */
+        SalarySnapshotSummaryOut: {
+            /** Captured At */
+            captured_at?: unknown;
+            /** Captured By */
+            captured_by?: unknown;
+            /** Employee Id */
+            employee_id: unknown;
+            /** Employee Name */
+            employee_name?: unknown;
+            /** Id */
+            id: unknown;
+            /** Net Salary */
+            net_salary?: unknown;
+            /** Salary Month */
+            salary_month: unknown;
+            /** Salary Record Id */
+            salary_record_id?: unknown;
+            /** Salary Year */
+            salary_year: unknown;
+            /** Snapshot Remark */
+            snapshot_remark?: unknown;
+            /** Snapshot Type */
+            snapshot_type: unknown;
+            /** Source Version */
+            source_version?: unknown;
+        };
+        /**
          * ScheduleDayItem
          * @description my-schedule 內某一日的排班資訊。
          */
@@ -22388,6 +23447,22 @@ export interface components {
             /** Year */
             year: unknown;
         };
+        /**
+         * SchedulerHealthItem
+         * @description schedulers_health item shape.
+         */
+        SchedulerHealthItem: {
+            /** Consecutive Failures */
+            consecutive_failures: unknown;
+            /** Expected Interval Seconds */
+            expected_interval_seconds: unknown;
+            /** Lag Seconds */
+            lag_seconds?: unknown;
+            /** Last Success At */
+            last_success_at?: unknown;
+            /** Name */
+            name: unknown;
+        };
         /** SchedulerMetric */
         SchedulerMetric: {
             /** Consecutive Failures */
@@ -22417,6 +23492,18 @@ export interface components {
             };
             /** Worker Pid */
             worker_pid: number;
+        };
+        /**
+         * SchedulersHealthOut
+         * @description GET /health/schedulers — UptimeRobot 公開 endpoint.
+         */
+        SchedulersHealthOut: {
+            /** Lagging */
+            lagging?: unknown;
+            /** Schedulers */
+            schedulers: unknown;
+            /** Status */
+            status: unknown;
         };
         /**
          * ScheduleSwapCandidateOut
@@ -22661,6 +23748,20 @@ export interface components {
             /** Projected Bonus */
             projected_bonus?: number | null;
         };
+        /** ScopeStatusOut */
+        ScopeStatusOut: {
+            /**
+             * Consented
+             * @description None 表示未曾簽過
+             */
+            consented?: boolean | null;
+            /** Consented At */
+            consented_at?: string | null;
+            /** Policy Version Id */
+            policy_version_id?: number | null;
+            /** Scope */
+            scope: string;
+        };
         /** ScoreItemCreate */
         ScoreItemCreate: {
             /** Item Code */
@@ -22813,6 +23914,27 @@ export interface components {
              * Format: date
              */
             session_date: string;
+        };
+        /** SessionItemOut */
+        SessionItemOut: {
+            /** Family Id */
+            family_id: string;
+            /** Ip */
+            ip: string | null;
+            /**
+             * Is Current
+             * @default false
+             */
+            is_current: boolean;
+            /**
+             * Last Active
+             * Format: date-time
+             */
+            last_active: string;
+            /** Token Count */
+            token_count: number;
+            /** User Agent */
+            user_agent: string | null;
         };
         /** SettlementOut */
         SettlementOut: {
@@ -23609,6 +24731,22 @@ export interface components {
             student_id: unknown;
         };
         /**
+         * StudentMedicalOut
+         * @description GET /students/{id}/medical — 特種個資取用（reason ≥10 字 gate）.
+         */
+        StudentMedicalOut: {
+            /** Allergy */
+            allergy?: unknown;
+            /** Medication */
+            medication?: unknown;
+            /** Name */
+            name: unknown;
+            /** Special Needs */
+            special_needs?: unknown;
+            /** Student Id */
+            student_id: unknown;
+        };
+        /**
          * StudentRecordsTimelineOut
          * @description GET /students/records 分頁回應。
          */
@@ -24160,6 +25298,14 @@ export interface components {
             permission_names?: string[] | null;
             /** Role */
             role?: string | null;
+        };
+        /**
+         * UptimeWebhookOut
+         * @description POST /uptime-webhook — UptimeRobot callback ack.
+         */
+        UptimeWebhookOut: {
+            /** Status */
+            status: unknown;
         };
         /** ValidationError */
         ValidationError: {
@@ -30061,6 +31207,77 @@ export interface operations {
             };
         };
     };
+    list_my_sessions_api_auth_sessions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionItemOut"][];
+                };
+            };
+        };
+    };
+    revoke_session_api_auth_sessions__family_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                family_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevokeSessionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    logout_all_sessions_api_auth_sessions_logout_all_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LogoutAllSessionsOut"];
+                };
+            };
+        };
+    };
     list_users_api_auth_users_get: {
         parameters: {
             query?: never;
@@ -34482,6 +35699,26 @@ export interface operations {
             };
         };
     };
+    schedulers_health_health_schedulers_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SchedulersHealthOut"];
+                };
+            };
+        };
+    };
     list_brackets_api_insurance_brackets_get: {
         parameters: {
             query?: {
@@ -34683,6 +35920,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SchedulerMetricsResponse"];
+                };
+            };
+        };
+    };
+    uptime_webhook_api_internal_uptime_webhook_post: {
+        parameters: {
+            query: {
+                token: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UptimeWebhookOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -37268,6 +38536,92 @@ export interface operations {
             };
         };
     };
+    write_consent_api_parent_me_consent_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConsentEventIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsentEventOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_my_consents_api_parent_me_consents_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsentsResponseOut"];
+                };
+            };
+        };
+    };
+    submit_correct_request_api_parent_me_correct_request_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CorrectRequestIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DsrRequestOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_data_export_api_parent_me_data_export_get: {
         parameters: {
             query?: never;
@@ -37284,6 +38638,92 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    submit_delete_request_api_parent_me_delete_request_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteRequestIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DsrRequestOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_my_dsr_requests_api_parent_me_dsr_requests_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DsrRequestOut"][];
+                };
+            };
+        };
+    };
+    submit_opt_out_request_api_parent_me_opt_out_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OptOutRequestIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DsrRequestOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -37982,6 +39422,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_current_policy_api_parent_policies_current_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyVersionOut"];
                 };
             };
         };
@@ -39778,6 +41238,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_my_data_export_api_portal_my_data_export_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortalMyDataExportOut"];
                 };
             };
         };
@@ -42660,7 +44140,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SalaryDetailAuditLogOut"];
                 };
             };
             /** @description Validation Error */
@@ -42691,7 +44171,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SalaryDetailBreakdownOut"];
                 };
             };
             /** @description Validation Error */
@@ -42757,7 +44237,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SalaryDetailFieldBreakdownOut"];
                 };
             };
             /** @description Validation Error */
@@ -42860,7 +44340,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SalaryDetailUnusedLeavePayoutOut"];
                 };
             };
             /** @description Validation Error */
@@ -43192,7 +44672,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SalaryHistoryItemOut"][];
                 };
             };
             /** @description Validation Error */
@@ -43225,7 +44705,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SalaryHistoryAllOut"];
                 };
             };
             /** @description Validation Error */
@@ -43279,7 +44759,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SalaryRecordItemOut"][];
                 };
             };
             /** @description Validation Error */
@@ -43345,7 +44825,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SalarySnapshotListOut"];
                 };
             };
             /** @description Validation Error */
@@ -43381,7 +44861,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SalarySnapshotCreateResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -43412,7 +44892,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SalarySnapshotDetailOut"];
                 };
             };
             /** @description Validation Error */
@@ -43443,7 +44923,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SalarySnapshotDiffOut"];
                 };
             };
             /** @description Validation Error */
@@ -45357,6 +46837,40 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_student_medical_api_students__student_id__medical_get: {
+        parameters: {
+            query: {
+                /** @description 讀取醫療資訊原因（≥10 字，將寫入 medical_access_log 供稽核） */
+                reason: string;
+            };
+            header?: never;
+            path: {
+                student_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudentMedicalOut"];
                 };
             };
             /** @description Validation Error */
