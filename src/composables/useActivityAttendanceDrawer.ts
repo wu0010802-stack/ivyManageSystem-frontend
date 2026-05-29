@@ -5,6 +5,8 @@ interface AttendanceStudent {
   registration_id: unknown
   is_present: boolean | null
   attendance_notes?: string
+  class_name?: string
+  student_name?: string
 }
 
 interface SessionData {
@@ -27,10 +29,13 @@ export function useActivityAttendanceDrawer({ getSessionFn, updateFn }: { getSes
   const drawerSession = ref<SessionData | null>(null)
   const saveLoading = ref(false)
 
-  // 未點名學生排最前，其餘維持原順序
+  // 先按班級聚集（跨班名冊好找），班級內未點名優先
   const sortedStudents = computed(() => {
     if (!drawerSession.value) return []
     return [...drawerSession.value.students].sort((a, b) => {
+      const ca = a.class_name || ''
+      const cb = b.class_name || ''
+      if (ca !== cb) return ca.localeCompare(cb, 'zh-Hant')
       const aNone = a.is_present === null
       const bNone = b.is_present === null
       if (aNone && !bNone) return -1
