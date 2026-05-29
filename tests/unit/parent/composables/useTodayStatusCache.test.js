@@ -3,7 +3,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const mockApi = vi.hoisted(() => ({ getTodayStatus: vi.fn() }))
 vi.mock('@/parent/api/profile', () => mockApi)
 
-import { useTodayStatusCache, _resetForTest } from '@/parent/composables/useTodayStatusCache'
+import {
+  useTodayStatusCache,
+  _resetForTest,
+  clearTodayStatusCache,
+} from '@/parent/composables/useTodayStatusCache'
 
 describe('useTodayStatusCache', () => {
   beforeEach(() => {
@@ -55,6 +59,20 @@ describe('useTodayStatusCache', () => {
     markStale()
     await refresh()
     expect(mockApi.getTodayStatus).toHaveBeenCalledTimes(2)
+  })
+
+  it('clearTodayStatusCache() 清除 sessionStorage 與 in-memory status（登出用）', async () => {
+    mockApi.getTodayStatus.mockResolvedValue({ data: { items: [{ id: 1 }] } })
+    const { status, refresh } = useTodayStatusCache()
+    await refresh()
+    expect(status.value).toEqual({ items: [{ id: 1 }] })
+    expect(sessionStorage.getItem('parent:today-status:v1')).not.toBeNull()
+
+    clearTodayStatusCache()
+
+    // 共用裝置：下一位家長登入前必須清掉前一位的今日狀態（PII）
+    expect(sessionStorage.getItem('parent:today-status:v1')).toBeNull()
+    expect(status.value).toBeNull()
   })
 
   it('無 BroadcastChannel 環境不 throw', async () => {

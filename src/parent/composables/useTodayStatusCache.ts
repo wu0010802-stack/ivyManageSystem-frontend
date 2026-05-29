@@ -128,6 +128,24 @@ export function useTodayStatusCache() {
   return { status, loading, error, refresh, markStale }
 }
 
+/**
+ * 登出時清除今日狀態快取：sessionStorage + module 層 in-memory status。
+ *
+ * 共用裝置下，下一位家長登入前必須清掉前一位的今日狀態（PII）；否則 60s FRESH_TTL
+ * 內 refresh() 會直接回傳前一位的 cache，導致家長 A 登出後家長 B 看到 A 孩子狀態。
+ * 不關閉 BroadcastChannel（下次 useTodayStatusCache() 會沿用）。
+ */
+export function clearTodayStatusCache() {
+  try {
+    sessionStorage.removeItem(CACHE_KEY)
+  } catch {
+    /* ignore */
+  }
+  status.value = null
+  error.value = null
+  inflight = null
+}
+
 // 測試用：重置 module-level state
 export function _resetForTest() {
   status.value = null
