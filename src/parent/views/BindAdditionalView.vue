@@ -5,25 +5,31 @@ import type { AxiosError } from 'axios'
 import { bindAdditional } from '../api/auth'
 import { useChildrenStore } from '../stores/children'
 import { toast } from '../utils/toast'
+import { useFriendlyError } from '@/composables/useFriendlyError'
+import type { FriendlyError } from '@/utils/errorCodeRegistry'
 import BrandMark from '@/components/brand/BrandMark.vue'
 
 const router = useRouter()
 const childrenStore = useChildrenStore()
+const { getFriendly } = useFriendlyError()
 
 const code = ref('')
 const submitting = ref(false)
-const errorMessage = ref('')
-// 後端 BusinessError code（含 BIND_CODE_NOT_FOUND/EXPIRED/USED 與 hijack 防護的 HTTPException 字串）
+const errorState = ref<FriendlyError | null>(null)
+// 後端 BusinessError code（含 BIND_CODE_NOT_FOUND/EXPIRED/USED/INVALID/ALREADY_USED 與 hijack 防護的 HTTPException）
 const errorCode = ref('')
 
 const trimmed = computed(() => code.value.trim().toUpperCase())
 const needsNewCode = computed(
-  () => errorCode.value === 'BIND_CODE_EXPIRED' || errorCode.value === 'BIND_CODE_USED',
+  () =>
+    errorCode.value === 'BIND_CODE_EXPIRED' ||
+    errorCode.value === 'BIND_CODE_USED' ||
+    errorCode.value === 'BIND_CODE_ALREADY_USED',
 )
 const schoolPhone = (import.meta.env.VITE_SCHOOL_PHONE as string | undefined) || ''
 
 async function submit() {
-  errorMessage.value = ''
+  errorState.value = null
   errorCode.value = ''
   if (!trimmed.value) {
     toast.warn('請輸入綁定碼')
@@ -40,8 +46,9 @@ async function submit() {
     const e = err as AxiosError
     const detail = e?.errorDetail as { code?: string } | null | undefined
     errorCode.value = String(detail?.code || '')
-    errorMessage.value = String(e?.displayMessage || '綁定碼無效或已被使用')
-    toast.error(errorMessage.value)
+    errorState.value = getFriendly(err)
+    // toast 仍保留作為立即觸發提示（visible 即使 user 已 scroll 開 input 區），inline 區塊提供 nextStep
+    toast.error(errorState.value.message)
   } finally {
     submitting.value = false
   }
@@ -49,7 +56,7 @@ async function submit() {
 
 function resetForRetry() {
   code.value = ''
-  errorMessage.value = ''
+  errorState.value = null
   errorCode.value = ''
 }
 </script>
@@ -76,14 +83,22 @@ function resetForRetry() {
           @keydown.enter="submit"
         />
       </div>
-      <p
-        v-if="errorMessage"
+      <div
+        v-if="errorState"
         class="error"
         role="alert"
         aria-live="assertive"
+        data-testid="bind-add-error"
       >
-        {{ errorMessage }}
-      </p>
+        <p class="error-message">{{ errorState.message }}</p>
+        <p
+          v-if="errorState.nextStep"
+          class="error-next-step"
+          data-testid="bind-add-error-next-step"
+        >
+          💡 {{ errorState.nextStep }}
+        </p>
+      </div>
 
       <div v-if="needsNewCode" class="recovery-actions">
         <a
@@ -177,6 +192,18 @@ function resetForRetry() {
   background: var(--coral-100, #ffe3e0);
   border-radius: 10px;
   font-weight: 500;
+}
+.error .error-message {
+  margin: 0;
+}
+.error .error-next-step {
+  margin: 4px 0 0;
+  padding-top: 4px;
+  border-top: 1px dashed var(--coral-300, #ffb5ad);
+  color: var(--pt-text-body, #5a4a4a);
+  font-weight: 400;
+  font-size: 12px;
+  line-height: 1.5;
 }
 .recovery-actions {
   display: flex;

@@ -4,31 +4,43 @@ import { useRoute, useRouter } from 'vue-router'
 import type { AxiosError } from 'axios'
 import { bind } from '../api/auth'
 import { useParentAuthStore } from '../stores/parentAuth'
+import { useFriendlyError } from '@/composables/useFriendlyError'
+import type { FriendlyError } from '@/utils/errorCodeRegistry'
 import BrandMark from '@/components/brand/BrandMark.vue'
 
 const route = useRoute()
 const router = useRouter()
 const authStore = useParentAuthStore()
+const { getFriendly } = useFriendlyError()
 
 const code = ref('')
 const submitting = ref(false)
-const errorMessage = ref('')
-// 後端 BusinessError code：BIND_CODE_NOT_FOUND / EXPIRED / USED；其他失敗為空字串
+// friendly error 狀態：含 message + nextStep + level；null 表示無錯誤
+const errorState = ref<FriendlyError | null>(null)
+// 後端 BusinessError code：BIND_CODE_NOT_FOUND / EXPIRED / USED / INVALID / ALREADY_USED；其他失敗為空字串
 const errorCode = ref('')
 
 const nameHint = computed(() => String(route.query.name_hint || ''))
 const trimmedCode = computed(() => code.value.trim().toUpperCase())
-// EXPIRED / USED 才需要「聯絡園所索取新碼」CTA；NOT_FOUND 只需提示重新輸入
+// EXPIRED / USED / ALREADY_USED 才需要「聯絡園所索取新碼」CTA；其他（含 NOT_FOUND）只需提示重新輸入
 const needsNewCode = computed(
-  () => errorCode.value === 'BIND_CODE_EXPIRED' || errorCode.value === 'BIND_CODE_USED',
+  () =>
+    errorCode.value === 'BIND_CODE_EXPIRED' ||
+    errorCode.value === 'BIND_CODE_USED' ||
+    errorCode.value === 'BIND_CODE_ALREADY_USED',
 )
 const schoolPhone = (import.meta.env.VITE_SCHOOL_PHONE as string | undefined) || ''
 
+function _setLocalError(message: string) {
+  errorCode.value = ''
+  errorState.value = { message, level: 'warning' }
+}
+
 async function submit() {
-  errorMessage.value = ''
+  errorState.value = null
   errorCode.value = ''
   if (!trimmedCode.value) {
-    errorMessage.value = '請輸入綁定碼'
+    _setLocalError('請輸入綁定碼')
     return
   }
   submitting.value = true
@@ -38,13 +50,13 @@ async function submit() {
       authStore.setUser(data.user)
       router.replace('/home')
     } else {
-      errorMessage.value = '綁定失敗，請聯絡園所'
+      _setLocalError('綁定失敗，請聯絡園所')
     }
   } catch (err: unknown) {
     const e = err as AxiosError
     const detail = e?.errorDetail as { code?: string } | null | undefined
     errorCode.value = String(detail?.code || '')
-    errorMessage.value = String(e?.displayMessage || '綁定碼無效或已過期')
+    errorState.value = getFriendly(err)
   } finally {
     submitting.value = false
   }
@@ -52,7 +64,7 @@ async function submit() {
 
 function resetForRetry() {
   code.value = ''
-  errorMessage.value = ''
+  errorState.value = null
   errorCode.value = ''
 }
 </script>
@@ -85,15 +97,26 @@ function resetForRetry() {
         />
       </div>
 
-      <p
-        v-if="errorMessage"
+      <div
+        v-if="errorState"
         class="error"
         role="alert"
         aria-live="assertive"
+        data-testid="bind-error"
       >
-        <span class="material-symbols-rounded" aria-hidden="true">error</span>
-        {{ errorMessage }}
-      </p>
+        <p class="error-message">
+          <span class="material-symbols-rounded" aria-hidden="true">error</span>
+          {{ errorState.message }}
+        </p>
+        <p
+          v-if="errorState.nextStep"
+          class="error-next-step"
+          data-testid="bind-error-next-step"
+        >
+          <span class="material-symbols-rounded" aria-hidden="true">tips_and_updates</span>
+          {{ errorState.nextStep }}
+        </p>
+      </div>
 
       <div v-if="needsNewCode" class="recovery-actions">
         <a
@@ -221,7 +244,7 @@ function resetForRetry() {
 
 .error {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 6px;
   color: var(--coral-700, #b14545);
   font-size: 13px;
@@ -234,6 +257,23 @@ function resetForRetry() {
 .error .material-symbols-rounded {
   font-size: 18px;
   font-variation-settings: 'FILL' 1, 'wght' 500;
+}
+.error .error-message {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+}
+.error .error-next-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  padding-top: 4px;
+  border-top: 1px dashed var(--coral-300, #ffb5ad);
+  color: var(--pt-text-body, #5a4a4a);
+  font-weight: 400;
+  line-height: 1.5;
 }
 
 .recovery-actions {

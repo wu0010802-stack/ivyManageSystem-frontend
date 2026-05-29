@@ -8,6 +8,7 @@ import ChildContextHeader from '../components/ChildContextHeader.vue'
 import { getTodayContactBook, listContactBook } from '../api/contactBook'
 import type { ContactBookEntry as CbEntry } from '../api/contactBook'
 import { toast } from '../utils/toast'
+import { useFriendlyError } from '@/composables/useFriendlyError'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import { useIncrementalRender } from '../composables/useIncrementalRender'
 import EmptyState from '@/components/common/EmptyState.vue'
@@ -22,6 +23,7 @@ import ContactBookListItem from '../components/contact-book/ContactBookListItem.
 const router = useRouter()
 const childrenStore = useChildrenStore()
 const { selectedId: selectedStudentId, ensureSelected } = useChildSelection()
+const { getFriendly } = useFriendlyError()
 
 // 切換小孩時舊 request 自動 abort，避免新舊小孩聯絡簿錯亂（P1-19）。
 const { data: cbBundle, error: cbError, pending: loading, refresh: refreshCb } =
@@ -94,8 +96,16 @@ async function fetchAll() {
 }
 
 watch(cbError, (err) => {
-  const e = err as Record<string, unknown> | null
-  if (e) toast.error(String(e?.displayMessage || '載入聯絡簿失敗'))
+  if (!err) return
+  // 接 BusinessError envelope（STUDENT_NOT_LINKED_TO_PARENT / PORTAL_DATA_UNAVAILABLE /
+  // CONTACT_BOOK_NOT_PUBLISHED 等）；組 message + nextStep 字串給 toast 顯示
+  const friendly = getFriendly(err)
+  const text = friendly.nextStep
+    ? `${friendly.message}｜${friendly.nextStep}`
+    : friendly.message
+  if (friendly.level === 'info') toast.info(text)
+  else if (friendly.level === 'warning') toast.warn(text)
+  else toast.error(text)
 })
 
 onMounted(async () => {
