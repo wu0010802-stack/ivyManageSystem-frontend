@@ -12944,6 +12944,32 @@ export interface components {
             /** Updated */
             updated: unknown;
         };
+        /**
+         * ActivityClassOptionsOut
+         * @description GET /class-options 回應。
+         *
+         *     options 為 Classroom.name 字串清單（filter is_active=True，依 id 排序）；
+         *     僅班級代稱，非 PII。
+         */
+        ActivityClassOptionsOut: {
+            /** Options */
+            options: unknown;
+        };
+        /**
+         * ActivityPosterUploadResultOut
+         * @description POST /settings/poster 海報上傳 200 回應。
+         *
+         *     回 {message, poster_url}：poster_url 為 backend.public_url 產出的對外網址
+         *     （local 模式：/api/activity/public/poster/<file>；supabase 模式：
+         *     https://<project>.supabase.co/.../activity-posters/<file>）。
+         *     不用 _common.MutationResultOut（後者欄位為 id）— 重用會 silent rename。
+         */
+        ActivityPosterUploadResultOut: {
+            /** Message */
+            message: unknown;
+            /** Poster Url */
+            poster_url: unknown;
+        };
         /** ActivityRateAggregateOut */
         ActivityRateAggregateOut: {
             /** Activity Rate */
@@ -12956,6 +12982,67 @@ export interface components {
             registered_for_activity: number;
             /** Suggested Score Delta */
             suggested_score_delta: string;
+        };
+        /**
+         * ActivityRegistrationChangeItemOut
+         * @description GET /changes items[] 單筆 RegistrationChange 稽核紀錄。
+         *
+         *     student_name 為快照欄位（報名當下 snapshot），ACTIVITY_READ 後台顯示。
+         *     changed_by 為操作者 username 或系統字串，非家長/學生 PII。
+         */
+        ActivityRegistrationChangeItemOut: {
+            /** Change Type */
+            change_type: unknown;
+            /** Changed By */
+            changed_by?: unknown;
+            /** Created At */
+            created_at?: unknown;
+            /** Description */
+            description: unknown;
+            /** Id */
+            id: unknown;
+            /** Registration Id */
+            registration_id: unknown;
+            /** Student Name */
+            student_name: unknown;
+        };
+        /**
+         * ActivityRegistrationChangeListOut
+         * @description GET /changes 列表 + 總筆數。
+         */
+        ActivityRegistrationChangeListOut: {
+            /** Items */
+            items: unknown;
+            /** Total */
+            total: unknown;
+        };
+        /**
+         * ActivityRegistrationTimeOut
+         * @description GET /settings/registration-time 回應。
+         *
+         *     對應 _serialize_settings 輸出：未設定時 is_open=False，其餘欄位 None；
+         *     已設定時各欄位來自 ActivityRegistrationSettings ORM。open_at / close_at
+         *     在 ORM 為 String 欄位（ISO 8601），故為 Optional[str]。
+         */
+        ActivityRegistrationTimeOut: {
+            /** Close At */
+            close_at?: unknown;
+            /** Event Date Label */
+            event_date_label?: unknown;
+            /** Form Card Title */
+            form_card_title?: unknown;
+            /** Is Open */
+            is_open: unknown;
+            /** Open At */
+            open_at?: unknown;
+            /** Page Title */
+            page_title?: unknown;
+            /** Poster Url */
+            poster_url?: unknown;
+            /** Target Audience */
+            target_audience?: unknown;
+            /** Term Label */
+            term_label?: unknown;
         };
         /**
          * ActivitySessionCreateResultOut
@@ -19273,6 +19360,137 @@ export interface components {
             /** Url */
             url?: unknown;
         };
+        /**
+         * ParentPortalMessageAttachmentOut
+         * @description 訊息附件單筆（_attachment_to_dict 序列化結果）。
+         *
+         *     回傳於：
+         *     - POST /threads/{id}/messages/{mid}/attach 的 response（單張）
+         *     - 被 ParentPortalMessageOut.attachments 內嵌
+         */
+        ParentPortalMessageAttachmentOut: {
+            /** Display Url */
+            display_url?: unknown;
+            /** Id */
+            id: unknown;
+            /** Mime Type */
+            mime_type?: unknown;
+            /** Original Filename */
+            original_filename?: unknown;
+            /** Size Bytes */
+            size_bytes?: unknown;
+            /** Thumb Url */
+            thumb_url?: unknown;
+            /** Url */
+            url?: unknown;
+        };
+        /**
+         * ParentPortalMessageListOut
+         * @description GET /messages/threads/{id}/messages — cursor pagination 訊息列表（DESC by id）。
+         */
+        ParentPortalMessageListOut: {
+            /** Items */
+            items: unknown;
+            /** Next Cursor */
+            next_cursor?: unknown;
+        };
+        /**
+         * ParentPortalMessageOut
+         * @description 單則訊息（_message_to_dict 序列化結果）。
+         *
+         *     回傳於：
+         *     - ParentPortalMessageListOut.items 元素
+         *     - ParentPortalMessageReplyOut 透過繼承共用欄位
+         */
+        ParentPortalMessageOut: {
+            /** Attachments */
+            attachments?: unknown;
+            /** Body */
+            body?: unknown;
+            /** Client Request Id */
+            client_request_id?: unknown;
+            /** Created At */
+            created_at?: unknown;
+            /** Deleted */
+            deleted: unknown;
+            /** Id */
+            id: unknown;
+            /** Sender Role */
+            sender_role: unknown;
+            /** Sender User Id */
+            sender_user_id: unknown;
+            /** Source */
+            source: unknown;
+            /** Thread Id */
+            thread_id: unknown;
+        };
+        /**
+         * ParentPortalMessageReplyOut
+         * @description POST /messages/threads/{id}/messages — 家長回覆。
+         *
+         *     Flat shape：繼承 ParentPortalMessageOut 所有欄位 + idempotent_replay。
+         *     對應 router 端 `{**_message_to_dict(...), "idempotent_replay": replayed}`。
+         */
+        ParentPortalMessageReplyOut: {
+            /** Attachments */
+            attachments?: unknown;
+            /** Body */
+            body?: unknown;
+            /** Client Request Id */
+            client_request_id?: unknown;
+            /** Created At */
+            created_at?: unknown;
+            /** Deleted */
+            deleted: unknown;
+            /** Id */
+            id: unknown;
+            /** Idempotent Replay */
+            idempotent_replay: unknown;
+            /** Sender Role */
+            sender_role: unknown;
+            /** Sender User Id */
+            sender_user_id: unknown;
+            /** Source */
+            source: unknown;
+            /** Thread Id */
+            thread_id: unknown;
+        };
+        /**
+         * ParentPortalMessageThreadListOut
+         * @description GET /messages/threads — cursor pagination thread 列表。
+         */
+        ParentPortalMessageThreadListOut: {
+            /** Items */
+            items: unknown;
+            /** Next Cursor */
+            next_cursor?: unknown;
+        };
+        /**
+         * ParentPortalMessageThreadOut
+         * @description 單筆 thread summary（_thread_summary 序列化結果）。
+         *
+         *     回傳於：
+         *     - GET /threads/{id}（單筆）
+         *     - ParentPortalMessageThreadListOut.items 元素
+         */
+        ParentPortalMessageThreadOut: {
+            /** Id */
+            id: unknown;
+            /** Last Message At */
+            last_message_at?: unknown;
+            /** Last Message Preview */
+            last_message_preview?: unknown;
+            /** Student Id */
+            student_id: unknown;
+            /** Student Name */
+            student_name?: unknown;
+            /** Teacher Name */
+            teacher_name?: unknown;
+            /** Teacher User Id */
+            teacher_user_id: unknown;
+            /** Unread Count */
+            unread_count: unknown;
+        };
         /** ParentRecipientItem */
         ParentRecipientItem: {
             /** Classroom Id */
@@ -21140,6 +21358,188 @@ export interface components {
              * @description like / love / celebrate
              */
             reaction: string;
+        };
+        /**
+         * RecruitmentCampusSettingOut
+         * @description 本園基本設定（地址 / 座標 / 通勤模式）。
+         */
+        RecruitmentCampusSettingOut: {
+            /** Campus Address */
+            campus_address?: unknown;
+            /** Campus Lat */
+            campus_lat?: unknown;
+            /** Campus Lng */
+            campus_lng?: unknown;
+            /** Campus Name */
+            campus_name: unknown;
+            /** Travel Mode */
+            travel_mode: unknown;
+            /** Updated At */
+            updated_at?: unknown;
+        };
+        /**
+         * RecruitmentMarketDistrictRowOut
+         * @description 市場情報單一行政區彙總（lead + 人口 + 競品）。
+         */
+        RecruitmentMarketDistrictRowOut: {
+            /** Avg Travel Minutes */
+            avg_travel_minutes?: unknown;
+            /** Competitor Capacity */
+            competitor_capacity?: unknown;
+            /** Competitor Count */
+            competitor_count?: unknown;
+            /** Data Completeness */
+            data_completeness: unknown;
+            /** Deposit Rate 90D */
+            deposit_rate_90d: unknown;
+            /** District */
+            district: unknown;
+            /** Lead Count 30D */
+            lead_count_30d: unknown;
+            /** Lead Count 90D */
+            lead_count_90d: unknown;
+            /** Penalty Count */
+            penalty_count?: unknown;
+            /** Population 0 6 */
+            population_0_6?: unknown;
+            /** Population Density */
+            population_density?: unknown;
+            /** Private Count */
+            private_count?: unknown;
+            /** Public Count */
+            public_count?: unknown;
+            /** Town Code */
+            town_code?: unknown;
+        };
+        /**
+         * RecruitmentMarketIntelligenceSnapshotOut
+         * @description 市場情報快照。
+         */
+        RecruitmentMarketIntelligenceSnapshotOut: {
+            campus: unknown;
+            /** Data Completeness */
+            data_completeness: unknown;
+            /** Districts */
+            districts: unknown;
+            /** Synced At */
+            synced_at?: unknown;
+        };
+        /**
+         * RecruitmentMarketSyncResultOut
+         * @description sync 完成後回傳：彙總 + 快照。
+         */
+        RecruitmentMarketSyncResultOut: {
+            /** Area Rows */
+            area_rows: unknown;
+            campus: unknown;
+            /** Hotspots Synced */
+            hotspots_synced: unknown;
+            snapshot: unknown;
+            /** Synced At */
+            synced_at?: unknown;
+            /** Target County */
+            target_county?: unknown;
+            /** Warning */
+            warning?: unknown;
+        };
+        /**
+         * RecruitmentNearbyKindergartenOut
+         * @description 單筆鄰近幼兒園資訊（Google Places + MOE enrichment 合併）。
+         */
+        RecruitmentNearbyKindergartenOut: {
+            /** Approved Capacity */
+            approved_capacity?: unknown;
+            /** Approved Date */
+            approved_date?: unknown;
+            /** Business Status */
+            business_status?: unknown;
+            /** Db Id */
+            db_id?: unknown;
+            /** Distance Km */
+            distance_km?: unknown;
+            /** Floor */
+            floor?: unknown;
+            /** Formatted Address */
+            formatted_address?: unknown;
+            /** Google Maps Uri */
+            google_maps_uri?: unknown;
+            /** Has After School */
+            has_after_school?: unknown;
+            /** Has Penalty */
+            has_penalty?: unknown;
+            /** Indoor Area Sqm */
+            indoor_area_sqm?: unknown;
+            /** Is Active */
+            is_active?: unknown;
+            /** Lat */
+            lat?: unknown;
+            /** Lng */
+            lng?: unknown;
+            /** Monthly Fee */
+            monthly_fee?: unknown;
+            /** Name */
+            name?: unknown;
+            /** Outdoor Area Sqm */
+            outdoor_area_sqm?: unknown;
+            /** Owner Name */
+            owner_name?: unknown;
+            /** Phone */
+            phone?: unknown;
+            /** Place Id */
+            place_id?: unknown;
+            /** Pre Public Type */
+            pre_public_type?: unknown;
+            /** Primary Type */
+            primary_type?: unknown;
+            /** Rating */
+            rating?: unknown;
+            /** School Type */
+            school_type?: unknown;
+            /** Shuttle */
+            shuttle?: unknown;
+            /** Source */
+            source?: unknown;
+            /** Total Area Sqm */
+            total_area_sqm?: unknown;
+            /** Types */
+            types?: unknown;
+            /** User Rating Count */
+            user_rating_count?: unknown;
+            /** Website */
+            website?: unknown;
+        };
+        /**
+         * RecruitmentNearbyKindergartensOut
+         * @description 鄰近幼兒園查詢結果包。
+         */
+        RecruitmentNearbyKindergartensOut: {
+            /** Message */
+            message?: unknown;
+            /** Provider Available */
+            provider_available: unknown;
+            /** Provider Name */
+            provider_name: unknown;
+            query_bounds?: unknown;
+            /** Schools */
+            schools: unknown;
+            /** Total */
+            total: unknown;
+        };
+        /**
+         * RecruitmentNearbyQueryBoundsOut
+         * @description 前端傳入的視野 bounding box 回放（debug 用）。
+         */
+        RecruitmentNearbyQueryBoundsOut: {
+            /** East */
+            east: unknown;
+            /** North */
+            north: unknown;
+            /** South */
+            south: unknown;
+            /** West */
+            west: unknown;
+            /** Zoom */
+            zoom?: unknown;
         };
         /**
          * RecruitmentOptionsOut
@@ -23774,6 +24174,27 @@ export interface components {
             /** Error Type */
             type: string;
         };
+        /**
+         * VendorPaymentAttachmentMetaOut
+         * @description 廠商付款附件 metadata（單筆）。
+         *
+         *     對應 ``VendorPayment.attachments`` JSONB list item，與
+         *     ``POST /vendor-payments/{id}/attachments`` 回傳同 shape。
+         */
+        VendorPaymentAttachmentMetaOut: {
+            /** Filename */
+            filename: unknown;
+            /** Key */
+            key: unknown;
+            /** Mime Type */
+            mime_type?: unknown;
+            /** Size */
+            size: unknown;
+            /** Uploaded At */
+            uploaded_at?: unknown;
+            /** Uploaded By Id */
+            uploaded_by_id?: unknown;
+        };
         /** VendorPaymentCreate */
         VendorPaymentCreate: {
             /** Amount */
@@ -23796,6 +24217,66 @@ export interface components {
             payment_method: "cash" | "bank_transfer" | "check" | "linepay" | "other";
             /** Vendor Name */
             vendor_name: string;
+        };
+        /**
+         * VendorPaymentListOut
+         * @description GET /vendor-payments 分頁列表回傳。
+         */
+        VendorPaymentListOut: {
+            /** Items */
+            items: unknown;
+            /** Page */
+            page: unknown;
+            /** Page Size */
+            page_size: unknown;
+            /** Total */
+            total: unknown;
+        };
+        /**
+         * VendorPaymentOut
+         * @description 單筆廠商付款（含簽收狀態 / 附件 metadata）。
+         *
+         *     對應 router ``_to_dict(row)`` 輸出。
+         */
+        VendorPaymentOut: {
+            /** Amount */
+            amount?: unknown;
+            /** Attachments */
+            attachments: unknown;
+            /** Created At */
+            created_at?: unknown;
+            /** Created By Id */
+            created_by_id?: unknown;
+            /** Created By Name */
+            created_by_name?: unknown;
+            /** Description */
+            description?: unknown;
+            /** Has Signature */
+            has_signature: unknown;
+            /** Id */
+            id: unknown;
+            /** Invoice Number */
+            invoice_number?: unknown;
+            /** Notes */
+            notes?: unknown;
+            /** Payment Date */
+            payment_date?: unknown;
+            /** Payment Method */
+            payment_method: unknown;
+            /** Signature Kind */
+            signature_kind?: unknown;
+            /** Signed At */
+            signed_at?: unknown;
+            /** Signer Id */
+            signer_id?: unknown;
+            /** Signer Name */
+            signer_name?: unknown;
+            /** Status */
+            status: unknown;
+            /** Updated At */
+            updated_at?: unknown;
+            /** Vendor Name */
+            vendor_name: unknown;
         };
         /** VendorPaymentSignRequest */
         VendorPaymentSignRequest: {
@@ -24491,7 +24972,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ActivityRegistrationChangeListOut"];
                 };
             };
             /** @description Validation Error */
@@ -24520,7 +25001,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ActivityClassOptionsOut"];
                 };
             };
         };
@@ -26631,7 +27112,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ActivityPosterUploadResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -26660,7 +27141,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ActivityRegistrationTimeOut"];
                 };
             };
         };
@@ -26684,7 +27165,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeleteResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -37088,7 +37569,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ParentPortalMessageThreadListOut"];
                 };
             };
             /** @description Validation Error */
@@ -37119,7 +37600,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ParentPortalMessageThreadOut"];
                 };
             };
             /** @description Validation Error */
@@ -37153,7 +37634,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ParentPortalMessageListOut"];
                 };
             };
             /** @description Validation Error */
@@ -37188,7 +37669,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ParentPortalMessageReplyOut"];
                 };
             };
             /** @description Validation Error */
@@ -37224,7 +37705,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ParentPortalMessageAttachmentOut"];
                 };
             };
             /** @description Validation Error */
@@ -40802,7 +41283,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["RecruitmentCampusSettingOut"];
                 };
             };
         };
@@ -40826,7 +41307,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["RecruitmentCampusSettingOut"];
                 };
             };
             /** @description Validation Error */
@@ -41183,7 +41664,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["RecruitmentMarketIntelligenceSnapshotOut"];
                 };
             };
             /** @description Validation Error */
@@ -41214,7 +41695,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["RecruitmentMarketSyncResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -41340,7 +41821,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["RecruitmentNearbyKindergartensOut"];
                 };
             };
             /** @description Validation Error */
@@ -46120,7 +46601,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["VendorPaymentListOut"];
                 };
             };
             /** @description Validation Error */
@@ -46184,7 +46665,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["VendorPaymentOut"];
                 };
             };
             /** @description Validation Error */
@@ -46285,7 +46766,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["VendorPaymentAttachmentMetaOut"];
                 };
             };
             /** @description Validation Error */
