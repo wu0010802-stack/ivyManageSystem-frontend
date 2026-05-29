@@ -10,13 +10,24 @@ import {
   replaceAnnouncementParentRecipients,
   getAnnouncementRecipients,
   getAnnouncementReaders,
+  uploadAnnouncementAttachment,
+  deleteAnnouncementAttachment,
 } from '@/api/announcements'
 import { useEmployeeStore } from '@/stores/employee'
 import { useClassroomStore } from '@/stores/classroom'
-import { Top } from '@element-plus/icons-vue'
+import { Top, Document } from '@element-plus/icons-vue'
 import { apiError } from '@/utils/error'
 
 type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
+
+type AttachmentItem = {
+  id: number
+  filename: string
+  mime_type: string
+  size_bytes: number
+  url: string
+  thumb_url: string | null
+}
 
 interface AnnouncementItem {
   id: number
@@ -32,6 +43,7 @@ interface AnnouncementItem {
   publish_at?: string | null
   expires_at?: string | null
   status?: 'scheduled' | 'active' | 'expired'
+  attachments?: AttachmentItem[]
   [key: string]: unknown
 }
 
@@ -61,6 +73,43 @@ const priorityOptions: { value: string; label: string; type: ElTagType }[] = [
 ]
 
 const priorityMap: Record<string, { value: string; label: string; type: ElTagType }> = Object.fromEntries(priorityOptions.map(p => [p.value, p]))
+
+// ── Attachment state ──────────────────────────────────────────────────────
+type PendingAttachment = { file: File; uid: number }
+
+const pendingAttachments = ref<PendingAttachment[]>([])
+const existingAttachments = ref<AttachmentItem[]>([])
+const attachmentsToDelete = ref<number[]>([])
+
+const ATTACHMENT_MAX = 5
+const ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024 // 10 MB
+
+const attachmentSlotsLeft = computed(
+  () => ATTACHMENT_MAX - existingAttachments.value.length,
+)
+
+const handleAttachmentChange = (uploadFile: { uid: number; raw?: File }) => {
+  if (!uploadFile.raw) return
+  pendingAttachments.value.push({ file: uploadFile.raw, uid: uploadFile.uid })
+}
+
+const handleAttachmentExceed = () => {
+  ElMessage.warning(`附件上限 ${ATTACHMENT_MAX} 個`)
+}
+
+const handleAttachmentBefore = (file: File) => {
+  if (file.size > ATTACHMENT_MAX_BYTES) {
+    ElMessage.warning(`單檔上限 10MB（${file.name} 超過）`)
+    return false
+  }
+  return true
+}
+
+const markAttachmentForDelete = (attId: number) => {
+  existingAttachments.value = existingAttachments.value.filter(a => a.id !== attId)
+  attachmentsToDelete.value.push(attId)
+}
+// ─────────────────────────────────────────────────────────────────────────
 
 type ReaderRow = { employee_id: number; name: string; read_at: string | null }
 
@@ -126,6 +175,9 @@ const resetForm = () => {
   form.parent_target_classroom_ids = []
   form.publish_at = null
   form.expires_at = null
+  pendingAttachments.value = []
+  existingAttachments.value = []
+  attachmentsToDelete.value = []
 }
 
 const fetchAnnouncements = async () => {
@@ -159,6 +211,9 @@ const openEdit = async (row: AnnouncementItem) => {
   form.restrict_recipients = false
   form.parent_visibility = 'off'
   form.parent_target_classroom_ids = []
+  pendingAttachments.value = []
+  attachmentsToDelete.value = []
+  existingAttachments.value = (row.attachments as AttachmentItem[]) ?? []
   isEdit.value = true
   dialogVisible.value = true
 
@@ -241,6 +296,24 @@ const handleSubmit = async () => {
       })
       const resData = res.data as { id?: number; announcement?: { id?: number } }
       announcementId = resData?.id ?? resData?.announcement?.id ?? null
+    }
+
+    // 附件操作（刪除 + 上傳）
+    if (announcementId) {
+      if (attachmentsToDelete.value.length > 0) {
+        await Promise.allSettled(
+          attachmentsToDelete.value.map(attId =>
+            deleteAnnouncementAttachment(announcementId as number, attId),
+          ),
+        )
+      }
+      if (pendingAttachments.value.length > 0) {
+        await Promise.all(
+          pendingAttachments.value.map(p =>
+            uploadAnnouncementAttachment(announcementId as number, p.file),
+          ),
+        )
+      }
     }
 
     // 家長端 scope 同步（plan A.5）
@@ -492,6 +565,37 @@ onMounted(() => {
           />
         </el-form-item>
 
+        <el-divider content-position="left">附件</el-divider>
+
+        <el-form-item label="附件">
+          <div class="attachments-block">
+            <div v-if="existingAttachments.length" class="existing-attachments">
+              <div v-for="att in existingAttachments" :key="att.id" class="att-row">
+                <img v-if="att.thumb_url" :src="att.thumb_url" class="att-thumb" alt="" />
+                <el-icon v-else><Document /></el-icon>
+                <span class="att-filename">{{ att.filename }}</span>
+                <el-button
+                  link
+                  type="danger"
+                  size="small"
+                  @click="markAttachmentForDelete(att.id)"
+                >移除</el-button>
+              </div>
+            </div>
+            <el-upload
+              :auto-upload="false"
+              :multiple="true"
+              :limit="attachmentSlotsLeft"
+              :on-change="handleAttachmentChange"
+              :on-exceed="handleAttachmentExceed"
+              :before-upload="handleAttachmentBefore"
+              accept=".jpg,.jpeg,.png,.gif,.heic,.heif,.pdf"
+            >
+              <el-button>選擇檔案（圖片/PDF，最多 5 個、單檔 10MB）</el-button>
+            </el-upload>
+          </div>
+        </el-form-item>
+
         <el-divider content-position="left">家長端</el-divider>
 
         <el-form-item label="家長端">
@@ -598,5 +702,44 @@ onMounted(() => {
 
 .text-muted {
   color: var(--text-tertiary);
+}
+
+.attachments-block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.existing-attachments {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.att-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--bg-color);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+}
+
+.att-thumb {
+  width: 32px;
+  height: 32px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+.att-filename {
+  flex: 1;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>

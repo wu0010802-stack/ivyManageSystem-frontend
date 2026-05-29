@@ -1,8 +1,18 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import { Document, Top } from '@element-plus/icons-vue'
 import { getPortalAnnouncements, markAnnouncementRead } from '@/api/portal'
 import { apiError } from '@/utils/error'
+
+type AttachmentItem = {
+  id: number
+  filename: string
+  mime_type: string
+  size_bytes: number
+  url: string
+  thumb_url: string | null
+}
 
 interface Announcement {
   id: number
@@ -13,6 +23,7 @@ interface Announcement {
   is_pinned: boolean
   created_by_name: string
   created_at: string
+  attachments?: AttachmentItem[]
 }
 const loading = ref(false)
 const announcements = ref<Announcement[]>([])
@@ -79,6 +90,10 @@ const formatDate = (isoStr: string) => {
 
 const unreadCount = computed(() => announcements.value.filter(a => !a.is_read).length)
 
+const openAttachment = (att: AttachmentItem) => {
+  window.open(att.url, '_blank', 'noopener')
+}
+
 onMounted(fetchAnnouncements)
 </script>
 
@@ -133,6 +148,25 @@ onMounted(fetchAnnouncements)
 
         <div v-if="expandedId === ann.id" class="ann-content">
           {{ ann.content ?? '' }}
+        </div>
+
+        <div
+          v-if="expandedId === ann.id && (ann.attachments?.length ?? 0) > 0"
+          class="ann-attachments"
+        >
+          <div
+            v-for="att in ann.attachments"
+            :key="att.id"
+            class="att-item"
+            @click.stop="openAttachment(att)"
+            role="button"
+            :tabindex="0"
+            @keydown.enter="openAttachment(att)"
+          >
+            <img v-if="att.thumb_url" :src="att.thumb_url" :alt="att.filename" class="att-thumb" />
+            <el-icon v-else size="32"><Document /></el-icon>
+            <span class="att-name">{{ att.filename }}</span>
+          </div>
         </div>
       </div>
     </div>
@@ -252,5 +286,43 @@ onMounted(fetchAnnouncements)
   .ann-meta {
     margin-top: 4px;
   }
+}
+
+.ann-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.att-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  cursor: pointer;
+  min-width: 96px;
+}
+
+.att-item:hover {
+  background: var(--bg-color);
+}
+
+.att-thumb {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+.att-name {
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-align: center;
+  max-width: 96px;
+  word-break: break-word;
 }
 </style>

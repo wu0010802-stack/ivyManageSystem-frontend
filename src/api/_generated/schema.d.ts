@@ -1919,6 +1919,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/announcements/{announcement_id}/attachments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload Announcement Attachment
+         * @description 上傳公告附件（圖片 / PDF），單一公告最多 5 個。
+         */
+        post: operations["upload_announcement_attachment_api_announcements__announcement_id__attachments_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/announcements/{announcement_id}/attachments/{attachment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Announcement Attachment
+         * @description 軟刪除公告附件。實檔保留 90 天由清理 job 接手。
+         */
+        delete: operations["delete_announcement_attachment_api_announcements__announcement_id__attachments__attachment_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/announcements/{announcement_id}/parent-recipients": {
         parameters: {
             query?: never;
@@ -13806,6 +13846,24 @@ export interface components {
             /** Severity */
             severity?: ("mild" | "moderate" | "severe") | null;
         };
+        /**
+         * AnnouncementAttachmentOut
+         * @description 單筆公告附件（list 內嵌）。
+         */
+        AnnouncementAttachmentOut: {
+            /** Filename */
+            filename: unknown;
+            /** Id */
+            id: unknown;
+            /** Mime Type */
+            mime_type: unknown;
+            /** Size Bytes */
+            size_bytes: unknown;
+            /** Thumb Url */
+            thumb_url?: unknown;
+            /** Url */
+            url: unknown;
+        };
         /** AnnouncementCreate */
         AnnouncementCreate: {
             /** Content */
@@ -13834,6 +13892,8 @@ export interface components {
          * @description 單筆公告（管理員列表用，含 readers/recipient 統計）。
          */
         AnnouncementItemOut: {
+            /** Attachments */
+            attachments?: unknown;
             /** Content */
             content: unknown;
             /** Created At */
@@ -14540,6 +14600,11 @@ export interface components {
         };
         /** Body_upload_activity_poster_api_activity_settings_poster_post */
         Body_upload_activity_poster_api_activity_settings_poster_post: {
+            /** File */
+            file: string;
+        };
+        /** Body_upload_announcement_attachment_api_announcements__announcement_id__attachments_post */
+        Body_upload_announcement_attachment_api_announcements__announcement_id__attachments_post: {
             /** File */
             file: string;
         };
@@ -28948,6 +29013,75 @@ export interface operations {
             header?: never;
             path: {
                 announcement_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_announcement_attachment_api_announcements__announcement_id__attachments_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                announcement_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_announcement_attachment_api_announcements__announcement_id__attachments_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_announcement_attachment_api_announcements__announcement_id__attachments__attachment_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                announcement_id: number;
+                attachment_id: number;
             };
             cookie?: never;
         };

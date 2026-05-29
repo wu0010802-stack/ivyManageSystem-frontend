@@ -28,3 +28,15 @@ export const getAnnouncementReaders = (
   id: number,
   params: { page?: number; page_size?: number } = {},
 ) => api.get(`/announcements/${id}/readers`, { params })
+
+// Attachment upload / delete（PR #2 附件支援）
+export const uploadAnnouncementAttachment = (id: number, file: File) => {
+  const fd = new FormData()
+  fd.append('file', file)
+  return api.post(`/announcements/${id}/attachments`, fd, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}
+
+export const deleteAnnouncementAttachment = (id: number, attId: number) =>
+  api.delete(`/announcements/${id}/attachments/${attId}`)
