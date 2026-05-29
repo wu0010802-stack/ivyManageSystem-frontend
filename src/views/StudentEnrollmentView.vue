@@ -22,7 +22,7 @@
     </div>
 
     <div v-if="stats" class="page-meta">
-      <span>{{ stats.school_year > 1911 ? stats.school_year - 1911 : stats.school_year }} 學年度 · {{ stats.semester_label }}</span>
+      <span>{{ coerceRocYear(stats.school_year) }} 學年度 · {{ stats.semester_label }}</span>
       <span v-if="stats.summary?.total != null" class="meta-sep">|</span>
       <span v-if="stats.summary?.total != null">在籍 {{ stats.summary.total }} 人</span>
     </div>
@@ -52,7 +52,7 @@
             <div class="card-header-row">
               <span class="card-header-title">各班在籍人數表</span>
               <span v-if="stats" class="card-header-meta">
-                {{ stats.school_year > 1911 ? stats.school_year - 1911 : stats.school_year }} 學年度 · {{ stats.semester_label }}
+                {{ coerceRocYear(stats.school_year) }} 學年度 · {{ stats.semester_label }}
               </span>
             </div>
           </template>
@@ -168,6 +168,7 @@ import { RefreshRight, Printer } from '@element-plus/icons-vue'
 import { getEnrollmentStats, getEnrollmentOptions, getEnrollmentRoster, getEnrollmentRosterPdf } from '@/api/studentEnrollment'
 import { openPdfInNewTab } from '@/utils/printPdfWindow'
 import { hasPermission } from '@/utils/auth'
+import { coerceRocYear } from '@/utils/academic'
 import BonusDashboard from '@/components/enrollment/BonusDashboard.vue'
 
 const showBonusTab = computed(() => hasPermission('SALARY_READ'))

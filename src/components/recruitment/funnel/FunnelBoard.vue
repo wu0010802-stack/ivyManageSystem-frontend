@@ -64,6 +64,7 @@ import { ref, computed, onMounted } from 'vue'
 import { ElSelect, ElOption, ElButton, ElMessage, ElMessageBox } from 'element-plus'
 import { useRecruitmentFunnelStore, type Stage, type FunnelCardData } from '@/stores/recruitmentFunnel'
 import { hasPermission } from '@/utils/auth'
+import { currentRocYear } from '@/utils/academic'
 import FunnelSummaryBar from './FunnelSummaryBar.vue'
 import FunnelColumn from './FunnelColumn.vue'
 import TransitionConfirmDialog from './TransitionConfirmDialog.vue'
@@ -74,7 +75,7 @@ const store = useRecruitmentFunnelStore()
 // === 篩選器 ===
 const schoolYearLocal = ref<number | null>(null)
 const semesterLocal = ref<1 | 2 | null>(null)
-const currentYear = new Date().getFullYear() - 1911
+const currentYear = currentRocYear()
 const yearOptions = computed(() => [currentYear, currentYear - 1, currentYear - 2])
 
 async function onRefresh() {

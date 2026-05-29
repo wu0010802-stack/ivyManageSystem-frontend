@@ -178,6 +178,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { GRADES_ORDER } from '@/constants/recruitment'
+import { toRocYear } from '@/utils/academic'
 
 interface VisitForm {
   month_raw?: string | number | null
@@ -238,12 +239,12 @@ const formRules = {
 const isoToRoc = (iso: string) => {
   if (!iso) return ''
   const [y, m, d] = iso.split('-')
-  return `${parseInt(y) - 1911}.${m}.${d}`
+  return `${toRocYear(parseInt(y))}.${m}.${d}`
 }
 const isoToRocMonth = (iso: string) => {
   if (!iso) return ''
   const [y, m] = iso.split('-')
-  return `${parseInt(y) - 1911}.${m}`
+  return `${toRocYear(parseInt(y))}.${m}`
 }
 
 // 監聽 month_raw（YYYY-MM-DD）→ 同步 visit_date 與 month（民國格式）

@@ -112,7 +112,7 @@ import { ElMessage } from 'element-plus'
 import { getFeeTemplates } from '@/api/fees'
 import { getGrades, getClassrooms } from '@/api/classrooms'
 import { getStudents } from '@/api/students'
-import { getCurrentAcademicTerm } from '@/utils/academic'
+import { getCurrentAcademicTerm, currentRocYear } from '@/utils/academic'
 
 interface FeeTemplate {
   grade_id: number | null
@@ -200,7 +200,7 @@ const overviewLoading = ref(false)
 const MONTHS_PER_SEMESTER = 6
 
 const availableYears = computed(() => {
-  const current = new Date().getFullYear() - 1911
+  const current = currentRocYear()
   return [current - 1, current, current + 1]
 })
 

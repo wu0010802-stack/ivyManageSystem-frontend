@@ -21,6 +21,7 @@ import {
 } from '@/api/appraisal'
 import { useAcademicTermStore } from '@/stores/academicTerm'
 import { useErrorNotify } from '@/composables/useErrorNotify'
+import { toAdYear } from '@/utils/academic'
 import AcademicTermSelector from '@/components/common/AcademicTermSelector.vue'
 import StatCard from '@/components/common/StatCard.vue'
 import AggregatedStatusDetailDialog from './AggregatedStatusDetailDialog.vue'
@@ -336,7 +337,7 @@ const creatingCycle = ref(false)
 
 function defaultDatesFor(schoolYear: number, semester: number | string) {
   // school_year 為民國
-  const yearAD = Number(schoolYear) + 1911
+  const yearAD = toAdYear(Number(schoolYear))
   if (Number(semester) === 1) {
     return {
       start_date: `${yearAD}-08-01`,

@@ -1,8 +1,47 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { getCurrentAcademicTerm, normalizeSchoolYear, buildSchoolYearOptions } from '@/utils/academic'
+import {
+  getCurrentAcademicTerm,
+  normalizeSchoolYear,
+  buildSchoolYearOptions,
+  toRocYear,
+  toAdYear,
+  currentRocYear,
+  coerceRocYear,
+} from '@/utils/academic'
 
 // 民國年換算：西元年 - 1911
 // 2025 → 114，2024 → 113
+
+describe('民國年 ↔ 西元年原語', () => {
+  it('toRocYear：西元 → 民國（- 1911）', () => {
+    expect(toRocYear(2025)).toBe(114)
+    expect(toRocYear(2024)).toBe(113)
+  })
+
+  it('toAdYear：民國 → 西元（+ 1911）', () => {
+    expect(toAdYear(114)).toBe(2025)
+    expect(toAdYear(113)).toBe(2024)
+  })
+
+  it('toRocYear / toAdYear 互逆', () => {
+    expect(toAdYear(toRocYear(2025))).toBe(2025)
+  })
+
+  it('currentRocYear：當前西元年對應民國學年度', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2025, 5, 15))
+    expect(currentRocYear()).toBe(114)
+    vi.useRealTimers()
+  })
+
+  it('coerceRocYear：> 1911 視為西元年轉民國', () => {
+    expect(coerceRocYear(2025)).toBe(114)
+  })
+
+  it('coerceRocYear：≤ 1911 視為已是民國年，原樣回傳', () => {
+    expect(coerceRocYear(114)).toBe(114)
+  })
+})
 
 describe('getCurrentAcademicTerm', () => {
   beforeEach(() => {

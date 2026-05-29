@@ -16,6 +16,7 @@ import { enqueueParent, flushParentQueue } from '@/parent/utils/parentOfflineQue
 import { OP_KINDS } from '@/utils/offlineQueue'
 import { useFriendlyError } from '@/composables/useFriendlyError'
 import { todayISO, dateToLocalISO } from '@/utils/format'
+import { toRocYear } from '@/utils/academic'
 import ParentBottomSheet from '../components/ParentBottomSheet.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import LeaveListCard from '../components/leaves/LeaveListCard.vue'
@@ -153,7 +154,7 @@ function currentSemesterRange(today = new Date()) {
   return {
     start: new Date(y, 7, 1), // 8/1
     end: new Date(y + 1, 6, 31, 23, 59, 59), // 7/31
-    label: `${y - 1911} 學年度`,
+    label: `${toRocYear(y)} 學年度`,
   }
 }
 
