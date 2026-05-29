@@ -283,6 +283,10 @@ const handleImportFile = async (file: { raw?: File }) => {
     importResult.value = res.data
     if (res.data.failed === 0) {
       ElMessage.success(`匯入完成，成功建立 ${res.data.created} 筆草稿加班單`)
+    }
+    // 只要有建立任何草稿（含部分成功 failed>0）就刷新主表，否則已建立的單不會出現
+    // 在列表，使用者要手動重查才看得到。部分失敗的明細仍由 importResult 卡片呈現。
+    if (res.data.created > 0) {
       await refreshAllData()
     }
   } catch (err) {
