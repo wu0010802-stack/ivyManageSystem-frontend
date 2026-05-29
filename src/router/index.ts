@@ -573,6 +573,12 @@ const routes: RouteRecordRaw[] = [
                     path: 'activity/attendance',
                     redirect: { path: '/portal/activity', query: { tab: 'attendance' } },
                 },
+                {
+                    path: 'leave-history',
+                    name: 'portal-leave-history',
+                    component: () => import('../views/portal/PortalLeaveHistoryView.vue'),
+                    meta: { portal: true, title: '補休歷史' },
+                },
             ],
         },
 ]

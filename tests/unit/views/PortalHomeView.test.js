@@ -25,6 +25,18 @@ vi.mock('@/api/portalHome', () => ({
   }),
 }))
 
+// mock 補休結餘 API（預設回有資料）
+vi.mock('@/api/portalLeaveQuotaExpiry', () => ({
+  getMyLeaveQuotaExpiry: vi.fn().mockResolvedValue({
+    data: {
+      compensatory_balance: 12.5,
+      earliest_expiring_grant: { expires_at: '2026-09-01', unexpired_hours: 4.0 },
+      next_anniversary: '2027-04-15',
+      expected_payout_month: '2026-10',
+    },
+  }),
+}))
+
 const router = createRouter({
   history: createWebHistory(),
   routes: [{ path: '/:pathMatch(.*)*', component: { template: '<div />' } }],
@@ -40,6 +52,11 @@ function mountIt() {
         ClassroomOpsCard: true,
         QuickLinksCard: true,
         ElButton: { template: '<button><slot /></button>' },
+        ElCard: {
+          template: '<div class="el-card"><slot name="header" /><slot /></div>',
+        },
+        ElIcon: { template: '<span class="el-icon"><slot /></span>' },
+        Warning: { template: '<svg />' },
       },
     },
   })
@@ -77,5 +94,40 @@ describe('PortalHomeView', () => {
     const w = mountIt()
     await flushPromises()
     expect(w.text()).toContain('我的班級')
+  })
+
+  // ── 補休結餘 widget ───────────────────────────────────────
+
+  it('renders leave-quota balance + earliest + anniversary + payout month', async () => {
+    const w = mountIt()
+    await flushPromises()
+    const text = w.text()
+    expect(text).toContain('12.5')
+    expect(text).toContain('2026-09-01')
+    expect(text).toContain('2027-04-15')
+    expect(text).toContain('2026-10')
+  })
+
+  it('hides warning-row when no earliest_expiring_grant', async () => {
+    const { getMyLeaveQuotaExpiry } = await import('@/api/portalLeaveQuotaExpiry')
+    getMyLeaveQuotaExpiry.mockResolvedValueOnce({
+      data: {
+        compensatory_balance: 0,
+        earliest_expiring_grant: null,
+        next_anniversary: '2027-04-15',
+        expected_payout_month: '2027-05',
+      },
+    })
+    const w = mountIt()
+    await flushPromises()
+    expect(w.find('.warning-row').exists()).toBe(false)
+  })
+
+  it('hides leave-quota-card when API returns null (error)', async () => {
+    const { getMyLeaveQuotaExpiry } = await import('@/api/portalLeaveQuotaExpiry')
+    getMyLeaveQuotaExpiry.mockRejectedValueOnce(new Error('network error'))
+    const w = mountIt()
+    await flushPromises()
+    expect(w.find('.leave-quota-card').exists()).toBe(false)
   })
 })

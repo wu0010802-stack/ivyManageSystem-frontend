@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import {
   createMyLeave,
@@ -7,6 +7,7 @@ import {
   getMyQuotas,
   getMyWorkdayHours,
 } from '@/api/portal'
+import { getMyLeaveQuotaExpiry } from '@/api/portalLeaveQuotaExpiry'
 import {
   LEAVE_TYPES as leaveTypes,
   LEAVE_RULE_HINTS,
@@ -97,6 +98,28 @@ const canSubmit = computed(() => !quotaExceeded.value)
 const quotaInfoAny = computed(() => quotaInfo.value as any)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const breakdownAny = computed(() => calcBreakdown.value as any[])
+
+// ── 補休到期 warning ──
+interface CompExpiryInfo {
+  compensatory_balance: number
+  earliest_expiring_grant: { expires_at: string; unexpired_hours: number } | null
+}
+const compExpiryInfo = ref<CompExpiryInfo | null>(null)
+
+const loadCompExpiry = async () => {
+  try {
+    const res = await getMyLeaveQuotaExpiry()
+    compExpiryInfo.value = res.data as CompExpiryInfo
+  } catch {
+    compExpiryInfo.value = null
+  }
+}
+
+watch(() => form.leave_type, (newType) => {
+  if (newType === 'compensatory' && !compExpiryInfo.value) {
+    loadCompExpiry()
+  }
+})
 
 const rules = {
   leave_type: [{ required: true, message: '請選擇假別', trigger: 'change' }],
@@ -255,6 +278,24 @@ const submitLeave = async () => {
         </div>
       </el-form-item>
 
+      <!-- 補休到期提醒：選補休後顯示最早到期 grant 資訊 -->
+      <el-alert
+        v-if="form.leave_type === 'compensatory' && compExpiryInfo"
+        type="warning"
+        :closable="false"
+        show-icon
+        class="comp-expiry-warning"
+      >
+        <template #title>
+          <span>
+            補休結餘 {{ compExpiryInfo.compensatory_balance.toFixed(1) }} h
+            <template v-if="compExpiryInfo.earliest_expiring_grant">
+              ｜將從最早到期 grant 扣（{{ compExpiryInfo.earliest_expiring_grant.expires_at }} 到期，{{ compExpiryInfo.earliest_expiring_grant.unexpired_hours.toFixed(1) }} h）
+            </template>
+          </span>
+        </template>
+      </el-alert>
+
       <el-form-item v-if="form.leave_type === 'sick'" label="住院病假">
         <el-switch v-model="form.is_hospitalized" active-text="住院" inactive-text="未住院" />
         <div style="margin-top: 4px; font-size: 12px; color: var(--el-text-color-secondary);">
@@ -399,6 +440,10 @@ const submitLeave = async () => {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+}
+
+.comp-expiry-warning {
+  margin-bottom: var(--space-2);
 }
 
 .form-footer {
