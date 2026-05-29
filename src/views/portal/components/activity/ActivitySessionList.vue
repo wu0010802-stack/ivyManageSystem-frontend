@@ -111,7 +111,7 @@ const filteredSessions = computed(() => {
       >
         <el-table-column label="日期" prop="session_date" width="120" align="center" />
         <el-table-column label="課程" prop="course_name" min-width="120" />
-        <el-table-column label="自班出席" width="140" align="center">
+        <el-table-column label="出席" width="140" align="center">
           <template #default="{ row }">
             <span v-if="row.recorded_count === 0" class="no-record">尚未點名</span>
             <span v-else>
