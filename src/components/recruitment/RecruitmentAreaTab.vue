@@ -157,6 +157,8 @@
       <div class="area-map">
         <RecruitmentAddressHeatmap
           :hotspots="(hs.hotspots as any[]) || []"
+          :buckets="hs.buckets || []"
+          :district-residual-visits="hs.district_residual_visits || {}"
           :campus="campus"
           :travel-bands="travelBands"
           :selected-district="selectedDistrict"
@@ -325,8 +327,18 @@ const opportunityText = (row: DistrictRow) => {
 }
 
 // Typed accessors for hotspotsSummary to avoid unknown prop errors in template
+interface BucketEntry {
+  center_lat: number
+  center_lng: number
+  district: string
+  visit_count: number
+  deposit_count: number
+}
+
 interface HotspotsSummaryTyped {
   hotspots?: unknown[]
+  buckets?: BucketEntry[]
+  district_residual_visits?: Record<string, number>
   records_with_address?: number
   total_hotspots?: number
   geocoded_hotspots?: number

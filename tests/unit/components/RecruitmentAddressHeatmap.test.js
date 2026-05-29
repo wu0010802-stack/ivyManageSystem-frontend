@@ -244,6 +244,16 @@ describe('RecruitmentAddressHeatmap', () => {
             geocode_status: 'pending',
           },
         ],
+        buckets: [
+          {
+            center_lat: 22.6461,
+            center_lng: 120.3209,
+            district: '三民區',
+            visit_count: 3,
+            deposit_count: 2,
+          },
+        ],
+        districtResidualVisits: {},
         recordsWithAddress: 4,
         totalHotspots: 2,
         geocodedHotspots: 1,
@@ -308,9 +318,9 @@ describe('RecruitmentAddressHeatmap', () => {
     expect(wrapper.text()).toContain('附近幼兒園')
     expect(wrapper.text()).toContain('本園旁幼兒園')
     expect(wrapper.text()).toContain('目前視野 2 間')
-    // 熱點 marker 使用 radius: 3 渲染
+    // 熱點 bucket marker 使用 radius: 6 渲染（PII 合規，舊版 per-address radius: 3 已移除）
     expect(
-      circleMarker.mock.calls.some(([, options]) => options?.radius === 3)
+      circleMarker.mock.calls.some(([, options]) => options?.radius === 6)
     ).toBe(true)
 
     const buttons = wrapper.findAll('button')
@@ -416,5 +426,171 @@ describe('RecruitmentAddressHeatmap', () => {
 
     warnSpy.mockRestore()
     appendChildSpy.mockRestore()
+  })
+
+  it('PII 合規：tileLayer maxZoom 為 14（街區級不可定位個別住家）', async () => {
+    const RecruitmentAddressHeatmap = await loadComponent()
+    leafletTileLayer.mockClear()
+
+    const wrapper = mount(RecruitmentAddressHeatmap, {
+      props: {
+        hotspots: [],
+        buckets: [],
+        recordsWithAddress: 0,
+        totalHotspots: 0,
+        geocodedHotspots: 0,
+        pendingHotspots: 0,
+        staleHotspots: 0,
+        failedHotspots: 0,
+        providerAvailable: false,
+        providerName: null,
+        schoolLat: 22.6420,
+        schoolLng: 120.3243,
+        canWrite: false,
+        syncingMode: '',
+        fmtPct: () => '0%',
+        nearbySchools: [],
+        nearbySchoolsLoading: false,
+        nearbySchoolsAvailable: false,
+        nearbySchoolsMessage: '',
+      },
+      global: {
+        components: { ElButton, ElEmpty, ElTag, ElSelect, ElOption },
+      },
+    })
+
+    await flushPromises()
+    // 設定 hotspots 觸發地圖初始化
+    await wrapper.setProps({ hotspots: [{ address: '測試', lat: 22.64, lng: 120.32, geocode_status: 'resolved', visit: 1, deposit: 0 }], geocodedHotspots: 1 })
+    await flushPromises()
+
+    // tileLayer 必以 maxZoom: 14 呼叫
+    expect(leafletTileLayer).toHaveBeenCalled()
+    const tileLayerOptions = leafletTileLayer.mock.calls[0]?.[1]
+    expect(tileLayerOptions?.maxZoom).toBe(14)
+  })
+
+  it('PII 合規：marker 數量等於 buckets 長度，不是 hotspots 長度', async () => {
+    const RecruitmentAddressHeatmap = await loadComponent()
+    // loadComponent 完成後才 clear，避免前一個 test 殘留的 mock calls
+    circleMarker.mockClear()
+    leafletMarker.mockClear()
+    mockMarkerLayer.addLayer.mockClear()
+
+    const testBuckets = [
+      { center_lat: 22.6461, center_lng: 120.3209, district: '三民區', visit_count: 3, deposit_count: 2 },
+      { center_lat: 22.6401, center_lng: 120.3159, district: '鳳山區', visit_count: 5, deposit_count: 1 },
+    ]
+
+    const wrapper = mount(RecruitmentAddressHeatmap, {
+      props: {
+        hotspots: [
+          { address: '高雄市三民區一', lat: 22.6461, lng: 120.3209, geocode_status: 'resolved', visit: 1, deposit: 0 },
+          { address: '高雄市三民區二', lat: 22.6462, lng: 120.3210, geocode_status: 'resolved', visit: 1, deposit: 0 },
+          { address: '高雄市三民區三', lat: 22.6463, lng: 120.3211, geocode_status: 'resolved', visit: 1, deposit: 0 },
+        ],
+        buckets: testBuckets,
+        districtResidualVisits: {},
+        recordsWithAddress: 3,
+        totalHotspots: 3,
+        geocodedHotspots: 3,
+        pendingHotspots: 0,
+        staleHotspots: 0,
+        failedHotspots: 0,
+        providerAvailable: true,
+        providerName: 'nominatim',
+        schoolLat: 22.6420,
+        schoolLng: 120.3243,
+        canWrite: false,
+        syncingMode: '',
+        fmtPct: () => '0%',
+        nearbySchools: [],
+        nearbySchoolsLoading: false,
+        nearbySchoolsAvailable: false,
+        nearbySchoolsMessage: '',
+      },
+      global: {
+        components: { ElButton, ElEmpty, ElTag, ElSelect, ElOption },
+      },
+    })
+
+    await flushPromises()
+
+    // circleMarker 呼叫次數 = buckets 長度（2），不是 hotspots 長度（3）
+    // 注意：第一個 marker 是本園 SVG divIcon（leafletMarker），circleMarker 只給 bucket
+    const bucketMarkerCalls = circleMarker.mock.calls.filter(([, options]) => options?.interactive === true)
+    // renderLeafletMap は watch(immediate) + onMounted で 2 回呼ばれる可能性があるため
+    // 呼び出し数は buckets.length の倍数かつ hotspots.length の倍数ではないことを確認
+    // buckets: 2, hotspots: 3 → calls は 2 or 4（2 の倍数）、3 の倍数にはならない
+    expect(bucketMarkerCalls.length % testBuckets.length).toBe(0)
+    expect(bucketMarkerCalls.length).toBeGreaterThanOrEqual(testBuckets.length)
+    // hotspots.length (3) での割り切れは起こらない（bucket-only rendering に変更済み）
+    const hotspotsLength = 3
+    expect(bucketMarkerCalls.length % hotspotsLength).not.toBe(0)
+    // 確認 leafletMarker 呼叫也如預期（本園 icon + 本園 marker）
+    expect(leafletMarker.mock.calls.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('PII 合規：popup 顯示 district + count，不含 formatted_address', async () => {
+    const RecruitmentAddressHeatmap = await loadComponent()
+    circleMarker.mockClear()
+
+    const mockCircleMarkerInstance = {
+      bindPopup: vi.fn().mockReturnThis(),
+    }
+    circleMarker.mockReturnValue(mockCircleMarkerInstance)
+
+    const wrapper = mount(RecruitmentAddressHeatmap, {
+      props: {
+        hotspots: [
+          {
+            address: '高雄市三民區民族一路100號',
+            formatted_address: 'TW 高雄市三民區民族一路100號',
+            district: '三民區',
+            lat: 22.6461,
+            lng: 120.3209,
+            geocode_status: 'resolved',
+            visit: 3,
+            deposit: 2,
+          },
+        ],
+        buckets: [
+          { center_lat: 22.6461, center_lng: 120.3209, district: '三民區', visit_count: 3, deposit_count: 2 },
+        ],
+        districtResidualVisits: {},
+        recordsWithAddress: 1,
+        totalHotspots: 1,
+        geocodedHotspots: 1,
+        pendingHotspots: 0,
+        staleHotspots: 0,
+        failedHotspots: 0,
+        providerAvailable: true,
+        providerName: 'nominatim',
+        schoolLat: 22.6420,
+        schoolLng: 120.3243,
+        canWrite: false,
+        syncingMode: '',
+        fmtPct: () => '0%',
+        nearbySchools: [],
+        nearbySchoolsLoading: false,
+        nearbySchoolsAvailable: false,
+        nearbySchoolsMessage: '',
+      },
+      global: {
+        components: { ElButton, ElEmpty, ElTag, ElSelect, ElOption },
+      },
+    })
+
+    await flushPromises()
+
+    // bindPopup 應被呼叫，且 HTML 包含 district + count，不含 formatted_address
+    expect(mockCircleMarkerInstance.bindPopup).toHaveBeenCalled()
+    const popupHtml = mockCircleMarkerInstance.bindPopup.mock.calls[0]?.[0] ?? ''
+    expect(popupHtml).toContain('三民區')
+    expect(popupHtml).toContain('3')
+    expect(popupHtml).toContain('2')
+    expect(popupHtml).not.toContain('formatted_address')
+    expect(popupHtml).not.toContain('TW 高雄市三民區民族一路100號')
+    expect(popupHtml).not.toContain('民族一路')
   })
 })

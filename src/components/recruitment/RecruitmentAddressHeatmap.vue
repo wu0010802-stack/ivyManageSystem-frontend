@@ -378,6 +378,14 @@ interface NearbySchool {
   [key: string]: unknown
 }
 
+interface BucketEntry {
+  center_lat: number
+  center_lng: number
+  district: string
+  visit_count: number
+  deposit_count: number
+}
+
 // Minimal typings for third-party map APIs (no @types/leaflet or google.maps declarations available)
 // Using unknown with casts is the TS-safe way to handle dynamic map API objects.
 declare global { interface Window { google?: { maps?: Record<string, unknown> } } }
@@ -406,6 +414,8 @@ interface GovData {
 
 const props = withDefaults(defineProps<{
   hotspots: HotspotEntry[]
+  buckets?: BucketEntry[]
+  districtResidualVisits?: Record<string, number>
   campus?: CampusProp
   travelBands?: number[]
   selectedDistrict?: string
@@ -449,6 +459,8 @@ const props = withDefaults(defineProps<{
   nearbySchoolsMessage: '',
   canWrite: false,
   syncingMode: '',
+  buckets: () => [],
+  districtResidualVisits: () => ({}),
 })
 
 const emit = defineEmits<{
@@ -1084,7 +1096,7 @@ const renderLeafletMap = async () => {
     tileLayer = L.tileLayer(MAP_TILE_URL, {
       attribution: MAP_ATTRIBUTION,
       subdomains: MAP_TILE_SUBDOMAINS,
-      maxZoom: 19,
+      maxZoom: 14,
     })
     tileLayer.addTo(mapInstance)
     // 光暈層在最底，標記層在上面，才能讓熱點 marker 可點擊
@@ -1123,19 +1135,24 @@ const renderLeafletMap = async () => {
   markerLayer.addLayer(schoolMarker)
   bounds.push([campusLat.value, campusLng.value])
 
-  // ── 熱點：單點標記 ──
-  for (const hotspot of mappedHotspots.value) {
-    const marker = L.circleMarker([hotspot.lat, hotspot.lng], {
-      radius: 3,
+  // ── 熱點：街區格（bucket）標記（PII 合規：僅顯示 district + count，不顯示原始地址）──
+  for (const bucket of (props.buckets ?? [])) {
+    const marker = L.circleMarker([bucket.center_lat, bucket.center_lng], {
+      radius: 6,
       color: '#f97316',
-      weight: 0,
+      weight: 1.5,
       fillColor: '#f97316',
-      fillOpacity: 0.75,
-      interactive: false,
+      fillOpacity: 0.65,
+      interactive: true,
     })
-
+    marker.bindPopup(
+      `<div class="map-popup">` +
+      `<strong>${escapeHtml(bucket.district)}</strong><br/>` +
+      `<span>本街區共 ${bucket.visit_count} 筆 visit / ${bucket.deposit_count} 筆 deposit</span>` +
+      `</div>`
+    )
     markerLayer.addLayer(marker)
-    bounds.push([hotspot.lat, hotspot.lng])
+    bounds.push([bucket.center_lat, bucket.center_lng])
   }
 
   // ── 附近幼兒園 ──
