@@ -8,6 +8,8 @@ import {
   deleteAnnouncement,
   getAnnouncementParentRecipients,
   replaceAnnouncementParentRecipients,
+  getAnnouncementRecipients,
+  getAnnouncementReaders,
 } from '@/api/announcements'
 import { useEmployeeStore } from '@/stores/employee'
 import { useClassroomStore } from '@/stores/classroom'
@@ -22,11 +24,9 @@ interface AnnouncementItem {
   content: string
   priority: string
   is_pinned: boolean
-  recipient_ids?: number[]
   recipient_count?: number
   read_count?: number
   read_preview?: { employee_id: number; name: string }[]
-  readers?: { employee_id: number; name: string; read_at: string }[]
   created_by_name?: string
   created_at?: string
   publish_at?: string | null
@@ -61,6 +61,29 @@ const priorityOptions: { value: string; label: string; type: ElTagType }[] = [
 ]
 
 const priorityMap: Record<string, { value: string; label: string; type: ElTagType }> = Object.fromEntries(priorityOptions.map(p => [p.value, p]))
+
+type ReaderRow = { employee_id: number; name: string; read_at: string | null }
+
+const readersCache = ref<Record<number, { items: ReaderRow[]; total: number; loaded: boolean }>>({})
+const readersLoading = ref<Record<number, boolean>>({})
+
+const ensureReadersLoaded = async (annId: number, force = false) => {
+  if (!force && readersCache.value[annId]?.loaded) return
+  readersLoading.value[annId] = true
+  try {
+    const res = await getAnnouncementReaders(annId, { page: 1, page_size: 50 })
+    const data = res.data as { items?: ReaderRow[]; total?: number }
+    readersCache.value[annId] = {
+      items: data.items || [],
+      total: data.total ?? 0,
+      loaded: true,
+    }
+  } catch (error) {
+    ElMessage.error(apiError(error, '載入已讀名單失敗'))
+  } finally {
+    readersLoading.value[annId] = false
+  }
+}
 
 // parent_visibility: 'off' | 'all' | 'classroom'
 // 後端 scope 支援 all/classroom/student/guardian；前端先涵蓋常用三種，
@@ -129,18 +152,26 @@ const openEdit = async (row: AnnouncementItem) => {
   form.content = row.content
   form.priority = row.priority
   form.is_pinned = row.is_pinned
-  form.target_employee_ids = row.recipient_ids ? [...row.recipient_ids] : []
-  form.restrict_recipients = form.target_employee_ids.length > 0
   form.publish_at = (row.publish_at as string | null) ?? null
   form.expires_at = (row.expires_at as string | null) ?? null
-  // 先以預設值打開，再 fetch 家長 scope
+  // 先以預設值打開（顯示 loading 期間可互動）
+  form.target_employee_ids = []
+  form.restrict_recipients = false
   form.parent_visibility = 'off'
   form.parent_target_classroom_ids = []
   isEdit.value = true
   dialogVisible.value = true
+
   try {
-    const res = await getAnnouncementParentRecipients(row.id)
-    const items: { scope: string; classroom_id?: number }[] = (res.data as { items?: { scope: string; classroom_id?: number }[] })?.items || []
+    const [recRes, parentRes] = await Promise.all([
+      getAnnouncementRecipients(row.id),
+      getAnnouncementParentRecipients(row.id),
+    ])
+    const empIds: number[] = (recRes.data as { employee_ids?: number[] })?.employee_ids || []
+    form.target_employee_ids = empIds
+    form.restrict_recipients = empIds.length > 0
+
+    const items: { scope: string; classroom_id?: number }[] = (parentRes.data as { items?: { scope: string; classroom_id?: number }[] })?.items || []
     if (items.length === 0) {
       form.parent_visibility = 'off'
     } else if (items.some(it => it.scope === 'all')) {
@@ -153,8 +184,7 @@ const openEdit = async (row: AnnouncementItem) => {
       form.parent_visibility = 'custom'
     }
   } catch (error) {
-    // 讀失敗不阻擋編輯，僅提示
-    ElMessage.warning('無法載入家長端發送對象設定，提交時將不變更該設定')
+    ElMessage.warning('讀取設定失敗，部分欄位可能未填入')
     form.parent_visibility = 'unchanged'
   }
 }
@@ -262,18 +292,13 @@ const togglePin = async (row: AnnouncementItem) => {
   }
 }
 
-const formatDate = (isoStr: string | undefined) => {
+const formatDate = (isoStr: string | null | undefined) => {
   if (!isoStr) return ''
   const d = new Date(isoStr)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
 const getReadPreview = (row: AnnouncementItem) => row.read_preview || []
-
-const getRemainingReaders = (row: AnnouncementItem) => Math.max(
-  0,
-  (row.read_count || 0) - getReadPreview(row).length,
-)
 
 onMounted(() => {
   fetchAnnouncements()
@@ -358,24 +383,27 @@ onMounted(() => {
               </div>
               <el-popover
                 placement="top-start"
-                trigger="hover"
-                width="260"
+                trigger="click"
+                width="280"
+                @show="ensureReadersLoaded(row.id)"
               >
                 <template #reference>
                   <el-button link type="success" class="read-preview-button">
                     已讀 {{ row.read_count }} 人
-                    <span v-if="getRemainingReaders(row) > 0">，再顯示 {{ getRemainingReaders(row) }} 人</span>
                   </el-button>
                 </template>
-                <div class="reader-popover">
+                <div v-loading="readersLoading[row.id]" class="reader-popover">
                   <div class="reader-popover-title">已讀名單</div>
                   <div
-                    v-for="reader in row.readers || []"
+                    v-for="reader in readersCache[row.id]?.items || []"
                     :key="`${row.id}-${reader.employee_id}`"
                     class="reader-row"
                   >
                     <span>{{ reader.name }}</span>
                     <span class="reader-read-at">{{ formatDate(reader.read_at) }}</span>
+                  </div>
+                  <div v-if="!readersLoading[row.id] && (readersCache[row.id]?.items || []).length === 0" class="text-muted">
+                    尚未有人已讀
                   </div>
                 </div>
               </el-popover>

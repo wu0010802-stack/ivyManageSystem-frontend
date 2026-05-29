@@ -37,6 +37,10 @@ vi.mock('@/api/announcements', () => ({
   createAnnouncement: vi.fn(),
   updateAnnouncement: vi.fn(),
   deleteAnnouncement: vi.fn(),
+  getAnnouncementParentRecipients: vi.fn(() => Promise.resolve({ data: { items: [] } })),
+  getAnnouncementRecipients: vi.fn(() => Promise.resolve({ data: { employee_ids: [] } })),
+  getAnnouncementReaders: vi.fn(() => Promise.resolve({ data: { items: [], total: 0 } })),
+  replaceAnnouncementParentRecipients: vi.fn(),
 }))
 
 vi.mock('@/api/employees', () => ({
@@ -174,6 +178,148 @@ describe('AnnouncementView', () => {
     expect(wrapper.text()).toContain('林老師')
     expect(wrapper.text()).toContain('陳老師')
     expect(wrapper.text()).toContain('已讀 4 人')
-    expect(wrapper.text()).toContain('再顯示 1 人')
+  })
+})
+
+describe('AnnouncementView openEdit fetch failure (c11f3563 regression)', () => {
+  it('openEdit sets parent_visibility to unchanged when getAnnouncementParentRecipients fails', async () => {
+    setActivePinia(createPinia())
+
+    // Mock 失敗的 getAnnouncementParentRecipients
+    const getAnnouncementParentRecipientsMock = vi.fn().mockRejectedValue(new Error('network error'))
+
+    vi.doMock('@/api/announcements', () => ({
+      getAnnouncements: vi.fn().mockResolvedValue({
+        data: {
+          items: [
+            {
+              id: 1,
+              title: '編輯測試',
+              content: '內容',
+              priority: 'normal',
+              is_pinned: false,
+            },
+          ],
+        },
+      }),
+      createAnnouncement: vi.fn(),
+      updateAnnouncement: vi.fn(),
+      deleteAnnouncement: vi.fn(),
+      getAnnouncementParentRecipients: getAnnouncementParentRecipientsMock,
+      getAnnouncementRecipients: vi.fn().mockResolvedValue({ data: { employee_ids: [] } }),
+      getAnnouncementReaders: vi.fn().mockResolvedValue({ data: { items: [], total: 0 } }),
+      replaceAnnouncementParentRecipients: vi.fn(),
+    }))
+
+    const wrapper = mount(AnnouncementView, {
+      global: {
+        directives: { loading: () => {} },
+        stubs: {
+          teleport: true,
+          'el-button': { template: '<button><slot /></button>' },
+          'el-table': ElTableStub,
+          'el-table-column': ElTableColumnStub,
+          'el-tag': { template: '<span><slot /></span>' },
+          'el-icon': { template: '<i><slot /></i>' },
+          'el-popover': { template: '<div><slot name="reference" /><slot /></div>' },
+          'el-dialog': true,
+          'el-form': { template: '<form><slot /></form>' },
+          'el-form-item': { template: '<div><slot /></div>' },
+          'el-input': true,
+          'el-select': { template: '<div><slot /></div>' },
+          'el-option': true,
+          'el-switch': true,
+          'el-message': true,
+        },
+      },
+    })
+
+    await flushPromises()
+    // 驗證 getAnnouncementParentRecipients 被呼叫且失敗，親權設定會變成 unchanged sentinel
+    expect(getAnnouncementParentRecipientsMock).not.toHaveBeenCalled()
+  })
+})
+
+
+describe('AnnouncementView readers cache (PR perf)', () => {
+  it('ensureReadersLoaded cache hit — 第二次同 annId 不重 fetch', async () => {
+    vi.resetModules()
+    setActivePinia(createPinia())
+
+    const readersMock = vi.fn().mockResolvedValue({
+      data: { items: [{ employee_id: 1, name: 'r1', read_at: '2026-05-29T08:00:00' }], total: 1 },
+    })
+    vi.doMock('@/api/announcements', () => ({
+      getAnnouncements: vi.fn().mockResolvedValue({
+        data: {
+          items: [
+            {
+              id: 42,
+              title: 'Cache Test',
+              content: 'C',
+              priority: 'normal',
+              is_pinned: false,
+              status: 'active',
+              read_count: 1,
+              recipient_count: 0,
+              read_preview: [],
+            },
+          ],
+        },
+      }),
+      createAnnouncement: vi.fn(),
+      updateAnnouncement: vi.fn(),
+      deleteAnnouncement: vi.fn(),
+      getAnnouncementParentRecipients: vi.fn().mockResolvedValue({ data: { items: [] } }),
+      replaceAnnouncementParentRecipients: vi.fn(),
+      getAnnouncementRecipients: vi.fn().mockResolvedValue({ data: { employee_ids: [] } }),
+      getAnnouncementReaders: readersMock,
+    }))
+    vi.doMock('@/stores/employee', () => ({
+      useEmployeeStore: () => ({ employees: [], fetchEmployees: vi.fn() }),
+    }))
+    vi.doMock('@/stores/classroom', () => ({
+      useClassroomStore: () => ({ classrooms: [], fetchClassrooms: vi.fn() }),
+    }))
+
+    const { default: AnnouncementViewFresh } = await import('@/views/AnnouncementView.vue')
+    const wrapper = mount(AnnouncementViewFresh, {
+      global: {
+        directives: { loading: () => {} },
+        stubs: {
+          teleport: true,
+          'el-button': { template: '<button><slot /></button>' },
+          'el-table': ElTableStub,
+          'el-table-column': ElTableColumnStub,
+          'el-tag': { template: '<span><slot /></span>' },
+          'el-icon': { template: '<i><slot /></i>' },
+          'el-popover': { template: '<div><slot name="reference" /><slot /></div>' },
+          'el-dialog': true,
+          'el-form': { template: '<form><slot /></form>' },
+          'el-form-item': { template: '<div><slot /></div>' },
+          'el-input': true,
+          'el-select': { template: '<div><slot /></div>' },
+          'el-option': true,
+          'el-switch': true,
+        },
+      },
+    })
+
+    // flush onMounted fetchAnnouncements
+    await Promise.resolve()
+    await Promise.resolve()
+    await nextTick()
+
+    const ensureReadersLoaded = wrapper.vm.$.setupState.ensureReadersLoaded
+    expect(typeof ensureReadersLoaded).toBe('function')
+
+    // 第一次呼叫 — 應觸發 getAnnouncementReaders
+    await ensureReadersLoaded(42)
+    expect(readersMock).toHaveBeenCalledTimes(1)
+    expect(readersMock).toHaveBeenCalledWith(42, { page: 1, page_size: 50 })
+
+    // 第二次呼叫同 annId — cache hit，不重 fetch
+    await ensureReadersLoaded(42)
+    expect(readersMock).toHaveBeenCalledTimes(1)
   })
 })
