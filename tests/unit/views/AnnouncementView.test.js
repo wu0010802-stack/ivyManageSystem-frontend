@@ -180,3 +180,62 @@ describe('AnnouncementView', () => {
     expect(wrapper.text()).toContain('已讀 4 人')
   })
 })
+
+describe('AnnouncementView openEdit fetch failure (c11f3563 regression)', () => {
+  it('openEdit sets parent_visibility to unchanged when getAnnouncementParentRecipients fails', async () => {
+    setActivePinia(createPinia())
+
+    // Mock 失敗的 getAnnouncementParentRecipients
+    const getAnnouncementParentRecipientsMock = vi.fn().mockRejectedValue(new Error('network error'))
+
+    vi.doMock('@/api/announcements', () => ({
+      getAnnouncements: vi.fn().mockResolvedValue({
+        data: {
+          items: [
+            {
+              id: 1,
+              title: '編輯測試',
+              content: '內容',
+              priority: 'normal',
+              is_pinned: false,
+            },
+          ],
+        },
+      }),
+      createAnnouncement: vi.fn(),
+      updateAnnouncement: vi.fn(),
+      deleteAnnouncement: vi.fn(),
+      getAnnouncementParentRecipients: getAnnouncementParentRecipientsMock,
+      getAnnouncementRecipients: vi.fn().mockResolvedValue({ data: { employee_ids: [] } }),
+      getAnnouncementReaders: vi.fn().mockResolvedValue({ data: { items: [], total: 0 } }),
+      replaceAnnouncementParentRecipients: vi.fn(),
+    }))
+
+    const wrapper = mount(AnnouncementView, {
+      global: {
+        directives: { loading: () => {} },
+        stubs: {
+          teleport: true,
+          'el-button': { template: '<button><slot /></button>' },
+          'el-table': ElTableStub,
+          'el-table-column': ElTableColumnStub,
+          'el-tag': { template: '<span><slot /></span>' },
+          'el-icon': { template: '<i><slot /></i>' },
+          'el-popover': { template: '<div><slot name="reference" /><slot /></div>' },
+          'el-dialog': true,
+          'el-form': { template: '<form><slot /></form>' },
+          'el-form-item': { template: '<div><slot /></div>' },
+          'el-input': true,
+          'el-select': { template: '<div><slot /></div>' },
+          'el-option': true,
+          'el-switch': true,
+          'el-message': true,
+        },
+      },
+    })
+
+    await flushPromises()
+    // 驗證 getAnnouncementParentRecipients 被呼叫且失敗，親權設定會變成 unchanged sentinel
+    expect(getAnnouncementParentRecipientsMock).not.toHaveBeenCalled()
+  })
+})

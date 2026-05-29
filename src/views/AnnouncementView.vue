@@ -185,6 +185,7 @@ const openEdit = async (row: AnnouncementItem) => {
     }
   } catch (error) {
     ElMessage.warning('讀取設定失敗，部分欄位可能未填入')
+    form.parent_visibility = 'unchanged'
   }
 }
 
