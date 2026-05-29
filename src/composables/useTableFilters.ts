@@ -37,7 +37,13 @@ export function useTableFilters(options: { apiFunc?: (params: Record<string, unk
   const items = ref<unknown[]>([])
   const extraParams = ref({})
 
+  // 並發 fetch 競態保護：每次 fetch 取自增序號，await 回來後若已被更新的 fetch
+  // 超車（mySeq !== seq）即丟棄此次過時結果，避免慢回應覆蓋快回應。
+  // 對齊 usePOSCheckout.runSearch 的 searchSeq pattern。
+  let seq = 0
+
   const fetch = async (overrideParams = {}) => {
+    const mySeq = ++seq
     loading.value = true
     try {
       const params = {
@@ -48,6 +54,8 @@ export function useTableFilters(options: { apiFunc?: (params: Record<string, unk
         ...overrideParams,
       }
       const res = await apiFunc(params)
+      // 已有更新的 fetch 在進行/完成 → 丟棄此次過時結果（不覆蓋 items/total）
+      if (mySeq !== seq) return items.value
       const payload = ((res as { data?: unknown })?.data ?? res) as { data?: unknown[]; items?: unknown[]; total?: number } | unknown[] | unknown
       if (Array.isArray(payload)) {
         items.value = payload
@@ -66,7 +74,9 @@ export function useTableFilters(options: { apiFunc?: (params: Record<string, unk
       }
       return items.value
     } finally {
-      loading.value = false
+      // 僅最新一次 fetch 負責收掉 loading；過時 fetch 提前返回時不動，避免較新
+      // fetch 仍進行中時被誤關。
+      if (mySeq === seq) loading.value = false
     }
   }
 

@@ -132,4 +132,28 @@ describe('useTableFilters', () => {
       expect.objectContaining({ search: 'abc', page: 1 }),
     )
   })
+
+  it('並發 fetch：慢回應不覆蓋快回應（後發先至 race guard）', async () => {
+    let resolveA
+    let resolveB
+    const apiFunc = vi.fn((params) => {
+      if (params.page === 1) {
+        return new Promise((r) => {
+          resolveA = () => r({ data: { data: ['A'], total: 1 } })
+        })
+      }
+      return new Promise((r) => {
+        resolveB = () => r({ data: { data: ['B'], total: 1 } })
+      })
+    })
+    const t = useTableFilters({ apiFunc })
+    const pA = t.setPage(1) // 先發（較慢）
+    const pB = t.setPage(2) // 後發（較快、較新）
+    resolveB() // B 先回 → 套用
+    await pB
+    expect(t.items.value).toEqual(['B'])
+    resolveA() // A（過時）後回，不可覆蓋較新的 B
+    await pA
+    expect(t.items.value).toEqual(['B'])
+  })
 })
