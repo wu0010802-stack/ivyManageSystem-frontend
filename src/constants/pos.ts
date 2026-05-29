@@ -1,6 +1,8 @@
 // POS 收銀常數
 // 園所資訊變動頻率極低，直接定義於此；日後要動態化再搬至 SystemConfig API
 
+import { formatCurrency } from '@/utils/currency'
+
 export const POS_ORG_INFO = {
   name: '常春藤幼兒園',
   subtitle: '課後才藝繳費收據',
@@ -23,10 +25,8 @@ export const LARGE_AMOUNT_THRESHOLD = 10000
 // 必須與後端 api/activity/_shared.py REFUND_APPROVAL_THRESHOLD 對齊
 export const REFUND_APPROVAL_THRESHOLD = 1000
 
-export const formatTWD = (n: unknown): string => {
-  if (n == null || Number.isNaN(Number(n))) return '—'
-  return `NT$ ${Number(n).toLocaleString('zh-Hant')}`
-}
+// 委派至全站單一金額 helper（NT$1,234，無空格 / —）。
+export const formatTWD = (n: unknown): string => formatCurrency(n)
 
 /**
  * 統一欠費計算：各頁面都應透過此 helper 以保持規則一致。
