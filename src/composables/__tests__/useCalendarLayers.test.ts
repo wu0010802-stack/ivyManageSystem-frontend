@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { useCalendarLayers, toFullCalendarEvents } from '../useCalendarLayers'
+import { useCalendarLayers, toFullCalendarEvents, applyEditable } from '../useCalendarLayers'
 import type { CalendarFeedItem } from '@/api/calendar'
 
 const STORAGE_KEY = 'calendar.enabledLayers'
@@ -148,5 +148,20 @@ describe('toFullCalendarEvents', () => {
       meta: { status: 'approved' },
       rawId: '7@2026-05-19',
     })
+  })
+})
+
+describe('applyEditable', () => {
+  it('editable=false 時逐 event 強制 editable:false', () => {
+    const out = applyEditable(
+      [{ id: 'a', editable: true }, { id: 'b', editable: false }],
+      false,
+    )
+    expect(out.every((e) => e.editable === false)).toBe(true)
+  })
+
+  it('editable=true 時原樣返回（保留 per-event editable）', () => {
+    const input = [{ id: 'a', editable: true }, { id: 'b', editable: false }]
+    expect(applyEditable(input, true)).toBe(input)
   })
 })

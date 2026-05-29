@@ -81,6 +81,16 @@ export function toFullCalendarEvents(items: CalendarFeedItem[]): EventInput[] {
   })
 }
 
+/**
+ * 唯讀強制：FullCalendar per-event editable:true 會蓋過全域 editable:false。
+ * 唯讀模式（editable=false）需逐 event 強制 editable:false，不能只靠全域旗標。
+ * editable=true 時原樣返回，保留 toFullCalendarEvents 設定的 per-layer editable。
+ */
+export function applyEditable(events: EventInput[], editable: boolean): EventInput[] {
+  if (editable) return events
+  return events.map((e) => ({ ...e, editable: false }))
+}
+
 export function useCalendarLayers(): UseCalendarLayersReturn {
   const enabledLayers = ref<Set<CalendarLayer>>(loadEnabled())
   const items = ref<CalendarFeedItem[]>([])
