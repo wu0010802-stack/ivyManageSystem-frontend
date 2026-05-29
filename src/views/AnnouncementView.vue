@@ -29,6 +29,9 @@ interface AnnouncementItem {
   readers?: { employee_id: number; name: string; read_at: string }[]
   created_by_name?: string
   created_at?: string
+  publish_at?: string | null
+  expires_at?: string | null
+  status?: 'scheduled' | 'active' | 'expired'
   [key: string]: unknown
 }
 
@@ -72,6 +75,8 @@ const form = reactive<{
   target_employee_ids: number[]
   parent_visibility: string
   parent_target_classroom_ids: number[]
+  publish_at: string | null
+  expires_at: string | null
 }>({
   id: null,
   title: '',
@@ -82,6 +87,8 @@ const form = reactive<{
   target_employee_ids: [],
   parent_visibility: 'off',
   parent_target_classroom_ids: [],
+  publish_at: null,
+  expires_at: null,
 })
 
 const resetForm = () => {
@@ -94,6 +101,8 @@ const resetForm = () => {
   form.target_employee_ids = []
   form.parent_visibility = 'off'
   form.parent_target_classroom_ids = []
+  form.publish_at = null
+  form.expires_at = null
 }
 
 const fetchAnnouncements = async () => {
@@ -122,6 +131,8 @@ const openEdit = async (row: AnnouncementItem) => {
   form.is_pinned = row.is_pinned
   form.target_employee_ids = row.recipient_ids ? [...row.recipient_ids] : []
   form.restrict_recipients = form.target_employee_ids.length > 0
+  form.publish_at = (row.publish_at as string | null) ?? null
+  form.expires_at = (row.expires_at as string | null) ?? null
   // 先以預設值打開，再 fetch 家長 scope
   form.parent_visibility = 'off'
   form.parent_target_classroom_ids = []
@@ -185,6 +196,8 @@ const handleSubmit = async () => {
         priority: form.priority,
         is_pinned: form.is_pinned,
         target_employee_ids: recipientIds,
+        publish_at: form.publish_at,
+        expires_at: form.expires_at,
       })
     } else {
       const res = await createAnnouncement({
@@ -193,6 +206,8 @@ const handleSubmit = async () => {
         priority: form.priority,
         is_pinned: form.is_pinned,
         target_employee_ids: recipientIds.length > 0 ? recipientIds : null,
+        publish_at: form.publish_at,
+        expires_at: form.expires_at,
       })
       const resData = res.data as { id?: number; announcement?: { id?: number } }
       announcementId = resData?.id ?? resData?.announcement?.id ?? null
@@ -294,6 +309,14 @@ onMounted(() => {
           <el-tag :type="priorityMap[row.priority]?.type || 'info'" size="small">
             {{ priorityMap[row.priority]?.label || row.priority }}
           </el-tag>
+        </template>
+      </el-table-column>
+
+      <el-table-column label="狀態" width="90" align="center">
+        <template #default="{ row }">
+          <el-tag v-if="row.status === 'scheduled'" type="info" size="small">預定</el-tag>
+          <el-tag v-else-if="row.status === 'expired'" size="small">已過期</el-tag>
+          <el-tag v-else type="success" size="small">進行中</el-tag>
         </template>
       </el-table-column>
 
@@ -418,6 +441,27 @@ onMounted(() => {
               :value="emp.value"
             />
           </el-select>
+        </el-form-item>
+
+        <el-divider content-position="left">排程</el-divider>
+
+        <el-form-item label="發佈時間">
+          <el-date-picker
+            v-model="form.publish_at"
+            type="datetime"
+            placeholder="留空＝立即發佈"
+            value-format="YYYY-MM-DDTHH:mm:ss"
+            style="width: 100%;"
+          />
+        </el-form-item>
+        <el-form-item label="到期時間">
+          <el-date-picker
+            v-model="form.expires_at"
+            type="datetime"
+            placeholder="留空＝永久"
+            value-format="YYYY-MM-DDTHH:mm:ss"
+            style="width: 100%;"
+          />
         </el-form-item>
 
         <el-divider content-position="left">家長端</el-divider>

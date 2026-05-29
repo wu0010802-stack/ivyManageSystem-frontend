@@ -82,6 +82,56 @@ const ElTableStub = defineComponent({
   },
 })
 
+describe('AnnouncementView status tags', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+  })
+
+  it('renders 預定 / 進行中 / 已過期 tags for 3 statuses', async () => {
+    getAnnouncements.mockResolvedValueOnce({
+      data: {
+        items: [
+          { id: 1, title: '排定中', content: '', priority: 'normal', is_pinned: false, status: 'scheduled', read_count: 0, recipient_count: 0 },
+          { id: 2, title: '進行', content: '', priority: 'normal', is_pinned: false, status: 'active', read_count: 0, recipient_count: 0 },
+          { id: 3, title: '已過期', content: '', priority: 'normal', is_pinned: false, status: 'expired', read_count: 0, recipient_count: 0 },
+        ],
+      },
+    })
+
+    const wrapper = mount(AnnouncementView, {
+      global: {
+        directives: { loading: () => {} },
+        stubs: {
+          teleport: true,
+          'el-button': { template: '<button><slot /></button>' },
+          'el-table': ElTableStub,
+          'el-table-column': ElTableColumnStub,
+          'el-tag': { template: '<span><slot /></span>' },
+          'el-icon': { template: '<i><slot /></i>' },
+          'el-popover': { template: '<div><slot name="reference" /><slot /></div>' },
+          'el-dialog': true,
+          'el-form': { template: '<form><slot /></form>' },
+          'el-form-item': { template: '<div><slot /></div>' },
+          'el-input': true,
+          'el-select': { template: '<div><slot /></div>' },
+          'el-option': true,
+          'el-switch': true,
+        },
+      },
+    })
+
+    await flushPromises()
+    await nextTick()
+    await flushPromises()
+
+    const text = wrapper.text()
+    expect(text).toContain('預定')
+    expect(text).toContain('進行中')
+    expect(text).toContain('已過期')
+  })
+})
+
 describe('AnnouncementView', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
