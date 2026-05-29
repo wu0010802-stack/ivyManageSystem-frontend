@@ -19,6 +19,8 @@ const expandedKey = ref<string | null>(null)
 const faqData = computed(() => faq.value as Record<string, unknown> | null)
 const items = computed(() => (faqData.value?.items as FaqItem[]) || [])
 const categories = computed(() => (faqData.value?.categories as FaqCategory[]) || [])
+const faqVersion = computed(() => (faqData.value?.version as string) || '')
+const faqUpdatedAt = computed(() => (faqData.value?.updated_at as string) || '')
 
 const filteredItems = computed<FaqItem[]>(() => {
   if (query.value.trim()) {
@@ -97,6 +99,11 @@ onMounted(load)
         </div>
       </div>
     </div>
+
+    <p v-if="faqVersion || faqUpdatedAt" class="faq-meta">
+      <span v-if="faqVersion">版本 {{ faqVersion }}</span>
+      <span v-if="faqUpdatedAt">{{ faqVersion ? '·' : '' }} 更新 {{ faqUpdatedAt }}</span>
+    </p>
 
     <div class="bottom-bar">
       <button class="pt-action-btn contact-btn" @click="goContactTeacher">
@@ -178,6 +185,13 @@ onMounted(load)
   padding: 12px 16px 14px;
   border-top: 1px solid var(--pt-border-light, #ecf5f9);
 }
+.faq-meta {
+  text-align: center;
+  font-size: 12px;
+  color: var(--pt-text-faint, #6b7280);
+  margin: 8px 0 80px;
+}
+.faq-meta span + span { margin-left: 4px; }
 .bottom-bar {
   position: fixed;
   bottom: 0;
