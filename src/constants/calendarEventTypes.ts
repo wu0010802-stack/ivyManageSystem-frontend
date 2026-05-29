@@ -18,7 +18,7 @@ export const EVENT_TYPES: readonly EventTypeDef[] = [
   { value: 'holiday', label: '國定假日', color: '#e6a23c' },
   { value: 'makeup_workday', label: '補班日', color: '#8b5cf6' },
   { value: 'general', label: '一般', color: '#909399' },
-] as const
+]
 
 const EVENT_TYPE_MAP: Record<string, EventTypeDef> = Object.fromEntries(
   EVENT_TYPES.map((t) => [t.value, t]),

@@ -51,4 +51,16 @@ describe('portalEventToFeedItem', () => {
     expect(portalEventToFeedItem({ event_date: '2026-05-19', event_type: 'holiday' }).color).toBe('#e6a23c')
     expect(portalEventToFeedItem({ event_date: '2026-05-19', event_type: 'makeup_workday' }).color).toBe('#8b5cf6')
   })
+
+  it('is_all_day=false 且無 start_time 時 start/end 退回純日期字串', () => {
+    const item = portalEventToFeedItem({ event_date: '2026-05-19', is_all_day: false })
+    expect(item.all_day).toBe(false)
+    expect(item.start).toBe('2026-05-19')
+    expect(item.end).toBe('2026-05-19')
+  })
+
+  it('缺 id 時 fallback 為 date-title 字串', () => {
+    const item = portalEventToFeedItem({ event_date: '2026-05-19', title: '假日' })
+    expect(item.id).toBe('2026-05-19-假日')
+  })
 })
