@@ -41,7 +41,8 @@ const visible = computed({
         </el-descriptions-item>
         <el-descriptions-item label="時間">
           <span v-if="props.event.is_all_day">全天</span>
-          <span v-else>{{ props.event.start_time }} - {{ props.event.end_time }}</span>
+          <span v-else-if="props.event.start_time">{{ props.event.start_time }} - {{ props.event.end_time ?? props.event.start_time }}</span>
+          <span v-else>—</span>
         </el-descriptions-item>
         <el-descriptions-item label="地點">{{ props.event.location || '—' }}</el-descriptions-item>
         <el-descriptions-item label="說明">{{ props.event.description || '—' }}</el-descriptions-item>

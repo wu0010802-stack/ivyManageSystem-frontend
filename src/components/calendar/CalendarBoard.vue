@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import FullCalendar from '@fullcalendar/vue3'
 import dayGridPlugin from '@fullcalendar/daygrid'
 import timeGridPlugin from '@fullcalendar/timegrid'
@@ -38,6 +38,11 @@ onMounted(() => {
 })
 onBeforeUnmount(() => {
   mql?.removeEventListener('change', syncIsMobile)
+})
+
+// isMobile 改變時實際切換視圖（initialView 僅 mount 時生效，需主動 changeView）
+watch(isMobile, (mobile) => {
+  calendarRef.value?.getApi().changeView(mobile ? 'listWeek' : 'dayGridMonth')
 })
 
 const fcEvents = computed(() => applyEditable(props.events, props.editable))
