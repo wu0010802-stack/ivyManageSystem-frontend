@@ -13755,6 +13755,8 @@ export interface components {
         AnnouncementCreate: {
             /** Content */
             content: string;
+            /** Expires At */
+            expires_at?: string | null;
             /**
              * Is Pinned
              * @default false
@@ -13765,6 +13767,8 @@ export interface components {
              * @default normal
              */
             priority: string;
+            /** Publish At */
+            publish_at?: string | null;
             /** Target Employee Ids */
             target_employee_ids?: number[] | null;
             /** Title */
@@ -13783,6 +13787,8 @@ export interface components {
             created_by?: unknown;
             /** Created By Name */
             created_by_name: unknown;
+            /** Expires At */
+            expires_at?: unknown;
             /** Has More Readers */
             has_more_readers: unknown;
             /** Id */
@@ -13791,6 +13797,8 @@ export interface components {
             is_pinned: unknown;
             /** Priority */
             priority: unknown;
+            /** Publish At */
+            publish_at?: unknown;
             /** Read Count */
             read_count: unknown;
             /** Read Preview */
@@ -13801,6 +13809,8 @@ export interface components {
             recipient_count: unknown;
             /** Recipient Ids */
             recipient_ids: unknown;
+            /** Status */
+            status: unknown;
             /** Title */
             title: unknown;
             /** Updated At */
@@ -13860,10 +13870,14 @@ export interface components {
         AnnouncementUpdate: {
             /** Content */
             content?: string | null;
+            /** Expires At */
+            expires_at?: string | null;
             /** Is Pinned */
             is_pinned?: boolean | null;
             /** Priority */
             priority?: string | null;
+            /** Publish At */
+            publish_at?: string | null;
             /** Target Employee Ids */
             target_employee_ids?: number[] | null;
             /** Title */
