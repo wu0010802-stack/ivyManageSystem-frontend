@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { eventTypeColor } from '@/constants/calendarEventTypes'
+import { eventTypeColor, eventTypeDef } from '@/constants/calendarEventTypes'
 import type { CalendarEventDetail } from './types'
 
 const props = defineProps<{
@@ -30,7 +30,7 @@ const visible = computed({
             size="small"
             style="border: none; color: #fff"
           >
-            {{ props.event.event_type_label }}
+            {{ props.event.event_type_label ?? eventTypeDef(props.event.event_type)?.label ?? props.event.event_type }}
           </el-tag>
         </el-descriptions-item>
         <el-descriptions-item label="日期">

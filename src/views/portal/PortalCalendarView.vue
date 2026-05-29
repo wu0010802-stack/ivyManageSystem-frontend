@@ -16,7 +16,8 @@ interface OfficialSync { warning?: string; [key: string]: unknown }
 const loading = ref(false)
 const officialSync = ref<OfficialSync | null>(null)
 
-// 月份快取 "YYYY-MM" → 該月事件，避免切視圖/月份重複抓取
+// 月份快取 "YYYY-MM" → 該月事件，避免切視圖/月份重複抓取。
+// 同一 session 內不 invalidate（唯讀教師端可接受；需要最新資料時重整頁面）。
 const monthCache = new Map<string, PortalCalendarEvent[]>()
 // 目前可見範圍涵蓋月份的事件（合併去重後）
 const events = ref<PortalCalendarEvent[]>([])
