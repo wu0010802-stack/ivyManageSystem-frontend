@@ -1875,7 +1875,12 @@ export interface paths {
         };
         /**
          * List Announcements
-         * @description 列出所有公告（管理員用）
+         * @description 列出所有公告（管理員用）。
+         *
+         *     read_count / recipient_count 走 SQL correlated COUNT subquery；
+         *     read_preview 走 batch query + Python group top-3（per announcement by read_at DESC）。
+         *     完整 readers / recipient_ids 改為 lazy 端點 GET /announcements/{id}/readers 與
+         *     GET /announcements/{id}/recipients，避免 list 路徑線性退化。
          */
         get: operations["list_announcements_api_announcements_get"];
         put?: never;
@@ -1935,6 +1940,46 @@ export interface paths {
          *       已涵蓋；前端不應同時送 'all' + 其他 scope，後端不強擋以保留彈性）
          */
         put: operations["replace_parent_recipients_api_announcements__announcement_id__parent_recipients_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/announcements/{announcement_id}/readers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Readers
+         * @description Lazy fetch admin popover 用的完整已讀名單（分頁、read_at DESC）。
+         */
+        get: operations["list_readers_api_announcements__announcement_id__readers_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/announcements/{announcement_id}/recipients": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Recipients
+         * @description Lazy fetch admin edit dialog 用的 recipient 員工 id 清單。
+         */
+        get: operations["list_recipients_api_announcements__announcement_id__recipients_get"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -8197,7 +8242,10 @@ export interface paths {
         };
         /**
          * Portal List Sessions
-         * @description 取得含自班學生的場次列表
+         * @description 才藝場次列表：列全部才藝場次（任何老師可見），出席統計算整堂。
+         *
+         *     放寬前僅列『自班有報名的課程』場次且統計只算自班；現對齊 admin：
+         *     列全部場次、整堂統計。維持回傳陣列（與既有前端相容，無分頁）。
          */
         get: operations["portal_list_sessions_api_portal_activity_attendance_sessions_get"];
         put?: never;
@@ -8217,7 +8265,11 @@ export interface paths {
         };
         /**
          * Portal Get Session Detail
-         * @description 場次詳情（僅含自班學生；classroom_id FK 比對）
+         * @description 場次詳情：完整跨班名冊（任何老師可查）。
+         *
+         *     放寬前僅回自班學生並以 403 collapse 防列舉；現任何老師皆可查任何場次，
+         *     無受保護資源可列舉，故場次不存在直接回 404（對齊 admin）。
+         *     group_by="classroom" → 額外回傳 groups（按班級分組）。
          */
         get: operations["portal_get_session_detail_api_portal_activity_attendance_sessions__session_id__get"];
         put?: never;
@@ -8238,7 +8290,10 @@ export interface paths {
         get?: never;
         /**
          * Portal Batch Update Attendance
-         * @description 批次點名（只能更新自班學生；classroom_id FK 比對）
+         * @description 批次點名：任何老師可點整堂跨班名冊；無效報名略過（對齊 admin）。
+         *
+         *     放寬前限定自班並對非自班 reg 整批 403；現移除自班限制，僅保留
+         *     『該 reg 確實有效報了本場次課程』的有效性檢查（無效者略過、不整批拒絕）。
          */
         put: operations["portal_batch_update_attendance_api_portal_activity_attendance_sessions__session_id__records_put"];
         post?: never;
@@ -13803,12 +13858,8 @@ export interface components {
             read_count: unknown;
             /** Read Preview */
             read_preview: unknown;
-            /** Readers */
-            readers: unknown;
             /** Recipient Count */
             recipient_count: unknown;
-            /** Recipient Ids */
-            recipient_ids: unknown;
             /** Status */
             status: unknown;
             /** Title */
@@ -13865,6 +13916,28 @@ export interface components {
             name: unknown;
             /** Read At */
             read_at?: unknown;
+        };
+        /**
+         * AnnouncementReadersOut
+         * @description GET /announcements/{id}/readers 分頁回傳。
+         */
+        AnnouncementReadersOut: {
+            /** Items */
+            items: unknown;
+            /** Page */
+            page: unknown;
+            /** Page Size */
+            page_size: unknown;
+            /** Total */
+            total: unknown;
+        };
+        /**
+         * AnnouncementRecipientsOut
+         * @description GET /announcements/{id}/recipients 回傳（lazy fetch admin edit dialog 用）。
+         */
+        AnnouncementRecipientsOut: {
+            /** Employee Ids */
+            employee_ids: unknown;
         };
         /** AnnouncementUpdate */
         AnnouncementUpdate: {
@@ -21910,6 +21983,18 @@ export interface components {
             reaction: string;
         };
         /**
+         * ReaderListItem
+         * @description 單筆已讀者明細（list_readers 端用，等同 AnnouncementReaderItemOut 但獨立暴露）。
+         */
+        ReaderListItem: {
+            /** Employee Id */
+            employee_id: unknown;
+            /** Name */
+            name: unknown;
+            /** Read At */
+            read_at?: unknown;
+        };
+        /**
          * RecruitmentCampusSettingOut
          * @description 本園基本設定（地址 / 座標 / 通勤模式）。
          */
@@ -28941,6 +29026,71 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AnnouncementParentRecipientsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_readers_api_announcements__announcement_id__readers_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path: {
+                announcement_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnnouncementReadersOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_recipients_api_announcements__announcement_id__recipients_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                announcement_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnnouncementRecipientsOut"];
                 };
             };
             /** @description Validation Error */

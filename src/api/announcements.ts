@@ -17,3 +17,14 @@ export const getAnnouncementParentRecipients = (id: number) =>
 
 export const replaceAnnouncementParentRecipients = (id: number, recipients: unknown) =>
   api.put(`/announcements/${id}/parent-recipients`, { recipients })
+
+// Lazy fetch endpoints（PR #8 perf 改造）
+// recipient_ids 改由此 endpoint 提供（list response 已移除此欄位）
+export const getAnnouncementRecipients = (id: number) =>
+  api.get(`/announcements/${id}/recipients`)
+
+// readers 完整名單改 lazy fetch（list 只回 read_preview×3）
+export const getAnnouncementReaders = (
+  id: number,
+  params: { page?: number; page_size?: number } = {},
+) => api.get(`/announcements/${id}/readers`, { params })
