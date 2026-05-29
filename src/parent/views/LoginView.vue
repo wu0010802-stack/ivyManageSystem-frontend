@@ -8,14 +8,22 @@ import {
   liff,
 } from '../services/liff'
 import { liffLogin } from '../api/auth'
+import {
+  CONSENT_SCOPE_SERVICE_ESSENTIAL,
+  getCurrentPolicy,
+  getMyConsents,
+  type PolicyVersionOut,
+} from '../api/consent'
 import { useParentAuthStore } from '../stores/parentAuth'
 import BrandMark from '@/components/brand/BrandMark.vue'
+import ConsentModal from '../components/ConsentModal.vue'
 
 const router = useRouter()
 const authStore = useParentAuthStore()
 
-const status = ref<'init' | 'loading' | 'error'>('init')
+const status = ref<'init' | 'loading' | 'consent' | 'error'>('init')
 const errorMessage = ref('')
+const pendingPolicy = ref<PolicyVersionOut | null>(null)
 
 function isIdTokenExpiredError(err: unknown) {
   const e = err as Record<string, unknown> | null | undefined
@@ -57,6 +65,12 @@ async function startLogin({ forceFresh = false } = {}) {
     if (data?.status === 'ok') {
       clearLiffTokenRefreshMarker()
       authStore.setUser(data.user)
+      // P0c-3: 強制 consent 關卡 — 未對 current policy 簽 service_essential 即攔下
+      const needsConsent = await checkConsentRequired()
+      if (needsConsent) {
+        status.value = 'consent'
+        return
+      }
       router.replace('/home')
     } else if (data?.status === 'need_binding') {
       clearLiffTokenRefreshMarker()
@@ -86,6 +100,39 @@ async function startLogin({ forceFresh = false } = {}) {
 function manualRetry() {
   // 使用者主動點重試：清掉 marker 後強制走完整 OAuth，確保拿新 id_token
   startLogin({ forceFresh: true })
+}
+
+async function checkConsentRequired(): Promise<boolean> {
+  /**
+   * 判斷是否需顯示 consent modal。
+   * - true：首次登入或 policy 升版未重簽
+   * - false：service_essential 已對 current policy 簽過
+   *
+   * 容錯：fetch 失敗時 fail-open（不攔截）避免 backend 暫停服務時鎖死家長。
+   * Risk-accepted：未實作 consent 時 backend 故障可能短暫繞過告知，但
+   * 法律風險 << UX 鎖死風險。後續可改 fail-closed by setting.
+   */
+  try {
+    const [{ data: policy }, { data: consents }] = await Promise.all([
+      getCurrentPolicy(),
+      getMyConsents(),
+    ])
+    pendingPolicy.value = policy
+    const essential = consents.current_status.find(
+      s => s.scope === CONSENT_SCOPE_SERVICE_ESSENTIAL,
+    )
+    if (!essential || essential.consented !== true) return true
+    if (essential.policy_version_id !== policy.id) return true
+    return false
+  } catch (err) {
+    console.warn('[consent] check failed, fail-open:', err)
+    return false
+  }
+}
+
+function onConsented() {
+  status.value = 'loading'
+  router.replace('/home')
 }
 
 onMounted(() => startLogin())
@@ -132,6 +179,12 @@ onMounted(() => startLogin())
     </div>
 
     <p class="legal">本服務由常春藤幼兒園提供</p>
+
+    <ConsentModal
+      v-if="status === 'consent' && pendingPolicy"
+      :policy="pendingPolicy"
+      @consented="onConsented"
+    />
   </div>
 </template>
 
