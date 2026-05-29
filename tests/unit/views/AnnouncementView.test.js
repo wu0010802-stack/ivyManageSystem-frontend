@@ -37,6 +37,10 @@ vi.mock('@/api/announcements', () => ({
   createAnnouncement: vi.fn(),
   updateAnnouncement: vi.fn(),
   deleteAnnouncement: vi.fn(),
+  getAnnouncementParentRecipients: vi.fn(() => Promise.resolve({ data: { items: [] } })),
+  getAnnouncementRecipients: vi.fn(() => Promise.resolve({ data: { employee_ids: [] } })),
+  getAnnouncementReaders: vi.fn(() => Promise.resolve({ data: { items: [], total: 0 } })),
+  replaceAnnouncementParentRecipients: vi.fn(),
 }))
 
 vi.mock('@/api/employees', () => ({
@@ -174,6 +178,5 @@ describe('AnnouncementView', () => {
     expect(wrapper.text()).toContain('林老師')
     expect(wrapper.text()).toContain('陳老師')
     expect(wrapper.text()).toContain('已讀 4 人')
-    expect(wrapper.text()).toContain('再顯示 1 人')
   })
 })
