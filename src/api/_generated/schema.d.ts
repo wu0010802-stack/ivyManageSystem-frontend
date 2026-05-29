@@ -18414,6 +18414,158 @@ export interface components {
             /** Warning */
             warning?: unknown;
         };
+        /**
+         * ParentContactBookAckOut
+         * @description POST /parent/contact-book/{id}/ack — 已讀回傳（idempotent）。
+         */
+        ParentContactBookAckOut: {
+            /** Already Marked */
+            already_marked: unknown;
+            /** Entry Id */
+            entry_id: unknown;
+            /** Read At */
+            read_at?: unknown;
+        };
+        /**
+         * ParentContactBookDetailOut
+         * @description GET /parent/contact-book/{id} — 單筆詳情（entry 欄位 + replies 列表）。
+         */
+        ParentContactBookDetailOut: {
+            /** Bowel */
+            bowel?: unknown;
+            /** Classroom Id */
+            classroom_id: unknown;
+            /** Id */
+            id: unknown;
+            /** Learning Highlight */
+            learning_highlight?: unknown;
+            /** Log Date */
+            log_date?: unknown;
+            /** Meal Lunch */
+            meal_lunch?: unknown;
+            /** Meal Snack */
+            meal_snack?: unknown;
+            /** Mood */
+            mood?: unknown;
+            /** My Acknowledged At */
+            my_acknowledged_at?: unknown;
+            /** Nap Minutes */
+            nap_minutes?: unknown;
+            /** Photos */
+            photos?: unknown;
+            /** Published At */
+            published_at?: unknown;
+            /** Replies */
+            replies?: unknown;
+            /** Student Id */
+            student_id: unknown;
+            /** Teacher Note */
+            teacher_note?: unknown;
+            /** Temperature C */
+            temperature_c?: unknown;
+        };
+        /**
+         * ParentContactBookEntryOut
+         * @description 聯絡簿單筆 entry payload（_entry_to_dict 序列化結果，家長視角）。
+         *
+         *     回傳於：
+         *     - GET /today（內嵌於 ParentContactBookTodayOut.entry）
+         *     - GET /（歷史清單內每筆）
+         *     - GET /{id}（被 ParentContactBookDetailOut 繼承）
+         */
+        ParentContactBookEntryOut: {
+            /** Bowel */
+            bowel?: unknown;
+            /** Classroom Id */
+            classroom_id: unknown;
+            /** Id */
+            id: unknown;
+            /** Learning Highlight */
+            learning_highlight?: unknown;
+            /** Log Date */
+            log_date?: unknown;
+            /** Meal Lunch */
+            meal_lunch?: unknown;
+            /** Meal Snack */
+            meal_snack?: unknown;
+            /** Mood */
+            mood?: unknown;
+            /** My Acknowledged At */
+            my_acknowledged_at?: unknown;
+            /** Nap Minutes */
+            nap_minutes?: unknown;
+            /** Photos */
+            photos?: unknown;
+            /** Published At */
+            published_at?: unknown;
+            /** Student Id */
+            student_id: unknown;
+            /** Teacher Note */
+            teacher_note?: unknown;
+            /** Temperature C */
+            temperature_c?: unknown;
+        };
+        /**
+         * ParentContactBookHistoryOut
+         * @description GET /parent/contact-book — 歷史清單（僅已發布）。
+         *
+         *     Router 回傳的 dict key 為 "from" / "to"（Python 保留字無法作欄位名），
+         *     透過 Field(alias=...) + serialization_alias 對齊；IvyBaseModel 預設
+         *     `populate_by_name=True` 允許 alias 與原名雙向 populate。
+         */
+        ParentContactBookHistoryOut: {
+            /** Entries */
+            entries: unknown;
+            /** From */
+            from: unknown;
+            /** Student Id */
+            student_id: unknown;
+            /** To */
+            to: unknown;
+        };
+        /**
+         * ParentContactBookPhotoOut
+         * @description 單張照片回傳（家長視角，只給 display / thumb url，不含 original_filename）。
+         */
+        ParentContactBookPhotoOut: {
+            /** Display Url */
+            display_url?: unknown;
+            /** Id */
+            id: unknown;
+            /** Thumb Url */
+            thumb_url?: unknown;
+        };
+        /**
+         * ParentContactBookReplyOut
+         * @description 家長回覆單筆（_reply_to_dict 序列化結果）。
+         *
+         *     回傳於：
+         *     - POST /{id}/reply（單筆新增 / idempotent replay）
+         *     - 被 ParentContactBookDetailOut.replies 內嵌
+         */
+        ParentContactBookReplyOut: {
+            /** Body */
+            body: unknown;
+            /** Created At */
+            created_at?: unknown;
+            /** Entry Id */
+            entry_id: unknown;
+            /** Guardian User Id */
+            guardian_user_id: unknown;
+            /** Id */
+            id: unknown;
+        };
+        /**
+         * ParentContactBookTodayOut
+         * @description GET /parent/contact-book/today — 今日聯絡簿（沒有 / 未發布時 entry=null）。
+         */
+        ParentContactBookTodayOut: {
+            entry?: unknown;
+            /** Log Date */
+            log_date: unknown;
+            /** Student Id */
+            student_id: unknown;
+        };
         /** ParentMedicationOrderCreate */
         ParentMedicationOrderCreate: {
             /**
@@ -18909,6 +19061,17 @@ export interface components {
             /** Visit Count */
             visit_count?: number | null;
         };
+        /**
+         * PermissionAdminOkOut
+         * @description delete_permission_definition / delete_role 回傳 — {ok: bool}。
+         *
+         *     不重用 _common.OkStatusOut（欄位是 status:str）或 DeleteResultOut（message:str），
+         *     重用會 silent rename 前端欄位。
+         */
+        PermissionAdminOkOut: {
+            /** Ok */
+            ok: unknown;
+        };
         /** PermissionDefinitionIn */
         PermissionDefinitionIn: {
             /** Code */
@@ -18922,6 +19085,22 @@ export interface components {
             group_name: string;
             /** Label */
             label: string;
+        };
+        /**
+         * PermissionDefinitionOut
+         * @description create_permission_definition / update_permission_definition 回傳。
+         */
+        PermissionDefinitionOut: {
+            /** Code */
+            code: unknown;
+            /** Description */
+            description?: unknown;
+            /** Group Name */
+            group_name: unknown;
+            /** Is Core */
+            is_core: unknown;
+            /** Label */
+            label: unknown;
         };
         /** PermissionDefinitionUpdate */
         PermissionDefinitionUpdate: {
@@ -19111,6 +19290,62 @@ export interface components {
             student_name?: unknown;
             /** Unread Count */
             unread_count: unknown;
+        };
+        /**
+         * PortalProfileLineBindingOut
+         * @description GET /portal/profile/line-binding — 目前綁定狀態。
+         */
+        PortalProfileLineBindingOut: {
+            /** Line User Id */
+            line_user_id?: unknown;
+        };
+        /**
+         * PortalProfileLineBindingUpdateOut
+         * @description PUT /portal/profile/line-binding — 綁定成功回傳。
+         */
+        PortalProfileLineBindingUpdateOut: {
+            /** Line User Id */
+            line_user_id: unknown;
+            /** Message */
+            message: unknown;
+        };
+        /**
+         * PortalProfileOut
+         * @description GET /portal/profile — 教師自身個資彙整。
+         *
+         *     bank_account 為遮罩字串（router 端用 _mask_bank_account 處理）。
+         */
+        PortalProfileOut: {
+            /** Address */
+            address?: unknown;
+            /** Bank Account */
+            bank_account?: unknown;
+            /** Bank Account Name */
+            bank_account_name?: unknown;
+            /** Bank Code */
+            bank_code?: unknown;
+            /** Classroom */
+            classroom?: unknown;
+            /** Emergency Contact Name */
+            emergency_contact_name?: unknown;
+            /** Emergency Contact Phone */
+            emergency_contact_phone?: unknown;
+            /** Employee Id */
+            employee_id: unknown;
+            /** Hire Date */
+            hire_date?: unknown;
+            /** Job Title */
+            job_title?: unknown;
+            /** Name */
+            name: unknown;
+            /** Phone */
+            phone?: unknown;
+            /** Position */
+            position?: unknown;
+            /** Work End Time */
+            work_end_time?: unknown;
+            /** Work Start Time */
+            work_start_time?: unknown;
         };
         /** POSCheckoutItem */
         POSCheckoutItem: {
@@ -20528,6 +20763,22 @@ export interface components {
             /** Permissions */
             permissions?: string[];
         };
+        /**
+         * RoleOut
+         * @description create_role / update_role 回傳。
+         */
+        RoleOut: {
+            /** Code */
+            code: unknown;
+            /** Description */
+            description?: unknown;
+            /** Is Core */
+            is_core: unknown;
+            /** Label */
+            label: unknown;
+            /** Permissions */
+            permissions: unknown;
+        };
         /** RoleUpdate */
         RoleUpdate: {
             /** Description */
@@ -21367,6 +21618,156 @@ export interface components {
             status: "completed" | "skipped" | "failed";
             /** Step */
             step: string;
+        };
+        /**
+         * StudentAttendanceBatchSaveResultOut
+         * @description POST /student-attendance/batch — 批次 upsert 結果 ({message, saved})。
+         */
+        StudentAttendanceBatchSaveResultOut: {
+            /** Message */
+            message: unknown;
+            /** Saved */
+            saved: unknown;
+        };
+        /**
+         * StudentAttendanceByStudentItemOut
+         * @description 單一學生紀錄抽屜中單筆出席紀錄。
+         */
+        StudentAttendanceByStudentItemOut: {
+            /** Date */
+            date?: unknown;
+            /** Id */
+            id: unknown;
+            /** Remark */
+            remark?: unknown;
+            /** Source Leave Id */
+            source_leave_id?: unknown;
+            /** Status */
+            status?: unknown;
+        };
+        /**
+         * StudentAttendanceByStudentOut
+         * @description GET /student-attendance/by-student — 學生紀錄抽屜回傳。
+         *
+         *     counts 採 Dict[str, int]，key 為中文出席狀態（出席/缺席/病假/事假/遲到），
+         *     與 VALID_STATUSES tuple 對齊，避免 alias 漂移。
+         */
+        StudentAttendanceByStudentOut: {
+            /** Counts */
+            counts: unknown;
+            /** Items */
+            items: unknown;
+            /** Student Id */
+            student_id: unknown;
+            /** Student Name */
+            student_name: unknown;
+            /** Total */
+            total: unknown;
+        };
+        /**
+         * StudentAttendanceDailyOut
+         * @description GET /student-attendance — 某班某日出席清單（含未點名）。
+         */
+        StudentAttendanceDailyOut: {
+            /** Classroom Id */
+            classroom_id: unknown;
+            /** Date */
+            date: unknown;
+            /** Records */
+            records: unknown;
+        };
+        /**
+         * StudentAttendanceDailyOverviewOut
+         * @description GET /student-attendance/overview — 全園當日各班出席總覽。
+         */
+        StudentAttendanceDailyOverviewOut: {
+            /** Classrooms */
+            classrooms: unknown;
+            /** Date */
+            date: unknown;
+            totals: unknown;
+        };
+        /**
+         * StudentAttendanceDailyRecordOut
+         * @description 單班當日單一學生一筆（未點名時 status/remark = None）。
+         */
+        StudentAttendanceDailyRecordOut: {
+            /** Name */
+            name: unknown;
+            /** Remark */
+            remark?: unknown;
+            /** Status */
+            status?: unknown;
+            /** Student Id */
+            student_id: unknown;
+            /** Student No */
+            student_no?: unknown;
+        };
+        /**
+         * StudentAttendanceOverviewClassroomOut
+         * @description 總覽內單班一筆（含當班統計 + rollcall_status）。
+         */
+        StudentAttendanceOverviewClassroomOut: {
+            /** Absent Count */
+            absent_count: unknown;
+            /** Attendance Rate */
+            attendance_rate: unknown;
+            /** Classroom Id */
+            classroom_id: unknown;
+            /** Classroom Name */
+            classroom_name: unknown;
+            /** Last Recorded At */
+            last_recorded_at?: unknown;
+            /** Last Recorded By */
+            last_recorded_by?: unknown;
+            /** Late Count */
+            late_count: unknown;
+            /** Leave Count */
+            leave_count: unknown;
+            /** On Campus Count */
+            on_campus_count: unknown;
+            /** Present Count */
+            present_count: unknown;
+            /** Record Completion Rate */
+            record_completion_rate: unknown;
+            /** Recorded Count */
+            recorded_count: unknown;
+            /** Rollcall Status */
+            rollcall_status: unknown;
+            /** Student Count */
+            student_count: unknown;
+            /** Unmarked Count */
+            unmarked_count: unknown;
+        };
+        /**
+         * StudentAttendanceSummaryOut
+         * @description 單班/全園出席摘要（對應 build_attendance_summary）。
+         */
+        StudentAttendanceSummaryOut: {
+            /** Absent Count */
+            absent_count: unknown;
+            /** Attendance Rate */
+            attendance_rate: unknown;
+            /** Late Count */
+            late_count: unknown;
+            /** Leave Count */
+            leave_count: unknown;
+            /** On Campus Count */
+            on_campus_count: unknown;
+            /** Personal Leave Count */
+            personal_leave_count: unknown;
+            /** Present Count */
+            present_count: unknown;
+            /** Record Completion Rate */
+            record_completion_rate: unknown;
+            /** Recorded Count */
+            recorded_count: unknown;
+            /** Sick Leave Count */
+            sick_leave_count: unknown;
+            /** Total Students */
+            total_students: unknown;
+            /** Unmarked Count */
+            unmarked_count: unknown;
         };
         /** StudentBulkTransfer */
         StudentBulkTransfer: {
@@ -34711,7 +35112,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ParentContactBookHistoryOut"];
                 };
             };
             /** @description Validation Error */
@@ -34742,7 +35143,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ParentContactBookDetailOut"];
                 };
             };
             /** @description Validation Error */
@@ -34773,7 +35174,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ParentContactBookAckOut"];
                 };
             };
             /** @description Validation Error */
@@ -34805,7 +35206,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeleteResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -34840,7 +35241,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ParentContactBookReplyOut"];
                 };
             };
             /** @description Validation Error */
@@ -34871,7 +35272,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ParentContactBookTodayOut"];
                 };
             };
             /** @description Validation Error */
@@ -36238,7 +36639,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PermissionDefinitionOut"];
                 };
             };
             /** @description Validation Error */
@@ -36273,7 +36674,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PermissionDefinitionOut"];
                 };
             };
             /** @description Validation Error */
@@ -36304,7 +36705,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PermissionAdminOkOut"];
                 };
             };
             /** @description Validation Error */
@@ -38572,7 +38973,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PortalProfileOut"];
                 };
             };
         };
@@ -38596,7 +38997,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeleteResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -38625,7 +39026,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PortalProfileLineBindingOut"];
                 };
             };
         };
@@ -38649,7 +39050,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PortalProfileLineBindingUpdateOut"];
                 };
             };
             /** @description Validation Error */
@@ -38678,7 +39079,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeleteResultOut"];
                 };
             };
         };
@@ -40511,7 +40912,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["RoleOut"];
                 };
             };
             /** @description Validation Error */
@@ -40546,7 +40947,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["RoleOut"];
                 };
             };
             /** @description Validation Error */
@@ -40577,7 +40978,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PermissionAdminOkOut"];
                 };
             };
             /** @description Validation Error */
@@ -41930,7 +42331,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["StudentAttendanceDailyOut"];
                 };
             };
             /** @description Validation Error */
@@ -41983,7 +42384,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["StudentAttendanceBatchSaveResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -42019,7 +42420,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["StudentAttendanceByStudentOut"];
                 };
             };
             /** @description Validation Error */
@@ -42121,7 +42522,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["StudentAttendanceDailyOverviewOut"];
                 };
             };
             /** @description Validation Error */
