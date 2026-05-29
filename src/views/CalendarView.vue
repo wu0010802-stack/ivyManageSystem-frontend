@@ -18,7 +18,7 @@ import type { RecurrenceRule } from '@/components/calendar/types'
 import type { CalendarLayer } from '@/api/calendar'
 import CalendarBoard from '@/components/calendar/CalendarBoard.vue'
 import CalendarEventDetailDialog from '@/components/calendar/CalendarEventDetailDialog.vue'
-import { EVENT_TYPES } from '@/constants/calendarEventTypes'
+import { EVENT_TYPES, eventTypeColor } from '@/constants/calendarEventTypes'
 
 interface CalendarEvent {
   id: number
@@ -69,7 +69,6 @@ const currentYear = computed(() => viewRange.value.start.getFullYear())
 const currentMonth = computed(() => viewRange.value.start.getMonth() + 1)
 
 const eventTypes = EVENT_TYPES
-const eventTypeMap = Object.fromEntries(eventTypes.map((item) => [item.value, item]))
 
 const form = reactive<{
   id: number | null
@@ -270,7 +269,7 @@ const handleDelete = async (event: CalendarEvent) => {
   }
 }
 
-// ===== FullCalendar callbacks =====
+// ===== CalendarBoard 事件處理 =====
 
 const onDatesSet = (arg: DatesSetArg) => {
   viewRange.value = { start: arg.start, end: arg.end }
@@ -414,7 +413,7 @@ const onEventDrop = async (info: EventDropArg) => {
         <el-table-column label="類型" width="110" align="center">
           <template #default="{ row }">
             <el-tag
-              :color="eventTypeMap[row.event_type]?.color"
+              :color="eventTypeColor(row.event_type)"
               effect="dark"
               size="small"
               style="border: none; color: #fff"
@@ -526,6 +525,4 @@ const onEventDrop = async (info: EventDropArg) => {
   color: var(--text-tertiary);
   font-size: 12px;
 }
-
-
 </style>
