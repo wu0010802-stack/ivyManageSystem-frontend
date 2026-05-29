@@ -41,6 +41,8 @@ vi.mock('@/api/announcements', () => ({
   getAnnouncementRecipients: vi.fn(() => Promise.resolve({ data: { employee_ids: [] } })),
   getAnnouncementReaders: vi.fn(() => Promise.resolve({ data: { items: [], total: 0 } })),
   replaceAnnouncementParentRecipients: vi.fn(),
+  uploadAnnouncementAttachment: vi.fn(() => Promise.resolve({ data: {} })),
+  deleteAnnouncementAttachment: vi.fn(() => Promise.resolve({ data: {} })),
 }))
 
 vi.mock('@/api/employees', () => ({
@@ -209,6 +211,8 @@ describe('AnnouncementView openEdit fetch failure (c11f3563 regression)', () => 
       getAnnouncementRecipients: vi.fn().mockResolvedValue({ data: { employee_ids: [] } }),
       getAnnouncementReaders: vi.fn().mockResolvedValue({ data: { items: [], total: 0 } }),
       replaceAnnouncementParentRecipients: vi.fn(),
+      uploadAnnouncementAttachment: vi.fn(() => Promise.resolve({ data: {} })),
+      deleteAnnouncementAttachment: vi.fn(() => Promise.resolve({ data: {} })),
     }))
 
     const wrapper = mount(AnnouncementView, {
@@ -274,6 +278,8 @@ describe('AnnouncementView readers cache (PR perf)', () => {
       replaceAnnouncementParentRecipients: vi.fn(),
       getAnnouncementRecipients: vi.fn().mockResolvedValue({ data: { employee_ids: [] } }),
       getAnnouncementReaders: readersMock,
+      uploadAnnouncementAttachment: vi.fn(() => Promise.resolve({ data: {} })),
+      deleteAnnouncementAttachment: vi.fn(() => Promise.resolve({ data: {} })),
     }))
     vi.doMock('@/stores/employee', () => ({
       useEmployeeStore: () => ({ employees: [], fetchEmployees: vi.fn() }),
