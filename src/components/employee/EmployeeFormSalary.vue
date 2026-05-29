@@ -3,6 +3,7 @@
 import { computed } from 'vue'
 import { Lock, WarningFilled } from '@element-plus/icons-vue'
 import { pensionRateToPercent, pensionPercentToRate } from '@/validators/employeeForm'
+import { formatCurrency } from '@/utils/currency'
 
 export interface EmployeeFormSalaryData {
   base_salary?: number | null
@@ -46,7 +47,7 @@ const emit = defineEmits<{
   'sync-insurance': []
 }>()
 
-const fmtNTD = (n: number | null | undefined) => `NT$${Number(n).toLocaleString()}`
+const fmtNTD = (n: number | null | undefined) => formatCurrency(n)
 
 // 勞退百分比雙向綁定（0-0.06 ↔ 0-6%）
 const pensionPercent = computed({
