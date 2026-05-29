@@ -23,6 +23,7 @@ interface PermDef {
   value: string
   label: string
   is_core: boolean
+  scope_options?: string[] | null
 }
 
 interface PermissionsResponse {
@@ -222,6 +223,61 @@ function handleDeletePermission(row: typeof permissionRows.value[0]) {
 onMounted(() => {
   fetchDefinition()
 })
+
+// ── Scope-aware permission helpers ──
+
+/** Return scope_options array for a permission code, or [] if none. */
+function scopeOptionsFor(code: string): string[] {
+  return definition.value.permissions[code]?.scope_options ?? []
+}
+
+/** Split a complex key like "STUDENTS_READ:own_class" into code + scope. */
+function splitPermKey(key: string): { code: string; scope: string | null } {
+  const idx = key.indexOf(':')
+  if (idx === -1) return { code: key, scope: null }
+  return { code: key.slice(0, idx), scope: key.slice(idx + 1) }
+}
+
+/** Is this permission code checked (bare or any scoped form)? */
+function isPermChecked(code: string): boolean {
+  return roleForm.permissions.some((k) => splitPermKey(k).code === code)
+}
+
+/** Current scope for a checked permission, or null if bare/unchecked. */
+function currentPermScope(code: string): string | null {
+  const found = roleForm.permissions.find((k) => splitPermKey(k).code === code)
+  if (!found) return null
+  return splitPermKey(found).scope
+}
+
+/** Toggle a checkbox on/off. When enabling a scoped permission, default to 'own_class'. */
+function togglePerm(code: string, checked: boolean) {
+  const filtered = roleForm.permissions.filter((k) => splitPermKey(k).code !== code)
+  if (checked) {
+    const opts = scopeOptionsFor(code)
+    if (opts.length > 0) {
+      const dflt = opts.includes('own_class') ? 'own_class' : opts[0]
+      filtered.push(`${code}:${dflt}`)
+    } else {
+      filtered.push(code)
+    }
+  }
+  roleForm.permissions = filtered
+}
+
+/** Update the scope for an already-checked permission. */
+function setPermScope(code: string, scope: string) {
+  roleForm.permissions = roleForm.permissions.map((k) =>
+    splitPermKey(k).code === code ? `${code}:${scope}` : k,
+  )
+}
+
+const SCOPE_LABELS: Record<string, string> = {
+  own_class: '僅自班',
+  all: '全園',
+}
+
+defineExpose({ splitPermKey, isPermChecked, currentPermScope, togglePerm, setPermScope, roleForm, roleDialogVisible, roleEditMode })
 </script>
 
 <template>
@@ -320,14 +376,33 @@ onMounted(() => {
           <div v-else class="permission-checkboxes">
             <div v-for="group in definition.groups" :key="group.name" class="perm-group">
               <div class="perm-group-name">{{ group.name }}</div>
-              <el-checkbox
-                v-for="code in group.permissions"
-                :key="code"
-                :model-value="roleForm.permissions.includes(code)"
-                @change="(v) => v ? roleForm.permissions.push(code) : roleForm.permissions.splice(roleForm.permissions.indexOf(code), 1)"
-              >
-                {{ definition.permissions[code]?.label || code }}
-              </el-checkbox>
+              <div v-for="code in group.permissions" :key="code" class="perm-row">
+                <el-checkbox
+                  :model-value="isPermChecked(code)"
+                  @change="(v) => togglePerm(code, !!v)"
+                >
+                  {{ definition.permissions[code]?.label || code }}
+                </el-checkbox>
+                <div
+                  v-if="isPermChecked(code) && scopeOptionsFor(code).length > 0"
+                  :data-perm-scope="code"
+                  class="perm-scope-row"
+                >
+                  <el-radio-group
+                    :model-value="currentPermScope(code) ?? undefined"
+                    size="small"
+                    @update:model-value="(v) => setPermScope(code, String(v))"
+                  >
+                    <el-radio
+                      v-for="opt in scopeOptionsFor(code)"
+                      :key="opt"
+                      :value="opt"
+                    >
+                      {{ SCOPE_LABELS[opt] || opt }}
+                    </el-radio>
+                  </el-radio-group>
+                </div>
+              </div>
               <div v-for="sp in group.split_permissions" :key="sp.read" class="split-row">
                 <span>{{ sp.module }}</span>
                 <el-checkbox
@@ -404,5 +479,13 @@ onMounted(() => {
 .readonly-hint {
   color: var(--text-tertiary);
   padding: 6px 0;
+}
+.perm-row {
+  margin-bottom: 4px;
+}
+.perm-scope-row {
+  margin-left: 24px;
+  margin-top: 2px;
+  margin-bottom: 6px;
 }
 </style>
