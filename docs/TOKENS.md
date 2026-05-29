@@ -68,5 +68,5 @@
 ## Refs
 
 - Spec: `~/Desktop/ivy-backend/docs/superpowers/specs/2026-05-28-observability-forensic-and-design-tokens-design.md` Ch4
-- Stylelint plugin: `scripts/stylelint/canonical-token-prefix.js`
+- Stylelint plugin: `scripts/stylelint/canonical-token-prefix.cjs`
 - Baseline script: `scripts/lint-tokens.mjs`
