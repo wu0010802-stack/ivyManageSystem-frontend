@@ -27,7 +27,7 @@ describe('useActivityAttendanceDrawer sortedStudents', () => {
       updateFn: async () => ({}),
     })
     await drawer.openDrawer({ id: 1 })
-    const order = drawer.sortedStudents.value.map((s: any) => s.registration_id)
+    const order = drawer.sortedStudents.value.map((s) => s.registration_id)
     // A班 在 B班 前；A班內未點名(a2,id=3)在已點名(a1,id=2)前
     expect(order).toEqual([3, 2, 1])
   })
