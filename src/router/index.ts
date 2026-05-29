@@ -198,6 +198,12 @@ const routes: RouteRecordRaw[] = [
             meta: { title: '操作紀錄' }
         },
         {
+            path: '/data-quality',
+            name: 'data-quality',
+            component: () => import('../views/DataQualityView.vue'),
+            meta: { title: '資料品質報告' }
+        },
+        {
             path: '/settings',
             name: 'settings',
             component: () => import('../views/SettingsView.vue'),

@@ -192,6 +192,10 @@
             <el-icon><Document /></el-icon>
             <template #title>操作紀錄</template>
           </el-menu-item>
+          <el-menu-item v-if="canView.DATA_QUALITY_READ" index="/data-quality">
+            <el-icon><WarningFilled /></el-icon>
+            <template #title>資料品質</template>
+          </el-menu-item>
           <el-menu-item v-if="canView.ACTIVITY_READ" index="/activity/changes">
             <el-icon><List /></el-icon>
             <template #title>修改紀錄</template>
@@ -257,7 +261,7 @@ import {
   Money, User, School, OfficeBuilding, Bell, TrendCharts, Setting,
   Expand, Fold, DataAnalysis, Files,
   Star, Collection, ChatDotRound, List, Van, CreditCard, Checked,
-  Medal, Trophy, SwitchButton
+  Medal, Trophy, SwitchButton, WarningFilled
 } from '@element-plus/icons-vue'
 import { PERMISSION_NAMES, getUserInfo } from '@/utils/auth'
 
@@ -339,7 +343,8 @@ const hasVisibleActivityItems = computed(() =>
 
 const hasVisibleReportsItems = computed(() =>
   canView.value.AUDIT_LOGS || canView.value.ACTIVITY_READ ||
-  canView.value.SALARY_READ || canView.value.REPORTS || canView.value.BUSINESS_ANALYTICS
+  canView.value.SALARY_READ || canView.value.REPORTS || canView.value.BUSINESS_ANALYTICS ||
+  canView.value.DATA_QUALITY_READ
 )
 
 const hasVisibleSettingsItems = computed(() =>
