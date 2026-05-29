@@ -12072,6 +12072,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/students/{student_id}/lifecycle-overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Student Lifecycle Overview */
+        get: operations["get_student_lifecycle_overview_api_students__student_id__lifecycle_overview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/students/{student_id}/measurements": {
         parameters: {
             query?: never;
@@ -17535,6 +17552,26 @@ export interface components {
             /** Total */
             total: number;
         };
+        /** GradeStepOut */
+        GradeStepOut: {
+            /** Classroom Name */
+            classroom_name?: string | null;
+            /** Entered At */
+            entered_at?: string | null;
+            /** Expected At */
+            expected_at?: string | null;
+            /** Grade Id */
+            grade_id: number;
+            /** Name */
+            name: string;
+            /** Sort Order */
+            sort_order: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "done" | "current" | "future" | "skipped";
+        };
         /**
          * GradeTargetUpdate
          * @description 年級目標人數更新
@@ -18247,6 +18284,22 @@ export interface components {
             message: unknown;
             /** Reset To Pending */
             reset_to_pending?: unknown;
+        };
+        /** LifecycleOverviewOut */
+        LifecycleOverviewOut: {
+            /** Current Stage */
+            current_stage: string;
+            /** Inner Grade Steps */
+            inner_grade_steps: components["schemas"]["GradeStepOut"][];
+            /** On Leave Badge */
+            on_leave_badge: boolean;
+            /** On Leave Since */
+            on_leave_since?: string | null;
+            /** Outer Steps */
+            outer_steps: components["schemas"]["StepOut"][];
+            /** Student Id */
+            student_id: number;
+            terminal: components["schemas"]["TerminalOut"];
         };
         /** LifecycleTransitionRequest */
         LifecycleTransitionRequest: {
@@ -24209,6 +24262,27 @@ export interface components {
             /** Name */
             name: string;
         };
+        /** StepOut */
+        StepOut: {
+            /**
+             * Key
+             * @enum {string}
+             */
+            key: "visited" | "deposited" | "enrolled" | "active" | "terminal";
+            /** Label */
+            label: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+            /** Occurred At */
+            occurred_at?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "done" | "current" | "future";
+        };
         /** StepResultModel */
         StepResultModel: {
             /** Completed At */
@@ -25181,6 +25255,18 @@ export interface components {
             fields?: components["schemas"]["TemplateFields"] | null;
             /** Name */
             name?: string | null;
+        };
+        /** TerminalOut */
+        TerminalOut: {
+            /** Actual Date */
+            actual_date?: string | null;
+            /** Expected Date */
+            expected_date?: string | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "graduated" | "withdrawn" | "transferred" | "none";
         };
         /** TermOption */
         TermOption: {
@@ -46659,6 +46745,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MutationResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_student_lifecycle_overview_api_students__student_id__lifecycle_overview_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                student_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LifecycleOverviewOut"];
                 };
             };
             /** @description Validation Error */

@@ -21,6 +21,7 @@ import ActivityTab from './tabs/ActivityTab.vue'
 import HealthGrowthTab from './tabs/HealthGrowthTab.vue'
 import GrowthProfileTab from './tabs/GrowthProfileTab.vue'
 import CommunicationTab from './tabs/CommunicationTab.vue'
+import LifecycleTab from './tabs/LifecycleTab.vue'
 import StudentDisabilityDocsPanel from './StudentDisabilityDocsPanel.vue'
 import StudentEnrollmentCertButton from './StudentEnrollmentCertButton.vue'
 
@@ -107,6 +108,7 @@ const TAB_DEFS = computed(() => [
   { name: 'health_growth', label: '健康／成長', show: canPortfolioRead.value || canHealthRead.value },
   { name: 'growth_profile', label: '成長檔案', show: canPortfolioRead.value },
   { name: 'disability_docs', label: '鑑定文件', show: canSpecialNeedsRead.value },
+  { name: 'lifecycle', label: '在校歷程', show: true },
   { name: 'communication', label: '家長溝通', show: true },
 ])
 
@@ -371,6 +373,11 @@ const breadcrumbItems = computed(() => {
         <StudentDisabilityDocsPanel
           v-else-if="tab.name === 'disability_docs'"
           :student-id="safeStudentId"
+        />
+        <LifecycleTab
+          v-else-if="tab.name === 'lifecycle'"
+          :student-id="safeStudentId"
+          :active="activeTab === 'lifecycle'"
         />
         <CommunicationTab
           v-else-if="tab.name === 'communication'"
