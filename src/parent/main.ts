@@ -29,6 +29,8 @@ import { getMe } from './api/profile'
 import { initTheme } from './composables/useTheme'
 import { initA11y } from './composables/useA11y'
 import { initSentry } from '@/utils/sentry'
+// 離線寫入佇列：boot / online / visibilitychange flush triggers（spec §6.3.2）
+import { flushAllParent } from '@/parent/utils/parentOfflineQueue'
 
 // Theme + A11y 應在第一次 paint 前套用，避免閃爍
 initTheme()
@@ -76,5 +78,25 @@ router.beforeEach(async (to) => {
   }
   return true
 })
+
+function setupOfflineFlushTriggers() {
+  // boot：等 router 首次 nav 結束後跑一次（auth hydrate 完成）
+  router.afterEach(() => {
+    if ((window as Window & { __parent_boot_flushed?: boolean }).__parent_boot_flushed) return
+    ;(window as Window & { __parent_boot_flushed?: boolean }).__parent_boot_flushed = true
+    queueMicrotask(() => { flushAllParent().catch(() => {}) })
+  })
+  // online event
+  window.addEventListener('online', () => {
+    flushAllParent().catch(() => {})
+  })
+  // visibilitychange 切回前景
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      flushAllParent().catch(() => {})
+    }
+  })
+}
+setupOfflineFlushTriggers()
 
 app.mount('#app')

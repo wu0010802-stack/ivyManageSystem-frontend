@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 家長端 LIFF 補完 PWA shell（manifest + SW 註冊驗證）並加入 5 種高頻寫入動作的 IndexedDB queue，含 client_uuid + DB partial UNIQUE INDEX 防重送髒資料。
+**Goal:** 家長端 LIFF 補完 PWA shell（manifest + SW 註冊驗證）並加入 5 種高頻寫入動作的 IndexedDB queue，含 client_request_id + DB partial UNIQUE INDEX 防重送髒資料。
 
-**Architecture:** 3 phase 順序：(0) 4 機種真機 spike 驗 LIFF webview 對 PWA 的支援邊界 → (1) 家長獨立 manifest + parent.html link → (2) IndexedDB queue 共用 `ivy-offline` DB，`src/utils/offlineQueue.ts` 升 shared-common 擴 OP_KINDS、`src/parent/utils/parentOfflineQueue.ts` thin facade 注 client_uuid + dispatch saveFn、ParentOfflineIndicator 觀察+觸發、5 view 接入。BE 前置：3 表 Alembic migration + 3 endpoint accept client_uuid 23505 視同成功。
+**Architecture:** 3 phase 順序：(0) 4 機種真機 spike 驗 LIFF webview 對 PWA 的支援邊界 → (1) 家長獨立 manifest + parent.html link → (2) IndexedDB queue 共用 `ivy-offline` DB，`src/utils/offlineQueue.ts` 升 shared-common 擴 OP_KINDS、`src/parent/utils/parentOfflineQueue.ts` thin facade 注 client_request_id + dispatch saveFn、ParentOfflineIndicator 觀察+觸發、5 view 接入。BE 前置：3 表 Alembic migration + 3 endpoint accept client_request_id 23505 視同成功。
 
 **Tech Stack:** Vue 3 (composition API + `<script setup lang="ts">`), Vite 5, vite-plugin-pwa (Workbox), idb (IndexedDB wrapper), Element Plus, Pinia, axios. BE: FastAPI + Pydantic + SQLAlchemy + Alembic + PostgreSQL.
 
@@ -17,11 +17,11 @@
 ### 新增
 
 - `ivy-frontend/public/parent.webmanifest` — 家長獨立 PWA manifest（name / icon / theme / scope）
-- `ivy-frontend/src/parent/utils/parentOfflineQueue.ts` — thin facade，注 client_uuid + dispatch saveFn
+- `ivy-frontend/src/parent/utils/parentOfflineQueue.ts` — thin facade，注 client_request_id + dispatch saveFn
 - `ivy-frontend/src/parent/utils/__tests__/parentOfflineQueue.test.ts` — vitest
 - `ivy-frontend/src/parent/components/ParentOfflineIndicator.vue` — 全域 banner + 點按 flush
 - `ivy-frontend/src/parent/components/__tests__/ParentOfflineIndicator.test.ts` — vitest
-- `ivy-backend/alembic/versions/20260527_paroff01_parent_offline_client_uuid.py` — 3 表加 client_uuid + partial UNIQUE
+- `ivy-backend/alembic/versions/20260527_paroff01_parent_offline_client_request_id.py` — 3 表加 client_request_id + partial UNIQUE
 - `ivy-backend/tests/test_parent_offline_idempotency.py` — pytest 含 6 重複 POST 視同成功 test
 - `.scratch/parent-pwa-liff-spike-2026-05-26.md` — Phase 0 報告
 
@@ -37,11 +37,11 @@
 - `ivy-frontend/src/parent/views/ContactBookView.vue` — 列表 ack 接 enqueue
 - `ivy-frontend/src/parent/views/EventAckView.vue` — 事件 ack 接 enqueue
 - `ivy-frontend/src/parent/views/LeavesView.vue` — 新建假單接 enqueue
-- `ivy-backend/api/parent_portal/messages.py` — 訊息 POST accept client_uuid + idempotent
-- `ivy-backend/api/parent_portal/contact_book.py` — reply POST accept client_uuid + idempotent
-- `ivy-backend/api/parent_portal/leaves.py` — leave POST accept client_uuid + idempotent
-- `ivy-backend/models/parent_message.py` / `models/contact_book.py` / `models/student_leave.py` — 3 個 model 加 `client_uuid` column
-- `ivy-backend/schemas/parent.py`（或對應 schema 檔）— 3 個 Pydantic request schema 加 optional `client_uuid`
+- `ivy-backend/api/parent_portal/messages.py` — 訊息 POST accept client_request_id + idempotent
+- `ivy-backend/api/parent_portal/contact_book.py` — reply POST accept client_request_id + idempotent
+- `ivy-backend/api/parent_portal/leaves.py` — leave POST accept client_request_id + idempotent
+- `ivy-backend/models/parent_message.py` / `models/contact_book.py` / `models/student_leave.py` — 3 個 model 加 `client_request_id` column
+- `ivy-backend/schemas/parent.py`（或對應 schema 檔）— 3 個 Pydantic request schema 加 optional `client_request_id`
 - `ivy-frontend/docs/superpowers/specs/2026-05-26-parent-liff-pwa-offline-design.md` — Phase 0 完成後回填 §10
 
 ---
@@ -242,20 +242,23 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 
 ---
 
-## Task 3: BE — Alembic migration 3 表加 client_uuid
+## Task 3: BE — Alembic migration 2 表加 client_request_id
+
+**IMPORTANT 更新（plan 階段發現）**：`parent_messages` 表已有 `client_request_id String(64)` + partial UNIQUE（migration `20260429_l7i8j9k0l1m2_parent_message_tables.py`）。沿用此 codebase pattern（**String(64) 不是 UUID**），只加另 2 表。
 
 **Files:**
-- Create: `ivy-backend/alembic/versions/20260527_paroff01_parent_offline_client_uuid.py`
-- Modify: `ivy-backend/models/parent_message.py` / `models/contact_book.py` / `models/student_leave.py`
+- Create: `ivy-backend/alembic/versions/20260527_paroff01_parent_offline_client_request_id.py`
+- Modify: `ivy-backend/models/contact_book.py` (class `StudentContactBookReply`) / `models/student_leave.py` (class `StudentLeaveRequest`)
+- **NOT modified**: `parent_messages` 表 / `models/parent_message.py`（已存在）
 
 **遵守 CLAUDE.md `superpowers:sqlalchemy-alembic-expert-best-practices-code-review` 規範**：idempotent up/down、partial UNIQUE WHERE NOT NULL、不破壞 head chain。
 
 - [ ] **Step 1: 寫 migration**
 
-Create `ivy-backend/alembic/versions/20260527_paroff01_parent_offline_client_uuid.py`：
+Create `ivy-backend/alembic/versions/20260527_paroff01_parent_offline_client_request_id.py`：
 
 ```python
-"""parent offline client_uuid 3 tables
+"""parent offline client_request_id 2 tables (replies + leaves)
 
 Revision ID: paroff01
 Revises: mergeheads05
@@ -263,51 +266,49 @@ Create Date: 2026-05-27
 """
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
 
 revision = 'paroff01'
 down_revision = 'mergeheads05'
 branch_labels = None
 depends_on = None
 
-TABLES = ('parent_messages', 'student_contact_book_replies', 'student_leave_requests')
+TABLES = ('student_contact_book_replies', 'student_leave_requests')
 
 
 def upgrade():
     for tbl in TABLES:
         op.add_column(
             tbl,
-            sa.Column('client_uuid', postgresql.UUID(as_uuid=True), nullable=True),
+            sa.Column('client_request_id', sa.String(length=64), nullable=True),
         )
         op.create_index(
-            f'ix_{tbl}_client_uuid',
+            f'ix_{tbl}_client_request_id',
             tbl,
-            ['client_uuid'],
+            ['client_request_id'],
             unique=True,
-            postgresql_where=sa.text('client_uuid IS NOT NULL'),
+            postgresql_where=sa.text('client_request_id IS NOT NULL'),
         )
 
 
 def downgrade():
     for tbl in TABLES:
-        op.drop_index(f'ix_{tbl}_client_uuid', table_name=tbl)
-        op.drop_column(tbl, 'client_uuid')
+        op.drop_index(f'ix_{tbl}_client_request_id', table_name=tbl)
+        op.drop_column(tbl, 'client_request_id')
 ```
 
-- [ ] **Step 2: 加 model column 3 處**
+- [ ] **Step 2: 加 model column 2 處**
 
-Edit `ivy-backend/models/parent_message.py` `class ParentMessage` 內加：
+Edit `ivy-backend/models/contact_book.py` `class StudentContactBookReply` 內加：
 
 ```python
-from sqlalchemy.dialects.postgresql import UUID
-# ...
-client_uuid = Column(UUID(as_uuid=True), nullable=True, index=False)
+client_request_id = Column(String(64), nullable=True)
 ```
 
 （index 由 alembic UNIQUE 創建，model 不需重複宣告）
 
-對 `models/contact_book.py` `class StudentContactBookReply` 同樣加。
 對 `models/student_leave.py` `class StudentLeaveRequest` 同樣加。
+
+`parent_messages` / `ParentMessage` 已有此欄位 + index，**不動**。
 
 - [ ] **Step 3: 驗證 alembic heads 沒分裂**
 
@@ -341,13 +342,13 @@ Expected: 兩次都成功，無錯誤。
 
 ```bash
 cd ivy-backend
-git add alembic/versions/20260527_paroff01_parent_offline_client_uuid.py \
-        models/parent_message.py models/contact_book.py models/student_leave.py
-git commit -m "feat(parent-offline): 3 表加 client_uuid + partial UNIQUE index
+git add alembic/versions/20260527_paroff01_parent_offline_client_request_id.py \
+        models/contact_book.py models/student_leave.py
+git commit -m "feat(parent-offline): 2 表加 client_request_id + partial UNIQUE index
 
-Alembic migration paroff01：parent_messages / student_contact_book_replies /
-student_leave_requests 各加 client_uuid UUID nullable + partial UNIQUE
-WHERE client_uuid IS NOT NULL。對應 model 加 column。
+Alembic migration paroff01：student_contact_book_replies / student_leave_requests
+各加 client_request_id String(64) nullable + partial UNIQUE WHERE client_request_id
+IS NOT NULL，沿用 parent_messages 既有 pattern（migration l7i8j9k0l1m2）。
 
 Spec：ivy-frontend/docs/superpowers/specs/2026-05-26-parent-liff-pwa-offline-design.md §6.2.5
 
@@ -357,7 +358,7 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 
 ---
 
-## Task 4: BE — 3 endpoint accept client_uuid + 23505 idempotent + pytest
+## Task 4: BE — 3 endpoint accept client_request_id + 23505 idempotent + pytest
 
 **Files:**
 - Modify: `ivy-backend/api/parent_portal/messages.py`
@@ -386,8 +387,8 @@ Create `ivy-backend/tests/test_parent_offline_idempotency.py`：
 """家長端離線 queue 對應的 3 endpoint idempotency tests
 
 3 個 endpoint 都應該：
-- 接受 optional client_uuid (UUID v4)
-- 同 client_uuid 重複 POST → 200 + 回原紀錄 + DB row count 不增加
+- 接受 optional client_request_id (UUID v4)
+- 同 client_request_id 重複 POST → 200 + 回原紀錄 + DB row count 不增加
 """
 import uuid
 import pytest
@@ -407,19 +408,19 @@ def parent_thread_id(db_session, sample_parent_user, sample_student):
     return thread.id
 
 
-def test_parent_message_repeat_client_uuid_returns_original(
+def test_parent_message_repeat_client_request_id_returns_original(
     parent_client, parent_thread_id, db_session
 ):
     from models.parent_message import ParentMessage
     cu = str(uuid.uuid4())
-    body = {"content": "hello", "client_uuid": cu}
+    body = {"content": "hello", "client_request_id": cu}
     # 第一次 POST
     r1 = parent_client.post(
         f"/api/parent/messages/threads/{parent_thread_id}/messages", json=body
     )
     assert r1.status_code == 200
     first_id = r1.json()["id"]
-    # 第二次 POST 同 client_uuid
+    # 第二次 POST 同 client_request_id
     r2 = parent_client.post(
         f"/api/parent/messages/threads/{parent_thread_id}/messages", json=body
     )
@@ -428,14 +429,14 @@ def test_parent_message_repeat_client_uuid_returns_original(
     # DB row count 不變
     count = db_session.scalar(
         select(func.count(ParentMessage.id)).where(
-            ParentMessage.client_uuid == cu
+            ParentMessage.client_request_id == cu
         )
     )
     assert count == 1, "DB 不應重複新建"
 
 
-def test_parent_message_no_client_uuid_still_works(parent_client, parent_thread_id):
-    """既有 caller 沒 client_uuid 應正常運作（向後相容）。"""
+def test_parent_message_no_client_request_id_still_works(parent_client, parent_thread_id):
+    """既有 caller 沒 client_request_id 應正常運作（向後相容）。"""
     body = {"content": "no-uuid"}
     r = parent_client.post(
         f"/api/parent/messages/threads/{parent_thread_id}/messages", json=body
@@ -445,12 +446,12 @@ def test_parent_message_no_client_uuid_still_works(parent_client, parent_thread_
 
 # === contact book reply ===
 
-def test_contact_book_reply_repeat_client_uuid_returns_original(
+def test_contact_book_reply_repeat_client_request_id_returns_original(
     parent_client, sample_contact_book_entry, db_session
 ):
     from models.contact_book import StudentContactBookReply
     cu = str(uuid.uuid4())
-    body = {"content": "reply", "client_uuid": cu}
+    body = {"content": "reply", "client_request_id": cu}
     r1 = parent_client.post(
         f"/api/parent/contact-book/{sample_contact_book_entry.id}/reply", json=body
     )
@@ -463,13 +464,13 @@ def test_contact_book_reply_repeat_client_uuid_returns_original(
     assert r2.json()["id"] == first_id
     count = db_session.scalar(
         select(func.count(StudentContactBookReply.id)).where(
-            StudentContactBookReply.client_uuid == cu
+            StudentContactBookReply.client_request_id == cu
         )
     )
     assert count == 1
 
 
-def test_contact_book_reply_no_client_uuid_still_works(
+def test_contact_book_reply_no_client_request_id_still_works(
     parent_client, sample_contact_book_entry
 ):
     r = parent_client.post(
@@ -481,7 +482,7 @@ def test_contact_book_reply_no_client_uuid_still_works(
 
 # === parent leave ===
 
-def test_parent_leave_repeat_client_uuid_returns_original(
+def test_parent_leave_repeat_client_request_id_returns_original(
     parent_client, sample_student, db_session
 ):
     from models.student_leave import StudentLeaveRequest
@@ -492,7 +493,7 @@ def test_parent_leave_repeat_client_uuid_returns_original(
         "start_date": "2026-06-01",
         "end_date": "2026-06-01",
         "reason": "test",
-        "client_uuid": cu,
+        "client_request_id": cu,
     }
     r1 = parent_client.post("/api/parent/student-leaves", json=body)
     assert r1.status_code == 200
@@ -502,13 +503,13 @@ def test_parent_leave_repeat_client_uuid_returns_original(
     assert r2.json()["id"] == first_id
     count = db_session.scalar(
         select(func.count(StudentLeaveRequest.id)).where(
-            StudentLeaveRequest.client_uuid == cu
+            StudentLeaveRequest.client_request_id == cu
         )
     )
     assert count == 1
 
 
-def test_parent_leave_no_client_uuid_still_works(parent_client, sample_student):
+def test_parent_leave_no_client_request_id_still_works(parent_client, sample_student):
     r = parent_client.post(
         "/api/parent/student-leaves",
         json={
@@ -531,9 +532,9 @@ cd ivy-backend
 pytest tests/test_parent_offline_idempotency.py -v
 ```
 
-Expected: 6 個 test 全 FAIL（client_uuid 欄位被忽略 / 重複 POST 視為新紀錄）。
+Expected: 6 個 test 全 FAIL（client_request_id 欄位被忽略 / 重複 POST 視為新紀錄）。
 
-- [ ] **Step 4: 改 3 Pydantic schema 加 optional client_uuid**
+- [ ] **Step 4: 改 3 Pydantic schema 加 optional client_request_id**
 
 對 3 個 schema 都加：
 
@@ -544,7 +545,7 @@ from typing import Optional
 class ParentMessageCreate(BaseModel):
     content: str
     # ...
-    client_uuid: Optional[UUID] = None
+    client_request_id: Optional[UUID] = None
 ```
 
 - [ ] **Step 5: 改 3 endpoint 處理 23505**
@@ -561,18 +562,18 @@ def create_thread_message(thread_id: int, body: ParentMessageCreate, db: Session
     msg = ParentMessage(
         thread_id=thread_id,
         # ...
-        client_uuid=body.client_uuid,
+        client_request_id=body.client_request_id,
     )
     db.add(msg)
     try:
         db.commit()
     except IntegrityError as e:
         # 23505 UNIQUE 衝突 = idempotent retry
-        if 'ix_parent_messages_client_uuid' in str(e.orig) and body.client_uuid:
+        if 'ix_parent_messages_client_request_id' in str(e.orig) and body.client_request_id:
             db.rollback()
             existing = db.scalar(
                 select(ParentMessage).where(
-                    ParentMessage.client_uuid == body.client_uuid
+                    ParentMessage.client_request_id == body.client_request_id
                 )
             )
             if existing:
@@ -582,7 +583,7 @@ def create_thread_message(thread_id: int, body: ParentMessageCreate, db: Session
     return msg
 ```
 
-3 endpoint 套同 pattern；INDEX name 替換成對應的 `ix_student_contact_book_replies_client_uuid` / `ix_student_leave_requests_client_uuid`。
+3 endpoint 套同 pattern；INDEX name 替換成對應的 `ix_student_contact_book_replies_client_request_id` / `ix_student_leave_requests_client_request_id`。
 
 - [ ] **Step 6: 跑 test 確認通過**
 
@@ -608,13 +609,13 @@ Expected: 既有 pre-existing fail 不變、無新 regression。
 cd ivy-backend
 git add api/parent_portal/messages.py api/parent_portal/contact_book.py \
         api/parent_portal/leaves.py schemas/ tests/test_parent_offline_idempotency.py
-git commit -m "feat(parent-offline): 3 endpoint accept client_uuid + idempotent
+git commit -m "feat(parent-offline): 3 endpoint accept client_request_id + idempotent
 
 messages POST / contact_book reply POST / leaves POST 接 optional
-client_uuid 欄位；INSERT 觸發 partial UNIQUE 衝突（23505）→ SELECT
-回原紀錄回 200，達成 retry-safe idempotent。沒帶 client_uuid 維持原行為。
+client_request_id 欄位；INSERT 觸發 partial UNIQUE 衝突（23505）→ SELECT
+回原紀錄回 200，達成 retry-safe idempotent。沒帶 client_request_id 維持原行為。
 
-Test: 3 endpoint × 2 case (重複 client_uuid / 不帶 client_uuid)
+Test: 3 endpoint × 2 case (重複 client_request_id / 不帶 client_request_id)
 
 Spec：ivy-frontend/docs/superpowers/specs/2026-05-26-parent-liff-pwa-offline-design.md §6.2.5 §6.3.3
 
@@ -740,7 +741,7 @@ describe('parentOfflineQueue', () => {
     indexedDB.deleteDatabase('ivy-offline')
   })
 
-  it('enqueueParent 自動注入 client_uuid (UUID v4 格式)', async () => {
+  it('enqueueParent 自動注入 client_request_id (UUID v4 格式)', async () => {
     vi.mock('@/parent/stores/parentAuth', () => ({
       useParentAuthStore: () => ({ user: { user_id: 42 } }),
     }))
@@ -748,7 +749,7 @@ describe('parentOfflineQueue', () => {
       kind: OP_KINDS.PARENT_MESSAGE,
       payload: { thread_id: 1, content: 'hi' },
     })
-    expect(op.payload.client_uuid).toMatch(
+    expect(op.payload.client_request_id).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
     )
   })
@@ -861,7 +862,7 @@ Create `ivy-frontend/src/parent/utils/parentOfflineQueue.ts`：
  * 家長端離線寫入佇列 facade。
  *
  * Wraps src/utils/offlineQueue.ts 的純 CRUD 核心：
- * - enqueueParent: 自動注入 client_uuid 進 payload + 從 parentAuth store 抓 user_id
+ * - enqueueParent: 自動注入 client_request_id 進 payload + 從 parentAuth store 抓 user_id
  * - flushParentQueue: 依 kind dispatch 對應 api saveFn，含 401 refresh / 403 needs_review / 5xx attempts++
  * - flushAllParent: 5 kind 全跑、debounce 1s
  *
@@ -918,7 +919,7 @@ export async function enqueueParent(args: ParentEnqueueArgs) {
   if (!userId) throw new Error('enqueueParent 需要已登入家長 user_id')
   const payloadWithUuid = {
     ...args.payload,
-    client_uuid: args.payload.client_uuid ?? genClientUuid(),
+    client_request_id: args.payload.client_request_id ?? genClientUuid(),
   }
   return enqueueOp({
     kind: args.kind,
@@ -1076,10 +1077,10 @@ Expected: 0 error。
 ```bash
 cd ivy-frontend
 git add src/parent/utils/parentOfflineQueue.ts src/parent/utils/__tests__/parentOfflineQueue.test.ts
-git commit -m "feat(parent-offline): parentOfflineQueue facade 注 client_uuid + dispatch saveFn
+git commit -m "feat(parent-offline): parentOfflineQueue facade 注 client_request_id + dispatch saveFn
 
 src/parent/utils/parentOfflineQueue.ts thin wrapper：
-- enqueueParent 自動注入 crypto.randomUUID() client_uuid + 從 parentAuth 抓 user_id
+- enqueueParent 自動注入 crypto.randomUUID() client_request_id + 從 parentAuth 抓 user_id
 - flushParentQueue 5 kind 各自 saveFn dispatch + 23505/409 視同成功 + 401 break + 403 needs_review + 5xx attempts++ ≥5 needs_review
 - flushAllParent debounce 1s 防 5 trigger 同時打
 
@@ -1755,7 +1756,7 @@ ContactBookView (CONTACT_BOOK_ACK) / EventAckView (EVENT_ACK) / LeavesView (PARE
 
 - online → 直送（含附件路徑既有）
 - offline + 含附件（含簽名 / 照片）→ toast 阻擋
-- offline + 純文字 → enqueueParent 注 client_uuid + 樂觀 UI 顯示「等待同步」
+- offline + 純文字 → enqueueParent 注 client_request_id + 樂觀 UI 顯示「等待同步」
 - onMounted 各自 flushParentQueue(kind) 一次
 - enqueue 後立刻 try flush 一次緩解 LIFF eviction
 
@@ -1857,5 +1858,5 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 
 User 接手：
 - 合 BE + FE main / push origin
-- 必要時通知 admin 注意 3 表 client_uuid 新欄位
+- 必要時通知 admin 注意 3 表 client_request_id 新欄位
 - 觀察 Sentry 一週看 offline path 錯誤分佈

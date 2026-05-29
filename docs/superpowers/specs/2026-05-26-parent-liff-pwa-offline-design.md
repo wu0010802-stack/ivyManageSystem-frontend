@@ -1,7 +1,7 @@
 # 家長端 LIFF PWA + 離線寫入佇列設計
 
 **Date**: 2026-05-26
-**Status**: Spec — pending plan
+**Status**: Phase 2 complete / pending user merge + push（Phase 0 spike skipped by user, Phase 1+2 implemented + automated tests green）
 **Repos affected**: ivy-frontend（主體）+ ivy-backend（Phase 2 前置 task）
 **Related memory**: [[project_parent_line_refresh_token_2026_05_03]]（30 天 LINE refresh token）
 
@@ -24,11 +24,11 @@
 
 - **Phase 0 (spike, 1 day)**：以實機驗證 LIFF webview 的 PWA 相容假設（SW / IndexedDB / install），交付 spike report。
 - **Phase 1 (0.5-1 day)**：補家長獨立 PWA manifest + 驗證既有 SW runtime caching 對 parent.html scope 生效，使外部瀏覽器使用者可加到主畫面。
-- **Phase 2 (2-3 day)**：5 個高頻、可異步、低風險的家長寫入動作接 IndexedDB queue，flush 5 trigger 點，含 client_uuid + DB UNIQUE constraint 防重送髒資料。
+- **Phase 2 (2-3 day)**：5 個高頻、可異步、低風險的家長寫入動作接 IndexedDB queue，flush 5 trigger 點，含 client_request_id + DB UNIQUE constraint 防重送髒資料。
 
 ### 2.2 非目標（明寫避 scope creep）
 
-- 後端 idempotency middleware（`Idempotency-Key` header / Redis cache）— v1 用 client_uuid + DB UNIQUE 解決
+- 後端 idempotency middleware（`Idempotency-Key` header / Redis cache）— v1 用 client_request_id + DB UNIQUE 解決
 - 後端離線使用 metric endpoint — 觀測靠既有 Sentry breadcrumbs
 - Install prompt UI（`beforeinstallprompt` handling）— LIFF webview 不會 fire
 - 含附件 op 的離線 queue（文字+照片）— 純文字 queue，附件離線阻擋，文字部分可由 view 層自存 sessionStorage 草稿
@@ -124,11 +124,11 @@ Phase 0 結果影響 Phase 1 **價值規模**（不影響 Phase 1 是否上線�
 
 | kind | 對應 endpoint | 是否冪等 | 附件處理 |
 |---|---|---|---|
-| `PARENT_MESSAGE` | `sendThreadMessage(threadId, payload)` | ❌ 非冪等 → client_uuid | 含 file 不 queue |
-| `CONTACT_BOOK_REPLY` | `replyContactBook(entryId, body)` | ❌ 非冪等 → client_uuid | 純文字 |
+| `PARENT_MESSAGE` | `sendThreadMessage(threadId, payload)` | ❌ 非冪等 → client_request_id | 含 file 不 queue |
+| `CONTACT_BOOK_REPLY` | `replyContactBook(entryId, body)` | ❌ 非冪等 → client_request_id | 純文字 |
 | `CONTACT_BOOK_ACK` | `ackContactBook(entryId)` | ✅ 天然冪等 | 純動作 |
 | `EVENT_ACK` | `acknowledgeEvent(eventId, payload)` | ✅ 應冪等（BE 驗證） | 不 queue 含簽名 blob 路徑 |
-| `PARENT_LEAVE_REQUEST` | `createLeave(payload)` | ❌ 非冪等 → client_uuid | 含 attachment 不 queue |
+| `PARENT_LEAVE_REQUEST` | `createLeave(payload)` | ❌ 非冪等 → client_request_id | 含 attachment 不 queue |
 
 **不 queue 的端點**：`createMedicationOrder`（醫療責任）/`uploadMedicationPhoto`、`uploadAckSignature`、`uploadLeaveAttachment`（附件 v1 阻擋）/ `notifications.ts`（偏好設定）/ `childMeasurements`（家長 read-only）。
 
@@ -160,13 +160,13 @@ admin bundle ↑ ~200B（kind 字串），parent bundle 已拉 shared-common 無
 
 #### 6.2.3 `src/parent/utils/parentOfflineQueue.ts`（新增 facade）
 
-職責：thin wrapper，注入 client_uuid + 從 parentAuth store 抓 user_id + dispatch saveFn。
+職責：thin wrapper，注入 client_request_id + 從 parentAuth store 抓 user_id + dispatch saveFn。
 
 ```ts
 // 介面草稿（plan 階段細修）
 export interface ParentEnqueueArgs {
   kind: ParentOpKind
-  payload: Record<string, unknown>  // 不含 client_uuid，facade 注入
+  payload: Record<string, unknown>  // 不含 client_request_id，facade 注入
   meta?: Record<string, unknown>    // UI 顯示用
 }
 
@@ -191,30 +191,29 @@ export async function flushAllParent(): Promise<FlushResult>
 
 #### 6.2.5 BE 前置 task — Alembic migration + 3 router
 
-**Migration**（一支，例如 `paroff01_parent_offline_client_uuid`）：
+**Codebase 既有 pattern 校正（plan 階段發現）**：`parent_messages` 表已有 `client_request_id String(64)` 欄位 + partial UNIQUE index（migration `20260429_l7i8j9k0l1m2_parent_message_tables.py`），對應 endpoint `api/parent_portal/messages.py` 已實作 idempotent replay（透過 `append_message()` helper 回 `replayed` flag + response `"idempotent_replay"` field）。沿用此 pattern 取代原 spec 預想的新欄位。
+
+**Migration**（一支，例如 `paroff01_parent_offline_client_request_id`）—— 只需處理 2 表（**訊息表已存在**）：
 
 ```sql
-ALTER TABLE parent_messages ADD COLUMN client_uuid UUID NULL;
-CREATE UNIQUE INDEX ix_parent_messages_client_uuid
-    ON parent_messages (client_uuid) WHERE client_uuid IS NOT NULL;
+ALTER TABLE student_contact_book_replies ADD COLUMN client_request_id VARCHAR(64) NULL;
+CREATE UNIQUE INDEX ix_student_contact_book_replies_client_request_id
+    ON student_contact_book_replies (client_request_id) WHERE client_request_id IS NOT NULL;
 
-ALTER TABLE student_contact_book_replies ADD COLUMN client_uuid UUID NULL;
-CREATE UNIQUE INDEX ix_student_contact_book_replies_client_uuid
-    ON student_contact_book_replies (client_uuid) WHERE client_uuid IS NOT NULL;
-
-ALTER TABLE student_leave_requests ADD COLUMN client_uuid UUID NULL;
-CREATE UNIQUE INDEX ix_student_leave_requests_client_uuid
-    ON student_leave_requests (client_uuid) WHERE client_uuid IS NOT NULL;
+ALTER TABLE student_leave_requests ADD COLUMN client_request_id VARCHAR(64) NULL;
+CREATE UNIQUE INDEX ix_student_leave_requests_client_request_id
+    ON student_leave_requests (client_request_id) WHERE client_request_id IS NOT NULL;
 ```
 
-**Partial UNIQUE** 不影響舊紀錄（`client_uuid IS NULL` 時不受 UNIQUE 約束）。表名以 plan 階段實機 grep 校正過：`parent_messages` / `student_contact_book_replies` / `student_leave_requests`。
+**Partial UNIQUE** 不影響舊紀錄（`client_request_id IS NULL` 時不受 UNIQUE 約束）。
 
-**3 router endpoint 改造**：
-- accept `client_uuid: Optional[UUID]` 欄位
-- INSERT 觸發 23505 `IntegrityError` → SELECT `WHERE client_uuid=?` → 回原紀錄 200（idempotent retry 收斂）
-- pytest 每 endpoint 2 test：正常 POST / 重複 POST 同 client_uuid
+**Router endpoint 改造（只 2 個 endpoint 需要改）**：
+- `api/parent_portal/messages.py` ← **已支援 client_request_id idempotency**，**不需改**
+- `api/parent_portal/contact_book.py` reply POST ← 加 `client_request_id: Optional[str]` 欄位，INSERT 觸發 23505 → SELECT `WHERE client_request_id=?` → 回原紀錄 200
+- `api/parent_portal/leaves.py` create POST ← 同 pattern
+- pytest 每新 endpoint 2 test：正常 POST / 重複 POST 同 client_request_id
 
-**Rollout 順序**：BE migration + endpoint 先 ship → 前端 Phase 2 後上。避免前端送 `client_uuid` 但 BE 仍舊版 silent ignore。
+**Rollout 順序**：BE migration + endpoint 先 ship → 前端 Phase 2 後上。避免前端送 `client_request_id` 但 BE 仍舊版 silent ignore。
 
 ### 6.3 Data flow
 
@@ -230,7 +229,7 @@ view 檢查 navigator.onLine + payload 含 file?
 ├─ offline + 有附件 → toast.warn 阻擋（含附件需連線）→ return
 └─ offline + 無附件 → enqueueParent({ kind, payload, meta })
                        ↓
-                  注入 payload.client_uuid = crypto.randomUUID()
+                  注入 payload.client_request_id = crypto.randomUUID()
                        ↓
                   IndexedDB ivy-offline.pending_ops put
                        ↓
@@ -344,7 +343,7 @@ iOS LINE 罕見 force kill webview 可能清 site data，op 消失家長以為�
 **Frontend vitest**：
 
 - `parentOfflineQueue.test.ts`：
-  - `enqueueParent` 自動注入 client_uuid（UUID v4 regex）
+  - `enqueueParent` 自動注入 client_request_id（UUID v4 regex）
   - userId 從 parentAuth store 抓
   - `flushParentQueue` 23505 視同成功 removeOp
   - 401 走 refresh 路徑（mock axios）
@@ -362,7 +361,7 @@ iOS LINE 罕見 force kill webview 可能清 site data，op 消失家長以為�
 
 **Backend pytest**：
 
-- 每 endpoint（3 個）2 test：正常 POST 含 client_uuid → 200 + persisted；重複 POST 同 client_uuid → 200 + 回原紀錄 + row count 不變
+- 每 endpoint（3 個）2 test：正常 POST 含 client_request_id → 200 + persisted；重複 POST 同 client_request_id → 200 + 回原紀錄 + row count 不變
 - migration test：upgrade + downgrade idempotent
 
 ### 8.4 手測 acceptance（Phase 2 收尾）
@@ -389,15 +388,15 @@ iOS LINE 罕見 force kill webview 可能清 site data，op 消失家長以為�
 |---|---|---|---|
 | iOS LINE webview SW 不可用 | 中 | Phase 1 縮水成只對外部瀏覽器有用 | §4.4 contingency |
 | LIFF eviction 清 IndexedDB | 低 | op 消失（家長以為送了） | enqueue 後立刻 try flush + 樂觀 UI tag |
-| client_uuid migration lock 表 | 低 | 短暫 503 | 低寫頻率表、deploy off-peak |
+| client_request_id migration lock 表 | 低 | 短暫 503 | 低寫頻率表、deploy off-peak |
 | 家長 brand icon 未備齊 | 中 | Phase 1 用 admin icon 上線 | Phase 1 內 icon swap fallback / follow-up |
 | 同 device 換帳號 op 混淆 | 低 | 罕見 | userId partition 既有機制 |
-| EVENT_ACK BE 並非冪等 | 低 | 重送導致重複 ack 紀錄 | Phase 2 plan 階段先 grep BE 確認語意，若非冪等加入 client_uuid 範圍 |
-| BE migration deploy 跟前端 ship 順序錯 | 低 | 前端送 client_uuid 但 BE 仍舊版 silent ignore | rollout 順序 §6.2.5 + 前端先驗 BE 已 ready |
+| EVENT_ACK BE 並非冪等 | 低 | 重送導致重複 ack 紀錄 | Phase 2 plan 階段先 grep BE 確認語意，若非冪等加入 client_request_id 範圍 |
+| BE migration deploy 跟前端 ship 順序錯 | 低 | 前端送 client_request_id 但 BE 仍舊版 silent ignore | rollout 順序 §6.2.5 + 前端先驗 BE 已 ready |
 
 ## 12 · 開放問題（plan 階段 verify）
 
-1. **`EVENT_ACK` endpoint** 是否冪等？plan 階段 grep BE 確認，若非則加入 client_uuid migration 範圍。
+1. **`EVENT_ACK` endpoint** 是否冪等？plan 階段 grep BE 確認，若非則加入 client_request_id migration 範圍。
 2. **vite-plugin-pwa autoUpdate 是否 inject `registerSW.js` 到 parent.html**？Phase 0 spike 順便驗證。
 3. **家長 brand icon asset 來源**：設計師有沒有現成 192/512/maskable？沒有 → fallback admin icon。
 4. **`useConnectionStatus` 既有 WS 狀態**是否要納入 flush trigger（WS 重連即 flush）？v1 暫不納入，靠 5 trigger 已足。

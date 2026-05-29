@@ -15,6 +15,8 @@ import ConfirmDialog from '../components/ConfirmDialog.vue'
 import MoodBadge from '../components/contact-book/MoodBadge.vue'
 import TimelineRow from '../components/contact-book/TimelineRow.vue'
 import PhotoGrid from '../components/contact-book/PhotoGrid.vue'
+import { enqueueParent, flushParentQueue } from '@/parent/utils/parentOfflineQueue'
+import { OP_KINDS } from '@/utils/offlineQueue'
 
 interface Reply {
   id: number | string
@@ -148,6 +150,30 @@ async function fetchData() {
 async function markAsRead() {
   if (acking.value) return
   acking.value = true
+
+  if (!navigator.onLine) {
+    try {
+      await enqueueParent({
+        kind: OP_KINDS.CONTACT_BOOK_ACK,
+        payload: { entry_id: entryId.value },
+        meta: { entry_id: entryId.value },
+      })
+      // 樂觀 UI
+      if (entry.value) {
+        entry.value.isRead = true
+        entry.value.readAt = new Date().toISOString()
+      }
+      toast.success('已暫存，連線後自動送出')
+      flushParentQueue(OP_KINDS.CONTACT_BOOK_ACK).catch(() => {})
+    } catch (err) {
+      const e = err as Record<string, unknown>
+      toast.error(String(e?.displayMessage || '暫存失敗，請稍後再試'))
+    } finally {
+      acking.value = false
+    }
+    return
+  }
+
   try {
     const { data } = await ackContactBook(entryId.value)
     if (entry.value) {
@@ -171,8 +197,30 @@ async function submitReply() {
     return
   }
   submitting.value = true
+
+  if (!navigator.onLine) {
+    try {
+      await enqueueParent({
+        kind: OP_KINDS.CONTACT_BOOK_REPLY,
+        payload: { entry_id: entryId.value, body },
+        meta: { entry_id: entryId.value, content_preview: body.slice(0, 20) },
+      })
+      // 樂觀 UI
+      replies.value.push({ id: `pending-${Date.now()}`, body, created_at: new Date().toISOString() })
+      newReply.value = ''
+      toast.success('已暫存，連線後自動送出')
+      flushParentQueue(OP_KINDS.CONTACT_BOOK_REPLY).catch(() => {})
+    } catch (err) {
+      const e = err as Record<string, unknown>
+      toast.error(String(e?.displayMessage || '暫存失敗'))
+    } finally {
+      submitting.value = false
+    }
+    return
+  }
+
   try {
-    const { data } = await replyContactBook(entryId.value, body)
+    const { data } = await replyContactBook(entryId.value, { body })
     replies.value.push(data as Reply)
     newReply.value = ''
   } catch (err) {
@@ -217,6 +265,8 @@ onMounted(async () => {
     }
   }
   await loadAndMark()
+  flushParentQueue(OP_KINDS.CONTACT_BOOK_REPLY).catch(() => {})
+  flushParentQueue(OP_KINDS.CONTACT_BOOK_ACK).catch(() => {})
 })
 
 watch(entryId, async (newId, oldId) => {

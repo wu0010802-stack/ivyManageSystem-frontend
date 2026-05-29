@@ -12,6 +12,8 @@ import SkeletonBlock from '../components/SkeletonBlock.vue'
 import { useIncrementalRender } from '../composables/useIncrementalRender'
 import EmptyState from '@/components/common/EmptyState.vue'
 import KawaiiStar from '@/components/brand/KawaiiStar.vue'
+import { flushParentQueue } from '@/parent/utils/parentOfflineQueue'
+import { OP_KINDS } from '@/utils/offlineQueue'
 
 import MonthDateStrip from '../components/contact-book/MonthDateStrip.vue'
 import ContactBookDayCard from '../components/contact-book/ContactBookDayCard.vue'
@@ -99,6 +101,9 @@ watch(cbError, (err) => {
 onMounted(async () => {
   await childrenStore.load()
   ensureSelected(childrenStore.items as { student_id: number }[])
+  // 列表頁進入時嘗試 flush 積壓的 ACK/REPLY ops（detail view 亦會 flush，此為額外保險）
+  flushParentQueue(OP_KINDS.CONTACT_BOOK_ACK).catch(() => {})
+  flushParentQueue(OP_KINDS.CONTACT_BOOK_REPLY).catch(() => {})
 })
 
 watch(selectedStudentId, fetchAll, { immediate: true })

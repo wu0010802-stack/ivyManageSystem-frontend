@@ -7,6 +7,8 @@ import { uploadAckSignature } from '../api/medications'
 import SignaturePad from '../components/SignaturePad.vue'
 import { toast } from '../utils/toast'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
+import { enqueueParent, flushParentQueue } from '@/parent/utils/parentOfflineQueue'
+import { OP_KINDS } from '@/utils/offlineQueue'
 
 interface EventItem {
   id: number
@@ -68,6 +70,38 @@ async function submit() {
   }
   if (!event.value) return
   submitting.value = true
+
+  // 離線分流
+  if (!navigator.onLine) {
+    const hasSignature = !!(padRef.value && !padRef.value.isEmpty())
+    if (hasSignature) {
+      toast.warn('手寫簽名上傳需要連線，請稍後再試')
+      submitting.value = false
+      return
+    }
+    try {
+      await enqueueParent({
+        kind: OP_KINDS.EVENT_ACK,
+        payload: {
+          event_id: event.value.id,
+          student_id: studentId.value,
+          signature_name: signatureName.value || null,
+        },
+        meta: { event_id: event.value.id },
+      })
+      toast.success('已暫存，連線後自動送出')
+      flushParentQueue(OP_KINDS.EVENT_ACK).catch(() => {})
+      router.replace({ path: '/events' })
+    } catch (err) {
+      const e = err as Record<string, unknown>
+      toast.error(String(e?.displayMessage || '暫存失敗'))
+    } finally {
+      submitting.value = false
+    }
+    return
+  }
+
+  // 線上路徑（原有邏輯不動）
   let ackOk = false
   try {
     await acknowledgeEvent(event.value.id, {
@@ -104,7 +138,10 @@ async function submit() {
   submitting.value = false
 }
 
-onMounted(init)
+onMounted(async () => {
+  await init()
+  flushParentQueue(OP_KINDS.EVENT_ACK).catch(() => {})
+})
 </script>
 
 <template>

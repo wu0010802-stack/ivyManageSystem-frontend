@@ -12,6 +12,8 @@ import {
   getLeave,
 } from '../api/leaves'
 import { toast } from '../utils/toast'
+import { enqueueParent, flushParentQueue } from '@/parent/utils/parentOfflineQueue'
+import { OP_KINDS } from '@/utils/offlineQueue'
 import { todayISO, dateToLocalISO } from '@/utils/format'
 import ParentBottomSheet from '../components/ParentBottomSheet.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
@@ -294,14 +296,39 @@ async function submit() {
     return
   }
   submitting.value = true
+
+  const leavePayload = {
+    student_id: Number(form.value.student_id),
+    leave_type: form.value.leave_type,
+    start_date: form.value.start_date,
+    end_date: form.value.end_date,
+    reason: form.value.reason.trim() || null,
+  }
+
+  if (!navigator.onLine) {
+    try {
+      await enqueueParent({
+        kind: OP_KINDS.PARENT_LEAVE_REQUEST,
+        payload: leavePayload,
+        meta: {
+          student_id: leavePayload.student_id,
+          leave_type: leavePayload.leave_type,
+        },
+      })
+      toast.success('請假已暫存，連線後自動送出')
+      showForm.value = false
+      flushParentQueue(OP_KINDS.PARENT_LEAVE_REQUEST).catch(() => {})
+    } catch (err) {
+      const e = err as Record<string, unknown>
+      toast.error(String(e?.displayMessage || '暫存失敗'))
+    } finally {
+      submitting.value = false
+    }
+    return
+  }
+
   try {
-    await createLeave({
-      student_id: Number(form.value.student_id),
-      leave_type: form.value.leave_type,
-      start_date: form.value.start_date,
-      end_date: form.value.end_date,
-      reason: form.value.reason.trim() || null,
-    })
+    await createLeave(leavePayload)
     toast.success('請假已成立')
     showForm.value = false
     fetchData()
@@ -335,6 +362,7 @@ onMounted(async () => {
   await childrenStore.load()
   ensureSelected(childrenStore.items as { student_id: number }[])
   fetchData()
+  flushParentQueue(OP_KINDS.PARENT_LEAVE_REQUEST).catch(() => {})
 })
 
 async function pullRefresh() {

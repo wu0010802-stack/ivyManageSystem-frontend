@@ -7,6 +7,8 @@ import MessageBubble from '../components/MessageBubble.vue'
 import MessageComposer from '../components/MessageComposer.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import { toast } from '../utils/toast'
+import { enqueueParent, flushParentQueue } from '@/parent/utils/parentOfflineQueue'
+import { OP_KINDS } from '@/utils/offlineQueue'
 
 interface ThreadInfo {
   teacher_name?: string
@@ -60,12 +62,39 @@ async function loadMore() {
 }
 
 async function onSend({ body, attachments, done }: { body: string; attachments?: File[]; done: (ok: boolean) => void }) {
+  const hasAttachment = (attachments?.length ?? 0) > 0
+
+  if (navigator.onLine) {
+    try {
+      await messagesStore.send(threadId.value, body, attachments)
+      done(true)
+    } catch (err) {
+      const e = err as Record<string, unknown>
+      toast.error(String(e?.displayMessage || '送出失敗'))
+      done(false)
+    }
+    return
+  }
+
+  // 離線分流
+  if (hasAttachment) {
+    toast.warn('需連線才能上傳附件，請連線後再試')
+    done(false)
+    return
+  }
+
   try {
-    await messagesStore.send(threadId.value, body, attachments)
+    await enqueueParent({
+      kind: OP_KINDS.PARENT_MESSAGE,
+      payload: { thread_id: threadId.value, body },
+      meta: { thread_id: threadId.value, content_preview: body.slice(0, 20) },
+    })
+    toast.success('已暫存，連線後自動送出')
     done(true)
+    flushParentQueue(OP_KINDS.PARENT_MESSAGE).catch(() => {})
   } catch (err) {
     const e = err as Record<string, unknown>
-    toast.error(String(e?.displayMessage || '送出失敗'))
+    toast.error(String(e?.displayMessage || '暫存失敗'))
     done(false)
   }
 }
@@ -93,7 +122,10 @@ async function doRecall() {
   }
 }
 
-onMounted(init)
+onMounted(async () => {
+  await init()
+  flushParentQueue(OP_KINDS.PARENT_MESSAGE).catch(() => {})
+})
 </script>
 
 <template>
