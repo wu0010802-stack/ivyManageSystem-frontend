@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { hasPermission } from '@/utils/auth'
 import GuardianManager from '@/components/student/GuardianManager.vue'
+import MedicalReasonDialog from '@/components/MedicalReasonDialog.vue'
 
 const props = defineProps<{
   profile: Record<string, unknown>
@@ -14,6 +15,11 @@ const basic = computed(() => (props.profile?.basic as Record<string, unknown>) |
 const health = computed(() => (props.profile?.health as Record<string, unknown>) || {})
 const studentId = computed(() => (basic.value?.id as number | null) || null)
 const canGuardiansRead = computed(() => hasPermission('GUARDIANS_READ'))
+
+// P0d-3b 法規/個資 §6 reason-gated 醫療欄位
+const canReadHealth = computed(() => hasPermission('STUDENTS_HEALTH_READ'))
+const showMedicalDialog = ref(false)
+const studentName = computed(() => (basic.value?.name as string) || '')
 </script>
 
 <template>
@@ -34,7 +40,19 @@ const canGuardiansRead = computed(() => hasPermission('GUARDIANS_READ'))
       <el-descriptions-item label="備註" :span="2">{{ basic.notes || '—' }}</el-descriptions-item>
     </el-descriptions>
 
-    <h3 class="section-title">健康資訊</h3>
+    <div class="health-header">
+      <h3 class="section-title">健康資訊</h3>
+      <!-- P0d-3b 法規/個資 §6 reason-gated detail：另開 dialog 含 reason 寫稽核 -->
+      <el-button
+        v-if="canReadHealth && studentId"
+        type="primary"
+        size="small"
+        @click="showMedicalDialog = true"
+      >
+        <el-icon><span class="material-symbols-rounded" aria-hidden="true">verified_user</span></el-icon>
+        以稽核紀錄查看詳情
+      </el-button>
+    </div>
     <el-descriptions :column="2" border>
       <el-descriptions-item label="過敏">{{ health.allergy || '—' }}</el-descriptions-item>
       <el-descriptions-item label="用藥">{{ health.medication || '—' }}</el-descriptions-item>
@@ -45,6 +63,13 @@ const canGuardiansRead = computed(() => hasPermission('GUARDIANS_READ'))
       </el-descriptions-item>
       <el-descriptions-item label="緊急聯絡電話">{{ health.emergency_contact_phone || '—' }}</el-descriptions-item>
     </el-descriptions>
+
+    <MedicalReasonDialog
+      v-if="studentId"
+      v-model="showMedicalDialog"
+      :student-id="studentId"
+      :student-name="studentName"
+    />
 
     <el-collapse v-if="canGuardiansRead && studentId" class="guardians-collapse" :model-value="['guardians']">
       <el-collapse-item title="監護人 / 緊急聯絡人" name="guardians">
@@ -66,5 +91,14 @@ const canGuardiansRead = computed(() => hasPermission('GUARDIANS_READ'))
 }
 .guardians-collapse {
   margin-top: 18px;
+}
+.health-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 18px 0 10px;
+}
+.health-header .section-title {
+  margin: 0;
 }
 </style>

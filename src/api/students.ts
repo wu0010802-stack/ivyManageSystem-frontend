@@ -4,6 +4,19 @@ export const getStudents = (params: unknown) => api.get('/students', { params })
 
 export const getStudent = (id: number) => api.get(`/students/${id}`)
 
+// P0d-2 法規/個資 §6 特種個資 reason-gated 醫療欄位讀取。
+// 每次 call 後端寫 medical_access_log。reason 後端強制 ≥10 字 ≤500 字 + STUDENTS_HEALTH_READ。
+export interface MedicalFieldsOut {
+  student_id: number
+  name: string
+  allergy: string | null
+  medication: string | null
+  special_needs: string | null
+}
+
+export const getStudentMedical = (id: number, reason: string) =>
+  api.get<MedicalFieldsOut>(`/students/${id}/medical`, { params: { reason } })
+
 export const createStudent = (data: unknown) => api.post('/students', data)
 
 export const updateStudent = (id: number, data: unknown) => api.put(`/students/${id}`, data)
