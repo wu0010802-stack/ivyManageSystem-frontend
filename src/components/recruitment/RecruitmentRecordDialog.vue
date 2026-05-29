@@ -146,6 +146,27 @@
           </el-form-item>
         </el-col>
       </el-row>
+
+      <div class="form-section-title">地址分析同意</div>
+      <el-row :gutter="12">
+        <el-col :span="24">
+          <el-form-item label="家長同意">
+            <el-checkbox v-model="form.geocoding_consent">家長已口頭同意以本住址進行招生區位分析（送至 Google Maps）&mdash; <strong>需明確確認</strong></el-checkbox>
+            <div class="form-hint" style="font-size:12px;color:var(--text-tertiary);margin-top:4px">
+              招生人員負責確認家長口頭同意後再勾選；預設不勾（explicit attestation 責任）。
+            </div>
+          </el-form-item>
+        </el-col>
+        <el-col :span="24">
+          <el-alert
+            v-if="!form.geocoding_consent"
+            type="info"
+            :closable="false"
+            title="未勾選同意 → 本筆 visit 不會進入招生 heatmap 區位分析"
+            style="margin-bottom:8px"
+          />
+        </el-col>
+      </el-row>
     </el-form>
     <template #footer>
       <el-button @click="$emit('update:visible', false)">取消</el-button>
@@ -179,6 +200,7 @@ interface VisitForm {
   no_deposit_reason_detail?: string | number | null
   notes?: string | number | null
   parent_response?: string | number | null
+  geocoding_consent?: boolean
   [key: string]: unknown
 }
 
