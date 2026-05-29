@@ -54,7 +54,9 @@ export function useApprovalModule({ docType, batchApproveFn, fetchFn, recordLabe
       fetchFn()
     } catch (err) {
       const e = err as { response?: { data?: { detail?: string } }; message?: string }
-      if (err !== 'cancel') ElMessage.error('批次核准失敗：' + (e?.response?.data?.detail || e?.message || ''))
+      // ElMessageBox 取消鈕 reject 'cancel'、X/ESC reject 'close'，皆為使用者關閉非錯誤
+      if (err !== 'cancel' && err !== 'close')
+        ElMessage.error('批次核准失敗：' + (e?.response?.data?.detail || e?.message || ''))
     } finally {
       batchLoading.value = false
     }
