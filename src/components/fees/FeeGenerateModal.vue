@@ -64,6 +64,7 @@
 import { reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { generateFeeRecords } from '@/api/fees'
+import { currentRocYear } from '@/utils/academic'
 
 interface PreviewResult {
   created: number
@@ -80,7 +81,7 @@ const emit = defineEmits<{
 }>()
 
 const form = reactive({
-  school_year: new Date().getFullYear() - 1911,
+  school_year: currentRocYear(),
   semester: 1,
   fee_types: ['registration', 'miscellaneous'],
 })

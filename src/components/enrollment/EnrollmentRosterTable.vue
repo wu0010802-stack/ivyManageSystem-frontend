@@ -200,6 +200,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { coerceRocYear } from '@/utils/academic'
 
 interface RosterStudent {
   name: string
@@ -246,7 +247,7 @@ const props = defineProps<{
 
 const rosterTitle = computed(() => {
   const rawYear = props.roster.school_year
-  const yr = rawYear > 1911 ? rawYear - 1911 : rawYear
+  const yr = coerceRocYear(rawYear)
   const sem = props.roster.semester === 1 ? '上' : '下'
   return `${yr}(${sem})幼兒在籍記錄`
 })

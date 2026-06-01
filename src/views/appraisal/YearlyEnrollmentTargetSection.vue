@@ -19,6 +19,7 @@ import { useErrorNotify } from '@/composables/useErrorNotify'
 import {
   getCurrentAcademicTerm,
   buildSchoolYearOptions,
+  toAdYear,
 } from '@/utils/academic'
 
 interface CycleEntry {
@@ -105,7 +106,7 @@ const creating = ref<Record<SemesterKey, boolean>>({ FIRST: false, SECOND: false
 
 function defaultDatesFor(schoolYear: number, semesterEnum: SemesterKey) {
   // schoolYear 為民國
-  const yearAD = Number(schoolYear) + 1911
+  const yearAD = toAdYear(Number(schoolYear))
   if (semesterEnum === 'FIRST') {
     return {
       start_date: `${yearAD}-08-01`,

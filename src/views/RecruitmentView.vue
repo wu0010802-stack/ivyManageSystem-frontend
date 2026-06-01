@@ -475,6 +475,7 @@ import RecruitmentPeriodDialog from '@/components/recruitment/RecruitmentPeriodD
 import RecruitmentCampusDialog from '@/components/recruitment/RecruitmentCampusDialog.vue'
 import { useRecruitmentCharts } from '@/composables/useRecruitmentCharts'
 import FunnelBoard from '@/components/recruitment/funnel/FunnelBoard.vue'
+import { toAdYear } from '@/utils/academic'
 import {
   GRADES_ORDER,
   FALLBACK_SCHOOL_LAT,
@@ -759,14 +760,14 @@ const rocDateToISO = (roc: string) => {
   if (!roc) return null
   const parts = roc.split('.')
   if (parts.length < 3) return null
-  const year = parseInt(parts[0]) + 1911
+  const year = toAdYear(parseInt(parts[0]))
   return `${year}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`
 }
 const rocMonthToISO = (rm: string) => {
   if (!rm) return null
   const parts = rm.split('.')
   if (parts.length < 2) return null
-  const year = parseInt(parts[0]) + 1911
+  const year = toAdYear(parseInt(parts[0]))
   return `${year}-${parts[1].padStart(2, '0')}`
 }
 
