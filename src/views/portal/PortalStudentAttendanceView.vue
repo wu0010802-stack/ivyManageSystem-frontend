@@ -307,7 +307,6 @@ onMounted(async () => {
             value-format="YYYY-MM-DD"
             style="width: 200px"
           />
-          <el-button type="primary" @click="fetchDailyAttendance">載入</el-button>
         </div>
 
         <StudentRollcallTable
