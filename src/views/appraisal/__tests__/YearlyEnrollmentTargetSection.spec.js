@@ -17,6 +17,7 @@ vi.mock('@/utils/academic', () => ({
     for (let i = -range; i <= range; i++) arr.push(current + i)
     return arr.sort((a, b) => b - a)
   },
+  toAdYear: (rocYear) => rocYear + 1911,
 }))
 
 vi.mock('element-plus', () => ({
