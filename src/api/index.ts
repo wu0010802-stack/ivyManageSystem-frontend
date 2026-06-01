@@ -34,8 +34,17 @@ declare module 'axios' {
     }
 }
 
+// 統一 API base：api 實例 baseURL 與 token refresh 共用同一來源，避免 refresh
+// 寫死 '/api' 而在自訂 VITE_API_BASE_URL 部署下打錯路徑（401 後刷新失敗 → 被踢登入頁）。
+export const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api'
+
+/** token refresh 端點；與 api 實例同 base，不寫死 /api。 */
+export function buildRefreshUrl(base: string = API_BASE): string {
+    return `${base}/auth/refresh`
+}
+
 const api: AxiosInstance = axios.create({
-    baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
+    baseURL: API_BASE,
     // 30s：在 nginx upstream timeout（60s）前先 abort，讓 UI 有足夠時間等慢端點，
     // 不再讓使用者在 10s 看到「載入失敗」誤導訊息。
     timeout: 30000,
@@ -56,7 +65,7 @@ let _refreshing: Promise<boolean> | null = null // 單一 refresh promise，避�
 
 function _doRefresh(): Promise<boolean> {
     // Cookie 會自動帶出，不需手動設定 header
-    return axios.post('/api/auth/refresh', null, {
+    return axios.post(buildRefreshUrl(), null, {
         withCredentials: true,
         timeout: 30000,
     }).then(res => {

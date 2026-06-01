@@ -522,7 +522,7 @@ describe('OvertimeView', () => {
       expect(getOvertimes).toHaveBeenCalled()
     })
 
-    it('匯入有部分失敗（failed>0）時 importResult 保留錯誤，不刷新主列表', async () => {
+    it('匯入部分成功（created>0, failed>0）仍刷新主列表，且不誤報整體成功', async () => {
       importOvertimes.mockResolvedValue({
         data: { total: 3, created: 2, failed: 1, errors: ['第3行日期格式錯誤'] },
       })
@@ -534,9 +534,27 @@ describe('OvertimeView', () => {
       await wrapper.vm.$.setupState.handleImportFile({ raw: new File([], 'test.xlsx') })
       await flushPromises()
 
+      // 已建立的 2 筆草稿需出現在主表 → 必須刷新（回歸：原本 failed>0 完全不刷新）
+      expect(getOvertimes).toHaveBeenCalled()
+      // 整體成功 toast 仍只在全部成功時顯示；部分失敗以 importResult 卡片呈現
       expect(ElMessage.success).not.toHaveBeenCalled()
-      expect(getOvertimes).not.toHaveBeenCalled()
       expect(wrapper.vm.$.setupState.importResult.failed).toBe(1)
+    })
+
+    it('匯入全部失敗（created=0）不刷新主列表', async () => {
+      importOvertimes.mockResolvedValue({
+        data: { total: 2, created: 0, failed: 2, errors: ['err1', 'err2'] },
+      })
+      const wrapper = mountOvertimeView()
+      await flushPromises()
+      vi.clearAllMocks()
+      getOvertimes.mockResolvedValue({ data: [] })
+
+      await wrapper.vm.$.setupState.handleImportFile({ raw: new File([], 'test.xlsx') })
+      await flushPromises()
+
+      expect(getOvertimes).not.toHaveBeenCalled()
+      expect(ElMessage.success).not.toHaveBeenCalled()
     })
   })
 
