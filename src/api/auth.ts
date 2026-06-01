@@ -21,8 +21,8 @@ export const refreshSession = () => {
 export const changePassword = (data: unknown) =>
   api.post('/auth/change-password', data)
 
-export const impersonate = (employeeId: number) =>
-  api.post('/auth/impersonate', { employee_id: employeeId })
+export const impersonate = (employeeId: number, mode: 'readonly' | 'write' = 'readonly') =>
+  api.post('/auth/impersonate', { employee_id: employeeId, mode })
 
 export const getUsers = () => api.get('/auth/users')
 
