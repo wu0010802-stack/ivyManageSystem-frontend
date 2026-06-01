@@ -45,4 +45,26 @@ describe('BatchOvertimeDialog', () => {
     expect(wrapper.vm.batchErrors).toHaveLength(1)
     expect(wrapper.vm.batchErrors[0].reason).toContain('超出當月加班上限')
   })
+
+  it('過濾掉 is_active=false 的員工', () => {
+    const wrapper = mount(BatchOvertimeDialog, {
+      props: {
+        modelValue: true,
+        employees: [
+          { id: 1, name: '甲', is_active: true },
+          { id: 2, name: '離職', is_active: false },
+        ],
+      },
+      global: { plugins: [ElementPlus] },
+    })
+    expect(wrapper.vm.rows).toHaveLength(1)
+    expect(wrapper.vm.rows[0].id).toBe(1)
+  })
+
+  it('調整預設時數會套用到所有列', async () => {
+    const wrapper = factory()
+    wrapper.vm.form.defaultHours = 4
+    await wrapper.vm.$nextTick()
+    expect(wrapper.vm.rows.every(r => r.hours === 4)).toBe(true)
+  })
 })

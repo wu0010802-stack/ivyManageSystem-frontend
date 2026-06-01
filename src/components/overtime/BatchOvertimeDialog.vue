@@ -68,7 +68,8 @@ const resetState = () => {
 
 // 對話框開啟時初始化（immediate 確保 mount 時 modelValue=true 也會跑）
 watch(() => props.modelValue, (open) => { if (open) resetState() }, { immediate: true })
-// 預設時數變動時同步每列
+// 設計決策：調整「預設時數」會套用到所有列（含已手調的列）。
+// 預期流程是先設預設、再逐人微調；若之後再改預設＝「全部改成這個時數」。
 watch(() => form.defaultHours, (h) => { rows.value.forEach(r => { r.hours = h }) })
 
 const buildPayload = () => ({
@@ -84,9 +85,10 @@ const buildPayload = () => ({
 })
 
 const applyBatchErrors = (error: unknown) => {
-  const detail = (error as { response?: { data?: { detail?: { errors?: BatchError[] } } } })
+  const detail = (error as { response?: { data?: { detail?: { message?: string; errors?: BatchError[] } } } })
     ?.response?.data?.detail
-  batchErrors.value = Array.isArray(detail?.errors) ? detail!.errors : []
+  const errs = detail?.errors
+  batchErrors.value = Array.isArray(errs) ? errs : []
 }
 
 const submit = async () => {
@@ -109,7 +111,7 @@ const submit = async () => {
   } catch (error) {
     applyBatchErrors(error)
     if (batchErrors.value.length === 0) {
-      ElMessage.error('建立失敗: ' + apiError(error, (error as Error).message))
+      ElMessage.error('建立失敗: ' + apiError(error))
     } else {
       ElMessage.error('整批未建立，請修正下列項目')
     }

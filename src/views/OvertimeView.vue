@@ -372,7 +372,7 @@ watch(activeSection, async (value) => {
               :loading="batchLoading"
               @click="openBatchReject"
             >批次駁回 ({{ selectedOvertimes.length }})</el-button>
-            <el-button type="primary" plain @click="openBatchCreate">
+            <el-button v-if="hasPermission('OVERTIME_WRITE')" type="primary" plain @click="openBatchCreate">
               <el-icon><Plus /></el-icon> 批次加班
             </el-button>
             <el-button type="success" @click="openCreate">
