@@ -1,14 +1,13 @@
 
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { computed, ref, onMounted, onUnmounted, provide } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getSubstitutePendingCount, getUnreadCount, getSwapPendingCount } from '@/api/portal'
 import { getPortalPendingCount } from '@/api/dismissalCalls'
 import { getUnreadCount as getMessagesUnreadCount } from '@/api/portalMessages'
 import { getTodayHub } from '@/api/portalClassHub'
-import { changePassword, endImpersonate, impersonate } from '@/api/auth'
-import { getEmployees } from '@/api/employees'
+import { changePassword, endImpersonate } from '@/api/auth'
 import { getUserInfo, clearAuth, setUserInfo } from '@/utils/auth'
 import OfflineIndicator from '@/components/OfflineIndicator.vue'
 import { apiError } from '@/utils/error'
@@ -20,13 +19,8 @@ import { Search } from '@element-plus/icons-vue'
 interface UserInfo {
   name?: string
   role?: string
+  impersonation_mode?: 'readonly' | 'write' | null
   [key: string]: unknown
-}
-
-interface EmployeeItem {
-  id: number | string
-  name?: string
-  employee_id?: string
 }
 
 const { openPalette } = usePortalSearch()
@@ -188,7 +182,6 @@ onMounted(() => {
   window.addEventListener('resize', checkMobile)
   window.addEventListener('portal-substitute-count-changed', onSubstituteChanged)
   document.addEventListener('visibilitychange', onVisibilityChange)
-  fetchEmployees()
   refreshPortalCounts({ force: true })
 
   // 導航更新一次性提示（v=1: 2026-05 教師端 ACD 改造）
@@ -226,46 +219,25 @@ const closeSidebar = () => {
   if (isMobile.value) sidebarOpen.value = false
 }
 
-// Impersonate tracking: 後端透過 admin_token Cookie 備份管理員應證，
-// 前端只需追蹤狀態旗標來控制 UI 顯示。
-const isImpersonating = ref(false)
-
-// 有 admin 角色或處於冒充狀態時顯示切換器
-const showSwitcher = computed(() =>
-  userInfo.value.role === 'admin' || isImpersonating.value
+// 冒充狀態：從 userInfo.impersonation_mode 推導（頁面重載後仍正確）。
+// 'readonly' = 預覽中（唯讀），'write' = 代操作中（操作會被記錄），null = 非冒充。
+const isImpersonating = computed(() =>
+  userInfo.value.impersonation_mode === 'readonly' ||
+  userInfo.value.impersonation_mode === 'write'
 )
+
+// readonly 旗標：供子頁面透過 inject('isReadonlyImpersonation') 取得，
+// 決定是否隱藏寫入控制項（實際寫入攔截由後端守衛，此為前端 UX 增強）。
+const isReadonlyImpersonation = computed(
+  () => userInfo.value.impersonation_mode === 'readonly'
+)
+provide('isReadonlyImpersonation', isReadonlyImpersonation)
 
 // 返回後台：自身是 admin/hr/supervisor，或處於冒充狀態
 const showBackToAdmin = computed(() => {
   const role = userInfo.value.role
   return ['admin', 'hr', 'supervisor'].includes(role as string) || isImpersonating.value
 })
-
-const employeeList = ref<EmployeeItem[]>([])
-
-const fetchEmployees = async () => {
-  if (userInfo.value.role !== 'admin' && !isImpersonating.value) return
-  // 冒充狀態下後端用 admin_token Cookie 驗證；axios instance 預設帶 cookies。
-  try {
-    const res = await getEmployees()
-    employeeList.value = res.data as EmployeeItem[]
-  } catch {
-    // silent
-  }
-}
-
-const handleSwitchUser = async (employeeId: number | string) => {
-  try {
-    const res = await impersonate(Number(employeeId))
-    const user = (res.data as Record<string, unknown>).user as UserInfo
-    setUserInfo(user)
-    isImpersonating.value = true
-    ElMessage.success(`已切換為：${user.name}`)
-    window.location.reload()
-  } catch (error) {
-    ElMessage.error(apiError(error, '切換失敗'))
-  }
-}
 
 const goBackToAdmin = async () => {
   if (!isImpersonating.value) {
@@ -276,9 +248,9 @@ const goBackToAdmin = async () => {
   try {
     const res = await endImpersonate()
     const user = (res.data as Record<string, unknown>).user as UserInfo
-    // 後端已清除 admin_token Cookie 並將 access_token 還原為管理員
+    // 後端已清除 admin_token Cookie 並將 access_token 還原為管理員；
+    // setUserInfo 後 isImpersonating computed 自動重算為 false。
     setUserInfo(user)
-    isImpersonating.value = false
     router.push('/')
   } catch (error) {
     ElMessage.error(apiError(error, '返回失敗'))
@@ -290,7 +262,6 @@ const goBackToAdmin = async () => {
 
 const handleCommand = (cmd: string) => {
   if (cmd === 'logout') {
-    isImpersonating.value = false
     clearAuth()
     router.push('/portal/login')
     ElMessage.success('已登出')
@@ -460,6 +431,40 @@ const submitPassword = async () => {
     <el-container>
       <OfflineIndicator />
 
+      <!-- 冒充模式常駐橫幅：readonly（預覽）或 write（代操作）-->
+      <el-alert
+        v-if="isReadonlyImpersonation"
+        type="info"
+        :closable="false"
+        class="impersonation-banner"
+        show-icon
+      >
+        <template #default>
+          <span class="impersonation-banner-text">
+            預覽中（唯讀）— {{ userInfo.name }}
+          </span>
+          <el-button size="small" plain @click="goBackToAdmin" class="impersonation-exit-btn">
+            返回後台
+          </el-button>
+        </template>
+      </el-alert>
+      <el-alert
+        v-else-if="userInfo.impersonation_mode === 'write'"
+        type="warning"
+        :closable="false"
+        class="impersonation-banner"
+        show-icon
+      >
+        <template #default>
+          <span class="impersonation-banner-text">
+            代操作中（操作會被記錄）— {{ userInfo.name }}
+          </span>
+          <el-button size="small" plain @click="goBackToAdmin" class="impersonation-exit-btn">
+            返回後台
+          </el-button>
+        </template>
+      </el-alert>
+
       <!-- PWA 安裝提示（手機首次訪問且瀏覽器支援時才顯示）-->
       <div v-if="showInstallBanner && isMobile" class="install-banner">
         <span>📱 加到桌面，打卡更方便！</span>
@@ -490,24 +495,6 @@ const submitPassword = async () => {
             >
               ← 返回後台
             </el-button>
-
-            <!-- Employee Switcher (Admin Only or impersonate mode) -->
-            <el-dropdown v-if="showSwitcher" @command="handleSwitchUser" style="margin-right: 15px">
-              <el-button type="warning" size="small" plain>
-                切換視角 <el-icon class="el-icon--right"><ArrowDown /></el-icon>
-              </el-button>
-              <template #dropdown>
-                <el-dropdown-menu class="switcher-dropdown">
-                  <el-dropdown-item
-                    v-for="emp in employeeList"
-                    :key="emp.id"
-                    :command="emp.id"
-                  >
-                    {{ emp.employee_id }} - {{ emp.name }}
-                  </el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
 
             <span class="user-name">{{ userInfo.name || '' }}</span>
             <el-dropdown @command="handleCommand">
@@ -771,6 +758,30 @@ const submitPassword = async () => {
   .el-main {
     padding: var(--space-4);
   }
+}
+
+/* 冒充模式常駐橫幅 */
+.impersonation-banner {
+  border-radius: 0 !important;
+  border-left: none !important;
+  border-right: none !important;
+}
+
+:deep(.impersonation-banner .el-alert__content) {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: var(--space-3);
+}
+
+.impersonation-banner-text {
+  flex: 1;
+  font-weight: 600;
+  font-size: var(--text-base);
+}
+
+.impersonation-exit-btn {
+  flex-shrink: 0;
 }
 
 .install-banner {
