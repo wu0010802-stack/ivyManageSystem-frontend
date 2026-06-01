@@ -14259,6 +14259,8 @@ export interface components {
             employee_id?: unknown;
             /** Id */
             id: unknown;
+            /** Impersonation Mode */
+            impersonation_mode?: unknown;
             /** Name */
             name: unknown;
             /** Permission Names */
