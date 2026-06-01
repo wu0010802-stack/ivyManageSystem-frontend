@@ -1,4 +1,5 @@
 import api from './index'
+import type { ApiBody } from './_generated/typed'
 
 export const getOvertimes = (params: unknown) => api.get('/overtimes', { params })
 
@@ -14,6 +15,10 @@ export const approveOvertime = (id: number, payload: unknown) =>
 // 批次審核
 export const batchApproveOvertimes = (ids: number[], approved: boolean, rejection_reason: string) =>
   api.post('/overtimes/batch-approve', { ids, approved, rejection_reason })
+
+// 批次建立（學校活動多人出席）；後端全部或全無，失敗回 422 detail.errors
+export const batchCreateOvertimes = (payload: ApiBody<'/overtimes/batch-create', 'post'>) =>
+  api.post('/overtimes/batch-create', payload)
 
 // Excel 匯入
 export const getOvertimeImportTemplate = () =>
