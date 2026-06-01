@@ -444,7 +444,7 @@ const routes: RouteRecordRaw[] = [
                     path: 'class-hub',
                     name: 'portal-class-hub',
                     component: () => import('../views/portal/PortalClassHubView.vue'),
-                    meta: { title: '今日工作台' },
+                    meta: { title: '今日班級工作台' },
                 },
                 {
                     path: 'attendance',

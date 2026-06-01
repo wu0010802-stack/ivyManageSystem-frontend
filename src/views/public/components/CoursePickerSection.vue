@@ -108,7 +108,7 @@ onUnmounted(cancelPreview)
     <span class="step-num">2</span>
     <div class="step-title-col">
       <span class="step-title">選擇才藝課程</span>
-      <span class="step-desc">可複選；剩餘名額即時顯示</span>
+      <span class="step-desc">必選，至少一門；可複選、剩餘名額即時顯示</span>
     </div>
   </div>
 

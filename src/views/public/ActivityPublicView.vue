@@ -61,7 +61,7 @@
         <div class="page-meta">
           <h1 class="page-subtitle">{{ displayTitle }}</h1>
           <div class="page-meta-row">
-            <span class="page-meta-term">{{ displayTermLabel }}</span>
+            <span v-if="displayTermLabel" class="page-meta-term">{{ displayTermLabel }}</span>
             <span v-if="displayEventDate" class="page-meta-item">
               <svg class="icon" width="14" height="14" aria-hidden="true"><use href="#i-calendar" /></svg>
               {{ displayEventDate }}
@@ -448,6 +448,7 @@ import { useRegistrationWindow } from '@/composables/useRegistrationWindow'
 import { useActivityAvailability } from '@/composables/useActivityAvailability'
 import { usePublicRegistrationForm } from '@/composables/usePublicRegistrationForm'
 import { useCourseAdvisory } from '@/composables/useCourseAdvisory'
+import { buildFormCardTitle } from '@/utils/activityDisplay'
 // KawaiiStar / LaurelWreath / BrandMark 已隨 SuccessSummaryModal 抽走（A1-P5）
 import VideoModal from './components/VideoModal.vue'
 import ContactInquiryModal from './components/ContactInquiryModal.vue'
@@ -485,14 +486,14 @@ interface TimeInfoExtended {
 // timeInfo 基礎型別只含 is_open/open_at/close_at，後端實際回傳更多欄位
 const timeInfoExt = computed(() => timeInfo.value as TimeInfoExtended)
 
-const displayTitle = computed(() => timeInfoExt.value?.page_title?.trim() || '114 下藝童趣｜課後才藝報名')
-const displayTermLabel = computed(() => timeInfoExt.value?.term_label?.trim() || '114 下學期')
-const displayEventDate = computed(() => timeInfoExt.value?.event_date_label?.trim() || '2026-02-23')
+const displayTitle = computed(() => timeInfoExt.value?.page_title?.trim() || '課後才藝報名')
+const displayTermLabel = computed(() => timeInfoExt.value?.term_label?.trim() || '')
+const displayEventDate = computed(() => timeInfoExt.value?.event_date_label?.trim() || '')
 const displayAudience = computed(() => timeInfoExt.value?.target_audience?.trim() || '本園在學幼兒')
 const displayFormCardTitle = computed(() => {
   const custom = timeInfoExt.value?.form_card_title?.trim()
   if (custom) return custom
-  return `${displayTitle.value.split('｜')[0]} · ${displayEventDate.value}`
+  return buildFormCardTitle(displayTitle.value, displayEventDate.value)
 })
 const posterSrc = computed(() => {
   if (posterBroken.value) return DEFAULT_POSTER
