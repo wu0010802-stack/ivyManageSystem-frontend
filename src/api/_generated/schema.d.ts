@@ -4193,6 +4193,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/dev/employee-salary-debug": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Debug Employee Salary
+         * @description 模擬計算單一員工薪資並回傳完整明細（dev 別名，正式請改打 /api/salaries/employee-salary-debug）。
+         */
+        get: operations["debug_employee_salary_api_dev_employee_salary_debug_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dev/salary-logic": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Salary Logic
+         * @description 傾印目前的薪資計算邏輯與所有參數設定（dev 別名，正式請改打 /api/salaries/logic）。
+         */
+        get: operations["get_salary_logic_api_dev_salary_logic_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/disciplinary-actions": {
         parameters: {
             query?: never;
@@ -5673,6 +5713,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/guardians/{guardian_id}/device-setup-code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Device Setup Code
+         * @description 為指定 Guardian 簽發無 LINE 裝置登入碼（明碼僅此次回傳）。
+         */
+        post: operations["create_device_setup_code_api_guardians__guardian_id__device_setup_code_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/guardians/{guardian_id}/revoke-devices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revoke Guardian Devices
+         * @description 撤銷此 Guardian 對應家長 User 的所有未撤銷裝置（遺失/被盜裝置）。
+         *
+         *     撤銷後該家長所有裝置下次 /refresh 即 401，需重新以新設定碼設定。
+         *     （含 LINE 裝置一併撤銷——「全撤」為安全動作，over-revoke 安全。）
+         */
+        post: operations["revoke_guardian_devices_api_guardians__guardian_id__revoke_devices_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health/live": {
         parameters: {
             query?: never;
@@ -7043,6 +7126,29 @@ export interface paths {
          *     指向當前 user.id。
          */
         post: operations["bind_additional_child_api_parent_auth_bind_additional_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/parent/auth/device-setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Device Setup
+         * @description 無 LINE 家長以 staff 簽發的設定碼兌換裝置登入 session（passwordless）。
+         *
+         *     成功 → 找/建 parent User（link guardian.user_id）+ 發 access + 30d refresh
+         *     （裝置記憶）。失敗一律回通用錯誤，避免碼枚舉。
+         */
+        post: operations["device_setup_api_parent_auth_device_setup_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -16557,6 +16663,20 @@ export interface components {
         DeleteResultOut: {
             /** Message */
             message: unknown;
+        };
+        /**
+         * DeviceSetupOut
+         * @description POST /auth/device-setup 兌換設定碼成功回傳（無 LINE 家長裝置登入）。
+         */
+        DeviceSetupOut: {
+            /** Status */
+            status: unknown;
+            user: unknown;
+        };
+        /** DeviceSetupRequest */
+        DeviceSetupRequest: {
+            /** Code */
+            code: string;
         };
         /** DisabilityDocCreate */
         DisabilityDocCreate: {
@@ -32911,6 +33031,59 @@ export interface operations {
             };
         };
     };
+    debug_employee_salary_api_dev_employee_salary_debug_get: {
+        parameters: {
+            query: {
+                employee_id: number;
+                month: number;
+                year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_salary_logic_api_dev_salary_logic_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
     list_actions_api_disciplinary_actions_get: {
         parameters: {
             query?: {
@@ -36043,6 +36216,68 @@ export interface operations {
             };
         };
     };
+    create_device_setup_code_api_guardians__guardian_id__device_setup_code_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                guardian_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_guardian_devices_api_guardians__guardian_id__revoke_devices_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                guardian_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     liveness_health_live_get: {
         parameters: {
             query?: never;
@@ -38243,6 +38478,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BindAdditionalChildOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    device_setup_api_parent_auth_device_setup_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeviceSetupRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeviceSetupOut"];
                 };
             };
             /** @description Validation Error */
