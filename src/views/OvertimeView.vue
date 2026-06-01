@@ -15,6 +15,7 @@ import { apiError } from '@/utils/error'
 import { downloadFile } from '@/utils/download'
 import { money } from '@/utils/format'
 import MeetingManagementPanel from '@/components/overtime/MeetingManagementPanel.vue'
+import BatchOvertimeDialog from '@/components/overtime/BatchOvertimeDialog.vue'
 import ApprovalLogDrawer from '@/components/common/ApprovalLogDrawer.vue'
 import { OVERTIME_TYPES as overtimeTypes } from '@/constants/approvalEnums'
 
@@ -129,6 +130,8 @@ const fetchPendingOvertimes = () => {
 }
 
 const saveOvertimeLoading = ref(false)
+const batchCreateVisible = ref(false)
+const openBatchCreate = () => { batchCreateVisible.value = true }
 
 const refreshAllData = async () => {
   await Promise.all([fetchOvertimes(), fetchPendingOvertimes()])
@@ -297,6 +300,13 @@ const handleImportFile = async (file: { raw?: File }) => {
 // approvalLogs cast for ApprovalLogDrawer (its ApprovalLog type is component-local)
 const castApprovalLogs = computed(() => approvalLogs.value as unknown as { id: number; action: string; created_at?: string; approver_username?: string; approver_role?: string }[])
 
+// BatchOvertimeDialog needs { id: number; name: string; is_active?: boolean }[];
+// employeeStore.employees is unknown[] from createFetchStore — safe to narrow to known EmployeeOut shape
+type EmployeeListItem = { id: number; name: string; is_active?: boolean }
+const batchOvertimeEmployees = computed<EmployeeListItem[]>(
+  () => employeeStore.employees as unknown as EmployeeListItem[],
+)
+
 // ── 審核流程（approvalPolicyStore 仍需 onMounted 中呼叫 fetchPolicies）──────
 const approvalPolicyStore = useApprovalPolicyStore()
 
@@ -362,6 +372,9 @@ watch(activeSection, async (value) => {
               :loading="batchLoading"
               @click="openBatchReject"
             >批次駁回 ({{ selectedOvertimes.length }})</el-button>
+            <el-button type="primary" plain @click="openBatchCreate">
+              <el-icon><Plus /></el-icon> 批次加班
+            </el-button>
             <el-button type="success" @click="openCreate">
               <el-icon><Plus /></el-icon> 新增加班
             </el-button>
@@ -577,6 +590,12 @@ watch(activeSection, async (value) => {
         <el-button type="primary" :loading="saveOvertimeLoading" @click="saveOvertime">儲存</el-button>
       </template>
     </el-dialog>
+
+    <BatchOvertimeDialog
+      v-model="batchCreateVisible"
+      :employees="batchOvertimeEmployees"
+      @created="refreshAllData"
+    />
 
     <!-- 簽核記錄 Drawer -->
     <ApprovalLogDrawer
