@@ -26,6 +26,19 @@
 
         <A11yMenu />
 
+        <!-- 檢視老師教師端按鈕（園長/admin 持有 PORTAL_PREVIEW 可達） -->
+        <el-button
+          v-if="canPreviewPortal"
+          type="warning"
+          size="small"
+          plain
+          :icon="Monitor"
+          :title="'檢視老師教師端'"
+          @click="openTeacherPicker"
+        >
+          <span class="enter-portal-label">檢視老師教師端</span>
+        </el-button>
+
         <!-- 進入前台按鈕 -->
         <el-button
           v-if="canEnterPortal"
@@ -153,6 +166,9 @@ const employeeStore = useEmployeeStore()
 // 是否有代操作權限（admin 才有，園長只有預覽）
 const canWriteImpersonate = computed(() => hasPermission('PORTAL_IMPERSONATE'))
 
+// 是否有教師端預覽入口權限（admin 通配符 + 園長持有 PORTAL_PREVIEW）
+const canPreviewPortal = computed(() => hasPermission('PORTAL_PREVIEW'))
+
 // 目前選定的進入前台模式；開啟 picker 時重置為 readonly
 const selectedMode = ref<'readonly' | 'write'>('readonly')
 
@@ -164,21 +180,26 @@ const filteredEmployees = computed(() =>
     : employeeList.value
 )
 
+// 開啟教師選擇器（獨立入口，供「檢視老師教師端」與超管「進入前台」共用）
+const openTeacherPicker = async () => {
+  try {
+    await employeeStore.fetchEmployees()
+    employeeList.value = (employeeStore.employees as unknown as EmployeeItem[])
+  } catch {
+    // silent
+  }
+  empSearch.value = ''
+  selectedMode.value = 'readonly'
+  showEmployeePicker.value = true
+}
+
 const goToPortal = async () => {
   if (hasEmployee.value) {
-    // 行政/園長/主任：直接以自己身份進入前台
+    // 行政/園長/主任：直接以自己身份進入前台（原行為保留）
     router.push('/portal/attendance')
   } else {
     // 最高管理員：先載入員工清單再彈 dialog
-    try {
-      await employeeStore.fetchEmployees()
-      employeeList.value = (employeeStore.employees as unknown as EmployeeItem[])
-    } catch {
-      // silent
-    }
-    empSearch.value = ''
-    selectedMode.value = 'readonly'
-    showEmployeePicker.value = true
+    await openTeacherPicker()
   }
 }
 
