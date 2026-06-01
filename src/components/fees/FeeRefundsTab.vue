@@ -47,7 +47,7 @@
             <p class="history-title">退費明細</p>
             <el-table :data="row._refunds" border size="small">
               <el-table-column label="退費金額" prop="amount" width="120" align="right">
-                <template #default="{ row: r }">NT$ {{ Number(r.amount || 0).toLocaleString() }}</template>
+                <template #default="{ row: r }">{{ formatCurrency(r.amount) }}</template>
               </el-table-column>
               <el-table-column label="原因" prop="reason" min-width="180" />
               <el-table-column label="備註" prop="notes" min-width="160" />
@@ -64,7 +64,7 @@
       <el-table-column label="學期" prop="period" width="100" />
       <el-table-column label="費用項目" prop="fee_item_name" min-width="120" />
       <el-table-column label="退費總額" width="120" align="right">
-        <template #default="{ row }">NT$ {{ Number(row._total_refunded || 0).toLocaleString() }}</template>
+        <template #default="{ row }">{{ formatCurrency(row._total_refunded) }}</template>
       </el-table-column>
       <el-table-column label="退費筆數" width="90" align="center">
         <template #default="{ row }">{{ row._refunds?.length || 0 }}</template>
@@ -136,7 +136,7 @@
         <el-table-column label="學期" prop="period" width="100" />
         <el-table-column label="費用項目" prop="fee_item_name" min-width="120" />
         <el-table-column label="已繳" width="110" align="right">
-          <template #default="{ row }">NT$ {{ Number(row.amount_paid || 0).toLocaleString() }}</template>
+          <template #default="{ row }">{{ formatCurrency(row.amount_paid) }}</template>
         </el-table-column>
         <el-table-column label="操作" width="100" align="center" fixed="right">
           <template #default="{ row }">
@@ -169,6 +169,7 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getFeeRecords, getFeeRefunds, getFeePeriods } from '@/api/fees'
+import { formatCurrency } from '@/utils/currency'
 import RefundSuggestModal from '@/components/fees/RefundSuggestModal.vue'
 
 const props = withDefaults(defineProps<{

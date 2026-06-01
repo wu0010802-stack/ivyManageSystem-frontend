@@ -50,11 +50,11 @@
       <el-table-column label="班級" prop="classroom_name" min-width="80" />
       <el-table-column label="費用項目" prop="fee_item_name" min-width="110" />
       <el-table-column label="學期" prop="period" width="85" />
-      <el-table-column label="應繳（元）" width="100" align="right">
-        <template #default="{ row }">{{ row.amount_due.toLocaleString() }}</template>
+      <el-table-column label="應繳" width="110" align="right">
+        <template #default="{ row }">{{ formatCurrency(row.amount_due) }}</template>
       </el-table-column>
-      <el-table-column label="已繳（元）" width="100" align="right">
-        <template #default="{ row }">{{ row.amount_paid.toLocaleString() }}</template>
+      <el-table-column label="已繳" width="110" align="right">
+        <template #default="{ row }">{{ formatCurrency(row.amount_paid) }}</template>
       </el-table-column>
       <el-table-column label="狀態" width="100" align="center">
         <template #default="{ row }">
@@ -103,12 +103,12 @@
     <!-- 統計摘要 -->
     <div class="summary-bar" v-if="summary">
       <el-tag type="info" size="large">總筆數：{{ summary.total_count }}</el-tag>
-      <el-tag size="large">總應繳：{{ summary.total_due.toLocaleString() }} 元</el-tag>
-      <el-tag type="success" size="large">已收：{{ summary.total_paid.toLocaleString() }} 元</el-tag>
+      <el-tag size="large">總應繳：{{ formatCurrency(summary.total_due) }}</el-tag>
+      <el-tag type="success" size="large">已收：{{ formatCurrency(summary.total_paid) }}</el-tag>
       <el-tag type="success" size="large">已繳：{{ summary.paid_count }} 人</el-tag>
       <el-tag type="warning" size="large">部分繳費：{{ summary.partial_count }} 人</el-tag>
       <el-tag type="danger" size="large">未繳：{{ summary.unpaid_count }} 人</el-tag>
-      <el-tag type="danger" size="large">未收：{{ summary.total_unpaid.toLocaleString() }} 元</el-tag>
+      <el-tag type="danger" size="large">未收：{{ formatCurrency(summary.total_unpaid) }}</el-tag>
     </div>
 
     <!-- ================================================================
@@ -117,9 +117,9 @@
     <el-dialog v-model="payDialogVisible" title="登記繳費" width="400px" destroy-on-close>
       <div v-if="payingRecord">
         <p>學生：<strong>{{ payingRecord.student_name }}</strong>（{{ payingRecord.classroom_name }}）</p>
-        <p>費用項目：{{ payingRecord.fee_item_name }} — 應繳 <strong>{{ payingRecord.amount_due.toLocaleString() }} 元</strong></p>
+        <p>費用項目：{{ payingRecord.fee_item_name }} — 應繳 <strong>{{ formatCurrency(payingRecord.amount_due) }}</strong></p>
         <p v-if="payingRecord.status === 'partial'" class="hint">
-          目前已登記 {{ payingRecord.amount_paid.toLocaleString() }} 元，請輸入更新後的累計已繳金額。
+          目前已登記 {{ formatCurrency(payingRecord.amount_paid) }}，請輸入更新後的累計已繳金額。
         </p>
         <el-form :model="payForm" :rules="payRules" ref="payFormRef" label-width="90px">
           <el-form-item label="繳費日期" prop="payment_date">
@@ -171,6 +171,7 @@ import { ElMessage } from 'element-plus'
 import type { FormInstance } from 'element-plus'
 import { getFeeRecords, payFeeRecord, getFeeSummary } from '@/api/fees'
 import { todayISO } from '@/utils/format'
+import { formatCurrency } from '@/utils/currency'
 import RefundSuggestModal from '@/components/fees/RefundSuggestModal.vue'
 
 interface Classroom {

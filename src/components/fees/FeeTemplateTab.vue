@@ -48,8 +48,8 @@
               </el-tag>
             </div>
             <div class="grade-totals">
-              <span>每生小計 <strong>{{ grade.per_student_total.toLocaleString() }}</strong></span>
-              <span>年級合計 <strong>{{ grade.grade_total.toLocaleString() }}</strong></span>
+              <span>每生小計 <strong>{{ formatCurrency(grade.per_student_total) }}</strong></span>
+              <span>年級合計 <strong>{{ formatCurrency(grade.grade_total) }}</strong></span>
             </div>
           </header>
 
@@ -66,8 +66,8 @@
                     <el-tag size="small" type="info">{{ cls.students.length }} 位學生</el-tag>
                   </div>
                   <div class="class-totals">
-                    <span>每生 {{ cls.per_student_total.toLocaleString() }}</span>
-                    <span>班級合計 <strong>{{ cls.class_total.toLocaleString() }}</strong></span>
+                    <span>每生 {{ formatCurrency(cls.per_student_total) }}</span>
+                    <span>班級合計 <strong>{{ formatCurrency(cls.class_total) }}</strong></span>
                   </div>
                 </div>
               </template>
@@ -89,12 +89,12 @@
                   </template>
                   <template #default>
                     <span v-if="col.amount == null" class="muted">—</span>
-                    <span v-else>{{ col.amount.toLocaleString() }}</span>
+                    <span v-else>{{ formatCurrency(col.amount) }}</span>
                   </template>
                 </el-table-column>
                 <el-table-column label="合計" width="120" align="right" fixed="right">
                   <template #default>
-                    <strong>{{ cls.per_student_total.toLocaleString() }}</strong>
+                    <strong>{{ formatCurrency(cls.per_student_total) }}</strong>
                   </template>
                 </el-table-column>
               </el-table>
@@ -113,6 +113,7 @@ import { getFeeTemplates } from '@/api/fees'
 import { getGrades, getClassrooms } from '@/api/classrooms'
 import { getStudents } from '@/api/students'
 import { getCurrentAcademicTerm, currentRocYear } from '@/utils/academic'
+import { formatCurrency } from '@/utils/currency'
 
 interface FeeTemplate {
   grade_id: number | null
@@ -220,10 +221,6 @@ const OVERVIEW_FEE_TYPES = [
   'summer_uniform', 'summer_sports',
 ]
 
-function formatMoney(n: number | null | undefined) {
-  return n != null ? `NT$ ${Number(n).toLocaleString()}` : '—'
-}
-
 async function loadOverview() {
   overviewLoading.value = true
   try {
@@ -292,7 +289,7 @@ function buildClassroomSection(cls: Classroom) {
         fee_type: ft,
         label: FEE_TYPE_LABELS[ft],
         amount: total,
-        detail: `${formatMoney(tpl.amount)} × ${MONTHS_PER_SEMESTER} 月`,
+        detail: `${formatCurrency(tpl.amount)} × ${MONTHS_PER_SEMESTER} 月`,
       }
     }
     return { fee_type: ft, label: FEE_TYPE_LABELS[ft], amount: tpl.amount, detail: null }

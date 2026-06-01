@@ -1,7 +1,7 @@
 /**
  * 共用格式化工具
  *
- * money()              — 金額格式化（$1,234 / '-'）
+ * money()              — 金額格式化（委派 currency.formatCurrency → NT$1,234 / —）
  * formatTime()         — ISO 字串取前 16 字元時間（HH:MM）
  * formatDate()         — ISO 字串轉 YYYY-MM-DD HH:MM（本地時間）
  * formatActivityDate() — ISO 字串轉 "YYYY-MM-DD HH:MM"，null → '-'
@@ -11,14 +11,14 @@
  * offsetISO()          — 今日 ± n 天的 YYYY-MM-DD
  */
 
+import { formatCurrency } from '@/utils/currency'
+
 const TAIPEI_TZ = 'Asia/Taipei'
 
 const pad2 = (n: number) => String(n).padStart(2, '0')
 
-export const money = (val: unknown) => {
-  if (!val && val !== 0) return '-'
-  return '$' + Number(val).toLocaleString()
-}
+// 委派至全站單一金額 helper（NT$1,234 / —），保留 money 名稱供既有 22 處 call site。
+export const money = (val: unknown) => formatCurrency(val)
 
 export const formatTime = (isoStr: unknown) => {
   if (!isoStr) return '-'

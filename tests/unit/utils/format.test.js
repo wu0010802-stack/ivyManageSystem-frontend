@@ -1,37 +1,36 @@
 import { describe, it, expect } from 'vitest'
 import { money, formatTime, formatDate } from '@/utils/format'
 
+// money() 自 2026-05-29 currency 統一後委派 formatCurrency → 'NT$1,234'、空值 '—'。
 describe('money()', () => {
-  it('null 回傳 "-"', () => {
-    expect(money(null)).toBe('-')
+  it('null 回傳破折號 —', () => {
+    expect(money(null)).toBe('—')
   })
 
-  it('undefined 回傳 "-"', () => {
-    expect(money(undefined)).toBe('-')
+  it('undefined 回傳破折號 —', () => {
+    expect(money(undefined)).toBe('—')
   })
 
-  it('空字串回傳 "-"', () => {
-    expect(money('')).toBe('-')
+  it('空字串回傳破折號 —', () => {
+    expect(money('')).toBe('—')
   })
 
-  it('0 回傳 "$0"（不誤判為 falsy）', () => {
-    expect(money(0)).toBe('$0')
+  it('0 回傳 "NT$0"（不誤判為 falsy）', () => {
+    expect(money(0)).toBe('NT$0')
   })
 
-  it('正整數加 $ 前綴', () => {
+  it('正整數加 NT$ 前綴', () => {
     const result = money(1234)
-    expect(result).toMatch(/^\$/)
-    expect(result).toContain('1')
-    expect(result).toContain('234')
+    expect(result).toMatch(/^NT\$/)
+    expect(result).toContain('1,234')
   })
 
   it('字串數字也能格式化', () => {
-    const result = money('5000')
-    expect(result).toMatch(/^\$/)
+    expect(money('5000')).toBe('NT$5,000')
   })
 
-  it('輸出值等於 "$" + toLocaleString（行為一致性）', () => {
-    expect(money(50000)).toBe('$' + Number(50000).toLocaleString())
+  it('輸出與 formatCurrency 一致', () => {
+    expect(money(50000)).toBe('NT$' + Number(50000).toLocaleString('zh-Hant'))
   })
 })
 
