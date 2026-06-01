@@ -6682,6 +6682,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/overtimes/batch-create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Batch Create Overtimes
+         * @description 一次為多位員工建立加班記錄（學校活動多人出席）。
+         *
+         *     全部或全無：Phase 1 對每位員工跑完整驗證並蒐集所有失敗；
+         *     任一失敗 → 422 整批不寫入。Phase 2 全通過才一次 commit。
+         *     每筆狀態 pending，不觸發薪資重算（與單筆建立一致）。
+         */
+        post: operations["batch_create_overtimes_api_overtimes_batch_create_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/overtimes/import": {
         parameters: {
             query?: never;
@@ -14297,6 +14321,49 @@ export interface components {
             attendance_ids: number[];
             /** Remark */
             remark?: string | null;
+        };
+        /** BatchOvertimeCreate */
+        BatchOvertimeCreate: {
+            /** Employees */
+            employees: components["schemas"]["BatchOvertimeEmployeeItem"][];
+            /** End Time */
+            end_time?: string | null;
+            /**
+             * Overtime Date
+             * Format: date
+             */
+            overtime_date: string;
+            /** Overtime Type */
+            overtime_type: string;
+            /** Reason */
+            reason?: string | null;
+            /** Start Time */
+            start_time?: string | null;
+            /**
+             * Use Comp Leave
+             * @default false
+             */
+            use_comp_leave: boolean;
+        };
+        /**
+         * BatchOvertimeCreateResultOut
+         * @description POST /overtimes/batch-create 成功回傳（全部建立）。
+         *
+         *     驗證失敗時回 422，body 為 {"detail": {"message": str, "errors": list}}，
+         *     不走本 response_model（FastAPI HTTPException 路徑）。
+         */
+        BatchOvertimeCreateResultOut: {
+            /** Created Ids */
+            created_ids: unknown;
+            /** Message */
+            message: unknown;
+        };
+        /** BatchOvertimeEmployeeItem */
+        BatchOvertimeEmployeeItem: {
+            /** Employee Id */
+            employee_id: number;
+            /** Hours */
+            hours: number;
         };
         /** BatchPaymentUpdate */
         BatchPaymentUpdate: {
@@ -37420,6 +37487,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    batch_create_overtimes_api_overtimes_batch_create_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BatchOvertimeCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchOvertimeCreateResultOut"];
                 };
             };
             /** @description Validation Error */
