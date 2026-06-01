@@ -1,15 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, shallowRef } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRouter } from 'vue-router'
-import FullCalendar from '@fullcalendar/vue3'
-import dayGridPlugin from '@fullcalendar/daygrid'
-import timeGridPlugin from '@fullcalendar/timegrid'
-import listPlugin from '@fullcalendar/list'
-import interactionPlugin from '@fullcalendar/interaction'
-import zhTwLocale from '@fullcalendar/core/locales/zh-tw'
 import type {
-  CalendarOptions,
   DatesSetArg,
   EventClickArg,
   EventDropArg,
@@ -23,6 +16,9 @@ import CalendarToolbar from '@/components/calendar/CalendarToolbar.vue'
 import RecurrenceEditor from '@/components/calendar/RecurrenceEditor.vue'
 import type { RecurrenceRule } from '@/components/calendar/types'
 import type { CalendarLayer } from '@/api/calendar'
+import CalendarBoard from '@/components/calendar/CalendarBoard.vue'
+import CalendarEventDetailDialog from '@/components/calendar/CalendarEventDetailDialog.vue'
+import { EVENT_TYPES, eventTypeColor } from '@/constants/calendarEventTypes'
 
 interface CalendarEvent {
   id: number
@@ -36,6 +32,8 @@ interface CalendarEvent {
   start_time?: string
   end_time?: string
   is_read_only?: boolean
+  event_type_label?: string
+  is_official?: boolean
   recurrence_rule?: RecurrenceRule | null
   [key: string]: unknown
 }
@@ -61,8 +59,6 @@ const isEdit = ref(false)
 const officialSync = ref<OfficialSync | null>(null)
 const searchText = ref('')
 
-const calendarRef = shallowRef<InstanceType<typeof FullCalendar> | null>(null)
-
 // FC 當前可見區間（datesSet 維護），用於決定 admin_feed window + export 月份
 const viewRange = ref<{ start: Date; end: Date }>({
   start: new Date(),
@@ -72,14 +68,7 @@ const viewRange = ref<{ start: Date; end: Date }>({
 const currentYear = computed(() => viewRange.value.start.getFullYear())
 const currentMonth = computed(() => viewRange.value.start.getMonth() + 1)
 
-const eventTypes = [
-  { value: 'meeting', label: '會議', color: '#409eff' },
-  { value: 'activity', label: '活動', color: '#67c23a' },
-  { value: 'holiday', label: '國定假日', color: '#e6a23c' },
-  { value: 'makeup_workday', label: '補班日', color: '#8b5cf6' },
-  { value: 'general', label: '一般', color: '#909399' },
-]
-const eventTypeMap = Object.fromEntries(eventTypes.map((item) => [item.value, item]))
+const eventTypes = EVENT_TYPES
 
 const form = reactive<{
   id: number | null
@@ -280,7 +269,7 @@ const handleDelete = async (event: CalendarEvent) => {
   }
 }
 
-// ===== FullCalendar callbacks =====
+// ===== CalendarBoard 事件處理 =====
 
 const onDatesSet = (arg: DatesSetArg) => {
   viewRange.value = { start: arg.start, end: arg.end }
@@ -369,36 +358,6 @@ const onEventDrop = async (info: EventDropArg) => {
   }
 }
 
-const calendarOptions = computed<CalendarOptions>(() => ({
-  plugins: [dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin],
-  initialView: 'dayGridMonth',
-  locale: zhTwLocale,
-  headerToolbar: {
-    left: 'prev,next today',
-    center: 'title',
-    right: 'dayGridMonth,timeGridWeek,timeGridDay,listWeek',
-  },
-  buttonText: {
-    today: '今天',
-    month: '月',
-    week: '週',
-    day: '日',
-    list: '列表',
-  },
-  height: 'auto',
-  events: fullCalendarEvents.value,
-  editable: true, // 全域開拖；個別 event 用 editable: false 鎖
-  eventStartEditable: true,
-  eventDurationEditable: false,
-  datesSet: onDatesSet,
-  eventClick: onEventClick,
-  eventDrop: onEventDrop,
-}))
-
-// 初始 viewRange 由 FullCalendar 的 datesSet 觸發；無需在這先 fetch
-// fullCalendarEvents → filteredItems → enabledLayers 是純 computed chain，
-// 重新計算會自動串到 FC events option。
-onMounted(() => {})
 </script>
 
 <template>
@@ -422,7 +381,13 @@ onMounted(() => {})
 
     <el-card class="calendar-card">
       <CalendarToolbar v-model="enabledLayers" />
-      <FullCalendar ref="calendarRef" :options="calendarOptions" />
+      <CalendarBoard
+        :events="fullCalendarEvents"
+        editable
+        @event-click="onEventClick"
+        @event-drop="onEventDrop"
+        @dates-set="onDatesSet"
+      />
     </el-card>
 
     <el-card style="margin-top: 20px">
@@ -448,7 +413,7 @@ onMounted(() => {})
         <el-table-column label="類型" width="110" align="center">
           <template #default="{ row }">
             <el-tag
-              :color="eventTypeMap[row.event_type]?.color"
+              :color="eventTypeColor(row.event_type)"
               effect="dark"
               size="small"
               style="border: none; color: #fff"
@@ -526,44 +491,7 @@ onMounted(() => {})
       </template>
     </el-dialog>
 
-    <el-dialog v-model="detailVisible" title="事件詳情" width="460px">
-      <template v-if="selectedEvent">
-        <el-descriptions :column="1" border>
-          <el-descriptions-item label="標題">
-            <span>{{ selectedEvent.title }}</span>
-            <el-tag v-if="selectedEvent.is_official" size="small" type="info" style="margin-left: 8px">官方</el-tag>
-          </el-descriptions-item>
-          <el-descriptions-item label="類型">
-            <el-tag
-              :color="eventTypeMap[selectedEvent.event_type]?.color"
-              effect="dark"
-              size="small"
-              style="border: none; color: #fff"
-            >
-              {{ selectedEvent.event_type_label }}
-            </el-tag>
-          </el-descriptions-item>
-          <el-descriptions-item label="日期">
-            {{ selectedEvent.event_date }}
-            <template v-if="selectedEvent.end_date && selectedEvent.end_date !== selectedEvent.event_date">
-              ~ {{ selectedEvent.end_date }}
-            </template>
-          </el-descriptions-item>
-          <el-descriptions-item label="時間">
-            <span v-if="selectedEvent.is_all_day">全天</span>
-            <span v-else>{{ selectedEvent.start_time }} - {{ selectedEvent.end_time }}</span>
-          </el-descriptions-item>
-          <el-descriptions-item label="地點">{{ selectedEvent.location || '—' }}</el-descriptions-item>
-          <el-descriptions-item label="說明">{{ selectedEvent.description || '—' }}</el-descriptions-item>
-          <el-descriptions-item label="資料來源">
-            {{ selectedEvent.is_official ? '官方同步（唯讀）' : '校內事件' }}
-          </el-descriptions-item>
-        </el-descriptions>
-      </template>
-      <template #footer>
-        <el-button @click="detailVisible = false">關閉</el-button>
-      </template>
-    </el-dialog>
+    <CalendarEventDetailDialog v-model="detailVisible" :event="selectedEvent" />
   </div>
 </template>
 
@@ -596,16 +524,5 @@ onMounted(() => {})
 .readonly-label {
   color: var(--text-tertiary);
   font-size: 12px;
-}
-
-/* FullCalendar 自帶 CSS variables，可在這客製按鈕色 */
-:deep(.fc) {
-  --fc-button-bg-color: var(--el-color-primary, #409eff);
-  --fc-button-border-color: var(--el-color-primary, #409eff);
-  --fc-button-hover-bg-color: var(--el-color-primary-light-3, #66b1ff);
-  --fc-button-hover-border-color: var(--el-color-primary-light-3, #66b1ff);
-  --fc-button-active-bg-color: var(--el-color-primary-dark-2, #337ecc);
-  --fc-button-active-border-color: var(--el-color-primary-dark-2, #337ecc);
-  --fc-today-bg-color: rgba(64, 158, 255, 0.06);
 }
 </style>
