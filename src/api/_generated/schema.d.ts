@@ -3277,7 +3277,7 @@ export interface paths {
         put?: never;
         /**
          * Impersonate User
-         * @description 切換使用者身份（管理員限定）
+         * @description 切換使用者身份（管理員或園長限定，依 mode 分流）
          */
         post: operations["impersonate_user_api_auth_impersonate_post"];
         delete?: never;
@@ -17793,6 +17793,12 @@ export interface components {
         ImpersonateRequest: {
             /** Employee Id */
             employee_id: number;
+            /**
+             * Mode
+             * @default readonly
+             * @enum {string}
+             */
+            mode: "readonly" | "write";
         };
         /**
          * ImportFailureItem

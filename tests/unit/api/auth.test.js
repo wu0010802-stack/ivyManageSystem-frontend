@@ -89,9 +89,19 @@ describe('auth api', () => {
     expect(mockPost).toHaveBeenCalledWith('/auth/change-password', payload)
   })
 
-  it('impersonate POST /auth/impersonate with employee_id body', async () => {
+  it('impersonate POST /auth/impersonate with employee_id and explicit mode', async () => {
+    await mod.impersonate(5, 'readonly')
+    expect(mockPost).toHaveBeenCalledWith('/auth/impersonate', { employee_id: 5, mode: 'readonly' })
+  })
+
+  it('impersonate sends mode: write when specified', async () => {
+    await mod.impersonate(5, 'write')
+    expect(mockPost).toHaveBeenCalledWith('/auth/impersonate', { employee_id: 5, mode: 'write' })
+  })
+
+  it('impersonate defaults mode to readonly when omitted', async () => {
     await mod.impersonate(42)
-    expect(mockPost).toHaveBeenCalledWith('/auth/impersonate', { employee_id: 42 })
+    expect(mockPost).toHaveBeenCalledWith('/auth/impersonate', { employee_id: 42, mode: 'readonly' })
   })
 
   it('getUsers GET /auth/users', async () => {
