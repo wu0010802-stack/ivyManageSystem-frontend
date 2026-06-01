@@ -1,4 +1,5 @@
 import api from './index'
+import type { ApiBody } from './_generated/typed'
 
 export const getFeePeriods = () => api.get('/fees/periods').then((res) => res.data)
 export const getFeeRecords = (params: unknown) => api.get('/fees/records', { params }).then((res) => res.data)
@@ -23,9 +24,16 @@ export const deleteFeeTemplate = (id: number) =>
 export const generateFeeRecords = (payload: unknown) =>
   api.post('/fees/generate', payload).then((res) => res.data)
 
-// ===== Stub (worktree-local only) — 2026-05-17 contact book redesign pilot
-// 真實 endpoint 在 user `refactor-fees-by-class` WIP 尚未 merge 到 main。
-// 本 stub 只為了讓 FeesTab.vue 在 pilot 分支上能編譯 / dev server 起得來。
-// user merge `refactor-fees-by-class` 後請刪除本行。
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export const getFeeAdjustments = (_params?: unknown) => Promise.resolve({ items: [] })
+// ===== 學費折抵 CRUD（同胞優惠 / 預繳 / 請假扣款 / 其他）=====
+// getFeeAdjustments 參數維持 unknown：FeesTab.vue 以 Record<string, unknown> 傳入，
+// 改用 ApiQuery 會破壞既有 typecheck（對齊本檔 getFeeRecords 慣例）。
+export const getFeeAdjustments = (params?: unknown) =>
+  api.get('/fees/adjustments', { params }).then((res) => res.data)
+export const createFeeAdjustment = (payload: ApiBody<'/fees/adjustments', 'post'>) =>
+  api.post('/fees/adjustments', payload).then((res) => res.data)
+export const updateFeeAdjustment = (
+  id: number,
+  payload: ApiBody<'/fees/adjustments/{adjustment_id}', 'put'>,
+) => api.put(`/fees/adjustments/${id}`, payload).then((res) => res.data)
+export const deleteFeeAdjustment = (id: number) =>
+  api.delete(`/fees/adjustments/${id}`).then((res) => res.data)
