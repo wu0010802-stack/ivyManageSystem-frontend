@@ -7,12 +7,14 @@ import {
   getClassrooms,
   getGrades,
   promoteAcademicYear,
+  previewPromoteAcademicYear,
   getTeacherOptions,
   updateClassroom,
 } from '@/api/classrooms'
 import { getCurrentAcademicTerm, normalizeSchoolYear, buildSchoolYearOptions } from '@/utils/academic'
+import { isGraduationRow, buildPromotionPayload } from '@/utils/classroomPromotion'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Clock, Delete, Edit, Plus, RefreshRight } from '@element-plus/icons-vue'
+import { Clock, Delete, Edit, Plus, Promotion, RefreshRight } from '@element-plus/icons-vue'
 import { useClassroomStore } from '@/stores/classroom'
 import { useAcademicTermStore } from '@/stores/academicTerm'
 import { hasPermission } from '@/utils/auth'
@@ -23,7 +25,10 @@ import ClassroomChangeLogDrawer from '@/components/classroom/ClassroomChangeLogD
 interface ClassroomRow { id: number; name: string; class_code?: string | null; school_year: number; semester: number; semester_label?: string; grade_id?: number | null; grade_name?: string; capacity?: number; current_count?: number; is_active?: boolean; head_teacher_id?: number | null; assistant_teacher_id?: number | null; english_teacher_id?: number | null; art_teacher_id?: number | null; head_teacher_name?: string | null; assistant_teacher_name?: string | null; english_teacher_name?: string | null; art_teacher_name?: string | null; student_preview?: Record<string, unknown>[]; students?: Record<string, unknown>[]; [key: string]: unknown }
 interface GradeRow { id: number; name: string; sort_order?: number; [key: string]: unknown }
 interface TeacherOption { id: number; name: string; [key: string]: unknown }
-interface PromotionRow { source_classroom_id: number; source_name: string; source_grade_id: number | null; source_grade_name: string; target_name: string; target_grade_id: number | null; copy_teachers: boolean; move_students: boolean }
+interface PromotionRow { source_classroom_id: number; source_name: string; source_grade_id: number | null; source_grade_name: string; target_name: string; target_grade_id: number | null; copy_teachers: boolean; move_students: boolean; excluded: boolean }
+interface PromotePreviewRow { source_classroom_id: number; source_name: string; source_grade_name?: string | null; resolved_target_grade_id?: number | null; resolved_target_grade_name?: string | null; target_name?: string | null; will_graduate: boolean; active_student_count: number; reuses_existing_target: boolean }
+interface PromoteConflict { kind: string; source_classroom_id?: number | null; target_name?: string | null; message: string }
+interface PromotePreview { source_term: string; target_term: string; rows: PromotePreviewRow[]; will_create_count: number; will_move_student_count: number; will_graduate_count: number; conflicts: PromoteConflict[]; has_blocking_conflict: boolean }
 
 const classroomStore = useClassroomStore()
 const termStore = useAcademicTermStore()
@@ -36,7 +41,9 @@ const loading = ref(false)
 const detailLoading = ref(false)
 const dialogVisible = ref(false)
 const promotionLoading = ref(false)
-const isAutoPromoting = ref(false)
+const promotionDialogVisible = ref(false)
+const previewLoading = ref(false)
+const previewResult = ref<PromotePreview | null>(null)
 const promotionRows = ref<PromotionRow[]>([])
 const formRef = ref<{ validate: (cb: (valid: boolean) => void) => void } | null>(null)
 const isEdit = ref(false)
@@ -97,7 +104,6 @@ const nextAcademicTerm = (schoolYear: number, semester: number) => (
 const sortedGrades = computed(() =>
   [...grades.value].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)),
 )
-const isGraduationRow = (row: PromotionRow) => !row.target_grade_id
 const promotionForm = reactive({
   source_school_year: currentAcademicTerm.school_year,
   source_semester: currentAcademicTerm.semester,
@@ -162,14 +168,6 @@ const fetchClassrooms = async () => {
       semester: filterSemester.value,
     })
     classrooms.value = response.data as ClassroomRow[]
-    if (classrooms.value.length === 0 && !isAutoPromoting.value) {
-      isAutoPromoting.value = true
-      try {
-        await autoPromoteIfNeeded()
-      } finally {
-        isAutoPromoting.value = false
-      }
-    }
   } catch (error) {
     ElMessage.error(apiError(error, '載入班級資料失敗'))
   } finally {
@@ -288,6 +286,7 @@ const findNextGradeId = (gradeId: number | null): number | null => {
 
 const loadPromotionRows = async () => {
   promotionLoading.value = true
+  previewResult.value = null
   try {
     const response = await getClassrooms({
       school_year: normalizeSchoolYear(promotionForm.source_school_year),
@@ -303,6 +302,7 @@ const loadPromotionRows = async () => {
       target_grade_id: findNextGradeId(classroom.grade_id ?? null),
       copy_teachers: true,
       move_students: true,
+      excluded: false,
     }))
   } catch (error) {
     promotionRows.value = []
@@ -312,52 +312,68 @@ const loadPromotionRows = async () => {
   }
 }
 
-const autoPromoteIfNeeded = async () => {
+// 開啟「跨學年升班」對話框：預設來源=目前檢視學期、目標=下一學期，使用者可在
+// 對話框內逐班調整（目標班名/年級、是否沿用老師、是否搬學生、排除某班），
+// 並先預覽影響再確認執行（取代過去切到空學期就靜默自動升班的行為）。
+const openPromotionDialog = async () => {
   const sy = normalizeSchoolYear(filterSchoolYear.value)
   const sem = filterSemester.value
-  const prevTerm = sem === 1
-    ? { school_year: sy - 1, semester: 2 }
-    : { school_year: sy, semester: 1 }
+  promotionForm.source_school_year = sy
+  promotionForm.source_semester = sem
+  const next = nextAcademicTerm(sy, sem)
+  promotionForm.target_school_year = next.school_year
+  promotionForm.target_semester = next.semester
+  previewResult.value = null
+  promotionRows.value = []
+  promotionDialogVisible.value = true
+  await loadPromotionRows()
+}
 
+const runPreview = async () => {
+  const payload = buildPromotionPayload(promotionForm, promotionRows.value)
+  if (!payload.classrooms.length) {
+    ElMessage.warning('請至少保留一個要升班的班級')
+    return
+  }
+  previewLoading.value = true
   try {
-    const prevRes = await getClassrooms({
-      school_year: prevTerm.school_year,
-      semester: prevTerm.semester,
-      include_inactive: false,
-    })
-    if (!(prevRes.data as unknown[])?.length) return
+    const response = await previewPromoteAcademicYear(payload)
+    previewResult.value = response.data as PromotePreview
+  } catch (error) {
+    previewResult.value = null
+    ElMessage.error(apiError(error, '升班預覽失敗'))
+  } finally {
+    previewLoading.value = false
+  }
+}
 
-    promotionForm.source_school_year = prevTerm.school_year
-    promotionForm.source_semester = prevTerm.semester
-    promotionForm.target_school_year = sy
-    promotionForm.target_semester = sem
-
-    await loadPromotionRows()
-
-    const response = await promoteAcademicYear({
-      source_school_year: prevTerm.school_year,
-      source_semester: prevTerm.semester,
-      target_school_year: sy,
-      target_semester: sem,
-      classrooms: promotionRows.value.map((row) => ({
-        source_classroom_id: row.source_classroom_id,
-        target_name: isGraduationRow(row) ? null : row.target_name,
-        target_grade_id: row.target_grade_id,
-        copy_teachers: true,
-        move_students: true,
-      })),
-    })
-
+const confirmPromotion = async () => {
+  if (!previewResult.value) {
+    ElMessage.warning('請先預覽影響再確認升班')
+    return
+  }
+  if (previewResult.value.has_blocking_conflict) {
+    ElMessage.error('仍有阻擋性衝突，請先排除後再升班')
+    return
+  }
+  promotionLoading.value = true
+  try {
+    const response = await promoteAcademicYear(buildPromotionPayload(promotionForm, promotionRows.value))
     const createdCount = response.data?.created_count || 0
+    const movedCount = response.data?.moved_student_count || 0
     const graduatedCount = response.data?.graduated_count || 0
     ElMessage.success(
-      `已自動建立新學期班級：新增 ${createdCount} 班${graduatedCount > 0 ? `，畢業 ${graduatedCount} 位學生` : ''}`,
+      `升班完成：新增 ${createdCount} 班、搬移 ${movedCount} 位學生`
+        + (graduatedCount > 0 ? `、畢業 ${graduatedCount} 位` : ''),
     )
+    promotionDialogVisible.value = false
     await fetchClassrooms()
     await fetchAvailableSchoolYears()
     await classroomStore.refresh()
   } catch (error) {
-    ElMessage.error(apiError(error, '自動建立班級失敗'))
+    ElMessage.error(apiError(error, '升班失敗'))
+  } finally {
+    promotionLoading.value = false
   }
 }
 
@@ -427,6 +443,22 @@ watch([filterSchoolYear, filterSemester], () => {
   fetchClassrooms()
 })
 
+// 升班對話框內任何調整（學期、逐班設定）都使既有預覽失效，強制重新預覽，
+// 確保「確認升班」送出的 payload 與最後一次預覽結果一致。
+watch(
+  () => [
+    promotionRows.value,
+    promotionForm.source_school_year,
+    promotionForm.source_semester,
+    promotionForm.target_school_year,
+    promotionForm.target_semester,
+  ],
+  () => {
+    previewResult.value = null
+  },
+  { deep: true },
+)
+
 
 onMounted(async () => {
   await fetchOptions()
@@ -457,6 +489,7 @@ const castDrawerClassroom = computed((): ClassroomDrawerProp | null => drawerCla
           inactive-text="僅顯示啟用"
         />
         <el-button :icon="RefreshRight" @click="fetchClassrooms">重新整理</el-button>
+        <el-button v-if="canWrite" :icon="Promotion" @click="openPromotionDialog">跨學年升班</el-button>
         <el-button v-if="canWrite" type="primary" :icon="Plus" @click="openCreate">新增班級</el-button>
       </div>
     </div>
@@ -670,6 +703,136 @@ const castDrawerClassroom = computed((): ClassroomDrawerProp | null => drawerCla
       :classroom="changeLogClassroom"
     />
 
+    <el-dialog
+      v-model="promotionDialogVisible"
+      title="跨學年升班"
+      width="900px"
+      :close-on-click-modal="false"
+    >
+      <div v-loading="promotionLoading">
+        <el-alert
+          type="info"
+          :closable="false"
+          show-icon
+          title="升班會建立新學期班級、搬移在讀學生；最高年級（無下一年級）的學生將畢業。請先「預覽影響」確認後再執行。"
+          style="margin-bottom: 12px"
+        />
+
+        <div class="promotion-terms">
+          <span>從</span>
+          <el-select v-model="promotionForm.source_school_year" style="width: 116px">
+            <el-option v-for="year in schoolYearOptions" :key="`ss-${year}`" :label="`${year}學年`" :value="year" />
+          </el-select>
+          <el-select v-model="promotionForm.source_semester" style="width: 104px">
+            <el-option v-for="opt in semesterOptions" :key="`sm-${opt.value}`" :label="opt.value === 1 ? '上學期' : '下學期'" :value="opt.value" />
+          </el-select>
+          <span>升至</span>
+          <el-select v-model="promotionForm.target_school_year" style="width: 116px">
+            <el-option v-for="year in schoolYearOptions" :key="`ts-${year}`" :label="`${year}學年`" :value="year" />
+          </el-select>
+          <el-select v-model="promotionForm.target_semester" style="width: 104px">
+            <el-option v-for="opt in semesterOptions" :key="`tm-${opt.value}`" :label="opt.value === 1 ? '上學期' : '下學期'" :value="opt.value" />
+          </el-select>
+          <el-button :icon="RefreshRight" @click="loadPromotionRows">載入來源班級</el-button>
+        </div>
+
+        <el-table
+          :data="promotionRows"
+          size="small"
+          style="margin-top: 12px"
+          empty-text="此來源學期沒有可升班的班級"
+        >
+          <el-table-column label="來源班級" min-width="130">
+            <template #default="{ row }">
+              <span :class="{ 'row-excluded': row.excluded }">{{ row.source_name }}</span>
+              <div class="text-muted">{{ row.source_grade_name }}</div>
+            </template>
+          </el-table-column>
+          <el-table-column label="目標年級（清空＝畢業）" width="170">
+            <template #default="{ row }">
+              <el-select v-model="row.target_grade_id" :disabled="row.excluded" placeholder="（畢業）" clearable size="small" style="width: 100%">
+                <el-option v-for="grade in sortedGrades" :key="grade.id" :label="grade.name" :value="grade.id" />
+              </el-select>
+            </template>
+          </el-table-column>
+          <el-table-column label="新班名" min-width="130">
+            <template #default="{ row }">
+              <el-input v-if="!isGraduationRow(row)" v-model="row.target_name" :disabled="row.excluded" size="small" placeholder="新班名" />
+              <el-tag v-else type="warning" size="small">畢業（不建班）</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="沿用老師" width="84" align="center">
+            <template #default="{ row }">
+              <el-switch v-model="row.copy_teachers" :disabled="row.excluded || isGraduationRow(row)" size="small" />
+            </template>
+          </el-table-column>
+          <el-table-column label="搬學生" width="78" align="center">
+            <template #default="{ row }">
+              <el-switch v-model="row.move_students" :disabled="row.excluded || isGraduationRow(row)" size="small" />
+            </template>
+          </el-table-column>
+          <el-table-column label="排除" width="70" align="center">
+            <template #default="{ row }">
+              <el-switch v-model="row.excluded" size="small" />
+            </template>
+          </el-table-column>
+        </el-table>
+
+        <div v-if="previewResult" class="promotion-preview">
+          <el-divider content-position="left">
+            預覽影響（{{ previewResult.source_term }} → {{ previewResult.target_term }}）
+          </el-divider>
+          <div class="preview-summary">
+            <el-tag type="primary">新增 {{ previewResult.will_create_count }} 班</el-tag>
+            <el-tag type="success">搬移 {{ previewResult.will_move_student_count }} 位學生</el-tag>
+            <el-tag v-if="previewResult.will_graduate_count > 0" type="warning">
+              畢業 {{ previewResult.will_graduate_count }} 位
+            </el-tag>
+          </div>
+          <el-table :data="previewResult.rows" size="small" style="margin-top: 8px">
+            <el-table-column prop="source_name" label="來源班級" min-width="120" />
+            <el-table-column label="處置" min-width="220">
+              <template #default="{ row }">
+                <el-tag v-if="row.will_graduate" type="warning" size="small">
+                  畢業 {{ row.active_student_count }} 位
+                </el-tag>
+                <span v-else>
+                  → {{ row.resolved_target_grade_name || '（未知年級）' }}「{{ row.target_name }}」
+                  <el-tag size="small" effect="plain">搬 {{ row.active_student_count }} 位</el-tag>
+                  <el-tag v-if="row.reuses_existing_target" size="small" type="info">重用停用班</el-tag>
+                </span>
+              </template>
+            </el-table-column>
+          </el-table>
+          <el-alert
+            v-if="previewResult.has_blocking_conflict"
+            type="error"
+            :closable="false"
+            show-icon
+            title="有阻擋性衝突，請先排除後再升班："
+            style="margin-top: 8px"
+          >
+            <ul class="conflict-list">
+              <li v-for="(c, idx) in previewResult.conflicts" :key="idx">{{ c.message }}</li>
+            </ul>
+          </el-alert>
+        </div>
+      </div>
+
+      <template #footer>
+        <el-button @click="promotionDialogVisible = false">取消</el-button>
+        <el-button :loading="previewLoading" @click="runPreview">預覽影響</el-button>
+        <el-button
+          type="primary"
+          :loading="promotionLoading"
+          :disabled="!previewResult || previewResult.has_blocking_conflict"
+          @click="confirmPromotion"
+        >
+          確認升班
+        </el-button>
+      </template>
+    </el-dialog>
+
   </div>
 </template>
 
@@ -811,5 +974,32 @@ const castDrawerClassroom = computed((): ClassroomDrawerProp | null => drawerCla
   .wizard-summary {
     flex-wrap: wrap;
   }
+}
+
+.promotion-terms {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.row-excluded {
+  text-decoration: line-through;
+  color: var(--text-tertiary);
+}
+
+.promotion-preview {
+  margin-top: var(--space-3);
+}
+
+.preview-summary {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.conflict-list {
+  margin: 4px 0 0;
+  padding-left: 18px;
 }
 </style>

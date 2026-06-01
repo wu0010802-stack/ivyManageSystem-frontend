@@ -20,6 +20,11 @@ export const cloneClassroomsToTerm = (payload: unknown) => api.post('/classrooms
 
 export const promoteAcademicYear = (payload: unknown) => api.post('/classrooms/promote-academic-year', payload)
 
+export const previewPromoteAcademicYear = (
+    payload: ApiBody<'/classrooms/promote-academic-year/preview', 'post'>,
+): AxiosResp<'/classrooms/promote-academic-year/preview', 'post'> =>
+    api.post('/classrooms/promote-academic-year/preview', payload)
+
 export const getTeacherOptions = () => api.get('/classrooms/teacher-options')
 
 export const getTeachers = getTeacherOptions
