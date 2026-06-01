@@ -161,6 +161,7 @@ declare module 'vue' {
     MeasurementChart: typeof import('./src/components/student/MeasurementChart.vue')['default']
     MeasurementEditorDialog: typeof import('./src/components/student/MeasurementEditorDialog.vue')['default']
     MeasurementsSection: typeof import('./src/components/portfolio/MeasurementsSection.vue')['default']
+    MedicalReasonDialog: typeof import('./src/components/MedicalReasonDialog.vue')['default']
     MeetingManagementPanel: typeof import('./src/components/overtime/MeetingManagementPanel.vue')['default']
     MessageBubble: typeof import('./src/components/portal/messages/MessageBubble.vue')['default']
     MessageComposer: typeof import('./src/components/portal/messages/MessageComposer.vue')['default']
@@ -259,6 +260,7 @@ declare module 'vue' {
     TodayTasksPanel: typeof import('./src/components/student/workbench/TodayTasksPanel.vue')['default']
     TransitionConfirmDialog: typeof import('./src/components/recruitment/funnel/TransitionConfirmDialog.vue')['default']
     TrendChart: typeof import('./src/components/portal/growth/TrendChart.vue')['default']
+    UnusedLeavePayoutTooltip: typeof import('./src/components/salary/UnusedLeavePayoutTooltip.vue')['default']
     VendorPaymentSignDialog: typeof import('./src/components/VendorPaymentSignDialog.vue')['default']
   }
   export interface GlobalDirectives {

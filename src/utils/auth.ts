@@ -176,7 +176,14 @@ const getRoutePermissions = (path: string) => {
 }
 
 /**
- * 檢查使用者是否擁有指定權限
+ * 權限 scope 的廣度順序：own_class < all
+ * 用於 getPermissionScope 比較多個 scope 時取最寬者。
+ */
+const _SCOPE_BREADTH: Record<string, number> = { own_class: 0, all: 1 }
+
+/**
+ * 檢查使用者是否擁有指定權限。
+ * 支援 bare code（'STUDENTS_READ'）與 scope-qualified code（'STUDENTS_READ:own_class'）。
  * @param permissionName - 權限名稱 (如 'EMPLOYEES_READ')
  */
 export function hasPermission(permissionName: string): boolean {
@@ -189,7 +196,46 @@ export function hasPermission(permissionName: string): boolean {
   const perms = userInfo['permission_names'] as string[] | null | undefined
   if (perms == null) return false  // resolve 在後端；前端 null = 無顯式權限
   if (perms.includes('*')) return true
-  return perms.includes(permissionName)
+  if (perms.includes(permissionName)) return true
+  // scope-qualified grant: 'STUDENTS_READ:own_class' counts as holding 'STUDENTS_READ'
+  return perms.some((n) => n.startsWith(`${permissionName}:`))
+}
+
+/**
+ * 取得使用者對指定權限的 scope（'all' | 'own_class' | null）。
+ * - wildcard '*' → 'all'
+ * - bare code → 'all'（向後兼容）
+ * - scope-qualified code → 對應 scope（僅接受已知 scope，未知視為無效）
+ * - 同時持有多個 scope 時回傳最寬者（all > own_class）
+ * - 未持有任何有效 scope → null（fail-closed）
+ * teacher 角色回傳 null（與 hasPermission 邏輯一致）。
+ * @param code - 權限基礎代碼 (如 'STUDENTS_READ')
+ */
+export function getPermissionScope(code: string): 'all' | 'own_class' | null {
+  const userInfo = getUserInfo()
+  if (!userInfo) return null
+
+  // teacher 角色只能存取 Portal
+  if (userInfo['role'] === 'teacher') return null
+
+  const perms = userInfo['permission_names'] as string[] | null | undefined
+  if (perms == null) return null
+  if (perms.includes('*')) return 'all'
+
+  const found: string[] = []
+  for (const n of perms) {
+    if (n === code) {
+      found.push('all')
+    } else if (n.startsWith(`${code}:`)) {
+      found.push(n.split(':', 2)[1])
+    }
+  }
+  if (found.length === 0) return null
+  const valid = found.filter((s) => s in _SCOPE_BREADTH)
+  if (valid.length === 0) return null
+  return valid.reduce((a, b) =>
+    _SCOPE_BREADTH[a] >= _SCOPE_BREADTH[b] ? a : b
+  ) as 'all' | 'own_class'
 }
 
 /**
