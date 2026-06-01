@@ -164,7 +164,7 @@ onUnmounted(() => {
 
     <el-card class="header-card">
       <div class="sheet-header">
-        <h2>出勤紀錄表</h2>
+        <h2>我的出勤</h2>
         <div class="month-nav">
           <el-button :icon="ArrowLeft" circle class="month-nav__btn" aria-label="上個月" @click="prevMonth" />
           <span class="month-label">{{ query.year }} 年 {{ String(query.month).padStart(2, '0') }} 月</span>
