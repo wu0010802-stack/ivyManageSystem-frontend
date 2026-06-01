@@ -68,6 +68,13 @@
 
   <!-- 超管員工選擇器 Dialog -->
   <el-dialog v-model="showEmployeePicker" title="選擇瀏覽身份" width="400px" append-to-body>
+    <!-- 進入前台模式選擇 -->
+    <div class="mode-selector" style="margin-bottom: 12px">
+      <el-radio-group v-model="selectedMode">
+        <el-radio label="readonly">預覽</el-radio>
+        <el-radio v-if="canWriteImpersonate" label="write">代操作</el-radio>
+      </el-radio-group>
+    </div>
     <el-input v-model="empSearch" placeholder="搜尋員工姓名 / 工號" clearable style="margin-bottom: 12px" />
     <el-scrollbar max-height="320px">
       <div
@@ -93,7 +100,7 @@ import { ElMessage } from 'element-plus'
 import { Monitor, Search, Setting, SwitchButton, User, ArrowDown } from '@element-plus/icons-vue'
 import { useEmployeeStore } from '@/stores/employee'
 import { impersonate } from '@/api/auth'
-import { getUserInfo, clearAuth, setUserInfo } from '@/utils/auth'
+import { getUserInfo, clearAuth, setUserInfo, hasPermission } from '@/utils/auth'
 import GlobalSearch from '@/components/GlobalSearch.vue'
 import { apiError } from '@/utils/error'
 import AdminNotificationBell from '@/components/layout/AdminNotificationBell.vue'
@@ -143,6 +150,12 @@ const employeeList = ref<EmployeeItem[]>([])
 const empSearch = ref<string>('')
 const employeeStore = useEmployeeStore()
 
+// 是否有代操作權限（admin 才有，園長只有預覽）
+const canWriteImpersonate = computed(() => hasPermission('PORTAL_IMPERSONATE'))
+
+// 目前選定的進入前台模式；開啟 picker 時重置為 readonly
+const selectedMode = ref<'readonly' | 'write'>('readonly')
+
 const filteredEmployees = computed(() =>
   empSearch.value
     ? employeeList.value.filter(e =>
@@ -164,13 +177,17 @@ const goToPortal = async () => {
       // silent
     }
     empSearch.value = ''
+    selectedMode.value = 'readonly'
     showEmployeePicker.value = true
   }
 }
 
 const doImpersonate = async (employeeId: number) => {
   try {
-    const res = await impersonate(employeeId)
+    // 安全守衛：無 PORTAL_IMPERSONATE 權限者強制使用 readonly
+    const mode: 'readonly' | 'write' =
+      selectedMode.value === 'write' && canWriteImpersonate.value ? 'write' : 'readonly'
+    const res = await impersonate(employeeId, mode)
     // 後端已透過 Set-Cookie 設定 access_token + admin_token Cookie
     setUserInfo(res.data.user)
     showEmployeePicker.value = false
