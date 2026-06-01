@@ -15,7 +15,7 @@ export const publicRegister = (data: unknown) =>
 export const publicCreateInquiry = (data: unknown) =>
   api.post('/activity/public/inquiries', data)
 export const publicQueryRegistration = (name: string, birthday: string, parent_phone: string) =>
-  api.get('/activity/public/query', { params: { name, birthday, parent_phone } })
+  api.post('/activity/public/query', { name, birthday, parent_phone })
 // Phase 3：以查詢碼 + 家長手機查詢（POST 而非 GET，避免 token 進 access log / 瀏覽器歷史）
 export const publicQueryByToken = (token: string, parent_phone: string) =>
   api.post('/activity/public/query-by-token', { token, parent_phone })
