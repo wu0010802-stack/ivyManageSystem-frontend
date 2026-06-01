@@ -3695,8 +3695,37 @@ export interface paths {
         /**
          * Promote Classrooms To Academic Year
          * @description 跨學年升班：建立新班、沿用老師並搬移在讀學生。
+         *
+         *     畢業班（無下一年級）學生改走 lifecycle 狀態機 transition() 落地：寫
+         *     StudentChangeLog 稽核並設 lifecycle_status=graduated（避免被 7/31 自動畢業
+         *     排程重複抓取）；搬班逐人寫 StudentClassroomTransfer 留歷史軌跡。畢業日對齊
+         *     自動畢業排程。整體為單一 transaction（任一步失敗則全部 rollback）。
          */
         post: operations["promote_classrooms_to_academic_year_api_classrooms_promote_academic_year_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/classrooms/promote-academic-year/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Promote Classrooms To Academic Year
+         * @description 跨學年升班試算（不寫入）：回傳逐班處置、彙總與阻擋性衝突清單。
+         *
+         *     供前端「預覽 + 確認」流程使用；與 execute 共用 _build_promotion_plan 確保
+         *     數字與衝突判定一致。整批層級錯誤（來源=目標學期相同）仍 raise 400，逐班
+         *     衝突收進 conflicts 回 200。
+         */
+        post: operations["preview_promote_classrooms_to_academic_year_api_classrooms_promote_academic_year_preview_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -15218,6 +15247,74 @@ export interface components {
             moved_student_count: unknown;
             /** Target Term */
             target_term: unknown;
+        };
+        /**
+         * ClassroomPromoteConflictOut
+         * @description 升班預覽：逐班層級的阻擋性衝突。
+         *
+         *     kind ∈ {missing_source, missing_target_name, duplicate_target_name,
+         *     active_name_collision, invalid_target_grade, reusable_target_has_students}。
+         */
+        ClassroomPromoteConflictOut: {
+            /** Kind */
+            kind: unknown;
+            /** Message */
+            message: unknown;
+            /** Source Classroom Id */
+            source_classroom_id?: unknown;
+            /** Target Name */
+            target_name?: unknown;
+        };
+        /**
+         * ClassroomPromotePreviewOut
+         * @description POST /classrooms/promote-academic-year/preview — 升班試算（不寫入）。
+         *
+         *     rows 為逐班處置；conflicts 收集所有阻擋性問題（execute 會於非空時拒絕）。
+         *     三個 count 與 execute 實際結果在「全員乾淨在讀」前提下相等。
+         */
+        ClassroomPromotePreviewOut: {
+            /** Conflicts */
+            conflicts: unknown;
+            /** Has Blocking Conflict */
+            has_blocking_conflict: unknown;
+            /** Rows */
+            rows: unknown;
+            /** Source Term */
+            source_term: unknown;
+            /** Target Term */
+            target_term: unknown;
+            /** Will Create Count */
+            will_create_count: unknown;
+            /** Will Graduate Count */
+            will_graduate_count: unknown;
+            /** Will Move Student Count */
+            will_move_student_count: unknown;
+        };
+        /**
+         * ClassroomPromotePreviewRowOut
+         * @description 升班預覽：單一來源班級的處置結果（不寫入，僅試算）。
+         */
+        ClassroomPromotePreviewRowOut: {
+            /** Active Student Count */
+            active_student_count: unknown;
+            /** Resolved Target Grade Id */
+            resolved_target_grade_id?: unknown;
+            /** Resolved Target Grade Name */
+            resolved_target_grade_name?: unknown;
+            /** Reuses Existing Target */
+            reuses_existing_target: unknown;
+            /** Source Classroom Id */
+            source_classroom_id: unknown;
+            /** Source Grade Id */
+            source_grade_id?: unknown;
+            /** Source Grade Name */
+            source_grade_name?: unknown;
+            /** Source Name */
+            source_name: unknown;
+            /** Target Name */
+            target_name?: unknown;
+            /** Will Graduate */
+            will_graduate: unknown;
         };
         /** ClassroomPromotionItem */
         ClassroomPromotionItem: {
@@ -31778,6 +31875,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ClassroomPromoteAcademicYearResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_promote_classrooms_to_academic_year_api_classrooms_promote_academic_year_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClassroomPromoteAcademicYear"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClassroomPromotePreviewOut"];
                 };
             };
             /** @description Validation Error */
