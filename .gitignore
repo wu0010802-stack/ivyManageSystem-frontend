@@ -11,3 +11,6 @@ coverage/
 frontend.log
 
 .worktrees/
+
+# Workspace 暫存產出物（trace/log/baseline 等 dev-time artifact）
+.scratch/

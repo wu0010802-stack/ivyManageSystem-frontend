@@ -64,6 +64,10 @@ jobs:
       - name: Type check（TS strict — L9 起改 blocking，TS errors 阻擋 PR）
         run: npm run typecheck
 
+      - name: Lint tokens (baseline, warn only)
+        run: npm run lint:tokens
+        continue-on-error: true
+
       - name: Build check
         env:
           # Sentry sourcemap 上傳：vite.config.js 用 SENTRY_AUTH_TOKEN 作為 enable gate；
