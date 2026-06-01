@@ -102,3 +102,29 @@ describe('AuditLogView — LOGIN_* / READ 快篩與動作標籤', () => {
     expect(wrapper.exists()).toBe(true)
   })
 })
+
+describe('AuditLogView — formatOperator 代操作者顯示', () => {
+  it('(a) 有 impersonated_by_name 時顯示「老師A（代操作：王小明）」', async () => {
+    const wrapper = mount(AuditLogView, mountOptions)
+    await flushPromises()
+    const row = { username: '老師A', impersonated_by_name: '王小明' }
+    const text = wrapper.vm.formatOperator(row)
+    expect(text).toBe('老師A（代操作：王小明）')
+  })
+
+  it('(b) impersonated_by_name 為 null 時只顯示使用者名稱', async () => {
+    const wrapper = mount(AuditLogView, mountOptions)
+    await flushPromises()
+    const row = { username: '老師A', impersonated_by_name: null }
+    const text = wrapper.vm.formatOperator(row)
+    expect(text).toBe('老師A')
+  })
+
+  it('(b2) impersonated_by_name 缺席時只顯示使用者名稱', async () => {
+    const wrapper = mount(AuditLogView, mountOptions)
+    await flushPromises()
+    const row = { username: '老師A' }
+    const text = wrapper.vm.formatOperator(row)
+    expect(text).toBe('老師A')
+  })
+})

@@ -15,6 +15,8 @@ interface AuditLog {
   ip_address?: string
   created_at?: string
   changes?: Record<string, unknown>
+  impersonated_by?: number | null
+  impersonated_by_name?: string | null
   [key: string]: unknown
 }
 
@@ -413,6 +415,13 @@ onMounted(async () => {
   await fetchMeta()
   fetchLogs()
 })
+
+const formatOperator = (row: Pick<AuditLog, 'username' | 'impersonated_by_name'>) => {
+  const base = row.username ?? ''
+  return row.impersonated_by_name ? `${base}（代操作：${row.impersonated_by_name}）` : base
+}
+
+defineExpose({ formatOperator })
 </script>
 
 <template>
@@ -540,7 +549,11 @@ onMounted(async () => {
           <span class="time-text">{{ formatTime(row.created_at) }}</span>
         </template>
       </el-table-column>
-      <el-table-column prop="username" label="使用者" width="110" />
+      <el-table-column label="使用者" width="110">
+        <template #default="{ row }">
+          <span>{{ formatOperator(row) }}</span>
+        </template>
+      </el-table-column>
       <el-table-column label="操作" width="80" align="center">
         <template #default="{ row }">
           <el-tag :type="getActionTag(row.action).type" size="small">
