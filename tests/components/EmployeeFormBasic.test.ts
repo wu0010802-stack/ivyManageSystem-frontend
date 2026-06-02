@@ -30,4 +30,32 @@ describe('EmployeeFormBasic', () => {
     await wrapper.vm.$nextTick()
     expect(wrapper.text()).toContain('教保身分別')
   })
+
+  it('isSelfEdit=true 時薪資敏感欄位（含收合區的職位）呈現唯讀鎖頭', async () => {
+    const wrapper = mount(EmployeeFormBasic, {
+      global: { plugins: [ElementPlus] },
+      props: { form: { name: '王', position: '園長', job_title_id: 1 }, isSelfEdit: true },
+    })
+    // 核心區鎖定欄位立即唯讀
+    expect(wrapper.find('.readonly-text').exists()).toBe(true)
+    // 展開職務細節後，position 也唯讀（顯示值，非可編輯）
+    ;(wrapper.vm as unknown as { applyValidationErrors: (p: string[]) => void })
+      .applyValidationErrors(['position'])
+    await wrapper.vm.$nextTick()
+    const locked = wrapper.findAll('.readonly-text')
+    expect(locked.some(n => n.text().includes('園長'))).toBe(true)
+  })
+
+  it('applyValidationErrors 設定該區徽章數', async () => {
+    const wrapper = mount(EmployeeFormBasic, {
+      global: { plugins: [ElementPlus] },
+      props: { form: { name: '' } },
+    })
+    ;(wrapper.vm as unknown as { applyValidationErrors: (p: string[]) => void })
+      .applyValidationErrors(['teacher_cert_no'])
+    await wrapper.vm.$nextTick()
+    const badge = wrapper.find('.form-section__badge')
+    expect(badge.exists()).toBe(true)
+    expect(badge.text()).toBe('1')
+  })
 })
