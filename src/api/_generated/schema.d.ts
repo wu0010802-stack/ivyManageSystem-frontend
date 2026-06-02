@@ -859,7 +859,13 @@ export interface paths {
         };
         /**
          * Get Public Courses Availability
-         * @description 前台：取得課程名額狀況
+         * @description 前台：取得課程名額狀況（帶 10s TTL 記憶體快取降低 DB 壓力）。
+         *
+         *     快取設計：
+         *     - availability 為 advisory 顯示；真正防超賣靠 register 端點的 with_for_update
+         *     - bounded staleness 10s 自然過期；register/update 可選 clear_namespace 加速反映
+         *     - cache hit 完全跳過 DB session，節省連線 + 兩次 query 開銷
+         *     - ETag/304 邏輯不動，對快取結果做 md5 (md5 over small dict 可忽略)
          */
         get: operations["get_public_courses_availability_api_activity_public_courses_availability_get"];
         put?: never;
@@ -922,17 +928,20 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        get?: never;
+        put?: never;
         /**
          * Public Query Registration
-         * @description 前台：依姓名+生日+家長手機查詢報名資料
+         * @description 前台：依姓名+生日+家長手機查詢報名資料（POST body，避免 PII 進 URL）
          *
          *     三欄必須同時相符；任一欄不符一律回相同的通用錯誤（不洩漏是哪一欄不符）。
          *
+         *     POST 而非 GET — 避免姓名/生日/家長手機進 access log / 瀏覽器歷史 / Referer，
+         *     與 /public/query-by-token 隱私契約一致。
+         *
          *     LOW-3：對成功與失敗 path 加入 200~500ms 隨機延遲，提高低成本枚舉成本。
          */
-        get: operations["public_query_registration_api_activity_public_query_get"];
-        put?: never;
-        post?: never;
+        post: operations["public_query_registration_api_activity_public_query_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -13164,6 +13173,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/year_end/cycles/{cycle_id}/build-settlements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Build Settlements Endpoint
+         * @description 跨員工計算並 upsert 年終結算單（idempotent）。非 DRAFT（已簽核）的結算不覆寫。
+         */
+        post: operations["build_settlements_endpoint_api_year_end_cycles__cycle_id__build_settlements_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/year_end/cycles/{cycle_id}/class_targets": {
         parameters: {
             query?: never;
@@ -13173,6 +13202,32 @@ export interface paths {
         };
         /** List Class Targets */
         get: operations["list_class_targets_api_year_end_cycles__cycle_id__class_targets_get"];
+        put?: never;
+        /**
+         * Upsert Class Target
+         * @description 手動設定班級招生目標（upsert by cycle+semester+classroom）。
+         *     avg_monthly_enrollment / class_performance_rate 由 build_settlements refresh，
+         *     此端點僅存手動輸入欄位（head_count_target / returning_student_rate / 老師指派）。
+         */
+        post: operations["upsert_class_target_api_year_end_cycles__cycle_id__class_targets_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/year_end/cycles/{cycle_id}/grid": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Grid Endpoint
+         * @description 回傳每位員工一列的年終結算 grid（含 special_bonuses 依 bonus_type 加總）。
+         */
+        get: operations["grid_endpoint_api_year_end_cycles__cycle_id__grid_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -13356,6 +13411,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/year_end/settlements/{settlement_id}/manual": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Manual Patch Settlement
+         * @description 手動微調結算：獎懲扣項、超額獎金、在職月數覆寫。自動重算受影響的結算單。
+         */
+        patch: operations["manual_patch_settlement_api_year_end_settlements__settlement_id__manual_patch"];
+        trace?: never;
+    };
     "/year_end/settlements/{settlement_id}/sign_accounting": {
         parameters: {
             query?: never;
@@ -13425,6 +13500,24 @@ export interface components {
             parent_phone: string;
             /** Token */
             token: string;
+        };
+        /**
+         * _PublicQueryPayload
+         * @description POST body for /public/query — 姓名+生日+家長手機查詢報名。
+         *
+         *     改為 POST body（原 GET query params）— 避免 PII 進 access log /
+         *     瀏覽器歷史 / Referer（與 /public/query-by-token 同理）。
+         *
+         *     schema 不設嚴格 max_length 以免 422 vs 404 status code 差異洩漏 oracle；
+         *     parent_phone max_length=30 防 DoS 級超長 payload（與 _PublicQueryByTokenPayload 一致）。
+         */
+        _PublicQueryPayload: {
+            /** Birthday */
+            birthday: string;
+            /** Name */
+            name: string;
+            /** Parent Phone */
+            parent_phone: string;
         };
         /**
          * AcademicSummaryOut
@@ -14998,6 +15091,21 @@ export interface components {
              */
             sort_order: number;
         };
+        /** BuildResultOut */
+        BuildResultOut: {
+            /** Built */
+            built: number;
+            /** Skipped Finalized */
+            skipped_finalized: number;
+        };
+        /** BuildSettlementsRequest */
+        BuildSettlementsRequest: {
+            /**
+             * Included Resigned Employee Ids
+             * @default []
+             */
+            included_resigned_employee_ids: number[];
+        };
         /** BulkAddParticipantsRequest */
         BulkAddParticipantsRequest: {
             /** Employee Ids */
@@ -15222,6 +15330,24 @@ export interface components {
             semester_first: boolean;
             /** Year End Cycle Id */
             year_end_cycle_id: number;
+        };
+        /** ClassEnrollmentTargetUpsert */
+        ClassEnrollmentTargetUpsert: {
+            /** Assistant Employee Id */
+            assistant_employee_id?: number | null;
+            /** Classroom Id */
+            classroom_id: number;
+            /** Head Count Target */
+            head_count_target: number;
+            /** Head Teacher Employee Id */
+            head_teacher_employee_id?: number | null;
+            /**
+             * Returning Student Rate
+             * @default 0
+             */
+            returning_student_rate: number | string;
+            /** Semester First */
+            semester_first: boolean;
         };
         /** ClassHubCounts */
         ClassHubCounts: {
@@ -16225,9 +16351,9 @@ export interface components {
             initial_lifecycle_status: string;
             /**
              * Student Id Code
-             * @description 學號
+             * @description [deprecated] 已忽略；學號改自動產生
              */
-            student_id_code: string;
+            student_id_code?: string | null;
         };
         /**
          * CopyCoursesRequest
@@ -17089,8 +17215,6 @@ export interface components {
             emergency_contact_name?: string | null;
             /** Emergency Contact Phone */
             emergency_contact_phone?: string | null;
-            /** Employee Id */
-            employee_id: string;
             /**
              * Employee Type
              * @default regular
@@ -17183,6 +17307,18 @@ export interface components {
              * @default 08:00
              */
             work_start_time: string;
+        };
+        /**
+         * EmployeeCreateResultOut
+         * @description POST /employees 建立員工成功回傳 — 包含自動配發的工號。
+         */
+        EmployeeCreateResultOut: {
+            /** Employee Id */
+            employee_id: unknown;
+            /** Id */
+            id: unknown;
+            /** Message */
+            message: unknown;
         };
         /**
          * EmployeeOut
@@ -17304,8 +17440,6 @@ export interface components {
             emergency_contact_name?: string | null;
             /** Emergency Contact Phone */
             emergency_contact_phone?: string | null;
-            /** Employee Id */
-            employee_id?: string | null;
             /** Employee Type */
             employee_type?: string | null;
             /** Extra Dependents Quarterly */
@@ -18035,6 +18169,25 @@ export interface components {
             /** Is Graduation Grade */
             is_graduation_grade?: boolean | null;
         };
+        /** GridRowOut */
+        GridRowOut: {
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+            /** Payable Amount */
+            payable_amount: string;
+            /** Settlement Id */
+            settlement_id: number;
+            /** Special Bonuses */
+            special_bonuses: {
+                [key: string]: string;
+            };
+            /** Status */
+            status: string;
+            /** Total Amount */
+            total_amount: string;
+        };
         /** GuardianCreate */
         GuardianCreate: {
             /**
@@ -18275,18 +18428,6 @@ export interface components {
              */
             mode: "readonly" | "write";
         };
-        /**
-         * ImportFailureItem
-         * @description Excel import 單筆失敗紀錄（caller 自訂 data shape）。
-         */
-        ImportFailureItem: {
-            /** Data */
-            data?: unknown;
-            /** Error */
-            error: unknown;
-            /** Row */
-            row?: unknown;
-        };
         /** ImportRecord */
         ImportRecord: {
             /** 介紹者 */
@@ -18319,6 +18460,21 @@ export interface components {
             "\u96FB\u8A2A\u5F8C\u5BB6\u9577\u56DE\u61C9"?: string | null;
             /** 電話 */
             "\u96FB\u8A71"?: string | null;
+        };
+        /** ImportResultOut */
+        ImportResultOut: {
+            /** Cycle Id */
+            cycle_id: number;
+            /** Participants Created */
+            participants_created: number;
+            /** Participants Updated */
+            participants_updated: number;
+            /** Score Items Upserted */
+            score_items_upserted: number;
+            /** Skipped Unresolved Names */
+            skipped_unresolved_names: string[];
+            /** Summaries Upserted */
+            summaries_upserted: number;
         };
         /** IncidentCreate */
         IncidentCreate: {
@@ -18599,6 +18755,10 @@ export interface components {
         LeaveApproveResultOut: {
             /** Message */
             message: unknown;
+            /** Salary Recalculated */
+            salary_recalculated?: unknown;
+            /** Salary Warning */
+            salary_warning?: unknown;
             /** Warning */
             warning?: unknown;
         };
@@ -18684,6 +18844,41 @@ export interface components {
             /** Substitute Employee Id */
             substitute_employee_id?: number | null;
         };
+        /**
+         * LeaveDeleteResultOut
+         * @description DELETE /leaves/{id} 回傳。
+         *
+         *     刪除已核准假單觸發薪資重算（撤銷原扣款）；重算失敗時回降級警告。
+         *     不共用 _common.DeleteResultOut（純 message），避免污染其他 delete 端點。
+         */
+        LeaveDeleteResultOut: {
+            /** Message */
+            message: unknown;
+            /** Salary Recalculated */
+            salary_recalculated?: unknown;
+            /** Salary Warning */
+            salary_warning?: unknown;
+        };
+        /**
+         * LeaveImportResultOut
+         * @description POST /leaves/import Excel 批次匯入回傳（total/created/failed:int/errors）。
+         *
+         *     與 _common.ImportResultOut ({succeeded, failed:list}) 不同：本 endpoint 回
+         *     total/created/failed:int/errors:list[str]（與 ShiftImportResultOut 同模式，
+         *     saved→created），前端 LeaveView 依此 shape 取用。原別名 = _common.ImportResultOut
+         *     基於「leaves import 也回 {succeeded,failed}」的錯誤假設，與實際 return 不符
+         *     （導致 ResponseValidationError → 端點 500）。
+         */
+        LeaveImportResultOut: {
+            /** Created */
+            created: unknown;
+            /** Errors */
+            errors: unknown;
+            /** Failed */
+            failed: unknown;
+            /** Total */
+            total: unknown;
+        };
         /** LeaveSnapshotPreview */
         LeaveSnapshotPreview: {
             /** Daily Wage */
@@ -18728,6 +18923,10 @@ export interface components {
             message: unknown;
             /** Reset To Pending */
             reset_to_pending?: unknown;
+            /** Salary Recalculated */
+            salary_recalculated?: unknown;
+            /** Salary Warning */
+            salary_warning?: unknown;
         };
         /** LifecycleOverviewOut */
         LifecycleOverviewOut: {
@@ -18909,6 +19108,15 @@ export interface components {
             item_code: string;
             /** Participant Id */
             participant_id: number;
+        };
+        /** ManualPatchRequest */
+        ManualPatchRequest: {
+            /** Deduction Disciplinary */
+            deduction_disciplinary?: number | string | null;
+            /** Excess Amount */
+            excess_amount?: number | string | null;
+            /** Hire Months Override */
+            hire_months_override?: number | string | null;
         };
         /** ManualSnapshotRequest */
         ManualSnapshotRequest: {
@@ -24123,31 +24331,6 @@ export interface components {
             week_start: unknown;
         };
         /**
-         * ImportResultOut
-         * @description Excel 批次匯入回傳共用 shape — {succeeded, failed}。
-         */
-        schemas___common__ImportResultOut: {
-            /** Failed */
-            failed: unknown;
-            /** Succeeded */
-            succeeded: unknown;
-        };
-        /** ImportResultOut */
-        schemas__appraisal__ImportResultOut: {
-            /** Cycle Id */
-            cycle_id: number;
-            /** Participants Created */
-            participants_created: number;
-            /** Participants Updated */
-            participants_updated: number;
-            /** Score Items Upserted */
-            score_items_upserted: number;
-            /** Skipped Unresolved Names */
-            skipped_unresolved_names: string[];
-            /** Summaries Upserted */
-            summaries_upserted: number;
-        };
-        /**
          * CertificateOut
          * @description 單筆員工證照 (對應 _cert_to_dict)。
          */
@@ -24698,8 +24881,8 @@ export interface components {
          * @description 9 種特別獎金 + 1 通用類型。
          *
          *     對應 Excel「年終獎金總表」B 欄各列：
-         *       APPRAISAL_HALF_BONUS_FIRST  : 較早那一筆（年終發放時對應「上學年下學期 = N-1.下」）— 來自 appraisal_summaries
-         *       APPRAISAL_HALF_BONUS_SECOND : 較晚那一筆（年終發放時對應「本學年上學期 = N.上」）— 來自 appraisal_summaries
+         *       APPRAISAL_HALF_BONUS_FIRST  : 較早那一筆（前一完整學年上學期）— 來自 appraisal_summaries
+         *       APPRAISAL_HALF_BONUS_SECOND : 較晚那一筆（前一完整學年下學期）— 來自 appraisal_summaries
          *       SEMESTER_DIVIDEND_FIRST     : N上學期紅利（舊生 500 + 才藝 1000）
          *       SEMESTER_DIVIDEND_SECOND    : N下學期紅利
          *       AFTER_CLASS_AWARD           : N上鼓勵推動才藝班獎金（按班級人數）
@@ -24708,8 +24891,8 @@ export interface components {
          *       FESTIVAL_DIFF               : N.8-N+1.01 節慶獎金差額（多退少補，可為負）
          *       CUSTOM                      : 其他客製化（保留擴充用）
          *
-         *     ⚠️ APPRAISAL_HALF_BONUS_FIRST/SECOND 的 FIRST/SECOND 是「時間順序」（FIRST=較早=前一學年下學期，SECOND=較晚=本學年上學期），
-         *     與 AppraisalCycle.Semester.FIRST/SECOND（學期上下）正好相反。由 services/year_end/appraisal_sync.py 依 calendar payout year 自動 map。
+         *     FIRST=較早=前一完整學年上學期（Semester.FIRST=上），SECOND=較晚=前一完整學年下學期（Semester.SECOND=下）；
+         *     兩者方向一致（無反轉）。由 services/year_end/appraisal_sync.py 依 calendar payout year 自動 map。
          * @enum {string}
          */
         SpecialBonusType: "APPRAISAL_HALF_BONUS_FIRST" | "APPRAISAL_HALF_BONUS_SECOND" | "SEMESTER_DIVIDEND_FIRST" | "SEMESTER_DIVIDEND_SECOND" | "AFTER_CLASS_AWARD" | "TEACHING_EXTRA" | "EXCESS_ENROLLMENT" | "FESTIVAL_DIFF" | "CUSTOM";
@@ -24971,8 +25154,6 @@ export interface components {
             special_needs?: string | null;
             /** Status Tag */
             status_tag?: string | null;
-            /** Student Id */
-            student_id: string;
         };
         /** StudentDetailAllergy */
         StudentDetailAllergy: {
@@ -26054,6 +26235,8 @@ export interface components {
              * Format: date
              */
             bonus_calc_date: string;
+            /** Clone From Academic Year */
+            clone_from_academic_year?: number | null;
             /**
              * End Date
              * Format: date
@@ -27672,18 +27855,18 @@ export interface operations {
             };
         };
     };
-    public_query_registration_api_activity_public_query_get: {
+    public_query_registration_api_activity_public_query_post: {
         parameters: {
-            query: {
-                birthday: string;
-                name: string;
-                parent_phone: string;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["_PublicQueryPayload"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -30260,7 +30443,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["schemas__appraisal__ImportResultOut"];
+                    "application/json": components["schemas"]["ImportResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -33574,7 +33757,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MutationResultOut"];
+                    "application/json": components["schemas"]["EmployeeCreateResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -37011,7 +37194,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DeleteResultOut"];
+                    "application/json": components["schemas"]["LeaveDeleteResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -37144,7 +37327,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["schemas___common__ImportResultOut"];
+                    "application/json": components["schemas"]["LeaveImportResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -49528,6 +49711,41 @@ export interface operations {
             };
         };
     };
+    build_settlements_endpoint_api_year_end_cycles__cycle_id__build_settlements_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cycle_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BuildSettlementsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BuildResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_class_targets_api_year_end_cycles__cycle_id__class_targets_get: {
         parameters: {
             query?: never;
@@ -49546,6 +49764,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ClassEnrollmentTargetOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upsert_class_target_api_year_end_cycles__cycle_id__class_targets_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cycle_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClassEnrollmentTargetUpsert"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClassEnrollmentTargetOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    grid_endpoint_api_year_end_cycles__cycle_id__grid_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cycle_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GridRowOut"][];
                 };
             };
             /** @description Validation Error */
@@ -49925,6 +50209,41 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettlementOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    manual_patch_settlement_api_year_end_settlements__settlement_id__manual_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                settlement_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ManualPatchRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
