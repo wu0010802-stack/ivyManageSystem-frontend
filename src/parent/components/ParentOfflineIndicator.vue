@@ -8,7 +8,6 @@
  * - K needs_review → 顯示「K 筆無法同步」+ 點開 ElMessageBox 列詳情
  */
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { ElMessageBox } from 'element-plus'
 import { listOps, OP_STATUS, updateOp } from '@/utils/offlineQueue'
 import { flushAllParent, PARENT_KINDS } from '@/parent/utils/parentOfflineQueue'
 import { useParentAuthStore } from '@/parent/stores/parentAuth'
@@ -58,6 +57,9 @@ async function openReviewDialog() {
     </div>`
   }).join('')
   try {
+    // EP 動態 import：parent 唯一用 element-plus 的點，延遲載入讓 parent 首屏
+    // 完全不載 element-plus（160KB gz）。確認操作是罕見互動，延遲無感。
+    const { ElMessageBox } = await import('element-plus')
     await ElMessageBox.confirm(html, '無法同步的操作', {
       confirmButtonText: '全部重試',
       cancelButtonText: '聯絡管理員',

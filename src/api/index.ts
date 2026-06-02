@@ -1,6 +1,5 @@
 import axios from 'axios'
 import type { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios'
-import { ElMessage } from 'element-plus'
 import { setUserInfo, clearAuth } from '@/utils/auth'
 import { classifyError, DEFAULT_MESSAGES } from '@/utils/errorHandler'
 import { applyDedupe } from '@/utils/apiDedupe'
@@ -138,6 +137,9 @@ api.interceptors.response.use(
                 return Promise.reject(error)
             }
             if (ksObj.code === 'READ_ONLY_MODE') {
+                // EP 動態 import：唯讀提示是罕見路徑，延遲載入避免 element-plus 成為
+                // admin-core 硬依賴（污染 public/parent 首屏）。axios wrapper 邏輯不變。
+                const { ElMessage } = await import('element-plus')
                 ElMessage.warning(typeof ksObj.message === 'string' ? ksObj.message : '系統暫時唯讀，編輯功能暫不可用')
                 error.displayMessage = typeof ksObj.message === 'string' ? ksObj.message : '系統暫時唯讀，編輯功能暫不可用'
                 error.errorDetail = ksObj

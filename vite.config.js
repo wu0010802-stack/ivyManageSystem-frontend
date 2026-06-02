@@ -52,7 +52,15 @@ function manualChunks(id) {
         // admin 程式碼）。釘到 shared-common 同時 de-dup 並切斷 parent→activity-admin。
         id.includes('/src/utils/academic.ts') ||
         id.includes('/src/composables/useCachedAsync.ts') ||
-        id.includes('/src/components/common/MobileErrorRetry.vue')
+        id.includes('/src/components/common/MobileErrorRetry.vue') ||
+        // 友善錯誤/連線狀態/捲動鎖/品牌裝飾元件：portal views 與家長端共用（皆 EP-free）。
+        // 未顯式指派時落 portal chunk → parent-app 靜態橋接整包 portal，連帶 cascade
+        // fullcalendar/chart-vendor/activity-admin/qrcode/markdown（~285KB gz）。
+        id.includes('/src/composables/useFriendlyError.ts') ||
+        id.includes('/src/utils/errorCodeRegistry.ts') ||
+        id.includes('/src/composables/useOnlineStatus.ts') ||
+        id.includes('/src/composables/useBodyLock.ts') ||
+        id.includes('/src/components/brand/')
     ) {
         return 'shared-common'
     }
@@ -122,7 +130,13 @@ function manualChunks(id) {
     //   只攔 @line/liff 會讓 sub-package 落到 vendor catch-all → admin / portal 入口
     //   被迫多載 ~25 KB gz。用 /node_modules/@liff/ 而非 @liff/ 避免 src/ 內別名誤命中。
     if (
-        id.includes('/src/parent/') ||
+        // 縮窄：排除 /src/parent/views/，讓 router.ts 已 lazy import 的家長 view
+        // 真正 emit per-view chunk（原本被這條過寬規則 collapse 成單一 eager chunk）。
+        (id.includes('/src/parent/')
+          && !id.includes('/src/parent/views/')
+          // assistant/ 元件只被 lazy AssistantView 用，排除讓 marked/dompurify
+          // （FaqAnswer 靜態 import）隨 AssistantView 一起 lazy，不進 parent 首屏。
+          && !id.includes('/src/parent/components/assistant/')) ||
         id.includes('@line/liff') ||
         id.includes('/node_modules/@liff/')
     ) {
@@ -184,7 +198,12 @@ function manualChunks(id) {
     // 不抽出時會 fall through 到 vendor catch-all → 所有入口（admin / parent / portal）
     // 都被迫載 150 KB raw / ~50 KB gz。
     // 不放 parent-app：parent 完全不用地圖。
-    if (id.includes('/node_modules/leaflet/')) {
+    if (
+        id.includes('/node_modules/leaflet/') ||
+        // leaflet.markercluster（招生熱力圖附近幼兒園聚合，見 D 的改動）隨 leaflet
+        // 一起 lazy，避免 fall through vendor catch-all 被三 entry eager 載入。
+        id.includes('/node_modules/leaflet.markercluster/')
+    ) {
         return 'leaflet'
     }
 
