@@ -124,6 +124,13 @@ export const manualPatchSettlement = (
 ): AxiosResp<'/year_end/settlements/{settlement_id}/manual', 'patch'> =>
   api.patch(`/year_end/settlements/${settlementId}/manual`, data)
 
+/** 新增/更新全校年度設定（upsert by cycle+semester）。 */
+export const postOrgSettings = (
+  cycleId: number,
+  data: ApiBody<'/year_end/cycles/{cycle_id}/org_settings', 'post'>,
+): AxiosResp<'/year_end/cycles/{cycle_id}/org_settings', 'post'> =>
+  api.post(`/year_end/cycles/${cycleId}/org_settings`, data)
+
 /** 手動設定班級招生目標（upsert by cycle+semester+classroom）。 */
 export const upsertClassTarget = (
   cycleId: number,
