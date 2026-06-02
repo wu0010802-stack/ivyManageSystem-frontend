@@ -10,6 +10,7 @@ import {
   permissionsCombine,
   permissionsHave,
   permissionsRemove,
+  shouldSendPermissionNames,
 } from '@/utils/auth'
 
 const ROLE_ICONS: Record<string, string> = {
@@ -105,7 +106,7 @@ const saveUser = async () => {
       password: userForm.password,
       role: userForm.role,
     }
-    if (!isUsingDefaultPermissions(userForm)) {
+    if (shouldSendPermissionNames(userForm.role, isUsingDefaultPermissions(userForm))) {
       payload.permission_names = userForm.permission_names
     }
     await createUser(payload)
@@ -179,7 +180,7 @@ const handleEditUser = (user: Record<string, unknown>) => {
 const saveEditUser = async () => {
   try {
     const payload: Record<string, unknown> = { role: editUserForm.role }
-    if (editUserForm.role !== 'teacher' && !isUsingDefaultPermissions(editUserForm)) {
+    if (shouldSendPermissionNames(editUserForm.role, isUsingDefaultPermissions(editUserForm))) {
       payload.permission_names = editUserForm.permission_names
     }
     await updateUser(editUserForm.id!, payload)
