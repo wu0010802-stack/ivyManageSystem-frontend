@@ -329,6 +329,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onErrorCaptured, onMounted, ref, watch } from 'vue'
 import 'leaflet/dist/leaflet.css'
+import 'leaflet.markercluster/dist/MarkerCluster.css'
+import 'leaflet.markercluster/dist/MarkerCluster.Default.css'
 // kiang 前端查詢已移除，所有資料由 nearby-kindergartens API 一次回傳
 import { syncGovKindergartens, getGovKindergartensSyncStatus, getGeocodePendingCount, geocodeCompetitorSchools, syncKiangData } from '@/api/recruitment'
 
@@ -905,8 +907,11 @@ const ensureLeaflet = async () => {
   if (!leafletPromise) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/ban-ts-comment
     // @ts-ignore – leaflet has no @types package in this project
-    leafletPromise = import('leaflet').then((module: any) => {
+    leafletPromise = import('leaflet').then(async (module: any) => {
       leafletApi = module.default ?? module
+      // 載入 markercluster 插件：以 side-effect 擴展 leafletApi，提供 L.markerClusterGroup
+      // @ts-ignore – leaflet.markercluster 無獨立 export，僅擴展 L
+      await import('leaflet.markercluster')
       return leafletApi
     })
   }
@@ -1103,7 +1108,12 @@ const renderLeafletMap = async () => {
     overlayLayer = L.layerGroup().addTo(mapInstance)
     heatLayer   = L.layerGroup().addTo(mapInstance)
     markerLayer = L.layerGroup().addTo(mapInstance)
-    nearbySchoolLayer = L.layerGroup().addTo(mapInstance)
+    // 附近幼兒園改用 marker cluster：prod 量級（數百）下避免逐一渲染 SVG divIcon 卡頓。
+    // addLayer / clearLayers 介面與 layerGroup 相容，故下方渲染/重建邏輯不變。
+    nearbySchoolLayer = L.markerClusterGroup({
+      showCoverageOnHover: false,
+      maxClusterRadius: 50,
+    }).addTo(mapInstance)
     renderedMapProvider.value = 'leaflet'
     mapInitialized.value = true
   }
