@@ -274,6 +274,18 @@ const routes: RouteRecordRaw[] = [
             meta: { title: '年終結算明細' }
         },
         {
+            path: '/year_end/cycles/:id/grid',
+            name: 'year-end-cycle-grid',
+            component: () => import('../views/yearEnd/YearEndGridView.vue'),
+            meta: { title: '年終總表', requiresAuth: true, permission: 'YEAR_END_READ' },
+        },
+        {
+            path: '/year_end/cycles/:id/config',
+            name: 'year-end-cycle-config',
+            component: () => import('../views/yearEnd/YearEndConfigView.vue'),
+            meta: { title: '年終本期設定', requiresAuth: true, permission: 'YEAR_END_READ' },
+        },
+        {
             path: '/year-end/appraisal-payout',
             name: 'YearEndAppraisalPayout',
             component: () => import('../views/yearEnd/AppraisalPayoutView.vue'),
