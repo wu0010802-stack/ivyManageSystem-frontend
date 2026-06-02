@@ -51,7 +51,7 @@ defineExpose({ expand })
     </div>
     <div v-else class="form-section__label">{{ title }}</div>
 
-    <div v-if="isOpen" class="form-section__body">
+    <div v-show="isOpen" class="form-section__body">
       <slot />
     </div>
   </div>

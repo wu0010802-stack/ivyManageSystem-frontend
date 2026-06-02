@@ -173,7 +173,7 @@ defineExpose({ applyValidationErrors })
   </el-form-item>
 
   <!-- 職務細節 -->
-  <FormSection ref="jobDetailRef" title="職務細節" collapsible :default-open="false"
+  <FormSection ref="jobDetailRef" data-test="section-jobDetail" title="職務細節" collapsible :default-open="false"
     :badge-count="sectionErrors.jobDetail" badge-type="error">
     <el-form-item label="職位" prop="position">
       <template v-if="isLocked('position')">
@@ -212,7 +212,7 @@ defineExpose({ applyValidationErrors })
   </FormSection>
 
   <!-- 個資・聯絡・緊急聯絡 -->
-  <FormSection ref="personalRef" title="個資・聯絡・緊急聯絡" collapsible :default-open="false"
+  <FormSection ref="personalRef" data-test="section-personal" title="個資・聯絡・緊急聯絡" collapsible :default-open="false"
     :badge-count="sectionErrors.personal" badge-type="error">
     <el-form-item label="生日">
       <el-date-picker v-model="form.birthday" type="date" placeholder="選擇日期" style="width:100%" value-format="YYYY-MM-DD" clearable />
@@ -234,7 +234,7 @@ defineExpose({ applyValidationErrors })
   </FormSection>
 
   <!-- 工作時間 -->
-  <FormSection ref="worktimeRef" title="工作時間" collapsible :default-open="false"
+  <FormSection ref="worktimeRef" data-test="section-worktime" title="工作時間" collapsible :default-open="false"
     :badge-count="sectionErrors.worktime" badge-type="error">
     <el-form-item label="上班時間">
       <el-time-select v-model="form.work_start_time" start="06:00" step="00:30" end="22:00" style="width:100%" />
@@ -245,7 +245,7 @@ defineExpose({ applyValidationErrors })
   </FormSection>
 
   <!-- 教保身分・政府申報 -->
-  <FormSection ref="govRef" title="教保身分・政府申報" collapsible :default-open="false"
+  <FormSection ref="govRef" data-test="section-gov" title="教保身分・政府申報" collapsible :default-open="false"
     :badge-count="sectionErrors.gov" badge-type="error">
     <el-form-item label="教保身分別">
       <el-select v-model="form.staff_role_category" clearable placeholder="(未指定)" style="width:100%">
