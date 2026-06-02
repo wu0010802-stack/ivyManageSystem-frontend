@@ -461,8 +461,8 @@ watch(
 
 
 onMounted(async () => {
-  await fetchOptions()
-  await fetchClassrooms()
+  // fetchOptions 與 fetchClassrooms 彼此無依賴，並行避免序列瀑布（省一個 round-trip）
+  await Promise.all([fetchOptions(), fetchClassrooms()])
 })
 
 interface ClassroomDrawerProp { id?: number; name?: string; grade_name?: string; semester_label?: string; is_active?: boolean; capacity?: number; students?: { id: number; name?: string; gender?: string; [key: string]: unknown }[] }
