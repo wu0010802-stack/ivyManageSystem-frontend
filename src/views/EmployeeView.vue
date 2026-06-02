@@ -390,6 +390,7 @@ const resetForm = () => {
   form.labor_insured_salary = null
   form.health_insured_salary = null
   form.pension_insured_salary = null
+  salarySectionErrors.value = 0
   suggestedSalary.value = null
 }
 
