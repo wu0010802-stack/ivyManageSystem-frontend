@@ -13,6 +13,12 @@ export const createYearEndCycle = (payload: unknown) =>
 export const listOrgYearSettings = (cycleId: number) =>
   api.get(`/year_end/cycles/${cycleId}/org_settings`)
 
+/** Typed getter for org settings — use this in new views. */
+export const getOrgSettings = (
+  cycleId: number,
+): AxiosResp<'/year_end/cycles/{cycle_id}/org_settings', 'get'> =>
+  api.get(`/year_end/cycles/${cycleId}/org_settings`)
+
 export const upsertOrgYearSettings = (cycleId: number, payload: unknown) =>
   api.post(`/year_end/cycles/${cycleId}/org_settings`, payload)
 
@@ -21,9 +27,21 @@ export const upsertOrgYearSettings = (cycleId: number, payload: unknown) =>
 export const listClassEnrollmentTargets = (cycleId: number) =>
   api.get(`/year_end/cycles/${cycleId}/class_targets`)
 
+/** Typed getter for class enrollment targets — use this in new views. */
+export const getClassTargets = (
+  cycleId: number,
+): AxiosResp<'/year_end/cycles/{cycle_id}/class_targets', 'get'> =>
+  api.get(`/year_end/cycles/${cycleId}/class_targets`)
+
 // ============ Settlements ============
 
 export const listYearEndSettlements = (cycleId: number) =>
+  api.get(`/year_end/cycles/${cycleId}/settlements`)
+
+/** Typed getter for cycle settlements — use this in new views. */
+export const getCycleSettlements = (
+  cycleId: number,
+): AxiosResp<'/year_end/cycles/{cycle_id}/settlements', 'get'> =>
   api.get(`/year_end/cycles/${cycleId}/settlements`)
 
 export const signSupervisorSettlement = (settlementId: number) =>
@@ -83,6 +101,35 @@ export const exportYearEndSummaryXlsxUrl = (cycleId: number) =>
 
 export const exportYearEndTransferRosterXlsxUrl = (cycleId: number) =>
   `${api.defaults.baseURL || '/api'}/year_end/cycles/${cycleId}/transfer_roster.xlsx`
+
+// ============ Grid / Build / Manual Patch ============
+
+/** 回傳每位員工一列的年終結算 grid（含 special_bonuses 依 bonus_type 加總）。 */
+export const getYearEndGrid = (
+  cycleId: number,
+): AxiosResp<'/year_end/cycles/{cycle_id}/grid', 'get'> =>
+  api.get(`/year_end/cycles/${cycleId}/grid`)
+
+/** 跨員工計算並 upsert 年終結算單（idempotent）。非 DRAFT 已簽核的結算不覆寫。 */
+export const buildSettlements = (
+  cycleId: number,
+  data: ApiBody<'/year_end/cycles/{cycle_id}/build-settlements', 'post'>,
+): AxiosResp<'/year_end/cycles/{cycle_id}/build-settlements', 'post'> =>
+  api.post(`/year_end/cycles/${cycleId}/build-settlements`, data)
+
+/** 手動微調結算：獎懲扣項、超額獎金、在職月數覆寫。自動重算受影響的結算單。 */
+export const manualPatchSettlement = (
+  settlementId: number,
+  data: ApiBody<'/year_end/settlements/{settlement_id}/manual', 'patch'>,
+): AxiosResp<'/year_end/settlements/{settlement_id}/manual', 'patch'> =>
+  api.patch(`/year_end/settlements/${settlementId}/manual`, data)
+
+/** 手動設定班級招生目標（upsert by cycle+semester+classroom）。 */
+export const upsertClassTarget = (
+  cycleId: number,
+  data: ApiBody<'/year_end/cycles/{cycle_id}/class_targets', 'post'>,
+): AxiosResp<'/year_end/cycles/{cycle_id}/class_targets', 'post'> =>
+  api.post(`/year_end/cycles/${cycleId}/class_targets`, data)
 
 // ============ Appraisal Payout ============
 
