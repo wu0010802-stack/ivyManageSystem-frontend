@@ -6,7 +6,7 @@
     width="560px"
     @closed="onClosed"
   >
-    <el-form label-width="90px">
+    <el-form label-position="top">
       <el-form-item v-if="!lockStudent" label="班級">
         <el-select
           v-model="pickedClassroomId"
@@ -33,11 +33,6 @@
           <el-option v-for="t in INCIDENT_TYPES" :key="t" :label="t" :value="t" />
         </el-select>
       </el-form-item>
-      <el-form-item label="嚴重程度">
-        <el-select v-model="form.severity" placeholder="選擇嚴重程度" clearable style="width: 100%">
-          <el-option v-for="s in SEVERITIES" :key="s" :label="s" :value="s" />
-        </el-select>
-      </el-form-item>
       <el-form-item label="發生時間 *">
         <el-date-picker
           v-model="form.occurred_at"
@@ -50,12 +45,21 @@
       <el-form-item label="事件描述 *">
         <el-input v-model="form.description" type="textarea" :rows="3" placeholder="請描述事件經過" />
       </el-form-item>
-      <el-form-item label="處置方式">
-        <el-input v-model="form.action_taken" type="textarea" :rows="2" placeholder="已採取的處置措施" />
-      </el-form-item>
-      <el-form-item label="通知家長">
-        <el-checkbox v-model="form.parent_notified">已通知家長</el-checkbox>
-      </el-form-item>
+
+      <!-- 補充（選填） -->
+      <FormSection data-test="section-extra" title="補充（選填）" collapsible :default-open="false">
+        <el-form-item label="嚴重程度">
+          <el-select v-model="form.severity" placeholder="選擇嚴重程度" clearable style="width: 100%">
+            <el-option v-for="s in SEVERITIES" :key="s" :label="s" :value="s" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="處置方式">
+          <el-input v-model="form.action_taken" type="textarea" :rows="2" placeholder="已採取的處置措施" />
+        </el-form-item>
+        <el-form-item label="通知家長">
+          <el-checkbox v-model="form.parent_notified">已通知家長</el-checkbox>
+        </el-form-item>
+      </FormSection>
     </el-form>
     <template #footer>
       <el-button @click="emit('update:visible', false)">取消</el-button>
@@ -71,6 +75,7 @@ import { INCIDENT_TYPES, SEVERITIES } from '@/constants/studentRecords'
 import { getStudents } from '@/api/students'
 import { useStudentRecordsStore } from '@/stores/studentRecords'
 import { apiError } from '@/utils/error'
+import FormSection from '@/components/common/FormSection.vue'
 
 const props = withDefaults(defineProps<{
   visible?: boolean
