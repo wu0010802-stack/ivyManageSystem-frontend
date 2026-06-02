@@ -3,6 +3,16 @@ import { mount } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 import EmployeeFormBasic from '@/components/employee/EmployeeFormBasic.vue'
 
+// happy-dom renders these EP components pathologically slowly under full-suite parallelism,
+// causing timeout flakiness. These tests assert structure/collapse/locks, not picker internals.
+const HEAVY_STUBS = {
+  'el-date-picker': true,
+  'el-time-select': true,
+  'el-select': true,
+  'el-option': true,
+  'el-input-number': true,
+} as const
+
 // happy-dom does not compute inline styles via getComputedStyle, so
 // isVisible() cannot detect v-show hiding. Check element.style.display directly.
 function isBodyHidden(wrapper: ReturnType<typeof mount>, dataTest: string): boolean {
@@ -12,7 +22,7 @@ function isBodyHidden(wrapper: ReturnType<typeof mount>, dataTest: string): bool
 
 function mountForm() {
   return mount(EmployeeFormBasic, {
-    global: { plugins: [ElementPlus] },
+    global: { plugins: [ElementPlus], stubs: HEAVY_STUBS },
     props: { form: { name: '', employee_id: '' } },
   })
 }
@@ -40,7 +50,7 @@ describe('EmployeeFormBasic', () => {
 
   it('isSelfEdit=true 時薪資敏感欄位（含收合區的職位）呈現唯讀鎖頭', async () => {
     const wrapper = mount(EmployeeFormBasic, {
-      global: { plugins: [ElementPlus] },
+      global: { plugins: [ElementPlus], stubs: HEAVY_STUBS },
       props: { form: { name: '王', position: '園長', job_title_id: 1 }, isSelfEdit: true },
     })
     // 核心區鎖定欄位立即唯讀
@@ -55,7 +65,7 @@ describe('EmployeeFormBasic', () => {
 
   it('applyValidationErrors 設定該區徽章數', async () => {
     const wrapper = mount(EmployeeFormBasic, {
-      global: { plugins: [ElementPlus] },
+      global: { plugins: [ElementPlus], stubs: HEAVY_STUBS },
       props: { form: { name: '' } },
     })
     ;(wrapper.vm as unknown as { applyValidationErrors: (p: string[]) => void })
@@ -84,7 +94,7 @@ describe('EmployeeFormBasic', () => {
         }
       },
     }
-    const wrapper = mount(TestHost, { global: { plugins: [ElementPlus] } })
+    const wrapper = mount(TestHost, { global: { plugins: [ElementPlus], stubs: HEAVY_STUBS } })
 
     // v-show keeps the body mounted — form-items are present in DOM even when collapsed
     const govBody = wrapper.find('[data-test="section-gov"] .form-section__body')
