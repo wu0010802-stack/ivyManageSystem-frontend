@@ -20,12 +20,21 @@ describe('FormSection', () => {
     expect(wrapper.find('.inner').exists()).toBe(true)
   })
 
+  it('Enter 鍵可展開收合', async () => {
+    const wrapper = mount(FormSection, {
+      props: { title: '個資', collapsible: true, defaultOpen: false },
+      slots: { default: '<div class="inner">內容</div>' },
+    })
+    await wrapper.find('.form-section__header').trigger('keydown.enter')
+    expect(wrapper.find('.inner').exists()).toBe(true)
+  })
+
   it('expand() 強制展開', async () => {
     const wrapper = mount(FormSection, {
       props: { title: '個資', collapsible: true, defaultOpen: false },
       slots: { default: '<div class="inner">內容</div>' },
     })
-    ;(wrapper.vm as unknown as { expand: () => void }).expand()
+    ;(wrapper.vm as { expand: () => void }).expand()
     await wrapper.vm.$nextTick()
     expect(wrapper.find('.inner').exists()).toBe(true)
   })
