@@ -65,7 +65,16 @@ function semesterLabel(semesterFirst: boolean): string {
   return semesterFirst ? '上學期' : '下學期'
 }
 
-function pct(val: string | number | null | undefined): string {
+/** 顯示已是百分比形式的欄位（如 org_achievement_rate=83.6 → "83.6%"）。 */
+function pctNum(val: string | number | null | undefined): string {
+  if (val === null || val === undefined || val === '') return '-'
+  const n = Number(val)
+  if (isNaN(n)) return String(val)
+  return n.toFixed(1) + '%'
+}
+
+/** 顯示比率形式的欄位（如 returning_student_rate=0.926 → "92.6%"）。 */
+function pctRatio(val: string | number | null | undefined): string {
   if (val === null || val === undefined || val === '') return '-'
   const n = Number(val)
   if (isNaN(n)) return String(val)
@@ -252,7 +261,7 @@ onMounted(async () => {
               <span class="readonly-val">{{ row.enrollment_actual ?? '-' }}</span>
             </el-form-item>
             <el-form-item label="招生達成率（自動）">
-              <span class="readonly-val">{{ pct(row.school_achievement_rate) }}</span>
+              <span class="readonly-val">{{ pctNum(row.school_achievement_rate) }}</span>
             </el-form-item>
             <el-form-item label="機構達成率">
               <template #label>
@@ -266,14 +275,14 @@ onMounted(async () => {
                 v-if="canWrite && orgEdits[String(row.semester_first)]"
                 v-model="orgEdits[String(row.semester_first)].org_achievement_rate"
                 :min="0"
-                :max="2"
-                :step="0.001"
-                :precision="3"
+                :max="200"
+                :step="0.1"
+                :precision="1"
                 controls-position="right"
                 style="width: 180px"
                 :data-test="`input-org-rate-${row.semester_first}`"
               />
-              <span v-else>{{ pct(row.org_achievement_rate) }}</span>
+              <span v-else>{{ pctNum(row.org_achievement_rate) }}</span>
               <span class="field-hint">（留預設則由系統用兩學期平均）</span>
             </el-form-item>
             <el-form-item label="缺會議扣款（元）">
@@ -374,12 +383,12 @@ onMounted(async () => {
               size="small"
               :data-test="`input-returning-rate-${row.id}`"
             />
-            <span v-else>{{ pct(row.returning_student_rate) }}</span>
+            <span v-else>{{ pctRatio(row.returning_student_rate) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="班級績效%（自動）" width="130">
           <template #default="{ row }">
-            <span class="readonly-val">{{ pct(row.class_performance_rate) }}</span>
+            <span class="readonly-val">{{ pctNum(row.class_performance_rate) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="110" fixed="right">

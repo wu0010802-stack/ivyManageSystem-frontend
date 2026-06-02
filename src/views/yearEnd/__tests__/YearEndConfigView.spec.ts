@@ -78,8 +78,10 @@ function makeOrgRow(overrides: Partial<OrgRow> = {}): OrgRow {
     semester_first: true,
     enrollment_target: 160,
     enrollment_actual: 150,
-    school_achievement_rate: '0.9375',
-    org_achievement_rate: '0.836',
+    // Percentage form: school_achievement_rate = actual/target × 100 = 93.75
+    school_achievement_rate: '93.75',
+    // Percentage form: org_achievement_rate = e.g. 83.6 (same unit as importYearEndExcel default)
+    org_achievement_rate: '83.6',
     meeting_absence_deduction: '1000',
     ...overrides,
   }
@@ -197,8 +199,8 @@ describe('YearEndConfigView', () => {
       expect.objectContaining({
         semester_first: true,
         enrollment_target: 170,
-        // school_achievement_rate is echoed back as number (via Number())
-        school_achievement_rate: Number(orgRow.school_achievement_rate),
+        // school_achievement_rate echoed back as number: Number('93.75') = 93.75
+        school_achievement_rate: 93.75,
       }),
     )
     expect(vi.mocked(ElMessage.success)).toHaveBeenCalledWith(
