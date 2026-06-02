@@ -54,8 +54,8 @@ const buildDialogVisible = ref(false)
 const editVisible = ref(false)
 const editingRow = ref<GridRow | null>(null)
 const editForm = reactive({
-  deduction_disciplinary: 0,
-  excess_amount: 0,
+  deduction_disciplinary: null as number | null,
+  excess_amount: null as number | null,
   hire_months_override: null as number | null,
 })
 
@@ -106,8 +106,8 @@ async function onBuild() {
 
 function openEdit(row: GridRow) {
   editingRow.value = row
-  editForm.deduction_disciplinary = 0
-  editForm.excess_amount = 0
+  editForm.deduction_disciplinary = null
+  editForm.excess_amount = null
   editForm.hire_months_override = null
   editVisible.value = true
 }
@@ -115,12 +115,15 @@ function openEdit(row: GridRow) {
 async function submitEdit() {
   if (!editingRow.value) return
   const payload: {
-    deduction_disciplinary?: number | string | null
-    excess_amount?: number | string | null
-    hire_months_override?: number | string | null
-  } = {
-    deduction_disciplinary: editForm.deduction_disciplinary,
-    excess_amount: editForm.excess_amount,
+    deduction_disciplinary?: number
+    excess_amount?: number
+    hire_months_override?: number
+  } = {}
+  if (editForm.deduction_disciplinary !== null) {
+    payload.deduction_disciplinary = editForm.deduction_disciplinary
+  }
+  if (editForm.excess_amount !== null) {
+    payload.excess_amount = editForm.excess_amount
   }
   if (editForm.hire_months_override !== null) {
     payload.hire_months_override = editForm.hire_months_override
@@ -316,6 +319,8 @@ onMounted(loadGrid)
             :step="100"
             controls-position="right"
             style="width: 200px"
+            placeholder="留空=不覆寫"
+            :value-on-clear="null"
             data-test="input-deduction"
           />
         </el-form-item>
@@ -326,6 +331,8 @@ onMounted(loadGrid)
             :step="100"
             controls-position="right"
             style="width: 200px"
+            placeholder="留空=不覆寫"
+            :value-on-clear="null"
             data-test="input-excess"
           />
         </el-form-item>

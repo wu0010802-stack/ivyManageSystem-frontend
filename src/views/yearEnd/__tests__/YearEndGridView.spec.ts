@@ -140,7 +140,7 @@ describe('YearEndGridView', () => {
     expect(vi.mocked(ElMessage.success)).toHaveBeenCalledWith('已試算 3 筆，略過已簽 1 筆')
   })
 
-  // Case 3: manual edit dialog patches and reloads
+  // Case 3: manual edit dialog patches and reloads (user sets deduction → IS sent)
   it('manual edit dialog patches settlement and reloads', async () => {
     vi.mocked(api.getYearEndGrid).mockResolvedValue({
       data: [makeRow()],
@@ -154,26 +154,69 @@ describe('YearEndGridView', () => {
       rows: GridRow[]
       openEdit: (row: GridRow) => void
       submitEdit: () => Promise<void>
-      editForm: { deduction_disciplinary: number; excess_amount: number; hire_months_override: number | null }
+      editForm: { deduction_disciplinary: number | null; excess_amount: number | null; hire_months_override: number | null }
     }
 
     // Open edit for the first DRAFT row
     vm.openEdit(vm.rows[0])
     await nextTick()
 
-    // Set deduction
-    vm.editForm.deduction_disciplinary = -500
+    // Set deduction (user explicitly enters -6000)
+    vm.editForm.deduction_disciplinary = -6000
 
     // Submit
     await vm.submitEdit()
     await nextTick()
 
+    // When user sets a value, it IS sent
     expect(api.manualPatchSettlement).toHaveBeenCalledWith(
       1,
-      expect.objectContaining({ deduction_disciplinary: -500 })
+      expect.objectContaining({ deduction_disciplinary: -6000 })
     )
     // getYearEndGrid called on mount + after patch = 2 times
     expect(api.getYearEndGrid).toHaveBeenCalledTimes(2)
+  })
+
+  // Case 5: manual patch omits untouched deduction/excess (no silent zero-wipe)
+  it('manual patch omits untouched deduction/excess (no silent zero-wipe)', async () => {
+    vi.mocked(api.getYearEndGrid).mockResolvedValue({
+      data: [makeRow()],
+    } as never)
+    vi.mocked(api.manualPatchSettlement).mockResolvedValue({
+      data: {},
+    } as never)
+
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as {
+      rows: GridRow[]
+      openEdit: (row: GridRow) => void
+      submitEdit: () => Promise<void>
+      editForm: { deduction_disciplinary: number | null; excess_amount: number | null; hire_months_override: number | null }
+    }
+
+    // Open edit for a DRAFT row
+    vm.openEdit(vm.rows[0])
+    await nextTick()
+
+    // Only set hire_months_override — leave deduction/excess untouched (null)
+    expect(vm.editForm.deduction_disciplinary).toBeNull()
+    expect(vm.editForm.excess_amount).toBeNull()
+    vm.editForm.hire_months_override = 8
+
+    // Submit
+    await vm.submitEdit()
+    await nextTick()
+
+    expect(api.manualPatchSettlement).toHaveBeenCalledOnce()
+    const arg = vi.mocked(api.manualPatchSettlement).mock.calls[0]![1]
+
+    // hire_months_override IS sent
+    expect(arg).toHaveProperty('hire_months_override', 8)
+
+    // deduction_disciplinary and excess_amount must NOT be in the payload at all
+    // (so backend keeps its prior persisted value — no silent zero-wipe)
+    expect('deduction_disciplinary' in arg).toBe(false)
+    expect('excess_amount' in arg).toBe(false)
   })
 
   // Case 4: finalized row hides manual edit button
