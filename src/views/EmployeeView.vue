@@ -846,6 +846,7 @@ onMounted(async () => {
       :width="isMobile ? '100%' : '800px'"
       :top="isMobile ? '0' : '15vh'"
       :fullscreen="isMobile"
+      destroy-on-close
     >
       <el-form :model="form" :rules="rules" ref="formRef" label-position="top">
         <!-- 新增：單捲動（核心 + 收合區段） -->
