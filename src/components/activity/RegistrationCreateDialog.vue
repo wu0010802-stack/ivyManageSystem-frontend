@@ -6,7 +6,7 @@
     width="560px"
     :close-on-click-modal="false"
   >
-    <el-form :model="form" label-width="90px">
+    <el-form :model="form" label-position="top">
       <el-form-item label="學生姓名" required>
         <el-input v-model="form.name" :maxlength="FIELD_RULES.studentNameMax" placeholder="請輸入學生姓名" />
       </el-form-item>
@@ -24,9 +24,6 @@
         <el-select v-model="form.class_" placeholder="選擇班級" style="width: 100%">
           <el-option v-for="n in classroomOptions" :key="n" :label="n" :value="n" />
         </el-select>
-      </el-form-item>
-      <el-form-item label="Email">
-        <el-input v-model="form.email" :maxlength="FIELD_RULES.emailMax" placeholder="選填" />
       </el-form-item>
       <el-form-item label="課程">
         <el-select
@@ -61,9 +58,16 @@
           />
         </el-select>
       </el-form-item>
-      <el-form-item label="備註">
-        <el-input v-model="form.remark" type="textarea" :rows="2" :maxlength="FIELD_RULES.remarkMax" />
-      </el-form-item>
+
+      <!-- 補充（選填） -->
+      <FormSection data-test="section-extra" title="補充（選填）" collapsible :default-open="false">
+        <el-form-item label="Email">
+          <el-input v-model="form.email" :maxlength="FIELD_RULES.emailMax" placeholder="選填" />
+        </el-form-item>
+        <el-form-item label="備註">
+          <el-input v-model="form.remark" type="textarea" :rows="2" :maxlength="FIELD_RULES.remarkMax" />
+        </el-form-item>
+      </FormSection>
     </el-form>
     <div class="create-summary">
       總計：<strong>NT$ {{ totalAmount.toLocaleString() }}</strong>
@@ -86,6 +90,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { createRegistration, getSupplies } from '@/api/activity'
 import { FIELD_RULES } from '@/constants/activity'
+import FormSection from '@/components/common/FormSection.vue'
 
 interface OptionItem {
   id?: number | string
