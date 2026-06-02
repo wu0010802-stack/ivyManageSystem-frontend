@@ -6,41 +6,50 @@
     destroy-on-close
     @update:model-value="$emit('update:modelValue', $event)"
   >
-    <el-form ref="formRef" :model="form" :rules="rules" label-width="100">
-      <el-form-item label="年級" prop="grade_id">
-        <el-select v-model="form.grade_id" :disabled="isEdit" placeholder="選擇年級" style="width: 100%">
-          <el-option v-for="g in grades" :key="g.id" :value="g.id" :label="g.name" />
-        </el-select>
-      </el-form-item>
-      <el-form-item label="學年" prop="school_year">
-        <el-input-number v-model="form.school_year" :min="100" :max="200" :disabled="isEdit" />
-      </el-form-item>
-      <el-form-item label="學期" prop="semester">
-        <el-radio-group v-model="form.semester" :disabled="isEdit">
-          <el-radio :value="1">上學期</el-radio>
-          <el-radio :value="2">下學期</el-radio>
-        </el-radio-group>
-      </el-form-item>
-      <el-form-item label="費用類型" prop="fee_type">
-        <el-radio-group v-model="form.fee_type" :disabled="isEdit">
-          <el-radio value="registration">註冊費</el-radio>
-          <el-radio value="miscellaneous">雜費</el-radio>
-          <el-radio value="monthly">月費</el-radio>
-        </el-radio-group>
-      </el-form-item>
-      <el-form-item label="名稱" prop="name">
-        <el-input v-model="form.name" placeholder="例：114 學年度上學期註冊費" />
-      </el-form-item>
-      <el-form-item label="金額" prop="amount">
-        <el-input-number v-model="form.amount" :min="0" :max="999999" :step="1" :precision="0" />
-      </el-form-item>
-      <el-form-item label="繳費期限">
-        <el-input-number v-model="form.due_date_offset_days" :min="0" :max="365" :step="1" :precision="0" />
-        <span class="hint">天 (產生日起算)</span>
-      </el-form-item>
+    <el-form ref="formRef" :model="form" :rules="rules" label-position="top">
+      <p class="required-legend"><span class="req">*</span> 為必填，其餘可日後補</p>
 
-      <template v-if="form.fee_type === 'monthly'">
-        <el-divider>月費組成 (退費依此計算)</el-divider>
+      <!-- 範本識別：新增常駐、編輯收合（後端 unique key，編輯不可變更） -->
+      <FormSection data-test="section-identity" title="範本識別" :collapsible="isEdit" :default-open="!isEdit">
+        <el-form-item label="年級" prop="grade_id">
+          <el-select v-model="form.grade_id" :disabled="isEdit" placeholder="選擇年級" style="width: 100%">
+            <el-option v-for="g in grades" :key="g.id" :value="g.id" :label="g.name" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="學年" prop="school_year">
+          <el-input-number v-model="form.school_year" :min="100" :max="200" :disabled="isEdit" />
+        </el-form-item>
+        <el-form-item label="學期" prop="semester">
+          <el-radio-group v-model="form.semester" :disabled="isEdit">
+            <el-radio :value="1">上學期</el-radio>
+            <el-radio :value="2">下學期</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="費用類型" prop="fee_type">
+          <el-radio-group v-model="form.fee_type" :disabled="isEdit">
+            <el-radio value="registration">註冊費</el-radio>
+            <el-radio value="miscellaneous">雜費</el-radio>
+            <el-radio value="monthly">月費</el-radio>
+          </el-radio-group>
+        </el-form-item>
+      </FormSection>
+
+      <!-- 費用內容 -->
+      <FormSection title="費用內容" :collapsible="false">
+        <el-form-item label="名稱" prop="name">
+          <el-input v-model="form.name" placeholder="例：114 學年度上學期註冊費" />
+        </el-form-item>
+        <el-form-item label="金額" prop="amount">
+          <el-input-number v-model="form.amount" :min="0" :max="999999" :step="1" :precision="0" />
+        </el-form-item>
+        <el-form-item label="繳費期限">
+          <el-input-number v-model="form.due_date_offset_days" :min="0" :max="365" :step="1" :precision="0" />
+          <span class="hint">天 (產生日起算)</span>
+        </el-form-item>
+      </FormSection>
+
+      <!-- 月費組成（僅月費，退費依此計算） -->
+      <FormSection v-if="form.fee_type === 'monthly'" title="月費組成（退費依此計算）" :collapsible="false">
         <el-form-item label="學費 (不退)">
           <el-input-number v-model="breakdown.tuition" :min="0" :step="1" :precision="0" />
         </el-form-item>
@@ -58,7 +67,7 @@
             必須等於金額才能儲存
           </span>
         </el-form-item>
-      </template>
+      </FormSection>
     </el-form>
 
     <template #footer>
@@ -75,6 +84,7 @@ import { ref, computed, reactive, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { FormInstance } from 'element-plus'
 import { createFeeTemplate, updateFeeTemplate } from '@/api/fees'
+import FormSection from '@/components/common/FormSection.vue'
 
 interface Grade {
   id: number
@@ -225,4 +235,6 @@ async function onSave() {
   margin-left: 12px;
   font-size: 12px;
 }
+.required-legend { font-size: 12px; color: var(--el-text-color-secondary); margin: 0 0 14px; }
+.required-legend .req { color: var(--el-color-danger); }
 </style>
