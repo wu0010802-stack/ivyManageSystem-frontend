@@ -1,0 +1,9 @@
+/* src/styles/form-hint.css */
+/* 表單欄位下方的就地說明 / 格式範例 */
+.form-hint {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--el-text-color-secondary);
+  margin-top: 4px;
+}
+.form-hint--example { color: var(--el-text-color-placeholder); }
