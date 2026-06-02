@@ -13,6 +13,9 @@ import OffboardingModal from '@/components/offboarding/OffboardingModal.vue'
 import { getRecords as getAttendanceRecords, uploadCsv, deleteEmployeeDateRecord } from '@/api/attendance'
 import { getPositionSalary } from '@/api/config'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import type { FormInstance, FormRules } from 'element-plus'
+import FormSection from '@/components/common/FormSection.vue'
+import { sectionForField } from '@/constants/employeeFormSections'
 import EmptyState from '@/components/common/EmptyState.vue'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
 import { useEmployeeStore } from '@/stores/employee'
@@ -49,15 +52,24 @@ const configStore = useConfigStore()
 const loading = ref(false)
 const currentDetail = ref<Record<string, unknown>>({})
 const detailDialogVisible = ref(false)
-const formRef = ref<{ validate: () => Promise<void> } | null>(null)
+const formRef = ref<FormInstance | null>(null)
+const basicFormRef = ref<{ applyValidationErrors: (p: string[]) => void } | null>(null)
+const salarySectionRef = ref<{ expand: () => void } | null>(null)
+const salarySectionErrors = ref(0)
 
 // ── 權限 ──────────────────────────────────────────────
 const canWriteEmployees = computed(() => hasPermission('EMPLOYEES_WRITE'))
 const canWriteSalary = computed(() => hasPermission('SALARY_WRITE'))
 
-const rules = {
-  employee_id: [{ required: true, message: '請輸入員工編號', trigger: 'blur' }],
-  name: [{ required: true, message: '請輸入姓名', trigger: 'blur' }]
+const rules: FormRules = {
+  // 後端 EmployeeCreate 真正必填只有 name；employee_id 由後端自動配號，不再強制
+  name: [{ required: true, message: '請輸入姓名', trigger: 'blur' }],
+  supervisor_role: [{ pattern: /^(園長|主任|組長|副組長)$/, message: '主管職不正確', trigger: 'change' }],
+  bonus_grade: [{ pattern: /^[ABC]$/, message: '獎金等級僅接受 A / B / C', trigger: 'change' }],
+  pension_self_rate: [{ type: 'number', min: 0, max: 0.06, message: '勞退自提率需介於 0–0.06', trigger: 'blur' }],
+  extra_dependents_quarterly: [{ type: 'number', min: 0, max: 10, message: '加保眷屬數需介於 0–10', trigger: 'blur' }],
+  insurance_salary_override_reason: [{ max: 200, message: '不可超過 200 字', trigger: 'blur' }],
+  teacher_cert_no: [{ max: 50, message: '不可超過 50 字', trigger: 'blur' }],
 }
 
 const positionSalaryConfig = ref<Record<string, number> | null>(null)
@@ -653,15 +665,25 @@ const handleDetail = async (row: Record<string, unknown>) => {
 
 // ── 新增流程（CREATE）────────────────────────────────
 const saveCreate = async () => {
-  if (!formRef.value) return
+  const formEl = formRef.value
+  if (!formEl) return
   form.supervisor_role = form.supervisor_role || null
   form.bonus_grade = form.bonus_grade ? (form.bonus_grade as string).toUpperCase() : null
   if (form.bonus_grade && !['A', 'B', 'C'].includes(form.bonus_grade as string)) {
     ElMessage.error('獎金等級覆蓋僅接受 A / B / C')
     return
   }
-  try {
-    await formRef.value.validate()
+  formEl.validate(async (valid, invalidFields) => {
+    if (!valid) {
+      const props = Object.keys(invalidFields ?? {})
+      basicFormRef.value?.applyValidationErrors(props)
+      const salaryProps = props.filter(p => sectionForField(p) === 'salary')
+      salarySectionErrors.value = salaryProps.length
+      if (salaryProps.length > 0) salarySectionRef.value?.expand()
+      await nextTick()
+      if (props[0]) formEl.scrollToField(props[0])
+      return
+    }
     try {
       await createEmployee(form)
       ElMessage.success('員工已新增')
@@ -670,9 +692,7 @@ const saveCreate = async () => {
     } catch (err) {
       showError(err)
     }
-  } catch {
-    // validation failed, form shows error messages
-  }
+  })
 }
 
 // ── 基本資料更新（只送 dirty fields）────────────────
@@ -826,19 +846,29 @@ onMounted(async () => {
       :top="isMobile ? '0' : '15vh'"
       :fullscreen="isMobile"
     >
-      <el-form :model="form" :rules="rules" ref="formRef" label-width="140px">
-        <el-tabs type="border-card" v-model="activeTab">
-          <el-tab-pane label="基本資料" name="basic">
-            <EmployeeFormBasic
-              :form="formAsBasicData"
-              :bureau-job-title-options="bureauJobTitleOptions"
-              :classroom-options="classroomOptions"
-              :is-self-edit="isSelfEdit"
-              :pending-suggestion="pendingSuggestion"
-              :suggested-salary="suggestedSalary"
-            />
-          </el-tab-pane>
-          <el-tab-pane label="薪資 / 投保 / 銀行" name="salary">
+      <el-form :model="form" :rules="rules" ref="formRef" label-position="top">
+        <!-- 新增：單捲動（核心 + 收合區段） -->
+        <template v-if="!isEdit">
+          <p class="required-legend"><span class="req">*</span> 為必填，其餘可日後補</p>
+          <EmployeeFormBasic
+            ref="basicFormRef"
+            :form="formAsBasicData"
+            :bureau-job-title-options="bureauJobTitleOptions"
+            :classroom-options="classroomOptions"
+            :is-self-edit="isSelfEdit"
+          />
+          <FormSection
+            ref="salarySectionRef"
+            title="薪資・投保・銀行"
+            collapsible
+            :default-open="false"
+            :badge-count="salarySectionErrors"
+            badge-type="error"
+          >
+            <el-alert
+              v-if="pendingSuggestion"
+              type="info" :closable="false" show-icon style="margin-bottom:12px"
+            >依職稱建議底薪 {{ Number(suggestedSalary).toLocaleString() }}，可於下方套用</el-alert>
             <EmployeeFormSalary
               :form="form"
               :is-readonly="isSalaryReadonly"
@@ -850,8 +880,37 @@ onMounted(async () => {
               @dismiss-suggestion="dismissSuggestion"
               @sync-insurance="syncInsuranceToBase"
             />
-          </el-tab-pane>
-        </el-tabs>
+          </FormSection>
+        </template>
+
+        <!-- 編輯：維持既有兩分頁 + dirty/preview/reason-gate -->
+        <template v-else>
+          <el-tabs type="border-card" v-model="activeTab">
+            <el-tab-pane label="基本資料" name="basic">
+              <EmployeeFormBasic
+                :form="formAsBasicData"
+                :bureau-job-title-options="bureauJobTitleOptions"
+                :classroom-options="classroomOptions"
+                :is-self-edit="isSelfEdit"
+                :pending-suggestion="pendingSuggestion"
+                :suggested-salary="suggestedSalary"
+              />
+            </el-tab-pane>
+            <el-tab-pane label="薪資 / 投保 / 銀行" name="salary">
+              <EmployeeFormSalary
+                :form="form"
+                :is-readonly="isSalaryReadonly"
+                :readonly-reason="salaryReadonlyReason"
+                :pending-suggestion="pendingSuggestion"
+                :suggested-salary="suggestedSalary"
+                :insurance-error="insuranceError"
+                @apply-suggestion="applySuggestion"
+                @dismiss-suggestion="dismissSuggestion"
+                @sync-insurance="syncInsuranceToBase"
+              />
+            </el-tab-pane>
+          </el-tabs>
+        </template>
       </el-form>
       <template #footer>
         <template v-if="!isEdit">
@@ -1242,6 +1301,9 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+.required-legend { font-size: 12px; color: var(--el-text-color-secondary); margin: 0 0 14px; }
+.required-legend .req { color: var(--el-color-danger); }
+
 .dialog-footer {
   display: flex;
   justify-content: flex-end;
