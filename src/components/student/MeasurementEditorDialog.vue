@@ -2,6 +2,7 @@
 import { ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { createMeasurement, updateMeasurement } from '@/api/studentMeasurements'
+import FormSection from '@/components/common/FormSection.vue'
 
 // 幼兒園學童常見範圍；超出時提示確認以避免誤輸入污染成長曲線
 const PLAUSIBLE_RANGES: Record<string, { min: number; max: number; label: string }> = {
@@ -163,7 +164,7 @@ function handleClose() {
     @update:model-value="handleClose"
     @close="handleClose"
   >
-    <el-form label-width="110px" label-position="right">
+    <el-form label-position="top">
       <el-form-item label="量測日期" required>
         <el-date-picker
           v-model="form.measured_on"
@@ -210,38 +211,39 @@ function handleClose() {
         />
       </el-form-item>
 
-      <el-form-item label="左眼視力">
-        <el-input-number
-          v-model="form.vision_left"
-          :precision="2"
-          :min="0"
-          :max="3"
-          :controls="false"
-          style="width: 100%"
-          placeholder="選填"
-        />
-      </el-form-item>
-
-      <el-form-item label="右眼視力">
-        <el-input-number
-          v-model="form.vision_right"
-          :precision="2"
-          :min="0"
-          :max="3"
-          :controls="false"
-          style="width: 100%"
-          placeholder="選填"
-        />
-      </el-form-item>
-
-      <el-form-item label="備註">
-        <el-input
-          v-model="form.note"
-          type="textarea"
-          :rows="3"
-          placeholder="選填"
-        />
-      </el-form-item>
+      <!-- 視力與備註（選填） -->
+      <FormSection data-test="section-extra" title="視力與備註（選填）" collapsible :default-open="false">
+        <el-form-item label="左眼視力">
+          <el-input-number
+            v-model="form.vision_left"
+            :precision="2"
+            :min="0"
+            :max="3"
+            :controls="false"
+            style="width: 100%"
+            placeholder="選填"
+          />
+        </el-form-item>
+        <el-form-item label="右眼視力">
+          <el-input-number
+            v-model="form.vision_right"
+            :precision="2"
+            :min="0"
+            :max="3"
+            :controls="false"
+            style="width: 100%"
+            placeholder="選填"
+          />
+        </el-form-item>
+        <el-form-item label="備註">
+          <el-input
+            v-model="form.note"
+            type="textarea"
+            :rows="3"
+            placeholder="選填"
+          />
+        </el-form-item>
+      </FormSection>
     </el-form>
 
     <template #footer>
