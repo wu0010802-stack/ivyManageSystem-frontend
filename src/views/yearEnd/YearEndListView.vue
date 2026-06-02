@@ -113,9 +113,11 @@ onMounted(load)
       <el-table-column label="學年" prop="academic_year" width="100" />
       <el-table-column label="基準日" prop="bonus_calc_date" width="160" />
       <el-table-column label="狀態" prop="status" width="120" />
-      <el-table-column label="操作" width="320">
+      <el-table-column label="操作" width="460">
         <template #default="{ row }">
           <el-button size="small" @click="router.push(`/year_end/cycles/${row.id}`)">明細</el-button>
+          <el-button size="small" @click="router.push(`/year_end/cycles/${row.id}/grid`)">總表</el-button>
+          <el-button size="small" @click="router.push(`/year_end/cycles/${row.id}/config`)">設定</el-button>
           <el-button size="small" :icon="Download" tag="a"
             :href="exportYearEndSummaryXlsxUrl(row.id)">年終獎金總表</el-button>
           <el-button size="small" :icon="Download" tag="a"

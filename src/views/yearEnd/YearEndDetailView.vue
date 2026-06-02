@@ -15,6 +15,7 @@ import {
   exportYearEndTransferRosterXlsxUrl,
 } from '@/api/yearEnd'
 import { apiError } from '@/utils/error'
+import { hasPermission } from '@/utils/auth'
 
 interface Settlement { id: number; employee_id: number; status: string; total_amount?: number | string; [key: string]: unknown }
 interface SpecialBonus { id: number; employee_id: number; bonus_type: string; period_label: string; amount: number | string; classroom_id?: number }
@@ -111,14 +112,25 @@ onMounted(load)
               <el-tag size="small">{{ statusLabel(row.status) }}</el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="簽核" width="200">
+          <el-table-column label="簽核" width="220">
             <template #default="{ row }">
-              <el-button v-if="row.status === 'DRAFT'"
-                size="small" @click="sign(row, 'supervisor')">主管簽</el-button>
-              <el-button v-else-if="row.status === 'SUPERVISOR_SIGNED'"
-                size="small" @click="sign(row, 'accounting')">會計簽</el-button>
-              <el-button v-else-if="row.status === 'ACCOUNTING_SIGNED'"
-                size="small" type="primary" @click="sign(row, 'finalize')">核定</el-button>
+              <!-- 兩關流程：DRAFT → 會計簽核 → 老闆核定 -->
+              <el-button
+                v-if="row.status === 'DRAFT' && hasPermission('APPRAISAL_ACCOUNTING')"
+                size="small"
+                @click="sign(row, 'accounting')"
+              >會計簽核</el-button>
+              <el-button
+                v-else-if="row.status === 'ACCOUNTING_SIGNED' && hasPermission('YEAR_END_FINALIZE')"
+                size="small"
+                type="primary"
+                @click="sign(row, 'finalize')"
+              >老闆核定</el-button>
+              <el-tag
+                v-else-if="row.status === 'FINALIZED'"
+                type="success"
+                size="small"
+              >已核定</el-tag>
             </template>
           </el-table-column>
         </el-table>
