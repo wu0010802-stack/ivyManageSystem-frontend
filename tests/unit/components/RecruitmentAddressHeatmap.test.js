@@ -49,12 +49,15 @@ const leafletMarker = vi.fn(() => ({
   bindPopup: vi.fn().mockReturnThis(),
   addListener: vi.fn(),
 }))
+// markercluster：回傳與 layerGroup 相容的 mock（addLayer/clearLayers/addTo）
+const markerClusterGroup = vi.fn(() => mockMarkerLayer)
 
 vi.mock('leaflet', () => ({
   default: {
     map: leafletMap,
     tileLayer: leafletTileLayer,
     layerGroup: leafletLayerGroup,
+    markerClusterGroup,
     circleMarker,
     circle,
     divIcon,
@@ -63,11 +66,16 @@ vi.mock('leaflet', () => ({
   map: leafletMap,
   tileLayer: leafletTileLayer,
   layerGroup: leafletLayerGroup,
+  markerClusterGroup,
   circleMarker,
   circle,
   divIcon,
   marker: leafletMarker,
 }))
+
+// leaflet.markercluster 以 side-effect 擴展 L；測試用 layerGroup mock 取代，
+// 故 mock 成 no-op，避免載入真實 UMD（引用全域 L → ReferenceError）。
+vi.mock('leaflet.markercluster', () => ({}))
 
 const ElButton = defineComponent({
   name: 'ElButton',
