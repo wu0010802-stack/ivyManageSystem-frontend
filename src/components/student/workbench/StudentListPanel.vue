@@ -369,8 +369,8 @@ onUnmounted(() => {
 
 onMounted(async () => {
   applyRouteContext()
-  await loadClassrooms()
-  await fetchStudents()
+  // loadClassrooms 與 fetchStudents 無依賴可並行；handleRouteAction 依賴 students 已載入故保留序列
+  await Promise.all([loadClassrooms(), fetchStudents()])
   await handleRouteAction()
 })
 </script>
