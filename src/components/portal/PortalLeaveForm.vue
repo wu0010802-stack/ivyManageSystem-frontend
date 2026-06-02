@@ -17,6 +17,7 @@ import {
 } from '@/utils/leaves'
 import { apiError } from '@/utils/error'
 import { useLeaveHoursCalculator } from '@/composables/useLeaveHoursCalculator'
+import FormSection from '@/components/common/FormSection.vue'
 
 withDefaults(defineProps<{
   allEmployees?: Record<string, unknown>[]
@@ -387,19 +388,21 @@ const submitLeave = async () => {
         </div>
       </el-form-item>
 
-      <el-form-item label="職務代理人">
-        <el-select
-          v-model="form.substitute_employee_id"
-          filterable clearable
-          placeholder="請選擇代理人（選填）"
-          style="width: 100%;"
-        >
-          <el-option v-for="emp in allEmployees" :key="(emp.id as number | string)" :label="(emp.name as string)" :value="(emp.id as number | string)" />
-        </el-select>
-        <div style="margin-top: 4px; font-size: 12px; color: var(--el-text-color-secondary);">
-          選填：指定代理人後，需代理人接受後主管才能核准假單
-        </div>
-      </el-form-item>
+      <FormSection title="進階（選填）" collapsible :default-open="false">
+        <el-form-item label="職務代理人">
+          <el-select
+            v-model="form.substitute_employee_id"
+            filterable clearable
+            placeholder="請選擇代理人（選填）"
+            style="width: 100%;"
+          >
+            <el-option v-for="emp in allEmployees" :key="(emp.id as number | string)" :label="(emp.name as string)" :value="(emp.id as number | string)" />
+          </el-select>
+          <div style="margin-top: 4px; font-size: 12px; color: var(--el-text-color-secondary);">
+            選填：指定代理人後，需代理人接受後主管才能核准假單
+          </div>
+        </el-form-item>
+      </FormSection>
 
       <el-form-item label="原因" prop="reason">
         <el-input v-model="form.reason" type="textarea" :rows="3" placeholder="請輸入請假原因" />
