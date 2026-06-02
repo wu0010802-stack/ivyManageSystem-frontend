@@ -6,7 +6,7 @@
     width="580px"
     @closed="onClosed"
   >
-    <el-form label-width="100px">
+    <el-form label-position="top">
       <el-form-item v-if="!lockStudent" label="班級">
         <el-select
           v-model="pickedClassroomId"
@@ -36,16 +36,6 @@
           <el-option v-for="t in ASSESSMENT_TYPES" :key="t" :label="t" :value="t" />
         </el-select>
       </el-form-item>
-      <el-form-item label="領域">
-        <el-select v-model="form.domain" placeholder="選擇領域" clearable style="width: 100%">
-          <el-option v-for="d in DOMAINS" :key="d" :label="d" :value="d" />
-        </el-select>
-      </el-form-item>
-      <el-form-item label="評等">
-        <el-select v-model="form.rating" placeholder="選擇評等" clearable style="width: 100%">
-          <el-option v-for="r in RATINGS" :key="r" :label="r" :value="r" />
-        </el-select>
-      </el-form-item>
       <el-form-item label="評量日期 *">
         <el-date-picker
           v-model="form.assessment_date"
@@ -58,25 +48,39 @@
       <el-form-item label="評量內容 *">
         <el-input v-model="form.content" type="textarea" :rows="4" placeholder="請描述評量觀察內容" />
       </el-form-item>
-      <el-form-item label="改善建議">
-        <el-input v-model="form.suggestions" type="textarea" :rows="2" placeholder="改善建議（選填）" />
-      </el-form-item>
-      <el-form-item label="關聯事件">
-        <el-select
-          v-model="form.related_incident_id"
-          placeholder="（選填）引用本生既有事件"
-          clearable
-          :loading="incidentsLoading"
-          style="width: 100%"
-        >
-          <el-option
-            v-for="inc in incidentOptions"
-            :key="inc.id as PropertyKey"
-            :label="`${(inc.occurred_at as string | undefined)?.slice(0, 10) || ''}　${inc.incident_type || ''}`"
-            :value="(inc.id as number)"
-          />
-        </el-select>
-      </el-form-item>
+
+      <!-- 補充（選填） -->
+      <FormSection data-test="section-extra" title="補充（選填）" collapsible :default-open="false">
+        <el-form-item label="領域">
+          <el-select v-model="form.domain" placeholder="選擇領域" clearable style="width: 100%">
+            <el-option v-for="d in DOMAINS" :key="d" :label="d" :value="d" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="評等">
+          <el-select v-model="form.rating" placeholder="選擇評等" clearable style="width: 100%">
+            <el-option v-for="r in RATINGS" :key="r" :label="r" :value="r" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="改善建議">
+          <el-input v-model="form.suggestions" type="textarea" :rows="2" placeholder="改善建議（選填）" />
+        </el-form-item>
+        <el-form-item label="關聯事件">
+          <el-select
+            v-model="form.related_incident_id"
+            placeholder="（選填）引用本生既有事件"
+            clearable
+            :loading="incidentsLoading"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="inc in incidentOptions"
+              :key="inc.id as PropertyKey"
+              :label="`${(inc.occurred_at as string | undefined)?.slice(0, 10) || ''}　${inc.incident_type || ''}`"
+              :value="(inc.id as number)"
+            />
+          </el-select>
+        </el-form-item>
+      </FormSection>
     </el-form>
     <template #footer>
       <el-button @click="emit('update:visible', false)">取消</el-button>
@@ -93,6 +97,7 @@ import { getStudents } from '@/api/students'
 import { getIncidents } from '@/api/studentIncidents'
 import { useStudentRecordsStore } from '@/stores/studentRecords'
 import { apiError } from '@/utils/error'
+import FormSection from '@/components/common/FormSection.vue'
 
 const props = withDefaults(defineProps<{
   visible?: boolean
