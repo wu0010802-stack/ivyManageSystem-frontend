@@ -46,8 +46,25 @@ function manualChunks(id) {
         id.includes('/src/utils/format.ts') ||
         id.includes('/src/utils/apiDedupe.ts') ||
         id.includes('/src/utils/offlineQueue.ts') ||
+        // academic：學年/民國年純函式 util（EP-free），admin（活動/考核）與家長端
+        // LeavesView 皆用。未顯式指派時 Rollup 把它複製進 admin-core + activity-admin
+        // 兩個 chunk，且家長端 import 它 → parent-app 靜態橋接 activity-admin（53KB gz
+        // admin 程式碼）。釘到 shared-common 同時 de-dup 並切斷 parent→activity-admin。
+        id.includes('/src/utils/academic.ts') ||
         id.includes('/src/composables/useCachedAsync.ts') ||
         id.includes('/src/components/common/MobileErrorRetry.vue')
+    ) {
+        return 'shared-common'
+    }
+
+    // 全域樣式（design-tokens / a11y）：被三個 entry 的 main.ts 直接 import。
+    // 不顯式指派時 Rollup 會把它們併進 parent-app chunk 的 CSS，導致 admin 的
+    // main 為了載入這份 CSS 而裸 `import"./parent-app.js"` → 連帶在 admin boot
+    // 執行 parent-app 的 LIFF init（liff.init() + 失敗的 /api/parent 401/403 呼叫）。
+    // 釘到 shared-common（三端皆載、admin 本就載）即切斷此 admin→parent-app 橋接。
+    if (
+        id.includes('/src/assets/design-tokens.css') ||
+        id.includes('/src/assets/a11y.css')
     ) {
         return 'shared-common'
     }
@@ -117,6 +134,50 @@ function manualChunks(id) {
     // views/public/* 由 router lazy dynamic import 落 ActivityPublicView 各自 chunk。
     if (id.includes('/src/public/')) {
         return 'public-app'
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    // Feature-lib peel：以下套件各自只服務「單一 lazy route / 單一 entry」。
+    // 既有程式已用動態 import / lazy route 做隔離，但若 fall through 到下方
+    // node_modules catch-all（→ vendor）就會被 admin / parent / public 三個
+    // entry 全部 eager 載入，把既有的 code-splitting 默默抵銷掉。比照
+    // leaflet / fullcalendar / chart 抽成獨立 chunk，回歸「用到才載」。
+    // ⚠ 必須置於下方 node_modules catch-all 之前。
+
+    // Sentry SDK：utils/sentry.ts 以 `await import('@sentry/vue')` 懶載入，
+    // 且僅在有 VITE_SENTRY_DSN 時才會載入（無 DSN → SDK 完全不下載）。落進
+    // vendor 時會變成預設情境下「三端 eager 載入卻 no-op」的死碼（且為 vendor
+    // 最大宗）。抽出後回歸 async chunk：無 DSN = 0 bytes，有 DSN = boot 後
+    // 非阻塞載入。全 src 無任何靜態 `@sentry/*` import（axios 攔截器走
+    // utils/sentry 的 captureException wrapper，而非直接依賴 @sentry/*），
+    // 故此 chunk 不會被任何 eager chunk static-import → 確定為純 async。
+    if (
+        id.includes('/node_modules/@sentry/') ||
+        id.includes('/node_modules/@sentry-internal/')
+    ) {
+        return 'sentry'
+    }
+
+    // vuedraggable（+ 其相依 sortablejs）：僅招生漏斗 FunnelColumn.vue（lazy
+    // route）用到拖拉排序。sortablejs 無其他直接 import，隨 vuedraggable 抽出。
+    if (
+        id.includes('/node_modules/vuedraggable/') ||
+        id.includes('/node_modules/sortablejs/')
+    ) {
+        return 'draggable'
+    }
+
+    // qrcode：僅 portal 個人頁 PortalProfileView.vue 產生 QR code 用到。
+    if (id.includes('/node_modules/qrcode/')) {
+        return 'qrcode'
+    }
+
+    // marked + dompurify：僅家長端 FAQ FaqAnswer.vue 渲染 + 消毒 markdown 用到。
+    if (
+        id.includes('/node_modules/marked/') ||
+        id.includes('/node_modules/dompurify/')
+    ) {
+        return 'markdown'
     }
 
     // Leaflet 地圖庫只在 RecruitmentAddressHeatmap.vue（招生熱力圖）動態 import 用到。
