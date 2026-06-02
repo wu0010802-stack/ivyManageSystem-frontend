@@ -29,7 +29,6 @@ const orgEdits = ref<
     string,
     {
       enrollment_target: number
-      org_achievement_rate: number
       meeting_absence_deduction: number
     }
   >
@@ -96,7 +95,6 @@ async function loadOrgSettings() {
       const key = String(row.semester_first)
       orgEdits.value[key] = {
         enrollment_target: row.enrollment_target,
-        org_achievement_rate: Number(row.org_achievement_rate),
         meeting_absence_deduction: Number(row.meeting_absence_deduction),
       }
     }
@@ -157,9 +155,9 @@ async function saveOrgSettings(row: OrgSettingsRow) {
     await postOrgSettings(cycleId, {
       semester_first: row.semester_first,
       enrollment_target: edits.enrollment_target,
-      org_achievement_rate: edits.org_achievement_rate,
+      // Echo back auto-computed fields (not user-editable) to satisfy required schema fields
+      org_achievement_rate: Number(row.org_achievement_rate),
       meeting_absence_deduction: edits.meeting_absence_deduction,
-      // Echo back auto-computed fields to satisfy required schema fields
       school_achievement_rate: Number(row.school_achievement_rate),
       enrollment_actual: row.enrollment_actual,
     })
@@ -264,26 +262,8 @@ onMounted(async () => {
               <span class="readonly-val">{{ pctNum(row.school_achievement_rate) }}</span>
             </el-form-item>
             <el-form-item label="機構達成率">
-              <template #label>
-                <span>機構達成率
-                  <el-tooltip content="留空（0）則由系統用兩學期平均自動計算；可手動覆寫">
-                    <el-icon class="hint-icon"><span>?</span></el-icon>
-                  </el-tooltip>
-                </span>
-              </template>
-              <el-input-number
-                v-if="canWrite && orgEdits[String(row.semester_first)]"
-                v-model="orgEdits[String(row.semester_first)].org_achievement_rate"
-                :min="0"
-                :max="200"
-                :step="0.1"
-                :precision="1"
-                controls-position="right"
-                style="width: 180px"
-                :data-test="`input-org-rate-${row.semester_first}`"
-              />
-              <span v-else>{{ pctNum(row.org_achievement_rate) }}</span>
-              <span class="field-hint">（留預設則由系統用兩學期平均）</span>
+              <span class="readonly-val" :data-test="`display-org-rate-${row.semester_first}`">{{ pctNum(row.org_achievement_rate) }}</span>
+              <span class="field-hint">由系統依兩學期全校達成率平均自動計算（手動覆寫為後續階段）</span>
             </el-form-item>
             <el-form-item label="缺會議扣款（元）">
               <el-input-number

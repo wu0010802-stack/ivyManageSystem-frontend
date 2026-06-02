@@ -155,14 +155,14 @@ describe('YearEndConfigView', () => {
     const wrapper = await mountView()
     const vm = wrapper.vm as unknown as {
       orgSettings: OrgRow[]
-      orgEdits: Record<string, { enrollment_target: number }>
+      orgEdits: Record<string, { enrollment_target: number; meeting_absence_deduction: number }>
       cycleId: number
     }
 
     expect(vm.orgSettings).toHaveLength(2)
     expect(vm.orgSettings[0].enrollment_target).toBe(160)
     expect(vm.orgSettings[1].enrollment_target).toBe(155)
-    // Edit buffers seeded
+    // Edit buffers seeded (org_achievement_rate is no longer in edits — it's read-only/echoed from row)
     expect(vm.orgEdits['true'].enrollment_target).toBe(160)
     expect(vm.orgEdits['false'].enrollment_target).toBe(155)
     expect(vm.cycleId).toBe(5)
@@ -170,7 +170,8 @@ describe('YearEndConfigView', () => {
   })
 
   // Case 2: save org settings → postOrgSettings called with edited enrollment_target
-  it('save org settings calls postOrgSettings with edited enrollment_target', async () => {
+  // and org_achievement_rate echoed from row (not editable — backend computes it)
+  it('save org settings calls postOrgSettings with edited enrollment_target and echoed org_achievement_rate', async () => {
     const orgRow = makeOrgRow({ semester_first: true, enrollment_target: 160 })
     // Mock both calls: initial load + reload after save
     vi.mocked(yearEndApi.getOrgSettings)
@@ -184,7 +185,7 @@ describe('YearEndConfigView', () => {
 
     const wrapper = await mountView()
     const vm = wrapper.vm as unknown as {
-      orgEdits: Record<string, { enrollment_target: number }>
+      orgEdits: Record<string, { enrollment_target: number; meeting_absence_deduction: number }>
       saveOrgSettings: (row: OrgRow) => Promise<void>
       orgSettings: OrgRow[]
     }
@@ -201,6 +202,8 @@ describe('YearEndConfigView', () => {
         enrollment_target: 170,
         // school_achievement_rate echoed back as number: Number('93.75') = 93.75
         school_achievement_rate: 93.75,
+        // org_achievement_rate echoed from row (read-only — backend computes from two school rates)
+        org_achievement_rate: 83.6,
       }),
     )
     expect(vi.mocked(ElMessage.success)).toHaveBeenCalledWith(
