@@ -1,14 +1,12 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { getUserInfo, hasPermission } from '@/utils/auth'
+import { getUserInfo } from '@/utils/auth'
 import OverviewPanel from './reports/OverviewPanel.vue'
 import FinanceSummaryPanel from './reports/FinanceSummaryPanel.vue'
 import MonthlyPnLPanel from './reports/MonthlyPnLPanel.vue'
 import MonthlyFixedCostPanel from './reports/MonthlyFixedCostPanel.vue'
 import AttendancePanel from './reports/AttendancePanel.vue'
 import SalaryPanel from './reports/SalaryPanel.vue'
-import FunnelPanel from '@/views/analytics/FunnelPanel.vue'
-import ChurnPanel from '@/views/analytics/ChurnPanel.vue'
 
 const viewerName = computed(() => {
   const info = getUserInfo()
@@ -18,7 +16,6 @@ const viewerName = computed(() => {
 const currentYear = new Date().getFullYear()
 const selectedYear = ref(currentYear)
 const activeTab = ref('overview')
-const canSeeAnalytics = computed(() => hasPermission('BUSINESS_ANALYTICS'))
 </script>
 
 <template>
@@ -51,12 +48,6 @@ const canSeeAnalytics = computed(() => hasPermission('BUSINESS_ANALYTICS'))
       </el-tab-pane>
       <el-tab-pane label="薪資" name="salary">
         <SalaryPanel v-if="activeTab === 'salary'" :key="selectedYear" :year="selectedYear" />
-      </el-tab-pane>
-      <el-tab-pane v-if="canSeeAnalytics" label="招生漏斗" name="funnel">
-        <FunnelPanel v-if="activeTab === 'funnel'" />
-      </el-tab-pane>
-      <el-tab-pane v-if="canSeeAnalytics" label="流失預警" name="churn">
-        <ChurnPanel v-if="activeTab === 'churn'" />
       </el-tab-pane>
     </el-tabs>
   </div>
