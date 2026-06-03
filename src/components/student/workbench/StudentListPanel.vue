@@ -5,7 +5,7 @@ import { getStudents } from '@/api/students'
 import { getClassrooms } from '@/api/classrooms'
 import { createDismissalCall, getDismissalCalls } from '@/api/dismissalCalls'
 import { ElMessage } from 'element-plus'
-import { Search, Plus, Edit, Delete, Warning, Van } from '@element-plus/icons-vue'
+import { Search, Plus, Edit, Warning, ArrowDown } from '@element-plus/icons-vue'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
 import { useConfirmDelete } from '@/composables'
 import { apiError } from '@/utils/error'
@@ -270,7 +270,7 @@ const handleEditSaved = () => {
   fetchStudents()
 }
 
-const { confirmDelete: handleDelete, deleting: deleteLoading } = useConfirmDelete({
+const { confirmDelete: handleDelete } = useConfirmDelete({
   endpoint: '/students',
   onSuccess: (row: unknown) => {
     domainBus.emit(STUDENT_EVENTS.DELETED, { id: (row as { id?: number })?.id })
@@ -278,6 +278,13 @@ const { confirmDelete: handleDelete, deleting: deleteLoading } = useConfirmDelet
   },
   successMsg: '刪除成功',
 })
+
+// 列內次要操作收進「更多」dropdown，降低每列動作密度
+const handleRowCommand = (command: string, row: StudentRow) => {
+  if (command === 'notify') handleNotifyDismissal(row)
+  else if (command === 'graduate') openGraduateDialog(row)
+  else if (command === 'delete') handleDelete(row)
+}
 
 const applyRouteContext = () => {
   const parsedSemester = Number(route.query.semester)
@@ -465,8 +472,8 @@ onMounted(async () => {
       </el-table-column>
       <el-table-column label="性別" width="70">
         <template #default="{ row }">
-          <el-tag v-if="row.gender === '男'" type="primary" size="small">男</el-tag>
-          <el-tag v-else-if="row.gender === '女'" type="danger" size="small">女</el-tag>
+          <el-tag v-if="row.gender === '男'" size="small" effect="light" class="gender-tag gender-tag--male">男</el-tag>
+          <el-tag v-else-if="row.gender === '女'" size="small" effect="light" class="gender-tag gender-tag--female">女</el-tag>
           <span v-else class="text-muted">-</span>
         </template>
       </el-table-column>
@@ -493,25 +500,29 @@ onMounted(async () => {
           <span v-else class="text-muted">-</span>
         </template>
       </el-table-column>
-      <el-table-column label="操作" min-width="320">
+      <el-table-column label="操作" min-width="200">
         <template #default="scope">
           <el-button size="small" @click="openProfile(scope.row)">檔案</el-button>
           <el-button size="small" :icon="Edit" @click="handleEdit(scope.row)">編輯</el-button>
-          <el-button
+          <el-dropdown
             v-if="activeTab === 'active'"
-            size="small"
-            type="primary"
-            :icon="Van"
-            :disabled="activeCallStudentIds.has(scope.row.id)"
-            @click="handleNotifyDismissal(scope.row)"
-          >{{ activeCallStudentIds.has(scope.row.id) ? '已通知' : '通知放學' }}</el-button>
-          <el-button
-            v-if="activeTab === 'active'"
-            size="small"
-            type="warning"
-            @click="openGraduateDialog(scope.row)"
-          >畢業/轉出</el-button>
-          <el-button v-if="activeTab === 'active'" size="small" type="danger" :icon="Delete" @click="handleDelete(scope.row)" :loading="deleteLoading">刪除</el-button>
+            trigger="click"
+            @command="(cmd: string) => handleRowCommand(cmd, scope.row)"
+          >
+            <el-button size="small">
+              更多<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+            </el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item
+                  command="notify"
+                  :disabled="activeCallStudentIds.has(scope.row.id)"
+                >{{ activeCallStudentIds.has(scope.row.id) ? '已通知放學' : '通知放學' }}</el-dropdown-item>
+                <el-dropdown-item command="graduate">畢業 / 轉出</el-dropdown-item>
+                <el-dropdown-item command="delete" divided class="row-action-danger">刪除</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
         </template>
       </el-table-column>
     </el-table>
@@ -593,6 +604,9 @@ onMounted(async () => {
         <el-form-item label="已選學生">
           <span>{{ selectedStudents.length }} 位</span>
         </el-form-item>
+        <el-form-item label="來源班級">
+          <span>{{ transferSourceClassroomId ? classroomName(transferSourceClassroomId) : '未分班' }}</span>
+        </el-form-item>
         <el-form-item label="目標班級">
           <el-select v-model="transferTargetClassroomId" placeholder="選擇班級" style="width: 100%">
             <el-option
@@ -629,6 +643,24 @@ onMounted(async () => {
   gap: var(--space-3);
   align-items: center;
   flex-wrap: wrap;
-  margin-top: 12px;
+  margin-top: var(--space-3);
+}
+
+/* 性別標籤：以柔色區分，避免用 danger（紅＝危險）誤標女性 */
+.gender-tag--male {
+  --el-tag-bg-color: #eef4fb;
+  --el-tag-border-color: #d6e4f5;
+  --el-tag-text-color: #2f6cb5;
+}
+
+.gender-tag--female {
+  --el-tag-bg-color: #fdeef4;
+  --el-tag-border-color: #f6d4e2;
+  --el-tag-text-color: #a83a73;
+}
+
+/* dropdown 內的刪除動作以危險色凸顯並與其他項分隔 */
+.row-action-danger {
+  color: var(--el-color-danger);
 }
 </style>

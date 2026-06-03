@@ -84,18 +84,18 @@ defineEmits<{ 'retry': [] }>()
 
 <style scoped>
 .section-card {
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
 }
 .section-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-3);
 }
 .section-title {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   font-weight: 600;
 }
 .title-text {
@@ -104,21 +104,21 @@ defineEmits<{ 'retry': [] }>()
 .section-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .open-full-link {
-  font-size: 18px;
-  color: #64748b;
+  font-size: var(--text-xl);
+  color: var(--text-secondary);
   text-decoration: none;
   padding: 0 6px;
 }
 .open-full-link:hover {
-  color: #1d4ed8;
+  color: var(--color-info-darker);
 }
 .section-alert {
-  margin-top: 8px;
+  margin-top: var(--space-2);
 }
 .section-skeleton {
-  padding: 8px 4px;
+  padding: var(--space-2) var(--space-1);
 }
 </style>

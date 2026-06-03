@@ -223,52 +223,52 @@ onMounted(async () => {
 
 <style scoped>
 .today-tasks-panel {
-  padding: 16px 0;
+  padding: var(--space-4) 0;
 }
 
 .panel-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 12px;
+  gap: var(--space-3);
   flex-wrap: wrap;
 }
 
 .panel-subtitle {
-  margin-top: 4px;
-  color: #64748b;
+  margin-top: var(--space-1);
+  color: var(--text-secondary);
 }
 
 .filter-card {
-  margin-top: 16px;
-  border-radius: 12px;
-  background: #f8fafc;
+  margin-top: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--neutral-50);
 }
 
 .filter-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 .filter-item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .filter-label {
-  color: #475569;
-  font-size: 13px;
+  color: var(--neutral-600);
+  font-size: var(--text-sm);
   white-space: nowrap;
 }
 
 .sections-grid {
-  margin-top: 16px;
+  margin-top: var(--space-4);
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  gap: var(--space-4);
 }
 
 @media (max-width: 1280px) {
@@ -278,7 +278,7 @@ onMounted(async () => {
 }
 
 .section-placeholder {
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   min-height: 320px;
 }
 </style>
