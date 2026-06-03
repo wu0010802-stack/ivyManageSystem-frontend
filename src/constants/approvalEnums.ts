@@ -1,8 +1,15 @@
+// submitter 角色 tag（WorkbenchApprovalsView 顯示送單人角色）。
+// 須涵蓋後端 utils/permissions.py ROLE_LABELS 全部 7 角色——送單人可為任何角色
+// （園長/會計也會送假/加班），缺漏會導致 tag 空白。label 為簡寫、語意對齊後端；
+// tag type（顏色）為前端關注點，後端 API 不回傳。
 export const ROLE_TAG_MAP = {
-  teacher:    { label: '教師',   type: 'info' },
+  admin:      { label: '管理員', type: 'danger' },
+  principal:  { label: '園長',   type: 'warning' },
   supervisor: { label: '主管',   type: 'warning' },
   hr:         { label: '人資',   type: 'success' },
-  admin:      { label: '管理員', type: 'danger' },
+  accountant: { label: '會計',   type: 'success' },
+  teacher:    { label: '教師',   type: 'info' },
+  parent:     { label: '家長',   type: 'info' },
 }
 
 export const OVERTIME_TYPE_MAP = {
@@ -14,7 +21,7 @@ export const OVERTIME_TYPE_MAP = {
 // 表單用選項：含費率說明（依勞基法第 24 條）
 export const OVERTIME_TYPES = [
   { value: 'weekday', label: '平日',           desc: '前2h ×1.34，超過2h ×1.67' },
-  { value: 'weekend', label: '假日',           desc: '前2h ×1.33，3~8h ×1.67，超8h ×2.67（最低計2h）' },
+  { value: 'weekend', label: '假日',           desc: '前2h ×1.34，3~8h ×1.67，超8h ×2.67（最低計2h）' },
   { value: 'holiday', label: '例假日/國定假日', desc: '全部 ×2.0' },
 ]
 

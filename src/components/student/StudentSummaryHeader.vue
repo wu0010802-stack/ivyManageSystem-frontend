@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { Warning, Phone, MoreFilled, SwitchButton, ArrowRight } from '@element-plus/icons-vue'
 import { hasPermission } from '@/utils/auth'
+import { LIFECYCLE_LABELS_ADMIN as LIFECYCLE_LABELS, LIFECYCLE_TAG_TYPE as LIFECYCLE_TAG } from '@/constants/lifecycle'
 
 const props = withDefaults(defineProps<{
   profile?: Record<string, unknown> | null
@@ -22,24 +23,7 @@ const emit = defineEmits<{
 const canLifecycleWrite = computed(() => hasPermission('STUDENTS_LIFECYCLE_WRITE'))
 const canStudentsWrite = computed(() => hasPermission('STUDENTS_WRITE'))
 
-const LIFECYCLE_LABELS = {
-  prospect: '招生中',
-  enrolled: '已報到',
-  active: '在學',
-  on_leave: '休學',
-  transferred: '轉出',
-  withdrawn: '退學',
-  graduated: '畢業',
-}
-const LIFECYCLE_TAG = {
-  prospect: 'info',
-  enrolled: 'warning',
-  active: 'success',
-  on_leave: 'warning',
-  transferred: 'info',
-  withdrawn: 'danger',
-  graduated: 'success',
-}
+// lifecycle label（admin 受眾用語）與 tag 改用單一來源 @/constants/lifecycle
 
 const basic = computed(() => (props.profile?.basic as Record<string, unknown>) || {})
 const health = computed(() => (props.profile?.health as Record<string, unknown>) || {})

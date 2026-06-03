@@ -8,6 +8,7 @@ import { apiError } from '@/utils/error'
 import PortalStudentDrawer from '@/components/portal/students/PortalStudentDrawer.vue'
 import PortalMeasurementSheet from '@/components/portal/sheets/PortalMeasurementSheet.vue'
 import PortalMilestoneSheet from '@/components/portal/sheets/PortalMilestoneSheet.vue'
+import { LIFECYCLE_LABELS_PORTAL } from '@/constants/lifecycle'
 
 interface Student { id: number; name?: string; birthday?: string; gender?: string; parent_name?: string; student_id?: string; lifecycle_status?: string; attendance_rate?: number; parent_phone_masked?: string; [key: string]: unknown }
 interface Classroom { classroom_id?: number; classroom_name?: string; student_count?: number; students?: Student[]; [key: string]: unknown }
@@ -119,14 +120,8 @@ function genderTagType(g: string | undefined): TagType {
   return 'info'
 }
 function lifecycleLabel(s: string | undefined): string {
-  return (
-    ({
-      active: '在學',
-      graduated: '畢業',
-      withdrawn: '離校',
-      transferred: '轉學',
-    } as Record<string, string>)[s ?? ''] || ''
-  )
+  // 教師端受眾用語；單一來源含全 7 狀態（補齊 prospect/enrolled/on_leave）
+  return LIFECYCLE_LABELS_PORTAL[s ?? ''] || ''
 }
 
 function attendanceLevel(rate: number | null | undefined): string {

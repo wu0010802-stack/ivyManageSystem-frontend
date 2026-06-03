@@ -110,6 +110,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { transitionStudentLifecycle } from '@/api/students'
+import { LIFECYCLE_LABELS_ADMIN as STATUS_LABELS, ALLOWED_TRANSITIONS } from '@/constants/lifecycle'
 
 const props = withDefaults(defineProps<{
   modelValue?: boolean
@@ -130,26 +131,8 @@ const visible = computed({
   set: (v) => emit('update:modelValue', v),
 })
 
-const STATUS_LABELS: Record<string, string> = {
-  prospect: '招生中',
-  enrolled: '已報到',
-  active: '在學',
-  on_leave: '休學',
-  transferred: '轉出',
-  withdrawn: '退學',
-  graduated: '畢業',
-}
-
-// 合法轉移表（同步後端 ALLOWED_TRANSITIONS）
-const ALLOWED_TRANSITIONS: Record<string, string[]> = {
-  prospect: ['enrolled', 'withdrawn'],
-  enrolled: ['active', 'withdrawn'],
-  active: ['on_leave', 'transferred', 'withdrawn', 'graduated'],
-  on_leave: ['active', 'withdrawn'],
-  withdrawn: ['active'],
-  transferred: [],
-  graduated: [],
-}
+// STATUS_LABELS（admin 受眾用語）與 ALLOWED_TRANSITIONS（鏡像後端轉移表）
+// 改用單一來源 @/constants/lifecycle
 
 const REASON_BY_TARGET: Record<string, string[]> = {
   on_leave: ['家庭因素', '健康因素', '其他'],
