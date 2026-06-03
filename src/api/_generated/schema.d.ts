@@ -1824,6 +1824,100 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/dsr-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Dsr Requests
+         * @description 列出 DSR 請求（可選 status filter），submitted_at desc。
+         */
+        get: operations["list_dsr_requests_api_admin_dsr_requests_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/dsr-requests/{req_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve Dsr Request
+         * @description 核准 pending DSR 請求。
+         *
+         *     按 request_type 分派（Task 12）：
+         *     - delete：ownership 重驗 → student lifecycle → WITHDRAWN → 365d GC 接手 PII 抹除
+         *     - correct：僅 status=approved；admin 事後透過既有編輯工具手動更正（不自動套用 new_value）
+         *     - 其他（opt_out 等）：防禦性僅 set status（opt_out 已於 Task 9 即時自助不進 queue）
+         */
+        post: operations["approve_dsr_request_api_admin_dsr_requests__req_id__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/dsr-requests/{req_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reject Dsr Request
+         * @description 駁回 pending DSR 請求 → status=rejected + decision_note + audit。
+         */
+        post: operations["reject_dsr_request_api_admin_dsr_requests__req_id__reject_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/policies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Policy Versions
+         * @description 列出所有 PolicyVersion，effective_at desc（最新生效版排前）。
+         */
+        get: operations["list_policy_versions_api_admin_policies_get"];
+        put?: never;
+        /**
+         * Create Policy Version
+         * @description 建立新 PolicyVersion。
+         *
+         *     - version 唯一，重複 version → 409。
+         *     - effective_at 解析為 naive datetime（isoformat 輸入）。
+         *     - 建立 effective_at <= now 的新版即觸發既有家長下次
+         *       has_signed_current_policy 失效 → 重簽（純資料驅動，此端點不額外處理）。
+         */
+        post: operations["create_policy_version_api_admin_policies_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/analytics/churn/at-risk": {
         parameters: {
             query?: never;
@@ -7848,10 +7942,15 @@ export interface paths {
         put?: never;
         /**
          * Submit Opt Out Request
-         * @description 個資法 §3.3 停止處理利用權：申請停止特定 scope 的資料處理。
+         * @description 個資法 §3.3 停止處理利用權：granular scope 即時撤回（spec §3.2a）。
          *
-         *     比 consent 撤回更具法律意義（撤回是「現在不同意」，opt-out 是「請求停止」)。
-         *     *opt-out 主要 surface 是 consent 撤回 + 此申請副本作為法律備案*。
+         *     - service_essential → 拒絕（400）：基礎服務同意不可停止，如需終止服務請走刪除申請。
+         *     - granular scope（photo_publish / line_push / cross_border_transfer）→ 即時生效：
+         *       1. 查該家長該 scope 最近一筆 ParentConsentLog 取 policy_version_id。
+         *          若從未有任何記錄 → 400「無可撤回的同意紀錄」。
+         *       2. 寫入 ParentConsentLog(consented=False, policy_version_id=<原版本>)。
+         *       3. invalidate_consent_cache 立即清快取，下次查詢即時反映撤回。
+         *       4. 寫 DsrRequest(status=approved) 作法律備案，不進 pending queue。
          */
         post: operations["submit_opt_out_request_api_parent_me_opt_out_post"];
         delete?: never;
@@ -17096,6 +17195,48 @@ export interface components {
             /** Student Id */
             student_id: number;
         };
+        /**
+         * DsrDecisionIn
+         * @description admin approve / reject 的決議說明。
+         */
+        DsrDecisionIn: {
+            /** Decision Note */
+            decision_note: string;
+        };
+        /**
+         * DsrRequestAdminOut
+         * @description admin queue 單筆 DSR 請求輸出（datetime 欄位序列化為 isoformat str）。
+         */
+        DsrRequestAdminOut: {
+            /** Decided At */
+            decided_at?: string | null;
+            /** Decided By */
+            decided_by?: number | null;
+            /** Decision Note */
+            decision_note?: string | null;
+            /** Field Name */
+            field_name?: string | null;
+            /** Id */
+            id: number;
+            /** New Value */
+            new_value?: string | null;
+            /** Reason */
+            reason?: string | null;
+            /** Request Type */
+            request_type: string;
+            /** Scope */
+            scope?: string | null;
+            /** Status */
+            status: string;
+            /** Subject Entity Id */
+            subject_entity_id?: number | null;
+            /** Subject Entity Type */
+            subject_entity_type?: string | null;
+            /** Submitted At */
+            submitted_at: string;
+            /** User Id */
+            user_id: number;
+        };
         /** DsrRequestOut */
         DsrRequestOut: {
             /** Decided At */
@@ -21175,6 +21316,40 @@ export interface components {
         PolicyUpdateRequest: {
             /** Policies */
             policies: components["schemas"]["PolicyItem"][];
+        };
+        /**
+         * PolicyVersionAdminOut
+         * @description admin policy 版本管理輸出（datetime 欄位序列化為 isoformat str）。
+         */
+        PolicyVersionAdminOut: {
+            /** Created At */
+            created_at: string;
+            /** Document Path */
+            document_path: string;
+            /** Effective At */
+            effective_at: string;
+            /** Id */
+            id: number;
+            /** Summary */
+            summary?: string | null;
+            /** Version */
+            version: string;
+        };
+        /**
+         * PolicyVersionCreateIn
+         * @description 建立新 PolicyVersion 的輸入。
+         *
+         *     effective_at 為 isoformat 字串；可未來生效（排程升版）或即時生效。
+         */
+        PolicyVersionCreateIn: {
+            /** Document Path */
+            document_path: string;
+            /** Effective At */
+            effective_at: string;
+            /** Summary */
+            summary?: string | null;
+            /** Version */
+            version: string;
         };
         /** PolicyVersionOut */
         PolicyVersionOut: {
@@ -29291,6 +29466,160 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WaitlistSweepResultOut"];
+                };
+            };
+        };
+    };
+    list_dsr_requests_api_admin_dsr_requests_get: {
+        parameters: {
+            query?: {
+                status?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DsrRequestAdminOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_dsr_request_api_admin_dsr_requests__req_id__approve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                req_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DsrDecisionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DsrRequestAdminOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reject_dsr_request_api_admin_dsr_requests__req_id__reject_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                req_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DsrDecisionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DsrRequestAdminOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_policy_versions_api_admin_policies_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyVersionAdminOut"][];
+                };
+            };
+        };
+    };
+    create_policy_version_api_admin_policies_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PolicyVersionCreateIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyVersionAdminOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

@@ -1,7 +1,29 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import ParentLayout from './layouts/ParentLayout.vue'
+import ConsentModal from './components/ConsentModal.vue'
+import { useConsentGate } from './composables/useConsentGate'
+import { getCurrentPolicy, type PolicyVersionOut } from './api/consent'
+
+const gate = useConsentGate()
+const consentPolicy = ref<PolicyVersionOut | null>(null)
+
+// gate.visible 變 true 時取得當期 policy（供 ConsentModal prop 使用）
+watch(gate.visible, async (val) => {
+  if (val && consentPolicy.value === null) {
+    try {
+      const { data } = await getCurrentPolicy()
+      consentPolicy.value = data
+    } catch {
+      // 取 policy 失敗時靜默；modal 因 policy 為 null 不會渲染
+      // 避免 consent gate 本身因 policy 請求失敗而無限循環
+    }
+  }
+  if (!val) {
+    consentPolicy.value = null
+  }
+})
 
 /**
  * 路由過場動畫方向判斷：
@@ -49,6 +71,13 @@ router.beforeEach((to, from) => {
       </transition>
     </router-view>
   </ParentLayout>
+
+  <!-- P2-4 re-consent modal：interceptor 攔 403 X-Consent-Required 後顯示 -->
+  <ConsentModal
+    v-if="gate.visible.value && consentPolicy"
+    :policy="consentPolicy"
+    @consented="gate.resolve()"
+  />
 </template>
 
 <style>

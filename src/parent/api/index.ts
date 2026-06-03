@@ -9,6 +9,7 @@ import axios, { type AxiosError, type AxiosInstance, type InternalAxiosRequestCo
 import { applyDedupe } from '@/utils/apiDedupe'
 import { classifyError, DEFAULT_MESSAGES } from '@/utils/errorHandler'
 import { toast } from '@/parent/utils/toast'
+import { useConsentGate } from '@/parent/composables/useConsentGate'
 
 // Lazy router import：避免將 createRouter side effect 灌進所有 partial-mock
 // vue-router 的既有測試（同 src/api/index.ts 處理方式）。
@@ -183,6 +184,13 @@ api.interceptors.response.use(
         error.errorDetail = ksObj
         return Promise.reject(error)
       }
+    }
+
+    // P2-4 consent gate：403 + X-Consent-Required header → 彈 re-consent modal
+    // 不 return / 不 retry；讓 Promise.reject 照常傳給 caller，modal 為全域 side effect。
+    const consentScope = error.response?.headers?.['x-consent-required']
+    if (error.response?.status === 403 && consentScope) {
+      useConsentGate().require(String(consentScope))
     }
 
     // 正規化錯誤訊息：對齊 admin (src/api/index.ts) 對 BusinessError envelope 的處理
