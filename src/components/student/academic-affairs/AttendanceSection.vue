@@ -103,7 +103,7 @@ defineExpose({ fetchDaily })
     count-type="info"
     :loading="loading"
     :error-message="errorMessage"
-    :empty-description="ctx.filters.classroomId ? '當日沒有資料' : '請先選擇班級'"
+    :empty-description="ctx.filters.classroomId ? '當日尚未點名，點右上「批次點名」開始' : '請先選擇班級'"
     :show-empty="filteredRows.length === 0"
     @retry="fetchDaily"
   >
@@ -116,11 +116,6 @@ defineExpose({ fetchDaily })
         @click="batchDrawerOpen = true"
       >
         批次點名
-      </el-button>
-    </template>
-    <template v-if="ctx.filters.classroomId" #empty-action>
-      <el-button size="small" type="primary" @click="batchDrawerOpen = true">
-        前往批次點名
       </el-button>
     </template>
     <template #summary>

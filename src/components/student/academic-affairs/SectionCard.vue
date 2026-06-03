@@ -80,9 +80,7 @@ defineEmits<{ 'retry': [] }>()
       v-if="!loading && !errorMessage && showEmpty"
       :description="emptyDescription"
       :image-size="48"
-    >
-      <slot name="empty-action" />
-    </el-empty>
+    />
   </el-card>
 </template>
 
