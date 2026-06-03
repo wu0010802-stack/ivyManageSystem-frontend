@@ -2,13 +2,43 @@
   <el-dialog
     v-model="visible"
     title="廠商簽收"
-    width="520px"
+    width="540px"
     :close-on-click-modal="false"
     destroy-on-close
     @close="reset"
   >
-    <el-tabs v-model="activeTab">
-      <el-tab-pane label="畫簽名" name="drawn">
+    <el-tabs v-model="activeTab" class="vp-sign-tabs">
+      <!-- 主要路徑：上傳廠商簽好的紙本照片 -->
+      <el-tab-pane label="上傳紙本照片" name="photo">
+        <el-upload
+          v-if="!photoPreview"
+          drag
+          class="vp-sign-upload"
+          :auto-upload="false"
+          :limit="1"
+          :show-file-list="false"
+          accept="image/png,image/jpeg,image/webp"
+          :on-change="handleUploadChange"
+        >
+          <div class="vp-sign-upload__inner">
+            <el-icon class="vp-sign-upload__icon"><UploadFilled /></el-icon>
+            <div class="vp-sign-upload__text">拖曳照片到這裡，或<em>點擊選擇</em></div>
+            <div class="vp-sign-upload__hint">廠商簽好的紙本請款／簽收單照片，PNG／JPG／WEBP</div>
+          </div>
+        </el-upload>
+
+        <div v-else class="vp-sign-preview">
+          <img :src="photoPreview" alt="簽收照片預覽" />
+          <div class="vp-sign-preview__bar">
+            <span class="vp-sign-preview__name">{{ photoName }}</span>
+            <el-button size="small" text @click="handleUploadRemove">重新選擇</el-button>
+          </div>
+        </div>
+        <p class="vp-sign-note">上傳前會自動壓縮，手機拍的大圖也沒問題</p>
+      </el-tab-pane>
+
+      <!-- 次要路徑：廠商當場於螢幕手寫 -->
+      <el-tab-pane label="當場手寫" name="drawn">
         <div class="signature-pad">
           <canvas
             ref="canvasRef"
@@ -26,27 +56,7 @@
           <div class="signature-hint">請廠商於上方框內簽名</div>
         </div>
         <div class="dialog-tools">
-          <el-button @click="clearCanvas">清除</el-button>
-        </div>
-      </el-tab-pane>
-
-      <el-tab-pane label="上傳照片" name="photo">
-        <el-upload
-          class="photo-upload"
-          :auto-upload="false"
-          :limit="1"
-          :show-file-list="true"
-          accept="image/png,image/jpeg,image/webp"
-          :on-change="handleUploadChange"
-          :on-remove="handleUploadRemove"
-        >
-          <el-button type="primary">選擇照片</el-button>
-          <template #tip>
-            <div class="upload-tip">PNG / JPG / WEBP，最大 1 MB</div>
-          </template>
-        </el-upload>
-        <div v-if="photoPreview" class="photo-preview">
-          <img :src="photoPreview" alt="預覽" />
+          <el-button @click="clearCanvas">清除重簽</el-button>
         </div>
       </el-tab-pane>
     </el-tabs>
@@ -63,7 +73,9 @@
 <script setup lang="ts">
 import { ref, watch, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
+import { UploadFilled } from '@element-plus/icons-vue'
 import { signVendorPayment } from '@/api/vendorPayment'
+import { compressImageToDataUrl } from '@/utils/imageCompress'
 
 const props = withDefaults(defineProps<{
   modelValue?: boolean
@@ -83,11 +95,12 @@ watch(
   (v) => {
     visible.value = v
     if (v) nextTick(() => resetCanvas())
-  }
+  },
 )
 watch(visible, (v) => emit('update:modelValue', v))
 
-const activeTab = ref<string>('drawn')
+// 預設走主要路徑：上傳紙本照片
+const activeTab = ref<string>('photo')
 const submitting = ref<boolean>(false)
 
 // ── 畫板 ──
@@ -148,56 +161,61 @@ function clearCanvas() {
 
 // ── 照片上傳 ──
 const photoPreview = ref<string>('')
+const photoName = ref<string>('')
 const photoFile = ref<File | null>(null)
 
 function handleUploadChange(file: { raw?: File; size?: number; name?: string }) {
   if (!file?.raw) return
-  if (file.raw.size > 1024 * 1024) {
-    ElMessage.warning('圖檔超過 1 MB，請壓縮後再試')
-    photoFile.value = null
-    photoPreview.value = ''
+  // 壓縮在 submit 處理，這裡只擋極端大檔避免瀏覽器卡頓
+  if (file.raw.size > 25 * 1024 * 1024) {
+    ElMessage.warning('圖檔過大（超過 25 MB），請改用較小的照片')
     return
   }
+  releasePreview()
   photoFile.value = file.raw
-  const reader = new FileReader()
-  reader.onload = (e) => {
-    photoPreview.value = (e.target?.result as string) ?? ''
-  }
-  reader.readAsDataURL(file.raw)
+  photoName.value = file.name || file.raw.name
+  photoPreview.value = URL.createObjectURL(file.raw)
 }
 
 function handleUploadRemove() {
+  releasePreview()
   photoFile.value = null
+  photoName.value = ''
   photoPreview.value = ''
 }
 
+function releasePreview() {
+  if (photoPreview.value.startsWith('blob:')) URL.revokeObjectURL(photoPreview.value)
+}
+
 function reset() {
-  activeTab.value = 'drawn'
-  photoFile.value = null
-  photoPreview.value = ''
+  activeTab.value = 'photo'
+  handleUploadRemove()
   drawn = false
 }
 
 async function submit() {
   if (!props.paymentId) return
-  let dataUrl = ''
-  let kind = activeTab.value
-  if (kind === 'drawn') {
-    if (!drawn) {
-      ElMessage.warning('請先簽名')
-      return
-    }
-    dataUrl = canvasRef.value!.toDataURL('image/png')
-  } else {
-    if (!photoPreview.value) {
-      ElMessage.warning('請選擇照片')
-      return
-    }
-    dataUrl = photoPreview.value
+  const kind = activeTab.value
+
+  // 先驗證輸入，再開 loading
+  if (kind === 'drawn' && !drawn) {
+    ElMessage.warning('請先簽名')
+    return
+  }
+  if (kind === 'photo' && !photoFile.value) {
+    ElMessage.warning('請選擇照片')
+    return
   }
 
   submitting.value = true
   try {
+    let dataUrl = ''
+    if (kind === 'drawn') {
+      dataUrl = canvasRef.value!.toDataURL('image/png')
+    } else {
+      dataUrl = await compressImageToDataUrl(photoFile.value!)
+    }
     await signVendorPayment(props.paymentId, {
       signature_kind: kind,
       signature_data: dataUrl,
@@ -215,9 +233,77 @@ async function submit() {
 </script>
 
 <style scoped>
+.vp-sign-tabs {
+  min-height: 240px;
+}
+
+/* 上傳區 */
+.vp-sign-upload :deep(.el-upload),
+.vp-sign-upload :deep(.el-upload-dragger) {
+  width: 100%;
+}
+.vp-sign-upload__inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: var(--space-4, 16px);
+}
+.vp-sign-upload__icon {
+  font-size: 40px;
+  color: var(--neutral-400, #94a3b8);
+}
+.vp-sign-upload__text {
+  font-size: var(--text-base, 14px);
+  color: var(--text-secondary, #64748b);
+}
+.vp-sign-upload__text em {
+  font-style: normal;
+  color: var(--brand-primary, #4f46e5);
+  font-weight: var(--font-weight-medium, 500);
+}
+.vp-sign-upload__hint {
+  font-size: var(--text-xs, 12px);
+  color: var(--text-tertiary, #94a3b8);
+}
+
+.vp-sign-preview {
+  border: 1px solid var(--neutral-200, #e2e8f0);
+  border-radius: var(--radius-md, 8px);
+  overflow: hidden;
+  background: var(--neutral-50, #f8fafc);
+}
+.vp-sign-preview img {
+  display: block;
+  width: 100%;
+  max-height: 280px;
+  object-fit: contain;
+  background: #fff;
+}
+.vp-sign-preview__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2, 8px);
+  padding: var(--space-2, 8px) var(--space-3, 12px);
+}
+.vp-sign-preview__name {
+  font-size: var(--text-sm, 13px);
+  color: var(--text-secondary, #64748b);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.vp-sign-note {
+  margin: var(--space-3, 12px) 0 0;
+  font-size: var(--text-xs, 12px);
+  color: var(--text-tertiary, #94a3b8);
+}
+
+/* 手寫畫板 */
 .signature-pad {
-  border: 1px dashed #c0c4cc;
-  border-radius: 6px;
+  border: 1px dashed var(--neutral-300, #cbd5e1);
+  border-radius: var(--radius-md, 8px);
   padding: 8px;
   background: #fff;
 }
@@ -230,28 +316,13 @@ async function submit() {
 }
 .signature-hint {
   text-align: center;
-  color: #909399;
-  font-size: 12px;
+  color: var(--text-tertiary, #94a3b8);
+  font-size: var(--text-xs, 12px);
   margin-top: 4px;
 }
 .dialog-tools {
-  margin-top: 12px;
+  margin-top: var(--space-3, 12px);
   display: flex;
   justify-content: flex-end;
-}
-.upload-tip {
-  font-size: 12px;
-  color: #909399;
-  margin-top: 4px;
-}
-.photo-preview {
-  margin-top: 12px;
-  text-align: center;
-}
-.photo-preview img {
-  max-width: 100%;
-  max-height: 200px;
-  border: 1px solid #e4e7ed;
-  border-radius: 4px;
 }
 </style>

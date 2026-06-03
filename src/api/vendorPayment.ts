@@ -1,7 +1,25 @@
 import api from './index'
 
+/** 區間彙總（跨狀態），對應後端 GET /vendor-payments/summary。 */
+export interface VendorPaymentSummary {
+  total_count: number
+  total_amount: number
+  pending_count: number
+  pending_amount: number
+  signed_count: number
+  signed_amount: number
+}
+
 export const listVendorPayments = (params: unknown) =>
   api.get('/vendor-payments', { params })
+
+/**
+ * 區間彙總：吃與列表相同的 range 篩選（start_date / end_date / vendor_name /
+ * payment_method），但**不吃 status**——一律回全狀態並拆 pending / signed，
+ * 供頂部 KPI 卡使用。
+ */
+export const getVendorPaymentSummary = (params?: unknown) =>
+  api.get('/vendor-payments/summary', { params })
 
 export const getVendorPayment = (id: number) => api.get(`/vendor-payments/${id}`)
 
