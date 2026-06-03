@@ -155,6 +155,7 @@ import { getCurrentAcademicTerm } from '@/utils/academic'
 import { getChangeLogs, getChangeLogsSummary, getChangeLogOptions,
   createChangeLog, updateChangeLog, deleteChangeLog } from '@/api/studentChangeLogs'
 import { getStudents } from '@/api/students'
+import { STUDENT_CHANGE_LOG_EVENT_TYPES, CHANGE_LOG_TAG_TYPE } from '@/constants/studentChangeLogEventTypes'
 
 // ── 學期選擇 ──────────────────────────────────────────
 const termStore = useAcademicTermStore()
@@ -206,7 +207,7 @@ const loadOptions = async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     reasonOptions.value = (res as any).data?.reason_options || {}
   } catch {
-    eventTypes.value = ['入學', '復學', '退學', '轉出', '轉入', '畢業']
+    eventTypes.value = [...STUDENT_CHANGE_LOG_EVENT_TYPES]
   }
 }
 
@@ -383,8 +384,7 @@ const handleDelete = async (row: Record<string, unknown>) => {
 // ── Tag 樣式 ──────────────────────────────────────────
 type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger'
 const eventTagType = (type: unknown): ElTagType | undefined => {
-  const map: Record<string, ElTagType> = { 入學: 'success', 復學: 'success', 退學: 'danger', 轉出: 'warning', 轉入: 'primary', 畢業: 'info' }
-  return map[String(type ?? '')] || undefined
+  return CHANGE_LOG_TAG_TYPE[String(type ?? '')] || undefined
 }
 
 onMounted(async () => {

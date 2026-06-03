@@ -12,6 +12,7 @@ import { getCommunications } from '@/api/studentCommunications'
 import { getClassroomEnrollmentComposition } from '@/api/classrooms'
 import { useErrorNotify } from '@/composables/useErrorNotify'
 import { dateToLocalISO } from '@/utils/format'
+import { STUDENT_CHANGE_LOG_EVENT_TYPES, CHANGE_LOG_TAG_TYPE, type ChangeLogTagType } from '@/constants/studentChangeLogEventTypes'
 
 const { notify } = useErrorNotify()
 
@@ -89,7 +90,7 @@ const selectedTermKey = computed({
 const activeTab = ref('timeline')
 
 // ── 異動時間軸 ─────────────────────────────────
-const EVENT_TYPES = ['入學', '復學', '退學', '轉出', '轉入', '畢業', '休學']
+const EVENT_TYPES = [...STUDENT_CHANGE_LOG_EVENT_TYPES]
 const filterEventTypes = ref<string[]>([])
 const logs = ref<ChangeLog[]>([])
 const logsLoading = ref(false)
@@ -98,11 +99,8 @@ const logsTotal = ref(0)
 const logsPage = ref(1)
 const LOGS_PAGE_SIZE = 50
 
-const eventTagType = (type: string | undefined): 'success' | 'danger' | 'warning' | 'primary' | 'info' | undefined => {
-  const map: Record<string, 'success' | 'danger' | 'warning' | 'primary' | 'info'> = {
-    入學: 'success', 復學: 'success', 退學: 'danger', 轉出: 'warning', 轉入: 'primary', 畢業: 'info', 休學: 'info',
-  }
-  return type ? map[type] : undefined
+const eventTagType = (type: string | undefined): ChangeLogTagType | undefined => {
+  return type ? CHANGE_LOG_TAG_TYPE[type] : undefined
 }
 
 const termParams = () => ({
