@@ -65,6 +65,11 @@ export const PERMISSION_NAMES = {
   VENDOR_PAYMENT_READ: 'VENDOR_PAYMENT_READ',
   VENDOR_PAYMENT_WRITE: 'VENDOR_PAYMENT_WRITE',
   DSR_MANAGE: 'DSR_MANAGE',
+  // 角色與權限管理 / 教師端預覽 / 代為操作（對齊後端 utils/permissions.py，
+  // 補回曾漏同步的 3 條；AdminHeader.vue 已用字面字串呼叫 hasPermission）
+  ROLES_MANAGE: 'ROLES_MANAGE',
+  PORTAL_PREVIEW: 'PORTAL_PREVIEW',
+  PORTAL_IMPERSONATE: 'PORTAL_IMPERSONATE',
 } as const
 
 export type PermissionName = typeof PERMISSION_NAMES[keyof typeof PERMISSION_NAMES]

@@ -5,6 +5,7 @@ import { ElMessage } from 'element-plus'
 import { getStudentDetail } from '@/api/portalStudentDetail'
 import PortalMeasurementSheet from '@/components/portal/sheets/PortalMeasurementSheet.vue'
 import PortalMilestoneSheet from '@/components/portal/sheets/PortalMilestoneSheet.vue'
+import { LIFECYCLE_LABELS_PORTAL } from '@/constants/lifecycle'
 
 const props = defineProps({
   studentId: { type: [String, Number], required: true },
@@ -26,6 +27,11 @@ function openMilestoneSheet() {
 const loading = ref(false)
 const error = ref<unknown>(null)
 const activeTab = ref('health')
+
+// 教師端受眾用語；原本直接顯示 raw lifecycle_status（無 label）→ 補上中文 label
+function lifecycleLabel(s: string | undefined | null) {
+  return (s && LIFECYCLE_LABELS_PORTAL[s]) || s || ''
+}
 
 async function load() {
   loading.value = true
@@ -102,7 +108,7 @@ function back() {
           <h2>{{ (studentInfo as Record<string, unknown>)?.name }}</h2>
           <span class="age">{{ ageLabel }}</span>
           <el-tag v-if="(studentInfo as Record<string, unknown>)?.lifecycle_status" size="small">
-            {{ (studentInfo as Record<string, unknown>)?.lifecycle_status }}
+            {{ lifecycleLabel((studentInfo as Record<string, unknown>)?.lifecycle_status as string) }}
           </el-tag>
         </div>
         <p class="meta">

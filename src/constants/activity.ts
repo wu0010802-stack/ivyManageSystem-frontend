@@ -66,5 +66,6 @@ export const UNLOCK_REASON_PATTERN = new RegExp(
   `.{${FIELD_RULES.unlockReasonMin},}`
 )
 
-// 滿勤獎金門檻（後端 grade.subtotal.bonus = 1000 代表達成 100% 出席）
+// 滿勤獎金門檻（後端 grade.subtotal.bonus 達此值代表達成 100% 出席）。
+// 須與後端 ivy-backend utils/activity_constants.py GRADE_TARGET_BONUS 一致。
 export const FULL_ATTENDANCE_BONUS = 1000

@@ -4,6 +4,7 @@ import { ElDrawer, ElTabs, ElTabPane, ElTag, ElEmpty, ElMessage } from 'element-
 import { View, Hide } from '@element-plus/icons-vue'
 import { usePortalStudent } from '@/composables/usePortalStudent'
 import { apiError } from '@/utils/error'
+import { LIFECYCLE_LABELS_PORTAL } from '@/constants/lifecycle'
 
 const props = withDefaults(defineProps<{
   modelValue?: boolean
@@ -90,8 +91,8 @@ function genderLabel(g: string | undefined | null) {
 }
 
 function lifecycleLabel(s: string | undefined | null) {
-  const map: Record<string, string> = { active: '在學', graduated: '畢業', withdrawn: '離校', transferred: '轉學' }
-  return (s && map[s]) || s || '—'
+  // 教師端受眾用語；單一來源含全 7 狀態（補齊 prospect/enrolled/on_leave）
+  return (s && LIFECYCLE_LABELS_PORTAL[s]) || s || '—'
 }
 
 function severityLabel(s: string | undefined | null) {

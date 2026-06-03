@@ -77,6 +77,7 @@
 import { ref, reactive, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { suggestRefund, refundFeeRecord } from '@/api/fees'
+import { NON_REFUNDABLE_FEE_TYPES } from './feeTypes'
 
 interface FeeRecord {
   id: number
@@ -109,7 +110,7 @@ const FEE_TYPE_LABELS = {
 }
 
 const feeTypeLabel = computed(() => (FEE_TYPE_LABELS as Record<string, string>)[props.record?.fee_type ?? ''] || '其他')
-const isBlocked = computed(() => ['material', 'insurance'].includes(props.record?.fee_type ?? ''))
+const isBlocked = computed(() => (NON_REFUNDABLE_FEE_TYPES as readonly string[]).includes(props.record?.fee_type ?? ''))
 
 const suggestion = ref<RefundSuggestion | null>(null)
 const suggesting = ref<boolean>(false)
