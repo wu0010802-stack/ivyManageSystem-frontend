@@ -64,9 +64,9 @@ describe('attendance api', () => {
     })
   })
 
-  it('deleteMonthRecords DELETE /attendance/records/month/:year/:month', async () => {
+  it('deleteMonthRecords DELETE /attendance/records/:year/:month', async () => {
     await mod.deleteMonthRecords(2026, 5)
-    expect(mockDelete).toHaveBeenCalledWith('/attendance/records/month/2026/5')
+    expect(mockDelete).toHaveBeenCalledWith('/attendance/records/2026/5')
   })
 
   it('deleteEmployeeDateRecord DELETE /attendance/records/:employeeId/:date', async () => {
