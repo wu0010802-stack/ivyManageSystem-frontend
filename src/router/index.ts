@@ -239,16 +239,21 @@ const routes: RouteRecordRaw[] = [
             component: () => import('@/views/admin/gov-reports/MonthlyReportView.vue'),
             meta: { title: '月度幼生在園統計' },
         },
-        // ============ 教職員考核 ============
+        // ============ 考核 × 年終 整合工作區 ============
+        {
+            path: '/appraisal-year-end',
+            name: 'appraisal-year-end',
+            component: () => import('../views/AppraisalYearEndView.vue'),
+            meta: { title: '考核與年終' }
+        },
+        // --- 舊路由 redirect（保留書籤 / 既有連結）---
         {
             path: '/appraisal-management',
-            name: 'appraisal-management',
-            component: () => import('../views/AppraisalManagementView.vue'),
-            meta: { title: '考核管理' }
+            redirect: (to) => ({ path: '/appraisal-year-end', query: { ...to.query, section: 'appraisal' } }),
         },
         {
             path: '/appraisal/cycles',
-            redirect: { path: '/appraisal-management', query: { tab: 'history' } },
+            redirect: { path: '/appraisal-year-end', query: { section: 'appraisal', tab: 'history' } },
         },
         {
             path: '/appraisal/cycles/:id',
@@ -258,14 +263,11 @@ const routes: RouteRecordRaw[] = [
         },
         {
             path: '/appraisal/settings',
-            redirect: { path: '/appraisal-management', query: { tab: 'settings' } },
+            redirect: { path: '/appraisal-year-end', query: { section: 'appraisal', tab: 'settings' } },
         },
-        // ============ 年終獎金結算 ============
         {
             path: '/year_end/cycles',
-            name: 'year-end-cycles',
-            component: () => import('../views/yearEnd/YearEndListView.vue'),
-            meta: { title: '年終獎金結算' }
+            redirect: (to) => ({ path: '/appraisal-year-end', query: { ...to.query, section: 'year-end' } }),
         },
         {
             path: '/year_end/cycles/:id',
@@ -287,9 +289,7 @@ const routes: RouteRecordRaw[] = [
         },
         {
             path: '/year-end/appraisal-payout',
-            name: 'YearEndAppraisalPayout',
-            component: () => import('../views/yearEnd/AppraisalPayoutView.vue'),
-            meta: { title: '考核年終 payout', requiresAuth: true, permission: 'APPRAISAL_FINALIZE' },
+            redirect: (to) => ({ path: '/appraisal-year-end', query: { ...to.query, section: 'payout' } }),
         },
 
         // ============ 離職管理 ============
