@@ -169,7 +169,7 @@ watch(
 
 <style scoped>
 .bonus-impact-preview {
-  margin-top: 8px;
+  margin-top: var(--space-2);
 }
 
 .preview-body {
@@ -180,12 +180,12 @@ watch(
   background: #f5f7fa;
   border-radius: 6px;
   padding: 10px 12px;
-  margin-bottom: 8px;
+  margin-bottom: var(--space-2);
 }
 
 .classroom-header {
   font-weight: 600;
-  font-size: 13px;
+  font-size: var(--text-sm);
   margin-bottom: 6px;
   color: var(--text-primary);
 }
@@ -193,9 +193,9 @@ watch(
 .teacher-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   padding: 3px 0;
-  font-size: 13px;
+  font-size: var(--text-sm);
 }
 
 .teacher-name {
@@ -205,7 +205,7 @@ watch(
 
 .teacher-role {
   color: var(--text-tertiary);
-  font-size: 12px;
+  font-size: var(--text-xs);
   min-width: 56px;
 }
 
@@ -215,26 +215,26 @@ watch(
 }
 
 .enrollment-hint {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
-  margin-top: 4px;
+  margin-top: var(--space-1);
 }
 
 .school-wide-collapse {
-  margin-top: 8px;
+  margin-top: var(--space-2);
 }
 
 .no-impact {
   text-align: center;
   color: var(--neutral-300);
-  padding: 12px 0;
-  font-size: 13px;
+  padding: var(--space-3) 0;
+  font-size: var(--text-sm);
 }
 
 .error-hint {
   color: #f56c6c;
-  font-size: 13px;
+  font-size: var(--text-sm);
   text-align: center;
-  padding: 8px 0;
+  padding: var(--space-2) 0;
 }
 </style>
