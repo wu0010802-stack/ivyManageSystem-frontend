@@ -59,6 +59,13 @@ describe('AppraisalYearEndView shell', () => {
     expect(replace).not.toHaveBeenCalled()
   })
 
+  it('全權限 deep link ?section=payout（非首位）→ 顯示 payout 且不 replace', () => {
+    const w = mountWith(['SETTINGS_READ', 'YEAR_END_READ', 'APPRAISAL_FINALIZE'], { section: 'payout' })
+    expect(w.find('.stub-payout').exists()).toBe(true)
+    expect(w.find('.stub-appraisal').exists()).toBe(false)
+    expect(replace).not.toHaveBeenCalled()
+  })
+
   it('?section 指向無權限 section → fallback 第一個可用', () => {
     mountWith(['YEAR_END_READ'], { section: 'payout' })
     expect(replace).toHaveBeenCalledWith({ query: { section: 'year-end' } })
