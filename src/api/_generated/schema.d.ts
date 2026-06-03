@@ -4325,46 +4325,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/dev/employee-salary-debug": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Debug Employee Salary
-         * @description 模擬計算單一員工薪資並回傳完整明細（dev 別名，正式請改打 /api/salaries/employee-salary-debug）。
-         */
-        get: operations["debug_employee_salary_api_dev_employee_salary_debug_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/dev/salary-logic": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Salary Logic
-         * @description 傾印目前的薪資計算邏輯與所有參數設定（dev 別名，正式請改打 /api/salaries/logic）。
-         */
-        get: operations["get_salary_logic_api_dev_salary_logic_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/disciplinary-actions": {
         parameters: {
             query?: never;
@@ -15053,8 +15013,22 @@ export interface components {
         BonusConfigUpdate: {
             /** Admin Festival */
             admin_festival?: number | null;
+            /**
+             * After Class Award Unit Price
+             * @description 課後才藝班年終單價 JSON（班名→K 單價）
+             */
+            after_class_award_unit_price?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Art Teacher Employee Ids
+             * @description 才藝老師年終收款人 employee id list（每位得全校總人次×單價）
+             */
+            art_teacher_employee_ids?: number[] | null;
             /** Art Teacher Festival */
             art_teacher_festival?: number | null;
+            /** Art Teacher Unit Price */
+            art_teacher_unit_price?: number | null;
             /** Assistant Teacher Ab */
             assistant_teacher_ab?: number | null;
             /** Assistant Teacher C */
@@ -15067,12 +15041,22 @@ export interface components {
             director_dividend?: number | null;
             /** Director Festival */
             director_festival?: number | null;
+            /** Dividend Activity Amount */
+            dividend_activity_amount?: number | null;
+            /** Dividend Activity Threshold */
+            dividend_activity_threshold?: number | null;
+            /** Dividend Returning Amount */
+            dividend_returning_amount?: number | null;
+            /** Dividend Returning Threshold */
+            dividend_returning_threshold?: number | null;
             /** Driver Festival */
             driver_festival?: number | null;
             /** Head Teacher Ab */
             head_teacher_ab?: number | null;
             /** Head Teacher C */
             head_teacher_c?: number | null;
+            /** Late Deduction Per Time */
+            late_deduction_per_time?: number | null;
             /** Leader Dividend */
             leader_dividend?: number | null;
             /** Leader Festival */
@@ -15081,6 +15065,8 @@ export interface components {
             meeting_absence_penalty?: number | null;
             /** Meeting Default Hours */
             meeting_default_hours?: number | null;
+            /** Missing Punch Deduction Per Time */
+            missing_punch_deduction_per_time?: number | null;
             /** Overtime Assistant Baby */
             overtime_assistant_baby?: number | null;
             /** Overtime Assistant Normal */
@@ -15089,6 +15075,8 @@ export interface components {
             overtime_head_baby?: number | null;
             /** Overtime Head Normal */
             overtime_head_normal?: number | null;
+            /** Personal Leave Deduction Per Day */
+            personal_leave_deduction_per_day?: number | null;
             /** Principal Dividend */
             principal_dividend?: number | null;
             /** Principal Festival */
@@ -15100,6 +15088,8 @@ export interface components {
             reason?: string | null;
             /** School Wide Target */
             school_wide_target?: number | null;
+            /** Sick Leave Deduction Per Day */
+            sick_leave_deduction_per_day?: number | null;
             /** Vice Leader Dividend */
             vice_leader_dividend?: number | null;
         };
@@ -15194,8 +15184,23 @@ export interface components {
         BuildResultOut: {
             /** Built */
             built: number;
+            /**
+             * Fallback Classes
+             * @default 0
+             */
+            fallback_classes: number;
             /** Skipped Finalized */
             skipped_finalized: number;
+            /**
+             * Unmatched Count
+             * @default 0
+             */
+            unmatched_count: number;
+            /**
+             * Warnings
+             * @default []
+             */
+            warnings: string[];
         };
         /** BuildSettlementsRequest */
         BuildSettlementsRequest: {
@@ -33744,59 +33749,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    debug_employee_salary_api_dev_employee_salary_debug_get: {
-        parameters: {
-            query: {
-                employee_id: number;
-                month: number;
-                year: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_salary_logic_api_dev_salary_logic_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
                 };
             };
         };
