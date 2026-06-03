@@ -146,7 +146,8 @@ import {
 } from '@/api/govMoe'
 import { getStudents } from '@/api/students'
 import { useClassroomStore } from '@/stores/classroom'
-import { getUserInfo } from '@/utils/auth'
+import { hasPermission } from '@/utils/auth'
+import { PERMISSION_NAMES } from '@/constants/permissions'
 
 interface ShortTermGoal { goal: string; criteria: string; due_date: string | null; status: string }
 interface TeamMember { role: string; name: string }
@@ -165,10 +166,10 @@ interface IepRecord {
   meeting_dates?: { initial?: string | null; mid?: string | null; final?: string | null }
 }
 
-const currentUser = computed(() => (getUserInfo() || {}) as Record<string, unknown>)
+// 批核/結案顯隱與後端 require_permission(STUDENTS_IEP_APPROVE) 對齊，
+// 不再讀 supervisor_role 字串（admin 走 '*' wildcard 仍 true）。
 const canApprove = computed(() =>
-  currentUser.value.role === 'admin' ||
-  ['園長', '主任'].includes(currentUser.value.supervisor_role as string)
+  hasPermission(PERMISSION_NAMES.STUDENTS_IEP_APPROVE)
 )
 
 const classroomStore = useClassroomStore()
