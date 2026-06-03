@@ -1,0 +1,80 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { mount } from '@vue/test-utils'
+import { nextTick } from 'vue'
+
+const replace = vi.fn()
+let mockQuery: Record<string, unknown> = {}
+vi.mock('vue-router', () => ({
+  useRoute: () => ({ query: mockQuery }),
+  useRouter: () => ({ replace }),
+}))
+
+const hasPermission = vi.fn()
+vi.mock('@/utils/auth', () => ({
+  hasPermission: (...a: unknown[]) => hasPermission(...a),
+}))
+
+import AppraisalYearEndView from '../AppraisalYearEndView.vue'
+
+const stubs = {
+  AppraisalManagementView: { name: 'AppraisalManagementView', template: '<div class="stub-appraisal" />' },
+  YearEndListView: { name: 'YearEndListView', template: '<div class="stub-year-end" />' },
+  AppraisalPayoutView: { name: 'AppraisalPayoutView', template: '<div class="stub-payout" />' },
+  ElSegmented: {
+    name: 'ElSegmented',
+    props: ['modelValue', 'options'],
+    emits: ['change'],
+    template: '<div class="stub-seg" />',
+  },
+  ElEmpty: { name: 'ElEmpty', template: '<div class="stub-empty" />' },
+}
+
+function mountWith(perms: string[], query: Record<string, unknown> = {}) {
+  hasPermission.mockImplementation((p: string) => perms.includes(p))
+  mockQuery = query
+  replace.mockClear()
+  return mount(AppraisalYearEndView, { global: { stubs } })
+}
+
+describe('AppraisalYearEndView shell', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('只渲染有權限的 section（只有 YEAR_END_READ → 年終獎金）', () => {
+    const w = mountWith(['YEAR_END_READ'])
+    const seg = w.findComponent({ name: 'ElSegmented' })
+    expect(seg.props('options')).toEqual([{ label: '年終獎金', value: 'year-end' }])
+    expect(w.find('.stub-year-end').exists()).toBe(true)
+    expect(w.find('.stub-appraisal').exists()).toBe(false)
+    expect(w.find('.stub-payout').exists()).toBe(false)
+  })
+
+  it('缺 section query → 落第一個可用並 replace 修正', () => {
+    mountWith(['YEAR_END_READ'])
+    expect(replace).toHaveBeenCalledWith({ query: { section: 'year-end' } })
+  })
+
+  it('deep link ?section=payout + APPRAISAL_FINALIZE → 顯示 payout', () => {
+    const w = mountWith(['APPRAISAL_FINALIZE'], { section: 'payout' })
+    expect(w.find('.stub-payout').exists()).toBe(true)
+    expect(replace).not.toHaveBeenCalled()
+  })
+
+  it('?section 指向無權限 section → fallback 第一個可用', () => {
+    mountWith(['YEAR_END_READ'], { section: 'payout' })
+    expect(replace).toHaveBeenCalledWith({ query: { section: 'year-end' } })
+  })
+
+  it('完全無權限 → 隱藏切換器、顯示 el-empty', () => {
+    const w = mountWith([])
+    expect(w.find('.stub-seg').exists()).toBe(false)
+    expect(w.find('.stub-empty').exists()).toBe(true)
+  })
+
+  it('切離 appraisal 時清掉 tab query', async () => {
+    const w = mountWith(['SETTINGS_READ', 'YEAR_END_READ'], { section: 'appraisal', tab: 'settings' })
+    replace.mockClear()
+    w.findComponent({ name: 'ElSegmented' }).vm.$emit('change', 'year-end')
+    await nextTick()
+    expect(replace).toHaveBeenCalledWith({ query: { section: 'year-end' } })
+  })
+})
