@@ -17357,6 +17357,8 @@ export interface components {
              * @default 0
              */
             dependents: number;
+            /** Email */
+            email?: string | null;
             /** Emergency Contact Name */
             emergency_contact_name?: string | null;
             /** Emergency Contact Phone */
@@ -17371,6 +17373,8 @@ export interface components {
              * @default 0
              */
             extra_dependents_quarterly: number;
+            /** Gender */
+            gender?: string | null;
             /**
              * Health Exempt
              * @default false
@@ -17387,6 +17391,8 @@ export interface components {
             hourly_rate: number;
             /** Id Number */
             id_number?: string | null;
+            /** Insurance Effective Date */
+            insurance_effective_date?: string | null;
             /**
              * Insurance Salary Level
              * @default 0
@@ -17499,6 +17505,8 @@ export interface components {
             classroom_name?: unknown;
             /** Dependents */
             dependents?: unknown;
+            /** Email */
+            email?: unknown;
             /** Emergency Contact Name */
             emergency_contact_name?: unknown;
             /** Emergency Contact Phone */
@@ -17509,6 +17517,8 @@ export interface components {
             employee_type: unknown;
             /** Extra Dependents Quarterly */
             extra_dependents_quarterly?: unknown;
+            /** Gender */
+            gender?: unknown;
             /** Health Exempt */
             health_exempt?: unknown;
             /** Hire Date */
@@ -17519,6 +17529,8 @@ export interface components {
             id: unknown;
             /** Id Number */
             id_number?: unknown;
+            /** Insurance Effective Date */
+            insurance_effective_date?: unknown;
             /** Insurance Salary Level */
             insurance_salary_level?: unknown;
             /** Insurance Salary Override Reason */
@@ -17582,6 +17594,8 @@ export interface components {
             classroom_id?: number | null;
             /** Dependents */
             dependents?: number | null;
+            /** Email */
+            email?: string | null;
             /** Emergency Contact Name */
             emergency_contact_name?: string | null;
             /** Emergency Contact Phone */
@@ -17590,6 +17604,8 @@ export interface components {
             employee_type?: string | null;
             /** Extra Dependents Quarterly */
             extra_dependents_quarterly?: number | null;
+            /** Gender */
+            gender?: string | null;
             /** Health Exempt */
             health_exempt?: boolean | null;
             /** Health Insured Salary */
@@ -17600,6 +17616,8 @@ export interface components {
             hourly_rate?: number | null;
             /** Id Number */
             id_number?: string | null;
+            /** Insurance Effective Date */
+            insurance_effective_date?: string | null;
             /** Insurance Salary Level */
             insurance_salary_level?: number | null;
             /** Insurance Salary Override Reason */

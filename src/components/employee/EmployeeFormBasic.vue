@@ -26,7 +26,6 @@ export interface EmployeeFormBasicData {
   bonus_grade?: string
   employee_type?: string
   supervisor_role?: string
-  department?: string
   gender?: string
   hire_date?: string
   probation_end_date?: string
@@ -155,6 +154,14 @@ defineExpose({ applyValidationErrors })
     </el-select>
   </el-form-item>
 
+  <el-form-item label="性別">
+    <el-select v-model="form.gender" clearable placeholder="請選擇" style="width:100%">
+      <el-option label="男" value="男" />
+      <el-option label="女" value="女" />
+      <el-option label="其他" value="其他" />
+    </el-select>
+  </el-form-item>
+
   <el-form-item label="到職日期">
     <template v-if="isLocked('hire_date')">
       <span class="readonly-text">{{ fmt(form.hire_date) }} <el-icon><Lock /></el-icon></span>
@@ -192,7 +199,6 @@ defineExpose({ applyValidationErrors })
         <el-option v-for="item in SUPERVISOR_ROLE_OPTIONS" :key="item" :label="item" :value="item" />
       </el-select>
     </el-form-item>
-    <el-form-item label="部門"><el-input v-model="form.department" /></el-form-item>
     <el-form-item label="獎金等級覆蓋" prop="bonus_grade">
       <template v-if="isLocked('bonus_grade')">
         <span class="readonly-text">{{ fmt(form.bonus_grade) }} <el-icon><Lock /></el-icon></span>
@@ -224,6 +230,9 @@ defineExpose({ applyValidationErrors })
     <el-form-item label="聯絡電話">
       <el-input v-model="form.phone" />
       <div class="form-hint form-hint--example">例：0912-345-678</div>
+    </el-form-item>
+    <el-form-item label="Email" prop="email">
+      <el-input v-model="form.email" placeholder="example@mail.com" maxlength="100" />
     </el-form-item>
     <el-form-item label="眷屬人數" prop="dependents">
       <el-input-number v-model="form.dependents" :min="0" :max="9" :step="1" style="width:100%" />
