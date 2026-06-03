@@ -127,6 +127,11 @@ export const ROUTE_PERMISSION_RULES = [
   { path: '/year_end', permission: 'YEAR_END_READ', prefix: true },
   // 考核年終 payout（路徑為 hyphen 與 /year_end 不同）：對齊後端 APPRAISAL_FINALIZE 守衛
   { path: '/year-end/appraisal-payout', permission: 'APPRAISAL_FINALIZE' },
+  // 考核 × 年終 整合工作區：承載三種權限，OR 語意（任一即可進頁，section 層再各自守門）
+  { path: '/appraisal-year-end', permission: 'SETTINGS_READ' },
+  { path: '/appraisal-year-end', permission: 'SALARY_READ' },
+  { path: '/appraisal-year-end', permission: 'YEAR_END_READ' },
+  { path: '/appraisal-year-end', permission: 'APPRAISAL_FINALIZE' },
   // 離職管理（路徑 /admin/offboarding 獨立 prefix，沿用 EMPLOYEES_READ 為 navigation gate）
   { path: '/admin/offboarding', permission: 'EMPLOYEES_READ' },
   // 加班 / 會議整合頁（OVERTIME_READ 或 MEETINGS 任一）
