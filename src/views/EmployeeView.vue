@@ -22,7 +22,7 @@ import { useEmployeeStore } from '@/stores/employee'
 import { todayISO, thisMonthISO } from '@/utils/format'
 import { useClassroomStore } from '@/stores/classroom'
 import { useConfigStore } from '@/stores/config'
-import { useCrudDialog, useConfirmDelete } from '@/composables'
+import { useCrudDialog, useConfirmDelete, useLatestSearch } from '@/composables'
 import { downloadFile } from '@/utils/download'
 import { mapEmployeeError } from '@/utils/error'
 import {
@@ -337,7 +337,14 @@ const debouncedSearch = ref('')
 const updateSearch = useDebounceFn((val) => { debouncedSearch.value = val }, 300)
 watch(searchQuery, updateSearch)
 
-const searchResults = ref<Record<string, unknown>[] | null>(null) // null = 用 store；有值 = 搜尋結果
+// 序列化搜尋：只套用最新查詢的回應，避免 debounced 搜尋的 out-of-order 舊回應覆蓋新結果
+const {
+  result: searchResults,
+  search: runEmployeeSearch,
+  reset: resetEmployeeSearch,
+} = useLatestSearch<Record<string, unknown>[]>(
+  async (val) => (await getEmployees({ search: val })).data as Record<string, unknown>[],
+)
 
 const filteredEmployees = computed(() =>
   searchResults.value !== null ? searchResults.value : (employeeStore.employees as Record<string, unknown>[])
@@ -345,12 +352,11 @@ const filteredEmployees = computed(() =>
 
 watch(debouncedSearch, async (val) => {
   if (!val) {
-    searchResults.value = null
+    resetEmployeeSearch()
     return
   }
   try {
-    const res = await getEmployees({ search: val })
-    searchResults.value = res.data as Record<string, unknown>[]
+    await runEmployeeSearch(val)
   } catch {
     ElMessage.error('搜尋員工失敗')
   }
