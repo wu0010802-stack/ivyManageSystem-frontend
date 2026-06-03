@@ -22,6 +22,7 @@ const props = withDefaults(defineProps<{
 const records = ref<Record<string, unknown>[]>([])
 const loading = ref(false)
 const errorMessage = ref('')
+const drawerOpen = ref(false)
 const dialogVisible = ref(false)
 const dialogMode = ref('create')
 const dialogInitial = ref<Record<string, unknown> | null>(null)
@@ -115,35 +116,49 @@ defineExpose({ fetchIncidents })
 </script>
 
 <template>
-  <SectionCard
-    title="事件"
-    :count="records.length"
-    count-type="danger"
-    :loading="loading"
-    :error-message="errorMessage"
-    :empty-description="ctx.filters.classroomId ? '期間內沒有事件紀錄' : '請先選擇班級'"
-    :show-empty="records.length === 0"
-    @retry="fetchIncidents"
-  >
-    <template #actions>
-      <el-button
-        size="small"
-        type="primary"
-        :disabled="!ctx.filters.classroomId"
-        @click="openCreate"
-      >
-        新增事件
-      </el-button>
-    </template>
+  <div class="record-entry">
+    <button type="button" class="record-trigger" @click="drawerOpen = true">
+      <el-badge :value="records.length" type="danger" class="record-trigger-badge">
+        <span class="record-trigger-label">事件</span>
+      </el-badge>
+      <span class="record-trigger-hint">查看 / 新增</span>
+      <span class="record-trigger-arrow" aria-hidden="true">›</span>
+    </button>
 
-    <el-table
-      v-if="records.length"
-      :data="records"
-      stripe
-      size="small"
-      style="width: 100%"
-      max-height="360"
+    <el-drawer
+      v-model="drawerOpen"
+      :title="`事件 · ${records.length}`"
+      size="720px"
+      append-to-body
     >
+      <div style="display: flex; justify-content: flex-end; margin-bottom: var(--space-3)">
+        <el-button
+          size="small"
+          type="primary"
+          :disabled="!ctx.filters.classroomId"
+          @click="openCreate"
+        >
+          新增事件
+        </el-button>
+      </div>
+
+      <SectionCard
+        title="事件"
+        hide-header
+        :loading="loading"
+        :error-message="errorMessage"
+        :empty-description="ctx.filters.classroomId ? '期間內沒有事件紀錄' : '請先選擇班級'"
+        :show-empty="records.length === 0"
+        @retry="fetchIncidents"
+      >
+        <el-table
+          v-if="records.length"
+          :data="records"
+          stripe
+          size="small"
+          style="width: 100%"
+          max-height="560"
+        >
       <el-table-column label="時間" width="150">
         <template #default="{ row }">{{ formatDateTime(row.occurred_at) }}</template>
       </el-table-column>
@@ -174,16 +189,18 @@ defineExpose({ fetchIncidents })
           <el-button link size="small" type="danger" @click="removeRow(row)">刪除</el-button>
         </template>
       </el-table-column>
-    </el-table>
+        </el-table>
+      </SectionCard>
 
-    <IncidentEditorDialog
-      v-model:visible="dialogVisible"
-      :mode="dialogMode"
-      :initial="dialogInitial"
-      :classrooms="props.classrooms"
-      :default-classroom-id="(ctx.filters.classroomId as number | null)"
-      :default-student-id="(ctx.filters.studentId as number | null)"
-      :lock-student="!!ctx.filters.studentId && dialogMode === 'create'"
-    />
-  </SectionCard>
+      <IncidentEditorDialog
+        v-model:visible="dialogVisible"
+        :mode="dialogMode"
+        :initial="dialogInitial"
+        :classrooms="props.classrooms"
+        :default-classroom-id="(ctx.filters.classroomId as number | null)"
+        :default-student-id="(ctx.filters.studentId as number | null)"
+        :lock-student="!!ctx.filters.studentId && dialogMode === 'create'"
+      />
+    </el-drawer>
+  </div>
 </template>

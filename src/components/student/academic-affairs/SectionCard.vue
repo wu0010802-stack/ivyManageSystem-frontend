@@ -10,6 +10,7 @@ withDefaults(defineProps<{
   emptyDescription?: string
   showEmpty?: boolean
   openFullRoute?: Record<string, unknown> | null
+  hideHeader?: boolean
 }>(), {
   count: null,
   countType: 'primary',
@@ -18,6 +19,7 @@ withDefaults(defineProps<{
   emptyDescription: '沒有資料',
   showEmpty: false,
   openFullRoute: null,
+  hideHeader: false,
 })
 
 defineEmits<{ 'retry': [] }>()
@@ -25,7 +27,7 @@ defineEmits<{ 'retry': [] }>()
 
 <template>
   <el-card shadow="never" class="section-card">
-    <template #header>
+    <template v-if="!hideHeader" #header>
       <div class="section-head">
         <div class="section-title">
           <span class="title-text">{{ title }}</span>

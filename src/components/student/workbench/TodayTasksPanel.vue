@@ -215,8 +215,14 @@ onMounted(async () => {
     <div class="sections-grid">
       <AttendanceSection />
       <LeaveSection />
-      <AssessmentSection :classrooms="classrooms" />
-      <IncidentSection :classrooms="classrooms" />
+    </div>
+
+    <div class="secondary-records">
+      <span class="secondary-records-label">次要紀錄</span>
+      <div class="secondary-records-entries">
+        <AssessmentSection :classrooms="classrooms" />
+        <IncidentSection :classrooms="classrooms" />
+      </div>
     </div>
   </div>
 </template>
@@ -275,6 +281,72 @@ onMounted(async () => {
   .sections-grid {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+.secondary-records {
+  margin-top: var(--space-4);
+}
+
+.secondary-records-label {
+  display: block;
+  margin-bottom: var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.secondary-records-entries {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+@media (max-width: 768px) {
+  .secondary-records-entries {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* 觸發鈕由子元件 (AssessmentSection / IncidentSection) 渲染，故用 :deep 穿透 */
+.secondary-records :deep(.record-entry) {
+  width: 100%;
+}
+
+.secondary-records :deep(.record-trigger) {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--neutral-200);
+  border-radius: var(--radius-lg);
+  background: var(--neutral-50);
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+
+.secondary-records :deep(.record-trigger:hover) {
+  background: var(--neutral-100);
+  border-color: var(--neutral-300);
+}
+
+.secondary-records :deep(.record-trigger-label) {
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--text-primary);
+}
+
+.secondary-records :deep(.record-trigger-hint) {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.secondary-records :deep(.record-trigger-arrow) {
+  margin-left: auto;
+  color: var(--text-secondary);
+  font-size: var(--text-xl);
+  line-height: 1;
 }
 
 .section-placeholder {
