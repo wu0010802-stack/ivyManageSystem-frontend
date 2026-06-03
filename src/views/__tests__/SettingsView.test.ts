@@ -33,7 +33,6 @@ const globalConfig = {
     SettingsUsersTab: { template: '<div data-test="users-tab" />' },
     SettingsApprovalTab: { template: '<div data-test="approval-tab" />' },
     SettingsLineTab: { template: '<div data-test="line-tab" />' },
-    SettingsAcademicTermsTab: { template: '<div data-test="academic-tab" />' },
     SettingsPermissionsTab: { template: '<div data-test="permissions-tab" />' },
     SettingsObservabilityTab: { template: '<div data-test="observability-tab" />' },
     DsrRequestsView: { template: '<div data-test="dsr-view" />' },

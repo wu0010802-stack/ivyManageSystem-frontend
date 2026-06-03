@@ -5,7 +5,6 @@ import SettingsShiftTab from '@/components/settings/SettingsShiftTab.vue'
 import SettingsUsersTab from '@/components/settings/SettingsUsersTab.vue'
 import SettingsApprovalTab from '@/components/settings/SettingsApprovalTab.vue'
 import SettingsLineTab from '@/components/settings/SettingsLineTab.vue'
-import SettingsAcademicTermsTab from '@/components/settings/SettingsAcademicTermsTab.vue'
 import SettingsPermissionsTab from '@/components/settings/SettingsPermissionsTab.vue'
 import SettingsObservabilityTab from '@/components/settings/SettingsObservabilityTab.vue'
 import DsrRequestsView from '@/views/DsrRequestsView.vue'
@@ -39,9 +38,6 @@ onMounted(() => {
       <el-tab-pane name="line">
         <template #label>LINE 通知設定 <el-tag type="warning" size="small" style="margin-left:4px;">Beta</el-tag></template>
         <SettingsLineTab v-if="activeTab === 'line'" />
-      </el-tab-pane>
-      <el-tab-pane label="學年/學期" name="academic-terms" lazy>
-        <SettingsAcademicTermsTab />
       </el-tab-pane>
       <el-tab-pane label="排程觀測" name="observability" lazy>
         <SettingsObservabilityTab v-if="activeTab === 'observability'" />
