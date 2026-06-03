@@ -136,11 +136,10 @@ describe('AdminSidebar 9-IA structure', () => {
     expect(item.text()).toContain('月度月報')
   })
 
-  it('「系統設定」含考核管理 /appraisal-management', async () => {
+  it('「系統設定」不再含考核管理（已整併至人事薪資「考核與年終」）', async () => {
     const wrapper = await mountSidebar()
-    const item = wrapper.find('[data-index="/appraisal-management"]')
-    expect(item.exists()).toBe(true)
-    expect(item.text()).toContain('考核管理')
+    const items = wrapper.findAll('[data-index="/appraisal-management"]')
+    expect(items.length).toBe(0)
   })
 
   it('「系統設定」含報名時間設定 /activity/settings', async () => {
@@ -150,14 +149,11 @@ describe('AdminSidebar 9-IA structure', () => {
     expect(item.text()).toContain('報名時間設定')
   })
 
-  it('「人事薪資」不再含考核管理', async () => {
-    // 考核管理移入系統設定，人事薪資組 (group-leave) 不含它
-    // 使用 group-leave el-sub-menu 對應的 slot 片段
+  it('「人事薪資」含「考核與年終」整合入口 /appraisal-year-end', async () => {
     const wrapper = await mountSidebar()
-    // data-index="/appraisal-management" 存在（在系統設定組）
-    const items = wrapper.findAll('[data-index="/appraisal-management"]')
-    // 應只有一個（系統設定組），不重複出現
-    expect(items.length).toBe(1)
+    const item = wrapper.find('[data-index="/appraisal-year-end"]')
+    expect(item.exists()).toBe(true)
+    expect(item.text()).toContain('考核與年終')
   })
 
   it('「廠商付款簽收」保留在園務行政', async () => {
@@ -167,11 +163,10 @@ describe('AdminSidebar 9-IA structure', () => {
     expect(item.text()).toContain('廠商付款簽收')
   })
 
-  it('「年終獎金」保留在人事薪資', async () => {
+  it('「年終獎金 / 考核年終 payout」獨立項目已整併（不再單獨出現）', async () => {
     const wrapper = await mountSidebar()
-    const item = wrapper.find('[data-index="/year_end/cycles"]')
-    expect(item.exists()).toBe(true)
-    expect(item.text()).toContain('年終獎金')
+    expect(wrapper.find('[data-index="/year_end/cycles"]').exists()).toBe(false)
+    expect(wrapper.find('[data-index="/year-end/appraisal-payout"]').exists()).toBe(false)
   })
 })
 
