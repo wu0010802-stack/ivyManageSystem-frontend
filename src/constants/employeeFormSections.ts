@@ -9,18 +9,19 @@ export const EMPLOYEE_FIELD_SECTION: Record<string, EmployeeFormSection> = {
   employee_id: 'core',
   job_title_id: 'core',
   employee_type: 'core',
+  gender: 'core',
   hire_date: 'core',
   classroom_id: 'core',
   // 職務細節
   position: 'jobDetail',
   supervisor_role: 'jobDetail',
-  department: 'jobDetail',
   bonus_grade: 'jobDetail',
   probation_end_date: 'jobDetail',
   // 個資・聯絡・緊急聯絡
   birthday: 'personal',
   id_number: 'personal',
   phone: 'personal',
+  email: 'personal',
   address: 'personal',
   dependents: 'personal',
   emergency_contact_name: 'personal',
@@ -45,6 +46,7 @@ export const EMPLOYEE_FIELD_SECTION: Record<string, EmployeeFormSection> = {
   pension_insured_salary: 'salary',
   extra_dependents_quarterly: 'salary',
   insurance_salary_override_reason: 'salary',
+  insurance_effective_date: 'salary',
 }
 
 export function sectionForField(prop: string): EmployeeFormSection {

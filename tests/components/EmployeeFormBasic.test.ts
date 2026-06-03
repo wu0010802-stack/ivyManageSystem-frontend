@@ -76,6 +76,14 @@ describe('EmployeeFormBasic', () => {
     expect(badge.text()).toBe('1')
   })
 
+  it('渲染性別與 Email 欄位，且不再有部門', () => {
+    const wrapper = mountForm()
+    const text = wrapper.text()
+    expect(text).toContain('性別')
+    expect(text).toContain('Email')
+    expect(text).not.toContain('部門')
+  })
+
   it('收合區欄位仍被 el-form.validate 偵測（v-show 保持掛載）並可展開', async () => {
     // This test proves that v-show keeps the gov section's form-items mounted
     // (accessible to el-form.validate) even when the section is collapsed.

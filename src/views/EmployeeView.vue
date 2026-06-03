@@ -14,8 +14,6 @@ import { getRecords as getAttendanceRecords, uploadCsv, deleteEmployeeDateRecord
 import { getPositionSalary } from '@/api/config'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
-import FormSection from '@/components/common/FormSection.vue'
-import { sectionForField } from '@/constants/employeeFormSections'
 import EmptyState from '@/components/common/EmptyState.vue'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
 import { useEmployeeStore } from '@/stores/employee'
@@ -54,8 +52,6 @@ const currentDetail = ref<Record<string, unknown>>({})
 const detailDialogVisible = ref(false)
 const formRef = ref<FormInstance | null>(null)
 const basicFormRef = ref<{ applyValidationErrors: (p: string[]) => void } | null>(null)
-const salarySectionRef = ref<{ expand: () => void } | null>(null)
-const salarySectionErrors = ref(0)
 
 // ── 權限 ──────────────────────────────────────────────
 const canWriteEmployees = computed(() => hasPermission('EMPLOYEES_WRITE'))
@@ -70,6 +66,7 @@ const rules: FormRules = {
   extra_dependents_quarterly: [{ type: 'number', min: 0, max: 10, message: '加保眷屬數需介於 0–10', trigger: 'blur' }],
   insurance_salary_override_reason: [{ max: 200, message: '不可超過 200 字', trigger: 'blur' }],
   teacher_cert_no: [{ max: 50, message: '不可超過 50 字', trigger: 'blur' }],
+  email: [{ type: 'email', message: 'Email 格式不正確', trigger: 'blur' }],
 }
 
 const positionSalaryConfig = ref<Record<string, number> | null>(null)
@@ -99,7 +96,6 @@ interface EmployeeForm {
   position: string
   supervisor_role: string | null
   bonus_grade: string | null
-  department: string
   phone: string
   address: string
   emergency_contact_name: string
@@ -107,6 +103,9 @@ interface EmployeeForm {
   hire_date: string
   probation_end_date: string
   birthday: string
+  gender: string
+  email: string
+  insurance_effective_date: string
   classroom_id: number | null
   base_salary: number
   hourly_rate: number
@@ -144,7 +143,6 @@ const form = reactive<EmployeeForm>({
   position: '',
   supervisor_role: null,
   bonus_grade: null,
-  department: 'Teaching',
   phone: '',
   address: '',
   emergency_contact_name: '',
@@ -152,6 +150,9 @@ const form = reactive<EmployeeForm>({
   hire_date: '',
   probation_end_date: '',
   birthday: '',
+  gender: '',
+  email: '',
+  insurance_effective_date: '',
   classroom_id: null,
   base_salary: 0,
   hourly_rate: 0,
@@ -204,7 +205,8 @@ const insuranceError = computed(() =>
 
 // ── 欄位標籤（預覽對話框用）──────────────────────────
 const FIELD_LABELS = {
-  name: '姓名', phone: '電話', address: '地址',
+  name: '姓名', gender: '性別', email: 'Email', phone: '電話', address: '地址',
+  insurance_effective_date: '加保生效日',
   base_salary: '底薪', hourly_rate: '時薪',
   insurance_salary_level: '投保級距', pension_self_rate: '勞退自提',
   bank_code: '銀行代碼', bank_account: '銀行帳號',
@@ -215,7 +217,7 @@ const FIELD_LABELS = {
   bonus_grade: '獎金等級',
   emergency_contact_name: '緊急聯絡人',
   emergency_contact_phone: '緊急聯絡電話',
-  department: '部門', dependents: '眷屬人數',
+  dependents: '眷屬人數',
   probation_end_date: '試用期截止',
   work_start_time: '上班時間', work_end_time: '下班時間',
   id_number: '身分證字號',
@@ -383,14 +385,12 @@ const resetForm = () => {
   form.supervisor_role = null
   form.classroom_id = null
   form.bonus_grade = null
-  form.department = 'Teaching'
   form.work_start_time = '08:00'
   form.work_end_time = '17:00'
   // 議題 B 分項投保 null（reset 預設 0 不適用，須 null 以走 fallback）
   form.labor_insured_salary = null
   form.health_insured_salary = null
   form.pension_insured_salary = null
-  salarySectionErrors.value = 0
   suggestedSalary.value = null
 }
 
@@ -678,9 +678,6 @@ const saveCreate = async () => {
     if (!valid) {
       const props = Object.keys(invalidFields ?? {})
       basicFormRef.value?.applyValidationErrors(props)
-      const salaryProps = props.filter(p => sectionForField(p) === 'salary')
-      salarySectionErrors.value = salaryProps.length
-      if (salaryProps.length > 0) salarySectionRef.value?.expand()
       await nextTick()
       if (props[0]) formEl.scrollToField(props[0])
       return
@@ -814,6 +811,10 @@ onMounted(async () => {
             <el-tag :type="getEmployeeStatus(scope.row).type" size="small">
               {{ getEmployeeStatus(scope.row).label }}
             </el-tag>
+            <el-tag
+              v-if="scope.row.is_active && scope.row.employee_type === 'regular' && scope.row.base_salary === 0"
+              type="warning" size="small" effect="plain" style="margin-left:4px"
+            >待補薪資</el-tag>
           </template>
         </el-table-column>
         <el-table-column fixed="right" label="操作" width="280">
@@ -859,30 +860,6 @@ onMounted(async () => {
             :classroom-options="classroomOptions"
             :is-self-edit="isSelfEdit"
           />
-          <FormSection
-            ref="salarySectionRef"
-            title="薪資・投保・銀行"
-            collapsible
-            :default-open="false"
-            :badge-count="salarySectionErrors"
-            badge-type="error"
-          >
-            <el-alert
-              v-if="pendingSuggestion"
-              type="info" :closable="false" show-icon style="margin-bottom:12px"
-            >依職稱建議底薪 {{ Number(suggestedSalary).toLocaleString() }}，可於下方套用</el-alert>
-            <EmployeeFormSalary
-              :form="form"
-              :is-readonly="isSalaryReadonly"
-              :readonly-reason="salaryReadonlyReason"
-              :pending-suggestion="pendingSuggestion"
-              :suggested-salary="suggestedSalary"
-              :insurance-error="insuranceError"
-              @apply-suggestion="applySuggestion"
-              @dismiss-suggestion="dismissSuggestion"
-              @sync-insurance="syncInsuranceToBase"
-            />
-          </FormSection>
         </template>
 
         <!-- 編輯：維持既有兩分頁 + dirty/preview/reason-gate -->
