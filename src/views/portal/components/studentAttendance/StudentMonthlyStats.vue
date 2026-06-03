@@ -1,16 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Bar } from 'vue-chartjs'
-import {
-  Chart as ChartJS,
-  BarElement,
-  CategoryScale,
-  LinearScale,
-  Tooltip,
-  Legend,
-} from 'chart.js'
-
-ChartJS.register(BarElement, CategoryScale, LinearScale, Tooltip, Legend)
+import { BarChart } from '@/composables/useChartJs'
 
 interface MonthlyStudent { name?: string; attendance_rate?: number; [key: string]: unknown }
 interface MonthlyData {
@@ -125,7 +115,7 @@ const chartOptions = {
           </div>
         </template>
         <div class="chart-container">
-          <Bar v-if="chartData" :data="chartData" :options="chartOptions" />
+          <BarChart v-if="chartData" :data="chartData" :options="chartOptions" />
         </div>
       </el-card>
 

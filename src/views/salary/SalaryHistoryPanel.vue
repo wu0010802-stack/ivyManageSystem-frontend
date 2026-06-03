@@ -4,21 +4,8 @@ import { getHistory } from '@/api/salary'
 import { ElMessage } from 'element-plus'
 import { useEmployeeStore } from '@/stores/employee'
 import { money } from '@/utils/format'
-import { Line } from 'vue-chartjs'
+import { LineChart } from '@/composables/useChartJs'
 import type { ChartOptions } from 'chart.js'
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title as ChartTitle,
-  Tooltip,
-  Legend,
-  Filler
-} from 'chart.js'
-
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, ChartTitle, Tooltip, Legend, Filler)
 
 interface HistoryRow {
   year: number
@@ -141,7 +128,7 @@ onMounted(() => {
     <div v-if="historyData.length > 0" v-loading="historyLoading">
       <el-card class="chart-card" v-if="chartData">
         <div class="chart-container">
-          <Line :data="chartData" :options="chartOptions" />
+          <LineChart :data="chartData" :options="chartOptions" />
         </div>
       </el-card>
 
