@@ -3072,7 +3072,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/attendance/records/{year}/{month}": {
+    "/attendance/records/month/{year}/{month}": {
         parameters: {
             query?: never;
             header?: never;
@@ -3084,9 +3084,12 @@ export interface paths {
         post?: never;
         /**
          * Delete Attendance Records
-         * @description 刪除指定月份的所有考勤記錄
+         * @description 刪除指定月份的所有考勤記錄。
+         *
+         *     path 刻意用 /records/month/{year}/{month}（而非 /records/{year}/{month}），
+         *     避免與單筆刪除 /records/{employee_id}/{date_str} 同為 2-segment 而被遮蔽（P1-6）。
          */
-        delete: operations["delete_attendance_records_api_attendance_records__year___month__delete"];
+        delete: operations["delete_attendance_records_api_attendance_records_month__year___month__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -31506,7 +31509,7 @@ export interface operations {
             };
         };
     };
-    delete_attendance_records_api_attendance_records__year___month__delete: {
+    delete_attendance_records_api_attendance_records_month__year___month__delete: {
         parameters: {
             query?: never;
             header?: never;

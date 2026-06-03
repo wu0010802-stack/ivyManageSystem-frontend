@@ -118,7 +118,7 @@ defineExpose({ fetchIncidents })
 <template>
   <div class="record-entry">
     <button type="button" class="record-trigger" @click="drawerOpen = true">
-      <el-badge :value="records.length" type="danger" class="record-trigger-badge">
+      <el-badge :value="records.length" type="info" class="record-trigger-badge">
         <span class="record-trigger-label">事件</span>
       </el-badge>
       <span class="record-trigger-hint">查看 / 新增</span>

@@ -80,7 +80,9 @@ defineEmits<{ 'retry': [] }>()
       v-if="!loading && !errorMessage && showEmpty"
       :description="emptyDescription"
       :image-size="48"
-    />
+    >
+      <slot name="empty-action" />
+    </el-empty>
   </el-card>
 </template>
 
@@ -101,7 +103,7 @@ defineEmits<{ 'retry': [] }>()
   font-weight: 600;
 }
 .title-text {
-  font-size: 15px;
+  font-size: var(--text-lg);
 }
 .section-actions {
   display: flex;

@@ -385,9 +385,8 @@ onMounted(async () => {
 <template>
   <div class="student-page">
     <div class="page-header">
-      <h2>學生管理</h2>
       <div class="header-actions">
-        <el-button type="success" @click="exportStudents">匯出 Excel</el-button>
+        <el-button @click="exportStudents">匯出 Excel</el-button>
         <el-button
           v-if="activeTab === 'active'"
           plain
@@ -466,7 +465,7 @@ onMounted(async () => {
             placement="top"
             :content="[row.allergy && `過敏：${row.allergy}`, row.medication && `用藥：${row.medication}`, row.special_needs && `特殊需求：${row.special_needs}`].filter(Boolean).join(' ／ ')"
           >
-            <el-icon style="color: #e6a23c; margin-left: 4px; vertical-align: middle"><Warning /></el-icon>
+            <el-icon style="color: var(--el-color-warning); margin-left: 4px; vertical-align: middle"><Warning /></el-icon>
           </el-tooltip>
         </template>
       </el-table-column>
@@ -595,7 +594,7 @@ onMounted(async () => {
       />
       <template #footer>
         <el-button @click="graduateDialogVisible = false">取消</el-button>
-        <el-button type="warning" @click="submitGraduate">確認離園</el-button>
+        <el-button type="primary" @click="submitGraduate">確認離園</el-button>
       </template>
     </el-dialog>
 
@@ -634,6 +633,17 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+.page-header {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: var(--space-4);
+}
+
+.header-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
 .filter-section {
   margin-bottom: var(--space-5);
 }

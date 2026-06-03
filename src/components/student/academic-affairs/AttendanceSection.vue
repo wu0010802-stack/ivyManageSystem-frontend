@@ -100,7 +100,7 @@ defineExpose({ fetchDaily })
   <SectionCard
     title="出席"
     :count="summary.total"
-    count-type="primary"
+    count-type="info"
     :loading="loading"
     :error-message="errorMessage"
     :empty-description="ctx.filters.classroomId ? '當日沒有資料' : '請先選擇班級'"
@@ -116,6 +116,11 @@ defineExpose({ fetchDaily })
         @click="batchDrawerOpen = true"
       >
         批次點名
+      </el-button>
+    </template>
+    <template v-if="ctx.filters.classroomId" #empty-action>
+      <el-button size="small" type="primary" @click="batchDrawerOpen = true">
+        前往批次點名
       </el-button>
     </template>
     <template #summary>

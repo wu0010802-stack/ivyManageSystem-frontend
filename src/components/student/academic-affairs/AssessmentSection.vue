@@ -118,7 +118,7 @@ defineExpose({ fetchAssessments })
 <template>
   <div class="record-entry">
     <button type="button" class="record-trigger" @click="drawerOpen = true">
-      <el-badge :value="filteredRows.length" type="primary" class="record-trigger-badge">
+      <el-badge :value="filteredRows.length" type="info" class="record-trigger-badge">
         <span class="record-trigger-label">評量</span>
       </el-badge>
       <span class="record-trigger-hint">查看 / 新增</span>

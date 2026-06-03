@@ -11,9 +11,9 @@ export const getRecords = (params: unknown) => api.get('/attendance/records', { 
 
 export const getSummary = (params: unknown) => api.get('/attendance/summary', { params })
 
-// 刪除整月份考勤
+// 刪除整月份考勤（path 用 /records/month/... 避免與單筆刪除路由遮蔽，見後端 P1-6）
 export const deleteMonthRecords = (year: number, month: number) =>
-  api.delete(`/attendance/records/${year}/${month}`)
+  api.delete(`/attendance/records/month/${year}/${month}`)
 
 // 刪除特定員工某日考勤
 export const deleteEmployeeDateRecord = (employeeId: number, date: string) =>

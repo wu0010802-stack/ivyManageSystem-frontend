@@ -146,14 +146,9 @@ onMounted(async () => {
 
 <template>
   <div class="today-tasks-panel">
-    <div class="panel-header">
-      <div>
-        <h2>今日任務池</h2>
-        <p class="panel-subtitle">
-          出席、請假、評量、事件四個區塊，依班級與日期區間同步顯示。
-        </p>
-      </div>
-    </div>
+    <p class="panel-subtitle">
+      出席、請假、評量、事件依下方班級與日期區間顯示；出席為當日點名，僅呈現區間結束日當天。
+    </p>
 
     <el-card shadow="never" class="filter-card">
       <div class="filter-row">
@@ -232,16 +227,8 @@ onMounted(async () => {
   padding: var(--space-4) 0;
 }
 
-.panel-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-}
-
 .panel-subtitle {
-  margin-top: var(--space-1);
+  margin: 0;
   color: var(--text-secondary);
 }
 
