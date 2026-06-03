@@ -13146,6 +13146,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/vendor-payments/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Vendor Payments Summary
+         * @description 區間彙總（跨狀態）：供前端 KPI 卡。
+         *
+         *     range 篩選（日期 / 廠商 / 收付方式）與列表一致，但**不吃 status**——
+         *     一律回全狀態並拆 pending / signed，讓「本期總額 / 待簽收 / 已簽收」
+         *     三張卡同時有意義。sum 走 SQL group_by 聚合，不受列表分頁限制、無 N+1。
+         *
+         *     NOTE: 本路由必須宣告在 ``/vendor-payments/{payment_id}`` 之前，否則
+         *     "summary" 會被當成 payment_id 解析（422）。
+         */
+        get: operations["vendor_payments_summary_api_vendor_payments_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/year_end/appraisal-payout": {
         parameters: {
             query?: never;
@@ -26354,6 +26381,29 @@ export interface components {
              * @enum {string}
              */
             signature_kind: "drawn" | "photo";
+        };
+        /**
+         * VendorPaymentSummaryOut
+         * @description GET /vendor-payments/summary 區間彙總（供前端 KPI 卡使用）。
+         *
+         *     依與列表相同的 range 篩選（start_date / end_date / vendor_name /
+         *     payment_method）彙總，但**不**受 status 篩選影響——一律回全狀態並拆
+         *     pending / signed，讓 KPI 卡同時呈現「本期總額 / 待簽收 / 已簽收」。
+         *     跨狀態 sum 走 SQL 聚合（非 N+1），不受列表分頁限制。
+         */
+        VendorPaymentSummaryOut: {
+            /** Pending Amount */
+            pending_amount: unknown;
+            /** Pending Count */
+            pending_count: unknown;
+            /** Signed Amount */
+            signed_amount: unknown;
+            /** Signed Count */
+            signed_count: unknown;
+            /** Total Amount */
+            total_amount: unknown;
+            /** Total Count */
+            total_count: unknown;
         };
         /** VendorPaymentUpdate */
         VendorPaymentUpdate: {
@@ -49816,6 +49866,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    vendor_payments_summary_api_vendor_payments_summary_get: {
+        parameters: {
+            query?: {
+                end_date?: string | null;
+                payment_method?: ("cash" | "bank_transfer" | "check" | "linepay" | "other") | null;
+                start_date?: string | null;
+                vendor_name?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VendorPaymentSummaryOut"];
                 };
             };
             /** @description Validation Error */
