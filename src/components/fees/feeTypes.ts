@@ -18,6 +18,9 @@ export const FEE_TYPES = [
   { value: 'insurance', label: '保險費', source: 'record', backend_key: 'insurance' },
 ]
 
+// 不可退費的費別（代購品/保險費）。前端 UI 預擋用；後端 api/fees/refunds.py 為強制 gate，兩端須一致。
+export const NON_REFUNDABLE_FEE_TYPES = ['material', 'insurance'] as const
+
 // backend fee_type → 樞紐欄位 value
 export const FEE_TYPE_BACKEND_TO_COLUMN = Object.fromEntries(
   FEE_TYPES.filter((t) => t.source === 'record' && t.backend_key).map((t) => [t.backend_key, t.value]),

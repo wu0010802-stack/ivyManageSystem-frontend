@@ -34,7 +34,12 @@ const userInfo = computed(() => getUserInfo() || {})
 const hasEmployee = computed(() => (userInfo.value as { employee_id?: unknown }).employee_id != null)
 
 const roleLabel = computed(() => {
-  const map: Record<string, string> = { admin: '系統管理員', hr: '人事', supervisor: '主管', teacher: '教師' }
+  // 優先用 API 回傳的 role_label（後端 7 角色全含）；此 map 僅 role_label 缺失時 fallback，
+  // 對齊後端 utils/permissions.py ROLE_LABELS 補齊 principal/accountant/parent。
+  const map: Record<string, string> = {
+    admin: '系統管理員', principal: '園長', supervisor: '主管',
+    hr: '人事', accountant: '會計', teacher: '教師', parent: '家長',
+  }
   const u = userInfo.value as { role_label?: string; role?: string }
   return u.role_label || (u.role ? map[u.role] : undefined) || u.role || '-'
 })

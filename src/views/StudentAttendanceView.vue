@@ -1,15 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Bar } from 'vue-chartjs'
-import {
-  Chart as ChartJS,
-  BarElement,
-  CategoryScale,
-  LinearScale,
-  Tooltip,
-  Legend,
-} from 'chart.js'
+import { BarChart } from '@/composables/useChartJs'
 
 import { apiError } from '@/utils/error'
 import { useAcademicTermStore } from '@/stores/academicTerm'
@@ -24,8 +16,6 @@ import {
 import { downloadFile } from '@/utils/download'
 import { buildStudentProfileLink } from '@/utils/studentLinks'
 import AttendanceBatchPanel from '@/components/student/academic-affairs/AttendanceBatchPanel.vue'
-
-ChartJS.register(BarElement, CategoryScale, LinearScale, Tooltip, Legend)
 
 const TODAY = todayISO()
 
@@ -514,7 +504,7 @@ onMounted(async () => {
                 <div class="card-title">{{ monthlyData.classroom_name }} {{ monthlyData.year }} 年 {{ monthlyData.month }} 月出席率</div>
               </template>
               <div class="chart-container">
-                <Bar v-if="chartData" :data="chartData" :options="chartOptions" />
+                <BarChart v-if="chartData" :data="chartData" :options="chartOptions" />
               </div>
             </el-card>
 

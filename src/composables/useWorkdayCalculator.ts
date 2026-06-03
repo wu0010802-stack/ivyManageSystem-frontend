@@ -241,7 +241,11 @@ export function useWorkdayCalculator({ form, fetchFn = null }: { form: Record<st
       return
     }
     const dateStr = leaveSingleDate.value || (form.start_date ? (form.start_date as string).substring(0, 10) : '')
-    if (dateStr) {
+    // 僅在「沒有既有時段」時填入預設 08:00–17:00。編輯既有自訂時段假單時
+    // populateFormFromRecord 已把 start_date 填成 'YYYY-MM-DD HH:MM:SS'（含時段），
+    // 此時不可覆寫，否則會把載入的結束時間清成 17:00 → leave_hours 被連鎖重算成全日。
+    const hasExistingTime = typeof form.start_date === 'string' && (form.start_date as string).length > 10
+    if (dateStr && !hasExistingTime) {
       form.start_date = `${dateStr} 08:00:00`
       form.end_date = `${dateStr} 17:00:00`
     }

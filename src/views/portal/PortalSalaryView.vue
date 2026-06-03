@@ -3,6 +3,7 @@ import { computed, ref, reactive, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { InfoFilled } from '@element-plus/icons-vue'
 import { getSalaryPreview } from '@/api/portal'
+import { computeIndependentBonusNet } from './portalSalaryBonus'
 
 const loading = ref(false)
 const salaryData = ref<Record<string, unknown> | null>(null)
@@ -54,6 +55,10 @@ const nextMonth = () => {
 
 const attendanceStats = computed(() => salaryData.value?.attendance_stats as Record<string, unknown> | undefined)
 const salary = computed(() => salaryData.value?.salary as Record<string, unknown> | undefined)
+
+// 獨立獎金淨額：festival_bonus 已在後端發放月扣除會議缺席扣款，此處僅加總不可再減
+// （計算與「不可雙重扣減」的原因註解見 ./portalSalaryBonus）。
+const independentBonusNet = computed(() => computeIndependentBonusNet(salary.value))
 
 onMounted(fetchSalary)
 </script>
@@ -185,11 +190,14 @@ onMounted(fetchSalary)
           <el-descriptions-item label="超額獎金">
             NT$ {{ salary?.overtime_bonus?.toLocaleString() || 0 }}
           </el-descriptions-item>
-          <el-descriptions-item label="會議缺席扣減">
-            <span class="text-warning">-NT$ {{ salary?.meeting_absence_deduction?.toLocaleString() || 0 }}</span>
+          <el-descriptions-item
+            v-if="(salary?.meeting_absence_deduction as number) > 0"
+            label="會議缺席扣減（已自節慶獎金扣除）"
+          >
+            <span class="text-warning">-NT$ {{ (salary?.meeting_absence_deduction as number)?.toLocaleString() || 0 }}</span>
           </el-descriptions-item>
           <el-descriptions-item label="獨立獎金淨額">
-            NT$ {{ (((salary?.festival_bonus as number) || 0) + ((salary?.overtime_bonus as number) || 0) - ((salary?.meeting_absence_deduction as number) || 0)).toLocaleString() }}
+            NT$ {{ independentBonusNet.toLocaleString() }}
           </el-descriptions-item>
         </el-descriptions>
 

@@ -2,18 +2,15 @@ import { describe, it, expect, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import StudentMonthlyStats from '@/views/portal/components/studentAttendance/StudentMonthlyStats.vue'
 
-vi.mock('chart.js', () => ({
-  Chart: { register: vi.fn() },
-  CategoryScale: {},
-  LinearScale: {},
-  BarElement: {},
-  Title: {},
-  Tooltip: {},
-  Legend: {},
-}))
-
-vi.mock('vue-chartjs', () => ({
-  Bar: { name: 'Bar', template: '<canvas data-test="bar-chart" />', props: ['data', 'options'] },
+// 元件改用 @/composables/useChartJs 的 BarChart（defineAsyncComponent，內部負責
+// import('chart.js') + register）。stub 在 useChartJs 層比照 MeasurementChart.spec.js，
+// 避免 async chart 元件在同步斷言下不渲染、也避免不完整的 chart.js mock 觸發 unhandled rejection。
+vi.mock('@/composables/useChartJs', () => ({
+  BarChart: {
+    name: 'BarChart',
+    props: ['data', 'options'],
+    template: '<canvas data-test="bar-chart" />',
+  },
 }))
 
 const DATA = {

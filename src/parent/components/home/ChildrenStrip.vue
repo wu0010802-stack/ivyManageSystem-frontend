@@ -7,6 +7,7 @@
  */
 import ParentIcon from '../ParentIcon.vue'
 import CrownIcon from '@/components/brand/CrownIcon.vue'
+import { LIFECYCLE_LABELS_PARENT as LIFECYCLE_LABELS } from '@/constants/lifecycle'
 
 interface Child {
   guardian_id: number
@@ -33,16 +34,7 @@ const emit = defineEmits<{
   'navigate': [path: string]
 }>()
 
-const LIFECYCLE_LABELS: Record<string, string> = {
-  active: '在學',
-  enrolled: '在學',
-  on_leave: '休學中',
-  withdrawn: '已退學',
-  transferred: '已轉出',
-  graduated: '已畢業',
-  prospect: '招生中',
-}
-
+// lifecycle label（家長受眾用語）改用單一來源 @/constants/lifecycle
 function lifecycleLabel(s: string | undefined): string {
   return (s ? LIFECYCLE_LABELS[s] : null) || s || ''
 }

@@ -79,6 +79,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getCurrentAcademicTerm } from '@/utils/academic'
 import { getChangeLogOptions } from '@/api/studentChangeLogs'
+import { STUDENT_CHANGE_LOG_EVENT_TYPES } from '@/constants/studentChangeLogEventTypes'
 import { getStudents } from '@/api/students'
 import { useStudentRecordsStore } from '@/stores/studentRecords'
 import { todayISO, dateToLocalISO } from '@/utils/format'
@@ -187,7 +188,7 @@ const loadOptions = async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     reasonOptions.value = (res as any).data?.reason_options || {}
   } catch {
-    eventTypes.value = ['入學', '復學', '退學', '轉出', '轉入', '畢業']
+    eventTypes.value = [...STUDENT_CHANGE_LOG_EVENT_TYPES]
   } finally {
     optionsLoaded.value = true
   }
