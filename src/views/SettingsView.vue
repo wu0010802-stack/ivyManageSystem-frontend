@@ -8,6 +8,9 @@ import SettingsLineTab from '@/components/settings/SettingsLineTab.vue'
 import SettingsAcademicTermsTab from '@/components/settings/SettingsAcademicTermsTab.vue'
 import SettingsPermissionsTab from '@/components/settings/SettingsPermissionsTab.vue'
 import SettingsObservabilityTab from '@/components/settings/SettingsObservabilityTab.vue'
+import DsrRequestsView from '@/views/DsrRequestsView.vue'
+import PolicyVersionsView from '@/views/PolicyVersionsView.vue'
+import { hasPermission } from '@/utils/auth'
 
 const activeTab = ref('shifts')
 const shiftStore = useShiftStore()
@@ -42,6 +45,20 @@ onMounted(() => {
       </el-tab-pane>
       <el-tab-pane label="排程觀測" name="observability" lazy>
         <SettingsObservabilityTab v-if="activeTab === 'observability'" />
+      </el-tab-pane>
+      <el-tab-pane
+        v-if="hasPermission('DSR_MANAGE')"
+        label="個資權利請求"
+        name="dsr-requests"
+      >
+        <DsrRequestsView v-if="activeTab === 'dsr-requests'" />
+      </el-tab-pane>
+      <el-tab-pane
+        v-if="hasPermission('DSR_MANAGE')"
+        label="隱私政策版本"
+        name="policy-versions"
+      >
+        <PolicyVersionsView v-if="activeTab === 'policy-versions'" />
       </el-tab-pane>
     </el-tabs>
   </div>
