@@ -400,10 +400,10 @@ onMounted(async () => {
     </div>
 
     <div class="filter-section">
-      <el-tabs v-model="activeTab" @tab-change="handleTabChange" style="margin-bottom: 0">
-        <el-tab-pane label="在讀中" name="active" />
-        <el-tab-pane label="已離園" name="graduated" />
-      </el-tabs>
+      <el-radio-group v-model="activeTab" @change="handleTabChange">
+        <el-radio-button value="active">在讀中</el-radio-button>
+        <el-radio-button value="graduated">已離園</el-radio-button>
+      </el-radio-group>
       <div class="filter-toolbar">
         <el-select v-model="filterSchoolYear" filterable allow-create default-first-option style="width: 150px">
           <el-option
