@@ -643,7 +643,7 @@ onMounted(async () => {
   gap: var(--space-3);
   align-items: center;
   flex-wrap: wrap;
-  margin-top: 12px;
+  margin-top: var(--space-3);
 }
 
 /* 性別標籤：以柔色區分，避免用 danger（紅＝危險）誤標女性 */
