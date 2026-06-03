@@ -56,6 +56,16 @@ vi.mock('@/api/vendorPayment', async () => {
         page_size: 20,
       },
     }),
+    getVendorPaymentSummary: vi.fn().mockResolvedValue({
+      data: {
+        total_count: 2,
+        total_amount: 10000,
+        pending_count: 1,
+        pending_amount: 1200,
+        signed_count: 1,
+        signed_amount: 8800,
+      },
+    }),
     createVendorPayment: vi.fn().mockResolvedValue({ data: { id: 99 } }),
     updateVendorPayment: vi.fn().mockResolvedValue({ data: { message: 'ok' } }),
     deleteVendorPayment: vi.fn().mockResolvedValue({ data: { message: 'ok' } }),
@@ -81,6 +91,7 @@ vi.mock('element-plus', () => ({
 
 import {
   listVendorPayments,
+  getVendorPaymentSummary,
   createVendorPayment,
   deleteVendorPayment,
   PAYMENT_METHOD_OPTIONS,
@@ -112,6 +123,12 @@ const globalStubs = {
   'el-form-item': { template: '<div class="el-form-item"><slot /></div>' },
   'el-pagination': { template: '<div class="el-pagination" />' },
   'el-upload': { template: '<div class="el-upload"><slot /></div>' },
+  'el-radio-group': { template: '<div class="el-radio-group"><slot /></div>', props: ['modelValue'] },
+  'el-radio-button': { template: '<label class="el-radio-button"><slot /></label>', props: ['value'] },
+  'el-skeleton': { template: '<div class="el-skeleton" />' },
+  'el-dropdown': { template: '<div class="el-dropdown"><slot /><slot name="dropdown" /></div>' },
+  'el-dropdown-menu': { template: '<div><slot /></div>' },
+  'el-dropdown-item': { template: '<div class="el-dropdown-item"><slot /></div>', props: ['command'] },
   VendorPaymentSignDialog: { template: '<div class="sign-dialog-stub" />' },
 }
 
@@ -134,6 +151,34 @@ describe('VendorPaymentView', () => {
     expect(wrapper.text()).toContain('廠商付款簽收')
     expect(wrapper.text()).toContain('清潔用品行')
     expect(wrapper.text()).toContain('食材廠商')
+  })
+
+  it('loads summary on mount and renders KPI cards', async () => {
+    const wrapper = mount(VendorPaymentView, {
+      global: { stubs: globalStubs, directives: globalDirectives },
+    })
+    await flushPromises()
+    expect(getVendorPaymentSummary).toHaveBeenCalled()
+    const text = wrapper.text()
+    expect(text).toContain('本期付款總額')
+    expect(text).toContain('待廠商簽收')
+    expect(text).toContain('已簽收')
+    // 待簽收筆數（pending_count = 1）渲染
+    expect(text).toContain('1 筆等待回簽')
+  })
+
+  it('summary follows range filter but not status (status only reloads list)', async () => {
+    const wrapper = mount(VendorPaymentView, {
+      global: { stubs: globalStubs, directives: globalDirectives },
+    })
+    await flushPromises()
+    getVendorPaymentSummary.mockClear()
+    listVendorPayments.mockClear()
+    // 只改 status → 只刷列表，彙總不重抓
+    wrapper.vm.filters.status = 'pending'
+    await wrapper.vm.fetchList()
+    expect(listVendorPayments).toHaveBeenCalled()
+    expect(getVendorPaymentSummary).not.toHaveBeenCalled()
   })
 
   it('hides write actions when user has no VENDOR_PAYMENT_WRITE', async () => {

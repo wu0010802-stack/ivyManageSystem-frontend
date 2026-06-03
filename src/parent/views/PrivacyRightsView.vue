@@ -14,6 +14,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   CONSENT_SCOPES,
+  CONSENT_SCOPE_SERVICE_ESSENTIAL,
   SCOPE_LABELS,
   getMyConsents,
   listMyDsrRequests,
@@ -177,18 +178,25 @@ async function submitCorrect() {
 }
 
 // ── Opt-out request ──
+// service_essential 不允許 opt-out（後端回 400），排除於下拉選單外
+const GRANULAR_CONSENT_SCOPES = CONSENT_SCOPES.filter(
+  (s) => s !== CONSENT_SCOPE_SERVICE_ESSENTIAL,
+)
+
 const optOutScope = ref<ConsentScope>('photo_publish')
 const optOutReason = ref('')
 
 async function submitOptOut() {
   loading.value = true
   errorMessage.value = ''
+  const scopeLabel = SCOPE_LABELS[optOutScope.value]
   try {
     await submitOptOutRequest({
       scope: optOutScope.value,
       reason: optOutReason.value || undefined,
     })
-    successMessage.value = '停止處理申請已送出'
+    // granular scope opt-out 即時生效（後端立即撤回 consent + invalidate）
+    successMessage.value = `已即時停止「${scopeLabel}」`
     optOutReason.value = ''
     await refresh()
   } catch (err) {
@@ -350,12 +358,15 @@ const children = computed(
     <!-- Opt-out -->
     <section v-if="tab === 'opt_out'" class="panel">
       <p class="panel-hint">
-        申請停止特定資料處理範疇。比「撤回同意」具更高法律意義（園所須備案）。
+        申請停止特定資料處理範疇。停止後<strong>即時生效</strong>，園所同步停止對應處理。
+      </p>
+      <p class="panel-hint service-essential-hint">
+        ⓘ 基礎服務同意（service_essential）不可停止；如需終止，請改走「申請刪除」。
       </p>
       <label class="field">
         <span>停止範疇</span>
         <select v-model="optOutScope">
-          <option v-for="s in CONSENT_SCOPES" :key="s" :value="s">
+          <option v-for="s in GRANULAR_CONSENT_SCOPES" :key="s" :value="s">
             {{ SCOPE_LABELS[s] }}
           </option>
         </select>
@@ -365,7 +376,7 @@ const children = computed(
         <textarea v-model="optOutReason" rows="3" />
       </label>
       <button class="submit-btn" type="button" :disabled="loading" @click="submitOptOut">
-        送出申請
+        確認停止處理
       </button>
     </section>
   </div>
@@ -448,6 +459,12 @@ const children = computed(
 
 .panel { padding: 0; }
 .panel-hint { font-size: 13px; color: var(--pt-text-muted); margin-bottom: 16px; line-height: 1.7; }
+.service-essential-hint {
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+}
 
 .consent-list, .dsr-list { list-style: none; padding: 0; margin: 0; }
 

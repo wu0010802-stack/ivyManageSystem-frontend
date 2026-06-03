@@ -26,6 +26,7 @@ export interface EmployeeFormSalaryData {
   health_insured_salary?: number | null
   pension_insured_salary?: number | null
   contract_base_salary?: number | null
+  insurance_effective_date?: string
 }
 
 const props = withDefaults(defineProps<{
@@ -138,6 +139,17 @@ const fmtRO = (v: number | string | null | undefined, currency = false) => {
                 同步為基本薪資
             </el-button>
         </template>
+    </el-form-item>
+
+    <!-- 加保生效日 -->
+    <el-form-item label="加保生效日">
+      <el-date-picker
+        v-model="form.insurance_effective_date" type="date"
+        placeholder="選擇日期" style="width:100%"
+        value-format="YYYY-MM-DD" clearable
+        :readonly="isReadonly"
+      />
+      <div class="hint" style="text-align:left">僅作記錄，不影響薪資計算</div>
     </el-form-item>
 
     <!-- 勞退自提 -->

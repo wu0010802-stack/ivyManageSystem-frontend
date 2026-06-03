@@ -50,6 +50,7 @@ export const PERMISSION_NAMES = {
   STUDENTS_MEDICATION_ADMINISTER: 'STUDENTS_MEDICATION_ADMINISTER',
   STUDENTS_SPECIAL_NEEDS_READ: 'STUDENTS_SPECIAL_NEEDS_READ',
   STUDENTS_SPECIAL_NEEDS_WRITE: 'STUDENTS_SPECIAL_NEEDS_WRITE',
+  STUDENTS_IEP_APPROVE: 'STUDENTS_IEP_APPROVE',
   PARENT_MESSAGES_WRITE: 'PARENT_MESSAGES_WRITE',
   GOV_REPORTS_VIEW: 'GOV_REPORTS_VIEW',
   GOV_REPORTS_EXPORT: 'GOV_REPORTS_EXPORT',
@@ -64,6 +65,7 @@ export const PERMISSION_NAMES = {
   YEAR_END_FINALIZE: 'YEAR_END_FINALIZE',
   VENDOR_PAYMENT_READ: 'VENDOR_PAYMENT_READ',
   VENDOR_PAYMENT_WRITE: 'VENDOR_PAYMENT_WRITE',
+  DSR_MANAGE: 'DSR_MANAGE',
   // 角色與權限管理 / 教師端預覽 / 代為操作（對齊後端 utils/permissions.py，
   // 補回曾漏同步的 3 條；AdminHeader.vue 已用字面字串呼叫 hasPermission）
   ROLES_MANAGE: 'ROLES_MANAGE',
@@ -115,7 +117,6 @@ export const ROUTE_PERMISSION_RULES = [
   { path: '/student-enrollment', permission: 'STUDENTS_READ' },
   { path: '/recruitment', permission: 'RECRUITMENT_READ' },
   { path: '/recruitment-ivykids', permission: 'RECRUITMENT_READ' },
-  { path: '/analytics', permission: 'BUSINESS_ANALYTICS', prefix: true },
   { path: '/portfolio/medication-today', permission: 'STUDENTS_HEALTH_READ' },
   // 考核：navigation gate 暫掛 SETTINGS_READ；後端 router 用 APPRAISAL_* 細粒度守衛
   { path: '/appraisal', permission: 'SETTINGS_READ', prefix: true },
@@ -126,6 +127,11 @@ export const ROUTE_PERMISSION_RULES = [
   { path: '/year_end', permission: 'YEAR_END_READ', prefix: true },
   // 考核年終 payout（路徑為 hyphen 與 /year_end 不同）：對齊後端 APPRAISAL_FINALIZE 守衛
   { path: '/year-end/appraisal-payout', permission: 'APPRAISAL_FINALIZE' },
+  // 考核 × 年終 整合工作區：承載三種權限，OR 語意（任一即可進頁，section 層再各自守門）
+  { path: '/appraisal-year-end', permission: 'SETTINGS_READ' },
+  { path: '/appraisal-year-end', permission: 'SALARY_READ' },
+  { path: '/appraisal-year-end', permission: 'YEAR_END_READ' },
+  { path: '/appraisal-year-end', permission: 'APPRAISAL_FINALIZE' },
   // 離職管理（路徑 /admin/offboarding 獨立 prefix，沿用 EMPLOYEES_READ 為 navigation gate）
   { path: '/admin/offboarding', permission: 'EMPLOYEES_READ' },
   // 加班 / 會議整合頁（OVERTIME_READ 或 MEETINGS 任一）

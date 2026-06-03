@@ -53,13 +53,12 @@
             <el-icon><Money /></el-icon>
             <template #title>薪資管理</template>
           </el-menu-item>
-          <el-menu-item v-if="canView.YEAR_END_READ" index="/year_end/cycles">
+          <el-menu-item
+            v-if="canView.SETTINGS_READ || canView.SALARY_READ || canView.YEAR_END_READ || canView.APPRAISAL_FINALIZE"
+            index="/appraisal-year-end"
+          >
             <el-icon><Trophy /></el-icon>
-            <template #title>年終獎金</template>
-          </el-menu-item>
-          <el-menu-item v-if="canView.APPRAISAL_FINALIZE" index="/year-end/appraisal-payout">
-            <el-icon><Medal /></el-icon>
-            <template #title>考核年終 payout</template>
+            <template #title>考核與年終</template>
           </el-menu-item>
           <el-menu-item v-if="canView.ATTENDANCE_READ" index="/attendance">
             <el-icon><Clock /></el-icon>
@@ -208,10 +207,6 @@
             <el-icon><Files /></el-icon>
             <template #title>報表統計</template>
           </el-menu-item>
-          <el-menu-item v-if="canView.BUSINESS_ANALYTICS" index="/analytics">
-            <el-icon><DataAnalysis /></el-icon>
-            <template #title>經營分析</template>
-          </el-menu-item>
         </el-sub-menu>
 
         <!-- 9. 系統設定 (移除操作紀錄，新增考核管理 + 報名時間設定) -->
@@ -223,10 +218,6 @@
           <el-menu-item v-if="canView.SETTINGS_READ" index="/settings">
             <el-icon><Setting /></el-icon>
             <template #title>一般設定</template>
-          </el-menu-item>
-          <el-menu-item v-if="canView.SETTINGS_READ || canView.SALARY_READ" index="/appraisal-management">
-            <el-icon><Medal /></el-icon>
-            <template #title>考核管理</template>
           </el-menu-item>
           <el-menu-item v-if="canView.ACTIVITY_WRITE" index="/activity/settings">
             <el-icon><Timer /></el-icon>
@@ -257,7 +248,7 @@ import {
   Money, User, School, OfficeBuilding, Bell, TrendCharts, Setting,
   Expand, Fold, DataAnalysis, Files,
   Star, Collection, ChatDotRound, List, Van, CreditCard, Checked,
-  Medal, Trophy, SwitchButton
+  Trophy, SwitchButton
 } from '@element-plus/icons-vue'
 import { PERMISSION_NAMES, getUserInfo } from '@/utils/auth'
 
@@ -317,7 +308,9 @@ const hasVisibleLeaveItems = computed(() =>
   canView.value.EMPLOYEES_READ || canView.value.SALARY_READ || canView.value.SALARY_WRITE ||
   canView.value.ATTENDANCE_READ || canView.value.LEAVES_READ ||
   canView.value.OVERTIME_READ || canView.value.MEETINGS ||
-  canView.value.SCHEDULE || canView.value.YEAR_END_READ || canView.value.APPRAISAL_FINALIZE
+  canView.value.SCHEDULE || canView.value.YEAR_END_READ || canView.value.APPRAISAL_FINALIZE ||
+  // 考核與年終整合入口含 SETTINGS_READ，群組需據此顯示
+  canView.value.SETTINGS_READ
 )
 
 const hasVisibleStudentItems = computed(() =>
@@ -339,11 +332,11 @@ const hasVisibleActivityItems = computed(() =>
 
 const hasVisibleReportsItems = computed(() =>
   canView.value.AUDIT_LOGS || canView.value.ACTIVITY_READ ||
-  canView.value.SALARY_READ || canView.value.REPORTS || canView.value.BUSINESS_ANALYTICS
+  canView.value.SALARY_READ || canView.value.REPORTS
 )
 
 const hasVisibleSettingsItems = computed(() =>
-  canView.value.SETTINGS_READ || canView.value.SALARY_READ || canView.value.ACTIVITY_WRITE
+  canView.value.SETTINGS_READ || canView.value.ACTIVITY_WRITE
 )
 
 const toggleCollapse = () => {

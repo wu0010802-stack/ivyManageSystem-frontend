@@ -182,6 +182,22 @@ const getRoutePermissions = (path: string) => {
 const _SCOPE_BREADTH: Record<string, number> = { own_class: 0, all: 1 }
 
 /**
+ * Canonical scope-aware permission codes。
+ * **必須與後端 utils/permissions.py 的 scope-aware 集合手動同步**
+ * （後端 has_permission 只對這些 code 認 ':scope' 後綴；其餘 code 帶 scope 後綴 fail-closed）。
+ * 對應 DB permission_definitions.scope_options 非空的 code（permscope01-04 seed）。
+ * scope-aware-parity.test.ts 以 hardcoded 期望集合守同步，防前後端反向漂移
+ * （RA-HIGH-1c：前端誤判「有權」→ 後端 403）。
+ */
+export const SCOPE_AWARE_CODES: ReadonlySet<string> = new Set([
+  'STUDENTS_READ', 'STUDENTS_WRITE', 'STUDENTS_HEALTH_READ', 'STUDENTS_HEALTH_WRITE',
+  'STUDENTS_LIFECYCLE_WRITE', 'STUDENTS_MEDICATION_ADMINISTER',
+  'STUDENTS_SPECIAL_NEEDS_READ', 'STUDENTS_SPECIAL_NEEDS_WRITE',
+  'PORTFOLIO_READ', 'PORTFOLIO_WRITE', 'PORTFOLIO_PUBLISH',
+  'DISMISSAL_CALLS_READ', 'DISMISSAL_CALLS_WRITE',
+])
+
+/**
  * 檢查使用者是否擁有指定權限。
  * 支援 bare code（'STUDENTS_READ'）與 scope-qualified code（'STUDENTS_READ:own_class'）。
  * @param permissionName - 權限名稱 (如 'EMPLOYEES_READ')
@@ -198,7 +214,12 @@ export function hasPermission(permissionName: string): boolean {
   if (perms.includes('*')) return true
   if (perms.includes(permissionName)) return true
   // scope-qualified grant: 'STUDENTS_READ:own_class' counts as holding 'STUDENTS_READ'
-  return perms.some((n) => n.startsWith(`${permissionName}:`))
+  // 但僅限 scope-aware code；非 scope-aware code 帶 scope 後綴一律 fail-closed，
+  // 對齊後端 has_permission（RA-HIGH-1c：避免前端說有權、後端 403 的反向漂移）。
+  if (SCOPE_AWARE_CODES.has(permissionName)) {
+    return perms.some((n) => n.startsWith(`${permissionName}:`))
+  }
+  return false
 }
 
 /**

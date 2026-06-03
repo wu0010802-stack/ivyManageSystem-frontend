@@ -94,9 +94,20 @@ async function loadGrid() {
 async function onBuild() {
   try {
     const res = await buildSettlements(cycleId, { included_resigned_employee_ids: [] })
-    const { built, skipped_finalized } = res.data as { built: number; skipped_finalized: number }
+    const { built, skipped_finalized, unmatched_count, fallback_classes } = res.data
     await loadGrid()
     ElMessage.success(`已試算 ${built} 筆，略過已簽 ${skipped_finalized} 筆`)
+    // 附帶提醒：資料缺口（任一 > 0 才顯示）
+    const gapParts: string[] = []
+    if (unmatched_count > 0) {
+      gapParts.push(`${unmatched_count} 筆才藝報名未配對班級，未計入鼓勵獎金`)
+    }
+    if (fallback_classes > 0) {
+      gapParts.push(`${fallback_classes} 班學號未回填，沿用手填舊生率`)
+    }
+    if (gapParts.length > 0) {
+      ElMessage.warning(gapParts.join('；'))
+    }
   } catch {
     ElMessage.error('試算失敗')
   } finally {

@@ -128,3 +128,9 @@ jobs:
       - name: Run drift check
         working-directory: ivy-frontend
         run: npm run gen:api:check
+
+      # 跨 repo 雙寫常數（基本工資/退費門檻/才藝獎金）的單側漂移守衛。
+      # 此 job 是唯一兩 repo 並存的地方（後端已 checkout 成 ../ivy-backend）。
+      - name: Check cross-repo shared constants
+        working-directory: ivy-frontend
+        run: npm run check:shared-constants

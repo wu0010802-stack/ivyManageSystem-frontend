@@ -1824,15 +1824,18 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/analytics/churn/at-risk": {
+    "/admin/dsr-requests": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Get At Risk */
-        get: operations["get_at_risk_api_analytics_churn_at_risk_get"];
+        /**
+         * List Dsr Requests
+         * @description 列出 DSR 請求（可選 status filter），submitted_at desc。
+         */
+        get: operations["list_dsr_requests_api_admin_dsr_requests_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1841,34 +1844,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/analytics/churn/history": {
+    "/admin/dsr-requests/{req_id}/approve": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Get Churn History */
-        get: operations["get_churn_history_api_analytics_churn_history_get"];
+        get?: never;
         put?: never;
-        post?: never;
+        /**
+         * Approve Dsr Request
+         * @description 核准 pending DSR 請求。
+         *
+         *     按 request_type 分派（Task 12）：
+         *     - delete：ownership 重驗 → student lifecycle → WITHDRAWN → 365d GC 接手 PII 抹除
+         *     - correct：僅 status=approved；admin 事後透過既有編輯工具手動更正（不自動套用 new_value）
+         *     - 其他（opt_out 等）：防禦性僅 set status（opt_out 已於 Task 9 即時自助不進 queue）
+         */
+        post: operations["approve_dsr_request_api_admin_dsr_requests__req_id__approve_post"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/analytics/funnel": {
+    "/admin/dsr-requests/{req_id}/reject": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Get Funnel */
-        get: operations["get_funnel_api_analytics_funnel_get"];
+        get?: never;
         put?: never;
-        post?: never;
+        /**
+         * Reject Dsr Request
+         * @description 駁回 pending DSR 請求 → status=rejected + decision_note + audit。
+         */
+        post: operations["reject_dsr_request_api_admin_dsr_requests__req_id__reject_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/policies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Policy Versions
+         * @description 列出所有 PolicyVersion，effective_at desc（最新生效版排前）。
+         */
+        get: operations["list_policy_versions_api_admin_policies_get"];
+        put?: never;
+        /**
+         * Create Policy Version
+         * @description 建立新 PolicyVersion。
+         *
+         *     - version 唯一，重複 version → 409。
+         *     - effective_at 解析為 naive datetime（isoformat 輸入）。
+         *     - 建立 effective_at <= now 的新版即觸發既有家長下次
+         *       has_signed_current_policy 失效 → 重簽（純資料驅動，此端點不額外處理）。
+         */
+        post: operations["create_policy_version_api_admin_policies_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4229,46 +4272,6 @@ export interface paths {
         post?: never;
         /** Delete Job Title */
         delete: operations["delete_job_title_api_config_titles__title_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/dev/employee-salary-debug": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Debug Employee Salary
-         * @description 模擬計算單一員工薪資並回傳完整明細（dev 別名，正式請改打 /api/salaries/employee-salary-debug）。
-         */
-        get: operations["debug_employee_salary_api_dev_employee_salary_debug_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/dev/salary-logic": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Salary Logic
-         * @description 傾印目前的薪資計算邏輯與所有參數設定（dev 別名，正式請改打 /api/salaries/logic）。
-         */
-        get: operations["get_salary_logic_api_dev_salary_logic_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -7851,10 +7854,15 @@ export interface paths {
         put?: never;
         /**
          * Submit Opt Out Request
-         * @description 個資法 §3.3 停止處理利用權：申請停止特定 scope 的資料處理。
+         * @description 個資法 §3.3 停止處理利用權：granular scope 即時撤回（spec §3.2a）。
          *
-         *     比 consent 撤回更具法律意義（撤回是「現在不同意」，opt-out 是「請求停止」)。
-         *     *opt-out 主要 surface 是 consent 撤回 + 此申請副本作為法律備案*。
+         *     - service_essential → 拒絕（400）：基礎服務同意不可停止，如需終止服務請走刪除申請。
+         *     - granular scope（photo_publish / line_push / cross_border_transfer）→ 即時生效：
+         *       1. 查該家長該 scope 最近一筆 ParentConsentLog 取 policy_version_id。
+         *          若從未有任何記錄 → 400「無可撤回的同意紀錄」。
+         *       2. 寫入 ParentConsentLog(consented=False, policy_version_id=<原版本>)。
+         *       3. invalidate_consent_cache 立即清快取，下次查詢即時反映撤回。
+         *       4. 寫 DsrRequest(status=approved) 作法律備案，不進 pending queue。
          */
         post: operations["submit_opt_out_request_api_parent_me_opt_out_post"];
         delete?: never;
@@ -13090,6 +13098,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/vendor-payments/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Vendor Payments Summary
+         * @description 區間彙總（跨狀態）：供前端 KPI 卡。
+         *
+         *     range 篩選（日期 / 廠商 / 收付方式）與列表一致，但**不吃 status**——
+         *     一律回全狀態並拆 pending / signed，讓「本期總額 / 待簽收 / 已簽收」
+         *     三張卡同時有意義。sum 走 SQL group_by 聚合，不受列表分頁限制、無 N+1。
+         *
+         *     NOTE: 本路由必須宣告在 ``/vendor-payments/{payment_id}`` 之前，否則
+         *     "summary" 會被當成 payment_id 解析（422）。
+         */
+        get: operations["vendor_payments_summary_api_vendor_payments_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/year_end/appraisal-payout": {
         parameters: {
             query?: never;
@@ -14957,8 +14992,22 @@ export interface components {
         BonusConfigUpdate: {
             /** Admin Festival */
             admin_festival?: number | null;
+            /**
+             * After Class Award Unit Price
+             * @description 課後才藝班年終單價 JSON（班名→K 單價）
+             */
+            after_class_award_unit_price?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Art Teacher Employee Ids
+             * @description 才藝老師年終收款人 employee id list（每位得全校總人次×單價）
+             */
+            art_teacher_employee_ids?: number[] | null;
             /** Art Teacher Festival */
             art_teacher_festival?: number | null;
+            /** Art Teacher Unit Price */
+            art_teacher_unit_price?: number | null;
             /** Assistant Teacher Ab */
             assistant_teacher_ab?: number | null;
             /** Assistant Teacher C */
@@ -14971,12 +15020,22 @@ export interface components {
             director_dividend?: number | null;
             /** Director Festival */
             director_festival?: number | null;
+            /** Dividend Activity Amount */
+            dividend_activity_amount?: number | null;
+            /** Dividend Activity Threshold */
+            dividend_activity_threshold?: number | null;
+            /** Dividend Returning Amount */
+            dividend_returning_amount?: number | null;
+            /** Dividend Returning Threshold */
+            dividend_returning_threshold?: number | null;
             /** Driver Festival */
             driver_festival?: number | null;
             /** Head Teacher Ab */
             head_teacher_ab?: number | null;
             /** Head Teacher C */
             head_teacher_c?: number | null;
+            /** Late Deduction Per Time */
+            late_deduction_per_time?: number | null;
             /** Leader Dividend */
             leader_dividend?: number | null;
             /** Leader Festival */
@@ -14985,6 +15044,8 @@ export interface components {
             meeting_absence_penalty?: number | null;
             /** Meeting Default Hours */
             meeting_default_hours?: number | null;
+            /** Missing Punch Deduction Per Time */
+            missing_punch_deduction_per_time?: number | null;
             /** Overtime Assistant Baby */
             overtime_assistant_baby?: number | null;
             /** Overtime Assistant Normal */
@@ -14993,6 +15054,8 @@ export interface components {
             overtime_head_baby?: number | null;
             /** Overtime Head Normal */
             overtime_head_normal?: number | null;
+            /** Personal Leave Deduction Per Day */
+            personal_leave_deduction_per_day?: number | null;
             /** Principal Dividend */
             principal_dividend?: number | null;
             /** Principal Festival */
@@ -15004,6 +15067,8 @@ export interface components {
             reason?: string | null;
             /** School Wide Target */
             school_wide_target?: number | null;
+            /** Sick Leave Deduction Per Day */
+            sick_leave_deduction_per_day?: number | null;
             /** Vice Leader Dividend */
             vice_leader_dividend?: number | null;
         };
@@ -15098,8 +15163,23 @@ export interface components {
         BuildResultOut: {
             /** Built */
             built: number;
+            /**
+             * Fallback Classes
+             * @default 0
+             */
+            fallback_classes: number;
             /** Skipped Finalized */
             skipped_finalized: number;
+            /**
+             * Unmatched Count
+             * @default 0
+             */
+            unmatched_count: number;
+            /**
+             * Warnings
+             * @default []
+             */
+            warnings: string[];
         };
         /** BuildSettlementsRequest */
         BuildSettlementsRequest: {
@@ -17099,6 +17179,48 @@ export interface components {
             /** Student Id */
             student_id: number;
         };
+        /**
+         * DsrDecisionIn
+         * @description admin approve / reject 的決議說明。
+         */
+        DsrDecisionIn: {
+            /** Decision Note */
+            decision_note: string;
+        };
+        /**
+         * DsrRequestAdminOut
+         * @description admin queue 單筆 DSR 請求輸出（datetime 欄位序列化為 isoformat str）。
+         */
+        DsrRequestAdminOut: {
+            /** Decided At */
+            decided_at?: string | null;
+            /** Decided By */
+            decided_by?: number | null;
+            /** Decision Note */
+            decision_note?: string | null;
+            /** Field Name */
+            field_name?: string | null;
+            /** Id */
+            id: number;
+            /** New Value */
+            new_value?: string | null;
+            /** Reason */
+            reason?: string | null;
+            /** Request Type */
+            request_type: string;
+            /** Scope */
+            scope?: string | null;
+            /** Status */
+            status: string;
+            /** Subject Entity Id */
+            subject_entity_id?: number | null;
+            /** Subject Entity Type */
+            subject_entity_type?: string | null;
+            /** Submitted At */
+            submitted_at: string;
+            /** User Id */
+            user_id: number;
+        };
         /** DsrRequestOut */
         DsrRequestOut: {
             /** Decided At */
@@ -17214,6 +17336,8 @@ export interface components {
              * @default 0
              */
             dependents: number;
+            /** Email */
+            email?: string | null;
             /** Emergency Contact Name */
             emergency_contact_name?: string | null;
             /** Emergency Contact Phone */
@@ -17228,6 +17352,8 @@ export interface components {
              * @default 0
              */
             extra_dependents_quarterly: number;
+            /** Gender */
+            gender?: string | null;
             /**
              * Health Exempt
              * @default false
@@ -17244,6 +17370,8 @@ export interface components {
             hourly_rate: number;
             /** Id Number */
             id_number?: string | null;
+            /** Insurance Effective Date */
+            insurance_effective_date?: string | null;
             /**
              * Insurance Salary Level
              * @default 0
@@ -17356,6 +17484,8 @@ export interface components {
             classroom_name?: unknown;
             /** Dependents */
             dependents?: unknown;
+            /** Email */
+            email?: unknown;
             /** Emergency Contact Name */
             emergency_contact_name?: unknown;
             /** Emergency Contact Phone */
@@ -17366,6 +17496,8 @@ export interface components {
             employee_type: unknown;
             /** Extra Dependents Quarterly */
             extra_dependents_quarterly?: unknown;
+            /** Gender */
+            gender?: unknown;
             /** Health Exempt */
             health_exempt?: unknown;
             /** Hire Date */
@@ -17376,6 +17508,8 @@ export interface components {
             id: unknown;
             /** Id Number */
             id_number?: unknown;
+            /** Insurance Effective Date */
+            insurance_effective_date?: unknown;
             /** Insurance Salary Level */
             insurance_salary_level?: unknown;
             /** Insurance Salary Override Reason */
@@ -17439,6 +17573,8 @@ export interface components {
             classroom_id?: number | null;
             /** Dependents */
             dependents?: number | null;
+            /** Email */
+            email?: string | null;
             /** Emergency Contact Name */
             emergency_contact_name?: string | null;
             /** Emergency Contact Phone */
@@ -17447,6 +17583,8 @@ export interface components {
             employee_type?: string | null;
             /** Extra Dependents Quarterly */
             extra_dependents_quarterly?: number | null;
+            /** Gender */
+            gender?: string | null;
             /** Health Exempt */
             health_exempt?: boolean | null;
             /** Health Insured Salary */
@@ -17457,6 +17595,8 @@ export interface components {
             hourly_rate?: number | null;
             /** Id Number */
             id_number?: string | null;
+            /** Insurance Effective Date */
+            insurance_effective_date?: string | null;
             /** Insurance Salary Level */
             insurance_salary_level?: number | null;
             /** Insurance Salary Override Reason */
@@ -21178,6 +21318,40 @@ export interface components {
         PolicyUpdateRequest: {
             /** Policies */
             policies: components["schemas"]["PolicyItem"][];
+        };
+        /**
+         * PolicyVersionAdminOut
+         * @description admin policy 版本管理輸出（datetime 欄位序列化為 isoformat str）。
+         */
+        PolicyVersionAdminOut: {
+            /** Created At */
+            created_at: string;
+            /** Document Path */
+            document_path: string;
+            /** Effective At */
+            effective_at: string;
+            /** Id */
+            id: number;
+            /** Summary */
+            summary?: string | null;
+            /** Version */
+            version: string;
+        };
+        /**
+         * PolicyVersionCreateIn
+         * @description 建立新 PolicyVersion 的輸入。
+         *
+         *     effective_at 為 isoformat 字串；可未來生效（排程升版）或即時生效。
+         */
+        PolicyVersionCreateIn: {
+            /** Document Path */
+            document_path: string;
+            /** Effective At */
+            effective_at: string;
+            /** Summary */
+            summary?: string | null;
+            /** Version */
+            version: string;
         };
         /** PolicyVersionOut */
         PolicyVersionOut: {
@@ -26160,6 +26334,29 @@ export interface components {
              */
             signature_kind: "drawn" | "photo";
         };
+        /**
+         * VendorPaymentSummaryOut
+         * @description GET /vendor-payments/summary 區間彙總（供前端 KPI 卡使用）。
+         *
+         *     依與列表相同的 range 篩選（start_date / end_date / vendor_name /
+         *     payment_method）彙總，但**不**受 status 篩選影響——一律回全狀態並拆
+         *     pending / signed，讓 KPI 卡同時呈現「本期總額 / 待簽收 / 已簽收」。
+         *     跨狀態 sum 走 SQL 聚合（非 N+1），不受列表分頁限制。
+         */
+        VendorPaymentSummaryOut: {
+            /** Pending Amount */
+            pending_amount: unknown;
+            /** Pending Count */
+            pending_count: unknown;
+            /** Signed Amount */
+            signed_amount: unknown;
+            /** Signed Count */
+            signed_count: unknown;
+            /** Total Amount */
+            total_amount: unknown;
+            /** Total Count */
+            total_count: unknown;
+        };
         /** VendorPaymentUpdate */
         VendorPaymentUpdate: {
             /** Amount */
@@ -29298,7 +29495,108 @@ export interface operations {
             };
         };
     };
-    get_at_risk_api_analytics_churn_at_risk_get: {
+    list_dsr_requests_api_admin_dsr_requests_get: {
+        parameters: {
+            query?: {
+                status?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DsrRequestAdminOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_dsr_request_api_admin_dsr_requests__req_id__approve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                req_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DsrDecisionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DsrRequestAdminOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reject_dsr_request_api_admin_dsr_requests__req_id__reject_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                req_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DsrDecisionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DsrRequestAdminOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_policy_versions_api_admin_policies_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -29313,21 +29611,23 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PolicyVersionAdminOut"][];
                 };
             };
         };
     };
-    get_churn_history_api_analytics_churn_history_get: {
+    create_policy_version_api_admin_policies_post: {
         parameters: {
-            query?: {
-                months?: number;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PolicyVersionCreateIn"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -29335,43 +29635,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_funnel_api_analytics_funnel_get: {
-        parameters: {
-            query: {
-                /** @description 區間迄（含） */
-                end: string;
-                grade?: string | null;
-                source?: string | null;
-                /** @description 區間起（含） */
-                start: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PolicyVersionAdminOut"];
                 };
             };
             /** @description Validation Error */
@@ -33418,59 +33682,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    debug_employee_salary_api_dev_employee_salary_debug_get: {
-        parameters: {
-            query: {
-                employee_id: number;
-                month: number;
-                year: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_salary_logic_api_dev_salary_logic_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
                 };
             };
         };
@@ -49520,6 +49731,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    vendor_payments_summary_api_vendor_payments_summary_get: {
+        parameters: {
+            query?: {
+                end_date?: string | null;
+                payment_method?: ("cash" | "bank_transfer" | "check" | "linepay" | "other") | null;
+                start_date?: string | null;
+                vendor_name?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VendorPaymentSummaryOut"];
                 };
             };
             /** @description Validation Error */

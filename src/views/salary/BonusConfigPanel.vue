@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { reactive, ref, computed, onMounted } from 'vue'
 import { getBonusConfig, updateBonusConfig, getGradeTargets, updateGradeTargets, getPositionSalary, updatePositionSalary, comparePositionSalary, syncPositionSalary, getTitles, updateTitle } from '@/api/config'
+import { getEmployees } from '@/api/employees'
+import type { ApiBody } from '@/api/_generated/typed'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { hasPermission } from '@/utils/auth'
 
@@ -32,7 +34,30 @@ const bonusConfig = reactive({
   meeting_default_hours: 2,
   meeting_absence_penalty: 100,
   art_teacher_festival: 2000,
+  // 年終獎金 E化 階段 2：年終規則
+  // ① 才藝鼓勵
+  art_teacher_unit_price: 0,
+  // ④ 學期紅利門檻/金額
+  dividend_returning_threshold: 0,
+  dividend_returning_amount: 500,
+  dividend_activity_threshold: 0,
+  dividend_activity_amount: 1000,
+  // ⑤ 考勤扣款費率
+  late_deduction_per_time: 50,
+  missing_punch_deduction_per_time: 50,
+  personal_leave_deduction_per_day: 500,
+  sick_leave_deduction_per_day: 500,
 })
+
+// 年終規則 JSON 欄位（型別對齊 ApiBody<'/config/bonus','put'>）
+// 課後才藝班年終單價（班名 → 單價），用動態 key-value 列編輯器
+type AfterClassAwardEntry = { className: string; price: number }
+const afterClassAwardRows = ref<AfterClassAwardEntry[]>([])
+// 才藝老師年終收款人 employee id list，用員工多選
+const artTeacherEmployeeIds = ref<number[]>([])
+
+type EmployeeOption = { id: number; name: unknown }
+const employeeOptions = ref<EmployeeOption[]>([])
 
 const gradeTargets = ref<Record<string, unknown>[]>([])
 
@@ -40,12 +65,42 @@ const fetchBonusConfig = async () => {
   loadingBonus.value = true
   try {
     const response = await getBonusConfig()
-    Object.assign(bonusConfig, response.data)
+    const data = response.data as Record<string, unknown>
+    Object.assign(bonusConfig, data)
+    // JSON 欄位轉成編輯器結構（dict → 動態列；list → 多選 v-model）
+    const dict = data.after_class_award_unit_price
+    afterClassAwardRows.value =
+      dict && typeof dict === 'object'
+        ? Object.entries(dict as Record<string, unknown>).map(([className, price]) => ({
+            className,
+            price: Number(price) || 0,
+          }))
+        : []
+    const ids = data.art_teacher_employee_ids
+    artTeacherEmployeeIds.value = Array.isArray(ids) ? ids.map((i) => Number(i)) : []
   } catch (error) {
     ElMessage.error('薪資設定載入失敗')
   } finally {
     loadingBonus.value = false
   }
+}
+
+const fetchEmployeeOptions = async () => {
+  try {
+    const res = await getEmployees({ is_active: true } as Parameters<typeof getEmployees>[0])
+    employeeOptions.value = (res.data as EmployeeOption[]).filter((e) => e.id != null)
+  } catch {
+    // 非致命：下拉選單退化但其餘欄位仍可編輯
+    ElMessage.warning('員工清單載入失敗，才藝老師選擇可能不完整')
+  }
+}
+
+const addAfterClassAwardRow = () => {
+  afterClassAwardRows.value.push({ className: '', price: 0 })
+}
+
+const removeAfterClassAwardRow = (index: number) => {
+  afterClassAwardRows.value.splice(index, 1)
 }
 
 const fetchGradeTargets = async () => {
@@ -85,9 +140,22 @@ const saveBonusConfig = async () => {
     return // 使用者按取消
   }
 
+  // 年終 JSON 欄位序列化：dict（班名→單價，略過空班名）+ id list
+  const afterClassAwardDict: Record<string, number> = {}
+  for (const row of afterClassAwardRows.value) {
+    const name = row.className.trim()
+    if (name) afterClassAwardDict[name] = Number(row.price) || 0
+  }
+  const payload: ApiBody<'/config/bonus', 'put'> & { reason: string } = {
+    ...bonusConfig,
+    after_class_award_unit_price: afterClassAwardDict,
+    art_teacher_employee_ids: [...artTeacherEmployeeIds.value],
+    reason,
+  }
+
   loadingBonus.value = true
   try {
-    await updateBonusConfig({ ...bonusConfig, reason })
+    await updateBonusConfig(payload)
     ElMessage.success('薪資設定已儲存')
   } catch (error) {
     const detail = (error as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
@@ -257,6 +325,7 @@ onMounted(() => {
   fetchPositionSalary()
   fetchCompare()
   fetchJobTitles()
+  fetchEmployeeOptions()
 })
 </script>
 
@@ -708,6 +777,192 @@ onMounted(() => {
           </el-table>
         </div>
       </el-tab-pane>
+
+      <!-- 年終獎金 E化 階段 2：年終規則 -->
+      <el-tab-pane label="年終規則" name="yearEnd">
+        <p class="desc-text">
+          年終獎金 E化引擎使用以下規則自動推導：才藝鼓勵金、學期紅利門檻、考勤扣款費率。
+          設定後於年終結算「建立」階段套用，個別金額仍可在總表手動覆寫。
+        </p>
+
+        <!-- ① 才藝鼓勵 -->
+        <div class="section-title">才藝鼓勵</div>
+        <el-card class="box-card mb-6" shadow="never">
+          <el-row :gutter="20">
+            <el-col :span="12">
+              <el-form-item>
+                <template #label>
+                  <el-tooltip content="才藝老師年終單價：每位收款人得「全校總人次 × 單價」" placement="top">
+                    <span>才藝老師單價</span>
+                  </el-tooltip>
+                </template>
+                <el-input-number
+                  v-model="bonusConfig.art_teacher_unit_price"
+                  :min="0" :step="10"
+                  controls-position="right" style="width: 100%"
+                />
+                <span class="unit-hint">元 / 人次</span>
+              </el-form-item>
+            </el-col>
+          </el-row>
+
+          <el-divider />
+          <div class="label mb-2">課後才藝班年終單價（班名 → 單價）</div>
+          <p class="desc-text">每個課後才藝班的年終鼓勵金單價，依班名對應。新增班別後填入單價。</p>
+          <div
+            v-for="(row, idx) in afterClassAwardRows"
+            :key="idx"
+            class="kv-row"
+          >
+            <el-input
+              v-model="row.className"
+              placeholder="班名（如：美術班）"
+              style="flex: 1"
+            />
+            <el-input-number
+              v-model="row.price"
+              :min="0" :step="10"
+              controls-position="right"
+              style="width: 160px"
+              placeholder="單價"
+            />
+            <el-button
+              type="danger"
+              link
+              @click="removeAfterClassAwardRow(idx)"
+            >移除</el-button>
+          </div>
+          <el-empty
+            v-if="afterClassAwardRows.length === 0"
+            description="尚未設定任何課後才藝班單價"
+            :image-size="48"
+          />
+          <el-button class="mt-2" @click="addAfterClassAwardRow">+ 新增班別</el-button>
+
+          <el-divider />
+          <el-form-item label="才藝老師（年終收款人）">
+            <el-select
+              v-model="artTeacherEmployeeIds"
+              multiple
+              filterable
+              clearable
+              placeholder="選擇才藝老師（每位得全校總人次 × 單價）"
+              style="width: 100%"
+            >
+              <el-option
+                v-for="emp in employeeOptions"
+                :key="emp.id"
+                :label="String(emp.name)"
+                :value="emp.id"
+              />
+            </el-select>
+          </el-form-item>
+        </el-card>
+
+        <!-- ④ 學期紅利 -->
+        <div class="section-title">學期紅利</div>
+        <el-card class="box-card mb-6" shadow="never">
+          <p class="desc-text">舊生率 / 才藝率達門檻時，發放對應紅利。門檻為 0–1 小數（例：0.8 = 80%）。</p>
+          <el-row :gutter="20">
+            <el-col :span="6">
+              <el-form-item>
+                <template #label>
+                  <el-tooltip content="舊生率達此門檻發放紅利（0–1 小數）" placement="top">
+                    <span>舊生率門檻</span>
+                  </el-tooltip>
+                </template>
+                <el-input-number
+                  v-model="bonusConfig.dividend_returning_threshold"
+                  :min="0" :max="1" :step="0.05" :precision="2"
+                  controls-position="right" style="width: 100%"
+                />
+              </el-form-item>
+            </el-col>
+            <el-col :span="6">
+              <el-form-item label="舊生率紅利">
+                <el-input-number
+                  v-model="bonusConfig.dividend_returning_amount"
+                  :min="0" :step="100"
+                  controls-position="right" style="width: 100%"
+                />
+                <span class="unit-hint">元</span>
+              </el-form-item>
+            </el-col>
+            <el-col :span="6">
+              <el-form-item>
+                <template #label>
+                  <el-tooltip content="才藝率達此門檻發放紅利（0–1 小數）" placement="top">
+                    <span>才藝率門檻</span>
+                  </el-tooltip>
+                </template>
+                <el-input-number
+                  v-model="bonusConfig.dividend_activity_threshold"
+                  :min="0" :max="1" :step="0.05" :precision="2"
+                  controls-position="right" style="width: 100%"
+                />
+              </el-form-item>
+            </el-col>
+            <el-col :span="6">
+              <el-form-item label="才藝率紅利">
+                <el-input-number
+                  v-model="bonusConfig.dividend_activity_amount"
+                  :min="0" :step="100"
+                  controls-position="right" style="width: 100%"
+                />
+                <span class="unit-hint">元</span>
+              </el-form-item>
+            </el-col>
+          </el-row>
+        </el-card>
+
+        <!-- ⑤ 考勤扣款 -->
+        <div class="section-title">考勤扣款</div>
+        <el-card class="box-card" shadow="never">
+          <p class="desc-text">年終結算時依考勤紀錄扣款的費率設定。</p>
+          <el-row :gutter="20">
+            <el-col :span="6">
+              <el-form-item label="遲到（每次）">
+                <el-input-number
+                  v-model="bonusConfig.late_deduction_per_time"
+                  :min="0" :max="50000" :step="10"
+                  controls-position="right" style="width: 100%"
+                />
+                <span class="unit-hint">元 / 次</span>
+              </el-form-item>
+            </el-col>
+            <el-col :span="6">
+              <el-form-item label="未打卡（每次）">
+                <el-input-number
+                  v-model="bonusConfig.missing_punch_deduction_per_time"
+                  :min="0" :max="50000" :step="10"
+                  controls-position="right" style="width: 100%"
+                />
+                <span class="unit-hint">元 / 次</span>
+              </el-form-item>
+            </el-col>
+            <el-col :span="6">
+              <el-form-item label="事假（每日）">
+                <el-input-number
+                  v-model="bonusConfig.personal_leave_deduction_per_day"
+                  :min="0" :max="50000" :step="50"
+                  controls-position="right" style="width: 100%"
+                />
+                <span class="unit-hint">元 / 日</span>
+              </el-form-item>
+            </el-col>
+            <el-col :span="6">
+              <el-form-item label="病假（每日）">
+                <el-input-number
+                  v-model="bonusConfig.sick_leave_deduction_per_day"
+                  :min="0" :max="50000" :step="50"
+                  controls-position="right" style="width: 100%"
+                />
+                <span class="unit-hint">元 / 日</span>
+              </el-form-item>
+            </el-col>
+          </el-row>
+        </el-card>
+      </el-tab-pane>
     </el-tabs>
   </div>
   <el-alert v-else type="warning" :closable="false" show-icon title="目前帳號沒有查看薪資設定的權限" />
@@ -750,8 +1005,20 @@ onMounted(() => {
   line-height: 1.6;
   margin-bottom: 15px;
 }
+.mt-2 { margin-top: var(--space-2, 8px); }
 .mt-4 { margin-top: var(--space-4); }
 .mt-6 { margin-top: var(--space-6); }
 .mb-2 { margin-bottom: var(--space-2, 8px); }
 .mb-6 { margin-bottom: var(--space-6); }
+.kv-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  margin-bottom: var(--space-2, 8px);
+}
+.unit-hint {
+  margin-left: var(--space-2, 8px);
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+}
 </style>

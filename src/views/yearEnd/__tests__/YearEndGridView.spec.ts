@@ -116,13 +116,13 @@ describe('YearEndGridView', () => {
     expect(api.getYearEndGrid).toHaveBeenCalledWith(7)
   })
 
-  // Case 2: build button calls buildSettlements then reloads grid
+  // Case 2: build button calls buildSettlements then reloads grid (no gaps → no warning)
   it('build button calls buildSettlements then reloads (getYearEndGrid called twice)', async () => {
     vi.mocked(api.getYearEndGrid).mockResolvedValue({
       data: [makeRow()],
     } as never)
     vi.mocked(api.buildSettlements).mockResolvedValue({
-      data: { built: 3, skipped_finalized: 1 },
+      data: { built: 3, skipped_finalized: 1, unmatched_count: 0, fallback_classes: 0, warnings: [] },
     } as never)
 
     const wrapper = await mountView()
@@ -138,6 +138,58 @@ describe('YearEndGridView', () => {
     // getYearEndGrid called on mount + after build = 2 times
     expect(api.getYearEndGrid).toHaveBeenCalledTimes(2)
     expect(vi.mocked(ElMessage.success)).toHaveBeenCalledWith('已試算 3 筆，略過已簽 1 筆')
+    // No gaps → warning must NOT fire
+    expect(vi.mocked(ElMessage.warning)).not.toHaveBeenCalled()
+  })
+
+  // Case 6: build returns unmatched/fallback gaps → success msg + warning with counts
+  it('build with unmatched_count and fallback_classes shows success then gap warning', async () => {
+    vi.mocked(api.getYearEndGrid).mockResolvedValue({
+      data: [makeRow()],
+    } as never)
+    vi.mocked(api.buildSettlements).mockResolvedValue({
+      data: { built: 5, skipped_finalized: 0, unmatched_count: 2, fallback_classes: 1, warnings: [] },
+    } as never)
+
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as { onBuild: () => Promise<void> }
+
+    await vm.onBuild()
+    await nextTick()
+
+    // Basic success message is always shown
+    expect(vi.mocked(ElMessage.success)).toHaveBeenCalledWith('已試算 5 筆，略過已簽 0 筆')
+
+    // Gap warning must include both counts
+    const warningCalls = vi.mocked(ElMessage.warning).mock.calls
+    expect(warningCalls).toHaveLength(1)
+    const warningText = warningCalls[0]![0] as string
+    expect(warningText).toContain('2 筆才藝報名未配對班級，未計入鼓勵獎金')
+    expect(warningText).toContain('1 班學號未回填，沿用手填舊生率')
+  })
+
+  // Case 7: build with only one gap → only that gap appears in warning
+  it('build with only fallback_classes gap shows partial warning', async () => {
+    vi.mocked(api.getYearEndGrid).mockResolvedValue({
+      data: [makeRow()],
+    } as never)
+    vi.mocked(api.buildSettlements).mockResolvedValue({
+      data: { built: 4, skipped_finalized: 2, unmatched_count: 0, fallback_classes: 3, warnings: [] },
+    } as never)
+
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as { onBuild: () => Promise<void> }
+
+    await vm.onBuild()
+    await nextTick()
+
+    expect(vi.mocked(ElMessage.success)).toHaveBeenCalledWith('已試算 4 筆，略過已簽 2 筆')
+
+    const warningCalls = vi.mocked(ElMessage.warning).mock.calls
+    expect(warningCalls).toHaveLength(1)
+    const warningText = warningCalls[0]![0] as string
+    expect(warningText).toContain('3 班學號未回填，沿用手填舊生率')
+    expect(warningText).not.toContain('未配對班級')
   })
 
   // Case 3: manual edit dialog patches and reloads (user sets deduction → IS sent)
