@@ -28,6 +28,8 @@ FROM nginx:alpine AS runtime
 # nginx 同時服務靜態 SPA 與反代 /api/* 到後端內網（first-party cookie，
 # 解 LIFF in-app webview 第三方 cookie 被擋的問題）
 COPY nginx.conf.template /etc/nginx/templates/default.conf.template
+# 安全標頭 snippet（非 template，不經 envsubst）；由各 location include 載入
+COPY nginx-security-headers.conf /etc/nginx/security-headers.conf
 COPY --from=build /app/dist /usr/share/nginx/html
 
 EXPOSE 8080
