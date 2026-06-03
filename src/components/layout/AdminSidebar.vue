@@ -207,10 +207,6 @@
             <el-icon><Files /></el-icon>
             <template #title>報表統計</template>
           </el-menu-item>
-          <el-menu-item v-if="canView.BUSINESS_ANALYTICS" index="/analytics">
-            <el-icon><DataAnalysis /></el-icon>
-            <template #title>經營分析</template>
-          </el-menu-item>
         </el-sub-menu>
 
         <!-- 9. 系統設定 (移除操作紀錄，新增考核管理 + 報名時間設定) -->
@@ -336,7 +332,7 @@ const hasVisibleActivityItems = computed(() =>
 
 const hasVisibleReportsItems = computed(() =>
   canView.value.AUDIT_LOGS || canView.value.ACTIVITY_READ ||
-  canView.value.SALARY_READ || canView.value.REPORTS || canView.value.BUSINESS_ANALYTICS
+  canView.value.SALARY_READ || canView.value.REPORTS
 )
 
 const hasVisibleSettingsItems = computed(() =>
