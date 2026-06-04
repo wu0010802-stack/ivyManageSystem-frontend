@@ -461,7 +461,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, defineAsyncComponent } from 'vue'
+import { ref, computed, onMounted, defineAsyncComponent, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   getRecruitmentRecords,
@@ -475,7 +475,8 @@ import {
   syncPeriod,
 } from '@/api/recruitment'
 import { apiError } from '@/utils/error'
-import { hasPermission } from '@/utils/auth'
+import { hasPermission, getUserInfo } from '@/utils/auth'
+import { useFormDraft } from '@/composables/useFormDraft'
 import { useRecruitmentDashboard } from '@/composables/useRecruitmentDashboard'
 import { useRecruitmentArea, createEmptyCampus } from '@/composables/useRecruitmentArea'
 import { useRecruitmentPeriods } from '@/composables/useRecruitmentPeriods'
@@ -775,6 +776,20 @@ const emptyForm = (): {
 })
 const form = ref(emptyForm())
 
+// 表單草稿暫存：招生表單聯絡 PII 一律排除，草稿僅留訪視/年級/來源等工作欄位
+const RECRUITMENT_DRAFT_EXCLUDE = [
+  'child_name', 'birthday', 'phone', 'address', 'district',
+  'parent_response', 'notes', 'month_raw',
+]
+const recruitmentDraft = useFormDraft({
+  formId: 'recruitment',
+  state: () => form.value,
+  recordId: () => editingId.value,
+  userScope: () => (getUserInfo()?.employee_id as string | number | null) || 'anon',
+  exclude: RECRUITMENT_DRAFT_EXCLUDE,
+  enabled: () => dialogVisible.value,
+})
+
 // -------- 近五年期間 Dialog --------
 const periodDialogVisible = ref(false)
 const periodDialogMode = ref('add')
@@ -1047,6 +1062,8 @@ const openAddDialog = async () => {
   dialogMode.value = 'add'
   editingId.value = null
   dialogVisible.value = true
+  await nextTick()
+  await recruitmentDraft.maybePromptRestore()
 }
 
 const openEditDialog = async (row: Record<string, unknown>) => {
@@ -1077,6 +1094,8 @@ const openEditDialog = async (row: Record<string, unknown>) => {
   dialogMode.value = 'edit'
   editingId.value = row.id as number | null
   dialogVisible.value = true
+  await nextTick()
+  await recruitmentDraft.maybePromptRestore()
 }
 
 const handleSave = async () => {
@@ -1092,6 +1111,7 @@ const handleSave = async () => {
       await updateRecruitmentRecord(editingId.value!, payload)
       ElMessage.success('更新成功')
     }
+    recruitmentDraft.clear()
     dialogVisible.value = false
     await fetchStats()
     invalidateOptions()

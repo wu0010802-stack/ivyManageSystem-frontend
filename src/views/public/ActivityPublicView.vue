@@ -447,6 +447,7 @@ import { useActivityRegistrationTime } from '@/composables/useActivityRegistrati
 import { useRegistrationWindow } from '@/composables/useRegistrationWindow'
 import { useActivityAvailability } from '@/composables/useActivityAvailability'
 import { usePublicRegistrationForm } from '@/composables/usePublicRegistrationForm'
+import { useFormDraft } from '@/composables/useFormDraft'
 import { useCourseAdvisory } from '@/composables/useCourseAdvisory'
 import { buildFormCardTitle } from '@/utils/activityDisplay'
 // KawaiiStar / LaurelWreath / BrandMark 已隨 SuccessSummaryModal 抽走（A1-P5）
@@ -549,6 +550,14 @@ const {
   normalizeMobile,
   FIELD_FOCUS_ORDER,
 } = usePublicRegistrationForm({ courses, supplies, availability })
+
+// 公開才藝報名草稿暫存（不引入 Element Plus，用 window.confirm 當還原提示）
+const activityDraft = useFormDraft({
+  formId: 'activity-public',
+  state: form,
+  userScope: () => 'public',
+  confirmRestore: ({ message }) => (window.confirm(message) ? 'restore' : 'discard'),
+})
 
 const submitting = ref(false)
 const posterLoaded = ref(false)
@@ -807,6 +816,7 @@ async function handleSubmitRegistration() {
       queryToken: result.query_token,
     })
     showToast(result.message || '報名送出成功！', 'success')
+    activityDraft.clear()
     resetForm()
     await refreshAvailability()
   } catch (err) {
@@ -822,6 +832,8 @@ onMounted(async () => {
   await runInit()
   startPolling()
   // A1-P7：30s tick 由 useRegistrationWindow 自管 lifecycle
+  // 選項載入完成後才提示還原，確保班級/課程選單已就緒
+  await activityDraft.maybePromptRestore()
 })
 onUnmounted(() => {
   stopPolling()
