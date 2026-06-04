@@ -119,11 +119,10 @@ describe('RecruitmentIvykidsTab', () => {
     expect(wrapper.text()).toContain('共 1 筆')
   })
 
-  it('保留獨立路由與側邊欄入口', () => {
-    expect(routerSource).toContain("path: '/recruitment-ivykids'")
-    expect(routerSource).toContain("meta: { title: '官網報名' }")
-    expect(sidebarSource).toContain('index="/recruitment-ivykids"')
-    expect(sidebarSource).toContain('官網報名')
-    expect(permissionsSource).toContain("{ path: '/recruitment-ivykids', permission: 'RECRUITMENT_READ' }")
+  it('官網報名併入招生統計（無獨立側邊欄/路由改 redirect）', () => {
+    // Phase 3：官網報名收進招生統計 tab，舊路由 redirect、移除獨立側邊欄項與權限對應
+    expect(routerSource).toMatch(/recruitment-ivykids[\s\S]{0,120}redirect:\s*['"]\/recruitment['"]/)
+    expect(sidebarSource).not.toContain('index="/recruitment-ivykids"')
+    expect(permissionsSource).not.toContain("{ path: '/recruitment-ivykids', permission: 'RECRUITMENT_READ' }")
   })
 })
