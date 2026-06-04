@@ -371,6 +371,11 @@
         />
       </el-tab-pane>
 
+      <!-- ==================== 名額規劃 ==================== -->
+      <el-tab-pane label="名額規劃" name="intake" lazy>
+        <IntakePlanPanel />
+      </el-tab-pane>
+
       <!-- ==================== 原始明細 ==================== -->
       <el-tab-pane label="原始明細" name="detail" lazy>
         <RecruitmentDetailTab
@@ -390,11 +395,8 @@
           @edit="openEditDialog"
           @delete="(id) => handleDelete(id as number)"
           @convert="openConvertDialog"
+          @reserve="openReserveDialog"
         />
-      </el-tab-pane>
-
-      <el-tab-pane label="招生漏斗" name="funnel" lazy>
-        <FunnelBoard />
       </el-tab-pane>
     </el-tabs>
 
@@ -439,6 +441,12 @@
       :classroom-options="classroomOptions"
       @converted="onConverted"
     />
+
+    <ReserveSeatDialog
+      v-model="reserveDialogVisible"
+      :visit="reserveTargetVisit"
+      @reserved="onReserved"
+    />
   </div>
 </template>
 
@@ -466,7 +474,9 @@ import RecruitmentAreaTab from '@/components/recruitment/RecruitmentAreaTab.vue'
 import RecruitmentNoDepositTab from '@/components/recruitment/RecruitmentNoDepositTab.vue'
 import RecruitmentPeriodsTab from '@/components/recruitment/RecruitmentPeriodsTab.vue'
 import RecruitmentDetailTab from '@/components/recruitment/RecruitmentDetailTab.vue'
+import IntakePlanPanel from '@/components/recruitment/IntakePlanPanel.vue'
 import RecruitmentConvertDialog from '@/components/recruitment/RecruitmentConvertDialog.vue'
+import ReserveSeatDialog from '@/components/recruitment/ReserveSeatDialog.vue'
 import { useClassroomStore } from '@/stores/classroom'
 import { useRouter } from 'vue-router'
 import RecruitmentMonthDialog from '@/components/recruitment/RecruitmentMonthDialog.vue'
@@ -474,7 +484,6 @@ import RecruitmentRecordDialog from '@/components/recruitment/RecruitmentRecordD
 import RecruitmentPeriodDialog from '@/components/recruitment/RecruitmentPeriodDialog.vue'
 import RecruitmentCampusDialog from '@/components/recruitment/RecruitmentCampusDialog.vue'
 import { useRecruitmentCharts } from '@/composables/useRecruitmentCharts'
-import FunnelBoard from '@/components/recruitment/funnel/FunnelBoard.vue'
 import { toAdYear } from '@/utils/academic'
 import {
   GRADES_ORDER,
@@ -533,6 +542,18 @@ async function loadClassroomsOnce() {
     // 失敗靜默：不阻擋 dialog 開啟，使用者仍可不選班級
     classroomOptions.value = []
   }
+}
+
+// ── 保留座位（暫定編班）─────────────────────────────
+const reserveDialogVisible = ref(false)
+const reserveTargetVisit = ref<Record<string, unknown> | null>(null)
+function openReserveDialog(row: Record<string, unknown>) {
+  reserveTargetVisit.value = row
+  reserveDialogVisible.value = true
+}
+function onReserved() {
+  // 重載訪視列表以反映 provisional 欄位變更
+  void fetchDetail()
 }
 
 async function openConvertDialog(row: Record<string, unknown>) {

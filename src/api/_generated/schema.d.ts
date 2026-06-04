@@ -23083,12 +23083,18 @@ export interface components {
             parent_response?: unknown;
             /** Phone */
             phone?: unknown;
+            /** Provisional Grade Id */
+            provisional_grade_id?: unknown;
             /** Referrer */
             referrer?: unknown;
             /** Seq No */
             seq_no?: unknown;
             /** Source */
             source?: unknown;
+            /** Target School Year */
+            target_school_year?: unknown;
+            /** Target Semester */
+            target_semester?: unknown;
             /** Transfer Term */
             transfer_term?: unknown;
             /** Updated At */
