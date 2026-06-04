@@ -451,7 +451,7 @@ const populateForm = (row: Record<string, unknown>) => {
 
 const { dialogVisible, isEdit, openCreate: handleAdd, openEdit: handleEdit, closeDialog } = useCrudDialog({ resetForm, populateForm })
 
-// 表單草稿暫存：薪資/投保/銀行/聯絡 PII 一律排除，草稿僅含基本欄位
+// 表單草稿暫存：身分證/教師證字號/薪資/投保/銀行/聯絡 PII 排除，草稿僅含姓名、性別、生日等基本欄位
 const EMPLOYEE_DRAFT_EXCLUDE = [
   'id', 'id_number', 'phone', 'email', 'address',
   'emergency_contact_name', 'emergency_contact_phone',
@@ -460,12 +460,13 @@ const EMPLOYEE_DRAFT_EXCLUDE = [
   'insurance_salary_override_reason', 'bypass_standard_base',
   'dependents', 'extra_dependents_quarterly',
   'bank_code', 'bank_account', 'bank_account_name',
+  'teacher_cert_no',
 ]
 const employeeDraft = useFormDraft({
   formId: 'employee',
   state: form,
   recordId: () => form.id,
-  userScope: () => (getUserInfo()?.employee_id as string | number | null) ?? 'anon',
+  userScope: () => (getUserInfo()?.employee_id as string | number | null) || 'anon',
   exclude: EMPLOYEE_DRAFT_EXCLUDE,
   enabled: () => dialogVisible.value,
 })
