@@ -24048,6 +24048,10 @@ export interface components {
             birthday_bonus?: number | null;
             /** Early Leave Deduction */
             early_leave_deduction?: number | null;
+            /** Extra Allowance */
+            extra_allowance?: number | null;
+            /** Extra Allowance Label */
+            extra_allowance_label?: string | null;
             /** Festival Bonus */
             festival_bonus?: number | null;
             /** Health Insurance Employee */
