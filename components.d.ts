@@ -31,7 +31,6 @@ declare module 'vue' {
     BalloonGroup: typeof import('./src/components/brand/BalloonGroup.vue')['default']
     BasicInfoTab: typeof import('./src/components/student/tabs/BasicInfoTab.vue')['default']
     BatchOvertimeDialog: typeof import('./src/components/overtime/BatchOvertimeDialog.vue')['default']
-    BonusDashboard: typeof import('./src/components/enrollment/BonusDashboard.vue')['default']
     BonusImpactPreview: typeof import('./src/components/students/BonusImpactPreview.vue')['default']
     BrandMark: typeof import('./src/components/brand/BrandMark.vue')['default']
     CalendarBoard: typeof import('./src/components/calendar/CalendarBoard.vue')['default']

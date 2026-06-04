@@ -8458,41 +8458,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/permissions/definitions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Create Permission Definition */
-        post: operations["create_permission_definition_api_permissions_definitions_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/permissions/definitions/{code}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Update Permission Definition */
-        put: operations["update_permission_definition_api_permissions_definitions__code__put"];
-        post?: never;
-        /** Delete Permission Definition */
-        delete: operations["delete_permission_definition_api_permissions_definitions__code__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/portal/activity/attendance/sessions": {
         parameters: {
             query?: never;
@@ -21394,7 +21359,7 @@ export interface components {
         };
         /**
          * PermissionAdminOkOut
-         * @description delete_permission_definition / delete_role 回傳 — {ok: bool}。
+         * @description delete_role 回傳 — {ok: bool}。
          *
          *     不重用 _common.OkStatusOut（欄位是 status:str）或 DeleteResultOut（message:str），
          *     重用會 silent rename 前端欄位。
@@ -21402,45 +21367,6 @@ export interface components {
         PermissionAdminOkOut: {
             /** Ok */
             ok: unknown;
-        };
-        /** PermissionDefinitionIn */
-        PermissionDefinitionIn: {
-            /** Code */
-            code: string;
-            /** Description */
-            description?: string | null;
-            /**
-             * Group Name
-             * @default 自訂
-             */
-            group_name: string;
-            /** Label */
-            label: string;
-        };
-        /**
-         * PermissionDefinitionOut
-         * @description create_permission_definition / update_permission_definition 回傳。
-         */
-        PermissionDefinitionOut: {
-            /** Code */
-            code: unknown;
-            /** Description */
-            description?: unknown;
-            /** Group Name */
-            group_name: unknown;
-            /** Is Core */
-            is_core: unknown;
-            /** Label */
-            label: unknown;
-        };
-        /** PermissionDefinitionUpdate */
-        PermissionDefinitionUpdate: {
-            /** Description */
-            description?: string | null;
-            /** Group Name */
-            group_name?: string | null;
-            /** Label */
-            label?: string | null;
         };
         /** PolicyItem */
         PolicyItem: {
@@ -41273,105 +41199,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_permission_definition_api_permissions_definitions_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PermissionDefinitionIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PermissionDefinitionOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_permission_definition_api_permissions_definitions__code__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                code: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PermissionDefinitionUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PermissionDefinitionOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_permission_definition_api_permissions_definitions__code__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                code: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PermissionAdminOkOut"];
                 };
             };
             /** @description Validation Error */

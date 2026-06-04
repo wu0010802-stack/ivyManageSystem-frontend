@@ -153,10 +153,6 @@
         </div>
       </el-tab-pane>
 
-      <!-- ============ Tab 3：獎金達成 ============ -->
-      <el-tab-pane v-if="showBonusTab" label="獎金達成" name="bonus">
-        <BonusDashboard v-if="activeTab === 'bonus'" />
-      </el-tab-pane>
     </el-tabs>
   </div>
 </template>
@@ -167,11 +163,7 @@ import { ElMessage } from 'element-plus'
 import { RefreshRight, Printer } from '@element-plus/icons-vue'
 import { getEnrollmentStats, getEnrollmentOptions, getEnrollmentRoster, getEnrollmentRosterPdf } from '@/api/studentEnrollment'
 import { openPdfInNewTab } from '@/utils/printPdfWindow'
-import { hasPermission } from '@/utils/auth'
 import { coerceRocYear } from '@/utils/academic'
-import BonusDashboard from '@/components/enrollment/BonusDashboard.vue'
-
-const showBonusTab = computed(() => hasPermission('SALARY_READ'))
 import { useAcademicTermStore } from '@/stores/academicTerm'
 import { apiError } from '@/utils/error'
 import EnrollmentRosterTable from '@/components/enrollment/EnrollmentRosterTable.vue'
