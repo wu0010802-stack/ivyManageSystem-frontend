@@ -11,6 +11,7 @@ export const MANUAL_ITEM_CODES = [
   'SELF_IMPROVEMENT_ACTIVITY',
   'CHILD_ACCIDENT',
   'CLASS_HEADCOUNT_BONUS',
+  'SPED',
   'OTHER',
 ]
 
@@ -21,6 +22,7 @@ export const MANUAL_LABEL: Record<string, string> = {
   SELF_IMPROVEMENT_ACTIVITY: '自強活動',
   CHILD_ACCIDENT: '幼兒意外',
   CLASS_HEADCOUNT_BONUS: '帶班人數',
+  SPED: '特教加分',
   OTHER: '其他',
 }
 

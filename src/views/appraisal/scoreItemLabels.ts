@@ -1,5 +1,5 @@
 /**
- * scoreItemLabels — 14 個 ScoreItemCode 的中文標籤與顯示順序（共用）。
+ * scoreItemLabels — 15 個 ScoreItemCode 的中文標籤與顯示順序（共用）。
  *
  * 對應後端 models/appraisal.py 的 ScoreItemCode enum。任何前端視圖
  * 要顯示這些 code 的人話名稱都應從此載入，避免同 code 多版本標籤。
@@ -21,6 +21,7 @@ export const ITEM_CODE_LABELS = {
   SELF_IMPROVEMENT_ACTIVITY: '自強活動',
   CHILD_ACCIDENT: '幼兒意外',
   CLASS_HEADCOUNT_BONUS: '帶班人數加分',
+  SPED: '特教加分',
   OTHER: '其他',
 }
 
