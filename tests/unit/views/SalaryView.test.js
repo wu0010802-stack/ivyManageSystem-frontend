@@ -357,4 +357,69 @@ describe('SalaryView', () => {
     expect(row.extra_allowance_label).toBe('值週')
     expect(row.net_pay).toBe(31241)
   })
+
+  it('編輯其他欄位時不會把已存的額外加給靜默歸零（回歸）', async () => {
+    // 模擬：列已由 getRecords 帶回 extra_allowance=1241 / 名目=值週。
+    // 會計只改「遲到扣款」、完全不碰額外加給；payload 必須照原值帶回 1241，
+    // 否則 manual_adjust 會把 1241→0、名目→null（資料靜默遺失）。
+    const wrapper = mount(SalaryView, {
+      global: {
+        directives: { loading: () => {} },
+        stubs: {
+          BonusConfigPanel: true,
+          SalaryHistoryPanel: true,
+          EmptyState: true,
+          Search: true,
+          InfoFilled: true,
+          'el-tabs': { template: '<div><slot /></div>' },
+          'el-tab-pane': { template: '<div><slot /></div>' },
+          'el-card': { template: '<div><slot /></div>' },
+          'el-select': { template: '<div><slot /></div>' },
+          'el-option': true,
+          'el-button': { template: '<button @click="$emit(\'click\')"><slot /></button>' },
+          'el-table': { template: '<div><slot /></div>' },
+          'el-table-column': true,
+          'el-tooltip': { template: '<span><slot /></span>' },
+          'el-icon': { template: '<span><slot /></span>' },
+          'el-dialog': { template: '<div><slot /><slot name="footer" /></div>' },
+          'el-form': { template: '<form><slot /></form>' },
+          'el-form-item': { props: ['label'], template: '<label>{{ label }}<slot /></label>' },
+          'el-input': {
+            props: ['modelValue'],
+            emits: ['update:modelValue'],
+            template: '<input :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />',
+          },
+          'el-input-number': {
+            props: ['modelValue'],
+            emits: ['update:modelValue'],
+            template: '<input type="number" :value="modelValue" @input="$emit(\'update:modelValue\', Number($event.target.value))" />',
+          },
+        },
+      },
+    })
+
+    manualAdjustSalary.mockResolvedValue({
+      data: { record: { id: 10, extra_allowance: 1241, extra_allowance_label: '值週', late_deduction: 50, net_salary: 31191, remark: '手動編輯：遲到扣款', manual_overrides: ['extra_allowance', 'extra_allowance_label', 'late_deduction'], version: 4 } },
+    })
+
+    // 列直接帶 getRecords 形狀（含 extra_allowance），不經 calculate
+    wrapper.vm.$.setupState.salaryRecords = [
+      { id: 10, employee_id: 1, employee_name: '王小明', version: 1, extra_allowance: 1241, extra_allowance_label: '值週' },
+    ]
+    const row = { id: 10, employee_id: 1, employee_name: '王小明', extra_allowance: 1241, extra_allowance_label: '值週', late_deduction: 0 }
+    wrapper.vm.$.setupState.salaryResults = [row]
+
+    wrapper.vm.$.setupState.openEditDialog(row)
+    // 只改遲到扣款，完全不碰額外加給金額/名目
+    wrapper.vm.$.setupState.editForm.late_deduction = 50
+    wrapper.vm.$.setupState.adjustmentReason = '遲到扣款修正為 50'
+    await wrapper.vm.$.setupState.saveManualAdjust()
+    await flushPromises()
+    await nextTick()
+
+    const [, payload] = manualAdjustSalary.mock.calls[0]
+    expect(payload.late_deduction).toBe(50)
+    expect(payload.extra_allowance).toBe(1241) // 關鍵：未被歸零
+    expect(payload.extra_allowance_label).toBe('值週') // 關鍵：名目保留
+  })
 })

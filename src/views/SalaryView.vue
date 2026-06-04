@@ -282,6 +282,10 @@ const fetchSalaryRecords = async () => {
           ...row,
           remark: record.remark || '',
           manual_overrides: Array.isArray(record.manual_overrides) ? record.manual_overrides : [],
+          // 額外加給為手填欄位，calculate 回應不帶（breakdown 恆 0）；從權威 DB record
+          // 帶回，否則編輯其他欄位時 saveManualAdjust 會送 0 把已存的值靜默歸零。
+          extra_allowance: (record as Record<string, unknown>).extra_allowance ?? row.extra_allowance ?? 0,
+          extra_allowance_label: (record as Record<string, unknown>).extra_allowance_label ?? row.extra_allowance_label ?? null,
         }
       })
     } else if (records.length > 0) {

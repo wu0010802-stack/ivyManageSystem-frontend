@@ -24112,6 +24112,10 @@ export interface components {
             employee_id: unknown;
             /** Employee Name */
             employee_name: unknown;
+            /** Extra Allowance */
+            extra_allowance: unknown;
+            /** Extra Allowance Label */
+            extra_allowance_label?: unknown;
             /** Festival Bonus */
             festival_bonus: unknown;
             /** Finalized At */
