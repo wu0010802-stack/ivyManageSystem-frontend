@@ -1,18 +1,29 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Bell, Mute, Refresh } from '@element-plus/icons-vue'
+import { Bell, Mute, Refresh, CircleCheck } from '@element-plus/icons-vue'
 import {
   getPortalDismissalCalls,
   acknowledgeDismissalCall,
   completeDismissalCall,
 } from '@/api/dismissalCalls'
+import DismissalCallCard from '@/components/dismissal/DismissalCallCard.vue'
+import {
+  useNowClock,
+  sortByOldestFirst,
+  type DismissalCallView,
+} from '@/composables/useDismissalUrgency'
 
-interface DismissalCall { id: number; student_name?: string; classroom_name?: string; status?: string; [key: string]: unknown }
+type DismissalCall = DismissalCallView
 
 // ─── 狀態 ───────────────────────────────────────────────
-const activeCalls = ref<DismissalCall[]>([])   // pending + acknowledged
+const activeCalls = ref<DismissalCall[]>([]) // pending + acknowledged
 const loading = ref(false)
+
+// 等候時間活著跳：單一 30s 時鐘 + 最久優先（FIFO）排序的 computed view。
+// WS handlers 照舊以 id 變動原始 activeCalls，排序交給 computed，避免在 handler 內手動插入正確位置。
+const { now } = useNowClock()
+const sortedCalls = computed(() => sortByOldestFirst(activeCalls.value))
 
 // WebSocket 與連線狀態
 let ws: WebSocket | null = null
@@ -40,7 +51,7 @@ const muted = ref(localStorage.getItem(SOUND_PREF_KEY) === '1')
 const toggleMute = () => {
   muted.value = !muted.value
   localStorage.setItem(SOUND_PREF_KEY, muted.value ? '1' : '')
-  ElMessage.success(muted.value ? '已靜音通知聲音' : '已開啟通知聲音')
+  ElMessage.success(muted.value ? '已關閉通知聲音' : '已開啟通知聲音')
 }
 
 // 用 Web Audio API 合成短 beep，避免額外音檔依賴
@@ -70,6 +81,13 @@ const playBeep = () => {
 const triggerHaptic = () => {
   if (muted.value) return
   if (navigator.vibrate) navigator.vibrate([180, 80, 180])
+}
+
+// 測試聲音：點擊本身就是 user gesture，可解鎖被瀏覽器擋住的 AudioContext，
+// 讓老師上工前先確認「真的聽得到」，而不是漏接才發現沒聲音。
+const testSound = () => {
+  playBeep()
+  triggerHaptic()
 }
 
 // ─── HTTP 載入 ───────────────────────────────────────────
@@ -107,7 +125,7 @@ const handleComplete = async (call: DismissalCall) => {
       '確認放學',
       {
         confirmButtonText: '確定放學',
-        cancelButtonText: '取消',
+        cancelButtonText: '返回',
         type: 'warning',
       },
     )
@@ -249,13 +267,6 @@ const requestNotificationPermission = () => {
   }
 }
 
-// ─── 工具函式 ────────────────────────────────────────────
-const formatTime = (dt: string | null | undefined) => {
-  if (!dt) return '-'
-  const d = new Date(dt)
-  return d.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })
-}
-
 // ─── Lifecycle ────────────────────────────────────────────
 onMounted(async () => {
   requestNotificationPermission()
@@ -274,28 +285,37 @@ onUnmounted(() => {
 
 <template>
   <div class="portal-dismissal-calls">
-    <el-card class="header-card">
-      <div class="sheet-header">
-        <h2>接送通知</h2>
-        <div class="header-actions">
-          <el-tag
-            :type="wsConnected ? 'success' : 'warning'"
-            size="small"
-            class="conn-tag"
-          >
-            {{ wsConnected ? '即時接收中' : '輪詢模式' }}
-          </el-tag>
-          <el-button
-            :icon="muted ? Mute : Bell"
-            circle
-            class="mute-btn"
-            :aria-label="muted ? '開啟通知聲音' : '靜音通知聲音'"
-            :title="muted ? '開啟通知聲音' : '靜音通知聲音'"
+    <header class="page-head">
+      <h2 class="page-head__title">接送通知</h2>
+      <div class="page-head__tools">
+        <el-tag
+          :type="wsConnected ? 'success' : 'warning'"
+          size="small"
+          effect="light"
+          class="conn-tag"
+        >
+          {{ wsConnected ? '即時接收中' : '連線不穩' }}
+        </el-tag>
+        <div class="sound-ctl">
+          <button
+            type="button"
+            class="sound-ctl__toggle"
+            :class="{ 'is-on': !muted }"
+            :aria-pressed="muted ? 'false' : 'true'"
             @click="toggleMute"
-          />
+          >
+            <el-icon><component :is="muted ? Mute : Bell" /></el-icon>
+            <span>通知聲音{{ muted ? '關' : '開' }}</span>
+          </button>
+          <button
+            v-if="!muted"
+            type="button"
+            class="sound-ctl__test"
+            @click="testSound"
+          >測試</button>
         </div>
       </div>
-    </el-card>
+    </header>
 
     <!-- 連線狀態 banner（reconnecting 黃 / exhausted 紅）-->
     <div
@@ -306,12 +326,12 @@ onUnmounted(() => {
     >
       <div class="conn-banner__text">
         <template v-if="connectionState === 'reconnecting'">
-          <span>即時連線中斷，正在重連…</span>
+          <span>即時連線中斷，正在重新連線</span>
           <span class="conn-banner__sub">第 {{ wsReconnectCount }} / {{ WS_MAX_RETRIES }} 次嘗試</span>
         </template>
         <template v-else>
-          <span>即時連線失敗，目前每 15 秒輪詢一次。</span>
-          <span class="conn-banner__sub">為避免漏接通知，請重新整理頁面。</span>
+          <span>即時連線失敗，目前改用備援接收（每 15 秒更新一次）</span>
+          <span class="conn-banner__sub">為避免漏接通知，建議重新整理頁面</span>
         </template>
       </div>
       <el-button
@@ -324,42 +344,38 @@ onUnmounted(() => {
       >重新整理</el-button>
     </div>
 
-    <div v-loading="loading">
-      <!-- 待處理列表 -->
-      <div v-if="activeCalls.length === 0" class="empty-state">
-        <el-empty description="目前沒有待處理的接送通知" />
+    <div class="dismissal-body" v-loading="loading">
+      <!-- 正向空狀態：一天大部分時間就是這個畫面 -->
+      <div v-if="activeCalls.length === 0 && !loading" class="empty">
+        <el-icon class="empty__ico"><CircleCheck /></el-icon>
+        <p class="empty__title">目前都接送完畢</p>
+        <p class="empty__sub">沒有正在等待的孩子，新的接送通知會即時出現在這裡</p>
       </div>
 
-      <div v-for="call in activeCalls" :key="call.id" class="call-card" :class="call.status">
-        <div class="call-info">
-          <div class="student-name">{{ call.student_name }}</div>
-          <div class="classroom-name">{{ call.classroom_name }}</div>
-          <div class="call-time">通知時間：{{ formatTime(call.requested_at as string | null | undefined) }}</div>
-          <div v-if="call.note" class="call-note">備註：{{ call.note }}</div>
-        </div>
-        <div class="call-actions">
-          <el-tag
-            :type="call.status === 'pending' ? 'warning' : 'primary'"
-            size="small"
-            class="call-actions__status"
-          >
-            {{ call.status === 'pending' ? '等待確認' : '已收到' }}
-          </el-tag>
-          <el-button
-            v-if="call.status === 'pending'"
-            type="primary"
-            class="call-actions__btn"
-            @click="handleAcknowledge(call)"
-          >已收到</el-button>
-          <el-button
-            v-if="call.status === 'acknowledged'"
-            type="success"
-            size="large"
-            class="call-actions__btn call-actions__btn--primary"
-            @click="handleComplete(call)"
-          >已放學</el-button>
-        </div>
-      </div>
+      <!-- 待處理列表：最久優先 -->
+      <TransitionGroup v-else tag="div" name="dcall-list" class="call-list">
+        <DismissalCallCard
+          v-for="call in sortedCalls"
+          :key="call.id"
+          :call="call"
+          :now="now"
+        >
+          <template #action>
+            <el-button
+              v-if="call.status === 'pending'"
+              type="primary"
+              class="act-btn"
+              @click="handleAcknowledge(call)"
+            >我收到了</el-button>
+            <el-button
+              v-else-if="call.status === 'acknowledged'"
+              type="success"
+              class="act-btn"
+              @click="handleComplete(call)"
+            >帶出去放學</el-button>
+          </template>
+        </DismissalCallCard>
+      </TransitionGroup>
     </div>
   </div>
 </template>
@@ -371,34 +387,80 @@ onUnmounted(() => {
   padding: var(--space-4);
 }
 
-.header-card {
-  margin-bottom: var(--space-4);
-  background-color: var(--surface-color);
-}
-
-.sheet-header {
+/* sticky header：捲動長列表時，連線與聲音狀態恆可見（安全關鍵） */
+.page-head {
+  position: sticky;
+  top: 0;
+  z-index: 10;
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: var(--space-3);
+  flex-wrap: wrap;
+  padding: var(--space-3) 0;
+  margin-bottom: var(--space-3);
+  background: var(--bg-color, var(--neutral-50));
 }
 
-.sheet-header h2 {
+.page-head__title {
   margin: 0;
   font-size: var(--text-3xl);
   font-weight: var(--font-weight-bold);
   color: var(--text-primary);
 }
 
-.header-actions {
+.page-head__tools {
   display: flex;
   align-items: center;
   gap: var(--space-3);
 }
 
-.mute-btn {
-  min-width: var(--touch-target-min);
+/* ─── 聲音控制：顯性顯示開/關 + 測試 ─── */
+.sound-ctl {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.sound-ctl__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   min-height: var(--touch-target-min);
+  padding: 0 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--surface-color);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), color var(--transition-fast), background-color var(--transition-fast);
+}
+.sound-ctl__toggle.is-on {
+  border-color: var(--color-success);
+  color: #1a7f4b;
+  background: var(--color-success-soft);
+}
+.sound-ctl__toggle:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.sound-ctl__test {
+  min-height: var(--touch-target-min);
+  padding: 0 10px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-primary);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+}
+.sound-ctl__test:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 /* ─── 連線狀態 banner ─── */
@@ -412,19 +474,16 @@ onUnmounted(() => {
   margin-bottom: var(--space-4);
   border: 1px solid transparent;
 }
-
 .conn-banner--reconnecting {
   background-color: var(--color-warning-soft);
   color: var(--text-primary);
   border-color: var(--color-warning);
 }
-
 .conn-banner--exhausted {
   background-color: var(--color-danger-soft);
   color: var(--text-primary);
   border-color: var(--color-danger);
 }
-
 .conn-banner__text {
   display: flex;
   flex-direction: column;
@@ -432,100 +491,98 @@ onUnmounted(() => {
   font-size: var(--text-sm);
   font-weight: var(--font-weight-medium);
 }
-
 .conn-banner__sub {
   font-size: var(--text-xs);
   color: var(--text-secondary);
   font-weight: var(--font-weight-regular);
 }
-
 .conn-banner__btn {
   flex-shrink: 0;
   min-height: var(--touch-target-min);
 }
 
-.empty-state {
-  margin-top: var(--space-10);
-}
-
-.call-card {
-  background: var(--surface-color);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-md);
-  padding: var(--space-4);
-  margin-bottom: var(--space-3);
+/* ─── 正向空狀態 ─── */
+.empty {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-3);
-  border-left: 4px solid var(--border-color);
-  transition: border-color var(--transition-fast);
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-2);
+  padding: var(--space-10) var(--space-4);
 }
-
-.call-card.pending {
-  border-left-color: var(--color-warning);
+.empty__ico {
+  font-size: 48px;
+  color: var(--color-success);
+  margin-bottom: var(--space-2);
 }
-
-.call-card.acknowledged {
-  border-left-color: var(--color-info);
-}
-
-.student-name {
+.empty__title {
+  margin: 0;
   font-size: var(--text-xl);
   font-weight: var(--font-weight-semibold);
   color: var(--text-primary);
-  margin-bottom: var(--space-1);
 }
-
-.classroom-name {
-  color: var(--text-secondary);
+.empty__sub {
+  margin: 0;
+  max-width: 32ch;
   font-size: var(--text-sm);
-  margin-bottom: var(--space-1);
-}
-
-.call-time {
   color: var(--text-tertiary);
-  font-size: var(--text-xs);
+  line-height: 1.6;
 }
 
-.call-note {
-  color: var(--text-secondary);
-  font-size: var(--text-xs);
-  margin-top: var(--space-1);
-  font-style: italic;
-}
-
-.call-actions {
+/* ─── 列表 ─── */
+.call-list {
   display: flex;
   flex-direction: column;
-  align-items: stretch;
-  gap: var(--space-2);
-  flex-shrink: 0;
-  min-width: 110px;
+  gap: var(--space-3);
 }
 
-.call-actions__status {
-  align-self: flex-end;
-}
-
-.call-actions__btn {
+.act-btn {
   min-height: var(--touch-target-min);
-}
-
-.call-actions__btn--primary {
   font-weight: var(--font-weight-semibold);
 }
 
-@media (max-width: 768px) {
-  .call-card {
-    flex-direction: column;
-    align-items: stretch;
+/* 卡片進場 / 移除 / 重排序動畫 */
+.dcall-list-enter-active {
+  transition:
+    opacity 0.24s cubic-bezier(0.25, 1, 0.5, 1),
+    transform 0.24s cubic-bezier(0.25, 1, 0.5, 1);
+}
+.dcall-list-leave-active {
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease;
+}
+.dcall-list-move {
+  transition: transform 0.24s cubic-bezier(0.25, 1, 0.5, 1);
+}
+.dcall-list-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+.dcall-list-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+@media (max-width: 560px) {
+  .page-head__tools {
+    width: 100%;
+    justify-content: space-between;
   }
-  .call-actions {
-    min-width: 0;
+  .act-btn {
+    width: 100%;
   }
-  .call-actions__status {
-    align-self: flex-start;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dcall-list-enter-active,
+  .dcall-list-leave-active,
+  .dcall-list-move {
+    transition: opacity 0.15s linear;
+  }
+  .dcall-list-enter-from,
+  .dcall-list-leave-to {
+    transform: none;
   }
 }
 </style>
