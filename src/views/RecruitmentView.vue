@@ -396,6 +396,7 @@
           @delete="(id) => handleDelete(id as number)"
           @convert="openConvertDialog"
           @reserve="openReserveDialog"
+          @journey="openJourney"
         />
       </el-tab-pane>
     </el-tabs>
@@ -447,6 +448,10 @@
       :visit="reserveTargetVisit"
       @reserved="onReserved"
     />
+
+    <el-drawer v-model="journeyDrawerVisible" title="參觀→入學 歷程" direction="rtl" size="460px">
+      <JourneyTimeline :visit-id="journeyVisitId" />
+    </el-drawer>
   </div>
 </template>
 
@@ -477,6 +482,7 @@ import RecruitmentDetailTab from '@/components/recruitment/RecruitmentDetailTab.
 import IntakePlanPanel from '@/components/recruitment/IntakePlanPanel.vue'
 import RecruitmentConvertDialog from '@/components/recruitment/RecruitmentConvertDialog.vue'
 import ReserveSeatDialog from '@/components/recruitment/ReserveSeatDialog.vue'
+import JourneyTimeline from '@/components/recruitment/JourneyTimeline.vue'
 import { useClassroomStore } from '@/stores/classroom'
 import { useRouter } from 'vue-router'
 import RecruitmentMonthDialog from '@/components/recruitment/RecruitmentMonthDialog.vue'
@@ -554,6 +560,14 @@ function openReserveDialog(row: Record<string, unknown>) {
 function onReserved() {
   // 重載訪視列表以反映 provisional 欄位變更
   void fetchDetail()
+}
+
+// ── 參觀→入學 歷程 ───────────────────────────────────
+const journeyDrawerVisible = ref(false)
+const journeyVisitId = ref<number | null>(null)
+function openJourney(row: Record<string, unknown>) {
+  journeyVisitId.value = (row.id as number) ?? null
+  journeyDrawerVisible.value = true
 }
 
 async function openConvertDialog(row: Record<string, unknown>) {
