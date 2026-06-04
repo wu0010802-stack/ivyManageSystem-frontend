@@ -26,7 +26,7 @@ const PII_KEY_SUBSTRINGS = [
   'line_user_id', 'liff', 'address',
   'child_name', 'student_name', 'parent_name', 'guardian',
   'emergency_contact', 'birthday', 'birth_date',
-  'medication', 'dosage', 'allergy', 'disability', 'iep',
+  'medication', 'dosage', 'allergy', 'disability', 'iep', 'special_needs',
   'health', 'diagnosis', 'growth', 'measurement', 'height', 'weight',
   'password', 'secret', 'token', 'jwt', 'cookie', 'authorization',
   'refresh_token', 'access_token', 'api_key',
