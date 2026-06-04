@@ -106,10 +106,9 @@ const routes: RouteRecordRaw[] = [
             meta: { title: '招生統計' }
         },
         {
+            // 官網報名已併入招生統計 tab；舊連結 redirect，避免 404
             path: '/recruitment-ivykids',
-            name: 'recruitment-ivykids',
-            component: () => import('../views/RecruitmentIvykidsView.vue'),
-            meta: { title: '官網報名' }
+            redirect: '/recruitment'
         },
         {
             path: '/classrooms',
