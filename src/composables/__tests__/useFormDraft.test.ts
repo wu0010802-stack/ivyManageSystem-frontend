@@ -218,3 +218,21 @@ describe('useFormDraft：maybePromptRestore', () => {
     stop()
   })
 })
+
+describe('useFormDraft：過期 GC', () => {
+  beforeEach(() => localStorage.clear())
+
+  it('init 時刪除前綴 ivy.draft. 下所有過期草稿', () => {
+    const old = new Date(Date.now() - 30 * 86400_000).toISOString()
+    const fresh = new Date().toISOString()
+    localStorage.setItem('ivy.draft.v1.old.1', JSON.stringify({ v: 1, savedAt: old, data: {} }))
+    localStorage.setItem('ivy.draft.v1.fresh.1', JSON.stringify({ v: 1, savedAt: fresh, data: {} }))
+    localStorage.setItem('unrelated.key', 'keep-me')
+    const form = reactive({ x: '' })
+    const { stop } = run(() => useFormDraft({ formId: 'whatever', state: form, ttlDays: 7, debounceMs: 0 }))
+    expect(localStorage.getItem('ivy.draft.v1.old.1')).toBeNull()      // 過期被刪
+    expect(localStorage.getItem('ivy.draft.v1.fresh.1')).toBeTruthy()  // 未過期保留
+    expect(localStorage.getItem('unrelated.key')).toBe('keep-me')      // 非前綴不動
+    stop()
+  })
+})

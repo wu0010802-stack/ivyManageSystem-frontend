@@ -130,6 +130,27 @@ export function useFormDraft<T extends object>(opts: UseFormDraftOptions<T>): Us
     draftSavedAt.value = env ? new Date(env.savedAt) : null
   }
 
+  const gcExpired = (): void => {
+    try {
+      const cutoff = ttlDays * 86400_000
+      const toRemove: string[] = []
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i)
+        if (!k || !k.startsWith(PREFIX)) continue
+        try {
+          const parsed = JSON.parse(localStorage.getItem(k) || '')
+          const ageMs = Date.now() - new Date(parsed?.savedAt).getTime()
+          if (!(ageMs >= 0) || ageMs > cutoff || parsed?.v !== VERSION) toRemove.push(k)
+        } catch {
+          toRemove.push(k) // 損壞也清掉
+        }
+      }
+      toRemove.forEach((k) => localStorage.removeItem(k))
+    } catch {
+      // localStorage 不可用 — 略過
+    }
+  }
+
   // flush：清掉 debounce 並立即寫入未存的 dirty 變更（enabled 門檻在 watcher 上，這裡只看 isDirty）
   const flush = (): void => {
     if (timer) { clearTimeout(timer); timer = null }
@@ -204,6 +225,8 @@ export function useFormDraft<T extends object>(opts: UseFormDraftOptions<T>): Us
     window.removeEventListener('beforeunload', onBeforeUnload)
     if (timer) clearTimeout(timer)
   })
+
+  gcExpired()
 
   return { hasDraft, draftSavedAt, maybePromptRestore, clear, discard, flush }
 }
