@@ -13,6 +13,7 @@ import {
 } from '@element-plus/icons-vue'
 import { hasPermission } from '@/utils/auth'
 import { useConfirmDelete } from '@/composables'
+import { useClassroomProspects } from '@/composables/useClassroomProspects'
 import { domainBus, STUDENT_EVENTS } from '@/utils/domainBus'
 import StudentEditDialog from '@/components/student/StudentEditDialog.vue'
 import StudentDetailPanel from '@/components/student/StudentDetailPanel.vue'
@@ -34,6 +35,9 @@ interface ClassroomProp {
   id?: number
   name?: string
   grade_name?: string
+  grade_id?: number
+  school_year?: number
+  semester?: number
   semester_label?: string
   is_active?: boolean
   capacity?: number
@@ -58,6 +62,21 @@ const emit = defineEmits<{
 const router = useRouter()
 
 const canWriteStudents = computed(() => hasPermission('STUDENTS_WRITE'))
+
+// ── 準新生／保留座位（呈現用，不計入在學人數/點名/收費）──────
+const prospectKey = computed(() => ({
+  grade_id: props.classroom?.grade_id ?? null,
+  school_year: props.classroom?.school_year ?? null,
+  semester: props.classroom?.semester ?? null,
+}))
+const { reservedCount, prospects, reload: reloadProspects } = useClassroomProspects(prospectKey)
+watch(
+  () => [props.visible, props.classroom?.id] as const,
+  ([v]) => {
+    if (v) void reloadProspects()
+  },
+  { immediate: true },
+)
 
 // ── 名冊篩選 ────────────────────────────────────────
 const studentSearch = ref('')
@@ -245,8 +264,8 @@ const close = () => emit('update:visible', false)
         <!-- 統計 pill row -->
         <div class="stat-pills-row">
           <div class="stat-pill stat-pill--primary">
-            <div class="stat-pill-value">{{ activeStudents.length }} / {{ classroom.capacity }}</div>
-            <div class="stat-pill-label">在讀</div>
+            <div class="stat-pill-value">在學 {{ activeStudents.length }} · 保留 {{ reservedCount }} / {{ classroom.capacity }}</div>
+            <div class="stat-pill-label">在讀 · 保留座位</div>
           </div>
           <div class="stat-pill stat-pill--info">
             <div class="stat-pill-value">{{ studentStats.maleCount }}</div>
@@ -342,6 +361,24 @@ const close = () => emit('update:visible', false)
                   </div>
                 </li>
               </ul>
+            </div>
+
+            <!-- 準新生／保留座位（尚未報到、不計入在學人數）-->
+            <div v-if="prospects.length" class="prospect-section">
+              <el-collapse>
+                <el-collapse-item
+                  :title="`準新生／保留座位（${prospects.length}）— 尚未報到、不計入在學人數`"
+                >
+                  <ul class="prospect-items">
+                    <li v-for="p in prospects" :key="p.id" class="prospect-item">
+                      <span class="prospect-name">{{ p.child_name }}</span>
+                      <el-tag size="small" type="info">{{ p.target_semester === 2 ? '下學期' : '上學期' }}</el-tag>
+                      <span v-if="p.source" class="muted">{{ p.source }}</span>
+                      <el-tag v-if="p.has_deposit" size="small" type="success">已預繳</el-tag>
+                    </li>
+                  </ul>
+                </el-collapse-item>
+              </el-collapse>
             </div>
           </aside>
 
