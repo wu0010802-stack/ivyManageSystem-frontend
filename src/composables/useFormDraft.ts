@@ -125,18 +125,33 @@ export function useFormDraft<T extends object>(opts: UseFormDraftOptions<T>): Us
   const maybePromptRestore = (): Promise<boolean> => Promise.resolve(false)
   const discard = clear
 
-  // 監看表單變動 → debounce 寫入
-  // 注意：直接傳 reactive 物件（非 getter）+ deep:true，才能正確追蹤 nested 變動
-  takeSnapshot()
-  refreshHasDraft()
+  // 監看表單變動 → debounce 寫入（enabled=false 時 watch callback 直接 return）
   const stopWatch = watch(
     state,
     () => { if (toValue(opts.enabled) !== false) schedule() },
     { deep: true }
   )
 
+  // enabled 轉換：轉 true 拍快照 + 偵測草稿；轉 false flush
+  let stopEnabled = () => {}
+  if (opts.enabled !== undefined) {
+    stopEnabled = watch(
+      () => toValue(opts.enabled),
+      (on, was) => {
+        if (on && !was) { takeSnapshot(); refreshHasDraft() }
+        else if (!on && was) { flush() }
+      },
+      { immediate: true }
+    )
+  } else {
+    takeSnapshot()
+    refreshHasDraft()
+  }
+
   onScopeDispose(() => {
+    flush()
     stopWatch()
+    stopEnabled()
     if (timer) clearTimeout(timer)
   })
 

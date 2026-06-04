@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { reactive, effectScope } from 'vue'
+import { reactive, effectScope, ref } from 'vue'
 import { useFormDraft } from '../useFormDraft'
 
 // 在 effectScope 內跑 composable，回傳 API + stop（讓 onScopeDispose 可被觸發）
@@ -60,6 +60,54 @@ describe('useFormDraft：讀回與過期', () => {
       formId: 'leave', state: form, userScope: () => 5, ttlDays: 7, debounceMs: 0,
     }))
     expect(api.hasDraft.value).toBe(false)
+    stop()
+  })
+})
+
+describe('useFormDraft：dirty 門檻與 enabled', () => {
+  beforeEach(() => localStorage.clear())
+
+  it('編輯模式：與初值快照相同 → 不寫草稿', async () => {
+    const form = reactive({ reason: '原因', hours: 8 })
+    const enabled = ref(true)
+    const { api, stop } = run(() => useFormDraft({
+      formId: 'leave', state: form, userScope: () => 5,
+      enabled: () => enabled.value, debounceMs: 0,
+    }))
+    void api
+    // 觸發一次 watch 但值未變
+    form.reason = '原因'
+    await new Promise((r) => setTimeout(r, 0))
+    expect(localStorage.getItem('ivy.draft.v1.leave.5')).toBeNull()
+    stop()
+  })
+
+  it('enabled=false 時不寫草稿', async () => {
+    const form = reactive({ reason: '' })
+    const enabled = ref(false)
+    const { api, stop } = run(() => useFormDraft({
+      formId: 'leave', state: form, userScope: () => 5,
+      enabled: () => enabled.value, debounceMs: 0,
+    }))
+    void api
+    form.reason = '變更'
+    await new Promise((r) => setTimeout(r, 0))
+    expect(localStorage.getItem('ivy.draft.v1.leave.5')).toBeNull()
+    stop()
+  })
+
+  it('enabled 轉 true 後重拍快照，之後變更才寫', async () => {
+    const form = reactive({ reason: '' })
+    const enabled = ref(false)
+    const { stop } = run(() => useFormDraft({
+      formId: 'leave', state: form, userScope: () => 5,
+      enabled: () => enabled.value, debounceMs: 0,
+    }))
+    enabled.value = true
+    await new Promise((r) => setTimeout(r, 0))
+    form.reason = '填寫中'
+    await new Promise((r) => setTimeout(r, 0))
+    expect(localStorage.getItem('ivy.draft.v1.leave.5')).toBeTruthy()
     stop()
   })
 })
