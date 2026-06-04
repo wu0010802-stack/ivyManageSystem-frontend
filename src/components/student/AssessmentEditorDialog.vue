@@ -183,7 +183,7 @@ const loadStudents = async (classroomId: number | null) => {
   if (!classroomId) { studentOptions.value = []; return }
   studentsLoading.value = true
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const res = await getStudents({ classroom_id: classroomId, is_active: true })
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     studentOptions.value = (res as any).data?.items || []

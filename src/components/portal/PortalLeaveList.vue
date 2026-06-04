@@ -101,11 +101,13 @@ const handleSupplementChange = (file: any, newList: any[]) => {
   const maxSize = 5 * 1024 * 1024
   if (!allowed.includes(file.raw?.type) && !file.name.match(/\.(heic|heif)$/i)) {
     ElMessage.error(`${file.name}：僅支援 JPG、PNG、GIF、HEIC、PDF`)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     supplementFileList.value = newList.filter((f: any) => f.uid !== file.uid)
     return
   }
   if ((file.raw?.size ?? 0) > maxSize) {
     ElMessage.error(`${file.name} 超過 5 MB 限制`)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     supplementFileList.value = newList.filter((f: any) => f.uid !== file.uid)
   }
 }
@@ -121,6 +123,7 @@ const submitSupplement = async () => {
   supplementLoading.value = true
   try {
     const formData = new FormData()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     supplementFileList.value.forEach((f: any) => formData.append('files', f.raw))
     await uploadMyLeaveAttachments(supplementLeave.value!.id as number, formData)
     ElMessage.success('附件已補充')

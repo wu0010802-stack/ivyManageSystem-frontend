@@ -59,6 +59,7 @@ async function submit() {
     ElMessage.success(`已開立 ${data.serial}`)
     open.value = false
   } catch (e) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ElMessage.error((e as any).response?.data?.detail || '開立失敗')
   } finally {
     loading.value = false

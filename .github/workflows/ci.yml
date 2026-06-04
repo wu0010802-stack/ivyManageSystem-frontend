@@ -64,6 +64,9 @@ jobs:
       - name: Type check（TS strict — L9 起改 blocking，TS errors 阻擋 PR）
         run: npm run typecheck
 
+      - name: ESLint（no-explicit-any — blocking；新 any 一律擋，遺留以 inline disable 棘輪 grandfather）
+        run: npm run lint
+
       - name: Lint tokens (baseline, warn only)
         run: npm run lint:tokens
         continue-on-error: true

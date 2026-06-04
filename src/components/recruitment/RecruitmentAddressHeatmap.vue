@@ -905,11 +905,13 @@ const markGoogleMapsUnavailable = (error: unknown) => {
 const ensureLeaflet = async () => {
   if (leafletApi) return leafletApi
   if (!leafletPromise) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/ban-ts-comment
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-ignore – leaflet has no @types package in this project
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     leafletPromise = import('leaflet').then(async (module: any) => {
       leafletApi = module.default ?? module
       // 載入 markercluster 插件：以 side-effect 擴展 leafletApi，提供 L.markerClusterGroup
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
       // @ts-ignore – leaflet.markercluster 無獨立 export，僅擴展 L
       await import('leaflet.markercluster')
       return leafletApi
