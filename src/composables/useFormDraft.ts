@@ -106,6 +106,7 @@ export function useFormDraft<T extends object>(opts: UseFormDraftOptions<T>): Us
     try { localStorage.removeItem(buildKey()) } catch { /* */ }
     hasDraft.value = false
     draftSavedAt.value = null
+    snapshot = JSON.stringify(pick(state as Record<string, unknown>)) // 重拍快照：clear 後不再 dirty，避免關閉時 flush 復活草稿
   }
 
   const read = (): DraftEnvelope | null => {

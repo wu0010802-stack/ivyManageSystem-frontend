@@ -152,6 +152,25 @@ describe('useFormDraft：flush', () => {
     stop()
     Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true })
   })
+
+  it('clear() 後關閉表單不應「復活」草稿', async () => {
+    const form = reactive({ reason: '' })
+    const enabled = ref(true)
+    const { api, stop } = run(() => useFormDraft({
+      formId: 'leave', state: form, userScope: () => 5,
+      enabled: () => enabled.value, debounceMs: 0,
+    }))
+    await new Promise((r) => setTimeout(r, 0))
+    form.reason = '已送出的內容'
+    await new Promise((r) => setTimeout(r, 0))
+    expect(localStorage.getItem('ivy.draft.v1.leave.5')).toBeTruthy() // 草稿已寫入
+    api.clear() // 模擬送出成功後清除
+    expect(localStorage.getItem('ivy.draft.v1.leave.5')).toBeNull()
+    enabled.value = false // 關閉表單 → flush；修好後不應復活
+    await new Promise((r) => setTimeout(r, 0))
+    expect(localStorage.getItem('ivy.draft.v1.leave.5')).toBeNull() // 仍為 null
+    stop()
+  })
 })
 
 describe('useFormDraft：maybePromptRestore', () => {
