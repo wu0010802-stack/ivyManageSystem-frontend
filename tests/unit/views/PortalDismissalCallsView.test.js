@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
-import { shallowMount } from '@vue/test-utils'
+import { flushPromises, shallowMount } from '@vue/test-utils'
 
 import PortalDismissalCallsView from '@/views/portal/PortalDismissalCallsView.vue'
 
@@ -104,5 +104,36 @@ describe('PortalDismissalCallsView', () => {
     wrapper.vm.activeCalls = [{ ...SAMPLE_CALL }]
     wrapper.vm.handleWsEvent({ type: 'dismissal_call_cancelled', payload: SAMPLE_CALL })
     expect(wrapper.vm.activeCalls).toHaveLength(0)
+  })
+
+  // ─── liveness watchdog（半開連線偵測）──────────────────────
+  it('逾 45s 未收到任何訊息應判定半開死連線並主動關閉重連', async () => {
+    vi.useFakeTimers()
+    try {
+      mountView()
+      await flushPromises()          // 等 onMounted 的 fetch + connectWs 跑完
+      mockWs.onopen()                // 模擬連線建立 → 啟動 liveness watchdog
+      mockWs.close.mockClear()
+      vi.advanceTimersByTime(45000)  // 45s 完全沒有任何訊息（含 ping）
+      expect(mockWs.close).toHaveBeenCalled() // watchdog 主動踢掉半開死連線
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('持續收到後端 ping 應續命，不誤判半開斷線', async () => {
+    vi.useFakeTimers()
+    try {
+      mountView()
+      await flushPromises()
+      mockWs.onopen()
+      mockWs.close.mockClear()
+      vi.advanceTimersByTime(30000)
+      mockWs.onmessage({ data: JSON.stringify({ type: 'ping' }) }) // 收到 ping → 續命
+      vi.advanceTimersByTime(30000)
+      expect(mockWs.close).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

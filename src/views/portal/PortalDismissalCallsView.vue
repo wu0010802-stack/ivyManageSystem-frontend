@@ -18,7 +18,11 @@ const loading = ref(false)
 let ws: WebSocket | null = null
 let wsReconnectTimer: ReturnType<typeof setTimeout> | null = null
 let pollingTimer: ReturnType<typeof setInterval> | null = null
+let wsLivenessTimer: ReturnType<typeof setTimeout> | null = null
 const WS_MAX_RETRIES = 5
+// 後端每 30s 主動 ping；逾 1.5×（45s）未收到任何訊息即視為半開死連線
+// （行動網路切換常見：TCP 半開，onclose/onerror 可能永不觸發），主動踢掉重連避免靜默漏接。
+const WS_LIVENESS_TIMEOUT = 45000
 const wsConnected = ref(false)
 const wsReconnectCount = ref(0)
 const wsExhausted = ref(false) // 已達重試上限，fallback 至 polling
@@ -130,6 +134,40 @@ const startPolling = () => {
   pollingTimer = setInterval(fetchCalls, 15000)
 }
 
+const clearLiveness = () => {
+  if (wsLivenessTimer) { clearTimeout(wsLivenessTimer); wsLivenessTimer = null }
+}
+
+// 每收到任何訊息（含後端 ping）就續命；逾時代表連線已半開死亡，主動踢掉重連。
+const bumpLiveness = () => {
+  clearLiveness()
+  wsLivenessTimer = setTimeout(() => {
+    if (!ws) return
+    // 半開連線的 onclose/onerror 可能永不觸發，先卸掉 handler 避免之後又重複排程重連，
+    // 再走與 onclose 相同的重連排程。
+    const dead = ws
+    dead.onclose = null
+    dead.onerror = null
+    dead.onmessage = null
+    try { dead.close() } catch { /* ignore */ }
+    ws = null
+    wsConnected.value = false
+    scheduleReconnect()
+  }, WS_LIVENESS_TIMEOUT)
+}
+
+const scheduleReconnect = () => {
+  if (wsReconnectCount.value < WS_MAX_RETRIES) {
+    const delay = Math.min(1000 * Math.pow(2, wsReconnectCount.value), 30000)
+    wsReconnectCount.value++
+    wsReconnectTimer = setTimeout(connectWs, delay)
+  } else {
+    // 超過重試上限，改用 polling，並升級 banner 提醒使用者重新整理
+    wsExhausted.value = true
+    startPolling()
+  }
+}
+
 const connectWs = () => {
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return
 
@@ -143,11 +181,13 @@ const connectWs = () => {
     wsExhausted.value = false
     stopPolling()
     if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null }
+    bumpLiveness()
     // 重連後重新 fetch，補回斷線期間的更新
     fetchCalls()
   }
 
   ws.onmessage = (e) => {
+    bumpLiveness()
     try {
       const event = JSON.parse(e.data)
       // 後端 _recv_loop 等 client 任何訊息回應，90 秒沒收就主動斷線。
@@ -164,15 +204,8 @@ const connectWs = () => {
 
   ws.onclose = () => {
     wsConnected.value = false
-    if (wsReconnectCount.value < WS_MAX_RETRIES) {
-      const delay = Math.min(1000 * Math.pow(2, wsReconnectCount.value), 30000)
-      wsReconnectCount.value++
-      wsReconnectTimer = setTimeout(connectWs, delay)
-    } else {
-      // 超過重試上限，改用 polling，並升級 banner 提醒使用者重新整理
-      wsExhausted.value = true
-      startPolling()
-    }
+    clearLiveness()
+    scheduleReconnect()
   }
 }
 
@@ -233,6 +266,7 @@ onMounted(async () => {
 onUnmounted(() => {
   if (ws) ws.close()
   if (wsReconnectTimer) clearTimeout(wsReconnectTimer)
+  clearLiveness()
   stopPolling()
   if (audioCtx) { audioCtx.close().catch(() => {}); audioCtx = null }
 })
