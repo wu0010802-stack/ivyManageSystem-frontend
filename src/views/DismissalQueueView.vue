@@ -61,8 +61,12 @@ const studentLabel = (s: StudentItem) => {
 // WebSocket
 let ws: WebSocket | null = null
 let wsReconnectTimer: ReturnType<typeof setTimeout> | null = null
+let wsLivenessTimer: ReturnType<typeof setTimeout> | null = null
 let wsReconnectCount = 0
 const WS_MAX_RETRIES = 5
+// 後端每 30s 主動 ping；逾 1.5×（45s）未收到任何訊息即視為半開死連線
+// （TCP 半開時 onclose/onerror 可能永不觸發），主動踢掉重連避免靜默漏接。
+const WS_LIVENESS_TIMEOUT = 45000
 const wsConnected = ref(false)
 
 // ─── HTTP 載入 ───────────────────────────────────────────
@@ -154,6 +158,36 @@ const submitCreate = async () => {
 }
 
 // ─── WebSocket ────────────────────────────────────────────
+const clearLiveness = () => {
+  if (wsLivenessTimer) { clearTimeout(wsLivenessTimer); wsLivenessTimer = null }
+}
+
+// 每收到任何訊息（含後端 ping）就續命；逾時代表連線已半開死亡，主動踢掉重連。
+const bumpLiveness = () => {
+  clearLiveness()
+  wsLivenessTimer = setTimeout(() => {
+    if (!ws) return
+    // 半開連線的 onclose/onerror 可能永不觸發，先卸掉 handler 避免之後又重複排程重連，
+    // 再走與 onclose 相同的重連排程。
+    const dead = ws
+    dead.onclose = null
+    dead.onerror = null
+    dead.onmessage = null
+    try { dead.close() } catch { /* ignore */ }
+    ws = null
+    wsConnected.value = false
+    scheduleReconnect()
+  }, WS_LIVENESS_TIMEOUT)
+}
+
+const scheduleReconnect = () => {
+  if (wsReconnectCount < WS_MAX_RETRIES) {
+    const delay = Math.min(1000 * Math.pow(2, wsReconnectCount), 30000)
+    wsReconnectCount++
+    wsReconnectTimer = setTimeout(connectWs, delay)
+  }
+}
+
 const connectWs = () => {
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return
 
@@ -165,9 +199,11 @@ const connectWs = () => {
     wsConnected.value = true
     wsReconnectCount = 0
     if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null }
+    bumpLiveness()
   }
 
   ws.onmessage = (e) => {
+    bumpLiveness()
     try {
       const event = JSON.parse(e.data)
       // 後端 _recv_loop 等 client 任何訊息回應，90 秒沒收就主動斷線。
@@ -184,11 +220,8 @@ const connectWs = () => {
 
   ws.onclose = () => {
     wsConnected.value = false
-    if (wsReconnectCount < WS_MAX_RETRIES) {
-      const delay = Math.min(1000 * Math.pow(2, wsReconnectCount), 30000)
-      wsReconnectCount++
-      wsReconnectTimer = setTimeout(connectWs, delay)
-    }
+    clearLiveness()
+    scheduleReconnect()
   }
 }
 
@@ -249,6 +282,7 @@ onMounted(async () => {
 onUnmounted(() => {
   if (ws) ws.close()
   if (wsReconnectTimer) clearTimeout(wsReconnectTimer)
+  clearLiveness()
 })
 </script>
 
