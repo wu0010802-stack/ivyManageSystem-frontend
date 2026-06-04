@@ -3593,29 +3593,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/bonus-preview/dashboard": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Bonus Dashboard
-         * @description 獎金達成儀表板：各班在籍 vs 目標、達成率、預估獎金。
-         *
-         *     F-016：對非 admin/hr caller 遮罩 estimated_bonus / base_amount /
-         *     estimated_total_bonus 金額（保留班級在籍/目標/達成率，供主管評估招生）。
-         */
-        get: operations["get_bonus_dashboard_api_bonus_preview_dashboard_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/calendar/admin_feed": {
         parameters: {
             query?: never;
@@ -4261,46 +4238,6 @@ export interface paths {
         put?: never;
         /** Run Now */
         post: operations["run_now_api_data_quality_run_now_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/dev/employee-salary-debug": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Debug Employee Salary
-         * @description 模擬計算單一員工薪資並回傳完整明細（dev 別名，正式請改打 /api/salaries/employee-salary-debug）。
-         */
-        get: operations["debug_employee_salary_api_dev_employee_salary_debug_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/dev/salary-logic": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Salary Logic
-         * @description 傾印目前的薪資計算邏輯與所有參數設定（dev 別名，正式請改打 /api/salaries/logic）。
-         */
-        get: operations["get_salary_logic_api_dev_salary_logic_get"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -5232,7 +5169,10 @@ export interface paths {
         };
         /**
          * Get Timeline
-         * @description Union of recruitment_event_log + student_change_logs, sorted by time.
+         * @description Union of recruitment_event_log + student_change_logs, sorted by time。
+         *
+         *     邏輯已抽到 services.recruitment_timeline.build_visit_timeline（與正確路由端點
+         *     /api/recruitment/visits/{id}/timeline 共用）；此 funnel route 已棄用但保留呼叫同 service。
          */
         get: operations["get_timeline_funnel_visits__visit_id__timeline_get"];
         put?: never;
@@ -10202,6 +10142,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/provenance/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Provenance
+         * @description 回傳單一 key 的 DerivedValue（含逐筆 source_records）。
+         */
+        get: operations["get_provenance_api_provenance__key__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/punch-corrections": {
         parameters: {
             query?: never;
@@ -10889,6 +10849,26 @@ export interface paths {
          * @description 匯出招生統計 Excel（多頁簽）
          */
         get: operations["export_recruitment_stats_api_recruitment_stats_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/recruitment/visits/{visit_id}/timeline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Visit Timeline
+         * @description 小孩參觀→入學歷程（招生事件 + 學生異動 union）。
+         */
+        get: operations["get_visit_timeline_api_recruitment_visits__visit_id__timeline_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -15101,18 +15081,6 @@ export interface components {
             /** Vice Leader Dividend */
             vice_leader_dividend?: number | null;
         };
-        /** BonusDashboardResponse */
-        BonusDashboardResponse: {
-            /** Classrooms */
-            classrooms: components["schemas"]["DashboardClassroom"][];
-            /** Is Festival Month */
-            is_festival_month: boolean;
-            /** Month */
-            month: number;
-            school_wide: components["schemas"]["DashboardSchoolWide"];
-            /** Year */
-            year: number;
-        };
         /** BonusImpactRequest */
         BonusImpactRequest: {
             /** Classroom Id */
@@ -16975,49 +16943,6 @@ export interface components {
             /** Work Start */
             work_start: unknown;
         };
-        /** DashboardClassroom */
-        DashboardClassroom: {
-            /** Achievement Rate */
-            achievement_rate: number;
-            /** Classroom Id */
-            classroom_id: number;
-            /** Classroom Name */
-            classroom_name: string;
-            /** Current Enrollment */
-            current_enrollment: number;
-            /** Grade Name */
-            grade_name: string;
-            /** Status */
-            status: string;
-            /** Target Enrollment */
-            target_enrollment: number;
-            /** Teachers */
-            teachers: components["schemas"]["DashboardTeacher"][];
-        };
-        /** DashboardSchoolWide */
-        DashboardSchoolWide: {
-            /** Achievement Rate */
-            achievement_rate: number;
-            /** Estimated Total Bonus */
-            estimated_total_bonus?: number | null;
-            /** Total Enrollment */
-            total_enrollment: number;
-            /** Total Target */
-            total_target: number;
-        };
-        /** DashboardTeacher */
-        DashboardTeacher: {
-            /** Base Amount */
-            base_amount?: number | null;
-            /** Employee Id */
-            employee_id: number;
-            /** Estimated Bonus */
-            estimated_bonus?: number | null;
-            /** Name */
-            name: string;
-            /** Role */
-            role: string;
-        };
         /** DeductionTypeCreate */
         DeductionTypeCreate: {
             /**
@@ -17067,6 +16992,57 @@ export interface components {
         DeleteResultOut: {
             /** Message */
             message: unknown;
+        };
+        /**
+         * DerivedValue
+         * @description 一個自動推導值 + 其完整 provenance。
+         */
+        DerivedValue: {
+            /**
+             * Breakdown
+             * @description 結構化組成（次數/單價/期間…）
+             */
+            breakdown?: {
+                [key: string]: unknown;
+            };
+            /**
+             * Deep Link
+             * @description 跳轉來源模組的前端路由+filter
+             */
+            deep_link?: string | null;
+            /**
+             * Formula Summary
+             * @description 可讀算式摘要
+             */
+            formula_summary: string;
+            /**
+             * Is Override
+             * @description 是否被手動覆寫（P2）
+             * @default false
+             */
+            is_override: boolean;
+            /**
+             * Key
+             * @description 推導項 key，如 attendance_late
+             */
+            key: string;
+            /**
+             * Override Meta
+             * @description {原自動值, 覆寫者, 時間, 原因}（P2）
+             */
+            override_meta?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Source Records
+             * @description 逐筆原始紀錄
+             */
+            source_records?: components["schemas"]["SourceRecord"][];
+            /**
+             * Value
+             * @description 權威值（與既有引擎一致，不可漂移）
+             */
+            value: string;
         };
         /**
          * DeviceSetupOut
@@ -25163,6 +25139,38 @@ export interface components {
             /** Skipped Reason */
             skipped_reason: string;
         };
+        /**
+         * SourceRecord
+         * @description 一筆原始來源紀錄（下鑽明細的一列）。
+         */
+        SourceRecord: {
+            /**
+             * Amount
+             * @description 此筆對 value 的貢獻（罰則為負）
+             */
+            amount: string;
+            /**
+             * Date
+             * Format: date
+             * @description 紀錄日期
+             */
+            date: string;
+            /**
+             * Label
+             * @description 可讀標籤，如『遲到』『事假 8h』
+             */
+            label: string;
+            /**
+             * Module
+             * @description 來源模組 key，如 attendance/leave/meeting
+             */
+            module: string;
+            /**
+             * Source Id
+             * @description 來源資料列 PK
+             */
+            source_id?: number | null;
+        };
         /** SpecialBonusItemCreate */
         SpecialBonusItemCreate: {
             /** Amount */
@@ -32569,38 +32577,6 @@ export interface operations {
             };
         };
     };
-    get_bonus_dashboard_api_bonus_preview_dashboard_get: {
-        parameters: {
-            query?: {
-                month?: number | null;
-                year?: number | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["BonusDashboardResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     get_admin_feed_api_calendar_admin_feed_get: {
         parameters: {
             query: {
@@ -33820,59 +33796,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RunNowOut"];
-                };
-            };
-        };
-    };
-    debug_employee_salary_api_dev_employee_salary_debug_get: {
-        parameters: {
-            query: {
-                employee_id: number;
-                month: number;
-                year: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_salary_logic_api_dev_salary_logic_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
                 };
             };
         };
@@ -43982,6 +43905,40 @@ export interface operations {
             };
         };
     };
+    get_provenance_api_provenance__key__get: {
+        parameters: {
+            query: {
+                cycle_id: number;
+                employee_id: number;
+            };
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DerivedValue"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_punch_corrections_api_punch_corrections_get: {
         parameters: {
             query?: {
@@ -45276,6 +45233,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_visit_timeline_api_recruitment_visits__visit_id__timeline_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                visit_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimelineOut"];
                 };
             };
             /** @description Validation Error */
