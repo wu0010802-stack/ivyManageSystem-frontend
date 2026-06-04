@@ -33,6 +33,7 @@ import {
 } from '@/constants/employee'
 import { hasPermission, getUserInfo } from '@/utils/auth'
 import { useEmployeeFormDirty } from '@/composables/useEmployeeFormDirty'
+import { useFormDraft } from '@/composables/useFormDraft'
 import { BASIC_TAB_FIELDS, SALARY_TAB_FIELDS } from '@/constants/employeeFields'
 import { validateInsuranceVsBase } from '@/validators/employeeForm'
 import EmployeeFormBasic, { type EmployeeFormBasicData } from '@/components/employee/EmployeeFormBasic.vue'
@@ -450,6 +451,36 @@ const populateForm = (row: Record<string, unknown>) => {
 
 const { dialogVisible, isEdit, openCreate: handleAdd, openEdit: handleEdit, closeDialog } = useCrudDialog({ resetForm, populateForm })
 
+// 表單草稿暫存：薪資/投保/銀行/聯絡 PII 一律排除，草稿僅含基本欄位
+const EMPLOYEE_DRAFT_EXCLUDE = [
+  'id', 'id_number', 'phone', 'email', 'address',
+  'emergency_contact_name', 'emergency_contact_phone',
+  'base_salary', 'hourly_rate', 'insurance_salary_level', 'pension_self_rate',
+  'labor_insured_salary', 'health_insured_salary', 'pension_insured_salary',
+  'insurance_salary_override_reason', 'bypass_standard_base',
+  'dependents', 'extra_dependents_quarterly',
+  'bank_code', 'bank_account', 'bank_account_name',
+]
+const employeeDraft = useFormDraft({
+  formId: 'employee',
+  state: form,
+  recordId: () => form.id,
+  userScope: () => (getUserInfo()?.employee_id as string | number | null) ?? 'anon',
+  exclude: EMPLOYEE_DRAFT_EXCLUDE,
+  enabled: () => dialogVisible.value,
+})
+
+const openCreateWithDraft = async () => {
+  handleAdd()
+  await nextTick()
+  await employeeDraft.maybePromptRestore()
+}
+const openEditWithDraft = async (row: Record<string, unknown>) => {
+  handleEdit(row)
+  await nextTick()
+  await employeeDraft.maybePromptRestore()
+}
+
 // ── 薪資自我編輯保護（需在 isEdit 宣告後）────────────
 const isSelfEdit = computed(() =>
   isEdit.value && form.id === getUserInfo()?.employee_id
@@ -729,6 +760,7 @@ const saveCreate = async () => {
     try {
       await createEmployee(form)
       ElMessage.success('員工已新增')
+      employeeDraft.clear()
       closeDialog()
       await fetchEmployees()
     } catch (err) {
@@ -749,6 +781,7 @@ const saveBasic = async () => {
     ElMessage.success(`基本資料已更新（${Object.keys(payload).length} 個欄位）`)
     await fetchEmployees()
     resetDirty(form)
+    employeeDraft.clear()
   } catch (err) {
     showError(err)
   }
@@ -860,7 +893,7 @@ onMounted(async () => {
           <el-option label="已離職" value="resigned" />
         </el-select>
         <el-button type="success" @click="exportEmployees">匯出 Excel</el-button>
-        <el-button type="primary" @click="handleAdd">
+        <el-button type="primary" @click="openCreateWithDraft">
           <el-icon><Plus /></el-icon> 新增員工
         </el-button>
       </div>
@@ -897,7 +930,7 @@ onMounted(async () => {
                 <el-button link type="primary" size="small" disabled>編輯</el-button>
               </span>
             </el-tooltip>
-            <el-button v-else link type="primary" size="small" @click="handleEdit(scope.row)">編輯</el-button>
+            <el-button v-else link type="primary" size="small" @click="openEditWithDraft(scope.row)">編輯</el-button>
             <el-dropdown
               v-if="canWriteEmployees"
               trigger="click"
