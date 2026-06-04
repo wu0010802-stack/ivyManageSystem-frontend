@@ -30,7 +30,7 @@ interface DraftEnvelope {
 }
 
 export function useFormDraft<T extends object>(opts: UseFormDraftOptions<T>): UseFormDraftReturn {
-  const { formId, state, exclude = [], debounceMs = 800 } = opts
+  const { formId, state, exclude = [], debounceMs = 800, ttlDays = 7 } = opts
   const hasDraft = ref(false) // 後續 Task 使用
   const draftSavedAt = ref<Date | null>(null) // 後續 Task 使用
   let snapshot = ''
@@ -94,6 +94,28 @@ export function useFormDraft<T extends object>(opts: UseFormDraftOptions<T>): Us
     draftSavedAt.value = null
   }
 
+  const read = (): DraftEnvelope | null => {
+    try {
+      const raw = localStorage.getItem(buildKey())
+      if (!raw) return null
+      const parsed = JSON.parse(raw)
+      if (!parsed || typeof parsed !== 'object') return null
+      if (parsed.v !== VERSION) return null
+      if (typeof parsed.savedAt !== 'string' || typeof parsed.data !== 'object' || !parsed.data) return null
+      const age = Date.now() - new Date(parsed.savedAt).getTime()
+      if (!(age >= 0) || age > ttlDays * 86400_000) return null
+      return parsed as DraftEnvelope
+    } catch {
+      return null
+    }
+  }
+
+  const refreshHasDraft = (): void => {
+    const env = read()
+    hasDraft.value = !!env
+    draftSavedAt.value = env ? new Date(env.savedAt) : null
+  }
+
   // 暫時佔位，後續 Task 補完
   const flush = (): void => {
     if (timer) { clearTimeout(timer); timer = null }
@@ -106,6 +128,7 @@ export function useFormDraft<T extends object>(opts: UseFormDraftOptions<T>): Us
   // 監看表單變動 → debounce 寫入
   // 注意：直接傳 reactive 物件（非 getter）+ deep:true，才能正確追蹤 nested 變動
   takeSnapshot()
+  refreshHasDraft()
   const stopWatch = watch(
     state,
     () => { if (toValue(opts.enabled) !== false) schedule() },

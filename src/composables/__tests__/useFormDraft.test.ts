@@ -32,3 +32,34 @@ describe('useFormDraft：key 與排除', () => {
     stop()
   })
 })
+
+describe('useFormDraft：讀回與過期', () => {
+  beforeEach(() => localStorage.clear())
+
+  it('init 時讀到未過期草稿 → hasDraft=true、draftSavedAt 有值', () => {
+    const key = 'ivy.draft.v1.leave.5'
+    localStorage.setItem(key, JSON.stringify({
+      v: 1, savedAt: new Date().toISOString(), data: { reason: 'x' },
+    }))
+    const form = reactive({ reason: '' })
+    const { api, stop } = run(() => useFormDraft({
+      formId: 'leave', state: form, userScope: () => 5, debounceMs: 0,
+    }))
+    expect(api.hasDraft.value).toBe(true)
+    expect(api.draftSavedAt.value).toBeInstanceOf(Date)
+    stop()
+  })
+
+  it('超過 ttlDays 的草稿視為無效 → hasDraft=false', () => {
+    const old = new Date(Date.now() - 8 * 86400_000).toISOString() // 8 天前
+    localStorage.setItem('ivy.draft.v1.leave.5', JSON.stringify({
+      v: 1, savedAt: old, data: { reason: 'x' },
+    }))
+    const form = reactive({ reason: '' })
+    const { api, stop } = run(() => useFormDraft({
+      formId: 'leave', state: form, userScope: () => 5, ttlDays: 7, debounceMs: 0,
+    }))
+    expect(api.hasDraft.value).toBe(false)
+    stop()
+  })
+})
