@@ -1,5 +1,4 @@
 import { watch, ref, toValue, onScopeDispose, type Ref, type MaybeRefOrGetter } from 'vue'
-import { ElMessageBox } from 'element-plus'
 
 const PREFIX = 'ivy.draft.'
 const VERSION = 1
@@ -15,15 +14,24 @@ function formatRelative(date: Date): string {
   return `${day} 天前`
 }
 
+export type DraftRestoreChoice = 'restore' | 'discard' | 'dismiss'
+export interface DraftPromptInfo {
+  message: string
+  title: string
+  relativeTime: string
+  hasExcluded: boolean
+}
+
 export interface UseFormDraftOptions<T extends object> {
   formId: string
-  state: T
+  state: MaybeRefOrGetter<T>
   recordId?: MaybeRefOrGetter<string | number | null>
   userScope?: MaybeRefOrGetter<string | number | null>
   exclude?: string[]
   enabled?: MaybeRefOrGetter<boolean>
   debounceMs?: number
   ttlDays?: number
+  confirmRestore?: (info: DraftPromptInfo) => DraftRestoreChoice | Promise<DraftRestoreChoice>
 }
 
 export interface UseFormDraftReturn {
@@ -42,11 +50,14 @@ interface DraftEnvelope {
 }
 
 export function useFormDraft<T extends object>(opts: UseFormDraftOptions<T>): UseFormDraftReturn {
-  const { formId, state, exclude = [], debounceMs = 800, ttlDays = 7 } = opts
+  const { formId, exclude = [], debounceMs = 800, ttlDays = 7 } = opts
   const hasDraft = ref(false)
   const draftSavedAt = ref<Date | null>(null)
   let snapshot: string | null = null
   let timer: ReturnType<typeof setTimeout> | null = null
+
+  // Resolve the current form object via toValue (supports reactive object, ref, or getter)
+  const cur = (): Record<string, unknown> => toValue(opts.state) as Record<string, unknown>
 
   const buildKey = (): string => {
     const rid = toValue(opts.recordId)
@@ -68,7 +79,7 @@ export function useFormDraft<T extends object>(opts: UseFormDraftOptions<T>): Us
 
   const isDirty = (): boolean => {
     if (snapshot === null) return false
-    return JSON.stringify(pick(state as Record<string, unknown>)) !== snapshot
+    return JSON.stringify(pick(cur())) !== snapshot
   }
 
   const write = (): void => {
@@ -76,7 +87,7 @@ export function useFormDraft<T extends object>(opts: UseFormDraftOptions<T>): Us
       const env: DraftEnvelope = {
         v: VERSION,
         savedAt: new Date().toISOString(),
-        data: pick(state as Record<string, unknown>),
+        data: pick(cur()),
       }
       localStorage.setItem(buildKey(), JSON.stringify(env))
     } catch {
@@ -98,7 +109,7 @@ export function useFormDraft<T extends object>(opts: UseFormDraftOptions<T>): Us
   }
 
   const takeSnapshot = (): void => {
-    snapshot = JSON.stringify(pick(state as Record<string, unknown>))
+    snapshot = JSON.stringify(pick(cur()))
   }
 
   const clear = (): void => {
@@ -106,7 +117,7 @@ export function useFormDraft<T extends object>(opts: UseFormDraftOptions<T>): Us
     try { localStorage.removeItem(buildKey()) } catch { /* */ }
     hasDraft.value = false
     draftSavedAt.value = null
-    snapshot = JSON.stringify(pick(state as Record<string, unknown>)) // 重拍快照：clear 後不再 dirty，避免關閉時 flush 復活草稿
+    snapshot = JSON.stringify(pick(cur())) // 重拍快照：clear 後不再 dirty，避免關閉時 flush 復活草稿
   }
 
   const read = (): DraftEnvelope | null => {
@@ -157,6 +168,23 @@ export function useFormDraft<T extends object>(opts: UseFormDraftOptions<T>): Us
     if (timer) { clearTimeout(timer); timer = null }
     if (isDirty()) write()
   }
+
+  // 預設提示：動態載入 Element Plus（避免公開端 bundle 被拉進整個套件）
+  const defaultConfirm = async (info: DraftPromptInfo): Promise<DraftRestoreChoice> => {
+    const { ElMessageBox } = await import('element-plus')
+    try {
+      await ElMessageBox.confirm(info.message, info.title, {
+        confirmButtonText: '還原',
+        cancelButtonText: '捨棄',
+        type: 'info',
+        distinguishCancelAndClose: true,
+      })
+      return 'restore'
+    } catch (action) {
+      return action === 'cancel' ? 'discard' : 'dismiss'
+    }
+  }
+
   const maybePromptRestore = async (): Promise<boolean> => {
     const env = read()
     if (!env) { hasDraft.value = false; draftSavedAt.value = null; return false }
@@ -164,33 +192,29 @@ export function useFormDraft<T extends object>(opts: UseFormDraftOptions<T>): Us
     const warn = exclude.length
       ? '\n（敏感欄位如電話、身分證、薪資、銀行帳號不會還原，請重新確認）'
       : ''
-    try {
-      await ElMessageBox.confirm(
-        `偵測到您 ${rel} 未完成的草稿，要還原嗎？${warn}`,
-        '繼續填寫上次的草稿？',
-        {
-          confirmButtonText: '還原',
-          cancelButtonText: '捨棄',
-          type: 'info',
-          distinguishCancelAndClose: true,
-        }
-      )
-      // 還原：只覆蓋草稿內有的（非敏感）欄位；快照維持還原前的值，使還原內容被視為 dirty 而續存
-      Object.assign(state, env.data)
+    const info: DraftPromptInfo = {
+      message: `偵測到您 ${rel} 未完成的草稿，要還原嗎？${warn}`,
+      title: '繼續填寫上次的草稿？',
+      relativeTime: rel,
+      hasExcluded: exclude.length > 0,
+    }
+    const choice = await (opts.confirmRestore ? opts.confirmRestore(info) : defaultConfirm(info))
+    if (choice === 'restore') {
+      Object.assign(cur(), env.data)
       hasDraft.value = false
       draftSavedAt.value = null
       return true
-    } catch (action) {
-      // 'cancel' = 按「捨棄」→ 清掉；'close' = 按 X → 保留
-      if (action === 'cancel') clear()
-      return false
     }
+    if (choice === 'discard') clear()
+    return false
   }
+
   const discard = clear
 
   // 監看表單變動 → debounce 寫入（enabled=false 時 watch callback 直接 return）
+  // state 為 MaybeRefOrGetter → 用 getter 形式讓 Vue 追蹤 ref reassign
   const stopWatch = watch(
-    state,
+    () => toValue(opts.state),
     () => { if (toValue(opts.enabled) !== false) schedule() },
     { deep: true }
   )

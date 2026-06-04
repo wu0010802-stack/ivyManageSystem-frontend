@@ -307,3 +307,52 @@ describe('useFormDraft:key 隔離與 beforeunload', () => {
     stop()
   })
 })
+
+describe('useFormDraft：confirmRestore 注入 + getter state', () => {
+  beforeEach(() => localStorage.clear())
+
+  it('注入 confirmRestore 回 restore → 套用草稿(不經 element-plus)', async () => {
+    localStorage.setItem('ivy.draft.v1.pub.public', JSON.stringify({
+      v: 1, savedAt: new Date().toISOString(), data: { name: '小明' },
+    }))
+    const form = reactive({ name: '' })
+    const { api, stop } = run(() => useFormDraft({
+      formId: 'pub', state: form, userScope: () => 'public',
+      enabled: () => true, debounceMs: 0, confirmRestore: () => 'restore',
+    }))
+    expect(await api.maybePromptRestore()).toBe(true)
+    expect(form.name).toBe('小明')
+    stop()
+  })
+
+  it('注入 confirmRestore 回 discard → 清掉草稿', async () => {
+    localStorage.setItem('ivy.draft.v1.pub.public', JSON.stringify({
+      v: 1, savedAt: new Date().toISOString(), data: { name: '小明' },
+    }))
+    const form = reactive({ name: '' })
+    const { api, stop } = run(() => useFormDraft({
+      formId: 'pub', state: form, userScope: () => 'public',
+      enabled: () => true, debounceMs: 0, confirmRestore: () => 'discard',
+    }))
+    expect(await api.maybePromptRestore()).toBe(false)
+    expect(localStorage.getItem('ivy.draft.v1.pub.public')).toBeNull()
+    stop()
+  })
+
+  it('state 傳 getter(讀 ref.value)：reassign 後仍追蹤新物件深層變更', async () => {
+    const r = ref<{ x: string }>({ x: '' })
+    const { stop } = run(() => useFormDraft({
+      formId: 'rec', state: () => r.value, userScope: () => 9,
+      enabled: () => true, debounceMs: 0,
+    }))
+    await new Promise((res) => setTimeout(res, 0))
+    r.value = { x: '改' }
+    await new Promise((res) => setTimeout(res, 0))
+    r.value.x = '再改'
+    await new Promise((res) => setTimeout(res, 0))
+    const raw = localStorage.getItem('ivy.draft.v1.rec.9')
+    expect(raw).toBeTruthy()
+    expect(JSON.parse(raw!).data.x).toBe('再改')
+    stop()
+  })
+})
