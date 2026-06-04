@@ -398,10 +398,6 @@
           @reserve="openReserveDialog"
         />
       </el-tab-pane>
-
-      <el-tab-pane label="招生漏斗" name="funnel" lazy>
-        <FunnelBoard />
-      </el-tab-pane>
     </el-tabs>
 
     <!-- ==================== 管理月份 Dialog ==================== -->
@@ -488,7 +484,6 @@ import RecruitmentRecordDialog from '@/components/recruitment/RecruitmentRecordD
 import RecruitmentPeriodDialog from '@/components/recruitment/RecruitmentPeriodDialog.vue'
 import RecruitmentCampusDialog from '@/components/recruitment/RecruitmentCampusDialog.vue'
 import { useRecruitmentCharts } from '@/composables/useRecruitmentCharts'
-import FunnelBoard from '@/components/recruitment/funnel/FunnelBoard.vue'
 import { toAdYear } from '@/utils/academic'
 import {
   GRADES_ORDER,
