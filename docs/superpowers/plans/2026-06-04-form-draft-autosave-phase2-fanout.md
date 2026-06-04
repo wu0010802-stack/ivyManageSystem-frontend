@@ -13,6 +13,11 @@
 - 招生報名：**嚴格全排除** 聯絡 PII（child_name/birthday/phone/address/district/parent_response/notes），草稿只留 visit_date/grade/source 等工作欄位。
 - 請假：保留 `reason`（核心欄位、員工自己帳號填），排除 `is_hospitalized`（醫療旗標）。
 
+> **⚠ 公開才藝報名草稿的兒童 PII 隱私註記（2026-06-05 業主決議 own-device）**
+> 公開表單 `exclude: []` → 草稿存進 localStorage（key 固定 `ivy.draft.v1.activity-public.public`）的不只 `parent_phone`，還含**幼兒姓名 + 幼兒生日**，且 onMounted 無條件跳 `window.confirm` 還原。
+> **業主決議：此表單僅供家長在自己手機（LINE 連結 / 分享連結）填寫，故維持全存**以保留完整體驗。
+> **若日後改在園所共用平板 / kiosk 提供此表單，必須先改掉**（否則下一位訪客會被提示還原前一位的幼兒姓名/生日/電話——兒童 PII 跨訪客外洩）。屆時兩個可行修法：① `exclude: ['name','birthday']`（只留電話）② `userScope` 改帶 sessionStorage 隨機 token（per-session 隔離，但關分頁後草稿失效）。
+
 ---
 
 ## 背景錨點（實作前必讀，全部已實測）
