@@ -130,6 +130,13 @@
         <template #default="{ row }">
           <el-button v-if="canWrite" size="small" @click="$emit('edit', row)">編輯</el-button>
           <el-button
+            v-if="canWrite && row.has_deposit"
+            size="small"
+            type="warning"
+            plain
+            @click="$emit('reserve', row)"
+          >{{ row.provisional_grade_id ? '變更座位' : '保留座位' }}</el-button>
+          <el-button
             v-if="canConvert && !row.enrolled"
             size="small"
             type="success"
@@ -196,6 +203,7 @@ const emit = defineEmits<{
   'page-change': [page: number]
   'edit': [row: Record<string, unknown>]
   'convert': [row: Record<string, unknown>]
+  'reserve': [row: Record<string, unknown>]
   'delete': [id: unknown]
 }>()
 
