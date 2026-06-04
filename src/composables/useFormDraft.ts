@@ -1,7 +1,19 @@
 import { watch, ref, toValue, onScopeDispose, type Ref, type MaybeRefOrGetter } from 'vue'
+import { ElMessageBox } from 'element-plus'
 
 const PREFIX = 'ivy.draft.'
 const VERSION = 1
+
+function formatRelative(date: Date): string {
+  const diffMs = Date.now() - date.getTime()
+  const min = Math.floor(diffMs / 60000)
+  if (min < 1) return '剛剛'
+  if (min < 60) return `${min} 分鐘前`
+  const hr = Math.floor(min / 60)
+  if (hr < 24) return `${hr} 小時前`
+  const day = Math.floor(hr / 24)
+  return `${day} 天前`
+}
 
 export interface UseFormDraftOptions<T extends object> {
   formId: string
@@ -123,7 +135,35 @@ export function useFormDraft<T extends object>(opts: UseFormDraftOptions<T>): Us
     if (timer) { clearTimeout(timer); timer = null }
     if (isDirty()) write()
   }
-  const maybePromptRestore = (): Promise<boolean> => Promise.resolve(false)
+  const maybePromptRestore = async (): Promise<boolean> => {
+    const env = read()
+    if (!env) { hasDraft.value = false; draftSavedAt.value = null; return false }
+    const rel = formatRelative(new Date(env.savedAt))
+    const warn = exclude.length
+      ? '\n（敏感欄位如電話、身分證、薪資、銀行帳號不會還原，請重新確認）'
+      : ''
+    try {
+      await ElMessageBox.confirm(
+        `偵測到您 ${rel} 未完成的草稿，要還原嗎？${warn}`,
+        '繼續填寫上次的草稿？',
+        {
+          confirmButtonText: '還原',
+          cancelButtonText: '捨棄',
+          type: 'info',
+          distinguishCancelAndClose: true,
+        }
+      )
+      // 還原：只覆蓋草稿內有的（非敏感）欄位；快照維持還原前的值，使還原內容被視為 dirty 而續存
+      Object.assign(state, env.data)
+      hasDraft.value = false
+      draftSavedAt.value = null
+      return true
+    } catch (action) {
+      // 'cancel' = 按「捨棄」→ 清掉；'close' = 按 X → 保留
+      if (action === 'cancel') clear()
+      return false
+    }
+  }
   const discard = clear
 
   // 監看表單變動 → debounce 寫入（enabled=false 時 watch callback 直接 return）

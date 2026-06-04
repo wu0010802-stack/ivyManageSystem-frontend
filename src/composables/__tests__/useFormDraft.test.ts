@@ -1,6 +1,10 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { reactive, effectScope, ref } from 'vue'
 import { useFormDraft } from '../useFormDraft'
+import { ElMessageBox } from 'element-plus'
+vi.mock('element-plus', () => ({
+  ElMessageBox: { confirm: vi.fn() },
+}))
 
 // 在 effectScope 內跑 composable，回傳 API + stop（讓 onScopeDispose 可被觸發）
 function run<T>(fn: () => T): { api: T; stop: () => void } {
@@ -147,5 +151,70 @@ describe('useFormDraft：flush', () => {
     expect(JSON.parse(raw!).data.reason).toBe('來不及 debounce')
     stop()
     Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true })
+  })
+})
+
+describe('useFormDraft：maybePromptRestore', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    vi.mocked(ElMessageBox.confirm).mockReset()
+  })
+
+  it('選「還原」→ 草稿 data 寫回 state、回傳 true', async () => {
+    localStorage.setItem('ivy.draft.v1.leave.5', JSON.stringify({
+      v: 1, savedAt: new Date().toISOString(), data: { reason: '上次填的' },
+    }))
+    vi.mocked(ElMessageBox.confirm).mockResolvedValue('confirm')
+    const form = reactive({ reason: '' })
+    const { api, stop } = run(() => useFormDraft({
+      formId: 'leave', state: form, userScope: () => 5,
+      enabled: () => true, debounceMs: 0,
+    }))
+    const restored = await api.maybePromptRestore()
+    expect(restored).toBe(true)
+    expect(form.reason).toBe('上次填的')
+    stop()
+  })
+
+  it('選「捨棄」(reject "cancel") → 清掉草稿、回傳 false', async () => {
+    localStorage.setItem('ivy.draft.v1.leave.5', JSON.stringify({
+      v: 1, savedAt: new Date().toISOString(), data: { reason: '上次填的' },
+    }))
+    vi.mocked(ElMessageBox.confirm).mockRejectedValue('cancel')
+    const form = reactive({ reason: '' })
+    const { api, stop } = run(() => useFormDraft({
+      formId: 'leave', state: form, userScope: () => 5, enabled: () => true, debounceMs: 0,
+    }))
+    const restored = await api.maybePromptRestore()
+    expect(restored).toBe(false)
+    expect(form.reason).toBe('')
+    expect(localStorage.getItem('ivy.draft.v1.leave.5')).toBeNull() // 已清
+    stop()
+  })
+
+  it('關閉 (reject "close") → 保留草稿、回傳 false', async () => {
+    localStorage.setItem('ivy.draft.v1.leave.5', JSON.stringify({
+      v: 1, savedAt: new Date().toISOString(), data: { reason: '上次填的' },
+    }))
+    vi.mocked(ElMessageBox.confirm).mockRejectedValue('close')
+    const form = reactive({ reason: '' })
+    const { api, stop } = run(() => useFormDraft({
+      formId: 'leave', state: form, userScope: () => 5, enabled: () => true, debounceMs: 0,
+    }))
+    const restored = await api.maybePromptRestore()
+    expect(restored).toBe(false)
+    expect(localStorage.getItem('ivy.draft.v1.leave.5')).toBeTruthy() // 保留
+    stop()
+  })
+
+  it('無草稿 → 不跳框、回傳 false', async () => {
+    const form = reactive({ reason: '' })
+    const { api, stop } = run(() => useFormDraft({
+      formId: 'leave', state: form, userScope: () => 5, enabled: () => true, debounceMs: 0,
+    }))
+    const restored = await api.maybePromptRestore()
+    expect(restored).toBe(false)
+    expect(vi.mocked(ElMessageBox.confirm)).not.toHaveBeenCalled()
+    stop()
   })
 })
