@@ -6,6 +6,7 @@ import { getDismissalCalls, cancelDismissalCall, createDismissalCall } from '@/a
 import { useClassroomStore } from '@/stores/classroom'
 import { getStudents } from '@/api/students'
 import DismissalCallCard from '@/components/dismissal/DismissalCallCard.vue'
+import { closeWebSocketSafely } from '@/utils/ws'
 import {
   useNowClock,
   sortByOldestFirst,
@@ -292,8 +293,11 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  if (ws) ws.close()
-  if (wsReconnectTimer) clearTimeout(wsReconnectTimer)
+  // 先卸 handler 再 close，避免 close() 觸發 onclose → scheduleReconnect 在卸載後
+  // 建殭屍重連（QA 2026-06-04 P2-5）。
+  closeWebSocketSafely(ws)
+  ws = null
+  if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null }
   clearLiveness()
 })
 </script>
