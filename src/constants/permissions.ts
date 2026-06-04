@@ -71,6 +71,8 @@ export const PERMISSION_NAMES = {
   ROLES_MANAGE: 'ROLES_MANAGE',
   PORTAL_PREVIEW: 'PORTAL_PREVIEW',
   PORTAL_IMPERSONATE: 'PORTAL_IMPERSONATE',
+  DATA_QUALITY_READ: 'DATA_QUALITY_READ',
+  DATA_QUALITY_WRITE: 'DATA_QUALITY_WRITE',
 } as const
 
 export type PermissionName = typeof PERMISSION_NAMES[keyof typeof PERMISSION_NAMES]
@@ -99,6 +101,7 @@ export const ROUTE_PERMISSION_RULES = [
   // /admin/gov-reports/{monthly,certificates,subsidies,iep} 對齊後端 GOV_REPORTS_VIEW 守衛
   { path: '/admin/gov-reports', permission: 'GOV_REPORTS_VIEW', prefix: true },
   { path: '/audit-logs', permission: 'AUDIT_LOGS' },
+  { path: '/data-quality', permission: 'DATA_QUALITY_READ' },
   { path: '/settings', permission: 'SETTINGS_READ' },
   { path: '/dismissal-queue', permission: 'DISMISSAL_CALLS_READ' },
   { path: '/activity/dashboard', permission: 'ACTIVITY_READ' },
