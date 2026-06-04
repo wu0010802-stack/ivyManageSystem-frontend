@@ -377,6 +377,10 @@
         <IntakePlanPanel />
       </el-tab-pane>
 
+      <el-tab-pane label="官網報名" name="ivykids" lazy>
+        <RecruitmentIvykidsTab :bar-component="castBarComponent" :show-charts="true" :can-write="canWrite" />
+      </el-tab-pane>
+
       <!-- ==================== 原始明細 ==================== -->
       <el-tab-pane label="原始明細" name="detail" lazy>
         <RecruitmentDetailTab
@@ -485,6 +489,7 @@ import RecruitmentConvertDialog from '@/components/recruitment/RecruitmentConver
 import ReserveSeatDialog from '@/components/recruitment/ReserveSeatDialog.vue'
 import JourneyTimeline from '@/components/recruitment/JourneyTimeline.vue'
 import AllChannelSummaryCard from '@/components/recruitment/AllChannelSummaryCard.vue'
+import RecruitmentIvykidsTab from '@/components/recruitment/RecruitmentIvykidsTab.vue'
 import { useClassroomStore } from '@/stores/classroom'
 import { useRouter } from 'vue-router'
 import RecruitmentMonthDialog from '@/components/recruitment/RecruitmentMonthDialog.vue'
