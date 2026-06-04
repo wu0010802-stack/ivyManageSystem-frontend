@@ -128,3 +128,24 @@ describe('useFormDraft：dirty 門檻與 enabled', () => {
     stop()
   })
 })
+
+describe('useFormDraft：flush', () => {
+  beforeEach(() => localStorage.clear())
+
+  it('分頁隱藏時立即 flush（不等 debounce）', async () => {
+    const form = reactive({ reason: '' })
+    const { stop } = run(() => useFormDraft({
+      formId: 'leave', state: form, userScope: () => 5,
+      enabled: () => true, debounceMs: 99999, // debounce 很久，證明是 flush 立即寫
+    }))
+    await new Promise((r) => setTimeout(r, 0))
+    form.reason = '來不及 debounce'
+    Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true })
+    document.dispatchEvent(new Event('visibilitychange'))
+    const raw = localStorage.getItem('ivy.draft.v1.leave.5')
+    expect(raw).toBeTruthy()
+    expect(JSON.parse(raw!).data.reason).toBe('來不及 debounce')
+    stop()
+    Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true })
+  })
+})

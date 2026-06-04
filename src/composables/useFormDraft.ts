@@ -149,10 +149,19 @@ export function useFormDraft<T extends object>(opts: UseFormDraftOptions<T>): Us
     refreshHasDraft()
   }
 
+  const onVisibility = (): void => {
+    if (document.visibilityState === 'hidden') flush()
+  }
+  const onBeforeUnload = (): void => { flush() }
+  document.addEventListener('visibilitychange', onVisibility)
+  window.addEventListener('beforeunload', onBeforeUnload)
+
   onScopeDispose(() => {
     flush()
     stopWatch()
     stopEnabled()
+    document.removeEventListener('visibilitychange', onVisibility)
+    window.removeEventListener('beforeunload', onBeforeUnload)
     if (timer) clearTimeout(timer)
   })
 
