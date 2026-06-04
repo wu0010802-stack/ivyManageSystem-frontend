@@ -55,6 +55,7 @@ declare module 'vue' {
     CrownIcon: typeof import('./src/components/brand/CrownIcon.vue')['default']
     CycleTimelineItem: typeof import('./src/components/portal/growth/CycleTimelineItem.vue')['default']
     DisabilityExpirySection: typeof import('./src/components/dashboard/DisabilityExpirySection.vue')['default']
+    DismissalCallCard: typeof import('./src/components/dismissal/DismissalCallCard.vue')['default']
     ElAlert: typeof import('element-plus/es')['ElAlert']
     ElAside: typeof import('element-plus/es')['ElAside']
     ElAutocomplete: typeof import('element-plus/es')['ElAutocomplete']

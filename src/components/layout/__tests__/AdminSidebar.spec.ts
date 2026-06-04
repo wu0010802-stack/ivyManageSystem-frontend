@@ -67,4 +67,24 @@ describe('AdminSidebar 考核年終整併 + 群組可見性回歸', () => {
   it('只有 APPRAISAL_FINALIZE → 入口可見', () => {
     expect(items(mountWith(['APPRAISAL_FINALIZE']))).toContain('/appraisal-year-end')
   })
+
+  it('報名時間設定/修改紀錄 改掛課後才藝群組，不再出現在系統設定/報表', () => {
+    const w = mountWith(['*'])
+    const inGroup = (sub: string) =>
+      w.find(`[data-sub="${sub}"]`).findAll('[data-item]').map((n) => n.attributes('data-item'))
+
+    const activity = inGroup('group-activity')
+    expect(activity).toContain('/activity/settings')
+    expect(activity).toContain('/activity/changes')
+
+    expect(inGroup('group-settings')).not.toContain('/activity/settings')
+    expect(inGroup('group-reports')).not.toContain('/activity/changes')
+  })
+
+  it('只有 ACTIVITY_READ → 課後才藝顯示含修改紀錄；報表群組不再因此空殼顯示', () => {
+    const w = mountWith(['ACTIVITY_READ'])
+    expect(subs(w)).toContain('group-activity')
+    expect(items(w)).toContain('/activity/changes')
+    expect(subs(w)).not.toContain('group-reports')
+  })
 })

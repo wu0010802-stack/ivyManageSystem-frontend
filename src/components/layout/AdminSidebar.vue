@@ -134,7 +134,7 @@
           </el-menu-item>
         </el-sub-menu>
 
-        <!-- 7. 課後才藝 (移除修改紀錄 + 報名時間設定) -->
+        <!-- 7. 課後才藝 (含報名時間設定 + 修改紀錄) -->
         <el-sub-menu v-if="hasVisibleActivityItems" index="group-activity">
           <template #title>
             <el-icon><Star /></el-icon>
@@ -147,6 +147,10 @@
           <el-menu-item v-if="canView.ACTIVITY_READ" index="/activity/registrations">
             <el-icon><Document /></el-icon>
             <template #title>報名管理</template>
+          </el-menu-item>
+          <el-menu-item v-if="canView.ACTIVITY_WRITE" index="/activity/settings">
+            <el-icon><Timer /></el-icon>
+            <template #title>報名時間設定</template>
           </el-menu-item>
           <el-menu-item v-if="canView.ACTIVITY_WRITE" index="/activity/pos">
             <el-icon><Money /></el-icon>
@@ -171,6 +175,10 @@
             <el-icon><Checked /></el-icon>
             <template #title>點名管理</template>
           </el-menu-item>
+          <el-menu-item v-if="canView.ACTIVITY_READ" index="/activity/changes">
+            <el-icon><List /></el-icon>
+            <template #title>修改紀錄</template>
+          </el-menu-item>
         </el-sub-menu>
 
         <!-- 8. 報表 (新一級，收查詢類) -->
@@ -182,10 +190,6 @@
           <el-menu-item v-if="canView.AUDIT_LOGS" index="/audit-logs">
             <el-icon><Document /></el-icon>
             <template #title>操作紀錄</template>
-          </el-menu-item>
-          <el-menu-item v-if="canView.ACTIVITY_READ" index="/activity/changes">
-            <el-icon><List /></el-icon>
-            <template #title>修改紀錄</template>
           </el-menu-item>
           <el-menu-item v-if="canView.SALARY_READ" index="/admin/gov-reports/monthly">
             <el-icon><DataAnalysis /></el-icon>
@@ -201,7 +205,7 @@
           </el-menu-item>
         </el-sub-menu>
 
-        <!-- 9. 系統設定 (移除操作紀錄，新增考核管理 + 報名時間設定) -->
+        <!-- 9. 系統設定 (移除操作紀錄) -->
         <el-sub-menu v-if="hasVisibleSettingsItems" index="group-settings">
           <template #title>
             <el-icon><Setting /></el-icon>
@@ -210,10 +214,6 @@
           <el-menu-item v-if="canView.SETTINGS_READ" index="/settings">
             <el-icon><Setting /></el-icon>
             <template #title>一般設定</template>
-          </el-menu-item>
-          <el-menu-item v-if="canView.ACTIVITY_WRITE" index="/activity/settings">
-            <el-icon><Timer /></el-icon>
-            <template #title>報名時間設定</template>
           </el-menu-item>
         </el-sub-menu>
       </el-menu>
@@ -323,12 +323,12 @@ const hasVisibleActivityItems = computed(() =>
 )
 
 const hasVisibleReportsItems = computed(() =>
-  canView.value.AUDIT_LOGS || canView.value.ACTIVITY_READ ||
+  canView.value.AUDIT_LOGS ||
   canView.value.SALARY_READ || canView.value.REPORTS
 )
 
 const hasVisibleSettingsItems = computed(() =>
-  canView.value.SETTINGS_READ || canView.value.ACTIVITY_WRITE
+  canView.value.SETTINGS_READ
 )
 
 const toggleCollapse = () => {

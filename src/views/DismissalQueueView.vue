@@ -1,9 +1,16 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { CircleCheck } from '@element-plus/icons-vue'
 import { getDismissalCalls, cancelDismissalCall, createDismissalCall } from '@/api/dismissalCalls'
 import { useClassroomStore } from '@/stores/classroom'
 import { getStudents } from '@/api/students'
+import DismissalCallCard from '@/components/dismissal/DismissalCallCard.vue'
+import {
+  useNowClock,
+  sortByOldestFirst,
+  type DismissalCallView,
+} from '@/composables/useDismissalUrgency'
 
 type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 
@@ -32,6 +39,11 @@ const calls = ref<DismissalCall[]>([])
 const loading = ref(false)
 const classroomStore = useClassroomStore()
 const classrooms = computed(() => classroomStore.classrooms)
+
+// 等候時間活著跳 + 最久優先（FIFO）看板排序
+const { now } = useNowClock()
+const isActiveView = computed(() => filterStatus.value === 'active')
+const sortedCalls = computed(() => sortByOldestFirst(calls.value as DismissalCallView[]))
 
 // 篩選
 const filterStatus = ref('active') // active=pending+acknowledged | completed | cancelled | all
@@ -289,12 +301,12 @@ onUnmounted(() => {
 <template>
   <div class="dismissal-queue-view">
     <div class="page-header">
-      <h2>接送通知佇列</h2>
+      <h2>接送通知</h2>
       <div class="header-actions">
-        <el-tag :type="wsConnected ? 'success' : 'danger'" size="small" style="margin-right: 8px">
-          {{ wsConnected ? '即時同步中' : '離線模式' }}
+        <el-tag :type="wsConnected ? 'success' : 'warning'" size="small" effect="light" style="margin-right: 8px">
+          {{ wsConnected ? '即時同步中' : '連線中斷' }}
         </el-tag>
-        <el-button type="primary" @click="openCreateDialog">+ 建立通知</el-button>
+        <el-button type="primary" @click="openCreateDialog">建立通知</el-button>
       </div>
     </div>
 
@@ -318,8 +330,40 @@ onUnmounted(() => {
       </el-col>
     </el-row>
 
-    <!-- 列表 -->
-    <el-table :data="calls" v-loading="loading" border style="width:100%" class="calls-table">
+    <!-- 待處理看板：最久優先，等候時間升級色一眼看出哪班老師還沒回應 -->
+    <template v-if="isActiveView">
+      <div v-if="calls.length === 0 && !loading" class="empty-board">
+        <el-icon class="empty-board__ico"><CircleCheck /></el-icon>
+        <p class="empty-board__title">目前沒有待處理的接送通知</p>
+        <p class="empty-board__sub">家長到場時建立通知，會即時出現在這裡</p>
+      </div>
+      <div v-else class="board-wrap" v-loading="loading">
+        <TransitionGroup tag="div" name="dcall-list" class="board">
+          <DismissalCallCard
+            v-for="call in sortedCalls"
+            :key="call.id"
+            :call="call"
+            :now="now"
+          >
+            <template #secondary>
+              <span v-if="call.requested_by_name" class="req-by">{{ call.requested_by_name }} 通知</span>
+            </template>
+            <template #action>
+              <el-button
+                v-if="call.status === 'pending' || call.status === 'acknowledged'"
+                type="danger"
+                plain
+                size="small"
+                @click="handleCancel(call as DismissalCall)"
+              >取消通知</el-button>
+            </template>
+          </DismissalCallCard>
+        </TransitionGroup>
+      </div>
+    </template>
+
+    <!-- 歷史紀錄：已放學 / 已取消 / 全部，走密集表格 -->
+    <el-table v-else :data="calls" v-loading="loading" border style="width:100%" class="calls-table">
       <el-table-column label="學生" prop="student_name" width="100" />
       <el-table-column label="班級" prop="classroom_name" width="100" />
       <el-table-column label="狀態" width="120">
@@ -338,16 +382,20 @@ onUnmounted(() => {
         <template #default="{ row }">{{ formatTime(row.completed_at) }}</template>
       </el-table-column>
       <el-table-column label="備註" prop="note" min-width="120" />
-      <el-table-column label="操作" width="100">
+      <el-table-column label="操作" width="110">
         <template #default="{ row }">
           <el-button
             v-if="row.status === 'pending' || row.status === 'acknowledged'"
             size="small"
             type="danger"
+            plain
             @click="handleCancel(row)"
-          >取消</el-button>
+          >取消通知</el-button>
         </template>
       </el-table-column>
+      <template #empty>
+        <span class="table-empty">沒有符合條件的紀錄</span>
+      </template>
     </el-table>
 
     <!-- 建立通知 Dialog -->
@@ -415,5 +463,82 @@ onUnmounted(() => {
 
 .calls-table {
   border-radius: 8px;
+}
+
+.table-empty {
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+}
+
+/* ─── 待處理看板 ─── */
+.board {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: var(--space-3);
+}
+
+.req-by {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.empty-board {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-1);
+  padding: var(--space-10) var(--space-4);
+}
+.empty-board__ico {
+  font-size: 44px;
+  color: var(--color-success);
+  margin-bottom: var(--space-2);
+}
+.empty-board__title {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+}
+.empty-board__sub {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+}
+
+/* 卡片進場 / 移除 / 重排序動畫 */
+.dcall-list-enter-active {
+  transition:
+    opacity 0.24s cubic-bezier(0.25, 1, 0.5, 1),
+    transform 0.24s cubic-bezier(0.25, 1, 0.5, 1);
+}
+.dcall-list-leave-active {
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease;
+}
+.dcall-list-move {
+  transition: transform 0.24s cubic-bezier(0.25, 1, 0.5, 1);
+}
+.dcall-list-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+.dcall-list-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dcall-list-enter-active,
+  .dcall-list-leave-active,
+  .dcall-list-move {
+    transition: opacity 0.15s linear;
+  }
+  .dcall-list-enter-from,
+  .dcall-list-leave-to {
+    transform: none;
+  }
 }
 </style>
