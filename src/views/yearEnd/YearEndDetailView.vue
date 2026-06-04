@@ -16,6 +16,8 @@ import {
 } from '@/api/yearEnd'
 import { apiError } from '@/utils/error'
 import { hasPermission } from '@/utils/auth'
+import ProvenanceDrawer from './components/ProvenanceDrawer.vue'
+import type { ProvenanceKey } from './components/ProvenanceDrawer.vue'
 
 interface Settlement { id: number; employee_id: number; status: string; total_amount?: number | string; [key: string]: unknown }
 interface SpecialBonus { id: number; employee_id: number; bonus_type: string; period_label: string; amount: number | string; classroom_id?: number }
@@ -32,6 +34,23 @@ const classTargets = ref<unknown[]>([])
 const loading = ref(false)
 const busy = ref(false)
 const tab = ref('settlements')
+
+// ── Provenance Drawer ─────────────────────────────────────────────
+const provenanceDrawerVisible = ref(false)
+const provenanceEmployeeId = ref(0)
+
+const DEDUCTION_KEYS: ProvenanceKey[] = [
+  { key: 'attendance_late', label: '遲到/未打卡' },
+  { key: 'personal_leave', label: '事假' },
+  { key: 'sick_leave', label: '病假' },
+  { key: 'meeting_absence', label: '會議缺席' },
+]
+
+function openProvenanceDrawer(employeeId: number) {
+  provenanceEmployeeId.value = employeeId
+  provenanceDrawerVisible.value = true
+}
+// ─────────────────────────────────────────────────────────────────
 
 const statusLabel = (s: string) =>
   (({
@@ -98,7 +117,18 @@ onMounted(load)
           <el-table-column label="毛額" prop="gross_amount" width="110" />
           <el-table-column label="達成%" prop="org_achievement_rate" width="80" />
           <el-table-column label="小計" prop="subtotal_amount" width="110" />
-          <el-table-column label="扣項合計" prop="deduction_total" width="100" />
+          <el-table-column label="扣項合計" width="120">
+            <template #default="{ row }">
+              <el-button
+                type="primary"
+                link
+                size="small"
+                @click="openProvenanceDrawer(row.employee_id)"
+              >
+                {{ row.deduction_total ?? '0' }} ↓
+              </el-button>
+            </template>
+          </el-table-column>
           <el-table-column label="到職月" prop="hire_months" width="80" />
           <el-table-column label="應領小計" prop="payable_amount" width="120" />
           <el-table-column label="特別獎金" prop="special_bonus_total" width="110" />
@@ -163,6 +193,14 @@ onMounted(load)
         </el-table>
       </el-tab-pane>
     </el-tabs>
+
+    <!-- 扣款 provenance 右側抽屜 -->
+    <ProvenanceDrawer
+      v-model="provenanceDrawerVisible"
+      :cycle-id="cycleId"
+      :employee-id="provenanceEmployeeId"
+      :provenance-keys="DEDUCTION_KEYS"
+    />
   </div>
 </template>
 

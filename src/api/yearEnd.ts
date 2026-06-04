@@ -1,5 +1,6 @@
 import api from './index'
 import type { ApiBody, AxiosResp } from './_generated/typed'
+import type { DerivedValue } from '@/types/provenance'
 
 // ============ Year-End Cycles 年終週期 ============
 
@@ -153,3 +154,18 @@ export const listAppraisalPayouts = (year: number): AxiosResp<'/year_end/apprais
 
 export const voidAppraisalPayouts = (year: number): AxiosResp<'/year_end/appraisal-payout/{year}', 'delete'> =>
   api.delete(`/year_end/appraisal-payout/${year}`, { params: { confirm: true } })
+
+// ============ Provenance 扣款溯源 ============
+
+/**
+ * 取得指定 key 的扣款溯源明細。
+ * 手寫型別（後端 P0 尚未 gen:api），不依賴 schema.d.ts。
+ */
+export const getProvenance = (
+  key: string,
+  cycleId: number,
+  employeeId: number,
+): Promise<{ data: DerivedValue }> =>
+  api.get<DerivedValue>(`/provenance/${key}`, {
+    params: { cycle_id: cycleId, employee_id: employeeId },
+  }) as Promise<{ data: DerivedValue }>
