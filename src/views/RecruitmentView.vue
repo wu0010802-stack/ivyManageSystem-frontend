@@ -371,6 +371,11 @@
         />
       </el-tab-pane>
 
+      <!-- ==================== 名額規劃 ==================== -->
+      <el-tab-pane label="名額規劃" name="intake" lazy>
+        <IntakePlanPanel />
+      </el-tab-pane>
+
       <!-- ==================== 原始明細 ==================== -->
       <el-tab-pane label="原始明細" name="detail" lazy>
         <RecruitmentDetailTab
@@ -466,6 +471,7 @@ import RecruitmentAreaTab from '@/components/recruitment/RecruitmentAreaTab.vue'
 import RecruitmentNoDepositTab from '@/components/recruitment/RecruitmentNoDepositTab.vue'
 import RecruitmentPeriodsTab from '@/components/recruitment/RecruitmentPeriodsTab.vue'
 import RecruitmentDetailTab from '@/components/recruitment/RecruitmentDetailTab.vue'
+import IntakePlanPanel from '@/components/recruitment/IntakePlanPanel.vue'
 import RecruitmentConvertDialog from '@/components/recruitment/RecruitmentConvertDialog.vue'
 import { useClassroomStore } from '@/stores/classroom'
 import { useRouter } from 'vue-router'
