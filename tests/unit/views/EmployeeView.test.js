@@ -275,4 +275,72 @@ describe('EmployeeView', () => {
     expect(mockUpdateEmployeeBasic).toHaveBeenCalledTimes(1)
     expect(mockUpdateEmployeeBasic).toHaveBeenCalledWith(42, { phone: '0988-123-456' })
   })
+
+  it('status filter narrows displayed rows while rosterStats counts the full roster', async () => {
+    // active / pending(未來離職日) / resigned 各一
+    employeeStore.employees = [
+      { id: 1, name: 'A', is_active: true, resign_date: null },
+      { id: 2, name: 'B', is_active: true, resign_date: '2999-01-01' },
+      { id: 3, name: 'C', is_active: false, resign_date: '2020-01-01' },
+    ]
+    const stubs = {
+      EmptyState: true,
+      TableSkeleton: true,
+      Plus: true,
+      'el-input': { template: '<input />' },
+      'el-button': { template: '<button><slot /></button>' },
+      'el-icon': true,
+      'el-card': { template: '<div><slot /></div>' },
+      'el-table': { template: '<div><slot /></div>' },
+      'el-table-column': true,
+      'el-dialog': { template: '<div><slot /><slot name="footer" /></div>' },
+      'el-form': { template: '<form><slot /></form>' },
+      'el-form-item': { props: ['label'], template: '<div>{{ label }}<slot /></div>' },
+      'el-tabs': { template: '<div><slot /></div>' },
+      'el-tab-pane': { template: '<div><slot /></div>' },
+      'el-row': { template: '<div><slot /></div>' },
+      'el-col': { template: '<div><slot /></div>' },
+      'el-select': { template: '<div><slot /></div>' },
+      'el-option': true,
+      'el-dropdown': { template: '<div><slot /><slot name="dropdown" /></div>' },
+      'el-dropdown-menu': { template: '<div><slot /></div>' },
+      'el-dropdown-item': { template: '<div><slot /></div>' },
+      'el-tooltip': { template: '<div><slot /></div>' },
+      'el-input-number': true,
+      'el-time-select': true,
+      'el-date-picker': { props: ['modelValue'], template: '<input :value="modelValue || \'\'" />' },
+      'el-divider': true,
+      'el-tag': { template: '<span><slot /></span>' },
+      'el-descriptions': { template: '<div><slot /></div>' },
+      'el-descriptions-item': { props: ['label'], template: '<div>{{ label }}:<slot /></div>' },
+    }
+    const wrapper = mount(EmployeeView, {
+      global: { directives: { loading: () => {} }, stubs },
+    })
+    await flushPromises()
+    await nextTick()
+
+    // rosterStats 永遠以整份名冊計數，不受狀態篩選影響
+    expect(wrapper.vm.rosterStats).toMatchObject({ total: 3, active: 1, pending: 1, resigned: 1 })
+
+    // 預設「全部」→ 顯示全部
+    expect(wrapper.vm.displayedEmployees).toHaveLength(3)
+
+    // 切「在職」→ 只剩 active
+    wrapper.vm.statusFilter = 'active'
+    await nextTick()
+    expect(wrapper.vm.displayedEmployees.map((e) => e.id)).toEqual([1])
+
+    // 切「已離職」→ 只剩 resigned；統計仍是 3 全貌
+    wrapper.vm.statusFilter = 'resigned'
+    await nextTick()
+    expect(wrapper.vm.displayedEmployees.map((e) => e.id)).toEqual([3])
+    expect(wrapper.vm.rosterStats.total).toBe(3)
+
+    // clearFilters 回復預設
+    wrapper.vm.clearFilters()
+    await nextTick()
+    expect(wrapper.vm.statusFilter).toBe('all')
+    expect(wrapper.vm.displayedEmployees).toHaveLength(3)
+  })
 })

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed, watch, nextTick } from 'vue'
 import { useDebounceFn, useMediaQuery } from '@vueuse/core'
-import { User, Plus } from '@element-plus/icons-vue'
+import { User, Plus, Search, ArrowDown } from '@element-plus/icons-vue'
 import {
   getEmployee, getEmployees, createEmployee,
   listEmployeeEducations, createEmployeeEducation, updateEmployeeEducation, deleteEmployeeEducation,
@@ -320,13 +320,20 @@ interface EmployeeRow {
 const offboardVisible = ref(false)
 const offboardTarget = ref<EmployeeRow | null>(null)
 
+// 員工狀態單一來源：filter 與狀態標籤共用，避免兩處判定邏輯漂移
+type StatusKey = 'active' | 'pending' | 'resigned'
+const statusKeyOf = (emp: Record<string, unknown>): StatusKey => {
+  if (!emp.is_active) return 'resigned'
+  if (emp.resign_date && (emp.resign_date as string) > todayISO()) return 'pending'
+  return 'active'
+}
+
 const getEmployeeStatus = (emp: Record<string, unknown>): { label: string; type: ElTagType } => {
-  const today = todayISO()
-  if (!emp.is_active) return { label: '已離職', type: 'info' }
-  if (emp.resign_date && (emp.resign_date as string) > today) {
-    return { label: `待離職・${emp.resign_date}`, type: 'warning' }
+  switch (statusKeyOf(emp)) {
+    case 'resigned': return { label: '已離職', type: 'info' }
+    case 'pending': return { label: `待離職・${emp.resign_date}`, type: 'warning' }
+    default: return { label: '在職', type: 'success' }
   }
-  return { label: '在職', type: 'success' }
 }
 
 const openOffboard = (emp: Record<string, unknown>) => {
@@ -344,6 +351,31 @@ const searchResults = ref<Record<string, unknown>[] | null>(null) // null = 用 
 const filteredEmployees = computed(() =>
   searchResults.value !== null ? searchResults.value : (employeeStore.employees as Record<string, unknown>[])
 )
+
+// ── 狀態篩選（純前端，疊在 filteredEmployees 之上；搜尋中也同時生效）──
+type StatusFilter = 'all' | StatusKey
+const statusFilter = ref<StatusFilter>('all')
+const matchesStatus = (emp: Record<string, unknown>) =>
+  statusFilter.value === 'all' || statusKeyOf(emp) === statusFilter.value
+
+// 表格實際渲染的清單：搜尋/store 結果 → 再過狀態篩選（單一 chain，不開平行路徑）
+const displayedEmployees = computed(() =>
+  (filteredEmployees.value as Record<string, unknown>[]).filter(matchesStatus)
+)
+
+// 名冊統計：永遠以整份 store 名冊為基準（不受搜尋/狀態篩選影響），
+// 提供穩定的全園總覽；搜尋時若改算搜尋結果，「共 N 人」易被誤讀為全園人數
+const rosterStats = computed(() => {
+  const counts = { active: 0, pending: 0, resigned: 0 }
+  const list = employeeStore.employees as Record<string, unknown>[]
+  for (const e of list) counts[statusKeyOf(e)] += 1
+  return { total: list.length, ...counts }
+})
+
+const clearFilters = () => {
+  searchQuery.value = ''
+  statusFilter.value = 'all'
+}
 
 watch(debouncedSearch, async (val) => {
   if (!val) {
@@ -423,11 +455,17 @@ const salaryReadonlyReason = computed(() => {
   return ''
 })
 
-const { confirmDelete: handleDelete, deleting: deleteLoading } = useConfirmDelete({
+const { confirmDelete: handleDelete } = useConfirmDelete({
   endpoint: '/employees',
   onSuccess: () => fetchEmployees(),
   successMsg: '刪除成功',
 })
+
+// 操作欄「更多」下拉指令（辦理離職 / 刪除收合於此，比照 LeaveView / VendorPaymentView）
+const handleRowCommand = (cmd: string, row: Record<string, unknown>) => {
+  if (cmd === 'offboard') openOffboard(row)
+  else if (cmd === 'delete') handleDelete(row)
+}
 
 const attendanceRecords = ref<Record<string, unknown>[]>([])
 const attendanceMonth = ref(thisMonthISO()) // YYYY-MM
@@ -788,9 +826,33 @@ onMounted(async () => {
 <template>
   <div class="employees-page">
     <div class="page-header">
-      <h2>員工管理</h2>
+      <div class="page-header-left">
+        <h2>員工管理</h2>
+        <p v-if="!loading" class="roster-stats">
+          共 {{ rosterStats.total }} 人
+          <span class="stat-sep">·</span> 在職 {{ rosterStats.active }}
+          <template v-if="rosterStats.pending">
+            <span class="stat-sep">·</span> 待離職 {{ rosterStats.pending }}
+          </template>
+          <template v-if="rosterStats.resigned">
+            <span class="stat-sep">·</span> 已離職 {{ rosterStats.resigned }}
+          </template>
+        </p>
+      </div>
       <div class="header-actions">
-        <el-input v-model="searchQuery" placeholder="搜尋姓名或編號" style="width: 200px; margin-right: 10px;" prefix-icon="Search" />
+        <el-input
+          v-model="searchQuery"
+          placeholder="搜尋姓名或編號"
+          class="search-input"
+          :prefix-icon="Search"
+          clearable
+        />
+        <el-select v-model="statusFilter" class="status-filter" aria-label="狀態篩選">
+          <el-option label="全部狀態" value="all" />
+          <el-option label="在職" value="active" />
+          <el-option label="待離職" value="pending" />
+          <el-option label="已離職" value="resigned" />
+        </el-select>
         <el-button type="success" @click="exportEmployees">匯出 Excel</el-button>
         <el-button type="primary" @click="handleAdd">
           <el-icon><Plus /></el-icon> 新增員工
@@ -800,7 +862,7 @@ onMounted(async () => {
 
     <TableSkeleton v-if="loading && !employeeStore.employees.length" :columns="7" />
     <el-card v-else class="no-hover">
-      <el-table :data="filteredEmployees" v-loading="loading" stripe style="width: 100%" max-height="600">
+      <el-table :data="displayedEmployees" v-loading="loading" stripe style="width: 100%" max-height="600">
         <el-table-column prop="employee_id" label="編號" width="100" sortable />
         <el-table-column prop="name" label="姓名" width="120" sortable />
         <el-table-column prop="title" label="教育局系統" width="150" sortable />
@@ -817,7 +879,7 @@ onMounted(async () => {
             >待補薪資</el-tag>
           </template>
         </el-table-column>
-        <el-table-column fixed="right" label="操作" width="280">
+        <el-table-column fixed="right" label="操作" width="190">
           <template #default="scope">
             <el-button link type="primary" size="small" @click="handleDetail(scope.row)">詳情</el-button>
             <el-tooltip
@@ -830,12 +892,34 @@ onMounted(async () => {
               </span>
             </el-tooltip>
             <el-button v-else link type="primary" size="small" @click="handleEdit(scope.row)">編輯</el-button>
-            <el-button v-if="canWriteEmployees && scope.row.is_active" link type="warning" size="small" @click="openOffboard(scope.row)">辦理離職</el-button>
-            <el-button v-if="canWriteEmployees" link type="danger" size="small" @click="handleDelete(scope.row)" :loading="deleteLoading">刪除</el-button>
+            <el-dropdown
+              v-if="canWriteEmployees"
+              trigger="click"
+              @command="(cmd) => handleRowCommand(cmd, scope.row)"
+            >
+              <el-button link type="primary" size="small">
+                更多<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+              </el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item v-if="scope.row.is_active" command="offboard">辦理離職</el-dropdown-item>
+                  <el-dropdown-item command="delete" divided>刪除</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </template>
         </el-table-column>
         <template #empty>
-          <EmptyState title="尚無員工資料" description="點擊「新增員工」開始建立" />
+          <EmptyState
+            v-if="searchQuery || statusFilter !== 'all'"
+            title="查無符合條件的員工"
+            description="試著調整搜尋關鍵字或狀態篩選"
+          >
+            <template #action>
+              <el-button size="small" @click="clearFilters">清除條件</el-button>
+            </template>
+          </EmptyState>
+          <EmptyState v-else title="尚無員工資料" description="點擊「新增員工」開始建立" />
         </template>
       </el-table>
     </el-card>
@@ -1282,6 +1366,37 @@ onMounted(async () => {
 <style scoped>
 .required-legend { font-size: 12px; color: var(--el-text-color-secondary); margin: 0 0 14px; }
 .required-legend .req { color: var(--el-color-danger); }
+
+/* ── 列表頁頂列 ── */
+.page-header-left {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.roster-stats {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+}
+.roster-stats .stat-sep {
+  margin: 0 var(--space-1);
+  color: var(--neutral-300);
+}
+.search-input { width: 220px; }
+.status-filter { width: 132px; }
+
+/* 窄螢幕：頂列改直向堆疊，搜尋/篩選撐滿好點 */
+@media (max-width: 767px) {
+  .employees-page .page-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-3);
+  }
+  .employees-page .header-actions { flex-wrap: wrap; }
+  .employees-page .search-input { flex: 1 1 160px; width: auto; }
+  .employees-page .status-filter { flex: 1 1 120px; width: auto; }
+}
 
 .dialog-footer {
   display: flex;
