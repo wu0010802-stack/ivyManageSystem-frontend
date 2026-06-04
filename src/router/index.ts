@@ -44,7 +44,7 @@ const routes: RouteRecordRaw[] = [
         {
             path: '/employees',
             name: 'employees',
-            component: () => import('../views/EmployeeView.vue'),
+            component: () => import('../views/EmployeeHubView.vue'),
             meta: { title: '員工管理' }
         },
         {
@@ -272,12 +272,10 @@ const routes: RouteRecordRaw[] = [
             redirect: (to) => ({ path: '/appraisal-year-end', query: { ...to.query, section: 'payout' } }),
         },
 
-        // ============ 離職管理 ============
+        // ============ 離職管理（已整合進員工管理 /employees?section=offboarding）============
         {
             path: '/admin/offboarding',
-            name: 'admin-offboarding',
-            component: () => import('@/views/admin/OffboardingView.vue'),
-            meta: { title: '離職管理', requiresAuth: true, permission: 'EMPLOYEES_READ' },
+            redirect: (to) => ({ path: '/employees', query: { ...to.query, section: 'offboarding' } }),
         },
 
         // ============ 學費管理 ============

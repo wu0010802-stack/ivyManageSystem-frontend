@@ -229,8 +229,9 @@ async function onMagicLinkUpdate(): Promise<void> {
 </template>
 
 <style scoped>
+/* 已內嵌於 EmployeeHubView 整合頁，page padding 由 wrapper(.employee-hub-view) 提供，此處歸零避免雙重留白 */
 .offboarding-view {
-    padding: 24px;
+    padding: 0;
 }
 
 .page-header {
