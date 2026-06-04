@@ -39,9 +39,6 @@ vi.mock('@/api/auth', () => ({
 }))
 
 vi.mock('@/api/permissions_admin', () => ({
-  createPermissionDefinition: vi.fn(),
-  updatePermissionDefinition: vi.fn(),
-  deletePermissionDefinition: vi.fn(),
   createRole: vi.fn().mockResolvedValue({ data: {} }),
   updateRole: vi.fn().mockResolvedValue({ data: {} }),
   deleteRole: vi.fn().mockResolvedValue({ data: { ok: true } }),

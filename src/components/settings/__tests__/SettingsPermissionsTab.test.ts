@@ -29,9 +29,6 @@ vi.mock('@/api/auth', () => {
 })
 
 vi.mock('@/api/permissions_admin', () => ({
-  createPermissionDefinition: vi.fn().mockResolvedValue({ data: { code: 'NEW', label: 'n', is_core: false } }),
-  updatePermissionDefinition: vi.fn().mockResolvedValue({ data: {} }),
-  deletePermissionDefinition: vi.fn().mockResolvedValue({ data: { ok: true } }),
   createRole: vi.fn().mockResolvedValue({ data: { code: 'new_r', label: 'r', permissions: [], is_core: false } }),
   updateRole: vi.fn().mockResolvedValue({ data: {} }),
   deleteRole: vi.fn().mockResolvedValue({ data: { ok: true } }),
@@ -55,16 +52,22 @@ describe('SettingsPermissionsTab', () => {
     return wrapper
   }
 
-  it('renders two sub-tabs: 角色管理 + 權限定義', async () => {
+  it('已簡化：移除「權限定義」分頁，只保留角色管理', async () => {
     const wrapper = await mountTab()
-    const tabLabels = wrapper.findAll('.el-tabs__item').map((el) => el.text())
-    expect(tabLabels).toContain('角色管理')
-    expect(tabLabels).toContain('權限定義')
+    // 壓平後不再有內層 sub-tabs
+    expect(wrapper.findAll('.el-tabs__item').length).toBe(0)
+    // 角色管理入口仍在
+    expect(document.querySelector('.add-role-btn')).not.toBeNull()
+    // 權限定義相關 UI 全數移除
+    expect(document.querySelector('.add-permission-btn')).toBeNull()
+    expect(document.querySelector('.permissions-table')).toBeNull()
+    expect(document.querySelector('.permission-warning-callout')).toBeNull()
+    expect(wrapper.text()).not.toContain('權限定義')
   })
 
   it('roles table renders all roles with is_core badge', async () => {
     const wrapper = await mountTab()
-    // 角色管理是 default tab，table 應渲染 3 個 role
+    // 角色管理表格應渲染 3 個 role
     const rows = document.querySelectorAll('.roles-table .el-table__row')
     expect(rows.length).toBe(3)
   })
@@ -86,30 +89,6 @@ describe('SettingsPermissionsTab', () => {
     expect(document.querySelector('.role-edit-dialog')).not.toBeNull()
   })
 
-  it('switching to 權限定義 tab shows warning callout', async () => {
-    const wrapper = await mountTab()
-    // 找「權限定義」tab 並點
-    const permTabLabel = wrapper.findAll('.el-tabs__item').find((el) => el.text() === '權限定義')
-    await permTabLabel?.trigger('click')
-    await flushPromises()
-    await nextTick()
-    const callout = document.querySelector('.permission-warning-callout')
-    expect(callout).not.toBeNull()
-    expect(callout?.textContent).toContain('自訂權限僅可用於')
-  })
-
-  it('clicking 新增權限 opens dialog with code+label+description+group_name fields', async () => {
-    const wrapper = await mountTab()
-    const permTabLabel = wrapper.findAll('.el-tabs__item').find((el) => el.text() === '權限定義')
-    await permTabLabel?.trigger('click')
-    await flushPromises()
-    const addBtn = document.querySelector('.add-permission-btn') as HTMLElement
-    addBtn.click()
-    await flushPromises()
-    expect(document.querySelector('.permission-edit-dialog')).not.toBeNull()
-    expect(document.querySelector('.permission-edit-dialog input[data-field="code"]')).not.toBeNull()
-  })
-
   it('deleting custom role calls deleteRole API', async () => {
     const wrapper = await mountTab()
     const customRow = Array.from(document.querySelectorAll('.roles-table .el-table__row')).find((r) =>
@@ -123,17 +102,5 @@ describe('SettingsPermissionsTab', () => {
     confirmBtn?.click()
     await flushPromises()
     expect(permsAdminApi.deleteRole).toHaveBeenCalledWith('custom_pri')
-  })
-
-  it('is_core permission delete button is disabled in 權限定義 tab', async () => {
-    const wrapper = await mountTab()
-    const permTabLabel = wrapper.findAll('.el-tabs__item').find((el) => el.text() === '權限定義')
-    await permTabLabel?.trigger('click')
-    await flushPromises()
-    const dashboardRow = Array.from(document.querySelectorAll('.permissions-table .el-table__row')).find((r) =>
-      r.textContent?.includes('DASHBOARD'),
-    )
-    const deleteBtn = dashboardRow?.querySelector('.delete-permission-btn')
-    expect(deleteBtn?.hasAttribute('disabled')).toBe(true)
   })
 })
