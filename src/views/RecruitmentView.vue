@@ -51,6 +51,7 @@
     <el-tabs v-model="activeTab" @tab-click="onTabClick">
       <!-- ==================== 總覽 ==================== -->
       <el-tab-pane label="總覽" name="overview">
+        <AllChannelSummaryCard :internal-snapshot="statsFunnelSnapshot" />
         <RecruitmentOverviewTab
           :stats="stats"
           :reference-month="referenceMonth"
@@ -483,6 +484,7 @@ import IntakePlanPanel from '@/components/recruitment/IntakePlanPanel.vue'
 import RecruitmentConvertDialog from '@/components/recruitment/RecruitmentConvertDialog.vue'
 import ReserveSeatDialog from '@/components/recruitment/ReserveSeatDialog.vue'
 import JourneyTimeline from '@/components/recruitment/JourneyTimeline.vue'
+import AllChannelSummaryCard from '@/components/recruitment/AllChannelSummaryCard.vue'
 import { useClassroomStore } from '@/stores/classroom'
 import { useRouter } from 'vue-router'
 import RecruitmentMonthDialog from '@/components/recruitment/RecruitmentMonthDialog.vue'
