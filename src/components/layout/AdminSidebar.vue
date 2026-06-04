@@ -112,10 +112,6 @@
             <el-icon><DataAnalysis /></el-icon>
             <template #title>招生統計</template>
           </el-menu-item>
-          <el-menu-item v-if="canView.RECRUITMENT_READ" index="/recruitment-ivykids">
-            <el-icon><Document /></el-icon>
-            <template #title>官網報名</template>
-          </el-menu-item>
         </el-sub-menu>
 
         <!-- 6. 園務行政 (不動) -->

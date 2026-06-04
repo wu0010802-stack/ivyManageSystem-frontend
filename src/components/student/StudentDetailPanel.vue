@@ -22,6 +22,7 @@ import HealthGrowthTab from './tabs/HealthGrowthTab.vue'
 import GrowthProfileTab from './tabs/GrowthProfileTab.vue'
 import CommunicationTab from './tabs/CommunicationTab.vue'
 import LifecycleTab from './tabs/LifecycleTab.vue'
+import JourneyTimeline from '@/components/recruitment/JourneyTimeline.vue'
 import StudentDisabilityDocsPanel from './StudentDisabilityDocsPanel.vue'
 import StudentEnrollmentCertButton from './StudentEnrollmentCertButton.vue'
 
@@ -57,6 +58,10 @@ const router = useRouter()
 const profile = ref<Record<string, unknown> | null>(null)
 const loading = ref(false)
 const safeStudentId = computed(() => props.studentId as number)
+// 入學前歷程入口：profile.lifecycle.recruitment_visit_id（profile 端點已曝露此欄）
+const recruitmentVisitId = computed<number | null>(
+  () => ((profile.value?.lifecycle as Record<string, unknown> | undefined)?.recruitment_visit_id as number | null) ?? null,
+)
 
 const canPortfolioRead = computed(() => hasPermission('PORTFOLIO_READ'))
 const canHealthRead = computed(() => hasPermission('STUDENTS_HEALTH_READ'))
@@ -374,11 +379,14 @@ const breadcrumbItems = computed(() => {
           v-else-if="tab.name === 'disability_docs'"
           :student-id="safeStudentId"
         />
-        <LifecycleTab
-          v-else-if="tab.name === 'lifecycle'"
-          :student-id="safeStudentId"
-          :active="activeTab === 'lifecycle'"
-        />
+        <template v-else-if="tab.name === 'lifecycle'">
+          <LifecycleTab :student-id="safeStudentId" :active="activeTab === 'lifecycle'" />
+          <el-collapse class="journey-section" style="margin-top: 16px">
+            <el-collapse-item title="入學前歷程（招生來源）">
+              <JourneyTimeline :visit-id="recruitmentVisitId" />
+            </el-collapse-item>
+          </el-collapse>
+        </template>
         <CommunicationTab
           v-else-if="tab.name === 'communication'"
           :student-id="safeStudentId"
