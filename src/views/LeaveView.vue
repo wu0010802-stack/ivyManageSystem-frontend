@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import { getLeaves, createLeave, updateLeave, approveLeave as approveLeaveApi, batchApproveLeaves, getLeaveImportTemplate, importLeaves } from '@/api/leaves'
 import { useApprovalPolicyStore } from '@/stores/approvalPolicy'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -20,7 +20,8 @@ import LeaveQuotaManager from './leave/LeaveQuotaManager.vue'
 import LeaveRejectDialog from './leave/LeaveRejectDialog.vue'
 import LeaveCalendar from './leave/LeaveCalendar.vue'
 import LeaveQuotaExpiryTab from '@/components/leave/LeaveQuotaExpiryTab.vue'
-import { hasPermission } from '@/utils/auth'
+import { hasPermission, getUserInfo } from '@/utils/auth'
+import { useFormDraft } from '@/composables/useFormDraft'
 
 const { currentYear, query } = useDateQuery()
 const employeeStore = useEmployeeStore()
@@ -125,6 +126,28 @@ const { dialogVisible, isEdit, openCreate, openEdit, closeDialog } = useCrudDial
   resetForm,
   populateForm: populateFormFromRecord,
 })
+
+// 表單草稿暫存：排除醫療旗標；保留 reason（核心欄位）
+const LEAVE_DRAFT_EXCLUDE = ['id', 'is_hospitalized']
+const leaveDraft = useFormDraft({
+  formId: 'leave',
+  state: form,
+  recordId: () => form.id,
+  userScope: () => (getUserInfo()?.employee_id as string | number | null) || 'anon',
+  exclude: LEAVE_DRAFT_EXCLUDE,
+  enabled: () => dialogVisible.value,
+})
+
+const openCreateWithDraft = async () => {
+  openCreate()
+  await nextTick()
+  await leaveDraft.maybePromptRestore()
+}
+const openEditWithDraft = async (row: Record<string, unknown>) => {
+  openEdit(row)
+  await nextTick()
+  await leaveDraft.maybePromptRestore()
+}
 
 const statusFilter = ref('')
 
@@ -300,6 +323,7 @@ const saveLeave = async () => {
       })
       ElMessage.success('請假記錄已新增')
     }
+    leaveDraft.clear()
     closeDialog()
     fetchLeaves()
   } catch (error) {
@@ -353,7 +377,7 @@ function handleRowCommand(cmd: string, row: Record<string, unknown>) {
       cancelApprove(row)
       break
     case 'edit':
-      openEdit(row)
+      openEditWithDraft(row)
       break
     case 'logs':
       openApprovalLogs(row as { id: unknown })
@@ -434,7 +458,7 @@ onMounted(() => {
           :loading="batchLoading"
           @click="openBatchReject"
         >批次駁回 ({{ selectedLeaves.length }})</el-button>
-        <el-button type="success" @click="openCreate">
+        <el-button type="success" @click="openCreateWithDraft">
           <el-icon><Plus /></el-icon> 新增請假
         </el-button>
       </div>
@@ -547,7 +571,7 @@ onMounted(() => {
               type="primary"
               size="small"
               link
-              @click="openEdit(scope.row)"
+              @click="openEditWithDraft(scope.row)"
             >編輯</el-button>
 
             <!-- 次要/危險動作收進 dropdown，降低誤觸與視覺密度 -->
