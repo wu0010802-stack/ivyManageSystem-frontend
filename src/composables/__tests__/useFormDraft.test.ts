@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { reactive, effectScope } from 'vue'
 import { useFormDraft } from '../useFormDraft'
 
@@ -17,7 +17,7 @@ describe('useFormDraft：key 與排除', () => {
     const form = reactive({ name: '', id_number: '' })
     const { api, stop } = run(() => useFormDraft({
       formId: 'employee', state: form,
-      recordId: () => form_recordId, userScope: () => 7,
+      recordId: () => null, userScope: () => 7,
       exclude: ['id_number'], debounceMs: 0,
     }))
     void api
@@ -32,4 +32,3 @@ describe('useFormDraft：key 與排除', () => {
     stop()
   })
 })
-const form_recordId: number | null = null

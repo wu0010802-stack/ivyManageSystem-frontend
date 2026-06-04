@@ -40,7 +40,7 @@ export function useFormDraft<T extends object>(opts: UseFormDraftOptions<T>): Us
     const rid = toValue(opts.recordId)
     const scope = toValue(opts.userScope)
     let k = `${PREFIX}v${VERSION}.${formId}`
-    if (rid != null && rid !== '') k += `.${rid}`
+    if (rid != null && rid !== '') k += `.r${rid}`
     if (scope != null && scope !== '') k += `.${scope}`
     return k
   }
@@ -100,7 +100,7 @@ export function useFormDraft<T extends object>(opts: UseFormDraftOptions<T>): Us
     if (toValue(opts.enabled) === false) return
     if (isDirty()) write()
   }
-  const maybePromptRestore = async (): Promise<boolean> => false
+  const maybePromptRestore = (): Promise<boolean> => Promise.resolve(false)
   const discard = clear
 
   // 監看表單變動 → debounce 寫入
