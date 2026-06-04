@@ -274,4 +274,87 @@ describe('SalaryView', () => {
     expect(row.net_pay).toBe(35900)
     expect(row.remark).toContain('手動編輯')
   })
+
+  it('額外加給金額與名目會送進 payload 並回寫列', async () => {
+    const wrapper = mount(SalaryView, {
+      global: {
+        directives: { loading: () => {} },
+        stubs: {
+          BonusConfigPanel: true,
+          SalaryHistoryPanel: true,
+          EmptyState: true,
+          Search: true,
+          InfoFilled: true,
+          'el-tabs': { template: '<div><slot /></div>' },
+          'el-tab-pane': { template: '<div><slot /></div>' },
+          'el-card': { template: '<div><slot /></div>' },
+          'el-select': { template: '<div><slot /></div>' },
+          'el-option': true,
+          'el-button': { template: '<button @click="$emit(\'click\')"><slot /></button>' },
+          'el-table': { template: '<div><slot /></div>' },
+          'el-table-column': true,
+          'el-tooltip': { template: '<span><slot /></span>' },
+          'el-icon': { template: '<span><slot /></span>' },
+          'el-dialog': { template: '<div><slot /><slot name="footer" /></div>' },
+          'el-form': { template: '<form><slot /></form>' },
+          'el-form-item': { props: ['label'], template: '<label>{{ label }}<slot /></label>' },
+          'el-input': {
+            props: ['modelValue'],
+            emits: ['update:modelValue'],
+            template: '<input :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />',
+          },
+          'el-input-number': {
+            props: ['modelValue'],
+            emits: ['update:modelValue'],
+            template: '<input type="number" :value="modelValue" @input="$emit(\'update:modelValue\', Number($event.target.value))" />',
+          },
+        },
+      },
+    })
+
+    manualAdjustSalary.mockResolvedValue({
+      data: {
+        record: {
+          id: 9,
+          employee_id: 2,
+          employee_name: '陳小華',
+          extra_allowance: 1241,
+          extra_allowance_label: '值週',
+          gross_salary: 31241,
+          total_deduction: 0,
+          net_salary: 31241,
+          remark: '手動編輯：額外加給',
+          manual_overrides: ['extra_allowance', 'extra_allowance_label'],
+          version: 3,
+        },
+      },
+    })
+
+    await wrapper.vm.$.setupState.calculateSalary()
+    wrapper.vm.$.setupState.salaryRecords = [
+      { id: 9, employee_id: 1, employee_name: '王小明', remark: '' },
+    ]
+    const row = wrapper.vm.$.setupState.salaryResults[0]
+
+    wrapper.vm.$.setupState.openEditDialog(row)
+    wrapper.vm.$.setupState.adjustmentReason = '補發本月值週費'
+    wrapper.vm.$.setupState.editForm.extra_allowance = 1241
+    wrapper.vm.$.setupState.editExtraAllowanceLabel = '值週'
+    await wrapper.vm.$.setupState.saveManualAdjust()
+    await flushPromises()
+    await nextTick()
+
+    expect(manualAdjustSalary).toHaveBeenCalledWith(
+      9,
+      expect.objectContaining({
+        extra_allowance: 1241,
+        extra_allowance_label: '值週',
+        adjustment_reason: '補發本月值週費',
+      }),
+      null,
+    )
+    expect(row.extra_allowance).toBe(1241)
+    expect(row.extra_allowance_label).toBe('值週')
+    expect(row.net_pay).toBe(31241)
+  })
 })
