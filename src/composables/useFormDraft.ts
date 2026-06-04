@@ -33,7 +33,7 @@ export function useFormDraft<T extends object>(opts: UseFormDraftOptions<T>): Us
   const { formId, state, exclude = [], debounceMs = 800, ttlDays = 7 } = opts
   const hasDraft = ref(false) // 後續 Task 使用
   const draftSavedAt = ref<Date | null>(null) // 後續 Task 使用
-  let snapshot = ''
+  let snapshot: string | null = null
   let timer: ReturnType<typeof setTimeout> | null = null
 
   const buildKey = (): string => {
@@ -54,8 +54,10 @@ export function useFormDraft<T extends object>(opts: UseFormDraftOptions<T>): Us
     return out
   }
 
-  const isDirty = (): boolean =>
-    JSON.stringify(pick(state as Record<string, unknown>)) !== snapshot
+  const isDirty = (): boolean => {
+    if (snapshot === null) return false
+    return JSON.stringify(pick(state as Record<string, unknown>)) !== snapshot
+  }
 
   const write = (): void => {
     try {
@@ -116,10 +118,9 @@ export function useFormDraft<T extends object>(opts: UseFormDraftOptions<T>): Us
     draftSavedAt.value = env ? new Date(env.savedAt) : null
   }
 
-  // 暫時佔位，後續 Task 補完
+  // flush：清掉 debounce 並立即寫入未存的 dirty 變更（enabled 門檻在 watcher 上，這裡只看 isDirty）
   const flush = (): void => {
     if (timer) { clearTimeout(timer); timer = null }
-    if (toValue(opts.enabled) === false) return
     if (isDirty()) write()
   }
   const maybePromptRestore = (): Promise<boolean> => Promise.resolve(false)

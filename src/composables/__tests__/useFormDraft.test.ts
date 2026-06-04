@@ -110,4 +110,21 @@ describe('useFormDraft：dirty 門檻與 enabled', () => {
     expect(localStorage.getItem('ivy.draft.v1.leave.5')).toBeTruthy()
     stop()
   })
+
+  it('關閉表單（enabled 轉 false）時 flush 寫入未存的變更', async () => {
+    const form = reactive({ reason: '' })
+    const enabled = ref(true)
+    const { stop } = run(() => useFormDraft({
+      formId: 'leave', state: form, userScope: () => 5,
+      enabled: () => enabled.value, debounceMs: 99999, // 不靠 debounce，證明是 flush
+    }))
+    await new Promise((r) => setTimeout(r, 0))
+    form.reason = '最後變更'
+    enabled.value = false // true→false 觸發 flush
+    await new Promise((r) => setTimeout(r, 0))
+    const raw = localStorage.getItem('ivy.draft.v1.leave.5')
+    expect(raw).toBeTruthy()
+    expect(JSON.parse(raw!).data.reason).toBe('最後變更')
+    stop()
+  })
 })
