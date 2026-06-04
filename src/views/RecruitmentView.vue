@@ -395,6 +395,7 @@
           @edit="openEditDialog"
           @delete="(id) => handleDelete(id as number)"
           @convert="openConvertDialog"
+          @reserve="openReserveDialog"
         />
       </el-tab-pane>
 
@@ -444,6 +445,12 @@
       :classroom-options="classroomOptions"
       @converted="onConverted"
     />
+
+    <ReserveSeatDialog
+      v-model="reserveDialogVisible"
+      :visit="reserveTargetVisit"
+      @reserved="onReserved"
+    />
   </div>
 </template>
 
@@ -473,6 +480,7 @@ import RecruitmentPeriodsTab from '@/components/recruitment/RecruitmentPeriodsTa
 import RecruitmentDetailTab from '@/components/recruitment/RecruitmentDetailTab.vue'
 import IntakePlanPanel from '@/components/recruitment/IntakePlanPanel.vue'
 import RecruitmentConvertDialog from '@/components/recruitment/RecruitmentConvertDialog.vue'
+import ReserveSeatDialog from '@/components/recruitment/ReserveSeatDialog.vue'
 import { useClassroomStore } from '@/stores/classroom'
 import { useRouter } from 'vue-router'
 import RecruitmentMonthDialog from '@/components/recruitment/RecruitmentMonthDialog.vue'
@@ -539,6 +547,18 @@ async function loadClassroomsOnce() {
     // 失敗靜默：不阻擋 dialog 開啟，使用者仍可不選班級
     classroomOptions.value = []
   }
+}
+
+// ── 保留座位（暫定編班）─────────────────────────────
+const reserveDialogVisible = ref(false)
+const reserveTargetVisit = ref<Record<string, unknown> | null>(null)
+function openReserveDialog(row: Record<string, unknown>) {
+  reserveTargetVisit.value = row
+  reserveDialogVisible.value = true
+}
+function onReserved() {
+  // 重載訪視列表以反映 provisional 欄位變更
+  void fetchDetail()
 }
 
 async function openConvertDialog(row: Record<string, unknown>) {

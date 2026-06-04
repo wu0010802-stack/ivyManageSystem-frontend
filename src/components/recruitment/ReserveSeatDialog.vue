@@ -1,6 +1,6 @@
 <template>
   <el-dialog v-model="visible" title="保留座位（暫定編班）" width="420px">
-    <p class="child-info">幼生：{{ visit?.child_name }}（visit #{{ visit?.id }}）</p>
+    <p class="child-info">幼生：{{ v.childName }}（visit #{{ v.id }}）</p>
     <el-form label-position="top">
       <el-form-item label="暫定年級" required>
         <el-select v-model="form.gradeId" placeholder="請選擇年級" style="width: 100%">
@@ -53,21 +53,13 @@ import { reserveSeat } from '@/api/recruitmentIntake'
 import { getGrades } from '@/api/classrooms'
 import { currentRocYear } from '@/utils/academic'
 
-interface VisitLike {
-  id: number
-  child_name?: string
-  has_deposit?: boolean
-  provisional_grade_id?: number | null
-  target_school_year?: number | null
-  target_semester?: number | null
-}
 interface GradeRow {
   id: number
   name: string
   sort_order?: number
 }
 
-const props = defineProps<{ modelValue: boolean; visit: VisitLike | null }>()
+const props = defineProps<{ modelValue: boolean; visit: Record<string, unknown> | null }>()
 const emit = defineEmits<{
   (e: 'update:modelValue', v: boolean): void
   (e: 'reserved'): void
@@ -78,6 +70,18 @@ const visible = computed({
   set: (v: boolean) => emit('update:modelValue', v),
 })
 
+// 來源 row 是 Record<string, unknown>（與招生訪視列表一致），這裡做一次 typed 解讀
+const v = computed(() => {
+  const x = props.visit ?? {}
+  return {
+    id: x.id as number | undefined,
+    childName: x.child_name as string | undefined,
+    gradeId: (x.provisional_grade_id as number | null | undefined) ?? null,
+    schoolYear: x.target_school_year as number | null | undefined,
+    semester: x.target_semester as number | null | undefined,
+  }
+})
+
 const grades = ref<GradeRow[]>([])
 const busy = ref(false)
 const form = ref<{ gradeId: number | null; schoolYear: number; semester: 1 | 2 }>({
@@ -86,31 +90,31 @@ const form = ref<{ gradeId: number | null; schoolYear: number; semester: 1 | 2 }
   semester: 1,
 })
 
-const isReserved = computed(() => props.visit?.provisional_grade_id != null)
+const isReserved = computed(() => v.value.gradeId != null)
 const canConfirm = computed(() => form.value.gradeId != null && !!form.value.schoolYear)
 
 watch(
-  () => [visible.value, props.visit?.id] as const,
-  async ([v]) => {
-    if (!v || !props.visit) return
+  () => [visible.value, v.value.id] as const,
+  async ([vis]) => {
+    if (!vis || v.value.id == null) return
     if (grades.value.length === 0) {
       const resp = await getGrades()
       grades.value = (resp.data as unknown as GradeRow[]) ?? []
     }
     form.value = {
-      gradeId: props.visit.provisional_grade_id ?? null,
-      schoolYear: props.visit.target_school_year ?? currentRocYear(),
-      semester: (props.visit.target_semester as 1 | 2) ?? 1,
+      gradeId: v.value.gradeId,
+      schoolYear: v.value.schoolYear ?? currentRocYear(),
+      semester: (v.value.semester as 1 | 2) ?? 1,
     }
   },
   { immediate: true },
 )
 
 async function confirm(): Promise<void> {
-  if (!canConfirm.value || !props.visit) return
+  if (!canConfirm.value || v.value.id == null) return
   busy.value = true
   try {
-    await reserveSeat(props.visit.id, {
+    await reserveSeat(v.value.id, {
       provisional_grade_id: form.value.gradeId,
       target_school_year: form.value.schoolYear,
       target_semester: form.value.semester,
@@ -126,10 +130,10 @@ async function confirm(): Promise<void> {
 }
 
 async function release(): Promise<void> {
-  if (!props.visit) return
+  if (v.value.id == null) return
   busy.value = true
   try {
-    await reserveSeat(props.visit.id, { provisional_grade_id: null })
+    await reserveSeat(v.value.id, { provisional_grade_id: null })
     ElMessage.success('已釋放保留')
     emit('reserved')
     visible.value = false
