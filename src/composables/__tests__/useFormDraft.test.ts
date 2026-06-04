@@ -255,3 +255,55 @@ describe('useFormDraft：過期 GC', () => {
     stop()
   })
 })
+
+describe('useFormDraft:key 隔離與 beforeunload', () => {
+  beforeEach(() => localStorage.clear())
+
+  it('編輯(recordId 7)與新增(recordId null)使用不同 key,草稿互不干擾', async () => {
+    const editForm = reactive({ name: '' })
+    const e = run(() => useFormDraft({
+      formId: 'employee', state: editForm, recordId: () => 7, userScope: () => 1,
+      enabled: () => true, debounceMs: 0,
+    }))
+    await new Promise((r) => setTimeout(r, 0))
+    editForm.name = '編輯中'
+    await new Promise((r) => setTimeout(r, 0))
+    expect(localStorage.getItem('ivy.draft.v1.employee.r7.1')).toBeTruthy()
+    expect(localStorage.getItem('ivy.draft.v1.employee.1')).toBeNull()
+    e.stop()
+  })
+
+  it('不同 userScope 寫到不同 key', async () => {
+    const f1 = reactive({ x: '' })
+    const a = run(() => useFormDraft({
+      formId: 'leave', state: f1, userScope: () => 1, enabled: () => true, debounceMs: 0,
+    }))
+    await new Promise((r) => setTimeout(r, 0))
+    f1.x = 'u1'
+    await new Promise((r) => setTimeout(r, 0))
+    const f2 = reactive({ x: '' })
+    const b = run(() => useFormDraft({
+      formId: 'leave', state: f2, userScope: () => 2, enabled: () => true, debounceMs: 0,
+    }))
+    await new Promise((r) => setTimeout(r, 0))
+    f2.x = 'u2'
+    await new Promise((r) => setTimeout(r, 0))
+    expect(JSON.parse(localStorage.getItem('ivy.draft.v1.leave.1')!).data.x).toBe('u1')
+    expect(JSON.parse(localStorage.getItem('ivy.draft.v1.leave.2')!).data.x).toBe('u2')
+    a.stop()
+    b.stop()
+  })
+
+  it('beforeunload 時立即 flush 寫入', async () => {
+    const form = reactive({ reason: '' })
+    const { stop } = run(() => useFormDraft({
+      formId: 'leave', state: form, userScope: () => 5,
+      enabled: () => true, debounceMs: 99999,
+    }))
+    await new Promise((r) => setTimeout(r, 0))
+    form.reason = '關頁前'
+    window.dispatchEvent(new Event('beforeunload'))
+    expect(JSON.parse(localStorage.getItem('ivy.draft.v1.leave.5')!).data.reason).toBe('關頁前')
+    stop()
+  })
+})

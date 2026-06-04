@@ -23,7 +23,7 @@ export interface UseFormDraftOptions<T extends object> {
   exclude?: string[]
   enabled?: MaybeRefOrGetter<boolean>
   debounceMs?: number
-  ttlDays?: number // 後續 Task 使用
+  ttlDays?: number
 }
 
 export interface UseFormDraftReturn {
@@ -43,8 +43,8 @@ interface DraftEnvelope {
 
 export function useFormDraft<T extends object>(opts: UseFormDraftOptions<T>): UseFormDraftReturn {
   const { formId, state, exclude = [], debounceMs = 800, ttlDays = 7 } = opts
-  const hasDraft = ref(false) // 後續 Task 使用
-  const draftSavedAt = ref<Date | null>(null) // 後續 Task 使用
+  const hasDraft = ref(false)
+  const draftSavedAt = ref<Date | null>(null)
   let snapshot: string | null = null
   let timer: ReturnType<typeof setTimeout> | null = null
 
