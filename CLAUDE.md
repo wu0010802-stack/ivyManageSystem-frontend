@@ -40,7 +40,7 @@ npm run test:coverage  # 含覆蓋率報告
 | `VITE_API_BASE_URL` | 後端 API 基底路徑，未設時預設 `/api` |
 | `VITE_GOOGLE_MAPS_API_KEY` | 設定後招生熱點圖改走 Google Maps；未設定維持 Leaflet + OpenStreetMap fallback。前端 key 應於 Google Console 設定 HTTP referrer 限制與只開 `Maps JavaScript API` |
 | `VITE_LIFF_ID` | LINE LIFF App ID，家長入口（parent portal）需要；未設定家長端 LINE 綁定/登入流程會失效 |
-| `VITE_SENTRY_DSN` | Sentry browser SDK DSN；缺值時 `src/utils/sentry.js` 完全 no-op |
+| `VITE_SENTRY_DSN` | Sentry browser SDK DSN；缺值時 `src/utils/sentry.ts` 完全 no-op |
 | `VITE_SENTRY_ENVIRONMENT` | Sentry environment tag，預設 fallback 到 `import.meta.env.MODE` |
 | `VITE_SENTRY_TRACES_SAMPLE_RATE` | trace 抽樣率（0~1，預設 0.1） |
 | `SENTRY_AUTH_TOKEN` / `SENTRY_ORG` / `SENTRY_PROJECT` | build-time（非 VITE_）；三者齊備時 vite build 才產 hidden source map 並上傳，否則 plugin disable
@@ -50,7 +50,7 @@ npm run test:coverage  # 含覆蓋率報告
 ## 架構重點
 
 ### 前端路由
-使用 `createWebHashHistory`（hash 模式）。管理端與教師入口（portal）路由共用同一 `router/index.js`，以 `/portal/` 前綴區分。
+使用 `createWebHashHistory`（hash 模式）。管理端與教師入口（portal）路由共用同一 `router/index.ts`，以 `/portal/` 前綴區分。
 
 ### 招生模組（前端整合）
 附近幼兒園詳細資料由三個來源合併，前端 composable 負責合併邏輯，**優先順序由高至低**：
@@ -61,7 +61,7 @@ npm run test:coverage  # 含覆蓋率報告
 | 2 | kiang.github.io | 月費備援、裁罰詳情文字 |
 | 3 | Google Places API | 名稱、座標、評分、Google Maps 連結 |
 
-**比對流程（`composables/usePreschoolGovData.js`）：**
+**比對流程（`composables/usePreschoolGovData.ts`）：**
 1. **並行查詢** Google Places 名稱 → DB（`findPreschoolFromDb`）與 kiang（`findPreschoolByName`，含 geo 距離加分）
 2. **kiang 橋接**：DB 找不到時，用 kiang 的官方名稱（`p.title`）重試 DB 查詢
 3. **合併**：DB 欄位展開覆蓋 kiang；月費、裁罰依上述規則決定
@@ -75,7 +75,7 @@ npm run test:coverage  # 含覆蓋率報告
 `src/` 業務碼已 100% TypeScript（2026-05-19 完成 L0–L9 全遷移，spec: `docs/superpowers/specs/2026-05-18-frontend-js-to-ts-migration-design.md`）。**不允許新增 `.js` 業務檔**：
 
 **強制規則（tsconfig + CI 已強制）：**
-- `tsconfig.json` `allowJs: false` — `src/` 下新增 `.js` 直接 typecheck 失敗
+- `tsconfig.json` 未設 `allowJs`（TS 預設即 off）— 配合 `strict` 模式，`src/` 下新增 `.js` 會被 vue-tsc typecheck 拒絕
 - `tsconfig.json` `strict: true` + `noUnusedLocals: true` + `noUnusedParameters: true`
 - CI `Type check` step **blocking**（移除 `continue-on-error` 後 typecheck error 直接擋 PR）
 
@@ -94,6 +94,110 @@ npm run test:coverage  # 含覆蓋率報告
 **檢驗：**
 - 本地：`npm run typecheck` 必過、`npm test` 必綠
 - CI：`Type check` step blocking，PR 必過才能 merge
+
+---
+
+### 跨端權限與認證（2026-05-21 起，str enum）
+
+2026-05-21 後端 Permission 從 IntFlag 改 `str Enum`（spec 代號 `permtxt01`），決策見 workspace `docs/adr/ADR-002_permission-intflag-to-str-enum.md`、介面 As-Is 見 `docs/spec/SPEC-002_permission-and-auth.md`。**無 64-bit 上限、無 BigInt 需求**。
+
+**前端使用方式（`src/utils/auth.ts`）：**
+
+```ts
+import { hasPermission } from '@/utils/auth'
+
+// 單一檢查
+if (hasPermission('SALARY_READ')) { ... }
+
+// 多項任一（route guard / sidebar）
+const allowed = ['SALARY_READ', 'SALARY_WRITE'].some(p => hasPermission(p))
+
+// 自動 wildcard：userInfo.permission_names 含 '*' 時 hasPermission(任意) → true
+```
+
+**資料來源**：
+- `userInfo.permission_names: string[]`（透過 `getUserInfo()` 從 localStorage 讀；響應式於 refresh / setUserInfo 後更新）
+- `null` 或 `undefined` 視為「無權限」，`hasPermission` 一律回 `false`（fail-safe）
+
+**新增 Permission 的跨端 SOP**：
+1. 後端 `utils/permissions.Permission` 加 enum 值（如 `Permission.NEW_FEATURE_READ = "NEW_FEATURE_READ"`）+ `PERMISSION_LABELS` 中文 + 必要的 `ROLE_TEMPLATES` 條目
+2. 前端 `src/constants/permissions.ts` 同步加常數（與後端 enum 名稱字面一致，CI 漂移將造成所有檢查 fail-safe 不通過）
+3. 兩端各自補測試
+
+**禁止**：
+- `: any` 或 `as any` 處理 permission（用 `string` 即可）
+- 自建 BigInt / 位元運算 helper（舊 `permissionMaskHas` / `permissionMaskAdd` 等已移除）
+- 直接讀 `userInfo.permission_names.includes(...)`（繞過 wildcard 與 fail-safe）；一律走 `hasPermission`
+
+**家長端**（`role='parent'`）：`permission_names=[]`，所有資源存取由後端 `Guardian.user_id` 過濾；前端只需依 `role` 判斷可否進 `/portal/*` 路由（詳見 `docs/spec/SPEC-003_parent-pii-retention.md`）。
+
+---
+
+### Datetime 與 Taipei TZ
+
+後端 datetime 寫入契約由 `ivy-backend/docs/sop/datetime-contract.md` 統管；前端對應規範如下。
+
+**接收後端 response**：
+- 後端 ORM 既有 column 兩種類型：
+  - **naive datetime**（無 tzinfo）：語意為「Asia/Taipei 牆上時間」
+  - **aware datetime**（含 tzinfo）：通常為 UTC，後端序列化時帶 `+00:00` 或 `Z`
+- 前端**禁止**對 naive 字串自行 `new Date()` 後當成 UTC（瀏覽器會誤判時區）；可用以下兩種做法：
+  - 用 OpenAPI 型別搭配 `dayjs` / `date-fns-tz`，明確標明來源時區
+  - 若 endpoint 已被後端統一為 aware UTC，前端直接 `new Date(isoString)` 顯示即可（瀏覽器自動轉本地時區）
+
+**送出 request body**：
+- 純日期（`YYYY-MM-DD`，如請假起訖日）：直接送字串
+- 帶時刻（如打卡時間）：建議送 **ISO 8601 含 `+08:00`**（明確時區），讓後端走 `utils/taipei_time` 三函數正規化；避免送 naive ISO 字串（`2026-05-28T09:00:00`，後端不知時區意圖）
+
+**檢驗**：
+- 後端 `ruff` 已啟用 `DTZ` rule 防 naive 操作；前端**無等價 lint rule**，仰賴 code review 與本規範
+- 任何顯示「比實際晚 8 小時」的 bug，先檢查是否前端把 Asia/Taipei naive 當 UTC 解析
+
+---
+
+### OpenAPI codegen（跨端契約管道）
+
+後端 FastAPI 的 Pydantic schema 是事實上的契約 single source of truth；前端 TS 型別由 codegen 自動衍生。**禁止手寫前端對應型別**（會與後端漂移）。
+
+決策見 workspace `docs/adr/ADR-001_openapi-typescript-codegen.md`，運維手冊見 `docs/infra/INFRA-001_cross-repo-contract-sync.md`。
+
+**跨端變更 SOP**（後端 schema 改動時）：
+
+```bash
+# 後端先行：改 router + Pydantic + pytest
+cd ~/Desktop/ivy-backend
+python scripts/dump_openapi.py       # 產 openapi.json（local-only，.gitignore 擋）
+
+# 前端 codegen
+cd ~/Desktop/ivy-frontend
+npm run gen:api                       # 跑 openapi-typescript → src/api/_generated/schema.d.ts
+# 只 commit schema.d.ts；不 commit openapi.json
+```
+
+**型別 helper**（`src/api/_generated/typed.d.ts`）：
+
+```ts
+import type { ApiBody, ApiQuery, AxiosResp, Schema } from '@/api/_generated/typed'
+
+// Request body 型別
+const body: ApiBody<'/employees', 'post'> = { ... }
+
+// Query 型別
+const params: ApiQuery<'/salaries/records', 'get'> = { year: 2026, month: 5 }
+
+// Response 型別（注意：用 AxiosResp，因 axios wrapper 不解包 .data）
+const resp: AxiosResp<'/employees', 'get'> = await api.get('/employees')
+```
+
+**重要慣例**：
+- **dispatch path 不帶 `/api`**：`api.get('/employees')` 而非 `api.get('/api/employees')`；後端 `dump_openapi.py` 預設剝掉 `/api` prefix
+- **`AxiosResp` 而非 `Schema`**：axios wrapper 不自動解包 `.data`，return type 必須含 `AxiosResp`；少數例外（`fees.ts` / `portalClassHub.ts` / `reports.ts` 內部自己解包）保留手動處理
+- **缺 `response_model=` 過渡寫法**：後端 router 未標 `response_model=` 時前端會收到 `unknown`，用 `as Shape // TODO(ts-strict): waiting on backend response_model`；後端補上後型別自動下放
+- **不換 `src/api/index.ts` axios wrapper**：dedupe / refresh / displayMessage / PII 過濾邏輯保留
+
+**漂移檢查**：
+- 本地：`npm run gen:api:check`（regen + porcelain check，含 untracked）
+- CI：兩 repo 的 `openapi-drift` job 跑 dump + check；schema.d.ts 漂移即 fail（公開 repo 用 default `GITHUB_TOKEN`，若改 private 需建 PAT）
 
 ---
 
@@ -143,7 +247,7 @@ npm run test:coverage  # 含覆蓋率報告
 **前端：**
 - API 呼叫統一透過 `src/api/` 下的模組，不在元件內直接 `fetch`/`axios`
 - 狀態管理用 Pinia store，不在元件間傳遞複雜狀態
-- 權限位元遮罩超過 32-bit（如 `FEES_WRITE = 1 << 32`）時必須用 `BigInt` 處理
+- 權限：用 `src/utils/auth.ts` 的 `hasPermission(name: string)`；2026-05-21 起 Permission 已改 str enum，**不再有 BigInt 需求**（見下方「跨端權限與認證」段）
 
 ---
 
@@ -159,29 +263,29 @@ npm run test:coverage  # 含覆蓋率報告
 - `ChurnPanel.vue` — at-risk 學生列表（含嚴重度 tag、訊號 detail）、12 月流失趨勢 LineChart、原因分布 BarChart
 
 支援 module：
-- `src/api/analytics.js` — `fetchFunnel(params)`、`fetchAtRisk()`、`fetchChurnHistory(months)`
-- `src/composables/useAnalyticsTimeRange.js` — 時間範圍 composable（本月/上月/本學期/上學期/本學年/自訂）
+- `src/api/analytics.ts` — `fetchFunnel(params)`、`fetchAtRisk()`、`fetchChurnHistory(months)`
+- `src/composables/useAnalyticsTimeRange.ts` — 時間範圍 composable（本月/上月/本學期/上學期/本學年/自訂）
 
-權限：`BUSINESS_ANALYTICS`（高位元 1 << 40，已加入 `src/constants/permissions.js`，sidebar `canView` 自動處理）。
-依賴 `views/reports/chartSetup.js` 的 vue-chartjs 共用初始化。
+權限：`Permission.BUSINESS_ANALYTICS`（str enum 值 = `"BUSINESS_ANALYTICS"`，列於 `src/constants/permissions.ts`，sidebar `canView` 透過 `hasPermission(string)` 自動處理）。
+依賴 `views/reports/chartSetup.ts` 的 vue-chartjs 共用初始化。
 
 ---
 
 ## 開發注意事項
 - 回應語言：一律使用**繁體中文**
-- 權限位元運算：禁止 `mask & PERMISSION_VALUES.X` 直接寫法（≥ 1<<32 的位元會被 32-bit truncate）；改用 `@/utils/auth` 的 `hasPermission` / `permissionMaskHas` / `permissionMaskAdd` / `permissionMaskRemove` / `permissionMaskCombine`，這些 helper 內部以 BigInt 運算。
+- 權限檢查：用 `@/utils/auth` 的 `hasPermission(name: string)` 純 `includes` 比對；**禁止**任何 `BigInt` / `mask & PERMISSION_VALUES.X` 寫法（2026-05-21 起 Permission 已改 str enum，舊 BigInt helper 已移除）。詳見下方「跨端權限與認證」段或 `../ivyManageSystem/docs/adr/ADR-002_permission-intflag-to-str-enum.md`。
 - 升級依賴後必須跑 `npm audit --production --audit-level=moderate`；CI 會 enforce。dev-only 套件的 transitive CVE（如 `vite-plugin-pwa`）需評估是否要 force 升級。
 
 ---
 
 ## 錯誤監控（Sentry）
 
-`src/utils/sentry.js` 提供 `initSentry(app, { entry })` 與 `captureException(err, context)`。
+`src/utils/sentry.ts` 提供 `initSentry(app, { entry })` 與 `captureException(err, context)`。
 
 - **啟用條件**：`VITE_SENTRY_DSN` 設定才生效；缺值時整支模組 no-op，三 entry boot 不受影響
-- **三 entry 都接上**：`src/main.js`（admin）/ `src/parent/main.js` / `src/public/main.js`；每個 entry 用 `entry: 'admin'|'parent'|'public'` tag 區分
-- **axios 攔截器**：`src/api/index.js` 對 `>=500` 與 network error 顯式上報；4xx（401/403/404/422 等）視為預期路徑由 UI errorHandler 處理，**不**送 Sentry
-- **PII 過濾**：60+ 欄位 denylist + URL path id sanitize + **query string PII 遮罩**（`?phone=0912 / ?email=x / ?id_number=A1` 等 value 自動 `[Filtered]`）+ **`event.user.id` FNV-1a hash**（擬個資去識別）；與後端 `_PII_KEY_SUBSTRINGS` 對齊。新增欄位同步前後端與測試（`tests/unit/utils/sentry.test.js`），backend 的 `tests/test_pii_denylist_parity.py` 在 CI enforce parity
+- **三 entry 都接上**：`src/main.ts`（admin）/ `src/parent/main.ts` / `src/public/main.ts`；每個 entry 用 `entry: 'admin'|'parent'|'public'` tag 區分
+- **axios 攔截器**：`src/api/index.ts` 對 `>=500` 與 network error 顯式上報；4xx（401/403/404/422 等）視為預期路徑由 UI errorHandler 處理，**不**送 Sentry
+- **PII 過濾**：60+ 欄位 denylist + URL path id sanitize + **query string PII 遮罩**（`?phone=0912 / ?email=x / ?id_number=A1` 等 value 自動 `[Filtered]`）+ **`event.user.id` FNV-1a hash**（擬個資去識別）；與後端 `_PII_KEY_SUBSTRINGS` 對齊。新增欄位同步前後端與測試（`tests/unit/utils/sentry.test.js`），backend 的 `tests/test_pii_denylist_parity.py` 在 CI enforce parity（讀前端 `sentry.ts` 比對 denylist + exempt list）
 - **`captureException` 內部 cache `_SentryRef`**：避免每次呼叫重複 dynamic import；init 前呼叫 → no-op（不再讀 env，純看 ref 是否存在）
 - **axios 攔截器使用 `sanitizeUrl(error.config?.url)` 才送 Sentry extra**：path id 去識別 + query PII 遮罩；不要直接送原始 url
 - **source map**：vite build 預設不產 .map（避免外洩程式結構）；需要 source map 給 Sentry 解 stack 時，在 build env 設 `SENTRY_AUTH_TOKEN` + `SENTRY_ORG` + `SENTRY_PROJECT`，plugin 會用 `sourcemap: 'hidden'` 產 map → 上傳 Sentry → 從 dist 刪除。**`postbuild` npm script 額外 `find dist -name '*.map' -delete` 兜底**，即便 Sentry upload 失敗 .map 也不會留在 dist 進 CDN

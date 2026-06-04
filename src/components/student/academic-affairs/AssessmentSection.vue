@@ -22,6 +22,7 @@ const props = withDefaults(defineProps<{
 const records = ref<Record<string, unknown>[]>([])
 const loading = ref(false)
 const errorMessage = ref('')
+const drawerOpen = ref(false)
 const dialogVisible = ref(false)
 const dialogMode = ref('create')
 const dialogInitial = ref<Record<string, unknown> | null>(null)
@@ -115,35 +116,49 @@ defineExpose({ fetchAssessments })
 </script>
 
 <template>
-  <SectionCard
-    title="評量"
-    :count="filteredRows.length"
-    count-type="primary"
-    :loading="loading"
-    :error-message="errorMessage"
-    :empty-description="ctx.filters.classroomId ? '期間內沒有評量資料' : '請先選擇班級'"
-    :show-empty="filteredRows.length === 0"
-    @retry="fetchAssessments"
-  >
-    <template #actions>
-      <el-button
-        size="small"
-        type="primary"
-        :disabled="!ctx.filters.classroomId"
-        @click="openCreate"
-      >
-        新增評量
-      </el-button>
-    </template>
+  <div class="record-entry">
+    <button type="button" class="record-trigger" @click="drawerOpen = true">
+      <el-badge :value="filteredRows.length" type="info" class="record-trigger-badge">
+        <span class="record-trigger-label">評量</span>
+      </el-badge>
+      <span class="record-trigger-hint">查看 / 新增</span>
+      <span class="record-trigger-arrow" aria-hidden="true">›</span>
+    </button>
 
-    <el-table
-      v-if="filteredRows.length"
-      :data="filteredRows"
-      stripe
-      size="small"
-      style="width: 100%"
-      max-height="360"
+    <el-drawer
+      v-model="drawerOpen"
+      :title="`評量 · ${filteredRows.length}`"
+      size="720px"
+      append-to-body
     >
+      <div style="display: flex; justify-content: flex-end; margin-bottom: var(--space-3)">
+        <el-button
+          size="small"
+          type="primary"
+          :disabled="!ctx.filters.classroomId"
+          @click="openCreate"
+        >
+          新增評量
+        </el-button>
+      </div>
+
+      <SectionCard
+        title="評量"
+        hide-header
+        :loading="loading"
+        :error-message="errorMessage"
+        :empty-description="ctx.filters.classroomId ? '期間內沒有評量資料' : '請先選擇班級'"
+        :show-empty="filteredRows.length === 0"
+        @retry="fetchAssessments"
+      >
+        <el-table
+          v-if="filteredRows.length"
+          :data="filteredRows"
+          stripe
+          size="small"
+          style="width: 100%"
+          max-height="560"
+        >
       <el-table-column label="日期" prop="assessment_date" width="100" />
       <el-table-column label="學生" prop="student_name" width="100" />
       <el-table-column label="學期" prop="semester" width="80" />
@@ -163,16 +178,18 @@ defineExpose({ fetchAssessments })
           <el-button link size="small" type="danger" @click="removeRow(row)">刪除</el-button>
         </template>
       </el-table-column>
-    </el-table>
+        </el-table>
+      </SectionCard>
 
-    <AssessmentEditorDialog
-      v-model:visible="dialogVisible"
-      :mode="dialogMode"
-      :initial="dialogInitial"
-      :classrooms="props.classrooms"
-      :default-classroom-id="(ctx.filters.classroomId as number | null)"
-      :default-student-id="(ctx.filters.studentId as number | null)"
-      :lock-student="!!ctx.filters.studentId && dialogMode === 'create'"
-    />
-  </SectionCard>
+      <AssessmentEditorDialog
+        v-model:visible="dialogVisible"
+        :mode="dialogMode"
+        :initial="dialogInitial"
+        :classrooms="props.classrooms"
+        :default-classroom-id="(ctx.filters.classroomId as number | null)"
+        :default-student-id="(ctx.filters.studentId as number | null)"
+        :lock-student="!!ctx.filters.studentId && dialogMode === 'create'"
+      />
+    </el-drawer>
+  </div>
 </template>

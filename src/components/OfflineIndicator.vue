@@ -2,17 +2,26 @@
 import { ref, onMounted } from 'vue'
 import { useOnlineStatus } from '@/composables/useOnlineStatus'
 import { countPending, OP_KINDS } from '@/utils/offlineQueue'
-
-const { isOnline } = useOnlineStatus(async () => {
-  // 重新連線時更新一下 badge，實際同步由點名頁自行觸發
-  pendingCount.value = await countPending(OP_KINDS.CLASS_ATTENDANCE, undefined)
-})
+import { getUserInfo } from '@/utils/auth'
 
 const pendingCount = ref<number>(0)
 
-onMounted(async () => {
-  pendingCount.value = await countPending(OP_KINDS.CLASS_ATTENDANCE, undefined)
+// 只計算「當前登入者」的待同步數，避免共享平板把其他老師的 pending 一起算進來（P2-5）。
+const refreshPendingCount = async () => {
+  const uid = (getUserInfo()?.id as string | number | undefined) ?? null
+  if (uid == null) {
+    pendingCount.value = 0
+    return
+  }
+  pendingCount.value = await countPending(OP_KINDS.CLASS_ATTENDANCE, uid)
+}
+
+const { isOnline } = useOnlineStatus(async () => {
+  // 重新連線時更新一下 badge，實際同步由點名頁自行觸發
+  await refreshPendingCount()
 })
+
+onMounted(refreshPendingCount)
 </script>
 
 <template>

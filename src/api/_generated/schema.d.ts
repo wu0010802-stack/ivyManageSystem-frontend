@@ -21,101 +21,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/academic-terms": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Terms
-         * @description 列出所有學年學期，依學年學期倒序排列。
-         */
-        get: operations["list_terms_api_academic_terms_get"];
-        put?: never;
-        /**
-         * Create Term
-         * @description 新增學年學期設定。
-         */
-        post: operations["create_term_api_academic_terms_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/academic-terms/{term_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Update Term
-         * @description 更新學年學期設定。
-         */
-        put: operations["update_term_api_academic_terms__term_id__put"];
-        post?: never;
-        /**
-         * Delete Term
-         * @description 刪除學年學期設定。
-         */
-        delete: operations["delete_term_api_academic_terms__term_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/academic-terms/{term_id}/set-current": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Set Current Term
-         * @description admin「正式開新學期」翻牌。
-         *
-         *     流程（同 transaction）：
-         *     1. 找 new term (term_id) — 不存在 → 404
-         *     2. 找舊 is_current term (可能 None) — 與 new term 相同 → 409 no-op
-         *     3. UPDATE 舊 row.is_current=false（若有），UPDATE new row.is_current=true
-         *     4. flush 讓 partial unique index 立刻檢查 singleton
-         *     5. fire_term_changed(old, new, session) — 三個 subscriber 同 session 串註執行
-         */
-        post: operations["set_current_term_api_academic_terms__term_id__set_current_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/academic-terms/current": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Current Term
-         * @description 回傳今日所在學期（查無回 null）。
-         */
-        get: operations["current_term_api_academic_terms_current_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/activity/attendance/sessions": {
         parameters: {
             query?: never;
@@ -4277,6 +4182,131 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/data-quality/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Reports */
+        get: operations["list_reports_api_data_quality_reports_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/data-quality/reports/{report_id}/ack": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ack Report */
+        post: operations["ack_report_api_data_quality_reports__report_id__ack_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/data-quality/reports/{report_id}/ignore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ignore Report */
+        post: operations["ignore_report_api_data_quality_reports__report_id__ignore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/data-quality/reports/{report_id}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resolve Report */
+        post: operations["resolve_report_api_data_quality_reports__report_id__resolve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/data-quality/run-now": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run Now */
+        post: operations["run_now_api_data_quality_run_now_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dev/employee-salary-debug": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Debug Employee Salary
+         * @description 模擬計算單一員工薪資並回傳完整明細（dev 別名，正式請改打 /api/salaries/employee-salary-debug）。
+         */
+        get: operations["debug_employee_salary_api_dev_employee_salary_debug_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dev/salary-logic": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Salary Logic
+         * @description 傾印目前的薪資計算邏輯與所有參數設定（dev 別名，正式請改打 /api/salaries/logic）。
+         */
+        get: operations["get_salary_logic_api_dev_salary_logic_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/disciplinary-actions": {
         parameters: {
             query?: never;
@@ -5829,11 +5859,22 @@ export interface paths {
         };
         /**
          * Readiness
-         * @description Readiness probe — 確認 DB 連線池可用。
+         * @description Readiness probe.
          *
-         *     資安掃描 2026-05-07 P1：response 不再回傳 env 欄位（無認證端點，env 值
-         *     告訴攻擊者部署環境類型，協助針對性 payload）。SRE 改在啟動 log 一次性
-         *     確認；如需動態查詢可在 /health/live 用 X-Health-Token header 私有揭露。
+         *     Shallow（無 query）— 既有 shape，不更動：
+         *         {"status": "ok", "db": "connected", "latency_ms": X.X}
+         *
+         *     Deep（?deep=1）— enriched shape：
+         *         {
+         *           "status": "ok" | "degraded",
+         *           "latency_ms": X.X,
+         *           "components": {
+         *             "db": {...},
+         *             "line": {...},
+         *             "supabase": {...},
+         *             "db_pool": {...},
+         *           },
+         *         }
          */
         get: operations["readiness_health_ready_get"];
         put?: never;
@@ -8417,41 +8458,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/permissions/definitions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Create Permission Definition */
-        post: operations["create_permission_definition_api_permissions_definitions_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/permissions/definitions/{code}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Update Permission Definition */
-        put: operations["update_permission_definition_api_permissions_definitions__code__put"];
-        post?: never;
-        /** Delete Permission Definition */
-        delete: operations["delete_permission_definition_api_permissions_definitions__code__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/portal/activity/attendance/sessions": {
         parameters: {
             query?: never;
@@ -10374,6 +10380,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/recruitment/funnel/visits/{visit_id}/reserve-seat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reserve Seat
+         * @description 設定/釋放暫定編班（保留座位）。null grade = 釋放。
+         */
+        post: operations["reserve_seat_api_recruitment_funnel_visits__visit_id__reserve_seat_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/recruitment/gov-kindergartens": {
         parameters: {
             query?: never;
@@ -10448,6 +10474,46 @@ export interface paths {
         put?: never;
         /** Import Recruitment Records */
         post: operations["import_recruitment_records_api_recruitment_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/recruitment/intake-plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Intake Plan
+         * @description 名額規劃彙總：每年級 計畫/保留/註冊/剩餘。
+         */
+        get: operations["get_intake_plan_api_recruitment_intake_plan_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/recruitment/intake-targets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put Intake Targets
+         * @description 設定每年級計畫名額。
+         */
+        put: operations["put_intake_targets_api_recruitment_intake_targets_put"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -11931,6 +11997,9 @@ export interface paths {
         /**
          * Get Enrollment Roster
          * @description 取得花名冊格式的在籍記錄，含每班學生姓名、教師、員工名單。
+         *
+         *     scope 由下方 class-scope filter 收斂（own_class 只看自己班，比照 get_students）；
+         *     不再用 assert_all_scope 一律 403，避免 class-scoped 角色完全看不到自己班花名冊。
          */
         get: operations["get_enrollment_roster_api_student_enrollment_roster_get"];
         put?: never;
@@ -13584,55 +13653,15 @@ export interface components {
             /** Semester */
             semester: unknown;
         };
-        /** AcademicTermIn */
-        AcademicTermIn: {
-            /**
-             * End Date
-             * Format: date
-             */
-            end_date: string;
-            /**
-             * School Year
-             * @description 民國學年
-             */
-            school_year: number;
-            /** Semester */
-            semester: number;
-            /**
-             * Start Date
-             * Format: date
-             */
-            start_date: string;
-        };
-        /** AcademicTermOut */
-        AcademicTermOut: {
-            /** Created At */
-            created_at: string | null;
-            /**
-             * End Date
-             * Format: date
-             */
-            end_date: string;
-            /** Id */
-            id: number;
-            /** Is Current */
-            is_current: boolean;
-            /** School Year */
-            school_year: number;
-            /** Semester */
-            semester: number;
-            /**
-             * Start Date
-             * Format: date
-             */
-            start_date: string;
-            /** Updated At */
-            updated_at: string | null;
-        };
         /** AckAllResponse */
         AckAllResponse: {
             /** Acknowledged Count */
             acknowledged_count: number;
+        };
+        /** AckBody */
+        AckBody: {
+            /** Note */
+            note?: string | null;
         };
         /** AckRequest */
         AckRequest: {
@@ -17219,7 +17248,7 @@ export interface components {
             /** Submitted At */
             submitted_at: string;
             /** User Id */
-            user_id: number;
+            user_id?: number | null;
         };
         /** DsrRequestOut */
         DsrRequestOut: {
@@ -18119,10 +18148,16 @@ export interface components {
             grade: string | null;
             /** Phone */
             phone: string | null;
+            /** Provisional Grade Id */
+            provisional_grade_id?: number | null;
+            /** Provisional Grade Name */
+            provisional_grade_name?: string | null;
             /** Source */
             source: string | null;
             /** Student Id */
             student_id: number | null;
+            /** Target School Year */
+            target_school_year?: number | null;
             /** Visit Id */
             visit_id: number;
         };
@@ -18560,6 +18595,11 @@ export interface components {
                 [key: string]: unknown;
             }[] | null;
         };
+        /** IgnoreBody */
+        IgnoreBody: {
+            /** Note */
+            note: string;
+        };
         /** ImpersonateRequest */
         ImpersonateRequest: {
             /** Employee Id */
@@ -18851,6 +18891,60 @@ export interface components {
              * @default labor
              */
             table_type: string;
+        };
+        /** IntakePlanOut */
+        IntakePlanOut: {
+            /** Rows */
+            rows: components["schemas"]["IntakePlanRow"][];
+            /** School Year */
+            school_year: number;
+            /** Semester */
+            semester: number;
+        };
+        /** IntakePlanRow */
+        IntakePlanRow: {
+            /** Enrolled Count */
+            enrolled_count: number;
+            /** Grade Id */
+            grade_id: number;
+            /** Grade Name */
+            grade_name: string;
+            /** Over Capacity */
+            over_capacity: boolean;
+            /** Remaining */
+            remaining: number;
+            /** Reserved Count */
+            reserved_count: number;
+            /** Target Seats */
+            target_seats: number;
+        };
+        /** IntakeTargetItem */
+        IntakeTargetItem: {
+            /** Grade Id */
+            grade_id: number;
+            /** Target Seats */
+            target_seats: number;
+        };
+        /** IntakeTargetsIn */
+        IntakeTargetsIn: {
+            /** School Year */
+            school_year: number;
+            /**
+             * Semester
+             * @default 1
+             */
+            semester: number;
+            /** Targets */
+            targets: components["schemas"]["IntakeTargetItem"][];
+        };
+        /** IntakeTargetsOut */
+        IntakeTargetsOut: {
+            /** School Year */
+            school_year: number;
+            /** Semester */
+            semester: number;
+            /** Targets */
+            targets: components["schemas"]["IntakeTargetItem"][];
         };
         /** IntegrationsHealthResponse */
         IntegrationsHealthResponse: {
@@ -19174,6 +19268,17 @@ export interface components {
             token_healthy: boolean | null;
             /** Token Last Check At */
             token_last_check_at: string | null;
+        };
+        /** ListReportsOut */
+        ListReportsOut: {
+            /** Items */
+            items: components["schemas"]["ReportOut"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
         };
         /** LoginRequest */
         LoginRequest: {
@@ -21254,7 +21359,7 @@ export interface components {
         };
         /**
          * PermissionAdminOkOut
-         * @description delete_permission_definition / delete_role 回傳 — {ok: bool}。
+         * @description delete_role 回傳 — {ok: bool}。
          *
          *     不重用 _common.OkStatusOut（欄位是 status:str）或 DeleteResultOut（message:str），
          *     重用會 silent rename 前端欄位。
@@ -21262,45 +21367,6 @@ export interface components {
         PermissionAdminOkOut: {
             /** Ok */
             ok: unknown;
-        };
-        /** PermissionDefinitionIn */
-        PermissionDefinitionIn: {
-            /** Code */
-            code: string;
-            /** Description */
-            description?: string | null;
-            /**
-             * Group Name
-             * @default 自訂
-             */
-            group_name: string;
-            /** Label */
-            label: string;
-        };
-        /**
-         * PermissionDefinitionOut
-         * @description create_permission_definition / update_permission_definition 回傳。
-         */
-        PermissionDefinitionOut: {
-            /** Code */
-            code: unknown;
-            /** Description */
-            description?: unknown;
-            /** Group Name */
-            group_name: unknown;
-            /** Is Core */
-            is_core: unknown;
-            /** Label */
-            label: unknown;
-        };
-        /** PermissionDefinitionUpdate */
-        PermissionDefinitionUpdate: {
-            /** Description */
-            description?: string | null;
-            /** Group Name */
-            group_name?: string | null;
-            /** Label */
-            label?: string | null;
         };
         /** PolicyItem */
         PolicyItem: {
@@ -23521,10 +23587,79 @@ export interface components {
              */
             client_request_id?: string | null;
         };
+        /** ReportOut */
+        ReportOut: {
+            /** Ack At */
+            ack_at?: string | null;
+            /**
+             * Detected At
+             * Format: date-time
+             */
+            detected_at: string;
+            /** Entity Id */
+            entity_id: string;
+            /** Entity Type */
+            entity_type: string;
+            /** Id */
+            id: number;
+            /**
+             * Last Seen At
+             * Format: date-time
+             */
+            last_seen_at: string;
+            /** Resolution Note */
+            resolution_note?: string | null;
+            /** Resolved At */
+            resolved_at?: string | null;
+            /** Rule Code */
+            rule_code: string;
+            /** Severity */
+            severity: string;
+            /** Status */
+            status: string;
+            /** Summary */
+            summary: string;
+        };
+        /** ReserveSeatIn */
+        ReserveSeatIn: {
+            /**
+             * Provisional Grade Id
+             * @description 暫定年級；null = 釋放保留座位
+             */
+            provisional_grade_id?: number | null;
+            /**
+             * Target School Year
+             * @description 目標學年（民國）
+             */
+            target_school_year?: number | null;
+            /**
+             * Target Semester
+             * @description 目標學期，省略預設 1
+             */
+            target_semester?: number | null;
+        };
+        /** ReserveSeatOut */
+        ReserveSeatOut: {
+            /** Provisional Grade Id */
+            provisional_grade_id: number | null;
+            /** Provisional Grade Name */
+            provisional_grade_name: string | null;
+            /** Target School Year */
+            target_school_year: number | null;
+            /** Target Semester */
+            target_semester: number | null;
+            /** Visit Id */
+            visit_id: number;
+        };
         /** ResetPasswordRequest */
         ResetPasswordRequest: {
             /** New Password */
             new_password: string;
+        };
+        /** ResolveBody */
+        ResolveBody: {
+            /** Note */
+            note: string;
         };
         /**
          * RevealPhoneOut
@@ -23634,6 +23769,15 @@ export interface components {
             seq: number;
             /** Status Tag */
             status_tag: string | null;
+        };
+        /** RunNowOut */
+        RunNowOut: {
+            /** Detected */
+            detected: number;
+            /** New Open */
+            new_open: number;
+            /** Ran At */
+            ran_at: string;
         };
         /**
          * SalaryDetailAuditLogItemOut
@@ -26524,178 +26668,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
-                };
-            };
-        };
-    };
-    list_terms_api_academic_terms_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AcademicTermOut"][];
-                };
-            };
-        };
-    };
-    create_term_api_academic_terms_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AcademicTermIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AcademicTermOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_term_api_academic_terms__term_id__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                term_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AcademicTermIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AcademicTermOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_term_api_academic_terms__term_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                term_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    set_current_term_api_academic_terms__term_id__set_current_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                term_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AcademicTermOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    current_term_api_academic_terms_current_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AcademicTermOut"] | null;
                 };
             };
         };
@@ -33686,6 +33658,219 @@ export interface operations {
             };
         };
     };
+    list_reports_api_data_quality_reports_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                rule_code?: string | null;
+                severity?: string | null;
+                status?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListReportsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ack_report_api_data_quality_reports__report_id__ack_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AckBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ignore_report_api_data_quality_reports__report_id__ignore_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IgnoreBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resolve_report_api_data_quality_reports__report_id__resolve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResolveBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_now_api_data_quality_run_now_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunNowOut"];
+                };
+            };
+        };
+    };
+    debug_employee_salary_api_dev_employee_salary_debug_get: {
+        parameters: {
+            query: {
+                employee_id: number;
+                month: number;
+                year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_salary_logic_api_dev_salary_logic_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
     list_actions_api_disciplinary_actions_get: {
         parameters: {
             query?: {
@@ -36902,7 +37087,9 @@ export interface operations {
     };
     readiness_health_ready_get: {
         parameters: {
-            query?: never;
+            query?: {
+                deep?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -36916,6 +37103,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -41016,105 +41212,6 @@ export interface operations {
             };
         };
     };
-    create_permission_definition_api_permissions_definitions_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PermissionDefinitionIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PermissionDefinitionOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_permission_definition_api_permissions_definitions__code__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                code: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PermissionDefinitionUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PermissionDefinitionOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_permission_definition_api_permissions_definitions__code__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                code: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PermissionAdminOkOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     portal_list_sessions_api_portal_activity_attendance_sessions_get: {
         parameters: {
             query?: {
@@ -44160,6 +44257,41 @@ export interface operations {
             };
         };
     };
+    reserve_seat_api_recruitment_funnel_visits__visit_id__reserve_seat_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                visit_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReserveSeatIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReserveSeatOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_gov_kindergartens_api_recruitment_gov_kindergartens_get: {
         parameters: {
             query?: {
@@ -44274,6 +44406,71 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RecruitmentRecordImportResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_intake_plan_api_recruitment_intake_plan_get: {
+        parameters: {
+            query: {
+                school_year: number;
+                semester?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntakePlanOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_intake_targets_api_recruitment_intake_targets_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IntakeTargetsIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntakeTargetsOut"];
                 };
             };
             /** @description Validation Error */

@@ -8,9 +8,9 @@
           <span class="hamburger-line"></span>
           <span class="hamburger-line"></span>
         </button>
-        <h2 v-if="pageTitle" class="page-title">
+        <h1 v-if="pageTitle" class="page-title">
           <span>{{ pageTitle }}</span>
-        </h2>
+        </h1>
       </div>
 
       <div class="header-right">

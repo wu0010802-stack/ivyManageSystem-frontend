@@ -146,14 +146,9 @@ onMounted(async () => {
 
 <template>
   <div class="today-tasks-panel">
-    <div class="panel-header">
-      <div>
-        <h2>今日任務池</h2>
-        <p class="panel-subtitle">
-          出席、請假、評量、事件四個區塊，依班級與日期區間同步顯示。
-        </p>
-      </div>
-    </div>
+    <p class="panel-subtitle">
+      出席、請假、評量、事件依下方班級與日期區間顯示；出席為當日點名，僅呈現區間結束日當天。
+    </p>
 
     <el-card shadow="never" class="filter-card">
       <div class="filter-row">
@@ -215,8 +210,14 @@ onMounted(async () => {
     <div class="sections-grid">
       <AttendanceSection />
       <LeaveSection />
-      <AssessmentSection :classrooms="classrooms" />
-      <IncidentSection :classrooms="classrooms" />
+    </div>
+
+    <div class="secondary-records">
+      <span class="secondary-records-label">次要紀錄</span>
+      <div class="secondary-records-entries">
+        <AssessmentSection :classrooms="classrooms" />
+        <IncidentSection :classrooms="classrooms" />
+      </div>
     </div>
   </div>
 </template>
@@ -226,16 +227,8 @@ onMounted(async () => {
   padding: var(--space-4) 0;
 }
 
-.panel-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-}
-
 .panel-subtitle {
-  margin-top: var(--space-1);
+  margin: 0;
   color: var(--text-secondary);
 }
 
@@ -275,6 +268,72 @@ onMounted(async () => {
   .sections-grid {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+.secondary-records {
+  margin-top: var(--space-4);
+}
+
+.secondary-records-label {
+  display: block;
+  margin-bottom: var(--space-2);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.secondary-records-entries {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+@media (max-width: 768px) {
+  .secondary-records-entries {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* 觸發鈕由子元件 (AssessmentSection / IncidentSection) 渲染，故用 :deep 穿透 */
+.secondary-records :deep(.record-entry) {
+  width: 100%;
+}
+
+.secondary-records :deep(.record-trigger) {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--neutral-200);
+  border-radius: var(--radius-lg);
+  background: var(--neutral-50);
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+
+.secondary-records :deep(.record-trigger:hover) {
+  background: var(--neutral-100);
+  border-color: var(--neutral-300);
+}
+
+.secondary-records :deep(.record-trigger-label) {
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--text-primary);
+}
+
+.secondary-records :deep(.record-trigger-hint) {
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.secondary-records :deep(.record-trigger-arrow) {
+  margin-left: auto;
+  color: var(--text-secondary);
+  font-size: var(--text-xl);
+  line-height: 1;
 }
 
 .section-placeholder {

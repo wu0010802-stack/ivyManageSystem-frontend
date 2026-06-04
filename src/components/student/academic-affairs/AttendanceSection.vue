@@ -100,10 +100,10 @@ defineExpose({ fetchDaily })
   <SectionCard
     title="出席"
     :count="summary.total"
-    count-type="primary"
+    count-type="info"
     :loading="loading"
     :error-message="errorMessage"
-    :empty-description="ctx.filters.classroomId ? '當日沒有資料' : '請先選擇班級'"
+    :empty-description="ctx.filters.classroomId ? '當日尚未點名，點右上「批次點名」開始' : '請先選擇班級'"
     :show-empty="filteredRows.length === 0"
     @retry="fetchDaily"
   >
