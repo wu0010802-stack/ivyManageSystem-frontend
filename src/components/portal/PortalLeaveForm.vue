@@ -60,11 +60,13 @@ const {
   formRef,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   fetchWorkdayHoursFn: ((start: string, end: string) => getMyWorkdayHours({ start_date: start, end_date: end })) as any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   fetchQuotaFn: (async (leaveType: string, year?: number) => {
     if (!leaveType || !_QUOTA_TYPES_LOCAL.has(leaveType)) return null
     const res = await getMyQuotas(year ? { year } : undefined)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return res.data.find((q: any) => q.leave_type === leaveType) || null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   }) as any,
 })
 
@@ -129,7 +131,7 @@ const rules = {
   leave_hours: [
     { required: true, message: '請輸入時數', trigger: 'blur' },
     {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       validator: (_rule: unknown, value: number, callback: (err?: Error) => void) => {
         if (value < 0.5) callback(new Error('請假時數至少 0.5 小時'))
         else if (Math.round(value * 2) !== value * 2) callback(new Error('請假時數必須為 0.5 小時的倍數'))
@@ -164,11 +166,13 @@ const handleAttachChange = (file: any, newFileList: any[]) => {
   const maxSize = 5 * 1024 * 1024
   if (!allowed.includes(file.raw?.type) && !file.name.match(/\.(heic|heif)$/i)) {
     ElMessage.error(`${file.name}：僅支援 JPG、PNG、GIF、HEIC、PDF 格式`)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     fileList.value = newFileList.filter((f: any) => f.uid !== file.uid)
     return
   }
   if ((file.raw?.size ?? 0) > maxSize) {
     ElMessage.error(`${file.name} 超過 5 MB 限制`)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     fileList.value = newFileList.filter((f: any) => f.uid !== file.uid)
   }
 }

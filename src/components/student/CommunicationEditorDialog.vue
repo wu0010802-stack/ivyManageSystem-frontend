@@ -92,6 +92,7 @@ const empty = () => ({
 })
 
 const form = reactive(empty())
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const formRef = ref<any>(null)
 const submitting = ref(false)
 

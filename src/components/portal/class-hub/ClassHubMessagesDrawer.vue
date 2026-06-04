@@ -282,7 +282,7 @@ async function openNew() {
   if (classrooms.value.length === 0) {
     try {
       const res = await getMyStudents()
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       classrooms.value = (res.data?.classrooms || []) as ClassroomEntry[]
     } catch (e) {
       ElMessage.error('讀取班級學生失敗')

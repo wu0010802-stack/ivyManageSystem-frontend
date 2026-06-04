@@ -31,7 +31,7 @@ async function reload() {
 }
 
 const OWNER_OPTIONS = computed(() =>
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   Object.entries(OWNER_TYPE_LABELS as Record<string, string>).map(([value, label]) => ({ value, label })),
 )
 

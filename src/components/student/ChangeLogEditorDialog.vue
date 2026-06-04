@@ -153,6 +153,7 @@ const empty = (): ChangeLogForm => ({
 })
 
 const form = reactive<ChangeLogForm>(empty())
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const formRef = ref<any>(null)
 const submitting = ref(false)
 
@@ -181,7 +182,7 @@ const optionsLoaded = ref(false)
 const loadOptions = async () => {
   if (optionsLoaded.value) return
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const res = await getChangeLogOptions()
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     eventTypes.value = (res as any).data?.event_types || []
@@ -205,7 +206,7 @@ const searchStudents = async (query: string) => {
   if (!query) return
   studentSearchLoading.value = true
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const res = await getStudents({ search: query, page_size: 20 })
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     studentOptions.value = (res as any).data?.items || []
@@ -279,6 +280,7 @@ const submit = async () => {
     emit('submitted')
     emit('update:visible', false)
   } catch (err) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const detail = (err as any)?.response?.data?.detail
     ElMessage.error(detail || (props.mode === 'create' ? '補登失敗' : '更新失敗'))
   } finally {

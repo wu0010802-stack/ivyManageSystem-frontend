@@ -161,6 +161,7 @@ const loading = ref(false)
 const dialogVisible = ref(false)
 const dialogMode = ref('create')
 const saving = ref(false)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const formRef = ref<any>(null)
 
 const emptyForm = (): Guardian => ({
@@ -200,6 +201,7 @@ async function fetchGuardians() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     guardians.value = (data as any).items || []
   } catch (err) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ElMessage.error((err as any).displayMessage || '讀取監護人失敗')
   } finally {
     loading.value = false
@@ -253,6 +255,7 @@ async function handleSave() {
     await fetchGuardians()
     emit('change')
   } catch (err) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ElMessage.error((err as any).displayMessage || '儲存失敗')
   } finally {
     saving.value = false
