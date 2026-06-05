@@ -492,7 +492,7 @@ import JourneyTimeline from '@/components/recruitment/JourneyTimeline.vue'
 import AllChannelSummaryCard from '@/components/recruitment/AllChannelSummaryCard.vue'
 import RecruitmentIvykidsTab from '@/components/recruitment/RecruitmentIvykidsTab.vue'
 import { useClassroomStore } from '@/stores/classroom'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import RecruitmentMonthDialog from '@/components/recruitment/RecruitmentMonthDialog.vue'
 import RecruitmentRecordDialog from '@/components/recruitment/RecruitmentRecordDialog.vue'
 import RecruitmentPeriodDialog from '@/components/recruitment/RecruitmentPeriodDialog.vue'
@@ -543,6 +543,7 @@ const canConvert = computed(() => hasPermission('RECRUITMENT_CONVERT'))
 
 // -------- 轉化為學生 --------
 const router = useRouter()
+const route = useRoute()
 const convertDialogVisible = ref(false)
 const convertTargetVisit = ref<Record<string, unknown> | null>(null)
 const classroomOptions = ref<{ id: number; name: string }[]>([])
@@ -951,6 +952,13 @@ const handleCampusSave = async () => {
 
 onMounted(() => {
   loadDashboard()
+  // 全域搜尋導航帶入 ?keyword=<幼生姓名>：切到「原始明細」分頁並以關鍵字篩選
+  const kw = typeof route.query.keyword === 'string' ? route.query.keyword : ''
+  if (kw) {
+    filter.value.keyword = kw
+    activeTab.value = 'detail'
+    loadDetailTab()
+  }
 })
 
 const handleReferenceMonthChange = async (value: string | null) => {

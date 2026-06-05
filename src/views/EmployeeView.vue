@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed, watch, nextTick } from 'vue'
+import { useRoute } from 'vue-router'
 import { useDebounceFn, useMediaQuery } from '@vueuse/core'
 import { User, Plus, Search, ArrowDown } from '@element-plus/icons-vue'
 import {
@@ -342,6 +343,7 @@ const openOffboard = (emp: Record<string, unknown>) => {
   offboardVisible.value = true
 }
 
+const route = useRoute()
 const searchQuery = ref('')
 const debouncedSearch = ref('')
 const updateSearch = useDebounceFn((val) => { debouncedSearch.value = val }, 300)
@@ -854,6 +856,12 @@ onMounted(async () => {
   // Why: 切回此頁時走 store TTL（5 分鐘）避免每次重抓員工清單；CRUD 完成的 callback 仍會
   // force=true 觸發即時更新（saveBasic / createEmployee / offboard / 編輯成功等路徑）。
   fetchEmployees(false)
+  // 全域搜尋導航帶入 ?search=<關鍵字>：預填搜尋框並觸發搜尋（debouncedSearch watcher）
+  const kw = typeof route.query.search === 'string' ? route.query.search : ''
+  if (kw) {
+    searchQuery.value = kw
+    debouncedSearch.value = kw
+  }
   configStore.fetchJobTitles()
   classroomStore.fetchClassrooms()
   try {
