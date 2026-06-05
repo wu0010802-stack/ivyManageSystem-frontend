@@ -16,8 +16,21 @@
       </div>
     </div>
 
+    <div v-if="!loading && loadError" class="med-load-error">
+      <el-alert
+        type="error"
+        show-icon
+        :closable="false"
+        title="無法載入今日用藥任務"
+        description="資料載入失敗，請點下方「重新整理」重試；在成功載入前請勿視為今日無人需要餵藥。"
+      />
+      <el-button type="primary" :loading="loading" style="margin-top: 8px" @click="reload">
+        重新整理
+      </el-button>
+    </div>
+
     <el-empty
-      v-if="!loading && orders.length === 0"
+      v-if="!loading && !loadError && orders.length === 0"
       description="今日沒有用藥任務"
     />
 
@@ -127,6 +140,7 @@ interface MedicationOrder {
 }
 
 const loading = ref(false)
+const loadError = ref(false)
 const orders = ref<MedicationOrder[]>([])
 const summary = reactive({ pending: 0, administered: 0, skipped: 0 })
 
@@ -167,6 +181,7 @@ function formatTime(iso: string) {
 
 async function reload() {
   loading.value = true
+  loadError.value = false
   try {
     const r = await getTodayMedication()
     orders.value = ((r.data as { orders?: MedicationOrder[] }).orders || []) as MedicationOrder[]
@@ -174,6 +189,13 @@ async function reload() {
     summary.administered = r.data.administered || 0
     summary.skipped = r.data.skipped || 0
   } catch (e) {
+    // 載入失敗時清空並標記錯誤，避免殘留舊資料、且讓畫面與「真的沒有用藥任務」
+    // 區隔開來（否則老師可能誤以為今日無人需餵藥而漏餵藥）。
+    loadError.value = true
+    orders.value = []
+    summary.pending = 0
+    summary.administered = 0
+    summary.skipped = 0
     apiError(e, '載入今日用藥失敗')
   } finally {
     loading.value = false

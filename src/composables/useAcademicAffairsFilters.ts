@@ -1,13 +1,12 @@
 import { computed, reactive, readonly } from 'vue'
 import type { InjectionKey } from 'vue'
+import { todayISO, dateToLocalISO } from '@/utils/format'
 
 const startOfMonthISO = () => {
   const d = new Date()
   d.setDate(1)
-  return d.toISOString().slice(0, 10)
+  return dateToLocalISO(d)
 }
-
-const todayISO = () => new Date().toISOString().slice(0, 10)
 
 /**
  * 學生教務整合頁的共享篩選狀態。

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
+import { todayISO } from '@/utils/format'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Edit, Delete } from '@element-plus/icons-vue'
 import {
@@ -29,7 +30,7 @@ const dialogMode = ref<'create' | 'edit'>('create')
 const form = reactive({
   id: null as number | null,
   employee_id: null as number | null,
-  action_date: new Date().toISOString().slice(0, 10),
+  action_date: todayISO(),
   action_type: 'warning',
   deduction_amount: 0,
   reason: '',
@@ -79,7 +80,7 @@ const openCreate = () => {
   dialogMode.value = 'create'
   form.id = null
   form.employee_id = null
-  form.action_date = new Date().toISOString().slice(0, 10)
+  form.action_date = todayISO()
   form.action_type = 'warning'
   form.deduction_amount = 1000
   form.reason = ''

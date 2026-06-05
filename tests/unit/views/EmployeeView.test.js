@@ -65,8 +65,8 @@ vi.mock('@/composables', () => ({
   useConfirmDelete: () => ({
     confirmDelete: vi.fn(),
   }),
-  // result 必須是 ref(null)：filteredEmployees 以 `!== null` 判斷是否套用搜尋結果，
-  // 回 ref([]) 會讓 displayedEmployees 永遠空、status-filter 測試失準
+  // EmployeeView 改用序列化搜尋 composable（避免 out-of-order 舊回應覆蓋）；
+  // result 預設 null 讓 filteredEmployees 回退到 employeeStore.employees。
   useLatestSearch: () => ({
     result: ref(null),
     search: vi.fn(),
