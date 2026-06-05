@@ -4244,6 +4244,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/dev/employee-salary-debug": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Debug Employee Salary
+         * @description 模擬計算單一員工薪資並回傳完整明細（dev 別名，正式請改打 /api/salaries/employee-salary-debug）。
+         */
+        get: operations["debug_employee_salary_api_dev_employee_salary_debug_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dev/salary-logic": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Salary Logic
+         * @description 傾印目前的薪資計算邏輯與所有參數設定（dev 別名，正式請改打 /api/salaries/logic）。
+         */
+        get: operations["get_salary_logic_api_dev_salary_logic_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/disciplinary-actions": {
         parameters: {
             query?: never;
@@ -24175,7 +24215,7 @@ export interface components {
             /** Total Deductions */
             total_deductions: unknown;
             /** Unused Leave Payout */
-            unused_leave_payout: unknown;
+            unused_leave_payout?: unknown;
             /** Version */
             version: unknown;
         };
@@ -24477,22 +24517,6 @@ export interface components {
             /** Year */
             year: unknown;
         };
-        /**
-         * SchedulerHealthItem
-         * @description schedulers_health item shape.
-         */
-        SchedulerHealthItem: {
-            /** Consecutive Failures */
-            consecutive_failures: unknown;
-            /** Expected Interval Seconds */
-            expected_interval_seconds: unknown;
-            /** Lag Seconds */
-            lag_seconds?: unknown;
-            /** Last Success At */
-            last_success_at?: unknown;
-            /** Name */
-            name: unknown;
-        };
         /** SchedulerMetric */
         SchedulerMetric: {
             /** Consecutive Failures */
@@ -24525,15 +24549,18 @@ export interface components {
         };
         /**
          * SchedulersHealthOut
-         * @description GET /health/schedulers — UptimeRobot 公開 endpoint.
+         * @description GET /health/schedulers — UptimeRobot 公開 endpoint。
+         *
+         *     僅回聚合狀態（HTTP status code + 非敏感計數）。scheduler 名稱 / lag /
+         *     失敗數等明細**不對未認證公開端外洩**（改記 server-side log 供 ops 排查）。
          */
         SchedulersHealthOut: {
-            /** Lagging */
-            lagging?: unknown;
-            /** Schedulers */
-            schedulers: unknown;
+            /** Lagging Count */
+            lagging_count: unknown;
             /** Status */
             status: unknown;
+            /** Total */
+            total: unknown;
         };
         /**
          * ScheduleSwapCandidateOut
@@ -33806,6 +33833,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RunNowOut"];
+                };
+            };
+        };
+    };
+    debug_employee_salary_api_dev_employee_salary_debug_get: {
+        parameters: {
+            query: {
+                employee_id: number;
+                month: number;
+                year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_salary_logic_api_dev_salary_logic_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };

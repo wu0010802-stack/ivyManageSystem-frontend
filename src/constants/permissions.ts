@@ -127,7 +127,8 @@ export const ROUTE_PERMISSION_RULES = [
   { path: '/fees', permission: 'FEES_READ' },
   { path: '/student-enrollment', permission: 'STUDENTS_READ' },
   { path: '/recruitment', permission: 'RECRUITMENT_READ' },
-  { path: '/recruitment-ivykids', permission: 'RECRUITMENT_READ' },
+  // /recruitment-ivykids 設計上為 redirect 至 /recruitment（router 在 guard 前先導向），
+  // 不需獨立 ROUTE_PERMISSION_RULES；加規則會與 RecruitmentIvykidsTab 設計測試相反。
   { path: '/portfolio/medication-today', permission: 'STUDENTS_HEALTH_READ' },
   // 考核：navigation gate 暫掛 SETTINGS_READ；後端 router 用 APPRAISAL_* 細粒度守衛
   { path: '/appraisal', permission: 'SETTINGS_READ', prefix: true },
