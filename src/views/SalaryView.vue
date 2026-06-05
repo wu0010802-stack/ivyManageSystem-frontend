@@ -103,6 +103,8 @@ const editLoading = ref(false)
 const editingRow = ref<SalaryRow | null>(null)
 const editingVersion = ref<number | null>(null)
 const adjustmentReason = ref('')
+// 額外加給名目（文字欄，與純數值的 editForm 分開，避免破壞 Record<string, number> 轉型）
+const editExtraAllowanceLabel = ref('')
 const editForm = reactive({
   festival_bonus: 0,
   overtime_bonus: 0,
@@ -110,6 +112,7 @@ const editForm = reactive({
   supervisor_dividend: 0,
   meeting_overtime_pay: 0,
   birthday_bonus: 0,
+  extra_allowance: 0,
   leave_deduction: 0,
   late_deduction: 0,
   early_leave_deduction: 0,
@@ -123,6 +126,7 @@ const editableFieldList = [
   { key: 'supervisor_dividend', label: '主管紅利' },
   { key: 'meeting_overtime_pay', label: '會議加班' },
   { key: 'birthday_bonus', label: '生日禮金' },
+  { key: 'extra_allowance', label: '額外加給' },
   { key: 'leave_deduction', label: '請假扣款' },
   { key: 'late_deduction', label: '遲到扣款' },
   { key: 'early_leave_deduction', label: '早退扣款' },
@@ -278,6 +282,10 @@ const fetchSalaryRecords = async () => {
           ...row,
           remark: record.remark || '',
           manual_overrides: Array.isArray(record.manual_overrides) ? record.manual_overrides : [],
+          // 額外加給為手填欄位，calculate 回應不帶（breakdown 恆 0）；從權威 DB record
+          // 帶回，否則編輯其他欄位時 saveManualAdjust 會送 0 把已存的值靜默歸零。
+          extra_allowance: (record as Record<string, unknown>).extra_allowance ?? row.extra_allowance ?? 0,
+          extra_allowance_label: (record as Record<string, unknown>).extra_allowance_label ?? row.extra_allowance_label ?? null,
         }
       })
     } else if (records.length > 0) {
@@ -331,6 +339,8 @@ const openEditDialog = (row: SalaryRow) => {
   for (const field of editableFieldList) {
     ef[field.key] = row[field.key] || 0
   }
+  // 額外加給名目為文字欄，不在 editableFieldList（數值）迴圈內，單獨帶入
+  editExtraAllowanceLabel.value = (row.extra_allowance_label as string) || ''
   showEditDialog.value = true
 }
 
@@ -351,6 +361,8 @@ const saveManualAdjust = async () => {
     for (const field of editableFieldList) {
       payload[field.key] = Number(ef[field.key] || 0)
     }
+    // 額外加給名目為文字欄，單獨帶入（空字串 → 後端轉 null）
+    payload.extra_allowance_label = (editExtraAllowanceLabel.value || '').trim()
     const response = await manualAdjustSalary(
       record.id!,
       payload as Parameters<typeof manualAdjustSalary>[1],
@@ -365,6 +377,8 @@ const saveManualAdjust = async () => {
         supervisor_dividend: updated.supervisor_dividend,
         meeting_overtime_pay: updated.meeting_overtime_pay,
         birthday_bonus: updated.birthday_bonus,
+        extra_allowance: updated.extra_allowance,
+        extra_allowance_label: updated.extra_allowance_label,
         leave_deduction: updated.leave_deduction,
         late_deduction: updated.late_deduction,
         early_leave_deduction: updated.early_leave_deduction,
@@ -974,6 +988,14 @@ onMounted(() => {
             <el-input-number v-model="(editForm as Record<string, number>)[field.key]" :min="0" :step="100" controls-position="right" />
           </el-form-item>
         </div>
+        <el-form-item label="額外加給名目">
+          <el-input
+            v-model="editExtraAllowanceLabel"
+            maxlength="50"
+            show-word-limit
+            placeholder="額外加給的名目（例：值週、活動加班費、補發）"
+          />
+        </el-form-item>
         <el-form-item label="調整原因" required>
           <el-input
             v-model="adjustmentReason"
