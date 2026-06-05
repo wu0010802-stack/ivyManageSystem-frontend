@@ -146,6 +146,38 @@ describe('權限邏輯（text[] 版本）', () => {
       expect(canAccessRoute('/recruitment-ivykids')).toBe(true)
       expect(canAccessRoute('/employees')).toBe(false)
     })
+
+    // 回歸：/workbench/* 與 /activity/audit/* 曾無 ROUTE_PERMISSION_RULES，
+    // canAccessRoute default-deny 把所有人（含 super admin）擋在待簽核/高風險/POS 解鎖稽核頁外。
+    it('工作台路由 /workbench 與 /workbench/approvals 需要 APPROVALS', () => {
+      setUserInfo({ role: 'admin', permission_names: ['APPROVALS'] })
+      expect(canAccessRoute('/workbench')).toBe(true)
+      expect(canAccessRoute('/workbench/approvals')).toBe(true)
+      // 僅有 APPROVALS 不得進高風險頁（精確 scope，避免過度授權）
+      expect(canAccessRoute('/workbench/high-risk')).toBe(false)
+    })
+
+    it('工作台高風險頁 /workbench/high-risk 需要 AUDIT_LOGS', () => {
+      setUserInfo({ role: 'admin', permission_names: ['AUDIT_LOGS'] })
+      expect(canAccessRoute('/workbench/high-risk')).toBe(true)
+      // 僅有 AUDIT_LOGS 不得進待簽核頁
+      expect(canAccessRoute('/workbench/approvals')).toBe(false)
+    })
+
+    it('POS 解鎖稽核 /activity/audit/pos-unlock 需要 ACTIVITY_PAYMENT_APPROVE', () => {
+      setUserInfo({ role: 'admin', permission_names: ['ACTIVITY_PAYMENT_APPROVE'] })
+      expect(canAccessRoute('/activity/audit/pos-unlock')).toBe(true)
+      setUserInfo({ role: 'admin', permission_names: ['ACTIVITY_READ'] })
+      expect(canAccessRoute('/activity/audit/pos-unlock')).toBe(false)
+    })
+
+    it('super admin 可進工作台與 POS 解鎖稽核（回歸 default-deny 鎖死全員）', () => {
+      setUserInfo({ role: 'admin', permission_names: ['*'] })
+      expect(canAccessRoute('/workbench')).toBe(true)
+      expect(canAccessRoute('/workbench/approvals')).toBe(true)
+      expect(canAccessRoute('/workbench/high-risk')).toBe(true)
+      expect(canAccessRoute('/activity/audit/pos-unlock')).toBe(true)
+    })
   })
 
   describe('getAllowedRoutes', () => {
