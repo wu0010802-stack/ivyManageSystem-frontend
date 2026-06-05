@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
-import { logout } from '../../api/auth'
+import { performParentLogout } from '../../composables/useParentLogout'
 import { useParentAuthStore } from '../../stores/parentAuth'
 import ConfirmDialog from '../ConfirmDialog.vue'
 import { ref } from 'vue'
@@ -50,15 +50,9 @@ function askLogout() {
 async function doLogout() {
   if (loggingOut.value) return
   loggingOut.value = true
-  try {
-    await logout()
-  } catch {
-    /* ignore */
-  } finally {
-    authStore.clear()
-    open.value = false
-    router.replace('/login')
-  }
+  await performParentLogout()
+  open.value = false
+  router.replace('/login')
 }
 
 const items = computed<DrawerItem[]>(() => [

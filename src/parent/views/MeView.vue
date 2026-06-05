@@ -1,14 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { logout } from '../api/auth'
+import { performParentLogout } from '../composables/useParentLogout'
 import { getHomeSummary } from '../api/profile'
 import { useParentAuthStore } from '../stores/parentAuth'
 import { useChildrenStore } from '../stores/children'
 import { useCachedAsync } from '@/composables/useCachedAsync'
 import { useDataExport } from '../composables/useDataExport'
-import { clearTodayStatusCache } from '../composables/useTodayStatusCache'
-import { liff } from '../services/liff'
 import AppModal from '../components/AppModal.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import UserHeroCard from '../components/more/UserHeroCard.vue'
@@ -70,18 +68,8 @@ function askLogout() { showLogoutConfirm.value = true }
 async function doLogout() {
   if (loggingOut.value) return
   loggingOut.value = true
-  try {
-    await logout()
-  } catch { /* ignore */ } finally {
-    // FE-2：清今日狀態快取（sessionStorage + in-memory），避免共用裝置下一位家長
-    // 在 60s TTL 內看到前一位家長孩子的今日狀態（PII）。
-    clearTodayStatusCache()
-    // FE-3：結束 LINE session，否則共用裝置回到 /login 後 liff.isLoggedIn() 仍為 true，
-    // 下一位使用者會被自動以前一位家長身分重新認證（登出形同無效）。
-    try { if (liff.isLoggedIn()) liff.logout() } catch { /* liff 未初始化等情況忽略 */ }
-    authStore.clear()
-    router.replace('/login')
-  }
+  await performParentLogout()
+  router.replace('/login')
 }
 
 onMounted(async () => {
