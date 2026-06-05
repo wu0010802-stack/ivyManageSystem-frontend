@@ -73,10 +73,10 @@ describe('activityPublic api', () => {
     expect(mockPost).toHaveBeenCalledWith('/activity/public/inquiries', payload)
   })
 
-  it('publicQueryRegistration GET /activity/public/query with name/birthday/parent_phone params', async () => {
+  it('publicQueryRegistration POST /activity/public/query with name/birthday/parent_phone body', async () => {
     await mod.publicQueryRegistration('小明', '2018-01-01', '0912000000')
-    expect(mockGet).toHaveBeenCalledWith('/activity/public/query', {
-      params: { name: '小明', birthday: '2018-01-01', parent_phone: '0912000000' },
+    expect(mockPost).toHaveBeenCalledWith('/activity/public/query', {
+      name: '小明', birthday: '2018-01-01', parent_phone: '0912000000',
     })
   })
 

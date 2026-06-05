@@ -143,7 +143,8 @@ describe('權限邏輯（text[] 版本）', () => {
         permission_names: ['RECRUITMENT_READ'],
       })
       expect(canAccessRoute('/recruitment')).toBe(true)
-      expect(canAccessRoute('/recruitment-ivykids')).toBe(true)
+      // /recruitment-ivykids 已改為 redirect 至 /recruitment（無自身 ROUTE_PERMISSION_RULES），
+      // runtime 由 router redirect 在 guard 解析前先導向，canAccessRoute 對它走 default-deny，不再單獨判權
       expect(canAccessRoute('/employees')).toBe(false)
     })
 

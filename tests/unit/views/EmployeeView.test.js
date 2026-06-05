@@ -65,6 +65,13 @@ vi.mock('@/composables', () => ({
   useConfirmDelete: () => ({
     confirmDelete: vi.fn(),
   }),
+  // result 必須是 ref(null)：filteredEmployees 以 `!== null` 判斷是否套用搜尋結果，
+  // 回 ref([]) 會讓 displayedEmployees 永遠空、status-filter 測試失準
+  useLatestSearch: () => ({
+    result: ref(null),
+    search: vi.fn(),
+    reset: vi.fn(),
+  }),
 }))
 
 vi.mock('@/utils/download', () => ({
