@@ -172,6 +172,18 @@ describe('TodayView hero - 以孩子今日狀態為主角', () => {
     expect(w.find('.today-note').text()).toContain('加綁')
   })
 
+  it('有綁定子女但今日狀態尚未就緒：不誤顯示「尚未綁定子女」（QA P2-15）', async () => {
+    const w = mountWith(
+      // home-summary 已確認有綁定子女，但 today-status 為空（放假/尚未載入）
+      { me: { name: '王太太' }, children: [{ student_id: 1, name: '小明' }], summary: {} },
+      { children: [] },
+    )
+    await flushPromises()
+    // hero 應為 null（隱藏），絕不可據 today-status 空而誤報「尚未綁定子女」
+    expect(w.find('.today-hero').exists()).toBe(false)
+    expect(w.text()).not.toContain('尚未綁定子女')
+  })
+
   it('不再顯示樣板問候語（晚安/早安/午安/下午好）', async () => {
     const w = mountWith(
       { me: { name: '王太太' }, children: [{ student_id: 1, name: '小明' }], summary: {} },
