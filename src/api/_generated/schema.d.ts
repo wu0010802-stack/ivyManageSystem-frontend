@@ -24174,6 +24174,8 @@ export interface components {
             total_deduction: unknown;
             /** Total Deductions */
             total_deductions: unknown;
+            /** Unused Leave Payout */
+            unused_leave_payout: unknown;
             /** Version */
             version: unknown;
         };

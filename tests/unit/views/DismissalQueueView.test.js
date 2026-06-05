@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
-import { shallowMount } from '@vue/test-utils'
+import { flushPromises, shallowMount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import DismissalQueueView from '@/views/DismissalQueueView.vue'
 
@@ -161,7 +161,9 @@ describe('DismissalQueueView', () => {
 
   it('收到後端 ping 訊息時應回送 pong，避免被 90 秒 idle 心跳踢掉', async () => {
     mountView()
-    await nextTick()
+    // onMounted 為 `await fetchCalls(); connectWs()`，connectWs 設 ws.onmessage
+    // 在 await 之後 → 須 flushPromises 等 fetchCalls resolve 後 connectWs 才跑。
+    await flushPromises()
     // 模擬後端送來的 application-level ping
     mockWs.onmessage({ data: JSON.stringify({ type: 'ping' }) })
     expect(mockWs.send).toHaveBeenCalledTimes(1)

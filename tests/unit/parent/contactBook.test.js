@@ -52,7 +52,7 @@ describe('parent contact-book API', () => {
     await ackContactBook(99)
     expect(apiMock.post).toHaveBeenCalledWith('/parent/contact-book/99/ack')
 
-    await replyContactBook(99, '謝謝老師')
+    await replyContactBook(99, { body: '謝謝老師' })
     expect(apiMock.post).toHaveBeenCalledWith('/parent/contact-book/99/reply', {
       body: '謝謝老師',
     })

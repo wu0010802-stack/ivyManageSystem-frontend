@@ -28,6 +28,14 @@ const rows = ref<PreviewRow[]>([])
 const selected = ref<Set<number>>(new Set())
 const tab = ref<'preview' | 'generated'>('preview')
 
+// 考核年終 payout 兩分量 = 前一學年的上/下學期。後端 resolve_target_cycles：
+// source_academic_year = civil_year_to_target_academic_year(year) - 1 = year - 1913
+// （civil_year_to_target_academic_year(N) = N - 1912）。動態計算避免寫死
+// （原寫死 113下/114上 兩者皆錯，正確為 113上/113下）。
+const sourceAcademicYear = computed(() => year.value - 1913)
+const earlierLabel = computed(() => `${sourceAcademicYear.value}上`)
+const laterLabel = computed(() => `${sourceAcademicYear.value}下`)
+
 const anyCycleNotFinalized = computed(() =>
   rows.value.some((r) => !r.earlier_cycle_finalized || !r.later_cycle_finalized)
 )
@@ -137,8 +145,8 @@ watch(year, loadPreview)
             </template>
           </el-table-column>
           <el-table-column prop="employee_name" label="員工" />
-          <el-table-column prop="earlier_amount" label="113下" />
-          <el-table-column prop="later_amount" label="114上" />
+          <el-table-column prop="earlier_amount" :label="earlierLabel" />
+          <el-table-column prop="later_amount" :label="laterLabel" />
           <el-table-column prop="total_amount" label="合計" />
           <el-table-column label="在職?" width="100">
             <template #default="{ row }">

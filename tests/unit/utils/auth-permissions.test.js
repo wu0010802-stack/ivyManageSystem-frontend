@@ -143,7 +143,8 @@ describe('權限邏輯（text[] 版本）', () => {
         permission_names: ['RECRUITMENT_READ'],
       })
       expect(canAccessRoute('/recruitment')).toBe(true)
-      expect(canAccessRoute('/recruitment-ivykids')).toBe(true)
+      // /recruitment-ivykids 的設計（redirect vs 獨立路由規則）由 RecruitmentIvykidsTab.test
+      // 把關，此處不重複斷言以免兩測試對該路由形成相反期望。
       expect(canAccessRoute('/employees')).toBe(false)
     })
 

@@ -3,6 +3,8 @@ import { computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { logout } from '../../api/auth'
 import { useParentAuthStore } from '../../stores/parentAuth'
+import { clearTodayStatusCache } from '../../composables/useTodayStatusCache'
+import { liff } from '../../services/liff'
 import ConfirmDialog from '../ConfirmDialog.vue'
 import { ref } from 'vue'
 
@@ -55,6 +57,16 @@ async function doLogout() {
   } catch {
     /* ignore */
   } finally {
+    // FE-2：清今日狀態快取（sessionStorage + in-memory），避免共用裝置下一位家長
+    // 在 60s TTL 內看到前一位家長孩子的今日狀態（PII）。對齊 MeView.doLogout。
+    clearTodayStatusCache()
+    // FE-3：結束 LINE session，否則共用裝置回到 /login 後 liff.isLoggedIn() 仍為 true，
+    // 下一位使用者會被自動以前一位家長身分重新認證（登出形同無效）。
+    try {
+      if (liff.isLoggedIn()) liff.logout()
+    } catch {
+      /* liff 未初始化等情況忽略 */
+    }
     authStore.clear()
     open.value = false
     router.replace('/login')

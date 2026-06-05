@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import MeDrawer from '@/parent/components/layout/MeDrawer.vue'
 
@@ -12,8 +12,27 @@ vi.mock('@/parent/api/auth', () => ({
   logout: vi.fn().mockResolvedValue(undefined),
 }))
 
+// P0-3 回歸：doLogout 必須清今日狀態快取 + 結束 LIFF session（共用裝置 PII）
+const { clearTodayStatusCacheMock, liffLogoutMock, liffIsLoggedInMock } = vi.hoisted(() => ({
+  clearTodayStatusCacheMock: vi.fn(),
+  liffLogoutMock: vi.fn(),
+  liffIsLoggedInMock: vi.fn(() => true),
+}))
+vi.mock('@/parent/composables/useTodayStatusCache', () => ({
+  clearTodayStatusCache: clearTodayStatusCacheMock,
+}))
+vi.mock('@/parent/services/liff', () => ({
+  liff: { isLoggedIn: liffIsLoggedInMock, logout: liffLogoutMock },
+}))
+
 const stubs = {
-  ConfirmDialog: { template: '<div class="confirm-stub" v-if="open" />', props: ['open'] },
+  ConfirmDialog: {
+    name: 'ConfirmDialog',
+    template:
+      '<div class="confirm-stub" v-if="open"><button class="do-confirm" @click="$emit(\'confirm\')" /></div>',
+    props: ['open'],
+    emits: ['confirm'],
+  },
   Teleport: true,
 }
 
@@ -21,6 +40,9 @@ beforeEach(() => {
   setActivePinia(createPinia())
   pushMock.mockClear()
   replaceMock.mockClear()
+  clearTodayStatusCacheMock.mockClear()
+  liffLogoutMock.mockClear()
+  liffIsLoggedInMock.mockClear()
 })
 
 describe('MeDrawer', () => {
@@ -71,6 +93,16 @@ describe('MeDrawer', () => {
     expect(pushMock).not.toHaveBeenCalled()
     expect(replaceMock).not.toHaveBeenCalled()
     expect(w.find('.confirm-stub').exists()).toBe(true)
+  })
+
+  it('確認登出 → 清今日狀態快取 + liff.logout + replace(/login)（P0-3 共用裝置 PII）', async () => {
+    const w = mount(MeDrawer, { props: { modelValue: true }, global: { stubs } })
+    await w.findAll('.md-item')[3].trigger('click') // 開啟 ConfirmDialog
+    await w.find('.do-confirm').trigger('click') // 觸發 @confirm="doLogout"
+    await flushPromises()
+    expect(clearTodayStatusCacheMock).toHaveBeenCalled()
+    expect(liffLogoutMock).toHaveBeenCalled()
+    expect(replaceMock).toHaveBeenCalledWith('/login')
   })
 
   it('backdrop 點擊 emit update:modelValue false', async () => {
