@@ -9,6 +9,7 @@
  * - 點 [歷史] 開 RuleHistoryDrawer（Task 19 實作完整版）
  */
 import { ref, computed, onMounted } from 'vue'
+import { todayISO } from '@/utils/format'
 import { ElMessage } from 'element-plus'
 import { Refresh, Edit, Clock } from '@element-plus/icons-vue'
 
@@ -25,7 +26,7 @@ import RuleHistoryDrawer from './RuleHistoryDrawer.vue'
 // P0-A：規則編輯由後端 APPRAISAL_RULE_WRITE 守衛，UI 對齊。
 const canEditRules = computed(() => hasPermission('APPRAISAL_RULE_WRITE'))
 
-const effectiveOn = ref(new Date().toISOString().slice(0, 10))
+const effectiveOn = ref(todayISO())
 
 interface ScoringRule {
   item_code?: string

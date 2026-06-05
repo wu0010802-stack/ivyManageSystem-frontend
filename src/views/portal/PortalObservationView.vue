@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getMyStudents } from '@/api/portal'
 import { listObservations, createObservation } from '@/api/portalObservations'
+import { todayISO, dateToLocalISO } from '@/utils/format'
 import { usePortalFromHub } from '@/composables/usePortalFromHub'
 import EmptyState from '@/components/common/EmptyState.vue'
 
@@ -29,7 +30,7 @@ const allStudents = ref<StudentOption[]>([])
 const studentId = ref<number | null>(null)
 const lockedStudent = ref(false) // 從學生個案頁進入時鎖定
 
-const today = new Date().toISOString().slice(0, 10)
+const today = todayISO()
 const formDate = ref(today)
 const formDomain = ref<string | null>(null)
 const formNarrative = ref('')
@@ -65,7 +66,7 @@ async function loadRecent() {
   try {
     const from = new Date()
     from.setDate(from.getDate() - 7)
-    const fromStr = from.toISOString().slice(0, 10)
+    const fromStr = dateToLocalISO(from)
     const { data } = await listObservations(studentId.value, {
       from: fromStr,
       to: today,

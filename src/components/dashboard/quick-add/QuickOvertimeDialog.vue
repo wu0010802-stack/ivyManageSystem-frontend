@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref, watch } from 'vue'
+import { todayISO } from '@/utils/format'
 import type { FormInstance, FormRules } from 'element-plus'
 import { createOvertime } from '@/api/overtimes'
 import { useEmployeeStore } from '@/stores/employee'
@@ -16,7 +17,7 @@ const emit = defineEmits<{
 const employeeStore = useEmployeeStore()
 
 const formRef = ref<FormInstance>()
-const today = () => new Date().toISOString().slice(0, 10)
+const today = () => todayISO()
 const form = reactive({
   employee_id: null as number | null,
   overtime_date: today(),
