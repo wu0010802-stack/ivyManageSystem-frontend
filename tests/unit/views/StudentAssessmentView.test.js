@@ -92,6 +92,15 @@ describe('StudentAssessmentView', () => {
     expect(getClassrooms).toHaveBeenCalled()
   })
 
+  it('無 STUDENTS_WRITE 權限時隱藏新增控制（防禦縱深）', async () => {
+    // 測試環境 localStorage 無 permission_names → hasPermission 回 false
+    const wrapper = mountView()
+    await flushPromises()
+
+    const btnTexts = wrapper.findAll('button').map((b) => b.text())
+    expect(btnTexts.some((t) => t.includes('新增評量'))).toBe(false)
+  })
+
   it('handleSearch 重置 currentPage=1 並重新載入', async () => {
     const wrapper = mountView()
     await flushPromises()
