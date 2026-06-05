@@ -379,6 +379,7 @@ import {
   type VendorPaymentSummary,
 } from '@/api/vendorPayment'
 import { hasPermission, PERMISSION_NAMES } from '@/utils/auth'
+import { todayISO } from '@/utils/format'
 import VendorPaymentSignDialog from '@/components/VendorPaymentSignDialog.vue'
 
 const paymentMethodOptions = PAYMENT_METHOD_OPTIONS
@@ -536,7 +537,8 @@ function clearFilters() {
 
 function resetForm() {
   Object.assign(form, {
-    payment_date: new Date().toISOString().slice(0, 10),
+    // 用本地時區今日，避免 toISOString() 走 UTC 在台北 00:00-08:00 預設成昨天
+    payment_date: todayISO(),
     vendor_name: '',
     amount: 0,
     payment_method: 'cash',
