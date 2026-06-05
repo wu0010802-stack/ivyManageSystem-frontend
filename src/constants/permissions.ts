@@ -92,6 +92,10 @@ export const ROUTE_PERMISSION_RULES = [
   { path: '/leaves', permission: 'LEAVES_READ' },
   { path: '/meetings', permission: 'MEETINGS' },
   { path: '/employees', permission: 'EMPLOYEES_READ' },
+  // 離職管理（/admin/offboarding 仍是獨立路由渲染 OffboardingView）：缺這條會讓
+  // canAccessRoute default-deny 把所有人（含 super admin）擋在離職管理頁外。
+  // 權限對齊後端 api/offboarding.py 讀取端點的 EMPLOYEES_READ 守衛。
+  { path: '/admin/offboarding', permission: 'EMPLOYEES_READ' },
   { path: '/students', permission: 'STUDENTS_READ' },
   { path: '/students/profile', permission: 'STUDENTS_READ', prefix: true },
   { path: '/student-attendance', permission: 'STUDENTS_READ' },
