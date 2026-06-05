@@ -65,6 +65,13 @@ vi.mock('@/composables', () => ({
   useConfirmDelete: () => ({
     confirmDelete: vi.fn(),
   }),
+  // EmployeeView 改用序列化搜尋 composable（避免 out-of-order 舊回應覆蓋）；
+  // result 預設 null 讓 filteredEmployees 回退到 employeeStore.employees。
+  useLatestSearch: () => ({
+    result: ref(null),
+    search: vi.fn(),
+    reset: vi.fn(),
+  }),
 }))
 
 vi.mock('@/utils/download', () => ({

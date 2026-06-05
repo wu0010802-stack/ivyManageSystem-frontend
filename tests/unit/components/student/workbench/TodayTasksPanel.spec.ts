@@ -16,7 +16,7 @@ describe('TodayTasksPanel', () => {
     vi.clearAllMocks()
   })
 
-  it('renders title 今日任務池 and the 4 sections', () => {
+  it('renders the 4 academic-affairs sections', () => {
     const wrapper = shallowMount(TodayTasksPanel, {
       global: {
         stubs: {
@@ -28,7 +28,8 @@ describe('TodayTasksPanel', () => {
       },
     })
 
-    expect(wrapper.find('h2').text()).toBe('今日任務池')
+    // 標題 heading 已於 workbench 重構移除（改用 panel-subtitle 說明文字），
+    // 本面板的契約是渲染出 4 個學務 section。
     expect(wrapper.findComponent({ name: 'AttendanceSection' }).exists()).toBe(true)
     expect(wrapper.findComponent({ name: 'LeaveSection' }).exists()).toBe(true)
     expect(wrapper.findComponent({ name: 'AssessmentSection' }).exists()).toBe(true)
