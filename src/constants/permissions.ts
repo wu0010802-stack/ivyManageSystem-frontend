@@ -78,6 +78,12 @@ export type PermissionName = typeof PERMISSION_NAMES[keyof typeof PERMISSION_NAM
 export const ROUTE_PERMISSION_RULES = [
   { path: '/', permission: 'DASHBOARD' },
   { path: '/approvals', permission: 'APPROVALS' },
+  // 工作台（/approvals 已 redirect 至 /workbench/approvals）：缺這幾條會讓 canAccessRoute
+  // default-deny 把所有人（含 super admin）擋在待簽核/高風險頁外。權限對齊後端守衛：
+  // approvals → APPROVALS；high-risk 走 api/audit.py 的 AUDIT_LOGS。
+  { path: '/workbench', permission: 'APPROVALS' },
+  { path: '/workbench/approvals', permission: 'APPROVALS' },
+  { path: '/workbench/high-risk', permission: 'AUDIT_LOGS' },
   { path: '/calendar', permission: 'CALENDAR' },
   { path: '/schedule', permission: 'SCHEDULE' },
   { path: '/attendance', permission: 'ATTENDANCE_READ' },
@@ -113,6 +119,8 @@ export const ROUTE_PERMISSION_RULES = [
   { path: '/activity/settings', permission: 'ACTIVITY_WRITE' },
   { path: '/activity/changes', permission: 'ACTIVITY_READ' },
   { path: '/activity/attendance', permission: 'ACTIVITY_READ', prefix: true },
+  // POS 日結解鎖稽核軌跡：對齊後端 api/activity/pos_approval.py 的 ACTIVITY_PAYMENT_APPROVE。
+  { path: '/activity/audit/pos-unlock', permission: 'ACTIVITY_PAYMENT_APPROVE' },
   { path: '/fees', permission: 'FEES_READ' },
   { path: '/student-enrollment', permission: 'STUDENTS_READ' },
   { path: '/recruitment', permission: 'RECRUITMENT_READ' },
