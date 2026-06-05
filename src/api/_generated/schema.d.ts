@@ -11634,6 +11634,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Global Search
+         * @description 後台全域搜尋。
+         *
+         *     Returns:
+         *         GlobalSearchResult 含 8 類 entity，各類 ≤ 8 筆。
+         *         無對應 READ 權限的類別回空陣列。
+         */
+        get: operations["global_search_api_search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/shifts/assignments": {
         parameters: {
             query?: never;
@@ -18261,6 +18285,51 @@ export interface components {
             snapshot_date: string;
             /** Year */
             year: number;
+        };
+        /** GlobalSearchResult */
+        GlobalSearchResult: {
+            /**
+             * Activity Registrations
+             * @default []
+             */
+            activity_registrations: components["schemas"]["SearchActivityItem"][];
+            /**
+             * Announcements
+             * @default []
+             */
+            announcements: components["schemas"]["SearchAnnouncementItem"][];
+            /**
+             * Classrooms
+             * @default []
+             */
+            classrooms: components["schemas"]["SearchClassroomItem"][];
+            /**
+             * Employees
+             * @default []
+             */
+            employees: components["schemas"]["SearchEmployeeItem"][];
+            /**
+             * Fees
+             * @default []
+             */
+            fees: components["schemas"]["SearchFeeItem"][];
+            /**
+             * Guardians
+             * @default []
+             */
+            guardians: components["schemas"]["SearchGuardianItem"][];
+            /** Q */
+            q: string;
+            /**
+             * Recruitment
+             * @default []
+             */
+            recruitment: components["schemas"]["SearchRecruitmentItem"][];
+            /**
+             * Students
+             * @default []
+             */
+            students: components["schemas"]["SearchStudentItem"][];
         };
         /**
          * Grade
@@ -24924,6 +24993,126 @@ export interface components {
              * @enum {string}
              */
             rule_type: "PER_UNIT" | "TIER" | "FLAT_THRESHOLD" | "DISCIPLINARY_TIERED";
+        };
+        /** SearchActivityItem */
+        SearchActivityItem: {
+            /**
+             * Class Name
+             * @default
+             */
+            class_name: string;
+            /** Id */
+            id: number;
+            /**
+             * Match Status
+             * @default
+             */
+            match_status: string;
+            /** Student Name */
+            student_name: string;
+        };
+        /** SearchAnnouncementItem */
+        SearchAnnouncementItem: {
+            /** Created At */
+            created_at?: string | null;
+            /** Id */
+            id: number;
+            /** Title */
+            title: string;
+        };
+        /** SearchClassroomItem */
+        SearchClassroomItem: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** School Year */
+            school_year?: number | null;
+            /** Semester */
+            semester?: number | null;
+        };
+        /** SearchEmployeeItem */
+        SearchEmployeeItem: {
+            /** Employee Id */
+            employee_id?: string | null;
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+        };
+        /** SearchFeeItem */
+        SearchFeeItem: {
+            /**
+             * Classroom Name
+             * @default
+             */
+            classroom_name: string;
+            /**
+             * Period
+             * @default
+             */
+            period: string;
+            /** Record Id */
+            record_id: number;
+            /**
+             * Status
+             * @default
+             */
+            status: string;
+            /** Student Name */
+            student_name: string;
+        };
+        /** SearchGuardianItem */
+        SearchGuardianItem: {
+            /**
+             * Child Name
+             * @default
+             */
+            child_name: string;
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /**
+             * Phone Masked
+             * @default
+             */
+            phone_masked: string;
+            /** Student Id */
+            student_id: number;
+        };
+        /** SearchRecruitmentItem */
+        SearchRecruitmentItem: {
+            /** Child Name */
+            child_name: string;
+            /**
+             * Enrolled
+             * @default false
+             */
+            enrolled: boolean;
+            /** Id */
+            id: number;
+            /** Target School Year */
+            target_school_year?: number | null;
+        };
+        /** SearchStudentItem */
+        SearchStudentItem: {
+            /**
+             * Classroom Name
+             * @default
+             */
+            classroom_name: string;
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Student Id */
+            student_id?: string | null;
         };
         /**
          * Semester
@@ -46492,6 +46681,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SalarySnapshotDiffOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    global_search_api_search_get: {
+        parameters: {
+            query: {
+                q: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GlobalSearchResult"];
                 };
             };
             /** @description Validation Error */
