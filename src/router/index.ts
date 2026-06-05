@@ -44,7 +44,7 @@ const routes: RouteRecordRaw[] = [
         {
             path: '/employees',
             name: 'employees',
-            component: () => import('../views/EmployeeView.vue'),
+            component: () => import('../views/EmployeeHubView.vue'),
             meta: { title: '員工管理' }
         },
         {
@@ -106,10 +106,9 @@ const routes: RouteRecordRaw[] = [
             meta: { title: '招生統計' }
         },
         {
+            // 官網報名已併入招生統計 tab；舊連結 redirect，避免 404
             path: '/recruitment-ivykids',
-            name: 'recruitment-ivykids',
-            component: () => import('../views/RecruitmentIvykidsView.vue'),
-            meta: { title: '官網報名' }
+            redirect: '/recruitment'
         },
         {
             path: '/classrooms',
@@ -176,6 +175,12 @@ const routes: RouteRecordRaw[] = [
             name: 'audit-logs',
             component: () => import('../views/AuditLogView.vue'),
             meta: { title: '操作紀錄' }
+        },
+        {
+            path: '/data-quality',
+            name: 'data-quality',
+            component: () => import('../views/DataQualityView.vue'),
+            meta: { title: '資料品質報告' }
         },
         {
             path: '/settings',
@@ -272,12 +277,10 @@ const routes: RouteRecordRaw[] = [
             redirect: (to) => ({ path: '/appraisal-year-end', query: { ...to.query, section: 'payout' } }),
         },
 
-        // ============ 離職管理 ============
+        // ============ 離職管理（已整合進員工管理 /employees?section=offboarding）============
         {
             path: '/admin/offboarding',
-            name: 'admin-offboarding',
-            component: () => import('@/views/admin/OffboardingView.vue'),
-            meta: { title: '離職管理', requiresAuth: true, permission: 'EMPLOYEES_READ' },
+            redirect: (to) => ({ path: '/employees', query: { ...to.query, section: 'offboarding' } }),
         },
 
         // ============ 學費管理 ============

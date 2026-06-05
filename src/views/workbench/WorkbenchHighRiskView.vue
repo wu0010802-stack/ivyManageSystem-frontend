@@ -41,6 +41,7 @@ async function load(): Promise<void> {
       unack_only: unackOnly.value,
       limit: 100,
     });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     items.value = ((res as any).data?.items ?? []) as Item[];
   } catch (e) {
     ElMessage.error("讀取高風險事件失敗");
@@ -59,6 +60,7 @@ async function onAckAll(): Promise<void> {
   try {
     await ElMessageBox.confirm("確定把所有 7 天內高風險事件標為已讀？", "確認", { type: "warning" });
     const res = await ackAllAudits({ days: 7 });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const count = (res as any).data?.acknowledged_count ?? 0;
     ElMessage.success(`已標 ${count} 筆為已讀`);
     await load();

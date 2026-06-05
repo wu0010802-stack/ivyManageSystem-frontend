@@ -1,15 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import MeDrawer from '@/parent/components/layout/MeDrawer.vue'
 
 const pushMock = vi.fn()
 const replaceMock = vi.fn()
+const { mockPerformLogout } = vi.hoisted(() => ({
+  mockPerformLogout: vi.fn().mockResolvedValue(undefined),
+}))
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: pushMock, replace: replaceMock }),
 }))
-vi.mock('@/parent/api/auth', () => ({
-  logout: vi.fn().mockResolvedValue(undefined),
+vi.mock('@/parent/composables/useParentLogout', () => ({
+  performParentLogout: mockPerformLogout,
 }))
 
 const stubs = {
@@ -21,6 +24,7 @@ beforeEach(() => {
   setActivePinia(createPinia())
   pushMock.mockClear()
   replaceMock.mockClear()
+  mockPerformLogout.mockClear()
 })
 
 describe('MeDrawer', () => {
@@ -92,5 +96,24 @@ describe('MeDrawer', () => {
     // authStore.user 預設 null → fallback '家長' + '家'
     expect(w.find('.md-user-name').text()).toBe('家長')
     expect(w.find('.md-avatar').text()).toBe('家')
+  })
+
+  it('確認登出 → performParentLogout 統一清理 + router.replace(/login) + 關閉抽屜（回歸：原漏清快取/LIFF）', async () => {
+    const confirmStub = {
+      template: '<button class="confirm-go" v-if="open" @click="$emit(\'confirm\')" />',
+      props: ['open'],
+      emits: ['confirm'],
+    }
+    const w = mount(MeDrawer, {
+      props: { modelValue: true },
+      global: { stubs: { ConfirmDialog: confirmStub, Teleport: true } },
+    })
+    await w.findAll('.md-item')[3].trigger('click') // 點登出 → 顯示確認
+    await w.find('.confirm-go').trigger('click') // 確認登出
+    await flushPromises()
+    expect(mockPerformLogout).toHaveBeenCalled()
+    expect(replaceMock).toHaveBeenCalledWith('/login')
+    const emitted = w.emitted('update:modelValue')
+    expect(emitted[emitted.length - 1][0]).toBe(false)
   })
 })

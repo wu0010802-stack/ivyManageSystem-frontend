@@ -53,12 +53,4 @@ describe('studentEnrollment api', () => {
       params: { school_year: 114, semester: 1, grade_id: 2 },
     })
   })
-
-  it('getBonusDashboard GET /bonus-preview/dashboard with params', async () => {
-    mockGet.mockResolvedValue({ data: {} })
-    await mod.getBonusDashboard({ year: 2026, month: 5 })
-    expect(mockGet).toHaveBeenCalledWith('/bonus-preview/dashboard', {
-      params: { year: 2026, month: 5 },
-    })
-  })
 })

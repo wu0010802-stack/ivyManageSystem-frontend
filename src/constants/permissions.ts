@@ -71,6 +71,8 @@ export const PERMISSION_NAMES = {
   ROLES_MANAGE: 'ROLES_MANAGE',
   PORTAL_PREVIEW: 'PORTAL_PREVIEW',
   PORTAL_IMPERSONATE: 'PORTAL_IMPERSONATE',
+  DATA_QUALITY_READ: 'DATA_QUALITY_READ',
+  DATA_QUALITY_WRITE: 'DATA_QUALITY_WRITE',
 } as const
 
 export type PermissionName = typeof PERMISSION_NAMES[keyof typeof PERMISSION_NAMES]
@@ -105,6 +107,7 @@ export const ROUTE_PERMISSION_RULES = [
   // /admin/gov-reports/{monthly,certificates,subsidies,iep} 對齊後端 GOV_REPORTS_VIEW 守衛
   { path: '/admin/gov-reports', permission: 'GOV_REPORTS_VIEW', prefix: true },
   { path: '/audit-logs', permission: 'AUDIT_LOGS' },
+  { path: '/data-quality', permission: 'DATA_QUALITY_READ' },
   { path: '/settings', permission: 'SETTINGS_READ' },
   { path: '/dismissal-queue', permission: 'DISMISSAL_CALLS_READ' },
   { path: '/activity/dashboard', permission: 'ACTIVITY_READ' },
@@ -124,7 +127,8 @@ export const ROUTE_PERMISSION_RULES = [
   { path: '/fees', permission: 'FEES_READ' },
   { path: '/student-enrollment', permission: 'STUDENTS_READ' },
   { path: '/recruitment', permission: 'RECRUITMENT_READ' },
-  { path: '/recruitment-ivykids', permission: 'RECRUITMENT_READ' },
+  // /recruitment-ivykids 設計上為 redirect 至 /recruitment（router 在 guard 前先導向），
+  // 不需獨立 ROUTE_PERMISSION_RULES；加規則會與 RecruitmentIvykidsTab 設計測試相反。
   { path: '/portfolio/medication-today', permission: 'STUDENTS_HEALTH_READ' },
   // 考核：navigation gate 暫掛 SETTINGS_READ；後端 router 用 APPRAISAL_* 細粒度守衛
   { path: '/appraisal', permission: 'SETTINGS_READ', prefix: true },
@@ -140,8 +144,6 @@ export const ROUTE_PERMISSION_RULES = [
   { path: '/appraisal-year-end', permission: 'SALARY_READ' },
   { path: '/appraisal-year-end', permission: 'YEAR_END_READ' },
   { path: '/appraisal-year-end', permission: 'APPRAISAL_FINALIZE' },
-  // 離職管理（路徑 /admin/offboarding 獨立 prefix，沿用 EMPLOYEES_READ 為 navigation gate）
-  { path: '/admin/offboarding', permission: 'EMPLOYEES_READ' },
   // 加班 / 會議整合頁（OVERTIME_READ 或 MEETINGS 任一）
   { path: '/overtime', permission: 'OVERTIME_READ' },
   { path: '/overtime', permission: 'MEETINGS' },

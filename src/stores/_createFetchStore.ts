@@ -36,8 +36,11 @@ export function createFetchStore(
 ) {
   const actions: Record<string, unknown> = {
     async [methodName](this: Record<string, unknown>, force = false) {
-      const data = this[dataKey] as unknown[]
-      if (!force && data.length && Date.now() - (this._fetchedAt as number) < ttl) return
+      const data = this[dataKey]
+      // 快取命中判定：陣列看長度（行為不變），物件/其他型別看是否已有值；
+      // 否則物件型 dataKey 的 data.length 恆 undefined → 永不命中 → 每次都重抓。
+      const hasCached = Array.isArray(data) ? data.length > 0 : data != null
+      if (!force && hasCached && Date.now() - (this._fetchedAt as number) < ttl) return
       if (this._pending) return this._pending as Promise<void>
 
       if (!silentFail) {

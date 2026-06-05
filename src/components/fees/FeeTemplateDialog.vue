@@ -207,7 +207,7 @@ async function onSave() {
     if (isEdit.value) {
       // 編輯不可變更 grade_id / school_year / semester / fee_type（後端 unique key）
       // 故只送 mutable 欄位
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+       
       const { grade_id: _gi, school_year: _sy, semester: _sm, fee_type: _ft, ...editable } = payload
       await updateFeeTemplate((props.template as FeeTemplate).id, editable)
     } else {

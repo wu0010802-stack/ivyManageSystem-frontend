@@ -7,8 +7,12 @@ import { getStudents } from '@/api/students'
 import { INCIDENT_TYPES, SEVERITIES, INCIDENT_TYPE_TAG as TYPE_TAG, SEVERITY_TAG } from '@/constants/studentRecords'
 import { apiError } from '@/utils/error'
 import { buildStudentProfileLink } from '@/utils/studentLinks'
+import { hasPermission } from '@/utils/auth'
 
 type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
+
+// 寫入控制守衛（防禦縱深；班級越權由後端 assert_student_access 把關）
+const canWrite = computed(() => hasPermission('STUDENTS_WRITE'))
 
 // ── 篩選 ────────────────────────────────────────────────
 const classroomStore = useClassroomStore()
@@ -216,7 +220,7 @@ onMounted(() => {
   <div class="page-container">
     <div class="page-header">
       <h2>學生事件紀錄</h2>
-      <el-button type="primary" @click="openCreate">＋ 新增事件</el-button>
+      <el-button v-if="canWrite" type="primary" @click="openCreate">＋ 新增事件</el-button>
     </div>
 
     <!-- 篩選列 -->
@@ -297,8 +301,8 @@ onMounted(() => {
         </el-table-column>
         <el-table-column label="操作" width="130" fixed="right">
           <template #default="{ row }">
-            <el-button size="small" text @click="openEdit(row)">編輯</el-button>
-            <el-button size="small" text type="danger" @click="handleDelete(row)">刪除</el-button>
+            <el-button v-if="canWrite" size="small" text @click="openEdit(row)">編輯</el-button>
+            <el-button v-if="canWrite" size="small" text type="danger" @click="handleDelete(row)">刪除</el-button>
           </template>
         </el-table-column>
       </el-table>

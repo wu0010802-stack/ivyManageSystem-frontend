@@ -16,7 +16,7 @@ describe('TodayTasksPanel', () => {
     vi.clearAllMocks()
   })
 
-  it('renders title 今日任務池 and the 4 sections', () => {
+  it('renders the panel subtitle and the 4 sections', () => {
     const wrapper = shallowMount(TodayTasksPanel, {
       global: {
         stubs: {
@@ -28,7 +28,8 @@ describe('TodayTasksPanel', () => {
       },
     })
 
-    expect(wrapper.find('h2').text()).toBe('今日任務池')
+    // 標題 h2「今日任務池」於後續重構移除，改以 panel-subtitle 描述列為穩定錨點
+    expect(wrapper.find('.panel-subtitle').exists()).toBe(true)
     expect(wrapper.findComponent({ name: 'AttendanceSection' }).exists()).toBe(true)
     expect(wrapper.findComponent({ name: 'LeaveSection' }).exists()).toBe(true)
     expect(wrapper.findComponent({ name: 'AssessmentSection' }).exists()).toBe(true)

@@ -2,6 +2,7 @@
 import { ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { createMilestone, updateMilestone, MILESTONE_TYPES } from '@/api/studentMilestones'
+import { todayISO } from '@/utils/format'
 
 const props = withDefaults(defineProps<{
   modelValue?: boolean
@@ -18,10 +19,6 @@ const emit = defineEmits<{
 }>()
 
 const saving = ref(false)
-
-function todayISO() {
-  return new Date().toISOString().slice(0, 10)
-}
 
 const form = ref({
   milestone_type: 'custom',

@@ -51,6 +51,7 @@
     <el-tabs v-model="activeTab" @tab-click="onTabClick">
       <!-- ==================== 總覽 ==================== -->
       <el-tab-pane label="總覽" name="overview">
+        <AllChannelSummaryCard :internal-snapshot="statsFunnelSnapshot" />
         <RecruitmentOverviewTab
           :stats="stats"
           :reference-month="referenceMonth"
@@ -371,6 +372,15 @@
         />
       </el-tab-pane>
 
+      <!-- ==================== 名額規劃 ==================== -->
+      <el-tab-pane label="名額規劃" name="intake" lazy>
+        <IntakePlanPanel />
+      </el-tab-pane>
+
+      <el-tab-pane label="官網報名" name="ivykids" lazy>
+        <RecruitmentIvykidsTab :bar-component="castBarComponent" :show-charts="true" :can-write="canWrite" />
+      </el-tab-pane>
+
       <!-- ==================== 原始明細 ==================== -->
       <el-tab-pane label="原始明細" name="detail" lazy>
         <RecruitmentDetailTab
@@ -390,11 +400,9 @@
           @edit="openEditDialog"
           @delete="(id) => handleDelete(id as number)"
           @convert="openConvertDialog"
+          @reserve="openReserveDialog"
+          @journey="openJourney"
         />
-      </el-tab-pane>
-
-      <el-tab-pane label="招生漏斗" name="funnel" lazy>
-        <FunnelBoard />
       </el-tab-pane>
     </el-tabs>
 
@@ -439,11 +447,21 @@
       :classroom-options="classroomOptions"
       @converted="onConverted"
     />
+
+    <ReserveSeatDialog
+      v-model="reserveDialogVisible"
+      :visit="reserveTargetVisit"
+      @reserved="onReserved"
+    />
+
+    <el-drawer v-model="journeyDrawerVisible" title="參觀→入學 歷程" direction="rtl" size="460px">
+      <JourneyTimeline :visit-id="journeyVisitId" />
+    </el-drawer>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, defineAsyncComponent } from 'vue'
+import { ref, computed, onMounted, defineAsyncComponent, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   getRecruitmentRecords,
@@ -457,7 +475,8 @@ import {
   syncPeriod,
 } from '@/api/recruitment'
 import { apiError } from '@/utils/error'
-import { hasPermission } from '@/utils/auth'
+import { hasPermission, getUserInfo } from '@/utils/auth'
+import { useFormDraft } from '@/composables/useFormDraft'
 import { useRecruitmentDashboard } from '@/composables/useRecruitmentDashboard'
 import { useRecruitmentArea, createEmptyCampus } from '@/composables/useRecruitmentArea'
 import { useRecruitmentPeriods } from '@/composables/useRecruitmentPeriods'
@@ -466,7 +485,12 @@ import RecruitmentAreaTab from '@/components/recruitment/RecruitmentAreaTab.vue'
 import RecruitmentNoDepositTab from '@/components/recruitment/RecruitmentNoDepositTab.vue'
 import RecruitmentPeriodsTab from '@/components/recruitment/RecruitmentPeriodsTab.vue'
 import RecruitmentDetailTab from '@/components/recruitment/RecruitmentDetailTab.vue'
+import IntakePlanPanel from '@/components/recruitment/IntakePlanPanel.vue'
 import RecruitmentConvertDialog from '@/components/recruitment/RecruitmentConvertDialog.vue'
+import ReserveSeatDialog from '@/components/recruitment/ReserveSeatDialog.vue'
+import JourneyTimeline from '@/components/recruitment/JourneyTimeline.vue'
+import AllChannelSummaryCard from '@/components/recruitment/AllChannelSummaryCard.vue'
+import RecruitmentIvykidsTab from '@/components/recruitment/RecruitmentIvykidsTab.vue'
 import { useClassroomStore } from '@/stores/classroom'
 import { useRouter } from 'vue-router'
 import RecruitmentMonthDialog from '@/components/recruitment/RecruitmentMonthDialog.vue'
@@ -474,7 +498,6 @@ import RecruitmentRecordDialog from '@/components/recruitment/RecruitmentRecordD
 import RecruitmentPeriodDialog from '@/components/recruitment/RecruitmentPeriodDialog.vue'
 import RecruitmentCampusDialog from '@/components/recruitment/RecruitmentCampusDialog.vue'
 import { useRecruitmentCharts } from '@/composables/useRecruitmentCharts'
-import FunnelBoard from '@/components/recruitment/funnel/FunnelBoard.vue'
 import { toAdYear } from '@/utils/academic'
 import {
   GRADES_ORDER,
@@ -533,6 +556,26 @@ async function loadClassroomsOnce() {
     // 失敗靜默：不阻擋 dialog 開啟，使用者仍可不選班級
     classroomOptions.value = []
   }
+}
+
+// ── 保留座位（暫定編班）─────────────────────────────
+const reserveDialogVisible = ref(false)
+const reserveTargetVisit = ref<Record<string, unknown> | null>(null)
+function openReserveDialog(row: Record<string, unknown>) {
+  reserveTargetVisit.value = row
+  reserveDialogVisible.value = true
+}
+function onReserved() {
+  // 重載訪視列表以反映 provisional 欄位變更
+  void fetchDetail()
+}
+
+// ── 參觀→入學 歷程 ───────────────────────────────────
+const journeyDrawerVisible = ref(false)
+const journeyVisitId = ref<number | null>(null)
+function openJourney(row: Record<string, unknown>) {
+  journeyVisitId.value = (row.id as number) ?? null
+  journeyDrawerVisible.value = true
 }
 
 async function openConvertDialog(row: Record<string, unknown>) {
@@ -732,6 +775,20 @@ const emptyForm = (): {
   geocoding_consent: false,
 })
 const form = ref(emptyForm())
+
+// 表單草稿暫存：招生表單聯絡 PII 一律排除，草稿僅留訪視/年級/來源等工作欄位
+const RECRUITMENT_DRAFT_EXCLUDE = [
+  'child_name', 'birthday', 'phone', 'address', 'district',
+  'parent_response', 'notes', 'month_raw',
+]
+const recruitmentDraft = useFormDraft({
+  formId: 'recruitment',
+  state: () => form.value,
+  recordId: () => editingId.value,
+  userScope: () => (getUserInfo()?.employee_id as string | number | null) || 'anon',
+  exclude: RECRUITMENT_DRAFT_EXCLUDE,
+  enabled: () => dialogVisible.value,
+})
 
 // -------- 近五年期間 Dialog --------
 const periodDialogVisible = ref(false)
@@ -1005,6 +1062,8 @@ const openAddDialog = async () => {
   dialogMode.value = 'add'
   editingId.value = null
   dialogVisible.value = true
+  await nextTick()
+  await recruitmentDraft.maybePromptRestore()
 }
 
 const openEditDialog = async (row: Record<string, unknown>) => {
@@ -1035,6 +1094,8 @@ const openEditDialog = async (row: Record<string, unknown>) => {
   dialogMode.value = 'edit'
   editingId.value = row.id as number | null
   dialogVisible.value = true
+  await nextTick()
+  await recruitmentDraft.maybePromptRestore()
 }
 
 const handleSave = async () => {
@@ -1050,6 +1111,7 @@ const handleSave = async () => {
       await updateRecruitmentRecord(editingId.value!, payload)
       ElMessage.success('更新成功')
     }
+    recruitmentDraft.clear()
     dialogVisible.value = false
     await fetchStats()
     invalidateOptions()

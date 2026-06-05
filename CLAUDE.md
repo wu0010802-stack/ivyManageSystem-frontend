@@ -78,11 +78,12 @@ npm run test:coverage  # 含覆蓋率報告
 - `tsconfig.json` 未設 `allowJs`（TS 預設即 off）— 配合 `strict` 模式，`src/` 下新增 `.js` 會被 vue-tsc typecheck 拒絕
 - `tsconfig.json` `strict: true` + `noUnusedLocals: true` + `noUnusedParameters: true`
 - CI `Type check` step **blocking**（移除 `continue-on-error` 後 typecheck error 直接擋 PR）
+- CI `ESLint` step **blocking**（`npm run lint` = `eslint .`，`eslint.config.js` flat config 極小集，2026-06-04 起）：強制 `@typescript-eslint/no-explicit-any` 與 `ban-ts-comment`
 
 **新增程式碼規則：**
 - **業務檔一律 `.ts`**：`src/api/<x>.ts` / `src/composables/<x>.ts` / `src/utils/<x>.ts` / `src/stores/<x>.ts` / `src/views/<x>.ts` / `src/components/<x>.ts`
 - **新 SFC 一律 `<script setup lang="ts">`**：`src/**/*.vue` 全套件已 `lang="ts"`
-- **禁顯式 `: any` / `as any`**：用 `: unknown` + narrow 或 `// @ts-expect-error TODO(ts-strict): <reason>` 過渡（目前 codebase 0 處標註）
+- **禁顯式 `: any` / `as any`（ESLint `no-explicit-any` 強制、CI blocking）**：新碼用 `: unknown` + narrow 或 `// @ts-expect-error TODO(ts-strict): <reason>` 過渡。**遺留 any 以 inline `// eslint-disable-next-line @typescript-eslint/no-explicit-any` 棘輪 grandfather**（2026-06-04 落地時 126 處）。`reportUnusedDisableDirectives: 'error'` 鎖死棘輪：**修掉一個 any 必須連同上方那行 disable 一起刪**，否則 unused directive 擋 CI。燃燒待辦：`grep -rn "eslint-disable-next-line @typescript-eslint/no-explicit-any" src`。裸 `@ts-ignore`/`@ts-nocheck` 被 `ban-ts-comment` 擋（用帶說明的 `@ts-expect-error`，或既有 leaflet 慣例 `eslint-disable-next-line @typescript-eslint/ban-ts-comment`）。spec: `docs/superpowers/specs/2026-06-04-frontend-eslint-no-explicit-any-design.md`
 - **新增 type alias / interface 須節制**：spec 接受 pragmatic exception（同檔 3+ 處用 + inline 嚴重損 DX），但 single-use shape 應 inline
 - **Vue 型別**：`defineProps<{ x: string }>()` / `defineEmits<{ change: [value: number] }>()` 用 type-based macros、`ref<T>(initial)` 顯式註型、預設值用 `withDefaults`
 - **API 型別**：`src/api/*.ts` 用 `import type { ApiBody, ApiQuery, AxiosResp } from '@/api/_generated/typed'` 對應 OpenAPI schema（後端 `response_model=` 缺漏時 endpoint 回 `unknown`，可 `as Shape // TODO(ts-strict): waiting on backend response_model`）
@@ -92,8 +93,8 @@ npm run test:coverage  # 含覆蓋率報告
 - 測試：`tests/**/*.{test,spec}.js`（vitest 仍支援 .js test 與 .ts source 共存）
 
 **檢驗：**
-- 本地：`npm run typecheck` 必過、`npm test` 必綠
-- CI：`Type check` step blocking，PR 必過才能 merge
+- 本地：`npm run typecheck` 必過、`npm run lint` 必過（0 error）、`npm test` 必綠
+- CI：`Type check` 與 `ESLint` step 皆 blocking，PR 必過才能 merge
 
 ---
 

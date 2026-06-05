@@ -126,9 +126,17 @@
       <el-table-column prop="no_deposit_reason" label="未預繳原因" min-width="120" show-overflow-tooltip />
       <el-table-column prop="notes" label="備註" min-width="120" show-overflow-tooltip />
       <el-table-column prop="parent_response" label="電訪回應" min-width="120" show-overflow-tooltip />
-      <el-table-column v-if="canWrite || canConvert" label="操作" width="220" fixed="right">
+      <el-table-column v-if="canWrite || canConvert" label="操作" width="290" fixed="right">
         <template #default="{ row }">
           <el-button v-if="canWrite" size="small" @click="$emit('edit', row)">編輯</el-button>
+          <el-button size="small" @click="$emit('journey', row)">歷程</el-button>
+          <el-button
+            v-if="canWrite && row.has_deposit"
+            size="small"
+            type="warning"
+            plain
+            @click="$emit('reserve', row)"
+          >{{ row.provisional_grade_id ? '變更座位' : '保留座位' }}</el-button>
           <el-button
             v-if="canConvert && !row.enrolled"
             size="small"
@@ -196,6 +204,8 @@ const emit = defineEmits<{
   'page-change': [page: number]
   'edit': [row: Record<string, unknown>]
   'convert': [row: Record<string, unknown>]
+  'reserve': [row: Record<string, unknown>]
+  'journey': [row: Record<string, unknown>]
   'delete': [id: unknown]
 }>()
 

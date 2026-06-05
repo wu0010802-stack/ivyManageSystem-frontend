@@ -78,7 +78,8 @@ describe('AppraisalYearEndView shell', () => {
   })
 
   it('切離 appraisal 時清掉 tab query', async () => {
-    const w = mountWith(['SETTINGS_READ', 'YEAR_END_READ'], { section: 'appraisal', tab: 'settings' })
+    // 考核分頁可見性已對齊內層 API（APPRAISAL_READ）
+    const w = mountWith(['APPRAISAL_READ', 'YEAR_END_READ'], { section: 'appraisal', tab: 'settings' })
     replace.mockClear()
     w.findComponent({ name: 'ElSegmented' }).vm.$emit('change', 'year-end')
     await nextTick()

@@ -64,9 +64,10 @@ describe('attendance api', () => {
     })
   })
 
-  it('deleteMonthRecords DELETE /attendance/records/:year/:month', async () => {
+  it('deleteMonthRecords DELETE /attendance/records/month/:year/:month', async () => {
     await mod.deleteMonthRecords(2026, 5)
-    expect(mockDelete).toHaveBeenCalledWith('/attendance/records/2026/5')
+    // path 用 /records/month/... 避免與單筆刪除路由遮蔽（見後端 P1-6）
+    expect(mockDelete).toHaveBeenCalledWith('/attendance/records/month/2026/5')
   })
 
   it('deleteEmployeeDateRecord DELETE /attendance/records/:employeeId/:date', async () => {

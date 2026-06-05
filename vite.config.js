@@ -124,6 +124,19 @@ function manualChunks(id) {
         return 'portal'
     }
 
+    // LIFF：@line/liff SDK + @liff/* + services/liff.ts wrapper，僅 lazy LoginView/MeView
+    // 用到（router 兩者皆 () => import(...)）。原本 services/liff.ts 被下方 /src/parent/
+    // 規則、@line/liff 被 parent-app 規則指派 → 與 parent 入口 main.ts 同 eager chunk，
+    // 家長端每次開機都下載/解析整包 LIFF（~29 KB gz）。抽成獨立 liff chunk（須在 parent-app
+    // 規則之前攔截 services/liff.ts），僅 login/me 頁 lazy 載入。
+    if (
+        id.includes('/src/parent/services/liff.ts') ||
+        id.includes('@line/liff') ||
+        id.includes('/node_modules/@liff/')
+    ) {
+        return 'liff'
+    }
+
     // 家長 App（LIFF）獨立 chunk；管理端 / Portal 都不需要載入
     // ⚠ 必須涵蓋 @line/liff 主套件 + @liff/* 所有 sub-package（init / sub-window /
     //   message-bus / share-target-picker / analytics / util / permission / store / ...）
@@ -136,9 +149,8 @@ function manualChunks(id) {
           && !id.includes('/src/parent/views/')
           // assistant/ 元件只被 lazy AssistantView 用，排除讓 marked/dompurify
           // （FaqAnswer 靜態 import）隨 AssistantView 一起 lazy，不進 parent 首屏。
-          && !id.includes('/src/parent/components/assistant/')) ||
-        id.includes('@line/liff') ||
-        id.includes('/node_modules/@liff/')
+          && !id.includes('/src/parent/components/assistant/'))
+        // @line/liff / @liff/* / services/liff.ts 已由上方 liff chunk 規則攔截
     ) {
         return 'parent-app'
     }

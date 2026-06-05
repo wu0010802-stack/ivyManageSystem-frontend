@@ -32,7 +32,7 @@ onMounted(() => {
       <el-tab-pane label="帳號管理" name="accounts">
         <SettingsUsersTab v-if="activeTab === 'accounts'" />
       </el-tab-pane>
-      <el-tab-pane label="權限管理" name="permissions">
+      <el-tab-pane label="角色管理" name="permissions">
         <SettingsPermissionsTab v-if="activeTab === 'permissions'" />
       </el-tab-pane>
       <el-tab-pane name="line">

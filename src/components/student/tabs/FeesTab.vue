@@ -119,7 +119,7 @@ const recordRows = computed(() =>
 const adjustmentRows = computed(() =>
   FEE_TYPES.filter((ft) => ft.source === 'adjustment').map((ft) => {
     const list = buckets.value.adjustments[ft.value] || []
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const amount = list.reduce((s: number, a) => s + ((a.amount as number) || 0), 0)
     return { fee_type: ft.value, label: ft.label, adj_type: ft.adj_type, items: list, amount }
   }),

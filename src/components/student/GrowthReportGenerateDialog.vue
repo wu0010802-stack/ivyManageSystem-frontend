@@ -58,6 +58,7 @@ async function onSubmit() {
     emit('created', r.data)
     visible.value = false
   } catch (e) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ElMessage.error((e as any)?.response?.data?.detail || '建立失敗')
   } finally {
     submitting.value = false

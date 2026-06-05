@@ -1,9 +1,17 @@
 import api from './index'
+import type { Schema } from './_generated/typed'
+import type { AxiosResponse } from 'axios'
 
 export const getRecruitmentRecords = (params: unknown) => api.get('/recruitment/records', { params })
 export const createRecruitmentRecord = (data: unknown) => api.post('/recruitment/records', data)
 export const updateRecruitmentRecord = (id: number, data: unknown) => api.put(`/recruitment/records/${id}`, data)
 export const deleteRecruitmentRecord = (id: number) => api.delete(`/recruitment/records/${id}`)
+
+// GET /recruitment/visits/{visit_id}/timeline — 小孩參觀→入學歷程（回應型別用既有 TimelineOut component）
+export const getVisitTimeline = (
+  visitId: number,
+): Promise<AxiosResponse<Schema<'TimelineOut'>>> =>
+  api.get(`/recruitment/visits/${visitId}/timeline`)
 // 招生訪視轉化為正式學生
 // body: { student_id_code, classroom_id?, enrollment_date?, gender?, initial_lifecycle_status? }
 export const convertRecruitmentRecord = (id: number, data: unknown) =>
