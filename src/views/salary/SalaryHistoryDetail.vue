@@ -39,8 +39,9 @@ const showSeparate = computed(() => hasSeparateTransfer(props.detail))
         <div class="sh-line">
           <span>{{ line.label }}</span><span class="sh-neg">-{{ money(line.amount) }}</span>
         </div>
+        <!-- informational 子列（如補充保費已含於健保）：不顯示負號，避免誤讀為額外扣款 -->
         <div v-for="child in (line.children || [])" :key="child.key" class="sh-line sh-child">
-          <span>{{ child.label }}</span><span>-{{ money(child.amount) }}</span>
+          <span>{{ child.label }}</span><span>{{ money(child.amount) }}</span>
         </div>
       </template>
       <div class="sh-line sh-subtotal">
