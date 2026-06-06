@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
+import { todayISO } from '@/utils/format'
 import { ElMessage } from 'element-plus'
 import { getMeasurementsLatest, createMeasurement } from '@/api/portalMeasurements'
 
@@ -21,7 +22,7 @@ const emit = defineEmits<{
   'done': []
 }>()
 
-const today = () => new Date().toISOString().slice(0, 10)
+const today = () => todayISO()
 
 const measuredOn = ref(today())
 const rows = ref<MeasurementRow[]>([])

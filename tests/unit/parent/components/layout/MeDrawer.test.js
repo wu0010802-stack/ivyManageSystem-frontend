@@ -5,34 +5,18 @@ import MeDrawer from '@/parent/components/layout/MeDrawer.vue'
 
 const pushMock = vi.fn()
 const replaceMock = vi.fn()
+const { mockPerformLogout } = vi.hoisted(() => ({
+  mockPerformLogout: vi.fn().mockResolvedValue(undefined),
+}))
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: pushMock, replace: replaceMock }),
 }))
-vi.mock('@/parent/api/auth', () => ({
-  logout: vi.fn().mockResolvedValue(undefined),
-}))
-
-// P0-3 回歸：doLogout 必須清今日狀態快取 + 結束 LIFF session（共用裝置 PII）
-const { clearTodayStatusCacheMock, liffLogoutMock, liffIsLoggedInMock } = vi.hoisted(() => ({
-  clearTodayStatusCacheMock: vi.fn(),
-  liffLogoutMock: vi.fn(),
-  liffIsLoggedInMock: vi.fn(() => true),
-}))
-vi.mock('@/parent/composables/useTodayStatusCache', () => ({
-  clearTodayStatusCache: clearTodayStatusCacheMock,
-}))
-vi.mock('@/parent/services/liff', () => ({
-  liff: { isLoggedIn: liffIsLoggedInMock, logout: liffLogoutMock },
+vi.mock('@/parent/composables/useParentLogout', () => ({
+  performParentLogout: mockPerformLogout,
 }))
 
 const stubs = {
-  ConfirmDialog: {
-    name: 'ConfirmDialog',
-    template:
-      '<div class="confirm-stub" v-if="open"><button class="do-confirm" @click="$emit(\'confirm\')" /></div>',
-    props: ['open'],
-    emits: ['confirm'],
-  },
+  ConfirmDialog: { template: '<div class="confirm-stub" v-if="open" />', props: ['open'] },
   Teleport: true,
 }
 
@@ -40,9 +24,7 @@ beforeEach(() => {
   setActivePinia(createPinia())
   pushMock.mockClear()
   replaceMock.mockClear()
-  clearTodayStatusCacheMock.mockClear()
-  liffLogoutMock.mockClear()
-  liffIsLoggedInMock.mockClear()
+  mockPerformLogout.mockClear()
 })
 
 describe('MeDrawer', () => {
@@ -95,16 +77,6 @@ describe('MeDrawer', () => {
     expect(w.find('.confirm-stub').exists()).toBe(true)
   })
 
-  it('確認登出 → 清今日狀態快取 + liff.logout + replace(/login)（P0-3 共用裝置 PII）', async () => {
-    const w = mount(MeDrawer, { props: { modelValue: true }, global: { stubs } })
-    await w.findAll('.md-item')[3].trigger('click') // 開啟 ConfirmDialog
-    await w.find('.do-confirm').trigger('click') // 觸發 @confirm="doLogout"
-    await flushPromises()
-    expect(clearTodayStatusCacheMock).toHaveBeenCalled()
-    expect(liffLogoutMock).toHaveBeenCalled()
-    expect(replaceMock).toHaveBeenCalledWith('/login')
-  })
-
   it('backdrop 點擊 emit update:modelValue false', async () => {
     const w = mount(MeDrawer, { props: { modelValue: true }, global: { stubs } })
     await w.find('.me-drawer-backdrop').trigger('click')
@@ -124,5 +96,24 @@ describe('MeDrawer', () => {
     // authStore.user 預設 null → fallback '家長' + '家'
     expect(w.find('.md-user-name').text()).toBe('家長')
     expect(w.find('.md-avatar').text()).toBe('家')
+  })
+
+  it('確認登出 → performParentLogout 統一清理 + router.replace(/login) + 關閉抽屜（回歸：原漏清快取/LIFF）', async () => {
+    const confirmStub = {
+      template: '<button class="confirm-go" v-if="open" @click="$emit(\'confirm\')" />',
+      props: ['open'],
+      emits: ['confirm'],
+    }
+    const w = mount(MeDrawer, {
+      props: { modelValue: true },
+      global: { stubs: { ConfirmDialog: confirmStub, Teleport: true } },
+    })
+    await w.findAll('.md-item')[3].trigger('click') // 點登出 → 顯示確認
+    await w.find('.confirm-go').trigger('click') // 確認登出
+    await flushPromises()
+    expect(mockPerformLogout).toHaveBeenCalled()
+    expect(replaceMock).toHaveBeenCalledWith('/login')
+    const emitted = w.emitted('update:modelValue')
+    expect(emitted[emitted.length - 1][0]).toBe(false)
   })
 })

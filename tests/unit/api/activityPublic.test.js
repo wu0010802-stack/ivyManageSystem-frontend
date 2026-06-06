@@ -75,8 +75,11 @@ describe('activityPublic api', () => {
 
   it('publicQueryRegistration POST /activity/public/query with name/birthday/parent_phone body', async () => {
     await mod.publicQueryRegistration('小明', '2018-01-01', '0912000000')
+    // 隱私設計：查詢用 POST body 帶 PII，不放 query string
     expect(mockPost).toHaveBeenCalledWith('/activity/public/query', {
-      name: '小明', birthday: '2018-01-01', parent_phone: '0912000000',
+      name: '小明',
+      birthday: '2018-01-01',
+      parent_phone: '0912000000',
     })
   })
 

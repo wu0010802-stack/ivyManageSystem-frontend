@@ -59,13 +59,18 @@ function initSections() {
   }))
 }
 
+// 序列化抓取：快速切換員工時，較舊請求的 await 回應不可覆蓋較新員工的資料。
+let fetchSeq = 0
+
 async function fetchAll() {
+  const mySeq = ++fetchSeq
   initSections()
   const results = await Promise.allSettled(
     props.provenanceKeys.map((pk) =>
       getProvenance(pk.key, props.cycleId, props.employeeId),
     ),
   )
+  if (mySeq !== fetchSeq) return // 已有更新的請求，丟棄此回應
   results.forEach((result, idx) => {
     if (result.status === 'fulfilled') {
       sections.value[idx].data = result.value.data

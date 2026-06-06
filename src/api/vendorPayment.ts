@@ -1,4 +1,4 @@
-import api from './index'
+import api, { API_BASE } from './index'
 
 /** 區間彙總（跨狀態），對應後端 GET /vendor-payments/summary。 */
 export interface VendorPaymentSummary {
@@ -42,10 +42,10 @@ export const deleteVendorPaymentAttachment = (id: number, key: string) =>
   api.delete(`/vendor-payments/${id}/attachments`, { params: { key } })
 
 export const downloadVendorPaymentAttachmentUrl = (id: number, key: string) =>
-  `/api/vendor-payments/${id}/attachments/download?key=${encodeURIComponent(key)}`
+  `${API_BASE}/vendor-payments/${id}/attachments/download?key=${encodeURIComponent(key)}`
 
 export const vendorPaymentSignatureUrl = (id: number) =>
-  `/api/vendor-payments/${id}/signature`
+  `${API_BASE}/vendor-payments/${id}/signature`
 
 export const PAYMENT_METHOD_OPTIONS = [
   { value: 'cash', label: '現金' },

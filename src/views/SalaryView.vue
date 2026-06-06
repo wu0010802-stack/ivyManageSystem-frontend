@@ -514,7 +514,7 @@ onMounted(() => {
               <el-option v-for="m in 12" :key="m" :label="m + ' 月'" :value="m" />
             </el-select>
 
-            <el-button type="success" :loading="loading" @click="calculateSalary">計算薪資</el-button>
+            <el-button v-if="canWriteSalary" type="success" :loading="loading" @click="calculateSalary">計算薪資</el-button>
             <el-button type="primary" :loading="bonusLoading" @click="fetchFestivalBonus">節慶獎金明細</el-button>
             <el-button v-if="salaryRecords.length > 0" type="warning" @click="exportAllExcel">匯出全部 Excel</el-button>
             <el-button v-if="salaryRecords.length > 0" type="danger" @click="exportAllPdf">匯出全部 PDF</el-button>

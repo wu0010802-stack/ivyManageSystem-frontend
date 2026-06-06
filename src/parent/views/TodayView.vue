@@ -127,6 +127,10 @@ const hero = computed(() => {
   const tc = todayChildren.value || []
   if (tc.length === 0) {
     if (!summaryData.value) return null
+    // 「尚未綁定子女」須依 home-summary 的權威子女清單判定，而非 today-status：
+    // today-status 可能因放假或尚未載入而為空，若據此判空，有綁定子女的家長會
+    // 被誤顯示「尚未綁定子女」。有子女但今日無狀態時隱藏 hero（其餘區塊照常渲染）。
+    if (children.value.length > 0) return null
     return {
       kind: 'empty',
       label: '尚未綁定子女',

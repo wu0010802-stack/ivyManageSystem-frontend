@@ -16,7 +16,9 @@ interface SectionDef {
 }
 
 const ALL_SECTIONS: SectionDef[] = [
-  { key: 'appraisal', label: '考核管理', can: () => hasPermission('SETTINGS_READ') || hasPermission('SALARY_READ') },
+  // 對齊內層 API：考核端點全要 APPRAISAL_READ（後端 api/appraisal）。原用
+  // SETTINGS_READ/SALARY_READ 判可見，無 APPRAISAL_READ 者看得到分頁卻 API 403。
+  { key: 'appraisal', label: '考核管理', can: () => hasPermission('APPRAISAL_READ') },
   { key: 'year-end', label: '年終獎金', can: () => hasPermission('YEAR_END_READ') },
   { key: 'payout', label: '考核年終', can: () => hasPermission('APPRAISAL_FINALIZE') },
 ]

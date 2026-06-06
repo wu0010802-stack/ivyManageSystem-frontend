@@ -20372,11 +20372,15 @@ export interface components {
              * @default 0
              */
             school_achievement_rate: number | string;
+            /** School Achievement Rate Override */
+            school_achievement_rate_override?: number | string | null;
             /** Semester First */
             semester_first: boolean;
         };
         /** OrgYearSettingsOut */
         OrgYearSettingsOut: {
+            /** Effective School Achievement Rate */
+            effective_school_achievement_rate: string;
             /** Enrollment Actual */
             enrollment_actual: number | null;
             /** Enrollment Target */
@@ -20389,6 +20393,8 @@ export interface components {
             org_achievement_rate: string;
             /** School Achievement Rate */
             school_achievement_rate: string;
+            /** School Achievement Rate Override */
+            school_achievement_rate_override: string | null;
             /** Semester First */
             semester_first: boolean;
             /** Year End Cycle Id */
@@ -22920,7 +22926,7 @@ export interface components {
             /** Data Completeness */
             data_completeness: unknown;
             /** Deposit Rate 90D */
-            deposit_rate_90d: unknown;
+            deposit_rate_90d?: unknown;
             /** District */
             district: unknown;
             /** Lead Count 30D */

@@ -3,6 +3,7 @@ import { ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { createMeasurement, updateMeasurement } from '@/api/studentMeasurements'
 import FormSection from '@/components/common/FormSection.vue'
+import { todayISO } from '@/utils/format'
 
 // 幼兒園學童常見範圍；超出時提示確認以避免誤輸入污染成長曲線
 const PLAUSIBLE_RANGES: Record<string, { min: number; max: number; label: string }> = {
@@ -44,10 +45,6 @@ const form = ref<{
   vision_right: null,
   note: '',
 })
-
-function todayISO() {
-  return new Date().toISOString().slice(0, 10)
-}
 
 function toNullableNumber(v: unknown): number | null {
   if (v === null || v === undefined || v === '') return null

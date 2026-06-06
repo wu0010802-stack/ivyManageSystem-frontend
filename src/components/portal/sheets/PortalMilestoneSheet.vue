@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
+import { todayISO } from '@/utils/format'
 import { ElMessage } from 'element-plus'
 import { createMilestone } from '@/api/portalMilestones'
 
@@ -40,7 +41,7 @@ const TYPES: MilestoneType[] = [
 ]
 const ICON_OPTIONS: string[] = ['🎂', '🌟', '🏆', '🎓', '🎨', '🎵']
 
-const today = () => new Date().toISOString().slice(0, 10)
+const today = () => todayISO()
 
 const form = ref<MilestoneForm>({
   milestone_type: '',

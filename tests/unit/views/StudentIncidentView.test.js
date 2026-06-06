@@ -94,6 +94,15 @@ describe('StudentIncidentView', () => {
     expect(getClassrooms).toHaveBeenCalled()
   })
 
+  it('無 STUDENTS_WRITE 權限時隱藏新增控制（防禦縱深）', async () => {
+    // 測試環境 localStorage 無 permission_names → hasPermission 回 false
+    const wrapper = mountView()
+    await flushPromises()
+
+    const btnTexts = wrapper.findAll('button').map((b) => b.text())
+    expect(btnTexts.some((t) => t.includes('新增事件'))).toBe(false)
+  })
+
   it('submitForm 在新增模式呼叫 createIncident', async () => {
     createIncident.mockResolvedValue({ data: { id: 10 } })
     getIncidents.mockResolvedValue({ data: { items: [], total: 0 } })
