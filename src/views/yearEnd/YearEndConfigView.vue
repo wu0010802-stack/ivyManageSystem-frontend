@@ -30,6 +30,7 @@ const orgEdits = ref<
     {
       enrollment_target: number
       meeting_absence_deduction: number
+      school_achievement_rate_override: number | null
     }
   >
 >({})
@@ -96,6 +97,11 @@ async function loadOrgSettings() {
       orgEdits.value[key] = {
         enrollment_target: row.enrollment_target,
         meeting_absence_deduction: Number(row.meeting_absence_deduction),
+        // 保留 null：Number(null) === 0 會把「未覆寫」誤判成「覆寫為 0%」
+        school_achievement_rate_override:
+          row.school_achievement_rate_override == null
+            ? null
+            : Number(row.school_achievement_rate_override),
       }
     }
   } catch {
@@ -159,6 +165,8 @@ async function saveOrgSettings(row: OrgSettingsRow) {
       org_achievement_rate: Number(row.org_achievement_rate),
       meeting_absence_deduction: edits.meeting_absence_deduction,
       school_achievement_rate: Number(row.school_achievement_rate),
+      // 空欄送 null（沿用系統自動值）；勿 Number() 化以免 null→0
+      school_achievement_rate_override: edits.school_achievement_rate_override,
       enrollment_actual: row.enrollment_actual,
     })
     ElMessage.success(`${semesterLabel(row.semester_first)} 已儲存`)
@@ -260,6 +268,22 @@ onMounted(async () => {
             </el-form-item>
             <el-form-item label="招生達成率（自動）">
               <span class="readonly-val">{{ pctNum(row.school_achievement_rate) }}</span>
+            </el-form-item>
+            <el-form-item label="全校達成率（覆寫）">
+              <el-input-number
+                v-if="canWrite && orgEdits[String(row.semester_first)]"
+                v-model="orgEdits[String(row.semester_first)].school_achievement_rate_override"
+                :min="0"
+                :step="0.1"
+                :precision="1"
+                :value-on-clear="null"
+                :placeholder="pctNum(row.school_achievement_rate)"
+                controls-position="right"
+                style="width: 180px"
+                :data-test="`input-school-rate-override-${row.semester_first}`"
+              />
+              <span v-else>{{ pctNum(row.school_achievement_rate_override) }}</span>
+              <span class="field-hint">留空＝沿用系統建議值 {{ pctNum(row.school_achievement_rate) }}</span>
             </el-form-item>
             <el-form-item label="機構達成率">
               <span class="readonly-val" :data-test="`display-org-rate-${row.semester_first}`">{{ pctNum(row.org_achievement_rate) }}</span>
