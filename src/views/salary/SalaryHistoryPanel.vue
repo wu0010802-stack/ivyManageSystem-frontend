@@ -6,6 +6,8 @@ import { useEmployeeStore } from '@/stores/employee'
 import { money } from '@/utils/format'
 import { LineChart } from '@/composables/useChartJs'
 import type { ChartOptions } from 'chart.js'
+import SalaryHistoryDetail from './SalaryHistoryDetail.vue'
+import type { PayslipDetail } from './salaryHistoryDetail'
 
 interface HistoryRow {
   year: number
@@ -14,6 +16,8 @@ interface HistoryRow {
   gross_salary: number
   base_salary: number
   total_bonus: number
+  in_gross_bonus: number
+  payslip_detail: PayslipDetail
   labor_insurance: number
   health_insurance: number
   attendance_deduction: number
@@ -133,14 +137,19 @@ onMounted(() => {
       </el-card>
 
       <el-table :data="historyData" border style="width: 100%; margin-top: 20px;" stripe>
+        <el-table-column type="expand">
+          <template #default="scope">
+            <SalaryHistoryDetail :detail="scope.row.payslip_detail" />
+          </template>
+        </el-table-column>
         <el-table-column label="年/月" width="90">
           <template #default="scope">{{ scope.row.year }}/{{ scope.row.month }}</template>
         </el-table-column>
         <el-table-column label="底薪" width="100">
           <template #default="scope">{{ money(scope.row.base_salary) }}</template>
         </el-table-column>
-        <el-table-column label="獎金" width="100">
-          <template #default="scope">{{ money(scope.row.total_bonus) }}</template>
+        <el-table-column label="獎金合計" width="110">
+          <template #default="scope">{{ money(scope.row.in_gross_bonus) }}</template>
         </el-table-column>
         <el-table-column label="勞保" width="90">
           <template #default="scope">{{ money(scope.row.labor_insurance) }}</template>
