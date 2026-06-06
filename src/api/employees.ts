@@ -65,3 +65,8 @@ export const updateEmployeeContract = (id: number, cid: number, data: ApiBody<'/
 
 export const deleteEmployeeContract = (id: number, cid: number): AxiosResp<'/employees/{employee_id}/contracts/{contract_id}', 'delete'> =>
     api.delete(`/employees/${id}/contracts/${cid}`)
+
+// ========== Class History ==========
+
+export const listEmployeeClassHistory = (id: number): AxiosResp<'/employees/{employee_id}/class-history', 'get'> =>
+    api.get(`/employees/${id}/class-history`)
