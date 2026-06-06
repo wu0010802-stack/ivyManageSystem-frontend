@@ -610,11 +610,13 @@ const fetchContracts = async () => {
 }
 
 const classHistory = ref<ClassHistoryRow[]>([])
+const classHistoryLoaded = ref(false)
 
 const fetchClassHistory = async () => {
   if (!currentDetail.value.id) return
   const res = await listEmployeeClassHistory(currentDetail.value.id as number)
   classHistory.value = (res.data.rows ?? []) as ClassHistoryRow[]
+  classHistoryLoaded.value = true
 }
 
 const onDetailTabChange = async (name: string | number) => {
@@ -746,6 +748,7 @@ const handleDetail = async (row: Record<string, unknown>) => {
     attendanceMonth.value = thisMonthISO()
     attendanceRecords.value = []
     classHistory.value = []
+    classHistoryLoaded.value = false
     detailDialogVisible.value = true
   } catch (error) {
     ElMessage.error('載入詳情失敗')
@@ -1300,7 +1303,7 @@ onMounted(async () => {
 
             <!-- 班級歷程 -->
             <el-tab-pane label="班級歷程" name="classHistory">
-              <el-table v-if="classHistory.length" :data="classHistory" style="width: 100%;">
+              <el-table v-if="classHistory.length" :data="classHistory" style="width: 100%;" size="small">
                 <el-table-column label="學年 / 學期" width="150">
                   <template #default="scope">
                     {{ formatSemester(scope.row.school_year, scope.row.semester) }}
@@ -1333,7 +1336,7 @@ onMounted(async () => {
                   </template>
                 </el-table-column>
               </el-table>
-              <el-empty v-else description="尚無帶班紀錄" />
+              <el-empty v-else-if="classHistoryLoaded" description="尚無帶班紀錄" />
             </el-tab-pane>
           </el-tabs>
         </section>
