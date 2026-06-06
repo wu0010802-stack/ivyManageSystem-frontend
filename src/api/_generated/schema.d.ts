@@ -4463,6 +4463,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/employees/{employee_id}/class-history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Employee Class History
+         * @description 員工班級歷程（學期×班級×角色×搭檔×期初/末人數）。
+         */
+        get: operations["get_employee_class_history_api_employees__employee_id__class_history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/employees/{employee_id}/contracts": {
         parameters: {
             query?: never;
@@ -15468,6 +15488,56 @@ export interface components {
             returning_student_rate: number | string;
             /** Semester First */
             semester_first: boolean;
+        };
+        /**
+         * ClassHistoryCoTeacher
+         * @description 同班搭檔老師（含才藝）。
+         */
+        ClassHistoryCoTeacher: {
+            /** Employee Id */
+            employee_id: unknown;
+            /** Name */
+            name: unknown;
+            /** Role */
+            role: unknown;
+        };
+        /**
+         * ClassHistoryResponse
+         * @description GET /employees/{id}/class-history 回傳。
+         */
+        ClassHistoryResponse: {
+            /** Rows */
+            rows?: unknown;
+        };
+        /**
+         * ClassHistoryRow
+         * @description 員工某學期帶的一個班的歷程列。
+         */
+        ClassHistoryRow: {
+            /** Classroom Id */
+            classroom_id: unknown;
+            /** Classroom Name */
+            classroom_name: unknown;
+            /** Co Teachers */
+            co_teachers?: unknown;
+            /** End Count */
+            end_count?: unknown;
+            /** End Count Is Live */
+            end_count_is_live?: unknown;
+            /** Grade Name */
+            grade_name?: unknown;
+            /** Is Current */
+            is_current?: unknown;
+            /** Net Change */
+            net_change?: unknown;
+            /** Role */
+            role: unknown;
+            /** School Year */
+            school_year: unknown;
+            /** Semester */
+            semester: unknown;
+            /** Start Count */
+            start_count?: unknown;
         };
         /** ClassHubCounts */
         ClassHubCounts: {
@@ -34407,6 +34477,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DeleteResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_employee_class_history_api_employees__employee_id__class_history_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                employee_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClassHistoryResponse"];
                 };
             };
             /** @description Validation Error */
