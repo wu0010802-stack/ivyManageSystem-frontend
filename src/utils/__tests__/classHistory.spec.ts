@@ -18,6 +18,8 @@ describe('classHistory formatters', () => {
     expect(roleLabel('head')).toBe('導師')
     expect(roleLabel('assistant')).toBe('助教')
     expect(roleLabel('art')).toBe('才藝')
+    expect(roleLabel('admin')).toBe('admin')
+    expect(roleLabel('')).toBe('')
   })
 
   it('formatCoTeachers', () => {
@@ -48,6 +50,11 @@ describe('classHistory formatters', () => {
   it('formatHeadcount: start missing, end present (past)', () => {
     const row = { start_count: null, end_count: 25, end_count_is_live: false } as ClassHistoryRow
     expect(formatHeadcount(row)).toBe('— → 25')
+  })
+
+  it('formatHeadcount: start present, end missing (past)', () => {
+    const row = { start_count: 22, end_count: null, end_count_is_live: false } as ClassHistoryRow
+    expect(formatHeadcount(row)).toBe('22 → —')
   })
 
   it('formatNetChange', () => {
