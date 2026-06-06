@@ -6,8 +6,9 @@ import { hasPermission } from '@/utils/auth'
 const AppraisalManagementView = defineAsyncComponent(() => import('./AppraisalManagementView.vue'))
 const YearEndListView = defineAsyncComponent(() => import('./yearEnd/YearEndListView.vue'))
 const AppraisalPayoutView = defineAsyncComponent(() => import('./yearEnd/AppraisalPayoutView.vue'))
+const YearEndRulesPanel = defineAsyncComponent(() => import('./yearEnd/YearEndRulesPanel.vue'))
 
-type SectionKey = 'appraisal' | 'year-end' | 'payout'
+type SectionKey = 'appraisal' | 'year-end' | 'payout' | 'year-end-rules'
 
 interface SectionDef {
   key: SectionKey
@@ -19,6 +20,7 @@ const ALL_SECTIONS: SectionDef[] = [
   { key: 'appraisal', label: '考核管理', can: () => hasPermission('SETTINGS_READ') || hasPermission('SALARY_READ') },
   { key: 'year-end', label: '年終獎金', can: () => hasPermission('YEAR_END_READ') },
   { key: 'payout', label: '考核年終', can: () => hasPermission('APPRAISAL_FINALIZE') },
+  { key: 'year-end-rules', label: '年終規則', can: () => hasPermission('SETTINGS_READ') },
 ]
 
 const route = useRoute()
@@ -74,6 +76,7 @@ const onSectionChange = (val: string | number) => {
       <AppraisalManagementView v-if="activeSection === 'appraisal'" />
       <YearEndListView v-else-if="activeSection === 'year-end'" />
       <AppraisalPayoutView v-else-if="activeSection === 'payout'" />
+      <YearEndRulesPanel v-else-if="activeSection === 'year-end-rules'" />
       <el-empty v-else description="無權限檢視此頁" />
     </div>
   </div>
