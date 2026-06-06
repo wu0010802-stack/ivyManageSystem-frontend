@@ -8,6 +8,7 @@ import {
   listEmployeeCertificates, createEmployeeCertificate, updateEmployeeCertificate, deleteEmployeeCertificate,
   listEmployeeContracts, createEmployeeContract, updateEmployeeContract, deleteEmployeeContract,
   updateEmployeeBasic, updateEmployeeSalary,
+  listEmployeeClassHistory,
 } from '@/api/employees'
 import OffboardingModal from '@/components/offboarding/OffboardingModal.vue'
 import { getRecords as getAttendanceRecords, uploadCsv, deleteEmployeeDateRecord } from '@/api/attendance'
@@ -18,6 +19,7 @@ import EmptyState from '@/components/common/EmptyState.vue'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
 import { useEmployeeStore } from '@/stores/employee'
 import { todayISO, thisMonthISO } from '@/utils/format'
+import { formatSemester, roleLabel, formatCoTeachers, formatHeadcount, formatNetChange, type ClassHistoryRow } from '@/utils/classHistory'
 import { useClassroomStore } from '@/stores/classroom'
 import { useConfigStore } from '@/stores/config'
 import { useCrudDialog, useConfirmDelete, useLatestSearch } from '@/composables'
@@ -607,6 +609,14 @@ const fetchContracts = async () => {
   contracts.value = res.data as Record<string, unknown>[]
 }
 
+const classHistory = ref<ClassHistoryRow[]>([])
+
+const fetchClassHistory = async () => {
+  if (!currentDetail.value.id) return
+  const res = await listEmployeeClassHistory(currentDetail.value.id as number)
+  classHistory.value = (res.data.rows ?? []) as ClassHistoryRow[]
+}
+
 const onDetailTabChange = async (name: string | number) => {
   if (loadedTabs.value.has(name)) return
   try {
@@ -614,6 +624,7 @@ const onDetailTabChange = async (name: string | number) => {
     else if (name === 'certificate') await fetchCertificates()
     else if (name === 'contract') await fetchContracts()
     else if (name === 'attendance') await fetchAttendance()
+    else if (name === 'classHistory') await fetchClassHistory()
     loadedTabs.value.add(name)
   } catch {
     ElMessage.error('載入失敗')
@@ -734,6 +745,7 @@ const handleDetail = async (row: Record<string, unknown>) => {
     contracts.value = []
     attendanceMonth.value = thisMonthISO()
     attendanceRecords.value = []
+    classHistory.value = []
     detailDialogVisible.value = true
   } catch (error) {
     ElMessage.error('載入詳情失敗')
@@ -1285,6 +1297,44 @@ onMounted(async () => {
                 </el-table-column>
               </el-table>
             </el-tab-pane>
+
+            <!-- 班級歷程 -->
+            <el-tab-pane label="班級歷程" name="classHistory">
+              <el-table v-if="classHistory.length" :data="classHistory" style="width: 100%;">
+                <el-table-column label="學年 / 學期" width="150">
+                  <template #default="scope">
+                    {{ formatSemester(scope.row.school_year, scope.row.semester) }}
+                    <el-tag v-if="scope.row.is_current" type="success" size="small">現在</el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column label="班級（年級）">
+                  <template #default="scope">
+                    {{ scope.row.classroom_name }}<span v-if="scope.row.grade_name">（{{ scope.row.grade_name }}）</span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="角色" width="90">
+                  <template #default="scope">
+                    <el-tag :type="scope.row.role === 'head' ? 'primary' : 'warning'" size="small">
+                      {{ roleLabel(scope.row.role) }}
+                    </el-tag>
+                  </template>
+                </el-table-column>
+                <el-table-column label="同班搭檔">
+                  <template #default="scope">{{ formatCoTeachers(scope.row.co_teachers) }}</template>
+                </el-table-column>
+                <el-table-column label="期初 → 期末" width="140">
+                  <template #default="scope">{{ formatHeadcount(scope.row) }}</template>
+                </el-table-column>
+                <el-table-column label="淨變化" width="100">
+                  <template #default="scope">
+                    <span :class="`net-${formatNetChange(scope.row.net_change).type}`">
+                      {{ formatNetChange(scope.row.net_change).text }}
+                    </span>
+                  </template>
+                </el-table-column>
+              </el-table>
+              <el-empty v-else description="尚無帶班紀錄" />
+            </el-tab-pane>
           </el-tabs>
         </section>
       </div>
@@ -1512,6 +1562,10 @@ onMounted(async () => {
   width: 48px;
   color: var(--el-text-color-secondary);
 }
+.net-up { color: var(--el-color-success); }
+.net-down { color: var(--el-color-danger); }
+.net-flat,
+.net-none { color: var(--el-text-color-secondary); }
 </style>
 
 <!-- 手機版表單欄位響應式：dialog 內容被 teleport 到 body，scoped 規則無法穿透，
