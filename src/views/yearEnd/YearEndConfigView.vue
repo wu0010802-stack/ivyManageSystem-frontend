@@ -274,6 +274,7 @@ onMounted(async () => {
                 v-if="canWrite && orgEdits[String(row.semester_first)]"
                 v-model="orgEdits[String(row.semester_first)].school_achievement_rate_override"
                 :min="0"
+                :max="999.9"
                 :step="0.1"
                 :precision="1"
                 :value-on-clear="null"
