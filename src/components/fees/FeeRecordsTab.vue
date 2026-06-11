@@ -259,6 +259,12 @@ function searchRecords() {
   fetchRecords()
 }
 
+// 父層（全域搜尋導航）帶入學生姓名預篩。
+// 只設 student_name → 觸發既有 watcher（page 歸 1 + 300ms debounce fetch），不重複呼叫 fetch。
+function applySearch(name: string) {
+  recordFilter.value.student_name = name
+}
+
 // 學生姓名即時搜尋（300ms debounce）
 let _feeSearchTimer: ReturnType<typeof setTimeout> | null = null
 watch(() => recordFilter.value.student_name, () => {
@@ -358,6 +364,7 @@ watch(() => recordFilter.value.classroom_name, () => searchRecords())
 
 defineExpose({
   fetchRecords,
+  applySearch,
   // 暴露給測試或父層存取需要的內部 state（白盒測試用）
   recordFilter,
   recordPage,

@@ -3,14 +3,13 @@
     <Transition name="gs-fade">
       <div v-if="visible" class="gs-overlay" @click.self="close">
         <div class="gs-modal" role="dialog" aria-modal="true" aria-label="全局搜尋">
-          <!-- 搜尋輸入框 -->
           <div class="gs-input-wrap">
             <el-icon class="gs-input-icon"><Search /></el-icon>
             <input
               ref="inputRef"
               v-model="query"
               class="gs-input"
-              placeholder="搜尋員工、學生、公告、頁面..."
+              placeholder="搜尋學生、員工、家長、班級、學費、才藝、招生、公告、頁面…"
               autocomplete="off"
               @keydown="onKeydown"
             />
@@ -18,91 +17,47 @@
             <kbd class="gs-esc-hint" @click="close">esc</kbd>
           </div>
 
-          <!-- 結果區 -->
           <div class="gs-results" ref="resultsRef">
-            <template v-if="query.trim()">
-              <!-- 員工 -->
-              <template v-if="employeeResults.length">
-                <div class="gs-section-title">員工</div>
+            <template v-if="query.trim().length >= 2">
+              <template v-for="group in groups" :key="group.key">
+                <div class="gs-section-title">{{ group.title }}</div>
                 <div
-                  v-for="(item, idx) in employeeResults"
-                  :key="'emp-' + item.id"
+                  v-for="entry in group.items"
+                  :key="group.key + '-' + entry.flatIndex"
                   class="gs-item"
-                  :class="{ 'gs-item--active': activeIndex === flatIndex('employee', idx) }"
-                  @mouseenter="activeIndex = flatIndex('employee', idx)"
-                  @click="select(item)"
+                  :class="{ 'gs-item--active': activeIndex === entry.flatIndex }"
+                  @mouseenter="activeIndex = entry.flatIndex"
+                  @click="selectByFlat(entry.flatIndex)"
                 >
-                  <el-icon class="gs-item-icon"><User /></el-icon>
-                  <span class="gs-item-label" v-html="highlight(item.name, query)"></span>
-                  <span class="gs-item-sub">{{ item.job_title || item.department || '' }}</span>
+                  <el-icon class="gs-item-icon"><component :is="group.icon" /></el-icon>
+                  <span class="gs-item-label" v-html="highlight(entry.label, query)"></span>
+                  <span class="gs-item-sub">{{ entry.sub }}</span>
                 </div>
               </template>
 
-              <!-- 學生 -->
-              <template v-if="studentResults.length">
-                <div class="gs-section-title">學生</div>
-                <div
-                  v-for="(item, idx) in studentResults"
-                  :key="'stu-' + item.id"
-                  class="gs-item"
-                  :class="{ 'gs-item--active': activeIndex === flatIndex('student', idx) }"
-                  @mouseenter="activeIndex = flatIndex('student', idx)"
-                  @click="select(item)"
-                >
-                  <el-icon class="gs-item-icon"><Avatar /></el-icon>
-                  <span class="gs-item-label" v-html="highlight(item.name, query)"></span>
-                  <span class="gs-item-sub">{{ item.classroom_name || '' }}</span>
-                </div>
-              </template>
-
-              <!-- 公告 -->
-              <template v-if="announcementResults.length">
-                <div class="gs-section-title">公告</div>
-                <div
-                  v-for="(item, idx) in announcementResults"
-                  :key="'ann-' + item.id"
-                  class="gs-item"
-                  :class="{ 'gs-item--active': activeIndex === flatIndex('announcement', idx) }"
-                  @mouseenter="activeIndex = flatIndex('announcement', idx)"
-                  @click="select(item)"
-                >
-                  <el-icon class="gs-item-icon"><Bell /></el-icon>
-                  <span class="gs-item-label" v-html="highlight(item.title, query)"></span>
-                </div>
-              </template>
-
-              <!-- 頁面 -->
-              <template v-if="pageResults.length">
+              <template v-if="pageEntries.length">
                 <div class="gs-section-title">頁面</div>
                 <div
-                  v-for="(item, idx) in pageResults"
-                  :key="'page-' + item.path"
+                  v-for="entry in pageEntries"
+                  :key="'page-' + entry.flatIndex"
                   class="gs-item"
-                  :class="{ 'gs-item--active': activeIndex === flatIndex('page', idx) }"
-                  @mouseenter="activeIndex = flatIndex('page', idx)"
-                  @click="select(item)"
+                  :class="{ 'gs-item--active': activeIndex === entry.flatIndex }"
+                  @mouseenter="activeIndex = entry.flatIndex"
+                  @click="selectByFlat(entry.flatIndex)"
                 >
                   <el-icon class="gs-item-icon"><Grid /></el-icon>
-                  <span class="gs-item-label" v-html="highlight(item.title, query)"></span>
-                  <span class="gs-item-sub">{{ item.path }}</span>
+                  <span class="gs-item-label" v-html="highlight(entry.label, query)"></span>
+                  <span class="gs-item-sub">{{ entry.sub }}</span>
                 </div>
               </template>
 
-              <!-- 無結果 -->
-              <div
-                v-if="!employeeResults.length && !studentResults.length && !announcementResults.length && !pageResults.length && !isLoading"
-                class="gs-empty"
-              >
+              <div v-if="!groups.length && !pageEntries.length && !isLoading" class="gs-empty">
                 無符合「{{ query }}」的結果
               </div>
             </template>
-
-            <div v-else class="gs-hint">
-              輸入關鍵字搜尋員工、學生、公告或頁面
-            </div>
+            <div v-else class="gs-hint">輸入至少 2 個字搜尋</div>
           </div>
 
-          <!-- 底部快捷鍵提示 -->
           <div class="gs-footer">
             <span><kbd>↑</kbd><kbd>↓</kbd> 導航</span>
             <span><kbd>Enter</kbd> 選擇</span>
@@ -115,181 +70,141 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted, markRaw } from 'vue'
 import { useRouter } from 'vue-router'
 import { Search, User, Avatar, Bell, Grid } from '@element-plus/icons-vue'
-import { useEmployeeStore } from '@/stores/employee'
-import { getStudents } from '@/api/students'
-import { getAnnouncements } from '@/api/announcements'
+import { globalSearch } from '@/api/search'
 import { canAccessRoute } from '@/utils/auth'
 import { highlight } from '@/utils/highlight'
 
 const router = useRouter()
-const employeeStore = useEmployeeStore()
 
-// ---------- state ----------
-const visible = ref<boolean>(false)
-const query = ref<string>('')
-const activeIndex = ref<number>(-1)
-const isLoading = ref<boolean>(false)
+const visible = ref(false)
+const query = ref('')
+const activeIndex = ref(-1)
+const isLoading = ref(false)
 const inputRef = ref<HTMLInputElement | null>(null)
 const resultsRef = ref<HTMLElement | null>(null)
 
-// 公告快取（首次 fetch 後不重複請求）
-const announcementCache = ref<Record<string, unknown>[] | null>(null)
-// 學生搜尋結果（debounce 後更新）
-const studentResults = ref<Record<string, unknown>[]>([])
+type Item = Record<string, unknown>
+const data = ref<Record<string, Item[]>>({})
 
-// 員工條目型別（store 回傳 unknown[]，此處 cast 供搜尋用）
-interface EmployeeEntry {
-  id: number | string
-  name?: string
-  employee_id?: string | number
-  job_title?: string
-  department?: string
-  [key: string]: unknown
+interface SectionDef {
+  key: string
+  title: string
+  icon: unknown
+  label: (i: Item) => string
+  sub: (i: Item) => string
+  navigate: (i: Item) => void
 }
 
-// ---------- 靜態頁面清單 ----------
-const ALL_PAGES = [
-  { title: '儀表板', path: '/', accessPath: '/' },
-  { title: '審核工作台', path: '/approvals', accessPath: '/approvals' },
-  { title: '考勤管理', path: '/attendance', accessPath: '/attendance' },
-  { title: '請假管理', path: '/leaves', accessPath: '/leaves' },
-  { title: '加班 / 會議', path: '/overtime', accessPath: '/overtime' },
-  { title: '員工管理', path: '/employees', accessPath: '/employees' },
-  { title: '學生管理', path: '/students', accessPath: '/students' },
-  { title: '班級學生管理', path: '/classrooms', accessPath: '/classrooms' },
-  { title: '薪資管理', path: '/salary', accessPath: '/salary' },
-  { title: '公告管理', path: '/announcements', accessPath: '/announcements' },
-  { title: '報表統計', path: '/reports', accessPath: '/reports' },
-  { title: '操作紀錄', path: '/audit-logs', accessPath: '/audit-logs' },
-  { title: '系統設定', path: '/settings', accessPath: '/settings' },
-  { title: '班表管理', path: '/schedule', accessPath: '/schedule' },
-  { title: '園務會議', path: '/overtime?tab=meetings', accessPath: '/overtime' },
-  { title: '學校行事曆', path: '/calendar', accessPath: '/calendar' },
-  { title: '招生統計', path: '/recruitment', accessPath: '/recruitment' },
+const SECTIONS: SectionDef[] = [
+  { key: 'students', title: '學生', icon: markRaw(Avatar),
+    label: i => String(i.name ?? ''),
+    sub: i => String(i.classroom_name || i.student_id || ''),
+    navigate: i => router.push(`/students/profile/${i.id}`) },
+  { key: 'employees', title: '員工', icon: markRaw(User),
+    label: i => String(i.name ?? ''),
+    sub: i => String(i.title || i.employee_id || ''),
+    navigate: i => router.push({ path: '/employees', query: { section: 'employees', search: String(i.name ?? '') } }) },
+  { key: 'guardians', title: '家長', icon: markRaw(Avatar),
+    label: i => String(i.name ?? ''),
+    sub: i => [i.child_name, i.phone_masked].filter(Boolean).join('．'),
+    navigate: i => router.push(`/students/profile/${i.student_id}`) },
+  { key: 'classrooms', title: '班級', icon: markRaw(Grid),
+    label: i => String(i.name ?? ''),
+    sub: i => i.school_year ? `${i.school_year} 學年` : '',
+    navigate: () => router.push('/classrooms') },
+  { key: 'fees', title: '學費', icon: markRaw(Grid),
+    label: i => String(i.student_name ?? ''),
+    sub: i => [i.period, i.status === 'paid' ? '已繳' : '未繳'].filter(Boolean).join('．'),
+    navigate: i => router.push({ path: '/fees', query: { search: String(i.student_name ?? '') } }) },
+  { key: 'activity_registrations', title: '才藝報名', icon: markRaw(Grid),
+    label: i => String(i.student_name ?? ''),
+    sub: i => String(i.class_name ?? ''),
+    navigate: i => router.push({ path: '/activity/registrations', query: { search: String(i.student_name ?? '') } }) },
+  { key: 'recruitment', title: '招生', icon: markRaw(Grid),
+    label: i => String(i.child_name ?? ''),
+    sub: i => i.target_school_year ? `${i.target_school_year} 學年` : '',
+    navigate: i => router.push({ path: '/recruitment', query: { keyword: String(i.child_name ?? '') } }) },
+  { key: 'announcements', title: '公告', icon: markRaw(Bell),
+    label: i => String(i.title ?? ''),
+    sub: () => '',
+    navigate: () => router.push('/announcements') },
 ]
 
-// ---------- computed 搜尋結果 ----------
-const employeeResults = computed((): Record<string, unknown>[] => {
-  const q = query.value.trim()
-  if (!q) return []
-  return (employeeStore.employees as EmployeeEntry[])
-    .filter(e =>
-      (e.name || '').includes(q) ||
-      (e.employee_id || '').toString().includes(q) ||
-      (e.job_title || '').includes(q)
-    )
-    .slice(0, 5)
-    .map(e => ({ ...e, _type: 'employee' } as Record<string, unknown>))
-})
+interface RenderedEntry { item: Item; flatIndex: number; label: string; sub: string }
+interface RenderedGroup { key: string; title: string; icon: unknown; items: RenderedEntry[] }
 
-const announcementResults = computed((): Record<string, unknown>[] => {
-  const q = query.value.trim()
-  if (!q || !announcementCache.value) return []
-  return announcementCache.value
-    .filter(a => ((a.title as string) || '').includes(q) || ((a.content as string) || '').includes(q))
-    .slice(0, 3)
-    .map(a => ({ ...a, _type: 'announcement' } as Record<string, unknown>))
-})
-
-const pageResults = computed((): Record<string, unknown>[] => {
-  const q = query.value.trim()
-  if (!q) return []
-  return ALL_PAGES
-    .filter(p => canAccessRoute(p.accessPath || p.path) && p.title.includes(q))
-    .map(p => ({ ...p, _type: 'page' } as Record<string, unknown>))
-})
-
-// ---------- 全域扁平索引（鍵盤導航用）----------
-// 順序：員工 → 學生 → 公告 → 頁面
-const flatItems = computed(() => [
-  ...employeeResults.value,
-  ...studentResults.value.map(s => ({ ...s, _type: 'student' })),
-  ...announcementResults.value,
-  ...pageResults.value,
-])
-
-function flatIndex(section: string, localIdx: number) {
-  const offsets: Record<string, number> = {
-    employee: 0,
-    student: employeeResults.value.length,
-    announcement: employeeResults.value.length + studentResults.value.length,
-    page: employeeResults.value.length + studentResults.value.length + announcementResults.value.length,
+const groups = computed<RenderedGroup[]>(() => {
+  const out: RenderedGroup[] = []
+  let idx = 0
+  for (const sec of SECTIONS) {
+    const rows = data.value[sec.key] || []
+    const items = rows.map(item => ({ item, flatIndex: idx++, label: sec.label(item), sub: sec.sub(item) }))
+    if (items.length) out.push({ key: sec.key, title: sec.title, icon: sec.icon, items })
   }
-  return offsets[section] + localIdx
+  return out
+})
+
+interface PageRow { title: string; path: string }
+const pages = computed<PageRow[]>(() => {
+  const q = query.value.trim()
+  if (q.length < 2) return []
+  const seen = new Set<string>()
+  const out: PageRow[] = []
+  for (const r of router.getRoutes()) {
+    const title = r.meta?.title
+    if (!title || r.path.includes(':') || seen.has(r.path)) continue
+    if (!canAccessRoute(r.path)) continue
+    if (!String(title).includes(q)) continue
+    seen.add(r.path)
+    out.push({ title: String(title), path: r.path })
+  }
+  return out.slice(0, 8)
+})
+
+const pageBase = computed(() => groups.value.reduce((n, g) => n + g.items.length, 0))
+const pageEntries = computed<RenderedEntry[]>(() =>
+  pages.value.map((p, i) => ({ item: p as unknown as Item, flatIndex: pageBase.value + i, label: p.title, sub: p.path })),
+)
+
+const totalCount = computed(() => pageBase.value + pages.value.length)
+
+function selectByFlat(flat: number) {
+  // 先找實體區塊
+  let idx = 0
+  for (const sec of SECTIONS) {
+    const rows = data.value[sec.key] || []
+    if (flat < idx + rows.length) { sec.navigate(rows[flat - idx]); close(); return }
+    idx += rows.length
+  }
+  const page = pages.value[flat - idx]
+  if (page) { router.push(page.path); close() }
 }
 
-// ---------- 資料載入 ----------
-async function loadAnnouncements() {
-  if (announcementCache.value !== null) return
-  try {
-    const res = await getAnnouncements({})
-    const resData = res.data as { items?: Record<string, unknown>[] } | Record<string, unknown>[] | null
-    announcementCache.value = (resData as { items?: Record<string, unknown>[] })?.items ?? (resData as Record<string, unknown>[]) ?? []
-  } catch {
-    announcementCache.value = []
-  }
-}
-
-// debounce 學生搜尋
-let studentTimer: ReturnType<typeof setTimeout> | null = null
-function scheduleStudentSearch(q: string) {
-  if (studentTimer !== null) clearTimeout(studentTimer)
-  if (!q.trim()) {
-    studentResults.value = []
-    return
-  }
-  studentTimer = setTimeout(async () => {
+let timer: ReturnType<typeof setTimeout> | null = null
+watch(query, (q) => {
+  activeIndex.value = -1
+  if (timer) clearTimeout(timer)
+  const s = q.trim()
+  if (s.length < 2) { data.value = {}; isLoading.value = false; return }
+  timer = setTimeout(async () => {
     isLoading.value = true
     try {
-      const res = await getStudents({ search: q, limit: 5 })
-      studentResults.value = (res.data?.items ?? res.data ?? []).slice(0, 5)
+      const res = await globalSearch(s)
+      // 回傳含 q:string + 各類陣列，先轉 unknown 再視為各區塊 map（不用 any）
+      data.value = (res.data as unknown as Record<string, Item[]>) || {}
     } catch {
-      studentResults.value = []
+      data.value = {}
     } finally {
       isLoading.value = false
     }
   }, 300)
-}
-
-// ---------- query 監聽 ----------
-watch(query, (newQ) => {
-  activeIndex.value = -1
-  scheduleStudentSearch(newQ)
 })
 
-// ---------- 開啟 / 關閉 ----------
-function open() {
-  visible.value = true
-  query.value = ''
-  activeIndex.value = -1
-  studentResults.value = []
-  // 預載資料
-  employeeStore.fetchEmployees()
-  loadAnnouncements()
-  nextTick(() => inputRef.value?.focus())
-}
-
-function close() {
-  visible.value = false
-  if (studentTimer !== null) clearTimeout(studentTimer)
-}
-
-// ---------- 選擇項目 ----------
-function select(item: Record<string, unknown>) {
-  const type = item._type
-  if (type === 'employee') router.push('/employees')
-  else if (type === 'student') router.push('/students')
-  else if (type === 'announcement') router.push('/announcements')
-  else if (type === 'page') router.push(item.path as string)
-  close()
-}
-
-// ---------- 鍵盤導航 ----------
 function onKeydown(e: KeyboardEvent) {
-  const total = flatItems.value.length
+  const total = totalCount.value
   if (e.key === 'ArrowDown') {
     e.preventDefault()
     activeIndex.value = total ? (activeIndex.value + 1) % total : -1
@@ -300,9 +215,7 @@ function onKeydown(e: KeyboardEvent) {
     scrollActiveIntoView()
   } else if (e.key === 'Enter') {
     e.preventDefault()
-    if (activeIndex.value >= 0 && activeIndex.value < total) {
-      select(flatItems.value[activeIndex.value])
-    }
+    if (activeIndex.value >= 0 && activeIndex.value < total) selectByFlat(activeIndex.value)
   } else if (e.key === 'Escape') {
     close()
   }
@@ -310,12 +223,23 @@ function onKeydown(e: KeyboardEvent) {
 
 function scrollActiveIntoView() {
   nextTick(() => {
-    const el = resultsRef.value?.querySelector('.gs-item--active')
-    el?.scrollIntoView({ block: 'nearest' })
+    resultsRef.value?.querySelector('.gs-item--active')?.scrollIntoView({ block: 'nearest' })
   })
 }
 
-// ---------- 全域快捷鍵 Ctrl+K / ⌘+K ----------
+function open() {
+  visible.value = true
+  query.value = ''
+  activeIndex.value = -1
+  data.value = {}
+  nextTick(() => inputRef.value?.focus())
+}
+
+function close() {
+  visible.value = false
+  if (timer) clearTimeout(timer)
+}
+
 function onGlobalKeydown(e: KeyboardEvent) {
   if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
     e.preventDefault()
@@ -326,10 +250,9 @@ function onGlobalKeydown(e: KeyboardEvent) {
 onMounted(() => window.addEventListener('keydown', onGlobalKeydown))
 onUnmounted(() => {
   window.removeEventListener('keydown', onGlobalKeydown)
-  if (studentTimer !== null) clearTimeout(studentTimer)
+  if (timer) clearTimeout(timer)
 })
 
-// ---------- 對外暴露 ----------
 defineExpose({ open })
 </script>
 

@@ -38,6 +38,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getFeePeriods } from '@/api/fees'
 import { useClassroomStore } from '@/stores/classroom'
@@ -51,7 +52,11 @@ const activeTab = ref('records')
 const periodOptions = ref<string[]>([])
 
 // ─── 子元件 ref（records tab） ──────────────────────────────────────────────
-const feeRecordsTabRef = ref<{ fetchRecords?: () => void } | null>(null)
+const route = useRoute()
+const feeRecordsTabRef = ref<{
+  fetchRecords?: () => void
+  applySearch?: (name: string) => void
+} | null>(null)
 
 // ─── 班級列表（供子元件下拉選單） ──────────────────────────────────────────
 const classroomStore = useClassroomStore()
@@ -73,7 +78,12 @@ watch(activeTab, (val) => {
 onMounted(() => {
   fetchFeePeriods()
   classroomStore.fetchClassrooms()
-  if (activeTab.value === 'records') feeRecordsTabRef.value?.fetchRecords?.()
+  if (activeTab.value === 'records') {
+    // 全域搜尋導航帶入 ?search=<學生姓名>：預填學生姓名並篩選
+    const kw = typeof route.query.search === 'string' ? route.query.search : ''
+    if (kw) feeRecordsTabRef.value?.applySearch?.(kw)
+    else feeRecordsTabRef.value?.fetchRecords?.()
+  }
 })
 </script>
 
