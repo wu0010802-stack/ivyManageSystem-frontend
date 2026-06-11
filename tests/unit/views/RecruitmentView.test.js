@@ -19,6 +19,13 @@ const getPeriods = vi.fn()
 const getPeriodsSummary = vi.fn()
 const downloadFile = vi.fn()
 
+// admin-search merge 後 view 於 setup 用 useRoute().query.keyword 預篩與
+// router.push 跳轉學生詳情，無注入時 mount 即炸，mock 之
+vi.mock('vue-router', () => ({
+  useRoute: () => ({ query: {} }),
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+}))
+
 vi.mock('chart.js', () => ({
   Chart: { register: vi.fn() },
   CategoryScale: {},

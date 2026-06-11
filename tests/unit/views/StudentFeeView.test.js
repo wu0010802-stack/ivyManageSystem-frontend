@@ -3,6 +3,12 @@ import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { nextTick } from 'vue'
 
+// admin-search merge 後 view 於 setup 讀 useRoute().query.search 做預篩，
+// 無 router 注入時 mount 即炸，mock 之
+vi.mock('vue-router', () => ({
+  useRoute: () => ({ query: {} }),
+}))
+
 // ── API mocks ──────────────────────────────────────────────────────────────
 const getFeePeriods = vi.fn()
 
