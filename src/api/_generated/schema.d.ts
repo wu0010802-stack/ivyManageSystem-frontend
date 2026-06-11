@@ -3401,6 +3401,9 @@ export interface paths {
         /**
          * Get Permissions
          * @description 取得權限定義（供前端渲染 UI）— 從 DB 拉，admin runtime 改動立即生效。
+         *
+         *     R6-1：須登入才可讀（原本無任何 Depends → 匿名訪客可拉整份 RBAC 模型，含
+         *     自訂角色 code/label/權限陣列）。要求 get_current_user 即封閉匿名洩漏。
          */
         get: operations["get_permissions_api_auth_permissions_get"];
         put?: never;
@@ -19608,6 +19611,16 @@ export interface components {
         };
         /** MedicationOrderCreate */
         MedicationOrderCreate: {
+            /**
+             * Acknowledge Allergy Warning
+             * @default false
+             */
+            acknowledge_allergy_warning: boolean;
+            /**
+             * Acknowledge Duplicate Slot
+             * @default false
+             */
+            acknowledge_duplicate_slot: boolean;
             /** Dose */
             dose: string;
             /** Medication Name */
@@ -38931,8 +38944,8 @@ export interface operations {
     };
     download_offboarding_bundle_api_offboarding_download_get: {
         parameters: {
-            query: {
-                token: string;
+            query?: {
+                token?: string;
             };
             header?: never;
             path?: never;
