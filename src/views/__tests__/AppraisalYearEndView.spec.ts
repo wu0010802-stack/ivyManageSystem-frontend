@@ -27,6 +27,7 @@ const stubs = {
     template: '<div class="stub-seg" />',
   },
   ElEmpty: { name: 'ElEmpty', template: '<div class="stub-empty" />' },
+  YearEndRulesPanel: { name: 'YearEndRulesPanel', template: '<div class="stub-year-end-rules" />' },
 }
 
 function mountWith(perms: string[], query: Record<string, unknown> = {}) {
@@ -84,5 +85,20 @@ describe('AppraisalYearEndView shell', () => {
     w.findComponent({ name: 'ElSegmented' }).vm.$emit('change', 'year-end')
     await nextTick()
     expect(replace).toHaveBeenCalledWith({ query: { section: 'year-end' } })
+  })
+
+  it('SETTINGS_READ → 出現「年終規則」section 並可渲染', () => {
+    const w = mountWith(['SETTINGS_READ'], { section: 'year-end-rules' })
+    const seg = w.findComponent({ name: 'ElSegmented' })
+    const opts = seg.props('options') as { label: string; value: string }[]
+    expect(opts.some((o) => o.value === 'year-end-rules' && o.label === '年終規則')).toBe(true)
+    expect(w.find('.stub-year-end-rules').exists()).toBe(true)
+  })
+
+  it('只有 YEAR_END_READ（無 SETTINGS_READ）→ 不出現年終規則 section', () => {
+    const w = mountWith(['YEAR_END_READ'])
+    const seg = w.findComponent({ name: 'ElSegmented' })
+    const opts = seg.props('options') as { label: string; value: string }[]
+    expect(opts.some((o) => o.value === 'year-end-rules')).toBe(false)
   })
 })

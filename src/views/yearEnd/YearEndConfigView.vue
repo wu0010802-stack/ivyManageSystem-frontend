@@ -419,10 +419,9 @@ onMounted(async () => {
         <span class="section-title">獎金標準 / 扣款費率</span>
       </template>
       <el-alert
-        title="才藝/教課單價、考核基準獎金、遲到/事病假費率等設定"
+        title="年終費率（才藝鼓勵、學期紅利門檻、遲到/事病假扣款）已移至「考核與年終 → 年終規則」；節慶基準獎金仍在「薪資管理 → 薪資設定」。"
         type="info"
         :closable="false"
-        description="以上費率設定集中於「薪資管理 → 薪資設定」頁面中的 BonusConfigPanel。"
         show-icon
         class="bonus-hint"
       />
@@ -430,11 +429,11 @@ onMounted(async () => {
         <el-button
           type="primary"
           plain
-          @click="router.push('/salary')"
+          @click="router.push({ path: '/appraisal-year-end', query: { section: 'year-end-rules' } })"
         >
-          前往薪資管理（薪資設定 tab）
+          前往年終規則設定
         </el-button>
-        <span class="field-hint">請切換到「薪資設定」分頁後即可編輯費率與標準獎金</span>
+        <span class="field-hint">才藝/學期紅利/考勤扣款費率於此編輯；節慶基準獎金請至薪資設定分頁</span>
       </div>
     </el-card>
   </div>

@@ -1,20 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
-import BonusConfigPanel from '../BonusConfigPanel.vue'
+import YearEndRulesPanel from '../YearEndRulesPanel.vue'
 
-// ---- Mock API modules ----
 vi.mock('@/api/config', () => ({
   getBonusConfig: vi.fn(),
   updateBonusConfig: vi.fn(),
-  getGradeTargets: vi.fn(),
-  updateGradeTargets: vi.fn(),
-  getPositionSalary: vi.fn(),
-  updatePositionSalary: vi.fn(),
-  comparePositionSalary: vi.fn(),
-  syncPositionSalary: vi.fn(),
-  getTitles: vi.fn(),
-  updateTitle: vi.fn(),
 }))
 
 vi.mock('@/api/employees', () => ({
@@ -42,19 +33,13 @@ type PanelVm = {
   afterClassAwardRows: { className: string; price: number }[]
   artTeacherEmployeeIds: number[]
   employeeOptions: { id: number; name: unknown }[]
-  bonusConfig: Record<string, unknown>
+  rules: Record<string, unknown>
   addAfterClassAwardRow: () => void
   removeAfterClassAwardRow: (i: number) => void
-  saveBonusConfig: () => Promise<void>
+  saveRules: () => Promise<void>
 }
 
-function stubAuxApis() {
-  vi.mocked(configApi.getGradeTargets).mockResolvedValue({ data: {} } as never)
-  vi.mocked(configApi.getPositionSalary).mockResolvedValue({ data: {} } as never)
-  vi.mocked(configApi.comparePositionSalary).mockResolvedValue({
-    data: { employees: [], out_of_sync: 0 },
-  } as never)
-  vi.mocked(configApi.getTitles).mockResolvedValue({ data: [] } as never)
+function stubEmployees() {
   vi.mocked(employeesApi.getEmployees).mockResolvedValue({
     data: [
       { id: 7, name: '林老師' },
@@ -64,13 +49,9 @@ function stubAuxApis() {
 }
 
 async function mountPanel() {
-  const wrapper = mount(BonusConfigPanel, {
+  const wrapper = mount(YearEndRulesPanel, {
     global: {
       stubs: {
-        'el-tabs': true,
-        'el-tab-pane': true,
-        'el-table': true,
-        'el-table-column': true,
         'el-button': true,
         'el-card': true,
         'el-alert': true,
@@ -78,14 +59,12 @@ async function mountPanel() {
         'el-empty': true,
         'el-row': true,
         'el-col': true,
-        'el-form': true,
         'el-form-item': true,
         'el-input': true,
         'el-input-number': true,
         'el-select': true,
         'el-option': true,
         'el-tooltip': true,
-        'el-tag': true,
       },
     },
   })
@@ -94,7 +73,7 @@ async function mountPanel() {
   return wrapper
 }
 
-describe('BonusConfigPanel 年終規則', () => {
+describe('YearEndRulesPanel', () => {
   beforeEach(() => vi.clearAllMocks())
 
   it('load: dict → afterClassAwardRows，list → artTeacherEmployeeIds', async () => {
@@ -107,7 +86,7 @@ describe('BonusConfigPanel 年終規則', () => {
         late_deduction_per_time: 50,
       },
     } as never)
-    stubAuxApis()
+    stubEmployees()
 
     const wrapper = await mountPanel()
     const vm = wrapper.vm as unknown as PanelVm
@@ -117,8 +96,8 @@ describe('BonusConfigPanel 年終規則', () => {
       { className: '律動班', price: 40 },
     ])
     expect(vm.artTeacherEmployeeIds).toEqual([7, 9])
-    expect(vm.bonusConfig.art_teacher_unit_price).toBe(30)
-    expect(vm.bonusConfig.dividend_returning_threshold).toBe(0.8)
+    expect(vm.rules.art_teacher_unit_price).toBe(30)
+    expect(vm.rules.dividend_returning_threshold).toBe(0.8)
     expect(vm.employeeOptions).toHaveLength(2)
   })
 
@@ -126,7 +105,7 @@ describe('BonusConfigPanel 年終規則', () => {
     vi.mocked(configApi.getBonusConfig).mockResolvedValue({
       data: { art_teacher_unit_price: 0 },
     } as never)
-    stubAuxApis()
+    stubEmployees()
 
     const wrapper = await mountPanel()
     const vm = wrapper.vm as unknown as PanelVm
@@ -139,21 +118,19 @@ describe('BonusConfigPanel 年終規則', () => {
     vi.mocked(configApi.getBonusConfig).mockResolvedValue({
       data: { after_class_award_unit_price: {}, art_teacher_employee_ids: [] },
     } as never)
-    stubAuxApis()
+    stubEmployees()
     vi.mocked(configApi.updateBonusConfig).mockResolvedValue({ data: {} } as never)
-    // ElMessageBox.prompt 回傳使用者填的原因
     vi.mocked(ElMessageBox.prompt).mockResolvedValue({ value: '年終規則設定調整測試' } as never)
 
     const wrapper = await mountPanel()
     const vm = wrapper.vm as unknown as PanelVm
 
-    // 模擬使用者編輯
     vm.afterClassAwardRows.push({ className: '美術班', price: 60 })
     vm.afterClassAwardRows.push({ className: '   ', price: 99 }) // 空白班名應略過
     vm.artTeacherEmployeeIds.push(7)
     await nextTick()
 
-    await vm.saveBonusConfig()
+    await vm.saveRules()
 
     expect(configApi.updateBonusConfig).toHaveBeenCalledTimes(1)
     const payload = vi.mocked(configApi.updateBonusConfig).mock.calls[0][0] as Record<
@@ -163,13 +140,16 @@ describe('BonusConfigPanel 年終規則', () => {
     expect(payload.after_class_award_unit_price).toEqual({ 美術班: 60 })
     expect(payload.art_teacher_employee_ids).toEqual([7])
     expect(payload.reason).toBe('年終規則設定調整測試')
+    // 確認只送年終欄位、不帶超額/節慶/底薪（後端部分更新會保留）
+    expect(payload.overtime_head_normal).toBeUndefined()
+    expect(payload.principal_festival).toBeUndefined()
   })
 
   it('add / remove afterClassAwardRow', async () => {
     vi.mocked(configApi.getBonusConfig).mockResolvedValue({
       data: { after_class_award_unit_price: { 美術班: 50 } },
     } as never)
-    stubAuxApis()
+    stubEmployees()
 
     const wrapper = await mountPanel()
     const vm = wrapper.vm as unknown as PanelVm
