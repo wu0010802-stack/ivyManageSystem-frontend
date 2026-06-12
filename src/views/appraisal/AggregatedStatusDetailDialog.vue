@@ -10,8 +10,8 @@ import { InfoFilled } from '@element-plus/icons-vue'
 
 import { summarizeRule } from './ruleSummary'
 
-interface DisciplinaryInfo { warning_count?: number; minor_count?: number; major_count?: number; suggested_score_delta?: number | string; actions?: Record<string, unknown>[]; [key: string]: unknown }
-interface Participant { employee_name?: string; role_group?: string; attendance?: Record<string, unknown>; retention?: Record<string, unknown> | null; activity?: Record<string, unknown> | null; disciplinary?: DisciplinaryInfo; [key: string]: unknown }
+interface DisciplinaryInfo { warning_count?: number; minor_count?: number; major_count?: number; commend_count?: number; minor_merit_count?: number; major_merit_count?: number; suggested_score_delta?: number | string; actions?: Record<string, unknown>[]; [key: string]: unknown }
+interface Participant { employee_name?: string; role_group?: string; reinstate_count?: number; attendance?: Record<string, unknown>; retention?: Record<string, unknown> | null; activity?: Record<string, unknown> | null; disciplinary?: DisciplinaryInfo; [key: string]: unknown }
 interface Cycle { [key: string]: unknown }
 
 const props = defineProps<{
@@ -36,12 +36,18 @@ const ACTION_TYPE_LABEL: Record<string, string> = {
   warning: '警告',
   minor: '小過',
   major: '大過',
+  commendation: '嘉獎',
+  minor_merit: '小功',
+  major_merit: '大功',
 }
 
 const ACTION_TYPE_TAG: Record<string, string> = {
   warning: '',
   minor: 'warning',
   major: 'danger',
+  commendation: 'success',
+  minor_merit: 'success',
+  major_merit: 'success',
 }
 
 const dialogVisible = computed({
@@ -100,6 +106,8 @@ const fmtDelta = (v: unknown) => {
             <el-descriptions-item label="早退">{{ attendance.early_leave_count || 0 }} 次</el-descriptions-item>
             <el-descriptions-item label="未打卡">{{ attendance.missing_punch_count || 0 }} 次</el-descriptions-item>
             <el-descriptions-item label="請假">{{ attendance.leave_days || 0 }} 天</el-descriptions-item>
+            <el-descriptions-item label="曠職">{{ attendance.absent_days || 0 }} 天</el-descriptions-item>
+            <el-descriptions-item label="復學事件">{{ participant.reinstate_count || 0 }} 次</el-descriptions-item>
             <el-descriptions-item label="建議扣分">
               <span :class="['delta', { negative: Number(attendance.suggested_score_delta) < 0 }]">
                 {{ fmtDelta(attendance.suggested_score_delta) }}
@@ -181,6 +189,9 @@ const fmtDelta = (v: unknown) => {
             <span>警告 <strong>{{ disciplinary.warning_count || 0 }}</strong></span>
             <span>小過 <strong>{{ disciplinary.minor_count || 0 }}</strong></span>
             <span>大過 <strong>{{ disciplinary.major_count || 0 }}</strong></span>
+            <span>嘉獎 <strong>{{ disciplinary.commend_count || 0 }}</strong></span>
+            <span>小功 <strong>{{ disciplinary.minor_merit_count || 0 }}</strong></span>
+            <span>大功 <strong>{{ disciplinary.major_merit_count || 0 }}</strong></span>
             <span>
               建議扣分：
               <span :class="['delta', { negative: Number(disciplinary.suggested_score_delta) < 0 }]">

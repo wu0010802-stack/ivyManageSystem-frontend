@@ -113,25 +113,39 @@ export function useSalarySettlement(year: Ref<number>, month: Ref<number>) {
     const { notify } = useErrorNotify()
     const records = ref<SettlementRecord[]>([])
     const prevRecords = ref<SettlementRecord[]>([])
+    // 上月載入「失敗」（500/網路錯誤）≠ 上月「真無資料」——
+    // 前者異常比較靜默失效，覆核 banner 須區分以免漏看月差
+    const prevLoadFailed = ref(false)
     const loading = ref(false)
     const thresholds = ref(getThresholds())
 
+    // 防切月 race：晚到的舊請求不得蓋掉新月資料（epoch 比對）
+    let refreshEpoch = 0
+
     const refresh = async () => {
+        const epoch = ++refreshEpoch
         loading.value = true
         try {
             const prevY = month.value === 1 ? year.value - 1 : year.value
             const prevM = month.value === 1 ? 12 : month.value - 1
+            let prevFailed = false
             const [cur, prev] = await Promise.all([
                 getRecords(year.value, month.value),
                 // 上月載入失敗（首月/權限邊界）不擋本月流程，異常比較自動降級
-                getRecords(prevY, prevM).catch(() => ({ data: [] as unknown[] })),
+                getRecords(prevY, prevM).catch(() => {
+                    prevFailed = true
+                    return { data: [] as unknown[] }
+                }),
             ])
+            if (epoch !== refreshEpoch) return // 已被更新的請求取代
             records.value = (cur.data ?? []) as unknown as SettlementRecord[]
             prevRecords.value = ((prev as { data: unknown[] }).data ?? []) as unknown as SettlementRecord[]
+            prevLoadFailed.value = prevFailed
         } catch (e) {
+            if (epoch !== refreshEpoch) return
             notify(e, 'useSalarySettlement.refresh', '載入薪資紀錄失敗')
         } finally {
-            loading.value = false
+            if (epoch === refreshEpoch) loading.value = false
         }
     }
     watch([year, month], refresh)
@@ -141,7 +155,7 @@ export function useSalarySettlement(year: Ref<number>, month: Ref<number>) {
     const sortedRecords = computed(() => sortByAttention(records.value, anomalies.value))
     const finalizedCount = computed(() => records.value.filter((r) => r.is_finalized).length)
 
-    return { records, prevRecords, loading, status, anomalies, sortedRecords, finalizedCount, thresholds, refresh }
+    return { records, prevRecords, prevLoadFailed, loading, status, anomalies, sortedRecords, finalizedCount, thresholds, refresh }
 }
 
 export type SalarySettlement = ReturnType<typeof useSalarySettlement>

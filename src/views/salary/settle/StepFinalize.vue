@@ -72,7 +72,14 @@
         </el-table-column>
         <el-table-column label="操作" width="100" fixed="right">
           <template #default="scope">
-            <el-button v-if="canWriteSalary" type="danger" size="small" link @click="onUnfinalize(scope.row)">
+            <el-button
+              v-if="canWriteSalary"
+              type="danger"
+              size="small"
+              link
+              :loading="unfinalizingId === scope.row.id"
+              @click="onUnfinalize(scope.row)"
+            >
               退回
             </el-button>
           </template>
@@ -192,7 +199,12 @@ const onForceFinalize = async () => {
     await runFinalize(true, reason.trim())
 }
 
+// in-flight 守衛：await 期間重複觸發會開第二個 prompt（後端會拒，但 UX 噪音）
+const unfinalizingId = ref<number | null>(null)
+
 const onUnfinalize = async (row: SettlementRecord) => {
+    if (unfinalizingId.value !== null) return
+    unfinalizingId.value = row.id
     let reason: string
     try {
         const res = await ElMessageBox.prompt(
@@ -207,6 +219,7 @@ const onUnfinalize = async (row: SettlementRecord) => {
         )
         reason = (res as { value: string }).value
     } catch {
+        unfinalizingId.value = null
         return
     }
     try {
@@ -215,6 +228,8 @@ const onUnfinalize = async (row: SettlementRecord) => {
         await settlement.refresh()
     } catch (error) {
         notify(error, 'StepFinalize.unfinalize', null, { prefix: '退回失敗' })
+    } finally {
+        unfinalizingId.value = null
     }
 }
 

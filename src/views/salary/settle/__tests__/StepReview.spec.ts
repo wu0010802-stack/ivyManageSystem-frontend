@@ -50,6 +50,7 @@ const makeSettlement = (records: SettlementRecord[], prev: SettlementRecord[] = 
     return {
         records: recordsRef,
         prevRecords: prevRef,
+        prevLoadFailed: ref(false),
         loading: ref(false),
         anomalies,
         sortedRecords: computed(() => sortByAttention(recordsRef.value, anomalies.value)),
@@ -221,5 +222,25 @@ describe('AdjustDrawer', () => {
         })
         const saveBtn = wrapper.findAll('button').find((b) => b.text().includes('儲存'))
         expect(saveBtn!.attributes('disabled')).toBeDefined()
+    })
+})
+
+describe('StepReview 上月比較 banner', () => {
+    it('prevLoadFailed=true → 顯示載入失敗警示而非「上月無紀錄」', () => {
+        const settlement = makeSettlement([rec()])
+        settlement.prevLoadFailed.value = true
+        const wrapper = mount(StepReview, {
+            global: { stubs: STUBS, provide: { settlement, settleQuery: { year: 2026, month: 5 } } },
+        })
+        expect(wrapper.text()).toContain('上月資料載入失敗')
+        expect(wrapper.text()).not.toContain('上月無紀錄')
+    })
+
+    it('上月真無資料（未失敗）→ 顯示「上月無紀錄」', () => {
+        const settlement = makeSettlement([rec()])
+        const wrapper = mount(StepReview, {
+            global: { stubs: STUBS, provide: { settlement, settleQuery: { year: 2026, month: 5 } } },
+        })
+        expect(wrapper.text()).toContain('上月無紀錄')
     })
 })

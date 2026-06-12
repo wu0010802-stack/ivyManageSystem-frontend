@@ -292,7 +292,11 @@ const canView = computed(() => {
   )
 })
 
-const activeMenu = computed(() => route.path)
+const activeMenu = computed(() => {
+  // 薪資 IA 拆 5 路由後子頁（settle/history/simulate/settings）仍高亮「薪資管理」
+  if (route.path.startsWith('/salary/')) return '/salary'
+  return route.path
+})
 
 // 工作台 badge = 待簽核 + 高風險未確認
 const workbenchBadge = computed(() =>

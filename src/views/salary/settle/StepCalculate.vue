@@ -8,6 +8,21 @@
       title="考勤或設定已變動，部分明細已過期，建議重新計算"
     />
 
+    <!-- 部分失敗持久警示：失敗員工在覆核表中是「不存在」而非標紅，必須在此處理完才前進 -->
+    <el-alert
+      v-if="calcErrors.length > 0"
+      type="error"
+      :closable="false"
+      class="calc-mb"
+      :title="`部分員工薪資計算失敗，共 ${calcErrors.length} 筆——這些員工本月尚無薪資紀錄，請排除原因後重新計算`"
+    >
+      <ul class="calc-error-list">
+        <li v-for="(err, i) in calcErrors" :key="i">
+          {{ err.employee_name }}：{{ err.error }}
+        </li>
+      </ul>
+    </el-alert>
+
     <el-card shadow="never" class="no-hover">
       <div class="calc-body">
         <div>
@@ -56,6 +71,7 @@ const q = inject<{ year: number; month: number }>('settleQuery', {
 })
 const { notify } = useErrorNotify()
 const calculating = ref(false)
+const calcErrors = ref<{ employee_name?: string; error?: string }[]>([])
 
 const disabledReason = computed(() => {
     if (!hasPermission('SALARY_WRITE')) return '需要薪資寫入權限（目前為唯讀模式）'
@@ -82,14 +98,12 @@ const onCalculate = async () => {
     try {
         const response = await calculate(q.year, q.month)
         const data = response.data as { errors?: { employee_name?: string; error?: string }[] }
-        const errors = data?.errors ?? []
-        if (errors.length > 0) {
-            const names = errors.map((e) => `${e.employee_name}（${e.error}）`).join('、')
-            ElMessage.warning(`部分員工薪資計算失敗，共 ${errors.length} 筆：${names}`)
-        } else {
-            ElMessage.success('薪資計算完成')
-        }
+        calcErrors.value = data?.errors ?? []
         await settlement.refresh()
+        if (calcErrors.value.length > 0) {
+            return // 停留在計算步驟，持久警示列出失敗員工
+        }
+        ElMessage.success('薪資計算完成')
         emit('next') // 自動進入覆核
     } catch (e) {
         notify(e, 'StepCalculate', null, { prefix: '計算失敗' })
@@ -121,6 +135,11 @@ const onCalculate = async () => {
   margin: 0;
   color: var(--text-secondary);
   font-size: var(--text-sm);
+}
+
+.calc-error-list {
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-4);
 }
 
 .step-actions {

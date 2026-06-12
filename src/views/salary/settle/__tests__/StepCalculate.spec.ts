@@ -26,7 +26,7 @@ const makeSettlement = (status: string, records: unknown[] = []) => ({
 })
 
 const STUBS = {
-    'el-alert': { template: '<div class="alert-stub">{{ $attrs.title }}</div>' },
+    'el-alert': { template: '<div class="alert-stub">{{ $attrs.title }}<slot /></div>' },
     'el-card': { template: '<div><slot /></div>' },
     'el-tooltip': { template: '<div><slot /></div>' },
     'el-button': {
@@ -70,7 +70,7 @@ describe('StepCalculate', () => {
         expect(wrapper.text()).toContain('建議重新計算')
     })
 
-    it('計算成功 → refresh + emit next；部分失敗 → warning', async () => {
+    it('計算成功 → refresh + emit next', async () => {
         const settlement = makeSettlement('reviewing')
         calculateMock.mockResolvedValue({ data: { results: [], errors: [] } })
         const wrapper = mountStep(settlement)
@@ -81,11 +81,30 @@ describe('StepCalculate', () => {
         expect(settlement.refresh).toHaveBeenCalled()
         expect(wrapper.emitted('next')).toBeTruthy()
         expect(ElMessage.success).toHaveBeenCalled()
+    })
 
-        calculateMock.mockResolvedValue({ data: { errors: [{ employee_name: '王', error: '缺底薪' }] } })
+    it('部分失敗 → 持久警示列出失敗員工、停留在計算步驟', async () => {
+        const settlement = makeSettlement('reviewing')
+        calculateMock.mockResolvedValue({
+            data: { errors: [{ employee_name: '王小明', error: '缺底薪' }] },
+        })
+        const wrapper = mountStep(settlement)
+        const btn = wrapper.findAll('button').find((b) => b.text().includes('計算薪資'))
         await btn!.trigger('click')
         await flushPromises()
-        expect(ElMessage.warning).toHaveBeenCalled()
+        // 不自動進覆核（失敗員工在覆核表中是「不存在」而非標紅，滑過去會漏看）
+        expect(wrapper.emitted('next')).toBeFalsy()
+        expect(settlement.refresh).toHaveBeenCalled()
+        // 持久警示（非 3 秒 toast）列出失敗員工與原因
+        expect(wrapper.text()).toContain('王小明')
+        expect(wrapper.text()).toContain('缺底薪')
+
+        // 重算全成功 → 警示清除、照常前進
+        calculateMock.mockResolvedValue({ data: { results: [], errors: [] } })
+        await btn!.trigger('click')
+        await flushPromises()
+        expect(wrapper.emitted('next')).toBeTruthy()
+        expect(wrapper.text()).not.toContain('王小明')
     })
 
     it('使用者取消 confirm → 不呼叫 calculate', async () => {
