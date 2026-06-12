@@ -1,4 +1,6 @@
 import { computed } from 'vue'
+// 純函式、零依賴，不會把 admin 端 chunk 拉進 parent bundle
+import { formatCurrency } from '@/utils/currency'
 
 const BUCKET_LABEL = {
   morning: '早上',
@@ -36,11 +38,6 @@ function bucketFromHour(h: number | null) {
   if (h >= 12 && h < 14) return 'noon'
   if (h >= 14 && h < 18) return 'afternoon'
   return 'later'
-}
-
-function formatMoney(n: number | null | undefined) {
-  if (!n) return '0'
-  return n.toLocaleString('en-US')
 }
 
 function isBirthdayToday(birthday: string | null | undefined) {
@@ -161,9 +158,9 @@ export function useTodayTimeline({ summary, todayChildren }: { summary: { value:
         bucket: 'later',
         variant: 'pending',
         time: null,
-        primary: `待繳費 NT$ ${formatMoney(fees?.outstanding)}`,
+        primary: `待繳費 ${formatCurrency(fees?.outstanding ?? 0)}`,
         secondary: (fees?.overdue ?? 0) > 0
-          ? `逾期 NT$ ${formatMoney(fees?.overdue)}`
+          ? `逾期 ${formatCurrency(fees?.overdue ?? 0)}`
           : `${fees?.outstanding_count} 筆`,
         tone: (fees?.overdue ?? 0) > 0 ? 'danger' : 'money',
         path: '/fees',

@@ -85,6 +85,7 @@ import { ElMessage } from 'element-plus'
 import type { FormInstance } from 'element-plus'
 import { createFeeTemplate, updateFeeTemplate } from '@/api/fees'
 import FormSection from '@/components/common/FormSection.vue'
+import { formatCurrency } from '@/utils/currency'
 
 interface Grade {
   id: number
@@ -149,7 +150,7 @@ const rules = {
 }
 
 function formatMoney(n: number | null | undefined): string {
-  return `NT$ ${Number(n || 0).toLocaleString()}`
+  return formatCurrency(n ?? 0)
 }
 
 watch(

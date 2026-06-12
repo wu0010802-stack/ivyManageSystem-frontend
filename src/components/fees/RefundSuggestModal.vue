@@ -78,6 +78,7 @@ import { ref, reactive, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { suggestRefund, refundFeeRecord } from '@/api/fees'
 import { NON_REFUNDABLE_FEE_TYPES } from './feeTypes'
+import { dateToLocalISO } from '@/utils/format'
 
 interface FeeRecord {
   id: number
@@ -191,7 +192,8 @@ async function onSubmit() {
 function format(d: Date | string | null): string | null {
   if (!d) return null
   const dt = d instanceof Date ? d : new Date(d)
-  return dt.toISOString().slice(0, 10)
+  // 本地時區，不可用 toISOString()（UTC 會在台北凌晨偏成昨天）；無效日期回 null
+  return dateToLocalISO(dt) || null
 }
 </script>
 

@@ -27,6 +27,7 @@ import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { generateCertificate } from '@/api/govMoe'
 import { hasPermission } from '@/utils/auth'
+import { todayISO } from '@/utils/format'
 
 const props = defineProps<{ studentId: number }>()
 
@@ -35,7 +36,7 @@ const canIssue = computed(() => hasPermission('GOV_REPORTS_EXPORT'))
 const open = ref(false)
 const loading = ref(false)
 const form = ref({
-  issue_date: new Date().toISOString().slice(0, 10),
+  issue_date: todayISO(),
   purpose: '',
   copies: 1,
 })
