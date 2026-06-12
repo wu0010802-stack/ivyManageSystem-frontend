@@ -73,6 +73,7 @@ import {
 } from 'element-plus'
 
 import type { RecurrenceRule, WeeklyRule, MonthlyDayRule, MonthlyNthRule } from './types'
+import { dateToLocalISO } from '@/utils/format'
 
 const props = defineProps<{ modelValue: RecurrenceRule | null }>()
 const emit = defineEmits<{ 'update:modelValue': [RecurrenceRule | null] }>()
@@ -97,7 +98,8 @@ const until = ref<string>(props.modelValue?.until ?? defaultUntil())
 function defaultUntil(): string {
   const d = new Date()
   d.setMonth(d.getMonth() + 1)
-  return d.toISOString().slice(0, 10)
+  // 本地時區，不可用 toISOString()（UTC 會在台北凌晨偏成昨天）
+  return dateToLocalISO(d)
 }
 
 function nthLabel(n: number): string {

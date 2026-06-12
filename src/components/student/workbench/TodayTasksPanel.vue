@@ -6,6 +6,7 @@ import { useAcademicTermStore } from '@/stores/academicTerm'
 import { getClassrooms } from '@/api/classrooms'
 import { getStudents } from '@/api/students'
 import { normalizeSchoolYear } from '@/utils/academic'
+import { todayRange, thisWeekRange, thisMonthRange, lastNDaysRange } from '@/utils/dateRange'
 import {
   useAcademicAffairsFilters,
   ACADEMIC_AFFAIRS_FILTERS_KEY,
@@ -56,41 +57,10 @@ const selectedStudentId = computed(() => filters.studentId as number | null)
 const selectedDateRange = computed(() => filters.dateRange as string[])
 
 const dateRangeShortcuts = [
-  {
-    text: '今天',
-    value: () => {
-      const t = new Date()
-      const iso = t.toISOString().slice(0, 10)
-      return [iso, iso]
-    },
-  },
-  {
-    text: '本週',
-    value: () => {
-      const today = new Date()
-      const day = today.getDay() || 7
-      const start = new Date(today)
-      start.setDate(today.getDate() - day + 1)
-      return [start.toISOString().slice(0, 10), today.toISOString().slice(0, 10)]
-    },
-  },
-  {
-    text: '本月',
-    value: () => {
-      const today = new Date()
-      const start = new Date(today.getFullYear(), today.getMonth(), 1)
-      return [start.toISOString().slice(0, 10), today.toISOString().slice(0, 10)]
-    },
-  },
-  {
-    text: '本學期 (近 90 天)',
-    value: () => {
-      const today = new Date()
-      const start = new Date(today)
-      start.setDate(today.getDate() - 90)
-      return [start.toISOString().slice(0, 10), today.toISOString().slice(0, 10)]
-    },
-  },
+  { text: '今天', value: () => todayRange() },
+  { text: '本週', value: () => thisWeekRange() },
+  { text: '本月', value: () => thisMonthRange() },
+  { text: '本學期 (近 90 天)', value: () => lastNDaysRange(90) },
 ]
 
 const fetchClassrooms = async () => {

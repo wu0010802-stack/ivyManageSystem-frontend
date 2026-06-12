@@ -15,6 +15,7 @@
  */
 import { describe, it, expect, beforeEach } from 'vitest'
 import { ref } from 'vue'
+import { dateToLocalISO } from '@/utils/format'
 import {
   usePublicRegistrationForm,
   normalizeMobile,
@@ -109,7 +110,7 @@ describe('usePublicRegistrationForm — 新版 composable', () => {
       const future = new Date()
       future.setFullYear(future.getFullYear() + 1)
       f.form.name = '小明'
-      f.form.birthday = future.toISOString().slice(0, 10)
+      f.form.birthday = dateToLocalISO(future)
       f.form.parent_phone = '0912345678'
       f.form.class_name = '大班'
       f.form.selectedCourses = ['美術']
