@@ -60,6 +60,22 @@ export const createManualSnapshot = (year: number, month: number, payload: unkno
 export const getSnapshotDiff = (snapshotId: number) =>
     api.get(`/salaries/snapshots/${snapshotId}/diff`)
 
+// 整月封存：非 force 時若有在職員工缺薪資紀錄、或任一筆 needs_recalc（stale）會 409；
+// force=true 需 force_reason ≥ 10 字 + ACTIVITY_PAYMENT_APPROVE（財務覆核）權限，
+// 被跳過的員工清單會回在 skipped_missing / skipped_stale
+export interface FinalizeMonthPayload { year: number; month: number; force?: boolean; force_reason?: string }
+export interface FinalizeMonthResult {
+    message: string
+    count: number
+    finalized_by: string
+    finalized_at: string
+    force: boolean
+    skipped_missing: string[]
+    skipped_stale: string[]
+}
+export const finalizeMonth = (payload: FinalizeMonthPayload) =>
+    api.post<FinalizeMonthResult>('/salaries/finalize-month', payload)
+
 // 解除單筆薪資封存（高風險、不可逆）：
 // - 需 SALARY_WRITE + admin/hr 角色 + ACTIVITY_PAYMENT_APPROVE（金流簽核）
 // - reason 必填 ≥ 10 字，會寫入 record.remark + audit_summary 供日後稽核
