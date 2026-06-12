@@ -1,6 +1,8 @@
 // ESLint flat config — 極小集，唯一目的：把 CLAUDE.md「禁 : any / as any」從靠自律
-// 變成 CI 工具強制（no-explicit-any）。既有違規以 eslint-suppressions.json 棘輪 grandfather，
-// 新違規一律擋；遺留違規逐一修掉後 `npm run lint -- --prune-suppressions` 燃燒。
+// 變成 CI 工具強制（no-explicit-any）。既有違規以 inline
+// `eslint-disable-next-line @typescript-eslint/no-explicit-any` 逐處 grandfather（126 個），
+// 搭配 reportUnusedDisableDirectives: 'error' 當棘輪：新違規一律擋；
+// 修掉一個 any 後忘刪 disable 會變 unused directive 直接報錯，棘輪只會收緊不會鬆。
 //
 // 刻意「極小」：不開 typescript-eslint / eslint-plugin-vue 的 recommended 規則集，
 // 避免一次冒出數百個無關 noise。只保留兩條與 TS-strict 承諾直接相關的規則。
