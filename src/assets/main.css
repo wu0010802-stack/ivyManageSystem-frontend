@@ -201,6 +201,22 @@ body {
   background-color: var(--bg-color) !important;
 }
 
+/* 數字等寬：表格內金額/數量對位（C 沉穩高密度） */
+.el-table {
+  font-variant-numeric: tabular-nums;
+}
+
+/* 金額欄：新頁面的金額 el-table-column 加 class-name="num-cell" align="right" */
+.el-table .num-cell {
+  font-variant-numeric: tabular-nums;
+}
+
+/* admin 表格密度：預設緊湊（僅 admin scope，避免影響 portal 觸控目標） */
+html.ivy-admin .el-table .el-table__cell {
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
 /* Dialog - responsive on mobile */
 @media (max-width: 768px) {
   .el-dialog {
