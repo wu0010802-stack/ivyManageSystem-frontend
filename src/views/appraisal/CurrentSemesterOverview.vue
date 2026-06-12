@@ -40,6 +40,7 @@ interface AttendanceInfo {
   early_leave_count?: number
   missing_punch_count?: number
   leave_days?: number
+  absent_days?: number
 }
 
 interface RetentionInfo {
@@ -55,6 +56,9 @@ interface DisciplinaryInfo {
   warning_count?: number
   minor_count?: number
   major_count?: number
+  commend_count?: number
+  minor_merit_count?: number
+  major_merit_count?: number
 }
 
 interface ParticipantRow {
@@ -168,7 +172,7 @@ const avgAttendanceAbnormal = computed(() => {
   const sum = list.reduce((acc, p) => {
     const a = p.attendance || {}
     return acc + (a.late_count || 0) + (a.early_leave_count || 0)
-      + (a.missing_punch_count || 0) + (a.leave_days || 0)
+      + (a.missing_punch_count || 0) + (a.leave_days || 0) + (a.absent_days || 0)
   }, 0)
   return (sum / list.length).toFixed(1)
 })
@@ -207,7 +211,8 @@ function isClassroomScoped(row: ParticipantRow) {
 
 function formatAttendance(row: ParticipantRow) {
   const a = row.attendance || {}
-  return `遲${a.late_count || 0}/早${a.early_leave_count || 0}/未${a.missing_punch_count || 0}/假${a.leave_days || 0}`
+  // 曠職自 2026-06-11 起與請假分流（−4/日），必須獨立可見
+  return `遲${a.late_count || 0}/早${a.early_leave_count || 0}/未${a.missing_punch_count || 0}/假${a.leave_days || 0}/曠${a.absent_days || 0}`
 }
 
 function formatRetention(row: ParticipantRow) {
@@ -222,8 +227,10 @@ function formatActivity(row: ParticipantRow) {
 
 function formatDisciplinary(row: ParticipantRow) {
   const d = row.disciplinary || {}
-  const total = (d.warning_count || 0) + (d.minor_count || 0) + (d.major_count || 0)
-  return total
+  const demerit = (d.warning_count || 0) + (d.minor_count || 0) + (d.major_count || 0)
+  const merit = (d.commend_count || 0) + (d.minor_merit_count || 0) + (d.major_merit_count || 0)
+  // 功過雙向（2026-06-11 規章對齊）：只顯示過會與 suggested_score_delta 對不上帳
+  return `過${demerit}／功${merit}`
 }
 
 // ── 詳情 dialog ────────────────────────────────────────────
@@ -523,7 +530,7 @@ const scorePreviewDialogVisible = ref(false)
             {{ row.retention?.classroom_name || (isClassroomScoped(row) ? '—' : '—') }}
           </template>
         </el-table-column>
-        <el-table-column label="遲早退/未打卡/請假" width="200">
+        <el-table-column label="遲早退/未打卡/請假/曠職" width="220">
           <template #default="{ row }">{{ formatAttendance(row) }}</template>
         </el-table-column>
         <el-table-column label="班級留校率" width="120">
@@ -536,7 +543,7 @@ const scorePreviewDialogVisible = ref(false)
             <span :data-test="`activity-${row.participant_id ?? 'emp' + row.employee_id}`">{{ formatActivity(row) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="懲處數" width="100">
+        <el-table-column label="功過" width="110">
           <template #default="{ row }">{{ formatDisciplinary(row) }}</template>
         </el-table-column>
         <el-table-column label="考核狀態" width="160">

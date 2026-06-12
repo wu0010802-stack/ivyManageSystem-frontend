@@ -526,3 +526,47 @@ describe('CurrentSemesterOverview', () => {
     expect(wrapper.find('[data-test="score-preview-dialog-stub"]').exists()).toBe(true)
   })
 })
+
+  // ── 規章對齊新欄位（2026-06-11）：曠職分流 + 功過雙向 ──────
+  it('出缺勤摘要含曠職、功過欄含功 counts', async () => {
+    getAppraisalCurrentCycle.mockResolvedValue({ data: SAMPLE_CYCLE })
+    const row = {
+      participant_id: 301,
+      employee_id: 31,
+      employee_name: '陳曠職',
+      role_group: 'HEAD_TEACHER',
+      classroom_id: 3,
+      is_participant: true,
+      hire_months_in_cycle: '6.0',
+      attendance: {
+        late_count: 1,
+        early_leave_count: 0,
+        missing_punch_count: 0,
+        leave_days: 0,
+        absent_days: 2,
+        suggested_score_delta: '-8.5',
+      },
+      retention: null,
+      activity: null,
+      disciplinary: {
+        warning_count: 1,
+        minor_count: 0,
+        major_count: 0,
+        commend_count: 2,
+        minor_merit_count: 0,
+        major_merit_count: 0,
+        actions: [],
+        suggested_score_delta: '1.00',
+      },
+    }
+    getAppraisalAllEmployeesStatus.mockResolvedValue({
+      data: makeStatusFixture({ extra: [row] }),
+    })
+
+    const wrapper = await mountView()
+    // 出缺勤摘要：曠職分流後必須可見（曠2），不可再藏進請假
+    expect(wrapper.text()).toContain('曠2')
+    // 功過欄：過 1、功 2 都要呈現，否則與 suggested_score_delta 對不上帳
+    expect(wrapper.text()).toContain('過1')
+    expect(wrapper.text()).toContain('功2')
+  })
