@@ -109,6 +109,25 @@ describe('StepReview', () => {
         expect(wrapper.text()).toContain('需注意')
         expect(wrapper.text()).toContain('共 1 人')
     })
+
+    it('點欄位明細：有 record id 開 dialog、無 id 警告（取代舊 SalaryView 測試）', async () => {
+        const { getSalaryFieldBreakdown } = await import('@/api/salary')
+        vi.mocked(getSalaryFieldBreakdown).mockResolvedValue({
+            data: { title: '底薪明細', employee: { employee_name: '測試' }, rows: [], columns: [] },
+        } as never)
+        const settlement = makeSettlement([rec({ id: 12 })])
+        const wrapper = mount(StepReview, {
+            global: { stubs: STUBS, provide: { settlement, settleQuery: { year: 2026, month: 5 } } },
+        })
+        const vm = wrapper.vm as unknown as {
+            openFieldBreakdown: (row: SettlementRecord, field: string) => Promise<void>
+            showFieldBreakdownDialog: boolean
+        }
+        await vm.openFieldBreakdown(settlement.records.value[0], 'base_salary')
+        await flushPromises()
+        expect(getSalaryFieldBreakdown).toHaveBeenCalledWith(12, 'base_salary')
+        expect(vm.showFieldBreakdownDialog).toBe(true)
+    })
 })
 
 describe('AdjustDrawer', () => {
@@ -170,6 +189,24 @@ describe('AdjustDrawer', () => {
         await flushPromises()
         expect(ElMessageBox.alert).toHaveBeenCalled()
         expect(wrapper.emitted('saved')).toBeTruthy()
+    })
+
+    it('編輯其他欄位時不把已存的額外加給靜默歸零（回歸，原 SalaryView.test.js）', async () => {
+        vi.mocked(manualAdjustSalary).mockResolvedValue({ data: { record: {} } } as never)
+        // row 來自 DB records，自帶 extra_allowance=500；只改 reason 直接存
+        const row = rec({ id: 88, extra_allowance: 500, extra_allowance_label: '值週' })
+        const wrapper = mount(AdjustDrawer, {
+            props: { modelValue: true, row },
+            global: { stubs: DRAWER_STUBS },
+        })
+        const vm = wrapper.vm as unknown as { reason: string; save: () => Promise<void> }
+        vm.reason = '只調整原因不動金額'
+        await vm.save()
+        expect(manualAdjustSalary).toHaveBeenCalledWith(
+            88,
+            expect.objectContaining({ extra_allowance: 500, extra_allowance_label: '值週' }),
+            expect.anything(),
+        )
     })
 
     it('已封存列 → 儲存按鈕 disabled', () => {
