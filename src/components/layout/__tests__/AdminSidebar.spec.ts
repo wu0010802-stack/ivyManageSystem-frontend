@@ -1,8 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 
+const routeState = { path: '/' }
 vi.mock('vue-router', () => ({
-  useRoute: () => ({ path: '/' }),
+  useRoute: () => ({
+    get path() {
+      return routeState.path
+    },
+  }),
 }))
 
 const getUserInfo = vi.fn()
@@ -17,7 +22,7 @@ const passthrough = { template: '<div><slot name="title" /><slot /></div>' }
 const stubs = {
   ElAside: passthrough,
   ElScrollbar: passthrough,
-  ElMenu: { template: '<nav><slot /></nav>' },
+  ElMenu: { props: ['defaultActive'], template: '<nav :data-active="defaultActive"><slot /></nav>' },
   ElSubMenu: { props: ['index'], template: '<div :data-sub="index"><slot name="title" /><slot /></div>' },
   ElMenuItem: { props: ['index'], template: '<a :data-item="index"><slot name="title" /><slot /></a>' },
   ElIcon: true,
@@ -86,5 +91,24 @@ describe('AdminSidebar 考核年終整併 + 群組可見性回歸', () => {
     expect(subs(w)).toContain('group-activity')
     expect(items(w)).toContain('/activity/changes')
     expect(subs(w)).not.toContain('group-reports')
+  })
+})
+
+describe('AdminSidebar activeMenu 薪資子頁高亮', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    routeState.path = '/'
+  })
+
+  it('/salary/settle 等子頁 → 高亮「薪資管理」(/salary)', () => {
+    routeState.path = '/salary/settle'
+    const w = mountWith(['*'])
+    expect(w.find('nav').attributes('data-active')).toBe('/salary')
+  })
+
+  it('其他路徑維持原樣（精確比對）', () => {
+    routeState.path = '/employees'
+    const w = mountWith(['*'])
+    expect(w.find('nav').attributes('data-active')).toBe('/employees')
   })
 })

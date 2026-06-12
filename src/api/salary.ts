@@ -70,8 +70,9 @@ export interface FinalizeMonthResult {
     finalized_by: string
     finalized_at: string
     force: boolean
-    skipped_missing: string[]
-    skipped_stale: string[]
+    // 後端實回 {id, name} 物件清單（_find_missing_salary_employees），非姓名字串
+    skipped_missing: { id: number; name: string }[]
+    skipped_stale: { id: number; name: string }[]
 }
 export const finalizeMonth = (payload: FinalizeMonthPayload) =>
     api.post<FinalizeMonthResult>('/salaries/finalize-month', payload)

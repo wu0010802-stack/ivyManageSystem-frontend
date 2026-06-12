@@ -109,7 +109,7 @@ describe('StepFinalize', () => {
         expect(wrapper.text()).toContain('王小明 缺薪資紀錄')
 
         finalizeMonthMock.mockResolvedValueOnce({
-            data: { message: '已封存', count: 1, skipped_missing: ['王小明'], skipped_stale: [], force: true },
+            data: { message: '已封存', count: 1, skipped_missing: [{ id: 3, name: '王小明' }], skipped_stale: [], force: true },
         })
         const forceBtn = wrapper.findAll('button').find((b) => b.text().includes('強制封存'))
         expect(forceBtn).toBeTruthy()
@@ -148,5 +148,23 @@ describe('StepFinalize', () => {
         expect(finalizeBtn!.attributes('disabled')).toBeDefined()
         const nextBtn = wrapper.findAll('button').find((b) => b.text().includes('下一步'))
         expect(nextBtn!.attributes('disabled')).toBeUndefined()
+    })
+})
+
+describe('StepFinalize 退回防連點', () => {
+    it('退回進行中再觸發同列 → unfinalizeSalary 只呼叫一次', async () => {
+        hasPermissionMock.mockReturnValue(true)
+        vi.mocked(ElMessageBox.prompt).mockResolvedValue({ value: '理由理由理由理由理由' } as never)
+        const settlement = makeSettlement([rec({ id: 9, is_finalized: true })])
+        unfinalizeSalaryMock.mockImplementation(
+            () => new Promise((resolve) => setTimeout(resolve, 20)),
+        )
+        const wrapper = mountStep(settlement)
+        const vm = wrapper.vm as unknown as {
+            onUnfinalize: (row: SettlementRecord) => Promise<void>
+        }
+        const row = settlement.records.value[0]
+        await Promise.all([vm.onUnfinalize(row), vm.onUnfinalize(row)])
+        expect(unfinalizeSalaryMock).toHaveBeenCalledTimes(1)
     })
 })
