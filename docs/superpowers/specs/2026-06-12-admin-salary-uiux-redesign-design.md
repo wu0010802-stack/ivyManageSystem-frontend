@@ -38,12 +38,14 @@
 從「7 個平行 tab」改為 5 個路由頁：
 
 ```
-/admin/salary                ← 結薪工作台（B）：本月狀態卡、待辦、各入口
-/admin/salary/settle         ← 月結嚮導（A）：5 步驟
-/admin/salary/history        ← 查詢與歷史（含快照、明細回看）
-/admin/salary/simulate       ← 薪資試算（人事談薪用，獨立於月結）
-/admin/salary/settings       ← 設定（獎金設定、才藝老師、系統設定、薪資邏輯說明）
+/salary                ← 結薪工作台（B）：本月狀態卡、待辦、各入口
+/salary/settle         ← 月結嚮導（A）：5 步驟
+/salary/history        ← 查詢與歷史（含快照、明細回看）
+/salary/simulate       ← 薪資試算（人事談薪用，獨立於月結）
+/salary/settings       ← 設定（獎金設定、才藝老師、系統設定、薪資邏輯說明）
 ```
+
+（路徑註：admin 路由既有慣例為根層平面式（`/salary`、`/employees`），故不加 `/admin` 前綴；保留 `/salary` 入口也讓 GlobalSearch、YearEndConfigView 既有站內連結與 e2e path 不需改動。）
 
 既有 8 個 panel 元件（BonusConfigPanel、ArtTeacherPayrollPanel、SystemSettingsPanel、SalaryHistoryPanel、SalarySimulatePanel、SalaryLogicPanel、SalarySnapshotDialog、SalaryBreakdown）大多直接搬家重用，不重寫。
 
