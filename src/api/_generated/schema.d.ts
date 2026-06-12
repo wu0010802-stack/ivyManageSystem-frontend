@@ -14617,12 +14617,18 @@ export interface components {
          * AttendancePolicyUpdate
          * @description 考勤政策更新。
          *
+         *     config_year：適用年度（西元）。未帶時 stamp 為「當前台北年度」；帶
+         *     config_year=2027 即為「建立 2027 年度設定」的入口（薪資引擎以
+         *     config_year == 結算年度 解析設定，見 services/salary/config_resolver）。
+         *
          *     Deprecated 欄位（不再進入薪資計算，已從 schema 移除）：
          *       - late_deduction / early_leave_deduction / missing_punch_deduction
          *         實際扣款固定以勞基法基準（每分鐘 = 月薪 / 30 / 8 / 60）計算，
          *         詳見 services/salary/deduction.py。DB 欄位保留以支援既有資料相容性。
          */
         AttendancePolicyUpdate: {
+            /** Config Year */
+            config_year?: number | null;
             /** Default Work End */
             default_work_end?: string | null;
             /** Default Work Start */
@@ -22258,6 +22264,11 @@ export interface components {
          * PositionSalaryUpdate
          * @description 職位標準底薪設定更新
          *
+         *     config_year：適用年度（西元）。未帶時 stamp 為「當前台北年度」；帶
+         *     config_year=2027 即為「建立 2027 年度標準底薪」的入口（薪資引擎以
+         *     config_year == 結算年度 解析，見 services/salary/config_resolver；
+         *     新年度列以最新一列為 baseline 複製後套用本次變更）。
+         *
          *     每欄位 le=_POSITION_SALARY_MAX：與 manual-adjust 同一上限，避免天文數字標準
          *     透過 sync 繞過手動調薪審批。
          */
@@ -22272,6 +22283,8 @@ export interface components {
             assistant_teacher_b?: number | null;
             /** Assistant Teacher C */
             assistant_teacher_c?: number | null;
+            /** Config Year */
+            config_year?: number | null;
             /** Designer */
             designer?: number | null;
             /** Director */
