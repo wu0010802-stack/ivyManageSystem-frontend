@@ -15,7 +15,13 @@ const TYPE_OPTIONS = [
   { value: 'warning', label: '警告', defaultAmount: 1000 },
   { value: 'minor', label: '小過', defaultAmount: 3000 },
   { value: 'major', label: '大過', defaultAmount: 0 },
+  { value: 'commendation', label: '嘉獎', defaultAmount: 0 },
+  { value: 'minor_merit', label: '小功', defaultAmount: 0 },
+  { value: 'major_merit', label: '大功', defaultAmount: 0 },
 ]
+
+// merit 類型（嘉獎/小功/大功）僅考核加分、不扣薪；後端對正金額回 422
+const MERIT_TYPES = new Set(['commendation', 'minor_merit', 'major_merit'])
 
 interface EmployeeOption { id: number; name: string }
 
@@ -44,7 +50,13 @@ const editingApplied = computed(() => {
 
 const typeLabel = (t: string) => TYPE_OPTIONS.find((o) => o.value === t)?.label || t
 
+const isMeritForm = computed(() => MERIT_TYPES.has(form.action_type))
+
 const applyTypeDefault = () => {
+  if (MERIT_TYPES.has(form.action_type)) {
+    form.deduction_amount = 0 // merit 不扣薪，鎖 0（後端對正金額回 422）
+    return
+  }
   const opt = TYPE_OPTIONS.find((o) => o.value === form.action_type)
   if (opt && !form.deduction_amount) form.deduction_amount = opt.defaultAmount
 }
@@ -291,10 +303,11 @@ onMounted(() => {
             v-model="form.deduction_amount"
             :min="0"
             :step="500"
-            :disabled="editingApplied"
+            :disabled="editingApplied || isMeritForm"
             style="width: 100%;"
           />
-          <span class="hint">0 表示用預設值（警告 1000 / 小過 3000 / 大過 0）</span>
+          <span v-if="isMeritForm" class="hint">獎勵類型（嘉獎/小功/大功）僅考核加分，不扣薪</span>
+          <span v-else class="hint">0 表示用預設值（警告 1000 / 小過 3000 / 大過 0）</span>
         </el-form-item>
         <el-form-item label="原因">
           <el-input

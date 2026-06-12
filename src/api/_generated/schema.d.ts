@@ -13739,6 +13739,11 @@ export interface components {
             classroom_id?: number | null;
             /** Enrolled Students */
             enrolled_students: number;
+            /**
+             * Grade Name
+             * @description 班級年級名
+             */
+            grade_name?: string | null;
             /** Registered For Activity */
             registered_for_activity: number;
             /** Suggested Score Delta */
@@ -14500,6 +14505,12 @@ export interface components {
         };
         /** AttendanceAggregateOut */
         AttendanceAggregateOut: {
+            /**
+             * Absent Days
+             * @description 曠職天數（status='absent'）
+             * @default 0
+             */
+            absent_days: number;
             /** Early Leave Count */
             early_leave_count: number;
             /** Late Count */
@@ -17161,12 +17172,12 @@ export interface components {
             action_date: string;
             /**
              * Action Type
-             * @description warning|minor|major
+             * @description warning|minor|major（懲處） | commendation|minor_merit|major_merit（merit 獎勵，不扣款）
              */
             action_type: string;
             /**
              * Deduction Amount
-             * @description 0 表示用 BonusConfig 預設
+             * @description 0 表示用 BonusConfig 預設；merit 類型請填 0
              * @default 0
              */
             deduction_amount: number;
@@ -17206,10 +17217,25 @@ export interface components {
         DisciplinaryAggregateOut: {
             /** Actions */
             actions?: components["schemas"]["DisciplinaryActionItemOut"][];
+            /**
+             * Commend Count
+             * @default 0
+             */
+            commend_count: number;
             /** Major Count */
             major_count: number;
+            /**
+             * Major Merit Count
+             * @default 0
+             */
+            major_merit_count: number;
             /** Minor Count */
             minor_count: number;
+            /**
+             * Minor Merit Count
+             * @default 0
+             */
+            minor_merit_count: number;
             /** Suggested Score Delta */
             suggested_score_delta: string;
             /** Warning Count */
@@ -21000,6 +21026,12 @@ export interface components {
             is_participant: boolean;
             /** Participant Id */
             participant_id?: number | null;
+            /**
+             * Reinstate Count
+             * @description 復學事件數
+             * @default 0
+             */
+            reinstate_count: number;
             retention: components["schemas"]["ClassRetentionAggregateOut"];
             role_group: components["schemas"]["RoleGroup"];
         };
@@ -24894,7 +24926,7 @@ export interface components {
              * Rule Type
              * @enum {string}
              */
-            rule_type: "PER_UNIT" | "TIER" | "FLAT_THRESHOLD" | "DISCIPLINARY_TIERED";
+            rule_type: "PER_UNIT" | "TIER" | "FLAT_THRESHOLD" | "DISCIPLINARY_TIERED" | "MANUAL_DELTA";
         };
         /** ScoringRuleOut */
         ScoringRuleOut: {
@@ -24923,7 +24955,7 @@ export interface components {
              * Rule Type
              * @enum {string}
              */
-            rule_type: "PER_UNIT" | "TIER" | "FLAT_THRESHOLD" | "DISCIPLINARY_TIERED";
+            rule_type: "PER_UNIT" | "TIER" | "FLAT_THRESHOLD" | "DISCIPLINARY_TIERED" | "MANUAL_DELTA";
         };
         /**
          * Semester
