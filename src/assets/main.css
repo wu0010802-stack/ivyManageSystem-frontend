@@ -29,6 +29,19 @@
   --border-color-light: var(--neutral-100);
 }
 
+/* Admin（html.ivy-admin，由 AdminLayout 掛載）：Element Plus 主色變數組對齊青藍品牌色。
+ * 只在 admin scope 覆寫，portal/parent/login 不受影響；dark mode 由 a11y.css 後載維持原樣。 */
+html.ivy-admin {
+  --color-primary-light: #38bdf8;
+  --el-color-primary: var(--brand-primary);
+  --el-color-primary-light-3: #4ea9d8;
+  --el-color-primary-light-5: #80c1e3;
+  --el-color-primary-light-7: #b3daee;
+  --el-color-primary-light-8: #cce6f4;
+  --el-color-primary-light-9: #e6f3f9;
+  --el-color-primary-dark-2: #026a9f;
+}
+
 body {
   margin: 0;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;

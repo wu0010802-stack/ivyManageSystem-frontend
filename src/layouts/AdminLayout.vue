@@ -74,6 +74,9 @@ function refreshNotifications() {
 }
 
 onMounted(() => {
+  // admin 品牌色 scope（design-tokens.css / main.css 的 html.ivy-admin 區塊）；
+  // 掛在 <html> 讓 teleport 到 body 的 dialog/message 也吃到
+  document.documentElement.classList.add('ivy-admin')
   checkMobile()
   window.addEventListener('resize', checkMobile)
   refreshNotifications()
@@ -83,6 +86,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  document.documentElement.classList.remove('ivy-admin')
   window.removeEventListener('resize', checkMobile)
   if (pollTimer !== null) {
     clearInterval(pollTimer)
