@@ -99,19 +99,8 @@
           <ManualOverrideIcon :row="scope.row" field="overtime_bonus" />
         </template>
       </el-table-column>
-      <el-table-column label="考核年終獎金" width="120" align="right" class-name="num-cell">
-        <template #default="scope">
-          <button
-            v-if="q.month === 2 && Number(scope.row.appraisal_year_end_bonus) > 0"
-            type="button"
-            class="cell-link text-link-primary"
-            @click="openAyeBreakdown(scope.row)"
-          >
-            {{ money(scope.row.appraisal_year_end_bonus) }}
-          </button>
-          <span v-else>{{ money(scope.row.appraisal_year_end_bonus) || '—' }}</span>
-        </template>
-      </el-table-column>
+      <!-- 考核年終欄已移除：決策⑥B 後走年終 E化獨立轉帳（表外），
+           engine 恆填 0 且該欄不在 records response schema -->
       <el-table-column label="加班津貼" width="100" align="right" class-name="num-cell">
         <template #default="scope">
           <button type="button" class="cell-link text-link-primary" @click="openFieldBreakdown(scope.row, 'overtime_pay')">
@@ -241,7 +230,7 @@
         </template>
         <template #default="scope">
           <strong class="text-success-strong">
-            {{ money((scope.row.net_pay || 0) + (scope.row.festival_bonus || 0) + (scope.row.overtime_bonus || 0) + (scope.row.appraisal_year_end_bonus || 0)) }}
+            {{ money((scope.row.net_pay || 0) + (scope.row.festival_bonus || 0) + (scope.row.overtime_bonus || 0)) }}
           </strong>
         </template>
       </el-table-column>
@@ -319,16 +308,6 @@
       </template>
     </el-dialog>
 
-    <!-- 考核年終明細 dialog（自原 SalaryView 搬移） -->
-    <el-dialog v-model="ayeBreakdownVisible" title="考核年終獎金明細" width="400">
-      <ul v-if="ayeBreakdownItems.length">
-        <li v-for="item in ayeBreakdownItems" :key="item.period_label + ':' + item.bonus_type">
-          <strong>{{ item.period_label }}</strong>：NT${{ item.amount }}
-          <a v-if="item.calc_meta?.appraisal_cycle_id" :href="`/appraisal/cycles/${item.calc_meta.appraisal_cycle_id}`" target="_blank">→ 查看 cycle</a>
-        </li>
-      </ul>
-      <p v-else>無資料</p>
-    </el-dialog>
   </div>
 </template>
 
@@ -337,7 +316,6 @@ import { ref, computed, inject, h, defineComponent, type PropType } from 'vue'
 import { ElMessage, ElTooltip, ElIcon } from 'element-plus'
 import { InfoFilled, Edit } from '@element-plus/icons-vue'
 import { getSalaryFieldBreakdown } from '@/api/salary'
-import { listAppraisalPayouts } from '@/api/yearEnd'
 import SalaryBreakdown from '../SalaryBreakdown.vue'
 import AdjustDrawer from './AdjustDrawer.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
@@ -472,27 +450,6 @@ const renderFieldBreakdownValue = (row: Record<string, unknown>, column: { key: 
     return value
 }
 
-// ---- 考核年終明細（自原 SalaryView 搬移；僅 2 月有值） ----
-interface AyePayoutItem {
-    employee_id: number
-    bonus_type: string
-    period_label: string
-    amount: string
-    source_ref: string | null
-    calc_meta?: { appraisal_cycle_id?: number; [k: string]: unknown }
-}
-const ayeBreakdownVisible = ref(false)
-const ayeBreakdownItems = ref<AyePayoutItem[]>([])
-const openAyeBreakdown = async (row: SettlementRecord) => {
-    try {
-        const res = await listAppraisalPayouts(q.year)
-        const items = (res.data as AyePayoutItem[]).filter((i) => i.employee_id === Number(row.employee_id))
-        ayeBreakdownItems.value = items
-        ayeBreakdownVisible.value = true
-    } catch {
-        // 失敗靜默：UI 仍可關閉 dialog
-    }
-}
 </script>
 
 <style scoped>
