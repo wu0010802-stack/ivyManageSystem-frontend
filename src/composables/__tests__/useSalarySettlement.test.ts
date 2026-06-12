@@ -156,3 +156,25 @@ describe('useSalarySettlement refresh（async race）', () => {
         expect(s.loading.value).toBe(false)
     })
 })
+
+describe('useSalarySettlement prevLoadFailed（上月載入失敗旗標）', () => {
+    it('上月請求失敗 → prevLoadFailed=true；成功 → false', async () => {
+        vi.mocked(getRecords).mockImplementation((year: number, month: number) => {
+            if (month === 4) return Promise.reject(new Error('500'))
+            return Promise.resolve({ data: [rec()] }) as ReturnType<typeof getRecords>
+        })
+        const year = ref(2026)
+        const month = ref(5)
+        const s = useSalarySettlement(year, month)
+        await s.refresh()
+        expect(s.prevLoadFailed.value).toBe(true)
+        expect(s.prevRecords.value).toEqual([])
+
+        // 改成上月也成功 → 旗標復位
+        vi.mocked(getRecords).mockImplementation(
+            () => Promise.resolve({ data: [rec()] }) as ReturnType<typeof getRecords>,
+        )
+        await s.refresh()
+        expect(s.prevLoadFailed.value).toBe(false)
+    })
+})

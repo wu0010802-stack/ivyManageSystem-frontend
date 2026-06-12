@@ -6,7 +6,16 @@
         <span>
           需注意 <b class="text-warning">{{ settlement.anomalies.value.size }}</b> 筆 ／
           共 {{ settlement.records.value.length }} 人
-          <span v-if="settlement.prevRecords.value.length === 0" class="review-toolbar__note">
+          <span
+            v-if="settlement.prevLoadFailed.value"
+            class="review-toolbar__note text-warning"
+          >
+            （上月資料載入失敗，差異比較暫停——請重新整理，勿在無比較下定案）
+          </span>
+          <span
+            v-else-if="settlement.prevRecords.value.length === 0"
+            class="review-toolbar__note"
+          >
             （上月無紀錄，差異比較停用）
           </span>
         </span>
