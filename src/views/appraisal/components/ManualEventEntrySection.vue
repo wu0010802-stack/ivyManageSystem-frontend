@@ -5,6 +5,7 @@ import {
   MANUAL_ITEM_CODES,
   MANUAL_LABEL,
 } from '../composables/useManualEventEntry'
+import { MANUAL_DELTA_RANGES } from '../scoreItemLabels'
 
 const props = defineProps<{
   cycleId?: number | null
@@ -19,6 +20,10 @@ const { dirtyEntries, loading, saving, getCount, setCount, saveAll } =
 // 暴露給模板
 const ITEM_CODES = MANUAL_ITEM_CODES
 const LABEL = MANUAL_LABEL
+
+// MANUAL_DELTA 類手填「分值」項（如幼兒意外 −10~0），其餘為次數/時數（min 0）
+const minFor = (code: string) => MANUAL_DELTA_RANGES[code]?.min ?? 0
+const maxFor = (code: string) => MANUAL_DELTA_RANGES[code]?.max ?? Infinity
 </script>
 
 <template>
@@ -60,7 +65,8 @@ const LABEL = MANUAL_LABEL
             v-if="row.participant_id"
             :model-value="getCount(row.participant_id, code)"
             :step="1"
-            :min="0"
+            :min="minFor(code)"
+            :max="maxFor(code)"
             :precision="0"
             :disabled="readonly"
             :data-test="`count-${row.participant_id}-${code}`"
