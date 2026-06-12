@@ -24194,6 +24194,26 @@ export interface components {
             total: unknown;
         };
         /**
+         * SalaryHistoryBreakdownOut
+         * @description 單月薪條三區明細 + 權威小計（小計取 persisted gross/total_deduction/net）。
+         */
+        SalaryHistoryBreakdownOut: {
+            /** Deduction Subtotal */
+            deduction_subtotal: unknown;
+            /** Deductions */
+            deductions: unknown;
+            /** Income */
+            income: unknown;
+            /** Income Subtotal */
+            income_subtotal: unknown;
+            /** Net Salary */
+            net_salary: unknown;
+            /** Separate Subtotal */
+            separate_subtotal: unknown;
+            /** Separate Transfer */
+            separate_transfer: unknown;
+        };
+        /**
          * SalaryHistoryItemOut
          * @description GET /salaries/history 單筆（單員工 N 月歷史）。
          *
@@ -24210,6 +24230,8 @@ export interface components {
             health_insurance: unknown;
             /** Id */
             id: unknown;
+            /** In Gross Bonus */
+            in_gross_bonus: unknown;
             /** Labor Insurance */
             labor_insurance: unknown;
             /** Leave Deduction */
@@ -24220,6 +24242,9 @@ export interface components {
             net_pay: unknown;
             /** Net Salary */
             net_salary: unknown;
+            payslip_detail: unknown;
+            /** Separate Transfer Total */
+            separate_transfer_total: unknown;
             /** Supplementary Health Employee */
             supplementary_health_employee: unknown;
             /** Total Bonus */
@@ -24230,6 +24255,24 @@ export interface components {
             total_deductions: unknown;
             /** Year */
             year: unknown;
+        };
+        /**
+         * SalaryHistoryLineOut
+         * @description 薪資歷史明細單列（收入/另行轉帳/扣款共用）。
+         */
+        SalaryHistoryLineOut: {
+            /** Amount */
+            amount: unknown;
+            /** Children */
+            children?: unknown;
+            /** Informational */
+            informational?: unknown;
+            /** Key */
+            key: unknown;
+            /** Label */
+            label: unknown;
+            /** Note */
+            note?: unknown;
         };
         /** SalaryManualAdjustRequest */
         SalaryManualAdjustRequest: {
