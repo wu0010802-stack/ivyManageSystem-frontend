@@ -18,9 +18,32 @@ const banTsComment = ['error', {
   minimumDescriptionLength: 3,
 }]
 
+// 擋 UTC 取日期反模式：`x.toISOString().slice(...)` / `x.toISOString().split(...)`。
+// 台北 UTC+8 下 toISOString() 會偏成 UTC 日期（凌晨 0~8 點偏成昨天；本地午夜的
+// Date 任何時刻都偏成前一天）。取 YYYY-MM-DD 一律用 src/utils/format.ts 的
+// todayISO / dateToLocalISO。完整 toISOString()（送後端 timestamp）不在此限。
+const UTC_DATE_SLICE_MESSAGE =
+  'toISOString() 是 UTC，台北會跨日；取 YYYY-MM-DD 請用 todayISO / dateToLocalISO（src/utils/format.ts）'
+const noUtcDateSliceRules = {
+  'no-restricted-syntax': [
+    'error',
+    {
+      selector:
+        "CallExpression[callee.property.name='slice'][callee.object.callee.property.name='toISOString']",
+      message: UTC_DATE_SLICE_MESSAGE,
+    },
+    {
+      selector:
+        "CallExpression[callee.property.name='split'][callee.object.callee.property.name='toISOString']",
+      message: UTC_DATE_SLICE_MESSAGE,
+    },
+  ],
+}
+
 const noAnyRules = {
   '@typescript-eslint/no-explicit-any': 'error',
   '@typescript-eslint/ban-ts-comment': banTsComment,
+  ...noUtcDateSliceRules,
 }
 
 export default tseslint.config(
@@ -70,6 +93,18 @@ export default tseslint.config(
     },
     plugins: { '@typescript-eslint': tseslint.plugin },
     rules: noAnyRules,
+  },
+
+  // .js / .mjs（測試、腳本、設定）：不掛 any 禁令，但 UTC 日期反模式照擋，
+  // 避免從測試碼回潮。
+  {
+    files: ['**/*.{js,mjs}'],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      globals: { ...globals.browser, ...globals.node },
+    },
+    rules: noUtcDateSliceRules,
   },
 
   // 測試 / 設定 / 腳本：放寬 any 禁令（對齊 CLAUDE.md「測試可寬鬆、可 .js」精神）。
