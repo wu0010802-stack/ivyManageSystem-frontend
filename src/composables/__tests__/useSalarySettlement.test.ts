@@ -1,13 +1,21 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { ref, nextTick } from 'vue'
 import {
     deriveStatus,
     detectAnomalies,
     sortByAttention,
     getThresholds,
     setThresholds,
+    useSalarySettlement,
     DEFAULT_THRESHOLDS,
     type SettlementRecord,
 } from '@/composables/useSalarySettlement'
+import { getRecords } from '@/api/salary'
+
+vi.mock('@/api/salary', () => ({ getRecords: vi.fn() }))
+vi.mock('@/composables/useErrorNotify', () => ({
+    useErrorNotify: () => ({ notify: vi.fn() }),
+}))
 
 const rec = (over: Partial<SettlementRecord> = {}): SettlementRecord => ({
     id: 1,
@@ -104,5 +112,47 @@ describe('thresholds（localStorage per 裝置）', () => {
     it('壞 JSON 回預設', () => {
         localStorage.setItem('ivy_salary_anomaly_thresholds', '{bad')
         expect(getThresholds()).toEqual({ pct: 0.1, abs: 3000 })
+    })
+})
+
+describe('useSalarySettlement refresh（async race）', () => {
+    interface PendingCall {
+        year: number
+        month: number
+        resolve: (v: { data: unknown[] }) => void
+    }
+
+    const flush = () => new Promise((r) => setTimeout(r))
+
+    it('切月後舊月慢回應不得蓋掉新月資料', async () => {
+        const calls: PendingCall[] = []
+        vi.mocked(getRecords).mockImplementation(
+            (year: number, month: number) =>
+                new Promise((resolve) => {
+                    calls.push({ year, month, resolve })
+                }) as ReturnType<typeof getRecords>,
+        )
+
+        const year = ref(2026)
+        const month = ref(5)
+        const s = useSalarySettlement(year, month)
+
+        void s.refresh() // 5 月（慢）：calls[0]=(2026,5)、calls[1]=(2026,4 prev)
+        month.value = 4 // watch 觸發第二個 refresh
+        await nextTick() // calls[2]=(2026,4)、calls[3]=(2026,3 prev)
+        expect(calls).toHaveLength(4)
+
+        // 4 月（新）先回
+        calls[2].resolve({ data: [rec({ employee_name: 'APR' })] })
+        calls[3].resolve({ data: [] })
+        await flush()
+        expect(s.records.value[0]?.employee_name).toBe('APR')
+
+        // 5 月（舊）慢回——不得蓋掉 4 月資料
+        calls[0].resolve({ data: [rec({ employee_name: 'MAY' })] })
+        calls[1].resolve({ data: [] })
+        await flush()
+        expect(s.records.value[0]?.employee_name).toBe('APR')
+        expect(s.loading.value).toBe(false)
     })
 })

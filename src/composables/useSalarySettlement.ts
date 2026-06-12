@@ -116,7 +116,11 @@ export function useSalarySettlement(year: Ref<number>, month: Ref<number>) {
     const loading = ref(false)
     const thresholds = ref(getThresholds())
 
+    // 防切月 race：晚到的舊請求不得蓋掉新月資料（epoch 比對）
+    let refreshEpoch = 0
+
     const refresh = async () => {
+        const epoch = ++refreshEpoch
         loading.value = true
         try {
             const prevY = month.value === 1 ? year.value - 1 : year.value
@@ -126,12 +130,14 @@ export function useSalarySettlement(year: Ref<number>, month: Ref<number>) {
                 // 上月載入失敗（首月/權限邊界）不擋本月流程，異常比較自動降級
                 getRecords(prevY, prevM).catch(() => ({ data: [] as unknown[] })),
             ])
+            if (epoch !== refreshEpoch) return // 已被更新的請求取代
             records.value = (cur.data ?? []) as unknown as SettlementRecord[]
             prevRecords.value = ((prev as { data: unknown[] }).data ?? []) as unknown as SettlementRecord[]
         } catch (e) {
+            if (epoch !== refreshEpoch) return
             notify(e, 'useSalarySettlement.refresh', '載入薪資紀錄失敗')
         } finally {
-            loading.value = false
+            if (epoch === refreshEpoch) loading.value = false
         }
     }
     watch([year, month], refresh)
