@@ -9,6 +9,7 @@
           <span class="hamburger-line"></span>
         </button>
         <h1 v-if="pageTitle" class="page-title">
+          <span v-if="parentTitle" class="page-title__parent">{{ parentTitle }} / </span>
           <span>{{ pageTitle }}</span>
         </h1>
       </div>
@@ -144,6 +145,7 @@ const route = useRoute()
 const router = useRouter()
 
 const pageTitle = computed(() => route.meta?.title || '')
+const parentTitle = computed(() => (route.meta?.parentTitle as string) || '')
 
 const userInfo = computed(() => (getUserInfo() || {}) as Record<string, unknown>)
 const displayName = computed(() => (userInfo.value.name as string | undefined) || '管理員')
@@ -270,6 +272,13 @@ const handleCommand = (command: string) => {
   padding: 2px 8px;
   user-select: none;
   min-width: 0;
+}
+
+.page-title__parent {
+  color: var(--text-tertiary);
+  font-weight: 400;
+  margin-right: 4px;
+  white-space: nowrap;
 }
 
 .page-title > span {

@@ -235,7 +235,7 @@ const bonusLikelyZeroedByLeave = computed(() => {
 // 「含獎金實領」= net_pay + festival_bonus + overtime_bonus。
 // net_salary 的公式 = gross_salary - 扣款，而 gross_salary 不含 festival_bonus /
 // overtime_bonus（engine.py:1764-1770），所以員工在發放月實際拿到的總額 = net_pay
-// + festival + overtime（festival/overtime 走獨立轉帳名冊）。與 SalaryView「含獎金實領」
+// + festival + overtime（festival/overtime 走獨立轉帳名冊）。與月結覆核（StepReview）「含獎金實領」
 // 同公式，讓試算結果可直接對照員工最終到手金額。
 const computeTotalWithBonus = (obj: SimRow | undefined | null): number => {
   if (!obj) return 0

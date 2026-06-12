@@ -16,8 +16,8 @@
         :router="true"
         unique-opened
         text-color="#94a3b8"
-        active-text-color="#ffffff"
-        background-color="#1e293b"
+        active-text-color="#7dd3fc"
+        background-color="#1e2a3a"
         @select="onMenuSelect"
       >
         <!-- 1. 儀表板 -->
@@ -347,8 +347,10 @@ const onMenuSelect = () => {
 </script>
 
 <style scoped>
+/* 色票對應 design-tokens.css 的 --sidebar-*；el-menu 的 color props 需 hex 字面值
+ * （collapsed 子選單 popup 由 EP 從 props 帶色），改色時兩處同步 */
 .admin-sidebar {
-  background-color: var(--text-primary);
+  background-color: var(--sidebar-bg);
   color: #fff;
   height: 100vh;
   display: flex;
@@ -406,13 +408,13 @@ const onMenuSelect = () => {
 }
 
 :deep(.el-menu-item:hover) {
-  background-color: var(--neutral-700) !important;
-  color: #fff !important;
+  background-color: var(--sidebar-bg-active) !important;
+  color: var(--sidebar-text-hover) !important;
 }
 
 :deep(.el-menu-item.is-active) {
-  background-color: var(--color-primary);
-  color: #fff !important;
+  background-color: var(--sidebar-bg-active);
+  color: var(--sidebar-text-active) !important;
 }
 
 :deep(.el-menu-item .el-icon) {
@@ -435,8 +437,8 @@ const onMenuSelect = () => {
 }
 
 :deep(.el-sub-menu .el-sub-menu__title:hover) {
-  background-color: var(--neutral-700) !important;
-  color: #fff !important;
+  background-color: var(--sidebar-bg-active) !important;
+  color: var(--sidebar-text-hover) !important;
 }
 
 :deep(.el-sub-menu .el-sub-menu__title .el-icon) {

@@ -143,8 +143,32 @@ const routes: RouteRecordRaw[] = [
         {
             path: '/salary',
             name: 'salary',
-            component: () => import('../views/SalaryView.vue'),
+            component: () => import('../views/salary/SalaryHubView.vue'),
             meta: { title: '薪資管理' }
+        },
+        {
+            path: '/salary/settle',
+            name: 'salary-settle',
+            component: () => import('../views/salary/SalarySettleView.vue'),
+            meta: { title: '月結', parentTitle: '薪資管理' }
+        },
+        {
+            path: '/salary/history',
+            name: 'salary-history',
+            component: () => import('../views/salary/SalaryHistoryView.vue'),
+            meta: { title: '薪資歷史', parentTitle: '薪資管理' }
+        },
+        {
+            path: '/salary/simulate',
+            name: 'salary-simulate',
+            component: () => import('../views/salary/SalarySimulateView.vue'),
+            meta: { title: '薪資試算', parentTitle: '薪資管理' }
+        },
+        {
+            path: '/salary/settings',
+            name: 'salary-settings',
+            component: () => import('../views/salary/SalarySettingsView.vue'),
+            meta: { title: '薪資設定', parentTitle: '薪資管理' }
         },
         {
             path: '/calendar',

@@ -175,4 +175,23 @@
   --brand-primary: #4f46e5; /* admin default = indigo */
   --brand-primary-hover: #4338ca;
   --brand-primary-soft: #e0e7ff;
+
+  /* ===== Admin 深色側欄（C・沉穩高密度，2026-06-12 改版） ===== */
+  --sidebar-bg: #1e2a3a;
+  --sidebar-bg-active: #314257;
+  --sidebar-text: #94a3b8;
+  --sidebar-text-hover: #e2e8f0;
+  --sidebar-text-active: #7dd3fc;
+}
+
+/* ===== Admin 品牌色（C・沉穩高密度 青藍） =====
+ * AdminLayout 掛載時在 <html> 加 .ivy-admin（卸載移除），
+ * 讓 teleport 到 body 的 dialog/message 也吃到，且不影響
+ * portal（刻意維持 indigo，見 soft-ui.css）與 parent（綠系覆寫）。
+ * dark mode 由 a11y.css 的 html.dark 後載覆寫，維持現行深色配色。
+ */
+html.ivy-admin {
+  --brand-primary: #0284c7;
+  --brand-primary-hover: #0369a1;
+  --brand-primary-soft: #e0f2fe;
 }

@@ -29,6 +29,19 @@
   --border-color-light: var(--neutral-100);
 }
 
+/* Admin（html.ivy-admin，由 AdminLayout 掛載）：Element Plus 主色變數組對齊青藍品牌色。
+ * 只在 admin scope 覆寫，portal/parent/login 不受影響；dark mode 由 a11y.css 後載維持原樣。 */
+html.ivy-admin {
+  --color-primary-light: #38bdf8;
+  --el-color-primary: var(--brand-primary);
+  --el-color-primary-light-3: #4ea9d8;
+  --el-color-primary-light-5: #80c1e3;
+  --el-color-primary-light-7: #b3daee;
+  --el-color-primary-light-8: #cce6f4;
+  --el-color-primary-light-9: #e6f3f9;
+  --el-color-primary-dark-2: #026a9f;
+}
+
 body {
   margin: 0;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -162,14 +175,16 @@ body {
   box-shadow: var(--shadow-sm) !important;
 }
 
-/* Button */
-.el-button--primary {
+/* Button
+ * 只蓋實心 primary；plain/link/text 變體的前景色 = --el-color-primary，
+ * 硬蓋背景會讓文字與背景同色（隱形）。 */
+.el-button--primary:not(.is-plain):not(.is-link):not(.is-text) {
   background-color: var(--color-primary) !important;
   border-color: var(--color-primary) !important;
 }
 
-.el-button--primary:hover,
-.el-button--primary:focus {
+.el-button--primary:not(.is-plain):not(.is-link):not(.is-text):hover,
+.el-button--primary:not(.is-plain):not(.is-link):not(.is-text):focus {
   background-color: var(--color-primary-soft) !important;
   border-color: var(--color-primary-soft) !important;
 }
@@ -186,6 +201,22 @@ body {
 .el-table th.el-table__cell {
   font-weight: 600;
   background-color: var(--bg-color) !important;
+}
+
+/* 數字等寬：表格內金額/數量對位（C 沉穩高密度） */
+.el-table {
+  font-variant-numeric: tabular-nums;
+}
+
+/* 金額欄：新頁面的金額 el-table-column 加 class-name="num-cell" align="right" */
+.el-table .num-cell {
+  font-variant-numeric: tabular-nums;
+}
+
+/* admin 表格密度：預設緊湊（僅 admin scope，避免影響 portal 觸控目標） */
+html.ivy-admin .el-table .el-table__cell {
+  padding-top: 6px;
+  padding-bottom: 6px;
 }
 
 /* Dialog - responsive on mobile */

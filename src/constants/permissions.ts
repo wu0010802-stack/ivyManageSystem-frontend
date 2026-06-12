@@ -104,7 +104,8 @@ export const ROUTE_PERMISSION_RULES = [
   { path: '/student-incidents', permission: 'STUDENTS_READ' },
   { path: '/student-academic-affairs', permission: 'STUDENTS_READ' },
   { path: '/classrooms', permission: 'CLASSROOMS_READ' },
-  { path: '/salary', permission: 'SALARY_READ' },
+  // prefix: 薪資 IA 拆分（2026-06-12）後涵蓋 /salary/settle|history|simulate|settings 全部子頁
+  { path: '/salary', permission: 'SALARY_READ', prefix: true },
   { path: '/announcements', permission: 'ANNOUNCEMENTS_READ' },
   { path: '/reports', permission: 'REPORTS' },
   { path: '/gov-reports', permission: 'REPORTS' },
