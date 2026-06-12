@@ -175,14 +175,16 @@ body {
   box-shadow: var(--shadow-sm) !important;
 }
 
-/* Button */
-.el-button--primary {
+/* Button
+ * 只蓋實心 primary；plain/link/text 變體的前景色 = --el-color-primary，
+ * 硬蓋背景會讓文字與背景同色（隱形）。 */
+.el-button--primary:not(.is-plain):not(.is-link):not(.is-text) {
   background-color: var(--color-primary) !important;
   border-color: var(--color-primary) !important;
 }
 
-.el-button--primary:hover,
-.el-button--primary:focus {
+.el-button--primary:not(.is-plain):not(.is-link):not(.is-text):hover,
+.el-button--primary:not(.is-plain):not(.is-link):not(.is-text):focus {
   background-color: var(--color-primary-soft) !important;
   border-color: var(--color-primary-soft) !important;
 }
