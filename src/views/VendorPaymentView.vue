@@ -380,6 +380,7 @@ import {
 } from '@/api/vendorPayment'
 import { hasPermission, PERMISSION_NAMES } from '@/utils/auth'
 import { todayISO } from '@/utils/format'
+import { formatCurrency } from '@/utils/currency'
 import VendorPaymentSignDialog from '@/components/VendorPaymentSignDialog.vue'
 
 const paymentMethodOptions = PAYMENT_METHOD_OPTIONS
@@ -685,8 +686,7 @@ function onSigned() {
 }
 
 function formatMoney(value: unknown) {
-  const n = Number(value || 0)
-  return `NT$${n.toLocaleString('en-US')}`
+  return formatCurrency(Number(value ?? 0) || 0)
 }
 
 function isImageAttachment(att: Attachment) {

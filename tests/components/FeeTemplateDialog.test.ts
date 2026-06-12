@@ -40,4 +40,17 @@ describe('FeeTemplateDialog — A+C', () => {
     })
     expect(isBodyHidden(wrapper, 'section-identity')).toBe(true)
   })
+
+  it('月費組成總和金額走 canonical 格式 NT$1,234（無空格）', () => {
+    const wrapper = mount(FeeTemplateDialog, {
+      global: { plugins: [ElementPlus], stubs: STUBS },
+      props: {
+        modelValue: true,
+        grades: [{ id: 1, name: '小班' }],
+        template: { id: 6, grade_id: 1, school_year: 114, semester: 1, fee_type: 'monthly', name: 'M', amount: 3000 },
+      },
+    })
+    expect(wrapper.text()).toContain('NT$3,000')
+    expect(wrapper.text()).not.toContain('NT$ ')
+  })
 })

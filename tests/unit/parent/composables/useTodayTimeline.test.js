@@ -105,6 +105,9 @@ describe('useTodayTimeline — bucket 分組', () => {
     const fees = later.items.find((i) => i.id === 'fees')
     expect(fees.tone).toBe('danger')
     expect(fees.secondary).toContain('逾期')
+    // 金額走全站 canonical 格式 NT$1,234（無空格，src/utils/currency.ts）
+    expect(fees.primary).toBe('待繳費 NT$5,200')
+    expect(fees.secondary).toBe('逾期 NT$3,000')
   })
 
   it('announcements / leaveReviews → later bucket info', () => {

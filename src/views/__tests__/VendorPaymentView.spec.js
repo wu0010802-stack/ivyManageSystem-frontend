@@ -165,6 +165,9 @@ describe('VendorPaymentView', () => {
     expect(text).toContain('已簽收')
     // 待簽收筆數（pending_count = 1）渲染
     expect(text).toContain('1 筆等待回簽')
+    // 金額走全站 canonical 格式 NT$1,234（無空格，src/utils/currency.ts）
+    expect(text).toContain('NT$10,000')
+    expect(text).toContain('NT$1,200')
   })
 
   it('summary follows range filter but not status (status only reloads list)', async () => {
