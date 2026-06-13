@@ -130,7 +130,7 @@ defineProps<{
   font-family: 'Fira Code', ui-monospace, monospace;
   font-size: 1.8rem;
   font-weight: 700;
-  color: var(--rv-primary, #1e3a8a);
+  color: var(--rv-primary, #1e40af);
   font-variant-numeric: tabular-nums;
 }
 .kpi-card.kpi-blue   .kpi-value { color: var(--color-info-darker); }
