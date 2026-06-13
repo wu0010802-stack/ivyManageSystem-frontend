@@ -1,8 +1,9 @@
+<!-- src/components/recruitment/RecruitmentConvertDialog.vue -->
 <template>
   <el-dialog
     v-model="visible"
     title="轉為正式學生"
-    width="560px"
+    width="520px"
     :close-on-click-modal="false"
     @closed="resetForm"
   >
@@ -16,32 +17,19 @@
     <el-alert
       v-if="visit?.enrolled"
       type="warning"
-      title="此訪視已標記為已報到，若重複轉化將被後端拒絕"
+      title="此訪視已標記為已報到，重複轉化將被後端拒絕"
+      :closable="false"
+      style="margin-bottom: 12px"
+    />
+    <el-alert
+      type="info"
+      title="學籍編號由系統自動配發；性別與其他資料可於轉化後到學生檔案補齊"
       :closable="false"
       style="margin-bottom: 12px"
     />
 
-    <el-form ref="formRef" :model="form" :rules="rules" label-width="110px">
-      <el-form-item label="學號" prop="student_id_code">
-        <el-input v-model="form.student_id_code" placeholder="例：S2026001" maxlength="20" show-word-limit />
-      </el-form-item>
-      <el-form-item label="性別" prop="gender">
-        <el-select v-model="form.gender" placeholder="選填" clearable style="width: 100%">
-          <el-option label="男" value="男" />
-          <el-option label="女" value="女" />
-          <el-option label="其他" value="其他" />
-        </el-select>
-      </el-form-item>
-      <el-form-item label="入學日期" prop="enrollment_date">
-        <el-date-picker
-          v-model="form.enrollment_date"
-          type="date"
-          value-format="YYYY-MM-DD"
-          placeholder="留空為今日"
-          style="width: 100%"
-        />
-      </el-form-item>
-      <el-form-item label="分班" prop="classroom_id">
+    <el-form label-width="110px">
+      <el-form-item label="分班">
         <el-select
           v-model="form.classroom_id"
           placeholder="可留空"
@@ -57,12 +45,6 @@
           />
         </el-select>
       </el-form-item>
-      <el-form-item label="初始狀態" prop="initial_lifecycle_status">
-        <el-radio-group v-model="form.initial_lifecycle_status">
-          <el-radio value="enrolled">已報到（未開學）</el-radio>
-          <el-radio value="active">在學（已開學）</el-radio>
-        </el-radio-group>
-      </el-form-item>
     </el-form>
 
     <template #footer>
@@ -75,10 +57,10 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { convertRecruitmentRecord } from '@/api/recruitment'
+import { transitionVisit } from '@/api/recruitmentFunnel'
 
-interface ClassroomOption { id: number | string; name: string; [key: string]: unknown }
-interface Visit { id: number | string; gender?: string | null; [key: string]: unknown }
+interface ClassroomOption { id: number; name: string; [key: string]: unknown }
+interface Visit { id: number | string; [key: string]: unknown }
 
 const props = withDefaults(defineProps<{
   modelValue?: boolean
@@ -100,60 +82,28 @@ const visible = computed({
   set: (v: boolean) => emit('update:modelValue', v),
 })
 
-const emptyForm = () => ({
-  student_id_code: '',
-  gender: null as string | null,
-  enrollment_date: '',
-  classroom_id: null as number | string | null,
-  initial_lifecycle_status: 'enrolled',
-})
-const form = reactive(emptyForm())
-const formRef = ref<{ validate: () => Promise<void>; clearValidate: () => void } | null>(null)
-const submitting = ref<boolean>(false)
-
-const rules = {
-  student_id_code: [
-    { required: true, message: '請輸入學號', trigger: 'blur' },
-    { max: 20, message: '學號不超過 20 字元', trigger: 'blur' },
-  ],
-  initial_lifecycle_status: [
-    { required: true, message: '請選擇初始狀態', trigger: 'change' },
-  ],
-}
+const form = reactive<{ classroom_id: number | null }>({ classroom_id: null })
+const submitting = ref(false)
 
 function resetForm() {
-  Object.assign(form, emptyForm())
-  formRef.value?.clearValidate()
+  form.classroom_id = null
 }
 
 watch(
   () => props.visit,
-  (v) => {
-    // 每次開啟時重置
-    resetForm()
-    if (v?.gender) form.gender = v.gender
-  },
+  () => resetForm(),
 )
 
 async function handleSubmit() {
   if (!props.visit) return
-  try {
-    await formRef.value?.validate()
-  } catch {
-    return
-  }
   submitting.value = true
   try {
-    const payload = {
-      student_id_code: form.student_id_code.trim(),
-      gender: form.gender || null,
-      enrollment_date: form.enrollment_date || null,
-      classroom_id: form.classroom_id || null,
-      initial_lifecycle_status: form.initial_lifecycle_status,
-    }
-    const { data } = await convertRecruitmentRecord(props.visit.id as number, payload)
-    ElMessage.success((data as { message?: string }).message || '已成功轉為正式學生')
-    emit('converted', data as Record<string, unknown>)
+    const { data } = await transitionVisit(Number(props.visit.id), {
+      to_stage: 'enrolled',
+      classroom_id: form.classroom_id ?? undefined,
+    })
+    ElMessage.success('已成功轉為正式學生')
+    emit('converted', data as unknown as Record<string, unknown>)
     visible.value = false
   } catch (err) {
     ElMessage.error((err as { displayMessage?: string }).displayMessage || '轉化失敗')
@@ -161,4 +111,6 @@ async function handleSubmit() {
     submitting.value = false
   }
 }
+
+defineExpose({ form, handleSubmit })
 </script>
