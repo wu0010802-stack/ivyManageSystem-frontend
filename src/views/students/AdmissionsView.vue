@@ -18,14 +18,35 @@
       <el-tab-pane label="漏斗看板" name="funnel">
         <FunnelBoard />
       </el-tab-pane>
+      <el-tab-pane label="訪視明細" name="records" lazy>
+        <AdmissionsRecordsPanel
+          :dashboard="dashboard"
+          :filter-patch="recordsFilterPatch"
+          @changed="onRecordsChanged"
+        />
+      </el-tab-pane>
+      <el-tab-pane label="名額規劃" name="intake" lazy>
+        <IntakePlanPanel />
+      </el-tab-pane>
+      <el-tab-pane label="官網報名" name="ivykids" lazy>
+        <RecruitmentIvykidsTab :bar-component="LazyBar" :show-charts="true" :can-write="canWrite" />
+      </el-tab-pane>
     </el-tabs>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
+import { ElMessage } from 'element-plus'
+import { hasPermission } from '@/utils/auth'
+import { useRecruitmentDashboard } from '@/composables/useRecruitmentDashboard'
+import { useRecruitmentFunnelStore } from '@/stores/recruitmentFunnel'
+import { LazyBar } from '@/components/recruitment/lazyChartComponents'
 import FunnelBoard from '@/components/recruitment/funnel/FunnelBoard.vue'
+import AdmissionsRecordsPanel from '@/components/recruitment/AdmissionsRecordsPanel.vue'
+import IntakePlanPanel from '@/components/recruitment/IntakePlanPanel.vue'
+import RecruitmentIvykidsTab from '@/components/recruitment/RecruitmentIvykidsTab.vue'
 
 const VALID_TABS = ['funnel', 'records', 'intake', 'ivykids', 'stats'] as const
 type AdmissionsTab = (typeof VALID_TABS)[number]
@@ -36,6 +57,28 @@ const initialTab = ((): AdmissionsTab => {
   return (VALID_TABS as readonly string[]).includes(t) ? (t as AdmissionsTab) : 'funnel'
 })()
 const activeTab = ref<AdmissionsTab>(initialTab)
+
+const canWrite = computed(() => hasPermission('RECRUITMENT_WRITE'))
+const dashboard = useRecruitmentDashboard({ notifyError: (m: string) => ElMessage.error(m) })
+const funnelStore = useRecruitmentFunnelStore()
+const recordsFilterPatch = ref<Record<string, unknown> | null>(null)
+
+function drillToRecords(patch: Record<string, unknown>) {
+  recordsFilterPatch.value = { ...patch }
+  activeTab.value = 'records'
+}
+
+async function onRecordsChanged() {
+  await dashboard.fetchStats()
+  dashboard.invalidateOptions()
+  void funnelStore.loadBoard() // 訪視 CRUD/轉化會改變漏斗卡片
+}
+
+onMounted(() => {
+  dashboard.loadDashboard()
+  const kw = typeof route.query.keyword === 'string' ? route.query.keyword : ''
+  if (kw) drillToRecords({ keyword: kw })
+})
 </script>
 
 <style scoped>
@@ -45,9 +88,6 @@ const activeTab = ref<AdmissionsTab>(initialTab)
   --rv-primary-lt: #dbeafe;
   --rv-text:       #1e293b;
   --rv-text-2:     #64748b;
-}
-
-.admissions-view {
   padding: 8px 0;
 }
 .page-header {
