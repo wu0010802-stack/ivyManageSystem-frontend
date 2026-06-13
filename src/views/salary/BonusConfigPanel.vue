@@ -29,6 +29,8 @@ const bonusConfig = reactive({
   overtime_assistant_normal: 0,
   overtime_assistant_baby: 0,
   school_wide_target: 0,
+  // 在籍人數計算模式（2026-06-13 L3）：month_end=月底快照 / daily_weighted=按日加權
+  enrollment_count_mode: 'month_end',
   // 階段 2-B：園規常數從 hardcode 搬到 BonusConfig
   meeting_default_hours: 2,
   meeting_absence_penalty: 100,
@@ -424,6 +426,17 @@ onMounted(() => {
           </p>
           <el-form-item label="全校目標人數">
             <el-input-number v-model="bonusConfig.school_wide_target" :min="0" size="large" />
+          </el-form-item>
+          <el-form-item label="在籍人數模式">
+            <el-select v-model="bonusConfig.enrollment_count_mode" style="width: 220px">
+              <el-option label="月底快照（預設）" value="month_end" />
+              <el-option label="按日加權平均" value="daily_weighted" />
+            </el-select>
+            <div class="desc-text mt-1">
+              節慶/超額獎金的班級與全校在籍人數計法：月底快照＝以該月最後一天在籍為準；
+              按日加權＝Σ每日在籍 ÷ 當月天數（學生月中進出按天比例計，1 位小數）。
+              已產生的人數快照不受切換影響，重新產生快照後才套用新模式。
+            </div>
           </el-form-item>
           <el-divider />
           <div class="label mb-2">非帶班職位獎金基數</div>

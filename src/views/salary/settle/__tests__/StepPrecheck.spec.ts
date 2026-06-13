@@ -12,6 +12,8 @@ vi.mock('@/api/punchCorrections', () => ({ getCorrections: (...a: unknown[]) => 
 const pushMock = vi.fn()
 
 const STUBS = {
+    // 快照面板自有 spec（EnrollmentSnapshotPanel.spec.ts），此處 stub 避免觸發 api
+    EnrollmentSnapshotPanel: true,
     'el-alert': { template: '<div class="alert-stub">{{ $attrs.title }}</div>' },
     'el-card': { template: '<div><slot /></div>' },
     'el-result': { template: '<div class="result-stub">{{ $attrs.title }}</div>' },
