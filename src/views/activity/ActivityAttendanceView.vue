@@ -178,8 +178,8 @@
         <!-- 快速操作 + 統計 Tags + 分組切換 -->
         <div class="drawer-top-actions">
           <el-space>
-            <el-button size="small" @click="setAllPresent(true)">全部出席</el-button>
-            <el-button size="small" @click="setAllPresent(false)">全部缺席</el-button>
+            <el-button v-if="canWrite" size="small" @click="setAllPresent(true)">全部出席</el-button>
+            <el-button v-if="canWrite" size="small" @click="setAllPresent(false)">全部缺席</el-button>
             <el-switch
               v-model="groupByClassroom"
               active-text="按班級分組"
@@ -210,6 +210,7 @@
                   <el-tag v-if="g.classroom_id === null" size="small" type="warning" effect="plain">未分班</el-tag>
                 </span>
                 <el-button
+                  v-if="canWrite"
                   size="small"
                   type="primary"
                   link
@@ -217,6 +218,7 @@
                   @click.stop="setGroupPresent(g, true)"
                 >全班出席</el-button>
                 <el-button
+                  v-if="canWrite"
                   size="small"
                   type="info"
                   link
@@ -236,6 +238,7 @@
                       v-model="row.is_present"
                       :active-value="true"
                       :inactive-value="false"
+                      :disabled="!canWrite"
                       active-text="出席"
                       inactive-text="缺席"
                       inline-prompt
@@ -244,7 +247,7 @@
                 </el-table-column>
                 <el-table-column label="備註" min-width="100">
                   <template #default="{ row }">
-                    <el-input v-model="row.attendance_notes" size="small" placeholder="備註" />
+                    <el-input v-model="row.attendance_notes" :disabled="!canWrite" size="small" placeholder="備註" />
                   </template>
                 </el-table-column>
               </el-table>
@@ -269,6 +272,7 @@
                 v-model="row.is_present"
                 :active-value="true"
                 :inactive-value="false"
+                :disabled="!canWrite"
                 active-text="出席"
                 inactive-text="缺席"
                 inline-prompt
@@ -279,6 +283,7 @@
             <template #default="{ row }">
               <el-input
                 v-model="row.attendance_notes"
+                :disabled="!canWrite"
                 size="small"
                 placeholder="備註"
               />
@@ -290,6 +295,7 @@
           <el-button :icon="Printer" @click="openPrintForCurrent">列印點名單</el-button>
           <el-button @click="handleExport">匯出 Excel</el-button>
           <el-button
+            v-if="canWrite"
             type="primary"
             :loading="saveLoading"
             @click="handleSave(loadSessions)"

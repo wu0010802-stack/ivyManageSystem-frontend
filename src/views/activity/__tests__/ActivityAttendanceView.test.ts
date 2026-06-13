@@ -234,3 +234,35 @@ describe('ActivityAttendanceView — 分組點名單一資料源（A1）', () =>
     expect(records.every(r => r.is_present === true)).toBe(true)
   })
 })
+
+describe('ActivityAttendanceView — drawer 寫入按鈕蓋 canWrite（A2）', () => {
+  it('READ-only 使用者看不到儲存點名/全部出席/全班出席等寫入按鈕', async () => {
+    asMock(hasPermission).mockReturnValue(false)
+    const wrapper = await mountView()
+    await openDrawer(wrapper)
+
+    const texts = wrapper.findAll('button').map(b => b.text())
+    expect(texts).not.toContain('儲存點名')
+    expect(texts).not.toContain('全部出席')
+    expect(texts).not.toContain('全部缺席')
+    expect(texts).not.toContain('全班出席')
+    expect(texts).not.toContain('全班缺席')
+    // 唯讀仍可列印/匯出
+    expect(texts).toContain('列印點名單')
+    expect(texts).toContain('匯出 Excel')
+    // 點名 switch 一併 disabled（排除頂部分組切換 switch）
+    const studentSwitches = wrapper.findAllComponents(ElSwitchStub).filter(s => s.props('modelValue') !== true && s.props('modelValue') !== false)
+    expect(studentSwitches.length).toBeGreaterThan(0)
+    expect(studentSwitches.every(s => s.props('disabled') === true)).toBe(true)
+  })
+
+  it('有寫入權限時按鈕照常顯示', async () => {
+    const wrapper = await mountView()
+    await openDrawer(wrapper)
+
+    const texts = wrapper.findAll('button').map(b => b.text())
+    expect(texts).toContain('儲存點名')
+    expect(texts).toContain('全部出席')
+    expect(texts).toContain('全班出席')
+  })
+})
