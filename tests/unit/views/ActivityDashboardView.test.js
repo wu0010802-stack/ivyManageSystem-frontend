@@ -14,7 +14,7 @@ import { createPinia, setActivePinia } from 'pinia'
 vi.mock('@/api/activity', () => ({
   getActivityStatsSummary: vi.fn(),
   getActivityStatsCharts: vi.fn(),
-  getActivityAttendanceStats: vi.fn(),
+  getActivityStats: vi.fn(),
   getActivityDashboardTable: vi.fn(),
   exportDashboardTable: vi.fn(),
 }))
@@ -27,7 +27,7 @@ vi.mock('element-plus', () => ({
 import {
   getActivityStatsSummary,
   getActivityStatsCharts,
-  getActivityAttendanceStats,
+  getActivityStats,
   getActivityDashboardTable,
 } from '@/api/activity'
 import { getCurrentAcademicTerm } from '@/utils/academic'
@@ -49,8 +49,9 @@ const GLOBAL_STUBS = {
 function mockAllResolved() {
   getActivityStatsSummary.mockResolvedValue({ data: { totalRegistrations: 1, unreadInquiries: 0 } })
   getActivityStatsCharts.mockResolvedValue({ data: { daily: [], topCourses: [] } })
-  getActivityAttendanceStats.mockResolvedValue({
-    data: { total_sessions: 0, avg_attendance_rate: 0, by_course: [] },
+  // 出席率沒有獨立端點：走 GET /activity/stats 聚合回應的頂層 attendance_stats
+  getActivityStats.mockResolvedValue({
+    data: { attendance_stats: { total_sessions: 0, avg_attendance_rate: 0, by_course: [] } },
   })
   getActivityDashboardTable.mockResolvedValue({
     data: { grades: [], courses: [], grand_total: {} },
@@ -74,7 +75,7 @@ describe('ActivityDashboardView — 學期接線', () => {
     const expected = { school_year, semester }
     expect(getActivityStatsSummary).toHaveBeenCalledWith(expected)
     expect(getActivityStatsCharts).toHaveBeenCalledWith(expected)
-    expect(getActivityAttendanceStats).toHaveBeenCalledWith(expected)
+    expect(getActivityStats).toHaveBeenCalledWith(expected)
     expect(getActivityDashboardTable).toHaveBeenCalledWith(expected)
   })
 
@@ -96,7 +97,7 @@ describe('ActivityDashboardView — 學期接線', () => {
 
     expect(getActivityStatsSummary).toHaveBeenCalledWith(prev)
     expect(getActivityStatsCharts).toHaveBeenCalledWith(prev)
-    expect(getActivityAttendanceStats).toHaveBeenCalledWith(prev)
+    expect(getActivityStats).toHaveBeenCalledWith(prev)
     expect(getActivityDashboardTable).toHaveBeenCalledWith(prev)
   })
 })

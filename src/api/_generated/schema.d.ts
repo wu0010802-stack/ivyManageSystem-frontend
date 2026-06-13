@@ -11411,6 +11411,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/salaries/enrollment-snapshot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Enrollment Snapshot
+         * @description 檢視該月快照列（含班名）。發放月時附 covered_months 供前端展開涵蓋月。
+         */
+        get: operations["get_enrollment_snapshot_api_salaries_enrollment_snapshot_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/salaries/enrollment-snapshot/{snapshot_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Patch Enrollment Snapshot
+         * @description 手調單列人數（需原因 ≥10 字）；視為已確認並標記薪資需重算。
+         */
+        patch: operations["patch_enrollment_snapshot_api_salaries_enrollment_snapshot__snapshot_id__patch"];
+        trace?: never;
+    };
+    "/salaries/enrollment-snapshot/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm Enrollment Snapshot
+         * @description 確認該月全部快照列（重產時不再被自動覆寫）。
+         */
+        post: operations["confirm_enrollment_snapshot_api_salaries_enrollment_snapshot_confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/salaries/enrollment-snapshot/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generate Enrollment Snapshot
+         * @description 產生/重產該月快照。值有變動時標記受影響發放月薪資需重算。
+         */
+        post: operations["generate_enrollment_snapshot_api_salaries_enrollment_snapshot_generate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/salaries/export-all": {
         parameters: {
             query?: never;
@@ -15330,6 +15410,11 @@ export interface components {
             dividend_returning_threshold?: number | null;
             /** Driver Festival */
             driver_festival?: number | null;
+            /**
+             * Enrollment Count Mode
+             * @description 在籍人數模式：month_end=月底快照 / daily_weighted=按日加權
+             */
+            enrollment_count_mode?: string | null;
             /** Head Teacher Ab */
             head_teacher_ab?: number | null;
             /** Head Teacher C */
@@ -25743,6 +25828,36 @@ export interface components {
         SkipPayload: {
             /** Skipped Reason */
             skipped_reason: string;
+        };
+        /** SnapshotConfirmRequest */
+        SnapshotConfirmRequest: {
+            /** Month */
+            month: number;
+            /** Year */
+            year: number;
+        };
+        /** SnapshotGenerateRequest */
+        SnapshotGenerateRequest: {
+            /**
+             * Force
+             * @description True 連已確認列一併覆寫
+             * @default false
+             */
+            force: boolean;
+            /** Month */
+            month: number;
+            /** Year */
+            year: number;
+        };
+        /** SnapshotPatchRequest */
+        SnapshotPatchRequest: {
+            /**
+             * Reason
+             * @description 手調原因（必填 ≥10 字）
+             */
+            reason?: string | null;
+            /** Student Count */
+            student_count: number;
         };
         /**
          * SourceRecord
@@ -46755,6 +46870,139 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_enrollment_snapshot_api_salaries_enrollment_snapshot_get: {
+        parameters: {
+            query: {
+                month: number;
+                year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_enrollment_snapshot_api_salaries_enrollment_snapshot__snapshot_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                snapshot_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SnapshotPatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_enrollment_snapshot_api_salaries_enrollment_snapshot_confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SnapshotConfirmRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    generate_enrollment_snapshot_api_salaries_enrollment_snapshot_generate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SnapshotGenerateRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

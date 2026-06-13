@@ -9,6 +9,9 @@
       title="本月為節慶獎金發放月（2／6／9／12 月），計算時會一併結算本期累積"
     />
 
+    <!-- 發放月：涵蓋月在籍人數快照（產生/核對/手調/確認；計算優先讀快照） -->
+    <EnrollmentSnapshotPanel v-if="isFestivalMonth" :year="q.year" :month="q.month" />
+
     <el-card v-loading="loading" shadow="never" class="no-hover">
       <template v-if="totalPending > 0">
         <el-alert
@@ -42,6 +45,7 @@ import { getLeaves } from '@/api/leaves'
 import { getOvertimes } from '@/api/overtimes'
 import { getCorrections } from '@/api/punchCorrections'
 import { useErrorNotify } from '@/composables/useErrorNotify'
+import EnrollmentSnapshotPanel from './EnrollmentSnapshotPanel.vue'
 
 defineEmits<{ (e: 'next'): void }>()
 

@@ -10,6 +10,19 @@ export const getFestivalBonus = (year: number, month: number) =>
 export const getFestivalBonusPeriodAccrual = (year: number, month: number) =>
     api.get(`/salaries/festival-bonus/period-accrual?year=${year}&month=${month}`)
 
+// 在籍人數快照（L2，2026-06-13）：結算前產生/檢視/手調/確認，薪資計算優先讀快照
+export const getEnrollmentSnapshot = (year: number, month: number) =>
+    api.get(`/salaries/enrollment-snapshot?year=${year}&month=${month}`)
+
+export const generateEnrollmentSnapshot = (payload: { year: number; month: number; force?: boolean }) =>
+    api.post('/salaries/enrollment-snapshot/generate', payload)
+
+export const patchEnrollmentSnapshot = (id: number, payload: { student_count: number; reason: string }) =>
+    api.patch(`/salaries/enrollment-snapshot/${id}`, payload)
+
+export const confirmEnrollmentSnapshot = (payload: { year: number; month: number }) =>
+    api.post('/salaries/enrollment-snapshot/confirm', payload)
+
 export const getRecords = (year: number, month: number): AxiosResp<'/salaries/records', 'get'> =>
     api.get(`/salaries/records?year=${year}&month=${month}`)
 
