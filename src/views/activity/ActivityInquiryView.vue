@@ -35,7 +35,7 @@
       </el-table-column>
       <el-table-column label="操作" width="200" align="center" fixed="right">
         <template #default="{ row }">
-          <el-button size="small" @click="openReplyDialog(row)">
+          <el-button v-if="canWrite" size="small" @click="openReplyDialog(row)">
             {{ row.reply ? '編輯回覆' : '回覆' }}
           </el-button>
           <el-button
@@ -44,7 +44,7 @@
             type="primary"
             @click="handleMarkRead(row)"
           >標記已讀</el-button>
-          <el-button size="small" type="danger" @click="handleDelete(row)" :loading="deletingId === row.id">刪除</el-button>
+          <el-button v-if="canWrite" size="small" type="danger" @click="handleDelete(row)" :loading="deletingId === row.id">刪除</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -85,10 +85,14 @@ import { Check } from '@element-plus/icons-vue'
 import { getInquiries, markInquiryRead, deleteInquiry, replyInquiry } from '@/api/activity'
 import { useActivityStore } from '@/stores/activity'
 import { formatActivityDate } from '@/utils/format'
+import { hasPermission } from '@/utils/auth'
 
 interface Inquiry { id: number; is_read: boolean; reply?: string; [key: string]: unknown }
 
 const activityStore = useActivityStore()
+
+// 對齊 ActivityRegistrationView 慣例：READ-only 隱藏回覆/刪除（標記已讀後端只要 ACTIVITY_READ，不蓋）
+const canWrite = computed(() => hasPermission('ACTIVITY_WRITE'))
 const list = ref<Inquiry[]>([])
 const total = ref(0)
 const deletingId = ref<number | null>(null)
@@ -97,7 +101,11 @@ const pageSize = ref(20)
 const loading = ref(false)
 const readFilter = ref<boolean | null>(null)
 
-const unreadCount = computed(() => list.value.filter((i) => !i.is_read).length)
+// 全量未讀數（後端 list 回應頂層 unread_count）；欄位缺席時 fallback 回當頁計算（平滑過渡）
+const serverUnreadCount = ref<number | null>(null)
+const unreadCount = computed(
+  () => serverUnreadCount.value ?? list.value.filter((i) => !i.is_read).length,
+)
 
 const replyDialog = ref(false)
 const replyTarget = ref<Inquiry | null>(null)
@@ -137,9 +145,10 @@ async function fetchList() {
       params.is_read = readFilter.value
     }
     const res = await getInquiries(params)
-    const data = res.data as { items: Inquiry[]; total: number }
+    const data = res.data as { items: Inquiry[]; total: number; unread_count?: number }
     list.value = data.items
     total.value = data.total
+    serverUnreadCount.value = typeof data.unread_count === 'number' ? data.unread_count : null
   } catch {
     ElMessage.error('載入失敗')
   } finally {
@@ -151,6 +160,10 @@ async function handleMarkRead(row: Inquiry) {
   try {
     await markInquiryRead(row.id)
     row.is_read = true
+    // 全量未讀數本地遞減（不重抓 list；下次 fetchList 會以後端為準）
+    if (serverUnreadCount.value != null) {
+      serverUnreadCount.value = Math.max(0, serverUnreadCount.value - 1)
+    }
     ElMessage.success('已標記為已讀')
     activityStore.fetchSummary({ force: true })
   } catch {

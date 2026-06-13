@@ -7,13 +7,14 @@
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 
-const { mockDelete } = vi.hoisted(() => ({
+const { mockDelete, mockGet } = vi.hoisted(() => ({
   mockDelete: vi.fn(() => Promise.resolve({ data: {} })),
+  mockGet: vi.fn(() => Promise.resolve({ data: {} })),
 }))
 
 vi.mock('@/api/index', () => ({
   default: {
-    get: vi.fn(),
+    get: mockGet,
     post: vi.fn(),
     put: vi.fn(),
     delete: mockDelete,
@@ -24,6 +25,9 @@ import {
   withdrawCourse,
   deleteRegistration,
   removeRegistrationSupply,
+  getActivityStats,
+  getActivityStatsSummary,
+  getActivityStatsCharts,
 } from '@/api/activity'
 
 describe('activity api — forceRefund / refundReason 契約', () => {
@@ -103,6 +107,46 @@ describe('activity api — forceRefund / refundReason 契約', () => {
     expect(mockDelete).toHaveBeenCalledWith(
       '/activity/registrations/7/supplies/88',
       { params: { force_refund: true, refund_reason: '用品移除超繳沖帳' } }
+    )
+  })
+})
+
+describe('activity api — 統計學期參數契約（同 dashboard-table 帶法）', () => {
+  beforeEach(() => {
+    mockGet.mockClear()
+  })
+
+  it('getActivityStatsSummary 不帶參數時 params 為空物件（後端套當前學期）', async () => {
+    await getActivityStatsSummary()
+    expect(mockGet).toHaveBeenCalledWith('/activity/stats-summary', { params: {} })
+  })
+
+  it('getActivityStatsSummary 帶 school_year/semester query', async () => {
+    await getActivityStatsSummary({ school_year: 114, semester: 2 })
+    expect(mockGet).toHaveBeenCalledWith(
+      '/activity/stats-summary',
+      { params: { school_year: 114, semester: 2 } },
+    )
+  })
+
+  it('getActivityStatsCharts 帶 school_year/semester query', async () => {
+    await getActivityStatsCharts({ school_year: 114, semester: 1 })
+    expect(mockGet).toHaveBeenCalledWith(
+      '/activity/stats-charts',
+      { params: { school_year: 114, semester: 1 } },
+    )
+  })
+
+  it('getActivityStats 不帶參數時 params 為空物件（後端套當前學期）', async () => {
+    await getActivityStats()
+    expect(mockGet).toHaveBeenCalledWith('/activity/stats', { params: {} })
+  })
+
+  it('getActivityStats 帶 school_year/semester query（出席率統計來自此聚合回應）', async () => {
+    await getActivityStats({ school_year: 114, semester: 1 })
+    expect(mockGet).toHaveBeenCalledWith(
+      '/activity/stats',
+      { params: { school_year: 114, semester: 1 } },
     )
   })
 })

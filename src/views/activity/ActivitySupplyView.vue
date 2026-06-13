@@ -4,7 +4,7 @@
       <h2>用品管理</h2>
       <div class="toolbar__actions">
         <AcademicTermSelector />
-        <el-button type="primary" @click="openCreate">新增用品</el-button>
+        <el-button v-if="canWrite" type="primary" @click="openCreate">新增用品</el-button>
       </div>
     </div>
 
@@ -13,7 +13,7 @@
       <el-table-column label="價格（元）" prop="price" width="110" align="right">
         <template #default="{ row }">${{ row.price?.toLocaleString() }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="130" align="center" fixed="right">
+      <el-table-column v-if="canWrite" label="操作" width="130" align="center" fixed="right">
         <template #default="{ row }">
           <el-button size="small" @click="openEdit(row)">編輯</el-button>
           <el-button size="small" type="danger" @click="handleDelete(row)">停用</el-button>
@@ -39,15 +39,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getSupplies, createSupply, updateSupply, deleteSupply } from '@/api/activity'
 import AcademicTermSelector from '@/components/common/AcademicTermSelector.vue'
 import { useAcademicTermStore } from '@/stores/academicTerm'
+import { hasPermission } from '@/utils/auth'
 
 interface Supply { id: number; name: string; price: number }
 
 const termStore = useAcademicTermStore()
+
+// 對齊 ActivityRegistrationView 慣例：READ-only 使用者隱藏 mutation 入口（後端守衛 ACTIVITY_WRITE）
+const canWrite = computed(() => hasPermission('ACTIVITY_WRITE'))
 
 const supplies = ref<Supply[]>([])
 const loading = ref(false)

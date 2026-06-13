@@ -309,17 +309,27 @@ const fetchTable = async () => {
   }
 }
 
-watch(selectedTermKey, fetchTable)
-
-onMounted(async () => {
+// 卡片 / 圖表 / 出席率三組統計皆帶選定學期（契約同 dashboard-table 的 school_year/semester）；
+// store 快取以學期 key 區分，切學期自動失效重抓，同學期 TTL 內不重抓。
+const fetchStatsAll = async () => {
   loading.value = true
-  // Why: summary 15s/charts 60s TTL 已足夠新鮮，切回 dashboard 不需每次強制重抓；
-  // table 隨 selectedTermKey watch 取得 term-specific 資料，不走 cache。
+  const termParams = { school_year: termStore.school_year, semester: termStore.semester }
   await Promise.all([
-    activityStore.fetchSummary(),
-    activityStore.fetchCharts(),
+    activityStore.fetchSummary(termParams),
+    activityStore.fetchCharts(termParams),
+    activityStore.fetchAttendanceStats(termParams),
   ])
   loading.value = false
+}
+
+// 切學期：卡片 / 圖表 / 出席率 / 統計表全部重抓
+watch(selectedTermKey, () => {
+  fetchStatsAll()
+  fetchTable()
+})
+
+onMounted(async () => {
+  await fetchStatsAll()
   await fetchTable()
 })
 
