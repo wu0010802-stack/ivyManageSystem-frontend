@@ -4,8 +4,8 @@
       <h2>課程管理</h2>
       <div class="toolbar__actions">
         <AcademicTermSelector />
-        <el-button @click="openCopyDialog" :icon="CopyDocument">複製上學期</el-button>
-        <el-button type="primary" @click="openCreate">新增課程</el-button>
+        <el-button v-if="canWrite" @click="openCopyDialog" :icon="CopyDocument">複製上學期</el-button>
+        <el-button v-if="canWrite" type="primary" @click="openCreate">新增課程</el-button>
       </div>
     </div>
 
@@ -58,7 +58,7 @@
           <span v-else>-</span>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="130" align="center" fixed="right">
+      <el-table-column v-if="canWrite" label="操作" width="130" align="center" fixed="right">
         <template #default="{ row }">
           <el-button size="small" @click="openEdit(row)">編輯</el-button>
           <el-button size="small" type="danger" @click="handleDelete(row)" :loading="deletingId === row.id">停用</el-button>
@@ -182,6 +182,7 @@
       <el-table-column label="操作" width="90" align="center">
         <template #default="{ row }">
           <el-button
+            v-if="canWrite"
             :data-test="`promote-waitlist-btn-${row.registration_id}`"
             size="small" type="success"
             @click="openPromoteDialog(row)"
@@ -264,13 +265,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { CopyDocument, VideoPlay } from '@element-plus/icons-vue'
 import { copyCoursesFromPrevious, getCourses, createCourse, updateCourse, deleteCourse,
          getCourseWaitlist, getCourseEnrolled, promoteWaitlist } from '@/api/activity'
 import AcademicTermSelector from '@/components/common/AcademicTermSelector.vue'
 import { useAcademicTermStore } from '@/stores/academicTerm'
+import { hasPermission } from '@/utils/auth'
 
 interface Course {
   id: number; name: string; price: number; sessions?: number | null; capacity: number
@@ -289,6 +291,9 @@ interface CourseForm {
 }
 
 const termStore = useAcademicTermStore()
+
+// 對齊 ActivityRegistrationView 慣例：READ-only 使用者隱藏 mutation 入口（後端守衛 ACTIVITY_WRITE）
+const canWrite = computed(() => hasPermission('ACTIVITY_WRITE'))
 
 const WEEKDAY_LABELS = ['一', '二', '三', '四', '五', '六', '日']
 function formatSchedule(row: Course) {

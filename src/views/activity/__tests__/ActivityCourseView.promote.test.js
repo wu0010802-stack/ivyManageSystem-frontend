@@ -19,6 +19,11 @@ vi.mock('@/stores/academicTerm', () => ({
   useAcademicTermStore: () => ({ school_year: 114, semester: 1 }),
 }))
 
+// ── auth mock（升位按鈕自 canWrite 閘後需要 ACTIVITY_WRITE）─────────────────
+vi.mock('@/utils/auth', () => ({
+  hasPermission: () => true,
+}))
+
 // ── element-plus 訊息 mock ────────────────────────────────────────────────
 vi.mock('element-plus', () => ({
   ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },

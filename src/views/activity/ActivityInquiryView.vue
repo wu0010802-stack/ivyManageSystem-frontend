@@ -35,7 +35,7 @@
       </el-table-column>
       <el-table-column label="操作" width="200" align="center" fixed="right">
         <template #default="{ row }">
-          <el-button size="small" @click="openReplyDialog(row)">
+          <el-button v-if="canWrite" size="small" @click="openReplyDialog(row)">
             {{ row.reply ? '編輯回覆' : '回覆' }}
           </el-button>
           <el-button
@@ -44,7 +44,7 @@
             type="primary"
             @click="handleMarkRead(row)"
           >標記已讀</el-button>
-          <el-button size="small" type="danger" @click="handleDelete(row)" :loading="deletingId === row.id">刪除</el-button>
+          <el-button v-if="canWrite" size="small" type="danger" @click="handleDelete(row)" :loading="deletingId === row.id">刪除</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -85,10 +85,14 @@ import { Check } from '@element-plus/icons-vue'
 import { getInquiries, markInquiryRead, deleteInquiry, replyInquiry } from '@/api/activity'
 import { useActivityStore } from '@/stores/activity'
 import { formatActivityDate } from '@/utils/format'
+import { hasPermission } from '@/utils/auth'
 
 interface Inquiry { id: number; is_read: boolean; reply?: string; [key: string]: unknown }
 
 const activityStore = useActivityStore()
+
+// 對齊 ActivityRegistrationView 慣例：READ-only 隱藏回覆/刪除（標記已讀後端只要 ACTIVITY_READ，不蓋）
+const canWrite = computed(() => hasPermission('ACTIVITY_WRITE'))
 const list = ref<Inquiry[]>([])
 const total = ref(0)
 const deletingId = ref<number | null>(null)
