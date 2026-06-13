@@ -19,7 +19,7 @@
             placeholder="選擇課程"
             clearable
             style="width: 100%"
-            @change="loadSessions"
+            @change="onFilterChange"
           >
             <el-option
               v-for="c in courses"
@@ -122,6 +122,17 @@
       目前沒有場次資料，請點擊「新增場次」建立。
     </div>
 
+    <el-pagination
+      v-if="total > 0"
+      v-model:current-page="page"
+      v-model:page-size="pageSize"
+      :total="total"
+      layout="total, prev, pager, next, jumper, sizes"
+      :page-sizes="[20, 50, 100]"
+      style="margin-top: 12px; justify-content: flex-end"
+      @change="loadSessions"
+    />
+
     <!-- 新增場次 Dialog -->
     <el-dialog
       v-model="createDialogVisible"
@@ -178,8 +189,8 @@
         <!-- 快速操作 + 統計 Tags + 分組切換 -->
         <div class="drawer-top-actions">
           <el-space>
-            <el-button size="small" @click="setAllPresent(true)">全部出席</el-button>
-            <el-button size="small" @click="setAllPresent(false)">全部缺席</el-button>
+            <el-button v-if="canWrite" size="small" @click="setAllPresent(true)">全部出席</el-button>
+            <el-button v-if="canWrite" size="small" @click="setAllPresent(false)">全部缺席</el-button>
             <el-switch
               v-model="groupByClassroom"
               active-text="按班級分組"
@@ -195,11 +206,11 @@
           </el-space>
         </div>
 
-        <!-- 分組模式：每班獨立 section + 全選 -->
-        <template v-if="groupByClassroom && drawerSession.groups?.length">
+        <!-- 分組模式：每班獨立 section + 全選（groups 為扁平 students 的 computed 視圖，單一資料源） -->
+        <template v-if="groupByClassroom && groupedStudents.length">
           <el-collapse v-model="activeGroups" style="margin-top: 12px">
             <el-collapse-item
-              v-for="g in drawerSession.groups"
+              v-for="g in groupedStudents"
               :key="String(g.classroom_id ?? 'unassigned')"
               :name="String(g.classroom_id ?? 'unassigned')"
             >
@@ -210,6 +221,7 @@
                   <el-tag v-if="g.classroom_id === null" size="small" type="warning" effect="plain">未分班</el-tag>
                 </span>
                 <el-button
+                  v-if="canWrite"
                   size="small"
                   type="primary"
                   link
@@ -217,6 +229,7 @@
                   @click.stop="setGroupPresent(g, true)"
                 >全班出席</el-button>
                 <el-button
+                  v-if="canWrite"
                   size="small"
                   type="info"
                   link
@@ -236,6 +249,7 @@
                       v-model="row.is_present"
                       :active-value="true"
                       :inactive-value="false"
+                      :disabled="!canWrite"
                       active-text="出席"
                       inactive-text="缺席"
                       inline-prompt
@@ -244,7 +258,7 @@
                 </el-table-column>
                 <el-table-column label="備註" min-width="100">
                   <template #default="{ row }">
-                    <el-input v-model="row.attendance_notes" size="small" placeholder="備註" />
+                    <el-input v-model="row.attendance_notes" :disabled="!canWrite" size="small" placeholder="備註" />
                   </template>
                 </el-table-column>
               </el-table>
@@ -269,6 +283,7 @@
                 v-model="row.is_present"
                 :active-value="true"
                 :inactive-value="false"
+                :disabled="!canWrite"
                 active-text="出席"
                 inactive-text="缺席"
                 inline-prompt
@@ -279,6 +294,7 @@
             <template #default="{ row }">
               <el-input
                 v-model="row.attendance_notes"
+                :disabled="!canWrite"
                 size="small"
                 placeholder="備註"
               />
@@ -290,6 +306,7 @@
           <el-button :icon="Printer" @click="openPrintForCurrent">列印點名單</el-button>
           <el-button @click="handleExport">匯出 Excel</el-button>
           <el-button
+            v-if="canWrite"
             type="primary"
             :loading="saveLoading"
             @click="handleSave(loadSessions)"
@@ -319,11 +336,12 @@ import { todayISO, dateToLocalISO } from '@/utils/format'
 import { useActivityAttendanceDrawer } from '@/composables/useActivityAttendanceDrawer'
 import { openPdfInNewTab } from '@/utils/printPdfWindow'
 
+import type { AttendanceStudent, AttendanceStudentGroup } from '@/composables/useActivityAttendanceDrawer'
+
 interface CourseOption { id: number; name: string }
 interface SessionRow { id: number; course_name?: string; session_date?: string; recorded_count?: number; present_count?: number; notes?: string; created_by?: string }
-interface AttendanceGroup { classroom_id: number | null; classroom_name?: string; students: Record<string, unknown>[] }
 // Extended session shape returned by the API (superset of composable's SessionData)
-interface SessionDetail { id: unknown; course_name: string; session_date: string; students: Record<string, unknown>[]; total?: number; groups?: AttendanceGroup[] }
+interface SessionDetail { id: unknown; course_name: string; session_date: string; students: AttendanceStudent[]; total?: number }
 
 const canWrite = computed(() => hasPermission('ACTIVITY_WRITE'))
 
@@ -359,7 +377,12 @@ const createDialogVisible = ref(false)
 const createLoading = ref(false)
 const createForm = ref<{ course_id: number | null; session_date: string | null; notes: string }>({ course_id: null, session_date: null, notes: '' })
 
-// 按班級分組：預設開啟；切換時重新呼叫 API（帶不同 group_by）
+// 分頁（後端預設 limit=100，逾百場次需分頁才不會靜默消失）
+const page = ref(1)
+const pageSize = ref(20)
+const total = ref(0)
+
+// 按班級分組：預設開啟；純前端展示切換（groups 為扁平 students 的 computed 視圖，不再重打 API）
 const GROUP_PREF_KEY = 'activity_attendance_group_by_classroom'
 const groupByClassroom = ref(
   typeof localStorage !== 'undefined'
@@ -375,12 +398,12 @@ const {
   drawerSession: _drawerSession,
   saveLoading,
   sortedStudents,
+  groupedStudents,
   drawerTitle,
   drawerPresentCount,
   drawerAbsentCount,
   drawerUnmarkedCount,
   openDrawer: openDrawerRaw,
-  reloadCurrentSession,
   setAllPresent,
   handleSave,
 } = useActivityAttendanceDrawer({
@@ -388,33 +411,28 @@ const {
   getSessionFn: (id, params) => getAttendanceSession(id as number, params),
   updateFn: (id, records) => batchUpdateAttendance(id as number, records),
 })
-// Cast to extended type that includes total/groups returned by API
+// Cast to extended type that includes total returned by API
 const drawerSession = _drawerSession as import('vue').Ref<SessionDetail | null>
 
-function currentGroupParams(): Record<string, string> {
-  return groupByClassroom.value ? { group_by: 'classroom' } : {}
-}
-
 async function openDrawer(row: SessionRow) {
-  await openDrawerRaw(row, currentGroupParams())
+  await openDrawerRaw(row)
   syncActiveGroups()
 }
 
 function syncActiveGroups() {
-  const groups = drawerSession.value?.groups || []
-  activeGroups.value = groups.map(g => String(g.classroom_id ?? 'unassigned'))
+  activeGroups.value = groupedStudents.value.map(g => String(g.classroom_id ?? 'unassigned'))
 }
 
-async function onGroupToggle(val: string | number | boolean) {
+function onGroupToggle(val: string | number | boolean) {
   if (typeof localStorage !== 'undefined') {
     localStorage.setItem(GROUP_PREF_KEY, val ? '1' : '0')
   }
-  await reloadCurrentSession(currentGroupParams())
+  // 分組為純前端 computed 視圖，切換不需重打 API
   syncActiveGroups()
 }
 
-function setGroupPresent(group: AttendanceGroup, value: boolean) {
-  (group.students || []).forEach(s => { (s as Record<string, unknown>).is_present = value })
+function setGroupPresent(group: AttendanceStudentGroup, value: boolean) {
+  group.students.forEach(s => { s.is_present = value })
 }
 
 // 快速日期範圍
@@ -438,29 +456,39 @@ function setQuickRange(range: string) {
     filterStartDate.value = dateToLocalISO(new Date(y, m, 1))
     filterEndDate.value = dateToLocalISO(new Date(y, m + 1, 0))
   }
-  loadSessions()
+  onFilterChange()
 }
 
 function onManualDateChange() {
   quickRange.value = null
-  loadSessions()
+  onFilterChange()
 }
 
 async function loadSessions() {
   loading.value = true
   try {
-    const params: Record<string, unknown> = {}
+    const params: Record<string, unknown> = {
+      skip: (page.value - 1) * pageSize.value,
+      limit: pageSize.value,
+    }
     if (filterCourseId.value) params.course_id = filterCourseId.value
     if (filterStartDate.value) params.start_date = filterStartDate.value
     if (filterEndDate.value) params.end_date = filterEndDate.value
     const res = await getAttendanceSessions(params)
-    const data = res.data as { items?: SessionRow[] } | SessionRow[]
+    const data = res.data as { items?: SessionRow[]; total?: number } | SessionRow[]
     sessions.value = (data as { items?: SessionRow[] })?.items ?? (Array.isArray(data) ? data : [])
+    total.value = (data as { total?: number })?.total ?? sessions.value.length
   } catch {
     ElMessage.error('載入場次失敗')
   } finally {
     loading.value = false
   }
+}
+
+/** 篩選條件變更時回到第一頁再載入 */
+function onFilterChange() {
+  page.value = 1
+  loadSessions()
 }
 
 async function loadCourses() {
@@ -477,7 +505,7 @@ function resetFilter() {
   filterStartDate.value = null
   filterEndDate.value = null
   quickRange.value = null
-  loadSessions()
+  onFilterChange()
 }
 
 function openCreateDialog() {
