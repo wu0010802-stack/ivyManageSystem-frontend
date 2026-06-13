@@ -428,14 +428,13 @@ watch(
 )
 
 onMounted(async () => {
-  await Promise.all([fetchDetail(), fetchOptions()])
   if (props.filterPatch) {
     filter.value = { ...filter.value, ...props.filterPatch, page: 1 }
-    void fetchDetail()
   }
+  await Promise.all([fetchDetail(), fetchOptions()])
 })
 
-defineExpose({ handleDelete, openAddDialog })
+defineExpose({ handleDelete, openAddDialog, fetchDetail })
 </script>
 
 <style scoped>

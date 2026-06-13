@@ -14,12 +14,13 @@
       </div>
     </div>
 
-    <el-tabs v-model="activeTab" class="admissions-tabs">
+    <el-tabs v-model="activeTab" class="admissions-tabs" @tab-change="onTabChange">
       <el-tab-pane label="漏斗看板" name="funnel">
         <FunnelBoard />
       </el-tab-pane>
       <el-tab-pane label="訪視明細" name="records" lazy>
         <AdmissionsRecordsPanel
+          ref="recordsPanelRef"
           :dashboard="dashboard"
           :filter-patch="recordsFilterPatch"
           @changed="onRecordsChanged"
@@ -61,17 +62,25 @@ const activeTab = ref<AdmissionsTab>(initialTab)
 const canWrite = computed(() => hasPermission('RECRUITMENT_WRITE'))
 const dashboard = useRecruitmentDashboard({ notifyError: (m: string) => ElMessage.error(m) })
 const funnelStore = useRecruitmentFunnelStore()
+// 注意：panel 為 lazy keep-mounted，patch 僅在 panel watch/onMounted 各讀一次；
+// 若日後改 destroy-on-hide，殘留 patch 會在 remount 重套舊篩選
 const recordsFilterPatch = ref<Record<string, unknown> | null>(null)
+const recordsPanelRef = ref<InstanceType<typeof AdmissionsRecordsPanel> | null>(null)
 
 function drillToRecords(patch: Record<string, unknown>) {
   recordsFilterPatch.value = { ...patch }
   activeTab.value = 'records'
 }
 
+function onTabChange(name: string | number) {
+  // 漏斗推卡會改變訪視 enrolled 狀態；切回明細時重抓避免顯示過期資料
+  if (name === 'records') void recordsPanelRef.value?.fetchDetail()
+}
+
 async function onRecordsChanged() {
   await dashboard.fetchStats()
   dashboard.invalidateOptions()
-  void funnelStore.loadBoard() // 訪視 CRUD/轉化會改變漏斗卡片
+  void funnelStore.loadBoard({ force: true }) // 訪視 CRUD/轉化會改變漏斗卡片；force 避免 loadingBoard 靜默跳過
 }
 
 onMounted(() => {
