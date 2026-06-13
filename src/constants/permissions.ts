@@ -131,6 +131,9 @@ export const ROUTE_PERMISSION_RULES = [
   { path: '/activity/audit/pos-unlock', permission: 'ACTIVITY_PAYMENT_APPROVE' },
   { path: '/fees', permission: 'FEES_READ' },
   { path: '/student-enrollment', permission: 'STUDENTS_READ' },
+  // 招生入學（/recruitment 重構搬遷至學生模組）。/students 是 exact 匹配不涵蓋此路由，
+  // 缺這條會被 canAccessRoute default-deny 鎖死（含 super admin）。
+  { path: '/students/admissions', permission: 'RECRUITMENT_READ' },
   { path: '/recruitment', permission: 'RECRUITMENT_READ' },
   // /recruitment-ivykids 設計上為 redirect 至 /recruitment（router 在 guard 前先導向），
   // 不需獨立 ROUTE_PERMISSION_RULES；加規則會與 RecruitmentIvykidsTab 設計測試相反。

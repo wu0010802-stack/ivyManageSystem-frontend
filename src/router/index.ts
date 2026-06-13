@@ -100,6 +100,12 @@ const routes: RouteRecordRaw[] = [
             meta: { title: '在籍統計' }
         },
         {
+            path: '/students/admissions',
+            name: 'students-admissions',
+            component: () => import('../views/students/AdmissionsView.vue'),
+            meta: { title: '招生入學' }
+        },
+        {
             path: '/recruitment',
             name: 'recruitment',
             component: () => import('../views/RecruitmentView.vue'),
