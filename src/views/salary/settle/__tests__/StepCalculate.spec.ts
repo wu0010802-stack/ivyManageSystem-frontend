@@ -5,7 +5,11 @@ import StepCalculate from '../StepCalculate.vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 const calculateMock = vi.fn()
-vi.mock('@/api/salary', () => ({ calculate: (...a: unknown[]) => calculateMock(...a) }))
+const getSnapshotMock = vi.fn()
+vi.mock('@/api/salary', () => ({
+    calculate: (...a: unknown[]) => calculateMock(...a),
+    getEnrollmentSnapshot: (...a: unknown[]) => getSnapshotMock(...a),
+}))
 
 const hasPermissionMock = vi.fn().mockReturnValue(true)
 vi.mock('@/utils/auth', () => ({ hasPermission: (...a: unknown[]) => hasPermissionMock(...a) }))
@@ -35,17 +39,19 @@ const STUBS = {
     },
 }
 
-const mountStep = (settlement: ReturnType<typeof makeSettlement>) =>
+const mountStep = (settlement: ReturnType<typeof makeSettlement>, month = 5) =>
     mount(StepCalculate, {
         global: {
             stubs: STUBS,
-            provide: { settlement, settleQuery: { year: 2026, month: 5 } },
+            provide: { settlement, settleQuery: { year: 2026, month } },
         },
     })
 
 describe('StepCalculate', () => {
     beforeEach(() => {
         calculateMock.mockReset()
+        getSnapshotMock.mockReset()
+        getSnapshotMock.mockResolvedValue({ data: { covered_months: [], rows: [] } })
         hasPermissionMock.mockReturnValue(true)
         vi.mocked(ElMessageBox.confirm).mockResolvedValue('confirm' as never)
         vi.mocked(ElMessage.success).mockReset()
@@ -114,5 +120,42 @@ describe('StepCalculate', () => {
         await btn!.trigger('click')
         await flushPromises()
         expect(calculateMock).not.toHaveBeenCalled()
+    })
+
+    it('發放月涵蓋月快照未全確認 → 計算按鈕 disabled（決策2 gate）', async () => {
+        getSnapshotMock.mockImplementation((year: number, month: number) => {
+            if (month === 6) {
+                return Promise.resolve({
+                    data: { covered_months: [[2026, 2], [2026, 3], [2026, 4], [2026, 5]], rows: [] },
+                })
+            }
+            // 2 月已確認，3/4/5 月未確認
+            return Promise.resolve({ data: { rows: [{ is_confirmed: month === 2 }] } })
+        })
+        const wrapper = mountStep(makeSettlement('idle'), 6)
+        await flushPromises()
+        const btn = wrapper.findAll('button').find((b) => b.text().includes('計算薪資'))
+        expect(btn!.attributes('disabled')).toBeDefined()
+    })
+
+    it('發放月涵蓋月快照全確認 → 計算按鈕可用', async () => {
+        getSnapshotMock.mockImplementation((year: number, month: number) => {
+            if (month === 6) {
+                return Promise.resolve({
+                    data: { covered_months: [[2026, 2], [2026, 5]], rows: [] },
+                })
+            }
+            return Promise.resolve({ data: { rows: [{ is_confirmed: true }] } })
+        })
+        const wrapper = mountStep(makeSettlement('idle'), 6)
+        await flushPromises()
+        const btn = wrapper.findAll('button').find((b) => b.text().includes('計算薪資'))
+        expect(btn!.attributes('disabled')).toBeUndefined()
+    })
+
+    it('非發放月不查快照 gate（不呼叫 getEnrollmentSnapshot）', async () => {
+        mountStep(makeSettlement('idle'), 5)
+        await flushPromises()
+        expect(getSnapshotMock).not.toHaveBeenCalled()
     })
 })

@@ -55,9 +55,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, inject } from 'vue'
+import { ref, computed, inject, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { calculate } from '@/api/salary'
+import { calculate, getEnrollmentSnapshot } from '@/api/salary'
 import { hasPermission } from '@/utils/auth'
 import { useErrorNotify } from '@/composables/useErrorNotify'
 import type { SalarySettlement } from '@/composables/useSalarySettlement'
@@ -73,9 +73,37 @@ const { notify } = useErrorNotify()
 const calculating = ref(false)
 const calcErrors = ref<{ employee_name?: string; error?: string }[]>([])
 
+// 發放月（2/6/9/12）快照 gate（決策2）：涵蓋月在籍人數快照須全部確認才能計算。
+// 前端預先禁用按鈕避免白點；後端 calculate 端點 422 為最終強制關卡。
+const isFestivalMonth = computed(() => [2, 6, 9, 12].includes(q.month))
+const snapshotPending = ref<[number, number][]>([])
+
+interface SnapshotRow { is_confirmed: boolean }
+const checkSnapshotGate = async () => {
+    if (!isFestivalMonth.value) return
+    try {
+        const res = await getEnrollmentSnapshot(q.year, q.month)
+        const covered = (res.data as { covered_months?: [number, number][] }).covered_months ?? []
+        const pending: [number, number][] = []
+        for (const [y, m] of covered) {
+            const r = await getEnrollmentSnapshot(y, m)
+            const rows = (r.data as { rows?: SnapshotRow[] }).rows ?? []
+            if (!rows.length || !rows.every((row) => row.is_confirmed)) pending.push([y, m])
+        }
+        snapshotPending.value = pending
+    } catch {
+        // 查詢失敗不阻擋（後端 422 兜底）
+    }
+}
+onMounted(checkSnapshotGate)
+
 const disabledReason = computed(() => {
     if (!hasPermission('SALARY_WRITE')) return '需要薪資寫入權限（目前為唯讀模式）'
     if (settlement.status.value === 'finalized') return '本月已定案，需先於「定案」步驟退回才能重算'
+    if (isFestivalMonth.value && snapshotPending.value.length > 0) {
+        const labels = snapshotPending.value.map(([y, m]) => `${y}/${m}`).join('、')
+        return `發放月須先於「結算前檢查」產生並確認各涵蓋月在籍人數快照（待辦：${labels}）`
+    }
     return ''
 })
 
