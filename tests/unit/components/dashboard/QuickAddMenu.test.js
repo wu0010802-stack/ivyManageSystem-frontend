@@ -75,4 +75,13 @@ describe('QuickAddMenu', () => {
     expect(push).toHaveBeenCalledWith({ path: '/employees', query: { quick_add: '1' } })
     expect(wrapper.emitted('open')).toBeFalsy()
   })
+
+  it('點訪視記錄項目 push 帶 tab=records + quick_add=1', async () => {
+    hasPermission.mockImplementation((name) => name === 'RECRUITMENT_WRITE')
+    const wrapper = mount(QuickAddMenu, { global: { stubs } })
+    const recruitmentItem = wrapper.findAll('.dropdown-item').find((el) => el.attributes('data-command') === 'recruitment')
+    await recruitmentItem.trigger('click')
+    expect(push).toHaveBeenCalledWith({ path: '/students/admissions', query: { tab: 'records', quick_add: '1' } })
+    expect(wrapper.emitted('open')).toBeFalsy()
+  })
 })

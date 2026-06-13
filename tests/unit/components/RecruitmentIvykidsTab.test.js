@@ -119,9 +119,9 @@ describe('RecruitmentIvykidsTab', () => {
     expect(wrapper.text()).toContain('共 1 筆')
   })
 
-  it('官網報名併入招生統計（無獨立側邊欄/路由改 redirect）', () => {
-    // Phase 3：官網報名收進招生統計 tab，舊路由 redirect、移除獨立側邊欄項與權限對應
-    expect(routerSource).toMatch(/recruitment-ivykids[\s\S]{0,120}redirect:\s*['"]\/recruitment['"]/)
+  it('官網報名併入招生入學（無獨立側邊欄/路由改 redirect 至 /students/admissions）', () => {
+    // Cutover：官網報名收進招生入學 tab，舊路由 redirect、移除獨立側邊欄項與權限對應
+    expect(routerSource).toMatch(/recruitment-ivykids[\s\S]{0,160}redirect:[\s\S]{0,80}\/students\/admissions[\s\S]{0,60}tab:\s*['"]ivykids['"]/)
     expect(sidebarSource).not.toContain('index="/recruitment-ivykids"')
     expect(permissionsSource).not.toContain("{ path: '/recruitment-ivykids', permission: 'RECRUITMENT_READ' }")
   })

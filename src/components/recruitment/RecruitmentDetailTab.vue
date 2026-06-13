@@ -138,7 +138,7 @@
             @click="$emit('reserve', row)"
           >{{ row.provisional_grade_id ? '變更座位' : '保留座位' }}</el-button>
           <el-button
-            v-if="canConvert && !row.enrolled"
+            v-if="canConvert && row.has_deposit && !row.enrolled"
             size="small"
             type="success"
             @click="$emit('convert', row)"

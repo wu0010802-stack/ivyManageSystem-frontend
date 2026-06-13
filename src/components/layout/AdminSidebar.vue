@@ -88,6 +88,10 @@
             <el-icon><User /></el-icon>
             <template #title>學生</template>
           </el-menu-item>
+          <el-menu-item v-if="canView.RECRUITMENT_READ" index="/students/admissions">
+            <el-icon><DataAnalysis /></el-icon>
+            <template #title>招生入學</template>
+          </el-menu-item>
           <el-menu-item v-if="canView.STUDENTS_READ" index="/student-enrollment">
             <el-icon><TrendCharts /></el-icon>
             <template #title>在籍統計</template>
@@ -99,18 +103,6 @@
           <el-menu-item v-if="canView.FEES_READ" index="/fees">
             <el-icon><CreditCard /></el-icon>
             <template #title>學費管理</template>
-          </el-menu-item>
-        </el-sub-menu>
-
-        <!-- 5. 園務統計 (只剩招生統計 + 官網報名) -->
-        <el-sub-menu v-if="hasVisibleStatsItems" index="group-stats">
-          <template #title>
-            <el-icon><TrendCharts /></el-icon>
-            <span>園務統計</span>
-          </template>
-          <el-menu-item v-if="canView.RECRUITMENT_READ" index="/recruitment">
-            <el-icon><DataAnalysis /></el-icon>
-            <template #title>招生統計</template>
           </el-menu-item>
         </el-sub-menu>
 
@@ -314,10 +306,7 @@ const hasVisibleLeaveItems = computed(() =>
 )
 
 const hasVisibleStudentItems = computed(() =>
-  canView.value.STUDENTS_READ || canView.value.CLASSROOMS_READ || canView.value.FEES_READ
-)
-
-const hasVisibleStatsItems = computed(() =>
+  canView.value.STUDENTS_READ || canView.value.CLASSROOMS_READ || canView.value.FEES_READ ||
   canView.value.RECRUITMENT_READ
 )
 

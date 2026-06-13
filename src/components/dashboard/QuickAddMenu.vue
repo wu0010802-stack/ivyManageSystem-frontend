@@ -43,6 +43,7 @@ type NavigateItem = {
   permission: string
   action: 'navigate'
   path: string
+  query?: Record<string, string>
 }
 type MenuItem = DialogItem | NavigateItem
 
@@ -53,7 +54,7 @@ const allItems: MenuItem[] = [
   { key: 'announcement', label: '公告', icon: Bell, permission: 'ANNOUNCEMENTS_WRITE', action: 'dialog' },
   { key: 'classroom', label: '班級', icon: OfficeBuilding, permission: 'CLASSROOMS_WRITE', action: 'dialog' },
   { key: 'employee', label: '員工', icon: User, permission: 'EMPLOYEES_WRITE', action: 'navigate', path: '/employees' },
-  { key: 'recruitment', label: '訪視記錄', icon: School, permission: 'RECRUITMENT_WRITE', action: 'navigate', path: '/recruitment' },
+  { key: 'recruitment', label: '訪視記錄', icon: School, permission: 'RECRUITMENT_WRITE', action: 'navigate', path: '/students/admissions', query: { tab: 'records' } },
 ]
 
 const visibleItems = computed(() => allItems.filter((item) => hasPermission(item.permission)))
@@ -62,7 +63,7 @@ const handleCommand = (key: string) => {
   const item = allItems.find((i) => i.key === key)
   if (!item) return
   if (item.action === 'navigate') {
-    router.push({ path: item.path, query: { quick_add: '1' } })
+    router.push({ path: item.path, query: { ...(item.query ?? {}), quick_add: '1' } })
   } else {
     emit('open', item.key)
   }
