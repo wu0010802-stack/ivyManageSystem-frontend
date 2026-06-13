@@ -13,6 +13,8 @@ import {
 } from '@/api/classrooms'
 import { getCurrentAcademicTerm, normalizeSchoolYear, buildSchoolYearOptions } from '@/utils/academic'
 import { isGraduationRow, buildPromotionPayload } from '@/utils/classroomPromotion'
+import { getIntakePlan } from '@/api/recruitmentIntake'
+import { mapReservedByGrade, reservedCountFor, type IntakePlanRowLite } from '@/utils/classroomReserved'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Clock, Delete, Edit, Plus, Promotion, RefreshRight } from '@element-plus/icons-vue'
 import { useClassroomStore } from '@/stores/classroom'
@@ -56,6 +58,7 @@ const changeLogDrawerVisible = ref(false)
 const changeLogClassroom = ref<ClassroomRow | null>(null)
 const canWrite = computed(() => hasPermission('CLASSROOMS_WRITE'))
 const canReadStudents = computed(() => hasPermission('STUDENTS_READ'))
+const reservedByGrade = ref<Record<number, number>>({})
 
 const filterSchoolYear = computed({
   get: () => termStore.school_year,
@@ -159,6 +162,20 @@ const resetForm = () => {
   currentClassroom.value = null
 }
 
+const loadReservedCounts = async () => {
+  try {
+    const resp = await getIntakePlan({
+      school_year: Number(filterSchoolYear.value),
+      semester: Number(filterSemester.value) || 1,
+    })
+    const rows = ((resp.data as { rows?: IntakePlanRowLite[] }).rows ?? [])
+    reservedByGrade.value = mapReservedByGrade(rows)
+  } catch {
+    // 招生資料拿不到不阻塞班級頁：膠囊降級不顯示
+    reservedByGrade.value = {}
+  }
+}
+
 const fetchClassrooms = async () => {
   loading.value = true
   try {
@@ -172,6 +189,7 @@ const fetchClassrooms = async () => {
     ElMessage.error(apiError(error, '載入班級資料失敗'))
   } finally {
     loading.value = false
+    void loadReservedCounts()
   }
 }
 
@@ -523,6 +541,14 @@ const castDrawerClassroom = computed((): ClassroomDrawerProp | null => drawerCla
           <p><strong>班級代號:</strong> {{ classroom.class_code || '-' }}</p>
           <p>
             <strong>學生人數:</strong> {{ classroom.current_count }} / {{ classroom.capacity }}
+            <el-tag
+              v-if="reservedCountFor(reservedByGrade, classroom) > 0"
+              type="warning"
+              effect="plain"
+              size="small"
+              style="margin-left: 6px"
+              :title="`同年級暫定編班（未報到）${reservedCountFor(reservedByGrade, classroom)} 人`"
+            >保留 {{ reservedCountFor(reservedByGrade, classroom) }}</el-tag>
             <el-tag
               v-if="getCapacityStatus(classroom) === 'full'"
               type="danger"
