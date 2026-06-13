@@ -61,7 +61,8 @@ async function fetchData() {
   if (!props.studentId || !canRead.value) return
   loading.value = true
   try {
-    const recParams: Record<string, unknown> = { student_id: props.studentId, page_size: 500 }
+    // page_size 上限對齊後端 api/fees/records.py 的 le=200（超過直接 422）
+    const recParams: Record<string, unknown> = { student_id: props.studentId, page_size: 200 }
     const adjParams: Record<string, unknown> = { student_id: props.studentId }
     if (period.value && period.value !== ALL_PERIODS) {
       recParams.period = period.value
