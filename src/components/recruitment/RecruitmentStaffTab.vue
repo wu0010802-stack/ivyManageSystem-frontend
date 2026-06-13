@@ -78,7 +78,7 @@ defineProps<{
         min-width="90"
       >
         <template #default="{ row }">
-          {{ row.sources[src] ?? 0 }}
+          {{ (row.sources as Record<string, number> | undefined)?.[src] ?? 0 }}
         </template>
       </el-table-column>
       <el-table-column label="合計" align="center" width="70">
@@ -100,5 +100,4 @@ defineProps<{
   height: 280px;
   position: relative;
 }
-.chart-box-tall { height: 360px; }
 </style>

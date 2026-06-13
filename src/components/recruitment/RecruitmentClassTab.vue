@@ -70,5 +70,4 @@ defineProps<{
   height: 280px;
   position: relative;
 }
-.chart-box-tall { height: 360px; }
 </style>

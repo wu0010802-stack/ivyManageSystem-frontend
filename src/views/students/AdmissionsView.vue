@@ -32,6 +32,13 @@
       <el-tab-pane label="官網報名" name="ivykids" lazy>
         <RecruitmentIvykidsTab :bar-component="LazyBar" :show-charts="true" :can-write="canWrite" />
       </el-tab-pane>
+      <el-tab-pane label="統計分析" name="stats" lazy>
+        <RecruitmentStatsPanel
+          ref="statsPanelRef"
+          :dashboard="dashboard"
+          @drill-records="drillToRecords"
+        />
+      </el-tab-pane>
     </el-tabs>
   </div>
 </template>
@@ -48,6 +55,7 @@ import FunnelBoard from '@/components/recruitment/funnel/FunnelBoard.vue'
 import AdmissionsRecordsPanel from '@/components/recruitment/AdmissionsRecordsPanel.vue'
 import IntakePlanPanel from '@/components/recruitment/IntakePlanPanel.vue'
 import RecruitmentIvykidsTab from '@/components/recruitment/RecruitmentIvykidsTab.vue'
+import RecruitmentStatsPanel from '@/components/recruitment/RecruitmentStatsPanel.vue'
 
 const VALID_TABS = ['funnel', 'records', 'intake', 'ivykids', 'stats'] as const
 type AdmissionsTab = (typeof VALID_TABS)[number]
@@ -66,6 +74,7 @@ const funnelStore = useRecruitmentFunnelStore()
 // 若日後改 destroy-on-hide，殘留 patch 會在 remount 重套舊篩選
 const recordsFilterPatch = ref<Record<string, unknown> | null>(null)
 const recordsPanelRef = ref<InstanceType<typeof AdmissionsRecordsPanel> | null>(null)
+const statsPanelRef = ref<InstanceType<typeof RecruitmentStatsPanel> | null>(null)
 
 function drillToRecords(patch: Record<string, unknown>) {
   recordsFilterPatch.value = { ...patch }
@@ -81,6 +90,7 @@ async function onRecordsChanged() {
   await dashboard.fetchStats()
   dashboard.invalidateOptions()
   void funnelStore.loadBoard({ force: true }) // 訪視 CRUD/轉化會改變漏斗卡片；force 避免 loadingBoard 靜默跳過
+  statsPanelRef.value?.invalidateLazyTabs() // 訪視變更後統計 lazy tab 重載
 }
 
 onMounted(() => {
