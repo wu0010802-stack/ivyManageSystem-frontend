@@ -1,12 +1,19 @@
 import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 
-interface AttendanceStudent {
+export interface AttendanceStudent {
   registration_id: unknown
   is_present: boolean | null
   attendance_notes?: string
   class_name?: string
+  classroom_id?: number | null
   student_name?: string
+}
+
+export interface AttendanceStudentGroup {
+  classroom_id: number | null
+  classroom_name: string
+  students: AttendanceStudent[]
 }
 
 interface SessionData {
@@ -42,6 +49,36 @@ export function useActivityAttendanceDrawer({ getSessionFn, updateFn }: { getSes
       if (!aNone && bNone) return 1
       return 0
     })
+  })
+
+  // 分組視圖：由前端從扁平 students 分組（單一資料源）。
+  // group 內物件「直接引用」扁平樹同一物件（不可 clone），
+  // 分組模式 v-model 的異動才會反映到 handleSave 序列化來源與統計 counts。
+  // 分組語意對齊後端 group_by=classroom：按 classroom_id 分組、
+  // 未分班（classroom_id null）歸「未分班」排最後、其餘按班名 zh-Hant 排序。
+  const groupedStudents = computed<AttendanceStudentGroup[]>(() => {
+    if (!drawerSession.value) return []
+    const groupMap = new Map<number | 'unassigned', AttendanceStudentGroup>()
+    for (const s of drawerSession.value.students) {
+      const cid = s.classroom_id ?? null
+      const key = cid === null ? 'unassigned' : cid
+      let group = groupMap.get(key)
+      if (!group) {
+        group = {
+          classroom_id: cid,
+          classroom_name: cid === null ? '未分班' : (s.class_name || '未分班'),
+          students: [],
+        }
+        groupMap.set(key, group)
+      }
+      group.students.push(s)
+    }
+    const groups = [...groupMap.values()]
+    const classified = groups
+      .filter(g => g.classroom_id !== null)
+      .sort((a, b) => a.classroom_name.localeCompare(b.classroom_name, 'zh-Hant'))
+    const unassigned = groups.find(g => g.classroom_id === null)
+    return unassigned ? [...classified, unassigned] : classified
   })
 
   const drawerTitle = computed(() => {
@@ -133,6 +170,7 @@ export function useActivityAttendanceDrawer({ getSessionFn, updateFn }: { getSes
     drawerSession,
     saveLoading,
     sortedStudents,
+    groupedStudents,
     drawerTitle,
     drawerPresentCount,
     drawerAbsentCount,
