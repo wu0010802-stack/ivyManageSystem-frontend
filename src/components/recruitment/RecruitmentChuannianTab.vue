@@ -1,12 +1,13 @@
 <script setup lang="ts">
+import type { ChartData } from 'chart.js'
 import { LazyBar, castChartOpts } from '@/components/recruitment/lazyChartComponents'
 
 defineProps<{
   showCharts: boolean
   stats: Record<string, unknown>  // 用到 chuannian_visit / chuannian_deposit / total_visit
   chuannianNoDeposit: number
-  chuannianExpectedBarData: Record<string, unknown> | null
-  chuannianGradeBarData: Record<string, unknown> | null
+  chuannianExpectedBarData: ChartData<'bar'> | null
+  chuannianGradeBarData: ChartData<'bar'> | null
   barOptions: Record<string, unknown>
   horizBarOptions: Record<string, unknown>
   chuannianByExpected: Record<string, unknown>[]
@@ -94,11 +95,6 @@ defineProps<{
 </template>
 
 <style scoped>
-/* ── Design Tokens（KPI 選色依賴）── */
-:root {
-  --rv-primary: #1e40af;
-}
-
 .chart-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));

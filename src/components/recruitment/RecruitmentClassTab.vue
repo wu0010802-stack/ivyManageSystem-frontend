@@ -1,10 +1,11 @@
 <script setup lang="ts">
+import type { ChartData } from 'chart.js'
 import { LazyBar, castChartOpts } from '@/components/recruitment/lazyChartComponents'
 
 defineProps<{
   showCharts: boolean
-  classBarData: Record<string, unknown> | null
-  classRateData: Record<string, unknown> | null
+  classBarData: ChartData<'bar'> | null
+  classRateData: ChartData<'bar'> | null
   classBarOptions: Record<string, unknown>
   percentHorizBarOptions: Record<string, unknown>
   statsByGrade: Record<string, unknown>[]

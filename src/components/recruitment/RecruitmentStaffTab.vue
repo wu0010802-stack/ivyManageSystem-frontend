@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { ChartData } from 'chart.js'
 import { LazyBar, castChartOpts } from '@/components/recruitment/lazyChartComponents'
 
 interface ReferrerSourceCross {
@@ -8,8 +9,8 @@ interface ReferrerSourceCross {
 
 defineProps<{
   showCharts: boolean
-  staffBarData: Record<string, unknown> | null
-  staffRateData: Record<string, unknown> | null
+  staffBarData: ChartData<'bar'> | null
+  staffRateData: ChartData<'bar'> | null
   barOptions: Record<string, unknown>
   percentBarOptions: Record<string, unknown>
   statsByReferrer: Record<string, unknown>[]
