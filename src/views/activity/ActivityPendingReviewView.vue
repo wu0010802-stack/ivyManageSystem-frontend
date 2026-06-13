@@ -70,7 +70,7 @@
       <el-table-column prop="class_name" label="家長填寫班級" width="150" />
       <el-table-column label="時間" width="170">
         <template #default="{ row }">
-          {{ formatTime(isRejected(row) ? row.reviewed_at : row.created_at) }}
+          {{ formatActivityDate(isRejected(row) ? row.reviewed_at : row.created_at) }}
         </template>
       </el-table-column>
       <el-table-column prop="reviewed_by" label="處理人" width="100" />
@@ -235,6 +235,9 @@ import {
   restoreRegistration,
   searchActivityStudents,
 } from '@/api/activity'
+// Why: 後端回 naive 台灣時間字串，new Date().toLocaleString() 會被瀏覽器時區偏移；
+// formatActivityDate 為純字串切片（其他 activity 頁慣例），不經 Date。
+import { formatActivityDate } from '@/utils/format'
 
 interface PendingRow { id: number; match_status?: string; student_name?: string; birthday?: string; parent_phone?: string; class_name?: string; reviewed_at?: string; created_at?: string; reviewed_by?: string; remark?: string }
 interface StudentCandidate { id: number; student_id?: string; name?: string; birthday?: string; classroom_name?: string; parent_phone?: string }
@@ -297,12 +300,6 @@ function rowClassName({ row }: { row: PendingRow }) {
 
 function goBack() {
   router.push({ name: 'activity-registrations' })
-}
-
-function formatTime(iso: string | undefined) {
-  if (!iso) return ''
-  const d = new Date(iso)
-  return d.toLocaleString('zh-TW', { hour12: false })
 }
 
 async function loadList() {
