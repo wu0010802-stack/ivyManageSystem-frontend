@@ -165,6 +165,16 @@ describe('權限邏輯（text[] 版本）', () => {
       expect(canAccessRoute('/workbench/approvals')).toBe(false)
     })
 
+    // 業主裁決（2026-06-13）：待審核佇列 route gate 對齊後端動作端點（只要 ACTIVITY_WRITE）。
+    // 入口按鈕（ActivityRegistrationView）本來就看 canWrite，三方一致。
+    it('待審核佇列 /activity/registrations/pending 需要 ACTIVITY_WRITE（對齊後端）', () => {
+      setUserInfo({ role: 'admin', permission_names: ['ACTIVITY_WRITE'] })
+      expect(canAccessRoute('/activity/registrations/pending')).toBe(true)
+      // 僅 READ 不可進（佇列含手動匹配/拒絕/強行收件等 mutation 入口）
+      setUserInfo({ role: 'admin', permission_names: ['ACTIVITY_READ'] })
+      expect(canAccessRoute('/activity/registrations/pending')).toBe(false)
+    })
+
     it('POS 解鎖稽核 /activity/audit/pos-unlock 需要 ACTIVITY_PAYMENT_APPROVE', () => {
       setUserInfo({ role: 'admin', permission_names: ['ACTIVITY_PAYMENT_APPROVE'] })
       expect(canAccessRoute('/activity/audit/pos-unlock')).toBe(true)

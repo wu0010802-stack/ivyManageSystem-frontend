@@ -117,7 +117,9 @@ export const ROUTE_PERMISSION_RULES = [
   { path: '/dismissal-queue', permission: 'DISMISSAL_CALLS_READ' },
   { path: '/activity/dashboard', permission: 'ACTIVITY_READ' },
   { path: '/activity/registrations', permission: 'ACTIVITY_READ' },
-  { path: '/activity/registrations/pending', permission: 'ACTIVITY_PAYMENT_APPROVE' },
+  // 業主裁決（2026-06-13）：對齊後端動作端點（match/reject/force-accept 只要 ACTIVITY_WRITE），
+  // 入口按鈕（ActivityRegistrationView canWrite）亦同，三方一致。
+  { path: '/activity/registrations/pending', permission: 'ACTIVITY_WRITE' },
   { path: '/activity/pos', permission: 'ACTIVITY_WRITE' },
   { path: '/activity/pos/approval', permission: 'ACTIVITY_PAYMENT_APPROVE' },
   { path: '/activity/catalog', permission: 'ACTIVITY_READ' },
