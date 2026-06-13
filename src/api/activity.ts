@@ -1,9 +1,19 @@
 import api from './index'
 
 // 統計
+// 學期參數契約：與 dashboard-table 完全相同的帶法（school_year/semester query，
+// 皆不傳時後端使用當前學期），stats-summary / stats-charts / attendance-stats 比照。
+export interface ActivityTermParams {
+  school_year?: number
+  semester?: number
+}
 export const getActivityStats = () => api.get('/activity/stats')
-export const getActivityStatsSummary = () => api.get('/activity/stats-summary')
-export const getActivityStatsCharts = () => api.get('/activity/stats-charts')
+export const getActivityStatsSummary = (params: ActivityTermParams = {}) =>
+  api.get('/activity/stats-summary', { params })
+export const getActivityStatsCharts = (params: ActivityTermParams = {}) =>
+  api.get('/activity/stats-charts', { params })
+export const getActivityAttendanceStats = (params: ActivityTermParams = {}) =>
+  api.get('/activity/attendance-stats', { params })
 export const getActivityDashboardTable = (params: unknown) => api.get('/activity/dashboard-table', { params })
 
 // 報名
