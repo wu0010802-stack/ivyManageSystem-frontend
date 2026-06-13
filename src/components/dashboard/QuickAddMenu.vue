@@ -53,7 +53,7 @@ const allItems: MenuItem[] = [
   { key: 'announcement', label: '公告', icon: Bell, permission: 'ANNOUNCEMENTS_WRITE', action: 'dialog' },
   { key: 'classroom', label: '班級', icon: OfficeBuilding, permission: 'CLASSROOMS_WRITE', action: 'dialog' },
   { key: 'employee', label: '員工', icon: User, permission: 'EMPLOYEES_WRITE', action: 'navigate', path: '/employees' },
-  { key: 'recruitment', label: '訪視記錄', icon: School, permission: 'RECRUITMENT_WRITE', action: 'navigate', path: '/recruitment' },
+  { key: 'recruitment', label: '訪視記錄', icon: School, permission: 'RECRUITMENT_WRITE', action: 'navigate', path: '/students/admissions?tab=records' },
 ]
 
 const visibleItems = computed(() => allItems.filter((item) => hasPermission(item.permission)))

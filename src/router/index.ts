@@ -106,15 +106,14 @@ const routes: RouteRecordRaw[] = [
             meta: { title: '招生入學' }
         },
         {
+            // 招生統計已重構為學生模組下的「招生入學」；舊連結 redirect 並保留 query
             path: '/recruitment',
-            name: 'recruitment',
-            component: () => import('../views/RecruitmentView.vue'),
-            meta: { title: '招生統計' }
+            redirect: (to) => ({ path: '/students/admissions', query: to.query })
         },
         {
-            // 官網報名已併入招生統計 tab；舊連結 redirect，避免 404
+            // 官網報名 → 招生入學的官網報名 tab
             path: '/recruitment-ivykids',
-            redirect: '/recruitment'
+            redirect: { path: '/students/admissions', query: { tab: 'ivykids' } }
         },
         {
             path: '/classrooms',

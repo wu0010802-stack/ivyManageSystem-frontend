@@ -29,7 +29,7 @@ type MarketSnapshotShape = {
 }
 
 /**
- * 招生 RecruitmentView 所有圖表的資料與設定 computed。
+ * 招生入學統計分析所有圖表的資料與設定 computed。
  *
  * 輸入：
  *  - stats:          useRecruitmentDashboard().stats（Ref<object>）

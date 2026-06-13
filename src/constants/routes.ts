@@ -19,7 +19,7 @@ export const ROUTES = {
   SETTINGS: '/settings',
   FEES: '/fees',
   STUDENT_ENROLLMENT: '/student-enrollment',
-  RECRUITMENT: '/recruitment',
+  RECRUITMENT: '/students/admissions',
   RECRUITMENT_IVYKIDS: '/recruitment-ivykids',
   ACTIVITY_DASHBOARD: '/activity/dashboard',
   ACTIVITY_REGISTRATIONS: '/activity/registrations',

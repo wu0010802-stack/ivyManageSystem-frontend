@@ -126,7 +126,7 @@ const SECTIONS: SectionDef[] = [
   { key: 'recruitment', title: '招生', icon: markRaw(Grid),
     label: i => String(i.child_name ?? ''),
     sub: i => i.target_school_year ? `${i.target_school_year} 學年` : '',
-    navigate: i => router.push({ path: '/recruitment', query: { keyword: String(i.child_name ?? '') } }) },
+    navigate: i => router.push({ path: '/students/admissions', query: { keyword: String(i.child_name ?? '') } }) },
   { key: 'announcements', title: '公告', icon: markRaw(Bell),
     label: i => String(i.title ?? ''),
     sub: () => '',
