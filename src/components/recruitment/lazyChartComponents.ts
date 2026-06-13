@@ -4,7 +4,7 @@
  * 自 RecruitmentView 抽出，供招生入學各統計元件共用。
  */
 import { defineAsyncComponent } from 'vue'
-import type { ChartOptions } from 'chart.js'
+import type { ChartOptions, ChartType } from 'chart.js'
 
 let _chartReady: Promise<void> | null = null
 const ensureChartReady = (): Promise<void> => {
@@ -32,5 +32,7 @@ export const LazyLine = defineAsyncComponent(() =>
 )
 
 // chart options 轉型（vue-chartjs 要求 ChartOptions<T>，composable 回傳 Record<string,unknown>）
-export const castChartOpts = (opts: Record<string, unknown>): ChartOptions<'bar'> =>
-  opts as unknown as ChartOptions<'bar'>
+// 預設 'bar'（現有呼叫點皆為 Bar）；Line 等其他圖型用 castChartOpts<'line'>(opts)
+export const castChartOpts = <T extends ChartType = 'bar'>(
+  opts: Record<string, unknown>,
+): ChartOptions<T> => opts as unknown as ChartOptions<T>
