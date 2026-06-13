@@ -97,7 +97,11 @@ const pageSize = ref(20)
 const loading = ref(false)
 const readFilter = ref<boolean | null>(null)
 
-const unreadCount = computed(() => list.value.filter((i) => !i.is_read).length)
+// 全量未讀數（後端 list 回應頂層 unread_count）；欄位缺席時 fallback 回當頁計算（平滑過渡）
+const serverUnreadCount = ref<number | null>(null)
+const unreadCount = computed(
+  () => serverUnreadCount.value ?? list.value.filter((i) => !i.is_read).length,
+)
 
 const replyDialog = ref(false)
 const replyTarget = ref<Inquiry | null>(null)
@@ -137,9 +141,10 @@ async function fetchList() {
       params.is_read = readFilter.value
     }
     const res = await getInquiries(params)
-    const data = res.data as { items: Inquiry[]; total: number }
+    const data = res.data as { items: Inquiry[]; total: number; unread_count?: number }
     list.value = data.items
     total.value = data.total
+    serverUnreadCount.value = typeof data.unread_count === 'number' ? data.unread_count : null
   } catch {
     ElMessage.error('載入失敗')
   } finally {
@@ -151,6 +156,10 @@ async function handleMarkRead(row: Inquiry) {
   try {
     await markInquiryRead(row.id)
     row.is_read = true
+    // 全量未讀數本地遞減（不重抓 list；下次 fetchList 會以後端為準）
+    if (serverUnreadCount.value != null) {
+      serverUnreadCount.value = Math.max(0, serverUnreadCount.value - 1)
+    }
     ElMessage.success('已標記為已讀')
     activityStore.fetchSummary({ force: true })
   } catch {
