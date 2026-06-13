@@ -66,7 +66,12 @@ export interface paths {
         post?: never;
         /**
          * Delete Session
-         * @description 刪除場次及所有點名記錄
+         * @description 刪除場次及所有點名記錄（顯式留稽核）
+         *
+         *     硬刪場次會 CASCADE 抹除該場所有點名紀錄；AuditMiddleware 的
+         *     ENTITY_PATTERNS 不涵蓋 /api/activity/attendance/* 路徑，故在此
+         *     顯式落 audit_logs（誰、哪課、哪日、抹掉幾筆出席紀錄），對齊
+         *     退課路徑「同步清除 N 筆舊點名紀錄」的稽核慣例。
          */
         delete: operations["delete_session_api_activity_attendance_sessions__session_id__delete"];
         options?: never;
@@ -1586,7 +1591,7 @@ export interface paths {
         };
         /**
          * Get Stats
-         * @description 取得儀表板統計資料（相容舊版：summary + charts）。
+         * @description 取得儀表板統計資料（相容舊版：summary + charts）。school_year/semester 不傳時使用當前學期。
          */
         get: operations["get_stats_api_activity_stats_get"];
         put?: never;
@@ -1606,7 +1611,7 @@ export interface paths {
         };
         /**
          * Get Stats Charts
-         * @description 取得儀表板圖表資料。
+         * @description 取得儀表板圖表資料。school_year/semester 不傳時使用當前學期。
          */
         get: operations["get_stats_charts_api_activity_stats_charts_get"];
         put?: never;
@@ -1626,7 +1631,7 @@ export interface paths {
         };
         /**
          * Get Stats Summary
-         * @description 取得儀表板摘要統計資料。
+         * @description 取得儀表板摘要統計資料。school_year/semester 不傳時使用當前學期。
          */
         get: operations["get_stats_summary_api_activity_stats_summary_get"];
         put?: never;
@@ -2376,6 +2381,9 @@ export interface paths {
          *
          *     限制：
          *       - cycle.status != OPEN → 400（已鎖/已關閉）
+         *       - 基準日早於規章生效日（2026-02-01）且已 sync 過 → 400
+         *         （考勤 leave/absent 分流對歷史 cycle 重 sync 是回溯生效，
+         *         會偏離已對帳基線；dry_run 預覽與首次 sync 不受影響）
          *       - dry_run=true → 不寫 DB，回 preview
          */
         post: operations["sync_score_items_api_appraisal_cycles__cycle_id__sync_score_items_post"];
@@ -13753,6 +13761,30 @@ export interface components {
             updated: unknown;
         };
         /**
+         * ActivityAttendanceCourseStatOut
+         * @description 單一課程出席率統計。
+         */
+        ActivityAttendanceCourseStatOut: {
+            /** Avg Rate */
+            avg_rate: unknown;
+            /** Course Name */
+            course_name: unknown;
+            /** Sessions */
+            sessions: unknown;
+        };
+        /**
+         * ActivityAttendanceStatsOut
+         * @description get_attendance_stats 聚合（avg_attendance_rate 為 0~1 小數）。
+         */
+        ActivityAttendanceStatsOut: {
+            /** Avg Attendance Rate */
+            avg_attendance_rate: unknown;
+            /** By Course */
+            by_course: unknown;
+            /** Total Sessions */
+            total_sessions: unknown;
+        };
+        /**
          * ActivityClassOptionsOut
          * @description GET /class-options 回應。
          *
@@ -13762,6 +13794,98 @@ export interface components {
         ActivityClassOptionsOut: {
             /** Options */
             options: unknown;
+        };
+        /**
+         * ActivityDashboardClassroomRowOut
+         * @description dashboard-table 班級列。courses 為 {course_id(str): 報名數}。
+         */
+        ActivityDashboardClassroomRowOut: {
+            /** Classroom Id */
+            classroom_id: unknown;
+            /** Classroom Name */
+            classroom_name: unknown;
+            /** Courses */
+            courses: unknown;
+            /** Ratio */
+            ratio: unknown;
+            /** Student Count */
+            student_count: unknown;
+            /** Teacher Name */
+            teacher_name: unknown;
+            /** Total Enrollments */
+            total_enrollments: unknown;
+        };
+        /**
+         * ActivityDashboardCourseOut
+         * @description dashboard-table 課程欄位定義（courses dict 的 key 為 str(course id)）。
+         */
+        ActivityDashboardCourseOut: {
+            /** Id */
+            id: unknown;
+            /** Name */
+            name: unknown;
+        };
+        /**
+         * ActivityDashboardGradeRowOut
+         * @description dashboard-table 年級區塊。
+         */
+        ActivityDashboardGradeRowOut: {
+            /** Classrooms */
+            classrooms: unknown;
+            /** Grade Id */
+            grade_id: unknown;
+            /** Grade Name */
+            grade_name: unknown;
+            subtotal: unknown;
+            /** Target Percent */
+            target_percent: unknown;
+        };
+        /**
+         * ActivityDashboardGradeSubtotalOut
+         * @description 年級小計（bonus/points 為達標獎勵展示值）。
+         */
+        ActivityDashboardGradeSubtotalOut: {
+            /** Bonus */
+            bonus: unknown;
+            /** Courses */
+            courses: unknown;
+            /** Points */
+            points: unknown;
+            /** Ratio */
+            ratio: unknown;
+            /** Student Count */
+            student_count: unknown;
+            /** Total Enrollments */
+            total_enrollments: unknown;
+        };
+        /**
+         * ActivityDashboardGrandTotalOut
+         * @description dashboard-table 全園總計。
+         */
+        ActivityDashboardGrandTotalOut: {
+            /** Courses */
+            courses: unknown;
+            /** Ratio */
+            ratio: unknown;
+            /** Student Count */
+            student_count: unknown;
+            /** Total Enrollments */
+            total_enrollments: unknown;
+        };
+        /**
+         * ActivityDashboardTableOut
+         * @description GET /dashboard-table 回應（含學期 echo）。
+         */
+        ActivityDashboardTableOut: {
+            /** Courses */
+            courses: unknown;
+            /** Grades */
+            grades: unknown;
+            grand_total: unknown;
+            /** School Year */
+            school_year: unknown;
+            /** Semester */
+            semester: unknown;
         };
         /**
          * ActivityPosterUploadResultOut
@@ -14000,6 +14124,69 @@ export interface components {
             student_id?: unknown;
             /** Student Name */
             student_name: unknown;
+        };
+        /**
+         * ActivityStatsChartsOut
+         * @description GET /stats-charts 回應。
+         */
+        ActivityStatsChartsOut: {
+            /** Daily */
+            daily: unknown;
+            /** Topcourses */
+            topCourses: unknown;
+        };
+        /**
+         * ActivityStatsDailyPointOut
+         * @description 每日報名趨勢單點（date 為 YYYY-MM-DD 字串）。
+         */
+        ActivityStatsDailyPointOut: {
+            /** Count */
+            count: unknown;
+            /** Date */
+            date: unknown;
+        };
+        /**
+         * ActivityStatsOut
+         * @description GET /stats 相容舊版複合回應（summary + charts + 出席統計）。
+         */
+        ActivityStatsOut: {
+            attendance_stats: unknown;
+            charts: unknown;
+            statistics: unknown;
+        };
+        /**
+         * ActivityStatsSummaryOut
+         * @description GET /stats-summary（學期感知；unreadInquiries 為全域收件匣不分學期）。
+         */
+        ActivityStatsSummaryOut: {
+            /** Enrollmentrate */
+            enrollmentRate: unknown;
+            /** Todaynewregistrations */
+            todayNewRegistrations: unknown;
+            /** Totalenrollments */
+            totalEnrollments: unknown;
+            /** Totalregistrations */
+            totalRegistrations: unknown;
+            /** Totalrevenue */
+            totalRevenue: unknown;
+            /** Totalsupplyorders */
+            totalSupplyOrders: unknown;
+            /** Totalunpaid */
+            totalUnpaid: unknown;
+            /** Totalwaitlist */
+            totalWaitlist: unknown;
+            /** Unreadinquiries */
+            unreadInquiries: unknown;
+        };
+        /**
+         * ActivityStatsTopCourseOut
+         * @description 熱門課程單筆（enrolled 報名數倒序 top 5）。
+         */
+        ActivityStatsTopCourseOut: {
+            /** Count */
+            count: unknown;
+            /** Name */
+            name: unknown;
         };
         /**
          * AddCourseRequest
@@ -22377,10 +22564,17 @@ export interface components {
         /**
          * PosOutstandingOut
          * @description GET /pos/outstanding-by-student 完整回應。
+         *
+         *     truncated/total_active（M3）：底層查詢有防爆上限（_POS_LIST_QUERY_LIMIT），
+         *     超限時 truncated=True 且 total_active 為過濾後全量筆數，避免無聲截斷。
          */
         PosOutstandingOut: {
             /** Groups */
             groups: unknown;
+            /** Total Active */
+            total_active?: unknown;
+            /** Truncated */
+            truncated?: unknown;
         };
         /**
          * PosOutstandingRegistrationItemOut
@@ -22604,6 +22798,10 @@ export interface components {
          * PosSemesterReconciliationOut
          * @description GET /pos/semester-reconciliation 完整回應（學期對帳總表，與 PosReconciliationOut
          *     日結區間對帳不同名不衝突）。
+         *
+         *     truncated/total_active（M3）：底層查詢有防爆上限（_POS_LIST_QUERY_LIMIT），
+         *     超限時 truncated=True 且 total_active 為過濾後 active 全量筆數，避免對帳
+         *     總表無聲截斷。
          */
         PosSemesterReconciliationOut: {
             /** Items */
@@ -22612,7 +22810,11 @@ export interface components {
             school_year: unknown;
             /** Semester */
             semester: unknown;
+            /** Total Active */
+            total_active?: unknown;
             totals: unknown;
+            /** Truncated */
+            truncated?: unknown;
         };
         /**
          * PosSemesterReconciliationTotalsOut
@@ -26473,6 +26675,57 @@ export interface components {
             /** Semester */
             semester?: number | null;
         };
+        /**
+         * SupplyCreateResultOut
+         * @description POST /supplies 201 回應（同 CourseCreateResultOut shape）。
+         */
+        SupplyCreateResultOut: {
+            /** Id */
+            id: unknown;
+            /** Message */
+            message: unknown;
+            /** School Year */
+            school_year: unknown;
+            /** Semester */
+            semester: unknown;
+        };
+        /**
+         * SupplyListItemOut
+         * @description GET /supplies 單筆。
+         *
+         *     school_year / semester 由 list 端點以 resolve 後的學期等值過濾，
+         *     回傳值必為 int（NULL 列不會被過濾條件選中）。
+         */
+        SupplyListItemOut: {
+            /** Id */
+            id: unknown;
+            /** Name */
+            name: unknown;
+            /** Price */
+            price: unknown;
+            /** School Year */
+            school_year: unknown;
+            /** Semester */
+            semester: unknown;
+        };
+        /**
+         * SupplyListOut
+         * @description GET /supplies 分頁回應（含 total + 學期 echo）。
+         */
+        SupplyListOut: {
+            /** Limit */
+            limit: unknown;
+            /** School Year */
+            school_year: unknown;
+            /** Semester */
+            semester: unknown;
+            /** Skip */
+            skip: unknown;
+            /** Supplies */
+            supplies: unknown;
+            /** Total */
+            total: unknown;
+        };
         /** SupplyUpdate */
         SupplyUpdate: {
             /** Name */
@@ -27743,7 +27996,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ActivityDashboardTableOut"];
                 };
             };
             /** @description Validation Error */
@@ -29641,7 +29894,10 @@ export interface operations {
     };
     get_stats_api_activity_stats_get: {
         parameters: {
-            query?: never;
+            query?: {
+                school_year?: number | null;
+                semester?: number | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -29654,14 +29910,26 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ActivityStatsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
     };
     get_stats_charts_api_activity_stats_charts_get: {
         parameters: {
-            query?: never;
+            query?: {
+                school_year?: number | null;
+                semester?: number | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -29674,14 +29942,26 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ActivityStatsChartsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
     };
     get_stats_summary_api_activity_stats_summary_get: {
         parameters: {
-            query?: never;
+            query?: {
+                school_year?: number | null;
+                semester?: number | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -29694,7 +29974,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ActivityStatsSummaryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -29751,7 +30040,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SupplyListOut"];
                 };
             };
             /** @description Validation Error */
@@ -29784,7 +30073,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SupplyCreateResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -29819,7 +30108,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeleteResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -29850,7 +30139,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeleteResultOut"];
                 };
             };
             /** @description Validation Error */
