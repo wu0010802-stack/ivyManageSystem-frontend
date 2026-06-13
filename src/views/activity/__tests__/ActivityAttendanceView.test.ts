@@ -266,3 +266,48 @@ describe('ActivityAttendanceView — drawer 寫入按鈕蓋 canWrite（A2）', (
     expect(texts).toContain('全班出席')
   })
 })
+
+describe('ActivityAttendanceView — 場次列表分頁（A3）', () => {
+  it('初始載入帶 skip=0 / limit=20，並把 total 接到分頁器', async () => {
+    const wrapper = await mountView({ total: 45 })
+    expect(getAttendanceSessions).toHaveBeenCalledWith(
+      expect.objectContaining({ skip: 0, limit: 20 }),
+    )
+    const pagination = wrapper.findComponent(ElPaginationStub)
+    expect(pagination.exists()).toBe(true)
+    expect(pagination.props('total')).toBe(45)
+  })
+
+  it('換頁時以新 skip 重新載入', async () => {
+    const wrapper = await mountView({ total: 45 })
+    const pagination = wrapper.findComponent(ElPaginationStub)
+    pagination.vm.$emit('update:currentPage', 2)
+    pagination.vm.$emit('change')
+    await flushPromises()
+    expect(asMock(getAttendanceSessions).mock.lastCall?.[0]).toMatchObject({ skip: 20, limit: 20 })
+  })
+
+  it('變更篩選條件時回到第一頁', async () => {
+    const wrapper = await mountView({ total: 45 })
+    const pagination = wrapper.findComponent(ElPaginationStub)
+    pagination.vm.$emit('update:currentPage', 2)
+    pagination.vm.$emit('change')
+    await flushPromises()
+
+    // 第一個 el-select 是課程篩選
+    const select = wrapper.findComponent({ name: 'ElSelectStub' })
+    select.vm.$emit('change')
+    await flushPromises()
+    expect(asMock(getAttendanceSessions).mock.lastCall?.[0]).toMatchObject({ skip: 0, limit: 20 })
+  })
+
+  it('total 為 0 時不渲染分頁器', async () => {
+    asMock(getCourses).mockResolvedValue({ data: { courses: [] } })
+    asMock(getAttendanceSessions).mockResolvedValue({ data: { items: [], total: 0 } })
+    const wrapper = mount(ActivityAttendanceView, {
+      global: { stubs: GLOBAL_STUBS, directives: { loading: () => {} } },
+    })
+    await flushPromises()
+    expect(wrapper.findComponent(ElPaginationStub).exists()).toBe(false)
+  })
+})

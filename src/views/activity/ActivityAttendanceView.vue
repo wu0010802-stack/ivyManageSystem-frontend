@@ -19,7 +19,7 @@
             placeholder="選擇課程"
             clearable
             style="width: 100%"
-            @change="loadSessions"
+            @change="onFilterChange"
           >
             <el-option
               v-for="c in courses"
@@ -121,6 +121,17 @@
     <div v-if="sessions.length === 0 && !loading" class="empty-hint">
       目前沒有場次資料，請點擊「新增場次」建立。
     </div>
+
+    <el-pagination
+      v-if="total > 0"
+      v-model:current-page="page"
+      v-model:page-size="pageSize"
+      :total="total"
+      layout="total, prev, pager, next, jumper, sizes"
+      :page-sizes="[20, 50, 100]"
+      style="margin-top: 12px; justify-content: flex-end"
+      @change="loadSessions"
+    />
 
     <!-- 新增場次 Dialog -->
     <el-dialog
@@ -366,6 +377,11 @@ const createDialogVisible = ref(false)
 const createLoading = ref(false)
 const createForm = ref<{ course_id: number | null; session_date: string | null; notes: string }>({ course_id: null, session_date: null, notes: '' })
 
+// 分頁（後端預設 limit=100，逾百場次需分頁才不會靜默消失）
+const page = ref(1)
+const pageSize = ref(20)
+const total = ref(0)
+
 // 按班級分組：預設開啟；純前端展示切換（groups 為扁平 students 的 computed 視圖，不再重打 API）
 const GROUP_PREF_KEY = 'activity_attendance_group_by_classroom'
 const groupByClassroom = ref(
@@ -440,29 +456,39 @@ function setQuickRange(range: string) {
     filterStartDate.value = dateToLocalISO(new Date(y, m, 1))
     filterEndDate.value = dateToLocalISO(new Date(y, m + 1, 0))
   }
-  loadSessions()
+  onFilterChange()
 }
 
 function onManualDateChange() {
   quickRange.value = null
-  loadSessions()
+  onFilterChange()
 }
 
 async function loadSessions() {
   loading.value = true
   try {
-    const params: Record<string, unknown> = {}
+    const params: Record<string, unknown> = {
+      skip: (page.value - 1) * pageSize.value,
+      limit: pageSize.value,
+    }
     if (filterCourseId.value) params.course_id = filterCourseId.value
     if (filterStartDate.value) params.start_date = filterStartDate.value
     if (filterEndDate.value) params.end_date = filterEndDate.value
     const res = await getAttendanceSessions(params)
-    const data = res.data as { items?: SessionRow[] } | SessionRow[]
+    const data = res.data as { items?: SessionRow[]; total?: number } | SessionRow[]
     sessions.value = (data as { items?: SessionRow[] })?.items ?? (Array.isArray(data) ? data : [])
+    total.value = (data as { total?: number })?.total ?? sessions.value.length
   } catch {
     ElMessage.error('載入場次失敗')
   } finally {
     loading.value = false
   }
+}
+
+/** 篩選條件變更時回到第一頁再載入 */
+function onFilterChange() {
+  page.value = 1
+  loadSessions()
 }
 
 async function loadCourses() {
@@ -479,7 +505,7 @@ function resetFilter() {
   filterStartDate.value = null
   filterEndDate.value = null
   quickRange.value = null
-  loadSessions()
+  onFilterChange()
 }
 
 function openCreateDialog() {
