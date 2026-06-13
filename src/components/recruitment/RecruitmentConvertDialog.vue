@@ -23,17 +23,20 @@
     />
     <el-alert
       type="info"
-      title="學籍編號由系統自動配發；性別與其他資料可於轉化後到學生檔案補齊"
+      title="學籍編號由系統自動配發；性別等其他資料可於轉化後到學生檔案補齊"
       :closable="false"
       style="margin-bottom: 12px"
     />
 
-    <el-form label-width="110px">
-      <el-form-item label="分班">
+    <el-form ref="formRef" :model="form" label-width="110px">
+      <el-form-item
+        label="分班"
+        prop="classroom_id"
+        :rules="[{ required: true, message: '請選擇分班', trigger: 'change' }]"
+      >
         <el-select
           v-model="form.classroom_id"
-          placeholder="可留空"
-          clearable
+          placeholder="請選擇分班"
           filterable
           style="width: 100%"
         >
@@ -60,7 +63,14 @@ import { ElMessage } from 'element-plus'
 import { transitionVisit } from '@/api/recruitmentFunnel'
 
 interface ClassroomOption { id: number; name: string; [key: string]: unknown }
-interface Visit { id: number | string; [key: string]: unknown }
+interface Visit {
+  id: number | string
+  child_name?: string
+  grade?: string | null
+  phone?: string | null
+  enrolled?: boolean
+  [key: string]: unknown
+}
 
 const props = withDefaults(defineProps<{
   modelValue?: boolean
@@ -84,9 +94,11 @@ const visible = computed({
 
 const form = reactive<{ classroom_id: number | null }>({ classroom_id: null })
 const submitting = ref(false)
+const formRef = ref<{ validate: () => Promise<void>; clearValidate: () => void } | null>(null)
 
 function resetForm() {
   form.classroom_id = null
+  formRef.value?.clearValidate()
 }
 
 watch(
@@ -96,6 +108,13 @@ watch(
 
 async function handleSubmit() {
   if (!props.visit) return
+  if (formRef.value && typeof formRef.value.validate === 'function') {
+    try {
+      await formRef.value.validate()
+    } catch {
+      return
+    }
+  }
   submitting.value = true
   try {
     const { data } = await transitionVisit(Number(props.visit.id), {
@@ -106,11 +125,19 @@ async function handleSubmit() {
     emit('converted', data as unknown as Record<string, unknown>)
     visible.value = false
   } catch (err) {
-    ElMessage.error((err as { displayMessage?: string }).displayMessage || '轉化失敗')
+    const e = err as { response?: { status?: number }; displayMessage?: string }
+    const status = e?.response?.status
+    if (status === 403) {
+      ElMessage.warning('權限不足，無法執行此操作')
+    } else if (status === 409) {
+      ElMessage.info(e.displayMessage || '狀態已被其他人變更，請重新整理後再試')
+    } else {
+      ElMessage.error(e.displayMessage || '轉化失敗')
+    }
   } finally {
     submitting.value = false
   }
 }
 
-defineExpose({ form, handleSubmit })
+defineExpose({ form, formRef, handleSubmit })
 </script>

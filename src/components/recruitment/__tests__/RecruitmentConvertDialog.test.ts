@@ -37,12 +37,29 @@ describe('RecruitmentConvertDialog（改打 funnel transition）', () => {
 
   it('成功後 emit converted 並帶 student_id', async () => {
     const wrapper = mountDialog()
-    const vm = wrapper.vm as unknown as { handleSubmit: () => Promise<void> }
+    const vm = wrapper.vm as unknown as { form: { classroom_id: number | null }; handleSubmit: () => Promise<void> }
+    vm.form.classroom_id = 7
     await vm.handleSubmit()
     await flushPromises()
     const emitted = wrapper.emitted('converted')
     expect(emitted).toBeTruthy()
     expect((emitted![0][0] as { student_id: number }).student_id).toBe(99)
+  })
+
+  it('未選分班時送出不打 API（後端 CONVERT_NEED_CLASSROOM 前移到 UI 驗證）', async () => {
+    const wrapper = mountDialog()
+    const vm = wrapper.vm as unknown as {
+      formRef: { validate: () => Promise<void>; clearValidate: () => void } | null
+      handleSubmit: () => Promise<void>
+    }
+    // 模擬真實 el-form validate 在必填未填時 reject
+    vm.formRef = {
+      validate: vi.fn().mockRejectedValue(new Error('validation failed')),
+      clearValidate: vi.fn(),
+    }
+    await vm.handleSubmit()
+    await flushPromises()
+    expect(transitionVisitMock).not.toHaveBeenCalled()
   })
 
   it('表單不再包含學號/性別/入學日期欄位', () => {
