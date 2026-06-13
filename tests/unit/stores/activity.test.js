@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useActivityStore } from '@/stores/activity'
 import {
-  getActivityAttendanceStats,
+  getActivityStats,
   getActivityStatsCharts,
   getActivityStatsSummary,
 } from '@/api/activity'
@@ -11,7 +11,6 @@ vi.mock('@/api/activity', () => ({
   getActivityStats: vi.fn(),
   getActivityStatsSummary: vi.fn(),
   getActivityStatsCharts: vi.fn(),
-  getActivityAttendanceStats: vi.fn(),
 }))
 
 describe('activity store', () => {
@@ -41,38 +40,6 @@ describe('activity store', () => {
     })
   })
 
-  it('fetchStats requests summary and charts in parallel', async () => {
-    getActivityStatsSummary.mockResolvedValue({
-      data: {
-        totalRegistrations: 10,
-        unreadInquiries: 1,
-      },
-    })
-    getActivityStatsCharts.mockResolvedValue({
-      data: {
-        daily: [{ date: '2026-03-13', count: 2 }],
-        topCourses: [{ name: '美術', count: 4 }],
-      },
-    })
-
-    const store = useActivityStore()
-    const stats = await store.fetchStats()
-
-    expect(getActivityStatsSummary).toHaveBeenCalledTimes(1)
-    expect(getActivityStatsCharts).toHaveBeenCalledTimes(1)
-    expect(stats).toEqual({
-      statistics: {
-        totalRegistrations: 10,
-        unreadInquiries: 1,
-      },
-      charts: {
-        daily: [{ date: '2026-03-13', count: 2 }],
-        topCourses: [{ name: '美術', count: 4 }],
-      },
-      attendance_stats: null,
-    })
-  })
-
   describe('學期感知（契約同 dashboard-table 的 school_year/semester）', () => {
     it('fetchSummary 帶學期參數時原樣傳給 API', async () => {
       getActivityStatsSummary.mockResolvedValue({ data: { totalRegistrations: 1 } })
@@ -96,7 +63,7 @@ describe('activity store', () => {
     it('切學期時即使 TTL 內也重抓（快取以學期 key 區分）', async () => {
       getActivityStatsSummary.mockResolvedValue({ data: { totalRegistrations: 1 } })
       getActivityStatsCharts.mockResolvedValue({ data: { daily: [] } })
-      getActivityAttendanceStats.mockResolvedValue({ data: { total_sessions: 0 } })
+      getActivityStats.mockResolvedValue({ data: { attendance_stats: { total_sessions: 0 } } })
 
       const store = useActivityStore()
       await store.fetchSummary({ school_year: 114, semester: 1 })
@@ -110,27 +77,35 @@ describe('activity store', () => {
       expect(getActivityStatsSummary).toHaveBeenLastCalledWith({ school_year: 114, semester: 2 })
       expect(getActivityStatsCharts).toHaveBeenCalledTimes(2)
       expect(getActivityStatsCharts).toHaveBeenLastCalledWith({ school_year: 114, semester: 2 })
-      expect(getActivityAttendanceStats).toHaveBeenCalledTimes(2)
-      expect(getActivityAttendanceStats).toHaveBeenLastCalledWith({ school_year: 114, semester: 2 })
+      expect(getActivityStats).toHaveBeenCalledTimes(2)
+      expect(getActivityStats).toHaveBeenLastCalledWith({ school_year: 114, semester: 2 })
     })
 
-    it('fetchAttendanceStats 寫入 stats.attendance_stats', async () => {
-      getActivityAttendanceStats.mockResolvedValue({
-        data: { total_sessions: 5, avg_attendance_rate: 0.9, by_course: [] },
+    it('fetchAttendanceStats 呼叫 /activity/stats 聚合並只取 attendance_stats key', async () => {
+      getActivityStats.mockResolvedValue({
+        data: {
+          statistics: { totalRegistrations: 10 },
+          charts: { daily: [] },
+          attendance_stats: { total_sessions: 5, avg_attendance_rate: 0.9, by_course: [] },
+        },
       })
 
       const store = useActivityStore()
       await store.fetchAttendanceStats({ school_year: 114, semester: 1 })
 
+      expect(getActivityStats).toHaveBeenCalledWith({ school_year: 114, semester: 1 })
       expect(store.stats.attendance_stats).toEqual({
         total_sessions: 5,
         avg_attendance_rate: 0.9,
         by_course: [],
       })
+      // 聚合回應的 statistics/charts 不污染 summary/charts 快取（各 action 自己抓）
+      expect(store.summary).toBe(null)
+      expect(store.charts).toBe(null)
     })
 
     it('fetchAttendanceStats 失敗時不擋（回傳既有值並記 error）', async () => {
-      getActivityAttendanceStats.mockRejectedValue(new Error('boom'))
+      getActivityStats.mockRejectedValue(new Error('boom'))
 
       const store = useActivityStore()
       const result = await store.fetchAttendanceStats({ school_year: 114, semester: 1 })
@@ -138,6 +113,43 @@ describe('activity store', () => {
       expect(result).toBe(null)
       expect(store.stats.attendance_stats).toBe(null)
       expect(store.error).toBe('boom')
+    })
+
+    it('競態：舊學期晚到的回應不覆寫新學期的快取與狀態', async () => {
+      const deferred = () => {
+        let resolve
+        const promise = new Promise((r) => { resolve = r })
+        return { promise, resolve }
+      }
+      const oldTerm = deferred()
+      const newTerm = deferred()
+      getActivityStats
+        .mockImplementationOnce(() => oldTerm.promise)
+        .mockImplementationOnce(() => newTerm.promise)
+
+      const store = useActivityStore()
+      const p1 = store.fetchAttendanceStats({ school_year: 114, semester: 1 })
+      const p2 = store.fetchAttendanceStats({ school_year: 114, semester: 2 })
+
+      // 新學期先回並 commit
+      newTerm.resolve({
+        data: { attendance_stats: { total_sessions: 9, avg_attendance_rate: 0.9, by_course: [] } },
+      })
+      await p2
+
+      // 舊學期晚到：不可覆寫新學期資料 / termKey / loading
+      oldTerm.resolve({
+        data: { attendance_stats: { total_sessions: 1, avg_attendance_rate: 0.1, by_course: [] } },
+      })
+      await p1
+
+      expect(store.attendance).toEqual({
+        total_sessions: 9,
+        avg_attendance_rate: 0.9,
+        by_course: [],
+      })
+      expect(store.attendanceTermKey).toBe('114-2')
+      expect(store.loadingAttendance).toBe(false)
     })
   })
 })

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import {
-  getActivityAttendanceStats,
+  getActivityStats,
   getActivityStatsCharts,
   getActivityStatsSummary,
   type ActivityTermParams,
@@ -165,10 +165,11 @@ export const useActivityStore = defineStore('activity', {
 
       this.loadingAttendance = true
       const entry: InflightEntry = { key: termKey, promise: Promise.resolve() }
-      entry.promise = getActivityAttendanceStats(termParamsOf({ school_year, semester }))
+      // 出席率沒有獨立端點：後端契約為 GET /activity/stats 聚合回應的頂層 key attendance_stats
+      entry.promise = getActivityStats(termParamsOf({ school_year, semester }))
         .then((res) => {
           if (inflightAttendance !== entry) return this.attendance
-          this.attendance = res.data
+          this.attendance = res.data?.attendance_stats ?? null
           this.attendanceTermKey = termKey
           this.lastAttendanceFetchedAt = Date.now()
           return this.attendance
@@ -187,29 +188,6 @@ export const useActivityStore = defineStore('activity', {
       inflightAttendance = entry
 
       return entry.promise
-    },
-
-    async fetchStats({ force = false, school_year, semester }: FetchOptions = {}) {
-      const termKey = termKeyOf({ school_year, semester })
-      if (
-        !force &&
-        this.summary &&
-        this.charts &&
-        this.summaryTermKey === termKey &&
-        this.chartsTermKey === termKey &&
-        this.lastSummaryFetchedAt &&
-        Date.now() - this.lastSummaryFetchedAt < SUMMARY_TTL_MS &&
-        this.lastChartsFetchedAt &&
-        Date.now() - this.lastChartsFetchedAt < CHARTS_TTL_MS
-      ) {
-        return this.stats
-      }
-
-      await Promise.all([
-        this.fetchSummary({ force, school_year, semester }),
-        this.fetchCharts({ force, school_year, semester }),
-      ])
-      return this.stats
     },
   },
 })

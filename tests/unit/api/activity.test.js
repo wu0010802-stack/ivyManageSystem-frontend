@@ -25,9 +25,9 @@ import {
   withdrawCourse,
   deleteRegistration,
   removeRegistrationSupply,
+  getActivityStats,
   getActivityStatsSummary,
   getActivityStatsCharts,
-  getActivityAttendanceStats,
 } from '@/api/activity'
 
 describe('activity api — forceRefund / refundReason 契約', () => {
@@ -137,10 +137,15 @@ describe('activity api — 統計學期參數契約（同 dashboard-table 帶法
     )
   })
 
-  it('getActivityAttendanceStats 帶 school_year/semester query', async () => {
-    await getActivityAttendanceStats({ school_year: 114, semester: 1 })
+  it('getActivityStats 不帶參數時 params 為空物件（後端套當前學期）', async () => {
+    await getActivityStats()
+    expect(mockGet).toHaveBeenCalledWith('/activity/stats', { params: {} })
+  })
+
+  it('getActivityStats 帶 school_year/semester query（出席率統計來自此聚合回應）', async () => {
+    await getActivityStats({ school_year: 114, semester: 1 })
     expect(mockGet).toHaveBeenCalledWith(
-      '/activity/attendance-stats',
+      '/activity/stats',
       { params: { school_year: 114, semester: 1 } },
     )
   })
