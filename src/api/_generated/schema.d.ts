@@ -13734,7 +13734,7 @@ export interface components {
         /** _ProbationAlertCounts */
         _ProbationAlertCounts: {
             /** Next Month */
-            next_month: unknown;
+            next_month: number;
         };
         /** _PromotionActionPayload */
         _PromotionActionPayload: {
@@ -13790,23 +13790,25 @@ export interface components {
          */
         AcademicSummaryOut: {
             /** Assessment Count */
-            assessment_count: unknown;
+            assessment_count: number;
             /** Attendance Present */
-            attendance_present: unknown;
+            attendance_present: number;
             /** Attendance Rate */
-            attendance_rate: unknown;
+            attendance_rate: number;
             /** Attendance Total */
-            attendance_total: unknown;
+            attendance_total: number;
             /** Incident Count */
-            incident_count: unknown;
+            incident_count: number;
             /** Leave Days */
-            leave_days: unknown;
+            leave_days: number;
             /** Period */
-            period: unknown;
+            period: {
+                [key: string]: string;
+            };
             /** School Year */
-            school_year: unknown;
+            school_year: number;
             /** Semester */
-            semester: unknown;
+            semester: number;
         };
         /** AckAllResponse */
         AckAllResponse: {
@@ -13834,11 +13836,11 @@ export interface components {
          */
         ActivityAttendanceBatchUpdateResultOut: {
             /** Ok */
-            ok: unknown;
+            ok: boolean;
             /** Skipped */
-            skipped: unknown;
+            skipped: number;
             /** Updated */
-            updated: unknown;
+            updated: number;
         };
         /**
          * ActivityAttendanceCourseStatOut
@@ -13846,11 +13848,11 @@ export interface components {
          */
         ActivityAttendanceCourseStatOut: {
             /** Avg Rate */
-            avg_rate: unknown;
+            avg_rate: number;
             /** Course Name */
-            course_name: unknown;
+            course_name: string;
             /** Sessions */
-            sessions: unknown;
+            sessions: number;
         };
         /**
          * ActivityAttendanceStatsOut
@@ -13858,11 +13860,11 @@ export interface components {
          */
         ActivityAttendanceStatsOut: {
             /** Avg Attendance Rate */
-            avg_attendance_rate: unknown;
+            avg_attendance_rate: number;
             /** By Course */
-            by_course: unknown;
+            by_course: components["schemas"]["ActivityAttendanceCourseStatOut"][];
             /** Total Sessions */
-            total_sessions: unknown;
+            total_sessions: number;
         };
         /**
          * ActivityClassOptionsOut
@@ -13873,7 +13875,7 @@ export interface components {
          */
         ActivityClassOptionsOut: {
             /** Options */
-            options: unknown;
+            options: string[];
         };
         /**
          * ActivityDashboardClassroomRowOut
@@ -13881,19 +13883,21 @@ export interface components {
          */
         ActivityDashboardClassroomRowOut: {
             /** Classroom Id */
-            classroom_id: unknown;
+            classroom_id: number;
             /** Classroom Name */
-            classroom_name: unknown;
+            classroom_name: string;
             /** Courses */
-            courses: unknown;
+            courses: {
+                [key: string]: number;
+            };
             /** Ratio */
-            ratio: unknown;
+            ratio: number;
             /** Student Count */
-            student_count: unknown;
+            student_count: number;
             /** Teacher Name */
-            teacher_name: unknown;
+            teacher_name: string;
             /** Total Enrollments */
-            total_enrollments: unknown;
+            total_enrollments: number;
         };
         /**
          * ActivityDashboardCourseOut
@@ -13901,9 +13905,9 @@ export interface components {
          */
         ActivityDashboardCourseOut: {
             /** Id */
-            id: unknown;
+            id: number;
             /** Name */
-            name: unknown;
+            name: string;
         };
         /**
          * ActivityDashboardGradeRowOut
@@ -13911,14 +13915,14 @@ export interface components {
          */
         ActivityDashboardGradeRowOut: {
             /** Classrooms */
-            classrooms: unknown;
+            classrooms: components["schemas"]["ActivityDashboardClassroomRowOut"][];
             /** Grade Id */
-            grade_id: unknown;
+            grade_id: number;
             /** Grade Name */
-            grade_name: unknown;
-            subtotal: unknown;
+            grade_name: string;
+            subtotal: components["schemas"]["ActivityDashboardGradeSubtotalOut"];
             /** Target Percent */
-            target_percent: unknown;
+            target_percent: number;
         };
         /**
          * ActivityDashboardGradeSubtotalOut
@@ -13926,17 +13930,19 @@ export interface components {
          */
         ActivityDashboardGradeSubtotalOut: {
             /** Bonus */
-            bonus: unknown;
+            bonus: number;
             /** Courses */
-            courses: unknown;
+            courses: {
+                [key: string]: number;
+            };
             /** Points */
-            points: unknown;
+            points: number;
             /** Ratio */
-            ratio: unknown;
+            ratio: number;
             /** Student Count */
-            student_count: unknown;
+            student_count: number;
             /** Total Enrollments */
-            total_enrollments: unknown;
+            total_enrollments: number;
         };
         /**
          * ActivityDashboardGrandTotalOut
@@ -13944,13 +13950,15 @@ export interface components {
          */
         ActivityDashboardGrandTotalOut: {
             /** Courses */
-            courses: unknown;
+            courses: {
+                [key: string]: number;
+            };
             /** Ratio */
-            ratio: unknown;
+            ratio: number;
             /** Student Count */
-            student_count: unknown;
+            student_count: number;
             /** Total Enrollments */
-            total_enrollments: unknown;
+            total_enrollments: number;
         };
         /**
          * ActivityDashboardTableOut
@@ -13958,14 +13966,14 @@ export interface components {
          */
         ActivityDashboardTableOut: {
             /** Courses */
-            courses: unknown;
+            courses: components["schemas"]["ActivityDashboardCourseOut"][];
             /** Grades */
-            grades: unknown;
-            grand_total: unknown;
+            grades: components["schemas"]["ActivityDashboardGradeRowOut"][];
+            grand_total: components["schemas"]["ActivityDashboardGrandTotalOut"];
             /** School Year */
-            school_year: unknown;
+            school_year: number;
             /** Semester */
-            semester: unknown;
+            semester: number;
         };
         /**
          * ActivityPosterUploadResultOut
@@ -13978,9 +13986,9 @@ export interface components {
          */
         ActivityPosterUploadResultOut: {
             /** Message */
-            message: unknown;
+            message: string;
             /** Poster Url */
-            poster_url: unknown;
+            poster_url: string;
         };
         /** ActivityRateAggregateOut */
         ActivityRateAggregateOut: {
@@ -14009,19 +14017,19 @@ export interface components {
          */
         ActivityRegistrationChangeItemOut: {
             /** Change Type */
-            change_type: unknown;
+            change_type: string;
             /** Changed By */
-            changed_by?: unknown;
+            changed_by?: string | null;
             /** Created At */
-            created_at?: unknown;
+            created_at?: string | null;
             /** Description */
-            description: unknown;
+            description: string;
             /** Id */
-            id: unknown;
+            id: number;
             /** Registration Id */
-            registration_id: unknown;
+            registration_id: number;
             /** Student Name */
-            student_name: unknown;
+            student_name: string;
         };
         /**
          * ActivityRegistrationChangeListOut
@@ -14029,9 +14037,9 @@ export interface components {
          */
         ActivityRegistrationChangeListOut: {
             /** Items */
-            items: unknown;
+            items: components["schemas"]["ActivityRegistrationChangeItemOut"][];
             /** Total */
-            total: unknown;
+            total: number;
         };
         /**
          * ActivityRegistrationTimeOut
@@ -14043,23 +14051,23 @@ export interface components {
          */
         ActivityRegistrationTimeOut: {
             /** Close At */
-            close_at?: unknown;
+            close_at?: string | null;
             /** Event Date Label */
-            event_date_label?: unknown;
+            event_date_label?: string | null;
             /** Form Card Title */
-            form_card_title?: unknown;
+            form_card_title?: string | null;
             /** Is Open */
-            is_open: unknown;
+            is_open: boolean;
             /** Open At */
-            open_at?: unknown;
+            open_at?: string | null;
             /** Page Title */
-            page_title?: unknown;
+            page_title?: string | null;
             /** Poster Url */
-            poster_url?: unknown;
+            poster_url?: string | null;
             /** Target Audience */
-            target_audience?: unknown;
+            target_audience?: string | null;
             /** Term Label */
-            term_label?: unknown;
+            term_label?: string | null;
         };
         /**
          * ActivitySessionCreateResultOut
@@ -14069,19 +14077,19 @@ export interface components {
          */
         ActivitySessionCreateResultOut: {
             /** Course Id */
-            course_id: unknown;
+            course_id: number;
             /** Course Name */
-            course_name: unknown;
+            course_name: string;
             /** Created At */
-            created_at?: unknown;
+            created_at?: string | null;
             /** Created By */
-            created_by?: unknown;
+            created_by?: string | null;
             /** Id */
-            id: unknown;
+            id: number;
             /** Notes */
-            notes: unknown;
+            notes: string;
             /** Session Date */
-            session_date: unknown;
+            session_date: string;
         };
         /**
          * ActivitySessionDeleteResultOut
@@ -14093,7 +14101,7 @@ export interface components {
          */
         ActivitySessionDeleteResultOut: {
             /** Ok */
-            ok: unknown;
+            ok: boolean;
         };
         /**
          * ActivitySessionDetailOut
@@ -14103,29 +14111,29 @@ export interface components {
          */
         ActivitySessionDetailOut: {
             /** Absent Count */
-            absent_count: unknown;
+            absent_count: number;
             /** Course Id */
-            course_id: unknown;
+            course_id: number;
             /** Course Name */
-            course_name: unknown;
+            course_name: string;
             /** Created At */
-            created_at?: unknown;
+            created_at?: string | null;
             /** Created By */
-            created_by?: unknown;
+            created_by?: string | null;
             /** Groups */
-            groups?: unknown;
+            groups?: components["schemas"]["ActivitySessionGroupOut"][] | null;
             /** Id */
-            id: unknown;
+            id: number;
             /** Notes */
-            notes: unknown;
+            notes: string;
             /** Present Count */
-            present_count: unknown;
+            present_count: number;
             /** Session Date */
-            session_date: unknown;
+            session_date: string;
             /** Students */
-            students: unknown;
+            students: components["schemas"]["ActivitySessionStudentItemOut"][];
             /** Total */
-            total: unknown;
+            total: number;
         };
         /**
          * ActivitySessionGroupOut
@@ -14135,11 +14143,11 @@ export interface components {
          */
         ActivitySessionGroupOut: {
             /** Classroom Id */
-            classroom_id?: unknown;
+            classroom_id?: number | null;
             /** Classroom Name */
-            classroom_name: unknown;
+            classroom_name: string;
             /** Students */
-            students: unknown;
+            students: components["schemas"]["ActivitySessionStudentItemOut"][];
         };
         /**
          * ActivitySessionListItemOut
@@ -14150,23 +14158,23 @@ export interface components {
          */
         ActivitySessionListItemOut: {
             /** Course Id */
-            course_id: unknown;
+            course_id: number;
             /** Course Name */
-            course_name: unknown;
+            course_name: string;
             /** Created At */
-            created_at?: unknown;
+            created_at?: string | null;
             /** Created By */
-            created_by?: unknown;
+            created_by?: string | null;
             /** Id */
-            id: unknown;
+            id: number;
             /** Notes */
-            notes: unknown;
+            notes: string;
             /** Present Count */
-            present_count: unknown;
+            present_count: number;
             /** Recorded Count */
-            recorded_count: unknown;
+            recorded_count: number;
             /** Session Date */
-            session_date?: unknown;
+            session_date?: string | null;
         };
         /**
          * ActivitySessionListOut
@@ -14174,13 +14182,13 @@ export interface components {
          */
         ActivitySessionListOut: {
             /** Items */
-            items: unknown;
+            items: components["schemas"]["ActivitySessionListItemOut"][];
             /** Limit */
-            limit: unknown;
+            limit: number;
             /** Skip */
-            skip: unknown;
+            skip: number;
             /** Total */
-            total: unknown;
+            total: number;
         };
         /**
          * ActivitySessionStudentItemOut
@@ -14191,19 +14199,19 @@ export interface components {
          */
         ActivitySessionStudentItemOut: {
             /** Attendance Notes */
-            attendance_notes: unknown;
+            attendance_notes: string;
             /** Class Name */
-            class_name: unknown;
+            class_name: string;
             /** Classroom Id */
-            classroom_id?: unknown;
+            classroom_id?: number | null;
             /** Is Present */
-            is_present?: unknown;
+            is_present?: boolean | null;
             /** Registration Id */
-            registration_id: unknown;
+            registration_id: number;
             /** Student Id */
-            student_id?: unknown;
+            student_id?: number | null;
             /** Student Name */
-            student_name: unknown;
+            student_name: string;
         };
         /**
          * ActivityStatsChartsOut
@@ -14211,9 +14219,9 @@ export interface components {
          */
         ActivityStatsChartsOut: {
             /** Daily */
-            daily: unknown;
+            daily: components["schemas"]["ActivityStatsDailyPointOut"][];
             /** Topcourses */
-            topCourses: unknown;
+            topCourses: components["schemas"]["ActivityStatsTopCourseOut"][];
         };
         /**
          * ActivityStatsDailyPointOut
@@ -14221,18 +14229,18 @@ export interface components {
          */
         ActivityStatsDailyPointOut: {
             /** Count */
-            count: unknown;
+            count: number;
             /** Date */
-            date: unknown;
+            date: string;
         };
         /**
          * ActivityStatsOut
          * @description GET /stats 相容舊版複合回應（summary + charts + 出席統計）。
          */
         ActivityStatsOut: {
-            attendance_stats: unknown;
-            charts: unknown;
-            statistics: unknown;
+            attendance_stats: components["schemas"]["ActivityAttendanceStatsOut"];
+            charts: components["schemas"]["ActivityStatsChartsOut"];
+            statistics: components["schemas"]["ActivityStatsSummaryOut"];
         };
         /**
          * ActivityStatsSummaryOut
@@ -14240,23 +14248,23 @@ export interface components {
          */
         ActivityStatsSummaryOut: {
             /** Enrollmentrate */
-            enrollmentRate: unknown;
+            enrollmentRate: number;
             /** Todaynewregistrations */
-            todayNewRegistrations: unknown;
+            todayNewRegistrations: number;
             /** Totalenrollments */
-            totalEnrollments: unknown;
+            totalEnrollments: number;
             /** Totalregistrations */
-            totalRegistrations: unknown;
+            totalRegistrations: number;
             /** Totalrevenue */
-            totalRevenue: unknown;
+            totalRevenue: number;
             /** Totalsupplyorders */
-            totalSupplyOrders: unknown;
+            totalSupplyOrders: number;
             /** Totalunpaid */
-            totalUnpaid: unknown;
+            totalUnpaid: number;
             /** Totalwaitlist */
-            totalWaitlist: unknown;
+            totalWaitlist: number;
             /** Unreadinquiries */
-            unreadInquiries: unknown;
+            unreadInquiries: number;
         };
         /**
          * ActivityStatsTopCourseOut
@@ -14264,9 +14272,9 @@ export interface components {
          */
         ActivityStatsTopCourseOut: {
             /** Count */
-            count: unknown;
+            count: number;
             /** Name */
-            name: unknown;
+            name: string;
         };
         /**
          * AddCourseRequest
@@ -14455,7 +14463,7 @@ export interface components {
          */
         AllergyDeleteOut: {
             /** Message */
-            message: unknown;
+            message: string;
         };
         /**
          * AllergyListOut
@@ -14463,9 +14471,9 @@ export interface components {
          */
         AllergyListOut: {
             /** Items */
-            items: unknown;
+            items: components["schemas"]["AllergyOut"][];
             /** Total */
-            total: unknown;
+            total: number;
         };
         /**
          * AllergyOut
@@ -14473,23 +14481,23 @@ export interface components {
          */
         AllergyOut: {
             /** Active */
-            active: unknown;
+            active: boolean;
             /** Allergen */
-            allergen: unknown;
+            allergen: string;
             /** Created At */
-            created_at?: unknown;
+            created_at?: string | null;
             /** First Aid Note */
-            first_aid_note?: unknown;
+            first_aid_note?: string | null;
             /** Id */
-            id: unknown;
+            id: number;
             /** Reaction Symptom */
-            reaction_symptom?: unknown;
+            reaction_symptom?: string | null;
             /** Severity */
-            severity?: unknown;
+            severity?: string | null;
             /** Student Id */
-            student_id: unknown;
+            student_id: number;
             /** Updated At */
-            updated_at?: unknown;
+            updated_at?: string | null;
         };
         /** AllergyUpdate */
         AllergyUpdate: {
@@ -14510,17 +14518,17 @@ export interface components {
          */
         AnnouncementAttachmentOut: {
             /** Filename */
-            filename: unknown;
+            filename: string;
             /** Id */
-            id: unknown;
+            id: number;
             /** Mime Type */
-            mime_type: unknown;
+            mime_type: string;
             /** Size Bytes */
-            size_bytes: unknown;
+            size_bytes: number;
             /** Thumb Url */
-            thumb_url?: unknown;
+            thumb_url?: string | null;
             /** Url */
-            url: unknown;
+            url: string;
         };
         /** AnnouncementCreate */
         AnnouncementCreate: {
@@ -14550,40 +14558,46 @@ export interface components {
          * @description 單筆公告（管理員列表用，含 readers/recipient 統計）。
          */
         AnnouncementItemOut: {
-            /** Attachments */
-            attachments?: unknown;
+            /**
+             * Attachments
+             * @default []
+             */
+            attachments: components["schemas"]["AnnouncementAttachmentOut"][];
             /** Content */
-            content: unknown;
+            content: string;
             /** Created At */
-            created_at?: unknown;
+            created_at?: string | null;
             /** Created By */
-            created_by?: unknown;
+            created_by?: number | null;
             /** Created By Name */
-            created_by_name: unknown;
+            created_by_name: string;
             /** Expires At */
-            expires_at?: unknown;
+            expires_at?: string | null;
             /** Has More Readers */
-            has_more_readers: unknown;
+            has_more_readers: boolean;
             /** Id */
-            id: unknown;
+            id: number;
             /** Is Pinned */
-            is_pinned: unknown;
+            is_pinned: boolean;
             /** Priority */
-            priority: unknown;
+            priority: string;
             /** Publish At */
-            publish_at?: unknown;
+            publish_at?: string | null;
             /** Read Count */
-            read_count: unknown;
+            read_count: number;
             /** Read Preview */
-            read_preview: unknown;
+            read_preview: components["schemas"]["AnnouncementReaderItemOut"][];
             /** Recipient Count */
-            recipient_count: unknown;
-            /** Status */
-            status: unknown;
+            recipient_count: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "scheduled" | "active" | "expired";
             /** Title */
-            title: unknown;
+            title: string;
             /** Updated At */
-            updated_at?: unknown;
+            updated_at?: string | null;
         };
         /**
          * AnnouncementListOut
@@ -14591,9 +14605,9 @@ export interface components {
          */
         AnnouncementListOut: {
             /** Items */
-            items: unknown;
+            items: components["schemas"]["AnnouncementItemOut"][];
             /** Total */
-            total: unknown;
+            total: number;
         };
         /**
          * AnnouncementParentRecipientItemOut
@@ -14601,15 +14615,15 @@ export interface components {
          */
         AnnouncementParentRecipientItemOut: {
             /** Classroom Id */
-            classroom_id?: unknown;
+            classroom_id?: number | null;
             /** Guardian Id */
-            guardian_id?: unknown;
+            guardian_id?: number | null;
             /** Id */
-            id: unknown;
+            id: number;
             /** Scope */
-            scope: unknown;
+            scope: string;
             /** Student Id */
-            student_id?: unknown;
+            student_id?: number | null;
         };
         /**
          * AnnouncementParentRecipientsOut
@@ -14617,11 +14631,11 @@ export interface components {
          */
         AnnouncementParentRecipientsOut: {
             /** Announcement Id */
-            announcement_id: unknown;
+            announcement_id: number;
             /** Items */
-            items: unknown;
+            items: components["schemas"]["AnnouncementParentRecipientItemOut"][];
             /** Total */
-            total: unknown;
+            total: number;
         };
         /**
          * AnnouncementReaderItemOut
@@ -14629,11 +14643,11 @@ export interface components {
          */
         AnnouncementReaderItemOut: {
             /** Employee Id */
-            employee_id?: unknown;
+            employee_id?: number | null;
             /** Name */
-            name: unknown;
+            name: string;
             /** Read At */
-            read_at?: unknown;
+            read_at?: string | null;
         };
         /**
          * AnnouncementReadersOut
@@ -14641,13 +14655,13 @@ export interface components {
          */
         AnnouncementReadersOut: {
             /** Items */
-            items: unknown;
+            items: components["schemas"]["ReaderListItem"][];
             /** Page */
-            page: unknown;
+            page: number;
             /** Page Size */
-            page_size: unknown;
+            page_size: number;
             /** Total */
-            total: unknown;
+            total: number;
         };
         /**
          * AnnouncementRecipientsOut
@@ -14655,7 +14669,7 @@ export interface components {
          */
         AnnouncementRecipientsOut: {
             /** Employee Ids */
-            employee_ids: unknown;
+            employee_ids: number[];
         };
         /** AnnouncementUpdate */
         AnnouncementUpdate: {
@@ -14813,9 +14827,9 @@ export interface components {
          */
         AttachmentUploadResultOut: {
             /** Attachments */
-            attachments: unknown;
+            attachments: string[];
             /** Message */
-            message: unknown;
+            message: string;
         };
         /** AttendanceAggregateOut */
         AttendanceAggregateOut: {
@@ -14923,37 +14937,37 @@ export interface components {
          */
         AttendanceRecordItemOut: {
             /** Date */
-            date: unknown;
+            date: string;
             /** Early Leave Minutes */
-            early_leave_minutes?: unknown;
+            early_leave_minutes?: number | null;
             /** Employee Id */
-            employee_id: unknown;
+            employee_id: number;
             /** Employee Name */
-            employee_name: unknown;
+            employee_name: string;
             /** Employee Number */
-            employee_number: unknown;
+            employee_number: string;
             /** Id */
-            id: unknown;
+            id: number;
             /** Is Early Leave */
-            is_early_leave?: unknown;
+            is_early_leave?: boolean | null;
             /** Is Late */
-            is_late?: unknown;
+            is_late?: boolean | null;
             /** Is Missing Punch In */
-            is_missing_punch_in?: unknown;
+            is_missing_punch_in?: boolean | null;
             /** Is Missing Punch Out */
-            is_missing_punch_out?: unknown;
+            is_missing_punch_out?: boolean | null;
             /** Late Minutes */
-            late_minutes?: unknown;
+            late_minutes?: number | null;
             /** Punch In */
-            punch_in?: unknown;
+            punch_in?: string | null;
             /** Punch Out */
-            punch_out?: unknown;
+            punch_out?: string | null;
             /** Remark */
-            remark?: unknown;
+            remark?: string | null;
             /** Status */
-            status?: unknown;
+            status?: string | null;
             /** Weekday */
-            weekday: unknown;
+            weekday: string;
         };
         /**
          * AttendanceRecordUpdate
@@ -14978,17 +14992,17 @@ export interface components {
          */
         AttendanceRecordUpsertResultOut: {
             /** Early Leave Minutes */
-            early_leave_minutes?: unknown;
+            early_leave_minutes?: number | null;
             /** Is Early Leave */
-            is_early_leave?: unknown;
+            is_early_leave?: boolean | null;
             /** Is Late */
-            is_late?: unknown;
+            is_late?: boolean | null;
             /** Late Minutes */
-            late_minutes?: unknown;
+            late_minutes?: number | null;
             /** Message */
-            message: unknown;
+            message: string;
             /** Status */
-            status?: unknown;
+            status?: string | null;
         };
         /**
          * AttendanceUploadRequest
@@ -15037,23 +15051,23 @@ export interface components {
          */
         AuthAdminUserItemOut: {
             /** Employee Id */
-            employee_id?: unknown;
+            employee_id?: number | null;
             /** Employee Name */
-            employee_name: unknown;
+            employee_name: string;
             /** Id */
-            id: unknown;
+            id: number;
             /** Is Active */
-            is_active: unknown;
+            is_active: boolean;
             /** Last Login */
-            last_login?: unknown;
+            last_login?: string | null;
             /** Permission Names */
-            permission_names: unknown;
+            permission_names: string[];
             /** Role */
-            role: unknown;
+            role: string;
             /** Role Label */
-            role_label: unknown;
+            role_label: string;
             /** Username */
-            username: unknown;
+            username: string;
         };
         /**
          * AuthLoginResultOut
@@ -15061,8 +15075,8 @@ export interface components {
          */
         AuthLoginResultOut: {
             /** Must Change Password */
-            must_change_password: unknown;
-            user: unknown;
+            must_change_password: boolean;
+            user: components["schemas"]["AuthUserOut"];
         };
         /**
          * AuthMessageOut
@@ -15070,7 +15084,7 @@ export interface components {
          */
         AuthMessageOut: {
             /** Message */
-            message: unknown;
+            message: string;
         };
         /**
          * AuthPermissionsDefinitionOut
@@ -15078,11 +15092,17 @@ export interface components {
          */
         AuthPermissionsDefinitionOut: {
             /** Groups */
-            groups: unknown;
+            groups: {
+                [key: string]: unknown;
+            }[];
             /** Permissions */
-            permissions: unknown;
+            permissions: {
+                [key: string]: unknown;
+            };
             /** Roles */
-            roles: unknown;
+            roles: {
+                [key: string]: unknown;
+            };
         };
         /**
          * AuthUserOut
@@ -15090,30 +15110,30 @@ export interface components {
          */
         AuthUserOut: {
             /** Employee Id */
-            employee_id?: unknown;
+            employee_id?: number | null;
             /** Id */
-            id: unknown;
+            id: number;
             /** Impersonation Mode */
-            impersonation_mode?: unknown;
+            impersonation_mode?: string | null;
             /** Name */
-            name: unknown;
+            name: string;
             /** Permission Names */
-            permission_names: unknown;
+            permission_names: string[];
             /** Role */
-            role: unknown;
+            role: string;
             /** Role Label */
-            role_label: unknown;
+            role_label: string;
             /** Title */
-            title?: unknown;
+            title?: string | null;
             /** Username */
-            username: unknown;
+            username: string;
         };
         /**
          * AuthUserResultOut
          * @description impersonate / refresh / end_impersonate 共用：{user: AuthUserOut}。
          */
         AuthUserResultOut: {
-            user: unknown;
+            user: components["schemas"]["AuthUserOut"];
         };
         /** AutoDetectPayload */
         AutoDetectPayload: {
@@ -15166,9 +15186,9 @@ export interface components {
          */
         BatchOvertimeCreateResultOut: {
             /** Created Ids */
-            created_ids: unknown;
+            created_ids: number[];
             /** Message */
-            message: unknown;
+            message: string;
         };
         /** BatchOvertimeEmployeeItem */
         BatchOvertimeEmployeeItem: {
@@ -15243,20 +15263,26 @@ export interface components {
          */
         BindAdditionalChildOut: {
             /** Guardian Id */
-            guardian_id: unknown;
-            /** Status */
-            status: unknown;
+            guardian_id: number;
+            /**
+             * Status
+             * @constant
+             */
+            status: "ok";
             /** Student Id */
-            student_id: unknown;
+            student_id: number;
         };
         /**
          * BindFirstChildOut
          * @description POST /bind 首次綁定成功回傳。
          */
         BindFirstChildOut: {
-            /** Status */
-            status: unknown;
-            user: unknown;
+            /**
+             * Status
+             * @constant
+             */
+            status: "ok";
+            user: components["schemas"]["ParentUserInfo"];
         };
         /** BindRequest */
         BindRequest: {
@@ -15592,11 +15618,11 @@ export interface components {
          */
         BulkTransferResultOut: {
             /** Message */
-            message: unknown;
+            message: string;
             /** Moved Count */
-            moved_count: unknown;
+            moved_count: number;
             /** Target Classroom Id */
-            target_classroom_id: unknown;
+            target_classroom_id: number;
         };
         /**
          * CalendarFeedItem
@@ -15811,19 +15837,25 @@ export interface components {
          */
         ClassHistoryCoTeacher: {
             /** Employee Id */
-            employee_id: unknown;
+            employee_id: number;
             /** Name */
-            name: unknown;
-            /** Role */
-            role: unknown;
+            name: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "head" | "assistant" | "art";
         };
         /**
          * ClassHistoryResponse
          * @description GET /employees/{id}/class-history 回傳。
          */
         ClassHistoryResponse: {
-            /** Rows */
-            rows?: unknown;
+            /**
+             * Rows
+             * @default []
+             */
+            rows: components["schemas"]["ClassHistoryRow"][];
         };
         /**
          * ClassHistoryRow
@@ -15831,29 +15863,41 @@ export interface components {
          */
         ClassHistoryRow: {
             /** Classroom Id */
-            classroom_id: unknown;
+            classroom_id: number;
             /** Classroom Name */
-            classroom_name: unknown;
-            /** Co Teachers */
-            co_teachers?: unknown;
+            classroom_name: string;
+            /**
+             * Co Teachers
+             * @default []
+             */
+            co_teachers: components["schemas"]["ClassHistoryCoTeacher"][];
             /** End Count */
-            end_count?: unknown;
-            /** End Count Is Live */
-            end_count_is_live?: unknown;
+            end_count?: number | null;
+            /**
+             * End Count Is Live
+             * @default false
+             */
+            end_count_is_live: boolean;
             /** Grade Name */
-            grade_name?: unknown;
-            /** Is Current */
-            is_current?: unknown;
+            grade_name?: string | null;
+            /**
+             * Is Current
+             * @default false
+             */
+            is_current: boolean;
             /** Net Change */
-            net_change?: unknown;
-            /** Role */
-            role: unknown;
+            net_change?: number | null;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "head" | "assistant";
             /** School Year */
-            school_year: unknown;
+            school_year: number;
             /** Semester */
-            semester: unknown;
+            semester: number;
             /** Start Count */
-            start_count?: unknown;
+            start_count?: number | null;
         };
         /** ClassHubCounts */
         ClassHubCounts: {
@@ -15998,11 +16042,11 @@ export interface components {
          */
         ClassroomCloneTermResultOut: {
             /** Created Count */
-            created_count: unknown;
+            created_count: number;
             /** Message */
-            message: unknown;
+            message: string;
             /** Target Term */
-            target_term: unknown;
+            target_term: string;
         };
         /** ClassroomCreate */
         ClassroomCreate: {
@@ -16044,45 +16088,45 @@ export interface components {
          */
         ClassroomDetailOut: {
             /** Art Teacher Id */
-            art_teacher_id?: unknown;
+            art_teacher_id?: number | null;
             /** Art Teacher Name */
-            art_teacher_name?: unknown;
+            art_teacher_name?: string | null;
             /** Assistant Teacher Id */
-            assistant_teacher_id?: unknown;
+            assistant_teacher_id?: number | null;
             /** Assistant Teacher Name */
-            assistant_teacher_name?: unknown;
+            assistant_teacher_name?: string | null;
             /** Capacity */
-            capacity?: unknown;
+            capacity?: number | null;
             /** Class Code */
-            class_code?: unknown;
+            class_code?: string | null;
             /** Current Count */
-            current_count: unknown;
+            current_count: number;
             /** English Teacher Id */
-            english_teacher_id?: unknown;
+            english_teacher_id?: number | null;
             /** English Teacher Name */
-            english_teacher_name?: unknown;
+            english_teacher_name?: string | null;
             /** Grade Id */
-            grade_id?: unknown;
+            grade_id?: number | null;
             /** Grade Name */
-            grade_name?: unknown;
+            grade_name?: string | null;
             /** Head Teacher Id */
-            head_teacher_id?: unknown;
+            head_teacher_id?: number | null;
             /** Head Teacher Name */
-            head_teacher_name?: unknown;
+            head_teacher_name?: string | null;
             /** Id */
-            id: unknown;
+            id: number;
             /** Is Active */
-            is_active: unknown;
+            is_active: boolean;
             /** Name */
-            name: unknown;
+            name: string;
             /** School Year */
-            school_year: unknown;
+            school_year: number;
             /** Semester */
-            semester: unknown;
+            semester: number;
             /** Semester Label */
-            semester_label: unknown;
+            semester_label: string;
             /** Students */
-            students: unknown;
+            students: components["schemas"]["ClassroomDetailStudentOut"][];
         };
         /**
          * ClassroomDetailStudentOut
@@ -16090,25 +16134,25 @@ export interface components {
          */
         ClassroomDetailStudentOut: {
             /** Allergy */
-            allergy?: unknown;
+            allergy?: string | null;
             /** Gender */
-            gender?: unknown;
+            gender?: string | null;
             /** Id */
-            id: unknown;
+            id: number;
             /** Is Active */
-            is_active?: unknown;
+            is_active?: boolean | null;
             /** Medication */
-            medication?: unknown;
+            medication?: string | null;
             /** Name */
-            name: unknown;
+            name: string;
             /** Parent Phone */
-            parent_phone?: unknown;
+            parent_phone?: string | null;
             /** Special Needs */
-            special_needs?: unknown;
+            special_needs?: string | null;
             /** Status */
-            status?: unknown;
+            status?: string | null;
             /** Student Id */
-            student_id?: unknown;
+            student_id?: string | null;
         };
         /**
          * ClassroomEnrollmentCompositionOut
@@ -16121,17 +16165,23 @@ export interface components {
          */
         ClassroomEnrollmentCompositionOut: {
             /** Classroom Id */
-            classroom_id: unknown;
+            classroom_id: number;
             /** Counts */
-            counts: unknown;
+            counts: {
+                [key: string]: number;
+            };
             /** Ratios */
-            ratios: unknown;
+            ratios: {
+                [key: string]: number;
+            };
             /** Snapshot Date */
-            snapshot_date: unknown;
+            snapshot_date: string;
             /** Timeline */
-            timeline: unknown;
+            timeline: {
+                [key: string]: unknown;
+            }[];
             /** Total */
-            total: unknown;
+            total: number;
         };
         /** ClassroomImpact */
         ClassroomImpact: {
@@ -16150,47 +16200,47 @@ export interface components {
          */
         ClassroomListItemOut: {
             /** Art Teacher Id */
-            art_teacher_id?: unknown;
+            art_teacher_id?: number | null;
             /** Art Teacher Name */
-            art_teacher_name?: unknown;
+            art_teacher_name?: string | null;
             /** Assistant Teacher Id */
-            assistant_teacher_id?: unknown;
+            assistant_teacher_id?: number | null;
             /** Assistant Teacher Name */
-            assistant_teacher_name?: unknown;
+            assistant_teacher_name?: string | null;
             /** Capacity */
-            capacity?: unknown;
+            capacity?: number | null;
             /** Class Code */
-            class_code?: unknown;
+            class_code?: string | null;
             /** Current Count */
-            current_count: unknown;
+            current_count: number;
             /** English Teacher Id */
-            english_teacher_id?: unknown;
+            english_teacher_id?: number | null;
             /** English Teacher Name */
-            english_teacher_name?: unknown;
+            english_teacher_name?: string | null;
             /** Grade Id */
-            grade_id?: unknown;
+            grade_id?: number | null;
             /** Grade Name */
-            grade_name?: unknown;
+            grade_name?: string | null;
             /** Has More Students */
-            has_more_students: unknown;
+            has_more_students: boolean;
             /** Head Teacher Id */
-            head_teacher_id?: unknown;
+            head_teacher_id?: number | null;
             /** Head Teacher Name */
-            head_teacher_name?: unknown;
+            head_teacher_name?: string | null;
             /** Id */
-            id: unknown;
+            id: number;
             /** Is Active */
-            is_active: unknown;
+            is_active: boolean;
             /** Name */
-            name: unknown;
+            name: string;
             /** School Year */
-            school_year: unknown;
+            school_year: number;
             /** Semester */
-            semester: unknown;
+            semester: number;
             /** Semester Label */
-            semester_label: unknown;
+            semester_label: string;
             /** Student Preview */
-            student_preview: unknown;
+            student_preview: components["schemas"]["ClassroomStudentPreviewOut"][];
         };
         /** ClassroomPromoteAcademicYear */
         ClassroomPromoteAcademicYear: {
@@ -16214,15 +16264,15 @@ export interface components {
          */
         ClassroomPromoteAcademicYearResultOut: {
             /** Created Count */
-            created_count: unknown;
+            created_count: number;
             /** Graduated Count */
-            graduated_count: unknown;
+            graduated_count: number;
             /** Message */
-            message: unknown;
+            message: string;
             /** Moved Student Count */
-            moved_student_count: unknown;
+            moved_student_count: number;
             /** Target Term */
-            target_term: unknown;
+            target_term: string;
         };
         /**
          * ClassroomPromoteConflictOut
@@ -16233,13 +16283,13 @@ export interface components {
          */
         ClassroomPromoteConflictOut: {
             /** Kind */
-            kind: unknown;
+            kind: string;
             /** Message */
-            message: unknown;
+            message: string;
             /** Source Classroom Id */
-            source_classroom_id?: unknown;
+            source_classroom_id?: number | null;
             /** Target Name */
-            target_name?: unknown;
+            target_name?: string | null;
         };
         /**
          * ClassroomPromotePreviewOut
@@ -16250,21 +16300,21 @@ export interface components {
          */
         ClassroomPromotePreviewOut: {
             /** Conflicts */
-            conflicts: unknown;
+            conflicts: components["schemas"]["ClassroomPromoteConflictOut"][];
             /** Has Blocking Conflict */
-            has_blocking_conflict: unknown;
+            has_blocking_conflict: boolean;
             /** Rows */
-            rows: unknown;
+            rows: components["schemas"]["ClassroomPromotePreviewRowOut"][];
             /** Source Term */
-            source_term: unknown;
+            source_term: string;
             /** Target Term */
-            target_term: unknown;
+            target_term: string;
             /** Will Create Count */
-            will_create_count: unknown;
+            will_create_count: number;
             /** Will Graduate Count */
-            will_graduate_count: unknown;
+            will_graduate_count: number;
             /** Will Move Student Count */
-            will_move_student_count: unknown;
+            will_move_student_count: number;
         };
         /**
          * ClassroomPromotePreviewRowOut
@@ -16272,25 +16322,25 @@ export interface components {
          */
         ClassroomPromotePreviewRowOut: {
             /** Active Student Count */
-            active_student_count: unknown;
+            active_student_count: number;
             /** Resolved Target Grade Id */
-            resolved_target_grade_id?: unknown;
+            resolved_target_grade_id?: number | null;
             /** Resolved Target Grade Name */
-            resolved_target_grade_name?: unknown;
+            resolved_target_grade_name?: string | null;
             /** Reuses Existing Target */
-            reuses_existing_target: unknown;
+            reuses_existing_target: boolean;
             /** Source Classroom Id */
-            source_classroom_id: unknown;
+            source_classroom_id: number;
             /** Source Grade Id */
-            source_grade_id?: unknown;
+            source_grade_id?: number | null;
             /** Source Grade Name */
-            source_grade_name?: unknown;
+            source_grade_name?: string | null;
             /** Source Name */
-            source_name: unknown;
+            source_name: string;
             /** Target Name */
-            target_name?: unknown;
+            target_name?: string | null;
             /** Will Graduate */
-            will_graduate: unknown;
+            will_graduate: boolean;
         };
         /** ClassroomPromotionItem */
         ClassroomPromotionItem: {
@@ -16317,13 +16367,13 @@ export interface components {
          */
         ClassroomStudentPreviewOut: {
             /** Gender */
-            gender?: unknown;
+            gender?: string | null;
             /** Id */
-            id: unknown;
+            id: number;
             /** Name */
-            name: unknown;
+            name: string;
             /** Student Id */
-            student_id?: unknown;
+            student_id?: string | null;
         };
         /** ClassroomUpdate */
         ClassroomUpdate: {
@@ -16359,11 +16409,11 @@ export interface components {
          */
         ClassroomUpdateResultOut: {
             /** Id */
-            id: unknown;
+            id: number;
             /** Message */
-            message: unknown;
+            message: string;
             /** Name */
-            name: unknown;
+            name: string;
         };
         /** ClassRosterData */
         ClassRosterData: {
@@ -16488,11 +16538,11 @@ export interface components {
          */
         ContactBookApplyTemplateItem: {
             /** Changed Fields */
-            changed_fields: unknown;
+            changed_fields: string[];
             /** Entry Id */
-            entry_id: unknown;
+            entry_id: number;
             /** Version */
-            version: unknown;
+            version: number;
         };
         /**
          * ContactBookApplyTemplateOut
@@ -16500,9 +16550,9 @@ export interface components {
          */
         ContactBookApplyTemplateOut: {
             /** Results */
-            results: unknown;
+            results: components["schemas"]["ContactBookApplyTemplateItem"][];
             /** Template Id */
-            template_id: unknown;
+            template_id: number;
         };
         /** ContactBookBatchItem */
         ContactBookBatchItem: {
@@ -16543,11 +16593,11 @@ export interface components {
          */
         ContactBookBatchPublishItem: {
             /** Entry Id */
-            entry_id: unknown;
+            entry_id: number;
             /** Message */
-            message?: unknown;
+            message?: string | null;
             /** Status */
-            status: unknown;
+            status: string;
         };
         /**
          * ContactBookBatchPublishOut
@@ -16555,9 +16605,9 @@ export interface components {
          */
         ContactBookBatchPublishOut: {
             /** Results */
-            results: unknown;
+            results: components["schemas"]["ContactBookBatchPublishItem"][];
             /** Success Count */
-            success_count: unknown;
+            success_count: number;
         };
         /**
          * ContactBookBatchUpsertOut
@@ -16565,11 +16615,11 @@ export interface components {
          */
         ContactBookBatchUpsertOut: {
             /** Classroom Id */
-            classroom_id: unknown;
+            classroom_id: number;
             /** Entry Ids */
-            entry_ids: unknown;
+            entry_ids: number[];
             /** Log Date */
-            log_date: unknown;
+            log_date: string;
         };
         /**
          * ContactBookCompletion
@@ -16577,13 +16627,13 @@ export interface components {
          */
         ContactBookCompletion: {
             /** Draft */
-            draft: unknown;
+            draft: number;
             /** Missing */
-            missing: unknown;
+            missing: number;
             /** Published */
-            published: unknown;
+            published: number;
             /** Roster */
-            roster: unknown;
+            roster: number;
         };
         /**
          * ContactBookCopyYesterdayOut
@@ -16591,11 +16641,11 @@ export interface components {
          */
         ContactBookCopyYesterdayOut: {
             /** Classroom Id */
-            classroom_id: unknown;
+            classroom_id: number;
             /** Created */
-            created: unknown;
+            created: number;
             /** Target Date */
-            target_date: unknown;
+            target_date: string;
         };
         /** ContactBookEntryFields */
         ContactBookEntryFields: {
@@ -16627,50 +16677,53 @@ export interface components {
          */
         ContactBookEntryOut: {
             /** Bowel */
-            bowel?: unknown;
+            bowel?: string | null;
             /** Classroom Id */
-            classroom_id: unknown;
+            classroom_id: number;
             /** Created At */
-            created_at?: unknown;
+            created_at?: string | null;
             /** Id */
-            id: unknown;
+            id: number;
             /** Learning Highlight */
-            learning_highlight?: unknown;
+            learning_highlight?: string | null;
             /** Log Date */
-            log_date?: unknown;
+            log_date?: string | null;
             /** Meal Lunch */
-            meal_lunch?: unknown;
+            meal_lunch?: number | null;
             /** Meal Snack */
-            meal_snack?: unknown;
+            meal_snack?: number | null;
             /** Mood */
-            mood?: unknown;
+            mood?: string | null;
             /** Nap Minutes */
-            nap_minutes?: unknown;
-            /** Photos */
-            photos?: unknown;
+            nap_minutes?: number | null;
+            /**
+             * Photos
+             * @default []
+             */
+            photos: components["schemas"]["ContactBookPhotoOut"][];
             /** Published At */
-            published_at?: unknown;
+            published_at?: string | null;
             /** Student Id */
-            student_id: unknown;
+            student_id: number;
             /** Teacher Note */
-            teacher_note?: unknown;
+            teacher_note?: string | null;
             /** Temperature C */
-            temperature_c?: unknown;
+            temperature_c?: number | null;
             /** Updated At */
-            updated_at?: unknown;
+            updated_at?: string | null;
             /** Version */
-            version: unknown;
+            version: number;
         };
         /**
          * ContactBookListItem
          * @description list_classroom_day 內每位學生一筆。
          */
         ContactBookListItem: {
-            entry?: unknown;
+            entry?: components["schemas"]["ContactBookEntryOut"] | null;
             /** Student Id */
-            student_id: unknown;
+            student_id: number;
             /** Student Name */
-            student_name: unknown;
+            student_name: string;
         };
         /**
          * ContactBookListOut
@@ -16678,12 +16731,12 @@ export interface components {
          */
         ContactBookListOut: {
             /** Classroom Id */
-            classroom_id: unknown;
-            completion: unknown;
+            classroom_id: number;
+            completion: components["schemas"]["ContactBookCompletion"];
             /** Items */
-            items: unknown;
+            items: components["schemas"]["ContactBookListItem"][];
             /** Log Date */
-            log_date: unknown;
+            log_date: string;
         };
         /**
          * ContactBookPhotoOut
@@ -16691,13 +16744,13 @@ export interface components {
          */
         ContactBookPhotoOut: {
             /** Display Url */
-            display_url?: unknown;
+            display_url?: string | null;
             /** Id */
-            id: unknown;
+            id: number;
             /** Original Filename */
-            original_filename?: unknown;
+            original_filename?: string | null;
             /** Thumb Url */
-            thumb_url?: unknown;
+            thumb_url?: string | null;
         };
         /**
          * ContactBookTemplateFieldsOut
@@ -16707,21 +16760,21 @@ export interface components {
          */
         ContactBookTemplateFieldsOut: {
             /** Bowel */
-            bowel?: unknown;
+            bowel?: string | null;
             /** Learning Highlight */
-            learning_highlight?: unknown;
+            learning_highlight?: string | null;
             /** Meal Lunch */
-            meal_lunch?: unknown;
+            meal_lunch?: number | null;
             /** Meal Snack */
-            meal_snack?: unknown;
+            meal_snack?: number | null;
             /** Mood */
-            mood?: unknown;
+            mood?: string | null;
             /** Nap Minutes */
-            nap_minutes?: unknown;
+            nap_minutes?: number | null;
             /** Teacher Note */
-            teacher_note?: unknown;
+            teacher_note?: string | null;
             /** Temperature C */
-            temperature_c?: unknown;
+            temperature_c?: number | null;
         };
         /**
          * ContactBookTemplateListOut
@@ -16729,7 +16782,7 @@ export interface components {
          */
         ContactBookTemplateListOut: {
             /** Items */
-            items: unknown;
+            items: components["schemas"]["ContactBookTemplateOut"][];
         };
         /**
          * ContactBookTemplateOut
@@ -16743,22 +16796,22 @@ export interface components {
          */
         ContactBookTemplateOut: {
             /** Classroom Id */
-            classroom_id?: unknown;
+            classroom_id?: number | null;
             /** Created At */
-            created_at?: unknown;
-            fields: unknown;
+            created_at?: string | null;
+            fields: components["schemas"]["ContactBookTemplateFieldsOut"];
             /** Id */
-            id: unknown;
+            id: number;
             /** Is Archived */
-            is_archived: unknown;
+            is_archived: boolean;
             /** Name */
-            name: unknown;
+            name: string;
             /** Owner User Id */
-            owner_user_id?: unknown;
+            owner_user_id?: number | null;
             /** Scope */
-            scope: unknown;
+            scope: string;
             /** Updated At */
-            updated_at?: unknown;
+            updated_at?: string | null;
         };
         /**
          * ContactBookUnpublishedItem
@@ -16766,15 +16819,15 @@ export interface components {
          */
         ContactBookUnpublishedItem: {
             /** Id */
-            id: unknown;
+            id: number;
             /** Student Id */
-            student_id: unknown;
+            student_id: number;
             /** Student Name */
-            student_name?: unknown;
+            student_name?: string | null;
             /** Updated At */
-            updated_at?: unknown;
+            updated_at?: string | null;
             /** Version */
-            version: unknown;
+            version: number;
         };
         /**
          * ContactBookUnpublishedOut
@@ -16782,11 +16835,11 @@ export interface components {
          */
         ContactBookUnpublishedOut: {
             /** Classroom Id */
-            classroom_id: unknown;
+            classroom_id: number;
             /** Items */
-            items: unknown;
+            items: components["schemas"]["ContactBookUnpublishedItem"][];
             /** Log Date */
-            log_date: unknown;
+            log_date: string;
         };
         /** ContractCreate */
         ContractCreate: {
@@ -16810,23 +16863,23 @@ export interface components {
          */
         ContractOut: {
             /** Contract Type */
-            contract_type: unknown;
+            contract_type: string;
             /** Created At */
-            created_at?: unknown;
+            created_at?: string | null;
             /** Employee Id */
-            employee_id: unknown;
+            employee_id: number;
             /** End Date */
-            end_date?: unknown;
+            end_date?: string | null;
             /** Id */
-            id: unknown;
+            id: number;
             /** Remark */
-            remark?: unknown;
+            remark?: string | null;
             /** Salary At Contract */
-            salary_at_contract?: unknown;
+            salary_at_contract?: number | null;
             /** Start Date */
-            start_date?: unknown;
+            start_date?: string | null;
             /** Updated At */
-            updated_at?: unknown;
+            updated_at?: string | null;
         };
         /** ContractUpdate */
         ContractUpdate: {
@@ -16978,13 +17031,13 @@ export interface components {
          */
         CourseCreateResultOut: {
             /** Id */
-            id: unknown;
+            id: number;
             /** Message */
-            message: unknown;
+            message: string;
             /** School Year */
-            school_year: unknown;
+            school_year: number;
             /** Semester */
-            semester: unknown;
+            semester: number;
         };
         /**
          * CourseDetailOut
@@ -16995,21 +17048,21 @@ export interface components {
          */
         CourseDetailOut: {
             /** Allow Waitlist */
-            allow_waitlist: unknown;
+            allow_waitlist: boolean;
             /** Capacity */
-            capacity?: unknown;
+            capacity?: number | null;
             /** Description */
-            description: unknown;
+            description: string;
             /** Id */
-            id: unknown;
+            id: number;
             /** Name */
-            name: unknown;
+            name: string;
             /** Price */
-            price: unknown;
+            price: number;
             /** Sessions */
-            sessions?: unknown;
+            sessions?: number | null;
             /** Video Url */
-            video_url: unknown;
+            video_url: string;
         };
         /**
          * CourseEnrolledItemOut
@@ -17017,15 +17070,15 @@ export interface components {
          */
         CourseEnrolledItemOut: {
             /** Class Name */
-            class_name?: unknown;
+            class_name?: string | null;
             /** Course Record Id */
-            course_record_id: unknown;
+            course_record_id: number;
             /** Position */
-            position: unknown;
+            position: number;
             /** Registration Id */
-            registration_id: unknown;
+            registration_id: number;
             /** Student Name */
-            student_name: unknown;
+            student_name: string;
         };
         /**
          * CourseEnrolledOut
@@ -17033,11 +17086,11 @@ export interface components {
          */
         CourseEnrolledOut: {
             /** Course Id */
-            course_id: unknown;
+            course_id: number;
             /** Course Name */
-            course_name: unknown;
+            course_name: string;
             /** Items */
-            items: unknown;
+            items: components["schemas"]["CourseEnrolledItemOut"][];
         };
         /**
          * CourseListItemOut
@@ -17049,43 +17102,43 @@ export interface components {
          */
         CourseListItemOut: {
             /** Allow Waitlist */
-            allow_waitlist: unknown;
+            allow_waitlist: boolean;
             /** Capacity */
-            capacity: unknown;
+            capacity: number;
             /** Description */
-            description: unknown;
+            description: string;
             /** Enrolled */
-            enrolled: unknown;
+            enrolled: number;
             /** Id */
-            id: unknown;
+            id: number;
             /** Max Age Months */
-            max_age_months?: unknown;
+            max_age_months?: number | null;
             /** Meeting End Time */
-            meeting_end_time?: unknown;
+            meeting_end_time?: string | null;
             /** Meeting Start Time */
-            meeting_start_time?: unknown;
+            meeting_start_time?: string | null;
             /** Meeting Weekday */
-            meeting_weekday?: unknown;
+            meeting_weekday?: number | null;
             /** Min Age Months */
-            min_age_months?: unknown;
+            min_age_months?: number | null;
             /** Name */
-            name: unknown;
+            name: string;
             /** Price */
-            price: unknown;
+            price: number;
             /** Promoted Pending */
-            promoted_pending: unknown;
+            promoted_pending: number;
             /** Remaining */
-            remaining: unknown;
+            remaining: number;
             /** School Year */
-            school_year: unknown;
+            school_year: number;
             /** Semester */
-            semester: unknown;
+            semester: number;
             /** Sessions */
-            sessions?: unknown;
+            sessions?: number | null;
             /** Video Url */
-            video_url: unknown;
+            video_url: string;
             /** Waitlist Count */
-            waitlist_count: unknown;
+            waitlist_count: number;
         };
         /**
          * CourseListOut
@@ -17093,17 +17146,17 @@ export interface components {
          */
         CourseListOut: {
             /** Courses */
-            courses: unknown;
+            courses: components["schemas"]["CourseListItemOut"][];
             /** Limit */
-            limit: unknown;
+            limit: number;
             /** School Year */
-            school_year: unknown;
+            school_year: number;
             /** Semester */
-            semester: unknown;
+            semester: number;
             /** Skip */
-            skip: unknown;
+            skip: number;
             /** Total */
-            total: unknown;
+            total: number;
         };
         /**
          * CoursesCopyResultOut
@@ -17113,13 +17166,13 @@ export interface components {
          */
         CoursesCopyResultOut: {
             /** Created */
-            created: unknown;
+            created: number;
             /** Created Ids */
-            created_ids: unknown;
+            created_ids: number[];
             /** Message */
-            message: unknown;
+            message: string;
             /** Skipped */
-            skipped: unknown;
+            skipped: number;
         };
         /** CourseUpdate */
         CourseUpdate: {
@@ -17154,15 +17207,15 @@ export interface components {
          */
         CourseWaitlistItemOut: {
             /** Class Name */
-            class_name?: unknown;
+            class_name?: string | null;
             /** Course Record Id */
-            course_record_id: unknown;
+            course_record_id: number;
             /** Registration Id */
-            registration_id: unknown;
+            registration_id: number;
             /** Student Name */
-            student_name: unknown;
+            student_name: string;
             /** Waitlist Position */
-            waitlist_position: unknown;
+            waitlist_position: number;
         };
         /**
          * CourseWaitlistOut
@@ -17170,11 +17223,11 @@ export interface components {
          */
         CourseWaitlistOut: {
             /** Course Id */
-            course_id: unknown;
+            course_id: number;
             /** Course Name */
-            course_name: unknown;
+            course_name: string;
             /** Items */
-            items: unknown;
+            items: components["schemas"]["CourseWaitlistItemOut"][];
         };
         /** CreateLeaveRequest */
         CreateLeaveRequest: {
@@ -17351,23 +17404,23 @@ export interface components {
          */
         DailyShiftOut: {
             /** Date */
-            date: unknown;
+            date: string;
             /** Employee Id */
-            employee_id: unknown;
+            employee_id: number;
             /** Employee Name */
-            employee_name: unknown;
+            employee_name: string;
             /** Id */
-            id: unknown;
+            id: number;
             /** Notes */
-            notes: unknown;
+            notes: string;
             /** Shift Type Id */
-            shift_type_id: unknown;
+            shift_type_id: number;
             /** Shift Type Name */
-            shift_type_name: unknown;
+            shift_type_name: string;
             /** Work End */
-            work_end: unknown;
+            work_end: string;
             /** Work Start */
-            work_start: unknown;
+            work_start: string;
         };
         /** DeductionTypeCreate */
         DeductionTypeCreate: {
@@ -17417,7 +17470,7 @@ export interface components {
          */
         DeleteResultOut: {
             /** Message */
-            message: unknown;
+            message: string;
         };
         /**
          * DerivedValue
@@ -17475,9 +17528,12 @@ export interface components {
          * @description POST /auth/device-setup 兌換設定碼成功回傳（無 LINE 家長裝置登入）。
          */
         DeviceSetupOut: {
-            /** Status */
-            status: unknown;
-            user: unknown;
+            /**
+             * Status
+             * @constant
+             */
+            status: "ok";
+            user: components["schemas"]["ParentUserInfo"];
         };
         /** DeviceSetupRequest */
         DeviceSetupRequest: {
@@ -17716,25 +17772,25 @@ export interface components {
          */
         EducationOut: {
             /** Created At */
-            created_at?: unknown;
+            created_at?: string | null;
             /** Degree */
-            degree: unknown;
+            degree: string;
             /** Employee Id */
-            employee_id: unknown;
+            employee_id: number;
             /** Graduation Date */
-            graduation_date?: unknown;
+            graduation_date?: string | null;
             /** Id */
-            id: unknown;
+            id: number;
             /** Is Highest */
-            is_highest: unknown;
+            is_highest: boolean;
             /** Major */
-            major?: unknown;
+            major?: string | null;
             /** Remark */
-            remark?: unknown;
+            remark?: string | null;
             /** School Name */
-            school_name: unknown;
+            school_name: string;
             /** Updated At */
-            updated_at?: unknown;
+            updated_at?: string | null;
         };
         /** EducationUpdate */
         EducationUpdate: {
@@ -17891,11 +17947,11 @@ export interface components {
          */
         EmployeeCreateResultOut: {
             /** Employee Id */
-            employee_id: unknown;
+            employee_id: string;
             /** Id */
-            id: unknown;
+            id: number;
             /** Message */
-            message: unknown;
+            message: string;
         };
         /**
          * EmployeeOut
@@ -17909,91 +17965,112 @@ export interface components {
          */
         EmployeeOut: {
             /** Address */
-            address?: unknown;
+            address?: string | null;
             /** Bank Account */
-            bank_account?: unknown;
+            bank_account?: string | null;
             /** Bank Account Name */
-            bank_account_name?: unknown;
+            bank_account_name?: string | null;
             /** Bank Code */
-            bank_code?: unknown;
+            bank_code?: string | null;
             /** Base Salary */
-            base_salary?: unknown;
+            base_salary?: number | null;
             /** Birthday */
-            birthday?: unknown;
+            birthday?: string | null;
             /** Bonus Grade */
-            bonus_grade?: unknown;
-            /** Bypass Standard Base */
-            bypass_standard_base?: unknown;
+            bonus_grade?: string | null;
+            /**
+             * Bypass Standard Base
+             * @default false
+             */
+            bypass_standard_base: boolean;
             /** Classroom Id */
-            classroom_id?: unknown;
+            classroom_id?: number | null;
             /** Classroom Name */
-            classroom_name?: unknown;
+            classroom_name?: string | null;
             /** Dependents */
-            dependents?: unknown;
+            dependents?: number | null;
             /** Email */
-            email?: unknown;
+            email?: string | null;
             /** Emergency Contact Name */
-            emergency_contact_name?: unknown;
+            emergency_contact_name?: string | null;
             /** Emergency Contact Phone */
-            emergency_contact_phone?: unknown;
+            emergency_contact_phone?: string | null;
             /** Employee Id */
-            employee_id: unknown;
+            employee_id: string;
             /** Employee Type */
-            employee_type: unknown;
-            /** Extra Dependents Quarterly */
-            extra_dependents_quarterly?: unknown;
+            employee_type: string;
+            /**
+             * Extra Dependents Quarterly
+             * @default 0
+             */
+            extra_dependents_quarterly: number;
             /** Gender */
-            gender?: unknown;
-            /** Health Exempt */
-            health_exempt?: unknown;
+            gender?: string | null;
+            /**
+             * Health Exempt
+             * @default false
+             */
+            health_exempt: boolean;
             /** Hire Date */
-            hire_date?: unknown;
+            hire_date?: string | null;
             /** Hourly Rate */
-            hourly_rate?: unknown;
+            hourly_rate?: number | null;
             /** Id */
-            id: unknown;
+            id: number;
             /** Id Number */
-            id_number?: unknown;
+            id_number?: string | null;
             /** Insurance Effective Date */
-            insurance_effective_date?: unknown;
+            insurance_effective_date?: string | null;
             /** Insurance Salary Level */
-            insurance_salary_level?: unknown;
+            insurance_salary_level?: number | null;
             /** Insurance Salary Override Reason */
-            insurance_salary_override_reason?: unknown;
+            insurance_salary_override_reason?: string | null;
             /** Is Active */
-            is_active: unknown;
+            is_active: boolean;
             /** Job Title Id */
-            job_title_id?: unknown;
+            job_title_id?: number | null;
             /** Name */
-            name: unknown;
-            /** No Employment Insurance */
-            no_employment_insurance?: unknown;
+            name: string;
+            /**
+             * No Employment Insurance
+             * @default false
+             */
+            no_employment_insurance: boolean;
             /** Pension Self Rate */
-            pension_self_rate?: unknown;
+            pension_self_rate?: number | null;
             /** Phone */
-            phone?: unknown;
+            phone?: string | null;
             /** Position */
-            position?: unknown;
+            position?: string | null;
             /** Probation End Date */
-            probation_end_date?: unknown;
+            probation_end_date?: string | null;
             /** Resign Date */
-            resign_date?: unknown;
+            resign_date?: string | null;
             /** Resign Reason */
-            resign_reason?: unknown;
-            /** Skip Payroll Bonuses */
-            skip_payroll_bonuses?: unknown;
-            /** Skip Payroll Transfer */
-            skip_payroll_transfer?: unknown;
+            resign_reason?: string | null;
+            /**
+             * Skip Payroll Bonuses
+             * @default false
+             */
+            skip_payroll_bonuses: boolean;
+            /**
+             * Skip Payroll Transfer
+             * @default false
+             */
+            skip_payroll_transfer: boolean;
             /** Supervisor Role */
-            supervisor_role?: unknown;
+            supervisor_role?: string | null;
             /** Title */
-            title?: unknown;
-            /** Unreported For Tax */
-            unreported_for_tax?: unknown;
+            title?: string | null;
+            /**
+             * Unreported For Tax
+             * @default false
+             */
+            unreported_for_tax: boolean;
             /** Work End Time */
-            work_end_time?: unknown;
+            work_end_time?: string | null;
             /** Work Start Time */
-            work_start_time?: unknown;
+            work_start_time?: string | null;
         };
         /** EmployeeUpdate */
         EmployeeUpdate: {
@@ -18171,33 +18248,33 @@ export interface components {
          */
         EventCalendarFeedItemOut: {
             /** Description */
-            description?: unknown;
+            description?: string | null;
             /** End Date */
-            end_date?: unknown;
+            end_date?: string | null;
             /** End Time */
-            end_time?: unknown;
+            end_time?: string | null;
             /** Event Date */
-            event_date: unknown;
+            event_date: string;
             /** Event Type */
-            event_type: unknown;
+            event_type: string;
             /** Event Type Label */
-            event_type_label: unknown;
+            event_type_label: string;
             /** Id */
-            id: unknown;
+            id: number | string;
             /** Is All Day */
-            is_all_day: unknown;
+            is_all_day: boolean;
             /** Is Official */
-            is_official: unknown;
+            is_official: boolean;
             /** Is Read Only */
-            is_read_only: unknown;
+            is_read_only: boolean;
             /** Location */
-            location?: unknown;
+            location?: string | null;
             /** Official Kind */
-            official_kind?: unknown;
+            official_kind?: string | null;
             /** Start Time */
-            start_time?: unknown;
+            start_time?: string | null;
             /** Title */
-            title: unknown;
+            title: string;
         };
         /**
          * EventCalendarFeedOut
@@ -18205,12 +18282,12 @@ export interface components {
          */
         EventCalendarFeedOut: {
             /** Events */
-            events: unknown;
+            events: components["schemas"]["EventCalendarFeedItemOut"][];
             /** Month */
-            month: unknown;
-            official_sync: unknown;
+            month: number;
+            official_sync: components["schemas"]["EventCalendarOfficialSyncOut"];
             /** Year */
-            year: unknown;
+            year: number;
         };
         /**
          * EventCalendarOfficialSyncOut
@@ -18219,13 +18296,13 @@ export interface components {
          */
         EventCalendarOfficialSyncOut: {
             /** Last Synced At */
-            last_synced_at?: unknown;
+            last_synced_at?: string | null;
             /** Status */
-            status: unknown;
+            status: string;
             /** Used Cache */
-            used_cache: unknown;
+            used_cache: boolean;
             /** Warning */
-            warning?: unknown;
+            warning?: string | null;
         };
         /** EventCreate */
         EventCreate: {
@@ -18270,35 +18347,37 @@ export interface components {
          */
         EventMutationResultOut: {
             /** Created At */
-            created_at?: unknown;
+            created_at?: string | null;
             /** Description */
-            description?: unknown;
+            description?: string | null;
             /** End Date */
-            end_date?: unknown;
+            end_date?: string | null;
             /** End Time */
-            end_time?: unknown;
+            end_time?: string | null;
             /** Event Date */
-            event_date: unknown;
+            event_date: string;
             /** Event Type */
-            event_type: unknown;
+            event_type: string;
             /** Event Type Label */
-            event_type_label: unknown;
+            event_type_label: string;
             /** Id */
-            id: unknown;
+            id: number;
             /** Is All Day */
-            is_all_day: unknown;
+            is_all_day: boolean;
             /** Location */
-            location?: unknown;
+            location?: string | null;
             /** Message */
-            message: unknown;
+            message: string;
             /** Recurrence Rule */
-            recurrence_rule?: unknown;
+            recurrence_rule?: {
+                [key: string]: unknown;
+            } | null;
             /** Start Time */
-            start_time?: unknown;
+            start_time?: string | null;
             /** Title */
-            title: unknown;
+            title: string;
             /** Updated At */
-            updated_at?: unknown;
+            updated_at?: string | null;
         };
         /**
          * EventOut
@@ -18308,33 +18387,35 @@ export interface components {
          */
         EventOut: {
             /** Created At */
-            created_at?: unknown;
+            created_at?: string | null;
             /** Description */
-            description?: unknown;
+            description?: string | null;
             /** End Date */
-            end_date?: unknown;
+            end_date?: string | null;
             /** End Time */
-            end_time?: unknown;
+            end_time?: string | null;
             /** Event Date */
-            event_date: unknown;
+            event_date: string;
             /** Event Type */
-            event_type: unknown;
+            event_type: string;
             /** Event Type Label */
-            event_type_label: unknown;
+            event_type_label: string;
             /** Id */
-            id: unknown;
+            id: number;
             /** Is All Day */
-            is_all_day: unknown;
+            is_all_day: boolean;
             /** Location */
-            location?: unknown;
+            location?: string | null;
             /** Recurrence Rule */
-            recurrence_rule?: unknown;
+            recurrence_rule?: {
+                [key: string]: unknown;
+            } | null;
             /** Start Time */
-            start_time?: unknown;
+            start_time?: string | null;
             /** Title */
-            title: unknown;
+            title: string;
             /** Updated At */
-            updated_at?: unknown;
+            updated_at?: string | null;
         };
         /** EventUpdate */
         EventUpdate: {
@@ -18510,35 +18591,35 @@ export interface components {
          */
         FinalSalaryPreviewOut: {
             /** Base Salary */
-            base_salary: unknown;
+            base_salary: number;
             /** Contracted Base Salary */
-            contracted_base_salary: unknown;
+            contracted_base_salary: number;
             /** Festival Bonus */
-            festival_bonus: unknown;
+            festival_bonus: number;
             /** Gross Salary */
-            gross_salary: unknown;
+            gross_salary: number;
             /** Health Insurance */
-            health_insurance: unknown;
+            health_insurance: number;
             /** Labor Insurance */
-            labor_insurance: unknown;
+            labor_insurance: number;
             /** Month */
-            month: unknown;
+            month: number;
             /** Net Salary */
-            net_salary: unknown;
+            net_salary: number;
             /** Net Salary With Unused Annual */
-            net_salary_with_unused_annual: unknown;
+            net_salary_with_unused_annual: number;
             /** Pension */
-            pension: unknown;
+            pension: number;
             /** Proration Note */
-            proration_note?: unknown;
+            proration_note?: string | null;
             /** Total Deduction */
-            total_deduction: unknown;
+            total_deduction: number;
             /** Unused Annual Leave Compensation */
-            unused_annual_leave_compensation: unknown;
+            unused_annual_leave_compensation: number;
             /** Unused Annual Leave Hours */
-            unused_annual_leave_hours: unknown;
+            unused_annual_leave_hours: number;
             /** Year */
-            year: unknown;
+            year: number;
         };
         /** FunnelBoardOut */
         FunnelBoardOut: {
@@ -18728,15 +18809,15 @@ export interface components {
          */
         GradeOut: {
             /** Age Range */
-            age_range?: unknown;
+            age_range?: string | null;
             /** Id */
-            id: unknown;
+            id: number;
             /** Is Graduation Grade */
-            is_graduation_grade: unknown;
+            is_graduation_grade: boolean;
             /** Name */
-            name: unknown;
+            name: string;
             /** Sort Order */
-            sort_order?: unknown;
+            sort_order?: number | null;
         };
         /** GradeRosterSummary */
         GradeRosterSummary: {
@@ -18867,7 +18948,7 @@ export interface components {
          */
         GuardianListOut: {
             /** Items */
-            items: unknown;
+            items: components["schemas"]["GuardianOut"][];
         };
         /**
          * GuardianOut
@@ -18875,27 +18956,27 @@ export interface components {
          */
         GuardianOut: {
             /** Can Pickup */
-            can_pickup: unknown;
+            can_pickup: boolean;
             /** Custody Note */
-            custody_note?: unknown;
+            custody_note?: string | null;
             /** Email */
-            email?: unknown;
+            email?: string | null;
             /** Id */
-            id: unknown;
+            id: number;
             /** Is Emergency */
-            is_emergency: unknown;
+            is_emergency: boolean;
             /** Is Primary */
-            is_primary: unknown;
+            is_primary: boolean;
             /** Name */
-            name?: unknown;
+            name?: string | null;
             /** Phone */
-            phone?: unknown;
+            phone?: string | null;
             /** Relation */
-            relation?: unknown;
+            relation?: string | null;
             /** Sort Order */
-            sort_order?: unknown;
+            sort_order?: number | null;
             /** Student Id */
-            student_id: unknown;
+            student_id: number;
         };
         /** GuardianUpdate */
         GuardianUpdate: {
@@ -18936,15 +19017,15 @@ export interface components {
          */
         HolidayImportResultOut: {
             /** Errors */
-            errors: unknown;
+            errors: string[];
             /** Failed */
-            failed: unknown;
+            failed: number;
             /** Stale Marked */
-            stale_marked?: unknown;
+            stale_marked?: number | null;
             /** Total */
-            total: unknown;
+            total: number;
             /** Upserted */
-            upserted: unknown;
+            upserted: number;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -19186,11 +19267,11 @@ export interface components {
          */
         InsuranceBracketDeleteResultOut: {
             /** Effective Year */
-            effective_year: unknown;
+            effective_year: number;
             /** Message */
-            message: unknown;
+            message: string;
             /** Stale Marked */
-            stale_marked: unknown;
+            stale_marked: number;
         };
         /**
          * InsuranceBracketIn
@@ -19221,19 +19302,19 @@ export interface components {
          */
         InsuranceBracketItemOut: {
             /** Amount */
-            amount: unknown;
+            amount: number;
             /** Health Employee */
-            health_employee: unknown;
+            health_employee: number;
             /** Health Employer */
-            health_employer: unknown;
+            health_employer: number;
             /** Id */
-            id: unknown;
+            id: number;
             /** Labor Employee */
-            labor_employee: unknown;
+            labor_employee: number;
             /** Labor Employer */
-            labor_employer: unknown;
+            labor_employer: number;
             /** Pension */
-            pension: unknown;
+            pension: number;
         };
         /**
          * InsuranceBracketListOut
@@ -19244,11 +19325,11 @@ export interface components {
          */
         InsuranceBracketListOut: {
             /** Brackets */
-            brackets: unknown;
+            brackets: components["schemas"]["InsuranceBracketItemOut"][];
             /** Effective Year */
-            effective_year?: unknown;
+            effective_year?: number | null;
             /** Requested Year */
-            requested_year: unknown;
+            requested_year: number;
         };
         /** InsuranceBracketsBulkUpsert */
         InsuranceBracketsBulkUpsert: {
@@ -19283,15 +19364,15 @@ export interface components {
          */
         InsuranceBracketUpsertResultOut: {
             /** Effective Year */
-            effective_year: unknown;
+            effective_year: number;
             /** Message */
-            message: unknown;
+            message: string;
             /** Replaced Existing */
-            replaced_existing: unknown;
+            replaced_existing: boolean;
             /** Stale Marked */
-            stale_marked: unknown;
+            stale_marked: number;
             /** Upserted */
-            upserted: unknown;
+            upserted: number;
         };
         /**
          * InsuranceCalculationOut
@@ -19302,21 +19383,21 @@ export interface components {
          */
         InsuranceCalculationOut: {
             /** Health Employee */
-            health_employee: unknown;
+            health_employee: number;
             /** Health Employer */
-            health_employer: unknown;
+            health_employer: number;
             /** Insured Amount */
-            insured_amount: unknown;
+            insured_amount: number;
             /** Labor Employee */
-            labor_employee: unknown;
+            labor_employee: number;
             /** Labor Employer */
-            labor_employer: unknown;
+            labor_employer: number;
             /** Pension Employer */
-            pension_employer: unknown;
+            pension_employer: number;
             /** Total Employee */
-            total_employee: unknown;
+            total_employee: number;
             /** Total Employer */
-            total_employer: unknown;
+            total_employer: number;
         };
         /**
          * InsuranceRateUpdate
@@ -19435,17 +19516,17 @@ export interface components {
          */
         LastMeasurement: {
             /** Head Circumference Cm */
-            head_circumference_cm?: unknown;
+            head_circumference_cm?: string | null;
             /** Height Cm */
-            height_cm?: unknown;
+            height_cm?: string | null;
             /** Measured On */
-            measured_on: unknown;
+            measured_on: string;
             /** Vision Left */
-            vision_left?: unknown;
+            vision_left?: string | null;
             /** Vision Right */
-            vision_right?: unknown;
+            vision_right?: string | null;
             /** Weight Kg */
-            weight_kg?: unknown;
+            weight_kg?: string | null;
         };
         /**
          * LeaveApproveResultOut
@@ -19453,13 +19534,13 @@ export interface components {
          */
         LeaveApproveResultOut: {
             /** Message */
-            message: unknown;
+            message: string;
             /** Salary Recalculated */
-            salary_recalculated?: unknown;
+            salary_recalculated?: boolean | null;
             /** Salary Warning */
-            salary_warning?: unknown;
+            salary_warning?: string | null;
             /** Warning */
-            warning?: unknown;
+            warning?: string | null;
         };
         /** LeaveBatchApproveRequest */
         LeaveBatchApproveRequest: {
@@ -19552,11 +19633,11 @@ export interface components {
          */
         LeaveDeleteResultOut: {
             /** Message */
-            message: unknown;
+            message: string;
             /** Salary Recalculated */
-            salary_recalculated?: unknown;
+            salary_recalculated?: boolean | null;
             /** Salary Warning */
-            salary_warning?: unknown;
+            salary_warning?: string | null;
         };
         /**
          * LeaveImportResultOut
@@ -19570,13 +19651,13 @@ export interface components {
          */
         LeaveImportResultOut: {
             /** Created */
-            created: unknown;
+            created: number;
             /** Errors */
-            errors: unknown;
+            errors: string[];
             /** Failed */
-            failed: unknown;
+            failed: number;
             /** Total */
-            total: unknown;
+            total: number;
         };
         /** LeaveSnapshotPreview */
         LeaveSnapshotPreview: {
@@ -19619,13 +19700,13 @@ export interface components {
          */
         LeaveUpdateResultOut: {
             /** Message */
-            message: unknown;
+            message: string;
             /** Reset To Pending */
-            reset_to_pending?: unknown;
+            reset_to_pending?: boolean | null;
             /** Salary Recalculated */
-            salary_recalculated?: unknown;
+            salary_recalculated?: boolean | null;
             /** Salary Warning */
-            salary_warning?: unknown;
+            salary_warning?: string | null;
         };
         /** LifecycleOverviewOut */
         LifecycleOverviewOut: {
@@ -19663,9 +19744,9 @@ export interface components {
          */
         LiffLoginNeedBindingOut: {
             /** Line User Id */
-            line_user_id: unknown;
+            line_user_id: string;
             /** Name Hint */
-            name_hint?: unknown;
+            name_hint?: string | null;
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
@@ -19682,7 +19763,7 @@ export interface components {
              * @enum {string}
              */
             status: "ok";
-            user: unknown;
+            user: components["schemas"]["ParentUserInfo"];
         };
         /** LiffLoginRequest */
         LiffLoginRequest: {
@@ -19755,7 +19836,7 @@ export interface components {
          */
         LogoutAllSessionsOut: {
             /** Logout All */
-            logout_all: unknown;
+            logout_all: boolean;
         };
         /** MagicLinkResponse */
         MagicLinkResponse: {
@@ -19891,27 +19972,30 @@ export interface components {
          */
         MedicationLogOut: {
             /** Administered At */
-            administered_at?: unknown;
+            administered_at?: string | null;
             /** Administered By */
-            administered_by?: unknown;
+            administered_by?: number | null;
             /** Correction Of */
-            correction_of?: unknown;
+            correction_of?: number | null;
             /** Created At */
-            created_at?: unknown;
+            created_at?: string | null;
             /** Id */
-            id: unknown;
+            id: number;
             /** Note */
-            note?: unknown;
+            note?: string | null;
             /** Order Id */
-            order_id: unknown;
+            order_id: number;
             /** Scheduled Time */
-            scheduled_time?: unknown;
+            scheduled_time?: string | null;
             /** Skipped */
-            skipped: unknown;
+            skipped: boolean;
             /** Skipped Reason */
-            skipped_reason?: unknown;
-            /** Status */
-            status: unknown;
+            skipped_reason?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "administered" | "skipped" | "correction";
         };
         /** MedicationOrderCreate */
         MedicationOrderCreate: {
@@ -19945,9 +20029,9 @@ export interface components {
          */
         MedicationOrderListOut: {
             /** Items */
-            items: unknown;
+            items: components["schemas"]["MedicationOrderOut"][];
             /** Total */
-            total: unknown;
+            total: number;
         };
         /**
          * MedicationOrderOut
@@ -19955,27 +20039,27 @@ export interface components {
          */
         MedicationOrderOut: {
             /** Created At */
-            created_at?: unknown;
+            created_at?: string | null;
             /** Created By */
-            created_by?: unknown;
+            created_by?: number | null;
             /** Dose */
-            dose?: unknown;
+            dose?: string | null;
             /** Id */
-            id: unknown;
+            id: number;
             /** Logs */
-            logs: unknown;
+            logs: components["schemas"]["MedicationLogOut"][];
             /** Medication Name */
-            medication_name: unknown;
+            medication_name: string;
             /** Note */
-            note?: unknown;
+            note?: string | null;
             /** Order Date */
-            order_date: unknown;
+            order_date: string;
             /** Source */
-            source?: unknown;
+            source?: string | null;
             /** Student Id */
-            student_id: unknown;
+            student_id: number;
             /** Time Slots */
-            time_slots: unknown;
+            time_slots: string[];
         };
         /**
          * MedicationOrderWithStudentOut
@@ -19983,31 +20067,31 @@ export interface components {
          */
         MedicationOrderWithStudentOut: {
             /** Classroom Id */
-            classroom_id?: unknown;
+            classroom_id?: number | null;
             /** Created At */
-            created_at?: unknown;
+            created_at?: string | null;
             /** Created By */
-            created_by?: unknown;
+            created_by?: number | null;
             /** Dose */
-            dose?: unknown;
+            dose?: string | null;
             /** Id */
-            id: unknown;
+            id: number;
             /** Logs */
-            logs: unknown;
+            logs: components["schemas"]["MedicationLogOut"][];
             /** Medication Name */
-            medication_name: unknown;
+            medication_name: string;
             /** Note */
-            note?: unknown;
+            note?: string | null;
             /** Order Date */
-            order_date: unknown;
+            order_date: string;
             /** Source */
-            source?: unknown;
+            source?: string | null;
             /** Student Id */
-            student_id: unknown;
+            student_id: number;
             /** Student Name */
-            student_name?: unknown;
+            student_name?: string | null;
             /** Time Slots */
-            time_slots: unknown;
+            time_slots: string[];
         };
         /**
          * MeetingBatchCreate
@@ -20037,9 +20121,9 @@ export interface components {
          */
         MeetingBatchCreateOut: {
             /** Count */
-            count: unknown;
+            count: number;
             /** Message */
-            message: unknown;
+            message: string;
         };
         /** MeetingRecordCreate */
         MeetingRecordCreate: {
@@ -20077,9 +20161,9 @@ export interface components {
          */
         MessageRecallOut: {
             /** Deleted At */
-            deleted_at: unknown;
+            deleted_at: string;
             /** Status */
-            status: unknown;
+            status: string;
         };
         /** MilestoneCreate */
         MilestoneCreate: {
@@ -20121,7 +20205,7 @@ export interface components {
          */
         MonthDeleteOut: {
             /** Deleted */
-            deleted: unknown;
+            deleted: string;
         };
         /** MonthlyFixedCostBatchEntry */
         MonthlyFixedCostBatchEntry: {
@@ -20166,9 +20250,9 @@ export interface components {
          */
         MonthOptionOut: {
             /** Id */
-            id: unknown;
+            id: number;
             /** Month */
-            month: unknown;
+            month: string;
         };
         /**
          * MutationResultOut
@@ -20176,9 +20260,9 @@ export interface components {
          */
         MutationResultOut: {
             /** Id */
-            id: unknown;
+            id: number;
             /** Message */
-            message: unknown;
+            message: string;
         };
         /** MyAppraisalDetailOut */
         MyAppraisalDetailOut: {
@@ -20277,41 +20361,41 @@ export interface components {
          */
         MyLeaveListItemOut: {
             /** Approved By */
-            approved_by?: unknown;
+            approved_by?: string | null;
             /** Attachment Paths */
-            attachment_paths: unknown;
+            attachment_paths: string[];
             /** Created At */
-            created_at?: unknown;
+            created_at?: string | null;
             /** End Date */
-            end_date: unknown;
+            end_date: string;
             /** End Time */
-            end_time?: unknown;
+            end_time?: string | null;
             /** Id */
-            id: unknown;
+            id: number;
             /** Leave Hours */
-            leave_hours: unknown;
+            leave_hours: number;
             /** Leave Type */
-            leave_type: unknown;
+            leave_type: string;
             /** Leave Type Label */
-            leave_type_label: unknown;
+            leave_type_label: string;
             /** Reason */
-            reason?: unknown;
+            reason?: string | null;
             /** Rejection Reason */
-            rejection_reason?: unknown;
+            rejection_reason?: string | null;
             /** Source Overtime Id */
-            source_overtime_id?: unknown;
+            source_overtime_id?: number | null;
             /** Start Date */
-            start_date: unknown;
+            start_date: string;
             /** Start Time */
-            start_time?: unknown;
+            start_time?: string | null;
             /** Status */
-            status: unknown;
+            status: string;
             /** Substitute Employee Id */
-            substitute_employee_id?: unknown;
+            substitute_employee_id?: number | null;
             /** Substitute Remark */
-            substitute_remark?: unknown;
+            substitute_remark?: string | null;
             /** Substitute Status */
-            substitute_status: unknown;
+            substitute_status: string;
         };
         /**
          * MyLeaveStatsOut
@@ -20319,19 +20403,19 @@ export interface components {
          */
         MyLeaveStatsOut: {
             /** Annual Leave Quota */
-            annual_leave_quota: unknown;
+            annual_leave_quota: number;
             /** Annual Leave Used Days */
-            annual_leave_used_days: unknown;
+            annual_leave_used_days: number;
             /** End Of Calculation */
-            end_of_calculation: unknown;
+            end_of_calculation: string;
             /** Hire Date */
-            hire_date?: unknown;
+            hire_date?: string | null;
             /** Seniority Months */
-            seniority_months: unknown;
+            seniority_months: number;
             /** Seniority Years */
-            seniority_years: unknown;
+            seniority_years: number;
             /** Start Of Calculation */
-            start_of_calculation: unknown;
+            start_of_calculation: string;
         };
         /**
          * MyQuotaItemOut
@@ -20339,19 +20423,19 @@ export interface components {
          */
         MyQuotaItemOut: {
             /** Leave Type */
-            leave_type: unknown;
+            leave_type: string;
             /** Leave Type Label */
-            leave_type_label: unknown;
+            leave_type_label: string;
             /** Note */
-            note?: unknown;
+            note?: string | null;
             /** Pending Hours */
-            pending_hours: unknown;
+            pending_hours: number;
             /** Remaining Hours */
-            remaining_hours: unknown;
+            remaining_hours: number;
             /** Total Hours */
-            total_hours: unknown;
+            total_hours: number;
             /** Used Hours */
-            used_hours: unknown;
+            used_hours: number;
         };
         /** MyScoreItemOut */
         MyScoreItemOut: {
@@ -20381,15 +20465,15 @@ export interface components {
          */
         MyStudentsClassroomBlock: {
             /** Classroom Id */
-            classroom_id: unknown;
+            classroom_id: number;
             /** Classroom Name */
-            classroom_name: unknown;
+            classroom_name: string;
             /** Role */
-            role: unknown;
+            role: string;
             /** Student Count */
-            student_count: unknown;
+            student_count: number;
             /** Students */
-            students: unknown;
+            students: components["schemas"]["MyStudentsStudentItem"][];
         };
         /**
          * MyStudentsOut
@@ -20397,11 +20481,11 @@ export interface components {
          */
         MyStudentsOut: {
             /** Classrooms */
-            classrooms: unknown;
+            classrooms: components["schemas"]["MyStudentsClassroomBlock"][];
             /** Employee Name */
-            employee_name: unknown;
+            employee_name: string;
             /** Total Students */
-            total_students: unknown;
+            total_students: number;
         };
         /**
          * MyStudentsStudentItem
@@ -20409,35 +20493,41 @@ export interface components {
          */
         MyStudentsStudentItem: {
             /** Attendance Rate This Month */
-            attendance_rate_this_month?: unknown;
+            attendance_rate_this_month?: number | null;
             /** Birthday */
-            birthday?: unknown;
+            birthday?: string | null;
             /** Enrollment Date */
-            enrollment_date?: unknown;
+            enrollment_date?: string | null;
             /** Gender */
-            gender?: unknown;
-            /** Has Health Alert */
-            has_health_alert?: unknown;
-            /** Health Alert Count */
-            health_alert_count?: unknown;
+            gender?: string | null;
+            /**
+             * Has Health Alert
+             * @default false
+             */
+            has_health_alert: boolean;
+            /**
+             * Health Alert Count
+             * @default 0
+             */
+            health_alert_count: number;
             /** Id */
-            id: unknown;
+            id: number;
             /** Last Absent Date */
-            last_absent_date?: unknown;
+            last_absent_date?: string | null;
             /** Lifecycle Status */
-            lifecycle_status?: unknown;
+            lifecycle_status?: string | null;
             /** Name */
-            name: unknown;
+            name: string;
             /** Notes */
-            notes?: unknown;
+            notes?: string | null;
             /** Parent Name */
-            parent_name?: unknown;
+            parent_name?: string | null;
             /** Parent Phone Masked */
-            parent_phone_masked?: unknown;
+            parent_phone_masked?: string | null;
             /** Status Tag */
-            status_tag?: unknown;
+            status_tag?: string | null;
             /** Student Id */
-            student_id: unknown;
+            student_id: string;
         };
         /**
          * MySubstituteRequestItemOut
@@ -20448,31 +20538,31 @@ export interface components {
          */
         MySubstituteRequestItemOut: {
             /** Created At */
-            created_at?: unknown;
+            created_at?: string | null;
             /** End Date */
-            end_date: unknown;
+            end_date: string;
             /** Id */
-            id: unknown;
+            id: number;
             /** Leave Hours */
-            leave_hours: unknown;
+            leave_hours: number;
             /** Leave Type */
-            leave_type: unknown;
+            leave_type: string;
             /** Leave Type Label */
-            leave_type_label: unknown;
+            leave_type_label: string;
             /** Reason */
-            reason?: unknown;
+            reason?: string | null;
             /** Requester Employee Id */
-            requester_employee_id: unknown;
+            requester_employee_id: string;
             /** Requester Name */
-            requester_name: unknown;
+            requester_name: string;
             /** Start Date */
-            start_date: unknown;
+            start_date: string;
             /** Status */
-            status: unknown;
+            status: string;
             /** Substitute Responded At */
-            substitute_responded_at?: unknown;
+            substitute_responded_at?: string | null;
             /** Substitute Status */
-            substitute_status: unknown;
+            substitute_status: string;
         };
         /** MyTrendOut */
         MyTrendOut: {
@@ -20509,27 +20599,27 @@ export interface components {
          */
         MyWorkdayHoursBreakdownItem: {
             /** Date */
-            date: unknown;
+            date: string;
             /** Holiday Name */
-            holiday_name?: unknown;
+            holiday_name?: string | null;
             /** Hours */
-            hours: unknown;
+            hours: number;
             /** Is Makeup Workday */
-            is_makeup_workday: unknown;
+            is_makeup_workday: boolean;
             /** Shift */
-            shift?: unknown;
+            shift?: string | null;
             /** Source */
-            source?: unknown;
+            source?: string | null;
             /** Type */
-            type: unknown;
+            type: string;
             /** Weekday */
-            weekday: unknown;
+            weekday: number;
             /** Work End */
-            work_end?: unknown;
+            work_end?: string | null;
             /** Work Start */
-            work_start?: unknown;
+            work_start?: string | null;
             /** Workday Override Name */
-            workday_override_name?: unknown;
+            workday_override_name?: string | null;
         };
         /**
          * MyWorkdayHoursOut
@@ -20537,9 +20627,9 @@ export interface components {
          */
         MyWorkdayHoursOut: {
             /** Breakdown */
-            breakdown: unknown;
+            breakdown: components["schemas"]["MyWorkdayHoursBreakdownItem"][];
             /** Total Hours */
-            total_hours: unknown;
+            total_hours: number;
         };
         /** NhiUnenrollRequest */
         NhiUnenrollRequest: {
@@ -20705,19 +20795,19 @@ export interface components {
          */
         OffboardResultOut: {
             /** Id */
-            id: unknown;
+            id: number;
             /** Is Active */
-            is_active: unknown;
+            is_active: boolean;
             /** Message */
-            message: unknown;
+            message: string;
             /** Name */
-            name: unknown;
+            name: string;
             /** Resign Date */
-            resign_date: unknown;
+            resign_date: string;
             /** Resign Reason */
-            resign_reason?: unknown;
+            resign_reason?: string | null;
             /** User Account Revoked */
-            user_account_revoked: unknown;
+            user_account_revoked: boolean;
         };
         /**
          * OkStatusOut
@@ -20725,7 +20815,7 @@ export interface components {
          */
         OkStatusOut: {
             /** Status */
-            status: unknown;
+            status: string;
         };
         /** OptOutRequestIn */
         OptOutRequestIn: {
@@ -20812,13 +20902,13 @@ export interface components {
          */
         OvertimeApproveResultOut: {
             /** Comp Leave Hours Granted */
-            comp_leave_hours_granted?: unknown;
+            comp_leave_hours_granted?: number | null;
             /** Message */
-            message: unknown;
+            message: string;
             /** Salary Recalculated */
-            salary_recalculated?: unknown;
+            salary_recalculated?: boolean | null;
             /** Warning */
-            warning?: unknown;
+            warning?: string | null;
         };
         /** OvertimeBatchApproveRequest */
         OvertimeBatchApproveRequest: {
@@ -20883,11 +20973,11 @@ export interface components {
          */
         OvertimeCreateResultOut: {
             /** Id */
-            id: unknown;
+            id: number;
             /** Message */
-            message: unknown;
+            message: string;
             /** Overtime Pay */
-            overtime_pay?: unknown;
+            overtime_pay?: number | null;
         };
         /**
          * OvertimeDeleteResultOut
@@ -20897,11 +20987,11 @@ export interface components {
          */
         OvertimeDeleteResultOut: {
             /** Message */
-            message: unknown;
+            message: string;
             /** Salary Recalculated */
-            salary_recalculated?: unknown;
+            salary_recalculated?: boolean | null;
             /** Warning */
-            warning?: unknown;
+            warning?: string | null;
         };
         /**
          * OvertimeImportResultOut
@@ -20912,13 +21002,13 @@ export interface components {
          */
         OvertimeImportResultOut: {
             /** Created */
-            created: unknown;
+            created: number;
             /** Errors */
-            errors: unknown;
+            errors: string[];
             /** Failed */
-            failed: unknown;
+            failed: number;
             /** Total */
-            total: unknown;
+            total: number;
         };
         /** OvertimeUpdate */
         OvertimeUpdate: {
@@ -20944,15 +21034,15 @@ export interface components {
          */
         OvertimeUpdateResultOut: {
             /** Message */
-            message: unknown;
+            message: string;
             /** Overtime Pay */
-            overtime_pay?: unknown;
+            overtime_pay?: number | null;
             /** Reset To Pending */
-            reset_to_pending?: unknown;
+            reset_to_pending?: boolean | null;
             /** Salary Recalculated */
-            salary_recalculated?: unknown;
+            salary_recalculated?: boolean | null;
             /** Warning */
-            warning?: unknown;
+            warning?: string | null;
         };
         /**
          * ParentContactBookAckOut
@@ -20960,11 +21050,11 @@ export interface components {
          */
         ParentContactBookAckOut: {
             /** Already Marked */
-            already_marked: unknown;
+            already_marked: boolean;
             /** Entry Id */
-            entry_id: unknown;
+            entry_id: number;
             /** Read At */
-            read_at?: unknown;
+            read_at?: string | null;
         };
         /**
          * ParentContactBookDetailOut
@@ -20972,37 +21062,43 @@ export interface components {
          */
         ParentContactBookDetailOut: {
             /** Bowel */
-            bowel?: unknown;
+            bowel?: string | null;
             /** Classroom Id */
-            classroom_id: unknown;
+            classroom_id: number;
             /** Id */
-            id: unknown;
+            id: number;
             /** Learning Highlight */
-            learning_highlight?: unknown;
+            learning_highlight?: string | null;
             /** Log Date */
-            log_date?: unknown;
+            log_date?: string | null;
             /** Meal Lunch */
-            meal_lunch?: unknown;
+            meal_lunch?: number | null;
             /** Meal Snack */
-            meal_snack?: unknown;
+            meal_snack?: number | null;
             /** Mood */
-            mood?: unknown;
+            mood?: string | null;
             /** My Acknowledged At */
-            my_acknowledged_at?: unknown;
+            my_acknowledged_at?: string | null;
             /** Nap Minutes */
-            nap_minutes?: unknown;
-            /** Photos */
-            photos?: unknown;
+            nap_minutes?: number | null;
+            /**
+             * Photos
+             * @default []
+             */
+            photos: components["schemas"]["ParentContactBookPhotoOut"][];
             /** Published At */
-            published_at?: unknown;
-            /** Replies */
-            replies?: unknown;
+            published_at?: string | null;
+            /**
+             * Replies
+             * @default []
+             */
+            replies: components["schemas"]["ParentContactBookReplyOut"][];
             /** Student Id */
-            student_id: unknown;
+            student_id: number;
             /** Teacher Note */
-            teacher_note?: unknown;
+            teacher_note?: string | null;
             /** Temperature C */
-            temperature_c?: unknown;
+            temperature_c?: number | null;
         };
         /**
          * ParentContactBookEntryOut
@@ -21015,35 +21111,38 @@ export interface components {
          */
         ParentContactBookEntryOut: {
             /** Bowel */
-            bowel?: unknown;
+            bowel?: string | null;
             /** Classroom Id */
-            classroom_id: unknown;
+            classroom_id: number;
             /** Id */
-            id: unknown;
+            id: number;
             /** Learning Highlight */
-            learning_highlight?: unknown;
+            learning_highlight?: string | null;
             /** Log Date */
-            log_date?: unknown;
+            log_date?: string | null;
             /** Meal Lunch */
-            meal_lunch?: unknown;
+            meal_lunch?: number | null;
             /** Meal Snack */
-            meal_snack?: unknown;
+            meal_snack?: number | null;
             /** Mood */
-            mood?: unknown;
+            mood?: string | null;
             /** My Acknowledged At */
-            my_acknowledged_at?: unknown;
+            my_acknowledged_at?: string | null;
             /** Nap Minutes */
-            nap_minutes?: unknown;
-            /** Photos */
-            photos?: unknown;
+            nap_minutes?: number | null;
+            /**
+             * Photos
+             * @default []
+             */
+            photos: components["schemas"]["ParentContactBookPhotoOut"][];
             /** Published At */
-            published_at?: unknown;
+            published_at?: string | null;
             /** Student Id */
-            student_id: unknown;
+            student_id: number;
             /** Teacher Note */
-            teacher_note?: unknown;
+            teacher_note?: string | null;
             /** Temperature C */
-            temperature_c?: unknown;
+            temperature_c?: number | null;
         };
         /**
          * ParentContactBookHistoryOut
@@ -21055,13 +21154,13 @@ export interface components {
          */
         ParentContactBookHistoryOut: {
             /** Entries */
-            entries: unknown;
+            entries: components["schemas"]["ParentContactBookEntryOut"][];
             /** From */
-            from: unknown;
+            from: string;
             /** Student Id */
-            student_id: unknown;
+            student_id: number;
             /** To */
-            to: unknown;
+            to: string;
         };
         /**
          * ParentContactBookPhotoOut
@@ -21069,11 +21168,11 @@ export interface components {
          */
         ParentContactBookPhotoOut: {
             /** Display Url */
-            display_url?: unknown;
+            display_url?: string | null;
             /** Id */
-            id: unknown;
+            id: number;
             /** Thumb Url */
-            thumb_url?: unknown;
+            thumb_url?: string | null;
         };
         /**
          * ParentContactBookReplyOut
@@ -21085,26 +21184,26 @@ export interface components {
          */
         ParentContactBookReplyOut: {
             /** Body */
-            body: unknown;
+            body: string;
             /** Created At */
-            created_at?: unknown;
+            created_at?: string | null;
             /** Entry Id */
-            entry_id: unknown;
+            entry_id: number;
             /** Guardian User Id */
-            guardian_user_id: unknown;
+            guardian_user_id: number;
             /** Id */
-            id: unknown;
+            id: number;
         };
         /**
          * ParentContactBookTodayOut
          * @description GET /parent/contact-book/today — 今日聯絡簿（沒有 / 未發布時 entry=null）。
          */
         ParentContactBookTodayOut: {
-            entry?: unknown;
+            entry?: components["schemas"]["ParentContactBookEntryOut"] | null;
             /** Log Date */
-            log_date: unknown;
+            log_date: string;
             /** Student Id */
-            student_id: unknown;
+            student_id: number;
         };
         /**
          * ParentMedicationLogOut
@@ -21115,21 +21214,24 @@ export interface components {
          */
         ParentMedicationLogOut: {
             /** Administered At */
-            administered_at?: unknown;
+            administered_at?: string | null;
             /** Id */
-            id: unknown;
+            id: number;
             /** Note */
-            note?: unknown;
+            note?: string | null;
             /** Order Id */
-            order_id: unknown;
+            order_id: number;
             /** Scheduled Time */
-            scheduled_time?: unknown;
+            scheduled_time?: string | null;
             /** Skipped */
-            skipped: unknown;
+            skipped: boolean;
             /** Skipped Reason */
-            skipped_reason?: unknown;
-            /** Status */
-            status: unknown;
+            skipped_reason?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "administered" | "skipped" | "correction";
         };
         /** ParentMedicationOrderCreate */
         ParentMedicationOrderCreate: {
@@ -21161,9 +21263,9 @@ export interface components {
          */
         ParentMedicationOrderListOut: {
             /** Items */
-            items: unknown;
+            items: components["schemas"]["ParentMedicationOrderOut"][];
             /** Total */
-            total: unknown;
+            total: number;
         };
         /**
          * ParentMedicationOrderOut
@@ -21179,29 +21281,29 @@ export interface components {
          */
         ParentMedicationOrderOut: {
             /** Created At */
-            created_at?: unknown;
+            created_at?: string | null;
             /** Created By */
-            created_by?: unknown;
+            created_by?: number | null;
             /** Dose */
-            dose: unknown;
+            dose: string;
             /** Id */
-            id: unknown;
+            id: number;
             /** Logs */
-            logs: unknown;
+            logs: components["schemas"]["ParentMedicationLogOut"][];
             /** Medication Name */
-            medication_name: unknown;
+            medication_name: string;
             /** Note */
-            note?: unknown;
+            note?: string | null;
             /** Order Date */
-            order_date: unknown;
+            order_date: string;
             /** Photos */
-            photos: unknown;
+            photos: components["schemas"]["ParentMedicationPhotoOut"][];
             /** Source */
-            source?: unknown;
+            source?: string | null;
             /** Student Id */
-            student_id: unknown;
+            student_id: number;
             /** Time Slots */
-            time_slots: unknown;
+            time_slots: string[];
         };
         /**
          * ParentMedicationPhotoOut
@@ -21217,21 +21319,21 @@ export interface components {
          */
         ParentMedicationPhotoOut: {
             /** Created At */
-            created_at?: unknown;
+            created_at?: string | null;
             /** Display Url */
-            display_url?: unknown;
+            display_url?: string | null;
             /** Id */
-            id: unknown;
+            id: number;
             /** Mime Type */
-            mime_type?: unknown;
+            mime_type?: string | null;
             /** Original Filename */
-            original_filename?: unknown;
+            original_filename?: string | null;
             /** Size Bytes */
-            size_bytes?: unknown;
+            size_bytes?: number | null;
             /** Thumb Url */
-            thumb_url?: unknown;
+            thumb_url?: string | null;
             /** Url */
-            url?: unknown;
+            url?: string | null;
         };
         /**
          * ParentPortalMessageAttachmentOut
@@ -21243,19 +21345,19 @@ export interface components {
          */
         ParentPortalMessageAttachmentOut: {
             /** Display Url */
-            display_url?: unknown;
+            display_url?: string | null;
             /** Id */
-            id: unknown;
+            id: number;
             /** Mime Type */
-            mime_type?: unknown;
+            mime_type?: string | null;
             /** Original Filename */
-            original_filename?: unknown;
+            original_filename?: string | null;
             /** Size Bytes */
-            size_bytes?: unknown;
+            size_bytes?: number | null;
             /** Thumb Url */
-            thumb_url?: unknown;
+            thumb_url?: string | null;
             /** Url */
-            url?: unknown;
+            url?: string | null;
         };
         /**
          * ParentPortalMessageListOut
@@ -21263,9 +21365,9 @@ export interface components {
          */
         ParentPortalMessageListOut: {
             /** Items */
-            items: unknown;
+            items: components["schemas"]["ParentPortalMessageOut"][];
             /** Next Cursor */
-            next_cursor?: unknown;
+            next_cursor?: number | null;
         };
         /**
          * ParentPortalMessageOut
@@ -21276,26 +21378,29 @@ export interface components {
          *     - ParentPortalMessageReplyOut 透過繼承共用欄位
          */
         ParentPortalMessageOut: {
-            /** Attachments */
-            attachments?: unknown;
+            /**
+             * Attachments
+             * @default []
+             */
+            attachments: components["schemas"]["ParentPortalMessageAttachmentOut"][];
             /** Body */
-            body?: unknown;
+            body?: string | null;
             /** Client Request Id */
-            client_request_id?: unknown;
+            client_request_id?: string | null;
             /** Created At */
-            created_at?: unknown;
+            created_at?: string | null;
             /** Deleted */
-            deleted: unknown;
+            deleted: boolean;
             /** Id */
-            id: unknown;
+            id: number;
             /** Sender Role */
-            sender_role: unknown;
+            sender_role: string;
             /** Sender User Id */
-            sender_user_id: unknown;
+            sender_user_id: number;
             /** Source */
-            source: unknown;
+            source: string;
             /** Thread Id */
-            thread_id: unknown;
+            thread_id: number;
         };
         /**
          * ParentPortalMessageReplyOut
@@ -21305,28 +21410,31 @@ export interface components {
          *     對應 router 端 `{**_message_to_dict(...), "idempotent_replay": replayed}`。
          */
         ParentPortalMessageReplyOut: {
-            /** Attachments */
-            attachments?: unknown;
+            /**
+             * Attachments
+             * @default []
+             */
+            attachments: components["schemas"]["ParentPortalMessageAttachmentOut"][];
             /** Body */
-            body?: unknown;
+            body?: string | null;
             /** Client Request Id */
-            client_request_id?: unknown;
+            client_request_id?: string | null;
             /** Created At */
-            created_at?: unknown;
+            created_at?: string | null;
             /** Deleted */
-            deleted: unknown;
+            deleted: boolean;
             /** Id */
-            id: unknown;
+            id: number;
             /** Idempotent Replay */
-            idempotent_replay: unknown;
+            idempotent_replay: boolean;
             /** Sender Role */
-            sender_role: unknown;
+            sender_role: string;
             /** Sender User Id */
-            sender_user_id: unknown;
+            sender_user_id: number;
             /** Source */
-            source: unknown;
+            source: string;
             /** Thread Id */
-            thread_id: unknown;
+            thread_id: number;
         };
         /**
          * ParentPortalMessageThreadListOut
@@ -21334,9 +21442,9 @@ export interface components {
          */
         ParentPortalMessageThreadListOut: {
             /** Items */
-            items: unknown;
+            items: components["schemas"]["ParentPortalMessageThreadOut"][];
             /** Next Cursor */
-            next_cursor?: unknown;
+            next_cursor?: number | null;
         };
         /**
          * ParentPortalMessageThreadOut
@@ -21348,21 +21456,21 @@ export interface components {
          */
         ParentPortalMessageThreadOut: {
             /** Id */
-            id: unknown;
+            id: number;
             /** Last Message At */
-            last_message_at?: unknown;
+            last_message_at?: string | null;
             /** Last Message Preview */
-            last_message_preview?: unknown;
+            last_message_preview?: string | null;
             /** Student Id */
-            student_id: unknown;
+            student_id: number;
             /** Student Name */
-            student_name?: unknown;
+            student_name?: string | null;
             /** Teacher Name */
-            teacher_name?: unknown;
+            teacher_name?: string | null;
             /** Teacher User Id */
-            teacher_user_id: unknown;
+            teacher_user_id: number;
             /** Unread Count */
-            unread_count: unknown;
+            unread_count: number;
         };
         /** ParentRecipientItem */
         ParentRecipientItem: {
@@ -21388,9 +21496,12 @@ export interface components {
          * @description POST /refresh access+refresh token rotation 成功回傳。
          */
         ParentRefreshOut: {
-            /** Status */
-            status: unknown;
-            user: unknown;
+            /**
+             * Status
+             * @constant
+             */
+            status: "ok";
+            user: components["schemas"]["ParentUserInfo"];
         };
         /**
          * ParentUserInfo
@@ -21398,11 +21509,11 @@ export interface components {
          */
         ParentUserInfo: {
             /** Name */
-            name: unknown;
+            name: string;
             /** Role */
-            role: unknown;
+            role: string;
             /** User Id */
-            user_id: unknown;
+            user_id: number;
         };
         /** ParticipantCreate */
         ParticipantCreate: {
@@ -21601,9 +21712,9 @@ export interface components {
          */
         PendingRegistrationActionResultOut: {
             /** Message */
-            message: unknown;
+            message: string;
             /** Registration Id */
-            registration_id: unknown;
+            registration_id: number;
         };
         /**
          * PendingRegistrationForceAcceptResultOut
@@ -21614,15 +21725,15 @@ export interface components {
          */
         PendingRegistrationForceAcceptResultOut: {
             /** Field Changed */
-            field_changed: unknown;
+            field_changed: boolean;
             /** Forced */
-            forced: unknown;
+            forced: boolean;
             /** Matched */
-            matched: unknown;
+            matched: boolean;
             /** Message */
-            message: unknown;
+            message: string;
             /** Registration Id */
-            registration_id: unknown;
+            registration_id: number;
         };
         /**
          * PendingRegistrationItemOut
@@ -21634,35 +21745,35 @@ export interface components {
          */
         PendingRegistrationItemOut: {
             /** Birthday */
-            birthday?: unknown;
+            birthday?: string | null;
             /** Class Name */
-            class_name?: unknown;
+            class_name?: string | null;
             /** Classroom Id */
-            classroom_id?: unknown;
+            classroom_id?: number | null;
             /** Created At */
-            created_at?: unknown;
+            created_at?: string | null;
             /** Email */
-            email?: unknown;
+            email?: string | null;
             /** Id */
-            id: unknown;
+            id: number;
             /** Match Status */
-            match_status?: unknown;
+            match_status?: string | null;
             /** Parent Phone */
-            parent_phone?: unknown;
+            parent_phone?: string | null;
             /** Pending Review */
-            pending_review?: unknown;
+            pending_review?: boolean | null;
             /** Remark */
-            remark: unknown;
+            remark: string;
             /** Reviewed At */
-            reviewed_at?: unknown;
+            reviewed_at?: string | null;
             /** Reviewed By */
-            reviewed_by?: unknown;
+            reviewed_by?: string | null;
             /** School Year */
-            school_year?: unknown;
+            school_year?: number | null;
             /** Semester */
-            semester?: unknown;
+            semester?: number | null;
             /** Student Name */
-            student_name: unknown;
+            student_name: string;
         };
         /**
          * PendingRegistrationListOut
@@ -21670,19 +21781,19 @@ export interface components {
          */
         PendingRegistrationListOut: {
             /** Items */
-            items: unknown;
+            items: components["schemas"]["PendingRegistrationItemOut"][];
             /** Limit */
-            limit: unknown;
+            limit: number;
             /** School Year */
-            school_year: unknown;
+            school_year: number;
             /** Semester */
-            semester: unknown;
+            semester: number;
             /** Skip */
-            skip: unknown;
+            skip: number;
             /** Status */
-            status: unknown;
+            status: string;
             /** Total */
-            total: unknown;
+            total: number;
         };
         /**
          * PendingRegistrationRematchResultOut
@@ -21692,13 +21803,13 @@ export interface components {
          */
         PendingRegistrationRematchResultOut: {
             /** Field Changed */
-            field_changed: unknown;
+            field_changed: boolean;
             /** Matched */
-            matched: unknown;
+            matched: boolean;
             /** Message */
-            message: unknown;
+            message: string;
             /** Registration Id */
-            registration_id: unknown;
+            registration_id: number;
         };
         /**
          * PendingRegistrationsSearchStudentItemOut
@@ -21709,19 +21820,19 @@ export interface components {
          */
         PendingRegistrationsSearchStudentItemOut: {
             /** Birthday */
-            birthday?: unknown;
+            birthday?: string | null;
             /** Classroom Id */
-            classroom_id?: unknown;
+            classroom_id?: number | null;
             /** Classroom Name */
-            classroom_name?: unknown;
+            classroom_name?: string | null;
             /** Id */
-            id: unknown;
+            id: number;
             /** Name */
-            name: unknown;
+            name: string;
             /** Parent Phone */
-            parent_phone?: unknown;
+            parent_phone?: string | null;
             /** Student Id */
-            student_id?: unknown;
+            student_id?: string | null;
         };
         /**
          * PendingRegistrationsSearchStudentsOut
@@ -21729,7 +21840,7 @@ export interface components {
          */
         PendingRegistrationsSearchStudentsOut: {
             /** Items */
-            items: unknown;
+            items: components["schemas"]["PendingRegistrationsSearchStudentItemOut"][];
         };
         /** PeriodCreate */
         PeriodCreate: {
@@ -21784,39 +21895,39 @@ export interface components {
          */
         PeriodOut: {
             /** Created At */
-            created_at?: unknown;
+            created_at?: string | null;
             /** Deposit Count */
-            deposit_count: unknown;
+            deposit_count: number;
             /** Deposit To Enrolled Rate */
-            deposit_to_enrolled_rate: unknown;
+            deposit_to_enrolled_rate: number;
             /** Effective Deposit Count */
-            effective_deposit_count: unknown;
+            effective_deposit_count: number;
             /** Effective To Enrolled Rate */
-            effective_to_enrolled_rate: unknown;
+            effective_to_enrolled_rate: number;
             /** Enrolled After School */
-            enrolled_after_school: unknown;
+            enrolled_after_school: number;
             /** Enrolled Count */
-            enrolled_count: unknown;
+            enrolled_count: number;
             /** Id */
-            id: unknown;
+            id: number;
             /** Not Enrolled Deposit */
-            not_enrolled_deposit: unknown;
+            not_enrolled_deposit: number;
             /** Notes */
-            notes?: unknown;
+            notes?: string | null;
             /** Period Name */
-            period_name: unknown;
+            period_name: string;
             /** Sort Order */
-            sort_order: unknown;
+            sort_order: number;
             /** Transfer Term Count */
-            transfer_term_count: unknown;
+            transfer_term_count: number;
             /** Updated At */
-            updated_at?: unknown;
+            updated_at?: string | null;
             /** Visit Count */
-            visit_count: unknown;
+            visit_count: number;
             /** Visit To Deposit Rate */
-            visit_to_deposit_rate: unknown;
+            visit_to_deposit_rate: number;
             /** Visit To Enrolled Rate */
-            visit_to_enrolled_rate: unknown;
+            visit_to_enrolled_rate: number;
         };
         /** PeriodUpdate */
         PeriodUpdate: {
@@ -21850,7 +21961,7 @@ export interface components {
          */
         PermissionAdminOkOut: {
             /** Ok */
-            ok: unknown;
+            ok: boolean;
         };
         /** PolicyItem */
         PolicyItem: {
@@ -21943,23 +22054,35 @@ export interface components {
          */
         PortalMyDataExportOut: {
             /** Appraisals */
-            appraisals: unknown;
+            appraisals: {
+                [key: string]: unknown;
+            }[];
             /** Attendance */
-            attendance: unknown;
+            attendance: {
+                [key: string]: unknown;
+            }[];
             /** Employee */
-            employee: unknown;
+            employee: {
+                [key: string]: unknown;
+            };
             /** Exported At */
-            exported_at: unknown;
+            exported_at: string;
             /** Exported By User Id */
-            exported_by_user_id: unknown;
+            exported_by_user_id: number;
             /** Leaves */
-            leaves: unknown;
+            leaves: {
+                [key: string]: unknown;
+            }[];
             /** Overtimes */
-            overtimes: unknown;
+            overtimes: {
+                [key: string]: unknown;
+            }[];
             /** Salary Records */
-            salary_records: unknown;
+            salary_records: {
+                [key: string]: unknown;
+            }[];
             /** Schema Version */
-            schema_version: unknown;
+            schema_version: number;
         };
         /**
          * PortalParentMessageAttachmentOut
@@ -21971,19 +22094,19 @@ export interface components {
          */
         PortalParentMessageAttachmentOut: {
             /** Display Url */
-            display_url?: unknown;
+            display_url?: string | null;
             /** Id */
-            id: unknown;
+            id: number;
             /** Mime Type */
-            mime_type?: unknown;
+            mime_type?: string | null;
             /** Original Filename */
-            original_filename?: unknown;
+            original_filename?: string | null;
             /** Size Bytes */
-            size_bytes?: unknown;
+            size_bytes?: number | null;
             /** Thumb Url */
-            thumb_url?: unknown;
+            thumb_url?: string | null;
             /** Url */
-            url?: unknown;
+            url?: string | null;
         };
         /**
          * PortalParentMessageCreateThreadOut
@@ -21993,9 +22116,9 @@ export interface components {
          */
         PortalParentMessageCreateThreadOut: {
             /** Idempotent Replay */
-            idempotent_replay: unknown;
-            message: unknown;
-            thread: unknown;
+            idempotent_replay: boolean;
+            message: components["schemas"]["PortalParentMessageOut"];
+            thread: components["schemas"]["PortalParentMessageThreadOut"];
         };
         /**
          * PortalParentMessageListOut
@@ -22004,9 +22127,9 @@ export interface components {
          */
         PortalParentMessageListOut: {
             /** Items */
-            items: unknown;
+            items: components["schemas"]["PortalParentMessageOut"][];
             /** Next Cursor */
-            next_cursor?: unknown;
+            next_cursor?: number | null;
         };
         /**
          * PortalParentMessageOut
@@ -22018,26 +22141,29 @@ export interface components {
          *     - PortalParentMessageReplyOut 透過繼承共用欄位
          */
         PortalParentMessageOut: {
-            /** Attachments */
-            attachments?: unknown;
+            /**
+             * Attachments
+             * @default []
+             */
+            attachments: components["schemas"]["PortalParentMessageAttachmentOut"][];
             /** Body */
-            body?: unknown;
+            body?: string | null;
             /** Client Request Id */
-            client_request_id?: unknown;
+            client_request_id?: string | null;
             /** Created At */
-            created_at?: unknown;
+            created_at?: string | null;
             /** Deleted */
-            deleted: unknown;
+            deleted: boolean;
             /** Id */
-            id: unknown;
+            id: number;
             /** Sender Role */
-            sender_role: unknown;
+            sender_role: string;
             /** Sender User Id */
-            sender_user_id: unknown;
+            sender_user_id: number;
             /** Source */
-            source: unknown;
+            source: string;
             /** Thread Id */
-            thread_id: unknown;
+            thread_id: number;
         };
         /**
          * PortalParentMessageReplyOut
@@ -22047,28 +22173,31 @@ export interface components {
          *     對應 router 端 `{**_message_to_dict(...), "idempotent_replay": replayed}`。
          */
         PortalParentMessageReplyOut: {
-            /** Attachments */
-            attachments?: unknown;
+            /**
+             * Attachments
+             * @default []
+             */
+            attachments: components["schemas"]["PortalParentMessageAttachmentOut"][];
             /** Body */
-            body?: unknown;
+            body?: string | null;
             /** Client Request Id */
-            client_request_id?: unknown;
+            client_request_id?: string | null;
             /** Created At */
-            created_at?: unknown;
+            created_at?: string | null;
             /** Deleted */
-            deleted: unknown;
+            deleted: boolean;
             /** Id */
-            id: unknown;
+            id: number;
             /** Idempotent Replay */
-            idempotent_replay: unknown;
+            idempotent_replay: boolean;
             /** Sender Role */
-            sender_role: unknown;
+            sender_role: string;
             /** Sender User Id */
-            sender_user_id: unknown;
+            sender_user_id: number;
             /** Source */
-            source: unknown;
+            source: string;
             /** Thread Id */
-            thread_id: unknown;
+            thread_id: number;
         };
         /**
          * PortalParentMessageThreadListOut
@@ -22076,9 +22205,9 @@ export interface components {
          */
         PortalParentMessageThreadListOut: {
             /** Items */
-            items: unknown;
+            items: components["schemas"]["PortalParentMessageThreadOut"][];
             /** Next Cursor */
-            next_cursor?: unknown;
+            next_cursor?: number | null;
         };
         /**
          * PortalParentMessageThreadOut
@@ -22091,21 +22220,21 @@ export interface components {
          */
         PortalParentMessageThreadOut: {
             /** Id */
-            id: unknown;
+            id: number;
             /** Last Message At */
-            last_message_at?: unknown;
+            last_message_at?: string | null;
             /** Last Message Preview */
-            last_message_preview?: unknown;
+            last_message_preview?: string | null;
             /** Parent Name */
-            parent_name?: unknown;
+            parent_name?: string | null;
             /** Parent User Id */
-            parent_user_id: unknown;
+            parent_user_id: number;
             /** Student Id */
-            student_id: unknown;
+            student_id: number;
             /** Student Name */
-            student_name?: unknown;
+            student_name?: string | null;
             /** Unread Count */
-            unread_count: unknown;
+            unread_count: number;
         };
         /**
          * PortalProfileLineBindingOut
@@ -22113,7 +22242,7 @@ export interface components {
          */
         PortalProfileLineBindingOut: {
             /** Line User Id */
-            line_user_id?: unknown;
+            line_user_id?: string | null;
         };
         /**
          * PortalProfileLineBindingUpdateOut
@@ -22121,9 +22250,9 @@ export interface components {
          */
         PortalProfileLineBindingUpdateOut: {
             /** Line User Id */
-            line_user_id: unknown;
+            line_user_id: string;
             /** Message */
-            message: unknown;
+            message: string;
         };
         /**
          * PortalProfileOut
@@ -22133,35 +22262,35 @@ export interface components {
          */
         PortalProfileOut: {
             /** Address */
-            address?: unknown;
+            address?: string | null;
             /** Bank Account */
-            bank_account?: unknown;
+            bank_account?: string | null;
             /** Bank Account Name */
-            bank_account_name?: unknown;
+            bank_account_name?: string | null;
             /** Bank Code */
-            bank_code?: unknown;
+            bank_code?: string | null;
             /** Classroom */
-            classroom?: unknown;
+            classroom?: string | null;
             /** Emergency Contact Name */
-            emergency_contact_name?: unknown;
+            emergency_contact_name?: string | null;
             /** Emergency Contact Phone */
-            emergency_contact_phone?: unknown;
+            emergency_contact_phone?: string | null;
             /** Employee Id */
-            employee_id: unknown;
+            employee_id: string;
             /** Hire Date */
-            hire_date?: unknown;
+            hire_date?: string | null;
             /** Job Title */
-            job_title?: unknown;
+            job_title?: string | null;
             /** Name */
-            name: unknown;
+            name: string;
             /** Phone */
-            phone?: unknown;
+            phone?: string | null;
             /** Position */
-            position?: unknown;
+            position?: string | null;
             /** Work End Time */
-            work_end_time?: unknown;
+            work_end_time?: string | null;
             /** Work Start Time */
-            work_start_time?: unknown;
+            work_start_time?: string | null;
         };
         /** POSCheckoutItem */
         POSCheckoutItem: {
@@ -22179,23 +22308,23 @@ export interface components {
          */
         PosCheckoutItemResultOut: {
             /** Amount Applied */
-            amount_applied: unknown;
+            amount_applied: number;
             /** Class Name */
-            class_name: unknown;
+            class_name: string;
             /** Courses */
-            courses: unknown;
+            courses: components["schemas"]["PosCourseDetailItemOut"][];
             /** New Paid Amount */
-            new_paid_amount: unknown;
+            new_paid_amount: number;
             /** New Payment Status */
-            new_payment_status: unknown;
+            new_payment_status: string;
             /** Registration Id */
-            registration_id: unknown;
+            registration_id: number;
             /** Student Name */
-            student_name: unknown;
+            student_name: string;
             /** Supplies */
-            supplies: unknown;
+            supplies: components["schemas"]["PosSupplyDetailItemOut"][];
             /** Total Amount */
-            total_amount: unknown;
+            total_amount: number;
         };
         /**
          * PosCheckoutOut
@@ -22209,29 +22338,29 @@ export interface components {
          */
         PosCheckoutOut: {
             /** Change */
-            change?: unknown;
+            change?: number | null;
             /** Created At */
-            created_at?: unknown;
+            created_at?: string | null;
             /** Idempotent Replay */
-            idempotent_replay?: unknown;
+            idempotent_replay?: boolean | null;
             /** Items */
-            items: unknown;
+            items: components["schemas"]["PosCheckoutItemResultOut"][];
             /** Notes */
-            notes: unknown;
+            notes: string;
             /** Operator */
-            operator: unknown;
+            operator: string;
             /** Payment Date */
-            payment_date?: unknown;
+            payment_date?: string | null;
             /** Payment Method */
-            payment_method: unknown;
+            payment_method: string;
             /** Receipt No */
-            receipt_no: unknown;
+            receipt_no: string;
             /** Tendered */
-            tendered?: unknown;
+            tendered?: number | null;
             /** Total */
-            total: unknown;
+            total: number;
             /** Type */
-            type: unknown;
+            type: string;
         };
         /** POSCheckoutRequest */
         POSCheckoutRequest: {
@@ -22277,11 +22406,11 @@ export interface components {
          */
         PosCloseHistoryOut: {
             /** Close Date */
-            close_date: unknown;
+            close_date: string;
             /** Count */
-            count: unknown;
+            count: number;
             /** Snapshots */
-            snapshots: unknown;
+            snapshots: components["schemas"]["PosCloseHistorySnapshotOut"][];
         };
         /**
          * PosCloseHistorySnapshotOut
@@ -22291,41 +22420,43 @@ export interface components {
          */
         PosCloseHistorySnapshotOut: {
             /** Actual Cash Count */
-            actual_cash_count?: unknown;
+            actual_cash_count?: number | null;
             /** Approve Note */
-            approve_note?: unknown;
+            approve_note?: string | null;
             /** Approved At */
-            approved_at?: unknown;
+            approved_at?: string | null;
             /** Approver Role */
-            approver_role?: unknown;
+            approver_role?: string | null;
             /** Approver Username */
-            approver_username?: unknown;
+            approver_username?: string | null;
             /** By Method */
-            by_method: unknown;
+            by_method: {
+                [key: string]: number;
+            };
             /** Cash Variance */
-            cash_variance?: unknown;
+            cash_variance?: number | null;
             /** Close Date */
-            close_date: unknown;
+            close_date: string;
             /** Id */
-            id: unknown;
+            id: number;
             /** Is Admin Override */
-            is_admin_override: unknown;
+            is_admin_override: boolean;
             /** Net Total */
-            net_total: unknown;
+            net_total: number;
             /** Payment Total */
-            payment_total: unknown;
+            payment_total: number;
             /** Refund Total */
-            refund_total: unknown;
+            refund_total: number;
             /** Transaction Count */
-            transaction_count: unknown;
+            transaction_count: number;
             /** Unlock Reason */
-            unlock_reason?: unknown;
+            unlock_reason?: string | null;
             /** Unlocked At */
-            unlocked_at?: unknown;
+            unlocked_at?: string | null;
             /** Unlocked By */
-            unlocked_by?: unknown;
+            unlocked_by?: string | null;
             /** Unlocked By Role */
-            unlocked_by_role?: unknown;
+            unlocked_by_role?: string | null;
         };
         /**
          * PosCourseDetailItemOut
@@ -22336,11 +22467,11 @@ export interface components {
          */
         PosCourseDetailItemOut: {
             /** Name */
-            name: unknown;
+            name: string;
             /** Price */
-            price: unknown;
+            price: number;
             /** Status */
-            status: unknown;
+            status: string;
         };
         /**
          * PosDailyCloseApproveOut
@@ -22350,33 +22481,38 @@ export interface components {
          */
         PosDailyCloseApproveOut: {
             /** Actual Cash Count */
-            actual_cash_count?: unknown;
+            actual_cash_count?: number | null;
             /** Approved At */
-            approved_at?: unknown;
+            approved_at?: string | null;
             /** Approver Username */
-            approver_username?: unknown;
+            approver_username?: string | null;
             /** By Method */
-            by_method: unknown;
+            by_method: {
+                [key: string]: number;
+            };
             /** Cash Variance */
-            cash_variance?: unknown;
+            cash_variance?: number | null;
             /** Date */
-            date: unknown;
+            date: string;
             /** Is Approved */
-            is_approved: unknown;
+            is_approved: boolean;
             /** Net Total */
-            net_total: unknown;
+            net_total: number;
             /** Note */
-            note?: unknown;
+            note?: string | null;
             /** Payment Total */
-            payment_total: unknown;
+            payment_total: number;
             /** Refund Total */
-            refund_total: unknown;
+            refund_total: number;
             /** Status */
-            status: unknown;
+            status: string;
             /** Transaction Count */
-            transaction_count: unknown;
-            /** Warnings */
-            warnings?: unknown;
+            transaction_count: number;
+            /**
+             * Warnings
+             * @default []
+             */
+            warnings: string[];
         };
         /**
          * PosDailyCloseLiveDiffOut
@@ -22387,29 +22523,29 @@ export interface components {
          */
         PosDailyCloseLiveDiffOut: {
             /** Live Net Total */
-            live_net_total: unknown;
+            live_net_total: number;
             /** Live Payment Total */
-            live_payment_total: unknown;
+            live_payment_total: number;
             /** Live Refund Total */
-            live_refund_total: unknown;
+            live_refund_total: number;
             /** Live Transaction Count */
-            live_transaction_count: unknown;
+            live_transaction_count: number;
             /** Net Total Diff */
-            net_total_diff: unknown;
+            net_total_diff: number;
             /** Original Net Total */
-            original_net_total: unknown;
+            original_net_total: number;
             /** Original Payment Total */
-            original_payment_total: unknown;
+            original_payment_total: number;
             /** Original Refund Total */
-            original_refund_total: unknown;
+            original_refund_total: number;
             /** Original Transaction Count */
-            original_transaction_count: unknown;
+            original_transaction_count: number;
             /** Payment Total Diff */
-            payment_total_diff: unknown;
+            payment_total_diff: number;
             /** Refund Total Diff */
-            refund_total_diff: unknown;
+            refund_total_diff: number;
             /** Transaction Count Diff */
-            transaction_count_diff: unknown;
+            transaction_count_diff: number;
         };
         /**
          * PosDailyCloseOut
@@ -22422,31 +22558,33 @@ export interface components {
          */
         PosDailyCloseOut: {
             /** Actual Cash Count */
-            actual_cash_count?: unknown;
+            actual_cash_count?: number | null;
             /** Approved At */
-            approved_at?: unknown;
+            approved_at?: string | null;
             /** Approver Username */
-            approver_username?: unknown;
+            approver_username?: string | null;
             /** By Method */
-            by_method: unknown;
+            by_method: {
+                [key: string]: number;
+            };
             /** Cash Variance */
-            cash_variance?: unknown;
+            cash_variance?: number | null;
             /** Date */
-            date: unknown;
+            date: string;
             /** Is Approved */
-            is_approved: unknown;
+            is_approved: boolean;
             /** Net Total */
-            net_total: unknown;
+            net_total: number;
             /** Note */
-            note?: unknown;
+            note?: string | null;
             /** Payment Total */
-            payment_total: unknown;
+            payment_total: number;
             /** Refund Total */
-            refund_total: unknown;
+            refund_total: number;
             /** Status */
-            status: unknown;
+            status: string;
             /** Transaction Count */
-            transaction_count: unknown;
+            transaction_count: number;
         };
         /**
          * PosDailyCloseUnlockOut
@@ -22457,14 +22595,14 @@ export interface components {
          */
         PosDailyCloseUnlockOut: {
             /** Close Date */
-            close_date: unknown;
+            close_date: string;
             /** Is Admin Override */
-            is_admin_override: unknown;
-            live_diff?: unknown;
+            is_admin_override: boolean;
+            live_diff?: components["schemas"]["PosDailyCloseLiveDiffOut"] | null;
             /** Notification Delivered */
-            notification_delivered: unknown;
+            notification_delivered: boolean;
             /** Unlocked At */
-            unlocked_at: unknown;
+            unlocked_at: string;
         };
         /**
          * PosDailySummaryByMethodItemOut
@@ -22475,13 +22613,13 @@ export interface components {
          */
         PosDailySummaryByMethodItemOut: {
             /** Count */
-            count: unknown;
+            count: number;
             /** Method */
-            method: unknown;
+            method: string;
             /** Payment */
-            payment: unknown;
+            payment: number;
             /** Refund */
-            refund: unknown;
+            refund: number;
         };
         /**
          * PosDailySummaryOut
@@ -22493,25 +22631,25 @@ export interface components {
          */
         PosDailySummaryOut: {
             /** By Method */
-            by_method: unknown;
+            by_method: components["schemas"]["PosDailySummaryByMethodItemOut"][];
             /** Cash In Drawer */
-            cash_in_drawer: unknown;
+            cash_in_drawer: number;
             /** Cash Warning */
-            cash_warning: unknown;
+            cash_warning: boolean;
             /** Cash Warning Threshold */
-            cash_warning_threshold: unknown;
+            cash_warning_threshold: number;
             /** Date */
-            date: unknown;
+            date: string;
             /** Net */
-            net: unknown;
+            net: number;
             /** Payment Count */
-            payment_count: unknown;
+            payment_count: number;
             /** Payment Total */
-            payment_total: unknown;
+            payment_total: number;
             /** Refund Count */
-            refund_count: unknown;
+            refund_count: number;
             /** Refund Total */
-            refund_total: unknown;
+            refund_total: number;
         };
         /**
          * PositionSalarySyncRequest
@@ -22584,16 +22722,16 @@ export interface components {
          */
         PosOperatorActivityItemOut: {
             /** Last Activity At */
-            last_activity_at?: unknown;
+            last_activity_at?: string | null;
             /** Operator */
-            operator: unknown;
+            operator: string;
             /** Payment Count */
-            payment_count: unknown;
+            payment_count: number;
             /** Refund Count */
-            refund_count: unknown;
+            refund_count: number;
             /** Total Count */
-            total_count: unknown;
-            user?: unknown;
+            total_count: number;
+            user?: components["schemas"]["PosOperatorUserOut"] | null;
         };
         /**
          * PosOperatorActivityOut
@@ -22601,11 +22739,11 @@ export interface components {
          */
         PosOperatorActivityOut: {
             /** Count */
-            count: unknown;
+            count: number;
             /** Days */
-            days: unknown;
+            days: number;
             /** Operators */
-            operators: unknown;
+            operators: components["schemas"]["PosOperatorActivityItemOut"][];
         };
         /**
          * PosOperatorUserOut
@@ -22615,15 +22753,15 @@ export interface components {
          */
         PosOperatorUserOut: {
             /** Display Name */
-            display_name: unknown;
+            display_name: string;
             /** Employee Id */
-            employee_id?: unknown;
+            employee_id?: number | null;
             /** Id */
-            id: unknown;
+            id: number;
             /** Is Active */
-            is_active: unknown;
+            is_active: boolean;
             /** Role */
-            role?: unknown;
+            role?: string | null;
         };
         /**
          * PosOutstandingGroupOut
@@ -22634,17 +22772,17 @@ export interface components {
          */
         PosOutstandingGroupOut: {
             /** Birthday */
-            birthday?: unknown;
+            birthday?: string | null;
             /** Class Name */
-            class_name: unknown;
+            class_name: string;
             /** Group Owed Total */
-            group_owed_total: unknown;
+            group_owed_total: number;
             /** Registrations */
-            registrations: unknown;
+            registrations: components["schemas"]["PosOutstandingRegistrationItemOut"][];
             /** Student Key */
-            student_key: unknown;
+            student_key: string;
             /** Student Name */
-            student_name: unknown;
+            student_name: string;
         };
         /**
          * PosOutstandingOut
@@ -22655,11 +22793,17 @@ export interface components {
          */
         PosOutstandingOut: {
             /** Groups */
-            groups: unknown;
-            /** Total Active */
-            total_active?: unknown;
-            /** Truncated */
-            truncated?: unknown;
+            groups: components["schemas"]["PosOutstandingGroupOut"][];
+            /**
+             * Total Active
+             * @default 0
+             */
+            total_active: number;
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
         };
         /**
          * PosOutstandingRegistrationItemOut
@@ -22667,21 +22811,21 @@ export interface components {
          */
         PosOutstandingRegistrationItemOut: {
             /** Class Name */
-            class_name: unknown;
+            class_name: string;
             /** Courses */
-            courses: unknown;
+            courses: components["schemas"]["PosCourseDetailItemOut"][];
             /** Created At */
-            created_at?: unknown;
+            created_at?: string | null;
             /** Id */
-            id: unknown;
+            id: number;
             /** Owed */
-            owed: unknown;
+            owed: number;
             /** Paid Amount */
-            paid_amount: unknown;
+            paid_amount: number;
             /** Supplies */
-            supplies: unknown;
+            supplies: components["schemas"]["PosSupplyDetailItemOut"][];
             /** Total Amount */
-            total_amount: unknown;
+            total_amount: number;
         };
         /**
          * PosPendingDailyCloseItemOut
@@ -22689,15 +22833,15 @@ export interface components {
          */
         PosPendingDailyCloseItemOut: {
             /** Date */
-            date: unknown;
+            date: string;
             /** Net Total */
-            net_total: unknown;
+            net_total: number;
             /** Payment Total */
-            payment_total: unknown;
+            payment_total: number;
             /** Refund Total */
-            refund_total: unknown;
+            refund_total: number;
             /** Transaction Count */
-            transaction_count: unknown;
+            transaction_count: number;
         };
         /**
          * PosPendingDailyClosesOut
@@ -22705,11 +22849,11 @@ export interface components {
          */
         PosPendingDailyClosesOut: {
             /** End Date */
-            end_date: unknown;
+            end_date: string;
             /** Pending */
-            pending: unknown;
+            pending: components["schemas"]["PosPendingDailyCloseItemOut"][];
             /** Start Date */
-            start_date: unknown;
+            start_date: string;
         };
         /**
          * PosRecentTransactionItemOut
@@ -22717,23 +22861,23 @@ export interface components {
          */
         PosRecentTransactionItemOut: {
             /** Amount Applied */
-            amount_applied: unknown;
+            amount_applied: number;
             /** Class Name */
-            class_name: unknown;
+            class_name: string;
             /** Courses */
-            courses: unknown;
+            courses: components["schemas"]["PosCourseDetailItemOut"][];
             /** New Paid Amount */
-            new_paid_amount: unknown;
+            new_paid_amount: number;
             /** New Payment Status */
-            new_payment_status: unknown;
+            new_payment_status: string;
             /** Registration Id */
-            registration_id: unknown;
+            registration_id: number;
             /** Student Name */
-            student_name: unknown;
+            student_name: string;
             /** Supplies */
-            supplies: unknown;
+            supplies: components["schemas"]["PosSupplyDetailItemOut"][];
             /** Total Amount */
-            total_amount: unknown;
+            total_amount: number;
         };
         /**
          * PosRecentTransactionOut
@@ -22745,31 +22889,31 @@ export interface components {
          */
         PosRecentTransactionOut: {
             /** Change */
-            change?: unknown;
+            change?: number | null;
             /** Created At */
-            created_at?: unknown;
+            created_at?: string | null;
             /** Items */
-            items: unknown;
+            items: components["schemas"]["PosRecentTransactionItemOut"][];
             /** Notes */
-            notes: unknown;
+            notes: string;
             /** Operator */
-            operator: unknown;
+            operator: string;
             /** Payment Date */
-            payment_date?: unknown;
+            payment_date?: string | null;
             /** Payment Method */
-            payment_method: unknown;
+            payment_method: string;
             /** Receipt No */
-            receipt_no: unknown;
+            receipt_no: string;
             /** Source */
-            source: unknown;
+            source: string;
             /** Student Names */
-            student_names: unknown;
+            student_names: string[];
             /** Tendered */
-            tendered?: unknown;
+            tendered?: number | null;
             /** Total */
-            total: unknown;
+            total: number;
             /** Type */
-            type: unknown;
+            type: string;
         };
         /**
          * PosRecentTransactionsOut
@@ -22777,9 +22921,9 @@ export interface components {
          */
         PosRecentTransactionsOut: {
             /** Date */
-            date: unknown;
+            date: string;
             /** Transactions */
-            transactions: unknown;
+            transactions: components["schemas"]["PosRecentTransactionOut"][];
         };
         /**
          * PosReconciliationItemOut
@@ -22790,25 +22934,25 @@ export interface components {
          */
         PosReconciliationItemOut: {
             /** Actual Cash */
-            actual_cash?: unknown;
+            actual_cash?: number | null;
             /** Date */
-            date: unknown;
+            date: string;
             /** Expected Cash */
-            expected_cash: unknown;
+            expected_cash: number;
             /** Is Approved */
-            is_approved: unknown;
+            is_approved: boolean;
             /** Net Total */
-            net_total: unknown;
+            net_total: number;
             /** Payment Total */
-            payment_total: unknown;
+            payment_total: number;
             /** Refund Total */
-            refund_total: unknown;
+            refund_total: number;
             /** Status */
-            status: unknown;
+            status: string;
             /** Transaction Count */
-            transaction_count: unknown;
+            transaction_count: number;
             /** Variance */
-            variance?: unknown;
+            variance?: number | null;
         };
         /**
          * PosReconciliationOut
@@ -22816,12 +22960,12 @@ export interface components {
          */
         PosReconciliationOut: {
             /** End Date */
-            end_date: unknown;
+            end_date: string;
             /** Items */
-            items: unknown;
+            items: components["schemas"]["PosReconciliationItemOut"][];
             /** Start Date */
-            start_date: unknown;
-            totals: unknown;
+            start_date: string;
+            totals: components["schemas"]["PosReconciliationTotalsOut"];
         };
         /**
          * PosReconciliationTotalsOut
@@ -22831,13 +22975,13 @@ export interface components {
          */
         PosReconciliationTotalsOut: {
             /** Net Total */
-            net_total: unknown;
+            net_total: number;
             /** Payment Total */
-            payment_total: unknown;
+            payment_total: number;
             /** Refund Total */
-            refund_total: unknown;
+            refund_total: number;
             /** Variance Total */
-            variance_total?: unknown;
+            variance_total?: number | null;
         };
         /**
          * PosSemesterReconciliationItemOut
@@ -22849,35 +22993,35 @@ export interface components {
          */
         PosSemesterReconciliationItemOut: {
             /** Approval Status */
-            approval_status: unknown;
+            approval_status: string;
             /** Approved Paid Amount */
-            approved_paid_amount: unknown;
+            approved_paid_amount: number;
             /** Class Name */
-            class_name: unknown;
+            class_name: string;
             /** Course Names */
-            course_names: unknown;
+            course_names: string[];
             /** Created At */
-            created_at?: unknown;
+            created_at?: string | null;
             /** Id */
-            id: unknown;
+            id: number;
             /** Is Active */
-            is_active: unknown;
+            is_active: boolean;
             /** Latest Payment Date */
-            latest_payment_date?: unknown;
+            latest_payment_date?: string | null;
             /** Offline Paid Amount */
-            offline_paid_amount: unknown;
+            offline_paid_amount: number;
             /** Owed */
-            owed: unknown;
+            owed: number;
             /** Paid Amount */
-            paid_amount: unknown;
+            paid_amount: number;
             /** Payment Status */
-            payment_status: unknown;
+            payment_status: string;
             /** Pending Paid Amount */
-            pending_paid_amount: unknown;
+            pending_paid_amount: number;
             /** Student Name */
-            student_name: unknown;
+            student_name: string;
             /** Total Amount */
-            total_amount: unknown;
+            total_amount: number;
         };
         /**
          * PosSemesterReconciliationOut
@@ -22890,16 +23034,22 @@ export interface components {
          */
         PosSemesterReconciliationOut: {
             /** Items */
-            items: unknown;
+            items: components["schemas"]["PosSemesterReconciliationItemOut"][];
             /** School Year */
-            school_year: unknown;
+            school_year: number;
             /** Semester */
-            semester: unknown;
-            /** Total Active */
-            total_active?: unknown;
-            totals: unknown;
-            /** Truncated */
-            truncated?: unknown;
+            semester: number;
+            /**
+             * Total Active
+             * @default 0
+             */
+            total_active: number;
+            totals: components["schemas"]["PosSemesterReconciliationTotalsOut"];
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
         };
         /**
          * PosSemesterReconciliationTotalsOut
@@ -22907,23 +23057,27 @@ export interface components {
          */
         PosSemesterReconciliationTotalsOut: {
             /** Approved Paid Amount */
-            approved_paid_amount: unknown;
+            approved_paid_amount: number;
             /** By Approval Status */
-            by_approval_status: unknown;
+            by_approval_status: {
+                [key: string]: number;
+            };
             /** By Payment Status */
-            by_payment_status: unknown;
+            by_payment_status: {
+                [key: string]: number;
+            };
             /** Offline Paid Amount */
-            offline_paid_amount: unknown;
+            offline_paid_amount: number;
             /** Outstanding Amount */
-            outstanding_amount: unknown;
+            outstanding_amount: number;
             /** Paid Amount */
-            paid_amount: unknown;
+            paid_amount: number;
             /** Pending Paid Amount */
-            pending_paid_amount: unknown;
+            pending_paid_amount: number;
             /** Registration Count */
-            registration_count: unknown;
+            registration_count: number;
             /** Total Amount */
-            total_amount: unknown;
+            total_amount: number;
         };
         /**
          * PosSupplyDetailItemOut
@@ -22934,9 +23088,9 @@ export interface components {
          */
         PosSupplyDetailItemOut: {
             /** Name */
-            name: unknown;
+            name: string;
             /** Price */
-            price: unknown;
+            price: number;
         };
         /**
          * PosUnlockEventItemOut
@@ -22946,19 +23100,19 @@ export interface components {
          */
         PosUnlockEventItemOut: {
             /** Action */
-            action: unknown;
+            action: string;
             /** Close Date */
-            close_date?: unknown;
+            close_date?: string | null;
             /** Comment */
-            comment?: unknown;
+            comment?: string | null;
             /** Id */
-            id: unknown;
+            id: number;
             /** Occurred At */
-            occurred_at?: unknown;
+            occurred_at?: string | null;
             /** Unlocker Role */
-            unlocker_role?: unknown;
+            unlocker_role?: string | null;
             /** Unlocker Username */
-            unlocker_username?: unknown;
+            unlocker_username?: string | null;
         };
         /**
          * PosUnlockEventsOut
@@ -22966,11 +23120,11 @@ export interface components {
          */
         PosUnlockEventsOut: {
             /** Count */
-            count: unknown;
+            count: number;
             /** Days */
-            days: unknown;
+            days: number;
             /** Events */
-            events: unknown;
+            events: components["schemas"]["PosUnlockEventItemOut"][];
         };
         /** PreferenceUpdate */
         PreferenceUpdate: {
@@ -22988,24 +23142,24 @@ export interface components {
          */
         ProbationAlertItem: {
             /** Days Remaining */
-            days_remaining: unknown;
+            days_remaining: number;
             /** Employee Id */
-            employee_id: unknown;
+            employee_id: string;
             /** Id */
-            id: unknown;
+            id: number;
             /** Name */
-            name: unknown;
+            name: string;
             /** Probation End Date */
-            probation_end_date: unknown;
+            probation_end_date: string;
         };
         /**
          * ProbationAlertResponseOut
          * @description GET /employees/probation-alerts 回傳。
          */
         ProbationAlertResponseOut: {
-            alerts: unknown;
+            alerts: components["schemas"]["_ProbationAlertCounts"];
             /** Employees */
-            employees: unknown;
+            employees: components["schemas"]["ProbationAlertItem"][];
         };
         /** ProfileUpdate */
         ProfileUpdate: {
@@ -23039,23 +23193,23 @@ export interface components {
          */
         PublicCoursesItemOut: {
             /** Frequency */
-            frequency: unknown;
+            frequency: string;
             /** Max Age Months */
-            max_age_months?: unknown;
+            max_age_months?: number | null;
             /** Meeting End Time */
-            meeting_end_time?: unknown;
+            meeting_end_time?: string | null;
             /** Meeting Start Time */
-            meeting_start_time?: unknown;
+            meeting_start_time?: string | null;
             /** Meeting Weekday */
-            meeting_weekday?: unknown;
+            meeting_weekday?: number | null;
             /** Min Age Months */
-            min_age_months?: unknown;
+            min_age_months?: number | null;
             /** Name */
-            name: unknown;
+            name: string;
             /** Price */
-            price: unknown;
+            price: number;
             /** Sessions */
-            sessions?: unknown;
+            sessions?: number | null;
         };
         /**
          * PublicFieldStateOut
@@ -23063,11 +23217,11 @@ export interface components {
          */
         PublicFieldStateOut: {
             /** Class Editable */
-            class_editable: unknown;
+            class_editable: boolean;
             /** Class Source */
-            class_source: unknown;
+            class_source: string;
             /** Review State */
-            review_state: unknown;
+            review_state: string;
         };
         /**
          * PublicInquiryPayload
@@ -23096,15 +23250,15 @@ export interface components {
          */
         PublicRegisterResultOut: {
             /** Id */
-            id: unknown;
+            id: number;
             /** Message */
-            message: unknown;
+            message: string;
             /** Query Token */
-            query_token: unknown;
+            query_token: string;
             /** Waitlist Courses */
-            waitlist_courses: unknown;
+            waitlist_courses: string[];
             /** Waitlisted */
-            waitlisted: unknown;
+            waitlisted: boolean;
         };
         /**
          * PublicRegistrationCourseOut
@@ -23112,19 +23266,19 @@ export interface components {
          */
         PublicRegistrationCourseOut: {
             /** Confirm Deadline */
-            confirm_deadline?: unknown;
+            confirm_deadline?: string | null;
             /** Course Id */
-            course_id: unknown;
+            course_id: number;
             /** Name */
-            name: unknown;
+            name: string;
             /** Price */
-            price: unknown;
+            price: number;
             /** Status */
-            status: unknown;
+            status: string;
             /** Waitlist Position */
-            waitlist_position?: unknown;
+            waitlist_position?: number | null;
             /** Waitlist Total */
-            waitlist_total?: unknown;
+            waitlist_total?: number | null;
         };
         /**
          * PublicRegistrationDetailOut
@@ -23134,32 +23288,32 @@ export interface components {
          */
         PublicRegistrationDetailOut: {
             /** Birthday */
-            birthday?: unknown;
+            birthday?: string | null;
             /** Class Name */
-            class_name?: unknown;
+            class_name?: string | null;
             /** Courses */
-            courses: unknown;
-            field_state: unknown;
+            courses: components["schemas"]["PublicRegistrationCourseOut"][];
+            field_state: components["schemas"]["PublicFieldStateOut"];
             /** Id */
-            id: unknown;
+            id: number;
             /** Is Paid */
-            is_paid: unknown;
+            is_paid: boolean;
             /** Message */
-            message?: unknown;
+            message?: string | null;
             /** Name */
-            name: unknown;
+            name: string;
             /** Paid Amount */
-            paid_amount: unknown;
+            paid_amount: number;
             /** Payment Status */
-            payment_status: unknown;
+            payment_status: string;
             /** Remark */
-            remark: unknown;
+            remark: string;
             /** Supplies */
-            supplies: unknown;
+            supplies: string[];
             /** Total Amount */
-            total_amount: unknown;
+            total_amount: number;
             /** Updated At */
-            updated_at?: unknown;
+            updated_at?: string | null;
         };
         /** PublicRegistrationPayload */
         PublicRegistrationPayload: {
@@ -23203,23 +23357,23 @@ export interface components {
          */
         PublicRegistrationTimeOut: {
             /** Close At */
-            close_at?: unknown;
+            close_at?: string | null;
             /** Event Date Label */
-            event_date_label?: unknown;
+            event_date_label?: string | null;
             /** Form Card Title */
-            form_card_title?: unknown;
+            form_card_title?: string | null;
             /** Is Open */
-            is_open: unknown;
+            is_open: boolean;
             /** Open At */
-            open_at?: unknown;
+            open_at?: string | null;
             /** Page Title */
-            page_title?: unknown;
+            page_title?: string | null;
             /** Poster Url */
-            poster_url?: unknown;
+            poster_url?: string | null;
             /** Target Audience */
-            target_audience?: unknown;
+            target_audience?: string | null;
             /** Term Label */
-            term_label?: unknown;
+            term_label?: string | null;
         };
         /**
          * PublicSuppliesItemOut
@@ -23227,9 +23381,9 @@ export interface components {
          */
         PublicSuppliesItemOut: {
             /** Name */
-            name: unknown;
+            name: string;
             /** Price */
-            price: unknown;
+            price: number;
         };
         /** PublicSupplyItem */
         PublicSupplyItem: {
@@ -23302,11 +23456,11 @@ export interface components {
          */
         ReaderListItem: {
             /** Employee Id */
-            employee_id: unknown;
+            employee_id: number;
             /** Name */
-            name: unknown;
+            name: string;
             /** Read At */
-            read_at?: unknown;
+            read_at?: string | null;
         };
         /**
          * RecruitmentCampusSettingOut
@@ -23314,17 +23468,17 @@ export interface components {
          */
         RecruitmentCampusSettingOut: {
             /** Campus Address */
-            campus_address?: unknown;
+            campus_address?: string | null;
             /** Campus Lat */
-            campus_lat?: unknown;
+            campus_lat?: number | null;
             /** Campus Lng */
-            campus_lng?: unknown;
+            campus_lng?: number | null;
             /** Campus Name */
-            campus_name: unknown;
+            campus_name: string;
             /** Travel Mode */
-            travel_mode: unknown;
+            travel_mode: string;
             /** Updated At */
-            updated_at?: unknown;
+            updated_at?: string | null;
         };
         /**
          * RecruitmentMarketDistrictRowOut
@@ -23332,46 +23486,61 @@ export interface components {
          */
         RecruitmentMarketDistrictRowOut: {
             /** Avg Travel Minutes */
-            avg_travel_minutes?: unknown;
-            /** Competitor Capacity */
-            competitor_capacity?: unknown;
-            /** Competitor Count */
-            competitor_count?: unknown;
+            avg_travel_minutes?: number | null;
+            /**
+             * Competitor Capacity
+             * @default 0
+             */
+            competitor_capacity: number;
+            /**
+             * Competitor Count
+             * @default 0
+             */
+            competitor_count: number;
             /** Data Completeness */
-            data_completeness: unknown;
+            data_completeness: string;
             /** Deposit Rate 90D */
-            deposit_rate_90d?: unknown;
+            deposit_rate_90d?: number | null;
             /** District */
-            district: unknown;
+            district: string;
             /** Lead Count 30D */
-            lead_count_30d: unknown;
+            lead_count_30d: number;
             /** Lead Count 90D */
-            lead_count_90d: unknown;
-            /** Penalty Count */
-            penalty_count?: unknown;
+            lead_count_90d: number;
+            /**
+             * Penalty Count
+             * @default 0
+             */
+            penalty_count: number;
             /** Population 0 6 */
-            population_0_6?: unknown;
+            population_0_6?: number | null;
             /** Population Density */
-            population_density?: unknown;
-            /** Private Count */
-            private_count?: unknown;
-            /** Public Count */
-            public_count?: unknown;
+            population_density?: number | null;
+            /**
+             * Private Count
+             * @default 0
+             */
+            private_count: number;
+            /**
+             * Public Count
+             * @default 0
+             */
+            public_count: number;
             /** Town Code */
-            town_code?: unknown;
+            town_code?: string | null;
         };
         /**
          * RecruitmentMarketIntelligenceSnapshotOut
          * @description 市場情報快照。
          */
         RecruitmentMarketIntelligenceSnapshotOut: {
-            campus: unknown;
+            campus: components["schemas"]["RecruitmentCampusSettingOut"];
             /** Data Completeness */
-            data_completeness: unknown;
+            data_completeness: string;
             /** Districts */
-            districts: unknown;
+            districts: components["schemas"]["RecruitmentMarketDistrictRowOut"][];
             /** Synced At */
-            synced_at?: unknown;
+            synced_at?: string | null;
         };
         /**
          * RecruitmentMarketSyncResultOut
@@ -23379,17 +23548,17 @@ export interface components {
          */
         RecruitmentMarketSyncResultOut: {
             /** Area Rows */
-            area_rows: unknown;
-            campus: unknown;
+            area_rows: number;
+            campus: components["schemas"]["RecruitmentCampusSettingOut"];
             /** Hotspots Synced */
-            hotspots_synced: unknown;
-            snapshot: unknown;
+            hotspots_synced: number;
+            snapshot: components["schemas"]["RecruitmentMarketIntelligenceSnapshotOut"];
             /** Synced At */
-            synced_at?: unknown;
+            synced_at?: string | null;
             /** Target County */
-            target_county?: unknown;
+            target_county?: string | null;
             /** Warning */
-            warning?: unknown;
+            warning?: unknown | null;
         };
         /**
          * RecruitmentNearbyKindergartenOut
@@ -23397,65 +23566,77 @@ export interface components {
          */
         RecruitmentNearbyKindergartenOut: {
             /** Approved Capacity */
-            approved_capacity?: unknown;
+            approved_capacity?: number | null;
             /** Approved Date */
-            approved_date?: unknown;
+            approved_date?: string | null;
             /** Business Status */
-            business_status?: unknown;
+            business_status?: string | null;
             /** Db Id */
-            db_id?: unknown;
+            db_id?: number | null;
             /** Distance Km */
-            distance_km?: unknown;
+            distance_km?: number | null;
             /** Floor */
-            floor?: unknown;
+            floor?: string | null;
             /** Formatted Address */
-            formatted_address?: unknown;
+            formatted_address?: string | null;
             /** Google Maps Uri */
-            google_maps_uri?: unknown;
-            /** Has After School */
-            has_after_school?: unknown;
-            /** Has Penalty */
-            has_penalty?: unknown;
+            google_maps_uri?: string | null;
+            /**
+             * Has After School
+             * @default false
+             */
+            has_after_school: boolean;
+            /**
+             * Has Penalty
+             * @default false
+             */
+            has_penalty: boolean;
             /** Indoor Area Sqm */
-            indoor_area_sqm?: unknown;
-            /** Is Active */
-            is_active?: unknown;
+            indoor_area_sqm?: number | null;
+            /**
+             * Is Active
+             * @default true
+             */
+            is_active: boolean;
             /** Lat */
-            lat?: unknown;
+            lat?: number | null;
             /** Lng */
-            lng?: unknown;
+            lng?: number | null;
             /** Monthly Fee */
-            monthly_fee?: unknown;
+            monthly_fee?: number | null;
             /** Name */
-            name?: unknown;
+            name?: string | null;
             /** Outdoor Area Sqm */
-            outdoor_area_sqm?: unknown;
+            outdoor_area_sqm?: number | null;
             /** Owner Name */
-            owner_name?: unknown;
+            owner_name?: string | null;
             /** Phone */
-            phone?: unknown;
+            phone?: string | null;
             /** Place Id */
-            place_id?: unknown;
+            place_id?: string | null;
             /** Pre Public Type */
-            pre_public_type?: unknown;
+            pre_public_type?: string | null;
             /** Primary Type */
-            primary_type?: unknown;
+            primary_type?: string | null;
             /** Rating */
-            rating?: unknown;
+            rating?: number | null;
             /** School Type */
-            school_type?: unknown;
+            school_type?: string | null;
             /** Shuttle */
-            shuttle?: unknown;
+            shuttle?: string | null;
             /** Source */
-            source?: unknown;
+            source?: string | null;
             /** Total Area Sqm */
-            total_area_sqm?: unknown;
-            /** Types */
-            types?: unknown;
+            total_area_sqm?: number | null;
+            /**
+             * Types
+             * @default []
+             */
+            types: string[];
             /** User Rating Count */
-            user_rating_count?: unknown;
+            user_rating_count?: number | null;
             /** Website */
-            website?: unknown;
+            website?: string | null;
         };
         /**
          * RecruitmentNearbyKindergartensOut
@@ -23463,16 +23644,16 @@ export interface components {
          */
         RecruitmentNearbyKindergartensOut: {
             /** Message */
-            message?: unknown;
+            message?: string | null;
             /** Provider Available */
-            provider_available: unknown;
+            provider_available: boolean;
             /** Provider Name */
-            provider_name: unknown;
-            query_bounds?: unknown;
+            provider_name: string;
+            query_bounds?: components["schemas"]["RecruitmentNearbyQueryBoundsOut"] | null;
             /** Schools */
-            schools: unknown;
+            schools: components["schemas"]["RecruitmentNearbyKindergartenOut"][];
             /** Total */
-            total: unknown;
+            total: number;
         };
         /**
          * RecruitmentNearbyQueryBoundsOut
@@ -23480,15 +23661,15 @@ export interface components {
          */
         RecruitmentNearbyQueryBoundsOut: {
             /** East */
-            east: unknown;
+            east: number;
             /** North */
-            north: unknown;
+            north: number;
             /** South */
-            south: unknown;
+            south: number;
             /** West */
-            west: unknown;
+            west: number;
             /** Zoom */
-            zoom?: unknown;
+            zoom?: number | null;
         };
         /**
          * RecruitmentOptionsOut
@@ -23496,15 +23677,15 @@ export interface components {
          */
         RecruitmentOptionsOut: {
             /** Grades */
-            grades: unknown;
+            grades: string[];
             /** Months */
-            months: unknown;
+            months: string[];
             /** No Deposit Reasons */
-            no_deposit_reasons: unknown;
+            no_deposit_reasons: string[];
             /** Referrers */
-            referrers: unknown;
+            referrers: string[];
             /** Sources */
-            sources: unknown;
+            sources: string[];
         };
         /**
          * RecruitmentRecordConvertOut
@@ -23515,15 +23696,15 @@ export interface components {
          */
         RecruitmentRecordConvertOut: {
             /** Change Log Id */
-            change_log_id?: unknown;
+            change_log_id?: number | null;
             /** Message */
-            message: unknown;
+            message: string;
             /** Primary Guardian Id */
-            primary_guardian_id?: unknown;
+            primary_guardian_id?: number | null;
             /** Recruitment Visit Id */
-            recruitment_visit_id: unknown;
+            recruitment_visit_id: number;
             /** Student Id */
-            student_id: unknown;
+            student_id: number;
         };
         /**
          * RecruitmentRecordImportResultOut
@@ -23534,9 +23715,9 @@ export interface components {
          */
         RecruitmentRecordImportResultOut: {
             /** Inserted */
-            inserted: unknown;
+            inserted: number;
             /** Skipped */
-            skipped: unknown;
+            skipped: number;
         };
         /**
          * RecruitmentRecordListOut
@@ -23544,13 +23725,13 @@ export interface components {
          */
         RecruitmentRecordListOut: {
             /** Page */
-            page: unknown;
+            page: number;
             /** Page Size */
-            page_size: unknown;
+            page_size: number;
             /** Records */
-            records: unknown;
+            records: components["schemas"]["RecruitmentRecordOut"][];
             /** Total */
-            total: unknown;
+            total: number;
         };
         /**
          * RecruitmentRecordOut
@@ -23558,55 +23739,55 @@ export interface components {
          */
         RecruitmentRecordOut: {
             /** Address */
-            address?: unknown;
+            address?: string | null;
             /** Birthday */
-            birthday?: unknown;
+            birthday?: string | null;
             /** Child Name */
-            child_name?: unknown;
+            child_name?: string | null;
             /** Created At */
-            created_at?: unknown;
+            created_at?: string | null;
             /** Deposit Collector */
-            deposit_collector?: unknown;
+            deposit_collector?: string | null;
             /** District */
-            district?: unknown;
+            district?: string | null;
             /** Enrolled */
-            enrolled?: unknown;
+            enrolled?: boolean | null;
             /** Grade */
-            grade?: unknown;
+            grade?: string | null;
             /** Has Deposit */
-            has_deposit?: unknown;
+            has_deposit?: boolean | null;
             /** Id */
-            id: unknown;
+            id: number;
             /** Month */
-            month?: unknown;
+            month?: string | null;
             /** No Deposit Reason */
-            no_deposit_reason?: unknown;
+            no_deposit_reason?: string | null;
             /** No Deposit Reason Detail */
-            no_deposit_reason_detail?: unknown;
+            no_deposit_reason_detail?: string | null;
             /** Notes */
-            notes?: unknown;
+            notes?: string | null;
             /** Parent Response */
-            parent_response?: unknown;
+            parent_response?: string | null;
             /** Phone */
-            phone?: unknown;
+            phone?: string | null;
             /** Provisional Grade Id */
-            provisional_grade_id?: unknown;
+            provisional_grade_id?: number | null;
             /** Referrer */
-            referrer?: unknown;
+            referrer?: string | null;
             /** Seq No */
-            seq_no?: unknown;
+            seq_no?: string | null;
             /** Source */
-            source?: unknown;
+            source?: string | null;
             /** Target School Year */
-            target_school_year?: unknown;
+            target_school_year?: number | null;
             /** Target Semester */
-            target_semester?: unknown;
+            target_semester?: number | null;
             /** Transfer Term */
-            transfer_term?: unknown;
+            transfer_term?: boolean | null;
             /** Updated At */
-            updated_at?: unknown;
+            updated_at?: string | null;
             /** Visit Date */
-            visit_date?: unknown;
+            visit_date?: string | null;
         };
         /** RecruitmentVisitCreate */
         RecruitmentVisitCreate: {
@@ -23828,9 +24009,9 @@ export interface components {
          */
         RegistrationBasicUpdateResultOut: {
             /** Changed */
-            changed: unknown;
+            changed: number;
             /** Message */
-            message: unknown;
+            message: string;
         };
         /**
          * RegistrationCreateResultOut
@@ -23838,13 +24019,13 @@ export interface components {
          */
         RegistrationCreateResultOut: {
             /** Id */
-            id: unknown;
+            id: number;
             /** Message */
-            message: unknown;
+            message: string;
             /** Waitlist Courses */
-            waitlist_courses: unknown;
+            waitlist_courses: string[];
             /** Waitlisted */
-            waitlisted: unknown;
+            waitlisted: boolean;
         };
         /**
          * RegistrationDetailChangeOut
@@ -23852,15 +24033,15 @@ export interface components {
          */
         RegistrationDetailChangeOut: {
             /** Change Type */
-            change_type: unknown;
+            change_type: string;
             /** Changed By */
-            changed_by?: unknown;
+            changed_by?: string | null;
             /** Created At */
-            created_at?: unknown;
+            created_at?: string | null;
             /** Description */
-            description: unknown;
+            description: string;
             /** Id */
-            id: unknown;
+            id: number;
         };
         /**
          * RegistrationDetailCourseOut
@@ -23868,17 +24049,17 @@ export interface components {
          */
         RegistrationDetailCourseOut: {
             /** Confirm Deadline */
-            confirm_deadline?: unknown;
+            confirm_deadline?: string | null;
             /** Course Id */
-            course_id: unknown;
+            course_id: number;
             /** Id */
-            id: unknown;
+            id: number;
             /** Name */
-            name: unknown;
+            name: string;
             /** Price */
-            price: unknown;
+            price: number;
             /** Status */
-            status: unknown;
+            status: string;
         };
         /**
          * RegistrationDetailOut
@@ -23886,49 +24067,49 @@ export interface components {
          */
         RegistrationDetailOut: {
             /** Birthday */
-            birthday?: unknown;
+            birthday?: string | null;
             /** Changes */
-            changes: unknown;
+            changes: components["schemas"]["RegistrationDetailChangeOut"][];
             /** Class Name */
-            class_name?: unknown;
+            class_name?: string | null;
             /** Classroom Id */
-            classroom_id?: unknown;
+            classroom_id?: number | null;
             /** Courses */
-            courses: unknown;
+            courses: components["schemas"]["RegistrationDetailCourseOut"][];
             /** Created At */
-            created_at?: unknown;
+            created_at?: string | null;
             /** Email */
-            email?: unknown;
+            email?: string | null;
             /** Id */
-            id: unknown;
+            id: number;
             /** Is Paid */
-            is_paid: unknown;
+            is_paid: boolean;
             /** Match Status */
-            match_status?: unknown;
+            match_status?: string | null;
             /** Paid Amount */
-            paid_amount: unknown;
+            paid_amount: number;
             /** Parent Phone */
-            parent_phone?: unknown;
+            parent_phone?: string | null;
             /** Payment Status */
-            payment_status: unknown;
+            payment_status: string;
             /** Pending Review */
-            pending_review?: unknown;
+            pending_review?: boolean | null;
             /** Remark */
-            remark: unknown;
+            remark: string;
             /** Reviewed At */
-            reviewed_at?: unknown;
+            reviewed_at?: string | null;
             /** Reviewed By */
-            reviewed_by?: unknown;
+            reviewed_by?: string | null;
             /** Student Id */
-            student_id?: unknown;
+            student_id?: number | null;
             /** Student Name */
-            student_name: unknown;
+            student_name: string;
             /** Supplies */
-            supplies: unknown;
+            supplies: components["schemas"]["RegistrationDetailSupplyOut"][];
             /** Total Amount */
-            total_amount: unknown;
+            total_amount: number;
             /** Updated At */
-            updated_at?: unknown;
+            updated_at?: string | null;
         };
         /**
          * RegistrationDetailSupplyOut
@@ -23936,13 +24117,13 @@ export interface components {
          */
         RegistrationDetailSupplyOut: {
             /** Id */
-            id: unknown;
+            id: number;
             /** Name */
-            name: unknown;
+            name: string;
             /** Price */
-            price: unknown;
+            price: number;
             /** Supply Id */
-            supply_id: unknown;
+            supply_id: number;
         };
         /**
          * RegistrationListItemOut
@@ -23953,55 +24134,55 @@ export interface components {
          */
         RegistrationListItemOut: {
             /** Birthday */
-            birthday?: unknown;
+            birthday?: string | null;
             /** Class Name */
-            class_name?: unknown;
+            class_name?: string | null;
             /** Classroom Id */
-            classroom_id?: unknown;
+            classroom_id?: number | null;
             /** Course Count */
-            course_count: unknown;
+            course_count: number;
             /** Course Names */
-            course_names: unknown;
+            course_names: string;
             /** Created At */
-            created_at?: unknown;
+            created_at?: string | null;
             /** Email */
-            email?: unknown;
+            email?: string | null;
             /** Id */
-            id: unknown;
+            id: number;
             /** Is Active */
-            is_active: unknown;
+            is_active: boolean;
             /** Is Paid */
-            is_paid: unknown;
+            is_paid: boolean;
             /** Match Status */
-            match_status?: unknown;
+            match_status?: string | null;
             /** Paid Amount */
-            paid_amount: unknown;
+            paid_amount: number;
             /** Parent Phone */
-            parent_phone?: unknown;
+            parent_phone?: string | null;
             /** Payment Status */
-            payment_status: unknown;
+            payment_status: string;
             /** Pending Review */
-            pending_review?: unknown;
+            pending_review?: boolean | null;
             /** Remark */
-            remark: unknown;
+            remark: string;
             /** Reviewed At */
-            reviewed_at?: unknown;
+            reviewed_at?: string | null;
             /** Reviewed By */
-            reviewed_by?: unknown;
+            reviewed_by?: string | null;
             /** School Year */
-            school_year?: unknown;
+            school_year?: number | null;
             /** Semester */
-            semester?: unknown;
+            semester?: number | null;
             /** Student Id */
-            student_id?: unknown;
+            student_id?: number | null;
             /** Student Name */
-            student_name: unknown;
+            student_name: string;
             /** Supply Count */
-            supply_count: unknown;
+            supply_count: number;
             /** Total Amount */
-            total_amount: unknown;
+            total_amount: number;
             /** Updated At */
-            updated_at?: unknown;
+            updated_at?: string | null;
         };
         /**
          * RegistrationListOut
@@ -24009,17 +24190,17 @@ export interface components {
          */
         RegistrationListOut: {
             /** Items */
-            items: unknown;
+            items: components["schemas"]["RegistrationListItemOut"][];
             /** Limit */
-            limit: unknown;
+            limit: number;
             /** School Year */
-            school_year?: unknown;
+            school_year?: number | null;
             /** Semester */
-            semester?: unknown;
+            semester?: number | null;
             /** Skip */
-            skip: unknown;
+            skip: number;
             /** Total */
-            total: unknown;
+            total: number;
         };
         /** RegistrationMatchRequest */
         RegistrationMatchRequest: {
@@ -24179,11 +24360,11 @@ export interface components {
          */
         RevealPhoneOut: {
             /** Guardian Id */
-            guardian_id?: unknown;
+            guardian_id?: number | null;
             /** Phone */
-            phone: unknown;
+            phone: string;
             /** Target */
-            target: unknown;
+            target: string;
         };
         /** RevealPhoneRequest */
         RevealPhoneRequest: {
@@ -24198,7 +24379,7 @@ export interface components {
          */
         RevokeSessionOut: {
             /** Revoked */
-            revoked: unknown;
+            revoked: number;
         };
         /**
          * RoleGroup
@@ -24229,15 +24410,15 @@ export interface components {
          */
         RoleOut: {
             /** Code */
-            code: unknown;
+            code: string;
             /** Description */
-            description?: unknown;
+            description?: string | null;
             /** Is Core */
-            is_core: unknown;
+            is_core: boolean;
             /** Label */
-            label: unknown;
+            label: string;
             /** Permissions */
-            permissions: unknown;
+            permissions: string[];
         };
         /** RoleUpdate */
         RoleUpdate: {
@@ -24297,15 +24478,15 @@ export interface components {
          */
         SalaryDetailAuditLogItemOut: {
             /** Action */
-            action: unknown;
+            action: string;
             /** Created At */
-            created_at?: unknown;
+            created_at?: string | null;
             /** Id */
-            id: unknown;
+            id: number;
             /** Summary */
-            summary?: unknown;
+            summary?: string | null;
             /** Username */
-            username?: unknown;
+            username?: string | null;
         };
         /**
          * SalaryDetailAuditLogOut
@@ -24313,9 +24494,9 @@ export interface components {
          */
         SalaryDetailAuditLogOut: {
             /** Items */
-            items: unknown;
+            items: components["schemas"]["SalaryDetailAuditLogItemOut"][];
             /** Record Id */
-            record_id: unknown;
+            record_id: number;
         };
         /**
          * SalaryDetailBonusesOut
@@ -24323,26 +24504,29 @@ export interface components {
          */
         SalaryDetailBonusesOut: {
             /** Birthday Bonus */
-            birthday_bonus: unknown;
+            birthday_bonus: number;
             /** Festival Bonus */
-            festival_bonus: unknown;
+            festival_bonus: number;
             /** Overtime Bonus */
-            overtime_bonus: unknown;
+            overtime_bonus: number;
             /** Supervisor Dividend */
-            supervisor_dividend: unknown;
+            supervisor_dividend: number;
         };
         /**
          * SalaryDetailBreakdownOut
          * @description GET /salaries/{id}/breakdown — 單筆薪資明細。
          */
         SalaryDetailBreakdownOut: {
-            bonuses: unknown;
-            deductions: unknown;
-            earnings: unknown;
-            employee: unknown;
-            /** Manual Overrides */
-            manual_overrides?: unknown;
-            summary: unknown;
+            bonuses: components["schemas"]["SalaryDetailBonusesOut"];
+            deductions: components["schemas"]["SalaryDetailDeductionsOut"];
+            earnings: components["schemas"]["SalaryDetailEarningsOut"];
+            employee: components["schemas"]["SalaryDetailEmployeeOut"];
+            /**
+             * Manual Overrides
+             * @default []
+             */
+            manual_overrides: string[];
+            summary: components["schemas"]["SalaryDetailSummaryOut"];
         };
         /**
          * SalaryDetailDeductionsOut
@@ -24350,25 +24534,25 @@ export interface components {
          */
         SalaryDetailDeductionsOut: {
             /** Absence Deduction */
-            absence_deduction: unknown;
+            absence_deduction: number;
             /** Early Leave Deduction */
-            early_leave_deduction: unknown;
+            early_leave_deduction: number;
             /** Health Insurance */
-            health_insurance: unknown;
+            health_insurance: number;
             /** Labor Insurance */
-            labor_insurance: unknown;
+            labor_insurance: number;
             /** Late Deduction */
-            late_deduction: unknown;
+            late_deduction: number;
             /** Leave Deduction */
-            leave_deduction: unknown;
+            leave_deduction: number;
             /** Meeting Absence Deduction */
-            meeting_absence_deduction: unknown;
+            meeting_absence_deduction: number;
             /** Pension */
-            pension: unknown;
+            pension: number;
             /** Supplementary Health Employee */
-            supplementary_health_employee: unknown;
+            supplementary_health_employee: number;
             /** Total Deduction */
-            total_deduction: unknown;
+            total_deduction: number;
         };
         /**
          * SalaryDetailEarningsOut
@@ -24376,13 +24560,13 @@ export interface components {
          */
         SalaryDetailEarningsOut: {
             /** Base Salary */
-            base_salary: unknown;
+            base_salary: number;
             /** Gross Salary */
-            gross_salary: unknown;
+            gross_salary: number;
             /** Meeting Overtime Pay */
-            meeting_overtime_pay: unknown;
+            meeting_overtime_pay: number;
             /** Overtime Pay */
-            overtime_pay: unknown;
+            overtime_pay: number;
         };
         /**
          * SalaryDetailEmployeeOut
@@ -24390,17 +24574,20 @@ export interface components {
          */
         SalaryDetailEmployeeOut: {
             /** Employee Code */
-            employee_code: unknown;
+            employee_code: string;
             /** Employee Name */
-            employee_name: unknown;
-            /** Job Title */
-            job_title?: unknown;
+            employee_name: string;
+            /**
+             * Job Title
+             * @default
+             */
+            job_title: string;
             /** Month */
-            month: unknown;
+            month: number;
             /** Record Id */
-            record_id: unknown;
+            record_id: number;
             /** Year */
-            year: unknown;
+            year: number;
         };
         /**
          * SalaryDetailFieldBreakdownOut
@@ -24411,17 +24598,22 @@ export interface components {
          */
         SalaryDetailFieldBreakdownOut: {
             /** Columns */
-            columns: unknown;
-            employee: unknown;
+            columns: components["schemas"]["SalaryDetailFieldColumnOut"][];
+            employee: components["schemas"]["SalaryDetailEmployeeOut"];
             /** Field */
-            field: unknown;
-            /** Note */
-            note?: unknown;
+            field: string;
+            /**
+             * Note
+             * @default
+             */
+            note: string;
             /** Rows */
-            rows: unknown;
-            summary: unknown;
+            rows: {
+                [key: string]: unknown;
+            }[];
+            summary: components["schemas"]["SalaryDetailFieldSummaryOut"];
             /** Title */
-            title: unknown;
+            title: string;
         };
         /**
          * SalaryDetailFieldColumnOut
@@ -24429,9 +24621,9 @@ export interface components {
          */
         SalaryDetailFieldColumnOut: {
             /** Key */
-            key: unknown;
+            key: string;
             /** Label */
-            label: unknown;
+            label: string;
         };
         /**
          * SalaryDetailFieldSummaryOut
@@ -24439,7 +24631,7 @@ export interface components {
          */
         SalaryDetailFieldSummaryOut: {
             /** Amount */
-            amount: unknown;
+            amount: number;
         };
         /**
          * SalaryDetailSummaryOut
@@ -24447,11 +24639,11 @@ export interface components {
          */
         SalaryDetailSummaryOut: {
             /** Bonus Amount */
-            bonus_amount: unknown;
+            bonus_amount: number;
             /** Bonus Separate */
-            bonus_separate: unknown;
+            bonus_separate: boolean;
             /** Net Salary */
-            net_salary: unknown;
+            net_salary: number;
         };
         /**
          * SalaryDetailUnusedLeavePayoutLogOut
@@ -24459,19 +24651,24 @@ export interface components {
          */
         SalaryDetailUnusedLeavePayoutLogOut: {
             /** Amount */
-            amount: unknown;
+            amount: number;
             /** Hourly Wage */
-            hourly_wage: unknown;
+            hourly_wage: number;
             /** Hours */
-            hours: unknown;
+            hours: number;
             /** Log Id */
-            log_id: unknown;
-            /** Meta */
-            meta?: unknown;
+            log_id: number;
+            /**
+             * Meta
+             * @default {}
+             */
+            meta: {
+                [key: string]: unknown;
+            };
             /** Source Type */
-            source_type: unknown;
+            source_type: string;
             /** Wage Basis Date */
-            wage_basis_date: unknown;
+            wage_basis_date: string;
         };
         /**
          * SalaryDetailUnusedLeavePayoutOut
@@ -24479,13 +24676,13 @@ export interface components {
          */
         SalaryDetailUnusedLeavePayoutOut: {
             /** Employee Id */
-            employee_id: unknown;
+            employee_id: number;
             /** Logs */
-            logs: unknown;
+            logs: components["schemas"]["SalaryDetailUnusedLeavePayoutLogOut"][];
             /** Salary Record Id */
-            salary_record_id: unknown;
+            salary_record_id: number;
             /** Total Amount */
-            total_amount: unknown;
+            total_amount: number;
         };
         /**
          * SalaryHistoryAllEmployeeOut
@@ -24493,11 +24690,11 @@ export interface components {
          */
         SalaryHistoryAllEmployeeOut: {
             /** Employee Id */
-            employee_id: unknown;
+            employee_id: number;
             /** Employee Name */
-            employee_name: unknown;
+            employee_name: string;
             /** Months */
-            months: unknown;
+            months: components["schemas"]["SalaryHistoryAllMonthOut"][];
         };
         /**
          * SalaryHistoryAllMonthOut
@@ -24505,11 +24702,11 @@ export interface components {
          */
         SalaryHistoryAllMonthOut: {
             /** Gross Salary */
-            gross_salary: unknown;
+            gross_salary: number;
             /** Month */
-            month: unknown;
+            month: number;
             /** Net Salary */
-            net_salary: unknown;
+            net_salary: number;
         };
         /**
          * SalaryHistoryAllOut
@@ -24517,13 +24714,13 @@ export interface components {
          */
         SalaryHistoryAllOut: {
             /** Items */
-            items: unknown;
+            items: components["schemas"]["SalaryHistoryAllEmployeeOut"][];
             /** Limit */
-            limit: unknown;
+            limit: number;
             /** Skip */
-            skip: unknown;
+            skip: number;
             /** Total */
-            total: unknown;
+            total: number;
         };
         /**
          * SalaryHistoryBreakdownOut
@@ -24531,19 +24728,19 @@ export interface components {
          */
         SalaryHistoryBreakdownOut: {
             /** Deduction Subtotal */
-            deduction_subtotal: unknown;
+            deduction_subtotal: number;
             /** Deductions */
-            deductions: unknown;
+            deductions: components["schemas"]["SalaryHistoryLineOut"][];
             /** Income */
-            income: unknown;
+            income: components["schemas"]["SalaryHistoryLineOut"][];
             /** Income Subtotal */
-            income_subtotal: unknown;
+            income_subtotal: number;
             /** Net Salary */
-            net_salary: unknown;
+            net_salary: number;
             /** Separate Subtotal */
-            separate_subtotal: unknown;
+            separate_subtotal: number;
             /** Separate Transfer */
-            separate_transfer: unknown;
+            separate_transfer: components["schemas"]["SalaryHistoryLineOut"][];
         };
         /**
          * SalaryHistoryItemOut
@@ -24553,40 +24750,40 @@ export interface components {
          */
         SalaryHistoryItemOut: {
             /** Attendance Deduction */
-            attendance_deduction: unknown;
+            attendance_deduction: number;
             /** Base Salary */
-            base_salary: unknown;
+            base_salary: number;
             /** Gross Salary */
-            gross_salary: unknown;
+            gross_salary: number;
             /** Health Insurance */
-            health_insurance: unknown;
+            health_insurance: number;
             /** Id */
-            id: unknown;
+            id: number;
             /** In Gross Bonus */
-            in_gross_bonus: unknown;
+            in_gross_bonus: number;
             /** Labor Insurance */
-            labor_insurance: unknown;
+            labor_insurance: number;
             /** Leave Deduction */
-            leave_deduction: unknown;
+            leave_deduction: number;
             /** Month */
-            month: unknown;
+            month: number;
             /** Net Pay */
-            net_pay: unknown;
+            net_pay: number;
             /** Net Salary */
-            net_salary: unknown;
-            payslip_detail: unknown;
+            net_salary: number;
+            payslip_detail: components["schemas"]["SalaryHistoryBreakdownOut"];
             /** Separate Transfer Total */
-            separate_transfer_total: unknown;
+            separate_transfer_total: number;
             /** Supplementary Health Employee */
-            supplementary_health_employee: unknown;
+            supplementary_health_employee: number;
             /** Total Bonus */
-            total_bonus: unknown;
+            total_bonus: number;
             /** Total Deduction */
-            total_deduction: unknown;
+            total_deduction: number;
             /** Total Deductions */
-            total_deductions: unknown;
+            total_deductions: number;
             /** Year */
-            year: unknown;
+            year: number;
         };
         /**
          * SalaryHistoryLineOut
@@ -24594,17 +24791,20 @@ export interface components {
          */
         SalaryHistoryLineOut: {
             /** Amount */
-            amount: unknown;
+            amount: number;
             /** Children */
-            children?: unknown;
-            /** Informational */
-            informational?: unknown;
+            children?: components["schemas"]["SalaryHistoryLineOut"][] | null;
+            /**
+             * Informational
+             * @default false
+             */
+            informational: boolean;
             /** Key */
-            key: unknown;
+            key: string;
             /** Label */
-            label: unknown;
+            label: string;
             /** Note */
-            note?: unknown;
+            note?: string | null;
         };
         /** SalaryManualAdjustRequest */
         SalaryManualAdjustRequest: {
@@ -24664,93 +24864,101 @@ export interface components {
          */
         SalaryRecordItemOut: {
             /** Absence Deduction */
-            absence_deduction: unknown;
+            absence_deduction: number;
             /** Attendance Deduction */
-            attendance_deduction: unknown;
+            attendance_deduction: number;
             /** Base Salary */
-            base_salary: unknown;
+            base_salary: number;
             /** Birthday Bonus */
-            birthday_bonus: unknown;
+            birthday_bonus: number;
             /** Breakdown */
-            breakdown?: unknown;
+            breakdown?: {
+                [key: string]: unknown;
+            } | null;
             /** Breakdown Stale */
-            breakdown_stale: unknown;
+            breakdown_stale: boolean;
             /** Calculated At */
-            calculated_at?: unknown;
+            calculated_at?: string | null;
             /** Early Leave Deduction */
-            early_leave_deduction: unknown;
+            early_leave_deduction: number;
             /** Employee Code */
-            employee_code: unknown;
+            employee_code: string;
             /** Employee Id */
-            employee_id: unknown;
+            employee_id: number;
             /** Employee Name */
-            employee_name: unknown;
+            employee_name: string;
             /** Extra Allowance */
-            extra_allowance: unknown;
+            extra_allowance: number;
             /** Extra Allowance Label */
-            extra_allowance_label?: unknown;
+            extra_allowance_label?: string | null;
             /** Festival Bonus */
-            festival_bonus: unknown;
+            festival_bonus: number;
             /** Finalized At */
-            finalized_at?: unknown;
+            finalized_at?: string | null;
             /** Finalized By */
-            finalized_by?: unknown;
+            finalized_by?: string | null;
             /** Gross Salary */
-            gross_salary: unknown;
+            gross_salary: number;
             /** Health Insurance */
-            health_insurance: unknown;
+            health_insurance: number;
             /** Id */
-            id: unknown;
+            id: number;
             /** Is Finalized */
-            is_finalized: unknown;
+            is_finalized: boolean;
             /** Job Title */
-            job_title: unknown;
+            job_title: string;
             /** Labor Insurance */
-            labor_insurance: unknown;
+            labor_insurance: number;
             /** Late Deduction */
-            late_deduction: unknown;
+            late_deduction: number;
             /** Leave Deduction */
-            leave_deduction: unknown;
-            /** Manual Overrides */
-            manual_overrides?: unknown;
+            leave_deduction: number;
+            /**
+             * Manual Overrides
+             * @default []
+             */
+            manual_overrides: string[];
             /** Meeting Absence Deduction */
-            meeting_absence_deduction: unknown;
+            meeting_absence_deduction: number;
             /** Meeting Overtime Pay */
-            meeting_overtime_pay: unknown;
+            meeting_overtime_pay: number;
             /** Missing Punch Deduction */
-            missing_punch_deduction: unknown;
+            missing_punch_deduction: number;
             /** Net Pay */
-            net_pay: unknown;
+            net_pay: number;
             /** Net Salary */
-            net_salary: unknown;
+            net_salary: number;
             /** Other Deduction */
-            other_deduction: unknown;
+            other_deduction: number;
             /** Overtime Bonus */
-            overtime_bonus: unknown;
+            overtime_bonus: number;
             /** Overtime Pay */
-            overtime_pay: unknown;
+            overtime_pay: number;
             /** Pension */
-            pension: unknown;
+            pension: number;
             /** Pension Self */
-            pension_self: unknown;
+            pension_self: number;
             /** Performance Bonus */
-            performance_bonus: unknown;
+            performance_bonus: number;
             /** Remark */
-            remark?: unknown;
+            remark?: string | null;
             /** Special Bonus */
-            special_bonus: unknown;
+            special_bonus: number;
             /** Supervisor Dividend */
-            supervisor_dividend: unknown;
+            supervisor_dividend: number;
             /** Supplementary Health Employee */
-            supplementary_health_employee: unknown;
+            supplementary_health_employee: number;
             /** Total Deduction */
-            total_deduction: unknown;
+            total_deduction: number;
             /** Total Deductions */
-            total_deductions: unknown;
-            /** Unused Leave Payout */
-            unused_leave_payout?: unknown;
+            total_deductions: number;
+            /**
+             * Unused Leave Payout
+             * @default 0
+             */
+            unused_leave_payout: number;
             /** Version */
-            version: unknown;
+            version: number;
         };
         /** SalaryRecordTarget */
         SalaryRecordTarget: {
@@ -24825,11 +25033,11 @@ export interface components {
          */
         SalarySnapshotCreateResultOut: {
             /** Captured By */
-            captured_by?: unknown;
+            captured_by?: string | null;
             /** Count */
-            count: unknown;
+            count: number;
             /** Message */
-            message: unknown;
+            message: string;
         };
         /**
          * SalarySnapshotDetailOut
@@ -24843,101 +25051,101 @@ export interface components {
          */
         SalarySnapshotDetailOut: {
             /** Absence Deduction */
-            absence_deduction?: unknown;
+            absence_deduction?: number | null;
             /** Absent Count */
-            absent_count?: unknown;
+            absent_count?: number | null;
             /** Attendance Policy Id */
-            attendance_policy_id?: unknown;
+            attendance_policy_id?: number | null;
             /** Base Salary */
-            base_salary?: unknown;
+            base_salary?: number | null;
             /** Birthday Bonus */
-            birthday_bonus?: unknown;
+            birthday_bonus?: number | null;
             /** Bonus Amount */
-            bonus_amount?: unknown;
+            bonus_amount?: number | null;
             /** Bonus Config Id */
-            bonus_config_id?: unknown;
+            bonus_config_id?: number | null;
             /** Bonus Separate */
-            bonus_separate?: unknown;
+            bonus_separate?: boolean | null;
             /** Captured At */
-            captured_at?: unknown;
+            captured_at?: string | null;
             /** Captured By */
-            captured_by?: unknown;
+            captured_by?: string | null;
             /** Early Leave Count */
-            early_leave_count?: unknown;
+            early_leave_count?: number | null;
             /** Early Leave Deduction */
-            early_leave_deduction?: unknown;
+            early_leave_deduction?: number | null;
             /** Employee Id */
-            employee_id: unknown;
+            employee_id: number;
             /** Employee Name */
-            employee_name?: unknown;
+            employee_name?: string | null;
             /** Festival Bonus */
-            festival_bonus?: unknown;
+            festival_bonus?: number | null;
             /** Gross Salary */
-            gross_salary?: unknown;
+            gross_salary?: number | null;
             /** Health Insurance Employee */
-            health_insurance_employee?: unknown;
+            health_insurance_employee?: number | null;
             /** Health Insurance Employer */
-            health_insurance_employer?: unknown;
+            health_insurance_employer?: number | null;
             /** Hourly Rate */
-            hourly_rate?: unknown;
+            hourly_rate?: number | null;
             /** Hourly Total */
-            hourly_total?: unknown;
+            hourly_total?: number | null;
             /** Id */
-            id: unknown;
+            id: number;
             /** Labor Insurance Employee */
-            labor_insurance_employee?: unknown;
+            labor_insurance_employee?: number | null;
             /** Labor Insurance Employer */
-            labor_insurance_employer?: unknown;
+            labor_insurance_employer?: number | null;
             /** Late Count */
-            late_count?: unknown;
+            late_count?: number | null;
             /** Late Deduction */
-            late_deduction?: unknown;
+            late_deduction?: number | null;
             /** Leave Deduction */
-            leave_deduction?: unknown;
+            leave_deduction?: number | null;
             /** Meeting Absence Deduction */
-            meeting_absence_deduction?: unknown;
+            meeting_absence_deduction?: number | null;
             /** Meeting Overtime Pay */
-            meeting_overtime_pay?: unknown;
+            meeting_overtime_pay?: number | null;
             /** Missing Punch Count */
-            missing_punch_count?: unknown;
+            missing_punch_count?: number | null;
             /** Missing Punch Deduction */
-            missing_punch_deduction?: unknown;
+            missing_punch_deduction?: number | null;
             /** Net Salary */
-            net_salary?: unknown;
+            net_salary?: number | null;
             /** Other Deduction */
-            other_deduction?: unknown;
+            other_deduction?: number | null;
             /** Overtime Bonus */
-            overtime_bonus?: unknown;
+            overtime_bonus?: number | null;
             /** Overtime Pay */
-            overtime_pay?: unknown;
+            overtime_pay?: number | null;
             /** Pension Employee */
-            pension_employee?: unknown;
+            pension_employee?: number | null;
             /** Pension Employer */
-            pension_employer?: unknown;
+            pension_employer?: number | null;
             /** Performance Bonus */
-            performance_bonus?: unknown;
+            performance_bonus?: number | null;
             /** Remark */
-            remark?: unknown;
+            remark?: string | null;
             /** Salary Month */
-            salary_month: unknown;
+            salary_month: number;
             /** Salary Record Id */
-            salary_record_id?: unknown;
+            salary_record_id?: number | null;
             /** Salary Year */
-            salary_year: unknown;
+            salary_year: number;
             /** Snapshot Remark */
-            snapshot_remark?: unknown;
+            snapshot_remark?: string | null;
             /** Snapshot Type */
-            snapshot_type: unknown;
+            snapshot_type: string;
             /** Source Version */
-            source_version?: unknown;
+            source_version?: number | null;
             /** Special Bonus */
-            special_bonus?: unknown;
+            special_bonus?: number | null;
             /** Supervisor Dividend */
-            supervisor_dividend?: unknown;
+            supervisor_dividend?: number | null;
             /** Total Deduction */
-            total_deduction?: unknown;
+            total_deduction?: number | null;
             /** Work Hours */
-            work_hours?: unknown;
+            work_hours?: number | null;
         };
         /**
          * SalarySnapshotDiffChangeOut
@@ -24948,11 +25156,11 @@ export interface components {
          */
         SalarySnapshotDiffChangeOut: {
             /** Current */
-            current?: unknown;
+            current?: unknown | null;
             /** Field */
-            field: unknown;
+            field: string;
             /** Snapshot */
-            snapshot?: unknown;
+            snapshot?: unknown | null;
         };
         /**
          * SalarySnapshotDiffOut
@@ -24960,15 +25168,15 @@ export interface components {
          */
         SalarySnapshotDiffOut: {
             /** Changes */
-            changes: unknown;
+            changes: components["schemas"]["SalarySnapshotDiffChangeOut"][];
             /** Current Record Id */
-            current_record_id?: unknown;
+            current_record_id?: number | null;
             /** Current Version */
-            current_version?: unknown;
+            current_version?: number | null;
             /** Has Current Record */
-            has_current_record: unknown;
+            has_current_record: boolean;
             /** Snapshot Id */
-            snapshot_id: unknown;
+            snapshot_id: number;
         };
         /**
          * SalarySnapshotListOut
@@ -24976,7 +25184,7 @@ export interface components {
          */
         SalarySnapshotListOut: {
             /** Snapshots */
-            snapshots: unknown;
+            snapshots: components["schemas"]["SalarySnapshotSummaryOut"][];
         };
         /**
          * SalarySnapshotSummaryOut
@@ -24986,29 +25194,32 @@ export interface components {
          */
         SalarySnapshotSummaryOut: {
             /** Captured At */
-            captured_at?: unknown;
+            captured_at?: string | null;
             /** Captured By */
-            captured_by?: unknown;
+            captured_by?: string | null;
             /** Employee Id */
-            employee_id: unknown;
+            employee_id: number;
             /** Employee Name */
-            employee_name?: unknown;
+            employee_name?: string | null;
             /** Id */
-            id: unknown;
-            /** Net Salary */
-            net_salary?: unknown;
+            id: number;
+            /**
+             * Net Salary
+             * @default 0
+             */
+            net_salary: number;
             /** Salary Month */
-            salary_month: unknown;
+            salary_month: number;
             /** Salary Record Id */
-            salary_record_id?: unknown;
+            salary_record_id?: number | null;
             /** Salary Year */
-            salary_year: unknown;
+            salary_year: number;
             /** Snapshot Remark */
-            snapshot_remark?: unknown;
+            snapshot_remark?: string | null;
             /** Snapshot Type */
-            snapshot_type: unknown;
+            snapshot_type: string;
             /** Source Version */
-            source_version?: unknown;
+            source_version?: number | null;
         };
         /**
          * ScheduleDayItem
@@ -25016,25 +25227,25 @@ export interface components {
          */
         ScheduleDayItem: {
             /** Date */
-            date: unknown;
+            date: string;
             /** Day */
-            day: unknown;
+            day: number;
             /** Is Makeup Workday */
-            is_makeup_workday: unknown;
+            is_makeup_workday: boolean;
             /** Is Override */
-            is_override: unknown;
+            is_override: boolean;
             /** Is Weekend */
-            is_weekend: unknown;
+            is_weekend: boolean;
             /** Shift Name */
-            shift_name?: unknown;
+            shift_name?: string | null;
             /** Shift Type Id */
-            shift_type_id?: unknown;
+            shift_type_id?: number | null;
             /** Weekday */
-            weekday: unknown;
+            weekday: string;
             /** Work End */
-            work_end?: unknown;
+            work_end?: string | null;
             /** Work Start */
-            work_start?: unknown;
+            work_start?: string | null;
         };
         /**
          * ScheduleMyScheduleOut
@@ -25042,13 +25253,13 @@ export interface components {
          */
         ScheduleMyScheduleOut: {
             /** Days */
-            days: unknown;
+            days: components["schemas"]["ScheduleDayItem"][];
             /** Employee Name */
-            employee_name: unknown;
+            employee_name: string;
             /** Month */
-            month: unknown;
+            month: number;
             /** Year */
-            year: unknown;
+            year: number;
         };
         /** SchedulerMetric */
         SchedulerMetric: {
@@ -25089,11 +25300,11 @@ export interface components {
          */
         SchedulersHealthOut: {
             /** Lagging Count */
-            lagging_count: unknown;
+            lagging_count: number;
             /** Status */
-            status: unknown;
+            status: string;
             /** Total */
-            total: unknown;
+            total: number;
         };
         /**
          * ScheduleSwapCandidateOut
@@ -25101,19 +25312,19 @@ export interface components {
          */
         ScheduleSwapCandidateOut: {
             /** Employee Id */
-            employee_id: unknown;
+            employee_id: number;
             /** Has Pending Swap */
-            has_pending_swap: unknown;
+            has_pending_swap: boolean;
             /** Name */
-            name: unknown;
+            name: string;
             /** Shift Name */
-            shift_name: unknown;
+            shift_name: string;
             /** Shift Type Id */
-            shift_type_id?: unknown;
+            shift_type_id?: number | null;
             /** Work End */
-            work_end?: unknown;
+            work_end?: string | null;
             /** Work Start */
-            work_start?: unknown;
+            work_start?: string | null;
         };
         /**
          * ScheduleSwapCreateOut
@@ -25123,11 +25334,11 @@ export interface components {
          */
         ScheduleSwapCreateOut: {
             /** Id */
-            id: unknown;
+            id: number;
             /** Message */
-            message: unknown;
+            message: string;
             /** Warnings */
-            warnings?: unknown;
+            warnings?: components["schemas"]["ScheduleWeeklyHoursWarning"][] | null;
         };
         /**
          * ScheduleSwapPendingCountOut
@@ -25135,7 +25346,7 @@ export interface components {
          */
         ScheduleSwapPendingCountOut: {
             /** Pending Count */
-            pending_count: unknown;
+            pending_count: number;
         };
         /**
          * ScheduleSwapRequestOut
@@ -25143,33 +25354,33 @@ export interface components {
          */
         ScheduleSwapRequestOut: {
             /** Created At */
-            created_at?: unknown;
+            created_at?: string | null;
             /** Id */
-            id: unknown;
+            id: number;
             /** Is Mine */
-            is_mine: unknown;
+            is_mine: boolean;
             /** Reason */
-            reason?: unknown;
+            reason?: string | null;
             /** Requester Id */
-            requester_id: unknown;
+            requester_id: number;
             /** Requester Name */
-            requester_name: unknown;
+            requester_name: string;
             /** Requester Shift */
-            requester_shift: unknown;
+            requester_shift: string;
             /** Status */
-            status: unknown;
+            status: string;
             /** Swap Date */
-            swap_date: unknown;
+            swap_date: string;
             /** Target Id */
-            target_id: unknown;
+            target_id: number;
             /** Target Name */
-            target_name: unknown;
+            target_name: string;
             /** Target Remark */
-            target_remark?: unknown;
+            target_remark?: string | null;
             /** Target Responded At */
-            target_responded_at?: unknown;
+            target_responded_at?: string | null;
             /** Target Shift */
-            target_shift: unknown;
+            target_shift: string;
         };
         /**
          * ScheduleSwapRespondOut
@@ -25179,9 +25390,9 @@ export interface components {
          */
         ScheduleSwapRespondOut: {
             /** Message */
-            message: unknown;
+            message: string;
             /** Warnings */
-            warnings?: unknown;
+            warnings?: components["schemas"]["ScheduleWeeklyHoursWarning"][] | null;
         };
         /**
          * ScheduleWeeklyHoursWarning
@@ -25189,19 +25400,19 @@ export interface components {
          */
         ScheduleWeeklyHoursWarning: {
             /** Calculated Hours */
-            calculated_hours: unknown;
+            calculated_hours: number;
             /** Code */
-            code: unknown;
+            code: string;
             /** Employee Id */
-            employee_id: unknown;
+            employee_id: number;
             /** Employee Name */
-            employee_name: unknown;
+            employee_name: string;
             /** Limit Hours */
-            limit_hours: unknown;
+            limit_hours: number;
             /** Message */
-            message: unknown;
+            message: string;
             /** Week Start */
-            week_start: unknown;
+            week_start: string;
         };
         /**
          * CertificateOut
@@ -25209,46 +25420,46 @@ export interface components {
          */
         schemas__employees_docs__CertificateOut: {
             /** Certificate Name */
-            certificate_name: unknown;
+            certificate_name: string;
             /** Certificate Number */
-            certificate_number?: unknown;
+            certificate_number?: string | null;
             /** Created At */
-            created_at?: unknown;
+            created_at?: string | null;
             /** Employee Id */
-            employee_id: unknown;
+            employee_id: number;
             /** Expiry Date */
-            expiry_date?: unknown;
+            expiry_date?: string | null;
             /** Id */
-            id: unknown;
+            id: number;
             /** Issued Date */
-            issued_date?: unknown;
+            issued_date?: string | null;
             /** Issuer */
-            issuer?: unknown;
+            issuer?: string | null;
             /** Remark */
-            remark?: unknown;
+            remark?: string | null;
             /** Updated At */
-            updated_at?: unknown;
+            updated_at?: string | null;
         };
         /**
          * StudentDetailOut
          * @description GET /students/{id}/detail 學生彙總頁 response。
          */
         schemas__portal_students__StudentDetailOut: {
-            attendance_30d: unknown;
-            attendance_this_month: unknown;
-            classroom?: unknown;
+            attendance_30d: components["schemas"]["StudentDetailAttendance30d"];
+            attendance_this_month: components["schemas"]["StudentDetailAttendanceThisMonth"];
+            classroom?: components["schemas"]["StudentDetailClassroom"] | null;
             /** Contact Book Recent */
-            contact_book_recent: unknown;
+            contact_book_recent: components["schemas"]["StudentDetailContactBook"][];
             /** Guardians */
-            guardians: unknown;
-            health: unknown;
+            guardians: components["schemas"]["StudentDetailGuardian"][];
+            health: components["schemas"]["StudentDetailHealth"];
             /** Recent Assessments */
-            recent_assessments: unknown;
+            recent_assessments: components["schemas"]["StudentDetailAssessment"][];
             /** Recent Incidents 30D */
-            recent_incidents_30d: unknown;
+            recent_incidents_30d: components["schemas"]["StudentDetailIncident"][];
             /** Recent Observations 30D */
-            recent_observations_30d: unknown;
-            student: unknown;
+            recent_observations_30d: components["schemas"]["StudentDetailObservation"][];
+            student: components["schemas"]["StudentDetailStudent"];
             /** Transfer History */
             transfer_history: unknown;
         };
@@ -25262,41 +25473,41 @@ export interface components {
          */
         schemas__students__StudentDetailOut: {
             /** Address */
-            address?: unknown;
+            address?: string | null;
             /** Allergy */
-            allergy?: unknown;
+            allergy?: string | null;
             /** Birthday */
-            birthday?: unknown;
+            birthday?: string | null;
             /** Classroom Id */
-            classroom_id?: unknown;
+            classroom_id?: number | null;
             /** Emergency Contact Name */
-            emergency_contact_name?: unknown;
+            emergency_contact_name?: string | null;
             /** Emergency Contact Phone */
-            emergency_contact_phone?: unknown;
+            emergency_contact_phone?: string | null;
             /** Emergency Contact Relation */
-            emergency_contact_relation?: unknown;
+            emergency_contact_relation?: string | null;
             /** Enrollment Date */
-            enrollment_date?: unknown;
+            enrollment_date?: string | null;
             /** Gender */
-            gender?: unknown;
+            gender?: string | null;
             /** Id */
-            id: unknown;
+            id: number;
             /** Is Active */
-            is_active: unknown;
+            is_active: boolean;
             /** Medication */
-            medication?: unknown;
+            medication?: string | null;
             /** Name */
-            name: unknown;
+            name: string;
             /** Notes */
-            notes?: unknown;
+            notes?: string | null;
             /** Parent Name */
-            parent_name?: unknown;
+            parent_name?: string | null;
             /** Parent Phone */
-            parent_phone?: unknown;
+            parent_phone?: string | null;
             /** Special Needs */
-            special_needs?: unknown;
+            special_needs?: string | null;
             /** Student Id */
-            student_id: unknown;
+            student_id: string;
         };
         /** SchoolWideImpact */
         SchoolWideImpact: {
@@ -25665,23 +25876,23 @@ export interface components {
          */
         ShiftAssignmentOut: {
             /** Employee Id */
-            employee_id: unknown;
+            employee_id: number;
             /** Employee Name */
-            employee_name: unknown;
+            employee_name: string;
             /** Id */
-            id: unknown;
+            id: number;
             /** Notes */
-            notes: unknown;
+            notes: string;
             /** Shift Type Id */
-            shift_type_id?: unknown;
+            shift_type_id?: number | null;
             /** Shift Type Name */
-            shift_type_name: unknown;
+            shift_type_name: string;
             /** Week Start Date */
-            week_start_date: unknown;
+            week_start_date: string;
             /** Work End */
-            work_end: unknown;
+            work_end: string;
             /** Work Start */
-            work_start: unknown;
+            work_start: string;
         };
         /**
          * ShiftAssignmentSaveResultOut
@@ -25691,11 +25902,11 @@ export interface components {
          */
         ShiftAssignmentSaveResultOut: {
             /** Message */
-            message: unknown;
+            message: string;
             /** Warnings */
-            warnings?: unknown;
+            warnings?: components["schemas"]["WeeklyHoursWarningOut"][] | null;
             /** Week Start Date */
-            week_start_date: unknown;
+            week_start_date: string;
         };
         /**
          * ShiftImportResultOut
@@ -25706,13 +25917,13 @@ export interface components {
          */
         ShiftImportResultOut: {
             /** Errors */
-            errors: unknown;
+            errors: string[];
             /** Failed */
-            failed: unknown;
+            failed: number;
             /** Saved */
-            saved: unknown;
+            saved: number;
             /** Total */
-            total: unknown;
+            total: number;
         };
         /**
          * ShiftSwapHistoryOut
@@ -25720,27 +25931,27 @@ export interface components {
          */
         ShiftSwapHistoryOut: {
             /** Created At */
-            created_at?: unknown;
+            created_at?: string | null;
             /** Id */
-            id: unknown;
+            id: number;
             /** Reason */
-            reason?: unknown;
+            reason?: string | null;
             /** Requester Name */
-            requester_name: unknown;
+            requester_name: string;
             /** Requester Shift */
-            requester_shift: unknown;
+            requester_shift: string;
             /** Status */
-            status: unknown;
+            status: string;
             /** Swap Date */
-            swap_date: unknown;
+            swap_date: string;
             /** Target Name */
-            target_name: unknown;
+            target_name: string;
             /** Target Remark */
-            target_remark?: unknown;
+            target_remark?: string | null;
             /** Target Responded At */
-            target_responded_at?: unknown;
+            target_responded_at?: string | null;
             /** Target Shift */
-            target_shift: unknown;
+            target_shift: string;
         };
         /** ShiftTypeCreate */
         ShiftTypeCreate: {
@@ -25762,17 +25973,17 @@ export interface components {
          */
         ShiftTypeOut: {
             /** Id */
-            id: unknown;
+            id: number;
             /** Is Active */
-            is_active: unknown;
+            is_active: boolean;
             /** Name */
-            name: unknown;
+            name: string;
             /** Sort Order */
-            sort_order: unknown;
+            sort_order: number;
             /** Work End */
-            work_end: unknown;
+            work_end: string;
             /** Work Start */
-            work_start: unknown;
+            work_start: string;
         };
         /** ShiftTypeUpdate */
         ShiftTypeUpdate: {
@@ -26001,9 +26212,9 @@ export interface components {
          */
         StudentAttendanceBatchSaveResultOut: {
             /** Message */
-            message: unknown;
+            message: string;
             /** Saved */
-            saved: unknown;
+            saved: number;
         };
         /**
          * StudentAttendanceByStudentItemOut
@@ -26011,15 +26222,15 @@ export interface components {
          */
         StudentAttendanceByStudentItemOut: {
             /** Date */
-            date?: unknown;
+            date?: string | null;
             /** Id */
-            id: unknown;
+            id: number;
             /** Remark */
-            remark?: unknown;
+            remark?: string | null;
             /** Source Leave Id */
-            source_leave_id?: unknown;
+            source_leave_id?: number | null;
             /** Status */
-            status?: unknown;
+            status?: string | null;
         };
         /**
          * StudentAttendanceByStudentOut
@@ -26030,15 +26241,17 @@ export interface components {
          */
         StudentAttendanceByStudentOut: {
             /** Counts */
-            counts: unknown;
+            counts: {
+                [key: string]: number;
+            };
             /** Items */
-            items: unknown;
+            items: components["schemas"]["StudentAttendanceByStudentItemOut"][];
             /** Student Id */
-            student_id: unknown;
+            student_id: number;
             /** Student Name */
-            student_name: unknown;
+            student_name: string;
             /** Total */
-            total: unknown;
+            total: number;
         };
         /**
          * StudentAttendanceDailyOut
@@ -26046,11 +26259,11 @@ export interface components {
          */
         StudentAttendanceDailyOut: {
             /** Classroom Id */
-            classroom_id: unknown;
+            classroom_id: number;
             /** Date */
-            date: unknown;
+            date: string;
             /** Records */
-            records: unknown;
+            records: components["schemas"]["StudentAttendanceDailyRecordOut"][];
         };
         /**
          * StudentAttendanceDailyOverviewOut
@@ -26058,10 +26271,10 @@ export interface components {
          */
         StudentAttendanceDailyOverviewOut: {
             /** Classrooms */
-            classrooms: unknown;
+            classrooms: components["schemas"]["StudentAttendanceOverviewClassroomOut"][];
             /** Date */
-            date: unknown;
-            totals: unknown;
+            date: string;
+            totals: components["schemas"]["StudentAttendanceSummaryOut"];
         };
         /**
          * StudentAttendanceDailyRecordOut
@@ -26069,15 +26282,15 @@ export interface components {
          */
         StudentAttendanceDailyRecordOut: {
             /** Name */
-            name: unknown;
+            name: string;
             /** Remark */
-            remark?: unknown;
+            remark?: string | null;
             /** Status */
-            status?: unknown;
+            status?: string | null;
             /** Student Id */
-            student_id: unknown;
+            student_id: number;
             /** Student No */
-            student_no?: unknown;
+            student_no?: string | null;
         };
         /**
          * StudentAttendanceOverviewClassroomOut
@@ -26085,35 +26298,35 @@ export interface components {
          */
         StudentAttendanceOverviewClassroomOut: {
             /** Absent Count */
-            absent_count: unknown;
+            absent_count: number;
             /** Attendance Rate */
-            attendance_rate: unknown;
+            attendance_rate: number;
             /** Classroom Id */
-            classroom_id: unknown;
+            classroom_id: number;
             /** Classroom Name */
-            classroom_name: unknown;
+            classroom_name: string;
             /** Last Recorded At */
-            last_recorded_at?: unknown;
+            last_recorded_at?: string | null;
             /** Last Recorded By */
-            last_recorded_by?: unknown;
+            last_recorded_by?: string | null;
             /** Late Count */
-            late_count: unknown;
+            late_count: number;
             /** Leave Count */
-            leave_count: unknown;
+            leave_count: number;
             /** On Campus Count */
-            on_campus_count: unknown;
+            on_campus_count: number;
             /** Present Count */
-            present_count: unknown;
+            present_count: number;
             /** Record Completion Rate */
-            record_completion_rate: unknown;
+            record_completion_rate: number;
             /** Recorded Count */
-            recorded_count: unknown;
+            recorded_count: number;
             /** Rollcall Status */
-            rollcall_status: unknown;
+            rollcall_status: string;
             /** Student Count */
-            student_count: unknown;
+            student_count: number;
             /** Unmarked Count */
-            unmarked_count: unknown;
+            unmarked_count: number;
         };
         /**
          * StudentAttendanceSummaryOut
@@ -26121,29 +26334,29 @@ export interface components {
          */
         StudentAttendanceSummaryOut: {
             /** Absent Count */
-            absent_count: unknown;
+            absent_count: number;
             /** Attendance Rate */
-            attendance_rate: unknown;
+            attendance_rate: number;
             /** Late Count */
-            late_count: unknown;
+            late_count: number;
             /** Leave Count */
-            leave_count: unknown;
+            leave_count: number;
             /** On Campus Count */
-            on_campus_count: unknown;
+            on_campus_count: number;
             /** Personal Leave Count */
-            personal_leave_count: unknown;
+            personal_leave_count: number;
             /** Present Count */
-            present_count: unknown;
+            present_count: number;
             /** Record Completion Rate */
-            record_completion_rate: unknown;
+            record_completion_rate: number;
             /** Recorded Count */
-            recorded_count: unknown;
+            recorded_count: number;
             /** Sick Leave Count */
-            sick_leave_count: unknown;
+            sick_leave_count: number;
             /** Total Students */
-            total_students: unknown;
+            total_students: number;
             /** Unmarked Count */
-            unmarked_count: unknown;
+            unmarked_count: number;
         };
         /** StudentBulkTransfer */
         StudentBulkTransfer: {
@@ -26213,158 +26426,173 @@ export interface components {
         /** StudentDetailAllergy */
         StudentDetailAllergy: {
             /** Allergen */
-            allergen: unknown;
+            allergen: string;
             /** First Aid Note */
-            first_aid_note?: unknown;
+            first_aid_note?: string | null;
             /** Id */
-            id: unknown;
+            id: number;
             /** Reaction */
-            reaction?: unknown;
+            reaction?: string | null;
             /** Severity */
-            severity?: unknown;
+            severity?: string | null;
         };
         /** StudentDetailAssessment */
         StudentDetailAssessment: {
             /** Assessment Date */
-            assessment_date?: unknown;
+            assessment_date?: string | null;
             /** Assessment Type */
-            assessment_type?: unknown;
+            assessment_type?: string | null;
             /** Domain */
-            domain?: unknown;
+            domain?: string | null;
             /** Id */
-            id: unknown;
+            id: number;
             /** Rating */
-            rating?: unknown;
+            rating?: string | null;
             /** Semester */
-            semester?: unknown;
+            semester?: string | null;
         };
         /** StudentDetailAttendance30d */
         StudentDetailAttendance30d: {
             /** By Day */
-            by_day: unknown;
-            summary: unknown;
+            by_day: components["schemas"]["StudentDetailAttendanceDay"][];
+            summary: components["schemas"]["StudentDetailAttendanceSummary"];
         };
         /** StudentDetailAttendanceDay */
         StudentDetailAttendanceDay: {
             /** Date */
-            date: unknown;
+            date: string;
             /** Remark */
-            remark?: unknown;
+            remark?: string | null;
             /** Status */
-            status: unknown;
+            status: string;
         };
         /** StudentDetailAttendanceSummary */
         StudentDetailAttendanceSummary: {
-            /** Absent */
-            absent?: unknown;
-            /** Late */
-            late?: unknown;
-            /** Leave */
-            leave?: unknown;
-            /** Present */
-            present?: unknown;
+            /**
+             * Absent
+             * @default 0
+             */
+            absent: number;
+            /**
+             * Late
+             * @default 0
+             */
+            late: number;
+            /**
+             * Leave
+             * @default 0
+             */
+            leave: number;
+            /**
+             * Present
+             * @default 0
+             */
+            present: number;
         };
         /** StudentDetailAttendanceThisMonth */
         StudentDetailAttendanceThisMonth: {
             /** Last Absent Date */
-            last_absent_date?: unknown;
+            last_absent_date?: string | null;
             /** Rate */
-            rate?: unknown;
+            rate?: number | null;
         };
         /** StudentDetailClassroom */
         StudentDetailClassroom: {
             /** Id */
-            id: unknown;
+            id: number;
             /** Name */
-            name: unknown;
+            name: string;
             /** Viewer Role */
-            viewer_role?: unknown;
+            viewer_role?: string | null;
         };
         /** StudentDetailContactBook */
         StudentDetailContactBook: {
             /** Id */
-            id: unknown;
+            id: number;
             /** Log Date */
-            log_date: unknown;
+            log_date: string;
             /** Mood */
-            mood?: unknown;
+            mood?: string | null;
             /** Published At */
-            published_at?: unknown;
+            published_at?: string | null;
             /** Teacher Note */
-            teacher_note?: unknown;
+            teacher_note?: string | null;
         };
         /** StudentDetailGuardian */
         StudentDetailGuardian: {
             /** Can Pickup */
-            can_pickup: unknown;
+            can_pickup: boolean;
             /** Email */
-            email?: unknown;
+            email?: string | null;
             /** Id */
-            id: unknown;
+            id: number;
             /** Is Emergency */
-            is_emergency: unknown;
+            is_emergency: boolean;
             /** Is Primary */
-            is_primary: unknown;
+            is_primary: boolean;
             /** Name */
-            name: unknown;
+            name: string;
             /** Phone Masked */
-            phone_masked?: unknown;
+            phone_masked?: string | null;
             /** Relation */
-            relation?: unknown;
+            relation?: string | null;
             /** User Id */
-            user_id?: unknown;
+            user_id?: number | null;
         };
         /** StudentDetailHealth */
         StudentDetailHealth: {
             /** Allergies */
-            allergies: unknown;
+            allergies: components["schemas"]["StudentDetailAllergy"][];
             /** Recent Medication Orders */
-            recent_medication_orders: unknown;
+            recent_medication_orders: components["schemas"]["StudentDetailMedicationOrder"][];
         };
         /** StudentDetailIncident */
         StudentDetailIncident: {
             /** Description */
-            description?: unknown;
+            description?: string | null;
             /** Id */
-            id: unknown;
+            id: number;
             /** Incident Date */
-            incident_date?: unknown;
+            incident_date?: string | null;
             /** Severity */
-            severity?: unknown;
+            severity?: string | null;
             /** Type */
-            type?: unknown;
+            type?: string | null;
         };
         /** StudentDetailMedicationOrder */
         StudentDetailMedicationOrder: {
             /** Dose */
-            dose?: unknown;
+            dose?: string | null;
             /** Id */
-            id: unknown;
+            id: number;
             /** Medication Name */
-            medication_name: unknown;
+            medication_name: string;
             /** Note */
-            note?: unknown;
+            note?: string | null;
             /** Order Date */
-            order_date: unknown;
+            order_date: string;
             /** Source */
-            source?: unknown;
+            source?: string | null;
             /** Time Slots */
             time_slots?: unknown;
         };
         /** StudentDetailObservation */
         StudentDetailObservation: {
             /** Domain */
-            domain?: unknown;
+            domain?: string | null;
             /** Id */
-            id: unknown;
-            /** Is Highlight */
-            is_highlight?: unknown;
+            id: number;
+            /**
+             * Is Highlight
+             * @default false
+             */
+            is_highlight: boolean;
             /** Narrative */
-            narrative?: unknown;
+            narrative?: string | null;
             /** Observation Date */
-            observation_date?: unknown;
+            observation_date?: string | null;
             /** Rating */
-            rating?: unknown;
+            rating?: string | null;
         };
         /**
          * StudentDetailStudent
@@ -26372,39 +26600,39 @@ export interface components {
          */
         StudentDetailStudent: {
             /** Allergy Text */
-            allergy_text?: unknown;
+            allergy_text?: string | null;
             /** Birthday */
-            birthday?: unknown;
+            birthday?: string | null;
             /** Emergency Contact Name */
-            emergency_contact_name?: unknown;
+            emergency_contact_name?: string | null;
             /** Emergency Contact Phone Masked */
-            emergency_contact_phone_masked?: unknown;
+            emergency_contact_phone_masked?: string | null;
             /** Emergency Contact Relation */
-            emergency_contact_relation?: unknown;
+            emergency_contact_relation?: string | null;
             /** Enrollment Date */
-            enrollment_date?: unknown;
+            enrollment_date?: string | null;
             /** Gender */
-            gender?: unknown;
+            gender?: string | null;
             /** Id */
-            id: unknown;
+            id: number;
             /** Lifecycle Status */
-            lifecycle_status?: unknown;
+            lifecycle_status?: string | null;
             /** Medication Text */
-            medication_text?: unknown;
+            medication_text?: string | null;
             /** Name */
-            name: unknown;
+            name: string;
             /** Notes */
-            notes?: unknown;
+            notes?: string | null;
             /** Parent Name */
-            parent_name?: unknown;
+            parent_name?: string | null;
             /** Parent Phone Masked */
-            parent_phone_masked?: unknown;
+            parent_phone_masked?: string | null;
             /** Special Needs */
-            special_needs?: unknown;
+            special_needs?: string | null;
             /** Status Tag */
-            status_tag?: unknown;
+            status_tag?: string | null;
             /** Student Id */
-            student_id: unknown;
+            student_id: string;
         };
         /** StudentGraduate */
         StudentGraduate: {
@@ -26429,45 +26657,45 @@ export interface components {
          */
         StudentListItemOut: {
             /** Address */
-            address?: unknown;
+            address?: string | null;
             /** Allergy */
-            allergy?: unknown;
+            allergy?: string | null;
             /** Birthday */
-            birthday?: unknown;
+            birthday?: string | null;
             /** Classroom Id */
-            classroom_id?: unknown;
+            classroom_id?: number | null;
             /** Emergency Contact Name */
-            emergency_contact_name?: unknown;
+            emergency_contact_name?: string | null;
             /** Emergency Contact Phone */
-            emergency_contact_phone?: unknown;
+            emergency_contact_phone?: string | null;
             /** Emergency Contact Relation */
-            emergency_contact_relation?: unknown;
+            emergency_contact_relation?: string | null;
             /** Enrollment Date */
-            enrollment_date?: unknown;
+            enrollment_date?: string | null;
             /** Gender */
-            gender?: unknown;
+            gender?: string | null;
             /** Graduation Date */
-            graduation_date?: unknown;
+            graduation_date?: string | null;
             /** Id */
-            id: unknown;
+            id: number;
             /** Is Active */
-            is_active: unknown;
+            is_active: boolean;
             /** Medication */
-            medication?: unknown;
+            medication?: string | null;
             /** Name */
-            name: unknown;
+            name: string;
             /** Parent Name */
-            parent_name?: unknown;
+            parent_name?: string | null;
             /** Parent Phone */
-            parent_phone?: unknown;
+            parent_phone?: string | null;
             /** Special Needs */
-            special_needs?: unknown;
+            special_needs?: string | null;
             /** Status */
-            status?: unknown;
+            status?: string | null;
             /** Status Tag */
-            status_tag?: unknown;
+            status_tag?: string | null;
             /** Student Id */
-            student_id: unknown;
+            student_id: string;
         };
         /**
          * StudentListOut
@@ -26475,13 +26703,13 @@ export interface components {
          */
         StudentListOut: {
             /** Items */
-            items: unknown;
+            items: components["schemas"]["StudentListItemOut"][];
             /** Limit */
-            limit: unknown;
+            limit: number;
             /** Skip */
-            skip: unknown;
+            skip: number;
             /** Total */
-            total: unknown;
+            total: number;
         };
         /**
          * StudentMeasurementSnapshotItem
@@ -26489,12 +26717,12 @@ export interface components {
          */
         StudentMeasurementSnapshotItem: {
             /** Classroom Id */
-            classroom_id?: unknown;
-            last_measurement?: unknown;
+            classroom_id?: number | null;
+            last_measurement?: components["schemas"]["LastMeasurement"] | null;
             /** Name */
-            name: unknown;
+            name: string;
             /** Student Id */
-            student_id: unknown;
+            student_id: number;
         };
         /**
          * StudentMedicalOut
@@ -26502,15 +26730,15 @@ export interface components {
          */
         StudentMedicalOut: {
             /** Allergy */
-            allergy?: unknown;
+            allergy?: string | null;
             /** Medication */
-            medication?: unknown;
+            medication?: string | null;
             /** Name */
-            name: unknown;
+            name: string;
             /** Special Needs */
-            special_needs?: unknown;
+            special_needs?: string | null;
             /** Student Id */
-            student_id: unknown;
+            student_id: number;
         };
         /**
          * StudentRecordsTimelineOut
@@ -26518,13 +26746,13 @@ export interface components {
          */
         StudentRecordsTimelineOut: {
             /** Items */
-            items: unknown;
+            items: components["schemas"]["StudentRecordTimelineItem"][];
             /** Page */
-            page: unknown;
+            page: number;
             /** Page Size */
-            page_size: unknown;
+            page_size: number;
             /** Total */
-            total: unknown;
+            total: number;
         };
         /**
          * StudentRecordTimelineItem
@@ -26532,27 +26760,29 @@ export interface components {
          */
         StudentRecordTimelineItem: {
             /** Classroom Id */
-            classroom_id?: unknown;
+            classroom_id?: number | null;
             /** Classroom Name */
-            classroom_name?: unknown;
+            classroom_name?: string | null;
             /** Occurred At */
-            occurred_at?: unknown;
+            occurred_at?: string | null;
             /** Parent Notified */
-            parent_notified?: unknown;
+            parent_notified?: boolean | null;
             /** Payload */
-            payload: unknown;
+            payload: {
+                [key: string]: unknown;
+            };
             /** Record Id */
-            record_id: unknown;
+            record_id: number;
             /** Record Type */
-            record_type: unknown;
+            record_type: string;
             /** Severity */
-            severity?: unknown;
+            severity?: string | null;
             /** Student Id */
-            student_id: unknown;
+            student_id: number;
             /** Student Name */
-            student_name?: unknown;
+            student_name?: string | null;
             /** Summary */
-            summary?: unknown;
+            summary?: string | null;
         };
         /** StudentUpdate */
         StudentUpdate: {
@@ -26702,7 +26932,7 @@ export interface components {
          */
         SubstitutePendingCountOut: {
             /** Pending Count */
-            pending_count: unknown;
+            pending_count: number;
         };
         /** SubstituteRespond */
         SubstituteRespond: {
@@ -26717,7 +26947,7 @@ export interface components {
          */
         SubstituteRespondOut: {
             /** Message */
-            message: unknown;
+            message: string;
         };
         /** SummaryLogOut */
         SummaryLogOut: {
@@ -26796,13 +27026,13 @@ export interface components {
          */
         SupplyCreateResultOut: {
             /** Id */
-            id: unknown;
+            id: number;
             /** Message */
-            message: unknown;
+            message: string;
             /** School Year */
-            school_year: unknown;
+            school_year: number;
             /** Semester */
-            semester: unknown;
+            semester: number;
         };
         /**
          * SupplyListItemOut
@@ -26813,15 +27043,15 @@ export interface components {
          */
         SupplyListItemOut: {
             /** Id */
-            id: unknown;
+            id: number;
             /** Name */
-            name: unknown;
+            name: string;
             /** Price */
-            price: unknown;
+            price: number;
             /** School Year */
-            school_year: unknown;
+            school_year: number;
             /** Semester */
-            semester: unknown;
+            semester: number;
         };
         /**
          * SupplyListOut
@@ -26829,17 +27059,17 @@ export interface components {
          */
         SupplyListOut: {
             /** Limit */
-            limit: unknown;
+            limit: number;
             /** School Year */
-            school_year: unknown;
+            school_year: number;
             /** Semester */
-            semester: unknown;
+            semester: number;
             /** Skip */
-            skip: unknown;
+            skip: number;
             /** Supplies */
-            supplies: unknown;
+            supplies: components["schemas"]["SupplyListItemOut"][];
             /** Total */
-            total: unknown;
+            total: number;
         };
         /** SupplyUpdate */
         SupplyUpdate: {
@@ -26931,9 +27161,9 @@ export interface components {
          */
         TeacherOptionOut: {
             /** Id */
-            id: unknown;
+            id: number;
             /** Name */
-            name: unknown;
+            name: string;
         };
         /**
          * TeacherOut
@@ -26941,13 +27171,13 @@ export interface components {
          */
         TeacherOut: {
             /** Employee Id */
-            employee_id: unknown;
+            employee_id: string;
             /** Id */
-            id: unknown;
+            id: number;
             /** Name */
-            name: unknown;
+            name: string;
             /** Title */
-            title?: unknown;
+            title?: string | null;
         };
         /** TeacherReplyRequest */
         TeacherReplyRequest: {
@@ -27054,15 +27284,15 @@ export interface components {
          */
         TodayMedicationSummaryOut: {
             /** Administered */
-            administered: unknown;
+            administered: number;
             /** Date */
-            date: unknown;
+            date: string;
             /** Orders */
-            orders: unknown;
+            orders: components["schemas"]["MedicationOrderWithStudentOut"][];
             /** Pending */
-            pending: unknown;
+            pending: number;
             /** Skipped */
-            skipped: unknown;
+            skipped: number;
         };
         /** TransitionIn */
         TransitionIn: {
@@ -27117,7 +27347,7 @@ export interface components {
          */
         UnreadCountOut: {
             /** Unread Count */
-            unread_count: unknown;
+            unread_count: number;
         };
         /** UpdateUserRequest */
         UpdateUserRequest: {
@@ -27134,7 +27364,7 @@ export interface components {
          */
         UptimeWebhookOut: {
             /** Status */
-            status: unknown;
+            status: string;
         };
         /** ValidationError */
         ValidationError: {
@@ -27158,17 +27388,17 @@ export interface components {
          */
         VendorPaymentAttachmentMetaOut: {
             /** Filename */
-            filename: unknown;
+            filename: string;
             /** Key */
-            key: unknown;
+            key: string;
             /** Mime Type */
-            mime_type?: unknown;
+            mime_type?: string | null;
             /** Size */
-            size: unknown;
+            size: number;
             /** Uploaded At */
-            uploaded_at?: unknown;
+            uploaded_at?: string | null;
             /** Uploaded By Id */
-            uploaded_by_id?: unknown;
+            uploaded_by_id?: number | null;
         };
         /** VendorPaymentCreate */
         VendorPaymentCreate: {
@@ -27199,13 +27429,13 @@ export interface components {
          */
         VendorPaymentListOut: {
             /** Items */
-            items: unknown;
+            items: components["schemas"]["VendorPaymentOut"][];
             /** Page */
-            page: unknown;
+            page: number;
             /** Page Size */
-            page_size: unknown;
+            page_size: number;
             /** Total */
-            total: unknown;
+            total: number;
         };
         /**
          * VendorPaymentOut
@@ -27215,43 +27445,43 @@ export interface components {
          */
         VendorPaymentOut: {
             /** Amount */
-            amount?: unknown;
+            amount?: number | null;
             /** Attachments */
-            attachments: unknown;
+            attachments: components["schemas"]["VendorPaymentAttachmentMetaOut"][];
             /** Created At */
-            created_at?: unknown;
+            created_at?: string | null;
             /** Created By Id */
-            created_by_id?: unknown;
+            created_by_id?: number | null;
             /** Created By Name */
-            created_by_name?: unknown;
+            created_by_name?: string | null;
             /** Description */
-            description?: unknown;
+            description?: string | null;
             /** Has Signature */
-            has_signature: unknown;
+            has_signature: boolean;
             /** Id */
-            id: unknown;
+            id: number;
             /** Invoice Number */
-            invoice_number?: unknown;
+            invoice_number?: string | null;
             /** Notes */
-            notes?: unknown;
+            notes?: string | null;
             /** Payment Date */
-            payment_date?: unknown;
+            payment_date?: string | null;
             /** Payment Method */
-            payment_method: unknown;
+            payment_method: string;
             /** Signature Kind */
-            signature_kind?: unknown;
+            signature_kind?: string | null;
             /** Signed At */
-            signed_at?: unknown;
+            signed_at?: string | null;
             /** Signer Id */
-            signer_id?: unknown;
+            signer_id?: number | null;
             /** Signer Name */
-            signer_name?: unknown;
+            signer_name?: string | null;
             /** Status */
-            status: unknown;
+            status: string;
             /** Updated At */
-            updated_at?: unknown;
+            updated_at?: string | null;
             /** Vendor Name */
-            vendor_name: unknown;
+            vendor_name: string;
         };
         /** VendorPaymentSignRequest */
         VendorPaymentSignRequest: {
@@ -27274,17 +27504,17 @@ export interface components {
          */
         VendorPaymentSummaryOut: {
             /** Pending Amount */
-            pending_amount: unknown;
+            pending_amount: number;
             /** Pending Count */
-            pending_count: unknown;
+            pending_count: number;
             /** Signed Amount */
-            signed_amount: unknown;
+            signed_amount: number;
             /** Signed Count */
-            signed_count: unknown;
+            signed_count: number;
             /** Total Amount */
-            total_amount: unknown;
+            total_amount: number;
             /** Total Count */
-            total_count: unknown;
+            total_count: number;
         };
         /** VendorPaymentUpdate */
         VendorPaymentUpdate: {
@@ -27325,13 +27555,13 @@ export interface components {
          */
         WaitlistSweepResultOut: {
             /** Expired */
-            expired: unknown;
+            expired: number;
             /** Final Reminded */
-            final_reminded: unknown;
+            final_reminded: number;
             /** Message */
-            message: unknown;
+            message: string;
             /** Reminded */
-            reminded: unknown;
+            reminded: number;
         };
         /**
          * WeeklyHoursWarningOut
@@ -27341,19 +27571,19 @@ export interface components {
          */
         WeeklyHoursWarningOut: {
             /** Calculated Hours */
-            calculated_hours: unknown;
+            calculated_hours: number;
             /** Code */
-            code: unknown;
+            code: string;
             /** Employee Id */
-            employee_id: unknown;
+            employee_id: number;
             /** Employee Name */
-            employee_name: unknown;
+            employee_name: string;
             /** Limit Hours */
-            limit_hours: unknown;
+            limit_hours: number;
             /** Message */
-            message: unknown;
+            message: string;
             /** Week Start */
-            week_start: unknown;
+            week_start: string;
         };
         /** YearEndCycleCreate */
         YearEndCycleCreate: {
