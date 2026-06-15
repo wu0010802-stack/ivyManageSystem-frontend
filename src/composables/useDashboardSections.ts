@@ -152,6 +152,10 @@ export function useDashboardSections() {
   const observeDeferredSection = (key: string, enabled: boolean) => {
     if (!enabled) return
 
+    // 已被 eager（今日待辦）抓取的 section 不需再 observe，避免重複請求/多餘 observer
+    const section = (deferredSections as Record<string, { loading: boolean; loaded: boolean }>)[key]
+    if (section?.loading || section?.loaded) return
+
     const target = deferredTargets[key]?.value
     if (!target) return
 
@@ -163,8 +167,23 @@ export function useDashboardSections() {
     deferredObserver.value?.observe(target)
   }
 
+  // 今日待辦三來源（待審摘要 / 今日打卡異常 / 學生未點名）在 mount 時立即並行抓取。
+  // Why: 待辦板永遠在頁面最上方、是使用者最先要看的東西；舊版把它的異常/未點名兩支
+  //      排在 critical 屏障之後、再走 IntersectionObserver 懶載，等於排在它根本不需要的
+  //      員工清單/學生數/今日出勤之後，多花一個 round-trip 波。改為脫離屏障、單波並行到齊。
+  //      notificationStore.fetchSummary 自帶 TTL + in-flight 去重，重複呼叫不會多打。
+  const fetchTodoBoardData = () => {
+    const jobs: Promise<unknown>[] = []
+    if (showApprovals) jobs.push(ignoreErrors(notificationStore.fetchSummary()))
+    if (showAttendance) jobs.push(loadDeferredSection('anomalies', deferredLoaders.anomalies))
+    if (showStudents) jobs.push(loadDeferredSection('studentAttendance', deferredLoaders.studentAttendance))
+    return Promise.all(jobs)
+  }
+
   const fetchCriticalDashboardData = async () => {
     loading.value = true
+    // 注意：待審摘要 (notificationStore.fetchSummary) 已移至 fetchTodoBoardData 提前並行抓，
+    //      此處不再重複，避免待辦板的資料源被綁在概況統計這一波。
     await Promise.all([
       ignoreErrors(employeeStore.fetchEmployees()),
       getStudents({ limit: 1 })
@@ -172,9 +191,6 @@ export function useDashboardSections() {
         .catch(() => {}),
       showAttendance
         ? getToday().then(r => { todayStats.value = r.data }).catch(() => {})
-        : null,
-      showApprovals
-        ? ignoreErrors(notificationStore.fetchSummary())
         : null,
     ].filter(Boolean))
     loading.value = false
@@ -208,6 +224,8 @@ export function useDashboardSections() {
   const navigateTo = (path: string) => router.push(path)
 
   onMounted(async () => {
+    // 今日待辦先行並行抓取（不 await，與下方 critical 同波發出）
+    fetchTodoBoardData()
     await fetchCriticalDashboardData()
     await setupDeferredDashboardData()
   })

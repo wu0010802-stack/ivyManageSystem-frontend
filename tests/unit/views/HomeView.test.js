@@ -163,44 +163,35 @@ describe('HomeView', () => {
     delete window.IntersectionObserver
   })
 
-  it('loads only critical cards on mount and defers secondary dashboard requests until sections enter viewport', async () => {
+  it('今日待辦三來源在 mount 時即並行抓取（不等捲動進場），其餘次要區塊仍懶載', async () => {
     shallowMount(HomeView, { global: globalConfig })
 
     await flushPromises()
     await nextTick()
     await flushPromises()
 
+    // critical 概況統計：照舊（員工清單 / 學生數 / 今日出勤）
     expect(employeeStore.fetchEmployees).toHaveBeenCalledTimes(1)
     expect(getStudents).toHaveBeenCalledTimes(1)
     expect(getToday).toHaveBeenCalledTimes(1)
+
+    // 今日待辦三來源：mount 即抓，毋須 IntersectionObserver 觸發。
+    // 待辦板永遠在頁面最上方、是使用者最先要看的東西，不該排在 critical 屏障與懶載之後。
     expect(notificationStore.fetchSummary).toHaveBeenCalledTimes(1)
+    expect(getTodayAnomalies).toHaveBeenCalledTimes(1)
+    expect(getStudentAttendanceSummary).toHaveBeenCalledTimes(1)
 
-    expect(getStudentAttendanceSummary).not.toHaveBeenCalled()
-    expect(getTodayAnomalies).not.toHaveBeenCalled()
+    // 與待辦無關的次要區塊仍懶載，不在首屏一次轟
     expect(getUpcomingEvents).not.toHaveBeenCalled()
+    expect(getProbationAlerts).not.toHaveBeenCalled()
 
+    // 待辦兩支已 eager，不再 observe；只剩 calendar 需要捲動進場才抓
     expect(intersectionObservers).toHaveLength(1)
-    // 目前 HomeView 模板只綁定 3 個 deferred section（studentAttendance/anomalies/calendar）；
-    // composable 內 probation section 尚未在模板落地，故 observe 次數為 3。
-    expect(intersectionObservers[0].observe).toHaveBeenCalledTimes(3)
+    expect(intersectionObservers[0].observe).toHaveBeenCalledTimes(1)
 
-    // section[0]: studentAttendance
     intersectionObservers[0].trigger([0])
     await flushPromises()
-    expect(getStudentAttendanceSummary).toHaveBeenCalledTimes(1)
-    expect(getTodayAnomalies).not.toHaveBeenCalled()
-
-    // section[1]: anomalies
-    intersectionObservers[0].trigger([1])
-    await flushPromises()
-    expect(getTodayAnomalies).toHaveBeenCalledTimes(1)
-    expect(getUpcomingEvents).not.toHaveBeenCalled()
-
-    // section[2]: calendar
-    intersectionObservers[0].trigger([2])
-    await flushPromises()
     expect(getUpcomingEvents).toHaveBeenCalledTimes(1)
-    expect(getProbationAlerts).not.toHaveBeenCalled()
   })
 
   it('快速操作 8 個磚塊都是可鍵盤聚焦的 <a> 元素，並有 href', async () => {

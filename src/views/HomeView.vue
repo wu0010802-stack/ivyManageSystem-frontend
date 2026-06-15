@@ -100,9 +100,10 @@ const todoTiles = computed(() => {
   return tiles
 })
 
-// 任何待辦資料尚未到齊則顯示骨架；都到齊且為 0 才顯示「全部清空」
+// 任何待辦資料尚未到齊則顯示骨架；都到齊且為 0 才顯示「全部清空」。
+// 只依待辦板自己的三個資料源判斷，不再綁定 critical 概況統計的 loading flag——
+// 待辦三來源已在 mount 時並行 eager 抓取，到齊即可顯示，毋須等其餘概況統計那一波。
 const todoDataReady = computed(() => {
-  if (isFirstLoad.value && loading.value) return false
   if (showApprovals && approvalSummary.value == null) return false
   if (showAttendance && !deferredSections.anomalies?.loaded) return false
   if (showStudents && !deferredSections.studentAttendance?.loaded) return false
