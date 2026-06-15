@@ -5208,72 +5208,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/funnel/board": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Board
-         * @description 4 階段看板資料。
-         *
-         *     Phase A 不做時間範圍過濾 — 抓全部 visits 推導 stage（資料量小可承受）。
-         *     Phase B 若需要過濾，加 month range filter。
-         */
-        get: operations["get_board_funnel_board_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/funnel/visits/{visit_id}/timeline": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Timeline
-         * @description Union of recruitment_event_log + student_change_logs, sorted by time。
-         *
-         *     邏輯已抽到 services.recruitment_timeline.build_visit_timeline（與正確路由端點
-         *     /api/recruitment/visits/{id}/timeline 共用）；此 funnel route 已棄用但保留呼叫同 service。
-         */
-        get: operations["get_timeline_funnel_visits__visit_id__timeline_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/funnel/visits/{visit_id}/transition": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Post Transition
-         * @description State machine driver — dynamic permission check based on from/to stage.
-         */
-        post: operations["post_transition_funnel_visits__visit_id__transition_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/gov-moe/certificates/{student_id}/generate": {
         parameters: {
             query?: never;
@@ -10411,6 +10345,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/recruitment/funnel/board": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Board
+         * @description 4 階段看板資料。
+         *
+         *     Phase A 不做時間範圍過濾 — 抓全部 visits 推導 stage（資料量小可承受）。
+         *     Phase B 若需要過濾，加 month range filter。
+         */
+        get: operations["get_board_api_recruitment_funnel_board_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/recruitment/funnel/visits/{visit_id}/reserve-seat": {
         parameters: {
             query?: never;
@@ -10425,6 +10382,49 @@ export interface paths {
          * @description 設定/釋放暫定編班（保留座位）。null grade = 釋放。
          */
         post: operations["reserve_seat_api_recruitment_funnel_visits__visit_id__reserve_seat_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/recruitment/funnel/visits/{visit_id}/timeline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Timeline
+         * @description Union of recruitment_event_log + student_change_logs, sorted by time。
+         *
+         *     邏輯已抽到 services.recruitment_timeline.build_visit_timeline（與正確路由端點
+         *     /api/recruitment/visits/{id}/timeline 共用）；此 funnel route 已棄用但保留呼叫同 service。
+         */
+        get: operations["get_timeline_api_recruitment_funnel_visits__visit_id__timeline_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/recruitment/funnel/visits/{visit_id}/transition": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Transition
+         * @description State machine driver — dynamic permission check based on from/to stage.
+         */
+        post: operations["post_transition_api_recruitment_funnel_visits__visit_id__transition_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -17414,7 +17414,7 @@ export interface components {
             /** Notes */
             notes: string;
             /** Shift Type Id */
-            shift_type_id: number;
+            shift_type_id?: number | null;
             /** Shift Type Name */
             shift_type_name: string;
             /** Work End */
@@ -36860,104 +36860,6 @@ export interface operations {
             };
         };
     };
-    get_board_funnel_board_get: {
-        parameters: {
-            query?: {
-                school_year?: number | null;
-                semester?: number | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["FunnelBoardOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_timeline_funnel_visits__visit_id__timeline_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                visit_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TimelineOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    post_transition_funnel_visits__visit_id__transition_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                visit_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["TransitionIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TransitionOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     generate_certificate_api_gov_moe_certificates__student_id__generate_post: {
         parameters: {
             query?: never;
@@ -45341,6 +45243,38 @@ export interface operations {
             };
         };
     };
+    get_board_api_recruitment_funnel_board_get: {
+        parameters: {
+            query?: {
+                school_year?: number | null;
+                semester?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FunnelBoardOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     reserve_seat_api_recruitment_funnel_visits__visit_id__reserve_seat_post: {
         parameters: {
             query?: never;
@@ -45363,6 +45297,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReserveSeatOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_timeline_api_recruitment_funnel_visits__visit_id__timeline_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                visit_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimelineOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_transition_api_recruitment_funnel_visits__visit_id__transition_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                visit_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransitionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransitionOut"];
                 };
             };
             /** @description Validation Error */

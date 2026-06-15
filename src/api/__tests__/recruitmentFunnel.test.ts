@@ -15,17 +15,17 @@ describe('recruitmentFunnel API wrapper', () => {
     vi.clearAllMocks()
   })
 
-  it('getFunnelBoard sends GET /funnel/board with no params', async () => {
+  it('getFunnelBoard sends GET /recruitment/funnel/board with no params', async () => {
     ;(api.get as ReturnType<typeof vi.fn>).mockResolvedValue({ data: { stages: {}, summary: {} } })
     await funnel.getFunnelBoard()
-    expect(api.get).toHaveBeenCalledWith('/funnel/board', expect.any(Object))
+    expect(api.get).toHaveBeenCalledWith('/recruitment/funnel/board', expect.any(Object))
   })
 
   it('getFunnelBoard passes school_year + semester params', async () => {
     ;(api.get as ReturnType<typeof vi.fn>).mockResolvedValue({ data: { stages: {}, summary: {} } })
     await funnel.getFunnelBoard({ schoolYear: 115, semester: 1 })
     expect(api.get).toHaveBeenCalledWith(
-      '/funnel/board',
+      '/recruitment/funnel/board',
       expect.objectContaining({ params: { school_year: 115, semester: 1 } }),
     )
   })
@@ -37,7 +37,7 @@ describe('recruitmentFunnel API wrapper', () => {
       classroom_id: 3,
     })
     expect(api.post).toHaveBeenCalledWith(
-      '/funnel/visits/42/transition',
+      '/recruitment/funnel/visits/42/transition',
       { to_stage: 'enrolled', classroom_id: 3 },
     )
   })
@@ -45,6 +45,6 @@ describe('recruitmentFunnel API wrapper', () => {
   it('getTimeline sends GET', async () => {
     ;(api.get as ReturnType<typeof vi.fn>).mockResolvedValue({ data: { events: [] } })
     await funnel.getTimeline(42)
-    expect(api.get).toHaveBeenCalledWith('/funnel/visits/42/timeline')
+    expect(api.get).toHaveBeenCalledWith('/recruitment/funnel/visits/42/timeline')
   })
 })
