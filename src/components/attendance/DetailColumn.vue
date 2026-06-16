@@ -91,7 +91,8 @@ async function onResolve(payload: {
     }
     ElMessage.success('已處理')
     emit('resolved')
-    emit('navigate', 1)
+    // 不在此 emit navigate：容器 refresh 後同 index 自然顯示下一筆；
+    // navigate 只保留給 ResolveCard 的 ◀▶ 手動瀏覽
   } catch (err) {
     notify(err, 'DetailColumn.resolve', null, { prefix: '處理失敗' })
   }

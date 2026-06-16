@@ -208,15 +208,14 @@ describe('DetailColumn', () => {
       })
     })
 
-    it('emits resolved + navigate(1) on success', async () => {
+    it('emits resolved 但不 emit navigate on success', async () => {
       const wrapper = mountDetail({})
       const card = wrapper.findComponent(ResolveCardStub)
       await card.vm.$emit('resolve', { action: 'admin_accept' })
       await nextTick()
       await nextTick()
       expect(wrapper.emitted('resolved')).toBeTruthy()
-      expect(wrapper.emitted('navigate')).toBeTruthy()
-      expect(wrapper.emitted('navigate')![0][0]).toBe(1)
+      expect(wrapper.emitted('navigate')).toBeFalsy()
     })
 
     it('shows ElMessage.success on success', async () => {
@@ -277,14 +276,14 @@ describe('DetailColumn', () => {
       })
     })
 
-    it('emits resolved + navigate(1) on punch success', async () => {
+    it('emits resolved 但不 emit navigate on punch success', async () => {
       const wrapper = mountDetail({})
       const card = wrapper.findComponent(ResolveCardStub)
       await card.vm.$emit('resolve', { action: 'punch', punch_in: '09:00', punch_out: '18:00' })
       await nextTick()
       await nextTick()
       expect(wrapper.emitted('resolved')).toBeTruthy()
-      expect(wrapper.emitted('navigate')![0][0]).toBe(1)
+      expect(wrapper.emitted('navigate')).toBeFalsy()
     })
 
     it('calls notify and does NOT emit navigate on punch failure', async () => {
