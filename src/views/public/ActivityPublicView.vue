@@ -450,6 +450,7 @@ import { usePublicRegistrationForm } from '@/composables/usePublicRegistrationFo
 import { useFormDraft } from '@/composables/useFormDraft'
 import { useCourseAdvisory } from '@/composables/useCourseAdvisory'
 import { buildFormCardTitle } from '@/utils/activityDisplay'
+import { buildPublicEditUrl } from '@/utils/publicLinks'
 // KawaiiStar / LaurelWreath / BrandMark 已隨 SuccessSummaryModal 抽走（A1-P5）
 import VideoModal from './components/VideoModal.vue'
 import ContactInquiryModal from './components/ContactInquiryModal.vue'
@@ -734,11 +735,10 @@ function buildSuccessSummary({ name, parentPhone, message, waitlisted, waitlistC
   successModal.waitlistCourses = waitlistOnes
   successModal.selectedSupplies = supplyItems
   successModal.totalAmount = total
-  // 編修連結由前端用 window.location.origin 組（後端不知道 frontend host）
+  // 編修連結由前端用 window.location.origin 組（後端不知道 frontend host）。
+  // 必須是 public.html hash 路由，token 放 hash 內——細節見 buildPublicEditUrl。
   successModal.queryToken = queryToken || ''
-  successModal.editUrl = queryToken
-    ? `${window.location.origin}/public/activity/query?token=${encodeURIComponent(queryToken)}`
-    : ''
+  successModal.editUrl = buildPublicEditUrl(window.location.origin, queryToken)
   successModal.copyHint = ''
   successModal.visible = true
 }
