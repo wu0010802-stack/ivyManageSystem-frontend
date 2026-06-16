@@ -77,8 +77,12 @@ async function onResolve(payload: {
 }): Promise<void> {
   try {
     if (payload.action === 'punch') {
+      if (props.employeeId == null) {
+        ElMessage.warning('找不到對應員工，無法補打卡')
+        return
+      }
       await upsertRecord({
-        employee_id: props.employeeId!,
+        employee_id: props.employeeId,
         date: props.anomaly!.date,
         ...(payload.punch_in !== undefined ? { punch_in: payload.punch_in } : {}),
         ...(payload.punch_out !== undefined ? { punch_out: payload.punch_out } : {}),

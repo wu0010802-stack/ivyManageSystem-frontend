@@ -26,13 +26,14 @@ vi.mock('@/composables/useErrorNotify', () => ({
 
 // ── mock ElMessage ─────────────────────────────────────────────────────────────
 vi.mock('element-plus', () => ({
-  ElMessage: { success: vi.fn(), error: vi.fn() },
+  ElMessage: { success: vi.fn(), warning: vi.fn(), error: vi.fn() },
 }))
 
 import { ElMessage } from 'element-plus'
 import DetailColumn from '../DetailColumn.vue'
 
 const mockElMessageSuccess = ElMessage.success as ReturnType<typeof vi.fn>
+const mockElMessageWarning = ElMessage.warning as ReturnType<typeof vi.fn>
 
 // ── fixture data ───────────────────────────────────────────────────────────────
 const anomalyItem: AnomalyItem = {
@@ -295,6 +296,18 @@ describe('DetailColumn', () => {
       await nextTick()
       await nextTick()
       expect(mockNotify).toHaveBeenCalled()
+      expect(wrapper.emitted('navigate')).toBeFalsy()
+    })
+
+    it('employeeId=null 時顯示 warning 並不呼叫 upsertRecord', async () => {
+      const wrapper = mountDetail({ employeeId: null })
+      const card = wrapper.findComponent(ResolveCardStub)
+      await card.vm.$emit('resolve', { action: 'punch', punch_in: '09:00', punch_out: '18:00' })
+      await nextTick()
+      await nextTick()
+      expect(mockUpsertRecord).not.toHaveBeenCalled()
+      expect(mockElMessageWarning).toHaveBeenCalledWith('找不到對應員工，無法補打卡')
+      expect(wrapper.emitted('resolved')).toBeFalsy()
       expect(wrapper.emitted('navigate')).toBeFalsy()
     })
   })
