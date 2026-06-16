@@ -8,6 +8,7 @@ export const PAYMENT_STATUS_TAG_TYPE = {
   partial: 'warning',
   overpaid:'danger',
   unpaid:  'danger',
+  no_fee:  'info',
 }
 
 export const PAYMENT_STATUS_LABEL = {
@@ -15,6 +16,9 @@ export const PAYMENT_STATUS_LABEL = {
   partial: '部分繳費',
   overpaid:'超繳',
   unpaid:  '未繳費',
+  // 業主裁定 B 口徑（0 元不算結清）：total=0 且未繳（全候補 / 0 元課程）→ 中性「免繳」，
+  // 與後端 _derive_payment_status 的 no_fee 對齊；不顯示「已繳費」避免誤導與篩選漂移。
+  no_fee:  '免繳',
 }
 
 export const COURSE_STATUS_TAG_TYPE = {

@@ -28832,7 +28832,7 @@ export interface operations {
                 /** @description fully_approved / partially_approved / pending_approval / no_payment */
                 approval_status?: string | null;
                 classroom_name?: string | null;
-                payment_status?: ("paid" | "partial" | "unpaid" | "overpaid") | null;
+                payment_status?: ("paid" | "partial" | "unpaid" | "overpaid" | "no_fee") | null;
                 school_year?: number | null;
                 semester?: number | null;
             };

@@ -13,6 +13,7 @@ describe('activity constants', () => {
     it('partial → warning', () => expect(PAYMENT_STATUS_TAG_TYPE.partial).toBe('warning'))
     it('overpaid → danger', () => expect(PAYMENT_STATUS_TAG_TYPE.overpaid).toBe('danger'))
     it('unpaid → danger', () => expect(PAYMENT_STATUS_TAG_TYPE.unpaid).toBe('danger'))
+    it('no_fee → info（免繳中性色）', () => expect(PAYMENT_STATUS_TAG_TYPE.no_fee).toBe('info'))
   })
 
   describe('PAYMENT_STATUS_LABEL', () => {
@@ -20,6 +21,8 @@ describe('activity constants', () => {
     it('partial → 部分繳費', () => expect(PAYMENT_STATUS_LABEL.partial).toBe('部分繳費'))
     it('overpaid → 超繳', () => expect(PAYMENT_STATUS_LABEL.overpaid).toBe('超繳'))
     it('unpaid → 未繳費', () => expect(PAYMENT_STATUS_LABEL.unpaid).toBe('未繳費'))
+    it('no_fee → 免繳（0 元/全候補，業主裁定 B 口徑不算結清）', () =>
+      expect(PAYMENT_STATUS_LABEL.no_fee).toBe('免繳'))
   })
 
   describe('COURSE_STATUS_TAG_TYPE', () => {
