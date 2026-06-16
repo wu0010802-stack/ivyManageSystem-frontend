@@ -157,7 +157,11 @@
                   <el-dropdown-item command="edit">
                     {{ canWrite ? '編輯' : '檢視' }}
                   </el-dropdown-item>
-                  <el-dropdown-item v-if="canWrite" command="delete" divided>刪除</el-dropdown-item>
+                  <el-dropdown-item
+                    v-if="canWrite && row.status === 'pending'"
+                    command="delete"
+                    divided
+                  >刪除</el-dropdown-item>
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
@@ -213,6 +217,7 @@
                 placeholder="選擇日期"
                 style="width: 100%"
                 :disabled="!canWrite"
+                :disabled-date="disabledFutureDate"
               />
             </el-form-item>
             <el-form-item label="收付方式" required>
@@ -231,7 +236,7 @@
             <el-form-item label="金額" required class="vp-form__col-2">
               <el-input-number
                 v-model="form.amount"
-                :min="0"
+                :min="1"
                 :max="99999999"
                 :precision="0"
                 :step="100"
@@ -534,6 +539,12 @@ function clearFilters() {
   filters.status = ''
   filters.payment_method = ''
   refresh()
+}
+
+// 禁未來日：與後端 validate_payment_date 守衛對齊（付款日不可晚於今日）。
+// 90 天回補上限由後端權威把關（避免 JS 午夜/時區與台北日的邊界誤差）。
+function disabledFutureDate(time: Date): boolean {
+  return time.getTime() > Date.now()
 }
 
 function resetForm() {

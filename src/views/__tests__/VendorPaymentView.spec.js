@@ -266,4 +266,15 @@ describe('VendorPaymentView', () => {
       })
     )
   })
+
+  it('disabledFutureDate blocks future dates, allows today and past', async () => {
+    const wrapper = mount(VendorPaymentView, {
+      global: { stubs: globalStubs, directives: globalDirectives },
+    })
+    await flushPromises()
+    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000)
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000)
+    expect(wrapper.vm.disabledFutureDate(tomorrow)).toBe(true)
+    expect(wrapper.vm.disabledFutureDate(yesterday)).toBe(false)
+  })
 })
