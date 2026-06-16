@@ -63,11 +63,6 @@ const ElOption = {
   template: `<option :value="value">{{ label }}</option>`,
 }
 
-const ElEmpty = {
-  props: ['description'],
-  template: `<div class="el-empty">{{ description }}</div>`,
-}
-
 const EmptyStateStub = {
   props: ['variant', 'title', 'description'],
   template: `<div class="empty-state-stub">{{ title }}</div>`,
@@ -76,7 +71,6 @@ const EmptyStateStub = {
 const stubs = {
   ElSelect,
   ElOption,
-  ElEmpty,
   EmptyState: EmptyStateStub,
 }
 

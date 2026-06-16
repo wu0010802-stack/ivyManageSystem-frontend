@@ -84,24 +84,10 @@ const ElTimePicker = {
   />`,
 }
 
-// Input stub
-const ElInput = {
-  props: ['modelValue', 'placeholder', 'disabled', 'readonly'],
-  emits: ['update:modelValue'],
-  template: `<input
-    class="el-input"
-    :value="modelValue ?? ''"
-    :disabled="disabled"
-    :readonly="readonly"
-    @input="$emit('update:modelValue', $event.target.value)"
-  />`,
-}
-
 const stubs = {
   ElTag,
   ElButton,
   ElTimePicker,
-  ElInput,
 }
 
 // ── mount helper ───────────────────────────────────────────────────────────────

@@ -18,8 +18,9 @@ vi.mock('@/api/attendance', () => ({
   upsertRecord: vi.fn().mockResolvedValue({ data: {} }),
 }))
 
+const mockHasPermission = vi.fn(() => true)
 vi.mock('@/utils/auth', () => ({
-  hasPermission: () => true,
+  hasPermission: (...args: unknown[]) => mockHasPermission(...args),
 }))
 
 vi.mock('@/composables/useIsMobile', () => ({
@@ -337,5 +338,20 @@ describe('WorkspaceHeader', () => {
       global: { stubs: WH_STUBS },
     })
     expect(wrapper.text()).toContain('待處理異常')
+  })
+
+  it('權限 gate：hasPermission 回 false 時「匯入」按鈕不顯示（canWrite=false）', () => {
+    mockHasPermission.mockReturnValue(false)
+    const wrapper = mount(WorkspaceHeader, {
+      props: defaultProps,
+      global: { stubs: WH_STUBS },
+    })
+    const importBtn = wrapper.findAll('button').find((b) => b.text().includes('匯入'))
+    expect(importBtn).toBeUndefined()
+    // 匯出按鈕不受權限限制，應仍可見
+    const exportBtn = wrapper.findAll('button').find((b) => b.text().includes('匯出'))
+    expect(exportBtn).toBeDefined()
+    // 重設，避免污染後續 test
+    mockHasPermission.mockReturnValue(true)
   })
 })

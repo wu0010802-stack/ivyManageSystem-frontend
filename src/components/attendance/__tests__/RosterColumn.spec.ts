@@ -1,6 +1,6 @@
 // src/components/attendance/__tests__/RosterColumn.spec.ts
 import { describe, it, expect } from 'vitest'
-import { mount, flushPromises } from '@vue/test-utils'
+import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import RosterColumn from '../RosterColumn.vue'
 import type { RosterRow } from '@/composables/useAttendanceWorkspace'
