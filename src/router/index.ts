@@ -124,7 +124,7 @@ const routes: RouteRecordRaw[] = [
         {
             path: '/attendance',
             name: 'attendance',
-            component: () => import('../views/AttendanceView.vue'),
+            component: () => import('../views/attendance/AttendanceWorkspaceView.vue'),
             meta: { title: '考勤管理' }
         },
         {
