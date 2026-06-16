@@ -6007,26 +6007,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/insurance/import": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Import Insurance Table
-         * @description 匯入勞健保級距表
-         */
-        post: operations["import_insurance_table_api_insurance_import_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/internal/integrations/health": {
         parameters: {
             query?: never;
@@ -19422,18 +19402,6 @@ export interface components {
             pension_employer_rate?: number | null;
             /** Rate Year */
             rate_year?: number | null;
-        };
-        /** InsuranceTableImport */
-        InsuranceTableImport: {
-            /** Data */
-            data: {
-                [key: string]: unknown;
-            }[];
-            /**
-             * Table Type
-             * @default labor
-             */
-            table_type: string;
         };
         /** IntakePlanOut */
         IntakePlanOut: {
@@ -38305,39 +38273,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InsuranceCalculationOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    import_insurance_table_api_insurance_import_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["InsuranceTableImport"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DeleteResultOut"];
                 };
             };
             /** @description Validation Error */

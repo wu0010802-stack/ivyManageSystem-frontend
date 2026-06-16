@@ -28,7 +28,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { Message } from '@element-plus/icons-vue'
-import { hasPermission } from '@/utils/auth'
+import { hasPortalPermission } from '@/utils/auth'
 
 withDefaults(defineProps<{
   messagesUnread?: number
@@ -37,7 +37,8 @@ withDefaults(defineProps<{
 })
 defineEmits<{ 'open-panel': [panel: string] }>()
 
-const canMessages = computed(() => hasPermission('PARENT_MESSAGES_WRITE'))
+// 教師專屬權限：用不對 teacher 短路的 hasPortalPermission（見 PortalClassHubView 註解）
+const canMessages = computed(() => hasPortalPermission('PARENT_MESSAGES_WRITE'))
 </script>
 
 <style scoped>

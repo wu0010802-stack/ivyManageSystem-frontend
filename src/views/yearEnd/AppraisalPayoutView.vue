@@ -39,12 +39,23 @@ const laterLabel = computed(() => `${sourceAcademicYear.value}下`)
 const anyCycleNotFinalized = computed(() =>
   rows.value.some((r) => !r.earlier_cycle_finalized || !r.later_cycle_finalized)
 )
-const selectedRows = computed(() => rows.value.filter((r) => selected.value.has(r.employee_id)))
-const selectedTotal = computed(() =>
-  selectedRows.value.reduce((s, r) => s + Number(r.total_amount), 0)
+// 後端 generate 契約：一律發放「全部在職員工」，只額外接受 included_inactive_employee_ids
+// 對「非在職」員工做 opt-in（後端不支援排除在職員工）。因此前端必須誠實化：
+//   payoutRows = 全部在職 + 已勾選的非在職
+// 不可用 selectedRows（含對在職列的取消勾選）來算 confirm 筆數/合計，
+// 否則畫面顯示與實際寫入金流不一致（bug #27）。
+// 若日後業主需要逐人排除在職員工，需後端 generate 增加 excluded ids 支援，
+// 本次先讓前端與後端實際行為一致。
+const activeRows = computed(() => rows.value.filter((r) => !r.is_inactive))
+const selectedInactiveRows = computed(() =>
+  rows.value.filter((r) => r.is_inactive && selected.value.has(r.employee_id))
+)
+const payoutRows = computed(() => [...activeRows.value, ...selectedInactiveRows.value])
+const payoutTotal = computed(() =>
+  payoutRows.value.reduce((s, r) => s + Number(r.total_amount), 0)
 )
 const includedInactiveIds = computed(() =>
-  selectedRows.value.filter((r) => r.is_inactive).map((r) => r.employee_id)
+  selectedInactiveRows.value.map((r) => r.employee_id)
 )
 
 async function loadPreview() {
@@ -61,18 +72,22 @@ async function loadPreview() {
 }
 
 function toggleSelect(employeeId: number, checked: boolean) {
+  // 在職員工一律納入發放（後端契約），不可被排除——對在職列的取消勾選視為 no-op，
+  // 避免畫面顯示「已排除」但實際仍會發放（bug #27）。只允許切換非在職員工的 opt-in。
+  const row = rows.value.find((r) => r.employee_id === employeeId)
+  if (row && !row.is_inactive) return
   if (checked) selected.value.add(employeeId)
   else selected.value.delete(employeeId)
 }
 
 async function onGenerate() {
-  if (selectedRows.value.length === 0) {
-    ElMessage.warning('請至少勾選一位員工')
+  if (payoutRows.value.length === 0) {
+    ElMessage.warning('沒有可發放的員工')
     return
   }
   try {
     await ElMessageBox.confirm(
-      `將為 ${selectedRows.value.length} 名員工生成 payout（合計 NT$${selectedTotal.value}）`,
+      `將為 ${payoutRows.value.length} 名員工生成 payout（全部在職 + 已勾選非在職，合計 NT$${payoutTotal.value}）`,
       '確認生成',
       { confirmButtonText: '確認', cancelButtonText: '取消' }
     )
@@ -108,7 +123,10 @@ async function onVoid() {
   }
 }
 
-defineExpose({ selected, anyCycleNotFinalized, onGenerate, onVoid, loadPreview, rows, year })
+defineExpose({
+  selected, anyCycleNotFinalized, onGenerate, onVoid, loadPreview, rows, year,
+  toggleSelect, payoutRows, payoutTotal,
+})
 
 onMounted(loadPreview)
 watch(year, loadPreview)
@@ -135,10 +153,13 @@ watch(year, loadPreview)
     <el-tabs v-model="tab">
       <el-tab-pane label="預覽" name="preview">
         <el-table v-loading="loading" :data="rows" border>
-          <el-table-column width="60">
+          <el-table-column label="發放" width="80">
             <template #default="{ row }">
+              <!-- 在職員工一律發放、不可排除（後端契約），checkbox 唯讀全勾；
+                   只有非在職員工可 opt-in 切換。bug #27：避免顯示與實際發放不一致 -->
               <el-checkbox
                 :model-value="selected.has(row.employee_id)"
+                :disabled="!row.is_inactive"
                 :data-test="`row-checkbox-${row.employee_id}`"
                 @update:model-value="(v) => toggleSelect(row.employee_id, Boolean(v))"
               />
@@ -164,7 +185,7 @@ watch(year, loadPreview)
 
         <footer class="footer">
           <el-button type="primary" size="large" data-test="generate-button" @click="onGenerate">
-            確認生成 {{ selectedRows.length }} 筆 payout（合計 NT${{ selectedTotal }}）
+            確認生成 {{ payoutRows.length }} 筆 payout（合計 NT${{ payoutTotal }}）
           </el-button>
         </footer>
       </el-tab-pane>

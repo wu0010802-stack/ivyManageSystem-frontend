@@ -78,7 +78,7 @@ import { storeToRefs } from 'pinia'
 import { usePortalClassHub } from '@/composables/usePortalClassHub'
 import { useClassHubPanelQuery } from '@/composables/useClassHubPanelQuery'
 import { usePortalMessagesStore } from '@/stores/portalMessages'
-import { hasPermission } from '@/utils/auth'
+import { hasPortalPermission } from '@/utils/auth'
 import ClassHubStickyNext from '@/components/portal/class-hub/ClassHubStickyNext.vue'
 import ClassHubTimeSlotCard from '@/components/portal/class-hub/ClassHubTimeSlotCard.vue'
 import ClassHubAttendanceSheet from '@/components/portal/class-hub/ClassHubAttendanceSheet.vue'
@@ -108,7 +108,9 @@ const {
   closeThread,
 } = useClassHubPanelQuery()
 
-const canMessages = computed(() => hasPermission('PARENT_MESSAGES_WRITE'))
+// PARENT_MESSAGES_WRITE 是教師專屬權限（後端 ROLE_TEMPLATES['teacher'] 有授予），
+// 必須用不對 teacher 短路的 hasPortalPermission，否則教師端家園溝通入口被永久隱藏。
+const canMessages = computed(() => hasPortalPermission('PARENT_MESSAGES_WRITE'))
 
 // Typed accessors for data fields
 interface NextTask { kind?: string; student_name?: string; detail?: string; due_at?: string | null; deep_link?: string }
@@ -149,7 +151,7 @@ const sheets = reactive({
 
 // 訊息未讀也要主動拉一次（store 沒有 auto-fetch）
 async function refreshMessagesUnread() {
-  if (!hasPermission('PARENT_MESSAGES_WRITE')) return
+  if (!hasPortalPermission('PARENT_MESSAGES_WRITE')) return
   try {
     await messagesStore.refreshUnread()
   } catch {

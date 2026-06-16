@@ -209,7 +209,36 @@ export function hasPermission(permissionName: string): boolean {
   // teacher 角色只能存取 Portal
   if (userInfo['role'] === 'teacher') return false
 
-  const perms = userInfo['permission_names'] as string[] | null | undefined
+  return _permsHold(userInfo['permission_names'], permissionName)
+}
+
+/**
+ * Portal 專用權限檢查：**不**對 teacher 角色短路。
+ *
+ * Why: 一般 `hasPermission` 對 `role === 'teacher'` 無條件 return false，這是防止教師
+ * 取得 admin 端權限的刻意設計（**絕對不可移除**）。但部分權限（如 PARENT_MESSAGES_WRITE）
+ * 是教師專屬權限——後端 `ROLE_TEMPLATES['teacher']` 有授予、`api/portal/parent_messages.py`
+ * 也以它守衛。若仍走 teacher 短路，這類教師端 Portal 功能（家園溝通收發/未讀數）在前端
+ * gate 上永遠不可能通過，導致功能被永久隱藏。
+ *
+ * 本 helper 跳過 teacher 短路，直接走 permission_names 比對（includes / wildcard '*' /
+ * scope-aware 後綴 '<name>:'），與後端 `utils/permissions.has_permission` 對齊。
+ * **僅供 Portal 端教師專屬功能使用**，admin 端權限請續用 `hasPermission`。
+ * @param permissionName - 權限名稱 (如 'PARENT_MESSAGES_WRITE')
+ */
+export function hasPortalPermission(permissionName: string): boolean {
+  const userInfo = getUserInfo()
+  if (!userInfo) return false
+
+  return _permsHold(userInfo['permission_names'], permissionName)
+}
+
+/**
+ * permission_names 是否持有 permissionName（不含角色短路）。
+ * hasPermission / hasPortalPermission 共用的核心比對，避免兩條路徑邏輯漂移。
+ */
+function _permsHold(rawPerms: unknown, permissionName: string): boolean {
+  const perms = rawPerms as string[] | null | undefined
   if (perms == null) return false  // resolve 在後端；前端 null = 無顯式權限
   if (perms.includes('*')) return true
   if (perms.includes(permissionName)) return true
