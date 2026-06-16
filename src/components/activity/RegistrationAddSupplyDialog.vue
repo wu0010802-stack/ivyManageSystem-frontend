@@ -16,7 +16,7 @@
           :loading="loadingSupplies"
         >
           <el-option
-            v-for="s in supplies"
+            v-for="s in availableSupplies"
             :key="s.id"
             :label="`${s.name}（$${s.price}）`"
             :value="s.id"
@@ -37,9 +37,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { addRegistrationSupply, getSupplies } from '@/api/activity'
+import { excludeAddedSupplies } from '@/utils/activityDisplay'
 
 interface Supply {
   id: number | string
@@ -53,9 +54,11 @@ const props = withDefaults(defineProps<{
   registrationId?: string | number | null
   schoolYear: number
   semester: number
+  existingSupplyIds?: Array<number | string>
 }>(), {
   modelValue: false,
   registrationId: null,
+  existingSupplyIds: () => [],
 })
 
 const emit = defineEmits<{
@@ -67,6 +70,11 @@ const supplyId = ref<number | string | null>(null)
 const adding = ref<boolean>(false)
 const loadingSupplies = ref<boolean>(false)
 const supplies = ref<Supply[]>([])
+
+// 剔除該報名已加入的用品，避免重複選撞唯一鍵（後端另有 409 硬擋）
+const availableSupplies = computed(() =>
+  excludeAddedSupplies(supplies.value, props.existingSupplyIds ?? []),
+)
 
 async function loadSupplies() {
   if (supplies.value.length > 0) return

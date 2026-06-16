@@ -21,6 +21,7 @@
           <el-option label="部分繳費" value="partial" />
           <el-option label="未繳費" value="unpaid" />
           <el-option label="超繳" value="overpaid" />
+          <el-option label="免繳" value="no_fee" />
         </el-select>
         <el-select v-model="courseFilter" placeholder="課程篩選" clearable style="width: 140px" @change="handleSearch">
           <el-option v-for="c in courseOptions" :key="c.id" :label="c.name" :value="c.id" />
@@ -366,6 +367,7 @@
       :registration-id="detail?.id"
       :school-year="termStore.school_year"
       :semester="termStore.semester"
+      :existing-supply-ids="(detail?.supplies || []).map((s) => s.supply_id)"
       @added="onSupplyAdded"
     />
     </div><!-- /.mode-list -->
@@ -410,7 +412,7 @@ interface RegistrationRow { id: number; student_name?: string; payment_status?: 
 interface PaymentRecord { id: number; type: string; amount: number; payment_date?: string; payment_method?: string; notes?: string; is_voided?: boolean; void_reason?: string }
 interface PaymentInfo { total_amount?: number; paid_amount?: number; payment_status?: string; records?: PaymentRecord[] }
 interface RegistrationCourse { id: number; course_id: number; name: string; price?: number; status: string; confirm_deadline?: string }
-interface RegistrationSupply { id: number; name?: string; price?: number }
+interface RegistrationSupply { id: number; supply_id: number; name?: string; price?: number }
 interface RegistrationDetail {
   id: number; student_name?: string; class_name?: string; birthday?: string; parent_phone?: string; email?: string; created_at?: string; remark?: string
   total_amount?: number; courses?: RegistrationCourse[]; supplies?: RegistrationSupply[]; changes?: Record<string, unknown>[]
