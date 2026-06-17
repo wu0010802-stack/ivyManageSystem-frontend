@@ -45,6 +45,13 @@
               <el-button size="small" type="primary" @click="applyThresholds">套用（僅本機）</el-button>
             </el-form>
           </el-popover>
+          <el-button
+            v-if="canWriteSalary"
+            type="primary"
+            size="small"
+            :disabled="selectedAdjustRows.length === 0"
+            @click="batchAdjustVisible = true"
+          >批次調整 ({{ selectedAdjustRows.length }})</el-button>
         </div>
       </div>
     </el-card>
@@ -58,7 +65,9 @@
       style="width: 100%"
       v-loading="settlement.loading.value"
       :row-class-name="rowClassName"
+      @selection-change="onSelectionChange"
     >
+      <el-table-column type="selection" :selectable="isRowSelectable" width="45" />
       <el-table-column type="expand">
         <template #default="{ row }">
           <SalaryBreakdown :row="row" :year="q.year" :month="q.month" />
@@ -283,6 +292,9 @@
     <!-- 列內調整側滑 -->
     <AdjustDrawer v-model="adjustVisible" :row="adjustingRow" @saved="settlement.refresh()" />
 
+    <!-- 批次調整 dialog -->
+    <BatchAdjustDialog v-model="batchAdjustVisible" :count="selectedAdjustRows.length" @confirm="applyBatchAdjust" />
+
     <!-- 欄位明細 dialog（自原 SalaryView 搬移） -->
     <el-dialog v-model="showFieldBreakdownDialog" :title="fieldBreakdownTitle" width="960px">
       <div v-loading="fieldBreakdownLoading">
@@ -323,9 +335,10 @@
 import { ref, computed, inject, h, defineComponent, type PropType } from 'vue'
 import { ElMessage, ElTooltip, ElIcon } from 'element-plus'
 import { InfoFilled, Edit, Search } from '@element-plus/icons-vue'
-import { getSalaryFieldBreakdown } from '@/api/salary'
+import { getSalaryFieldBreakdown, manualAdjustSalary } from '@/api/salary'
 import SalaryBreakdown from '../SalaryBreakdown.vue'
 import AdjustDrawer from './AdjustDrawer.vue'
+import BatchAdjustDialog from './BatchAdjustDialog.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import UnusedLeavePayoutTooltip from '@/components/salary/UnusedLeavePayoutTooltip.vue'
 import { hasPermission } from '@/utils/auth'
@@ -409,6 +422,40 @@ const adjustingRow = ref<SettlementRecord | null>(null)
 const openAdjust = (row: SettlementRecord) => {
     adjustingRow.value = row
     adjustVisible.value = true
+}
+
+// ---- 批次調整 ----
+const batchAdjustVisible = ref(false)
+const selectedAdjustRows = ref<SettlementRecord[]>([])
+const isRowSelectable = (row: SettlementRecord) => !row.is_finalized
+const onSelectionChange = (rows: SettlementRecord[]) => {
+    selectedAdjustRows.value = rows
+}
+const applyBatchAdjust = async ({ field, value, reason }: { field: string; value: number; reason: string }) => {
+    const rows = selectedAdjustRows.value
+    if (rows.length === 0) return
+    const payload = { [field]: value, adjustment_reason: reason } as Parameters<typeof manualAdjustSalary>[1]
+    const results = await Promise.allSettled(
+        rows.map((r) => manualAdjustSalary(r.id, payload, r.version ?? undefined)),
+    )
+    const failed = results
+        .map((res, i) => ({ res, row: rows[i] }))
+        .filter((x) => x.res.status === 'rejected')
+        .map((x) => {
+            const e = (x.res as PromiseRejectedResult).reason as { response?: { data?: { detail?: string } } }
+            return { name: x.row.employee_name, reason: e?.response?.data?.detail || '失敗' }
+        })
+    const succeeded = rows.length - failed.length
+    if (failed.length === 0) {
+        ElMessage.success(`已套用 ${succeeded} 筆`)
+    } else {
+        ElMessage.warning(
+            `完成：成功 ${succeeded} 筆，失敗 ${failed.length} 筆（${failed.map((f) => `${f.name}: ${f.reason}`).join('；')}）`,
+        )
+    }
+    batchAdjustVisible.value = false
+    selectedAdjustRows.value = []
+    settlement.refresh()
 }
 
 // ---- 單人 PDF ----
