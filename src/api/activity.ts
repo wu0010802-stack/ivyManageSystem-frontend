@@ -202,6 +202,9 @@ export const getAttendanceSessions = (params: unknown) =>
   api.get('/activity/attendance/sessions', { params })
 export const createAttendanceSession = (data: unknown) =>
   api.post('/activity/attendance/sessions', data)
+// 依上課星期在日期範圍批次建場次（取代逐堂手動新增）；weekday 省略則用課程 meeting_weekday
+export const createAttendanceSessionsBatch = (data: unknown) =>
+  api.post('/activity/attendance/sessions/batch', data)
 export const deleteAttendanceSession = (id: number) =>
   api.delete(`/activity/attendance/sessions/${id}`)
 export const getAttendanceSession = (id: number, params: unknown = {}) =>

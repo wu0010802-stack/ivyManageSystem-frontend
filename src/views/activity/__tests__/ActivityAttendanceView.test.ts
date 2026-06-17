@@ -8,6 +8,7 @@ import type { VNode } from 'vue'
 vi.mock('@/api/activity', () => ({
   getAttendanceSessions: vi.fn(),
   createAttendanceSession: vi.fn(),
+  createAttendanceSessionsBatch: vi.fn(),
   deleteAttendanceSession: vi.fn(),
   getAttendanceSession: vi.fn(),
   batchUpdateAttendance: vi.fn(),
@@ -33,6 +34,7 @@ import {
   getAttendanceSessions,
   getAttendanceSession,
   batchUpdateAttendance,
+  createAttendanceSessionsBatch,
   getCourses,
 } from '@/api/activity'
 import { hasPermission } from '@/utils/auth'
@@ -309,5 +311,48 @@ describe('ActivityAttendanceView — 場次列表分頁（A3）', () => {
     })
     await flushPromises()
     expect(wrapper.findComponent(ElPaginationStub).exists()).toBe(false)
+  })
+})
+
+describe('ActivityAttendanceView — 批次產生場次（A4）', () => {
+  it('有寫入權限時顯示「批次產生場次」按鈕', async () => {
+    const wrapper = await mountView()
+    expect(wrapper.findAll('button').map(b => b.text())).toContain('批次產生場次')
+  })
+
+  it('填妥表單送出：帶 weekday payload + 重載列表', async () => {
+    asMock(createAttendanceSessionsBatch).mockResolvedValue({ data: { created_count: 4, skipped_existing: 1 } })
+    const wrapper = await mountView()
+    asMock(getAttendanceSessions).mockClear()
+    // @ts-expect-error script-setup 內部 ref 經 test-utils 暴露於 vm
+    wrapper.vm.batchForm = { course_id: 1, weekday: 2, start_date: '2026-06-01', end_date: '2026-06-30', notes: 'x' }
+    // @ts-expect-error 同上
+    await wrapper.vm.handleBatchCreate()
+    await flushPromises()
+    expect(createAttendanceSessionsBatch).toHaveBeenCalledWith({
+      course_id: 1, start_date: '2026-06-01', end_date: '2026-06-30', notes: 'x', weekday: 2,
+    })
+    expect(getAttendanceSessions).toHaveBeenCalled()
+  })
+
+  it('weekday 留空 → payload 不帶 weekday（後端用課程預設）', async () => {
+    asMock(createAttendanceSessionsBatch).mockResolvedValue({ data: { created_count: 2, skipped_existing: 0 } })
+    const wrapper = await mountView()
+    // @ts-expect-error 同上
+    wrapper.vm.batchForm = { course_id: 1, weekday: null, start_date: '2026-06-01', end_date: '2026-06-30', notes: '' }
+    // @ts-expect-error 同上
+    await wrapper.vm.handleBatchCreate()
+    await flushPromises()
+    const payload = asMock(createAttendanceSessionsBatch).mock.calls[0][0] as Record<string, unknown>
+    expect('weekday' in payload).toBe(false)
+  })
+
+  it('缺課程 → 不呼叫 API', async () => {
+    const wrapper = await mountView()
+    // @ts-expect-error 同上
+    wrapper.vm.batchForm = { course_id: null, weekday: null, start_date: '2026-06-01', end_date: '2026-06-30', notes: '' }
+    // @ts-expect-error 同上
+    await wrapper.vm.handleBatchCreate()
+    expect(createAttendanceSessionsBatch).not.toHaveBeenCalled()
   })
 })
