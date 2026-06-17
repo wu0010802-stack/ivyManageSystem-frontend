@@ -21,9 +21,12 @@ export async function openPdfInNewTab({ fetchBlob, loadingText = 'PDF 載入中�
     onError && onError(new Error('瀏覽器封鎖了新分頁，請允許彈出視窗'))
     return null
   }
+  // loadingText 以 textContent 寫入（永不被當 HTML 解析），避免呼叫端字串成為 XSS sink
   win.document.write(
-    `<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><title>載入中…</title></head><body style="font-family:sans-serif;padding:24px;color:#555">${loadingText}</body></html>`
+    '<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><title>載入中…</title></head><body style="font-family:sans-serif;padding:24px;color:#555"><p id="ivy-pdf-loading-text"></p></body></html>'
   )
+  const loadingEl = win.document.getElementById('ivy-pdf-loading-text')
+  if (loadingEl) loadingEl.textContent = loadingText
 
   let blobUrl: string | null = null
   try {
