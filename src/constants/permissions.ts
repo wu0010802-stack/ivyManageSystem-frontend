@@ -140,8 +140,12 @@ export const ROUTE_PERMISSION_RULES = [
   // /recruitment 規則保留供 redirect 解析；ivykids 不需獨立規則。
   { path: '/recruitment', permission: 'RECRUITMENT_READ' },
   { path: '/portfolio/medication-today', permission: 'STUDENTS_HEALTH_READ' },
-  // 考核：navigation gate 暫掛 SETTINGS_READ；後端 router 用 APPRAISAL_* 細粒度守衛
+  // 考核：navigation gate 接受 SETTINGS_READ 或 APPRAISAL_READ（OR，canAccessRoute
+  // 對同 path 多列為 some() 語意）。後端 appraisal router 用 APPRAISAL_READ 守衛；
+  // 原本只掛 SETTINGS_READ 會把只持 APPRAISAL_READ、無 SETTINGS_READ 的考核專員被
+  // default-deny 鎖在頁外（SYNC-2）。section 層仍各自走細粒度 APPRAISAL_* 守衛。
   { path: '/appraisal', permission: 'SETTINGS_READ', prefix: true },
+  { path: '/appraisal', permission: 'APPRAISAL_READ', prefix: true },
   // 考核管理整合頁（顯示 SETTINGS_READ 或 SALARY_READ 任一即可）
   { path: '/appraisal-management', permission: 'SETTINGS_READ' },
   { path: '/appraisal-management', permission: 'SALARY_READ' },
