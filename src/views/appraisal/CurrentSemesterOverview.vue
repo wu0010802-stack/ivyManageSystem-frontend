@@ -9,6 +9,8 @@
 import { computed, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, Connection, Plus, DataAnalysis } from '@element-plus/icons-vue'
+import { useClientTableFilter } from '@/composables/useClientTableFilter'
+import AdminListToolbar from '@/components/common/AdminListToolbar.vue'
 
 import {
   getAppraisalCurrentCycle,
@@ -163,6 +165,30 @@ watch(
 
 // ── KPI 計算 ──────────────────────────────────────────────
 const participants = computed<ParticipantRow[]>(() => aggregatedStatus.value?.participants || [])
+
+const {
+  searchQuery: overviewSearch,
+  filterValues: overviewFilters,
+  filtered: filteredParticipants,
+  total: participantTotal,
+  shown: participantShown,
+} = useClientTableFilter<ParticipantRow>({
+  source: () => participants.value,
+  searchFields: (p) => [p.employee_name ?? ''],
+  filters: {
+    participation: (p, v) => v !== 'non' || p.is_participant === false,
+    discipline: (p, v) => {
+      if (v !== 'has') return true
+      const d = p.disciplinary || {}
+      return (d.warning_count || 0) + (d.minor_count || 0) + (d.major_count || 0) > 0
+    },
+  },
+})
+
+const overviewFilterGroups = [
+  { key: 'participation', label: '參與', options: [{ label: '未加入考核', value: 'non' }] },
+  { key: 'discipline', label: '懲處', options: [{ label: '有懲處', value: 'has' }] },
+]
 
 const employeeCount = computed(() => participants.value.length)
 
@@ -511,8 +537,17 @@ const scorePreviewDialogVisible = ref(false)
         </el-collapse-item>
       </el-collapse>
 
+      <AdminListToolbar
+        v-model:search="overviewSearch"
+        search-placeholder="搜尋教師姓名"
+        :filters="overviewFilterGroups"
+        v-model:filter-values="overviewFilters"
+        :total="participantTotal"
+        :shown="participantShown"
+      />
+
       <el-table
-        :data="participants"
+        :data="filteredParticipants"
         v-loading="statusLoading"
         stripe
         empty-text="尚無員工資料"

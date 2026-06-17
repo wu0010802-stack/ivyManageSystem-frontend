@@ -166,6 +166,7 @@ const GLOBAL_STUBS = {
     inheritAttrs: false,
   },
   AggregatedStatusDetailDialog: true,
+  AdminListToolbar: true,
   ManualEventEntrySection: {
     props: ['cycleId', 'participants', 'readonly'],
     template: '<div data-test="manual-event-section" />',
@@ -570,3 +571,43 @@ describe('CurrentSemesterOverview', () => {
     expect(wrapper.text()).toContain('過1')
     expect(wrapper.text()).toContain('功2')
   })
+
+describe('CurrentSemesterOverview 清單篩選（Task 4）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('overviewSearch 以姓名過濾 filteredParticipants', async () => {
+    getAppraisalCurrentCycle.mockResolvedValue({ data: SAMPLE_CYCLE })
+    getAppraisalAllEmployeesStatus.mockResolvedValue({
+      data: makeStatusFixture({
+        extra: [
+          { participant_id: 9, employee_id: 9, employee_name: '陳大文', is_participant: true, disciplinary: {} },
+        ],
+      }),
+    })
+    const wrapper = await mountView()
+    const vm = wrapper.vm
+    vm.overviewSearch = '陳'
+    await wrapper.vm.$nextTick()
+    expect(vm.filteredParticipants.every((p) => p.employee_name.includes('陳'))).toBe(true)
+    expect(vm.filteredParticipants.some((p) => p.employee_name === '陳大文')).toBe(true)
+  })
+
+  it('未加入考核 chip 僅留 is_participant===false', async () => {
+    getAppraisalCurrentCycle.mockResolvedValue({ data: SAMPLE_CYCLE })
+    getAppraisalAllEmployeesStatus.mockResolvedValue({
+      data: makeStatusFixture({
+        extra: [
+          { participant_id: 8, employee_id: 8, employee_name: '未加入者', is_participant: false, disciplinary: {} },
+        ],
+      }),
+    })
+    const wrapper = await mountView()
+    const vm = wrapper.vm
+    vm.overviewFilters = { participation: 'non' }
+    await wrapper.vm.$nextTick()
+    expect(vm.filteredParticipants.every((p) => p.is_participant === false)).toBe(true)
+    expect(vm.filteredParticipants.length).toBeGreaterThan(0)
+  })
+})
