@@ -5,9 +5,13 @@ import StepCalculate from '../StepCalculate.vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 const calculateMock = vi.fn()
+const calculateAsyncMock = vi.fn()
+const getSalaryCalcJobMock = vi.fn()
 const getSnapshotMock = vi.fn()
 vi.mock('@/api/salary', () => ({
     calculate: (...a: unknown[]) => calculateMock(...a),
+    calculateAsync: (...a: unknown[]) => calculateAsyncMock(...a),
+    getSalaryCalcJob: (...a: unknown[]) => getSalaryCalcJobMock(...a),
     getEnrollmentSnapshot: (...a: unknown[]) => getSnapshotMock(...a),
 }))
 
@@ -50,6 +54,8 @@ const mountStep = (settlement: ReturnType<typeof makeSettlement>, month = 5) =>
 describe('StepCalculate', () => {
     beforeEach(() => {
         calculateMock.mockReset()
+        calculateAsyncMock.mockReset()
+        getSalaryCalcJobMock.mockReset()
         getSnapshotMock.mockReset()
         getSnapshotMock.mockResolvedValue({ data: { covered_months: [], rows: [] } })
         hasPermissionMock.mockReturnValue(true)
@@ -78,12 +84,15 @@ describe('StepCalculate', () => {
 
     it('計算成功 → refresh + emit next', async () => {
         const settlement = makeSettlement('reviewing')
-        calculateMock.mockResolvedValue({ data: { results: [], errors: [] } })
+        calculateAsyncMock.mockResolvedValue({ data: { job_id: 'job-1', total: 3 } })
+        getSalaryCalcJobMock.mockResolvedValue({
+            data: { job_id: 'job-1', status: 'completed', errors: [], done: 3, total: 3, current_employee: '' },
+        })
         const wrapper = mountStep(settlement)
         const btn = wrapper.findAll('button').find((b) => b.text().includes('計算薪資'))
         await btn!.trigger('click')
         await flushPromises()
-        expect(calculateMock).toHaveBeenCalledWith(2026, 5)
+        expect(calculateAsyncMock).toHaveBeenCalledWith(2026, 5)
         expect(settlement.refresh).toHaveBeenCalled()
         expect(wrapper.emitted('next')).toBeTruthy()
         expect(ElMessage.success).toHaveBeenCalled()
@@ -91,8 +100,16 @@ describe('StepCalculate', () => {
 
     it('部分失敗 → 持久警示列出失敗員工、停留在計算步驟', async () => {
         const settlement = makeSettlement('reviewing')
-        calculateMock.mockResolvedValue({
-            data: { errors: [{ employee_name: '王小明', error: '缺底薪' }] },
+        calculateAsyncMock.mockResolvedValue({ data: { job_id: 'job-2', total: 3 } })
+        getSalaryCalcJobMock.mockResolvedValue({
+            data: {
+                job_id: 'job-2',
+                status: 'completed',
+                errors: [{ employee_name: '王小明', error: '缺底薪' }],
+                done: 2,
+                total: 3,
+                current_employee: '',
+            },
         })
         const wrapper = mountStep(settlement)
         const btn = wrapper.findAll('button').find((b) => b.text().includes('計算薪資'))
@@ -106,20 +123,29 @@ describe('StepCalculate', () => {
         expect(wrapper.text()).toContain('缺底薪')
 
         // 重算全成功 → 警示清除、照常前進
-        calculateMock.mockResolvedValue({ data: { results: [], errors: [] } })
+        getSalaryCalcJobMock.mockResolvedValue({
+            data: {
+                job_id: 'job-2',
+                status: 'completed',
+                errors: [],
+                done: 3,
+                total: 3,
+                current_employee: '',
+            },
+        })
         await btn!.trigger('click')
         await flushPromises()
         expect(wrapper.emitted('next')).toBeTruthy()
         expect(wrapper.text()).not.toContain('王小明')
     })
 
-    it('使用者取消 confirm → 不呼叫 calculate', async () => {
+    it('使用者取消 confirm → 不呼叫 calculateAsync', async () => {
         vi.mocked(ElMessageBox.confirm).mockRejectedValue('cancel')
         const wrapper = mountStep(makeSettlement('reviewing'))
         const btn = wrapper.findAll('button').find((b) => b.text().includes('計算薪資'))
         await btn!.trigger('click')
         await flushPromises()
-        expect(calculateMock).not.toHaveBeenCalled()
+        expect(calculateAsyncMock).not.toHaveBeenCalled()
     })
 
     it('發放月涵蓋月快照未全確認 → 計算按鈕 disabled（決策2 gate）', async () => {
