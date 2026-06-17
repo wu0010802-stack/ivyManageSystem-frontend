@@ -17,6 +17,8 @@ import { useEmployeeStore } from '@/stores/employee'
 import { useClassroomStore } from '@/stores/classroom'
 import { Top, Document } from '@element-plus/icons-vue'
 import { apiError } from '@/utils/error'
+import { useTableFilters } from '@/composables/useTableFilters'
+import AdminListToolbar from '@/components/common/AdminListToolbar.vue'
 
 type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 
@@ -47,8 +49,25 @@ interface AnnouncementItem {
   [key: string]: unknown
 }
 
-const loading = ref(false)
-const announcements = ref<AnnouncementItem[]>([])
+const {
+  searchQuery: annSearch,
+  items: rawAnnouncements,
+  total: annTotal,
+  page: annPage,
+  pageSize: annPageSize,
+  loading,
+  fetch: fetchAnnouncements,
+  setPage: annSetPage,
+  setExtraParams,
+} = useTableFilters({ apiFunc: (params) => getAnnouncements(params), initialPageSize: 50 })
+
+const announcements = computed(() => rawAnnouncements.value as AnnouncementItem[])
+
+const annFilterValues = ref<Record<string, unknown>>({})
+const onAnnFilterChange = (v: Record<string, unknown>) => {
+  annFilterValues.value = v
+  return setExtraParams({ priority: v.priority })
+}
 const dialogVisible = ref(false)
 const isEdit = ref(false)
 const employeeStore = useEmployeeStore()
@@ -73,6 +92,10 @@ const priorityOptions: { value: string; label: string; type: ElTagType }[] = [
 ]
 
 const priorityMap: Record<string, { value: string; label: string; type: ElTagType }> = Object.fromEntries(priorityOptions.map(p => [p.value, p]))
+
+const annFilterGroups = computed(() => [
+  { key: 'priority', label: '優先級', options: priorityOptions.map((o) => ({ label: o.label, value: o.value })) },
+])
 
 // ── Attachment state ──────────────────────────────────────────────────────
 type PendingAttachment = { file: File; uid: number }
@@ -178,18 +201,6 @@ const resetForm = () => {
   pendingAttachments.value = []
   existingAttachments.value = []
   attachmentsToDelete.value = []
-}
-
-const fetchAnnouncements = async () => {
-  loading.value = true
-  try {
-    const res = await getAnnouncements({})
-    announcements.value = (res.data as { items?: AnnouncementItem[] }).items || []
-  } catch (error) {
-    ElMessage.error(apiError(error, '載入失敗'))
-  } finally {
-    loading.value = false
-  }
 }
 
 const openAdd = () => {
@@ -387,6 +398,15 @@ onMounted(() => {
       <el-button type="primary" @click="openAdd">新增公告</el-button>
     </div>
 
+    <AdminListToolbar
+      v-model:search="annSearch"
+      search-placeholder="搜尋公告標題"
+      :filters="annFilterGroups"
+      :filter-values="annFilterValues"
+      :total="annTotal"
+      @update:filter-values="onAnnFilterChange"
+    />
+
     <el-table :data="announcements" v-loading="loading" stripe border style="width: 100%" max-height="600">
       <el-table-column label="置頂" width="70" align="center">
         <template #default="{ row }">
@@ -499,6 +519,17 @@ onMounted(() => {
         </template>
       </el-table-column>
     </el-table>
+
+    <el-pagination
+      v-if="annTotal > annPageSize"
+      style="margin-top: 16px; justify-content: flex-end;"
+      background
+      layout="total, prev, pager, next"
+      :total="annTotal"
+      :page-size="annPageSize"
+      :current-page="annPage"
+      @current-change="annSetPage"
+    />
 
     <!-- Add/Edit Dialog -->
     <el-dialog
