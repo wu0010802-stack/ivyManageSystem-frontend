@@ -3,13 +3,15 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowRight, Check, Close, Document, Link, Loading, Paperclip } from '@element-plus/icons-vue'
-import { getLeaves, approveLeave as approveLeaveApi, getLeaveAttachment } from '@/api/leaves'
-import { getOvertimes, approveOvertime as approveOvertimeApi } from '@/api/overtimes'
-import { getCorrections, approveCorrection as approveCorrectionApi } from '@/api/punchCorrections'
+import { getLeaves, approveLeave as approveLeaveApi, getLeaveAttachment, batchApproveLeaves } from '@/api/leaves'
+import { getOvertimes, approveOvertime as approveOvertimeApi, batchApproveOvertimes } from '@/api/overtimes'
+import { getCorrections, approveCorrection as approveCorrectionApi, batchApproveCorrections } from '@/api/punchCorrections'
 import { LEAVE_TYPE_MAP as leaveTypeMap } from '@/utils/leaves'
 import { money, formatDate, formatTime } from '@/utils/format'
 import { useFetchPending, useApprovalOperation } from '@/composables'
+import { useApprovalModule } from '@/composables/useApprovalModule'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
+import LeaveBatchRejectDialog from '@/views/leave/LeaveBatchRejectDialog.vue'
 import { ROLE_TAG_MAP, OVERTIME_TYPE_MAP, CORRECTION_TYPE_MAP, SUBSTITUTE_STATUS_MAP } from '@/constants/approvalEnums'
 
 const router = useRouter()
@@ -22,6 +24,29 @@ const isFirstLoad = ref(true)
 const { items: pendingLeaves,          fetch: fetchPendingLeaves    } = useFetchPending(getLeaves)
 const { items: pendingOvertimes,       fetch: fetchPendingOvertimes } = useFetchPending(getOvertimes)
 const { items: pendingPunchCorrections, fetch: fetchPendingCorrections } = useFetchPending(getCorrections)
+
+type BatchFn = (ids: unknown[], approved: boolean, reason?: string) => Promise<{ data: { succeeded: { length: number }[]; failed: { id: unknown; reason: string }[] } }>
+
+const {
+  selectedItems: selectedLeaves, batchLoading: batchLoadingL,
+  batchRejectVisible: batchRejectVisibleL, batchRejectReason: batchRejectReasonL,
+  handleSelectionChange: handleSelectionChangeL, showBatchApproveConfirm: approveBatchL,
+  openBatchReject: openBatchRejectL, confirmBatchReject: confirmBatchRejectL, canApprove: canApproveL,
+} = useApprovalModule({ docType: 'leave', batchApproveFn: batchApproveLeaves as BatchFn, fetchFn: () => fetchPendingLeaves(), recordLabel: '請假記錄' })
+
+const {
+  selectedItems: selectedOvertimes, batchLoading: batchLoadingO,
+  batchRejectVisible: batchRejectVisibleO, batchRejectReason: batchRejectReasonO,
+  handleSelectionChange: handleSelectionChangeO, showBatchApproveConfirm: approveBatchO,
+  openBatchReject: openBatchRejectO, confirmBatchReject: confirmBatchRejectO, canApprove: canApproveO,
+} = useApprovalModule({ docType: 'overtime', batchApproveFn: batchApproveOvertimes as BatchFn, fetchFn: () => fetchPendingOvertimes(), recordLabel: '加班記錄' })
+
+const {
+  selectedItems: selectedCorrections, batchLoading: batchLoadingC,
+  batchRejectVisible: batchRejectVisibleC, batchRejectReason: batchRejectReasonC,
+  handleSelectionChange: handleSelectionChangeC, showBatchApproveConfirm: approveBatchC,
+  openBatchReject: openBatchRejectC, confirmBatchReject: confirmBatchRejectC, canApprove: canApproveC,
+} = useApprovalModule({ docType: 'punch_correction', batchApproveFn: batchApproveCorrections as BatchFn, fetchFn: () => fetchPendingCorrections(), recordLabel: '補打卡記錄' })
 
 const roleTagMap        = ROLE_TAG_MAP
 const overtimeTypeMap   = OVERTIME_TYPE_MAP
@@ -259,6 +284,8 @@ onMounted(fetchAll)
           </div>
           <div class="card-header__actions">
             <el-badge :value="pendingLeaves.length" :type="pendingLeaves.length > 0 ? 'warning' : 'success'" />
+            <el-button v-if="selectedLeaves.length > 0" type="success" size="small" :loading="batchLoadingL" @click="approveBatchL">批次核准 ({{ selectedLeaves.length }})</el-button>
+            <el-button v-if="selectedLeaves.length > 0" type="danger" size="small" :loading="batchLoadingL" @click="openBatchRejectL">批次駁回 ({{ selectedLeaves.length }})</el-button>
             <el-button link type="primary" @click="goToLeaveManagement">
               請假管理
               <el-icon><ArrowRight /></el-icon>
@@ -276,7 +303,9 @@ onMounted(fetchAll)
         size="small"
         style="width: 100%"
         max-height="520"
+        @selection-change="handleSelectionChangeL"
       >
+        <el-table-column type="selection" width="45" :selectable="canApproveL" />
         <el-table-column label="員工" min-width="140">
           <template #default="{ row }">
             <div class="cell-stack">
@@ -380,6 +409,8 @@ onMounted(fetchAll)
           </div>
           <div class="card-header__actions">
             <el-badge :value="pendingOvertimes.length" :type="pendingOvertimes.length > 0 ? 'warning' : 'success'" />
+            <el-button v-if="selectedOvertimes.length > 0" type="success" size="small" :loading="batchLoadingO" @click="approveBatchO">批次核准 ({{ selectedOvertimes.length }})</el-button>
+            <el-button v-if="selectedOvertimes.length > 0" type="danger" size="small" :loading="batchLoadingO" @click="openBatchRejectO">批次駁回 ({{ selectedOvertimes.length }})</el-button>
             <el-button link type="primary" @click="goToOvertimeManagement">
               加班管理
               <el-icon><ArrowRight /></el-icon>
@@ -397,7 +428,9 @@ onMounted(fetchAll)
         size="small"
         style="width: 100%"
         max-height="520"
+        @selection-change="handleSelectionChangeO"
       >
+        <el-table-column type="selection" width="45" :selectable="canApproveO" />
         <el-table-column label="員工" min-width="140">
           <template #default="{ row }">
             <div class="cell-stack">
@@ -477,6 +510,8 @@ onMounted(fetchAll)
           </div>
           <div class="card-header__actions">
             <el-badge :value="pendingPunchCorrections.length" :type="pendingPunchCorrections.length > 0 ? 'warning' : 'success'" />
+            <el-button v-if="selectedCorrections.length > 0" type="success" size="small" :loading="batchLoadingC" @click="approveBatchC">批次核准 ({{ selectedCorrections.length }})</el-button>
+            <el-button v-if="selectedCorrections.length > 0" type="danger" size="small" :loading="batchLoadingC" @click="openBatchRejectC">批次駁回 ({{ selectedCorrections.length }})</el-button>
             <el-button link type="primary" @click="goToAttendanceManagement">
               考勤管理
               <el-icon><ArrowRight /></el-icon>
@@ -494,7 +529,9 @@ onMounted(fetchAll)
         size="small"
         style="width: 100%"
         max-height="520"
+        @selection-change="handleSelectionChangeC"
       >
+        <el-table-column type="selection" width="45" :selectable="canApproveC" />
         <el-table-column prop="employee_name" label="員工" min-width="120" />
         <el-table-column prop="attendance_date" label="考勤日期" width="120" />
         <el-table-column label="補正類型" width="110">
@@ -540,6 +577,10 @@ onMounted(fetchAll)
 
       <el-empty v-else-if="!isFirstLoad" description="沒有待審核的補打卡申請" :image-size="60" />
     </el-card>
+
+    <LeaveBatchRejectDialog v-model:visible="batchRejectVisibleL" v-model:reason="batchRejectReasonL" :loading="batchLoadingL" @confirm="confirmBatchRejectL" />
+    <LeaveBatchRejectDialog v-model:visible="batchRejectVisibleO" v-model:reason="batchRejectReasonO" :loading="batchLoadingO" @confirm="confirmBatchRejectO" />
+    <LeaveBatchRejectDialog v-model:visible="batchRejectVisibleC" v-model:reason="batchRejectReasonC" :loading="batchLoadingC" @confirm="confirmBatchRejectC" />
 
     <el-dialog
       v-model="attachDialogVisible"
