@@ -295,7 +295,11 @@ const handleExport = async () => {
       try {
         const text = await (err.response.data as Blob).text()
         const body = JSON.parse(text) as { detail?: string }
-        ElMessage.error(body.detail || '匯出失敗')
+        // 超量 400：補可操作引導，避免使用者只看到硬訊息卻不知如何縮小範圍
+        ElMessage.error({
+          message: `${body.detail || '匯出失敗'}　請縮小範圍後再試：設定起訖時間（或用快捷時段），並可加上資源類型／操作者等篩選。`,
+          duration: 6000,
+        })
       } catch (_) {
         ElMessage.error('匯出失敗')
       }
@@ -468,6 +472,9 @@ defineExpose({ formatOperator })
         <el-button size="small" link @click="setQuickRange('today')">今日</el-button>
         <el-button size="small" link @click="setQuickRange('7d')">近 7 日</el-button>
         <el-button size="small" link @click="setQuickRange('month')">本月</el-button>
+        <span v-if="!filters.start_at && !filters.end_at" class="risk-hint">
+          ℹ️ 未設定起訖時間時預設只顯示最近 30 天；要查更早的紀錄請設定起始時間或用快捷時段
+        </span>
       </div>
       <div class="quick-ranges">
         <span class="quick-label">高風險快篩：</span>
