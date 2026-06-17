@@ -49,9 +49,10 @@ const semesterOptions = [
   { label: '下學期（2 月 - 7 月）', value: 2 },
 ]
 
-// 畢業/轉出 dialog
+// 畢業/轉出 dialog（單筆 graduateTarget；批次則 graduateBatchMode + selectedStudents）
 const graduateDialogVisible = ref(false)
 const graduateTarget = ref<StudentRow | null>(null)
+const graduateBatchMode = ref(false)
 const graduateFormRef = ref<{ validate: (cb: (valid: boolean) => void) => void } | null>(null)
 const graduateForm = reactive({ graduation_date: '', status: '已畢業', reason: '', notes: '' })
 const graduateRules = {
@@ -181,12 +182,25 @@ const handleTabChange = () => {
   fetchStudents()
 }
 
-const openGraduateDialog = (row: StudentRow) => {
-  graduateTarget.value = row
+const resetGraduateForm = () => {
   graduateForm.graduation_date = ''
   graduateForm.status = '已畢業'
   graduateForm.reason = ''
   graduateForm.notes = ''
+}
+
+const openGraduateDialog = (row: StudentRow) => {
+  graduateBatchMode.value = false
+  graduateTarget.value = row
+  resetGraduateForm()
+  graduateDialogVisible.value = true
+}
+
+const openBatchGraduateDialog = () => {
+  if (!selectedStudents.value.length) return
+  graduateBatchMode.value = true
+  graduateTarget.value = null
+  resetGraduateForm()
   graduateDialogVisible.value = true
 }
 
@@ -194,10 +208,24 @@ const submitGraduate = async () => {
   if (!graduateFormRef.value) return
   await graduateFormRef.value.validate(async (valid) => {
     if (!valid) return
+    const studentStore = useStudentStore()
     try {
-      const studentStore = useStudentStore()
-      await studentStore.graduateStudent(graduateTarget.value!.id, graduateForm)
-      ElMessage.success(`已將「${graduateTarget.value!.name}」設為${graduateForm.status}`)
+      if (graduateBatchMode.value) {
+        const result = await studentStore.bulkGraduate({
+          student_ids: selectedStudents.value.map((s) => s.id),
+          graduation_date: graduateForm.graduation_date,
+          status: graduateForm.status,
+          reason: graduateForm.reason || null,
+          notes: graduateForm.notes || null,
+        })
+        const done = result?.graduated_count ?? 0
+        const skipped = result?.skipped?.length ?? 0
+        ElMessage.success(`已將 ${done} 名學生設為${graduateForm.status}${skipped ? `，略過 ${skipped} 名` : ''}`)
+        selectedStudents.value = []
+      } else {
+        await studentStore.graduateStudent(graduateTarget.value!.id, graduateForm)
+        ElMessage.success(`已將「${graduateTarget.value!.name}」設為${graduateForm.status}`)
+      }
       graduateDialogVisible.value = false
       fetchStudents()
     } catch (error) {
@@ -395,6 +423,14 @@ onMounted(async () => {
         >
           批次轉班
         </el-button>
+        <el-button
+          v-if="activeTab === 'active'"
+          plain
+          :disabled="selectedStudents.length === 0"
+          @click="openBatchGraduateDialog"
+        >
+          批次畢業
+        </el-button>
         <el-button type="primary" :icon="Plus" @click="handleAdd">新增學生</el-button>
       </div>
     </div>
@@ -558,10 +594,11 @@ onMounted(async () => {
     </StudentEditDialog>
 
     <!-- 畢業/轉出 Dialog -->
-    <el-dialog v-model="graduateDialogVisible" title="設定離園" width="400px">
+    <el-dialog v-model="graduateDialogVisible" :title="graduateBatchMode ? '批次設定離園' : '設定離園'" width="400px">
       <el-form :model="graduateForm" :rules="graduateRules" ref="graduateFormRef" label-width="90px">
-        <el-form-item label="學生姓名">
-          <span>{{ graduateTarget?.name }}</span>
+        <el-form-item :label="graduateBatchMode ? '對象' : '學生姓名'">
+          <span v-if="graduateBatchMode">已選 {{ selectedStudents.length }} 名學生</span>
+          <span v-else>{{ graduateTarget?.name }}</span>
         </el-form-item>
         <el-form-item label="離園類型" prop="status">
           <el-radio-group v-model="graduateForm.status">

@@ -4,6 +4,7 @@ import {
   updateStudent as apiUpdateStudent,
   graduateStudent as apiGraduateStudent,
   bulkTransferStudents as apiBulkTransferStudents,
+  bulkGraduateStudents as apiBulkGraduateStudents,
   transitionStudentLifecycle as apiTransitionLifecycle,
 } from '@/api/students'
 import { createKeyedFetchStore } from './_createKeyedFetchStore'
@@ -20,6 +21,7 @@ type StoreWithMutations = ReturnType<typeof baseStore> & {
   updateStudent: (id: number, payload: Record<string, unknown>) => Promise<unknown>
   graduateStudent: (id: number, payload: Record<string, unknown>) => Promise<unknown>
   bulkTransfer: (args: { student_ids: number[]; target_classroom_id: number; source_classroom_id?: number | null }) => Promise<unknown>
+  bulkGraduate: (args: { student_ids: number[]; graduation_date: string; status: string; reason?: string | null; notes?: string | null }) => Promise<{ graduated_count?: number; skipped?: { student_id: number; reason: string }[]; succeeded_ids?: number[] }>
   transitionLifecycle: (id: number, payload: Record<string, unknown>) => Promise<unknown>
 }
 
@@ -84,6 +86,16 @@ function buildMutationActions(store: StoreWithMutations) {
         to_classroom_id: target_classroom_id,
       })
       return res?.data
+    },
+
+    async bulkGraduate({ student_ids, graduation_date, status, reason = null, notes = null }: { student_ids: number[]; graduation_date: string; status: string; reason?: string | null; notes?: string | null }) {
+      const res = await apiBulkGraduateStudents({ student_ids, graduation_date, status, reason, notes })
+      const data = (res?.data ?? {}) as { succeeded_ids?: number[]; graduated_count?: number; skipped?: { student_id: number; reason: string }[] }
+      const toStatus = status === '已轉出' ? 'transferred' : 'graduated'
+      for (const id of data.succeeded_ids ?? []) {
+        domainBus.emit(STUDENT_EVENTS.LIFECYCLE_CHANGED, { id, from_status: null, to_status: toStatus })
+      }
+      return data
     },
 
     async transitionLifecycle(id: number, payload: Record<string, unknown>) {

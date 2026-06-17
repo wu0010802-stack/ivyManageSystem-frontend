@@ -7,6 +7,7 @@ vi.mock('@/api/students', () => ({
   updateStudent: vi.fn(),
   graduateStudent: vi.fn(),
   bulkTransferStudents: vi.fn(),
+  bulkGraduateStudents: vi.fn(),
   transitionStudentLifecycle: vi.fn(),
 }))
 
@@ -16,6 +17,7 @@ import {
   updateStudent,
   graduateStudent,
   bulkTransferStudents,
+  bulkGraduateStudents,
 } from '@/api/students'
 import { useStudentStore } from '@/stores/student'
 import { domainBus, STUDENT_EVENTS } from '@/utils/domainBus'
@@ -100,6 +102,36 @@ describe('useStudentStore', () => {
       from_status: 'active',
       to_status: 'graduated',
     })
+  })
+
+  it('bulkGraduate calls API, emits lifecycle-changed per succeeded id, returns result', async () => {
+    bulkGraduateStudents.mockResolvedValue({
+      data: { graduated_count: 2, succeeded_ids: [1, 2], skipped: [{ student_id: 3, reason: '已非在讀狀態' }] },
+    })
+    const store = useStudentStore()
+    const events = []
+    domainBus.on(STUDENT_EVENTS.LIFECYCLE_CHANGED, (p) => events.push(p))
+
+    const result = await store.bulkGraduate({ student_ids: [1, 2, 3], graduation_date: '2026-06-30', status: '已畢業' })
+
+    expect(bulkGraduateStudents).toHaveBeenCalledWith({
+      student_ids: [1, 2, 3], graduation_date: '2026-06-30', status: '已畢業', reason: null, notes: null,
+    })
+    expect(result.graduated_count).toBe(2)
+    expect(result.skipped).toHaveLength(1)
+    expect(events).toEqual([
+      { id: 1, from_status: null, to_status: 'graduated' },
+      { id: 2, from_status: null, to_status: 'graduated' },
+    ])
+  })
+
+  it('bulkGraduate maps 已轉出 to transferred', async () => {
+    bulkGraduateStudents.mockResolvedValue({ data: { graduated_count: 1, succeeded_ids: [5] } })
+    const store = useStudentStore()
+    const events = []
+    domainBus.on(STUDENT_EVENTS.LIFECYCLE_CHANGED, (p) => events.push(p))
+    await store.bulkGraduate({ student_ids: [5], graduation_date: '2026-06-30', status: '已轉出' })
+    expect(events[0].to_status).toBe('transferred')
   })
 
   it('createStudent emits student:created', async () => {
