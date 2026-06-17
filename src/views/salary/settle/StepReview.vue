@@ -20,6 +20,14 @@
           </span>
         </span>
         <div class="review-toolbar__actions">
+          <el-input
+            v-model="reviewSearch"
+            placeholder="搜尋姓名/編號"
+            :prefix-icon="Search"
+            clearable
+            size="small"
+            style="width: 180px"
+          />
           <el-switch v-model="onlyAttention" active-text="只看需注意" />
           <el-popover placement="bottom-end" :width="280" trigger="click">
             <template #reference>
@@ -314,7 +322,7 @@
 <script setup lang="ts">
 import { ref, computed, inject, h, defineComponent, type PropType } from 'vue'
 import { ElMessage, ElTooltip, ElIcon } from 'element-plus'
-import { InfoFilled, Edit } from '@element-plus/icons-vue'
+import { InfoFilled, Edit, Search } from '@element-plus/icons-vue'
 import { getSalaryFieldBreakdown } from '@/api/salary'
 import SalaryBreakdown from '../SalaryBreakdown.vue'
 import AdjustDrawer from './AdjustDrawer.vue'
@@ -324,6 +332,7 @@ import { hasPermission } from '@/utils/auth'
 import { money } from '@/utils/format'
 import { downloadFile } from '@/utils/download'
 import { useErrorNotify } from '@/composables/useErrorNotify'
+import { useClientTableFilter } from '@/composables/useClientTableFilter'
 import {
     getThresholds,
     setThresholds,
@@ -363,10 +372,14 @@ const ManualOverrideIcon = defineComponent({
 
 // ---- 異常浮出 ----
 const onlyAttention = ref(false)
-const visibleRecords = computed(() => {
+const attentionRecords = computed(() => {
     const sorted = settlement.sortedRecords.value
     if (!onlyAttention.value) return sorted
     return sorted.filter((r) => settlement.anomalies.value.has(r.employee_id))
+})
+const { searchQuery: reviewSearch, filtered: visibleRecords } = useClientTableFilter<SettlementRecord>({
+    source: () => attentionRecords.value,
+    searchFields: (r) => [r.employee_name, String(r.employee_id)],
 })
 const reasonsFor = (row: SettlementRecord): AnomalyReason[] =>
     settlement.anomalies.value.get(row.employee_id) ?? []

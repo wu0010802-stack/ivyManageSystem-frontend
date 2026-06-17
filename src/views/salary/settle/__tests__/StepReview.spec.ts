@@ -66,6 +66,7 @@ const STUBS = {
     'el-popover': true,
     'el-form': true,
     'el-form-item': true,
+    'el-input': true,
     'el-input-number': true,
     'el-button': { template: '<button><slot /></button>' },
     'el-dialog': true,
@@ -222,6 +223,24 @@ describe('AdjustDrawer', () => {
         })
         const saveBtn = wrapper.findAll('button').find((b) => b.text().includes('儲存'))
         expect(saveBtn!.attributes('disabled')).toBeDefined()
+    })
+})
+
+describe('StepReview 姓名搜尋', () => {
+    it('reviewSearch 以姓名過濾 visibleRecords', async () => {
+        const settlement = makeSettlement([
+            rec({ employee_id: 'E1', employee_name: '王小明' }),
+            rec({ employee_id: 'E2', employee_name: '陳大文' }),
+            rec({ employee_id: 'E3', employee_name: '王美麗' }),
+        ])
+        const wrapper = mount(StepReview, {
+            global: { stubs: STUBS, provide: { settlement, settleQuery: { year: 2026, month: 5 } } },
+        })
+        const vm = wrapper.vm as unknown as { reviewSearch: string; visibleRecords: { employee_id: string }[] }
+        expect(vm.visibleRecords).toHaveLength(3)
+        vm.reviewSearch = '王'
+        await wrapper.vm.$nextTick()
+        expect(vm.visibleRecords.map((r) => r.employee_id)).toEqual(['E1', 'E3'])
     })
 })
 
