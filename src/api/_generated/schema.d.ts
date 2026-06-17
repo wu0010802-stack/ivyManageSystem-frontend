@@ -139,6 +139,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/activity/attendance/sessions/batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Sessions Batch
+         * @description 依「每週上課星期」在日期範圍內批次建立場次（取代逐堂手動新增十幾二十次）。
+         *
+         *     weekday 省略時取課程 meeting_weekday；同課同日已存在（uq_activity_session_course_date）
+         *     者跳過並計入 skipped_existing（冪等 → 可重複按 / 微調範圍重跑不報錯）。
+         */
+        post: operations["create_sessions_batch_api_activity_attendance_sessions_batch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/activity/audit/operator-activity": {
         parameters: {
             query?: never;
@@ -10334,10 +10357,14 @@ export interface paths {
         };
         /**
          * Get Board
-         * @description 4 階段看板資料。
+         * @description 4 階段看板資料，依「訪視月份所屬學年（/學期）」圈定範圍。
          *
-         *     Phase A 不做時間範圍過濾 — 抓全部 visits 推導 stage（資料量小可承受）。
-         *     Phase B 若需要過濾，加 month range filter。
+         *     visit 依 month（民國月份）所屬學年過濾（學年 N = 8 月~隔年 7 月）：school_year 未帶
+         *     時預設當前學年，semester 未帶時涵蓋整學年（上+下）。
+         *
+         *     原實作抓全表（query(RecruitmentVisit).all()）→ 切學年看板不變、隨年度無上限累積、
+         *     summary 是全歷史人數而非當期（2026-06 探測）。target_school_year 多為 NULL（僅保留
+         *     座位時才填）不能當過濾依據，故改由 month 推導所屬學年（與招生模組 month/period 慣例一致）。
          */
         get: operations["get_board_api_recruitment_funnel_board_get"];
         put?: never;
@@ -12834,6 +12861,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/students/bulk-graduate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bulk Graduate Students
+         * @description 批次畢業/轉出（整班學年末一次處理，取代逐一開 dialog 點 N 次）。
+         *
+         *     有效在讀學生原子處理（單一交易）；找不到 / 已非在讀 / 離園日早於入學日者列入
+         *     skipped 不影響其餘。對齊單筆 graduate_student 副作用：set_lifecycle_status（PII
+         *     retention 戳記，不可繞過）+ StudentChangeLog + 才藝報名軟刪 + 接送/請假取消 +
+         *     發放月薪資 stale。限 admin/hr/supervisor（require_unrestricted_role）。
+         */
+        post: operations["bulk_graduate_students_api_students_bulk_graduate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/students/bulk-transfer": {
         parameters: {
             query?: never;
@@ -13707,6 +13759,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/year_end/settlements/finalize_batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Finalize Batch
+         * @description 批次老闆核定（ACCOUNTING_SIGNED → FINALIZED）。
+         */
+        post: operations["finalize_batch_api_year_end_settlements_finalize_batch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/year_end/settlements/sign_accounting_batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sign Accounting Batch
+         * @description 批次會計簽核（DRAFT/SUPERVISOR_SIGNED → ACCOUNTING_SIGNED）。
+         */
+        post: operations["sign_accounting_batch_api_year_end_settlements_sign_accounting_batch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/year_end/settlements/sign_supervisor_batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sign Supervisor Batch
+         * @description 批次主管簽核（DRAFT → SUPERVISOR_SIGNED）。
+         */
+        post: operations["sign_supervisor_batch_api_year_end_settlements_sign_supervisor_batch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -13724,6 +13836,8 @@ export interface components {
             name: string;
             /** Parent Phone */
             parent_phone: string;
+            /** Query Token */
+            query_token?: string | null;
         };
         /**
          * _PublicQueryByTokenPayload
@@ -14048,6 +14162,31 @@ export interface components {
             target_audience?: string | null;
             /** Term Label */
             term_label?: string | null;
+        };
+        /**
+         * ActivitySessionBatchCreateResultOut
+         * @description POST /attendance/sessions/batch 回應：依上課星期展開日期範圍批次建立場次。
+         *
+         *     created_dates 為實際新建的日期（ISO 升冪）；已存在（uq course+date）者計入
+         *     skipped_existing 而不報錯，讓重複按或微調範圍重跑為冪等。
+         */
+        ActivitySessionBatchCreateResultOut: {
+            /** Course Id */
+            course_id: number;
+            /** Course Name */
+            course_name: string;
+            /** Created Count */
+            created_count: number;
+            /** Created Dates */
+            created_dates: string[];
+            /** End Date */
+            end_date: string;
+            /** Skipped Existing */
+            skipped_existing: number;
+            /** Start Date */
+            start_date: string;
+            /** Weekday */
+            weekday: number;
         };
         /**
          * ActivitySessionCreateResultOut
@@ -15590,6 +15729,32 @@ export interface components {
             assignments: components["schemas"]["AssignmentItem"][];
             /** Week Start Date */
             week_start_date: string;
+        };
+        /**
+         * BulkGraduateResultOut
+         * @description POST /students/bulk-graduate 回傳：有效在讀學生原子處理，無效者列入 skipped。
+         */
+        BulkGraduateResultOut: {
+            /** Graduated Count */
+            graduated_count: number;
+            /** Message */
+            message: string;
+            /** Skipped */
+            skipped: components["schemas"]["BulkGraduateSkippedItem"][];
+            /** Status */
+            status: string;
+            /** Succeeded Ids */
+            succeeded_ids: number[];
+        };
+        /**
+         * BulkGraduateSkippedItem
+         * @description bulk-graduate 跳過的學生（找不到 / 已非在讀 / 離園日早於入學日）。
+         */
+        BulkGraduateSkippedItem: {
+            /** Reason */
+            reason: string;
+            /** Student Id */
+            student_id: number;
         };
         /**
          * BulkTransferResultOut
@@ -23274,6 +23439,11 @@ export interface components {
             paid_amount: number;
             /** Payment Status */
             payment_status: string;
+            /**
+             * Query Token Required
+             * @default false
+             */
+            query_token_required: boolean;
             /** Remark */
             remark: string;
             /** Supplies */
@@ -23376,6 +23546,8 @@ export interface components {
             new_parent_phone?: string | null;
             /** Parent Phone */
             parent_phone: string;
+            /** Query Token */
+            query_token?: string | null;
             /**
              * Remark
              * @default
@@ -25767,6 +25939,25 @@ export interface components {
             /** Message */
             message?: string | null;
         };
+        /** SessionBatchCreate */
+        SessionBatchCreate: {
+            /** Course Id */
+            course_id: number;
+            /**
+             * End Date
+             * Format: date
+             */
+            end_date: string;
+            /** Notes */
+            notes?: string | null;
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+            /** Weekday */
+            weekday?: number | null;
+        };
         /** SessionCreate */
         SessionCreate: {
             /** Course Id */
@@ -25799,6 +25990,30 @@ export interface components {
             token_count: number;
             /** User Agent */
             user_agent: string | null;
+        };
+        /** SettlementBatchSignFailedItem */
+        SettlementBatchSignFailedItem: {
+            /** Reason */
+            reason: string;
+            /** Settlement Id */
+            settlement_id: number;
+        };
+        /** SettlementBatchSignRequest */
+        SettlementBatchSignRequest: {
+            /** Settlement Ids */
+            settlement_ids: number[];
+        };
+        /**
+         * SettlementBatchSignResultOut
+         * @description 批次簽核/核定回應：逐筆成功/失敗（狀態不符、職責分離、自我核准等列入 failed）。
+         */
+        SettlementBatchSignResultOut: {
+            /** Failed */
+            failed: components["schemas"]["SettlementBatchSignFailedItem"][];
+            /** Succeeded Count */
+            succeeded_count: number;
+            /** Succeeded Ids */
+            succeeded_ids: number[];
         };
         /** SettlementOut */
         SettlementOut: {
@@ -26325,6 +26540,23 @@ export interface components {
             total_students: number;
             /** Unmarked Count */
             unmarked_count: number;
+        };
+        /** StudentBulkGraduate */
+        StudentBulkGraduate: {
+            /** Graduation Date */
+            graduation_date: string;
+            /** Notes */
+            notes?: string | null;
+            /** Reason */
+            reason?: string | null;
+            /**
+             * Status
+             * @default 已畢業
+             * @enum {string}
+             */
+            status: "已畢業" | "已轉出";
+            /** Student Ids */
+            student_ids: number[];
         };
         /** StudentBulkTransfer */
         StudentBulkTransfer: {
@@ -26974,6 +27206,8 @@ export interface components {
         SupabaseHealth: {
             /** Breaker */
             breaker: string;
+            /** Final Failed */
+            final_failed: number;
             /** Pending Uploads */
             pending_uploads: number;
         };
@@ -27871,6 +28105,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_sessions_batch_api_activity_attendance_sessions_batch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SessionBatchCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivitySessionBatchCreateResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -50119,6 +50386,39 @@ export interface operations {
             };
         };
     };
+    bulk_graduate_students_api_students_bulk_graduate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StudentBulkGraduate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkGraduateResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     bulk_transfer_students_api_students_bulk_transfer_post: {
         parameters: {
             query?: never;
@@ -51973,6 +52273,105 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SettlementOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    finalize_batch_api_year_end_settlements_finalize_batch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SettlementBatchSignRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettlementBatchSignResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sign_accounting_batch_api_year_end_settlements_sign_accounting_batch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SettlementBatchSignRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettlementBatchSignResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sign_supervisor_batch_api_year_end_settlements_sign_supervisor_batch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SettlementBatchSignRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettlementBatchSignResultOut"];
                 };
             };
             /** @description Validation Error */
