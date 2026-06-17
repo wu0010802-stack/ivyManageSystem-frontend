@@ -402,7 +402,8 @@ watch(debouncedSearch, async (val) => {
 })
 
 const exportEmployees = () => {
-  downloadFile('/exports/employees', '員工名冊.xlsx')
+  const q = searchQuery.value.trim()
+  downloadFile('/exports/employees', '員工名冊.xlsx', q ? { search: q } : undefined)
 }
 
 const fetchEmployees = async (force = true) => {

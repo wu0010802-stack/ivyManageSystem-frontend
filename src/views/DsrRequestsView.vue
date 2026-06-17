@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { listDsrRequests, approveDsrRequest, rejectDsrRequest } from '@/api/dsr'
 import { apiError } from '@/utils/error'
 import type { Schema } from '@/api/_generated/typed'
+import AdminListToolbar from '@/components/common/AdminListToolbar.vue'
 
 type DsrRecord = Schema<'DsrRequestAdminOut'>
 
@@ -29,6 +30,16 @@ const STATUS_TAG_TYPE: Record<string, 'info' | 'success' | 'danger'> = {
 // --- State ---
 const records = ref<DsrRecord[]>([])
 const loading = ref(false)
+const statusFilter = ref<string>('pending')
+const dsrFilterGroups = [{
+  key: 'status', label: '狀態', allLabel: '全部',
+  options: [
+    { label: '待處理', value: 'pending' },
+    { label: '已核准', value: 'approved' },
+    { label: '已駁回', value: 'rejected' },
+  ],
+}]
+const dsrFilterValues = computed<Record<string, unknown>>(() => ({ status: statusFilter.value }))
 
 // Approve dialog
 const approveDialogVisible = ref(false)
@@ -46,13 +57,19 @@ const rejectLoading = ref(false)
 const fetchList = async () => {
   loading.value = true
   try {
-    const res = await listDsrRequests()
+    const params = statusFilter.value ? { status: statusFilter.value } : undefined
+    const res = await listDsrRequests(params)
     records.value = res.data
   } catch (err) {
     ElMessage.error(apiError(err, '載入 DSR 請求失敗'))
   } finally {
     loading.value = false
   }
+}
+
+const onStatusFilterChange = (v: Record<string, unknown>) => {
+  statusFilter.value = (v.status as string) ?? ''
+  return fetchList()
 }
 
 // --- Approve ---
@@ -109,6 +126,14 @@ onMounted(fetchList)
 <template>
   <div class="dsr-requests-view">
     <h2 class="page-title">個資請求佇列（DSR）</h2>
+
+    <AdminListToolbar
+      :searchable="false"
+      :filters="dsrFilterGroups"
+      :filter-values="dsrFilterValues"
+      :total="records.length"
+      @update:filter-values="onStatusFilterChange"
+    />
 
     <el-table :data="records" v-loading="loading" style="width: 100%">
       <el-table-column prop="id" label="編號" width="80" />
