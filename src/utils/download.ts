@@ -34,10 +34,15 @@ export function saveBlobResponse(response: AxiosResponse<BlobPart>, fallbackName
  * 透過 axios 下載檔案（帶 JWT token，走 proxy）
  * @param {string} url - API 路徑，例如 '/exports/employees'
  * @param {string} [fallbackName] - 預設檔名（若 header 無 Content-Disposition）
+ * @param {Record<string, unknown>} [params] - 附加 query params（例如搜尋字串）
  */
-export async function downloadFile(url: string, fallbackName = 'download.xlsx') {
+export async function downloadFile(
+  url: string,
+  fallbackName = 'download.xlsx',
+  params?: Record<string, unknown>,
+) {
   try {
-    const response = await api.get(url, { responseType: 'blob', timeout: 30000 })
+    const response = await api.get(url, { responseType: 'blob', timeout: 30000, params })
     saveBlobResponse(response, fallbackName)
   } catch (error) {
     ElMessage.error('下載失敗: ' + ((error as { message?: string })?.message || '未知錯誤'))
