@@ -58,6 +58,7 @@ import DsrRequestsView from '../DsrRequestsView.vue'
 // 共用 stubs（避免 Element Plus 元件 teleport 到 body 的問題）
 const globalStubs = {
   teleport: true,
+  AdminListToolbar: true,
   'el-table': {
     template:
       '<table data-test="dsr-table"><tbody><tr v-for="r in data" :key="r.id" :data-id="r.id"><td class="type-cell">{{ r.request_type }}</td><td class="status-cell">{{ r.status }}</td><slot name="default" :row="r" /></tr></tbody></table>',
@@ -205,5 +206,23 @@ describe('DsrRequestsView', () => {
     expect(vm.approveDialogVisible).toBe(false)
     // 核准後重新 fetch
     expect(listDsrRequests).toHaveBeenCalledTimes(2)
+  })
+
+  it('預設帶 status=pending 查詢', async () => {
+    mount(DsrRequestsView, { global: { stubs: globalStubs, directives: globalDirectives } })
+    await flushPromises()
+    expect(listDsrRequests).toHaveBeenCalledWith({ status: 'pending' })
+  })
+
+  it('切換狀態 chip 以新 status 重查；全部則不帶 status', async () => {
+    const wrapper = mount(DsrRequestsView, { global: { stubs: globalStubs, directives: globalDirectives } })
+    await flushPromises()
+    const vm = wrapper.vm as unknown as { onStatusFilterChange: (v: Record<string, unknown>) => void }
+    vm.onStatusFilterChange({ status: 'approved' })
+    await flushPromises()
+    expect(listDsrRequests).toHaveBeenLastCalledWith({ status: 'approved' })
+    vm.onStatusFilterChange({})
+    await flushPromises()
+    expect(listDsrRequests).toHaveBeenLastCalledWith(undefined)
   })
 })
