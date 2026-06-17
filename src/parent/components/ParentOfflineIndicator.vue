@@ -11,6 +11,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { listOps, OP_STATUS, updateOp } from '@/utils/offlineQueue'
 import { flushAllParent, PARENT_KINDS } from '@/parent/utils/parentOfflineQueue'
 import { useParentAuthStore } from '@/parent/stores/parentAuth'
+import { escapeHtml } from '@/utils/html'
 
 const authStore = useParentAuthStore()
 
@@ -50,10 +51,12 @@ async function openReviewDialog() {
   const html = reviewOps.value.map((op) => {
     const created = op.created_at as string
     const lastErr = op.last_error as string | null
+    // last_error / kind / created 皆可能含後端回傳的使用者可控字串，
+    // dangerouslyUseHTMLString 場景必須逐欄 escape，否則形成 XSS（C47）。
     return `<div style="margin:8px 0;padding:8px;border-left:3px solid #f56c6c;">
-      <strong>${op.kind as string}</strong><br>
-      建立：${created}<br>
-      錯誤：${lastErr ?? '—'}
+      <strong>${escapeHtml(op.kind)}</strong><br>
+      建立：${escapeHtml(created)}<br>
+      錯誤：${escapeHtml(lastErr ?? '—')}
     </div>`
   }).join('')
   try {
