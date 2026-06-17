@@ -10210,6 +10210,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/punch-corrections/batch-approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Batch Approve Punch Corrections
+         * @description 批次核准/駁回補打卡。Pass 1 純驗證收集 failed，Pass 2 逐筆 savepoint 套用，
+         *     最後統一 commit。核准成功項會寫考勤 + 標薪資 stale。
+         */
+        post: operations["batch_approve_punch_corrections_api_punch_corrections_batch_approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/recruitment/address-hotspots": {
         parameters: {
             query?: never;
@@ -23559,6 +23580,15 @@ export interface components {
              */
             supplies: components["schemas"]["PublicSupplyItem"][];
         };
+        /** PunchCorrectionBatchApproveRequest */
+        PunchCorrectionBatchApproveRequest: {
+            /** Approved */
+            approved: boolean;
+            /** Ids */
+            ids: number[];
+            /** Rejection Reason */
+            rejection_reason?: string | null;
+        };
         /** PunchCorrectionCreate */
         PunchCorrectionCreate: {
             /**
@@ -30912,6 +30942,8 @@ export interface operations {
             query?: {
                 page?: number;
                 page_size?: number;
+                priority?: string | null;
+                search?: string | null;
             };
             header?: never;
             path?: never;
@@ -36404,7 +36436,9 @@ export interface operations {
     };
     export_employees_api_exports_employees_get: {
         parameters: {
-            query?: never;
+            query?: {
+                search?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -36418,6 +36452,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -45221,6 +45264,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DeleteResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    batch_approve_punch_corrections_api_punch_corrections_batch_approve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PunchCorrectionBatchApproveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
