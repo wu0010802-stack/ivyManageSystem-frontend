@@ -193,7 +193,7 @@
             截止：{{ formatDeadline(item.confirm_deadline) }}
             <span class="promotion-countdown">（{{ formatCountdown(item.confirm_deadline) }}）</span>
           </div>
-          <div class="promotion-card-actions">
+          <div v-if="canMutate" class="promotion-card-actions">
             <button
               type="button"
               class="btn btn-primary btn-sm"
@@ -211,6 +211,10 @@
               放棄此位
             </button>
           </div>
+          <!-- 資安 #5：三欄查詢（無 token）載入 token-bearing 報名時，候補確認/放棄須改用查詢連結 -->
+          <div v-else class="info-hint mutation-locked-hint">
+            🔒 確認 / 放棄候補需使用「報名時取得的查詢連結」。請改用查詢連結開啟本頁，或聯繫校方協助。
+          </div>
         </div>
       </section>
 
@@ -220,8 +224,13 @@
           <h2>編輯報名資料</h2>
         </div>
 
-        <div class="info-hint">
+        <div v-if="canMutate" class="info-hint">
           <strong>提示：</strong>您可以修改以下資料，完成後請點選「儲存修改」按鈕。
+        </div>
+        <!-- 資安 #5：三欄查詢（無 token）載入 token-bearing 報名時僅供檢視 -->
+        <div v-else class="info-hint mutation-locked-hint">
+          🔒 此報名需使用「報名時取得的查詢連結」才能修改。目前查詢僅供檢視；
+          如需修改，請改用查詢連結開啟本頁，或聯繫校方協助。
         </div>
 
         <!-- 候補位次摘要：依 queryResult.courses 渲染，不依賴 options 列表 -->
@@ -386,8 +395,14 @@
           <button
             type="button"
             class="btn btn-primary"
-            :disabled="editSubmitting || saveBlocked"
-            :title="saveBlocked ? '此修改會產生退費，請聯繫校方' : ''"
+            :disabled="editSubmitting || saveBlocked || !canMutate"
+            :title="
+              !canMutate
+                ? '此報名需使用報名時取得的查詢連結才能修改'
+                : saveBlocked
+                  ? '此修改會產生退費，請聯繫校方'
+                  : ''
+            "
             @click="handleSaveChanges"
           >
             {{ editSubmitting ? '儲存中…' : '儲存修改 Save' }}
@@ -438,6 +453,9 @@ interface QueryResult {
     class_editable?: boolean
     review_state?: string
   }
+  // 資安 #5：此報名是否需帶 query_token 才能做破壞性 mutation（=後端有 query_token_hash）。
+  // 三欄查詢（無 token）載入 token-bearing 報名時，前端據此顯示唯讀。
+  query_token_required?: boolean
 }
 
 const TOAST_ICONS: Record<string, string> = {
@@ -480,6 +498,17 @@ function normalizeMobile(raw: string): string {
 }
 const phoneValid = computed(() =>
   TW_MOBILE_RE.test(normalizeMobile(queryForm.parent_phone))
+)
+
+// 資安 #5：以 token 模式載入時手上才有 query_token；三欄模式為 null。
+const activeQueryToken = computed(() =>
+  queryMode.value === 'token' && queryForm.token.trim() ? queryForm.token.trim() : null,
+)
+// 可否進行破壞性 mutation（修改/確認/放棄）：
+// - 後端標 query_token_required（token-bearing 報名）→ 必須手上有 token
+// - 否則（舊報名 query_token_required=false）→ 沿用三欄，永遠可改
+const canMutate = computed(
+  () => !queryResult.value?.query_token_required || !!activeQueryToken.value,
 )
 
 const editForm = reactive({
@@ -645,6 +674,8 @@ async function handleConfirmPromotion(item: CourseEntry) {
       name: queryResult.value!.name,
       birthday: queryResult.value!.birthday || queryForm.birthday,
       parent_phone: phonePayload,
+      // 資安 #5：token-bearing 報名確認候補需帶 query_token（舊報名為 null）
+      query_token: activeQueryToken.value ?? undefined,
     })
     showToast((res as { data?: { message?: string } })?.data?.message || '已確認升為正式', 'success')
     // 重新查詢以更新狀態
@@ -672,6 +703,8 @@ async function handleDeclinePromotion(item: CourseEntry) {
       name: queryResult.value!.name,
       birthday: queryResult.value!.birthday || queryForm.birthday,
       parent_phone: phonePayload,
+      // 資安 #5：token-bearing 報名放棄候補需帶 query_token（舊報名為 null）
+      query_token: activeQueryToken.value ?? undefined,
     })
     showToast((res as { data?: { message?: string } })?.data?.message || '已放棄該名額', 'warning')
     const refreshed = await publicQueryRegistration(
@@ -808,6 +841,10 @@ async function handleSaveChanges() {
     // 樂觀鎖：把當前查詢回來的 updated_at 帶回去，後端比對不符即拒（409）
     if (queryResult.value!.updated_at) {
       payload.if_unmodified_since = queryResult.value!.updated_at
+    }
+    // 資安 #5：token-bearing 報名修改需帶 query_token（舊報名為 null，後端沿用三欄）
+    if (activeQueryToken.value) {
+      payload.query_token = activeQueryToken.value
     }
     const res = await publicUpdateRegistration(payload)
 
