@@ -263,11 +263,11 @@
                       <span class="gov-detail-label">使用樓層</span>
                       <span class="gov-detail-value">{{ preschoolGovData.floor }}</span>
                     </div>
-                    <div v-if="preschoolGovData.website" class="gov-detail-row">
+                    <div v-if="sanitizeHref(preschoolGovData.website)" class="gov-detail-row">
                       <span class="gov-detail-label">園所網址</span>
                       <a
                         class="gov-detail-value gov-detail-link"
-                        :href="preschoolGovData.website"
+                        :href="sanitizeHref(preschoolGovData.website)"
                         target="_blank"
                         rel="noopener noreferrer"
                       >{{ preschoolGovData.website }}</a>
@@ -333,6 +333,7 @@ import 'leaflet.markercluster/dist/MarkerCluster.css'
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css'
 // kiang 前端查詢已移除，所有資料由 nearby-kindergartens API 一次回傳
 import { syncGovKindergartens, getGovKindergartensSyncStatus, getGeocodePendingCount, geocodeCompetitorSchools, syncKiangData } from '@/api/recruitment'
+import { sanitizeHref } from '@/utils/url'
 
 interface CampusProp {
   campus_name?: string
@@ -1077,14 +1078,16 @@ const nearbySchoolPopupHtml = (school: NearbySchool) => {
   const ratingLine = schoolRating != null
     ? `<div class="popup-rating">${ratingStars} ${escapeHtml(schoolRating.toFixed(1))}${school.user_rating_count != null ? ` <span class="popup-rating-count">（${school.user_rating_count.toLocaleString()} 則）</span>` : ''}</div>`
     : ''
+  // 這段 HTML 會丟進 Leaflet bindPopup / Google InfoWindow（innerHTML），外部連結先過 scheme allowlist
+  const safeMapUri = sanitizeHref(school.google_maps_uri)
   return [
     `<div class="map-popup">`,
     `<strong>${escapeHtml(school.name || '未命名幼兒園')}</strong>`,
     ratingLine,
     `<div>${escapeHtml(school.formatted_address || '未提供地址')}</div>`,
     school.distance_km != null ? `<div>距本園約 ${escapeHtml(school.distance_km.toFixed(1))} km</div>` : '',
-    school.google_maps_uri
-      ? `<div><a href="${escapeHtml(school.google_maps_uri)}" target="_blank" rel="noreferrer">Google Maps</a></div>`
+    safeMapUri
+      ? `<div><a href="${escapeHtml(safeMapUri)}" target="_blank" rel="noreferrer">Google Maps</a></div>`
       : '',
     `</div>`,
   ].join('')

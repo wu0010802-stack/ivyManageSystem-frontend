@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
+import { sanitizeHref } from '@/utils/url'
 
 interface FaqAction {
   type: 'route' | 'contact_teacher' | 'external'
@@ -34,7 +35,11 @@ function runAction(): void {
   if (!a) return
   if (a.type === 'route') router.push(a.path ?? '/')
   else if (a.type === 'contact_teacher') router.push('/messages')
-  else if (a.type === 'external' && a.url) window.open(a.url, '_blank', 'noopener')
+  else if (a.type === 'external' && a.url) {
+    // 只放行 http(s)：擋掉 javascript: 等 scheme（window.open('javascript:…') 在部分引擎會執行）
+    const href = sanitizeHref(a.url)
+    if (href) window.open(href, '_blank', 'noopener')
+  }
 }
 </script>
 
