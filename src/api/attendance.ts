@@ -36,3 +36,9 @@ export const exportAnomalies = (year: number, month: number, status = 'all') =>
 
 export const exportEmployeeAttendance = (params: unknown) =>
   api.get('/exports/employee-attendance', { params, responseType: 'blob' })
+
+export const previewImport = (payload: { raw_text?: string; records?: unknown[] }) =>
+  api.post('/attendance/upload/preview', payload)
+
+export const upsertRecord = (data: { employee_id: number; date: string; punch_in?: string; punch_out?: string }) =>
+  api.post('/attendance/record', data)
