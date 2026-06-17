@@ -4,6 +4,30 @@ import type { ApiBody, AxiosResp } from './_generated/typed'
 export const calculate = (year: number, month: number): AxiosResp<'/salaries/calculate', 'post'> =>
     api.post(`/salaries/calculate?year=${year}&month=${month}`)
 
+// async 批次計算（後端 calculate-async + job registry；同步 calculate 對 >300 員工會擋並
+// 指向此路徑）。後端兩端點無 response_model（回 job.to_dict() 純 dict）→ 前端自訂型別。
+export interface SalaryCalcJobStatus {
+    job_id: string
+    year: number
+    month: number
+    status: 'pending' | 'running' | 'completed' | 'failed'
+    total: number
+    done: number
+    progress_ratio: number
+    current_employee: string
+    errors: { employee_name?: string; error?: string }[]
+    error_message: string | null
+    result_count: number
+}
+
+/** 啟動 async 批次計算 job（202，立即回 job_id；實際計算於背景）。409=同月已有進行中 job/已封存。 */
+export const calculateAsync = (year: number, month: number): AxiosResp<'/salaries/calculate-async', 'post'> =>
+    api.post(`/salaries/calculate-async?year=${year}&month=${month}`)
+
+/** 查詢 async 計算 job 狀態 / 進度（輪詢用）。 */
+export const getSalaryCalcJob = (jobId: string): AxiosResp<'/salaries/calculate-jobs/{job_id}', 'get'> =>
+    api.get(`/salaries/calculate-jobs/${jobId}`)
+
 export const getFestivalBonus = (year: number, month: number) =>
     api.get(`/salaries/festival-bonus?year=${year}&month=${month}`)
 

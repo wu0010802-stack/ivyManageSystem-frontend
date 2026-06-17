@@ -46,6 +46,15 @@
           </span>
         </el-tooltip>
       </div>
+
+      <!-- async 計算進度：背景批次 + 輪詢，取代原本只有一顆 spinner -->
+      <div v-if="progress" class="calc-progress">
+        <el-progress :percentage="progressPct" :stroke-width="14" :duration="2" />
+        <p class="calc-hint calc-progress-label">
+          計算中 {{ progress.done }} / {{ progress.total }}
+          <span v-if="progress.current">（{{ progress.current }}）</span>
+        </p>
+      </div>
     </el-card>
 
     <div class="step-actions">
@@ -57,7 +66,7 @@
 <script setup lang="ts">
 import { ref, computed, inject, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { calculate, getEnrollmentSnapshot } from '@/api/salary'
+import { calculateAsync, getSalaryCalcJob, getEnrollmentSnapshot, type SalaryCalcJobStatus } from '@/api/salary'
 import { hasPermission } from '@/utils/auth'
 import { useErrorNotify } from '@/composables/useErrorNotify'
 import type { SalarySettlement } from '@/composables/useSalarySettlement'
@@ -72,6 +81,13 @@ const q = inject<{ year: number; month: number }>('settleQuery', {
 const { notify } = useErrorNotify()
 const calculating = ref(false)
 const calcErrors = ref<{ employee_name?: string; error?: string }[]>([])
+// async 計算進度（done/total/current）；null = 未在計算
+const progress = ref<{ done: number; total: number; current: string } | null>(null)
+const progressPct = computed(() => {
+    const p = progress.value
+    if (!p || !p.total) return 0
+    return Math.min(100, Math.round((p.done / p.total) * 100))
+})
 
 // 發放月（2/6/9/12）快照 gate（決策2）：涵蓋月在籍人數快照須全部確認才能計算。
 // 前端預先禁用按鈕避免白點；後端 calculate 端點 422 為最終強制關卡。
@@ -112,6 +128,25 @@ const lastCalculatedAt = computed(() => {
     return first?.calculated_at ? new Date(first.calculated_at).toLocaleString('zh-TW') : ''
 })
 
+const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+
+// 輪詢 job 至 completed/failed；過程中更新 progress。10 分鐘安全上限。
+const POLL_INTERVAL_MS = 1000
+const POLL_TIMEOUT_MS = 10 * 60 * 1000
+const pollCalcJob = async (jobId: string): Promise<SalaryCalcJobStatus> => {
+    const startedAt = Date.now()
+    for (;;) {
+        const res = await getSalaryCalcJob(jobId)
+        const job = res.data as SalaryCalcJobStatus
+        if (job.status === 'completed' || job.status === 'failed') return job
+        progress.value = { done: job.done, total: job.total, current: job.current_employee }
+        if (Date.now() - startedAt > POLL_TIMEOUT_MS) {
+            throw new Error('計算逾時，請稍後於「覆核」步驟確認結果，或重新整理後重試')
+        }
+        await delay(POLL_INTERVAL_MS)
+    }
+}
+
 const onCalculate = async () => {
     try {
         await ElMessageBox.confirm(
@@ -123,10 +158,20 @@ const onCalculate = async () => {
         return // 使用者取消
     }
     calculating.value = true
+    calcErrors.value = []
+    progress.value = null
     try {
-        const response = await calculate(q.year, q.month)
-        const data = response.data as { errors?: { employee_name?: string; error?: string }[] }
-        calcErrors.value = data?.errors ?? []
+        // 走 async 端點：立即拿 job_id，背景計算 + 輪詢進度，避免大園所同步計算 HTTP 逾時
+        const startRes = await calculateAsync(q.year, q.month)
+        const started = startRes.data as { job_id: string; total: number }
+        progress.value = { done: 0, total: started.total ?? 0, current: '' }
+
+        const job = await pollCalcJob(started.job_id)
+        if (job.status === 'failed') {
+            ElMessage.error(job.error_message || '薪資計算失敗')
+            return
+        }
+        calcErrors.value = job.errors ?? []
         await settlement.refresh()
         if (calcErrors.value.length > 0) {
             return // 停留在計算步驟，持久警示列出失敗員工
@@ -134,9 +179,11 @@ const onCalculate = async () => {
         ElMessage.success('薪資計算完成')
         emit('next') // 自動進入覆核
     } catch (e) {
+        // 409（同月已有進行中 job / 已封存）走 notify 顯示後端 detail
         notify(e, 'StepCalculate', null, { prefix: '計算失敗' })
     } finally {
         calculating.value = false
+        progress.value = null
     }
 }
 </script>
@@ -168,6 +215,14 @@ const onCalculate = async () => {
 .calc-error-list {
   margin: var(--space-2) 0 0;
   padding-left: var(--space-4);
+}
+
+.calc-progress {
+  margin-top: var(--space-4);
+}
+
+.calc-progress-label {
+  margin-top: var(--space-2);
 }
 
 .step-actions {
