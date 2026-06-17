@@ -52,7 +52,7 @@
       </el-table-column>
       <el-table-column label="影片" width="60" align="center">
         <template #default="{ row }">
-          <a v-if="row.video_url" :href="row.video_url" target="_blank" rel="noopener">
+          <a v-if="sanitizeHref(row.video_url)" :href="sanitizeHref(row.video_url)" target="_blank" rel="noopener">
             <el-icon><VideoPlay /></el-icon>
           </a>
           <span v-else>-</span>
@@ -273,6 +273,7 @@ import { copyCoursesFromPrevious, getCourses, createCourse, updateCourse, delete
 import AcademicTermSelector from '@/components/common/AcademicTermSelector.vue'
 import { useAcademicTermStore } from '@/stores/academicTerm'
 import { hasPermission } from '@/utils/auth'
+import { sanitizeHref } from '@/utils/url'
 
 interface Course {
   id: number; name: string; price: number; sessions?: number | null; capacity: number
