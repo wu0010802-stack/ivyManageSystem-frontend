@@ -54,6 +54,14 @@ export const signAccountingSettlement = (settlementId: number) =>
 export const finalizeSettlement = (settlementId: number) =>
   api.post(`/year_end/settlements/${settlementId}/finalize`)
 
+// 批次簽核/核定（新端點，push 前 gen:api 補 schema.d.ts）；回 {succeeded_ids, succeeded_count, failed:[{settlement_id,reason}]}
+export const signSupervisorBatch = (settlementIds: number[]) =>
+  api.post('/year_end/settlements/sign_supervisor_batch', { settlement_ids: settlementIds })
+export const signAccountingBatch = (settlementIds: number[]) =>
+  api.post('/year_end/settlements/sign_accounting_batch', { settlement_ids: settlementIds })
+export const finalizeBatch = (settlementIds: number[]) =>
+  api.post('/year_end/settlements/finalize_batch', { settlement_ids: settlementIds })
+
 // ============ Special Bonuses ============
 
 export const listSpecialBonuses = (cycleId: number, params: unknown = {}) =>

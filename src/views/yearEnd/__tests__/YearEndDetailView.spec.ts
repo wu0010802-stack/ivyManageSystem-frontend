@@ -14,6 +14,9 @@ vi.mock('@/api/yearEnd', async (importOriginal) => {
     signSupervisorSettlement: vi.fn(),
     signAccountingSettlement: vi.fn(),
     finalizeSettlement: vi.fn(),
+    signSupervisorBatch: vi.fn(),
+    signAccountingBatch: vi.fn(),
+    finalizeBatch: vi.fn(),
     exportYearEndSummaryXlsxUrl: vi.fn().mockReturnValue('/api/year-end/1/summary.xlsx'),
     exportYearEndTransferRosterXlsxUrl: vi.fn().mockReturnValue('/api/year-end/1/roster.xlsx'),
   }
@@ -217,5 +220,46 @@ describe('YearEndDetailView — 兩關簽核流程', () => {
     expect(vm.statusLabel('FINALIZED')).toBe('已核定')
     // SUPERVISOR_SIGNED still mapped for backwards compat display
     expect(vm.statusLabel('SUPERVISOR_SIGNED')).toBe('主管已簽')
+  })
+
+  // Case 7: 批次會計簽核 — 帶選取 ids 呼叫 batch wrapper + 成功訊息
+  it('signBatch(accounting) 帶選取 ids 呼叫 signAccountingBatch + 重載', async () => {
+    setupApiMocks([makeSettlement({ id: 1, status: 'DRAFT' }), makeSettlement({ id: 2, status: 'DRAFT' })])
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as {
+      selectedSettlements: Settlement[]
+      signBatch: (stage: string) => Promise<void>
+    }
+    vm.selectedSettlements = [makeSettlement({ id: 1 }), makeSettlement({ id: 2 })]
+    vi.mocked(api.signAccountingBatch).mockResolvedValue({
+      data: { succeeded_count: 2, succeeded_ids: [1, 2], failed: [] },
+    } as never)
+
+    await vm.signBatch('accounting')
+    await nextTick()
+
+    expect(api.signAccountingBatch).toHaveBeenCalledWith([1, 2])
+    expect(vi.mocked(ElMessage.success)).toHaveBeenCalled()
+  })
+
+  // Case 8: 批次有 failed → 顯示 warning（不誤報成功）
+  it('signBatch 有 failed 時以 warning 回報部分失敗', async () => {
+    setupApiMocks([makeSettlement({ status: 'DRAFT' })])
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as {
+      selectedSettlements: Settlement[]
+      signBatch: (stage: string) => Promise<void>
+    }
+    vm.selectedSettlements = [makeSettlement({ id: 1 })]
+    vi.mocked(api.finalizeBatch).mockResolvedValue({
+      data: { succeeded_count: 0, succeeded_ids: [], failed: [{ settlement_id: 1, reason: '非會計已簽' }] },
+    } as never)
+
+    await vm.signBatch('finalize')
+    await nextTick()
+
+    expect(api.finalizeBatch).toHaveBeenCalledWith([1])
+    expect(vi.mocked(ElMessage.warning)).toHaveBeenCalled()
+    expect(vi.mocked(ElMessage.success)).not.toHaveBeenCalled()
   })
 })

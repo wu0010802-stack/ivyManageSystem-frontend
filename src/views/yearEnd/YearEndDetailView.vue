@@ -11,6 +11,9 @@ import {
   signSupervisorSettlement,
   signAccountingSettlement,
   finalizeSettlement,
+  signSupervisorBatch,
+  signAccountingBatch,
+  finalizeBatch,
   exportYearEndSummaryXlsxUrl,
   exportYearEndTransferRosterXlsxUrl,
 } from '@/api/yearEnd'
@@ -90,6 +93,40 @@ async function sign(s: Settlement, stage: string) {
   }
 }
 
+// ── 批次簽核/核定 ────────────────────────────────────────────────
+const selectedSettlements = ref<Settlement[]>([])
+function handleSelectionChange(rows: Settlement[]) {
+  selectedSettlements.value = rows
+}
+
+async function signBatch(stage: 'supervisor' | 'accounting' | 'finalize') {
+  if (!selectedSettlements.value.length) return
+  const ids = selectedSettlements.value.map((s) => s.id)
+  busy.value = true
+  try {
+    const res =
+      stage === 'supervisor'
+        ? await signSupervisorBatch(ids)
+        : stage === 'accounting'
+          ? await signAccountingBatch(ids)
+          : await finalizeBatch(ids)
+    const data = res.data as { succeeded_count?: number; failed?: { settlement_id: number; reason: string }[] }
+    const done = data?.succeeded_count ?? 0
+    const failed = data?.failed?.length ?? 0
+    if (failed) {
+      ElMessage.warning(`完成 ${done} 筆，${failed} 筆未處理（狀態不符/職責分離等，明細見伺服器回應）`)
+    } else {
+      ElMessage.success(`已完成 ${done} 筆`)
+    }
+    selectedSettlements.value = []
+    await load()
+  } catch (e) {
+    ElMessage.error(apiError(e, '批次簽核失敗'))
+  } finally {
+    busy.value = false
+  }
+}
+
 onMounted(load)
 </script>
 
@@ -109,7 +146,14 @@ onMounted(load)
 
     <el-tabs v-model="tab">
       <el-tab-pane label="員工結算單" name="settlements">
-        <el-table :data="settlements" v-loading="loading" stripe size="small">
+        <div v-if="selectedSettlements.length" class="batch-bar">
+          <span>已選 {{ selectedSettlements.length }} 筆：</span>
+          <el-button v-if="hasPermission('APPRAISAL_REVIEW')" size="small" :loading="busy" @click="signBatch('supervisor')">批次主管簽核</el-button>
+          <el-button v-if="hasPermission('APPRAISAL_ACCOUNTING')" size="small" :loading="busy" @click="signBatch('accounting')">批次會計簽核</el-button>
+          <el-button v-if="hasPermission('YEAR_END_FINALIZE')" size="small" type="primary" :loading="busy" @click="signBatch('finalize')">批次核定</el-button>
+        </div>
+        <el-table :data="settlements" v-loading="loading" stripe size="small" @selection-change="handleSelectionChange">
+          <el-table-column type="selection" width="44" />
           <el-table-column label="員工 ID" prop="employee_id" width="80" />
           <el-table-column label="平均績效%" prop="avg_performance_rate" width="100" />
           <el-table-column label="基本薪俸" prop="base_salary" width="100" />
@@ -208,4 +252,5 @@ onMounted(load)
 .ye-detail { padding: 16px; }
 .meta { margin: 12px 0; padding: 12px; background: #f5f7fa; border-radius: 4px; }
 .toolbar { margin: 16px 0; display: flex; gap: 8px; }
+.batch-bar { margin: 0 0 8px; display: flex; align-items: center; gap: 8px; font-size: 13px; }
 </style>
