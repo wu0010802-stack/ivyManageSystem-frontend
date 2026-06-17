@@ -1,7 +1,7 @@
 import { createRouter, createWebHashHistory, type RouteRecordRaw, type RouteLocationNormalized } from 'vue-router'
 import { refreshSession } from '@/api/auth'
 import { startRouteLoading, finishRouteLoading } from '@/composables/useRouteLoading'
-import { isLoggedIn, canAccessRoute, getUserInfo, getAllowedRoutes, hasStoredUserInfo, setUserInfo, clearAuth } from '@/utils/auth'
+import { isLoggedIn, canAccessRoute, getUserInfo, getAllowedRoutes, hasStoredUserInfo, setUserInfo, clearAuth, hasPortalPermission } from '@/utils/auth'
 
 const routes: RouteRecordRaw[] = [
         // ============ Admin Routes ============
@@ -468,7 +468,7 @@ const routes: RouteRecordRaw[] = [
                     path: 'class-hub',
                     name: 'portal-class-hub',
                     component: () => import('../views/portal/PortalClassHubView.vue'),
-                    meta: { title: '今日班級工作台' },
+                    meta: { title: '今日班級工作台', permission: 'STUDENTS_READ' },
                 },
                 {
                     path: 'attendance',
@@ -491,19 +491,19 @@ const routes: RouteRecordRaw[] = [
                     name: 'portal-student-detail',
                     component: () => import('../views/portal/PortalStudentDetailView.vue'),
                     props: true,
-                    meta: { title: '學生個案' },
+                    meta: { title: '學生個案', permission: 'STUDENTS_READ' },
                 },
                 {
                     path: 'medications',
                     name: 'portal-medications',
                     component: () => import('../views/portal/PortalMedicationView.vue'),
-                    meta: { title: '用藥執行' },
+                    meta: { title: '用藥執行', permission: 'STUDENTS_HEALTH_READ' },
                 },
                 {
                     path: 'observations',
                     name: 'portal-observations',
                     component: () => import('../views/portal/PortalObservationView.vue'),
-                    meta: { title: '課堂觀察' },
+                    meta: { title: '課堂觀察', permission: 'STUDENTS_READ' },
                 },
                 {
                     path: 'leave',
@@ -534,18 +534,19 @@ const routes: RouteRecordRaw[] = [
                     path: 'students',
                     name: 'portal-students',
                     component: () => import('../views/portal/PortalStudentsView.vue'),
+                    meta: { permission: 'STUDENTS_READ' },
                 },
                 {
                     path: 'incidents',
                     name: 'portal-incidents',
                     component: () => import('../views/portal/PortalIncidentView.vue'),
-                    meta: { title: '事件紀錄' },
+                    meta: { title: '事件紀錄', permission: 'STUDENTS_READ' },
                 },
                 {
                     path: 'assessments',
                     name: 'portal-assessments',
                     component: () => import('../views/portal/PortalAssessmentView.vue'),
-                    meta: { title: '學期評量' },
+                    meta: { title: '學期評量', permission: 'STUDENTS_READ' },
                 },
                 {
                     path: 'growth',
@@ -557,19 +558,19 @@ const routes: RouteRecordRaw[] = [
                     path: 'dismissal-calls',
                     name: 'portal-dismissal-calls',
                     component: () => import('../views/portal/PortalDismissalCallsView.vue'),
-                    meta: { title: '接送通知' },
+                    meta: { title: '接送通知', permission: 'DISMISSAL_CALLS_READ' },
                 },
                 {
                     path: 'student-attendance',
                     name: 'portal-student-attendance',
                     component: () => import('../views/portal/PortalStudentAttendanceView.vue'),
-                    meta: { title: '學生點名' },
+                    meta: { title: '學生點名', permission: 'STUDENTS_READ' },
                 },
                 {
                     path: 'contact-book',
                     name: 'portal-contact-book',
                     component: () => import('../views/portal/PortalContactBookView.vue'),
-                    meta: { title: '每日聯絡簿' },
+                    meta: { title: '每日聯絡簿', permission: 'PORTFOLIO_READ' },
                 },
                 {
                     path: 'calendar',
@@ -708,6 +709,21 @@ router.beforeEach(async (to, _from, next) => {
                 next('/login')
             }
             return
+        }
+    }
+
+    // Portal 子路由逐路由權限檢查（C52）：
+    // /portal 父路由 guard 原本只檢 requiresAuth，canAccessRoute 因 !to.meta.portal 不被呼叫，
+    // 導致任何登入的 portal 使用者（含缺對應權限的教師）可直接打 URL 進敏感子頁
+    //（用藥/接送/學生個案等含學生 PII/健康資料）。在此對掛了 meta.permission 的 portal 子路由
+    // 以 hasPortalPermission 判定（teacher 不短路，沿用其既有 scope-aware 語意，
+    // 與後端 require_permission 對齊），缺權限導回 /portal/home。
+    if (loggedIn && to.meta.portal && to.meta.permission) {
+        if (!hasPortalPermission(to.meta.permission as string)) {
+            if (to.path !== '/portal/home') {
+                next('/portal/home')
+                return
+            }
         }
     }
 

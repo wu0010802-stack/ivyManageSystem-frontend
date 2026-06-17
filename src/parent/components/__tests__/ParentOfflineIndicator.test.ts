@@ -70,6 +70,34 @@ describe('ParentOfflineIndicator', () => {
     expect(wrapper.text()).toContain('無法同步')
   })
 
+  it('review 對話框內 last_error 被 HTML escape（C47 防 XSS）', async () => {
+    const confirmSpy = vi.fn().mockRejectedValue(new Error('cancel'))
+    const ep = await import('element-plus')
+    vi.spyOn(ep.ElMessageBox, 'confirm').mockImplementation(confirmSpy as any)
+
+    const op = await enqueueOp({
+      kind: OP_KINDS.PARENT_MESSAGE,
+      payload: { content: 'x' },
+      userId: 7,
+    })
+    await updateOp(op.id, {
+      status: OP_STATUS.NEEDS_REVIEW,
+      last_error: '<img src=x onerror=alert(1)>',
+    })
+
+    const wrapper = mount(ParentOfflineIndicator, {
+      global: { plugins: [ElementPlus] },
+    })
+    await new Promise((r) => setTimeout(r, 100))
+    await wrapper.find('[data-testid="open-review"]').trigger('click')
+    await new Promise((r) => setTimeout(r, 50))
+
+    expect(confirmSpy).toHaveBeenCalled()
+    const html = confirmSpy.mock.calls[0][0] as string
+    expect(html).not.toContain('<img src=x onerror=alert(1)>')
+    expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;')
+  })
+
   it('點按 pending banner 觸 flushAllParent', async () => {
     await enqueueOp({
       kind: OP_KINDS.PARENT_MESSAGE,
