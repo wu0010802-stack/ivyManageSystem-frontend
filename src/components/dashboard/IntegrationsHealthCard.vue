@@ -54,10 +54,17 @@
           {{ breakerLabel(data.supabase.breaker) }}
         </el-tag>
       </div>
-      <ul v-if="data.supabase.pending_uploads > 0" class="integration-detail">
-        <li>
+      <ul
+        v-if="data.supabase.pending_uploads > 0 || data.supabase.final_failed > 0"
+        class="integration-detail"
+      >
+        <li v-if="data.supabase.pending_uploads > 0">
           <span>待同步上傳</span>
           <el-tag type="warning" size="small">{{ data.supabase.pending_uploads }} 筆</el-tag>
+        </li>
+        <li v-if="data.supabase.final_failed > 0">
+          <span>永久失敗</span>
+          <el-tag type="danger" size="small">{{ data.supabase.final_failed }} 筆</el-tag>
         </li>
       </ul>
 
@@ -113,7 +120,8 @@ const hasAnyIssue = computed(() => {
     d.line.token_healthy === false ||
     d.line.retry_pending > 0 ||
     d.line.retry_final_failed_24h > 0 ||
-    d.supabase.pending_uploads > 0
+    d.supabase.pending_uploads > 0 ||
+    d.supabase.final_failed > 0
   )
 })
 </script>
