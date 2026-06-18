@@ -263,3 +263,47 @@ describe('StepReview 上月比較 banner', () => {
         expect(wrapper.text()).toContain('上月無紀錄')
     })
 })
+
+describe('StepReview 批次調整', () => {
+  beforeEach(() => { vi.mocked(manualAdjustSalary).mockReset() })
+
+  it('applyBatchAdjust 對每筆選取送單欄 partial payload 並 refresh', async () => {
+    vi.mocked(manualAdjustSalary).mockResolvedValue({ data: { record: {} } } as never)
+    const settlement = makeSettlement([rec({ id: 1 })])
+    const wrapper = mount(StepReview, {
+      global: { stubs: { ...STUBS, BatchAdjustDialog: true }, provide: { settlement, settleQuery: { year: 2026, month: 5 } } },
+    })
+    const vm = wrapper.vm as unknown as {
+      selectedAdjustRows: SettlementRecord[]
+      applyBatchAdjust: (p: { field: string; value: number; reason: string }) => Promise<void>
+    }
+    vm.selectedAdjustRows = [
+      rec({ id: 1, employee_name: '甲', version: 3 }),
+      rec({ id: 2, employee_name: '乙', version: 5 }),
+    ]
+    await vm.applyBatchAdjust({ field: 'festival_bonus', value: 500, reason: '活動加班補發' })
+    expect(vi.mocked(manualAdjustSalary)).toHaveBeenCalledTimes(2)
+    expect(vi.mocked(manualAdjustSalary)).toHaveBeenCalledWith(1, { festival_bonus: 500, adjustment_reason: '活動加班補發' }, 3)
+    expect(vi.mocked(manualAdjustSalary)).toHaveBeenCalledWith(2, { festival_bonus: 500, adjustment_reason: '活動加班補發' }, 5)
+    expect(settlement.refresh).toHaveBeenCalled()
+  })
+
+  it('部分失敗時其餘成功並 warning', async () => {
+    vi.mocked(manualAdjustSalary)
+      .mockRejectedValueOnce({ response: { data: { detail: '已封存' } } })
+      .mockResolvedValue({ data: { record: {} } } as never)
+    const settlement = makeSettlement([rec({ id: 1 })])
+    const wrapper = mount(StepReview, {
+      global: { stubs: { ...STUBS, BatchAdjustDialog: true }, provide: { settlement, settleQuery: { year: 2026, month: 5 } } },
+    })
+    const vm = wrapper.vm as unknown as {
+      selectedAdjustRows: SettlementRecord[]
+      applyBatchAdjust: (p: { field: string; value: number; reason: string }) => Promise<void>
+    }
+    vm.selectedAdjustRows = [rec({ id: 1, employee_name: '甲', version: 3 }), rec({ id: 2, employee_name: '乙', version: 5 })]
+    await vm.applyBatchAdjust({ field: 'overtime_pay', value: 300, reason: '值週津貼補發' })
+    const { ElMessage } = await import('element-plus')
+    expect(vi.mocked(ElMessage.warning)).toHaveBeenCalled()
+    expect(settlement.refresh).toHaveBeenCalled()
+  })
+})
