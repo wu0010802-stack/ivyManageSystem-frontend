@@ -60,6 +60,7 @@ const ICON_MAP = {
   trophy: 'emoji_events',
   ruler: 'straighten',
   user: 'person',
+  copy: 'content_copy',
 }
 
 const SIZE_MAP = {
