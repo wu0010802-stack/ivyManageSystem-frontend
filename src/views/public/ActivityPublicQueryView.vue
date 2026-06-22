@@ -678,13 +678,9 @@ async function handleConfirmPromotion(item: CourseEntry) {
       query_token: activeQueryToken.value ?? undefined,
     })
     showToast((res as { data?: { message?: string } })?.data?.message || '已確認升為正式', 'success')
-    // 重新查詢以更新狀態
-    const refreshed = await publicQueryRegistration(
-      queryResult.value!.name,
-      queryResult.value!.birthday || queryForm.birthday,
-      phonePayload,
-    )
-    hydrateResult((refreshed as { data: QueryResult }).data)
+    // 重新查詢以更新狀態：沿用當前查詢模式（token 模式用 token 查詢），避免硬用
+    // 三欄查詢在多筆跨學期 active 報名時跳到別的學期報名
+    hydrateResult(await refetchCurrent(phonePayload))
   } catch (err) {
     showToast((err as { response?: { data?: { detail?: string } } }).response?.data?.detail || '確認失敗', 'error')
   } finally {
@@ -707,12 +703,8 @@ async function handleDeclinePromotion(item: CourseEntry) {
       query_token: activeQueryToken.value ?? undefined,
     })
     showToast((res as { data?: { message?: string } })?.data?.message || '已放棄該名額', 'warning')
-    const refreshed = await publicQueryRegistration(
-      queryResult.value!.name,
-      queryResult.value!.birthday || queryForm.birthday,
-      phonePayload,
-    )
-    hydrateResult((refreshed as { data: QueryResult }).data)
+    // 沿用當前查詢模式刷新（同 handleConfirmPromotion），避免三欄查詢跳學期
+    hydrateResult(await refetchCurrent(phonePayload))
   } catch (err) {
     showToast((err as { response?: { data?: { detail?: string } } }).response?.data?.detail || '放棄失敗', 'error')
   } finally {

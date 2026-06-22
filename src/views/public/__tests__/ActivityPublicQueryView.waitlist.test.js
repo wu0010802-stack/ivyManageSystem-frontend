@@ -21,7 +21,11 @@ vi.mock('@/api/activityPublic', () => ({
   getPublicCoursesAvailability: vi.fn().mockResolvedValue({ data: {} }),
 }))
 
-import { publicQueryByToken } from '@/api/activityPublic'
+import {
+  publicQueryByToken,
+  publicQueryRegistration,
+  publicConfirmPromotion,
+} from '@/api/activityPublic'
 
 // ── 工具 function 型 mock（view 透過具名 import 用）─────────────────────────
 vi.mock('@/utils/arrayUtils', () => ({
@@ -181,5 +185,55 @@ describe('ActivityPublicQueryView — 候補位次顯示', () => {
 
     expect(wrapper.text()).not.toContain('目前第')
     expect(wrapper.text()).not.toContain('候補中')
+  })
+})
+
+describe('ActivityPublicQueryView — 候補轉正後刷新沿用查詢模式（#5）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('token 模式確認候補轉正後，用 token 查詢刷新（不誤用三欄查詢跳到別的學期）', async () => {
+    publicQueryByToken.mockResolvedValue({
+      data: {
+        id: 1,
+        name: '王小明',
+        birthday: '2020-01-01',
+        class_name: '大班',
+        courses: [
+          {
+            course_id: 7,
+            name: '美術',
+            status: 'promoted_pending',
+            waitlist_position: null,
+            waitlist_total: null,
+          },
+        ],
+        supplies: [],
+        total_amount: 0,
+        paid_amount: 0,
+      },
+    })
+    publicConfirmPromotion.mockResolvedValue({ data: { message: '已確認升為正式' } })
+
+    const wrapper = await mountView()
+    await triggerTokenQuery(wrapper)
+
+    // 清掉查詢階段的呼叫，只觀察「轉正後刷新」用哪個 API
+    publicQueryByToken.mockClear()
+    publicQueryRegistration.mockClear()
+
+    await wrapper.vm.handleConfirmPromotion({
+      course_id: 7,
+      name: '美術',
+      status: 'promoted_pending',
+    })
+    await new Promise((r) => setTimeout(r, 0))
+
+    expect(publicConfirmPromotion).toHaveBeenCalledTimes(1)
+    // 刷新必須沿用 token 模式（token 查詢鎖定同一張報名 / 學期），
+    // 不可硬用三欄查詢（多筆跨學期時會任意跳到別的學期報名）
+    expect(publicQueryByToken).toHaveBeenCalledTimes(1)
+    expect(publicQueryRegistration).not.toHaveBeenCalled()
   })
 })
