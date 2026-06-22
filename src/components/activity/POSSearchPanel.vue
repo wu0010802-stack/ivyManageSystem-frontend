@@ -209,7 +209,7 @@
 import { computed, ref, watch } from 'vue'
 import { ArrowLeft, ArrowRight, Search } from '@element-plus/icons-vue'
 
-import { POS_MODES, computeOwed, formatTWD } from '@/constants/pos'
+import { POS_MODES, computeOwed, formatTWD, normalizeByDateRow } from '@/constants/pos'
 
 const weekdayLabels = ['日', '一', '二', '三', '四', '五', '六']
 
@@ -472,21 +472,9 @@ const totalAmount = computed(() => {
 const isSelected = (id: unknown) => props.selectedIds.includes(id as number | string)
 
 function handleSingleToggle(row: RegistrationEntry) {
-  // 依單筆模式的搜尋結果需要組成 owed / courses 給購物車
-  const owed = computeOwed(row.total_amount, row.paid_amount)
-  const normalized: Record<string, unknown> = {
-    id: row.id,
-    student_name: row.student_name,
-    class_name: row.class_name || '',
-    total_amount: row.total_amount,
-    paid_amount: row.paid_amount,
-    owed,
-    courses: (row.course_names || '')
-      .split('、')
-      .filter(Boolean)
-      .map((name: string) => ({ name, price: 0, status: 'enrolled' })),
-    supplies: [],
-  }
+  // 優先使用後端回傳的真實 courses / supplies（含 price），
+  // 若缺失則 fallback 到 course_names 拆解（normalizeByDateRow 內部處理）。
+  const normalized = normalizeByDateRow(row as Record<string, unknown>)
   emit('toggle', normalized, row.student_name ?? '')
 }
 </script>
