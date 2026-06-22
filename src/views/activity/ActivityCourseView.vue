@@ -270,6 +270,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { CopyDocument, VideoPlay } from '@element-plus/icons-vue'
 import { copyCoursesFromPrevious, getCourses, createCourse, updateCourse, deleteCourse,
          getCourseWaitlist, getCourseEnrolled, promoteWaitlist } from '@/api/activity'
+import type { ApiBody } from '@/api/_generated/typed'
 import AcademicTermSelector from '@/components/common/AcademicTermSelector.vue'
 import { useAcademicTermStore } from '@/stores/academicTerm'
 import { hasPermission } from '@/utils/auth'
@@ -453,7 +454,7 @@ async function handleCopy() {
       source_semester: copyForm.value.source_semester,
       target_school_year: termStore.school_year,
       target_semester: termStore.semester,
-    })
+    } as ApiBody<'/activity/courses/copy-from-previous', 'post'>)
     ElMessage.success((res.data as { message: string }).message)
     copyDialogVisible.value = false
     fetchCourses()

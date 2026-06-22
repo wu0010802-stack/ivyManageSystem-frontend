@@ -159,10 +159,12 @@ async function handleSubmit() {
   saving.value = true
   try {
     await addRegistrationPayment(props.registrationId as number, {
-      type: props.type,
+      // type / payment_method 後端為 Literal（POS cash-only）；表單值為 string，
+      // 由 UI 約束在合法集合內，此處 cast 對齊 codegen 契約。
+      type: props.type as 'payment' | 'refund',
       amount,
       payment_date: form.payment_date,
-      payment_method: form.payment_method,
+      payment_method: form.payment_method as '現金',
       notes: form.notes.trim(),
       idempotency_key: form.idempotency_key,
     })

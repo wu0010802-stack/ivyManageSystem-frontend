@@ -87,9 +87,11 @@ async function loadRegistrations() {
   loading.value = true
   try {
     const res = await getPortalActivityRegistrations()
-    data.value = res.data
-    if (res.data.classrooms.length > 0) {
-      activeClass.value = res.data.classrooms[0]
+    // TODO(ts-strict): /portal/activity/registrations 後端尚無 response_model → codegen 回 unknown
+    const d = res.data as RegistrationData
+    data.value = d
+    if (d.classrooms.length > 0) {
+      activeClass.value = d.classrooms[0]
     }
   } catch {
     ElMessage.error('載入才藝報名資料失敗')
@@ -161,7 +163,8 @@ async function loadAttendanceSessions() {
     if (filterStartDate.value) params.start_date = filterStartDate.value
     if (filterEndDate.value) params.end_date = filterEndDate.value
     const res = await getPortalAttendanceSessions(params)
-    sessions.value = res.data
+    // TODO(ts-strict): /portal/activity/attendance/sessions 後端尚無 response_model → unknown
+    sessions.value = res.data as typeof sessions.value
     attendanceLoaded.value = true
   } catch {
     ElMessage.error('載入場次失敗')

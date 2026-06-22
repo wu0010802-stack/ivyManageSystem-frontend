@@ -235,6 +235,7 @@ import {
   restoreRegistration,
   searchActivityStudents,
 } from '@/api/activity'
+import type { Schema } from '@/api/_generated/typed'
 // Why: 後端回 naive 台灣時間字串，new Date().toLocaleString() 會被瀏覽器時區偏移；
 // formatActivityDate 為純字串切片（其他 activity 頁慣例），不經 Date。
 import { formatActivityDate } from '@/utils/format'
@@ -390,7 +391,7 @@ function openForceDialog(row: PendingRow) {
 async function confirmEdit() {
   if (!editDialog.row) return
   const row = editDialog.row
-  const payload: Record<string, string> = {}
+  const payload: Schema<'RegistrationRematchRequest'> = {}
   const name = editDialog.form.name?.trim()
   const birthday = editDialog.form.birthday || ''
   const phone = editDialog.form.parent_phone?.trim()

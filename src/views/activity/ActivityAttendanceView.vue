@@ -380,6 +380,7 @@ import { useActivityAttendanceDrawer } from '@/composables/useActivityAttendance
 import { openPdfInNewTab } from '@/utils/printPdfWindow'
 
 import type { AttendanceStudent, AttendanceStudentGroup } from '@/composables/useActivityAttendanceDrawer'
+import type { ApiBody } from '@/api/_generated/typed'
 
 interface CourseOption { id: number; name: string }
 interface SessionRow { id: number; course_name?: string; session_date?: string; recorded_count?: number; present_count?: number; notes?: string; created_by?: string }
@@ -464,8 +465,11 @@ const {
   setAllPresent,
   handleSave,
 } = useActivityAttendanceDrawer({
-  // Wrap typed API fns to match the composable's generic (unknown-arg) contract
+  // composable 以 unknown-arg 泛型契約定義 getSessionFn/updateFn（其 SessionData 內部
+  // 型別與 codegen 後 API 型別不完全一致，如 is_present 的 undefined）；此處為已知邊界。
+  // @ts-expect-error TODO(ts-strict): composable unknown-arg 契約 vs 型別化 API 的邊界
   getSessionFn: (id, params) => getAttendanceSession(id as number, params),
+  // @ts-expect-error TODO(ts-strict): 同上（records 型別於邊界相接）
   updateFn: (id, records) => batchUpdateAttendance(id as number, records),
 })
 // Cast to extended type that includes total returned by API
@@ -585,7 +589,8 @@ async function handleCreate() {
   }
   createLoading.value = true
   try {
-    await createAttendanceSession(createForm.value)
+    // 上方守衛已確保 course_id / session_date 非空，對齊 codegen body 型別。
+    await createAttendanceSession(createForm.value as ApiBody<'/activity/attendance/sessions', 'post'>)
     ElMessage.success('場次建立成功')
     createDialogVisible.value = false
     loadSessions()
@@ -613,10 +618,11 @@ async function handleBatchCreate() {
   }
   batchLoading.value = true
   try {
-    const payload: Record<string, unknown> = {
-      course_id: batchForm.value.course_id,
-      start_date: batchForm.value.start_date,
-      end_date: batchForm.value.end_date,
+    // 上方守衛已確保 course_id / start_date / end_date 非空，對齊 codegen body 型別。
+    const payload: ApiBody<'/activity/attendance/sessions/batch', 'post'> = {
+      course_id: batchForm.value.course_id as number,
+      start_date: batchForm.value.start_date as string,
+      end_date: batchForm.value.end_date as string,
       notes: batchForm.value.notes,
     }
     if (batchForm.value.weekday != null) payload.weekday = batchForm.value.weekday

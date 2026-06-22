@@ -5,6 +5,12 @@ import {
   getActivityStatsSummary,
   type ActivityTermParams,
 } from '@/api/activity'
+import type { ApiResponse } from '@/api/_generated/typed'
+
+// 後端契約型別（codegen）：summary/charts/attendance state 由 unknown 改為具名型別。
+type ActivitySummary = ApiResponse<'/activity/stats-summary', 'get'>
+type ActivityCharts = ApiResponse<'/activity/stats-charts', 'get'>
+type ActivityAttendance = ApiResponse<'/activity/stats', 'get'>['attendance_stats']
 
 const SUMMARY_TTL_MS = 15_000
 const CHARTS_TTL_MS = 60_000
@@ -41,9 +47,9 @@ interface FetchOptions extends ActivityTermParams {
 export const useActivityStore = defineStore('activity', {
   state: () => ({
     unreadInquiries: 0,
-    summary: null,
-    charts: null,
-    attendance: null,
+    summary: null as ActivitySummary | null,
+    charts: null as ActivityCharts | null,
+    attendance: null as ActivityAttendance | null,
     summaryTermKey: '',
     chartsTermKey: '',
     attendanceTermKey: '',
