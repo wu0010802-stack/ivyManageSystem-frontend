@@ -27,7 +27,10 @@ import { hasPermission } from '@/utils/auth'
  * 有意不放 Pinia store：POS 狀態頁面級且短暫，不跨路由共享。
  *
  * 安全保護：
- * - 每次送出產生新的 idempotency_key，避免網路重送造成重複結帳
+ * - idempotency_key：同一次送出嘗試固定一把 key，網路逾時/5xx 重試沿用同 key
+ *   避免重複結帳；成功或 4xx（含後端內容守衛回 409）後才釋放，下次送出換新 key。
+ *   後端 /pos/checkout 對同 key 不同內容（金額/項目/類型/日期）回 409，杜絕改了
+ *   金額卻收到舊收據的錯帳。
  * - payment_date 使用台北時區本地日期字串，避免跨日 UTC 誤差
  * - scope dispose 時清除 searchTimer
  */
