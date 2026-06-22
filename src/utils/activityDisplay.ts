@@ -19,3 +19,44 @@ export function excludeAddedSupplies<T extends { id: number | string }>(
   const taken = new Set(existingSupplyIds.map((x) => String(x)))
   return supplies.filter((s) => !taken.has(String(s.id)))
 }
+
+/**
+ * 估算修改報名後某課程的狀態（純函式，對應元件內 estimatedCourseStatus）。
+ *
+ * 邏輯（對齊後端 _attach_courses 的 update 路徑）：
+ * 1. availability[name] > 0  → 'enrolled'（有空位）
+ * 2. availability[name] === 0
+ *    → **先**檢查本生在 queryResult.courses 是否已佔此課容量
+ *      （status 'enrolled' 或 'promoted_pending'）。
+ *      若已佔位 → 'enrolled'（後端 update 排除自己，本生座位保留）。
+ *      否則     → 'waitlist'（真正滿席，新加課程進候補）。
+ * 3. availability[name] === undefined（後端不回此課）
+ *    → 用 queryResult.courses 中本生原狀態；無原狀態 fallback 'enrolled'。
+ * 4. availability[name] < 0（滿且不開候補）→ 'enrolled'（fallback，後端行為）。
+ *
+ * @param courseName      課程名稱
+ * @param availabilityMap GET /public/courses/availability 回傳的 map（可能為空物件）
+ * @param existingCourses queryResult.courses（本生目前報名的課程列表）
+ */
+export function estimateCourseStatus(
+  courseName: string,
+  availabilityMap: Record<string, number>,
+  existingCourses: Array<{ name: string; status: string }>,
+): string {
+  const remaining = availabilityMap[courseName]
+  if (remaining !== undefined && remaining > 0) return 'enrolled'
+  if (remaining === 0) {
+    // 本生已佔此課容量（enrolled 或 promoted_pending）→ 後端排除自己，座位保留
+    const orig = existingCourses.find((c) => c.name === courseName)
+    if (orig?.status === 'enrolled' || orig?.status === 'promoted_pending') {
+      return 'enrolled'
+    }
+    return 'waitlist'
+  }
+  if (remaining === undefined) {
+    const orig = existingCourses.find((c) => c.name === courseName)
+    return orig?.status ?? 'enrolled'
+  }
+  // remaining < 0（滿且不開候補）
+  return 'enrolled'
+}

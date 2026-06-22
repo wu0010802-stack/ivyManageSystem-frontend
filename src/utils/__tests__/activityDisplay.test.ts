@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildFormCardTitle, excludeAddedSupplies } from '../activityDisplay'
+import { buildFormCardTitle, excludeAddedSupplies, estimateCourseStatus } from '../activityDisplay'
 
 describe('buildFormCardTitle', () => {
   it('有活動日期時，主標題（去｜副標）後接「· 日期」', () => {
@@ -30,5 +30,65 @@ describe('excludeAddedSupplies', () => {
   it('無已加入時回原清單', () => {
     const supplies = [{ id: 1, name: 'A' }]
     expect(excludeAddedSupplies(supplies, [])).toEqual(supplies)
+  })
+})
+
+// ── estimateCourseStatus ────────────────────────────────────────────────────
+// Bug P2：課程額滿（availability===0）+ allow_waitlist + 本生已 enrolled
+// → 後端 update 排除自己，本生座位維持 enrolled；前端誤估 'waitlist' → feePreview 剔除學費
+// → wouldOverpay=true → saveBlocked=true → 家長無法儲存合法的修改。
+describe('estimateCourseStatus', () => {
+  const enrolledCourses = [{ name: '鋼琴', status: 'enrolled' }]
+  const promotedCourses = [{ name: '美術', status: 'promoted_pending' }]
+
+  it('(a) 課程額滿（availability===0）+ 本生原狀態 enrolled → 應估為 enrolled（修前錯回 waitlist）', () => {
+    // availability[name]===0 在修前會直接 return 'waitlist'；修後應先檢查本生既有座位
+    expect(
+      estimateCourseStatus('鋼琴', { 鋼琴: 0 }, enrolledCourses),
+    ).toBe('enrolled')
+  })
+
+  it('(a2) 課程額滿 + 本生原狀態 promoted_pending → 應估為 enrolled（後端 update 亦視同佔位）', () => {
+    expect(
+      estimateCourseStatus('美術', { 美術: 0 }, promotedCourses),
+    ).toBe('enrolled')
+  })
+
+  it('(b) 全新課程（queryResult 中無本生 enrolled/promoted_pending）+ availability===0 → 仍回 waitlist（避免過度修改）', () => {
+    // 新加課程在 queryResult.courses 中不存在本生 enrolled 記錄
+    expect(
+      estimateCourseStatus('體能', { 體能: 0 }, enrolledCourses),
+    ).toBe('waitlist')
+  })
+
+  it('有名額（availability>0）→ enrolled（不論是否已有原狀態）', () => {
+    expect(
+      estimateCourseStatus('鋼琴', { 鋼琴: 3 }, enrolledCourses),
+    ).toBe('enrolled')
+  })
+
+  it('availability 不含該課（undefined）+ 本生已在 queryResult enrolled → 用原狀態 enrolled', () => {
+    expect(
+      estimateCourseStatus('鋼琴', {}, enrolledCourses),
+    ).toBe('enrolled')
+  })
+
+  it('availability 不含該課（undefined）+ 本生原狀態 waitlist → 用原狀態 waitlist', () => {
+    expect(
+      estimateCourseStatus('鋼琴', {}, [{ name: '鋼琴', status: 'waitlist' }]),
+    ).toBe('waitlist')
+  })
+
+  it('availability 不含該課（undefined）+ queryResult 中無本生記錄 → fallback enrolled', () => {
+    expect(
+      estimateCourseStatus('鋼琴', {}, []),
+    ).toBe('enrolled')
+  })
+
+  it('availability<0（滿且不開候補）→ enrolled（後端不開候補但本生已 enrolled）', () => {
+    // remaining < 0 表示超賣/不開候補，原始邏輯 fallback enrolled
+    expect(
+      estimateCourseStatus('鋼琴', { 鋼琴: -1 }, enrolledCourses),
+    ).toBe('enrolled')
   })
 })
