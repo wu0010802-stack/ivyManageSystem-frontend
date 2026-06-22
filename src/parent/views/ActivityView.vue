@@ -17,6 +17,7 @@ import {
 import { toast } from '../utils/toast'
 import { sumOutstanding } from '../utils/activityPayment'
 import { useRegistrationWindow } from '@/composables/useRegistrationWindow'
+import { buildPublicEditUrl } from '@/utils/publicLinks'
 import ParentIcon from '../components/ParentIcon.vue'
 import PullToRefresh from '../components/PullToRefresh.vue'
 
@@ -33,6 +34,10 @@ const myRegs = ref<Registration[]>([])
 const loading = ref(false)
 const submitting = ref(false)
 const showRegister = ref(false)
+
+// #2：報名成功後後端回傳一次性 query_token，組成公開「管理我的報名」連結供家長保存。
+// 後端只存 hash、明文僅此一次，故必須在此即時呈現並提供複製；遺失需洽校方重發。
+const manageUrl = ref('')
 
 // ② 報名時段守衛（前端 UX；後端 _check_registration_open 仍為硬閘）。
 // 預設 is_open=true → fail-open：載入前 / 讀取失敗時不擋報名入口，避免誤鎖。
@@ -178,15 +183,18 @@ async function submitRegister() {
   }
   submitting.value = true
   try {
-    await registerCourses({
+    const res = await registerCourses({
       student_id: Number(form.value.student_id),
       school_year: form.value.school_year,
       semester: form.value.semester,
       course_ids: (form.value.course_ids ?? []).map(Number),
       supply_ids: [],
     })
+    const token = (res as { data?: { query_token?: string } })?.data?.query_token
+    manageUrl.value = token ? buildPublicEditUrl(window.location.origin, token) : ''
     toast.success('報名成功')
     showRegister.value = false
+    tab.value = 'my'
     fetchMy()
   } catch (err: unknown) {
     const e = err as Record<string, unknown>
@@ -194,6 +202,20 @@ async function submitRegister() {
   } finally {
     submitting.value = false
   }
+}
+
+async function copyManageLink() {
+  if (!manageUrl.value) return
+  try {
+    await navigator.clipboard.writeText(manageUrl.value)
+    toast.success('管理連結已複製')
+  } catch {
+    toast.error('複製失敗，請長按連結手動複製')
+  }
+}
+
+function dismissManageLink() {
+  manageUrl.value = ''
 }
 
 async function onConfirmPromotion(reg: Registration, rc: RegCourse) {
@@ -268,6 +290,19 @@ async function pullRefresh() {
     </div>
 
     <template v-if="tab === 'my'">
+      <!-- #2：報名成功後一次性管理連結（公開查詢頁，憑 token 修改/取消） -->
+      <div v-if="manageUrl" class="manage-link-card" role="status">
+        <button class="manage-link-close" aria-label="關閉" @click="dismissManageLink">×</button>
+        <div class="manage-link-title">報名成功！請保存您的管理連結</div>
+        <div class="manage-link-desc">
+          日後修改課程／用品或取消報名，請使用此連結（僅顯示這一次，建議立即複製保存）。
+        </div>
+        <div class="manage-link-url">{{ manageUrl }}</div>
+        <button class="pt-action-btn manage-link-copy" @click="copyManageLink">
+          <ParentIcon name="copy" size="sm" />
+          複製連結
+        </button>
+      </div>
       <div v-if="!loading && filteredRegs.length === 0" class="pt-empty">
         <div class="pt-empty-title">尚無報名</div>
       </div>
@@ -396,5 +431,49 @@ async function pullRefresh() {
 }
 .reg-notice.is-danger .reg-notice-title {
   color: var(--color-danger);
+}
+
+/* #2：報名成功後一次性「管理我的報名」連結卡片 */
+.manage-link-card {
+  position: relative;
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  border: 1px solid var(--brand-primary-soft, #d7eef7);
+  background: var(--brand-primary-soft, #eef8fc);
+}
+.manage-link-title {
+  font-weight: 700;
+  font-size: 14px;
+  margin-bottom: 4px;
+  color: var(--brand-primary);
+}
+.manage-link-desc {
+  font-size: 13px;
+  color: var(--pt-text-soft);
+  margin-bottom: 8px;
+}
+.manage-link-url {
+  font-size: 12px;
+  word-break: break-all;
+  background: var(--pt-surface-raised, var(--neutral-0));
+  border: 1px solid var(--pt-border-light, #ecf5f9);
+  border-radius: 10px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+}
+.manage-link-copy {
+  width: 100%;
+}
+.manage-link-close {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  border: none;
+  background: transparent;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--pt-text-soft);
 }
 </style>
