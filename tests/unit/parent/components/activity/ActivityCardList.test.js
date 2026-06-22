@@ -63,4 +63,44 @@ describe('ActivityCardList', () => {
     const wrapper = mount(ActivityCardList, { props: { courses: [] } })
     expect(wrapper.find('#act-upcoming').exists()).toBe(true)
   })
+
+  it('有上課時段/適齡時顯示對應 chip', () => {
+    const wrapper = mount(ActivityCardList, {
+      props: {
+        courses: [
+          {
+            ...courses[0],
+            id: 7,
+            meeting_weekday: 2,
+            meeting_start_time: '15:30',
+            meeting_end_time: '16:30',
+            min_age_months: 36,
+            max_age_months: 72,
+          },
+        ],
+      },
+    })
+    const text = wrapper.text()
+    expect(text).toContain('週三 15:30–16:30')
+    expect(text).toContain('適齡 3–6 歲')
+    expect(wrapper.find('.meta-chip.conflict').exists()).toBe(false)
+  })
+
+  it('course id 在 conflictIds 內時顯示「時段衝突」', () => {
+    const wrapper = mount(ActivityCardList, {
+      props: {
+        courses: [{ ...courses[0], id: 5 }],
+        conflictIds: new Set([5]),
+      },
+    })
+    expect(wrapper.find('.meta-chip.conflict').exists()).toBe(true)
+    expect(wrapper.text()).toContain('時段衝突')
+  })
+
+  it('無時段/適齡/衝突時不渲染 meta 列', () => {
+    const wrapper = mount(ActivityCardList, {
+      props: { courses: [{ ...courses[0], id: 8 }] },
+    })
+    expect(wrapper.find('.course-card-meta').exists()).toBe(false)
+  })
 })

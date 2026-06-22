@@ -16,14 +16,15 @@ import {
 } from '../api/activity'
 import { toast } from '../utils/toast'
 import { sumOutstanding } from '../utils/activityPayment'
+import { collectBusySlots, buildConflictCourseIds } from '../utils/activitySchedule'
 import { useRegistrationWindow } from '@/composables/useRegistrationWindow'
 import { buildPublicEditUrl } from '@/utils/publicLinks'
 import ParentIcon from '../components/ParentIcon.vue'
 import PullToRefresh from '../components/PullToRefresh.vue'
 
-interface RegCourse { course_id: number; course_name: string; status: string; price?: number; price_snapshot?: unknown }
+interface RegCourse { course_id: number; course_name: string; status: string; price?: number; price_snapshot?: unknown; meeting_weekday?: number | null; meeting_start_time?: string | null; meeting_end_time?: string | null }
 interface Registration { id: number; student_id: number; student_name?: string; school_year: number; semester: number; is_paid: boolean; total_amount?: number; outstanding_amount?: number; payment_status?: string; courses: RegCourse[] }
-interface Course { id: number; name: string; price?: number; school_year: number; semester: number; capacity: number; enrolled_count: number; is_full: boolean; allow_waitlist: boolean; sessions?: number; description?: string; price_snapshot?: unknown }
+interface Course { id: number; name: string; price?: number; school_year: number; semester: number; capacity: number; enrolled_count: number; is_full: boolean; allow_waitlist: boolean; sessions?: number; description?: string; price_snapshot?: unknown; min_age_months?: number | null; max_age_months?: number | null; meeting_weekday?: number | null; meeting_start_time?: string | null; meeting_end_time?: string | null }
 
 const childrenStore = useChildrenStore()
 const { selectedId, ensureSelected } = useChildSelection()
@@ -104,6 +105,13 @@ const unpaidActivityFee = computed(() => sumOutstanding(filteredRegs.value))
 
 // MVP：後端 course response 無 start_date，先設 0；後續若新增欄位再算 7 天內
 const upcomingCount = computed(() => 0)
+
+// 衝堂偵測（前台 advisory，不擋報名）：以所選孩子「已佔位」課程（enrolled /
+// promoted_pending）的上課時段，比對目錄課程，標出時段衝突者。weekday/time 由
+// 後端 list_courses / my-registrations 帶出（缺值則無法判定，不誤報）。
+const conflictCourseIds = computed(() =>
+  buildConflictCourseIds(courses.value, collectBusySlots(filteredRegs.value)),
+)
 
 async function fetchMy() {
   loading.value = true
@@ -339,7 +347,7 @@ async function pullRefresh() {
       <div v-if="!loading && courses.length === 0" class="pt-empty">
         <div class="pt-empty-title">目前沒有開放的課程</div>
       </div>
-      <ActivityCardList v-else :courses="courses" />
+      <ActivityCardList v-else :courses="courses" :conflict-ids="conflictCourseIds" />
     </template>
 
     <ActivityRegisterSheet
