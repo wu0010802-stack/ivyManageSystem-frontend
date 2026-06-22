@@ -57,6 +57,47 @@ describe('RegistrationStatusList', () => {
     expect(text).toContain('候補中')
   })
 
+  it('payment_status=no_fee（全候補）顯示「免繳」而非「未繳費」', () => {
+    // ④ 全候補 total=0 時後端回 no_fee；badge 不可沿用 is_paid 顯示「未繳費」。
+    const regs = [
+      {
+        id: 20,
+        student_id: 3,
+        student_name: '候補生',
+        school_year: 113,
+        semester: 1,
+        is_paid: false,
+        payment_status: 'no_fee',
+        courses: [{ course_id: 300, course_name: '陶土', status: 'waitlist' }],
+      },
+    ]
+    const wrapper = mount(RegistrationStatusList, {
+      props: { registrations: regs, courseStatusMap: COURSE_STATUS },
+    })
+    const text = wrapper.text()
+    expect(text).toContain('免繳')
+    expect(text).not.toContain('未繳費')
+  })
+
+  it('payment_status=partial 顯示「部分繳費」', () => {
+    const regs = [
+      {
+        id: 21,
+        student_id: 4,
+        student_name: '部分生',
+        school_year: 113,
+        semester: 1,
+        is_paid: false,
+        payment_status: 'partial',
+        courses: [{ course_id: 301, course_name: '鋼琴', status: 'enrolled' }],
+      },
+    ]
+    const wrapper = mount(RegistrationStatusList, {
+      props: { registrations: regs, courseStatusMap: COURSE_STATUS },
+    })
+    expect(wrapper.text()).toContain('部分繳費')
+  })
+
   it('根節點帶 id="act-active" 作為 hero 錨點', () => {
     const wrapper = mount(RegistrationStatusList, {
       props: { registrations, courseStatusMap: COURSE_STATUS },
