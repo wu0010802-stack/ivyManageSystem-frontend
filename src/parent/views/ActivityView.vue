@@ -12,9 +12,11 @@ import {
   myRegistrations,
   registerCourses,
   confirmPromotion,
+  getRegistrationTime,
 } from '../api/activity'
 import { toast } from '../utils/toast'
 import { sumOutstanding } from '../utils/activityPayment'
+import { useRegistrationWindow } from '@/composables/useRegistrationWindow'
 import ParentIcon from '../components/ParentIcon.vue'
 import PullToRefresh from '../components/PullToRefresh.vue'
 
@@ -31,6 +33,19 @@ const myRegs = ref<Registration[]>([])
 const loading = ref(false)
 const submitting = ref(false)
 const showRegister = ref(false)
+
+// ② 報名時段守衛（前端 UX；後端 _check_registration_open 仍為硬閘）。
+// 預設 is_open=true → fail-open：載入前 / 讀取失敗時不擋報名入口，避免誤鎖。
+// 與公開報名頁共用 useRegistrationWindow，關閉/未到/截止/即將截止語意一致。
+const regTimeInfo = ref<{ is_open?: boolean; open_at?: string | null; close_at?: string | null }>({
+  is_open: true,
+  open_at: null,
+  close_at: null,
+})
+const { isRegistrationOpen, noticeState } = useRegistrationWindow({
+  timeInfo: regTimeInfo,
+  submitting,
+})
 
 // 報名表單（符合 ActivityRegisterSheet FormData interface）
 const form = ref<{
@@ -111,7 +126,20 @@ async function fetchCourses() {
   }
 }
 
+async function fetchRegistrationTime() {
+  try {
+    const { data } = await getRegistrationTime()
+    if (data) regTimeInfo.value = data
+  } catch {
+    // 靜默失敗 → 維持 fail-open 預設（不擋報名入口；後端為硬閘）
+  }
+}
+
 function openRegister() {
+  if (!isRegistrationOpen.value) {
+    toast.warn(noticeState.value?.message || '目前未開放報名')
+    return
+  }
   if ((childrenStore.items || []).length === 0) {
     toast.warn('尚未綁定子女')
     return
@@ -208,10 +236,11 @@ onMounted(async () => {
   ensureSelected(childrenStore.items as { student_id: number }[])
   fetchMy()
   fetchCourses()
+  fetchRegistrationTime()
 })
 
 async function pullRefresh() {
-  await Promise.all([fetchMy(), fetchCourses()])
+  await Promise.all([fetchMy(), fetchCourses(), fetchRegistrationTime()])
 }
 </script>
 
@@ -252,8 +281,22 @@ async function pullRefresh() {
     </template>
 
     <template v-else>
+      <!-- ② 報名時段提示（尚未開放 / 尚未開始 / 已截止 / 即將截止） -->
+      <div
+        v-if="noticeState"
+        class="reg-notice"
+        :class="noticeState.variant"
+        role="status"
+      >
+        <div class="reg-notice-title">{{ noticeState.title }}</div>
+        <div class="reg-notice-msg">{{ noticeState.message }}</div>
+      </div>
       <div class="toolbar">
-        <button class="pt-action-btn" @click="openRegister">
+        <button
+          class="pt-action-btn"
+          :disabled="!isRegistrationOpen"
+          @click="openRegister"
+        >
           <ParentIcon name="plus" size="sm" />
           開始報名
         </button>
@@ -317,5 +360,41 @@ async function pullRefresh() {
 .toolbar {
   display: flex;
   justify-content: flex-end;
+}
+
+.toolbar .pt-action-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ② 報名時段提示卡 */
+.reg-notice {
+  border-radius: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--pt-border-light, #ecf5f9);
+  background: var(--pt-surface-raised, var(--neutral-0));
+}
+.reg-notice-title {
+  font-weight: 700;
+  font-size: 14px;
+  margin-bottom: 2px;
+}
+.reg-notice-msg {
+  font-size: 13px;
+  color: var(--pt-text-soft);
+}
+.reg-notice.is-warning {
+  background: var(--color-warning-soft);
+  border-color: var(--color-warning-soft);
+}
+.reg-notice.is-warning .reg-notice-title {
+  color: var(--pt-warning-text-soft);
+}
+.reg-notice.is-danger {
+  background: var(--color-danger-soft);
+  border-color: var(--color-danger-soft);
+}
+.reg-notice.is-danger .reg-notice-title {
+  color: var(--color-danger);
 }
 </style>
