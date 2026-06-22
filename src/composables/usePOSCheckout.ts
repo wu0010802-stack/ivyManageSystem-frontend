@@ -19,6 +19,9 @@ import {
 } from '@/constants/pos'
 import { useAcademicTermStore } from '@/stores/academicTerm'
 import { hasPermission } from '@/utils/auth'
+import type { ApiResponse, ApiBody } from '@/api/_generated/typed'
+
+type CheckoutBody = ApiBody<'/activity/pos/checkout', 'post'>
 
 /**
  * POS 收銀狀態機：搜尋 → 選擇單筆 → 送出（可選列印） → 重置。
@@ -86,13 +89,13 @@ export function usePOSCheckout() {
   const receiptDialogVisible = ref(false)
 
   const dailySummary = reactive({
-    data: null,
+    data: null as ApiResponse<'/activity/pos/daily-summary', 'get'> | null,
     loading: false,
   })
 
   // ── 今日交易明細（可重印） ─────────────────────────────────────
   const recentTransactions = reactive({
-    items: [],
+    items: [] as NonNullable<ApiResponse<'/activity/pos/recent-transactions', 'get'>['transactions']>,
     loading: false,
   })
 
@@ -326,18 +329,18 @@ export function usePOSCheckout() {
     }
 
     try {
-      const payload = {
+      const payload: CheckoutBody = {
         items: [
           {
-            registration_id: item.id,
+            registration_id: Number(item.id),
             amount: Number(item.amount_applied),
           },
         ],
-        payment_method: paymentMethod.value,
+        payment_method: paymentMethod.value as CheckoutBody['payment_method'],
         payment_date: taipeiTodayISO(),
         tendered: null,
         notes: (notes.value || '').trim(),
-        type: checkoutType.value,
+        type: checkoutType.value as CheckoutBody['type'],
         idempotency_key: pendingIdempotencyKey,
       }
       const res = await posCheckout(payload)
