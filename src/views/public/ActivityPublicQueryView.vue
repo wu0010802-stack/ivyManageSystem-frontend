@@ -426,6 +426,7 @@ import {
 import { usePublicActivityOptions } from '@/composables/usePublicActivityOptions'
 import { useActivityAvailability } from '@/composables/useActivityAvailability'
 import { toggleArrayItem } from '@/utils/arrayUtils'
+import { estimateCourseStatus } from '@/utils/activityDisplay'
 
 interface Toast { id: number; message: string; type: string }
 interface CourseEntry {
@@ -598,17 +599,13 @@ const fieldState = computed(() => {
 const classEditable = computed(() => fieldState.value.class_editable === true)
 
 // 估算修改後課程狀態 — 與後端 _attach_courses 對齊：刪後重插時依「現有名額」決定。
-// 因此 availability 優先於原狀態（例：原本 waitlist、現在退一位空出 → 估為 enrolled）。
-// availability[name]：>0 有名額（enrolled）、=0 無名額但開候補（waitlist）、<0 已滿不開候補。
+// 當課程額滿（availability===0）且本生原本已 enrolled/promoted_pending 時，
+// 後端 update 排除本生自己重新計算，本生座位必然保留 → 估為 enrolled（修 P2 bug）。
+// availability[name]：>0 有名額（enrolled）、=0 無名額但開候補（依本生原狀態判定）、<0 已滿不開候補。
 function estimatedCourseStatus(courseName: string): string {
-  const remaining = (availability.value as Record<string, number> | null)?.[courseName]
-  if (remaining !== undefined && remaining > 0) return 'enrolled'
-  if (remaining === 0) return 'waitlist'
-  if (remaining === undefined) {
-    const orig = (queryResult.value?.courses || []).find((c) => c.name === courseName)
-    return orig?.status ?? 'enrolled'
-  }
-  return 'enrolled'
+  const availabilityMap = (availability.value as Record<string, number> | null) ?? {}
+  const existingCourses = queryResult.value?.courses ?? []
+  return estimateCourseStatus(courseName, availabilityMap, existingCourses)
 }
 
 // 儲存前費用預覽：估算新應繳並比對已繳，及早警示退費場景。
