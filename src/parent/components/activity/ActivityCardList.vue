@@ -4,11 +4,14 @@
  *
  * Props:
  *  - courses: ActivityCourse 陣列
+ *  - conflictIds: 與所選孩子已報名課程時段衝突的 course id 集合（advisory 標記）
  *
  * 根節點帶 id="act-upcoming" 提供 hero scrollIntoView 錨點。
  *
  * 注：目前後端 course response 無 poster/image 欄位，故未使用 LazyImage。
  */
+import { formatWeekday, formatTimeRange, formatAgeRange } from '../../utils/activitySchedule'
+
 interface Course {
   id: number
   name: string
@@ -21,13 +24,35 @@ interface Course {
   is_full: boolean
   allow_waitlist: boolean
   description?: string
+  min_age_months?: number | null
+  max_age_months?: number | null
+  meeting_weekday?: number | null
+  meeting_start_time?: string | null
+  meeting_end_time?: string | null
 }
 
-withDefaults(defineProps<{
+const props = withDefaults(defineProps<{
   courses?: Course[]
+  conflictIds?: Set<number>
 }>(), {
   courses: () => [],
+  conflictIds: () => new Set<number>(),
 })
+
+// 課程時段摘要：'週三 15:30–16:30'（缺 weekday 或時間則只顯示有的部分）。
+function scheduleText(c: Course): string {
+  return [formatWeekday(c.meeting_weekday), formatTimeRange(c.meeting_start_time, c.meeting_end_time)]
+    .filter(Boolean)
+    .join(' ')
+}
+
+function ageText(c: Course): string {
+  return formatAgeRange(c.min_age_months, c.max_age_months)
+}
+
+function isConflict(c: Course): boolean {
+  return props.conflictIds.has(c.id)
+}
 </script>
 
 <template>
@@ -48,6 +73,14 @@ withDefaults(defineProps<{
           {{ c.enrolled_count }}/{{ c.capacity }}
           {{ c.is_full ? (c.allow_waitlist ? '可候補' : '已額滿') : '可報名' }}
         </span>
+      </div>
+      <div
+        v-if="scheduleText(c) || ageText(c) || isConflict(c)"
+        class="course-card-meta"
+      >
+        <span v-if="scheduleText(c)" class="meta-chip">🕒 {{ scheduleText(c) }}</span>
+        <span v-if="ageText(c)" class="meta-chip">適齡 {{ ageText(c) }}</span>
+        <span v-if="isConflict(c)" class="meta-chip conflict">時段衝突</span>
       </div>
       <div v-if="c.description" class="course-card-desc">{{ c.description }}</div>
     </div>
@@ -104,6 +137,29 @@ withDefaults(defineProps<{
 }
 .enroll-tag.open { background: var(--pt-tint-calendar); color: var(--pt-tint-calendar-fg); }
 .enroll-tag.full { background: var(--pt-tint-money); color: var(--pt-tint-money-fg); }
+
+.course-card-meta {
+  margin-top: 6px;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.meta-chip {
+  padding: 2px 8px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--pt-surface-subtle, var(--m3-surface-container-high));
+  color: var(--pt-text-soft);
+}
+
+.meta-chip.conflict {
+  background: var(--color-warning-soft);
+  color: var(--pt-warning-text-soft);
+  font-weight: 800;
+}
 
 .course-card-desc {
   margin-top: 6px;
