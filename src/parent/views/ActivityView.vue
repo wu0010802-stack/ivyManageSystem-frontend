@@ -14,11 +14,12 @@ import {
   confirmPromotion,
 } from '../api/activity'
 import { toast } from '../utils/toast'
+import { sumOutstanding } from '../utils/activityPayment'
 import ParentIcon from '../components/ParentIcon.vue'
 import PullToRefresh from '../components/PullToRefresh.vue'
 
 interface RegCourse { course_id: number; course_name: string; status: string; price?: number; price_snapshot?: unknown }
-interface Registration { id: number; student_id: number; student_name?: string; school_year: number; semester: number; is_paid: boolean; courses: RegCourse[] }
+interface Registration { id: number; student_id: number; student_name?: string; school_year: number; semester: number; is_paid: boolean; total_amount?: number; outstanding_amount?: number; payment_status?: string; courses: RegCourse[] }
 interface Course { id: number; name: string; price?: number; school_year: number; semester: number; capacity: number; enrolled_count: number; is_full: boolean; allow_waitlist: boolean; sessions?: number; description?: string; price_snapshot?: unknown }
 
 const childrenStore = useChildrenStore()
@@ -76,17 +77,10 @@ const activeRegistrations = computed(() =>
   ).length,
 )
 
-const unpaidActivityFee = computed(() =>
-  filteredRegs.value
-    .filter((r) => !r.is_paid)
-    .reduce((s, r) => {
-      const total = (r.courses || []).reduce(
-        (a, c) => a + Number((c as unknown as { price_snapshot?: unknown; price?: number }).price_snapshot ?? c.price ?? 0),
-        0,
-      )
-      return s + total
-    }, 0),
-)
+// ④ 待繳：以後端 outstanding_amount（= max(total-paid, 0)）為準。
+// 後端 total 只計 enrolled 課程 + 用品（候補不計），且已扣除已繳，免繳/溢繳/已繳清
+// 皆為 0。原本前端自行加總所有課程（含候補、未扣已繳、漏算用品）會高估待繳。
+const unpaidActivityFee = computed(() => sumOutstanding(filteredRegs.value))
 
 // MVP：後端 course response 無 start_date，先設 0；後續若新增欄位再算 7 天內
 const upcomingCount = computed(() => 0)

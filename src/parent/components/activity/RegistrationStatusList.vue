@@ -12,6 +12,8 @@
  *
  * 根節點帶 id="act-active" 提供 hero scrollIntoView 錨點。
  */
+import { paymentBadge } from '../../utils/activityPayment'
+
 interface RegCourse {
   course_id: number
   course_name: string
@@ -25,6 +27,9 @@ interface Registration {
   school_year: number
   semester: number
   is_paid: boolean
+  // ④ 後端直接回傳的繳費口徑（_registration_summary）。badge 一律以此渲染。
+  payment_status?: string
+  outstanding_amount?: number
   courses: RegCourse[]
 }
 
@@ -52,8 +57,8 @@ const emit = defineEmits<{
       <div class="reg-header">
         <span class="reg-student">{{ reg.student_name || studentNameMap.get(reg.student_id) }}</span>
         <span class="reg-term">{{ reg.school_year }}-{{ reg.semester === 1 ? '上' : '下' }}</span>
-        <span :class="['paid', reg.is_paid ? 'ok' : 'warn']">
-          {{ reg.is_paid ? '已繳費' : '未繳費' }}
+        <span :class="['paid', paymentBadge(reg).tone]">
+          {{ paymentBadge(reg).label }}
         </span>
       </div>
       <div
@@ -123,8 +128,10 @@ const emit = defineEmits<{
   border-radius: 10px;
   font-size: 12px;
 }
-.paid.ok   { background: var(--pt-tint-calendar); color: var(--pt-tint-calendar-fg); }
-.paid.warn { background: var(--pt-tint-money); color: var(--pt-tint-money-fg); }
+.paid.ok      { background: var(--pt-tint-calendar); color: var(--pt-tint-calendar-fg); }
+.paid.warn    { background: var(--pt-tint-money); color: var(--pt-tint-money-fg); }
+/* 免繳（no_fee，全候補 / 0 元）：中性灰，不用警示色避免家長誤以為欠款 */
+.paid.neutral { background: var(--pt-surface-mute, #eef1f4); color: var(--pt-text-muted); }
 
 /* 童彩報名狀態 chip（courseStatusMap inline style 優先；以下為 token 預設） */
 .course-status[data-status="enrolled"]         { background: var(--pt-tint-calendar); color: var(--pt-tint-calendar-fg); }
