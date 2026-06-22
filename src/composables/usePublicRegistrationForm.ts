@@ -35,6 +35,19 @@ function priceOf(name: string, source: { name: string; price?: number | string }
 
 const FIELD_FOCUS_ORDER = ['name', 'birthday', 'parent_phone', 'class_name', 'courses']
 
+/**
+ * Finding 3（2026-06-22）：公開報名表單中屬幼兒/家長 PII 的欄位。
+ * useFormDraft 的草稿暫存（共用電腦 localStorage、scope 固定 'public'、TTL 7 天）
+ * 必須 exclude 這些欄位，避免下一位訪客被提示還原前一位幼兒的姓名/生日/班級/電話。
+ * 課程/用品選擇（selectedCourses / selectedSupplies）非 PII，仍可保留以利填表。
+ */
+export const PUBLIC_DRAFT_PII_FIELDS = [
+  'name',
+  'birthday',
+  'parent_phone',
+  'class_name',
+] as const
+
 export function usePublicRegistrationForm({ courses, supplies, availability }: { courses: { value: { name: string; price?: number | string }[] }; supplies: { value: { name: string; price?: number | string }[] }; availability: { value: Record<string, number> } }) {
   const form = reactive({
     name: '',

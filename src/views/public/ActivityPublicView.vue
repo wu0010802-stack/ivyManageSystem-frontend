@@ -446,7 +446,10 @@ import { usePublicActivityOptions } from '@/composables/usePublicActivityOptions
 import { useActivityRegistrationTime } from '@/composables/useActivityRegistrationTime'
 import { useRegistrationWindow } from '@/composables/useRegistrationWindow'
 import { useActivityAvailability } from '@/composables/useActivityAvailability'
-import { usePublicRegistrationForm } from '@/composables/usePublicRegistrationForm'
+import {
+  usePublicRegistrationForm,
+  PUBLIC_DRAFT_PII_FIELDS,
+} from '@/composables/usePublicRegistrationForm'
 import { useFormDraft } from '@/composables/useFormDraft'
 import { useCourseAdvisory } from '@/composables/useCourseAdvisory'
 import { buildFormCardTitle } from '@/utils/activityDisplay'
@@ -557,6 +560,9 @@ const activityDraft = useFormDraft({
   formId: 'activity-public',
   state: form,
   userScope: () => 'public',
+  // Finding 3：公開/共用電腦上不持久化幼兒 PII（姓名/生日/班級/家長電話），
+  // 只保留課程/用品選擇；下一位訪客不會被提示還原前一位的個資。
+  exclude: [...PUBLIC_DRAFT_PII_FIELDS],
   confirmRestore: ({ message }) => (window.confirm(message) ? 'restore' : 'discard'),
 })
 
