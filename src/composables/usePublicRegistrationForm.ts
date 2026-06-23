@@ -54,8 +54,8 @@ export function usePublicRegistrationForm({ courses, supplies, availability }: {
     birthday: '',
     parent_phone: '',
     class_name: '',
-    selectedCourses: [],
-    selectedSupplies: [],
+    selectedCourses: [] as string[],
+    selectedSupplies: [] as string[],
   })
 
   // 各欄位錯誤訊息（送出後填入；使用者開始修改時清除對應欄位）

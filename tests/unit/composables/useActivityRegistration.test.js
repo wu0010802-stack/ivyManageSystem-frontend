@@ -207,6 +207,35 @@ describe('useActivityRegistration', () => {
     expect(classroomOptions.value).toEqual(options)
   })
 
+  it('班級清單守衛：第二次 loadOptions 只重抓課程（名額），不重抓班級', async () => {
+    getCourses.mockResolvedValue({ data: { courses: [{ id: 1, name: '美術' }] } })
+    getClassOptions.mockResolvedValue({ data: { options: ['大班'] } })
+
+    const { loadOptions } = useActivityRegistration()
+    await loadOptions() // 首次：課程 + 班級各一次
+    expect(getCourses).toHaveBeenCalledTimes(1)
+    expect(getClassOptions).toHaveBeenCalledTimes(1)
+
+    await loadOptions() // mutation 後刷新名額：只重抓課程
+    expect(getCourses).toHaveBeenCalledTimes(2)
+    expect(getClassOptions).toHaveBeenCalledTimes(1) // 班級不再重抓
+  })
+
+  it('班級守衛：首次 getClassOptions 失敗則下次仍會重試（未標記已載入）', async () => {
+    getCourses.mockResolvedValue({ data: { courses: [] } })
+    getClassOptions
+      .mockRejectedValueOnce(new Error('班級載入失敗'))
+      .mockResolvedValueOnce({ data: { options: ['大班'] } })
+
+    const { classroomOptions, loadOptions } = useActivityRegistration()
+    await loadOptions() // 班級失敗
+    expect(classroomOptions.value).toEqual([])
+
+    await loadOptions() // 應重試班級
+    expect(getClassOptions).toHaveBeenCalledTimes(2)
+    expect(classroomOptions.value).toEqual(['大班'])
+  })
+
   it('handleSearch 有防抖：300ms 內多次呼叫只觸發一次 fetchList', async () => {
     vi.useFakeTimers()
 

@@ -18,19 +18,25 @@ vi.mock('@/api/activityPublic', () => ({
   publicUpdateRegistration: vi.fn(),
   publicConfirmPromotion: vi.fn(),
   publicDeclinePromotion: vi.fn(),
-  getPublicCourses: vi.fn().mockResolvedValue({ data: [] }),
-  getPublicSupplies: vi.fn().mockResolvedValue({ data: [] }),
-  getPublicClasses: vi.fn().mockResolvedValue({ data: [] }),
-  getPublicCourseVideos: vi.fn().mockResolvedValue({ data: {} }),
+  // view 改用 bootstrap 單支 GET 取代 4 支個別 GET（C4 quick win）
+  getPublicBootstrap: vi.fn().mockResolvedValue({
+    data: { courses: [], supplies: [], classes: [], course_videos: {} },
+  }),
   getPublicCoursesAvailability: vi.fn().mockResolvedValue({ data: {} }),
 }))
 
 import {
   publicQueryByToken,
-  getPublicCourses,
-  getPublicSupplies,
+  getPublicBootstrap,
   getPublicCoursesAvailability,
 } from '@/api/activityPublic'
+
+// 用 bootstrap 設定課程/用品 option 價（取代原本分別 mock getPublicCourses/Supplies）
+function mockBootstrap({ courses = [], supplies = [], classes = ['大班'] } = {}) {
+  getPublicBootstrap.mockResolvedValue({
+    data: { courses, supplies, classes, course_videos: {} },
+  })
+}
 
 vi.mock('@/utils/arrayUtils', () => ({
   toggleArrayItem: (arr, item) => {
@@ -64,8 +70,10 @@ describe('ActivityPublicQueryView — 退費預警價格來源（P2）', () => {
 
   it('既有課程+用品的 option 價被後台調降後保留原品項，仍用 snapshot 估算、不誤擋儲存', async () => {
     // 後台把美術 option 由 3000 降到 2000、彩色筆由 300 降到 100
-    getPublicCourses.mockResolvedValue({ data: [{ name: '美術', price: 2000 }] })
-    getPublicSupplies.mockResolvedValue({ data: [{ name: '彩色筆', price: 100 }] })
+    mockBootstrap({
+      courses: [{ name: '美術', price: 2000 }],
+      supplies: [{ name: '彩色筆', price: 100 }],
+    })
     getPublicCoursesAvailability.mockResolvedValue({ data: { 美術: 5 } })
     // query 回報名當下的 snapshot：美術 3000、彩色筆 300，已繳 3300
     publicQueryByToken.mockResolvedValue({
@@ -91,8 +99,10 @@ describe('ActivityPublicQueryView — 退費預警價格來源（P2）', () => {
   })
 
   it('新增的用品用目前 option 價（snapshot 不存在於既有報名）', async () => {
-    getPublicCourses.mockResolvedValue({ data: [{ name: '美術', price: 3000 }] })
-    getPublicSupplies.mockResolvedValue({ data: [{ name: '畫具', price: 500 }] })
+    mockBootstrap({
+      courses: [{ name: '美術', price: 3000 }],
+      supplies: [{ name: '畫具', price: 500 }],
+    })
     getPublicCoursesAvailability.mockResolvedValue({ data: { 美術: 5 } })
     // 原報名只有美術（snapshot 3000），無任何用品，已繳 3000
     publicQueryByToken.mockResolvedValue({

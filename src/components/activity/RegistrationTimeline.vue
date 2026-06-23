@@ -57,6 +57,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { MATCH_STATUS_LABEL_LONG } from '@/constants/activity'
 
 interface TimelineEvent {
   kind?: string
@@ -120,14 +121,7 @@ const props = withDefaults(defineProps<{
   paymentStatus: 'unpaid',
 })
 
-const MATCH_LABEL: Record<string, string> = {
-  matched: '系統自動匹配',
-  manual: '人工綁定學生',
-  forced: '強行收件（校外生）',
-  pending: '等待校方審核',
-  rejected: '已拒絕（視為校外生）',
-  unmatched: '舊資料、未比對',
-}
+const MATCH_LABEL = MATCH_STATUS_LABEL_LONG as Record<string, string>
 
 function fmtDate(s: string | null | undefined) {
   if (!s) return ''

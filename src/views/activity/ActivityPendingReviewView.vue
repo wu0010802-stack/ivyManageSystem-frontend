@@ -44,6 +44,7 @@
     </el-form>
 
     <el-table
+      ref="tableRef"
       v-loading="loading"
       :data="items"
       stripe
@@ -51,7 +52,9 @@
       :row-class-name="rowClassName"
       empty-text="目前沒有待審核或已拒絕的報名"
       style="width: 100%"
+      @selection-change="handleSelectionChange"
     >
+      <el-table-column type="selection" width="45" />
       <el-table-column label="狀態" width="110">
         <template #default="{ row }">
           <el-tag
@@ -110,6 +113,30 @@
       @current-change="loadList"
       @size-change="loadList"
     />
+
+    <!-- 批次操作浮動工具列（後端無批次端點 → 前端並發逐筆呼叫彙總結果）-->
+    <transition name="batch-bar">
+      <div v-if="selectedRows.length > 0" class="batch-toolbar">
+        <span class="batch-info">
+          已選 {{ selectedRows.length }} 筆（待審 {{ selectedPending.length }} · 已拒 {{ selectedRejected.length }}）
+        </span>
+        <el-button
+          size="small"
+          type="danger"
+          :loading="batchProcessing"
+          :disabled="selectedPending.length === 0"
+          @click="handleBatchReject"
+        >批次拒絕（{{ selectedPending.length }}）</el-button>
+        <el-button
+          size="small"
+          type="success"
+          :loading="batchProcessing"
+          :disabled="selectedRejected.length === 0"
+          @click="handleBatchRestore"
+        >批次復原（{{ selectedRejected.length }}）</el-button>
+        <el-button size="small" @click="clearSelection">取消</el-button>
+      </div>
+    </transition>
 
     <!-- 手動匹配 dialog -->
     <el-dialog v-model="matchDialog.visible" title="手動匹配在校生" width="640px">
@@ -222,7 +249,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search } from '@element-plus/icons-vue'
@@ -256,6 +283,96 @@ const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
 const loading = ref(false)
+
+// ── 批次操作 ─────────────────────────────────────────────
+const tableRef = ref<{ clearSelection: () => void } | null>(null)
+const selectedRows = ref<PendingRow[]>([])
+const batchProcessing = ref(false)
+// 拒絕只能對非已拒列；復原只能對已拒列（各自過濾，互不影響）
+const selectedPending = computed(() => selectedRows.value.filter((r) => !isRejected(r)))
+const selectedRejected = computed(() => selectedRows.value.filter((r) => isRejected(r)))
+
+function handleSelectionChange(rows: PendingRow[]) {
+  selectedRows.value = rows
+}
+function clearSelection() {
+  // el-table 實例提供 clearSelection；測試 stub 可能無此方法 → 防禦呼叫
+  if (typeof tableRef.value?.clearSelection === 'function') tableRef.value.clearSelection()
+  selectedRows.value = []
+}
+
+// 並發逐筆呼叫並彙總成功/失敗數（後端無批次端點）
+async function runBatch<T>(rows: T[], fn: (row: T) => Promise<unknown>): Promise<{ ok: number; fail: number }> {
+  const results = await Promise.allSettled(rows.map((r) => fn(r)))
+  let ok = 0
+  let fail = 0
+  for (const res of results) {
+    if (res.status === 'fulfilled') ok += 1
+    else fail += 1
+  }
+  return { ok, fail }
+}
+
+async function handleBatchReject() {
+  const targets = selectedPending.value
+  if (targets.length === 0) return
+  let reason = ''
+  try {
+    const result = (await ElMessageBox.prompt(
+      `將對已選的 ${targets.length} 筆「待審核」報名套用同一拒絕原因（原因將寫入 audit log）。`,
+      '批次拒絕',
+      {
+        inputPlaceholder: '必填：共用拒絕原因（至少 2 字）',
+        confirmButtonText: '確認批次拒絕',
+        cancelButtonText: '取消',
+        type: 'warning',
+        inputValidator: (val: string) => {
+          const t = (val || '').trim()
+          if (t.length < 2) return '請填寫拒絕原因（至少 2 字）'
+          if (t.length > 200) return '不得超過 200 字'
+          return true
+        },
+      },
+    )) as { value: string }
+    reason = result.value.trim()
+  } catch {
+    return // 取消
+  }
+  batchProcessing.value = true
+  try {
+    const { ok, fail } = await runBatch(targets, (row) => rejectRegistration(row.id, reason))
+    if (fail === 0) ElMessage.success(`已批次拒絕 ${ok} 筆`)
+    else ElMessage.warning(`批次拒絕完成：成功 ${ok} 筆、失敗 ${fail} 筆`)
+    clearSelection()
+    await loadList()
+  } finally {
+    batchProcessing.value = false
+  }
+}
+
+async function handleBatchRestore() {
+  const targets = selectedRejected.value
+  if (targets.length === 0) return
+  try {
+    await ElMessageBox.confirm(
+      `確認將已選的 ${targets.length} 筆「已拒絕」報名批次復原至待審核？`,
+      '批次復原',
+      { confirmButtonText: '確認批次復原', cancelButtonText: '取消', type: 'info' },
+    )
+  } catch {
+    return // 取消
+  }
+  batchProcessing.value = true
+  try {
+    const { ok, fail } = await runBatch(targets, (row) => restoreRegistration(row.id))
+    if (fail === 0) ElMessage.success(`已批次復原 ${ok} 筆`)
+    else ElMessage.warning(`批次復原完成：成功 ${ok} 筆、失敗 ${fail} 筆`)
+    clearSelection()
+    await loadList()
+  } finally {
+    batchProcessing.value = false
+  }
+}
 
 const matchDialog = reactive<{
   visible: boolean
@@ -531,5 +648,39 @@ onMounted(loadList)
 :deep(.el-table__row.row-rejected) .el-tag,
 :deep(.el-table__row.row-rejected) .el-button {
   text-decoration: none;
+}
+
+/* 批次操作浮動工具列（範式對齊 ActivityRegistrationView）*/
+.batch-toolbar {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--text-primary, #1f2937);
+  color: #fff;
+  padding: 10px 20px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  z-index: 999;
+}
+.batch-info { font-size: 14px; }
+.batch-bar-enter-active,
+.batch-bar-leave-active { transition: all 0.2s ease; }
+.batch-bar-enter-from,
+.batch-bar-leave-to { opacity: 0; transform: translateX(-50%) translateY(20px); }
+
+@media (max-width: 768px) {
+  .batch-toolbar {
+    left: 12px;
+    right: 12px;
+    transform: none;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .batch-bar-enter-from,
+  .batch-bar-leave-to { opacity: 0; transform: translateY(20px); }
 }
 </style>

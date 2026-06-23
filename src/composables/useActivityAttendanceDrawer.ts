@@ -36,6 +36,26 @@ export function useActivityAttendanceDrawer({ getSessionFn, updateFn }: { getSes
   const drawerSession = ref<SessionData | null>(null)
   const saveLoading = ref(false)
 
+  // 未存變更守衛：載入/儲存後存點名輸入的快照（is_present + 備註），
+  // 與目前值比對即得 isDirty，供 drawer before-close 攔截 ESC/X 靜默丟失。
+  const dirtySnapshot = ref<string>('')
+
+  function serializeAttendanceInputs(session: SessionData | null): string {
+    if (!session) return ''
+    return JSON.stringify(
+      session.students.map(s => [s.registration_id, s.is_present, s.attendance_notes || '']),
+    )
+  }
+
+  function captureSnapshot() {
+    dirtySnapshot.value = serializeAttendanceInputs(drawerSession.value)
+  }
+
+  function isDirty(): boolean {
+    if (!drawerSession.value) return false
+    return serializeAttendanceInputs(drawerSession.value) !== dirtySnapshot.value
+  }
+
   // 先按班級聚集（跨班名冊好找），班級內未點名優先
   const sortedStudents = computed(() => {
     if (!drawerSession.value) return []
@@ -111,6 +131,7 @@ export function useActivityAttendanceDrawer({ getSessionFn, updateFn }: { getSes
     try {
       const res = await getSessionFn(row.id, params)
       drawerSession.value = res.data
+      captureSnapshot()
     } catch {
       ElMessage.error('載入點名資料失敗')
       drawerVisible.value = false
@@ -126,6 +147,7 @@ export function useActivityAttendanceDrawer({ getSessionFn, updateFn }: { getSes
     try {
       const res = await getSessionFn(sid, params)
       drawerSession.value = res.data
+      captureSnapshot()
     } catch {
       ElMessage.error('重新載入點名資料失敗')
     } finally {
@@ -152,6 +174,7 @@ export function useActivityAttendanceDrawer({ getSessionFn, updateFn }: { getSes
     saveLoading.value = true
     try {
       await updateFn(drawerSession.value.id, records)
+      captureSnapshot()
       ElMessage.success('點名儲存成功')
       drawerVisible.value = false
       if (onSuccess) onSuccess()
@@ -179,5 +202,6 @@ export function useActivityAttendanceDrawer({ getSessionFn, updateFn }: { getSes
     reloadCurrentSession,
     setAllPresent,
     handleSave,
+    isDirty,
   }
 }

@@ -6,6 +6,8 @@
  * 欄位為準渲染，不再自行加總課程（避免漏扣已繳、誤計候補課程、漏算用品）。
  */
 
+import { PAYMENT_STATUS_LABEL } from '@/constants/activity'
+
 export interface RegPaymentLike {
   is_paid?: boolean
   payment_status?: string
@@ -26,23 +28,27 @@ export interface PaymentBadge {
 
 /**
  * 依後端 payment_status 映射顯示用 badge。
+ * label 取自 constants/activity 的 PAYMENT_STATUS_LABEL（與 admin 單一來源，
+ * 消除 parent「溢繳」漂移→統一「超繳」）；tone 各自保留（家長端不同渲染系統）。
  * 無 payment_status（舊 response / 尚未升級的後端）時，向後相容退回 is_paid。
  */
+const _LABELS = PAYMENT_STATUS_LABEL as Record<string, string>
+
 export function paymentBadge(reg: RegPaymentLike): PaymentBadge {
   switch (reg.payment_status) {
     case 'paid':
-      return { label: '已繳費', tone: 'ok' }
+      return { label: _LABELS.paid, tone: 'ok' }
     case 'no_fee':
-      return { label: '免繳', tone: 'neutral' }
+      return { label: _LABELS.no_fee, tone: 'neutral' }
     case 'partial':
-      return { label: '部分繳費', tone: 'warn' }
+      return { label: _LABELS.partial, tone: 'warn' }
     case 'overpaid':
-      return { label: '溢繳', tone: 'warn' }
+      return { label: _LABELS.overpaid, tone: 'warn' }
     case 'unpaid':
-      return { label: '未繳費', tone: 'warn' }
+      return { label: _LABELS.unpaid, tone: 'warn' }
     default:
       return reg.is_paid
-        ? { label: '已繳費', tone: 'ok' }
-        : { label: '未繳費', tone: 'warn' }
+        ? { label: _LABELS.paid, tone: 'ok' }
+        : { label: _LABELS.unpaid, tone: 'warn' }
   }
 }

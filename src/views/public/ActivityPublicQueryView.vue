@@ -429,11 +429,20 @@ import {
   publicUpdateRegistration,
   publicConfirmPromotion,
   publicDeclinePromotion,
+  getPublicBootstrap,
 } from '@/api/activityPublic'
 import { usePublicActivityOptions } from '@/composables/usePublicActivityOptions'
 import { useActivityAvailability } from '@/composables/useActivityAvailability'
 import { toggleArrayItem } from '@/utils/arrayUtils'
 import { estimateCourseStatus } from '@/utils/activityDisplay'
+import {
+  priceFromList,
+  buildSupplySnapshotMap,
+  resolveSupplyPrice,
+  sumCourseFees,
+  sumSupplyFees,
+} from '@/utils/activityPricing'
+import type { ApiBody } from '@/api/_generated/typed'
 // FE-3（2026-06-23 audit）：費用預覽改用全站 canonical 金額格式化（千分位 + NaN→「—」），
 // 不再各自 `NT$ {{ x }}`（後端回非數字時會顯示「NT$ NaN」、且無千分位）。
 import { formatCurrency } from '@/utils/currency'
@@ -480,7 +489,20 @@ const TOAST_ICONS: Record<string, string> = {
 interface CourseOption { name: string; price?: string | number; [key: string]: unknown }
 interface SupplyOption { name: string; price?: string | number; [key: string]: unknown }
 
-const { courses: _courses, supplies: _supplies, classes: _classes, loadOptions } = usePublicActivityOptions()
+const { courses: _courses, supplies: _supplies, classes: _classes, applyOptions } = usePublicActivityOptions()
+
+// 此頁僅需 courses/supplies/classes（不用 videos）。用 bootstrap 單支 GET 取代
+// loadOptions 的 4 支並行 GET，削報名尖峰對單 worker 後端的請求放大。
+async function loadOptions() {
+  const res = await getPublicBootstrap()
+  const b = res.data
+  applyOptions({
+    courses: b.courses,
+    supplies: b.supplies,
+    classes: b.classes,
+    videos: b.course_videos,
+  })
+}
 const { availability, refresh: refreshAvailability, startPolling, stopPolling } =
   useActivityAvailability()
 
@@ -647,28 +669,22 @@ function onToggleCourse(courseName: string): void {
 const feePreview = computed(() => {
   if (!queryResult.value) return null
   const existingCourses = queryResult.value.courses ?? []
-  // 既有用品的 snapshot 價：supplies 回 {name, price}（P2 後端改）；舊資料容錯為 string。
-  const existingSupplyPrice = new Map(
-    (queryResult.value.supplies ?? [])
-      .filter((s): s is { name: string; price?: number } => typeof s !== 'string')
-      .map((s) => [s.name, Number(s.price ?? 0)]),
-  )
-  const newCourseTotal = editForm.selectedCourses.reduce((sum, name) => {
-    if (estimatedCourseStatus(name) !== 'enrolled') return sum
-    const existing = existingCourses.find((c) => c.name === name)
-    const price = existing
-      ? Number(existing.price ?? 0)
-      : Number(courses.value.find((c) => c.name === name)?.price ?? 0)
-    return sum + price
-  }, 0)
-  const newSupplyTotal = editForm.selectedSupplies.reduce((sum, name) => {
-    const snap = existingSupplyPrice.get(name)
-    const price =
-      snap !== undefined
-        ? snap
-        : Number(supplies.value.find((s) => s.name === name)?.price ?? 0)
-    return sum + price
-  }, 0)
+  // 既有用品的 snapshot 價 map（物件型保留、舊資料 string 跳過）；編修模式既有品項優先用此價。
+  const existingSupplyPrice = buildSupplySnapshotMap(queryResult.value.supplies ?? [])
+  // 課程：只算 enrolled；既有課用 snapshot 價（courses[].price），新增課才用目前 option 價。
+  const newCourseTotal = sumCourseFees(editForm.selectedCourses, {
+    isEnrolled: (name) => estimatedCourseStatus(name) === 'enrolled',
+    resolvePrice: (name) => {
+      const existing = existingCourses.find((c) => c.name === name)
+      return existing
+        ? priceFromList(name, existingCourses)
+        : priceFromList(name, courses.value)
+    },
+  })
+  // 用品：既有品項用 snapshot 價、新增品項用目前 option 價。
+  const newSupplyTotal = sumSupplyFees(editForm.selectedSupplies, {
+    resolvePrice: (name) => resolveSupplyPrice(name, existingSupplyPrice, supplies.value),
+  })
   const newTotal = newCourseTotal + newSupplyTotal
   const originalTotal = Number(queryResult.value.total_amount || 0)
   const paidAmount = Number(queryResult.value.paid_amount || 0)
@@ -815,6 +831,18 @@ function hydrateResult(data: QueryResult) {
     : []
   editForm.new_parent_phone = ''
   newPhoneTouched.value = false
+  // availability 只有「編輯課程」介面才用；查詢階段不輪詢。查詢命中→進入編輯介面時
+  // 才首次抓 availability 並起 30s 輪詢（avoid 查詢頁背景空轉）。
+  ensureAvailabilityPolling()
+}
+
+// availability 輪詢只起一次（家長可能多次重查，prevent 疊加 interval）
+const availabilityPollingStarted = ref(false)
+function ensureAvailabilityPolling() {
+  if (availabilityPollingStarted.value) return
+  availabilityPollingStarted.value = true
+  refreshAvailability()
+  startPolling(30000)
 }
 
 // 用當前 mode 重新查一次（給 stale 409 / 儲存後 refresh 共用）
@@ -853,16 +881,11 @@ async function handleSaveChanges() {
 
   editSubmitting.value = true
   try {
-    const coursesPayload = editForm.selectedCourses.map((name) => {
-      const c = courses.value.find((x) => x.name === name)
-      return { name, price: String(c?.price ?? 0) }
-    })
-    const suppliesPayload = editForm.selectedSupplies.map((name) => {
-      const s = supplies.value.find((x) => x.name === name)
-      return { name, price: String(s?.price ?? 0) }
-    })
+    // 契約 PublicCourseItem/PublicSupplyItem 只收 name（價格後端以 DB price_snapshot 為準）
+    const coursesPayload = editForm.selectedCourses.map((name) => ({ name }))
+    const suppliesPayload = editForm.selectedSupplies.map((name) => ({ name }))
 
-    const payload: Record<string, unknown> = {
+    const payload: ApiBody<'/activity/public/update', 'post'> = {
       id: queryResult.value!.id,
       name: queryResult.value!.name,
       birthday: queryResult.value!.birthday || queryForm.birthday,
@@ -870,6 +893,7 @@ async function handleSaveChanges() {
       class: editForm.class_name,
       courses: coursesPayload,
       supplies: suppliesPayload,
+      remark: '',
     }
     if (phoneWillChange) {
       payload.new_parent_phone = newPhoneRaw
@@ -949,8 +973,9 @@ onMounted(async () => {
     queryMode.value = 'token'
   }
   try {
-    await Promise.all([loadOptions(), refreshAvailability()])
-    startPolling(30000)
+    // 僅載入課程/用品/班級選項；availability 輪詢延到查詢命中、進入編輯介面才啟動
+    // （ensureAvailabilityPolling，於 hydrateResult），查詢階段不輪詢。
+    await loadOptions()
   } catch (err) {
     showToast((err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '無法載入頁面資料', 'error')
   }

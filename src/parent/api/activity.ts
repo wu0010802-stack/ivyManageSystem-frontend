@@ -25,3 +25,8 @@ export const getRegistrationPayments = (registrationId: number) =>
 // 子女已佔位課程未來 days 天內的場次（hero upcomingCount / 下次上課）。
 export const getUpcomingSessions = (days = 30) =>
   api.get('/parent/activity/upcoming-sessions', { params: { days } })
+
+// 家長端首屏聚合：courses + my-registrations + upcoming-sessions + registration-time
+// 一次回（4 GET 併 1，削報名尖峰對單 worker 後端的請求放大；對齊公開端 bootstrap）。
+export const getActivityBootstrap = (days = 30) =>
+  api.get('/parent/activity/bootstrap', { params: { days } })

@@ -9,7 +9,19 @@ vi.mock('@/parent/api/activity', () => ({
   myRegistrations: vi.fn().mockResolvedValue({ data: { items: [] } }),
   registerCourses: vi.fn().mockResolvedValue({ data: {} }),
   confirmPromotion: vi.fn().mockResolvedValue({ data: {} }),
-  getRegistrationTime: (...a: unknown[]) => getRegistrationTimeMock(...a),
+  // 首屏改用 bootstrap 聚合（4 GET 併 1）；registration_time 區塊沿用
+  // getRegistrationTimeMock 驅動，保留原報名時段守衛測試設計。
+  getActivityBootstrap: async (...a: unknown[]) => {
+    const rt = (await getRegistrationTimeMock(...a)) as { data?: unknown }
+    return {
+      data: {
+        registration_time: rt?.data,
+        courses: { items: [] },
+        registrations: { items: [] },
+        upcoming_sessions: { items: [] },
+      },
+    }
+  },
 }))
 
 vi.mock('@/parent/api/profile', () => ({

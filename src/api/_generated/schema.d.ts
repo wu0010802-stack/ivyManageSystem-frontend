@@ -6970,6 +6970,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/parent/activity/bootstrap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Activity Bootstrap
+         * @description 家長端首屏聚合：courses + my-registrations + upcoming-sessions +
+         *     registration-time 一次回，把 4 支 GET 併成 1 支（對齊公開端 /public/bootstrap，
+         *     削報名尖峰對單 worker 的請求放大）。
+         *
+         *     各區塊直接重用既有 handler 函式，口徑與單支端點完全一致；courses 走 parent
+         *     RLS session（per-parent enrolled count），故無法重用公開端不帶 per-parent count
+         *     的 builder。registration-time 為全域公開設定（/public/registration-time 無認證
+         *     即暴露），用普通 session 取，避免依賴 parent RLS 角色對 settings 表的存取權。
+         */
+        get: operations["activity_bootstrap_api_parent_activity_bootstrap_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/parent/activity/courses": {
         parameters: {
             query?: never;
@@ -8467,6 +8494,11 @@ export interface paths {
          *
          *     放寬前僅列『自班有報名的課程』場次且統計只算自班；現對齊 admin：
          *     列全部場次、整堂統計。維持回傳陣列（與既有前端相容，無分頁）。
+         *
+         *     防無窗查詢：start_date / end_date 皆未帶時（前端清空日期）預設只回最近
+         *     _PORTAL_SESSIONS_DEFAULT_WINDOW_DAYS 天的場次，避免一次撈全部歷史場次並對
+         *     全 session_id 跑出席聚合（employee-gated 非 DoS，但屬不設防的契約退化）。
+         *     要看更早場次顯式帶 start_date 即可。
          */
         get: operations["portal_list_sessions_api_portal_activity_attendance_sessions_get"];
         put?: never;
@@ -21405,6 +21437,20 @@ export interface components {
             warning?: string | null;
         };
         /**
+         * ParentActivityBootstrapOut
+         * @description GET /parent/activity/bootstrap：家長端首屏一次聚合。
+         *
+         *     把 courses + my-registrations + upcoming-sessions + registration-time 四支
+         *     GET 併成一支，削報名尖峰對單 worker 後端的請求放大（對齊公開端
+         *     /public/bootstrap）。各區塊 shape 與對應單支端點完全一致。
+         */
+        ParentActivityBootstrapOut: {
+            courses: components["schemas"]["ParentCourseListOut"];
+            registration_time: components["schemas"]["PublicRegistrationTimeOut"];
+            registrations: components["schemas"]["MyRegistrationsOut"];
+            upcoming_sessions: components["schemas"]["ParentUpcomingSessionsOut"];
+        };
+        /**
          * ParentContactBookAckOut
          * @description POST /parent/contact-book/{id}/ack — 已讀回傳（idempotent）。
          */
@@ -24596,6 +24642,31 @@ export interface components {
             visit_date?: string | null;
         };
         /**
+         * RefundCalcPayload
+         * @description 退費計算稽核明細（calc_method 對應的形狀）。
+         *
+         *     取代原裸 dict（OpenAPI additionalProperties:true → 前端 Record<string,
+         *     unknown>）。course 比例法欄位較全；supply（不退）/未知總堂數法只有共同的
+         *     amount_due + formula，其餘留 None。三種 calc_method 皆無此外的鍵，故以
+         *     全欄位聯集 + Optional 即可結構化覆蓋。
+         */
+        RefundCalcPayload: {
+            /** Amount Due */
+            amount_due: number;
+            /** Formula */
+            formula: string;
+            /** Ratio Band */
+            ratio_band?: string | null;
+            /** Refund Ratio */
+            refund_ratio?: string | null;
+            /** Served Ratio */
+            served_ratio?: number | null;
+            /** T Served */
+            T_served?: number | null;
+            /** T Total */
+            T_total?: number | null;
+        };
+        /**
          * RefundRequest
          * @description 退款請求。退款走獨立流程，於 StudentFeeRefund 表留下歷史。
          *
@@ -24636,10 +24707,7 @@ export interface components {
             amount_due: number;
             /** Calc Method */
             calc_method: string;
-            /** Calc Payload */
-            calc_payload: {
-                [key: string]: unknown;
-            };
+            calc_payload: components["schemas"]["RefundCalcPayload"];
             /** Name */
             name: string;
             /**
@@ -40794,6 +40862,37 @@ export interface operations {
             };
         };
     };
+    activity_bootstrap_api_parent_activity_bootstrap_get: {
+        parameters: {
+            query?: {
+                days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParentActivityBootstrapOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_courses_api_parent_activity_courses_get: {
         parameters: {
             query?: {
@@ -43120,7 +43219,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ActivitySessionListItemOut"][];
                 };
             };
             /** @description Validation Error */
@@ -43153,7 +43252,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ActivitySessionDetailOut"];
                 };
             };
             /** @description Validation Error */

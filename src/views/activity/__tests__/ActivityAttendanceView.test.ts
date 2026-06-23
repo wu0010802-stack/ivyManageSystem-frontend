@@ -25,6 +25,11 @@ vi.mock('@/utils/printPdfWindow', () => ({
   openPdfInNewTab: vi.fn(),
 }))
 
+// loadCourses 現帶 termStore 學期（口徑對齊他頁）→ mock store 提供固定學期
+vi.mock('@/stores/academicTerm', () => ({
+  useAcademicTermStore: () => ({ school_year: 114, semester: 1 }),
+}))
+
 vi.mock('element-plus', () => ({
   ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
   ElMessageBox: { confirm: vi.fn() },

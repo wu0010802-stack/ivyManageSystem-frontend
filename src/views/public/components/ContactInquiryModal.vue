@@ -55,7 +55,8 @@ async function handleSubmit() {
 
   submitting.value = true
   try {
-    const res = await publicCreateInquiry({ name, phone, question })
+    // _hp 為 honeypot（bot 陷阱），正常使用者一律空字串（填值=機器人→後端 silent-drop）。
+    const res = await publicCreateInquiry({ name, phone, question, _hp: '' })
     emit('toast', res?.data?.message || '感謝您的提問，我們會儘快回覆您！', 'success')
     close()
   } catch (err) {

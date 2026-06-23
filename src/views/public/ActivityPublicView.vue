@@ -443,6 +443,7 @@ import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { publicRegister, getPublicBootstrap } from '@/api/activityPublic'
 import { usePublicActivityOptions } from '@/composables/usePublicActivityOptions'
+import { priceFromList, sumCourseFees, sumSupplyFees } from '@/utils/activityPricing'
 import { useActivityRegistrationTime } from '@/composables/useActivityRegistrationTime'
 import { useRegistrationWindow } from '@/composables/useRegistrationWindow'
 import { useActivityAvailability } from '@/composables/useActivityAvailability'
@@ -465,18 +466,19 @@ const router = useRouter()
 
 // TOAST_ICONS 已搬至 ToastStack 元件（A1-P4）
 
-interface CourseOption { name: string; price?: string | number; sessions?: number | string; [key: string]: unknown }
-interface SupplyOption { name: string; price?: string | number; [key: string]: unknown }
-
-const { courses: _courses, supplies: _supplies, classes: _classes, videos: _videos, loading: optionsLoading, applyOptions } = usePublicActivityOptions()
+// composable 已用 codegen 契約型別（PublicCourseOption/PublicSupplyOption），
+// 不再是 unknown[]；此處僅放寬到 view 子元件（CoursePickerSection/SuccessSummaryModal）
+// 接受的 CourseItem/CourseOption（sessions string|number，無 null）。
+const { courses: _courses, supplies: _supplies, classes, videos, loading: optionsLoading, applyOptions } = usePublicActivityOptions()
 const { timeInfo, applyTime } = useActivityRegistrationTime()
 const { availability, refresh: refreshAvailability, startPolling, stopPolling } = useActivityAvailability()
 
-// 強型別轉換：composable 回傳 unknown[]，view 用強型別 computed 供模板/函式使用
-const courses = computed(() => _courses.value as CourseOption[])
-const supplies = computed(() => _supplies.value as SupplyOption[])
-const classes = computed(() => (_classes.value as unknown[]).map(String))
-const videos = computed(() => _videos.value as Record<string, string>)
+interface CourseOption { name: string; price?: string | number; sessions?: number | string; [key: string]: unknown }
+interface SupplyOption { name: string; price?: string | number; [key: string]: unknown }
+// 子元件 CourseItem.sessions 不收 null（後端 null 視為「無固定堂數」，模板以排程字串呈現），
+// 故此邊界用 as 收斂 null→省略。
+const courses = computed(() => _courses.value as unknown as CourseOption[])
+const supplies = computed(() => _supplies.value as unknown as SupplyOption[])
 
 // ===== 前台客製化顯示 =====
 const DEFAULT_POSTER = '/images/activity-poster.jpg'
@@ -712,11 +714,6 @@ const successModal = reactive<{
   copyHint: '',
 })
 
-function priceOf(name: string, source: Array<{ name: string; price?: unknown }>) {
-  const item = source.find((it) => it.name === name)
-  return Number(item?.price) || 0
-}
-
 function buildSuccessSummary({ name, parentPhone, message, waitlisted, waitlistCourses, queryToken }: {
   name: string; parentPhone: string; message: string; waitlisted?: boolean;
   waitlistCourses?: string[]; queryToken?: string
@@ -724,24 +721,32 @@ function buildSuccessSummary({ name, parentPhone, message, waitlisted, waitlistC
   const waitlistSet = new Set(waitlistCourses || [])
   const enrolledCourses: CourseItem[] = []
   const waitlistOnes: CourseItem[] = []
-  let total = 0
 
+  // 新報名模式：無既有 snapshot，一律用目前 option 價（priceFromList 容錯查價）。
   form.selectedCourses.forEach((courseName) => {
-    const price = priceOf(courseName, courses.value)
+    const price = priceFromList(courseName, courses.value)
     const item: CourseItem = { name: courseName, price }
     if (waitlistSet.has(courseName)) {
       waitlistOnes.push(item)
     } else {
       enrolledCourses.push(item)
-      total += price
     }
   })
 
-  const supplyItems = form.selectedSupplies.map((supplyName) => {
-    const price = priceOf(supplyName, supplies.value)
-    total += price
-    return { name: supplyName, price }
-  })
+  const supplyItems = form.selectedSupplies.map((supplyName) => ({
+    name: supplyName,
+    price: priceFromList(supplyName, supplies.value),
+  }))
+
+  // 課程只算 enrolled（候補不計）、用品全計入——口徑與 query view feePreview 共用 util 對齊。
+  const total =
+    sumCourseFees(form.selectedCourses, {
+      isEnrolled: (n) => !waitlistSet.has(n),
+      resolvePrice: (n) => priceFromList(n, courses.value),
+    }) +
+    sumSupplyFees(form.selectedSupplies, {
+      resolvePrice: (n) => priceFromList(n, supplies.value),
+    })
 
   successModal.studentName = name
   successModal.parentPhone = parentPhone
@@ -818,9 +823,12 @@ async function handleSubmitRegistration() {
       birthday,
       parent_phone: parentPhone,
       class: className,
-      courses: form.selectedCourses.map((courseName) => ({ name: courseName, price: '' })),
-      supplies: form.selectedSupplies.map((supplyName) => ({ name: supplyName, price: '' })),
+      // 契約 PublicCourseItem/PublicSupplyItem 只收 name（價格後端以 DB 為準）
+      courses: form.selectedCourses.map((courseName) => ({ name: courseName })),
+      supplies: form.selectedSupplies.map((supplyName) => ({ name: supplyName })),
       remark: '',
+      // _hp honeypot：正常使用者空字串（填值=機器人→後端 silent-drop）
+      _hp: '',
     })
     const result = res?.data || {}
     buildSuccessSummary({

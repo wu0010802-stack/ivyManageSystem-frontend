@@ -36,6 +36,9 @@ export function useActivityRegistration() {
   // ── 下拉選項 ─────────────────────────────────────────────────
   const courseOptions = ref<unknown[]>([])
   const classroomOptions = ref<unknown[]>([])
+  // 班級清單近乎靜態（getClassOptions 無學期參數），mutation 後刷新名額只需重抓課程。
+  // 載入成功後標記，避免每次 loadOptions 連帶重抓不會變的班級清單。
+  const classroomOptionsLoaded = ref(false)
 
   // ── 批次操作 ─────────────────────────────────────────────────
   const selectedIds = ref<number[]>([])
@@ -149,17 +152,20 @@ export function useActivityRegistration() {
   }
 
   // ── 載入下拉選項 ─────────────────────────────────────────────
+  // 課程選項每次都重抓（剩餘名額會隨報名/退課變動）；班級清單只在尚未載入時抓一次。
   async function loadOptions() {
     try {
-      const [coursesRes, classRes] = await Promise.all([
-        getCourses({
-          school_year: termStore.school_year,
-          semester: termStore.semester,
-        }),
-        getClassOptions(),
-      ])
+      const coursesP = getCourses({
+        school_year: termStore.school_year,
+        semester: termStore.semester,
+      })
+      const classP = classroomOptionsLoaded.value ? null : getClassOptions()
+      const [coursesRes, classRes] = await Promise.all([coursesP, classP])
       courseOptions.value = (coursesRes.data as { courses?: unknown[] }).courses || []
-      classroomOptions.value = (classRes.data as { options?: unknown[] }).options || []
+      if (classRes) {
+        classroomOptions.value = (classRes.data as { options?: unknown[] }).options || []
+        classroomOptionsLoaded.value = true
+      }
     } catch {
       ElMessage.warning('篩選選項載入失敗，部分篩選功能暫不可用')
     }

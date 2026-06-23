@@ -218,6 +218,7 @@
       direction="rtl"
       size="480px"
       :close-on-click-modal="false"
+      :before-close="handleDrawerBeforeClose"
     >
       <div v-if="drawerLoading" v-loading="true" style="min-height: 200px" />
       <template v-else-if="drawerSession">
@@ -308,41 +309,44 @@
           </el-collapse>
         </template>
 
-        <!-- Flat 模式：原有單一表格 -->
-        <el-table
-          v-else
-          :data="sortedStudents"
-          :row-class-name="({ row }) => row.is_present === null ? 'unmarked-row' : ''"
-          border
-          style="margin-top: 12px"
-          size="small"
-        >
-          <el-table-column label="班級" prop="class_name" width="80" align="center" />
-          <el-table-column label="姓名" prop="student_name" min-width="90" />
-          <el-table-column label="出席" width="100" align="center">
-            <template #default="{ row }">
-              <el-switch
-                v-model="row.is_present"
-                :active-value="true"
-                :inactive-value="false"
-                :disabled="!canWrite"
-                active-text="出席"
-                inactive-text="缺席"
-                inline-prompt
-              />
-            </template>
-          </el-table-column>
-          <el-table-column label="備註" min-width="100">
-            <template #default="{ row }">
-              <el-input
-                v-model="row.attendance_notes"
-                :disabled="!canWrite"
-                size="small"
-                placeholder="備註"
-              />
-            </template>
-          </el-table-column>
-        </el-table>
+        <!-- Flat 模式：原有單一表格（備註欄套網格鍵盤導航：Enter/↓ 跳下一列同欄）-->
+        <div v-else ref="flatGridRef">
+          <el-table
+            :data="sortedStudents"
+            :row-class-name="({ row }) => row.is_present === null ? 'unmarked-row' : ''"
+            border
+            style="margin-top: 12px"
+            size="small"
+          >
+            <el-table-column label="班級" prop="class_name" width="80" align="center" />
+            <el-table-column label="姓名" prop="student_name" min-width="90" />
+            <el-table-column label="出席" width="100" align="center">
+              <template #default="{ row }">
+                <el-switch
+                  v-model="row.is_present"
+                  :active-value="true"
+                  :inactive-value="false"
+                  :disabled="!canWrite"
+                  active-text="出席"
+                  inactive-text="缺席"
+                  inline-prompt
+                />
+              </template>
+            </el-table-column>
+            <el-table-column label="備註" min-width="100">
+              <template #default="{ row, $index }">
+                <div :data-grid-row="$index" data-grid-col="0">
+                  <el-input
+                    v-model="row.attendance_notes"
+                    :disabled="!canWrite"
+                    size="small"
+                    placeholder="備註"
+                  />
+                </div>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
 
         <div class="drawer-actions">
           <el-button :icon="Printer" @click="openPrintForCurrent">列印點名單</el-button>
@@ -360,7 +364,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Check, Delete, Printer, Calendar } from '@element-plus/icons-vue'
 import {
@@ -378,6 +382,8 @@ import { hasPermission } from '@/utils/auth'
 import { todayISO, dateToLocalISO } from '@/utils/format'
 import { useActivityAttendanceDrawer } from '@/composables/useActivityAttendanceDrawer'
 import { openPdfInNewTab } from '@/utils/printPdfWindow'
+import { useAcademicTermStore } from '@/stores/academicTerm'
+import { useGridKeyboardNav } from '@/composables/useGridKeyboardNav'
 
 import type { AttendanceStudent, AttendanceStudentGroup } from '@/composables/useActivityAttendanceDrawer'
 import type { ApiBody } from '@/api/_generated/typed'
@@ -405,6 +411,12 @@ async function openPrint(row: { id: number }) {
 function openPrintForCurrent() {
   if (drawerSession.value?.id) openPrint({ id: drawerSession.value.id as unknown as number })
 }
+
+const termStore = useAcademicTermStore()
+
+// flat 模式備註欄網格鍵盤導航容器（v-else 條件渲染 → 用 ref + composable 內 watch immediate 綁定）
+const flatGridRef = ref<HTMLElement | null>(null)
+useGridKeyboardNav(flatGridRef)
 
 const loading = ref(false)
 const sessions = ref<SessionRow[]>([])
@@ -464,6 +476,7 @@ const {
   openDrawer: openDrawerRaw,
   setAllPresent,
   handleSave,
+  isDirty,
 } = useActivityAttendanceDrawer({
   // composable 以 unknown-arg 泛型契約定義 getSessionFn/updateFn（其 SessionData 內部
   // 型別與 codegen 後 API 型別不完全一致，如 is_present 的 undefined）；此處為已知邊界。
@@ -478,6 +491,24 @@ const drawerSession = _drawerSession as import('vue').Ref<SessionDetail | null>
 async function openDrawer(row: SessionRow) {
   await openDrawerRaw(row)
   syncActiveGroups()
+}
+
+// 未存點名守衛：ESC/X 關閉時若有未儲存的出席/備註異動，先確認再關。
+async function handleDrawerBeforeClose(done: () => void) {
+  if (!isDirty()) {
+    done()
+    return
+  }
+  try {
+    await ElMessageBox.confirm('尚有未儲存點名，確定離開？', '未儲存變更', {
+      type: 'warning',
+      confirmButtonText: '離開',
+      cancelButtonText: '留在此頁',
+    })
+    done()
+  } catch {
+    // 取消：留在 drawer
+  }
 }
 
 function syncActiveGroups() {
@@ -554,12 +585,22 @@ function onFilterChange() {
 
 async function loadCourses() {
   try {
-    const res = await getCourses()
+    // 帶當前學期，與他頁 termStore 選定學期一致（否則課程下拉跟後端 current term 走、口徑漂移）。
+    const res = await getCourses({
+      school_year: termStore.school_year,
+      semester: termStore.semester,
+    })
     courses.value = (res.data as { courses?: CourseOption[] })?.courses ?? []
   } catch {
     // silent
   }
 }
+
+// 切換學期時重載課程下拉（比照 ActivityCourseView）
+watch(
+  () => [termStore.school_year, termStore.semester],
+  () => loadCourses(),
+)
 
 function resetFilter() {
   filterCourseId.value = null

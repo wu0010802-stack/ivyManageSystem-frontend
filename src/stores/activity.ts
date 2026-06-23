@@ -3,6 +3,7 @@ import {
   getActivityStats,
   getActivityStatsCharts,
   getActivityStatsSummary,
+  getActivityDashboardTable,
   type ActivityTermParams,
 } from '@/api/activity'
 import type { ApiResponse } from '@/api/_generated/typed'
@@ -11,10 +12,13 @@ import type { ApiResponse } from '@/api/_generated/typed'
 type ActivitySummary = ApiResponse<'/activity/stats-summary', 'get'>
 type ActivityCharts = ApiResponse<'/activity/stats-charts', 'get'>
 type ActivityAttendance = ApiResponse<'/activity/stats', 'get'>['attendance_stats']
+type ActivityDashboardTable = ApiResponse<'/activity/dashboard-table', 'get'>
 
 const SUMMARY_TTL_MS = 15_000
 const CHARTS_TTL_MS = 60_000
 const ATTENDANCE_TTL_MS = 60_000
+// dashboard 統計表沿用 charts 的 60s TTL（同屬重型聚合，更新頻率相近）
+const DASHBOARD_TABLE_TTL_MS = 60_000
 
 // 學期快取 key：未指定學期（後端自動套當前學期）以空字串表示
 const termKeyOf = ({ school_year, semester }: ActivityTermParams = {}) =>
@@ -31,6 +35,7 @@ interface InflightEntry {
 let inflightSummary: InflightEntry | null = null
 let inflightCharts: InflightEntry | null = null
 let inflightAttendance: InflightEntry | null = null
+let inflightDashboardTable: InflightEntry | null = null
 
 interface FetchOptions extends ActivityTermParams {
   force?: boolean
@@ -50,15 +55,19 @@ export const useActivityStore = defineStore('activity', {
     summary: null as ActivitySummary | null,
     charts: null as ActivityCharts | null,
     attendance: null as ActivityAttendance | null,
+    dashboardTable: null as ActivityDashboardTable | null,
     summaryTermKey: '',
     chartsTermKey: '',
     attendanceTermKey: '',
+    dashboardTableTermKey: '',
     lastSummaryFetchedAt: 0,
     lastChartsFetchedAt: 0,
     lastAttendanceFetchedAt: 0,
+    lastDashboardTableFetchedAt: 0,
     loadingSummary: false,
     loadingCharts: false,
     loadingAttendance: false,
+    loadingDashboardTable: false,
     error: '',
   }),
 
@@ -192,6 +201,47 @@ export const useActivityStore = defineStore('activity', {
           }
         })
       inflightAttendance = entry
+
+      return entry.promise
+    },
+
+    async fetchDashboardTable({ force = false, school_year, semester }: FetchOptions = {}) {
+      const termKey = termKeyOf({ school_year, semester })
+      if (
+        !force &&
+        this.dashboardTableTermKey === termKey &&
+        this.lastDashboardTableFetchedAt &&
+        Date.now() - this.lastDashboardTableFetchedAt < DASHBOARD_TABLE_TTL_MS
+      ) {
+        return this.dashboardTable
+      }
+
+      if (inflightDashboardTable && inflightDashboardTable.key === termKey) {
+        return inflightDashboardTable.promise
+      }
+
+      this.loadingDashboardTable = true
+      const entry: InflightEntry = { key: termKey, promise: Promise.resolve() }
+      entry.promise = getActivityDashboardTable(termParamsOf({ school_year, semester }))
+        .then((res) => {
+          // 僅最新一筆請求可 commit，避免切學期競態讓舊學期回應覆寫新學期
+          if (inflightDashboardTable !== entry) return this.dashboardTable
+          this.dashboardTable = res.data
+          this.dashboardTableTermKey = termKey
+          this.lastDashboardTableFetchedAt = Date.now()
+          return this.dashboardTable
+        })
+        .catch((err) => {
+          this.error = err?.message || '載入課後才藝統計表失敗'
+          return this.dashboardTable
+        })
+        .finally(() => {
+          if (inflightDashboardTable === entry) {
+            this.loadingDashboardTable = false
+            inflightDashboardTable = null
+          }
+        })
+      inflightDashboardTable = entry
 
       return entry.promise
     },

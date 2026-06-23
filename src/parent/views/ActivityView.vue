@@ -12,8 +12,7 @@ import {
   myRegistrations,
   registerCourses,
   confirmPromotion,
-  getRegistrationTime,
-  getUpcomingSessions,
+  getActivityBootstrap,
 } from '../api/activity'
 import { toast } from '../utils/toast'
 import { sumOutstanding } from '../utils/activityPayment'
@@ -41,7 +40,10 @@ const tab = ref('my') // my / new
 const courses = ref<Course[]>([])
 const myRegs = ref<Registration[]>([])
 const upcomingSessions = ref<(UpcomingSessionLike & { course_name?: string })[]>([])
-const loading = ref(false)
+// 報名清單與課程清單各自獨立 loading：共用單一 ref 會讓兩支並行 fetch 互相覆蓋
+// loading 狀態 → 空狀態誤閃。各判各的。
+const regsLoading = ref(false)
+const coursesLoading = ref(false)
 const submitting = ref(false)
 const showRegister = ref(false)
 // FE-1（2026-06-23 audit）：確認轉正式防連點。記錄「正在確認的 reg:course」，
@@ -163,7 +165,7 @@ const formConflictIds = computed(() =>
 )
 
 async function fetchMy() {
-  loading.value = true
+  regsLoading.value = true
   try {
     const { data } = await myRegistrations()
     myRegs.value = data?.items || []
@@ -171,12 +173,12 @@ async function fetchMy() {
     const e = err as Record<string, unknown>
     toast.error(String(e?.displayMessage || '載入失敗'))
   } finally {
-    loading.value = false
+    regsLoading.value = false
   }
 }
 
 async function fetchCourses() {
-  loading.value = true
+  coursesLoading.value = true
   try {
     const { data } = await listCourses()
     courses.value = data?.items || []
@@ -184,26 +186,28 @@ async function fetchCourses() {
     const e = err as Record<string, unknown>
     toast.error(String(e?.displayMessage || '載入失敗'))
   } finally {
-    loading.value = false
+    coursesLoading.value = false
   }
 }
 
-async function fetchUpcoming() {
-  // hero「即將開課」用；靜默失敗（非關鍵區塊，失敗時 upcomingCount 退回 0）
+// 首屏聚合：courses + my-registrations + upcoming-sessions + registration-time
+// 一次取回（取代原本 4 支並行 GET，削報名尖峰對單 worker 後端的請求放大）。
+// 報名/轉正後的局部刷新仍走 fetchMy/fetchCourses。
+async function fetchBootstrap() {
+  regsLoading.value = true
+  coursesLoading.value = true
   try {
-    const { data } = await getUpcomingSessions()
-    upcomingSessions.value = data?.items || []
-  } catch {
-    upcomingSessions.value = []
-  }
-}
-
-async function fetchRegistrationTime() {
-  try {
-    const { data } = await getRegistrationTime()
-    if (data) regTimeInfo.value = data
-  } catch {
-    // 靜默失敗 → 維持 fail-open 預設（不擋報名入口；後端為硬閘）
+    const { data } = await getActivityBootstrap()
+    myRegs.value = data?.registrations?.items || []
+    courses.value = data?.courses?.items || []
+    upcomingSessions.value = data?.upcoming_sessions?.items || []
+    if (data?.registration_time) regTimeInfo.value = data.registration_time
+  } catch (err: unknown) {
+    const e = err as Record<string, unknown>
+    toast.error(String(e?.displayMessage || '載入失敗'))
+  } finally {
+    regsLoading.value = false
+    coursesLoading.value = false
   }
 }
 
@@ -262,7 +266,8 @@ async function submitRegister() {
     toast.success('報名成功')
     showRegister.value = false
     tab.value = 'my'
-    fetchMy()
+    // 報名會改變課程容量/額滿狀態 → 並行重抓課程清單（pullRefresh 同 pattern）
+    Promise.all([fetchMy(), fetchCourses()])
   } catch (err: unknown) {
     const e = err as Record<string, unknown>
     toast.error(String(e?.displayMessage || '報名失敗'))
@@ -292,7 +297,8 @@ async function onConfirmPromotion(reg: Registration, rc: RegCourse) {
   try {
     await confirmPromotion(reg.id, rc.course_id)
     toast.success('已確認轉正式')
-    fetchMy()
+    // 轉正會佔用容量 → 並行重抓課程清單以更新額滿狀態
+    Promise.all([fetchMy(), fetchCourses()])
   } catch (err: unknown) {
     const e = err as Record<string, unknown>
     toast.error(String(e?.displayMessage || '確認失敗'))
@@ -328,14 +334,11 @@ function onScrollSection(key: string) {
 onMounted(async () => {
   await childrenStore.load()
   ensureSelected(childrenStore.items as { student_id: number }[])
-  fetchMy()
-  fetchCourses()
-  fetchRegistrationTime()
-  fetchUpcoming()
+  fetchBootstrap()
 })
 
 async function pullRefresh() {
-  await Promise.all([fetchMy(), fetchCourses(), fetchRegistrationTime(), fetchUpcoming()])
+  await fetchBootstrap()
 }
 </script>
 
@@ -376,7 +379,7 @@ async function pullRefresh() {
           複製連結
         </button>
       </div>
-      <div v-if="!loading && filteredRegs.length === 0" class="pt-empty">
+      <div v-if="!regsLoading && filteredRegs.length === 0" class="pt-empty">
         <div class="pt-empty-title">尚無報名</div>
       </div>
       <RegistrationStatusList
@@ -410,7 +413,7 @@ async function pullRefresh() {
           開始報名
         </button>
       </div>
-      <div v-if="!loading && courses.length === 0" class="pt-empty">
+      <div v-if="!coursesLoading && courses.length === 0" class="pt-empty">
         <div class="pt-empty-title">目前沒有開放的課程</div>
       </div>
       <ActivityCardList v-else :courses="courses" :conflict-ids="conflictCourseIds" />
