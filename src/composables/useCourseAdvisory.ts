@@ -115,7 +115,10 @@ export function useCourseAdvisory({ courses, availability, form }: { courses: Re
   function availabilityState(course: CourseItem) {
     const remaining = availability.value[course.name]
     if (remaining === undefined) {
-      return { text: '', cssClass: '', full: false }
+      // FE-5（2026-06-23 audit）：availability map 不含該課時，顯示「名額查詢中」而非
+      // 空字串靜默呈現為可報名。full 仍為 false（不前端硬擋；容量由後端 /public/register
+      // 硬閘決定 enrolled / waitlist / 額滿）。
+      return { text: '名額查詢中', cssClass: 'is-unknown', full: false }
     }
     if (remaining === -1) {
       return { text: '已額滿', cssClass: 'is-full', full: true }

@@ -44,6 +44,9 @@ const upcomingSessions = ref<(UpcomingSessionLike & { course_name?: string })[]>
 const loading = ref(false)
 const submitting = ref(false)
 const showRegister = ref(false)
+// FE-1（2026-06-23 audit）：確認轉正式防連點。記錄「正在確認的 reg:course」，
+// 期間停用該按鈕，避免網路慢時連點重複送出（對齊公開查詢頁 promotionSubmitting）。
+const confirmingKey = ref<string | null>(null)
 
 // #2：報名成功後後端回傳一次性 query_token，組成公開「管理我的報名」連結供家長保存。
 // 後端只存 hash、明文僅此一次，故必須在此即時呈現並提供複製；遺失需洽校方重發。
@@ -283,6 +286,9 @@ function dismissManageLink() {
 }
 
 async function onConfirmPromotion(reg: Registration, rc: RegCourse) {
+  const key = `${reg.id}:${rc.course_id}`
+  if (confirmingKey.value) return // 已有確認進行中，避免連點併發
+  confirmingKey.value = key
   try {
     await confirmPromotion(reg.id, rc.course_id)
     toast.success('已確認轉正式')
@@ -290,6 +296,8 @@ async function onConfirmPromotion(reg: Registration, rc: RegCourse) {
   } catch (err: unknown) {
     const e = err as Record<string, unknown>
     toast.error(String(e?.displayMessage || '確認失敗'))
+  } finally {
+    confirmingKey.value = null
   }
 }
 
@@ -376,6 +384,7 @@ async function pullRefresh() {
         :registrations="filteredRegs"
         :student-name-map="studentNameMap"
         :course-status-map="COURSE_STATUS"
+        :confirming-key="confirmingKey"
         @confirm-promotion="onConfirmPromotion"
       />
     </template>

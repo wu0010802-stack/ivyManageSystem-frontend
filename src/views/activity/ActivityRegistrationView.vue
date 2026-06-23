@@ -109,6 +109,7 @@
         <template #default="{ row }">
           <el-button size="small" @click="openDetail(row)">詳情</el-button>
           <el-button
+            v-if="canWrite"
             size="small"
             type="danger"
             @click="handleDelete(row)"
@@ -220,7 +221,7 @@
                 軟刪原因：{{ rec.void_reason }}
               </span>
               <el-button
-                v-if="!rec.is_voided"
+                v-if="canWrite && !rec.is_voided"
                 link
                 type="danger"
                 size="small"
@@ -231,7 +232,7 @@
           </div>
           <div v-else class="no-payment-hint">尚無繳費記錄</div>
 
-          <div class="payment-actions">
+          <div v-if="canWrite" class="payment-actions">
             <el-button size="small" type="success" @click="openPaymentDialog('payment')">新增繳費</el-button>
             <el-button size="small" type="danger" @click="openPaymentDialog('refund')" :disabled="!paymentInfo.paid_amount">新增退費</el-button>
           </div>
@@ -261,7 +262,7 @@
               </div>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="160" align="center">
+          <el-table-column v-if="canWrite" label="操作" width="160" align="center">
             <template #default="{ row }">
               <el-button
                 v-if="row.status === 'waitlist' || row.status === 'promoted_pending'"
@@ -269,6 +270,7 @@
                 type="primary"
                 @click="handlePromote(row)"
                 :loading="savingPromote"
+                :disabled="savingPromote"
               >{{ row.status === 'promoted_pending' ? '代替家長確認' : '升正式' }}</el-button>
               <el-button
                 size="small"

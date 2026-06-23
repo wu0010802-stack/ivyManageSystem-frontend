@@ -39,10 +39,13 @@ withDefaults(defineProps<{
   registrations?: Registration[]
   studentNameMap?: Map<number, string>
   courseStatusMap?: Record<string, { label: string; color: { bg: string; color: string } }>
+  // FE-1（2026-06-23 audit）：正在確認的「reg.id:course_id」鍵；該列確認鈕停用防連點。
+  confirmingKey?: string | null
 }>(), {
   registrations: () => [],
   studentNameMap: () => new Map(),
   courseStatusMap: () => ({}),
+  confirmingKey: null,
 })
 const emit = defineEmits<{
   'confirm-promotion': [reg: Registration, course: RegCourse]
@@ -86,6 +89,7 @@ const emit = defineEmits<{
           v-if="rc.status === 'promoted_pending'"
           type="button"
           class="confirm-btn"
+          :disabled="confirmingKey === `${reg.id}:${rc.course_id}`"
           @click="emit('confirm-promotion', reg, rc)"
         >確認轉正式</button>
       </div>

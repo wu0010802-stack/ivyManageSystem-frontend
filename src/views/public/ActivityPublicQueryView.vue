@@ -370,23 +370,23 @@
           <dl class="fee-preview-list">
             <div class="fee-row">
               <dt>原應繳</dt>
-              <dd>NT$ {{ feePreview.originalTotal }}</dd>
+              <dd>{{ formatCurrency(feePreview.originalTotal) }}</dd>
             </div>
             <div class="fee-row">
               <dt>新應繳</dt>
-              <dd>NT$ {{ feePreview.newTotal }}</dd>
+              <dd>{{ formatCurrency(feePreview.newTotal) }}</dd>
             </div>
             <div class="fee-row">
               <dt>已繳</dt>
-              <dd>NT$ {{ feePreview.paidAmount }}</dd>
+              <dd>{{ formatCurrency(feePreview.paidAmount) }}</dd>
             </div>
             <div v-if="feePreview.additionalDue > 0" class="fee-row fee-row-due">
               <dt>需補繳</dt>
-              <dd>NT$ {{ feePreview.additionalDue }}</dd>
+              <dd>{{ formatCurrency(feePreview.additionalDue) }}</dd>
             </div>
             <div v-if="feePreview.wouldOverpay" class="fee-row fee-row-refund">
               <dt>可能退費</dt>
-              <dd>NT$ {{ feePreview.refundNeeded }}</dd>
+              <dd>{{ formatCurrency(feePreview.refundNeeded) }}</dd>
             </div>
           </dl>
           <div v-if="feePreview.wouldOverpay" class="fee-preview-msg">
@@ -434,6 +434,9 @@ import { usePublicActivityOptions } from '@/composables/usePublicActivityOptions
 import { useActivityAvailability } from '@/composables/useActivityAvailability'
 import { toggleArrayItem } from '@/utils/arrayUtils'
 import { estimateCourseStatus } from '@/utils/activityDisplay'
+// FE-3（2026-06-23 audit）：費用預覽改用全站 canonical 金額格式化（千分位 + NaN→「—」），
+// 不再各自 `NT$ {{ x }}`（後端回非數字時會顯示「NT$ NaN」、且無千分位）。
+import { formatCurrency } from '@/utils/currency'
 
 interface Toast { id: number; message: string; type: string }
 interface CourseEntry {

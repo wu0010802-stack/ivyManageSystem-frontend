@@ -231,6 +231,7 @@
               type="danger"
               plain
               :loading="submitting"
+              :disabled="submitting"
               class="pos-approval__action"
               @click="handleUnlock"
             >
@@ -280,7 +281,7 @@
                 <el-button
                   type="primary"
                   :loading="submitting"
-                  :disabled="!canApprove"
+                  :disabled="!canApprove || submitting"
                   @click="handleApprove"
                 >
                   {{ canApprove ? '確認簽核' : '無簽核權限' }}
