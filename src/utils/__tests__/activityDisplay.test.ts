@@ -85,10 +85,24 @@ describe('estimateCourseStatus', () => {
     ).toBe('enrolled')
   })
 
-  it('availability<0（滿且不開候補）→ enrolled（後端不開候補但本生已 enrolled）', () => {
-    // remaining < 0 表示超賣/不開候補，原始邏輯 fallback enrolled
+  it('availability<0（滿且不開候補）+ 本生原 enrolled → 仍 enrolled（保留座位、計費）', () => {
+    // remaining < 0 表示滿且不開候補；本生既已佔位，後端 update 排除自己座位保留
     expect(
       estimateCourseStatus('鋼琴', { 鋼琴: -1 }, enrolledCourses),
     ).toBe('enrolled')
+  })
+
+  it('(c) availability<0（滿且不開候補）+ 本生原 promoted_pending → 仍 enrolled（保留座位）', () => {
+    expect(
+      estimateCourseStatus('美術', { 美術: -1 }, promotedCourses),
+    ).toBe('enrolled')
+  })
+
+  it('(d) availability<0（滿且不開候補）+ 本生無原報名 → unavailable（不計費，前端剔除）', () => {
+    // 新加課程在 queryResult.courses 中無本生 enrolled/promoted_pending 記錄
+    // → 後端 fail-closed 注定 400，前端不應虛報學費
+    expect(
+      estimateCourseStatus('陶藝', { 陶藝: -1 }, enrolledCourses),
+    ).toBe('unavailable')
   })
 })

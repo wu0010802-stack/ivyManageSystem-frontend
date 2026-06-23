@@ -60,8 +60,17 @@ function update(field: string, value: unknown): void {
   emit('update:form-data', { ...props.formData, [field]: value })
 }
 
+// 滿額且不開放候補（is_full && allow_waitlist===false）→ 後端 _attach_courses fail-closed
+// 對此情形 raise 400，純前端契約缺口；此處鎖住 checkbox 防呆（衝堂 conflictIds 維持只警告不鎖）。
+function isLocked(c: Course): boolean {
+  return c.is_full === true && c.allow_waitlist === false
+}
+
 function toggleCourse(id: number): void {
+  // 守衛：額滿不候補課若尚未勾選則不可加入（已勾的不鎖，避免無法取消既有選擇）
   const ids = Array.isArray(props.formData.course_ids) ? [...props.formData.course_ids] : []
+  const locked = props.availableCourses.find((c) => c.id === id)
+  if (locked && isLocked(locked) && !ids.includes(id)) return
   const idx = ids.indexOf(id)
   if (idx >= 0) ids.splice(idx, 1)
   else ids.push(id)
@@ -103,6 +112,7 @@ function toggleCourse(id: number): void {
           <input
             type="checkbox"
             :checked="formData.course_ids?.includes(c.id)"
+            :disabled="isLocked(c) && !formData.course_ids?.includes(c.id)"
             @change="toggleCourse(c.id)"
           />
           <span class="pick-name">
@@ -111,7 +121,8 @@ function toggleCourse(id: number): void {
           </span>
           <span class="pick-meta">
             ${{ c.price?.toLocaleString() }}
-            <span v-if="c.is_full">・已額滿{{ c.allow_waitlist ? '（候補）' : '' }}</span>
+            <span v-if="c.is_full && c.allow_waitlist === false" class="pick-full-locked">・已額滿・恕不開放候補</span>
+            <span v-else-if="c.is_full">・已額滿{{ c.allow_waitlist ? '（候補）' : '' }}</span>
           </span>
         </label>
       </fieldset>
@@ -194,6 +205,11 @@ function toggleCourse(id: number): void {
 .pick-meta {
   color: var(--pt-text-placeholder);
   font-size: 12px;
+}
+
+.pick-full-locked {
+  color: var(--pt-warning-text-soft, var(--color-warning, #b45309));
+  font-weight: 600;
 }
 
 .text-muted {

@@ -321,13 +321,20 @@
                 type="checkbox"
                 :value="course.name"
                 :checked="editForm.selectedCourses.includes(course.name)"
-                @change="toggleArrayItem(editForm.selectedCourses, course.name)"
+                :disabled="courseLocked(course.name) && !editForm.selectedCourses.includes(course.name)"
+                @change="onToggleCourse(course.name)"
               />
               <span class="course-text">
                 {{ course.name }}
                 <span class="price-tag">${{ course.price }}</span>
                 <span v-if="statusBadgeFor(course.name)" class="qty-display is-waiting">
                   {{ statusBadgeFor(course.name) }}
+                </span>
+                <span
+                  v-if="courseLocked(course.name) && !editForm.selectedCourses.includes(course.name)"
+                  class="qty-display is-locked"
+                >
+                  已額滿（不開放候補）
                 </span>
               </span>
             </label>
@@ -606,6 +613,25 @@ function estimatedCourseStatus(courseName: string): string {
   const availabilityMap = (availability.value as Record<string, number> | null) ?? {}
   const existingCourses = queryResult.value?.courses ?? []
   return estimateCourseStatus(courseName, availabilityMap, existingCourses)
+}
+
+// 滿額且不開放候補（availability===-1）的課程鎖定（修 P2）：
+// 後端 _attach_courses 對「滿額且 allow_waitlist=false」fail-closed raise 400，
+// 純前端契約缺口。此處 disable checkbox + 標示，避免家長勾了注定 400 的課。
+// **保留本生既有選擇例外**：本生原 enrolled/promoted_pending 的課後端 update 排除自己、
+// 座位保留，不可鎖（否則家長一存就被自己原課 400 卡死）。
+function courseLocked(courseName: string): boolean {
+  const availabilityMap = (availability.value as Record<string, number> | null) ?? {}
+  if (availabilityMap[courseName] !== -1) return false
+  const orig = (queryResult.value?.courses ?? []).find((c) => c.name === courseName)
+  if (orig?.status === 'enrolled' || orig?.status === 'promoted_pending') return false
+  return true
+}
+
+// checkbox change 守衛：鎖定且尚未勾選的課不可加入（已勾的可取消，避免卡死）
+function onToggleCourse(courseName: string): void {
+  if (courseLocked(courseName) && !editForm.selectedCourses.includes(courseName)) return
+  toggleArrayItem(editForm.selectedCourses, courseName)
 }
 
 // 儲存前費用預覽：估算新應繳並比對已繳，及早警示退費場景。

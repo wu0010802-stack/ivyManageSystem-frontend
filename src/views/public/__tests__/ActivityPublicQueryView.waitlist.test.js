@@ -25,11 +25,18 @@ import {
   publicQueryByToken,
   publicQueryRegistration,
   publicConfirmPromotion,
+  getPublicCourses,
+  getPublicCoursesAvailability,
 } from '@/api/activityPublic'
 
 // ── 工具 function 型 mock（view 透過具名 import 用）─────────────────────────
+// toggleArrayItem 真實實作（測 toggle 守衛時需要真的不/有改陣列）
 vi.mock('@/utils/arrayUtils', () => ({
-  toggleArrayItem: vi.fn(),
+  toggleArrayItem: (arr, item) => {
+    const i = arr.indexOf(item)
+    if (i >= 0) arr.splice(i, 1)
+    else arr.push(item)
+  },
 }))
 
 const mountView = async () => {
@@ -235,5 +242,79 @@ describe('ActivityPublicQueryView — 候補轉正後刷新沿用查詢模式（
     // 不可硬用三欄查詢（多筆跨學期時會任意跳到別的學期報名）
     expect(publicQueryByToken).toHaveBeenCalledTimes(1)
     expect(publicQueryRegistration).not.toHaveBeenCalled()
+  })
+})
+
+// ── 滿額不開候補（availability=-1）課程鎖定 + 不入估費（P2）──────────────────
+describe('ActivityPublicQueryView — 滿額不開候補課鎖定 + 估費剔除（P2）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    // 預設 supplies/classes 空，courses 帶 3 課（含一門 availability=-1 的滿額不候補課）
+    getPublicCourses.mockResolvedValue({
+      data: [
+        { name: '美術', price: 3000 },
+        { name: '陶藝', price: 2000 },
+      ],
+    })
+  })
+
+  it('availability=-1 的新課（本生無原報名）→ checkbox disabled、標示已額滿、且不入 feePreview', async () => {
+    // 陶藝 availability=-1（滿且不開候補）；本生只原報名美術（enrolled）
+    getPublicCoursesAvailability.mockResolvedValue({ data: { 美術: 5, 陶藝: -1 } })
+    publicQueryByToken.mockResolvedValue({
+      data: {
+        id: 1,
+        name: '王小明',
+        birthday: '2020-01-01',
+        class_name: '大班',
+        courses: [{ course_id: 1, name: '美術', status: 'enrolled' }],
+        supplies: [],
+        total_amount: 3000,
+        paid_amount: 3000,
+      },
+    })
+
+    const wrapper = await mountView()
+    await triggerTokenQuery(wrapper)
+
+    // 找到陶藝那個 course-item 的 checkbox（value="陶藝"）
+    const taoyiCheckbox = wrapper
+      .findAll('.course-item input[type="checkbox"]')
+      .find((cb) => cb.attributes('value') === '陶藝')
+    expect(taoyiCheckbox).toBeTruthy()
+    expect(taoyiCheckbox.attributes('disabled')).toBeDefined()
+    expect(wrapper.text()).toContain('已額滿（不開放候補）')
+
+    // 估費：估狀態為 unavailable → feePreview 不計陶藝學費
+    expect(wrapper.vm.estimatedCourseStatus('陶藝')).toBe('unavailable')
+  })
+
+  it('availability=-1 但本生原 enrolled 的課 → 維持可勾選且計費（保留座位）', async () => {
+    // 美術 availability=-1（滿且不開候補），但本生原已 enrolled → 保留座位
+    getPublicCoursesAvailability.mockResolvedValue({ data: { 美術: -1, 陶藝: 5 } })
+    publicQueryByToken.mockResolvedValue({
+      data: {
+        id: 1,
+        name: '王小明',
+        birthday: '2020-01-01',
+        class_name: '大班',
+        courses: [{ course_id: 1, name: '美術', status: 'enrolled' }],
+        supplies: [],
+        total_amount: 3000,
+        paid_amount: 3000,
+      },
+    })
+
+    const wrapper = await mountView()
+    await triggerTokenQuery(wrapper)
+
+    const meishuCheckbox = wrapper
+      .findAll('.course-item input[type="checkbox"]')
+      .find((cb) => cb.attributes('value') === '美術')
+    expect(meishuCheckbox).toBeTruthy()
+    // 本生原 enrolled → 不鎖
+    expect(meishuCheckbox.attributes('disabled')).toBeUndefined()
+    // 估狀態仍 enrolled（保留座位、計費）
+    expect(wrapper.vm.estimatedCourseStatus('美術')).toBe('enrolled')
   })
 })

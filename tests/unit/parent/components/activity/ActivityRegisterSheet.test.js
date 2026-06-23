@@ -12,6 +12,7 @@ const children = [
 const availableCourses = [
   { id: 100, name: '繪畫', price: 3000, is_full: false, allow_waitlist: true },
   { id: 101, name: '足球', price: 4500, is_full: true, allow_waitlist: true },
+  { id: 102, name: '陶藝', price: 2000, is_full: true, allow_waitlist: false },
 ]
 
 const baseForm = { student_id: 1, school_year: 113, semester: 1, course_ids: [] }
@@ -34,7 +35,7 @@ describe('ActivityRegisterSheet', () => {
     expect(text).toContain('足球')
     expect(text).toContain('已額滿（候補）')
     const checkboxes = wrapper.findAll('input[type="checkbox"]')
-    expect(checkboxes).toHaveLength(2)
+    expect(checkboxes).toHaveLength(3)
   })
 
   it('勾選課程 emit update:form-data 帶完整 form', async () => {
@@ -71,9 +72,33 @@ describe('ActivityRegisterSheet', () => {
       global: { stubs },
     })
     expect(wrapper.text()).toContain('時段衝突')
-    // advisory：checkbox 仍可勾選（不 disabled）
+    // advisory：衝堂課（101 足球，is_full 但 allow_waitlist=true → 未鎖）checkbox 仍可勾選（不 disabled）
     const checkboxes = wrapper.findAll('input[type="checkbox"]')
-    expect(checkboxes.every((cb) => !cb.attributes('disabled'))).toBe(true)
+    // 第 1 個（index 1）為衝堂課 101，須維持可勾選
+    expect(checkboxes[1].attributes('disabled')).toBeUndefined()
+  })
+
+  it('滿額且不開放候補課（陶藝 102）checkbox 應 disabled，且 toggle 不改 formData', async () => {
+    const wrapper = mount(ActivityRegisterSheet, {
+      props: {
+        modelValue: true,
+        formData: baseForm,
+        children,
+        availableCourses,
+      },
+      global: { stubs },
+    })
+    // 文字標籤標示「已額滿・恕不開放候補」
+    expect(wrapper.text()).toContain('恕不開放候補')
+    // 陶藝為第 3 個（index 2）checkbox，須 disabled
+    const checkboxes = wrapper.findAll('input[type="checkbox"]')
+    expect(checkboxes[2].attributes('disabled')).toBeDefined()
+    // toggle 不改 formData（守衛 early-return；瀏覽器 disabled 不觸發 change，
+    // 但守衛是防呆雙保險，直接呼叫 toggleCourse 驗證）
+    wrapper.vm.toggleCourse(102)
+    await wrapper.vm.$nextTick()
+    const ev = wrapper.emitted('update:form-data')
+    expect(ev).toBeFalsy()
   })
 
   it('未傳 conflictIds → 無衝堂提示（向後相容）', () => {
