@@ -1,5 +1,5 @@
 // src/composables/useGridKeyboardNav.ts
-import { onMounted, onScopeDispose } from 'vue'
+import { watch, onScopeDispose } from 'vue'
 import type { Ref } from 'vue'
 
 /**
@@ -43,6 +43,13 @@ export function useGridKeyboardNav(container: Ref<HTMLElement | null>): void {
     input.select()
   }
 
-  onMounted(() => container.value?.addEventListener('keydown', onKeydown))
+  watch(
+    container,
+    (el, prev) => {
+      prev?.removeEventListener('keydown', onKeydown)
+      el?.addEventListener('keydown', onKeydown)
+    },
+    { immediate: true, flush: 'sync' },
+  )
   onScopeDispose(() => container.value?.removeEventListener('keydown', onKeydown))
 }

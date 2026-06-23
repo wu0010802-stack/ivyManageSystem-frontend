@@ -55,3 +55,19 @@ describe('MonthlyFixedCostPanel 原值對照', () => {
     expect(w.find('[data-test="orig-1-rent"]').text()).toContain('500,000')
   })
 })
+
+describe('MonthlyFixedCostPanel 鍵盤導航', () => {
+  it('資料載入完成後 Enter 鍵可從 r0c0 移焦點到 r1c0（條件渲染補綁測試）', async () => {
+    const w = mountPanel()
+    // 資料載入完成 → skeleton 消失 → fc-scroll div 渲染 → gridRef 解析
+    await flushPromises()
+
+    const r0c0 = w.find('input[data-grid-row="0"][data-grid-col="0"]').element as HTMLInputElement
+    r0c0.focus()
+    r0c0.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+
+    const r1c0 = w.find('input[data-grid-row="1"][data-grid-col="0"]').element as HTMLInputElement
+    expect(document.activeElement).toBe(r1c0)
+    w.unmount()
+  })
+})
