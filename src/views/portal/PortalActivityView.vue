@@ -49,7 +49,7 @@
         :drawer-unmarked-count="drawerUnmarkedCount"
         :before-close="handleRollcallBeforeClose"
         @set-all-present="setAllPresent"
-        @save="handleSave(loadAttendanceSessions)"
+        @save="handleSave(optimisticUpdateSessionCounts)"
       />
     </template>
   </div>
@@ -104,7 +104,7 @@ async function loadRegistrations() {
 // ── 課程點名 Tab ──
 const attendanceLoading = ref(false)
 const attendanceLoaded = ref(false)
-interface ActivitySession { course_id?: number; course_name?: string; [key: string]: unknown }
+interface ActivitySession { id?: unknown; course_id?: number; course_name?: string; present_count?: number; recorded_count?: number; [key: string]: unknown }
 const sessions = ref<ActivitySession[]>([])
 const filterCourseId = ref<number | null>(null)
 const filterStartDate = ref<string | null>(null)
@@ -183,6 +183,18 @@ function ensureAttendanceLoaded() {
 
 function openRollcall(session: { course_id?: number; course_name?: string; [key: string]: unknown }) {
   openDrawer(session as unknown as { id: unknown })
+}
+
+// 點名儲存後樂觀就地更新該列 count，免整批重抓全月場次。
+// 後端 PUT 僅回 {ok,updated,skipped} 不含 counts，故走前端 composable 已算好的
+// drawerPresentCount/drawerAbsentCount（recorded = present + absent，未點名不計）。
+function optimisticUpdateSessionCounts() {
+  const sid = drawerSession.value?.id
+  if (sid == null) return
+  const row = sessions.value.find((s) => (s as { id?: unknown }).id === sid)
+  if (!row) return
+  row.present_count = drawerPresentCount.value
+  row.recorded_count = drawerPresentCount.value + drawerAbsentCount.value
 }
 
 // 未存點名守衛：ESC/X 關閉時若有未儲存的出席/備註異動，先確認再關。

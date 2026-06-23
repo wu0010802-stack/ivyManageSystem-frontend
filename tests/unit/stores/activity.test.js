@@ -5,12 +5,14 @@ import {
   getActivityStats,
   getActivityStatsCharts,
   getActivityStatsSummary,
+  getActivityDashboardTable,
 } from '@/api/activity'
 
 vi.mock('@/api/activity', () => ({
   getActivityStats: vi.fn(),
   getActivityStatsSummary: vi.fn(),
   getActivityStatsCharts: vi.fn(),
+  getActivityDashboardTable: vi.fn(),
 }))
 
 describe('activity store', () => {
@@ -113,6 +115,78 @@ describe('activity store', () => {
       expect(result).toBe(null)
       expect(store.stats.attendance_stats).toBe(null)
       expect(store.error).toBe('boom')
+    })
+
+    it('fetchDashboardTable 呼叫 dashboard-table、學期感知 TTL 內不重抓', async () => {
+      getActivityDashboardTable.mockResolvedValue({ data: { grades: [], courses: [], grand_total: {} } })
+
+      const store = useActivityStore()
+      await store.fetchDashboardTable({ school_year: 114, semester: 1 })
+      await store.fetchDashboardTable({ school_year: 114, semester: 1 }) // TTL 內
+
+      expect(getActivityDashboardTable).toHaveBeenCalledTimes(1)
+      expect(getActivityDashboardTable).toHaveBeenCalledWith({ school_year: 114, semester: 1 })
+      expect(store.dashboardTable).toEqual({ grades: [], courses: [], grand_total: {} })
+    })
+
+    it('fetchDashboardTable 切學期重抓（快取以學期 key 區分）', async () => {
+      getActivityDashboardTable.mockResolvedValue({ data: { grades: [], courses: [], grand_total: {} } })
+
+      const store = useActivityStore()
+      await store.fetchDashboardTable({ school_year: 114, semester: 1 })
+      await store.fetchDashboardTable({ school_year: 114, semester: 2 })
+
+      expect(getActivityDashboardTable).toHaveBeenCalledTimes(2)
+      expect(getActivityDashboardTable).toHaveBeenLastCalledWith({ school_year: 114, semester: 2 })
+    })
+
+    it('fetchDashboardTable force 強制重抓（忽略 TTL）', async () => {
+      getActivityDashboardTable.mockResolvedValue({ data: { grades: [], courses: [], grand_total: {} } })
+
+      const store = useActivityStore()
+      await store.fetchDashboardTable({ school_year: 114, semester: 1 })
+      await store.fetchDashboardTable({ force: true, school_year: 114, semester: 1 })
+
+      expect(getActivityDashboardTable).toHaveBeenCalledTimes(2)
+    })
+
+    it('fetchDashboardTable inflight dedupe：同學期並行只打一次', async () => {
+      let resolveFn
+      getActivityDashboardTable.mockReturnValue(new Promise((r) => { resolveFn = r }))
+
+      const store = useActivityStore()
+      const p1 = store.fetchDashboardTable({ school_year: 114, semester: 1 })
+      const p2 = store.fetchDashboardTable({ school_year: 114, semester: 1 })
+      resolveFn({ data: { grades: [], courses: [], grand_total: {} } })
+      await Promise.all([p1, p2])
+
+      expect(getActivityDashboardTable).toHaveBeenCalledTimes(1)
+    })
+
+    it('fetchDashboardTable 競態：舊學期晚到不覆寫新學期', async () => {
+      const deferred = () => {
+        let resolve
+        const promise = new Promise((r) => { resolve = r })
+        return { promise, resolve }
+      }
+      const oldTerm = deferred()
+      const newTerm = deferred()
+      getActivityDashboardTable
+        .mockImplementationOnce(() => oldTerm.promise)
+        .mockImplementationOnce(() => newTerm.promise)
+
+      const store = useActivityStore()
+      const p1 = store.fetchDashboardTable({ school_year: 114, semester: 1 })
+      const p2 = store.fetchDashboardTable({ school_year: 114, semester: 2 })
+
+      newTerm.resolve({ data: { grades: [], courses: [{ id: 9, name: '新' }], grand_total: {} } })
+      await p2
+      oldTerm.resolve({ data: { grades: [], courses: [{ id: 1, name: '舊' }], grand_total: {} } })
+      await p1
+
+      expect(store.dashboardTable.courses).toEqual([{ id: 9, name: '新' }])
+      expect(store.dashboardTableTermKey).toBe('114-2')
+      expect(store.loadingDashboardTable).toBe(false)
     })
 
     it('競態：舊學期晚到的回應不覆寫新學期的快取與狀態', async () => {

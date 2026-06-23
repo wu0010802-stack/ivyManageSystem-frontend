@@ -265,7 +265,8 @@ async function submitRegister() {
     toast.success('報名成功')
     showRegister.value = false
     tab.value = 'my'
-    fetchMy()
+    // 報名會改變課程容量/額滿狀態 → 並行重抓課程清單（pullRefresh 同 pattern）
+    Promise.all([fetchMy(), fetchCourses()])
   } catch (err: unknown) {
     const e = err as Record<string, unknown>
     toast.error(String(e?.displayMessage || '報名失敗'))
@@ -295,7 +296,8 @@ async function onConfirmPromotion(reg: Registration, rc: RegCourse) {
   try {
     await confirmPromotion(reg.id, rc.course_id)
     toast.success('已確認轉正式')
-    fetchMy()
+    // 轉正會佔用容量 → 並行重抓課程清單以更新額滿狀態
+    Promise.all([fetchMy(), fetchCourses()])
   } catch (err: unknown) {
     const e = err as Record<string, unknown>
     toast.error(String(e?.displayMessage || '確認失敗'))

@@ -140,7 +140,7 @@ import { storeToRefs } from 'pinia'
 import { useActivityStore } from '@/stores/activity'
 import { useAcademicTermStore } from '@/stores/academicTerm'
 import { getCurrentAcademicTerm } from '@/utils/academic'
-import { getActivityDashboardTable, exportDashboardTable } from '@/api/activity'
+import { exportDashboardTable } from '@/api/activity'
 import { FULL_ATTENDANCE_BONUS } from '@/constants/activity'
 import { ElMessage } from 'element-plus'
 
@@ -182,11 +182,13 @@ const selectedTermKey = computed({
 })
 
 const loading = ref(false)
-const loadingTable = ref(false)
 const exportingTable = ref(false)
-const dashboardData = ref<DashboardData | null>(null)
 
-const { stats } = storeToRefs(activityStore)
+// dashboard 統計表搬進 store（學期感知 TTL 60s + inflight dedupe + 競態守衛），
+// view 不再持有 local dashboardData/onMounted 無條件重抓。
+const { stats, dashboardTable, loadingDashboardTable: loadingTable } = storeToRefs(activityStore)
+// 模板沿用 dashboardData 名稱（型別窄化為本檔 DashboardData）
+const dashboardData = computed(() => dashboardTable.value as DashboardData | null)
 const _statsAny = computed(() => stats.value as unknown as Record<string, unknown> | null)
 const statistics = computed(() => (_statsAny.value?.statistics as Record<string, unknown> | undefined) || {})
 const dailyStats = computed(() => (_statsAny.value?.charts as { daily?: { date: string; count: number }[] } | undefined)?.daily || [])
@@ -294,19 +296,17 @@ const objectSpanMethod = ({ row, column }: { row: Record<string, unknown>; colum
     return { rowspan: 1, colspan: 1 }
 }
 
-const fetchTable = async () => {
-  loadingTable.value = true
-  try {
-    const res = await getActivityDashboardTable({
-      school_year: termStore.school_year,
-      semester: termStore.semester,
-    })
-    dashboardData.value = res.data as DashboardData
-  } catch {
-    ElMessage.error('資料載入失敗，請重新整理')
-  } finally {
-    loadingTable.value = false
-  }
+const fetchTable = async (force = false) => {
+  const before = activityStore.lastDashboardTableFetchedAt
+  await activityStore.fetchDashboardTable({
+    force,
+    school_year: termStore.school_year,
+    semester: termStore.semester,
+  })
+  // 失敗判定不靠共享的 store.error（會被其他 action 污染）：成功一定推進 fetchedAt
+  // 時戳，且資料就緒。若時戳未推進且仍無資料即視為本次表格載入失敗。
+  const stale = activityStore.lastDashboardTableFetchedAt === before
+  if (stale && !dashboardTable.value) ElMessage.error('資料載入失敗，請重新整理')
 }
 
 // 卡片 / 圖表 / 出席率三組統計皆帶選定學期（契約同 dashboard-table 的 school_year/semester）；
