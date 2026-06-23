@@ -64,6 +64,10 @@ export function usePOSCheckout() {
   const searching = ref(false)
   const searchGroups = ref<Record<string, unknown>[]>([])
   const searchRegistrations = ref<Record<string, unknown>[]>([])
+  // 截斷狀態：後端 outstanding-by-student 有 2000 筆防爆上限、依日期模式每狀態
+  // /registrations 上限 200。超限時清單/日曆/金額會不完整，必須讓 UI 提示櫃台縮小
+  // 搜尋範圍，否則靜默漏掉待收/待退款（code review P1/P2）。
+  const searchTruncation = reactive({ truncated: false, total: 0 })
   let searchSeq = 0
   let searchTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -154,6 +158,9 @@ export function usePOSCheckout() {
     const classroom = (classroomFilter.value || '').trim()
     const seq = ++searchSeq
     searching.value = true
+    // 重置截斷旗標；取回資料後再依當次回應重新判定（seq 守衛擋下過期寫入）
+    searchTruncation.truncated = false
+    searchTruncation.total = 0
     try {
       if (mode.value === 'by-student') {
         const opts: Record<string, unknown> = {
@@ -166,6 +173,9 @@ export function usePOSCheckout() {
         const res = await getPOSOutstandingByStudent(q, 100, opts)
         if (seq !== searchSeq) return
         searchGroups.value = res.data?.groups || []
+        // 後端標記截斷（active/可退費母體超過 2000 上限）→ 清單可能漏掉排在後面的學生
+        searchTruncation.truncated = res.data?.truncated ?? false
+        searchTruncation.total = res.data?.total_active ?? 0
       } else {
         const statuses = isRefundMode.value
           ? ['paid', 'partial', 'overpaid']
@@ -183,6 +193,20 @@ export function usePOSCheckout() {
         )
         const results = await Promise.all(calls)
         if (seq !== searchSeq) return
+        // 截斷偵測：/registrations 每狀態上限 200，後端回 total。total 超過實際抓回
+        // 筆數即代表此狀態尚有未載入交易，日曆與金額會少算（code review P2）。各狀態
+        // payment_status 互斥（一筆只屬一狀態），total 直接相加為符合條件母體上界。
+        let dateTruncated = false
+        let dateTotal = 0
+        for (const r of results) {
+          const d = r.data as { items?: unknown[]; total?: number }
+          const shown = d?.items?.length ?? 0
+          const tot = Number(d?.total ?? shown)
+          dateTotal += tot
+          if (tot > shown) dateTruncated = true
+        }
+        searchTruncation.truncated = dateTruncated
+        searchTruncation.total = dateTotal
         const items = results.flatMap((r) => (r.data as { items?: Record<string, unknown>[] })?.items || [])
         const seen = new Set()
         const merged = []
@@ -492,6 +516,7 @@ export function usePOSCheckout() {
     searching,
     searchGroups,
     searchRegistrations,
+    searchTruncation,
     triggerSearch,
     runSearch,
     switchMode,

@@ -14,6 +14,8 @@
         :selected-ids="selectedIds"
         :is-refund-mode="isRefundMode"
         :classroom-options="classroomOptions"
+        :truncated="searchTruncation.truncated"
+        :truncated-total="searchTruncation.total"
         class="pos-panel-wrap__col"
         @search="triggerSearch"
         @toggle="handleToggle"
@@ -168,6 +170,7 @@ const {
   searching,
   searchGroups,
   searchRegistrations,
+  searchTruncation,
   triggerSearch,
   runSearch,
   checkoutType,

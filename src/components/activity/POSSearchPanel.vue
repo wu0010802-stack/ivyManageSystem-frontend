@@ -55,6 +55,15 @@
       />
     </div>
 
+    <el-alert
+      v-if="!searching && truncated"
+      class="pos-panel__truncated"
+      type="warning"
+      :title="truncationText"
+      :closable="false"
+      show-icon
+    />
+
     <div class="pos-panel__summary" v-if="!searching && resultCount > 0">
       <span>{{ resultSummaryText }}</span>
       <span class="pos-panel__summary-total">
@@ -278,6 +287,8 @@ const props = withDefaults(defineProps<{
   selectedIds?: (number | string)[]
   isRefundMode?: boolean
   classroomOptions?: string[]
+  truncated?: boolean
+  truncatedTotal?: number
 }>(), {
   classroomFilter: '',
   overdueOnly: false,
@@ -287,6 +298,20 @@ const props = withDefaults(defineProps<{
   selectedIds: () => [],
   isRefundMode: false,
   classroomOptions: () => [],
+  truncated: false,
+  truncatedTotal: 0,
+})
+
+// 截斷提示文案：依模式區分。資料量超過後端上限時清單/日曆/金額不完整，提醒櫃台
+// 用班級或關鍵字縮小範圍，避免靜默漏掉待收/待退款（code review P1/P2）。
+const truncationText = computed(() => {
+  const total = props.truncatedTotal || 0
+  const totalHint = total > 0 ? `符合條件約 ${total} 筆，` : ''
+  const action = props.isRefundMode ? '退款' : '收款'
+  if (props.mode === 'by-student') {
+    return `資料筆數較多（${totalHint}已達上限），清單僅顯示部分，請用班級或關鍵字縮小搜尋範圍，以免遺漏待${action}項目。`
+  }
+  return `部分交易未載入（${totalHint}每狀態上限 200 筆），日曆與金額可能少算，請用班級或關鍵字縮小範圍後再核對。`
 })
 
 const emit = defineEmits<{
