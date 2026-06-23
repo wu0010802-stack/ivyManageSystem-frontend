@@ -4308,6 +4308,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/dev/employee-salary-debug": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Debug Employee Salary
+         * @description 模擬計算單一員工薪資並回傳完整明細（dev 別名，正式請改打 /api/salaries/employee-salary-debug）。
+         */
+        get: operations["debug_employee_salary_api_dev_employee_salary_debug_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dev/salary-logic": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Salary Logic
+         * @description 傾印目前的薪資計算邏輯與所有參數設定（dev 別名，正式請改打 /api/salaries/logic）。
+         */
+        get: operations["get_salary_logic_api_dev_salary_logic_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/disciplinary-actions": {
         parameters: {
             query?: never;
@@ -7023,6 +7063,31 @@ export interface paths {
          * @description 報名繳費歷史；不揭露 operator 等員工欄位。
          */
         get: operations["registration_payments_api_parent_activity_registrations__registration_id__payments_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/parent/activity/upcoming-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Upcoming Sessions
+         * @description 家長子女『已佔位』（enrolled / promoted_pending）課程未來 days 天內的場次。
+         *
+         *     finding #2：原 hero upcomingCount 固定 0（course response 無起訖日）。正解是查
+         *     ActivitySession（逐場 session_date），非補 course.start_date（model 無此欄）。
+         *     前端據此算 upcomingCount（7 天內）與各課『下次上課』。候補課程未佔位故不計；
+         *     過去場次（session_date < 今日台灣時間）排除。場次無時間欄，時間取自課程。
+         */
+        get: operations["upcoming_sessions_api_parent_activity_upcoming_sessions_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -21783,6 +21848,32 @@ export interface components {
             status: "ok";
             user: components["schemas"]["ParentUserInfo"];
         };
+        /** ParentUpcomingSessionOut */
+        ParentUpcomingSessionOut: {
+            /** Course Id */
+            course_id: number;
+            /** Course Name */
+            course_name: string;
+            /** Meeting End Time */
+            meeting_end_time?: string | null;
+            /** Meeting Start Time */
+            meeting_start_time?: string | null;
+            /** Meeting Weekday */
+            meeting_weekday?: number | null;
+            /** Session Date */
+            session_date: string;
+            /** Student Id */
+            student_id?: number | null;
+            /** Student Name */
+            student_name?: string | null;
+        };
+        /** ParentUpcomingSessionsOut */
+        ParentUpcomingSessionsOut: {
+            /** Items */
+            items: components["schemas"]["ParentUpcomingSessionOut"][];
+            /** Total */
+            total: number;
+        };
         /**
          * ParentUserInfo
          * @description 家長使用者基本資訊（bind/refresh 共用 user 欄位）。
@@ -21929,12 +22020,12 @@ export interface components {
             payment_method?: "現金" | null;
             /**
              * Payment Reason
-             * @description is_paid=True 補齊欠費時必填，≥ 5 字；會寫進補齊紀錄 notes
+             * @description is_paid=True 補齊欠費時必填，≥ 15 字；會寫進補齊紀錄 notes
              */
             payment_reason?: string | null;
             /**
              * Refund Reason
-             * @description 當 is_paid=False 時必填，≥ 5 字；留於沖帳紀錄 notes
+             * @description 當 is_paid=False 時必填，≥ 15 字；留於沖帳紀錄 notes
              */
             refund_reason?: string | null;
         };
@@ -35459,6 +35550,59 @@ export interface operations {
             };
         };
     };
+    debug_employee_salary_api_dev_employee_salary_debug_get: {
+        parameters: {
+            query: {
+                employee_id: number;
+                month: number;
+                year: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_salary_logic_api_dev_salary_logic_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
     list_actions_api_disciplinary_actions_get: {
         parameters: {
             query?: {
@@ -40573,6 +40717,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upcoming_sessions_api_parent_activity_upcoming_sessions_get: {
+        parameters: {
+            query?: {
+                days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParentUpcomingSessionsOut"];
                 };
             };
             /** @description Validation Error */
