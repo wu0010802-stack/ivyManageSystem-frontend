@@ -13,10 +13,17 @@ import {
   registerCourses,
   confirmPromotion,
   getRegistrationTime,
+  getUpcomingSessions,
 } from '../api/activity'
 import { toast } from '../utils/toast'
 import { sumOutstanding } from '../utils/activityPayment'
-import { collectBusySlots, buildConflictCourseIds } from '../utils/activitySchedule'
+import {
+  collectBusySlots,
+  buildConflictCourseIds,
+  countUpcomingWithinDays,
+  type UpcomingSessionLike,
+} from '../utils/activitySchedule'
+import { todayISO } from '@/utils/format'
 import { useRegistrationWindow } from '@/composables/useRegistrationWindow'
 import { buildPublicEditUrl } from '@/utils/publicLinks'
 import ParentIcon from '../components/ParentIcon.vue'
@@ -32,6 +39,7 @@ const tab = ref('my') // my / new
 
 const courses = ref<Course[]>([])
 const myRegs = ref<Registration[]>([])
+const upcomingSessions = ref<(UpcomingSessionLike & { course_name?: string })[]>([])
 const loading = ref(false)
 const submitting = ref(false)
 const showRegister = ref(false)
@@ -103,8 +111,15 @@ const activeRegistrations = computed(() =>
 // 皆為 0。原本前端自行加總所有課程（含候補、未扣已繳、漏算用品）會高估待繳。
 const unpaidActivityFee = computed(() => sumOutstanding(filteredRegs.value))
 
-// MVP：後端 course response 無 start_date，先設 0；後續若新增欄位再算 7 天內
-const upcomingCount = computed(() => 0)
+// 即將開課（7 天內）：以後端 upcoming-sessions（ActivitySession 逐場日期）為準，
+// 依所選孩子過濾。未選孩子時計全部子女。
+const upcomingCount = computed(() =>
+  countUpcomingWithinDays(upcomingSessions.value, {
+    studentId: selectedId.value ?? undefined,
+    days: 7,
+    todayISO: todayISO(),
+  }),
+)
 
 // 衝堂偵測（前台 advisory，不擋報名）：以所選孩子「已佔位」課程（enrolled /
 // promoted_pending）的上課時段，比對目錄課程，標出時段衝突者。weekday/time 由
@@ -136,6 +151,16 @@ async function fetchCourses() {
     toast.error(String(e?.displayMessage || '載入失敗'))
   } finally {
     loading.value = false
+  }
+}
+
+async function fetchUpcoming() {
+  // hero「即將開課」用；靜默失敗（非關鍵區塊，失敗時 upcomingCount 退回 0）
+  try {
+    const { data } = await getUpcomingSessions()
+    upcomingSessions.value = data?.items || []
+  } catch {
+    upcomingSessions.value = []
   }
 }
 
@@ -267,10 +292,11 @@ onMounted(async () => {
   fetchMy()
   fetchCourses()
   fetchRegistrationTime()
+  fetchUpcoming()
 })
 
 async function pullRefresh() {
-  await Promise.all([fetchMy(), fetchCourses(), fetchRegistrationTime()])
+  await Promise.all([fetchMy(), fetchCourses(), fetchRegistrationTime(), fetchUpcoming()])
 }
 </script>
 

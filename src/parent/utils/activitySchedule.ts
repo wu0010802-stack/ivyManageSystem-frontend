@@ -105,3 +105,37 @@ export function buildConflictCourseIds(
   }
   return ids
 }
+
+export interface UpcomingSessionLike {
+  student_id?: number | null
+  session_date?: string | null // "YYYY-MM-DD"
+}
+
+/** todayISO 起算 n 天後的 "YYYY-MM-DD"（純函式，不依賴當下時間，便於測試）。 */
+function addDaysISO(iso: string, n: number): string {
+  const [y, m, d] = iso.split('-').map(Number)
+  const dt = new Date(y, m - 1, d)
+  dt.setDate(dt.getDate() + n)
+  const mm = String(dt.getMonth() + 1).padStart(2, '0')
+  const dd = String(dt.getDate()).padStart(2, '0')
+  return `${dt.getFullYear()}-${mm}-${dd}`
+}
+
+/**
+ * upcoming-sessions 中落在 [todayISO, todayISO+days] 的場次數（hero「即將開課」用）。
+ * studentId 非空時只計該孩子。session_date 為零補位字串，可直接字典序比較。
+ */
+export function countUpcomingWithinDays(
+  sessions: UpcomingSessionLike[],
+  { studentId, days, todayISO }: { studentId?: number | null; days: number; todayISO: string },
+): number {
+  const end = addDaysISO(todayISO, days)
+  let count = 0
+  for (const s of sessions || []) {
+    if (studentId != null && s.student_id !== studentId) continue
+    const d = s.session_date
+    if (!d) continue
+    if (d >= todayISO && d <= end) count++
+  }
+  return count
+}

@@ -21,3 +21,7 @@ export const confirmPromotion = (registrationId: number, courseId: number) =>
 
 export const getRegistrationPayments = (registrationId: number) =>
   api.get(`/parent/activity/registrations/${registrationId}/payments`)
+
+// 子女已佔位課程未來 days 天內的場次（hero upcomingCount / 下次上課）。
+export const getUpcomingSessions = (days = 30) =>
+  api.get('/parent/activity/upcoming-sessions', { params: { days } })
