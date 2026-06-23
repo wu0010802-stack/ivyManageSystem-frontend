@@ -20,6 +20,7 @@ import { sumOutstanding } from '../utils/activityPayment'
 import {
   collectBusySlots,
   buildConflictCourseIds,
+  buildFormConflictCourseIds,
   countUpcomingWithinDays,
   type UpcomingSessionLike,
 } from '../utils/activitySchedule'
@@ -121,11 +122,41 @@ const upcomingCount = computed(() =>
   }),
 )
 
+// 目錄課程的學期（list_courses 預設回當前學期，課程同質）。供衝堂偵測只比對
+// 同學期的已佔位時段，避免上學期課程誤報本學期衝堂（code review #6）。
+const catalogTerm = computed(() => {
+  const c = courses.value[0]
+  return c ? { schoolYear: c.school_year, semester: c.semester } : {}
+})
+
 // 衝堂偵測（前台 advisory，不擋報名）：以所選孩子「已佔位」課程（enrolled /
 // promoted_pending）的上課時段，比對目錄課程，標出時段衝突者。weekday/time 由
 // 後端 list_courses / my-registrations 帶出（缺值則無法判定，不誤報）。
+// code review #6：busy slots 依目錄學期過濾，跨學期報名不納入比對。
 const conflictCourseIds = computed(() =>
-  buildConflictCourseIds(courses.value, collectBusySlots(filteredRegs.value)),
+  buildConflictCourseIds(
+    courses.value,
+    collectBusySlots(filteredRegs.value, catalogTerm.value),
+  ),
+)
+
+// 報名表單衝堂：以「報名表單學期」的既有佔位 + 本次同時勾選的其他新課互比，
+// 標出衝堂課程（code review #6 part 2：表單複選互比，advisory 不擋報名）。
+const formBusySlots = computed(() =>
+  collectBusySlots(filteredRegs.value, {
+    schoolYear: form.value.school_year ?? undefined,
+    semester:
+      form.value.semester != null && form.value.semester !== ''
+        ? Number(form.value.semester)
+        : undefined,
+  }),
+)
+const formConflictIds = computed(() =>
+  buildFormConflictCourseIds(
+    filteredCourses.value,
+    form.value.course_ids ?? [],
+    formBusySlots.value,
+  ),
 )
 
 async function fetchMy() {
@@ -381,6 +412,7 @@ async function pullRefresh() {
       v-model:form-data="form"
       :children="childrenTyped"
       :available-courses="filteredCourses"
+      :conflict-ids="formConflictIds"
       :submitting="submitting"
       @submit="submitRegister"
     />

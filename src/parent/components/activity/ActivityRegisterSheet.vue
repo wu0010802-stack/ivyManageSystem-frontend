@@ -41,10 +41,14 @@ const props = withDefaults(defineProps<{
   children?: Child[]
   availableCourses?: Course[]
   submitting?: boolean
+  // code review #6：衝堂課程 id 集合（與既有報名或本次其他勾選互衝）。advisory 提示，
+  // 不停用 checkbox（衝堂為警告不阻擋報名，與後端 model 設計一致）。
+  conflictIds?: Set<number>
 }>(), {
   children: () => [],
   availableCourses: () => [],
   submitting: false,
+  conflictIds: () => new Set<number>(),
 })
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
@@ -101,7 +105,10 @@ function toggleCourse(id: number): void {
             :checked="formData.course_ids?.includes(c.id)"
             @change="toggleCourse(c.id)"
           />
-          <span class="pick-name">{{ c.name }}</span>
+          <span class="pick-name">
+            {{ c.name }}
+            <span v-if="conflictIds.has(c.id)" class="pick-conflict">⚠ 時段衝突</span>
+          </span>
           <span class="pick-meta">
             ${{ c.price?.toLocaleString() }}
             <span v-if="c.is_full">・已額滿{{ c.allow_waitlist ? '（候補）' : '' }}</span>
@@ -174,6 +181,14 @@ function toggleCourse(id: number): void {
 .pick-name {
   flex: 1;
   font-weight: 500;
+}
+
+.pick-conflict {
+  margin-left: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--pt-warning-text-soft, var(--color-warning, #b45309));
+  white-space: nowrap;
 }
 
 .pick-meta {

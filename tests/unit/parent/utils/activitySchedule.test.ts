@@ -7,6 +7,7 @@ import {
   collectBusySlots,
   buildConflictCourseIds,
   countUpcomingWithinDays,
+  buildFormConflictCourseIds,
 } from '@/parent/utils/activitySchedule'
 
 describe('formatWeekday', () => {
@@ -142,5 +143,56 @@ describe('countUpcomingWithinDays', () => {
   it('缺 session_date 不計、空陣列回 0', () => {
     expect(countUpcomingWithinDays([{ student_id: 1 }], { studentId: 1, days: 7, todayISO: today })).toBe(0)
     expect(countUpcomingWithinDays([], { days: 7, todayISO: today })).toBe(0)
+  })
+})
+
+describe('collectBusySlots（學期過濾，code review #6）', () => {
+  const regs = [
+    {
+      school_year: 113,
+      semester: 2,
+      courses: [
+        { status: 'enrolled', meeting_weekday: 2, meeting_start_time: '15:00', meeting_end_time: '16:00' },
+      ],
+    },
+    {
+      school_year: 114,
+      semester: 1,
+      courses: [
+        { status: 'enrolled', meeting_weekday: 2, meeting_start_time: '15:00', meeting_end_time: '16:00' },
+      ],
+    },
+  ]
+  it('指定學年/學期 → 只收該學期已佔位時段（不跨學期誤報）', () => {
+    const slots = collectBusySlots(regs, { schoolYear: 114, semester: 1 })
+    expect(slots).toHaveLength(1)
+  })
+  it('未指定學期 → 不過濾（向後相容）', () => {
+    expect(collectBusySlots(regs)).toHaveLength(2)
+  })
+})
+
+describe('buildFormConflictCourseIds（表單複選互比，code review #6）', () => {
+  const catalog = [
+    { id: 1, meeting_weekday: 2, meeting_start_time: '15:00', meeting_end_time: '16:00' },
+    { id: 2, meeting_weekday: 2, meeting_start_time: '15:30', meeting_end_time: '16:30' }, // 與 1 衝
+    { id: 3, meeting_weekday: 5, meeting_start_time: '15:00', meeting_end_time: '16:00' }, // 不衝
+  ]
+  it('同時勾選兩門互衝課程 → 兩者都標記', () => {
+    const ids = buildFormConflictCourseIds(catalog, [1, 2], [])
+    expect(ids.has(1)).toBe(true)
+    expect(ids.has(2)).toBe(true)
+    expect(ids.has(3)).toBe(false)
+  })
+  it('只勾選一門課 → 不與自己衝堂', () => {
+    const ids = buildFormConflictCourseIds(catalog, [1], [])
+    expect(ids.has(1)).toBe(false)
+  })
+  it('與既有 busy 時段衝突的目錄課程也標記（不限已勾選）', () => {
+    const busy = [{ meeting_weekday: 2, meeting_start_time: '15:00', meeting_end_time: '16:00' }]
+    const ids = buildFormConflictCourseIds(catalog, [], busy)
+    expect(ids.has(1)).toBe(true)
+    expect(ids.has(2)).toBe(true)
+    expect(ids.has(3)).toBe(false)
   })
 })
