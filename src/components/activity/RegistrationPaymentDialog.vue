@@ -10,9 +10,9 @@
       <span class="dps-divider">|</span>
       <span>已繳 <strong class="dps-paid">NT${{ paidAmount.toLocaleString() }}</strong></span>
       <span class="dps-divider">|</span>
-      <span :class="paidAmount > totalAmount ? 'dps-over' : 'dps-owed'">
-        {{ paidAmount > totalAmount ? '超繳' : '尚欠' }}
-        <strong>NT${{ Math.abs(totalAmount - paidAmount).toLocaleString() }}</strong>
+      <span :class="summaryState.cls">
+        {{ summaryState.label }}
+        <strong v-if="paymentDiff !== 0">NT${{ Math.abs(paymentDiff).toLocaleString() }}</strong>
       </span>
     </div>
     <el-form :model="form" label-width="90px">
@@ -140,6 +140,15 @@ const overpayment = computed(() => {
   return Math.max(0, props.paidAmount + (form.amount || 0) - props.totalAmount)
 })
 
+// 付款摘要狀態：超繳 / 已繳清 / 尚欠。補「已繳清」第三態，避免
+// paidAmount === totalAmount 時誤顯示「尚欠 NT$0」。
+const paymentDiff = computed(() => props.totalAmount - props.paidAmount)
+const summaryState = computed(() => {
+  if (props.paidAmount > props.totalAmount) return { label: '超繳', cls: 'dps-over' }
+  if (props.paidAmount === props.totalAmount) return { label: '已繳清', cls: 'dps-settled' }
+  return { label: '尚欠', cls: 'dps-owed' }
+})
+
 async function handleSubmit() {
   if (!props.registrationId || saving.value) return
   const amount = Number(form.amount) || 0
@@ -148,6 +157,12 @@ async function handleSubmit() {
     return
   }
   if (props.type === 'refund') {
+    // 退費金額上限守衛：不可超過已繳（對齊後端與 POS canSubmit 的顯式守衛）。
+    // el-input-number 的 :max 為軟 clamp，貼上／程式化輸入可短暫超出，故顯式攔。
+    if (amount > props.paidAmount) {
+      ElMessage.warning(`退費金額不可超過已繳 NT$${props.paidAmount.toLocaleString()}`)
+      return
+    }
     // 後端 AddPaymentRequest 對 type=refund 強制 notes（退費原因）≥
     // MIN_REFUND_REASON_LENGTH=15；前端先擋，避免送出後才被 422。
     const reason = (form.notes || '').trim()
@@ -210,5 +225,6 @@ async function handleSubmit() {
 .dps-divider { color: var(--neutral-300); }
 .dps-paid { color: var(--color-success-hover); }
 .dps-owed { color: var(--neutral-700); }
+.dps-settled { color: var(--color-success-hover); }
 .dps-over { color: var(--color-warning-hover); }
 </style>
