@@ -414,6 +414,8 @@ interface DailyDetail {
   actual_cash_count?: number | null; cash_variance?: number | null; note?: string
   payment_total?: number; refund_total?: number; net_total?: number; transaction_count?: number
   by_method?: Record<string, number>
+  // 後端權威的盤點門檻判定（現金毛流量 ≥ 門檻）；前端據此決定 actual_cash_count 是否必填
+  cash_count_required?: boolean
 }
 interface PendingRow { date: string; transaction_count?: number; payment_total?: number; refund_total?: number; net_total?: number }
 interface ReconItem { date: string; status?: PosApprovalStatus; transaction_count?: number; payment_total?: number; refund_total?: number; net_total?: number; expected_cash?: number; actual_cash?: number | null; variance?: number | null }
@@ -538,23 +540,14 @@ function handlePendingSelect(row: PendingRow | null) {
   if (row?.date) selectedDate.value = row.date
 }
 
-// 盤點門檻：與後端 _CASH_COUNT_REQUIRED_THRESHOLD 同步
-// 預期現金 ≥ NT$3,000 時 actual_cash_count 必填，否則前端先擋下避免送出後再被 400
-const CASH_COUNT_REQUIRED_THRESHOLD = 3000
-
 async function handleApprove() {
   if (!canApprove.value) return
   const cash = form.actualCashCount
-  const expectedCash = Number(cashInSystem.value) || 0
-  if (
-    expectedCash >= CASH_COUNT_REQUIRED_THRESHOLD
-    && cash == null
-  ) {
-    ElMessage.warning(
-      `當日預期現金 ${formatTWD(expectedCash)} ≥ ${formatTWD(
-        CASH_COUNT_REQUIRED_THRESHOLD
-      )}，必須填寫實際現金盤點金額`
-    )
+  // 盤點門檻由後端權威判定（現金毛流量 ≥ 門檻）並透過 cash_count_required 回傳，
+  // 前端據此決定是否必填，不再用淨額自行推算 — 否則退款壓低淨額時前端放行、
+  // 後端用毛流量擋，老闆會在確認後才被 400。
+  if (detail.value?.cash_count_required && cash == null) {
+    ElMessage.warning('當日現金流量已達盤點門檻，必須填寫實際現金盤點金額')
     return
   }
   const variance = cash == null ? null : Number(cash) - cashInSystem.value
