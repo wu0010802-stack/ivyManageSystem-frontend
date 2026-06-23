@@ -723,6 +723,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/activity/public/bootstrap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Public Bootstrap
+         * @description 前台：一次取回報名頁初始化所需的全部靜態資料（取代 5 支並發 GET）。
+         *
+         *     回傳 registration-time + courses + supplies + classes + course-videos，
+         *     帶 30s process-global 快取：報名開放尖峰 cache hit 完全跳過 DB session，
+         *     把 DB 實打次數從 O(家長數) 收斂到 O(1/TTL)（穩定度稽核 2026-06-23）。
+         *     名額（availability）變動快，前端仍走 /public/courses/availability 即時查。
+         */
+        get: operations["get_public_bootstrap_api_activity_public_bootstrap_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/activity/public/classes": {
         parameters: {
             query?: never;
@@ -969,6 +994,7 @@ export interface paths {
          * @description 家長確認接受候補轉正（三欄驗證）。
          *
          *     錯誤碼：
+         *     - 403 STUDENT_TERMINAL：學生已離校/畢業/轉出，不可升為正式
          *     - 404：查無對應報名（身份驗證失敗）
          *     - 409 ALREADY_CONFIRMED：已是正式
          *     - 409 NOT_PENDING：非待確認狀態（可能已逾期或已放棄）
@@ -1509,7 +1535,8 @@ export interface paths {
         };
         /**
          * Export Registrations
-         * @description 匯出報名名單為 Excel
+         * @description 匯出報名名單為 Excel（含 _export_limiter：5/60s，對齊 payment-report，
+         *     避免重複打 Excel 生成造成資源壓力）
          */
         get: operations["export_registrations_api_activity_registrations_export_get"];
         put?: never;
@@ -19112,6 +19139,29 @@ export interface components {
             status: "done" | "current" | "future" | "skipped";
         };
         /**
+         * GradeTargetOut
+         * @description GET /grade-targets 的值物件（dict key 為 grade_name）。
+         *
+         *     festival_* / overtime_* 為 Integer 欄（default 0）；以 Optional 接 None 防
+         *     legacy 空值觸發 response_model 驗證 500。
+         */
+        GradeTargetOut: {
+            /** Festival One Teacher */
+            festival_one_teacher?: number | null;
+            /** Festival Shared */
+            festival_shared?: number | null;
+            /** Festival Two Teachers */
+            festival_two_teachers?: number | null;
+            /** Id */
+            id: number;
+            /** Overtime One Teacher */
+            overtime_one_teacher?: number | null;
+            /** Overtime Shared */
+            overtime_shared?: number | null;
+            /** Overtime Two Teachers */
+            overtime_two_teachers?: number | null;
+        };
+        /**
          * GradeTargetUpdate
          * @description 年級目標人數更新
          */
@@ -19769,6 +19819,18 @@ export interface components {
         JobTitleCreate: {
             /** Bonus Grade */
             bonus_grade?: string | null;
+            /** Name */
+            name: string;
+        };
+        /**
+         * JobTitleOut
+         * @description GET /titles 回傳的職稱項目。
+         */
+        JobTitleOut: {
+            /** Bonus Grade */
+            bonus_grade?: string | null;
+            /** Id */
+            id: number;
             /** Name */
             name: string;
         };
@@ -22444,6 +22506,15 @@ export interface components {
             /** Registration Id */
             registration_id: number;
         };
+        /** PortalBatchAttendanceResultOut */
+        PortalBatchAttendanceResultOut: {
+            /** Ok */
+            ok: boolean;
+            /** Skipped */
+            skipped: number;
+            /** Updated */
+            updated: number;
+        };
         /** PortalBatchAttendanceUpdate */
         PortalBatchAttendanceUpdate: {
             /** Records */
@@ -22697,6 +22768,49 @@ export interface components {
             /** Work Start Time */
             work_start_time?: string | null;
         };
+        /** PortalRegistrationCourseOut */
+        PortalRegistrationCourseOut: {
+            /** Course Name */
+            course_name: string;
+            /** Status */
+            status: string;
+            /** Waitlist Position */
+            waitlist_position?: number | null;
+        };
+        /** PortalRegistrationItemOut */
+        PortalRegistrationItemOut: {
+            /** Class Name */
+            class_name?: string | null;
+            /** Courses */
+            courses: components["schemas"]["PortalRegistrationCourseOut"][];
+            /** Created At */
+            created_at?: string | null;
+            /** Id */
+            id: number;
+            /** Is Paid */
+            is_paid: boolean;
+            /** Student Name */
+            student_name?: string | null;
+        };
+        /** PortalRegistrationsOut */
+        PortalRegistrationsOut: {
+            /** Classrooms */
+            classrooms: string[];
+            /** Registrations */
+            registrations: components["schemas"]["PortalRegistrationItemOut"][];
+            summary?: components["schemas"]["PortalRegistrationsSummaryOut"] | null;
+        };
+        /** PortalRegistrationsSummaryOut */
+        PortalRegistrationsSummaryOut: {
+            /** Total Enrolled */
+            total_enrolled: number;
+            /** Total Paid */
+            total_paid: number;
+            /** Total Registrations */
+            total_registrations: number;
+            /** Total Waitlist */
+            total_waitlist: number;
+        };
         /** POSCheckoutItem */
         POSCheckoutItem: {
             /**
@@ -22746,6 +22860,8 @@ export interface components {
             change?: number | null;
             /** Created At */
             created_at?: string | null;
+            /** Has Voided Items */
+            has_voided_items?: boolean | null;
             /** Idempotent Replay */
             idempotent_replay?: boolean | null;
             /** Items */
@@ -22754,6 +22870,8 @@ export interface components {
             notes: string;
             /** Operator */
             operator: string;
+            /** Original Total */
+            original_total?: number | null;
             /** Payment Date */
             payment_date?: string | null;
             /** Payment Method */
@@ -23045,6 +23163,11 @@ export interface components {
             cash_warning_threshold: number;
             /** Date */
             date: string;
+            /**
+             * Is Approved
+             * @default false
+             */
+            is_approved: boolean;
             /** Net */
             net: number;
             /** Payment Count */
@@ -23055,6 +23178,54 @@ export interface components {
             refund_count: number;
             /** Refund Total */
             refund_total: number;
+        };
+        /**
+         * PositionSalaryOut
+         * @description GET /position-salary 回傳（無資料時為完整預設物件，非 {}）。
+         *
+         *     薪資欄位底層為 Money（process_result_value → float）；歷史上「無資料」
+         *     預設路徑回 int、「有資料」路徑回 float，wire format 不一致。加 response_model
+         *     後一律正規化為 float，前端（el-input-number / JS number）無感。
+         *     director/principal 可為 NULL；id 在無資料預設物件為 None；version 防 legacy
+         *     空值以 Optional 接 None。
+         */
+        PositionSalaryOut: {
+            /** Admin Staff */
+            admin_staff?: number | null;
+            /** Art Teacher */
+            art_teacher?: number | null;
+            /** Assistant Teacher A */
+            assistant_teacher_a?: number | null;
+            /** Assistant Teacher B */
+            assistant_teacher_b?: number | null;
+            /** Assistant Teacher C */
+            assistant_teacher_c?: number | null;
+            /** Changed By */
+            changed_by?: string | null;
+            /** Designer */
+            designer?: number | null;
+            /** Director */
+            director?: number | null;
+            /** Driver */
+            driver?: number | null;
+            /** English Teacher */
+            english_teacher?: number | null;
+            /** Head Teacher A */
+            head_teacher_a?: number | null;
+            /** Head Teacher B */
+            head_teacher_b?: number | null;
+            /** Head Teacher C */
+            head_teacher_c?: number | null;
+            /** Id */
+            id?: number | null;
+            /** Kitchen Staff */
+            kitchen_staff?: number | null;
+            /** Nurse */
+            nurse?: number | null;
+            /** Principal */
+            principal?: number | null;
+            /** Version */
+            version?: number | null;
         };
         /**
          * PositionSalarySyncRequest
@@ -23615,6 +23786,27 @@ export interface components {
             emergency_contact_phone?: string | null;
             /** Phone */
             phone?: string | null;
+        };
+        /**
+         * PublicBootstrapOut
+         * @description GET /public/bootstrap：一次回傳報名頁初始化所需的全部靜態資料。
+         *
+         *     取代前端開頁時並發打 registration-time + courses + supplies + classes +
+         *     course-videos 五支 GET（降低報名開放尖峰的請求數與單 worker DB 壓力，
+         *     穩定度稽核 2026-06-23）。名額（availability）變動快，仍走獨立端點即時查。
+         */
+        PublicBootstrapOut: {
+            /** Classes */
+            classes: string[];
+            /** Course Videos */
+            course_videos: {
+                [key: string]: string;
+            };
+            /** Courses */
+            courses: components["schemas"]["PublicCoursesItemOut"][];
+            registration_time: components["schemas"]["PublicRegistrationTimeOut"];
+            /** Supplies */
+            supplies: components["schemas"]["PublicSuppliesItemOut"][];
         };
         /** PublicCourseItem */
         PublicCourseItem: {
@@ -24468,6 +24660,11 @@ export interface components {
             pending_review: boolean;
             /** Query Token */
             query_token: string;
+            /**
+             * Refunded Amount
+             * @default 0
+             */
+            refunded_amount: number;
             /** School Year */
             school_year?: number | null;
             /** Semester */
@@ -24757,6 +24954,11 @@ export interface components {
             payment_status: string;
             /** Pending Review */
             pending_review: boolean;
+            /**
+             * Refunded Amount
+             * @default 0
+             */
+            refunded_amount: number;
             /** School Year */
             school_year?: number | null;
             /** Semester */
@@ -29542,6 +29744,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_public_bootstrap_api_activity_public_bootstrap_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicBootstrapOut"];
                 };
             };
         };
@@ -34937,7 +35159,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": {
+                        [key: string]: components["schemas"]["GradeTargetOut"];
+                    };
                 };
             };
         };
@@ -35136,7 +35360,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PositionSalaryOut"];
                 };
             };
         };
@@ -35262,7 +35486,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["JobTitleOut"][];
                 };
             };
         };
@@ -42896,7 +43120,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PortalBatchAttendanceResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -42925,7 +43149,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PortalRegistrationsOut"];
                 };
             };
         };
