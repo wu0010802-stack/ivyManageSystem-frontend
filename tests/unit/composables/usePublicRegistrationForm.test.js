@@ -128,11 +128,32 @@ describe('usePublicRegistrationForm — 新版 composable', () => {
       expect(f.errors.parent_phone).toContain('09')
     })
 
-    it('未選課程 → errors.courses', () => {
+    it('未選課程且未選用品 → false,errors.courses', () => {
       f.form.name = '小明'
       f.form.birthday = '2022-01-15'
       f.form.parent_phone = '0912345678'
       f.form.class_name = '大班'
+      expect(f.validateForm()).toBe(false)
+      expect(f.errors.courses).toContain('至少')
+    })
+
+    it('只選用品、無課程 → true（與後端 model_validator 對齊，可送出）', () => {
+      f.form.name = '小明'
+      f.form.birthday = '2022-01-15'
+      f.form.parent_phone = '0912345678'
+      f.form.class_name = '大班'
+      f.form.selectedSupplies = ['畫具組']
+      expect(f.validateForm()).toBe(true)
+      expect(f.errors.courses).toBe('')
+    })
+
+    it('課程與用品皆空 → false,errors.courses 標記', () => {
+      f.form.name = '小明'
+      f.form.birthday = '2022-01-15'
+      f.form.parent_phone = '0912345678'
+      f.form.class_name = '大班'
+      f.form.selectedCourses = []
+      f.form.selectedSupplies = []
       expect(f.validateForm()).toBe(false)
       expect(f.errors.courses).toContain('至少')
     })

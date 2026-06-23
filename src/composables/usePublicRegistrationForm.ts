@@ -158,8 +158,10 @@ export function usePublicRegistrationForm({ courses, supplies, availability }: {
 
     if (!className) errors.class_name = '請選擇寶貝班級'
 
-    if (form.selectedCourses.length === 0)
-      errors.courses = '請至少選擇一門才藝課'
+    // 與後端 model_validator(_require_at_least_one_item) 對齊：
+    // 至少一門課程「或」一項用品即可送出（允許「只買用品」的合法流程）。
+    if (form.selectedCourses.length === 0 && form.selectedSupplies.length === 0)
+      errors.courses = '請至少選擇一門課程或一項用品'
 
     return FIELD_FOCUS_ORDER.every((f) => !errors[f as keyof typeof errors])
   }
