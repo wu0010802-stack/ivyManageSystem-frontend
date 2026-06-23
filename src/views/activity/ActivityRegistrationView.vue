@@ -797,6 +797,9 @@ async function handleExport() {
       payment_status: paymentFilter.value || undefined,
       course_id: courseFilter.value || undefined,
       classroom_name: classroomFilter.value || undefined,
+      // 帶上目前選取學期，避免匯出傾印所有 active 學期（與列表查詢一致）
+      school_year: termStore.school_year,
+      semester: termStore.semester,
     })
     const url = URL.createObjectURL(new Blob([res.data as BlobPart]))
     const a = document.createElement('a')

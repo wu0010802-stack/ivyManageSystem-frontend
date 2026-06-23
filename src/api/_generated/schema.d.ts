@@ -22895,6 +22895,11 @@ export interface components {
             by_method: {
                 [key: string]: number;
             };
+            /**
+             * Cash Count Required
+             * @default false
+             */
+            cash_count_required: boolean;
             /** Cash Variance */
             cash_variance?: number | null;
             /** Date */
@@ -22972,6 +22977,11 @@ export interface components {
             by_method: {
                 [key: string]: number;
             };
+            /**
+             * Cash Count Required
+             * @default false
+             */
+            cash_count_required: boolean;
             /** Cash Variance */
             cash_variance?: number | null;
             /** Date */
@@ -30705,7 +30715,9 @@ export interface operations {
                 classroom_name?: string | null;
                 course_id?: number | null;
                 payment_status?: string | null;
+                school_year?: number | null;
                 search?: string | null;
+                semester?: number | null;
             };
             header?: never;
             path?: never;
@@ -30741,7 +30753,9 @@ export interface operations {
                 /** @description 納入已軟刪（is_active=False）報名，供財務查核刪除/退款後的歷史帳務 */
                 include_inactive?: boolean;
                 payment_status?: string | null;
+                school_year?: number | null;
                 search?: string | null;
+                semester?: number | null;
             };
             header?: never;
             path?: never;
