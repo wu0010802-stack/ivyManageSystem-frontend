@@ -29,6 +29,8 @@ interface Course {
   meeting_weekday?: number | null
   meeting_start_time?: string | null
   meeting_end_time?: string | null
+  instructor_name?: string | null
+  next_session_date?: string | null
 }
 
 const props = withDefaults(defineProps<{
@@ -53,6 +55,18 @@ function ageText(c: Course): string {
 function isConflict(c: Course): boolean {
   return props.conflictIds.has(c.id)
 }
+
+// "YYYY-MM-DD" → "M/D"（下次上課顯示用；缺值回空字串）。
+function nextSessionText(c: Course): string {
+  const d = c.next_session_date
+  if (!d) return ''
+  const [, m, day] = d.split('-')
+  return `${Number(m)}/${Number(day)}`
+}
+
+function hasMeta(c: Course): boolean {
+  return !!(scheduleText(c) || ageText(c) || isConflict(c) || c.instructor_name || c.next_session_date)
+}
 </script>
 
 <template>
@@ -74,11 +88,10 @@ function isConflict(c: Course): boolean {
           {{ c.is_full ? (c.allow_waitlist ? '可候補' : '已額滿') : '可報名' }}
         </span>
       </div>
-      <div
-        v-if="scheduleText(c) || ageText(c) || isConflict(c)"
-        class="course-card-meta"
-      >
+      <div v-if="hasMeta(c)" class="course-card-meta">
         <span v-if="scheduleText(c)" class="meta-chip">🕒 {{ scheduleText(c) }}</span>
+        <span v-if="c.next_session_date" class="meta-chip">📅 下次 {{ nextSessionText(c) }}</span>
+        <span v-if="c.instructor_name" class="meta-chip">👤 {{ c.instructor_name }}</span>
         <span v-if="ageText(c)" class="meta-chip">適齡 {{ ageText(c) }}</span>
         <span v-if="isConflict(c)" class="meta-chip conflict">時段衝突</span>
       </div>

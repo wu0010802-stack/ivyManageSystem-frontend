@@ -96,6 +96,9 @@
         <el-form-item label="說明">
           <el-input v-model="form.description" type="textarea" :rows="2" />
         </el-form-item>
+        <el-form-item label="講師">
+          <el-input v-model="form.instructor_name" maxlength="50" placeholder="講師姓名（選填，前台課程卡顯示）" />
+        </el-form-item>
 
         <el-divider content-position="left">
           <span style="font-size: 12px; color: var(--text-secondary);">
@@ -281,6 +284,7 @@ interface Course {
   allow_waitlist: boolean; video_url?: string; description?: string
   min_age_months?: number | null; max_age_months?: number | null
   meeting_weekday?: number | null; meeting_start_time?: string; meeting_end_time?: string
+  instructor_name?: string | null
   enrolled?: number; waitlist_count?: number
 }
 interface WaitlistItem { registration_id: number; student_name?: string; class_name?: string; waitlist_position?: number }
@@ -290,6 +294,7 @@ interface CourseForm {
   name: string; price: number; sessions: number | null; capacity: number; allow_waitlist: boolean
   video_url: string; description: string; min_age_months: number | null; max_age_months: number | null
   meeting_weekday: number | null; meeting_start_time: string; meeting_end_time: string
+  instructor_name: string
 }
 
 const termStore = useAcademicTermStore()
@@ -329,6 +334,7 @@ const defaultForm = (): CourseForm => ({
   meeting_weekday: null,
   meeting_start_time: '',
   meeting_end_time: '',
+  instructor_name: '',
 })
 const form = ref<CourseForm>(defaultForm())
 
@@ -486,6 +492,7 @@ function openEdit(row: Course) {
     meeting_weekday: row.meeting_weekday ?? null,
     meeting_start_time: row.meeting_start_time || '',
     meeting_end_time: row.meeting_end_time || '',
+    instructor_name: row.instructor_name || '',
   }
   dialogVisible.value = true
 }
@@ -507,6 +514,7 @@ async function handleSave() {
     ...f,
     meeting_start_time: f.meeting_start_time || null,
     meeting_end_time: f.meeting_end_time || null,
+    instructor_name: f.instructor_name || null,
   }
   saving.value = true
   try {
