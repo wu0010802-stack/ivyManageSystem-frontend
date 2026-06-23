@@ -41,8 +41,15 @@
           <el-option v-for="m in PAYMENT_METHODS" :key="m" :label="m" :value="m" />
         </el-select>
       </el-form-item>
-      <el-form-item label="備註">
-        <el-input v-model="form.notes" type="textarea" :rows="2" />
+      <el-form-item :label="type === 'refund' ? '退費原因＊' : '備註'">
+        <el-input
+          v-model="form.notes"
+          type="textarea"
+          :rows="2"
+          :placeholder="type === 'refund'
+            ? `必填，請說明退費原因（至少 ${FIELD_RULES.refundReasonMin} 字，會寫入退費紀錄供稽核）`
+            : ''"
+        />
       </el-form-item>
     </el-form>
     <el-alert
@@ -141,6 +148,13 @@ async function handleSubmit() {
     return
   }
   if (props.type === 'refund') {
+    // 後端 AddPaymentRequest 對 type=refund 強制 notes（退費原因）≥
+    // MIN_REFUND_REASON_LENGTH=15；前端先擋，避免送出後才被 422。
+    const reason = (form.notes || '').trim()
+    if (reason.length < FIELD_RULES.refundReasonMin) {
+      ElMessage.warning(`退費原因必須至少 ${FIELD_RULES.refundReasonMin} 字`)
+      return
+    }
     try {
       await ElMessageBox.confirm(
         `確定要為 ${props.studentName || '此報名'} 退費 NT$${amount.toLocaleString()}？此操作會同步更新已繳金額。`,
