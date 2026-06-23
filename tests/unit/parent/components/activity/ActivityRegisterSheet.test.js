@@ -59,6 +59,36 @@ describe('ActivityRegisterSheet', () => {
     })
   })
 
+  it('conflictIds 含某課 id → 該課顯示時段衝突提示（advisory，不停用 checkbox）', () => {
+    const wrapper = mount(ActivityRegisterSheet, {
+      props: {
+        modelValue: true,
+        formData: baseForm,
+        children,
+        availableCourses,
+        conflictIds: new Set([101]),
+      },
+      global: { stubs },
+    })
+    expect(wrapper.text()).toContain('時段衝突')
+    // advisory：checkbox 仍可勾選（不 disabled）
+    const checkboxes = wrapper.findAll('input[type="checkbox"]')
+    expect(checkboxes.every((cb) => !cb.attributes('disabled'))).toBe(true)
+  })
+
+  it('未傳 conflictIds → 無衝堂提示（向後相容）', () => {
+    const wrapper = mount(ActivityRegisterSheet, {
+      props: {
+        modelValue: true,
+        formData: baseForm,
+        children,
+        availableCourses,
+      },
+      global: { stubs },
+    })
+    expect(wrapper.text()).not.toContain('時段衝突')
+  })
+
   it('送出按鈕 emit submit；取消按鈕 emit update:modelValue=false', async () => {
     const wrapper = mount(ActivityRegisterSheet, {
       props: {

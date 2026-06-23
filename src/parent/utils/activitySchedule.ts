@@ -69,16 +69,34 @@ export function hasScheduleConflict(a: CourseSlot, b: CourseSlot): boolean {
 export const OCCUPYING_STATUSES = ['enrolled', 'promoted_pending']
 
 interface RegistrationLike {
+  school_year?: number | null
+  semester?: number | null
   courses?: Array<CourseSlot & { status?: string }>
 }
 
-/** 從家長報名清單抽出「已佔位課程」的時段，供衝堂比對。 */
+interface CollectBusyOptions {
+  /** 指定學年/學期 → 只收該學期的報名（防跨學期誤報，code review #6）。 */
+  schoolYear?: number | null
+  semester?: number | null
+  statuses?: string[]
+}
+
+/** 從家長報名清單抽出「已佔位課程」的時段，供衝堂比對。
+ *
+ * code review #6：my-registrations 回所有學期的 active 報名；若不過濾，上學期課程
+ * 會讓本學期同星期/時段的課程誤報衝堂。傳入 schoolYear+semester 時只收該學期；
+ * 未傳則維持舊行為（不過濾，向後相容）。 */
 export function collectBusySlots(
   regs: RegistrationLike[],
-  statuses: string[] = OCCUPYING_STATUSES,
+  opts: CollectBusyOptions = {},
 ): CourseSlot[] {
+  const { schoolYear, semester, statuses = OCCUPYING_STATUSES } = opts
+  const filterTerm = schoolYear != null && semester != null
   const slots: CourseSlot[] = []
   for (const reg of regs || []) {
+    if (filterTerm && (reg.school_year !== schoolYear || reg.semester !== semester)) {
+      continue
+    }
     for (const c of reg?.courses || []) {
       if (c.status && statuses.includes(c.status)) {
         slots.push({
@@ -138,4 +156,27 @@ export function countUpcomingWithinDays(
     if (d >= todayISO && d <= end) count++
   }
   return count
+}
+
+/** 報名表單用衝堂集合（code review #6）：標記目錄課程中與「既有 busy 時段」或
+ * 「其他已勾選課程」衝突者。排除自己（否則課程與自身時段必定重疊變成自衝）。
+ * 涵蓋兩個情境：① 與既有報名衝突 ② 本次同時勾選的多門新課互相衝突。 */
+export function buildFormConflictCourseIds(
+  catalog: CatalogCourseSlot[],
+  selectedIds: Iterable<number>,
+  existingBusy: CourseSlot[] = [],
+): Set<number> {
+  const selected = new Set(selectedIds)
+  const ids = new Set<number>()
+  for (const course of catalog || []) {
+    // 與本課程互比的 busy：既有佔位時段 + 其他「已勾選」課程（排除自己）
+    const otherSelectedSlots = (catalog || []).filter(
+      (c) => c.id !== course.id && selected.has(c.id),
+    )
+    const busy = [...(existingBusy || []), ...otherSelectedSlots]
+    if (busy.some((slot) => hasScheduleConflict(course, slot))) {
+      ids.add(course.id)
+    }
+  }
+  return ids
 }
