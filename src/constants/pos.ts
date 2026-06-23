@@ -35,6 +35,61 @@ export const formatTWD = (n: unknown): string => formatCurrency(n)
 export const computeOwed = (total: unknown, paid: unknown): number =>
   Math.max(0, (Number(total) || 0) - (Number(paid) || 0))
 
+export interface POSCourseEntry {
+  name: string
+  price: number
+  [key: string]: unknown
+}
+
+export interface POSByDateNormalized {
+  id: unknown
+  student_name: string
+  class_name: string
+  total_amount: number
+  paid_amount: number
+  owed: number
+  courses: POSCourseEntry[]
+  supplies: POSCourseEntry[]
+  [key: string]: unknown
+}
+
+/**
+ * by-date 模式行資料正規化：
+ * 優先使用後端回傳的真實 courses / supplies（含 price），
+ * 僅在缺失時才 fallback 到 course_names 字串拆解（price 為 0）。
+ * handleSingleToggle 呼叫此函式，確保付款面板顯示完整明細。
+ */
+export function normalizeByDateRow(row: Record<string, unknown>): POSByDateNormalized {
+  const owed = computeOwed(row.total_amount, row.paid_amount)
+
+  let courses: POSCourseEntry[]
+  if (Array.isArray(row.courses) && row.courses.length > 0) {
+    courses = row.courses as POSCourseEntry[]
+  } else {
+    // fallback：後端若未回傳結構化課程，以 course_names 拆解，price 填 0
+    courses = (String(row.course_names || ''))
+      .split('、')
+      .filter(Boolean)
+      .map((name) => ({ name, price: 0, status: 'enrolled' }))
+  }
+
+  const supplies: POSCourseEntry[] = Array.isArray(row.supplies)
+    ? (row.supplies as POSCourseEntry[])
+    : []
+
+  return {
+    ...row,
+    id: row.id,
+    student_name: String(row.student_name || ''),
+    class_name: String(row.class_name || ''),
+    total_amount: Number(row.total_amount || 0),
+    paid_amount: Number(row.paid_amount || 0),
+    owed,
+    courses,
+    supplies,
+  }
+}
+
 // 中文大寫金額（收據用）：1500 → 壹仟伍佰元整
 const _CN_DIGITS = ['零', '壹', '貳', '參', '肆', '伍', '陸', '柒', '捌', '玖']
 const _CN_UNITS = ['', '拾', '佰', '仟']
