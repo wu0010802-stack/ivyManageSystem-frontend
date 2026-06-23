@@ -443,6 +443,7 @@ import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { publicRegister, getPublicBootstrap } from '@/api/activityPublic'
 import { usePublicActivityOptions } from '@/composables/usePublicActivityOptions'
+import { priceFromList, sumCourseFees, sumSupplyFees } from '@/utils/activityPricing'
 import { useActivityRegistrationTime } from '@/composables/useActivityRegistrationTime'
 import { useRegistrationWindow } from '@/composables/useRegistrationWindow'
 import { useActivityAvailability } from '@/composables/useActivityAvailability'
@@ -712,11 +713,6 @@ const successModal = reactive<{
   copyHint: '',
 })
 
-function priceOf(name: string, source: Array<{ name: string; price?: unknown }>) {
-  const item = source.find((it) => it.name === name)
-  return Number(item?.price) || 0
-}
-
 function buildSuccessSummary({ name, parentPhone, message, waitlisted, waitlistCourses, queryToken }: {
   name: string; parentPhone: string; message: string; waitlisted?: boolean;
   waitlistCourses?: string[]; queryToken?: string
@@ -724,24 +720,32 @@ function buildSuccessSummary({ name, parentPhone, message, waitlisted, waitlistC
   const waitlistSet = new Set(waitlistCourses || [])
   const enrolledCourses: CourseItem[] = []
   const waitlistOnes: CourseItem[] = []
-  let total = 0
 
+  // 新報名模式：無既有 snapshot，一律用目前 option 價（priceFromList 容錯查價）。
   form.selectedCourses.forEach((courseName) => {
-    const price = priceOf(courseName, courses.value)
+    const price = priceFromList(courseName, courses.value)
     const item: CourseItem = { name: courseName, price }
     if (waitlistSet.has(courseName)) {
       waitlistOnes.push(item)
     } else {
       enrolledCourses.push(item)
-      total += price
     }
   })
 
-  const supplyItems = form.selectedSupplies.map((supplyName) => {
-    const price = priceOf(supplyName, supplies.value)
-    total += price
-    return { name: supplyName, price }
-  })
+  const supplyItems = form.selectedSupplies.map((supplyName) => ({
+    name: supplyName,
+    price: priceFromList(supplyName, supplies.value),
+  }))
+
+  // 課程只算 enrolled（候補不計）、用品全計入——口徑與 query view feePreview 共用 util 對齊。
+  const total =
+    sumCourseFees(form.selectedCourses, {
+      isEnrolled: (n) => !waitlistSet.has(n),
+      resolvePrice: (n) => priceFromList(n, courses.value),
+    }) +
+    sumSupplyFees(form.selectedSupplies, {
+      resolvePrice: (n) => priceFromList(n, supplies.value),
+    })
 
   successModal.studentName = name
   successModal.parentPhone = parentPhone

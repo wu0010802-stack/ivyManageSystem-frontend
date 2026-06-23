@@ -434,6 +434,13 @@ import { usePublicActivityOptions } from '@/composables/usePublicActivityOptions
 import { useActivityAvailability } from '@/composables/useActivityAvailability'
 import { toggleArrayItem } from '@/utils/arrayUtils'
 import { estimateCourseStatus } from '@/utils/activityDisplay'
+import {
+  priceFromList,
+  buildSupplySnapshotMap,
+  resolveSupplyPrice,
+  sumCourseFees,
+  sumSupplyFees,
+} from '@/utils/activityPricing'
 // FE-3（2026-06-23 audit）：費用預覽改用全站 canonical 金額格式化（千分位 + NaN→「—」），
 // 不再各自 `NT$ {{ x }}`（後端回非數字時會顯示「NT$ NaN」、且無千分位）。
 import { formatCurrency } from '@/utils/currency'
@@ -647,28 +654,22 @@ function onToggleCourse(courseName: string): void {
 const feePreview = computed(() => {
   if (!queryResult.value) return null
   const existingCourses = queryResult.value.courses ?? []
-  // 既有用品的 snapshot 價：supplies 回 {name, price}（P2 後端改）；舊資料容錯為 string。
-  const existingSupplyPrice = new Map(
-    (queryResult.value.supplies ?? [])
-      .filter((s): s is { name: string; price?: number } => typeof s !== 'string')
-      .map((s) => [s.name, Number(s.price ?? 0)]),
-  )
-  const newCourseTotal = editForm.selectedCourses.reduce((sum, name) => {
-    if (estimatedCourseStatus(name) !== 'enrolled') return sum
-    const existing = existingCourses.find((c) => c.name === name)
-    const price = existing
-      ? Number(existing.price ?? 0)
-      : Number(courses.value.find((c) => c.name === name)?.price ?? 0)
-    return sum + price
-  }, 0)
-  const newSupplyTotal = editForm.selectedSupplies.reduce((sum, name) => {
-    const snap = existingSupplyPrice.get(name)
-    const price =
-      snap !== undefined
-        ? snap
-        : Number(supplies.value.find((s) => s.name === name)?.price ?? 0)
-    return sum + price
-  }, 0)
+  // 既有用品的 snapshot 價 map（物件型保留、舊資料 string 跳過）；編修模式既有品項優先用此價。
+  const existingSupplyPrice = buildSupplySnapshotMap(queryResult.value.supplies ?? [])
+  // 課程：只算 enrolled；既有課用 snapshot 價（courses[].price），新增課才用目前 option 價。
+  const newCourseTotal = sumCourseFees(editForm.selectedCourses, {
+    isEnrolled: (name) => estimatedCourseStatus(name) === 'enrolled',
+    resolvePrice: (name) => {
+      const existing = existingCourses.find((c) => c.name === name)
+      return existing
+        ? priceFromList(name, existingCourses)
+        : priceFromList(name, courses.value)
+    },
+  })
+  // 用品：既有品項用 snapshot 價、新增品項用目前 option 價。
+  const newSupplyTotal = sumSupplyFees(editForm.selectedSupplies, {
+    resolvePrice: (name) => resolveSupplyPrice(name, existingSupplyPrice, supplies.value),
+  })
   const newTotal = newCourseTotal + newSupplyTotal
   const originalTotal = Number(queryResult.value.total_amount || 0)
   const paidAmount = Number(queryResult.value.paid_amount || 0)

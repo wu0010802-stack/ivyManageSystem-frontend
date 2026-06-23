@@ -47,10 +47,19 @@ describe('paymentBadge', () => {
     )
   })
 
-  it('payment_status=overpaid → 溢繳', () => {
-    expect(paymentBadge({ payment_status: 'overpaid', is_paid: false }).label).toBe(
-      '溢繳',
-    )
+  it('payment_status=overpaid → 超繳（與 admin PAYMENT_STATUS_LABEL 對齊，消除「溢繳」漂移）', () => {
+    const badge = paymentBadge({ payment_status: 'overpaid', is_paid: false })
+    expect(badge.label).toBe('超繳')
+    // tone 各自保留：overpaid 仍走 warn 渲染
+    expect(badge.tone).toBe('warn')
+  })
+
+  it('label 一律取自 constants/activity 的 PAYMENT_STATUS_LABEL（單一來源）', async () => {
+    const { PAYMENT_STATUS_LABEL } = await import('@/constants/activity')
+    expect(paymentBadge({ payment_status: 'paid' }).label).toBe(PAYMENT_STATUS_LABEL.paid)
+    expect(paymentBadge({ payment_status: 'no_fee' }).label).toBe(PAYMENT_STATUS_LABEL.no_fee)
+    expect(paymentBadge({ payment_status: 'partial' }).label).toBe(PAYMENT_STATUS_LABEL.partial)
+    expect(paymentBadge({ payment_status: 'unpaid' }).label).toBe(PAYMENT_STATUS_LABEL.unpaid)
   })
 
   it('無 payment_status 時向後相容：依 is_paid 兜底', () => {

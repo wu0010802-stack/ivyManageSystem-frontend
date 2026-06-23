@@ -33,6 +33,38 @@ export const COURSE_STATUS_LABEL = {
   promoted_pending: '待家長確認',
 }
 
+// 匹配狀態（match_status）收斂：原本散落在 ActivityRegistrationView（短文案）與
+// RegistrationTimeline（較長變體）兩處各自定義。集中為「共用 tag type + 短/長兩套
+// label」，兩處各取所需，避免文案漂移。
+export const MATCH_STATUS_TAG_TYPE = {
+  matched:   'success',
+  manual:    'primary',
+  pending:   'warning',
+  rejected:  'info',
+  unmatched: 'info',
+  forced:    'danger',
+}
+
+// admin 列表用短文案（窄欄位）
+export const MATCH_STATUS_LABEL_SHORT = {
+  matched:   '系統自動',
+  manual:    '人工指定',
+  pending:   '待審核',
+  rejected:  '已拒絕',
+  unmatched: '未比對',
+  forced:    '強行收件',
+}
+
+// timeline 用較詳細文案（含說明語）
+export const MATCH_STATUS_LABEL_LONG = {
+  matched:   '系統自動匹配',
+  manual:    '人工綁定學生',
+  pending:   '等待校方審核',
+  rejected:  '已拒絕（視為校外生）',
+  unmatched: '舊資料、未比對',
+  forced:    '強行收件（校外生）',
+}
+
 // 後端才藝 POS 為 cash-only（payment_method: Literal["現金"]）；選非現金送出會 422。
 // 收斂成只剩現金與後端契約對齊；未來後端支援多付款方式時再加回轉帳/其他。
 export const PAYMENT_METHODS = ['現金']

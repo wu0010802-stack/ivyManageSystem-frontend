@@ -395,6 +395,7 @@ import {
   PAYMENT_STATUS_TAG_TYPE, PAYMENT_STATUS_LABEL,
   COURSE_STATUS_TAG_TYPE, COURSE_STATUS_LABEL,
   FIELD_RULES, VOID_REASON_PATTERN, forceRefundReasonPromptOptions,
+  MATCH_STATUS_TAG_TYPE, MATCH_STATUS_LABEL_SHORT,
 } from '@/constants/activity'
 import { useActivityRegistration } from '@/composables/useActivityRegistration'
 import { useCountdownBanner, countdownLabel } from '@/composables/useCountdownBanner'
@@ -451,16 +452,13 @@ function goToPublic() {
 }
 
 type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
-const MATCH_STATUS_TAG: Record<string, { label: string; type: ElTagType }> = {
-  matched: { label: '系統自動', type: 'success' },
-  manual: { label: '人工指定', type: 'primary' },
-  pending: { label: '待審核', type: 'warning' },
-  rejected: { label: '已拒絕', type: 'info' },
-  unmatched: { label: '未比對', type: 'info' },
-  forced: { label: '強行收件', type: 'danger' },
-}
 function matchStatusTag(status: string): { label: string; type: ElTagType } {
-  return MATCH_STATUS_TAG[status] || { label: status || '—', type: 'info' }
+  const label = (MATCH_STATUS_LABEL_SHORT as Record<string, string>)[status]
+  if (!label) return { label: status || '—', type: 'info' }
+  return {
+    label,
+    type: ((MATCH_STATUS_TAG_TYPE as Record<string, string>)[status] || 'info') as ElTagType,
+  }
 }
 
 // 短時段倒數提示由 useCountdownBanner 提供，這裡僅做別名保留呼叫端 API

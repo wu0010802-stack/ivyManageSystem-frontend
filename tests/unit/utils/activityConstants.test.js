@@ -9,6 +9,9 @@ import {
   REFUND_REASON_PATTERN,
   VOID_REASON_PATTERN,
   forceRefundReasonPromptOptions,
+  MATCH_STATUS_TAG_TYPE,
+  MATCH_STATUS_LABEL_SHORT,
+  MATCH_STATUS_LABEL_LONG,
 } from '@/constants/activity'
 
 // 14 字 / 15 字樣本（後端 MIN_REFUND_REASON_LENGTH=15、MIN_VOID_REASON_LENGTH=5）
@@ -43,6 +46,32 @@ describe('activity constants', () => {
   describe('COURSE_STATUS_LABEL', () => {
     it('enrolled → 正式', () => expect(COURSE_STATUS_LABEL.enrolled).toBe('正式'))
     it('waitlist → 候補', () => expect(COURSE_STATUS_LABEL.waitlist).toBe('候補'))
+  })
+
+  describe('MATCH_STATUS 收斂（admin 短文案 + timeline 長文案，共用 tag type）', () => {
+    it('六種狀態 type/short/long 三表 key 一致', () => {
+      const keys = ['matched', 'manual', 'pending', 'rejected', 'unmatched', 'forced']
+      for (const k of keys) {
+        expect(MATCH_STATUS_TAG_TYPE[k]).toBeDefined()
+        expect(MATCH_STATUS_LABEL_SHORT[k]).toBeDefined()
+        expect(MATCH_STATUS_LABEL_LONG[k]).toBeDefined()
+      }
+    })
+    it('短文案保留 admin 既有用字（系統自動 / 強行收件）', () => {
+      expect(MATCH_STATUS_LABEL_SHORT.matched).toBe('系統自動')
+      expect(MATCH_STATUS_LABEL_SHORT.forced).toBe('強行收件')
+      expect(MATCH_STATUS_LABEL_SHORT.rejected).toBe('已拒絕')
+    })
+    it('長文案保留 timeline 較詳細變體（系統自動匹配 / 校外生）', () => {
+      expect(MATCH_STATUS_LABEL_LONG.matched).toBe('系統自動匹配')
+      expect(MATCH_STATUS_LABEL_LONG.forced).toBe('強行收件（校外生）')
+      expect(MATCH_STATUS_LABEL_LONG.rejected).toBe('已拒絕（視為校外生）')
+    })
+    it('tag type：matched=success / manual=primary / forced=danger', () => {
+      expect(MATCH_STATUS_TAG_TYPE.matched).toBe('success')
+      expect(MATCH_STATUS_TAG_TYPE.manual).toBe('primary')
+      expect(MATCH_STATUS_TAG_TYPE.forced).toBe('danger')
+    })
   })
 
   describe('PAYMENT_METHODS', () => {
