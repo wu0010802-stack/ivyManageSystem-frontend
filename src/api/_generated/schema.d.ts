@@ -1537,6 +1537,9 @@ export interface paths {
          * Export Registrations
          * @description 匯出報名名單為 Excel（含 _export_limiter：5/60s，對齊 payment-report，
          *     避免重複打 Excel 生成造成資源壓力）
+         *
+         *     school_year / semester：與列表端點一致，未提供時預設當前學期
+         *     （resolve_academic_term_filters），避免匯出傾印所有 active 學期。
          */
         get: operations["export_registrations_api_activity_registrations_export_get"];
         put?: never;
@@ -1560,6 +1563,9 @@ export interface paths {
          *
          *     include_inactive：預設 False（維持只含 active 的現狀）；財務需查核刪除並退款後的
          *     歷史帳務時可帶 true 納入軟刪報名（#5）。
+         *
+         *     school_year / semester：與列表端點一致，未提供時預設當前學期
+         *     （resolve_academic_term_filters），避免匯出傾印所有 active 學期。
          */
         get: operations["export_payment_report_api_activity_registrations_payment_report_get"];
         put?: never;
@@ -15371,6 +15377,29 @@ export interface components {
         AutoDetectPayload: {
             /** Reference Date */
             reference_date?: string | null;
+        };
+        /**
+         * BatchApproveFailItem
+         * @description 批次核准/駁回單筆失敗紀錄 — {id, reason}。
+         */
+        BatchApproveFailItem: {
+            /** Id */
+            id: number;
+            /** Reason */
+            reason: string;
+        };
+        /**
+         * BatchApproveResultOut
+         * @description 批次核准/駁回回傳共用 shape — {succeeded, failed}。
+         *
+         *     succeeded 為成功處理的紀錄 id 清單；failed 為失敗明細（id + 原因）。
+         *     leaves / overtimes / punch_corrections 三個 batch-approve 端點回傳形狀一致，共用此 schema。
+         */
+        BatchApproveResultOut: {
+            /** Failed */
+            failed: components["schemas"]["BatchApproveFailItem"][];
+            /** Succeeded */
+            succeeded: number[];
         };
         /** BatchAttendanceUpdate */
         BatchAttendanceUpdate: {
@@ -39523,7 +39552,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["BatchApproveResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -40655,7 +40684,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["BatchApproveResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -45949,7 +45978,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["BatchApproveResultOut"];
                 };
             };
             /** @description Validation Error */
