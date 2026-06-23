@@ -309,41 +309,44 @@
           </el-collapse>
         </template>
 
-        <!-- Flat 模式：原有單一表格 -->
-        <el-table
-          v-else
-          :data="sortedStudents"
-          :row-class-name="({ row }) => row.is_present === null ? 'unmarked-row' : ''"
-          border
-          style="margin-top: 12px"
-          size="small"
-        >
-          <el-table-column label="班級" prop="class_name" width="80" align="center" />
-          <el-table-column label="姓名" prop="student_name" min-width="90" />
-          <el-table-column label="出席" width="100" align="center">
-            <template #default="{ row }">
-              <el-switch
-                v-model="row.is_present"
-                :active-value="true"
-                :inactive-value="false"
-                :disabled="!canWrite"
-                active-text="出席"
-                inactive-text="缺席"
-                inline-prompt
-              />
-            </template>
-          </el-table-column>
-          <el-table-column label="備註" min-width="100">
-            <template #default="{ row }">
-              <el-input
-                v-model="row.attendance_notes"
-                :disabled="!canWrite"
-                size="small"
-                placeholder="備註"
-              />
-            </template>
-          </el-table-column>
-        </el-table>
+        <!-- Flat 模式：原有單一表格（備註欄套網格鍵盤導航：Enter/↓ 跳下一列同欄）-->
+        <div v-else ref="flatGridRef">
+          <el-table
+            :data="sortedStudents"
+            :row-class-name="({ row }) => row.is_present === null ? 'unmarked-row' : ''"
+            border
+            style="margin-top: 12px"
+            size="small"
+          >
+            <el-table-column label="班級" prop="class_name" width="80" align="center" />
+            <el-table-column label="姓名" prop="student_name" min-width="90" />
+            <el-table-column label="出席" width="100" align="center">
+              <template #default="{ row }">
+                <el-switch
+                  v-model="row.is_present"
+                  :active-value="true"
+                  :inactive-value="false"
+                  :disabled="!canWrite"
+                  active-text="出席"
+                  inactive-text="缺席"
+                  inline-prompt
+                />
+              </template>
+            </el-table-column>
+            <el-table-column label="備註" min-width="100">
+              <template #default="{ row, $index }">
+                <div :data-grid-row="$index" data-grid-col="0">
+                  <el-input
+                    v-model="row.attendance_notes"
+                    :disabled="!canWrite"
+                    size="small"
+                    placeholder="備註"
+                  />
+                </div>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
 
         <div class="drawer-actions">
           <el-button :icon="Printer" @click="openPrintForCurrent">列印點名單</el-button>
@@ -380,6 +383,7 @@ import { todayISO, dateToLocalISO } from '@/utils/format'
 import { useActivityAttendanceDrawer } from '@/composables/useActivityAttendanceDrawer'
 import { openPdfInNewTab } from '@/utils/printPdfWindow'
 import { useAcademicTermStore } from '@/stores/academicTerm'
+import { useGridKeyboardNav } from '@/composables/useGridKeyboardNav'
 
 import type { AttendanceStudent, AttendanceStudentGroup } from '@/composables/useActivityAttendanceDrawer'
 import type { ApiBody } from '@/api/_generated/typed'
@@ -409,6 +413,10 @@ function openPrintForCurrent() {
 }
 
 const termStore = useAcademicTermStore()
+
+// flat 模式備註欄網格鍵盤導航容器（v-else 條件渲染 → 用 ref + composable 內 watch immediate 綁定）
+const flatGridRef = ref<HTMLElement | null>(null)
+useGridKeyboardNav(flatGridRef)
 
 const loading = ref(false)
 const sessions = ref<SessionRow[]>([])
