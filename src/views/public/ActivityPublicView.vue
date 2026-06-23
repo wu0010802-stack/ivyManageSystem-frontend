@@ -441,7 +441,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { publicRegister } from '@/api/activityPublic'
+import { publicRegister, getPublicBootstrap } from '@/api/activityPublic'
 import { usePublicActivityOptions } from '@/composables/usePublicActivityOptions'
 import { useActivityRegistrationTime } from '@/composables/useActivityRegistrationTime'
 import { useRegistrationWindow } from '@/composables/useRegistrationWindow'
@@ -468,8 +468,8 @@ const router = useRouter()
 interface CourseOption { name: string; price?: string | number; sessions?: number | string; [key: string]: unknown }
 interface SupplyOption { name: string; price?: string | number; [key: string]: unknown }
 
-const { courses: _courses, supplies: _supplies, classes: _classes, videos: _videos, loading: optionsLoading, loadOptions } = usePublicActivityOptions()
-const { timeInfo, loadTime } = useActivityRegistrationTime()
+const { courses: _courses, supplies: _supplies, classes: _classes, videos: _videos, loading: optionsLoading, applyOptions } = usePublicActivityOptions()
+const { timeInfo, applyTime } = useActivityRegistrationTime()
 const { availability, refresh: refreshAvailability, startPolling, stopPolling } = useActivityAvailability()
 
 // 強型別轉換：composable 回傳 unknown[]，view 用強型別 computed 供模板/函式使用
@@ -578,7 +578,17 @@ const retryingInit = ref(false)
 
 async function runInit() {
   try {
-    await Promise.all([loadTime(), loadOptions(), refreshAvailability()])
+    // 一次取回靜態資料（bootstrap，後端 30s 快取）+ 即時名額；6 支 GET 降為 2 支，
+    // 削報名開放尖峰對單 worker 後端的請求放大（穩定度稽核 2026-06-23）。
+    const [bootRes] = await Promise.all([getPublicBootstrap(), refreshAvailability()])
+    const b = bootRes.data
+    applyOptions({
+      courses: b.courses,
+      supplies: b.supplies,
+      classes: b.classes,
+      videos: b.course_videos,
+    })
+    applyTime(b.registration_time)
     initState.value = 'ready'
     initErrorMessage.value = ''
     if (classes.value.length === 0) {

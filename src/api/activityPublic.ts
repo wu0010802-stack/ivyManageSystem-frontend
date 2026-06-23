@@ -10,6 +10,10 @@ export const getPublicClasses = () =>
   api.get('/activity/public/classes')
 export const getPublicCoursesAvailability = () =>
   api.get('/activity/public/courses/availability')
+// 一次取回報名頁靜態資料（registration-time + courses + supplies + classes +
+// course-videos），取代開頁時並發 5 支 GET（後端 30s 快取，穩定度稽核 2026-06-23）。
+export const getPublicBootstrap = () =>
+  api.get('/activity/public/bootstrap')
 export const publicRegister = (data: unknown) =>
   api.post('/activity/public/register', data)
 export const publicCreateInquiry = (data: unknown) =>
