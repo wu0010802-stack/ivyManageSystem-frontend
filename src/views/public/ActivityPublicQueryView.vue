@@ -442,6 +442,7 @@ import {
   sumCourseFees,
   sumSupplyFees,
 } from '@/utils/activityPricing'
+import type { ApiBody } from '@/api/_generated/typed'
 // FE-3（2026-06-23 audit）：費用預覽改用全站 canonical 金額格式化（千分位 + NaN→「—」），
 // 不再各自 `NT$ {{ x }}`（後端回非數字時會顯示「NT$ NaN」、且無千分位）。
 import { formatCurrency } from '@/utils/currency'
@@ -880,16 +881,11 @@ async function handleSaveChanges() {
 
   editSubmitting.value = true
   try {
-    const coursesPayload = editForm.selectedCourses.map((name) => {
-      const c = courses.value.find((x) => x.name === name)
-      return { name, price: String(c?.price ?? 0) }
-    })
-    const suppliesPayload = editForm.selectedSupplies.map((name) => {
-      const s = supplies.value.find((x) => x.name === name)
-      return { name, price: String(s?.price ?? 0) }
-    })
+    // 契約 PublicCourseItem/PublicSupplyItem 只收 name（價格後端以 DB price_snapshot 為準）
+    const coursesPayload = editForm.selectedCourses.map((name) => ({ name }))
+    const suppliesPayload = editForm.selectedSupplies.map((name) => ({ name }))
 
-    const payload: Record<string, unknown> = {
+    const payload: ApiBody<'/activity/public/update', 'post'> = {
       id: queryResult.value!.id,
       name: queryResult.value!.name,
       birthday: queryResult.value!.birthday || queryForm.birthday,
@@ -897,6 +893,7 @@ async function handleSaveChanges() {
       class: editForm.class_name,
       courses: coursesPayload,
       supplies: suppliesPayload,
+      remark: '',
     }
     if (phoneWillChange) {
       payload.new_parent_phone = newPhoneRaw
