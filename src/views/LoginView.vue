@@ -181,7 +181,7 @@ const handleLogin = async () => {
 .brand-mark {
   width: min(100%, 440px);
   aspect-ratio: 1 / 1;
-  background: url('/images/login-bg.png') center / contain no-repeat;
+  background: url('/images/login-bg.jpg') center / contain no-repeat;
 }
 
 .login-panel {
