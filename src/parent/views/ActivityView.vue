@@ -12,8 +12,7 @@ import {
   myRegistrations,
   registerCourses,
   confirmPromotion,
-  getRegistrationTime,
-  getUpcomingSessions,
+  getActivityBootstrap,
 } from '../api/activity'
 import { toast } from '../utils/toast'
 import { sumOutstanding } from '../utils/activityPayment'
@@ -191,22 +190,24 @@ async function fetchCourses() {
   }
 }
 
-async function fetchUpcoming() {
-  // hero「即將開課」用；靜默失敗（非關鍵區塊，失敗時 upcomingCount 退回 0）
+// 首屏聚合：courses + my-registrations + upcoming-sessions + registration-time
+// 一次取回（取代原本 4 支並行 GET，削報名尖峰對單 worker 後端的請求放大）。
+// 報名/轉正後的局部刷新仍走 fetchMy/fetchCourses。
+async function fetchBootstrap() {
+  regsLoading.value = true
+  coursesLoading.value = true
   try {
-    const { data } = await getUpcomingSessions()
-    upcomingSessions.value = data?.items || []
-  } catch {
-    upcomingSessions.value = []
-  }
-}
-
-async function fetchRegistrationTime() {
-  try {
-    const { data } = await getRegistrationTime()
-    if (data) regTimeInfo.value = data
-  } catch {
-    // 靜默失敗 → 維持 fail-open 預設（不擋報名入口；後端為硬閘）
+    const { data } = await getActivityBootstrap()
+    myRegs.value = data?.registrations?.items || []
+    courses.value = data?.courses?.items || []
+    upcomingSessions.value = data?.upcoming_sessions?.items || []
+    if (data?.registration_time) regTimeInfo.value = data.registration_time
+  } catch (err: unknown) {
+    const e = err as Record<string, unknown>
+    toast.error(String(e?.displayMessage || '載入失敗'))
+  } finally {
+    regsLoading.value = false
+    coursesLoading.value = false
   }
 }
 
@@ -333,14 +334,11 @@ function onScrollSection(key: string) {
 onMounted(async () => {
   await childrenStore.load()
   ensureSelected(childrenStore.items as { student_id: number }[])
-  fetchMy()
-  fetchCourses()
-  fetchRegistrationTime()
-  fetchUpcoming()
+  fetchBootstrap()
 })
 
 async function pullRefresh() {
-  await Promise.all([fetchMy(), fetchCourses(), fetchRegistrationTime(), fetchUpcoming()])
+  await fetchBootstrap()
 }
 </script>
 
