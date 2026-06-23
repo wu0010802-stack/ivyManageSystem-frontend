@@ -127,7 +127,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import {
   createGuardian,
   createGuardianBindingCode,
@@ -136,6 +136,7 @@ import {
   updateGuardian,
 } from '@/api/students'
 import { hasPermission } from '@/utils/auth'
+import { apiError } from '@/utils/error'
 
 const props = defineProps<{ studentId: number }>()
 const emit = defineEmits<{ 'change': [] }>()
@@ -161,8 +162,7 @@ const loading = ref(false)
 const dialogVisible = ref(false)
 const dialogMode = ref('create')
 const saving = ref(false)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const formRef = ref<any>(null)
+const formRef = ref<FormInstance>()
 
 const emptyForm = (): Guardian => ({
   id: null,
@@ -178,7 +178,7 @@ const emptyForm = (): Guardian => ({
 })
 const form = reactive(emptyForm())
 
-const formRules = {
+const formRules: FormRules = {
   name: [{ required: true, message: '請輸入姓名', trigger: 'blur' }],
   phone: [
     {
@@ -187,8 +187,7 @@ const formRules = {
       trigger: 'blur',
     },
   ],
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  email: [{ type: 'email' as any, message: 'Email 格式不正確', trigger: 'blur' }],
+  email: [{ type: 'email', message: 'Email 格式不正確', trigger: 'blur' }],
 }
 
 const primaryGuardian = computed(() => guardians.value.find((g) => g.is_primary) || null)
@@ -198,11 +197,9 @@ async function fetchGuardians() {
   loading.value = true
   try {
     const { data } = await listGuardians(props.studentId)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    guardians.value = (data as any).items || []
+    guardians.value = (data as { items?: Guardian[] }).items || []
   } catch (err) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ElMessage.error((err as any).displayMessage || '讀取監護人失敗')
+    ElMessage.error(apiError(err, '讀取監護人失敗'))
   } finally {
     loading.value = false
   }
@@ -229,7 +226,7 @@ function openEditDialog(row: Guardian) {
 
 async function handleSave() {
   try {
-    await formRef.value.validate()
+    await formRef.value?.validate()
   } catch {
     return
   }
@@ -255,8 +252,7 @@ async function handleSave() {
     await fetchGuardians()
     emit('change')
   } catch (err) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ElMessage.error((err as any).displayMessage || '儲存失敗')
+    ElMessage.error(apiError(err, '儲存失敗'))
   } finally {
     saving.value = false
   }
@@ -278,8 +274,7 @@ async function handleDelete(row: Guardian) {
     await fetchGuardians()
     emit('change')
   } catch (err) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ElMessage.error((err as any).displayMessage || '刪除失敗')
+    ElMessage.error(apiError(err, '刪除失敗'))
   }
 }
 
@@ -306,8 +301,7 @@ async function handleIssueBindingCode(row: Record<string, unknown>) {
       : ''
     bindingCodeVisible.value = true
   } catch (err) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ElMessage.error((err as any).displayMessage || '簽發失敗')
+    ElMessage.error(apiError(err, '簽發失敗'))
   }
 }
 
