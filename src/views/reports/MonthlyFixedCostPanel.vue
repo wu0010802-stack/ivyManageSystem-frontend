@@ -1,16 +1,20 @@
 <script setup lang="ts">
 import { ref, computed, watch, reactive } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   getMonthlyFixedCosts,
   batchUpsertMonthlyFixedCosts,
 } from '@/api/monthlyFixedCost'
 import { apiError } from '@/utils/error'
 import { hasPermission } from '@/utils/auth'
+import { useGridKeyboardNav } from '@/composables/useGridKeyboardNav'
+import { useUnsavedChangesGuard } from '@/composables/useUnsavedChangesGuard'
 
 const props = defineProps<{
   year: number
 }>()
+
+const emit = defineEmits<{ 'update:dirty': [boolean] }>()
 
 const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1)
 
@@ -128,6 +132,47 @@ const dirtyEntries = computed(() => {
 
 const dirtyCount = computed(() => dirtyEntries.value.length)
 
+// emit dirty 狀態給父層（Task 6 ReportsView 用）
+watch(dirtyCount, (n) => emit('update:dirty', n > 0), { immediate: true })
+
+// 原值 getter
+function getOriginal(month: number, category: string): number | null {
+  return cellState.get(cellKey(month, category))?.original ?? null
+}
+
+// 容器 ref 供鍵盤導航使用
+const gridRef = ref<HTMLElement | null>(null)
+useGridKeyboardNav(gridRef)
+useUnsavedChangesGuard(() => dirtyCount.value > 0)
+
+// 原值格式化
+const amountFmt = new Intl.NumberFormat('zh-TW')
+function originalText(month: number, category: string): string {
+  const v = getOriginal(month, category)
+  return v == null ? '—' : amountFmt.format(v)
+}
+
+// 套用到全年：輸入一個金額套用到該類別所有 12 個月
+async function applyToYear(category: string, label: string) {
+  if (!canWrite.value) return
+  try {
+    const result = await ElMessageBox.prompt(
+      `輸入要套用到「${label}」全年 12 個月的金額`,
+      '套用到全年',
+      {
+        inputPattern: /^\d+$/,
+        inputErrorMessage: '請輸入非負整數',
+        confirmButtonText: '套用',
+        cancelButtonText: '取消',
+      },
+    )
+    // prompt 確認時回傳 { value, action }；取消時 reject，不會到此行
+    const inputValue = typeof result === 'object' && 'value' in result ? result.value : ''
+    const amount = Math.trunc(Number(inputValue))
+    for (const m of MONTHS) setCurrent(m, category, amount)
+  } catch { /* 使用者取消 */ }
+}
+
 // 月度合計（read-only 顯示用，跨 8 category 加總）
 function monthTotal(month: number) {
   let sum = 0
@@ -236,7 +281,7 @@ async function saveAll() {
     <div v-else-if="errorMsg && !hasAnyEntry" class="fixed-cost-error">
       <el-empty :description="errorMsg" />
     </div>
-    <div v-else class="fc-scroll">
+    <div v-else ref="gridRef" class="fc-scroll">
       <div v-if="!hasAnyEntry && !loading" class="empty-hint">
         <el-alert
           type="info"
@@ -254,10 +299,19 @@ async function saveAll() {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="c in CATEGORIES" :key="c.key" :data-category="c.key">
-            <th class="sticky-col row-label">{{ c.label }}</th>
+          <tr v-for="(c, ci) in CATEGORIES" :key="c.key" :data-category="c.key">
+            <th class="sticky-col row-label">
+              {{ c.label }}
+              <el-button
+                v-if="canWrite"
+                link
+                size="small"
+                :data-test="`apply-year-${c.key}`"
+                @click="applyToYear(c.key, c.label)"
+              >套用全年</el-button>
+            </th>
             <td
-              v-for="m in MONTHS"
+              v-for="(m, mi) in MONTHS"
               :key="m"
               class="cell-edit"
               :class="{ 'cell-dirty': isDirty(m, c.key) }"
@@ -269,11 +323,18 @@ async function saveAll() {
                 min="0"
                 step="1"
                 class="cell-input"
+                :data-grid-row="ci"
+                :data-grid-col="mi"
                 :value="getCurrent(m, c.key) ?? ''"
                 :disabled="!canWrite || saving"
                 :placeholder="c.defaultAmount != null ? amountFormatter.format(c.defaultAmount) : ''"
                 @input="setCurrent(m, c.key, ($event.target as HTMLInputElement).value)"
               />
+              <span
+                v-if="isDirty(m, c.key)"
+                class="cell-orig"
+                :data-test="`orig-${m}-${c.key}`"
+              >原 {{ originalText(m, c.key) }}</span>
             </td>
             <td class="cell-num col-total" :data-row-total="c.key">
               {{ formatTotal(categoryTotal(c.key)) }}
@@ -414,6 +475,8 @@ async function saveAll() {
   border-color: var(--el-color-warning);
   background: var(--el-color-warning-light-9);
 }
+
+.cell-orig { display: block; font-size: 10px; color: var(--el-text-color-secondary); text-align: right; line-height: 1.2; }
 
 .cell-num {
   text-align: right;
