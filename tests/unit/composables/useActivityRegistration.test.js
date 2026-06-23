@@ -149,6 +149,21 @@ describe('useActivityRegistration', () => {
     expect(batchUpdatePayment).not.toHaveBeenCalled()
   })
 
+  it('batchMarkPaid prompt 要求原因 ≥ 15 字（對齊後端 BatchPaymentUpdate.reason）', async () => {
+    // 後端 BatchPaymentUpdate.reason 硬限 MIN_REFUND_REASON_LENGTH=15；前端 prompt
+    // 過去用 5 字 regex，5-14 字會過前端、被後端 422。
+    const { selectedIds, batchMarkPaid } = useActivityRegistration()
+    selectedIds.value = [1, 2]
+
+    await batchMarkPaid(true)
+
+    const opts = ElMessageBoxPrompt.mock.calls[0][2]
+    expect(opts.inputPattern.test('一二三四五六七八九十一二三四')).toBe(false) // 14 字
+    expect(opts.inputPattern.test('一二三四五六七八九十一二三四五')).toBe(true) // 15 字
+    const message = ElMessageBoxPrompt.mock.calls[0][0]
+    expect(message).toContain('15')
+  })
+
   it('initFromQuery 從 URL query 反序列化篩選條件', () => {
     mockQuery.value = {
       search: '李',

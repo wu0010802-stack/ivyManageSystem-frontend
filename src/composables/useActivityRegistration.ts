@@ -8,6 +8,7 @@ import {
   getClassOptions,
 } from '@/api/activity'
 import { useAcademicTermStore } from '@/stores/academicTerm'
+import { FIELD_RULES, REFUND_REASON_PATTERN } from '@/constants/activity'
 
 /**
  * 封裝才藝報名管理的核心狀態與操作。
@@ -118,13 +119,14 @@ export function useActivityRegistration() {
     let reason = ''
     try {
       const res = await ElMessageBox.prompt(
-        `確定將已選 ${selectedIds.value.length} 筆報名標記為「已繳費」？\n\n系統將自動補齊差額為「系統補齊」付款紀錄。\n\n請輸入操作原因（≥ 5 字，會寫入稽核軌跡）：`,
+        `確定將已選 ${selectedIds.value.length} 筆報名標記為「已繳費」？\n\n系統將自動補齊差額為「系統補齊」付款紀錄。\n\n請輸入操作原因（≥ ${FIELD_RULES.refundReasonMin} 字，會寫入稽核軌跡）：`,
         '批次更新確認',
         {
           type: 'warning',
           confirmButtonText: '確定',
-          inputPattern: /.{5,}/,
-          inputErrorMessage: '原因至少 5 字',
+          // 後端 BatchPaymentUpdate.reason 硬限 MIN_REFUND_REASON_LENGTH=15
+          inputPattern: REFUND_REASON_PATTERN,
+          inputErrorMessage: `原因至少 ${FIELD_RULES.refundReasonMin} 字`,
         }
       )
       reason = ((res as { value?: string })?.value || '').trim()
