@@ -213,9 +213,19 @@ export function usePOSCheckout() {
         for (const item of items) {
           if (seen.has(item.id)) continue
           seen.add(item.id)
-          // 過濾空報名（無 enrolled 課程且無用品），避免後端 unpaid=paid_amount==0 漏擋
+          // 過濾依模式而異（code review P1）：
+          // - 收款模式：丟掉空報名（total<=0，無 enrolled 課程且無用品），避免後端
+          //   unpaid=paid_amount==0 漏擋。
+          // - 退款模式：保留 paid>0（與後端 refundable 口徑一致）。total==0 && paid>0 的
+          //   超繳報名（後端 _derive_payment_status 歸 overpaid）必須留下，否則櫃台在退款
+          //   模式看不到 → 漏退。
           const total = Number(item.total_amount || 0)
-          if (total <= 0) continue
+          const paid = Number(item.paid_amount || 0)
+          if (isRefundMode.value) {
+            if (paid <= 0) continue
+          } else if (total <= 0) {
+            continue
+          }
           merged.push(item)
         }
         merged.sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
