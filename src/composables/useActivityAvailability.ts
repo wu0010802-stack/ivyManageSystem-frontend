@@ -20,20 +20,30 @@ export function useActivityAvailability() {
     }
   }
 
-  function startPolling(intervalMs = 30000) {
+  // trackAge：是否每秒更新 secondsSinceUpdate（給「N 秒前更新」UI 用）。
+  // 兩個公開頁都沒消費 secondsSinceUpdate → 預設 false，不建每秒 tickTimer（省一個 interval）。
+  function startPolling(intervalMs = 30000, { trackAge = false }: { trackAge?: boolean } = {}) {
     availabilityTimer = setInterval(refresh, intervalMs)
-    tickTimer = setInterval(() => {
-      if (lastUpdate.value !== null) {
-        secondsSinceUpdate.value = Math.floor((Date.now() - lastUpdate.value) / 1000)
-      }
-    }, 1000)
+
+    function startTick() {
+      if (!trackAge || tickTimer) return
+      tickTimer = setInterval(() => {
+        if (lastUpdate.value !== null) {
+          secondsSinceUpdate.value = Math.floor((Date.now() - lastUpdate.value) / 1000)
+        }
+      }, 1000)
+    }
+    startTick()
 
     function handleVisibilityChange() {
       if (document.hidden) {
         if (availabilityTimer) { clearInterval(availabilityTimer); availabilityTimer = null }
+        // 隱藏時一併清除 tickTimer（背景頁不需每秒更新秒數）
+        if (tickTimer) { clearInterval(tickTimer); tickTimer = null }
       } else {
         refresh()
         availabilityTimer = setInterval(refresh, intervalMs)
+        startTick()
       }
     }
     document.addEventListener('visibilitychange', handleVisibilityChange)

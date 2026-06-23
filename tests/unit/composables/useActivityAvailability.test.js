@@ -126,6 +126,55 @@ describe('useActivityAvailability', () => {
     Object.defineProperty(document, 'hidden', { value: false, configurable: true })
   })
 
+  it('startPolling 預設 trackAge=false → 不建 tickTimer（secondsSinceUpdate 不隨秒更新）', async () => {
+    vi.useFakeTimers()
+    getPublicCoursesAvailability.mockResolvedValue({ data: {} })
+
+    const { secondsSinceUpdate, startPolling, stopPolling } = useActivityAvailability()
+    startPolling(30000) // 預設不追 age
+    await vi.advanceTimersByTimeAsync(30000) // 觸發一次 refresh → lastUpdate 有值
+
+    // 即使過了數秒，沒有 tickTimer → secondsSinceUpdate 維持 refresh 時設的 0
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(secondsSinceUpdate.value).toBe(0)
+
+    stopPolling()
+  })
+
+  it('startPolling({ trackAge: true }) → 建 tickTimer，secondsSinceUpdate 隨秒遞增', async () => {
+    vi.useFakeTimers()
+    getPublicCoursesAvailability.mockResolvedValue({ data: {} })
+
+    const { secondsSinceUpdate, startPolling, stopPolling } = useActivityAvailability()
+    startPolling(30000, { trackAge: true })
+    await vi.advanceTimersByTimeAsync(30000) // refresh → lastUpdate=now, seconds=0
+
+    await vi.advanceTimersByTimeAsync(3000)
+    expect(secondsSinceUpdate.value).toBeGreaterThanOrEqual(3)
+
+    stopPolling()
+  })
+
+  it('trackAge=true 時頁面隱藏一併清除 tickTimer', async () => {
+    vi.useFakeTimers()
+    getPublicCoursesAvailability.mockResolvedValue({ data: {} })
+
+    const { secondsSinceUpdate, startPolling, stopPolling } = useActivityAvailability()
+    startPolling(30000, { trackAge: true })
+    await vi.advanceTimersByTimeAsync(30000)
+    const snapshot = secondsSinceUpdate.value
+
+    Object.defineProperty(document, 'hidden', { value: true, configurable: true })
+    document.dispatchEvent(new Event('visibilitychange'))
+
+    // hidden 後 tickTimer 已清，秒數不再前進
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(secondsSinceUpdate.value).toBe(snapshot)
+
+    stopPolling()
+    Object.defineProperty(document, 'hidden', { value: false, configurable: true })
+  })
+
   it('stopPolling 同時移除 visibilitychange 監聽器', async () => {
     vi.useFakeTimers()
 

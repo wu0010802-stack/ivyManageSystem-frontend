@@ -41,7 +41,10 @@ const tab = ref('my') // my / new
 const courses = ref<Course[]>([])
 const myRegs = ref<Registration[]>([])
 const upcomingSessions = ref<(UpcomingSessionLike & { course_name?: string })[]>([])
-const loading = ref(false)
+// 報名清單與課程清單各自獨立 loading：共用單一 ref 會讓兩支並行 fetch 互相覆蓋
+// loading 狀態 → 空狀態誤閃。各判各的。
+const regsLoading = ref(false)
+const coursesLoading = ref(false)
 const submitting = ref(false)
 const showRegister = ref(false)
 // FE-1（2026-06-23 audit）：確認轉正式防連點。記錄「正在確認的 reg:course」，
@@ -163,7 +166,7 @@ const formConflictIds = computed(() =>
 )
 
 async function fetchMy() {
-  loading.value = true
+  regsLoading.value = true
   try {
     const { data } = await myRegistrations()
     myRegs.value = data?.items || []
@@ -171,12 +174,12 @@ async function fetchMy() {
     const e = err as Record<string, unknown>
     toast.error(String(e?.displayMessage || '載入失敗'))
   } finally {
-    loading.value = false
+    regsLoading.value = false
   }
 }
 
 async function fetchCourses() {
-  loading.value = true
+  coursesLoading.value = true
   try {
     const { data } = await listCourses()
     courses.value = data?.items || []
@@ -184,7 +187,7 @@ async function fetchCourses() {
     const e = err as Record<string, unknown>
     toast.error(String(e?.displayMessage || '載入失敗'))
   } finally {
-    loading.value = false
+    coursesLoading.value = false
   }
 }
 
@@ -376,7 +379,7 @@ async function pullRefresh() {
           複製連結
         </button>
       </div>
-      <div v-if="!loading && filteredRegs.length === 0" class="pt-empty">
+      <div v-if="!regsLoading && filteredRegs.length === 0" class="pt-empty">
         <div class="pt-empty-title">尚無報名</div>
       </div>
       <RegistrationStatusList
@@ -410,7 +413,7 @@ async function pullRefresh() {
           開始報名
         </button>
       </div>
-      <div v-if="!loading && courses.length === 0" class="pt-empty">
+      <div v-if="!coursesLoading && courses.length === 0" class="pt-empty">
         <div class="pt-empty-title">目前沒有開放的課程</div>
       </div>
       <ActivityCardList v-else :courses="courses" :conflict-ids="conflictCourseIds" />

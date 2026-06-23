@@ -12,7 +12,7 @@
       </el-select>
     </div>
 
-    <el-row :gutter="16" class="stat-cards">
+    <el-row :gutter="16" class="stat-cards" v-loading="loading">
       <el-col :xs="12" :sm="8" :lg="4" v-for="card in statCards" :key="card.label">
         <el-card class="stat-card" shadow="hover">
           <div class="stat-value">{{ card.value }}</div>
@@ -98,7 +98,7 @@
       </el-col>
     </el-row>
 
-    <el-row :gutter="16" class="charts-row" v-if="stats" style="margin-top: 16px;">
+    <el-row :gutter="16" class="charts-row" v-if="stats" v-loading="loading" style="margin-top: 16px;">
       <el-col :xs="24" :md="14">
         <el-card>
           <template #header>每日報名趨勢</template>

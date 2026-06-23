@@ -361,7 +361,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Check, Delete, Printer, Calendar } from '@element-plus/icons-vue'
 import {
@@ -379,6 +379,7 @@ import { hasPermission } from '@/utils/auth'
 import { todayISO, dateToLocalISO } from '@/utils/format'
 import { useActivityAttendanceDrawer } from '@/composables/useActivityAttendanceDrawer'
 import { openPdfInNewTab } from '@/utils/printPdfWindow'
+import { useAcademicTermStore } from '@/stores/academicTerm'
 
 import type { AttendanceStudent, AttendanceStudentGroup } from '@/composables/useActivityAttendanceDrawer'
 import type { ApiBody } from '@/api/_generated/typed'
@@ -406,6 +407,8 @@ async function openPrint(row: { id: number }) {
 function openPrintForCurrent() {
   if (drawerSession.value?.id) openPrint({ id: drawerSession.value.id as unknown as number })
 }
+
+const termStore = useAcademicTermStore()
 
 const loading = ref(false)
 const sessions = ref<SessionRow[]>([])
@@ -574,12 +577,22 @@ function onFilterChange() {
 
 async function loadCourses() {
   try {
-    const res = await getCourses()
+    // 帶當前學期，與他頁 termStore 選定學期一致（否則課程下拉跟後端 current term 走、口徑漂移）。
+    const res = await getCourses({
+      school_year: termStore.school_year,
+      semester: termStore.semester,
+    })
     courses.value = (res.data as { courses?: CourseOption[] })?.courses ?? []
   } catch {
     // silent
   }
 }
+
+// 切換學期時重載課程下拉（比照 ActivityCourseView）
+watch(
+  () => [termStore.school_year, termStore.semester],
+  () => loadCourses(),
+)
 
 function resetFilter() {
   filterCourseId.value = null

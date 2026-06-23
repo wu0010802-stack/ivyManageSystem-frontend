@@ -1,10 +1,4 @@
 import { ref } from 'vue'
-import {
-  getPublicCourses,
-  getPublicSupplies,
-  getPublicClasses,
-  getPublicCourseVideos,
-} from '@/api/activityPublic'
 
 export function usePublicActivityOptions() {
   const courses = ref<unknown[]>([])
@@ -14,7 +8,8 @@ export function usePublicActivityOptions() {
   const loading = ref(false)
   const error = ref<unknown>(null)
 
-  // 共用填值邏輯：個別端點（loadOptions）與 /public/bootstrap 合併端點都用此填入 refs。
+  // 共用填值邏輯：兩公開頁都由 /public/bootstrap 合併端點取資料後用此填入 refs。
+  // （原 loadOptions 的 4 支並行個別 GET 已下線，bootstrap 單支 GET 取代。）
   function applyOptions(payload: {
     courses?: unknown
     supplies?: unknown
@@ -29,29 +24,5 @@ export function usePublicActivityOptions() {
     videos.value = payload.videos ?? {}
   }
 
-  async function loadOptions() {
-    loading.value = true
-    error.value = null
-    try {
-      const [coursesRes, suppliesRes, classesRes, videosRes] = await Promise.all([
-        getPublicCourses(),
-        getPublicSupplies(),
-        getPublicClasses(),
-        getPublicCourseVideos(),
-      ])
-      applyOptions({
-        courses: coursesRes.data,
-        supplies: suppliesRes.data,
-        classes: classesRes.data,
-        videos: videosRes.data,
-      })
-    } catch (e) {
-      error.value = e
-      throw e
-    } finally {
-      loading.value = false
-    }
-  }
-
-  return { courses, supplies, classes, videos, loading, error, loadOptions, applyOptions }
+  return { courses, supplies, classes, videos, loading, error, applyOptions }
 }

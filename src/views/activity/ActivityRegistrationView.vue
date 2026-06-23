@@ -329,6 +329,7 @@
 
     <!-- 新增繳費/退費 Dialog -->
     <RegistrationPaymentDialog
+      v-if="paymentDialogVisible"
       v-model="paymentDialogVisible"
       :type="paymentDialogType"
       :registration-id="detail?.id"
@@ -339,6 +340,7 @@
     />
 
     <RegistrationCreateDialog
+      v-if="createDialogVisible"
       v-model="createDialogVisible"
       :school-year="termStore.school_year"
       :semester="termStore.semester"
@@ -348,6 +350,7 @@
     />
 
     <RegistrationEditBasicDialog
+      v-if="editBasicDialogVisible"
       v-model="editBasicDialogVisible"
       :registration-id="detail?.id"
       :initial="detail || {}"
@@ -357,6 +360,7 @@
 
     <!-- 新增課程 Dialog -->
     <RegistrationAddCourseDialog
+      v-if="addCourseDialogVisible"
       v-model="addCourseDialogVisible"
       :registration-id="detail?.id"
       :course-options="courseOptions"
@@ -365,6 +369,7 @@
     />
 
     <RegistrationAddSupplyDialog
+      v-if="addSupplyDialogVisible"
       v-model="addSupplyDialogVisible"
       :registration-id="detail?.id"
       :school-year="termStore.school_year"
@@ -377,7 +382,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, defineAsyncComponent } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Edit, Link } from '@element-plus/icons-vue'
@@ -402,12 +407,13 @@ import { useCountdownBanner, countdownLabel } from '@/composables/useCountdownBa
 import { formatActivityDate } from '@/utils/format'
 import { hasPermission } from '@/utils/auth'
 import AcademicTermSelector from '@/components/common/AcademicTermSelector.vue'
-import RegistrationPaymentDialog from '@/components/activity/RegistrationPaymentDialog.vue'
-import RegistrationTimeline from '@/components/activity/RegistrationTimeline.vue'
-import RegistrationEditBasicDialog from '@/components/activity/RegistrationEditBasicDialog.vue'
-import RegistrationCreateDialog from '@/components/activity/RegistrationCreateDialog.vue'
-import RegistrationAddCourseDialog from '@/components/activity/RegistrationAddCourseDialog.vue'
-import RegistrationAddSupplyDialog from '@/components/activity/RegistrationAddSupplyDialog.vue'
+// 6 個彈窗/時間軸都綁在 v-model/drawer 後，互動才顯示 → 改 async 拆出主 chunk，加速首載。
+const RegistrationPaymentDialog = defineAsyncComponent(() => import('@/components/activity/RegistrationPaymentDialog.vue'))
+const RegistrationTimeline = defineAsyncComponent(() => import('@/components/activity/RegistrationTimeline.vue'))
+const RegistrationEditBasicDialog = defineAsyncComponent(() => import('@/components/activity/RegistrationEditBasicDialog.vue'))
+const RegistrationCreateDialog = defineAsyncComponent(() => import('@/components/activity/RegistrationCreateDialog.vue'))
+const RegistrationAddCourseDialog = defineAsyncComponent(() => import('@/components/activity/RegistrationAddCourseDialog.vue'))
+const RegistrationAddSupplyDialog = defineAsyncComponent(() => import('@/components/activity/RegistrationAddSupplyDialog.vue'))
 
 type ApiErr = { response?: { data?: { detail?: string }; status?: number } }
 

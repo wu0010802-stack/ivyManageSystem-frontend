@@ -14,10 +14,10 @@ vi.mock('@/api/activityPublic', () => ({
   publicUpdateRegistration: vi.fn(),
   publicConfirmPromotion: vi.fn(),
   publicDeclinePromotion: vi.fn(),
-  getPublicCourses: vi.fn().mockResolvedValue({ data: [] }),
-  getPublicSupplies: vi.fn().mockResolvedValue({ data: [] }),
-  getPublicClasses: vi.fn().mockResolvedValue({ data: [] }),
-  getPublicCourseVideos: vi.fn().mockResolvedValue({ data: {} }),
+  // view 改用 bootstrap 單支 GET 取代 4 支個別 GET（C4 quick win）
+  getPublicBootstrap: vi.fn().mockResolvedValue({
+    data: { courses: [], supplies: [], classes: [], course_videos: {} },
+  }),
   getPublicCoursesAvailability: vi.fn().mockResolvedValue({ data: {} }),
 }))
 
@@ -25,9 +25,16 @@ import {
   publicQueryByToken,
   publicQueryRegistration,
   publicConfirmPromotion,
-  getPublicCourses,
+  getPublicBootstrap,
   getPublicCoursesAvailability,
 } from '@/api/activityPublic'
+
+// 用 bootstrap 設定課程 option（取代原本 mock getPublicCourses）
+function mockBootstrap({ courses = [], supplies = [], classes = ['大班'] } = {}) {
+  getPublicBootstrap.mockResolvedValue({
+    data: { courses, supplies, classes, course_videos: {} },
+  })
+}
 
 // ── 工具 function 型 mock（view 透過具名 import 用）─────────────────────────
 // toggleArrayItem 真實實作（測 toggle 守衛時需要真的不/有改陣列）
@@ -250,8 +257,8 @@ describe('ActivityPublicQueryView — 滿額不開候補課鎖定 + 估費剔除
   beforeEach(() => {
     vi.clearAllMocks()
     // 預設 supplies/classes 空，courses 帶 3 課（含一門 availability=-1 的滿額不候補課）
-    getPublicCourses.mockResolvedValue({
-      data: [
+    mockBootstrap({
+      courses: [
         { name: '美術', price: 3000 },
         { name: '陶藝', price: 2000 },
       ],

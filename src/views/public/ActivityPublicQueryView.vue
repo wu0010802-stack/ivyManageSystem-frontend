@@ -429,6 +429,7 @@ import {
   publicUpdateRegistration,
   publicConfirmPromotion,
   publicDeclinePromotion,
+  getPublicBootstrap,
 } from '@/api/activityPublic'
 import { usePublicActivityOptions } from '@/composables/usePublicActivityOptions'
 import { useActivityAvailability } from '@/composables/useActivityAvailability'
@@ -487,7 +488,20 @@ const TOAST_ICONS: Record<string, string> = {
 interface CourseOption { name: string; price?: string | number; [key: string]: unknown }
 interface SupplyOption { name: string; price?: string | number; [key: string]: unknown }
 
-const { courses: _courses, supplies: _supplies, classes: _classes, loadOptions } = usePublicActivityOptions()
+const { courses: _courses, supplies: _supplies, classes: _classes, applyOptions } = usePublicActivityOptions()
+
+// 此頁僅需 courses/supplies/classes（不用 videos）。用 bootstrap 單支 GET 取代
+// loadOptions 的 4 支並行 GET，削報名尖峰對單 worker 後端的請求放大。
+async function loadOptions() {
+  const res = await getPublicBootstrap()
+  const b = res.data
+  applyOptions({
+    courses: b.courses,
+    supplies: b.supplies,
+    classes: b.classes,
+    videos: b.course_videos,
+  })
+}
 const { availability, refresh: refreshAvailability, startPolling, stopPolling } =
   useActivityAvailability()
 
@@ -816,6 +830,18 @@ function hydrateResult(data: QueryResult) {
     : []
   editForm.new_parent_phone = ''
   newPhoneTouched.value = false
+  // availability 只有「編輯課程」介面才用；查詢階段不輪詢。查詢命中→進入編輯介面時
+  // 才首次抓 availability 並起 30s 輪詢（avoid 查詢頁背景空轉）。
+  ensureAvailabilityPolling()
+}
+
+// availability 輪詢只起一次（家長可能多次重查，prevent 疊加 interval）
+const availabilityPollingStarted = ref(false)
+function ensureAvailabilityPolling() {
+  if (availabilityPollingStarted.value) return
+  availabilityPollingStarted.value = true
+  refreshAvailability()
+  startPolling(30000)
 }
 
 // 用當前 mode 重新查一次（給 stale 409 / 儲存後 refresh 共用）
@@ -950,8 +976,9 @@ onMounted(async () => {
     queryMode.value = 'token'
   }
   try {
-    await Promise.all([loadOptions(), refreshAvailability()])
-    startPolling(30000)
+    // 僅載入課程/用品/班級選項；availability 輪詢延到查詢命中、進入編輯介面才啟動
+    // （ensureAvailabilityPolling，於 hydrateResult），查詢階段不輪詢。
+    await loadOptions()
   } catch (err) {
     showToast((err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || '無法載入頁面資料', 'error')
   }
