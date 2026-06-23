@@ -47,6 +47,7 @@
         :drawer-present-count="drawerPresentCount"
         :drawer-absent-count="drawerAbsentCount"
         :drawer-unmarked-count="drawerUnmarkedCount"
+        :before-close="handleRollcallBeforeClose"
         @set-all-present="setAllPresent"
         @save="handleSave(loadAttendanceSessions)"
       />
@@ -57,7 +58,7 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   getPortalActivityRegistrations,
   getPortalAttendanceSessions,
@@ -123,6 +124,7 @@ const {
   openDrawer,
   setAllPresent,
   handleSave,
+  isDirty,
 } = useActivityAttendanceDrawer({
   getSessionFn: getPortalAttendanceSession as unknown as (...args: unknown[]) => Promise<{ data: { id: unknown; course_name: string; session_date: string; students: { registration_id: unknown; is_present: boolean | null; attendance_notes?: string }[] } }>,
   updateFn: batchUpdatePortalAttendance as unknown as (...args: unknown[]) => Promise<unknown>,
@@ -181,6 +183,24 @@ function ensureAttendanceLoaded() {
 
 function openRollcall(session: { course_id?: number; course_name?: string; [key: string]: unknown }) {
   openDrawer(session as unknown as { id: unknown })
+}
+
+// 未存點名守衛：ESC/X 關閉時若有未儲存的出席/備註異動，先確認再關。
+async function handleRollcallBeforeClose(done: () => void) {
+  if (!isDirty()) {
+    done()
+    return
+  }
+  try {
+    await ElMessageBox.confirm('尚有未儲存點名，確定離開？', '未儲存變更', {
+      type: 'warning',
+      confirmButtonText: '離開',
+      cancelButtonText: '留在此頁',
+    })
+    done()
+  } catch {
+    // 取消：留在 drawer
+  }
 }
 
 function handleTabChange(tab: string | number) {

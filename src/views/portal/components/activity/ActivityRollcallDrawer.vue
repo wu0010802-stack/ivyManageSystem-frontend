@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import type { PropType } from 'vue'
+
+type BeforeCloseFn = (done: () => void) => void
+
 defineProps({
   modelValue: { type: Boolean, required: true },
   drawerTitle: { type: String, default: '點名' },
@@ -9,6 +13,8 @@ defineProps({
   drawerPresentCount: { type: Number, default: 0 },
   drawerAbsentCount: { type: Number, default: 0 },
   drawerUnmarkedCount: { type: Number, default: 0 },
+  // 未存點名守衛：由父層注入（父層持有 isDirty），dirty 時攔截 ESC/X。
+  beforeClose: { type: Function as PropType<BeforeCloseFn>, default: undefined },
 })
 
 defineEmits([
@@ -25,6 +31,7 @@ defineEmits([
     direction="rtl"
     size="460px"
     :close-on-click-modal="false"
+    :before-close="beforeClose"
     @update:model-value="$emit('update:modelValue', $event)"
   >
     <div v-if="drawerLoading" v-loading="true" style="min-height: 200px" />

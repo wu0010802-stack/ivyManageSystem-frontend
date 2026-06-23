@@ -218,6 +218,7 @@
       direction="rtl"
       size="480px"
       :close-on-click-modal="false"
+      :before-close="handleDrawerBeforeClose"
     >
       <div v-if="drawerLoading" v-loading="true" style="min-height: 200px" />
       <template v-else-if="drawerSession">
@@ -464,6 +465,7 @@ const {
   openDrawer: openDrawerRaw,
   setAllPresent,
   handleSave,
+  isDirty,
 } = useActivityAttendanceDrawer({
   // composable 以 unknown-arg 泛型契約定義 getSessionFn/updateFn（其 SessionData 內部
   // 型別與 codegen 後 API 型別不完全一致，如 is_present 的 undefined）；此處為已知邊界。
@@ -478,6 +480,24 @@ const drawerSession = _drawerSession as import('vue').Ref<SessionDetail | null>
 async function openDrawer(row: SessionRow) {
   await openDrawerRaw(row)
   syncActiveGroups()
+}
+
+// 未存點名守衛：ESC/X 關閉時若有未儲存的出席/備註異動，先確認再關。
+async function handleDrawerBeforeClose(done: () => void) {
+  if (!isDirty()) {
+    done()
+    return
+  }
+  try {
+    await ElMessageBox.confirm('尚有未儲存點名，確定離開？', '未儲存變更', {
+      type: 'warning',
+      confirmButtonText: '離開',
+      cancelButtonText: '留在此頁',
+    })
+    done()
+  } catch {
+    // 取消：留在 drawer
+  }
 }
 
 function syncActiveGroups() {
