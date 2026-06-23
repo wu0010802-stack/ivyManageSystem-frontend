@@ -4308,46 +4308,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/dev/employee-salary-debug": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Debug Employee Salary
-         * @description 模擬計算單一員工薪資並回傳完整明細（dev 別名，正式請改打 /api/salaries/employee-salary-debug）。
-         */
-        get: operations["debug_employee_salary_api_dev_employee_salary_debug_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/dev/salary-logic": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Salary Logic
-         * @description 傾印目前的薪資計算邏輯與所有參數設定（dev 別名，正式請改打 /api/salaries/logic）。
-         */
-        get: operations["get_salary_logic_api_dev_salary_logic_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/disciplinary-actions": {
         parameters: {
             query?: never;
@@ -17277,6 +17237,8 @@ export interface components {
             capacity: number;
             /** Description */
             description?: string | null;
+            /** Instructor Name */
+            instructor_name?: string | null;
             /** Max Age Months */
             max_age_months?: number | null;
             /** Meeting End Time */
@@ -17333,6 +17295,8 @@ export interface components {
             description: string;
             /** Id */
             id: number;
+            /** Instructor Name */
+            instructor_name?: string | null;
             /** Name */
             name: string;
             /** Price */
@@ -17389,6 +17353,8 @@ export interface components {
             enrolled: number;
             /** Id */
             id: number;
+            /** Instructor Name */
+            instructor_name?: string | null;
             /** Max Age Months */
             max_age_months?: number | null;
             /** Meeting End Time */
@@ -17460,6 +17426,8 @@ export interface components {
             capacity?: number | null;
             /** Description */
             description?: string | null;
+            /** Instructor Name */
+            instructor_name?: string | null;
             /** Max Age Months */
             max_age_months?: number | null;
             /** Meeting End Time */
@@ -21518,6 +21486,8 @@ export interface components {
             enrolled_count: number;
             /** Id */
             id: number;
+            /** Instructor Name */
+            instructor_name?: string | null;
             /** Is Full */
             is_full: boolean;
             /** Max Age Months */
@@ -21532,6 +21502,8 @@ export interface components {
             min_age_months?: number | null;
             /** Name */
             name: string;
+            /** Next Session Date */
+            next_session_date?: string | null;
             /** Price */
             price?: number | null;
             /** School Year */
@@ -23660,6 +23632,8 @@ export interface components {
         PublicCoursesItemOut: {
             /** Frequency */
             frequency: string;
+            /** Instructor Name */
+            instructor_name?: string | null;
             /** Max Age Months */
             max_age_months?: number | null;
             /** Meeting End Time */
@@ -23672,6 +23646,8 @@ export interface components {
             min_age_months?: number | null;
             /** Name */
             name: string;
+            /** Next Session Date */
+            next_session_date?: string | null;
             /** Price */
             price: number;
             /** Sessions */
@@ -35546,59 +35522,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RunNowOut"];
-                };
-            };
-        };
-    };
-    debug_employee_salary_api_dev_employee_salary_debug_get: {
-        parameters: {
-            query: {
-                employee_id: number;
-                month: number;
-                year: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_salary_logic_api_dev_salary_logic_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
                 };
             };
         };

@@ -103,4 +103,26 @@ describe('ActivityCardList', () => {
     })
     expect(wrapper.find('.course-card-meta').exists()).toBe(false)
   })
+
+  it('顯示講師與下次上課（next_session_date → M/D）', () => {
+    const wrapper = mount(ActivityCardList, {
+      props: {
+        courses: [
+          { ...courses[0], id: 11, instructor_name: '王老師', next_session_date: '2026-06-26' },
+        ],
+      },
+    })
+    const text = wrapper.text()
+    expect(text).toContain('👤 王老師')
+    expect(text).toContain('下次 6/26')
+    expect(wrapper.find('.course-card-meta').exists()).toBe(true)
+  })
+
+  it('僅有講師（無時段/適齡）也渲染 meta 列', () => {
+    const wrapper = mount(ActivityCardList, {
+      props: { courses: [{ ...courses[0], id: 12, instructor_name: '李老師' }] },
+    })
+    expect(wrapper.find('.course-card-meta').exists()).toBe(true)
+    expect(wrapper.text()).toContain('李老師')
+  })
 })
