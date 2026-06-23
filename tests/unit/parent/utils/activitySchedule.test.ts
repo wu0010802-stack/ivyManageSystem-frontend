@@ -6,6 +6,7 @@ import {
   hasScheduleConflict,
   collectBusySlots,
   buildConflictCourseIds,
+  countUpcomingWithinDays,
 } from '@/parent/utils/activitySchedule'
 
 describe('formatWeekday', () => {
@@ -117,5 +118,29 @@ describe('buildConflictCourseIds', () => {
     const ids = buildConflictCourseIds(catalog, busy)
     expect(ids.has(1)).toBe(true)
     expect(ids.has(2)).toBe(false)
+  })
+})
+
+describe('countUpcomingWithinDays', () => {
+  const today = '2026-06-23'
+  const sessions = [
+    { student_id: 1, session_date: '2026-06-23' }, // 今天（窗內）
+    { student_id: 1, session_date: '2026-06-29' }, // +6（窗內）
+    { student_id: 1, session_date: '2026-06-30' }, // +7（含端點，窗內）
+    { student_id: 1, session_date: '2026-07-05' }, // +12（窗外）
+    { student_id: 2, session_date: '2026-06-24' }, // 別的孩子
+  ]
+  it('計入 [today, today+days] 含端點，排除窗外', () => {
+    expect(countUpcomingWithinDays(sessions, { studentId: 1, days: 7, todayISO: today })).toBe(3)
+  })
+  it('studentId 篩選只計該孩子', () => {
+    expect(countUpcomingWithinDays(sessions, { studentId: 2, days: 7, todayISO: today })).toBe(1)
+  })
+  it('studentId 省略時計全部', () => {
+    expect(countUpcomingWithinDays(sessions, { days: 7, todayISO: today })).toBe(4)
+  })
+  it('缺 session_date 不計、空陣列回 0', () => {
+    expect(countUpcomingWithinDays([{ student_id: 1 }], { studentId: 1, days: 7, todayISO: today })).toBe(0)
+    expect(countUpcomingWithinDays([], { days: 7, todayISO: today })).toBe(0)
   })
 })
