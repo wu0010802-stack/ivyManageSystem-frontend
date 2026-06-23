@@ -522,7 +522,13 @@ async function handleSave() {
       await updateCourse(editingId.value, payload)
       ElMessage.success('課程更新成功')
     } else {
-      await createCourse(payload)
+      // 帶上 selector 選定學期：否則後端缺省成當前學期，非當前學期新增會「消失」
+      // 並污染當前學期資料（與 fetchCourses 同樣以 termStore 查詢對齊）
+      await createCourse({
+        ...payload,
+        school_year: termStore.school_year,
+        semester: termStore.semester,
+      })
       ElMessage.success('課程新增成功')
     }
     dialogVisible.value = false

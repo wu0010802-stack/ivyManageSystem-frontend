@@ -99,7 +99,13 @@ async function handleSave() {
       await updateSupply(editingId.value, form.value)
       ElMessage.success('用品更新成功')
     } else {
-      await createSupply(form.value)
+      // 帶上 selector 選定學期：否則後端缺省成當前學期，非當前學期新增會「消失」
+      // 並污染當前學期資料（與 fetchSupplies 同樣以 termStore 查詢對齊）
+      await createSupply({
+        ...form.value,
+        school_year: termStore.school_year,
+        semester: termStore.semester,
+      })
       ElMessage.success('用品新增成功')
     }
     dialogVisible.value = false
