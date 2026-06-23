@@ -31,7 +31,7 @@ import ParentIcon from '../components/ParentIcon.vue'
 import PullToRefresh from '../components/PullToRefresh.vue'
 
 interface RegCourse { course_id: number; course_name: string; status: string; price?: number; price_snapshot?: unknown; meeting_weekday?: number | null; meeting_start_time?: string | null; meeting_end_time?: string | null }
-interface Registration { id: number; student_id: number; student_name?: string; school_year: number; semester: number; is_paid: boolean; total_amount?: number; outstanding_amount?: number; payment_status?: string; courses: RegCourse[] }
+interface Registration { id: number; student_id: number; student_name?: string; school_year: number; semester: number; is_paid: boolean; total_amount?: number; outstanding_amount?: number; payment_status?: string; refunded_amount?: number; courses: RegCourse[] }
 interface Course { id: number; name: string; price?: number; school_year: number; semester: number; capacity: number; enrolled_count: number; is_full: boolean; allow_waitlist: boolean; sessions?: number; description?: string; price_snapshot?: unknown; min_age_months?: number | null; max_age_months?: number | null; meeting_weekday?: number | null; meeting_start_time?: string | null; meeting_end_time?: string | null }
 
 const childrenStore = useChildrenStore()
