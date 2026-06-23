@@ -58,6 +58,36 @@ const STUBS = {
   },
 }
 
+const SESSION_3 = {
+  id: 9,
+  course_name: '陶藝',
+  session_date: '2026-05-20',
+  total: 3,
+  students: [
+    { student_id: 1, student_name: '小明', class_name: '小白兔', is_present: true, attendance_notes: '' },
+    { student_id: 2, student_name: '小華', class_name: '小綠葉', is_present: null, attendance_notes: '' },
+    { student_id: 3, student_name: '阿明', class_name: '小白兔', is_present: null, attendance_notes: '' },
+  ],
+}
+
+function mountWith(extraProps = {}) {
+  return mount(ActivityRollcallDrawer, {
+    props: {
+      modelValue: true,
+      drawerTitle: '點名',
+      drawerLoading: false,
+      drawerSession: SESSION_3,
+      sortedStudents: SESSION_3.students,
+      saveLoading: false,
+      drawerPresentCount: 1,
+      drawerAbsentCount: 0,
+      drawerUnmarkedCount: 2,
+      ...extraProps,
+    },
+    global: { stubs: STUBS, directives: { loading: vLoading } },
+  })
+}
+
 describe('ActivityRollcallDrawer', () => {
   it('passes title prop to drawer', () => {
     const w = mount(ActivityRollcallDrawer, {
@@ -173,6 +203,54 @@ describe('ActivityRollcallDrawer', () => {
     })
     // When loading, session content is not shown
     expect(w.findComponent({ name: 'ElTable' }).exists()).toBe(false)
+  })
+
+  it('搜尋姓名/班級 → displayStudents 過濾（只影響顯示）', async () => {
+    const w = mountWith()
+    expect(w.vm.displayStudents.length).toBe(3)
+    w.vm.searchText = '小白兔' // 班級
+    await w.vm.$nextTick()
+    expect(w.vm.displayStudents.map((s) => s.student_id)).toEqual([1, 3])
+    w.vm.searchText = '阿明' // 姓名
+    await w.vm.$nextTick()
+    expect(w.vm.displayStudents.map((s) => s.student_id)).toEqual([3])
+  })
+
+  it('只看未點名 toggle → 僅顯示 is_present === null', async () => {
+    const w = mountWith()
+    w.vm.onlyUnmarked = true
+    await w.vm.$nextTick()
+    expect(w.vm.displayStudents.map((s) => s.student_id)).toEqual([2, 3])
+  })
+
+  it('搜尋 + 只看未點名 同時生效', async () => {
+    const w = mountWith()
+    w.vm.onlyUnmarked = true
+    w.vm.searchText = '小白兔'
+    await w.vm.$nextTick()
+    // 未點名(2,3) ∩ 班級小白兔(1,3) = 3
+    expect(w.vm.displayStudents.map((s) => s.student_id)).toEqual([3])
+  })
+
+  it('過濾不改動 source（被濾掉的列值保留，儲存不漏）', async () => {
+    const w = mountWith()
+    w.vm.onlyUnmarked = true
+    await w.vm.$nextTick()
+    // 小明(id1, present) 被濾掉，但仍在 sortedStudents source，值不變
+    const src = SESSION_3.students.find((s) => s.student_id === 1)
+    expect(src.is_present).toBe(true)
+    expect(w.props('sortedStudents').length).toBe(3)
+  })
+
+  it('換場次（drawerSession 變）時重置搜尋與 toggle', async () => {
+    const w = mountWith()
+    w.vm.searchText = '小明'
+    w.vm.onlyUnmarked = true
+    await w.vm.$nextTick()
+    await w.setProps({ drawerSession: { ...SESSION_3, id: 99 } })
+    await w.vm.$nextTick()
+    expect(w.vm.searchText).toBe('')
+    expect(w.vm.onlyUnmarked).toBe(false)
   })
 
   it('emits update:modelValue when drawer requests close', async () => {

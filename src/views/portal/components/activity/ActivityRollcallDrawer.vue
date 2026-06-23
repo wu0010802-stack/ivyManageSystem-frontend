@@ -1,14 +1,22 @@
 <script setup lang="ts">
+import { ref, computed, watch } from 'vue'
 import type { PropType } from 'vue'
 
 type BeforeCloseFn = (done: () => void) => void
 
-defineProps({
+interface RollcallStudent {
+  is_present: boolean | null
+  student_name?: string
+  class_name?: string
+  [key: string]: unknown
+}
+
+const props = defineProps({
   modelValue: { type: Boolean, required: true },
   drawerTitle: { type: String, default: '點名' },
   drawerLoading: { type: Boolean, default: false },
   drawerSession: { type: Object, default: null },
-  sortedStudents: { type: Array, default: () => [] },
+  sortedStudents: { type: Array as PropType<RollcallStudent[]>, default: () => [] },
   saveLoading: { type: Boolean, default: false },
   drawerPresentCount: { type: Number, default: 0 },
   drawerAbsentCount: { type: Number, default: 0 },
@@ -22,6 +30,29 @@ defineEmits([
   'set-all-present',  // (value: boolean)
   'save',
 ])
+
+// 顯示用搜尋 / 篩選（只影響顯示，儲存仍以完整 students 為來源，由父層 composable 處理）。
+const searchText = ref('')
+const onlyUnmarked = ref(false)
+
+// 換場次（drawerSession 變）時重置篩選，避免上一場的「只看未點名」殘留。
+watch(() => props.drawerSession, () => {
+  searchText.value = ''
+  onlyUnmarked.value = false
+})
+
+// displayStudents 內的物件為 sortedStudents 同一參考 → v-model 仍直接改原物件，
+// 篩選不會漏存（被濾掉的列其值留在 source，儲存時由父層完整 students 序列化）。
+const displayStudents = computed<RollcallStudent[]>(() => {
+  const q = searchText.value.trim().toLowerCase()
+  return props.sortedStudents.filter((s) => {
+    if (onlyUnmarked.value && s.is_present !== null) return false
+    if (!q) return true
+    const name = String(s.student_name ?? '').toLowerCase()
+    const cls = String(s.class_name ?? '').toLowerCase()
+    return name.includes(q) || cls.includes(q)
+  })
+})
 </script>
 
 <template>
@@ -57,12 +88,30 @@ defineEmits([
         </el-space>
       </div>
 
+      <!-- 即時搜尋 + 只看未點名（僅影響顯示，儲存仍以完整名冊為來源）-->
+      <div class="drawer-filter-bar">
+        <el-input
+          v-model="searchText"
+          size="small"
+          placeholder="搜尋姓名 / 班級"
+          clearable
+          style="flex: 1; min-width: 140px"
+        />
+        <el-switch
+          v-model="onlyUnmarked"
+          size="small"
+          active-text="只看未點名"
+          inline-prompt
+        />
+      </div>
+
       <el-table
-        :data="sortedStudents"
+        :data="displayStudents"
         :row-class-name="({ row }) => row.is_present === null ? 'unmarked-row' : ''"
         border
         style="margin-top: 12px"
         size="small"
+        empty-text="無符合條件的學生"
       >
         <el-table-column label="班級" prop="class_name" width="80" align="center" />
         <el-table-column label="姓名" prop="student_name" min-width="90" />
@@ -108,6 +157,13 @@ defineEmits([
   flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 4px;
+}
+.drawer-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+  flex-wrap: wrap;
 }
 .drawer-actions {
   display: flex;
