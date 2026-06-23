@@ -117,6 +117,15 @@ const ElOption = defineComponent({
   },
 })
 
+const ElInput = defineComponent({
+  name: 'ElInput',
+  props: ['modelValue', 'placeholder', 'size', 'clearable'],
+  emits: ['update:modelValue'],
+  setup(_props, { slots }) {
+    return () => h('input', { class: 'el-input' }, slots.default?.())
+  },
+})
+
 const flushPromises = async () => {
   await Promise.resolve()
   await Promise.resolve()
@@ -134,6 +143,10 @@ const loadComponent = async (googleMapsApiKey = '') => {
 beforeEach(() => {
   delete window.google
   Object.keys(leafletHandlers).forEach((key) => delete leafletHandlers[key])
+  // 預設 fetch mock：未顯式 mock 的測試不打真實網路（jsdom 相對 URL → localhost:3000
+  // ECONNREFUSED）。gov db / preschool feed 為選用，reject 時組件 graceful 降級
+  // （loadGovDbData 等有 catch）；需特定 feed 的測試自行覆蓋 global.fetch。
+  global.fetch = vi.fn(() => Promise.reject(new Error('fetch blocked in test')))
 })
 
 afterEach(() => {
@@ -171,7 +184,7 @@ describe('RecruitmentAddressHeatmap', () => {
         nearbySchoolsMessage: '',
       },
       global: {
-        components: { ElButton, ElEmpty, ElTag, ElSelect, ElOption },
+        components: { ElButton, ElEmpty, ElTag, ElSelect, ElOption, ElInput },
       },
     })
 
@@ -308,7 +321,7 @@ describe('RecruitmentAddressHeatmap', () => {
         nearbySchoolsMessage: '',
       },
       global: {
-        components: { ElButton, ElEmpty, ElTag, ElSelect, ElOption },
+        components: { ElButton, ElEmpty, ElTag, ElSelect, ElOption, ElInput },
       },
     })
 
@@ -415,7 +428,7 @@ describe('RecruitmentAddressHeatmap', () => {
         nearbySchoolsMessage: '',
       },
       global: {
-        components: { ElButton, ElEmpty, ElTag, ElSelect, ElOption },
+        components: { ElButton, ElEmpty, ElTag, ElSelect, ElOption, ElInput },
       },
     })
 
@@ -463,7 +476,7 @@ describe('RecruitmentAddressHeatmap', () => {
         nearbySchoolsMessage: '',
       },
       global: {
-        components: { ElButton, ElEmpty, ElTag, ElSelect, ElOption },
+        components: { ElButton, ElEmpty, ElTag, ElSelect, ElOption, ElInput },
       },
     })
 
@@ -518,7 +531,7 @@ describe('RecruitmentAddressHeatmap', () => {
         nearbySchoolsMessage: '',
       },
       global: {
-        components: { ElButton, ElEmpty, ElTag, ElSelect, ElOption },
+        components: { ElButton, ElEmpty, ElTag, ElSelect, ElOption, ElInput },
       },
     })
 
@@ -585,7 +598,7 @@ describe('RecruitmentAddressHeatmap', () => {
         nearbySchoolsMessage: '',
       },
       global: {
-        components: { ElButton, ElEmpty, ElTag, ElSelect, ElOption },
+        components: { ElButton, ElEmpty, ElTag, ElSelect, ElOption, ElInput },
       },
     })
 
