@@ -1,7 +1,12 @@
 import { ref, computed, watch } from 'vue'
 import type { Ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { getManualEventCounts, batchUpsertManualEventCounts } from '@/api/appraisal'
+import {
+  getManualEventCounts,
+  batchUpsertManualEventCounts,
+  listAppraisalCycles,
+  getAppraisalAllEmployeesStatus,
+} from '@/api/appraisal'
 import { apiError } from '@/utils/error'
 
 export const MANUAL_ITEM_CODES = [
@@ -108,7 +113,53 @@ export function useManualEventEntry(cycleIdRef: Ref<number | null | undefined>) 
     counts.value[key][code] = value
   }
 
+  function getOriginal(pid: string | number, code: string) {
+    return original.value[String(pid)]?.[code] ?? 0
+  }
+
+  async function inheritFromPreviousCycle(
+    currentParticipants: { participant_id?: number | null; employee_id?: number }[],
+  ): Promise<{ applied: number; skipped: number } | null> {
+    const curId = cycleIdRef.value
+    if (!curId) return null
+    // 1. 取全部週期，依 start_date 升冪找出當前的前一個
+    const { data: cyclesRaw } = await listAppraisalCycles()
+    const cycles = (cyclesRaw as { id: number; start_date: string }[]) ?? []
+    const sorted = [...cycles].sort((a, b) => String(a.start_date).localeCompare(String(b.start_date)))
+    const idx = sorted.findIndex((c) => Number(c.id) === Number(curId))
+    if (idx <= 0) return null
+    const prevId = sorted[idx - 1].id
+
+    // 2. 上一週期 participant_id → employee_id
+    const { data: prevStatus } = await getAppraisalAllEmployeesStatus(prevId)
+    const prevParts = (prevStatus as { participants?: { participant_id?: number | null; employee_id?: number }[] }).participants ?? []
+    const prevPidToEmp = new Map<number, number>()
+    for (const p of prevParts) {
+      if (p.participant_id != null && p.employee_id != null) prevPidToEmp.set(Number(p.participant_id), Number(p.employee_id))
+    }
+
+    // 3. 當期 employee_id → 當期 participant_id
+    const empToCurPid = new Map<number, number>()
+    for (const p of currentParticipants) {
+      if (p.participant_id != null && p.employee_id != null) empToCurPid.set(Number(p.employee_id), Number(p.participant_id))
+    }
+
+    // 4. 上一週期手填值，逐筆對映帶入
+    const { data: prevCounts } = await getManualEventCounts(prevId)
+    const entries = (prevCounts as { entries?: { participant_id: number | string; item_code: string; count: number | string }[] }).entries ?? []
+    let applied = 0
+    let skipped = 0
+    for (const e of entries) {
+      const emp = prevPidToEmp.get(Number(e.participant_id))
+      const curPid = emp != null ? empToCurPid.get(emp) : undefined
+      if (curPid == null) { skipped++; continue }
+      setCount(curPid, e.item_code, Number(e.count))
+      applied++
+    }
+    return { applied, skipped }
+  }
+
   watch(cycleIdRef, () => load(), { immediate: true })
 
-  return { counts, dirtyEntries, loading, saving, load, saveAll, getCount, setCount }
+  return { counts, dirtyEntries, loading, saving, load, saveAll, getCount, setCount, getOriginal, inheritFromPreviousCycle }
 }
