@@ -180,7 +180,15 @@ watch(
   }
 )
 
-const isValid = computed(() => !!form.name && !!form.birthday && !!form.class_)
+// 至少一門課程或一項用品（對齊後端 invariant：公開/家長/後台一致），
+// 否則送出會被後端 400 退回。
+const isValid = computed(
+  () =>
+    !!form.name &&
+    !!form.birthday &&
+    !!form.class_ &&
+    (form.courseNames.length > 0 || form.supplyNames.length > 0),
+)
 
 const totalAmount = computed(() => {
   let sum = 0
