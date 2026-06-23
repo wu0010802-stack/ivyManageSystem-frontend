@@ -30,6 +30,8 @@ interface Registration {
   // ④ 後端直接回傳的繳費口徑（_registration_summary）。badge 一律以此渲染。
   payment_status?: string
   outstanding_amount?: number
+  // 已退費累計（後端 refunded 維度）：>0 時顯示「已退費」，區分退過費歸零 vs 從未繳。
+  refunded_amount?: number
   courses: RegCourse[]
 }
 
@@ -59,6 +61,9 @@ const emit = defineEmits<{
         <span class="reg-term">{{ reg.school_year }}-{{ reg.semester === 1 ? '上' : '下' }}</span>
         <span :class="['paid', paymentBadge(reg).tone]">
           {{ paymentBadge(reg).label }}
+        </span>
+        <span v-if="(reg.refunded_amount ?? 0) > 0" class="reg-refunded">
+          已退費 ${{ (reg.refunded_amount ?? 0).toLocaleString() }}
         </span>
       </div>
       <div
@@ -132,6 +137,15 @@ const emit = defineEmits<{
 .paid.warn    { background: var(--pt-tint-money); color: var(--pt-tint-money-fg); }
 /* 免繳（no_fee，全候補 / 0 元）：中性灰，不用警示色避免家長誤以為欠款 */
 .paid.neutral { background: var(--pt-surface-mute, #eef1f4); color: var(--pt-text-muted); }
+
+/* 已退費：緊接付款 badge 後，灰底小字（資訊性，非警示） */
+.reg-refunded {
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  background: var(--pt-surface-mute, #eef1f4);
+  color: var(--pt-text-muted);
+}
 
 /* 童彩報名狀態 chip（courseStatusMap inline style 優先；以下為 token 預設） */
 .course-status[data-status="enrolled"]         { background: var(--pt-tint-calendar); color: var(--pt-tint-calendar-fg); }

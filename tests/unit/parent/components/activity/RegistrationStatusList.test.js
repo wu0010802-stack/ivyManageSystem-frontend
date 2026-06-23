@@ -98,6 +98,45 @@ describe('RegistrationStatusList', () => {
     expect(wrapper.text()).toContain('部分繳費')
   })
 
+  it('refunded_amount>0 顯示「已退費 NT$xxx」（區分退過費歸零 vs 從未繳）', () => {
+    const regs = [
+      {
+        id: 22,
+        student_id: 5,
+        student_name: '退費生',
+        school_year: 113,
+        semester: 1,
+        is_paid: false,
+        payment_status: 'no_fee',
+        refunded_amount: 5000,
+        courses: [{ course_id: 302, course_name: '美術', status: 'enrolled' }],
+      },
+    ]
+    const wrapper = mount(RegistrationStatusList, {
+      props: { registrations: regs, courseStatusMap: COURSE_STATUS },
+    })
+    expect(wrapper.find('.reg-refunded').exists()).toBe(true)
+    expect(wrapper.text()).toContain('已退費 $5,000')
+  })
+
+  it('refunded_amount=0 或缺值不顯示「已退費」', () => {
+    const regs = [
+      {
+        id: 23,
+        student_id: 6,
+        student_name: '一般生',
+        school_year: 113,
+        semester: 1,
+        is_paid: false,
+        courses: [{ course_id: 303, course_name: '直排輪', status: 'enrolled' }],
+      },
+    ]
+    const wrapper = mount(RegistrationStatusList, {
+      props: { registrations: regs, courseStatusMap: COURSE_STATUS },
+    })
+    expect(wrapper.find('.reg-refunded').exists()).toBe(false)
+  })
+
   it('根節點帶 id="act-active" 作為 hero 錨點', () => {
     const wrapper = mount(RegistrationStatusList, {
       props: { registrations, courseStatusMap: COURSE_STATUS },
