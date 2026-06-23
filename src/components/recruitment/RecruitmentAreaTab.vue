@@ -188,8 +188,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-import RecruitmentAddressHeatmap from './RecruitmentAddressHeatmap.vue'
+import { computed, defineAsyncComponent } from 'vue'
+// 1930 行地圖元件 + 3 個 leaflet/markercluster CSS 改 async chunk：
+// 區域分析地圖實際渲染時才載入，不再隨 RecruitmentAreaTab（→ RecruitmentStatsPanel）
+// 的 chunk 一起下載。Leaflet JS 本就 dynamic import，此處補上元件碼與 CSS。
+const RecruitmentAddressHeatmap = defineAsyncComponent(
+  () => import('./RecruitmentAddressHeatmap.vue'),
+)
 import IvyCampusCompetition from './IvyCampusCompetition.vue'
 
 interface DistrictRow {
