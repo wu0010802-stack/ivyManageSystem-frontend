@@ -458,7 +458,8 @@ interface QueryResult {
   paid_amount?: number | string
   updated_at?: string
   courses?: CourseEntry[]
-  supplies?: Array<string | { name: string }>
+  // P2：supplies 回 {name, price}（price=報名當下 price_snapshot）；舊資料容錯為 string。
+  supplies?: Array<string | { name: string; price?: number }>
   field_state?: {
     class_source?: string
     class_editable?: boolean
@@ -638,18 +639,35 @@ function onToggleCourse(courseName: string): void {
 }
 
 // 儲存前費用預覽：估算新應繳並比對已繳，及早警示退費場景。
-// 與後端 /public/update 的 _attach_courses 一致：以「目前」課程/用品價格估算，
-// 候補/promoted_pending 不計費。退費警告以「已繳 > 估算新應繳」為準（與後端 409 一致）。
+// 價格來源須與後端 /public/update 的 diff 更新對齊（code review P2）：未變更的課程/用品
+// 後端保留原列與 price_snapshot（不重抓價），新增品項才以目前 DB 價建立 snapshot。因此
+// 既有品項用 queryResult 回的 snapshot（courses[].price / supplies[].price）估算，新增品項
+// 才用目前 option 價——否則後台調價後，家長保留原品項也會被誤判退費而擋下儲存。
+// 候補/promoted_pending 不計費；退費警告以「已繳 > 估算新應繳」為準（與後端 409 一致）。
 const feePreview = computed(() => {
   if (!queryResult.value) return null
+  const existingCourses = queryResult.value.courses ?? []
+  // 既有用品的 snapshot 價：supplies 回 {name, price}（P2 後端改）；舊資料容錯為 string。
+  const existingSupplyPrice = new Map(
+    (queryResult.value.supplies ?? [])
+      .filter((s): s is { name: string; price?: number } => typeof s !== 'string')
+      .map((s) => [s.name, Number(s.price ?? 0)]),
+  )
   const newCourseTotal = editForm.selectedCourses.reduce((sum, name) => {
     if (estimatedCourseStatus(name) !== 'enrolled') return sum
-    const opt = courses.value.find((c) => c.name === name)
-    return sum + Number(opt?.price ?? 0)
+    const existing = existingCourses.find((c) => c.name === name)
+    const price = existing
+      ? Number(existing.price ?? 0)
+      : Number(courses.value.find((c) => c.name === name)?.price ?? 0)
+    return sum + price
   }, 0)
   const newSupplyTotal = editForm.selectedSupplies.reduce((sum, name) => {
-    const opt = supplies.value.find((s) => s.name === name)
-    return sum + Number(opt?.price ?? 0)
+    const snap = existingSupplyPrice.get(name)
+    const price =
+      snap !== undefined
+        ? snap
+        : Number(supplies.value.find((s) => s.name === name)?.price ?? 0)
+    return sum + price
   }, 0)
   const newTotal = newCourseTotal + newSupplyTotal
   const originalTotal = Number(queryResult.value.total_amount || 0)

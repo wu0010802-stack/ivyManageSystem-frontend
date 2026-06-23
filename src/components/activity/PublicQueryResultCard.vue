@@ -31,7 +31,12 @@
     </div>
     <div v-if="registration.supplies?.length" class="supply-list">
       <div class="supply-list-title">用品</div>
-      <span v-for="s in registration.supplies" :key="s" class="supply-chip">{{ s }}</span>
+      <span
+        v-for="s in registration.supplies"
+        :key="typeof s === 'string' ? s : s.name"
+        class="supply-chip"
+        >{{ typeof s === 'string' ? s : s.name }}</span
+      >
     </div>
     <div v-if="registration.remark" class="result-notes">備註：{{ registration.remark }}</div>
     <div class="query-actions">
@@ -58,7 +63,8 @@ interface Registration {
   total_amount?: number
   paid_amount?: number
   courses: CourseItem[]
-  supplies?: string[]
+  // P2：supplies 回 {name, price}；容錯舊 string 形狀。
+  supplies?: Array<string | { name: string; price?: number }>
   remark?: string
   [key: string]: unknown
 }

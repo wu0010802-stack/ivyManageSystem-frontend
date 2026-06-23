@@ -1,0 +1,123 @@
+import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { mount } from '@vue/test-utils'
+
+// code review P2：儲存前退費預警（feePreview / wouldOverpay / saveBlocked）的價格來源。
+// 後端 /public/update 是 diff 更新——未變更課程/用品保留原 price_snapshot，不會退費。
+// 前端 feePreview 原本對「所有」已選課程/用品都用目前 option 價估算，後台調降價後，家長
+// 即使保留原品項也會被誤判 newTotal < paid → wouldOverpay 擋下儲存。
+// 修法：既有品項用 queryResult 回的 price_snapshot（課程 courses[].price、用品
+// supplies[].price），新增品項才用目前 option 價，與後端 diff 行為對齊。
+
+vi.mock('vue-router', () => ({
+  useRoute: () => ({ query: {} }),
+}))
+
+vi.mock('@/api/activityPublic', () => ({
+  publicQueryByToken: vi.fn(),
+  publicQueryRegistration: vi.fn(),
+  publicUpdateRegistration: vi.fn(),
+  publicConfirmPromotion: vi.fn(),
+  publicDeclinePromotion: vi.fn(),
+  getPublicCourses: vi.fn().mockResolvedValue({ data: [] }),
+  getPublicSupplies: vi.fn().mockResolvedValue({ data: [] }),
+  getPublicClasses: vi.fn().mockResolvedValue({ data: [] }),
+  getPublicCourseVideos: vi.fn().mockResolvedValue({ data: {} }),
+  getPublicCoursesAvailability: vi.fn().mockResolvedValue({ data: {} }),
+}))
+
+import {
+  publicQueryByToken,
+  getPublicCourses,
+  getPublicSupplies,
+  getPublicCoursesAvailability,
+} from '@/api/activityPublic'
+
+vi.mock('@/utils/arrayUtils', () => ({
+  toggleArrayItem: (arr, item) => {
+    const i = arr.indexOf(item)
+    if (i >= 0) arr.splice(i, 1)
+    else arr.push(item)
+  },
+}))
+
+const mountView = async () => {
+  const ActivityPublicQueryView = (await import('../ActivityPublicQueryView.vue')).default
+  return mount(ActivityPublicQueryView, {
+    global: { stubs: ['router-link', 'router-view'] },
+  })
+}
+
+async function triggerTokenQuery(wrapper) {
+  const tabs = wrapper.findAll('.mode-tab')
+  await tabs[0].trigger('click')
+  wrapper.vm.queryForm.token = 'TESTTOKEN123'
+  wrapper.vm.queryForm.parent_phone = '0912345678'
+  await wrapper.vm.$nextTick()
+  await wrapper.find('[data-test="query-submit"]').trigger('click')
+  await new Promise((r) => setTimeout(r, 0))
+}
+
+describe('ActivityPublicQueryView — 退費預警價格來源（P2）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('既有課程+用品的 option 價被後台調降後保留原品項，仍用 snapshot 估算、不誤擋儲存', async () => {
+    // 後台把美術 option 由 3000 降到 2000、彩色筆由 300 降到 100
+    getPublicCourses.mockResolvedValue({ data: [{ name: '美術', price: 2000 }] })
+    getPublicSupplies.mockResolvedValue({ data: [{ name: '彩色筆', price: 100 }] })
+    getPublicCoursesAvailability.mockResolvedValue({ data: { 美術: 5 } })
+    // query 回報名當下的 snapshot：美術 3000、彩色筆 300，已繳 3300
+    publicQueryByToken.mockResolvedValue({
+      data: {
+        id: 1,
+        name: '王小明',
+        birthday: '2020-01-01',
+        class_name: '大班',
+        courses: [{ course_id: 1, name: '美術', status: 'enrolled', price: 3000 }],
+        supplies: [{ name: '彩色筆', price: 300 }],
+        total_amount: 3300,
+        paid_amount: 3300,
+      },
+    })
+
+    const wrapper = await mountView()
+    await triggerTokenQuery(wrapper)
+
+    // 既有品項沿用 snapshot（3000 + 300），不是被調降後的 option 價（2000 + 100）
+    expect(wrapper.vm.feePreview.newTotal).toBe(3300)
+    expect(wrapper.vm.feePreview.wouldOverpay).toBe(false)
+    expect(wrapper.vm.saveBlocked).toBe(false)
+  })
+
+  it('新增的用品用目前 option 價（snapshot 不存在於既有報名）', async () => {
+    getPublicCourses.mockResolvedValue({ data: [{ name: '美術', price: 3000 }] })
+    getPublicSupplies.mockResolvedValue({ data: [{ name: '畫具', price: 500 }] })
+    getPublicCoursesAvailability.mockResolvedValue({ data: { 美術: 5 } })
+    // 原報名只有美術（snapshot 3000），無任何用品，已繳 3000
+    publicQueryByToken.mockResolvedValue({
+      data: {
+        id: 1,
+        name: '王小明',
+        birthday: '2020-01-01',
+        class_name: '大班',
+        courses: [{ course_id: 1, name: '美術', status: 'enrolled', price: 3000 }],
+        supplies: [],
+        total_amount: 3000,
+        paid_amount: 3000,
+      },
+    })
+
+    const wrapper = await mountView()
+    await triggerTokenQuery(wrapper)
+
+    // 家長新增畫具（原報名沒有 → 用目前 option 價 500）
+    wrapper.vm.editForm.selectedSupplies.push('畫具')
+    await wrapper.vm.$nextTick()
+
+    // 既有課程 snapshot 3000 + 新增用品 option 價 500
+    expect(wrapper.vm.feePreview.newTotal).toBe(3500)
+    expect(wrapper.vm.feePreview.additionalDue).toBe(500)
+    expect(wrapper.vm.saveBlocked).toBe(false)
+  })
+})
