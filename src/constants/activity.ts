@@ -57,8 +57,14 @@ export const FIELD_RULES = {
   emailMax: 200,
   remarkMax: 500,
   paymentAmountMax: 999999,
+  // 軟刪 payment（VoidPaymentRequest）原因門檻：後端 MIN_VOID_REASON_LENGTH=5
   voidReasonMin: 5,
   voidReasonMax: 200,
+  // 退費 / 自動沖帳 / 批次補齊原因門檻：後端 MIN_REFUND_REASON_LENGTH=15
+  // （require_refund_reason / BatchPaymentUpdate.reason / AddPaymentRequest）。
+  // 嚴於軟刪，因退費直接影響財務流水；勿與 voidReasonMin 混用。
+  refundReasonMin: 15,
+  refundReasonMax: 200,
   unlockReasonMin: 10,
 }
 
@@ -66,6 +72,25 @@ export const FIELD_RULES = {
 export const VOID_REASON_PATTERN = new RegExp(
   `.{${FIELD_RULES.voidReasonMin},${FIELD_RULES.voidReasonMax}}`
 )
+
+// 退費 / 自動沖帳 / 批次補齊原因的正則（≥15 字 ≤200 字，對齊後端 15 字硬限）
+export const REFUND_REASON_PATTERN = new RegExp(
+  `.{${FIELD_RULES.refundReasonMin},${FIELD_RULES.refundReasonMax}}`
+)
+
+// 自動沖帳（force refund）二次確認 prompt 的共用設定：退課 / 刪報名 / 移除用品三處
+// 沖帳原因規則完全相同，僅 confirmButtonText 不同。集中此處避免三處各自誤用
+// voidReasonMin(5) 而被後端 15 字硬限 422。
+export function forceRefundReasonPromptOptions(confirmButtonText: string) {
+  return {
+    type: 'warning' as const,
+    confirmButtonText,
+    cancelButtonText: '取消',
+    inputPattern: REFUND_REASON_PATTERN,
+    inputErrorMessage: `原因必須 ${FIELD_RULES.refundReasonMin}-${FIELD_RULES.refundReasonMax} 個字，不可敷衍`,
+    confirmButtonClass: 'el-button--danger',
+  }
+}
 
 // 解鎖日結原因的正則（≥10 字）
 export const UNLOCK_REASON_PATTERN = new RegExp(

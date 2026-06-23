@@ -392,7 +392,7 @@ import { useAcademicTermStore } from '@/stores/academicTerm'
 import {
   PAYMENT_STATUS_TAG_TYPE, PAYMENT_STATUS_LABEL,
   COURSE_STATUS_TAG_TYPE, COURSE_STATUS_LABEL,
-  FIELD_RULES, VOID_REASON_PATTERN,
+  FIELD_RULES, VOID_REASON_PATTERN, forceRefundReasonPromptOptions,
 } from '@/constants/activity'
 import { useActivityRegistration } from '@/composables/useActivityRegistration'
 import { useCountdownBanner, countdownLabel } from '@/composables/useCountdownBanner'
@@ -698,7 +698,7 @@ async function doWithdrawCourse(course: RegistrationCourse, forceRefund: boolean
     fetchList()
   } catch (e) {
     // 409：退課後將超繳，需二次確認以 force_refund=true 自動沖帳；
-    // 後端要求自動沖帳必填 refund_reason（≥5 字），故此處用 prompt 收原因。
+    // 後端要求自動沖帳必填 refund_reason（≥15 字），故此處用 prompt 收原因。
     const err = e as ApiErr
     if (err?.response?.status === 409 && !forceRefund) {
       const detailMsg = err?.response?.data?.detail || '退課將產生超繳'
@@ -706,15 +706,9 @@ async function doWithdrawCourse(course: RegistrationCourse, forceRefund: boolean
       try {
         reasonResult = (await ElMessageBox.prompt(
           `${detailMsg}\n\n按「確認退課並沖帳」後會自動寫一筆退費沖帳紀錄（付款方式：系統補齊），原繳費歷史保留。` +
-            `\n\n請輸入沖帳原因（至少 ${FIELD_RULES.voidReasonMin} 字，會寫入退費紀錄供稽核）：`,
+            `\n\n請輸入沖帳原因（至少 ${FIELD_RULES.refundReasonMin} 字，會寫入退費紀錄供稽核）：`,
           '需要確認自動沖帳',
-          {
-            type: 'warning',
-            confirmButtonText: '確認退課並沖帳',
-            cancelButtonText: '取消',
-            inputPattern: VOID_REASON_PATTERN,
-            inputErrorMessage: `原因必須 ${FIELD_RULES.voidReasonMin}-${FIELD_RULES.voidReasonMax} 個字，不可敷衍`,
-          }
+          forceRefundReasonPromptOptions('確認退課並沖帳')
         )) as { value: string }
       } catch {
         withdrawingCourseId.value = null
@@ -752,7 +746,7 @@ async function doDeleteRegistration(row: RegistrationRow, forceRefund: boolean, 
     fetchList()
   } catch (e) {
     // 409：報名尚有已繳金額，需二次確認以 force_refund=true 自動沖帳；
-    // 後端要求自動沖帳必填 refund_reason（≥5 字），故此處用 prompt 收原因。
+    // 後端要求自動沖帳必填 refund_reason（≥15 字），故此處用 prompt 收原因。
     const err = e as ApiErr
     if (err?.response?.status === 409 && !forceRefund) {
       const detailMsg = err?.response?.data?.detail || '報名尚有已繳金額'
@@ -760,16 +754,9 @@ async function doDeleteRegistration(row: RegistrationRow, forceRefund: boolean, 
       try {
         reasonResult = (await ElMessageBox.prompt(
           `${detailMsg}\n\n按「確認刪除並沖帳」後會自動寫退費沖帳紀錄（付款方式：系統補齊），原繳費歷史保留。` +
-            `\n\n請輸入沖帳原因（至少 ${FIELD_RULES.voidReasonMin} 字，會寫入退費紀錄供稽核）：`,
+            `\n\n請輸入沖帳原因（至少 ${FIELD_RULES.refundReasonMin} 字，會寫入退費紀錄供稽核）：`,
           '需要確認自動沖帳',
-          {
-            type: 'warning',
-            confirmButtonText: '確認刪除並沖帳',
-            cancelButtonText: '取消',
-            inputPattern: VOID_REASON_PATTERN,
-            inputErrorMessage: `原因必須 ${FIELD_RULES.voidReasonMin}-${FIELD_RULES.voidReasonMax} 個字，不可敷衍`,
-            confirmButtonClass: 'el-button--danger',
-          }
+          forceRefundReasonPromptOptions('確認刪除並沖帳')
         )) as { value: string }
       } catch {
         deletingRegistrationId.value = null
@@ -927,7 +914,7 @@ async function doRemoveSupply(row: RegistrationSupply, forceRefund: boolean, ref
     fetchList()
   } catch (e) {
     // 409：移除用品後將超繳，需二次確認以 force_refund=true 自動沖帳；
-    // 後端要求自動沖帳必填 refund_reason（≥5 字），故此處用 prompt 收原因。
+    // 後端要求自動沖帳必填 refund_reason（≥15 字），故此處用 prompt 收原因。
     const err = e as ApiErr
     if (err?.response?.status === 409 && !forceRefund) {
       const detailMsg = err?.response?.data?.detail || '移除用品將產生超繳'
@@ -935,16 +922,9 @@ async function doRemoveSupply(row: RegistrationSupply, forceRefund: boolean, ref
       try {
         reasonResult = (await ElMessageBox.prompt(
           `${detailMsg}\n\n按「確認移除並沖帳」後會自動寫一筆退費沖帳紀錄（付款方式：系統補齊），原繳費歷史保留。` +
-            `\n\n請輸入沖帳原因（至少 ${FIELD_RULES.voidReasonMin} 字，會寫入退費紀錄供稽核）：`,
+            `\n\n請輸入沖帳原因（至少 ${FIELD_RULES.refundReasonMin} 字，會寫入退費紀錄供稽核）：`,
           '需要確認自動沖帳',
-          {
-            type: 'warning',
-            confirmButtonText: '確認移除並沖帳',
-            cancelButtonText: '取消',
-            inputPattern: VOID_REASON_PATTERN,
-            inputErrorMessage: `原因必須 ${FIELD_RULES.voidReasonMin}-${FIELD_RULES.voidReasonMax} 個字，不可敷衍`,
-            confirmButtonClass: 'el-button--danger',
-          }
+          forceRefundReasonPromptOptions('確認移除並沖帳')
         )) as { value: string }
       } catch {
         deletingSupplyId.value = null
