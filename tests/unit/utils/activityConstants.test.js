@@ -36,10 +36,15 @@ describe('activity constants', () => {
   })
 
   describe('PAYMENT_METHODS', () => {
-    it('包含現金、轉帳、其他', () => {
-      expect(PAYMENT_METHODS).toContain('現金')
-      expect(PAYMENT_METHODS).toContain('轉帳')
-      expect(PAYMENT_METHODS).toContain('其他')
+    // Finding (P2)：後端才藝 POS 為 cash-only（payment_method: Literal["現金"]）。
+    // 前端原本提供「轉帳/其他」，使用者選非現金送出會 422。收斂成只剩現金，
+    // 與後端契約對齊；未來後端支援多付款方式時再加回。
+    it('cash-only：只含現金', () => {
+      expect(PAYMENT_METHODS).toEqual(['現金'])
+    })
+    it('不再提供轉帳/其他（後端會 422）', () => {
+      expect(PAYMENT_METHODS).not.toContain('轉帳')
+      expect(PAYMENT_METHODS).not.toContain('其他')
     })
   })
 })

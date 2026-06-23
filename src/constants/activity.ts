@@ -33,7 +33,9 @@ export const COURSE_STATUS_LABEL = {
   promoted_pending: '待家長確認',
 }
 
-export const PAYMENT_METHODS = ['現金', '轉帳', '其他']
+// 後端才藝 POS 為 cash-only（payment_method: Literal["現金"]）；選非現金送出會 422。
+// 收斂成只剩現金與後端契約對齊；未來後端支援多付款方式時再加回轉帳/其他。
+export const PAYMENT_METHODS = ['現金']
 
 export const APPROVAL_STATUS_LABEL = {
   fully_approved:     '已簽核',
