@@ -55,7 +55,7 @@ const pendingSignCount = computed(() => {
 
 // 學費：summary.fees.outstanding_count（筆數）+ outstanding（金額）
 const feesInfo = computed(() => {
-  const fees = (summary.value as { fees?: { outstanding_count?: number; outstanding?: number; overdue?: number } } | null)?.fees
+  const fees = (summary.value as { fees?: { outstanding_count?: number; outstanding?: number; overdue?: number } } | null)?.fees // TODO(ts-strict): waiting on backend response_model
   if (!fees || !fees.outstanding_count) return null
   return {
     count: fees.outstanding_count,
@@ -152,23 +152,38 @@ const hero = computed(() => {
     if (children.value.length > 0) return null
     return {
       kind: 'empty',
-      label: '尚未綁定子女',
-      note: '可從「我的」分頁加綁，或請園所協助。',
+      title: '尚未綁定子女',
+      sub: '可從「我的」分頁加綁，或請園所協助。',
+      statusLabel: null as string | null,
+      statusTone: 'neutral' as const,
     }
   }
   if (tc.length === 1) {
     const c = tc[0]
+    // title = 孩子姓名（來自 home-summary selectedChild），sub = 班級，statusLabel = 出席狀態
+    const name = (selectedChild.value?.name ?? (c as { name?: string }).name) || '孩子'
+    const classroom = (selectedChild.value?.classroom_name ?? (c as { classroom_name?: string }).classroom_name) || null
+    const statusLabel = childStatusLabel(c)
     return {
       kind: 'single',
-      label: childStatusLabel(c),
-      note: [c.name, c.classroom_name].filter(Boolean).join('　·　') || null,
+      title: name,
+      sub: classroom,
+      statusLabel,
+      statusTone: childStatusTone(statusLabel),
     }
   }
-  // 多寶家庭：顯示 selected 單孩 status，ChildContextHeader 自行顯示姓名/班級
+  // 多寶家庭：title = selected 孩子姓名，sub = 班級，statusLabel = 該孩出席狀態
+  // ChildContextHeader 已改為多孩才顯示，不在此重複孩子名
+  const sc = selectedChild.value
+  const name = sc?.name || '孩子'
+  const classroom = sc?.classroom_name || null
+  const statusLabel = childStatusLabel(selectedTodayChild.value)
   return {
     kind: 'multi',
-    label: childStatusLabel(selectedTodayChild.value),
-    note: null,
+    title: name,
+    sub: classroom,
+    statusLabel,
+    statusTone: childStatusTone(statusLabel),
   }
 })
 
@@ -198,24 +213,25 @@ function go(path: string) {
     <!-- 頂部 Bento Hero：孩子姓名/班級 + 今日出席狀態 -->
     <div class="today-head">
       <p class="today-date">{{ todayDateLine }}</p>
-      <ChildContextHeader v-if="children.length >= 1" variant="hero" class="today-cch" />
+      <!-- 多孩才顯示 ChildContextHeader；單孩姓名已由 DashboardHero title 呈現 -->
+      <ChildContextHeader v-if="children.length > 1" variant="hero" class="today-cch" />
 
       <!-- empty 態：尚未綁定子女 -->
       <template v-if="hero?.kind === 'empty'">
         <DashboardHero
-          :title="hero.label"
-          :sub="hero.note ?? undefined"
+          :title="hero.title"
+          :sub="hero.sub ?? undefined"
           class="today-hero-card"
         />
       </template>
 
-      <!-- single / multi 態：使用 DashboardHero 顯示孩子狀態 -->
+      <!-- single / multi 態：title = 孩子姓名，sub = 班級，status-label = 出席狀態 -->
       <template v-else-if="hero">
         <DashboardHero
-          :title="hero.label"
-          :sub="hero.note ?? undefined"
-          :status-label="hero.label"
-          :status-tone="childStatusTone(hero.label)"
+          :title="hero.title"
+          :sub="hero.sub ?? undefined"
+          :status-label="hero.statusLabel ?? undefined"
+          :status-tone="hero.statusTone"
           class="today-hero-card"
         />
       </template>
