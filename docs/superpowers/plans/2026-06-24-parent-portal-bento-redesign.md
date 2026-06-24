@@ -138,16 +138,21 @@
 
 - [ ] **Step 4: 文件化綠色雙階分工**。在 `globals.css` 的 brand 區塊（line 122-134）註解補一行說明：`/* Bento: --brand-primary(#0d9053) 僅大面積/hero/裝飾；M3 filled 按鈕/小字綠底用 --m3-primary(#006d3d, AA)。勿把 --m3-primary 壓成 #0d9053（白字掉到 4.1:1 未過 AA normal text）。 */`
 
-- [ ] **Step 5: 驗證**
-  - Run: `npm run parent:audit` → Expected: pass（未引入裸 hex 到 views/components）
+- [ ] **Step 5: 修 3 個 pre-existing parent:audit 違規（基線轉綠）**。執行時基線 `parent:audit` 已紅（非本次改動造成），需先修使後續 gate 有意義。各以 `var(--token, #fallback)` 包裝（audit 放行 `var()` 內 hex）：
+  - `src/parent/views/MessagesView.vue:330`：`color: #fff;` → `color: var(--m3-on-primary, #fff);`
+  - `src/parent/views/MeView.vue:342`：`color: #fff;` → `color: var(--m3-on-primary, #fff);`
+  - `src/parent/views/MaintenanceView.vue:114`：`background: #00838f;` → `background: var(--mv-header-bg, #00838f);`（MaintenanceView 整頁青色於 Task 13 再正式 token 化，此處僅讓 audit 過綠、視覺不變）
+
+- [ ] **Step 6: 驗證**
+  - Run: `npm run parent:audit` → Expected: **pass**（基線 3 違規已修、未引入新裸 hex）
   - Run: `npm run build` → Expected: 成功
   - 視覺 sanity：啟 dev server 或 mount 任一既有 view，確認底色變冷調 slate、卡片白底、文字深 slate、品牌綠按鈕仍綠。
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add src/assets/design-tokens.css src/parent/styles/globals.css
-git commit -m "feat(parent): 冷調石板灰 surface token + spacing 補號（Bento P0）"
+git add src/assets/design-tokens.css src/parent/styles/globals.css src/parent/views/MessagesView.vue src/parent/views/MeView.vue src/parent/views/MaintenanceView.vue
+git commit -m "feat(parent): 冷調石板灰 surface token + spacing 補號 + 基線 audit 轉綠（Bento P0）"
 ```
 
 ---
@@ -644,7 +649,7 @@ defineProps<{
 ```
 
 - [ ] **Step 3**：跑測試確認失敗（紅，證 bug 存在）→ FAIL
-- [ ] **Step 4**：實作：加 `loadError` ref；fetch catch 設 `loadError=true`；template 三態優先序改 `loading → error → empty → list`（error 渲染 `MobileErrorRetry :on-retry`）。順手把 `.badge` 的 `color: #fff`(L330) 改 `var(--m3-on-primary, #fff)`。
+- [ ] **Step 4**：實作：加 `loadError` ref；fetch catch 設 `loadError=true`；template 三態優先序改 `loading → error → empty → list`（error 渲染 `MobileErrorRetry :on-retry`）。（註：`.badge` 的 `color: #fff` L330 已於 Task 1 改成 token，不需再動。）
 - [ ] **Step 5**：跑測試確認通過 → PASS
 - [ ] **Step 6: Commit** — `git commit -m "fix(parent): 訊息頁載入失敗顯示錯誤態（修落空態 bug，Bento P4）"`
 
