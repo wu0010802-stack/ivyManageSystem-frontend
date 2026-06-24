@@ -112,7 +112,9 @@ describe('portal api', () => {
   it('getMyStudents hits /portal/my-students', async () => {
     api.get.mockResolvedValue({ data: [] })
     await getMyStudents()
-    expect(api.get).toHaveBeenCalledWith('/portal/my-students')
+    // 收斂為 codegen 型別後統一帶 { params }（classroom_id 為 optional query）；
+    // 無參數時 params 為 undefined，axios 會忽略，行為等同原本不帶 query。
+    expect(api.get).toHaveBeenCalledWith('/portal/my-students', { params: undefined })
   })
 
   it('getPortalStudentDetail hits /portal/students/{id}/detail', async () => {
