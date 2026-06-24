@@ -376,4 +376,57 @@ describe('ChildProfileView — 主 profile 載入三態（Task 12）', () => {
 
     w.unmount()
   })
+
+  it('profile 載入失敗時顯示 MobileErrorRetry，不空白降級', async () => {
+    getChildProfileMock.mockRejectedValue({ displayMessage: '連線失敗' })
+    fetchChildPhotosMock.mockResolvedValue({ data: { items: [] } })
+    timelineItemsRef.value = []
+    timelineLoadingRef.value = false
+
+    setActivePinia(createPinia())
+    const ChildProfileView = (await import('@/parent/views/ChildProfileView.vue')).default
+    const w = mount(ChildProfileView, {
+      global: { stubs: STUBS },
+    })
+    await flushPromises()
+
+    // data 未載入 → child-hero 不應顯示
+    expect(w.find('.child-hero').exists()).toBe(false)
+    // 應顯示 MobileErrorRetry 而非空白
+    const errComp = w.findComponent({ name: 'MobileErrorRetry' })
+    expect(errComp.exists()).toBe(true)
+
+    w.unmount()
+  })
+
+  it('profile 錯誤重試：點 MobileErrorRetry 按鈕觸發 fetchData 再次呼叫', async () => {
+    // 第一次 reject，第二次 resolve
+    getChildProfileMock
+      .mockRejectedValueOnce({ displayMessage: '連線失敗' })
+      .mockResolvedValueOnce(SUCCESS_PROFILE)
+    fetchChildPhotosMock.mockResolvedValue(SUCCESS_PHOTOS)
+    timelineItemsRef.value = []
+    timelineLoadingRef.value = false
+
+    setActivePinia(createPinia())
+    const ChildProfileView = (await import('@/parent/views/ChildProfileView.vue')).default
+    const w = mount(ChildProfileView, {
+      global: { stubs: STUBS },
+    })
+    await flushPromises()
+
+    // 第一次失敗 → MobileErrorRetry 顯示
+    const errComp = w.findComponent({ name: 'MobileErrorRetry' })
+    expect(errComp.exists()).toBe(true)
+
+    // 重試
+    await errComp.find('button').trigger('click')
+    await flushPromises()
+
+    // 重試成功 → profile 顯示，error 消失
+    expect(w.findComponent({ name: 'MobileErrorRetry' }).exists()).toBe(false)
+    expect(w.find('.child-name').text()).toBe('小明')
+
+    w.unmount()
+  })
 })

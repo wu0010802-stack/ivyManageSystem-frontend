@@ -30,18 +30,21 @@ const studentId = computed(() => Number(route.params.studentId))
 
 const data = ref<Record<string, unknown> | null>(null)
 const loading = ref(false)
+const loadError = ref(false)
 
 const SEVERITY_LABEL: Record<string, string> = { mild: '輕度', moderate: '中度', severe: '嚴重' }
 
 async function fetchData() {
   if (!studentId.value) return
   loading.value = true
+  loadError.value = false
   try {
     const { data: d } = await getChildProfile(studentId.value)
     data.value = d
   } catch (err) {
     const e = err as Record<string, unknown>
     toast.error(String(e?.displayMessage || '載入失敗'))
+    if (!data.value) loadError.value = true
   } finally {
     loading.value = false
   }
@@ -159,6 +162,13 @@ onMounted(() => {
 
     <template v-if="loading && !data">
       <SkeletonBlock variant="card" :count="2" />
+    </template>
+
+    <template v-else-if="loadError && !data">
+      <MobileErrorRetry
+        fallback-message="孩子資料載入失敗，請稍後再試"
+        @retry="fetchData"
+      />
     </template>
 
     <template v-else-if="data">
