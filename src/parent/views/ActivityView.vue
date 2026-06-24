@@ -13,6 +13,7 @@ import {
   registerCourses,
   confirmPromotion,
   getActivityBootstrap,
+  getUpcomingSessions,
 } from '../api/activity'
 import { toast } from '../utils/toast'
 import { sumOutstanding } from '../utils/activityPayment'
@@ -190,9 +191,22 @@ async function fetchCourses() {
   }
 }
 
+// Low（2026-06-24 code review）：報名/轉正後 hero 的「即將開課」（upcomingSessions）
+// 也要刷新——剛報名/轉正的課要立即出現在即將開課與下次上課。原本局部刷新只走
+// fetchMy/fetchCourses 會漏掉這塊。獨立輕量 GET，不重抓 registration_time。
+async function fetchUpcoming() {
+  try {
+    const { data } = await getUpcomingSessions()
+    upcomingSessions.value = data?.items || []
+  } catch (err: unknown) {
+    const e = err as Record<string, unknown>
+    toast.error(String(e?.displayMessage || '載入失敗'))
+  }
+}
+
 // 首屏聚合：courses + my-registrations + upcoming-sessions + registration-time
 // 一次取回（取代原本 4 支並行 GET，削報名尖峰對單 worker 後端的請求放大）。
-// 報名/轉正後的局部刷新仍走 fetchMy/fetchCourses。
+// 報名/轉正後的局部刷新走 fetchMy/fetchCourses/fetchUpcoming（不重抓 registration_time）。
 async function fetchBootstrap() {
   regsLoading.value = true
   coursesLoading.value = true
@@ -268,8 +282,8 @@ async function submitRegister() {
     toast.success('報名成功')
     showRegister.value = false
     tab.value = 'my'
-    // 報名會改變課程容量/額滿狀態 → 並行重抓課程清單（pullRefresh 同 pattern）
-    Promise.all([fetchMy(), fetchCourses()])
+    // 報名會改變課程容量/額滿狀態 + hero 即將開課 → 並行重抓（pullRefresh 同 pattern）
+    Promise.all([fetchMy(), fetchCourses(), fetchUpcoming()])
   } catch (err: unknown) {
     const e = err as Record<string, unknown>
     toast.error(String(e?.displayMessage || '報名失敗'))
@@ -299,8 +313,8 @@ async function onConfirmPromotion(reg: Registration, rc: RegCourse) {
   try {
     await confirmPromotion(reg.id, rc.course_id)
     toast.success('已確認轉正式')
-    // 轉正會佔用容量 → 並行重抓課程清單以更新額滿狀態
-    Promise.all([fetchMy(), fetchCourses()])
+    // 轉正會佔用容量 + 影響 hero 即將開課 → 並行重抓課程清單與 upcoming sessions
+    Promise.all([fetchMy(), fetchCourses(), fetchUpcoming()])
   } catch (err: unknown) {
     const e = err as Record<string, unknown>
     toast.error(String(e?.displayMessage || '確認失敗'))
