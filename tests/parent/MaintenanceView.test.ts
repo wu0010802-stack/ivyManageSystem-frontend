@@ -62,10 +62,12 @@ async function buildHarness(query: Record<string, string> = {}) {
 }
 
 describe('Parent MaintenanceView', () => {
-  it('shows default message + 鯨魚 emoji', async () => {
+  it('shows default message + Material Symbol icon', async () => {
     const { w } = await buildHarness()
     expect(w.text()).toContain('系統升級中')
-    expect(w.text()).toContain('🐳')
+    // 已改用 Material Symbols（engineering icon），不再使用 emoji
+    expect(w.find('.material-symbols-rounded').exists()).toBe(true)
+    expect(w.text()).toContain('系統維護中')
   })
 
   it('uses query.message when present', async () => {
