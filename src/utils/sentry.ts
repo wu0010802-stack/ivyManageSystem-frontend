@@ -52,6 +52,28 @@ const PII_KEY_EXEMPT_SUBSTRINGS = [
 //   /api/students/123/measurements/45 → /api/students/:id/measurements/:id
 const URL_ID_RE = /\/(\d+)(?=\/|$|\?)/g
 
+// value-level 強識別子遮罩（與後端 utils/sentry_init._redact_pii_value 對齊）。
+// key-based denylist 只遮結構化 dict key；自由文字 / breadcrumb message 內嵌的
+// 識別子（身分證 / 手機 / 市話 / LINE userId）需此層攔截。
+// SEC-2026-0624-01：補 LINE userId（`U` + 32 小寫 hex，可直接對映真實 LINE 帳號）。
+const VALUE_TW_ID_RE = /\b[A-Za-z][12A-Da-d]\d{8}\b/g // 身分證 / 居留證
+const VALUE_MOBILE_RE = /\b09\d{8}\b/g // 手機
+const VALUE_LANDLINE_RE = /\b0\d{1,2}-\d{6,8}\b/g // 市話（帶 dash）
+const VALUE_LINE_UID_RE = /\bU[0-9a-f]{32}\b/g // LINE userId
+
+/**
+ * 遮罩自由文字 / breadcrumb message 內的強識別子（身分證/居留證、手機、帶 dash
+ * 市話、LINE userId）。非字串原樣回傳；只遮樣式明確的識別子，避免誤遮 id / 數字。
+ */
+export function redactPiiValue(text: unknown) {
+  if (typeof text !== 'string' || !text) return text
+  return text
+    .replace(VALUE_TW_ID_RE, FILTERED)
+    .replace(VALUE_MOBILE_RE, FILTERED)
+    .replace(VALUE_LANDLINE_RE, FILTERED)
+    .replace(VALUE_LINE_UID_RE, FILTERED)
+}
+
 /**
  * Sanitize URL：path 中段純數字 → `:id`；query 內 PII key 值 → `[Filtered]`。
  *
@@ -168,7 +190,7 @@ export function scrubEvent(event: unknown) {
         const c = crumb as Record<string, unknown>
         if (c['data']) c['data'] = scrubMapping(c['data'])
         if (typeof c['message'] === 'string') {
-          c['message'] = sanitizeUrl(c['message'])
+          c['message'] = redactPiiValue(sanitizeUrl(c['message']))
         }
       }
     }
@@ -181,7 +203,7 @@ export function scrubBreadcrumb(crumb: unknown) {
   const c = crumb as Record<string, unknown>
   if (c['data']) c['data'] = scrubMapping(c['data'])
   if (typeof c['message'] === 'string') {
-    c['message'] = sanitizeUrl(c['message'])
+    c['message'] = redactPiiValue(sanitizeUrl(c['message']))
   }
   return c
 }

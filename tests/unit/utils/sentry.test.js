@@ -7,6 +7,7 @@ import {
   scrubBreadcrumb,
   scrubQueryString,
   hashUserId,
+  redactPiiValue,
   initSentry,
   captureException,
 } from '@/utils/sentry'
@@ -321,6 +322,47 @@ describe('scrubQueryString', () => {
 
   it('empty string passthrough', () => {
     expect(scrubQueryString('')).toBe('')
+  })
+})
+
+describe('redactPiiValue (SEC-2026-0624-01：與後端 _redact_pii_value 對齊)', () => {
+  const LINE_UID = 'U' + '0123456789abcdef0123456789abcdef' // 真實格式 U + 32 hex
+
+  it('masks LINE userId (U + 32 hex)', () => {
+    const out = redactPiiValue(`綁定成功 line_user_id=${LINE_UID} 完成`)
+    expect(out).not.toContain(LINE_UID)
+    expect(out).toContain('[Filtered]')
+  })
+
+  it('masks mobile / id / landline 自由文字（與後端對齊）', () => {
+    const out = redactPiiValue('電話 0912345678 身分證 A123456789 市話 02-12345678')
+    expect(out).not.toContain('0912345678')
+    expect(out).not.toContain('A123456789')
+    expect(out).not.toContain('02-12345678')
+  })
+
+  it('keeps plain text / 非 LINE-uid 格式 token 不誤遮', () => {
+    expect(redactPiiValue('學生編號 12345 已報名')).toBe('學生編號 12345 已報名')
+    expect(redactPiiValue('使用者 U_victim_parent_001 已綁定')).toBe(
+      '使用者 U_victim_parent_001 已綁定'
+    )
+  })
+
+  it('passes through non-string', () => {
+    expect(redactPiiValue(null)).toBe(null)
+    expect(redactPiiValue(42)).toBe(42)
+  })
+
+  it('scrubEvent 對 breadcrumb message 跑 value 遮罩（不只 sanitizeUrl）', () => {
+    const res = scrubEvent({
+      breadcrumbs: { values: [{ message: `[parent-bind] ${LINE_UID}` }] },
+    })
+    expect(res.breadcrumbs.values[0].message).not.toContain(LINE_UID)
+  })
+
+  it('scrubBreadcrumb 對 message 跑 value 遮罩', () => {
+    const res = scrubBreadcrumb({ message: '家長電話 0912345678' })
+    expect(res.message).not.toContain('0912345678')
   })
 })
 
