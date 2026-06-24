@@ -3,6 +3,7 @@ import { ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import ParentLayout from './layouts/ParentLayout.vue'
 import ConsentModal from './components/ConsentModal.vue'
+import ErrorBoundary from '@/components/common/ErrorBoundary.vue'
 import { useConsentGate } from './composables/useConsentGate'
 import { getCurrentPolicy, type PolicyVersionOut } from './api/consent'
 
@@ -65,11 +66,15 @@ router.beforeEach((to, from) => {
 
 <template>
   <ParentLayout>
-    <router-view v-slot="{ Component, route }">
-      <transition :name="transitionName" mode="out-in">
-        <component :is="Component" :key="route.fullPath" />
-      </transition>
-    </router-view>
+    <!-- 全域錯誤邊界：單頁元件 render/computed throw 時降級成 fallback，
+         而非白屏整個家長端 App（parent entry 無 app.config.errorHandler）。 -->
+    <ErrorBoundary variant="parent">
+      <router-view v-slot="{ Component, route }">
+        <transition :name="transitionName" mode="out-in">
+          <component :is="Component" :key="route.fullPath" />
+        </transition>
+      </router-view>
+    </ErrorBoundary>
   </ParentLayout>
 
   <!-- P2-4 re-consent modal：interceptor 攔 403 X-Consent-Required 後顯示 -->
