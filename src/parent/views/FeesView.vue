@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import ChildContextHeader from '../components/ChildContextHeader.vue'
-import FeeHero from '../components/fees/FeeHero.vue'
+import DashboardHero from '../components/DashboardHero.vue'
 import FeeListGroup from '../components/fees/FeeListGroup.vue'
 import FeeReceiptSheet from '../components/fees/FeeReceiptSheet.vue'
 import { useChildrenStore } from '../stores/children'
@@ -14,6 +14,7 @@ import {
 import { toast } from '../utils/toast'
 import PullToRefresh from '../components/PullToRefresh.vue'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
+import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
 
 interface FeeRecord {
   id: number
@@ -47,6 +48,7 @@ const { selectedId, ensureSelected } = useChildSelection()
 const summary = ref<Record<string, unknown> | null>(null)
 const records = ref<FeeRecord[]>([])
 const loading = ref(false)
+const loadError = ref(false)
 const detail = ref<FeeDetail | null>(null)
 const detailLoading = ref(false)
 
@@ -57,15 +59,18 @@ const detailOpen = computed({
   },
 })
 
+// 狀態 → StatusPill tone 對應
+const STATUS_TONE: Record<string, 'ok' | 'warn' | 'danger' | 'neutral'> = {
+  unpaid: 'warn',
+  partial: 'warn',
+  paid: 'ok',
+  overdue: 'danger',
+}
 const STATUS_LABEL: Record<string, string> = {
   unpaid: '未繳',
   partial: '部分繳費',
   paid: '已繳清',
-}
-const STATUS_COLOR: Record<string, { bg: string; color: string }> = {
-  unpaid: { bg: 'var(--color-danger-soft)', color: 'var(--m3-error, var(--color-danger))' },
-  partial: { bg: 'var(--color-warning-soft)', color: 'var(--m3-tertiary, var(--pt-warning-text))' },
-  paid: { bg: 'var(--brand-primary-soft)', color: 'var(--m3-primary, var(--pt-success-text))' },
+  overdue: '逾期',
 }
 
 const childTotals = computed(() => {
@@ -91,6 +96,24 @@ const nearestDueDate = computed(() => {
   return sorted[0]?.due_date ?? ''
 })
 
+// DashboardHero props
+const heroValue = computed(() => `NT$ ${unpaidTotal.value.toLocaleString()}`)
+const heroSub = computed(() => {
+  if (overdueAmount.value > 0) return `逾期 NT$ ${overdueAmount.value.toLocaleString()}`
+  if (nearestDueDate.value && unpaidCount.value > 0) return `最近到期：${nearestDueDate.value}（共 ${unpaidCount.value} 筆）`
+  return ''
+})
+const heroStatusTone = computed<'danger' | 'warn' | 'ok'>(() => {
+  if (overdueAmount.value > 0) return 'danger'
+  if (unpaidCount.value > 0) return 'warn'
+  return 'ok'
+})
+const heroStatusLabel = computed(() => {
+  if (overdueAmount.value > 0) return '有逾期款項'
+  if (unpaidCount.value > 0) return '有待繳費用'
+  return '繳費無欠款'
+})
+
 function onJumpUnpaid() {
   const el = document.querySelector('[data-unpaid-anchor]')
   if (el) {
@@ -107,6 +130,7 @@ async function fetchSummary() {
   } catch (err) {
     const e = err as Record<string, unknown>
     toast.error(String(e?.displayMessage || '載入失敗'))
+    throw err
   }
 }
 
@@ -119,9 +143,25 @@ async function fetchRecords() {
   } catch (err) {
     const e = err as Record<string, unknown>
     toast.error(String(e?.displayMessage || '載入失敗'))
+    throw err
   } finally {
     loading.value = false
   }
+}
+
+async function loadAll() {
+  loadError.value = false
+  try {
+    await Promise.all([fetchSummary(), fetchRecords()])
+  } catch {
+    loadError.value = true
+  }
+}
+
+async function retryLoad() {
+  records.value = []
+  summary.value = null
+  await loadAll()
 }
 
 async function openDetail(record: FeeRecord) {
@@ -195,27 +235,39 @@ function onCopyNo(no: string | null | undefined) {
 onMounted(async () => {
   await childrenStore.load()
   ensureSelected(childrenStore.items as { student_id: number }[])
-  fetchSummary()
-  fetchRecords()
+  await loadAll()
 })
 
-watch(selectedId, fetchRecords)
+watch(selectedId, () => {
+  loadError.value = false
+  fetchRecords().catch(() => { loadError.value = true })
+})
 
 async function pullRefresh() {
+  loadError.value = false
   await Promise.all([fetchSummary(), fetchRecords()])
 }
 </script>
 
 <template>
   <PullToRefresh :on-refresh="pullRefresh" class="fees-view">
-    <FeeHero
+    <!-- Hero：以 DashboardHero 取代 FeeHero，呈現本月應繳金額 + 到期/逾期資訊 -->
+    <DashboardHero
       v-if="summary"
-      :unpaid-total="unpaidTotal"
-      :unpaid-count="unpaidCount"
-      :nearest-due-date="nearestDueDate"
-      :overdue-amount="overdueAmount"
-      @jump-unpaid="onJumpUnpaid"
+      eyebrow="本月應繳"
+      :title="unpaidCount > 0 ? '有待繳費用' : '繳費無欠款'"
+      :value="heroValue"
+      :sub="heroSub"
+      :status-label="heroStatusLabel"
+      :status-tone="heroStatusTone"
     />
+    <!-- 有未繳款時提供跳至應繳的快捷按鈕 -->
+    <div v-if="summary && unpaidCount > 0" class="jump-unpaid-wrap">
+      <button type="button" class="jump-unpaid-btn" @click="onJumpUnpaid">
+        <span class="material-symbols-rounded" aria-hidden="true">arrow_downward</span>
+        跳到應繳
+      </button>
+    </div>
 
     <ChildContextHeader variant="page" />
 
@@ -227,20 +279,29 @@ async function pullRefresh() {
       </span>
     </div>
 
+    <!-- 載入中（三態 skeleton） -->
     <div v-if="loading && records.length === 0" class="skeleton-wrap">
       <SkeletonBlock variant="card" :count="3" />
     </div>
 
-    <div v-else-if="!loading && records.length === 0" class="pt-empty">
-      <span class="material-symbols-rounded" aria-hidden="true" style="font-size: 40px; color: var(--brand-primary);">payments</span>
+    <!-- 錯誤三態：fetch 失敗且沒有資料時顯示 inline error + retry -->
+    <MobileErrorRetry
+      v-else-if="loadError && records.length === 0"
+      @retry="retryLoad"
+    />
+
+    <!-- 空狀態 -->
+    <div v-else-if="!loading && !loadError && records.length === 0" class="pt-empty">
+      <span class="material-symbols-rounded pt-empty-icon" aria-hidden="true">payments</span>
       <p class="pt-empty-title">尚無費用紀錄</p>
       <p class="pt-empty-note">園所開立帳單後會出現在這裡</p>
     </div>
 
+    <!-- 費用列表：使用 StatusPill tone 取代舊 STATUS_COLOR map -->
     <FeeListGroup
       :records="records"
       :status-label="(s) => STATUS_LABEL[s] || s"
-      :status-color="(s) => STATUS_COLOR[s] || null"
+      :status-tone="(s) => STATUS_TONE[s] ?? 'neutral'"
       @record-click="(r) => { openDetail(r as FeeRecord) }"
     />
 
@@ -271,7 +332,7 @@ async function pullRefresh() {
   font-size: 13px;
   color: var(--pt-text-body);
   background: var(--cream, #fffcf2);
-  border: 1px solid rgba(13, 144, 83, 0.12);
+  border: 1px solid var(--brand-primary-border, color-mix(in srgb, var(--brand-primary, #0d9053) 12%, transparent));
   border-radius: 12px;
   padding: 12px 14px;
 }
@@ -288,5 +349,34 @@ async function pullRefresh() {
   display: flex;
   flex-direction: column;
   gap: var(--space-3, 12px);
+}
+
+/* 空狀態圖示改用 token */
+.pt-empty-icon {
+  font-size: var(--text-5xl, 40px);
+  color: var(--brand-primary, #0d9053);
+}
+
+/* 跳至應繳快捷列 */
+.jump-unpaid-wrap {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 16px;
+}
+.jump-unpaid-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--brand-primary, #0d9053);
+  background: var(--brand-primary-soft, color-mix(in srgb, var(--brand-primary, #0d9053) 10%, transparent));
+  border: 1px solid var(--brand-primary-border, color-mix(in srgb, var(--brand-primary, #0d9053) 20%, transparent));
+  border-radius: 999px;
+  padding: 6px 14px;
+  cursor: pointer;
+}
+.jump-unpaid-btn .material-symbols-rounded {
+  font-size: 16px;
 }
 </style>
