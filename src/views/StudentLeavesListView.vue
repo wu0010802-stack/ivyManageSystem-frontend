@@ -83,7 +83,7 @@ onMounted(() => {
       </el-form-item>
     </el-form>
 
-    <el-table :data="items" v-loading="loading" stripe border style="width: 100%;">
+    <el-table :data="items" v-loading="loading" stripe border style="width: 100%;" max-height="600">
       <el-table-column label="學生" width="120">
         <template #default="{ row }">
           <router-link
