@@ -7,6 +7,8 @@ import ActivityHero from '../components/activity/ActivityHero.vue'
 import ActivityCardList from '../components/activity/ActivityCardList.vue'
 import ActivityRegisterSheet from '../components/activity/ActivityRegisterSheet.vue'
 import RegistrationStatusList from '../components/activity/RegistrationStatusList.vue'
+import SkeletonBlock from '../components/SkeletonBlock.vue'
+import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
 import {
   listCourses,
   myRegistrations,
@@ -46,6 +48,8 @@ const regsLoading = ref(false)
 const coursesLoading = ref(false)
 const submitting = ref(false)
 const showRegister = ref(false)
+// Task 7（Bento P3）：首屏 fetch 失敗 → inline error 三態
+const loadError = ref(false)
 // FE-1（2026-06-23 audit）：確認轉正式防連點。記錄「正在確認的 reg:course」，
 // 期間停用該按鈕，避免網路慢時連點重複送出（對齊公開查詢頁 promotionSubmitting）。
 const confirmingKey = ref<string | null>(null)
@@ -196,15 +200,18 @@ async function fetchCourses() {
 async function fetchBootstrap() {
   regsLoading.value = true
   coursesLoading.value = true
+  loadError.value = false
   try {
     const { data } = await getActivityBootstrap()
     myRegs.value = data?.registrations?.items || []
     courses.value = data?.courses?.items || []
     upcomingSessions.value = data?.upcoming_sessions?.items || []
     if (data?.registration_time) regTimeInfo.value = data.registration_time
+    loadError.value = false
   } catch (err: unknown) {
     const e = err as Record<string, unknown>
     toast.error(String(e?.displayMessage || '載入失敗'))
+    loadError.value = true
   } finally {
     regsLoading.value = false
     coursesLoading.value = false
@@ -415,10 +422,22 @@ async function pullRefresh() {
           開始報名
         </button>
       </div>
-      <div v-if="!coursesLoading && courses.length === 0" class="pt-empty">
-        <div class="pt-empty-title">目前沒有開放的課程</div>
-      </div>
-      <ActivityCardList v-else :courses="courses" :conflict-ids="conflictCourseIds" />
+      <SkeletonBlock
+        v-if="coursesLoading && !courses.length"
+        variant="card"
+        :count="3"
+        aria-label="課程載入中"
+      />
+      <MobileErrorRetry
+        v-else-if="loadError"
+        @retry="fetchBootstrap"
+      />
+      <template v-else>
+        <div v-if="!coursesLoading && courses.length === 0" class="pt-empty">
+          <div class="pt-empty-title">目前沒有開放的課程</div>
+        </div>
+        <ActivityCardList v-else :courses="courses" :conflict-ids="conflictCourseIds" />
+      </template>
     </template>
 
     <ActivityRegisterSheet
