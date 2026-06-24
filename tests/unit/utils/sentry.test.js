@@ -378,6 +378,23 @@ describe('redactPiiValue (SEC-2026-0624-01：與後端 _redact_pii_value 對齊)
     )
   })
 
+  it('masks identifiers adjacent to CJK with no separator（JS \\b ASCII-only 已覆蓋）', () => {
+    // JS \b 視中文為非詞字元，故中文緊鄰識別子無空白也會遮（前端本就正確；後端 Python
+    // \b 為 Unicode-aware 反而漏遮，已於後端改顯式邊界對齊）。此測試鎖死前端此行為。
+    const uid = 'U' + '0123456789abcdef'.repeat(2)
+    const out = redactPiiValue(
+      `電話0912345678請改期，身分證A123456789，市話02-12345678，綁定${uid}止`
+    )
+    expect(out).not.toContain('0912345678')
+    expect(out).not.toContain('A123456789')
+    expect(out).not.toContain('02-12345678')
+    expect(out).not.toContain(uid)
+  })
+
+  it('does not mask digit subsequence inside a longer run', () => {
+    expect(redactPiiValue('代碼1230912345678末')).toBe('代碼1230912345678末')
+  })
+
   it('passes through non-string', () => {
     expect(redactPiiValue(null)).toBe(null)
     expect(redactPiiValue(42)).toBe(42)
