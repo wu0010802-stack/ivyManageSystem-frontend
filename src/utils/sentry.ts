@@ -56,6 +56,13 @@ const URL_ID_RE = /\/(\d+)(?=\/|$|\?)/g
 // key-based denylist 只遮結構化 dict key；自由文字 / breadcrumb message 內嵌的
 // 識別子（身分證 / 手機 / 市話 / LINE userId）需此層攔截。
 // SEC-2026-0624-01：補 LINE userId（`U` + 32 小寫 hex，可直接對映真實 LINE 帳號）。
+// 邊界用 \b：JS 的 \b 為 **ASCII-only**，視中文為非詞字元，故「中文緊鄰識別子無空白」
+// （如 `電話0912345678請改期`，zh-TW 自由文字極常見）會正確遮（與後端對齊的目標一致）。
+// ⚠ 刻意不改用 (?<!…) lookbehind：Safari <16.4 不支援、會在模組載入時 SyntaxError 崩潰
+//   （家長端可能有舊 iOS；Vite 預設 target 含 Safari 14）。後端 Python \b 為 Unicode-aware
+//   反而漏遮 CJK，故後端改用顯式 lookaround（無瀏覽器相容限制）；前端維持 \b。
+// 殘留差異（可接受）：JS \b 視底線為詞字元，故 `_0912345678` 等底線緊鄰（罕見）前端不遮、
+//   後端遮——非中文場景、機率極低，不值得為此引入 Safari 崩潰風險。
 const VALUE_TW_ID_RE = /\b[A-Za-z][12A-Da-d]\d{8}\b/g // 身分證 / 居留證
 const VALUE_MOBILE_RE = /\b09\d{8}\b/g // 手機
 const VALUE_LANDLINE_RE = /\b0\d{1,2}-\d{6,8}\b/g // 市話（帶 dash）
