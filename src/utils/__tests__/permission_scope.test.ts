@@ -43,6 +43,16 @@ describe('getPermissionScope', () => {
     setUserInfo({ role: 'admin', permission_names: ['STUDENTS_READ:owncampus'] })
     expect(getPermissionScope('STUDENTS_READ')).toBeNull()
   })
+
+  it('returns null for multi-colon token (對齊後端 resolve_grant split fail-closed)', () => {
+    // 後端 resolve_grant 用 split(":",1) → scope='own_class:extra'（不在 {own_class,all}）
+    // 視為無效 → None。前端原用 split(":",2)[1] 會抽出合法 'own_class' → 較寬鬆（提權方向）。
+    setUserInfo({
+      role: 'admin',
+      permission_names: ['STUDENTS_READ:own_class:extra'],
+    })
+    expect(getPermissionScope('STUDENTS_READ')).toBeNull()
+  })
 })
 
 describe('hasPermission with scoped codes', () => {

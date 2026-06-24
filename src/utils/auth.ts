@@ -277,7 +277,10 @@ export function getPermissionScope(code: string): 'all' | 'own_class' | null {
     if (n === code) {
       found.push('all')
     } else if (n.startsWith(`${code}:`)) {
-      found.push(n.split(':', 2)[1])
+      // 取首個冒號後全部（對齊後端 resolve_grant 的 split(":",1)[1] 語意）；
+      // 多冒號 token（如 'CODE:own_class:extra'）抽出 'own_class:extra' → 下方
+      // _SCOPE_BREADTH 過濾視為無效 → fail-closed，而非 split(":",2) 的較寬鬆 'own_class'。
+      found.push(n.slice(code.length + 1))
     }
   }
   if (found.length === 0) return null
