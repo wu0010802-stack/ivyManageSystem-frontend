@@ -120,6 +120,39 @@ describe('FeesView 三態（Task 9）', () => {
     w.unmount()
   })
 
+  it('pull-to-refresh 失敗時 loadError 為 true 且 MobileErrorRetry 出現（records 為空時）', async () => {
+    // 初始載入失敗（records 為空），接著 pull-to-refresh 也失敗
+    // 修正前：pullRefresh 重置 loadError=false 後 reject 未被 catch → MobileErrorRetry 消失
+    // 修正後：pullRefresh catch 住後再設 loadError=true → MobileErrorRetry 持續顯示
+    summaryMock
+      .mockRejectedValueOnce({ displayMessage: '網路錯誤' })   // 初始載入失敗
+      .mockRejectedValueOnce({ displayMessage: '重整失敗' })   // pull-to-refresh 也失敗
+    recordsMock
+      .mockRejectedValueOnce({ displayMessage: '網路錯誤' })   // 初始載入失敗
+      .mockRejectedValueOnce({ displayMessage: '重整失敗' })   // pull-to-refresh 也失敗
+
+    setActivePinia(createPinia())
+    const FeesView = (await import('@/parent/views/FeesView.vue')).default
+    const w = mount(FeesView, {
+      global: { stubs: STUBS },
+    })
+    // 讓初始載入完成（失敗）
+    await flushPromises()
+
+    // 初始失敗後 MobileErrorRetry 應出現（loadError=true, records.length===0）
+    expect(w.findComponent({ name: 'MobileErrorRetry' }).exists()).toBe(true)
+
+    // 觸發 pullRefresh：透過 defineExpose 暴露的函式直接呼叫
+    await (w.vm as unknown as { pullRefresh: () => Promise<void> }).pullRefresh()
+    await flushPromises()
+
+    // pull-to-refresh 也失敗後 loadError 仍應為 true → MobileErrorRetry 應持續出現
+    const errComp = w.findComponent({ name: 'MobileErrorRetry' })
+    expect(errComp.exists()).toBe(true)
+
+    w.unmount()
+  })
+
   it('成功載入後 SkeletonBlock 消失、MobileErrorRetry 不存在', async () => {
     summaryMock.mockResolvedValue(SUCCESS_SUMMARY)
     recordsMock.mockResolvedValue(SUCCESS_RECORDS)

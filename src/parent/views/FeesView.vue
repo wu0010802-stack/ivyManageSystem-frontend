@@ -232,6 +232,8 @@ function onCopyNo(no: string | null | undefined) {
   copyText(no)
 }
 
+defineExpose({ pullRefresh })
+
 onMounted(async () => {
   await childrenStore.load()
   ensureSelected(childrenStore.items as { student_id: number }[])
@@ -245,7 +247,11 @@ watch(selectedId, () => {
 
 async function pullRefresh() {
   loadError.value = false
-  await Promise.all([fetchSummary(), fetchRecords()])
+  try {
+    await Promise.all([fetchSummary(), fetchRecords()])
+  } catch {
+    loadError.value = true
+  }
 }
 </script>
 
