@@ -139,11 +139,11 @@ onUnmounted(() => {
   box-shadow: 0 2px 12px rgba(0, 0, 0, .15);
 }
 .indicator-btn.pending {
-  background: #0d9053;
-  color: #fff;
+  background: var(--brand-primary, #0d9053);
+  color: var(--pt-on-accent, #fff);
 }
 .indicator-btn.review {
-  background: #f56c6c;
-  color: #fff;
+  background: var(--color-danger, #f56c6c);
+  color: var(--pt-on-accent, #fff);
 }
 </style>

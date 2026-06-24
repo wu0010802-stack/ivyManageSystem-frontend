@@ -34,10 +34,10 @@ watch(() => props.modelValue, v => { local.value = v })
   position: sticky; top: 0; z-index: 5;
   display: flex; align-items: center; gap: 8px;
   padding: 10px 14px;
-  background: #fff;
-  border-bottom: 1px solid #e5e7eb;
+  background: var(--pt-surface-card, #fff);
+  border-bottom: 1px solid var(--pt-border, #e5e7eb);
 }
-.material-symbols-rounded { color: #6b7280; font-size: 20px; }
+.material-symbols-rounded { color: var(--pt-text-muted, #6b7280); font-size: 20px; }
 input {
   flex: 1; border: none; outline: none;
   font-size: 15px; background: transparent;

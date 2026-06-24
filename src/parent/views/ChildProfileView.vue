@@ -5,7 +5,9 @@ import { getChildProfile } from '../api/profile'
 import { fetchChildPhotos } from '../api/childPhotos'
 import { toast } from '../utils/toast'
 import ParentIcon from '../components/ParentIcon.vue'
+import SectionHeader from '../components/SectionHeader.vue'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
+import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
 import LaurelWreath from '@/components/brand/LaurelWreath.vue'
 import KawaiiStar from '@/components/brand/KawaiiStar.vue'
 import CrownIcon from '@/components/brand/CrownIcon.vue'
@@ -28,18 +30,21 @@ const studentId = computed(() => Number(route.params.studentId))
 
 const data = ref<Record<string, unknown> | null>(null)
 const loading = ref(false)
+const loadError = ref(false)
 
 const SEVERITY_LABEL: Record<string, string> = { mild: '輕度', moderate: '中度', severe: '嚴重' }
 
 async function fetchData() {
   if (!studentId.value) return
   loading.value = true
+  loadError.value = false
   try {
     const { data: d } = await getChildProfile(studentId.value)
     data.value = d
   } catch (err) {
     const e = err as Record<string, unknown>
     toast.error(String(e?.displayMessage || '載入失敗'))
+    if (!data.value) loadError.value = true
   } finally {
     loading.value = false
   }
@@ -136,13 +141,16 @@ onMounted(() => {
         <ParentIcon name="notebook" size="sm" />
         最新動態
       </h2>
-      <div v-if="timelineError && !timelineItems.length" class="empty timeline-error">
-        <span>{{ timelineError }}</span>
-        <button class="retry-btn" :disabled="timelineLoading" @click="() => reloadTimeline(false)">
-          重試
-        </button>
-      </div>
-      <div v-else-if="timelineLoading && !timelineItems.length" class="empty">載入中…</div>
+      <MobileErrorRetry
+        v-if="timelineError && !timelineItems.length"
+        :error="timelineError"
+        @retry="() => reloadTimeline(false)"
+      />
+      <SkeletonBlock
+        v-else-if="timelineLoading && !timelineItems.length"
+        variant="row"
+        :count="3"
+      />
       <div v-else-if="timelineItems.length === 0" class="empty">最近沒有動態</div>
       <div v-else class="feed">
         <TimelineItem v-for="item in typedTimelineItems" :key="item.id as string" :item="item" />
@@ -154,6 +162,13 @@ onMounted(() => {
 
     <template v-if="loading && !data">
       <SkeletonBlock variant="card" :count="2" />
+    </template>
+
+    <template v-else-if="loadError && !data">
+      <MobileErrorRetry
+        fallback-message="孩子資料載入失敗，請稍後再試"
+        @retry="fetchData"
+      />
     </template>
 
     <template v-else-if="data">
@@ -252,21 +267,20 @@ onMounted(() => {
 
     <!-- 最新照片 -->
     <section class="pt-card growth-section" aria-labelledby="photos-title">
-      <div class="section-header">
-        <h2 id="photos-title" class="section-title">
-          <ParentIcon name="camera" size="sm" />
-          最新照片
-        </h2>
-        <button class="more-link" type="button" @click="goPhotos">
-          查看全部
-          <ParentIcon name="chevron-right" size="xs" />
-        </button>
-      </div>
-      <div v-if="photosLoading" class="placeholder small">載入中…</div>
-      <div v-else-if="photosError" class="placeholder small photos-error">
-        <span>載入失敗</span>
-        <button class="retry-btn" type="button" @click="loadPhotos">重試</button>
-      </div>
+      <SectionHeader title="最新照片">
+        <template #action>
+          <button class="more-link" type="button" @click="goPhotos">
+            查看全部
+            <ParentIcon name="chevron-right" size="xs" />
+          </button>
+        </template>
+      </SectionHeader>
+      <SkeletonBlock v-if="photosLoading" variant="row" :count="1" />
+      <MobileErrorRetry
+        v-else-if="photosError"
+        fallback-message="照片載入失敗，請稍後再試"
+        @retry="loadPhotos"
+      />
       <div v-else-if="photos.length === 0" class="placeholder small">尚無照片</div>
       <div v-else class="photo-strip-wrap">
         <ul class="photo-strip" role="list">
@@ -329,7 +343,7 @@ onMounted(() => {
   margin: 0 var(--space-3, 12px);
   padding: var(--space-5, 22px) var(--space-4, 16px);
   background: var(--pt-gradient-hero);
-  border: 1px solid rgba(90, 168, 66, 0.15);
+  border: 1px solid var(--pt-tint-brand, rgba(90, 168, 66, 0.15));
   border-radius: 18px;
   box-shadow: var(--pt-elev-1);
   overflow: hidden;
@@ -420,7 +434,7 @@ onMounted(() => {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 0.875rem; /* 14px */
+  font-size: 14px;
   font-weight: 800;
   color: var(--pt-text-strong);
   margin: 0 0 10px;
@@ -490,7 +504,7 @@ onMounted(() => {
 }
 .change-btn { width: 100%; }
 .growth-section .section-title {
-  font-size: 1rem; /* 16px */
+  font-size: 16px;
   font-weight: 700;
   letter-spacing: 0;
   color: var(--pt-text-strong);
@@ -505,7 +519,7 @@ onMounted(() => {
   align-self: center;
   margin-top: 4px;
   padding: 8px 16px;
-  background: var(--pt-surface-mute, #f3f4f6);
+  background: var(--pt-surface-mute);
   border: none;
   border-radius: 6px;
   font-size: 13px;
@@ -516,41 +530,12 @@ onMounted(() => {
   opacity: 0.6;
   cursor: default;
 }
-.timeline-error {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  color: var(--pt-warning-text, #b85c00);
-}
-.retry-btn {
-  padding: 4px 12px;
-  background: var(--pt-surface-mute, #f3f4f6);
-  border: none;
-  border-radius: 6px;
-  font-size: 12px;
-  cursor: pointer;
-  color: var(--m3-on-surface-variant, var(--pt-text-muted));
-}
-.retry-btn:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
 .link-btn {
-  background: var(--pt-surface-mute, #f5fbe6);
+  background: var(--pt-surface-mute);
   padding: 10px 16px;
   font-size: 14px;
 }
 .link-btn:hover { background: var(--leaf-100, #dcf4e6); }
-.section-header {
-  display: flex;
-  align-items: center;
-  margin-bottom: 10px;
-}
-.section-header .section-title {
-  flex: 1;
-  margin: 0;
-}
 .more-link {
   display: inline-flex;
   align-items: center;
@@ -561,7 +546,7 @@ onMounted(() => {
   background: transparent;
   border: none;
   color: var(--pt-text-strong);
-  font-size: 0.8125rem; /* 13px */
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   border-radius: 8px;
@@ -569,7 +554,7 @@ onMounted(() => {
 }
 .more-link :deep(.parent-icon) { color: var(--brand-primary); }
 .more-link:active {
-  background: var(--pt-surface-mute, #f3f4f6);
+  background: var(--pt-surface-mute);
 }
 /* 漸隱遮罩：暗示右側還有可滑動內容 */
 .photo-strip-wrap {
@@ -606,7 +591,7 @@ onMounted(() => {
   flex-shrink: 0;
   border-radius: 10px;
   overflow: hidden;
-  background: var(--pt-surface-mute, #f3f4f6);
+  background: var(--pt-surface-mute);
   cursor: pointer;
   padding: 0;
   border: none;
@@ -618,12 +603,5 @@ onMounted(() => {
   box-shadow: var(--pt-elev-1);
 }
 .strip-thumb > img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.placeholder.small { padding: 12px; font-size: 0.8125rem; /* 13px */ }
-.placeholder.photos-error {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  color: var(--pt-warning-text, #b85c00);
-}
+.placeholder.small { padding: 12px; font-size: 13px; }
 </style>

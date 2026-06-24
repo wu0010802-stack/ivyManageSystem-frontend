@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
 import ActivityCardList from '@/parent/components/activity/ActivityCardList.vue'
 
+// M3Card、M3Icon、StatusPill 使用真實元件渲染（無需 stub）
 const courses = [
   {
     id: 1,
@@ -46,7 +47,27 @@ describe('ActivityCardList', () => {
     expect(text).toContain('基礎繪畫入門')
   })
 
-  it('額滿課程帶 enroll-tag.full，可候補時顯示「可候補」', () => {
+  it('可報名課程顯示 StatusPill（tone-warn）', () => {
+    const wrapper = mount(ActivityCardList, {
+      props: { courses: [courses[0]] },
+    })
+    const pill = wrapper.find('.status-pill')
+    expect(pill.exists()).toBe(true)
+    expect(pill.classes()).toContain('tone-warn')
+    expect(pill.text()).toContain('可報名')
+  })
+
+  it('額滿課程顯示 StatusPill（tone-neutral）', () => {
+    const wrapper = mount(ActivityCardList, {
+      props: { courses: [courses[1]] },
+    })
+    const pill = wrapper.find('.status-pill')
+    expect(pill.exists()).toBe(true)
+    expect(pill.classes()).toContain('tone-neutral')
+    expect(pill.text()).toContain('已額滿')
+  })
+
+  it('額滿但可候補時顯示「可候補」StatusPill（tone-neutral）', () => {
     const wrapper = mount(ActivityCardList, {
       props: {
         courses: [
@@ -54,9 +75,10 @@ describe('ActivityCardList', () => {
         ],
       },
     })
-    const tag = wrapper.find('.enroll-tag')
-    expect(tag.classes()).toContain('full')
-    expect(tag.text()).toContain('可候補')
+    const pill = wrapper.find('.status-pill')
+    expect(pill.exists()).toBe(true)
+    expect(pill.classes()).toContain('tone-neutral')
+    expect(pill.text()).toContain('可候補')
   })
 
   it('根節點帶 id="act-upcoming" 作為 hero 錨點', () => {
@@ -64,7 +86,7 @@ describe('ActivityCardList', () => {
     expect(wrapper.find('#act-upcoming').exists()).toBe(true)
   })
 
-  it('有上課時段/適齡時顯示對應 chip', () => {
+  it('有上課時段/適齡時顯示對應 meta chip', () => {
     const wrapper = mount(ActivityCardList, {
       props: {
         courses: [
@@ -86,7 +108,7 @@ describe('ActivityCardList', () => {
     expect(wrapper.find('.meta-chip.conflict').exists()).toBe(false)
   })
 
-  it('course id 在 conflictIds 內時顯示「時段衝突」', () => {
+  it('course id 在 conflictIds 內時顯示「時段衝突」meta chip', () => {
     const wrapper = mount(ActivityCardList, {
       props: {
         courses: [{ ...courses[0], id: 5 }],
@@ -113,7 +135,7 @@ describe('ActivityCardList', () => {
       },
     })
     const text = wrapper.text()
-    expect(text).toContain('👤 王老師')
+    expect(text).toContain('王老師')
     expect(text).toContain('下次 6/26')
     expect(wrapper.find('.course-card-meta').exists()).toBe(true)
   })
@@ -124,5 +146,16 @@ describe('ActivityCardList', () => {
     })
     expect(wrapper.find('.course-card-meta').exists()).toBe(true)
     expect(wrapper.text()).toContain('李老師')
+  })
+
+  it('課程卡片使用 M3Card（m3-card class）包覆', () => {
+    const wrapper = mount(ActivityCardList, { props: { courses } })
+    const cards = wrapper.findAll('.m3-card')
+    expect(cards.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('課程卡片含 icon tile（course-icon-tile）', () => {
+    const wrapper = mount(ActivityCardList, { props: { courses: [courses[0]] } })
+    expect(wrapper.find('.course-icon-tile').exists()).toBe(true)
   })
 })

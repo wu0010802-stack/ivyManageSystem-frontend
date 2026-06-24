@@ -57,20 +57,20 @@ function runAction(): void {
 .markdown :deep(p) { margin: 0 0 6px; }
 .markdown :deep(p:last-child) { margin-bottom: 0; }
 .markdown :deep(strong) { font-weight: 600; }
-.markdown :deep(a) { color: #0d9053; text-decoration: underline; }
+.markdown :deep(a) { color: var(--brand-primary, #0d9053); text-decoration: underline; }
 .markdown :deep(ul), .markdown :deep(ol) { margin: 4px 0; padding-left: 20px; }
 .markdown :deep(code) {
-  background: #f3f4f6; padding: 2px 4px; border-radius: 4px; font-size: 0.9em;
+  background: var(--pt-surface-mute, #f3f4f6); padding: 2px 4px; border-radius: 4px; font-size: 0.9em;
 }
 .cta {
   align-self: flex-start;
   padding: 6px 14px;
-  border: 1.5px solid #0d9053;
+  border: 1.5px solid var(--brand-primary, #0d9053);
   border-radius: 999px;
-  background: #fff;
-  color: #0d9053;
+  background: var(--pt-surface-card, #fff);
+  color: var(--brand-primary, #0d9053);
   font-size: 14px; font-weight: 500;
   cursor: pointer;
 }
-.cta:active { background: #ecfdf5; }
+.cta:active { background: var(--brand-primary-soft, #ecfdf5); }
 </style>

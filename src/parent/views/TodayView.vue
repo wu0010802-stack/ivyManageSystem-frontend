@@ -16,8 +16,10 @@ import PushCta from '../components/home/PushCta.vue'
 import ChildrenStrip from '../components/home/ChildrenStrip.vue'
 import ChildContextHeader from '../components/ChildContextHeader.vue'
 import PendingSignBanner from '../components/home/PendingSignBanner.vue'
-import LaurelWreath from '@/components/brand/LaurelWreath.vue'
 import ContactBookDayCard from '../components/contact-book/ContactBookDayCard.vue'
+import DashboardHero from '../components/DashboardHero.vue'
+import StatTile from '../components/StatTile.vue'
+import SectionHeader from '../components/SectionHeader.vue'
 
 const router = useRouter()
 const authStore = useParentAuthStore()
@@ -49,6 +51,16 @@ const showPushCta = computed(() => me.value && !me.value.can_push)
 const pendingSignCount = computed(() => {
   const v = (summary.value as { pending_event_acks?: unknown } | null)?.pending_event_acks
   return typeof v === 'number' ? v : 0
+})
+
+// 學費：summary.fees.outstanding_count（筆數）+ outstanding（金額）
+const feesInfo = computed(() => {
+  const fees = (summary.value as { fees?: { outstanding_count?: number; outstanding?: number; overdue?: number } } | null)?.fees // TODO(ts-strict): waiting on backend response_model
+  if (!fees || !fees.outstanding_count) return null
+  return {
+    count: fees.outstanding_count,
+    overdue: fees.overdue ?? 0,
+  }
 })
 
 const selectedChild = computed(() => {
@@ -118,6 +130,13 @@ function childStatusLabel(c: Record<string, unknown> | null | undefined) {
   return isOffDay() ? '今天放假' : '尚未到校'
 }
 
+function childStatusTone(label: string): 'ok' | 'warn' | 'danger' | 'neutral' | 'info' {
+  if (label === '已入園' || label === '在園中' || label === '已離園') return 'ok'
+  if (label === '請假') return 'info'
+  if (label === '今天放假') return 'neutral'
+  return 'neutral'
+}
+
 const selectedTodayChild = computed(() => {
   const tc = todayChildren.value || []
   return tc.find((c) => (c as { student_id?: number }).student_id === selectedStudentId.value) || null
@@ -133,23 +152,38 @@ const hero = computed(() => {
     if (children.value.length > 0) return null
     return {
       kind: 'empty',
-      label: '尚未綁定子女',
-      note: '可從「我的」分頁加綁，或請園所協助。',
+      title: '尚未綁定子女',
+      sub: '可從「我的」分頁加綁，或請園所協助。',
+      statusLabel: null as string | null,
+      statusTone: 'neutral' as const,
     }
   }
   if (tc.length === 1) {
     const c = tc[0]
+    // title = 孩子姓名（來自 home-summary selectedChild），sub = 班級，statusLabel = 出席狀態
+    const name = (selectedChild.value?.name ?? (c as { name?: string }).name) || '孩子'
+    const classroom = (selectedChild.value?.classroom_name ?? (c as { classroom_name?: string }).classroom_name) || null
+    const statusLabel = childStatusLabel(c)
     return {
       kind: 'single',
-      label: childStatusLabel(c),
-      note: [c.name, c.classroom_name].filter(Boolean).join('　·　') || null,
+      title: name,
+      sub: classroom,
+      statusLabel,
+      statusTone: childStatusTone(statusLabel),
     }
   }
-  // 多寶家庭：顯示 selected 單孩 status，ChildContextHeader 自行顯示姓名/班級
+  // 多寶家庭：title = selected 孩子姓名，sub = 班級，statusLabel = 該孩出席狀態
+  // ChildContextHeader 已改為多孩才顯示，不在此重複孩子名
+  const sc = selectedChild.value
+  const name = sc?.name || '孩子'
+  const classroom = sc?.classroom_name || null
+  const statusLabel = childStatusLabel(selectedTodayChild.value)
   return {
     kind: 'multi',
-    label: childStatusLabel(selectedTodayChild.value),
-    note: null,
+    title: name,
+    sub: classroom,
+    statusLabel,
+    statusTone: childStatusTone(statusLabel),
   }
 })
 
@@ -176,31 +210,66 @@ function go(path: string) {
   <PullToRefresh :on-refresh="pullRefresh" class="today-view">
     <PendingSignBanner :count="pendingSignCount" />
 
-    <header class="today-head">
-      <LaurelWreath
-        side="right"
-        :opacity="0.08"
-        :size="132"
-        class="today-laurel"
-        aria-hidden="true"
-      />
+    <!-- 頂部 Bento Hero：孩子姓名/班級 + 今日出席狀態 -->
+    <div class="today-head">
       <p class="today-date">{{ todayDateLine }}</p>
-      <ChildContextHeader v-if="children.length >= 1" variant="hero" class="today-cch" />
-      <h1 v-if="hero" class="today-hero">{{ hero.label }}</h1>
-      <p v-if="hero?.note" class="today-note">{{ hero.note }}</p>
-    </header>
+      <!-- 多孩才顯示 ChildContextHeader；單孩姓名已由 DashboardHero title 呈現 -->
+      <ChildContextHeader v-if="children.length > 1" variant="hero" class="today-cch" />
+
+      <!-- empty 態：尚未綁定子女 -->
+      <template v-if="hero?.kind === 'empty'">
+        <DashboardHero
+          :title="hero.title"
+          :sub="hero.sub ?? undefined"
+          class="today-hero-card"
+        />
+      </template>
+
+      <!-- single / multi 態：title = 孩子姓名，sub = 班級，status-label = 出席狀態 -->
+      <template v-else-if="hero">
+        <DashboardHero
+          :title="hero.title"
+          :sub="hero.sub ?? undefined"
+          :status-label="hero.statusLabel ?? undefined"
+          :status-tone="hero.statusTone"
+          class="today-hero-card"
+        />
+      </template>
+    </div>
 
     <PushCta v-if="showPushCta" @enable="go('/notifications/preferences')" />
 
+    <!-- Bento 格：待繳學費 + 待簽文件 -->
+    <div v-if="feesInfo || pendingSignCount > 0" class="today-bento">
+      <StatTile
+        v-if="feesInfo"
+        label="待繳學費"
+        :value="`${feesInfo.count} 筆`"
+        :sub="feesInfo.overdue > 0 ? '有逾期款項' : undefined"
+        icon="payments"
+        tone="amber"
+        to="/fees"
+      />
+      <StatTile
+        v-if="pendingSignCount > 0"
+        label="待簽文件"
+        :value="`${pendingSignCount} 份`"
+        icon="edit_document"
+        tone="coral"
+        to="/events"
+      />
+    </div>
+
     <!-- 今日聯絡簿 hero card：家長最關心的「孩子今天過得好嗎」 -->
     <section v-if="contactBookEntry && selectedChild" class="cb-hero">
-      <div class="cb-hero-head">
-        <p class="cb-hero-eyebrow">今日聯絡簿</p>
-        <router-link :to="`/contact-book/${contactBookEntry.id}`" class="cb-open">
-          查看完整
-          <span class="material-symbols-rounded" aria-hidden="true">arrow_forward</span>
-        </router-link>
-      </div>
+      <SectionHeader title="今日聯絡簿">
+        <template #action>
+          <router-link :to="`/contact-book/${contactBookEntry.id}`" class="cb-open">
+            查看完整
+            <span class="material-symbols-rounded" aria-hidden="true">arrow_forward</span>
+          </router-link>
+        </template>
+      </SectionHeader>
       <router-link
         :to="`/contact-book/${contactBookEntry.id}`"
         class="cb-card-link"
@@ -236,6 +305,7 @@ function go(path: string) {
     />
 
     <section v-else class="today-stream">
+      <SectionHeader title="今日動態" />
       <TodayTimeline :buckets="buckets" @navigate="go" />
     </section>
 
@@ -257,19 +327,12 @@ function go(path: string) {
 }
 
 .today-head {
-  position: relative;
-  padding: 28px var(--space-4, 16px) var(--space-3, 12px);
-  overflow: hidden;
-  isolation: isolate;
   display: flex;
   flex-direction: column;
+  gap: var(--space-2, 8px);
+  padding: var(--space-6, 24px) var(--space-4, 16px) 0;
 }
-.today-laurel {
-  position: absolute;
-  right: -32px;
-  bottom: -36px;
-  z-index: -1;
-}
+
 .today-date {
   margin: 0;
   font-size: var(--text-sm, 13px);
@@ -277,40 +340,26 @@ function go(path: string) {
   color: var(--pt-text-muted);
   letter-spacing: 0.02em;
 }
+
 .today-cch {
-  margin-top: var(--space-3, 12px);
+  margin-top: var(--space-1, 4px);
 }
-.today-hero {
-  margin: var(--space-2, 8px) 0 0;
-  font-size: 30px;
-  font-weight: 800;
-  line-height: 1.1;
-  letter-spacing: -0.01em;
-  color: var(--pt-text-strong);
+
+.today-hero-card {
+  margin-top: var(--space-2, 8px);
 }
-.today-note {
-  margin: var(--space-2, 8px) 0 0;
-  font-size: var(--text-base, 15px);
-  color: var(--pt-text-muted);
-  font-weight: 500;
+
+/* Bento 格：2 欄 StatTile */
+.today-bento {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2, 8px);
+  padding: 0 var(--space-4, 16px);
 }
 
 /* 今日聯絡簿 hero 區 */
 .cb-hero { padding: 0 var(--space-4, 16px); }
-.cb-hero-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
-}
-.cb-hero-eyebrow {
-  margin: 0;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--pt-text-soft);
-}
+
 .cb-open {
   display: inline-flex;
   align-items: center;
@@ -318,10 +367,11 @@ function go(path: string) {
   background: transparent;
   border: none;
   color: var(--brand-primary, #0d9053);
-  font-size: 13px;
+  font-size: var(--text-sm, 13px);
   font-weight: 600;
   cursor: pointer;
-  padding: 4px 0;
+  padding: var(--space-1, 4px) 0;
+  text-decoration: none;
 }
 .cb-open .material-symbols-rounded {
   font-size: 18px;
@@ -349,7 +399,10 @@ function go(path: string) {
 }
 
 .today-stream {
-  padding: var(--space-2, 8px) var(--space-4, 16px) var(--space-3, 12px);
+  padding: 0 var(--space-4, 16px) var(--space-3, 12px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 8px);
 }
 
 .today-footer {
@@ -358,13 +411,13 @@ function go(path: string) {
 .today-footer-link {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 14px 18px;
+  gap: var(--space-3, 12px);
+  padding: var(--space-4, 16px) var(--space-5, 20px);
   border-radius: 14px;
   background: var(--m3-surface-container, #ebefe8);
   color: var(--pt-text-strong, #2a2520);
   text-decoration: none;
-  font-size: 15px;
+  font-size: var(--text-base, 15px);
   font-weight: 600;
   transition: background-color 120ms ease;
 }
@@ -384,11 +437,5 @@ function go(path: string) {
 
 @media (prefers-reduced-motion: reduce) {
   .cb-card-link { transition: none; }
-}
-
-@media (min-width: 420px) {
-  .today-hero {
-    font-size: 34px;
-  }
 }
 </style>

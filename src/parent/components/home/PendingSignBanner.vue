@@ -72,7 +72,7 @@ function go() {
   height: 32px;
   border-radius: 9999px;
   background: var(--pt-amber-icon-bg, #f5b637);
-  color: #fff;
+  color: var(--pt-on-accent, #fff);
   display: inline-flex;
   align-items: center;
   justify-content: center;

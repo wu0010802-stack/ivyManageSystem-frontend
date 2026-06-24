@@ -5,13 +5,15 @@
  * Props:
  *  - records: 費用紀錄陣列
  *  - statusLabel: (status) => string
- *  - statusColor: (status) => { bg, color } | null
+ *  - statusTone: (status) => 'ok'|'warn'|'danger'|'neutral' — 供 StatusPill 使用
  *
  * Emits:
  *  - record-click(record): 卡片點擊
  *
  * 第一筆未繳/部分繳費的卡片會帶 data-unpaid-anchor，供 hero CTA scrollIntoView。
  */
+import StatusPill from '@/parent/components/StatusPill.vue'
+
 interface FeeRecord {
   id: number
   fee_item_name: string
@@ -23,12 +25,14 @@ interface FeeRecord {
   period?: string
 }
 
+type ToneFn = (status: string) => 'ok' | 'warn' | 'danger' | 'neutral' | 'info'
+
 const props = withDefaults(defineProps<{
   records: FeeRecord[]
   statusLabel: (status: string) => string
-  statusColor?: (status: string) => { bg: string; color: string } | null
+  statusTone?: ToneFn
 }>(), {
-  statusColor: () => null,
+  statusTone: () => ((_s: string): 'neutral' => 'neutral'),
 })
 const emit = defineEmits<{
   'record-click': [record: FeeRecord]
@@ -53,15 +57,10 @@ function isUnpaidAnchor(r: FeeRecord, idx: number): boolean {
   >
     <div class="record-row1">
       <span class="record-name">{{ r.fee_item_name }}</span>
-      <span
-        class="record-status"
-        :data-status="r.status"
-        :style="
-          statusColor(r.status)
-            ? { background: statusColor(r.status)?.bg, color: statusColor(r.status)?.color }
-            : {}
-        "
-      >{{ statusLabel(r.status) }}</span>
+      <StatusPill
+        :label="statusLabel(r.status)"
+        :tone="statusTone(r.status)"
+      />
     </div>
     <div class="record-row2">
       應繳 ${{ fmt(r.amount_due) }} ・ 已繳 ${{ fmt(r.amount_paid) }} ・ 未繳 ${{ fmt(r.outstanding) }}
@@ -94,19 +93,6 @@ function isUnpaidAnchor(r: FeeRecord, idx: number): boolean {
   color: var(--m3-on-surface, var(--pt-text-strong));
   font-size: 15px;
 }
-
-.record-status {
-  padding: 3px 9px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 800;
-}
-
-/* 童彩狀態 chip（prop statusColor 優先；以下為無 prop 時的 token 預設） */
-.record-status[data-status="paid"]    { background: var(--pt-tint-calendar); color: var(--pt-tint-calendar-fg); }
-.record-status[data-status="unpaid"]  { background: var(--pt-tint-money); color: var(--pt-tint-money-fg); }
-.record-status[data-status="overdue"] { background: var(--pt-tint-announcement); color: var(--pt-tint-announcement-fg); }
-.record-status[data-status="partial"] { background: var(--pt-tint-pickup); color: var(--pt-tint-pickup-fg); }
 
 .record-row2 {
   margin-top: 6px;

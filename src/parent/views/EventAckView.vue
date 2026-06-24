@@ -268,7 +268,7 @@ onMounted(async () => {
 .field select:focus {
   outline: none;
   border-color: var(--brand-primary, #0d9053);
-  background: #fff;
+  background: var(--pt-surface-card, #fff);
 }
 
 .pad-wrap {

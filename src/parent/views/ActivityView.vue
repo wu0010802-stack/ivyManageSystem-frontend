@@ -7,6 +7,8 @@ import ActivityHero from '../components/activity/ActivityHero.vue'
 import ActivityCardList from '../components/activity/ActivityCardList.vue'
 import ActivityRegisterSheet from '../components/activity/ActivityRegisterSheet.vue'
 import RegistrationStatusList from '../components/activity/RegistrationStatusList.vue'
+import SkeletonBlock from '../components/SkeletonBlock.vue'
+import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
 import {
   listCourses,
   myRegistrations,
@@ -29,6 +31,7 @@ import { useRegistrationWindow } from '@/composables/useRegistrationWindow'
 import { buildPublicEditUrl } from '@/utils/publicLinks'
 import ParentIcon from '../components/ParentIcon.vue'
 import PullToRefresh from '../components/PullToRefresh.vue'
+import M3SegmentedButton from '../components/m3/M3SegmentedButton.vue'
 
 interface RegCourse { course_id: number; course_name: string; status: string; price?: number; price_snapshot?: unknown; meeting_weekday?: number | null; meeting_start_time?: string | null; meeting_end_time?: string | null }
 interface Registration { id: number; student_id: number; student_name?: string; school_year: number; semester: number; is_paid: boolean; total_amount?: number; outstanding_amount?: number; payment_status?: string; refunded_amount?: number; courses: RegCourse[] }
@@ -47,6 +50,8 @@ const regsLoading = ref(false)
 const coursesLoading = ref(false)
 const submitting = ref(false)
 const showRegister = ref(false)
+// Task 7（Bento P3）：首屏 fetch 失敗 → inline error 三態
+const loadError = ref(false)
 // FE-1（2026-06-23 audit）：確認轉正式防連點。記錄「正在確認的 reg:course」，
 // 期間停用該按鈕，避免網路慢時連點重複送出（對齊公開查詢頁 promotionSubmitting）。
 const confirmingKey = ref<string | null>(null)
@@ -210,15 +215,18 @@ async function fetchUpcoming() {
 async function fetchBootstrap() {
   regsLoading.value = true
   coursesLoading.value = true
+  loadError.value = false
   try {
     const { data } = await getActivityBootstrap()
     myRegs.value = data?.registrations?.items || []
     courses.value = data?.courses?.items || []
     upcomingSessions.value = data?.upcoming_sessions?.items || []
     if (data?.registration_time) regTimeInfo.value = data.registration_time
+    loadError.value = false
   } catch (err: unknown) {
     const e = err as Record<string, unknown>
     toast.error(String(e?.displayMessage || '載入失敗'))
+    loadError.value = true
   } finally {
     regsLoading.value = false
     coursesLoading.value = false
@@ -337,8 +345,9 @@ function onScrollSection(key: string) {
   } else if (key === 'unpaid') {
     tab.value = 'my'
     requestAnimationFrame(() => {
-      const el = document.querySelector('.reg-card .paid.warn')
-      if (el) el.closest('.reg-card')?.scrollIntoView({ behavior: 'smooth' })
+      // data-unpaid 屬性由 RegistrationStatusList 標記在第一筆未繳/部分繳費的 reg-card 上
+      const el = document.querySelector<HTMLElement>('.reg-card[data-unpaid]')
+      if (el) el.scrollIntoView({ behavior: 'smooth' })
       else
         document
           .querySelector('#act-active')
@@ -368,18 +377,15 @@ async function pullRefresh() {
     />
 
     <ChildContextHeader v-if="tab === 'my'" variant="page" />
-    <div class="tab-row">
-      <button
-        class="tab-btn"
-        :class="{ active: tab === 'my' }"
-        @click="tab = 'my'"
-      >我的報名</button>
-      <button
-        class="tab-btn"
-        :class="{ active: tab === 'new' }"
-        @click="tab = 'new'"
-      >可報名課程</button>
-    </div>
+    <M3SegmentedButton
+      :model-value="tab"
+      :items="[
+        { value: 'my', label: '我的報名', icon: 'assignment' },
+        { value: 'new', label: '可報名課程', icon: 'school' },
+      ]"
+      class="tab-segmented"
+      @update:model-value="tab = ($event as string)"
+    />
 
     <template v-if="tab === 'my'">
       <!-- #2：報名成功後一次性管理連結（公開查詢頁，憑 token 修改/取消） -->
@@ -429,10 +435,22 @@ async function pullRefresh() {
           開始報名
         </button>
       </div>
-      <div v-if="!coursesLoading && courses.length === 0" class="pt-empty">
-        <div class="pt-empty-title">目前沒有開放的課程</div>
-      </div>
-      <ActivityCardList v-else :courses="courses" :conflict-ids="conflictCourseIds" />
+      <SkeletonBlock
+        v-if="coursesLoading && !courses.length"
+        variant="card"
+        :count="3"
+        aria-label="課程載入中"
+      />
+      <MobileErrorRetry
+        v-else-if="loadError"
+        @retry="fetchBootstrap"
+      />
+      <template v-else>
+        <div v-if="!coursesLoading && courses.length === 0" class="pt-empty">
+          <div class="pt-empty-title">目前沒有開放的課程</div>
+        </div>
+        <ActivityCardList v-else :courses="courses" :conflict-ids="conflictCourseIds" />
+      </template>
     </template>
 
     <ActivityRegisterSheet
@@ -454,36 +472,8 @@ async function pullRefresh() {
   gap: var(--pt-page-gap, 18px);
 }
 
-.tab-row {
-  display: flex;
-  background: var(--pt-surface-recessed, var(--pt-surface-mute));
-  border: 1px solid var(--pt-page-border, var(--pt-border));
-  border-radius: 18px;
-  padding: 4px;
-  gap: 4px;
-}
-
-.tab-btn {
-  flex: 1;
-  min-height: var(--touch-target-min, 44px);
-  padding: 8px;
-  background: transparent;
-  border: 1px solid transparent;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--pt-text-soft);
-  border-radius: 14px;
-  cursor: pointer;
-  transition: background 160ms ease, color 160ms ease;
-}
-
-.tab-btn:hover { background: var(--pt-surface-mute-soft, #fefcf3); }
-
-.tab-btn.active {
-  background: var(--pt-surface-raised, var(--neutral-0));
-  border-color: var(--pt-border-light, #ecf5f9);
-  color: var(--brand-primary);
-  box-shadow: var(--pt-shadow-press, var(--pt-elev-1));
+.tab-segmented {
+  width: 100%;
 }
 
 .toolbar {

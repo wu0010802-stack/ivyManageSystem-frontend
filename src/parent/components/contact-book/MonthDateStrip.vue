@@ -220,7 +220,7 @@ function onPick(d: DateChip): void {
   border-color: var(--brand-primary, #0d9053);
 }
 .chip.is-today .weekday,
-.chip.is-today .day { color: #fff; }
+.chip.is-today .day { color: var(--pt-on-accent, #fff); }
 .chip.is-today .dot { background: var(--sun-300, #ffe285); }
 
 .chip.is-selected:not(.is-today) {

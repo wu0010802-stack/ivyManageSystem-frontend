@@ -92,7 +92,7 @@ const overflow = computed<number>(() => Math.max(0, props.photos.length - 6))
   align-items: center;
   justify-content: center;
   background: rgba(27, 68, 89, 0.55);
-  color: #fff;
+  color: var(--pt-on-accent, #fff);
   font-size: 22px;
   font-weight: 700;
 }

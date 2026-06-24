@@ -479,6 +479,6 @@ async function pullRefresh() {
   color: var(--brand-primary, #0d9053);
   border: 1px solid rgba(13, 144, 83, 0.18);
 }
-.hero-cta:hover { background: #fff; }
+.hero-cta:hover { background: var(--pt-surface-card, #fff); }
 .hero-cta:active { background: var(--cream, #fffcf2); }
 </style>

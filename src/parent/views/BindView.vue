@@ -238,7 +238,7 @@ function resetForRetry() {
 .input-group input:focus-visible {
   outline: none;
   border-color: var(--brand-primary, #0d9053);
-  background: #fff;
+  background: var(--pt-surface-card, #fff);
   box-shadow: 0 0 0 4px rgba(13, 144, 83, 0.12);
 }
 
