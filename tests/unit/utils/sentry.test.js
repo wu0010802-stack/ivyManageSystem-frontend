@@ -164,6 +164,19 @@ describe('scrubMapping', () => {
     expect(scrubMapping(null)).toBe(null)
   })
 
+  it('redacts strong identifiers inside free-text string values (對齊後端 _scrub_mapping)', () => {
+    // 後端 _scrub_mapping 對 string value 跑 _redact_pii_value；前端須對齊，否則
+    // 自由文字欄位（reason/note/summary）內嵌的手機/身分證/LINE userId 會在前端側洩漏。
+    const res = scrubMapping({
+      reason: '家長電話 0912345678 請改期',
+      note: '身分證 A123456789 已核',
+      ok: '正常文字 編號 12345',
+    })
+    expect(res.reason).not.toContain('0912345678')
+    expect(res.note).not.toContain('A123456789')
+    expect(res.ok).toBe('正常文字 編號 12345') // 非識別子不誤遮
+  })
+
   it('substring matches extended keys like parent_email', () => {
     const res = scrubMapping({
       parent_email: 'x@y.com',
@@ -287,6 +300,23 @@ describe('scrubEvent', () => {
   it('non-object passthrough', () => {
     expect(scrubEvent(null)).toBe(null)
     expect(scrubEvent('s')).toBe('s')
+  })
+
+  it('redacts identifiers in exception.values[].value (對齊後端 _scrub_event P2-2)', () => {
+    // 未捕捉 JS 錯誤訊息可能內嵌手機/身分證/LINE userId；後端對 exception.values[].value
+    // 跑 _redact_pii_value，前端 scrubEvent 須對齊，否則前端側單邊洩漏。
+    const res = scrubEvent({
+      exception: {
+        values: [
+          { type: 'Error', value: '家長 0912345678 綁定失敗 身分證 A123456789' },
+          { type: 'Error', value: 123 }, // 非字串原樣保留
+        ],
+      },
+    })
+    const exVal = res.exception.values[0].value
+    expect(exVal).not.toContain('0912345678')
+    expect(exVal).not.toContain('A123456789')
+    expect(res.exception.values[1].value).toBe(123)
   })
 })
 
