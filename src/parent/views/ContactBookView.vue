@@ -15,6 +15,9 @@ import EmptyState from '@/components/common/EmptyState.vue'
 import KawaiiStar from '@/components/brand/KawaiiStar.vue'
 import { flushParentQueue } from '@/parent/utils/parentOfflineQueue'
 import { OP_KINDS } from '@/utils/offlineQueue'
+import SectionHeader from '../components/SectionHeader.vue'
+import StatusPill from '../components/StatusPill.vue'
+import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
 
 import MonthDateStrip from '../components/contact-book/MonthDateStrip.vue'
 import ContactBookDayCard from '../components/contact-book/ContactBookDayCard.vue'
@@ -136,6 +139,9 @@ const unreadCount = computed(() =>
 )
 
 const hasAnyHistory = computed(() => historyWithoutToday.value.length > 0)
+
+// 當 fetch 失敗且完全沒有資料時，顯示 inline MobileErrorRetry（toast 仍保留）
+const hasNoData = computed(() => !today.value && history.value.length === 0)
 </script>
 
 <template>
@@ -154,12 +160,19 @@ const hasAnyHistory = computed(() => historyWithoutToday.value.length > 0)
       </div>
     </template>
 
+    <MobileErrorRetry
+      v-else-if="cbError && hasNoData"
+      :error="cbError as Error"
+      @retry="fetchAll"
+    />
+
     <template v-else>
       <section class="today-section">
-        <p class="section-eyebrow">
-          <span class="eyebrow-text">今日聯絡簿</span>
-          <span v-if="unreadCount > 0" class="unread-pill">{{ unreadCount }} 則未讀</span>
-        </p>
+        <SectionHeader title="今日聯絡簿">
+          <template v-if="unreadCount > 0" #action>
+            <StatusPill :label="`${unreadCount} 則未讀`" tone="info" />
+          </template>
+        </SectionHeader>
         <router-link
           v-if="today"
           :to="entryHref(today.id)"
@@ -181,9 +194,7 @@ const hasAnyHistory = computed(() => historyWithoutToday.value.length > 0)
       </section>
 
       <section v-if="hasAnyHistory" class="history-section">
-        <p class="section-eyebrow">
-          <span class="eyebrow-text">之前的紀錄</span>
-        </p>
+        <SectionHeader title="之前的紀錄" />
 
         <div v-if="groupedHistory.thisWeek.length" class="group">
           <p class="group-title">本週</p>
@@ -242,40 +253,15 @@ const hasAnyHistory = computed(() => historyWithoutToday.value.length > 0)
 
 <style scoped>
 .cb {
-  padding: 0 0 24px;
+  padding: 0 0 var(--space-6);
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-1);
 }
-.skeleton-wrap { padding: 8px 16px; display: flex; flex-direction: column; gap: 10px; }
+.skeleton-wrap { padding: var(--space-2) var(--space-4); display: flex; flex-direction: column; gap: 10px; }
 .render-sentinel { height: 1px; }
 
-.section-eyebrow {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 18px 16px 10px;
-}
-.eyebrow-text {
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--pt-text-soft);
-}
-.unread-pill {
-  display: inline-flex;
-  align-items: center;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  padding: 3px 10px;
-  border-radius: 999px;
-  background: var(--coral-100, #ffe3e0);
-  color: var(--coral-700, #b14545);
-}
-
-.today-section { padding: 0 16px; }
+.today-section { padding: 0 var(--space-4); }
 .today-card {
   display: block;
   text-decoration: none;
@@ -286,21 +272,21 @@ const hasAnyHistory = computed(() => historyWithoutToday.value.length > 0)
 .today-card:focus-visible {
   outline: 2px solid var(--brand-primary, #0d9053);
   outline-offset: 3px;
-  border-radius: 20px;
+  border-radius: var(--radius-2xl);
 }
 
-.history-section { margin-top: 8px; }
-.group { margin-top: 8px; }
+.history-section { margin-top: var(--space-2); }
+.group { margin-top: var(--space-2); }
 .group-title {
-  margin: 0 16px 6px;
-  font-size: 13px;
-  font-weight: 600;
+  margin: 0 var(--space-4) var(--space-1);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-semibold);
   color: var(--pt-text-faint);
 }
 .group-list {
   background: var(--pt-surface-card, #fff);
-  border-radius: 16px;
-  margin: 0 16px;
+  border-radius: var(--radius-xl);
+  margin: 0 var(--space-4);
   overflow: hidden;
   border: 1px solid var(--pt-border-light, #ecf5f9);
 }

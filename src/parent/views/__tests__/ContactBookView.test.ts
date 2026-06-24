@@ -90,6 +90,18 @@ vi.mock('@/components/common/EmptyState.vue', () => ({
 vi.mock('@/components/brand/KawaiiStar.vue', () => ({
   default: { template: '<span />' },
 }))
+vi.mock('@/components/common/MobileErrorRetry.vue', () => ({
+  default: {
+    template: '<div data-testid="mobile-error-retry"><button @click="$emit(\'retry\')">重試</button></div>',
+    emits: ['retry'],
+  },
+}))
+vi.mock('@/parent/components/SectionHeader.vue', () => ({
+  default: { template: '<div data-testid="section-header"><slot name="action" /></div>' },
+}))
+vi.mock('@/parent/components/StatusPill.vue', () => ({
+  default: { template: '<span data-testid="status-pill" />' },
+}))
 
 function createTestRouter() {
   return createRouter({
@@ -161,5 +173,63 @@ describe('ContactBookView — friendly error watch', () => {
     expect(mockToast.error).toHaveBeenCalledTimes(1)
     expect(mockToast.error.mock.calls[0]![0]).toBe('伺服器爆了')
     expect(w.exists()).toBe(true)
+  })
+})
+
+describe('ContactBookView — inline MobileErrorRetry', () => {
+  it('fetch 失敗且無資料時渲染 MobileErrorRetry', async () => {
+    // 預設 mockCbBundle = { today: null, entries: [] }（hasNoData = true）
+    const w = mountCbView()
+    await flushPromises()
+
+    // 設定 error — 觸發 watch(cbError) + hasNoData 條件
+    mockCbError.value = {
+      isAxiosError: true,
+      response: { status: 500 },
+      errorDetail: null,
+      displayMessage: '伺服器錯誤',
+    }
+    await flushPromises()
+
+    expect(w.find('[data-testid="mobile-error-retry"]').exists()).toBe(true)
+  })
+
+  it('有資料時即使 fetch 錯誤也不渲染 MobileErrorRetry', async () => {
+    // 給 bundle 一筆 today 資料 → hasNoData = false
+    mockCbBundle.value = {
+      today: { id: 1, log_date: '2026-06-24', isRead: true },
+      entries: [],
+    }
+    const w = mountCbView()
+    await flushPromises()
+
+    mockCbError.value = {
+      isAxiosError: true,
+      response: { status: 500 },
+      errorDetail: null,
+      displayMessage: '伺服器錯誤',
+    }
+    await flushPromises()
+
+    expect(w.find('[data-testid="mobile-error-retry"]').exists()).toBe(false)
+  })
+
+  it('點擊重試呼叫 fetchAll（refresh）', async () => {
+    const w = mountCbView()
+    await flushPromises()
+
+    mockCbError.value = {
+      isAxiosError: true,
+      response: { status: 503 },
+      errorDetail: null,
+      displayMessage: '服務不可用',
+    }
+    await flushPromises()
+
+    const btn = w.find('[data-testid="mobile-error-retry"] button')
+    expect(btn.exists()).toBe(true)
+    await btn.trigger('click')
+    // fetchAll 內部呼叫 refreshCb（mockRefresh）
+    expect(mockRefresh).toHaveBeenCalled()
   })
 })
