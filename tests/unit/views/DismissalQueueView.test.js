@@ -181,4 +181,70 @@ describe('DismissalQueueView', () => {
     wrapper.vm.handleWsEvent({ type: 'dismissal_call_cancelled', payload: SAMPLE_CALL })
     expect(wrapper.vm.calls).toHaveLength(0)
   })
+
+  // ─── 點名單一鍵發起 ───────────────────────────────────
+  it('掛載後應呼叫 getStudents 載入點名單', async () => {
+    mountView()
+    await flushPromises()
+    expect(getStudents).toHaveBeenCalledWith(expect.objectContaining({ is_active: true }))
+  })
+
+  it('handleQuickCreate: 一鍵發起應建立通知並重抓列表，完成後清除 inFlight', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    vi.clearAllMocks()
+    getDismissalCalls.mockResolvedValue({ data: [] })
+    createDismissalCall.mockResolvedValue({ data: {} })
+
+    await wrapper.vm.handleQuickCreate({ id: 10, name: '小明', classroomId: 5, notifying: false })
+    await flushPromises()
+
+    expect(createDismissalCall).toHaveBeenCalledWith({ student_id: 10, classroom_id: 5 })
+    expect(getDismissalCalls).toHaveBeenCalled() // 成功後 refetch 保證入列
+    expect(wrapper.vm.inFlight.has(10)).toBe(false)
+  })
+
+  it('handleQuickCreate: 已在通知中的學生不重複發起（從源頭擋 409）', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    vi.clearAllMocks()
+
+    await wrapper.vm.handleQuickCreate({ id: 10, name: '小明', classroomId: 5, notifying: true })
+    expect(createDismissalCall).not.toHaveBeenCalled()
+  })
+
+  it('handleQuickCreate: 未分班（classroomId 為 null）不發起', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    vi.clearAllMocks()
+
+    await wrapper.vm.handleQuickCreate({ id: 10, name: '小明', classroomId: null, notifying: false })
+    expect(createDismissalCall).not.toHaveBeenCalled()
+  })
+
+  it('handleQuickCreate: 409 時補抓狀態並清除 inFlight', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    vi.clearAllMocks()
+    getDismissalCalls.mockResolvedValue({ data: [] })
+    createDismissalCall.mockRejectedValue({ response: { status: 409, data: { detail: '已存在' } } })
+
+    await wrapper.vm.handleQuickCreate({ id: 10, name: '小明', classroomId: 5, notifying: false })
+    await flushPromises()
+
+    expect(getDismissalCalls).toHaveBeenCalled() // 409 後仍 refetch 補狀態
+    expect(wrapper.vm.inFlight.has(10)).toBe(false)
+  })
+
+  it('handleWsEvent: dismissal_call_created 對已存在 id 去重，不重複插入', async () => {
+    getDismissalCalls.mockResolvedValue({ data: [] })
+    const wrapper = mountView()
+    await nextTick()
+    wrapper.vm.filterStatus = 'active'
+    wrapper.vm.calls = [{ ...SAMPLE_CALL }]
+
+    // 自己建立時 fetchCalls 已入列、WS echo 又送同一筆 → 應被去重
+    wrapper.vm.handleWsEvent({ type: 'dismissal_call_created', payload: { ...SAMPLE_CALL } })
+    expect(wrapper.vm.calls).toHaveLength(1)
+  })
 })
