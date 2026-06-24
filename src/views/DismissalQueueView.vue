@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { CircleCheck } from '@element-plus/icons-vue'
+import { CircleCheck, Refresh } from '@element-plus/icons-vue'
 import { getDismissalCalls, cancelDismissalCall, createDismissalCall } from '@/api/dismissalCalls'
 import { useClassroomStore } from '@/stores/classroom'
 import { getStudents } from '@/api/students'
@@ -75,12 +75,21 @@ const studentLabel = (s: StudentItem) => {
 let ws: WebSocket | null = null
 let wsReconnectTimer: ReturnType<typeof setTimeout> | null = null
 let wsLivenessTimer: ReturnType<typeof setTimeout> | null = null
-let wsReconnectCount = 0
+let pollingTimer: ReturnType<typeof setInterval> | null = null
+const wsReconnectCount = ref(0)
 const WS_MAX_RETRIES = 5
 // 後端每 30s 主動 ping；逾 1.5×（45s）未收到任何訊息即視為半開死連線
 // （TCP 半開時 onclose/onerror 可能永不觸發），主動踢掉重連避免靜默漏接。
 const WS_LIVENESS_TIMEOUT = 45000
 const wsConnected = ref(false)
+const wsExhausted = ref(false) // 已達重試上限，fallback 至 polling
+
+// 連線體感狀態：normal / reconnecting / exhausted（對齊 PortalDismissalCallsView）
+const connectionState = computed(() => {
+  if (wsConnected.value) return 'normal'
+  if (wsExhausted.value) return 'exhausted'
+  return 'reconnecting'
+})
 
 // ─── HTTP 載入 ───────────────────────────────────────────
 const fetchCalls = async () => {
@@ -193,12 +202,30 @@ const bumpLiveness = () => {
   }, WS_LIVENESS_TIMEOUT)
 }
 
+const stopPolling = () => {
+  if (pollingTimer) { clearInterval(pollingTimer); pollingTimer = null }
+}
+
+const startPolling = () => {
+  stopPolling()
+  pollingTimer = setInterval(fetchCalls, 15000)
+}
+
 const scheduleReconnect = () => {
-  if (wsReconnectCount < WS_MAX_RETRIES) {
-    const delay = Math.min(1000 * Math.pow(2, wsReconnectCount), 30000)
-    wsReconnectCount++
+  if (wsReconnectCount.value < WS_MAX_RETRIES) {
+    const delay = Math.min(1000 * Math.pow(2, wsReconnectCount.value), 30000)
+    wsReconnectCount.value++
     wsReconnectTimer = setTimeout(connectWs, delay)
+  } else {
+    // 超過重試上限，改用 polling，並升級 banner 提醒使用者重新整理
+    // （對齊 PortalDismissalCallsView，避免耗盡後靜默停止漏接通知）
+    wsExhausted.value = true
+    startPolling()
   }
+}
+
+const reloadPage = () => {
+  location.reload()
 }
 
 const connectWs = () => {
@@ -210,9 +237,13 @@ const connectWs = () => {
 
   ws.onopen = () => {
     wsConnected.value = true
-    wsReconnectCount = 0
+    wsReconnectCount.value = 0
+    wsExhausted.value = false
+    stopPolling()
     if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null }
     bumpLiveness()
+    // 重連後重新 fetch，補回斷線期間的更新
+    fetchCalls()
   }
 
   ws.onmessage = (e) => {
@@ -241,9 +272,12 @@ const connectWs = () => {
 const handleWsEvent = (event: { type: string; payload: DismissalCall }) => {
   const { type, payload } = event
   if (type === 'dismissal_call_created') {
-    // 若目前顯示 active，prepend
+    // 若目前顯示 active，prepend；以 id 去重避免自建/echo 雙加（對齊 useDismissalRoster
+    // WS created 去重教訓）與 polling fallback 期間 WS 重連補抓造成的重複。
     if (filterStatus.value === 'active' || filterStatus.value === 'all') {
-      calls.value.unshift(payload)
+      if (!calls.value.some(c => c.id === payload.id)) {
+        calls.value.unshift(payload)
+      }
     }
   } else if (type === 'dismissal_call_updated') {
     const idx = calls.value.findIndex(c => c.id === payload.id)
@@ -299,6 +333,7 @@ onUnmounted(() => {
   ws = null
   if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null }
   clearLiveness()
+  stopPolling()
 })
 </script>
 
@@ -312,6 +347,36 @@ onUnmounted(() => {
         </el-tag>
         <el-button type="primary" @click="openCreateDialog">建立通知</el-button>
       </div>
+    </div>
+
+    <!-- 連線狀態 banner（reconnecting 黃 / exhausted 紅）：耗盡重連後
+         fallback 輪詢，提醒使用者重新整理避免漏接（對齊 PortalDismissalCallsView）-->
+    <div
+      v-if="connectionState !== 'normal'"
+      class="conn-banner"
+      :class="`conn-banner--${connectionState}`"
+      role="alert"
+      data-testid="dismissal-conn-banner"
+    >
+      <div class="conn-banner__text">
+        <template v-if="connectionState === 'reconnecting'">
+          <span>即時連線中斷，正在重新連線</span>
+          <span class="conn-banner__sub">第 {{ wsReconnectCount }} / {{ WS_MAX_RETRIES }} 次嘗試</span>
+        </template>
+        <template v-else>
+          <span>即時連線失敗，目前改用備援接收（每 15 秒更新一次）</span>
+          <span class="conn-banner__sub">為避免漏接通知，建議重新整理頁面</span>
+        </template>
+      </div>
+      <el-button
+        v-if="connectionState === 'exhausted'"
+        type="danger"
+        size="small"
+        :icon="Refresh"
+        class="conn-banner__btn"
+        data-testid="dismissal-conn-reload"
+        @click="reloadPage"
+      >重新整理</el-button>
     </div>
 
     <!-- 篩選 -->
@@ -459,6 +524,43 @@ onUnmounted(() => {
   margin: 0;
   font-size: 1.25rem;
   font-weight: 600;
+}
+
+/* ─── 連線狀態 banner（對齊 PortalDismissalCallsView）─── */
+.conn-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3, 12px);
+  padding: var(--space-3, 12px) var(--space-4, 16px);
+  border-radius: var(--radius-md, 8px);
+  margin-bottom: 16px;
+  border: 1px solid transparent;
+}
+.conn-banner--reconnecting {
+  background-color: var(--color-warning-soft, #fdf6ec);
+  color: var(--text-primary, #1f2937);
+  border-color: var(--color-warning, #e6a23c);
+}
+.conn-banner--exhausted {
+  background-color: var(--color-danger-soft, #fef0f0);
+  color: var(--text-primary, #1f2937);
+  border-color: var(--color-danger, #f56c6c);
+}
+.conn-banner__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--text-sm, 14px);
+  font-weight: 500;
+}
+.conn-banner__sub {
+  font-size: var(--text-xs, 12px);
+  color: var(--text-secondary, #6b7280);
+  font-weight: 400;
+}
+.conn-banner__btn {
+  flex-shrink: 0;
 }
 
 .filter-bar {
