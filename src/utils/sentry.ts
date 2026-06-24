@@ -133,6 +133,9 @@ function keyIsPii(key: unknown) {
 export function scrubMapping(obj: unknown): unknown {
   if (obj === null || obj === undefined) return obj
   if (Array.isArray(obj)) return obj.map((item) => scrubMapping(item))
+  // string value 跑 value-level 識別子遮罩（key 非 PII 時的兜底，與後端
+  // _scrub_mapping 對齊；遮自由文字 reason/note/summary 內的手機/身分證/LINE userId）。
+  if (typeof obj === 'string') return redactPiiValue(obj)
   if (typeof obj !== 'object') return obj
   const out: Record<string, unknown> = {}
   for (const [k, v] of Object.entries(obj)) {
@@ -191,6 +194,24 @@ export function scrubEvent(event: unknown) {
         if (c['data']) c['data'] = scrubMapping(c['data'])
         if (typeof c['message'] === 'string') {
           c['message'] = redactPiiValue(sanitizeUrl(c['message']))
+        }
+      }
+    }
+  }
+
+  // exception.values[].value：未捕捉 JS 錯誤訊息可能內嵌識別子（手機/身分證/LINE
+  // userId），須單獨跑 value-level 遮罩（與後端 _scrub_event P2-2 對齊）。
+  const exc = ev['exception']
+  if (
+    exc &&
+    typeof exc === 'object' &&
+    Array.isArray((exc as Record<string, unknown>)['values'])
+  ) {
+    for (const exVal of (exc as Record<string, unknown[]>)['values']) {
+      if (exVal && typeof exVal === 'object') {
+        const e = exVal as Record<string, unknown>
+        if (typeof e['value'] === 'string') {
+          e['value'] = redactPiiValue(e['value'])
         }
       }
     }
