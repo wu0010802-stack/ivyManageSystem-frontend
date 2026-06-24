@@ -4,7 +4,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import { ref } from 'vue'
+import { ref, defineComponent } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
 
 // ── 可控的 mock：讓 getActivityBootstrap 可在各 test 動態設定 ──────────────
@@ -35,11 +35,37 @@ vi.mock('@/parent/composables/useChildSelection', () => ({
   }),
 }))
 
+// 明確 mock children store，防止 FeesView.threestates 等相鄰測試檔的 vi.mock 登錄
+// 在同 worker 下殘留污染本檔（ActivityView 直接呼叫 useChildrenStore()）
+vi.mock('@/parent/stores/children', () => ({
+  useChildrenStore: () => ({
+    items: [{ student_id: 1, name: '小明' }],
+    load: vi.fn().mockResolvedValue(undefined),
+  }),
+}))
+
+// ActivityRegisterSheet 需明確 stub（含 children prop），否則布林 stub 會撞 DOM Node.children 唯讀屬性
+const ActivityRegisterSheetStub = defineComponent({
+  name: 'ActivityRegisterSheet',
+  props: {
+    modelValue: Boolean,
+    formData: Object,
+    children: Array,
+    courses: Array,
+    myRegs: Array,
+    submitting: Boolean,
+    conflictCourseIds: Array,
+    isRegistrationOpen: Boolean,
+  },
+  emits: ['update:modelValue', 'submitted'],
+  template: '<div class="activity-register-sheet-stub" />',
+})
+
 // 元件 stubs：PullToRefresh 必須渲染 slot，其餘可 stub 掉
 const STUBS = {
   ActivityHero: true,
   ActivityCardList: true,
-  ActivityRegisterSheet: true,
+  ActivityRegisterSheet: ActivityRegisterSheetStub,
   RegistrationStatusList: true,
   ChildContextHeader: true,
   ParentIcon: true,
