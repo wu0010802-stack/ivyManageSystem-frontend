@@ -154,7 +154,7 @@ const stats = computed(() => {
   height: 20px;
   border-radius: 50%;
   background: var(--brand-primary, #0d9053);
-  color: #fff;
+  color: var(--m3-on-primary, #fff);
   flex-shrink: 0;
 }
 .meta {
@@ -245,7 +245,7 @@ const stats = computed(() => {
   justify-content: center;
   aspect-ratio: 1;
   background: rgba(13, 144, 83, 0.85);
-  color: #fff;
+  color: var(--m3-on-primary, #fff);
   font-weight: 700;
   font-size: 17px;
   border-radius: 12px;

@@ -32,7 +32,7 @@ const reactions: string[] = ['like', 'love', 'celebrate']
 <style scoped>
 .reaction-bar { display: flex; gap: 4px; }
 .reaction {
-  background: #f3f4f6;
+  background: var(--pt-surface-mute, #f3f4f6);
   border: none;
   padding: 4px 10px;
   border-radius: 16px;
@@ -44,5 +44,5 @@ const reactions: string[] = ['like', 'love', 'celebrate']
   background: var(--color-warning-soft);
   transform: scale(1.1);
 }
-.reaction:hover:not(.active) { background: #e5e7eb; }
+.reaction:hover:not(.active) { background: var(--pt-surface-mute-soft, #e5e7eb); }
 </style>

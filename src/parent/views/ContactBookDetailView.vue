@@ -582,7 +582,7 @@ function formatReplyTime(iso: string) {
 }
 .read-btn {
   background: var(--brand-primary, #0d9053);
-  color: #fff;
+  color: var(--m3-on-primary, #fff);
   border: none;
   padding: 8px 16px;
   border-radius: 999px;
@@ -681,7 +681,7 @@ function formatReplyTime(iso: string) {
   align-items: center;
   gap: 4px;
   background: var(--brand-primary, #0d9053);
-  color: #fff;
+  color: var(--m3-on-primary, #fff);
   border: none;
   padding: 8px 16px;
   border-radius: 999px;

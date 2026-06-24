@@ -124,6 +124,7 @@
    * 品牌主色切換史：#3f7d48 (原綠) → #ff8b8b (coral, 短暫過渡) → #0d9053 (回歸 IvyKids 官網深綠)
    * Secondary = teal #33aaaa，accent = star yellow。Leaf 綠仍保留作 tint。
    * ============================================================ */
+  /* Bento: --brand-primary(#0d9053) 僅大面積/hero/裝飾；M3 filled 按鈕/小字綠底用 --m3-primary(#006d3d, AA)。勿把 --m3-primary 壓成 #0d9053（白字掉到 4.1:1 未過 AA normal text）。 */
   /* 2026-05-07：回歸 IvyKids 官網品牌（從 coral 切換回深綠雙系統）*/
   --brand-primary:        var(--ivy-green-deep);    /* #0d9053 */
   --brand-primary-hover:  var(--ivy-green-bright);  /* #0caf76 */
@@ -237,6 +238,48 @@
     0 8px 18px rgba(27, 68, 89, 0.08);
   --pt-tint-brand: rgba(13, 144, 83, 0.10);
   --pt-tint-sun: rgba(255, 222, 81, 0.28);
+
+  /* ============================================================
+   * Bento 重設計：冷調石板灰 surface ramp（2026-06-24）
+   * 覆寫 M3 與 pt 兩套被消費的 surface/text/border token，使整個
+   * 家長 app 從暖奶油底位移到冷調 slate。brand 綠與 accent/tile 保留。
+   * globals.css 載入晚於 m3-tokens.css，故此處 --m3-* 覆寫會贏 cascade。
+   * Spec §3.2。
+   * ============================================================ */
+  /* M3 surface tonal ramp → slate */
+  --m3-background: #eef1f5;
+  --m3-surface: #eef1f5;
+  --m3-surface-container-lowest: #ffffff;
+  --m3-surface-container-low: #ffffff;
+  --m3-surface-container: #f4f7fa;
+  --m3-surface-container-high: #eef2f7;
+  --m3-surface-container-highest: #e7edf3;
+  --m3-on-surface: #0f172a;
+  --m3-on-surface-variant: #64748b;
+  --m3-outline: #cbd5e1;
+  --m3-outline-variant: #e2e8f0;
+  /* pt 系列（legacy view 仍消費）→ slate */
+  --pt-text-strong: #0f172a;
+  --pt-text-body: #1e293b;
+  --pt-text-muted: #64748b;
+  --pt-text-soft: #64748b;
+  --pt-text-faint: #94a3b8;
+  --pt-surface-card: #ffffff;
+  --pt-surface-mute: #f1f5f9;
+  --pt-surface-mute-soft: #f8fafc;
+  --pt-surface-raised: #ffffff;
+  --pt-surface-recessed: #eef2f7;
+  --pt-border: #e2e8f0;
+  --pt-border-light: #eef2f7;
+  --pt-border-strong: #cbd5e1;
+  --pt-page-border: rgba(15, 23, 42, 0.08);
+  --pt-hairline: 1px solid #e2e8f0;
+  --pt-shadow-card:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 6px 20px rgba(15, 23, 42, 0.06);
+  --pt-elev-1: 0 1px 2px rgba(15, 23, 42, 0.05), 0 2px 8px rgba(15, 23, 42, 0.06);
+  --pt-elev-2: 0 4px 12px rgba(15, 23, 42, 0.08), 0 12px 28px rgba(15, 23, 42, 0.10);
+  --pt-elev-3: 0 8px 18px rgba(15, 23, 42, 0.12), 0 20px 48px rgba(15, 23, 42, 0.16);
 }
 
 /* ============================================================
@@ -353,6 +396,35 @@
   --pt-shadow-press: 0 8px 18px rgba(0, 0, 0, 0.24);
   --pt-tint-brand: rgba(90, 168, 66, 0.16);
   --pt-tint-sun: rgba(255, 230, 109, 0.16);
+
+  /* Bento 冷調 dark slate（2026-06-24，對齊 light 段） */
+  --m3-background: #0f141a;
+  --m3-surface: #0f141a;
+  --m3-surface-container-lowest: #0b0f14;
+  --m3-surface-container-low: #1a212b;
+  --m3-surface-container: #1f2731;
+  --m3-surface-container-high: #252e3a;
+  --m3-surface-container-highest: #2c3744;
+  --m3-on-surface: #e7edf3;
+  --m3-on-surface-variant: #9aa7b5;
+  --m3-outline: #475569;
+  --m3-outline-variant: #2a333f;
+  --pt-text-strong: #e7edf3;
+  --pt-text-body: #d6dee7;
+  --pt-text-muted: #9aa7b5;
+  --pt-text-soft: #9aa7b5;
+  --pt-text-faint: #6b7886;
+  --pt-surface-card: #1a212b;
+  --pt-surface-mute: #1f2731;
+  --pt-surface-mute-soft: #252e3a;
+  --pt-surface-raised: #1a212b;
+  --pt-surface-recessed: #0f141a;
+  --pt-border: #2a333f;
+  --pt-border-light: #1f2731;
+  --pt-border-strong: #475569;
+  --pt-page-border: rgba(255, 255, 255, 0.08);
+  --pt-hairline: 1px solid #2a333f;
+  --pt-shadow-card: 0 6px 20px rgba(0, 0, 0, 0.32);
 }
 
 /* ========== Focus Visible ==========

@@ -31,7 +31,7 @@ defineEmits<{
   padding: 8px 14px;
   border: 1.5px solid var(--chip-color);
   border-radius: 999px;
-  background: #fff;
+  background: var(--pt-surface-card, #fff);
   color: var(--chip-color);
   font-size: 14px; font-weight: 500;
   cursor: pointer;

@@ -321,7 +321,7 @@ async function pullRefresh() { await fetchData() }
   cursor: pointer;
   background: var(--cream, #fffcf2);
 }
-.cell.has:hover { background: #fff6e0; }
+.cell.has:hover { background: var(--sun-100, #fff6e0); }
 .cell.has:active { transform: scale(0.95); }
 
 .day-num { font-weight: 600; color: var(--pt-text-strong); line-height: 1; }
@@ -348,7 +348,7 @@ async function pullRefresh() { await fetchData() }
 }
 .cell.is-selected {
   box-shadow: 0 0 0 2px var(--brand-primary, #0d9053);
-  background: #fff !important;
+  background: var(--pt-surface-card, #fff) !important;
   transform: scale(1.04);
 }
 .cell.is-selected .day-num { color: var(--brand-primary, #0d9053); font-weight: 800; }

@@ -327,7 +327,7 @@ onMounted(init)
   height: 22px;
   padding: 0 7px;
   background: var(--coral-500, #ff8b8b);
-  color: #fff;
+  color: var(--m3-on-primary, #fff);
   font-size: 11px;
   font-weight: 700;
   border-radius: 11px;

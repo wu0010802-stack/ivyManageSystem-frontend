@@ -199,7 +199,7 @@ function dayLabel(iso: string) {
 }
 .day-filter > button.active {
   background: var(--brand-primary, #0d9053);
-  color: #fff;
+  color: var(--m3-on-primary, #fff);
   border-color: var(--brand-primary, #0d9053);
 }
 

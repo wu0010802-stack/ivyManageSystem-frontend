@@ -195,7 +195,7 @@ watch(open, (v) => {
   height: 48px;
   border-radius: 50%;
   background: var(--brand-primary, #0d9053);
-  color: #fff;
+  color: var(--m3-on-primary, #fff);
   display: flex;
   align-items: center;
   justify-content: center;

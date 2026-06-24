@@ -91,17 +91,17 @@ async function tryRefresh() {
 h2 {
   font-size: 1.5rem;
   margin: 0 0 12px;
-  color: #00838f;
+  color: var(--mv-heading-color, #00838f);
 }
 p {
-  color: #546e7a;
+  color: var(--mv-body-color, #546e7a);
   line-height: 1.6;
   margin: 0 0 24px;
   font-size: 0.95rem;
 }
 button {
-  background: #00acc1;
-  color: white;
+  background: var(--mv-btn-bg, #00acc1);
+  color: var(--m3-on-primary, #fff);
   border: none;
   padding: 12px 32px;
   border-radius: 24px;
@@ -111,7 +111,7 @@ button {
   min-width: 140px;
 }
 button:hover:not(:disabled) {
-  background: #00838f;
+  background: var(--mv-header-bg, #00838f);
 }
 button:disabled {
   opacity: 0.5;
