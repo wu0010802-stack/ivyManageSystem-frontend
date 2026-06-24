@@ -8,6 +8,7 @@ import {
   batchSaveClassAttendance,
   getMyClassAttendanceMonthly,
 } from '@/api/portal'
+import type { ApiBody } from '@/api/_generated/typed'
 import { downloadFile } from '@/utils/download'
 import { apiError } from '@/utils/error'
 import {
@@ -78,7 +79,9 @@ const syncQueue = async ({ silent = false } = {}) => {
   syncing.value = true
   try {
     const result = await flushClassAttendanceQueue(
-      (payload) => batchSaveClassAttendance(payload),
+      // 佇列以 unknown payload 回呼，依後端 BatchSaveRequestPortal 契約送出。
+      (payload) =>
+        batchSaveClassAttendance(payload as ApiBody<'/portal/class-attendance/batch', 'post'>),
       { userId: uid },
     )
     await refreshPendingCount()
@@ -130,7 +133,9 @@ const fetchDailyAttendance = async () => {
       date: dailyDate.value,
       classroom_id: classroomId.value,
     })
-    dailyRecords.value = (res.data.records as AttendanceRecord[]).map((record) => ({
+    // 後端缺 response_model，res.data 為 unknown，narrow 取 records。
+    const records = (res.data as { records?: AttendanceRecord[] }).records ?? []
+    dailyRecords.value = records.map((record) => ({
       ...record,
       status: record.status || '出席',
       remark: record.remark || '',
@@ -183,7 +188,8 @@ const saveDailyAttendance = async () => {
       ElMessage.success(`離線中，已暫存 ${payload.entries.length} 筆，連線後自動同步`)
       return
     }
-    await batchSaveClassAttendance(payload)
+    // entries 來自伺服器點名清單，student_id/status 必有值；依後端契約送出。
+    await batchSaveClassAttendance(payload as ApiBody<'/portal/class-attendance/batch', 'post'>)
     ElMessage.success('點名儲存成功')
     if (pendingCount.value > 0) syncQueue({ silent: true })
   } catch (error) {
@@ -210,7 +216,8 @@ const fetchMonthly = async () => {
       year: Number(year),
       month: Number(month),
     })
-    monthlyData.value = res.data
+    // 後端缺 response_model，res.data 為 unknown，narrow 成月度物件。
+    monthlyData.value = res.data as Record<string, unknown> | null
   } catch (error) {
     ElMessage.error(apiError(error, '載入月統計失敗'))
   } finally {

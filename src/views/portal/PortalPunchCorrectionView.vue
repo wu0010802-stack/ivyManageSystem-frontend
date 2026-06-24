@@ -3,6 +3,7 @@ import { ref, reactive, watch, onMounted } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { ElMessage } from 'element-plus'
 import { getMyPunchCorrections, createMyPunchCorrection } from '@/api/portal'
+import type { ApiBody } from '@/api/_generated/typed'
 import { apiError } from '@/utils/error'
 import { useIsMobile } from '@/composables/useIsMobile'
 import TeacherBottomSheet from '@/components/portal/TeacherBottomSheet.vue'
@@ -12,7 +13,7 @@ const { isMobile } = useIsMobile()
 
 const loading = ref(false)
 const submitLoading = ref(false)
-const corrections = ref([])
+const corrections = ref<Record<string, unknown>[]>([])
 
 const now = new Date()
 const query = reactive({
@@ -32,7 +33,8 @@ const fetchCorrections = async () => {
   loading.value = true
   try {
     const res = await getMyPunchCorrections({ year: query.year, month: query.month })
-    corrections.value = res.data
+    // 後端缺 response_model，res.data 為 unknown，narrow 成清單。
+    corrections.value = res.data as Record<string, unknown>[]
   } catch {
     ElMessage.error('載入失敗')
   } finally {
@@ -45,7 +47,8 @@ const openForm = () => { showForm.value = true }
 const submitCorrection = async (payload: Record<string, unknown>) => {
   submitLoading.value = true
   try {
-    await createMyPunchCorrection(payload)
+    // 表單以 Record 形式 emit，依後端 PunchCorrectionCreate 契約送出。
+    await createMyPunchCorrection(payload as ApiBody<'/portal/my-punch-corrections', 'post'>)
     ElMessage.success('補打卡申請已送出，待主管核准')
     showForm.value = false
     fetchCorrections()

@@ -106,14 +106,10 @@ const isValid = computed(
 async function loadStudents() {
   try {
     const res = await getMyStudents()
-    const data = res.data ?? res
-    if (Array.isArray(data.students)) {
-      students.value = data.students
-    } else if (Array.isArray(data.groups)) {
-      students.value = data.groups.flatMap((g: { students?: Student[] }) => g.students || [])
-    } else {
-      students.value = []
-    }
+    // 後端 MyStudentsOut 將學生掛在 classrooms[].students 之下，攤平成單一清單。
+    students.value = (res.data.classrooms ?? []).flatMap((c) =>
+      (c.students ?? []).map((s) => ({ id: s.id, name: s.name })),
+    )
   } catch (e) {
     error.value = '載入學生清單失敗'
     students.value = []

@@ -44,7 +44,8 @@ const fetchAnnouncements = async (append = false) => {
   try {
     const skip = append ? announcements.value.length : 0
     const res = await getPortalAnnouncements({ skip, limit: pageSize })
-    const { items, total } = res.data
+    // 後端缺 response_model，res.data 為 unknown，依後端契約 narrow 成分頁結構。
+    const { items, total } = res.data as { items: Announcement[]; total: number }
     totalAnnouncements.value = total
     if (append) {
       announcements.value.push(...items)

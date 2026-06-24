@@ -139,7 +139,8 @@ const fetchCandidates = async (dateStr: string) => {
   candidatesLoading.value = true
   try {
     const res = await getSwapCandidates({ date: dateStr })
-    candidates.value = res.data
+    // codegen 型別 work_start/work_end 為 string | null，本元件 SwapCandidate 用 ?: string；narrow 對齊。
+    candidates.value = res.data as SwapCandidate[]
   } catch {
     ElMessage.error('載入候選老師失敗')
   } finally {
@@ -148,6 +149,11 @@ const fetchCandidates = async (dateStr: string) => {
 }
 
 const submitSwap = async (payload: { swap_date: string; target_id: number | null; reason: string }) => {
+  // 後端 SwapRequestCreate.target_id 為必填，缺對象不可送出。
+  if (payload.target_id == null) {
+    ElMessage.error('請選擇換班對象')
+    return
+  }
   swapSubmitLoading.value = true
   try {
     await createSwapRequest({

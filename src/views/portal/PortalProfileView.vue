@@ -52,8 +52,10 @@ const fetchProfile = async () => {
   loading.value = true
   try {
     const res = await getProfile()
-    profile.value = res.data
-    syncForm(res.data)
+    // codegen 型別多處欄位為 string | null，本元件 ProfileData 用 ?: string；narrow 對齊。
+    const data = res.data as ProfileData
+    profile.value = data
+    syncForm(data)
   } catch (error) {
     notify(error, 'PortalProfile:load', '載入個人資料失敗')
   } finally {

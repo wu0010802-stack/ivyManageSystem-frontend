@@ -63,8 +63,10 @@ const fetchSheet = async (force = false) => {
   loading.value = true
   try {
     const res = await getAttendanceSheet({ year: query.year, month: query.month })
-    sheetData.value = res.data
-    sheetCache.set(key, res.data)
+    // 後端缺 response_model，res.data 為 unknown，narrow 成本元件的 SheetData。
+    const sheet = res.data as SheetData
+    sheetData.value = sheet
+    sheetCache.set(key, sheet)
   } catch (error) {
     ElMessage.error('載入失敗: ' + apiError(error, (error as Error)?.message ?? '錯誤'))
   } finally {

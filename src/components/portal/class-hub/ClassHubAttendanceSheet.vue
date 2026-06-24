@@ -58,7 +58,7 @@ const loading = ref(false)
 const error = ref('')
 const pendingRecords = ref<AttendanceRecord[]>([]) // students with status==null
 const picks = reactive<Record<string | number, string>>({}) // student_id -> selected status (optimistic UI)
-let cachedClassroomId: number | string | null = null
+let cachedClassroomId: number | null = null
 let cachedDate: string | null = null
 
 function todayIso() {
@@ -79,7 +79,8 @@ async function fetchClassroom() {
   if (!hub.classroom_id) {
     throw new Error('找不到您的班級')
   }
-  return hub.classroom_id
+  // getTodayHub 為自解包鬆散型別，classroom_id 統一收斂成 number。
+  return Number(hub.classroom_id)
 }
 
 async function load() {
@@ -112,12 +113,14 @@ async function load() {
 async function onPick(studentId: number | string) {
   const status = picks[studentId]
   if (!status) return
+  // 尚未載入完成（無班級/日期）不可送出，後端 batch body 要求 date/classroom_id 必填。
+  if (cachedDate == null || cachedClassroomId == null) return
   // Save this single entry (batch endpoint accepts arrays — send one)
   try {
     await batchSaveClassAttendance({
       date: cachedDate,
       classroom_id: cachedClassroomId,
-      entries: [{ student_id: studentId, status }],
+      entries: [{ student_id: Number(studentId), status }],
     })
     // Remove from pending list (optimistic)
     pendingRecords.value = pendingRecords.value.filter(

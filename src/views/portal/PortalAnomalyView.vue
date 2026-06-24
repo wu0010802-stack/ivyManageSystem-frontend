@@ -35,7 +35,8 @@ const confirmAnomaly = async (anomaly: AnomalyEntry) => {
   anomaly.submitting = true
   try {
     const res = await confirmAnomalyApi(anomaly.id, anomaly.selected_action)
-    ElMessage.success(res.data.message)
+    // 後端缺 response_model，res.data 為 unknown，narrow 取回應訊息。
+    ElMessage.success((res.data as { message: string }).message)
     anomaly.confirmed = true
   } catch (error) {
     ElMessage.error(apiError(error, '處理失敗'))

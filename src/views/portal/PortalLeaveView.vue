@@ -98,7 +98,8 @@ const leaveStats = ref<LeaveStats | null>(null)
 const fetchLeaveStats = async () => {
   try {
     const res = await getMyLeaveStats()
-    leaveStats.value = res.data
+    // codegen 型別 hire_date 為 string | null，本元件 LeaveStats 用 ?: string；narrow 對齊。
+    leaveStats.value = res.data as LeaveStats
   } catch {
     // silent
   }

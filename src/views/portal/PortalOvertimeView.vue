@@ -2,6 +2,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getMyOvertimes, createMyOvertime, deleteMyOvertime } from '@/api/portal'
+import type { ApiBody } from '@/api/_generated/typed'
 import { apiError } from '@/utils/error'
 import { OVERTIME_TYPES as overtimeTypes } from '@/constants/approvalEnums'
 import { useIsMobile } from '@/composables/useIsMobile'
@@ -26,7 +27,8 @@ const fetchOvertimes = async () => {
     loading.value = true
     try {
         const res = await getMyOvertimes({ year: query.year, month: query.month })
-        overtimes.value = res.data
+        // 後端缺 response_model，res.data 為 unknown，narrow 成清單。
+        overtimes.value = res.data as Record<string, unknown>[]
     } catch (error) {
         ElMessage.error('載入失敗')
     } finally {
@@ -41,10 +43,13 @@ const openForm = () => {
 const submitOvertime = async (payload: Record<string, unknown>) => {
     submitLoading.value = true
     try {
-        const res = await createMyOvertime(payload)
+        // 表單以 Record 形式 emit，依後端 OvertimeCreatePortal 契約送出。
+        const res = await createMyOvertime(payload as ApiBody<'/portal/my-overtimes', 'post'>)
+        // 後端缺 response_model，res.data 為 unknown，narrow 取預估加班費。
+        const overtimePay = (res.data as { overtime_pay?: number }).overtime_pay
         const msg = payload.use_comp_leave
             ? `補休申請已送出（${payload.hours}h），核准後計入當年度補休配額`
-            : `加班申請已送出，預估加班費: NT$ ${res.data.overtime_pay}`
+            : `加班申請已送出，預估加班費: NT$ ${overtimePay}`
         ElMessage.success(msg)
         showForm.value = false
         fetchOvertimes()

@@ -56,7 +56,9 @@ export function usePortalStudent() {
     try {
       const res = await revealPortalStudentPhone(studentId as number, {
         target,
-        guardian_id: guardianId,
+        // 後端 RevealPhoneRequest.guardian_id 為 number | null；guardianId 可能是
+        // number/string/null，統一收斂成 number | null。
+        guardian_id: guardianId == null ? null : Number(guardianId),
       })
       const phone = res.data?.phone
       if (phone) {

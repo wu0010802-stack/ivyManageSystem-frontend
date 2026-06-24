@@ -33,7 +33,8 @@ const fetchSalary = async () => {
   loading.value = true
   try {
     const res = await getSalaryPreview({ year: query.year, month: query.month })
-    salaryData.value = res.data
+    // 後端缺 response_model，res.data 為 unknown，narrow 成薪資物件。
+    salaryData.value = res.data as Record<string, unknown> | null
   } catch (error) {
     ElMessage.error('載入失敗')
   } finally {
