@@ -7,6 +7,7 @@ import { toast } from '../utils/toast'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import PullToRefresh from '../components/PullToRefresh.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import MobileErrorRetry from '@/components/common/MobileErrorRetry.vue'
 import KawaiiStar from '@/components/brand/KawaiiStar.vue'
 import { fmtTimeOrDate } from '../utils/datetime'
 import MessagesSearchBar from '../components/messages/MessagesSearchBar.vue'
@@ -39,6 +40,7 @@ const messagesStore = useMessagesStore()
 
 const announcements = ref<Announcement[]>([])
 const announcementsLoaded = ref(false)
+const loadError = ref(false)
 const selectedAnnouncement = ref<Announcement | null>(null)
 const detailOpen = computed({
   get: () => selectedAnnouncement.value !== null,
@@ -82,19 +84,25 @@ const totalUnread = computed(() => {
 
 const fullyLoaded = computed(() => messagesStore.threadsLoaded && announcementsLoaded.value)
 
-async function fetchAnnouncements() {
+async function fetchAnnouncements(): Promise<boolean> {
   try {
     const { data } = await listAnnouncements({ limit: 50 })
     announcements.value = ((data as { items?: Announcement[] })?.items || [])
+    announcementsLoaded.value = true
+    return true
   } catch (err) {
     const e = err as Record<string, unknown>
     toast.error(String(e?.displayMessage || '載入公告失敗'))
-  } finally {
     announcementsLoaded.value = true
+    return false
   }
 }
 
 async function init() {
+  loadError.value = false
+  let threadsOk = true
+  let announcementsOk = true
+
   await Promise.all([
     (async () => {
       try {
@@ -102,10 +110,18 @@ async function init() {
       } catch (err) {
         const e = err as Record<string, unknown>
         toast.error(String(e?.displayMessage || '載入訊息失敗'))
+        threadsOk = false
       }
     })(),
-    fetchAnnouncements(),
+    (async () => {
+      announcementsOk = await fetchAnnouncements()
+    })(),
   ])
+
+  // 若兩者皆失敗且無任何已快取資料，顯示錯誤態
+  if (!threadsOk && !announcementsOk && inboxItems.value.length === 0) {
+    loadError.value = true
+  }
 }
 
 function openThread(t: Thread) {
@@ -125,10 +141,7 @@ async function openAnnounce(a: Announcement) {
 }
 
 async function pullRefresh() {
-  await Promise.all([
-    messagesStore.fetchThreads(true),
-    fetchAnnouncements(),
-  ])
+  await init()
 }
 
 onMounted(init)
@@ -154,6 +167,12 @@ onMounted(init)
         <SkeletonBlock variant="row" :count="4" />
       </div>
     </template>
+
+    <MobileErrorRetry
+      v-else-if="loadError"
+      fallback-message="載入訊息失敗，請稍後再試"
+      @retry="init"
+    />
 
     <EmptyState
       v-else-if="inboxItems.length === 0"
