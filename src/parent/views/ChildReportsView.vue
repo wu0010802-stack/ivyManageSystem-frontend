@@ -36,7 +36,7 @@ async function load() {
 }
 
 function onDownload(report: Report) {
-  window.open(childReportDownloadUrl(studentId.value, Number(report.id)), '_blank')
+  window.open(childReportDownloadUrl(studentId.value, Number(report.id)), '_blank', 'noopener')
 }
 
 function formatDate(s: string | null | undefined) {
