@@ -98,9 +98,10 @@ function courseStatusLabel(
 <template>
   <div id="act-active" class="reg-status-list">
     <div
-      v-for="reg in registrations"
+      v-for="(reg, idx) in registrations"
       :key="reg.id"
       class="reg-card"
+      :data-unpaid="(reg.payment_status === 'unpaid' || reg.payment_status === 'partial' || (!reg.payment_status && !reg.is_paid)) && registrations.findIndex((r) => r.payment_status === 'unpaid' || r.payment_status === 'partial' || (!r.payment_status && !r.is_paid)) === idx ? '' : undefined"
     >
       <div class="reg-header">
         <span class="reg-student">{{ reg.student_name || studentNameMap.get(reg.student_id) }}</span>

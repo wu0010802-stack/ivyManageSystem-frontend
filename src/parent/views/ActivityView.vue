@@ -331,8 +331,9 @@ function onScrollSection(key: string) {
   } else if (key === 'unpaid') {
     tab.value = 'my'
     requestAnimationFrame(() => {
-      const el = document.querySelector('.reg-card .paid.warn')
-      if (el) el.closest('.reg-card')?.scrollIntoView({ behavior: 'smooth' })
+      // data-unpaid 屬性由 RegistrationStatusList 標記在第一筆未繳/部分繳費的 reg-card 上
+      const el = document.querySelector<HTMLElement>('.reg-card[data-unpaid]')
+      if (el) el.scrollIntoView({ behavior: 'smooth' })
       else
         document
           .querySelector('#act-active')
