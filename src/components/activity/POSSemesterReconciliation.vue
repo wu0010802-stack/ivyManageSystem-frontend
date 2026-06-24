@@ -57,6 +57,15 @@
       </div>
     </div>
 
+    <div v-if="truncated" class="pos-semester__trunc-warn" role="alert">
+      ⚠ 報名筆數超過系統單次查詢上限，目前僅載入 {{ items.length }} 筆 / 全學期共
+      {{ totalActive }} 筆。以下統計卡為「目前載入筆數的部分合計」，<strong>並非全學期總計</strong>；
+      請以班級／繳費／簽核狀態篩選縮小範圍後再逐段對帳，以免漏算。
+    </div>
+
+    <div v-if="truncated" class="pos-semester__stats-caption">
+      以下為部分合計（已載入 {{ items.length }} / {{ totalActive }} 筆）
+    </div>
     <div class="pos-semester__stats">
       <StatCard
         label="報名筆數"
@@ -266,6 +275,11 @@ const loading = ref<boolean>(false)
 const items = ref<Record<string, unknown>[]>([])
 const totals = ref<{ offline_paid_amount?: number; [key: string]: unknown }>({})
 const classroomOptions = ref<string[]>([])
+// High（2026-06-24 code review）：後端在報名數超過單次查詢上限時回 truncated=true
+// + total_active（母體總數），此時 items / totals 只是「已載入筆數的部分合計」。
+// 必須保存並顯示，否則對帳者會把部分合計誤當全學期總計而靜默少算。
+const truncated = ref<boolean>(false)
+const totalActive = ref<number>(0)
 
 const filters = reactive<{
   classroom_name: string
@@ -303,12 +317,21 @@ async function reload() {
     if (filters.payment_status) params.payment_status = filters.payment_status
     if (filters.approval_status) params.approval_status = filters.approval_status
     const res = await getPOSSemesterReconciliation(params)
-    const resData = res.data as { items?: Record<string, unknown>[]; totals?: Record<string, unknown> }
+    const resData = res.data as {
+      items?: Record<string, unknown>[]
+      totals?: Record<string, unknown>
+      truncated?: boolean
+      total_active?: number
+    }
     items.value = resData?.items || []
     totals.value = resData?.totals || {}
+    truncated.value = resData?.truncated === true
+    totalActive.value = resData?.total_active ?? items.value.length
   } catch (err) {
     items.value = []
     totals.value = {}
+    truncated.value = false
+    totalActive.value = 0
     const axiosErr = err as { response?: { data?: { detail?: string } } }
     ElMessage.error(axiosErr?.response?.data?.detail || '讀取學期對帳失敗')
   } finally {
@@ -386,6 +409,23 @@ onMounted(() => {
   border: 1px solid #e2e8f0;
   padding: 8px 12px;
   border-radius: 4px;
+}
+
+.pos-semester__trunc-warn {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--color-danger-hover, #b42318);
+  background: var(--color-danger-soft, #fef3f2);
+  border: 1px solid var(--color-danger-soft, #fee4e2);
+  padding: 10px 14px;
+  border-radius: 6px;
+}
+
+.pos-semester__stats-caption {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-warning-hover, #b54708);
+  margin-bottom: -4px;
 }
 
 .pos-semester__hint code {
