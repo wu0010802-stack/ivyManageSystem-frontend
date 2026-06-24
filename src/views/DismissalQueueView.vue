@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { CircleCheck } from '@element-plus/icons-vue'
+import { Search, Plus, Check, Loading } from '@element-plus/icons-vue'
 import { getDismissalCalls, cancelDismissalCall, createDismissalCall } from '@/api/dismissalCalls'
 import { useClassroomStore } from '@/stores/classroom'
 import { getStudents } from '@/api/students'
@@ -12,11 +12,17 @@ import {
   sortByOldestFirst,
   type DismissalCallView,
 } from '@/composables/useDismissalUrgency'
+import {
+  buildRoster,
+  type RosterStudent,
+  type ClassroomInput,
+} from '@/composables/useDismissalRoster'
 
 type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 
 interface DismissalCall {
   id: number
+  student_id?: number
   student_name: string
   classroom_name: string
   status: string
@@ -53,13 +59,33 @@ const filterClassroomId = ref<number | null>(null)
 // 建立通知 dialog
 const createDialogVisible = ref(false)
 const createLoading = ref(false)
-const studentList = ref<StudentItem[]>([])
+const students = ref<StudentItem[]>([])
 const createForm = ref<{ student_id: number | null; classroom_id: number | null; note: string }>({ student_id: null, classroom_id: null, note: '' })
 const createFilterClassroomId = ref(null)
 
+// ─── 點名單一鍵發起 ──────────────────────────────────────
+// 在籍學生依班級分組，點 chip 即建立通知；已在通知中的學生由 buildRoster 標 notifying
+// （從源頭擋後端 409），建立中的學生暫存 inFlight 給即時回饋。
+const rosterQuery = ref('')
+const inFlight = ref<Set<number>>(new Set())
+
+const roster = computed(() => {
+  const groups = buildRoster(
+    students.value,
+    classrooms.value as ClassroomInput[],
+    calls.value,
+    rosterQuery.value,
+  )
+  // 與看板共用 filterClassroomId：選了班級時點名單也只顯示該班
+  if (filterClassroomId.value == null) return groups
+  return groups.filter(g => g.classroomId === filterClassroomId.value)
+})
+
+const rosterFlatStudents = computed(() => roster.value.flatMap(g => g.students))
+
 const filteredStudentOptions = computed(() => {
-  if (!createFilterClassroomId.value) return studentList.value
-  return studentList.value.filter(s => s.classroom_id === createFilterClassroomId.value)
+  if (!createFilterClassroomId.value) return students.value
+  return students.value.filter(s => s.classroom_id === createFilterClassroomId.value)
 })
 
 const classroomNameMap = computed(() =>
@@ -118,25 +144,29 @@ const handleCancel = async (call: DismissalCall) => {
   }
 }
 
-// ─── 建立通知 ────────────────────────────────────────────
-const openCreateDialog = async () => {
-  createForm.value = { student_id: null, classroom_id: null, note: '' }
-  createFilterClassroomId.value = null
-  studentList.value = []
+// ─── 學生清單載入（點名單 + Dialog 共用）────────────────
+const loadStudents = async () => {
   try {
     const res = await getStudents({ is_active: true, limit: 500 })
-    studentList.value = ((res.data as { items?: StudentItem[] }).items || []) as StudentItem[]
+    students.value = ((res.data as { items?: StudentItem[] }).items || []) as StudentItem[]
   } catch (e) {
     const err = e as { response?: { data?: { detail?: string } }; message?: string }
     ElMessage.error('載入學生清單失敗：' + (err.response?.data?.detail || err.message))
   }
+}
+
+// ─── 建立通知（備註路徑，少見情境走 Dialog）──────────────
+const openCreateDialog = async () => {
+  createForm.value = { student_id: null, classroom_id: null, note: '' }
+  createFilterClassroomId.value = null
+  if (students.value.length === 0) await loadStudents() // 點名單已於掛載時載入，通常直接命中快取
   createDialogVisible.value = true
 }
 
 // 切換班級篩選時，若已選學生不在該班則清除
 watch(createFilterClassroomId, (newVal) => {
   if (!newVal) return
-  const selected = studentList.value.find(s => s.id === createForm.value.student_id)
+  const selected = students.value.find(s => s.id === createForm.value.student_id)
   if (selected && selected.classroom_id !== newVal) {
     createForm.value.student_id = null
     createForm.value.classroom_id = null
@@ -144,7 +174,7 @@ watch(createFilterClassroomId, (newVal) => {
 })
 
 const onStudentSelect = (studentId: number) => {
-  const s = studentList.value.find(s => s.id === studentId)
+  const s = students.value.find(s => s.id === studentId)
   if (s) createForm.value.classroom_id = s.classroom_id
 }
 
@@ -167,6 +197,41 @@ const submitCreate = async () => {
     ElMessage.error((e as { response?: { data?: { detail?: string } } }).response?.data?.detail || '建立失敗')
   } finally {
     createLoading.value = false
+  }
+}
+
+// ─── 點名單一鍵發起 ──────────────────────────────────────
+// inFlight 即時回饋 → 成功後 refetch 保證新通知入列、chip 轉 notifying。
+// WS echo 由 handleWsEvent 的 id 去重擋掉重覆。
+const handleQuickCreate = async (student: RosterStudent) => {
+  if (student.classroomId == null) return // 未分班無法建立（後端需 classroom_id）
+  if (student.notifying || inFlight.value.has(student.id)) return
+  inFlight.value.add(student.id)
+  try {
+    await createDismissalCall({ student_id: student.id, classroom_id: student.classroomId })
+    await fetchCalls()
+    ElMessage.success(`已通知接送：${student.name}`)
+  } catch (e) {
+    const err = e as { response?: { status?: number; data?: { detail?: string } } }
+    if (err.response?.status === 409) {
+      await fetchCalls() // 多半他人剛建立，補狀態讓 chip 轉灰
+      ElMessage.info(`${student.name} 已有進行中的接送通知`)
+    } else {
+      ElMessage.error(err.response?.data?.detail || '建立失敗')
+    }
+  } finally {
+    inFlight.value.delete(student.id)
+  }
+}
+
+// 搜尋框按 Enter：若篩到剩唯一可發起的學生，直接建立並清空搜尋。
+const onRosterEnter = () => {
+  const candidates = rosterFlatStudents.value.filter(
+    s => !s.notifying && !inFlight.value.has(s.id) && s.classroomId != null,
+  )
+  if (candidates.length === 1) {
+    handleQuickCreate(candidates[0])
+    rosterQuery.value = ''
   }
 }
 
@@ -241,6 +306,8 @@ const connectWs = () => {
 const handleWsEvent = (event: { type: string; payload: DismissalCall }) => {
   const { type, payload } = event
   if (type === 'dismissal_call_created') {
+    // id 去重：自己一鍵 / Dialog 建立時，fetchCalls 已入列、WS echo 又送同一筆會雙加。
+    if (calls.value.some(c => c.id === payload.id)) return
     // 若目前顯示 active，prepend
     if (filterStatus.value === 'active' || filterStatus.value === 'all') {
       calls.value.unshift(payload)
@@ -288,7 +355,7 @@ const formatTime = (dt: string | undefined) => {
 
 // ─── Lifecycle ────────────────────────────────────────────
 onMounted(async () => {
-  await Promise.all([fetchCalls(), classroomStore.fetchClassrooms()])
+  await Promise.all([fetchCalls(), classroomStore.fetchClassrooms(), loadStudents()])
   connectWs()
 })
 
@@ -334,36 +401,79 @@ onUnmounted(() => {
       </el-col>
     </el-row>
 
-    <!-- 待處理看板：最久優先，等候時間升級色一眼看出哪班老師還沒回應 -->
+    <!-- active 視圖：搜尋 + 待接送看板 + 點名單一鍵發起 -->
     <template v-if="isActiveView">
-      <div v-if="calls.length === 0 && !loading" class="empty-board">
-        <el-icon class="empty-board__ico"><CircleCheck /></el-icon>
-        <p class="empty-board__title">目前沒有待處理的接送通知</p>
-        <p class="empty-board__sub">家長到場時建立通知，會即時出現在這裡</p>
-      </div>
-      <div v-else class="board-wrap" v-loading="loading">
-        <TransitionGroup tag="div" name="dcall-list" class="board">
-          <DismissalCallCard
-            v-for="call in sortedCalls"
-            :key="call.id"
-            :call="call"
-            :now="now"
-          >
-            <template #secondary>
-              <span v-if="call.requested_by_name" class="req-by">{{ call.requested_by_name }} 通知</span>
-            </template>
-            <template #action>
-              <el-button
-                v-if="call.status === 'pending' || call.status === 'acknowledged'"
-                type="danger"
-                plain
-                size="small"
-                @click="handleCancel(call as DismissalCall)"
-              >取消通知</el-button>
-            </template>
-          </DismissalCallCard>
-        </TransitionGroup>
-      </div>
+      <!-- 搜尋框：篩點名單，按 Enter 若剩唯一相符即直接發起 -->
+      <el-input
+        v-model="rosterQuery"
+        class="roster-search"
+        placeholder="搜尋學生姓名，點選即可通知接送"
+        clearable
+        :prefix-icon="Search"
+        @keyup.enter="onRosterEnter"
+      />
+
+      <!-- 待接送（進行中）：最久優先，等候時間升級色一眼看出哪班老師還沒回應 -->
+      <section class="board-section">
+        <h3 class="section-title">
+          待接送<span class="section-title__count">{{ sortedCalls.length }}</span>
+        </h3>
+        <div v-if="sortedCalls.length === 0 && !loading" class="board-empty">
+          目前沒有等待接送的孩子，點下方點名單即可通知
+        </div>
+        <div v-else class="board-wrap" v-loading="loading">
+          <TransitionGroup tag="div" name="dcall-list" class="board">
+            <DismissalCallCard
+              v-for="call in sortedCalls"
+              :key="call.id"
+              :call="call"
+              :now="now"
+            >
+              <template #secondary>
+                <span v-if="call.requested_by_name" class="req-by">{{ call.requested_by_name }} 通知</span>
+              </template>
+              <template #action>
+                <el-button
+                  v-if="call.status === 'pending' || call.status === 'acknowledged'"
+                  type="danger"
+                  plain
+                  size="small"
+                  @click="handleCancel(call as DismissalCall)"
+                >取消通知</el-button>
+              </template>
+            </DismissalCallCard>
+          </TransitionGroup>
+        </div>
+      </section>
+
+      <!-- 點名單：點學生 chip 一鍵發起；已在通知中灰底停用 -->
+      <section class="roster-section">
+        <h3 class="section-title">點名單</h3>
+        <div v-if="roster.length === 0" class="roster-empty">
+          {{ rosterQuery ? '找不到符合的學生' : '沒有在籍學生' }}
+        </div>
+        <div v-for="group in roster" :key="group.classroomId ?? 'none'" class="roster-group">
+          <div class="roster-group__name">{{ group.classroomName }}</div>
+          <div class="roster-chips">
+            <button
+              v-for="s in group.students"
+              :key="s.id"
+              type="button"
+              class="chip"
+              :class="{ 'is-notifying': s.notifying, 'is-inflight': inFlight.has(s.id) }"
+              :disabled="s.notifying || inFlight.has(s.id) || s.classroomId == null"
+              :title="s.classroomId == null ? '未分班，無法發起' : s.name"
+              @click="handleQuickCreate(s)"
+            >
+              <el-icon v-if="inFlight.has(s.id)" class="chip__ico is-loading"><Loading /></el-icon>
+              <el-icon v-else-if="s.notifying" class="chip__ico"><Check /></el-icon>
+              <el-icon v-else class="chip__ico"><Plus /></el-icon>
+              <span class="chip__name">{{ s.name }}</span>
+              <span v-if="s.notifying" class="chip__tag">通知中</span>
+            </button>
+          </div>
+        </div>
+      </section>
     </template>
 
     <!-- 歷史紀錄：已放學 / 已取消 / 全部，走密集表格 -->
@@ -486,29 +596,128 @@ onUnmounted(() => {
   color: var(--text-tertiary);
 }
 
-.empty-board {
+/* ─── 搜尋框 + 區段標題 ─── */
+.roster-search {
+  margin-bottom: var(--space-4);
+  max-width: 420px;
+}
+
+.section-title {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  text-align: center;
-  gap: var(--space-1);
-  padding: var(--space-10) var(--space-4);
-}
-.empty-board__ico {
-  font-size: 44px;
-  color: var(--color-success);
-  margin-bottom: var(--space-2);
-}
-.empty-board__title {
-  margin: 0;
-  font-size: var(--text-lg);
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-base);
   font-weight: var(--font-weight-semibold);
-  color: var(--text-primary);
+  color: var(--text-secondary);
 }
-.empty-board__sub {
-  margin: 0;
-  font-size: var(--text-sm);
+.section-title__count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--color-primary);
+  color: #fff;
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
+}
+
+.board-section {
+  margin-bottom: var(--space-6);
+}
+.board-empty {
+  padding: var(--space-4);
+  border: 1px dashed var(--border-color);
+  border-radius: var(--radius-md);
   color: var(--text-tertiary);
+  font-size: var(--text-sm);
+  text-align: center;
+}
+
+/* ─── 點名單 ─── */
+.roster-empty {
+  padding: var(--space-3) 0;
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+}
+.roster-group {
+  margin-bottom: var(--space-4);
+}
+.roster-group__name {
+  margin-bottom: var(--space-2);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-tertiary);
+}
+.roster-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* 學生 chip：點 = 一鍵發起 */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--touch-target-min);
+  padding: 0 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: var(--surface-color);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition:
+    border-color var(--transition-fast),
+    background-color var(--transition-fast),
+    color var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+.chip:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  box-shadow: var(--shadow-sm);
+}
+.chip:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.chip:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+.chip__ico {
+  font-size: 14px;
+  color: var(--color-primary);
+}
+.chip__name {
+  white-space: nowrap;
+}
+.chip:disabled {
+  cursor: default;
+}
+
+/* 已在通知中：綠底打勾、停用，從源頭擋重複建立 */
+.chip.is-notifying {
+  background: var(--color-success-soft);
+  border-color: var(--color-success);
+  color: #1a7f4b;
+}
+.chip.is-notifying .chip__ico {
+  color: #1a7f4b;
+}
+.chip__tag {
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-semibold);
+}
+/* 建立中 */
+.chip.is-inflight {
+  cursor: progress;
+  opacity: 0.75;
 }
 
 /* 卡片進場 / 移除 / 重排序動畫 */

@@ -189,6 +189,9 @@ const statusText = computed(
   background: var(--color-danger-soft);
   color: #b42318;
   font-weight: var(--font-weight-bold);
+  /* 等候逾門檻：等候時間 chip 放大，最久沒被接的孩子一眼最醒目 */
+  font-size: var(--text-base);
+  padding: 5px 12px;
 }
 
 .dcall__note {

@@ -290,7 +290,10 @@ onUnmounted(() => {
 <template>
   <div class="portal-dismissal-calls">
     <header class="page-head">
-      <h2 class="page-head__title">接送通知</h2>
+      <h2 class="page-head__title">
+        接送通知
+        <span v-if="activeCalls.length" class="page-head__count">待接送 {{ activeCalls.length }}</span>
+      </h2>
       <div class="page-head__tools">
         <el-tag
           :type="wsConnected ? 'success' : 'warning'"
@@ -411,6 +414,19 @@ onUnmounted(() => {
   font-size: var(--text-3xl);
   font-weight: var(--font-weight-bold);
   color: var(--text-primary);
+}
+/* 待接送即時計數：老師一眼知道還有幾位待處理 */
+.page-head__count {
+  display: inline-block;
+  margin-left: var(--space-2);
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--color-primary);
+  color: #fff;
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
+  vertical-align: middle;
 }
 
 .page-head__tools {
