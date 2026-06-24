@@ -76,7 +76,7 @@ describe('ActivityView 三態（Task 7）', () => {
     await flushPromises() // 讓 childrenStore.load() 完成但 bootstrap 仍 pending
 
     // 手動切 tab（bootstrap 還在 pending，coursesLoading 仍 true）
-    const tabs = w.findAll('.tab-btn')
+    const tabs = w.findAll('.m3-segment')
     await tabs[1].trigger('click')
 
     // SkeletonBlock 應存在（coursesLoading=true 且 courses.length===0）
@@ -99,7 +99,7 @@ describe('ActivityView 三態（Task 7）', () => {
     await flushPromises()
 
     // 切到「可報名課程」tab
-    const tabs = w.findAll('.tab-btn')
+    const tabs = w.findAll('.m3-segment')
     await tabs[1].trigger('click')
     await flushPromises()
 
@@ -133,7 +133,7 @@ describe('ActivityView 三態（Task 7）', () => {
     })
     await flushPromises()
 
-    const tabs = w.findAll('.tab-btn')
+    const tabs = w.findAll('.m3-segment')
     await tabs[1].trigger('click')
     await flushPromises()
 
