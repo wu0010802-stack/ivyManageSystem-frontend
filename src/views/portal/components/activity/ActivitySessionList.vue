@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import type { Schema } from '@/api/_generated/typed'
 
-interface Session { course_id?: number; course_name?: string; [key: string]: unknown }
+// 後端 portal sessions list 已補 response_model（ActivitySessionListItemOut）→
+// 直接用 codegen 型別取代原本帶 index signature 的鬆散本地 interface。
+type Session = Schema<'ActivitySessionListItemOut'>
 
 const props = defineProps<{
   sessions: Session[]

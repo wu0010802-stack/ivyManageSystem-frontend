@@ -67,6 +67,7 @@ import {
 } from '@/api/activity'
 import { dateToLocalISO } from '@/utils/format'
 import { useActivityAttendanceDrawer } from '@/composables/useActivityAttendanceDrawer'
+import type { Schema } from '@/api/_generated/typed'
 import ActivityRegistrationPanel from './components/activity/ActivityRegistrationPanel.vue'
 import ActivitySessionList from './components/activity/ActivitySessionList.vue'
 import ActivityRollcallDrawer from './components/activity/ActivityRollcallDrawer.vue'
@@ -104,8 +105,9 @@ async function loadRegistrations() {
 // ── 課程點名 Tab ──
 const attendanceLoading = ref(false)
 const attendanceLoaded = ref(false)
-interface ActivitySession { id?: unknown; course_id?: number; course_name?: string; present_count?: number; recorded_count?: number; [key: string]: unknown }
-const sessions = ref<ActivitySession[]>([])
+// 後端 portal sessions list 已補 response_model（ActivitySessionListItemOut）→ codegen 型別
+type PortalSessionRow = Schema<'ActivitySessionListItemOut'>
+const sessions = ref<PortalSessionRow[]>([])
 const filterCourseId = ref<number | null>(null)
 const filterStartDate = ref<string | null>(null)
 const filterEndDate = ref<string | null>(null)
@@ -126,8 +128,14 @@ const {
   handleSave,
   isDirty,
 } = useActivityAttendanceDrawer({
-  getSessionFn: getPortalAttendanceSession as unknown as (...args: unknown[]) => Promise<{ data: { id: unknown; course_name: string; session_date: string; students: { registration_id: unknown; is_present: boolean | null; attendance_notes?: string }[] } }>,
-  updateFn: batchUpdatePortalAttendance as unknown as (...args: unknown[]) => Promise<unknown>,
+  // 對齊 admin call site（ActivityAttendanceView）：composable 以 unknown-arg 泛型契約
+  // 定義 getSessionFn/updateFn，其 SessionData 內部型別與 codegen 後 API 型別不完全
+  // 一致（如 is_present 的 undefined）；以薄 lambda 包裝已型別化的 api（id 由 unknown
+  // 收斂為 number），取代原 as-unknown-as 偽造完整簽名的雙重斷言。
+  // @ts-expect-error TODO(ts-strict): composable unknown-arg 契約 vs 型別化 API 的邊界
+  getSessionFn: (id, params) => getPortalAttendanceSession(id as number, params),
+  // @ts-expect-error TODO(ts-strict): 同上（records 型別於邊界相接）
+  updateFn: (id, records) => batchUpdatePortalAttendance(id as number, records),
 })
 
 function _monthBounds(offset: number) {
@@ -165,8 +173,7 @@ async function loadAttendanceSessions() {
     if (filterStartDate.value) params.start_date = filterStartDate.value
     if (filterEndDate.value) params.end_date = filterEndDate.value
     const res = await getPortalAttendanceSessions(params)
-    // TODO(ts-strict): /portal/activity/attendance/sessions 後端尚無 response_model → unknown
-    sessions.value = res.data as typeof sessions.value
+    sessions.value = res.data
     attendanceLoaded.value = true
   } catch {
     ElMessage.error('載入場次失敗')
@@ -181,8 +188,8 @@ function ensureAttendanceLoaded() {
   }
 }
 
-function openRollcall(session: { course_id?: number; course_name?: string; [key: string]: unknown }) {
-  openDrawer(session as unknown as { id: unknown })
+function openRollcall(session: PortalSessionRow) {
+  openDrawer(session)
 }
 
 // 點名儲存後樂觀就地更新該列 count，免整批重抓全月場次。
@@ -191,7 +198,7 @@ function openRollcall(session: { course_id?: number; course_name?: string; [key:
 function optimisticUpdateSessionCounts() {
   const sid = drawerSession.value?.id
   if (sid == null) return
-  const row = sessions.value.find((s) => (s as { id?: unknown }).id === sid)
+  const row = sessions.value.find((s) => s.id === sid)
   if (!row) return
   row.present_count = drawerPresentCount.value
   row.recorded_count = drawerPresentCount.value + drawerAbsentCount.value

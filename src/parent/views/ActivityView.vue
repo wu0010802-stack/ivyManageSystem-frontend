@@ -256,8 +256,10 @@ async function submitRegister() {
   try {
     const res = await registerCourses({
       student_id: Number(form.value.student_id),
-      school_year: form.value.school_year,
-      semester: form.value.semester,
+      // registerCourses payload 以 codegen 契約把關後抓出：school_year 可能 null、
+      // semester 在表單為字串，但後端 register body 要 number → 比照 student_id 強制轉。
+      school_year: Number(form.value.school_year),
+      semester: Number(form.value.semester),
       course_ids: (form.value.course_ids ?? []).map(Number),
       supply_ids: [],
     })

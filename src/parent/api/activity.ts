@@ -1,4 +1,5 @@
 import api from './index'
+import type { ApiBody } from '../../api/_generated/typed'
 
 export const listCourses = (params = {}) =>
   api.get('/parent/activity/courses', { params })
@@ -11,8 +12,13 @@ export const getRegistrationTime = () =>
 export const myRegistrations = () =>
   api.get('/parent/activity/my-registrations')
 
-export const registerCourses = (payload: unknown) =>
-  api.post('/parent/activity/register', payload)
+// 報名 payload 以 codegen 契約型別把關（抓 student_id/course_ids/supply_ids 等欄位
+// 漂移）。GET 回傳維持鬆散：本 view 的 Course/Registration 為較嚴格的本地 interface
+// （非 null），與 codegen 的 nullable 欄位接合會 cascade 進子元件 props，屬 parent
+// home view 型別重構，留待後續（FE codegen 遷移既定邊界）。
+export const registerCourses = (
+  payload: ApiBody<'/parent/activity/register', 'post'>,
+) => api.post('/parent/activity/register', payload)
 
 export const confirmPromotion = (registrationId: number, courseId: number) =>
   api.post(`/parent/activity/registrations/${registrationId}/confirm-promotion`, {
