@@ -281,7 +281,7 @@
                 <el-button
                   type="primary"
                   :loading="submitting"
-                  :disabled="!canApprove || submitting"
+                  :disabled="approveDisabled"
                   @click="handleApprove"
                 >
                   {{ canApprove ? '確認簽核' : '無簽核權限' }}
@@ -432,6 +432,13 @@ const loadingPending = ref(false)
 const detail = ref<DailyDetail | null>(null)
 const loadingDetail = ref(false)
 const submitting = ref(false)
+
+// 簽核按鈕停用：無權限 / 送出中 / detail 載入中皆停用。
+// 載入中停用可避免切換日期後、detail 尚未到位時，用舊 context（cashInSystem /
+// cash_count_required）誤簽。
+const approveDisabled = computed(
+  () => !canApprove.value || submitting.value || loadingDetail.value,
+)
 
 const dailyTransactions = ref<Record<string, unknown>[]>([])
 const loadingTx = ref(false)
@@ -697,6 +704,9 @@ async function doUnlock({ isOverride, minLen }: { isOverride: boolean; minLen: n
 }
 
 watch(selectedDate, () => {
+  // 先清空表單，避免前一個日期輸入的盤點金額/備註串到新日期送出，
+  // 污染日結 snapshot 的 actual_cash_count / cash_variance / note。
+  resetForm()
   loadDetail()
   loadDailyTransactions()
 })
