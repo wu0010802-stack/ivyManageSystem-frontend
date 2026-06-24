@@ -101,7 +101,7 @@ p {
 }
 button {
   background: var(--mv-btn-bg, #00acc1);
-  color: var(--m3-on-primary, #fff);
+  color: var(--pt-on-accent, #fff);
   border: none;
   padding: 12px 32px;
   border-radius: 24px;

@@ -35,7 +35,7 @@ watch(() => props.modelValue, v => { local.value = v })
   display: flex; align-items: center; gap: 8px;
   padding: 10px 14px;
   background: var(--pt-surface-card, #fff);
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--pt-border, #e5e7eb);
 }
 .material-symbols-rounded { color: var(--pt-text-muted, #6b7280); font-size: 20px; }
 input {

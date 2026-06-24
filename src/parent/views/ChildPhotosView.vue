@@ -209,7 +209,7 @@ onMounted(load)
   top: 50%;
   transform: translateY(-50%);
   background: rgba(255, 255, 255, 0.16);
-  color: var(--m3-on-primary, #fff);
+  color: var(--pt-on-accent, #fff);
   border: none;
   width: 48px;
   height: 48px;
@@ -231,7 +231,7 @@ onMounted(load)
   top: max(16px, env(safe-area-inset-top));
   right: 16px;
   background: rgba(255, 255, 255, 0.16);
-  color: var(--m3-on-primary, #fff);
+  color: var(--pt-on-accent, #fff);
   border: none;
   width: 40px;
   height: 40px;
@@ -250,7 +250,7 @@ onMounted(load)
   bottom: max(24px, env(safe-area-inset-bottom));
   left: 50%;
   transform: translateX(-50%);
-  color: var(--m3-on-primary, #fff);
+  color: var(--pt-on-accent, #fff);
   background: rgba(0, 0, 0, 0.4);
   border-radius: 999px;
   font-size: 13px;

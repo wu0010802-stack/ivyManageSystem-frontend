@@ -339,7 +339,7 @@ const PREFS = [
   border-radius: 10px;
   border: none;
   background: var(--brand-primary, #0d9053);
-  color: var(--m3-on-primary, #fff);
+  color: var(--pt-on-accent, #fff);
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
