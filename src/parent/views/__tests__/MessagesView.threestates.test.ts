@@ -149,6 +149,36 @@ describe('MessagesView 三態（Task 10）', () => {
     w.unmount()
   })
 
+  it('重試期間（re-fetch pending）顯示 SkeletonBlock', async () => {
+    // 第一次兩 API 都 reject
+    fetchThreadsMock.mockRejectedValueOnce(new Error('網路錯誤'))
+    listAnnouncementsMock.mockRejectedValueOnce(new Error('網路錯誤'))
+
+    setActivePinia(createPinia())
+    const MessagesView = (await import('@/parent/views/MessagesView.vue')).default
+    const w = mount(MessagesView, {
+      global: { stubs: STUBS },
+    })
+    await flushPromises()
+
+    // 初始失敗 → MobileErrorRetry 出現
+    const errComp = w.findComponent({ name: 'MobileErrorRetry' })
+    expect(errComp.exists()).toBe(true)
+
+    // 重試：兩 API 永不 resolve（模擬 re-fetch 仍 pending）
+    fetchThreadsMock.mockReturnValue(new Promise(() => {}))
+    listAnnouncementsMock.mockReturnValue(new Promise(() => {}))
+
+    // 點「重試」，不 await flushPromises → re-fetch 仍 pending
+    await errComp.find('button').trigger('click')
+
+    // re-fetch pending 期間應顯示 SkeletonBlock（announcementsLoaded 已重設為 false）
+    expect(w.findComponent({ name: 'SkeletonBlock' }).exists()).toBe(true)
+    expect(w.findComponent({ name: 'MobileErrorRetry' }).exists()).toBe(false)
+
+    w.unmount()
+  })
+
   it('成功載入後 SkeletonBlock 消失、MobileErrorRetry 不存在', async () => {
     fetchThreadsMock.mockResolvedValue(SUCCESS_THREADS)
     listAnnouncementsMock.mockResolvedValue(SUCCESS_ANNOUNCEMENTS)

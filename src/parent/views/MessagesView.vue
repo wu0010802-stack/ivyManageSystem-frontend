@@ -100,6 +100,7 @@ async function fetchAnnouncements(): Promise<boolean> {
 
 async function init() {
   loadError.value = false
+  announcementsLoaded.value = false   // 重試時重設，確保 skeleton 重新顯示
   let threadsOk = true
   let announcementsOk = true
 
