@@ -31,6 +31,13 @@ const STATUS_TAG_TYPE: Record<string, 'info' | 'success' | 'danger'> = {
 const records = ref<DsrRecord[]>([])
 const loading = ref(false)
 const statusFilter = ref<string>('pending')
+
+// --- Pagination（client-side 切片，避免全量資料恆在 DOM）---
+const currentPage = ref(1)
+const pageSize = ref(20)
+const pagedRecords = computed(() =>
+  records.value.slice((currentPage.value - 1) * pageSize.value, currentPage.value * pageSize.value),
+)
 const dsrFilterGroups = [{
   key: 'status', label: '狀態', allLabel: '全部',
   options: [
@@ -60,6 +67,9 @@ const fetchList = async () => {
     const params = statusFilter.value ? { status: statusFilter.value } : undefined
     const res = await listDsrRequests(params)
     records.value = res.data
+    // 重載資料後將頁碼夾回有效範圍（避免換篩選後停在不存在的頁）
+    const maxPage = Math.max(1, Math.ceil(records.value.length / pageSize.value))
+    if (currentPage.value > maxPage) currentPage.value = maxPage
   } catch (err) {
     ElMessage.error(apiError(err, '載入 DSR 請求失敗'))
   } finally {
@@ -69,6 +79,7 @@ const fetchList = async () => {
 
 const onStatusFilterChange = (v: Record<string, unknown>) => {
   statusFilter.value = (v.status as string) ?? ''
+  currentPage.value = 1
   return fetchList()
 }
 
@@ -135,7 +146,7 @@ onMounted(fetchList)
       @update:filter-values="onStatusFilterChange"
     />
 
-    <el-table :data="records" v-loading="loading" style="width: 100%">
+    <el-table :data="pagedRecords" v-loading="loading" style="width: 100%">
       <el-table-column prop="id" label="編號" width="80" />
       <el-table-column label="類型" width="120">
         <template #default="{ row }">
@@ -170,6 +181,15 @@ onMounted(fetchList)
         </template>
       </el-table-column>
     </el-table>
+
+    <div v-if="records.length > pageSize" style="display: flex; justify-content: flex-end; margin-top: 16px">
+      <el-pagination
+        v-model:current-page="currentPage"
+        :page-size="pageSize"
+        :total="records.length"
+        layout="total, prev, pager, next"
+      />
+    </div>
 
     <!-- Approve Dialog -->
     <el-dialog v-model="approveDialogVisible" title="核准 DSR 請求" width="480px">
