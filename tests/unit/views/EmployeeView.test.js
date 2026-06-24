@@ -83,6 +83,12 @@ vi.mock('element-plus', () => ({
   ElMessageBox: { confirm: vi.fn(), prompt: vi.fn() },
 }))
 
+// EmployeeView onMounted 讀 route.query.search（全域搜尋導航帶入）；
+// 測試未裝 router plugin，需 mock useRoute 否則 route 為 undefined 拋 TypeError。
+vi.mock('vue-router', () => ({
+  useRoute: () => ({ query: {} }),
+}))
+
 const flushPromises = async () => {
   await Promise.resolve()
   await Promise.resolve()

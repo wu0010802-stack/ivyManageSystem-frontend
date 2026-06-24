@@ -77,6 +77,10 @@ describe('P1-13 ManualEventEntrySection 計數限正整數', () => {
       getCount: () => 0,
       setCount: vi.fn(),
       saveAll: vi.fn(),
+      // 元件 render 於 cell 比對原值（v-if getOriginal !== getCount）、並提供「沿用上一週期」；
+      // mock 必須補這兩個 export，否則 getOriginal 為 undefined → render 於 :114 拋。
+      getOriginal: () => 0,
+      inheritFromPreviousCycle: vi.fn(),
     })
 
     const w = mount(ManualEventEntrySection, {

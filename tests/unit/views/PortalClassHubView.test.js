@@ -24,9 +24,12 @@ vi.mock('@/api/portalMessages', () => ({
   ),
 }))
 
-// ---- Mock auth so hasPermission('PARENT_MESSAGES_WRITE') 為 deterministic ----
+// ---- Mock auth so hasPermission / hasPortalPermission 為 deterministic ----
+// PortalClassHubView 用 hasPortalPermission（不對 teacher 短路）守 PARENT_MESSAGES_WRITE，
+// 兩個 export 都要 mock，否則元件 onMounted 讀到未定義 export 即拋。
 vi.mock('@/utils/auth', () => ({
   hasPermission: vi.fn(() => true),
+  hasPortalPermission: vi.fn(() => true),
 }))
 
 // ---- Mock Vue Router (PortalClassHubView calls useRouter) ----
