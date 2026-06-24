@@ -85,9 +85,14 @@ async function openReviewDialog() {
 const show = computed(() => pendingCount.value > 0 || reviewCount.value > 0)
 
 let timer: ReturnType<typeof setInterval> | null = null
+// 輪詢 callback：背景分頁（document.hidden）時跳過，省 IO；前景再恢復。
+function pollRefresh() {
+  if (typeof document !== 'undefined' && document.hidden) return
+  refresh()
+}
 onMounted(() => {
   refresh()
-  timer = setInterval(refresh, 5000)
+  timer = setInterval(pollRefresh, 5000)
 })
 onUnmounted(() => {
   if (timer) clearInterval(timer)
