@@ -26,7 +26,7 @@ const message = computed(() => {
 
 <template>
   <div class="mobile-error-retry" role="alert">
-    <div class="mobile-error-retry__icon" aria-hidden="true">⚠️</div>
+    <span class="material-symbols-rounded mobile-error-retry__icon" aria-hidden="true">error</span>
     <p class="mobile-error-retry__message">{{ message }}</p>
     <button class="mobile-error-retry__btn" type="button" @click="$emit('retry')">
       重試
@@ -47,17 +47,18 @@ const message = computed(() => {
   font-size: 28px;
   line-height: 1;
   margin-bottom: 8px;
+  color: var(--color-danger, #c0392b);
 }
 .mobile-error-retry__message {
   margin: 0 0 16px;
-  color: #c0392b;
+  color: var(--color-danger, #c0392b);
   font-size: 14px;
   max-width: 280px;
 }
 .mobile-error-retry__btn {
   padding: 8px 24px;
   background: var(--brand-primary);
-  color: #fff;
+  color: var(--pt-on-accent, #fff);
   border: none;
   border-radius: 6px;
   font-size: 14px;

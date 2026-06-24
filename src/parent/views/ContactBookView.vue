@@ -258,7 +258,7 @@ const hasNoData = computed(() => !today.value && history.value.length === 0)
   flex-direction: column;
   gap: var(--space-1);
 }
-.skeleton-wrap { padding: var(--space-2) var(--space-4); display: flex; flex-direction: column; gap: 10px; }
+.skeleton-wrap { padding: var(--space-2) var(--space-4); display: flex; flex-direction: column; gap: var(--space-2, 8px); }
 .render-sentinel { height: 1px; }
 
 .today-section { padding: 0 var(--space-4); }

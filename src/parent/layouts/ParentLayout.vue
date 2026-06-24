@@ -186,5 +186,13 @@ function onBack() {
   position: sticky;
   bottom: 0;
   z-index: var(--z-sticky, 10);
+  /*
+   * Bento 冷調收尾：在冷石板底色上，M3 active indicator pill 改用
+   * slate-tinted secondary-container，使 active tab 對比更清晰且與 surface 色調一致。
+   * 預設 --m3-secondary-container 是 #d2e8d4（暖綠），在 slate #eef1f5 上輕微色調衝突。
+   * --m3-on-secondary-container 維持深綠以保留品牌感。
+   */
+  --m3-secondary-container: var(--m3-surface-container-highest, #e7edf3);
+  --m3-on-secondary-container: var(--m3-on-surface, #0f172a);
 }
 </style>
