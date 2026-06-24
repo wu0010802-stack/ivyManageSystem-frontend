@@ -60,6 +60,9 @@ export function usePortalClassHub() {
   onMounted(() => {
     refresh().catch(() => {})
     timer = setInterval(() => {
+      // 背景分頁（document.hidden）時跳過輪詢，省後端負載 / quota；
+      // 切回前景由 visibilitychange → onVisible 立刻補抓。
+      if (typeof document !== 'undefined' && document.hidden) return
       refresh().catch(() => {})
     }, POLL_MS)
     if (typeof document !== 'undefined') {

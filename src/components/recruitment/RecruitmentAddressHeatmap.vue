@@ -518,6 +518,9 @@ const handleGovSync = async () => {
 // ── 競爭者學校批次地理編碼 ──
 const geocodingCompetitors = ref(false)
 const geocodeCompetitorResult = ref('')
+// 元件卸載旗標：while(true) 批次 loop 跨多個 await，卸載後若不中止會繼續打
+// API（浪費 Google 流量）並對已銷毀元件寫 reactive state。卸載時翻 true 即 break。
+let geocodeAborted = false
 
 const autoGeocodeIfNeeded = async () => {
   if (!props.canWrite || geocodingCompetitors.value) return
@@ -541,9 +544,13 @@ const handleGeocodeCompetitors = async () => {
   try {
     // 每批最多 500 筆，重複執行直到沒有剩餘待 geocode 的學校
     while (true) {
+      // 卸載後中止：避免對已銷毀元件繼續打 API / 寫 reactive state
+      if (geocodeAborted) break
       batchCount += 1
       geocodeCompetitorResult.value = `第 ${batchCount} 批處理中…（累計成功 ${totalGeocoded} 筆）`
       const res = await geocodeCompetitorSchools(500)
+      // await 期間可能已卸載，回來再檢查一次
+      if (geocodeAborted) break
       const { geocoded = 0, failed = 0, total = 0 } = res.data ?? {}
       totalGeocoded += geocoded
       totalFailed += failed
@@ -1342,6 +1349,8 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  // 中止進行中的批次 geocode loop（while(true) 跨多個 await）
+  geocodeAborted = true
   if (govSyncPoll) {
     clearInterval(govSyncPoll)
     govSyncPoll = null

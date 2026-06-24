@@ -289,7 +289,7 @@ const children = computed(
         <li v-for="r in dsrHistory" :key="r.id" class="dsr-row">
           <div class="dsr-meta">
             <strong>{{ r.request_type === 'delete' ? '刪除' : r.request_type === 'correct' ? '更正' : '停止處理' }}</strong>
-            <small>{{ r.submitted_at.slice(0, 10) }}</small>
+            <small v-if="r.submitted_at">{{ r.submitted_at.slice(0, 10) }}</small>
           </div>
           <span :class="['badge', r.status]">{{ r.status === 'pending' ? '待處理' : r.status === 'approved' ? '已同意' : '已拒絕' }}</span>
           <p class="dsr-reason">{{ r.reason || '—' }}</p>

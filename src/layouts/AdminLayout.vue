@@ -73,6 +73,13 @@ function refreshNotifications() {
   if (isLoggedIn() && isAdminContext(route.path)) notificationStore.fetchSummary()
 }
 
+// 輪詢專用 callback：背景分頁（document.hidden）時跳過，省後端負載 / quota
+// （對照 useHighRiskAuditCount）。切回前景後下一個 tick 自然恢復。
+function pollNotifications() {
+  if (typeof document !== 'undefined' && document.hidden) return
+  refreshNotifications()
+}
+
 onMounted(() => {
   // admin 品牌色 scope（design-tokens.css / main.css 的 html.ivy-admin 區塊）；
   // 掛在 <html> 讓 teleport 到 body 的 dialog/message 也吃到
@@ -82,7 +89,7 @@ onMounted(() => {
   refreshNotifications()
   // Why: 切頁不再觸發 fetchSummary（避免每次 navigation 多一支 API 等待），改用
   // 固定 60 秒輪詢；store 本身有 10s TTL + in-flight dedupe 守住，重複請求不會炸後端。
-  pollTimer = setInterval(refreshNotifications, NOTIFICATION_POLL_MS)
+  pollTimer = setInterval(pollNotifications, NOTIFICATION_POLL_MS)
 })
 
 onUnmounted(() => {

@@ -446,7 +446,7 @@ onMounted(() => {
 
       <el-table-column label="內容預覽" min-width="250">
         <template #default="{ row }">
-          <span style="color: var(--text-secondary);">{{ row.content.length > 60 ? row.content.slice(0, 60) + '...' : row.content }}</span>
+          <span style="color: var(--text-secondary);">{{ (row.content ?? '').length > 60 ? (row.content ?? '').slice(0, 60) + '...' : (row.content ?? '') }}</span>
         </template>
       </el-table-column>
 
