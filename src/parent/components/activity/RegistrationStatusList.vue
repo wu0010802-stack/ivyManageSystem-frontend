@@ -5,7 +5,8 @@
  * Props:
  *  - registrations: 已篩選後的報名陣列
  *  - studentNameMap: Map<student_id, name> 用於 fallback 顯示學生姓名
- *  - courseStatusMap: { [status]: { label, color: { bg, color } } }
+ *  - courseStatusMap: { [status]: { label, color: { bg, color } } }（保留 prop 相容性；
+ *    視覺渲染已改用 StatusPill tone，prop 僅用於取 label）
  *
  * Emits:
  *  - confirm-promotion(reg, course): 確認轉正式按鈕點擊
@@ -13,6 +14,9 @@
  * 根節點帶 id="act-active" 提供 hero scrollIntoView 錨點。
  */
 import { paymentBadge } from '../../utils/activityPayment'
+import StatusPill from '../StatusPill.vue'
+
+type StatusPillTone = 'ok' | 'warn' | 'danger' | 'neutral' | 'info'
 
 interface RegCourse {
   course_id: number
@@ -50,6 +54,45 @@ withDefaults(defineProps<{
 const emit = defineEmits<{
   'confirm-promotion': [reg: Registration, course: RegCourse]
 }>()
+
+/**
+ * 課程報名狀態 → StatusPill tone。
+ * enrolled        → ok（已確認報名）
+ * waitlist        → warn（候補中，待確認）
+ * promoted_pending → danger（需要家長確認轉正式）
+ * finished        → neutral（已結束）
+ * refunded        → neutral（已退費）
+ * 其他            → neutral
+ */
+function courseStatusTone(status: string): StatusPillTone {
+  switch (status) {
+    case 'enrolled':        return 'ok'
+    case 'waitlist':        return 'warn'
+    case 'promoted_pending': return 'danger'
+    case 'finished':        return 'neutral'
+    case 'refunded':        return 'neutral'
+    default:                return 'neutral'
+  }
+}
+
+/**
+ * 課程報名狀態 label：從 courseStatusMap 取 label（向後相容），
+ * 若 map 無對應則 fallback 到各 status 的預設中文標籤。
+ */
+const STATUS_LABEL_FALLBACK: Record<string, string> = {
+  enrolled: '已報名',
+  waitlist: '候補中',
+  promoted_pending: '待您確認',
+  finished: '已結束',
+  refunded: '已退費',
+}
+
+function courseStatusLabel(
+  status: string,
+  map: Record<string, { label: string; color: { bg: string; color: string } }>,
+): string {
+  return map[status]?.label ?? STATUS_LABEL_FALLBACK[status] ?? status
+}
 </script>
 
 <template>
@@ -62,9 +105,11 @@ const emit = defineEmits<{
       <div class="reg-header">
         <span class="reg-student">{{ reg.student_name || studentNameMap.get(reg.student_id) }}</span>
         <span class="reg-term">{{ reg.school_year }}-{{ reg.semester === 1 ? '上' : '下' }}</span>
-        <span :class="['paid', paymentBadge(reg).tone]">
-          {{ paymentBadge(reg).label }}
-        </span>
+        <StatusPill
+          class="payment-pill"
+          :label="paymentBadge(reg).label"
+          :tone="paymentBadge(reg).tone"
+        />
         <span v-if="(reg.refunded_amount ?? 0) > 0" class="reg-refunded">
           已退費 ${{ (reg.refunded_amount ?? 0).toLocaleString() }}
         </span>
@@ -75,16 +120,11 @@ const emit = defineEmits<{
         class="course-row"
       >
         <span class="course-name">{{ rc.course_name }}</span>
-        <span
-          class="course-status"
+        <StatusPill
+          :label="courseStatusLabel(rc.status, courseStatusMap)"
+          :tone="courseStatusTone(rc.status)"
           :data-status="rc.status"
-          :style="{
-            background: courseStatusMap[rc.status]?.color.bg,
-            color: courseStatusMap[rc.status]?.color.color,
-          }"
-        >
-          {{ courseStatusMap[rc.status]?.label || rc.status }}
-        </span>
+        />
         <button
           v-if="rc.status === 'promoted_pending'"
           type="button"
@@ -101,11 +141,11 @@ const emit = defineEmits<{
 .reg-status-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--space-3, 10px);
 }
 
 .reg-card {
-  background: var(--neutral-0);
+  background: var(--m3-surface-container-low, var(--neutral-0));
   border-radius: 12px;
   padding: 12px 14px;
   box-shadow: var(--m3-elev-1, var(--pt-elev-1));
@@ -113,9 +153,10 @@ const emit = defineEmits<{
 
 .reg-header {
   display: flex;
-  gap: 8px;
+  gap: var(--space-2, 8px);
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: var(--space-2, 8px);
+  flex-wrap: wrap;
 }
 
 .reg-student {
@@ -124,45 +165,31 @@ const emit = defineEmits<{
 }
 
 .reg-term {
-  background: var(--color-info-soft);
-  color: var(--pt-info-link); /* 學期資訊 chip，語意為 info status，保留 info-link */
+  background: var(--color-info-soft, #e0f2fe);
+  color: var(--pt-info-link, #2d6f8e);
   padding: 1px 8px;
   border-radius: 10px;
   font-size: 12px;
 }
 
-.paid {
+.payment-pill {
   margin-left: auto;
-  padding: 1px 8px;
-  border-radius: 10px;
-  font-size: 12px;
 }
-.paid.ok      { background: var(--pt-tint-calendar); color: var(--pt-tint-calendar-fg); }
-.paid.warn    { background: var(--pt-tint-money); color: var(--pt-tint-money-fg); }
-/* 免繳（no_fee，全候補 / 0 元）：中性灰，不用警示色避免家長誤以為欠款 */
-.paid.neutral { background: var(--pt-surface-mute, #eef1f4); color: var(--pt-text-muted); }
 
 /* 已退費：緊接付款 badge 後，灰底小字（資訊性，非警示） */
 .reg-refunded {
   padding: 1px 8px;
   border-radius: 10px;
   font-size: 12px;
-  background: var(--pt-surface-mute, #eef1f4);
-  color: var(--pt-text-muted);
+  background: var(--m3-surface-container-highest, #e7edf3);
+  color: var(--pt-text-muted, var(--pt-text-soft));
 }
-
-/* 童彩報名狀態 chip（courseStatusMap inline style 優先；以下為 token 預設） */
-.course-status[data-status="enrolled"]         { background: var(--pt-tint-calendar); color: var(--pt-tint-calendar-fg); }
-.course-status[data-status="waitlist"]         { background: var(--pt-tint-money); color: var(--pt-tint-money-fg); }
-.course-status[data-status="finished"]         { background: var(--pt-tint-pickup); color: var(--pt-tint-pickup-fg); }
-.course-status[data-status="refunded"]         { background: var(--pt-tint-event); color: var(--pt-tint-event-fg); }
-.course-status[data-status="promoted_pending"] { background: var(--pt-tint-announcement); color: var(--pt-tint-announcement-fg); }
 
 .course-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 0;
+  gap: var(--space-2, 8px);
+  padding: var(--space-2, 8px) 0;
   border-top: 1px solid var(--m3-outline-variant, var(--pt-border));
 }
 
@@ -172,16 +199,10 @@ const emit = defineEmits<{
   color: var(--m3-on-surface-variant, var(--pt-text-muted));
 }
 
-.course-status {
-  padding: 1px 8px;
-  border-radius: 10px;
-  font-size: 12px;
-}
-
 .confirm-btn {
   padding: 4px 10px;
   background: var(--m3-primary, var(--brand-primary));
-  color: var(--neutral-0);
+  color: var(--m3-on-primary, var(--neutral-0));
   border: none;
   border-radius: 6px;
   font-size: 12px;

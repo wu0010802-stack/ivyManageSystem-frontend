@@ -30,6 +30,7 @@ import { useRegistrationWindow } from '@/composables/useRegistrationWindow'
 import { buildPublicEditUrl } from '@/utils/publicLinks'
 import ParentIcon from '../components/ParentIcon.vue'
 import PullToRefresh from '../components/PullToRefresh.vue'
+import M3SegmentedButton from '../components/m3/M3SegmentedButton.vue'
 
 interface RegCourse { course_id: number; course_name: string; status: string; price?: number; price_snapshot?: unknown; meeting_weekday?: number | null; meeting_start_time?: string | null; meeting_end_time?: string | null }
 interface Registration { id: number; student_id: number; student_name?: string; school_year: number; semester: number; is_paid: boolean; total_amount?: number; outstanding_amount?: number; payment_status?: string; refunded_amount?: number; courses: RegCourse[] }
@@ -361,18 +362,15 @@ async function pullRefresh() {
     />
 
     <ChildContextHeader v-if="tab === 'my'" variant="page" />
-    <div class="tab-row">
-      <button
-        class="tab-btn"
-        :class="{ active: tab === 'my' }"
-        @click="tab = 'my'"
-      >我的報名</button>
-      <button
-        class="tab-btn"
-        :class="{ active: tab === 'new' }"
-        @click="tab = 'new'"
-      >可報名課程</button>
-    </div>
+    <M3SegmentedButton
+      :model-value="tab"
+      :items="[
+        { value: 'my', label: '我的報名', icon: 'assignment' },
+        { value: 'new', label: '可報名課程', icon: 'school' },
+      ]"
+      class="tab-segmented"
+      @update:model-value="tab = ($event as string)"
+    />
 
     <template v-if="tab === 'my'">
       <!-- #2：報名成功後一次性管理連結（公開查詢頁，憑 token 修改/取消） -->
@@ -459,36 +457,8 @@ async function pullRefresh() {
   gap: var(--pt-page-gap, 18px);
 }
 
-.tab-row {
-  display: flex;
-  background: var(--pt-surface-recessed, var(--pt-surface-mute));
-  border: 1px solid var(--pt-page-border, var(--pt-border));
-  border-radius: 18px;
-  padding: 4px;
-  gap: 4px;
-}
-
-.tab-btn {
-  flex: 1;
-  min-height: var(--touch-target-min, 44px);
-  padding: 8px;
-  background: transparent;
-  border: 1px solid transparent;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--pt-text-soft);
-  border-radius: 14px;
-  cursor: pointer;
-  transition: background 160ms ease, color 160ms ease;
-}
-
-.tab-btn:hover { background: var(--pt-surface-mute-soft, #fefcf3); }
-
-.tab-btn.active {
-  background: var(--pt-surface-raised, var(--neutral-0));
-  border-color: var(--pt-border-light, #ecf5f9);
-  color: var(--brand-primary);
-  box-shadow: var(--pt-shadow-press, var(--pt-elev-1));
+.tab-segmented {
+  width: 100%;
 }
 
 .toolbar {

@@ -50,8 +50,8 @@ async function buildView() {
   const ActivityView = (await import('@/parent/views/ActivityView.vue')).default
   const w = mount(ActivityView, { global: { stubs: STUBS } })
   await flushPromises()
-  // 切到「可報名課程」tab（第二顆 tab 按鈕）
-  const tabs = w.findAll('.tab-btn')
+  // 切到「可報名課程」tab（M3SegmentedButton 第二個 segment）
+  const tabs = w.findAll('.m3-segment')
   await tabs[1].trigger('click')
   await flushPromises()
   return w

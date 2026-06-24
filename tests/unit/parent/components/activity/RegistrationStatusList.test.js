@@ -57,6 +57,46 @@ describe('RegistrationStatusList', () => {
     expect(text).toContain('候補中')
   })
 
+  it('課程狀態透過 StatusPill 渲染 — enrolled 帶 tone-ok', () => {
+    const wrapper = mount(RegistrationStatusList, {
+      props: {
+        registrations: [registrations[0]],
+        courseStatusMap: COURSE_STATUS,
+      },
+    })
+    // enrolled 課程的 StatusPill（data-status=enrolled）
+    const enrolledPill = wrapper.find('[data-status="enrolled"].status-pill')
+    expect(enrolledPill.exists()).toBe(true)
+    expect(enrolledPill.classes()).toContain('tone-ok')
+    expect(enrolledPill.text()).toContain('已報名')
+  })
+
+  it('候補課程 StatusPill 帶 tone-warn', () => {
+    const wrapper = mount(RegistrationStatusList, {
+      props: {
+        registrations: [registrations[1]],
+        courseStatusMap: COURSE_STATUS,
+      },
+    })
+    const pill = wrapper.find('[data-status="waitlist"].status-pill')
+    expect(pill.exists()).toBe(true)
+    expect(pill.classes()).toContain('tone-warn')
+    expect(pill.text()).toContain('候補中')
+  })
+
+  it('promoted_pending 課程 StatusPill 帶 tone-danger', () => {
+    const wrapper = mount(RegistrationStatusList, {
+      props: {
+        registrations: [registrations[0]],
+        courseStatusMap: COURSE_STATUS,
+      },
+    })
+    const pill = wrapper.find('[data-status="promoted_pending"].status-pill')
+    expect(pill.exists()).toBe(true)
+    expect(pill.classes()).toContain('tone-danger')
+    expect(pill.text()).toContain('待您確認')
+  })
+
   it('payment_status=no_fee（全候補）顯示「免繳」而非「未繳費」', () => {
     // ④ 全候補 total=0 時後端回 no_fee；badge 不可沿用 is_paid 顯示「未繳費」。
     const regs = [
@@ -77,6 +117,27 @@ describe('RegistrationStatusList', () => {
     const text = wrapper.text()
     expect(text).toContain('免繳')
     expect(text).not.toContain('未繳費')
+  })
+
+  it('payment_status=no_fee StatusPill 帶 tone-neutral', () => {
+    const regs = [
+      {
+        id: 20,
+        student_id: 3,
+        student_name: '候補生',
+        school_year: 113,
+        semester: 1,
+        is_paid: false,
+        payment_status: 'no_fee',
+        courses: [{ course_id: 300, course_name: '陶土', status: 'waitlist' }],
+      },
+    ]
+    const wrapper = mount(RegistrationStatusList, {
+      props: { registrations: regs, courseStatusMap: COURSE_STATUS },
+    })
+    const paymentPill = wrapper.find('.payment-pill.status-pill')
+    expect(paymentPill.exists()).toBe(true)
+    expect(paymentPill.classes()).toContain('tone-neutral')
   })
 
   it('payment_status=partial 顯示「部分繳費」', () => {
