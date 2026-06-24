@@ -8,6 +8,56 @@ import { useEmployeeStore } from '@/stores/employee'
 import { useNotificationStore } from '@/stores/notification'
 import { hasPermission, getUserInfo } from '@/utils/auth'
 
+interface UpcomingEvent {
+  event_date: string
+  [key: string]: unknown
+}
+
+/**
+ * 把 upcoming events 依 event_date（YYYY-MM-DD）分組，產生「今天 / 明天 /
+ * 後天 / M 月 D 日」label，並依日期升冪排序。
+ *
+ * F3 防禦：event_date 為空 / null / undefined / 壞格式時跳過該筆，
+ * 避免原先 `key.split('-')` 對非字串崩潰（→ 配合無 error boundary 白屏）。
+ *
+ * @param events upcoming events 陣列
+ * @param now    基準「今天」（預設 new Date()）；測試可注入固定時間
+ */
+export function groupUpcomingEvents(
+  events: UpcomingEvent[],
+  now: Date = new Date(),
+): { label: string; events: UpcomingEvent[] }[] {
+  if (!events?.length) return []
+  const today = new Date(now)
+  today.setHours(0, 0, 0, 0)
+  const map: Record<string, { label: string; events: UpcomingEvent[] }> = {}
+  for (const ev of events) {
+    const key = ev?.event_date
+    // 防禦：event_date 必須是 YYYY-MM-DD 形式的非空字串，否則跳過該筆
+    if (typeof key !== 'string' || !key) continue
+    if (!map[key]) {
+      const evDate = new Date(`${key}T00:00:00`)
+      const diff = Number.isNaN(evDate.getTime())
+        ? NaN
+        : Math.round((evDate.getTime() - today.getTime()) / 86400000)
+      let label: string
+      if (diff === 0) label = '今天'
+      else if (diff === 1) label = '明天'
+      else if (diff === 2) label = '後天'
+      else {
+        const [, m, d] = key.split('-')
+        // m / d 缺失（壞格式）時 fallback 顯示原字串，避免 NaN 月 NaN 日
+        label = m && d ? `${parseInt(m)} 月 ${parseInt(d)} 日` : key
+      }
+      map[key] = { label, events: [] }
+    }
+    map[key].events.push(ev)
+  }
+  return Object.entries(map)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([, value]) => value)
+}
+
 export function useDashboardSections() {
   const router = useRouter()
   const employeeStore = useEmployeeStore()
@@ -73,32 +123,7 @@ export function useDashboardSections() {
     return info?.name || info?.display_name || info?.username || '管理員'
   })
 
-  const groupedEvents = computed(() => {
-    if (!upcomingEvents.value.length) return []
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const map: Record<string, { label: string; events: typeof upcomingEvents.value }> = {}
-    for (const ev of upcomingEvents.value) {
-      const key = ev.event_date
-      if (!map[key]) {
-        const evDate = new Date(`${key}T00:00:00`)
-        const diff = Math.round((evDate.getTime() - today.getTime()) / 86400000)
-        let label
-        if (diff === 0) label = '今天'
-        else if (diff === 1) label = '明天'
-        else if (diff === 2) label = '後天'
-        else {
-          const [, m, d] = key.split('-')
-          label = `${parseInt(m)} 月 ${parseInt(d)} 日`
-        }
-        map[key] = { label, events: [] }
-      }
-      map[key].events.push(ev)
-    }
-    return Object.entries(map)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([, value]) => value)
-  })
+  const groupedEvents = computed(() => groupUpcomingEvents(upcomingEvents.value))
 
   const eventTagType: Record<string, string> = { meeting: '', activity: 'success', holiday: 'danger', general: 'info' }
 
