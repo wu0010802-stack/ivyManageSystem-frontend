@@ -125,17 +125,33 @@ export function clearAuth(options: { notifyServer?: boolean } = {}) {
 }
 
 function _resetStores() {
-  // option store 皆支援 $reset()（回 state() 預設）；setup store 無 $reset 則略過。
+  // option store 的 $reset() 會把 state 回到 state() 預設，直接呼叫即可。
+  // ⚠ setup store 也帶 $reset()（typeof === 'function'），但 Pinia 對 setup store 的
+  // $reset 是「呼叫即 throw」的佔位實作，故不能用 typeof 判斷分流。改為：先試 $reset()，
+  // throw 表示是 setup store → fallback 呼叫其自帶 invalidate()（清空快取 state / TTL）。
+  // setup store（如 portalMessages / portalDashboard）含家長對話、學生過敏/用藥/缺席等 PII，
+  // 共享平板登出時必須清乾淨；登出/登入皆 SPA router.push 不 reload，記憶體不會被自然清掉。
+  // 泛型涵蓋所有已實例化 store（不在此 import 個別 store，避免循環依賴）。
   // 不清 module-level inflight 變數（僅持 promise、非 PII，且會以新 session 資料 resolve）。
   const pinia = getActivePinia() as
-    | { _s?: Map<string, { $reset?: () => void }> }
+    | {
+        _s?: Map<
+          string,
+          { $reset?: () => void; invalidate?: () => void }
+        >
+      }
     | undefined
   if (!pinia || !pinia._s) return
   pinia._s.forEach((store) => {
     try {
       store.$reset?.()
     } catch {
-      /* setup store 無 $reset，略過 */
+      // setup store：$reset throw，改走 invalidate()
+      try {
+        store.invalidate?.()
+      } catch {
+        /* 略過：無 $reset 亦無 invalidate 的 setup store */
+      }
     }
   })
 }
