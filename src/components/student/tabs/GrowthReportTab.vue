@@ -55,7 +55,7 @@ function onCreated() {
 }
 
 function onDownload(row: Record<string, unknown>) {
-  window.open(downloadGrowthReportUrl(props.studentId, row.id as number), '_blank')
+  window.open(downloadGrowthReportUrl(props.studentId, row.id as number), '_blank', 'noopener')
 }
 
 async function onSendLine(row: Record<string, unknown>) {
