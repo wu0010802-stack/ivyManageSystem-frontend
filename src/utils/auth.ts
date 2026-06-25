@@ -1,6 +1,7 @@
 // Token 已改由後端 httpOnly Cookie 管理，JS 無法存取。
 // 保留函式簽名供向下相容，但不再操作 localStorage。
 import { shallowRef } from 'vue'
+import { getActivePinia } from 'pinia'
 import {
   PERMISSION_NAMES,
   ROUTE_PERMISSION_RULES,
@@ -117,6 +118,26 @@ export function clearAuth(options: { notifyServer?: boolean } = {}) {
   // 共享裝置：清掉 SW 為此 user 快取的 Portal 私人資料
   // （薪資、班級名單、公告等），避免下一位登入者看到上一位的內容。
   _purgePortalCaches()
+  // 共享裝置：重置所有已實例化的 Pinia store state，避免下一位登入者在 refetch 前的
+  // render tick（keyed-fetch entries TTL 數分鐘、notification.summary 等）短暫看到上一位
+  // 的快取業務資料。登出/登入皆 router.push 不 reload，記憶體不會被自然清掉。
+  _resetStores()
+}
+
+function _resetStores() {
+  // option store 皆支援 $reset()（回 state() 預設）；setup store 無 $reset 則略過。
+  // 不清 module-level inflight 變數（僅持 promise、非 PII，且會以新 session 資料 resolve）。
+  const pinia = getActivePinia() as
+    | { _s?: Map<string, { $reset?: () => void }> }
+    | undefined
+  if (!pinia || !pinia._s) return
+  pinia._s.forEach((store) => {
+    try {
+      store.$reset?.()
+    } catch {
+      /* setup store 無 $reset，略過 */
+    }
+  })
 }
 
 const _PORTAL_USER_CACHES = [
