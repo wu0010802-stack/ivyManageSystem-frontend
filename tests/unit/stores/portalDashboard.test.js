@@ -41,16 +41,17 @@ describe('usePortalDashboardStore', () => {
     expect(store.error).toBeInstanceOf(Error)
   })
 
-  it('invalidate resets lastFetchedAt so next fetchSummary re-fetches even without force', async () => {
+  it('invalidate 清空 summary 並重置 lastFetchedAt，下次 fetchSummary 不用 force 也會重抓', async () => {
     // 第一次 fetch 填充 summary
     getHomeSummary.mockResolvedValue({ data: { v: 1 } })
     const store = usePortalDashboardStore()
     await store.fetchSummary()
     expect(store.summary).toEqual({ v: 1 })
 
-    // invalidate 不清 summary，但讓 isFresh() 回傳 false
+    // invalidate 一併清 summary（含學生過敏/用藥/缺席 PII，共享平板登出時不可殘留），
+    // 並讓 isFresh() 回傳 false。
     store.invalidate()
-    expect(store.summary).toEqual({ v: 1 }) // summary 還在
+    expect(store.summary).toBe(null) // summary 已清空（PII 不殘留）
 
     // 下次 fetchSummary() 不用 force 也會重抓
     getHomeSummary.mockResolvedValue({ data: { v: 2 } })

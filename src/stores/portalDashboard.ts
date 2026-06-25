@@ -38,6 +38,9 @@ export const usePortalDashboardStore = defineStore('portalDashboard', () => {
   }
 
   function invalidate() {
+    // summary 含學生過敏/用藥/缺席等 PII；登出時（共享平板）必須一併清成 null，
+    // 否則 lastFetchedAt 歸零後 summary 仍殘留可讀，下一位登入者 render tick 可見。
+    summary.value = null
     lastFetchedAt.value = 0
   }
 
