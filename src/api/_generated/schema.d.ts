@@ -25930,16 +25930,21 @@ export interface components {
          * @description 單筆快照完整欄位（summary + 全部 SalaryRecord 反射複製欄位）。
          *
          *     Payload 欄位來源：service ``_PAYLOAD_COLUMNS``（SalarySnapshot 與
-         *     SalaryRecord 欄位交集，扣掉 metadata）。SalarySnapshot model 目前未含
-         *     ``supplementary_health_employee`` / ``appraisal_year_end_bonus`` /
-         *     ``unused_leave_payout`` — 故本 schema 也不暴露。新增 SalaryRecord/Snapshot
-         *     Money 欄位時須同步補上對應欄位（PR checklist 提醒）。
+         *     SalaryRecord 欄位交集，扣掉 metadata）。本 schema **必須宣告 _PAYLOAD_COLUMNS
+         *     的每一欄**，否則該欄值雖 persist 且已進 payload dict，仍會被 response_model
+         *     靜默丟棄、detail API 少回（2026-06-25 設計審查：原漏宣告 extra_allowance /
+         *     extra_allowance_label / appraisal_year_end_bonus / supplementary_health_employee
+         *     / unused_leave_payout 5 欄即如此，舊註解誤稱「SalarySnapshot model 未含」已過時）。
+         *     新增 SalaryRecord/Snapshot 欄位時須同步補上對應欄位；
+         *     tests/test_salary_snapshot_column_parity.py 已加 schema↔payload parity 守衛強制。
          */
         SalarySnapshotDetailOut: {
             /** Absence Deduction */
             absence_deduction?: number | null;
             /** Absent Count */
             absent_count?: number | null;
+            /** Appraisal Year End Bonus */
+            appraisal_year_end_bonus?: number | null;
             /** Attendance Policy Id */
             attendance_policy_id?: number | null;
             /** Base Salary */
@@ -25964,6 +25969,10 @@ export interface components {
             employee_id: number;
             /** Employee Name */
             employee_name?: string | null;
+            /** Extra Allowance */
+            extra_allowance?: number | null;
+            /** Extra Allowance Label */
+            extra_allowance_label?: string | null;
             /** Festival Bonus */
             festival_bonus?: number | null;
             /** Gross Salary */
@@ -26028,8 +26037,12 @@ export interface components {
             special_bonus?: number | null;
             /** Supervisor Dividend */
             supervisor_dividend?: number | null;
+            /** Supplementary Health Employee */
+            supplementary_health_employee?: number | null;
             /** Total Deduction */
             total_deduction?: number | null;
+            /** Unused Leave Payout */
+            unused_leave_payout?: number | null;
             /** Work Hours */
             work_hours?: number | null;
         };
