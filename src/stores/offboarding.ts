@@ -68,8 +68,16 @@ export const useOffboardingStore = defineStore('offboarding', () => {
     return res.data
   }
 
-  /** 手動清除指定員工的快取 */
-  function invalidate(id: number): void {
+  /** 清除快取。
+   *  - 傳 id：清單一員工。
+   *  - 不傳 id：清空整個快取（clearAuth → _resetStores 對 setup store 的零參數重置會走這條；
+   *    離職詳情含資遣費 / 離職結算等 HR 財務 PII，共享平板登出必須能整批清乾淨）。 */
+  function invalidate(id?: number): void {
+    if (id === undefined) {
+      cache.value.clear()
+      loading.value.clear()
+      return
+    }
     cache.value.delete(id)
   }
 
