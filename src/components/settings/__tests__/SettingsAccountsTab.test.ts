@@ -61,6 +61,7 @@ vi.mock('@/api/permissions_admin', () => ({
 }))
 
 import SettingsAccountsTab from '../SettingsAccountsTab.vue'
+import { createUser } from '@/api/auth'
 
 describe('SettingsAccountsTab — role card UX', () => {
   beforeEach(() => {
@@ -88,6 +89,23 @@ describe('SettingsAccountsTab — role card UX', () => {
     await nextTick()
     return wrapper
   }
+
+  it('saveUser 送出中重複呼叫不重送（saving 守衛，防序列雙擊跳誤導性「建立失敗」toast）', async () => {
+    const wrapper = await mountTab()
+    const vm = wrapper.vm as unknown as {
+      userForm: Record<string, unknown>
+      saveUser: () => Promise<void>
+    }
+    let resolve!: (v: unknown) => void
+    vi.mocked(createUser).mockReturnValueOnce(new Promise((r) => { resolve = r }) as ReturnType<typeof createUser>)
+    Object.assign(vm.userForm, { employee_id: 1, username: 'u1', password: 'p1', role: 'teacher' })
+    const p1 = vm.saveUser()
+    const p2 = vm.saveUser()
+    expect(vi.mocked(createUser)).toHaveBeenCalledTimes(1)
+    resolve({ data: {} })
+    await Promise.all([p1, p2])
+    await flushPromises()
+  })
 
   it('renders 7 role cards in new-user dialog', async () => {
     await mountAndOpenAddDialog()

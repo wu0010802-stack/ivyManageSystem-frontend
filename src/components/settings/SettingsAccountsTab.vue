@@ -99,11 +99,14 @@ const handleAddUser = () => {
   userDialogVisible.value = true
 }
 
+const savingUser = ref(false)
 const saveUser = async () => {
   if (!userForm.employee_id || !userForm.username || !userForm.password) {
     ElMessage.warning('請填寫所有欄位')
     return
   }
+  if (savingUser.value) return  // 送出中防序列/併發重送（避免序列雙擊跳誤導性「建立失敗」toast）
+  savingUser.value = true
   try {
     const payload: Record<string, unknown> = {
       employee_id: userForm.employee_id,
@@ -121,6 +124,8 @@ const saveUser = async () => {
     fetchUsers()
   } catch (error) {
     ElMessage.error(apiError(error, '建立失敗'))
+  } finally {
+    savingUser.value = false
   }
 }
 
@@ -449,7 +454,7 @@ defineExpose({
       </el-form>
       <template #footer>
         <el-button @click="userDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="saveUser">建立</el-button>
+        <el-button type="primary" :loading="savingUser" @click="saveUser">建立</el-button>
       </template>
     </el-dialog>
 

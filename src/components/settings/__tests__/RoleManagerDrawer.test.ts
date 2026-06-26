@@ -73,6 +73,21 @@ describe('RoleManagerDrawer', () => {
     expect(updateRole).toHaveBeenCalledWith('admin', expect.not.objectContaining({ permissions: expect.anything() }))
   })
 
+  it('saveRole 送出中重複呼叫不重送（saving 守衛，防序列雙擊建重複/誤導 toast）', async () => {
+    let resolve!: (v: unknown) => void
+    createRole.mockReturnValueOnce(new Promise((r) => { resolve = r }))
+    const w = mountDrawer()
+    const vm = w.vm as unknown as Vm
+    vm.handleAddRole()
+    Object.assign(vm.roleForm, { code: 'r_guard', label: '守衛角色', description: '', permissions: ['DASHBOARD'] })
+    const p1 = vm.saveRole()
+    const p2 = vm.saveRole()
+    expect(createRole).toHaveBeenCalledTimes(1)
+    resolve({ data: {} })
+    await Promise.all([p1, p2])
+    await flushPromises()
+  })
+
   it('renders 帳號數 column header', async () => {
     const w = mountDrawer()
     await nextTick()

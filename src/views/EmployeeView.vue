@@ -760,7 +760,9 @@ const handleDetail = async (row: Record<string, unknown>) => {
 }
 
 // ── 新增流程（CREATE）────────────────────────────────
+const saving = ref(false)
 const saveCreate = async () => {
+  if (saving.value) return  // 送出中防序列/併發重送（name 非 unique，序列雙擊會真的建出重複員工）
   const formEl = formRef.value
   if (!formEl) return
   form.supervisor_role = form.supervisor_role || null
@@ -769,15 +771,17 @@ const saveCreate = async () => {
     ElMessage.error('獎金等級覆蓋僅接受 A / B / C')
     return
   }
+  // 同步設 saving（在 validate 前），否則 validate 的 async 間隙會讓第二次點擊穿過守衛。
+  saving.value = true
   formEl.validate(async (valid, invalidFields) => {
-    if (!valid) {
-      const props = Object.keys(invalidFields ?? {})
-      basicFormRef.value?.applyValidationErrors(props)
-      await nextTick()
-      if (props[0]) formEl.scrollToField(props[0])
-      return
-    }
     try {
+      if (!valid) {
+        const props = Object.keys(invalidFields ?? {})
+        basicFormRef.value?.applyValidationErrors(props)
+        await nextTick()
+        if (props[0]) formEl.scrollToField(props[0])
+        return
+      }
       await createEmployee(form)
       ElMessage.success('員工已新增')
       employeeDraft.clear()
@@ -785,6 +789,8 @@ const saveCreate = async () => {
       await fetchEmployees()
     } catch (err) {
       showError(err)
+    } finally {
+      saving.value = false
     }
   })
 }
@@ -1043,7 +1049,7 @@ onMounted(async () => {
       <template #footer>
         <template v-if="!isEdit">
           <el-button @click="closeDialog">取消</el-button>
-          <el-button type="primary" @click="saveCreate">儲存</el-button>
+          <el-button type="primary" :loading="saving" @click="saveCreate">儲存</el-button>
         </template>
         <template v-else>
           <el-button @click="closeDialog">關閉</el-button>
