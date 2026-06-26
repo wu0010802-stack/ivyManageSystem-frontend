@@ -163,9 +163,12 @@ body {
   transition: transform var(--transition-base), box-shadow var(--transition-base);
 }
 
-.el-card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md) !important;
+/* 只在有真 hover 能力的指標裝置抬升；觸控裝置點過卡片不再卡在 hover 抬起態。 */
+@media (hover: hover) and (pointer: fine) {
+  .el-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md) !important;
+  }
 }
 
 /* Cards used as containers (tables, forms) should not hover-float */
