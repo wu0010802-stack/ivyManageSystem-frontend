@@ -45,6 +45,9 @@ export async function downloadFile(
     const response = await api.get(url, { responseType: 'blob', timeout: 30000, params })
     saveBlobResponse(response, fallbackName)
   } catch (error) {
-    ElMessage.error('下載失敗: ' + ((error as { message?: string })?.message || '未知錯誤'))
+    // interceptor 已把 blob/JSON 錯誤正規化進 displayMessage（如「本月薪資尚未封存」）；
+    // 優先顯示真實原因，無則退回通用文案。
+    const e = error as { displayMessage?: string | null; message?: string }
+    ElMessage.error(e.displayMessage || '下載失敗: ' + (e.message || '未知錯誤'))
   }
 }

@@ -8,9 +8,19 @@ vi.mock('@/api', () => ({ default: { get } }))
 vi.mock('element-plus', () => ({ ElMessage: { error: vi.fn() } }))
 
 import { downloadFile } from '@/utils/download'
+import { ElMessage } from 'element-plus'
 
 describe('downloadFile', () => {
   beforeEach(() => vi.clearAllMocks())
+
+  it('下載失敗時優先顯示 interceptor 正規化的 displayMessage（真實原因，非通用「下載失敗」）', async () => {
+    const err = Object.assign(new Error('Request failed with status code 409'), {
+      displayMessage: '本月薪資尚未封存',
+    })
+    get.mockRejectedValueOnce(err)
+    await downloadFile('/exports/salary')
+    expect(ElMessage.error).toHaveBeenCalledWith('本月薪資尚未封存')
+  })
   it('帶 params 時傳給 axios get', async () => {
     get.mockResolvedValue({ data: new Blob(['x']), headers: {} })
     await downloadFile('/exports/employees', '員工名冊.xlsx', { search: '王' })
