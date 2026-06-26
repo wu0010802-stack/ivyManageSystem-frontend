@@ -14,5 +14,7 @@ describe('iOS 輸入 16px 保底（消除聚焦放大）', () => {
     const css = read('src/assets/main.css').replace(/\s+/g, ' ')
     expect(css).toContain('max-width: 767.98px')
     expect(css).toMatch(/\.el-input__inner[^}]*font-size:\s*16px/)
+    expect(css).toMatch(/\.el-textarea__inner[^}]*font-size:\s*16px/)
+    expect(css).toMatch(/\.el-select__wrapper input[^}]*font-size:\s*16px/)
   })
 })
