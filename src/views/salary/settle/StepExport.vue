@@ -17,6 +17,7 @@
           type="primary"
           plain
           :loading="rosterLoading === type"
+          :disabled="rosterLoading !== null && rosterLoading !== type"
           @click="exportRoster(type)"
         >
           {{ label }}名冊
