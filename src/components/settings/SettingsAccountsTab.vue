@@ -3,6 +3,7 @@ import { ref, reactive, onMounted, computed, nextTick, watch, type Ref } from 'v
 import { storeToRefs } from 'pinia'
 import { getUsers, getPermissions, createUser, updateUser, deleteUser, resetPassword } from '@/api/auth'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { ArrowDown } from '@element-plus/icons-vue'
 import { useEmployeeStore } from '@/stores/employee'
 import { apiError } from '@/utils/error'
 import { shouldSendPermissionNames } from '@/utils/auth'
@@ -42,6 +43,23 @@ const permissionDefinition = ref<RolesDefinition>({ permissions: {}, groups: [],
 
 const roleDrawerVisible = ref<boolean>(false)
 const onRolesChanged = () => { fetchPermissionDefinition() }
+
+// 搜尋 / 角色篩選
+const keyword = ref<string>('')
+const roleFilter = ref<string>('')
+
+const roleFilterOptions = computed(() =>
+  Object.entries(permissionDefinition.value.roles).map(([code, r]) => ({ code, label: r.label || code })),
+)
+
+const filteredUsers = computed(() =>
+  users.value.filter((u) => {
+    const matchRole = !roleFilter.value || u.role === roleFilter.value
+    const hay = `${(u.username as string) ?? ''}${(u.employee_name as string) ?? ''}`
+    const matchKw = !keyword.value || hay.includes(keyword.value.trim())
+    return matchRole && matchKw
+  }),
+)
 
 const fetchUsers = async () => {
   loadingUsers.value = true
@@ -263,21 +281,37 @@ const _openEditExpander = () => {
 // 偏離時自動展開 expander（取代舊版寫在 togglePermission 內的展開邏輯）
 watch(deviationCount, (n) => { if (n > 0) advancedExpanded.value = true })
 
+function onRowCommand(cmd: string, row: Record<string, unknown>) {
+  if (cmd === 'reset') handleResetPassword(row)
+  else if (cmd === 'delete') handleDeleteUser(row)
+}
+
 onMounted(() => {
   fetchUsers()
   fetchPermissionDefinition()
 })
 
-defineExpose({ userForm, editUserForm, saveUser, saveEditUser, isUsingDefaultPermissions, deviationCount, restoreDefault })
+defineExpose({
+  userForm, editUserForm, saveUser, saveEditUser, isUsingDefaultPermissions, deviationCount, restoreDefault,
+  keyword, roleFilter, filteredUsers, onRowCommand, resetDialogVisible, handleResetPassword, handleDeleteUser,
+})
 </script>
 
 <template>
   <div>
-    <div class="tab-header">
-      <el-button @click="roleDrawerVisible = true">⚙ 管理角色</el-button>
-      <el-button type="primary" @click="handleAddUser">新增帳號</el-button>
+    <div class="accounts-toolbar">
+      <div class="toolbar-left">
+        <el-input v-model="keyword" placeholder="搜尋帳號 / 姓名" clearable style="width: 220px;" />
+        <el-select v-model="roleFilter" placeholder="全部角色" clearable style="width: 160px;">
+          <el-option v-for="r in roleFilterOptions" :key="r.code" :label="r.label" :value="r.code" />
+        </el-select>
+      </div>
+      <div class="toolbar-right">
+        <el-button @click="roleDrawerVisible = true">⚙ 管理角色</el-button>
+        <el-button type="primary" @click="handleAddUser">新增帳號</el-button>
+      </div>
     </div>
-    <el-table :data="users" v-loading="loadingUsers" style="width: 100%; margin-top: 20px;">
+    <el-table :data="filteredUsers" v-loading="loadingUsers" style="width: 100%; margin-top: 20px;">
       <el-table-column prop="username" label="帳號" width="150" />
       <el-table-column prop="employee_name" label="員工姓名" width="120" />
       <el-table-column prop="role" label="角色" width="120">
@@ -301,13 +335,26 @@ defineExpose({ userForm, editUserForm, saveUser, saveEditUser, isUsingDefaultPer
         </template>
       </el-table-column>
       <el-table-column prop="last_login" label="最後登入" width="180" />
-      <el-table-column label="操作" width="220">
+      <el-table-column label="操作" width="160">
         <template #default="{ row } = {}">
           <el-button v-if="row" link type="primary" @click="handleEditUser(row)">編輯</el-button>
-          <el-button v-if="row" link type="primary" @click="handleResetPassword(row)">重設密碼</el-button>
-          <el-button v-if="row" link type="danger" @click="handleDeleteUser(row)">刪除</el-button>
+          <el-dropdown v-if="row" trigger="click" @command="(cmd: string) => onRowCommand(cmd, row)">
+            <el-button link type="primary">更多<el-icon class="el-icon--right"><arrow-down /></el-icon></el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="reset">重設密碼</el-dropdown-item>
+                <el-dropdown-item command="delete" divided>刪除</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
         </template>
       </el-table-column>
+      <template #empty>
+        <div class="accounts-empty">
+          <span v-if="keyword || roleFilter">查無符合條件的帳號</span>
+          <span v-else>尚無帳號</span>
+        </div>
+      </template>
     </el-table>
 
     <!-- 管理角色抽屜 -->
@@ -513,10 +560,19 @@ defineExpose({ userForm, editUserForm, saveUser, saveEditUser, isUsingDefaultPer
 </template>
 
 <style scoped>
-.tab-header {
-  margin-top: 10px;
+.accounts-toolbar {
   display: flex;
-  gap: 8px;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.toolbar-left,
+.toolbar-right {
+  display: flex;
+  gap: 12px;
   align-items: center;
 }
 
@@ -607,5 +663,11 @@ defineExpose({ userForm, editUserForm, saveUser, saveEditUser, isUsingDefaultPer
 
 .advanced-tuning-toggle:hover {
   color: var(--el-color-primary);
+}
+
+.accounts-empty {
+  padding: 24px 0;
+  color: var(--text-tertiary);
+  font-size: 14px;
 }
 </style>

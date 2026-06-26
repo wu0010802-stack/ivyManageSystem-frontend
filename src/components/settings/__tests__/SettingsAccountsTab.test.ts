@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { nextTick } from 'vue'
-import ElementPlus from 'element-plus'
+import ElementPlus, { ElMessageBox } from 'element-plus'
 
 vi.mock('@/api/auth', () => {
   const mockPermissionDefinition = {
@@ -29,7 +29,13 @@ vi.mock('@/api/auth', () => {
     },
   }
   return {
-    getUsers: vi.fn().mockResolvedValue({ data: [] }),
+    getUsers: vi.fn().mockResolvedValue({
+      data: [
+        { id: 1, username: 'wang01', employee_name: '王小明', role: 'admin', permission_names: ['*'], is_active: true },
+        { id: 2, username: 'lin02', employee_name: '林老師', role: 'teacher', permission_names: null, is_active: true },
+        { id: 3, username: 'chen03', employee_name: '陳主任', role: 'supervisor', permission_names: ['DASHBOARD', 'EMPLOYEES_READ'], is_active: true },
+      ],
+    }),
     getPermissions: vi.fn().mockResolvedValue({ data: mockPermissionDefinition }),
     createUser: vi.fn().mockResolvedValue({ data: {} }),
     updateUser: vi.fn().mockResolvedValue({ data: {} }),
@@ -64,8 +70,8 @@ describe('SettingsAccountsTab — role card UX', () => {
   async function mountAndOpenAddDialog() {
     const wrapper = mount(SettingsAccountsTab, { attachTo: document.body, global: { plugins: [ElementPlus] } })
     await flushPromises()
-    // 「新增帳號」按鈕在 .tab-header 內，type="primary"；「管理角色」無 type="primary"
-    const addBtn = wrapper.find('.tab-header button.el-button--primary')
+    // 「新增帳號」按鈕在 .toolbar-right 內，type="primary"；「管理角色」無 type="primary"
+    const addBtn = wrapper.find('.toolbar-right button.el-button--primary')
     await addBtn.trigger('click')
     await flushPromises()
     await nextTick()
@@ -76,7 +82,7 @@ describe('SettingsAccountsTab — role card UX', () => {
   async function mountTab() {
     const wrapper = mount(SettingsAccountsTab, { attachTo: document.body, global: { plugins: [ElementPlus] } })
     await flushPromises()
-    const addBtn = wrapper.find('.tab-header button.el-button--primary')
+    const addBtn = wrapper.find('.toolbar-right button.el-button--primary')
     await addBtn.trigger('click')
     await flushPromises()
     await nextTick()
@@ -153,10 +159,10 @@ describe('SettingsAccountsTab — role card UX', () => {
     expect(parentCard?.getAttribute('title') || parentCard?.querySelector('[role="tooltip"]')?.textContent).toContain('家長端 LIFF')
   })
 
-  it('tab-header 有「管理角色」按鈕', async () => {
+  it('accounts-toolbar 有「管理角色」按鈕', async () => {
     const wrapper = mount(SettingsAccountsTab, { attachTo: document.body, global: { plugins: [ElementPlus] } })
     await flushPromises()
-    const header = wrapper.find('.tab-header')
+    const header = wrapper.find('.accounts-toolbar')
     expect(header.text()).toContain('管理角色')
   })
 
@@ -176,5 +182,47 @@ describe('SettingsAccountsTab — role card UX', () => {
     vm.restoreDefault(vm.userForm)
     await nextTick()
     expect(vm.isUsingDefaultPermissions(vm.userForm)).toBe(true)
+  })
+
+  it('filteredUsers 依關鍵字與角色篩選收斂', async () => {
+    // getUsers mock 已回三筆：wang01/王小明/admin、lin02/林老師/teacher、chen03/陳主任/supervisor
+    const wrapper = await mountTab()
+    const vm = wrapper.vm as unknown as {
+      keyword: string
+      roleFilter: string
+      filteredUsers: { username: string }[]
+    }
+    vm.keyword = '林'
+    await nextTick()
+    expect(vm.filteredUsers.map((u) => u.username)).toEqual(['lin02'])
+    vm.keyword = ''
+    vm.roleFilter = 'supervisor'
+    await nextTick()
+    expect(vm.filteredUsers.map((u) => u.username)).toEqual(['chen03'])
+  })
+
+  it('onRowCommand 把 reset/delete 導到對應 handler', async () => {
+    const wrapper = await mountTab()
+    const vm = wrapper.vm as unknown as {
+      onRowCommand: (cmd: string, row: Record<string, unknown>) => void
+      resetDialogVisible: boolean
+    }
+    const row = { id: 9, username: 'x' }
+
+    // reset → handleResetPassword → resetDialogVisible = true
+    vm.onRowCommand('reset', row)
+    await nextTick()
+    expect(vm.resetDialogVisible).toBe(true)
+
+    // delete → handleDeleteUser → ElMessageBox.confirm 被呼叫
+    const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm' as never)
+    vm.onRowCommand('delete', row)
+    await nextTick()
+    expect(confirmSpy).toHaveBeenCalledWith(
+      expect.stringContaining('x'),
+      expect.any(String),
+      expect.any(Object),
+    )
+    confirmSpy.mockRestore()
   })
 })
