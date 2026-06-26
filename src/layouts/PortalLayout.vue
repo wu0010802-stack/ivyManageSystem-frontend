@@ -979,4 +979,10 @@ const submitPassword = async () => {
 .psp-fab .el-icon {
   font-size: 22px;
 }
+
+/* dark mode：install-banner 背景是硬編淺綠（不翻色，finding #2 既有債），上游 a11y.css
+   把 --color-success-darker 翻成亮色會讓提示文字塌對比；dark scope 還原可讀深字。 */
+html.dark .install-banner {
+  color: #15803d;
+}
 </style>

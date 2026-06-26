@@ -55,4 +55,32 @@ describe('深色模式 *-darker 反向用法回歸防護（對抗式覆核 2026-
     const gs = read('../../src/components/GlobalSearch.vue')
     expect(gs).toMatch(/html\.dark[^{]*\.search-highlight/)
   })
+
+  it('PortalLayout 的 .install-banner（success-darker 疊硬編淺綠底）有 dark-mode 覆寫', () => {
+    const layout = read('../../src/layouts/PortalLayout.vue')
+    expect(layout).toMatch(/html\.dark[^{]*\.install-banner/)
+  })
+
+  it('AddressHeatmap 跨元素受害者（白卡/淺底上的 darker 文字）有 dark-mode 覆寫', () => {
+    const heatmap = read(
+      '../../src/components/recruitment/RecruitmentAddressHeatmap.vue',
+    )
+    // 代表性鎖住：nearby-school-name（父白卡）、gov-detail-link（父 #f8fbff）、rating-score（父白卡）
+    expect(heatmap).toMatch(/html\.dark[^{]*\.nearby-school-name/)
+    expect(heatmap).toMatch(/html\.dark[^{]*\.gov-detail-link/)
+    expect(heatmap).toMatch(/html\.dark[^{]*\.rating-score/)
+  })
+
+  it('RecruitmentAreaTab 的 .dc-stat-val（硬編白 .district-card 內的 darker 文字）有 dark-mode 覆寫', () => {
+    const area = read('../../src/components/recruitment/RecruitmentAreaTab.vue')
+    expect(area).toMatch(/html\.dark[^{]*\.dc-stat--ok\s+\.dc-stat-val/)
+    expect(area).toMatch(/html\.dark[^{]*\.dc-stat--warn\s+\.dc-stat-val/)
+  })
+
+  // 反例守衛：StatsPanel/Chuannian/Ivykids 的 kpi-value 在「會翻深底的 el-card」內，
+  // 上游全域 override 把文字翻亮即正確（~10:1）；不可再加 dark 深字覆寫（否則 dark-on-dark）。
+  it('StatsPanel 不得對 el-card 內 kpi-value 加 dark 深字覆寫（誤診守衛）', () => {
+    const stats = read('../../src/components/recruitment/RecruitmentStatsPanel.vue')
+    expect(stats).not.toMatch(/html\.dark[^{]*\.kpi-card[^{]*\.kpi-value/)
+  })
 })
