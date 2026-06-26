@@ -59,12 +59,26 @@ describe('PortalLayout — 手機漢堡鍵恢復側欄可達（P0）', () => {
     localStorage.setItem('portal_layout_v', '1') // 防 onboarding setTimeout 干擾
     userInfoData = { name: '陳老師', role: 'teacher', impersonation_mode: null }
   })
+  // RWD P0 後 PortalLayout 的 isMobile 來自 useIsMobile()（matchMedia 驅動，
+  // 非 innerWidth），測試以 mock matchMedia 控制手機/桌機判定。
+  function setMobileViewport(matches: boolean) {
+    window.matchMedia = vi.fn().mockReturnValue({
+      matches,
+      media: '(max-width: 767.98px)',
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })
+  }
   afterEach(() => {
-    window.innerWidth = 1024
+    setMobileViewport(false)
   })
 
   it('手機寬度顯示漢堡鍵，點擊後側欄開啟', async () => {
-    window.innerWidth = 375
+    setMobileViewport(true)
     const wrapper = mount(PortalLayout, { global: { plugins: [ElementPlus], stubs } })
     await flushPromises()
 
@@ -78,7 +92,7 @@ describe('PortalLayout — 手機漢堡鍵恢復側欄可達（P0）', () => {
   })
 
   it('桌機寬度不顯示漢堡鍵', async () => {
-    window.innerWidth = 1280
+    setMobileViewport(false)
     const wrapper = mount(PortalLayout, { global: { plugins: [ElementPlus], stubs } })
     await flushPromises()
     expect(wrapper.find(SEL).exists()).toBe(false)

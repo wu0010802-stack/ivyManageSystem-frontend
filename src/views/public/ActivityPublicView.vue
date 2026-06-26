@@ -1320,7 +1320,7 @@ onUnmounted(() => {
 .form-grid-2col .form-row { padding: var(--space-3) 0; }
 /* 4 個欄位 = 兩列：最後一列（item 3、4）拿掉 dashed border */
 .form-grid-2col .form-row:nth-child(n+3) { border-bottom: 0; padding-bottom: 0; }
-@media (max-width: 768px) {
+@media (--to-sm) {
   .form-grid-2col { grid-template-columns: 1fr; column-gap: 0; }
   .form-grid-2col .form-row { padding: var(--space-4) 0; }
   .form-grid-2col .form-row:nth-child(n+3) { border-bottom: 1px dashed var(--color-border); padding-bottom: var(--space-4); }

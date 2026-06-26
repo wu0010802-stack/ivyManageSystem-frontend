@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { nextTick, reactive } from 'vue'
+import { nextTick, reactive, ref } from 'vue'
 import { shallowMount } from '@vue/test-utils'
 import AdminLayout from '@/layouts/AdminLayout.vue'
 
@@ -23,6 +23,11 @@ vi.mock('@/stores/notification', () => ({
   }),
 }))
 
+const mockIsMobile = ref(false)
+vi.mock('@/composables/useIsMobile', () => ({
+  useIsMobile: () => ({ isMobile: mockIsMobile, cleanup: () => {} }),
+}))
+
 const stubs = {
   AdminSidebar: true,
   AdminHeader: true,
@@ -34,6 +39,7 @@ describe('AdminLayout', () => {
   beforeEach(() => {
     fetchSummary.mockClear()
     route.path = '/'
+    mockIsMobile.value = false
     vi.useFakeTimers()
   })
 
@@ -65,6 +71,20 @@ describe('AdminLayout', () => {
 
     vi.advanceTimersByTime(60_000)
     expect(fetchSummary).toHaveBeenCalledTimes(3)
+  })
+
+  it('離開手機視窗時自動關閉手機側欄', async () => {
+    mockIsMobile.value = true
+    const wrapper = shallowMount(AdminLayout, { global: { stubs, renderStubDefaultSlot: true } })
+    await nextTick()
+    // 透過 header 切開側欄
+    wrapper.findComponent({ name: 'AdminHeader' }).vm.$emit('toggle-sidebar')
+    await nextTick()
+    expect(wrapper.findComponent({ name: 'AdminSidebar' }).props('mobileOpen')).toBe(true)
+    // 切回桌機 → watch 應關閉側欄
+    mockIsMobile.value = false
+    await nextTick()
+    expect(wrapper.findComponent({ name: 'AdminSidebar' }).props('mobileOpen')).toBe(false)
   })
 
   it('clears the polling timer on unmount', async () => {

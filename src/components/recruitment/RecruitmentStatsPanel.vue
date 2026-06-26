@@ -949,7 +949,7 @@ defineExpose({ openCampusDialog, invalidateLazyTabs })
   white-space: nowrap;
 }
 .travel-badge--green  { background: var(--color-success-soft); color: var(--color-success-darker); }
-.travel-badge--yellow { background: #fef9c3; color: var(--color-warning-darker); }
+.travel-badge--yellow { background: var(--color-warning-soft); color: var(--color-warning-darker); }
 .travel-badge--orange { background: #ffedd5; color: #c2410c; }
 .text-muted { color: var(--neutral-300); }
 
@@ -994,14 +994,14 @@ defineExpose({ openCampusDialog, invalidateLazyTabs })
   color: #22543d;
 }
 
-@media (max-width: 768px) {
+@media (--to-sm) {
   .area-header-bar {
     flex-direction: column;
     align-items: stretch;
   }
 }
 
-@media (max-width: 768px) {
+@media (--to-sm) {
   .panel-toolbar {
     flex-wrap: wrap;
   }

@@ -187,7 +187,7 @@ const hasAnomaly = computed(() => anomalies.value.length > 0)
   box-shadow: 0 0 0 3px var(--color-success-soft);
 }
 
-@media (max-width: 767px) {
+@media (--to-sm) {
   .stats-strip {
     flex-direction: column;
     align-items: stretch;

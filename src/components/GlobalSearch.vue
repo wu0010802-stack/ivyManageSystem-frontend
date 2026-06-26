@@ -448,4 +448,10 @@ defineExpose({ open })
   padding: 0 1px;
   font-style: normal;
 }
+/* dark mode：硬編淺黃底 + *-darker 文字（a11y.css 把 darker 翻亮）會變「亮字疊淺底」近乎
+   不可見。窄覆寫成深底亮字維持 highlight 對比。 */
+html.dark .search-highlight {
+  background-color: #78350f;
+  color: #fde68a;
+}
 </style>

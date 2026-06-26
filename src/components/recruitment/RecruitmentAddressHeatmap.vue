@@ -1936,4 +1936,14 @@ watch(topNearbySchools, (newList) => {
     grid-template-columns: 1fr;
   }
 }
+
+/* dark mode：以下元素疊在不翻色的硬編淺底/白卡（finding #2 既有債，非本次範圍），上游
+   a11y.css 把 --color-*-darker 翻亮會讓文字塌對比。dark scope 窄覆寫還原可讀：疊白/淺底
+   的文字還原深字；自帶硬編淺藍底的 gov 按鈕改用會翻色的 *-soft 底（hover 本就用 *-soft）。 */
+html.dark .nearby-school-name { color: #1d4ed8; }
+html.dark .gov-data-btn { background: var(--color-info-soft); }
+html.dark .gov-detail-link,
+html.dark .gov-detail-link:hover { color: #1d4ed8; }
+html.dark .gov-status-warned { color: #b45309; }
+html.dark .rating-score { color: #b45309; }
 </style>

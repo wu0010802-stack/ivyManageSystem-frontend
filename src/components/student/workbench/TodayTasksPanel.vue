@@ -257,7 +257,7 @@ onMounted(async () => {
   gap: var(--space-3);
 }
 
-@media (max-width: 768px) {
+@media (--to-sm) {
   .secondary-records-entries {
     grid-template-columns: minmax(0, 1fr);
   }

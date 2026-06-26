@@ -241,7 +241,7 @@ onMounted(fetchCorrections)
   align-items: center;
 }
 
-@media (max-width: 767px) {
+@media (--to-sm) {
   .type-grid {
     flex-direction: column;
     gap: 8px;

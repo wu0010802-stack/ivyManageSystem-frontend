@@ -280,7 +280,7 @@ onMounted(fetchAnnouncements)
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
 }
 
-@media (max-width: 768px) {
+@media (--to-sm) {
   .ann-header {
     flex-direction: column;
   }

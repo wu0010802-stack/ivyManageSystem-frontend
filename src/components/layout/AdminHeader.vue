@@ -411,7 +411,7 @@ const handleCommand = (command: string) => {
   font-family: inherit;
 }
 
-@media (max-width: 767px) {
+@media (--to-sm) {
   .admin-header {
     padding: 0 var(--space-3);
   }

@@ -54,4 +54,9 @@ describe('useIsMobile', () => {
         cleanup()
         expect(mockMql.removeEventListener).toHaveBeenCalledTimes(1)
     })
+
+    it('用 canonical 手機上界呼叫 matchMedia', () => {
+        useIsMobile()
+        expect(window.matchMedia).toHaveBeenCalledWith('(max-width: 767.98px)')
+    })
 })

@@ -672,7 +672,7 @@ onMounted(loadList)
 .batch-bar-enter-from,
 .batch-bar-leave-to { opacity: 0; transform: translateX(-50%) translateY(20px); }
 
-@media (max-width: 768px) {
+@media (--to-sm) {
   .batch-toolbar {
     left: 12px;
     right: 12px;

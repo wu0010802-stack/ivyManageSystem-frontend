@@ -158,7 +158,7 @@ const links = [
   font-size: var(--text-sm);
 }
 
-@media (max-width: 768px) {
+@media (--to-sm) {
   .hub-stats,
   .hub-links {
     grid-template-columns: 1fr;

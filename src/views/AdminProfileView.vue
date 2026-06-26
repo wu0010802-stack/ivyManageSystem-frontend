@@ -458,7 +458,7 @@ onMounted(() => {
   line-height: 1.7;
 }
 
-@media (max-width: 768px) {
+@media (--to-sm) {
   .admin-profile {
     padding: var(--space-3);
   }

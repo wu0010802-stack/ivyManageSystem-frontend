@@ -283,7 +283,7 @@ defineExpose({ activeIndex })
   flex-direction: column;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
 }
-@media (max-width: 767px) {
+@media (--to-sm) {
   .psp-overlay {
     padding-top: 0;
     align-items: stretch;

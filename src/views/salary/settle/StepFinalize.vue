@@ -294,7 +294,7 @@ const formatTime = (value: string | null | undefined) => {
   text-align: right;
 }
 
-@media (max-width: 768px) {
+@media (--to-sm) {
   .finalize-stats {
     grid-template-columns: repeat(2, 1fr);
   }
