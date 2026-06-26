@@ -374,8 +374,8 @@ export const ROLES_WITHOUT_PERMISSION_UI = ['teacher', 'parent']
  *
  * 回傳 false 代表「省略 permission_names」→ 後端會以角色預設權限 resolve。
  *
- * Why: 新增帳號表單的 permission_names 預設為 `['*']`（togglePermission 的 wildcard
- * sentinel）。teacher / parent 的權限編輯 UI 被隱藏，使用者通常不會去動它；殘留的
+ * Why: 新增帳號表單的 permission_names 預設為 `['*']`（`handleAddUser` 初始化）。
+ * teacher / parent 的權限編輯 UI 被隱藏，使用者通常不會去動它；殘留的
  * `['*']` 若被當成「自訂權限」送出，會讓教師/家長帳號取得全權限（越權）。對這兩個
  * 無權限 UI 的角色一律省略 permission_names；其餘角色只在「偏離角色預設」時送出。
  * create 與 edit 共用此判定，避免兩條路徑分歧（本函式正是修補該分歧 P0）。
