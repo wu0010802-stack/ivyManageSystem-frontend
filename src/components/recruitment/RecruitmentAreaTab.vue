@@ -525,7 +525,7 @@ const hs = computed((): HotspotsSummaryTyped => props.hotspotsSummary as Hotspot
   border-radius: 999px;
 }
 .dc-travel-badge--green  { background: var(--color-success-soft); color: var(--color-success-darker); }
-.dc-travel-badge--yellow { background: #fef9c3; color: var(--color-warning-darker); }
+.dc-travel-badge--yellow { background: var(--color-warning-soft); color: var(--color-warning-darker); }
 .dc-travel-badge--orange { background: #ffedd5; color: #c2410c; }
 
 /* 預繳率條 */

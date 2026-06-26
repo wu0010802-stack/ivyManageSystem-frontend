@@ -155,6 +155,18 @@ const ariaLabel = computed(() => {
 .dcall--ack .dcall__mono {
   background: var(--color-info-darker);
 }
+/* dark mode：*-darker 在 a11y.css 被翻成亮色（供 *-soft 深底上的文字用），但此處 avatar
+   是「solid 背景 + 白字」，亮底會讓白字塌掉對比。窄覆寫還原各 tone 深底（與 light mode 同值），
+   維持白字 WCAG AA。 */
+html.dark .dcall--warning .dcall__mono {
+  background: #b45309;
+}
+html.dark .dcall--critical .dcall__mono {
+  background: #b91c1c;
+}
+html.dark .dcall--ack .dcall__mono {
+  background: #1d4ed8;
+}
 
 .dcall__id {
   flex: 1;

@@ -9,15 +9,21 @@
  *
  * 本測試鎖住：a11y.css 必須在 dark scope 覆寫四個 *-darker（防止再被移除而靜默回歸）。
  * 一處集中覆寫即同時修正全部引用點，無需逐檔動。
+ *
+ * ⚠ 反向用法（對抗式覆核 2026-06-26 抓到）：*-darker 有兩種互斥用途——
+ *   ① 疊在 *-soft / token 深底上的「強調文字」（主流，全域覆寫後在 dark mode 變亮 = 修對）；
+ *   ② 當「solid 背景」配白字（DismissalCallCard avatar），或當「文字」疊在「硬編淺底」上
+ *      （travel-badge--yellow / search-highlight）→ 全域覆寫會讓這些塌掉對比。
+ *   單一 token 值無法同時滿足，故這些反向站點需各自 dark-mode 窄覆寫。下方鎖住這些修復。
  */
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
-const a11yCss = readFileSync(
-  fileURLToPath(new URL('../../src/assets/a11y.css', import.meta.url)),
-  'utf-8',
-)
+const read = (rel: string): string =>
+  readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf-8')
+
+const a11yCss = read('../../src/assets/a11y.css')
 
 describe('深色模式 *-darker token 覆寫（WCAG AA 對比）', () => {
   it('a11y.css 含 html.dark 區段', () => {
@@ -30,4 +36,23 @@ describe('深色模式 *-darker token 覆寫（WCAG AA 對比）', () => {
       expect(a11yCss).toMatch(new RegExp(`--color-${tone}-darker\\s*:`))
     },
   )
+})
+
+describe('深色模式 *-darker 反向用法回歸防護（對抗式覆核 2026-06-26）', () => {
+  it('招生 travel-badge--yellow 改用會翻深底的 *-soft token，不留硬編淺底 #fef9c3（否則 dark mode 亮字疊淺底近乎不可見）', () => {
+    const area = read('../../src/components/recruitment/RecruitmentAreaTab.vue')
+    const stats = read('../../src/components/recruitment/RecruitmentStatsPanel.vue')
+    expect(area).not.toMatch(/badge--yellow\s*\{[^}]*#fef9c3/)
+    expect(stats).not.toMatch(/badge--yellow\s*\{[^}]*#fef9c3/)
+  })
+
+  it('DismissalCallCard 的 .dcall__mono（*-darker 當背景＋白字）有 dark-mode 深底覆寫', () => {
+    const card = read('../../src/components/dismissal/DismissalCallCard.vue')
+    expect(card).toMatch(/html\.dark[^{]*\.dcall__mono/)
+  })
+
+  it('GlobalSearch 的 .search-highlight（硬編淺底＋darker 文字）有 dark-mode 覆寫', () => {
+    const gs = read('../../src/components/GlobalSearch.vue')
+    expect(gs).toMatch(/html\.dark[^{]*\.search-highlight/)
+  })
 })
