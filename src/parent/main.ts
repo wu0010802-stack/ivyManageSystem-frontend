@@ -1,5 +1,6 @@
 import { createApp, type App as VueApp } from 'vue'
 import { createPinia } from 'pinia'
+import { installChunkSelfHeal } from '@/utils/chunkSelfHeal'
 
 import App from './App.vue'
 import router from './router'
@@ -31,6 +32,9 @@ import { initA11y } from './composables/useA11y'
 import { initSentry } from '@/utils/sentry'
 // 離線寫入佇列：boot / online / visibilitychange flush triggers（spec §6.3.2）
 import { flushAllParent } from '@/parent/utils/parentOfflineQueue'
+
+// PWA 升級自救（chunk hash 失效時清 SW+caches reload，避免白屏）
+installChunkSelfHeal()
 
 // Theme + A11y 應在第一次 paint 前套用，避免閃爍
 initTheme()

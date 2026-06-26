@@ -481,6 +481,14 @@ button {
   touch-action: manipulation;
 }
 
+/* iOS / LINE LIFF WebView：font-size < 16px 的表單欄位聚焦會自動放大整頁。
+   家長端為 100% 手機受眾，全域保底 16px（視覺密度由各元件 line-height 控制）。 */
+input,
+textarea,
+select {
+  font-size: 16px;
+}
+
 /* ========== Touch Target Helper ==========
  * 內含 icon-only 的小按鈕，可加 .touch-target 強制 44×44。
  */

@@ -10,6 +10,7 @@
  * 路由保留作 fallback，不破壞既有連結。
  */
 import { createApp, type App as VueApp } from 'vue'
+import { installChunkSelfHeal } from '@/utils/chunkSelfHeal'
 
 import App from './App.vue'
 import router from './router'
@@ -17,6 +18,9 @@ import { initSentry } from '@/utils/sentry'
 
 // 設計 tokens（字級 / 間距 / 圓角 / 顏色）與 admin / parent 共用同一份基礎尺度
 import '@/assets/design-tokens.css'
+
+// PWA 升級自救（chunk hash 失效時清 SW+caches reload，避免白屏）
+installChunkSelfHeal()
 
 const app: VueApp = createApp(App)
 

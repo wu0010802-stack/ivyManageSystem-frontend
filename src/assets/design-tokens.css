@@ -1,3 +1,11 @@
+/* 全域 box-sizing reset：含 padding 的全寬卡片/輸入框在窄機不再 content-box 溢出。
+   三端 entry 皆 import 本檔，一次跨端生效。 */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 /**
  * 跨角色共用設計 tokens
  *

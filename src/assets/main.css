@@ -163,9 +163,12 @@ body {
   transition: transform var(--transition-base), box-shadow var(--transition-base);
 }
 
-.el-card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md) !important;
+/* 只在有真 hover 能力的指標裝置抬升；觸控裝置點過卡片不再卡在 hover 抬起態。 */
+@media (hover: hover) and (pointer: fine) {
+  .el-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md) !important;
+  }
 }
 
 /* Cards used as containers (tables, forms) should not hover-float */
@@ -313,5 +316,15 @@ html.ivy-admin .el-table .el-table__cell {
     animation: none !important;
     background: var(--bg-color-soft);
     opacity: 0.85;
+  }
+}
+
+/* iOS 聚焦放大防制：手機把 Element Plus 輸入欄位字級提到 16px；
+   桌機維持 14px 密度。767.98px = RWD canonical MOBILE_MAX_PX。 */
+@media (max-width: 767.98px) {
+  .el-input__inner,
+  .el-textarea__inner,
+  .el-select__wrapper input {
+    font-size: 16px;
   }
 }
