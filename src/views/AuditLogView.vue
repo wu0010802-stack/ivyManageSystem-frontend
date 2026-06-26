@@ -289,22 +289,31 @@ const handleExport = async () => {
     URL.revokeObjectURL(url)
     ElMessage.success('匯出成功')
   } catch (error) {
-    // 超過上限的 400 response 是 blob，要讀取才能看 detail
-    const err = error as { response?: { status?: number; data?: unknown } }
-    if (err.response?.status === 400 && err.response?.data instanceof Blob) {
-      try {
-        const text = await (err.response.data as Blob).text()
-        const body = JSON.parse(text) as { detail?: string }
-        // 超量 400：補可操作引導，避免使用者只看到硬訊息卻不知如何縮小範圍
-        ElMessage.error({
-          message: `${body.detail || '匯出失敗'}　請縮小範圍後再試：設定起訖時間（或用快捷時段），並可加上資源類型／操作者等篩選。`,
-          duration: 6000,
-        })
-      } catch (_) {
-        ElMessage.error('匯出失敗')
+    // 超量匯出是 400。其 detail：api interceptor 已把 application/json 的 blob 錯誤體解碼成
+    // 物件（少數情況仍可能是未解碼 Blob，故兩形態都處理），避免 interceptor 改動後丟失下方引導。
+    const err = error as {
+      response?: { status?: number; data?: unknown }
+      displayMessage?: string | null
+    }
+    if (err.response?.status === 400) {
+      let detail = ''
+      const data = err.response.data
+      if (data instanceof Blob) {
+        try {
+          detail = (JSON.parse(await data.text()) as { detail?: string }).detail || ''
+        } catch { /* 解析失敗：留空，走通用文案 */ }
+      } else {
+        detail = (data as { detail?: string })?.detail || err.displayMessage || ''
       }
+      // 超量 400：補可操作引導，避免使用者只看到硬訊息卻不知如何縮小範圍
+      ElMessage.error({
+        message: `${detail || '匯出失敗'}　請縮小範圍後再試：設定起訖時間（或用快捷時段），並可加上資源類型／操作者等篩選。`,
+        duration: 6000,
+      })
     } else {
-      ElMessage.error((err.response?.data as { detail?: string })?.detail || '匯出失敗')
+      ElMessage.error(
+        (err.response?.data as { detail?: string })?.detail || err.displayMessage || '匯出失敗',
+      )
     }
   } finally {
     exporting.value = false
