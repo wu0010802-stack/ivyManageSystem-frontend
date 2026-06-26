@@ -27,5 +27,7 @@ describe('installChunkSelfHeal', () => {
     const events = spy.mock.calls.map((c) => c[0])
     expect(events).toContain('error')
     expect(events).toContain('unhandledrejection')
+    expect(events.filter((e) => e === 'error')).toHaveLength(1)
+    expect(events.filter((e) => e === 'unhandledrejection')).toHaveLength(1)
   })
 })
