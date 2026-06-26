@@ -190,15 +190,17 @@ onUnmounted(() => {
     <!-- ===== Table View (Desktop) ===== -->
     <el-card v-loading="loading" class="grid-card" v-if="viewMode === 'table'">
       <AttendanceTableView
-        :days="sheetData?.days ?? []"
-        :uses-shift="sheetData?.uses_shift ?? false"
+        v-if="sheetData"
+        :days="sheetData.days || []"
+        :uses-shift="sheetData.uses_shift || false"
       />
     </el-card>
 
     <!-- ===== Card View (Mobile) ===== -->
     <div v-if="viewMode === 'cards'" v-loading="loading" class="cards-wrapper">
       <AttendanceCardsView
-        :days="sheetData?.days ?? []"
+        v-if="sheetData"
+        :days="sheetData.days || []"
         :month="query.month"
       />
     </div>

@@ -16,20 +16,20 @@ vi.mock('@/utils/auth', () => ({
 }))
 
 import PortalAttendanceView from '@/views/portal/PortalAttendanceView.vue'
-import AttendanceCardsView from '@/views/portal/components/attendance/AttendanceCardsView.vue'
-import AttendanceTableView from '@/views/portal/components/attendance/AttendanceTableView.vue'
 
 describe('PortalAttendanceView viewMode 隨手機態切換', () => {
   it('手機載入時用 cards、切回桌機用 table', async () => {
     mockIsMobile.value = true
     const wrapper = shallowMount(PortalAttendanceView)
     await nextTick()
-    expect(wrapper.findComponent(AttendanceCardsView).exists()).toBe(true)
-    expect(wrapper.findComponent(AttendanceTableView).exists()).toBe(false)
+    // viewMode='cards'：cards-wrapper 在、grid-card 不在
+    expect(wrapper.find('.cards-wrapper').exists()).toBe(true)
+    expect(wrapper.find('.grid-card').exists()).toBe(false)
 
     mockIsMobile.value = false
     await nextTick()
-    expect(wrapper.findComponent(AttendanceTableView).exists()).toBe(true)
-    expect(wrapper.findComponent(AttendanceCardsView).exists()).toBe(false)
+    // viewMode='table'：grid-card 在、cards-wrapper 不在
+    expect(wrapper.find('.grid-card').exists()).toBe(true)
+    expect(wrapper.find('.cards-wrapper').exists()).toBe(false)
   })
 })
