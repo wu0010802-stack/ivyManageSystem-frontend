@@ -7,6 +7,7 @@ import { useClassroomStore } from '@/stores/classroom'
 import { getStudents } from '@/api/students'
 import DismissalCallCard from '@/components/dismissal/DismissalCallCard.vue'
 import { closeWebSocketSafely } from '@/utils/ws'
+import { formatTaipeiClock } from '@/utils/taipeiTime'
 import {
   useNowClock,
   sortByOldestFirst,
@@ -382,10 +383,10 @@ const STATUS_TYPE_MAP: Record<string, ElTagType> = {
 }
 const statusType = (status: string): ElTagType => STATUS_TYPE_MAP[status]
 
-const formatTime = (dt: string | undefined) => {
-  if (!dt) return '-'
-  return new Date(dt).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })
-}
+// 後端時間是台北 naive 字串，統一走 formatTaipeiClock 顯式錨定 +08:00 並以
+// Asia/Taipei 格式化，任何裝置時區都顯示正確台北時刻（修原 new Date 在非台灣
+// 裝置會差 8 小時的顯示 bug；與 portal / 家長時間軸同源）。
+const formatTime = (dt: string | undefined) => formatTaipeiClock(dt) ?? '-'
 
 // ─── Lifecycle ────────────────────────────────────────────
 onMounted(async () => {
@@ -407,12 +408,23 @@ onUnmounted(() => {
 <template>
   <div class="dismissal-queue-view">
     <div class="page-header">
-      <h2>接送通知</h2>
+      <h2 class="page-header__title">
+        接送通知
+        <span
+          v-if="isActiveView && sortedCalls.length"
+          class="page-header__count"
+        >待接送 {{ sortedCalls.length }}</span>
+      </h2>
       <div class="header-actions">
-        <el-tag :type="wsConnected ? 'success' : 'warning'" size="small" effect="light" style="margin-right: 8px">
-          {{ wsConnected ? '即時同步中' : '連線中斷' }}
+        <el-tag
+          :type="wsConnected ? 'success' : 'warning'"
+          size="small"
+          effect="light"
+          class="conn-tag"
+        >
+          {{ wsConnected ? '即時同步中' : '連線不穩' }}
         </el-tag>
-        <el-button type="primary" @click="openCreateDialog">建立通知</el-button>
+        <el-button type="primary" :icon="Plus" @click="openCreateDialog">建立通知</el-button>
       </div>
     </div>
 
@@ -620,20 +632,47 @@ onUnmounted(() => {
 
 <style scoped>
 .dismissal-queue-view {
-  padding: 20px;
+  padding: var(--space-5);
 }
 
 .page-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 16px;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-4);
 }
 
-.page-header h2 {
+.page-header__title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   margin: 0;
-  font-size: 1.25rem;
-  font-weight: 600;
+  font-size: var(--text-2xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-primary);
+}
+/* 待接送即時計數：與教師端 portal 一致，一眼掌握還有幾位待處理 */
+.page-header__count {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: var(--radius-full);
+  background: var(--color-primary);
+  color: #fff;
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.conn-tag {
+  /* gap 由 .header-actions 負責，移除舊 inline margin */
+  flex-shrink: 0;
 }
 
 /* ─── 連線狀態 banner（對齊 PortalDismissalCallsView）─── */
@@ -644,7 +683,7 @@ onUnmounted(() => {
   gap: var(--space-3, 12px);
   padding: var(--space-3, 12px) var(--space-4, 16px);
   border-radius: var(--radius-md, 8px);
-  margin-bottom: 16px;
+  margin-bottom: var(--space-4);
   border: 1px solid transparent;
 }
 .conn-banner--reconnecting {
@@ -674,11 +713,11 @@ onUnmounted(() => {
 }
 
 .filter-bar {
-  margin-bottom: 16px;
+  margin-bottom: var(--space-4);
 }
 
 .calls-table {
-  border-radius: 8px;
+  border-radius: var(--radius-md);
 }
 
 .table-empty {
@@ -691,6 +730,16 @@ onUnmounted(() => {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: var(--space-3);
+}
+
+/* 手機：看板改單欄、頁面 padding 收斂，避免 320px 卡片最小寬在窄螢幕橫向溢出 */
+@media (max-width: 560px) {
+  .dismissal-queue-view {
+    padding: var(--space-3);
+  }
+  .board {
+    grid-template-columns: 1fr;
+  }
 }
 
 .req-by {

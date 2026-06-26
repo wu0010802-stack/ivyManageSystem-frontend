@@ -1,12 +1,17 @@
 import { ref, onMounted, onUnmounted } from 'vue'
+import { parseTaipeiDate } from '@/utils/taipeiTime'
 
 /**
  * 接送通知「等候時間 / 緊急度」共用邏輯。
  *
  * 老師端 portal 與管理端佇列共用同一套：把家長已等候的時間變成主角，
- * 並依門檻升級顏色，讓最久沒被接的孩子最醒目。純函式部分（parse / elapsed /
+ * 並依門檻升級顏色，讓最久沒被接的孩子最醒目。純函式部分（elapsed /
  * level / format）可單獨測試，元件只負責渲染。
+ *
+ * 台北時區解析統一委派 `@/utils/taipeiTime`（單一事實來源；admin 歷史表格、
+ * 家長時間軸同源），此處 re-export 維持既有 import 相容。
  */
+export { parseTaipeiDate } from '@/utils/taipeiTime'
 
 /** 等候時間升級門檻（分鐘）。3 分轉琥珀提醒、8 分轉紅警示。日後要調整服務標準改這兩個常數即可。 */
 export const URGENCY_WARNING_MIN = 3
@@ -24,26 +29,6 @@ export interface DismissalCallView {
   requested_by_name?: string
   note?: string
   [key: string]: unknown
-}
-
-const TAIPEI_OFFSET = '+08:00'
-// 已帶時區資訊（Z 或 ±HH:MM）的字串不重複錨定。
-const HAS_OFFSET_RE = /([zZ])$|([+-]\d{2}:?\d{2})$/
-
-/**
- * 解析後端 requested_at。
- *
- * 後端 requested_at 是「台北牆鐘」的 naive ISO 字串（無時區 offset，見 backend
- * models/dismissal._now_taipei_naive）。直接 `new Date()` 會以裝置本地時區解析，
- * 台灣裝置剛好正確，但非台灣時區（或時區設定錯誤）的裝置會差 8 小時。
- * 等候時間（now − requested_at）比單純顯示時鐘敏感得多：差 8 小時會讓每張卡都誤判成紅色警示。
- * 因此顯式錨定 +08:00，任何裝置時區都算得對；已帶 offset/Z 的字串則原樣解析。
- */
-export function parseTaipeiDate(iso: string | null | undefined): Date | null {
-  if (!iso) return null
-  const anchored = HAS_OFFSET_RE.test(iso) ? iso : `${iso}${TAIPEI_OFFSET}`
-  const d = new Date(anchored)
-  return Number.isNaN(d.getTime()) ? null : d
 }
 
 /** 已等候分鐘數（向下取整，下限 0）。無法解析回 null。 */

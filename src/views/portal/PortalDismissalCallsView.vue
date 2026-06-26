@@ -20,6 +20,9 @@ type DismissalCall = DismissalCallView
 // ─── 狀態 ───────────────────────────────────────────────
 const activeCalls = ref<DismissalCall[]>([]) // pending + acknowledged
 const loading = ref(false)
+// 螢幕報讀宣告：新通知到達時除了 beep/震動/瀏覽器推播，補一則 aria-live 文字，
+// 讓關掉聲音或使用報讀器的老師也能即時得知（無障礙對等通知）。
+const liveAnnounce = ref('')
 
 // 等候時間活著跳：單一 30s 時鐘 + 最久優先（FIFO）排序的 computed view。
 // WS handlers 照舊以 id 變動原始 activeCalls，排序交給 computed，避免在 handler 內手動插入正確位置。
@@ -239,6 +242,7 @@ const handleWsEvent = (event: { type: string; payload: DismissalCall }) => {
     notifyBrowser(payload)
     playBeep()
     triggerHaptic()
+    liveAnnounce.value = `新接送通知：${payload.student_name || '學生'}${payload.classroom_name ? `（${payload.classroom_name}）` : ''} 等待接送`
   } else if (type === 'dismissal_call_updated') {
     const idx = activeCalls.value.findIndex(c => c.id === payload.id)
     if (payload.status === 'completed' || payload.status === 'cancelled') {
@@ -289,6 +293,9 @@ onUnmounted(() => {
 
 <template>
   <div class="portal-dismissal-calls">
+    <!-- 無障礙即時宣告：新通知到達時報讀，與 beep/震動/瀏覽器推播對等 -->
+    <p class="sr-only" role="status" aria-live="polite" aria-atomic="true">{{ liveAnnounce }}</p>
+
     <header class="page-head">
       <h2 class="page-head__title">
         接送通知
@@ -392,6 +399,19 @@ onUnmounted(() => {
   max-width: 600px;
   margin: 0 auto;
   padding: var(--space-4);
+}
+
+/* 螢幕報讀專用，視覺隱藏（portal app 無全域 sr-only，自帶 scoped 版） */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* sticky header：捲動長列表時，連線與聲音狀態恆可見（安全關鍵） */

@@ -81,6 +81,30 @@ describe('useTodayTimeline — bucket 分組', () => {
     expect(item.time).toBe('15:00')
   })
 
+  it('接送時間台北時區錨定：帶 Z 的 UTC completed_at 換算成台北（裝置時區無關）', () => {
+    // 08:00 UTC = 16:00 台北 → 下午桶、time 16:00。舊版 new Date().getHours()
+    // 會隨執行機器時區飄移（非台灣裝置差 8 小時），新版顯式錨定 Asia/Taipei 才恆正確。
+    const { buckets } = setup({
+      childrenValue: [
+        {
+          student_id: 1,
+          name: '小明',
+          dismissal: {
+            id: 7,
+            status: 'completed',
+            requested_at: '2026-05-13T06:00:00Z',
+            completed_at: '2026-05-13T08:00:00Z',
+          },
+        },
+      ],
+    })
+    const afternoon = buckets.value.find((b) => b.key === 'afternoon')
+    expect(afternoon).toBeDefined()
+    const item = afternoon.items.find((e) => e.id === 'dismissal:1')
+    expect(item.time).toBe('16:00')
+    expect(item.variant).toBe('past')
+  })
+
   it('summary 待辦（fees / acks / messages / promotions） → later bucket pending', () => {
     const { buckets } = setup({
       summaryValue: {
