@@ -525,7 +525,7 @@ const hs = computed((): HotspotsSummaryTyped => props.hotspotsSummary as Hotspot
   border-radius: 999px;
 }
 .dc-travel-badge--green  { background: var(--color-success-soft); color: var(--color-success-darker); }
-.dc-travel-badge--yellow { background: #fef9c3; color: var(--color-warning-darker); }
+.dc-travel-badge--yellow { background: var(--color-warning-soft); color: var(--color-warning-darker); }
 .dc-travel-badge--orange { background: #ffedd5; color: #c2410c; }
 
 /* 預繳率條 */
@@ -575,6 +575,10 @@ const hs = computed((): HotspotsSummaryTyped => props.hotspotsSummary as Hotspot
 .dc-stat--ok .dc-stat-val { color: var(--color-success-darker); }
 .dc-stat--warn .dc-stat-val { color: var(--color-warning-darker); }
 .dc-stat--danger .dc-stat-val { color: var(--color-danger-hover); }
+/* dark mode：.district-card 是硬編白卡（plain div，非 el-card 不翻底，finding #2 既有債），
+   上游 a11y.css 把 --color-*-darker 翻亮會讓統計值塌對比；還原可讀深字（danger 走 *-hover 不受影響）。 */
+html.dark .dc-stat--ok .dc-stat-val { color: #15803d; }
+html.dark .dc-stat--warn .dc-stat-val { color: #b45309; }
 
 /* 展開詳細 */
 .dc-detail {

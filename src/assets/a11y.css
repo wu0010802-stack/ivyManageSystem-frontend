@@ -108,6 +108,17 @@ html.dark {
   --color-danger-lighter: var(--color-danger-soft);
   --color-info-lighter: var(--color-info-soft);
 
+  /* semantic *-darker：高對比強調文字色。design-tokens.css 的 light 值（#15803d 等深 hex）
+   * 疊在上方翻好的深色 *-soft tint 上，對比僅 ~1.7-2.2:1 遠未達 WCAG AA。改用與 stat-card
+   * dark value 同階的亮色——一處覆寫即同時修正全站約 110 處 `color: var(--color-*-darker)`
+   * 文字引用（badge / chip / KPI 強調值）。
+   * 高對比深色（html.ivy-contrast-high[data-theme="dark"]）未覆寫 *-darker 且仍套 html.dark
+   * 的 *-soft，故經 cascade 一併受惠（該 scope 的 base 色亦採同組亮色，無衝突）。 */
+  --color-success-darker: #6ee7b7;
+  --color-warning-darker: #fcd34d;
+  --color-danger-darker: #fca5a5;
+  --color-info-darker: #93c5fd;
+
   /* brand 在深底用淺一階確保對比 */
   --brand-primary: #818cf8;       /* indigo-400 */
   --brand-primary-hover: #a5b4fc; /* indigo-300 */
