@@ -4,7 +4,8 @@
  *
  * 本檔只放 @custom-media 定義、不含任何規則。經 postcss-custom-media 解析後
  * 不產出任何 CSS（零 runtime 體積）。@csstools/postcss-global-data 會把這些
- * 定義注入每個 SFC <style> 編譯單元。
+ * 定義注入每個 SFC 的 style 編譯單元（stylelint 用 postcss-html 解析，註解
+ * 內勿用角括號 style 標記，否則會被誤判為 HTML 標籤而 CssSyntaxError）。
  */
 
 /* min-width anchors（mobile-first 用） */
