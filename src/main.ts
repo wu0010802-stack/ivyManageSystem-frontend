@@ -1,40 +1,9 @@
 import { createApp, type App as VueApp } from 'vue'
 import { createPinia } from 'pinia'
+import { installChunkSelfHeal } from '@/utils/chunkSelfHeal'
 
-// PWA 升級自救：偵測到 chunk hash 已被新部署移除（dynamic import 失敗、
-// 或瀏覽器丟 ChunkLoadError）時，主動清掉 SW + caches 再 reload 一次，
-// 避免舊 SW 命中已死的 chunk 造成白屏。用 sessionStorage flag 防止迴圈。
-const SELF_HEAL_FLAG = '__ivy_chunk_self_heal__'
-async function selfHealAndReload() {
-  if (sessionStorage.getItem(SELF_HEAL_FLAG)) return
-  sessionStorage.setItem(SELF_HEAL_FLAG, '1')
-  try {
-    if ('serviceWorker' in navigator) {
-      const regs = await navigator.serviceWorker.getRegistrations()
-      await Promise.all(regs.map((r) => r.unregister()))
-    }
-    if ('caches' in window) {
-      const keys = await caches.keys()
-      await Promise.all(keys.map((k) => caches.delete(k)))
-    }
-  } finally {
-    location.reload()
-  }
-}
-function looksLikeChunkLoadError(message = '') {
-  return /ChunkLoadError|Loading chunk|Failed to fetch dynamically imported module|error loading dynamically imported module/i.test(
-    message,
-  )
-}
-window.addEventListener('error', (e) => {
-  const msg = e?.message || e?.error?.message || ''
-  if (looksLikeChunkLoadError(msg)) selfHealAndReload()
-})
-window.addEventListener('unhandledrejection', (e) => {
-  const reason = e?.reason
-  const msg = (reason && (reason.message || String(reason))) || ''
-  if (looksLikeChunkLoadError(msg)) selfHealAndReload()
-})
+// PWA 升級自救（chunk hash 失效時清 SW+caches reload，避免白屏）
+installChunkSelfHeal()
 
 import App from './App.vue'
 import router from './router'
