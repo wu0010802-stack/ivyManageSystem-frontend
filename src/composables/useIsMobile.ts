@@ -1,6 +1,7 @@
 import { ref, onBeforeUnmount, getCurrentInstance } from 'vue'
+import { MOBILE_MAX_PX } from '@/constants/breakpoints'
 
-const QUERY = '(max-width: 767px)'
+const QUERY = `(max-width: ${MOBILE_MAX_PX}px)`
 
 /**
  * Reactive boolean reflecting whether viewport matches `(max-width: 767px)`.
