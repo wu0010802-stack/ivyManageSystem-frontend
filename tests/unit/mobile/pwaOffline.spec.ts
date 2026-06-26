@@ -16,4 +16,8 @@ describe('PWA 離線收斂', () => {
     expect(c).toContain("'parent.html'")
     expect(c).toContain("'public.html'")
   })
+
+  it('PWA manifest theme_color 與 index.html meta 對齊 (#4f46e5)', () => {
+    expect(cfg()).toContain("theme_color: '#4f46e5'")
+  })
 })

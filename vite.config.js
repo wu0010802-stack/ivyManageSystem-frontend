@@ -271,7 +271,7 @@ export default defineConfig({
                 name: '常春藤管理系統',
                 short_name: '常春藤管理',
                 description: '常春藤幼兒園管理與教師入口系統',
-                theme_color: '#3f7d48',
+                theme_color: '#4f46e5',
                 background_color: '#ffffff',
                 display: 'standalone',
                 orientation: 'portrait',
