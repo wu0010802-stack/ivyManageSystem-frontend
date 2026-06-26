@@ -57,7 +57,10 @@ function handleEditRole(row: typeof roleRows.value[0]) {
   roleDialogVisible.value = true
 }
 
+const saving = ref(false)
 async function saveRole() {
+  if (saving.value) return  // 送出中防序列/併發重送（併發另有 api dedupe 兜底）
+  saving.value = true
   try {
     if (roleEditMode.value === 'create') {
       await createRole({
@@ -77,6 +80,8 @@ async function saveRole() {
     emit('roles-changed')
   } catch (e) {
     ElMessage.error(apiError(e, '儲存失敗'))
+  } finally {
+    saving.value = false
   }
 }
 
@@ -94,7 +99,7 @@ function handleDeleteRole(row: typeof roleRows.value[0]) {
     .catch(() => {})
 }
 
-defineExpose({ roleRows, roleForm, roleDialogVisible, roleEditMode, handleAddRole, handleEditRole, saveRole, handleDeleteRole, accountCount })
+defineExpose({ roleRows, roleForm, roleDialogVisible, roleEditMode, handleAddRole, handleEditRole, saveRole, handleDeleteRole, accountCount, saving })
 </script>
 
 <template>
@@ -143,7 +148,7 @@ defineExpose({ roleRows, roleForm, roleDialogVisible, roleEditMode, handleAddRol
       </el-form>
       <template #footer>
         <el-button @click="roleDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="saveRole">儲存</el-button>
+        <el-button type="primary" :loading="saving" @click="saveRole">儲存</el-button>
       </template>
     </el-dialog>
   </el-drawer>

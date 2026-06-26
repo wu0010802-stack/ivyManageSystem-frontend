@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
 import { ref, computed } from 'vue'
 import StepExport from '../StepExport.vue'
 import type { SettlementRecord } from '@/composables/useSalarySettlement'
@@ -68,6 +68,21 @@ describe('StepExport', () => {
             '2026年05月_節慶獎金轉帳名冊.xlsx',
         )
         expect(wrapper.text()).toContain('本月結薪完成')
+    })
+
+    it('重型匯出進行中再點不重送（await + loading 守衛，薪資全員匯出慢易誤點重複）', async () => {
+        let resolve!: () => void
+        downloadFileMock.mockReturnValueOnce(new Promise<void>((r) => { resolve = r }))
+        const wrapper = mountStep(makeSettlement([rec()]))
+        const btn = wrapper.findAll('button').find((b) => b.text().includes('Excel'))!
+        await btn.trigger('click')
+        await btn.trigger('click') // 進行中第二次點擊
+        expect(downloadFileMock).toHaveBeenCalledTimes(1)
+        resolve()
+        await flushPromises()
+        // 結束後可再次匯出
+        await btn.trigger('click')
+        expect(downloadFileMock).toHaveBeenCalledTimes(2)
     })
 
     it('匯出總表 Excel/PDF', async () => {

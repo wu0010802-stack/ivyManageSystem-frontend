@@ -109,6 +109,19 @@ api.interceptors.response.use(
             _redirectToLogin()
         }
 
+        // 下載端點用 responseType:'blob'：伺服器回 JSON 錯誤時 error.response.data 是 Blob，
+        // 下方 killSwitch / displayMessage 正規化（讀 detail.message）讀不到 → 使用者只看到通用
+        // 「下載失敗」。先把 application/json 的 blob 解析回物件，讓真實錯誤（如「本月薪資尚未封存」）
+        // 浮現；一處集中修即覆蓋全部 blob 下載端點。非 JSON / 解析失敗則維持原 blob 走通用 fallback。
+        const blobData = error.response?.data
+        if (blobData instanceof Blob && blobData.type.includes('application/json')) {
+            try {
+                error.response!.data = JSON.parse(await blobData.text())
+            } catch {
+                /* 非 JSON 或解析失敗：維持原 blob，走通用 fallback */
+            }
+        }
+
         // Phase 4 kill switch（spec §4.4）：
         // 503 + envelope code === 'MAINTENANCE_MODE' → router.replace(/maintenance)
         // 503 + code === 'READ_ONLY_MODE' → ElMessage.warning（讓使用者知道編輯被擋）
