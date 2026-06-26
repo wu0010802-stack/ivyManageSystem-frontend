@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft, ArrowRight, Printer } from '@element-plus/icons-vue'
 import { getAttendanceSheet, getAttendanceSheetPdf } from '@/api/portal'
 import { openPdfInNewTab } from '@/utils/printPdfWindow'
 import { getUserInfo } from '@/utils/auth'
 import { apiError } from '@/utils/error'
+import { useIsMobile } from '@/composables/useIsMobile'
 import AttendanceMonthSticky from './components/attendance/AttendanceMonthSticky.vue'
 import AttendanceStatsRow from './components/attendance/AttendanceStatsRow.vue'
 import AttendanceCardsView from './components/attendance/AttendanceCardsView.vue'
@@ -46,13 +47,12 @@ const sheetData = ref<SheetData | null>(null)
 const viewMode = ref('table') // 'table' or 'cards'
 const sheetCache = new Map() // key: 'YYYY-M'，唯讀 View 快取可永久保留
 
-// Auto-detect mobile
-const isMobile = ref(window.innerWidth < 768)
-const onResize = () => {
-  isMobile.value = window.innerWidth < 768
-  if (isMobile.value && viewMode.value === 'table') viewMode.value = 'cards'
-  if (!isMobile.value && viewMode.value === 'cards') viewMode.value = 'table'
-}
+// Auto-detect mobile（immediate: true 保留原 onMounted 內 onResize() 初始同步）
+const { isMobile } = useIsMobile()
+watch(isMobile, (m) => {
+  if (m && viewMode.value === 'table') viewMode.value = 'cards'
+  if (!m && viewMode.value === 'cards') viewMode.value = 'table'
+}, { immediate: true })
 
 const fetchSheet = async (force = false) => {
   const key = `${query.year}-${query.month}`
@@ -133,8 +133,6 @@ const scrollToToday = () => {
 }
 
 onMounted(() => {
-  onResize()
-  window.addEventListener('resize', onResize)
   fetchSheet()
   if ('IntersectionObserver' in window && topSentinel.value) {
     stickyObserver = new IntersectionObserver(
@@ -146,7 +144,6 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  window.removeEventListener('resize', onResize)
   stickyObserver?.disconnect()
 })
 </script>
@@ -193,17 +190,15 @@ onUnmounted(() => {
     <!-- ===== Table View (Desktop) ===== -->
     <el-card v-loading="loading" class="grid-card" v-if="viewMode === 'table'">
       <AttendanceTableView
-        v-if="sheetData"
-        :days="sheetData.days || []"
-        :uses-shift="sheetData.uses_shift || false"
+        :days="sheetData?.days ?? []"
+        :uses-shift="sheetData?.uses_shift ?? false"
       />
     </el-card>
 
     <!-- ===== Card View (Mobile) ===== -->
     <div v-if="viewMode === 'cards'" v-loading="loading" class="cards-wrapper">
       <AttendanceCardsView
-        v-if="sheetData"
-        :days="sheetData.days || []"
+        :days="sheetData?.days ?? []"
         :month="query.month"
       />
     </div>
