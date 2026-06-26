@@ -14,7 +14,7 @@ import { apiError } from '@/utils/error'
 import A11yMenu from '@/components/common/A11yMenu.vue'
 import PortalSearchPalette from '@/components/portal/PortalSearchPalette.vue'
 import { usePortalSearch, installPortalSearchKeyboard } from '@/composables/usePortalSearch'
-import { Search } from '@element-plus/icons-vue'
+import { Search, Fold } from '@element-plus/icons-vue'
 
 interface UserInfo {
   name?: string
@@ -301,7 +301,7 @@ const submitPassword = async () => {
     <!-- Mobile overlay -->
     <div class="sidebar-overlay" v-if="isMobile && sidebarOpen" @click="closeSidebar"></div>
 
-    <el-aside :width="isMobile ? '220px' : '200px'" :class="{ 'sidebar-open': sidebarOpen, 'sidebar-hidden': isMobile && !sidebarOpen }">
+    <el-aside id="portal-sidebar" :width="isMobile ? '220px' : '200px'" :class="{ 'sidebar-open': sidebarOpen, 'sidebar-hidden': isMobile && !sidebarOpen }">
       <div class="portal-logo">
         <span>教師專區</span>
       </div>
@@ -475,6 +475,19 @@ const submitPassword = async () => {
       <el-header height="60px">
         <div class="portal-header">
           <div class="header-left">
+            <!-- 手機漢堡鍵：點擊後開啟側欄；overlay/動畫/closeSidebar 既有，此為唯一缺漏的觸發點（P0） -->
+            <button
+              v-if="isMobile"
+              class="portal-sidebar-toggle"
+              data-test="portal-sidebar-toggle"
+              type="button"
+              :aria-expanded="sidebarOpen"
+              aria-controls="portal-sidebar"
+              aria-label="開啟選單"
+              @click="sidebarOpen = true"
+            >
+              <el-icon><Fold /></el-icon>
+            </button>
             <h3>常春藤義華幼兒園 - 教職員考勤系統</h3>
           </div>
           <button class="psp-trigger-portal" @click="openPalette" title="搜尋 (Cmd+K)">
@@ -809,6 +822,22 @@ const submitPassword = async () => {
   border: none;
 }
 
+/* 手機漢堡鍵：命中區 ≥ 44×44px，觸發點透明以符合 Portal header 視覺 */
+.portal-sidebar-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin-right: 4px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 20px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
 /* Bottom Navigation */
 .bottom-nav {
   display: flex;
@@ -816,7 +845,8 @@ const submitPassword = async () => {
   bottom: 0;
   left: 0;
   right: 0;
-  height: 60px;
+  height: calc(60px + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
   background-color: var(--surface-color);
   border-top: 1px solid var(--border-color);
   box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.08);
@@ -961,7 +991,7 @@ const submitPassword = async () => {
 /* ── 行動端搜尋 FAB（右下角圓鈕） ── */
 .psp-fab {
   position: fixed;
-  bottom: 76px; /* bottom-nav 60px + 16px gap */
+  bottom: calc(76px + env(safe-area-inset-bottom)); /* bottom-nav(60+inset)+16 gap */
   right: 16px;
   z-index: 50;
   width: 48px;

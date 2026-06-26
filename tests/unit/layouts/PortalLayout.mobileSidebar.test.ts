@@ -1,0 +1,87 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { mount, flushPromises } from '@vue/test-utils'
+import ElementPlus from 'element-plus'
+
+vi.mock('vue-router', () => ({
+  RouterView: { template: '<div />' },
+  useRoute: () => ({ path: '/portal/home' }),
+  useRouter: () => ({ push: vi.fn() }),
+}))
+let userInfoData: Record<string, unknown> = {}
+vi.mock('@/utils/auth', () => ({
+  getUserInfo: () => userInfoData,
+  setUserInfo: vi.fn(),
+  clearAuth: vi.fn(),
+}))
+vi.mock('@/api/portal', () => ({
+  getSubstitutePendingCount: vi.fn(() => Promise.resolve({ data: { pending_count: 0 } })),
+  getUnreadCount: vi.fn(() => Promise.resolve({ data: { unread_count: 0 } })),
+  getSwapPendingCount: vi.fn(() => Promise.resolve({ data: { pending_count: 0 } })),
+}))
+vi.mock('@/api/dismissalCalls', () => ({
+  getPortalPendingCount: vi.fn(() => Promise.resolve({ data: { count: 0 } })),
+}))
+vi.mock('@/api/portalMessages', () => ({
+  getUnreadCount: vi.fn(() => Promise.resolve({ data: { unread_count: 0 } })),
+}))
+vi.mock('@/api/portalClassHub', () => ({
+  getTodayHub: vi.fn(() => Promise.resolve({ counts: {} })),
+}))
+vi.mock('@/api/auth', () => ({
+  changePassword: vi.fn(() => Promise.resolve()),
+  endImpersonate: vi.fn(() => Promise.resolve({ data: { user: {} } })),
+  impersonate: vi.fn(() => Promise.resolve({ data: { user: {} } })),
+}))
+vi.mock('@/api/employees', () => ({ getEmployees: vi.fn(() => Promise.resolve({ data: [] })) }))
+vi.mock('@/composables/usePortalSearch', () => ({
+  usePortalSearch: () => ({ openPalette: vi.fn() }),
+  installPortalSearchKeyboard: vi.fn(),
+}))
+vi.mock('element-plus', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>
+  return {
+    ...actual,
+    ElMessageBox: Object.assign(vi.fn(() => Promise.resolve()), {
+      alert: vi.fn(() => Promise.resolve()),
+      confirm: vi.fn(() => Promise.resolve()),
+    }),
+    ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
+  }
+})
+
+const stubs = { PortalSearchPalette: true, OfflineIndicator: true, A11yMenu: true }
+import PortalLayout from '@/layouts/PortalLayout.vue'
+
+const SEL = '[data-test="portal-sidebar-toggle"]'
+
+describe('PortalLayout — 手機漢堡鍵恢復側欄可達（P0）', () => {
+  beforeEach(() => {
+    localStorage.setItem('portal_layout_v', '1') // 防 onboarding setTimeout 干擾
+    userInfoData = { name: '陳老師', role: 'teacher', impersonation_mode: null }
+  })
+  afterEach(() => {
+    window.innerWidth = 1024
+  })
+
+  it('手機寬度顯示漢堡鍵，點擊後側欄開啟', async () => {
+    window.innerWidth = 375
+    const wrapper = mount(PortalLayout, { global: { plugins: [ElementPlus], stubs } })
+    await flushPromises()
+
+    const burger = wrapper.find(SEL)
+    expect(burger.exists()).toBe(true)
+    expect(wrapper.find('.el-aside').classes()).not.toContain('sidebar-open')
+
+    await burger.trigger('click')
+    expect(wrapper.find('.el-aside').classes()).toContain('sidebar-open')
+    wrapper.unmount()
+  })
+
+  it('桌機寬度不顯示漢堡鍵', async () => {
+    window.innerWidth = 1280
+    const wrapper = mount(PortalLayout, { global: { plugins: [ElementPlus], stubs } })
+    await flushPromises()
+    expect(wrapper.find(SEL).exists()).toBe(false)
+    wrapper.unmount()
+  })
+})
