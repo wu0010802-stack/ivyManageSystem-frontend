@@ -295,6 +295,8 @@ export default defineConfig({
                 // multi-page 後管理端 entry 是 main-*.js，家長 App 是 parent-app-*.js（走 runtime cache）
                 globPatterns: [
                     'index.html',
+                    'parent.html',
+                    'public.html',
                     'registerSW.js',
                     'manifest.webmanifest',
                     'assets/main-*.css',
@@ -314,7 +316,10 @@ export default defineConfig({
                 // hash routing：所有 SPA 內導航回傳 index.html；
                 // 家長 App 是另一個獨立 HTML，必須排除避免被導向管理端
                 navigateFallback: 'index.html',
-                navigateFallbackDenylist: [/^\/parent\.html/, /^\/parent\//],
+                navigateFallbackDenylist: [
+                    /^\/parent\.html/, /^\/parent\//,
+                    /^\/public\.html/, /^\/public\//,
+                ],
 
                 runtimeCaching: [
                     {
