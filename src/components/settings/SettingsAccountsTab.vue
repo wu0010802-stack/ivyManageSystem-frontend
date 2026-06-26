@@ -286,6 +286,11 @@ function onRowCommand(cmd: string, row: Record<string, unknown>) {
   else if (cmd === 'delete') handleDeleteUser(row)
 }
 
+const clearFilters = () => {
+  keyword.value = ''
+  roleFilter.value = ''
+}
+
 onMounted(() => {
   fetchUsers()
   fetchPermissionDefinition()
@@ -293,7 +298,7 @@ onMounted(() => {
 
 defineExpose({
   userForm, editUserForm, saveUser, saveEditUser, isUsingDefaultPermissions, deviationCount, restoreDefault,
-  keyword, roleFilter, filteredUsers, onRowCommand, resetDialogVisible, handleResetPassword, handleDeleteUser,
+  keyword, roleFilter, filteredUsers, clearFilters, onRowCommand, resetDialogVisible, handleResetPassword, handleDeleteUser,
 })
 </script>
 
@@ -351,7 +356,10 @@ defineExpose({
       </el-table-column>
       <template #empty>
         <div class="accounts-empty">
-          <span v-if="keyword || roleFilter">查無符合條件的帳號</span>
+          <template v-if="keyword || roleFilter">
+            <span>查無符合條件的帳號</span>
+            <el-button link type="primary" data-testid="clear-filters" @click="clearFilters">清除篩選</el-button>
+          </template>
           <span v-else>尚無帳號</span>
         </div>
       </template>

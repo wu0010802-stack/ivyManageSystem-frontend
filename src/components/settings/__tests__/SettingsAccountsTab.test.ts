@@ -225,4 +225,22 @@ describe('SettingsAccountsTab — role card UX', () => {
     )
     confirmSpy.mockRestore()
   })
+
+  it('空狀態在有篩選時顯示「清除篩選」按鈕，點擊後重置 keyword 與 roleFilter', async () => {
+    const wrapper = mount(SettingsAccountsTab, { attachTo: document.body, global: { plugins: [ElementPlus] } })
+    await flushPromises()
+    const vm = wrapper.vm as unknown as { keyword: string; roleFilter: string; filteredUsers: unknown[] }
+    // 篩出空集合 → el-table 顯示 #empty slot
+    vm.keyword = 'zzz_無此帳號'
+    await flushPromises()
+    await nextTick()
+    expect(vm.filteredUsers.length).toBe(0)
+    // 有篩選時，空狀態出現「清除篩選」按鈕
+    const clearBtn = wrapper.find('[data-testid="clear-filters"]')
+    expect(clearBtn.exists()).toBe(true)
+    await clearBtn.trigger('click')
+    await nextTick()
+    expect(vm.keyword).toBe('')
+    expect(vm.roleFilter).toBe('')
+  })
 })
