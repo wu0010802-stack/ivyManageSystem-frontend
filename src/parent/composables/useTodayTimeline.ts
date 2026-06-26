@@ -1,6 +1,10 @@
 import { computed } from 'vue'
 // 純函式、零依賴，不會把 admin 端 chunk 拉進 parent bundle
 import { formatCurrency } from '@/utils/currency'
+// 接送時間是後端台北 naive 字串；統一走零依賴的 taipeiTime 工具顯式錨定 +08:00
+// 並以 Asia/Taipei 取時/格式化，避免非台灣裝置差 8 小時導致時段桶分錯、時間顯示錯
+// （與 admin 歷史表格 / portal 同源）。
+import { formatTaipeiClock, taipeiHour } from '@/utils/taipeiTime'
 
 const BUCKET_LABEL = {
   morning: '早上',
@@ -9,28 +13,6 @@ const BUCKET_LABEL = {
   later: '晚一些',
 }
 const BUCKET_ORDER = ['morning', 'noon', 'afternoon', 'later']
-
-function formatTime(iso: string | null | undefined) {
-  if (!iso) return null
-  try {
-    const d = new Date(iso)
-    if (Number.isNaN(d.getTime())) return null
-    return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`
-  } catch {
-    return null
-  }
-}
-
-function hourFrom(iso: string | null | undefined) {
-  if (!iso) return null
-  try {
-    const d = new Date(iso)
-    if (Number.isNaN(d.getTime())) return null
-    return d.getHours()
-  } catch {
-    return null
-  }
-}
 
 function bucketFromHour(h: number | null) {
   if (h == null) return null
@@ -130,13 +112,13 @@ export function useTodayTimeline({ summary, todayChildren }: { summary: { value:
         const sourceTs = completed
           ? c.dismissal.completed_at || c.dismissal.requested_at
           : c.dismissal.acknowledged_at || c.dismissal.requested_at
-        const hour = hourFrom(sourceTs)
+        const hour = taipeiHour(sourceTs)
         const inferredBucket = bucketFromHour(hour) || 'afternoon'
         out.push({
           id: `dismissal:${c.student_id}`,
           bucket: inferredBucket,
           variant: completed ? 'past' : 'pending',
-          time: formatTime(sourceTs),
+          time: formatTaipeiClock(sourceTs),
           primary: `${c.name} 接送`,
           secondary: dismissalLabel(c.dismissal.status),
           tone: 'info',

@@ -40,10 +40,25 @@ const waited = computed(() => formatWaited(minutes.value))
 const statusText = computed(
   () => STATUS_TEXT[props.call.status ?? ''] ?? props.call.status ?? '',
 )
+
+/**
+ * 整張卡片的螢幕報讀摘要：學生 + 班級 + 狀態（+ 等候時間）。
+ * 圓徽是純視覺（aria-hidden），緊急度只靠顏色/脈動傳達，因此把關鍵訊息
+ * 收斂成一句 aria-label，讓報讀器一次讀懂這張卡。
+ */
+const ariaLabel = computed(() => {
+  const parts = [
+    props.call.student_name || '未知學生',
+    props.call.classroom_name || '未分班',
+    statusText.value,
+  ]
+  if (waited.value) parts.push(waited.value)
+  return parts.filter(Boolean).join('，')
+})
 </script>
 
 <template>
-  <article class="dcall" :class="`dcall--${tone}`">
+  <article class="dcall" :class="`dcall--${tone}`" :aria-label="ariaLabel">
     <div class="dcall__head">
       <span class="dcall__mono" aria-hidden="true">{{ monogram }}</span>
       <div class="dcall__id">
@@ -115,7 +130,9 @@ const statusText = computed(
   gap: var(--space-3);
 }
 
-/* 姓名首字圓徽：孩子身分識別，深綠品牌底，加速隔著教室辨認 */
+/* 姓名首字圓徽：孩子身分識別，加速隔著教室辨認。
+   底色隨卡片語氣（tone）走，與升級色和諧，不再恆綠在紅脈動卡上打架。
+   各 tone 一律用較深的 *-darker 階，確保白字維持 WCAG AA 對比。 */
 .dcall__mono {
   flex-shrink: 0;
   width: 44px;
@@ -127,6 +144,16 @@ const statusText = computed(
   color: #fff;
   font-size: var(--text-lg);
   font-weight: var(--font-weight-bold);
+  transition: background-color var(--transition-base);
+}
+.dcall--warning .dcall__mono {
+  background: var(--color-warning-darker);
+}
+.dcall--critical .dcall__mono {
+  background: var(--color-danger-darker);
+}
+.dcall--ack .dcall__mono {
+  background: var(--color-info-darker);
 }
 
 .dcall__id {
@@ -180,14 +207,16 @@ const statusText = computed(
 .dcall__wait-ico {
   font-size: 14px;
 }
-/* 對比微調：深琥珀 / 深紅文字於各自 soft 底上達 WCAG AA */
+/* 對比：深琥珀 / 深紅文字於各自 soft 底，light mode 達 WCAG AA（用 *-darker token）。
+   註：*-darker 未隨 a11y.css 的 html.dark 覆寫，故 dark mode chip 對比延用既有限制
+   （與改版前硬編碼色相同，非本次引入；如要根治需在 a11y.css 補 dark *-darker，屬全站範圍）。 */
 .dcall__wait--warning {
   background: var(--color-warning-soft);
-  color: #92600a;
+  color: var(--color-warning-darker);
 }
 .dcall__wait--critical {
   background: var(--color-danger-soft);
-  color: #b42318;
+  color: var(--color-danger-darker);
   font-weight: var(--font-weight-bold);
   /* 等候逾門檻：等候時間 chip 放大，最久沒被接的孩子一眼最醒目 */
   font-size: var(--text-base);
@@ -220,15 +249,15 @@ const statusText = computed(
 }
 .dcall__status--pending {
   background: var(--color-warning-soft);
-  color: #92600a;
+  color: var(--color-warning-darker);
 }
 .dcall__status--acknowledged {
   background: var(--color-info-soft);
-  color: #1f5bb5;
+  color: var(--color-info-darker);
 }
 .dcall__status--completed {
   background: var(--color-success-soft);
-  color: #1a7f4b;
+  color: var(--color-success-darker);
 }
 .dcall__status--cancelled {
   background: var(--neutral-100);
