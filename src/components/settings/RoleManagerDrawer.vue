@@ -6,7 +6,7 @@ import { apiError } from '@/utils/error'
 import PermissionPicker, { type PermissionPickerDefinition } from './PermissionPicker.vue'
 
 interface RoleDef { label: string; description: string; permissions: string[]; is_core: boolean }
-type RolesDefinition = PermissionPickerDefinition & { roles: Record<string, RoleDef> }
+export type RolesDefinition = PermissionPickerDefinition & { roles: Record<string, RoleDef> }
 
 const props = defineProps<{
   visible: boolean

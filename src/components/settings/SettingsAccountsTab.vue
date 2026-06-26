@@ -6,8 +6,8 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { useEmployeeStore } from '@/stores/employee'
 import { apiError } from '@/utils/error'
 import { shouldSendPermissionNames } from '@/utils/auth'
-import PermissionPicker, { type PermissionPickerDefinition } from './PermissionPicker.vue'
-import RoleManagerDrawer from './RoleManagerDrawer.vue'
+import PermissionPicker from './PermissionPicker.vue'
+import RoleManagerDrawer, { type RolesDefinition } from './RoleManagerDrawer.vue'
 
 const ROLE_ICONS: Record<string, string> = {
   admin: '👑',
@@ -38,27 +38,7 @@ const editUserDialogVisible = ref<boolean>(false)
 const editUserForm = reactive<{ id: number | null; username: string; role: string; permission_names: string[] }>({ id: null, username: '', role: 'teacher', permission_names: ['*'] })
 const credentialDialogVisible = ref<boolean>(false)
 const createdCredentials = ref<{ username: string; password: string }>({ username: '', password: '' })
-interface PermGroup {
-  name: string
-  permissions?: string[]
-  split_permissions?: { module: string; read: string; write: string }[]
-}
-
-interface RoleConfig {
-  label: string
-  permissions: string[]
-  description?: string
-}
-
-const permissionDefinition = ref<{ permissions: Record<string, { label: string; value: string }>; groups: PermGroup[]; roles: Record<string, RoleConfig> }>({ permissions: {}, groups: [], roles: {} })
-
-// RoleManagerDrawer 的 definition prop 需要 description: string 與 is_core: boolean（皆為 required）。
-// 實際 API 回傳的資料包含這兩欄，但本地 RoleConfig 介面為保持向後相容僅宣告 optional。
-// 使用 unknown 轉型讓 TS 通過（runtime 安全）。
-type DrawerDefinition = PermissionPickerDefinition & {
-  roles: Record<string, { label: string; description: string; permissions: string[]; is_core: boolean }>
-}
-const permDefForDrawer = computed(() => permissionDefinition.value as unknown as DrawerDefinition)
+const permissionDefinition = ref<RolesDefinition>({ permissions: {}, groups: [], roles: {} })
 
 const roleDrawerVisible = ref<boolean>(false)
 const onRolesChanged = () => { fetchPermissionDefinition() }
@@ -333,7 +313,7 @@ defineExpose({ userForm, editUserForm, saveUser, saveEditUser, isUsingDefaultPer
     <!-- 管理角色抽屜 -->
     <RoleManagerDrawer
       v-model:visible="roleDrawerVisible"
-      :definition="permDefForDrawer"
+      :definition="permissionDefinition"
       :users="users"
       @roles-changed="onRolesChanged"
     />
