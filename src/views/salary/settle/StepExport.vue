@@ -16,6 +16,7 @@
           :key="type"
           type="primary"
           plain
+          :loading="rosterLoading === type"
           @click="exportRoster(type)"
         >
           {{ label }}名冊
@@ -26,8 +27,8 @@
     <el-card shadow="never" class="no-hover export-card">
       <h4 class="export-title">薪資總表與快照</h4>
       <div class="export-buttons">
-        <el-button @click="exportAllExcel">匯出全部 Excel</el-button>
-        <el-button @click="exportAllPdf">匯出全部 PDF</el-button>
+        <el-button :loading="excelLoading" @click="exportAllExcel">匯出全部 Excel</el-button>
+        <el-button :loading="pdfLoading" @click="exportAllPdf">匯出全部 PDF</el-button>
         <el-button @click="showSnapshotDialog = true">月底快照</el-button>
       </div>
     </el-card>
@@ -81,25 +82,49 @@ const ROSTER_TYPE_LABELS = {
 const hasExported = ref(false)
 const showSnapshotDialog = ref(false)
 
-const exportRoster = (type: keyof typeof ROSTER_TYPE_LABELS) => {
+// 重型匯出（薪資全員 Excel/PDF、逐筆轉帳名冊）慢且原本無回饋，易誤判沒點到而重複點擊。
+// 改 await + per-action loading：按鈕顯示忙碌、進行中防重送（並發另有 api dedupe 兜底）。
+const rosterLoading = ref<keyof typeof ROSTER_TYPE_LABELS | null>(null)
+const excelLoading = ref(false)
+const pdfLoading = ref(false)
+
+const exportRoster = async (type: keyof typeof ROSTER_TYPE_LABELS) => {
+    if (rosterLoading.value) return
+    rosterLoading.value = type
     const label = ROSTER_TYPE_LABELS[type]
     const filename = `${q.year}年${String(q.month).padStart(2, '0')}月_${label}轉帳名冊.xlsx`
-    downloadFile(`/salaries/${q.year}/${q.month}/transfer-roster?type=${type}`, filename)
-    hasExported.value = true
+    try {
+        await downloadFile(`/salaries/${q.year}/${q.month}/transfer-roster?type=${type}`, filename)
+        hasExported.value = true
+    } finally {
+        rosterLoading.value = null
+    }
 }
 
-const exportAllExcel = () => {
-    downloadFile(
-        `/salaries/export-all?year=${q.year}&month=${q.month}&format=xlsx`,
-        `${q.year}年${q.month}月薪資總表.xlsx`,
-    )
+const exportAllExcel = async () => {
+    if (excelLoading.value) return
+    excelLoading.value = true
+    try {
+        await downloadFile(
+            `/salaries/export-all?year=${q.year}&month=${q.month}&format=xlsx`,
+            `${q.year}年${q.month}月薪資總表.xlsx`,
+        )
+    } finally {
+        excelLoading.value = false
+    }
 }
 
-const exportAllPdf = () => {
-    downloadFile(
-        `/salaries/export-all?year=${q.year}&month=${q.month}&format=pdf`,
-        `${q.year}年${q.month}月薪資總表.pdf`,
-    )
+const exportAllPdf = async () => {
+    if (pdfLoading.value) return
+    pdfLoading.value = true
+    try {
+        await downloadFile(
+            `/salaries/export-all?year=${q.year}&month=${q.month}&format=pdf`,
+            `${q.year}年${q.month}月薪資總表.pdf`,
+        )
+    } finally {
+        pdfLoading.value = false
+    }
 }
 </script>
 
