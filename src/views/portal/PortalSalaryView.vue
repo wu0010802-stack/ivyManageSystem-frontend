@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, ref, reactive, onMounted, onUnmounted } from 'vue'
+import { computed, ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { InfoFilled } from '@element-plus/icons-vue'
 import { getSalaryPreview } from '@/api/portal'
 import { computeIndependentBonusNet } from './portalSalaryBonus'
+import { useIsMobile } from '@/composables/useIsMobile'
 
 const loading = ref(false)
 const salaryData = ref<Record<string, unknown> | null>(null)
@@ -18,10 +19,7 @@ const STATUS_MESSAGES = {
 }
 const statusMessage = computed(() => (STATUS_MESSAGES as Record<string, { title: string; desc: string }>)[(salaryData.value?.salary_status as string) || ''] || STATUS_MESSAGES.none)
 
-const isMobile = ref(window.innerWidth < 768)
-const checkMobile = () => { isMobile.value = window.innerWidth < 768 }
-onMounted(() => window.addEventListener('resize', checkMobile))
-onUnmounted(() => window.removeEventListener('resize', checkMobile))
+const { isMobile } = useIsMobile()
 
 const now = new Date()
 const query = reactive({

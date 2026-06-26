@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
@@ -13,6 +13,7 @@ import {
 } from '@element-plus/icons-vue'
 import { hasPermission } from '@/utils/auth'
 import { useConfirmDelete } from '@/composables'
+import { useIsMobile } from '@/composables/useIsMobile'
 import { useClassroomProspects } from '@/composables/useClassroomProspects'
 import { domainBus, STUDENT_EVENTS } from '@/utils/domainBus'
 import StudentEditDialog from '@/components/student/StudentEditDialog.vue'
@@ -157,14 +158,7 @@ watch(
 )
 
 // 手機切換顯示
-const isMobile = ref(typeof window !== 'undefined' && window.innerWidth < 768)
-const handleResize = () => { isMobile.value = window.innerWidth < 768 }
-onMounted(() => {
-  if (typeof window !== 'undefined') window.addEventListener('resize', handleResize)
-})
-onUnmounted(() => {
-  if (typeof window !== 'undefined') window.removeEventListener('resize', handleResize)
-})
+const { isMobile } = useIsMobile()
 const mobileShowDetail = computed(() => isMobile.value && selectedStudentId.value)
 
 // ── 學生新增/編輯 dialog ────────────────────────────

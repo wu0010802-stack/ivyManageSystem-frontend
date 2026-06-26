@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, reactive, computed, toRef, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, toRef, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getMySchedule, getSwapRequests, getSwapCandidates, createSwapRequest, respondToSwap, cancelSwapRequest } from '@/api/portal'
 import { apiError } from '@/utils/error'
 import { useScheduleCalendar } from '@/composables/useScheduleCalendar'
+import { useIsMobile } from '@/composables/useIsMobile'
 import ScheduleMonthHeader from './components/schedule/ScheduleMonthHeader.vue'
 import ScheduleCalendarGrid from './components/schedule/ScheduleCalendarGrid.vue'
 import ScheduleSwapTable from './components/schedule/ScheduleSwapTable.vue'
@@ -45,9 +46,7 @@ const { calendarWeeks, isToday, isFutureDate } = useScheduleCalendar(
 )
 
 // ============ 行動裝置偵測 ============
-const isMobile = ref(false)
-let mqList: MediaQueryList | null = null
-const onMqChange = (e: MediaQueryListEvent) => { isMobile.value = e.matches }
+const { isMobile } = useIsMobile()
 
 // ============ Day Detail BottomSheet（mobile only）============
 const showDaySheet = ref(false)
@@ -216,13 +215,6 @@ const changeMonth = (offset: number) => {
 onMounted(() => {
   fetchSchedule()
   fetchSwapRequests()
-  mqList = window.matchMedia('(max-width: 767px)')
-  isMobile.value = mqList.matches
-  mqList.addEventListener('change', onMqChange)
-})
-
-onUnmounted(() => {
-  mqList?.removeEventListener('change', onMqChange)
 })
 </script>
 

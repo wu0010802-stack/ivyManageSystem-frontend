@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import QRCode from 'qrcode'
 import { getProfile, updateProfile } from '@/api/portal'
 import { getMyLineBinding, updateMyLineBinding, deleteMyLineBinding } from '@/api/lineBinding'
 import { useErrorNotify } from '@/composables/useErrorNotify'
+import { useIsMobile } from '@/composables/useIsMobile'
 
 const { notify } = useErrorNotify()
 const lineBotFriendUrl = import.meta.env.VITE_LINE_BOT_FRIEND_URL || ''
@@ -13,10 +14,7 @@ const loading = ref(false)
 const saving = ref(false)
 const isEditing = ref(false)
 
-const isMobile = ref(window.innerWidth < 768)
-const checkMobile = () => { isMobile.value = window.innerWidth < 768 }
-onMounted(() => window.addEventListener('resize', checkMobile))
-onUnmounted(() => window.removeEventListener('resize', checkMobile))
+const { isMobile } = useIsMobile()
 
 interface ProfileData {
   employee_id?: string | number
