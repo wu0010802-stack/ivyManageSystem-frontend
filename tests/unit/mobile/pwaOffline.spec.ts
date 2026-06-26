@@ -5,10 +5,10 @@ import { resolve } from 'node:path'
 const cfg = () => readFileSync(resolve(process.cwd(), 'vite.config.js'), 'utf-8')
 
 describe('PWA 離線收斂', () => {
-  it('navigateFallbackDenylist 排除 /public（不被餵 admin 外殼）', () => {
-    const c = cfg().replace(/\s+/g, ' ')
-    const denylist = c.match(/navigateFallbackDenylist:\s*\[(.*?)\]/)?.[1] ?? ''
-    expect(denylist).toContain('/public')
+  it('navigateFallbackDenylist 排除 /public.html 與 /public/ 兩種路徑', () => {
+    const c = cfg()
+    expect(c).toContain('/^\\/public\\.html/')
+    expect(c).toContain('/^\\/public\\//')
   })
 
   it('globPatterns 精快取 parent.html 與 public.html', () => {
