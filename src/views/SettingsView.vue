@@ -2,10 +2,9 @@
 import { ref, onMounted } from 'vue'
 import { useShiftStore } from '@/stores/shift'
 import SettingsShiftTab from '@/components/settings/SettingsShiftTab.vue'
-import SettingsUsersTab from '@/components/settings/SettingsUsersTab.vue'
+import SettingsAccountsTab from '@/components/settings/SettingsAccountsTab.vue'
 import SettingsApprovalTab from '@/components/settings/SettingsApprovalTab.vue'
 import SettingsLineTab from '@/components/settings/SettingsLineTab.vue'
-import SettingsPermissionsTab from '@/components/settings/SettingsPermissionsTab.vue'
 import SettingsObservabilityTab from '@/components/settings/SettingsObservabilityTab.vue'
 import DsrRequestsView from '@/views/DsrRequestsView.vue'
 import PolicyVersionsView from '@/views/PolicyVersionsView.vue'
@@ -29,11 +28,8 @@ onMounted(() => {
       <el-tab-pane label="審核流程設定" name="approval">
         <SettingsApprovalTab v-if="activeTab === 'approval'" />
       </el-tab-pane>
-      <el-tab-pane label="帳號管理" name="accounts">
-        <SettingsUsersTab v-if="activeTab === 'accounts'" />
-      </el-tab-pane>
-      <el-tab-pane label="角色管理" name="permissions">
-        <SettingsPermissionsTab v-if="activeTab === 'permissions'" />
+      <el-tab-pane label="帳號與權限" name="accounts">
+        <SettingsAccountsTab v-if="activeTab === 'accounts'" />
       </el-tab-pane>
       <el-tab-pane name="line">
         <template #label>LINE 通知設定 <el-tag type="warning" size="small" style="margin-left:4px;">Beta</el-tag></template>

@@ -30,10 +30,9 @@ const globalConfig = {
     'el-tag': { template: '<span><slot /></span>', props: ['type', 'size'] },
     // 子 settings tab 元件全部 shallow stub 掉（shallowMount 已自動，但保留明確 key）
     SettingsShiftTab: { template: '<div data-test="shift-tab" />' },
-    SettingsUsersTab: { template: '<div data-test="users-tab" />' },
+    SettingsAccountsTab: { template: '<div data-test="accounts-tab" />' },
     SettingsApprovalTab: { template: '<div data-test="approval-tab" />' },
     SettingsLineTab: { template: '<div data-test="line-tab" />' },
-    SettingsPermissionsTab: { template: '<div data-test="permissions-tab" />' },
     SettingsObservabilityTab: { template: '<div data-test="observability-tab" />' },
     DsrRequestsView: { template: '<div data-test="dsr-view" />' },
     PolicyVersionsView: { template: '<div data-test="policy-view" />' },
@@ -73,6 +72,6 @@ describe('SettingsView', () => {
     await flushPromises()
     // 確認固定存在的 tab（不受權限影響）
     expect(wrapper.html()).toContain('輪班別管理')
-    expect(wrapper.html()).toContain('帳號管理')
+    expect(wrapper.html()).toContain('帳號與權限')
   })
 })

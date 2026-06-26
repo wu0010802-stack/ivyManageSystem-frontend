@@ -364,7 +364,7 @@ export function permissionsCombine(arrays: string[][]): string[] {
 }
 
 /**
- * 帳號管理 UI 中不顯示權限編輯區（SettingsUsersTab 以 v-if 隱藏）的角色，
+ * 帳號管理 UI 中不顯示權限編輯區的角色，
  * 其權限一律交由後端依角色預設 resolve。
  */
 export const ROLES_WITHOUT_PERMISSION_UI = ['teacher', 'parent']
