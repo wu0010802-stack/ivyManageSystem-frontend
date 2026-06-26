@@ -1,10 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { readdirSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { dirname } from 'node:path'
 
-// worktree 中 import.meta.url 可能不是 file:// 協議，改用 process.cwd() 相對路徑
-const SRC = resolve(dirname(new URL(import.meta.url).pathname), '../../src')
+// worktree 中 import.meta.url 可能不是 file:// 協議，用 process.cwd() 相對路徑
+const SRC = resolve(process.cwd(), 'src')
 
 // 合法的非斷點用法（佈局計算 / 斷點來源本體）允許保留裸用法。
 const ALLOW = new Set([
@@ -15,7 +14,8 @@ const ALLOW = new Set([
 
 const FORBIDDEN = [
   /innerWidth\s*<\s*768\b/,
-  /matchMedia\(\s*['"`]\(max-width:\s*767px\)/,
+  /matchMedia\(\s*['"`]\(max-width:\s*76[78]px\)/,
+  /useMediaQuery\([^)]*max-width:\s*76[78]/,
 ]
 
 function listFiles(dir: string): string[] {

@@ -4,7 +4,7 @@ import { MOBILE_MAX_PX } from '@/constants/breakpoints'
 const QUERY = `(max-width: ${MOBILE_MAX_PX}px)`
 
 /**
- * Reactive boolean reflecting whether viewport matches `(max-width: 767px)`.
+ * Reactive boolean reflecting whether viewport matches `(max-width: 767.98px)`.
  *
  * - 初始值直接讀 `window.matchMedia` 結果（無 SSR 場景，安全）
  * - listener 在元件 unmount 時自動 cleanup
