@@ -227,7 +227,7 @@ const deltaArrow = (value: unknown) => {
   margin-bottom: 16px;
 }
 
-@media (max-width: 768px) {
+@media (--to-sm) {
   .funnel-section { grid-template-columns: 1fr; }
 }
 

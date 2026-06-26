@@ -324,7 +324,7 @@ onMounted(() => {
   color: var(--text-primary);
 }
 
-@media (max-width: 767px) {
+@media (--to-sm) {
   .stats-container {
     grid-template-columns: repeat(2, 1fr);
     gap: 10px;

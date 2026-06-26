@@ -404,7 +404,7 @@ onMounted(() => {
 }
 
 /* Mobile */
-@media (max-width: 767px) {
+@media (--to-sm) {
   .controls {
     justify-content: center;
   }

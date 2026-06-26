@@ -987,7 +987,7 @@ const castDrawerClassroom = computed((): ClassroomDrawerProp | null => drawerCla
   margin-top: var(--space-3);
 }
 
-@media (max-width: 767px) {
+@media (--to-sm) {
   .page-header {
     flex-direction: column;
     align-items: stretch;

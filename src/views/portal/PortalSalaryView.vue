@@ -325,7 +325,7 @@ onMounted(fetchSalary)
   letter-spacing: 0.5px;
 }
 
-@media (max-width: 767px) {
+@media (--to-sm) {
   .month-label {
     font-size: var(--text-lg);
     min-width: 120px;

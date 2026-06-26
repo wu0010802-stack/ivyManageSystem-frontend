@@ -331,7 +331,7 @@ function handleClose() {
   font-size: var(--text-sm);
 }
 
-@media (max-width: 767px) {
+@media (--to-sm) {
   .form-row {
     grid-template-columns: 1fr;
   }

@@ -1489,7 +1489,7 @@ onMounted(async () => {
 .status-filter { width: 132px; }
 
 /* 窄螢幕：頂列改直向堆疊，搜尋/篩選撐滿好點 */
-@media (max-width: 767px) {
+@media (--to-sm) {
   .employees-page .page-header {
     flex-direction: column;
     align-items: stretch;
@@ -1583,7 +1583,7 @@ onMounted(async () => {
 <!-- 手機版表單欄位響應式：dialog 內容被 teleport 到 body，scoped 規則無法穿透，
      用非 scoped block 提供全域 fallback，但僅針對含 .responsive-form-dialog 的 dialog -->
 <style>
-@media (max-width: 767px) {
+@media (--to-sm) {
   .el-overlay-dialog .el-dialog.is-fullscreen .el-row .el-col {
     width: 100% !important;
     max-width: 100% !important;

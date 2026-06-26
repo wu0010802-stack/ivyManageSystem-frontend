@@ -303,7 +303,7 @@ onUnmounted(() => {
 }
 
 /* ===== Mobile responsive ===== */
-@media (max-width: 767px) {
+@media (--to-sm) {
   .sheet-header {
     flex-direction: column;
     align-items: flex-start;

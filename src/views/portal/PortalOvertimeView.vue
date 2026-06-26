@@ -217,7 +217,7 @@ onMounted(fetchOvertimes)
     color: var(--color-primary);
 }
 
-@media (max-width: 767px) {
+@media (--to-sm) {
     .query-row {
         flex-wrap: wrap;
     }

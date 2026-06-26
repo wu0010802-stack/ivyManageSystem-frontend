@@ -751,7 +751,7 @@ const submitPassword = async () => {
 }
 
 /* Mobile padding 收緊 */
-@media (max-width: 768px) {
+@media (--to-sm) {
   .el-main {
     padding: var(--space-4);
   }
@@ -880,7 +880,7 @@ const submitPassword = async () => {
 }
 
 /* Mobile styles */
-@media (max-width: 767px) {
+@media (--to-sm) {
   .portal-header h3 {
     font-size: var(--text-lg);
   }
@@ -949,7 +949,7 @@ const submitPassword = async () => {
   border-radius: 3px;
   font-size: 11px;
 }
-@media (max-width: 767px) {
+@media (--to-sm) {
   .psp-trigger-portal {
     display: none;
   }

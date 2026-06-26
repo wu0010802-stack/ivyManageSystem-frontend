@@ -456,7 +456,7 @@ onMounted(() => {
   font-family: ui-monospace, monospace;
 }
 
-@media (max-width: 768px) {
+@media (--to-sm) {
   :deep(.el-descriptions) {
     --el-descriptions-item-bordered-label-background: var(--bg-color);
   }

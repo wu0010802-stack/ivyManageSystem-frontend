@@ -169,7 +169,7 @@ const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
   outline-offset: -2px;
 }
 
-@media (max-width: 767px) {
+@media (--to-sm) {
   .calendar-cell {
     min-height: 65px;
     padding: 4px;

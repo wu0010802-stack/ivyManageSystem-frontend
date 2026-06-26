@@ -137,7 +137,7 @@ onUnmounted(() => {
   z-index: 1999;
 }
 
-@media (max-width: 767px) {
+@media (--to-sm) {
   .content-container {
     padding: var(--space-4);
   }

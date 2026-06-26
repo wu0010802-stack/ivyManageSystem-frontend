@@ -235,7 +235,7 @@ const formatDate = (iso: unknown) => {
   grid-template-columns: 1fr 1fr;
   gap: 12px;
 }
-@media (max-width: 768px) {
+@media (--to-sm) {
   .info-row { grid-template-columns: 1fr; }
 }
 

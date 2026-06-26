@@ -975,7 +975,7 @@ onMounted(async () => {
 .toolbar { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
 .filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 
-@media (max-width: 768px) {
+@media (--to-sm) {
   .toolbar { flex-direction: column; align-items: stretch; }
   .filters { flex-direction: column; }
   .filters > * { width: 100% !important; }
@@ -1067,7 +1067,7 @@ onMounted(async () => {
 .batch-bar-enter-from,
 .batch-bar-leave-to { opacity: 0; transform: translateX(-50%) translateY(20px); }
 
-@media (max-width: 768px) {
+@media (--to-sm) {
   .batch-toolbar {
     left: 12px;
     right: 12px;

@@ -605,7 +605,7 @@ const close = () => emit('update:visible', false)
 
 .mobile-back { display: none; margin-bottom: 8px; }
 
-@media (max-width: 768px) {
+@media (--to-sm) {
   .classroom-student-drawer :deep(.el-drawer) {
     width: 100% !important;
   }

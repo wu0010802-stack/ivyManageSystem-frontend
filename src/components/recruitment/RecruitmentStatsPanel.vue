@@ -994,14 +994,14 @@ defineExpose({ openCampusDialog, invalidateLazyTabs })
   color: #22543d;
 }
 
-@media (max-width: 768px) {
+@media (--to-sm) {
   .area-header-bar {
     flex-direction: column;
     align-items: stretch;
   }
 }
 
-@media (max-width: 768px) {
+@media (--to-sm) {
   .panel-toolbar {
     flex-wrap: wrap;
   }
