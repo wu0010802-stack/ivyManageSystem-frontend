@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
-import { useDebounceFn, useMediaQuery } from '@vueuse/core'
+import { useDebounceFn } from '@vueuse/core'
 import { User, Plus, Search, ArrowDown } from '@element-plus/icons-vue'
 import {
   getEmployee, getEmployees, createEmployee,
@@ -35,6 +35,7 @@ import {
   EMPLOYEE_TYPE_OPTIONS,
 } from '@/constants/employee'
 import { hasPermission, getUserInfo } from '@/utils/auth'
+import { useIsMobile } from '@/composables/useIsMobile'
 import { useEmployeeFormDirty } from '@/composables/useEmployeeFormDirty'
 import { useFormDraft } from '@/composables/useFormDraft'
 import { BASIC_TAB_FIELDS, SALARY_TAB_FIELDS } from '@/constants/employeeFields'
@@ -47,8 +48,8 @@ import type { ApiBody } from '@/api/_generated/typed'
 const employeeStore = useEmployeeStore()
 const classroomStore = useClassroomStore()
 
-// 手機版（≤767px）：詳情/編輯 Dialog 改為全螢幕，內部 grid 改單欄
-const isMobile = useMediaQuery('(max-width: 767px)')
+// 手機版（≤767.98px）：詳情/編輯 Dialog 改為全螢幕，內部 grid 改單欄
+const { isMobile } = useIsMobile()
 const configStore = useConfigStore()
 
 const loading = ref(false)
