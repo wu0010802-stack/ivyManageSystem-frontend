@@ -259,7 +259,7 @@ const avatarColor = computed(() => {
   margin-right: 4px;
 }
 
-@media (max-width: 768px) {
+@media (--to-sm) {
   .header-main {
     flex-wrap: wrap;
   }

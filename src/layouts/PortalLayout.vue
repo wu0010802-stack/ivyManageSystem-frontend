@@ -1,6 +1,6 @@
 
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted, provide } from 'vue'
+import { computed, ref, onMounted, onUnmounted, provide, watch } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getSubstitutePendingCount, getUnreadCount, getSwapPendingCount } from '@/api/portal'
@@ -14,6 +14,7 @@ import { apiError } from '@/utils/error'
 import A11yMenu from '@/components/common/A11yMenu.vue'
 import PortalSearchPalette from '@/components/portal/PortalSearchPalette.vue'
 import { usePortalSearch, installPortalSearchKeyboard } from '@/composables/usePortalSearch'
+import { useIsMobile } from '@/composables/useIsMobile'
 import { Search } from '@element-plus/icons-vue'
 
 interface UserInfo {
@@ -38,13 +39,12 @@ const passwordForm = ref<{ old_password: string; new_password: string; confirm_p
 const passwordLoading = ref(false)
 
 // Mobile sidebar
-const isMobile = ref(false)
+const { isMobile } = useIsMobile()
 const sidebarOpen = ref(false)
 
-const checkMobile = () => {
-  isMobile.value = window.innerWidth < 768
-  if (!isMobile.value) sidebarOpen.value = false
-}
+watch(isMobile, (m) => {
+  if (!m) sidebarOpen.value = false
+})
 
 // Unread announcement count
 const unreadCount = ref(0)
@@ -178,8 +178,6 @@ const dismissInstallBanner = () => {
 }
 
 onMounted(() => {
-  checkMobile()
-  window.addEventListener('resize', checkMobile)
   window.addEventListener('portal-substitute-count-changed', onSubstituteChanged)
   document.addEventListener('visibilitychange', onVisibilityChange)
   refreshPortalCounts({ force: true })
@@ -210,7 +208,6 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  window.removeEventListener('resize', checkMobile)
   window.removeEventListener('portal-substitute-count-changed', onSubstituteChanged)
   document.removeEventListener('visibilitychange', onVisibilityChange)
 })
@@ -754,7 +751,7 @@ const submitPassword = async () => {
 }
 
 /* Mobile padding 收緊 */
-@media (max-width: 768px) {
+@media (--to-sm) {
   .el-main {
     padding: var(--space-4);
   }
@@ -883,7 +880,7 @@ const submitPassword = async () => {
 }
 
 /* Mobile styles */
-@media (max-width: 767px) {
+@media (--to-sm) {
   .portal-header h3 {
     font-size: var(--text-lg);
   }
@@ -952,7 +949,7 @@ const submitPassword = async () => {
   border-radius: 3px;
   font-size: 11px;
 }
-@media (max-width: 767px) {
+@media (--to-sm) {
   .psp-trigger-portal {
     display: none;
   }

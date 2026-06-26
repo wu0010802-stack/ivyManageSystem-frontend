@@ -66,7 +66,7 @@ defineEmits(['prev', 'next'])
   color: var(--text-primary);
 }
 
-@media (max-width: 767px) {
+@media (--to-sm) {
   .month-nav {
     justify-content: center;
   }

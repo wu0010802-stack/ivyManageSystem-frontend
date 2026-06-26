@@ -1,0 +1,20 @@
+/**
+ * Canonical RWD 斷點 — CSS 單一來源（與 src/constants/breakpoints.ts 同步，
+ * 由 src/constants/__tests__/breakpoints.spec.ts drift guard 強制一致）。
+ *
+ * 本檔只放 @custom-media 定義、不含任何規則。經 postcss-custom-media 解析後
+ * 不產出任何 CSS（零 runtime 體積）。@csstools/postcss-global-data 會把這些
+ * 定義注入每個 SFC 的 style 編譯單元（stylelint 用 postcss-html 解析，註解
+ * 內勿用角括號 style 標記，否則會被誤判為 HTML 標籤而 CssSyntaxError）。
+ */
+
+/* min-width anchors（mobile-first 用） */
+@custom-media --bp-xs (min-width: 480px);
+@custom-media --bp-sm (min-width: 768px);
+@custom-media --bp-md (min-width: 1024px);
+@custom-media --bp-lg (min-width: 1200px);
+
+/* max-width（desktop-first override，多數既有 @media 對應這組） */
+@custom-media --to-sm (max-width: 767.98px);   /* 手機 */
+@custom-media --to-md (max-width: 1023.98px);
+@custom-media --to-lg (max-width: 1199.98px);

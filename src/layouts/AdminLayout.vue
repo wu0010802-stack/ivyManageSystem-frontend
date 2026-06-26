@@ -26,27 +26,28 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
 import AdminSidebar from '../components/layout/AdminSidebar.vue'
 import AdminHeader from '../components/layout/AdminHeader.vue'
 import { isLoggedIn } from '@/utils/auth'
 import { useNotificationStore } from '@/stores/notification'
 import { useHighRiskAuditCount } from '@/composables/useHighRiskAuditCount'
+import { useIsMobile } from '@/composables/useIsMobile'
 
 const NOTIFICATION_POLL_MS = 60_000
 
 const route = useRoute()
 const notificationStore = useNotificationStore()
 const { unackCount: unackHighRiskCount } = useHighRiskAuditCount()
-const isMobile = ref(false)
+const { isMobile } = useIsMobile()
 const sidebarOpen = ref(false)
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
-const checkMobile = () => {
-  isMobile.value = window.innerWidth < 768
-  if (!isMobile.value) sidebarOpen.value = false
-}
+// 離開手機視窗時關閉手機側欄（原 checkMobile 的副作用）
+watch(isMobile, (m) => {
+  if (!m) sidebarOpen.value = false
+})
 
 const toggleSidebar = () => {
   sidebarOpen.value = !sidebarOpen.value
@@ -84,8 +85,6 @@ onMounted(() => {
   // admin 品牌色 scope（design-tokens.css / main.css 的 html.ivy-admin 區塊）；
   // 掛在 <html> 讓 teleport 到 body 的 dialog/message 也吃到
   document.documentElement.classList.add('ivy-admin')
-  checkMobile()
-  window.addEventListener('resize', checkMobile)
   refreshNotifications()
   // Why: 切頁不再觸發 fetchSummary（避免每次 navigation 多一支 API 等待），改用
   // 固定 60 秒輪詢；store 本身有 10s TTL + in-flight dedupe 守住，重複請求不會炸後端。
@@ -94,7 +93,6 @@ onMounted(() => {
 
 onUnmounted(() => {
   document.documentElement.classList.remove('ivy-admin')
-  window.removeEventListener('resize', checkMobile)
   if (pollTimer !== null) {
     clearInterval(pollTimer)
     pollTimer = null
@@ -139,7 +137,7 @@ onUnmounted(() => {
   z-index: 1999;
 }
 
-@media (max-width: 767px) {
+@media (--to-sm) {
   .content-container {
     padding: var(--space-4);
   }

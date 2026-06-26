@@ -220,7 +220,7 @@ html.ivy-admin .el-table .el-table__cell {
 }
 
 /* Dialog - responsive on mobile */
-@media (max-width: 768px) {
+@media (--to-sm) {
   .el-dialog {
     width: 95% !important;
     margin: var(--space-4) auto !important;

@@ -11,7 +11,13 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { ref, nextTick } from 'vue'
 import ElementPlus from 'element-plus'
+
+const mockIsMobile = ref(false)
+vi.mock('@/composables/useIsMobile', () => ({
+  useIsMobile: () => ({ isMobile: mockIsMobile, cleanup: () => {} }),
+}))
 
 // ---- vue-router mock ----
 const routerPush = vi.fn()
@@ -92,9 +98,35 @@ const stubs = {
 
 import PortalLayout from '@/layouts/PortalLayout.vue'
 
+describe('PortalLayout — isMobile 接線', () => {
+  beforeEach(() => {
+    routerPush.mockClear()
+    mockIsMobile.value = false
+    localStorage.setItem('portal_layout_v', '1')
+  })
+
+  it('isMobile 為 true 時 .portal-layout 含 is-mobile class；切回 false 後移除', async () => {
+    userInfoData = { name: '陳老師', role: 'teacher', impersonation_mode: null }
+    mockIsMobile.value = true
+
+    const wrapper = mount(PortalLayout, {
+      global: { plugins: [ElementPlus], stubs },
+    })
+    await flushPromises()
+    expect(wrapper.find('.portal-layout').classes()).toContain('is-mobile')
+
+    mockIsMobile.value = false
+    await nextTick()
+    expect(wrapper.find('.portal-layout').classes()).not.toContain('is-mobile')
+
+    wrapper.unmount()
+  })
+})
+
 describe('PortalLayout — impersonation 橫幅', () => {
   beforeEach(() => {
     routerPush.mockClear()
+    mockIsMobile.value = false
     // 每次測試前清除 onboarding 提示，防止 setTimeout ElMessageBox 干擾
     localStorage.setItem('portal_layout_v', '1')
   })
