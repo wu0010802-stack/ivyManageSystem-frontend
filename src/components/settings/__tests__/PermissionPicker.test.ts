@@ -76,6 +76,19 @@ describe('PermissionPicker', () => {
     expect(lastEmit(w)).not.toContain('STUDENTS_READ:own_class')
   })
 
+  // 回歸：wildcard 狀態下改某 scope-aware 權限的 scope，會把 '*' 展開成所有 bare code
+  // （bare = 全園），並把目標 code 收斂為所選 scope。這是「去升權」（de-escalation）的
+  // by-design 行為——釘成回歸測試，避免日後有人「修正」成保留 '*'（=維持全權）或往升權方向改。
+  it('setScope in wildcard state de-escalates: leaves wildcard, target code → chosen scope, others → bare', () => {
+    const w = mountPicker(['*'])
+    ;(w.vm as unknown as Vm).setScope('STUDENTS_READ', 'own_class')
+    const next = lastEmit(w)
+    expect(next).not.toContain('*')                    // 離開 wildcard
+    expect(next).toContain('STUDENTS_READ:own_class')  // 目標 code 收斂為 own_class
+    expect(next).toContain('DASHBOARD')                // 其餘展開為 bare（= 全園）
+    expect(next).toContain('EMPLOYEES_READ')
+  })
+
   it('currentScope: bare scope-aware shows all, scoped shows its scope, wildcard shows all', () => {
     expect((mountPicker(['STUDENTS_READ']).vm as unknown as Vm).currentScope('STUDENTS_READ')).toBe('all')
     expect((mountPicker(['STUDENTS_READ:own_class']).vm as unknown as Vm).currentScope('STUDENTS_READ')).toBe('own_class')
