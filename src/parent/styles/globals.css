@@ -109,8 +109,8 @@
    * Parent App semantic 變體
    * 補 design-tokens 沒有的中間色；色相對齊新 palette
    * ============================================================ */
-  --pt-warning-text:      #c99500;       /* warning label */
-  --pt-warning-text-mid:  #c99500;       /* warning 圖示 */
+  --pt-warning-text:      #8a5d00;       /* warning label（AA on warn-soft）*/
+  --pt-warning-text-mid:  #8a5d00;       /* warning 圖示 */
   --pt-warning-text-soft: #9c7300;       /* warning chip */
   --pt-success-text:      #2d7c56;       /* success label */
   --pt-info-text:         #2d6f8e;       /* info chip */

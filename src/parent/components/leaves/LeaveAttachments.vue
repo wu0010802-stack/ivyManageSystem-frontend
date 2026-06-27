@@ -109,8 +109,8 @@ function onFileChange(e: Event): void {
 .att-link {
   flex: 1;
   font-size: 13px;
-  color: var(--pt-info-link);
-  text-decoration: none;
+  color: var(--pt-info-text);
+  text-decoration: underline;
   word-break: break-all;
   display: inline-flex;
   align-items: center;
