@@ -40,10 +40,6 @@ vi.mock('@/api/portal', () => ({
   getSwapPendingCount: vi.fn(() => Promise.resolve({ data: { pending_count: 0 } })),
 }))
 
-vi.mock('@/api/dismissalCalls', () => ({
-  getPortalPendingCount: vi.fn(() => Promise.resolve({ data: { count: 0 } })),
-}))
-
 vi.mock('@/api/portalMessages', () => ({
   getUnreadCount: vi.fn(() => Promise.resolve({ data: { unread_count: 0 } })),
 }))
@@ -138,7 +134,16 @@ describe('PortalLayout — 接送提醒 composable 接線', () => {
     userInfoData = { name: '陳老師', role: 'teacher', impersonation_mode: null }
     const wrapper = mount(PortalLayout, { global: { plugins: [ElementPlus], stubs } })
     await flushPromises()
-    expect(wrapper.find('.announcement-badge').exists()).toBe(true)
+    const badge = wrapper.find('.announcement-badge')
+    expect(badge.exists()).toBe(true)
+    // el-badge 將 value 渲染於 .el-badge__content；若找到則斷言值；
+    // 否則 fallback 到 badge.text()（無 slot 時 ElBadge 根元素含文字）
+    const badgeContent = badge.find('.el-badge__content')
+    if (badgeContent.exists()) {
+      expect(badgeContent.text()).toContain('3')
+    } else {
+      expect(badge.text()).toContain('3')
+    }
     wrapper.unmount()
   })
 })

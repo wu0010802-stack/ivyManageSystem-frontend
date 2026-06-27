@@ -105,4 +105,72 @@ describe('usePortalDismissalAlerts', () => {
     expect(muted.value).toBe(true)
     expect(localStorage.getItem('portal_dismissal_sound_muted')).toBe('1')
   })
+
+  it('ping → pong：ws.send 送出 {"type":"pong"}', async () => {
+    const m = await import('@/composables/usePortalDismissalAlerts')
+    m.initPortalDismissalAlerts()
+    lastWs!.open()
+    lastWs!.emit({ type: 'ping' })
+    expect(lastWs!.sent).toContain(JSON.stringify({ type: 'pong' }))
+  })
+
+  it('liveness timeout：45s 無訊息 → ws 被關閉並排程重連', async () => {
+    vi.useFakeTimers()
+    try {
+      const m = await import('@/composables/usePortalDismissalAlerts')
+      m.initPortalDismissalAlerts()
+      const firstWs = lastWs!
+      firstWs.open()
+      // 推進 45s，觸發 bumpLiveness callback → dead.close() + scheduleReconnect
+      vi.advanceTimersByTime(45000)
+      expect(firstWs.readyState).toBe(3)
+      // 再推進 backoff（第一次 delay = 1000ms）→ connectWs 建立新 MockWS
+      vi.advanceTimersByTime(1000)
+      expect(lastWs).not.toBe(firstWs)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('ping 重置 liveness：ping 後 30s 不提前觸發 timeout', async () => {
+    vi.useFakeTimers()
+    try {
+      const m = await import('@/composables/usePortalDismissalAlerts')
+      m.initPortalDismissalAlerts()
+      const firstWs = lastWs!
+      firstWs.open()
+      // 推進 30s（未到 45s timeout），送 ping → bumpLiveness 重置計時器
+      vi.advanceTimersByTime(30000)
+      firstWs.emit({ type: 'ping' })
+      // 再推進 30s（ping 後僅 30s，距新 timeout 還有 15s）
+      vi.advanceTimersByTime(30000)
+      // ws 應仍為 OPEN，無新 WebSocket 建立
+      expect(firstWs.readyState).toBe(1)
+      expect(lastWs).toBe(firstWs)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('dismissal_call_updated status=completed → 從 activeCalls 移除', async () => {
+    const m = await import('@/composables/usePortalDismissalAlerts')
+    m.initPortalDismissalAlerts()
+    lastWs!.open()
+    lastWs!.emit({ type: 'dismissal_call_created', payload: { id: 5, student_name: '小美', classroom_name: '大班', status: 'pending' } })
+    const { activeCalls } = m.usePortalDismissalAlerts()
+    expect(activeCalls.value.some((c) => c.id === 5)).toBe(true)
+    lastWs!.emit({ type: 'dismissal_call_updated', payload: { id: 5, student_name: '小美', classroom_name: '大班', status: 'completed' } })
+    expect(activeCalls.value.some((c) => c.id === 5)).toBe(false)
+  })
+
+  it('dismissal_call_cancelled → 從 activeCalls 移除', async () => {
+    const m = await import('@/composables/usePortalDismissalAlerts')
+    m.initPortalDismissalAlerts()
+    lastWs!.open()
+    lastWs!.emit({ type: 'dismissal_call_created', payload: { id: 7, student_name: '小強', classroom_name: '中班', status: 'pending' } })
+    const { activeCalls } = m.usePortalDismissalAlerts()
+    expect(activeCalls.value.some((c) => c.id === 7)).toBe(true)
+    lastWs!.emit({ type: 'dismissal_call_cancelled', payload: { id: 7 } })
+    expect(activeCalls.value.some((c) => c.id === 7)).toBe(false)
+  })
 })
