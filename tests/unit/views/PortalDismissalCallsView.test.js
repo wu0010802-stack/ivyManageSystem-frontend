@@ -1,32 +1,73 @@
+/**
+ * tests/unit/views/PortalDismissalCallsView.test.js
+ *
+ * Task 2 重構（純消費者）：WS / beep / lifecycle 已移至 usePortalDismissalAlerts composable。
+ * 此測試改為 mock composable，僅驗證 view 自身行為：
+ *   - mount 時呼叫 fetchCalls（進頁補抓最新）
+ *   - handleAcknowledge 更新 activeCalls
+ *   - handleComplete 從 activeCalls 移除
+ *
+ * WS liveness / reconnect / ping-pong 行為已移至 composable 單元測試（若另建）。
+ */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ref, computed } from 'vue'
 import { nextTick } from 'vue'
 import { flushPromises, shallowMount } from '@vue/test-utils'
 
 import PortalDismissalCallsView from '@/views/portal/PortalDismissalCallsView.vue'
 
 // ─── Mock API ────────────────────────────────────────────
-const getPortalDismissalCalls = vi.fn(() => Promise.resolve({ data: [] }))
 const acknowledgeDismissalCall = vi.fn(() => Promise.resolve({ data: {} }))
 const completeDismissalCall = vi.fn(() => Promise.resolve({ data: {} }))
 
 vi.mock('@/api/dismissalCalls', () => ({
-  getPortalDismissalCalls: (...args) => getPortalDismissalCalls(...args),
   acknowledgeDismissalCall: (...args) => acknowledgeDismissalCall(...args),
   completeDismissalCall: (...args) => completeDismissalCall(...args),
+  getPortalDismissalCalls: vi.fn(() => Promise.resolve({ data: [] })),
 }))
 
-// ─── Mock WebSocket（不連線）─────────────────────────────
-const mockWs = {
-  readyState: 1, // OPEN
-  close: vi.fn(),
-  send: vi.fn(),
-  onopen: null,
-  onmessage: null,
-  onerror: null,
-  onclose: null,
-}
-vi.stubGlobal('WebSocket', vi.fn(function () { return mockWs }))
-// jsdom 沒有 Notification，給個 no-op stub
+// ─── Mock usePortalDismissalAlerts（module-singleton）────
+const activeCalls = ref([])
+const fetchCallsMock = vi.fn()
+
+vi.mock('@/composables/usePortalDismissalAlerts', () => ({
+  usePortalDismissalAlerts: () => ({
+    activeCalls,
+    sortedCalls: computed(() => [...activeCalls.value]),
+    pendingCount: computed(() => activeCalls.value.length),
+    loading: ref(false),
+    liveAnnounce: ref(''),
+    wsConnected: ref(true),
+    connectionState: computed(() => 'normal'),
+    muted: ref(false),
+    audioUnlocked: ref(true),
+    notificationSupported: ref(false),
+    toggleMute: vi.fn(),
+    unlockAudio: vi.fn(),
+    playBeep: vi.fn(),
+    triggerHaptic: vi.fn(),
+    fetchCalls: fetchCallsMock,
+  }),
+}))
+
+// ─── Mock useDismissalUrgency（useNowClock 供計時）────────
+vi.mock('@/composables/useDismissalUrgency', () => ({
+  useNowClock: () => ({ now: ref(new Date()) }),
+  sortByOldestFirst: (calls) => [...calls],
+}))
+
+// ─── Mock element-plus（ElMessageBox.confirm 給 handleComplete）
+vi.mock('element-plus', async (importOriginal) => {
+  const actual = await importOriginal()
+  return {
+    ...actual,
+    ElMessageBox: Object.assign(vi.fn(() => Promise.resolve()), {
+      confirm: vi.fn(() => Promise.resolve()),
+    }),
+    ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
+  }
+})
+
 vi.stubGlobal('Notification', { permission: 'denied', requestPermission: vi.fn() })
 
 // ─── Helpers ─────────────────────────────────────────────
@@ -49,93 +90,60 @@ function mountView() {
         'el-button': { template: '<button @click="$emit(\'click\')"><slot /></button>' },
         'el-tag': { template: '<span><slot /></span>' },
         'el-empty': { template: '<div />' },
+        DismissalCallCard: { template: '<div><slot name="action" /></div>' },
       },
     },
   })
 }
 
 // ─── Tests ───────────────────────────────────────────────
-describe('PortalDismissalCallsView', () => {
+describe('PortalDismissalCallsView（純消費者）', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockWs.send.mockClear()
-    mockWs.close.mockClear()
-    getPortalDismissalCalls.mockResolvedValue({ data: [] })
+    activeCalls.value = []
   })
 
-  it('掛載後應呼叫 getPortalDismissalCalls', async () => {
+  it('掛載後應呼叫 fetchCalls 補抓最新', async () => {
     mountView()
     await nextTick()
-    expect(getPortalDismissalCalls).toHaveBeenCalled()
+    expect(fetchCallsMock).toHaveBeenCalled()
   })
 
-  it('收到後端 ping 訊息時應回送 pong，避免被 90 秒 idle 心跳踢掉', async () => {
-    mountView()
-    // onMounted 為 `await fetchCalls(); connectWs()`，connectWs 設 ws.onmessage
-    // 在 await 之後 → 須 flushPromises 等 fetchCalls resolve 後 connectWs 才跑。
+  it('handleAcknowledge: 確認後應更新 activeCalls 中的 status', async () => {
+    activeCalls.value = [{ ...SAMPLE_CALL }]
+    const wrapper = mountView()
+    await nextTick()
+    await wrapper.vm.handleAcknowledge({ ...SAMPLE_CALL })
+    expect(acknowledgeDismissalCall).toHaveBeenCalledWith(SAMPLE_CALL.id)
+    expect(activeCalls.value[0].status).toBe('acknowledged')
+  })
+
+  it('handleAcknowledge: API 失敗時 activeCalls 不變', async () => {
+    activeCalls.value = [{ ...SAMPLE_CALL }]
+    acknowledgeDismissalCall.mockRejectedValueOnce(new Error('fail'))
+    const wrapper = mountView()
+    await nextTick()
+    await wrapper.vm.handleAcknowledge({ ...SAMPLE_CALL })
+    expect(activeCalls.value[0].status).toBe('pending')
+  })
+
+  it('handleComplete: 完成後應從 activeCalls 移除', async () => {
+    activeCalls.value = [{ ...SAMPLE_CALL }]
+    const wrapper = mountView()
     await flushPromises()
-    mockWs.onmessage({ data: JSON.stringify({ type: 'ping' }) })
-    expect(mockWs.send).toHaveBeenCalledTimes(1)
-    const payload = JSON.parse(mockWs.send.mock.calls[0][0])
-    expect(payload).toEqual({ type: 'pong' })
+    await wrapper.vm.handleComplete({ ...SAMPLE_CALL })
+    expect(completeDismissalCall).toHaveBeenCalledWith(SAMPLE_CALL.id)
+    expect(activeCalls.value).toHaveLength(0)
   })
 
-  it('handleWsEvent: dismissal_call_created 應 prepend 待處理列表', async () => {
+  it('handleComplete: 使用者取消確認時 completeDismissalCall 不被呼叫', async () => {
+    const { ElMessageBox } = await import('element-plus')
+    ElMessageBox.confirm.mockRejectedValueOnce(new Error('cancel'))
+    activeCalls.value = [{ ...SAMPLE_CALL }]
     const wrapper = mountView()
-    await nextTick()
-    wrapper.vm.activeCalls = []
-    wrapper.vm.handleWsEvent({ type: 'dismissal_call_created', payload: SAMPLE_CALL })
-    expect(wrapper.vm.activeCalls).toHaveLength(1)
-    expect(wrapper.vm.activeCalls[0].id).toBe(SAMPLE_CALL.id)
-  })
-
-  it('handleWsEvent: dismissal_call_updated 為 completed 時應從列表移除', async () => {
-    const wrapper = mountView()
-    await nextTick()
-    wrapper.vm.activeCalls = [{ ...SAMPLE_CALL }]
-    wrapper.vm.handleWsEvent({
-      type: 'dismissal_call_updated',
-      payload: { ...SAMPLE_CALL, status: 'completed' },
-    })
-    expect(wrapper.vm.activeCalls).toHaveLength(0)
-  })
-
-  it('handleWsEvent: dismissal_call_cancelled 應移除該筆', async () => {
-    const wrapper = mountView()
-    await nextTick()
-    wrapper.vm.activeCalls = [{ ...SAMPLE_CALL }]
-    wrapper.vm.handleWsEvent({ type: 'dismissal_call_cancelled', payload: SAMPLE_CALL })
-    expect(wrapper.vm.activeCalls).toHaveLength(0)
-  })
-
-  // ─── liveness watchdog（半開連線偵測）──────────────────────
-  it('逾 45s 未收到任何訊息應判定半開死連線並主動關閉重連', async () => {
-    vi.useFakeTimers()
-    try {
-      mountView()
-      await flushPromises()          // 等 onMounted 的 fetch + connectWs 跑完
-      mockWs.onopen()                // 模擬連線建立 → 啟動 liveness watchdog
-      mockWs.close.mockClear()
-      vi.advanceTimersByTime(45000)  // 45s 完全沒有任何訊息（含 ping）
-      expect(mockWs.close).toHaveBeenCalled() // watchdog 主動踢掉半開死連線
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('持續收到後端 ping 應續命，不誤判半開斷線', async () => {
-    vi.useFakeTimers()
-    try {
-      mountView()
-      await flushPromises()
-      mockWs.onopen()
-      mockWs.close.mockClear()
-      vi.advanceTimersByTime(30000)
-      mockWs.onmessage({ data: JSON.stringify({ type: 'ping' }) }) // 收到 ping → 續命
-      vi.advanceTimersByTime(30000)
-      expect(mockWs.close).not.toHaveBeenCalled()
-    } finally {
-      vi.useRealTimers()
-    }
+    await flushPromises()
+    await wrapper.vm.handleComplete({ ...SAMPLE_CALL })
+    expect(completeDismissalCall).not.toHaveBeenCalled()
+    expect(activeCalls.value).toHaveLength(1)
   })
 })

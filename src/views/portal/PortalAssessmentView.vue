@@ -193,7 +193,7 @@ onMounted(async () => {
       <el-table-column label="評量日期" width="100" prop="assessment_date" />
     </el-table>
 
-    <div style="margin-top: 8px; font-size: 13px; color: var(--text-tertiary)">
+    <div style="margin-top: 8px; font-size: 13px; color: var(--pt-text-muted)">
       共 {{ total }} 筆紀錄
     </div>
 

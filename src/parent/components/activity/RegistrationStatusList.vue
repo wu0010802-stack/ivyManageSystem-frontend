@@ -167,7 +167,7 @@ function courseStatusLabel(
 
 .reg-term {
   background: var(--color-info-soft, #e0f2fe);
-  color: var(--pt-info-link, #2d6f8e);
+  color: var(--pt-info-text, #2d6f8e);
   padding: 1px 8px;
   border-radius: 10px;
   font-size: 12px;

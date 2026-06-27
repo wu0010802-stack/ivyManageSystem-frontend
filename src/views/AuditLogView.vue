@@ -677,12 +677,12 @@ defineExpose({ formatOperator })
   font-style: italic;
 }
 .diff-before {
-  color: #c0392b;
+  color: var(--color-danger-darker);
   text-decoration: line-through;
   font-family: monospace;
 }
 .diff-after {
-  color: #27ae60;
+  color: var(--color-success-darker);
   font-family: monospace;
   font-weight: 500;
 }

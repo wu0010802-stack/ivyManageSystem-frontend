@@ -216,7 +216,7 @@ onMounted(async () => {
       </el-table-column>
     </el-table>
 
-    <div style="margin-top: 8px; font-size: 13px; color: var(--text-tertiary)">
+    <div style="margin-top: 8px; font-size: 13px; color: var(--pt-text-muted)">
       共 {{ total }} 筆紀錄
     </div>
 

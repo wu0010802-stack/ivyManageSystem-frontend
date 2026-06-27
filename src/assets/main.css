@@ -328,3 +328,11 @@ html.ivy-admin .el-table .el-table__cell {
     font-size: 16px;
   }
 }
+
+/* WCAG AA：Element Plus 預設 light-effect 狀態徽章文字色（*-base on *-soft）對比僅 1.9–3.1:1。
+   改用 design-tokens 的 *-darker（為 text-on-light 設計），躍升至 ≥4.5:1。
+   只覆寫 light effect 預設；effect="dark"（白字飽和底）已達標、不在此選擇器內。 */
+.el-tag.el-tag--warning:not(.el-tag--dark) { color: var(--color-warning-darker) !important; }
+.el-tag.el-tag--success:not(.el-tag--dark) { color: var(--color-success-darker) !important; }
+.el-tag.el-tag--danger:not(.el-tag--dark)  { color: var(--color-danger-darker) !important; }
+.el-tag.el-tag--info:not(.el-tag--dark)    { color: var(--color-info-darker) !important; }

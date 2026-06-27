@@ -147,7 +147,7 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  background: var(--brand-primary, #0d9053);
+  background: var(--m3-primary, #006d3d);
   color: #fff;
   border: none;
   padding: 10px 18px;
@@ -159,7 +159,7 @@
   text-decoration: none;
   font-family: inherit;
 }
-.pt-action-btn:active { transform: scale(0.97); background: var(--brand-primary-hover, #0caf76); }
+.pt-action-btn:active { transform: scale(0.97); background: var(--m3-primary, #006d3d); }
 .pt-action-btn:disabled,
 .pt-action-btn[aria-disabled='true'] {
   background: var(--brand-primary-soft, #f5fbe6);

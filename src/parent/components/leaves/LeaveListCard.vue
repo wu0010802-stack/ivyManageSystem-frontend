@@ -94,7 +94,7 @@ const emit = defineEmits<{
 
 .type {
   background: var(--color-info-soft);
-  color: var(--pt-info-link);
+  color: var(--pt-info-text);
   padding: 3px 9px;
   border-radius: 999px;
   font-size: 12px;

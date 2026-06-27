@@ -4,8 +4,8 @@ import { computed, ref, onMounted, onUnmounted, provide, watch } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getSubstitutePendingCount, getUnreadCount, getSwapPendingCount } from '@/api/portal'
-import { getPortalPendingCount } from '@/api/dismissalCalls'
 import { getUnreadCount as getMessagesUnreadCount } from '@/api/portalMessages'
+import { initPortalDismissalAlerts, teardownPortalDismissalAlerts, usePortalDismissalAlerts } from '@/composables/usePortalDismissalAlerts'
 import { getTodayHub } from '@/api/portalClassHub'
 import { changePassword, endImpersonate } from '@/api/auth'
 import { getUserInfo, clearAuth, setUserInfo } from '@/utils/auth'
@@ -52,7 +52,9 @@ const unreadCount = ref(0)
 // Swap pending count
 const swapPendingCount = ref(0)
 const substitutePendingCount = ref(0)
-const dismissalPendingCount = ref(0)
+
+// 接送待處理數：由 module-singleton composable 即時維護（WS 推播驅動），殼層不另外 fetch
+const { pendingCount: dismissalPendingCount } = usePortalDismissalAlerts()
 
 // 家園溝通：家長訊息未讀
 const messagesUnreadCount = ref(0)
@@ -97,15 +99,6 @@ const fetchSubstitutePendingCount = async () => {
   }
 }
 
-const fetchDismissalPendingCount = async () => {
-  try {
-    const res = await getPortalPendingCount()
-    dismissalPendingCount.value = (res.data as Record<string, unknown>)?.count as number || 0
-  } catch {
-    // Silent fail
-  }
-}
-
 const fetchMessagesUnreadCount = async () => {
   try {
     const res = await getMessagesUnreadCount()
@@ -136,7 +129,7 @@ const refreshPortalCounts = ({ force = false }: { force?: boolean } = {}) => {
   fetchUnreadCount()
   fetchSwapPendingCount()
   fetchSubstitutePendingCount()
-  fetchDismissalPendingCount()
+  // dismissal count 由 composable 透過 WS 即時維護，不走輪詢
   fetchMessagesUnreadCount()
   fetchHubPendingCount()
 }
@@ -181,6 +174,8 @@ onMounted(() => {
   window.addEventListener('portal-substitute-count-changed', onSubstituteChanged)
   document.addEventListener('visibilitychange', onVisibilityChange)
   refreshPortalCounts({ force: true })
+  // 接送提醒提升到殼層：單一 WS、全 Portal 頁存活、AudioContext gesture unlock、visibilitychange 重連
+  initPortalDismissalAlerts()
 
   // 導航更新一次性提示（v=1: 2026-05 教師端 ACD 改造）
   const PORTAL_LAYOUT_VERSION = '1'
@@ -210,6 +205,7 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('portal-substitute-count-changed', onSubstituteChanged)
   document.removeEventListener('visibilitychange', onVisibilityChange)
+  teardownPortalDismissalAlerts()
 })
 
 const closeSidebar = () => {
@@ -858,7 +854,7 @@ const submitPassword = async () => {
   justify-content: center;
   gap: 3px;
   font-size: 12px;
-  color: var(--text-tertiary);
+  color: var(--pt-text-muted, #64748b);
   cursor: pointer;
   transition: color var(--transition-base);
   -webkit-tap-highlight-color: transparent;
