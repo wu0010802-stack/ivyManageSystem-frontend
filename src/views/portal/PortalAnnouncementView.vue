@@ -175,7 +175,7 @@ onMounted(fetchAnnouncements)
     <div v-if="announcements.length && !noMore" style="text-align: center; margin-top: 16px;">
       <el-button @click="loadMore" :loading="loading">載入更多</el-button>
     </div>
-    <div v-if="announcements.length && noMore" style="text-align: center; margin-top: 12px; color: var(--text-tertiary); font-size: var(--text-xs);">
+    <div v-if="announcements.length && noMore" style="text-align: center; margin-top: 12px; color: var(--pt-text-muted); font-size: var(--text-xs);">
       已顯示全部 {{ totalAnnouncements }} 則公告
     </div>
 
@@ -254,14 +254,14 @@ onMounted(fetchAnnouncements)
 
 .ann-meta {
   font-size: var(--text-xs);
-  color: var(--text-tertiary);
+  color: var(--pt-text-muted);
   white-space: nowrap;
 }
 
 .ann-preview {
   margin-top: 8px;
   font-size: var(--text-sm);
-  color: var(--text-tertiary);
+  color: var(--pt-text-muted);
   line-height: 1.5;
 }
 

@@ -854,7 +854,7 @@ const submitPassword = async () => {
   justify-content: center;
   gap: 3px;
   font-size: 12px;
-  color: var(--text-tertiary);
+  color: var(--pt-text-muted, #64748b);
   cursor: pointer;
   transition: color var(--transition-base);
   -webkit-tap-highlight-color: transparent;

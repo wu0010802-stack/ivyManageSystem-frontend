@@ -187,12 +187,12 @@ function onBack() {
   bottom: 0;
   z-index: var(--z-sticky, 10);
   /*
-   * Bento 冷調收尾：在冷石板底色上，M3 active indicator pill 改用
-   * slate-tinted secondary-container，使 active tab 對比更清晰且與 surface 色調一致。
-   * 預設 --m3-secondary-container 是 #d2e8d4（暖綠），在 slate #eef1f5 上輕微色調衝突。
+   * WCAG AA 對比修正：active indicator pill 改用品牌綠，確保對 nav bar (#f4f7fa) 有 ≥3:1 對比。
+   * 預設 --m3-secondary-container 是 #d2e8d4（暖綠），或被覆寫成 #e7edf3（過淺無對比）。
+   * 改用 --brand-primary（#0d9053）一致品牌感且達 AA。
    * --m3-on-secondary-container 維持深綠以保留品牌感。
    */
-  --m3-secondary-container: var(--m3-surface-container-highest, #e7edf3);
+  --m3-secondary-container: var(--brand-primary, #0d9053);
   --m3-on-secondary-container: var(--m3-on-surface, #0f172a);
 }
 </style>

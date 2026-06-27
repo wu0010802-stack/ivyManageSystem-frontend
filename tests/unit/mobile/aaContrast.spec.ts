@@ -25,4 +25,8 @@ describe('WCAG AA 顏色收斂', () => {
     expect(css).toContain('--pt-warning-text:      #8a5d00')
     expect(css).not.toContain('--pt-warning-text:      #c99500')
   })
+  it('PortalLayout .bottom-tab 未選中不再用 --text-tertiary 當文字', () => {
+    const css = read('src/layouts/PortalLayout.vue').replace(/\s+/g, ' ')
+    expect(css).toMatch(/\.bottom-tab\s*\{[^}]*color:\s*var\(--pt-text-muted/)
+  })
 })
