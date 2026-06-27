@@ -26,8 +26,6 @@ class MockWS {
 }
 
 // ── mock AudioContext ──
-const oscStub = () => ({ type: '', frequency: { value: 0 }, connect: () => oscStub2(), start: vi.fn(), stop: vi.fn() })
-const oscStub2 = () => ({ connect: vi.fn() })
 class MockAudioCtx {
   state = 'running'; currentTime = 0
   createOscillator() { return { type: '', frequency: { value: 0 }, connect: () => ({ connect: vi.fn() }), start: vi.fn(), stop: vi.fn() } }
@@ -47,10 +45,9 @@ beforeEach(() => {
 afterEach(async () => {
   const m = await import('@/composables/usePortalDismissalAlerts')
   m.teardownPortalDismissalAlerts()
-  // vi.unstubAllGlobals() は setup.js の localStorage mock も除去してしまい
-  // 次の beforeEach で localStorage.clear() が TypeError になるため呼ばない。
-  // WebSocket / AudioContext は beforeEach で毎回 vi.stubGlobal し直すので
-  // afterEach で unstub しなくてもテスト間の隔離は保たれる。
+  // vi.unstubAllGlobals() 會移除 setup.js 對 localStorage 的 mock，
+  // 導致下一個 beforeEach 的 localStorage.clear() 拋 TypeError，故不呼叫。
+  // WebSocket / AudioContext 由 beforeEach 的 vi.stubGlobal 每次重設，仍保持測試間隔離。
 })
 
 describe('usePortalDismissalAlerts', () => {

@@ -240,8 +240,10 @@ export function teardownPortalDismissalAlerts(): void {
   wsReconnectCount.value = 0
   wsExhausted.value = false
   activeCalls.value = []
-  // 靜音偏好讀 localStorage 當前值（teardown 後 beforeEach 會 clear()，所以測試中重置為 false）
+  // muted 偏好持久化於 localStorage；重讀當前值（與 toggleMute 寫入保持同步，正常情況為 no-op）
   muted.value = localStorage.getItem(SOUND_PREF_KEY) === '1'
+  liveAnnounce.value = ''
+  loading.value = false
   initialized = false
 }
 
