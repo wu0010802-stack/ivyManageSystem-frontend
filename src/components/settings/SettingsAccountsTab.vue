@@ -9,6 +9,8 @@ import { apiError } from '@/utils/error'
 import { shouldSendPermissionNames } from '@/utils/auth'
 import PermissionPicker from './PermissionPicker.vue'
 import RoleManagerDrawer, { type RolesDefinition } from './RoleManagerDrawer.vue'
+import AdminListCards from '@/components/common/AdminListCards.vue'
+import { useIsMobile } from '@/composables/useIsMobile'
 
 const ROLE_ICONS: Record<string, string> = {
   admin: '👑',
@@ -296,6 +298,16 @@ const clearFilters = () => {
   roleFilter.value = ''
 }
 
+const { isMobile } = useIsMobile()
+
+const accountCardColumns = [
+  { label: '員工姓名', prop: 'employee_name' },
+  { label: '角色', prop: '__role' },
+  { label: '權限', prop: '__perm' },
+  { label: '狀態', prop: '__status' },
+  { label: '最後登入', prop: 'last_login' },
+]
+
 onMounted(() => {
   fetchUsers()
   fetchPermissionDefinition()
@@ -321,7 +333,7 @@ defineExpose({
         <el-button type="primary" @click="handleAddUser">新增帳號</el-button>
       </div>
     </div>
-    <el-table :data="filteredUsers" v-loading="loadingUsers" style="width: 100%; margin-top: 20px;">
+    <el-table v-if="!isMobile" :data="filteredUsers" v-loading="loadingUsers" style="width: 100%; margin-top: 20px;">
       <el-table-column prop="username" label="帳號" width="150" />
       <el-table-column prop="employee_name" label="員工姓名" width="120" />
       <el-table-column prop="role" label="角色" width="120">
@@ -369,6 +381,43 @@ defineExpose({
         </div>
       </template>
     </el-table>
+    <AdminListCards
+      v-else
+      :items="filteredUsers"
+      :columns="accountCardColumns"
+      row-key="username"
+      :loading="loadingUsers"
+      empty-text="尚無帳號"
+      style="margin-top: 20px;"
+    >
+      <template #title="{ item }">{{ item.username }}</template>
+      <template #cell-__role="{ item }">
+        <el-tag :type="getRoleTagType(item.role as string)">{{ item.role_label || item.role }}</el-tag>
+      </template>
+      <template #cell-__perm="{ item }">
+        <template v-if="item.role !== 'teacher'">
+          <el-tag v-if="Array.isArray(item.permission_names) && (item.permission_names as string[]).includes('*')" type="success" size="small">全部</el-tag>
+          <el-tag v-else-if="isUsingRoleDefault(item)" type="info" size="small">預設</el-tag>
+          <el-tag v-else type="warning" size="small">自訂</el-tag>
+        </template>
+        <span v-else style="color: var(--text-tertiary);">-</span>
+      </template>
+      <template #cell-__status="{ item }">
+        <el-tag :type="item.is_active ? 'success' : 'info'" size="small">{{ item.is_active ? '啟用' : '停用' }}</el-tag>
+      </template>
+      <template #actions="{ item }">
+        <el-button link type="primary" @click="handleEditUser(item)">編輯</el-button>
+        <el-dropdown trigger="click" @command="(cmd: string) => onRowCommand(cmd, item)">
+          <el-button link type="primary">更多<el-icon class="el-icon--right"><arrow-down /></el-icon></el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="reset">重設密碼</el-dropdown-item>
+              <el-dropdown-item command="delete" divided>刪除</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+      </template>
+    </AdminListCards>
 
     <!-- 管理角色抽屜 -->
     <RoleManagerDrawer

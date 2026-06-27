@@ -43,6 +43,7 @@ import { validateInsuranceVsBase } from '@/validators/employeeForm'
 import EmployeeFormBasic, { type EmployeeFormBasicData } from '@/components/employee/EmployeeFormBasic.vue'
 import EmployeeFormSalary from '@/components/employee/EmployeeFormSalary.vue'
 import EmployeeChangesPreviewDialog from '@/components/employee/EmployeeChangesPreviewDialog.vue'
+import AdminListCards from '@/components/common/AdminListCards.vue'
 import type { ApiBody } from '@/api/_generated/typed'
 
 const employeeStore = useEmployeeStore()
@@ -51,6 +52,15 @@ const classroomStore = useClassroomStore()
 // 手機版（≤767.98px）：詳情/編輯 Dialog 改為全螢幕，內部 grid 改單欄
 const { isMobile } = useIsMobile()
 const configStore = useConfigStore()
+
+// 手機卡片視圖欄位（__status 為 slot-only 欄，值由 #cell-__status slot 渲染）
+const employeeCardColumns = [
+  { label: '編號', prop: 'employee_id' },
+  { label: '教育局系統', prop: 'title' },
+  { label: '職位', prop: 'position' },
+  { label: '到職日', prop: 'hire_date' },
+  { label: '狀態', prop: '__status' },
+]
 
 const loading = ref(false)
 const currentDetail = ref<Record<string, unknown>>({})
@@ -932,7 +942,7 @@ onMounted(async () => {
     </div>
 
     <TableSkeleton v-if="loading && !employeeStore.employees.length" :columns="7" />
-    <el-card v-else class="no-hover">
+    <el-card v-else-if="!isMobile" class="no-hover">
       <el-table :data="displayedEmployees" v-loading="loading" stripe style="width: 100%" max-height="600">
         <el-table-column prop="employee_id" label="編號" width="100" sortable />
         <el-table-column prop="name" label="姓名" width="120" sortable />
@@ -994,6 +1004,37 @@ onMounted(async () => {
         </template>
       </el-table>
     </el-card>
+    <AdminListCards
+      v-else
+      :items="displayedEmployees"
+      :columns="employeeCardColumns"
+      row-key="employee_id"
+      :loading="loading"
+      empty-text="尚無員工資料"
+    >
+      <template #title="{ item }">{{ item.name }}</template>
+      <template #cell-__status="{ item }">
+        <el-tag :type="getEmployeeStatus(item).type" size="small">{{ getEmployeeStatus(item).label }}</el-tag>
+        <el-tag v-if="item.is_active && item.employee_type === 'regular' && item.base_salary === 0" type="warning" size="small" effect="plain" style="margin-left:4px">待補薪資</el-tag>
+      </template>
+      <template #actions="{ item }">
+        <el-button link type="primary" size="small" @click="handleDetail(item)">詳情</el-button>
+        <el-button v-if="canWriteEmployees" link type="primary" size="small" @click="openEditWithDraft(item)">編輯</el-button>
+        <el-dropdown
+          v-if="canWriteEmployees"
+          trigger="click"
+          @command="(cmd) => handleRowCommand(cmd, item)"
+        >
+          <el-button link type="primary" size="small">更多<el-icon class="el-icon--right"><ArrowDown /></el-icon></el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item v-if="item.is_active" command="offboard">辦理離職</el-dropdown-item>
+              <el-dropdown-item command="delete" divided>刪除</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+      </template>
+    </AdminListCards>
 
     <!-- Add/Edit Dialog -->
     <el-dialog
