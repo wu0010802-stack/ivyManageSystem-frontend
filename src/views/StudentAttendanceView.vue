@@ -16,6 +16,8 @@ import {
 import { downloadFile } from '@/utils/download'
 import { buildStudentProfileLink } from '@/utils/studentLinks'
 import AttendanceBatchPanel from '@/components/student/academic-affairs/AttendanceBatchPanel.vue'
+import AdminListCards from '@/components/common/AdminListCards.vue'
+import { useIsMobile } from '@/composables/useIsMobile'
 
 const TODAY = todayISO()
 
@@ -309,6 +311,17 @@ const goToEditFromDrawer = () => {
   detailDrawerVisible.value = false
 }
 
+const { isMobile } = useIsMobile()
+
+const classroomCardColumns = [
+  { label: '在籍人數', prop: 'student_count' },
+  { label: '已點名', prop: 'recorded_count' },
+  { label: '未點名', prop: 'unmarked_count' },
+  { label: '到校率', prop: '__rate' },
+  { label: '點名完成率', prop: '__completion' },
+  { label: '狀態', prop: '__status' },
+]
+
 type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 const rollcallStatusMeta = (status: unknown): { label: string; type: ElTagType } => {
   if (status === 'complete') return { label: '已完成', type: 'success' }
@@ -418,6 +431,7 @@ onMounted(async () => {
         </div>
 
         <el-table
+          v-if="!isMobile"
           v-loading="overviewLoading"
           :data="overviewRows"
           stripe
@@ -466,9 +480,32 @@ onMounted(async () => {
             </template>
           </el-table-column>
         </el-table>
+        <AdminListCards
+          v-else
+          :items="overviewRows"
+          :columns="classroomCardColumns"
+          row-key="classroom_name"
+          :loading="overviewLoading"
+          empty-text="目前沒有可顯示的班級出席資料"
+          style="margin-top: 16px"
+        >
+          <template #title="{ item }">{{ item.classroom_name }}</template>
+          <template #cell-__rate="{ item }">{{ item.attendance_rate }}%</template>
+          <template #cell-__completion="{ item }">
+            <el-tag :type="(item.record_completion_rate as number) >= 100 ? 'success' : (item.record_completion_rate as number) >= 70 ? 'warning' : 'danger'">{{ item.record_completion_rate }}%</el-tag>
+          </template>
+          <template #cell-__status="{ item }">
+            <el-tag :type="rollcallStatusMeta(item.rollcall_status).type">{{ rollcallStatusMeta(item.rollcall_status).label }}</el-tag>
+          </template>
+          <template #actions="{ item }">
+            <el-button link type="primary" @click="openDetailDrawer(item as Record<string, unknown>)">查看明細</el-button>
+            <el-button link type="success" @click="goToMonthlyAnalysis(item as Record<string, unknown>)">月分析</el-button>
+            <el-button link type="warning" @click="goToDailyEdit(item as Record<string, unknown>)">點名編修</el-button>
+          </template>
+        </AdminListCards>
 
         <el-empty
-          v-if="!overviewLoading && overviewRows.length === 0"
+          v-if="!isMobile && !overviewLoading && overviewRows.length === 0"
           description="目前沒有可顯示的班級出席資料"
           :image-size="80"
         />

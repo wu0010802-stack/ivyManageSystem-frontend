@@ -767,6 +767,25 @@ html.dark .todo-empty {
   margin-bottom: 16px;
 }
 
+/* 統計卡 grid 平板中間帶
+ * El Plus md 斷點（min-width: 992px）早於專案 --to-md（max-width: 1023.98px），
+ * 故 992-1023px 區間 .el-col-md-6 已取得 25%（4 欄），需覆寫回 50%（2 欄）。
+ * --to-sm 補回手機單欄：--to-md（max-width: 1023.98px）在 <768px 同樣命中，且本
+ * :deep 選擇器 specificity 高於 El Plus 的 .el-col-xs-24，若不在 --to-sm 顯式還原
+ * 100%，手機會被 --to-md 的 50% 規則套住而誤顯 2 欄。 */
+@media (--to-md) {
+  .stats-row :deep(.el-col-md-6) {
+    max-width: 50%;
+    flex: 0 0 50%;
+  }
+}
+@media (--to-sm) {
+  .stats-row :deep(.el-col-md-6) {
+    max-width: 100%;
+    flex: 0 0 100%;
+  }
+}
+
 /* ── 學生出勤摘要條 ── */
 .student-summary-bar {
   margin-top: calc(24px * -1 + 8px);
