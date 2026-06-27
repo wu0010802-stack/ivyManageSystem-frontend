@@ -451,4 +451,16 @@ const handleCommand = (command: string) => {
     display: none;
   }
 }
+
+/* P3-2：手機放大 header 圖示鈕觸控目標 ≥44px（桌機不變） */
+@media (--to-sm) {
+  .header-right :deep(.el-button) {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .search-trigger {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
 </style>
