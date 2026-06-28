@@ -8,6 +8,7 @@ import { apiError } from '@/utils/error'
 import { useIsMobile } from '@/composables/useIsMobile'
 import TeacherBottomSheet from '@/components/portal/TeacherBottomSheet.vue'
 import PortalPunchCorrectionForm from '@/components/portal/PortalPunchCorrectionForm.vue'
+import AdminListCards from '@/components/common/AdminListCards.vue'
 
 const { isMobile } = useIsMobile()
 
@@ -82,6 +83,20 @@ const formatTime = (isoStr: string | null | undefined) => {
   return isoStr.slice(11, 16)
 }
 
+// 手機卡片視圖欄位設定（格式化函式沿用既有 formatTime/correctionTypeTagType/statusLabel）
+const correctionCardColumns = [
+  { label: '補正類型', prop: 'correction_type' },
+  { label: '申請上班', prop: 'requested_punch_in',
+    formatter: (item: Record<string, unknown>) => formatTime(item.requested_punch_in as string | null | undefined) },
+  { label: '申請下班', prop: 'requested_punch_out',
+    formatter: (item: Record<string, unknown>) => formatTime(item.requested_punch_out as string | null | undefined) },
+  { label: '說明原因', prop: 'reason' },
+  { label: '狀態', prop: 'approval_status' },
+  { label: '核准人', prop: 'approved_by' },
+  { label: '駁回原因', prop: 'rejection_reason',
+    formatter: (item: Record<string, unknown>) => (item.rejection_reason as string) || '-' },
+]
+
 // 年/月連動時只觸發一次請求（防止使用者先改年再改月，送出兩次 API）
 const _debouncedFetch = useDebounceFn(fetchCorrections, 200)
 watch([() => query.year, () => query.month], _debouncedFetch)
@@ -119,7 +134,7 @@ onMounted(fetchCorrections)
         </el-select>
       </div>
 
-      <el-table :data="corrections" border stripe style="margin-top: 12px;">
+      <el-table v-if="!isMobile" :data="corrections" border stripe style="margin-top: 12px;">
         <el-table-column prop="attendance_date" label="申請日期" width="120" />
         <el-table-column label="補正類型" width="120">
           <template #default="{ row }">
@@ -157,7 +172,30 @@ onMounted(fetchCorrections)
         </el-table-column>
       </el-table>
 
-      <el-empty v-if="!loading && corrections.length === 0" description="本月無補打卡申請記錄" />
+      <!-- 桌機空狀態；手機空狀態由 AdminListCards emptyText 負責 -->
+      <el-empty v-if="!isMobile && !loading && corrections.length === 0" description="本月無補打卡申請記錄" />
+
+      <!-- 手機卡片視圖；row-key="id" 對應後端 _format_correction 回傳 id 欄位 -->
+      <AdminListCards
+        v-else-if="isMobile"
+        :items="corrections"
+        :columns="correctionCardColumns"
+        row-key="id"
+        :loading="loading"
+        empty-text="本月無補打卡申請記錄"
+      >
+        <template #title="{ item }">{{ item.attendance_date }}</template>
+        <template #cell-correction_type="{ item }">
+          <el-tag :type="correctionTypeTagType(item.correction_type as string)" size="small">
+            {{ item.correction_type_label }}
+          </el-tag>
+        </template>
+        <template #cell-approval_status="{ item }">
+          <el-tag :type="statusTagType(item.approval_status as string)" size="small">
+            {{ statusLabel(item.approval_status as string) }}
+          </el-tag>
+        </template>
+      </AdminListCards>
     </el-card>
 
     <!-- Mobile: BottomSheet -->
