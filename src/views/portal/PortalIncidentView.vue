@@ -4,6 +4,8 @@ import { ElMessage } from 'element-plus'
 import { getMyClassIncidents, createPortalIncident } from '@/api/studentIncidents'
 import api from '@/api/index'
 import { INCIDENT_TYPES, SEVERITIES, INCIDENT_TYPE_TAG as _TYPE_TAG, SEVERITY_TAG as _SEVERITY_TAG } from '@/constants/studentRecords'
+import { useIsMobile } from '@/composables/useIsMobile'
+import AdminListCards from '@/components/common/AdminListCards.vue'
 
 type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 const TYPE_TAG = _TYPE_TAG as Record<string, ElTagType>
@@ -11,6 +13,7 @@ const SEVERITY_TAG = _SEVERITY_TAG as Record<string, ElTagType>
 import { usePortalFromHub } from '@/composables/usePortalFromHub'
 
 const { fromHub, backToHub } = usePortalFromHub()
+const { isMobile } = useIsMobile()
 
 // ── 班級/學生 ─────────────────────────────────────────
 interface ClassroomStudent { id: number; name: string; [key: string]: unknown }
@@ -124,6 +127,24 @@ const truncate = (text: string, len = 60) => {
   return text.length > len ? text.slice(0, len) + '…' : text
 }
 
+// ── 手機卡片欄設定（truncate 已定義，可安全引用）────────────
+const incidentCardColumns = [
+  {
+    label: '發生時間',
+    prop: 'occurred_at',
+    formatter: (item: Record<string, unknown>) =>
+      item.occurred_at ? String(item.occurred_at).slice(0, 16).replace('T', ' ') : '-',
+  },
+  { label: '類型', prop: 'incident_type' },      // tag → #cell-incident_type
+  { label: '嚴重程度', prop: 'severity' },        // tag → #cell-severity
+  {
+    label: '描述',
+    prop: 'description',
+    formatter: (item: Record<string, unknown>) => truncate(item.description as string),
+  },
+  { label: '通知家長', prop: 'parent_notified' }, // tag → #cell-parent_notified
+]
+
 onMounted(async () => {
   await fetchMyStudents()
   fetchIncidents()
@@ -181,8 +202,8 @@ onMounted(async () => {
       </el-col>
     </el-row>
 
-    <!-- 事件表格 -->
-    <el-table :data="incidents" v-loading="loading" stripe size="small">
+    <!-- 事件表格（桌機）／卡片（手機） -->
+    <el-table v-if="!isMobile" :data="incidents" v-loading="loading" stripe size="small">
       <el-table-column label="發生時間" width="145">
         <template #default="{ row }">
           {{ row.occurred_at ? row.occurred_at.slice(0, 16).replace('T', ' ') : '-' }}
@@ -215,6 +236,30 @@ onMounted(async () => {
         </template>
       </el-table-column>
     </el-table>
+
+    <!-- 手機卡片視圖（incidents 的 DB PK 欄位為 id，已確認 incident_to_dict 回傳 id） -->
+    <AdminListCards
+      v-else
+      :items="incidents"
+      :columns="incidentCardColumns"
+      row-key="id"
+      :loading="loading"
+      empty-text="目前沒有事件紀錄"
+    >
+      <template #title="{ item }">{{ item.student_name || '（未指定學生）' }}</template>
+      <template #cell-incident_type="{ item }">
+        <el-tag :type="TYPE_TAG[item.incident_type as string]" size="small">{{ item.incident_type }}</el-tag>
+      </template>
+      <template #cell-severity="{ item }">
+        <el-tag v-if="item.severity" :type="SEVERITY_TAG[item.severity as string]" size="small">{{ item.severity }}</el-tag>
+        <span v-else>-</span>
+      </template>
+      <template #cell-parent_notified="{ item }">
+        <el-tag :type="item.parent_notified ? 'success' : 'info'" size="small">
+          {{ item.parent_notified ? '已通知' : '未通知' }}
+        </el-tag>
+      </template>
+    </AdminListCards>
 
     <div style="margin-top: 8px; font-size: 13px; color: var(--pt-text-muted)">
       共 {{ total }} 筆紀錄
