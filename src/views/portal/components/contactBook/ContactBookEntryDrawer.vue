@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { Bell, Camera, Delete } from '@element-plus/icons-vue'
 import type { UploadRequestOptions } from 'element-plus'
+import { useIsMobile } from '@/composables/useIsMobile'
 
 const props = defineProps({
   modelValue: { type: Boolean, required: true },
@@ -84,6 +85,8 @@ watch(
   { immediate: true },
 )
 
+const { isMobile } = useIsMobile()
+
 const visible = computed({
   get: () => props.modelValue,
   set: (v) => emit('update:modelValue', v),
@@ -131,7 +134,7 @@ function handleClose() {
     v-model="visible"
     :title="studentName ? `${studentName} 的聯絡簿` : '聯絡簿'"
     direction="rtl"
-    size="520px"
+    :size="isMobile ? '100%' : '520px'"
     :close-on-click-modal="!saving && !publishing"
     @close="handleClose"
   >
@@ -148,7 +151,7 @@ function handleClose() {
       </el-alert>
 
       <el-form-item label="心情">
-        <el-select v-model="form.mood" placeholder="選擇心情" clearable style="width: 220px">
+        <el-select v-model="form.mood" placeholder="選擇心情" clearable style="width: 220px; max-width: 100%">
           <el-option v-for="o in MOOD_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
         </el-select>
       </el-form-item>
@@ -182,7 +185,7 @@ function handleClose() {
       </div>
 
       <el-form-item label="排便">
-        <el-select v-model="form.bowel" placeholder="選擇排便狀況" clearable style="width: 220px">
+        <el-select v-model="form.bowel" placeholder="選擇排便狀況" clearable style="width: 220px; max-width: 100%">
           <el-option v-for="o in BOWEL_OPTIONS" :key="o.value" :label="o.label" :value="o.value" />
         </el-select>
       </el-form-item>

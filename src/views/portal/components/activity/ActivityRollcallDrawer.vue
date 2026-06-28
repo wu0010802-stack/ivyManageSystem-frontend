@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import type { PropType } from 'vue'
+import { useIsMobile } from '@/composables/useIsMobile'
 
 type BeforeCloseFn = (done: () => void) => void
 
@@ -35,6 +36,8 @@ defineEmits([
 const searchText = ref('')
 const onlyUnmarked = ref(false)
 
+const { isMobile } = useIsMobile()
+
 // 換場次（drawerSession 變）時重置篩選，避免上一場的「只看未點名」殘留。
 watch(() => props.drawerSession, () => {
   searchText.value = ''
@@ -60,7 +63,7 @@ const displayStudents = computed<RollcallStudent[]>(() => {
     :model-value="modelValue"
     :title="drawerTitle"
     direction="rtl"
-    size="460px"
+    :size="isMobile ? '100%' : '460px'"
     :close-on-click-modal="false"
     :before-close="beforeClose"
     @update:model-value="$emit('update:modelValue', $event)"
@@ -95,7 +98,7 @@ const displayStudents = computed<RollcallStudent[]>(() => {
           size="small"
           placeholder="搜尋姓名 / 班級"
           clearable
-          style="flex: 1; min-width: 140px"
+          style="flex: 1; min-width: 0"
         />
         <el-switch
           v-model="onlyUnmarked"
