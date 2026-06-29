@@ -35,6 +35,7 @@ import {
   listPendingRegistrations,
   rejectRegistration,
   restoreRegistration,
+  searchActivityStudents,
 } from '@/api/activity'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import ActivityPendingReviewView from '@/views/activity/ActivityPendingReviewView.vue'
@@ -229,5 +230,74 @@ describe('ActivityPendingReviewView — 批次拒絕 / 批次復原', () => {
     expect(restoreRegistration).toHaveBeenCalledWith(5)
     expect(restoreRegistration).toHaveBeenCalledWith(7)
     expect(ElMessage.success).toHaveBeenCalledWith('已批次復原 2 筆')
+  })
+})
+
+describe('ActivityPendingReviewView — 手動匹配搜尋競態', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    listPendingRegistrations.mockResolvedValue({ data: { items: [], total: 0 } })
+  })
+
+  const mountView = () =>
+    mount(ActivityPendingReviewView, {
+      global: { stubs: GLOBAL_STUBS, directives: { loading: () => {} } },
+    })
+
+  // Bug：runSearch 無 sequence token，亂序到達的過期搜尋回應會覆蓋最新候選人，
+  // 使用者點選後 confirmMatch 把報名綁到過期清單的學生（綁錯學生）。
+  it('過期搜尋回應不覆蓋最新候選人（out-of-order discard）', async () => {
+    let resolveOld
+    let resolveNew
+    searchActivityStudents
+      .mockReturnValueOnce(new Promise((r) => { resolveOld = r }))
+      .mockReturnValueOnce(new Promise((r) => { resolveNew = r }))
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    // 第一次搜尋（舊查詢，回應較慢）
+    wrapper.vm.matchDialog.searchQuery = '舊查詢'
+    const p1 = wrapper.vm.runSearch()
+    // 第二次搜尋（新查詢，回應較快）
+    wrapper.vm.matchDialog.searchQuery = '新查詢'
+    const p2 = wrapper.vm.runSearch()
+
+    // 新查詢先 resolve
+    resolveNew({ data: { items: [{ id: 2, name: '新候選人' }] } })
+    await p2
+    await flushPromises()
+    // 舊查詢後 resolve（過期，不得覆蓋）
+    resolveOld({ data: { items: [{ id: 1, name: '舊候選人' }] } })
+    await p1
+    await flushPromises()
+
+    expect(wrapper.vm.matchDialog.candidates.map((c) => c.id)).toEqual([2])
+  })
+
+  // 跨 dialog reopen：對 row X 開窗（搜尋在途）→ 關閉改對 row Y 開窗（Y 無預填名
+  // 故不發新搜尋）→ X 的搜尋晚到，不得污染 Y 對話框的候選人清單。
+  it('reopen 後前一個 dialog 的在途搜尋不污染新對話框', async () => {
+    let resolveX
+    searchActivityStudents.mockReturnValueOnce(new Promise((r) => { resolveX = r }))
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    // 對 row X 開窗（有預填名 → 觸發搜尋，但在途）
+    wrapper.vm.openMatchDialog({ id: 11, student_name: '張三' })
+    await flushPromises()
+
+    // 關閉後改對 row Y 開窗（無預填名 → 不發新搜尋）
+    wrapper.vm.openMatchDialog({ id: 22, student_name: '' })
+    await flushPromises()
+
+    // X 的搜尋晚到
+    resolveX({ data: { items: [{ id: 99, name: 'X 的候選人' }] } })
+    await flushPromises()
+
+    // 新對話框（Y）的候選人不得被 X 的過期搜尋污染
+    expect(wrapper.vm.matchDialog.candidates).toEqual([])
+    expect(wrapper.vm.matchDialog.row.id).toBe(22)
   })
 })

@@ -449,7 +449,11 @@ function openMatchDialog(row: PendingRow) {
   matchDialog.searchQuery = row.student_name || ''
   matchDialog.candidates = []
   matchDialog.selected = null
+  matchDialog.loading = false
   matchDialog.visible = true
+  // 使前一個 dialog 的在途搜尋失效：否則上一位學生的慢速搜尋晚到時，
+  // 會污染本次對話框的候選人清單，使用者點選後 confirmMatch 綁錯學生。
+  searchSeq++
   if (matchDialog.searchQuery) runSearch()
 }
 
@@ -459,7 +463,11 @@ function debouncedSearch() {
   searchTimer = setTimeout(runSearch, 250)
 }
 
+// 搜尋 sequence token（對齊 ActivityRegistrationView 的 drawerSeq 範式）：
+// 連續輸入/重開對話框會有多個在途請求，亂序到達時只採最新一次的結果。
+let searchSeq = 0
 async function runSearch() {
+  const seq = ++searchSeq
   const q = matchDialog.searchQuery?.trim()
   if (!q) {
     matchDialog.candidates = []
@@ -468,12 +476,14 @@ async function runSearch() {
   matchDialog.loading = true
   try {
     const res = await searchActivityStudents(q, 20)
+    if (seq !== searchSeq) return // 過期回應，丟棄不覆蓋
     matchDialog.candidates = (res.data as { items?: StudentCandidate[] })?.items || []
   } catch (err) {
+    if (seq !== searchSeq) return // 過期錯誤，忽略
     const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
     ElMessage.error(detail || '搜尋學生失敗')
   } finally {
-    matchDialog.loading = false
+    if (seq === searchSeq) matchDialog.loading = false
   }
 }
 

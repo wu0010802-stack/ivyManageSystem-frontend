@@ -233,8 +233,8 @@
           <div v-else class="no-payment-hint">尚無繳費記錄</div>
 
           <div v-if="canWrite" class="payment-actions">
-            <el-button size="small" type="success" @click="openPaymentDialog('payment')">新增繳費</el-button>
-            <el-button size="small" type="danger" @click="openPaymentDialog('refund')" :disabled="!paymentInfo.paid_amount">新增退費</el-button>
+            <el-button size="small" type="success" @click="openPaymentDialog('payment')" :disabled="loadingPayments || paymentLoadFailed">新增繳費</el-button>
+            <el-button size="small" type="danger" @click="openPaymentDialog('refund')" :disabled="!paymentInfo.paid_amount || loadingPayments || paymentLoadFailed">新增退費</el-button>
           </div>
         </div>
 
@@ -520,6 +520,9 @@ const tableRef = ref<{ clearSelection: () => void } | null>(null)
 
 // ── 繳費相關 state ──
 const loadingPayments = ref(false)
+// 繳費端點載入失敗旗標：失敗時 paid_amount 會停在 0，若放行開繳費對話框，
+// computeOwed(全額, 0) 會預填全額造成重複收款超繳；故失敗態須擋下繳費操作。
+const paymentLoadFailed = ref(false)
 const paymentInfo = ref<PaymentInfo>({ total_amount: 0, paid_amount: 0, payment_status: 'unpaid', records: [] })
 const deletingPaymentId = ref<number | null>(null)
 const deletingRegistrationId = ref<number | null>(null)
@@ -538,6 +541,7 @@ async function openDetail(row: RegistrationRow) {
   detail.value = null
   remarkText.value = ''
   loadingDetail.value = true
+  paymentLoadFailed.value = false
   paymentInfo.value = { total_amount: 0, paid_amount: 0, payment_status: 'unpaid', records: [] }
   try {
     const detailRes = await getRegistrationDetail(row.id)
@@ -556,12 +560,14 @@ async function openDetail(row: RegistrationRow) {
 
 async function loadPayments(registrationId: number, seq = drawerSeq.value) {
   loadingPayments.value = true
+  paymentLoadFailed.value = false
   try {
     const res = await getRegistrationPayments(registrationId)
     if (seq !== drawerSeq.value) return
     paymentInfo.value = res.data as PaymentInfo
   } catch (e) {
     if (seq === drawerSeq.value) {
+      paymentLoadFailed.value = true
       ElMessage.warning((e as ApiErr)?.response?.data?.detail || '繳費資訊載入失敗')
     }
   } finally {
@@ -574,6 +580,12 @@ function openPaymentDialog(type: 'payment' | 'refund') {
   // 使用者誤送出將造成超繳。
   if (loadingPayments.value) {
     ElMessage.warning('繳費資訊載入中，請稍候再試')
+    return
+  }
+  // Why: 繳費資訊載入失敗時 paid_amount 停在 0，computeOwed 會用全額預填造成
+  // 重複收款超繳；失敗態一律擋下繳費/退費，要求先重載。
+  if (paymentLoadFailed.value) {
+    ElMessage.warning('繳費資訊載入失敗，請先重新整理繳費資料再操作，以免重複收款')
     return
   }
   paymentDialogType.value = type

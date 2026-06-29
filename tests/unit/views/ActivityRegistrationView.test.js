@@ -118,6 +118,10 @@ vi.mock('element-plus', () => ({
   ElMessageBox: { confirm: vi.fn() },
 }))
 
+// ── import mocked api / element-plus bindings for per-test control ──────────
+import { getRegistrationDetail, getRegistrationPayments } from '@/api/activity'
+import { ElMessage } from 'element-plus'
+
 // ── import View after mocks ────────────────────────────────────────────────
 import ActivityRegistrationView from '@/views/activity/ActivityRegistrationView.vue'
 
@@ -144,6 +148,7 @@ const GLOBAL_STUBS = {
   'el-timeline-item': { template: '<div><slot /></div>' },
   'el-icon': { template: '<span />' },
   RegistrationPaymentDialog: true,
+  RegistrationTimeline: true,
   RegistrationEditBasicDialog: true,
   RegistrationCreateDialog: true,
   RegistrationAddCourseDialog: true,
@@ -210,5 +215,49 @@ describe('ActivityRegistrationView', () => {
     await flushPromises()
 
     expect(mockBatchMarkPaid).toHaveBeenCalledWith(true, expect.any(Function))
+  })
+
+  // ── 繳費資訊載入失敗防超繳（回歸）────────────────────────────────────────
+  // Bug：detail 載入成功（total_amount=全額）但 payments 端點失敗時，
+  // paymentInfo.paid_amount 停在 0，openPaymentDialog 既有守衛只擋「載入中」，
+  // 失敗後仍放行 → dialog 以 computeOwed(全額, 0)=全額 預填 → 重複收款超繳。
+  it('繳費資訊載入失敗後，開繳費對話框被擋下（防全額預填超繳）', async () => {
+    getRegistrationDetail.mockResolvedValue({
+      data: { id: 7, total_amount: 1500, courses: [], supplies: [] },
+    })
+    getRegistrationPayments.mockRejectedValue(new Error('boom'))
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.vm.openDetail({ id: 7 })
+    await flushPromises()
+
+    // 失敗態：loading 已關、paid_amount 停在 0、detail 全額已載入
+    expect(wrapper.vm.loadingPayments).toBe(false)
+    expect(wrapper.vm.paymentInfo.paid_amount || 0).toBe(0)
+
+    ElMessage.warning.mockClear()
+    wrapper.vm.openPaymentDialog('payment')
+
+    // 必須被擋：dialog 不可開啟，且提示使用者
+    expect(wrapper.vm.paymentDialogVisible).toBe(false)
+    expect(ElMessage.warning).toHaveBeenCalled()
+  })
+
+  it('繳費資訊載入成功後，開繳費對話框正常開啟（對照組）', async () => {
+    getRegistrationDetail.mockResolvedValue({
+      data: { id: 8, total_amount: 1500, courses: [], supplies: [] },
+    })
+    getRegistrationPayments.mockResolvedValue({
+      data: { total_amount: 1500, paid_amount: 500, payment_status: 'partial', records: [] },
+    })
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.vm.openDetail({ id: 8 })
+    await flushPromises()
+
+    wrapper.vm.openPaymentDialog('payment')
+    expect(wrapper.vm.paymentDialogVisible).toBe(true)
   })
 })
