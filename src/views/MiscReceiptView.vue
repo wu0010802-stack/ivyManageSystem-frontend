@@ -414,7 +414,7 @@ import {
   categoryLabel,
   type MiscReceiptSummary,
 } from '@/api/miscReceipt'
-import { hasPermission } from '@/utils/auth'
+import { hasPermission, PERMISSION_NAMES } from '@/utils/auth'
 import { todayISO } from '@/utils/format'
 import { formatCurrency } from '@/utils/currency'
 import MiscReceiptSignDialog from '@/components/MiscReceiptSignDialog.vue'
@@ -422,7 +422,7 @@ import MiscReceiptSignDialog from '@/components/MiscReceiptSignDialog.vue'
 const paymentMethodOptions = PAYMENT_METHOD_OPTIONS
 const categoryOptions = CATEGORY_OPTIONS
 
-const canWrite = computed(() => hasPermission('MISC_RECEIPT_WRITE'))
+const canWrite = computed(() => hasPermission(PERMISSION_NAMES.MISC_RECEIPT_WRITE))
 
 interface Attachment { key: string; filename: string; size: number; mime_type?: string | null }
 const items = ref<Record<string, unknown>[]>([])
