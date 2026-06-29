@@ -16,7 +16,8 @@ import { isGraduationRow, buildPromotionPayload } from '@/utils/classroomPromoti
 import { getIntakePlan } from '@/api/recruitmentIntake'
 import { mapReservedByGrade, reservedCountFor, type IntakePlanRowLite } from '@/utils/classroomReserved'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Clock, Delete, Edit, Plus, Promotion, RefreshRight } from '@element-plus/icons-vue'
+import { Clock, Delete, Edit, Plus, Promotion, RefreshRight, User, Reading, MoreFilled } from '@element-plus/icons-vue'
+import { capacityStatus, capacityPercent } from '@/utils/classroomCapacity'
 import { useClassroomStore } from '@/stores/classroom'
 import { useAcademicTermStore } from '@/stores/academicTerm'
 import { hasPermission } from '@/utils/auth'
@@ -139,12 +140,18 @@ const rules = {
 }
 
 const dialogTitle = computed(() => (isEdit.value ? '編輯班級' : '新增班級'))
-const getCapacityStatus = (classroom: ClassroomRow) => {
-  const count = classroom.current_count || 0
-  const capacity = classroom.capacity || 1
-  if (count >= capacity) return 'full'
-  if (count >= capacity * 0.9) return 'warning'
-  return 'normal'
+const getCapacityStatus = (classroom: ClassroomRow) => capacityStatus(classroom.current_count, classroom.capacity)
+// el-progress 的 status：滿載→紅、接近額滿→黃、正常→綠
+const progressStatus = (classroom: ClassroomRow): '' | 'success' | 'warning' | 'exception' => {
+  const s = getCapacityStatus(classroom)
+  if (s === 'full') return 'exception'
+  if (s === 'warning') return 'warning'
+  return 'success'
+}
+// 卡片右上角「⋯」選單：把破壞性的「停用」從主熱區移到次要選單，降低誤觸
+const handleCardCommand = (command: string, classroom: ClassroomRow) => {
+  if (command === 'edit') void openEdit(classroom)
+  else if (command === 'disable') void handleDelete(classroom)
 }
 
 const resetForm = () => {
@@ -512,25 +519,37 @@ const castDrawerClassroom = computed((): ClassroomDrawerProp | null => drawerCla
       </div>
     </div>
 
-    <div class="classroom-grid" v-if="classrooms.length > 0" v-loading="loading">
+    <!-- 載入骨架：初次載入或切到尚無資料的學期時，避免先閃「尚無班級資料」再跳出卡片 -->
+    <div v-if="loading && classrooms.length === 0" class="classroom-grid classroom-skeleton" aria-hidden="true">
+      <el-card v-for="n in 6" :key="`sk-${n}`" class="classroom-card is-skeleton" shadow="never">
+        <el-skeleton :rows="5" animated />
+      </el-card>
+    </div>
+
+    <div class="classroom-grid" v-else-if="classrooms.length > 0" v-loading="loading">
       <el-card
         v-for="classroom in classrooms"
         :key="classroom.id"
         class="classroom-card"
         shadow="hover"
+        role="button"
+        tabindex="0"
+        :aria-label="`開啟 ${classroom.name} 學生管理`"
         @click="openStudentDrawer(classroom)"
+        @keydown.enter.prevent="openStudentDrawer(classroom)"
+        @keydown.space.prevent="openStudentDrawer(classroom)"
       >
         <template #header>
           <div class="card-header">
             <div class="header-title">
-              <span>{{ classroom.name }}</span>
+              <span class="class-name">{{ classroom.name }}</span>
               <el-tag v-if="!classroom.is_active" type="info" size="small">已停用</el-tag>
             </div>
             <div class="card-tags">
               <el-tag size="small" effect="plain" type="primary">
                 {{ classroom.semester_label }}
               </el-tag>
-              <el-tag size="small" :type="classroom.is_active ? 'success' : 'info'">
+              <el-tag size="small" effect="plain" type="info">
                 {{ classroom.grade_name || '未設定年級' }}
               </el-tag>
             </div>
@@ -538,64 +557,90 @@ const castDrawerClassroom = computed((): ClassroomDrawerProp | null => drawerCla
         </template>
 
         <div class="card-content">
-          <p><strong>班級代號:</strong> {{ classroom.class_code || '-' }}</p>
-          <p>
-            <strong>學生人數:</strong> {{ classroom.current_count }} / {{ classroom.capacity }}
-            <el-tag
-              v-if="reservedCountFor(reservedByGrade, classroom) > 0"
-              type="warning"
-              effect="plain"
-              size="small"
-              style="margin-left: 6px"
-              :title="`同年級暫定編班（未報到）${reservedCountFor(reservedByGrade, classroom)} 人`"
-            >保留 {{ reservedCountFor(reservedByGrade, classroom) }}</el-tag>
-            <el-tag
-              v-if="getCapacityStatus(classroom) === 'full'"
-              type="danger"
-              size="small"
-              style="margin-left: 6px"
-            >已滿</el-tag>
-            <el-tag
-              v-else-if="getCapacityStatus(classroom) === 'warning'"
-              type="warning"
-              size="small"
-              style="margin-left: 6px"
-            >接近額滿</el-tag>
-          </p>
+          <dl class="card-meta">
+            <div class="meta-row">
+              <dt>班級代號</dt>
+              <dd>{{ classroom.class_code || '—' }}</dd>
+            </div>
+            <div class="meta-row">
+              <dt>學生人數</dt>
+              <dd class="count-cell">
+                <span class="count-text">{{ classroom.current_count ?? 0 }} / {{ classroom.capacity ?? '—' }}</span>
+                <el-tag
+                  v-if="reservedCountFor(reservedByGrade, classroom) > 0"
+                  type="warning"
+                  effect="plain"
+                  size="small"
+                  :title="`同年級暫定編班（未報到）${reservedCountFor(reservedByGrade, classroom)} 人`"
+                >保留 {{ reservedCountFor(reservedByGrade, classroom) }}</el-tag>
+                <el-tag v-if="getCapacityStatus(classroom) === 'full'" type="danger" size="small">已滿</el-tag>
+                <el-tag v-else-if="getCapacityStatus(classroom) === 'warning'" type="warning" size="small">接近額滿</el-tag>
+              </dd>
+            </div>
+          </dl>
 
+          <el-progress
+            class="capacity-progress"
+            :percentage="capacityPercent(classroom.current_count, classroom.capacity)"
+            :status="progressStatus(classroom)"
+            :stroke-width="8"
+            :show-text="false"
+            aria-hidden="true"
+          />
 
           <div class="teacher-info">
-            <p v-if="classroom.head_teacher_name">👩‍🏫 {{ classroom.head_teacher_name }}</p>
-            <p v-else class="text-muted">未指派班導師</p>
-            <p v-if="classroom.assistant_teacher_name">👨‍🏫 {{ classroom.assistant_teacher_name }}</p>
-            <p v-if="classroom.english_teacher_name || classroom.art_teacher_name">🌍 {{ classroom.english_teacher_name || classroom.art_teacher_name }}</p>
+            <p :class="{ 'text-muted': !classroom.head_teacher_name }">
+              <el-icon><User /></el-icon>
+              <span class="role-label">班導</span>{{ classroom.head_teacher_name || '未指派' }}
+            </p>
+            <p v-if="classroom.assistant_teacher_name">
+              <el-icon><User /></el-icon>
+              <span class="role-label">副班</span>{{ classroom.assistant_teacher_name }}
+            </p>
+            <p v-if="classroom.english_teacher_name || classroom.art_teacher_name">
+              <el-icon><Reading /></el-icon>
+              <span class="role-label">美語</span>{{ classroom.english_teacher_name || classroom.art_teacher_name }}
+            </p>
           </div>
 
-          <div class="card-actions">
+          <div class="card-actions" @click.stop>
             <el-button
               v-if="canReadStudents"
               size="small"
               :icon="Clock"
-              @click.stop="openChangeLogDrawer(classroom)"
+              @click="openChangeLogDrawer(classroom)"
             >
               歷史紀錄
             </el-button>
-            <el-button v-if="canWrite" size="small" :icon="Edit" @click.stop="openEdit(classroom)">編輯</el-button>
-            <el-button
-              v-if="canWrite && classroom.is_active"
-              size="small"
-              type="danger"
-              plain
-              :icon="Delete"
-              @click.stop="handleDelete(classroom)"
+            <el-dropdown
+              v-if="canWrite"
+              trigger="click"
+              @command="(cmd: string) => handleCardCommand(cmd, classroom)"
             >
-              停用
-            </el-button>
+              <el-button size="small" :icon="MoreFilled" aria-label="更多操作" />
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="edit" :icon="Edit">編輯班級</el-dropdown-item>
+                  <el-dropdown-item
+                    v-if="classroom.is_active"
+                    command="disable"
+                    :icon="Delete"
+                    divided
+                    class="dropdown-danger"
+                  >停用班級</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </div>
         </div>
       </el-card>
     </div>
-    <el-empty v-else description="尚無班級資料" />
+
+    <el-empty v-else description="尚無班級資料">
+      <el-button v-if="canWrite" type="primary" :icon="Plus" class="empty-create-btn" @click="openCreate">
+        新增班級
+      </el-button>
+    </el-empty>
 
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="720px">
       <div v-loading="detailLoading">
@@ -885,12 +930,33 @@ const castDrawerClassroom = computed((): ClassroomDrawerProp | null => drawerCla
 
 .classroom-card {
   cursor: pointer;
-  transition: transform var(--transition-base);
+  transition: transform var(--transition-base), box-shadow var(--transition-base);
   height: 100%;
 }
 
 .classroom-card:hover {
-  transform: translateY(-5px);
+  transform: translateY(-4px);
+}
+
+.classroom-card:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 2px;
+}
+
+.classroom-card.is-skeleton {
+  cursor: default;
+}
+
+.classroom-card.is-skeleton:hover {
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .classroom-card,
+  .classroom-card:hover {
+    transition: none;
+    transform: none;
+  }
 }
 
 .classroom-card :deep(.el-card__body) {
@@ -922,33 +988,91 @@ const castDrawerClassroom = computed((): ClassroomDrawerProp | null => drawerCla
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  min-height: 340px;
   height: 100%;
 }
 
-.section-label {
-  font-size: 0.85rem;
-  color: var(--text-secondary);
-  margin-bottom: 6px;
+.class-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.student-preview {
-  min-height: 78px;
-}
-
-.student-preview-tags {
+/* 結構化 metadata：label 在左、值在右，取代原本的「粗體冒號」inline 排版 */
+.card-meta {
+  margin: 0;
   display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.meta-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.meta-row dt {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.meta-row dd {
+  margin: 0;
+  font-weight: 600;
+  text-align: right;
+}
+
+.count-cell {
+  display: flex;
+  align-items: center;
   gap: 6px;
   flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
-.student-preview-tag {
-  margin-right: 0;
+.count-text {
+  font-variant-numeric: tabular-nums;
+}
+
+.capacity-progress {
+  margin-top: calc(-1 * var(--space-1, 4px));
+}
+
+.teacher-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .teacher-info p {
-  margin: 0 0 6px;
+  margin: 0;
   font-size: 0.9em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.teacher-info .el-icon {
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.role-label {
+  display: inline-block;
+  min-width: 2.4em;
+  color: var(--text-secondary);
+  font-size: 0.82em;
+}
+
+.dropdown-danger {
+  color: var(--el-color-danger);
+}
+
+.empty-create-btn {
+  margin-top: var(--space-3);
 }
 
 .card-actions {
@@ -999,6 +1123,12 @@ const castDrawerClassroom = computed((): ClassroomDrawerProp | null => drawerCla
 
   .wizard-summary {
     flex-wrap: wrap;
+  }
+
+  /* 觸控目標：卡片動作按鈕在手機上加大到 ≥44px，降低誤觸 */
+  .card-actions :deep(.el-button) {
+    min-height: 44px;
+    min-width: 44px;
   }
 }
 

@@ -12,6 +12,7 @@ import {
   Switch as SwitchIcon,
 } from '@element-plus/icons-vue'
 import { hasPermission } from '@/utils/auth'
+import { capacityPercent, capacityStatus } from '@/utils/classroomCapacity'
 import { useConfirmDelete } from '@/composables'
 import { useIsMobile } from '@/composables/useIsMobile'
 import { useClassroomProspects } from '@/composables/useClassroomProspects'
@@ -82,6 +83,7 @@ watch(
 // ── 名冊篩選 ────────────────────────────────────────
 const studentSearch = ref('')
 const studentGenderFilter = ref('')
+const showHealthOnly = ref(false)
 const showInactive = ref(false)
 
 const activeStudents = computed(() =>
@@ -99,8 +101,29 @@ const visibleStudents = computed(() => {
       || (s.name || '').includes(studentSearch.value)
       || s.student_id?.includes(studentSearch.value)
     const matchGender = !studentGenderFilter.value || s.gender === studentGenderFilter.value
-    return matchSearch && matchGender
+    const matchHealth = !showHealthOnly.value || !!hasHealthAlert(s)
+    return matchSearch && matchGender && matchHealth
   })
+})
+
+// 統計 pill 兼作快速篩選：再點一次同條件即取消
+const toggleGenderFilter = (gender: string) => {
+  studentGenderFilter.value = studentGenderFilter.value === gender ? '' : gender
+}
+const toggleHealthFilter = () => {
+  showHealthOnly.value = !showHealthOnly.value
+}
+const clearFilters = () => {
+  studentGenderFilter.value = ''
+  showHealthOnly.value = false
+  studentSearch.value = ''
+}
+
+// 容量進度（與班級卡片同一套口徑）
+const capacityPct = computed(() => capacityPercent(activeStudents.value.length, props.classroom?.capacity))
+const capacityProgressStatus = computed<'' | 'success' | 'warning' | 'exception'>(() => {
+  const s = capacityStatus(activeStudents.value.length, props.classroom?.capacity)
+  return s === 'full' ? 'exception' : s === 'warning' ? 'warning' : 'success'
 })
 
 const studentStats = computed(() => {
@@ -118,8 +141,8 @@ const studentStats = computed(() => {
 
 const avatarBgColor = (gender: string | undefined) => {
   if (gender === '男') return 'var(--el-color-primary)'
-  if (gender === '女') return '#e91e8c'
-  return '#909399'
+  if (gender === '女') return 'var(--el-color-danger)'
+  return 'var(--el-color-info)'
 }
 
 const hasHealthAlert = (s: StudentRecord) => s.allergy || s.medication || s.special_needs
@@ -255,24 +278,62 @@ const close = () => emit('update:visible', false)
           </div>
         </div>
 
-        <!-- 統計 pill row -->
-        <div class="stat-pills-row">
-          <div class="stat-pill stat-pill--primary">
-            <div class="stat-pill-value">在學 {{ activeStudents.length }} · 保留 {{ reservedCount }} / {{ classroom.capacity }}</div>
-            <div class="stat-pill-label">在讀 · 保留座位</div>
-          </div>
-          <div class="stat-pill stat-pill--info">
+        <!-- 統計 pill row（兼作快速篩選；再點一次取消）-->
+        <div class="stat-pills-row" role="group" aria-label="學生統計與篩選">
+          <button
+            type="button"
+            class="stat-pill stat-pill--primary"
+            :class="{ 'is-active': !studentGenderFilter && !showHealthOnly }"
+            :aria-pressed="!studentGenderFilter && !showHealthOnly"
+            @click="clearFilters"
+          >
+            <div class="stat-pill-value">在學 {{ activeStudents.length }}</div>
+            <div class="stat-pill-label">全部在讀</div>
+          </button>
+          <button
+            type="button"
+            class="stat-pill stat-pill--info"
+            :class="{ 'is-active': studentGenderFilter === '男' }"
+            :aria-pressed="studentGenderFilter === '男'"
+            @click="toggleGenderFilter('男')"
+          >
             <div class="stat-pill-value">{{ studentStats.maleCount }}</div>
             <div class="stat-pill-label">男生</div>
-          </div>
-          <div class="stat-pill stat-pill--danger">
+          </button>
+          <button
+            type="button"
+            class="stat-pill stat-pill--danger"
+            :class="{ 'is-active': studentGenderFilter === '女' }"
+            :aria-pressed="studentGenderFilter === '女'"
+            @click="toggleGenderFilter('女')"
+          >
             <div class="stat-pill-value">{{ studentStats.femaleCount }}</div>
             <div class="stat-pill-label">女生</div>
-          </div>
-          <div class="stat-pill stat-pill--warning">
+          </button>
+          <button
+            type="button"
+            class="stat-pill stat-pill--warning"
+            :class="{ 'is-active': showHealthOnly }"
+            :aria-pressed="showHealthOnly"
+            @click="toggleHealthFilter"
+          >
             <div class="stat-pill-value">{{ studentStats.healthAlertCount }}</div>
             <div class="stat-pill-label">需注意</div>
+          </button>
+        </div>
+
+        <!-- 容量進度（在學/容量 + 保留座位）-->
+        <div class="capacity-bar">
+          <div class="capacity-bar-text">
+            <span class="capacity-count">容量 {{ activeStudents.length }} / {{ classroom.capacity ?? '—' }}</span>
+            <span v-if="reservedCount > 0" class="capacity-reserved">· 保留 {{ reservedCount }}</span>
           </div>
+          <el-progress
+            :percentage="capacityPct"
+            :status="capacityProgressStatus"
+            :stroke-width="6"
+            :show-text="false"
+          />
         </div>
 
         <!-- Split view -->
@@ -312,21 +373,26 @@ const close = () => emit('update:visible', false)
                 description="找不到符合條件的學生"
                 :image-size="80"
               />
-              <ul v-else class="roster-items">
+              <ul v-else class="roster-items" role="listbox" aria-label="學生名冊">
                 <li
                   v-for="s in visibleStudents"
                   :key="s.id"
                   class="roster-item"
+                  role="option"
+                  tabindex="0"
+                  :aria-selected="s.id === selectedStudentId"
                   :class="{
                     selected: s.id === selectedStudentId,
                     inactive: s.is_active === false,
                   }"
                   @click="handleSelectStudent(s)"
+                  @keydown.enter.prevent="handleSelectStudent(s)"
+                  @keydown.space.prevent="handleSelectStudent(s)"
                 >
                   <el-avatar
                     :size="36"
                     :style="{
-                      backgroundColor: s.is_active === false ? '#c0c4cc' : avatarBgColor(s.gender),
+                      backgroundColor: s.is_active === false ? 'var(--el-text-color-disabled)' : avatarBgColor(s.gender),
                       fontSize: '14px',
                       flexShrink: 0,
                     }"
@@ -475,6 +541,24 @@ const close = () => emit('update:visible', false)
   border-radius: 6px;
   text-align: center;
   border: 1px solid transparent;
+  font-family: inherit;
+  cursor: pointer;
+  transition: filter 0.15s, box-shadow 0.15s;
+}
+.stat-pill:hover {
+  filter: brightness(0.97);
+}
+.stat-pill:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 2px;
+}
+.stat-pill.is-active {
+  box-shadow: inset 0 0 0 2px currentColor;
+}
+@media (prefers-reduced-motion: reduce) {
+  .stat-pill {
+    transition: none;
+  }
 }
 .stat-pill--primary {
   background: var(--el-color-primary-light-9);
@@ -504,6 +588,25 @@ const close = () => emit('update:visible', false)
 .stat-pill-label {
   font-size: 0.72rem;
   opacity: 0.8;
+}
+
+.capacity-bar {
+  padding: 0 22px 10px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+  flex-shrink: 0;
+}
+.capacity-bar-text {
+  display: flex;
+  gap: 6px;
+  font-size: 0.78rem;
+  color: var(--el-text-color-secondary);
+  margin-bottom: 4px;
+}
+.capacity-count {
+  font-variant-numeric: tabular-nums;
+}
+.capacity-reserved {
+  color: var(--el-color-warning);
 }
 
 .split-view {
@@ -552,10 +655,17 @@ const close = () => emit('update:visible', false)
   transition: background 0.15s;
 }
 .roster-item:hover { background: var(--el-fill-color-light); }
+.roster-item:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: -2px;
+}
 .roster-item.selected {
   background: var(--el-color-primary-light-9);
   border-left: 3px solid var(--el-color-primary);
   padding-left: 9px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .roster-item { transition: none; }
 }
 .roster-item.inactive .roster-name span:first-child {
   color: var(--el-text-color-disabled);
