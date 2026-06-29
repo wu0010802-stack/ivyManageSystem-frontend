@@ -78,12 +78,12 @@
           <template #header>
             <span>課程出席率統計</span>
             <span style="float:right; font-size:13px; color:#64748b">
-              共 {{ attendanceStats.total_sessions }} 場次 · 平均出席率 {{ avgAttendanceRate }}
+              已點名 {{ attendanceStats.total_sessions }} 場次 · 平均出席率 {{ avgAttendanceRate }}
             </span>
           </template>
           <el-table :data="attendanceStats.by_course" size="small" border>
             <el-table-column label="課程名稱" prop="course_name" />
-            <el-table-column label="場次數" prop="sessions" width="90" align="center" />
+            <el-table-column label="已點名場次" prop="sessions" width="100" align="center" />
             <el-table-column label="平均出席率" width="120" align="center">
               <template #default="{ row }">
                 <el-progress
