@@ -59,6 +59,7 @@ beforeEach(() => {
 afterEach(async () => {
   const m = await import('@/composables/usePortalDismissalAlerts')
   m.teardownPortalDismissalAlerts()
+  m.usePortalDismissalAlerts().muted.value = false // 重置 module-singleton muted，避免跨測試洩漏
   // vi.unstubAllGlobals() 會移除 setup.js 對 localStorage 的 mock，
   // 導致下一個 beforeEach 的 localStorage.clear() 拋 TypeError，故不呼叫。
   // WebSocket / AudioContext 由 beforeEach 的 vi.stubGlobal 每次重設，仍保持測試間隔離。
@@ -238,7 +239,7 @@ describe('usePortalDismissalAlerts', () => {
       expect(speakMock).not.toHaveBeenCalled()
       // 推進 350ms → 語音播報
       vi.advanceTimersByTime(350)
-      expect(speakMock).toHaveBeenCalledTimes(2)
+      expect(speakMock).toHaveBeenCalledTimes(2) // 2 = zh-TW 段 + en-US 段
       expect((speakMock.mock.calls[0][0] as { text: string }).text).toBe('小班 小安')
     } finally {
       vi.useRealTimers()
@@ -252,5 +253,21 @@ describe('usePortalDismissalAlerts', () => {
     expect(speakMock).toHaveBeenCalledTimes(1)
     expect((speakMock.mock.calls[0][0] as { text: string; volume: number }).text).toBe('')
     expect((speakMock.mock.calls[0][0] as { text: string; volume: number }).volume).toBe(0)
+  })
+
+  it('teardown 清待播語音計時器並 cancel（卸載後不發聲）', async () => {
+    vi.useFakeTimers()
+    try {
+      const m = await import('@/composables/usePortalDismissalAlerts')
+      m.initPortalDismissalAlerts()
+      lastWs!.open()
+      lastWs!.emit({ type: 'dismissal_call_created', payload: { id: 99, student_name: '小天', classroom_name: '小班', status: 'pending' } })
+      m.teardownPortalDismissalAlerts()
+      expect(cancelMock).toHaveBeenCalled()
+      vi.advanceTimersByTime(350)
+      expect(speakMock).not.toHaveBeenCalled() // 計時器已被 teardown 清掉，350ms 後不應發聲
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
