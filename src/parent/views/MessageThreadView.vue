@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { useMessagesStore } from '../stores/messages'
 import { getMessageThread } from '../api/messages'
@@ -9,6 +9,7 @@ import ConfirmDialog from '../components/ConfirmDialog.vue'
 import { toast } from '../utils/toast'
 import { enqueueParent, flushParentQueue } from '@/parent/utils/parentOfflineQueue'
 import { OP_KINDS } from '@/utils/offlineQueue'
+import { useKeyboardInset } from '../composables/useKeyboardInset'
 
 interface ThreadInfo {
   teacher_name?: string
@@ -19,6 +20,8 @@ interface MessageItem {
   id: number | string
   [key: string]: unknown
 }
+
+const { keyboardInset } = useKeyboardInset()
 
 const route = useRoute()
 const messagesStore = useMessagesStore()
@@ -110,6 +113,22 @@ const recallOpen = computed({
   },
 })
 
+// 訊息列表容器 ref，供自動捲底使用
+const messagesEl = ref<HTMLElement | null>(null)
+
+function scrollToBottom() {
+  nextTick(() => {
+    const el = messagesEl.value
+    if (el) el.scrollTop = el.scrollHeight
+  })
+}
+
+// 新訊息到達（length 增加且非「載入更早」）→ 捲到底；loadMore 時 loadingMore=true，保留閱讀位置
+watch(
+  () => messages.value.length,
+  (newLen, oldLen) => { if (newLen > oldLen && !loadingMore.value) scrollToBottom() },
+)
+
 async function doRecall() {
   const id = recallTarget.value
   recallTarget.value = null
@@ -124,19 +143,20 @@ async function doRecall() {
 
 onMounted(async () => {
   await init()
+  scrollToBottom()
   flushParentQueue(OP_KINDS.PARENT_MESSAGE).catch(() => {})
 })
 </script>
 
 <template>
-  <div class="thread-view">
+  <div class="thread-view" :style="{ paddingBottom: keyboardInset ? keyboardInset + 'px' : undefined }">
     <!-- M3TopAppBar 由 ParentLayout 提供（依 route.meta.showBack 顯示返回鍵）；這裡只顯示對話對方的副標題（學生名）。 -->
     <div v-if="thread" class="thread-subtitle">
       <strong>{{ thread.teacher_name || '老師' }}</strong>
       <span class="sub">{{ thread.student_name }}</span>
     </div>
 
-    <div class="messages">
+    <div class="messages" ref="messagesEl">
       <button
         v-if="hasMore"
         type="button"
@@ -172,8 +192,8 @@ onMounted(async () => {
 .thread-view {
   display: flex;
   flex-direction: column;
-  height: calc(100dvh - 64px);
-  margin: -16px;
+  flex: 1;
+  min-height: 0;
   background: var(--m3-surface, var(--pt-surface-thread-bg));
 }
 
