@@ -196,6 +196,11 @@ export function useActivityAttendanceDrawer({ getSessionFn, updateFn }: { getSes
 
   async function handleSave(onSuccess?: () => void) {
     if (!drawerSession.value) return
+    // F4：擷取當前載入世代。儲存期間使用者可能關閉此場次再開另一場（openDrawer /
+    // reloadCurrentSession 皆 ++loadSeq）。await updateFn 後若世代已變，代表畫面已是
+    // 另一場次，過期回應不得對它做 captureBaseline（誤標乾淨→靜默丟失輸入）/
+    // success / 關閉 drawer。本場次的存檔本身已以本場 id+records 正確送出。
+    const seq = loadSeq
     const records = drawerSession.value.students
       // 後端 AttendanceRecordItem.is_present 為必填 bool，未點名（null）無法寫入
       .filter(s => s.is_present !== null)
@@ -218,6 +223,8 @@ export function useActivityAttendanceDrawer({ getSessionFn, updateFn }: { getSes
     saveLoading.value = true
     try {
       await updateFn(drawerSession.value.id, records)
+      // F4：儲存期間已切換/重載場次 → 不動現行（另一）場次的 UI 與基準。
+      if (seq !== loadSeq) return
       captureBaseline()
       captureSnapshot()
       ElMessage.success('點名儲存成功')

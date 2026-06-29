@@ -260,3 +260,69 @@ describe('useActivityAttendanceDrawer — F6 openDrawer 過期回應競態守衛
     expect(drawer.drawerSession.value?.id).toBe('B')
   })
 })
+
+describe('useActivityAttendanceDrawer — F4 handleSave 過期儲存競態守衛', () => {
+  function buildResp(id: unknown, regId: number) {
+    return {
+      data: {
+        id,
+        course_name: `課-${id}`,
+        session_date: '2026-06-13',
+        students: [
+          { registration_id: regId, is_present: null, attendance_notes: '', classroom_id: 1, class_name: 'X班', student_name: '生' },
+        ],
+      },
+    }
+  }
+
+  it('儲存 A 期間切到 B：A 的回應不得關閉 B、不得把 B 標記為乾淨', async () => {
+    const getResolvers: Array<(v: unknown) => void> = []
+    const getSessionFn = vi.fn(
+      () => new Promise(resolve => { getResolvers.push(resolve as (v: unknown) => void) })
+    ) as unknown as (...args: unknown[]) => Promise<{ data: unknown }>
+    let saveResolve!: (v: unknown) => void
+    const updateFn = vi.fn(
+      () => new Promise(resolve => { saveResolve = resolve as (v: unknown) => void })
+    ) as unknown as (...args: unknown[]) => Promise<unknown>
+    const drawer = useActivityAttendanceDrawer({ getSessionFn, updateFn })
+
+    // 開 A 並改動（dirty，使 handleSave 會真的打 API）
+    const pA = drawer.openDrawer({ id: 'A' })
+    getResolvers[0](buildResp('A', 11))
+    await pA
+    drawer.drawerSession.value!.students[0].is_present = true
+
+    // 儲存 A（updateFn 卡住，模擬慢網路）
+    const pSave = drawer.handleSave()
+
+    // 儲存進行中切到 B
+    const pB = drawer.openDrawer({ id: 'B' })
+    getResolvers[1](buildResp('B', 99))
+    await pB
+    // 在 B 上輸入尚未儲存的點名
+    drawer.drawerSession.value!.students[0].is_present = false
+
+    // A 的儲存此刻才完成（B 已在畫面上）
+    saveResolve({ data: { ok: true } })
+    await pSave
+
+    // A 的回應不得：① 關閉 B 的 drawer ② 覆蓋 B 的當前場次 ③ 把 B 標記為乾淨
+    expect(drawer.drawerVisible.value).toBe(true)
+    expect(drawer.drawerSession.value?.id).toBe('B')
+    expect(drawer.isDirty()).toBe(true)
+  })
+
+  it('未切換場次的正常儲存：成功後關閉 drawer 並重置為乾淨（反回歸）', async () => {
+    const getSessionFn = vi.fn(async () => buildResp('A', 11))
+    const updateFn = vi.fn(async () => ({ data: { ok: true } }))
+    const drawer = useActivityAttendanceDrawer({ getSessionFn, updateFn })
+
+    await drawer.openDrawer({ id: 'A' })
+    drawer.drawerSession.value!.students[0].is_present = true
+    await drawer.handleSave()
+
+    expect(updateFn).toHaveBeenCalledTimes(1)
+    expect(drawer.drawerVisible.value).toBe(false)
+    expect(drawer.isDirty()).toBe(false)
+  })
+})

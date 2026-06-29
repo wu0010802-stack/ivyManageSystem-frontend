@@ -422,18 +422,24 @@ async function confirmPromote() {
   }
 }
 
+// F5：切換學期競態守衛。每次載入遞增序號，回應落地前比對序號；快速切學期時較慢的
+// 舊請求後回不得覆寫較新請求的結果（否則頁面顯示新學期但資料屬舊學期）。
+let fetchSeq = 0
 async function fetchCourses() {
+  const seq = ++fetchSeq
   loading.value = true
   try {
     const res = await getCourses({
       school_year: termStore.school_year,
       semester: termStore.semester,
     })
+    if (seq !== fetchSeq) return // 過期回應：已有更新的載入，丟棄不覆寫
     courses.value = (res.data as { courses: Course[] }).courses
   } catch {
+    if (seq !== fetchSeq) return
     ElMessage.error('載入失敗')
   } finally {
-    loading.value = false
+    if (seq === fetchSeq) loading.value = false
   }
 }
 

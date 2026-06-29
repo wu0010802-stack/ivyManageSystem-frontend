@@ -24786,7 +24786,7 @@ export interface components {
             /** Pending Review */
             pending_review: boolean;
             /** Query Token */
-            query_token: string;
+            query_token?: string | null;
             /**
              * Refunded Amount
              * @default 0
