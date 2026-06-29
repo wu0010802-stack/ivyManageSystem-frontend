@@ -16,7 +16,7 @@
 
     <el-tabs v-model="activeTab" class="admissions-tabs" @tab-change="onTabChange">
       <el-tab-pane label="漏斗看板" name="funnel">
-        <FunnelBoard />
+        <FunnelBoard :dashboard="dashboard" @created="onFunnelVisitCreated" />
       </el-tab-pane>
       <el-tab-pane label="訪視明細" name="records" lazy>
         <AdmissionsRecordsPanel
@@ -91,6 +91,13 @@ async function onRecordsChanged() {
   dashboard.invalidateOptions()
   void funnelStore.loadBoard({ force: true }) // 訪視 CRUD/轉化會改變漏斗卡片；force 避免 loadingBoard 靜默跳過
   statsPanelRef.value?.invalidateLazyTabs() // 訪視變更後統計 lazy tab 重載
+}
+
+// 看板直接新增訪視後：同步統計與選項（看板本身已由 FunnelBoard 重載，故此處不再 loadBoard）
+async function onFunnelVisitCreated() {
+  await dashboard.fetchStats()
+  dashboard.invalidateOptions()
+  statsPanelRef.value?.invalidateLazyTabs()
 }
 
 onMounted(() => {

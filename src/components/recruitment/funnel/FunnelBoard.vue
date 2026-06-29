@@ -26,6 +26,7 @@
         <el-option :value="2" label="下學期" />
       </el-select>
       <el-button size="small" @click="onRefresh">重新整理</el-button>
+      <FunnelAddVisit :dashboard="dashboard" class="funnel-board__add" @created="onVisitCreated" />
     </div>
 
     <FunnelSummaryBar v-if="store.board" :summary="store.board.summary" />
@@ -69,6 +70,16 @@ import FunnelSummaryBar from './FunnelSummaryBar.vue'
 import FunnelColumn from './FunnelColumn.vue'
 import TransitionConfirmDialog from './TransitionConfirmDialog.vue'
 import TimelineDrawer from './TimelineDrawer.vue'
+import type { useRecruitmentDashboard } from '@/composables/useRecruitmentDashboard'
+import FunnelAddVisit from './FunnelAddVisit.vue'
+
+defineProps<{
+  dashboard: ReturnType<typeof useRecruitmentDashboard>
+}>()
+
+const emit = defineEmits<{
+  created: []
+}>()
 
 const store = useRecruitmentFunnelStore()
 
@@ -199,6 +210,22 @@ function onCardClick(card: FunnelCardData) {
   drawerOpen.value = true
 }
 
+// 看板新增訪視成功：重載看板使新卡片出現；若該訪視月份不在目前篩選的學年/學期，提示使用者
+async function onVisitCreated(record: { id: number; [k: string]: unknown }): Promise<void> {
+  try {
+    await store.loadBoard({ force: true })
+  } catch {
+    // 重載失敗：仍通知父層同步統計；不做篩選範圍判斷（避免以過期看板誤報）
+    ElMessage.warning('新增成功，但看板重載失敗，請手動重新整理')
+    emit('created')
+    return
+  }
+  if (!store.getCardByVisitId(record.id)) {
+    ElMessage.info('新增成功，但該參觀日期不在目前篩選的學年/學期，請切換篩選查看')
+  }
+  emit('created')
+}
+
 onMounted(() => {
   store.loadBoard()
 })
@@ -214,6 +241,10 @@ onMounted(() => {
   gap: 8px;
   margin-bottom: 12px;
   align-items: center;
+}
+
+.funnel-board__add {
+  margin-left: auto;
 }
 
 .funnel-board__columns {

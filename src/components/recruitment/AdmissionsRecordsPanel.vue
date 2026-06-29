@@ -80,6 +80,7 @@ import { useFormDraft } from '@/composables/useFormDraft'
 import type { useRecruitmentDashboard } from '@/composables/useRecruitmentDashboard'
 import { useClassroomStore } from '@/stores/classroom'
 import { toAdYear } from '@/utils/academic'
+import { emptyVisitForm, type VisitFormState } from '@/constants/recruitment'
 import RecruitmentDetailTab from '@/components/recruitment/RecruitmentDetailTab.vue'
 import RecruitmentMonthDialog from '@/components/recruitment/RecruitmentMonthDialog.vue'
 import RecruitmentRecordDialog from '@/components/recruitment/RecruitmentRecordDialog.vue'
@@ -199,38 +200,7 @@ const fetchDetailDebounced = () => {
 const dialogVisible = ref(false)
 const dialogMode = ref('add')
 const editingId = ref<number | null>(null)
-const emptyForm = (): {
-  month: string
-  month_raw: string | null
-  seq_no: string
-  visit_date: string
-  child_name: string
-  birthday: string | null
-  grade: string | null
-  phone: string
-  address: string
-  district: string
-  source: string
-  referrer: string
-  deposit_collector: string
-  has_deposit: boolean
-  enrolled: boolean
-  transfer_term: boolean
-  no_deposit_reason: string | null
-  no_deposit_reason_detail: string
-  notes: string
-  parent_response: string
-  geocoding_consent: boolean
-} => ({
-  month: '', month_raw: null, seq_no: '', visit_date: '', child_name: '',
-  birthday: null, grade: null, phone: '', address: '',
-  district: '', source: '', referrer: '', deposit_collector: '',
-  has_deposit: false, enrolled: false, transfer_term: false,
-  no_deposit_reason: null, no_deposit_reason_detail: '',
-  notes: '', parent_response: '',
-  geocoding_consent: false,
-})
-const form = ref(emptyForm())
+const form = ref<VisitFormState>(emptyVisitForm())
 
 // 表單草稿暫存：招生表單聯絡 PII 一律排除，草稿僅留訪視/年級/來源等工作欄位
 const RECRUITMENT_DRAFT_EXCLUDE = [
@@ -329,7 +299,7 @@ const onPageChange = (page: number) => {
 // -------- 訪視記錄 CRUD --------
 const openAddDialog = async () => {
   await fetchOptions()
-  form.value = emptyForm()
+  form.value = emptyVisitForm()
   dialogMode.value = 'add'
   editingId.value = null
   dialogVisible.value = true
