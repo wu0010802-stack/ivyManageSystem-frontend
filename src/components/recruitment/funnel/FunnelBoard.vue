@@ -211,9 +211,9 @@ function onCardClick(card: FunnelCardData) {
 }
 
 // 看板新增訪視成功：重載看板使新卡片出現；若該訪視月份不在目前篩選的學年/學期，提示使用者
-async function onVisitCreated(record: Record<string, unknown>): Promise<void> {
+async function onVisitCreated(record: { id: number; [k: string]: unknown }): Promise<void> {
   await store.loadBoard({ force: true })
-  if (!store.getCardByVisitId(record['id'] as number)) {
+  if (!store.getCardByVisitId(record.id)) {
     ElMessage.info('新增成功，但該參觀日期不在目前篩選的學年/學期，請切換篩選查看')
   }
   emit('created')

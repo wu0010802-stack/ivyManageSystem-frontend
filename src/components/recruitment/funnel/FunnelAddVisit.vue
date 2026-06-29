@@ -36,7 +36,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  created: [record: Record<string, unknown>]
+  created: [record: { id: number; [k: string]: unknown }]
 }>()
 
 // 與「訪視明細」tab 同一把鎖：無 RECRUITMENT_WRITE 不顯示按鈕
@@ -78,7 +78,7 @@ async function handleSave(): Promise<void> {
     const res = await createRecruitmentRecord(payload)
     ElMessage.success('新增成功')
     dialogVisible.value = false
-    emit('created', (res as { data: Record<string, unknown> }).data)
+    emit('created', (res as { data: { id: number; [k: string]: unknown } }).data)
   } catch (e) {
     ElMessage.error(apiError(e, '儲存失敗'))
   } finally {
