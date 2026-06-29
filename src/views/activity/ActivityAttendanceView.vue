@@ -562,6 +562,10 @@ async function loadSessions() {
     const params: Record<string, unknown> = {
       skip: (page.value - 1) * pageSize.value,
       limit: pageSize.value,
+      // 帶當前學期：場次列表須與 termStore 選定學期一致，否則跨學期全顯，
+      // 可能在當前學期畫面誤編輯/刪除舊學期場次（場次學期繼承自課程）。
+      school_year: termStore.school_year,
+      semester: termStore.semester,
     }
     if (filterCourseId.value) params.course_id = filterCourseId.value
     if (filterStartDate.value) params.start_date = filterStartDate.value
@@ -596,10 +600,16 @@ async function loadCourses() {
   }
 }
 
-// 切換學期時重載課程下拉（比照 ActivityCourseView）
+// 切換學期時重載課程下拉與場次列表（比照 ActivityCourseView）。
+// 場次也須一併重載，否則切學期後仍停留在舊學期場次（P1：可能誤編輯/刪除）。
 watch(
   () => [termStore.school_year, termStore.semester],
-  () => loadCourses(),
+  () => {
+    loadCourses()
+    // 清掉可能屬於舊學期的課程篩選，再重置分頁重載該學期場次
+    filterCourseId.value = null
+    onFilterChange()
+  },
 )
 
 function resetFilter() {

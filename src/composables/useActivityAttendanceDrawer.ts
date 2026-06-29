@@ -40,6 +40,30 @@ export function useActivityAttendanceDrawer({ getSessionFn, updateFn }: { getSes
   // 與目前值比對即得 isDirty，供 drawer before-close 攔截 ESC/X 靜默丟失。
   const dirtySnapshot = ref<string>('')
 
+  // F2：載入時逐 registration 記下基準（is_present + 備註），handleSave 只送
+  // 相對基準有異動的列。否則送整份名冊快照，兩位老師同編一場時，後存者會用過期
+  // 快照把前者對「其他學生」的點名回沖（跨學生 lost update），並連帶影響退費堂數。
+  const baseline = ref<Map<unknown, { is_present: boolean | null; notes: string }>>(
+    new Map(),
+  )
+  function captureBaseline() {
+    const m = new Map<unknown, { is_present: boolean | null; notes: string }>()
+    if (drawerSession.value) {
+      for (const s of drawerSession.value.students) {
+        m.set(s.registration_id, {
+          is_present: s.is_present,
+          notes: s.attendance_notes || '',
+        })
+      }
+    }
+    baseline.value = m
+  }
+
+  // F6：openDrawer/reloadCurrentSession 競態守衛。先開 A、關閉後開 B，若 A 較晚
+  // 回應，過期回應不得覆寫 B 的名冊或使用者已輸入內容。每次載入遞增序號，回應
+  // 落地前比對序號，非當前載入即丟棄。
+  let loadSeq = 0
+
   function serializeAttendanceInputs(session: SessionData | null): string {
     if (!session) return ''
     return JSON.stringify(
@@ -125,33 +149,41 @@ export function useActivityAttendanceDrawer({ getSessionFn, updateFn }: { getSes
   )
 
   async function openDrawer(row: { id: unknown }, params: Record<string, unknown> = {}) {
+    const seq = ++loadSeq
     drawerVisible.value = true
     drawerLoading.value = true
     drawerSession.value = null
     try {
       const res = await getSessionFn(row.id, params)
+      if (seq !== loadSeq) return // 過期回應：已有更新的開啟，丟棄不覆寫
       drawerSession.value = res.data
+      captureBaseline()
       captureSnapshot()
     } catch {
+      if (seq !== loadSeq) return
       ElMessage.error('載入點名資料失敗')
       drawerVisible.value = false
     } finally {
-      drawerLoading.value = false
+      if (seq === loadSeq) drawerLoading.value = false
     }
   }
 
   async function reloadCurrentSession(params: Record<string, unknown> = {}) {
     if (!drawerSession.value) return
+    const seq = ++loadSeq
     drawerLoading.value = true
     const sid = drawerSession.value.id
     try {
       const res = await getSessionFn(sid, params)
+      if (seq !== loadSeq) return
       drawerSession.value = res.data
+      captureBaseline()
       captureSnapshot()
     } catch {
+      if (seq !== loadSeq) return
       ElMessage.error('重新載入點名資料失敗')
     } finally {
-      drawerLoading.value = false
+      if (seq === loadSeq) drawerLoading.value = false
     }
   }
 
@@ -165,15 +197,28 @@ export function useActivityAttendanceDrawer({ getSessionFn, updateFn }: { getSes
   async function handleSave(onSuccess?: () => void) {
     if (!drawerSession.value) return
     const records = drawerSession.value.students
+      // 後端 AttendanceRecordItem.is_present 為必填 bool，未點名（null）無法寫入
       .filter(s => s.is_present !== null)
+      // F2：只送相對載入基準有異動的列（is_present 或備註改變），避免回沖其他老師
+      .filter(s => {
+        const base = baseline.value.get(s.registration_id)
+        if (!base) return true // 基準無此列（理論上不會）→ 視為新異動送出
+        return base.is_present !== s.is_present || base.notes !== (s.attendance_notes || '')
+      })
       .map(s => ({
         registration_id: s.registration_id,
         is_present: s.is_present,
         notes: s.attendance_notes || '',
       }))
+    // F4b：無任何異動就不打 API（否則空陣列撞後端 min_length=1 得 422）。
+    if (records.length === 0) {
+      ElMessage.warning('沒有需要儲存的點名異動')
+      return
+    }
     saveLoading.value = true
     try {
       await updateFn(drawerSession.value.id, records)
+      captureBaseline()
       captureSnapshot()
       ElMessage.success('點名儲存成功')
       drawerVisible.value = false

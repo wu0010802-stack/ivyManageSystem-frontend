@@ -167,3 +167,96 @@ describe('useActivityAttendanceDrawer — 分組點名單一資料源', () => {
     }
   })
 })
+
+describe('useActivityAttendanceDrawer — F2 點名只送異動列（防跨學生 lost update）', () => {
+  it('只送相對載入快照有異動的列，不回沖其他老師已點的學生', async () => {
+    // 另一位老師已把 11 點為出席（載入快照即帶 is_present=true）
+    const seeds: StudentSeed[] = [
+      { registration_id: 11, classroom_id: 2, class_name: '櫻桃班', student_name: '王小明', is_present: true },
+      { registration_id: 12, classroom_id: 1, class_name: '蘋果班', student_name: '李小華' },
+      { registration_id: 13, classroom_id: null, class_name: '', student_name: '陳小美' },
+    ]
+    const { drawer, updateFn } = setup(seeds)
+    await drawer.openDrawer({ id: 101 })
+
+    // 本次只動 12（11 維持載入時的 true，未碰）
+    const s12 = drawer.drawerSession.value!.students.find(s => s.registration_id === 12)!
+    s12.is_present = true
+
+    await drawer.handleSave()
+    const records = savedRecords(updateFn)
+    // 只能含 12；含 11 即代表用過期快照回沖了別人的點名
+    expect(records).toEqual([{ registration_id: 12, is_present: true, notes: '' }])
+  })
+
+  it('改備註亦算異動（present 不變但備註變）會被送出', async () => {
+    const seeds: StudentSeed[] = [
+      { registration_id: 21, classroom_id: 1, class_name: '蘋果班', student_name: '甲', is_present: true, attendance_notes: '' },
+    ]
+    const { drawer, updateFn } = setup(seeds)
+    await drawer.openDrawer({ id: 101 })
+    const s21 = drawer.drawerSession.value!.students.find(s => s.registration_id === 21)!
+    s21.attendance_notes = '遲到 10 分鐘'
+
+    await drawer.handleSave()
+    expect(savedRecords(updateFn)).toEqual([
+      { registration_id: 21, is_present: true, notes: '遲到 10 分鐘' },
+    ])
+  })
+})
+
+describe('useActivityAttendanceDrawer — F4b 全無異動不打 API（避免 422）', () => {
+  it('全班未點名按儲存 → 不呼叫 updateFn、給友善提示', async () => {
+    const { drawer, updateFn } = setup()
+    await drawer.openDrawer({ id: 101 })
+
+    await drawer.handleSave()
+    expect(updateFn).not.toHaveBeenCalled()
+  })
+
+  it('載入後完全沒改動按儲存 → 不呼叫 updateFn', async () => {
+    const seeds: StudentSeed[] = [
+      { registration_id: 31, classroom_id: 1, class_name: '蘋果班', student_name: '乙', is_present: true },
+    ]
+    const { drawer, updateFn } = setup(seeds)
+    await drawer.openDrawer({ id: 101 })
+    // 不做任何改動
+    await drawer.handleSave()
+    expect(updateFn).not.toHaveBeenCalled()
+  })
+})
+
+describe('useActivityAttendanceDrawer — F6 openDrawer 過期回應競態守衛', () => {
+  function buildResp(id: unknown, regId: number) {
+    return {
+      data: {
+        id,
+        course_name: `課-${id}`,
+        session_date: '2026-06-13',
+        students: [
+          { registration_id: regId, is_present: null, attendance_notes: '', classroom_id: 1, class_name: 'X班', student_name: '生' },
+        ],
+      },
+    }
+  }
+
+  it('先開 A 後開 B，A 較晚回應不得覆寫 B 的名冊', async () => {
+    const resolvers: Array<(v: unknown) => void> = []
+    const getSessionFn = vi.fn(
+      () => new Promise(resolve => { resolvers.push(resolve as (v: unknown) => void) })
+    ) as unknown as (...args: unknown[]) => Promise<{ data: unknown }>
+    const updateFn = vi.fn(async () => ({ data: { ok: true } }))
+    const drawer = useActivityAttendanceDrawer({ getSessionFn, updateFn })
+
+    const pA = drawer.openDrawer({ id: 'A' })
+    const pB = drawer.openDrawer({ id: 'B' })
+
+    // B 先回（較新的開啟）
+    resolvers[1](buildResp('B', 99))
+    // A 後回（過期）
+    resolvers[0](buildResp('A', 11))
+    await Promise.all([pA, pB])
+
+    expect(drawer.drawerSession.value?.id).toBe('B')
+  })
+})

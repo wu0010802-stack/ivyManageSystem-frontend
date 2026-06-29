@@ -30,7 +30,7 @@ export interface paths {
         };
         /**
          * List Sessions
-         * @description 場次列表（可依課程、日期範圍篩選，支援分頁）
+         * @description 場次列表（可依課程、學期、日期範圍篩選，支援分頁）
          */
         get: operations["list_sessions_api_activity_attendance_sessions_get"];
         put?: never;
@@ -28654,6 +28654,8 @@ export interface operations {
                 course_id?: number | null;
                 end_date?: string | null;
                 limit?: number;
+                school_year?: number | null;
+                semester?: number | null;
                 skip?: number;
                 start_date?: string | null;
             };
