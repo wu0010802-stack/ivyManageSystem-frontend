@@ -199,6 +199,12 @@ const routes: RouteRecordRaw[] = [
             meta: { title: '廠商付款簽收' }
         },
         {
+            path: '/misc-receipts',
+            name: 'misc-receipts',
+            component: () => import('../views/MiscReceiptView.vue'),
+            meta: { title: '雜項收款簽收' }
+        },
+        {
             path: '/audit-logs',
             name: 'audit-logs',
             component: () => import('../views/AuditLogView.vue'),

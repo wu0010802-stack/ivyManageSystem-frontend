@@ -121,6 +121,10 @@
             <el-icon><Money /></el-icon>
             <template #title>廠商付款簽收</template>
           </el-menu-item>
+          <el-menu-item v-if="canView.MISC_RECEIPT_READ" index="/misc-receipts">
+            <el-icon><Coin /></el-icon>
+            <template #title>雜項收款簽收</template>
+          </el-menu-item>
         </el-sub-menu>
 
         <!-- 7. 課後才藝 (含報名時間設定 + 修改紀錄) -->
@@ -230,7 +234,7 @@ import { ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   DataBoard, Finished, Calendar, Timer, Clock, Document, Watch,
-  Money, User, School, OfficeBuilding, Bell, Setting,
+  Money, Coin, User, School, OfficeBuilding, Bell, Setting,
   Expand, Fold, DataAnalysis, Files,
   Star, Collection, ChatDotRound, List, Van, CreditCard, Checked,
   Trophy, WarningFilled

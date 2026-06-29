@@ -65,6 +65,8 @@ export const PERMISSION_NAMES = {
   YEAR_END_FINALIZE: 'YEAR_END_FINALIZE',
   VENDOR_PAYMENT_READ: 'VENDOR_PAYMENT_READ',
   VENDOR_PAYMENT_WRITE: 'VENDOR_PAYMENT_WRITE',
+  MISC_RECEIPT_READ: 'MISC_RECEIPT_READ',
+  MISC_RECEIPT_WRITE: 'MISC_RECEIPT_WRITE',
   DSR_MANAGE: 'DSR_MANAGE',
   // 角色與權限管理 / 教師端預覽 / 代為操作（對齊後端 utils/permissions.py，
   // 補回曾漏同步的 3 條；AdminHeader.vue 已用字面字串呼叫 hasPermission）
@@ -166,6 +168,8 @@ export const ROUTE_PERMISSION_RULES = [
   { path: '/overtime', permission: 'MEETINGS' },
   // 廠商付款簽收（園務行政）
   { path: '/vendor-payments', permission: 'VENDOR_PAYMENT_READ' },
+  // 雜項收款簽收（園務行政）
+  { path: '/misc-receipts', permission: 'MISC_RECEIPT_READ' },
 ]
 
 // 不需要權限即可訪問的路由（登入頁、密碼變更、公開報名頁、已登入即可訪問的個人資料頁等）。
