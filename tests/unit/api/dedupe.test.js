@@ -113,4 +113,14 @@ describe('apiDedupe', () => {
     ])
     expect(api._calls).toBe(1)
   })
+
+  it('併發 FormData 上傳到同 URL 不去重（qa-loop round2：原 key 塌成 {} 會吞檔）', async () => {
+    const api = makeInstance()
+    const fd1 = new FormData()
+    fd1.append('file', 'a')
+    const fd2 = new FormData()
+    fd2.append('file', 'b')
+    await Promise.all([api.post('/upload', fd1), api.post('/upload', fd2)])
+    expect(api._calls).toBe(2)
+  })
 })

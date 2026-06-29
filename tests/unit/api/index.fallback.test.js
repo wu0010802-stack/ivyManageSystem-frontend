@@ -63,4 +63,25 @@ describe('admin api interceptor — friendly fallback (Phase 5)', () => {
     const err = await api.get('/forbidden').catch((e) => e)
     expect(err.displayMessage).toBe(DEFAULT_MESSAGES[ErrorType.FORBIDDEN])
   })
+
+  // qa-loop round2（2026-06-29）：detail 為陣列/無 message 物件時 displayMessage 須仍為字串
+  it('422 detail 為陣列（FastAPI validation）→ displayMessage 為字串，不洩原始陣列', async () => {
+    mock.onGet('/validation-422').reply(422, {
+      detail: [{ loc: ['body', 'x'], msg: 'field required', type: 'value_error.missing' }],
+    })
+    const err = await api.get('/validation-422').catch((e) => e)
+    expect(Array.isArray(err.displayMessage)).toBe(false)
+    expect(
+      typeof err.displayMessage === 'string' || err.displayMessage === null
+    ).toBe(true)
+  })
+
+  it('object detail 無 message（如 {code}）→ displayMessage 為字串 fallback，非原始物件', async () => {
+    mock.onGet('/code-detail').reply(404, { detail: { code: 'VISIT_NOT_FOUND' } })
+    const err = await api.get('/code-detail').catch((e) => e)
+    expect(typeof err.displayMessage).not.toBe('object')
+    expect(
+      typeof err.displayMessage === 'string' || err.displayMessage === null
+    ).toBe(true)
+  })
 })

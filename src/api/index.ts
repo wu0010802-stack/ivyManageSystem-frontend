@@ -178,7 +178,12 @@ api.interceptors.response.use(
             error.displayMessage = (rawDetail as Record<string, unknown>).message as string
             error.errorDetail = rawDetail  // 含 code / context
         } else {
-            error.displayMessage = (rawDetail as string | null | undefined)
+            // rawDetail 可能是 FastAPI 422 的「陣列」（[{loc,msg,type}...]）或 {code} 物件
+            // （無 message）；typeof 皆為 'object' 但非字串。直接當 displayMessage 會違反
+            // 宣告型別 string|null 並在 UI 渲染成 [object Object] / 原始陣列亂碼。僅採用
+            // 字串 detail，其餘退 responseData.message / 友善 fallback（qa-loop round2 2026-06-29）。
+            const detailStr = typeof rawDetail === 'string' ? rawDetail : null
+            error.displayMessage = detailStr
                 || (responseData?.message as string | null | undefined)
                 || friendlyFallback
             error.errorDetail = null

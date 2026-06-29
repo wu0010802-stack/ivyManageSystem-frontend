@@ -12,8 +12,26 @@ function stableStringify(obj: unknown): string {
     .join(',') + '}'
 }
 
+// 二進位/串流 body（FormData / Blob / File / ArrayBuffer）無可列舉 own keys，
+// stableStringify 的 Object.keys 會回 [] → 全部塌成 '{}'，使同 URL 併發上傳被去重吞掉
+// 較晚的檔案（qa-loop round2 2026-06-29）。上傳本就不該因「同 URL」被併單。
+function isBinaryBody(p: unknown): boolean {
+  if (p == null || typeof p !== 'object') return false
+  return (
+    (typeof FormData !== 'undefined' && p instanceof FormData) ||
+    (typeof Blob !== 'undefined' && p instanceof Blob) ||
+    (typeof ArrayBuffer !== 'undefined' && p instanceof ArrayBuffer)
+  )
+}
+
+let _binaryBodySeq = 0
+
 function buildKey(method: string, url: unknown, payload: unknown) {
   const m = (method || 'get').toUpperCase()
+  // 二進位 body 給唯一 key（停用去重），避免併發上傳塌成同 key 吞檔。
+  if (isBinaryBody(payload)) {
+    return `${m} ${url || ''} __binary__${++_binaryBodySeq}`
+  }
   const body = payload == null ? '' : stableStringify(payload)
   return `${m} ${url || ''} ${body}`
 }
