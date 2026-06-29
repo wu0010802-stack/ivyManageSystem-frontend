@@ -78,6 +78,7 @@ async function handleSave(): Promise<void> {
     const res = await createRecruitmentRecord(payload)
     ElMessage.success('新增成功')
     dialogVisible.value = false
+    // TODO(ts-strict): waiting on backend response_model — createRecruitmentRecord 回傳 unknown
     emit('created', (res as { data: { id: number; [k: string]: unknown } }).data)
   } catch (e) {
     ElMessage.error(apiError(e, '儲存失敗'))

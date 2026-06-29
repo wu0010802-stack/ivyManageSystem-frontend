@@ -8,11 +8,12 @@ import { useRecruitmentFunnelStore } from '@/stores/recruitmentFunnel'
 import type { useRecruitmentDashboard } from '@/composables/useRecruitmentDashboard'
 
 const infoMock = vi.hoisted(() => vi.fn())
+const warningMock = vi.hoisted(() => vi.fn())
 vi.mock('element-plus', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   return {
     ...actual,
-    ElMessage: { success: vi.fn(), error: vi.fn(), info: infoMock, warning: vi.fn() },
+    ElMessage: { success: vi.fn(), error: vi.fn(), info: infoMock, warning: warningMock },
   }
 })
 
@@ -47,6 +48,7 @@ describe('FunnelBoard 新增訪視串接', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     infoMock.mockReset()
+    warningMock.mockReset()
   })
 
   it('子元件 created → 重載看板並 emit created', async () => {
@@ -66,16 +68,30 @@ describe('FunnelBoard 新增訪視串接', () => {
     expect(wrapper.emitted('created')).toBeTruthy()
   })
 
+  it('看板重載失敗 → warning 提示且仍 emit created、不顯示 info', async () => {
+    const store = useRecruitmentFunnelStore()
+    store.board = emptyBoard()
+    vi.spyOn(store, 'loadBoard').mockRejectedValue(new Error('network'))
+    const wrapper = mountBoard()
+    await flushPromises()
+    await wrapper.findComponent(FunnelAddVisit).vm.$emit('created', { id: 99, month: '115.03' })
+    await flushPromises()
+    expect(warningMock).toHaveBeenCalled()
+    expect(infoMock).not.toHaveBeenCalled()
+    expect(wrapper.emitted('created')).toBeTruthy()
+  })
+
   it('新卡片不在目前篩選範圍 → 顯示提示', async () => {
     const store = useRecruitmentFunnelStore()
     store.board = emptyBoard() // 重載後仍無 visit_id=99
-    vi.spyOn(store, 'loadBoard').mockResolvedValue()
+    const loadSpy = vi.spyOn(store, 'loadBoard').mockResolvedValue()
     const wrapper = mountBoard()
     await flushPromises()
 
     await wrapper.findComponent(FunnelAddVisit).vm.$emit('created', { id: 99, month: '110.03' })
     await flushPromises()
 
+    expect(loadSpy).toHaveBeenCalledWith({ force: true })
     expect(infoMock).toHaveBeenCalledTimes(1)
     expect(infoMock.mock.calls[0][0]).toContain('不在目前篩選')
     expect(wrapper.emitted('created')).toBeTruthy()
