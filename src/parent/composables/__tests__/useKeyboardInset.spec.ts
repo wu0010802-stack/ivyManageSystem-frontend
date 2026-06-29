@@ -55,6 +55,14 @@ describe('useKeyboardInset', () => {
     expect(api.keyboardInset.value).toBe(0)
   })
 
+  it('縮小剛好 80（邊界）視為非鍵盤', () => {
+    const vv = stubVV(800)
+    const { api } = mountHost()
+    vv._set(720) // 縮 80
+    vv._emit('resize')
+    expect(api.keyboardInset.value).toBe(0)
+  })
+
   it('鍵盤收回 → keyboardInset 歸 0', () => {
     const vv = stubVV(800)
     const { api } = mountHost()
@@ -70,5 +78,21 @@ describe('useKeyboardInset', () => {
     const { wrapper } = mountHost()
     wrapper.unmount()
     expect(spy).toHaveBeenCalledWith('resize', expect.any(Function))
+  })
+
+  it('unmount 後 resize 事件不再影響 keyboardInset', () => {
+    const vv = stubVV(800)
+    const { wrapper, api } = mountHost()
+    // 先觸發鍵盤彈出
+    vv._set(500)
+    vv._emit('resize')
+    const valueBeforeUnmount = api.keyboardInset.value
+    expect(valueBeforeUnmount).toBe(300)
+    // unmount 移除監聽
+    wrapper.unmount()
+    // 再次觸發 resize，值應保持不變（證明 handler 已移除）
+    vv._set(300)
+    vv._emit('resize')
+    expect(api.keyboardInset.value).toBe(valueBeforeUnmount)
   })
 })
