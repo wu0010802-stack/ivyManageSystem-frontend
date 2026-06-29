@@ -95,8 +95,10 @@ const exportRoster = async (type: keyof typeof ROSTER_TYPE_LABELS) => {
     const label = ROSTER_TYPE_LABELS[type]
     const filename = `${q.year}年${String(q.month).padStart(2, '0')}月_${label}轉帳名冊.xlsx`
     try {
-        await downloadFile(`/salaries/${q.year}/${q.month}/transfer-roster?type=${type}`, filename)
-        hasExported.value = true
+        // 只有下載真的成功才標記完成；downloadFile 內部吞錯後仍 resolve，
+        // 不可把「沒 throw」當成功，否則匯出失敗仍誤顯「本月結薪完成」。
+        const ok = await downloadFile(`/salaries/${q.year}/${q.month}/transfer-roster?type=${type}`, filename)
+        if (ok) hasExported.value = true
     } finally {
         rosterLoading.value = null
     }

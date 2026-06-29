@@ -161,8 +161,13 @@ function scheduleReconnect(): void {
 function connectWs(): void {
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return
   const proto = location.protocol === 'https:' ? 'wss' : 'ws'
-  ws = new WebSocket(`${proto}://${location.host}/api/ws/portal/dismissal-calls`)
-  ws.onopen = () => {
+  // 以 socket instance identity 守衛所有 handler：若此 socket 已非當前 ws（被 visibilitychange
+  // 替換或 liveness 重連換掉），舊 socket 延遲送達的事件一律忽略，避免污染新連線狀態
+  // （誤標斷線 / 清掉新 liveness timer / 多排一次重連）。
+  const socket = new WebSocket(`${proto}://${location.host}/api/ws/portal/dismissal-calls`)
+  ws = socket
+  socket.onopen = () => {
+    if (ws !== socket) return
     wsConnected.value = true
     wsReconnectCount.value = 0
     wsExhausted.value = false
@@ -171,16 +176,22 @@ function connectWs(): void {
     bumpLiveness()
     fetchCalls()
   }
-  ws.onmessage = (e) => {
+  socket.onmessage = (e) => {
+    if (ws !== socket) return
     bumpLiveness()
     try {
       const event = JSON.parse(e.data)
-      if (event.type === 'ping') { ws?.send(JSON.stringify({ type: 'pong' })); return }
+      if (event.type === 'ping') { socket.send(JSON.stringify({ type: 'pong' })); return }
       handleWsEvent(event)
     } catch { /* ignore */ }
   }
-  ws.onerror = () => { wsConnected.value = false }
-  ws.onclose = () => { wsConnected.value = false; clearLiveness(); scheduleReconnect() }
+  socket.onerror = () => { if (ws !== socket) return; wsConnected.value = false }
+  socket.onclose = () => {
+    if (ws !== socket) return
+    wsConnected.value = false
+    clearLiveness()
+    scheduleReconnect()
+  }
 }
 
 function handleWsEvent(event: { type: string; payload: DismissalCall }): void {
@@ -207,7 +218,10 @@ function onVisibility(): void {
   if (document.visibilityState !== 'visible') return
   fetchCalls()
   if (!ws || ws.readyState !== WebSocket.OPEN) {
-    if (ws) { try { ws.close() } catch { /* ignore */ } ws = null }
+    // 卸除舊 socket 的 handler 再關閉（與 teardown / bumpLiveness 同 idiom）；否則舊 socket
+    // 延遲送達的 onclose 會排程殭屍重連並把替換後的新連線標為斷線。
+    closeWebSocketSafely(ws)
+    ws = null
     wsReconnectCount.value = 0
     connectWs()
   }

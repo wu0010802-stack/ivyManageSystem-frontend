@@ -35,19 +35,23 @@ export function saveBlobResponse(response: AxiosResponse<BlobPart>, fallbackName
  * @param {string} url - API 路徑，例如 '/exports/employees'
  * @param {string} [fallbackName] - 預設檔名（若 header 無 Content-Disposition）
  * @param {Record<string, unknown>} [params] - 附加 query params（例如搜尋字串）
+ * @returns {Promise<boolean>} 成功 true、失敗 false；錯誤已於內部顯示。呼叫端不可
+ *   把「沒 throw」當成功（如結薪完成卡），須依此布林值判定成敗。
  */
 export async function downloadFile(
   url: string,
   fallbackName = 'download.xlsx',
   params?: Record<string, unknown>,
-) {
+): Promise<boolean> {
   try {
     const response = await api.get(url, { responseType: 'blob', timeout: 30000, params })
     saveBlobResponse(response, fallbackName)
+    return true
   } catch (error) {
     // interceptor 已把 blob/JSON 錯誤正規化進 displayMessage（如「本月薪資尚未封存」）；
     // 優先顯示真實原因，無則退回通用文案。
     const e = error as { displayMessage?: string | null; message?: string }
     ElMessage.error(e.displayMessage || '下載失敗: ' + (e.message || '未知錯誤'))
+    return false
   }
 }
