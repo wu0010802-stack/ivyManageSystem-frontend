@@ -8,6 +8,7 @@ import {
   scrubQueryString,
   hashUserId,
   redactPiiValue,
+  redactPiiKvInText,
   initSentry,
   captureException,
 } from '@/utils/sentry'
@@ -491,5 +492,46 @@ describe('captureException', () => {
     await expect(
       captureException(new Error('test'), { url: '/x' })
     ).resolves.toBeUndefined()
+  })
+})
+
+// qa-loop round2（2026-06-29）：與後端 _redact_pii_kv_in_text 對齊——exception value 內
+// key-based PII（email/姓名/帳號）須遮罩，value-level 正則攔不到。
+describe('redactPiiKvInText', () => {
+  it('filters denylist key values but keeps keys', () => {
+    const out = redactPiiKvInText(
+      "{'email': 'foo@bar.com', 'parent_name': '王小明', 'bank_account': '1234567890'}"
+    )
+    expect(out).not.toContain('foo@bar.com')
+    expect(out).not.toContain('王小明')
+    expect(out).not.toContain('1234567890')
+    expect(out).toContain('[Filtered]')
+    expect(out).toContain('email')
+  })
+
+  it('keeps non-PII key values', () => {
+    const out = redactPiiKvInText("{'count': 5, 'status': 'ok'}")
+    expect(out).toContain('5')
+    expect(out).toContain('ok')
+    expect(out).not.toContain('[Filtered]')
+  })
+
+  it('scrubEvent redacts key-based PII inside exception value', () => {
+    const ev = {
+      exception: {
+        values: [
+          {
+            type: 'Error',
+            value:
+              "constraint violated [parameters: {'email': 'foo@bar.com', 'parent_name': '王小明'}]",
+          },
+        ],
+      },
+    }
+    const res = scrubEvent(ev)
+    const v = res.exception.values[0].value
+    expect(v).not.toContain('foo@bar.com')
+    expect(v).not.toContain('王小明')
+    expect(v).toContain('[Filtered]')
   })
 })

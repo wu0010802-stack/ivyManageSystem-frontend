@@ -137,6 +137,18 @@ function keyIsPii(key: unknown) {
   return PII_KEY_SUBSTRINGS.some((needle) => lk.includes(needle))
 }
 
+// `key: value` / `key=value` 內 key 命中 denylist 的 value 遮罩（與後端
+// _redact_pii_kv_in_text 對齊）。value-level 正則攔不到 email / 姓名 / 銀行帳號 等須靠 key
+// 判定者；無引號 val 排除 {}[]() 引號冒號，避免 `parameters: {'email':...` 吞掉內層 key。
+const KV_PII_RE = /(['"]?)([A-Za-z_][A-Za-z0-9_]*)\1(\s*[:=]\s*)('[^']*'|"[^"]*"|[^\s,;:{}()[\]'"]+)/g
+
+export function redactPiiKvInText(text: unknown) {
+  if (typeof text !== 'string' || !text) return text
+  return text.replace(KV_PII_RE, (m, q, key, sep) =>
+    keyIsPii(key) ? `${q}${key}${q}${sep}${FILTERED}` : m,
+  )
+}
+
 export function scrubMapping(obj: unknown): unknown {
   if (obj === null || obj === undefined) return obj
   if (Array.isArray(obj)) return obj.map((item) => scrubMapping(item))
@@ -218,7 +230,8 @@ export function scrubEvent(event: unknown) {
       if (exVal && typeof exVal === 'object') {
         const e = exVal as Record<string, unknown>
         if (typeof e['value'] === 'string') {
-          e['value'] = redactPiiValue(e['value'])
+          // 先 value-level（身分證/手機/LINE id），再 key-value denylist（email/姓名/帳號等）。
+          e['value'] = redactPiiKvInText(redactPiiValue(e['value']) as string)
         }
       }
     }
