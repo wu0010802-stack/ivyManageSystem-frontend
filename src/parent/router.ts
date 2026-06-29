@@ -48,7 +48,7 @@ const routes: RouteRecordRaw[] = [
       path: '/messages/:threadId',
       name: 'parent-message-thread',
       component: () => import('./views/MessageThreadView.vue'),
-      meta: { title: '對話', tab: 'messages', showBack: true },
+      meta: { title: '對話', tab: 'messages', showBack: true, hideTabBar: true },
     },
     {
       path: '/assistant',

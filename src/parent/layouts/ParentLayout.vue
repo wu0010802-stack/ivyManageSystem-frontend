@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useParentAuthStore } from '../stores/parentAuth'
 import { getUnreadCount } from '../api/announcements'
 import { getMessageUnreadCount } from '../api/messages'
+import { shouldRefreshUnread } from '../utils/unreadThrottle'
 import M3TopAppBar from '../components/m3/M3TopAppBar.vue'
 import M3NavigationBar from '../components/m3/M3NavigationBar.vue'
 import M3IconButton from '../components/m3/M3IconButton.vue'
@@ -77,8 +78,13 @@ const TABS = computed<TabItem[]>(() => [
 
 const drawerOpen = ref(false)
 
-async function refreshUnread() {
+const UNREAD_TTL_MS = 45_000
+let lastUnreadAt = 0
+
+async function refreshUnread(force = false) {
   if (!authStore.isAuthed()) return
+  const now = Date.now()
+  if (!force && !shouldRefreshUnread(lastUnreadAt, now, UNREAD_TTL_MS)) return
   try {
     const [{ data: a }, { data: m }] = await Promise.all([
       getUnreadCount(),
@@ -86,13 +92,14 @@ async function refreshUnread() {
     ])
     unread.value = (a as Record<string, unknown>)?.unread_count as number || 0
     unreadMessages.value = (m as Record<string, unknown>)?.unread_count as number || 0
+    lastUnreadAt = now
   } catch {
     /* ignore */
   }
 }
 
-onMounted(refreshUnread)
-watch(() => route.fullPath, refreshUnread)
+onMounted(() => refreshUnread())
+watch(() => route.fullPath, () => refreshUnread())
 
 const headerTitle = computed(() => route.meta?.title as string || '常春藤家長')
 const headerShowBack = computed(() => route.meta?.showBack === true)
