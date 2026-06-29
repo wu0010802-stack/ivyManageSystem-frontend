@@ -6,6 +6,7 @@ import { toast } from '../utils/toast'
 import SkeletonBlock from '../components/SkeletonBlock.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import KawaiiStar from '@/components/brand/KawaiiStar.vue'
+import { useIncrementalRender } from '../composables/useIncrementalRender'
 
 interface PhotoItem {
   id: number | string
@@ -21,6 +22,14 @@ const studentId = computed(() => Number(route.params.studentId))
 const items = ref<PhotoItem[]>([])
 const total = ref(0)
 const loading = ref(false)
+
+// 漸進渲染：每頁 30 張，避免一次 render 200 縮圖拖慢首屏
+const { visible: visibleRaw, hasMore, sentinelRef } = useIncrementalRender(
+  items as unknown as import('vue').Ref<unknown[]>,
+  { pageSize: 30 },
+)
+// 還原型別，讓 template 可存取 PhotoItem 欄位
+const visible = computed(() => visibleRaw.value as PhotoItem[])
 const previewIdx = ref<number | null>(null)
 const lightboxRef = ref<HTMLElement | null>(null)
 // 開啟 lightbox 前的焦點元素，關閉時還原（focus trap a11y）。
@@ -103,7 +112,7 @@ onMounted(load)
 
     <div v-else class="grid pt-section-pad-x">
       <button
-        v-for="(item, idx) in items"
+        v-for="(item, idx) in visible"
         :key="item.id"
         type="button"
         class="thumb"
@@ -112,6 +121,8 @@ onMounted(load)
       >
         <img :src="item.thumb_url || item.display_url || item.url" :alt="item.filename" loading="lazy" decoding="async" />
       </button>
+      <!-- 漸進渲染哨兵：捲動到底時 IntersectionObserver 自動載入下一批 -->
+      <div v-if="hasMore" ref="sentinelRef" class="render-sentinel" aria-hidden="true" />
     </div>
 
     <div
@@ -258,6 +269,8 @@ onMounted(load)
   padding: 6px 14px;
   font-variant-numeric: tabular-nums;
 }
+
+.render-sentinel { height: 1px; grid-column: 1 / -1; }
 
 @media (prefers-reduced-motion: reduce) {
   .thumb { transition: none; }
