@@ -31,7 +31,7 @@ vi.mock('vue-router', () => ({
 }))
 
 // 靜默 toast（避免 console 雜訊）
-vi.mock('../utils/toast', () => ({
+vi.mock('../../utils/toast', () => ({
   toast: { error: vi.fn(), success: vi.fn(), warn: vi.fn(), info: vi.fn() },
 }))
 

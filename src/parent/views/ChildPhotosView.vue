@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref, type Ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { fetchChildPhotos } from '../api/childPhotos'
 import { toast } from '../utils/toast'
@@ -25,7 +25,7 @@ const loading = ref(false)
 
 // 漸進渲染：每頁 30 張，避免一次 render 200 縮圖拖慢首屏
 const { visible: visibleRaw, hasMore, sentinelRef } = useIncrementalRender(
-  items as unknown as import('vue').Ref<unknown[]>,
+  items as unknown as Ref<unknown[]>,
   { pageSize: 30 },
 )
 // 還原型別，讓 template 可存取 PhotoItem 欄位
