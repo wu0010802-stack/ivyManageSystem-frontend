@@ -16,10 +16,23 @@ describe('家長端字型首屏效能', () => {
     const headContent = html.split('<noscript>')[0]
     const fontLinks = headContent.match(/<link[^>]*rel="stylesheet"[^>]*fonts\.googleapis\.com[^>]*>/g) || []
     expect(fontLinks.length).toBeGreaterThanOrEqual(2)
-    fontLinks.forEach((l) => expect(l).toContain("media=\"print\""))
+    fontLinks.forEach((l) => {
+      expect(l).toContain("media=\"print\"")
+      expect(l).toContain("onload=\"this.media='all'\"")
+    })
   })
   it('vite.config workbox 有 google-fonts runtimeCaching', () => {
     const cfg = read('vite.config.js')
     expect(cfg).toContain('fonts.gstatic.com')
+    expect(cfg).toContain("handler: 'CacheFirst'")
+    expect(cfg).toContain("cacheName: 'google-fonts'")
+    expect(cfg).toContain('statuses: [0, 200]')
+  })
+  it('parent.html noscript 後備為同步載入（無 media=print）', () => {
+    const html = read('parent.html')
+    const noscript = html.match(/<noscript>([\s\S]*?)<\/noscript>/)?.[1] || ''
+    const links = noscript.match(/<link[^>]*>/g) || []
+    expect(links.length).toBe(2)
+    links.forEach((l) => expect(l).not.toContain('media="print"'))
   })
 })
