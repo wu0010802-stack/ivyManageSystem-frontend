@@ -1,12 +1,23 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, defineAsyncComponent } from 'vue'
 import { useRoute } from 'vue-router'
 import TodayTasksPanel from '@/components/student/workbench/TodayTasksPanel.vue'
 import StudentListPanel from '@/components/student/workbench/StudentListPanel.vue'
 
+// 在籍統計含 chart.js 與在籍記錄表，懶載以維持學生頁原本的載入重量（僅點該分頁才載入）
+const EnrollmentPanel = defineAsyncComponent(
+  () => import('@/components/student/workbench/EnrollmentPanel.vue'),
+)
+
 const route = useRoute()
-// 從別頁帶 action（新增 / 轉班）深連結進來時，直接落在「學生名冊」分頁
-const activeTab = ref(route.query.action ? 'roster' : 'tasks')
+// 深連結優先序：?tab=（含在籍統計）→ ?action=（新增 / 轉班，落在「學生名冊」）→ 預設今日任務
+const VALID_TABS = ['tasks', 'roster', 'enrollment']
+const initialTab = () => {
+  const tab = route.query.tab
+  if (typeof tab === 'string' && VALID_TABS.includes(tab)) return tab
+  return route.query.action ? 'roster' : 'tasks'
+}
+const activeTab = ref(initialTab())
 </script>
 
 <template>
@@ -17,6 +28,9 @@ const activeTab = ref(route.query.action ? 'roster' : 'tasks')
       </el-tab-pane>
       <el-tab-pane label="學生名冊" name="roster">
         <StudentListPanel />
+      </el-tab-pane>
+      <el-tab-pane label="在籍統計" name="enrollment" lazy>
+        <EnrollmentPanel />
       </el-tab-pane>
     </el-tabs>
   </div>

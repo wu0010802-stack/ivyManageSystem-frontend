@@ -92,10 +92,7 @@
             <el-icon><DataAnalysis /></el-icon>
             <template #title>招生入學</template>
           </el-menu-item>
-          <el-menu-item v-if="canView.STUDENTS_READ" index="/student-enrollment">
-            <el-icon><TrendCharts /></el-icon>
-            <template #title>在籍統計</template>
-          </el-menu-item>
+          <!-- 在籍統計已折入「學生」頁的分頁（/students?tab=enrollment）；舊路徑 redirect 保留 -->
           <el-menu-item v-if="canView.STUDENTS_READ" index="/dismissal-queue">
             <el-icon><Van /></el-icon>
             <template #title>接送通知</template>
@@ -233,7 +230,7 @@ import { ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   DataBoard, Finished, Calendar, Timer, Clock, Document, Watch,
-  Money, User, School, OfficeBuilding, Bell, TrendCharts, Setting,
+  Money, User, School, OfficeBuilding, Bell, Setting,
   Expand, Fold, DataAnalysis, Files,
   Star, Collection, ChatDotRound, List, Van, CreditCard, Checked,
   Trophy, WarningFilled

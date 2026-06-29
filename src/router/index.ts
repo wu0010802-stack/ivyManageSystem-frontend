@@ -94,10 +94,9 @@ const routes: RouteRecordRaw[] = [
             meta: { title: '今日用藥' }
         },
         {
+            // 在籍統計已折入學生模組（/students 的「在籍統計」分頁）；舊連結 redirect 並保留 query
             path: '/student-enrollment',
-            name: 'student-enrollment',
-            component: () => import('../views/StudentEnrollmentView.vue'),
-            meta: { title: '在籍統計' }
+            redirect: (to) => ({ path: '/students', query: { ...to.query, tab: 'enrollment' } }),
         },
         {
             path: '/students/admissions',

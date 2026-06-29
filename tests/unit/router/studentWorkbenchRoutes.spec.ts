@@ -17,4 +17,14 @@ describe('student workbench routing', () => {
     await testRouter.push('/student-academic-affairs')
     expect(testRouter.currentRoute.value.path).toBe('/students')
   })
+
+  it('/student-enrollment redirects to /students with tab=enrollment query', async () => {
+    const testRouter = createRouter({
+      history: createMemoryHistory(),
+      routes: router.options.routes,
+    })
+    await testRouter.push('/student-enrollment')
+    expect(testRouter.currentRoute.value.path).toBe('/students')
+    expect(testRouter.currentRoute.value.query.tab).toBe('enrollment')
+  })
 })

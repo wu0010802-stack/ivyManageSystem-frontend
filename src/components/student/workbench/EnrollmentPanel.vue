@@ -1,7 +1,6 @@
 <template>
   <div class="enrollment-view">
     <div class="page-header">
-      <h2>幼生在籍統計</h2>
       <div class="header-actions">
         <el-select
           v-model="selectedTerm"
@@ -566,15 +565,11 @@ const doughnutChartOptions = {
 /* ===== Page Header ===== */
 .page-header {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
   gap: var(--space-4, 16px);
   margin-bottom: var(--space-3, 12px);
   flex-wrap: wrap;
-}
-
-.page-header h2 {
-  margin: 0;
 }
 
 .header-actions {
