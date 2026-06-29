@@ -35,16 +35,31 @@ class MockAudioCtx {
   get destination() { return {} }
 }
 
+// ── mock SpeechSynthesis ──
+const speakMock = vi.fn()
+const cancelMock = vi.fn()
+class MockUtterance {
+  text = ''
+  lang = ''
+  volume = 1
+  constructor(t?: string) { this.text = t ?? '' }
+}
+
 beforeEach(() => {
   getCallsMock.mockClear()
   lastWs = null
   vi.stubGlobal('WebSocket', MockWS as unknown as typeof WebSocket)
   vi.stubGlobal('AudioContext', MockAudioCtx as unknown as typeof AudioContext)
+  speakMock.mockClear()
+  cancelMock.mockClear()
+  vi.stubGlobal('speechSynthesis', { speak: speakMock, cancel: cancelMock })
+  vi.stubGlobal('SpeechSynthesisUtterance', MockUtterance as unknown as typeof SpeechSynthesisUtterance)
   localStorage.clear()
 })
 afterEach(async () => {
   const m = await import('@/composables/usePortalDismissalAlerts')
   m.teardownPortalDismissalAlerts()
+  m.usePortalDismissalAlerts().muted.value = false // 重置 module-singleton muted，避免跨測試洩漏
   // vi.unstubAllGlobals() 會移除 setup.js 對 localStorage 的 mock，
   // 導致下一個 beforeEach 的 localStorage.clear() 拋 TypeError，故不呼叫。
   // WebSocket / AudioContext 由 beforeEach 的 vi.stubGlobal 每次重設，仍保持測試間隔離。
@@ -172,5 +187,87 @@ describe('usePortalDismissalAlerts', () => {
     expect(activeCalls.value.some((c) => c.id === 7)).toBe(true)
     lastWs!.emit({ type: 'dismissal_call_cancelled', payload: { id: 7 } })
     expect(activeCalls.value.some((c) => c.id === 7)).toBe(false)
+  })
+
+  it('speakAnnouncement 唸兩段：zh-TW「班級 名」+ en-US「time to go home」', async () => {
+    const m = await import('@/composables/usePortalDismissalAlerts')
+    const { speakAnnouncement } = m.usePortalDismissalAlerts()
+    speakAnnouncement({ student_name: '小明', classroom_name: '幼幼班' })
+    expect(speakMock).toHaveBeenCalledTimes(2)
+    const first = speakMock.mock.calls[0][0] as { text: string; lang: string }
+    const second = speakMock.mock.calls[1][0] as { text: string; lang: string }
+    expect(first.text).toBe('幼幼班 小明')
+    expect(first.lang).toBe('zh-TW')
+    expect(second.text).toBe('time to go home')
+    expect(second.lang).toBe('en-US')
+  })
+
+  it('speakAnnouncement 班級缺只唸名字；名字也缺唸「學生」', async () => {
+    const m = await import('@/composables/usePortalDismissalAlerts')
+    const { speakAnnouncement } = m.usePortalDismissalAlerts()
+    speakAnnouncement({ student_name: '小華' })
+    expect((speakMock.mock.calls[0][0] as { text: string }).text).toBe('小華')
+    speakMock.mockClear()
+    speakAnnouncement({})
+    expect((speakMock.mock.calls[0][0] as { text: string }).text).toBe('學生')
+  })
+
+  it('muted 時 speakAnnouncement 不唸', async () => {
+    const m = await import('@/composables/usePortalDismissalAlerts')
+    const { speakAnnouncement, toggleMute } = m.usePortalDismissalAlerts()
+    toggleMute() // muted = true
+    speakAnnouncement({ student_name: '小明', classroom_name: '幼幼班' })
+    expect(speakMock).not.toHaveBeenCalled()
+  })
+
+  it('speechSynthesis 不存在時 speakAnnouncement 安全 no-op（不 throw）', async () => {
+    vi.stubGlobal('speechSynthesis', undefined)
+    const m = await import('@/composables/usePortalDismissalAlerts')
+    const { speakAnnouncement } = m.usePortalDismissalAlerts()
+    expect(() => speakAnnouncement({ student_name: '小明', classroom_name: '幼幼班' })).not.toThrow()
+    expect(speakMock).not.toHaveBeenCalled()
+  })
+
+  it('dismissal_call_created → beep 後 350ms 觸發語音播報', async () => {
+    vi.useFakeTimers()
+    try {
+      const m = await import('@/composables/usePortalDismissalAlerts')
+      m.initPortalDismissalAlerts()
+      lastWs!.open()
+      lastWs!.emit({ type: 'dismissal_call_created', payload: { id: 11, student_name: '小安', classroom_name: '小班', status: 'pending' } })
+      // 事件當下：beep 已同步播；語音尚未（先 beep 再唸）
+      expect(speakMock).not.toHaveBeenCalled()
+      // 推進 350ms → 語音播報
+      vi.advanceTimersByTime(350)
+      expect(speakMock).toHaveBeenCalledTimes(2) // 2 = zh-TW 段 + en-US 段
+      expect((speakMock.mock.calls[0][0] as { text: string }).text).toBe('小班 小安')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('首次 pointerdown 同時解鎖 speech（speak 被呼叫一次空白 utterance）', async () => {
+    const m = await import('@/composables/usePortalDismissalAlerts')
+    m.initPortalDismissalAlerts()
+    document.dispatchEvent(new Event('pointerdown'))
+    expect(speakMock).toHaveBeenCalledTimes(1)
+    expect((speakMock.mock.calls[0][0] as { text: string; volume: number }).text).toBe('')
+    expect((speakMock.mock.calls[0][0] as { text: string; volume: number }).volume).toBe(0)
+  })
+
+  it('teardown 清待播語音計時器並 cancel（卸載後不發聲）', async () => {
+    vi.useFakeTimers()
+    try {
+      const m = await import('@/composables/usePortalDismissalAlerts')
+      m.initPortalDismissalAlerts()
+      lastWs!.open()
+      lastWs!.emit({ type: 'dismissal_call_created', payload: { id: 99, student_name: '小天', classroom_name: '小班', status: 'pending' } })
+      m.teardownPortalDismissalAlerts()
+      expect(cancelMock).toHaveBeenCalled()
+      vi.advanceTimersByTime(350)
+      expect(speakMock).not.toHaveBeenCalled() // 計時器已被 teardown 清掉，350ms 後不應發聲
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
