@@ -45,6 +45,8 @@ let gestureHandler: (() => void) | null = null
 let visibilityHandler: (() => void) | null = null
 const WS_MAX_RETRIES = 5
 const WS_LIVENESS_TIMEOUT = 45000
+const SPEECH_LEAD_MS = 350
+const speechTimers = new Set<ReturnType<typeof setTimeout>>()
 
 // ── 聲音 / 震動 ──
 function unlockAudio(): void {
@@ -224,6 +226,9 @@ function handleWsEvent(event: { type: string; payload: DismissalCall }): void {
     notifyBrowser(payload)
     playBeep()
     triggerHaptic()
+    // 先 beep 再唸：延遲讓 0.4s beep 明確先行
+    const timer = setTimeout(() => { speechTimers.delete(timer); speakAnnouncement(payload) }, SPEECH_LEAD_MS)
+    speechTimers.add(timer)
     liveAnnounce.value = `新接送通知：${payload.student_name || '學生'}${payload.classroom_name ? `（${payload.classroom_name}）` : ''} 等待接送`
   } else if (type === 'dismissal_call_updated') {
     const idx = activeCalls.value.findIndex((c) => c.id === payload.id)
@@ -252,7 +257,7 @@ export function initPortalDismissalAlerts(): void {
   initialized = true
   requestNotificationPermission()
   // 首次任一手勢解鎖 AudioContext（once + capture，最早攔截）
-  gestureHandler = () => { unlockAudio() }
+  gestureHandler = () => { unlockAudio(); unlockSpeech() }
   document.addEventListener('pointerdown', gestureHandler, { once: true, capture: true })
   visibilityHandler = onVisibility
   document.addEventListener('visibilitychange', visibilityHandler)
@@ -265,6 +270,9 @@ export function teardownPortalDismissalAlerts(): void {
   ws = null
   if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null }
   clearLiveness()
+  speechTimers.forEach(clearTimeout)
+  speechTimers.clear()
+  try { window.speechSynthesis?.cancel() } catch { /* ignore */ }
   stopPolling()
   if (gestureHandler) { document.removeEventListener('pointerdown', gestureHandler, { capture: true } as EventListenerOptions); gestureHandler = null }
   if (visibilityHandler) { document.removeEventListener('visibilitychange', visibilityHandler); visibilityHandler = null }

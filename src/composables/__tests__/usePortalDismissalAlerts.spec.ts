@@ -226,4 +226,31 @@ describe('usePortalDismissalAlerts', () => {
     expect(() => speakAnnouncement({ student_name: '小明', classroom_name: '幼幼班' })).not.toThrow()
     expect(speakMock).not.toHaveBeenCalled()
   })
+
+  it('dismissal_call_created → beep 後 350ms 觸發語音播報', async () => {
+    vi.useFakeTimers()
+    try {
+      const m = await import('@/composables/usePortalDismissalAlerts')
+      m.initPortalDismissalAlerts()
+      lastWs!.open()
+      lastWs!.emit({ type: 'dismissal_call_created', payload: { id: 11, student_name: '小安', classroom_name: '小班', status: 'pending' } })
+      // 事件當下：beep 已同步播；語音尚未（先 beep 再唸）
+      expect(speakMock).not.toHaveBeenCalled()
+      // 推進 350ms → 語音播報
+      vi.advanceTimersByTime(350)
+      expect(speakMock).toHaveBeenCalledTimes(2)
+      expect((speakMock.mock.calls[0][0] as { text: string }).text).toBe('小班 小安')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('首次 pointerdown 同時解鎖 speech（speak 被呼叫一次空白 utterance）', async () => {
+    const m = await import('@/composables/usePortalDismissalAlerts')
+    m.initPortalDismissalAlerts()
+    document.dispatchEvent(new Event('pointerdown'))
+    expect(speakMock).toHaveBeenCalledTimes(1)
+    expect((speakMock.mock.calls[0][0] as { text: string; volume: number }).text).toBe('')
+    expect((speakMock.mock.calls[0][0] as { text: string; volume: number }).volume).toBe(0)
+  })
 })
