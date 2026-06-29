@@ -29,9 +29,8 @@ const {
   toggleMute,
   unlockAudio,
   unlockSpeech,
-  playBeep,
-  speakAnnouncement,
-  triggerHaptic,
+  playAlert,
+  cancelPendingSpeech,
   fetchCalls,
 } = usePortalDismissalAlerts()
 
@@ -44,13 +43,13 @@ const notificationPermitted = computed(() => {
   try { return Notification.permission === 'granted' } catch { return false }
 })
 
-// ─── 測試聲音：user gesture 解鎖 AudioContext + speechSynthesis + 確認聽得到 ──
+// ─── 測試聲音：user gesture 解鎖 AudioContext + speechSynthesis，走與真實通知同一序列 ──
+// 先 cancelPendingSpeech 清掉上一次待播，連點「測試」不會堆疊。
 const testSound = () => {
   unlockAudio()
   unlockSpeech()
-  playBeep()
-  triggerHaptic()
-  speakAnnouncement({ student_name: '測試', classroom_name: '小班' })
+  cancelPendingSpeech()
+  playAlert({ student_name: '測試', classroom_name: '小班' })
 }
 
 const reloadPage = () => location.reload()

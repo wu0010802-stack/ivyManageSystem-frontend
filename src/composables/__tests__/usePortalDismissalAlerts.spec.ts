@@ -26,9 +26,14 @@ class MockWS {
 }
 
 // ── mock AudioContext ──
+// createOscillator 用 spy 計數，供「雙音門鈴建兩個 oscillator」斷言
+const createOscillatorSpy = vi.fn(() => ({
+  type: '', frequency: { value: 0, setValueAtTime: vi.fn() },
+  connect: () => ({ connect: vi.fn() }), start: vi.fn(), stop: vi.fn(),
+}))
 class MockAudioCtx {
   state = 'running'; currentTime = 0
-  createOscillator() { return { type: '', frequency: { value: 0 }, connect: () => ({ connect: vi.fn() }), start: vi.fn(), stop: vi.fn() } }
+  createOscillator() { return createOscillatorSpy() }
   createGain() { return { gain: { setValueAtTime: vi.fn(), linearRampToValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() }, connect: vi.fn() } }
   resume() { return Promise.resolve() }
   close() { return Promise.resolve() }
@@ -38,10 +43,15 @@ class MockAudioCtx {
 // ── mock SpeechSynthesis ──
 const speakMock = vi.fn()
 const cancelMock = vi.fn()
+// 預設裝置同時有 zh-TW 與 en-US voice；個別測試可 override 模擬缺 voice / 尚未載入
+const DEFAULT_VOICES = [{ name: 'Mei-Jia', lang: 'zh-TW' }, { name: 'Samantha', lang: 'en-US' }]
+const getVoicesMock = vi.fn(() => DEFAULT_VOICES)
 class MockUtterance {
   text = ''
   lang = ''
   volume = 1
+  rate = 1
+  voice: unknown = null
   constructor(t?: string) { this.text = t ?? '' }
 }
 
@@ -52,7 +62,10 @@ beforeEach(() => {
   vi.stubGlobal('AudioContext', MockAudioCtx as unknown as typeof AudioContext)
   speakMock.mockClear()
   cancelMock.mockClear()
-  vi.stubGlobal('speechSynthesis', { speak: speakMock, cancel: cancelMock })
+  createOscillatorSpy.mockClear()
+  getVoicesMock.mockClear()
+  getVoicesMock.mockImplementation(() => DEFAULT_VOICES)
+  vi.stubGlobal('speechSynthesis', { speak: speakMock, cancel: cancelMock, getVoices: getVoicesMock })
   vi.stubGlobal('SpeechSynthesisUtterance', MockUtterance as unknown as typeof SpeechSynthesisUtterance)
   localStorage.clear()
 })
@@ -189,17 +202,19 @@ describe('usePortalDismissalAlerts', () => {
     expect(activeCalls.value.some((c) => c.id === 7)).toBe(false)
   })
 
-  it('speakAnnouncement 唸兩段：zh-TW「班級 名」+ en-US「time to go home」', async () => {
+  it('speakAnnouncement 唸兩段且各段挑對應語言 voice：zh 段中文 voice + en 段英文 voice', async () => {
     const m = await import('@/composables/usePortalDismissalAlerts')
     const { speakAnnouncement } = m.usePortalDismissalAlerts()
     speakAnnouncement({ student_name: '小明', classroom_name: '幼幼班' })
     expect(speakMock).toHaveBeenCalledTimes(2)
-    const first = speakMock.mock.calls[0][0] as { text: string; lang: string }
-    const second = speakMock.mock.calls[1][0] as { text: string; lang: string }
+    const first = speakMock.mock.calls[0][0] as { text: string; lang: string; voice: { lang: string } }
+    const second = speakMock.mock.calls[1][0] as { text: string; lang: string; voice: { lang: string } }
     expect(first.text).toBe('幼幼班 小明')
     expect(first.lang).toBe('zh-TW')
+    expect(first.voice.lang).toBe('zh-TW') // 顯式挑中文 voice，不用錯語言嗓子唸中文
     expect(second.text).toBe('time to go home')
     expect(second.lang).toBe('en-US')
+    expect(second.voice.lang).toBe('en-US')
   })
 
   it('speakAnnouncement 班級缺只唸名字；名字也缺唸「學生」', async () => {
@@ -228,7 +243,7 @@ describe('usePortalDismissalAlerts', () => {
     expect(speakMock).not.toHaveBeenCalled()
   })
 
-  it('dismissal_call_created → beep 後 350ms 觸發語音播報', async () => {
+  it('dismissal_call_created → beep 後 450ms 觸發語音播報（門鈴響完再唸，不重疊）', async () => {
     vi.useFakeTimers()
     try {
       const m = await import('@/composables/usePortalDismissalAlerts')
@@ -237,8 +252,11 @@ describe('usePortalDismissalAlerts', () => {
       lastWs!.emit({ type: 'dismissal_call_created', payload: { id: 11, student_name: '小安', classroom_name: '小班', status: 'pending' } })
       // 事件當下：beep 已同步播；語音尚未（先 beep 再唸）
       expect(speakMock).not.toHaveBeenCalled()
-      // 推進 350ms → 語音播報
+      // 350ms 時門鈴尚未讓位（避免與 beep 重疊）
       vi.advanceTimersByTime(350)
+      expect(speakMock).not.toHaveBeenCalled()
+      // 累計 450ms → 語音播報
+      vi.advanceTimersByTime(100)
       expect(speakMock).toHaveBeenCalledTimes(2) // 2 = zh-TW 段 + en-US 段
       expect((speakMock.mock.calls[0][0] as { text: string }).text).toBe('小班 小安')
     } finally {
@@ -264,8 +282,75 @@ describe('usePortalDismissalAlerts', () => {
       lastWs!.emit({ type: 'dismissal_call_created', payload: { id: 99, student_name: '小天', classroom_name: '小班', status: 'pending' } })
       m.teardownPortalDismissalAlerts()
       expect(cancelMock).toHaveBeenCalled()
-      vi.advanceTimersByTime(350)
-      expect(speakMock).not.toHaveBeenCalled() // 計時器已被 teardown 清掉，350ms 後不應發聲
+      vi.advanceTimersByTime(450)
+      expect(speakMock).not.toHaveBeenCalled() // 計時器已被 teardown 清掉，450ms 後不應發聲
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('無 zh voice 時跳過中文段，只唸英文（不用錯語言 voice 唸中文）', async () => {
+    getVoicesMock.mockImplementation(() => [{ name: 'Samantha', lang: 'en-US' }])
+    const m = await import('@/composables/usePortalDismissalAlerts')
+    const { speakAnnouncement } = m.usePortalDismissalAlerts()
+    speakAnnouncement({ student_name: '小明', classroom_name: '幼幼班' })
+    expect(speakMock).toHaveBeenCalledTimes(1)
+    const only = speakMock.mock.calls[0][0] as { text: string; lang: string }
+    expect(only.text).toBe('time to go home')
+    expect(only.lang).toBe('en-US')
+  })
+
+  it('getVoices 尚未載入（空清單）→ 退化兩段都唸但不指定 voice（至少有聲音）', async () => {
+    getVoicesMock.mockImplementation(() => [])
+    const m = await import('@/composables/usePortalDismissalAlerts')
+    const { speakAnnouncement } = m.usePortalDismissalAlerts()
+    speakAnnouncement({ student_name: '小明', classroom_name: '幼幼班' })
+    expect(speakMock).toHaveBeenCalledTimes(2)
+    expect((speakMock.mock.calls[0][0] as { voice: unknown }).voice).toBeNull()
+    expect((speakMock.mock.calls[1][0] as { voice: unknown }).voice).toBeNull()
+  })
+
+  it('speakAnnouncement 語速放慢（rate < 1）讓播報更清楚', async () => {
+    const m = await import('@/composables/usePortalDismissalAlerts')
+    const { speakAnnouncement } = m.usePortalDismissalAlerts()
+    speakAnnouncement({ student_name: '小明', classroom_name: '幼幼班' })
+    expect((speakMock.mock.calls[0][0] as { rate: number }).rate).toBeLessThan(1)
+  })
+
+  it('playBeep 為雙音門鈴：建立兩個 oscillator', async () => {
+    const m = await import('@/composables/usePortalDismissalAlerts')
+    const { playBeep } = m.usePortalDismissalAlerts()
+    createOscillatorSpy.mockClear()
+    playBeep()
+    expect(createOscillatorSpy).toHaveBeenCalledTimes(2)
+  })
+
+  it('playAlert：beep 同步播、語音延遲 450ms（測試按鈕與真實通知共用同一序列）', async () => {
+    vi.useFakeTimers()
+    try {
+      const m = await import('@/composables/usePortalDismissalAlerts')
+      const { playAlert } = m.usePortalDismissalAlerts()
+      createOscillatorSpy.mockClear()
+      playAlert({ student_name: '小明', classroom_name: '小班' })
+      expect(createOscillatorSpy).toHaveBeenCalledTimes(2) // beep 立即（雙音）
+      expect(speakMock).not.toHaveBeenCalled()             // 語音尚未
+      vi.advanceTimersByTime(450)
+      expect(speakMock).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('cancelPendingSpeech：清待播計時器 + speechSynthesis.cancel（連點測試不堆疊）', async () => {
+    vi.useFakeTimers()
+    try {
+      const m = await import('@/composables/usePortalDismissalAlerts')
+      const { playAlert, cancelPendingSpeech } = m.usePortalDismissalAlerts()
+      playAlert({ student_name: '小明', classroom_name: '小班' })
+      cancelPendingSpeech()
+      expect(cancelMock).toHaveBeenCalled()
+      vi.advanceTimersByTime(450)
+      expect(speakMock).not.toHaveBeenCalled() // 待播計時器已清，不再發聲
     } finally {
       vi.useRealTimers()
     }

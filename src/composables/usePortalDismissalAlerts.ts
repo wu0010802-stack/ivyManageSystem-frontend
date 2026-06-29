@@ -45,7 +45,10 @@ let gestureHandler: (() => void) | null = null
 let visibilityHandler: (() => void) | null = null
 const WS_MAX_RETRIES = 5
 const WS_LIVENESS_TIMEOUT = 45000
-const SPEECH_LEAD_MS = 350
+// beep（雙音門鈴約 0.43s）響完才唸，避免門鈴尾音與語音重疊
+const SPEECH_LEAD_MS = 450
+// 語速稍慢，班級/名字唸得更清楚
+const SPEECH_RATE = 0.95
 const speechTimers = new Set<ReturnType<typeof setTimeout>>()
 
 // ── 聲音 / 震動 ──
@@ -68,6 +71,12 @@ function unlockAudio(): void {
   } catch { /* 解鎖失敗：audioUnlocked 維持 false，UI 顯示提示 */ }
 }
 
+// 雙音門鈴「叮-咚」（G5 784Hz → C6 1047Hz）：比單音 880Hz sine 悅耳不刺，
+// 也更像「通知音」。柔和包絡，兩音稍微銜接，總長約 0.43s。
+const BEEP_TONES = [
+  { freq: 784, at: 0, dur: 0.16 },     // 叮 G5
+  { freq: 1047, at: 0.15, dur: 0.28 }, // 咚 C6
+]
 function playBeep(): void {
   if (muted.value) return
   try {
@@ -77,16 +86,20 @@ function playBeep(): void {
       audioCtx = new Ctx()
     }
     if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {})
-    const osc = audioCtx.createOscillator()
-    const gain = audioCtx.createGain()
-    osc.type = 'sine'
-    osc.frequency.value = 880
-    gain.gain.setValueAtTime(0, audioCtx.currentTime)
-    gain.gain.linearRampToValueAtTime(0.25, audioCtx.currentTime + 0.02)
-    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.35)
-    osc.connect(gain).connect(audioCtx.destination)
-    osc.start()
-    osc.stop(audioCtx.currentTime + 0.4)
+    const t0 = audioCtx.currentTime
+    for (const tone of BEEP_TONES) {
+      const osc = audioCtx.createOscillator()
+      const gain = audioCtx.createGain()
+      osc.type = 'sine'
+      osc.frequency.value = tone.freq
+      const start = t0 + tone.at
+      gain.gain.setValueAtTime(0, start)
+      gain.gain.linearRampToValueAtTime(0.2, start + 0.02)
+      gain.gain.exponentialRampToValueAtTime(0.001, start + tone.dur)
+      osc.connect(gain).connect(audioCtx.destination)
+      osc.start(start)
+      osc.stop(start + tone.dur + 0.02)
+    }
   } catch { /* ignore */ }
 }
 
@@ -108,20 +121,60 @@ function unlockSpeech(): void {
   } catch { /* 解鎖失敗：維持靜默，beep 仍為保底 */ }
 }
 
+// 挑指定語言的 voice：優先精確匹配（zh-TW / en-US），否則同語系前綴（zh / en）。
+// hasVoices=false 代表 getVoices() 尚未載入（部分瀏覽器首呼回空，需 voiceschanged）。
+function pickVoice(exact: string, prefix: string): { hasVoices: boolean; voice: SpeechSynthesisVoice | null } {
+  let voices: SpeechSynthesisVoice[] = []
+  try { voices = window.speechSynthesis.getVoices?.() || [] } catch { /* ignore */ }
+  if (!voices.length) return { hasVoices: false, voice: null }
+  const voice = voices.find((v) => v.lang === exact)
+    || voices.find((v) => v.lang?.toLowerCase().startsWith(prefix))
+    || null
+  return { hasVoices: true, voice }
+}
+
 // 唸「班級 名」（zh-TW）+「time to go home」(en-US)，拆兩段避免混語發音不正確。
 // 班級/名皆缺退化為「學生」，與 liveAnnounce fallback 一致。
+// 每段顯式挑對應語言 voice：有 voice 清單但挑不到該語言 → 跳過該段（不用錯語言嗓子唸，
+// 否則中文會被英文 voice 唸得很怪）；清單尚未載入（空）→ 退化照唸並設 lang，至少有聲音。
 function speakAnnouncement(call: { student_name?: string; classroom_name?: string }): void {
   if (muted.value) return
   if (!speechSupported()) return
   try {
     const zhText = [call.classroom_name, call.student_name].filter(Boolean).join(' ') || '學生'
-    const zh = new window.SpeechSynthesisUtterance(zhText)
-    zh.lang = 'zh-TW'
-    const en = new window.SpeechSynthesisUtterance('time to go home')
-    en.lang = 'en-US'
-    window.speechSynthesis.speak(zh)
-    window.speechSynthesis.speak(en)
+    const zhPick = pickVoice('zh-TW', 'zh')
+    if (!zhPick.hasVoices || zhPick.voice) {
+      const zh = new window.SpeechSynthesisUtterance(zhText)
+      zh.lang = 'zh-TW'
+      zh.rate = SPEECH_RATE
+      if (zhPick.voice) zh.voice = zhPick.voice
+      window.speechSynthesis.speak(zh)
+    }
+    const enPick = pickVoice('en-US', 'en')
+    if (!enPick.hasVoices || enPick.voice) {
+      const en = new window.SpeechSynthesisUtterance('time to go home')
+      en.lang = 'en-US'
+      en.rate = SPEECH_RATE
+      if (enPick.voice) en.voice = enPick.voice
+      window.speechSynthesis.speak(en)
+    }
   } catch { /* ignore：beep 仍為保底 */ }
+}
+
+// 統一的「響鈴 + 播報」序列：beep 同步先響，SPEECH_LEAD_MS 後才唸（門鈴響完不重疊）。
+// 真實通知（handleWsEvent）與測試按鈕（PortalDismissalCallsView.testSound）共用，時序一致。
+function playAlert(call: { student_name?: string; classroom_name?: string }): void {
+  playBeep()
+  triggerHaptic()
+  const timer = setTimeout(() => { speechTimers.delete(timer); speakAnnouncement(call) }, SPEECH_LEAD_MS)
+  speechTimers.add(timer)
+}
+
+// 清掉所有待播語音（待觸發計時器 + 正在唸的佇列）。測試按鈕連點時先清，避免堆疊。
+function cancelPendingSpeech(): void {
+  speechTimers.forEach(clearTimeout)
+  speechTimers.clear()
+  try { window.speechSynthesis?.cancel() } catch { /* ignore */ }
 }
 
 // navigator.vibrate 在所有 iOS（含 iPhone 上的 LINE in-app WebView）為 no-op；
@@ -235,11 +288,7 @@ function handleWsEvent(event: { type: string; payload: DismissalCall }): void {
   if (type === 'dismissal_call_created') {
     activeCalls.value.unshift(payload)
     notifyBrowser(payload)
-    playBeep()
-    triggerHaptic()
-    // 先 beep 再唸：延遲讓 0.4s beep 明確先行
-    const timer = setTimeout(() => { speechTimers.delete(timer); speakAnnouncement(payload) }, SPEECH_LEAD_MS)
-    speechTimers.add(timer)
+    playAlert(payload)
     liveAnnounce.value = `新接送通知：${payload.student_name || '學生'}${payload.classroom_name ? `（${payload.classroom_name}）` : ''} 等待接送`
   } else if (type === 'dismissal_call_updated') {
     const idx = activeCalls.value.findIndex((c) => c.id === payload.id)
@@ -284,9 +333,7 @@ export function teardownPortalDismissalAlerts(): void {
   ws = null
   if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null }
   clearLiveness()
-  speechTimers.forEach(clearTimeout)
-  speechTimers.clear()
-  try { window.speechSynthesis?.cancel() } catch { /* ignore */ }
+  cancelPendingSpeech()
   stopPolling()
   if (gestureHandler) { document.removeEventListener('pointerdown', gestureHandler, { capture: true } as EventListenerOptions); gestureHandler = null }
   if (visibilityHandler) { document.removeEventListener('visibilitychange', visibilityHandler); visibilityHandler = null }
@@ -307,6 +354,6 @@ export function usePortalDismissalAlerts() {
   return {
     activeCalls, sortedCalls, pendingCount, loading, liveAnnounce,
     wsConnected, connectionState, muted, audioUnlocked, notificationSupported,
-    toggleMute, unlockAudio, unlockSpeech, playBeep, speakAnnouncement, triggerHaptic, fetchCalls,
+    toggleMute, unlockAudio, unlockSpeech, playBeep, speakAnnouncement, playAlert, cancelPendingSpeech, triggerHaptic, fetchCalls,
   }
 }
