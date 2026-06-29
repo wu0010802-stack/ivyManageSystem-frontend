@@ -28,7 +28,9 @@ const {
   notificationSupported,
   toggleMute,
   unlockAudio,
+  unlockSpeech,
   playBeep,
+  speakAnnouncement,
   triggerHaptic,
   fetchCalls,
 } = usePortalDismissalAlerts()
@@ -42,11 +44,13 @@ const notificationPermitted = computed(() => {
   try { return Notification.permission === 'granted' } catch { return false }
 })
 
-// ─── 測試聲音：user gesture 解鎖 AudioContext + 確認聽得到 ──
+// ─── 測試聲音：user gesture 解鎖 AudioContext + speechSynthesis + 確認聽得到 ──
 const testSound = () => {
   unlockAudio()
+  unlockSpeech()
   playBeep()
   triggerHaptic()
+  speakAnnouncement({ student_name: '測試', classroom_name: '小班' })
 }
 
 const reloadPage = () => location.reload()
