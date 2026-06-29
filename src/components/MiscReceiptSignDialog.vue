@@ -74,7 +74,7 @@
 import { ref, watch, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import { UploadFilled } from '@element-plus/icons-vue'
-import { signMiscReceipt } from '../api/miscReceipt'
+import { signMiscReceipt } from '@/api/miscReceipt'
 import { compressImageToDataUrl } from '@/utils/imageCompress'
 
 const props = withDefaults(defineProps<{

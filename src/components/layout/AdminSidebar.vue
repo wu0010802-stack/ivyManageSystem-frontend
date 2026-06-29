@@ -313,7 +313,7 @@ const hasVisibleStudentItems = computed(() =>
 
 const hasVisibleAdminItems = computed(() =>
   canView.value.ANNOUNCEMENTS_READ || canView.value.CALENDAR ||
-  canView.value.VENDOR_PAYMENT_READ
+  canView.value.VENDOR_PAYMENT_READ || canView.value.MISC_RECEIPT_READ
 )
 
 const hasVisibleActivityItems = computed(() =>
