@@ -16,7 +16,7 @@
 
     <el-tabs v-model="activeTab" class="admissions-tabs" @tab-change="onTabChange">
       <el-tab-pane label="漏斗看板" name="funnel">
-        <FunnelBoard />
+        <FunnelBoard :dashboard="dashboard" />
       </el-tab-pane>
       <el-tab-pane label="訪視明細" name="records" lazy>
         <AdmissionsRecordsPanel
