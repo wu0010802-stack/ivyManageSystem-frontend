@@ -40,6 +40,7 @@ import {
   registerCourses,
   confirmPromotion,
   getUpcomingSessions,
+  myRegistrations,
 } from '@/parent/api/activity'
 import ActivityView from '@/parent/views/ActivityView.vue'
 
@@ -90,6 +91,39 @@ describe('ActivityView 報名/轉正後刷新 upcoming sessions', () => {
 
     expect(confirmPromotion).toHaveBeenCalledWith(5, 10)
     expect(getUpcomingSessions).toHaveBeenCalled()
+    w.unmount()
+  })
+
+  // Low（2026-06-29 稽核 finding 4）：onConfirmPromotion 的 finally 在未 await 的
+  // Promise.all 刷新前就清 confirmingKey → 慢網路下舊「確認」按鈕提早恢復，
+  // 二次點擊命中已轉正的課程得到 409。修法：await 刷新後再解鎖。
+  it('轉正確認：刷新完成前 confirmingKey 不解鎖（消除重複送出窗口）', async () => {
+    // 讓 fetchMy 的 myRegistrations 維持 pending，模擬慢網路刷新
+    let resolveMy
+    myRegistrations.mockImplementationOnce(
+      () =>
+        new Promise((r) => {
+          resolveMy = r
+        }),
+    )
+
+    const w = mountView()
+    await flushPromises()
+
+    // 啟動轉正確認（不 await，刷新階段 myRegistrations 仍 pending）
+    const p = w.vm.onConfirmPromotion({ id: 5, courses: [] }, { course_id: 10 })
+    await flushPromises()
+
+    // 刷新尚未完成 → confirmingKey 必須仍鎖住（修前：finally 已提早清成 null）
+    expect(w.vm.confirmingKey).toBe('5:10')
+
+    // 解開刷新 → Promise.all 完成 → onConfirmPromotion resolve
+    resolveMy({ data: { items: [], total: 0 } })
+    await p
+    await flushPromises()
+
+    // 刷新完成後才解鎖
+    expect(w.vm.confirmingKey).toBe(null)
     w.unmount()
   })
 })

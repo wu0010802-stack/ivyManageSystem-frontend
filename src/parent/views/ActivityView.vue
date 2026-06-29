@@ -321,8 +321,10 @@ async function onConfirmPromotion(reg: Registration, rc: RegCourse) {
   try {
     await confirmPromotion(reg.id, rc.course_id)
     toast.success('已確認轉正式')
-    // 轉正會佔用容量 + 影響 hero 即將開課 → 並行重抓課程清單與 upcoming sessions
-    Promise.all([fetchMy(), fetchCourses(), fetchUpcoming()])
+    // 轉正會佔用容量 + 影響 hero 即將開課 → 並行重抓課程清單與 upcoming sessions。
+    // 稽核 finding 4：await 刷新後才在 finally 解鎖，避免慢網路下舊「確認」按鈕在
+    // 列表尚未更新前提早恢復、二次點擊命中已轉正課程得到 409。
+    await Promise.all([fetchMy(), fetchCourses(), fetchUpcoming()])
   } catch (err: unknown) {
     const e = err as Record<string, unknown>
     toast.error(String(e?.displayMessage || '確認失敗'))
@@ -401,7 +403,8 @@ async function pullRefresh() {
           複製連結
         </button>
       </div>
-      <div v-if="!regsLoading && filteredRegs.length === 0" class="pt-empty">
+      <MobileErrorRetry v-if="loadError" @retry="fetchBootstrap" />
+      <div v-else-if="!regsLoading && filteredRegs.length === 0" class="pt-empty">
         <div class="pt-empty-title">尚無報名</div>
       </div>
       <RegistrationStatusList

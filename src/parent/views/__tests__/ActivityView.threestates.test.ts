@@ -149,6 +149,35 @@ describe('ActivityView 三態（Task 7）', () => {
     w.unmount()
   })
 
+  it('首屏（預設「我的報名」分頁）fetch 失敗：顯示 MobileErrorRetry，不誤顯「尚無報名」', async () => {
+    // 稽核 2026-06-29 finding 3：預設停在 my 分頁，首屏失敗時舊版只在 new 分頁有
+    // 錯誤+重試，my 分頁卻顯示「尚無報名」空狀態 → 家長誤以為沒報名且無法重試。
+    bootstrapMock
+      .mockRejectedValueOnce({ displayMessage: '網路錯誤' })
+      .mockResolvedValueOnce(SUCCESS_RESP)
+
+    setActivePinia(createPinia())
+    const ActivityView = (await import('@/parent/views/ActivityView.vue')).default
+    const w = mount(ActivityView, {
+      global: { stubs: STUBS },
+    })
+    await flushPromises()
+
+    // 不切 tab：預設停在「我的報名」分頁
+    const errComp = w.findComponent({ name: 'MobileErrorRetry' })
+    expect(errComp.exists()).toBe(true)
+    // 不可誤顯「尚無報名」空狀態
+    expect(w.text()).not.toContain('尚無報名')
+
+    // 點重試 → 重新呼叫 bootstrap、成功後錯誤元件消失
+    await errComp.find('button').trigger('click')
+    await flushPromises()
+    expect(bootstrapMock).toHaveBeenCalledTimes(2)
+    expect(w.findComponent({ name: 'MobileErrorRetry' }).exists()).toBe(false)
+
+    w.unmount()
+  })
+
   it('成功載入後 SkeletonBlock 消失、顯示正常課程區', async () => {
     bootstrapMock.mockResolvedValue(SUCCESS_RESP)
 
