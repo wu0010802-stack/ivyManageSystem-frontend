@@ -323,6 +323,18 @@ export default defineConfig({
 
                 runtimeCaching: [
                     {
+                        // Google Fonts（跨 origin）：CacheFirst，opaque 回應允許快取
+                        urlPattern: ({ url }) =>
+                            url.origin === 'https://fonts.googleapis.com' ||
+                            url.origin === 'https://fonts.gstatic.com',
+                        handler: 'CacheFirst',
+                        options: {
+                            cacheName: 'google-fonts',
+                            expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 365 },
+                            cacheableResponse: { statuses: [0, 200] },
+                        },
+                    },
+                    {
                         urlPattern: ({ url, request }) =>
                             url.origin === self.location.origin &&
                             url.pathname.startsWith('/assets/') &&
