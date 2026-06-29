@@ -21,6 +21,14 @@ describe('downloadFile', () => {
     await downloadFile('/exports/salary')
     expect(ElMessage.error).toHaveBeenCalledWith('本月薪資尚未封存')
   })
+  it('下載成功回傳 true（呼叫端可據此判定成敗）', async () => {
+    get.mockResolvedValueOnce({ data: new Blob(['x']), headers: {} })
+    expect(await downloadFile('/exports/salary')).toBe(true)
+  })
+  it('下載失敗回傳 false（呼叫端不可誤判為成功）', async () => {
+    get.mockRejectedValueOnce(Object.assign(new Error('boom'), { displayMessage: '本月薪資尚未封存' }))
+    expect(await downloadFile('/exports/salary')).toBe(false)
+  })
   it('帶 params 時傳給 axios get', async () => {
     get.mockResolvedValue({ data: new Blob(['x']), headers: {} })
     await downloadFile('/exports/employees', '員工名冊.xlsx', { search: '王' })

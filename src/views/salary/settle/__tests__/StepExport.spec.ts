@@ -59,15 +59,26 @@ describe('StepExport', () => {
         expect(wrapper.text()).toContain('尚有 1 筆未封存')
     })
 
-    it('匯出轉帳名冊 → downloadFile 帶 type 與檔名；匯出後顯示完成卡', async () => {
+    it('匯出轉帳名冊成功 → downloadFile 帶 type 與檔名；匯出後顯示完成卡', async () => {
+        downloadFileMock.mockResolvedValueOnce(true)
         const wrapper = mountStep(makeSettlement([rec()]))
         const btn = wrapper.findAll('button').find((b) => b.text().includes('節慶獎金名冊'))
         await btn!.trigger('click')
+        await flushPromises()
         expect(downloadFileMock).toHaveBeenCalledWith(
             '/salaries/2026/5/transfer-roster?type=festival',
             '2026年05月_節慶獎金轉帳名冊.xlsx',
         )
         expect(wrapper.text()).toContain('本月結薪完成')
+    })
+
+    it('匯出轉帳名冊失敗（downloadFile 回 false）→ 不顯示完成卡（避免誤判結薪完成）', async () => {
+        downloadFileMock.mockResolvedValueOnce(false)
+        const wrapper = mountStep(makeSettlement([rec()]))
+        const btn = wrapper.findAll('button').find((b) => b.text().includes('節慶獎金名冊'))
+        await btn!.trigger('click')
+        await flushPromises()
+        expect(wrapper.text()).not.toContain('本月結薪完成')
     })
 
     it('重型匯出進行中再點不重送（await + loading 守衛，薪資全員匯出慢易誤點重複）', async () => {
