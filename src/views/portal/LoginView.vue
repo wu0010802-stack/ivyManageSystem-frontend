@@ -174,7 +174,11 @@ const handleLogin = async () => {
 .brand-mark {
   width: min(100%, 440px);
   aspect-ratio: 1 / 1;
-  background: url('/images/login-bg.jpg') center / contain no-repeat;
+  /* 去背 logo：外圍白底已移除為透明，圖案直接貼合頁面背景、不再有白方框。
+   * 輕微降飽和與對比、微提亮讓童趣配色更溫潤；柔和暖色投影呼應教師端奶油黃背景。 */
+  background: url('/images/login-logo.png') center / contain no-repeat;
+  filter: saturate(0.92) contrast(0.96) brightness(1.03)
+    drop-shadow(0 6px 18px rgba(120, 104, 52, 0.14));
 }
 
 .login-panel {
