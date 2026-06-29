@@ -9,6 +9,9 @@ vi.mock('vue-router', async () => {
   return { ...actual, useRoute: () => ({ params: { threadId: '1' } }) }
 })
 
+// useKeyboardInset：解耦 Task 1，mock 回傳 keyboardInset=0
+vi.mock('../../composables/useKeyboardInset', () => ({ useKeyboardInset: () => ({ keyboardInset: ref(0) }) }))
+
 // messages store（可控 messages）
 const messageItems = ref<{ id: number }[]>([])
 vi.mock('../../stores/messages', () => ({
@@ -42,5 +45,20 @@ describe('MessageThreadView 自動捲底 + route', () => {
     messageItems.value = [{ id: 1 }, { id: 2 }, { id: 3 }]
     await nextTick(); await nextTick()
     expect(el.scrollTop).toBe(1500)
+  })
+
+  it('loadMore 時不捲底（保留閱讀位置）', async () => {
+    const wrapper = mount(MessageThreadView, { global: { stubs } })
+    await flushPromises()
+    const el = wrapper.find('.messages').element as HTMLElement
+    // 設 loadingMore=true（載入更早訊息）
+    (wrapper.vm as any).loadingMore = true
+    // 記錄初始 scrollTop
+    const beforeScrollTop = el.scrollTop
+    // 追加舊訊息（前面）
+    messageItems.value = [{ id: 0 }, ...messageItems.value]
+    await nextTick(); await nextTick()
+    // 驗證未自動捲底（scrollTop 應保持不變）
+    expect(el.scrollTop).toBe(beforeScrollTop)
   })
 })
