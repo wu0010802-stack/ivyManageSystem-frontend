@@ -75,6 +75,9 @@ async function fetchSupplies() {
     supplies.value = (res.data as { supplies: Supply[] }).supplies
   } catch {
     if (seq !== fetchSeq) return
+    // F4：載入失敗須清空清單，否則切學期失敗時畫面留著上一學期的資料且編輯/停用
+    // 按鈕仍可操作（學期選擇器顯示新學期但資料屬舊學期），易誤改到舊學期資料。
+    supplies.value = []
     ElMessage.error('載入失敗')
   } finally {
     if (seq === fetchSeq) loading.value = false

@@ -14538,9 +14538,9 @@ export interface components {
             amount: number;
             /**
              * Idempotency Key
-             * @description 冪等 key（8-64 英數/底線/連字號）；同 key 在 10 分鐘內視為重試並回傳先前結果
+             * @description 冪等 key（8-64 英數/底線/連字號，必填）；同 key 在 10 分鐘內視為重試並回傳先前結果。Finding #1：所有金流寫入強制帶 key，移除模糊的內容式去重。
              */
-            idempotency_key?: string | null;
+            idempotency_key: string;
             /**
              * Notes
              * @default
@@ -22969,9 +22969,9 @@ export interface components {
         POSCheckoutRequest: {
             /**
              * Idempotency Key
-             * @description 冪等 key，同 key 在 10 分鐘內重送視為重試，回傳先前結果
+             * @description 冪等 key（必填），同 key 在 10 分鐘內重送視為重試，回傳先前結果。Finding #1：POS 結帳強制帶 key，移除無-key 內容式去重。
              */
-            idempotency_key?: string | null;
+            idempotency_key: string;
             /** Items */
             items: components["schemas"]["POSCheckoutItem"][];
             /**

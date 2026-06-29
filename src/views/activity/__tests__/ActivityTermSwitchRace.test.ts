@@ -167,3 +167,96 @@ describe('課程/用品切換學期舊回應覆蓋守衛（F5）', () => {
     wrapper.unmount()
   })
 })
+
+// 第四輪才藝 review F4（中）：切換學期時若最新請求載入失敗，畫面只顯示錯誤、
+// 沒有清掉上一學期的清單，編輯/停用按鈕仍可操作 → 學期選擇器顯示新學期但資料
+// 屬於舊學期，可能誤改到舊學期資料。修正：非過期的載入失敗須清空清單。
+describe('課程/用品切換學期載入失敗清空舊資料（F4）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('fetchCourses：最新請求載入失敗時清空舊學期清單', async () => {
+    const resolvers: Array<(v: unknown) => void> = []
+    const rejecters: Array<(e: unknown) => void> = []
+    vi.mocked(getCourses).mockImplementation(
+      () =>
+        new Promise((resolve, reject) => {
+          resolvers.push(resolve as (v: unknown) => void)
+          rejecters.push(reject)
+        }) as any,
+    )
+
+    const wrapper = mount(ActivityCourseView, MOUNT_OPTS)
+    // 初次載入：舊學期有資料
+    resolvers[0]({ data: { courses: [{ id: 1, name: '舊學期課' }] } })
+    await flushPromises()
+    const setup = setupOf(wrapper)
+    expect((setup.courses as unknown[]).length).toBe(1)
+
+    // 切到新學期，新請求載入失敗 → 必須清空舊學期清單（不留可操作的舊資料）
+    const p = setup.fetchCourses()
+    rejecters[1](new Error('500'))
+    await p
+    await flushPromises()
+
+    expect(setup.courses as unknown[]).toEqual([])
+    wrapper.unmount()
+  })
+
+  it('fetchCourses：過期（較舊）請求失敗不得清掉較新請求的資料', async () => {
+    const resolvers: Array<(v: unknown) => void> = []
+    const rejecters: Array<(e: unknown) => void> = []
+    vi.mocked(getCourses).mockImplementation(
+      () =>
+        new Promise((resolve, reject) => {
+          resolvers.push(resolve as (v: unknown) => void)
+          rejecters.push(reject)
+        }) as any,
+    )
+
+    const wrapper = mount(ActivityCourseView, MOUNT_OPTS)
+    resolvers[0]({ data: { courses: [] } })
+    await flushPromises()
+    const setup = setupOf(wrapper)
+
+    const p1 = setup.fetchCourses() // 舊請求
+    const p2 = setup.fetchCourses() // 新請求（較新）
+    // 新請求先回成功資料
+    resolvers[2]({ data: { courses: [{ id: 9, name: '新學期課' }] } })
+    // 舊請求後失敗 → 過期，不得清掉新資料
+    rejecters[1](new Error('500'))
+    await Promise.all([p1, p2])
+    await flushPromises()
+
+    const names = (setup.courses as Array<{ name: string }>).map(c => c.name)
+    expect(names).toEqual(['新學期課'])
+    wrapper.unmount()
+  })
+
+  it('fetchSupplies：最新請求載入失敗時清空舊學期清單', async () => {
+    const resolvers: Array<(v: unknown) => void> = []
+    const rejecters: Array<(e: unknown) => void> = []
+    vi.mocked(getSupplies).mockImplementation(
+      () =>
+        new Promise((resolve, reject) => {
+          resolvers.push(resolve as (v: unknown) => void)
+          rejecters.push(reject)
+        }) as any,
+    )
+
+    const wrapper = mount(ActivitySupplyView, MOUNT_OPTS)
+    resolvers[0]({ data: { supplies: [{ id: 1, name: '舊學期品', price: 20 }] } })
+    await flushPromises()
+    const setup = setupOf(wrapper)
+    expect((setup.supplies as unknown[]).length).toBe(1)
+
+    const p = setup.fetchSupplies()
+    rejecters[1](new Error('500'))
+    await p
+    await flushPromises()
+
+    expect(setup.supplies as unknown[]).toEqual([])
+    wrapper.unmount()
+  })
+})
