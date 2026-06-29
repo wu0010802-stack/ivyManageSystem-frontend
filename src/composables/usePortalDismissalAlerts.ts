@@ -88,6 +88,40 @@ function playBeep(): void {
   } catch { /* ignore */ }
 }
 
+// ── 語音播報（Web Speech API，best-effort；beep 為不支援時的保底）──
+function speechSupported(): boolean {
+  return typeof window !== 'undefined'
+    && typeof window.speechSynthesis !== 'undefined'
+    && typeof window.SpeechSynthesisUtterance === 'function'
+}
+
+// iOS Safari 與 AudioContext 同樣需在首次 user gesture 內解鎖 speechSynthesis，
+// 否則之後的 speak() 永不發聲。LINE in-app WebView 多半不支援，feature-detect no-op。
+function unlockSpeech(): void {
+  if (!speechSupported()) return
+  try {
+    const u = new window.SpeechSynthesisUtterance('')
+    u.volume = 0
+    window.speechSynthesis.speak(u)
+  } catch { /* 解鎖失敗：維持靜默，beep 仍為保底 */ }
+}
+
+// 唸「班級 名」（zh-TW）+「time to go home」(en-US)，拆兩段避免混語發音不正確。
+// 班級/名皆缺退化為「學生」，與 liveAnnounce fallback 一致。
+function speakAnnouncement(call: { student_name?: string; classroom_name?: string }): void {
+  if (muted.value) return
+  if (!speechSupported()) return
+  try {
+    const zhText = [call.classroom_name, call.student_name].filter(Boolean).join(' ') || '學生'
+    const zh = new window.SpeechSynthesisUtterance(zhText)
+    zh.lang = 'zh-TW'
+    const en = new window.SpeechSynthesisUtterance('time to go home')
+    en.lang = 'en-US'
+    window.speechSynthesis.speak(zh)
+    window.speechSynthesis.speak(en)
+  } catch { /* ignore：beep 仍為保底 */ }
+}
+
 // navigator.vibrate 在所有 iOS（含 iPhone 上的 LINE in-app WebView）為 no-op；
 // 僅 Android 有效，不可當 iOS 可靠提醒手段（iOS 主提醒 = beep + 前景視覺）。
 function triggerHaptic(): void {
@@ -251,6 +285,6 @@ export function usePortalDismissalAlerts() {
   return {
     activeCalls, sortedCalls, pendingCount, loading, liveAnnounce,
     wsConnected, connectionState, muted, audioUnlocked, notificationSupported,
-    toggleMute, unlockAudio, playBeep, triggerHaptic, fetchCalls,
+    toggleMute, unlockAudio, unlockSpeech, playBeep, speakAnnouncement, triggerHaptic, fetchCalls,
   }
 }

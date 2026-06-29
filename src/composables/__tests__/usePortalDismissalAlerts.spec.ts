@@ -35,11 +35,25 @@ class MockAudioCtx {
   get destination() { return {} }
 }
 
+// ── mock SpeechSynthesis ──
+const speakMock = vi.fn()
+const cancelMock = vi.fn()
+class MockUtterance {
+  text = ''
+  lang = ''
+  volume = 1
+  constructor(t?: string) { this.text = t ?? '' }
+}
+
 beforeEach(() => {
   getCallsMock.mockClear()
   lastWs = null
   vi.stubGlobal('WebSocket', MockWS as unknown as typeof WebSocket)
   vi.stubGlobal('AudioContext', MockAudioCtx as unknown as typeof AudioContext)
+  speakMock.mockClear()
+  cancelMock.mockClear()
+  vi.stubGlobal('speechSynthesis', { speak: speakMock, cancel: cancelMock })
+  vi.stubGlobal('SpeechSynthesisUtterance', MockUtterance as unknown as typeof SpeechSynthesisUtterance)
   localStorage.clear()
 })
 afterEach(async () => {
@@ -172,5 +186,44 @@ describe('usePortalDismissalAlerts', () => {
     expect(activeCalls.value.some((c) => c.id === 7)).toBe(true)
     lastWs!.emit({ type: 'dismissal_call_cancelled', payload: { id: 7 } })
     expect(activeCalls.value.some((c) => c.id === 7)).toBe(false)
+  })
+
+  it('speakAnnouncement 唸兩段：zh-TW「班級 名」+ en-US「time to go home」', async () => {
+    const m = await import('@/composables/usePortalDismissalAlerts')
+    const { speakAnnouncement } = m.usePortalDismissalAlerts()
+    speakAnnouncement({ student_name: '小明', classroom_name: '幼幼班' })
+    expect(speakMock).toHaveBeenCalledTimes(2)
+    const first = speakMock.mock.calls[0][0] as { text: string; lang: string }
+    const second = speakMock.mock.calls[1][0] as { text: string; lang: string }
+    expect(first.text).toBe('幼幼班 小明')
+    expect(first.lang).toBe('zh-TW')
+    expect(second.text).toBe('time to go home')
+    expect(second.lang).toBe('en-US')
+  })
+
+  it('speakAnnouncement 班級缺只唸名字；名字也缺唸「學生」', async () => {
+    const m = await import('@/composables/usePortalDismissalAlerts')
+    const { speakAnnouncement } = m.usePortalDismissalAlerts()
+    speakAnnouncement({ student_name: '小華' })
+    expect((speakMock.mock.calls[0][0] as { text: string }).text).toBe('小華')
+    speakMock.mockClear()
+    speakAnnouncement({})
+    expect((speakMock.mock.calls[0][0] as { text: string }).text).toBe('學生')
+  })
+
+  it('muted 時 speakAnnouncement 不唸', async () => {
+    const m = await import('@/composables/usePortalDismissalAlerts')
+    const { speakAnnouncement, toggleMute } = m.usePortalDismissalAlerts()
+    toggleMute() // muted = true
+    speakAnnouncement({ student_name: '小明', classroom_name: '幼幼班' })
+    expect(speakMock).not.toHaveBeenCalled()
+  })
+
+  it('speechSynthesis 不存在時 speakAnnouncement 安全 no-op（不 throw）', async () => {
+    vi.stubGlobal('speechSynthesis', undefined)
+    const m = await import('@/composables/usePortalDismissalAlerts')
+    const { speakAnnouncement } = m.usePortalDismissalAlerts()
+    expect(() => speakAnnouncement({ student_name: '小明', classroom_name: '幼幼班' })).not.toThrow()
+    expect(speakMock).not.toHaveBeenCalled()
   })
 })
