@@ -280,6 +280,10 @@ const classroomOptions = ref<string[]>([])
 // 必須保存並顯示，否則對帳者會把部分合計誤當全學期總計而靜默少算。
 const truncated = ref<boolean>(false)
 const totalActive = ref<number>(0)
+// 請求序號守衛（2026-06-29 audit F3）：切學期 / 快速切篩選會連發 reload，較慢回應的
+// 舊請求不得最後覆寫較新請求的 items/totals/truncated/totalActive（否則選擇器顯示新
+// 學期、金額卻屬舊學期）。僅最新 seq 的回應（成功或失敗）能寫入狀態。
+let reloadSeq = 0
 
 const filters = reactive<{
   classroom_name: string
@@ -307,6 +311,7 @@ function formatDate(iso: string | null | undefined) {
 }
 
 async function reload() {
+  const seq = ++reloadSeq
   loading.value = true
   try {
     const params: Record<string, unknown> = {
@@ -317,6 +322,8 @@ async function reload() {
     if (filters.payment_status) params.payment_status = filters.payment_status
     if (filters.approval_status) params.approval_status = filters.approval_status
     const res = await getPOSSemesterReconciliation(params)
+    // 較新請求已發出 → 丟棄本（過時）回應，不覆寫狀態
+    if (seq !== reloadSeq) return
     const resData = res.data as {
       items?: Record<string, unknown>[]
       totals?: Record<string, unknown>
@@ -328,6 +335,7 @@ async function reload() {
     truncated.value = resData?.truncated === true
     totalActive.value = resData?.total_active ?? items.value.length
   } catch (err) {
+    if (seq !== reloadSeq) return
     items.value = []
     totals.value = {}
     truncated.value = false
@@ -335,7 +343,7 @@ async function reload() {
     const axiosErr = err as { response?: { data?: { detail?: string } } }
     ElMessage.error(axiosErr?.response?.data?.detail || '讀取學期對帳失敗')
   } finally {
-    loading.value = false
+    if (seq === reloadSeq) loading.value = false
   }
 }
 

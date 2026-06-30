@@ -172,8 +172,13 @@ export function useActivityRegistration() {
         classroomOptionsLoaded.value = true
       }
     } catch {
-      if (seq === loadOptionsSeq.value)
+      if (seq === loadOptionsSeq.value) {
+        // 失敗時清空 courseOptions（2026-06-29 audit F4）：切學期載入失敗若保留舊課程，
+        // 篩選器與「新增課程」視窗會展示錯誤學期的選項（後端雖拒跨學期寫入不致錯帳，
+        // 但不應誤導操作者）。classroomOptions 非學期專屬、且只載一次，保留不動。
+        courseOptions.value = []
         ElMessage.warning('篩選選項載入失敗，部分篩選功能暫不可用')
+      }
     }
   }
 

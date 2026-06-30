@@ -290,28 +290,39 @@ export function usePOSCheckout() {
   }
 
   /**
-   * 退費模式：以後端建議值（按出席堂數三段比例）覆寫 buildSelection 的全額預填，
-   * 避免簽核者盲簽「全額已繳」造成超退（2026-06-29 audit P2-B）。
-   * seq 守衛防快速切換選取時舊建議覆寫；載入失敗則保留 buildSelection 的 paid fallback。
+   * 退費模式：以後端「剩餘建議額」（remaining_suggested_amount = 按出席比例建議總額
+   * 扣已退、夾 0）覆寫 buildSelection 的全額預填，避免簽核者盲簽「全額已繳」造成超退
+   * （2026-06-29 audit P2-B）；多次退費時不會把累積建議總額重複預填（audit F1）。
+   * seq 守衛防快速切換選取時舊建議覆寫。
+   * fail-closed（audit F2）：載入失敗或回應缺 remaining_suggested_amount 時，不再保留
+   * buildSelection 的全額 paid fallback，改歸 0 + 警告，強制人工輸入金額（amount_applied
+   * <=0 時 canSubmit 為 false，送出鈕被擋）。
    */
   async function applyRefundSuggestion(registrationId: unknown) {
     const seq = ++refundSuggestionSeq
     refundSuggestionLoading.value = true
+    // 仍是同一筆選取、且無較新請求才套用（成功 / 失敗共用守衛）
+    const stillCurrent = () =>
+      seq === refundSuggestionSeq &&
+      !!selectedItem.value &&
+      Number(selectedItem.value.id) === Number(registrationId)
+    const failClosed = () => {
+      if (!stillCurrent()) return
+      selectedItem.value = { ...selectedItem.value!, amount_applied: 0 }
+      ElMessage.warning('退費建議載入失敗，請手動確認退費金額')
+    }
     try {
       const res = await getRefundSuggestion(Number(registrationId))
-      // 仍是同一筆選取、且無較新請求才套用
-      if (seq !== refundSuggestionSeq) return
-      if (
-        !selectedItem.value ||
-        Number(selectedItem.value.id) !== Number(registrationId)
-      )
-        return
-      const suggested = Number(
-        (res.data as { total_suggested_amount?: number })?.total_suggested_amount ?? 0
-      )
-      selectedItem.value = { ...selectedItem.value, amount_applied: suggested }
+      if (!stillCurrent()) return
+      const remaining = (res.data as { remaining_suggested_amount?: number })
+        ?.remaining_suggested_amount
+      if (typeof remaining === 'number' && Number.isFinite(remaining)) {
+        selectedItem.value = { ...selectedItem.value!, amount_applied: remaining }
+      } else {
+        failClosed()
+      }
     } catch {
-      // 建議載入失敗：保留 buildSelection 的全額 fallback，不阻斷退費流程
+      failClosed()
     } finally {
       if (seq === refundSuggestionSeq) refundSuggestionLoading.value = false
     }

@@ -24742,8 +24742,15 @@ export interface components {
             computed_at: string;
             /** Items */
             items: components["schemas"]["RefundSuggestionItem"][];
+            /**
+             * Prior Refunded Amount
+             * @default 0
+             */
+            prior_refunded_amount: number;
             /** Registration Id */
             registration_id: number;
+            /** Remaining Suggested Amount */
+            remaining_suggested_amount: number;
             /** Total Amount Due */
             total_amount_due: number;
             /** Total Suggested Amount */

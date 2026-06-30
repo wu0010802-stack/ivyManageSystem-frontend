@@ -141,19 +141,32 @@ watch(
   }
 )
 
-// 抓後端退費建議（按出席堂數三段比例），以 total_suggested_amount 覆寫全額預填。
-// 仍開著同一筆才套用；載入失敗保留 fallback，不阻斷退費（P2-B）。
+// 抓後端退費建議（按出席堂數三段比例），以 remaining_suggested_amount（剩餘建議額＝
+// 建議總額扣已退、夾 0）覆寫全額預填；多次退費不重複預填累積建議總額（audit F1）。
+// 仍開著同一筆才套用。
+// fail-closed（audit F2）：載入失敗或回應缺 remaining_suggested_amount 時，不再保留全額
+// fallback，改歸 0 + 警告，強制人工輸入（form.amount=0 時送出鈕 :disabled 為 true）。
 async function loadRefundSuggestion(registrationId: string | number) {
   refundSuggestionLoading.value = true
+  const stillCurrent = () =>
+    props.modelValue && Number(props.registrationId) === Number(registrationId)
+  const failClosed = () => {
+    if (!stillCurrent()) return
+    form.amount = 0
+    ElMessage.warning('退費建議載入失敗，請手動確認退費金額')
+  }
   try {
     const res = await getRefundSuggestion(Number(registrationId))
-    if (!props.modelValue || Number(props.registrationId) !== Number(registrationId)) return
-    const suggested = Number(
-      (res.data as { total_suggested_amount?: number })?.total_suggested_amount ?? props.paidAmount
-    )
-    form.amount = suggested
+    if (!stillCurrent()) return
+    const remaining = (res.data as { remaining_suggested_amount?: number })
+      ?.remaining_suggested_amount
+    if (typeof remaining === 'number' && Number.isFinite(remaining)) {
+      form.amount = remaining
+    } else {
+      failClosed()
+    }
   } catch {
-    // 保留全額 fallback
+    failClosed()
   } finally {
     refundSuggestionLoading.value = false
   }
