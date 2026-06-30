@@ -7,9 +7,16 @@ vi.mock('@/api/recruitment', () => ({
   getRecruitmentOptions: vi.fn(),
 }))
 
+vi.mock('@/utils/download', () => ({
+  downloadFile: vi.fn(),
+}))
+
+import { downloadFile } from '@/utils/download'
+
 const mockGetStats = getRecruitmentStats as ReturnType<typeof vi.fn>
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const _mockGetOptions = getRecruitmentOptions as ReturnType<typeof vi.fn>
+const mockDownloadFile = downloadFile as ReturnType<typeof vi.fn>
 
 const minimalStats = {
   total_visit: 0,
@@ -50,6 +57,7 @@ describe('useRecruitmentDashboard — 入學學期篩選 (term params)', () => {
     vi.clearAllMocks()
     mockGetStats.mockResolvedValue({ data: minimalStats })
     ;(getRecruitmentOptions as ReturnType<typeof vi.fn>).mockResolvedValue({ data: {} })
+    mockDownloadFile.mockResolvedValue(undefined)
   })
 
   it('school_year & semester 透傳到 getRecruitmentStats', async () => {
@@ -74,14 +82,7 @@ describe('useRecruitmentDashboard — 入學學期篩選 (term params)', () => {
     const { fetchStats } = useRecruitmentDashboard()
     await fetchStats()
     const calledParams = mockGetStats.mock.calls[0][0] as Record<string, unknown> | undefined
-    // calledParams may be undefined (no params at all) or an object without term keys
-    if (calledParams !== undefined) {
-      expect(calledParams).not.toHaveProperty('school_year')
-      expect(calledParams).not.toHaveProperty('semester')
-    } else {
-      // undefined params means no term filter — acceptable
-      expect(calledParams).toBeUndefined()
-    }
+    expect(calledParams).toBeUndefined()
   })
 
   it('與 referenceMonth 同時傳：params 含所有三個欄位', async () => {
@@ -104,5 +105,15 @@ describe('useRecruitmentDashboard — 入學學期篩選 (term params)', () => {
     dashboard.statsSemester.value = 1
     expect(dashboard.statsSchoolYear.value).toBe(115)
     expect(dashboard.statsSemester.value).toBe(1)
+  })
+
+  it('handleExportExcel URL 含 school_year/semester', async () => {
+    const { statsSchoolYear, statsSemester, handleExportExcel } = useRecruitmentDashboard()
+    statsSchoolYear.value = 115
+    statsSemester.value = 2
+    await handleExportExcel()
+    const url = mockDownloadFile.mock.calls[0][0] as string
+    expect(url).toContain('school_year=115')
+    expect(url).toContain('semester=2')
   })
 })
