@@ -104,6 +104,10 @@ export const updateRegistrationPayment = (id: number, payload: ApiBody<'/activit
   api.put(`/activity/registrations/${id}/payment`, payload)
 export const getRegistrationPayments = (id: number): AxiosResp<'/activity/registrations/{registration_id}/payments', 'get'> =>
   api.get(`/activity/registrations/${id}/payments`)
+// 退費建議（按出席堂數三段比例）：POS / 退費 UI 在退費前預載建議值，避免預填全額
+// 已繳而超退（2026-06-29 audit P2-B）。每門 course / 每筆 supply 分開列出。
+export const getRefundSuggestion = (id: number): AxiosResp<'/activity/registrations/{registration_id}/refund-suggestion', 'get'> =>
+  api.get(`/activity/registrations/${id}/refund-suggestion`)
 export const addRegistrationPayment = (id: number, data: ApiBody<'/activity/registrations/{registration_id}/payments', 'post'>): AxiosResp<'/activity/registrations/{registration_id}/payments', 'post'> =>
   api.post(`/activity/registrations/${id}/payments`, data)
 // 軟刪除繳費紀錄（voiding）：需 ACTIVITY_PAYMENT_APPROVE 權限 + reason ≥ 5 字

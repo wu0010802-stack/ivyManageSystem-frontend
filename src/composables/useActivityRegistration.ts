@@ -26,6 +26,7 @@ export function useActivityRegistration() {
   const pageSize = ref(20)
   const loading = ref(false)
   const fetchSeq = ref(0)
+  const loadOptionsSeq = ref(0)
 
   // ── 篩選條件（與 URL query 同步）────────────────────────────
   const searchText = ref('')
@@ -154,6 +155,9 @@ export function useActivityRegistration() {
   // ── 載入下拉選項 ─────────────────────────────────────────────
   // 課程選項每次都重抓（剩餘名額會隨報名/退課變動）；班級清單只在尚未載入時抓一次。
   async function loadOptions() {
+    // seq 守衛（對齊 fetchList 的 fetchSeq）：學期 A→B 快速切換時，較慢回應的舊學期
+    // 課程不得覆寫較新學期的 courseOptions（2026-06-29 audit P3-G）。
+    const seq = ++loadOptionsSeq.value
     try {
       const coursesP = getCourses({
         school_year: termStore.school_year,
@@ -161,13 +165,15 @@ export function useActivityRegistration() {
       })
       const classP = classroomOptionsLoaded.value ? null : getClassOptions()
       const [coursesRes, classRes] = await Promise.all([coursesP, classP])
+      if (seq !== loadOptionsSeq.value) return
       courseOptions.value = (coursesRes.data as { courses?: unknown[] }).courses || []
       if (classRes) {
         classroomOptions.value = (classRes.data as { options?: unknown[] }).options || []
         classroomOptionsLoaded.value = true
       }
     } catch {
-      ElMessage.warning('篩選選項載入失敗，部分篩選功能暫不可用')
+      if (seq === loadOptionsSeq.value)
+        ElMessage.warning('篩選選項載入失敗，部分篩選功能暫不可用')
     }
   }
 

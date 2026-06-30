@@ -6,6 +6,7 @@ import {
   getPOSOutstandingByStudent,
   getPOSReceiptPdf,
   getPOSRecentTransactions,
+  getRefundSuggestion,
   getRegistrations,
   posCheckout,
 } from '@/api/activity'
@@ -79,6 +80,10 @@ export function usePOSCheckout() {
   const checkoutType = ref('payment') // 'payment' | 'refund'
   const isRefundMode = computed(() => checkoutType.value === 'refund')
 
+  // ── 退費建議值載入（按出席比例，避免預填全額已繳超退；P2-B）─────────
+  const refundSuggestionLoading = ref(false)
+  let refundSuggestionSeq = 0
+
   // ── 收款 ────────────────────────────────────────────────────────
   // 永遠是現金（spec 2026-05-06-pos-cash-only）；保留 ref 以便未來擴充時最小改動
   const paymentMethod = ref(CASH_METHOD)
@@ -127,6 +132,8 @@ export function usePOSCheckout() {
     if (applied <= 0) return false
     // 退費模式：金額不得超過已繳；備註原因 ≥ 15 字（與後端 MIN_REFUND_REASON_LENGTH 一致）
     if (isRefundMode.value) {
+      // 建議值載入中先擋送出，避免於 async 覆寫前盲送 buildSelection 的全額預填（P2-B）
+      if (refundSuggestionLoading.value) return false
       if (applied > (item.paid_amount || 0)) return false
       if ((notes.value || '').trim().length < 15) return false
       // 大於門檻必須有 ACTIVITY_PAYMENT_APPROVE，否則後端會 403
@@ -282,6 +289,34 @@ export function usePOSCheckout() {
     }
   }
 
+  /**
+   * 退費模式：以後端建議值（按出席堂數三段比例）覆寫 buildSelection 的全額預填，
+   * 避免簽核者盲簽「全額已繳」造成超退（2026-06-29 audit P2-B）。
+   * seq 守衛防快速切換選取時舊建議覆寫；載入失敗則保留 buildSelection 的 paid fallback。
+   */
+  async function applyRefundSuggestion(registrationId: unknown) {
+    const seq = ++refundSuggestionSeq
+    refundSuggestionLoading.value = true
+    try {
+      const res = await getRefundSuggestion(Number(registrationId))
+      // 仍是同一筆選取、且無較新請求才套用
+      if (seq !== refundSuggestionSeq) return
+      if (
+        !selectedItem.value ||
+        Number(selectedItem.value.id) !== Number(registrationId)
+      )
+        return
+      const suggested = Number(
+        (res.data as { total_suggested_amount?: number })?.total_suggested_amount ?? 0
+      )
+      selectedItem.value = { ...selectedItem.value, amount_applied: suggested }
+    } catch {
+      // 建議載入失敗：保留 buildSelection 的全額 fallback，不阻斷退費流程
+    } finally {
+      if (seq === refundSuggestionSeq) refundSuggestionLoading.value = false
+    }
+  }
+
   /** 點擊搜尋結果：同 id 再點 → 取消；不同 id → 取代 */
   function selectItem(row: Record<string, unknown>, studentName: string) {
     if (!row) return
@@ -290,6 +325,10 @@ export function usePOSCheckout() {
       return
     }
     selectedItem.value = buildSelection(row, studentName)
+    if (isRefundMode.value) {
+      // 非同步覆寫為建議值（buildSelection 已先放 paid 作 fallback）
+      applyRefundSuggestion(row.id)
+    }
   }
 
   function clearSelection() {
@@ -533,6 +572,7 @@ export function usePOSCheckout() {
     // 交易類型
     checkoutType,
     isRefundMode,
+    refundSuggestionLoading,
     // 單筆選取
     selectedItem,
     itemTotal,

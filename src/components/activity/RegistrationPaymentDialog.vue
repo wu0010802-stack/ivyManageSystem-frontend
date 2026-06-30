@@ -64,7 +64,7 @@
       <el-button
         :type="type === 'payment' ? 'success' : 'danger'"
         :loading="saving"
-        :disabled="!form.amount || !form.payment_date"
+        :disabled="!form.amount || !form.payment_date || refundSuggestionLoading"
         @click="handleSubmit"
       >確認送出</el-button>
     </template>
@@ -74,7 +74,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { addRegistrationPayment } from '@/api/activity'
+import { addRegistrationPayment, getRefundSuggestion } from '@/api/activity'
 import { computeOwed } from '@/constants/pos'
 import { FIELD_RULES, PAYMENT_METHODS } from '@/constants/activity'
 import { todayISO } from '@/utils/format'
@@ -101,6 +101,8 @@ const emit = defineEmits<{
 }>()
 
 const saving = ref<boolean>(false)
+// 退費建議值載入中（按出席比例，避免預填全額已繳超退；P2-B）
+const refundSuggestionLoading = ref<boolean>(false)
 const form = reactive<{
   amount: number
   payment_date: string
@@ -125,6 +127,7 @@ watch(
   () => props.modelValue,
   (open) => {
     if (!open) return
+    // 退費先放全額已繳作 fallback，再以後端建議值（按出席比例）覆寫，避免超退（P2-B）
     form.amount = props.type === 'payment'
       ? computeOwed(props.totalAmount, props.paidAmount)
       : props.paidAmount
@@ -132,8 +135,29 @@ watch(
     form.payment_method = (PAYMENT_METHODS as string[])[0]
     form.notes = ''
     form.idempotency_key = genIdempotencyKey()
+    if (props.type === 'refund' && props.registrationId != null) {
+      loadRefundSuggestion(props.registrationId)
+    }
   }
 )
+
+// 抓後端退費建議（按出席堂數三段比例），以 total_suggested_amount 覆寫全額預填。
+// 仍開著同一筆才套用；載入失敗保留 fallback，不阻斷退費（P2-B）。
+async function loadRefundSuggestion(registrationId: string | number) {
+  refundSuggestionLoading.value = true
+  try {
+    const res = await getRefundSuggestion(Number(registrationId))
+    if (!props.modelValue || Number(props.registrationId) !== Number(registrationId)) return
+    const suggested = Number(
+      (res.data as { total_suggested_amount?: number })?.total_suggested_amount ?? props.paidAmount
+    )
+    form.amount = suggested
+  } catch {
+    // 保留全額 fallback
+  } finally {
+    refundSuggestionLoading.value = false
+  }
+}
 
 const overpayment = computed(() => {
   if (props.type !== 'payment') return 0
