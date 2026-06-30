@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { Money, Calendar, User, Warning, ArrowRight } from '@element-plus/icons-vue'
+import { formatSemester } from '@/utils/classHistory'
 
 const props = defineProps<{
   profile: Record<string, unknown>
@@ -23,6 +24,12 @@ const attendanceCount = (status: string) => (attendance.value?.by_status as Reco
 const primaryGuardian = computed(() =>
   guardians.value.find((g) => g.is_primary) || guardians.value[0] || null,
 )
+
+const enrollTermText = computed(() => {
+  const sy = lifecycle.value.enrollment_school_year as number | null
+  const sem = lifecycle.value.enrollment_semester as number | null
+  return sy != null && sem != null ? formatSemester(sy, sem) : '—'
+})
 
 const formatDate = (iso: unknown) => {
   if (!iso) return '—'
@@ -133,6 +140,7 @@ const formatDate = (iso: unknown) => {
         </template>
         <el-descriptions :column="1" size="small">
           <el-descriptions-item label="入學日">{{ formatDate(lifecycle.enrollment_date) }}</el-descriptions-item>
+          <el-descriptions-item label="入學學期">{{ enrollTermText }}</el-descriptions-item>
           <el-descriptions-item v-if="lifecycle.graduation_date" label="畢業日">
             {{ formatDate(lifecycle.graduation_date) }}
           </el-descriptions-item>
