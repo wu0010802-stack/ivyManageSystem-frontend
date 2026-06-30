@@ -95,8 +95,10 @@
                 ]"
               >
                 <template v-if="cls.students[rowIdx - 1]">
-                  {{ cls.students[rowIdx - 1].name
-                  }}<span
+                  <span
+                    class="student-link"
+                    @click="onClick(cls.students[rowIdx - 1])"
+                  >{{ cls.students[rowIdx - 1].name }}</span><span
                     v-if="cls.students[rowIdx - 1].status_tag === '原住民'"
                     class="indigenous-mark"
                   >原</span>
@@ -209,6 +211,10 @@ const props = defineProps<{
   highlightKeyword?: string
 }>()
 
+const emit = defineEmits<{
+  'select-student': [{ id: number; name: string }]
+}>()
+
 const rosterTitle = computed(() => {
   const rawYear = props.roster.school_year
   const yr = coerceRocYear(rawYear)
@@ -263,6 +269,10 @@ function studentTagClass(student: RosterStudent | undefined) {
 function isHit(student: RosterStudent | undefined) {
   const kw = (props.highlightKeyword ?? '').trim()
   return !!kw && !!student && student.name.includes(kw)
+}
+
+function onClick(student: RosterStudent | undefined) {
+  if (student?.student_id) emit('select-student', { id: student.student_id, name: student.name })
 }
 </script>
 
@@ -383,6 +393,15 @@ thead td.corner-cell:first-child {
 .student-cell {
   min-width: 72px;
   max-width: 96px;
+}
+
+.student-link {
+  cursor: pointer;
+}
+
+.student-link:hover {
+  text-decoration: underline;
+  color: var(--color-primary);
 }
 
 .indigenous-mark {

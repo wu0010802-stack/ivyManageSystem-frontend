@@ -321,6 +321,10 @@ const applyRouteContext = () => {
   filterSemester.value = [1, 2].includes(parsedSemester) ? parsedSemester : currentAcademicTerm.semester
   filterClassroomId.value = Number.isFinite(parsedClassroomId) ? parsedClassroomId : null
   showAllClassrooms.value = route.query.show_all === '1'
+  // 在籍記錄表點學生跳轉：以 ?q= 預填搜尋框並觸發查詢
+  if (typeof route.query.q === 'string' && route.query.q) {
+    searchQuery.value = route.query.q
+  }
 }
 
 const clearRouteAction = async () => {
