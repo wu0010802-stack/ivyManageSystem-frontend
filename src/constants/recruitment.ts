@@ -1,3 +1,5 @@
+import { getCurrentAcademicTerm } from '@/utils/academic'
+
 export const GRADES_ORDER = ['幼幼班', '小班', '中班', '大班']
 
 // 本園座標備援值（當後端尚未設定 campus_lat/lng 時使用，同時是地圖初始中心點）
@@ -29,6 +31,8 @@ export interface VisitFormState {
   has_deposit: boolean
   enrolled: boolean
   transfer_term: boolean
+  target_school_year: number
+  target_semester: 1 | 2
   no_deposit_reason: string | null
   no_deposit_reason_detail: string
   notes: string
@@ -37,11 +41,14 @@ export interface VisitFormState {
 }
 
 export function emptyVisitForm(): VisitFormState {
+  const term = getCurrentAcademicTerm()
   return {
     month: '', month_raw: null, seq_no: '', visit_date: '', child_name: '',
     birthday: null, grade: null, phone: '', address: '',
     district: '', source: '', referrer: '', deposit_collector: '',
     has_deposit: false, enrolled: false, transfer_term: false,
+    target_school_year: term.school_year,
+    target_semester: term.semester as 1 | 2,
     no_deposit_reason: null, no_deposit_reason_detail: '',
     notes: '', parent_response: '',
     geocoding_consent: false,

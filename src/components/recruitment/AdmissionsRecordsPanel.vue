@@ -79,7 +79,7 @@ import { hasPermission, getUserInfo } from '@/utils/auth'
 import { useFormDraft } from '@/composables/useFormDraft'
 import type { useRecruitmentDashboard } from '@/composables/useRecruitmentDashboard'
 import { useClassroomStore } from '@/stores/classroom'
-import { toAdYear } from '@/utils/academic'
+import { toAdYear, getCurrentAcademicTerm } from '@/utils/academic'
 import { emptyVisitForm, type VisitFormState } from '@/constants/recruitment'
 import RecruitmentDetailTab from '@/components/recruitment/RecruitmentDetailTab.vue'
 import RecruitmentMonthDialog from '@/components/recruitment/RecruitmentMonthDialog.vue'
@@ -326,6 +326,8 @@ const openEditDialog = async (row: Record<string, unknown>) => {
     has_deposit: Boolean(row.has_deposit),
     enrolled: Boolean(row.enrolled ?? false),
     transfer_term: Boolean(row.transfer_term ?? false),
+    target_school_year: Number(row.target_school_year ?? getCurrentAcademicTerm().school_year),
+    target_semester: (Number(row.target_semester ?? getCurrentAcademicTerm().semester) as 1 | 2),
     no_deposit_reason: (row.no_deposit_reason ?? null) as string | null,
     no_deposit_reason_detail: String(row.no_deposit_reason_detail ?? ''),
     notes: String(row.notes ?? ''),
