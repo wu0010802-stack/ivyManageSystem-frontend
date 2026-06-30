@@ -10,8 +10,8 @@
 
 ## Global Constraints
 
-- 升級目標（spec §2.1）：`vite@^8.1.0`、`@vitejs/plugin-vue@^6`、`vue-router@^5.1.0`、`pinia@^3.0.4`、`vue@^3.5.39`、`vue-tsc@^3.3.5`（`@volar/typescript` 隨 vue-tsc3 自動解析）。
-- **不升**（spec §2.2）：`typescript` 留 `^5.9.3`（openapi-typescript@7 peer 卡 ts^5）、`@types/node` 留 `^22.x`（運行環境 node 20/22）。**升級指令絕不可帶這兩個。**
+- 升級目標：`vite@^8.1.0`、`@vitejs/plugin-vue@^6`、`vue-router@^5.1.0`、`pinia@^3.0.4`、`vue@^3.5.39`。
+- **不升（#52 整組暫緩，2026-06-30 執行期決策 B）**：`typescript` 留 `^5.9.3`（openapi-typescript@7 peer 卡 ts^5）、`@types/node` 留 `^22.x`（運行環境 node 20/22）、`vue-tsc` 留 `^2.2.12`（vue-tsc3 對 composable+template ref 有 noUnusedLocals false-positive，language-tools#1168）、`@volar/typescript` 隨舊。**升級指令絕不可帶這四個。**
 - 工作目錄：worktree `/Users/yilunwu/Desktop/ivy-frontend/.claude/worktrees/vite8`，分支 `chore/vite8-ecosystem-upgrade`。所有 git/npm 操作在此 worktree，**不碰主工作樹**（28 commit 未 push + WIP）。
 - 前端規範：TS-only，禁 `: any`（用 `: unknown`+narrow 或 `// @ts-expect-error TODO(ts-strict): <reason>`）。
 - 驗證完整度：typecheck + build + 三 entry chunk 比對 + vitest + workspace e2e + PR CI 全綠（spec §4）。
@@ -46,10 +46,9 @@ npm install \
   "@vitejs/plugin-vue@^6" \
   "vue-router@^5.1.0" \
   "pinia@^3.0.4" \
-  "vue@^3.5.39" \
-  "vue-tsc@^3.3.5"
+  "vue@^3.5.39"
 ```
-Expected: 安裝成功，**無 `npm error code ERESOLVE`**。若 ERESOLVE → 停下，看是哪個 peer（多半是 @vitejs/plugin-vue 版本沒對齊 vite8），調整版本再試，**不可**用 `--legacy-peer-deps` 蒙混。
+Expected: 安裝成功，**無 `npm error code ERESOLVE`**。（vue-tsc 不升，留 ^2.2.12）若 ERESOLVE → 停下，看是哪個 peer（多半是 @vitejs/plugin-vue 版本沒對齊 vite8），調整版本再試，**不可**用 `--legacy-peer-deps` 蒙混。
 
 - [ ] **Step 3: 確認 typescript / @types/node 未被動到**
 

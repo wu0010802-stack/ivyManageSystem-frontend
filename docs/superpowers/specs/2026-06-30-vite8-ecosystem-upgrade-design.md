@@ -27,8 +27,6 @@
 | `vue-router` | `^4.2.5 → ^5.1.0` | major | "boring" 過渡版，未用 unplugin-vue-router → 零代碼改動 |
 | `pinia` | `^2.1.7 → ^3.0.4` | major | "boring" 過渡版，grep 確認未用被移除的 `defineStore({})` / `PiniaStorePlugin` → 零代碼改動 |
 | `vue` | `^3.4.15 → ^3.5.39` | minor | 安全 |
-| `vue-tsc` | `^2.2.12 → ^3.3.5` | major | peer 要 ts `>=5.8`（配 ts5.9 OK）；major 需驗 typecheck |
-| `@volar/typescript` | `→ 2.4.28` | — | 隨 vue-tsc3 lockfile |
 
 > `vite-plugin-pwa@1.3`、`unplugin-vue-components@32`、`jsdom@29`、`sass@1.101`、`@sentry/*`、`@line/liff`、`@material/material-color-utilities`、`@types/node@22.20` 已隨 2026-06-30 聚合 PR #66 merge 進 main。
 
@@ -38,6 +36,10 @@
 |------|---------|---------|
 | `typescript` | `→ ^6.0.3` | `openapi-typescript@7.13.0` peer 要 ts `^5.x`，ts6 會 ERESOLVE。留 `^5.9.3`，待 openapi-typescript 出支援 ts6 的版本再升。 |
 | `@types/node` | `→ ^26.0.1` | 運行環境是 Node 20/22（CI `node-version: "20"`、Zeabur 同級），types major 應匹配運行 major。留 `^22.x`。 |
+| `vue-tsc` | `→ ^3.3.5` | vue-tsc3 對「composable 回傳 ref + template 綁定」有 `noUnusedLocals` false-positive（[language-tools#1168](https://github.com/vuejs/language-tools/issues/1168)）：本專案 9 處誤報但代碼類型正確。**vue-tsc 2.2.12 實測 typecheck 乾淨通過**，升 3 無收益只帶 workaround。留 `^2.2.12`。 |
+| `@volar/typescript` | `→ 2.4.28` | 隨 vue-tsc 一併留舊。 |
+
+> **#52 ts-tooling group 4 個更新全數暫緩**（2026-06-30 執行期決策 B）：typescript 卡 openapi-typescript@7、@types/node 卡運行環境 node 版本、vue-tsc/@volar 因 vue-tsc3 false-positive 不划算。整組待上游成熟後再評估。vite-8 生態核心（vite/plugin-vue/router/pinia/vue）不受影響、照升。
 
 ### 2.3 為何單一聚合 PR
 
@@ -56,7 +58,7 @@ vite8 ↔ @vitejs/plugin-vue ↔ vue-router/pinia 之間有 peer 耦合，且全
 依序執行，任一失敗即停下修正：
 
 1. `npm install` 無 ERESOLVE。
-2. `vue-tsc` typecheck 通過（ts5.9 + vue-tsc3）；major 升級可能更嚴格暴露現有 type 問題 → 一併修。
+2. `vue-tsc 2.2.12` typecheck 通過（實測乾淨無 error；vue-tsc 留舊版避開 #1168 false-positive，見 §2.2）。
 3. `vite build` 成功（Rolldown）。
 4. **人工比對三 entry（admin/parent/public）的 dist chunk 分割** vs 升級前：確認 `vue-core` / `parent-app` / `admin-core` 等關鍵 chunk 邊界沒亂、家長 bundle 沒被迫拉入 element-plus / activity-admin、無循環依賴/TDZ。
 5. `vitest` 全綠（jsdom29 已升）。
@@ -74,7 +76,7 @@ vite8 ↔ @vitejs/plugin-vue ↔ vue-router/pinia 之間有 peer 耦合，且全
 
 1. 聚合 PR（分支 `chore/vite8-ecosystem-upgrade`），附 §4 驗證記錄。
 2. CI 全綠後 merge（觸發前端 Zeabur prod 部署）。
-3. dependabot 自動 close #50 #58；手動 `gh pr close #52` 並注明「部分升（vue-tsc/volar），typescript/@types/node 卡上游」。
+3. dependabot 自動 close #50 #58；手動 `gh pr close #52` 並注明「整組暫緩，4 個更新全卡上游/false-positive（見 §2.2）」。
 4. 清 worktree + 本地分支。
 
 ## 7. 非目標（YAGNI）
