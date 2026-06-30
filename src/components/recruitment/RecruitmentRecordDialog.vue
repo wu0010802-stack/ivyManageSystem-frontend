@@ -34,6 +34,18 @@
             <el-option v-for="g in GRADES_ORDER" :key="g" :label="g" :value="g" />
           </el-select>
         </el-form-item>
+        <el-form-item label="入學學期" required>
+          <div class="enroll-term">
+            <el-select v-model="form.target_school_year" size="small" style="width:130px">
+              <el-option v-for="y in enrollYearOptions" :key="y" :value="y" :label="`${y} 學年`" />
+            </el-select>
+            <el-radio-group v-model="form.target_semester" size="small">
+              <el-radio-button :value="1">上學期</el-radio-button>
+              <el-radio-button :value="2">下學期</el-radio-button>
+            </el-radio-group>
+          </div>
+          <div class="form-hint">小孩預計入學的學期（預設當前學期，可改）。</div>
+        </el-form-item>
         <el-form-item label="生日">
           <el-date-picker v-model="form.birthday" type="date" value-format="YYYY-MM-DD" style="width:100%" />
         </el-form-item>
@@ -118,10 +130,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, reactive, nextTick } from 'vue'
+import { ref, watch, reactive, nextTick, computed } from 'vue'
 import type { FormInstance } from 'element-plus'
 import { GRADES_ORDER } from '@/constants/recruitment'
-import { toRocYear } from '@/utils/academic'
+import { toRocYear, currentRocYear } from '@/utils/academic'
 import FormSection from '@/components/common/FormSection.vue'
 import { sectionForRecruitmentField } from '@/constants/recruitmentFormSections'
 
@@ -147,6 +159,8 @@ interface VisitForm {
   notes?: string | number | null
   parent_response?: string | number | null
   geocoding_consent?: boolean
+  target_school_year?: number
+  target_semester?: number
   [key: string]: unknown
 }
 
@@ -194,6 +208,11 @@ function applyValidationErrors(invalidProps: string[]) {
     }
   }
 }
+
+const enrollYearOptions = computed(() => {
+  const y = currentRocYear()
+  return [y + 3, y + 2, y + 1, y, y - 1]
+})
 
 const formRules = {
   month: [{ required: true, message: '請選擇參觀日期', trigger: 'blur' }],
@@ -274,4 +293,5 @@ defineExpose({ formRef, applyValidationErrors })
 <style scoped>
 .required-legend { font-size: 12px; color: var(--el-text-color-secondary); margin: 0 0 14px; }
 .required-legend .req { color: var(--el-color-danger); }
+.enroll-term { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 </style>
