@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- 升級目標：`vite@^8.1.0`、`@vitejs/plugin-vue@^6`、`vue-router@^5.1.0`、`pinia@^3.0.4`、`vue@^3.5.39`。
+- 升級目標：`vite@^7.3.6`（**改升 7 不升 8，執行期決策 C**：vite 8 Rolldown 不支援 manualChunks 需重寫 advancedChunks，#58 留 backlog）、`@vitejs/plugin-vue@^6`、`vue-router@^5.1.0`、`pinia@^3.0.4`、`vue@^3.5.39`。
 - **不升（#52 整組暫緩，2026-06-30 執行期決策 B）**：`typescript` 留 `^5.9.3`（openapi-typescript@7 peer 卡 ts^5）、`@types/node` 留 `^22.x`（運行環境 node 20/22）、`vue-tsc` 留 `^2.2.12`（vue-tsc3 對 composable+template ref 有 noUnusedLocals false-positive，language-tools#1168）、`@volar/typescript` 隨舊。**升級指令絕不可帶這四個。**
 - 工作目錄：worktree `/Users/yilunwu/Desktop/ivy-frontend/.claude/worktrees/vite8`，分支 `chore/vite8-ecosystem-upgrade`。所有 git/npm 操作在此 worktree，**不碰主工作樹**（28 commit 未 push + WIP）。
 - 前端規範：TS-only，禁 `: any`（用 `: unknown`+narrow 或 `// @ts-expect-error TODO(ts-strict): <reason>`）。
@@ -42,13 +42,13 @@ Expected: `chore/vite8-ecosystem-upgrade`
 Run（在 worktree 根；指令**不含** typescript/@types/node）：
 ```bash
 npm install \
-  "vite@^8.1.0" \
+  "vite@^7" \
   "@vitejs/plugin-vue@^6" \
   "vue-router@^5.1.0" \
   "pinia@^3.0.4" \
   "vue@^3.5.39"
 ```
-Expected: 安裝成功，**無 `npm error code ERESOLVE`**。（vue-tsc 不升，留 ^2.2.12）若 ERESOLVE → 停下，看是哪個 peer（多半是 @vitejs/plugin-vue 版本沒對齊 vite8），調整版本再試，**不可**用 `--legacy-peer-deps` 蒙混。
+Expected: 安裝成功，**無 `npm error code ERESOLVE`**。（vite 升 7 不升 8；vue-tsc 不升留 ^2.2.12）若 ERESOLVE → 停下，看是哪個 peer（多半是 @vitejs/plugin-vue 版本沒對齊 vite8），調整版本再試，**不可**用 `--legacy-peer-deps` 蒙混。
 
 - [ ] **Step 3: 確認 typescript / @types/node 未被動到**
 
@@ -145,7 +145,7 @@ Expected: 看到 `vue-core`、`parent-app`、`admin-core`、`public-app`、`elem
 
 確認以下不變式（vite.config `manualChunks` 註解所載的意圖）：
 - `index.html`（admin）、`public.html` **不** preload `parent-app`（家長 LIFF 整包，含 @line/liff）。
-- `parent.html`（家長）**不** preload `admin-core` / `activity-admin` / `element-plus`。
+- ⚠ 修正：parent/public preload `admin-core`/`activity-admin` 是**既有 modulepreload 行為**（vite5 baseline 相同、非回歸）；真正不變式只有 admin/portal 不載 `parent-app`。驗證改為「三 entry chunk 與 vite5 baseline build 逐一等價」+ vue-core 存在。
 - `vue-core` 為三 entry 共享（含 `plugin-vue:export-helper`、`vite/preload-helper`）。
 
 Run（檢查家長 entry 沒拉入 admin/element-plus）：

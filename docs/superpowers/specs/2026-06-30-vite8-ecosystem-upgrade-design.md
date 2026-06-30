@@ -22,8 +22,8 @@
 
 | 套件 | 從 → 到 | 性質 | 備註 |
 |------|--------|------|------|
-| `vite` | `^5.0.11 → ^8.1.0` | major×3 | 改用 Rolldown+Oxc 打包器取代 esbuild/Rollup |
-| `@vitejs/plugin-vue` | `^5.0.3 → ^6.x` | major | **手動配套**：dependabot 沒提，但 vite 8 需要它升到支援 `vite ^7||^8` 的版本 |
+| `vite` | `^5.0.11 → ^7.3.6` | major×2 | **改升 7 不升 8**（執行期決策 C）：vite 8 用 Rolldown、不支援 `manualChunks`，本專案 ~250 行講究 chunk 策略需重寫 advancedChunks 才不回歸；vite 7 仍用 Rollup、manualChunks 原樣相容。vite 8（#58）改列 backlog（§2.2）。 |
+| `@vitejs/plugin-vue` | `^5.0.3 → ^6.x` | major | **手動配套**：dependabot 沒提，但需升到支援 `vite ^7||^8` 的版本（實裝 6.0.7） |
 | `vue-router` | `^4.2.5 → ^5.1.0` | major | "boring" 過渡版，未用 unplugin-vue-router → 零代碼改動 |
 | `pinia` | `^2.1.7 → ^3.0.4` | major | "boring" 過渡版，grep 確認未用被移除的 `defineStore({})` / `PiniaStorePlugin` → 零代碼改動 |
 | `vue` | `^3.4.15 → ^3.5.39` | minor | 安全 |
@@ -38,6 +38,7 @@
 | `@types/node` | `→ ^26.0.1` | 運行環境是 Node 20/22（CI `node-version: "20"`、Zeabur 同級），types major 應匹配運行 major。留 `^22.x`。 |
 | `vue-tsc` | `→ ^3.3.5` | vue-tsc3 對「composable 回傳 ref + template 綁定」有 `noUnusedLocals` false-positive（[language-tools#1168](https://github.com/vuejs/language-tools/issues/1168)）：本專案 9 處誤報但代碼類型正確。**vue-tsc 2.2.12 實測 typecheck 乾淨通過**，升 3 無收益只帶 workaround。留 `^2.2.12`。 |
 | `@volar/typescript` | `→ 2.4.28` | 隨 vue-tsc 一併留舊。 |
+| `vite` | `→ ^8.1.0` | **#58**：vite 8 用 Rolldown、不支援 `manualChunks`，本專案 ~250 行講究 chunk 策略需重寫成 `advancedChunks` 才不回歸。本次改升 vite 7（Rollup 相容、零 chunk 回歸，已 baseline 實測等價）。vite 8 留 backlog 待有空重寫 chunk 策略再上。 |
 
 > **#52 ts-tooling group 4 個更新全數暫緩**（2026-06-30 執行期決策 B）：typescript 卡 openapi-typescript@7、@types/node 卡運行環境 node 版本、vue-tsc/@volar 因 vue-tsc3 false-positive 不划算。整組待上游成熟後再評估。vite-8 生態核心（vite/plugin-vue/router/pinia/vue）不受影響、照升。
 
@@ -49,9 +50,7 @@ vite8 ↔ @vitejs/plugin-vue ↔ vue-router/pinia 之間有 peer 耦合，且全
 
 1. 從 `origin/main` 開隔離 worktree（主工作樹有 28 commit 未 push + 未提交 WIP，**不可用**）。
 2. `npm install` 套用 §2.1 升級 + regen lockfile（vite8 改用 Rolldown，esbuild 不再是主 bundler，lockfile 平台條目會變動）。
-3. 檢查 `vite.config.js`：
-   - `build.rollupOptions` 由 vite8 兼容層自動轉 `rolldownOptions`，多數無需改。
-   - 重點看 `manualChunks`（本專案有大量手動 chunk 分割：`plugin-vue:export-helper` / `vite/preload-helper` 固定到 `vue-core`、`src/utils/format.ts` 等共用工具的 chunk 歸屬，避免 admin/parent/public 三 entry 間循環依賴與 TDZ）在 Rolldown 下是否仍正確。
+3. `vite.config.js` 的 `manualChunks` **無需改**：vite 7 仍用 Rollup、原樣相容（已 baseline 實測三 entry chunk 逐一等價）。（vite 8 才需重寫 advancedChunks，本次不做。）
 
 ## 4. 驗證（完整）
 
@@ -60,14 +59,14 @@ vite8 ↔ @vitejs/plugin-vue ↔ vue-router/pinia 之間有 peer 耦合，且全
 1. `npm install` 無 ERESOLVE。
 2. `vue-tsc 2.2.12` typecheck 通過（實測乾淨無 error；vue-tsc 留舊版避開 #1168 false-positive，見 §2.2）。
 3. `vite build` 成功（Rolldown）。
-4. **人工比對三 entry（admin/parent/public）的 dist chunk 分割** vs 升級前：確認 `vue-core` / `parent-app` / `admin-core` 等關鍵 chunk 邊界沒亂、家長 bundle 沒被迫拉入 element-plus / activity-admin、無循環依賴/TDZ。
+4. **三 entry（admin/parent/public）chunk 分割與 vite5 baseline 逐 entry 等價**：vite 7 仍用 Rollup、manualChunks 原樣相容，build 出的三 entry chunk 引用須與升級前 baseline 完全一致、`vue-core` 存在。⚠ 修正先前誤寫的不變式：「parent/public 各拉一批含 admin-core/activity-admin 的共享 chunk」是**既有 modulepreload 行為、非回歸**（baseline 相同；modulepreload≠執行）。真正的不變式只有：admin/portal 不載 `parent-app`（vite.config line 140）、未登入 public 不執行 admin 邏輯（line 159）。
 5. `vitest` 全綠（jsdom29 已升）。
 6. workspace `e2e/` critical-path smoke（起 `start.sh` 兩端 + chromium）。
 7. PR CI 全綠（`Tests & Build` / `OpenAPI Drift Check` / `依賴 CVE 掃描` / typecheck gate）。
 
 ## 5. 風險與回滾
 
-- **主風險：Rolldown 的 `manualChunks` 行為差異** → chunk 分割回歸 → prod 白屏 / TDZ（`Cannot access 'X' before initialization`）。緩解＝§4.4 人工比對 + §4.6 e2e + §4.3 build 產物檢查。
+- **chunk 分割無回歸**：vite 7 仍用 Rollup、manualChunks 原樣相容，三 entry chunk 與 vite5 baseline 實測逐一等價（vite 8 的 Rolldown manualChunks 不相容已透過改升 vite 7 規避，見 §2.1/§2.2）。原列為主風險的 Rolldown chunk 回歸已不適用。
 - **vue-tsc 3 major**：typecheck 行為可能更嚴格 → 暴露現有 type 問題，於本 PR 一併修。
 - **回滾**：單一 PR，`git revert` 即可；Zeabur build 失敗會保留舊版本、不部署壞版（前端純靜態 build、無 migration）。
 - **上游卡關**：`typescript` / `@types/node` 留舊版，記入 backlog，待 `openapi-typescript` 支援 ts6 與運行環境升 node 後再評估。
@@ -76,11 +75,11 @@ vite8 ↔ @vitejs/plugin-vue ↔ vue-router/pinia 之間有 peer 耦合，且全
 
 1. 聚合 PR（分支 `chore/vite8-ecosystem-upgrade`），附 §4 驗證記錄。
 2. CI 全綠後 merge（觸發前端 Zeabur prod 部署）。
-3. dependabot 自動 close #50 #58；手動 `gh pr close #52` 並注明「整組暫緩，4 個更新全卡上游/false-positive（見 §2.2）」。
+3. dependabot 自動 close #50（vue-core 已升）；#58（vite 8）與 #52（ts-tooling）**留 open 作 backlog**，各加註暫緩原因（#58 待重寫 advancedChunks、#52 卡上游/false-positive，見 §2.2）。
 4. 清 worktree + 本地分支。
 
 ## 7. 非目標（YAGNI）
 
-- 不升 typescript 6 / @types/node 26（§2.2）。
+- 不升 typescript 6 / @types/node 26 / vue-tsc 3 / vite 8（§2.2）。
 - 不導入 vue-router 5 的 file-based routing / data loaders（unplugin-vue-router 併入功能）——本次只做版本升級，不改路由架構。
-- 不重構現有 `manualChunks` 策略——只驗證它在 Rolldown 下仍正確，除非 Rolldown 強制需要調整。
+- 不重構現有 `manualChunks`（vite 7 原樣相容，無需動）；vite 8 的 `advancedChunks` 重寫留 backlog。
