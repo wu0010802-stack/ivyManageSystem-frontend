@@ -60,12 +60,6 @@ export const createEmptyRecruitmentOptions = () => ({
   no_deposit_reasons: [],
 })
 
-const buildRecruitmentExportUrl = (referenceMonth: string | null) => {
-  const params = new URLSearchParams()
-  if (referenceMonth) params.set('reference_month', referenceMonth)
-  const query = params.toString()
-  return query ? `/recruitment/stats/export?${query}` : '/recruitment/stats/export'
-}
 
 export function useRecruitmentDashboard({ notifyError }: { notifyError?: (msg: string) => void } = {}) {
   const stats = ref<Record<string, unknown>>(createEmptyRecruitmentStats() as Record<string, unknown>)
@@ -74,6 +68,8 @@ export function useRecruitmentDashboard({ notifyError }: { notifyError?: (msg: s
   const optionsLoaded = ref(false)
   const exportingExcel = ref(false)
   const referenceMonth = ref<string | null>(null)
+  const statsSchoolYear = ref<number | null>(null)
+  const statsSemester = ref<1 | 2 | null>(null)
 
   let optionsPromise: Promise<boolean> | null = null
 
@@ -148,7 +144,11 @@ export function useRecruitmentDashboard({ notifyError }: { notifyError?: (msg: s
   const fetchStats = async (month: string | null = referenceMonth.value) => {
     loadingStats.value = true
     try {
-      const params = buildScopeParams(month ? { reference_month: month } : {})
+      const base: Record<string, unknown> = {}
+      if (month) base.reference_month = month
+      if (statsSchoolYear.value != null) base.school_year = statsSchoolYear.value
+      if (statsSemester.value != null) base.semester = statsSemester.value
+      const params = buildScopeParams(base)
       const response = await getRecruitmentStats(params)
       applyStatsPayload(response.data)
       return true
@@ -177,10 +177,13 @@ export function useRecruitmentDashboard({ notifyError }: { notifyError?: (msg: s
     exportingExcel.value = true
     try {
       const filename = '招生統計.xlsx'
-      await downloadFile(
-        buildRecruitmentExportUrl(referenceMonth.value),
-        filename,
-      )
+      const urlParams = new URLSearchParams()
+      if (referenceMonth.value) urlParams.set('reference_month', referenceMonth.value)
+      if (statsSchoolYear.value != null) urlParams.set('school_year', String(statsSchoolYear.value))
+      if (statsSemester.value != null) urlParams.set('semester', String(statsSemester.value))
+      const query = urlParams.toString()
+      const url = query ? `/recruitment/stats/export?${query}` : '/recruitment/stats/export'
+      await downloadFile(url, filename)
       return true
     } catch (error) {
       reportError(error, '匯出失敗')
@@ -197,6 +200,8 @@ export function useRecruitmentDashboard({ notifyError }: { notifyError?: (msg: s
     optionsLoaded,
     exportingExcel,
     referenceMonth,
+    statsSchoolYear,
+    statsSemester,
     invalidateOptions,
     fetchOptions,
     fetchStats,

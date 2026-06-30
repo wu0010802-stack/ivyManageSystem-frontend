@@ -2,6 +2,32 @@
   <div class="stats-panel" v-loading="loadingStats">
     <div class="panel-toolbar">
       <el-select
+        v-model="statsSchoolYear"
+        size="small"
+        placeholder="入學學年"
+        clearable
+        style="width: 120px"
+        @change="fetchStats()"
+      >
+        <el-option
+          v-for="y in termYearOptions"
+          :key="y"
+          :label="`${y} 學年`"
+          :value="y"
+        />
+      </el-select>
+      <el-select
+        v-model="statsSemester"
+        size="small"
+        placeholder="學期"
+        clearable
+        style="width: 100px"
+        @change="fetchStats()"
+      >
+        <el-option label="上學期" :value="1" />
+        <el-option label="下學期" :value="2" />
+      </el-select>
+      <el-select
         v-model="referenceMonth"
         size="small"
         placeholder="參考月份"
@@ -206,6 +232,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { currentRocYear } from '@/utils/academic'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   getNoDepositAnalysis,
@@ -249,10 +276,18 @@ const {
   loadingStats,
   exportingExcel,
   referenceMonth,
+  statsSchoolYear,
+  statsSemester,
   setReferenceMonth,
   handleExportExcel,
+  fetchStats,
   fetchOptions,
 } = props.dashboard
+
+const termYearOptions = computed(() => {
+  const y = currentRocYear()
+  return [y + 1, y, y - 1, y - 2]
+})
 
 // -------- 常數 --------
 const AREA_HOTSPOT_DISPLAY_LIMIT = 200
