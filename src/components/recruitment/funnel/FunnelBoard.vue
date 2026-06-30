@@ -3,7 +3,7 @@
     <div class="funnel-board__toolbar">
       <el-select
         v-model="schoolYearLocal"
-        placeholder="學年"
+        placeholder="入學學年"
         clearable
         size="small"
         style="width: 120px"
@@ -17,7 +17,7 @@
       </el-select>
       <el-select
         v-model="semesterLocal"
-        placeholder="學期"
+        placeholder="入學學期"
         clearable
         size="small"
         style="width: 100px"
@@ -87,7 +87,7 @@ const store = useRecruitmentFunnelStore()
 const schoolYearLocal = ref<number | null>(null)
 const semesterLocal = ref<1 | 2 | null>(null)
 const currentYear = currentRocYear()
-const yearOptions = computed(() => [currentYear, currentYear - 1, currentYear - 2])
+const yearOptions = computed(() => [currentYear + 1, currentYear, currentYear - 1, currentYear - 2])
 
 async function onRefresh() {
   await store.setFilter(schoolYearLocal.value, semesterLocal.value)
