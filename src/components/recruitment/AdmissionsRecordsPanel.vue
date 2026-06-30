@@ -183,11 +183,14 @@ const filter = ref<{
   keyword: string
   page: number
   page_size: number
+  school_year: number | null
+  semester: number | null
   [key: string]: unknown
 }>({
   month: null, grade: null, source: null, referrer: null,
   has_deposit: null, no_deposit_reason: null, keyword: '',
   page: 1, page_size: 50,
+  school_year: null, semester: null,
 })
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
@@ -261,6 +264,8 @@ const fetchDetail = async () => {
       params.has_deposit = filter.value.has_deposit
     if (filter.value.no_deposit_reason) params.no_deposit_reason = filter.value.no_deposit_reason
     if (filter.value.keyword) params.keyword = filter.value.keyword
+    if (filter.value.school_year != null) params.school_year = filter.value.school_year
+    if (filter.value.semester != null) params.semester = filter.value.semester
 
     const res = await getRecruitmentRecords(params)
     detailData.value = res.data.records
@@ -280,6 +285,7 @@ const clearFilter = () => {
     ...filter.value,
     month: null, grade: null, source: null, referrer: null,
     has_deposit: null, no_deposit_reason: null, keyword: '', page: 1,
+    school_year: null, semester: null,
   }
   fetchDetail()
 }
@@ -393,6 +399,7 @@ watch(
       month: null, grade: null, source: null, referrer: null,
       has_deposit: null, no_deposit_reason: null, keyword: '',
       page: 1, page_size: filter.value.page_size,
+      school_year: null, semester: null,
       ...patch,
     }
     void fetchDetail()

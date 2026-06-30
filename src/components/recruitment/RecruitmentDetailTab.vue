@@ -24,6 +24,29 @@
         <el-option v-for="item in options.grades" :key="item" :label="item" :value="item" />
       </el-select>
       <el-select
+        :model-value="filters.school_year ?? null"
+        placeholder="入學學年"
+        clearable
+        size="small"
+        style="width:120px"
+        @update:model-value="updateFilter('school_year', $event)"
+        @change="$emit('filter-change')"
+      >
+        <el-option v-for="y in termYearOptions" :key="y" :label="`${y} 學年`" :value="y" />
+      </el-select>
+      <el-select
+        :model-value="filters.semester ?? null"
+        placeholder="學期"
+        clearable
+        size="small"
+        style="width:100px"
+        @update:model-value="updateFilter('semester', $event)"
+        @change="$emit('filter-change')"
+      >
+        <el-option label="上學期" :value="1" />
+        <el-option label="下學期" :value="2" />
+      </el-select>
+      <el-select
         :model-value="filters.source"
         placeholder="來源"
         clearable
@@ -97,6 +120,7 @@
       </el-table-column>
       <el-table-column prop="child_name" label="姓名" width="90" />
       <el-table-column prop="grade" label="班別" width="80" />
+      <el-table-column label="入學學期" width="110" :formatter="(row: Record<string, unknown>) => enrollTermText(row)" />
       <el-table-column prop="address" label="地址" min-width="220" show-overflow-tooltip>
         <template #default="{ row }">
           {{ row.address || row.district || '—' }}
@@ -161,6 +185,10 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
+import { currentRocYear } from '@/utils/academic'
+import { formatSemester } from '@/utils/classHistory'
+
 interface DetailFilters {
   month?: string | null
   grade?: string | null
@@ -171,6 +199,8 @@ interface DetailFilters {
   keyword?: string | null
   page?: number
   page_size?: number
+  school_year?: number | null
+  semester?: number | null
   [key: string]: unknown
 }
 
@@ -208,6 +238,17 @@ const emit = defineEmits<{
   'journey': [row: Record<string, unknown>]
   'delete': [id: unknown]
 }>()
+
+const termYearOptions = computed(() => {
+  const y = currentRocYear()
+  return [y + 1, y, y - 1, y - 2]
+})
+
+const enrollTermText = (row: Record<string, unknown>): string => {
+  const sy = row.target_school_year as number | null
+  const sem = row.target_semester as number | null
+  return sy != null && sem != null ? formatSemester(sy, sem) : '—'
+}
 
 const updateFilter = (field: string, value: unknown) => {
   emit('update-filter', { [field]: value })
