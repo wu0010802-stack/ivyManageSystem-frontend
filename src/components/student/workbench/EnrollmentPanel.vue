@@ -141,9 +141,56 @@
       <!-- ============ Tab 2：在籍記錄表 ============ -->
       <el-tab-pane label="在籍記錄表" name="roster">
         <div v-loading="rosterLoading">
-          <div v-if="roster">
-            <EnrollmentRosterTable :roster="roster" />
-          </div>
+          <template v-if="roster">
+            <!-- 工具列 -->
+            <div class="roster-toolbar">
+              <el-select
+                v-model="gradeFilter"
+                multiple
+                collapse-tags
+                placeholder="年級"
+                clearable
+                style="min-width: 160px"
+              >
+                <el-option v-for="g in gradeOptions" :key="g" :label="g" :value="g" />
+              </el-select>
+              <el-select
+                v-model="classFilter"
+                multiple
+                collapse-tags
+                placeholder="班級"
+                clearable
+                style="min-width: 160px"
+              >
+                <el-option
+                  v-for="c in classOptions"
+                  :key="c.classroom_id"
+                  :label="c.class_name"
+                  :value="c.classroom_id"
+                />
+              </el-select>
+              <el-input
+                v-model="searchInput"
+                placeholder="搜尋學生姓名"
+                clearable
+                style="max-width: 200px"
+                :prefix-icon="Search"
+              />
+              <div class="tag-chips">
+                <span class="chip chip-new">● 新生 {{ displayTagCounts.新生 }}</span>
+                <span class="chip chip-underage">● 不足齡 {{ displayTagCounts.不足齡 }}</span>
+                <span class="chip chip-special">● 特教 {{ displayTagCounts.特教生 }}</span>
+                <span class="chip chip-indigenous">● 原民 {{ displayTagCounts.原住民 }}</span>
+              </div>
+              <el-button :icon="Download" @click="exportXlsx">匯出 Excel</el-button>
+            </div>
+            <EnrollmentRosterTable
+              v-if="displayRoster"
+              :roster="displayRoster"
+              :highlight-keyword="searchKeyword"
+              @select-student="onSelectStudent"
+            />
+          </template>
           <el-empty
             v-else-if="!rosterLoading"
             description="尚未載入在籍記錄表，點擊上方「重新整理」載入資料"
@@ -158,14 +205,18 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, defineAsyncComponent } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { RefreshRight, Printer } from '@element-plus/icons-vue'
+import { RefreshRight, Printer, Search, Download } from '@element-plus/icons-vue'
 import { getEnrollmentStats, getEnrollmentOptions, getEnrollmentRoster, getEnrollmentRosterPdf } from '@/api/studentEnrollment'
 import { openPdfInNewTab } from '@/utils/printPdfWindow'
 import { coerceRocYear } from '@/utils/academic'
 import { useAcademicTermStore } from '@/stores/academicTerm'
 import { apiError } from '@/utils/error'
+import { downloadFile } from '@/utils/download'
 import EnrollmentRosterTable from '@/components/enrollment/EnrollmentRosterTable.vue'
+import type { Roster } from '@/components/enrollment/rosterTypes'
+import { filterRoster } from '@/components/enrollment/rosterFilter'
 
 // --- Type interfaces ---
 interface TermOption { school_year: number; semester: number; label: string }
@@ -201,18 +252,26 @@ const DoughnutChart = defineAsyncComponent(() =>
 // ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
-interface RosterStudent { name: string; status_tag?: string }
-interface RosterClass { classroom_id: number; class_number: number; grade_name: string; class_name: string; head_teacher_name?: string | null; assistant_teacher_name?: string | null; art_teacher_name?: string | null; students: RosterStudent[]; total: number; old_count: number; new_count: number }
-interface GradeSummary { grade_name: string; class_numbers: number[]; total: number; old_count: number; new_count: number }
-interface RosterData { school_year: number; semester: number; generated_date: string; classes: RosterClass[]; grade_summaries: GradeSummary[]; grand_total: number; old_grand_total: number; new_grand_total: number; staff_by_role: Record<string, { name: string }[]> }
+const router = useRouter()
 
 const termStore = useAcademicTermStore()
 const loading = ref(false)
 const rosterLoading = ref(false)
 const stats = ref<EnrollmentStats | null>(null)
-const roster = ref<RosterData | null>(null)
+const roster = ref<Roster | null>(null)
 const termOptions = ref<TermOption[]>([])
 const activeTab = ref('stats')
+
+// 工具列狀態
+const gradeFilter = ref<string[]>([])
+const classFilter = ref<number[]>([])
+const searchInput = ref('')
+const searchKeyword = ref('')
+let _searchTimer: ReturnType<typeof setTimeout> | null = null
+watch(searchInput, (v) => {
+  if (_searchTimer) clearTimeout(_searchTimer)
+  _searchTimer = setTimeout(() => { searchKeyword.value = v }, 300)
+})
 
 const selectedTerm = computed({
   get: () => `${termStore.school_year}-${termStore.semester}`,
@@ -263,7 +322,7 @@ const fetchRoster = async () => {
   rosterLoading.value = true
   try {
     const res = await getEnrollmentRoster(termParams())
-    roster.value = res.data as unknown as RosterData
+    roster.value = res.data as unknown as Roster
   } catch (e) {
     ElMessage.error(apiError(e, '載入在籍記錄表失敗'))
   } finally {
@@ -289,6 +348,33 @@ const onTabClick = (pane: unknown) => {
   if (tab.paneName === 'roster' && !roster.value) {
     fetchRoster()
   }
+}
+
+// ---------------------------------------------------------------------------
+// 工具列 computed
+// ---------------------------------------------------------------------------
+const gradeOptions = computed(() => [...new Set((roster.value?.classes ?? []).map(c => c.grade_name))])
+const classOptions = computed(() => {
+  const cs = roster.value?.classes ?? []
+  return gradeFilter.value.length ? cs.filter(c => gradeFilter.value.includes(c.grade_name)) : cs
+})
+const displayRoster = computed((): Roster | null =>
+  roster.value ? filterRoster(roster.value, gradeFilter.value, classFilter.value) : null
+)
+const displayTagCounts = computed(() => {
+  const counts = { 新生: 0, 不足齡: 0, 特教生: 0, 原住民: 0 }
+  for (const c of displayRoster.value?.classes ?? [])
+    for (const s of c.students)
+      if (s.status_tag && s.status_tag in counts) counts[s.status_tag as keyof typeof counts]++
+  return counts
+})
+
+const exportXlsx = async () => {
+  await downloadFile('/student-enrollment/roster.xlsx', '在籍清單.xlsx', termParams())
+}
+
+const onSelectStudent = ({ id, name }: { id: number; name: string }) => {
+  router.push({ path: '/students', query: { tab: 'roster', student_id: String(id), q: name } })
 }
 
 const printRoster = async () => {
@@ -707,4 +793,32 @@ const doughnutChartOptions = {
   position: relative;
   padding: 8px 4px 0;
 }
+
+/* ===== 工具列 ===== */
+.roster-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3, 12px);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-3, 12px);
+}
+
+.tag-chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.chip {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+
+.chip-new        { color: var(--color-success); }
+.chip-underage   { color: var(--color-warning); }
+.chip-special    { color: #7c3aed; }
+.chip-indigenous { color: var(--color-info); }
 </style>

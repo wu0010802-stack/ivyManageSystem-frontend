@@ -90,7 +90,8 @@
                 class="student-cell"
                 :class="[
                   studentTagClass(cls.students[rowIdx - 1]),
-                  { 'grade-border-right': gradeLastClassNumbers.has(cls.class_number) }
+                  { 'grade-border-right': gradeLastClassNumbers.has(cls.class_number) },
+                  { 'is-hit': isHit(cls.students[rowIdx - 1]) }
                 ]"
               >
                 <template v-if="cls.students[rowIdx - 1]">
@@ -201,48 +202,11 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { coerceRocYear } from '@/utils/academic'
-
-interface RosterStudent {
-  name: string
-  status_tag?: string
-}
-
-interface RosterClass {
-  classroom_id: number
-  class_number: number
-  grade_name: string
-  class_name: string
-  head_teacher_name?: string | null
-  assistant_teacher_name?: string | null
-  art_teacher_name?: string | null
-  students: RosterStudent[]
-  total: number
-  old_count: number
-  new_count: number
-}
-
-interface GradeSummary {
-  grade_name: string
-  class_numbers: number[]
-  total: number
-  old_count: number
-  new_count: number
-}
-
-interface Roster {
-  school_year: number
-  semester: number
-  generated_date: string
-  classes: RosterClass[]
-  grade_summaries: GradeSummary[]
-  grand_total: number
-  old_grand_total: number
-  new_grand_total: number
-  staff_by_role: Record<string, { name: string }[]>
-}
+import type { Roster, RosterStudent } from './rosterTypes'
 
 const props = defineProps<{
   roster: Roster
+  highlightKeyword?: string
 }>()
 
 const rosterTitle = computed(() => {
@@ -294,6 +258,11 @@ function studentTagClass(student: RosterStudent | undefined) {
     case '原住民': return 'tag-indigenous'
     default: return ''
   }
+}
+
+function isHit(student: RosterStudent | undefined) {
+  const kw = (props.highlightKeyword ?? '').trim()
+  return !!kw && !!student && student.name.includes(kw)
 }
 </script>
 
@@ -428,6 +397,13 @@ thead td.corner-cell:first-child {
 .tag-underage   { color: #ea580c; }
 .tag-special    { color: #7c3aed; }
 .tag-indigenous { color: var(--color-info-hover); }
+
+/* 搜尋命中高亮 */
+.student-cell.is-hit {
+  background: var(--color-warning-soft);
+  outline: 2px solid var(--color-warning);
+  font-weight: 700;
+}
 
 /* ── 年級分隔粗邊框 ── */
 .grade-border-right {
