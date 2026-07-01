@@ -128,7 +128,6 @@ vi.mock('element-plus', () => ({
 const GLOBAL_STUBS = {
   TableSkeleton: true,
   LeaveAttachmentDialog: true,
-  LeaveApprovalLogDrawer: true,
   LeaveBatchRejectDialog: true,
   LeaveImportDialog: true,
   LeaveQuotaManager: true,
