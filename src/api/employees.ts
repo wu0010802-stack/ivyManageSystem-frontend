@@ -70,3 +70,9 @@ export const deleteEmployeeContract = (id: number, cid: number): AxiosResp<'/emp
 
 export const listEmployeeClassHistory = (id: number): AxiosResp<'/employees/{employee_id}/class-history', 'get'> =>
     api.get(`/employees/${id}/class-history`)
+
+// ========== Punch PIN（管理員重置） ==========
+
+/** 管理員重置指定員工的打卡 PIN（員工下次需自行重設） */
+export const resetPunchPin = (employeeId: number): AxiosResp<'/employees/{employee_id}/reset-punch-pin', 'post'> =>
+    api.post(`/employees/${employeeId}/reset-punch-pin`)
