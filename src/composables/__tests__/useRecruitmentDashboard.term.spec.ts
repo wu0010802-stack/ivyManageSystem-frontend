@@ -14,7 +14,6 @@ vi.mock('@/utils/download', () => ({
 import { downloadFile } from '@/utils/download'
 
 const mockGetStats = getRecruitmentStats as ReturnType<typeof vi.fn>
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const _mockGetOptions = getRecruitmentOptions as ReturnType<typeof vi.fn>
 const mockDownloadFile = downloadFile as ReturnType<typeof vi.fn>
 
