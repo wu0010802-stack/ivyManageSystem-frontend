@@ -422,6 +422,12 @@ const routes: RouteRecordRaw[] = [
             component: () => import('../views/public/ActivityPublicQueryView.vue'),
             meta: { title: '查詢 / 修改報名', noAuth: true },
         },
+        {
+            path: '/kiosk/punch',
+            name: 'kiosk-punch',
+            component: () => import('../views/kiosk/KioskPunchView.vue'),
+            meta: { title: '電子打卡', noAuth: true, public: true, bare: true, hideNav: true },
+        },
 
         // ============ Maintenance（kill-switch redirect target，雙端共用 admin entry） ============
         {
