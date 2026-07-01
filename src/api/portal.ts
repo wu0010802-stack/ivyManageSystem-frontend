@@ -213,7 +213,7 @@ export const getMySubstituteRequests = (
 
 // ----- 打卡 PIN -----
 
-/** 教師自助設定打卡 PIN（需傳舊 PIN 或初次設定） */
+/** 教師自助設定打卡 PIN（僅需傳新 PIN；後端以 JWT 身分識別，不需傳舊 PIN） */
 export const setPunchPin = (
   data: ApiBody<'/portal/me/punch-pin', 'put'>,
 ): AxiosResp<'/portal/me/punch-pin', 'put'> =>

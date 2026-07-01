@@ -74,12 +74,21 @@ async function confirmPunch() {
     const d = res.data as { employee_name: string; action: string; punch_time: string }
     successText.value = `${d.employee_name}　${actionLabel(d.action)}　${d.punch_time.slice(11, 16)}`
     stage.value = 'success'
-    await loadRoster()
+    // 打卡已成功：立即排程 reset，不受後續刷新名單影響
     setTimeout(reset, 3000)
   } catch {
+    // 僅 kioskPunch 本身失敗才顯示錯誤
     ElMessage.error('打卡失敗，請重試')
   } finally {
     loading.value = false
+  }
+  // 刷新名單為裝飾性動作，失敗不影響已完成的打卡記錄，不可誤報失敗
+  if (stage.value === 'success') {
+    try {
+      await loadRoster()
+    } catch {
+      // 名單過期屬 cosmetic，下次 reset 後自愈
+    }
   }
 }
 
@@ -133,6 +142,7 @@ function reset() {
     <div v-else-if="stage === 'success'" class="success-stage">
       <p class="success-check">✓ 打卡成功</p>
       <p class="success-text">{{ successText }}</p>
+      <el-button text @click="reset">返回</el-button>
     </div>
   </div>
 </template>
