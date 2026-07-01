@@ -2,7 +2,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import QRCode from 'qrcode'
-import { getProfile, updateProfile } from '@/api/portal'
+import { getProfile, updateProfile, setPunchPin } from '@/api/portal'
 import { getMyLineBinding, updateMyLineBinding, deleteMyLineBinding } from '@/api/lineBinding'
 import { useErrorNotify } from '@/composables/useErrorNotify'
 import { useIsMobile } from '@/composables/useIsMobile'
@@ -189,6 +189,32 @@ const removeLineBinding = async () => {
   }
 }
 
+// ---- 打卡 PIN ----
+const pinForm = reactive({ new_pin: '', confirm_pin: '' })
+const savingPin = ref(false)
+
+async function savePunchPin() {
+  if (!/^\d{4,6}$/.test(pinForm.new_pin)) {
+    ElMessage.warning('PIN 須為 4-6 位數字')
+    return
+  }
+  if (pinForm.new_pin !== pinForm.confirm_pin) {
+    ElMessage.warning('兩次輸入的 PIN 不一致')
+    return
+  }
+  savingPin.value = true
+  try {
+    await setPunchPin({ pin: pinForm.new_pin })
+    ElMessage.success('打卡 PIN 已更新')
+    pinForm.new_pin = ''
+    pinForm.confirm_pin = ''
+  } catch {
+    ElMessage.error('設定失敗，請重試')
+  } finally {
+    savingPin.value = false
+  }
+}
+
 onMounted(() => {
   fetchProfile()
   fetchLineBinding()
@@ -346,6 +372,23 @@ onMounted(() => {
           </el-form-item>
         </el-form>
       </template>
+    </el-card>
+
+    <!-- 打卡 PIN 設定 -->
+    <el-card class="profile-card" shadow="hover">
+      <template #header><span class="card-title">打卡 PIN 設定</span></template>
+      <el-form label-width="100px">
+        <el-form-item label="新 PIN">
+          <el-input v-model="pinForm.new_pin" type="password" maxlength="6"
+                    placeholder="4-6 位數字" show-password />
+        </el-form-item>
+        <el-form-item label="確認 PIN">
+          <el-input v-model="pinForm.confirm_pin" type="password" maxlength="6" show-password />
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" :loading="savingPin" @click="savePunchPin">儲存</el-button>
+        </el-form-item>
+      </el-form>
     </el-card>
   </div>
 </template>

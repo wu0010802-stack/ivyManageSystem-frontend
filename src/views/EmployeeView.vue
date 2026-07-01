@@ -38,6 +38,7 @@ import { hasPermission, getUserInfo } from '@/utils/auth'
 import { useIsMobile } from '@/composables/useIsMobile'
 import { useEmployeeFormDirty } from '@/composables/useEmployeeFormDirty'
 import { useFormDraft } from '@/composables/useFormDraft'
+import { useResetPunchPin } from '@/composables/useResetPunchPin'
 import { BASIC_TAB_FIELDS, SALARY_TAB_FIELDS } from '@/constants/employeeFields'
 import { validateInsuranceVsBase } from '@/validators/employeeForm'
 import EmployeeFormBasic, { type EmployeeFormBasicData } from '@/components/employee/EmployeeFormBasic.vue'
@@ -71,6 +72,9 @@ const basicFormRef = ref<{ applyValidationErrors: (p: string[]) => void } | null
 // ── 權限 ──────────────────────────────────────────────
 const canWriteEmployees = computed(() => hasPermission('EMPLOYEES_WRITE'))
 const canWriteSalary = computed(() => hasPermission('SALARY_WRITE'))
+const canResetPunchPin = computed(() => hasPermission('ATTENDANCE_WRITE'))
+
+const { resetEmployeePin } = useResetPunchPin()
 
 const rules: FormRules = {
   // 後端 EmployeeCreate 真正必填只有 name；employee_id 由後端自動配號，不再強制
@@ -518,6 +522,7 @@ const { confirmDelete: handleDelete } = useConfirmDelete({
 // 操作欄「更多」下拉指令（辦理離職 / 刪除收合於此，比照 LeaveView / VendorPaymentView）
 const handleRowCommand = (cmd: string, row: Record<string, unknown>) => {
   if (cmd === 'offboard') openOffboard(row)
+  else if (cmd === 'reset-punch-pin') resetEmployeePin(row as { id: number; name: string })
   else if (cmd === 'delete') handleDelete(row)
 }
 
@@ -984,6 +989,7 @@ onMounted(async () => {
               <template #dropdown>
                 <el-dropdown-menu>
                   <el-dropdown-item v-if="scope.row.is_active" command="offboard">辦理離職</el-dropdown-item>
+                  <el-dropdown-item v-if="canResetPunchPin" command="reset-punch-pin">重置打卡 PIN</el-dropdown-item>
                   <el-dropdown-item command="delete" divided>刪除</el-dropdown-item>
                 </el-dropdown-menu>
               </template>

@@ -210,3 +210,11 @@ export const getMySubstituteRequests = (
   params?: ApiQuery<'/portal/my-substitute-requests', 'get'>,
 ): AxiosResp<'/portal/my-substitute-requests', 'get'> =>
   api.get('/portal/my-substitute-requests', { params })
+
+// ----- 打卡 PIN -----
+
+/** 教師自助設定打卡 PIN（僅需傳新 PIN；後端以 JWT 身分識別，不需傳舊 PIN） */
+export const setPunchPin = (
+  data: ApiBody<'/portal/me/punch-pin', 'put'>,
+): AxiosResp<'/portal/me/punch-pin', 'put'> =>
+  api.put('/portal/me/punch-pin', data)
