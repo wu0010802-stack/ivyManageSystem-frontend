@@ -3011,6 +3011,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/attendance/kiosk/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Kiosk Preview
+         * @description 打卡預判（確認用，不寫入）：驗 PIN 後回傳即將記為上班/下班。
+         */
+        post: operations["kiosk_preview_api_attendance_kiosk_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/attendance/kiosk/punch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Kiosk Punch
+         * @description 即時打卡：驗 PIN 後寫入伺服器當前時間（first-in/last-out）。body 無時間戳欄位，天然防止 self 反向注入。
+         */
+        post: operations["kiosk_punch_api_attendance_kiosk_punch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/attendance/kiosk/roster": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Kiosk Roster
+         * @description 打卡名單：在職員工 + 是否已設 PIN + 今日打卡狀態。最小揭露，無 PII。
+         */
+        get: operations["kiosk_roster_api_attendance_kiosk_roster_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/attendance/record": {
         parameters: {
             query?: never;
@@ -4651,6 +4711,26 @@ export interface paths {
          *     appraisal mark 等），response shape 保持向後相容。
          */
         post: operations["offboard_employee_api_employees__employee_id__offboard_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/employees/{employee_id}/reset-punch-pin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reset Employee Punch Pin
+         * @description 管理端重置員工打卡 PIN（清空，員工須至 Portal 重設）。不經手、不回傳明文 PIN。
+         */
+        post: operations["reset_employee_punch_pin_api_employees__employee_id__reset_punch_pin_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6543,6 +6623,142 @@ export interface paths {
          * @description 查詢當月園務會議出勤統計
          */
         get: operations["get_meeting_summary_api_meetings_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/misc-receipts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Misc Receipts */
+        get: operations["list_misc_receipts_api_misc_receipts_get"];
+        put?: never;
+        /** Create Misc Receipt */
+        post: operations["create_misc_receipt_api_misc_receipts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/misc-receipts/{receipt_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Misc Receipt */
+        get: operations["get_misc_receipt_api_misc_receipts__receipt_id__get"];
+        /** Update Misc Receipt */
+        put: operations["update_misc_receipt_api_misc_receipts__receipt_id__put"];
+        post?: never;
+        /** Delete Misc Receipt */
+        delete: operations["delete_misc_receipt_api_misc_receipts__receipt_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/misc-receipts/{receipt_id}/attachments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upload Attachment */
+        post: operations["upload_attachment_api_misc_receipts__receipt_id__attachments_post"];
+        /** Delete Attachment Endpoint */
+        delete: operations["delete_attachment_endpoint_api_misc_receipts__receipt_id__attachments_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/misc-receipts/{receipt_id}/attachments/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download Attachment */
+        get: operations["download_attachment_api_misc_receipts__receipt_id__attachments_download_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/misc-receipts/{receipt_id}/sign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sign Misc Receipt
+         * @description 簽收：解析 base64 → 寫 storage → 更新狀態。pending 才能簽收。
+         */
+        post: operations["sign_misc_receipt_api_misc_receipts__receipt_id__sign_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/misc-receipts/{receipt_id}/signature": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Signature Image */
+        get: operations["get_signature_image_api_misc_receipts__receipt_id__signature_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/misc-receipts/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Misc Receipts Summary
+         * @description 區間彙總（跨狀態）：供前端 KPI 卡。
+         *
+         *     range 篩選（日期 / 繳款方 / 類別 / 收付方式）與列表一致，但**不吃 status**——
+         *     一律回全狀態並拆 pending / signed，讓「本期總額 / 待簽收 / 已簽收」
+         *     三張卡同時有意義。sum 走 SQL group_by 聚合，不受列表分頁限制、無 N+1。
+         *
+         *     NOTE: 本路由必須宣告在 ``/misc-receipts/{receipt_id}`` 之前，否則
+         *     "summary" 會被當成 receipt_id 解析（422）。
+         */
+        get: operations["misc_receipts_summary_api_misc_receipts_summary_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -9280,6 +9496,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/portal/me/punch-pin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set My Punch Pin
+         * @description 教師設定/更新自己的打卡 PIN（沿用 Portal 登入身分，不需舊 PIN）。
+         */
+        put: operations["set_my_punch_pin_api_portal_me_punch_pin_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/portal/medications/today": {
         parameters: {
             query?: never;
@@ -10463,14 +10699,14 @@ export interface paths {
         };
         /**
          * Get Board
-         * @description 4 階段看板資料，依「訪視月份所屬學年（/學期）」圈定範圍。
+         * @description 4 階段看板資料，依「入學學期（target_school_year/target_semester）」圈定範圍。
          *
-         *     visit 依 month（民國月份）所屬學年過濾（學年 N = 8 月~隔年 7 月）：school_year 未帶
-         *     時預設當前學年，semester 未帶時涵蓋整學年（上+下）。
+         *     所有寫入路徑皆保證 target 有值：create 預設當前學期、Excel import 由月份推導、
+         *     enrterm01 migration backfill 補齊既有資料（含 dev DB null_tsy=0 記錄）。
+         *     因此 board 可直接以 target 過濾，無需 month fallback。
          *
-         *     原實作抓全表（query(RecruitmentVisit).all()）→ 切學年看板不變、隨年度無上限累積、
-         *     summary 是全歷史人數而非當期（2026-06 探測）。target_school_year 多為 NULL（僅保留
-         *     座位時才填）不能當過濾依據，故改由 month 推導所屬學年（與招生模組 month/period 慣例一致）。
+         *     school_year 未帶時預設當前學年，semester 未帶時涵蓋整學年（上+下，即不加
+         *     target_semester 條件）。
          */
         get: operations["get_board_api_recruitment_funnel_board_get"];
         put?: never;
@@ -11010,7 +11246,7 @@ export interface paths {
         };
         /**
          * Get Recruitment Stats
-         * @description 完整統計匯總（全 SQL GROUP BY，效能最佳化版）
+         * @description 完整統計匯總（全 SQL GROUP BY，效能最佳化版）；可依入學學期 scope。
          */
         get: operations["get_recruitment_stats_api_recruitment_stats_get"];
         put?: never;
@@ -11030,7 +11266,7 @@ export interface paths {
         };
         /**
          * Export Recruitment Stats
-         * @description 匯出招生統計 Excel（多頁簽）
+         * @description 匯出招生統計 Excel（多頁簽）；可依入學學期 scope。
          */
         get: operations["export_recruitment_stats_api_recruitment_stats_export_get"];
         put?: never;
@@ -15666,6 +15902,11 @@ export interface components {
              */
             owner_type: "observation" | "report" | "medication_order";
         };
+        /** Body_upload_attachment_api_misc_receipts__receipt_id__attachments_post */
+        Body_upload_attachment_api_misc_receipts__receipt_id__attachments_post: {
+            /** File */
+            file: string;
+        };
         /** Body_upload_attachment_api_vendor_payments__payment_id__attachments_post */
         Body_upload_attachment_api_vendor_payments__payment_id__attachments_post: {
             /** File */
@@ -19900,6 +20141,54 @@ export interface components {
             /** Name */
             name: string;
         };
+        /** KioskPreviewResponse */
+        KioskPreviewResponse: {
+            /** Action */
+            action: string;
+            /** Current Punch Out */
+            current_punch_out: string | null;
+            /** Employee Name */
+            employee_name: string;
+            /**
+             * Server Time
+             * Format: date-time
+             */
+            server_time: string;
+            /** Will Overwrite */
+            will_overwrite: boolean;
+        };
+        /** KioskPunchRequest */
+        KioskPunchRequest: {
+            /** Employee Id */
+            employee_id: number;
+            /** Pin */
+            pin: string;
+        };
+        /** KioskPunchResponse */
+        KioskPunchResponse: {
+            /** Action */
+            action: string;
+            /** Employee Name */
+            employee_name: string;
+            /**
+             * Punch Time
+             * Format: date-time
+             */
+            punch_time: string;
+            /** Status */
+            status: string;
+        };
+        /** KioskRosterEntry */
+        KioskRosterEntry: {
+            /** Employee Id */
+            employee_id: number;
+            /** Has Pin */
+            has_pin: boolean;
+            /** Name */
+            name: string;
+            /** Today State */
+            today_state: string;
+        };
         /**
          * LastMeasurement
          * @description 單筆量測快照；string 值對齊 router 內 `str(Decimal)` 序列化.
@@ -20583,6 +20872,156 @@ export interface components {
             milestone_type?: string | null;
             /** Title */
             title?: string | null;
+        };
+        /**
+         * MiscReceiptAttachmentMetaOut
+         * @description 雜項收款附件 metadata（單筆）。
+         */
+        MiscReceiptAttachmentMetaOut: {
+            /** Filename */
+            filename: string;
+            /** Key */
+            key: string;
+            /** Mime Type */
+            mime_type?: string | null;
+            /** Size */
+            size: number;
+            /** Uploaded At */
+            uploaded_at?: string | null;
+            /** Uploaded By Id */
+            uploaded_by_id?: number | null;
+        };
+        /** MiscReceiptCreate */
+        MiscReceiptCreate: {
+            /** Amount */
+            amount: number | string;
+            /** Category */
+            category: string;
+            /** Description */
+            description?: string | null;
+            /** Notes */
+            notes?: string | null;
+            /** Payer Name */
+            payer_name: string;
+            /**
+             * Payment Method
+             * @enum {string}
+             */
+            payment_method: "cash" | "bank_transfer" | "check" | "linepay" | "other";
+            /**
+             * Receipt Date
+             * Format: date
+             */
+            receipt_date: string;
+            /** Receipt Number */
+            receipt_number?: string | null;
+        };
+        /**
+         * MiscReceiptListOut
+         * @description GET /misc-receipts 分頁列表回傳。
+         */
+        MiscReceiptListOut: {
+            /** Items */
+            items: components["schemas"]["MiscReceiptOut"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
+        };
+        /**
+         * MiscReceiptOut
+         * @description 單筆雜項收款（含簽收狀態 / 附件 metadata）。對應 router _to_dict(row)。
+         */
+        MiscReceiptOut: {
+            /** Amount */
+            amount?: number | null;
+            /** Attachments */
+            attachments: components["schemas"]["MiscReceiptAttachmentMetaOut"][];
+            /** Category */
+            category: string;
+            /** Created At */
+            created_at?: string | null;
+            /** Created By Id */
+            created_by_id?: number | null;
+            /** Created By Name */
+            created_by_name?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Has Signature */
+            has_signature: boolean;
+            /** Id */
+            id: number;
+            /** Notes */
+            notes?: string | null;
+            /** Payer Name */
+            payer_name: string;
+            /** Payment Method */
+            payment_method: string;
+            /** Receipt Date */
+            receipt_date?: string | null;
+            /** Receipt Number */
+            receipt_number?: string | null;
+            /** Signature Kind */
+            signature_kind?: string | null;
+            /** Signed At */
+            signed_at?: string | null;
+            /** Signer Id */
+            signer_id?: number | null;
+            /** Signer Name */
+            signer_name?: string | null;
+            /** Status */
+            status: string;
+            /** Updated At */
+            updated_at?: string | null;
+        };
+        /** MiscReceiptSignRequest */
+        MiscReceiptSignRequest: {
+            /** Signature Data */
+            signature_data: string;
+            /**
+             * Signature Kind
+             * @enum {string}
+             */
+            signature_kind: "drawn" | "photo";
+        };
+        /**
+         * MiscReceiptSummaryOut
+         * @description GET /misc-receipts/summary 區間彙總（KPI 卡，跨狀態，含 pending）。
+         */
+        MiscReceiptSummaryOut: {
+            /** Pending Amount */
+            pending_amount: number;
+            /** Pending Count */
+            pending_count: number;
+            /** Signed Amount */
+            signed_amount: number;
+            /** Signed Count */
+            signed_count: number;
+            /** Total Amount */
+            total_amount: number;
+            /** Total Count */
+            total_count: number;
+        };
+        /** MiscReceiptUpdate */
+        MiscReceiptUpdate: {
+            /** Amount */
+            amount?: number | string | null;
+            /** Category */
+            category?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Notes */
+            notes?: string | null;
+            /** Payer Name */
+            payer_name?: string | null;
+            /** Payment Method */
+            payment_method?: ("cash" | "bank_transfer" | "check" | "linepay" | "other") | null;
+            /** Receipt Date */
+            receipt_date?: string | null;
+            /** Receipt Number */
+            receipt_number?: string | null;
         };
         /** MonthCreate */
         MonthCreate: {
@@ -24190,6 +24629,11 @@ export interface components {
             /** Requested Punch Out */
             requested_punch_out?: string | null;
         };
+        /** PunchPinSetRequest */
+        PunchPinSetRequest: {
+            /** Pin */
+            pin: string;
+        };
         /** QuotaUpdate */
         QuotaUpdate: {
             /** Note */
@@ -24592,6 +25036,10 @@ export interface components {
             seq_no?: string | null;
             /** Source */
             source?: string | null;
+            /** Target School Year */
+            target_school_year?: number | null;
+            /** Target Semester */
+            target_semester?: number | null;
             /**
              * Transfer Term
              * @default false
@@ -24641,6 +25089,10 @@ export interface components {
             seq_no?: string | null;
             /** Source */
             source?: string | null;
+            /** Target School Year */
+            target_school_year?: number | null;
+            /** Target Semester */
+            target_semester?: number | null;
             /** Transfer Term */
             transfer_term?: boolean | null;
             /** Visit Date */
@@ -26394,6 +26846,10 @@ export interface components {
             emergency_contact_relation?: string | null;
             /** Enrollment Date */
             enrollment_date?: string | null;
+            /** Enrollment School Year */
+            enrollment_school_year?: number | null;
+            /** Enrollment Semester */
+            enrollment_semester?: number | null;
             /** Gender */
             gender?: string | null;
             /** Id */
@@ -33697,6 +34153,92 @@ export interface operations {
             };
         };
     };
+    kiosk_preview_api_attendance_kiosk_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KioskPunchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KioskPreviewResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    kiosk_punch_api_attendance_kiosk_punch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KioskPunchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KioskPunchResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    kiosk_roster_api_attendance_kiosk_roster_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KioskRosterEntry"][];
+                };
+            };
+        };
+    };
     create_or_update_attendance_record_api_attendance_record_post: {
         parameters: {
             query?: never;
@@ -36794,6 +37336,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OffboardResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reset_employee_punch_pin_api_employees__employee_id__reset_punch_pin_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                employee_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -40177,6 +40750,376 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_misc_receipts_api_misc_receipts_get: {
+        parameters: {
+            query?: {
+                category?: string | null;
+                end_date?: string | null;
+                page?: number;
+                page_size?: number;
+                payer_name?: string | null;
+                payment_method?: ("cash" | "bank_transfer" | "check" | "linepay" | "other") | null;
+                start_date?: string | null;
+                status?: ("pending" | "signed") | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MiscReceiptListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_misc_receipt_api_misc_receipts_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MiscReceiptCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MutationResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_misc_receipt_api_misc_receipts__receipt_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                receipt_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MiscReceiptOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_misc_receipt_api_misc_receipts__receipt_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                receipt_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MiscReceiptUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_misc_receipt_api_misc_receipts__receipt_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                receipt_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_attachment_api_misc_receipts__receipt_id__attachments_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                receipt_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_attachment_api_misc_receipts__receipt_id__attachments_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MiscReceiptAttachmentMetaOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_attachment_endpoint_api_misc_receipts__receipt_id__attachments_delete: {
+        parameters: {
+            query: {
+                key: string;
+            };
+            header?: never;
+            path: {
+                receipt_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_attachment_api_misc_receipts__receipt_id__attachments_download_get: {
+        parameters: {
+            query: {
+                key: string;
+            };
+            header?: never;
+            path: {
+                receipt_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sign_misc_receipt_api_misc_receipts__receipt_id__sign_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                receipt_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MiscReceiptSignRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_signature_image_api_misc_receipts__receipt_id__signature_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                receipt_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    misc_receipts_summary_api_misc_receipts_summary_get: {
+        parameters: {
+            query?: {
+                category?: string | null;
+                end_date?: string | null;
+                payer_name?: string | null;
+                payment_method?: ("cash" | "bank_transfer" | "check" | "linepay" | "other") | null;
+                start_date?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MiscReceiptSummaryOut"];
                 };
             };
             /** @description Validation Error */
@@ -44367,6 +45310,39 @@ export interface operations {
             };
         };
     };
+    set_my_punch_pin_api_portal_me_punch_pin_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PunchPinSetRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_today_medications_api_portal_medications_today_get: {
         parameters: {
             query?: {
@@ -47239,6 +48215,8 @@ export interface operations {
                 page?: number;
                 page_size?: number;
                 referrer?: string | null;
+                school_year?: number | null;
+                semester?: number | null;
                 source?: string | null;
             };
             header?: never;
@@ -47404,6 +48382,8 @@ export interface operations {
             query?: {
                 dataset_scope?: string;
                 reference_month?: string | null;
+                school_year?: number | null;
+                semester?: number | null;
             };
             header?: never;
             path?: never;
@@ -47436,6 +48416,8 @@ export interface operations {
             query?: {
                 dataset_scope?: string;
                 reference_month?: string | null;
+                school_year?: number | null;
+                semester?: number | null;
             };
             header?: never;
             path?: never;
