@@ -194,6 +194,7 @@ declare module 'vue' {
     MiscReceiptSignDialog: typeof import('./src/components/MiscReceiptSignDialog.vue')['default']
     MobileEmptyState: typeof import('./src/components/common/MobileEmptyState.vue')['default']
     MobileErrorRetry: typeof import('./src/components/common/MobileErrorRetry.vue')['default']
+    NumPad: typeof import('./src/components/kiosk/NumPad.vue')['default']
     OffboardingModal: typeof import('./src/components/offboarding/OffboardingModal.vue')['default']
     OffboardingPreviewPanel: typeof import('./src/components/offboarding/OffboardingPreviewPanel.vue')['default']
     OffboardingStepsResult: typeof import('./src/components/offboarding/OffboardingStepsResult.vue')['default']
