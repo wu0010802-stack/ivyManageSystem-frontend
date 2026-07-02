@@ -1,14 +1,11 @@
 import api, { API_BASE } from './index'
-
-/** 區間彙總（跨狀態），對應後端 GET /misc-receipts/summary。 */
-export interface MiscReceiptSummary {
-  total_count: number
-  total_amount: number
-  pending_count: number
-  pending_amount: number
-  signed_count: number
-  signed_amount: number
-}
+export {
+  PAYMENT_METHOD_OPTIONS,
+  paymentMethodLabel,
+  CATEGORY_OPTIONS,
+  categoryLabel,
+} from '@/constants/signoff'
+export type { SignoffSummary as MiscReceiptSummary } from '@/constants/signoff'
 
 export const listMiscReceipts = (params: unknown) =>
   api.get('/misc-receipts', { params })
@@ -46,26 +43,3 @@ export const downloadMiscReceiptAttachmentUrl = (id: number, key: string) =>
 
 export const miscReceiptSignatureUrl = (id: number) =>
   `${API_BASE}/misc-receipts/${id}/signature`
-
-export const PAYMENT_METHOD_OPTIONS = [
-  { value: 'cash', label: '現金' },
-  { value: 'bank_transfer', label: '銀行匯款' },
-  { value: 'check', label: '支票' },
-  { value: 'linepay', label: 'LINE Pay' },
-  { value: 'other', label: '其他' },
-]
-
-export const paymentMethodLabel = (value: string) =>
-  PAYMENT_METHOD_OPTIONS.find((o) => o.value === value)?.label || value
-
-export const CATEGORY_OPTIONS = [
-  { value: 'rent', label: '場地租金' },
-  { value: 'donation', label: '捐款' },
-  { value: 'subsidy', label: '補助款' },
-  { value: 'secondhand_sale', label: '二手義賣' },
-  { value: 'refund_recovery', label: '退費回收' },
-  { value: 'other', label: '其他' },
-]
-
-export const categoryLabel = (value: string) =>
-  CATEGORY_OPTIONS.find((o) => o.value === value)?.label || value
