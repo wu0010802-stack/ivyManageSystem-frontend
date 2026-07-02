@@ -1956,6 +1956,13 @@ export interface paths {
         /**
          * Upload Announcement Attachment
          * @description 上傳公告附件（圖片 / PDF），單一公告最多 5 個。
+         *
+         *     async handler 只保留副檔名守衛、公告存在 + 附件數上限的 fail-fast 前置檢查與檔案
+         *     讀取（唯一的 await）；magic 驗證 + 影像變體生成（PIL 全圖重編碼 + EXIF orientation
+         *     + 兩次 LANCZOS resize + JPEG 編碼 + 落盤）+ DB 寫入抽到同步 helper
+         *     _process_announcement_attachment_upload，經 asyncio.to_thread 丟 threadpool，避免
+         *     單一 uvicorn worker 部署下凍結 event loop（對照 api/attendance/upload.py commit
+         *     c49989f6）。
          */
         post: operations["upload_announcement_attachment_api_announcements__announcement_id__attachments_post"];
         delete?: never;
@@ -2466,6 +2473,11 @@ export interface paths {
         /**
          * Export Transfer Roster
          * @description 匯出轉帳名冊（只含 bonus > 0 的員工）。
+         *
+         *     轉帳名冊含全員未遮罩銀行帳號 + 戶名 + 獎金金額，屬付款/會計產物，故掛會計階
+         *     APPRAISAL_ACCOUNTING（admin/hr）而非最低階 APPRAISAL_READ——後者 supervisor 亦持有，
+         *     會讓主管越權下載全所員工銀行帳號名冊（稽核 2026-07-02 P1）。對齊同模組會計簽核
+         *     （__init__.py 會計階 gate）與姊妹薪資轉帳名冊的 full-salary-view 守衛。
          */
         get: operations["export_transfer_roster_api_appraisal_cycles__cycle_id__transfer_roster_xlsx_get"];
         put?: never;
@@ -2876,6 +2888,13 @@ export interface paths {
         /**
          * Upload Attachment
          * @description 上傳附件並自動生成 display / thumb 變體（影像）。
+         *
+         *     async handler 只保留輕量 fail-fast 守衛（副檔名 / HEIC 支援）、ACL 前置檢查與
+         *     檔案讀取（唯一的 await）；其後的 magic 驗證 + 影像變體生成（PIL 全圖重編碼 +
+         *     EXIF orientation + 兩次 LANCZOS resize + JPEG 編碼 + 落盤）+ DB 寫入等 CPU-heavy
+         *     工作抽到同步 helper `_process_attachment_upload`，經 asyncio.to_thread 丟
+         *     threadpool 執行，避免單一 uvicorn worker 部署下凍結 event loop（對照
+         *     api/attendance/upload.py commit c49989f6）。
          */
         post: operations["upload_attachment_api_attachments_post"];
         delete?: never;
@@ -6697,7 +6716,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Download Attachment */
+        /**
+         * Download Attachment
+         * @description 回傳附件檔案（binary）。response_model=None 理由同 get_signature_image。
+         */
         get: operations["download_attachment_api_misc_receipts__receipt_id__attachments_download_get"];
         put?: never;
         post?: never;
@@ -6734,7 +6756,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get Signature Image */
+        /**
+         * Get Signature Image
+         * @description 回傳簽名影像（binary）。response_model=None：FileResponse 繞過 response_model
+         *     驗證，掛假 schema 反而讓 OpenAPI 騙人（聲明 JSON 但實回 binary）。慣例對齊
+         *     api/portfolio/reports.py:download_growth_report。
+         */
         get: operations["get_signature_image_api_misc_receipts__receipt_id__signature_get"];
         put?: never;
         post?: never;
@@ -37370,7 +37397,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeleteResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -45333,7 +45360,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeleteResultOut"];
                 };
             };
             /** @description Validation Error */
