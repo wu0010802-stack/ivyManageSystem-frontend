@@ -23,6 +23,7 @@
 import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { join, basename, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { gzipSync } from 'node:zlib'
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url))
 const DIST = join(SCRIPT_DIR, '..', 'dist')
@@ -49,6 +50,18 @@ const ENTRIES = [
     reason: '家長端 parent 不得靜態可達 admin-core chunk',
   },
 ]
+
+// C2（2026-07-02 系統設計檢視）：每 entry「靜態可達（首屏阻塞）」chunk 集合的 gz 大小
+// 預算（KB）。超出即 exit 1，防止首屏體積悄悄漂大的回歸（例如 admin index 曾漂到含
+// portal+activity-admin+fullcalendar+qrcode 的 eager 載入）。數值以本次真實 build 的
+// 印出值 + ~12% headroom 校準；刻意成長時對照印出值上調。
+// 校準基準（2026-07-02 真實 build 首屏 gz）：index 675.7 / public 174.5 / parent 245.9。
+// 下方為 +~12% headroom；刻意成長時對照 build 印出值上調。
+const ENTRY_BUDGETS_KB = {
+  index: 760,
+  public: 200,
+  parent: 280,
+}
 
 if (!existsSync(ASSETS)) {
   console.error(`[check-entry-chunks] 找不到 ${ASSETS}，請先執行 npm run build`)
@@ -155,9 +168,32 @@ for (const entry of ENTRIES) {
     continue
   }
   const { visited, edgeFrom } = computeReachable(entry)
+
+  // C2：量測此 entry 靜態可達集合的 gz 總量（≈ 首屏阻塞 JS 體積）。budget=0 為量測模式
+  // （只印不強制），設定實際預算後超標即算 fail。
+  let gzBytes = 0
+  for (const f of visited) {
+    gzBytes += gzipSync(readFileSync(join(ASSETS, f))).length
+  }
+  const gzKb = gzBytes / 1024
+  const budgetKb = ENTRY_BUDGETS_KB[entry.name] || 0
+  const overBudget = budgetKb > 0 && gzKb > budgetKb
+  console.log(
+    `[check-entry-chunks] ${entry.name}：靜態可達 ${visited.size} chunk，` +
+      `首屏 gz ${gzKb.toFixed(1)}KB` +
+      (budgetKb > 0 ? ` / 預算 ${budgetKb}KB${overBudget ? ' ✗ 超標' : ' ✓'}` : ' (量測模式，未設預算)')
+  )
+  if (overBudget) {
+    failed = true
+    console.error(
+      `\n[check-entry-chunks] ✗ ${entry.name}：首屏 gz ${gzKb.toFixed(1)}KB 超過預算 ${budgetKb}KB。` +
+        `修法：把新拖入首屏的重依賴改 lazy（dynamic import）或 peel 成獨立 chunk；` +
+        `若為刻意成長，校準後上調 ENTRY_BUDGETS_KB。`
+    )
+  }
+
   const violations = [...visited].filter((f) => entry.forbidden.some((re) => re.test(f)))
   if (violations.length === 0) {
-    console.log(`[check-entry-chunks] ✓ ${entry.name}：靜態可達 ${visited.size} chunk，無違規`)
     continue
   }
   failed = true
