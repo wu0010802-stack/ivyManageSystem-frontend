@@ -193,15 +193,22 @@ const routes: RouteRecordRaw[] = [
             meta: { title: '公告管理' }
         },
         {
+            path: '/finance-signoffs',
+            name: 'finance-signoffs',
+            component: () => import('../views/FinanceSignoffView.vue'),
+            meta: { title: '收支簽收' }
+        },
+        // 舊入口 redirect：保留書籤與稽核深連結（?highlight 等 query 原樣透傳）
+        {
             path: '/vendor-payments',
             name: 'vendor-payments',
-            component: () => import('../views/VendorPaymentView.vue'),
+            redirect: (to) => ({ path: '/finance-signoffs', query: { ...to.query, tab: 'vendor' } }),
             meta: { title: '廠商付款簽收' }
         },
         {
             path: '/misc-receipts',
             name: 'misc-receipts',
-            component: () => import('../views/MiscReceiptView.vue'),
+            redirect: (to) => ({ path: '/finance-signoffs', query: { ...to.query, tab: 'misc' } }),
             meta: { title: '雜項收款簽收' }
         },
         {
