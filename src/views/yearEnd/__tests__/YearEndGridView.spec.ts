@@ -116,6 +116,31 @@ describe('YearEndGridView', () => {
     expect(api.getYearEndGrid).toHaveBeenCalledWith(7)
   })
 
+  // F-2: 總表金額顯示層統一四捨五入到整數元，row 原始字串值（送出/核對用）不受影響
+  it('F-2: moneyInt 顯示層四捨五入到整數元，不改動 row 原始字串值', async () => {
+    vi.mocked(api.getYearEndGrid).mockResolvedValue({
+      data: [makeRow({ payable_amount: '60443.41', total_amount: '65443.41' })],
+    } as never)
+
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as {
+      rows: GridRow[]
+      moneyInt: (val: unknown) => string
+    }
+
+    // 原始資料值不動（送出/核對仍用原始精度）
+    expect(vm.rows[0].payable_amount).toBe('60443.41')
+    expect(vm.rows[0].total_amount).toBe('65443.41')
+
+    // 顯示層四捨五入到整數元
+    expect(vm.moneyInt(vm.rows[0].payable_amount)).toBe('NT$60,443')
+    expect(vm.moneyInt(vm.rows[0].total_amount)).toBe('NT$65,443')
+    // 既有整數欄（考核上）維持不變
+    expect(vm.moneyInt(vm.rows[0].special_bonuses.APPRAISAL_HALF_BONUS_FIRST)).toBe('NT$3,312')
+    // null/空值仍走既有「—」fallback
+    expect(vm.moneyInt(null)).toBe('—')
+  })
+
   // Case 2: build button calls buildSettlements then reloads grid (no gaps → no warning)
   it('build button calls buildSettlements then reloads (getYearEndGrid called twice)', async () => {
     vi.mocked(api.getYearEndGrid).mockResolvedValue({

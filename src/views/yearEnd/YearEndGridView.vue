@@ -10,6 +10,19 @@ import api from '@/api/index'
 // Derive row type from the typed API wrapper — no hand-written `any`.
 type GridRow = Awaited<ReturnType<typeof getYearEndGrid>>['data'][number]
 
+// F-2：總表金額統一顯示為整數元（僅顯示層四捨五入，row.* 原始資料值不動、
+// 送出/核對仍用原始精度）。「主結算」「合計」帶兩位小數與「考核上」「紅利上」
+// 等整數欄並列時視覺突兀，也讓欄寬更容易不夠而在小數點附近換行。
+// GridRowOut 的金額欄位（payable_amount / total_amount / special_bonuses[key]）
+// 是後端 Decimal 序列化的字串，先 Number() 轉換再四捨五入。null/'' 直接交給
+// money() 走既有「—」fallback（Number(null)===0 / Number('')===0 會誤判成
+// 有效值，故先排除）。
+const moneyInt = (val: unknown) => {
+  if (val == null || val === '') return money(val)
+  const n = Number(val)
+  return Number.isFinite(n) ? money(Math.round(n)) : money(val)
+}
+
 const SPECIAL_BONUS_LABELS: Record<string, string> = {
   APPRAISAL_HALF_BONUS_FIRST: '考核上',
   APPRAISAL_HALF_BONUS_SECOND: '考核下',
@@ -225,9 +238,9 @@ onMounted(loadGrid)
       />
 
       <!-- 主結算 -->
-      <el-table-column label="主結算" width="120" align="right">
+      <el-table-column label="主結算" width="130" align="right" class-name="money-cell">
         <template #default="{ row }">
-          {{ money(row.payable_amount) }}
+          {{ moneyInt(row.payable_amount) }}
         </template>
       </el-table-column>
 
@@ -236,9 +249,9 @@ onMounted(loadGrid)
         v-for="col in bonusColumns"
         :key="col.key"
         :label="col.label"
-        width="110"
+        width="118"
         align="right"
-        :class-name="col.key === 'EXCESS_ENROLLMENT' || col.key === 'CUSTOM' ? 'yellow-col' : ''"
+        :class-name="`money-cell ${col.key === 'EXCESS_ENROLLMENT' || col.key === 'CUSTOM' ? 'yellow-col' : ''}`"
       >
         <template #header>
           <span
@@ -249,15 +262,15 @@ onMounted(loadGrid)
           <span
             :class="col.key === 'EXCESS_ENROLLMENT' || col.key === 'CUSTOM' ? 'yellow-cell' : ''"
           >
-            {{ money(row.special_bonuses[col.key] ?? 0) }}
+            {{ moneyInt(row.special_bonuses[col.key] ?? 0) }}
           </span>
         </template>
       </el-table-column>
 
       <!-- 合計 -->
-      <el-table-column label="合計" width="130" align="right">
+      <el-table-column label="合計" width="145" align="right" class-name="money-cell">
         <template #default="{ row }">
-          <strong class="total-amount">{{ money(row.total_amount) }}</strong>
+          <strong class="total-amount">{{ moneyInt(row.total_amount) }}</strong>
         </template>
       </el-table-column>
 
@@ -398,6 +411,11 @@ onMounted(loadGrid)
 .total-amount {
   color: #409eff;
   font-weight: 600;
+}
+/* F-2：金額 cell 禁止在小數點/千分位逗號附近換行成兩行（稽核核對風險）；
+   欄寬不足時交給 el-table 內建橫向捲動，不擠壓內容。 */
+:deep(.money-cell .cell) {
+  white-space: nowrap;
 }
 .yellow-header {
   background: #fefce8;
