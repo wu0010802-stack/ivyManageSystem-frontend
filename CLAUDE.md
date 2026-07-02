@@ -112,18 +112,25 @@ if (hasPermission('SALARY_READ')) { ... }
 
 // 多項任一（route guard / sidebar）
 const allowed = ['SALARY_READ', 'SALARY_WRITE'].some(p => hasPermission(p))
-
-// 自動 wildcard：userInfo.permission_names 含 '*' 時 hasPermission(任意) → true
 ```
+
+**`hasPermission` 比對順序（非純 `includes`）**：
+1. `role === 'teacher'` 短路回 `false`（教師只走 Portal；**勿移除，否則提權**）
+2. wildcard：`permission_names` 含 `'*'` → true
+3. bare：`includes(name)` → true
+4. scope-qualified：`startsWith('<name>:')` → true（row-level scoping `<CODE>:own_class/all`，用 `getPermissionScope(name)` 取 scope，與後端 `resolve_grant` 對齊）
+
+**教師專屬 Portal 功能**（如家園溝通收發）用 `hasPortalPermission`——跳過 teacher 短路、其餘比對相同；**僅限 Portal 端使用**，admin 端一律 `hasPermission`。
 
 **資料來源**：
 - `userInfo.permission_names: string[]`（透過 `getUserInfo()` 從 localStorage 讀；響應式於 refresh / setUserInfo 後更新）
 - `null` 或 `undefined` 視為「無權限」，`hasPermission` 一律回 `false`（fail-safe）
 
 **新增 Permission 的跨端 SOP**：
-1. 後端 `utils/permissions.Permission` 加 enum 值（如 `Permission.NEW_FEATURE_READ = "NEW_FEATURE_READ"`）+ `PERMISSION_LABELS` 中文 + 必要的 `ROLE_TEMPLATES` 條目
+1. 後端 `utils/permissions.Permission` 加 enum 值（如 `Permission.NEW_FEATURE_READ = "NEW_FEATURE_READ"`）+ `PERMISSION_LABELS` 中文（僅供 alembic seed）
 2. 前端 `src/constants/permissions.ts` 同步加常數（與後端 enum 名稱字面一致，CI 漂移將造成所有檢查 fail-safe 不通過）
-3. 兩端各自補測試
+3. 角色→權限映射以 **DB `roles` 表為單一來源**（`rolesdb01` 起，`GET /auth/permissions` 回傳、前端純渲染）；in-code `ROLE_TEMPLATES` 僅為無 session / DB 未 seed 時的 fallback，新權限的角色授予要落在 DB seed
+4. 兩端各自補測試
 
 **禁止**：
 - `: any` 或 `as any` 處理 permission（用 `string` 即可）
@@ -212,6 +219,14 @@ const resp: AxiosResp<'/employees', 'get'> = await api.get('/employees')
 - 元件渲染
 - API 整合
 
+**家長端測試散在三個樹**：`src/parent/**/__tests__/`（co-located）、`tests/unit/parent/`（mirror）、`tests/parent/`。改家長端元件的 markup / CSS class / prop 後**必跑全三樹**：
+
+```bash
+npm run test -- --run src/parent tests/unit/parent tests/parent
+```
+
+別樹的 sibling 測試檔不在本次 diff 內，只跑自己那樹會漏紅（2026-06-24 Bento 改版兩度踩中）。滾動/查詢錨點用穩定 `data-*` 屬性，別綁會被 restyle 改掉的 CSS class。
+
 ---
 
 ### Git Commit 規範
@@ -274,8 +289,9 @@ const resp: AxiosResp<'/employees', 'get'> = await api.get('/employees')
 
 ## 開發注意事項
 - 回應語言：一律使用**繁體中文**
-- 權限檢查：用 `@/utils/auth` 的 `hasPermission(name: string)` 純 `includes` 比對；**禁止**任何 `BigInt` / `mask & PERMISSION_VALUES.X` 寫法（2026-05-21 起 Permission 已改 str enum，舊 BigInt helper 已移除）。詳見下方「跨端權限與認證」段或 `../ivyManageSystem/docs/adr/ADR-002_permission-intflag-to-str-enum.md`。
+- 權限檢查：一律走 `@/utils/auth` 的 `hasPermission(name: string)`（**非純 `includes`**：teacher 短路 → wildcard `*` → bare includes → scope-qualified 前綴，詳見上方「跨端權限與認證」段）；**禁止**任何 `BigInt` / `mask & PERMISSION_VALUES.X` 寫法（2026-05-21 起 Permission 已改 str enum，舊 BigInt helper 已移除）。決策見 `../ivyManageSystem/docs/adr/ADR-002_permission-intflag-to-str-enum.md`。
 - 升級依賴後必須跑 `npm audit --production --audit-level=moderate`；CI 會 enforce。dev-only 套件的 transitive CVE（如 `vite-plugin-pwa`）需評估是否要 force 升級。
+- **依賴版本釘選（升大版前先讀）**：`vite` 停在 7.x——vite 8 = Rolldown，不支援 `manualChunks`，升級需重寫成 `advancedChunks` 並對 baseline build 比對 chunk 產物；`vue-tsc` 停在 2.2.12——v3 對 composable + template ref 有 `noUnusedLocals` 誤報（上游 issue #1168）。
 
 ---
 
