@@ -117,6 +117,14 @@ const suggestion = ref<RefundSuggestion | null>(null)
 const suggesting = ref<boolean>(false)
 const submitting = ref<boolean>(false)
 
+// 冪等鍵：同一次退費嘗試固定一把 key，網路逾時/回應遺失後重按沿用同 key，後端 10 分鐘
+// 視窗內視為重試回放原結果，避免重複退款（雙重退錢）。後端要求 ^[A-Za-z0-9_-]{8,64}$。
+const idempotencyKey = ref<string>('')
+function genIdempotencyKey(): string {
+  const rand = Math.random().toString(36).slice(2, 10)
+  return `RFD-${Date.now()}-${rand}`
+}
+
 const form = reactive<{
   withdrawal_date: Date | null
   T_total_override: number | null
@@ -143,6 +151,12 @@ watch(() => props.record, (r) => {
     form.notes = ''
     suggestion.value = null
   }
+}, { immediate: true })
+
+// 每次開啟視為一次新的退費嘗試 → 產一把新 key；同一開啟期間（含送出失敗後重按）
+// 不重生，確保重送沿用同 key 讓後端回放而非重複退款。
+watch(() => props.modelValue, (open) => {
+  if (open) idempotencyKey.value = genIdempotencyKey()
 }, { immediate: true })
 
 const canSubmit = computed(() =>
@@ -175,6 +189,7 @@ async function onSubmit() {
       amount: form.amount,
       reason: form.reason,
       notes: form.notes,
+      idempotency_key: idempotencyKey.value,
       calc_method: suggestion.value?.calc_method,
       calc_payload: suggestion.value?.calc_payload,
     })
@@ -195,6 +210,9 @@ function format(d: Date | string | null): string | null {
   // 本地時區，不可用 toISOString()（UTC 會在台北凌晨偏成昨天）；無效日期回 null
   return dateToLocalISO(dt) || null
 }
+
+// 供測試檢視內部狀態（比照 AdjustmentEditDialog）
+defineExpose({ form, onSubmit, idempotencyKey })
 </script>
 
 <style scoped>
