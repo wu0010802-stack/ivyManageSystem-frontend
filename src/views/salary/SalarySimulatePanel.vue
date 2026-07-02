@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
+import type { AxiosError } from 'axios'
 import { simulateSalary, getEmployeeSalaryDebug } from '@/api/salary'
 import { useEmployeeStore } from '@/stores/employee'
 import { ElMessage } from 'element-plus'
@@ -166,8 +167,11 @@ const runSimulate = async ({ useCache = true }: { useCache?: boolean } = {}) => 
     cache[cacheKey] = { ts: Date.now(), data: simRes.data }
     writeCache(pruneCache(cache))
   } catch (e) {
-    const detail = (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
-    ElMessage.error('試算失敗: ' + (detail || (e as Error).message))
+    // 錯誤訊息一律讀攔截器正規化後的 displayMessage（src/api/index.ts），
+    // 不再自己解析 response.data.detail——detail 在後端 500 envelope 下是物件
+    // （{code,message,request_id}），直接字串串接會顯示 [object Object]。
+    const err = e as AxiosError
+    ElMessage.error('試算失敗: ' + (err.displayMessage || err.message))
   } finally {
     loading.value = false
   }
