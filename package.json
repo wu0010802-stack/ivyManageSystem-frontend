@@ -5,7 +5,7 @@
     "type": "module",
     "scripts": {
         "dev": "vite",
-        "build": "vite build",
+        "build": "vite build && node scripts/check-entry-chunks.mjs",
         "postbuild": "find dist -name '*.map' -type f -delete 2>/dev/null; true",
         "preview": "vite preview",
         "test": "vitest run",

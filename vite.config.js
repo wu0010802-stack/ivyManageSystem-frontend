@@ -60,7 +60,38 @@ function manualChunks(id) {
         id.includes('/src/utils/errorCodeRegistry.ts') ||
         id.includes('/src/composables/useOnlineStatus.ts') ||
         id.includes('/src/composables/useBodyLock.ts') ||
-        id.includes('/src/components/brand/')
+        id.includes('/src/components/brand/') ||
+        // ErrorBoundary.vue（admin App.vue + parent App.vue 共用）與 chunkSelfHeal.ts
+        // （admin / public / parent 三端 main.ts 各呼叫一次）皆三端共用且皆 EP-free。
+        // 未顯式指派時 Rollup 把兩檔吸進 parent-app chunk → index / public entry 被迫
+        // 靜態 import parent-app 整包，連鎖 static-bridge 幾乎全部 chunk（家長 LIFF boot：
+        // 殭屍 mount、每次載頁必打 2 支 /api/parent 401、401 後 parent/api/index.ts 改寫
+        // location.hash='#/login' 摧毀 deep link → admin 深頁重整被彈首頁、報名連結 hash 被吃）。
+        // ⚠ 這是「三端共用的 EP-free 檔漏 pin → 被併進 parent-app」的第二次同型回歸
+        //（前次為 design-tokens.css，見下方全域樣式規則的註解）。釘到 shared-common
+        //（三端皆載、admin 本就載）即切斷 index/public → parent-app 的靜態橋接。
+        id.includes('/src/components/common/ErrorBoundary.vue') ||
+        id.includes('/src/utils/chunkSelfHeal.ts') ||
+        // sentry：三端 main.ts + ErrorBoundary + admin api/index.ts 皆 import。靜態
+        // import 全為 type-only（@sentry/vue 走 await import → sentry chunk 維持
+        // lazy），EP-free。未 pin 時被併進 admin-core → shared-common（ErrorBoundary
+        // 的 captureException）與 parent-app（parent main.ts 的 initSentry）雙雙
+        // 靜態橋接 admin-core。
+        id.includes('/src/utils/sentry.ts') ||
+        // errorHandler：純錯誤分類（零 import、EP-free），admin api/index.ts 與家長
+        // src/parent/api/index.ts 皆用。原列 admin-core，害 parent-app 靜態橋接
+        // admin-core（家長端被迫載整包 admin entry utilities）；移入 shared-common
+        // 切斷（admin-core 規則的清單已同步移除）。
+        id.includes('/src/utils/errorHandler.ts') ||
+        // lifecycle / taipeiTime / constants-activity：純常數/純函式（零 import、
+        // EP-free），admin/portal 與家長端 eager 元件（ChildrenStrip /
+        // useTodayTimeline / activityPayment）皆用。未 pin 時分別落 portal 與
+        // activity-admin chunk → parent-app 靜態橋接 portal / activity-admin，
+        // 再連鎖 admin-core + element-plus + fullcalendar 全塞進家長首屏。
+        // 釘到 shared-common 切斷整條 cascade。
+        id.includes('/src/constants/lifecycle.ts') ||
+        id.includes('/src/utils/taipeiTime.ts') ||
+        id.includes('/src/constants/activity.ts')
     ) {
         return 'shared-common'
     }
@@ -102,7 +133,8 @@ function manualChunks(id) {
         id.includes('/src/stores/employee.ts') ||
         id.includes('/src/utils/auth.ts') ||
         id.includes('/src/utils/error.ts') ||
-        id.includes('/src/utils/errorHandler.ts') ||
+        // errorHandler.ts 已移入 shared-common（家長端 parent/api/index.ts 也 import，
+        // 留在 admin-core 會讓 parent-app 靜態橋接 admin-core），見上方 shared-common 註解。
         id.includes('/src/constants/permissions.ts')
     ) {
         return 'admin-core'
