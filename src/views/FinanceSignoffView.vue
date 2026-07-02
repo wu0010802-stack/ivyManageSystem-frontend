@@ -57,7 +57,7 @@ watch(
 watch(activeKey, async (value) => {
   const current = typeof route.query.tab === 'string' ? route.query.tab : undefined
   if (value === current) return
-  const nextQuery = { ...route.query, tab: value }
+  const nextQuery = { ...route.query, tab: value } as Record<string, string | string[]>
   delete nextQuery.highlight
   await router.replace({ query: nextQuery })
 })
@@ -67,7 +67,7 @@ const activeModule = computed(
 )
 
 const highlightId = computed<number | null>(() => {
-  const raw = route.query.highlight
+  const raw = route.query.highlight as string | string[] | undefined
   const id = Number(Array.isArray(raw) ? raw[0] : raw)
   return Number.isInteger(id) && id > 0 ? id : null
 })
