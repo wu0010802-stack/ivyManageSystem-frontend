@@ -787,12 +787,6 @@ onMounted(async () => {
   gap: var(--space-4, 16px);
   margin-bottom: var(--space-5, 20px);
 }
-.so-header h2 {
-  margin: 0;
-  font-size: var(--text-2xl, 20px);
-  font-weight: var(--font-weight-semibold, 600);
-  color: var(--text-primary, #1e293b);
-}
 .so-header__sub {
   margin: 4px 0 0;
   font-size: var(--text-sm, 13px);

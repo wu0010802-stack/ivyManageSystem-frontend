@@ -67,4 +67,24 @@ describe('FinanceSignoffView', () => {
     mockQuery = { tab: 'vendor', highlight: 'abc' }
     expect(mountView().find('.panel-stub').attributes('data-highlight')).toBe('')
   })
+
+  it('tab fallback 時不得把 highlight 帶進另一個模組', () => {
+    // 只有 vendor 權限 + misc 深連結：落到 vendor 面板，highlight 必須清空
+    vi.mocked(hasPermission).mockImplementation((p: string) => p === 'VENDOR_PAYMENT_READ')
+    mockQuery = { tab: 'misc', highlight: '7' }
+    let wrapper = mountView()
+    expect(wrapper.find('.panel-stub').attributes('data-key')).toBe('vendor')
+    expect(wrapper.find('.panel-stub').attributes('data-highlight')).toBe('')
+
+    // 無效 tab 值 fallback 同理
+    vi.mocked(hasPermission).mockReturnValue(true)
+    mockQuery = { tab: 'nonsense', highlight: '7' }
+    wrapper = mountView()
+    expect(wrapper.find('.panel-stub').attributes('data-key')).toBe('vendor')
+    expect(wrapper.find('.panel-stub').attributes('data-highlight')).toBe('')
+
+    // query 無 tab 時 highlight 照常生效（直連預設模組）
+    mockQuery = { highlight: '7' }
+    expect(mountView().find('.panel-stub').attributes('data-highlight')).toBe('7')
+  })
 })

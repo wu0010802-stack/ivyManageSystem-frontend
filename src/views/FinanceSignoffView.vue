@@ -67,6 +67,10 @@ const activeModule = computed(
 )
 
 const highlightId = computed<number | null>(() => {
+  // tab fallback（無效值或無該模組權限）時 query.tab ≠ activeKey，
+  // 此時不得把 highlight 帶進落點模組（id 撞號會打開不相干的紀錄）
+  const tab = route.query.tab
+  if (typeof tab === 'string' && tab !== activeKey.value) return null
   const raw = route.query.highlight as string | string[] | undefined
   const id = Number(Array.isArray(raw) ? raw[0] : raw)
   return Number.isInteger(id) && id > 0 ? id : null
