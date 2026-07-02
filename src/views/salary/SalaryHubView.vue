@@ -26,7 +26,7 @@
 
       <el-card shadow="never" class="hub-next no-hover">
         <span class="hub-next__hint">{{ statusMeta.hint }}</span>
-        <el-button type="primary" @click="goSettle">{{ statusMeta.action }}</el-button>
+        <el-button type="primary" class="hub-next__cta" @click="goSettle">{{ statusMeta.action }}</el-button>
       </el-card>
 
       <div class="hub-links">
@@ -162,6 +162,11 @@ const links = [
   .hub-stats,
   .hub-links {
     grid-template-columns: 1fr;
+  }
+
+  /* F-5：月結主入口 CTA 高僅 32px，低於 44px 建議觸控目標 */
+  .hub-next__cta {
+    min-height: var(--touch-target-min);
   }
 }
 </style>

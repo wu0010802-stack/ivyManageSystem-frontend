@@ -788,6 +788,14 @@ onMounted(() => {
   align-items: start;
 }
 
+/* F-3：窄螢幕下固定寬度雙欄 grid 會把結果區擠出畫面外且無捲動提示，
+   <768px 改單欄堆疊（左：參數設定，右：結果，依 DOM 順序垂直排列）。 */
+@media (--to-sm) {
+  .simulate-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
 .param-card :deep(.el-card__body) {
   padding: 16px;
 }

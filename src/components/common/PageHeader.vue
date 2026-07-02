@@ -28,4 +28,17 @@ withDefaults(defineProps<{
   font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
+
+/* F-4：.page-header 的 flex nowrap 來自全站 src/assets/main.css（非 scoped）；
+   窄螢幕下右側 .header-actions（下拉/按鈕組）不收縮，把左側標題擠到只剩幾 px
+   寬，逐字直排、副標破版。scoped 選擇器（.page-header[data-v-xxx]）specificity
+   高於 main.css 的裸 class，安全覆寫且只在窄斷點生效，桌機版不變。 */
+@media (--to-sm) {
+  .page-header {
+    flex-wrap: wrap;
+  }
+  .page-header__left {
+    flex: 1 1 auto;
+  }
+}
 </style>
