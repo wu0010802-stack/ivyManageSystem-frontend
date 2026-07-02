@@ -175,7 +175,7 @@ function netCellClass(v: number | null | undefined) {
         show-icon
       >
         <template #title>
-          以下項目尚未自動整合，可至「廠商付款」模組（<router-link :to="{ name: 'vendor-payments' }">廠商付款簽收</router-link>）登錄
+          以下項目尚未自動整合，可至「收支簽收」的「廠商付款」分頁（<router-link :to="{ path: '/finance-signoffs', query: { tab: 'vendor' } }">收支簽收</router-link>）登錄
         </template>
         <ul class="pending-list">
           <li v-for="(item, idx) in pendingItems" :key="idx">{{ item }}</li>
