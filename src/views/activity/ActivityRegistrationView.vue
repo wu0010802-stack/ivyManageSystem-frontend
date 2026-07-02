@@ -221,7 +221,7 @@
                 軟刪原因：{{ rec.void_reason }}
               </span>
               <el-button
-                v-if="canWrite && !rec.is_voided"
+                v-if="canVoidPayment && !rec.is_voided"
                 link
                 type="danger"
                 size="small"
@@ -429,6 +429,11 @@ interface RegistrationDetail {
 }
 
 const canWrite = computed(() => hasPermission('ACTIVITY_WRITE'))
+// 軟刪繳費走後端 DELETE /registrations/{id}/payments/{pid}，守衛是
+// ACTIVITY_PAYMENT_APPROVE（非 WRITE）——「有 WRITE 無簽核權」的櫃台配置
+// 舊版會看到可點按鈕、填完原因才吃 403（audit C-4，2026-07-02；對齊
+// POS 頁 canApproveRefund 前端閘）
+const canVoidPayment = computed(() => hasPermission('ACTIVITY_PAYMENT_APPROVE'))
 
 function courseStatusTagType(status: string): ElTagType {
   return ((COURSE_STATUS_TAG_TYPE as Record<string, string>)[status] || 'info') as ElTagType
