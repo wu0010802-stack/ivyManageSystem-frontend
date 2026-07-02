@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { mount, flushPromises } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import YearEndGridView from '../YearEndGridView.vue'
 
@@ -7,6 +7,7 @@ vi.mock('@/api/yearEnd', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/api/yearEnd')>()
   return {
     ...actual,
+    listYearEndCycles: vi.fn(),
     getYearEndGrid: vi.fn(),
     buildSettlements: vi.fn(),
     manualPatchSettlement: vi.fn(),
@@ -38,6 +39,7 @@ vi.mock('@/api/index', () => ({
 
 import * as api from '@/api/yearEnd'
 import { ElMessage } from 'element-plus'
+import { hasPermission } from '@/utils/auth'
 
 // ---- helpers ----
 
@@ -82,13 +84,25 @@ async function mountView() {
       },
     },
   })
+  // Task 9: onMounted(initGrid) chains listYearEndCycles → (buildSettlements) → loadGrid
+  // — multiple sequential awaits, so flushPromises() (not just nextTick) is needed to
+  // drain the whole chain before assertions run.
+  await flushPromises()
   await nextTick()
   await nextTick()
   return wrapper
 }
 
 describe('YearEndGridView', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    // Task 9 進頁自動 build 預設值：canWrite=true + OPEN cycle（多數既有測試場景），
+    // 個別測試如需 CLOSED / 無 WRITE 權限 / listYearEndCycles 失敗，於各自 it() 內覆寫。
+    vi.mocked(hasPermission).mockReturnValue(true)
+    vi.mocked(api.listYearEndCycles).mockResolvedValue({
+      data: [{ id: 7, status: 'OPEN' }],
+    } as never)
+  })
 
   // Case 1: renders rows with employee name + total + bonus columns (vm-layer)
   it('loads and exposes rows with correct employee name, total, and bonus columns', async () => {
@@ -313,5 +327,154 @@ describe('YearEndGridView', () => {
     // canWrite is true (mocked), but template guards with `row.status === 'DRAFT' && canWrite`
     // we verify the DRAFT condition is false → button should NOT render
     expect(vm.rows[0].status === 'DRAFT' && vm.canWrite).toBe(false)
+  })
+})
+
+// ── Task 9：進頁自動 build（依 cycle 狀態 + canWrite）─────────────────────
+describe('YearEndGridView 進頁自動 build（Task 9）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(hasPermission).mockReturnValue(true)
+    vi.mocked(api.listYearEndCycles).mockResolvedValue({
+      data: [{ id: 7, status: 'OPEN' }],
+    } as never)
+  })
+
+  it('OPEN + canWrite：mount 時 buildSettlements 在 getYearEndGrid 之前被呼叫', async () => {
+    const callOrder: string[] = []
+    vi.mocked(api.buildSettlements).mockImplementationOnce(async () => {
+      callOrder.push('build')
+      return {
+        data: { built: 1, skipped_finalized: 0, unmatched_count: 0, fallback_classes: 0, warnings: [] },
+      } as never
+    })
+    vi.mocked(api.getYearEndGrid).mockImplementationOnce(async () => {
+      callOrder.push('grid')
+      return { data: [makeRow()] } as never
+    })
+
+    await mountView()
+
+    expect(api.buildSettlements).toHaveBeenCalledWith(7, { included_resigned_employee_ids: [] })
+    expect(callOrder).toEqual(['build', 'grid'])
+  })
+
+  it('LOCKED + canWrite：仍屬 buildable 狀態，mount 時觸發 buildSettlements', async () => {
+    vi.mocked(api.listYearEndCycles).mockResolvedValue({
+      data: [{ id: 7, status: 'LOCKED' }],
+    } as never)
+    vi.mocked(api.buildSettlements).mockResolvedValue({
+      data: { built: 1, skipped_finalized: 0, unmatched_count: 0, fallback_classes: 0, warnings: [] },
+    } as never)
+    vi.mocked(api.getYearEndGrid).mockResolvedValue({ data: [makeRow()] } as never)
+
+    await mountView()
+
+    expect(api.buildSettlements).toHaveBeenCalledWith(7, { included_resigned_employee_ids: [] })
+    expect(api.getYearEndGrid).toHaveBeenCalledWith(7)
+  })
+
+  it('CLOSED cycle：不呼叫 buildSettlements，仍 loadGrid', async () => {
+    vi.mocked(api.listYearEndCycles).mockResolvedValue({
+      data: [{ id: 7, status: 'CLOSED' }],
+    } as never)
+    vi.mocked(api.getYearEndGrid).mockResolvedValue({ data: [makeRow()] } as never)
+
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as { rows: GridRow[]; cycleStatus: string | null }
+
+    expect(api.buildSettlements).not.toHaveBeenCalled()
+    expect(api.getYearEndGrid).toHaveBeenCalledWith(7)
+    expect(vm.rows).toHaveLength(1)
+    expect(vm.cycleStatus).toBe('CLOSED')
+  })
+
+  it('無 WRITE 權限（hasPermission 回 false）：不呼叫 buildSettlements，仍 loadGrid', async () => {
+    vi.mocked(hasPermission).mockReturnValue(false)
+    vi.mocked(api.getYearEndGrid).mockResolvedValue({ data: [makeRow()] } as never)
+
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as { rows: GridRow[] }
+
+    expect(api.buildSettlements).not.toHaveBeenCalled()
+    expect(api.getYearEndGrid).toHaveBeenCalledWith(7)
+    expect(vm.rows).toHaveLength(1)
+  })
+
+  it('buildSettlements reject 時仍 loadGrid（靜默降級，不噴錯誤訊息）', async () => {
+    vi.mocked(api.buildSettlements).mockRejectedValueOnce(new Error('build failed'))
+    vi.mocked(api.getYearEndGrid).mockResolvedValue({ data: [makeRow()] } as never)
+
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as { rows: GridRow[] }
+
+    expect(api.buildSettlements).toHaveBeenCalledWith(7, { included_resigned_employee_ids: [] })
+    expect(api.getYearEndGrid).toHaveBeenCalledWith(7)
+    expect(vm.rows).toHaveLength(1)
+    // 靜默降級：不彈 dialog、不顯示訊息
+    expect(vi.mocked(ElMessage.error)).not.toHaveBeenCalled()
+    expect(vi.mocked(ElMessage.warning)).not.toHaveBeenCalled()
+  })
+
+  it('listYearEndCycles 失敗時 fail-closed：不 build，仍 loadGrid（不白屏，狀態未知不重算）', async () => {
+    vi.mocked(api.listYearEndCycles).mockRejectedValue(new Error('network error'))
+    vi.mocked(api.getYearEndGrid).mockResolvedValue({ data: [makeRow()] } as never)
+
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as { rows: GridRow[]; cycleStatus: string | null }
+
+    // fail-closed：cycle 狀態未知（null）→ 不對可能是 CLOSED 的 cycle 自動重算
+    expect(api.buildSettlements).not.toHaveBeenCalled()
+    expect(api.getYearEndGrid).toHaveBeenCalledWith(7)
+    expect(vm.rows).toHaveLength(1)
+    expect(vm.cycleStatus).toBeNull()
+  })
+
+  it('cycleId 不在清單（回 [] 或不含該 id）：fail-closed 不 build，仍 loadGrid', async () => {
+    // 清單有資料但找不到 cycleId=7（例如清單只含其他週期），cycleStatus 退為 null
+    vi.mocked(api.listYearEndCycles).mockResolvedValue({
+      data: [{ id: 99, status: 'OPEN' }],
+    } as never)
+    vi.mocked(api.getYearEndGrid).mockResolvedValue({ data: [makeRow()] } as never)
+
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as { rows: GridRow[]; cycleStatus: string | null }
+
+    expect(api.buildSettlements).not.toHaveBeenCalled()
+    expect(api.getYearEndGrid).toHaveBeenCalledWith(7)
+    expect(vm.rows).toHaveLength(1)
+    expect(vm.cycleStatus).toBeNull()
+  })
+
+  it('toolbar 於試算後顯示「最後試算」與格式化時間（HH:MM）', async () => {
+    vi.mocked(api.buildSettlements).mockResolvedValue({
+      data: { built: 1, skipped_finalized: 0, unmatched_count: 0, fallback_classes: 0, warnings: [] },
+    } as never)
+    vi.mocked(api.getYearEndGrid).mockResolvedValue({ data: [makeRow()] } as never)
+
+    const wrapper = await mountView()
+
+    const el = wrapper.find('[data-test="last-built-at"]')
+    expect(el.exists()).toBe(true)
+    expect(el.text()).toContain('最後試算')
+    expect(el.text()).toMatch(/\d{2}:\d{2}/)
+  })
+
+  it('手動「↻ 重新試算」按鈕維持現狀（onBuild 邏輯不受 initGrid 影響）', async () => {
+    vi.mocked(api.getYearEndGrid).mockResolvedValue({ data: [makeRow()] } as never)
+    vi.mocked(api.buildSettlements).mockResolvedValue({
+      data: { built: 3, skipped_finalized: 1, unmatched_count: 0, fallback_classes: 0, warnings: [] },
+    } as never)
+
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as { onBuild: () => Promise<void> }
+
+    // mount 已自動觸發一次 build + loadGrid；手動再觸發一次
+    await vm.onBuild()
+    await nextTick()
+
+    expect(vi.mocked(ElMessage.success)).toHaveBeenCalledWith('已試算 3 筆，略過已簽 1 筆')
+    // getYearEndGrid: mount 的 initGrid 一次 + 手動 onBuild 一次 = 2 次
+    expect(api.getYearEndGrid).toHaveBeenCalledTimes(2)
   })
 })

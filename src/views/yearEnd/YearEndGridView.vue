@@ -2,13 +2,20 @@
 import { ref, computed, reactive, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { getYearEndGrid, buildSettlements, manualPatchSettlement } from '@/api/yearEnd'
+import { getYearEndGrid, buildSettlements, manualPatchSettlement, listYearEndCycles } from '@/api/yearEnd'
 import { money } from '@/utils/format'
 import { hasPermission } from '@/utils/auth'
 import api from '@/api/index'
 
 // Derive row type from the typed API wrapper — no hand-written `any`.
 type GridRow = Awaited<ReturnType<typeof getYearEndGrid>>['data'][number]
+
+// listYearEndCycles() 無單筆 cycle-by-id 端點，沿用 YearEndDetailView.vue 的
+// listYearEndCycles().find() 慣例；只取 grid 進頁 auto-build 判斷需要的最小欄位集。
+interface YearEndCycleLite {
+  id: number
+  status: string
+}
 
 // F-2：總表金額統一顯示為整數元（僅顯示層四捨五入，row.* 原始資料值不動、
 // 送出/核對仍用原始精度）。「主結算」「合計」帶兩位小數與「考核上」「紅利上」
@@ -60,6 +67,12 @@ const loading = ref(false)
 
 const canWrite = computed(() => hasPermission('YEAR_END_WRITE'))
 
+// 進頁自動 build（Task 9）：cycle 狀態（判斷是否為封存 CLOSED）+ 最後一次觸發試算的
+// 本地時間戳。後端 BuildResultOut 無 timestamp，這裡只記「有嘗試過」，不代表一定成功
+// ——失敗走靜默降級（見 initGrid），手動「↻ 重新試算」按鈕維持現狀不受影響。
+const cycleStatus = ref<string | null>(null)
+const lastBuiltAt = ref<Date | null>(null)
+
 // ---- 重新試算 dialog ----
 const buildDialogVisible = ref(false)
 
@@ -92,6 +105,15 @@ const bonusColumns = computed(() => {
 
 const baseUrl = computed(() => api.defaults.baseURL || '/api')
 
+// lastBuiltAt 是本地 Date（非後端 ISO 字串，BuildResultOut 無 timestamp），近複製
+// CurrentSemesterOverview.vue 的 formatTime 慣例但省去 ISO parse 這步。
+function formatTime(d: Date | null) {
+  if (!d) return ''
+  const hh = String(d.getHours()).padStart(2, '0')
+  const mm = String(d.getMinutes()).padStart(2, '0')
+  return `${hh}:${mm}`
+}
+
 async function loadGrid() {
   loading.value = true
   try {
@@ -102,6 +124,31 @@ async function loadGrid() {
   } finally {
     loading.value = false
   }
+}
+
+// 進頁自動 build（Task 9）：**fail-closed** — 只在正向確認為 buildable 狀態
+// （OPEN/LOCKED）且可寫時才自動試算，再讀。
+// 後端 build-settlements 無 cycle 層級狀態守衛（只逐列 non-DRAFT skip），這個前端
+// 判斷是「自動重算封存 cycle」的唯一防線；一次網路抖動讓 listYearEndCycles 失敗
+// （.catch → []）或 cycleId 找不到時 cycleStatus 退為 null，若放行 build 會靜默重算
+// CLOSED cycle 覆寫殘留 DRAFT 列。故狀態未知（null）/CLOSED 一律跳過只 loadGrid。
+async function initGrid() {
+  const cycles = await listYearEndCycles()
+    .then((res) => res.data as YearEndCycleLite[])
+    .catch(() => [] as YearEndCycleLite[])
+  const cycle = cycles.find((c) => c.id === cycleId)
+  cycleStatus.value = cycle?.status ?? null
+  if (canWrite.value && (cycleStatus.value === 'OPEN' || cycleStatus.value === 'LOCKED')) {
+    try {
+      await buildSettlements(cycleId, { included_resigned_employee_ids: [] })
+      // 成功後才記時間戳：語意是「最後成功試算」而非「嘗試」。build 失敗（catch）不設。
+      lastBuiltAt.value = new Date()
+    } catch {
+      // 靜默降級：進頁自動試算失敗不打斷閱讀，沿用既有結算資料
+      // （不彈 dialog、不顯示訊息；手動「↻ 重新試算」按鈕維持現狀可兜底重試）
+    }
+  }
+  await loadGrid()
 }
 
 async function onBuild() {
@@ -170,9 +217,10 @@ defineExpose({
   rows, loading, bonusColumns, canWrite,
   loadGrid, onBuild, openEdit, submitEdit,
   buildDialogVisible, editVisible, editingRow, editForm,
+  cycleStatus, lastBuiltAt, initGrid,
 })
 
-onMounted(loadGrid)
+onMounted(initGrid)
 </script>
 
 <template>
@@ -180,6 +228,9 @@ onMounted(loadGrid)
     <!-- Top toolbar -->
     <header class="toolbar">
       <h2 class="title">年終總表（週期 {{ cycleId }}）</h2>
+      <span v-if="lastBuiltAt" class="last-built" data-test="last-built-at">
+        最後試算 {{ formatTime(lastBuiltAt) }}
+      </span>
       <div class="actions">
         <el-button
           v-if="canWrite"
@@ -397,6 +448,10 @@ onMounted(loadGrid)
 .title {
   margin: 0;
   font-size: 18px;
+}
+.last-built {
+  color: #909399;
+  font-size: 13px;
 }
 .actions {
   display: flex;
