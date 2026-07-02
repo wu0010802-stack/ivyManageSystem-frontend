@@ -747,8 +747,14 @@ async function handleConfirmPromotion(item: CourseEntry) {
     })
     showToast((res as { data?: { message?: string } })?.data?.message || '已確認升為正式', 'success')
     // 重新查詢以更新狀態：沿用當前查詢模式（token 模式用 token 查詢），避免硬用
-    // 三欄查詢在多筆跨學期 active 報名時跳到別的學期報名
-    hydrateResult(await refetchCurrent(phonePayload))
+    // 三欄查詢在多筆跨學期 active 報名時跳到別的學期報名。
+    // 內層 try：mutation 已成功，刷新失敗（公開查詢限流 / 網路抖動）不可落到
+    // 外層 catch 誤報「確認失敗」——家長會重按吃 409（audit C-2，2026-07-02）
+    try {
+      hydrateResult(await refetchCurrent(phonePayload))
+    } catch {
+      showToast('已確認成功，但頁面刷新失敗，請稍後重新查詢查看最新狀態', 'warning', 6000)
+    }
   } catch (err) {
     showToast((err as { response?: { data?: { detail?: string } } }).response?.data?.detail || '確認失敗', 'error')
   } finally {
@@ -771,8 +777,13 @@ async function handleDeclinePromotion(item: CourseEntry) {
       query_token: activeQueryToken.value ?? undefined,
     })
     showToast((res as { data?: { message?: string } })?.data?.message || '已放棄該名額', 'warning')
-    // 沿用當前查詢模式刷新（同 handleConfirmPromotion），避免三欄查詢跳學期
-    hydrateResult(await refetchCurrent(phonePayload))
+    // 沿用當前查詢模式刷新（同 handleConfirmPromotion），避免三欄查詢跳學期。
+    // 內層 try：同 confirm——mutation 已成功，刷新失敗不可誤報「放棄失敗」
+    try {
+      hydrateResult(await refetchCurrent(phonePayload))
+    } catch {
+      showToast('已放棄成功，但頁面刷新失敗，請稍後重新查詢查看最新狀態', 'warning', 6000)
+    }
   } catch (err) {
     showToast((err as { response?: { data?: { detail?: string } } }).response?.data?.detail || '放棄失敗', 'error')
   } finally {
