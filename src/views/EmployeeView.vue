@@ -519,7 +519,7 @@ const { confirmDelete: handleDelete } = useConfirmDelete({
   successMsg: '刪除成功',
 })
 
-// 操作欄「更多」下拉指令（辦理離職 / 刪除收合於此，比照 LeaveView / VendorPaymentView）
+// 操作欄「更多」下拉指令（辦理離職 / 刪除收合於此，比照 LeaveView / SignoffPanel）
 const handleRowCommand = (cmd: string, row: Record<string, unknown>) => {
   if (cmd === 'offboard') openOffboard(row)
   else if (cmd === 'reset-punch-pin') resetEmployeePin(row as { id: number; name: string })

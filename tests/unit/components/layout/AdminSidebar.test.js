@@ -28,6 +28,7 @@ vi.mock('@/utils/auth', () => ({
     ANNOUNCEMENTS_READ: 'ANNOUNCEMENTS_READ',
     CALENDAR: 'CALENDAR',
     VENDOR_PAYMENT_READ: 'VENDOR_PAYMENT_READ',
+    MISC_RECEIPT_READ: 'MISC_RECEIPT_READ',
     ACTIVITY_READ: 'ACTIVITY_READ',
     ACTIVITY_WRITE: 'ACTIVITY_WRITE',
     ACTIVITY_PAYMENT_APPROVE: 'ACTIVITY_PAYMENT_APPROVE',
@@ -156,11 +157,13 @@ describe('AdminSidebar 9-IA structure', () => {
     expect(item.text()).toContain('考核與年終')
   })
 
-  it('「廠商付款簽收」保留在園務行政', async () => {
+  it('「收支簽收」整合入口在園務行政（廠商付款/雜項收款已整併）', async () => {
     const wrapper = await mountSidebar()
-    const item = wrapper.find('[data-index="/vendor-payments"]')
+    const item = wrapper.find('[data-index="/finance-signoffs"]')
     expect(item.exists()).toBe(true)
-    expect(item.text()).toContain('廠商付款簽收')
+    expect(item.text()).toContain('收支簽收')
+    expect(wrapper.find('[data-index="/vendor-payments"]').exists()).toBe(false)
+    expect(wrapper.find('[data-index="/misc-receipts"]').exists()).toBe(false)
   })
 
   it('「年終獎金 / 考核年終 payout」獨立項目已整併（不再單獨出現）', async () => {

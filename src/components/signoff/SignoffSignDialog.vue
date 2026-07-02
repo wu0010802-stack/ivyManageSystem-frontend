@@ -1,43 +1,43 @@
 <template>
   <el-dialog
     v-model="visible"
-    title="廠商簽收"
+    :title="config.texts.signTitle"
     width="540px"
     :close-on-click-modal="false"
     destroy-on-close
     @close="reset"
   >
-    <el-tabs v-model="activeTab" class="vp-sign-tabs">
-      <!-- 主要路徑：上傳廠商簽好的紙本照片 -->
+    <el-tabs v-model="activeTab" class="so-sign-tabs">
+      <!-- 主要路徑：上傳簽好的紙本照片 -->
       <el-tab-pane label="上傳紙本照片" name="photo">
         <el-upload
           v-if="!photoPreview"
           drag
-          class="vp-sign-upload"
+          class="so-sign-upload"
           :auto-upload="false"
           :limit="1"
           :show-file-list="false"
           accept="image/png,image/jpeg,image/webp"
           :on-change="handleUploadChange"
         >
-          <div class="vp-sign-upload__inner">
-            <el-icon class="vp-sign-upload__icon"><UploadFilled /></el-icon>
-            <div class="vp-sign-upload__text">拖曳照片到這裡，或<em>點擊選擇</em></div>
-            <div class="vp-sign-upload__hint">廠商簽好的紙本請款／簽收單照片，PNG／JPG／WEBP</div>
+          <div class="so-sign-upload__inner">
+            <el-icon class="so-sign-upload__icon"><UploadFilled /></el-icon>
+            <div class="so-sign-upload__text">拖曳照片到這裡，或<em>點擊選擇</em></div>
+            <div class="so-sign-upload__hint">{{ config.texts.signUploadHint }}</div>
           </div>
         </el-upload>
 
-        <div v-else class="vp-sign-preview">
+        <div v-else class="so-sign-preview">
           <img :src="photoPreview" alt="簽收照片預覽" />
-          <div class="vp-sign-preview__bar">
-            <span class="vp-sign-preview__name">{{ photoName }}</span>
+          <div class="so-sign-preview__bar">
+            <span class="so-sign-preview__name">{{ photoName }}</span>
             <el-button size="small" text @click="handleUploadRemove">重新選擇</el-button>
           </div>
         </div>
-        <p class="vp-sign-note">上傳前會自動壓縮，手機拍的大圖也沒問題</p>
+        <p class="so-sign-note">上傳前會自動壓縮，手機拍的大圖也沒問題</p>
       </el-tab-pane>
 
-      <!-- 次要路徑：廠商當場於螢幕手寫 -->
+      <!-- 次要路徑：當場於螢幕手寫 -->
       <el-tab-pane label="當場手寫" name="drawn">
         <div class="signature-pad">
           <canvas
@@ -53,7 +53,7 @@
             @touchmove.prevent="draw"
             @touchend.prevent="endDraw"
           />
-          <div class="signature-hint">請廠商於上方框內簽名</div>
+          <div class="signature-hint">{{ config.texts.signPadHint }}</div>
         </div>
         <div class="dialog-tools">
           <el-button @click="clearCanvas">清除重簽</el-button>
@@ -74,15 +74,16 @@
 import { ref, watch, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import { UploadFilled } from '@element-plus/icons-vue'
-import { signVendorPayment } from '@/api/vendorPayment'
+import type { SignoffModuleConfig } from '@/config/signoffModules'
 import { compressImageToDataUrl } from '@/utils/imageCompress'
 
 const props = withDefaults(defineProps<{
   modelValue?: boolean
-  paymentId?: number | null
+  recordId?: number | null
+  config: SignoffModuleConfig
 }>(), {
   modelValue: false,
-  paymentId: null,
+  recordId: null,
 })
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
@@ -195,7 +196,7 @@ function reset() {
 }
 
 async function submit() {
-  if (!props.paymentId) return
+  if (!props.recordId) return
   const kind = activeTab.value
 
   // 先驗證輸入，再開 loading
@@ -216,7 +217,7 @@ async function submit() {
     } else {
       dataUrl = await compressImageToDataUrl(photoFile.value!)
     }
-    await signVendorPayment(props.paymentId, {
+    await props.config.api.sign(props.recordId, {
       signature_kind: kind,
       signature_data: dataUrl,
     })
@@ -233,68 +234,68 @@ async function submit() {
 </script>
 
 <style scoped>
-.vp-sign-tabs {
+.so-sign-tabs {
   min-height: 240px;
 }
 
 /* 上傳區 */
-.vp-sign-upload :deep(.el-upload),
-.vp-sign-upload :deep(.el-upload-dragger) {
+.so-sign-upload :deep(.el-upload),
+.so-sign-upload :deep(.el-upload-dragger) {
   width: 100%;
 }
-.vp-sign-upload__inner {
+.so-sign-upload__inner {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 6px;
   padding: var(--space-4, 16px);
 }
-.vp-sign-upload__icon {
+.so-sign-upload__icon {
   font-size: 40px;
   color: var(--neutral-400, #94a3b8);
 }
-.vp-sign-upload__text {
+.so-sign-upload__text {
   font-size: var(--text-base, 14px);
   color: var(--text-secondary, #64748b);
 }
-.vp-sign-upload__text em {
+.so-sign-upload__text em {
   font-style: normal;
   color: var(--brand-primary, #4f46e5);
   font-weight: var(--font-weight-medium, 500);
 }
-.vp-sign-upload__hint {
+.so-sign-upload__hint {
   font-size: var(--text-xs, 12px);
   color: var(--text-tertiary, #94a3b8);
 }
 
-.vp-sign-preview {
+.so-sign-preview {
   border: 1px solid var(--neutral-200, #e2e8f0);
   border-radius: var(--radius-md, 8px);
   overflow: hidden;
   background: var(--neutral-50, #f8fafc);
 }
-.vp-sign-preview img {
+.so-sign-preview img {
   display: block;
   width: 100%;
   max-height: 280px;
   object-fit: contain;
   background: #fff;
 }
-.vp-sign-preview__bar {
+.so-sign-preview__bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2, 8px);
   padding: var(--space-2, 8px) var(--space-3, 12px);
 }
-.vp-sign-preview__name {
+.so-sign-preview__name {
   font-size: var(--text-sm, 13px);
   color: var(--text-secondary, #64748b);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.vp-sign-note {
+.so-sign-note {
   margin: var(--space-3, 12px) 0 0;
   font-size: var(--text-xs, 12px);
   color: var(--text-tertiary, #94a3b8);

@@ -117,13 +117,12 @@
             <el-icon><Calendar /></el-icon>
             <template #title>行事曆</template>
           </el-menu-item>
-          <el-menu-item v-if="canView.VENDOR_PAYMENT_READ" index="/vendor-payments">
+          <el-menu-item
+            v-if="canView.VENDOR_PAYMENT_READ || canView.MISC_RECEIPT_READ"
+            index="/finance-signoffs"
+          >
             <el-icon><Money /></el-icon>
-            <template #title>廠商付款簽收</template>
-          </el-menu-item>
-          <el-menu-item v-if="canView.MISC_RECEIPT_READ" index="/misc-receipts">
-            <el-icon><Coin /></el-icon>
-            <template #title>雜項收款簽收</template>
+            <template #title>收支簽收</template>
           </el-menu-item>
         </el-sub-menu>
 
@@ -234,7 +233,7 @@ import { ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   DataBoard, Finished, Calendar, Timer, Clock, Document, Watch,
-  Money, Coin, User, School, OfficeBuilding, Bell, Setting,
+  Money, User, School, OfficeBuilding, Bell, Setting,
   Expand, Fold, DataAnalysis, Files,
   Star, Collection, ChatDotRound, List, Van, CreditCard, Checked,
   Trophy, WarningFilled

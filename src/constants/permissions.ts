@@ -166,10 +166,10 @@ export const ROUTE_PERMISSION_RULES = [
   // 加班 / 會議整合頁（OVERTIME_READ 或 MEETINGS 任一）
   { path: '/overtime', permission: 'OVERTIME_READ' },
   { path: '/overtime', permission: 'MEETINGS' },
-  // 廠商付款簽收（園務行政）
-  { path: '/vendor-payments', permission: 'VENDOR_PAYMENT_READ' },
-  // 雜項收款簽收（園務行政）
-  { path: '/misc-receipts', permission: 'MISC_RECEIPT_READ' },
+  // 收支簽收（園務行政）：廠商付款／雜項收款任一 READ 即可進整合頁（OR 語意，比照 /overtime）。
+  // 舊 /vendor-payments、/misc-receipts 已改 redirect，guard 收到的 to 是新路由，舊規則移除。
+  { path: '/finance-signoffs', permission: 'VENDOR_PAYMENT_READ' },
+  { path: '/finance-signoffs', permission: 'MISC_RECEIPT_READ' },
 ]
 
 // 不需要權限即可訪問的路由（登入頁、密碼變更、公開報名頁、已登入即可訪問的個人資料頁等）。

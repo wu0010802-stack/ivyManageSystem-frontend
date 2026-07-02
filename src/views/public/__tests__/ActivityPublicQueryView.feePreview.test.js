@@ -131,3 +131,77 @@ describe('ActivityPublicQueryView — 退費預警價格來源（P2）', () => {
     expect(wrapper.vm.saveBlocked).toBe(false)
   })
 })
+
+describe('ActivityPublicQueryView — promoted_pending 不計費（audit C-1，2026-07-02）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('零改動時 promoted_pending 課不計入新應繳（與後端僅 enrolled 計費對齊）', async () => {
+    mockBootstrap({
+      courses: [
+        { name: '美術', price: 3000 },
+        { name: '圍棋', price: 2000 },
+      ],
+    })
+    getPublicCoursesAvailability.mockResolvedValue({ data: { 美術: 0, 圍棋: 0 } })
+    // 後端 total_amount=3000：只計 enrolled 美術；圍棋是 promoted_pending 佔位未確認
+    publicQueryByToken.mockResolvedValue({
+      data: {
+        id: 1,
+        name: '王小明',
+        birthday: '2020-01-01',
+        class_name: '大班',
+        courses: [
+          { course_id: 1, name: '美術', status: 'enrolled', price: 3000 },
+          { course_id: 2, name: '圍棋', status: 'promoted_pending', price: 2000 },
+        ],
+        supplies: [],
+        total_amount: 3000,
+        paid_amount: 3000,
+      },
+    })
+
+    const wrapper = await mountView()
+    await triggerTokenQuery(wrapper)
+
+    // 修前 bug：newTotal=5000（pending 課被計費）→ 家長零改動即看到「需補繳 2000」
+    expect(wrapper.vm.feePreview.newTotal).toBe(3000)
+    expect(wrapper.vm.feePreview.hasChange).toBe(false)
+    expect(wrapper.vm.feePreview.additionalDue).toBe(0)
+  })
+
+  it('wouldOverpay 以正確口徑判斷，不被 pending 課價虛胖的總額漏擋', async () => {
+    mockBootstrap({
+      courses: [
+        { name: '美術', price: 500 },
+        { name: '圍棋', price: 1000 },
+      ],
+    })
+    getPublicCoursesAvailability.mockResolvedValue({ data: { 美術: 0, 圍棋: 0 } })
+    // 已繳 800 > 真實新應繳 500（enrolled 美術）→ 應警示退費並擋儲存；
+    // 修前虛胖 newTotal=1500 ≥ 800 → 漏警示，家長儲存直接吃後端 409
+    publicQueryByToken.mockResolvedValue({
+      data: {
+        id: 1,
+        name: '王小明',
+        birthday: '2020-01-01',
+        class_name: '大班',
+        courses: [
+          { course_id: 1, name: '美術', status: 'enrolled', price: 500 },
+          { course_id: 2, name: '圍棋', status: 'promoted_pending', price: 1000 },
+        ],
+        supplies: [],
+        total_amount: 500,
+        paid_amount: 800,
+      },
+    })
+
+    const wrapper = await mountView()
+    await triggerTokenQuery(wrapper)
+
+    expect(wrapper.vm.feePreview.newTotal).toBe(500)
+    expect(wrapper.vm.feePreview.wouldOverpay).toBe(true)
+    expect(wrapper.vm.saveBlocked).toBe(true)
+  })
+})

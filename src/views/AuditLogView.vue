@@ -51,9 +51,11 @@ const filters = reactive({
 // 避免點「#5」卻跳去列表頁這種假導航（其他 entity 只有列表頁）。
 const ENTITY_ROUTES: Record<string, (id: number | string | null | undefined) => { path: string; query?: Record<string, string | number> } | null> = {
   student: (id) => (id ? { path: `/students/profile/${id}` } : null),
-  // 廠商付款：列表頁支援 ?highlight=<id> 自動開啟該筆編輯 dialog
+  // 收支簽收：整合頁支援 ?tab=<模組>&highlight=<id> 自動開啟該筆編輯 dialog
   vendor_payment: (id) =>
-    id ? { path: '/vendor-payments', query: { highlight: String(id) } } : null,
+    id ? { path: '/finance-signoffs', query: { tab: 'vendor', highlight: String(id) } } : null,
+  misc_receipt: (id) =>
+    id ? { path: '/finance-signoffs', query: { tab: 'misc', highlight: String(id) } } : null,
 }
 
 // 高風險事件快篩：name → predicate(row) → boolean

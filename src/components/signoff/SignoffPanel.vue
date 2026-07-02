@@ -1,28 +1,25 @@
 <template>
-  <div class="vendor-payment-view">
+  <div class="signoff-panel">
     <!-- 頁首 -->
-    <header class="vp-header">
-      <div class="vp-header__title">
-        <h2>廠商付款簽收</h2>
-        <p class="vp-header__sub">逐筆登記廠商請款，上傳廠商簽收的紙本憑證留存</p>
-      </div>
+    <header class="so-header">
+      <p class="so-header__sub">{{ config.texts.headerSub }}</p>
       <el-button
         v-if="canWrite"
         type="primary"
         @click="openCreate"
-      >新增付款</el-button>
+      >{{ config.texts.addButton }}</el-button>
     </header>
 
-    <!-- 區間彙總（跨狀態，隨日期/廠商/收付方式篩選連動；不受狀態篩選影響） -->
-    <section class="vp-summary" aria-label="本期彙總">
-      <div class="vp-summary__cards" v-loading="summaryLoading">
+    <!-- 區間彙總（跨狀態，隨日期/對象/收付方式篩選連動；不受狀態篩選影響） -->
+    <section class="so-summary" aria-label="本期彙總">
+      <div class="so-summary__cards" v-loading="summaryLoading">
         <div class="kpi-card">
-          <div class="kpi-label">本期付款總額</div>
+          <div class="kpi-label">{{ config.texts.kpiTotalLabel }}</div>
           <div class="kpi-value">{{ formatMoney(summary.total_amount) }}</div>
           <div class="kpi-meta">共 {{ summary.total_count }} 筆</div>
         </div>
         <div class="kpi-card" :class="{ 'kpi-warning': summary.pending_count > 0 }">
-          <div class="kpi-label">待廠商簽收</div>
+          <div class="kpi-label">{{ config.texts.kpiPendingLabel }}</div>
           <div class="kpi-value">{{ formatMoney(summary.pending_amount) }}</div>
           <div class="kpi-meta">{{ summary.pending_count }} 筆等待回簽</div>
         </div>
@@ -32,18 +29,18 @@
           <div class="kpi-meta">{{ summary.signed_count }} 筆已完成</div>
         </div>
       </div>
-      <p class="vp-summary__period">本期：{{ rangeLabel }}</p>
+      <p class="so-summary__period">本期：{{ rangeLabel }}</p>
     </section>
 
     <!-- 篩選：狀態為主軸（分段），其餘為次要條件 -->
-    <div class="vp-filters">
-      <el-radio-group v-model="filters.status" class="vp-filters__status" @change="fetchList">
+    <div class="so-filters">
+      <el-radio-group v-model="filters.status" class="so-filters__status" @change="fetchList">
         <el-radio-button value="">全部</el-radio-button>
         <el-radio-button value="pending">待簽收</el-radio-button>
         <el-radio-button value="signed">已簽收</el-radio-button>
       </el-radio-group>
 
-      <div class="vp-filters__rest">
+      <div class="so-filters__rest">
         <el-date-picker
           v-model="filters.dateRange"
           type="daterange"
@@ -54,15 +51,30 @@
           @change="refresh"
         />
         <el-input
-          v-model="filters.vendor_name"
-          placeholder="搜尋廠商名稱"
+          v-model="filters.partyName"
+          :placeholder="config.texts.searchPlaceholder"
           clearable
           style="width: 200px"
           @keyup.enter="refresh"
           @clear="refresh"
         />
         <el-select
-          v-model="filters.payment_method"
+          v-if="config.category"
+          v-model="filters.category"
+          :placeholder="config.category.label"
+          clearable
+          style="width: 140px"
+          @change="refresh"
+        >
+          <el-option
+            v-for="opt in config.category.options"
+            :key="opt.value"
+            :label="opt.label"
+            :value="opt.value"
+          />
+        </el-select>
+        <el-select
+          v-model="filters.paymentMethod"
           placeholder="收付方式"
           clearable
           style="width: 140px"
@@ -80,40 +92,45 @@
     </div>
 
     <!-- 首次載入用骨架，避免置中 spinner 突兀 -->
-    <el-skeleton v-if="loading && !items.length" :rows="6" animated class="vp-skeleton" />
+    <el-skeleton v-if="loading && !items.length" :rows="6" animated class="so-skeleton" />
 
     <el-table
       v-else
       :data="items"
       v-loading="loading && items.length > 0"
       row-key="id"
-      class="vp-table"
+      class="so-table"
       @row-click="onRowClick"
     >
-      <el-table-column prop="payment_date" label="付款日期" width="116" />
-      <el-table-column prop="vendor_name" label="廠商" min-width="160">
+      <el-table-column :prop="config.fields.date.key" :label="config.fields.date.label" width="116" />
+      <el-table-column :prop="config.fields.partyName.key" :label="config.fields.partyName.label" min-width="160">
         <template #default="{ row }">
-          <span class="vp-vendor">{{ row.vendor_name }}</span>
+          <span class="so-party">{{ row[config.fields.partyName.key] }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column v-if="config.category" :label="config.category.label" width="104">
+        <template #default="{ row }">
+          {{ config.category.labelOf(String(row.category ?? '')) }}
         </template>
       </el-table-column>
       <el-table-column label="金額" width="132" align="right">
         <template #default="{ row }">
-          <span class="vp-amount">{{ formatMoney(row.amount) }}</span>
+          <span class="so-amount">{{ formatMoney(row.amount) }}</span>
         </template>
       </el-table-column>
       <el-table-column label="收付方式" width="104">
         <template #default="{ row }">
-          {{ paymentMethodLabel(row.payment_method) }}
+          {{ paymentMethodLabel(row.payment_method as string) }}
         </template>
       </el-table-column>
       <el-table-column prop="description" label="項目／說明" min-width="180">
         <template #default="{ row }">
-          <span :class="{ 'vp-muted': !row.description }">{{ row.description || '未填寫' }}</span>
+          <span :class="{ 'so-muted': !row.description }">{{ row.description || '未填寫' }}</span>
         </template>
       </el-table-column>
       <el-table-column label="狀態" width="92" align="center">
         <template #default="{ row }">
-          <span class="vp-status" :class="`vp-status--${row.status}`">
+          <span class="so-status" :class="`so-status--${row.status}`">
             {{ row.status === 'signed' ? '已簽收' : '待簽收' }}
           </span>
         </template>
@@ -121,23 +138,23 @@
       <el-table-column label="簽收" min-width="128">
         <template #default="{ row }">
           <template v-if="row.status === 'signed'">
-            <div class="vp-signer">{{ row.signer_name || '已簽收' }}</div>
-            <div class="vp-signer__meta">{{ signKindLabel(row.signature_kind) }}</div>
+            <div class="so-signer">{{ row.signer_name || '已簽收' }}</div>
+            <div class="so-signer__meta">{{ signKindLabel(row.signature_kind as string | null) }}</div>
           </template>
-          <span v-else class="vp-muted">尚未回簽</span>
+          <span v-else class="so-muted">尚未回簽</span>
         </template>
       </el-table-column>
       <el-table-column label="附件" width="76" align="center">
         <template #default="{ row }">
-          <span v-if="row.attachments?.length" class="vp-attach-chip" title="附件數">
-            <el-icon class="vp-attach-chip__clip"><Paperclip /></el-icon>{{ row.attachments.length }}
+          <span v-if="(row.attachments as Attachment[] | undefined)?.length" class="so-attach-chip" title="附件數">
+            <el-icon class="so-attach-chip__clip"><Paperclip /></el-icon>{{ (row.attachments as Attachment[]).length }}
           </span>
-          <span v-else class="vp-muted">—</span>
+          <span v-else class="so-muted">—</span>
         </template>
       </el-table-column>
       <el-table-column label="操作" width="150" fixed="right" align="right">
         <template #default="{ row }">
-          <div class="vp-actions" @click.stop>
+          <div class="so-actions" @click.stop>
             <el-button
               v-if="canWrite && row.status === 'pending'"
               size="small"
@@ -151,7 +168,7 @@
             >明細</el-button>
 
             <el-dropdown trigger="click" @command="(c) => onRowCommand(c, row)">
-              <el-button size="small" class="vp-actions__more" aria-label="更多操作">⋯</el-button>
+              <el-button size="small" class="so-actions__more" aria-label="更多操作">⋯</el-button>
               <template #dropdown>
                 <el-dropdown-menu>
                   <el-dropdown-item command="edit">
@@ -170,21 +187,21 @@
       </el-table-column>
 
       <template #empty>
-        <div class="vp-empty">
+        <div class="so-empty">
           <template v-if="hasActiveFilters">
-            <p class="vp-empty__title">目前篩選條件下沒有符合的紀錄</p>
+            <p class="so-empty__title">目前篩選條件下沒有符合的紀錄</p>
             <el-button text type="primary" @click="clearFilters">清除篩選條件</el-button>
           </template>
           <template v-else>
-            <p class="vp-empty__title">尚無廠商付款紀錄</p>
-            <p class="vp-empty__hint">點右上「新增付款」開始登記第一筆廠商請款。</p>
-            <el-button v-if="canWrite" type="primary" @click="openCreate">新增付款</el-button>
+            <p class="so-empty__title">{{ config.texts.emptyTitle }}</p>
+            <p class="so-empty__hint">{{ config.texts.emptyHint }}</p>
+            <el-button v-if="canWrite" type="primary" @click="openCreate">{{ config.texts.addButton }}</el-button>
           </template>
         </div>
       </template>
     </el-table>
 
-    <div class="vp-pagination">
+    <div class="so-pagination">
       <el-pagination
         v-model:current-page="page"
         v-model:page-size="pageSize"
@@ -203,15 +220,15 @@
       :title="dialogTitle"
       width="600px"
       destroy-on-close
-      class="vp-dialog"
+      class="so-dialog"
     >
-      <el-form :model="form" label-position="top" class="vp-form">
-        <div class="vp-form__section">
-          <div class="vp-form__section-title">請款資訊</div>
-          <div class="vp-form__grid">
-            <el-form-item label="付款日期" required>
+      <el-form :model="form" label-position="top" class="so-form">
+        <div class="so-form__section">
+          <div class="so-form__section-title">{{ config.texts.formSectionTitle }}</div>
+          <div class="so-form__grid">
+            <el-form-item :label="config.fields.date.label" required>
               <el-date-picker
-                v-model="form.payment_date"
+                v-model="form.date"
                 type="date"
                 value-format="YYYY-MM-DD"
                 placeholder="選擇日期"
@@ -221,7 +238,7 @@
               />
             </el-form-item>
             <el-form-item label="收付方式" required>
-              <el-select v-model="form.payment_method" style="width: 100%" :disabled="!canWrite">
+              <el-select v-model="form.paymentMethod" style="width: 100%" :disabled="!canWrite">
                 <el-option
                   v-for="opt in paymentMethodOptions"
                   :key="opt.value"
@@ -230,10 +247,20 @@
                 />
               </el-select>
             </el-form-item>
-            <el-form-item label="廠商名稱" required class="vp-form__col-2">
-              <el-input v-model="form.vendor_name" maxlength="120" :disabled="!canWrite" placeholder="例：好棒棒清潔用品行" />
+            <el-form-item :label="config.texts.formPartyLabel" required class="so-form__col-2">
+              <el-input v-model="form.partyName" maxlength="120" :disabled="!canWrite" :placeholder="config.texts.formPartyPlaceholder" />
             </el-form-item>
-            <el-form-item label="金額" required class="vp-form__col-2">
+            <el-form-item v-if="config.category" :label="config.category.label" required class="so-form__col-2">
+              <el-select v-model="form.category" style="width: 100%" :disabled="!canWrite">
+                <el-option
+                  v-for="opt in config.category.options"
+                  :key="opt.value"
+                  :label="opt.label"
+                  :value="opt.value"
+                />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="金額" required class="so-form__col-2">
               <el-input-number
                 v-model="form.amount"
                 :min="1"
@@ -244,19 +271,19 @@
                 style="width: 100%"
                 :disabled="!canWrite"
               />
-              <span class="vp-form__amount-echo">{{ formatMoney(form.amount) }}</span>
+              <span class="so-form__amount-echo">{{ formatMoney(form.amount) }}</span>
             </el-form-item>
           </div>
         </div>
 
-        <div class="vp-form__section">
-          <div class="vp-form__section-title">單據明細</div>
+        <div class="so-form__section">
+          <div class="so-form__section-title">單據明細</div>
           <el-form-item label="項目／說明">
-            <el-input v-model="form.description" maxlength="255" :disabled="!canWrite" placeholder="例：5 月清潔用品" />
+            <el-input v-model="form.description" maxlength="255" :disabled="!canWrite" :placeholder="config.texts.descPlaceholder" />
           </el-form-item>
-          <div class="vp-form__grid">
-            <el-form-item label="發票／收據號">
-              <el-input v-model="form.invoice_number" maxlength="60" :disabled="!canWrite" />
+          <div class="so-form__grid">
+            <el-form-item :label="config.fields.docNumber.label">
+              <el-input v-model="form.docNumber" maxlength="60" :disabled="!canWrite" />
             </el-form-item>
           </div>
           <el-form-item label="備註">
@@ -264,64 +291,64 @@
           </el-form-item>
         </div>
 
-        <div v-if="editingId" class="vp-form__section">
-          <div class="vp-form__section-title">
+        <div v-if="editingId" class="so-form__section">
+          <div class="so-form__section-title">
             簽收憑證
-            <span class="vp-form__section-hint">翻為「已簽收」所留存的廠商簽名／簽收照片（1 張）</span>
+            <span class="so-form__section-hint">{{ config.texts.signedCertHint }}</span>
           </div>
-          <div v-if="form.status === 'signed'" class="vp-signed-block">
-            <div class="vp-signed-block__info">
-              <span class="vp-status vp-status--signed">已簽收</span>
+          <div v-if="form.status === 'signed'" class="so-signed-block">
+            <div class="so-signed-block__info">
+              <span class="so-status so-status--signed">已簽收</span>
               <span>{{ form.signer_name || '—' }}</span>
-              <span class="vp-muted">{{ formatDateTime(form.signed_at) }}・{{ signKindLabel(form.signature_kind) }}</span>
+              <span class="so-muted">{{ formatDateTime(form.signed_at) }}・{{ signKindLabel(form.signature_kind) }}</span>
             </div>
             <a
               v-if="form.has_signature"
               :href="signatureUrl(editingId)"
               target="_blank"
-              class="vp-signed-block__thumb"
+              class="so-signed-block__thumb"
             >
               <img :src="signatureUrl(editingId)" alt="簽收憑證" />
             </a>
           </div>
-          <div v-else class="vp-signed-block vp-signed-block--pending">
-            <span class="vp-muted">尚未回簽</span>
+          <div v-else class="so-signed-block so-signed-block--pending">
+            <span class="so-muted">尚未回簽</span>
             <el-button v-if="canWrite" size="small" type="primary" @click="openSignFromDialog">上傳簽收憑證</el-button>
           </div>
         </div>
 
-        <div v-if="editingId" class="vp-form__section">
-          <div class="vp-form__section-title">
+        <div v-if="editingId" class="so-form__section">
+          <div class="so-form__section-title">
             單據附件
-            <span class="vp-form__section-hint">發票、請款單等補充文件（最多 5 張）</span>
+            <span class="so-form__section-hint">{{ config.texts.attachmentsHint }}</span>
           </div>
-          <div class="vp-attachments">
-            <div v-if="!form.attachments?.length" class="vp-muted vp-attachments__empty">尚無附件</div>
-            <div class="vp-attachments__grid">
+          <div class="so-attachments">
+            <div v-if="!form.attachments?.length" class="so-muted so-attachments__empty">尚無附件</div>
+            <div class="so-attachments__grid">
               <div
                 v-for="att in form.attachments || []"
                 :key="att.key"
-                class="vp-att"
+                class="so-att"
               >
                 <a
                   :href="downloadAttachmentUrl(editingId, att.key)"
                   target="_blank"
-                  class="vp-att__preview"
+                  class="so-att__preview"
                   :title="att.filename"
                 >
                   <img v-if="isImageAttachment(att)" :src="downloadAttachmentUrl(editingId, att.key)" :alt="att.filename" />
-                  <span v-else class="vp-att__doc" aria-hidden="true">PDF</span>
+                  <span v-else class="so-att__doc" aria-hidden="true">PDF</span>
                 </a>
-                <div class="vp-att__meta">
-                  <span class="vp-att__name" :title="att.filename">{{ att.filename }}</span>
-                  <span class="vp-att__size">{{ formatSize(att.size) }}</span>
+                <div class="so-att__meta">
+                  <span class="so-att__name" :title="att.filename">{{ att.filename }}</span>
+                  <span class="so-att__size">{{ formatSize(att.size) }}</span>
                 </div>
                 <el-button
                   v-if="canWrite"
                   size="small"
                   link
                   type="danger"
-                  class="vp-att__remove"
+                  class="so-att__remove"
                   @click="removeAttachment(att.key)"
                 >移除</el-button>
               </div>
@@ -332,14 +359,14 @@
               :http-request="handleAttachmentUpload"
               :show-file-list="false"
               accept=".pdf,.png,.jpg,.jpeg,.webp"
-              class="vp-attachments__upload"
+              class="so-attachments__upload"
             >
               <el-button size="small" plain>＋ 上傳附件</el-button>
             </el-upload>
           </div>
         </div>
 
-        <p v-if="editingId && form.created_by_name" class="vp-form__audit">
+        <p v-if="editingId && form.created_by_name" class="so-form__audit">
           建立：{{ form.created_by_name }}・{{ formatDateTime(form.created_at) }}
         </p>
       </el-form>
@@ -355,9 +382,10 @@
       </template>
     </el-dialog>
 
-    <VendorPaymentSignDialog
+    <SignoffSignDialog
       v-model="signDialogVisible"
-      :payment-id="signingId"
+      :record-id="signingId"
+      :config="config"
       @signed="onSigned"
     />
   </div>
@@ -365,32 +393,30 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Paperclip } from '@element-plus/icons-vue'
-import {
-  listVendorPayments,
-  getVendorPaymentSummary,
-  getVendorPayment,
-  createVendorPayment,
-  updateVendorPayment,
-  deleteVendorPayment,
-  uploadVendorPaymentAttachment,
-  deleteVendorPaymentAttachment,
-  downloadVendorPaymentAttachmentUrl,
-  vendorPaymentSignatureUrl,
-  PAYMENT_METHOD_OPTIONS,
-  paymentMethodLabel,
-  type VendorPaymentSummary,
-} from '@/api/vendorPayment'
-import { hasPermission, PERMISSION_NAMES } from '@/utils/auth'
+import { hasPermission } from '@/utils/auth'
 import { todayISO } from '@/utils/format'
 import { formatCurrency } from '@/utils/currency'
-import VendorPaymentSignDialog from '@/components/VendorPaymentSignDialog.vue'
+import { PAYMENT_METHOD_OPTIONS, paymentMethodLabel, type SignoffSummary } from '@/constants/signoff'
+import type { SignoffModuleConfig } from '@/config/signoffModules'
+import SignoffSignDialog from './SignoffSignDialog.vue'
+
+const props = withDefaults(
+  defineProps<{
+    config: SignoffModuleConfig
+    /** 深連結：掛載後自動開啟該筆編輯／明細（由 FinanceSignoffView 從 ?highlight 解析傳入） */
+    highlightId?: number | null
+  }>(),
+  { highlightId: null },
+)
+
+// config 視為掛載期常量：外層 FinanceSignoffView 以 :key="config.key" 切 tab 重掛載
+const config = props.config
 
 const paymentMethodOptions = PAYMENT_METHOD_OPTIONS
 
-const canWrite = computed(() => hasPermission(PERMISSION_NAMES.VENDOR_PAYMENT_WRITE))
+const canWrite = computed(() => hasPermission(config.permissions.write))
 
 interface Attachment { key: string; filename: string; size: number; mime_type?: string | null }
 const items = ref<Record<string, unknown>[]>([])
@@ -399,7 +425,7 @@ const page = ref(1)
 const pageSize = ref(20)
 const loading = ref(false)
 
-const EMPTY_SUMMARY: VendorPaymentSummary = {
+const EMPTY_SUMMARY: SignoffSummary = {
   total_count: 0,
   total_amount: 0,
   pending_count: 0,
@@ -407,26 +433,29 @@ const EMPTY_SUMMARY: VendorPaymentSummary = {
   signed_count: 0,
   signed_amount: 0,
 }
-const summary = ref<VendorPaymentSummary>({ ...EMPTY_SUMMARY })
+const summary = ref<SignoffSummary>({ ...EMPTY_SUMMARY })
 const summaryLoading = ref(false)
 
 const filters = reactive<{
   dateRange: string[] | null
-  vendor_name: string
+  partyName: string
   status: string
-  payment_method: string
+  paymentMethod: string
+  category: string
 }>({
   dateRange: null,
-  vendor_name: '',
+  partyName: '',
   status: '',
-  payment_method: '',
+  paymentMethod: '',
+  category: '',
 })
 
 const hasActiveFilters = computed(
   () =>
     !!filters.status ||
-    !!filters.vendor_name ||
-    !!filters.payment_method ||
+    !!filters.partyName ||
+    !!filters.paymentMethod ||
+    !!filters.category ||
     (filters.dateRange?.length === 2),
 )
 
@@ -441,16 +470,19 @@ const dialogVisible = ref(false)
 const editingId = ref<number | null>(null)
 const saving = ref(false)
 const dialogTitle = computed(() =>
-  editingId.value ? (canWrite.value ? '編輯付款' : '檢視付款') : '新增付款',
+  editingId.value
+    ? (canWrite.value ? `編輯${config.texts.unitLabel}` : `檢視${config.texts.unitLabel}`)
+    : config.texts.addButton,
 )
 
 const form = reactive<{
-  payment_date: string
-  vendor_name: string
+  date: string
+  partyName: string
   amount: number
-  payment_method: string
+  paymentMethod: string
   description: string
-  invoice_number: string
+  docNumber: string
+  category: string
   notes: string
   attachments: Attachment[]
   status: string
@@ -461,12 +493,13 @@ const form = reactive<{
   created_by_name: string | null
   created_at: string | null
 }>({
-  payment_date: '',
-  vendor_name: '',
+  date: '',
+  partyName: '',
   amount: 0,
-  payment_method: 'cash',
+  paymentMethod: 'cash',
   description: '',
-  invoice_number: '',
+  docNumber: '',
+  category: '',
   notes: '',
   attachments: [],
   status: 'pending',
@@ -481,8 +514,8 @@ const form = reactive<{
 const signDialogVisible = ref(false)
 const signingId = ref<number | null>(null)
 
-const downloadAttachmentUrl = downloadVendorPaymentAttachmentUrl
-const signatureUrl = vendorPaymentSignatureUrl
+const downloadAttachmentUrl = config.api.attachmentDownloadUrl
+const signatureUrl = config.api.signatureUrl
 
 function buildRangeParams(): Record<string, unknown> {
   const params: Record<string, unknown> = {}
@@ -490,8 +523,9 @@ function buildRangeParams(): Record<string, unknown> {
     params.start_date = filters.dateRange[0]
     params.end_date = filters.dateRange[1]
   }
-  if (filters.vendor_name) params.vendor_name = filters.vendor_name
-  if (filters.payment_method) params.payment_method = filters.payment_method
+  if (filters.partyName) params[config.fields.partyName.key] = filters.partyName
+  if (filters.paymentMethod) params.payment_method = filters.paymentMethod
+  if (config.category && filters.category) params.category = filters.category
   return params
 }
 
@@ -503,9 +537,10 @@ async function fetchList() {
     params.page_size = pageSize.value
     if (filters.status) params.status = filters.status
 
-    const res = await listVendorPayments(params)
-    items.value = res.data.items
-    total.value = res.data.total
+    const res = await config.api.list(params)
+    const data = res.data as { items: Record<string, unknown>[]; total: number }
+    items.value = data.items
+    total.value = data.total
   } catch (e) {
     const err = e as { response?: { data?: { detail?: string } } }
     ElMessage.error(err?.response?.data?.detail || '載入失敗')
@@ -517,8 +552,8 @@ async function fetchList() {
 async function fetchSummary() {
   summaryLoading.value = true
   try {
-    const res = await getVendorPaymentSummary(buildRangeParams())
-    summary.value = res.data as VendorPaymentSummary
+    const res = await config.api.summary(buildRangeParams())
+    summary.value = res.data as SignoffSummary
   } catch {
     summary.value = { ...EMPTY_SUMMARY }
   } finally {
@@ -535,13 +570,14 @@ function refresh() {
 
 function clearFilters() {
   filters.dateRange = null
-  filters.vendor_name = ''
+  filters.partyName = ''
   filters.status = ''
-  filters.payment_method = ''
+  filters.paymentMethod = ''
+  filters.category = ''
   refresh()
 }
 
-// 禁未來日：與後端 validate_payment_date 守衛對齊（付款日不可晚於今日）。
+// 禁未來日：與後端 validate_payment_date 守衛對齊（收付日不可晚於今日）。
 // 90 天回補上限由後端權威把關（避免 JS 午夜/時區與台北日的邊界誤差）。
 function disabledFutureDate(time: Date): boolean {
   return time.getTime() > Date.now()
@@ -550,12 +586,13 @@ function disabledFutureDate(time: Date): boolean {
 function resetForm() {
   Object.assign(form, {
     // 用本地時區今日，避免 toISOString() 走 UTC 在台北 00:00-08:00 預設成昨天
-    payment_date: todayISO(),
-    vendor_name: '',
+    date: todayISO(),
+    partyName: '',
     amount: 0,
-    payment_method: 'cash',
+    paymentMethod: 'cash',
     description: '',
-    invoice_number: '',
+    docNumber: '',
+    category: '',
     notes: '',
     attachments: [],
     status: 'pending',
@@ -577,12 +614,13 @@ function openCreate() {
 function openEdit(row: Record<string, unknown>) {
   editingId.value = row.id as number | null
   Object.assign(form, {
-    payment_date: row.payment_date,
-    vendor_name: row.vendor_name,
+    date: row[config.fields.date.key],
+    partyName: row[config.fields.partyName.key],
     amount: Number(row.amount),
-    payment_method: row.payment_method,
+    paymentMethod: row.payment_method,
     description: row.description || '',
-    invoice_number: row.invoice_number || '',
+    docNumber: row[config.fields.docNumber.key] || '',
+    category: (row.category as string | undefined) || '',
     notes: row.notes || '',
     attachments: row.attachments || [],
     status: row.status,
@@ -618,25 +656,26 @@ function onRowCommand(command: string, row: Record<string, unknown>) {
 }
 
 async function handleSave() {
-  if (!form.payment_date || !form.vendor_name || form.amount == null) {
-    return ElMessage.warning('請填寫日期、廠商與金額')
+  if (!form.date || !form.partyName || form.amount == null || (config.category && !form.category)) {
+    return ElMessage.warning(config.texts.requiredMsg)
   }
   saving.value = true
   try {
-    const payload = {
-      payment_date: form.payment_date,
-      vendor_name: form.vendor_name,
+    const payload: Record<string, unknown> = {
+      [config.fields.date.key]: form.date,
+      [config.fields.partyName.key]: form.partyName,
       amount: form.amount,
-      payment_method: form.payment_method,
+      payment_method: form.paymentMethod,
       description: form.description || null,
-      invoice_number: form.invoice_number || null,
+      [config.fields.docNumber.key]: form.docNumber || null,
       notes: form.notes || null,
     }
+    if (config.category) payload.category = form.category
     if (editingId.value) {
-      await updateVendorPayment(editingId.value, payload)
+      await config.api.update(editingId.value, payload)
       ElMessage.success('更新成功')
     } else {
-      await createVendorPayment(payload)
+      await config.api.create(payload)
       ElMessage.success('新增成功')
     }
     dialogVisible.value = false
@@ -652,11 +691,11 @@ async function handleSave() {
 async function handleDelete(row: Record<string, unknown>) {
   try {
     await ElMessageBox.confirm(
-      `確定刪除「${row.vendor_name}」付款紀錄？此動作無法復原。`,
+      `確定刪除「${row[config.fields.partyName.key]}」${config.texts.unitLabel}紀錄？此動作無法復原。`,
       '確認刪除',
       { type: 'warning', confirmButtonText: '確定刪除', confirmButtonClass: 'el-button--danger' },
     )
-    await deleteVendorPayment(row.id as number)
+    await config.api.remove(row.id as number)
     ElMessage.success('已刪除')
     refresh()
   } catch (e) {
@@ -670,7 +709,7 @@ async function handleAttachmentUpload({ file }: { file: File }) {
   const fd = new FormData()
   fd.append('file', file)
   try {
-    const res = await uploadVendorPaymentAttachment(editingId.value, fd)
+    const res = await config.api.uploadAttachment(editingId.value, fd)
     form.attachments = [...(form.attachments || []), res.data as Attachment]
     ElMessage.success('附件已上傳')
     fetchList()
@@ -683,7 +722,7 @@ async function handleAttachmentUpload({ file }: { file: File }) {
 async function removeAttachment(key: string) {
   try {
     await ElMessageBox.confirm('確定刪除此附件？', '確認刪除', { type: 'warning' })
-    await deleteVendorPaymentAttachment(editingId.value as number, key)
+    await config.api.deleteAttachment(editingId.value as number, key)
     form.attachments = (form.attachments || []).filter((a) => a.key !== key)
     fetchList()
   } catch (e) {
@@ -723,16 +762,13 @@ function formatDateTime(iso: string | null | undefined) {
   return new Date(iso).toLocaleString('zh-TW')
 }
 
-const route = useRoute()
-
 async function tryOpenHighlight() {
-  const id = Number(route.query?.highlight)
-  if (!id) return
+  if (!props.highlightId) return
   try {
-    const res = await getVendorPayment(id)
-    openEdit(res.data)
+    const res = await config.api.get(props.highlightId)
+    openEdit(res.data as Record<string, unknown>)
   } catch {
-    ElMessage.warning('找不到該筆付款紀錄')
+    ElMessage.warning(`找不到該筆${config.texts.unitLabel}紀錄`)
   }
 }
 
@@ -743,35 +779,25 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.vendor-payment-view {
-  padding: var(--space-4, 16px);
-}
-
 /* ── 頁首 ── */
-.vp-header {
+.so-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   gap: var(--space-4, 16px);
   margin-bottom: var(--space-5, 20px);
 }
-.vp-header h2 {
-  margin: 0;
-  font-size: var(--text-2xl, 20px);
-  font-weight: var(--font-weight-semibold, 600);
-  color: var(--text-primary, #1e293b);
-}
-.vp-header__sub {
+.so-header__sub {
   margin: 4px 0 0;
   font-size: var(--text-sm, 13px);
   color: var(--text-secondary, #64748b);
 }
 
 /* ── 彙總 KPI（對齊 FeesTab .kpi-card 慣例） ── */
-.vp-summary {
+.so-summary {
   margin-bottom: var(--space-5, 20px);
 }
-.vp-summary__cards {
+.so-summary__cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: var(--space-3, 12px);
@@ -814,21 +840,21 @@ onMounted(async () => {
 .kpi-success .kpi-value {
   color: var(--color-success-darker, #15803d);
 }
-.vp-summary__period {
+.so-summary__period {
   margin: var(--space-2, 8px) 0 0;
   font-size: var(--text-xs, 12px);
   color: var(--text-tertiary, #94a3b8);
 }
 
 /* ── 篩選 ── */
-.vp-filters {
+.so-filters {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-3, 12px) var(--space-4, 16px);
   margin-bottom: var(--space-4, 16px);
 }
-.vp-filters__rest {
+.so-filters__rest {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -836,37 +862,37 @@ onMounted(async () => {
 }
 
 /* ── 骨架 ── */
-.vp-skeleton {
+.so-skeleton {
   padding: var(--space-4, 16px) var(--space-2, 8px);
 }
 
 /* ── 表格 ── */
-.vp-table {
+.so-table {
   cursor: pointer;
 }
-.vp-vendor {
+.so-party {
   font-weight: var(--font-weight-medium, 500);
   color: var(--text-primary, #1e293b);
 }
-.vp-amount {
+.so-amount {
   font-variant-numeric: tabular-nums;
   font-weight: var(--font-weight-semibold, 600);
   color: var(--text-primary, #1e293b);
 }
-.vp-muted {
+.so-muted {
   color: var(--text-tertiary, #94a3b8);
 }
-.vp-signer {
+.so-signer {
   font-size: var(--text-sm, 13px);
   color: var(--text-primary, #1e293b);
 }
-.vp-signer__meta {
+.so-signer__meta {
   font-size: var(--text-xs, 12px);
   color: var(--text-tertiary, #94a3b8);
 }
 
 /* 狀態：用低彩度 soft 底，pending 為待辦語意（amber）、signed 完成（green） */
-.vp-status {
+.so-status {
   display: inline-block;
   padding: 2px 10px;
   border-radius: var(--radius-full, 9999px);
@@ -874,16 +900,16 @@ onMounted(async () => {
   font-weight: var(--font-weight-medium, 500);
   line-height: 1.6;
 }
-.vp-status--pending {
+.so-status--pending {
   background: var(--color-warning-soft, #fef3c7);
   color: var(--color-warning-darker, #b45309);
 }
-.vp-status--signed {
+.so-status--signed {
   background: var(--color-success-soft, #dcfce7);
   color: var(--color-success-darker, #15803d);
 }
 
-.vp-attach-chip {
+.so-attach-chip {
   display: inline-flex;
   align-items: center;
   gap: 2px;
@@ -891,61 +917,61 @@ onMounted(async () => {
   color: var(--text-secondary, #64748b);
   font-variant-numeric: tabular-nums;
 }
-.vp-attach-chip__clip {
+.so-attach-chip__clip {
   font-size: 14px;
   color: var(--text-tertiary, #94a3b8);
 }
 
-.vp-actions {
+.so-actions {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1, 4px);
   justify-content: flex-end;
 }
-.vp-actions__more {
+.so-actions__more {
   padding-left: 8px;
   padding-right: 8px;
   font-weight: 700;
 }
 
 /* ── 空狀態 ── */
-.vp-empty {
+.so-empty {
   padding: var(--space-8, 32px) var(--space-4, 16px);
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: var(--space-2, 8px);
 }
-.vp-empty__title {
+.so-empty__title {
   margin: 0;
   font-size: var(--text-base, 14px);
   font-weight: var(--font-weight-medium, 500);
   color: var(--text-secondary, #64748b);
 }
-.vp-empty__hint {
+.so-empty__hint {
   margin: 0 0 var(--space-2, 8px);
   font-size: var(--text-sm, 13px);
   color: var(--text-tertiary, #94a3b8);
 }
 
-.vp-pagination {
+.so-pagination {
   margin-top: var(--space-4, 16px);
   display: flex;
   justify-content: flex-end;
 }
 
 /* ── Dialog 分區表單 ── */
-.vp-form__section {
+.so-form__section {
   padding-bottom: var(--space-4, 16px);
   margin-bottom: var(--space-4, 16px);
   border-bottom: 1px solid var(--neutral-100, #f1f5f9);
 }
-.vp-form__section:last-of-type {
+.so-form__section:last-of-type {
   border-bottom: none;
   margin-bottom: 0;
   padding-bottom: 0;
 }
-.vp-form__section-title {
+.so-form__section-title {
   font-size: var(--text-sm, 13px);
   font-weight: var(--font-weight-semibold, 600);
   color: var(--text-primary, #1e293b);
@@ -954,50 +980,50 @@ onMounted(async () => {
   align-items: baseline;
   gap: var(--space-2, 8px);
 }
-.vp-form__section-hint {
+.so-form__section-hint {
   font-size: var(--text-xs, 12px);
   font-weight: var(--font-weight-regular, 400);
   color: var(--text-tertiary, #94a3b8);
 }
-.vp-form__grid {
+.so-form__grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0 var(--space-4, 16px);
 }
-.vp-form__col-2 {
+.so-form__col-2 {
   grid-column: span 2;
 }
-.vp-form__amount-echo {
+.so-form__amount-echo {
   margin-left: var(--space-3, 12px);
   font-size: var(--text-sm, 13px);
   color: var(--text-secondary, #64748b);
   font-variant-numeric: tabular-nums;
 }
-.vp-form__audit {
+.so-form__audit {
   margin: var(--space-3, 12px) 0 0;
   font-size: var(--text-xs, 12px);
   color: var(--text-tertiary, #94a3b8);
 }
 
 /* 簽收憑證區 */
-.vp-signed-block {
+.so-signed-block {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-4, 16px);
   flex-wrap: wrap;
 }
-.vp-signed-block--pending {
+.so-signed-block--pending {
   justify-content: flex-start;
 }
-.vp-signed-block__info {
+.so-signed-block__info {
   display: flex;
   align-items: center;
   gap: var(--space-2, 8px);
   flex-wrap: wrap;
   font-size: var(--text-sm, 13px);
 }
-.vp-signed-block__thumb img {
+.so-signed-block__thumb img {
   max-width: 180px;
   max-height: 90px;
   border: 1px solid var(--neutral-200, #e2e8f0);
@@ -1007,23 +1033,23 @@ onMounted(async () => {
 }
 
 /* 附件區 */
-.vp-attachments__empty {
+.so-attachments__empty {
   font-size: var(--text-sm, 13px);
   margin-bottom: var(--space-2, 8px);
 }
-.vp-attachments__grid {
+.so-attachments__grid {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-3, 12px);
   margin-bottom: var(--space-3, 12px);
 }
-.vp-att {
+.so-att {
   width: 120px;
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
-.vp-att__preview {
+.so-att__preview {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1033,43 +1059,43 @@ onMounted(async () => {
   overflow: hidden;
   background: var(--neutral-50, #f8fafc);
 }
-.vp-att__preview img {
+.so-att__preview img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
-.vp-att__doc {
+.so-att__doc {
   font-size: var(--text-sm, 13px);
   font-weight: var(--font-weight-semibold, 600);
   color: var(--text-secondary, #64748b);
   letter-spacing: 0.05em;
 }
-.vp-att__meta {
+.so-att__meta {
   display: flex;
   flex-direction: column;
   font-size: var(--text-xs, 12px);
 }
-.vp-att__name {
+.so-att__name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--text-secondary, #64748b);
 }
-.vp-att__size {
+.so-att__size {
   color: var(--text-tertiary, #94a3b8);
 }
-.vp-att__remove {
+.so-att__remove {
   align-self: flex-start;
 }
 
 @media (max-width: 640px) {
-  .vp-header {
+  .so-header {
     flex-direction: column;
   }
-  .vp-form__grid {
+  .so-form__grid {
     grid-template-columns: 1fr;
   }
-  .vp-form__col-2 {
+  .so-form__col-2 {
     grid-column: span 1;
   }
 }

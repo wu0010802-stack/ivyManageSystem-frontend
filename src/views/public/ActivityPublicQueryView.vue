@@ -673,7 +673,15 @@ const feePreview = computed(() => {
   const existingSupplyPrice = buildSupplySnapshotMap(queryResult.value.supplies ?? [])
   // 課程：只算 enrolled；既有課用 snapshot 價（courses[].price），新增課才用目前 option 價。
   const newCourseTotal = sumCourseFees(editForm.selectedCourses, {
-    isEnrolled: (name) => estimatedCourseStatus(name) === 'enrolled',
+    // promoted_pending 佔位保留但未確認：後端 diff-keep 保留原 status 且計費只算
+    // enrolled；estimateCourseStatus 對本生原 pending 課回 'enrolled' 是「座位保留」
+    // 語意非計費語意，直接以原狀態排除。否則零改動即虛報「需補繳」、wouldOverpay
+    // 用虛胖 newTotal 漏擋退費場景吃後端 409（audit C-1，2026-07-02）。
+    isEnrolled: (name) => {
+      const orig = existingCourses.find((c) => c.name === name)
+      if (orig?.status === 'promoted_pending') return false
+      return estimatedCourseStatus(name) === 'enrolled'
+    },
     resolvePrice: (name) => {
       const existing = existingCourses.find((c) => c.name === name)
       return existing

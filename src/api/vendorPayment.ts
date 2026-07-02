@@ -1,14 +1,6 @@
 import api, { API_BASE } from './index'
-
-/** 區間彙總（跨狀態），對應後端 GET /vendor-payments/summary。 */
-export interface VendorPaymentSummary {
-  total_count: number
-  total_amount: number
-  pending_count: number
-  pending_amount: number
-  signed_count: number
-  signed_amount: number
-}
+export { PAYMENT_METHOD_OPTIONS, paymentMethodLabel } from '@/constants/signoff'
+export type { SignoffSummary as VendorPaymentSummary } from '@/constants/signoff'
 
 export const listVendorPayments = (params: unknown) =>
   api.get('/vendor-payments', { params })
@@ -46,14 +38,3 @@ export const downloadVendorPaymentAttachmentUrl = (id: number, key: string) =>
 
 export const vendorPaymentSignatureUrl = (id: number) =>
   `${API_BASE}/vendor-payments/${id}/signature`
-
-export const PAYMENT_METHOD_OPTIONS = [
-  { value: 'cash', label: '現金' },
-  { value: 'bank_transfer', label: '銀行匯款' },
-  { value: 'check', label: '支票' },
-  { value: 'linepay', label: 'LINE Pay' },
-  { value: 'other', label: '其他' },
-]
-
-export const paymentMethodLabel = (value: string) =>
-  PAYMENT_METHOD_OPTIONS.find((o) => o.value === value)?.label || value
