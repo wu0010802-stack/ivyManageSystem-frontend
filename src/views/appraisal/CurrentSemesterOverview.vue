@@ -20,6 +20,7 @@ import {
   addAppraisalParticipant,
   bulkAddAppraisalParticipantsFromActive,
   listScoringRules,
+  refreshAppraisalCycle,
 } from '@/api/appraisal'
 import { useAcademicTermStore } from '@/stores/academicTerm'
 import { useErrorNotify } from '@/composables/useErrorNotify'
@@ -77,7 +78,7 @@ interface ParticipantRow {
   [key: string]: unknown
 }
 
-interface AggregatedStatus { participants?: ParticipantRow[] }
+interface AggregatedStatus { participants?: ParticipantRow[]; generated_at?: string }
 
 interface SyncPreviewData {
   deleted_count?: number
@@ -115,6 +116,7 @@ async function fetchCurrentCycle() {
 // ── 取得 aggregated_status（cycle 存在才打）────────────────
 const aggregatedStatus = ref<AggregatedStatus | null>(null)
 const statusLoading = ref(false)
+const lastRefreshedAt = ref<string | null>(null)
 
 async function loadStatus() {
   if (!currentCycle.value) {
@@ -125,11 +127,21 @@ async function loadStatus() {
   try {
     const { data } = await getAppraisalAllEmployeesStatus(currentCycle.value.id)
     aggregatedStatus.value = data as AggregatedStatus
+    lastRefreshedAt.value = (data as AggregatedStatus)?.generated_at ?? null
   } catch (e) {
     notify(e, 'CurrentSemesterOverview:fetchStatus', '載入彙整狀態失敗')
   } finally {
     statusLoading.value = false
   }
+}
+
+function formatTime(iso: string | null | undefined) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const hh = String(d.getHours()).padStart(2, '0')
+  const mm = String(d.getMinutes()).padStart(2, '0')
+  return `${hh}:${mm}`
 }
 
 // ── 載入扣分規則（給 detail dialog tooltip 顯示）──────────
@@ -149,8 +161,24 @@ async function loadRules() {
   }
 }
 
+// ── 進頁即算：OPEN cycle 先 refresh 再 loadStatus ──────────
+const refreshing = ref(false)
+
+async function refreshIfOpen() {
+  if (!currentCycle.value || currentCycle.value.status !== 'OPEN' || refreshing.value) return
+  refreshing.value = true
+  try {
+    await refreshAppraisalCycle(currentCycle.value.id)
+  } catch (e) {
+    // 靜默降級：refresh 失敗不擋 loadStatus，總覽仍顯示既有彙整資料
+  } finally {
+    refreshing.value = false
+  }
+}
+
 async function reloadAll() {
   await fetchCurrentCycle()
+  await refreshIfOpen()
   await loadStatus()
   await loadRules()
 }
@@ -422,7 +450,16 @@ const scorePreviewDialogVisible = ref(false)
   <div class="current-semester-overview">
     <!-- toolbar -->
     <div class="toolbar">
-      <AcademicTermSelector />
+      <div class="toolbar__left">
+        <AcademicTermSelector />
+        <span
+          v-if="currentCycle && lastRefreshedAt"
+          class="toolbar__updated"
+          data-test="last-refreshed-at"
+        >
+          已即時重算 {{ formatTime(lastRefreshedAt) }}
+        </span>
+      </div>
       <div class="toolbar__actions">
         <el-button
           v-if="currentCycle && hasNonParticipant"
@@ -463,7 +500,7 @@ const scorePreviewDialogVisible = ref(false)
         </el-tooltip>
         <el-button
           :icon="Refresh"
-          :loading="cycleLoading || statusLoading"
+          :loading="cycleLoading || refreshing || statusLoading"
           data-test="refresh-btn"
           @click="reloadAll"
         >
@@ -709,6 +746,18 @@ const scorePreviewDialogVisible = ref(false)
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+.toolbar__left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.toolbar__updated {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
 }
 
 .toolbar__actions {

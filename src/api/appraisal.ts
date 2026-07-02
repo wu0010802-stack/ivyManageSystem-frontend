@@ -104,6 +104,10 @@ export const syncAppraisalScoreItems = (cycleId: number, { dryRun = false } = {}
 export const getAppraisalAllEmployeesStatus = (cycleId: number) =>
     api.get(`/appraisal/cycles/${cycleId}/all_employees_status`)
 
+/** 進頁即算：單一 transaction 內 sync_score_items + summaries:recompute，回摘要計數。僅 OPEN cycle 可呼叫（非 OPEN 後端回 400）。 */
+export const refreshAppraisalCycle = (cycleId: number): AxiosResp<'/appraisal/cycles/{cycle_id}/refresh', 'post'> =>
+    api.post(`/appraisal/cycles/${cycleId}/refresh`)
+
 export const bulkAddAppraisalParticipantsFromActive = (cycleId: number, employeeIds: number[] | null = null) =>
     api.post(`/appraisal/cycles/${cycleId}/participants:bulk_from_active`, {
         employee_ids: employeeIds,
