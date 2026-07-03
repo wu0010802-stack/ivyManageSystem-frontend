@@ -157,6 +157,49 @@ describe('useSalarySettlement refresh（async race）', () => {
     })
 })
 
+describe('useSalarySettlement currentLoadFailed（當月載入失敗清空殘留）', () => {
+    it('當月請求失敗 → 清空 records/prevRecords 並設 currentLoadFailed，避免殘留上一個月名冊', async () => {
+        // 先成功載入 5 月 → records 有值
+        vi.mocked(getRecords).mockImplementation(
+            () => Promise.resolve({ data: [rec({ employee_name: 'MAY' })] }) as ReturnType<typeof getRecords>,
+        )
+        const year = ref(2026)
+        const month = ref(5)
+        const s = useSalarySettlement(year, month)
+        await s.refresh()
+        expect(s.records.value.length).toBe(1)
+        expect(s.currentLoadFailed.value).toBe(false)
+
+        // 當月請求改為 500（模擬切到會失敗的月份）→ 名冊須清空，不得殘留 MAY
+        vi.mocked(getRecords).mockImplementation(
+            () => Promise.reject(new Error('500')) as ReturnType<typeof getRecords>,
+        )
+        await s.refresh()
+        expect(s.records.value).toEqual([])
+        expect(s.prevRecords.value).toEqual([])
+        expect(s.currentLoadFailed.value).toBe(true)
+        expect(s.loading.value).toBe(false)
+    })
+
+    it('當月載入失敗後再次成功 → currentLoadFailed 復位', async () => {
+        vi.mocked(getRecords).mockImplementation(
+            () => Promise.reject(new Error('500')) as ReturnType<typeof getRecords>,
+        )
+        const year = ref(2026)
+        const month = ref(5)
+        const s = useSalarySettlement(year, month)
+        await s.refresh()
+        expect(s.currentLoadFailed.value).toBe(true)
+
+        vi.mocked(getRecords).mockImplementation(
+            () => Promise.resolve({ data: [rec()] }) as ReturnType<typeof getRecords>,
+        )
+        await s.refresh()
+        expect(s.currentLoadFailed.value).toBe(false)
+        expect(s.records.value.length).toBe(1)
+    })
+})
+
 describe('useSalarySettlement prevLoadFailed（上月載入失敗旗標）', () => {
     it('上月請求失敗 → prevLoadFailed=true；成功 → false', async () => {
         vi.mocked(getRecords).mockImplementation((year: number, month: number) => {

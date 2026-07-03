@@ -255,6 +255,30 @@ describe('ResolveCard', () => {
     expect(redEl.exists()).toBe(true)
   })
 
+  it('僅 context 變更（item 不變）→ 補卡時間 ref 亦被 reset', async () => {
+    // characterization：context 是父層 computed，每次換筆都回新物件參考；
+    // 保留的 watch(context) 已能承擔 reset，故單獨改 context 即應清空 local ref。
+    const wrapper = mountCard({
+      item: itemMissingPunch,
+      context: missingOutContext,
+    })
+    const timePickers = wrapper.findAll('.el-time-picker')
+    const outPicker = timePickers[timePickers.length - 1]
+    await outPicker.setValue('21:00')
+    await nextTick()
+    expect(outPicker.element.value).toBe('21:00')
+
+    // 僅換 context（item 不變，模擬 recordsCache 更新或換筆時 computed 產生新物件）
+    await wrapper.setProps({
+      context: { punch_in: '08:00', punch_out: null, has_leave: false, estimated_deduction: 0 },
+    })
+    await nextTick()
+
+    const pickersAfter = wrapper.findAll('.el-time-picker')
+    const outPickerAfter = pickersAfter[pickersAfter.length - 1]
+    expect(outPickerAfter.element.value).toBe('')
+  })
+
   it('props.item 變更後補卡時間 ref 被 reset（換筆清空）', async () => {
     const wrapper = mountCard({
       item: itemMissingPunch,

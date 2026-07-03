@@ -116,6 +116,9 @@ export function useSalarySettlement(year: Ref<number>, month: Ref<number>) {
     // 上月載入「失敗」（500/網路錯誤）≠ 上月「真無資料」——
     // 前者異常比較靜默失效，覆核 banner 須區分以免漏看月差
     const prevLoadFailed = ref(false)
+    // 當月載入「失敗」旗標：讓 UI 顯示「本月載入失敗」空狀態，
+    // 而非殘留上一個月名冊（新月份標頭 + 舊月份名冊的不同步）
+    const currentLoadFailed = ref(false)
     const loading = ref(false)
     const thresholds = ref(getThresholds())
 
@@ -141,8 +144,15 @@ export function useSalarySettlement(year: Ref<number>, month: Ref<number>) {
             records.value = (cur.data ?? []) as unknown as SettlementRecord[]
             prevRecords.value = ((prev as { data: unknown[] }).data ?? []) as unknown as SettlementRecord[]
             prevLoadFailed.value = prevFailed
+            currentLoadFailed.value = false
         } catch (e) {
             if (epoch !== refreshEpoch) return
+            // 當月載入失敗：清空名冊，避免顯示與標頭月份不一致的殘留資料
+            // （覆核/定案畫面尤其誤導——操作者會誤以為看到的是新月份的人）
+            records.value = []
+            prevRecords.value = []
+            prevLoadFailed.value = false
+            currentLoadFailed.value = true
             notify(e, 'useSalarySettlement.refresh', '載入薪資紀錄失敗')
         } finally {
             if (epoch === refreshEpoch) loading.value = false
@@ -155,7 +165,7 @@ export function useSalarySettlement(year: Ref<number>, month: Ref<number>) {
     const sortedRecords = computed(() => sortByAttention(records.value, anomalies.value))
     const finalizedCount = computed(() => records.value.filter((r) => r.is_finalized).length)
 
-    return { records, prevRecords, prevLoadFailed, loading, status, anomalies, sortedRecords, finalizedCount, thresholds, refresh }
+    return { records, prevRecords, prevLoadFailed, currentLoadFailed, loading, status, anomalies, sortedRecords, finalizedCount, thresholds, refresh }
 }
 
 export type SalarySettlement = ReturnType<typeof useSalarySettlement>
