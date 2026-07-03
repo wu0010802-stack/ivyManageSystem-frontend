@@ -59,10 +59,16 @@ export function useLeaveQuota({ form, fetchFn = null }: { form: Record<string, u
     editBaselineHours.value = 0
   }
 
+  // 實際可用時數：編輯模式須把本筆原本已計入 used_hours 的時數加回。
+  // quotaExceeded 與 LeaveView.saveLeave 的配額確認閘門一律以此為準，避免兩者口徑不一致。
+  const effectiveRemaining = computed<number | null>(() => {
+    if (!quotaInfo.value) return null
+    return quotaInfo.value.remaining_hours + editBaselineHours.value
+  })
+
   const quotaExceeded = computed(() => {
-    if (!quotaInfo.value) return false
-    const effectiveRemaining = quotaInfo.value.remaining_hours + editBaselineHours.value
-    return (form.leave_hours as number) > effectiveRemaining
+    if (effectiveRemaining.value === null) return false
+    return (form.leave_hours as number) > effectiveRemaining.value
   })
 
   return {
@@ -70,6 +76,7 @@ export function useLeaveQuota({ form, fetchFn = null }: { form: Record<string, u
     quotaInfo,
     quotaLoading,
     quotaExceeded,
+    effectiveRemaining,
     fetchQuotaInfo,
     setEditBaseline,
     clearEditBaseline,
