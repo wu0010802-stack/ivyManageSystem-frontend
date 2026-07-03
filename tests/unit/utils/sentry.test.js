@@ -535,3 +535,38 @@ describe('redactPiiKvInText', () => {
     expect(v).toContain('[Filtered]')
   })
 })
+
+// 系統優化盤點 P1（2026-07-03）：logentry / top-level message 未過 PII scrub。
+// 與後端 utils/sentry_init._scrub_event 對齊（PII 遮罩前後端必須同步，否則單側洩漏）。
+describe('scrubEvent logentry / message PII', () => {
+  it('redacts logentry.formatted / message PII', () => {
+    const ev = {
+      logentry: {
+        message: '登入失敗 email=parent@example.com 手機 0912345678',
+        formatted: '登入失敗 email=parent@example.com 手機 0912345678',
+        params: ['parent@example.com', '0912345678'],
+      },
+    }
+    const res = scrubEvent(ev)
+    expect(res.logentry.formatted).not.toContain('parent@example.com')
+    expect(res.logentry.formatted).not.toContain('0912345678')
+    expect(res.logentry.message).not.toContain('parent@example.com')
+    expect(res.logentry.formatted).toContain('[Filtered]')
+  })
+
+  it('redacts logentry.params dict keys', () => {
+    const ev = {
+      logentry: { message: '建立家長失敗', params: { email: 'foo@bar.com', parent_name: '王小明' } },
+    }
+    const res = scrubEvent(ev)
+    expect(res.logentry.params.email).toBe('[Filtered]')
+    expect(res.logentry.params.parent_name).toBe('[Filtered]')
+  })
+
+  it('redacts top-level message PII', () => {
+    const res = scrubEvent({ message: '身分證 A123456789 綁定失敗，email=user@example.com' })
+    expect(res.message).not.toContain('A123456789')
+    expect(res.message).not.toContain('user@example.com')
+    expect(res.message).toContain('[Filtered]')
+  })
+})

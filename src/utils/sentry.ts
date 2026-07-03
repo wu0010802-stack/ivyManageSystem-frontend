@@ -236,6 +236,25 @@ export function scrubEvent(event: unknown) {
       }
     }
   }
+
+  // 記錄訊息本體亦可能夾帶 PII：LoggingIntegration 的 logentry（message/formatted/
+  // params）與 captureMessage 的 top-level message 都不落在上述任一 section，需單獨遮。
+  // 同 exception value 語意：value-level（身分證/手機/LINE id）+ key-value denylist
+  // （email/姓名/帳號等須靠 key 判定者）。與後端 _scrub_event 對齊。
+  if (typeof ev['message'] === 'string') {
+    ev['message'] = redactPiiKvInText(redactPiiValue(ev['message']) as string)
+  }
+
+  const logentry = ev['logentry']
+  if (logentry && typeof logentry === 'object') {
+    const le = logentry as Record<string, unknown>
+    for (const seg of ['message', 'formatted']) {
+      if (typeof le[seg] === 'string') {
+        le[seg] = redactPiiKvInText(redactPiiValue(le[seg]) as string)
+      }
+    }
+    if ('params' in le) le['params'] = scrubMapping(le['params'])
+  }
   return ev
 }
 
