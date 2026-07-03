@@ -41,7 +41,15 @@ export function createFetchStore(
       // 否則物件型 dataKey 的 data.length 恆 undefined → 永不命中 → 每次都重抓。
       const hasCached = Array.isArray(data) ? data.length > 0 : data != null
       if (!force && hasCached && Date.now() - (this._fetchedAt as number) < ttl) return
-      if (this._pending) return this._pending as Promise<void>
+      if (this._pending) {
+        // 非強制：沿用 in-flight 去重。
+        // 強制（force=true，如 refresh()）：不可回傳舊的 in-flight promise（會拿到過時結果），
+        // 改排在現行 in-flight 之後再抓一次最新，順序保證強制刷新結果最後落地。
+        if (!force) return this._pending as Promise<void>
+        return (this._pending as Promise<void>).then(() =>
+          (this[methodName] as (force: boolean) => Promise<void>)(true),
+        )
+      }
 
       if (!silentFail) {
         this.loading = true

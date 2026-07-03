@@ -41,13 +41,20 @@ export const useNotificationStore = defineStore('notification', {
   },
 
   actions: {
-    async fetchSummary({ force = false } = {}) {
+    // 明確標註回傳型別：force 分支會遞迴呼叫 this.fetchSummary（chain 在 in-flight 之後），
+    // 自我參照下 TS 無法推導回傳型別（TS7023），須顯式標註。呼叫端皆 fire-and-forget 不取用形狀。
+    async fetchSummary({ force = false } = {}): Promise<unknown> {
       if (!force && this.lastFetchedAt && Date.now() - this.lastFetchedAt < SUMMARY_TTL_MS) {
         return this.summary
       }
 
       if (inflightSummaryRequest) {
-        return inflightSummaryRequest
+        // 非強制：沿用 in-flight 去重。
+        // 強制（force=true，如簽核後刷新徽章）：不可回傳「簽核前」的 in-flight promise，
+        // 否則徽章不會即時遞減；改排在現行 in-flight 之後再抓一次最新，
+        // 順序保證讓強制刷新的結果最後落地（避免與舊請求競態）。
+        if (!force) return inflightSummaryRequest
+        return inflightSummaryRequest.then(() => this.fetchSummary({ force: true }))
       }
 
       this.loading = true
