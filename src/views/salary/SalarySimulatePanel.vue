@@ -295,11 +295,27 @@ const COMPARE_FIELDS = [
   { key: 'total_with_bonus', label: '含獎金實領', bold: true, highlight: true },
 ]
 
+// 扣款類欄位集合：對員工而言「扣更多（差異 > 0）」= 變差（紅）、「扣更少」= 變好（綠）。
+// 必須涵蓋 COMPARE_FIELDS 中所有扣款欄——含勞健保、二代健保補充保費、勞退自提、會議缺席
+// 扣款；早期只列 total_deductions/遲到/早退/請假/曠職，漏掉的保險/勞退/節慶扣減欄會被當成
+// 收入類（增加上綠、減少上紅），色碼與實際好壞相反，HR 對照談薪時易誤讀。
+const DEDUCTION_KEYS = new Set<string>([
+  'total_deductions',
+  'labor_insurance',
+  'health_insurance',
+  'supplementary_health_employee',
+  'pension_self',
+  'late_deduction',
+  'early_leave_deduction',
+  'leave_deduction',
+  'absence_deduction',
+  'meeting_absence_deduction',
+])
+
 const diffColor = (key: string, val: number) => {
   if (val === 0) return ''
-  // 扣款類：值增加 = 變差（紅），值減少 = 變好（綠）
-  const isDeduction = ['total_deductions', 'late_deduction', 'early_leave_deduction',
-    'leave_deduction', 'absence_deduction'].includes(key)
+  // 扣款類：值增加 = 變差（紅），值減少 = 變好（綠）；收入類則相反。
+  const isDeduction = DEDUCTION_KEYS.has(key)
   const positive = isDeduction ? val < 0 : val > 0
   return positive ? 'diff-pos' : 'diff-neg'
 }

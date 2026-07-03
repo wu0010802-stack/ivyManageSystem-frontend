@@ -83,3 +83,58 @@ describe('SalarySimulatePanel 試算失敗訊息', () => {
     expect(msg).not.toContain('[object Object]')
   })
 })
+
+// F-2：diffColor 對「差異」上色（diff-pos=綠=有利、diff-neg=紅=不利）。
+// 扣款欄位「增加（差異 > 0）」= 扣更多 = 對員工不利 → 應紅（diff-neg）。
+// 原本 isDeduction 清單漏了勞健保/勞退/二代健保補充保費/會議缺席扣款，
+// 導致這些欄位增加時被誤判為有利（綠），減少反而顯示不利（紅），色碼相反。
+describe('SalarySimulatePanel diffColor 扣款色碼', () => {
+  type DiffVm = { diffColor: (key: string, val: number) => string }
+
+  const mountVm = () => {
+    const wrapper = mount(SalarySimulatePanel)
+    return wrapper.vm as unknown as DiffVm
+  }
+
+  // 全部扣款欄位（含原本漏掉的 5 欄）：增加 = 不利（紅），減少 = 有利（綠）
+  const DEDUCTION_KEYS = [
+    'total_deductions',
+    'labor_insurance',
+    'health_insurance',
+    'supplementary_health_employee',
+    'pension_self',
+    'late_deduction',
+    'early_leave_deduction',
+    'leave_deduction',
+    'absence_deduction',
+    'meeting_absence_deduction',
+  ]
+
+  it.each(DEDUCTION_KEYS)('扣款欄 %s：增加 → 紅（diff-neg，不利）', (key) => {
+    const vm = mountVm()
+    expect(vm.diffColor(key, 100)).toBe('diff-neg')
+  })
+
+  it.each(DEDUCTION_KEYS)('扣款欄 %s：減少 → 綠（diff-pos，有利）', (key) => {
+    const vm = mountVm()
+    expect(vm.diffColor(key, -100)).toBe('diff-pos')
+  })
+
+  // 收入類欄位：增加 = 有利（綠），維持原行為不回歸
+  it.each([
+    ['gross_salary'],
+    ['net_pay'],
+    ['total_with_bonus'],
+    ['festival_bonus'],
+    ['base_salary'],
+  ])('收入欄 %s：增加 → 綠（diff-pos，有利）', (key) => {
+    const vm = mountVm()
+    expect(vm.diffColor(key, 100)).toBe('diff-pos')
+    expect(vm.diffColor(key, -100)).toBe('diff-neg')
+  })
+
+  it('差異為 0 → 無色碼', () => {
+    const vm = mountVm()
+    expect(vm.diffColor('labor_insurance', 0)).toBe('')
+  })
+})
