@@ -2322,6 +2322,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/appraisal/cycles/{cycle_id}/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Refresh Cycle
+         * @description 進頁即算：單一 transaction 內 sync_score_items + summaries:recompute，回摘要計數。
+         */
+        post: operations["refresh_cycle_api_appraisal_cycles__cycle_id__refresh_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/appraisal/cycles/{cycle_id}/score_preview": {
         parameters: {
             query?: never;
@@ -25129,6 +25149,30 @@ export interface components {
             /** Visit Date */
             visit_date?: string | null;
         };
+        /** RefreshResultOut */
+        RefreshResultOut: {
+            /** Created */
+            created: number;
+            /** Cycle Id */
+            cycle_id: number;
+            /** Recomputed */
+            recomputed: number;
+            /**
+             * Refreshed At
+             * Format: date-time
+             */
+            refreshed_at: string;
+            /** Skipped Finalized */
+            skipped_finalized: number;
+            /** Skipped Manual */
+            skipped_manual: number;
+            /** Skipped Tenure */
+            skipped_tenure: number;
+            /** Synced Deleted */
+            synced_deleted: number;
+            /** Synced Inserted */
+            synced_inserted: number;
+        };
         /**
          * RefundCalcPayload
          * @description 退費計算稽核明細（calc_method 對應的形狀）。
@@ -32992,6 +33036,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BulkAddParticipantsResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    refresh_cycle_api_appraisal_cycles__cycle_id__refresh_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cycle_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefreshResultOut"];
                 };
             };
             /** @description Validation Error */

@@ -10,6 +10,19 @@ vi.mock('@/api/appraisal', () => ({
   createAppraisalCycle: vi.fn(),
   addAppraisalParticipant: vi.fn(),
   bulkAddAppraisalParticipantsFromActive: vi.fn(),
+  refreshAppraisalCycle: vi.fn().mockResolvedValue({
+    data: {
+      cycle_id: 12,
+      synced_deleted: 0,
+      synced_inserted: 0,
+      skipped_manual: 0,
+      recomputed: 0,
+      created: 0,
+      skipped_finalized: 0,
+      skipped_tenure: 0,
+      refreshed_at: '2026-05-16T03:25:00Z',
+    },
+  }),
   previewAppraisalScore: vi.fn().mockResolvedValue({ data: { participants: [] } }),
   getManualEventCounts: vi.fn().mockResolvedValue({ data: { entries: [] } }),
   batchUpsertManualEventCounts: vi.fn().mockResolvedValue({ data: { ok: true } }),
@@ -48,6 +61,7 @@ import {
   createAppraisalCycle,
   addAppraisalParticipant,
   bulkAddAppraisalParticipantsFromActive,
+  refreshAppraisalCycle,
 } from '@/api/appraisal'
 
 import CurrentSemesterOverview from '../CurrentSemesterOverview.vue'
@@ -609,5 +623,76 @@ describe('CurrentSemesterOverview 清單篩選（Task 4）', () => {
     await wrapper.vm.$nextTick()
     expect(vm.filteredParticipants.every((p) => p.is_participant === false)).toBe(true)
     expect(vm.filteredParticipants.length).toBeGreaterThan(0)
+  })
+})
+
+// ── 進頁即算 refresh 接線（Task 8）─────────────────────────
+describe('CurrentSemesterOverview 進頁即算 refresh（Task 8）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('OPEN cycle mount 時，refreshAppraisalCycle 在 getAppraisalAllEmployeesStatus 之前被呼叫', async () => {
+    const callOrder = []
+    getAppraisalCurrentCycle.mockResolvedValue({ data: SAMPLE_CYCLE }) // status: OPEN
+    refreshAppraisalCycle.mockImplementationOnce(async (cycleId) => {
+      callOrder.push('refresh')
+      return {
+        data: {
+          cycle_id: cycleId,
+          synced_deleted: 0,
+          synced_inserted: 0,
+          skipped_manual: 0,
+          recomputed: 0,
+          created: 0,
+          skipped_finalized: 0,
+          skipped_tenure: 0,
+          refreshed_at: '2026-05-16T03:25:00Z',
+        },
+      }
+    })
+    getAppraisalAllEmployeesStatus.mockImplementationOnce(async () => {
+      callOrder.push('status')
+      return { data: makeStatusFixture() }
+    })
+
+    await mountView()
+
+    expect(refreshAppraisalCycle).toHaveBeenCalledWith(12)
+    expect(callOrder).toEqual(['refresh', 'status'])
+  })
+
+  it('非 OPEN cycle 不呼叫 refreshAppraisalCycle', async () => {
+    getAppraisalCurrentCycle.mockResolvedValue({ data: { ...SAMPLE_CYCLE, status: 'CLOSED' } })
+    getAppraisalAllEmployeesStatus.mockResolvedValue({ data: makeStatusFixture() })
+
+    await mountView()
+
+    expect(refreshAppraisalCycle).not.toHaveBeenCalled()
+    expect(getAppraisalAllEmployeesStatus).toHaveBeenCalledWith(12)
+  })
+
+  it('refreshAppraisalCycle reject 時仍呼叫 getAppraisalAllEmployeesStatus（靜默降級）', async () => {
+    getAppraisalCurrentCycle.mockResolvedValue({ data: SAMPLE_CYCLE })
+    refreshAppraisalCycle.mockRejectedValueOnce(new Error('cycle not OPEN'))
+    getAppraisalAllEmployeesStatus.mockResolvedValue({ data: makeStatusFixture() })
+
+    const wrapper = await mountView()
+
+    expect(refreshAppraisalCycle).toHaveBeenCalledWith(12)
+    expect(getAppraisalAllEmployeesStatus).toHaveBeenCalledWith(12)
+    // 降級：不噴未捕捉例外，元件仍正常渲染
+    expect(wrapper.find('[data-test="kpi-employees"]').exists()).toBe(true)
+  })
+
+  it('toolbar 顯示「已即時重算」與 generated_at 格式化時間', async () => {
+    getAppraisalCurrentCycle.mockResolvedValue({ data: SAMPLE_CYCLE })
+    getAppraisalAllEmployeesStatus.mockResolvedValue({ data: makeStatusFixture() })
+
+    const wrapper = await mountView()
+
+    const updated = wrapper.find('[data-test="last-refreshed-at"]')
+    expect(updated.exists()).toBe(true)
+    expect(updated.text()).toContain('已即時重算')
   })
 })
