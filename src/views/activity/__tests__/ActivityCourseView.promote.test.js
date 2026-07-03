@@ -196,3 +196,46 @@ describe('ActivityCourseView — 候補 Drawer 手動升位', () => {
     expect(wrapper.text()).toContain('該家長已被前一個升位')
   })
 })
+
+describe('ActivityCourseView — 容量欄含 promoted_pending 佔位（audit C-5，2026-07-02）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  const mountList = async (course) => {
+    getCourses.mockResolvedValue({ data: { courses: [course] } })
+    const wrapper = mount(ActivityCourseView, {
+      global: { stubs: GLOBAL_STUBS, directives: { loading: () => {} } },
+    })
+    await flushPromises()
+    return wrapper
+  }
+
+  it('29 enrolled + 1 promoted_pending / 30 → 顯示佔位 30/30 並標示待確認', async () => {
+    // 後端容量閘以佔位數（enrolled + promoted_pending）擋升位：只顯示 29/30
+    // 會讓管理者以為有位，點升位卻吃 400「容量已滿」
+    const wrapper = await mountList({
+      ...sampleCourse,
+      capacity: 30,
+      enrolled: 29,
+      promoted_pending: 1,
+      waitlist_count: 0,
+    })
+    const text = wrapper.text()
+    expect(text).toContain('30/30')
+    expect(text).toContain('待確認')
+  })
+
+  it('無 promoted_pending → 維持原顯示、無待確認標示', async () => {
+    const wrapper = await mountList({
+      ...sampleCourse,
+      capacity: 20,
+      enrolled: 12,
+      promoted_pending: 0,
+      waitlist_count: 0,
+    })
+    const text = wrapper.text()
+    expect(text).toContain('12/20')
+    expect(text).not.toContain('待確認')
+  })
+})

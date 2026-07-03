@@ -18,7 +18,7 @@ interface CourseItem {
 interface AvailabilityResult { text: string; cssClass: string; full: boolean }
 interface AdvisoryChip { severity: string; message: string }
 
-withDefaults(defineProps<{
+const props = withDefaults(defineProps<{
   courses: CourseItem[]
   optionsLoading?: boolean
   selectedCourses: string[]
@@ -39,6 +39,13 @@ defineEmits<{
   (e: 'toggle', course: CourseItem): void
   (e: 'open-video', title: string, url: string): void
 }>()
+
+// 額滿鎖定只擋「新加」：已勾選的課保留可取消，否則 30s 輪詢後名額翻轉
+// （-1）時該課卡死在表單、送出必 400（audit C-3，2026-07-02；與
+// usePublicRegistrationForm.toggleCourse 守衛及查詢頁 courseLocked 對齊）
+function courseLocked(course: CourseItem): boolean {
+  return props.availabilityState(course).full && !props.selectedCourses.includes(course.name)
+}
 
 const PREVIEW_W = 320
 const PREVIEW_H = 180
@@ -134,15 +141,15 @@ onUnmounted(cancelPreview)
           v-else
           :key="course.name"
           class="course-item"
-          :class="{ 'course-item-disabled': availabilityState(course).full }"
-          :title="availabilityState(course).full ? '此課程已額滿，無法再報名' : ''"
+          :class="{ 'course-item-disabled': courseLocked(course) }"
+          :title="courseLocked(course) ? '此課程已額滿，無法再報名' : ''"
         >
           <label class="course-label">
             <input
               type="checkbox"
               name="course"
               :value="course.name"
-              :disabled="availabilityState(course).full"
+              :disabled="courseLocked(course)"
               :checked="selectedCourses.includes(course.name)"
               @change="$emit('toggle', course)"
             />

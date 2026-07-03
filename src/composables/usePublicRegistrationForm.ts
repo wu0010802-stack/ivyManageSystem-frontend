@@ -167,11 +167,17 @@ export function usePublicRegistrationForm({ courses, supplies, availability }: {
   }
 
   /**
-   * 切換報名課程選擇。額滿（availability=-1）擋下；候補（=0）允許。
-   * 此規則與 view 的 availabilityState(course).full 一致。
+   * 切換報名課程選擇。額滿（availability=-1）擋「新加」；候補（=0）允許。
+   * 已勾選的一律可取消：30s 輪詢後名額被搶（翻成 -1）時若連取消也擋，
+   * 該課卡死在表單裡、送出必吃後端 400（查詢/編修頁 onToggleCourse 有同款
+   * carve-out；audit C-3，2026-07-02）。
    */
   function toggleCourse(course: { name: string }) {
-    if (availability.value[course.name] === -1) return
+    if (
+      availability.value[course.name] === -1 &&
+      !form.selectedCourses.includes(course.name)
+    )
+      return
     toggleArrayItem(form.selectedCourses, course.name)
   }
 

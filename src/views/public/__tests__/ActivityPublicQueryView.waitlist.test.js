@@ -25,6 +25,7 @@ import {
   publicQueryByToken,
   publicQueryRegistration,
   publicConfirmPromotion,
+  publicDeclinePromotion,
   getPublicBootstrap,
   getPublicCoursesAvailability,
 } from '@/api/activityPublic'
@@ -323,5 +324,69 @@ describe('ActivityPublicQueryView — 滿額不開候補課鎖定 + 估費剔除
     expect(meishuCheckbox.attributes('disabled')).toBeUndefined()
     // 估狀態仍 enrolled（保留座位、計費）
     expect(wrapper.vm.estimatedCourseStatus('美術')).toBe('enrolled')
+  })
+})
+
+describe('ActivityPublicQueryView — 轉正確認/放棄成功但刷新失敗不誤報（audit C-2，2026-07-02）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  const seedQuery = () => {
+    publicQueryByToken.mockResolvedValue({
+      data: {
+        id: 1,
+        name: '王小明',
+        birthday: '2020-01-01',
+        class_name: '大班',
+        courses: [
+          { course_id: 7, name: '美術', status: 'promoted_pending', waitlist_position: null, waitlist_total: null },
+        ],
+        supplies: [],
+        total_amount: 0,
+        paid_amount: 0,
+      },
+    })
+  }
+
+  it('confirm 成功、刷新查詢 429 → 顯示成功與刷新提示，不顯示「確認失敗」', async () => {
+    seedQuery()
+    publicConfirmPromotion.mockResolvedValue({ data: { message: '已確認升為正式' } })
+
+    const wrapper = await mountView()
+    await triggerTokenQuery(wrapper)
+
+    // 轉正後的 refetch 失敗（模擬公開查詢限流 / 網路抖動）
+    publicQueryByToken.mockRejectedValue({
+      response: { status: 429, data: { detail: '查詢過於頻繁，請稍後再試' } },
+    })
+
+    await wrapper.vm.handleConfirmPromotion({ course_id: 7, name: '美術', status: 'promoted_pending' })
+    await new Promise((r) => setTimeout(r, 0))
+
+    const msgs = wrapper.vm.toasts.map((t) => t.message).join('|')
+    expect(msgs).toContain('已確認升為正式')
+    expect(msgs).not.toContain('確認失敗')
+    // mutation 已成功，任何 error 級 toast（含 429 detail 文字）都是誤報
+    expect(wrapper.vm.toasts.filter((t) => t.type === 'error')).toEqual([])
+  })
+
+  it('decline 成功、刷新查詢失敗 → 不顯示「放棄失敗」', async () => {
+    seedQuery()
+    publicDeclinePromotion.mockResolvedValue({ data: { message: '已放棄該名額' } })
+    // 測試環境（happy-dom）無 window.confirm，stubGlobal 提供
+    vi.stubGlobal('confirm', vi.fn(() => true))
+
+    const wrapper = await mountView()
+    await triggerTokenQuery(wrapper)
+
+    publicQueryByToken.mockRejectedValue(new Error('network flake'))
+
+    await wrapper.vm.handleDeclinePromotion({ course_id: 7, name: '美術', status: 'promoted_pending' })
+    await new Promise((r) => setTimeout(r, 0))
+
+    const msgs = wrapper.vm.toasts.map((t) => t.message).join('|')
+    expect(msgs).toContain('已放棄該名額')
+    expect(msgs).not.toContain('放棄失敗')
   })
 })

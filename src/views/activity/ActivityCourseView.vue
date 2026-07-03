@@ -23,14 +23,20 @@
           <span v-else style="color: var(--text-tertiary);">-</span>
         </template>
       </el-table-column>
-      <el-table-column label="容量" width="70" align="center">
+      <!-- 容量以佔位數（enrolled + promoted_pending）計：後端容量閘同口徑擋
+           手動升位，只顯示 enrolled 會出現「看似有位、升位卻 400 容量已滿」
+           的矛盾（audit C-5，2026-07-02） -->
+      <el-table-column label="容量" width="90" align="center">
         <template #default="{ row }">
           <el-button
-            v-if="row.enrolled > 0"
+            v-if="occupying(row) > 0"
             link type="primary" size="small"
             @click="openEnrolled(row)"
-          >{{ row.enrolled }}/{{ row.capacity }}</el-button>
+          >{{ occupying(row) }}/{{ row.capacity }}</el-button>
           <span v-else>0/{{ row.capacity }}</span>
+          <div v-if="(row.promoted_pending || 0) > 0" class="pending-occupancy-hint">
+            含 {{ row.promoted_pending }} 待確認
+          </div>
         </template>
       </el-table-column>
       <el-table-column label="候補" width="70" align="center">
@@ -285,7 +291,7 @@ interface Course {
   min_age_months?: number | null; max_age_months?: number | null
   meeting_weekday?: number | null; meeting_start_time?: string; meeting_end_time?: string
   instructor_name?: string | null
-  enrolled?: number; waitlist_count?: number
+  enrolled?: number; promoted_pending?: number; waitlist_count?: number
 }
 interface WaitlistItem { registration_id: number; student_name?: string; class_name?: string; waitlist_position?: number }
 interface EnrolledItem { position?: number; student_name?: string; class_name?: string }
@@ -359,6 +365,12 @@ const enrolledDrawer = ref(false)
 const enrolledCourse = ref<{ id: number; name: string } | null>(null)
 const enrolledItems = ref<EnrolledItem[]>([])
 const enrolledLoading = ref(false)
+
+// 佔位數 = enrolled + promoted_pending（與後端手動升位容量閘同口徑，
+// courses.py 的 remaining 亦以此計）
+function occupying(row: Course): number {
+  return (row.enrolled || 0) + (row.promoted_pending || 0)
+}
 
 async function openEnrolled(row: Course) {
   enrolledCourse.value = { id: row.id, name: row.name }
@@ -579,6 +591,7 @@ onMounted(fetchCourses)
 .toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; gap: 12px; flex-wrap: wrap; }
 .toolbar h2 { margin: 0; font-size: 20px; font-weight: 600; }
 .toolbar__actions { display: flex; gap: 8px; align-items: center; }
+.pending-occupancy-hint { font-size: 11px; color: var(--el-color-warning); line-height: 1.2; }
 </style>
 
 <style>
