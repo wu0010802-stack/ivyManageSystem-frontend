@@ -305,13 +305,17 @@ const routes: RouteRecordRaw[] = [
             path: '/year_end/cycles/:id/grid',
             name: 'year-end-cycle-grid',
             component: () => import('../views/yearEnd/YearEndGridView.vue'),
-            meta: { title: '年終總表', requiresAuth: true, permission: 'YEAR_END_READ' },
+            // 純 admin 路由：未登入走 guard 的 next('/login')；授權由 ROUTE_PERMISSION_RULES
+            // 的 /year_end prefix 規則（YEAR_END_READ）把關。不掛 portal-only 的 requiresAuth
+            // （否則未登入誤導向 /portal/login），也不掛不被 guard 消費的死碼 permission。
+            meta: { title: '年終總表' },
         },
         {
             path: '/year_end/cycles/:id/config',
             name: 'year-end-cycle-config',
             component: () => import('../views/yearEnd/YearEndConfigView.vue'),
-            meta: { title: '年終本期設定', requiresAuth: true, permission: 'YEAR_END_READ' },
+            // 純 admin 路由：同 grid，未登入走 next('/login')，授權靠 /year_end prefix 規則。
+            meta: { title: '年終本期設定' },
         },
         {
             path: '/year-end/appraisal-payout',
