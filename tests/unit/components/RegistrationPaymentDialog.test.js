@@ -4,8 +4,10 @@ import { nextTick } from 'vue'
 
 // ── API mock ─────────────────────────────────────────────────────────────────
 const addRegistrationPayment = vi.fn()
+const getRefundSuggestion = vi.fn()
 vi.mock('@/api/activity', () => ({
   addRegistrationPayment: (...a) => addRegistrationPayment(...a),
+  getRefundSuggestion: (...a) => getRefundSuggestion(...a),
 }))
 
 // ── element-plus mock ────────────────────────────────────────────────────────
@@ -77,6 +79,16 @@ describe('RegistrationPaymentDialog', () => {
     vi.clearAllMocks()
     addRegistrationPayment.mockResolvedValue({ data: {} })
     ElMessageBoxConfirm.mockResolvedValue(true)
+    // 退費開啟會抓 getRefundSuggestion 預填剩餘建議額（P2-B）；未 mock 會走 fail-closed
+    // 把 form.amount 歸 0 → 送出鈕 disabled，退費案例永遠打不到 API。給有效建議值。
+    getRefundSuggestion.mockResolvedValue({
+      data: {
+        total_suggested_amount: 500,
+        prior_refunded_amount: 0,
+        remaining_suggested_amount: 500,
+        items: [],
+      },
+    })
   })
 
   it('退費：原因 < 15 字 → 顯示警告、不打 API（後端 AddPaymentRequest 退費硬限 15 字）', async () => {
