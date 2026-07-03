@@ -66,11 +66,18 @@ const statusLabel = (s: string) =>
 async function load() {
   loading.value = true
   try {
-    const cycles = (await listYearEndCycles()).data as YearEndCycle[]
+    // 四支彼此無依賴、皆只吃 cycleId → 併發載入，首載等待取最慢者而非四次 round-trip 相加
+    const [cyclesRes, settRes, sbRes, ctRes] = await Promise.all([
+      listYearEndCycles(),
+      listYearEndSettlements(cycleId),
+      listSpecialBonuses(cycleId),
+      listClassEnrollmentTargets(cycleId),
+    ])
+    const cycles = cyclesRes.data as YearEndCycle[]
     cycle.value = cycles.find((c) => c.id === cycleId) ?? null
-    settlements.value = (await listYearEndSettlements(cycleId)).data
-    specialBonuses.value = (await listSpecialBonuses(cycleId)).data
-    classTargets.value = (await listClassEnrollmentTargets(cycleId)).data
+    settlements.value = settRes.data
+    specialBonuses.value = sbRes.data
+    classTargets.value = ctRes.data
   } catch (e) {
     ElMessage.error(apiError(e, '載入失敗'))
   } finally {

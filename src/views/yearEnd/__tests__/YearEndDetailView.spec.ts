@@ -263,3 +263,46 @@ describe('YearEndDetailView — 兩關簽核流程', () => {
     expect(vi.mocked(ElMessage.success)).not.toHaveBeenCalled()
   })
 })
+
+/**
+ * Finding [4]（P3 perf）：load() 內四支彼此無依賴、皆只吃 cycleId 的 API 原為逐一 await，
+ * 首載等待 ≈ 四次 round-trip 相加。改用 Promise.all 併發後應同時發出四支請求。
+ * 以「四支皆回 pending 時仍全部被呼叫」作為併發的 characterization。
+ */
+describe('YearEndDetailView.load — 併發載入（Promise.all）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockHasPermission.mockReturnValue(true)
+  })
+
+  it('load 併發呼叫四支彼此無依賴的 API（非序列 await）', async () => {
+    // 四支都回 pending（永不 resolve）：若為序列 await，第一支未完成時後三支不會被呼叫
+    vi.mocked(api.listYearEndCycles).mockReturnValue(new Promise(() => {}) as never)
+    vi.mocked(api.listYearEndSettlements).mockReturnValue(new Promise(() => {}) as never)
+    vi.mocked(api.listSpecialBonuses).mockReturnValue(new Promise(() => {}) as never)
+    vi.mocked(api.listClassEnrollmentTargets).mockReturnValue(new Promise(() => {}) as never)
+
+    await mountView()
+
+    expect(api.listYearEndCycles).toHaveBeenCalledTimes(1)
+    expect(api.listYearEndSettlements).toHaveBeenCalledTimes(1)
+    expect(api.listSpecialBonuses).toHaveBeenCalledTimes(1)
+    expect(api.listClassEnrollmentTargets).toHaveBeenCalledTimes(1)
+    // 三支吃 cycleId = 1（route.params.id）
+    expect(api.listYearEndSettlements).toHaveBeenCalledWith(1)
+    expect(api.listSpecialBonuses).toHaveBeenCalledWith(1)
+    expect(api.listClassEnrollmentTargets).toHaveBeenCalledWith(1)
+  })
+
+  it('併發回應後正確賦值（cycle/settlements 行為不變）', async () => {
+    setupApiMocks([makeSettlement({ id: 9, status: 'DRAFT' })])
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as {
+      cycle: { id: number } | null
+      settlements: Settlement[]
+    }
+    expect(vm.cycle?.id).toBe(1)
+    expect(vm.settlements).toHaveLength(1)
+    expect(vm.settlements[0].id).toBe(9)
+  })
+})
