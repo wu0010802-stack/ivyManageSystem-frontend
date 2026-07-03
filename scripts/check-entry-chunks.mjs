@@ -55,12 +55,13 @@ const ENTRIES = [
 // 預算（KB）。超出即 exit 1，防止首屏體積悄悄漂大的回歸（例如 admin index 曾漂到含
 // portal+activity-admin+fullcalendar+qrcode 的 eager 載入）。數值以本次真實 build 的
 // 印出值 + ~12% headroom 校準；刻意成長時對照印出值上調。
-// 校準基準（2026-07-02 真實 build 首屏 gz）：index 675.7 / public 174.5 / parent 245.9。
+// 校準基準（真實 build 首屏 gz）：index 675.7 / public 174.5（2026-07-02）；
+// parent 216.5（2026-07-03，useParentLogout 改 lazy liff 後由 245.9 降下）。
 // 下方為 +~12% headroom；刻意成長時對照 build 印出值上調。
 const ENTRY_BUDGETS_KB = {
   index: 760,
   public: 200,
-  parent: 280,
+  parent: 245,
 }
 
 if (!existsSync(ASSETS)) {
