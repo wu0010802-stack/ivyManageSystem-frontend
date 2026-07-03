@@ -18937,6 +18937,8 @@ export interface components {
         };
         /** EventCreate */
         EventCreate: {
+            /** Ack Deadline */
+            ack_deadline?: string | null;
             /** Description */
             description?: string | null;
             /** End Date */
@@ -18964,6 +18966,11 @@ export interface components {
             recurrence_rule?: {
                 [key: string]: unknown;
             } | null;
+            /**
+             * Requires Acknowledgment
+             * @default false
+             */
+            requires_acknowledgment: boolean;
             /** Start Time */
             start_time?: string | null;
             /** Title */
@@ -19050,6 +19057,8 @@ export interface components {
         };
         /** EventUpdate */
         EventUpdate: {
+            /** Ack Deadline */
+            ack_deadline?: string | null;
             /** Description */
             description?: string | null;
             /** End Date */
@@ -19068,6 +19077,8 @@ export interface components {
             recurrence_rule?: {
                 [key: string]: unknown;
             } | null;
+            /** Requires Acknowledgment */
+            requires_acknowledgment?: boolean | null;
             /** Start Time */
             start_time?: string | null;
             /** Title */
