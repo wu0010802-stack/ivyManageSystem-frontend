@@ -2,6 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { ref } from 'vue'
 
+// RegistrationTimeline 在 view 內以 defineAsyncComponent 動態 import；不 mock 掉，其
+// scoped-style CSS import 會在測試環境 teardown 後才 resolve → EnvironmentTeardownError
+// （flaky，讓 vitest exit 非 0、CI 紅）。純展示子元件，mock 為空 render 不影響本 view 斷言。
+vi.mock('@/components/activity/RegistrationTimeline.vue', () => ({
+  default: { name: 'RegistrationTimeline', render: () => null },
+}))
+
 // ── API mocks ──────────────────────────────────────────────────────────────
 vi.mock('@/api/activity', () => ({
   getRegistrations: vi.fn(),
