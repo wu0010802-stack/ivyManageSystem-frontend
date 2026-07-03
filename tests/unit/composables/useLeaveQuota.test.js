@@ -70,6 +70,26 @@ describe('useLeaveQuota', () => {
     expect(quotaExceeded.value).toBe(true)
   })
 
+  it('effectiveRemaining：= remaining + editBaseline；quotaInfo=null 時為 null', async () => {
+    const fetchFn = makeFetch({ remaining_hours: 2 })
+    const form = reactive({ employee_id: 1, leave_type: 'annual', start_date: '2026-05-01', leave_hours: 5 })
+    const { effectiveRemaining, setEditBaseline } = useLeaveQuota({ form, fetchFn })
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(effectiveRemaining.value).toBe(2)
+
+    setEditBaseline(4)
+    expect(effectiveRemaining.value).toBe(6)
+  })
+
+  it('effectiveRemaining：quotaInfo=null 時為 null', async () => {
+    const fetchFn = makeFetch(null)
+    const form = reactive({ employee_id: 1, leave_type: 'official', start_date: '2026-05-01', leave_hours: 1 })
+    const { effectiveRemaining } = useLeaveQuota({ form, fetchFn })
+    await Promise.resolve()
+    expect(effectiveRemaining.value).toBe(null)
+  })
+
   it('quotaInfo=null 時 quotaExceeded 為 false', async () => {
     const fetchFn = makeFetch(null)
     const form = reactive({ employee_id: 1, leave_type: 'official', start_date: '2026-05-01', leave_hours: 100 })

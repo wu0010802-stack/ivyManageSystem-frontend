@@ -94,6 +94,7 @@ const {
   quotaInfo,
   quotaLoading,
   quotaExceeded,
+  effectiveRemaining,
   canSave,
   calcTooltipHtml,
   officeHoursWarning,
@@ -275,11 +276,13 @@ const saveLeave = async () => {
     if (!confirmed) return
   }
 
-  // 配額超額警告（有配額資料才檢查）
-  if (quotaInfo.value && quotaInfo.value.remaining_hours < form.leave_hours) {
-    const over = (form.leave_hours - quotaInfo.value.remaining_hours).toFixed(1)
+  // 配額超額警告（有配額資料才檢查）。
+  // 用 effectiveRemaining（remaining + editBaseline）而非原始 remaining_hours，
+  // 才能與畫面上的 quotaExceeded 警示一致；編輯既有假單時本筆時數已計入 used_hours。
+  if (effectiveRemaining.value !== null && form.leave_hours > effectiveRemaining.value) {
+    const over = (form.leave_hours - effectiveRemaining.value).toFixed(1)
     const confirmed = await ElMessageBox.confirm(
-      `此次請假（${form.leave_hours}h）將超出剩餘配額（${quotaInfo.value.remaining_hours}h），超出 ${over}h，確認要儲存嗎？`,
+      `此次請假（${form.leave_hours}h）將超出剩餘配額（${effectiveRemaining.value}h），超出 ${over}h，確認要儲存嗎？`,
       '配額不足警告',
       { type: 'warning', confirmButtonText: '確認儲存', cancelButtonText: '取消' }
     ).catch(() => false)

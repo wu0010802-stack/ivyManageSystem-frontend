@@ -79,6 +79,7 @@ vi.mock('@/composables', () => ({
     quotaInfo: ref(null),
     quotaLoading: ref(false),
     quotaExceeded: ref(false),
+    effectiveRemaining: ref(null),
     canSave: ref(true),
     calcTooltipHtml: ref(''),
     officeHoursWarning: ref(''),
@@ -436,6 +437,41 @@ describe('LeaveView', () => {
       await flushPromises()
 
       expect(ElMessage.error).toHaveBeenCalledWith(expect.stringContaining('系統錯誤'))
+    })
+
+    // 迴歸：編輯既有假單時，本筆時數已計入 used_hours → remaining_hours 已扣掉本筆。
+    // 配額確認閘門必須用「實際可用（remaining + editBaseline）」，與 quotaExceeded 警示一致，
+    // 否則會跳出不該出現的「配額不足」確認框。
+    it('編輯模式：本次時數 ≤ 實際可用配額（含 editBaseline）時不觸發配額不足確認', async () => {
+      const wrapper = await mountAndSetForm({ id: 1, leave_type: 'annual', leave_hours: 8 })
+      wrapper.vm.$.setupState.isEdit = true
+      // remaining_hours 已扣掉本筆 8h → 0；但實際可用 = 0 + 8(editBaseline) = 8
+      wrapper.vm.$.setupState.quotaInfo = { remaining_hours: 0 }
+      wrapper.vm.$.setupState.effectiveRemaining = 8
+
+      await wrapper.vm.$.setupState.saveLeave()
+      await flushPromises()
+
+      // 8h ≤ 實際可用 8h → 不應跳出任何確認框
+      expect(ElMessageBox.confirm).not.toHaveBeenCalled()
+      expect(updateLeave).toHaveBeenCalled()
+    })
+
+    it('編輯模式：本次時數超過實際可用配額時仍觸發配額不足確認', async () => {
+      const wrapper = await mountAndSetForm({ id: 1, leave_type: 'annual', leave_hours: 8 })
+      wrapper.vm.$.setupState.isEdit = true
+      // 實際可用 = 1 + 2 = 3 < 8 → 應觸發確認
+      wrapper.vm.$.setupState.quotaInfo = { remaining_hours: 1 }
+      wrapper.vm.$.setupState.effectiveRemaining = 3
+
+      await wrapper.vm.$.setupState.saveLeave()
+      await flushPromises()
+
+      expect(ElMessageBox.confirm).toHaveBeenCalledWith(
+        expect.stringContaining('超出剩餘配額'),
+        expect.anything(),
+        expect.anything(),
+      )
     })
   })
 
