@@ -64,7 +64,10 @@ const fetchGradeTargets = async () => {
   }
 }
 
-const saveBonusConfig = async () => {
+// 回傳 true=已成功儲存；false=使用者取消原因輸入 或 API 失敗。
+// saveAllBonusSettings 依此決定是否續存年級目標與是否顯示總成功訊息，
+// 避免「取消原因/儲存失敗」時仍寫入年級目標並謊報全部成功。
+const saveBonusConfig = async (): Promise<boolean> => {
   // bug sweep 2026-05-16 P1-5：BonusConfig 變更影響全員獎金基數，
   // 後端對齊 PUT /insurance/brackets 要求 reason ≥10 字 + ACTIVITY_PAYMENT_APPROVE。
   let reason
@@ -86,7 +89,7 @@ const saveBonusConfig = async () => {
     )
     reason = (result as { value: string }).value.trim()
   } catch {
-    return // 使用者按取消
+    return false // 使用者按取消
   }
 
   const payload: ApiBody<'/config/bonus', 'put'> & { reason: string } = {
@@ -98,15 +101,17 @@ const saveBonusConfig = async () => {
   try {
     await updateBonusConfig(payload)
     ElMessage.success('薪資設定已儲存')
+    return true
   } catch (error) {
     const detail = (error as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
     ElMessage.error(typeof detail === 'string' ? detail : '薪資設定儲存失敗')
+    return false
   } finally {
     loadingBonus.value = false
   }
 }
 
-const saveGradeTargets = async () => {
+const saveGradeTargets = async (): Promise<boolean> => {
   try {
     const updatePromises = gradeTargets.value.map(grade => {
       const payload = {
@@ -121,8 +126,10 @@ const saveGradeTargets = async () => {
       return updateGradeTargets(payload)
     })
     await Promise.all(updatePromises)
+    return true
   } catch (error) {
     ElMessage.error('年級目標儲存失敗')
+    return false
   }
 }
 
@@ -251,9 +258,11 @@ const syncAll = async () => {
 const saveAllBonusSettings = async () => {
   loadingBonus.value = true
   try {
-    await saveBonusConfig()
-    await saveGradeTargets()
-    ElMessage.success('所有薪資設定已儲存')
+    // 費率是稽核閘門（需異動原因）：取消或失敗就不得續存年級目標、也不得謊報全部成功
+    const bonusOk = await saveBonusConfig()
+    if (!bonusOk) return
+    const gradeOk = await saveGradeTargets()
+    if (gradeOk) ElMessage.success('所有薪資設定已儲存')
   } finally {
     loadingBonus.value = false
   }
