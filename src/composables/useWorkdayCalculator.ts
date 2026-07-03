@@ -139,7 +139,15 @@ export function useWorkdayCalculator({ form, fetchFn = null }: { form: Record<st
       const { total_hours, breakdown } = (res as { data: { total_hours: number; breakdown: { type: string; date: string; hours?: number; work_start?: string; work_end?: string }[] } }).data
       applyBreakdownResult(start, end, total_hours, breakdown)
     } catch {
-      fallbackCalc(start, end)
+      if (leaveMode.value === 'morning' || leaveMode.value === 'afternoon') {
+        // 半日模式時段固定（08:00–12:00 / 13:00–17:00），API 失敗時保留 4h 預設。
+        // 不可走 fallbackCalc：呼叫端傳的是 date-only 字串，fallbackCalc 以同日 00:00–00:00
+        // 建 Date → 誤算 0 分鐘 → 把 leave_hours 覆寫成 0.5h，與固定 4h 時段自相矛盾。
+        form.leave_hours = 4
+        calcHint.value = `${leaveMode.value === 'morning' ? '上午' : '下午'} 4h（預設班制）`
+      } else {
+        fallbackCalc(start, end)
+      }
       calcBreakdown.value = []
     } finally {
       calcLoading.value = false
