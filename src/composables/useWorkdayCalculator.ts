@@ -123,7 +123,13 @@ export function useWorkdayCalculator({ form, fetchFn = null }: { form: Record<st
     calcHint.value = `${workdays} 個工作日，合計 ${form.leave_hours}h（依實際時段）${holidays > 0 ? `，${holidays} 天國定假日不計` : ''}`
   }
 
+  // 防切員工/切日期 race：晚到的舊請求不得蓋掉新請求已寫入的 leave_hours/時段
+  // （鏡像 useAttendanceWorkspace.refresh 的 epoch 比對）。因 leave_hours 被 disable 直接送出，
+  // stale 值一旦覆寫使用者無法修正。
+  let fetchEpoch = 0
+
   const fetchWorkdayHours = async (start: string, end: string) => {
+    const my = ++fetchEpoch
     calcLoading.value = true
     calcBreakdown.value = []
     calcHint.value = ''
@@ -136,9 +142,11 @@ export function useWorkdayCalculator({ form, fetchFn = null }: { form: Record<st
       } else {
         res = await getWorkdayHours({ employee_id: form.employee_id, start_date: sd, end_date: ed })
       }
+      if (my !== fetchEpoch) return
       const { total_hours, breakdown } = (res as { data: { total_hours: number; breakdown: { type: string; date: string; hours?: number; work_start?: string; work_end?: string }[] } }).data
       applyBreakdownResult(start, end, total_hours, breakdown)
     } catch {
+      if (my !== fetchEpoch) return
       if (leaveMode.value === 'morning' || leaveMode.value === 'afternoon') {
         // 半日模式時段固定（08:00–12:00 / 13:00–17:00），API 失敗時保留 4h 預設。
         // 不可走 fallbackCalc：呼叫端傳的是 date-only 字串，fallbackCalc 以同日 00:00–00:00
@@ -150,7 +158,7 @@ export function useWorkdayCalculator({ form, fetchFn = null }: { form: Record<st
       }
       calcBreakdown.value = []
     } finally {
-      calcLoading.value = false
+      if (my === fetchEpoch) calcLoading.value = false
     }
   }
 
