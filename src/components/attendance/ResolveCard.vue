@@ -108,16 +108,8 @@ const canWrite = computed(() => hasPermission('ATTENDANCE_WRITE'))
 const localPunchIn = ref<string | null>(props.context.punch_in)
 const localPunchOut = ref<string | null>(props.context.punch_out)
 
-// item 換筆後 reset（auto-advance）
-watch(
-  () => props.item,
-  () => {
-    localPunchIn.value = props.context.punch_in
-    localPunchOut.value = props.context.punch_out
-  },
-)
-
-// context 換筆後也 reset
+// 換筆後 reset（auto-advance）：context 為父層 computed，每次換筆（item 變更）
+// 都會重算成新物件參考，故單一 watch(context) 已涵蓋所有換筆情境。
 watch(
   () => props.context,
   (ctx) => {
