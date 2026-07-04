@@ -26,7 +26,7 @@ const hasAnySignPerm = computed(
     || hasPermission('APPRAISAL_FINALIZE'),
 )
 // P1-8：FINALIZED 已是終態，沒有下一個 stage，「簽核」option 必須隱藏
-// 否則點下去 CycleDetailView.onKanbanAction stage map 取不到值 silent
+// 否則點下去 CycleDetailPanel.onKanbanAction stage map 取不到值 silent
 // no-op，使用者以為系統壞了。退簽 (REJECT) 仍允許（FINALIZED → ACCOUNTING_SIGNED）。
 const canSign = computed(
   () => hasAnySignPerm.value && props.summary?.status !== 'FINALIZED',

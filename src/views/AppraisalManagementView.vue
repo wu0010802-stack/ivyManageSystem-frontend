@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router'
 import CurrentSemesterOverview from './appraisal/CurrentSemesterOverview.vue'
 import CycleListView from './appraisal/CycleListView.vue'
 import AppraisalSettingsView from './appraisal/AppraisalSettingsView.vue'
@@ -33,7 +33,13 @@ watch(() => route.query.tab, (next) => {
 
 const onTabChange = (name: string | number) => {
   if (route.query.tab === name) return
-  router.replace({ query: { ...route.query, tab: String(name) } })
+  const query: LocationQueryRaw = { ...route.query, tab: String(name) }
+  // cycle/view 屬於 history tab 的內嵌明細；切離時清除避免殘留
+  if (String(name) !== 'history') {
+    delete (query as Record<string, unknown>).cycle
+    delete (query as Record<string, unknown>).view
+  }
+  router.replace({ query })
 }
 </script>
 

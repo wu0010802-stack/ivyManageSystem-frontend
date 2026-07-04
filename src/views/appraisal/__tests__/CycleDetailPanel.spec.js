@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { defineComponent, h, nextTick } from 'vue'
 
-import CycleDetailView from '@/views/appraisal/CycleDetailView.vue'
+import CycleDetailPanel from '@/views/appraisal/CycleDetailPanel.vue'
 
 vi.mock('@/api/appraisal', () => ({
   listAppraisalParticipants: vi.fn().mockResolvedValue({ data: [] }),
@@ -23,12 +23,14 @@ vi.mock('@/api/appraisal', () => ({
 vi.mock('element-plus', () => ({
   ElMessage: { error: vi.fn(), success: vi.fn(), warning: vi.fn() },
 }))
+
+// 內嵌元件仍讀 route.query.view 覆寫預設 view；query 可由測試逐案調整
+const routeQuery = { value: {} }
 vi.mock('vue-router', () => ({
-  useRoute: () => ({ params: { id: '5' }, query: {} }),
+  useRoute: () => ({ query: routeQuery.value }),
   useRouter: () => ({ back: vi.fn(), replace: vi.fn() }),
 }))
 
-// P0-A 守衛：spec 需 mock hasPermission，否則 batch-zone / 重算按鈕被隱藏
 vi.mock('@/utils/auth', () => ({
   hasPermission: vi.fn().mockReturnValue(true),
 }))
@@ -88,7 +90,6 @@ const stubs = {
         : null)
     },
   }),
-  ElPageHeader: { template: '<div><slot /></div>' },
   ElButton: {
     props: ['type', 'icon', 'loading', 'disabled'],
     emits: ['click'],
@@ -112,27 +113,46 @@ const flush = async () => {
   await nextTick()
 }
 
-describe('CycleDetailView', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+const mountPanel = () => mount(CycleDetailPanel, { props: { cycleId: 5 }, global: { stubs } })
 
-  it('defaults to kanban view', async () => {
-    const wrapper = mount(CycleDetailView, { global: { stubs } })
+describe('CycleDetailPanel', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    routeQuery.value = {}
+  })
+
+  it('defaults to list view（內嵌需求：進頁即列表模式）', async () => {
+    const wrapper = mountPanel()
+    await flush()
+    expect(wrapper.find('[data-test="list-view-stub"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="kanban-view-stub"]').exists()).toBe(false)
+  })
+
+  it('query view=kanban 覆寫預設', async () => {
+    routeQuery.value = { view: 'kanban' }
+    const wrapper = mountPanel()
     await flush()
     expect(wrapper.find('[data-test="kanban-view-stub"]').exists()).toBe(true)
     expect(wrapper.find('[data-test="list-view-stub"]').exists()).toBe(false)
   })
 
-  it('switches to list view when view ref is set to list', async () => {
-    const wrapper = mount(CycleDetailView, { global: { stubs } })
+  it('switches to kanban view when view ref is set', async () => {
+    const wrapper = mountPanel()
     await flush()
-    wrapper.vm.view = 'list'
+    wrapper.vm.view = 'kanban'
     await nextTick()
-    expect(wrapper.find('[data-test="list-view-stub"]').exists()).toBe(true)
-    expect(wrapper.find('[data-test="kanban-view-stub"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="kanban-view-stub"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="list-view-stub"]').exists()).toBe(false)
+  })
+
+  it('shows cycle meta from listAppraisalCycles by cycleId prop', async () => {
+    const wrapper = mountPanel()
+    await flush()
+    expect(wrapper.text()).toContain('114 學年')
   })
 
   it('shows batch-zone when selectedIds not empty', async () => {
-    const wrapper = mount(CycleDetailView, { global: { stubs } })
+    const wrapper = mountPanel()
     await flush()
     expect(wrapper.find('[data-test="batch-zone"]').exists()).toBe(false)
     wrapper.vm.selectedIds = [1, 2]
@@ -141,7 +161,7 @@ describe('CycleDetailView', () => {
   })
 
   it('opens reject dialog via openReject', async () => {
-    const wrapper = mount(CycleDetailView, { global: { stubs } })
+    const wrapper = mountPanel()
     await flush()
     expect(wrapper.find('[data-test="reject-dialog-stub"]').exists()).toBe(false)
     wrapper.vm.openReject({ id: 7, status: 'SUPERVISOR_SIGNED' })

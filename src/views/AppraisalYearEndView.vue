@@ -58,8 +58,12 @@ const onSectionChange = (val: string | number) => {
   const next = String(val) as SectionKey
   if (next === activeSection.value) return
   const query: LocationQueryRaw = { ...route.query, section: next }
-  // tab 屬於 appraisal 內層 tab；切離 appraisal 時清除避免殘留
-  if (next !== 'appraisal') delete (query as Record<string, unknown>).tab
+  // tab/cycle/view 屬於 appraisal 內層（歷史週期內嵌明細）；切離時清除避免殘留
+  if (next !== 'appraisal') {
+    delete (query as Record<string, unknown>).tab
+    delete (query as Record<string, unknown>).cycle
+    delete (query as Record<string, unknown>).view
+  }
   router.replace({ query })
 }
 </script>

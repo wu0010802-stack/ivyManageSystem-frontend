@@ -50,7 +50,7 @@ vi.mock('@/utils/error', () => ({
   apiError: (e, fallback) => fallback || 'error',
 }))
 
-import CycleDetailView from '@/views/appraisal/CycleDetailView.vue'
+import CycleDetailPanel from '@/views/appraisal/CycleDetailPanel.vue'
 import SummaryCard from '@/views/appraisal/components/SummaryCard.vue'
 import ListView from '@/views/appraisal/components/ListView.vue'
 import ScoringRulesPanel from '@/views/appraisal/components/ScoringRulesPanel.vue'
@@ -130,9 +130,10 @@ describe('P0-A 考核 UI 權限守衛', () => {
   })
 
   // ===== CycleDetailView =====
-  describe('CycleDetailView toolbar', () => {
+  describe('CycleDetailPanel toolbar', () => {
     async function mountView(selected = []) {
-      const wrapper = mount(CycleDetailView, {
+      const wrapper = mount(CycleDetailPanel, {
+        props: { cycleId: 1 },
         global: {
           stubs: componentStubs({
             KanbanView: true,

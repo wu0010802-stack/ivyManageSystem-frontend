@@ -282,10 +282,12 @@ const routes: RouteRecordRaw[] = [
             redirect: { path: '/appraisal-year-end', query: { section: 'appraisal', tab: 'history' } },
         },
         {
+            // 明細已元件化內嵌於歷史週期 tab（2026-07-04 spec），舊連結導到內嵌落點
             path: '/appraisal/cycles/:id',
-            name: 'appraisal-cycle-detail',
-            component: () => import('../views/appraisal/CycleDetailView.vue'),
-            meta: { title: '考核週期詳情' }
+            redirect: (to) => ({
+                path: '/appraisal-year-end',
+                query: { section: 'appraisal', tab: 'history', cycle: String(to.params.id) },
+            }),
         },
         {
             path: '/appraisal/settings',

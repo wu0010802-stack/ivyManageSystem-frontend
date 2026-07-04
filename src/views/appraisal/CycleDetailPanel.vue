@@ -1,4 +1,11 @@
 <script setup lang="ts">
+/**
+ * CycleDetailPanel — 單一考核週期明細（內嵌元件）
+ *
+ * 原 CycleDetailView 分頁元件化（2026-07-04 spec）：cycleId 改由 prop 傳入、
+ * 預設 view 改 list（歷史週期 tab 進頁即列表模式）、移除 el-page-header。
+ * 父層以 :key="cycleId" 重掛切換週期。
+ */
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -31,9 +38,11 @@ interface Cycle { id: number; academic_year?: number; semester?: string; base_sc
 interface Participant { id: number; employee_id?: number; role_group?: string; employee_name?: string; [key: string]: unknown }
 interface Summary { id: number; participant_id?: number; status?: string; total_score?: number; grade?: string; bonus_amount?: number; employee_name?: string; [key: string]: unknown }
 
+const props = defineProps<{ cycleId: number }>()
+
 const route = useRoute()
 const router = useRouter()
-const cycleId = Number(route.params.id)
+const cycleId = computed(() => props.cycleId)
 
 const cycle = ref<Cycle | null>(null)
 const participants = ref<Participant[]>([])
@@ -43,9 +52,10 @@ const loading = ref(false)
 const busy = ref(false)
 
 // P1-9：view 用 URL query 同步，F5 後保留、可分享。
+// 內嵌後預設 list（需求：進頁即列表模式），query 仍可覆寫成 kanban。
 const VALID_VIEWS = ['kanban', 'list']
 const initialQueryView = String(route?.query?.view ?? '')
-const initialView = VALID_VIEWS.includes(initialQueryView) ? initialQueryView : 'kanban'
+const initialView = VALID_VIEWS.includes(initialQueryView) ? initialQueryView : 'list'
 const view = ref(initialView)
 const selectedIds = ref<number[]>([])
 
@@ -95,9 +105,9 @@ async function load() {
   loading.value = true
   try {
     const cycles = (await listAppraisalCycles()).data as unknown as Cycle[]
-    cycle.value = cycles.find((c) => c.id === cycleId) || null
-    participants.value = (await listAppraisalParticipants(cycleId)).data as Participant[]
-    summaries.value = (await listAppraisalSummaries(cycleId)).data as Summary[]
+    cycle.value = cycles.find((c) => c.id === cycleId.value) || null
+    participants.value = (await listAppraisalParticipants(cycleId.value)).data as Participant[]
+    summaries.value = (await listAppraisalSummaries(cycleId.value)).data as Summary[]
     catalog.value = (await listAppraisalCatalog()).data as unknown[]
   } catch (e) {
     ElMessage.error(apiError(e, MSG.load_failed))
@@ -124,7 +134,7 @@ function silentKanbanRefresh() {
 async function recompute() {
   busy.value = true
   try {
-    await recomputeAppraisalSummaries(cycleId)
+    await recomputeAppraisalSummaries(cycleId.value)
     ElMessage.success(MSG.recompute_success)
     await reload()
   } catch (e) {
@@ -231,7 +241,6 @@ onMounted(load)
 
 <template>
   <div class="cycle-detail">
-    <el-page-header content="半年考核明細" @back="router.back()" />
     <div v-if="cycle" class="meta">
       <strong>{{ cycle.academic_year }} 學年</strong>
       {{ cycle.semester === 'FIRST' ? '上學期' : '下學期' }} ｜
@@ -325,8 +334,8 @@ onMounted(load)
 </template>
 
 <style scoped>
-.cycle-detail { padding: 16px; }
-.meta { margin: 12px 0; padding: 12px; background: #f5f7fa; border-radius: 4px; }
+.cycle-detail { padding: 0; }
+.meta { margin: 12px 0; padding: 12px; background: var(--el-fill-color-light, #f5f7fa); border-radius: 4px; }
 .toolbar { margin: 16px 0; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .batch-zone { display: flex; gap: 6px; }
 </style>
