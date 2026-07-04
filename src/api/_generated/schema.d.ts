@@ -17915,26 +17915,11 @@ export interface components {
         CycleCreate: {
             /** Academic Year */
             academic_year: number;
-            /**
-             * Base Score Calc Date
-             * Format: date
-             */
-            base_score_calc_date: string;
-            /**
-             * End Date
-             * Format: date
-             */
-            end_date: string;
             /** Enrollment Actual */
             enrollment_actual?: number | null;
             /** Enrollment Target */
             enrollment_target?: number | null;
             semester: components["schemas"]["Semester"];
-            /**
-             * Start Date
-             * Format: date
-             */
-            start_date: string;
         };
         /** CycleOut */
         CycleOut: {

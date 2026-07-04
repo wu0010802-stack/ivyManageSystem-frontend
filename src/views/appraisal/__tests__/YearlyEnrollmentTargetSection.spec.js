@@ -17,7 +17,6 @@ vi.mock('@/utils/academic', () => ({
     for (let i = -range; i <= range; i++) arr.push(current + i)
     return arr.sort((a, b) => b - a)
   },
-  toAdYear: (rocYear) => rocYear + 1911,
 }))
 
 vi.mock('element-plus', () => ({
@@ -139,7 +138,7 @@ describe('YearlyEnrollmentTargetSection', () => {
     expect(wrapper.find('[data-test="edit-second-btn"]').exists()).toBe(false)
   })
 
-  it('點 placeholder 建立 → 呼叫 createAppraisalCycle 帶正確日期（下學期）', async () => {
+  it('點 placeholder 建立 → 呼叫 createAppraisalCycle（日期不再由前端計算送出，交由後端推算）', async () => {
     getAppraisalCyclesByYear.mockResolvedValue({ data: [FIRST_CYCLE] })
     createAppraisalCycle.mockResolvedValue({ data: SECOND_CYCLE })
 
@@ -152,9 +151,9 @@ describe('YearlyEnrollmentTargetSection', () => {
     expect(arg).toMatchObject({
       academic_year: 114,
       semester: 'SECOND',
-      start_date: '2026-02-01', // (114+1911)+1 = 2026
-      end_date: '2026-07-31',
-      base_score_calc_date: '2026-03-15',
     })
+    expect(arg).not.toHaveProperty('start_date')
+    expect(arg).not.toHaveProperty('end_date')
+    expect(arg).not.toHaveProperty('base_score_calc_date')
   })
 })

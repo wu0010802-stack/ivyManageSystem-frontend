@@ -24,7 +24,6 @@ import {
 } from '@/api/appraisal'
 import { useAcademicTermStore } from '@/stores/academicTerm'
 import { useErrorNotify } from '@/composables/useErrorNotify'
-import { toAdYear } from '@/utils/academic'
 import AcademicTermSelector from '@/components/common/AcademicTermSelector.vue'
 import StatCard from '@/components/common/StatCard.vue'
 import AggregatedStatusDetailDialog from './AggregatedStatusDetailDialog.vue'
@@ -393,25 +392,8 @@ async function bulkAddAll() {
   }
 }
 
-// ── 建立本學期週期（D5 預設日期）──────────────────────────
+// ── 建立本學期週期（日期由後端依 academic_year+semester 自動推算）──
 const creatingCycle = ref(false)
-
-function defaultDatesFor(schoolYear: number, semester: number | string) {
-  // school_year 為民國
-  const yearAD = toAdYear(Number(schoolYear))
-  if (Number(semester) === 1) {
-    return {
-      start_date: `${yearAD}-08-01`,
-      end_date: `${yearAD + 1}-01-31`,
-      base_score_calc_date: `${yearAD}-09-15`,
-    }
-  }
-  return {
-    start_date: `${yearAD + 1}-02-01`,
-    end_date: `${yearAD + 1}-07-31`,
-    base_score_calc_date: `${yearAD + 1}-03-15`,
-  }
-}
 
 async function createCurrentCycle() {
   try {
@@ -425,11 +407,9 @@ async function createCurrentCycle() {
   }
   creatingCycle.value = true
   try {
-    const dates = defaultDatesFor(termStore.school_year, termStore.semester)
     await createAppraisalCycle({
       academic_year: termStore.school_year,
       semester: toSemesterEnum(termStore.semester),
-      ...dates,
       enrollment_target: 0,
       enrollment_actual: null,
     })

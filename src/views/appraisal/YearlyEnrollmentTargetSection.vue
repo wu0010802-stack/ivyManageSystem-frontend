@@ -4,7 +4,7 @@
  *
  * 上下學期 side-by-side 卡片明確區分目標人數，可分別編輯。
  * 缺學期 cycle 時提供 placeholder 含「建立本學期週期」捷徑，
- * 預設 base_score_calc_date 上 9/15、下 3/15。
+ * 起訖日/基準日由後端依 academic_year+semester 固定推算。
  */
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -16,11 +16,7 @@ import {
   patchAppraisalCycle,
 } from '@/api/appraisal'
 import { useErrorNotify } from '@/composables/useErrorNotify'
-import {
-  getCurrentAcademicTerm,
-  buildSchoolYearOptions,
-  toAdYear,
-} from '@/utils/academic'
+import { getCurrentAcademicTerm, buildSchoolYearOptions } from '@/utils/academic'
 
 interface CycleEntry {
   id: number
@@ -101,25 +97,8 @@ async function saveEdit(cycle: CycleEntry) {
   }
 }
 
-// ── 建立學期 cycle ─────────────────────────────────────────
+// ── 建立學期 cycle（日期由後端依 academic_year+semester 自動推算）──
 const creating = ref<Record<SemesterKey, boolean>>({ FIRST: false, SECOND: false })
-
-function defaultDatesFor(schoolYear: number, semesterEnum: SemesterKey) {
-  // schoolYear 為民國
-  const yearAD = toAdYear(Number(schoolYear))
-  if (semesterEnum === 'FIRST') {
-    return {
-      start_date: `${yearAD}-08-01`,
-      end_date: `${yearAD + 1}-01-31`,
-      base_score_calc_date: `${yearAD}-09-15`,
-    }
-  }
-  return {
-    start_date: `${yearAD + 1}-02-01`,
-    end_date: `${yearAD + 1}-07-31`,
-    base_score_calc_date: `${yearAD + 1}-03-15`,
-  }
-}
 
 async function createForSemester(semesterEnum: SemesterKey) {
   const label = semesterEnum === 'FIRST' ? '上' : '下'
@@ -134,11 +113,9 @@ async function createForSemester(semesterEnum: SemesterKey) {
   }
   creating.value[semesterEnum] = true
   try {
-    const dates = defaultDatesFor(selectedYear.value, semesterEnum)
     await createAppraisalCycle({
       academic_year: selectedYear.value,
       semester: semesterEnum,
-      ...dates,
       enrollment_target: 0,
       enrollment_actual: null,
     })

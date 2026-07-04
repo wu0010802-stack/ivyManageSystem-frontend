@@ -24,10 +24,7 @@ const submitting = ref(false)
 
 const form = ref({
   academic_year: 114,
-  semester: 'FIRST',
-  start_date: '',
-  end_date: '',
-  base_score_calc_date: '',
+  semester: 'FIRST' as 'FIRST' | 'SECOND',
   enrollment_target: 160,
   enrollment_actual: null as number | null,
 })
@@ -57,7 +54,7 @@ async function load() {
 async function submit() {
   submitting.value = true
   try {
-    await createAppraisalCycle({ ...form.value, semester: form.value.semester as 'FIRST' | 'SECOND' })
+    await createAppraisalCycle({ ...form.value })
     ElMessage.success('建立成功')
     createDialog.value = false
     await load()
@@ -141,14 +138,11 @@ onMounted(load)
           <el-input-number v-model="form.academic_year" :min="100" :max="200" />
         </el-form-item>
         <el-form-item label="學期">
-          <el-select v-model="form.semester">
-            <el-option value="FIRST" label="上學期" />
-            <el-option value="SECOND" label="下學期" />
-          </el-select>
+          <el-radio-group v-model="form.semester">
+            <el-radio-button value="FIRST">上學期</el-radio-button>
+            <el-radio-button value="SECOND">下學期</el-radio-button>
+          </el-radio-group>
         </el-form-item>
-        <el-form-item label="開始日"><el-date-picker v-model="form.start_date" value-format="YYYY-MM-DD" /></el-form-item>
-        <el-form-item label="結束日"><el-date-picker v-model="form.end_date" value-format="YYYY-MM-DD" /></el-form-item>
-        <el-form-item label="基準日"><el-date-picker v-model="form.base_score_calc_date" value-format="YYYY-MM-DD" /></el-form-item>
         <el-form-item label="招生目標"><el-input-number v-model="form.enrollment_target" :min="0" /></el-form-item>
         <el-form-item label="實際註冊"><el-input-number v-model="form.enrollment_actual" :min="0" /></el-form-item>
       </el-form>
