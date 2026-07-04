@@ -87,6 +87,17 @@ describe('AppraisalYearEndView shell', () => {
     expect(replace).toHaveBeenCalledWith({ query: { section: 'year-end' } })
   })
 
+  it('切離 appraisal 時一併清掉 cycle/view query（歷史週期內嵌明細殘留）', async () => {
+    const w = mountWith(
+      ['APPRAISAL_READ', 'YEAR_END_READ'],
+      { section: 'appraisal', tab: 'history', cycle: '4', view: 'kanban' },
+    )
+    replace.mockClear()
+    w.findComponent({ name: 'ElSegmented' }).vm.$emit('change', 'year-end')
+    await nextTick()
+    expect(replace).toHaveBeenCalledWith({ query: { section: 'year-end' } })
+  })
+
   it('SETTINGS_READ → 出現「年終規則」section 並可渲染', () => {
     const w = mountWith(['SETTINGS_READ'], { section: 'year-end-rules' })
     const seg = w.findComponent({ name: 'ElSegmented' })

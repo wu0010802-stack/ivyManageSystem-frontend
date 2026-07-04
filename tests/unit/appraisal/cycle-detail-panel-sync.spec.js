@@ -1,5 +1,6 @@
 /**
- * P1-9 / P1-14：CycleDetailView URL query 同步 + 簽核改局部 patch。
+ * P1-9 / P1-14：CycleDetailPanel URL query 同步 + 簽核改局部 patch。
+ *（2026-07-04 元件化：原 CycleDetailView 分頁，cycleId 改 prop、預設 view 改 list）
  *
  * P1-9：
  *   1. 切 view 觸發 router.replace 帶上 ?view=
@@ -60,7 +61,7 @@ const {
 vi.mock('element-plus', () => ({ ElMessage: elMessage }))
 
 vi.mock('vue-router', () => ({
-  useRoute: () => ({ params: { id: '1' }, query: initialRouteQuery.value }),
+  useRoute: () => ({ query: initialRouteQuery.value }),
   useRouter: () => routerMock,
 }))
 
@@ -74,7 +75,7 @@ vi.mock('@/utils/error', () => ({
   apiError: (e, f) => f || 'err',
 }))
 
-import CycleDetailView from '@/views/appraisal/CycleDetailView.vue'
+import CycleDetailPanel from '@/views/appraisal/CycleDetailPanel.vue'
 
 const transparentStub = (slotsToRender = ['default']) => ({
   template: `<div>${slotsToRender.map((s) => `<slot name="${s}" />`).join('')}</div>`,
@@ -95,7 +96,7 @@ const stubs = {
 }
 
 async function mountView() {
-  const w = mount(CycleDetailView, { global: { stubs } })
+  const w = mount(CycleDetailPanel, { props: { cycleId: 1 }, global: { stubs } })
   await new Promise((r) => setTimeout(r, 0))
   await w.vm.$nextTick()
   return w
@@ -105,7 +106,7 @@ function clearApiCalls() {
   Object.values(apiMocks).forEach((m) => m.mockClear?.())
 }
 
-describe('P1-9 / P1-14 CycleDetailView URL query + local patch', () => {
+describe('P1-9 / P1-14 CycleDetailPanel URL query + local patch', () => {
   beforeEach(() => {
     Object.values(apiMocks).forEach((m) => m.mockClear?.())
     routerMock.replace.mockClear()
@@ -121,18 +122,24 @@ describe('P1-9 / P1-14 CycleDetailView URL query + local patch', () => {
       expect(w.vm.view).toBe('list')
     })
 
-    it('mount 時 route.query.view 缺值 → 初始 view 為 kanban', async () => {
+    it('mount 時 route.query.view 缺值 → 初始 view 為 list（內嵌預設列表模式）', async () => {
       initialRouteQuery.value = {}
+      const w = await mountView()
+      expect(w.vm.view).toBe('list')
+    })
+
+    it('mount 時 route.query.view="kanban" → 初始 view 為 kanban', async () => {
+      initialRouteQuery.value = { view: 'kanban' }
       const w = await mountView()
       expect(w.vm.view).toBe('kanban')
     })
 
-    it('切 view 觸發 router.replace 帶 ?view=list', async () => {
+    it('切 view 觸發 router.replace 帶 ?view=kanban（預設已是 list，改切 kanban 驗同步）', async () => {
       const w = await mountView()
-      w.vm.view = 'list'
+      w.vm.view = 'kanban'
       await w.vm.$nextTick()
       expect(routerMock.replace).toHaveBeenCalledWith(
-        expect.objectContaining({ query: expect.objectContaining({ view: 'list' }) }),
+        expect.objectContaining({ query: expect.objectContaining({ view: 'kanban' }) }),
       )
     })
 
@@ -140,7 +147,7 @@ describe('P1-9 / P1-14 CycleDetailView URL query + local patch', () => {
       const w = await mountView()
       w.vm.selectedIds = [10, 11]
       await w.vm.$nextTick()
-      w.vm.view = 'list'
+      w.vm.view = 'kanban'
       await w.vm.$nextTick()
       expect(w.vm.selectedIds).toEqual([])
     })

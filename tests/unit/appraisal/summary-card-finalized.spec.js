@@ -1,7 +1,7 @@
 /**
  * P1-8：FINALIZED 卡片隱藏簽核 dropdown，避免 silent no-op。
  *
- * CycleDetailView.onKanbanAction 的 stage map 只涵蓋 DRAFT /
+ * CycleDetailPanel.onKanbanAction 的 stage map 只涵蓋 DRAFT /
  * SUPERVISOR_SIGNED / ACCOUNTING_SIGNED。狀態為 FINALIZED 時若使用者
  * 點「簽核」，stage 取不到 → 整個 action handler 靜默 no-op。
  * 解：SummaryCard 內判斷 status==='FINALIZED' 時不 render 簽核項。

@@ -1,20 +1,28 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+/**
+ * CycleListView — 歷史週期 tab 本體（2026-07-04 重構）
+ *
+ * 原「週期表格 → 跳轉 /appraisal/cycles/:id 分頁」改為：
+ * dropdown 選週期（預設當期學期，無當期取最新）+ 內嵌 CycleDetailPanel。
+ * 選擇同步 URL query `cycle`（F5 保留、可分享、舊分頁連結 redirect 落點）。
+ */
+import { ref, computed, onMounted } from 'vue'
+import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Plus, Refresh, Upload, Download } from '@element-plus/icons-vue'
+import { Plus, Refresh, Upload } from '@element-plus/icons-vue'
 import {
   listAppraisalCycles,
   createAppraisalCycle,
   importAppraisalExcel,
-  exportAppraisalCycleXlsxUrl,
-  exportAppraisalTransferRosterXlsxUrl,
 } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
+import { getCurrentAcademicTerm } from '@/utils/academic'
+import CycleDetailPanel from './CycleDetailPanel.vue'
 import type { UploadRawFile } from 'element-plus'
 
 interface Cycle { id: number; academic_year?: number; semester?: string; base_score_calc_date?: string; base_score?: number; enrollment_actual?: number | null; enrollment_target?: number | null; status?: string }
 
+const route = useRoute()
 const router = useRouter()
 const loading = ref(false)
 const cycles = ref<Cycle[]>([])
@@ -41,12 +49,59 @@ const importForm = ref({
 
 const semesterLabel = (v: string) => (v === 'FIRST' ? '上學期' : '下學期')
 const statusLabel = (v: string) => ({ OPEN: '進行中', LOCKED: '已鎖定', CLOSED: '已封存' } as Record<string, string>)[v] || v
+const cycleLabel = (c: Cycle) =>
+  `${c.academic_year} 學年${semesterLabel(c.semester ?? '')}（${statusLabel(c.status ?? '')}）`
+
+// 新到舊：學年 desc，同學年下學期在前（下學期時間較晚）
+const SEMESTER_RECENCY: Record<string, number> = { SECOND: 0, FIRST: 1 }
+const sortedCycles = computed(() =>
+  [...cycles.value].sort(
+    (a, b) =>
+      (b.academic_year ?? 0) - (a.academic_year ?? 0) ||
+      (SEMESTER_RECENCY[a.semester ?? ''] ?? 9) - (SEMESTER_RECENCY[b.semester ?? ''] ?? 9),
+  ),
+)
+
+const selectedCycleId = ref<number | null>(null)
+
+/** 預設選中優先序：URL query cycle（有效）→ 當期學期週期 → 最新一筆。 */
+function resolveDefaultCycleId(): number | null {
+  const list = sortedCycles.value
+  if (list.length === 0) return null
+  const rawQuery = route.query.cycle
+  const queryId = Number(Array.isArray(rawQuery) ? rawQuery[0] : rawQuery)
+  if (Number.isFinite(queryId) && list.some((c) => c.id === queryId)) return queryId
+  const term = getCurrentAcademicTerm()
+  const termSemester = Number(term.semester) === 1 ? 'FIRST' : 'SECOND'
+  const current = list.find(
+    (c) => c.academic_year === term.school_year && c.semester === termSemester,
+  )
+  return (current ?? list[0]).id
+}
+
+/** 選中週期同步至 URL query（保留 section/tab 等其他欄位）。 */
+function syncCycleQuery() {
+  const idStr = selectedCycleId.value != null ? String(selectedCycleId.value) : undefined
+  const currentRaw = route.query.cycle
+  const current = Array.isArray(currentRaw) ? currentRaw[0] : currentRaw
+  if ((current ?? undefined) === idStr) return
+  const query: LocationQueryRaw = { ...route.query }
+  if (idStr) query.cycle = idStr
+  else delete (query as Record<string, unknown>).cycle
+  router.replace({ query })
+}
+
+function onCycleChange() {
+  syncCycleQuery()
+}
 
 async function load() {
   loading.value = true
   try {
     const { data } = await listAppraisalCycles()
     cycles.value = data as unknown as Cycle[]
+    selectedCycleId.value = resolveDefaultCycleId()
+    syncCycleQuery()
   } catch (e) {
     ElMessage.error(apiError(e, '載入考核週期失敗'))
   } finally {
@@ -98,41 +153,35 @@ onMounted(load)
 </script>
 
 <template>
-  <div class="cycle-list">
-    <el-page-header @back="router.back()" content="半年考核管理" />
+  <div class="cycle-list" v-loading="loading">
     <div class="toolbar">
+      <el-select
+        v-model="selectedCycleId"
+        class="cycle-select"
+        placeholder="選擇考核週期"
+        data-test="cycle-select"
+        @change="onCycleChange"
+      >
+        <el-option
+          v-for="c in sortedCycles"
+          :key="c.id"
+          :value="c.id"
+          :label="cycleLabel(c)"
+        />
+      </el-select>
       <el-button type="primary" :icon="Plus" @click="createDialog = true">新增週期</el-button>
       <el-button type="success" :icon="Upload" @click="importDialog = true">上傳 Excel</el-button>
       <el-button :icon="Refresh" @click="load">重新整理</el-button>
     </div>
 
-    <el-table :data="cycles" v-loading="loading" stripe>
-      <el-table-column label="學年" prop="academic_year" width="100" />
-      <el-table-column label="學期" width="120">
-        <template #default="{ row }">{{ semesterLabel(row.semester) }}</template>
-      </el-table-column>
-      <el-table-column label="基準日" prop="base_score_calc_date" width="160" />
-      <el-table-column label="基礎分數" width="120">
-        <template #default="{ row }">{{ Number(row.base_score).toFixed(1) }}</template>
-      </el-table-column>
-      <el-table-column label="招生 (實/目標)" width="160">
-        <template #default="{ row }">
-          {{ row.enrollment_actual ?? '-' }} / {{ row.enrollment_target ?? '-' }}
-        </template>
-      </el-table-column>
-      <el-table-column label="狀態" width="120">
-        <template #default="{ row }">{{ statusLabel(row.status) }}</template>
-      </el-table-column>
-      <el-table-column label="操作" width="280">
-        <template #default="{ row }">
-          <el-button size="small" @click="router.push(`/appraisal/cycles/${row.id}`)">明細</el-button>
-          <el-button size="small" type="primary" :icon="Download" tag="a"
-            :href="exportAppraisalCycleXlsxUrl(row.id)">匯出</el-button>
-          <el-button size="small" :icon="Download" tag="a"
-            :href="exportAppraisalTransferRosterXlsxUrl(row.id)">轉帳名冊</el-button>
-        </template>
-      </el-table-column>
-    </el-table>
+    <CycleDetailPanel
+      v-if="selectedCycleId != null"
+      :key="selectedCycleId"
+      :cycle-id="selectedCycleId"
+    />
+    <el-empty v-else-if="!loading" description="尚未建立任何考核週期">
+      <el-button type="primary" :icon="Plus" @click="createDialog = true">新增週期</el-button>
+    </el-empty>
 
     <!-- 新增 -->
     <el-dialog v-model="createDialog" title="新增半年考核週期" width="520px">
@@ -180,6 +229,7 @@ onMounted(load)
 </template>
 
 <style scoped>
-.cycle-list { padding: 16px; }
-.toolbar { margin: 16px 0; display: flex; gap: 8px; }
+.cycle-list { padding: 16px 0 0; }
+.toolbar { margin: 0 0 16px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.cycle-select { width: 240px; }
 </style>

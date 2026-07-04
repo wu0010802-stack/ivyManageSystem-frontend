@@ -39,8 +39,13 @@ describe('考核/年終 舊路由 → 整合工作區 redirect', () => {
     expect(r.query).toMatchObject({ section: 'appraisal', tab: 'settings' })
   })
 
-  it('下鑽路由維持獨立（不被 redirect）', () => {
+  it('年終下鑽路由維持獨立（不被 redirect）', () => {
     expect(follow('/year_end/cycles/7').path).toBe('/year_end/cycles/7')
-    expect(follow('/appraisal/cycles/3').path).toBe('/appraisal/cycles/3')
+  })
+
+  it('/appraisal/cycles/:id → 內嵌明細（section=appraisal&tab=history&cycle=:id）', () => {
+    const r = follow('/appraisal/cycles/3')
+    expect(r.path).toBe('/appraisal-year-end')
+    expect(r.query).toMatchObject({ section: 'appraisal', tab: 'history', cycle: '3' })
   })
 })
