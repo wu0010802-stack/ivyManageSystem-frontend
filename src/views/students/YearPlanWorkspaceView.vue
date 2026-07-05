@@ -15,10 +15,10 @@
       <!-- mutation in-flight（loading=true）期間鎖住所有互動觸發點：雙擊會以同一
            base_version 送第二發、撞 409 誤導使用者「有別人在動草稿」 -->
       <div v-if="status" class="actions">
-        <el-button v-if="editable" class="btn-add-class" :disabled="loading" @click="onAddClassClick">新增班級</el-button>
-        <el-button class="btn-regenerate" :disabled="!canRegenerate || loading" @click="onRegenerateClick">重新產生建議</el-button>
-        <el-button type="primary" class="btn-publish" :disabled="!canPublish || loading" @click="onPublishClick">發布</el-button>
-        <el-button class="btn-unpublish" :disabled="!canUnpublish || loading" @click="onUnpublishClick">撤回發布</el-button>
+        <el-button v-if="editable && canWrite" class="btn-add-class" :disabled="loading" @click="onAddClassClick">新增班級</el-button>
+        <el-button v-if="canWrite" class="btn-regenerate" :disabled="!canRegenerate || loading" @click="onRegenerateClick">重新產生建議</el-button>
+        <el-button v-if="canWrite" type="primary" class="btn-publish" :disabled="!canPublish || loading" @click="onPublishClick">發布</el-button>
+        <el-button v-if="canWrite" class="btn-unpublish" :disabled="!canUnpublish || loading" @click="onUnpublishClick">撤回發布</el-button>
       </div>
     </div>
 
@@ -33,7 +33,7 @@
 
     <div v-else-if="state === 'none'" class="empty-state">
       <p>尚未產生新學年編班草稿</p>
-      <el-button type="primary" class="btn-generate" @click="onGenerateClick">產生草稿</el-button>
+      <el-button v-if="canWrite" type="primary" class="btn-generate" @click="onGenerateClick">產生草稿</el-button>
     </div>
 
     <div v-else-if="plan" class="workspace-body">
@@ -48,7 +48,7 @@
       />
       <PlanRosterTable
         :plan="plan"
-        :editable="editable"
+        :editable="editable && canWrite"
         @select-students="onSelectStudents"
         @class-edit="onClassEdit"
         @student-move="onStudentMove"
@@ -87,6 +87,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { hasPermission } from '@/utils/auth'
 import { useYearPlanWorkspace } from '@/composables/useYearPlanWorkspace'
 import type { BulkOp } from '@/composables/useYearPlanWorkspace'
 import PlanRosterTable from '@/components/enrollment/planning/PlanRosterTable.vue'
@@ -133,6 +134,10 @@ const STATE_LABELS: Record<PlanState, string> = {
   applied: '已套用',
 }
 const stateLabel = computed(() => STATE_LABELS[state.value])
+
+// 權限鎖：對齊 ClassroomView.vue 慣例，寫入動作鈕（新增班/重生成/發布/撤回/產生草稿
+// CTA）與 PlanRosterTable 的可編輯性一律疊加此權限；僅 READ 者連勾選/編輯鈕都不出現。
+const canWrite = computed(() => hasPermission('CLASSROOMS_WRITE'))
 
 // 唯讀鎖：僅 draft 狀態的草稿可編輯（published/applied 皆唯讀）。
 const editable = computed(() => plan.value?.status === 'draft')

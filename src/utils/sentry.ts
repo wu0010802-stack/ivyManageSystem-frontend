@@ -31,7 +31,7 @@ const PII_KEY_SUBSTRINGS = [
   'health', 'diagnosis', 'growth', 'measurement', 'height', 'weight',
   'password', 'secret', 'token', 'jwt', 'cookie', 'authorization',
   'refresh_token', 'access_token', 'api_key',
-  'resign_reason', 'leave_balance_snapshot', 'certificate_pdf_path',
+  'resign_reason', 'exclude_reason', 'leave_balance_snapshot', 'certificate_pdf_path',
 ]
 
 const FILTERED = '[Filtered]'

@@ -147,6 +147,17 @@ describe('scrubMapping', () => {
     }
   })
 
+  it('filters exclude_reason (新學年預編班行政自由輸入，對齊既有 resign_reason 先例)', () => {
+    const res = scrubMapping({
+      exclude_reason: '家長要求轉學，疑似家庭因素',
+      resign_reason: '健康因素',
+      name: 'Alice',
+    })
+    expect(res.exclude_reason).toBe('[Filtered]')
+    expect(res.resign_reason).toBe('[Filtered]')
+    expect(res.name).toBe('Alice')
+  })
+
   it('recurses into nested dict and list', () => {
     const res = scrubMapping({
       meta: { id_number: 'A1', ok: 'yes' },

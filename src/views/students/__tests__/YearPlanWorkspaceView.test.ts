@@ -21,6 +21,13 @@ vi.mock('@/api/classrooms', () => ({
   getTeacherOptions: vi.fn().mockResolvedValue({ data: [] }),
 }))
 
+// 比照同域 PlanStatusCard.spec.ts 的 hasPermission mock 慣例：預設可寫（既有測試
+// 皆假設 WRITE 者），權限 gating 案例逐一 override 為 false。
+let hasPermissionReturn = true
+vi.mock('@/utils/auth', () => ({
+  hasPermission: () => hasPermissionReturn,
+}))
+
 import {
   getClassroomYearPlanStatus,
   getClassroomYearPlanDetail,
@@ -129,7 +136,10 @@ function detailDraftWithClasses(overrides: Record<string, unknown> = {}) {
 }
 
 describe('YearPlanWorkspaceView', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    hasPermissionReturn = true
+  })
 
   it('掛載時 state=none → 顯示空狀態 CTA', async () => {
     mockStatus.mockResolvedValue(statusNone())
@@ -262,6 +272,48 @@ describe('YearPlanWorkspaceView', () => {
     expect(alertSpy).toHaveBeenCalled()
     // 確認後應重新呼叫 load()（status 至少再多打一次）
     expect(mockStatus.mock.calls.length).toBeGreaterThan(1)
+  })
+
+  it('僅 READ 權限（無 CLASSROOMS_WRITE）：隱藏產生草稿 CTA、四顆寫入動作鈕，且列表不可勾選', async () => {
+    hasPermissionReturn = false
+
+    mockStatus.mockResolvedValueOnce(statusNone())
+    const wNone = mountView()
+    await flushPromises()
+    expect(wNone.find('.empty-state').exists()).toBe(true)
+    expect(wNone.find('.btn-generate').exists()).toBe(false)
+
+    mockStatus.mockResolvedValue(statusDraft())
+    mockDetail.mockResolvedValue(detailDraftWithClasses())
+    const w = mountView()
+    await flushPromises()
+
+    expect(w.find('.btn-add-class').exists()).toBe(false)
+    expect(w.find('.btn-regenerate').exists()).toBe(false)
+    expect(w.find('.btn-publish').exists()).toBe(false)
+    expect(w.find('.btn-unpublish').exists()).toBe(false)
+    // canWrite=false → PlanRosterTable editable prop 為 false，勾選 checkbox 不出現
+    expect(w.findComponent({ name: 'ElCheckbox' }).exists()).toBe(false)
+  })
+
+  it('具 CLASSROOMS_WRITE 權限：產生草稿 CTA、四顆寫入動作鈕與列表勾選皆可見', async () => {
+    hasPermissionReturn = true
+
+    mockStatus.mockResolvedValueOnce(statusNone())
+    const wNone = mountView()
+    await flushPromises()
+    expect(wNone.find('.btn-generate').exists()).toBe(true)
+
+    mockStatus.mockResolvedValue(statusDraft())
+    mockDetail.mockResolvedValue(detailDraftWithClasses())
+    const w = mountView()
+    await flushPromises()
+
+    expect(w.find('.btn-add-class').exists()).toBe(true)
+    expect(w.find('.btn-regenerate').exists()).toBe(true)
+    expect(w.find('.btn-publish').exists()).toBe(true)
+    expect(w.find('.btn-unpublish').exists()).toBe(true)
+    expect(w.findComponent({ name: 'ElCheckbox' }).exists()).toBe(true)
   })
 
   it('mutation in-flight（loading=true）時四顆動作鈕與批次工具列全部鎖定，防雙擊偽版本衝突', async () => {
