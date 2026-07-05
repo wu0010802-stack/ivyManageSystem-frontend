@@ -122,6 +122,20 @@ describe('useActivityRegistration', () => {
     )
   })
 
+  // ── 回歸：不篩選（全部）時也要看得到全部審核狀態，含已拒絕 ──────────────────
+  // Bug：原本不篩選時完全不帶 include_inactive，導致 is_active=False 的「已拒絕」
+  // 報名在「全部」檢視下永遠不會出現；後端已同步收斂為「未帶 match_status 時
+  // include_inactive=true 只會多放行 rejected，不會連刪除報名一併洩漏」。
+  it('fetchList 不篩選（全部）時也附 include_inactive=true', async () => {
+    const { matchStatusFilter, fetchList } = useActivityRegistration()
+
+    expect(matchStatusFilter.value).toBe('')
+    await fetchList()
+    expect(getRegistrations).toHaveBeenLastCalledWith(
+      expect.objectContaining({ match_status: undefined, include_inactive: true })
+    )
+  })
+
   it('batchMarkPaid 送出正確的 ids 與 reason（只接受 isPaid=true，批次沖帳已禁用）', async () => {
     const { batchMarkPaid } = useActivityRegistration()
 

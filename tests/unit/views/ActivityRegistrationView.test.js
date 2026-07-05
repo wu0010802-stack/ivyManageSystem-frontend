@@ -135,7 +135,7 @@ vi.mock('vue-router', () => ({
 
 // ── element-plus mocks ─────────────────────────────────────────────────────
 vi.mock('element-plus', () => ({
-  ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
+  ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() },
   ElMessageBox: { confirm: vi.fn() },
 }))
 
@@ -152,7 +152,7 @@ const GLOBAL_STUBS = {
   'el-select': { template: '<div><slot /></div>' },
   'el-option': true,
   'el-button': { template: '<button @click="$emit(\'click\')"><slot /></button>' },
-  'el-table': { template: '<div><slot /></div>', methods: { clearSelection: vi.fn() } },
+  'el-table': { template: '<div><slot /></div>', methods: { clearSelection: vi.fn(), toggleRowSelection: vi.fn() } },
   'el-table-column': true,
   'el-pagination': true,
   'el-drawer': { template: '<div><slot /></div>' },
@@ -244,6 +244,39 @@ describe('ActivityRegistrationView', () => {
     await flushPromises()
 
     expect(mockBatchMarkPaid).toHaveBeenCalledWith(true, [1, 2], expect.any(Function))
+  })
+
+  // ── 批量勾選分類收斂（回歸）──────────────────────────────────────────────
+  // Bug：舊邏輯以完全相同的 match_status 分群，導致「系統自動」「人工指定」
+  // 「強行收件」這些都屬於已完成報名的狀態彼此無法勾選在一起。現改以三分類
+  // （待審核 / 已拒絕 / 報名成功）分群，同分類下不同 match_status 應可共選。
+  it('報名成功分類下，不同 match_status（matched/manual/forced）可一起勾選', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    wrapper.vm.handleSelectionChange([
+      { id: 1, match_status: 'matched' },
+      { id: 2, match_status: 'manual' },
+      { id: 3, match_status: 'forced' },
+    ])
+    await flushPromises()
+
+    expect(wrapper.vm.selectedRows).toHaveLength(3)
+    expect(wrapper.vm.selectionCategory).toBe('success')
+    expect(wrapper.text()).toContain('已選 3 筆 · 狀態：報名成功')
+  })
+
+  it('跨分類全選（待審核＋報名成功）會收斂到第一筆的分類並提示', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    wrapper.vm.handleSelectionChange([
+      { id: 1, match_status: 'pending' },
+      { id: 2, match_status: 'matched' },
+    ])
+    await flushPromises()
+
+    expect(wrapper.vm.selectedRows.map((r) => r.id)).toEqual([1])
+    expect(wrapper.vm.selectionCategory).toBe('pending')
+    expect(ElMessage.info).toHaveBeenCalled()
   })
 
   // ── 繳費資訊載入失敗防超繳（回歸）────────────────────────────────────────

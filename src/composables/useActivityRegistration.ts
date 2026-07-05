@@ -34,7 +34,9 @@ export function useActivityRegistration() {
   const courseFilter = ref<number | null>(null)
   const classroomFilter = ref('')
   // 報名狀態（match_status）篩選：'' = 全部。rejected 為 is_active=False，
-  // 主列表預設會濾掉 → 選 rejected 時 fetchList 須同時帶 include_inactive=true。
+  // 主列表預設會濾掉 → 選 rejected 或不篩選（全部）時 fetchList 須同時帶
+  // include_inactive=true（後端只會額外放行 rejected，不會連刪除報名一併洩漏，
+  // 見 ivyManageSystem-backend api/activity/registrations.py 的 get_registrations）。
   const matchStatusFilter = ref('')
 
   // ── 下拉選項 ─────────────────────────────────────────────────
@@ -93,8 +95,10 @@ export function useActivityRegistration() {
         search: searchText.value || undefined,
         payment_status: paymentFilter.value || undefined,
         match_status: matchStatusFilter.value || undefined,
-        // rejected 為 is_active=False，主列表預設只含 active → 篩 rejected 時放寬。
-        include_inactive: matchStatusFilter.value === 'rejected' ? true : undefined,
+        // rejected 為 is_active=False，主列表預設只含 active。篩「已拒絕」或
+        // 不篩選（全部狀態）時都要放寬；後端在未帶 match_status 時只會額外放行
+        // rejected，不會連刪除報名／學生離園自動軟刪的列也一併洩漏出來。
+        include_inactive: (!matchStatusFilter.value || matchStatusFilter.value === 'rejected') ? true : undefined,
         course_id: courseFilter.value || undefined,
         classroom_name: classroomFilter.value || undefined,
         school_year: termStore.school_year,

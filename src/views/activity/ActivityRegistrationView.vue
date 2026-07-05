@@ -113,41 +113,27 @@
               @click="handleRestore(row)"
             >復原</el-button>
           </template>
-          <!-- 其餘列：四顆審核鈕（僅待審核 enabled）+ 刪除 -->
+          <!-- 僅「待審核」列顯示四顆審核鈕；其他狀態不顯示 -->
           <template v-else>
-            <el-button
-              size="small"
-              type="primary"
-              :disabled="!canWrite || !isPending(row)"
-              @click="openMatchDialog(row)"
-            >手動匹配</el-button>
-            <el-button
-              size="small"
-              type="warning"
-              :disabled="!canWrite || !isPending(row)"
-              @click="openRematchDialog(row)"
-            >重新比對</el-button>
-            <el-button
-              size="small"
-              type="danger"
-              plain
-              :disabled="!canWrite || !isPending(row)"
-              @click="openForceDialog(row)"
-            >強行收件</el-button>
-            <el-tooltip
-              :disabled="!(isPending(row) && (row.paid_amount || 0) > 0)"
-              content="已有繳費，請先於詳情處理繳費再拒絕"
-              placement="top"
-            >
-              <span class="reject-btn-wrap">
-                <el-button
-                  size="small"
-                  type="danger"
-                  :disabled="!canReject(row)"
-                  @click="handleReject(row)"
-                >拒絕</el-button>
-              </span>
-            </el-tooltip>
+            <template v-if="canWrite && isPending(row)">
+              <el-button size="small" type="primary" @click="openMatchDialog(row)">手動匹配</el-button>
+              <el-button size="small" type="warning" @click="openRematchDialog(row)">重新比對</el-button>
+              <el-button size="small" type="danger" plain @click="openForceDialog(row)">強行收件</el-button>
+              <el-tooltip
+                :disabled="!((row.paid_amount || 0) > 0)"
+                content="已有繳費，請先於詳情處理繳費再拒絕"
+                placement="top"
+              >
+                <span class="reject-btn-wrap">
+                  <el-button
+                    size="small"
+                    type="danger"
+                    :disabled="!canReject(row)"
+                    @click="handleReject(row)"
+                  >拒絕</el-button>
+                </span>
+              </el-tooltip>
+            </template>
             <el-button
               v-if="canWrite"
               size="small"
@@ -180,22 +166,22 @@
     <!-- 批次操作浮動工具列（依所選群組的報名狀態切換動作）-->
     <transition name="batch-bar">
       <div v-if="selectedRows.length > 0" class="batch-toolbar">
-        <span class="batch-info">已選 {{ selectedRows.length }} 筆 · 狀態：{{ matchLabel(selectionStatus) || '—' }}</span>
+        <span class="batch-info">已選 {{ selectedRows.length }} 筆 · 狀態：{{ selectionCategoryLabel }}</span>
 
-        <!-- 待審核群組：批量審核（含批量通過的兩條路徑）+ 逐筆精靈 -->
-        <template v-if="selectionStatus === 'pending'">
+        <!-- 待審核分類：批量審核（含批量通過的兩條路徑）+ 逐筆精靈 -->
+        <template v-if="selectionCategory === 'pending'">
           <el-button size="small" type="primary" :loading="batchProcessing" @click="onBatchRematch">批量重新比對</el-button>
           <el-button size="small" type="danger" plain :loading="batchProcessing" @click="onBatchForceAccept">批量強行收件</el-button>
           <el-button size="small" type="danger" :loading="batchProcessing" @click="onBatchReject">批量拒絕</el-button>
           <el-button size="small" type="warning" plain @click="onOpenWizard">逐筆審核</el-button>
         </template>
 
-        <!-- 已拒絕群組：批量復原 -->
-        <template v-else-if="selectionStatus === 'rejected'">
+        <!-- 已拒絕分類：批量復原 -->
+        <template v-else-if="selectionCategory === 'rejected'">
           <el-button size="small" type="success" :loading="batchProcessing" @click="onBatchRestore">批量復原</el-button>
         </template>
 
-        <!-- 已收件 / 未比對群組：沿用批量標記已繳費 -->
+        <!-- 報名成功分類（系統自動 / 人工指定 / 強行收件 / 未比對）：沿用批量標記已繳費 -->
         <template v-else>
           <el-button size="small" type="success" :loading="savingBatch" @click="handleBatchMarkPaid(true)">標記已繳費</el-button>
         </template>
@@ -580,10 +566,6 @@ function resetFilters() {
 // ── 報名狀態（match_status）篩選選項 ──
 const matchStatusFilterOptions = (Object.keys(MATCH_STATUS_LABEL_SHORT) as (keyof typeof MATCH_STATUS_LABEL_SHORT)[])
   .map((value) => ({ value, label: MATCH_STATUS_LABEL_SHORT[value] }))
-function matchLabel(status: string | null | undefined): string {
-  if (!status) return ''
-  return (MATCH_STATUS_LABEL_SHORT as Record<string, string>)[status] || status
-}
 
 // ── 報名時間 banner ──
 type AlertType = 'success' | 'warning' | 'info' | 'error'
@@ -883,14 +865,31 @@ async function doDeleteRegistration(row: RegistrationRow, forceRefund: boolean, 
   }
 }
 
-// ── 批量勾選：限同一 match_status（審核狀態）分群 ──
-// selectionStatus = 目前群組的 match_status（空選為 null）；逐一勾選時其他狀態的
-// checkbox 由 isRowSelectable disable；表頭全選跨狀態時於 handleSelectionChange 收斂。
-const selectionStatus = computed<string | null>(() =>
-  selectedRows.value.length ? ((selectedRows.value[0].match_status as string | undefined) ?? null) : null
+// ── 批量勾選：限同一「審核分類」──
+// 批量動作實際只在乎三種分類：待審核 / 已拒絕 / 已完成報名（系統自動 matched、
+// 人工指定 manual、強行收件 forced、未比對 unmatched 都算已完成報名，彼此可互相
+// 勾選一起批次操作，例如一起標記已繳費）；不再要求逐一 match_status 完全相同。
+type SelectionCategory = 'pending' | 'rejected' | 'success'
+const SELECTION_CATEGORY_LABEL: Record<SelectionCategory, string> = {
+  pending: '待審核',
+  rejected: '已拒絕',
+  success: '報名成功',
+}
+function selectionCategoryOf(status: string | undefined): SelectionCategory {
+  if (status === 'pending') return 'pending'
+  if (status === 'rejected') return 'rejected'
+  return 'success'
+}
+// selectionCategory = 目前群組的分類（空選為 null）；逐一勾選時其他分類的 checkbox
+// 由 isRowSelectable disable；表頭全選跨分類時於 handleSelectionChange 收斂。
+const selectionCategory = computed<SelectionCategory | null>(() =>
+  selectedRows.value.length ? selectionCategoryOf(selectedRows.value[0].match_status as string | undefined) : null
+)
+const selectionCategoryLabel = computed(() =>
+  selectionCategory.value ? SELECTION_CATEGORY_LABEL[selectionCategory.value] : '—'
 )
 function isRowSelectable(row: RegistrationRow): boolean {
-  return selectionStatus.value === null || row.match_status === selectionStatus.value
+  return selectionCategory.value === null || selectionCategoryOf(row.match_status as string | undefined) === selectionCategory.value
 }
 let clamping = false
 function handleSelectionChange(rows: RegistrationRow[]) {
@@ -899,17 +898,17 @@ function handleSelectionChange(rows: RegistrationRow[]) {
     selectedRows.value = []
     return
   }
-  const anchor = rows[0].match_status as string | undefined
-  const sameGroup = rows.filter(r => r.match_status === anchor)
+  const anchorCategory = selectionCategoryOf(rows[0].match_status as string | undefined)
+  const sameGroup = rows.filter(r => selectionCategoryOf(r.match_status as string | undefined) === anchorCategory)
   if (sameGroup.length !== rows.length) {
-    // 只會來自表頭全選（逐一勾選時其他狀態已 disabled）→ 收斂到錨定群組
+    // 只會來自表頭全選（逐一勾選時其他分類已 disabled）→ 收斂到錨定分類
     selectedRows.value = sameGroup
     clamping = true
     nextTick(() => {
       tableRef.value?.clearSelection()
       sameGroup.forEach(r => tableRef.value?.toggleRowSelection(r, true))
       clamping = false
-      ElMessage.info(`批量僅能勾選同一報名狀態，已保留「${matchLabel(anchor)}」${sameGroup.length} 筆`)
+      ElMessage.info(`批量僅能勾選同一報名狀態分類，已保留「${SELECTION_CATEGORY_LABEL[anchorCategory]}」${sameGroup.length} 筆`)
     })
   } else {
     selectedRows.value = sameGroup
@@ -1134,6 +1133,27 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+/* 勾選欄點擊範圍放大：讓整個儲存格都可點（而不是只有 14px 的 checkbox 本身）。
+   前綴 .activity-registrations 是為了拉高 specificity，蓋過 element-plus 內建的
+   `.el-table__body-wrapper .el-table-column--selection>.cell{display:inline-flex;height:23px}`
+  （單純 :deep() 不含外層 class 時不會帶 scope 屬性，specificity 會輸給它，寬度撐不開）。 */
+.activity-registrations :deep(.el-table-column--selection .cell) {
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+.activity-registrations :deep(.el-table-column--selection .el-checkbox) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 12px 0;
+  cursor: pointer;
+}
 .amount-hint { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; }
 /* 拒絕鈕以 tooltip span 包住（disabled 時仍可 hover 提示）→ 補回按鈕間距 */
 .reject-btn-wrap { display: inline-flex; margin-left: 12px; vertical-align: middle; }
