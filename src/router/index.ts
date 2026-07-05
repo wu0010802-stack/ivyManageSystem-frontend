@@ -105,6 +105,13 @@ const routes: RouteRecordRaw[] = [
             meta: { title: '招生入學' }
         },
         {
+            // 新學年預編班（取代舊 /classrooms 跨學年升班 dialog）；Task 11 補完整編班工作台 UI。
+            path: '/students/year-plan',
+            name: 'studentsYearPlan',
+            component: () => import('../views/students/YearPlanWorkspaceView.vue'),
+            meta: { title: '新學年預編班' }
+        },
+        {
             // 招生統計已重構為學生模組下的「招生入學」；舊連結 redirect 並保留 query
             path: '/recruitment',
             redirect: (to) => ({ path: '/students/admissions', query: to.query })

@@ -18,8 +18,6 @@ vi.mock('@/api/classrooms', () => ({
   getClassroom: (...args: unknown[]) => getClassroom(...(args as [])),
   getClassrooms: (...args: unknown[]) => getClassrooms(...(args as [])),
   getGrades: vi.fn(() => Promise.resolve({ data: [] })),
-  promoteAcademicYear: vi.fn(),
-  previewPromoteAcademicYear: vi.fn(),
   getTeacherOptions: vi.fn(() => Promise.resolve({ data: [] })),
   updateClassroom: vi.fn(),
 }))

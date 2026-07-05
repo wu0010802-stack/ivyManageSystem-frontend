@@ -16,15 +16,6 @@ export const updateClassroom = (id: number, payload: ApiBody<'/classrooms/{class
 export const deleteClassroom = (id: number): AxiosResp<'/classrooms/{classroom_id}', 'delete'> =>
     api.delete(`/classrooms/${id}`)
 
-export const cloneClassroomsToTerm = (payload: unknown) => api.post('/classrooms/clone-term', payload)
-
-export const promoteAcademicYear = (payload: unknown) => api.post('/classrooms/promote-academic-year', payload)
-
-export const previewPromoteAcademicYear = (
-    payload: ApiBody<'/classrooms/promote-academic-year/preview', 'post'>,
-): AxiosResp<'/classrooms/promote-academic-year/preview', 'post'> =>
-    api.post('/classrooms/promote-academic-year/preview', payload)
-
 export const getTeacherOptions = () => api.get('/classrooms/teacher-options')
 
 export const getTeachers = getTeacherOptions

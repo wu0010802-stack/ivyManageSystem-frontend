@@ -74,18 +74,6 @@ describe('classrooms api', () => {
     expect(mockDelete).toHaveBeenCalledWith('/classrooms/42')
   })
 
-  it('cloneClassroomsToTerm POST /classrooms/clone-term', async () => {
-    const payload = { from_term: '114-1', to_term: '114-2' }
-    await mod.cloneClassroomsToTerm(payload)
-    expect(mockPost).toHaveBeenCalledWith('/classrooms/clone-term', payload)
-  })
-
-  it('promoteAcademicYear POST /classrooms/promote-academic-year', async () => {
-    const payload = { from_year: 114, to_year: 115 }
-    await mod.promoteAcademicYear(payload)
-    expect(mockPost).toHaveBeenCalledWith('/classrooms/promote-academic-year', payload)
-  })
-
   it('getTeacherOptions GET /classrooms/teacher-options', async () => {
     await mod.getTeacherOptions()
     expect(mockGet).toHaveBeenCalledWith('/classrooms/teacher-options')
