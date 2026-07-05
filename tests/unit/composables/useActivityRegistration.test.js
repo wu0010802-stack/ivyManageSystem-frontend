@@ -106,11 +106,26 @@ describe('useActivityRegistration', () => {
     )
   })
 
-  it('batchMarkPaid 送出正確的 ids 與 reason（只接受 isPaid=true，批次沖帳已禁用）', async () => {
-    const { selectedIds, batchMarkPaid } = useActivityRegistration()
-    selectedIds.value = [1, 2, 3]
+  it('fetchList 帶 match_status；選 rejected 時附 include_inactive=true', async () => {
+    const { matchStatusFilter, fetchList } = useActivityRegistration()
 
-    await batchMarkPaid(true)
+    matchStatusFilter.value = 'pending'
+    await fetchList()
+    expect(getRegistrations).toHaveBeenLastCalledWith(
+      expect.objectContaining({ match_status: 'pending', include_inactive: undefined })
+    )
+
+    matchStatusFilter.value = 'rejected'
+    await fetchList()
+    expect(getRegistrations).toHaveBeenLastCalledWith(
+      expect.objectContaining({ match_status: 'rejected', include_inactive: true })
+    )
+  })
+
+  it('batchMarkPaid 送出正確的 ids 與 reason（只接受 isPaid=true，批次沖帳已禁用）', async () => {
+    const { batchMarkPaid } = useActivityRegistration()
+
+    await batchMarkPaid(true, [1, 2, 3])
 
     expect(batchUpdatePayment).toHaveBeenCalledWith(
       [1, 2, 3],
@@ -119,32 +134,28 @@ describe('useActivityRegistration', () => {
   })
 
   it('batchMarkPaid 傳入 isPaid=false 不呼叫 API（已禁用批次沖帳）', async () => {
-    const { selectedIds, batchMarkPaid } = useActivityRegistration()
-    selectedIds.value = [1, 2]
+    const { batchMarkPaid } = useActivityRegistration()
 
-    await batchMarkPaid(false)
+    await batchMarkPaid(false, [1, 2])
 
     expect(batchUpdatePayment).not.toHaveBeenCalled()
   })
 
-  it('batchMarkPaid 成功後顯示後端訊息並清空 selectedIds', async () => {
-    const { selectedIds, batchMarkPaid } = useActivityRegistration()
-    selectedIds.value = [1, 2]
+  it('batchMarkPaid 成功後顯示後端訊息', async () => {
+    const { batchMarkPaid } = useActivityRegistration()
 
-    await batchMarkPaid(true)
+    await batchMarkPaid(true, [1, 2])
 
     expect(ElMessageSuccess).toHaveBeenCalledWith('已更新 2 筆報名為已繳費')
-    expect(selectedIds.value).toEqual([])
   })
 
   it('batchMarkPaid 取消確認後不呼叫 API', async () => {
     // prompt 取消（user 按 cancel 或關閉對話框）→ ElMessageBox.prompt reject
     ElMessageBoxPrompt.mockRejectedValue(new Error('cancel'))
 
-    const { selectedIds, batchMarkPaid } = useActivityRegistration()
-    selectedIds.value = [1]
+    const { batchMarkPaid } = useActivityRegistration()
 
-    await batchMarkPaid(true)
+    await batchMarkPaid(true, [1])
 
     expect(batchUpdatePayment).not.toHaveBeenCalled()
   })
@@ -152,10 +163,9 @@ describe('useActivityRegistration', () => {
   it('batchMarkPaid prompt 要求原因 ≥ 15 字（對齊後端 BatchPaymentUpdate.reason）', async () => {
     // 後端 BatchPaymentUpdate.reason 硬限 MIN_REFUND_REASON_LENGTH=15；前端 prompt
     // 過去用 5 字 regex，5-14 字會過前端、被後端 422。
-    const { selectedIds, batchMarkPaid } = useActivityRegistration()
-    selectedIds.value = [1, 2]
+    const { batchMarkPaid } = useActivityRegistration()
 
-    await batchMarkPaid(true)
+    await batchMarkPaid(true, [1, 2])
 
     const opts = ElMessageBoxPrompt.mock.calls[0][2]
     expect(opts.inputPattern.test('一二三四五六七八九十一二三四')).toBe(false) // 14 字

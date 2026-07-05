@@ -38,7 +38,13 @@ vi.mock('@/api/activity', () => ({
   withdrawCourse: vi.fn(),
   getRegistrationTime: vi.fn().mockResolvedValue({ data: {} }),
   removeRegistrationSupply: vi.fn(),
-  listPendingRegistrations: vi.fn().mockResolvedValue({ data: { items: [], total: 0 } }),
+  // 審核工作流 API（useActivityReview 於 setup 匯入；本檔不觸發）
+  matchRegistration: vi.fn(),
+  rejectRegistration: vi.fn(),
+  rematchRegistration: vi.fn(),
+  forceAcceptRegistration: vi.fn(),
+  restoreRegistration: vi.fn(),
+  searchActivityStudents: vi.fn(),
 }))
 
 vi.mock('@/composables/useActivityRegistration', () => ({
@@ -50,11 +56,11 @@ vi.mock('@/composables/useActivityRegistration', () => ({
     loading: ref(false),
     searchText: ref(''),
     paymentFilter: ref(''),
+    matchStatusFilter: ref(''),
     courseFilter: ref(''),
     classroomFilter: ref(''),
     courseOptions: ref([]),
     classroomOptions: ref([]),
-    selectedIds: ref([]),
     savingBatch: ref(false),
     initFromQuery: vi.fn(),
     fetchList: vi.fn(),

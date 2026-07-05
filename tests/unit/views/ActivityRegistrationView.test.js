@@ -9,6 +9,13 @@ vi.mock('@/components/activity/RegistrationTimeline.vue', () => ({
   default: { name: 'RegistrationTimeline', render: () => null },
 }))
 
+// 同理，RegistrationPaymentDialog 亦為 defineAsyncComponent，被「開繳費對話框」測試
+// 觸發載入；其 module import 的 POS_ORG_INFO 常數在測試 teardown 後才 resolve 會炸
+// EnvironmentTeardownError（flaky、CI 紅）。純展示子元件，mock 為空 render。
+vi.mock('@/components/activity/RegistrationPaymentDialog.vue', () => ({
+  default: { name: 'RegistrationPaymentDialog', render: () => null },
+}))
+
 // ── API mocks ──────────────────────────────────────────────────────────────
 vi.mock('@/api/activity', () => ({
   getRegistrations: vi.fn(),
@@ -32,6 +39,13 @@ vi.mock('@/api/activity', () => ({
   addRegistrationCourse: vi.fn(),
   addRegistrationSupply: vi.fn(),
   removeRegistrationSupply: vi.fn(),
+  // 審核工作流 API（useActivityReview 於 setup 匯入；本檔測試不觸發，僅需存在）
+  matchRegistration: vi.fn(),
+  rejectRegistration: vi.fn(),
+  rematchRegistration: vi.fn(),
+  forceAcceptRegistration: vi.fn(),
+  restoreRegistration: vi.fn(),
+  searchActivityStudents: vi.fn(),
 }))
 
 // ── Pinia store mock ───────────────────────────────────────────────────────
@@ -76,7 +90,7 @@ const mockHandleBatchMarkPaid = vi.fn()
 const mockInitFromQuery = vi.fn()
 const mockBatchMarkPaid = vi.fn()
 
-const mockSelectedIds = ref([])
+const mockMatchStatusFilter = ref('')
 const mockList = ref([])
 const mockTotal = ref(0)
 const mockPage = ref(1)
@@ -99,11 +113,11 @@ vi.mock('@/composables/useActivityRegistration', () => ({
     loading: mockLoading,
     searchText: mockSearchText,
     paymentFilter: mockPaymentFilter,
+    matchStatusFilter: mockMatchStatusFilter,
     courseFilter: mockCourseFilter,
     classroomFilter: mockClassroomFilter,
     courseOptions: mockCourseOptions,
     classroomOptions: mockClassroomOptions,
-    selectedIds: mockSelectedIds,
     savingBatch: mockSavingBatch,
     initFromQuery: mockInitFromQuery,
     fetchList: mockFetchList,
@@ -181,7 +195,7 @@ function mountView() {
 describe('ActivityRegistrationView', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockSelectedIds.value = []
+    mockMatchStatusFilter.value = ''
     mockList.value = []
     mockFetchList.mockResolvedValue(undefined)
     mockLoadOptions.mockResolvedValue(undefined)
@@ -196,32 +210,40 @@ describe('ActivityRegistrationView', () => {
     expect(mockLoadOptions).toHaveBeenCalledOnce()
   })
 
-  it('selectedIds 有值時顯示批次工具列', async () => {
-    mockSelectedIds.value = [1, 2]
+  it('有選取列時顯示批次工具列', async () => {
     const wrapper = mountView()
+    await flushPromises()
+    // 勾選同一 match_status 群組 → view 內 selectedRows 更新
+    wrapper.vm.handleSelectionChange([
+      { id: 1, match_status: 'matched' },
+      { id: 2, match_status: 'matched' },
+    ])
     await flushPromises()
 
     expect(wrapper.find('.batch-toolbar').exists()).toBe(true)
   })
 
-  it('selectedIds 為空時不顯示批次工具列', async () => {
-    mockSelectedIds.value = []
+  it('未選取時不顯示批次工具列', async () => {
     const wrapper = mountView()
     await flushPromises()
 
     expect(wrapper.find('.batch-toolbar').exists()).toBe(false)
   })
 
-  it('點擊「標記已繳費」呼叫 batchMarkPaid(true, ...)', async () => {
-    mockSelectedIds.value = [1, 2]
+  it('已收件群組點擊「標記已繳費」呼叫 batchMarkPaid(true, ids, fn)', async () => {
     const wrapper = mountView()
+    await flushPromises()
+    wrapper.vm.handleSelectionChange([
+      { id: 1, match_status: 'matched' },
+      { id: 2, match_status: 'matched' },
+    ])
     await flushPromises()
 
     const btn = wrapper.find('.batch-toolbar button')
     await btn.trigger('click')
     await flushPromises()
 
-    expect(mockBatchMarkPaid).toHaveBeenCalledWith(true, expect.any(Function))
+    expect(mockBatchMarkPaid).toHaveBeenCalledWith(true, [1, 2], expect.any(Function))
   })
 
   // ── 繳費資訊載入失敗防超繳（回歸）────────────────────────────────────────
