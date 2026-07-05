@@ -26,6 +26,21 @@ vi.mock('@/api/recruitmentIntake', () => ({
   getIntakePlan: vi.fn(() => Promise.resolve({ data: { rows: [] } })),
 }))
 
+// PlanStatusCard（新學年準備狀態卡）mount 後會打 status API，需 mock 避免真打網路。
+vi.mock('@/api/classroomYearPlan', () => ({
+  getClassroomYearPlanStatus: vi.fn(() => Promise.resolve({
+    data: {
+      state: 'none',
+      target_school_year: 115,
+      source_school_year: 114,
+      blocking_count: 0,
+      warning_count: 0,
+      prep_start_date: '2026-06-01',
+      apply_overdue: false,
+    },
+  })),
+}))
+
 vi.mock('@/stores/classroom', () => ({
   useClassroomStore: () => ({ refresh: vi.fn(() => Promise.resolve()) }),
 }))
@@ -76,6 +91,7 @@ const stubs = {
   'el-descriptions-item': { template: '<div><slot /></div>' },
   'el-divider': { template: '<div><slot /></div>' },
   'el-alert': true,
+  'el-link': { template: '<a><slot /></a>' },
   'el-drawer': { template: '<div><slot /></div>' },
   'el-table': { template: '<div><slot /></div>' },
   'el-table-column': true,

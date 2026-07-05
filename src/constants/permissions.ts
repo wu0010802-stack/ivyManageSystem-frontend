@@ -141,7 +141,7 @@ export const ROUTE_PERMISSION_RULES = [
   // 招生入學（/recruitment 重構搬遷至學生模組）。/students 是 exact 匹配不涵蓋此路由，
   // 缺這條會被 canAccessRoute default-deny 鎖死（含 super admin）。
   { path: '/students/admissions', permission: 'RECRUITMENT_READ' },
-  // 新學年預編班：草稿隔離作業，對齊後端 api/classroom_year_plans/ 的 CLASSROOMS_READ 守衛
+  // 新學年預編班：草稿隔離作業，對齊後端 api/classroom_year_plans.py 的 CLASSROOMS_READ 守衛
   // （寫入動作各自細分 CLASSROOMS_WRITE，此處僅為 navigation gate）。
   { path: '/students/year-plan', permission: 'CLASSROOMS_READ' },
   // /recruitment 與 /recruitment-ivykids 為 redirect 至 /students/admissions（router 在 guard 前先導向），

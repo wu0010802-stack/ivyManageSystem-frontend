@@ -21,6 +21,7 @@ import { hasPermission } from '@/utils/auth'
 import { apiError } from '@/utils/error'
 import ClassroomStudentDrawer from '@/components/classroom/ClassroomStudentDrawer.vue'
 import ClassroomChangeLogDrawer from '@/components/classroom/ClassroomChangeLogDrawer.vue'
+import PlanStatusCard from '@/components/classroom/PlanStatusCard.vue'
 
 interface ClassroomRow { id: number; name: string; class_code?: string | null; school_year: number; semester: number; semester_label?: string; grade_id?: number | null; grade_name?: string; capacity?: number; current_count?: number; is_active?: boolean; head_teacher_id?: number | null; assistant_teacher_id?: number | null; english_teacher_id?: number | null; art_teacher_id?: number | null; head_teacher_name?: string | null; assistant_teacher_name?: string | null; english_teacher_name?: string | null; art_teacher_name?: string | null; student_preview?: Record<string, unknown>[]; students?: Record<string, unknown>[]; [key: string]: unknown }
 interface GradeRow { id: number; name: string; sort_order?: number; [key: string]: unknown }
@@ -32,7 +33,6 @@ const currentAcademicTerm = getCurrentAcademicTerm()
 const classrooms = ref<ClassroomRow[]>([])
 const grades = ref<GradeRow[]>([])
 const teachers = ref<TeacherOption[]>([])
-const availableSchoolYears = ref<number[]>([])
 const loading = ref(false)
 const detailLoading = ref(false)
 const dialogVisible = ref(false)
@@ -63,7 +63,6 @@ const semesterOptions = [
 ]
 const schoolYearOptions = computed(() => {
   const years = new Set<number>(buildSchoolYearOptions(currentAcademicTerm.school_year, 1))
-  availableSchoolYears.value.forEach((year) => years.add(Number(year)))
   years.add(normalizeSchoolYear(filterSchoolYear.value))
   return Array.from(years).sort((a, b) => b - a)
 })
@@ -351,6 +350,8 @@ const castDrawerClassroom = computed((): ClassroomDrawerProp | null => drawerCla
         <el-button v-if="canWrite" type="primary" :icon="Plus" @click="openCreate">新增班級</el-button>
       </div>
     </div>
+
+    <PlanStatusCard />
 
     <!-- 載入骨架：初次載入或切到尚無資料的學期時，避免先閃「尚無班級資料」再跳出卡片 -->
     <div v-if="loading && classrooms.length === 0" class="classroom-grid classroom-skeleton" aria-hidden="true">
