@@ -23129,6 +23129,12 @@ export interface components {
             head_teacher_name?: string | null;
             /** Id */
             id: number;
+            /** Source Art Teacher Name */
+            source_art_teacher_name?: string | null;
+            /** Source Assistant Teacher Name */
+            source_assistant_teacher_name?: string | null;
+            /** Source Head Teacher Name */
+            source_head_teacher_name?: string | null;
             /** Source Name */
             source_name?: string | null;
             /** Target Grade Id */
@@ -24517,6 +24523,12 @@ export interface components {
             grade_name?: string | null;
             /** Head Teacher Name */
             head_teacher_name?: string | null;
+            /** Source Art Teacher Name */
+            source_art_teacher_name?: string | null;
+            /** Source Assistant Teacher Name */
+            source_assistant_teacher_name?: string | null;
+            /** Source Head Teacher Name */
+            source_head_teacher_name?: string | null;
             /** Target Name */
             target_name: string;
         };
