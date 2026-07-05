@@ -263,4 +263,64 @@ describe('YearPlanWorkspaceView', () => {
     // 確認後應重新呼叫 load()（status 至少再多打一次）
     expect(mockStatus.mock.calls.length).toBeGreaterThan(1)
   })
+
+  it('mutation in-flight（loading=true）時四顆動作鈕與批次工具列全部鎖定，防雙擊偽版本衝突', async () => {
+    mockStatus.mockResolvedValue(statusDraft())
+    mockDetail.mockResolvedValue(detailDraftWithClasses())
+
+    const w = mountView()
+    await flushPromises()
+
+    // in-flight 前：draft 無 blocking → 發布/重生成/新增班可點
+    expect((w.find('.btn-publish').element as HTMLButtonElement).disabled).toBe(false)
+    expect((w.find('.btn-regenerate').element as HTMLButtonElement).disabled).toBe(false)
+    expect((w.find('.btn-add-class').element as HTMLButtonElement).disabled).toBe(false)
+
+    // 勾一位學生後以 never-resolving promise 模擬 bulk mutation in-flight
+    const checkbox = w.findComponent({ name: 'ElCheckbox' })
+    await checkbox.find('input[type="checkbox"]').setValue(true)
+    await flushPromises()
+    mockBulkStudents.mockReturnValue(new Promise(() => {}))
+
+    const toolbar = w.findComponent(PlanBatchToolbar)
+    ;(toolbar.vm as unknown as { applyReset: () => void }).applyReset()
+    await nextTick()
+
+    expect((w.find('.btn-add-class').element as HTMLButtonElement).disabled).toBe(true)
+    expect((w.find('.btn-regenerate').element as HTMLButtonElement).disabled).toBe(true)
+    expect((w.find('.btn-publish').element as HTMLButtonElement).disabled).toBe(true)
+    expect((w.find('.btn-unpublish').element as HTMLButtonElement).disabled).toBe(true)
+    expect(toolbar.props('disabled')).toBe(true)
+  })
+
+  it('publish in-flight 時「確認發布」鈕鎖定，不可再點（不重複呼叫 API）', async () => {
+    mockStatus.mockResolvedValue(statusDraft())
+    mockDetail.mockResolvedValue(detailDraftWithClasses())
+    mockPreview.mockResolvedValue({
+      data: {
+        classes: [], graduating: [], excluded: [],
+        issues: { blocking: [], warnings: [] },
+        totals: { assigned_count: 0, class_count: 0, excluded_count: 0, graduating_count: 0 },
+      },
+    })
+    mockPublish.mockReturnValue(new Promise(() => {})) // publish 永遠 pending
+
+    const w = mountView()
+    await flushPromises()
+    await w.find('.btn-publish').trigger('click')
+    await flushPromises()
+
+    const confirmBtn = w.findAllComponents({ name: 'ElButton' }).find(b => b.text().includes('確認發布'))
+    expect(confirmBtn?.props('disabled')).toBe(false)
+    await confirmBtn?.trigger('click')
+    await nextTick()
+
+    expect(mockPublish).toHaveBeenCalledTimes(1)
+    // in-flight：確認鈕 disabled（submitting prop 由父層 loading 傳入）
+    expect(confirmBtn?.props('disabled')).toBe(true)
+    // 再點一次也不會送第二發（同一 base_version 的偽版本衝突來源）
+    await confirmBtn?.trigger('click')
+    await nextTick()
+    expect(mockPublish).toHaveBeenCalledTimes(1)
+  })
 })

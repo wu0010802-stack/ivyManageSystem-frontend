@@ -12,11 +12,13 @@
           <span v-if="plan" class="issue-chip issue-chip-warning">提醒 {{ plan.issues.warnings.length }}</span>
         </template>
       </div>
+      <!-- mutation in-flight（loading=true）期間鎖住所有互動觸發點：雙擊會以同一
+           base_version 送第二發、撞 409 誤導使用者「有別人在動草稿」 -->
       <div v-if="status" class="actions">
-        <el-button v-if="editable" class="btn-add-class" @click="onAddClassClick">新增班級</el-button>
-        <el-button class="btn-regenerate" :disabled="!canRegenerate" @click="onRegenerateClick">重新產生建議</el-button>
-        <el-button type="primary" class="btn-publish" :disabled="!canPublish" @click="onPublishClick">發布</el-button>
-        <el-button class="btn-unpublish" :disabled="!canUnpublish" @click="onUnpublishClick">撤回發布</el-button>
+        <el-button v-if="editable" class="btn-add-class" :disabled="loading" @click="onAddClassClick">新增班級</el-button>
+        <el-button class="btn-regenerate" :disabled="!canRegenerate || loading" @click="onRegenerateClick">重新產生建議</el-button>
+        <el-button type="primary" class="btn-publish" :disabled="!canPublish || loading" @click="onPublishClick">發布</el-button>
+        <el-button class="btn-unpublish" :disabled="!canUnpublish || loading" @click="onUnpublishClick">撤回發布</el-button>
       </div>
     </div>
 
@@ -41,6 +43,7 @@
         class="batch-toolbar"
         :selected-count="selectedStudentIds.length"
         :plan-classes="planClassOptions"
+        :disabled="loading"
         @bulk-op="onBulkOp"
       />
       <PlanRosterTable
@@ -56,8 +59,8 @@
       <p>將保留 {{ manualAdjustedCount }} 筆手動調整。</p>
       <el-checkbox v-model="overwriteManual">放棄我的手動調整（依系統規則全部重新分派）</el-checkbox>
       <template #footer>
-        <el-button @click="regenerateDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="onRegenerateConfirm">執行</el-button>
+        <el-button :disabled="loading" @click="regenerateDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="loading" @click="onRegenerateConfirm">執行</el-button>
       </template>
     </el-dialog>
 
@@ -65,6 +68,7 @@
       ref="publishDialogRef"
       v-model="publishDialogVisible"
       :plan-id="plan?.id ?? null"
+      :submitting="loading"
       @confirm="onPublishConfirm"
     />
 
@@ -72,6 +76,7 @@
       v-model="classEditDialogVisible"
       :mode="classEditMode"
       :plan-class="classEditTarget"
+      :submitting="loading"
       @create="onClassCreate"
       @update="onClassUpdate"
       @delete="onClassDelete"

@@ -138,6 +138,9 @@ export function useYearPlanWorkspace() {
     context: string,
     fallback: string,
   ): Promise<T | null> {
+    // in-flight 再入短路：UI disabled 綁 loading 之外的第二道防線（同 tick 雙擊、
+    // DOM 尚未重繪套用 disabled 時）——否則第二發帶同一 base_version 撞 409 偽版本衝突。
+    if (loading.value) return null
     loading.value = true
     error.value = null
     versionConflict.value = false
@@ -262,6 +265,8 @@ export function useYearPlanWorkspace() {
    */
   async function publish(): Promise<{ ok: boolean; blockingIssues?: IssueOut[] }> {
     if (!plan.value) return { ok: false }
+    // in-flight 再入短路（同 _runMutation）：防雙擊以同一 base_version 送第二發。
+    if (loading.value) return { ok: false }
     const planId = plan.value.id
     const baseVersion = plan.value.version
     loading.value = true

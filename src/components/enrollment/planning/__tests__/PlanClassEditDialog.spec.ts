@@ -156,4 +156,23 @@ describe('PlanClassEditDialog', () => {
     expect(mockGetTeacherOptions).toHaveBeenCalled()
     expect(w).toBeTruthy()
   })
+
+  it('submitting=true（父層 mutation in-flight）時儲存/刪除鈕 disabled 且派發短路', async () => {
+    const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm' as never)
+    const w = mountDialog({ mode: 'edit', planClass, submitting: true })
+    await flushPromises()
+
+    const buttons = w.findAllComponents({ name: 'ElButton' })
+    const saveBtn = buttons.find(b => b.text().includes('儲存'))
+    const deleteBtn = buttons.find(b => b.text().includes('刪除班級'))
+    expect(saveBtn?.props('disabled')).toBe(true)
+    expect(deleteBtn?.props('disabled')).toBe(true)
+
+    // 第二道防線：即使繞過 UI 直接呼叫（同 tick 雙擊 DOM 未重繪），也不派發
+    vmOf(w).onSubmit()
+    await vmOf(w).onDelete()
+    expect(w.emitted('update')).toBeFalsy()
+    expect(w.emitted('delete')).toBeFalsy()
+    expect(confirmSpy).not.toHaveBeenCalled()
+  })
 })

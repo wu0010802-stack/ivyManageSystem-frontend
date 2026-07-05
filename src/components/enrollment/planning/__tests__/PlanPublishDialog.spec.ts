@@ -31,11 +31,11 @@ interface DialogVm {
   canPublish: boolean
 }
 
-function mountDialog(planId: number | null = 5) {
+function mountDialog(planId: number | null = 5, extraProps: Record<string, unknown> = {}) {
   return mount(PlanPublishDialog, {
     attachTo: document.body,
     global: { plugins: [ElementPlus] },
-    props: { modelValue: true, planId },
+    props: { modelValue: true, planId, ...extraProps },
   })
 }
 
@@ -87,6 +87,19 @@ describe('PlanPublishDialog', () => {
     const confirmBtn = w.findAllComponents({ name: 'ElButton' }).find(b => b.text().includes('確認發布'))
     await confirmBtn?.trigger('click')
     expect(w.emitted('confirm')).toBeTruthy()
+  })
+
+  it('submitting=true（父層 publish in-flight）時「確認發布」鈕 disabled，blocking=0 也不可再點', async () => {
+    mockGetPreview.mockResolvedValue({ data: previewFixture() })
+    const w = mountDialog(5, { submitting: true })
+    await flushPromises()
+    // preview 無 blocking（canPublish=true），但父層 publish in-flight → 仍 disabled
+    expect(vmOf(w).canPublish).toBe(true)
+    const confirmBtn = w.findAllComponents({ name: 'ElButton' }).find(b => b.text().includes('確認發布'))
+    expect(confirmBtn?.props('disabled')).toBe(true)
+    expect(confirmBtn?.props('loading')).toBe(true)
+    await confirmBtn?.trigger('click')
+    expect(w.emitted('confirm')).toBeFalsy()
   })
 
   it('reload() 可由父層呼叫重新整理 preview', async () => {

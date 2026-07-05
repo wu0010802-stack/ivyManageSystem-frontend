@@ -56,8 +56,15 @@
     </div>
 
     <template #footer>
-      <el-button @click="visible = false">取消</el-button>
-      <el-button type="primary" :disabled="!canPublish" :loading="loading" @click="emit('confirm')">
+      <el-button :disabled="submitting" @click="visible = false">取消</el-button>
+      <!-- disabled 除 blocking gating 外也要吃父層 publish() in-flight（submitting），
+           防雙擊以同一 base_version 送第二發撞 409 偽版本衝突 -->
+      <el-button
+        type="primary"
+        :disabled="!canPublish || submitting"
+        :loading="loading || submitting"
+        @click="emit('confirm')"
+      >
         確認發布
       </el-button>
     </template>
@@ -82,6 +89,8 @@ type PreviewOut = Schema<'PreviewOut'>
 const props = defineProps<{
   modelValue: boolean
   planId: number | null
+  /** 父層 publish() in-flight：期間確認/取消鈕鎖定，防雙擊重複送出。 */
+  submitting?: boolean
 }>()
 
 const emit = defineEmits<{

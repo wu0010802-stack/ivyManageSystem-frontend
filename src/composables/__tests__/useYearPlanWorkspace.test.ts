@@ -348,4 +348,19 @@ describe('useYearPlanWorkspace', () => {
     expect(mockCreateClass).not.toHaveBeenCalled()
     expect(mockPublish).not.toHaveBeenCalled()
   })
+
+  it('mutation in-flight 期間再入直接短路（同 tick 雙擊只送一發，不帶同一 base_version 撞 409）', async () => {
+    const ws = await loadedWorkspace()
+    mockBulkStudents.mockReturnValue(new Promise(() => {})) // 第一發永遠 pending
+
+    const first = ws.bulkUpdateStudents('reset', [1])
+    // 第二發（未 await 第一發，loading 已為 true）→ 短路回 false，不打 API
+    expect(await ws.bulkUpdateStudents('reset', [1])).toBe(false)
+    expect(mockBulkStudents).toHaveBeenCalledTimes(1)
+
+    // publish 同樣受 in-flight 短路保護
+    expect((await ws.publish()).ok).toBe(false)
+    expect(mockPublish).not.toHaveBeenCalled()
+    void first // 首發刻意不 resolve；測試結束由 vitest 回收
+  })
 })

@@ -32,11 +32,13 @@
       </template>
     </el-form>
 
+    <!-- submitting（父層 mutation in-flight）期間鎖住刪除/取消/儲存，防雙擊以同一
+         base_version 送第二發撞 409 偽版本衝突 -->
     <template #footer>
-      <el-button v-if="mode === 'edit'" type="danger" plain class="delete-btn" @click="onDelete">刪除班級</el-button>
+      <el-button v-if="mode === 'edit'" type="danger" plain class="delete-btn" :disabled="submitting" @click="onDelete">刪除班級</el-button>
       <span class="footer-spacer" />
-      <el-button @click="visible = false">取消</el-button>
-      <el-button type="primary" :disabled="!canSubmit" @click="onSubmit">儲存</el-button>
+      <el-button :disabled="submitting" @click="visible = false">取消</el-button>
+      <el-button type="primary" :disabled="!canSubmit || submitting" :loading="submitting" @click="onSubmit">儲存</el-button>
     </template>
   </el-dialog>
 </template>
@@ -62,6 +64,8 @@ const props = defineProps<{
   modelValue: boolean
   mode: 'create' | 'edit'
   planClass: PlanClass | null
+  /** 父層 create/update/delete mutation in-flight：期間鎖定 footer 三鈕與派發短路。 */
+  submitting?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -152,7 +156,8 @@ watch(
 const canSubmit = computed(() => form.value.target_name.trim().length > 0 && form.value.target_grade_id != null)
 
 function onSubmit(): void {
-  if (!canSubmit.value) return
+  // submitting 短路：UI disabled 之外的第二道防線（同 tick 雙擊 DOM 尚未重繪時）
+  if (!canSubmit.value || props.submitting) return
   if (props.mode === 'create') {
     emit('create', {
       target_name: form.value.target_name,
@@ -174,7 +179,7 @@ function onSubmit(): void {
 }
 
 async function onDelete(): Promise<void> {
-  if (!props.planClass) return
+  if (!props.planClass || props.submitting) return
   try {
     await ElMessageBox.confirm(
       `確定要刪除班級「${props.planClass.target_name}」嗎？班內學生會被設回未分班。`,
