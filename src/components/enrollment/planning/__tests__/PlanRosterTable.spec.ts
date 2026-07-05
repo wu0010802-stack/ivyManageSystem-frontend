@@ -1,0 +1,136 @@
+import { mount } from '@vue/test-utils'
+import { describe, it, expect } from 'vitest'
+import PlanRosterTable from '../PlanRosterTable.vue'
+import type { Schema } from '@/api/_generated/typed'
+
+type PlanDetail = Schema<'PlanDetailOut'>
+
+function buildPlan(overrides: Partial<PlanDetail> = {}): PlanDetail {
+  return {
+    id: 1,
+    target_school_year: 115,
+    source_school_year: 114,
+    status: 'draft',
+    version: 1,
+    generated_at: '2026-06-01T00:00:00',
+    published_at: null,
+    applied_at: null,
+    classes: [
+      {
+        id: 10,
+        source_name: '幼幼A',
+        target_name: '小班A',
+        target_grade_id: 1,
+        grade_name: '小班',
+        capacity: 2,
+        class_code: 'K1A',
+        head_teacher_id: 100,
+        head_teacher_name: '王老師',
+        assistant_teacher_id: null,
+        assistant_teacher_name: null,
+        art_teacher_id: null,
+        art_teacher_name: null,
+        assigned_count: 3, // 超額：3 > capacity 2
+      },
+      {
+        id: 11,
+        source_name: null,
+        target_name: '中班A',
+        target_grade_id: 2,
+        grade_name: '中班',
+        capacity: 15,
+        class_code: 'K2A',
+        head_teacher_id: 200,
+        head_teacher_name: '李老師',
+        assistant_teacher_id: 201,
+        assistant_teacher_name: '陳老師',
+        art_teacher_id: 202,
+        art_teacher_name: '美語老師甲',
+        assigned_count: 1,
+      },
+    ],
+    students: [
+      { id: 1, student_id: 'S001', name: '小明', source_classroom_name: '幼幼A', plan_class_id: 10, disposition: 'promote', exclude_reason: null, manually_adjusted: false, current_grade_name: '幼幼' },
+      { id: 2, student_id: 'S002', name: '小華', source_classroom_name: '幼幼B', plan_class_id: 10, disposition: 'retain', exclude_reason: null, manually_adjusted: true, current_grade_name: '小班' },
+      { id: 3, student_id: 'S003', name: '小美', source_classroom_name: '幼幼A', plan_class_id: 10, disposition: 'promote', exclude_reason: null, manually_adjusted: false, current_grade_name: '幼幼' },
+      { id: 4, student_id: 'S004', name: '小強', source_classroom_name: '大班A', plan_class_id: null, disposition: 'graduate', exclude_reason: null, manually_adjusted: false, current_grade_name: '大班' },
+      { id: 5, student_id: 'S005', name: '小英', source_classroom_name: '中班B', plan_class_id: null, disposition: 'exclude', exclude_reason: '轉學', manually_adjusted: true, current_grade_name: '中班' },
+    ],
+    issues: { blocking: [], warnings: [] },
+    ...overrides,
+  }
+}
+
+describe('PlanRosterTable', () => {
+  it('依年級分組渲染班級欄（小班／中班各一欄，含年級名稱）', () => {
+    const w = mount(PlanRosterTable, { props: { plan: buildPlan(), editable: true } })
+    const gradeHeaders = w.findAll('.grade-group-cell')
+    expect(gradeHeaders.map(h => h.text())).toEqual(['小班', '中班'])
+    const classHeaders = w.findAll('.class-name-text')
+    expect(classHeaders.map(h => h.text())).toEqual(['小班A', '中班A'])
+  })
+
+  it('容量超額（assigned_count > capacity）班級 badge 標紅', () => {
+    const w = mount(PlanRosterTable, { props: { plan: buildPlan(), editable: true } })
+    const badges = w.findAll('.capacity-badge')
+    expect(badges[0].text()).toContain('3/2')
+    expect(badges[0].classes()).toContain('over-capacity')
+    expect(badges[1].text()).toContain('1/15')
+    expect(badges[1].classes()).not.toContain('over-capacity')
+  })
+
+  it('留級學生顯示「留」tag；畢業/排除收合區顯示「畢」「除」tag', () => {
+    const w = mount(PlanRosterTable, { props: { plan: buildPlan(), editable: true } })
+    const retainTags = w.findAll('.disposition-tag-retain')
+    expect(retainTags.length).toBe(1)
+    expect(retainTags[0].text()).toBe('留')
+
+    // promote 是預設分派，不需要 tag
+    expect(w.findAll('.disposition-tag-promote').length).toBe(0)
+
+    const graduateSection = w.find('.graduate-section')
+    expect(graduateSection.text()).toContain('小強')
+    expect(graduateSection.find('.disposition-tag-graduate').text()).toBe('畢')
+
+    const excludeSection = w.find('.exclude-section')
+    expect(excludeSection.text()).toContain('小英')
+    expect(excludeSection.text()).toContain('轉學')
+    expect(excludeSection.find('.disposition-tag-exclude').text()).toBe('除')
+  })
+
+  it('教師未指派顯示「待確認」tag，hover 顯示原班參考', () => {
+    const w = mount(PlanRosterTable, { props: { plan: buildPlan(), editable: true } })
+    const unassignedTags = w.findAll('.teacher-unassigned')
+    // 小班A：副班導、美語老師未指派 → 2 個「待確認」；中班A 三教師皆已指派 → 0
+    expect(unassignedTags.length).toBe(2)
+    expect(unassignedTags[0].text()).toBe('待確認')
+    expect(unassignedTags[0].attributes('title')).toContain('幼幼A')
+  })
+
+  it('勾選學生 checkbox 會 emit select-students（累積目前勾選集合）', async () => {
+    const w = mount(PlanRosterTable, { props: { plan: buildPlan(), editable: true } })
+    const checkboxes = w.findAll('input[type="checkbox"].student-checkbox')
+    await checkboxes[0].setValue(true)
+    const events = w.emitted('select-students')
+    expect(events).toBeTruthy()
+    expect(events![0][0]).toEqual([1])
+  })
+
+  it('editable=false 時不渲染 checkbox', () => {
+    const w = mount(PlanRosterTable, { props: { plan: buildPlan(), editable: false } })
+    expect(w.findAll('input[type="checkbox"].student-checkbox').length).toBe(0)
+  })
+
+  it('editable=true 時點擊班級編輯鈕 emit class-edit(planClassId)', async () => {
+    const w = mount(PlanRosterTable, { props: { plan: buildPlan(), editable: true } })
+    await w.findAll('.class-edit-btn')[0].trigger('click')
+    const events = w.emitted('class-edit')
+    expect(events).toBeTruthy()
+    expect(events![0][0]).toBe(10)
+  })
+
+  it('editable=false 時不渲染班級編輯鈕', () => {
+    const w = mount(PlanRosterTable, { props: { plan: buildPlan(), editable: false } })
+    expect(w.findAll('.class-edit-btn').length).toBe(0)
+  })
+})
