@@ -20,13 +20,15 @@
               :class="{ 'grade-border-right': lastClassIds.has(cls.id) }"
             >
               <span class="class-name-text">{{ cls.target_name }}</span>
-              <button
+              <el-button
                 v-if="editable"
-                type="button"
+                :icon="Edit"
+                circle
+                size="small"
                 class="class-edit-btn"
                 title="編輯班級"
                 @click="emit('class-edit', cls.id)"
-              >✎</button>
+              />
             </td>
           </tr>
           <!-- 容量 badge -->
@@ -53,7 +55,7 @@
               :class="{ 'grade-border-right': lastClassIds.has(cls.id) }"
             >
               <span v-if="cls.head_teacher_name" class="teacher-name">{{ cls.head_teacher_name }}</span>
-              <span v-else class="teacher-unassigned" :title="referenceTitle(cls)">待確認</span>
+              <span v-else class="teacher-unassigned" :title="referenceTitle(cls, 'head')">待確認</span>
             </td>
           </tr>
           <!-- 副班導 -->
@@ -66,7 +68,7 @@
               :class="{ 'grade-border-right': lastClassIds.has(cls.id) }"
             >
               <span v-if="cls.assistant_teacher_name" class="teacher-name">{{ cls.assistant_teacher_name }}</span>
-              <span v-else class="teacher-unassigned" :title="referenceTitle(cls)">待確認</span>
+              <span v-else class="teacher-unassigned" :title="referenceTitle(cls, 'assistant')">待確認</span>
             </td>
           </tr>
           <!-- 美語老師 -->
@@ -79,7 +81,7 @@
               :class="{ 'grade-border-right': lastClassIds.has(cls.id) }"
             >
               <span v-if="cls.art_teacher_name" class="teacher-name">{{ cls.art_teacher_name }}</span>
-              <span v-else class="teacher-unassigned" :title="referenceTitle(cls)">待確認</span>
+              <span v-else class="teacher-unassigned" :title="referenceTitle(cls, 'art')">待確認</span>
             </td>
           </tr>
         </thead>
@@ -93,23 +95,24 @@
               class="student-cell"
               :class="{ 'grade-border-right': lastClassIds.has(cls.id) }"
             >
-              <template v-if="studentsByClass.get(cls.id)?.[rowIdx - 1]">
+              <!-- cellStudents 回傳 0~1 筆，藉 v-for 取得模板內的區域變數 student，
+                   避免同一格重複 studentsByClass.get(cls.id)![rowIdx-1] 七次 -->
+              <template v-for="student in cellStudents(cls.id, rowIdx)" :key="student.id">
                 <label class="student-line">
-                  <input
+                  <el-checkbox
                     v-if="editable"
-                    type="checkbox"
                     class="student-checkbox"
-                    :checked="selected.has(studentsByClass.get(cls.id)![rowIdx - 1].id)"
-                    @change="onToggleStudent(studentsByClass.get(cls.id)![rowIdx - 1].id, ($event.target as HTMLInputElement).checked)"
-                  >
-                  <span class="student-name">{{ studentsByClass.get(cls.id)![rowIdx - 1].name }}</span>
+                    :model-value="selected.has(student.id)"
+                    @change="(val: string | number | boolean) => onToggleStudent(student.id, Boolean(val))"
+                  />
+                  <span class="student-name">{{ student.name }}</span>
                   <span
-                    v-if="dispositionTag(studentsByClass.get(cls.id)![rowIdx - 1])"
+                    v-if="dispositionTag(student)"
                     class="disposition-tag"
-                    :class="`disposition-tag-${studentsByClass.get(cls.id)![rowIdx - 1].disposition}`"
-                  >{{ dispositionTag(studentsByClass.get(cls.id)![rowIdx - 1]) }}</span>
+                    :class="`disposition-tag-${student.disposition}`"
+                  >{{ dispositionTag(student) }}</span>
                 </label>
-                <div class="student-source">{{ studentsByClass.get(cls.id)![rowIdx - 1].source_classroom_name ?? '' }}</div>
+                <div class="student-source">{{ student.source_classroom_name ?? '' }}</div>
               </template>
             </td>
           </tr>
@@ -133,53 +136,53 @@
       </table>
     </div>
 
-    <!-- 未分班（promote/retain 但無 plan_class_id）：正常流程不應出現，僅防呆顯示避免資料被靜默吃掉 -->
-    <div v-if="unassignedStudents.length" class="side-section unassigned-section">
-      <button type="button" class="side-toggle" @click="unassignedOpen = !unassignedOpen">
-        待分班（{{ unassignedStudents.length }}）
-      </button>
-      <ul v-if="unassignedOpen" class="side-list">
-        <li v-for="s in unassignedStudents" :key="s.id">
-          <span class="student-name">{{ s.name }}</span>
-          <span class="student-source">{{ s.source_classroom_name ?? '' }}</span>
-        </li>
-      </ul>
-    </div>
+    <el-collapse v-model="openSections" class="side-collapse">
+      <!-- 未分班（promote/retain 但無 plan_class_id）：正常流程不應出現，僅防呆顯示避免資料被靜默吃掉 -->
+      <el-collapse-item
+        v-if="unassignedStudents.length"
+        name="unassigned"
+        class="side-section unassigned-section"
+        :title="`待分班（${unassignedStudents.length}）`"
+      >
+        <ul class="side-list">
+          <li v-for="s in unassignedStudents" :key="s.id">
+            <span class="student-name">{{ s.name }}</span>
+            <span class="student-source">{{ s.source_classroom_name ?? '' }}</span>
+          </li>
+        </ul>
+      </el-collapse-item>
 
-    <!-- 畢業名單 -->
-    <div class="side-section graduate-section">
-      <button type="button" class="side-toggle" @click="graduateOpen = !graduateOpen">
-        畢業名單（{{ graduateStudents.length }}）
-      </button>
-      <ul v-if="graduateOpen" class="side-list">
-        <li v-for="s in graduateStudents" :key="s.id">
-          <span class="student-name">{{ s.name }}</span>
-          <span class="disposition-tag disposition-tag-graduate">畢</span>
-          <span class="student-source">{{ s.source_classroom_name ?? '' }}</span>
-        </li>
-      </ul>
-    </div>
+      <!-- 畢業名單 -->
+      <el-collapse-item name="graduate" class="side-section graduate-section" :title="`畢業名單（${graduateStudents.length}）`">
+        <ul class="side-list">
+          <li v-for="s in graduateStudents" :key="s.id">
+            <span class="student-name">{{ s.name }}</span>
+            <span class="disposition-tag disposition-tag-graduate">畢</span>
+            <span class="student-source">{{ s.source_classroom_name ?? '' }}</span>
+          </li>
+        </ul>
+      </el-collapse-item>
 
-    <!-- 排除名單 -->
-    <div class="side-section exclude-section">
-      <button type="button" class="side-toggle" @click="excludeOpen = !excludeOpen">
-        排除名單（{{ excludeStudents.length }}）
-      </button>
-      <ul v-if="excludeOpen" class="side-list">
-        <li v-for="s in excludeStudents" :key="s.id">
-          <span class="student-name">{{ s.name }}</span>
-          <span class="disposition-tag disposition-tag-exclude">除</span>
-          <span class="student-source">{{ s.source_classroom_name ?? '' }}</span>
-          <span v-if="s.exclude_reason" class="exclude-reason">（{{ s.exclude_reason }}）</span>
-        </li>
-      </ul>
-    </div>
+      <!-- 排除名單 -->
+      <el-collapse-item name="exclude" class="side-section exclude-section" :title="`排除名單（${excludeStudents.length}）`">
+        <ul class="side-list">
+          <li v-for="s in excludeStudents" :key="s.id">
+            <span class="student-name">{{ s.name }}</span>
+            <span class="disposition-tag disposition-tag-exclude">除</span>
+            <span class="student-source">{{ s.source_classroom_name ?? '' }}</span>
+            <span v-if="s.exclude_reason" class="exclude-reason">（{{ s.exclude_reason }}）</span>
+          </li>
+        </ul>
+      </el-collapse-item>
+    </el-collapse>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
+import { Edit } from '@element-plus/icons-vue'
 import type { Schema } from '@/api/_generated/typed'
+import type { BulkOp } from '@/composables/useYearPlanWorkspace'
 
 type PlanDetail = Schema<'PlanDetailOut'>
 type PlanClass = Schema<'PlanClassOut'>
@@ -193,7 +196,9 @@ const props = defineProps<{
 const emit = defineEmits<{
   'select-students': [ids: number[]]
   'class-edit': [planClassId: number]
-  'student-move': [payload: { studentId: number; fromPlanClassId: number | null; toPlanClassId: number | null }]
+  // 對齊後端 BulkStudentsRequest 語意（批次 student_ids＋op＋plan_class_id）；拖曳搬班
+  // 尚未接線（brief 明示 checkbox 批次優先，拖曳延後），單人移動＝ids 長度 1。
+  'student-move': [payload: { studentIds: number[]; op: BulkOp; planClassId?: number | null; excludeReason?: string | null }]
 }>()
 
 // ── 年級分組（依 target_grade_id 首次出現順序分組，容忍後端非嚴格連續排序）──
@@ -235,12 +240,16 @@ function isOverCapacity(cls: PlanClass): boolean {
   return cls.capacity != null && cls.assigned_count > cls.capacity
 }
 
-// 教師「待確認」hover 參考：PlanClassOut 沒有承接自來源班的教師姓名欄位（generator
-// 產生草稿班時刻意不帶入教師，見 services/classroom_year_plan/generator.py
-// _ensure_system_classes），故唯一可用的「原班」提示只有 source_name（來源班級
-// 名稱字串）。Task 12 若要顯示真正的原班教師，需後端另外補欄位。
-function referenceTitle(cls: PlanClass): string {
-  return cls.source_name ? `原班參考：${cls.source_name}` : '新班級，無原班對應'
+// 教師「待確認」hover 參考：改顯示對應原班的三師姓名之一（source_head/assistant/
+// art_teacher_name，Task 12 後端已補此三欄），None 顯「—」；取代 Task 11 只能顯示
+// 來源班名稱字串的粗略提示。
+function referenceTitle(cls: PlanClass, role: 'head' | 'assistant' | 'art'): string {
+  const label = role === 'head' ? '班導' : role === 'assistant' ? '副班導' : '美語老師'
+  const sourceName =
+    role === 'head' ? cls.source_head_teacher_name
+    : role === 'assistant' ? cls.source_assistant_teacher_name
+    : cls.source_art_teacher_name
+  return `原班${label}：${sourceName ?? '—'}`
 }
 
 function gradeAssignedTotal(group: GradeGroup): number {
@@ -271,6 +280,12 @@ const maxRowCount = computed(() => {
   return max
 })
 
+/** 回傳 0~1 筆學生（供 template `v-for` 取得區域變數，避免同一格重複 `.get()`）。 */
+function cellStudents(classId: number, rowIdx: number): PlanStudent[] {
+  const student = studentsByClass.value.get(classId)?.[rowIdx - 1]
+  return student ? [student] : []
+}
+
 const unassignedStudents = computed(() =>
   props.plan.students.filter(
     s => (s.disposition === 'promote' || s.disposition === 'retain') && s.plan_class_id == null
@@ -279,9 +294,8 @@ const unassignedStudents = computed(() =>
 const graduateStudents = computed(() => props.plan.students.filter(s => s.disposition === 'graduate'))
 const excludeStudents = computed(() => props.plan.students.filter(s => s.disposition === 'exclude'))
 
-const unassignedOpen = ref(true)
-const graduateOpen = ref(true)
-const excludeOpen = ref(true)
+// 三個側欄收合區預設全開（沿用 Task 11 行為），改用 el-collapse 的 name 陣列。
+const openSections = ref<string[]>(['unassigned', 'graduate', 'exclude'])
 
 function dispositionTag(student: PlanStudent): string | null {
   switch (student.disposition) {
@@ -292,7 +306,7 @@ function dispositionTag(student: PlanStudent): string | null {
   }
 }
 
-// ── 勾選集合：Task 12 消費 select-students 事件實作批次操作 ──
+// ── 勾選集合：父層 PlanBatchToolbar 消費 select-students 事件實作批次操作 ──
 const selected = ref<Set<number>>(new Set())
 
 function onToggleStudent(studentId: number, checked: boolean): void {
@@ -301,7 +315,17 @@ function onToggleStudent(studentId: number, checked: boolean): void {
   emit('select-students', Array.from(selected.value))
 }
 
-// student-move：拖曳搬班為 Task 12 互動範圍，本 task 僅先宣告事件型別供銜接。
+// 草稿被其他操作（regenerate/發布/批次調整）異動後 version 會遞增；重新載入的新 plan
+// 不該殘留舊版本的勾選集合，否則使用者可能對已不存在的分派繼續批次操作。
+watch(
+  () => props.plan.version,
+  () => {
+    selected.value.clear()
+    emit('select-students', [])
+  },
+)
+
+// student-move：拖曳搬班留待未來接線，本 task 僅先把事件型別對齊 BulkStudentsRequest。
 </script>
 
 <style scoped>
@@ -352,12 +376,8 @@ function onToggleStudent(studentId: number, checked: boolean): void {
 }
 
 .class-edit-btn {
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  color: var(--color-info-hover);
-  font-size: 12px;
-  margin-left: 2px;
+  margin-left: 4px;
+  vertical-align: middle;
 }
 
 .capacity-badge {
@@ -458,17 +478,8 @@ tfoot tr:first-child td {
   padding-left: 14px !important;
 }
 
-.side-section {
+.side-collapse {
   margin-top: var(--space-4);
-}
-
-.side-toggle {
-  border: 1px solid var(--border-color, var(--neutral-300));
-  background: var(--neutral-50);
-  border-radius: var(--radius-sm);
-  padding: 4px 10px;
-  font-weight: 600;
-  cursor: pointer;
 }
 
 .side-list {

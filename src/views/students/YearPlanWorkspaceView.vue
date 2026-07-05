@@ -13,24 +13,10 @@
         </template>
       </div>
       <div v-if="status" class="actions">
-        <button
-          type="button"
-          class="btn-regenerate"
-          :disabled="!canRegenerate"
-          @click="onRegenerateClick"
-        >重新產生建議</button>
-        <button
-          type="button"
-          class="btn-publish"
-          :disabled="!canPublish"
-          @click="onPublishClick"
-        >發布</button>
-        <button
-          type="button"
-          class="btn-unpublish"
-          :disabled="!canUnpublish"
-          @click="onUnpublishClick"
-        >撤回發布</button>
+        <el-button v-if="editable" class="btn-add-class" @click="onAddClassClick">新增班級</el-button>
+        <el-button class="btn-regenerate" :disabled="!canRegenerate" @click="onRegenerateClick">重新產生建議</el-button>
+        <el-button type="primary" class="btn-publish" :disabled="!canPublish" @click="onPublishClick">發布</el-button>
+        <el-button class="btn-unpublish" :disabled="!canUnpublish" @click="onUnpublishClick">撤回發布</el-button>
       </div>
     </div>
 
@@ -40,50 +26,111 @@
 
     <div v-else-if="error" class="workspace-error">
       <p>{{ error }}</p>
-      <button type="button" class="btn-reload" @click="load">重新載入</button>
+      <el-button class="btn-reload" @click="load">重新載入</el-button>
     </div>
 
     <div v-else-if="state === 'none'" class="empty-state">
       <p>尚未產生新學年編班草稿</p>
-      <button type="button" class="btn-generate" @click="onGenerateClick">產生草稿</button>
+      <el-button type="primary" class="btn-generate" @click="onGenerateClick">產生草稿</el-button>
     </div>
 
     <div v-else-if="plan" class="workspace-body">
       <PlanIssuesPanel :issues="plan.issues" @locate-issue="onLocateIssue" />
+      <PlanBatchToolbar
+        v-if="editable"
+        class="batch-toolbar"
+        :selected-count="selectedStudentIds.length"
+        :plan-classes="planClassOptions"
+        @bulk-op="onBulkOp"
+      />
       <PlanRosterTable
         :plan="plan"
-        :editable="plan.status === 'draft'"
+        :editable="editable"
         @select-students="onSelectStudents"
         @class-edit="onClassEdit"
         @student-move="onStudentMove"
       />
     </div>
+
+    <el-dialog v-model="regenerateDialogVisible" title="重新產生建議" width="440px">
+      <p>將保留 {{ manualAdjustedCount }} 筆手動調整。</p>
+      <el-checkbox v-model="overwriteManual">放棄我的手動調整（依系統規則全部重新分派）</el-checkbox>
+      <template #footer>
+        <el-button @click="regenerateDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="onRegenerateConfirm">執行</el-button>
+      </template>
+    </el-dialog>
+
+    <PlanPublishDialog
+      ref="publishDialogRef"
+      v-model="publishDialogVisible"
+      :plan-id="plan?.id ?? null"
+      @confirm="onPublishConfirm"
+    />
+
+    <PlanClassEditDialog
+      v-model="classEditDialogVisible"
+      :mode="classEditMode"
+      :plan-class="classEditTarget"
+      @create="onClassCreate"
+      @update="onClassUpdate"
+      @delete="onClassDelete"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { computed, onMounted, ref, watch } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { useYearPlanWorkspace } from '@/composables/useYearPlanWorkspace'
+import type { BulkOp } from '@/composables/useYearPlanWorkspace'
 import PlanRosterTable from '@/components/enrollment/planning/PlanRosterTable.vue'
 import PlanIssuesPanel from '@/components/enrollment/planning/PlanIssuesPanel.vue'
+import PlanBatchToolbar from '@/components/enrollment/planning/PlanBatchToolbar.vue'
+import PlanClassEditDialog from '@/components/enrollment/planning/PlanClassEditDialog.vue'
+import PlanPublishDialog from '@/components/enrollment/planning/PlanPublishDialog.vue'
 import type { Schema } from '@/api/_generated/typed'
 
-// 新學年預編班工作台（Task 11：唯讀渲染層 + 骨架）。
-// 互動編輯（regenerate/發布/撤回/逐班調整/學生批次操作）行為留給 Task 12 接線；
-// 本頁先把狀態渲染與按鈕 disabled 邏輯做完整。
+// 新學年預編班工作台（Task 11 唯讀渲染層 + Task 12 互動編輯/批次/發布）。
+// 所有互動 mutation 共用 useYearPlanWorkspace 單一狀態來源：成功後 reload() 取得新
+// version/status，PlanRosterTable 的 editable（依 plan.status）與 selected 勾選重置
+// （依 plan.version watch）都自然跟著變化，本層不需要重複維護唯讀鎖。
 
-const { status, plan, loading, error, state, load, generate } = useYearPlanWorkspace()
+type PlanClassOut = Schema<'PlanClassOut'>
+type ClassCreatePayload = Omit<Schema<'ClassCreateRequest'>, 'base_version'>
+type ClassUpdatePayload = Omit<Schema<'ClassUpdateRequest'>, 'base_version'>
+type PlanState = Schema<'StatusOut'>['state']
+
+const {
+  status,
+  plan,
+  loading,
+  error,
+  versionConflict,
+  state,
+  load,
+  generate,
+  regenerate,
+  createClass,
+  updateClass,
+  deleteClass,
+  bulkUpdateStudents,
+  publish,
+  unpublish,
+} = useYearPlanWorkspace()
 
 onMounted(load)
 
-const STATE_LABELS: Record<string, string> = {
+const STATE_LABELS: Record<PlanState, string> = {
   none: '無草稿',
   draft: '草稿中',
   published: '已發布',
   applied: '已套用',
 }
-const stateLabel = computed(() => STATE_LABELS[state.value] ?? state.value)
+const stateLabel = computed(() => STATE_LABELS[state.value])
+
+// 唯讀鎖：僅 draft 狀態的草稿可編輯（published/applied 皆唯讀）。
+const editable = computed(() => plan.value?.status === 'draft')
 
 // 重新產生建議：僅 draft 狀態可操作（regenerate 端點也要求 status===draft）
 const canRegenerate = computed(() => state.value === 'draft')
@@ -100,29 +147,168 @@ function onGenerateClick(): void {
   void generate()
 }
 
-// 以下三個動作鈕行為留 Task 12 接線；本 task 先給出可感知的回饋避免死按鈕。
+// ── 409 version_conflict 統一處理：所有互動 mutation 共用同一份 composable 狀態，
+// 任何一個失敗設定 versionConflict 後這裡統一跳出提示，避免每個呼叫端各自判斷。
+watch(versionConflict, (conflict) => {
+  if (!conflict) return
+  ElMessageBox.alert(
+    error.value ?? '此草稿已被其他操作異動，請重新載入後再試',
+    '版本衝突',
+    { type: 'warning', confirmButtonText: '重新載入' },
+  )
+    .then(() => load())
+    .catch(() => {})
+})
+
+// ── 重新產生建議 dialog ──
+const regenerateDialogVisible = ref(false)
+const overwriteManual = ref(false)
+const manualAdjustedCount = computed(
+  () => plan.value?.students.filter(s => s.manually_adjusted).length ?? 0,
+)
+
 function onRegenerateClick(): void {
-  ElMessage.info('重新產生建議功能將於下一步驟提供')
+  overwriteManual.value = false
+  regenerateDialogVisible.value = true
 }
+
+async function onRegenerateConfirm(): Promise<void> {
+  const result = await regenerate(overwriteManual.value)
+  if (result) {
+    ElMessage.success(
+      `已重新產生：新增 ${result.added}、移除 ${result.removed}、更新 ${result.updated}，保留手動調整 ${result.preserved_manual} 筆`,
+    )
+    regenerateDialogVisible.value = false
+  }
+}
+
+// ── 發布 / 撤回發布 ──
+const publishDialogVisible = ref(false)
+const publishDialogRef = ref<InstanceType<typeof PlanPublishDialog> | null>(null)
+
 function onPublishClick(): void {
-  ElMessage.info('發布功能將於下一步驟提供')
+  publishDialogVisible.value = true
 }
-function onUnpublishClick(): void {
-  ElMessage.info('撤回發布功能將於下一步驟提供')
+
+async function onPublishConfirm(): Promise<void> {
+  const result = await publish()
+  if (result.ok) {
+    ElMessage.success('已發布')
+    publishDialogVisible.value = false
+  } else if (result.blockingIssues) {
+    ElMessage.warning('尚有阻擋問題，無法發布，已重新整理清單')
+    await publishDialogRef.value?.reload()
+  }
+}
+
+async function onUnpublishClick(): Promise<void> {
+  try {
+    await ElMessageBox.confirm(
+      '確定要撤回發布嗎？撤回後草稿將恢復為可編輯狀態。',
+      '撤回發布',
+      { type: 'warning', confirmButtonText: '確定撤回', cancelButtonText: '取消' },
+    )
+  } catch {
+    return // 使用者取消
+  }
+  const ok = await unpublish()
+  if (ok) ElMessage.success('已撤回發布')
+}
+
+// ── 班級編輯（新增／編輯／刪除）──
+const classEditDialogVisible = ref(false)
+const classEditMode = ref<'create' | 'edit'>('create')
+const classEditTarget = ref<PlanClassOut | null>(null)
+
+function onAddClassClick(): void {
+  classEditMode.value = 'create'
+  classEditTarget.value = null
+  classEditDialogVisible.value = true
+}
+
+function onClassEdit(planClassId: number): void {
+  classEditMode.value = 'edit'
+  classEditTarget.value = plan.value?.classes.find(c => c.id === planClassId) ?? null
+  classEditDialogVisible.value = true
+}
+
+async function onClassCreate(payload: ClassCreatePayload): Promise<void> {
+  const ok = await createClass(payload)
+  if (ok) {
+    ElMessage.success('已新增班級')
+    classEditDialogVisible.value = false
+  }
+}
+
+async function onClassUpdate(classId: number, payload: ClassUpdatePayload): Promise<void> {
+  const ok = await updateClass(classId, payload)
+  if (ok) {
+    ElMessage.success('已更新班級')
+    classEditDialogVisible.value = false
+  }
+}
+
+async function onClassDelete(classId: number): Promise<void> {
+  const ok = await deleteClass(classId)
+  if (ok) {
+    ElMessage.success('已刪除班級')
+    classEditDialogVisible.value = false
+  }
+}
+
+// ── 學生批次操作 ──
+const selectedStudentIds = ref<number[]>([])
+
+function onSelectStudents(ids: number[]): void {
+  selectedStudentIds.value = ids
+}
+
+const planClassOptions = computed(() =>
+  (plan.value?.classes ?? []).map(c => ({
+    id: c.id,
+    label: `${c.grade_name ?? ''} ${c.target_name}`.trim(),
+  })),
+)
+
+async function onBulkOp(payload: {
+  op: BulkOp
+  planClassId?: number | null
+  excludeReason?: string | null
+}): Promise<void> {
+  if (!selectedStudentIds.value.length) return
+  const ok = await bulkUpdateStudents(
+    payload.op,
+    selectedStudentIds.value,
+    payload.planClassId ?? null,
+    payload.excludeReason ?? null,
+  )
+  if (ok) {
+    ElMessage.success('已更新學生分派')
+    selectedStudentIds.value = []
+  }
 }
 
 function onLocateIssue(issue: Schema<'IssueOut'>): void {
-  // Task 12：捲動/高亮對應班級或學生列；本 task 先接住事件避免未處理警告。
+  // Task 13（若有）：捲動/高亮對應班級或學生列；本 task 先接住事件避免未處理警告。
   void issue
 }
-function onSelectStudents(ids: number[]): void {
-  void ids
-}
-function onClassEdit(planClassId: number): void {
-  void planClassId
-}
-function onStudentMove(payload: { studentId: number; fromPlanClassId: number | null; toPlanClassId: number | null }): void {
-  void payload
+
+// student-move：拖曳搬班尚未接線（brief：checkbox 批次優先），保留與 PlanBatchToolbar
+// 相同的派發路徑供未來串接。
+async function onStudentMove(payload: {
+  studentIds: number[]
+  op: BulkOp
+  planClassId?: number | null
+  excludeReason?: string | null
+}): Promise<void> {
+  if (!payload.studentIds.length) return
+  const ok = await bulkUpdateStudents(
+    payload.op,
+    payload.studentIds,
+    payload.planClassId ?? null,
+    payload.excludeReason ?? null,
+  )
+  if (ok) ElMessage.success('已更新學生分派')
 }
 </script>
 
@@ -198,20 +384,6 @@ function onStudentMove(payload: { studentId: number; fromPlanClassId: number | n
   gap: var(--space-2);
 }
 
-.actions button {
-  border: 1px solid var(--neutral-300);
-  background: var(--neutral-0);
-  border-radius: var(--radius-md);
-  padding: 6px 14px;
-  cursor: pointer;
-  font-weight: 600;
-}
-
-.actions button:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
 .loading-skeleton {
   display: flex;
   flex-direction: column;
@@ -240,12 +412,6 @@ function onStudentMove(payload: { studentId: number; fromPlanClassId: number | n
 
 .btn-reload {
   margin-top: var(--space-2);
-  border: 1px solid var(--color-danger-hover);
-  background: var(--neutral-0);
-  color: var(--color-danger-hover);
-  border-radius: var(--radius-md);
-  padding: 4px 12px;
-  cursor: pointer;
 }
 
 .empty-state {
@@ -257,19 +423,16 @@ function onStudentMove(payload: { studentId: number; fromPlanClassId: number | n
   color: var(--text-secondary);
 }
 
-.btn-generate {
-  border: none;
-  background: var(--color-info);
-  color: var(--neutral-0);
-  border-radius: var(--radius-md);
-  padding: 8px 20px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
 .workspace-body {
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
+}
+
+.batch-toolbar {
+  border: 1px solid var(--neutral-200);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  background: var(--neutral-50);
 }
 </style>
