@@ -183,6 +183,7 @@
                 <span class="chip chip-indigenous">● 原民 {{ displayTagCounts.原住民 }}</span>
               </div>
               <el-button :icon="Download" @click="exportXlsx">匯出 Excel</el-button>
+              <el-button v-if="canWriteClassrooms" class="btn-year-plan" @click="goYearPlan">新學年預編班</el-button>
             </div>
             <EnrollmentRosterTable
               v-if="displayRoster"
@@ -213,6 +214,7 @@ import { openPdfInNewTab } from '@/utils/printPdfWindow'
 import { coerceRocYear } from '@/utils/academic'
 import { useAcademicTermStore } from '@/stores/academicTerm'
 import { apiError } from '@/utils/error'
+import { hasPermission } from '@/utils/auth'
 import { downloadFile } from '@/utils/download'
 import EnrollmentRosterTable from '@/components/enrollment/EnrollmentRosterTable.vue'
 import type { Roster } from '@/components/enrollment/rosterTypes'
@@ -253,6 +255,12 @@ const DoughnutChart = defineAsyncComponent(() =>
 // State
 // ---------------------------------------------------------------------------
 const router = useRouter()
+
+// 入口：在籍記錄表工具列「新學年預編班」按鈕，導向獨立的預編班工作台頁面
+// （/students/year-plan，見 router/index.ts）。僅有 CLASSROOMS_WRITE 權限才顯示——
+// 沿用 ClassroomView 既有的權限判斷慣例（該頁的 PlanStatusCard 亦同）。
+const canWriteClassrooms = computed(() => hasPermission('CLASSROOMS_WRITE'))
+const goYearPlan = () => router.push('/students/year-plan')
 
 const termStore = useAcademicTermStore()
 const loading = ref(false)
