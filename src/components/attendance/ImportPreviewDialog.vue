@@ -16,6 +16,7 @@ import { ElMessage } from 'element-plus'
 import { previewImport, uploadCsv, uploadFile } from '@/api/attendance'
 import { useErrorNotify } from '@/composables/useErrorNotify'
 import { hasPermission } from '@/utils/auth'
+import { summarizeCsvImportResult } from '@/utils/attendanceImport'
 
 // ── Props / Emits ──────────────────────────────────────────────────────────────
 const props = defineProps<{
@@ -121,7 +122,13 @@ async function handleConfirmImport() {
       year: props.year,
       month: props.month,
     })
-    ElMessage.success((res.data as { message?: string }).message || '匯入完成')
+    // 後端逐列失敗回 200（失敗數在 body results），不可只看 HTTP 狀態報成功
+    const summary = summarizeCsvImportResult(res.data)
+    if (summary.ok) {
+      ElMessage.success(summary.text)
+    } else {
+      ElMessage.warning(summary.text)
+    }
     emit('imported', res.data)
     resetState()
     closeDialog()
@@ -161,7 +168,13 @@ async function handleExcelUpload(options: { file: File }) {
     const formData = new FormData()
     formData.append('file', options.file)
     const res = await uploadFile(formData)
-    ElMessage.success((res.data as { message?: string }).message || '上傳完成')
+    // xlsx 端點同樣以 200 + body results 回報逐列失敗
+    const summary = summarizeCsvImportResult(res.data)
+    if (summary.ok) {
+      ElMessage.success(summary.text)
+    } else {
+      ElMessage.warning(summary.text)
+    }
     emit('imported', res.data)
     resetState()
     closeDialog()

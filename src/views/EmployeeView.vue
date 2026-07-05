@@ -13,6 +13,7 @@ import {
 } from '@/api/employees'
 import OffboardingModal from '@/components/offboarding/OffboardingModal.vue'
 import { getRecords as getAttendanceRecords, uploadCsv, deleteEmployeeDateRecord } from '@/api/attendance'
+import { summarizeCsvImportResult } from '@/utils/attendanceImport'
 import { getPositionSalary } from '@/api/config'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
@@ -577,8 +578,15 @@ const editAttendance = (row: Record<string, unknown>) => {
         }]
      }
      try {
-        await uploadCsv(payload)
-        ElMessage.success('出勤已更新')
+        const res = await uploadCsv(payload)
+        // upload-csv 對逐列失敗回 200（失敗原因在 body results），
+        // 不可只看 HTTP 狀態就報「出勤已更新」（資料實際沒寫入）
+        const summary = summarizeCsvImportResult(res.data)
+        if (summary.ok) {
+           ElMessage.success('出勤已更新')
+        } else {
+           ElMessage.warning(summary.text)
+        }
         fetchAttendance()
      } catch (err) {
         ElMessage.error('更新失敗')
