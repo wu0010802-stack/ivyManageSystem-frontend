@@ -3810,6 +3810,203 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/classroom-year-plans/{plan_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Plan Detail */
+        get: operations["get_plan_detail_api_classroom_year_plans__plan_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/classroom-year-plans/{plan_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Post Cancel */
+        post: operations["post_cancel_api_classroom_year_plans__plan_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/classroom-year-plans/{plan_id}/classes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Post Create Class */
+        post: operations["post_create_class_api_classroom_year_plans__plan_id__classes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/classroom-year-plans/{plan_id}/classes/{class_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Class */
+        delete: operations["delete_class_api_classroom_year_plans__plan_id__classes__class_id__delete"];
+        options?: never;
+        head?: never;
+        /** Patch Class */
+        patch: operations["patch_class_api_classroom_year_plans__plan_id__classes__class_id__patch"];
+        trace?: never;
+    };
+    "/classroom-year-plans/{plan_id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Preview
+         * @description 發布前摘要：逐班分派狀況、graduate/exclude 名單、blocking/warnings、總計。
+         */
+        get: operations["get_preview_api_classroom_year_plans__plan_id__preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/classroom-year-plans/{plan_id}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Post Publish */
+        post: operations["post_publish_api_classroom_year_plans__plan_id__publish_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/classroom-year-plans/{plan_id}/regenerate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Post Regenerate */
+        post: operations["post_regenerate_api_classroom_year_plans__plan_id__regenerate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/classroom-year-plans/{plan_id}/students/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Post Bulk Students */
+        post: operations["post_bulk_students_api_classroom_year_plans__plan_id__students_bulk_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/classroom-year-plans/{plan_id}/unpublish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Post Unpublish */
+        post: operations["post_unpublish_api_classroom_year_plans__plan_id__unpublish_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/classroom-year-plans/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Generate
+         * @description 冪等：目標學年已有非 cancelled 草稿時直接回傳既有草稿（created=False）。
+         */
+        post: operations["post_generate_api_classroom_year_plans_generate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/classroom-year-plans/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Status
+         * @description 無 plan 也要能答（state="none"）。target 學年由 resolve_default_target_year 推。
+         */
+        get: operations["get_status_api_classroom_year_plans_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/classrooms": {
         parameters: {
             query?: never;
@@ -3879,75 +4076,6 @@ export interface paths {
         get: operations["get_classroom_enrollment_composition_api_classrooms__classroom_id__enrollment_composition_get"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/classrooms/clone-term": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Clone Classrooms To Term
-         * @description 將指定學期的班級複製到另一個學期。
-         */
-        post: operations["clone_classrooms_to_term_api_classrooms_clone_term_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/classrooms/promote-academic-year": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Promote Classrooms To Academic Year
-         * @description 跨學年升班：建立新班、沿用老師並搬移在讀學生。
-         *
-         *     畢業班（無下一年級）學生改走 lifecycle 狀態機 transition() 落地：寫
-         *     StudentChangeLog 稽核並設 lifecycle_status=graduated（避免被 7/31 自動畢業
-         *     排程重複抓取）；搬班逐人寫 StudentClassroomTransfer 留歷史軌跡。畢業日對齊
-         *     自動畢業排程。整體為單一 transaction（任一步失敗則全部 rollback）。
-         */
-        post: operations["promote_classrooms_to_academic_year_api_classrooms_promote_academic_year_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/classrooms/promote-academic-year/preview": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Preview Promote Classrooms To Academic Year
-         * @description 跨學年升班試算（不寫入）：回傳逐班處置、彙總與阻擋性衝突清單。
-         *
-         *     供前端「預覽 + 確認」流程使用；與 execute 共用 _build_promotion_plan 確保
-         *     數字與衝突判定一致。整批層級錯誤（來源=目標學期相同）仍 raise 400，逐班
-         *     衝突收進 conflicts 回 200。
-         */
-        post: operations["preview_promote_classrooms_to_academic_year_api_classrooms_promote_academic_year_preview_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -11452,7 +11580,7 @@ export interface paths {
          * Export Finance Summary
          * @description 匯出收支彙總為 Excel。
          *
-         *     指定 month 時，額外附三張明細分頁（學費、才藝、薪資）；
+         *     指定 month 時，額外附六張明細分頁（學費、才藝、薪資、廠商付款、雜項收款、固定支出）；
          *     未指定 month 時只輸出月度彙總與分類統計兩張分頁。
          *
          *     F-031：薪資明細 Sheet 5 在非 admin/hr 角色下需以「—」遮罩金額欄位，
@@ -11476,10 +11604,11 @@ export interface paths {
         };
         /**
          * Get Monthly Pnl
-         * @description 月度損益表：試算表 layout，4 section × 12 月 × row + totals + pending_items。
+         * @description 月度現金收支表（現金收付制，原稱「月度損益表」）：試算表 layout，
+         *     4 section × 12 月 × row + totals + pending_items。
          *
-         *     Phase 1 範圍：只整合已有資料來源的 ~22 列；未整合的 user 自家詞彙、紅利細項、
-         *     固定費用、個別廠商分項落於 pending_items（不假裝填 0）。
+         *     Phase 1 範圍：只整合已有資料來源的列；未整合的 user 自家詞彙、部分紅利細項、
+         *     個別廠商分項落於 pending_items（不假裝填 0）；固定費用/雜項收款已整合。
          *
          *     快取：sub-category `reports_monthly_pnl`，TTL 30 分；與 /finance-summary 共用
          *     `utils.finance_cache.invalidate_finance_summary_cache()` 失效掛鉤，所有 fees /
@@ -16025,6 +16154,15 @@ export interface components {
             director_festival?: number | null;
             /** Dividend Activity Amount */
             dividend_activity_amount?: number | null;
+            /**
+             * Dividend Activity Grade Thresholds
+             * @description 紅利才藝參與率逐年級門檻（年級名→fraction，如 {'大班':1.0}）
+             */
+            dividend_activity_grade_thresholds?: {
+                [key: string]: number;
+            } | null;
+            /** Dividend Activity Min Sessions */
+            dividend_activity_min_sessions?: number | null;
             /** Dividend Activity Threshold */
             dividend_activity_threshold?: number | null;
             /** Dividend Returning Amount */
@@ -16234,6 +16372,29 @@ export interface components {
             /** Student Id */
             student_id: number;
         };
+        /** BulkStudentsRequest */
+        BulkStudentsRequest: {
+            /** Base Version */
+            base_version: number;
+            /** Exclude Reason */
+            exclude_reason?: string | null;
+            /**
+             * Op
+             * @enum {string}
+             */
+            op: "assign" | "retain" | "graduate" | "exclude" | "reset";
+            /** Plan Class Id */
+            plan_class_id?: number | null;
+            /** Student Ids */
+            student_ids: number[];
+        };
+        /** BulkStudentsResultOut */
+        BulkStudentsResultOut: {
+            /** Updated Count */
+            updated_count: number;
+            /** Version */
+            version: number;
+        };
         /**
          * BulkTransferResultOut
          * @description POST /students/bulk-transfer 回傳；shape 與 MutationResultOut 不同
@@ -16412,6 +16573,26 @@ export interface components {
             new_password: string;
             /** Old Password */
             old_password: string;
+        };
+        /** ClassCreateRequest */
+        ClassCreateRequest: {
+            /** Base Version */
+            base_version: number;
+            /** Capacity */
+            capacity?: number | null;
+            /** Class Code */
+            class_code?: string | null;
+            /** Target Grade Id */
+            target_grade_id: number;
+            /** Target Name */
+            target_name: string;
+        };
+        /** ClassDeleteResultOut */
+        ClassDeleteResultOut: {
+            /** Message */
+            message: string;
+            /** Version */
+            version: number;
         };
         /** ClassEnrollmentTargetOut */
         ClassEnrollmentTargetOut: {
@@ -16628,6 +16809,16 @@ export interface components {
             slots: components["schemas"]["ClassHubSlotData"][];
             sticky_next?: components["schemas"]["ClassHubStickyTask"] | null;
         };
+        /**
+         * ClassMutationResultOut
+         * @description POST /classes 與 PATCH /classes/{class_id} 共用 — {id, version}。
+         */
+        ClassMutationResultOut: {
+            /** Id */
+            id: number;
+            /** Version */
+            version: number;
+        };
         /** ClassRetentionAggregateOut */
         ClassRetentionAggregateOut: {
             /** Classroom Id */
@@ -16642,34 +16833,6 @@ export interface components {
             retention_rate: string;
             /** Suggested Score Delta */
             suggested_score_delta: string;
-        };
-        /** ClassroomCloneTerm */
-        ClassroomCloneTerm: {
-            /**
-             * Copy Teachers
-             * @default true
-             */
-            copy_teachers: boolean;
-            /** Source School Year */
-            source_school_year: number;
-            /** Source Semester */
-            source_semester: number;
-            /** Target School Year */
-            target_school_year: number;
-            /** Target Semester */
-            target_semester: number;
-        };
-        /**
-         * ClassroomCloneTermResultOut
-         * @description POST /classrooms/clone-term — 學期間複製班級結果。
-         */
-        ClassroomCloneTermResultOut: {
-            /** Created Count */
-            created_count: number;
-            /** Message */
-            message: string;
-            /** Target Term */
-            target_term: string;
         };
         /** ClassroomCreate */
         ClassroomCreate: {
@@ -16865,125 +17028,6 @@ export interface components {
             /** Student Preview */
             student_preview: components["schemas"]["ClassroomStudentPreviewOut"][];
         };
-        /** ClassroomPromoteAcademicYear */
-        ClassroomPromoteAcademicYear: {
-            /** Classrooms */
-            classrooms: components["schemas"]["ClassroomPromotionItem"][];
-            /** Source School Year */
-            source_school_year: number;
-            /** Source Semester */
-            source_semester: number;
-            /** Target School Year */
-            target_school_year: number;
-            /** Target Semester */
-            target_semester: number;
-        };
-        /**
-         * ClassroomPromoteAcademicYearResultOut
-         * @description POST /classrooms/promote-academic-year — 跨學年升班結果。
-         *
-         *     含三個獨立 count：created（新建班級數）、moved_student（移轉學生數）、
-         *     graduated（畢業學生數，無 target_grade 時自動觸發）。
-         */
-        ClassroomPromoteAcademicYearResultOut: {
-            /** Created Count */
-            created_count: number;
-            /** Graduated Count */
-            graduated_count: number;
-            /** Message */
-            message: string;
-            /** Moved Student Count */
-            moved_student_count: number;
-            /** Target Term */
-            target_term: string;
-        };
-        /**
-         * ClassroomPromoteConflictOut
-         * @description 升班預覽：逐班層級的阻擋性衝突。
-         *
-         *     kind ∈ {missing_source, missing_target_name, duplicate_target_name,
-         *     active_name_collision, invalid_target_grade, reusable_target_has_students}。
-         */
-        ClassroomPromoteConflictOut: {
-            /** Kind */
-            kind: string;
-            /** Message */
-            message: string;
-            /** Source Classroom Id */
-            source_classroom_id?: number | null;
-            /** Target Name */
-            target_name?: string | null;
-        };
-        /**
-         * ClassroomPromotePreviewOut
-         * @description POST /classrooms/promote-academic-year/preview — 升班試算（不寫入）。
-         *
-         *     rows 為逐班處置；conflicts 收集所有阻擋性問題（execute 會於非空時拒絕）。
-         *     三個 count 與 execute 實際結果在「全員乾淨在讀」前提下相等。
-         */
-        ClassroomPromotePreviewOut: {
-            /** Conflicts */
-            conflicts: components["schemas"]["ClassroomPromoteConflictOut"][];
-            /** Has Blocking Conflict */
-            has_blocking_conflict: boolean;
-            /** Rows */
-            rows: components["schemas"]["ClassroomPromotePreviewRowOut"][];
-            /** Source Term */
-            source_term: string;
-            /** Target Term */
-            target_term: string;
-            /** Will Create Count */
-            will_create_count: number;
-            /** Will Graduate Count */
-            will_graduate_count: number;
-            /** Will Move Student Count */
-            will_move_student_count: number;
-        };
-        /**
-         * ClassroomPromotePreviewRowOut
-         * @description 升班預覽：單一來源班級的處置結果（不寫入，僅試算）。
-         */
-        ClassroomPromotePreviewRowOut: {
-            /** Active Student Count */
-            active_student_count: number;
-            /** Resolved Target Grade Id */
-            resolved_target_grade_id?: number | null;
-            /** Resolved Target Grade Name */
-            resolved_target_grade_name?: string | null;
-            /** Reuses Existing Target */
-            reuses_existing_target: boolean;
-            /** Source Classroom Id */
-            source_classroom_id: number;
-            /** Source Grade Id */
-            source_grade_id?: number | null;
-            /** Source Grade Name */
-            source_grade_name?: string | null;
-            /** Source Name */
-            source_name: string;
-            /** Target Name */
-            target_name?: string | null;
-            /** Will Graduate */
-            will_graduate: boolean;
-        };
-        /** ClassroomPromotionItem */
-        ClassroomPromotionItem: {
-            /**
-             * Copy Teachers
-             * @default true
-             */
-            copy_teachers: boolean;
-            /**
-             * Move Students
-             * @default true
-             */
-            move_students: boolean;
-            /** Source Classroom Id */
-            source_classroom_id: number;
-            /** Target Grade Id */
-            target_grade_id?: number | null;
-            /** Target Name */
-            target_name?: string | null;
-        };
         /**
          * ClassroomStudentPreviewOut
          * @description list /classrooms 內單班最多 3 個學生 preview。
@@ -17073,6 +17117,29 @@ export interface components {
             male: number;
             /** Total */
             total: number;
+        };
+        /**
+         * ClassUpdateRequest
+         * @description 部分更新：「有給才改」語意（router 端以 `exclude_unset` 判斷）。教師三欄位
+         *     允許顯式傳 `null` 清空（`exclude_unset` 保留但值為 None 時仍套用）。
+         */
+        ClassUpdateRequest: {
+            /** Art Teacher Id */
+            art_teacher_id?: number | null;
+            /** Assistant Teacher Id */
+            assistant_teacher_id?: number | null;
+            /** Base Version */
+            base_version: number;
+            /** Capacity */
+            capacity?: number | null;
+            /** Class Code */
+            class_code?: string | null;
+            /** Head Teacher Id */
+            head_teacher_id?: number | null;
+            /** Target Grade Id */
+            target_grade_id?: number | null;
+            /** Target Name */
+            target_name?: string | null;
         };
         /** CommentIn */
         CommentIn: {
@@ -19371,6 +19438,15 @@ export interface components {
             /** Year */
             year: number;
         };
+        /** GenerateResultOut */
+        GenerateResultOut: {
+            /** Created */
+            created: boolean;
+            /** Plan Id */
+            plan_id: number;
+            /** Version */
+            version: number;
+        };
         /** GlobalSearchResult */
         GlobalSearchResult: {
             /**
@@ -20160,6 +20236,28 @@ export interface components {
             external_http: components["schemas"]["ExternalHttpHealth"];
             line: components["schemas"]["LineHealth"];
             supabase: components["schemas"]["SupabaseHealth"];
+        };
+        /**
+         * IssueOut
+         * @description 草稿問題偵測單筆（`services.classroom_year_plan.issues.compute_issues` 的
+         *     `_issue()` shape 對映）。
+         */
+        IssueOut: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+            /** Plan Class Id */
+            plan_class_id?: number | null;
+            /** Student Id */
+            student_id?: number | null;
+        };
+        /** IssuesOut */
+        IssuesOut: {
+            /** Blocking */
+            blocking: components["schemas"]["IssueOut"][];
+            /** Warnings */
+            warnings: components["schemas"]["IssueOut"][];
         };
         /** IvykidsBackendSyncPayload */
         IvykidsBackendSyncPayload: {
@@ -22996,6 +23094,123 @@ export interface components {
             /** Ok */
             ok: boolean;
         };
+        /** PlanActionRequest */
+        PlanActionRequest: {
+            /** Base Version */
+            base_version: number;
+        };
+        /**
+         * PlanClassOut
+         * @description 草稿內單一班級（尚未寫入 `classrooms`）。
+         *
+         *     `id` 為 `ClassroomYearPlanClass.id`——PATCH/DELETE `{class_id}` 與學生 bulk op
+         *     的 `plan_class_id` 皆指此值。
+         */
+        PlanClassOut: {
+            /** Art Teacher Id */
+            art_teacher_id?: number | null;
+            /** Art Teacher Name */
+            art_teacher_name?: string | null;
+            /** Assigned Count */
+            assigned_count: number;
+            /** Assistant Teacher Id */
+            assistant_teacher_id?: number | null;
+            /** Assistant Teacher Name */
+            assistant_teacher_name?: string | null;
+            /** Capacity */
+            capacity?: number | null;
+            /** Class Code */
+            class_code?: string | null;
+            /** Grade Name */
+            grade_name?: string | null;
+            /** Head Teacher Id */
+            head_teacher_id?: number | null;
+            /** Head Teacher Name */
+            head_teacher_name?: string | null;
+            /** Id */
+            id: number;
+            /** Source Name */
+            source_name?: string | null;
+            /** Target Grade Id */
+            target_grade_id: number;
+            /** Target Name */
+            target_name: string;
+        };
+        /**
+         * PlanDetailOut
+         * @description GET /{plan_id} — 完整明細。
+         */
+        PlanDetailOut: {
+            /** Applied At */
+            applied_at?: string | null;
+            /** Classes */
+            classes: components["schemas"]["PlanClassOut"][];
+            /** Generated At */
+            generated_at?: string | null;
+            /** Id */
+            id: number;
+            issues: components["schemas"]["IssuesOut"];
+            /** Published At */
+            published_at?: string | null;
+            /** Source School Year */
+            source_school_year: number;
+            /** Status */
+            status: string;
+            /** Students */
+            students: components["schemas"]["PlanStudentOut"][];
+            /** Target School Year */
+            target_school_year: number;
+            /** Version */
+            version: number;
+        };
+        /**
+         * PlanGenerateRequest
+         * @description 加 `Plan` 前綴避免與 `api/gov_moe/monthly.py` 既有 `GenerateRequest` 撞名——
+         *     OpenAPI 元件同名時 FastAPI 會把兩者都改成模組全限定名，等於重命名無關模組的
+         *     既有公開元件（前端 codegen 型別名跟著劇變）。
+         */
+        PlanGenerateRequest: {
+            /** Target School Year */
+            target_school_year?: number | null;
+        };
+        /**
+         * PlanStateResultOut
+         * @description publish/unpublish/cancel 共用 — {status, version}。
+         */
+        PlanStateResultOut: {
+            /** Status */
+            status: string;
+            /** Version */
+            version: number;
+        };
+        /**
+         * PlanStudentOut
+         * @description 草稿內單一學生分派結果。
+         *
+         *     `id` / `student_id` 對齊既有 `ClassroomDetailStudentOut` 慣例：`id` 為
+         *     `Student.id`（學生 bulk op 的 `student_ids` 即指此值），`student_id` 為
+         *     `Student.student_id`（學號顯示碼）。
+         */
+        PlanStudentOut: {
+            /** Current Grade Name */
+            current_grade_name?: string | null;
+            /** Disposition */
+            disposition: string;
+            /** Exclude Reason */
+            exclude_reason?: string | null;
+            /** Id */
+            id: number;
+            /** Manually Adjusted */
+            manually_adjusted: boolean;
+            /** Name */
+            name: string;
+            /** Plan Class Id */
+            plan_class_id?: number | null;
+            /** Source Classroom Name */
+            source_classroom_name?: string | null;
+            /** Student Id */
+            student_id?: string | null;
+        };
         /** PolicyItem */
         PolicyItem: {
             /** Approver Roles */
@@ -24288,6 +24503,34 @@ export interface components {
                 [key: string]: boolean;
             };
         };
+        /** PreviewClassOut */
+        PreviewClassOut: {
+            /** Art Teacher Name */
+            art_teacher_name?: string | null;
+            /** Assigned Count */
+            assigned_count: number;
+            /** Assistant Teacher Name */
+            assistant_teacher_name?: string | null;
+            /** Capacity */
+            capacity?: number | null;
+            /** Grade Name */
+            grade_name?: string | null;
+            /** Head Teacher Name */
+            head_teacher_name?: string | null;
+            /** Target Name */
+            target_name: string;
+        };
+        /** PreviewOut */
+        PreviewOut: {
+            /** Classes */
+            classes: components["schemas"]["PreviewClassOut"][];
+            /** Excluded */
+            excluded: components["schemas"]["PreviewStudentSummaryOut"][];
+            /** Graduating */
+            graduating: components["schemas"]["PreviewStudentSummaryOut"][];
+            issues: components["schemas"]["IssuesOut"];
+            totals: components["schemas"]["PreviewTotalsOut"];
+        };
         /** PreviewRow */
         PreviewRow: {
             /**
@@ -24312,6 +24555,21 @@ export interface components {
             /** Status */
             status?: string | null;
         };
+        /**
+         * PreviewStudentSummaryOut
+         * @description 發布前摘要的畢業／排除名單單筆（`exclude_reason` 對排除名單有值、畢業名單恆
+         *     None）。
+         */
+        PreviewStudentSummaryOut: {
+            /** Exclude Reason */
+            exclude_reason?: string | null;
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Source Classroom Name */
+            source_classroom_name?: string | null;
+        };
         /** PreviewSummary */
         PreviewSummary: {
             /** Importable */
@@ -24320,6 +24578,17 @@ export interface components {
             overwrites: number;
             /** Problems */
             problems: number;
+        };
+        /** PreviewTotalsOut */
+        PreviewTotalsOut: {
+            /** Assigned Count */
+            assigned_count: number;
+            /** Class Count */
+            class_count: number;
+            /** Excluded Count */
+            excluded_count: number;
+            /** Graduating Count */
+            graduating_count: number;
         };
         /**
          * ProbationAlertItem
@@ -25296,6 +25565,29 @@ export interface components {
              * Format: date
              */
             withdrawal_date: string;
+        };
+        /** RegenerateRequest */
+        RegenerateRequest: {
+            /** Base Version */
+            base_version: number;
+            /**
+             * Overwrite Manual
+             * @default false
+             */
+            overwrite_manual: boolean;
+        };
+        /** RegenerateResultOut */
+        RegenerateResultOut: {
+            /** Added */
+            added: number;
+            /** Preserved Manual */
+            preserved_manual: number;
+            /** Removed */
+            removed: number;
+            /** Updated */
+            updated: number;
+            /** Version */
+            version: number;
         };
         /** RegisterOut */
         RegisterOut: {
@@ -27642,6 +27934,40 @@ export interface components {
         StaffEntry: {
             /** Name */
             name: string;
+        };
+        /**
+         * StatusOut
+         * @description GET /status — 無 plan 也要能答（state="none"）。
+         */
+        StatusOut: {
+            /** Applied At */
+            applied_at?: string | null;
+            /** Apply Overdue */
+            apply_overdue: boolean;
+            /** Blocking Count */
+            blocking_count: number;
+            /** Plan Id */
+            plan_id?: number | null;
+            /**
+             * Prep Start Date
+             * Format: date
+             */
+            prep_start_date: string;
+            /** Published At */
+            published_at?: string | null;
+            /** Source School Year */
+            source_school_year: number;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "none" | "draft" | "published" | "applied";
+            /** Target School Year */
+            target_school_year: number;
+            /** Version */
+            version?: number | null;
+            /** Warning Count */
+            warning_count: number;
         };
         /** StepOut */
         StepOut: {
@@ -35355,6 +35681,401 @@ export interface operations {
             };
         };
     };
+    get_plan_detail_api_classroom_year_plans__plan_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_cancel_api_classroom_year_plans__plan_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanActionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanStateResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_create_class_api_classroom_year_plans__plan_id__classes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClassCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClassMutationResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_class_api_classroom_year_plans__plan_id__classes__class_id__delete: {
+        parameters: {
+            query: {
+                base_version: number;
+            };
+            header?: never;
+            path: {
+                class_id: number;
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClassDeleteResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_class_api_classroom_year_plans__plan_id__classes__class_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                class_id: number;
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClassUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClassMutationResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_preview_api_classroom_year_plans__plan_id__preview_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_publish_api_classroom_year_plans__plan_id__publish_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanActionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanStateResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_regenerate_api_classroom_year_plans__plan_id__regenerate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegenerateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegenerateResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_bulk_students_api_classroom_year_plans__plan_id__students_bulk_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkStudentsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkStudentsResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_unpublish_api_classroom_year_plans__plan_id__unpublish_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanActionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanStateResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_generate_api_classroom_year_plans_generate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanGenerateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerateResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_status_api_classroom_year_plans_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StatusOut"];
+                };
+            };
+        };
+    };
     get_classrooms_api_classrooms_get: {
         parameters: {
             query?: {
@@ -35537,105 +36258,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ClassroomEnrollmentCompositionOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    clone_classrooms_to_term_api_classrooms_clone_term_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ClassroomCloneTerm"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ClassroomCloneTermResultOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    promote_classrooms_to_academic_year_api_classrooms_promote_academic_year_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ClassroomPromoteAcademicYear"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ClassroomPromoteAcademicYearResultOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    preview_promote_classrooms_to_academic_year_api_classrooms_promote_academic_year_preview_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ClassroomPromoteAcademicYear"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ClassroomPromotePreviewOut"];
                 };
             };
             /** @description Validation Error */
