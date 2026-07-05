@@ -39,6 +39,7 @@ import ImportPreviewDialog from '../ImportPreviewDialog.vue'
 
 const mockHasPermission = hasPermission as ReturnType<typeof vi.fn>
 const mockElMessageSuccess = ElMessage.success as ReturnType<typeof vi.fn>
+const mockElMessageWarning = ElMessage.warning as ReturnType<typeof vi.fn>
 
 // ── fixtures ───────────────────────────────────────────────────────────────────
 const normalizedRows = [
@@ -357,6 +358,38 @@ describe('ImportPreviewDialog', () => {
     await nextTick()
 
     expect(mockElMessageSuccess).toHaveBeenCalled()
+  })
+
+  it('確認匯入回 200 但 failed>0 → ElMessage.warning 帶錯誤明細且不顯示 success（防誤報成功）', async () => {
+    // 後端逐列失敗不拋 HTTP 錯誤（累計在 body results），前端必須檢查 failed 數
+    mockPreviewImport.mockResolvedValue({ data: previewFixture })
+    mockUploadCsv.mockResolvedValue({
+      data: {
+        message: '考勤記錄匯入完成，成功 0 筆，失敗 1 筆',
+        results: { success: 0, failed: 1, errors: ['王小明 2026/06/01: 上下班時間相同 08:00，請確認資料'] },
+      },
+    })
+
+    const wrapper = mountDialog()
+    const textarea = wrapper.find('.el-input-stub')
+    await textarea.setValue('csv data')
+    await nextTick()
+
+    const previewBtn = wrapper.findAll('.el-button-stub').find((b) => b.text().includes('預覽核對'))
+    await previewBtn!.trigger('click')
+    await nextTick()
+    await nextTick()
+
+    const importBtn = wrapper.findAll('.el-button-stub').find((b) => b.text().includes('確認匯入'))
+    await importBtn!.trigger('click')
+    await nextTick()
+    await nextTick()
+
+    expect(mockElMessageWarning).toHaveBeenCalled()
+    const warned = String(mockElMessageWarning.mock.calls[0][0])
+    expect(warned).toContain('失敗 1 筆')
+    expect(warned).toContain('上下班時間相同')
+    expect(mockElMessageSuccess).not.toHaveBeenCalled()
   })
 
   // ── 權限 false 時隱藏確認匯入 ────────────────────────────────────────────────
