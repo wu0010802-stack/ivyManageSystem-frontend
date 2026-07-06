@@ -22,6 +22,8 @@
         </div>
       </el-main>
     </el-container>
+
+    <SessionIdleDialog />
   </el-container>
 </template>
 
@@ -30,10 +32,13 @@ import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
 import AdminSidebar from '../components/layout/AdminSidebar.vue'
 import AdminHeader from '../components/layout/AdminHeader.vue'
+import SessionIdleDialog from '@/components/common/SessionIdleDialog.vue'
 import { isLoggedIn } from '@/utils/auth'
 import { useNotificationStore } from '@/stores/notification'
 import { useHighRiskAuditCount } from '@/composables/useHighRiskAuditCount'
 import { useIsMobile } from '@/composables/useIsMobile'
+import { startSessionWatchdog, stopSessionWatchdog } from '@/composables/useSessionWatchdog'
+import { ADMIN_IDLE_MS, IDLE_COUNTDOWN_MS } from '@/constants/session'
 
 const NOTIFICATION_POLL_MS = 60_000
 
@@ -89,6 +94,11 @@ onMounted(() => {
   // Why: 切頁不再觸發 fetchSummary（避免每次 navigation 多一支 API 等待），改用
   // 固定 60 秒輪詢；store 本身有 10s TTL + in-flight dedupe 守住，重複請求不會炸後端。
   pollTimer = setInterval(pollNotifications, NOTIFICATION_POLL_MS)
+  startSessionWatchdog({
+    idleMs: ADMIN_IDLE_MS,
+    countdownMs: IDLE_COUNTDOWN_MS,
+    loginPath: '/login',
+  })
 })
 
 onUnmounted(() => {
@@ -97,6 +107,7 @@ onUnmounted(() => {
     clearInterval(pollTimer)
     pollTimer = null
   }
+  stopSessionWatchdog()
 })
 </script>
 
