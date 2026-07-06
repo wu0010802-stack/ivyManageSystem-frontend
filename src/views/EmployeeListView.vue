@@ -268,7 +268,11 @@ onMounted(async () => {
         @row-click="onRowClick"
       >
         <el-table-column prop="employee_id" label="編號" width="100" sortable />
-        <el-table-column prop="name" label="姓名" width="120" sortable />
+        <el-table-column prop="name" label="姓名" width="120" sortable>
+          <template #default="scope">
+            <router-link :to="`/employees/${scope.row.id}`" class="name-link" @click.stop>{{ scope.row.name }}</router-link>
+          </template>
+        </el-table-column>
         <el-table-column prop="title" label="教育局系統" width="150" sortable />
         <el-table-column prop="position" label="職位" width="120" />
         <el-table-column prop="hire_date" label="到職日" width="120" sortable />
@@ -307,7 +311,7 @@ onMounted(async () => {
                 <el-dropdown-menu>
                   <el-dropdown-item v-if="scope.row.is_active" command="offboard">辦理離職</el-dropdown-item>
                   <el-dropdown-item v-if="canResetPunchPin" command="reset-punch-pin">重置打卡 PIN</el-dropdown-item>
-                  <el-dropdown-item command="quick-resign" divided>快速標記離職</el-dropdown-item>
+                  <el-dropdown-item v-if="scope.row.is_active" command="quick-resign" divided>快速標記離職</el-dropdown-item>
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
@@ -336,7 +340,7 @@ onMounted(async () => {
       empty-text="尚無員工資料"
     >
       <template #title="{ item }">
-        <span class="card-title-link" @click="goDetail(item)">{{ item.name }}</span>
+        <router-link :to="`/employees/${item.id}`" class="card-title-link">{{ item.name }}</router-link>
       </template>
       <template #cell-__status="{ item }">
         <el-tag :type="getEmployeeStatus(item).type" size="small">{{ getEmployeeStatus(item).label }}</el-tag>
@@ -354,7 +358,7 @@ onMounted(async () => {
             <el-dropdown-menu>
               <el-dropdown-item v-if="item.is_active" command="offboard">辦理離職</el-dropdown-item>
               <el-dropdown-item v-if="canResetPunchPin" command="reset-punch-pin">重置打卡 PIN</el-dropdown-item>
-              <el-dropdown-item command="quick-resign" divided>快速標記離職</el-dropdown-item>
+              <el-dropdown-item v-if="item.is_active" command="quick-resign" divided>快速標記離職</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
@@ -400,7 +404,9 @@ onMounted(async () => {
 .el-table :deep(tbody tr) { cursor: pointer; }
 :deep(.el-table .row-resigned) { opacity: 0.55; }
 :deep(.el-table .row-pending) { opacity: 0.8; }
-.card-title-link { cursor: pointer; color: var(--el-color-primary); }
+.name-link { color: var(--el-color-primary); text-decoration: none; }
+.name-link:hover { text-decoration: underline; }
+.card-title-link { cursor: pointer; color: var(--el-color-primary); text-decoration: none; }
 
 /* 窄螢幕：頂列改直向堆疊，搜尋/篩選撐滿好點 */
 @media (--to-sm) {

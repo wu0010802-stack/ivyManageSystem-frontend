@@ -202,4 +202,43 @@ describe('EmployeeListView', () => {
 
     expect(mockDeleteEmployee).not.toHaveBeenCalled()
   })
+
+  it('已離職列的「更多」下拉不再出現「快速標記離職」指令', async () => {
+    employeeStore.employees = [{ id: 8, name: '已離職員工', is_active: false, resign_date: '2020-01-01' }]
+    const wrapper = mountView()
+    await flushPromises()
+    await nextTick()
+
+    expect(wrapper.text()).not.toContain('快速標記離職')
+  })
+
+  it('姓名欄渲染 router-link，鍵盤使用者可循連結進詳情頁（非僅 row-click）', async () => {
+    employeeStore.employees = [{ id: 7, name: '王小明', is_active: true, resign_date: null }]
+    // el-table-column 預設 stub（true）不會呼叫 scoped slot（見既有測試皆用 wrapper.vm 斷言而非 DOM）；
+    // 此處針對「姓名」欄位覆寫一個會實際呼叫 default slot 的 stub，注入對應 row，才能斷言 router-link 有渲染。
+    const nameColumnStub = {
+      props: ['prop'],
+      render() {
+        if (this.prop === 'name' && this.$slots.default) {
+          return this.$slots.default({ row: employeeStore.employees[0] })
+        }
+        return null
+      },
+    }
+    const wrapper = mount(EmployeeListView, {
+      global: {
+        directives: { loading: () => {} },
+        stubs: { ...stubs, 'el-table-column': nameColumnStub },
+      },
+    })
+    await flushPromises()
+    await nextTick()
+
+    // 測試環境未安裝 vue-router plugin，<router-link> 無法解析為真實 <a>，
+    // 故斷言其 `to` prop（等同真實環境會渲染成的 href 目標）與文字，而非 href/a 標籤。
+    const link = wrapper.find('.name-link')
+    expect(link.exists()).toBe(true)
+    expect(link.attributes('to')).toBe('/employees/7')
+    expect(link.text()).toBe('王小明')
+  })
 })

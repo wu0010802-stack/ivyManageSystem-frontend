@@ -110,7 +110,7 @@ const onSaved = async () => {
           <el-button v-if="employee.is_active" type="warning" plain size="small" @click="offboardVisible = true">辦理離職</el-button>
         </div>
         <nav class="anchor-nav" aria-label="區塊導覽">
-          <a v-for="s in SECTIONS" :key="s.key" class="anchor-link" @click.prevent="scrollToSection(s.key)">{{ s.label }}</a>
+          <a v-for="s in SECTIONS" :key="s.key" :href="`#emp-sec-${s.key}`" class="anchor-link" @click.prevent="scrollToSection(s.key)">{{ s.label }}</a>
         </nav>
       </aside>
 
