@@ -117,6 +117,30 @@ describe('PlanStatusCard', () => {
     expect(wrapper.text()).toContain('草稿編輯中，尚有 3 項問題（另 2 項提醒）')
   })
 
+  it('draft 態 + blocking=0 且 warning>0：仍顯示提醒計數（不被問題計數閘死），且維持 info 樣式', async () => {
+    getClassroomYearPlanStatus.mockResolvedValue({
+      data: {
+        state: 'draft',
+        target_school_year: 115,
+        source_school_year: 114,
+        plan_id: 1,
+        version: 2,
+        blocking_count: 0,
+        warning_count: 4,
+        prep_start_date: '2026-06-01',
+        apply_overdue: false,
+      },
+    })
+    const wrapper = mountCard()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('草稿編輯中，有 4 項提醒')
+    expect(wrapper.text()).not.toContain('項問題')
+    // 提醒不升級樣式：無 blocking 時維持 info
+    const alert = wrapper.findComponent({ name: 'ElAlert' })
+    expect(alert.props('type')).toBe('info')
+  })
+
   it('draft 態 + blocking_count=0：不顯示「尚有 0 項問題」，僅顯示「草稿編輯中」', async () => {
     getClassroomYearPlanStatus.mockResolvedValue({
       data: {

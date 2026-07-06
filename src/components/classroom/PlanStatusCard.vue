@@ -39,9 +39,12 @@ const displayMessage = computed(() => {
   if (applyOverdue.value) return '計畫尚未套用，排程器重試中'
   switch (state.value) {
     case 'draft': {
-      if (blockingCount.value <= 0) return '草稿編輯中'
-      const base = `草稿編輯中，尚有 ${blockingCount.value} 項問題`
-      return warningCount.value > 0 ? `${base}（另 ${warningCount.value} 項提醒）` : base
+      if (blockingCount.value > 0) {
+        const base = `草稿編輯中，尚有 ${blockingCount.value} 項問題`
+        return warningCount.value > 0 ? `${base}（另 ${warningCount.value} 項提醒）` : base
+      }
+      if (warningCount.value > 0) return `草稿編輯中，有 ${warningCount.value} 項提醒`
+      return '草稿編輯中'
     }
     case 'published':
       return '已確認，等待學年切換（預計 8/1 套用）'
