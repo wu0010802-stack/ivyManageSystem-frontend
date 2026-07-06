@@ -1098,6 +1098,10 @@ export interface paths {
          *     school_year 與 semester：可同時給或同時不給（不給則預設當前學期）。
          *     match_status：篩選自動匹配/手動綁定/待審核/拒絕等狀態。
          *     include_inactive：列出 rejected（軟刪除）的 registration 時需設 True。
+         *       未同時指定 match_status（前端「全部狀態」情境）時，僅額外放行
+         *       match_status='rejected' 的軟刪列，不會連刪除報名／學生離園自動軟刪的列
+         *       也一併洩漏——那些列 match_status 維持刪除前的原值、且沒有任何「已刪除」
+         *       標記，混進「全部」會讓使用者誤以為是有效報名。
          *     student_id：查詢單一學生的歷史報名紀錄（跨學期）；提供時通常搭配
          *       school_year=None、semester=None 才能看全部學期。
          */
@@ -13994,6 +13998,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/year_end/cycles/{cycle_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Cycle Status
+         * @description 年終週期狀態轉換：OPEN → LOCKED → CLOSED；亦允許倒退（CLOSED→LOCKED→OPEN）
+         *     作救援（記 audit warning）。
+         *
+         *     - 轉 CLOSED 前置守衛：cycle 全部結算單皆須 FINALIZED，否則 400（比照
+         *       api/appraisal/cycles.py:134-198 update_cycle 的封存前置守衛精神）。
+         *     - 轉 LOCKED 時覆寫 params_snapshot 為鎖定當下版（加 locked_at）；轉回 OPEN
+         *       不清除（留最後鎖定紀錄）。
+         */
+        patch: operations["update_cycle_status_api_year_end_cycles__cycle_id__patch"];
+        trace?: never;
+    };
     "/year_end/cycles/{cycle_id}/build-settlements": {
         parameters: {
             query?: never;
@@ -16215,6 +16245,10 @@ export interface components {
             school_wide_target?: number | null;
             /** Sick Leave Deduction Per Day */
             sick_leave_deduction_per_day?: number | null;
+            /** Teaching Extra Sessions Per Unit */
+            teaching_extra_sessions_per_unit?: number | null;
+            /** Teaching Extra Unit Price */
+            teaching_extra_unit_price?: number | null;
             /** Vice Leader Dividend */
             vice_leader_dividend?: number | null;
         };
@@ -17689,6 +17723,8 @@ export interface components {
             capacity: number;
             /** Description */
             description?: string | null;
+            /** Instructor Employee Id */
+            instructor_employee_id?: number | null;
             /** Instructor Name */
             instructor_name?: string | null;
             /** Max Age Months */
@@ -17747,6 +17783,8 @@ export interface components {
             description: string;
             /** Id */
             id: number;
+            /** Instructor Employee Id */
+            instructor_employee_id?: number | null;
             /** Instructor Name */
             instructor_name?: string | null;
             /** Name */
@@ -17805,6 +17843,8 @@ export interface components {
             enrolled: number;
             /** Id */
             id: number;
+            /** Instructor Employee Id */
+            instructor_employee_id?: number | null;
             /** Instructor Name */
             instructor_name?: string | null;
             /** Max Age Months */
@@ -17878,6 +17918,8 @@ export interface components {
             capacity?: number | null;
             /** Description */
             description?: string | null;
+            /** Instructor Employee Id */
+            instructor_employee_id?: number | null;
             /** Instructor Name */
             instructor_name?: string | null;
             /** Max Age Months */
@@ -29959,6 +30001,10 @@ export interface components {
             end_date: string;
             /** Id */
             id: number;
+            /** Params Snapshot */
+            params_snapshot?: {
+                [key: string]: unknown;
+            };
             /**
              * Start Date
              * Format: date
@@ -29971,6 +30017,15 @@ export interface components {
          * @enum {string}
          */
         YearEndCycleStatus: "OPEN" | "LOCKED" | "CLOSED";
+        /**
+         * YearEndCycleStatusUpdate
+         * @description G2 狀態轉換請求：PATCH /cycles/{cycle_id}。
+         *
+         *     僅支援轉換 status；允許倒退（CLOSED→LOCKED→OPEN）作救援。
+         */
+        YearEndCycleStatusUpdate: {
+            status: components["schemas"]["YearEndCycleStatus"];
+        };
         /** YearEndImportResultOut */
         YearEndImportResultOut: {
             /** Class Targets Upserted */
@@ -54765,6 +54820,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["YearEndCycleCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["YearEndCycleOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_cycle_status_api_year_end_cycles__cycle_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cycle_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["YearEndCycleStatusUpdate"];
             };
         };
         responses: {
