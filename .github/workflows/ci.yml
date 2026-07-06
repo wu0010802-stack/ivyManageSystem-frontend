@@ -58,8 +58,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run tests
-        run: npm run test
+      - name: Run tests（含 coverage gate，門檻見 vitest.config.js）
+        run: npm run test:coverage
 
       - name: Type check（TS strict — L9 起改 blocking，TS errors 阻擋 PR）
         run: npm run typecheck
