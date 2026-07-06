@@ -33,6 +33,11 @@ export function useActivityRegistration() {
   const paymentFilter = ref('')
   const courseFilter = ref<number | null>(null)
   const classroomFilter = ref('')
+  // 報名狀態（match_status）篩選：'' = 全部。rejected 為 is_active=False，
+  // 主列表預設會濾掉 → 選 rejected 或不篩選（全部）時 fetchList 須同時帶
+  // include_inactive=true（後端只會額外放行 rejected，不會連刪除報名一併洩漏，
+  // 見 ivyManageSystem-backend api/activity/registrations.py 的 get_registrations）。
+  const matchStatusFilter = ref('')
 
   // ── 下拉選項 ─────────────────────────────────────────────────
   const courseOptions = ref<unknown[]>([])
@@ -42,7 +47,8 @@ export function useActivityRegistration() {
   const classroomOptionsLoaded = ref(false)
 
   // ── 批次操作 ─────────────────────────────────────────────────
-  const selectedIds = ref<number[]>([])
+  // 選取的 row 由使用端（view）持有（需依 match_status 分群、限同狀態）；
+  // batchMarkPaid 以參數收 ids，composable 不持有選取狀態。
   const savingBatch = ref(false)
 
   // ── 初始化：從 URL query 反序列化篩選條件 ─────────────────────
@@ -50,12 +56,14 @@ export function useActivityRegistration() {
     const q = route.query
     const search = Array.isArray(q.search) ? q.search[0] : q.search
     const payment_status = Array.isArray(q.payment_status) ? q.payment_status[0] : q.payment_status
+    const match_status = Array.isArray(q.match_status) ? q.match_status[0] : q.match_status
     const course_id = Array.isArray(q.course_id) ? q.course_id[0] : q.course_id
     const classroom_name = Array.isArray(q.classroom_name) ? q.classroom_name[0] : q.classroom_name
     const qpage = Array.isArray(q.page) ? q.page[0] : q.page
     const qpageSize = Array.isArray(q.page_size) ? q.page_size[0] : q.page_size
     if (search) searchText.value = search
     if (payment_status) paymentFilter.value = payment_status
+    if (match_status) matchStatusFilter.value = match_status
     if (course_id) courseFilter.value = Number(course_id)
     if (classroom_name) classroomFilter.value = classroom_name
     if (qpage) page.value = Number(qpage) || 1
@@ -67,6 +75,7 @@ export function useActivityRegistration() {
     const query: Record<string, string> = {}
     if (searchText.value) query.search = searchText.value
     if (paymentFilter.value) query.payment_status = paymentFilter.value
+    if (matchStatusFilter.value) query.match_status = matchStatusFilter.value
     if (courseFilter.value) query.course_id = String(courseFilter.value)
     if (classroomFilter.value) query.classroom_name = classroomFilter.value
     if (page.value > 1) query.page = String(page.value)
@@ -85,6 +94,11 @@ export function useActivityRegistration() {
         limit: pageSize.value,
         search: searchText.value || undefined,
         payment_status: paymentFilter.value || undefined,
+        match_status: matchStatusFilter.value || undefined,
+        // rejected 為 is_active=False，主列表預設只含 active。篩「已拒絕」或
+        // 不篩選（全部狀態）時都要放寬；後端在未帶 match_status 時只會額外放行
+        // rejected，不會連刪除報名／學生離園自動軟刪的列也一併洩漏出來。
+        include_inactive: (!matchStatusFilter.value || matchStatusFilter.value === 'rejected') ? true : undefined,
         course_id: courseFilter.value || undefined,
         classroom_name: classroomFilter.value || undefined,
         school_year: termStore.school_year,
@@ -113,17 +127,18 @@ export function useActivityRegistration() {
   // ── 批次標記「已繳費」─────────────────────────────────────────
   // Why: 批次「未繳費」會一口氣寫多筆全額沖帳 refund，誤操作損失大，後端已禁用。
   // 需要退費請走單筆 PUT /payment（帶 confirm_refund_amount）或 DELETE /payments/{id} 軟刪。
-  async function batchMarkPaid(isPaid: boolean, onSuccess?: () => void) {
+  async function batchMarkPaid(isPaid: boolean, ids: number[], onSuccess?: () => void) {
     if (!isPaid) {
       ElMessage.warning(
         '批次沖帳已停用，請改用單筆繳費明細頁的退費 / 軟刪按鈕逐筆處理。'
       )
       return
     }
+    if (ids.length === 0) return
     let reason = ''
     try {
       const res = await ElMessageBox.prompt(
-        `確定將已選 ${selectedIds.value.length} 筆報名標記為「已繳費」？\n\n系統將自動補齊差額為「系統補齊」付款紀錄。\n\n請輸入操作原因（≥ ${FIELD_RULES.refundReasonMin} 字，會寫入稽核軌跡）：`,
+        `確定將已選 ${ids.length} 筆報名標記為「已繳費」？\n\n系統將自動補齊差額為「系統補齊」付款紀錄。\n\n請輸入操作原因（≥ ${FIELD_RULES.refundReasonMin} 字，會寫入稽核軌跡）：`,
         '批次更新確認',
         {
           type: 'warning',
@@ -139,9 +154,8 @@ export function useActivityRegistration() {
     }
     savingBatch.value = true
     try {
-      const res = await batchUpdatePayment(selectedIds.value, reason)
+      const res = await batchUpdatePayment(ids, reason)
       ElMessage.success((res.data as { message: string }).message)
-      selectedIds.value = []
       if (onSuccess) onSuccess()
       await fetchList()
     } catch (e) {
@@ -197,11 +211,11 @@ export function useActivityRegistration() {
     // 列表
     list, total, page, pageSize, loading,
     // 篩選
-    searchText, paymentFilter, courseFilter, classroomFilter,
+    searchText, paymentFilter, matchStatusFilter, courseFilter, classroomFilter,
     // 選項
     courseOptions, classroomOptions,
     // 批次
-    selectedIds, savingBatch,
+    savingBatch,
     // 方法
     initFromQuery, fetchList, handleSearch, batchMarkPaid, loadOptions,
   }

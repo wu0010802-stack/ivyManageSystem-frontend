@@ -367,12 +367,6 @@ const routes: RouteRecordRaw[] = [
             meta: { title: '報名管理' }
         },
         {
-            path: '/activity/registrations/pending',
-            name: 'activity-registrations-pending',
-            component: () => import('../views/activity/ActivityPendingReviewView.vue'),
-            meta: { title: '報名審核佇列' }
-        },
-        {
             path: '/activity/pos',
             name: 'activity-pos',
             component: () => import('../views/activity/POSView.vue'),

@@ -23,6 +23,9 @@
           <el-option label="超繳" value="overpaid" />
           <el-option label="免繳" value="no_fee" />
         </el-select>
+        <el-select v-model="matchStatusFilter" placeholder="報名狀態" clearable style="width: 130px" @change="handleSearch">
+          <el-option v-for="opt in matchStatusFilterOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
+        </el-select>
         <el-select v-model="courseFilter" placeholder="課程篩選" clearable style="width: 140px" @change="handleSearch">
           <el-option v-for="c in courseOptions" :key="c.id" :label="c.name" :value="c.id" />
         </el-select>
@@ -36,17 +39,6 @@
           <el-icon><Plus /></el-icon>
           新增報名
         </el-button>
-        <el-badge
-          v-if="canWrite"
-          :value="pendingCount"
-          :hidden="pendingCount === 0"
-          type="warning"
-          class="pending-badge"
-        >
-          <el-button type="warning" plain @click="goToPending">
-            待審核佇列
-          </el-button>
-        </el-badge>
         <el-button type="info" plain @click="goToPublic">
           <el-icon><Link /></el-icon>
           前台報名頁
@@ -71,7 +63,7 @@
       border
       @selection-change="handleSelectionChange"
     >
-      <el-table-column type="selection" width="45" />
+      <el-table-column type="selection" width="45" :selectable="isRowSelectable" />
       <el-table-column label="學生" prop="student_name" min-width="90" />
       <el-table-column label="家長手機" prop="parent_phone" min-width="120">
         <template #default="{ row }">
@@ -81,13 +73,17 @@
       <el-table-column label="班級" prop="class_name" min-width="100">
         <template #default="{ row }">
           <span>{{ row.class_name || '—' }}</span>
+        </template>
+      </el-table-column>
+      <el-table-column label="審核狀態" width="100" align="center">
+        <template #default="{ row }">
           <el-tag
             v-if="row.match_status"
             size="small"
             :type="matchStatusTag(row.match_status).type"
             effect="plain"
-            class="source-tag"
           >{{ matchStatusTag(row.match_status).label }}</el-tag>
+          <span v-else>—</span>
         </template>
       </el-table-column>
       <el-table-column label="課程" prop="course_names" min-width="160" show-overflow-tooltip />
@@ -105,16 +101,47 @@
       <el-table-column label="報名時間" min-width="140">
         <template #default="{ row }">{{ formatActivityDate(row.created_at) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="160" align="center" fixed="right">
+      <el-table-column label="操作" width="470" align="center" fixed="right">
         <template #default="{ row }">
           <el-button size="small" @click="openDetail(row)">詳情</el-button>
-          <el-button
-            v-if="canWrite"
-            size="small"
-            type="danger"
-            @click="handleDelete(row)"
-            :loading="deletingRegistrationId === row.id"
-          >刪除</el-button>
+          <!-- 已拒絕列：改顯示「復原」 -->
+          <template v-if="isRejectedRow(row)">
+            <el-button
+              v-if="canWrite"
+              size="small"
+              type="success"
+              @click="handleRestore(row)"
+            >復原</el-button>
+          </template>
+          <!-- 僅「待審核」列顯示四顆審核鈕；其他狀態不顯示 -->
+          <template v-else>
+            <template v-if="canWrite && isPending(row)">
+              <el-button size="small" type="primary" @click="openMatchDialog(row)">手動匹配</el-button>
+              <el-button size="small" type="warning" @click="openRematchDialog(row)">重新比對</el-button>
+              <el-button size="small" type="danger" plain @click="openForceDialog(row)">強行收件</el-button>
+              <el-tooltip
+                :disabled="!((row.paid_amount || 0) > 0)"
+                content="已有繳費，請先於詳情處理繳費再拒絕"
+                placement="top"
+              >
+                <span class="reject-btn-wrap">
+                  <el-button
+                    size="small"
+                    type="danger"
+                    :disabled="!canReject(row)"
+                    @click="handleReject(row)"
+                  >拒絕</el-button>
+                </span>
+              </el-tooltip>
+            </template>
+            <el-button
+              v-if="canWrite"
+              size="small"
+              type="danger"
+              @click="handleDelete(row)"
+              :loading="deletingRegistrationId === row.id"
+            >刪除</el-button>
+          </template>
         </template>
       </el-table-column>
     </el-table>
@@ -136,14 +163,29 @@
       @change="fetchList"
     />
 
-    <!-- 批次操作浮動工具列 -->
+    <!-- 批次操作浮動工具列（依所選群組的報名狀態切換動作）-->
     <transition name="batch-bar">
-      <div v-if="selectedIds.length > 0" class="batch-toolbar">
-        <span class="batch-info">已選 {{ selectedIds.length }} 筆</span>
-        <el-button size="small" type="success" :loading="savingBatch" @click="handleBatchMarkPaid(true)">標記已繳費</el-button>
-        <el-tooltip content="批次沖帳已停用，請改至繳費明細逐筆軟刪以防誤操作" placement="top">
-          <el-button size="small" type="warning" disabled>標記未繳費（已停用）</el-button>
-        </el-tooltip>
+      <div v-if="selectedRows.length > 0" class="batch-toolbar">
+        <span class="batch-info">已選 {{ selectedRows.length }} 筆 · 狀態：{{ selectionCategoryLabel }}</span>
+
+        <!-- 待審核分類：批量審核（含批量通過的兩條路徑）+ 逐筆精靈 -->
+        <template v-if="selectionCategory === 'pending'">
+          <el-button size="small" type="primary" :loading="batchProcessing" @click="onBatchRematch">批量重新比對</el-button>
+          <el-button size="small" type="danger" plain :loading="batchProcessing" @click="onBatchForceAccept">批量強行收件</el-button>
+          <el-button size="small" type="danger" :loading="batchProcessing" @click="onBatchReject">批量拒絕</el-button>
+          <el-button size="small" type="warning" plain @click="onOpenWizard">逐筆審核</el-button>
+        </template>
+
+        <!-- 已拒絕分類：批量復原 -->
+        <template v-else-if="selectionCategory === 'rejected'">
+          <el-button size="small" type="success" :loading="batchProcessing" @click="onBatchRestore">批量復原</el-button>
+        </template>
+
+        <!-- 報名成功分類（系統自動 / 人工指定 / 強行收件 / 未比對）：沿用批量標記已繳費 -->
+        <template v-else>
+          <el-button size="small" type="success" :loading="savingBatch" @click="handleBatchMarkPaid(true)">標記已繳費</el-button>
+        </template>
+
         <el-button size="small" @click="clearSelection">取消</el-button>
       </div>
     </transition>
@@ -377,12 +419,37 @@
       :existing-supply-ids="(detail?.supplies || []).map((s) => s.supply_id)"
       @added="onSupplyAdded"
     />
+
+    <!-- 審核工作流：手動匹配 / 重新比對·強行收件 / 逐筆審核精靈 -->
+    <RegistrationMatchDialog
+      v-if="matchDialog.visible"
+      :state="matchDialog"
+      :on-search="debouncedMatchSearch"
+      :on-confirm="confirmMatch"
+    />
+    <RegistrationRematchForceDialog
+      v-if="editDialog.visible"
+      :state="editDialog"
+      :on-confirm="confirmEdit"
+    />
+    <RegistrationReviewWizard
+      v-if="wizardEverOpened"
+      :state="wizard"
+      :current="wizardCurrent"
+      :on-search="debouncedWizardSearch"
+      :on-match="wizardMatch"
+      :on-force="wizardForce"
+      :on-reject="wizardReject"
+      :on-skip="wizardSkip"
+      :on-prev="prevWizard"
+      :on-close="finishWizard"
+    />
     </div><!-- /.mode-list -->
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, defineAsyncComponent } from 'vue'
+import { ref, computed, nextTick, onMounted, watch, defineAsyncComponent } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Edit, Link } from '@element-plus/icons-vue'
@@ -393,7 +460,6 @@ import {
   getRegistrationPayments, deleteRegistrationPayment,
   withdrawCourse, getRegistrationTime,
   removeRegistrationSupply,
-  listPendingRegistrations,
 } from '@/api/activity'
 import { useAcademicTermStore } from '@/stores/academicTerm'
 import {
@@ -403,6 +469,7 @@ import {
   MATCH_STATUS_TAG_TYPE, MATCH_STATUS_LABEL_SHORT,
 } from '@/constants/activity'
 import { useActivityRegistration } from '@/composables/useActivityRegistration'
+import { useActivityReview, type ReviewRow } from '@/composables/useActivityReview'
 import { useCountdownBanner, countdownLabel } from '@/composables/useCountdownBanner'
 import { formatActivityDate } from '@/utils/format'
 import { hasPermission } from '@/utils/auth'
@@ -414,6 +481,10 @@ const RegistrationEditBasicDialog = defineAsyncComponent(() => import('@/compone
 const RegistrationCreateDialog = defineAsyncComponent(() => import('@/components/activity/RegistrationCreateDialog.vue'))
 const RegistrationAddCourseDialog = defineAsyncComponent(() => import('@/components/activity/RegistrationAddCourseDialog.vue'))
 const RegistrationAddSupplyDialog = defineAsyncComponent(() => import('@/components/activity/RegistrationAddSupplyDialog.vue'))
+// 審核工作流 dialog / 精靈（互動才顯示 → async）
+const RegistrationMatchDialog = defineAsyncComponent(() => import('@/components/activity/RegistrationMatchDialog.vue'))
+const RegistrationRematchForceDialog = defineAsyncComponent(() => import('@/components/activity/RegistrationRematchForceDialog.vue'))
+const RegistrationReviewWizard = defineAsyncComponent(() => import('@/components/activity/RegistrationReviewWizard.vue'))
 
 type ApiErr = { response?: { data?: { detail?: string }; status?: number } }
 
@@ -444,19 +515,6 @@ function courseStatusLabel(status: string) {
 const termStore = useAcademicTermStore()
 const router = useRouter()
 
-const pendingCount = ref(0)
-async function loadPendingCount() {
-  if (!canWrite.value) return
-  try {
-    const res = await listPendingRegistrations({ skip: 0, limit: 1 })
-    pendingCount.value = (res.data as { total?: number })?.total || 0
-  } catch {
-    pendingCount.value = 0
-  }
-}
-function goToPending() {
-  router.push({ name: 'activity-registrations-pending' })
-}
 function goToPublic() {
   const url = router.resolve({ name: 'public-activity' }).href
   window.open(url, '_blank', 'noopener')
@@ -477,11 +535,15 @@ const formatDeadlineHint = countdownLabel
 
 const {
   list, total, page, pageSize, loading,
-  searchText, paymentFilter, courseFilter, classroomFilter,
+  searchText, paymentFilter, matchStatusFilter, courseFilter, classroomFilter,
   courseOptions: _courseOptions, classroomOptions: _classroomOptions,
-  selectedIds, savingBatch,
+  savingBatch,
   initFromQuery, fetchList, handleSearch, batchMarkPaid, loadOptions,
 } = useActivityRegistration()
+
+// 選取的 row 由 view 持有（批量勾選需依 match_status 分群）；selectedIds 供批量繳費端點。
+const selectedRows = ref<RegistrationRow[]>([])
+const selectedIds = computed(() => selectedRows.value.map((r) => r.id))
 // Cast composable's unknown[] to the specific types expected by child components
 interface CourseOptionItem { id: number | string; name: string; price?: number | string; remaining?: number; capacity?: number; [key: string]: unknown }
 const courseOptions = _courseOptions as import('vue').Ref<CourseOptionItem[]>
@@ -489,16 +551,21 @@ const classroomOptions = _classroomOptions as import('vue').Ref<string[]>
 
 // ── 篩選輔助 ──
 const hasActiveFilters = computed(() =>
-  !!(searchText.value || paymentFilter.value || courseFilter.value || classroomFilter.value)
+  !!(searchText.value || paymentFilter.value || matchStatusFilter.value || courseFilter.value || classroomFilter.value)
 )
 
 function resetFilters() {
   searchText.value = ''
   paymentFilter.value = ''
+  matchStatusFilter.value = ''
   courseFilter.value = null
   classroomFilter.value = ''
   handleSearch()
 }
+
+// ── 報名狀態（match_status）篩選選項 ──
+const matchStatusFilterOptions = (Object.keys(MATCH_STATUS_LABEL_SHORT) as (keyof typeof MATCH_STATUS_LABEL_SHORT)[])
+  .map((value) => ({ value, label: MATCH_STATUS_LABEL_SHORT[value] }))
 
 // ── 報名時間 banner ──
 type AlertType = 'success' | 'warning' | 'info' | 'error'
@@ -521,7 +588,10 @@ const savingRemark = ref(false)
 const withdrawingCourseId = ref<number | null>(null)
 const exporting = ref(false)
 
-const tableRef = ref<{ clearSelection: () => void } | null>(null)
+const tableRef = ref<{
+  clearSelection: () => void
+  toggleRowSelection: (row: RegistrationRow, selected?: boolean) => void
+} | null>(null)
 
 // ── 繳費相關 state ──
 const loadingPayments = ref(false)
@@ -795,20 +865,101 @@ async function doDeleteRegistration(row: RegistrationRow, forceRefund: boolean, 
   }
 }
 
+// ── 批量勾選：限同一「審核分類」──
+// 批量動作實際只在乎三種分類：待審核 / 已拒絕 / 已完成報名（系統自動 matched、
+// 人工指定 manual、強行收件 forced、未比對 unmatched 都算已完成報名，彼此可互相
+// 勾選一起批次操作，例如一起標記已繳費）；不再要求逐一 match_status 完全相同。
+type SelectionCategory = 'pending' | 'rejected' | 'success'
+const SELECTION_CATEGORY_LABEL: Record<SelectionCategory, string> = {
+  pending: '待審核',
+  rejected: '已拒絕',
+  success: '報名成功',
+}
+function selectionCategoryOf(status: string | undefined): SelectionCategory {
+  if (status === 'pending') return 'pending'
+  if (status === 'rejected') return 'rejected'
+  return 'success'
+}
+// selectionCategory = 目前群組的分類（空選為 null）；逐一勾選時其他分類的 checkbox
+// 由 isRowSelectable disable；表頭全選跨分類時於 handleSelectionChange 收斂。
+const selectionCategory = computed<SelectionCategory | null>(() =>
+  selectedRows.value.length ? selectionCategoryOf(selectedRows.value[0].match_status as string | undefined) : null
+)
+const selectionCategoryLabel = computed(() =>
+  selectionCategory.value ? SELECTION_CATEGORY_LABEL[selectionCategory.value] : '—'
+)
+function isRowSelectable(row: RegistrationRow): boolean {
+  return selectionCategory.value === null || selectionCategoryOf(row.match_status as string | undefined) === selectionCategory.value
+}
+let clamping = false
 function handleSelectionChange(rows: RegistrationRow[]) {
-  selectedIds.value = rows.map(r => r.id)
+  if (clamping) return
+  if (rows.length === 0) {
+    selectedRows.value = []
+    return
+  }
+  const anchorCategory = selectionCategoryOf(rows[0].match_status as string | undefined)
+  const sameGroup = rows.filter(r => selectionCategoryOf(r.match_status as string | undefined) === anchorCategory)
+  if (sameGroup.length !== rows.length) {
+    // 只會來自表頭全選（逐一勾選時其他分類已 disabled）→ 收斂到錨定分類
+    selectedRows.value = sameGroup
+    clamping = true
+    nextTick(() => {
+      tableRef.value?.clearSelection()
+      sameGroup.forEach(r => tableRef.value?.toggleRowSelection(r, true))
+      clamping = false
+      ElMessage.info(`批量僅能勾選同一報名狀態分類，已保留「${SELECTION_CATEGORY_LABEL[anchorCategory]}」${sameGroup.length} 筆`)
+    })
+  } else {
+    selectedRows.value = sameGroup
+  }
 }
 
 function clearSelection() {
   tableRef.value?.clearSelection()
-  selectedIds.value = []
+  selectedRows.value = []
 }
 
 async function handleBatchMarkPaid(isPaid: boolean) {
-  await batchMarkPaid(isPaid, () => {
-    tableRef.value?.clearSelection()
-  })
+  await batchMarkPaid(isPaid, selectedIds.value, () => { clearSelection() })
 }
+
+// ── 審核工作流（單列 + 批量 + 逐筆精靈）：集中於 useActivityReview ──
+const review = useActivityReview({
+  onChanged: () => { fetchList() },
+  clearSelection,
+})
+const {
+  batchProcessing,
+  matchDialog, editDialog, wizard, wizardCurrent,
+  debouncedMatchSearch, debouncedWizardSearch,
+  openMatchDialog, confirmMatch, openRematchDialog, openForceDialog, confirmEdit,
+  handleReject, handleRestore,
+  handleBatchRematch, handleBatchForceAccept, handleBatchReject, handleBatchRestore,
+  openWizard, prevWizard, finishWizard, wizardMatch, wizardForce, wizardReject, wizardSkip,
+} = review
+
+// 是否為待審核列（四顆審核鈕僅此時 enabled）
+function isPending(row: RegistrationRow): boolean {
+  return row.match_status === 'pending'
+}
+function isRejectedRow(row: RegistrationRow): boolean {
+  return row.match_status === 'rejected'
+}
+// 拒絕鈕在已有繳費時 disable（對齊後端 reject 的 paid_amount 守衛，避免必然 409）
+function canReject(row: RegistrationRow): boolean {
+  return canWrite.value && isPending(row) && !((row.paid_amount as number) > 0)
+}
+
+// 批量列動作（以 selectedRows 為輸入；cast 到 ReviewRow）
+const selectedReviewRows = computed<ReviewRow[]>(() => selectedRows.value as unknown as ReviewRow[])
+function onBatchRematch() { handleBatchRematch(selectedReviewRows.value) }
+function onBatchForceAccept() { handleBatchForceAccept(selectedReviewRows.value) }
+function onBatchReject() { handleBatchReject(selectedReviewRows.value) }
+function onBatchRestore() { handleBatchRestore(selectedReviewRows.value) }
+// 精靈首次開啟後保持掛載（async chunk 只載一次），讓 el-dialog @close 能正常結算刷新。
+const wizardEverOpened = ref(false)
+function onOpenWizard() { wizardEverOpened.value = true; openWizard(selectedReviewRows.value) }
 
 async function handleExport() {
   exporting.value = true
@@ -972,7 +1123,6 @@ onMounted(async () => {
   initFromQuery()
   fetchList()
   loadOptions()
-  loadPendingCount()
   try {
     const res = await getRegistrationTime()
     regTimeInfo.value = res.data as { is_open: boolean; open_at: string | null; close_at: string | null }
@@ -983,9 +1133,31 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+/* 勾選欄點擊範圍放大：讓整個儲存格都可點（而不是只有 14px 的 checkbox 本身）。
+   前綴 .activity-registrations 是為了拉高 specificity，蓋過 element-plus 內建的
+   `.el-table__body-wrapper .el-table-column--selection>.cell{display:inline-flex;height:23px}`
+  （單純 :deep() 不含外層 class 時不會帶 scope 屬性，specificity 會輸給它，寬度撐不開）。 */
+.activity-registrations :deep(.el-table-column--selection .cell) {
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+.activity-registrations :deep(.el-table-column--selection .el-checkbox) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 12px 0;
+  cursor: pointer;
+}
 .amount-hint { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; }
-.source-tag { margin-left: 6px; font-size: 12px; }
-.pending-badge { margin-left: 4px; }
+/* 拒絕鈕以 tooltip span 包住（disabled 時仍可 hover 提示）→ 補回按鈕間距 */
+.reject-btn-wrap { display: inline-flex; margin-left: 12px; vertical-align: middle; }
+.reject-btn-wrap + .el-button { margin-left: 12px; }
 .activity-registrations { padding: 16px; }
 .page-header { margin-bottom: 16px; }
 .page-header h2 { margin: 0; font-size: 20px; font-weight: 600; }
