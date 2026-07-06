@@ -48,6 +48,13 @@ const routes: RouteRecordRaw[] = [
             meta: { title: '員工管理' }
         },
         {
+            path: '/employees/:id(\\d+)',
+            name: 'employee-detail',
+            component: () => import('../views/EmployeeDetailView.vue'),
+            props: (route) => ({ id: Number(route.params.id) }),
+            meta: { title: '員工詳情' }
+        },
+        {
             path: '/students',
             name: 'students',
             component: () => import('../views/StudentWorkbenchView.vue'),
