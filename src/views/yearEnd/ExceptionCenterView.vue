@@ -1,0 +1,350 @@
+<script setup lang="ts">
+import { computed, onMounted, reactive, ref } from 'vue'
+import { Refresh } from '@element-plus/icons-vue'
+import { listAppraisalCycles, getAppraisalCycleExceptions } from '@/api/appraisal'
+import { listYearEndCycles, getYearEndCycleExceptions } from '@/api/yearEnd'
+import { apiError } from '@/utils/error'
+import { formatTimeTW } from '@/utils/format'
+import { hasPermission } from '@/utils/auth'
+
+// 例外中心 MVP：把後端兩支彙整端點（考核 / 年終）做成單一工作佇列頁——行政一頁看到
+// 「這批還有什麼要人工處理」，逐筆「前往處理」深連結到修復介面。唯讀彙整，不建新表；
+// 「處理」＝到源頭修復後對應項目自動消失（下次呼叫即不再出現，故本頁提供重新整理鈕）。
+
+type Severity = 'blocking' | 'warning' | 'info'
+
+interface ExceptionItem {
+  type: string
+  severity: Severity
+  entity_type: string
+  entity_id: string
+  target_name: string
+  reason: string
+  impact: string
+  suggested_action: string
+  deep_link: string
+}
+
+interface ExceptionsData {
+  cycle_id: number
+  generated_at: string
+  counts_by_type: Record<string, number>
+  items: ExceptionItem[]
+}
+
+interface CycleOption {
+  id: number
+  academic_year: number
+  status?: string
+  semester?: number
+  [key: string]: unknown
+}
+
+const SEVERITY_TAG_TYPE: Record<Severity, 'danger' | 'warning' | 'info'> = {
+  blocking: 'danger',
+  warning: 'warning',
+  info: 'info',
+}
+const SEVERITY_LABEL: Record<Severity, string> = {
+  blocking: '阻斷',
+  warning: '警告',
+  info: '提示',
+}
+const STATUS_LABELS: Record<string, string> = {
+  OPEN: '開放',
+  LOCKED: '已鎖定',
+  CLOSED: '已封存',
+}
+
+type CycleFetcher = () => Promise<{ data: unknown }>
+type ExceptionsFetcher = (cycleId: number) => Promise<{ data: unknown }>
+
+/** 單一批次（考核／年終）的週期下拉 + 例外清單狀態，回傳單一 reactive 物件供 template 直接綁定。 */
+function useExceptionGroup(fetchCycles: CycleFetcher, fetchExceptions: ExceptionsFetcher) {
+  const cycles = ref<CycleOption[]>([])
+  const cyclesLoading = ref(false)
+  const selectedCycleId = ref<number | null>(null)
+  const data = ref<ExceptionsData | null>(null)
+  const loading = ref(false)
+  const errorMsg = ref('')
+  const typeFilter = ref<string>('all')
+
+  const totalCount = computed(() => data.value?.items.length ?? 0)
+  const typeCounts = computed(() => data.value?.counts_by_type ?? {})
+  const filteredItems = computed(() => {
+    const items = data.value?.items ?? []
+    if (typeFilter.value === 'all') return items
+    return items.filter((i) => i.type === typeFilter.value)
+  })
+
+  async function loadCycles() {
+    cyclesLoading.value = true
+    try {
+      const res = await fetchCycles()
+      cycles.value = (res.data as CycleOption[]) ?? []
+      if (cycles.value.length > 0 && selectedCycleId.value == null) {
+        // 預設選最新一筆：以 id 最大者為準（後端遞增主鍵，較大 id = 較晚建立）
+        selectedCycleId.value = cycles.value.reduce((a, b) => (b.id > a.id ? b : a)).id
+      }
+    } catch (e) {
+      errorMsg.value = apiError(e, '週期清單載入失敗')
+    } finally {
+      cyclesLoading.value = false
+    }
+  }
+
+  async function loadExceptions() {
+    if (selectedCycleId.value == null) return
+    loading.value = true
+    errorMsg.value = ''
+    try {
+      const res = await fetchExceptions(selectedCycleId.value)
+      data.value = res.data as ExceptionsData
+    } catch (e) {
+      errorMsg.value = apiError(e, '例外清單載入失敗')
+      data.value = null
+    } finally {
+      loading.value = false
+    }
+  }
+
+  function onCycleChange() {
+    typeFilter.value = 'all'
+    loadExceptions()
+  }
+
+  return reactive({
+    cycles, cyclesLoading, selectedCycleId, data, loading, errorMsg, typeFilter,
+    totalCount, typeCounts, filteredItems,
+    loadCycles, loadExceptions, onCycleChange,
+  })
+}
+
+const appraisal = useExceptionGroup(
+  () => listAppraisalCycles(),
+  (cycleId: number) => getAppraisalCycleExceptions(cycleId),
+)
+const yearEnd = useExceptionGroup(
+  () => listYearEndCycles(),
+  (cycleId: number) => getYearEndCycleExceptions(cycleId),
+)
+
+function cycleLabel(c: CycleOption): string {
+  const statusLabel = c.status ? `（${STATUS_LABELS[c.status] ?? c.status}）` : ''
+  return `${c.academic_year} 學年度${statusLabel}`
+}
+
+const groups = computed(() => (
+  [
+    { key: 'appraisal', label: '考核批次', permission: 'APPRAISAL_READ', g: appraisal },
+    { key: 'year-end', label: '年終批次', permission: 'YEAR_END_READ', g: yearEnd },
+  ].filter((group) => hasPermission(group.permission))
+))
+
+async function bootGroup(group: ReturnType<typeof useExceptionGroup>, permission: string) {
+  if (!hasPermission(permission)) return
+  await group.loadCycles()
+  await group.loadExceptions()
+}
+
+onMounted(() => {
+  Promise.all([
+    bootGroup(appraisal, 'APPRAISAL_READ'),
+    bootGroup(yearEnd, 'YEAR_END_READ'),
+  ])
+})
+</script>
+
+<template>
+  <div class="exception-center">
+    <div class="page-header">
+      <h2>例外中心</h2>
+      <p class="page-sub">一頁彙整這批還有什麼要人工處理，逐筆「前往處理」直達修復介面。</p>
+    </div>
+
+    <section
+      v-for="group in groups"
+      :key="group.key"
+      class="exception-group"
+      :data-test="`group-${group.key}`"
+    >
+      <div class="group-header">
+        <span class="group-title">{{ group.label }}</span>
+        <div class="group-header-actions">
+          <el-select
+            v-model="group.g.selectedCycleId"
+            placeholder="選擇週期"
+            style="width: 220px"
+            :loading="group.g.cyclesLoading"
+            :data-test="`${group.key}-cycle-select`"
+            @change="group.g.onCycleChange"
+          >
+            <el-option
+              v-for="c in group.g.cycles"
+              :key="c.id"
+              :label="cycleLabel(c)"
+              :value="c.id"
+            />
+          </el-select>
+          <span v-if="group.g.data" class="generated-at">
+            彙整於 {{ formatTimeTW(group.g.data.generated_at) }}
+          </span>
+          <el-button
+            :icon="Refresh"
+            circle
+            size="small"
+            :loading="group.g.loading"
+            :data-test="`${group.key}-refresh-button`"
+            @click="group.g.loadExceptions()"
+          />
+        </div>
+      </div>
+
+      <el-alert
+        v-if="group.g.errorMsg"
+        :title="group.g.errorMsg"
+        type="error"
+        show-icon
+        :closable="false"
+        style="margin-bottom: 12px"
+      />
+
+      <template v-else-if="group.g.data">
+        <div class="type-chips">
+          <button
+            type="button"
+            class="type-chip"
+            :class="{ 'type-chip--active': group.g.typeFilter === 'all' }"
+            :data-test="`${group.key}-type-chip-all`"
+            @click="group.g.typeFilter = 'all'"
+          >
+            全部
+            <span class="type-chip__count">{{ group.g.totalCount }}</span>
+          </button>
+          <button
+            v-for="(count, type) in group.g.typeCounts"
+            :key="type"
+            type="button"
+            class="type-chip"
+            :class="{ 'type-chip--active': group.g.typeFilter === type }"
+            :data-test="`${group.key}-type-chip-${type}`"
+            @click="group.g.typeFilter = type"
+          >
+            {{ type }}
+            <span class="type-chip__count">{{ count }}</span>
+          </button>
+        </div>
+
+        <el-empty
+          v-if="group.g.totalCount === 0"
+          description="本批次沒有待處理事項 ✓"
+        />
+        <div v-else-if="group.g.filteredItems.length === 0" class="no-match-hint">
+          此分類目前無項目
+        </div>
+        <div v-else class="exception-list">
+          <div
+            v-for="item in group.g.filteredItems"
+            :key="`${item.entity_type}-${item.entity_id}-${item.type}`"
+            class="exception-row"
+            :class="`exception-row--${item.severity}`"
+          >
+            <el-tag :type="SEVERITY_TAG_TYPE[item.severity]" size="small" class="severity-tag">
+              {{ SEVERITY_LABEL[item.severity] }}
+            </el-tag>
+            <div class="exception-row__body">
+              <div class="exception-row__title">
+                <strong>{{ item.target_name }}</strong>
+                <span class="exception-row__type">{{ item.type }}</span>
+              </div>
+              <div class="exception-row__reason">{{ item.reason }}</div>
+              <div class="exception-row__impact">影響：{{ item.impact }}</div>
+              <div class="exception-row__action">建議：{{ item.suggested_action }}</div>
+            </div>
+            <router-link :to="item.deep_link" class="exception-row__cta">前往處理 →</router-link>
+          </div>
+        </div>
+      </template>
+
+      <div v-else class="loading-placeholder" aria-busy="true">
+        <el-skeleton :rows="3" animated />
+      </div>
+    </section>
+  </div>
+</template>
+
+<style scoped>
+.exception-center { padding: 16px; }
+.page-header { margin-bottom: 16px; }
+.page-header h2 { margin: 0 0 4px; font-size: 20px; font-weight: 600; }
+.page-sub { margin: 0; font-size: 13px; color: var(--text-tertiary); }
+
+.exception-group {
+  background: var(--bg-color-overlay, #fff);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+.group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.group-title { font-size: 16px; font-weight: 600; }
+.group-header-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.generated-at { font-size: 12px; color: var(--text-tertiary); }
+
+.type-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.type-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: transparent;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--text-secondary);
+}
+.type-chip--active {
+  border-color: var(--color-primary, #409eff);
+  color: var(--color-primary, #409eff);
+  background: var(--color-primary-light-9, #ecf5ff);
+}
+.type-chip__count { font-weight: 600; }
+
+.no-match-hint { color: var(--text-tertiary); font-size: 13px; padding: 24px 0; text-align: center; }
+
+.exception-list { display: flex; flex-direction: column; gap: 8px; }
+.exception-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+}
+.exception-row--blocking { border-left: 3px solid var(--color-danger, #f56c6c); }
+.exception-row--warning { border-left: 3px solid var(--color-warning, #e6a23c); }
+.exception-row--info { border-left: 3px solid var(--color-info, #909399); }
+.severity-tag { margin-top: 2px; flex-shrink: 0; }
+.exception-row__body { flex: 1; min-width: 0; }
+.exception-row__title { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+.exception-row__type { font-size: 12px; color: var(--text-tertiary); }
+.exception-row__reason { font-size: 13px; color: var(--text-primary); margin-bottom: 2px; }
+.exception-row__impact,
+.exception-row__action { font-size: 12px; color: var(--text-secondary); }
+.exception-row__cta {
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-primary, #409eff);
+  white-space: nowrap;
+  text-decoration: none;
+}
+</style>

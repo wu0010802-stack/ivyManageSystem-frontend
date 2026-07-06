@@ -7,8 +7,9 @@ const AppraisalManagementView = defineAsyncComponent(() => import('./AppraisalMa
 const YearEndListView = defineAsyncComponent(() => import('./yearEnd/YearEndListView.vue'))
 const AppraisalPayoutView = defineAsyncComponent(() => import('./yearEnd/AppraisalPayoutView.vue'))
 const YearEndRulesPanel = defineAsyncComponent(() => import('./yearEnd/YearEndRulesPanel.vue'))
+const ExceptionCenterView = defineAsyncComponent(() => import('./yearEnd/ExceptionCenterView.vue'))
 
-type SectionKey = 'appraisal' | 'year-end' | 'payout' | 'year-end-rules'
+type SectionKey = 'appraisal' | 'year-end' | 'payout' | 'year-end-rules' | 'exceptions'
 
 interface SectionDef {
   key: SectionKey
@@ -23,6 +24,8 @@ const ALL_SECTIONS: SectionDef[] = [
   { key: 'year-end', label: '年終獎金', can: () => hasPermission('YEAR_END_READ') },
   { key: 'payout', label: '考核年終', can: () => hasPermission('APPRAISAL_FINALIZE') },
   { key: 'year-end-rules', label: '年終規則', can: () => hasPermission('SETTINGS_READ') },
+  // 例外中心：唯讀彙整考核/年終待人工處理事項，任一端 READ 權限即可見（OR，非兩者皆須）
+  { key: 'exceptions', label: '例外中心', can: () => hasPermission('APPRAISAL_READ') || hasPermission('YEAR_END_READ') },
 ]
 
 const route = useRoute()
@@ -83,6 +86,7 @@ const onSectionChange = (val: string | number) => {
       <YearEndListView v-else-if="activeSection === 'year-end'" />
       <AppraisalPayoutView v-else-if="activeSection === 'payout'" />
       <YearEndRulesPanel v-else-if="activeSection === 'year-end-rules'" />
+      <ExceptionCenterView v-else-if="activeSection === 'exceptions'" />
       <el-empty v-else description="無權限檢視此頁" />
     </div>
   </div>
