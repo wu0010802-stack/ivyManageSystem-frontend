@@ -665,7 +665,22 @@ async function restoreSessionIfNeeded(to: RouteLocationNormalized) {
             loggedIn: true,
             userInfo: getUserInfo(),
         }
-    } catch {
+    } catch (err) {
+        // 409：staff refresh token rotation 的併發保護——另一條獨立路徑（如 axios 401
+        // 攔截器的 _doRefresh）同時搶著刷新，backend race-tolerance 視窗判定「rotation
+        // in progress」而非真的過期/無效，實際 session 仍有效。不應強制登出，沿用既有
+        // userInfo 並刷新驗證時戳即可（對齊 src/parent/api/index.ts 對同一情境的處理）。
+        const status = (err as { response?: { status?: number } })?.response?.status
+        if (status === 409) {
+            const existing = getUserInfo()
+            if (existing) {
+                setUserInfo(existing)
+                return {
+                    loggedIn: true,
+                    userInfo: existing,
+                }
+            }
+        }
         clearAuth({ notifyServer: false })
         return {
             loggedIn: false,
