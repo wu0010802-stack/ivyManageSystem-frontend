@@ -34,9 +34,55 @@ type PanelVm = {
   artTeacherEmployeeIds: number[]
   employeeOptions: { id: number; name: unknown }[]
   rules: Record<string, unknown>
+  gradeThresholdPercents: Record<string, number | null>
+  dividendActivityMinSessions: number | null
+  clearAllGradeThresholds: () => void
   addAfterClassAwardRow: () => void
   removeAfterClassAwardRow: (i: number) => void
   saveRules: () => Promise<void>
+}
+
+// 完整 GET /config/bonus 回應形狀，逐欄位對齊 ivy-backend api/config/bonus.py
+// get_bonus_config 的 literal dict（避免 mock 形狀憑感覺瞎猜、造成假綠燈）。
+const FULL_BONUS_CONFIG_RESPONSE = {
+  id: 1,
+  config_year: 2026,
+  head_teacher_ab: 3000,
+  head_teacher_c: 2500,
+  assistant_teacher_ab: 2000,
+  assistant_teacher_c: 1500,
+  principal_festival: 5000,
+  director_festival: 4000,
+  leader_festival: 3000,
+  driver_festival: 2000,
+  designer_festival: 2000,
+  admin_festival: 2000,
+  principal_dividend: 3000,
+  director_dividend: 2000,
+  leader_dividend: 1000,
+  vice_leader_dividend: 800,
+  overtime_head_normal: 500,
+  overtime_head_baby: 600,
+  overtime_assistant_normal: 400,
+  overtime_assistant_baby: 500,
+  school_wide_target: 300,
+  enrollment_count_mode: 'month_end',
+  meeting_default_hours: 2,
+  meeting_absence_penalty: 100,
+  art_teacher_festival: 2000,
+  art_teacher_unit_price: 30,
+  dividend_returning_threshold: 0.96,
+  dividend_returning_amount: 500,
+  dividend_activity_threshold: 0.8,
+  dividend_activity_amount: 1000,
+  dividend_activity_grade_thresholds: { 大班: 1.0, 中班: 0.9, 小班: 0.8, 幼幼班: 0.7 },
+  dividend_activity_min_sessions: 16,
+  late_deduction_per_time: 50,
+  missing_punch_deduction_per_time: 50,
+  personal_leave_deduction_per_day: 500,
+  sick_leave_deduction_per_day: 500,
+  after_class_award_unit_price: {},
+  art_teacher_employee_ids: [],
 }
 
 function stubEmployees() {
@@ -159,5 +205,136 @@ describe('YearEndRulesPanel', () => {
     expect(vm.afterClassAwardRows).toHaveLength(2)
     vm.removeAfterClassAwardRow(0)
     expect(vm.afterClassAwardRows).toEqual([{ className: '', price: 0 }])
+  })
+
+  // G15（園方福利辦法 115.01.01）：逐年級才藝門檻 + 堂數條件
+  describe('G15 逐年級門檻 / 堂數條件', () => {
+    it('load: 後端 dict → gradeThresholdPercents 換算為百分比；min_sessions 直接帶入', async () => {
+      vi.mocked(configApi.getBonusConfig).mockResolvedValue({
+        data: FULL_BONUS_CONFIG_RESPONSE,
+      } as never)
+      stubEmployees()
+
+      const wrapper = await mountPanel()
+      const vm = wrapper.vm as unknown as PanelVm
+
+      expect(vm.gradeThresholdPercents).toEqual({
+        大班: 100,
+        中班: 90,
+        小班: 80,
+        幼幼班: 70,
+      })
+      expect(vm.dividendActivityMinSessions).toBe(16)
+    })
+
+    it('load: 兩新欄位缺失（模擬舊後端）→ 容錯回退 null，不炸', async () => {
+      vi.mocked(configApi.getBonusConfig).mockResolvedValue({
+        data: { art_teacher_unit_price: 0 },
+      } as never)
+      stubEmployees()
+
+      const wrapper = await mountPanel()
+      const vm = wrapper.vm as unknown as PanelVm
+
+      expect(vm.gradeThresholdPercents).toEqual({
+        大班: null,
+        中班: null,
+        小班: null,
+        幼幼班: null,
+      })
+      expect(vm.dividendActivityMinSessions).toBeNull()
+    })
+
+    it('load: 兩新欄位明確為 null（新後端但未設定）→ 維持 null', async () => {
+      vi.mocked(configApi.getBonusConfig).mockResolvedValue({
+        data: {
+          ...FULL_BONUS_CONFIG_RESPONSE,
+          dividend_activity_grade_thresholds: null,
+          dividend_activity_min_sessions: null,
+        },
+      } as never)
+      stubEmployees()
+
+      const wrapper = await mountPanel()
+      const vm = wrapper.vm as unknown as PanelVm
+
+      expect(vm.gradeThresholdPercents).toEqual({
+        大班: null,
+        中班: null,
+        小班: null,
+        幼幼班: null,
+      })
+      expect(vm.dividendActivityMinSessions).toBeNull()
+    })
+
+    it('save: gradeThresholdPercents 換算回 fraction dict、min sessions 隨 payload 送出', async () => {
+      vi.mocked(configApi.getBonusConfig).mockResolvedValue({
+        data: FULL_BONUS_CONFIG_RESPONSE,
+      } as never)
+      stubEmployees()
+      vi.mocked(configApi.updateBonusConfig).mockResolvedValue({ data: {} } as never)
+      vi.mocked(ElMessageBox.prompt).mockResolvedValue({ value: '年終規則設定調整測試' } as never)
+
+      const wrapper = await mountPanel()
+      const vm = wrapper.vm as unknown as PanelVm
+
+      await vm.saveRules()
+
+      const payload = vi.mocked(configApi.updateBonusConfig).mock.calls[0][0] as Record<
+        string,
+        unknown
+      >
+      expect(payload.dividend_activity_grade_thresholds).toEqual({
+        大班: 1,
+        中班: 0.9,
+        小班: 0.8,
+        幼幼班: 0.7,
+      })
+      expect(payload.dividend_activity_min_sessions).toBe(16)
+    })
+
+    it('save: 整組清空年級門檻（clearAllGradeThresholds）→ payload 送 null（回退單一門檻）', async () => {
+      vi.mocked(configApi.getBonusConfig).mockResolvedValue({
+        data: FULL_BONUS_CONFIG_RESPONSE,
+      } as never)
+      stubEmployees()
+      vi.mocked(configApi.updateBonusConfig).mockResolvedValue({ data: {} } as never)
+      vi.mocked(ElMessageBox.prompt).mockResolvedValue({ value: '年終規則設定調整測試' } as never)
+
+      const wrapper = await mountPanel()
+      const vm = wrapper.vm as unknown as PanelVm
+
+      vm.clearAllGradeThresholds()
+      await nextTick()
+      await vm.saveRules()
+
+      const payload = vi.mocked(configApi.updateBonusConfig).mock.calls[0][0] as Record<
+        string,
+        unknown
+      >
+      expect(payload.dividend_activity_grade_thresholds).toBeNull()
+    })
+
+    it('save: 堂數條件清空為 null → payload 送 null（停用堂數條件）', async () => {
+      vi.mocked(configApi.getBonusConfig).mockResolvedValue({
+        data: FULL_BONUS_CONFIG_RESPONSE,
+      } as never)
+      stubEmployees()
+      vi.mocked(configApi.updateBonusConfig).mockResolvedValue({ data: {} } as never)
+      vi.mocked(ElMessageBox.prompt).mockResolvedValue({ value: '年終規則設定調整測試' } as never)
+
+      const wrapper = await mountPanel()
+      const vm = wrapper.vm as unknown as PanelVm
+
+      vm.dividendActivityMinSessions = null
+      await nextTick()
+      await vm.saveRules()
+
+      const payload = vi.mocked(configApi.updateBonusConfig).mock.calls[0][0] as Record<
+        string,
+        unknown
+      >
+      expect(payload.dividend_activity_min_sessions).toBeNull()
+    })
   })
 })
