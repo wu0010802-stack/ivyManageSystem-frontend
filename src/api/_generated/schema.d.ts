@@ -18838,6 +18838,8 @@ export interface components {
              * @default false
              */
             health_exempt: boolean;
+            /** Health Insured Salary */
+            health_insured_salary?: number | null;
             /** Hire Date */
             hire_date?: string | null;
             /** Hourly Rate */
@@ -18856,6 +18858,8 @@ export interface components {
             is_active: boolean;
             /** Job Title Id */
             job_title_id?: number | null;
+            /** Labor Insured Salary */
+            labor_insured_salary?: number | null;
             /** Name */
             name: string;
             /**
@@ -18863,6 +18867,8 @@ export interface components {
              * @default false
              */
             no_employment_insurance: boolean;
+            /** Pension Insured Salary */
+            pension_insured_salary?: number | null;
             /** Pension Self Rate */
             pension_self_rate?: number | null;
             /** Phone */
@@ -18885,8 +18891,14 @@ export interface components {
              * @default false
              */
             skip_payroll_transfer: boolean;
+            /** Staff Role Category */
+            staff_role_category?: string | null;
             /** Supervisor Role */
             supervisor_role?: string | null;
+            /** Teacher Cert No */
+            teacher_cert_no?: string | null;
+            /** Teacher Cert Type */
+            teacher_cert_type?: string | null;
             /** Title */
             title?: string | null;
             /**
