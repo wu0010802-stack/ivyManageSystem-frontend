@@ -55,10 +55,12 @@ export default tseslint.config(
     linterOptions: { reportUnusedDisableDirectives: 'error' },
   },
   {
-    // 不掃：建置產物、codegen 型別（schema.d.ts 50k 行）、自動產生的宣告檔、vite 暫存檔。
+    // 不掃：建置產物、coverage 報表產物（istanbul HTML helper 自帶 eslint-disable）、
+    // codegen 型別（schema.d.ts 50k 行）、自動產生的宣告檔、vite 暫存檔。
     ignores: [
       'dist/**',
       'dist-debug/**',
+      'coverage/**',
       'src/api/_generated/**',
       'auto-imports.d.ts',
       'components.d.ts',
