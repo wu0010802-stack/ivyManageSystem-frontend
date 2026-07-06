@@ -6,6 +6,7 @@ import { getOrgSettings, postOrgSettings, getClassTargets, upsertClassTarget } f
 import { getEmployees } from '@/api/employees'
 import { getClassrooms } from '@/api/classrooms'
 import { hasPermission } from '@/utils/auth'
+import { apiError } from '@/utils/error'
 
 // ---- Derive row types from typed API wrappers — no hand-written `any` ----
 type OrgSettingsRow = Awaited<ReturnType<typeof getOrgSettings>>['data'][number]
@@ -171,8 +172,8 @@ async function saveOrgSettings(row: OrgSettingsRow) {
     })
     ElMessage.success(`${semesterLabel(row.semester_first)} 已儲存`)
     await loadOrgSettings()
-  } catch {
-    ElMessage.error('儲存失敗')
+  } catch (e) {
+    ElMessage.error(apiError(e, '儲存失敗'))
   } finally {
     orgSaving.value[key] = false
   }
@@ -195,8 +196,8 @@ async function saveClassTarget(row: ClassTargetRow) {
     })
     ElMessage.success(`${classroomName(row.classroom_id)}（${semesterLabel(row.semester_first)}）已儲存`)
     await loadClassTargets()
-  } catch {
-    ElMessage.error('班級設定儲存失敗')
+  } catch (e) {
+    ElMessage.error(apiError(e, '班級設定儲存失敗'))
   } finally {
     classSaving.value[row.id] = false
   }

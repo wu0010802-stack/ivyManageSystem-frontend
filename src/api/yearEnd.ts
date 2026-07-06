@@ -9,6 +9,13 @@ export const listYearEndCycles = () => api.get('/year_end/cycles')
 export const createYearEndCycle = (payload: unknown) =>
   api.post('/year_end/cycles', payload)
 
+/** G2：年終週期狀態轉換（OPEN→LOCKED→CLOSED；亦允許倒退 CLOSED→LOCKED→OPEN 作救援）。 */
+export const updateCycleStatus = (
+  cycleId: number,
+  data: ApiBody<'/year_end/cycles/{cycle_id}', 'patch'>,
+): AxiosResp<'/year_end/cycles/{cycle_id}', 'patch'> =>
+  api.patch(`/year_end/cycles/${cycleId}`, data)
+
 // ============ Org Year Settings ============
 
 export const listOrgYearSettings = (cycleId: number) =>

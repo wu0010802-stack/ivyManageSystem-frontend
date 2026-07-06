@@ -126,19 +126,20 @@ async function loadGrid() {
   }
 }
 
-// 進頁自動 build（Task 9）：**fail-closed** — 只在正向確認為 buildable 狀態
-// （OPEN/LOCKED）且可寫時才自動試算，再讀。
-// 後端 build-settlements 無 cycle 層級狀態守衛（只逐列 non-DRAFT skip），這個前端
-// 判斷是「自動重算封存 cycle」的唯一防線；一次網路抖動讓 listYearEndCycles 失敗
-// （.catch → []）或 cycleId 找不到時 cycleStatus 退為 null，若放行 build 會靜默重算
-// CLOSED cycle 覆寫殘留 DRAFT 列。故狀態未知（null）/CLOSED 一律跳過只 loadGrid。
+// 進頁自動 build（Task 9）：**fail-closed** — 只在正向確認為 OPEN 狀態
+// 且可寫時才自動試算，再讀。
+// 後端 build-settlements 現在對 LOCKED cycle 一律拒絕（cycle_guard，年終批次2 G2
+// 週期鎖定），故僅 OPEN 才自動重算；一次網路抖動讓 listYearEndCycles 失敗
+// （.catch → []）或 cycleId 找不到時 cycleStatus 退為 null，若誤判為可重算會對
+// 已鎖定/封存 cycle 發出注定失敗的 build 請求。故狀態未知（null）/LOCKED/CLOSED
+// 一律跳過只 loadGrid。
 async function initGrid() {
   const cycles = await listYearEndCycles()
     .then((res) => res.data as YearEndCycleLite[])
     .catch(() => [] as YearEndCycleLite[])
   const cycle = cycles.find((c) => c.id === cycleId)
   cycleStatus.value = cycle?.status ?? null
-  if (canWrite.value && (cycleStatus.value === 'OPEN' || cycleStatus.value === 'LOCKED')) {
+  if (canWrite.value && cycleStatus.value === 'OPEN') {
     try {
       await buildSettlements(cycleId, { included_resigned_employee_ids: [] })
       // 成功後才記時間戳：語意是「最後成功試算」而非「嘗試」。build 失敗（catch）不設。
@@ -154,16 +155,20 @@ async function initGrid() {
 async function onBuild() {
   try {
     const res = await buildSettlements(cycleId, { included_resigned_employee_ids: [] })
-    const { built, skipped_finalized, unmatched_count, fallback_classes } = res.data
+    const { built, skipped_finalized, unmatched_count, fallback_classes, warnings } = res.data
     await loadGrid()
     ElMessage.success(`已試算 ${built} 筆，略過已簽 ${skipped_finalized} 筆`)
-    // 附帶提醒：資料缺口（任一 > 0 才顯示）
+    // 附帶提醒：資料缺口（任一 > 0 才顯示）+ 後端明細 warnings（如超額覆寫、教課獎勵
+    // 缺配對班級等，年終批次2 G7/G8 新增）
     const gapParts: string[] = []
     if (unmatched_count > 0) {
       gapParts.push(`${unmatched_count} 筆才藝報名未配對班級，未計入鼓勵獎金`)
     }
     if (fallback_classes > 0) {
       gapParts.push(`${fallback_classes} 班學號未回填，沿用手填舊生率`)
+    }
+    if (warnings && warnings.length > 0) {
+      gapParts.push(...warnings)
     }
     if (gapParts.length > 0) {
       ElMessage.warning(gapParts.join('；'))

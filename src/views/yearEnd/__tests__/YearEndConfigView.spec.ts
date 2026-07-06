@@ -275,4 +275,68 @@ describe('YearEndConfigView', () => {
     )
     expect(vi.mocked(ElMessage.success)).toHaveBeenCalled()
   })
+
+  // 兩處寫死「儲存失敗」改用 apiError 讀後端 detail（LOCKED/CLOSED 拒絕時使用者要看得到原因）
+  it('save org settings 失敗時顯示後端 detail（非寫死「儲存失敗」）', async () => {
+    vi.mocked(yearEndApi.getOrgSettings).mockResolvedValue({
+      data: [makeOrgRow({ semester_first: true, enrollment_target: 160 })],
+    } as never)
+    vi.mocked(yearEndApi.getClassTargets).mockResolvedValue({ data: [] } as never)
+    stubSupportApis()
+    vi.mocked(yearEndApi.postOrgSettings).mockRejectedValue({
+      response: { data: { detail: '週期已鎖定，無法修改全校設定' } },
+    })
+
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as {
+      saveOrgSettings: (row: OrgRow) => Promise<void>
+      orgSettings: OrgRow[]
+    }
+
+    await vm.saveOrgSettings(vm.orgSettings[0])
+    await nextTick()
+
+    expect(vi.mocked(ElMessage.error)).toHaveBeenCalledWith('週期已鎖定，無法修改全校設定')
+  })
+
+  it('save class target 失敗時顯示後端 detail（非寫死「班級設定儲存失敗」）', async () => {
+    const classRow = makeClassRow({ id: 10, classroom_id: 3, head_count_target: 25 })
+    vi.mocked(yearEndApi.getOrgSettings).mockResolvedValue({ data: [] } as never)
+    vi.mocked(yearEndApi.getClassTargets).mockResolvedValue({ data: [classRow] } as never)
+    stubSupportApis()
+    vi.mocked(yearEndApi.upsertClassTarget).mockRejectedValue({
+      response: { data: { detail: '週期已封存，無法修改班級設定' } },
+    })
+
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as {
+      saveClassTarget: (row: ClassRow) => Promise<void>
+      classTargets: ClassRow[]
+    }
+
+    await vm.saveClassTarget(vm.classTargets[0])
+    await nextTick()
+
+    expect(vi.mocked(ElMessage.error)).toHaveBeenCalledWith('週期已封存，無法修改班級設定')
+  })
+
+  it('save org settings 失敗且無 detail 時 fallback 為「儲存失敗」', async () => {
+    vi.mocked(yearEndApi.getOrgSettings).mockResolvedValue({
+      data: [makeOrgRow({ semester_first: true, enrollment_target: 160 })],
+    } as never)
+    vi.mocked(yearEndApi.getClassTargets).mockResolvedValue({ data: [] } as never)
+    stubSupportApis()
+    vi.mocked(yearEndApi.postOrgSettings).mockRejectedValue(new Error('network error'))
+
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as {
+      saveOrgSettings: (row: OrgRow) => Promise<void>
+      orgSettings: OrgRow[]
+    }
+
+    await vm.saveOrgSettings(vm.orgSettings[0])
+    await nextTick()
+
+    expect(vi.mocked(ElMessage.error)).toHaveBeenCalledWith('儲存失敗')
+  })
 })

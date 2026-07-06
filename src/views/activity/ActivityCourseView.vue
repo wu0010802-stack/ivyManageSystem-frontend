@@ -23,6 +23,13 @@
           <span v-else style="color: var(--text-tertiary);">-</span>
         </template>
       </el-table-column>
+      <!-- G8（年終批次2）：課程負責老師，年終教課獎勵金依此歸屬自動計算 -->
+      <el-table-column label="負責老師" width="100" align="center">
+        <template #default="{ row }">
+          <span v-if="instructorName(row)">{{ instructorName(row) }}</span>
+          <span v-else style="color: var(--text-tertiary);">未設定</span>
+        </template>
+      </el-table-column>
       <!-- 容量以佔位數（enrolled + promoted_pending）計：後端容量閘同口徑擋
            手動升位，只顯示 enrolled 會出現「看似有位、升位卻 400 容量已滿」
            的矛盾（audit C-5，2026-07-02） -->
@@ -104,6 +111,26 @@
         </el-form-item>
         <el-form-item label="講師">
           <el-input v-model="form.instructor_name" maxlength="50" placeholder="講師姓名（選填，前台課程卡顯示）" />
+        </el-form-item>
+        <el-form-item label="負責老師">
+          <el-select
+            v-model="form.instructor_employee_id"
+            clearable
+            filterable
+            placeholder="選擇負責老師"
+            style="width: 100%"
+            data-test="select-instructor-employee"
+          >
+            <el-option
+              v-for="emp in employeeOptions"
+              :key="emp.id"
+              :label="String(emp.name)"
+              :value="emp.id"
+            />
+          </el-select>
+          <div style="font-size: 12px; color: var(--text-tertiary); margin-top: 4px;">
+            年終教課獎勵金依此歸屬自動計算
+          </div>
         </el-form-item>
 
         <el-divider content-position="left">
@@ -279,6 +306,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { CopyDocument, VideoPlay } from '@element-plus/icons-vue'
 import { copyCoursesFromPrevious, getCourses, createCourse, updateCourse, deleteCourse,
          getCourseWaitlist, getCourseEnrolled, promoteWaitlist } from '@/api/activity'
+import { getEmployees } from '@/api/employees'
 import type { ApiBody } from '@/api/_generated/typed'
 import AcademicTermSelector from '@/components/common/AcademicTermSelector.vue'
 import { useAcademicTermStore } from '@/stores/academicTerm'
@@ -291,6 +319,8 @@ interface Course {
   min_age_months?: number | null; max_age_months?: number | null
   meeting_weekday?: number | null; meeting_start_time?: string; meeting_end_time?: string
   instructor_name?: string | null
+  // G8（年終批次2）：課程負責老師，年終教課獎勵金依此歸屬自動計算
+  instructor_employee_id?: number | null
   enrolled?: number; promoted_pending?: number; waitlist_count?: number
 }
 interface WaitlistItem { registration_id: number; student_name?: string; class_name?: string; waitlist_position?: number }
@@ -301,7 +331,10 @@ interface CourseForm {
   video_url: string; description: string; min_age_months: number | null; max_age_months: number | null
   meeting_weekday: number | null; meeting_start_time: string; meeting_end_time: string
   instructor_name: string
+  instructor_employee_id: number | null
 }
+
+type EmployeeOption = { id: number; name: unknown }
 
 const termStore = useAcademicTermStore()
 
@@ -341,8 +374,26 @@ const defaultForm = (): CourseForm => ({
   meeting_start_time: '',
   meeting_end_time: '',
   instructor_name: '',
+  instructor_employee_id: null,
 })
 const form = ref<CourseForm>(defaultForm())
+
+// G8：負責老師下拉選項（在職員工），比照 YearEndRulesPanel.vue 的 fetchEmployeeOptions 慣例
+const employeeOptions = ref<EmployeeOption[]>([])
+async function fetchEmployeeOptions() {
+  try {
+    const res = await getEmployees({ is_active: true } as Parameters<typeof getEmployees>[0])
+    employeeOptions.value = (res.data as EmployeeOption[]).filter((e) => e.id != null)
+  } catch {
+    // 非致命：下拉退化但其餘欄位仍可編輯
+    ElMessage.warning('員工清單載入失敗，負責老師選擇可能不完整')
+  }
+}
+function instructorName(row: Course): string {
+  if (row.instructor_employee_id == null) return ''
+  const emp = employeeOptions.value.find((e) => e.id === row.instructor_employee_id)
+  return emp ? String(emp.name) : `員工 #${row.instructor_employee_id}`
+}
 
 const waitlistDrawer = ref(false)
 const waitlistCourse = ref<{ id: number; name: string } | null>(null)
@@ -514,6 +565,7 @@ function openEdit(row: Course) {
     meeting_start_time: row.meeting_start_time || '',
     meeting_end_time: row.meeting_end_time || '',
     instructor_name: row.instructor_name || '',
+    instructor_employee_id: row.instructor_employee_id ?? null,
   }
   dialogVisible.value = true
 }
@@ -583,7 +635,10 @@ async function handleDelete(row: Course) {
   }
 }
 
-onMounted(fetchCourses)
+onMounted(() => {
+  fetchCourses()
+  fetchEmployeeOptions()
+})
 </script>
 
 <style scoped>

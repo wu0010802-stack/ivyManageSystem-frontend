@@ -36,6 +36,8 @@ type PanelVm = {
   rules: Record<string, unknown>
   gradeThresholdPercents: Record<string, number | null>
   dividendActivityMinSessions: number | null
+  teachingExtraUnitPrice: number | null
+  teachingExtraSessionsPerUnit: number | null
   clearAllGradeThresholds: () => void
   addAfterClassAwardRow: () => void
   removeAfterClassAwardRow: (i: number) => void
@@ -77,6 +79,8 @@ const FULL_BONUS_CONFIG_RESPONSE = {
   dividend_activity_amount: 1000,
   dividend_activity_grade_thresholds: { 大班: 1.0, 中班: 0.9, 小班: 0.8, 幼幼班: 0.7 },
   dividend_activity_min_sessions: 16,
+  teaching_extra_unit_price: 70,
+  teaching_extra_sessions_per_unit: 5,
   late_deduction_per_time: 50,
   missing_punch_deduction_per_time: 50,
   personal_leave_deduction_per_day: 500,
@@ -335,6 +339,97 @@ describe('YearEndRulesPanel', () => {
         unknown
       >
       expect(payload.dividend_activity_min_sessions).toBeNull()
+    })
+  })
+
+  // G8（年終批次2）：教課獎勵金——每滿 N 堂計 1 次 × 單價
+  describe('G8 教課獎勵單價 / 每次堂數', () => {
+    it('load: 後端回傳數值 → 直接帶入', async () => {
+      vi.mocked(configApi.getBonusConfig).mockResolvedValue({
+        data: FULL_BONUS_CONFIG_RESPONSE,
+      } as never)
+      stubEmployees()
+
+      const wrapper = await mountPanel()
+      const vm = wrapper.vm as unknown as PanelVm
+
+      expect(vm.teachingExtraUnitPrice).toBe(70)
+      expect(vm.teachingExtraSessionsPerUnit).toBe(5)
+    })
+
+    it('load: 舊後端缺欄位（undefined）→ 容錯回退 null，不炸', async () => {
+      vi.mocked(configApi.getBonusConfig).mockResolvedValue({
+        data: { art_teacher_unit_price: 0 },
+      } as never)
+      stubEmployees()
+
+      const wrapper = await mountPanel()
+      const vm = wrapper.vm as unknown as PanelVm
+
+      expect(vm.teachingExtraUnitPrice).toBeNull()
+      expect(vm.teachingExtraSessionsPerUnit).toBeNull()
+    })
+
+    it('load: 新後端明確為 null（未設定，沿用預設）→ 維持 null', async () => {
+      vi.mocked(configApi.getBonusConfig).mockResolvedValue({
+        data: {
+          ...FULL_BONUS_CONFIG_RESPONSE,
+          teaching_extra_unit_price: null,
+          teaching_extra_sessions_per_unit: null,
+        },
+      } as never)
+      stubEmployees()
+
+      const wrapper = await mountPanel()
+      const vm = wrapper.vm as unknown as PanelVm
+
+      expect(vm.teachingExtraUnitPrice).toBeNull()
+      expect(vm.teachingExtraSessionsPerUnit).toBeNull()
+    })
+
+    it('save: 兩欄隨 payload 送出（round-trip）', async () => {
+      vi.mocked(configApi.getBonusConfig).mockResolvedValue({
+        data: FULL_BONUS_CONFIG_RESPONSE,
+      } as never)
+      stubEmployees()
+      vi.mocked(configApi.updateBonusConfig).mockResolvedValue({ data: {} } as never)
+      vi.mocked(ElMessageBox.prompt).mockResolvedValue({ value: '年終規則設定調整測試' } as never)
+
+      const wrapper = await mountPanel()
+      const vm = wrapper.vm as unknown as PanelVm
+
+      await vm.saveRules()
+
+      const payload = vi.mocked(configApi.updateBonusConfig).mock.calls[0][0] as Record<
+        string,
+        unknown
+      >
+      expect(payload.teaching_extra_unit_price).toBe(70)
+      expect(payload.teaching_extra_sessions_per_unit).toBe(5)
+    })
+
+    it('save: 清空為 null → payload 送 null（沿用預設 65/4）', async () => {
+      vi.mocked(configApi.getBonusConfig).mockResolvedValue({
+        data: FULL_BONUS_CONFIG_RESPONSE,
+      } as never)
+      stubEmployees()
+      vi.mocked(configApi.updateBonusConfig).mockResolvedValue({ data: {} } as never)
+      vi.mocked(ElMessageBox.prompt).mockResolvedValue({ value: '年終規則設定調整測試' } as never)
+
+      const wrapper = await mountPanel()
+      const vm = wrapper.vm as unknown as PanelVm
+
+      vm.teachingExtraUnitPrice = null
+      vm.teachingExtraSessionsPerUnit = null
+      await nextTick()
+      await vm.saveRules()
+
+      const payload = vi.mocked(configApi.updateBonusConfig).mock.calls[0][0] as Record<
+        string,
+        unknown
+      >
+      expect(payload.teaching_extra_unit_price).toBeNull()
+      expect(payload.teaching_extra_sessions_per_unit).toBeNull()
     })
   })
 })

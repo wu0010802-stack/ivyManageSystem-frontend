@@ -57,6 +57,12 @@ const gradeThresholdPercents = reactive<GradeThresholdPercents>(emptyGradeThresh
 // G15：幼生該學期出席堂數「超過」此值才計入才藝參與率分子；null＝停用堂數條件。
 const dividendActivityMinSessions = ref<number | null>(null)
 
+// G8（年終批次2）：教課獎勵金——暫依 Excel 慣例（R1）每滿 N 堂計 1 次 × 單價。
+// 留空＝null＝沿用後端預設（65 元／4 堂）；不放進 RULE_FIELDS 的 0 預設寫法，
+// 因為「未設定」與「設為 0」語意不同（比照 dividendActivityMinSessions 的 null 容錯模式）。
+const teachingExtraUnitPrice = ref<number | null>(null)
+const teachingExtraSessionsPerUnit = ref<number | null>(null)
+
 const clearAllGradeThresholds = () => {
   Object.assign(gradeThresholdPercents, emptyGradeThresholdPercents())
 }
@@ -98,6 +104,14 @@ const fetchRules = async () => {
     const minSessionsRaw = data.dividend_activity_min_sessions
     dividendActivityMinSessions.value =
       typeof minSessionsRaw === 'number' ? minSessionsRaw : null
+
+    // G8：兩欄同樣容錯（舊後端缺欄位 undefined / 新後端未設定 null 皆視為「沿用預設」）
+    const teachingUnitPriceRaw = data.teaching_extra_unit_price
+    teachingExtraUnitPrice.value =
+      typeof teachingUnitPriceRaw === 'number' ? teachingUnitPriceRaw : null
+    const teachingSessionsRaw = data.teaching_extra_sessions_per_unit
+    teachingExtraSessionsPerUnit.value =
+      typeof teachingSessionsRaw === 'number' ? teachingSessionsRaw : null
   } catch {
     ElMessage.error('年終規則載入失敗')
   } finally {
@@ -161,6 +175,9 @@ const saveRules = async () => {
     // G15：逐年級門檻換算回 fraction dict（全空 → null 回退單一門檻）+ 堂數條件（null＝停用）。
     dividend_activity_grade_thresholds: gradeThresholdsToApi(gradeThresholdPercents),
     dividend_activity_min_sessions: dividendActivityMinSessions.value,
+    // G8：留空＝null＝沿用後端預設（65 元／4 堂）
+    teaching_extra_unit_price: teachingExtraUnitPrice.value,
+    teaching_extra_sessions_per_unit: teachingExtraSessionsPerUnit.value,
     reason,
   }
 
@@ -266,6 +283,40 @@ onMounted(() => {
           />
         </el-select>
       </el-form-item>
+    </el-card>
+
+    <!-- ⑥ 教課獎勵（②③ 為既有編號跳號留白，避免與其他意涵混淆改用下一個未用序號） -->
+    <div class="section-title">教課獎勵</div>
+    <el-card class="box-card mb-6" shadow="never">
+      <p class="desc-text">
+        暫依 Excel 慣例（R1）：每滿 N 堂計 1 次 × 單價；留空＝沿用系統預設（65 元／4 堂）。
+      </p>
+      <el-row :gutter="20">
+        <el-col :span="12">
+          <el-form-item label="教課獎勵單價">
+            <el-input-number
+              v-model="teachingExtraUnitPrice"
+              :min="0" :step="5"
+              controls-position="right" style="width: 100%"
+              :value-on-clear="null"
+              placeholder="沿用預設 65"
+            />
+            <span class="unit-hint">元 / 次</span>
+          </el-form-item>
+        </el-col>
+        <el-col :span="12">
+          <el-form-item label="每次堂數">
+            <el-input-number
+              v-model="teachingExtraSessionsPerUnit"
+              :min="1" :step="1" :precision="0"
+              controls-position="right" style="width: 100%"
+              :value-on-clear="null"
+              placeholder="沿用預設 4"
+            />
+            <span class="unit-hint">堂 / 次</span>
+          </el-form-item>
+        </el-col>
+      </el-row>
     </el-card>
 
     <!-- ④ 學期紅利 -->

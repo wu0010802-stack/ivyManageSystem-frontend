@@ -231,6 +231,58 @@ describe('YearEndGridView', () => {
     expect(warningText).not.toContain('未配對班級')
   })
 
+  // 年終批次2 G7/G8：後端新增 warnings 明細（如超額覆寫、教課獎勵缺配對班級等），
+  // 應與既有 unmatched_count/fallback_classes 缺口提示合併顯示（同一則 warning）。
+  it('build 回傳 warnings 非空時，與既有缺口提示合併顯示（同一則 warning）', async () => {
+    vi.mocked(api.getYearEndGrid).mockResolvedValue({
+      data: [makeRow()],
+    } as never)
+    vi.mocked(api.buildSettlements).mockResolvedValue({
+      data: {
+        built: 2,
+        skipped_finalized: 0,
+        unmatched_count: 1,
+        fallback_classes: 0,
+        warnings: ['員工 10 教課獎勵金找不到負責課程班級'],
+      },
+    } as never)
+
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as { onBuild: () => Promise<void> }
+
+    await vm.onBuild()
+    await nextTick()
+
+    const warningCalls = vi.mocked(ElMessage.warning).mock.calls
+    expect(warningCalls).toHaveLength(1)
+    const warningText = warningCalls[0]![0] as string
+    expect(warningText).toContain('1 筆才藝報名未配對班級，未計入鼓勵獎金')
+    expect(warningText).toContain('員工 10 教課獎勵金找不到負責課程班級')
+  })
+
+  it('build 回傳 warnings 非空但無其他缺口時，仍單獨顯示 warning', async () => {
+    vi.mocked(api.getYearEndGrid).mockResolvedValue({
+      data: [makeRow()],
+    } as never)
+    vi.mocked(api.buildSettlements).mockResolvedValue({
+      data: {
+        built: 2,
+        skipped_finalized: 0,
+        unmatched_count: 0,
+        fallback_classes: 0,
+        warnings: ['某筆超額獎金已被手動覆寫，未隨試算更新'],
+      },
+    } as never)
+
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as { onBuild: () => Promise<void> }
+
+    await vm.onBuild()
+    await nextTick()
+
+    expect(vi.mocked(ElMessage.warning)).toHaveBeenCalledWith('某筆超額獎金已被手動覆寫，未隨試算更新')
+  })
+
   // Case 3: manual edit dialog patches and reloads (user sets deduction → IS sent)
   it('manual edit dialog patches settlement and reloads', async () => {
     vi.mocked(api.getYearEndGrid).mockResolvedValue({
@@ -359,19 +411,21 @@ describe('YearEndGridView 進頁自動 build（Task 9）', () => {
     expect(callOrder).toEqual(['build', 'grid'])
   })
 
-  it('LOCKED + canWrite：仍屬 buildable 狀態，mount 時觸發 buildSettlements', async () => {
+  // 年終批次2 G2：後端 build-settlements 現在對 LOCKED cycle 一律拒絕（cycle_guard），
+  // 故前端不應再對 LOCKED cycle 自動觸發 build——這與舊行為（LOCKED 仍視為 buildable）相反。
+  it('LOCKED + canWrite：後端現一律拒絕 build（cycle_guard），mount 時不觸發 buildSettlements', async () => {
     vi.mocked(api.listYearEndCycles).mockResolvedValue({
       data: [{ id: 7, status: 'LOCKED' }],
     } as never)
-    vi.mocked(api.buildSettlements).mockResolvedValue({
-      data: { built: 1, skipped_finalized: 0, unmatched_count: 0, fallback_classes: 0, warnings: [] },
-    } as never)
     vi.mocked(api.getYearEndGrid).mockResolvedValue({ data: [makeRow()] } as never)
 
-    await mountView()
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as { rows: GridRow[]; cycleStatus: string | null }
 
-    expect(api.buildSettlements).toHaveBeenCalledWith(7, { included_resigned_employee_ids: [] })
+    expect(api.buildSettlements).not.toHaveBeenCalled()
     expect(api.getYearEndGrid).toHaveBeenCalledWith(7)
+    expect(vm.rows).toHaveLength(1)
+    expect(vm.cycleStatus).toBe('LOCKED')
   })
 
   it('CLOSED cycle：不呼叫 buildSettlements，仍 loadGrid', async () => {
