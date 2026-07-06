@@ -220,5 +220,6 @@ export function stopSessionWatchdog(): void {
   }
   _clearCountdownTimer()
   countdownRemainingMs.value = null
+  _refreshFailedNotice = false // 防旗標跨 stop→start 週期殘留，吞掉下一輪 session 的網路錯誤提示
   _opts = null
 }

@@ -150,4 +150,16 @@ describe('useSessionWatchdog', () => {
     vi.advanceTimersByTime(15_000)
     expect(window.location.hash).toBe('#/login')
   })
+
+  it('倒數中 logoutNow → clearAuth(notifyServer) + 導登入頁，但不設閒置 one-shot 旗標', () => {
+    startWatchdog()
+    const { countdownRemainingMs } = useSessionWatchdogState()
+    vi.advanceTimersByTime(IDLE_MS + 15_000)
+    expect(countdownRemainingMs.value).not.toBeNull()
+    logoutNow()
+    expect(clearAuth).toHaveBeenCalledWith({ notifyServer: true })
+    expect(window.location.hash).toBe('#/login')
+    // 手動登出 ≠ 閒置登出：登入頁不應顯示「閒置已登出」提示
+    expect(sessionStorage.getItem(IDLE_LOGOUT_FLAG_KEY)).toBeNull()
+  })
 })
