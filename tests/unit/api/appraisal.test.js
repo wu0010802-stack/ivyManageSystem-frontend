@@ -237,15 +237,9 @@ describe('appraisal api', () => {
     )
   })
 
-  it('listAppraisalPenaltyCatalog stub rejects with not-implemented error', async () => {
-    await expect(mod.listAppraisalPenaltyCatalog()).rejects.toThrow(
-      'listAppraisalPenaltyCatalog 後端尚未實作'
-    )
-  })
-
-  it('patchAppraisalPenaltyCatalog stub rejects with not-implemented error', async () => {
-    await expect(mod.patchAppraisalPenaltyCatalog()).rejects.toThrow(
-      'patchAppraisalPenaltyCatalog 後端尚未實作'
-    )
+  it('patchAppraisalCatalogItem PATCH /appraisal/catalog/:item_id with payload', async () => {
+    const payload = { label: '新標籤', is_active: false }
+    await mod.patchAppraisalCatalogItem(9, payload)
+    expect(mockPatch).toHaveBeenCalledWith('/appraisal/catalog/9', payload)
   })
 })

@@ -17,6 +17,9 @@ export const patchAppraisalCycle = (cycleId: number, payload: ApiBody<'/appraisa
 export const listAppraisalCatalog = (): AxiosResp<'/appraisal/catalog', 'get'> =>
     api.get('/appraisal/catalog')
 
+export const patchAppraisalCatalogItem = (itemId: number, payload: ApiBody<'/appraisal/catalog/{item_id}', 'patch'>): AxiosResp<'/appraisal/catalog/{item_id}', 'patch'> =>
+    api.patch(`/appraisal/catalog/${itemId}`, payload)
+
 // ============ Participants ============
 
 export const listAppraisalParticipants = (cycleId: number): AxiosResp<'/appraisal/cycles/{cycle_id}/participants', 'get'> =>
@@ -112,15 +115,6 @@ export const bulkAddAppraisalParticipantsFromActive = (cycleId: number, employee
     api.post(`/appraisal/cycles/${cycleId}/participants:bulk_from_active`, {
         employee_ids: employeeIds,
     })
-
-// ============ Penalty Catalog stubs（baseline build fix）============
-// PenaltyCatalogPanel.vue 引用這兩個名稱，但後端目前未實作對應 endpoint；
-// 在 endpoint 落地前保留 stub 讓 import / build 不失敗。
-const _notImplemented = (name: string) => () =>
-    Promise.reject(new Error(`${name} 後端尚未實作`))
-
-export const listAppraisalPenaltyCatalog = _notImplemented('listAppraisalPenaltyCatalog')
-export const patchAppraisalPenaltyCatalog = _notImplemented('patchAppraisalPenaltyCatalog')
 
 // ============ Phase 1 Calibrate（scoring rules + manual counts + preview）============
 
