@@ -14,3 +14,8 @@ frontend.log
 
 # Workspace 暫存產出物（trace/log/baseline 等 dev-time artifact）
 .scratch/
+
+# 工具狀態/暫存物（infra 稽核 2026-07-06 起 untrack）
+.superpowers/
+vite.config.js.timestamp-*
+CLAUDE.md.before-*
