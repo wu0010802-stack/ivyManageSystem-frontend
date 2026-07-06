@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 
 const h = vi.hoisted(() => ({
@@ -29,6 +29,13 @@ const stubs = {
 }
 
 describe('SessionIdleDialog', () => {
+  afterEach(() => {
+    // 還原共享 singleton ref，避免最後一個測試把它設成 null 後影響其他檔案的測試順序
+    const countdown = (watchdog as unknown as { __countdown: { value: number | null } })
+      .__countdown
+    countdown.value = 125_000
+  })
+
   it('倒數中顯示 mm:ss（125000ms → 2:05）', () => {
     const wrapper = mount(SessionIdleDialog, { global: { stubs } })
     expect(wrapper.find('.dlg').exists()).toBe(true)

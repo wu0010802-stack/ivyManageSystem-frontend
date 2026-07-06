@@ -15,7 +15,7 @@ vi.mock('@/utils/auth', () => ({
   isLoggedIn: vi.fn(() => true),
 }))
 
-// 隔離 session watchdog：層測試不關心其內部實作，避免看門狗 tick 打到
+// 隔離 session watchdog：本測試不關心其內部實作，避免看門狗 tick 打到
 // 上面 partial mock 的 @/utils/auth（缺 hasStoredUserInfo）而炸測試。
 vi.mock('@/composables/useSessionWatchdog', () => ({
   startSessionWatchdog: vi.fn(),

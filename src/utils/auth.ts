@@ -17,7 +17,7 @@ function _isPublicRoute(path: string) {
   return PUBLIC_ROUTE_PREFIXES.some((prefix) => path.startsWith(prefix))
 }
 
-const USER_INFO_KEY = 'userInfo'
+export const USER_INFO_KEY = 'userInfo'
 const SESSION_VALIDATED_AT_KEY = 'auth_session_validated_at'
 const SESSION_MAX_AGE_MS = 14 * 60 * 1000
 

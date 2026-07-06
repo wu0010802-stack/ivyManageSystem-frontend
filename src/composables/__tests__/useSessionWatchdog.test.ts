@@ -5,13 +5,13 @@ vi.mock('@/api/auth', () => ({
 }))
 vi.mock('@/utils/auth', () => ({
   clearAuth: vi.fn(),
-  hasStoredUserInfo: vi.fn(() => true),
+  USER_INFO_KEY: 'userInfo',
 }))
 // continueSession 網路錯誤分支的動態 import
 vi.mock('element-plus', () => ({ ElMessage: { warning: vi.fn() } }))
 
 import { refreshSession } from '@/api/auth'
-import { clearAuth, hasStoredUserInfo } from '@/utils/auth'
+import { clearAuth } from '@/utils/auth'
 import {
   startSessionWatchdog,
   stopSessionWatchdog,
@@ -34,8 +34,8 @@ describe('useSessionWatchdog', () => {
     vi.useFakeTimers()
     localStorage.clear()
     sessionStorage.clear()
+    localStorage.setItem('userInfo', '{}') // 模擬已登入
     window.location.hash = '#/'
-    vi.mocked(hasStoredUserInfo).mockReturnValue(true)
     vi.mocked(clearAuth).mockClear()
     vi.mocked(refreshSession).mockReset()
     vi.mocked(refreshSession).mockResolvedValue({ data: { user: {} } } as never)
@@ -146,7 +146,7 @@ describe('useSessionWatchdog', () => {
 
   it('userInfo 被清（他分頁登出）→ 下個 tick 導回登入頁', () => {
     startWatchdog()
-    vi.mocked(hasStoredUserInfo).mockReturnValue(false)
+    localStorage.removeItem('userInfo')
     vi.advanceTimersByTime(15_000)
     expect(window.location.hash).toBe('#/login')
   })

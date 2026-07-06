@@ -33,7 +33,7 @@ vi.mock('@/utils/auth', () => ({
   clearAuth: vi.fn(),
 }))
 
-// 隔離 session watchdog：層測試不關心其內部實作，避免看門狗 tick 打到
+// 隔離 session watchdog：本測試不關心其內部實作，避免看門狗 tick 打到
 // 上面 partial mock 的 @/utils/auth（缺 hasStoredUserInfo）而炸測試
 // （PortalLayout 為完整 mount，SessionIdleDialog 會真的渲染，故補
 // useSessionWatchdogState 回傳的 ref 形狀）。

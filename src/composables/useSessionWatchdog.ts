@@ -5,7 +5,7 @@
 import { readonly, ref } from 'vue'
 import type { Ref } from 'vue'
 import { refreshSession } from '@/api/auth'
-import { clearAuth, hasStoredUserInfo } from '@/utils/auth'
+import { clearAuth, USER_INFO_KEY } from '@/utils/auth'
 
 /** 登入頁 one-shot 提示旗標（sessionStorage，同分頁） */
 export const IDLE_LOGOUT_FLAG_KEY = 'idle_logout_notice'
@@ -117,8 +117,9 @@ function _enterCountdown(remainingMs: number) {
 
 function _tick() {
   if (!_opts) return
-  if (!hasStoredUserInfo()) {
-    // 別的分頁已登出（或 401 已被踢）：本分頁跟著回登入頁
+  if (localStorage.getItem(USER_INFO_KEY) === null) {
+    // 讀 localStorage 現值而非 in-memory ref——clearAuth 會同步移除此 key，跨分頁登出
+    // （別分頁清掉）與本分頁被 401 踢出皆可偵測；in-memory ref 是 per-tab 的，跨分頁不會更新
     const loginPath = _opts.loginPath
     stopSessionWatchdog()
     window.location.hash = `#${loginPath}`
