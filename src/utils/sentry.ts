@@ -46,6 +46,7 @@ const PII_KEY_EXEMPT_SUBSTRINGS = [
   'email_template', 'email_subject',
   'growth_funnel', 'growth_rate', 'growth_count',
   'measurement_unit', 'measurement_type',
+  'default_weight', // 考核加減分項目權重（AppraisalScoreItemCatalog）；避免 weight substring 誤遮
 ]
 
 // URL path「/數字」→「/:id」，e.g.
