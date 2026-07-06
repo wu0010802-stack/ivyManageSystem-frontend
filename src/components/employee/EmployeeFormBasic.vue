@@ -130,7 +130,8 @@ defineExpose({ applyValidationErrors })
   </el-form-item>
 
   <el-form-item label="員工編號">
-    <div data-test="employee-id-auto" class="form-hint" style="margin-top:0">
+    <el-tag v-if="form.employee_id" data-test="employee-id-value" effect="plain">{{ form.employee_id }}</el-tag>
+    <div v-else data-test="employee-id-auto" class="form-hint" style="margin-top:0">
       <el-tag type="success" effect="plain">儲存後自動配號（例：114001）</el-tag>
     </div>
   </el-form-item>

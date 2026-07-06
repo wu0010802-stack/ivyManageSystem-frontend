@@ -35,6 +35,17 @@ describe('EmployeeFormBasic', () => {
     expect(auto.text()).toContain('自動配號')
   })
 
+  it('編輯模式（已有編號）顯示現有員工編號，非自動配號提示', () => {
+    const wrapper = mount(EmployeeFormBasic, {
+      global: { plugins: [ElementPlus], stubs: HEAVY_STUBS },
+      props: { form: { name: '王小明', employee_id: '114001' } },
+    })
+    const value = wrapper.find('[data-test="employee-id-value"]')
+    expect(value.exists()).toBe(true)
+    expect(value.text()).toBe('114001')
+    expect(wrapper.find('[data-test="employee-id-auto"]').exists()).toBe(false)
+  })
+
   it('收合區段預設收合（不可見）', () => {
     const wrapper = mountForm()
     expect(isBodyHidden(wrapper, 'section-gov')).toBe(true)
