@@ -1,87 +1,91 @@
 <script setup lang="ts">
+/**
+ * PenaltyCatalogPanel — 扣分項目目錄（16 項加減分定義）中繼資料維護
+ *
+ * 對應後端 GET /appraisal/catalog（既有）＋ PATCH /appraisal/catalog/{item_id}（新增）。
+ * 項目集合（code / sign）由 ScoreItemCode enum 與 seed 治理，不開放新增/刪除；
+ * 本面板只維護顯示用中繼資料：label / default_weight / data_source / description /
+ * display_order / is_active。PATCH 採 exclude_unset 語意，前端建 payload 時只送異動欄位。
+ */
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Refresh, Edit } from '@element-plus/icons-vue'
-import {
-  listAppraisalPenaltyCatalog,
-  patchAppraisalPenaltyCatalog,
-} from '@/api/appraisal'
+import { Refresh } from '@element-plus/icons-vue'
+import { listAppraisalCatalog, patchAppraisalCatalogItem } from '@/api/appraisal'
 import { apiError } from '@/utils/error'
+import { hasPermission } from '@/utils/auth'
+import type { ApiBody, Schema } from '@/api/_generated/typed'
 
-interface PenaltyItem {
-  id: number
-  code?: string
-  category?: string
-  subcategory?: string
-  description?: string
-  default_event_type?: string
-  default_score_delta?: number | string
-  severity_max?: number
-  display_order?: number
-  is_active?: boolean
-  [key: string]: unknown
+type CatalogItem = Schema<'CatalogOut'>
+type ScoreSign = CatalogItem['sign']
+type CatalogPatchPayload = ApiBody<'/appraisal/catalog/{item_id}', 'patch'>
+
+// data_source / description 編輯狀態內一律以 string 承接（null → ''），方便 el-input
+// v-model 綁定；送出 PATCH 前才在 buildDiff 正規化回 string | null。
+interface CatalogEdit {
+  label: string
+  default_weight: number
+  data_source: string
+  description: string
+  display_order: number
 }
 
-const items = ref<PenaltyItem[]>([])
+// P0-A 對齊 ScoringRulesPanel：目錄中繼資料編輯由後端 APPRAISAL_RULE_WRITE 守衛。
+const canEdit = computed(() => hasPermission('APPRAISAL_RULE_WRITE'))
+
+const items = ref<CatalogItem[]>([])
 const loading = ref(false)
-const showInactive = ref(false)
-const categoryFilter = ref('')
+const filterMode = ref<'all' | 'active'>('all')
+const savingId = ref<number | null>(null)
+const edits = reactive<Record<number, CatalogEdit>>({})
 
-const dialogVisible = ref(false)
-const submitting = ref(false)
-const editTarget = ref<PenaltyItem | null>(null)
-const form = reactive({
-  default_score_delta: 0,
-  severity_max: 1,
-  display_order: 0,
-  is_active: true,
-})
+const SIGN_LABELS: Record<ScoreSign, string> = {
+  POSITIVE: '加分',
+  NEGATIVE: '扣分',
+  NEUTRAL: '中性',
+}
+const SIGN_TAG_TYPES: Record<ScoreSign, 'success' | 'danger' | 'info'> = {
+  POSITIVE: 'success',
+  NEGATIVE: 'danger',
+  NEUTRAL: 'info',
+}
+const signLabel = (sign: ScoreSign) => SIGN_LABELS[sign] ?? sign
+const signTagType = (sign: ScoreSign) => SIGN_TAG_TYPES[sign] ?? 'info'
 
-const categoryOptions = [
-  { value: '', label: '全部分類' },
-  { value: 'MISCONDUCT', label: '行為不當' },
-  { value: 'MEDICATION', label: '用藥相關' },
-  { value: 'ACCIDENT', label: '意外事故' },
-  { value: 'DISPUTE', label: '糾紛' },
-  { value: 'NEGLIGENCE', label: '疏失' },
-  { value: 'MERIT', label: '功績' },
-  { value: 'SPECIAL', label: '特別事件' },
-]
-const categoryLabel = (v: string) =>
-  categoryOptions.find((o) => o.value === v)?.label || v
-
-const eventTypeLabel: Record<string, string> = {
-  MAJOR_MERIT: '大功',
-  MINOR_MERIT: '小功',
-  COMMENDATION: '嘉獎',
-  WARNING: '警告',
-  MINOR_DEMERIT: '小過',
-  MAJOR_DEMERIT: '大過',
-  ORAL_WARNING: '口頭警告',
-  SCORE_ADJUST: '分數調整',
+function snapshotFromItem(item: CatalogItem): CatalogEdit {
+  return {
+    label: item.label,
+    default_weight: Number(item.default_weight),
+    data_source: item.data_source ?? '',
+    description: item.description ?? '',
+    display_order: item.display_order,
+  }
 }
 
-const sortedItems = computed(() => {
-  let arr = items.value
-  if (categoryFilter.value) {
-    arr = arr.filter((i) => i.category === categoryFilter.value)
-  }
-  return [...arr].sort((a, b) => {
-    const ac = a.category ?? '', bc = b.category ?? ''
-    if (ac !== bc) return ac.localeCompare(bc)
-    const ad = a.display_order ?? 0, bd = b.display_order ?? 0
+/** 空字串正規化為 null（與後端 nullable string 欄位對齊）。 */
+const blankToNull = (v: string): string | null => (v.trim() === '' ? null : v)
+
+const filteredItems = computed(() =>
+  filterMode.value === 'active' ? items.value.filter((i) => i.is_active) : items.value,
+)
+
+const sortedItems = computed(() =>
+  [...filteredItems.value].sort((a, b) => {
+    const ad = a.display_order ?? 0
+    const bd = b.display_order ?? 0
     if (ad !== bd) return ad - bd
     return a.id - b.id
-  })
-})
+  }),
+)
 
 const fetchItems = async () => {
   loading.value = true
   try {
-    const res = await (listAppraisalPenaltyCatalog as (p: Record<string, unknown>) => Promise<{ data: unknown }>)({
-      active_only: !showInactive.value,
-    })
-    items.value = ((res.data || []) as PenaltyItem[])
+    const res = await listAppraisalCatalog()
+    const data = res.data || []
+    items.value = data
+    for (const item of data) {
+      edits[item.id] = snapshotFromItem(item)
+    }
   } catch (error) {
     ElMessage.error(apiError(error, '載入扣分目錄失敗'))
   } finally {
@@ -89,48 +93,64 @@ const fetchItems = async () => {
   }
 }
 
-const openEdit = (row: PenaltyItem) => {
-  editTarget.value = row
-  form.default_score_delta = Number(row.default_score_delta)
-  form.severity_max = row.severity_max ?? 1
-  form.display_order = row.display_order ?? 0
-  form.is_active = row.is_active ?? true
-  dialogVisible.value = true
+/** exclude_unset 語意：diff edits[id] 與目前 items 內的原值，只回傳異動欄位。 */
+function buildDiff(id: number): CatalogPatchPayload {
+  const item = items.value.find((i) => i.id === id)
+  const edit = edits[id]
+  const payload: CatalogPatchPayload = {}
+  if (!item || !edit) return payload
+  if (edit.label !== item.label) payload.label = edit.label
+  if (edit.default_weight !== Number(item.default_weight)) payload.default_weight = edit.default_weight
+  const nextSource = blankToNull(edit.data_source)
+  if (nextSource !== (item.data_source ?? null)) payload.data_source = nextSource
+  const nextDescription = blankToNull(edit.description)
+  if (nextDescription !== (item.description ?? null)) payload.description = nextDescription
+  if (edit.display_order !== item.display_order) payload.display_order = edit.display_order
+  return payload
 }
 
-const submitForm = async () => {
-  submitting.value = true
+function isDirty(id: number): boolean {
+  return Object.keys(buildDiff(id)).length > 0
+}
+
+async function saveRow(row: CatalogItem) {
+  const payload = buildDiff(row.id)
+  if (Object.keys(payload).length === 0) return
+  savingId.value = row.id
   try {
-    const res = await (patchAppraisalPenaltyCatalog as (id: number, p: Record<string, unknown>) => Promise<{ data: unknown }>)(editTarget.value!.id, {
-      default_score_delta: form.default_score_delta,
-      severity_max: form.severity_max,
-      display_order: form.display_order,
-      is_active: form.is_active,
-    })
-    const updated = res.data as PenaltyItem
+    const res = await patchAppraisalCatalogItem(row.id, payload)
+    const updated = res.data
     const idx = items.value.findIndex((i) => i.id === updated.id)
     if (idx >= 0) items.value[idx] = updated
+    edits[updated.id] = snapshotFromItem(updated)
     ElMessage.success('已更新')
-    dialogVisible.value = false
   } catch (error) {
     ElMessage.error(apiError(error, '更新失敗'))
   } finally {
-    submitting.value = false
+    savingId.value = null
   }
 }
 
-// is_active inline switch（只送 is_active 一個欄位）
-const toggleActive = async (row: PenaltyItem, val: boolean) => {
+function cancelRow(row: CatalogItem) {
+  edits[row.id] = snapshotFromItem(row)
+}
+
+// is_active 為獨立即時切換（非併入編輯列），只送 is_active 一個欄位。
+async function toggleActive(row: CatalogItem, val: boolean) {
   try {
-    const res = await (patchAppraisalPenaltyCatalog as (id: number, p: Record<string, unknown>) => Promise<{ data: unknown }>)(row.id, { is_active: val })
-    const idx = items.value.findIndex((i) => i.id === row.id)
-    if (idx >= 0) items.value[idx] = res.data as PenaltyItem
+    const res = await patchAppraisalCatalogItem(row.id, { is_active: val })
+    const updated = res.data
+    const idx = items.value.findIndex((i) => i.id === updated.id)
+    if (idx >= 0) items.value[idx] = updated
+    edits[updated.id] = snapshotFromItem(updated)
     ElMessage.success(val ? '已啟用' : '已停用')
   } catch (error) {
-    // 失敗時恢復原值
-    row.is_active = !val
     ElMessage.error(apiError(error, '切換失敗'))
   }
+}
+
+function rowClassName({ row }: { row: CatalogItem }) {
+  return row.is_active ? '' : 'row-inactive'
 }
 
 onMounted(fetchItems)
@@ -139,28 +159,17 @@ onMounted(fetchItems)
 <template>
   <div class="penalty-catalog-panel">
     <div class="panel-head">
-      <div>
-        <p class="hint">
-          扣分項目為 seed 資料，僅可調整分數預設值、嚴重度上限、顯示順序與啟用狀態；新增項目請走 migration。
-        </p>
-      </div>
+      <p class="hint" data-test="panel-hint">
+        扣分項目目錄僅維護顯示用中繼資料（名稱／預設權重／資料來源／說明／排序／啟用）；
+        項目集合與加減分性質由系統治理，不可新增或刪除。預設權重為顯示用預設值，
+        實際計分依規則版本；停用項目仍保留歷史分數對照。
+      </p>
       <div class="actions">
-        <el-select
-          v-model="categoryFilter"
-          placeholder="篩選分類"
-          style="width: 140px"
-        >
-          <el-option
-            v-for="opt in categoryOptions"
-            :key="opt.value"
-            :value="opt.value"
-            :label="opt.label"
-          />
-        </el-select>
-        <el-checkbox v-model="showInactive" @change="fetchItems">
-          含已停用
-        </el-checkbox>
-        <el-button :icon="Refresh" @click="fetchItems" :loading="loading">
+        <el-radio-group v-model="filterMode" data-test="filter-mode">
+          <el-radio-button value="all" data-test="filter-all">全部</el-radio-button>
+          <el-radio-button value="active" data-test="filter-active">僅啟用</el-radio-button>
+        </el-radio-group>
+        <el-button :icon="Refresh" :loading="loading" data-test="refresh-btn" @click="fetchItems">
           重新整理
         </el-button>
       </div>
@@ -171,94 +180,136 @@ onMounted(fetchItems)
       v-loading="loading"
       empty-text="無項目"
       stripe
+      :row-class-name="rowClassName"
     >
-      <el-table-column label="代碼" prop="code" width="100" />
-      <el-table-column label="分類" min-width="100">
-        <template #default="{ row }">{{ categoryLabel(row.category) }}</template>
-      </el-table-column>
-      <el-table-column label="子分類" prop="subcategory" min-width="120" />
-      <el-table-column label="說明" prop="description" min-width="240" />
-      <el-table-column label="預設類別" width="110">
+      <el-table-column label="代碼" width="170">
         <template #default="{ row }">
-          {{ eventTypeLabel[row.default_event_type] || row.default_event_type }}
+          <span class="code-cell" :data-test="`code-${row.code}`">{{ row.code }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="預設分數" prop="default_score_delta" width="100" align="right">
-        <template #default="{ row }">
-          <span :class="Number(row.default_score_delta) >= 0 ? 'score-pos' : 'score-neg'">
-            {{ Number(row.default_score_delta) > 0 ? '+' : '' }}{{ row.default_score_delta }}
-          </span>
-        </template>
-      </el-table-column>
-      <el-table-column label="嚴重度" prop="severity_max" width="80" align="center" />
-      <el-table-column label="順序" prop="display_order" width="80" align="center" />
-      <el-table-column label="啟用" width="80" align="center">
-        <template #default="{ row }">
-          <el-switch
-            v-model="row.is_active"
-            @change="(val) => toggleActive(row, val as boolean)"
-          />
-        </template>
-      </el-table-column>
-      <el-table-column label="動作" width="100" fixed="right">
-        <template #default="{ row }">
-          <el-button size="small" :icon="Edit" @click="openEdit(row)">
-            編輯
-          </el-button>
-        </template>
-      </el-table-column>
-    </el-table>
 
-    <el-dialog
-      v-model="dialogVisible"
-      title="編輯扣分項"
-      width="480px"
-      :close-on-click-modal="false"
-    >
-      <p v-if="editTarget" class="edit-target">
-        {{ editTarget.code }} ・{{ editTarget.description }}
-      </p>
-      <el-form label-width="100px" @submit.prevent="submitForm">
-        <el-form-item label="預設分數">
-          <el-input-number
-            v-model="form.default_score_delta"
-            :min="-20"
-            :max="20"
-            :step="1"
-            controls-position="right"
-            style="width: 100%"
+      <el-table-column label="顯示名稱" min-width="160">
+        <template #default="{ row }">
+          <el-input
+            v-if="canEdit"
+            v-model="edits[row.id].label"
+            maxlength="60"
+            show-word-limit
+            :data-test="`label-input-${row.code}`"
           />
-        </el-form-item>
-        <el-form-item label="嚴重度上限">
+          <span v-else :data-test="`label-text-${row.code}`">{{ row.label }}</span>
+        </template>
+      </el-table-column>
+
+      <el-table-column width="90" align="center">
+        <template #header>性質</template>
+        <template #default="{ row }">
+          <el-tag :type="signTagType(row.sign)" :data-test="`sign-tag-${row.code}`">
+            {{ signLabel(row.sign) }}
+          </el-tag>
+        </template>
+      </el-table-column>
+
+      <el-table-column width="160" align="right">
+        <template #header>
+          預設權重
+          <span class="col-hint">顯示用；實際依規則版本</span>
+        </template>
+        <template #default="{ row }">
           <el-input-number
-            v-model="form.severity_max"
-            :min="1"
-            :max="5"
-            :step="1"
+            v-if="canEdit"
+            v-model="edits[row.id].default_weight"
+            :min="-99"
+            :max="99"
+            :step="0.1"
             controls-position="right"
-            style="width: 100%"
+            :data-test="`weight-input-${row.code}`"
           />
-        </el-form-item>
-        <el-form-item label="顯示順序">
+          <span v-else :data-test="`weight-text-${row.code}`">{{ row.default_weight }}</span>
+        </template>
+      </el-table-column>
+
+      <el-table-column label="資料來源" min-width="140">
+        <template #default="{ row }">
+          <el-input
+            v-if="canEdit"
+            v-model="edits[row.id].data_source"
+            maxlength="60"
+            :data-test="`source-input-${row.code}`"
+          />
+          <span v-else :data-test="`source-text-${row.code}`">{{ row.data_source || '-' }}</span>
+        </template>
+      </el-table-column>
+
+      <el-table-column label="說明" min-width="220">
+        <template #default="{ row }">
+          <el-input
+            v-if="canEdit"
+            v-model="edits[row.id].description"
+            type="textarea"
+            :rows="2"
+            :data-test="`description-input-${row.code}`"
+          />
+          <span v-else :data-test="`description-text-${row.code}`">{{ row.description || '-' }}</span>
+        </template>
+      </el-table-column>
+
+      <el-table-column label="順序" width="100" align="center">
+        <template #default="{ row }">
           <el-input-number
-            v-model="form.display_order"
+            v-if="canEdit"
+            v-model="edits[row.id].display_order"
             :min="0"
             :step="1"
             controls-position="right"
-            style="width: 100%"
+            :data-test="`order-input-${row.code}`"
           />
-        </el-form-item>
-        <el-form-item label="啟用">
-          <el-switch v-model="form.is_active" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="submitForm">
-          儲存
-        </el-button>
-      </template>
-    </el-dialog>
+          <span v-else :data-test="`order-text-${row.code}`">{{ row.display_order }}</span>
+        </template>
+      </el-table-column>
+
+      <el-table-column label="啟用" width="90" align="center">
+        <template #default="{ row }">
+          <el-switch
+            v-if="canEdit"
+            :model-value="row.is_active"
+            :data-test="`active-switch-${row.code}`"
+            @change="(val) => toggleActive(row, val as boolean)"
+          />
+          <el-tag
+            v-else
+            size="small"
+            :type="row.is_active ? 'success' : 'info'"
+            :data-test="`active-text-${row.code}`"
+          >
+            {{ row.is_active ? '啟用' : '停用' }}
+          </el-tag>
+        </template>
+      </el-table-column>
+
+      <el-table-column v-if="canEdit" label="動作" width="130" fixed="right">
+        <template #default="{ row }">
+          <template v-if="isDirty(row.id)">
+            <el-button
+              size="small"
+              type="primary"
+              :loading="savingId === row.id"
+              :data-test="`save-btn-${row.code}`"
+              @click="saveRow(row)"
+            >
+              儲存
+            </el-button>
+            <el-button
+              size="small"
+              :data-test="`cancel-btn-${row.code}`"
+              @click="cancelRow(row)"
+            >
+              取消
+            </el-button>
+          </template>
+        </template>
+      </el-table-column>
+    </el-table>
   </div>
 </template>
 
@@ -270,7 +321,7 @@ onMounted(fetchItems)
 .panel-head {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   margin-bottom: var(--space-4);
   gap: var(--space-3);
   flex-wrap: wrap;
@@ -280,7 +331,7 @@ onMounted(fetchItems)
   margin: 0;
   color: var(--text-tertiary);
   font-size: var(--text-sm);
-  max-width: 600px;
+  max-width: 640px;
 }
 
 .actions {
@@ -290,21 +341,20 @@ onMounted(fetchItems)
   flex-shrink: 0;
 }
 
-.score-pos {
-  color: var(--color-success);
-  font-weight: 600;
+.code-cell {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+  font-size: var(--text-sm);
 }
 
-.score-neg {
-  color: var(--color-danger);
-  font-weight: 600;
+.col-hint {
+  display: block;
+  font-weight: 400;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
 }
 
-.edit-target {
-  margin: 0 0 var(--space-4);
-  padding: var(--space-3);
+:deep(.row-inactive) {
+  color: var(--text-tertiary);
   background: var(--neutral-50);
-  border-radius: var(--radius-md);
-  color: var(--text-secondary);
 }
 </style>
