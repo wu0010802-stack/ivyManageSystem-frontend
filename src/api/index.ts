@@ -209,6 +209,11 @@ api.interceptors.response.use(
 function _redirectToLogin() {
     const isPortal = window.location.hash.includes('/portal')
     clearAuth({ notifyServer: false })
+    // 原本無聲瞬移 → 帶提示（EP 動態 import，同 READ_ONLY_MODE 模式，
+    // 避免 element-plus 成為 public/parent chunk 硬依賴）
+    import('element-plus')
+        .then(({ ElMessage }) => ElMessage.warning('登入已逾期，請重新登入'))
+        .catch(() => { /* silent */ })
     if (isPortal) {
         window.location.hash = '#/portal/login'
     } else {

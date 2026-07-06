@@ -7,6 +7,7 @@ import { User, Lock } from '@element-plus/icons-vue'
 import { login } from '@/api/auth'
 import { setUserInfo } from '@/utils/auth'
 import { apiError } from '@/utils/error'
+import { IDLE_LOGOUT_FLAG_KEY } from '@/composables/useSessionWatchdog'
 
 const router = useRouter()
 const loading = ref(false)
@@ -16,6 +17,10 @@ const passwordInput = ref<HTMLInputElement | null>(null)
 
 onMounted(() => {
   requestAnimationFrame(() => {
+    if (sessionStorage.getItem(IDLE_LOGOUT_FLAG_KEY)) {
+      sessionStorage.removeItem(IDLE_LOGOUT_FLAG_KEY)
+      ElMessage.info('因閒置過久，已自動登出')
+    }
     usernameInput.value?.focus?.()
   })
 })
