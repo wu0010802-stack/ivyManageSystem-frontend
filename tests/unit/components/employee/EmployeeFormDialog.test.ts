@@ -18,13 +18,13 @@ vi.mock('@/api/config', () => ({
   getPositionSalary: (...a: unknown[]) => mockGetPositionSalary(...a),
 }))
 
-// ── stores（照抄 EmployeeView.test.js 開頭的 mock 寫法：整包替換成可控 plain object）──
-const configStore = { jobTitles: [] as { id: number; name: string }[] }
+// ── stores（照抄 EmployeeListView.test.js 開頭的 mock 寫法：整包替換成可控 plain object）──
+const configStore = { jobTitles: [] as { id: number; name: string }[], fetchJobTitles: vi.fn(() => Promise.resolve()) }
 vi.mock('@/stores/config', () => ({
   useConfigStore: () => configStore,
 }))
 
-const classroomStore = { classrooms: [] as { id: number; name: string }[] }
+const classroomStore = { classrooms: [] as { id: number; name: string }[], fetchClassrooms: vi.fn(() => Promise.resolve()) }
 vi.mock('@/stores/classroom', () => ({
   useClassroomStore: () => classroomStore,
 }))
@@ -67,6 +67,7 @@ type DialogVm = {
   openEdit: (row: Record<string, unknown>) => Promise<void>
   form: Record<string, unknown>
   saveCreate: () => Promise<void>
+  saveBasic: () => Promise<void>
 }
 
 describe('EmployeeFormDialog', () => {
@@ -112,6 +113,51 @@ describe('EmployeeFormDialog', () => {
     await vm.saveCreate()
     await vi.waitFor(() => {
       expect(w.emitted('saved')).toBeTruthy()
+    })
+  })
+
+  // ── 自 EmployeeListView.test.js 遷移（生日欄位）──
+  it('新增模式 form.birthday 預設空字串且渲染「生日」欄位', async () => {
+    const w = mountDialog()
+    await (w.vm as unknown as DialogVm).openCreate()
+    await nextTick()
+    expect((w.vm as unknown as DialogVm).form.birthday).toBe('')
+    expect(w.text()).toContain('生日')
+  })
+
+  it('編輯模式 openEdit 帶入 birthday 進 form', async () => {
+    const w = mountDialog()
+    const vm = w.vm as unknown as DialogVm
+    await vm.openEdit({ id: 1, name: '王小明', birthday: '1990-03-15', base_salary: 30000, hourly_rate: 0, insurance_salary_level: 30000 })
+    await nextTick()
+    expect(vm.form.birthday).toBe('1990-03-15')
+  })
+
+  // ── 自 EmployeeListView.test.js 遷移（saveBasic 只送 dirty 欄位）──
+  it('saveBasic 只送 dirty 欄位 — 改 phone → { phone } payload', async () => {
+    const w = mountDialog()
+    const vm = w.vm as unknown as DialogVm
+    // openEdit → populateForm 建立 dirty 快照（resetDirty 在 nextTick 完成）
+    await vm.openEdit({
+      id: 42,
+      employee_id: 'EMP001',
+      name: '測試員工',
+      phone: '0912-000-000',
+      base_salary: 30000,
+      hourly_rate: 0,
+      insurance_salary_level: 30000,
+    })
+    await nextTick()
+    await nextTick()
+
+    // 只修改 phone
+    vm.form.phone = '0988-123-456'
+    await nextTick()
+
+    await vm.saveBasic()
+    await vi.waitFor(() => {
+      expect(mockUpdateEmployeeBasic).toHaveBeenCalledTimes(1)
+      expect(mockUpdateEmployeeBasic).toHaveBeenCalledWith(42, { phone: '0988-123-456' })
     })
   })
 })

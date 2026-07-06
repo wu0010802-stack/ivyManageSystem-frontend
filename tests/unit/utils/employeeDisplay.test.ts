@@ -48,7 +48,7 @@ describe('薪資遮罩顯示（後端 role/self 遮罩回 null，嚴禁顯示成
   })
 })
 
-describe('detectRole / standardSalaryFor（自 EmployeeView 搬出，行為不變）', () => {
+describe('detectRole / standardSalaryFor（自舊員工頁搬出，行為不變）', () => {
   it('班導/副班導判定', () => {
     expect(detectRole('班導')).toBe('head')
     expect(detectRole('副班導')).toBe('assistant')

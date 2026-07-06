@@ -12,7 +12,7 @@ vi.mock('vue-router', () => ({
 import EmployeeHubView from '../EmployeeHubView.vue'
 
 const stubs = {
-  EmployeeView: { name: 'EmployeeView', template: '<div class="stub-employees" />' },
+  EmployeeListView: { name: 'EmployeeListView', template: '<div class="stub-employees" />' },
   OffboardingView: { name: 'OffboardingView', template: '<div class="stub-offboarding" />' },
   ElSegmented: {
     name: 'ElSegmented',

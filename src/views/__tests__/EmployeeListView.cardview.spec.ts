@@ -15,7 +15,7 @@ vi.mock('vue-router', () => ({ useRoute: () => ({ query: {} }), useRouter: () =>
 // API 直呼 mock（onMounted 呼 getPositionSalary）
 vi.mock('@/api/config', () => ({ getPositionSalary: vi.fn(() => new Promise(() => {})) }))
 
-import EmployeeView from '@/views/EmployeeView.vue'
+import EmployeeListView from '@/views/EmployeeListView.vue'
 
 // el-table / el-table-column 不是全域安裝的 Element Plus，shallowMount 下不自動 stub；
 // 明確傳入 stubs，讓 el-table-column 不執行帶 scope 的 slot（否則 scope.row 為 undefined 炸）
@@ -28,10 +28,10 @@ const globalStubs = {
   },
 }
 
-describe('EmployeeView 手機卡片切換', () => {
+describe('EmployeeListView 手機卡片切換', () => {
   it('桌機顯示 el-table、手機顯示 AdminListCards', async () => {
     mockIsMobile.value = false
-    const w = shallowMount(EmployeeView, { global: globalStubs })
+    const w = shallowMount(EmployeeListView, { global: globalStubs })
     await nextTick()
     expect(w.findComponent({ name: 'ElTable' }).exists() || w.find('.el-table').exists()).toBe(true)
     expect(w.findComponent({ name: 'AdminListCards' }).exists()).toBe(false)
