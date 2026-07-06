@@ -65,7 +65,7 @@
         "eslint-plugin-vue": "^10.9.2",
         "fake-indexeddb": "^6.2.5",
         "globals": "^17.6.0",
-        "happy-dom": "^20.6.1",
+        "happy-dom": "^20.10.6",
         "jsdom": "^29.1.1",
         "openapi-typescript": "^7.13.0",
         "postcss": "^8.5.15",
