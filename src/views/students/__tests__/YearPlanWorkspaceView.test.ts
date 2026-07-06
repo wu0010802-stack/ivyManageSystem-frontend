@@ -15,6 +15,7 @@ vi.mock('@/api/classroomYearPlan', () => ({
   getClassroomYearPlanPreview: vi.fn(),
   publishClassroomYearPlan: vi.fn(),
   unpublishClassroomYearPlan: vi.fn(),
+  cancelClassroomYearPlan: vi.fn(),
 }))
 vi.mock('@/api/classrooms', () => ({
   getGrades: vi.fn().mockResolvedValue({ data: [] }),
@@ -35,6 +36,7 @@ import {
   bulkUpdateClassroomYearPlanStudents,
   getClassroomYearPlanPreview,
   publishClassroomYearPlan,
+  cancelClassroomYearPlan,
 } from '@/api/classroomYearPlan'
 import YearPlanWorkspaceView from '../YearPlanWorkspaceView.vue'
 import PlanBatchToolbar from '@/components/enrollment/planning/PlanBatchToolbar.vue'
@@ -49,6 +51,7 @@ const mockGenerate = generateClassroomYearPlan as ReturnType<typeof vi.fn>
 const mockBulkStudents = bulkUpdateClassroomYearPlanStudents as ReturnType<typeof vi.fn>
 const mockPreview = getClassroomYearPlanPreview as ReturnType<typeof vi.fn>
 const mockPublish = publishClassroomYearPlan as ReturnType<typeof vi.fn>
+const mockCancel = cancelClassroomYearPlan as ReturnType<typeof vi.fn>
 
 function statusNone() {
   return {
@@ -247,6 +250,7 @@ describe('YearPlanWorkspaceView', () => {
 
   it('版本衝突：任一互動 mutation 收到 409 version_conflict → 彈出提示，確認後重新載入', async () => {
     const alertSpy = vi.spyOn(ElMessageBox, 'alert').mockResolvedValue('confirm' as never)
+    vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm' as never)
     mockStatus.mockResolvedValue(statusDraft())
     mockDetail.mockResolvedValue(detailDraftWithClasses())
 
@@ -264,8 +268,8 @@ describe('YearPlanWorkspaceView', () => {
     await flushPromises()
 
     const toolbar = w.findComponent(PlanBatchToolbar)
-    const vm = toolbar.vm as unknown as { applyReset: () => void }
-    vm.applyReset()
+    const vm = toolbar.vm as unknown as { applyReset: () => Promise<void> }
+    void vm.applyReset()
     await flushPromises()
     await nextTick()
 
@@ -274,7 +278,7 @@ describe('YearPlanWorkspaceView', () => {
     expect(mockStatus.mock.calls.length).toBeGreaterThan(1)
   })
 
-  it('僅 READ 權限（無 CLASSROOMS_WRITE）：隱藏產生草稿 CTA、四顆寫入動作鈕，且列表不可勾選', async () => {
+  it('僅 READ 權限（無 CLASSROOMS_WRITE）：隱藏產生草稿 CTA、五顆寫入動作鈕，且列表不可勾選', async () => {
     hasPermissionReturn = false
 
     mockStatus.mockResolvedValueOnce(statusNone())
@@ -292,11 +296,12 @@ describe('YearPlanWorkspaceView', () => {
     expect(w.find('.btn-regenerate').exists()).toBe(false)
     expect(w.find('.btn-publish').exists()).toBe(false)
     expect(w.find('.btn-unpublish').exists()).toBe(false)
+    expect(w.find('.btn-cancel-plan').exists()).toBe(false)
     // canWrite=false → PlanRosterTable editable prop 為 false，勾選 checkbox 不出現
     expect(w.findComponent({ name: 'ElCheckbox' }).exists()).toBe(false)
   })
 
-  it('具 CLASSROOMS_WRITE 權限：產生草稿 CTA、四顆寫入動作鈕與列表勾選皆可見', async () => {
+  it('具 CLASSROOMS_WRITE 權限：產生草稿 CTA、五顆寫入動作鈕與列表勾選皆可見', async () => {
     hasPermissionReturn = true
 
     mockStatus.mockResolvedValueOnce(statusNone())
@@ -313,20 +318,23 @@ describe('YearPlanWorkspaceView', () => {
     expect(w.find('.btn-regenerate').exists()).toBe(true)
     expect(w.find('.btn-publish').exists()).toBe(true)
     expect(w.find('.btn-unpublish').exists()).toBe(true)
+    expect(w.find('.btn-cancel-plan').exists()).toBe(true)
     expect(w.findComponent({ name: 'ElCheckbox' }).exists()).toBe(true)
   })
 
-  it('mutation in-flight（loading=true）時四顆動作鈕與批次工具列全部鎖定，防雙擊偽版本衝突', async () => {
+  it('mutation in-flight（loading=true）時五顆動作鈕與批次工具列全部鎖定，防雙擊偽版本衝突', async () => {
     mockStatus.mockResolvedValue(statusDraft())
     mockDetail.mockResolvedValue(detailDraftWithClasses())
+    vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm' as never)
 
     const w = mountView()
     await flushPromises()
 
-    // in-flight 前：draft 無 blocking → 發布/重生成/新增班可點
+    // in-flight 前：draft 無 blocking → 發布/重生成/新增班/作廢皆可點
     expect((w.find('.btn-publish').element as HTMLButtonElement).disabled).toBe(false)
     expect((w.find('.btn-regenerate').element as HTMLButtonElement).disabled).toBe(false)
     expect((w.find('.btn-add-class').element as HTMLButtonElement).disabled).toBe(false)
+    expect((w.find('.btn-cancel-plan').element as HTMLButtonElement).disabled).toBe(false)
 
     // 勾一位學生後以 never-resolving promise 模擬 bulk mutation in-flight
     const checkbox = w.findComponent({ name: 'ElCheckbox' })
@@ -335,13 +343,15 @@ describe('YearPlanWorkspaceView', () => {
     mockBulkStudents.mockReturnValue(new Promise(() => {}))
 
     const toolbar = w.findComponent(PlanBatchToolbar)
-    ;(toolbar.vm as unknown as { applyReset: () => void }).applyReset()
+    void (toolbar.vm as unknown as { applyReset: () => Promise<void> }).applyReset()
+    await flushPromises()
     await nextTick()
 
     expect((w.find('.btn-add-class').element as HTMLButtonElement).disabled).toBe(true)
     expect((w.find('.btn-regenerate').element as HTMLButtonElement).disabled).toBe(true)
     expect((w.find('.btn-publish').element as HTMLButtonElement).disabled).toBe(true)
     expect((w.find('.btn-unpublish').element as HTMLButtonElement).disabled).toBe(true)
+    expect((w.find('.btn-cancel-plan').element as HTMLButtonElement).disabled).toBe(true)
     expect(toolbar.props('disabled')).toBe(true)
   })
 
@@ -374,5 +384,39 @@ describe('YearPlanWorkspaceView', () => {
     await confirmBtn?.trigger('click')
     await nextTick()
     expect(mockPublish).toHaveBeenCalledTimes(1)
+  })
+
+  it('作廢草稿流程：點擊 → 強確認 → 呼叫 cancel API 帶 base_version → reload 回 none 空狀態', async () => {
+    vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm' as never)
+    mockStatus.mockResolvedValueOnce(statusDraft())
+    mockDetail.mockResolvedValueOnce(detailDraftWithClasses())
+    mockCancel.mockResolvedValue({ data: { status: 'cancelled', version: 2 } })
+
+    const w = mountView()
+    await flushPromises()
+    expect(w.find('.btn-cancel-plan').exists()).toBe(true)
+
+    mockStatus.mockResolvedValueOnce(statusNone())
+    await w.find('.btn-cancel-plan').trigger('click')
+    await flushPromises()
+
+    expect(mockCancel).toHaveBeenCalledWith(5, { base_version: 1 })
+    expect(w.find('.empty-state').exists()).toBe(true)
+    expect(w.find('.btn-cancel-plan').exists()).toBe(false)
+  })
+
+  it('作廢草稿流程：使用者取消 ElMessageBox.confirm 時不呼叫 cancel API', async () => {
+    vi.spyOn(ElMessageBox, 'confirm').mockRejectedValue('cancel')
+    mockStatus.mockResolvedValue(statusDraft())
+    mockDetail.mockResolvedValue(detailDraftWithClasses())
+
+    const w = mountView()
+    await flushPromises()
+
+    await w.find('.btn-cancel-plan').trigger('click')
+    await flushPromises()
+
+    expect(mockCancel).not.toHaveBeenCalled()
+    expect(w.find('.btn-cancel-plan').exists()).toBe(true)
   })
 })

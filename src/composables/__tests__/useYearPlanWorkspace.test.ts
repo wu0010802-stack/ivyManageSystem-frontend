@@ -12,6 +12,7 @@ vi.mock('@/api/classroomYearPlan', () => ({
   getClassroomYearPlanPreview: vi.fn(),
   publishClassroomYearPlan: vi.fn(),
   unpublishClassroomYearPlan: vi.fn(),
+  cancelClassroomYearPlan: vi.fn(),
 }))
 vi.mock('@/composables/useErrorNotify', () => ({ useErrorNotify: () => ({ notify: vi.fn() }) }))
 
@@ -27,6 +28,7 @@ import {
   getClassroomYearPlanPreview,
   publishClassroomYearPlan,
   unpublishClassroomYearPlan,
+  cancelClassroomYearPlan,
 } from '@/api/classroomYearPlan'
 import { useYearPlanWorkspace } from '@/composables/useYearPlanWorkspace'
 
@@ -41,6 +43,7 @@ const mockBulkStudents = bulkUpdateClassroomYearPlanStudents as ReturnType<typeo
 const mockPreview = getClassroomYearPlanPreview as ReturnType<typeof vi.fn>
 const mockPublish = publishClassroomYearPlan as ReturnType<typeof vi.fn>
 const mockUnpublish = unpublishClassroomYearPlan as ReturnType<typeof vi.fn>
+const mockCancel = cancelClassroomYearPlan as ReturnType<typeof vi.fn>
 
 function statusNone() {
   return {
@@ -334,6 +337,22 @@ describe('useYearPlanWorkspace', () => {
     expect(ok).toBe(true)
   })
 
+  it('cancelPlan(): 帶 base_version，成功後回傳 true 並 reload 回 none（plan 從系統消失）', async () => {
+    const ws = await loadedWorkspace()
+    const detailCallsBeforeCancel = mockDetail.mock.calls.length
+    mockCancel.mockResolvedValue({ data: { status: 'cancelled', version: 2 } })
+    mockStatus.mockResolvedValue(statusNone())
+
+    const ok = await ws.cancelPlan()
+
+    expect(mockCancel).toHaveBeenCalledWith(5, { base_version: 1 })
+    expect(ok).toBe(true)
+    expect(ws.state.value).toBe('none')
+    expect(ws.plan.value).toBeNull()
+    // reload 讀到 state=none（plan_id=null）→ 不再呼叫 detail（呼叫次數維持在 cancel 前的水位）
+    expect(mockDetail).toHaveBeenCalledTimes(detailCallsBeforeCancel)
+  })
+
   it('互動 mutation 在 plan 為 null 時直接短路回 falsy，不呼叫 API', async () => {
     mockStatus.mockResolvedValue(statusNone())
     const ws = useYearPlanWorkspace()
@@ -345,8 +364,10 @@ describe('useYearPlanWorkspace', () => {
     expect(await ws.regenerate(false)).toBeNull()
     expect((await ws.publish()).ok).toBe(false)
     expect(await ws.unpublish()).toBe(false)
+    expect(await ws.cancelPlan()).toBe(false)
     expect(mockCreateClass).not.toHaveBeenCalled()
     expect(mockPublish).not.toHaveBeenCalled()
+    expect(mockCancel).not.toHaveBeenCalled()
   })
 
   it('mutation in-flight 期間再入直接短路（同 tick 雙擊只送一發，不帶同一 base_version 撞 409）', async () => {
@@ -361,6 +382,9 @@ describe('useYearPlanWorkspace', () => {
     // publish 同樣受 in-flight 短路保護
     expect((await ws.publish()).ok).toBe(false)
     expect(mockPublish).not.toHaveBeenCalled()
+    // cancelPlan 同樣受 in-flight 短路保護
+    expect(await ws.cancelPlan()).toBe(false)
+    expect(mockCancel).not.toHaveBeenCalled()
     void first // 首發刻意不 resolve；測試結束由 vitest 回收
   })
 })

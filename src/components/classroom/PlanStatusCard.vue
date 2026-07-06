@@ -22,6 +22,7 @@ const status = ref<StatusOut | null>(null)
 const state = computed(() => status.value?.state ?? 'none')
 const applyOverdue = computed(() => status.value?.apply_overdue ?? false)
 const blockingCount = computed(() => status.value?.blocking_count ?? 0)
+const warningCount = computed(() => status.value?.warning_count ?? 0)
 
 // 樣式：讀取失敗用 error；排程套用逾期用 warning 蓋過其他狀態；applied 用 success；
 // draft 有待處理問題時用 warning；其餘（none / 無問題的 draft）用 info。
@@ -37,8 +38,11 @@ const displayMessage = computed(() => {
   if (loadError.value) return loadError.value
   if (applyOverdue.value) return '計畫尚未套用，排程器重試中'
   switch (state.value) {
-    case 'draft':
-      return `草稿編輯中，尚有 ${blockingCount.value} 項問題`
+    case 'draft': {
+      if (blockingCount.value <= 0) return '草稿編輯中'
+      const base = `草稿編輯中，尚有 ${blockingCount.value} 項問題`
+      return warningCount.value > 0 ? `${base}（另 ${warningCount.value} 項提醒）` : base
+    }
     case 'published':
       return '已確認，等待學年切換（預計 8/1 套用）'
     case 'applied':
@@ -73,8 +77,6 @@ const load = async () => {
 }
 
 onMounted(load)
-
-defineExpose({ reload: load })
 </script>
 
 <template>

@@ -9,7 +9,7 @@ interface ToolbarVm {
   applyAssign: () => void
   applyRetain: () => void
   applyExclude: () => Promise<void>
-  applyReset: () => void
+  applyReset: () => Promise<void>
 }
 
 function mountToolbar(props: Partial<{ selectedCount: number; disabled: boolean }> = {}) {
@@ -67,12 +67,20 @@ describe('PlanBatchToolbar', () => {
     expect(w.emitted('bulk-op')).toBeFalsy()
   })
 
-  it('還原建議 → emit bulk-op {op:reset}（無需額外參數）', async () => {
+  it('還原建議 → 使用者確認後 emit bulk-op {op:reset}（無需額外參數）', async () => {
+    const confirmSpy = vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm' as never)
     const w = mountToolbar()
-    vmOf(w).applyReset()
-    await w.vm.$nextTick()
+    await vmOf(w).applyReset()
+    expect(confirmSpy).toHaveBeenCalled()
     const events = w.emitted('bulk-op')
     expect(events![0][0]).toEqual({ op: 'reset' })
+  })
+
+  it('還原建議 → 使用者取消 ElMessageBox.confirm 時不派發', async () => {
+    vi.spyOn(ElMessageBox, 'confirm').mockRejectedValue('cancel')
+    const w = mountToolbar()
+    await vmOf(w).applyReset()
+    expect(w.emitted('bulk-op')).toBeFalsy()
   })
 
   it('排除 → 使用者輸入原因後 emit bulk-op {op:exclude, excludeReason}', async () => {

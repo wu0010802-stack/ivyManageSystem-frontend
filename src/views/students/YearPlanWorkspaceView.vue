@@ -19,6 +19,7 @@
         <el-button v-if="canWrite" class="btn-regenerate" :disabled="!canRegenerate || loading" @click="onRegenerateClick">重新產生建議</el-button>
         <el-button v-if="canWrite" type="primary" class="btn-publish" :disabled="!canPublish || loading" @click="onPublishClick">發布</el-button>
         <el-button v-if="canWrite" class="btn-unpublish" :disabled="!canUnpublish || loading" @click="onUnpublishClick">撤回發布</el-button>
+        <el-button v-if="canWrite && canCancelPlan" type="danger" class="btn-cancel-plan" :disabled="loading" @click="onCancelPlanClick">作廢草稿</el-button>
       </div>
     </div>
 
@@ -123,6 +124,7 @@ const {
   bulkUpdateStudents,
   publish,
   unpublish,
+  cancelPlan,
 } = useYearPlanWorkspace()
 
 onMounted(load)
@@ -152,6 +154,9 @@ const canPublish = computed(() => {
 })
 // 撤回發布：僅 published 狀態可操作
 const canUnpublish = computed(() => state.value === 'published')
+// 作廢草稿：draft（放棄未完成草稿）或 published（等同取消已發布的確認）皆可操作；
+// none（無草稿可作廢）與 applied（已套用，不可逆）不顯示此按鈕。
+const canCancelPlan = computed(() => state.value === 'draft' || state.value === 'published')
 
 function onGenerateClick(): void {
   void generate()
@@ -223,6 +228,26 @@ async function onUnpublishClick(): Promise<void> {
   }
   const ok = await unpublish()
   if (ok) ElMessage.success('已撤回發布')
+}
+
+// ── 作廢草稿：published 狀態語氣加重（等同取消已發布的確認），draft 則單純告知
+// 草稿將移除、可重新產生。作廢後 plan 從系統消失，cancelPlan() 內建 reload() 會讓
+// state 回到 none，本層不需要額外處理空狀態渲染。
+async function onCancelPlanClick(): Promise<void> {
+  const message = state.value === 'published'
+    ? '此計畫已發布，作廢將同時取消先前的發布確認，這份新學年草稿會被移除，之後可重新產生。此操作無法復原，確定要作廢嗎？'
+    : '作廢後這份新學年草稿將被移除，之後可重新產生。確定要作廢嗎？'
+  try {
+    await ElMessageBox.confirm(message, '作廢草稿', {
+      type: 'warning',
+      confirmButtonText: '確定作廢',
+      cancelButtonText: '取消',
+    })
+  } catch {
+    return // 使用者取消
+  }
+  const ok = await cancelPlan()
+  if (ok) ElMessage.success('已作廢，草稿已移除')
 }
 
 // ── 班級編輯（新增／編輯／刪除）──

@@ -88,7 +88,18 @@ async function applyExclude(): Promise<void> {
   }
 }
 
-function applyReset(): void {
+async function applyReset(): Promise<void> {
+  try {
+    // 還原建議會丟棄所選學生的手動調整，改回系統建議分派——具破壞性，先強確認
+    // 再派發（比照 applyExclude 的 ElMessageBox 慣例）。
+    await ElMessageBox.confirm(
+      '此操作將丟棄所選學生的手動調整，還原為系統建議，確定要繼續嗎？',
+      '還原建議',
+      { type: 'warning', confirmButtonText: '確定還原', cancelButtonText: '取消' },
+    )
+  } catch {
+    return // 使用者取消，不派發
+  }
   emit('bulk-op', { op: 'reset' })
 }
 

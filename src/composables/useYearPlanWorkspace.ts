@@ -11,6 +11,7 @@ import {
   getClassroomYearPlanPreview,
   publishClassroomYearPlan,
   unpublishClassroomYearPlan,
+  cancelClassroomYearPlan,
 } from '@/api/classroomYearPlan'
 import type { Schema } from '@/api/_generated/typed'
 import { useErrorNotify } from '@/composables/useErrorNotify'
@@ -302,6 +303,23 @@ export function useYearPlanWorkspace() {
     return result != null
   }
 
+  /**
+   * 作廢草稿/已發布計畫：draft 或 published 皆可作廢，成功後 plan 從系統消失
+   * （後端 cancel 端點將 state 收斂回 none）。走既有 `_runMutation` 骨架，reload()
+   * 取回的 status.state 會是 'none'，UI 依此自然回到空狀態。
+   */
+  async function cancelPlan(): Promise<boolean> {
+    if (!plan.value) return false
+    const planId = plan.value.id
+    const baseVersion = plan.value.version
+    const result = await _runMutation(
+      () => cancelClassroomYearPlan(planId, { base_version: baseVersion }),
+      'useYearPlanWorkspace.cancelPlan',
+      '作廢草稿失敗',
+    )
+    return result != null
+  }
+
   return {
     status,
     plan,
@@ -322,6 +340,7 @@ export function useYearPlanWorkspace() {
     loadPreview,
     publish,
     unpublish,
+    cancelPlan,
   }
 }
 

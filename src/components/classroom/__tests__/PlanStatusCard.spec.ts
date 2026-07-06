@@ -85,7 +85,7 @@ describe('PlanStatusCard', () => {
         plan_id: 1,
         version: 2,
         blocking_count: 3,
-        warning_count: 1,
+        warning_count: 0,
         prep_start_date: '2026-06-01',
         apply_overdue: false,
       },
@@ -94,6 +94,48 @@ describe('PlanStatusCard', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('草稿編輯中，尚有 3 項問題')
+    expect(wrapper.text()).not.toContain('項提醒')
+  })
+
+  it('draft 態 + 有 warning：問題數之後附加「（另 M 項提醒）」', async () => {
+    getClassroomYearPlanStatus.mockResolvedValue({
+      data: {
+        state: 'draft',
+        target_school_year: 115,
+        source_school_year: 114,
+        plan_id: 1,
+        version: 2,
+        blocking_count: 3,
+        warning_count: 2,
+        prep_start_date: '2026-06-01',
+        apply_overdue: false,
+      },
+    })
+    const wrapper = mountCard()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('草稿編輯中，尚有 3 項問題（另 2 項提醒）')
+  })
+
+  it('draft 態 + blocking_count=0：不顯示「尚有 0 項問題」，僅顯示「草稿編輯中」', async () => {
+    getClassroomYearPlanStatus.mockResolvedValue({
+      data: {
+        state: 'draft',
+        target_school_year: 115,
+        source_school_year: 114,
+        plan_id: 1,
+        version: 2,
+        blocking_count: 0,
+        warning_count: 0,
+        prep_start_date: '2026-06-01',
+        apply_overdue: false,
+      },
+    })
+    const wrapper = mountCard()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('草稿編輯中')
+    expect(wrapper.text()).not.toContain('尚有')
   })
 
   it('published 態（未逾期）：顯示等待學年切換文字', async () => {
