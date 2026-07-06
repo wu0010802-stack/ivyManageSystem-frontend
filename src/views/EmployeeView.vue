@@ -11,6 +11,7 @@ import {
   updateEmployeeBasic, updateEmployeeSalary,
   listEmployeeClassHistory,
 } from '@/api/employees'
+import { statusKeyOf, getEmployeeStatus, detectRole, standardSalaryFor, type ElTagType, type EmployeeStatusKey } from '@/utils/employeeDisplay'
 import OffboardingModal from '@/components/offboarding/OffboardingModal.vue'
 import { getRecords as getAttendanceRecords, uploadCsv, deleteEmployeeDateRecord } from '@/api/attendance'
 import { summarizeCsvImportResult } from '@/utils/attendanceImport'
@@ -20,7 +21,7 @@ import type { FormInstance, FormRules } from 'element-plus'
 import EmptyState from '@/components/common/EmptyState.vue'
 import TableSkeleton from '@/components/common/TableSkeleton.vue'
 import { useEmployeeStore } from '@/stores/employee'
-import { todayISO, thisMonthISO } from '@/utils/format'
+import { thisMonthISO } from '@/utils/format'
 import { formatSemester, roleLabel, formatCoTeachers, formatHeadcount, formatNetChange, type ClassHistoryRow } from '@/utils/classHistory'
 import { useClassroomStore } from '@/stores/classroom'
 import { useConfigStore } from '@/stores/config'
@@ -91,13 +92,6 @@ const rules: FormRules = {
 
 const positionSalaryConfig = ref<Record<string, number> | null>(null)
 const suggestedSalary = ref<number | null>(null)
-
-const detectRole = (position: string | null | undefined) => {
-  if (!position) return null
-  if (position.includes('班導') && !position.includes('副')) return 'head'
-  if (position.includes('副班導')) return 'assistant'
-  return null
-}
 
 const titleToGrade = (jobTitleId: number | null | undefined) => {
   if (!jobTitleId || !configStore.jobTitles) return null
@@ -306,26 +300,7 @@ const syncInsuranceToBase = () => {
   form.insurance_salary_level = form.base_salary
 }
 
-// 查詢某員工對應的標準薪俸（詳情頁用）
-const standardSalaryFor = (emp: Record<string, unknown>) => {
-  if (!positionSalaryConfig.value || !emp) return null
-  const cfg = positionSalaryConfig.value
-  const pos = (emp.position as string) || ''
-  const role = detectRole(pos)
-  if (role) {
-    const titleName = (emp.job_title_name as string) || (emp.title as string) || ''
-    const grade = ((emp.bonus_grade as string) || (TITLE_TO_GRADE as Record<string, string>)[titleName] || '').toLowerCase()
-    if (grade) {
-      const key = `${role === 'head' ? 'head_teacher' : 'assistant_teacher'}_${grade}`
-      return cfg[key] ?? null
-    }
-    return null
-  }
-  const key = (POSITION_SALARY_KEY as Record<string, string>)[pos]
-  return key ? (cfg[key] ?? null) : null
-}
-
-type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
+// standardSalaryFor 已搬到 @/utils/employeeDisplay
 
 interface EmployeeRow {
   id: number
@@ -340,21 +315,7 @@ interface EmployeeRow {
 const offboardVisible = ref(false)
 const offboardTarget = ref<EmployeeRow | null>(null)
 
-// 員工狀態單一來源：filter 與狀態標籤共用，避免兩處判定邏輯漂移
-type StatusKey = 'active' | 'pending' | 'resigned'
-const statusKeyOf = (emp: Record<string, unknown>): StatusKey => {
-  if (!emp.is_active) return 'resigned'
-  if (emp.resign_date && (emp.resign_date as string) > todayISO()) return 'pending'
-  return 'active'
-}
-
-const getEmployeeStatus = (emp: Record<string, unknown>): { label: string; type: ElTagType } => {
-  switch (statusKeyOf(emp)) {
-    case 'resigned': return { label: '已離職', type: 'info' }
-    case 'pending': return { label: `待離職・${emp.resign_date}`, type: 'warning' }
-    default: return { label: '在職', type: 'success' }
-  }
-}
+// 員工狀態單一來源已搬到 @/utils/employeeDisplay
 
 const openOffboard = (emp: Record<string, unknown>) => {
   offboardTarget.value = emp as EmployeeRow
@@ -381,7 +342,7 @@ const filteredEmployees = computed(() =>
 )
 
 // ── 狀態篩選（純前端，疊在 filteredEmployees 之上；搜尋中也同時生效）──
-type StatusFilter = 'all' | StatusKey
+type StatusFilter = 'all' | EmployeeStatusKey
 const statusFilter = ref<StatusFilter>('all')
 const matchesStatus = (emp: Record<string, unknown>) =>
   statusFilter.value === 'all' || statusKeyOf(emp) === statusFilter.value
@@ -884,7 +845,7 @@ const showBasicPreview = () => {
 }
 
 // computed helpers for template — avoids repeated null checks & arithmetic type errors
-const currentStandardSalary = computed(() => standardSalaryFor(currentDetail.value))
+const currentStandardSalary = computed(() => standardSalaryFor(currentDetail.value, positionSalaryConfig.value))
 const formAsBasicData = computed(() => form as unknown as EmployeeFormBasicData)
 const classroomOptions = computed(() => classroomStore.classrooms as { id: number; name: string }[])
 
