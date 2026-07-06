@@ -80,4 +80,22 @@ describe('useEmployeeDetail', () => {
     expect(mockListEdu).not.toHaveBeenCalled()
     expect(d.employee.value).toMatchObject({ name: '呂麗珍（改）' })
   })
+
+  it('id 快速切換：舊回應晚到不覆蓋新資料（過期守衛）', async () => {
+    let resolveOld: ((v: unknown) => void) | undefined
+    const oldPromise = new Promise((r) => { resolveOld = r })
+    mockGetEmployee
+      .mockImplementationOnce(() => oldPromise)
+      .mockResolvedValueOnce({ data: { id: 2, name: '新員工' } })
+    const id = ref(1)
+    const d = useEmployeeDetail(id)
+    await nextTick()
+    id.value = 2
+    await flush(); await nextTick()
+    expect(d.employee.value).toMatchObject({ id: 2, name: '新員工' })
+    resolveOld?.({ data: { id: 1, name: '舊員工' } })
+    await flush(); await nextTick()
+    expect(d.employee.value).toMatchObject({ id: 2, name: '新員工' })
+    expect(d.loading.value).toBe(false)
+  })
 })
