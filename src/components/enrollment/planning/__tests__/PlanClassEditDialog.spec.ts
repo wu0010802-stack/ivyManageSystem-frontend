@@ -131,6 +131,23 @@ describe('PlanClassEditDialog', () => {
     })
   })
 
+  it('edit 模式：el-select clear 造成 undefined 時仍送顯式 null（清空教師不可被 JSON 序列化吞掉）', async () => {
+    const w = mountDialog({ mode: 'edit', planClass })
+    await flushPromises()
+    const vm = vmOf(w)
+    // el-select clearable 的 × 會把 model 設成 undefined（繞過 number|null 型別）；
+    // 若 payload 原樣帶 undefined，JSON.stringify 會整欄丟棄 → 後端 exclude_unset 視為未變更
+    vm.form.head_teacher_id = undefined as unknown as null
+    await w.vm.$nextTick()
+    vm.onSubmit()
+    const events = w.emitted('update')
+    expect(events).toBeTruthy()
+    const payload = events![0][1] as Record<string, unknown>
+    expect('head_teacher_id' in payload).toBe(true)
+    expect(payload.head_teacher_id).toBeNull()
+    expect(JSON.parse(JSON.stringify(payload))).toHaveProperty('head_teacher_id', null)
+  })
+
   it('edit 模式：確認刪除後 emit delete(classId)', async () => {
     vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm' as never)
     const w = mountDialog({ mode: 'edit', planClass })

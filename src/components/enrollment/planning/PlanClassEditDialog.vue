@@ -171,9 +171,11 @@ function onSubmit(): void {
       target_grade_id: form.value.target_grade_id,
       capacity: form.value.capacity,
       class_code: form.value.class_code,
-      head_teacher_id: form.value.head_teacher_id,
-      assistant_teacher_id: form.value.assistant_teacher_id,
-      art_teacher_id: form.value.art_teacher_id,
+      // el-select clearable 的 × 會把 model 設成 undefined；undefined 會被 JSON
+      // 序列化整欄丟棄 → 後端 exclude_unset 視為未變更，清空會靜默失敗，故正規化為 null
+      head_teacher_id: form.value.head_teacher_id ?? null,
+      assistant_teacher_id: form.value.assistant_teacher_id ?? null,
+      art_teacher_id: form.value.art_teacher_id ?? null,
     })
   }
 }
