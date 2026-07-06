@@ -2118,6 +2118,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/appraisal/catalog/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Patch Catalog Item
+         * @description 維護 16 項加減分目錄的中繼資料（label / 說明 / 權重 / 排序 / 啟用）。
+         *
+         *     只做 PATCH：項目集合（code）由 ScoreItemCode enum 與 seed 治理，新增/刪除
+         *     項目會產生引擎不認得的孤兒項目，故不開放 POST/DELETE。code 與 sign 不在
+         *     CatalogPatch 欄位內，payload 帶了也不會被採用（schema 層面就不收）。
+         *     is_active=False 停用後 GET /catalog 仍會列出該項目，是否隱藏由前端顯示濾鏡決定。
+         */
+        patch: operations["patch_catalog_item_api_appraisal_catalog__item_id__patch"];
+        trace?: never;
+    };
     "/appraisal/current": {
         parameters: {
             query?: never;
@@ -2311,15 +2336,19 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Bulk Add Participants From Active
+         * Bulk Add Participants From Active Endpoint
          * @description 把指定（或全部）在職員工自動加入 cycle。
          *
          *     - role_group / classroom_id 從 Employee 推斷（infer_role_group / infer_classroom_id）；
          *     - hire_months_in_cycle 預設 6；
          *     - 已加入 cycle 的員工會被 skip（不論 is_excluded）；
          *     - cycle.status != OPEN 直接 400。
+         *
+         *     核心邏輯已抽至 services.appraisal.cycle_service.bulk_add_participants_from_active
+         *     （供 services/cycle_autocreate_scheduler.py 共用）；本函式僅負責 404 查找 +
+         *     例外轉 HTTPException + 組裝既有 response schema。
          */
-        post: operations["bulk_add_participants_from_active_api_appraisal_cycles__cycle_id__participants_bulk_from_active_post"];
+        post: operations["bulk_add_participants_from_active"];
         delete?: never;
         options?: never;
         head?: never;
@@ -13990,7 +14019,13 @@ export interface paths {
         /** List Cycles */
         get: operations["list_cycles_api_year_end_cycles_get"];
         put?: never;
-        /** Create Cycle */
+        /**
+         * Create Cycle
+         * @description 建立年終週期。核心邏輯已抽至
+         *     services.year_end.cycle_service.create_year_end_cycle（供
+         *     services/cycle_autocreate_scheduler.py 共用）；本端點僅負責例外轉
+         *     HTTPException，行為與抽離前完全一致。
+         */
         post: operations["create_cycle_api_year_end_cycles_post"];
         delete?: never;
         options?: never;
@@ -16530,6 +16565,29 @@ export interface components {
             /** Label */
             label: string;
             sign: components["schemas"]["ScoreItemSign"];
+        };
+        /**
+         * CatalogPatch
+         * @description PATCH /appraisal/catalog/{item_id} 可改欄位。
+         *
+         *     刻意不含 code / sign：引擎以 code join 對應項目、sign 決定加減分方向，
+         *     改了會讓既有 scoring rule / score item 對不上項目定義，故不開放修改
+         *     （項目集合由 ScoreItemCode enum 與 seed 治理，這裡只維護中繼資料）。
+         *     exclude_unset 語意：沒帶到的欄位不動。
+         */
+        CatalogPatch: {
+            /** Data Source */
+            data_source?: string | null;
+            /** Default Weight */
+            default_weight?: number | string | null;
+            /** Description */
+            description?: string | null;
+            /** Display Order */
+            display_order?: number | null;
+            /** Is Active */
+            is_active?: boolean | null;
+            /** Label */
+            label?: string | null;
         };
         /** CertificateCreate */
         CertificateCreate: {
@@ -33556,6 +33614,41 @@ export interface operations {
             };
         };
     };
+    patch_catalog_item_api_appraisal_catalog__item_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CatalogPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_current_cycle_api_appraisal_current_get: {
         parameters: {
             query?: {
@@ -33901,7 +33994,7 @@ export interface operations {
             };
         };
     };
-    bulk_add_participants_from_active_api_appraisal_cycles__cycle_id__participants_bulk_from_active_post: {
+    bulk_add_participants_from_active: {
         parameters: {
             query?: never;
             header?: never;
