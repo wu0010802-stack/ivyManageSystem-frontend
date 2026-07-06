@@ -40,6 +40,12 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_buffering off;
+        # 上傳上限對齊後端硬上限（utils/file_upload.py：一般 10MB / 影片 50MB）。
+        # 未設時 nginx 預設 1m，>1MB 上傳（醫療照片、附件、Excel 匯入）會在
+        # nginx 層 413，永遠打不到後端；細粒度 10MB 限制仍由後端執行（JSON 413）。
+        client_max_body_size 50m;
+        # 顯式釘住預設值：前端 axios timeout 30s < 此值，逾時語意由 axios 主導。
+        proxy_read_timeout 60s;
     }
 
     # ── 必須每次 revalidate 的檔案（PWA 推不下去就是這幾個快取太兇） ──
