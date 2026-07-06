@@ -451,6 +451,10 @@ const formAsBasicData = computed(() => form as unknown as EmployeeFormBasicData)
 const classroomOptions = computed(() => classroomStore.classrooms as { id: number; name: string }[])
 
 onMounted(async () => {
+  // 下拉資料：職稱（教育局系統）與班級選項，供基本資料 tab 使用。
+  // 清單頁與詳情頁兩個父頁掛載本 dialog 都能自載，父頁 onMounted 不需重複 fetch。
+  configStore.fetchJobTitles()
+  classroomStore.fetchClassrooms()
   try {
     const res = await getPositionSalary()
     positionSalaryConfig.value = res.data as Record<string, number>
@@ -559,7 +563,7 @@ onMounted(async () => {
 .required-legend .req { color: var(--el-color-danger); }
 </style>
 
-<!-- dialog teleport 到 body，scoped 穿不透；比照 EmployeeView.vue 既有的非 scoped 全域 fallback 做法 -->
+<!-- dialog teleport 到 body，scoped 穿不透；用非 scoped 全域 fallback 供 dialog 內容套用 -->
 <style>
 /* 桌機：tabs 內容區內捲，tab 列與 dialog footer 永遠可見 */
 .employee-form-dialog:not(.is-fullscreen) .el-tabs--border-card > .el-tabs__content {

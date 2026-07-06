@@ -13,6 +13,10 @@ export const createEmployee = (data: ApiBody<'/employees', 'post'>): AxiosResp<'
 export const updateEmployee = (id: number, data: ApiBody<'/employees/{employee_id}', 'put'>): AxiosResp<'/employees/{employee_id}', 'put'> =>
     api.put(`/employees/${id}`, data)
 
+/** 快速標記離職（軟刪：設離職+撤帳號，跳過 offboarding 流程）——非資料刪除 */
+export const deleteEmployee = (id: number): AxiosResp<'/employees/{employee_id}', 'delete'> =>
+    api.delete(`/employees/${id}`)
+
 // ============ Diff-only updates ============
 // Why: 後端 require_not_self_edit 比對 update_data.keys()，前端必須只送
 // 真正異動的欄位才不會誤觸守衛（即使值相同也算 touch）。

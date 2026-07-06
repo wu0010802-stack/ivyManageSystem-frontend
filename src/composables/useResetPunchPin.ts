@@ -1,7 +1,7 @@
 /**
  * useResetPunchPin
  * 封裝「重置員工打卡 PIN」的確認 → API 呼叫 → 成功/失敗訊息流程。
- * 分離自 EmployeeView，方便單元測試。
+ * 分離自舊員工頁，方便單元測試。
  */
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { resetPunchPin } from '@/api/employees'

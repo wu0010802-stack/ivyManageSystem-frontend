@@ -11,9 +11,9 @@ import {
  *
  * 使用方式：
  *   const { notify } = useErrorNotify()
- *   try { ... } catch (e) { notify(e, 'EmployeeView:fetch') }
+ *   try { ... } catch (e) { notify(e, 'EmployeeListView:fetch') }
  *   // 帶 fallback
- *   try { ... } catch (e) { notify(e, 'EmployeeView:save', '儲存失敗') }
+ *   try { ... } catch (e) { notify(e, 'EmployeeListView:save', '儲存失敗') }
  *   // 帶 prefix（取代 'X失敗: ' + apiError(...) 模式）
  *   try { ... } catch (e) { notify(e, 'AttendanceView:upload', null, { prefix: '上傳失敗' }) }
  *

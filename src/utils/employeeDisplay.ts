@@ -4,7 +4,7 @@ import { TITLE_TO_GRADE, POSITION_SALARY_KEY } from '@/constants/employee'
 export type EmployeeStatusKey = 'active' | 'pending' | 'resigned'
 export type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger' | undefined
 
-/** 員工狀態單一來源（自 EmployeeView.vue 搬出，邏輯不變） */
+/** 員工狀態單一來源（自舊員工頁搬出，邏輯不變） */
 export const statusKeyOf = (emp: Record<string, unknown>): EmployeeStatusKey => {
   if (!emp.is_active) return 'resigned'
   if (emp.resign_date && (emp.resign_date as string) > todayISO()) return 'pending'
@@ -50,7 +50,7 @@ export const bankInfoDisplay = (emp: Record<string, unknown>): string => {
   return `${code} - ${account}${name ? `（${name}）` : ''}`
 }
 
-/** 職位 → 導師角色（自 EmployeeView.vue 搬出，邏輯不變） */
+/** 職位 → 導師角色（自舊員工頁搬出，邏輯不變） */
 export const detectRole = (position: string | null | undefined): 'head' | 'assistant' | null => {
   if (!position) return null
   if (position.includes('班導') && !position.includes('副')) return 'head'
@@ -58,7 +58,7 @@ export const detectRole = (position: string | null | undefined): 'head' | 'assis
   return null
 }
 
-/** 查某員工對應的標準薪俸（自 EmployeeView.vue standardSalaryFor 搬出，邏輯不變） */
+/** 查某員工對應的標準薪俸（自舊員工頁standardSalaryFor 搬出，邏輯不變） */
 export const standardSalaryFor = (
   emp: Record<string, unknown>,
   cfg: Record<string, number> | null,

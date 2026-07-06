@@ -2,7 +2,7 @@
 import { defineAsyncComponent, ref, watch } from 'vue'
 import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router'
 
-const EmployeeView = defineAsyncComponent(() => import('./EmployeeView.vue'))
+const EmployeeListView = defineAsyncComponent(() => import('./EmployeeListView.vue'))
 const OffboardingView = defineAsyncComponent(() => import('./admin/OffboardingView.vue'))
 
 type SectionKey = 'employees' | 'offboarding'
@@ -55,7 +55,7 @@ const onSectionChange = (val: string | number) => {
       @change="onSectionChange"
     />
     <div class="section-body">
-      <EmployeeView v-if="activeSection === 'employees'" />
+      <EmployeeListView v-if="activeSection === 'employees'" />
       <OffboardingView v-else-if="activeSection === 'offboarding'" />
     </div>
   </div>

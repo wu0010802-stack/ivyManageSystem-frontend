@@ -17,6 +17,7 @@ import CredentialsSection from '@/components/employee/detail/CredentialsSection.
 import AttendanceSection from '@/components/employee/detail/AttendanceSection.vue'
 import ClassHistorySection from '@/components/employee/detail/ClassHistorySection.vue'
 import OffboardingModal from '@/components/offboarding/OffboardingModal.vue'
+import EmployeeFormDialog from '@/components/employee/EmployeeFormDialog.vue'
 
 const props = defineProps<{ id: number }>()
 const router = useRouter()
@@ -68,6 +69,14 @@ const reloadSub = (kind: 'education' | 'certificate' | 'contract') => {
   else if (kind === 'certificate') detail.reloadCertificates().catch(() => ElMessage.error('重新載入失敗'))
   else detail.reloadContracts().catch(() => ElMessage.error('重新載入失敗'))
 }
+
+// 編輯：接統一員工表單彈窗
+const formDialog = ref<InstanceType<typeof EmployeeFormDialog> | null>(null)
+const openEdit = () => { if (employee.value) formDialog.value?.openEdit(employee.value) }
+const onSaved = async () => {
+  await detail.reloadCore().catch(() => ElMessage.error('重新載入失敗'))
+  employeeStore.fetchEmployees(true)
+}
 </script>
 
 <template>
@@ -97,7 +106,7 @@ const reloadSub = (kind: 'education' | 'certificate' | 'contract') => {
           </div>
         </div>
         <div v-if="canWriteEmployees" class="aside-actions">
-          <!-- 編輯按鈕於 Task 8 接 EmployeeFormDialog -->
+          <el-button type="primary" plain size="small" @click="openEdit">編輯</el-button>
           <el-button v-if="employee.is_active" type="warning" plain size="small" @click="offboardVisible = true">辦理離職</el-button>
         </div>
         <nav class="anchor-nav" aria-label="區塊導覽">
@@ -144,6 +153,8 @@ const reloadSub = (kind: 'education' | 'certificate' | 'contract') => {
       :employee-name="(employee.name as string) || ''"
       @success="onOffboarded"
     />
+
+    <EmployeeFormDialog ref="formDialog" @saved="onSaved" />
   </div>
 </template>
 
