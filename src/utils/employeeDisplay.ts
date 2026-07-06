@@ -35,8 +35,12 @@ export const insuranceLevelDisplay = (v: unknown): string => {
   return n.toLocaleString()
 }
 
-export const pensionSelfRatePct = (v: unknown): string =>
-  `${((typeof v === 'number' ? v : 0) * 100).toFixed(1)}%`
+export const pensionSelfRatePct = (v: unknown): string => {
+  if (v === null || v === undefined) return '無檢視權限'
+  const n = Number(v)
+  if (Number.isNaN(n)) return '—'
+  return `${(n * 100).toFixed(1)}%`
+}
 
 export const bankInfoDisplay = (emp: Record<string, unknown>): string => {
   const code = (emp.bank_code as string) || ''

@@ -23,9 +23,10 @@ describe('SalarySection 顯示規範', () => {
     expect(w.text()).not.toContain('底薪')
   })
   it('後端遮罩（null）→ 顯示無檢視權限，不得顯示 0 或 NaN', () => {
-    const w = mountWith({ employee_type: 'regular', base_salary: null, insurance_salary_level: null })
+    const w = mountWith({ employee_type: 'regular', base_salary: null, insurance_salary_level: null, pension_self_rate: null })
     expect(w.text()).toContain('無檢視權限')
     expect(w.text()).not.toContain('NaN')
+    expect(w.text()).not.toContain('0.0%')
   })
   it('投保級距 0 → 未設定', () => {
     const w = mountWith({ employee_type: 'regular', base_salary: 30000, insurance_salary_level: 0 })

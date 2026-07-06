@@ -37,7 +37,8 @@ describe('薪資遮罩顯示（後端 role/self 遮罩回 null，嚴禁顯示成
   })
   it('勞退自提百分比', () => {
     expect(pensionSelfRatePct(0.06)).toBe('6.0%')
-    expect(pensionSelfRatePct(null)).toBe('0.0%')
+    expect(pensionSelfRatePct(null)).toBe('無檢視權限')
+    expect(pensionSelfRatePct(0)).toBe('0.0%')
   })
   it('銀行資訊：全空 → —；有值組合顯示', () => {
     expect(bankInfoDisplay({})).toBe('—')
