@@ -2,6 +2,7 @@
 <script setup lang="ts">
 import { computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import zhTw from 'element-plus/es/locale/lang/zh-tw'
 import AdminLayout from './layouts/AdminLayout.vue'
 import ErrorBoundary from './components/common/ErrorBoundary.vue'
 import { useRouteLoading } from './composables/useRouteLoading'
@@ -28,11 +29,14 @@ watch(
   <!-- 全域錯誤邊界：單一頁面 render/computed throw 時降級成 fallback，
        而非白屏整個 SPA（admin/teacher entry 無 app.config.errorHandler）。 -->
   <ErrorBoundary variant="admin">
-    <!-- Portal routes, admin login, public routes, and bare (print) routes use their own layout -->
-    <RouterView v-if="isPortalRoute || isLoginPage || isPublicRoute || isBareRoute" />
+    <!-- Element Plus zh-tw locale 提供者，讓全站表格空狀態顯示「暫無資料」 -->
+    <el-config-provider :locale="zhTw">
+      <!-- Portal routes, admin login, public routes, and bare (print) routes use their own layout -->
+      <RouterView v-if="isPortalRoute || isLoginPage || isPublicRoute || isBareRoute" />
 
-    <!-- Admin routes use the AdminLayout -->
-    <AdminLayout v-else />
+      <!-- Admin routes use the AdminLayout -->
+      <AdminLayout v-else />
+    </el-config-provider>
   </ErrorBoundary>
 
   <!-- 一般換頁的頂部細進度條（冷啟動由全頁遮罩處理） -->
