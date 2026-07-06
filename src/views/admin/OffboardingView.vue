@@ -221,7 +221,7 @@ async function onMagicLinkUpdate(): Promise<void> {
                         :last-used-at="selectedRow.detail.magic_link_last_used_at ?? null"
                         @update="onMagicLinkUpdate"
                     />
-                    <p v-else class="text-muted">此員工尚無離職 Record，無法管理 Magic Link。</p>
+                    <p v-else class="text-muted">此員工尚無離職紀錄，無法管理 Magic Link。</p>
                 </div>
             </template>
         </el-drawer>
