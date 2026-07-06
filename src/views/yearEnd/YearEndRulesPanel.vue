@@ -5,6 +5,13 @@ import { getEmployees } from '@/api/employees'
 import type { ApiBody } from '@/api/_generated/typed'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { hasPermission } from '@/utils/auth'
+import {
+  DIVIDEND_ACTIVITY_GRADES,
+  emptyGradeThresholdPercents,
+  gradeThresholdsFromApi,
+  gradeThresholdsToApi,
+  type GradeThresholdPercents,
+} from '@/utils/dividendActivityThresholds'
 
 const loading = ref(false)
 const canRead = computed(() => hasPermission('SETTINGS_READ'))
@@ -44,6 +51,16 @@ const afterClassAwardRows = ref<AfterClassAwardEntry[]>([])
 // 才藝老師年終收款人 employee id list
 const artTeacherEmployeeIds = ref<number[]>([])
 
+// G15（園方福利辦法 115.01.01）：紅利才藝參與率逐年級門檻（顯示用百分比，0~100）。
+// 任一年級留空＝該年級沿用單一門檻 dividend_activity_threshold；四年級皆空 → 送出 null。
+const gradeThresholdPercents = reactive<GradeThresholdPercents>(emptyGradeThresholdPercents())
+// G15：幼生該學期出席堂數「超過」此值才計入才藝參與率分子；null＝停用堂數條件。
+const dividendActivityMinSessions = ref<number | null>(null)
+
+const clearAllGradeThresholds = () => {
+  Object.assign(gradeThresholdPercents, emptyGradeThresholdPercents())
+}
+
 type EmployeeOption = { id: number; name: unknown }
 const employeeOptions = ref<EmployeeOption[]>([])
 
@@ -68,6 +85,19 @@ const fetchRules = async () => {
         : []
     const ids = data.art_teacher_employee_ids
     artTeacherEmployeeIds.value = Array.isArray(ids) ? ids.map((i) => Number(i)) : []
+
+    // G15 兩新欄位：舊後端缺欄位（undefined）與新後端明確 null 皆視為「未設定」，
+    // 由 gradeThresholdsFromApi 統一容錯，不炸也不需另外顯示「不支援」提示。
+    const gradeThresholdsRaw = data.dividend_activity_grade_thresholds
+    const gradeThresholdsDict =
+      gradeThresholdsRaw && typeof gradeThresholdsRaw === 'object'
+        ? (gradeThresholdsRaw as Record<string, number>)
+        : null
+    Object.assign(gradeThresholdPercents, gradeThresholdsFromApi(gradeThresholdsDict))
+
+    const minSessionsRaw = data.dividend_activity_min_sessions
+    dividendActivityMinSessions.value =
+      typeof minSessionsRaw === 'number' ? minSessionsRaw : null
   } catch {
     ElMessage.error('年終規則載入失敗')
   } finally {
@@ -128,6 +158,9 @@ const saveRules = async () => {
     ...rules,
     after_class_award_unit_price: afterClassAwardDict,
     art_teacher_employee_ids: [...artTeacherEmployeeIds.value],
+    // G15：逐年級門檻換算回 fraction dict（全空 → null 回退單一門檻）+ 堂數條件（null＝停用）。
+    dividend_activity_grade_thresholds: gradeThresholdsToApi(gradeThresholdPercents),
+    dividend_activity_min_sessions: dividendActivityMinSessions.value,
     reason,
   }
 
@@ -287,6 +320,53 @@ onMounted(() => {
             />
             <span class="unit-hint">元</span>
           </el-form-item>
+        </el-col>
+      </el-row>
+
+      <el-divider />
+      <div class="label mb-2" style="display: flex; align-items: center; justify-content: space-between">
+        <span>才藝率逐年級門檻（選填，園方福利辦法 115.01.01）</span>
+        <el-button size="small" link @click="clearAllGradeThresholds">清空全部年級門檻</el-button>
+      </div>
+      <p class="desc-text">
+        逐年級設定才藝參與率門檻（百分比，0–100）；未設定之年級沿用上方「才藝率門檻」單一值。
+        四個年級皆清空即整組回退為單一門檻。
+      </p>
+      <el-row :gutter="20">
+        <el-col v-for="grade in DIVIDEND_ACTIVITY_GRADES" :key="grade" :span="6">
+          <el-form-item :label="grade">
+            <el-input-number
+              v-model="gradeThresholdPercents[grade]"
+              :min="0" :max="100" :step="1"
+              controls-position="right" style="width: 100%"
+              placeholder="沿用單一門檻"
+            />
+            <span class="unit-hint">%</span>
+          </el-form-item>
+        </el-col>
+      </el-row>
+
+      <el-divider />
+      <div class="label mb-2">堂數條件（選填）</div>
+      <el-row :gutter="20">
+        <el-col :span="12">
+          <el-form-item>
+            <template #label>
+              <el-tooltip content="幼生該學期出席堂數「超過」此值才計入才藝參與率分子" placement="top">
+                <span>幼生出席逾 N 堂才計入參加率</span>
+              </el-tooltip>
+            </template>
+            <el-input-number
+              v-model="dividendActivityMinSessions"
+              :min="0" :max="200" :step="1"
+              controls-position="right" style="width: 100%"
+              placeholder="留空＝停用堂數條件"
+            />
+            <span class="unit-hint">堂</span>
+          </el-form-item>
+          <p class="desc-text">
+            提醒：點名資料不完整時建議停用（清空），避免因出席紀錄不齊而誤少發紅利。
+          </p>
         </el-col>
       </el-row>
     </el-card>
