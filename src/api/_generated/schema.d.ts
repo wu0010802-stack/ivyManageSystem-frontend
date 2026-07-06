@@ -26033,6 +26033,504 @@ export interface components {
             /** Summary */
             summary: string;
         };
+        /**
+         * ReportsAttendanceByClassroomItemOut
+         * @description `_query_attendance_by_classroom` 單班級項。
+         */
+        ReportsAttendanceByClassroomItemOut: {
+            /** Classroom */
+            classroom: string;
+            /** Classroom Id */
+            classroom_id: number;
+            /** Early Leave */
+            early_leave: number;
+            /** Late */
+            late: number;
+            /** Rate */
+            rate: number;
+            /** Total Records */
+            total_records: number;
+        };
+        /**
+         * ReportsAttendanceDetailOut
+         * @description GET /reports/attendance/detail 回應（LIMIT 200，truncated 提示前端）。
+         */
+        ReportsAttendanceDetailOut: {
+            /** Classroom Id */
+            classroom_id?: number | null;
+            /** Month */
+            month?: number | null;
+            /** Records */
+            records: components["schemas"]["ReportsAttendanceDetailRecordOut"][];
+            /** Total Records */
+            total_records: number;
+            /** Truncated */
+            truncated: boolean;
+            /** Year */
+            year: number;
+        };
+        /**
+         * ReportsAttendanceDetailRecordOut
+         * @description `_build_attendance_detail` 單筆異常考勤紀錄。
+         */
+        ReportsAttendanceDetailRecordOut: {
+            /** Anomaly Types */
+            anomaly_types: string[];
+            /** Classroom Id */
+            classroom_id?: number | null;
+            /** Classroom Name */
+            classroom_name?: string | null;
+            /** Date */
+            date: string;
+            /** Early Minutes */
+            early_minutes: number;
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+            /** Late Minutes */
+            late_minutes: number;
+            /** Missing Punch In */
+            missing_punch_in: boolean;
+            /** Missing Punch Out */
+            missing_punch_out: boolean;
+            /** Note */
+            note?: string | null;
+        };
+        /**
+         * ReportsAttendanceMonthlyItemOut
+         * @description `_query_attendance_monthly` 單月項（12 個月密集陣列）。
+         */
+        ReportsAttendanceMonthlyItemOut: {
+            /** Early Leave */
+            early_leave: number;
+            /** Late */
+            late: number;
+            /** Missing */
+            missing: number;
+            /** Month */
+            month: number;
+            /** Normal */
+            normal: number;
+            /** Rate */
+            rate: number;
+            /** Total Records */
+            total_records: number;
+        };
+        /**
+         * ReportsDashboardOut
+         * @description GET /reports/dashboard 回應。
+         */
+        ReportsDashboardOut: {
+            /** Attendance By Classroom */
+            attendance_by_classroom: components["schemas"]["ReportsAttendanceByClassroomItemOut"][];
+            /** Attendance Monthly */
+            attendance_monthly: components["schemas"]["ReportsAttendanceMonthlyItemOut"][];
+            /** Leave Monthly */
+            leave_monthly: components["schemas"]["ReportsLeaveMonthlyItemOut"][];
+            /** Salary Monthly */
+            salary_monthly: components["schemas"]["ReportsSalaryMonthlyItemOut"][];
+            /** Year */
+            year: number;
+        };
+        /**
+         * ReportsExpenseCategoryOut
+         * @description `expense_by_category` 單筆（salary_gross / employer_benefit /
+         *     vendor_payment / fixed_cost）；無 refund 欄位。
+         */
+        ReportsExpenseCategoryOut: {
+            /** Amount */
+            amount: number;
+            /** Category */
+            category: string;
+            /** Label */
+            label: string;
+        };
+        /**
+         * ReportsFinanceDetailActivityItemOut
+         * @description `get_activity_detail` 單筆（payment/refund 同形狀）。
+         */
+        ReportsFinanceDetailActivityItemOut: {
+            /** Amount */
+            amount: number;
+            /** Date */
+            date?: string | null;
+            /** Kind */
+            kind: string;
+            /** Operator */
+            operator?: string | null;
+            /** Payment Method */
+            payment_method?: string | null;
+            /** Receipt No */
+            receipt_no?: string | null;
+            /** Registration Id */
+            registration_id?: number | null;
+            /** Student Name */
+            student_name?: string | null;
+        };
+        /**
+         * ReportsFinanceDetailFixedCostItemOut
+         * @description `get_monthly_fixed_cost_detail` 單筆。
+         */
+        ReportsFinanceDetailFixedCostItemOut: {
+            /** Amount */
+            amount: number;
+            /** Category */
+            category: string;
+            /** Month */
+            month: number;
+            /** Notes */
+            notes?: string | null;
+            /** Year */
+            year: number;
+        };
+        /**
+         * ReportsFinanceDetailMiscReceiptItemOut
+         * @description `get_misc_receipt_detail` 單筆。
+         */
+        ReportsFinanceDetailMiscReceiptItemOut: {
+            /** Amount */
+            amount: number;
+            /** Category */
+            category: string;
+            /** Date */
+            date?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Id */
+            id: number;
+            /** Payer Name */
+            payer_name?: string | null;
+            /** Payment Method */
+            payment_method?: string | null;
+            /** Receipt Number */
+            receipt_number?: string | null;
+            /** Status */
+            status: string;
+        };
+        /**
+         * ReportsFinanceDetailSalaryItemOut
+         * @description `get_salary_detail` 單筆。
+         *
+         *     金額欄位在非 admin/hr 角色下會被 `mask_dict_fields(..., placeholder=None)`
+         *     遮罩（F-031），故一律 Optional[int]，None 代表遮罩而非缺值。
+         */
+        ReportsFinanceDetailSalaryItemOut: {
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+            /** Employer Benefit */
+            employer_benefit?: number | null;
+            /** Festival Bonus */
+            festival_bonus?: number | null;
+            /** Gross Salary */
+            gross_salary?: number | null;
+            /** Is Finalized */
+            is_finalized: boolean;
+            /** Net Salary */
+            net_salary?: number | null;
+            /** Overtime Bonus */
+            overtime_bonus?: number | null;
+            /** Real Cost */
+            real_cost?: number | null;
+        };
+        /**
+         * ReportsFinanceDetailTuitionItemOut
+         * @description `get_tuition_detail` 單筆 — kind='payment' 或 'refund' 混合 list。
+         *
+         *     payment 專屬：student_name/classroom_name/fee_item_name/payment_method。
+         *     refund 專屬：reason/refunded_by。非該 kind 的欄位序列化為 null。
+         */
+        ReportsFinanceDetailTuitionItemOut: {
+            /** Amount */
+            amount: number;
+            /** Classroom Name */
+            classroom_name?: string | null;
+            /** Date */
+            date?: string | null;
+            /** Fee Item Name */
+            fee_item_name?: string | null;
+            /** Kind */
+            kind: string;
+            /** Payment Method */
+            payment_method?: string | null;
+            /** Reason */
+            reason?: string | null;
+            /** Refunded By */
+            refunded_by?: string | null;
+            /** Student Name */
+            student_name?: string | null;
+        };
+        /**
+         * ReportsFinanceDetailVendorPaymentItemOut
+         * @description `get_vendor_payment_detail` 單筆。
+         */
+        ReportsFinanceDetailVendorPaymentItemOut: {
+            /** Amount */
+            amount: number;
+            /** Date */
+            date?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Id */
+            id: number;
+            /** Invoice Number */
+            invoice_number?: string | null;
+            /** Payment Method */
+            payment_method: string;
+            /** Status */
+            status: string;
+            /** Vendor Name */
+            vendor_name: string;
+        };
+        /**
+         * ReportsFinancePeriodOut
+         * @description `{"year": ..., "month": ...}` — /finance-summary 與 /finance-summary/detail 共用。
+         */
+        ReportsFinancePeriodOut: {
+            /** Month */
+            month?: number | null;
+            /** Year */
+            year: number;
+        };
+        /**
+         * ReportsFinanceSummaryDetailOut
+         * @description GET /reports/finance-summary/detail 回應（下鑽六來源明細）。
+         */
+        ReportsFinanceSummaryDetailOut: {
+            /** Activity */
+            activity: components["schemas"]["ReportsFinanceDetailActivityItemOut"][];
+            /** Fixed Cost */
+            fixed_cost: components["schemas"]["ReportsFinanceDetailFixedCostItemOut"][];
+            /** Misc Receipt */
+            misc_receipt: components["schemas"]["ReportsFinanceDetailMiscReceiptItemOut"][];
+            period: components["schemas"]["ReportsFinancePeriodOut"];
+            /** Salary */
+            salary: components["schemas"]["ReportsFinanceDetailSalaryItemOut"][];
+            /** Tuition */
+            tuition: components["schemas"]["ReportsFinanceDetailTuitionItemOut"][];
+            /** Vendor Payment */
+            vendor_payment: components["schemas"]["ReportsFinanceDetailVendorPaymentItemOut"][];
+        };
+        /**
+         * ReportsFinanceSummaryOut
+         * @description GET /reports/finance-summary 回應。
+         */
+        ReportsFinanceSummaryOut: {
+            /** Expense By Category */
+            expense_by_category: components["schemas"]["ReportsExpenseCategoryOut"][];
+            /** Monthly Trend */
+            monthly_trend: components["schemas"]["ReportsMonthlyTrendItemOut"][];
+            period: components["schemas"]["ReportsFinancePeriodOut"];
+            /** Revenue By Category */
+            revenue_by_category: components["schemas"]["ReportsRevenueCategoryOut"][];
+            summary: components["schemas"]["ReportsFinanceSummaryTotalsOut"];
+        };
+        /**
+         * ReportsFinanceSummaryTotalsOut
+         * @description `build_finance_summary` 的 `summary` 區塊。
+         */
+        ReportsFinanceSummaryTotalsOut: {
+            /** Net Cashflow */
+            net_cashflow: number;
+            /** Net Revenue */
+            net_revenue: number;
+            /** Total Expense */
+            total_expense: number;
+            /** Total Refund */
+            total_refund: number;
+            /** Total Revenue */
+            total_revenue: number;
+        };
+        /**
+         * ReportsLeaveMonthlyItemOut
+         * @description `_query_leave_monthly` 單月項（12 個月密集陣列，只計 status='approved'）。
+         */
+        ReportsLeaveMonthlyItemOut: {
+            /** Annual */
+            annual: number;
+            /** Maternity */
+            maternity: number;
+            /** Menstrual */
+            menstrual: number;
+            /** Month */
+            month: number;
+            /** Paternity */
+            paternity: number;
+            /** Personal */
+            personal: number;
+            /** Sick */
+            sick: number;
+            /** Total Hours */
+            total_hours: number;
+        };
+        /**
+         * ReportsMonthlyPnlOut
+         * @description GET /reports/monthly-pnl 回應（月度現金收支表，原稱「月度損益表」）。
+         */
+        ReportsMonthlyPnlOut: {
+            /** Pending Items */
+            pending_items: string[];
+            /** Sections */
+            sections: components["schemas"]["ReportsPnlSectionOut"][];
+            totals: components["schemas"]["ReportsPnlTotalsOut"];
+            /** Year */
+            year: number;
+        };
+        /**
+         * ReportsMonthlyTrendItemOut
+         * @description `monthly_trend` 單月項（year 全年時 12 筆，指定 month 時 1 筆）。
+         */
+        ReportsMonthlyTrendItemOut: {
+            /** Expense */
+            expense: number;
+            /** Month */
+            month: number;
+            /** Net */
+            net: number;
+            /** Refund */
+            refund: number;
+            /** Revenue */
+            revenue: number;
+        };
+        /**
+         * ReportsPnlRowOut
+         * @description `monthly_pnl_service._row()` 單筆——試算表一列。
+         *
+         *     total 在統計列（unit='person'/'class'，include_total=False）為 None；
+         *     amount 列為 12 個月加總的 int。
+         */
+        ReportsPnlRowOut: {
+            /** Is Breakdown */
+            is_breakdown: boolean;
+            /** Is Subtotal */
+            is_subtotal: boolean;
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Monthly */
+            monthly: number[];
+            /** Total */
+            total?: number | null;
+            /** Unit */
+            unit: string;
+        };
+        /**
+         * ReportsPnlSectionOut
+         * @description `sections` 單一 section（stats / income / personnel_expense / variable_expense）。
+         */
+        ReportsPnlSectionOut: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Rows */
+            rows: components["schemas"]["ReportsPnlRowOut"][];
+        };
+        /**
+         * ReportsPnlTotalItemOut
+         * @description `totals.{income_total,refund_total,expense_total,net_cashflow}` 共用 shape。
+         */
+        ReportsPnlTotalItemOut: {
+            /** Monthly */
+            monthly: number[];
+            /** Total */
+            total: number;
+        };
+        /**
+         * ReportsPnlTotalsOut
+         * @description `totals` 區塊——四個彙總指標。
+         */
+        ReportsPnlTotalsOut: {
+            expense_total: components["schemas"]["ReportsPnlTotalItemOut"];
+            income_total: components["schemas"]["ReportsPnlTotalItemOut"];
+            net_cashflow: components["schemas"]["ReportsPnlTotalItemOut"];
+            refund_total: components["schemas"]["ReportsPnlTotalItemOut"];
+        };
+        /**
+         * ReportsRevenueCategoryOut
+         * @description `revenue_by_category` 單筆（tuition / activity / misc_receipt）。
+         */
+        ReportsRevenueCategoryOut: {
+            /** Amount */
+            amount: number;
+            /** Category */
+            category: string;
+            /** Label */
+            label: string;
+            /** Refund */
+            refund: number;
+        };
+        /**
+         * ReportsSalaryContributorsOut
+         * @description GET /reports/salary/contributors 回應（top 5 應發 + top 5 加班費）。
+         */
+        ReportsSalaryContributorsOut: {
+            /** Month */
+            month: number;
+            /** Top Gross */
+            top_gross: components["schemas"]["ReportsSalaryTopGrossItemOut"][];
+            /** Top Overtime */
+            top_overtime: components["schemas"]["ReportsSalaryTopOvertimeItemOut"][];
+            /** Year */
+            year: number;
+        };
+        /**
+         * ReportsSalaryMonthlyItemOut
+         * @description `_query_salary_monthly` 單月項（12 個月密集陣列）。
+         *
+         *     total_gross/total_net/total_deductions/total_bonus/total_overtime_pay 只認
+         *     finalized 且非 stale 薪資；employee_count_pending 為草稿/待重算筆數，不因
+         *     密集化被壓成空月（見 api/reports.py `_query_salary_monthly` docstring）。
+         */
+        ReportsSalaryMonthlyItemOut: {
+            /** Employee Count */
+            employee_count: number;
+            /** Employee Count Pending */
+            employee_count_pending: number;
+            /** Month */
+            month: number;
+            /** Total Bonus */
+            total_bonus: number;
+            /** Total Deductions */
+            total_deductions: number;
+            /** Total Gross */
+            total_gross: number;
+            /** Total Net */
+            total_net: number;
+            /** Total Overtime Pay */
+            total_overtime_pay: number;
+        };
+        /**
+         * ReportsSalaryTopGrossItemOut
+         * @description `top_gross` 單筆；gross_salary 非 admin/hr 遮罩為 None（F-031）。
+         */
+        ReportsSalaryTopGrossItemOut: {
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+            /** Gross Salary */
+            gross_salary?: number | null;
+            /** Is Finalized */
+            is_finalized: boolean;
+        };
+        /**
+         * ReportsSalaryTopOvertimeItemOut
+         * @description `top_overtime` 單筆；overtime_pay 非 admin/hr 遮罩為 None（F-031）。
+         */
+        ReportsSalaryTopOvertimeItemOut: {
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+            /** Is Finalized */
+            is_finalized: boolean;
+            /** Overtime Pay */
+            overtime_pay?: number | null;
+        };
         /** ReserveSeatIn */
         ReserveSeatIn: {
             /**
@@ -49231,7 +49729,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ReportsAttendanceDetailOut"];
                 };
             };
             /** @description Validation Error */
@@ -49262,7 +49760,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ReportsDashboardOut"];
                 };
             };
             /** @description Validation Error */
@@ -49294,7 +49792,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ReportsFinanceSummaryOut"];
                 };
             };
             /** @description Validation Error */
@@ -49326,7 +49824,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ReportsFinanceSummaryDetailOut"];
                 };
             };
             /** @description Validation Error */
@@ -49389,7 +49887,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ReportsMonthlyPnlOut"];
                 };
             };
             /** @description Validation Error */
@@ -49421,7 +49919,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ReportsSalaryContributorsOut"];
                 };
             };
             /** @description Validation Error */

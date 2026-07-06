@@ -75,7 +75,7 @@ defineExpose({
       <el-tab-pane label="收支彙總" name="finance">
         <FinanceSummaryPanel v-if="activeTab === 'finance'" :key="selectedYear" :year="selectedYear" />
       </el-tab-pane>
-      <el-tab-pane label="月度損益表" name="monthly-pnl">
+      <el-tab-pane label="月度現金收支表" name="monthly-pnl">
         <MonthlyPnLPanel v-if="activeTab === 'monthly-pnl'" :key="selectedYear" :year="selectedYear" />
       </el-tab-pane>
       <el-tab-pane label="固定支出登錄" name="fixed-cost">

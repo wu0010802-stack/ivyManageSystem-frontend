@@ -9,6 +9,7 @@ import { useCachedAsync } from '@/composables/useCachedAsync'
 import { apiError } from '@/utils/error'
 import { money } from '@/utils/format'
 import { downloadFile } from '@/utils/download'
+import { lastMonthWithData, pctChange } from './financeTrend'
 import type { ChartOptions } from 'chart.js'
 
 const props = defineProps<{
@@ -17,6 +18,7 @@ const props = defineProps<{
 
 const exporting = ref(false)
 const selectedMonth = ref<number | null>(null)
+const errorMsg = ref('')
 
 const detailVisible = ref(false)
 const detailMonth = ref<number | null>(null)
@@ -36,19 +38,28 @@ const monthData = ref<unknown>(null)
 const monthLoading = ref(false)
 
 async function loadData() {
+  errorMsg.value = ''
   if (selectedMonth.value == null) {
-    try {
-      await yearLevel.refresh(false)
-    } catch (e) {
-      ElMessage.error(apiError(e, '載入收支資料失敗'))
+    // 注意：useCachedAsync.refresh() 內部把 fetcher 的 reject 吞掉（只更新
+    // error ref，外層 `await promise` 的 catch 直接 return data.value，不 re-throw）
+    // ——`await yearLevel.refresh(false)` 永遠不會丟出例外，包在這裡的 try/catch
+    // 曾是 dead code（2026-07-05 補錯誤狀態時發現）。改讀 yearLevel.error 本身。
+    await yearLevel.refresh(false)
+    if (yearLevel.error.value) {
+      // 有舊快取時 refresh() 會保留 stale data（SWR），僅在真的沒有任何資料可顯示
+      // 時才需要持久性錯誤畫面；見下方 template 的 `errorMsg && !data` 判斷。
+      errorMsg.value = apiError(yearLevel.error.value, '載入收支資料失敗')
+      ElMessage.error(errorMsg.value)
     }
   } else {
     monthLoading.value = true
+    monthData.value = null
     try {
       const res = await getFinanceSummary(props.year, selectedMonth.value)
       monthData.value = res.data
     } catch (e) {
-      ElMessage.error(apiError(e, '載入收支資料失敗'))
+      errorMsg.value = apiError(e, '載入收支資料失敗')
+      ElMessage.error(errorMsg.value)
     } finally {
       monthLoading.value = false
     }
@@ -148,21 +159,22 @@ const summary = computed(() => data.value?.summary || {
   total_expense: 0, net_cashflow: 0,
 })
 
-// MoM：比較當前系統月與上個月（僅在檢視整年時顯示；選某月時不顯示）
-const currentMonth = new Date().getMonth() + 1
+// MoM：錨定「所選年度內最後一個有資料的月份」（非瀏覽器當下真實月份），僅在檢視
+// 整年時顯示；選某月時不顯示（2026-07-05 修正錨定 bug，見 financeTrend.ts 註解）。
 type TrendItem = { month: number; revenue: number; refund: number; expense: number; net: number }
 const mom = computed(() => {
   if (selectedMonth.value != null) return null
   const trend: TrendItem[] = data.value?.monthly_trend || []
-  const curr = trend.find((r: TrendItem) => r.month === currentMonth)
-  const prev = trend.find((r: TrendItem) => r.month === currentMonth - 1)
+  const anchorMonth = lastMonthWithData(trend)
+  if (anchorMonth == null) return null
+  const curr = trend.find((r: TrendItem) => r.month === anchorMonth)
+  const prev = trend.find((r: TrendItem) => r.month === anchorMonth - 1)
   if (!curr || !prev) return null
-  const pct = (a: number, b: number) => (b ? ((a - b) / b) * 100 : null)
   return {
-    revenue: pct(curr.revenue, prev.revenue),
-    refund: pct(curr.refund, prev.refund),
-    expense: pct(curr.expense, prev.expense),
-    net: pct(curr.net, prev.net),
+    revenue: pctChange(curr.revenue, prev.revenue),
+    refund: pctChange(curr.refund, prev.refund),
+    expense: pctChange(curr.expense, prev.expense),
+    net: pctChange(curr.net, prev.net),
   }
 })
 
@@ -201,6 +213,9 @@ const exportXlsx = async () => {
 
 <template>
   <el-skeleton v-if="loading" :rows="10" animated />
+  <div v-else-if="errorMsg && !data" class="finance-error">
+    <el-empty :description="errorMsg" />
+  </div>
   <div v-else class="finance-panel">
     <div class="controls">
       <el-select v-model="selectedMonth" clearable placeholder="整年" style="width: 140px;">
@@ -361,4 +376,6 @@ const exportXlsx = async () => {
   color: var(--color-info); cursor: pointer; font: inherit;
 }
 .link-btn:hover { text-decoration: underline; }
+
+.finance-error { padding: 32px 0; }
 </style>

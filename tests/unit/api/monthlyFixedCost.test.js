@@ -35,14 +35,25 @@ describe('monthlyFixedCost api', () => {
     mockDelete.mockReset()
   })
 
-  it('getMonthlyFixedCosts GET /monthly-fixed-costs?year', async () => {
-    mockGet.mockResolvedValue({ data: [{ id: 1, year: 2026 }] })
+  it('getMonthlyFixedCosts GET /monthly-fixed-costs?year，解包後端 {year, items} 為陣列', async () => {
+    // 真實後端形狀（api/monthly_fixed_costs.py list_monthly_fixed_costs）：{year, items: [...]}
+    // 2026-07-05 稽核發現舊 mock 用裸陣列造成假綠：wrapper 回物件時
+    // MonthlyFixedCostPanel / OverviewPanel 的 Array.isArray 檢查恆 false，
+    // 既有已存值永遠不會載入 grid。
+    mockGet.mockResolvedValue({
+      data: { year: 2026, items: [{ id: 1, year: 2026, month: 2, category: 'rent', amount: 67429 }] },
+    })
     const out = await mod.getMonthlyFixedCosts(2026)
     expect(mockGet).toHaveBeenCalledWith('/monthly-fixed-costs', {
       params: { year: 2026 },
     })
-    // .data unwrap
-    expect(out).toEqual([{ id: 1, year: 2026 }])
+    expect(out).toEqual([{ id: 1, year: 2026, month: 2, category: 'rent', amount: 67429 }])
+  })
+
+  it('getMonthlyFixedCosts 後端回 items 缺漏時回空陣列（不回 undefined/物件）', async () => {
+    mockGet.mockResolvedValue({ data: { year: 2026 } })
+    const out = await mod.getMonthlyFixedCosts(2026)
+    expect(out).toEqual([])
   })
 
   it('upsertMonthlyFixedCost PUT /monthly-fixed-costs with payload', async () => {

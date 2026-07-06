@@ -9,6 +9,7 @@ import { apiError } from '@/utils/error'
 import { hasPermission } from '@/utils/auth'
 import { useGridKeyboardNav } from '@/composables/useGridKeyboardNav'
 import { useUnsavedChangesGuard } from '@/composables/useUnsavedChangesGuard'
+import { invalidateCachedAsync } from '@/composables/useCachedAsync'
 
 const props = defineProps<{
   year: number
@@ -69,7 +70,14 @@ async function load() {
       }
     }
   } catch (e) {
-    errorMsg.value = apiError(e, '載入月度固定費用失敗')
+    // 403：分頁掛在 REPORTS 權限下，但底層 GET 端點要求獨立的 VENDOR_PAYMENT_READ，
+    // 持有 REPORTS 但無該權限的角色會看到通用「載入失敗」誤導成頁面壞了
+    // （2026-07-05 稽核 §0 / P3-11），改顯示明確的權限提示。
+    if ((e as { response?: { status?: number } })?.response?.status === 403) {
+      errorMsg.value = '需要廠商付款讀取權限（VENDOR_PAYMENT_READ）才能查看固定費用登錄'
+    } else {
+      errorMsg.value = apiError(e, '載入月度固定費用失敗')
+    }
     ElMessage.error(errorMsg.value)
     buildEmptyState()
   } finally {
@@ -235,6 +243,12 @@ async function saveAll() {
   try {
     await batchUpsertMonthlyFixedCosts(props.year, dirtyEntries.value)
     ElMessage.success(`已儲存 ${dirtyEntries.value.length} 筆`)
+    // 固定支出會併入收支彙總/概況/薪資頁的總支出（2026-07-05 後端修正），但那三頁
+    // 走 useCachedAsync 的模組級全域 cache（TTL 5 分鐘），存檔前已開過的分頁在
+    // TTL 內切回去會看到舊值。存檔成功後失效這兩個前綴，讓下次切頁強制重抓
+    // （稽核 P1：全 repo 原本 0 處呼叫 invalidateCachedAsync）。
+    invalidateCachedAsync('reports/finance:')
+    invalidateCachedAsync('reports/dashboard:')
     // 成功後重抓 → rebuild map → dirty 自動清零
     await load()
   } catch (e) {

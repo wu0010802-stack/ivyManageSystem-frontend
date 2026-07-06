@@ -142,6 +142,13 @@ const globalConfig = {
         ])
       },
     }),
+    ElTag: defineComponent({
+      name: 'ElTag',
+      props: ['type', 'effect', 'size'],
+      setup(_, { slots }) {
+        return () => h('span', { class: 'el-tag' }, slots.default?.())
+      },
+    }),
   },
 }
 
@@ -289,6 +296,20 @@ describe('MonthlyPnLPanel', () => {
     // total === null → "—"（無單位後綴）
     const lastCell = cells[cells.length - 1]
     expect(lastCell.text()).toBe('—')
+  })
+
+  it('標題正名「月度現金收支表」並顯示「現金收付實現制」badge（2026-07-05 owner 裁定①）', async () => {
+    mockGetMonthlyPnL.mockResolvedValueOnce(makeFixture())
+    const w = mount(MonthlyPnLPanel, {
+      props: { year: 2026 },
+      global: globalConfig,
+    })
+    await flushPromises()
+
+    expect(w.find('[data-test="pnl-title"]').text()).toBe('月度現金收支表')
+    expect(w.find('[data-test="pnl-cashbasis-badge"]').text()).toBe('現金收付實現制')
+    // 舊名不應殘留
+    expect(w.text()).not.toContain('月度損益表')
   })
 
   it('API 失敗時顯示 errorMsg empty state，不 crash', async () => {

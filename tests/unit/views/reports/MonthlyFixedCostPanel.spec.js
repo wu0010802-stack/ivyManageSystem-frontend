@@ -14,10 +14,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { defineComponent, h } from 'vue'
 
-const { mockGet, mockBatch, mockHasPermission } = vi.hoisted(() => ({
+const { mockGet, mockBatch, mockHasPermission, mockInvalidateCachedAsync } = vi.hoisted(() => ({
   mockGet: vi.fn(),
   mockBatch: vi.fn(),
   mockHasPermission: vi.fn(),
+  mockInvalidateCachedAsync: vi.fn(),
 }))
 
 vi.mock('@/api/monthlyFixedCost', () => ({
@@ -29,6 +30,10 @@ vi.mock('@/api/monthlyFixedCost', () => ({
 
 vi.mock('@/utils/auth', () => ({
   hasPermission: mockHasPermission,
+}))
+
+vi.mock('@/composables/useCachedAsync', () => ({
+  invalidateCachedAsync: mockInvalidateCachedAsync,
 }))
 
 vi.mock('element-plus', () => ({
@@ -108,6 +113,7 @@ describe('MonthlyFixedCostPanel', () => {
     mockBatch.mockReset()
     mockHasPermission.mockReset()
     mockHasPermission.mockReturnValue(true)
+    mockInvalidateCachedAsync.mockReset()
   })
 
   it('渲染 8 類別 × 12 月 = 96 個可編輯 cell', async () => {
@@ -253,6 +259,14 @@ describe('MonthlyFixedCostPanel', () => {
     expect(w.text()).toContain('您只有查看權限')
   })
 
+  it('載入 403（無 VENDOR_PAYMENT_READ）時顯示明確權限提示，非通用「載入失敗」（2026-07-05 稽核 §0/P3-11）', async () => {
+    mockGet.mockRejectedValueOnce({ response: { status: 403, data: { detail: 'Forbidden' } } })
+    const w = mountPanel({ year: 2026 })
+    await flushPromises()
+
+    expect(w.text()).toContain('需要廠商付款讀取權限')
+  })
+
   it('year prop 改變 → refetch', async () => {
     mockGet.mockResolvedValueOnce([])
     const w = mountPanel({ year: 2025 })
@@ -287,6 +301,36 @@ describe('MonthlyFixedCostPanel', () => {
     // 總計 = 500000 + 500000 + 3000 = 1,003,000
     const grand = w.find('[data-grand-total]')
     expect(grand.text().replace(/\s/g, '')).toContain('1,003,000')
+  })
+
+  it('儲存成功後呼叫 invalidateCachedAsync 失效 reports/finance: 與 reports/dashboard: 前綴（2026-07-05 補 P1 缺口：固定支出併入總支出後，概況/收支彙總/薪資頁的舊快取需失效）', async () => {
+    mockGet.mockResolvedValueOnce([])
+    mockBatch.mockResolvedValueOnce({ count: 1 })
+    mockGet.mockResolvedValueOnce([])
+
+    const w = mountPanel({ year: 2026 })
+    await flushPromises()
+
+    await w.find('[data-cell-key="1-rent"] input').setValue('500000')
+    await w.find('[data-test="save-all-btn"]').trigger('click')
+    await flushPromises()
+
+    expect(mockInvalidateCachedAsync).toHaveBeenCalledWith('reports/finance:')
+    expect(mockInvalidateCachedAsync).toHaveBeenCalledWith('reports/dashboard:')
+  })
+
+  it('儲存失敗時不呼叫 invalidateCachedAsync（沒有真的變乾淨的資料，快取不該被清）', async () => {
+    mockGet.mockResolvedValueOnce([])
+    mockBatch.mockRejectedValueOnce(new Error('boom'))
+
+    const w = mountPanel({ year: 2026 })
+    await flushPromises()
+
+    await w.find('[data-cell-key="1-rent"] input').setValue('500000')
+    await w.find('[data-test="save-all-btn"]').trigger('click')
+    await flushPromises()
+
+    expect(mockInvalidateCachedAsync).not.toHaveBeenCalled()
   })
 
   it('儲存失敗時 dirty 不清空，並顯示錯誤訊息', async () => {

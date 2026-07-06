@@ -55,8 +55,9 @@ function mountView() {
         // Element Plus 元件也 stub（el-tabs/el-select/el-option/el-tab-pane）
         ElSelect: { template: '<div><slot /></div>', props: ['modelValue'], emits: ['change'] },
         ElOption: true,
-        ElTabs: { template: '<div><slot /></div>', props: ['modelValue', 'type', 'beforeLeave'], emits: ['update:modelValue'] },
-        ElTabPane: { template: '<div><slot /></div>', props: ['label', 'name'] },
+        ElTabs: { name: 'ElTabs', template: '<div><slot /></div>', props: ['modelValue', 'type', 'beforeLeave'], emits: ['update:modelValue'] },
+        // 顯式 name（findAllComponents({name:...}) 依此比對，stub key 本身不會自動當 name）
+        ElTabPane: { name: 'ElTabPane', template: '<div><slot /></div>', props: ['label', 'name'] },
       },
     },
     attachTo: document.body,
@@ -199,5 +200,15 @@ describe('ReportsView 固定費用未存攔截', () => {
     const result = await vm.onTabBeforeLeave('finance', 'overview')
     expect(result).toBe(true)
     expect(confirmMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('ReportsView 頁籤正名（2026-07-05 owner 裁定①：月度損益表 → 月度現金收支表）', () => {
+  it('monthly-pnl 頁籤 label 已改為「月度現金收支表」', () => {
+    const w = mountView()
+    const pane = w.findAllComponents({ name: 'ElTabPane' })
+      .find(p => p.props('name') === 'monthly-pnl')
+    expect(pane?.props('label')).toBe('月度現金收支表')
+    expect(pane?.props('label')).not.toBe('月度損益表')
   })
 })

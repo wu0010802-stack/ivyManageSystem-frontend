@@ -61,7 +61,7 @@ const salaryChartData = computed(() => {
     datasets: [
       { label: '應發總額', data: gross, backgroundColor: 'rgba(64,158,255,0.6)', borderColor: '#409EFF', borderWidth: 1, borderRadius: 4, order: 3 },
       { label: '實發總額', data: net, type: 'line', borderColor: '#67C23A', backgroundColor: 'rgba(103,194,58,0.1)', fill: false, tension: 0.3, pointRadius: 4, order: 1 },
-      { label: '獎金', data: bonus, type: 'line', borderColor: '#E6A23C', backgroundColor: 'rgba(230,162,60,0.1)', fill: false, tension: 0.3, borderDash: [5, 5], pointRadius: 3, order: 2 },
+      { label: '獎金合計（含已計入應發之績效/特殊獎金）', data: bonus, type: 'line', borderColor: '#E6A23C', backgroundColor: 'rgba(230,162,60,0.1)', fill: false, tension: 0.3, borderDash: [5, 5], pointRadius: 3, order: 2 },
       { label: '加班費', data: ot, type: 'line', borderColor: '#9B59B6', backgroundColor: 'rgba(155,89,182,0.1)', fill: false, tension: 0.3, borderDash: [3, 3], pointRadius: 3, order: 2 },
     ],
   } as unknown as ChartData<'bar', (number | null)[]>
@@ -73,8 +73,15 @@ const salaryChartOptions = computed(() => ({
     legend: { position: 'top' as const },
     tooltip: {
       callbacks: {
-        label: (ctx: { dataset: { label: string }; parsed: { y: number | null } }) =>
-          `${ctx.dataset.label}: $${ctx.parsed.y ? ctx.parsed.y.toLocaleString() : 0}`,
+        // 獎金合計已計入應發總額中（非額外加項），tooltip 加註提醒避免使用者誤將
+        // 「應發+獎金」相加算成實際成本（2026-07-05 報表重構，任務項 6）。
+        label: (ctx: { dataset: { label: string }; parsed: { y: number | null } }) => {
+          const line = `${ctx.dataset.label}: $${ctx.parsed.y ? ctx.parsed.y.toLocaleString() : 0}`
+          if (ctx.dataset.label.startsWith('獎金合計')) {
+            return [line, '（已計入應發總額，不可與應發相加）']
+          }
+          return line
+        },
       },
     },
   },

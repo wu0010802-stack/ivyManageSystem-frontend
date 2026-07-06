@@ -4,6 +4,9 @@ import { ElMessage } from 'element-plus'
 import { getFinanceSummaryDetail } from '@/api/reports'
 import { apiError } from '@/utils/error'
 import { money } from '@/utils/format'
+// 雜項收款 6 類（rent/donation/subsidy/secondhand_sale/refund_recovery/other）中文
+// 標籤沿用收支簽收頁的共用常數，避免同一 enum 兩處映射漂移。
+import { categoryLabel as miscCategoryLabel } from '@/constants/signoff'
 
 const props = withDefaults(defineProps<{
   modelValue: boolean
@@ -22,7 +25,7 @@ const visible = computed({
 })
 
 const loading = ref(false)
-const data = ref<{ tuition?: unknown[]; activity?: unknown[]; salary?: unknown[]; vendor_payment?: unknown[] } | null>(null)
+const data = ref<{ tuition?: unknown[]; activity?: unknown[]; misc_receipt?: unknown[]; salary?: unknown[]; vendor_payment?: unknown[]; fixed_cost?: unknown[] } | null>(null)
 const activeTab = ref('tuition')
 
 const load = async () => {
@@ -47,8 +50,13 @@ watch(
 
 const tuitionRows = computed(() => data.value?.tuition || [])
 const activityRows = computed(() => data.value?.activity || [])
+// 雜項收款明細（get_misc_receipt_detail：date/payer_name/category/amount/
+// payment_method/description/receipt_number/status），2026-07-06 補齊下鑽完整性
+// ——收入側原本只有學費/才藝兩 tab，misc_receipt 已計入總收入卻無法下鑽。
+const miscRows = computed(() => data.value?.misc_receipt || [])
 const salaryRows = computed(() => data.value?.salary || [])
 const vendorRows = computed(() => data.value?.vendor_payment || [])
+const fixedCostRows = computed(() => data.value?.fixed_cost || [])
 
 type ElTagType = 'primary' | 'success' | 'warning' | 'info' | 'danger'
 const kindLabel = (k: string) => (k === 'payment' ? '繳費' : k === 'refund' ? '退款' : k)
@@ -62,6 +70,20 @@ const PAYMENT_METHOD_LABEL: Record<string, string> = {
   other: '其他',
 }
 const methodLabel = (m: string) => PAYMENT_METHOD_LABEL[m] || m
+
+// 8 類固定支出（比照後端 MonthlyFixedCost.category enum；2026-07-05 收支彙總
+// 納入固定支出後，下鑽明細同步補上，見 build_finance_detail 的 fixed_cost 欄）
+const FIXED_COST_CATEGORY_LABEL: Record<string, string> = {
+  rent: '租金',
+  water: '水費',
+  electricity: '電費',
+  phone: '電話費',
+  office_petty_cash: '辦公室零用金',
+  kitchen_petty_cash: '廚房零用金',
+  meals: '餐點',
+  old_pension_reserve: '舊制勞退準備金',
+}
+const fixedCostCategoryLabel = (c: string) => FIXED_COST_CATEGORY_LABEL[c] || c
 </script>
 
 <template>
@@ -109,6 +131,31 @@ const methodLabel = (m: string) => PAYMENT_METHOD_LABEL[m] || m
         </el-table>
       </el-tab-pane>
 
+      <el-tab-pane :label="`雜項收款 (${miscRows.length})`" name="misc_receipt">
+        <el-table :data="miscRows" border stripe max-height="480" size="small" empty-text="無資料">
+          <el-table-column prop="date" label="日期" width="110" />
+          <el-table-column prop="payer_name" label="繳款人" min-width="110" />
+          <el-table-column label="類別" width="110">
+            <template #default="{ row }">{{ miscCategoryLabel(row.category) }}</template>
+          </el-table-column>
+          <el-table-column label="金額" width="110" align="right">
+            <template #default="{ row }">{{ money(row.amount) }}</template>
+          </el-table-column>
+          <el-table-column label="收付方式" width="110">
+            <template #default="{ row }">{{ methodLabel(row.payment_method) }}</template>
+          </el-table-column>
+          <el-table-column prop="description" label="說明" min-width="140" />
+          <el-table-column prop="receipt_number" label="收據號" width="120" />
+          <el-table-column label="狀態" width="90" align="center">
+            <template #default="{ row }">
+              <el-tag :type="row.status === 'signed' ? 'success' : 'warning'" size="small">
+                {{ row.status === 'signed' ? '已簽收' : '待簽收' }}
+              </el-tag>
+            </template>
+          </el-table-column>
+        </el-table>
+      </el-tab-pane>
+
       <el-tab-pane :label="`薪資 (${salaryRows.length})`" name="salary">
         <el-table :data="salaryRows" border stripe max-height="480" size="small" empty-text="無資料">
           <el-table-column prop="employee_name" label="員工" width="120" fixed />
@@ -153,6 +200,21 @@ const methodLabel = (m: string) => PAYMENT_METHOD_LABEL[m] || m
               </el-tag>
             </template>
           </el-table-column>
+        </el-table>
+      </el-tab-pane>
+
+      <el-tab-pane :label="`固定支出 (${fixedCostRows.length})`" name="fixed_cost">
+        <el-table :data="fixedCostRows" border stripe max-height="480" size="small" empty-text="無資料">
+          <el-table-column label="年/月" width="100">
+            <template #default="{ row }">{{ row.year }} / {{ row.month }}</template>
+          </el-table-column>
+          <el-table-column label="類別" width="140">
+            <template #default="{ row }">{{ fixedCostCategoryLabel(row.category) }}</template>
+          </el-table-column>
+          <el-table-column label="金額" width="110" align="right">
+            <template #default="{ row }">{{ money(row.amount) }}</template>
+          </el-table-column>
+          <el-table-column prop="notes" label="備註" min-width="140" />
         </el-table>
       </el-tab-pane>
     </el-tabs>

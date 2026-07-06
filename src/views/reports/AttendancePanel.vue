@@ -133,11 +133,23 @@ const classroomChartOptions = computed(() => ({
 }))
 
 const leaveChartData = computed(() => {
-  const arr = (data.value.leave_monthly || []) as Array<{ personal?: number; sick?: number; annual?: number; menstrual?: number; maternity?: number; paternity?: number }>
-  const personal = arr.map(d => d.personal || 0)
-  const sick = arr.map(d => d.sick || 0)
-  const annual = arr.map(d => d.annual || 0)
-  const other = arr.map(d => (d.menstrual || 0) + (d.maternity || 0) + (d.paternity || 0))
+  // 依月份鍵值取值（防禦性）：後端 `_query_leave_monthly` 已保證回傳固定 12 筆
+  // 密集陣列，但那是隱性契約；比照上面 attendanceChartData 建 monthMap，
+  // 避免未來後端回傳稀疏陣列時前端按 index 對錯月份（2026-07-05 稽核 P3-3）。
+  const arr = (data.value.leave_monthly || []) as Array<{ month: number; personal?: number; sick?: number; annual?: number; menstrual?: number; maternity?: number; paternity?: number }>
+  const monthMap: Record<number, typeof arr[number]> = {}
+  arr.forEach(d => { monthMap[d.month] = d })
+  const personal: number[] = []
+  const sick: number[] = []
+  const annual: number[] = []
+  const other: number[] = []
+  for (let m = 1; m <= 12; m++) {
+    const d = monthMap[m]
+    personal.push(d?.personal || 0)
+    sick.push(d?.sick || 0)
+    annual.push(d?.annual || 0)
+    other.push((d?.menstrual || 0) + (d?.maternity || 0) + (d?.paternity || 0))
+  }
   return {
     labels: MONTH_LABELS,
     datasets: [

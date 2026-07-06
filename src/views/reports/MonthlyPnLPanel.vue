@@ -44,7 +44,7 @@ async function load() {
   try {
     data.value = await getMonthlyPnL(props.year)
   } catch (e) {
-    errorMsg.value = apiError(e, '載入月度損益表失敗')
+    errorMsg.value = apiError(e, '載入月度現金收支表失敗')
     ElMessage.error(errorMsg.value)
     data.value = null
   } finally {
@@ -100,9 +100,13 @@ function netCellClass(v: number | null | undefined) {
     <el-empty :description="errorMsg" />
   </div>
   <div v-else-if="isEmpty" class="pnl-empty">
-    <el-empty description="此年度尚無損益資料" />
+    <el-empty description="此年度尚無現金收支資料" />
   </div>
   <div v-else class="monthly-pnl">
+    <div class="pnl-header">
+      <h3 class="panel-title" data-test="pnl-title">月度現金收支表</h3>
+      <el-tag type="info" effect="plain" size="small" data-test="pnl-cashbasis-badge">現金收付實現制</el-tag>
+    </div>
     <div class="pnl-scroll">
       <table class="pnl-table">
         <thead>
@@ -190,6 +194,17 @@ function netCellClass(v: number | null | undefined) {
   display: flex;
   flex-direction: column;
   gap: var(--space-4, 16px);
+}
+
+.pnl-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pnl-header .panel-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
 }
 
 .pnl-scroll {
