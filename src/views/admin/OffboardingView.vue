@@ -70,7 +70,7 @@ function getChecklistStatus(row: ResignedEmployee): ChecklistStatus {
 }
 
 const checklistLabel: Record<ChecklistStatus, string> = {
-    no_record: '無 record',
+    no_record: '未建立紀錄',
     closed: '已結案',
     open: '未結案',
 }
@@ -153,8 +153,8 @@ async function onMagicLinkUpdate(): Promise<void> {
                 </template>
             </el-table-column>
 
-            <!-- Checklist 狀態 -->
-            <el-table-column label="Checklist 狀態" min-width="110">
+            <!-- 離職檢核 -->
+            <el-table-column label="離職檢核" min-width="110">
                 <template #default="{ row }: { row: ResignedEmployee }">
                     <el-tag :type="(checklistTagType[getChecklistStatus(row)] as 'success' | 'warning' | 'info')">
                         {{ checklistLabel[getChecklistStatus(row)] }}
