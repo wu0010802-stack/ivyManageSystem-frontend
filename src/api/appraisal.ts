@@ -152,3 +152,11 @@ export const getSummaryLogs = (summaryId: number) =>
 
 export const getSignStatusSummary = (cycleId: number) =>
     api.get(`/appraisal/cycles/${cycleId}/sign_status_summary`)
+
+// ============ Exception Center（例外中心：唯讀彙整待人工處理事項）============
+
+/** 彙整考核週期內待人工處理的例外事項（唯讀衍生，不建新表）。 */
+export const getAppraisalCycleExceptions = (
+    cycleId: number,
+): AxiosResp<'/appraisal/cycles/{cycle_id}/exceptions', 'get'> =>
+    api.get(`/appraisal/cycles/${cycleId}/exceptions`)

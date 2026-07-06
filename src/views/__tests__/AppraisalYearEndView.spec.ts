@@ -20,6 +20,7 @@ const stubs = {
   AppraisalManagementView: { name: 'AppraisalManagementView', template: '<div class="stub-appraisal" />' },
   YearEndListView: { name: 'YearEndListView', template: '<div class="stub-year-end" />' },
   AppraisalPayoutView: { name: 'AppraisalPayoutView', template: '<div class="stub-payout" />' },
+  ExceptionCenterView: { name: 'ExceptionCenterView', template: '<div class="stub-exceptions" />' },
   ElSegmented: {
     name: 'ElSegmented',
     props: ['modelValue', 'options'],
@@ -40,10 +41,14 @@ function mountWith(perms: string[], query: Record<string, unknown> = {}) {
 describe('AppraisalYearEndView shell', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('只渲染有權限的 section（只有 YEAR_END_READ → 年終獎金）', () => {
+  it('只渲染有權限的 section（只有 YEAR_END_READ → 年終獎金 + 例外中心[OR]）', () => {
     const w = mountWith(['YEAR_END_READ'])
     const seg = w.findComponent({ name: 'ElSegmented' })
-    expect(seg.props('options')).toEqual([{ label: '年終獎金', value: 'year-end' }])
+    // 例外中心對 APPRAISAL_READ / YEAR_END_READ 為 OR 語意，YEAR_END_READ 單獨持有即可見
+    expect(seg.props('options')).toEqual([
+      { label: '年終獎金', value: 'year-end' },
+      { label: '例外中心', value: 'exceptions' },
+    ])
     expect(w.find('.stub-year-end').exists()).toBe(true)
     expect(w.find('.stub-appraisal').exists()).toBe(false)
     expect(w.find('.stub-payout').exists()).toBe(false)
@@ -111,5 +116,29 @@ describe('AppraisalYearEndView shell', () => {
     const seg = w.findComponent({ name: 'ElSegmented' })
     const opts = seg.props('options') as { label: string; value: string }[]
     expect(opts.some((o) => o.value === 'year-end-rules')).toBe(false)
+  })
+
+  // 例外中心：唯讀彙整考核/年終待人工處理事項，任一方 READ 權限即可見（OR）
+  it('只有 APPRAISAL_READ → 出現「例外中心」section 並可渲染', () => {
+    const w = mountWith(['APPRAISAL_READ'], { section: 'exceptions' })
+    const seg = w.findComponent({ name: 'ElSegmented' })
+    const opts = seg.props('options') as { label: string; value: string }[]
+    expect(opts.some((o) => o.value === 'exceptions' && o.label === '例外中心')).toBe(true)
+    expect(w.find('.stub-exceptions').exists()).toBe(true)
+  })
+
+  it('只有 YEAR_END_READ → 亦出現「例外中心」section（OR 語意）', () => {
+    const w = mountWith(['YEAR_END_READ'], { section: 'exceptions' })
+    const seg = w.findComponent({ name: 'ElSegmented' })
+    const opts = seg.props('options') as { label: string; value: string }[]
+    expect(opts.some((o) => o.value === 'exceptions')).toBe(true)
+    expect(w.find('.stub-exceptions').exists()).toBe(true)
+  })
+
+  it('完全無 APPRAISAL_READ / YEAR_END_READ → 不出現「例外中心」section', () => {
+    const w = mountWith(['SETTINGS_READ'])
+    const seg = w.findComponent({ name: 'ElSegmented' })
+    const opts = seg.props('options') as { label: string; value: string }[]
+    expect(opts.some((o) => o.value === 'exceptions')).toBe(false)
   })
 })

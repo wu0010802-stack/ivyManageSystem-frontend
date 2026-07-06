@@ -184,3 +184,11 @@ export const getProvenance = (
   api.get<DerivedValue>(`/provenance/${key}`, {
     params: { cycle_id: cycleId, employee_id: employeeId },
   }) as Promise<{ data: DerivedValue }>
+
+// ============ Exception Center（例外中心：唯讀彙整待人工處理事項）============
+
+/** 彙整年終結算週期內待人工處理的例外事項（唯讀衍生，不建新表）。 */
+export const getYearEndCycleExceptions = (
+  cycleId: number,
+): AxiosResp<'/year_end/cycles/{cycle_id}/exceptions', 'get'> =>
+  api.get(`/year_end/cycles/${cycleId}/exceptions`)

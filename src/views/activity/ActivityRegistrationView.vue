@@ -450,7 +450,7 @@
 
 <script setup lang="ts">
 import { ref, computed, nextTick, onMounted, watch, defineAsyncComponent } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Edit, Link } from '@element-plus/icons-vue'
 import {
@@ -514,6 +514,7 @@ function courseStatusLabel(status: string) {
 }
 const termStore = useAcademicTermStore()
 const router = useRouter()
+const route = useRoute()
 
 function goToPublic() {
   const url = router.resolve({ name: 'public-activity' }).href
@@ -540,6 +541,25 @@ const {
   savingBatch,
   initFromQuery, fetchList, handleSearch, batchMarkPaid, loadOptions,
 } = useActivityRegistration()
+
+// 例外中心深連結（/activity/registrations?match_status=pending）可能導到「已掛載的
+// 本頁」——同路徑只換 query 時 Vue Router 不會重新 mount component，onMounted 內的
+// initFromQuery() 只在首次掛載跑一次，不會再生效。額外 watch route.query.match_status
+// 讓深連結在使用者已停留本頁時也能生效；用值比較避免與 syncToQuery() 的 router.replace
+// 互相觸發成無窮迴圈。
+watch(
+  () => {
+    const raw = route.query.match_status
+    return Array.isArray(raw) ? raw[0] : raw
+  },
+  (next) => {
+    const val = next || ''
+    if (val === matchStatusFilter.value) return
+    matchStatusFilter.value = val
+    page.value = 1
+    fetchList()
+  },
+)
 
 // 選取的 row 由 view 持有（批量勾選需依 match_status 分群）；selectedIds 供批量繳費端點。
 const selectedRows = ref<RegistrationRow[]>([])
