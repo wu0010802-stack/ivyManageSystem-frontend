@@ -8,12 +8,8 @@ vi.mock('@/composables/useIsMobile', () => ({ useIsMobile: () => ({ isMobile: mo
 // employees 給一筆假資料，避免 loading && !employees.length = true 讓 TableSkeleton 遮住表格
 const fakeEmployee = { employee_id: 'T001', name: '測試員工', title: '', position: '', hire_date: '', is_active: true, employee_type: 'regular', base_salary: 30000, status: 'active' }
 vi.mock('@/stores/employee', () => ({ useEmployeeStore: () => ({ employees: [fakeEmployee], fetchEmployees: vi.fn(() => new Promise(() => {})) }) }))
-vi.mock('@/stores/classroom', () => ({ useClassroomStore: () => ({ classrooms: [], fetchClassrooms: vi.fn(() => new Promise(() => {})) }) }))
-vi.mock('@/stores/config', () => ({ useConfigStore: () => ({ jobTitles: [], fetchJobTitles: vi.fn(() => new Promise(() => {})) }) }))
 // vue-router mock（onMounted 讀 route.query.search）
 vi.mock('vue-router', () => ({ useRoute: () => ({ query: {} }), useRouter: () => ({ push: vi.fn(), replace: vi.fn() }) }))
-// API 直呼 mock（onMounted 呼 getPositionSalary）
-vi.mock('@/api/config', () => ({ getPositionSalary: vi.fn(() => new Promise(() => {})) }))
 
 import EmployeeListView from '@/views/EmployeeListView.vue'
 

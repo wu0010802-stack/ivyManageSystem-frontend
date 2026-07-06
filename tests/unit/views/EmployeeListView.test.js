@@ -8,18 +8,6 @@ const employeeStore = {
   fetchEmployees: vi.fn(() => Promise.resolve()),
 }
 
-const classroomStore = {
-  classrooms: [],
-  fetchClassrooms: vi.fn(() => Promise.resolve()),
-}
-
-const configStore = {
-  jobTitles: [],
-  fetchJobTitles: vi.fn(() => Promise.resolve()),
-}
-
-const getPositionSalary = vi.fn(() => Promise.resolve({ data: {} }))
-
 const mockDeleteEmployee = vi.fn(() => Promise.resolve({ data: {} }))
 
 vi.mock('@/api/employees', () => ({
@@ -33,20 +21,8 @@ vi.mock('@/api/employees', () => ({
   deleteEmployee: (...args) => mockDeleteEmployee(...args),
 }))
 
-vi.mock('@/api/config', () => ({
-  getPositionSalary: (...args) => getPositionSalary(...args),
-}))
-
 vi.mock('@/stores/employee', () => ({
   useEmployeeStore: () => employeeStore,
-}))
-
-vi.mock('@/stores/classroom', () => ({
-  useClassroomStore: () => classroomStore,
-}))
-
-vi.mock('@/stores/config', () => ({
-  useConfigStore: () => configStore,
 }))
 
 vi.mock('@/composables', () => ({
@@ -118,8 +94,6 @@ describe('EmployeeListView', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     employeeStore.employees = []
-    configStore.jobTitles = []
-    classroomStore.classrooms = []
   })
 
   it('onMounted honors store TTL by calling fetchEmployees(false)', async () => {
