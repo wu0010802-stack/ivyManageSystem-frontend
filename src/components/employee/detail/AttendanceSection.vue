@@ -1,0 +1,124 @@
+<script setup lang="ts">
+import { ref, onMounted } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { getRecords as getAttendanceRecords, uploadCsv, deleteEmployeeDateRecord } from '@/api/attendance'
+import { summarizeCsvImportResult } from '@/utils/attendanceImport'
+import { thisMonthISO } from '@/utils/format'
+import type { ElTagType } from '@/utils/employeeDisplay'
+
+const props = defineProps<{ employee: Record<string, unknown> }>()
+
+const attendanceRecords = ref<Record<string, unknown>[]>([])
+const attendanceMonth = ref(thisMonthISO()) // YYYY-MM
+
+const fetchAttendance = async () => {
+  if (!props.employee.id || !attendanceMonth.value) return
+  const [year, month] = attendanceMonth.value.split('-')
+  try {
+    const response = await getAttendanceRecords({
+      employee_id: props.employee.id as number,
+      year: parseInt(year),
+      month: parseInt(month)
+    })
+    attendanceRecords.value = response.data as Record<string, unknown>[]
+  } catch (error) {
+    ElMessage.error('載入出勤紀錄失敗')
+  }
+}
+
+const getAttendanceStatusType = (status: string): ElTagType => {
+  if (status === 'normal') return 'success'
+  if (status.includes('late') || status.includes('early')) return 'warning'
+  return 'danger'
+}
+
+const editAttendance = (row: Record<string, unknown>) => {
+  ElMessageBox.prompt('請輸入新的上/下班時間 (格式: HH:MM,HH:MM)', '編輯出勤', {
+    confirmButtonText: '確定',
+    cancelButtonText: '取消',
+    inputValue: `${row.punch_in || ''},${row.punch_out || ''}`,
+    inputPattern: /^([0-1]?[0-9]|2[0-3]):[0-5][0-9],([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/,
+    inputErrorMessage: '時間格式不正確'
+  }).then(async (result) => {
+     const value = (result as unknown as { value: string }).value
+     const [inTime, outTime] = value.split(',')
+     // Call API to save (using existing upload-csv endpoint logic w/ wrapper or new endpoint if we made one?)
+     // Reusing the logic from app.js: wrap in upload payload
+     const payload = {
+        year: parseInt(attendanceMonth.value.split('-')[0]),
+        month: parseInt(attendanceMonth.value.split('-')[1]),
+        records: [{
+           department: "Manual",
+           employee_number: props.employee.employee_id,
+           name: props.employee.name,
+           date: (row.date as string).replace(/-/g, '/'),
+           weekday: "",
+           punch_in: inTime,
+           punch_out: outTime
+        }]
+     }
+     try {
+        const res = await uploadCsv(payload)
+        // upload-csv 對逐列失敗回 200（失敗原因在 body results），
+        // 不可只看 HTTP 狀態就報「出勤已更新」（資料實際沒寫入）
+        const summary = summarizeCsvImportResult(res.data)
+        if (summary.ok) {
+           ElMessage.success('出勤已更新')
+        } else {
+           ElMessage.warning(summary.text)
+        }
+        fetchAttendance()
+     } catch (err) {
+        ElMessage.error('更新失敗')
+     }
+  }).catch(() => {})
+}
+
+const deleteAttendance = (row: Record<string, unknown>) => {
+   ElMessageBox.confirm(`確定要刪除 ${row.date} 的出勤紀錄嗎？`, '警告', {
+      type: 'warning'
+   }).then(async () => {
+      try {
+         await deleteEmployeeDateRecord(props.employee.id as number, row.date as string)
+         ElMessage.success('已刪除')
+         fetchAttendance()
+      } catch (err) {
+         ElMessage.error('刪除失敗')
+      }
+   })
+}
+
+onMounted(fetchAttendance)
+</script>
+
+<template>
+  <div>
+    <div class="attendance-filter">
+      <el-date-picker
+        v-model="attendanceMonth"
+        type="month"
+        placeholder="選擇月份"
+        format="YYYY-MM"
+        value-format="YYYY-MM"
+        @change="fetchAttendance"
+      />
+    </div>
+    <el-table :data="attendanceRecords" height="400" style="width: 100%; margin-top: 10px;">
+      <el-table-column prop="date" label="日期" width="120" />
+      <el-table-column prop="weekday" label="星期" width="80" />
+      <el-table-column prop="punch_in" label="上班" />
+      <el-table-column prop="punch_out" label="下班" />
+      <el-table-column prop="status" label="狀態">
+        <template #default="scope">
+          <el-tag :type="getAttendanceStatusType(scope.row.status)">{{ scope.row.status }}</el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="操作" width="150">
+         <template #default="scope">
+            <el-button link type="primary" @click="editAttendance(scope.row)">編輯</el-button>
+            <el-button link type="danger" @click="deleteAttendance(scope.row)">刪除</el-button>
+         </template>
+      </el-table-column>
+    </el-table>
+  </div>
+</template>
