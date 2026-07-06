@@ -1,4 +1,12 @@
 version: 2
+# ─────────────────────────────────────────────────────────────
+# ⚠ 版本更新（version updates）已於 2026-07-06 停用。
+#   做法：兩個 ecosystem 的 open-pull-requests-limit 全設為 0。
+#   效果：Dependabot 不再每週開版本更新 PR（消除 PR/分支噪音）。
+#   保留：security updates 不受此 limit 限制，仍會在出現 CVE 時自動開 PR
+#         （需 repo 設定「Dependabot security updates」開啟）。
+#   恢復版本更新：把下方 open-pull-requests-limit 改回 10 即可。
+# ─────────────────────────────────────────────────────────────
 updates:
   # npm dependencies
   - package-ecosystem: "npm"
@@ -8,7 +16,7 @@ updates:
       day: "monday"
       time: "09:00"
       timezone: "Asia/Taipei"
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 0  # 停用版本更新；security updates 不受此限制
     labels:
       - "dependencies"
       - "frontend"
@@ -44,6 +52,7 @@ updates:
     directory: "/"
     schedule:
       interval: "monthly"
+    open-pull-requests-limit: 0  # 停用版本更新
     labels:
       - "dependencies"
       - "ci"
