@@ -56,7 +56,7 @@ describe('useRegistrationWindow', () => {
     wrapper.unmount()
   })
 
-  it('截止前 48h 內 → 收尾提醒', () => {
+  it('截止前 48h 內 → 收尾提醒，但仍可送出（提醒非封鎖）', () => {
     // now=2026-03-01 10:00 UTC；close_at=2026-03-02 12:00 UTC（26h 後）
     const timeInfo = ref({
       is_open: true,
@@ -67,7 +67,26 @@ describe('useRegistrationWindow', () => {
     const { wrapper, get } = mountWithComposable({ timeInfo, submitting })
     expect(get().noticeState.value?.title).toBe('報名即將截止')
     expect(get().noticeState.value?.variant).toBe('is-warning')
+    // 回歸：截止前提醒只是提示，報名視窗仍開放，送出按鈕不得鎖死
+    expect(get().isRegistrationOpen.value).toBe(true)
+    expect(get().submitButtonLabel.value).toBe('確認報名資料')
+    expect(get().submitButtonDisabled.value).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('超過 close_at → 報名已截止，送出鎖死', () => {
+    // now=2026-03-01 10:00 UTC；close_at=2026-02-28 12:00 UTC（已過）
+    const timeInfo = ref({
+      is_open: true,
+      open_at: '2026-02-01T00:00:00Z',
+      close_at: '2026-02-28T12:00:00Z',
+    })
+    const submitting = ref(false)
+    const { wrapper, get } = mountWithComposable({ timeInfo, submitting })
+    expect(get().noticeState.value?.title).toBe('報名已截止')
     expect(get().isRegistrationOpen.value).toBe(false)
+    expect(get().submitButtonLabel.value).toBe('報名已截止')
+    expect(get().submitButtonDisabled.value).toBe(true)
     wrapper.unmount()
   })
 

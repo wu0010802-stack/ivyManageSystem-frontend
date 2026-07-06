@@ -43,19 +43,21 @@ export function useRegistrationWindow({ timeInfo, submitting }: { timeInfo: Ref<
     const closeAt = settings.close_at ? new Date(settings.close_at) : null
 
     if (!settings.is_open) {
-      return { variant: 'is-warning', title: '報名尚未開放', message: '目前尚未開放線上報名，請稍後再試。' }
+      return { variant: 'is-warning', title: '報名尚未開放', message: '目前尚未開放線上報名，請稍後再試。', blocking: true }
     }
     if (openAt && now < openAt) {
       return {
         variant: 'is-warning',
         title: '報名尚未開始',
         message: `報名開始時間：${openAt.toLocaleString('zh-TW')}，距離開放還有 ${formatCountdown(openAt.getTime(), now.getTime())}。`,
+        blocking: true,
       }
     }
     if (closeAt && now > closeAt) {
-      return { variant: 'is-danger', title: '報名已截止', message: '感謝您的關注，本期報名已結束。' }
+      return { variant: 'is-danger', title: '報名已截止', message: '感謝您的關注，本期報名已結束。', blocking: true }
     }
-    // 截止前 48 小時內：彈出收尾提醒（urgent close countdown）
+    // 截止前 48 小時內：彈出收尾提醒（urgent close countdown）。
+    // blocking:false —— 純提示，報名視窗仍開放，不得鎖住送出按鈕。
     if (closeAt) {
       const diffHours = (closeAt.getTime() - now.getTime()) / 3_600_000
       if (diffHours <= 48 && diffHours > 0) {
@@ -63,13 +65,14 @@ export function useRegistrationWindow({ timeInfo, submitting }: { timeInfo: Ref<
           variant: 'is-warning',
           title: '報名即將截止',
           message: `截止時間：${closeAt.toLocaleString('zh-TW')}，剩餘 ${formatCountdown(closeAt.getTime(), now.getTime())}，請儘速完成報名。`,
+          blocking: false,
         }
       }
     }
     return null
   })
 
-  const isRegistrationOpen = computed(() => noticeState.value === null)
+  const isRegistrationOpen = computed(() => !noticeState.value?.blocking)
 
   const submitButtonLabel = computed(() => {
     if (submitting.value) return '送出中…'
