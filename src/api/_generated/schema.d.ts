@@ -2248,6 +2248,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/appraisal/cycles/{cycle_id}/exceptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Appraisal Exceptions
+         * @description 彙整考核週期內待人工處理的例外事項（唯讀衍生，不建新表）。
+         *
+         *     「處理」＝到源頭修復後對應項目自動消失（下次呼叫即不再出現）。
+         */
+        get: operations["get_appraisal_exceptions_api_appraisal_cycles__cycle_id__exceptions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/appraisal/cycles/{cycle_id}/export.xlsx": {
         parameters: {
             query?: never;
@@ -14102,6 +14124,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/year_end/cycles/{cycle_id}/exceptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Year End Exceptions
+         * @description 彙整年終結算週期內待人工處理的例外事項（唯讀衍生，不建新表）。
+         *
+         *     「處理」＝到源頭修復後對應項目自動消失（下次呼叫即不再出現）。
+         */
+        get: operations["get_year_end_exceptions_api_year_end_cycles__cycle_id__exceptions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/year_end/cycles/{cycle_id}/grid": {
         parameters: {
             query?: never;
@@ -19235,6 +19279,46 @@ export interface components {
             start_time?: string | null;
             /** Title */
             title?: string | null;
+        };
+        /** ExceptionItemOut */
+        ExceptionItemOut: {
+            /** Deep Link */
+            deep_link: string;
+            /** Entity Id */
+            entity_id: string;
+            /** Entity Type */
+            entity_type: string;
+            /** Impact */
+            impact: string;
+            /** Reason */
+            reason: string;
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "blocking" | "warning" | "info";
+            /** Suggested Action */
+            suggested_action: string;
+            /** Target Name */
+            target_name: string;
+            /** Type */
+            type: string;
+        };
+        /** ExceptionsOut */
+        ExceptionsOut: {
+            /** Counts By Type */
+            counts_by_type: {
+                [key: string]: number;
+            };
+            /** Cycle Id */
+            cycle_id: number;
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
+            /** Items */
+            items: components["schemas"]["ExceptionItemOut"][];
         };
         /** ExpiringStudentRow */
         ExpiringStudentRow: {
@@ -33818,6 +33902,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AggregatedStatusOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_appraisal_exceptions_api_appraisal_cycles__cycle_id__exceptions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cycle_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExceptionsOut"];
                 };
             };
             /** @description Validation Error */
@@ -55059,6 +55174,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ClassEnrollmentTargetOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_year_end_exceptions_api_year_end_cycles__cycle_id__exceptions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cycle_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExceptionsOut"];
                 };
             };
             /** @description Validation Error */
