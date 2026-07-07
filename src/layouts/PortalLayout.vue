@@ -16,9 +16,6 @@ import PortalSearchPalette from '@/components/portal/PortalSearchPalette.vue'
 import { usePortalSearch, installPortalSearchKeyboard } from '@/composables/usePortalSearch'
 import { useIsMobile } from '@/composables/useIsMobile'
 import { Search, Fold } from '@element-plus/icons-vue'
-import SessionIdleDialog from '@/components/common/SessionIdleDialog.vue'
-import { startSessionWatchdog, stopSessionWatchdog } from '@/composables/useSessionWatchdog'
-import { PORTAL_IDLE_MS, IDLE_COUNTDOWN_MS } from '@/constants/session'
 
 interface UserInfo {
   name?: string
@@ -180,12 +177,6 @@ onMounted(() => {
   // 接送提醒提升到殼層：單一 WS、全 Portal 頁存活、AudioContext gesture unlock、visibilitychange 重連
   initPortalDismissalAlerts()
 
-  startSessionWatchdog({
-    idleMs: PORTAL_IDLE_MS,
-    countdownMs: IDLE_COUNTDOWN_MS,
-    loginPath: '/portal/login',
-  })
-
   // 導航更新一次性提示（v=1: 2026-05 教師端 ACD 改造）
   const PORTAL_LAYOUT_VERSION = '1'
   const stored = localStorage.getItem('portal_layout_v')
@@ -215,7 +206,6 @@ onUnmounted(() => {
   window.removeEventListener('portal-substitute-count-changed', onSubstituteChanged)
   document.removeEventListener('visibilitychange', onVisibilityChange)
   teardownPortalDismissalAlerts()
-  stopSessionWatchdog()
 })
 
 const closeSidebar = () => {
@@ -585,8 +575,6 @@ const submitPassword = async () => {
         <el-button type="primary" :loading="passwordLoading" @click="submitPassword">確認</el-button>
       </template>
     </el-dialog>
-
-    <SessionIdleDialog />
   </el-container>
 </template>
 

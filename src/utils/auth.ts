@@ -19,7 +19,8 @@ function _isPublicRoute(path: string) {
 
 export const USER_INFO_KEY = 'userInfo'
 const SESSION_VALIDATED_AT_KEY = 'auth_session_validated_at'
-const SESSION_MAX_AGE_MS = 14 * 60 * 1000
+// 閒置逾時（useIdleTimeout）與登入時效判定（isLoggedIn）共用同一基準，避免魔法數字重複定義。
+export const SESSION_MAX_AGE_MS = 14 * 60 * 1000
 
 // 響應式 user info 來源：refresh / setUserInfo 後，任何 computed(() => hasPermission(...))
 // 或 computed(() => getUserInfo()) 會自動重算，不需要 F5。

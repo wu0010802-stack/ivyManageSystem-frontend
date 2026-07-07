@@ -6,7 +6,7 @@ import { User, Lock } from '@element-plus/icons-vue'
 import { login } from '@/api/auth'
 import { setUserInfo } from '@/utils/auth'
 import { apiError } from '@/utils/error'
-import { IDLE_LOGOUT_FLAG_KEY } from '@/composables/useSessionWatchdog'
+import { IDLE_LOGOUT_FLAG_KEY } from '@/composables/useIdleTimeout'
 
 const router = useRouter()
 const loading = ref(false)
