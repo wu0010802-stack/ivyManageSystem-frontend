@@ -41,6 +41,42 @@ describe('useManualEventEntry getOriginal', () => {
   })
 })
 
+describe('useManualEventEntry note 溯源（機構活動同步標示）', () => {
+  it('load 解析 note，getNote 回傳全文；無 note 的列回 null', async () => {
+    // mock 形狀逐欄抄 ManualEventCountOut 契約（count 為 Decimal 字串、note 可選）
+    mockGetCounts.mockResolvedValue({
+      data: {
+        cycle_id: 1,
+        entries: [
+          {
+            participant_id: 10,
+            item_code: 'SELF_IMPROVEMENT_ACTIVITY',
+            count: '2',
+            employee_name: '王雅玲',
+            entered_at: '2026-10-02T08:00:00Z',
+            entered_by: 1,
+            note: '自動同步：機構活動出席（2場）',
+          },
+          {
+            participant_id: 10,
+            item_code: 'OTHER',
+            count: '1',
+            employee_name: '王雅玲',
+            entered_at: null,
+            entered_by: null,
+            note: null,
+          },
+        ],
+      },
+    } as never)
+    const { getNote } = useManualEventEntry(ref(1))
+    await nextTick(); await Promise.resolve(); await nextTick()
+    expect(getNote(10, 'SELF_IMPROVEMENT_ACTIVITY')).toBe('自動同步：機構活動出席（2場）')
+    expect(getNote(10, 'OTHER')).toBeNull()
+    expect(getNote(99, 'OTHER')).toBeNull()
+  })
+})
+
 describe('useManualEventEntry inheritFromPreviousCycle', () => {
   it('以 employee_id 對映上一週期數值帶入當期（標 dirty）', async () => {
     // 當期 cycle=2，空白

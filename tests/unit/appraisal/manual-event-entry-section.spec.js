@@ -81,6 +81,8 @@ describe('P1-13 ManualEventEntrySection 計數限正整數', () => {
       // mock 必須補這兩個 export，否則 getOriginal 為 undefined → render 於 :114 拋。
       getOriginal: () => 0,
       inheritFromPreviousCycle: vi.fn(),
+      // 2026-07-07 起 cell 另呼叫 getNote 顯示機構活動「自動同步」溯源 tag，同上須補。
+      getNote: () => null,
     })
 
     const w = mount(ManualEventEntrySection, {

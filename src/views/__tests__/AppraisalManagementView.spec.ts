@@ -16,6 +16,7 @@ const stubs = {
   CycleListView: { name: 'CycleListView', template: '<div class="stub-history" />' },
   AppraisalSettingsView: { name: 'AppraisalSettingsView', template: '<div class="stub-settings" />' },
   DisciplinaryPanel: { name: 'DisciplinaryPanel', template: '<div class="stub-disciplinary" />' },
+  InstitutionEventPanel: { name: 'InstitutionEventPanel', template: '<div class="stub-institution-events" />' },
   ElTabs: {
     name: 'ElTabs',
     props: ['modelValue'],
@@ -46,6 +47,12 @@ describe('AppraisalManagementView tabs', () => {
     w.findComponent({ name: 'ElTabs' }).vm.$emit('tab-change', 'settings')
     await nextTick()
     expect(replace).toHaveBeenCalledWith({ query: { section: 'appraisal', tab: 'settings' } })
+  })
+
+  it('tab=institution_events 渲染活動出席面板（懶載入）', () => {
+    const w = mountWith({ tab: 'institution_events' })
+    expect(w.find('.stub-institution-events').exists()).toBe(true)
+    expect(w.find('.stub-current').exists()).toBe(false)
   })
 
   it('history 內切 tab 再切回不殘留：切到 current 不帶 cycle', async () => {

@@ -44,10 +44,12 @@ export const MANUAL_LABEL: Record<string, string> = {
 }
 
 type CountMap = Record<string, Record<string, number>>
+type NoteMap = Record<string, Record<string, string>>
 
 export function useManualEventEntry(cycleIdRef: Ref<number | null | undefined>) {
   const counts = ref<CountMap>({})
   const original = ref<CountMap>({})
+  const notes = ref<NoteMap>({})
   const loading = ref(false)
   const saving = ref(false)
 
@@ -57,14 +59,20 @@ export function useManualEventEntry(cycleIdRef: Ref<number | null | undefined>) 
     try {
       const { data } = await getManualEventCounts(cycleIdRef.value)
       const m: CountMap = {}
-      const entries = (data as { entries?: { participant_id: number | string; item_code: string; count: number | string }[] }).entries ?? []
+      const n: NoteMap = {}
+      const entries = (data as { entries?: { participant_id: number | string; item_code: string; count: number | string; note?: string | null }[] }).entries ?? []
       for (const e of entries) {
         const pid = String(e.participant_id)
         if (!m[pid]) m[pid] = {}
         m[pid][e.item_code] = Number(e.count)
+        if (e.note) {
+          if (!n[pid]) n[pid] = {}
+          n[pid][e.item_code] = e.note
+        }
       }
       counts.value = JSON.parse(JSON.stringify(m)) as CountMap
       original.value = JSON.parse(JSON.stringify(m)) as CountMap
+      notes.value = n
     } catch (e) {
       ElMessage.error(apiError(e, '載入手填事件失敗'))
     } finally {
@@ -117,6 +125,11 @@ export function useManualEventEntry(cycleIdRef: Ref<number | null | undefined>) 
     return original.value[String(pid)]?.[code] ?? 0
   }
 
+  /** 該格後端 note（例如「自動同步：機構活動出席（2場）」溯源標示用）；無則 null。 */
+  function getNote(pid: string | number, code: string): string | null {
+    return notes.value[String(pid)]?.[code] ?? null
+  }
+
   async function inheritFromPreviousCycle(
     currentParticipants: { participant_id?: number | null; employee_id?: number }[],
   ): Promise<{ applied: number; skipped: number } | null> {
@@ -161,5 +174,5 @@ export function useManualEventEntry(cycleIdRef: Ref<number | null | undefined>) 
 
   watch(cycleIdRef, () => load(), { immediate: true })
 
-  return { counts, dirtyEntries, loading, saving, load, saveAll, getCount, setCount, getOriginal, inheritFromPreviousCycle }
+  return { counts, dirtyEntries, loading, saving, load, saveAll, getCount, setCount, getOriginal, getNote, inheritFromPreviousCycle }
 }
