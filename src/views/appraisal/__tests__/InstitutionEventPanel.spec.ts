@@ -299,8 +299,10 @@ describe('InstitutionEventPanel 列表', () => {
     await flushPromises()
     expect(mockList).toHaveBeenCalledWith({ school_year: 114, semester: 1 })
     expect(w.text()).toContain('自我提升講座')
-    expect(w.text()).toContain('自我提升活動') // event_type 中文標籤
-    expect(w.text()).toContain('自強活動') // score_item_code 複用 MANUAL_LABEL
+    // event_type=self_improvement 與 score_item_code=SELF_IMPROVEMENT_ACTIVITY
+    // 統一顯示既有考核詞彙「自強活動」（對映修正後兩者同名）
+    expect(w.text()).toContain('自強活動')
+    expect(w.text()).not.toContain('自我提升活動')
   })
 })
 

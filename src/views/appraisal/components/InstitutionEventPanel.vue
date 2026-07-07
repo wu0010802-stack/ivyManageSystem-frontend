@@ -2,7 +2,7 @@
 /**
  * InstitutionEventPanel — 機構活動出席登記（G9-D1）
  *
- * 行政一次登記機構活動（園務會議/自強活動/自我提升活動/尾牙等）並勾選缺席名單，
+ * 行政一次登記機構活動（園務會議/機構研習/自強活動/尾牙等）並勾選缺席名單，
  * 取代逐人手填；提供考核端顯式同步（dry-run 預覽 → 確認套用）。
  *
  * 契約要點：
@@ -35,12 +35,12 @@ import type { Schema } from '@/api/_generated/typed'
 type EventRow = Schema<'InstitutionEventOut'>
 type SyncResult = Schema<'AppraisalSyncResult'>
 
-// 5 種活動類型（中文語意依後端 models/institution_event.py 註解：
-// 園務會議/自強活動/自我提升活動/尾牙等）
+// 5 種活動類型。self_improvement 對齊既有考核碼 SELF_IMPROVEMENT_ACTIVITY 的
+// 中文標籤「自強活動」（MANUAL_LABEL），避免同一場活動的類型與考核碼顯示兩個名字。
 const EVENT_TYPE_LABEL: Record<string, string> = {
   org_meeting: '園務會議',
-  org_training: '自強活動',
-  self_improvement: '自我提升活動',
+  org_training: '機構研習',
+  self_improvement: '自強活動',
   year_end_party: '尾牙',
   other: '其他',
 }
