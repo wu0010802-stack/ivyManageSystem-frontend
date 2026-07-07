@@ -132,12 +132,33 @@ const ElInputNumberStub = defineComponent({
   },
 })
 
+const ElTooltipStub = defineComponent({
+  name: 'ElTooltipStub',
+  props: ['content'],
+  setup(props, { slots }) {
+    return () => h('span', { 'data-tooltip-content': props.content }, slots.default?.())
+  },
+})
+
+const ElTagStub = defineComponent({
+  name: 'ElTagStub',
+  inheritAttrs: false,
+  setup(_, { attrs, slots }) {
+    const dataAttrs = Object.fromEntries(
+      Object.entries(attrs).filter(([k]) => k.startsWith('data-')),
+    )
+    return () => h('span', { class: 'el-tag', ...dataAttrs }, slots.default?.())
+  },
+})
+
 const GLOBAL_STUBS = {
   'el-button': ElButtonStub,
   'el-alert': ElAlertStub,
   'el-table': ElTableStub,
   'el-table-column': ElTableColumnStub,
   'el-input-number': ElInputNumberStub,
+  'el-tooltip': ElTooltipStub,
+  'el-tag': ElTagStub,
 }
 
 const mountOpts = (props = {}) => ({
@@ -300,6 +321,57 @@ describe('ManualEventEntrySection', () => {
     const wrapper = mount(ManualEventEntrySection, mountOpts({ readonly: true }))
     await flushPromises()
     expect(wrapper.find('[data-test="inherit-prev-btn"]').exists()).toBe(false)
+  })
+
+  // ── 機構活動同步溯源標示 ────────────────────────────────────────────────────
+
+  it('note 以「自動同步」開頭的列顯示同步 tag，tooltip 含 note 全文', async () => {
+    api.getManualEventCounts.mockResolvedValueOnce({
+      data: {
+        cycle_id: 10,
+        entries: [
+          {
+            participant_id: 1,
+            item_code: 'SELF_IMPROVEMENT_ACTIVITY',
+            count: '2',
+            employee_name: '王雅玲',
+            entered_at: '2026-10-02T08:00:00Z',
+            entered_by: 1,
+            note: '自動同步：機構活動出席（2場）',
+          },
+        ],
+      },
+    })
+    const wrapper = mount(ManualEventEntrySection, mountOpts())
+    await flushPromises()
+
+    const tag = wrapper.find('[data-test="synced-tag-1-SELF_IMPROVEMENT_ACTIVITY"]')
+    expect(tag.exists()).toBe(true)
+    // tooltip 全文提示 HR：數字來自機構活動同步，覆寫前留意
+    const tooltip = wrapper.find('[data-tooltip-content]')
+    expect(tooltip.attributes('data-tooltip-content')).toContain('自動同步：機構活動出席（2場）')
+  })
+
+  it('note 非「自動同步」開頭（人工備註）不顯示同步 tag', async () => {
+    api.getManualEventCounts.mockResolvedValueOnce({
+      data: {
+        cycle_id: 10,
+        entries: [
+          {
+            participant_id: 1,
+            item_code: 'OTHER',
+            count: '1',
+            employee_name: '王雅玲',
+            entered_at: null,
+            entered_by: null,
+            note: '人工填寫備註',
+          },
+        ],
+      },
+    })
+    const wrapper = mount(ManualEventEntrySection, mountOpts())
+    await flushPromises()
+    expect(wrapper.find('[data-test="synced-tag-1-OTHER"]').exists()).toBe(false)
   })
 
   it('每格有正確 data-grid-row / data-grid-col 屬性', async () => {

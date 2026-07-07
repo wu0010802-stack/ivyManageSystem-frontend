@@ -17,8 +17,14 @@ const props = defineProps<{
 }>()
 
 const cycleIdRef = computed(() => props.cycleId ?? null)
-const { dirtyEntries, loading, saving, getCount, setCount, saveAll, getOriginal, inheritFromPreviousCycle } =
+const { dirtyEntries, loading, saving, getCount, setCount, saveAll, getOriginal, getNote, inheritFromPreviousCycle } =
   useManualEventEntry(cycleIdRef)
+
+// 機構活動同步溯源：note 以「自動同步」開頭的格顯示 tag（覆寫前留意）
+function syncedNote(pid: string | number, code: string): string | null {
+  const note = getNote(pid, code)
+  return note && note.startsWith('自動同步') ? note : null
+}
 
 const ITEM_CODES = MANUAL_ITEM_CODES
 const LABEL = MANUAL_LABEL
@@ -117,6 +123,20 @@ async function onInheritPrevious() {
             >
               原 {{ getOriginal(row.participant_id, code) }}
             </span>
+            <el-tooltip
+              v-if="syncedNote(row.participant_id, code)"
+              :content="`${syncedNote(row.participant_id, code)}——此數字來自機構活動出席同步，人工覆寫前請留意`"
+              placement="top"
+            >
+              <el-tag
+                size="small"
+                type="info"
+                class="cell-sync-tag"
+                :data-test="`synced-tag-${row.participant_id}-${code}`"
+              >
+                自動同步
+              </el-tag>
+            </el-tooltip>
           </div>
           <span v-else>—</span>
         </template>
@@ -156,5 +176,8 @@ async function onInheritPrevious() {
   font-size: 11px;
   color: var(--el-text-color-secondary);
   line-height: 1;
+}
+.cell-sync-tag {
+  align-self: flex-start;
 }
 </style>
