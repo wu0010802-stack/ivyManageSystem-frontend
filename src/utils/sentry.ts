@@ -32,6 +32,7 @@ const PII_KEY_SUBSTRINGS = [
   'password', 'secret', 'token', 'jwt', 'cookie', 'authorization',
   'refresh_token', 'access_token', 'api_key',
   'resign_reason', 'exclude_reason', 'leave_balance_snapshot', 'certificate_pdf_path',
+  'exempt_reason',
 ]
 
 const FILTERED = '[Filtered]'

@@ -158,6 +158,15 @@ describe('scrubMapping', () => {
     expect(res.name).toBe('Alice')
   })
 
+  it('filters exempt_reason (機構活動缺席豁免原因，HR 自由輸入，對齊既有 exclude_reason 先例)', () => {
+    const res = scrubMapping({
+      exempt_reason: '當日有核准住院病假',
+      title: '園務會議',
+    })
+    expect(res.exempt_reason).toBe('[Filtered]')
+    expect(res.title).toBe('園務會議')
+  })
+
   it('recurses into nested dict and list', () => {
     const res = scrubMapping({
       meta: { id_number: 'A1', ok: 'yes' },
