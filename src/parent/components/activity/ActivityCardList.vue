@@ -10,7 +10,7 @@
  *
  * 注：目前後端 course response 無 poster/image 欄位，故未使用 LazyImage。
  */
-import { formatWeekday, formatTimeRange, formatAgeRange } from '../../utils/activitySchedule'
+import { formatWeekday, formatTimeRange } from '../../utils/activitySchedule'
 import M3Card from '../m3/M3Card.vue'
 import M3Icon from '../m3/M3Icon.vue'
 import StatusPill from '../StatusPill.vue'
@@ -27,8 +27,6 @@ interface Course {
   is_full: boolean
   allow_waitlist: boolean
   description?: string
-  min_age_months?: number | null
-  max_age_months?: number | null
   meeting_weekday?: number | null
   meeting_start_time?: string | null
   meeting_end_time?: string | null
@@ -51,10 +49,6 @@ function scheduleText(c: Course): string {
     .join(' ')
 }
 
-function ageText(c: Course): string {
-  return formatAgeRange(c.min_age_months, c.max_age_months)
-}
-
 function isConflict(c: Course): boolean {
   return props.conflictIds.has(c.id)
 }
@@ -68,7 +62,7 @@ function nextSessionText(c: Course): string {
 }
 
 function hasMeta(c: Course): boolean {
-  return !!(scheduleText(c) || ageText(c) || isConflict(c) || c.instructor_name || c.next_session_date)
+  return !!(scheduleText(c) || isConflict(c) || c.instructor_name || c.next_session_date)
 }
 
 /**
@@ -131,7 +125,6 @@ function enrollLabel(c: Course): string {
               <M3Icon name="person" :size="13" aria-hidden="true" />
               {{ c.instructor_name }}
             </span>
-            <span v-if="ageText(c)" class="meta-chip">適齡 {{ ageText(c) }}</span>
             <span v-if="isConflict(c)" class="meta-chip conflict">
               <M3Icon name="warning" :size="13" aria-hidden="true" />
               時段衝突

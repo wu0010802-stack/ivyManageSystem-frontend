@@ -135,35 +135,9 @@
 
         <el-divider content-position="left">
           <span style="font-size: 12px; color: var(--text-secondary);">
-            適齡 / 上課時段（公開報名頁顯示用；空白＝不限制）
+            上課時段（公開報名頁顯示用；空白＝不限制）
           </span>
         </el-divider>
-        <el-form-item label="建議月齡">
-          <div style="display: flex; gap: 8px; align-items: center; width: 100%;">
-            <el-input-number
-              v-model="form.min_age_months"
-              :min="0"
-              :max="240"
-              :step="6"
-              :precision="0"
-              placeholder="最小"
-              controls-position="right"
-              style="flex: 1;"
-            />
-            <span style="color: var(--text-tertiary);">~</span>
-            <el-input-number
-              v-model="form.max_age_months"
-              :min="0"
-              :max="240"
-              :step="6"
-              :precision="0"
-              placeholder="最大"
-              controls-position="right"
-              style="flex: 1;"
-            />
-            <span style="color: var(--text-secondary); font-size: 12px; flex-shrink: 0;">月齡</span>
-          </div>
-        </el-form-item>
         <el-form-item label="上課星期">
           <el-select
             v-model="form.meeting_weekday"
@@ -316,7 +290,6 @@ import { sanitizeHref } from '@/utils/url'
 interface Course {
   id: number; name: string; price: number; sessions?: number | null; capacity: number
   allow_waitlist: boolean; video_url?: string; description?: string
-  min_age_months?: number | null; max_age_months?: number | null
   meeting_weekday?: number | null; meeting_start_time?: string; meeting_end_time?: string
   instructor_name?: string | null
   // G8（年終批次2）：課程負責老師，年終教課獎勵金依此歸屬自動計算
@@ -328,7 +301,7 @@ interface EnrolledItem { position?: number; student_name?: string; class_name?: 
 
 interface CourseForm {
   name: string; price: number; sessions: number | null; capacity: number; allow_waitlist: boolean
-  video_url: string; description: string; min_age_months: number | null; max_age_months: number | null
+  video_url: string; description: string
   meeting_weekday: number | null; meeting_start_time: string; meeting_end_time: string
   instructor_name: string
   instructor_employee_id: number | null
@@ -367,9 +340,7 @@ const defaultForm = (): CourseForm => ({
   allow_waitlist: true,
   video_url: '',
   description: '',
-  // Phase 3：適齡 + 結構化時段（給家長公開頁前台 advisory 用；nullable 表示不限）
-  min_age_months: null,
-  max_age_months: null,
+  // Phase 3：結構化時段（給家長公開頁前台 advisory 用；nullable 表示不限）
   meeting_weekday: null,
   meeting_start_time: '',
   meeting_end_time: '',
@@ -559,8 +530,6 @@ function openEdit(row: Course) {
     allow_waitlist: row.allow_waitlist,
     video_url: row.video_url || '',
     description: row.description || '',
-    min_age_months: row.min_age_months ?? null,
-    max_age_months: row.max_age_months ?? null,
     meeting_weekday: row.meeting_weekday ?? null,
     meeting_start_time: row.meeting_start_time || '',
     meeting_end_time: row.meeting_end_time || '',
@@ -576,9 +545,6 @@ async function handleSave() {
   }
   // Phase 3 前端驗證：與後端 Pydantic validator 同步
   const f = form.value
-  if (f.min_age_months != null && f.max_age_months != null && f.min_age_months > f.max_age_months) {
-    return ElMessage.warning('最小月齡不可大於最大月齡')
-  }
   if (f.meeting_start_time && f.meeting_end_time && f.meeting_start_time >= f.meeting_end_time) {
     return ElMessage.warning('上課起始時刻必須早於結束時刻')
   }

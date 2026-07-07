@@ -17986,16 +17986,12 @@ export interface components {
             instructor_employee_id?: number | null;
             /** Instructor Name */
             instructor_name?: string | null;
-            /** Max Age Months */
-            max_age_months?: number | null;
             /** Meeting End Time */
             meeting_end_time?: string | null;
             /** Meeting Start Time */
             meeting_start_time?: string | null;
             /** Meeting Weekday */
             meeting_weekday?: number | null;
-            /** Min Age Months */
-            min_age_months?: number | null;
             /** Name */
             name: string;
             /** Price */
@@ -18106,16 +18102,12 @@ export interface components {
             instructor_employee_id?: number | null;
             /** Instructor Name */
             instructor_name?: string | null;
-            /** Max Age Months */
-            max_age_months?: number | null;
             /** Meeting End Time */
             meeting_end_time?: string | null;
             /** Meeting Start Time */
             meeting_start_time?: string | null;
             /** Meeting Weekday */
             meeting_weekday?: number | null;
-            /** Min Age Months */
-            min_age_months?: number | null;
             /** Name */
             name: string;
             /** Price */
@@ -18181,16 +18173,12 @@ export interface components {
             instructor_employee_id?: number | null;
             /** Instructor Name */
             instructor_name?: string | null;
-            /** Max Age Months */
-            max_age_months?: number | null;
             /** Meeting End Time */
             meeting_end_time?: string | null;
             /** Meeting Start Time */
             meeting_start_time?: string | null;
             /** Meeting Weekday */
             meeting_weekday?: number | null;
-            /** Min Age Months */
-            min_age_months?: number | null;
             /** Name */
             name?: string | null;
             /** Price */
@@ -19977,8 +19965,6 @@ export interface components {
             employee_name: string;
             /** Payable Amount */
             payable_amount: string;
-            /** Remark */
-            remark?: string | null;
             /** Settlement Id */
             settlement_id: number;
             /** Special Bonuses */
@@ -21204,8 +21190,6 @@ export interface components {
             excess_amount?: number | string | null;
             /** Hire Months Override */
             hire_months_override?: number | string | null;
-            /** Remark */
-            remark?: string | null;
         };
         /** ManualSnapshotRequest */
         ManualSnapshotRequest: {
@@ -22690,16 +22674,12 @@ export interface components {
             instructor_name?: string | null;
             /** Is Full */
             is_full: boolean;
-            /** Max Age Months */
-            max_age_months?: number | null;
             /** Meeting End Time */
             meeting_end_time?: string | null;
             /** Meeting Start Time */
             meeting_start_time?: string | null;
             /** Meeting Weekday */
             meeting_weekday?: number | null;
-            /** Min Age Months */
-            min_age_months?: number | null;
             /** Name */
             name: string;
             /** Next Session Date */
@@ -25157,16 +25137,12 @@ export interface components {
             frequency: string;
             /** Instructor Name */
             instructor_name?: string | null;
-            /** Max Age Months */
-            max_age_months?: number | null;
             /** Meeting End Time */
             meeting_end_time?: string | null;
             /** Meeting Start Time */
             meeting_start_time?: string | null;
             /** Meeting Weekday */
             meeting_weekday?: number | null;
-            /** Min Age Months */
-            min_age_months?: number | null;
             /** Name */
             name: string;
             /** Next Session Date */

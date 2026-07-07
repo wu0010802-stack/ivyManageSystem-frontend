@@ -1,8 +1,8 @@
 /**
- * 家長端才藝課「上課時段 / 適齡 / 衝堂偵測」純函式。
+ * 家長端才藝課「上課時段 / 衝堂偵測」純函式。
  *
  * 資料來源：後端 list_courses / my-registrations 已曝露 meeting_weekday(0=Mon..6=Sun)、
- * meeting_start_time / meeting_end_time（"HH:MM"）、min_age_months / max_age_months。
+ * meeting_start_time / meeting_end_time（"HH:MM"）。
  * 衝堂為前台 advisory（model 設計：警告不擋報名），故全部判定在前端純函式完成。
  */
 
@@ -28,28 +28,6 @@ export function formatWeekday(weekday?: number | null): string {
 export function formatTimeRange(start?: string | null, end?: string | null): string {
   if (!start || !end) return ''
   return `${start}–${end}`
-}
-
-function monthsToAge(months: number): string {
-  const years = months / 12
-  // 整數歲不帶小數；否則保留一位（例：30 個月 → 2.5 歲）
-  return Number.isInteger(years) ? String(years) : years.toFixed(1)
-}
-
-/**
- * (min_age_months, max_age_months) → 適齡字串（歲）。
- * 皆有 → '3–6 歲'；只有下限 → '3 歲以上'；只有上限 → '6 歲以下'；皆無 → ''。
- */
-export function formatAgeRange(
-  minMonths?: number | null,
-  maxMonths?: number | null,
-): string {
-  const hasMin = minMonths != null
-  const hasMax = maxMonths != null
-  if (hasMin && hasMax) return `${monthsToAge(minMonths!)}–${monthsToAge(maxMonths!)} 歲`
-  if (hasMin) return `${monthsToAge(minMonths!)} 歲以上`
-  if (hasMax) return `${monthsToAge(maxMonths!)} 歲以下`
-  return ''
 }
 
 /**
