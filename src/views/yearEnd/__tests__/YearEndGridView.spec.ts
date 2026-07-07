@@ -51,6 +51,7 @@ type GridRow = {
   special_bonuses: Record<string, string>
   total_amount: string
   status: string
+  remark?: string | null
 }
 
 function makeRow(overrides: Partial<GridRow> = {}): GridRow {
@@ -297,7 +298,12 @@ describe('YearEndGridView', () => {
       rows: GridRow[]
       openEdit: (row: GridRow) => void
       submitEdit: () => Promise<void>
-      editForm: { deduction_disciplinary: number | null; excess_amount: number | null; hire_months_override: number | null }
+      editForm: {
+        deduction_disciplinary: number | null
+        excess_amount: number | null
+        hire_months_override: number | null
+        remark: string | null
+      }
     }
 
     // Open edit for the first DRAFT row
@@ -318,6 +324,38 @@ describe('YearEndGridView', () => {
     )
     // getYearEndGrid called on mount + after patch = 2 times
     expect(api.getYearEndGrid).toHaveBeenCalledTimes(2)
+  })
+
+  it('manual edit can update remark without touching amount fields', async () => {
+    vi.mocked(api.getYearEndGrid).mockResolvedValue({
+      data: [makeRow({ remark: '舊備註' })],
+    } as never)
+    vi.mocked(api.manualPatchSettlement).mockResolvedValue({
+      data: {},
+    } as never)
+
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as {
+      rows: GridRow[]
+      openEdit: (row: GridRow) => void
+      submitEdit: () => Promise<void>
+      editForm: {
+        deduction_disciplinary: number | null
+        excess_amount: number | null
+        hire_months_override: number | null
+        remark: string | null
+      }
+    }
+
+    vm.openEdit(vm.rows[0])
+    await nextTick()
+    expect(vm.editForm.remark).toBe('舊備註')
+
+    vm.editForm.remark = '114.08 到職'
+    await vm.submitEdit()
+    await nextTick()
+
+    expect(api.manualPatchSettlement).toHaveBeenCalledWith(1, { remark: '114.08 到職' })
   })
 
   // Case 5: manual patch omits untouched deduction/excess (no silent zero-wipe)

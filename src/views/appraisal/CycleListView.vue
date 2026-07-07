@@ -9,7 +9,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Plus, Refresh, Upload } from '@element-plus/icons-vue'
+import { Plus, Refresh, Upload, MoreFilled } from '@element-plus/icons-vue'
 import {
   listAppraisalCycles,
   createAppraisalCycle,
@@ -29,6 +29,7 @@ const cycles = ref<Cycle[]>([])
 const createDialog = ref(false)
 const importDialog = ref(false)
 const submitting = ref(false)
+const importFallbackNotice = '系統已支援進頁重算與手動事件維護；Excel 匯入僅供例外對稿或歷史資料修復。'
 
 const form = ref({
   academic_year: 114,
@@ -167,7 +168,20 @@ onMounted(load)
         />
       </el-select>
       <el-button type="primary" :icon="Plus" @click="createDialog = true">新增週期</el-button>
-      <el-button type="success" :icon="Upload" @click="importDialog = true">上傳 Excel</el-button>
+      <el-dropdown trigger="click">
+        <el-button :icon="MoreFilled">更多操作</el-button>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item
+              :icon="Upload"
+              data-test="appraisal-import-fallback-action"
+              @click="importDialog = true"
+            >
+              例外匯入 Excel
+            </el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
       <el-button :icon="Refresh" @click="load">重新整理</el-button>
     </div>
 
@@ -202,7 +216,14 @@ onMounted(load)
     </el-dialog>
 
     <!-- 上傳 Excel -->
-    <el-dialog v-model="importDialog" title="上傳半年考核 Excel" width="560px">
+    <el-dialog v-model="importDialog" title="例外匯入半年考核 Excel" width="560px">
+      <el-alert
+        class="import-fallback-alert"
+        type="info"
+        :closable="false"
+        show-icon
+        :title="importFallbackNotice"
+      />
       <el-form :model="importForm" label-width="120px">
         <el-form-item label="檔案 (.xls/.xlsx)">
           <el-upload :auto-upload="false" :show-file-list="true" :limit="1"
@@ -226,4 +247,5 @@ onMounted(load)
 .cycle-list { padding: 16px 0 0; }
 .toolbar { margin: 0 0 16px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .cycle-select { width: 240px; }
+.import-fallback-alert { margin-bottom: 12px; }
 </style>

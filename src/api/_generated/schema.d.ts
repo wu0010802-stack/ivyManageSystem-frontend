@@ -19977,6 +19977,8 @@ export interface components {
             employee_name: string;
             /** Payable Amount */
             payable_amount: string;
+            /** Remark */
+            remark?: string | null;
             /** Settlement Id */
             settlement_id: number;
             /** Special Bonuses */
@@ -21202,6 +21204,8 @@ export interface components {
             excess_amount?: number | string | null;
             /** Hire Months Override */
             hire_months_override?: number | string | null;
+            /** Remark */
+            remark?: string | null;
         };
         /** ManualSnapshotRequest */
         ManualSnapshotRequest: {

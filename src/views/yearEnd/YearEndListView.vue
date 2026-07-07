@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Refresh, Upload, Download } from '@element-plus/icons-vue'
+import { Plus, Refresh, Upload, Download, MoreFilled } from '@element-plus/icons-vue'
 import {
   listYearEndCycles,
   createYearEndCycle,
@@ -28,6 +28,7 @@ const loading = ref(false)
 const createDialog = ref(false)
 const importDialog = ref(false)
 const busy = ref(false)
+const importFallbackNotice = '系統已自動試算並產生轉帳清冊；Excel 匯入僅供例外對稿或歷史資料修復。'
 
 // ── G2：週期狀態轉換（OPEN→LOCKED→CLOSED；亦允許倒退救援） ─────────────────
 const canFinalize = computed(() => hasPermission('YEAR_END_FINALIZE'))
@@ -166,7 +167,20 @@ onMounted(load)
     <el-page-header @back="router.back()" content="年終獎金結算" />
     <div class="toolbar">
       <el-button type="primary" :icon="Plus" @click="createDialog = true">新增年度週期</el-button>
-      <el-button type="success" :icon="Upload" @click="importDialog = true">上傳 Excel</el-button>
+      <el-dropdown trigger="click">
+        <el-button :icon="MoreFilled">更多操作</el-button>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item
+              :icon="Upload"
+              data-test="year-end-import-fallback-action"
+              @click="importDialog = true"
+            >
+              例外匯入 Excel
+            </el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
       <el-button :icon="Refresh" @click="load">重新整理</el-button>
     </div>
 
@@ -239,7 +253,14 @@ onMounted(load)
       </template>
     </el-dialog>
 
-    <el-dialog v-model="importDialog" title="上傳年終經營績效 Excel" width="640px">
+    <el-dialog v-model="importDialog" title="例外匯入年終經營績效 Excel" width="640px">
+      <el-alert
+        class="import-fallback-alert"
+        type="info"
+        :closable="false"
+        show-icon
+        :title="importFallbackNotice"
+      />
       <el-form :model="importForm" label-width="160px">
         <el-form-item label="檔案 (.xls)">
           <el-upload :auto-upload="false" :show-file-list="true" :limit="1"
@@ -265,4 +286,5 @@ onMounted(load)
 <style scoped>
 .ye-list { padding: 16px; }
 .toolbar { margin: 16px 0; display: flex; gap: 8px; }
+.import-fallback-alert { margin-bottom: 12px; }
 </style>

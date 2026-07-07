@@ -151,6 +151,17 @@ describe('YearEndListView — G2 週期狀態操作', () => {
     expect(tag.text()).toBe(expectedLabel)
   })
 
+  it('P4：Excel 匯入降級為例外 fallback 入口', async () => {
+    vi.mocked(api.listYearEndCycles).mockResolvedValue({ data: [makeCycle()] } as never)
+
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as { importFallbackNotice: string }
+
+    expect(wrapper.text()).toContain('更多操作')
+    expect(wrapper.text()).not.toContain('上傳 Excel')
+    expect(vm.importFallbackNotice).toContain('Excel 匯入僅供例外對稿')
+  })
+
   it('OPEN 狀態：顯示「鎖定」按鈕；點擊確認後呼叫 updateCycleStatus(id, {status: LOCKED})', async () => {
     vi.mocked(api.listYearEndCycles).mockResolvedValue({ data: [makeCycle({ status: 'OPEN' })] } as never)
     vi.mocked(ElMessageBox.confirm).mockResolvedValue('confirm' as never)

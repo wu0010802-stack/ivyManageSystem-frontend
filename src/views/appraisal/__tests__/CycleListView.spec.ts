@@ -106,6 +106,16 @@ describe('CycleListView（dropdown + 內嵌明細）', () => {
     ])
   })
 
+  it('P4：Excel 匯入降級為例外 fallback 入口', async () => {
+    const wrapper = mountView()
+    await flush()
+    const vm = wrapper.vm as unknown as { importFallbackNotice: string }
+
+    expect(wrapper.text()).toContain('更多操作')
+    expect(wrapper.text()).not.toContain('上傳 Excel')
+    expect(vm.importFallbackNotice).toContain('Excel 匯入僅供例外對稿')
+  })
+
   it('預設選中當期學期的週期（非最新一筆也優先當期）', async () => {
     vi.mocked(getCurrentAcademicTerm).mockReturnValue({ school_year: 113, semester: 2 })
     const wrapper = mountView()

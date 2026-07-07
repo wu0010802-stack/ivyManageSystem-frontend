@@ -83,6 +83,7 @@ const editForm = reactive({
   deduction_disciplinary: null as number | null,
   excess_amount: null as number | null,
   hire_months_override: null as number | null,
+  remark: null as string | null,
 })
 
 // ---- Derived columns ----
@@ -185,6 +186,7 @@ function openEdit(row: GridRow) {
   editForm.deduction_disciplinary = null
   editForm.excess_amount = null
   editForm.hire_months_override = null
+  editForm.remark = row.remark ?? null
   editVisible.value = true
 }
 
@@ -194,6 +196,7 @@ async function submitEdit() {
     deduction_disciplinary?: number
     excess_amount?: number
     hire_months_override?: number
+    remark?: string
   } = {}
   if (editForm.deduction_disciplinary !== null) {
     payload.deduction_disciplinary = editForm.deduction_disciplinary
@@ -203,6 +206,9 @@ async function submitEdit() {
   }
   if (editForm.hire_months_override !== null) {
     payload.hire_months_override = editForm.hire_months_override
+  }
+  if (editForm.remark !== null) {
+    payload.remark = editForm.remark
   }
   try {
     await manualPatchSettlement(editingRow.value.settlement_id, payload)
@@ -428,6 +434,17 @@ onMounted(initGrid)
             placeholder="留空=不覆寫"
             :value-on-clear="null"
             data-test="input-hire-months"
+          />
+        </el-form-item>
+        <el-form-item label="備註">
+          <el-input
+            v-model="editForm.remark"
+            type="textarea"
+            :rows="3"
+            maxlength="500"
+            show-word-limit
+            placeholder="留空=清除備註"
+            data-test="input-remark"
           />
         </el-form-item>
       </el-form>
