@@ -5,11 +5,12 @@ import CurrentSemesterOverview from './appraisal/CurrentSemesterOverview.vue'
 import CycleListView from './appraisal/CycleListView.vue'
 import AppraisalSettingsView from './appraisal/AppraisalSettingsView.vue'
 import DisciplinaryPanel from './salary/DisciplinaryPanel.vue'
+import InstitutionEventPanel from './appraisal/components/InstitutionEventPanel.vue'
 
 const route = useRoute()
 const router = useRouter()
 
-const VALID_TABS = ['current', 'history', 'settings', 'disciplinary']
+const VALID_TABS = ['current', 'history', 'institution_events', 'settings', 'disciplinary']
 const DEFAULT_TAB = 'current'
 const LEGACY_TAB_MAP: Record<string, string> = { cycles: 'history' }
 
@@ -51,6 +52,9 @@ const onTabChange = (name: string | number) => {
       </el-tab-pane>
       <el-tab-pane label="歷史週期" name="history">
         <CycleListView v-if="activeTab === 'history'" />
+      </el-tab-pane>
+      <el-tab-pane label="活動出席" name="institution_events">
+        <InstitutionEventPanel v-if="activeTab === 'institution_events'" />
       </el-tab-pane>
       <el-tab-pane label="考核設定" name="settings">
         <AppraisalSettingsView v-if="activeTab === 'settings'" />
