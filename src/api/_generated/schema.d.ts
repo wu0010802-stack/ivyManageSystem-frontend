@@ -6206,6 +6206,97 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/institution_events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Institution Events */
+        get: operations["list_institution_events_api_institution_events_get"];
+        put?: never;
+        /** Create Institution Event */
+        post: operations["create_institution_event_api_institution_events_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/institution_events/{event_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Institution Event */
+        get: operations["get_institution_event_api_institution_events__event_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Institution Event */
+        delete: operations["delete_institution_event_api_institution_events__event_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Institution Event */
+        patch: operations["update_institution_event_api_institution_events__event_id__patch"];
+        trace?: never;
+    };
+    "/institution_events/{event_id}/absences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replace Institution Event Absences
+         * @description replace-set 語意：payload.entries 即缺席名單全集，未列出者從既有名單移除。
+         *
+         *     is_exempt 未顯式提供（None）時，依當日已核准假別套自動豁免建議（婚假/喪假/
+         *     產假/住院病假）；顯式提供（True/False）則尊重 caller 覆寫，不套建議。
+         */
+        put: operations["replace_institution_event_absences_api_institution_events__event_id__absences_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/institution_events/sync/appraisal/{cycle_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sync Appraisal
+         * @description 把機構活動缺席同步進 AppraisalManualEventCount（dry_run 預覽 / apply 寫入）。
+         *
+         *     範圍：cycle.start_date~end_date 內、score_item_code 非 NULL 的活動 ×
+         *     該 cycle 非 is_excluded 的 participant。逐 (participant_id, item_code) 累加
+         *     Σ 非豁免缺席的 min(event.hours, 4)（辦法十二上限 -2/次=4hr，此處自行 clamp）。
+         *
+         *     只動 4 個同步 code（INSTITUTION_MEETING_0913/1115、SELF_IMPROVEMENT_ACTIVITY、
+         *     SCHOOL_MEETING_ABSENCE），其他 manual code 一概不碰。dry_run=true 只回 diff、
+         *     不寫入；apply（dry_run=false）比照既有 batch_upsert_manual_event_counts，
+         *     要求 cycle.status == OPEN（同一張表的另一寫入路徑，維持相同不變式）。
+         *
+         *     不自動觸發 refresh；呼叫端需自行接 POST /appraisal/cycles/{id}/refresh。
+         */
+        post: operations["sync_appraisal_api_institution_events_sync_appraisal__cycle_id__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/insurance/brackets": {
         parameters: {
             query?: never;
@@ -14511,6 +14602,38 @@ export interface components {
             /** Parent Phone */
             parent_phone: string;
         };
+        /** AbsenceEntryIn */
+        AbsenceEntryIn: {
+            /** Employee Id */
+            employee_id: number;
+            /** Exempt Reason */
+            exempt_reason?: string | null;
+            /** Is Exempt */
+            is_exempt?: boolean | null;
+        };
+        /** AbsenceOut */
+        AbsenceOut: {
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+            /** Exempt Reason */
+            exempt_reason: string | null;
+            /** Is Exempt */
+            is_exempt: boolean;
+        };
+        /** AbsenceReplaceIn */
+        AbsenceReplaceIn: {
+            /** Entries */
+            entries: components["schemas"]["AbsenceEntryIn"][];
+        };
+        /** AbsenceReplaceOut */
+        AbsenceReplaceOut: {
+            /** Entries */
+            entries: components["schemas"]["AbsenceOut"][];
+            /** Event Id */
+            event_id: number;
+        };
         /**
          * AcademicSummaryOut
          * @description GET /students/{id}/academic-summary 回傳。
@@ -15553,6 +15676,40 @@ export interface components {
             cycle_id: number;
             /** Cycle Name */
             cycle_name: string;
+        };
+        /** AppraisalSyncChange */
+        AppraisalSyncChange: {
+            /** Employee Id */
+            employee_id: number;
+            /** Employee Name */
+            employee_name: string;
+            /** Item Code */
+            item_code: string;
+            /** New Count */
+            new_count: string;
+            /** Old Count */
+            old_count: string;
+            /** Old Note */
+            old_note: string | null;
+            /** Participant Id */
+            participant_id: number;
+        };
+        /** AppraisalSyncRequest */
+        AppraisalSyncRequest: {
+            /**
+             * Dry Run
+             * @default true
+             */
+            dry_run: boolean;
+        };
+        /** AppraisalSyncResult */
+        AppraisalSyncResult: {
+            /** Applied */
+            applied: boolean;
+            /** Changes */
+            changes: components["schemas"]["AppraisalSyncChange"][];
+            /** Skipped Equal */
+            skipped_equal: number;
         };
         /** AssessmentCreate */
         AssessmentCreate: {
@@ -20197,6 +20354,121 @@ export interface components {
             /** Reply */
             reply: string;
         };
+        /** InstitutionEventCreate */
+        InstitutionEventCreate: {
+            /**
+             * Event Date
+             * Format: date
+             */
+            event_date: string;
+            /** Event Type */
+            event_type: string;
+            /**
+             * Hours
+             * @default 2.0
+             */
+            hours: number | string;
+            /** Note */
+            note?: string | null;
+            /** Score Item Code */
+            score_item_code?: string | null;
+            /** Title */
+            title: string;
+        };
+        /** InstitutionEventDetailOut */
+        InstitutionEventDetailOut: {
+            /**
+             * Absence Count
+             * @default 0
+             */
+            absence_count: number;
+            /** Absences */
+            absences?: components["schemas"]["AbsenceOut"][];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by: number | null;
+            /**
+             * Event Date
+             * Format: date
+             */
+            event_date: string;
+            /** Event Type */
+            event_type: string;
+            /** Hours */
+            hours: string;
+            /** Id */
+            id: number;
+            /** Note */
+            note: string | null;
+            /** Score Item Code */
+            score_item_code: string | null;
+            /** Title */
+            title: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** InstitutionEventOut */
+        InstitutionEventOut: {
+            /**
+             * Absence Count
+             * @default 0
+             */
+            absence_count: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by: number | null;
+            /**
+             * Event Date
+             * Format: date
+             */
+            event_date: string;
+            /** Event Type */
+            event_type: string;
+            /** Hours */
+            hours: string;
+            /** Id */
+            id: number;
+            /** Note */
+            note: string | null;
+            /** Score Item Code */
+            score_item_code: string | null;
+            /** Title */
+            title: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * InstitutionEventUpdate
+         * @description PATCH 部分更新；未提供的欄位不變。
+         */
+        InstitutionEventUpdate: {
+            /** Event Date */
+            event_date?: string | null;
+            /** Event Type */
+            event_type?: string | null;
+            /** Hours */
+            hours?: number | string | null;
+            /** Note */
+            note?: string | null;
+            /** Score Item Code */
+            score_item_code?: string | null;
+            /** Title */
+            title?: string | null;
+        };
         /** InsuranceBracketDeleteRequest */
         InsuranceBracketDeleteRequest: {
             /**
@@ -20917,6 +21189,8 @@ export interface components {
             entered_by: number | null;
             /** Item Code */
             item_code: string;
+            /** Note */
+            note?: string | null;
             /** Participant Id */
             participant_id: number;
         };
@@ -41200,6 +41474,238 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SchedulersHealthOut"];
+                };
+            };
+        };
+    };
+    list_institution_events_api_institution_events_get: {
+        parameters: {
+            query?: {
+                school_year?: number | null;
+                semester?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstitutionEventOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_institution_event_api_institution_events_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstitutionEventCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstitutionEventOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_institution_event_api_institution_events__event_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                event_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstitutionEventDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_institution_event_api_institution_events__event_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                event_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MutationResultOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_institution_event_api_institution_events__event_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                event_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstitutionEventUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstitutionEventOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    replace_institution_event_absences_api_institution_events__event_id__absences_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                event_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AbsenceReplaceIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AbsenceReplaceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sync_appraisal_api_institution_events_sync_appraisal__cycle_id__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cycle_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AppraisalSyncRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppraisalSyncResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
