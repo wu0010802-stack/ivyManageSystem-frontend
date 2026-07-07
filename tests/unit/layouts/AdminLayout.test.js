@@ -15,18 +15,6 @@ vi.mock('@/utils/auth', () => ({
   isLoggedIn: vi.fn(() => true),
 }))
 
-// 隔離 session watchdog：本測試不關心其內部實作，避免看門狗 tick 打到
-// 上面 partial mock 的 @/utils/auth（缺 hasStoredUserInfo）而炸測試。
-vi.mock('@/composables/useSessionWatchdog', () => ({
-  startSessionWatchdog: vi.fn(),
-  stopSessionWatchdog: vi.fn(),
-  useSessionWatchdogState: () => ({ countdownRemainingMs: { value: null } }),
-  continueSession: vi.fn(),
-  logoutNow: vi.fn(),
-  IDLE_LOGOUT_FLAG_KEY: 'idle_logout_notice',
-  LAST_ACTIVITY_KEY: 'session_last_activity_at',
-}))
-
 vi.mock('@/stores/notification', () => ({
   useNotificationStore: () => ({
     approvalCount: 0,

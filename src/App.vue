@@ -5,11 +5,14 @@ import { useRoute } from 'vue-router'
 import zhTw from 'element-plus/es/locale/lang/zh-tw'
 import AdminLayout from './layouts/AdminLayout.vue'
 import ErrorBoundary from './components/common/ErrorBoundary.vue'
+import SessionIdleModal from './components/common/SessionIdleModal.vue'
 import { useRouteLoading } from './composables/useRouteLoading'
+import { useIdleTimeout } from './composables/useIdleTimeout'
 import { applyPageTitle } from './utils/pageTitle'
 
 const route = useRoute()
 const { routeLoading, routeProgress } = useRouteLoading()
+const { showWarningModal, remainingSeconds, dismiss, extend } = useIdleTimeout()
 const isPortalRoute = computed(() => route.path.startsWith('/portal'))
 const isLoginPage = computed(() => route.path === '/login')
 const isPublicRoute = computed(() => route.path.startsWith('/public'))
@@ -62,6 +65,13 @@ watch(
       </div>
     </div>
   </Transition>
+
+  <SessionIdleModal
+    :visible="showWarningModal"
+    :remaining-seconds="remainingSeconds"
+    @close="dismiss"
+    @extend="extend"
+  />
 </template>
 
 <style>

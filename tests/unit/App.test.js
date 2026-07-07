@@ -11,6 +11,8 @@ const route = reactive({
 
 vi.mock('vue-router', () => ({
   useRoute: () => route,
+  // App.vue 掛載的 useIdleTimeout() 需要 useRouter()（閒置逾時強制登出時 router.push）。
+  useRouter: () => ({ push: vi.fn() }),
   RouterView: defineComponent({
     name: 'RouterView',
     template: '<div class="router-view" />',
