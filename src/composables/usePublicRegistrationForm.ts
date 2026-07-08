@@ -17,6 +17,11 @@ import { toggleArrayItem } from '@/utils/arrayUtils'
 
 const TW_MOBILE_RE = /^09\d{8}$/
 
+// 保守 email 格式（與後端 EmailStr 寬嚴不必一致：打錯只是收不到信，無安全後果）
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
+// 對齊後端 DB String(200)
+const EMAIL_MAX_LEN = 200
+
 export function normalizeMobile(raw: unknown) {
   return String(raw || '').replace(/[\s\-().]/g, '')
 }
@@ -33,7 +38,7 @@ function priceOf(name: string, source: { name: string; price?: number | string }
   return Number(item?.price) || 0
 }
 
-const FIELD_FOCUS_ORDER = ['name', 'birthday', 'parent_phone', 'class_name', 'courses']
+const FIELD_FOCUS_ORDER = ['name', 'birthday', 'parent_phone', 'class_name', 'email', 'courses']
 
 /**
  * Finding 3（2026-06-22）：公開報名表單中屬幼兒/家長 PII 的欄位。
@@ -46,6 +51,7 @@ export const PUBLIC_DRAFT_PII_FIELDS = [
   'birthday',
   'parent_phone',
   'class_name',
+  'email',
 ] as const
 
 export function usePublicRegistrationForm({ courses, supplies, availability }: { courses: { value: { name: string; price?: number | string }[] }; supplies: { value: { name: string; price?: number | string }[] }; availability: { value: Record<string, number> } }) {
@@ -54,6 +60,7 @@ export function usePublicRegistrationForm({ courses, supplies, availability }: {
     birthday: '',
     parent_phone: '',
     class_name: '',
+    email: '',
     selectedCourses: [] as string[],
     selectedSupplies: [] as string[],
   })
@@ -64,6 +71,7 @@ export function usePublicRegistrationForm({ courses, supplies, availability }: {
     birthday: '',
     parent_phone: '',
     class_name: '',
+    email: '',
     courses: '',
   })
 
@@ -123,6 +131,7 @@ export function usePublicRegistrationForm({ courses, supplies, availability }: {
     errors.birthday = ''
     errors.parent_phone = ''
     errors.class_name = ''
+    errors.email = ''
     errors.courses = ''
 
     const name = form.name.trim()
@@ -158,6 +167,11 @@ export function usePublicRegistrationForm({ courses, supplies, availability }: {
 
     if (!className) errors.class_name = '請選擇寶貝班級'
 
+    const email = form.email.trim()
+    if (email && (email.length > EMAIL_MAX_LEN || !EMAIL_RE.test(email))) {
+      errors.email = '請輸入有效的 Email，或留空不填'
+    }
+
     // 與後端 model_validator(_require_at_least_one_item) 對齊：
     // 至少一門課程「或」一項用品即可送出（允許「只買用品」的合法流程）。
     if (form.selectedCourses.length === 0 && form.selectedSupplies.length === 0)
@@ -190,6 +204,7 @@ export function usePublicRegistrationForm({ courses, supplies, availability }: {
     form.birthday = ''
     form.parent_phone = ''
     form.class_name = ''
+    form.email = ''
     form.selectedCourses = []
     form.selectedSupplies = []
   }

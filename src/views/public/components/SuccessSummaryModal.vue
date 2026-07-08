@@ -9,11 +9,10 @@
  * Props:
  *   summary: { visible, message, studentName, parentPhone,
  *              enrolledCourses, waitlistCourses, selectedSupplies, totalAmount,
- *              queryToken, editUrl, copyHint } — reactive
+ *              queryToken, editUrl, copyHint, email? } — reactive
  * Emits:
  *   close
  */
-import { computed } from 'vue'
 import KawaiiStar from '@/components/brand/KawaiiStar.vue'
 import BrandMark from '@/components/brand/BrandMark.vue'
 
@@ -30,6 +29,8 @@ interface Summary {
   queryToken: string
   editUrl: string
   copyHint: string
+  // 家長輸入的通知信箱（來源＝本地 form 值，非 API response）；有值才顯示提示行
+  email?: string
 }
 
 const props = defineProps<{
@@ -50,28 +51,30 @@ async function copyToClipboard(text: string, label: string) {
   }
 }
 
-const canShare = computed(
-  () => typeof navigator !== 'undefined' && typeof navigator.share === 'function',
-)
-
-async function shareToken() {
-  if (!canShare.value) return
-  try {
-    await navigator.share({
-      title: '才藝報名查詢碼',
-      text:
-        `查詢碼：${props.summary.queryToken}\n編修連結：${props.summary.editUrl}\n` +
-        '（請勿轉傳給校外人士，僅供家人留存）',
-      url: props.summary.editUrl,
-    })
-  } catch (err) {
-    // 使用者取消分享屬正常流程,不顯示錯誤
-    if (err && (err as { name?: string }).name !== 'AbortError') {
-      props.summary.copyHint = '分享失敗，請改用複製按鈕'
-      setTimeout(() => { props.summary.copyHint = '' }, 4000)
-    }
-  }
-}
+// 2026-07-08 業主指示：暫時停用「分享給家人」按鈕（Web Share API）。
+// 恢復時把下方註解與 template 內對應區塊一起打開，並補回 `import { computed } from 'vue'`。
+// const canShare = computed(
+//   () => typeof navigator !== 'undefined' && typeof navigator.share === 'function',
+// )
+//
+// async function shareToken() {
+//   if (!canShare.value) return
+//   try {
+//     await navigator.share({
+//       title: '才藝報名查詢碼',
+//       text:
+//         `查詢碼：${props.summary.queryToken}\n編修連結：${props.summary.editUrl}\n` +
+//         '（請勿轉傳給校外人士，僅供家人留存）',
+//       url: props.summary.editUrl,
+//     })
+//   } catch (err) {
+//     // 使用者取消分享屬正常流程,不顯示錯誤
+//     if (err && (err as { name?: string }).name !== 'AbortError') {
+//       props.summary.copyHint = '分享失敗，請改用複製按鈕'
+//       setTimeout(() => { props.summary.copyHint = '' }, 4000)
+//     }
+//   }
+// }
 </script>
 
 <template>
@@ -146,6 +149,10 @@ async function shareToken() {
         </div>
         <p class="summary-final-note">本金額不含候補課程；實際金額以園方確認後通知為準。</p>
 
+        <p v-if="summary.email" class="email-notice">
+          報名資訊將寄送至 {{ summary.email }}，未收到請檢查垃圾郵件匣。
+        </p>
+
         <div v-if="summary.queryToken" class="success-token-box">
           <div class="token-title">查詢 / 編修專用連結</div>
           <p class="token-hint">
@@ -191,6 +198,7 @@ async function shareToken() {
               複製
             </button>
           </div>
+          <!-- 2026-07-08 業主指示：暫時停用「分享給家人」按鈕（連同 script 的 canShare/shareToken 一起註解）
           <div v-if="canShare" class="token-share-row">
             <button
               type="button"
@@ -201,6 +209,7 @@ async function shareToken() {
               分享給家人（Line / 訊息 / Email）
             </button>
           </div>
+          -->
           <div v-if="summary.copyHint" class="token-copy-hint">
             <svg width="12" height="12" aria-hidden="true"><use href="#i-check" /></svg>
             {{ summary.copyHint }}
@@ -213,3 +222,14 @@ async function shareToken() {
     </div>
   </div>
 </template>
+
+<style scoped>
+.email-notice {
+  font-size: 0.85rem;
+  color: #4a6b5d;
+  background: #eef6f1;
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin: 8px 0;
+}
+</style>

@@ -50,6 +50,7 @@ describe('usePublicRegistrationForm — 新版 composable', () => {
       expect(f.form.birthday).toBe('')
       expect(f.form.parent_phone).toBe('')
       expect(f.form.class_name).toBe('')
+      expect(f.form.email).toBe('')
       expect(f.form.selectedCourses).toEqual([])
       expect(f.form.selectedSupplies).toEqual([])
     })
@@ -57,16 +58,18 @@ describe('usePublicRegistrationForm — 新版 composable', () => {
     it('errors 全空字串、phoneTouched=false', () => {
       expect(f.errors.name).toBe('')
       expect(f.errors.birthday).toBe('')
+      expect(f.errors.email).toBe('')
       expect(f.errors.courses).toBe('')
       expect(f.phoneTouched.value).toBe(false)
     })
 
-    it('FIELD_FOCUS_ORDER 包含 5 欄', () => {
+    it('FIELD_FOCUS_ORDER 包含 6 欄', () => {
       expect(f.FIELD_FOCUS_ORDER).toEqual([
         'name',
         'birthday',
         'parent_phone',
         'class_name',
+        'email',
         'courses',
       ])
     })
@@ -212,6 +215,7 @@ describe('usePublicRegistrationForm — 新版 composable', () => {
       f.form.birthday = '2022-01-15'
       f.form.parent_phone = '0912345678'
       f.form.class_name = '大班'
+      f.form.email = 'test@example.com'
       f.form.selectedCourses = ['美術']
       f.form.selectedSupplies = ['畫具組']
 
@@ -221,6 +225,7 @@ describe('usePublicRegistrationForm — 新版 composable', () => {
       expect(f.form.birthday).toBe('')
       expect(f.form.parent_phone).toBe('')
       expect(f.form.class_name).toBe('')
+      expect(f.form.email).toBe('')
       expect(f.form.selectedCourses).toEqual([])
       expect(f.form.selectedSupplies).toEqual([])
     })

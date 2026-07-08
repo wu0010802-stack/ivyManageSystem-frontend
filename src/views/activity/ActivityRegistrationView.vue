@@ -101,47 +101,55 @@
       <el-table-column label="報名時間" min-width="140">
         <template #default="{ row }">{{ formatActivityDate(row.created_at) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="470" align="center" fixed="right">
+      <el-table-column label="操作" width="330" align="center" fixed="right" class-name="op-cell">
         <template #default="{ row }">
-          <el-button size="small" @click="openDetail(row)">詳情</el-button>
-          <!-- 已拒絕列：改顯示「復原」 -->
-          <template v-if="isRejectedRow(row)">
+          <!-- 第一行：詳情 / 刪除（拒絕列為復原）/ 複製查詢碼 -->
+          <div class="op-row">
+            <el-button size="small" @click="openDetail(row)">詳情</el-button>
+            <!-- 已拒絕列：改顯示「復原」 -->
             <el-button
-              v-if="canWrite"
+              v-if="isRejectedRow(row) && canWrite"
               size="small"
               type="success"
               @click="handleRestore(row)"
             >復原</el-button>
-          </template>
-          <!-- 僅「待審核」列顯示四顆審核鈕；其他狀態不顯示 -->
-          <template v-else>
-            <template v-if="canWrite && isPending(row)">
-              <el-button size="small" type="primary" @click="openMatchDialog(row)">手動匹配</el-button>
-              <el-button size="small" type="warning" @click="openRematchDialog(row)">重新比對</el-button>
-              <el-button size="small" type="danger" plain @click="openForceDialog(row)">強行收件</el-button>
-              <el-tooltip
-                :disabled="!((row.paid_amount || 0) > 0)"
-                content="已有繳費，請先於詳情處理繳費再拒絕"
-                placement="top"
-              >
-                <span class="reject-btn-wrap">
-                  <el-button
-                    size="small"
-                    type="danger"
-                    :disabled="!canReject(row)"
-                    @click="handleReject(row)"
-                  >拒絕</el-button>
-                </span>
-              </el-tooltip>
-            </template>
             <el-button
-              v-if="canWrite"
+              v-else-if="!isRejectedRow(row) && canWrite"
               size="small"
               type="danger"
               @click="handleDelete(row)"
               :loading="deletingRegistrationId === row.id"
             >刪除</el-button>
-          </template>
+            <!-- 查詢碼由姓名+生日+家長手機確定性派生（後端反推），供家長遺失時補發 -->
+            <el-tooltip v-if="row.query_token" :content="row.query_token" placement="top">
+              <el-button
+                size="small"
+                type="primary"
+                plain
+                @click="copyQueryToken(row.query_token)"
+              >複製查詢碼</el-button>
+            </el-tooltip>
+          </div>
+          <!-- 第二行：僅「待審核」列顯示四顆審核鈕；其他狀態不顯示 -->
+          <div v-if="!isRejectedRow(row) && canWrite && isPending(row)" class="op-row op-row--audit">
+            <el-button size="small" type="primary" @click="openMatchDialog(row)">手動匹配</el-button>
+            <el-button size="small" type="warning" @click="openRematchDialog(row)">重新比對</el-button>
+            <el-button size="small" type="danger" plain @click="openForceDialog(row)">強行收件</el-button>
+            <el-tooltip
+              :disabled="!((row.paid_amount || 0) > 0)"
+              content="已有繳費，請先於詳情處理繳費再拒絕"
+              placement="top"
+            >
+              <span class="reject-btn-wrap">
+                <el-button
+                  size="small"
+                  type="danger"
+                  :disabled="!canReject(row)"
+                  @click="handleReject(row)"
+                >拒絕</el-button>
+              </span>
+            </el-tooltip>
+          </div>
         </template>
       </el-table-column>
     </el-table>
@@ -208,6 +216,13 @@
           <el-descriptions-item label="生日">{{ detail.birthday }}</el-descriptions-item>
           <el-descriptions-item label="家長手機">{{ detail.parent_phone || '—' }}</el-descriptions-item>
           <el-descriptions-item label="Email" :span="2">{{ detail.email }}</el-descriptions-item>
+          <el-descriptions-item label="查詢碼" :span="2">
+            <template v-if="detail.query_token">
+              <span class="query-token-text">{{ detail.query_token }}</span>
+              <el-button size="small" link type="primary" @click="copyQueryToken(detail.query_token)">複製</el-button>
+            </template>
+            <span v-else>—</span>
+          </el-descriptions-item>
           <el-descriptions-item label="報名時間" :span="2">{{ formatActivityDate(detail.created_at) }}</el-descriptions-item>
         </el-descriptions>
 
@@ -488,13 +503,13 @@ const RegistrationReviewWizard = defineAsyncComponent(() => import('@/components
 
 type ApiErr = { response?: { data?: { detail?: string }; status?: number } }
 
-interface RegistrationRow { id: number; student_name?: string; payment_status?: string; [key: string]: unknown }
+interface RegistrationRow { id: number; student_name?: string; payment_status?: string; query_token?: string | null; [key: string]: unknown }
 interface PaymentRecord { id: number; type: string; amount: number; payment_date?: string; payment_method?: string; notes?: string; is_voided?: boolean; void_reason?: string }
 interface PaymentInfo { total_amount?: number; paid_amount?: number; payment_status?: string; records?: PaymentRecord[] }
 interface RegistrationCourse { id: number; course_id: number; name: string; price?: number; status: string; confirm_deadline?: string }
 interface RegistrationSupply { id: number; supply_id: number; name?: string; price?: number }
 interface RegistrationDetail {
-  id: number; student_name?: string; class_name?: string; birthday?: string; parent_phone?: string; email?: string; created_at?: string; remark?: string
+  id: number; student_name?: string; class_name?: string; birthday?: string; parent_phone?: string; email?: string; created_at?: string; remark?: string; query_token?: string | null
   total_amount?: number; courses?: RegistrationCourse[]; supplies?: RegistrationSupply[]; changes?: Record<string, unknown>[]
   [key: string]: unknown
 }
@@ -505,6 +520,16 @@ const canWrite = computed(() => hasPermission('ACTIVITY_WRITE'))
 // 舊版會看到可點按鈕、填完原因才吃 403（audit C-4，2026-07-02；對齊
 // POS 頁 canApproveRefund 前端閘）
 const canVoidPayment = computed(() => hasPermission('ACTIVITY_PAYMENT_APPROVE'))
+
+async function copyQueryToken(token: unknown) {
+  if (typeof token !== 'string' || !token) return
+  try {
+    await navigator.clipboard.writeText(token)
+    ElMessage.success('查詢碼已複製')
+  } catch {
+    ElMessage.warning('複製失敗，請以滑鼠選取後手動複製')
+  }
+}
 
 function courseStatusTagType(status: string): ElTagType {
   return ((COURSE_STATUS_TAG_TYPE as Record<string, string>)[status] || 'info') as ElTagType
@@ -1297,4 +1322,18 @@ onMounted(async () => {
   margin-top: 4px;
 }
 .create-hint { color: var(--text-tertiary); margin-left: 8px; font-size: 13px; }
+.query-token-text { font-family: monospace; word-break: break-all; margin-right: 8px; }
+
+/* 操作欄兩行排版：第一行 詳情/刪除(復原)/複製查詢碼，第二行 四顆審核鈕 */
+.op-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+}
+.op-row + .op-row { margin-top: 12px; }
+/* 以 gap 控間距，抵銷 element-plus 相鄰按鈕的預設 margin-left（12px） */
+.op-row .el-button + .el-button { margin-left: 0; }
+/* 操作欄儲存格 padding 加大，兩行按鈕不顯擁擠 */
+:deep(td.op-cell .cell) { padding: 14px 12px; }
 </style>

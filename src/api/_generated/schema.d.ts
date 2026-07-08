@@ -25308,6 +25308,8 @@ export interface components {
             query_token_required: boolean;
             /** Remark */
             remark: string;
+            /** Rotated Query Token */
+            rotated_query_token?: string | null;
             /** Supplies */
             supplies: components["schemas"]["PublicRegistrationSupplyOut"][];
             /** Total Amount */
@@ -25330,6 +25332,8 @@ export interface components {
             class: string;
             /** Courses */
             courses: components["schemas"]["PublicCourseItem"][];
+            /** Email */
+            email?: string | null;
             /** Name */
             name: string;
             /** Parent Phone */
@@ -26268,6 +26272,8 @@ export interface components {
             payment_status: string;
             /** Pending Review */
             pending_review?: boolean | null;
+            /** Query Token */
+            query_token?: string | null;
             /** Remark */
             remark: string;
             /** Reviewed At */
@@ -26337,6 +26343,8 @@ export interface components {
             payment_status: string;
             /** Pending Review */
             pending_review?: boolean | null;
+            /** Query Token */
+            query_token?: string | null;
             /** Remark */
             remark: string;
             /** Reviewed At */
