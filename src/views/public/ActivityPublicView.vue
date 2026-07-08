@@ -283,6 +283,35 @@
                       <div v-if="errors.class_name" id="studentClass-err" class="form-error-hint" role="alert">{{ errors.class_name }}</div>
                     </div>
                   </div>
+
+                  <div class="form-row" :class="{ 'has-error': !!errors.email }">
+                    <div class="form-label-col">
+                      <label class="form-label" for="contactEmail">
+                        聯絡 Email（選填） <span class="en">Email</span>
+                      </label>
+                    </div>
+                    <div class="form-input-col">
+                      <input
+                        id="contactEmail"
+                        v-model="form.email"
+                        type="email"
+                        class="input-text"
+                        :class="{ 'is-invalid': !!errors.email }"
+                        :aria-invalid="!!errors.email"
+                        :aria-describedby="errors.email ? 'contactEmail-err' : 'contactEmail-hint'"
+                        placeholder="example@email.com"
+                        maxlength="200"
+                        autocomplete="email"
+                        inputmode="email"
+                        enterkeyhint="next"
+                        @input="clearError('email')"
+                      />
+                      <div id="contactEmail-hint" class="form-hint">
+                        填寫後，報名成功將寄送報名資訊、查詢碼與修改連結到此信箱。
+                      </div>
+                      <div v-if="errors.email" id="contactEmail-err" class="form-error-hint" role="alert">{{ errors.email }}</div>
+                    </div>
+                  </div>
                   </div><!-- /.form-grid-2col -->
 
                   <!-- A1-P7：Step 2 抽 CoursePickerSection 元件 -->
@@ -698,7 +727,8 @@ interface CourseItem { name: string; price: number }
 const successModal = reactive<{
   visible: boolean; studentName: string; parentPhone: string; message: string;
   waitlisted: boolean; enrolledCourses: CourseItem[]; waitlistCourses: CourseItem[];
-  selectedSupplies: CourseItem[]; totalAmount: number; queryToken: string; editUrl: string; copyHint: string
+  selectedSupplies: CourseItem[]; totalAmount: number; queryToken: string; editUrl: string; copyHint: string;
+  email: string
 }>({
   visible: false,
   studentName: '',
@@ -712,10 +742,11 @@ const successModal = reactive<{
   queryToken: '',
   editUrl: '',
   copyHint: '',
+  email: '',
 })
 
-function buildSuccessSummary({ name, parentPhone, message, waitlisted, waitlistCourses, queryToken }: {
-  name: string; parentPhone: string; message: string; waitlisted?: boolean;
+function buildSuccessSummary({ name, parentPhone, email, message, waitlisted, waitlistCourses, queryToken }: {
+  name: string; parentPhone: string; email?: string; message: string; waitlisted?: boolean;
   waitlistCourses?: string[]; queryToken?: string
 }) {
   const waitlistSet = new Set(waitlistCourses || [])
@@ -760,6 +791,7 @@ function buildSuccessSummary({ name, parentPhone, message, waitlisted, waitlistC
   // 必須是 public.html hash 路由，token 放 hash 內——細節見 buildPublicEditUrl。
   successModal.queryToken = queryToken || ''
   successModal.editUrl = buildPublicEditUrl(window.location.origin, queryToken)
+  successModal.email = email || ''
   successModal.copyHint = ''
   successModal.visible = true
 }
@@ -779,6 +811,7 @@ const FIELD_ELEMENT_ID: Record<string, string> = {
   birthday: 'studentBirthday',
   parent_phone: 'parentPhone',
   class_name: 'studentClass',
+  email: 'contactEmail',
   courses: 'courseListGroup',
 }
 
@@ -815,6 +848,7 @@ async function handleSubmitRegistration() {
   const birthday = form.birthday
   const className = form.class_name
   const parentPhone = normalizeMobile(form.parent_phone)
+  const email = form.email.trim()
 
   submitting.value = true
   try {
@@ -827,6 +861,8 @@ async function handleSubmitRegistration() {
       courses: form.selectedCourses.map((courseName) => ({ name: courseName })),
       supplies: form.selectedSupplies.map((supplyName) => ({ name: supplyName })),
       remark: '',
+      // 選填通知信箱：空值不帶 key（後端視同未填，DB 存 NULL）
+      ...(email ? { email } : {}),
       // _hp honeypot：正常使用者空字串（填值=機器人→後端 silent-drop）
       _hp: '',
     })
@@ -834,6 +870,7 @@ async function handleSubmitRegistration() {
     buildSuccessSummary({
       name,
       parentPhone,
+      email,
       message: result.message || '報名資料已送出',
       waitlisted: result.waitlisted,
       waitlistCourses: Array.isArray(result.waitlist_courses) ? result.waitlist_courses : [],

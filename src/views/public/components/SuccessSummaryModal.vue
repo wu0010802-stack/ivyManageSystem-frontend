@@ -29,6 +29,8 @@ interface Summary {
   queryToken: string
   editUrl: string
   copyHint: string
+  // 家長輸入的通知信箱（來源＝本地 form 值，非 API response）；有值才顯示提示行
+  email?: string
 }
 
 const props = defineProps<{
@@ -147,6 +149,10 @@ async function copyToClipboard(text: string, label: string) {
         </div>
         <p class="summary-final-note">本金額不含候補課程；實際金額以園方確認後通知為準。</p>
 
+        <p v-if="summary.email" class="email-notice">
+          報名資訊將寄送至 {{ summary.email }}，未收到請檢查垃圾郵件匣。
+        </p>
+
         <div v-if="summary.queryToken" class="success-token-box">
           <div class="token-title">查詢 / 編修專用連結</div>
           <p class="token-hint">
@@ -216,3 +222,14 @@ async function copyToClipboard(text: string, label: string) {
     </div>
   </div>
 </template>
+
+<style scoped>
+.email-notice {
+  font-size: 0.85rem;
+  color: #4a6b5d;
+  background: #eef6f1;
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin: 8px 0;
+}
+</style>
