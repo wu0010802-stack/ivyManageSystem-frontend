@@ -30,6 +30,7 @@ export const STUDENT_FIELD_SECTION: Record<string, StudentFormSection> = {
   nationality: 'gov',
   household_address: 'gov',
   is_disadvantaged: 'gov',
+  is_special_education: 'gov',
   low_income_status: 'gov',
   indigenous_status: 'gov',
   disability_type: 'gov',

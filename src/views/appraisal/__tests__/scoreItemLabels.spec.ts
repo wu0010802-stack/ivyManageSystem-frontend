@@ -28,11 +28,14 @@ describe('scoreItemLabels 規章對齊（2026-06-11 spec）', () => {
       expect(ITEM_CODE_LABELS[code as keyof typeof ITEM_CODE_LABELS]).toBeTruthy()
   })
 
-  it('auto 集合含曠職與復學，其餘新項歸手填', () => {
+  it('auto 集合含學生來源自動項，其餘新項歸手填', () => {
     expect(AUTO_ITEM_CODES.has('ABSENTEEISM')).toBe(true)
     expect(AUTO_ITEM_CODES.has('STUDENT_REINSTATE')).toBe(true)
+    expect(AUTO_ITEM_CODES.has('CHILD_ACCIDENT')).toBe(true)
+    expect(AUTO_ITEM_CODES.has('SPED')).toBe(true)
+    expect(AUTO_ITEM_CODES.has('TRIAL_LEAVE')).toBe(true)
     for (const code of NEW_CODES.filter(
-      (c) => c !== 'ABSENTEEISM' && c !== 'STUDENT_REINSTATE',
+      (c) => c !== 'ABSENTEEISM' && c !== 'STUDENT_REINSTATE' && c !== 'TRIAL_LEAVE',
     )) {
       expect(MANUAL_ITEM_CODES).toContain(code)
       expect(MANUAL_LABEL[code]).toBeTruthy()

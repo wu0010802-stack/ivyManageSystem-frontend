@@ -14432,6 +14432,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/year_end/settlements/{settlement_id}/logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Settlement Logs
+         * @description 回傳單一 settlement 的 append-only 軌跡。
+         */
+        get: operations["get_settlement_logs_api_year_end_settlements__settlement_id__logs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/year_end/settlements/{settlement_id}/manual": {
         parameters: {
             query?: never;
@@ -17220,6 +17240,8 @@ export interface components {
             id: number;
             /** Is Active */
             is_active?: boolean | null;
+            /** Is Special Education */
+            is_special_education?: boolean | null;
             /** Medication */
             medication?: string | null;
             /** Name */
@@ -20287,6 +20309,8 @@ export interface components {
         IncidentCreate: {
             /** Action Taken */
             action_taken?: string | null;
+            /** Appraisal Score Delta */
+            appraisal_score_delta?: number | string | null;
             /** Description */
             description: string;
             /** Incident Type */
@@ -20301,6 +20325,8 @@ export interface components {
              * @default false
              */
             parent_notified: boolean;
+            /** Responsible Employee Id */
+            responsible_employee_id?: number | null;
             /** Severity */
             severity?: string | null;
             /** Student Id */
@@ -20310,6 +20336,8 @@ export interface components {
         IncidentUpdate: {
             /** Action Taken */
             action_taken?: string | null;
+            /** Appraisal Score Delta */
+            appraisal_score_delta?: number | string | null;
             /** Description */
             description?: string | null;
             /** Incident Type */
@@ -20320,6 +20348,8 @@ export interface components {
             parent_notified?: boolean | null;
             /** Parent Notified At */
             parent_notified_at?: string | null;
+            /** Responsible Employee Id */
+            responsible_employee_id?: number | null;
             /** Severity */
             severity?: string | null;
         };
@@ -28203,6 +28233,8 @@ export interface components {
             id: number;
             /** Is Active */
             is_active: boolean;
+            /** Is Special Education */
+            is_special_education?: boolean | null;
             /** Medication */
             medication?: string | null;
             /** Name */
@@ -29207,6 +29239,11 @@ export interface components {
              * @default false
              */
             is_disadvantaged: boolean;
+            /**
+             * Is Special Education
+             * @default false
+             */
+            is_special_education: boolean;
             /** Low Income Status */
             low_income_status?: string | null;
             /** Medication */
@@ -29455,8 +29492,8 @@ export interface components {
          * StudentListItemOut
          * @description GET /students items 內單筆學生欄位。
          *
-         *     `allergy` / `medication` / `special_needs` 在缺權限時會被 router 端
-         *     `mask_student_health_fields` 設為 None（不刪除 key）；故型別維持 Optional[str]。
+         *     `allergy` / `medication` / `special_needs` / `is_special_education` 在缺權限時會被 router 端
+         *     `mask_student_health_fields` 設為 None（不刪除 key）；故型別維持 Optional。
          */
         StudentListItemOut: {
             /** Address */
@@ -29483,6 +29520,8 @@ export interface components {
             id: number;
             /** Is Active */
             is_active: boolean;
+            /** Is Special Education */
+            is_special_education?: boolean | null;
             /** Medication */
             medication?: string | null;
             /** Name */
@@ -29626,6 +29665,11 @@ export interface components {
              * @default false
              */
             is_disadvantaged: boolean;
+            /**
+             * Is Special Education
+             * @default false
+             */
+            is_special_education: boolean;
             /** Low Income Status */
             low_income_status?: string | null;
             /** Medication */
@@ -30470,6 +30514,39 @@ export interface components {
             skipped_unresolved_names: string[];
             /** Special Bonuses Upserted */
             special_bonuses_upserted: number;
+        };
+        /**
+         * YearEndSettlementLogAction
+         * @description 年終 settlement 軌跡動作型別。
+         * @enum {string}
+         */
+        YearEndSettlementLogAction: "BUILD" | "MANUAL_PATCH" | "SIGN_SUPERVISOR" | "SIGN_ACCOUNTING" | "FINALIZE";
+        /** YearEndSettlementLogOut */
+        YearEndSettlementLogOut: {
+            action: components["schemas"]["YearEndSettlementLogAction"];
+            /** Actor Id */
+            actor_id: number | null;
+            /** Actor Role Snapshot */
+            actor_role_snapshot: string | null;
+            /** Comment */
+            comment: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            from_status: components["schemas"]["YearEndSettlementStatus"] | null;
+            /** Id */
+            id: number;
+            /** Metadata Json */
+            metadata_json?: {
+                [key: string]: unknown;
+            };
+            /** Reason */
+            reason: string | null;
+            /** Settlement Id */
+            settlement_id: number;
+            to_status: components["schemas"]["YearEndSettlementStatus"] | null;
         };
         /**
          * YearEndSettlementStatus
@@ -56145,6 +56222,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SettlementOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_settlement_logs_api_year_end_settlements__settlement_id__logs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                settlement_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["YearEndSettlementLogOut"][];
                 };
             };
             /** @description Validation Error */

@@ -155,8 +155,8 @@ onMounted(load)
       <el-tab-pane label="員工結算單" name="settlements">
         <div v-if="selectedSettlements.length" class="batch-bar">
           <span>已選 {{ selectedSettlements.length }} 筆：</span>
-          <el-button v-if="hasPermission('APPRAISAL_REVIEW')" size="small" :loading="busy" @click="signBatch('supervisor')">批次主管簽核</el-button>
-          <el-button v-if="hasPermission('APPRAISAL_ACCOUNTING')" size="small" :loading="busy" @click="signBatch('accounting')">批次會計簽核</el-button>
+          <el-button v-if="hasPermission('YEAR_END_REVIEW')" size="small" :loading="busy" @click="signBatch('supervisor')">批次主管簽核</el-button>
+          <el-button v-if="hasPermission('YEAR_END_ACCOUNTING')" size="small" :loading="busy" @click="signBatch('accounting')">批次會計簽核</el-button>
           <el-button v-if="hasPermission('YEAR_END_FINALIZE')" size="small" type="primary" :loading="busy" @click="signBatch('finalize')">批次核定</el-button>
         </div>
         <el-table :data="settlements" v-loading="loading" stripe size="small" @selection-change="handleSelectionChange">
@@ -197,7 +197,7 @@ onMounted(load)
             <template #default="{ row }">
               <!-- 兩關流程：DRAFT → 會計簽核 → 老闆核定 -->
               <el-button
-                v-if="row.status === 'DRAFT' && hasPermission('APPRAISAL_ACCOUNTING')"
+                v-if="row.status === 'DRAFT' && hasPermission('YEAR_END_ACCOUNTING')"
                 size="small"
                 @click="sign(row, 'accounting')"
               >會計簽核</el-button>

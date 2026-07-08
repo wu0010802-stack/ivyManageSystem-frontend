@@ -20,9 +20,9 @@ export const ITEM_CODE_LABELS = {
   INSTITUTION_MEETING_0913: '9/13 機構會議研習（填時數，每次最多計 4 小時）',
   INSTITUTION_MEETING_1115: '11/15 機構會議研習（填時數，每次最多計 4 小時）',
   SELF_IMPROVEMENT_ACTIVITY: '自強活動（填時數，每次最多計 4 小時）',
-  CHILD_ACCIDENT: '幼兒意外（填扣分 −1~−10，主管評議）',
+  CHILD_ACCIDENT: '幼兒意外（事件紀錄自動彙總，主管評議）',
   CLASS_HEADCOUNT_BONUS: '帶班人數加分',
-  SPED: '特教加分（在園逾 4 個月）',
+  SPED: '特教加分（特教標記）',
   STUDENT_WITHDRAWAL: '休學人數（當月月費未繳者）',
   STUDENT_REINSTATE: '復學人數',
   TRIAL_LEAVE: '試讀離園',
@@ -45,11 +45,14 @@ export const AUTO_ITEM_CODES = new Set([
   'RETURNING_RATE_0315',
   'AFTER_CLASS_RATE',
   'REWARD_PUNISH',
+  'CHILD_ACCIDENT',
   'CLASS_HEADCOUNT_BONUS',
+  'SPED',
   'STUDENT_REINSTATE',
+  'TRIAL_LEAVE',
 ])
 
-/** MANUAL_DELTA 類手填「分值」項的輸入範圍（與後端 aprreg01 規則 config 一致） */
+/** MANUAL_DELTA 類分值項的輸入範圍（與後端 aprreg01 規則 config 一致） */
 export const MANUAL_DELTA_RANGES: Record<string, { min: number; max: number }> = {
   CHILD_ACCIDENT: { min: -10, max: 0 },
   EXAM_RESULT: { min: -10, max: 10 },

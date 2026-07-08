@@ -384,10 +384,10 @@ describe('ManualEventEntrySection', () => {
     const wrapper = mount(ManualEventEntrySection, mountOpts())
     await flushPromises()
 
-    // OTHER 是最後一個 ITEM_CODE（index 13）；第一筆 row $index=0
+    // OTHER 是最後一個 ITEM_CODE（index 10）；第一筆 row $index=0
     const inp = wrapper.find('[data-test="count-1-OTHER"]')
     expect(inp.exists()).toBe(true)
     expect(inp.attributes('data-grid-row')).toBe('0')
-    expect(inp.attributes('data-grid-col')).toBe('13')
+    expect(inp.attributes('data-grid-col')).toBe('10')
   })
 })

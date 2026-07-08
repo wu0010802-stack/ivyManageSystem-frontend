@@ -88,6 +88,7 @@ interface StudentForm {
   nationality: string
   household_address: string
   is_disadvantaged: boolean
+  is_special_education: boolean | null
   low_income_status: string
   indigenous_status: string
   disability_type: string
@@ -119,6 +120,7 @@ const emptyForm = (): StudentForm => ({
   nationality: '本國',
   household_address: '',
   is_disadvantaged: false,
+  is_special_education: false,
   low_income_status: '',
   indigenous_status: '',
   disability_type: '',
@@ -168,13 +170,15 @@ const submit = async () => {
     submitting.value = true
     try {
       const studentStore = useStudentStore()
+      const payload: Record<string, unknown> = { ...form }
+      if (payload.is_special_education == null) Reflect.deleteProperty(payload, 'is_special_education')
       if (isEdit.value) {
-        await studentStore.updateStudent(form.id as number, form)
+        await studentStore.updateStudent(form.id as number, payload)
       } else {
-        await studentStore.createStudent(form)
+        await studentStore.createStudent(payload)
       }
       ElMessage.success(isEdit.value ? '更新成功' : '新增成功')
-      emit('saved', { ...form })
+      emit('saved', payload)
       close()
     } catch (error) {
       const detail = (error as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
@@ -276,6 +280,13 @@ const submit = async () => {
         <el-form-item label="國籍"><el-input v-model="form.nationality" maxlength="20" placeholder="本國" /></el-form-item>
         <el-form-item label="戶籍地址"><el-input v-model="form.household_address" type="textarea" :rows="2" /></el-form-item>
         <el-form-item label="弱勢標記"><el-switch v-model="form.is_disadvantaged" /></el-form-item>
+        <el-form-item label="特教標記">
+          <el-switch
+            :model-value="form.is_special_education ?? false"
+            :disabled="form.is_special_education == null"
+            @update:model-value="(v: string | number | boolean) => (form.is_special_education = v === true)"
+          />
+        </el-form-item>
         <el-form-item label="低收/中低收">
           <el-select v-model="form.low_income_status" clearable placeholder="(無)">
             <el-option label="低收入戶" value="low" />

@@ -166,16 +166,16 @@ describe('YearEndDetailView — 兩關簽核流程', () => {
     expect(vi.mocked(ElMessage.success)).toHaveBeenCalledWith('簽核完成')
   })
 
-  // Case 3: DRAFT 有 APPRAISAL_ACCOUNTING 權限 → 按鈕應可操作 (vm-layer permission check)
-  it('DRAFT + hasPermission(APPRAISAL_ACCOUNTING)=true → 允許會計簽核操作', async () => {
+  // Case 3: DRAFT 有 YEAR_END_ACCOUNTING 權限 → 按鈕應可操作 (vm-layer permission check)
+  it('DRAFT + hasPermission(YEAR_END_ACCOUNTING)=true → 允許會計簽核操作', async () => {
     setupApiMocks([makeSettlement({ status: 'DRAFT' })])
-    mockHasPermission.mockImplementation((p: string) => p === 'APPRAISAL_ACCOUNTING')
+    mockHasPermission.mockImplementation((p: string) => p === 'YEAR_END_ACCOUNTING')
 
     const wrapper = await mountView()
     const vm = wrapper.vm as unknown as { settlements: Settlement[] }
 
-    // Permission gate: DRAFT + APPRAISAL_ACCOUNTING true → show button condition
-    expect(vm.settlements[0].status === 'DRAFT' && mockHasPermission('APPRAISAL_ACCOUNTING')).toBe(true)
+    // Permission gate: DRAFT + YEAR_END_ACCOUNTING true → show button condition
+    expect(vm.settlements[0].status === 'DRAFT' && mockHasPermission('YEAR_END_ACCOUNTING')).toBe(true)
     // 主管簽 should not be shown: no supervisor stage in two-gate flow
     expect(vm.settlements[0].status === 'SUPERVISOR_SIGNED').toBe(false)
   })

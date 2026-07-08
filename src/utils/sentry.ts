@@ -27,7 +27,7 @@ const PII_KEY_SUBSTRINGS = [
   'child_name', 'student_name', 'parent_name', 'guardian', 'custody_note',
   'emergency_contact', 'birthday', 'birth_date',
   'medication', 'dosage', 'allergy', 'allergen', 'allergies',
-  'reaction_symptom', 'first_aid_note', 'disability', 'iep', 'special_needs',
+  'reaction_symptom', 'first_aid_note', 'disability', 'iep', 'special_needs', 'special_education',
   'health', 'diagnosis', 'growth', 'measurement', 'height', 'weight',
   'password', 'secret', 'token', 'jwt', 'cookie', 'authorization',
   'refresh_token', 'access_token', 'api_key',
