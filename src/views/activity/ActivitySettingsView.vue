@@ -121,7 +121,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { h, ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadRawFile } from 'element-plus'
 import {
@@ -129,6 +129,10 @@ import {
   updateRegistrationTime,
   uploadActivityPoster,
 } from '@/api/activity'
+import {
+  buildSaveConfirmLines,
+  taipeiNowMinuteString,
+} from './registrationSettingsConfirm'
 
 interface SettingsForm {
   is_open: boolean
@@ -238,10 +242,22 @@ async function handleSave() {
     return
   }
 
-  const statusText = form.value.is_open ? '開放報名' : '關閉報名'
+  // 確認框攤開實際生效的時間窗與異常警告（曾有年份誤存 2021/2029 未被發現，
+  // 導致時間窗形同永遠開放；見 registrationSettingsConfirm.ts）
+  const confirmLines = buildSaveConfirmLines(
+    {
+      is_open: form.value.is_open,
+      open_at: form.value.open_at,
+      close_at: form.value.close_at,
+    },
+    taipeiNowMinuteString()
+  )
   try {
     await ElMessageBox.confirm(
-      `確定要將報名設定為「${statusText}」並儲存前台顯示內容？`,
+      h('div', null, [
+        ...confirmLines.map((line) => h('p', { style: 'margin: 4px 0' }, line)),
+        h('p', { style: 'margin: 8px 0 0' }, '確定要儲存以上設定並更新前台顯示內容？'),
+      ]),
       '確認儲存',
       { type: 'warning', confirmButtonText: '確定儲存', cancelButtonText: '取消' }
     )
