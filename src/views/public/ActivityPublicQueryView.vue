@@ -931,6 +931,13 @@ async function handleSaveChanges() {
     if (phoneWillChange) {
       queryForm.parent_phone = newPhoneRaw
     }
+    // 2026-07-08：查詢碼由三欄位確定性派生 — 換手機後後端重派生並回新明文 token
+    // （rotated_query_token，僅此一次），立即替換手上舊 token，否則後續 mutation 全 404。
+    // （rotation 僅發生於 token 模式的換手機更新 — 無 token 的舊報名不重派生）
+    const rotatedToken = (res as { data?: { rotated_query_token?: string | null } })?.data?.rotated_query_token
+    if (rotatedToken) {
+      queryForm.token = rotatedToken
+    }
     // 後端 update response 已含完整 registration（含 field_state 與新 updated_at），
     // 直接 hydrate 即可，不需再打一次 publicQueryRegistration。
     hydrateResult((res as { data: QueryResult }).data)

@@ -75,6 +75,17 @@
           <span>{{ row.class_name || '—' }}</span>
         </template>
       </el-table-column>
+      <!-- 查詢碼由姓名+生日+家長手機確定性派生（後端反推），供家長遺失時補查 -->
+      <el-table-column label="查詢碼" width="130" align="center">
+        <template #default="{ row }">
+          <el-tooltip v-if="row.query_token" :content="row.query_token" placement="top">
+            <el-button size="small" link type="primary" @click="copyQueryToken(row.query_token)">
+              {{ String(row.query_token).slice(0, 8) }}… 複製
+            </el-button>
+          </el-tooltip>
+          <span v-else>—</span>
+        </template>
+      </el-table-column>
       <el-table-column label="審核狀態" width="100" align="center">
         <template #default="{ row }">
           <el-tag
@@ -208,6 +219,13 @@
           <el-descriptions-item label="生日">{{ detail.birthday }}</el-descriptions-item>
           <el-descriptions-item label="家長手機">{{ detail.parent_phone || '—' }}</el-descriptions-item>
           <el-descriptions-item label="Email" :span="2">{{ detail.email }}</el-descriptions-item>
+          <el-descriptions-item label="查詢碼" :span="2">
+            <template v-if="detail.query_token">
+              <span class="query-token-text">{{ detail.query_token }}</span>
+              <el-button size="small" link type="primary" @click="copyQueryToken(detail.query_token)">複製</el-button>
+            </template>
+            <span v-else>—</span>
+          </el-descriptions-item>
           <el-descriptions-item label="報名時間" :span="2">{{ formatActivityDate(detail.created_at) }}</el-descriptions-item>
         </el-descriptions>
 
@@ -488,13 +506,13 @@ const RegistrationReviewWizard = defineAsyncComponent(() => import('@/components
 
 type ApiErr = { response?: { data?: { detail?: string }; status?: number } }
 
-interface RegistrationRow { id: number; student_name?: string; payment_status?: string; [key: string]: unknown }
+interface RegistrationRow { id: number; student_name?: string; payment_status?: string; query_token?: string | null; [key: string]: unknown }
 interface PaymentRecord { id: number; type: string; amount: number; payment_date?: string; payment_method?: string; notes?: string; is_voided?: boolean; void_reason?: string }
 interface PaymentInfo { total_amount?: number; paid_amount?: number; payment_status?: string; records?: PaymentRecord[] }
 interface RegistrationCourse { id: number; course_id: number; name: string; price?: number; status: string; confirm_deadline?: string }
 interface RegistrationSupply { id: number; supply_id: number; name?: string; price?: number }
 interface RegistrationDetail {
-  id: number; student_name?: string; class_name?: string; birthday?: string; parent_phone?: string; email?: string; created_at?: string; remark?: string
+  id: number; student_name?: string; class_name?: string; birthday?: string; parent_phone?: string; email?: string; created_at?: string; remark?: string; query_token?: string | null
   total_amount?: number; courses?: RegistrationCourse[]; supplies?: RegistrationSupply[]; changes?: Record<string, unknown>[]
   [key: string]: unknown
 }
@@ -505,6 +523,16 @@ const canWrite = computed(() => hasPermission('ACTIVITY_WRITE'))
 // 舊版會看到可點按鈕、填完原因才吃 403（audit C-4，2026-07-02；對齊
 // POS 頁 canApproveRefund 前端閘）
 const canVoidPayment = computed(() => hasPermission('ACTIVITY_PAYMENT_APPROVE'))
+
+async function copyQueryToken(token: unknown) {
+  if (typeof token !== 'string' || !token) return
+  try {
+    await navigator.clipboard.writeText(token)
+    ElMessage.success('查詢碼已複製')
+  } catch {
+    ElMessage.warning('複製失敗，請以滑鼠選取後手動複製')
+  }
+}
 
 function courseStatusTagType(status: string): ElTagType {
   return ((COURSE_STATUS_TAG_TYPE as Record<string, string>)[status] || 'info') as ElTagType
@@ -1297,4 +1325,5 @@ onMounted(async () => {
   margin-top: 4px;
 }
 .create-hint { color: var(--text-tertiary); margin-left: 8px; font-size: 13px; }
+.query-token-text { font-family: monospace; word-break: break-all; margin-right: 8px; }
 </style>
