@@ -9,7 +9,7 @@
  * Props:
  *   summary: { visible, message, studentName, parentPhone,
  *              enrolledCourses, waitlistCourses, selectedSupplies, totalAmount,
- *              queryToken, editUrl, copyHint } — reactive
+ *              queryToken, editUrl, copyHint, email? } — reactive
  * Emits:
  *   close
  */
