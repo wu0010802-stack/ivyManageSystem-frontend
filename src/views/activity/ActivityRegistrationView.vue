@@ -101,7 +101,7 @@
       <el-table-column label="報名時間" min-width="140">
         <template #default="{ row }">{{ formatActivityDate(row.created_at) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="330" align="center" fixed="right">
+      <el-table-column label="操作" width="330" align="center" fixed="right" class-name="op-cell">
         <template #default="{ row }">
           <!-- 第一行：詳情 / 刪除（拒絕列為復原）/ 複製查詢碼 -->
           <div class="op-row">
@@ -1331,7 +1331,9 @@ onMounted(async () => {
   align-items: center;
   gap: 6px;
 }
-.op-row + .op-row { margin-top: 6px; }
+.op-row + .op-row { margin-top: 12px; }
 /* 以 gap 控間距，抵銷 element-plus 相鄰按鈕的預設 margin-left（12px） */
 .op-row .el-button + .el-button { margin-left: 0; }
+/* 操作欄儲存格 padding 加大，兩行按鈕不顯擁擠 */
+:deep(td.op-cell .cell) { padding: 14px 12px; }
 </style>
