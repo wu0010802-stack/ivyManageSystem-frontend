@@ -25302,6 +25302,8 @@ export interface components {
             class: string;
             /** Courses */
             courses: components["schemas"]["PublicCourseItem"][];
+            /** Email */
+            email?: string | null;
             /** Name */
             name: string;
             /** Parent Phone */
