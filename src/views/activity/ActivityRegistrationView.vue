@@ -75,17 +75,6 @@
           <span>{{ row.class_name || '—' }}</span>
         </template>
       </el-table-column>
-      <!-- 查詢碼由姓名+生日+家長手機確定性派生（後端反推），供家長遺失時補查 -->
-      <el-table-column label="查詢碼" width="130" align="center">
-        <template #default="{ row }">
-          <el-tooltip v-if="row.query_token" :content="row.query_token" placement="top">
-            <el-button size="small" link type="primary" @click="copyQueryToken(row.query_token)">
-              {{ String(row.query_token).slice(0, 8) }}… 複製
-            </el-button>
-          </el-tooltip>
-          <span v-else>—</span>
-        </template>
-      </el-table-column>
       <el-table-column label="審核狀態" width="100" align="center">
         <template #default="{ row }">
           <el-tag
@@ -112,47 +101,55 @@
       <el-table-column label="報名時間" min-width="140">
         <template #default="{ row }">{{ formatActivityDate(row.created_at) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="470" align="center" fixed="right">
+      <el-table-column label="操作" width="330" align="center" fixed="right">
         <template #default="{ row }">
-          <el-button size="small" @click="openDetail(row)">詳情</el-button>
-          <!-- 已拒絕列：改顯示「復原」 -->
-          <template v-if="isRejectedRow(row)">
+          <!-- 第一行：詳情 / 刪除（拒絕列為復原）/ 複製查詢碼 -->
+          <div class="op-row">
+            <el-button size="small" @click="openDetail(row)">詳情</el-button>
+            <!-- 已拒絕列：改顯示「復原」 -->
             <el-button
-              v-if="canWrite"
+              v-if="isRejectedRow(row) && canWrite"
               size="small"
               type="success"
               @click="handleRestore(row)"
             >復原</el-button>
-          </template>
-          <!-- 僅「待審核」列顯示四顆審核鈕；其他狀態不顯示 -->
-          <template v-else>
-            <template v-if="canWrite && isPending(row)">
-              <el-button size="small" type="primary" @click="openMatchDialog(row)">手動匹配</el-button>
-              <el-button size="small" type="warning" @click="openRematchDialog(row)">重新比對</el-button>
-              <el-button size="small" type="danger" plain @click="openForceDialog(row)">強行收件</el-button>
-              <el-tooltip
-                :disabled="!((row.paid_amount || 0) > 0)"
-                content="已有繳費，請先於詳情處理繳費再拒絕"
-                placement="top"
-              >
-                <span class="reject-btn-wrap">
-                  <el-button
-                    size="small"
-                    type="danger"
-                    :disabled="!canReject(row)"
-                    @click="handleReject(row)"
-                  >拒絕</el-button>
-                </span>
-              </el-tooltip>
-            </template>
             <el-button
-              v-if="canWrite"
+              v-else-if="!isRejectedRow(row) && canWrite"
               size="small"
               type="danger"
               @click="handleDelete(row)"
               :loading="deletingRegistrationId === row.id"
             >刪除</el-button>
-          </template>
+            <!-- 查詢碼由姓名+生日+家長手機確定性派生（後端反推），供家長遺失時補發 -->
+            <el-tooltip v-if="row.query_token" :content="row.query_token" placement="top">
+              <el-button
+                size="small"
+                type="primary"
+                plain
+                @click="copyQueryToken(row.query_token)"
+              >複製查詢碼</el-button>
+            </el-tooltip>
+          </div>
+          <!-- 第二行：僅「待審核」列顯示四顆審核鈕；其他狀態不顯示 -->
+          <div v-if="!isRejectedRow(row) && canWrite && isPending(row)" class="op-row op-row--audit">
+            <el-button size="small" type="primary" @click="openMatchDialog(row)">手動匹配</el-button>
+            <el-button size="small" type="warning" @click="openRematchDialog(row)">重新比對</el-button>
+            <el-button size="small" type="danger" plain @click="openForceDialog(row)">強行收件</el-button>
+            <el-tooltip
+              :disabled="!((row.paid_amount || 0) > 0)"
+              content="已有繳費，請先於詳情處理繳費再拒絕"
+              placement="top"
+            >
+              <span class="reject-btn-wrap">
+                <el-button
+                  size="small"
+                  type="danger"
+                  :disabled="!canReject(row)"
+                  @click="handleReject(row)"
+                >拒絕</el-button>
+              </span>
+            </el-tooltip>
+          </div>
         </template>
       </el-table-column>
     </el-table>
@@ -1326,4 +1323,15 @@ onMounted(async () => {
 }
 .create-hint { color: var(--text-tertiary); margin-left: 8px; font-size: 13px; }
 .query-token-text { font-family: monospace; word-break: break-all; margin-right: 8px; }
+
+/* 操作欄兩行排版：第一行 詳情/刪除(復原)/複製查詢碼，第二行 四顆審核鈕 */
+.op-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+}
+.op-row + .op-row { margin-top: 6px; }
+/* 以 gap 控間距，抵銷 element-plus 相鄰按鈕的預設 margin-left（12px） */
+.op-row .el-button + .el-button { margin-left: 0; }
 </style>
