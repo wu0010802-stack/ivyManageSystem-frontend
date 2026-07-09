@@ -5,7 +5,12 @@
  */
 import type { PermissionName } from '@/constants/permissions'
 import { PERMISSION_NAMES } from '@/constants/permissions'
-import { CATEGORY_OPTIONS, categoryLabel } from '@/constants/signoff'
+import {
+  CATEGORY_OPTIONS,
+  categoryLabel,
+  VENDOR_CATEGORY_OPTIONS,
+  vendorCategoryLabel,
+} from '@/constants/signoff'
 import {
   listVendorPayments,
   getVendorPaymentSummary,
@@ -88,7 +93,7 @@ export interface SignoffModuleConfig {
     date: SignoffField
     docNumber: SignoffField
   }
-  /** 僅雜項收款有；null 時面板不渲染類別篩選／表格欄／表單欄 */
+  /** null 時面板不渲染類別篩選／表格欄／表單欄（現行 vendor／misc 兩模組皆有設定） */
   category: {
     label: string
     options: ReadonlyArray<{ value: string; label: string }>
@@ -119,7 +124,11 @@ export const VENDOR_SIGNOFF_MODULE: SignoffModuleConfig = {
     date: { key: 'payment_date', label: '付款日期' },
     docNumber: { key: 'invoice_number', label: '發票／收據號' },
   },
-  category: null,
+  category: {
+    label: '類別',
+    options: VENDOR_CATEGORY_OPTIONS,
+    labelOf: vendorCategoryLabel,
+  },
   permissions: {
     read: PERMISSION_NAMES.VENDOR_PAYMENT_READ,
     write: PERMISSION_NAMES.VENDOR_PAYMENT_WRITE,
@@ -139,7 +148,7 @@ export const VENDOR_SIGNOFF_MODULE: SignoffModuleConfig = {
     emptyTitle: '尚無廠商付款紀錄',
     emptyHint: '點右上「新增付款」開始登記第一筆廠商請款。',
     unitLabel: '付款',
-    requiredMsg: '請填寫日期、廠商與金額',
+    requiredMsg: '請填寫日期、廠商、類別與金額',
     signTitle: '廠商簽收',
     signUploadHint: '廠商簽好的紙本請款／簽收單照片，PNG／JPG／WEBP',
     signPadHint: '請廠商於上方框內簽名',

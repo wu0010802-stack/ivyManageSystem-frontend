@@ -27,6 +27,19 @@ export const CATEGORY_OPTIONS = [
 export const categoryLabel = (value: string) =>
   CATEGORY_OPTIONS.find((o) => o.value === value)?.label || value
 
+export const VENDOR_CATEGORY_OPTIONS = [
+  { value: '餐點食材', label: '餐點食材' },
+  { value: '教材教具', label: '教材教具' },
+  { value: '清潔衛生', label: '清潔衛生' },
+  { value: '維修設備', label: '維修設備' },
+  { value: '文具事務', label: '文具事務' },
+  { value: '活動支出', label: '活動支出' },
+  { value: '其他', label: '其他' },
+] as const
+
+export const vendorCategoryLabel = (value: string) =>
+  VENDOR_CATEGORY_OPTIONS.find((o) => o.value === value)?.label || value
+
 /** 區間彙總（跨狀態），對應後端 GET /vendor-payments/summary 與 /misc-receipts/summary（shape 相同）。 */
 export interface SignoffSummary {
   total_count: number

@@ -19,10 +19,16 @@ describe('signoffModules config', () => {
     expect(MISC_SIGNOFF_MODULE.fields.docNumber.key).toBe('receipt_number')
   })
 
-  it('類別欄僅雜項收款有（6 類）', () => {
-    expect(VENDOR_SIGNOFF_MODULE.category).toBeNull()
+  it('vendor 與 misc 皆有類別設定', () => {
     expect(MISC_SIGNOFF_MODULE.category?.options).toHaveLength(6)
     expect(MISC_SIGNOFF_MODULE.category?.labelOf('rent')).toBe('場地租金')
+  })
+
+  it('vendor 模組有 7 類 category 設定', () => {
+    expect(VENDOR_SIGNOFF_MODULE.category).not.toBeNull()
+    expect(VENDOR_SIGNOFF_MODULE.category?.options).toHaveLength(7)
+    expect(VENDOR_SIGNOFF_MODULE.category?.options.map((o) => o.value)).toContain('清潔衛生')
+    expect(VENDOR_SIGNOFF_MODULE.category?.labelOf('其他')).toBe('其他')
   })
 
   it('權限碼對齊 PERMISSION_NAMES', () => {
