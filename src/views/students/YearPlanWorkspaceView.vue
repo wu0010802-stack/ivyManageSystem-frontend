@@ -391,12 +391,19 @@ async function onBulkOp(payload: {
 
 async function onLocateIssue(issue: Schema<'IssueOut'>): Promise<void> {
   if (issue.student_id != null) {
-    // 已分班 → 表格定位；否則 fallback 側欄待分班清單
-    if (rosterRef.value?.locateStudent(issue.student_id)) return
+    // 已分班 → 表格定位；否則 fallback 側欄待分班清單。窄幕抽屜模式下表格在抽屜
+    // 後方，命中 roster 分支才需先關抽屜露出表格；sidePanel 分支目標就在抽屜內，
+    // 不關。
+    if (rosterRef.value?.locateStudent(issue.student_id)) {
+      if (isNarrow.value) drawerVisible.value = false
+      return
+    }
     await sidePanelRef.value?.locateStudent(issue.student_id)
     return
   }
   if (issue.plan_class_id != null) {
+    // 班級一律是表格目標，窄幕同理先關抽屜
+    if (isNarrow.value) drawerVisible.value = false
     rosterRef.value?.locateClass(issue.plan_class_id)
   }
 }

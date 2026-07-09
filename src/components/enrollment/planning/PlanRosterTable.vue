@@ -424,7 +424,7 @@ defineExpose({ locateStudent, locateClass })
   z-index: 4;
 }
 
-/* .plan-roster-table 前綴：提高 specificity 至 (0,2,1)，勝過通用
+/* .plan-roster-table 前綴：提高 specificity 至 (0,2,0)，勝過通用
    `.plan-roster-table td`（0,1,1），避免其 background 蓋掉這裡的底色 */
 .plan-roster-table .corner-cell {
   position: sticky;
@@ -432,7 +432,7 @@ defineExpose({ locateStudent, locateClass })
   border-right: none !important;
   border-top: none !important;
   border-left: none !important;
-  background: transparent;
+  background: var(--neutral-100);
 }
 
 .plan-roster-table .grade-group-cell {
