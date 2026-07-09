@@ -187,6 +187,11 @@ export const ROUTE_PERMISSION_RULES = [
 export const PUBLIC_ROUTES = ['/login', '/change-password', '/portal/login', '/profile']
 export const PUBLIC_ROUTE_PREFIXES = ['/public/']
 
+// 僅能走 Portal（教師 /portal、家長 parent app）、不可用管理端 /login 登入的角色。
+// LoginView.vue 用它排除，而非誤用「role !== 'admin'」擋掉 principal/supervisor/hr/accountant
+// 等合法管理端角色（2026-07 修正：/settings 把角色改成非 admin 後帳號無法登入的 bug）。
+export const PORTAL_ONLY_ROLES = ['teacher', 'parent']
+
 export const TEACHER_PORTAL_ROUTES = [
   '/portal',
   '/portal/attendance',

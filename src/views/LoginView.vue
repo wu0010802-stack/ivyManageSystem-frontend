@@ -6,6 +6,7 @@ import { User, Lock } from '@element-plus/icons-vue'
 import { login } from '@/api/auth'
 import { setUserInfo } from '@/utils/auth'
 import { apiError } from '@/utils/error'
+import { PORTAL_ONLY_ROLES } from '@/constants/permissions'
 import { IDLE_LOGOUT_FLAG_KEY } from '@/composables/useIdleTimeout'
 
 const router = useRouter()
@@ -53,8 +54,8 @@ const handleLogin = async () => {
     const res = await login(form.username, form.password)
 
     const userData = res.data as { user: { role: string; name: string }; must_change_password?: boolean }
-    if (userData.user.role !== 'admin') {
-      ElMessage.error('權限不足，僅管理員可登入後台')
+    if (PORTAL_ONLY_ROLES.includes(userData.user.role)) {
+      ElMessage.error('此帳號僅能從「教職員入口」登入')
       usernameInput.value?.focus?.()
       return
     }
