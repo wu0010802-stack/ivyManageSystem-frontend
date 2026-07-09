@@ -113,4 +113,10 @@ describe('PlanBatchToolbar', () => {
     const selects = w.findAllComponents({ name: 'ElSelect' })
     expect(selects[0].props('disabled')).toBe(true)
   })
+
+  it('點「清除選取」emit clear-selection', async () => {
+    const w = mountToolbar({ selectedCount: 2 })
+    await w.find('.btn-clear-selection').trigger('click')
+    expect(w.emitted('clear-selection')).toBeTruthy()
+  })
 })

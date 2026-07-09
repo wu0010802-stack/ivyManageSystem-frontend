@@ -26,6 +26,7 @@
 
     <el-button :disabled="isDisabled" @click="applyExclude">排除</el-button>
     <el-button :disabled="isDisabled" @click="applyReset">還原建議</el-button>
+    <el-button text class="btn-clear-selection" @click="emit('clear-selection')">清除選取</el-button>
   </div>
 </template>
 
@@ -53,6 +54,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'bulk-op': [payload: { op: BulkOp; planClassId?: number | null; excludeReason?: string | null }]
+  'clear-selection': []
 }>()
 
 const assignTargetId = ref<number | null>(null)
