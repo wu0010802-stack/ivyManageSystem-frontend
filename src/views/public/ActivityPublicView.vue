@@ -656,7 +656,7 @@ const {
 
 // 費用預覽 feePreview 已抽至 usePublicRegistrationForm（A1-P1）
 
-// 課程顯示輔助（適齡 / 衝堂 / 名額狀態 / age helpers）抽至 useCourseAdvisory（A1-P6）
+// 課程顯示輔助（衝堂 / 名額狀態）抽至 useCourseAdvisory（A1-P6）
 const {
   formatSchedule,
   courseAdvisory,
@@ -1574,13 +1574,8 @@ onUnmounted(() => {
   border-color: var(--color-border);
 }
 .meta-chip--schedule .icon { color: var(--ivy-teal); flex-shrink: 0; }
-/* Phase 3 advisory chips：適齡（warn 黃）/ 衝堂（danger 紅） */
+/* Phase 3 advisory chips：衝堂（danger 紅） */
 .meta-chip--advisory .icon { flex-shrink: 0; }
-.meta-chip--warn {
-  color: var(--color-warning-darker);
-  background-color: var(--color-warning-soft);
-  border-color: rgba(217, 119, 6, 0.35);
-}
 .meta-chip--danger {
   color: var(--color-danger-darker);
   background-color: var(--color-danger-soft);
@@ -1766,11 +1761,6 @@ onUnmounted(() => {
   font-weight: 600;
   border-radius: var(--radius-full);
   border: 1px solid transparent;
-}
-.advisory-tag--warn {
-  color: var(--color-warning-darker);
-  background-color: rgba(255, 255, 255, 0.7);
-  border-color: rgba(217, 119, 6, 0.4);
 }
 .advisory-tag--danger {
   color: var(--color-danger-darker);

@@ -86,7 +86,7 @@ describe('ActivityCardList', () => {
     expect(wrapper.find('#act-upcoming').exists()).toBe(true)
   })
 
-  it('有上課時段/適齡時顯示對應 meta chip', () => {
+  it('有上課時段時顯示對應 meta chip', () => {
     const wrapper = mount(ActivityCardList, {
       props: {
         courses: [
@@ -96,15 +96,12 @@ describe('ActivityCardList', () => {
             meeting_weekday: 2,
             meeting_start_time: '15:30',
             meeting_end_time: '16:30',
-            min_age_months: 36,
-            max_age_months: 72,
           },
         ],
       },
     })
     const text = wrapper.text()
     expect(text).toContain('週三 15:30–16:30')
-    expect(text).toContain('適齡 3–6 歲')
     expect(wrapper.find('.meta-chip.conflict').exists()).toBe(false)
   })
 
@@ -119,7 +116,7 @@ describe('ActivityCardList', () => {
     expect(wrapper.text()).toContain('時段衝突')
   })
 
-  it('無時段/適齡/衝突時不渲染 meta 列', () => {
+  it('無時段/衝突時不渲染 meta 列', () => {
     const wrapper = mount(ActivityCardList, {
       props: { courses: [{ ...courses[0], id: 8 }] },
     })
@@ -140,7 +137,7 @@ describe('ActivityCardList', () => {
     expect(wrapper.find('.course-card-meta').exists()).toBe(true)
   })
 
-  it('僅有講師（無時段/適齡）也渲染 meta 列', () => {
+  it('僅有講師（無時段）也渲染 meta 列', () => {
     const wrapper = mount(ActivityCardList, {
       props: { courses: [{ ...courses[0], id: 12, instructor_name: '李老師' }] },
     })

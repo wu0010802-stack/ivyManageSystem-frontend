@@ -4,9 +4,8 @@
  * 集中:
  *  - availabilityState(course)        — 名額顏色語意（剩餘 / 候補 / 額滿）
  *  - formatSchedule(course)            — 「週X 09:30–10:30」字串
- *  - courseAdvisory(course)            — 適齡 + 衝堂 warning 列表
+ *  - courseAdvisory(course)            — 衝堂 warning 列表
  *  - selectedAdvisories                — 已勾選課程的 advisory 匯總(供 advisory-panel)
- *  - ageInMonths                       — 由 form.birthday 計算
  *
  * Input: { courses, availability, form } reactive refs
  */
@@ -20,29 +19,7 @@ type CourseItem = {
   meeting_weekday?: number | null
   meeting_start_time?: string | null
   meeting_end_time?: string | null
-  min_age_months?: number | null
-  max_age_months?: number | null
   [key: string]: unknown
-}
-
-function ageMonthsFromBirthday(birthday: string | null | undefined) {
-  if (!birthday) return null
-  const b = new Date(birthday)
-  if (Number.isNaN(b.getTime())) return null
-  const now = new Date()
-  let months =
-    (now.getFullYear() - b.getFullYear()) * 12 + (now.getMonth() - b.getMonth())
-  if (now.getDate() < b.getDate()) months -= 1
-  return months >= 0 ? months : null
-}
-
-function monthsToYearLabel(m: number | null) {
-  if (m == null) return ''
-  const y = Math.floor(m / 12)
-  const mo = m % 12
-  if (y === 0) return `${mo} 個月`
-  if (mo === 0) return `${y} 歲`
-  return `${y} 歲 ${mo} 個月`
 }
 
 function hasSchedule(c: CourseItem) {
@@ -56,33 +33,15 @@ function schedulesOverlap(a: CourseItem, b: CourseItem) {
   return (a.meeting_start_time ?? '') < (b.meeting_end_time ?? '') && (b.meeting_start_time ?? '') < (a.meeting_end_time ?? '')
 }
 
-export function useCourseAdvisory({ courses, availability, form }: { courses: Ref<CourseItem[]>; availability: Ref<Record<string, number>>; form: { birthday?: string | null; selectedCourses: string[] } }) {
-  const ageInMonths = computed(() => ageMonthsFromBirthday(form.birthday))
-
+export function useCourseAdvisory({ courses, availability, form }: { courses: Ref<CourseItem[]>; availability: Ref<Record<string, number>>; form: { selectedCourses: string[] } }) {
   function formatSchedule(course: CourseItem) {
     if (!hasSchedule(course)) return ''
     return `週${WEEKDAY_LABELS[course.meeting_weekday!]} ${course.meeting_start_time}–${course.meeting_end_time}`
   }
 
-  // 對單一課程算 advisory(適齡 + 衝堂);僅在課程被勾選時計算衝堂
+  // 對單一課程算 advisory(衝堂);僅在課程被勾選時計算
   function courseAdvisory(course: CourseItem) {
     const warnings = []
-    const ageMonths = ageInMonths.value
-    if (ageMonths != null) {
-      if (course.min_age_months != null && ageMonths < course.min_age_months) {
-        warnings.push({
-          kind: 'age',
-          severity: 'warn',
-          message: `建議 ${monthsToYearLabel(course.min_age_months)} 以上`,
-        })
-      } else if (course.max_age_months != null && ageMonths > course.max_age_months) {
-        warnings.push({
-          kind: 'age',
-          severity: 'warn',
-          message: `建議 ${monthsToYearLabel(course.max_age_months)} 以下`,
-        })
-      }
-    }
     if (form.selectedCourses.includes(course.name) && hasSchedule(course)) {
       for (const otherName of form.selectedCourses) {
         if (otherName === course.name) continue
@@ -133,7 +92,6 @@ export function useCourseAdvisory({ courses, availability, form }: { courses: Re
   }
 
   return {
-    ageInMonths,
     formatSchedule,
     courseAdvisory,
     selectedAdvisories,

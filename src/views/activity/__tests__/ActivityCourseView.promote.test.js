@@ -125,8 +125,6 @@ const sampleCourse = {
   allow_waitlist: true,
   video_url: '',
   description: '',
-  min_age_months: null,
-  max_age_months: null,
   meeting_weekday: null,
   meeting_start_time: '',
   meeting_end_time: '',

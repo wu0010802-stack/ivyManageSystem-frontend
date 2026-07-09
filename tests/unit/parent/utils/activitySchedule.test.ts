@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest'
 import {
   formatWeekday,
   formatTimeRange,
-  formatAgeRange,
   hasScheduleConflict,
   collectBusySlots,
   buildConflictCourseIds,
@@ -31,24 +30,6 @@ describe('formatTimeRange', () => {
     expect(formatTimeRange('15:30', null)).toBe('')
     expect(formatTimeRange(null, '16:30')).toBe('')
     expect(formatTimeRange(null, null)).toBe('')
-  })
-})
-
-describe('formatAgeRange', () => {
-  it('月齡轉歲，整數歲不帶小數', () => {
-    expect(formatAgeRange(36, 72)).toBe('3–6 歲')
-  })
-  it('非整數歲保留一位小數', () => {
-    expect(formatAgeRange(30, 72)).toBe('2.5–6 歲')
-  })
-  it('只有下限 → "X 歲以上"', () => {
-    expect(formatAgeRange(36, null)).toBe('3 歲以上')
-  })
-  it('只有上限 → "X 歲以下"', () => {
-    expect(formatAgeRange(null, 72)).toBe('6 歲以下')
-  })
-  it('皆無 → 空字串', () => {
-    expect(formatAgeRange(null, null)).toBe('')
   })
 })
 

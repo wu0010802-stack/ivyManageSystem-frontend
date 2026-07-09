@@ -4,7 +4,7 @@
  *
  * 包含:
  *  - 「Step 2 選擇才藝課程」標題
- *  - 課程清單 v-for(含名額狀態、適齡/衝堂 advisory chip、影片預覽 btn)
+ *  - 課程清單 v-for(含名額狀態、衝堂 advisory chip、影片預覽 btn)
  *  - 影片 chip hover 600ms 後浮現 muted autoplay preview (YouTube-style)
  */
 import { reactive, onUnmounted } from 'vue'
@@ -475,11 +475,6 @@ onUnmounted(cancelPreview)
 }
 .meta-chip--schedule .icon { color: var(--ivy-teal); flex-shrink: 0; }
 .meta-chip--advisory .icon { flex-shrink: 0; }
-.meta-chip--warn {
-  color: var(--color-warning-darker);
-  background-color: var(--color-warning-soft);
-  border-color: rgba(217, 119, 6, 0.35);
-}
 .meta-chip--danger {
   color: var(--color-danger-darker);
   background-color: var(--color-danger-soft);
