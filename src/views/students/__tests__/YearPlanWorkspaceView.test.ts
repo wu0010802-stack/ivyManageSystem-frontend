@@ -40,6 +40,7 @@ import {
 } from '@/api/classroomYearPlan'
 import YearPlanWorkspaceView from '../YearPlanWorkspaceView.vue'
 import PlanBatchToolbar from '@/components/enrollment/planning/PlanBatchToolbar.vue'
+import PlanRosterTable from '@/components/enrollment/planning/PlanRosterTable.vue'
 
 function mountView() {
   return mount(YearPlanWorkspaceView, { global: { plugins: [ElementPlus] } })
@@ -418,5 +419,24 @@ describe('YearPlanWorkspaceView', () => {
 
     expect(mockCancel).not.toHaveBeenCalled()
     expect(w.find('.btn-cancel-plan').exists()).toBe(true)
+  })
+
+  it('拖曳搬班：PlanRosterTable emit student-move → 呼叫 bulk API（assign、單一學生、含 base_version）', async () => {
+    mockStatus.mockResolvedValue(statusDraft())
+    mockDetail.mockResolvedValue(detailDraftWithClasses())
+    mockBulkStudents.mockResolvedValue({ data: { updated_count: 1, version: 2 } })
+
+    const w = mountView()
+    await flushPromises()
+
+    const roster = w.findComponent(PlanRosterTable)
+    expect(roster.exists()).toBe(true)
+    // 模擬拖曳搬班產生的 emit（把 student 1 搬到 class 11）
+    roster.vm.$emit('student-move', { studentIds: [1], op: 'assign', planClassId: 11 })
+    await flushPromises()
+
+    expect(mockBulkStudents).toHaveBeenCalledWith(5, {
+      base_version: 1, op: 'assign', student_ids: [1], plan_class_id: 11, exclude_reason: null,
+    })
   })
 })
