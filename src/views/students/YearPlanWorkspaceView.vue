@@ -13,6 +13,9 @@
       <!-- mutation in-flight（loading=true）期間鎖住所有互動觸發點：雙擊會以同一
            base_version 送第二發、撞 409 誤導使用者「有別人在動草稿」 -->
       <div v-if="status" class="actions">
+        <el-badge v-if="isNarrow && plan" :value="totalIssueCount" :hidden="totalIssueCount === 0" class="drawer-badge">
+          <el-button class="btn-side-drawer" @click="drawerVisible = true">問題與名單</el-button>
+        </el-badge>
         <template v-if="canWrite && state === 'draft'">
           <el-button class="btn-add-class" :disabled="loading" @click="onAddClassClick">新增班級</el-button>
           <el-button class="btn-regenerate" :disabled="loading" @click="onRegenerateClick">重新產生建議</el-button>
@@ -73,7 +76,8 @@
         />
       </div>
       <PlanSidePanel
-        ref="sidePanelRef"
+        v-if="!isNarrow"
+        :ref="setSidePanelRef"
         class="side-panel"
         :plan="plan"
         :editable="editable && canWrite"
@@ -82,6 +86,18 @@
         @locate-issue="onLocateIssue"
       />
     </div>
+
+    <el-drawer v-model="drawerVisible" size="360px" :with-header="false">
+      <PlanSidePanel
+        v-if="isNarrow && plan"
+        :ref="setSidePanelRef"
+        :plan="plan"
+        :editable="editable && canWrite"
+        :selected-ids="selectedSet"
+        @set-selected="onSetSelected"
+        @locate-issue="onLocateIssue"
+      />
+    </el-drawer>
 
     <el-dialog v-model="regenerateDialogVisible" title="重新產生建議" width="440px">
       <p>將保留 {{ manualAdjustedCount }} 筆手動調整。</p>
@@ -113,7 +129,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowDown } from '@element-plus/icons-vue'
 import { hasPermission } from '@/utils/auth'
@@ -342,7 +358,11 @@ function clearSelection(): void {
 watch(() => plan.value?.version, clearSelection)
 
 const rosterRef = ref<InstanceType<typeof PlanRosterTable> | null>(null)
-const sidePanelRef = ref<InstanceType<typeof PlanSidePanel> | null>(null)
+type SidePanelInstance = InstanceType<typeof PlanSidePanel>
+const sidePanelRef = ref<SidePanelInstance | null>(null)
+function setSidePanelRef(el: unknown): void {
+  if (el) sidePanelRef.value = el as SidePanelInstance
+}
 
 const planClassOptions = computed(() =>
   (plan.value?.classes ?? []).map(c => ({
@@ -369,10 +389,41 @@ async function onBulkOp(payload: {
   }
 }
 
-function onLocateIssue(issue: Schema<'IssueOut'>): void {
-  // Task 13（若有）：捲動/高亮對應班級或學生列；本 task 先接住事件避免未處理警告。
-  void issue
+async function onLocateIssue(issue: Schema<'IssueOut'>): Promise<void> {
+  if (issue.student_id != null) {
+    // 已分班 → 表格定位；否則 fallback 側欄待分班清單
+    if (rosterRef.value?.locateStudent(issue.student_id)) return
+    await sidePanelRef.value?.locateStudent(issue.student_id)
+    return
+  }
+  if (issue.plan_class_id != null) {
+    rosterRef.value?.locateClass(issue.plan_class_id)
+  }
 }
+
+// <1280px 側欄改抽屜（admin 桌機為主，僅作基本自適應；測試環境 happy-dom 有真
+// matchMedia 實作但預設 innerWidth=1024，測試檔 beforeAll 已 stub 回桌機寬幕）
+const isNarrow = ref(false)
+const drawerVisible = ref(false)
+let narrowMq: MediaQueryList | null = null
+const onNarrowChange = (e: MediaQueryListEvent | MediaQueryList): void => {
+  isNarrow.value = e.matches
+}
+
+onMounted(() => {
+  if (typeof window.matchMedia !== 'function') return
+  narrowMq = window.matchMedia('(max-width: 1279px)')
+  onNarrowChange(narrowMq)
+  narrowMq.addEventListener('change', onNarrowChange)
+})
+
+onUnmounted(() => {
+  narrowMq?.removeEventListener('change', onNarrowChange)
+})
+
+const totalIssueCount = computed(
+  () => (plan.value?.issues.blocking.length ?? 0) + (plan.value?.issues.warnings.length ?? 0),
+)
 
 // student-move：拖曳搬班尚未接線（brief：checkbox 批次優先），保留與 PlanBatchToolbar
 // 相同的派發路徑供未來串接。
@@ -494,6 +545,12 @@ async function onStudentMove(payload: {
   grid-template-columns: minmax(0, 1fr) 320px;
   gap: var(--space-5);
   align-items: start;
+}
+
+@media (max-width: 1279px) {
+  .workspace-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .main-column {

@@ -5,6 +5,15 @@ import ElementPlus, { ElMessageBox } from 'element-plus'
 
 beforeAll(() => {
   Element.prototype.scrollIntoView = vi.fn()
+  // happy-dom 的 matchMedia 是「真」實作（非 jsdom 的缺失狀態），且預設
+  // innerWidth=1024 會讓 `(max-width: 1279px)` 誤判為窄幕；固定回傳桌機寬幕，
+  // 讓既有測試維持側欄直接渲染（不進抽屜）的假設，比照
+  // PortalPunchCorrectionView.cardview.spec.ts 的 stub 慣例。
+  window.matchMedia = vi.fn().mockReturnValue({
+    matches: false, media: '(max-width: 1279px)', onchange: null,
+    addListener: vi.fn(), removeListener: vi.fn(),
+    addEventListener: vi.fn(), removeEventListener: vi.fn(), dispatchEvent: vi.fn(),
+  })
 })
 
 vi.mock('@/api/classroomYearPlan', () => ({
@@ -546,5 +555,48 @@ describe('YearPlanWorkspaceView', () => {
     expect(w.findComponent(PlanSidePanel).exists()).toBe(true)
     expect(w.find('.plan-issues-summary').exists()).toBe(true)
     expect(w.find('.plan-issues-panel').exists()).toBe(false)
+  })
+
+  it('locate-issue：學生在表格內 → 編班表對應 entry 閃爍高亮', async () => {
+    mockStatus.mockResolvedValue(statusDraft())
+    mockDetail.mockResolvedValue(detailDraftWithClasses())
+    const w = mountView()
+    await flushPromises()
+
+    const panel = w.findComponent(PlanSidePanel)
+    panel.vm.$emit('locate-issue', { code: 'plan_student_inactive', message: 'x', plan_class_id: null, student_id: 1 })
+    await flushPromises()
+
+    expect(w.find('.student-entry[data-student-id="1"]').classes()).toContain('flash-highlight')
+  })
+
+  it('locate-issue：學生未分班 → 側欄待分班列閃爍高亮', async () => {
+    mockStatus.mockResolvedValue(statusDraft())
+    mockDetail.mockResolvedValue(detailDraftWithClasses({
+      students: [
+        { id: 2, student_id: 'S002', name: '小華', source_classroom_name: '幼幼B', plan_class_id: null, disposition: 'promote', exclude_reason: null, manually_adjusted: false, current_grade_name: '幼幼' },
+      ],
+    }))
+    const w = mountView()
+    await flushPromises()
+
+    const panel = w.findComponent(PlanSidePanel)
+    panel.vm.$emit('locate-issue', { code: 'student_unassigned', message: 'x', plan_class_id: null, student_id: 2 })
+    await flushPromises()
+
+    expect(w.find('.unassigned-row[data-student-id="2"]').classes()).toContain('flash-highlight')
+  })
+
+  it('locate-issue：僅 plan_class_id → 班名格閃爍高亮', async () => {
+    mockStatus.mockResolvedValue(statusDraft())
+    mockDetail.mockResolvedValue(detailDraftWithClasses())
+    const w = mountView()
+    await flushPromises()
+
+    const panel = w.findComponent(PlanSidePanel)
+    panel.vm.$emit('locate-issue', { code: 'head_teacher_missing', message: 'x', plan_class_id: 10, student_id: null })
+    await flushPromises()
+
+    expect(w.find('.class-name-cell[data-plan-class-id="10"]').classes()).toContain('flash-highlight')
   })
 })
