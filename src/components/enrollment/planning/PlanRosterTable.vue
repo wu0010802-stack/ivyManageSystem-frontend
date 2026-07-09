@@ -17,7 +17,10 @@
               v-for="cls in flatClasses"
               :key="cls.id"
               class="class-name-cell"
-              :class="{ 'grade-border-right': lastClassIds.has(cls.id) }"
+              :class="{ 'grade-border-right': lastClassIds.has(cls.id), 'drop-target-active': dragOverClassId === cls.id }"
+              @dragover.prevent="onDragOver(cls.id)"
+              @dragleave="onDragLeave(cls.id)"
+              @drop="onDrop(cls.id)"
             >
               <span class="class-name-text">{{ cls.target_name }}</span>
               <el-button
@@ -93,26 +96,37 @@
               v-for="cls in flatClasses"
               :key="cls.id"
               class="student-cell"
-              :class="{ 'grade-border-right': lastClassIds.has(cls.id) }"
+              :class="{ 'grade-border-right': lastClassIds.has(cls.id), 'drop-target-active': dragOverClassId === cls.id }"
+              @dragover.prevent="onDragOver(cls.id)"
+              @dragleave="onDragLeave(cls.id)"
+              @drop="onDrop(cls.id)"
             >
               <!-- cellStudents 回傳 0~1 筆，藉 v-for 取得模板內的區域變數 student，
                    避免同一格重複 studentsByClass.get(cls.id)![rowIdx-1] 七次 -->
               <template v-for="student in cellStudents(cls.id, rowIdx)" :key="student.id">
-                <label class="student-line">
-                  <el-checkbox
-                    v-if="editable"
-                    class="student-checkbox"
-                    :model-value="selected.has(student.id)"
-                    @change="(val: string | number | boolean) => onToggleStudent(student.id, Boolean(val))"
-                  />
-                  <span class="student-name">{{ student.name }}</span>
-                  <span
-                    v-if="dispositionTag(student)"
-                    class="disposition-tag"
-                    :class="`disposition-tag-${student.disposition}`"
-                  >{{ dispositionTag(student) }}</span>
-                </label>
-                <div class="student-source">{{ student.source_classroom_name ?? '' }}</div>
+                <div
+                  class="student-entry"
+                  :draggable="editable"
+                  :class="{ dragging: draggingStudent?.id === student.id }"
+                  @dragstart="onDragStart(student, $event)"
+                  @dragend="onDragEnd"
+                >
+                  <label class="student-line">
+                    <el-checkbox
+                      v-if="editable"
+                      class="student-checkbox"
+                      :model-value="selected.has(student.id)"
+                      @change="(val: string | number | boolean) => onToggleStudent(student.id, Boolean(val))"
+                    />
+                    <span class="student-name">{{ student.name }}</span>
+                    <span
+                      v-if="dispositionTag(student)"
+                      class="disposition-tag"
+                      :class="`disposition-tag-${student.disposition}`"
+                    >{{ dispositionTag(student) }}</span>
+                  </label>
+                  <div class="student-source">{{ student.source_classroom_name ?? '' }}</div>
+                </div>
               </template>
             </td>
           </tr>
@@ -325,7 +339,45 @@ watch(
   },
 )
 
-// student-move：拖曳搬班留待未來接線，本 task 僅先把事件型別對齊 BulkStudentsRequest。
+// ── 拖曳搬班（原生 HTML5 DnD）：拖曳學生到別班欄 → emit student-move（op=assign）──
+// 僅 editable 時可拖；同班放回 no-op；派發經路（student-move → 父層 onStudentMove →
+// bulkUpdateStudents）與後端契約沿用既有實作，本元件只補 UI 觸發。
+const draggingStudent = ref<{ id: number; planClassId: number | null } | null>(null)
+const dragOverClassId = ref<number | null>(null)
+
+function onDragStart(student: PlanStudent, event: DragEvent): void {
+  if (!props.editable) return
+  draggingStudent.value = { id: student.id, planClassId: student.plan_class_id ?? null }
+  // jsdom 程式化 dispatch 無 dataTransfer；設值僅為真實瀏覽器的游標/拖曳影像。
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', String(student.id))
+  }
+}
+
+function onDragOver(classId: number): void {
+  // @dragover.prevent 已呼叫 preventDefault 允許 drop；此處僅追蹤高亮目標欄。
+  if (!draggingStudent.value) return
+  dragOverClassId.value = classId
+}
+
+function onDragLeave(classId: number): void {
+  if (dragOverClassId.value === classId) dragOverClassId.value = null
+}
+
+function onDrop(targetClassId: number): void {
+  const dragged = draggingStudent.value
+  draggingStudent.value = null
+  dragOverClassId.value = null
+  if (!props.editable || !dragged) return
+  if (dragged.planClassId === targetClassId) return // 同班放回 no-op，免無意義 version bump
+  emit('student-move', { studentIds: [dragged.id], op: 'assign', planClassId: targetClassId })
+}
+
+function onDragEnd(): void {
+  draggingStudent.value = null
+  dragOverClassId.value = null
+}
 </script>
 
 <style scoped>
@@ -422,6 +474,25 @@ watch(
 .student-cell {
   min-width: 96px;
   text-align: left;
+}
+
+.student-entry {
+  cursor: grab;
+}
+
+.student-entry[draggable="false"] {
+  cursor: default;
+}
+
+.student-entry.dragging {
+  opacity: 0.4;
+}
+
+.student-cell.drop-target-active,
+.class-name-cell.drop-target-active {
+  background: var(--color-primary-soft);
+  outline: 2px dashed var(--color-primary);
+  outline-offset: -2px;
 }
 
 .student-line {

@@ -162,4 +162,44 @@ describe('PlanRosterTable', () => {
     const events = w.emitted('select-students')!
     expect(events[events.length - 1][0]).toEqual([])
   })
+
+  // ── 拖曳搬班（原生 HTML5 DnD）──
+  // buildPlan 版面：class 10（小班A）／class 11（中班A）；學生 1/2/3 皆在 class 10。
+  // .student-cell 依 row×class 排列 → index 0,2,4=class10 欄；index 1,3,5=class11 欄。
+  it('拖曳學生到別班欄 drop → emit student-move（op=assign、單一學生、目標班 id）', async () => {
+    const w = mountTable()
+    // 第一個 .student-entry = 小明（student.id=1，原 class 10）
+    await w.findAll('.student-entry')[0].trigger('dragstart')
+    // index 1 = 第一列的 class 11 欄（空格）
+    await w.findAll('.student-cell')[1].trigger('drop')
+    const events = w.emitted('student-move')
+    expect(events).toBeTruthy()
+    expect(events![0][0]).toEqual({ studentIds: [1], op: 'assign', planClassId: 11 })
+  })
+
+  it('拖回原班（同一班欄）drop → 不 emit student-move（no-op）', async () => {
+    const w = mountTable()
+    await w.findAll('.student-entry')[0].trigger('dragstart') // 小明，原 class 10
+    await w.findAll('.student-cell')[0].trigger('drop') // index 0 = class 10 欄（原班）
+    expect(w.emitted('student-move')).toBeFalsy()
+  })
+
+  it('editable=false：學生 entry 不可拖（draggable=false），drop 也不 emit', async () => {
+    const w = mountTable({}, false)
+    const entry = w.findAll('.student-entry')[0]
+    expect(entry.attributes('draggable')).toBe('false')
+    await entry.trigger('dragstart')
+    await w.findAll('.student-cell')[1].trigger('drop')
+    expect(w.emitted('student-move')).toBeFalsy()
+  })
+
+  it('dragover 目標班欄 → 該欄所有格子帶 drop-target-active，原班欄不高亮', async () => {
+    const w = mountTable()
+    await w.findAll('.student-entry')[0].trigger('dragstart')
+    await w.findAll('.student-cell')[1].trigger('dragover') // class 11 欄
+    const cells = w.findAll('.student-cell')
+    expect(cells[1].classes()).toContain('drop-target-active') // class 11 欄格子
+    expect(cells[3].classes()).toContain('drop-target-active')
+    expect(cells[0].classes()).not.toContain('drop-target-active') // class 10 欄不高亮
+  })
 })
