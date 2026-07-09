@@ -265,6 +265,37 @@ describe('YearEndDetailView — 兩關簽核流程', () => {
 })
 
 /**
+ * 行級會計簽核條件必須與 BE `_apply_accounting_sign` 狀態機一致：
+ * BE 接受 DRAFT **或** SUPERVISOR_SIGNED（批次主管簽核後仍可行級會計簽），
+ * 舊條件只認 DRAFT → 批次主管簽核後行級按鈕消失、簽核欄空白。
+ */
+describe('YearEndDetailView — 行級會計簽核顯示條件（canAccountingSign）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockHasPermission.mockReturnValue(true)
+  })
+
+  it('SUPERVISOR_SIGNED 仍可行級會計簽核（對齊 BE 狀態機）', async () => {
+    setupApiMocks([makeSettlement({ status: 'SUPERVISOR_SIGNED' })])
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as { canAccountingSign: (row: { status: string }) => boolean }
+    expect(vm.canAccountingSign({ status: 'DRAFT' })).toBe(true)
+    expect(vm.canAccountingSign({ status: 'SUPERVISOR_SIGNED' })).toBe(true)
+    expect(vm.canAccountingSign({ status: 'ACCOUNTING_SIGNED' })).toBe(false)
+    expect(vm.canAccountingSign({ status: 'FINALIZED' })).toBe(false)
+  })
+
+  it('無 YEAR_END_ACCOUNTING 權限 → 任何狀態皆不可行級會計簽核', async () => {
+    setupApiMocks([makeSettlement({ status: 'SUPERVISOR_SIGNED' })])
+    mockHasPermission.mockImplementation((p: string) => p !== 'YEAR_END_ACCOUNTING')
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as { canAccountingSign: (row: { status: string }) => boolean }
+    expect(vm.canAccountingSign({ status: 'DRAFT' })).toBe(false)
+    expect(vm.canAccountingSign({ status: 'SUPERVISOR_SIGNED' })).toBe(false)
+  })
+})
+
+/**
  * Finding [4]（P3 perf）：load() 內四支彼此無依賴、皆只吃 cycleId 的 API 原為逐一 await，
  * 首載等待 ≈ 四次 round-trip 相加。改用 Promise.all 併發後應同時發出四支請求。
  * 以「四支皆回 pending 時仍全部被呼叫」作為併發的 characterization。

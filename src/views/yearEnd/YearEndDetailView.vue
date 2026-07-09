@@ -85,6 +85,12 @@ async function load() {
   }
 }
 
+// 對齊 BE _apply_accounting_sign 狀態機：DRAFT 或 SUPERVISOR_SIGNED 皆可會計簽核
+// （批次主管簽核後，行級「會計簽核」按鈕不可消失）
+function canAccountingSign(row: { status: string }): boolean {
+  return ['DRAFT', 'SUPERVISOR_SIGNED'].includes(row.status) && hasPermission('YEAR_END_ACCOUNTING')
+}
+
 async function sign(s: Settlement, stage: string) {
   busy.value = true
   try {
@@ -195,9 +201,9 @@ onMounted(load)
           </el-table-column>
           <el-table-column label="簽核" width="220">
             <template #default="{ row }">
-              <!-- 兩關流程：DRAFT → 會計簽核 → 老闆核定 -->
+              <!-- 簽核流程：DRAFT →（可選批次主管簽）→ 會計簽核 → 老闆核定 -->
               <el-button
-                v-if="row.status === 'DRAFT' && hasPermission('YEAR_END_ACCOUNTING')"
+                v-if="canAccountingSign(row)"
                 size="small"
                 @click="sign(row, 'accounting')"
               >會計簽核</el-button>
