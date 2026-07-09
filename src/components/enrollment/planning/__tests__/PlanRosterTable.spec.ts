@@ -1,10 +1,14 @@
 import { mount } from '@vue/test-utils'
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, beforeAll } from 'vitest'
 import ElementPlus from 'element-plus'
 import PlanRosterTable from '../PlanRosterTable.vue'
 import type { Schema } from '@/api/_generated/typed'
 
 type PlanDetail = Schema<'PlanDetailOut'>
+
+beforeAll(() => {
+  Element.prototype.scrollIntoView = vi.fn()
+})
 
 function buildPlan(overrides: Partial<PlanDetail> = {}): PlanDetail {
   return {
@@ -65,10 +69,10 @@ function buildPlan(overrides: Partial<PlanDetail> = {}): PlanDetail {
   }
 }
 
-function mountTable(overrides: Partial<PlanDetail> = {}, editable = true) {
+function mountTable(overrides: Partial<PlanDetail> = {}, editable = true, selectedIds = new Set<number>()) {
   return mount(PlanRosterTable, {
     global: { plugins: [ElementPlus] },
-    props: { plan: buildPlan(overrides), editable },
+    props: { plan: buildPlan(overrides), editable, selectedIds },
   })
 }
 
@@ -90,23 +94,15 @@ describe('PlanRosterTable', () => {
     expect(badges[1].classes()).not.toContain('over-capacity')
   })
 
-  it('留級學生顯示「留」tag；畢業/排除收合區顯示「畢」「除」tag', () => {
+  it('留級學生顯示「留」tag；promote 不帶 tag；畢業/排除不再渲染於本元件', () => {
     const w = mountTable()
     const retainTags = w.findAll('.disposition-tag-retain')
     expect(retainTags.length).toBe(1)
     expect(retainTags[0].text()).toBe('留')
-
-    // promote 是預設分派，不需要 tag
     expect(w.findAll('.disposition-tag-promote').length).toBe(0)
-
-    const graduateSection = w.find('.graduate-section')
-    expect(graduateSection.text()).toContain('小強')
-    expect(graduateSection.find('.disposition-tag-graduate').text()).toBe('畢')
-
-    const excludeSection = w.find('.exclude-section')
-    expect(excludeSection.text()).toContain('小英')
-    expect(excludeSection.text()).toContain('轉學')
-    expect(excludeSection.find('.disposition-tag-exclude').text()).toBe('除')
+    expect(w.find('.graduate-section').exists()).toBe(false)
+    expect(w.find('.exclude-section').exists()).toBe(false)
+    expect(w.find('.side-collapse').exists()).toBe(false)
   })
 
   it('教師未指派顯示「待確認」tag，hover 顯示原班三師姓名（None 顯「—」）', () => {
@@ -121,13 +117,15 @@ describe('PlanRosterTable', () => {
     expect(unassignedTags[1].attributes('title')).toBe('原班美語老師：舊美語老師')
   })
 
-  it('勾選學生 checkbox 會 emit select-students（累積目前勾選集合）', async () => {
-    const w = mountTable()
-    const checkbox = w.findComponent({ name: 'ElCheckbox' })
-    await checkbox.find('input[type="checkbox"]').setValue(true)
-    const events = w.emitted('select-students')
-    expect(events).toBeTruthy()
-    expect(events![0][0]).toEqual([1])
+  it('勾選學生 checkbox emit set-selected([id], checked)；勾選狀態由 selectedIds prop 決定', async () => {
+    const w = mountTable({}, true, new Set([2]))
+    const checkboxes = w.findAllComponents({ name: 'ElCheckbox' })
+    // 學生 2（小華，selectedIds 內）應為勾選狀態
+    const checkedBox = checkboxes.find(c => (c.props('modelValue') as boolean) === true)
+    expect(checkedBox).toBeTruthy()
+    // 勾學生 1 → emit set-selected([1], true)
+    await checkboxes[0].find('input[type="checkbox"]').setValue(true)
+    expect(w.emitted('set-selected')![0]).toEqual([[1], true])
   })
 
   it('editable=false 時不渲染 checkbox', () => {
@@ -146,21 +144,6 @@ describe('PlanRosterTable', () => {
   it('editable=false 時不渲染班級編輯鈕', () => {
     const w = mountTable({}, false)
     expect(w.findAll('.class-edit-btn').length).toBe(0)
-  })
-
-  it('plan.version 變動時清空勾選集合並 emit select-students([])', async () => {
-    const plan = buildPlan()
-    const w = mount(PlanRosterTable, {
-      global: { plugins: [ElementPlus] },
-      props: { plan, editable: true },
-    })
-    const checkbox = w.findComponent({ name: 'ElCheckbox' })
-    await checkbox.find('input[type="checkbox"]').setValue(true)
-    expect(w.emitted('select-students')![0][0]).toEqual([1])
-
-    await w.setProps({ plan: { ...plan, version: 2 } })
-    const events = w.emitted('select-students')!
-    expect(events[events.length - 1][0]).toEqual([])
   })
 
   // ── 拖曳搬班（原生 HTML5 DnD）──
@@ -201,5 +184,49 @@ describe('PlanRosterTable', () => {
     expect(cells[1].classes()).toContain('drop-target-active') // class 11 欄格子
     expect(cells[3].classes()).toContain('drop-target-active')
     expect(cells[0].classes()).not.toContain('drop-target-active') // class 10 欄不高亮
+  })
+
+  // ── 外部拖入（側欄待分班學生拖入，無內部 dragstart）──
+  it('外部拖入（無內部 dragstart）：drop 帶 dataTransfer student id → emit student-move', async () => {
+    const w = mountTable()
+    await w.findAll('.student-cell')[1].trigger('drop', {
+      dataTransfer: { getData: () => '42' },
+    })
+    const events = w.emitted('student-move')
+    expect(events).toBeTruthy()
+    expect(events![0][0]).toEqual({ studentIds: [42], op: 'assign', planClassId: 11 })
+  })
+
+  it('外部拖入 dataTransfer 值非數字 → 不 emit', async () => {
+    const w = mountTable()
+    await w.findAll('.student-cell')[1].trigger('drop', {
+      dataTransfer: { getData: () => 'not-a-number' },
+    })
+    expect(w.emitted('student-move')).toBeFalsy()
+  })
+
+  it('外部拖 dragover（dataTransfer.types 含 text/plain）→ 目標欄高亮', async () => {
+    const w = mountTable()
+    await w.findAll('.student-cell')[1].trigger('dragover', {
+      dataTransfer: { types: ['text/plain'] },
+    })
+    expect(w.findAll('.student-cell')[1].classes()).toContain('drop-target-active')
+  })
+
+  // ── locate（供 Task 5 view 側欄跳轉聚焦）──
+  it('locateStudent：存在 → 回 true 且該 entry 帶 flash-highlight；不存在 → false', () => {
+    const w = mountTable()
+    const vm = w.vm as unknown as { locateStudent: (id: number) => boolean; locateClass: (id: number) => boolean }
+    expect(vm.locateStudent(1)).toBe(true)
+    expect(w.find('.student-entry[data-student-id="1"]').classes()).toContain('flash-highlight')
+    expect(vm.locateStudent(999)).toBe(false)
+  })
+
+  it('locateClass：存在 → 回 true 且班名格帶 flash-highlight；不存在 → false', () => {
+    const w = mountTable()
+    const vm = w.vm as unknown as { locateClass: (id: number) => boolean }
+    expect(vm.locateClass(10)).toBe(true)
+    expect(w.find('.class-name-cell[data-plan-class-id="10"]').classes()).toContain('flash-highlight')
+    expect(vm.locateClass(999)).toBe(false)
   })
 })

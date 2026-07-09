@@ -1,5 +1,5 @@
 <template>
-  <div class="plan-roster-wrapper">
+  <div ref="rootEl" class="plan-roster-wrapper">
     <div class="plan-roster-scroll">
       <table class="plan-roster-table">
         <thead>
@@ -17,10 +17,11 @@
               v-for="cls in flatClasses"
               :key="cls.id"
               class="class-name-cell"
+              :data-plan-class-id="cls.id"
               :class="{ 'grade-border-right': lastClassIds.has(cls.id), 'drop-target-active': dragOverClassId === cls.id }"
-              @dragover.prevent="onDragOver(cls.id)"
+              @dragover.prevent="onDragOver(cls.id, $event)"
               @dragleave="onDragLeave(cls.id)"
-              @drop="onDrop(cls.id)"
+              @drop="onDrop(cls.id, $event)"
             >
               <span class="class-name-text">{{ cls.target_name }}</span>
               <el-button
@@ -97,15 +98,16 @@
               :key="cls.id"
               class="student-cell"
               :class="{ 'grade-border-right': lastClassIds.has(cls.id), 'drop-target-active': dragOverClassId === cls.id }"
-              @dragover.prevent="onDragOver(cls.id)"
+              @dragover.prevent="onDragOver(cls.id, $event)"
               @dragleave="onDragLeave(cls.id)"
-              @drop="onDrop(cls.id)"
+              @drop="onDrop(cls.id, $event)"
             >
               <!-- cellStudents 回傳 0~1 筆，藉 v-for 取得模板內的區域變數 student，
                    避免同一格重複 studentsByClass.get(cls.id)![rowIdx-1] 七次 -->
               <template v-for="student in cellStudents(cls.id, rowIdx)" :key="student.id">
                 <div
                   class="student-entry"
+                  :data-student-id="student.id"
                   :draggable="editable"
                   :class="{ dragging: draggingStudent?.id === student.id }"
                   @dragstart="onDragStart(student, $event)"
@@ -115,8 +117,8 @@
                     <el-checkbox
                       v-if="editable"
                       class="student-checkbox"
-                      :model-value="selected.has(student.id)"
-                      @change="(val: string | number | boolean) => onToggleStudent(student.id, Boolean(val))"
+                      :model-value="props.selectedIds.has(student.id)"
+                      @change="(val: string | number | boolean) => emit('set-selected', [student.id], Boolean(val))"
                     />
                     <span class="student-name">{{ student.name }}</span>
                     <span
@@ -149,51 +151,11 @@
         </tfoot>
       </table>
     </div>
-
-    <el-collapse v-model="openSections" class="side-collapse">
-      <!-- 未分班（promote/retain 但無 plan_class_id）：正常流程不應出現，僅防呆顯示避免資料被靜默吃掉 -->
-      <el-collapse-item
-        v-if="unassignedStudents.length"
-        name="unassigned"
-        class="side-section unassigned-section"
-        :title="`待分班（${unassignedStudents.length}）`"
-      >
-        <ul class="side-list">
-          <li v-for="s in unassignedStudents" :key="s.id">
-            <span class="student-name">{{ s.name }}</span>
-            <span class="student-source">{{ s.source_classroom_name ?? '' }}</span>
-          </li>
-        </ul>
-      </el-collapse-item>
-
-      <!-- 畢業名單 -->
-      <el-collapse-item name="graduate" class="side-section graduate-section" :title="`畢業名單（${graduateStudents.length}）`">
-        <ul class="side-list">
-          <li v-for="s in graduateStudents" :key="s.id">
-            <span class="student-name">{{ s.name }}</span>
-            <span class="disposition-tag disposition-tag-graduate">畢</span>
-            <span class="student-source">{{ s.source_classroom_name ?? '' }}</span>
-          </li>
-        </ul>
-      </el-collapse-item>
-
-      <!-- 排除名單 -->
-      <el-collapse-item name="exclude" class="side-section exclude-section" :title="`排除名單（${excludeStudents.length}）`">
-        <ul class="side-list">
-          <li v-for="s in excludeStudents" :key="s.id">
-            <span class="student-name">{{ s.name }}</span>
-            <span class="disposition-tag disposition-tag-exclude">除</span>
-            <span class="student-source">{{ s.source_classroom_name ?? '' }}</span>
-            <span v-if="s.exclude_reason" class="exclude-reason">（{{ s.exclude_reason }}）</span>
-          </li>
-        </ul>
-      </el-collapse-item>
-    </el-collapse>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed } from 'vue'
 import { Edit } from '@element-plus/icons-vue'
 import type { Schema } from '@/api/_generated/typed'
 import type { BulkOp } from '@/composables/useYearPlanWorkspace'
@@ -205,10 +167,11 @@ type PlanStudent = Schema<'PlanStudentOut'>
 const props = defineProps<{
   plan: PlanDetail
   editable: boolean
+  selectedIds: Set<number>
 }>()
 
 const emit = defineEmits<{
-  'select-students': [ids: number[]]
+  'set-selected': [ids: number[], checked: boolean]
   'class-edit': [planClassId: number]
   // 對齊後端 BulkStudentsRequest 語意（批次 student_ids＋op＋plan_class_id）；拖曳搬班
   // 尚未接線（brief 明示 checkbox 批次優先，拖曳延後），單人移動＝ids 長度 1。
@@ -300,17 +263,6 @@ function cellStudents(classId: number, rowIdx: number): PlanStudent[] {
   return student ? [student] : []
 }
 
-const unassignedStudents = computed(() =>
-  props.plan.students.filter(
-    s => (s.disposition === 'promote' || s.disposition === 'retain') && s.plan_class_id == null
-  )
-)
-const graduateStudents = computed(() => props.plan.students.filter(s => s.disposition === 'graduate'))
-const excludeStudents = computed(() => props.plan.students.filter(s => s.disposition === 'exclude'))
-
-// 三個側欄收合區預設全開（沿用 Task 11 行為），改用 el-collapse 的 name 陣列。
-const openSections = ref<string[]>(['unassigned', 'graduate', 'exclude'])
-
 function dispositionTag(student: PlanStudent): string | null {
   switch (student.disposition) {
     case 'retain': return '留'
@@ -319,25 +271,6 @@ function dispositionTag(student: PlanStudent): string | null {
     default: return null // promote 為預設分派，不需要 tag
   }
 }
-
-// ── 勾選集合：父層 PlanBatchToolbar 消費 select-students 事件實作批次操作 ──
-const selected = ref<Set<number>>(new Set())
-
-function onToggleStudent(studentId: number, checked: boolean): void {
-  if (checked) selected.value.add(studentId)
-  else selected.value.delete(studentId)
-  emit('select-students', Array.from(selected.value))
-}
-
-// 草稿被其他操作（regenerate/發布/批次調整）異動後 version 會遞增；重新載入的新 plan
-// 不該殘留舊版本的勾選集合，否則使用者可能對已不存在的分派繼續批次操作。
-watch(
-  () => props.plan.version,
-  () => {
-    selected.value.clear()
-    emit('select-students', [])
-  },
-)
 
 // ── 拖曳搬班（原生 HTML5 DnD）：拖曳學生到別班欄 → emit student-move（op=assign）──
 // 僅 editable 時可拖；同班放回 no-op；派發經路（student-move → 父層 onStudentMove →
@@ -355,21 +288,31 @@ function onDragStart(student: PlanStudent, event: DragEvent): void {
   }
 }
 
-function onDragOver(classId: number): void {
-  // @dragover.prevent 已呼叫 preventDefault 允許 drop；此處僅追蹤高亮目標欄。
-  if (!draggingStudent.value) return
-  dragOverClassId.value = classId
+function onDragOver(classId: number, event: DragEvent): void {
+  // 內部拖曳（draggingStudent）或外部拖入（dataTransfer 帶 text/plain，如側欄待分班）皆高亮
+  if (draggingStudent.value || event.dataTransfer?.types.includes('text/plain')) {
+    dragOverClassId.value = classId
+  }
 }
 
 function onDragLeave(classId: number): void {
   if (dragOverClassId.value === classId) dragOverClassId.value = null
 }
 
-function onDrop(targetClassId: number): void {
-  const dragged = draggingStudent.value
+function onDrop(targetClassId: number, event: DragEvent): void {
+  const internal = draggingStudent.value
   draggingStudent.value = null
   dragOverClassId.value = null
-  if (!props.editable || !dragged) return
+  if (!props.editable) return
+  let dragged = internal
+  if (!dragged) {
+    // 外部拖入 fallback（側欄待分班列）：dataTransfer 攜帶 student.id；
+    // 未分班學生 planClassId 視為 null → 任何班皆非同班、必派發
+    const raw = event.dataTransfer?.getData('text/plain')
+    const id = raw != null && raw !== '' ? Number(raw) : NaN
+    if (!Number.isInteger(id)) return
+    dragged = { id, planClassId: null }
+  }
   if (dragged.planClassId === targetClassId) return // 同班放回 no-op，免無意義 version bump
   emit('student-move', { studentIds: [dragged.id], op: 'assign', planClassId: targetClassId })
 }
@@ -378,33 +321,114 @@ function onDragEnd(): void {
   draggingStudent.value = null
   dragOverClassId.value = null
 }
+
+// ── locate（供 Task 5 側欄跳轉聚焦）：捲動至目標並閃爍高亮；找不到回 false ──
+const rootEl = ref<HTMLElement | null>(null)
+const flashTimers = new Map<Element, number>()
+
+function _flash(el: Element): void {
+  el.classList.remove('flash-highlight')
+  void (el as HTMLElement).offsetWidth // 強制 reflow 讓 animation 可重複觸發
+  el.classList.add('flash-highlight')
+  const prev = flashTimers.get(el)
+  if (prev != null) window.clearTimeout(prev)
+  flashTimers.set(el, window.setTimeout(() => {
+    el.classList.remove('flash-highlight')
+    flashTimers.delete(el)
+  }, 1600))
+}
+
+function locateStudent(studentId: number): boolean {
+  const el = rootEl.value?.querySelector(`.student-entry[data-student-id="${studentId}"]`)
+  if (!el) return false
+  el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' })
+  _flash(el)
+  return true
+}
+
+function locateClass(planClassId: number): boolean {
+  const el = rootEl.value?.querySelector(`.class-name-cell[data-plan-class-id="${planClassId}"]`)
+  if (!el) return false
+  el.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' })
+  _flash(el)
+  return true
+}
+
+defineExpose({ locateStudent, locateClass })
 </script>
 
 <style scoped>
 .plan-roster-wrapper {
+  --yp-h-grade: 34px;
+  --yp-h-name: 40px;
   font-size: 14px;
   color: var(--text-primary);
 }
 
 .plan-roster-scroll {
-  overflow-x: auto;
+  overflow: auto;
+  /* 垂直捲動收在表格容器內，sticky 表頭對此容器生效（el-main 為外層捲動根，
+     對 window/el-main sticky 需算 header 高度，內部容器最穩） */
+  max-height: calc(100vh - 230px);
 }
 
 .plan-roster-table {
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   white-space: nowrap;
   color: var(--text-primary);
 }
 
 .plan-roster-table td {
-  border: 1px solid var(--neutral-300);
+  border-right: 1px solid var(--neutral-300);
+  border-bottom: 1px solid var(--neutral-300);
   padding: 5px 8px;
   text-align: center;
   vertical-align: top;
+  background: var(--surface-color);
+}
+
+/* separate 模式補上外框左/上緣 */
+.plan-roster-table thead tr:first-child td {
+  border-top: 1px solid var(--neutral-300);
+}
+
+.plan-roster-table td:first-child {
+  border-left: 1px solid var(--neutral-300);
+}
+
+/* ── sticky 表頭：年級/班名/人數三列凍結；三師列隨捲動離場 ── */
+.plan-roster-table thead tr:nth-child(1) td {
+  position: sticky;
+  top: 0;
+  height: var(--yp-h-grade);
+  z-index: 3;
+}
+
+.plan-roster-table thead tr:nth-child(2) td {
+  position: sticky;
+  top: var(--yp-h-grade);
+  height: var(--yp-h-name);
+  z-index: 3;
+}
+
+.plan-roster-table thead tr:nth-child(3) td {
+  position: sticky;
+  top: calc(var(--yp-h-grade) + var(--yp-h-name));
+  z-index: 3;
+}
+
+/* 左上交會格（前三列的 row-label / corner）同時 sticky 左+上，須壓過單向 sticky 格 */
+.plan-roster-table thead tr:nth-child(-n + 3) td.row-label,
+.plan-roster-table thead td.corner-cell {
+  z-index: 4;
 }
 
 .corner-cell {
-  border: none !important;
+  border-right: none !important;
+  border-top: none !important;
+  border-left: none !important;
+  background: transparent;
 }
 
 .grade-group-cell {
@@ -549,27 +573,18 @@ tfoot tr:first-child td {
   padding-left: 14px !important;
 }
 
-.side-collapse {
-  margin-top: var(--space-4);
+@keyframes flash-highlight {
+  0% {
+    background: var(--color-primary-soft);
+    box-shadow: inset 0 0 0 2px var(--color-primary);
+  }
+  100% {
+    background: transparent;
+    box-shadow: none;
+  }
 }
 
-.side-list {
-  list-style: none;
-  margin: var(--space-2) 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.side-list li {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.exclude-reason {
-  font-size: 12px;
-  color: var(--text-secondary);
+.flash-highlight {
+  animation: flash-highlight 1.6s ease-out;
 }
 </style>
