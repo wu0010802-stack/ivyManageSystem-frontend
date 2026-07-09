@@ -9,7 +9,7 @@
           <div class="total-chip"><span class="total-label">排除</span><span class="total-value">{{ preview.totals.excluded_count }}</span></div>
         </div>
 
-        <PlanIssuesPanel :issues="preview.issues" class="publish-issues" />
+        <PlanIssuesSummary :issues="preview.issues" class="publish-issues" />
 
         <div class="section">
           <h4>逐班分派</h4>
@@ -75,7 +75,7 @@
 import { ref, computed, watch } from 'vue'
 import { getClassroomYearPlanPreview } from '@/api/classroomYearPlan'
 import { apiError } from '@/utils/error'
-import PlanIssuesPanel from '@/components/enrollment/planning/PlanIssuesPanel.vue'
+import PlanIssuesSummary from '@/components/enrollment/planning/PlanIssuesSummary.vue'
 import type { Schema } from '@/api/_generated/typed'
 
 type PreviewOut = Schema<'PreviewOut'>

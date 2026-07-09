@@ -77,6 +77,9 @@ describe('PlanPublishDialog', () => {
     expect(vmOf(w).canPublish).toBe(false)
     const confirmBtn = w.findAllComponents({ name: 'ElButton' }).find(b => b.text().includes('確認發布'))
     expect(confirmBtn?.props('disabled')).toBe(true)
+    // PlanIssuesSummary 預設收合，逐筆 message 需展開組標題才會渲染（Task 5 起
+    // PlanPublishDialog 改用 PlanIssuesSummary 取代已刪除的 PlanIssuesPanel）
+    await w.find('.group-toggle').trigger('click')
     expect(w.text()).toContain('分派人數超過容量')
   })
 

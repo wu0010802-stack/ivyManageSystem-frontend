@@ -1,7 +1,11 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import ElementPlus, { ElMessageBox } from 'element-plus'
+
+beforeAll(() => {
+  Element.prototype.scrollIntoView = vi.fn()
+})
 
 vi.mock('@/api/classroomYearPlan', () => ({
   getClassroomYearPlanStatus: vi.fn(),
@@ -41,6 +45,7 @@ import {
 import YearPlanWorkspaceView from '../YearPlanWorkspaceView.vue'
 import PlanBatchToolbar from '@/components/enrollment/planning/PlanBatchToolbar.vue'
 import PlanRosterTable from '@/components/enrollment/planning/PlanRosterTable.vue'
+import PlanSidePanel from '@/components/enrollment/planning/PlanSidePanel.vue'
 
 function mountView() {
   return mount(YearPlanWorkspaceView, { global: { plugins: [ElementPlus] } })
@@ -438,5 +443,92 @@ describe('YearPlanWorkspaceView', () => {
     expect(mockBulkStudents).toHaveBeenCalledWith(5, {
       base_version: 1, op: 'assign', student_ids: [1], plan_class_id: 11, exclude_reason: null,
     })
+  })
+
+  it('無勾選時批次工具列不渲染；勾選後浮出；清除選取後隱藏', async () => {
+    mockStatus.mockResolvedValue(statusDraft())
+    mockDetail.mockResolvedValue(detailDraftWithClasses())
+
+    const w = mountView()
+    await flushPromises()
+    expect(w.findComponent(PlanBatchToolbar).exists()).toBe(false)
+
+    const checkbox = w.findComponent({ name: 'ElCheckbox' })
+    await checkbox.find('input[type="checkbox"]').setValue(true)
+    await flushPromises()
+    const toolbar = w.findComponent(PlanBatchToolbar)
+    expect(toolbar.exists()).toBe(true)
+
+    toolbar.vm.$emit('clear-selection')
+    await flushPromises()
+    expect(w.findComponent(PlanBatchToolbar).exists()).toBe(false)
+  })
+
+  it('側欄與編班表共用 selection：側欄 set-selected 的學生與表格勾選合併派發 bulk op', async () => {
+    mockStatus.mockResolvedValue(statusDraft())
+    // 一位已分班（id=1）+ 一位未分班（id=2）
+    mockDetail.mockResolvedValue(detailDraftWithClasses({
+      students: [
+        { id: 1, student_id: 'S001', name: '小明', source_classroom_name: '幼幼A', plan_class_id: 10, disposition: 'promote', exclude_reason: null, manually_adjusted: false, current_grade_name: '幼幼' },
+        { id: 2, student_id: 'S002', name: '小華', source_classroom_name: '幼幼B', plan_class_id: null, disposition: 'promote', exclude_reason: null, manually_adjusted: false, current_grade_name: '幼幼' },
+      ],
+    }))
+    mockBulkStudents.mockResolvedValue({ data: { updated_count: 2, version: 2 } })
+
+    const w = mountView()
+    await flushPromises()
+
+    // 表格勾 id=1（第一個 checkbox 是 roster 的學生 1）
+    const rosterCheckbox = w.findComponent(PlanRosterTable).findComponent({ name: 'ElCheckbox' })
+    await rosterCheckbox.find('input[type="checkbox"]').setValue(true)
+    // 側欄勾 id=2
+    const panel = w.findComponent(PlanSidePanel)
+    panel.vm.$emit('set-selected', [2], true)
+    await flushPromises()
+
+    const toolbar = w.findComponent(PlanBatchToolbar)
+    expect(toolbar.props('selectedCount')).toBe(2)
+
+    const vm = toolbar.vm as unknown as { assignTargetId: number | null; applyAssign: () => void }
+    vm.assignTargetId = 10
+    vm.applyAssign()
+    await flushPromises()
+
+    expect(mockBulkStudents).toHaveBeenCalledWith(5, {
+      base_version: 1, op: 'assign', student_ids: [1, 2], plan_class_id: 10, exclude_reason: null,
+    })
+  })
+
+  it('plan.version 遞增（mutation 成功 reload）後 selection 清空', async () => {
+    mockStatus.mockResolvedValue(statusDraft())
+    mockDetail.mockResolvedValueOnce(detailDraftWithClasses())
+    mockBulkStudents.mockResolvedValue({ data: { updated_count: 1, version: 2 } })
+    // reload 後 version=2
+    mockDetail.mockResolvedValue(detailDraftWithClasses({ version: 2 }))
+
+    const w = mountView()
+    await flushPromises()
+
+    const checkbox = w.findComponent({ name: 'ElCheckbox' })
+    await checkbox.find('input[type="checkbox"]').setValue(true)
+    await flushPromises()
+    const toolbar = w.findComponent(PlanBatchToolbar)
+    const vm = toolbar.vm as unknown as { assignTargetId: number | null; applyAssign: () => void }
+    vm.assignTargetId = 10
+    vm.applyAssign()
+    await flushPromises()
+
+    // 派發成功 → reload version 2 → selection 清空 → 工具列消失
+    expect(w.findComponent(PlanBatchToolbar).exists()).toBe(false)
+  })
+
+  it('渲染 PlanSidePanel（含問題聚合摘要），不再渲染舊 PlanIssuesPanel 平鋪列', async () => {
+    mockStatus.mockResolvedValue(statusDraft())
+    mockDetail.mockResolvedValue(detailDraft())
+    const w = mountView()
+    await flushPromises()
+    expect(w.findComponent(PlanSidePanel).exists()).toBe(true)
+    expect(w.find('.plan-issues-summary').exists()).toBe(true)
+    expect(w.find('.plan-issues-panel').exists()).toBe(false)
   })
 })

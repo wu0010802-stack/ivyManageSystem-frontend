@@ -38,21 +38,34 @@
     </div>
 
     <div v-else-if="plan" class="workspace-body">
-      <PlanIssuesPanel :issues="plan.issues" @locate-issue="onLocateIssue" />
-      <PlanBatchToolbar
-        v-if="editable"
-        class="batch-toolbar"
-        :selected-count="selectedStudentIds.length"
-        :plan-classes="planClassOptions"
-        :disabled="loading"
-        @bulk-op="onBulkOp"
-      />
-      <PlanRosterTable
+      <div class="main-column">
+        <PlanBatchToolbar
+          v-if="editable && canWrite && selectedStudentIds.length > 0"
+          class="batch-toolbar"
+          :selected-count="selectedStudentIds.length"
+          :plan-classes="planClassOptions"
+          :disabled="loading"
+          @bulk-op="onBulkOp"
+          @clear-selection="clearSelection"
+        />
+        <PlanRosterTable
+          ref="rosterRef"
+          :plan="plan"
+          :editable="editable && canWrite"
+          :selected-ids="selectedSet"
+          @set-selected="onSetSelected"
+          @class-edit="onClassEdit"
+          @student-move="onStudentMove"
+        />
+      </div>
+      <PlanSidePanel
+        ref="sidePanelRef"
+        class="side-panel"
         :plan="plan"
         :editable="editable && canWrite"
-        @select-students="onSelectStudents"
-        @class-edit="onClassEdit"
-        @student-move="onStudentMove"
+        :selected-ids="selectedSet"
+        @set-selected="onSetSelected"
+        @locate-issue="onLocateIssue"
       />
     </div>
 
@@ -92,7 +105,7 @@ import { hasPermission } from '@/utils/auth'
 import { useYearPlanWorkspace } from '@/composables/useYearPlanWorkspace'
 import type { BulkOp } from '@/composables/useYearPlanWorkspace'
 import PlanRosterTable from '@/components/enrollment/planning/PlanRosterTable.vue'
-import PlanIssuesPanel from '@/components/enrollment/planning/PlanIssuesPanel.vue'
+import PlanSidePanel from '@/components/enrollment/planning/PlanSidePanel.vue'
 import PlanBatchToolbar from '@/components/enrollment/planning/PlanBatchToolbar.vue'
 import PlanClassEditDialog from '@/components/enrollment/planning/PlanClassEditDialog.vue'
 import PlanPublishDialog from '@/components/enrollment/planning/PlanPublishDialog.vue'
@@ -291,12 +304,29 @@ async function onClassDelete(classId: number): Promise<void> {
   }
 }
 
-// ── 學生批次操作 ──
-const selectedStudentIds = ref<number[]>([])
+// ── 學生批次操作：selection 單一事實來源（表格 + 側欄待分班共用；批次工具列據此
+// 派發）。selectedSet 用 ref<Set<number>> 而非 ref<number[]>——Vue 會把 Set 深度
+// reactive 化，故 .add()/.delete()/.clear() 就地變更即可觸發子元件 computed
+// （props.selectedIds.has()）更新，不需要整包重新指派新 Set。──
+const selectedSet = ref<Set<number>>(new Set())
+const selectedStudentIds = computed(() => Array.from(selectedSet.value))
 
-function onSelectStudents(ids: number[]): void {
-  selectedStudentIds.value = ids
+function onSetSelected(ids: number[], checked: boolean): void {
+  for (const id of ids) {
+    if (checked) selectedSet.value.add(id)
+    else selectedSet.value.delete(id)
+  }
 }
+
+function clearSelection(): void {
+  selectedSet.value.clear()
+}
+
+// 草稿被異動（regenerate/發布/批次調整）後 version 遞增；新 plan 不殘留舊勾選
+watch(() => plan.value?.version, clearSelection)
+
+const rosterRef = ref<InstanceType<typeof PlanRosterTable> | null>(null)
+const sidePanelRef = ref<InstanceType<typeof PlanSidePanel> | null>(null)
 
 const planClassOptions = computed(() =>
   (plan.value?.classes ?? []).map(c => ({
@@ -319,7 +349,7 @@ async function onBulkOp(payload: {
   )
   if (ok) {
     ElMessage.success('已更新學生分派')
-    selectedStudentIds.value = []
+    clearSelection()
   }
 }
 
@@ -459,15 +489,34 @@ async function onStudentMove(payload: {
 }
 
 .workspace-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.main-column {
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
+  gap: var(--space-3);
+}
+
+.side-panel {
+  position: sticky;
+  top: var(--space-3);
+  max-height: calc(100vh - 140px);
+  overflow-y: auto;
 }
 
 .batch-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
   border: 1px solid var(--neutral-200);
   border-radius: var(--radius-md);
   padding: var(--space-2) var(--space-3);
-  background: var(--neutral-50);
+  background: var(--surface-color);
+  box-shadow: var(--shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.08));
 }
 </style>
