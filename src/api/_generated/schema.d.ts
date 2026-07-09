@@ -11753,8 +11753,9 @@ export interface paths {
          * @description 月度現金收支表（現金收付制，原稱「月度損益表」）：試算表 layout，
          *     4 section × 12 月 × row + totals + pending_items。
          *
-         *     Phase 1 範圍：只整合已有資料來源的列；未整合的 user 自家詞彙、部分紅利細項、
-         *     個別廠商分項落於 pending_items（不假裝填 0）；固定費用/雜項收款已整合。
+         *     年終撥款列與個別廠商分類 breakdown 列已整合入表；固定費用/雜項收款亦已整合。
+         *     尚未整合的 user 自訂指標、預繳、畢冊、部分紅利細項、補充保費等仍落於
+         *     pending_items（不假裝填 0）。
          *
          *     快取：sub-category `reports_monthly_pnl`，TTL 30 分；與 /finance-summary 共用
          *     `utils.finance_cache.invalidate_finance_summary_cache()` 失效掛鉤，所有 fees /
@@ -19987,6 +19988,8 @@ export interface components {
             employee_name: string;
             /** Payable Amount */
             payable_amount: string;
+            /** Remark */
+            remark?: string | null;
             /** Settlement Id */
             settlement_id: number;
             /** Special Bonuses */
@@ -21220,6 +21223,8 @@ export interface components {
             excess_amount?: number | string | null;
             /** Hire Months Override */
             hire_months_override?: number | string | null;
+            /** Remark */
+            remark?: string | null;
         };
         /** ManualSnapshotRequest */
         ManualSnapshotRequest: {
@@ -30237,6 +30242,8 @@ export interface components {
         VendorPaymentCreate: {
             /** Amount */
             amount: number | string;
+            /** Category */
+            category: string;
             /** Description */
             description?: string | null;
             /** Invoice Number */
@@ -30281,6 +30288,8 @@ export interface components {
             amount?: number | null;
             /** Attachments */
             attachments: components["schemas"]["VendorPaymentAttachmentMetaOut"][];
+            /** Category */
+            category: string;
             /** Created At */
             created_at?: string | null;
             /** Created By Id */
@@ -30353,6 +30362,8 @@ export interface components {
         VendorPaymentUpdate: {
             /** Amount */
             amount?: number | string | null;
+            /** Category */
+            category?: string | null;
             /** Description */
             description?: string | null;
             /** Invoice Number */
