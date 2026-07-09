@@ -178,7 +178,7 @@ describe('YearPlanWorkspaceView', () => {
     expect(mockDetail).toHaveBeenCalledWith(5)
     expect(w.find('.empty-state').exists()).toBe(false)
     expect(w.find('.status-badge').text()).toContain('草稿')
-    expect(w.find('.issue-chip-blocking').text()).toContain('1')
+    expect(w.find('.severity-blocking .severity-count').text()).toBe('1')
   })
 
   it('載入中顯示 skeleton；狀態徽章依 state 渲染且動作鈕依 state disabled', async () => {
@@ -192,9 +192,9 @@ describe('YearPlanWorkspaceView', () => {
     resolveStatus(statusDraft())
     await flushPromises()
     expect(w.find('.loading-skeleton').exists()).toBe(false)
-    // draft 狀態：可重新產生建議、不可撤回發布
-    expect((w.find('.btn-regenerate').element as HTMLButtonElement).disabled).toBe(false)
-    expect((w.find('.btn-unpublish').element as HTMLButtonElement).disabled).toBe(true)
+    // draft 狀態：顯示 draft 動作（新增班/重生成/發布），不顯示撤回發布
+    expect(w.find('.btn-regenerate').exists()).toBe(true)
+    expect(w.find('.btn-unpublish').exists()).toBe(false)
     // 有 blocking issue → 發布鈕 disabled
     expect((w.find('.btn-publish').element as HTMLButtonElement).disabled).toBe(true)
   })
@@ -302,7 +302,7 @@ describe('YearPlanWorkspaceView', () => {
     expect(w.find('.btn-regenerate').exists()).toBe(false)
     expect(w.find('.btn-publish').exists()).toBe(false)
     expect(w.find('.btn-unpublish').exists()).toBe(false)
-    expect(w.find('.btn-cancel-plan').exists()).toBe(false)
+    expect(w.find('.btn-more').exists()).toBe(false)
     // canWrite=false → PlanRosterTable editable prop 為 false，勾選 checkbox 不出現
     expect(w.findComponent({ name: 'ElCheckbox' }).exists()).toBe(false)
   })
@@ -323,9 +323,23 @@ describe('YearPlanWorkspaceView', () => {
     expect(w.find('.btn-add-class').exists()).toBe(true)
     expect(w.find('.btn-regenerate').exists()).toBe(true)
     expect(w.find('.btn-publish').exists()).toBe(true)
-    expect(w.find('.btn-unpublish').exists()).toBe(true)
-    expect(w.find('.btn-cancel-plan').exists()).toBe(true)
+    expect(w.find('.btn-unpublish').exists()).toBe(false)
+    expect(w.find('.btn-more').exists()).toBe(true)
     expect(w.findComponent({ name: 'ElCheckbox' }).exists()).toBe(true)
+  })
+
+  it('published 狀態：顯示撤回發布與更多（作廢），不顯示 draft 動作鈕', async () => {
+    mockStatus.mockResolvedValue({
+      data: { ...statusDraft().data, state: 'published' as const, published_at: '2026-07-01T00:00:00' },
+    })
+    mockDetail.mockResolvedValue(detailDraftWithClasses({ status: 'published', published_at: '2026-07-01T00:00:00' }))
+    const w = mountView()
+    await flushPromises()
+    expect(w.find('.btn-unpublish').exists()).toBe(true)
+    expect(w.find('.btn-more').exists()).toBe(true)
+    expect(w.find('.btn-publish').exists()).toBe(false)
+    expect(w.find('.btn-add-class').exists()).toBe(false)
+    expect(w.find('.btn-regenerate').exists()).toBe(false)
   })
 
   it('mutation in-flight（loading=true）時五顆動作鈕與批次工具列全部鎖定，防雙擊偽版本衝突', async () => {
@@ -336,11 +350,11 @@ describe('YearPlanWorkspaceView', () => {
     const w = mountView()
     await flushPromises()
 
-    // in-flight 前：draft 無 blocking → 發布/重生成/新增班/作廢皆可點
+    // in-flight 前：draft 無 blocking → 發布/重生成/新增班/更多皆可點
     expect((w.find('.btn-publish').element as HTMLButtonElement).disabled).toBe(false)
     expect((w.find('.btn-regenerate').element as HTMLButtonElement).disabled).toBe(false)
     expect((w.find('.btn-add-class').element as HTMLButtonElement).disabled).toBe(false)
-    expect((w.find('.btn-cancel-plan').element as HTMLButtonElement).disabled).toBe(false)
+    expect((w.find('.btn-more').element as HTMLButtonElement).disabled).toBe(false)
 
     // 勾一位學生後以 never-resolving promise 模擬 bulk mutation in-flight
     const checkbox = w.findComponent({ name: 'ElCheckbox' })
@@ -356,8 +370,8 @@ describe('YearPlanWorkspaceView', () => {
     expect((w.find('.btn-add-class').element as HTMLButtonElement).disabled).toBe(true)
     expect((w.find('.btn-regenerate').element as HTMLButtonElement).disabled).toBe(true)
     expect((w.find('.btn-publish').element as HTMLButtonElement).disabled).toBe(true)
-    expect((w.find('.btn-unpublish').element as HTMLButtonElement).disabled).toBe(true)
-    expect((w.find('.btn-cancel-plan').element as HTMLButtonElement).disabled).toBe(true)
+    expect(w.find('.btn-unpublish').exists()).toBe(false)
+    expect((w.find('.btn-more').element as HTMLButtonElement).disabled).toBe(true)
     expect(toolbar.props('disabled')).toBe(true)
   })
 
@@ -400,15 +414,16 @@ describe('YearPlanWorkspaceView', () => {
 
     const w = mountView()
     await flushPromises()
-    expect(w.find('.btn-cancel-plan').exists()).toBe(true)
+    expect(w.find('.btn-more').exists()).toBe(true)
 
     mockStatus.mockResolvedValueOnce(statusNone())
-    await w.find('.btn-cancel-plan').trigger('click')
+    const dropdown = w.findComponent({ name: 'ElDropdown' })
+    dropdown.vm.$emit('command', 'cancel-plan')
     await flushPromises()
 
     expect(mockCancel).toHaveBeenCalledWith(5, { base_version: 1 })
     expect(w.find('.empty-state').exists()).toBe(true)
-    expect(w.find('.btn-cancel-plan').exists()).toBe(false)
+    expect(w.findComponent({ name: 'ElDropdown' }).exists()).toBe(false)
   })
 
   it('作廢草稿流程：使用者取消 ElMessageBox.confirm 時不呼叫 cancel API', async () => {
@@ -419,11 +434,12 @@ describe('YearPlanWorkspaceView', () => {
     const w = mountView()
     await flushPromises()
 
-    await w.find('.btn-cancel-plan').trigger('click')
+    const dropdown = w.findComponent({ name: 'ElDropdown' })
+    dropdown.vm.$emit('command', 'cancel-plan')
     await flushPromises()
 
     expect(mockCancel).not.toHaveBeenCalled()
-    expect(w.find('.btn-cancel-plan').exists()).toBe(true)
+    expect(w.find('.btn-more').exists()).toBe(true)
   })
 
   it('拖曳搬班：PlanRosterTable emit student-move → 呼叫 bulk API（assign、單一學生、含 base_version）', async () => {

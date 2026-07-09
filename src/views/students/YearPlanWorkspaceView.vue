@@ -8,18 +8,32 @@
             {{ status.source_school_year }} 學年下學期 → {{ status.target_school_year }} 學年上學期
           </span>
           <span class="status-badge" :class="`status-${state}`">{{ stateLabel }}</span>
-          <span v-if="plan" class="issue-chip issue-chip-blocking">阻擋 {{ plan.issues.blocking.length }}</span>
-          <span v-if="plan" class="issue-chip issue-chip-warning">提醒 {{ plan.issues.warnings.length }}</span>
         </template>
       </div>
       <!-- mutation in-flight（loading=true）期間鎖住所有互動觸發點：雙擊會以同一
            base_version 送第二發、撞 409 誤導使用者「有別人在動草稿」 -->
       <div v-if="status" class="actions">
-        <el-button v-if="editable && canWrite" class="btn-add-class" :disabled="loading" @click="onAddClassClick">新增班級</el-button>
-        <el-button v-if="canWrite" class="btn-regenerate" :disabled="!canRegenerate || loading" @click="onRegenerateClick">重新產生建議</el-button>
-        <el-button v-if="canWrite" type="primary" class="btn-publish" :disabled="!canPublish || loading" @click="onPublishClick">發布</el-button>
-        <el-button v-if="canWrite" class="btn-unpublish" :disabled="!canUnpublish || loading" @click="onUnpublishClick">撤回發布</el-button>
-        <el-button v-if="canWrite && canCancelPlan" type="danger" class="btn-cancel-plan" :disabled="loading" @click="onCancelPlanClick">作廢草稿</el-button>
+        <template v-if="canWrite && state === 'draft'">
+          <el-button class="btn-add-class" :disabled="loading" @click="onAddClassClick">新增班級</el-button>
+          <el-button class="btn-regenerate" :disabled="loading" @click="onRegenerateClick">重新產生建議</el-button>
+          <el-button type="primary" class="btn-publish" :disabled="!canPublish || loading" @click="onPublishClick">發布</el-button>
+        </template>
+        <el-button
+          v-if="canWrite && state === 'published'"
+          class="btn-unpublish"
+          :disabled="loading"
+          @click="onUnpublishClick"
+        >撤回發布</el-button>
+        <el-dropdown v-if="canWrite && canCancelPlan" trigger="click" @command="onMoreCommand">
+          <el-button class="btn-more" :disabled="loading">
+            更多<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="cancel-plan" class="dropdown-item-danger">作廢草稿</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
       </div>
     </div>
 
@@ -101,6 +115,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { ArrowDown } from '@element-plus/icons-vue'
 import { hasPermission } from '@/utils/auth'
 import { useYearPlanWorkspace } from '@/composables/useYearPlanWorkspace'
 import type { BulkOp } from '@/composables/useYearPlanWorkspace'
@@ -157,16 +172,12 @@ const canWrite = computed(() => hasPermission('CLASSROOMS_WRITE'))
 // 唯讀鎖：僅 draft 狀態的草稿可編輯（published/applied 皆唯讀）。
 const editable = computed(() => plan.value?.status === 'draft')
 
-// 重新產生建議：僅 draft 狀態可操作（regenerate 端點也要求 status===draft）
-const canRegenerate = computed(() => state.value === 'draft')
 // 發布：draft 且無 blocking issue 才可執行（發布前必須先解決阻擋項目）
 const canPublish = computed(() => {
   if (state.value !== 'draft') return false
   if (plan.value) return plan.value.issues.blocking.length === 0
   return (status.value?.blocking_count ?? 0) === 0
 })
-// 撤回發布：僅 published 狀態可操作
-const canUnpublish = computed(() => state.value === 'published')
 // 作廢草稿：draft（放棄未完成草稿）或 published（等同取消已發布的確認）皆可操作；
 // none（無草稿可作廢）與 applied（已套用，不可逆）不顯示此按鈕。
 const canCancelPlan = computed(() => state.value === 'draft' || state.value === 'published')
@@ -261,6 +272,11 @@ async function onCancelPlanClick(): Promise<void> {
   }
   const ok = await cancelPlan()
   if (ok) ElMessage.success('已作廢，草稿已移除')
+}
+
+// 「更多」下拉目前僅一個作廢項目，command 用字串比對保留未來擴充空間。
+function onMoreCommand(command: string): void {
+  if (command === 'cancel-plan') void onCancelPlanClick()
 }
 
 // ── 班級編輯（新增／編輯／刪除）──
@@ -425,28 +441,13 @@ async function onStudentMove(payload: {
   color: var(--color-success-hover);
 }
 
-.issue-chip {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 8px;
-  border-radius: var(--radius-full, 9999px);
-  font-size: var(--text-xs);
-  font-weight: 600;
-}
-
-.issue-chip-blocking {
-  background: var(--color-danger-soft);
-  color: var(--color-danger-hover);
-}
-
-.issue-chip-warning {
-  background: var(--color-warning-soft);
-  color: var(--color-warning-hover);
-}
-
 .actions {
   display: flex;
   gap: var(--space-2);
+}
+
+.dropdown-item-danger {
+  color: var(--color-danger);
 }
 
 .loading-skeleton {
