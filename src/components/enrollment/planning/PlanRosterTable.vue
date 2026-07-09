@@ -424,20 +424,24 @@ defineExpose({ locateStudent, locateClass })
   z-index: 4;
 }
 
-.corner-cell {
+/* .plan-roster-table 前綴：提高 specificity 至 (0,2,1)，勝過通用
+   `.plan-roster-table td`（0,1,1），避免其 background 蓋掉這裡的底色 */
+.plan-roster-table .corner-cell {
+  position: sticky;
+  left: 0;
   border-right: none !important;
   border-top: none !important;
   border-left: none !important;
   background: transparent;
 }
 
-.grade-group-cell {
+.plan-roster-table .grade-group-cell {
   font-weight: 700;
   background: var(--neutral-100);
   border-right: 2px solid var(--neutral-600) !important;
 }
 
-.row-label {
+.plan-roster-table .row-label {
   position: sticky;
   left: 0;
   z-index: 2;
@@ -469,7 +473,7 @@ defineExpose({ locateStudent, locateClass })
   background: var(--color-danger-soft);
 }
 
-.teacher-label {
+.plan-roster-table .teacher-label {
   background: var(--color-warning-soft);
 }
 
@@ -485,7 +489,7 @@ defineExpose({ locateStudent, locateClass })
   cursor: help;
 }
 
-.seq-cell {
+.plan-roster-table .seq-cell {
   position: sticky;
   left: 0;
   z-index: 2;
@@ -560,7 +564,7 @@ tfoot tr:first-child td {
   border-top: 2px solid var(--neutral-600);
 }
 
-.grade-total-cell {
+.plan-roster-table .grade-total-cell {
   background: var(--neutral-100);
   font-weight: 700;
   font-size: 13px;

@@ -128,6 +128,17 @@ describe('PlanRosterTable', () => {
     expect(w.emitted('set-selected')![0]).toEqual([[1], true])
   })
 
+  it('取消勾選學生 checkbox（初始已勾選）→ emit set-selected([id], false)', async () => {
+    const w = mountTable({}, true, new Set([2]))
+    const checkboxes = w.findAllComponents({ name: 'ElCheckbox' })
+    // 學生 2（小華）已在 selectedIds 內，初始為勾選狀態
+    const checkedBox = checkboxes.find(c => (c.props('modelValue') as boolean) === true)
+    expect(checkedBox).toBeTruthy()
+    // 取消勾選 → emit set-selected([2], false)
+    await checkedBox!.find('input[type="checkbox"]').setValue(false)
+    expect(w.emitted('set-selected')![0]).toEqual([[2], false])
+  })
+
   it('editable=false 時不渲染 checkbox', () => {
     const w = mountTable({}, false)
     expect(w.findAllComponents({ name: 'ElCheckbox' }).length).toBe(0)
