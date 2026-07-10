@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
-import { defineComponent, h } from 'vue'
+import { defineComponent, h, ref } from 'vue'
 import type { VNode } from 'vue'
 import CredentialsSection from '../CredentialsSection.vue'
 
@@ -9,6 +9,10 @@ const mockHasPermission = vi.fn(() => true)
 vi.mock('@/utils/auth', () => ({
   hasPermission: (...a: unknown[]) => mockHasPermission(...a),
 }))
+
+// 手機/桌機切換：預設桌機
+const mockIsMobile = ref(false)
+vi.mock('@/composables/useIsMobile', () => ({ useIsMobile: () => ({ isMobile: mockIsMobile }) }))
 
 // ── 可正確傳遞 row 資料的 el-table / el-table-column stub ──
 // 沿用 src/views/activity/__tests__/ActivityAttendanceView.test.ts 既有慣例：
@@ -48,7 +52,7 @@ const GLOBAL_STUBS = {
   'el-table': ElTableStub,
   'el-table-column': ElTableColumnStub,
   'el-tag': { template: '<span class="el-tag" :data-type="type"><slot /></span>', props: ['type'] },
-  'el-dialog': { template: '<div><slot /><slot name="footer" /></div>' },
+  'el-dialog': { name: 'ElDialog', props: ['fullscreen', 'modelValue', 'width'], template: '<div><slot /><slot name="footer" /></div>' },
   'el-form': { template: '<form><slot /></form>' },
   'el-form-item': { template: '<div><slot /></div>' },
   'el-input': { template: '<input />' },
@@ -102,6 +106,22 @@ describe('CredentialsSection 操作權限守衛（EMPLOYEES_WRITE）', () => {
     expect(wrapper.text()).not.toContain('新增合約')
     expect(wrapper.text()).not.toContain('編輯')
     expect(wrapper.text()).not.toContain('刪除')
+  })
+})
+
+describe('CredentialsSection 手機 RWD（子對話框 fullscreen）', () => {
+  beforeEach(() => { mockHasPermission.mockReturnValue(true); mockIsMobile.value = false })
+
+  it('手機版子對話框採 fullscreen', () => {
+    mockIsMobile.value = true
+    const wrapper = mount(CredentialsSection, { props: { ...baseProps }, global: { stubs: GLOBAL_STUBS } })
+    expect(wrapper.findComponent({ name: 'ElDialog' }).props('fullscreen')).toBe(true)
+  })
+
+  it('桌機版子對話框非 fullscreen', () => {
+    mockIsMobile.value = false
+    const wrapper = mount(CredentialsSection, { props: { ...baseProps }, global: { stubs: GLOBAL_STUBS } })
+    expect(wrapper.findComponent({ name: 'ElDialog' }).props('fullscreen')).toBe(false)
   })
 })
 

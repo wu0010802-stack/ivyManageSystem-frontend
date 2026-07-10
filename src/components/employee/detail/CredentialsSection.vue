@@ -12,6 +12,7 @@ import EmptyState from '@/components/common/EmptyState.vue'
 import type { ApiBody } from '@/api/_generated/typed'
 import { expiryStatus } from '@/utils/expiry'
 import { hasPermission } from '@/utils/auth'
+import { useIsMobile } from '@/composables/useIsMobile'
 
 const props = defineProps<{
   employeeId: number
@@ -23,6 +24,9 @@ const emit = defineEmits<{ (e: 'reload', kind: 'education' | 'certificate' | 'co
 
 // 學歷/證照/合約 CUD 後端皆守 EMPLOYEES_WRITE：無權限者隱藏新增與逐列編輯/刪除，與詳情頁頂部編輯鈕對齊
 const canWrite = computed(() => hasPermission('EMPLOYEES_WRITE'))
+
+// 手機版子對話框改 fullscreen（原固定 560px 在窄螢幕過寬、右側被裁切）
+const { isMobile } = useIsMobile()
 
 // ── 學歷 / 證照 / 合約 共用子對話框 ──────────────────
 type SubDialogKind = 'education' | 'certificate' | 'contract' | null
@@ -254,7 +258,8 @@ function credentialExpiryTag(dateStr: unknown): { type: 'danger' | 'warning'; la
     <el-dialog
       v-model="subDialog.visible"
       :title="subDialogTitle"
-      width="560px"
+      :width="isMobile ? '100%' : '560px'"
+      :fullscreen="isMobile"
       append-to-body
     >
       <!-- 學歷 -->
