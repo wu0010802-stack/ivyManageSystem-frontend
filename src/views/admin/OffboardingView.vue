@@ -2,10 +2,12 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getEmployees } from '@/api/employees'
-import { getOffboardingCertificate } from '@/api/offboarding'
+import { getOffboardingCertificate, patchNhiUnenroll } from '@/api/offboarding'
 import { useOffboardingStore } from '@/stores/offboarding'
 import type { OffboardingDetail } from '@/stores/offboarding'
 import MagicLinkPanel from '@/components/offboarding/MagicLinkPanel.vue'
+import OffboardingModal from '@/components/offboarding/OffboardingModal.vue'
+import type { ApiResponse } from '@/api/_generated/typed'
 
 // ── 型別 ────────────────────────────────────────────────
 
@@ -21,6 +23,8 @@ interface ResignedEmployee {
     detail: OffboardingDetail | null
 }
 
+type OffboardingProcessResult = ApiResponse<'/offboarding/{employee_id}/process', 'post'>
+
 // ── Store ────────────────────────────────────────────────
 
 const store = useOffboardingStore()
@@ -33,6 +37,10 @@ const loading = ref(false)
 // Drawer
 const drawerVisible = ref(false)
 const selectedRow = ref<ResignedEmployee | null>(null)
+
+// 開始離職檢核 Modal（no_record 狀態列點擊觸發）
+const offboardModalVisible = ref(false)
+const offboardModalRow = ref<ResignedEmployee | null>(null)
 
 // ── 初始化 ────────────────────────────────────────────────
 
@@ -81,6 +89,27 @@ const checklistTagType: Record<ChecklistStatus, string> = {
     open: 'warning',
 }
 
+// 操作欄按鈕文案：依三態決定（no_record 進 modal 走辦理流程；open/closed 都是進既有 drawer）
+const actionButtonLabel: Record<ChecklistStatus, string> = {
+    no_record: '開始離職檢核',
+    open: '繼續檢核',
+    closed: '查看文件',
+}
+
+/** closed 狀態為次要動作（查看文件），其餘兩態為主要動作（進行中的檢核流程） */
+function isPrimaryAction(row: ResignedEmployee): boolean {
+    return getChecklistStatus(row) !== 'closed'
+}
+
+/** 依三態決定操作欄按鈕行為：no_record → 開辦理離職 modal；open/closed → 開既有管理 drawer */
+function handleAction(row: ResignedEmployee): void {
+    if (getChecklistStatus(row) === 'no_record') {
+        openOffboardModal(row)
+    } else {
+        openManage(row)
+    }
+}
+
 // ── 證明 PDF ──────────────────────────────────────────────
 
 async function handleDownloadCertificate(row: ResignedEmployee): Promise<void> {
@@ -105,22 +134,56 @@ function openManage(row: ResignedEmployee): void {
     drawerVisible.value = true
 }
 
+/** 強制重抓指定員工的離職詳情，同步更新清單列與 drawer 內選中列（若正被選中） */
+async function syncRow(id: number): Promise<void> {
+    const detail = await store.refreshDetail(id)
+    const idx = rows.value.findIndex((r) => r.employee.id === id)
+    if (idx !== -1) {
+        rows.value[idx] = { ...rows.value[idx], detail }
+    }
+    if (selectedRow.value?.employee.id === id) {
+        selectedRow.value = { ...selectedRow.value, detail }
+    }
+}
+
 async function onMagicLinkUpdate(): Promise<void> {
     if (!selectedRow.value) return
-    const id = selectedRow.value.employee.id
     try {
-        const detail = await store.refreshDetail(id)
-        // 同步更新清單列
-        const idx = rows.value.findIndex((r) => r.employee.id === id)
-        if (idx !== -1) {
-            rows.value[idx] = { ...rows.value[idx], detail }
-        }
-        // 更新 drawer 內選中列
-        if (selectedRow.value) {
-            selectedRow.value = { ...selectedRow.value, detail }
-        }
+        await syncRow(selectedRow.value.employee.id)
     } catch {
         ElMessage.error('更新 Magic Link 狀態失敗')
+    }
+}
+
+// ── 健保退保申報 ──────────────────────────────────────────
+
+// el-switch 未覆寫 active-value/inactive-value，change 事件實際值恆為 boolean；
+// 型別仍宣告聯集以符合 SwitchEmits 簽章，故用 Boolean() 明確窄化。
+async function handleNhiUnenrollToggle(value: string | number | boolean): Promise<void> {
+    if (!selectedRow.value) return
+    const id = selectedRow.value.employee.id
+    const submitted = Boolean(value)
+    try {
+        await patchNhiUnenroll(id, { submitted })
+        await syncRow(id)
+    } catch {
+        ElMessage.error('更新健保退保申報狀態失敗')
+    }
+}
+
+// ── 開始離職檢核 Modal ────────────────────────────────────
+
+function openOffboardModal(row: ResignedEmployee): void {
+    offboardModalRow.value = row
+    offboardModalVisible.value = true
+}
+
+async function onOffboardSuccess(_result: OffboardingProcessResult): Promise<void> {
+    if (!offboardModalRow.value) return
+    try {
+        await syncRow(offboardModalRow.value.employee.id)
+    } catch {
+        ElMessage.error('更新離職檢核狀態失敗')
     }
 }
 </script>
@@ -188,15 +251,17 @@ async function onMagicLinkUpdate(): Promise<void> {
                 </template>
             </el-table-column>
 
-            <!-- 操作 -->
-            <el-table-column label="操作" width="90" fixed="right">
+            <!-- 操作：依三態顯示不同文案（no_record 開辦理 modal；open/closed 開既有 drawer） -->
+            <el-table-column label="操作" width="150" fixed="right">
                 <template #default="{ row }: { row: ResignedEmployee }">
                     <el-button
+                        class="offboard-action-btn"
                         size="small"
-                        type="primary"
-                        @click="openManage(row)"
+                        :type="isPrimaryAction(row) ? 'primary' : undefined"
+                        :plain="!isPrimaryAction(row)"
+                        @click="handleAction(row)"
                     >
-                        管理
+                        {{ actionButtonLabel[getChecklistStatus(row)] }}
                     </el-button>
                 </template>
             </el-table-column>
@@ -223,8 +288,48 @@ async function onMagicLinkUpdate(): Promise<void> {
                     />
                     <p v-else class="text-muted">此員工尚無離職紀錄，無法管理 Magic Link。</p>
                 </div>
+
+                <template v-if="selectedRow.detail">
+                    <!-- 健保退保申報 -->
+                    <div class="drawer-section">
+                        <h4 class="drawer-section-title">健保退保申報</h4>
+                        <el-switch
+                            class="nhi-unenroll-switch"
+                            :model-value="!!selectedRow.detail.nhi_unenroll_submitted_at"
+                            active-text="已申報"
+                            inactive-text="未申報"
+                            :disabled="getChecklistStatus(selectedRow) === 'closed'"
+                            @change="handleNhiUnenrollToggle"
+                        />
+                    </div>
+
+                    <!-- 離職證明 -->
+                    <div class="drawer-section">
+                        <h4 class="drawer-section-title">離職證明</h4>
+                        <el-button
+                            v-if="selectedRow.detail.certificate_pdf_path"
+                            class="drawer-download-cert-btn"
+                            link
+                            type="primary"
+                            size="small"
+                            @click="handleDownloadCertificate(selectedRow)"
+                        >
+                            下載 PDF
+                        </el-button>
+                        <span v-else class="text-muted">未產生</span>
+                    </div>
+                </template>
             </template>
         </el-drawer>
+
+        <!-- 開始離職檢核 Modal（no_record 狀態列點擊觸發） -->
+        <OffboardingModal
+            v-if="offboardModalRow"
+            v-model="offboardModalVisible"
+            :employee-id="offboardModalRow.employee.id"
+            :employee-name="offboardModalRow.employee.name ?? `員工 #${offboardModalRow.employee.id}`"
+            @success="onOffboardSuccess"
+        />
     </div>
 </template>
 
