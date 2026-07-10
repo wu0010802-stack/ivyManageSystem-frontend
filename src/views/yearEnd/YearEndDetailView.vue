@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, Download } from '@element-plus/icons-vue'
 import {
   listYearEndCycles,
@@ -14,16 +14,30 @@ import {
   signSupervisorBatch,
   signAccountingBatch,
   finalizeBatch,
+  updateCycleStatus,
   exportYearEndSummaryXlsxUrl,
   exportYearEndTransferRosterXlsxUrl,
 } from '@/api/yearEnd'
 import { apiError } from '@/utils/error'
 import { hasPermission } from '@/utils/auth'
+import { formatCurrency } from '@/utils/currency'
+import { CYCLE_STATUS_TAG, cycleStatusLabel, SIGN_STATUS_TAG } from '@/constants/appraisalYearEnd'
+import SignProgressBar from '@/views/appraisalYearEnd/components/SignProgressBar.vue'
 import ProvenanceDrawer from './components/ProvenanceDrawer.vue'
 import type { ProvenanceKey } from './components/ProvenanceDrawer.vue'
 
-interface Settlement { id: number; employee_id: number; status: string; total_amount?: number | string; [key: string]: unknown }
-interface SpecialBonus { id: number; employee_id: number; bonus_type: string; period_label: string; amount: number | string; classroom_id?: number }
+interface Settlement { id: number; employee_id: number; employee_name?: string; status: string; total_amount?: number | string; [key: string]: unknown }
+interface SpecialBonus { id: number; employee_id: number; employee_name?: string; bonus_type: string; period_label: string; amount: number | string; classroom_id?: number | null }
+interface ClassTarget {
+  id: number
+  classroom_id: number
+  classroom_name?: string | null
+  head_teacher_employee_id?: number | null
+  head_teacher_name?: string | null
+  assistant_employee_id?: number | null
+  deputy_teacher_name?: string | null
+  [key: string]: unknown
+}
 interface YearEndCycle { id: number; academic_year: number; bonus_calc_date: string; status: string }
 
 const route = useRoute()
@@ -33,7 +47,7 @@ const cycleId = Number(route.params.id)
 const cycle = ref<YearEndCycle | null>(null)
 const settlements = ref<Settlement[]>([])
 const specialBonuses = ref<SpecialBonus[]>([])
-const classTargets = ref<unknown[]>([])
+const classTargets = ref<ClassTarget[]>([])
 const loading = ref(false)
 const busy = ref(false)
 const tab = ref('settlements')
@@ -62,6 +76,16 @@ const statusLabel = (s: string) =>
     ACCOUNTING_SIGNED: '會計已簽',
     FINALIZED: '已核定',
   } as Record<string, string>)[s] || s)
+
+// Task 11②：頂部簽核進度列 counts —— 由已載入 settlements 的 status 本地聚合，
+// 不額外打 API（SignProgressBar 純顯示用元件，見 @/views/appraisalYearEnd/components/SignProgressBar.vue）
+const settlementCounts = computed(() => {
+  const counts: Record<string, number> = {}
+  for (const s of settlements.value) {
+    counts[s.status] = (counts[s.status] ?? 0) + 1
+  }
+  return counts
+})
 
 async function load() {
   loading.value = true
@@ -140,6 +164,55 @@ async function signBatch(stage: 'supervisor' | 'accounting' | 'finalize') {
   }
 }
 
+// ── Task 11③：週期狀態轉換（OPEN→LOCKED→CLOSED；亦允許倒退救援）────────────
+// 自 YearEndListView（Task 10 瘦身時移出）搬入本頁 header；單週期頁故
+// statusBusy 簡化為單一 ref（不再是 Task 10 原本的 per-row Record<id, boolean>）。
+const canFinalize = computed(() => hasPermission('YEAR_END_FINALIZE'))
+const statusBusy = ref(false)
+
+async function transitionStatus(newStatus: 'OPEN' | 'LOCKED' | 'CLOSED', confirmMessage: string) {
+  if (!cycle.value) return
+  try {
+    await ElMessageBox.confirm(confirmMessage, '確認狀態變更', { type: 'warning' })
+  } catch {
+    return // 使用者按取消
+  }
+  statusBusy.value = true
+  try {
+    await updateCycleStatus(cycle.value.id, { status: newStatus })
+    ElMessage.success('週期狀態已更新')
+    await load()
+  } catch (e) {
+    ElMessage.error(apiError(e, '狀態更新失敗'))
+  } finally {
+    statusBusy.value = false
+  }
+}
+
+function lockCycle() {
+  return transitionStatus('LOCKED', `確定要鎖定「${cycle.value?.academic_year} 學年度」週期嗎？鎖定後將無法再自動重新試算。`)
+}
+
+// Task 11③：封存前置檢核 —— 尚有結算單未核定（FINALIZED）時直接阻擋，不進入 confirm 流程。
+async function closeCycle() {
+  const notFinalized = settlements.value.filter((s) => s.status !== 'FINALIZED')
+  if (notFinalized.length > 0) {
+    ElMessageBox.alert(
+      `尚有 ${notFinalized.length} 筆結算單未核定（FINALIZED），無法封存。請先完成簽核。`,
+      '無法封存',
+      { type: 'error' },
+    )
+    return
+  }
+  return transitionStatus('CLOSED', `封存前請確認：此週期所有結算單須全數核定（FINALIZED）。確定要封存「${cycle.value?.academic_year} 學年度」週期嗎？`)
+}
+function reopenToLocked() {
+  return transitionStatus('LOCKED', `確定要將「${cycle.value?.academic_year} 學年度」退回鎖定狀態嗎？（救援用途）`)
+}
+function reopenToOpen() {
+  return transitionStatus('OPEN', `確定要將「${cycle.value?.academic_year} 學年度」退回開放狀態嗎？（救援用途）`)
+}
+
 onMounted(load)
 </script>
 
@@ -148,13 +221,47 @@ onMounted(load)
     <el-page-header @back="router.back()" content="年終獎金明細" />
     <div v-if="cycle" class="meta">
       <strong>{{ cycle.academic_year }} 學年度</strong> ｜
-      基準日 {{ cycle.bonus_calc_date }} ｜ 狀態 {{ cycle.status }}
+      基準日 {{ cycle.bonus_calc_date }} ｜
+      <el-tag :type="CYCLE_STATUS_TAG[cycle.status] || 'info'" size="small">{{ cycleStatusLabel(cycle.status) }}</el-tag>
     </div>
+
+    <!-- Task 11②：頂部簽核進度列，counts 由已載入 settlements 本地聚合 -->
+    <SignProgressBar :counts="settlementCounts" class="sign-progress-wrap" />
 
     <div class="toolbar">
       <el-button :icon="Refresh" @click="load">重新載入</el-button>
       <el-button :icon="Download" tag="a" :href="exportYearEndSummaryXlsxUrl(cycleId)">年終獎金總表</el-button>
       <el-button :icon="Download" tag="a" :href="exportYearEndTransferRosterXlsxUrl(cycleId)">轉帳名冊</el-button>
+
+      <!-- Task 11③：週期狀態機（自 YearEndListView 搬入），須 YEAR_END_FINALIZE 權限 -->
+      <template v-if="canFinalize && cycle">
+        <el-button
+          v-if="cycle.status === 'OPEN'"
+          type="warning"
+          :loading="statusBusy"
+          data-test="lock-cycle-button"
+          @click="lockCycle"
+        >鎖定</el-button>
+        <template v-else-if="cycle.status === 'LOCKED'">
+          <el-button
+            type="primary"
+            :loading="statusBusy"
+            data-test="close-cycle-button"
+            @click="closeCycle"
+          >封存</el-button>
+          <el-button
+            :loading="statusBusy"
+            data-test="reopen-open-button"
+            @click="reopenToOpen"
+          >退回開放</el-button>
+        </template>
+        <el-button
+          v-else-if="cycle.status === 'CLOSED'"
+          :loading="statusBusy"
+          data-test="reopen-locked-button"
+          @click="reopenToLocked"
+        >退回鎖定</el-button>
+      </template>
     </div>
 
     <el-tabs v-model="tab">
@@ -167,13 +274,25 @@ onMounted(load)
         </div>
         <el-table :data="settlements" v-loading="loading" stripe size="small" @selection-change="handleSelectionChange">
           <el-table-column type="selection" width="44" />
-          <el-table-column label="員工 ID" prop="employee_id" width="80" />
+          <el-table-column label="員工" width="110">
+            <template #default="{ row }">
+              <span :title="`ID ${row.employee_id}`">{{ row.employee_name }}</span>
+            </template>
+          </el-table-column>
           <el-table-column label="平均績效%" prop="avg_performance_rate" width="100" />
-          <el-table-column label="基本薪俸" prop="base_salary" width="100" />
-          <el-table-column label="節慶獎金" prop="festival_total" width="100" />
-          <el-table-column label="毛額" prop="gross_amount" width="110" />
+          <el-table-column label="基本薪俸" width="100">
+            <template #default="{ row }">{{ formatCurrency(row.base_salary) }}</template>
+          </el-table-column>
+          <el-table-column label="節慶獎金" width="100">
+            <template #default="{ row }">{{ formatCurrency(row.festival_total) }}</template>
+          </el-table-column>
+          <el-table-column label="毛額" width="110">
+            <template #default="{ row }">{{ formatCurrency(row.gross_amount) }}</template>
+          </el-table-column>
           <el-table-column label="達成%" prop="org_achievement_rate" width="80" />
-          <el-table-column label="小計" prop="subtotal_amount" width="110" />
+          <el-table-column label="小計" width="110">
+            <template #default="{ row }">{{ formatCurrency(row.subtotal_amount) }}</template>
+          </el-table-column>
           <el-table-column label="扣項合計" width="120">
             <template #default="{ row }">
               <el-button
@@ -182,21 +301,25 @@ onMounted(load)
                 size="small"
                 @click="openProvenanceDrawer(row.employee_id)"
               >
-                {{ row.deduction_total ?? '0' }} ↓
+                {{ formatCurrency(row.deduction_total) }} ↓
               </el-button>
             </template>
           </el-table-column>
           <el-table-column label="到職月" prop="hire_months" width="80" />
-          <el-table-column label="應領小計" prop="payable_amount" width="120" />
-          <el-table-column label="特別獎金" prop="special_bonus_total" width="110" />
-          <el-table-column label="總額" prop="total_amount" width="120">
+          <el-table-column label="應領小計" width="120">
+            <template #default="{ row }">{{ formatCurrency(row.payable_amount) }}</template>
+          </el-table-column>
+          <el-table-column label="特別獎金" width="110">
+            <template #default="{ row }">{{ formatCurrency(row.special_bonus_total) }}</template>
+          </el-table-column>
+          <el-table-column label="總額" width="120">
             <template #default="{ row }">
-              <strong>{{ Number(row.total_amount).toLocaleString() }}</strong>
+              <strong>{{ formatCurrency(row.total_amount) }}</strong>
             </template>
           </el-table-column>
           <el-table-column label="狀態" width="120">
             <template #default="{ row }">
-              <el-tag size="small">{{ statusLabel(row.status) }}</el-tag>
+              <el-tag size="small" :type="SIGN_STATUS_TAG[row.status]">{{ statusLabel(row.status) }}</el-tag>
             </template>
           </el-table-column>
           <el-table-column label="簽核" width="220">
@@ -225,11 +348,15 @@ onMounted(load)
 
       <el-tab-pane label="特別獎金" name="bonuses">
         <el-table :data="specialBonuses" v-loading="loading" stripe size="small">
-          <el-table-column label="員工 ID" prop="employee_id" width="80" />
+          <el-table-column label="員工" width="110">
+            <template #default="{ row }">
+              <span :title="`ID ${row.employee_id}`">{{ row.employee_name }}</span>
+            </template>
+          </el-table-column>
           <el-table-column label="獎金類型" prop="bonus_type" width="220" />
           <el-table-column label="期間" prop="period_label" width="160" />
-          <el-table-column label="金額" prop="amount" width="120">
-            <template #default="{ row }">{{ Number(row.amount).toLocaleString() }}</template>
+          <el-table-column label="金額" width="120">
+            <template #default="{ row }">{{ formatCurrency(row.amount) }}</template>
           </el-table-column>
           <el-table-column label="班級" prop="classroom_id" width="80" />
         </el-table>
@@ -240,9 +367,25 @@ onMounted(load)
           <el-table-column label="學期" width="80">
             <template #default="{ row }">{{ row.semester_first ? '上' : '下' }}</template>
           </el-table-column>
-          <el-table-column label="班級 ID" prop="classroom_id" width="80" />
-          <el-table-column label="班導 ID" prop="head_teacher_employee_id" width="100" />
-          <el-table-column label="副班導 ID" prop="assistant_employee_id" width="100" />
+          <el-table-column label="班級" width="120">
+            <template #default="{ row }">
+              <span :title="`ID ${row.classroom_id}`">{{ row.classroom_name ?? `班級 ${row.classroom_id}` }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="班導" width="100">
+            <template #default="{ row }">
+              <span :title="row.head_teacher_employee_id != null ? `ID ${row.head_teacher_employee_id}` : ''">
+                {{ row.head_teacher_name ?? '—' }}
+              </span>
+            </template>
+          </el-table-column>
+          <el-table-column label="副班導" width="100">
+            <template #default="{ row }">
+              <span :title="row.assistant_employee_id != null ? `ID ${row.assistant_employee_id}` : ''">
+                {{ row.deputy_teacher_name ?? '—' }}
+              </span>
+            </template>
+          </el-table-column>
           <el-table-column label="編制人數" prop="head_count_target" width="100" />
           <el-table-column label="平均在籍" prop="avg_monthly_enrollment" width="100" />
           <el-table-column label="經營績效%" prop="class_performance_rate" width="120" />
@@ -263,7 +406,8 @@ onMounted(load)
 
 <style scoped>
 .ye-detail { padding: 16px; }
-.meta { margin: 12px 0; padding: 12px; background: #f5f7fa; border-radius: 4px; }
-.toolbar { margin: 16px 0; display: flex; gap: 8px; }
+.meta { margin: 12px 0; padding: 12px; background: #f5f7fa; border-radius: 4px; display: flex; align-items: center; gap: 8px; }
+.sign-progress-wrap { margin: 0 0 12px; }
+.toolbar { margin: 16px 0; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .batch-bar { margin: 0 0 8px; display: flex; align-items: center; gap: 8px; font-size: 13px; }
 </style>

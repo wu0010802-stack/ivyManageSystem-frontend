@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
-import { nextTick } from 'vue'
+import { nextTick, defineComponent, h } from 'vue'
 import YearEndDetailView from '../YearEndDetailView.vue'
 
 vi.mock('@/api/yearEnd', async (importOriginal) => {
@@ -17,16 +17,20 @@ vi.mock('@/api/yearEnd', async (importOriginal) => {
     signSupervisorBatch: vi.fn(),
     signAccountingBatch: vi.fn(),
     finalizeBatch: vi.fn(),
+    updateCycleStatus: vi.fn(),
     exportYearEndSummaryXlsxUrl: vi.fn().mockReturnValue('/api/year-end/1/summary.xlsx'),
     exportYearEndTransferRosterXlsxUrl: vi.fn().mockReturnValue('/api/year-end/1/roster.xlsx'),
   }
 })
 
+// Task 11③：狀態機搬入本頁 — 需要 ElMessageBox.confirm（狀態轉換確認）與
+// ElMessageBox.alert（封存前置檢核阻擋提示）。
 vi.mock('element-plus', async (importOriginal) => {
   const actual = await importOriginal<typeof import('element-plus')>()
   return {
     ...actual,
     ElMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
+    ElMessageBox: { confirm: vi.fn().mockResolvedValue(true), alert: vi.fn() },
   }
 })
 
@@ -46,13 +50,14 @@ vi.mock('@/api/index', () => ({
 }))
 
 import * as api from '@/api/yearEnd'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 
 // ---- helpers ----
 
 interface Settlement {
   id: number
   employee_id: number
+  employee_name?: string
   status: string
   total_amount: number
   [key: string]: unknown
@@ -62,6 +67,7 @@ function makeSettlement(overrides: Partial<Settlement> = {}): Settlement {
   return {
     id: 1,
     employee_id: 10,
+    employee_name: '王小明',
     status: 'DRAFT',
     total_amount: 50000,
     avg_performance_rate: 90,
@@ -78,28 +84,97 @@ function makeSettlement(overrides: Partial<Settlement> = {}): Settlement {
   }
 }
 
-function setupApiMocks(settlements: Settlement[]) {
+function setupApiMocks(settlements: Settlement[], cycleOverrides: Partial<{ id: number; academic_year: number; bonus_calc_date: string; status: string }> = {}) {
   vi.mocked(api.listYearEndCycles).mockResolvedValue({
-    data: [{ id: 1, academic_year: 114, bonus_calc_date: '2026-01-31', status: 'DRAFT' }],
+    data: [{ id: 1, academic_year: 114, bonus_calc_date: '2026-01-31', status: 'DRAFT', ...cycleOverrides }],
   } as never)
   vi.mocked(api.listYearEndSettlements).mockResolvedValue({ data: settlements } as never)
   vi.mocked(api.listSpecialBonuses).mockResolvedValue({ data: [] } as never)
   vi.mocked(api.listClassEnrollmentTargets).mockResolvedValue({ data: [] } as never)
 }
 
+// el-table / el-table-column 需要真的執行 scoped #default slot 才能驗證表格內容
+// （比照 YearEndListView.spec.ts 慣例）；其餘元件用全域 auto-stub 即可。
+const ElTableColumnStub = defineComponent({
+  name: 'ElTableColumnStub',
+  props: { data: { type: Array, default: () => [] } },
+  setup(props, { slots }) {
+    return () => h(
+      'div',
+      { class: 'el-table-column-stub' },
+      props.data.map((row: unknown, index: number) =>
+        h('div', { key: index }, slots.default ? slots.default({ row }) : []),
+      ),
+    )
+  },
+})
+
+const ElTableStub = defineComponent({
+  name: 'ElTableStub',
+  props: { data: { type: Array, default: () => [] } },
+  setup(props, { slots }) {
+    return () => h(
+      'div',
+      { class: 'el-table' },
+      (slots.default?.() || []).map((vnode, index) =>
+        h(vnode.type, { ...vnode.props, data: props.data, key: index }, vnode.children),
+      ),
+    )
+  },
+})
+
+const ElTagStub = defineComponent({
+  name: 'ElTagStub',
+  props: { type: { type: String, default: undefined } },
+  setup(props, { slots }) {
+    return () => h('span', { class: 'el-tag-stub', 'data-type': props.type }, slots.default?.())
+  },
+})
+
+const ElButtonStub = defineComponent({
+  name: 'ElButtonStub',
+  inheritAttrs: false,
+  setup(_, { attrs, emit, slots }) {
+    const dataAttrs = Object.fromEntries(
+      Object.entries(attrs).filter(([k]) => k.startsWith('data-') || k === 'loading'),
+    )
+    return () => h(
+      'button',
+      { ...dataAttrs, onClick: () => emit('click') },
+      slots.default?.(),
+    )
+  },
+})
+
+// el-tabs/el-tab-pane 的 true auto-stub 不會渲染子內容（實測：wrapper.text() 拿不到
+// 表格資料），改用會真的 render default slot 的 stub，讓三個分頁的表格內容都能被斷言。
+const ElTabsStub = defineComponent({
+  name: 'ElTabsStub',
+  setup(_, { slots }) {
+    return () => h('div', { class: 'el-tabs-stub' }, slots.default?.())
+  },
+})
+const ElTabPaneStub = defineComponent({
+  name: 'ElTabPaneStub',
+  setup(_, { slots }) {
+    return () => h('div', { class: 'el-tab-pane-stub' }, slots.default?.())
+  },
+})
+
 async function mountView() {
   const wrapper = mount(YearEndDetailView, {
     global: {
       stubs: {
         'el-page-header': true,
-        'el-table': true,
-        'el-table-column': true,
-        'el-button': true,
-        'el-tag': true,
-        'el-tabs': true,
-        'el-tab-pane': true,
+        'el-table': ElTableStub,
+        'el-table-column': ElTableColumnStub,
+        'el-button': ElButtonStub,
+        'el-tag': ElTagStub,
+        'el-tabs': ElTabsStub,
+        'el-tab-pane': ElTabPaneStub,
         'el-icon': true,
       },
+      directives: { loading: () => {} },
     },
   })
   await nextTick()
@@ -335,5 +410,214 @@ describe('YearEndDetailView.load — 併發載入（Promise.all）', () => {
     expect(vm.cycle?.id).toBe(1)
     expect(vm.settlements).toHaveLength(1)
     expect(vm.settlements[0].id).toBe(9)
+  })
+})
+
+/**
+ * Task 11：明細頁重整 —— 四案：
+ * ① 三個表顯示姓名（employee_name / classroom_name / head_teacher_name / deputy_teacher_name）
+ * ② 頂部簽核進度列 + 統一狀態標籤
+ * ③ 狀態機（鎖定/封存/退回）搬入本頁 header，含封存前置檢核
+ * ④ 簽核狀態 tag 上色 + 金額 formatCurrency
+ */
+describe('YearEndDetailView — Task 11 明細頁重整', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockHasPermission.mockReturnValue(true)
+    vi.mocked(ElMessageBox.confirm).mockResolvedValue(true as never)
+  })
+
+  it('① 結算單顯示員工姓名而非裸 ID，金額欄用 formatCurrency，簽核 tag 依 SIGN_STATUS_TAG 上色', async () => {
+    setupApiMocks([
+      makeSettlement({ id: 1, employee_id: 10, employee_name: '王小明', status: 'DRAFT', total_amount: 50000, base_salary: 40000 }),
+    ])
+
+    const wrapper = await mountView()
+
+    expect(wrapper.text()).toContain('王小明')
+    expect(wrapper.text()).not.toContain('員工 ID')
+    // 金額欄改用 formatCurrency（NT$ 千分位前綴），非裸數字/toLocaleString
+    expect(wrapper.text()).toContain('NT$40,000') // base_salary
+    expect(wrapper.text()).toContain('NT$50,000') // total_amount
+    // 簽核狀態 tag 依 SIGN_STATUS_TAG 上色（DRAFT → info），非全預設灰(undefined)
+    const statusTag = wrapper.findAll('.el-tag-stub').find((t) => t.text() === '草稿')
+    expect(statusTag).toBeTruthy()
+    expect(statusTag!.attributes('data-type')).toBe('info')
+  })
+
+  it('① 班級經營績效表顯示 classroom_name / head_teacher_name / deputy_teacher_name', async () => {
+    setupApiMocks([makeSettlement()])
+    vi.mocked(api.listClassEnrollmentTargets).mockResolvedValue({
+      data: [{
+        id: 1,
+        year_end_cycle_id: 1,
+        semester_first: true,
+        classroom_id: 3,
+        classroom_name: '向日葵班',
+        head_teacher_employee_id: 20,
+        head_teacher_name: '林老師',
+        assistant_employee_id: 21,
+        deputy_teacher_name: '陳老師',
+        head_count_target: 20,
+        avg_monthly_enrollment: 18,
+        class_performance_rate: 90,
+        returning_student_rate: 85,
+      }],
+    } as never)
+
+    const wrapper = await mountView()
+
+    expect(wrapper.text()).toContain('向日葵班')
+    expect(wrapper.text()).toContain('林老師')
+    expect(wrapper.text()).toContain('陳老師')
+  })
+
+  it('① 特別獎金表顯示員工姓名', async () => {
+    setupApiMocks([makeSettlement()])
+    vi.mocked(api.listSpecialBonuses).mockResolvedValue({
+      data: [{
+        id: 1,
+        year_end_cycle_id: 1,
+        employee_id: 30,
+        employee_name: '李小華',
+        bonus_type: 'CUSTOM',
+        period_label: '114上',
+        amount: 3000,
+        classroom_id: null,
+        calc_meta: {},
+        source_ref: null,
+      }],
+    } as never)
+
+    const wrapper = await mountView()
+
+    expect(wrapper.text()).toContain('李小華')
+  })
+
+  it('② 頂部渲染簽核進度列（SignProgressBar），counts 由已載入 settlements 本地聚合', async () => {
+    setupApiMocks([
+      makeSettlement({ id: 1, status: 'DRAFT' }),
+      makeSettlement({ id: 2, status: 'FINALIZED' }),
+      makeSettlement({ id: 3, status: 'FINALIZED' }),
+    ])
+
+    const wrapper = await mountView()
+
+    const progressBar = wrapper.findComponent({ name: 'SignProgressBar' })
+    expect(progressBar.exists()).toBe(true)
+    expect(progressBar.props('counts')).toEqual({ DRAFT: 1, FINALIZED: 2 })
+    // 不多打 API：只有 load() 既有四支被呼叫，沒有額外的簽核統計 API
+    expect(api.listYearEndSettlements).toHaveBeenCalledTimes(1)
+  })
+
+  it('② .meta 列狀態改用 cycleStatusLabel + CYCLE_STATUS_TAG（非 raw code）', async () => {
+    setupApiMocks([makeSettlement()], { status: 'LOCKED' })
+
+    const wrapper = await mountView()
+
+    expect(wrapper.text()).not.toContain('狀態 LOCKED')
+    const cycleTag = wrapper.findAll('.el-tag-stub').find((t) => t.text() === '已鎖定')
+    expect(cycleTag).toBeTruthy()
+    expect(cycleTag!.attributes('data-type')).toBe('warning')
+  })
+
+  it('③ OPEN 週期 header 顯示「鎖定」按鈕，點擊後 confirm + updateCycleStatus(LOCKED) + reload', async () => {
+    setupApiMocks([makeSettlement()], { status: 'OPEN' })
+
+    const wrapper = await mountView()
+
+    const lockBtn = wrapper.find('[data-test="lock-cycle-button"]')
+    expect(lockBtn.exists()).toBe(true)
+    expect(wrapper.find('[data-test="close-cycle-button"]').exists()).toBe(false)
+
+    vi.mocked(api.updateCycleStatus).mockResolvedValue({ data: {} } as never)
+    await lockBtn.trigger('click')
+    await nextTick()
+    await nextTick()
+
+    expect(ElMessageBox.confirm).toHaveBeenCalled()
+    expect(api.updateCycleStatus).toHaveBeenCalledWith(1, { status: 'LOCKED' })
+    // 成功後 reload 本頁資料（cycle meta + settlements 皆重打）
+    expect(api.listYearEndCycles).toHaveBeenCalledTimes(2)
+    expect(api.listYearEndSettlements).toHaveBeenCalledTimes(2)
+  })
+
+  it('③ LOCKED 週期 header 顯示「封存」與「退回開放」按鈕', async () => {
+    setupApiMocks([makeSettlement({ status: 'FINALIZED' })], { status: 'LOCKED' })
+
+    const wrapper = await mountView()
+
+    expect(wrapper.find('[data-test="close-cycle-button"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="reopen-open-button"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="lock-cycle-button"]').exists()).toBe(false)
+  })
+
+  it('③ CLOSED 週期 header 顯示「退回鎖定」按鈕', async () => {
+    setupApiMocks([makeSettlement({ status: 'FINALIZED' })], { status: 'CLOSED' })
+
+    const wrapper = await mountView()
+
+    expect(wrapper.find('[data-test="reopen-locked-button"]').exists()).toBe(true)
+  })
+
+  it('③ 封存前置檢核：有未核定結算單時點「封存」被阻擋並列出筆數，不呼叫 updateCycleStatus', async () => {
+    setupApiMocks([
+      makeSettlement({ id: 1, status: 'FINALIZED' }),
+      makeSettlement({ id: 2, status: 'ACCOUNTING_SIGNED' }),
+      makeSettlement({ id: 3, status: 'DRAFT' }),
+    ], { status: 'LOCKED' })
+
+    const wrapper = await mountView()
+
+    const closeBtn = wrapper.find('[data-test="close-cycle-button"]')
+    expect(closeBtn.exists()).toBe(true)
+    await closeBtn.trigger('click')
+    await nextTick()
+
+    expect(ElMessageBox.alert).toHaveBeenCalledWith(
+      expect.stringContaining('2'),
+      '無法封存',
+      expect.objectContaining({ type: 'error' }),
+    )
+    expect(ElMessageBox.confirm).not.toHaveBeenCalled()
+    expect(api.updateCycleStatus).not.toHaveBeenCalled()
+  })
+
+  it('③ 封存前置檢核通過（全數 FINALIZED）：confirm + updateCycleStatus(CLOSED)', async () => {
+    setupApiMocks([
+      makeSettlement({ id: 1, status: 'FINALIZED' }),
+      makeSettlement({ id: 2, status: 'FINALIZED' }),
+    ], { status: 'LOCKED' })
+
+    const wrapper = await mountView()
+
+    vi.mocked(api.updateCycleStatus).mockResolvedValue({ data: {} } as never)
+    const closeBtn = wrapper.find('[data-test="close-cycle-button"]')
+    await closeBtn.trigger('click')
+    await nextTick()
+    await nextTick()
+
+    expect(ElMessageBox.alert).not.toHaveBeenCalled()
+    expect(ElMessageBox.confirm).toHaveBeenCalled()
+    expect(api.updateCycleStatus).toHaveBeenCalledWith(1, { status: 'CLOSED' })
+  })
+
+  it('③ statusBusy 為單一 boolean ref（單週期頁非 per-row map）', async () => {
+    setupApiMocks([makeSettlement()], { status: 'OPEN' })
+    const wrapper = await mountView()
+    const vm = wrapper.vm as unknown as { statusBusy: boolean }
+    expect(typeof vm.statusBusy).toBe('boolean')
+  })
+
+  it('③ 無 YEAR_END_FINALIZE 權限 → 不顯示任何狀態機按鈕', async () => {
+    mockHasPermission.mockReturnValue(false)
+    setupApiMocks([makeSettlement()], { status: 'OPEN' })
+
+    const wrapper = await mountView()
+
+    expect(wrapper.find('[data-test="lock-cycle-button"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="close-cycle-button"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="reopen-open-button"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="reopen-locked-button"]').exists()).toBe(false)
   })
 })
