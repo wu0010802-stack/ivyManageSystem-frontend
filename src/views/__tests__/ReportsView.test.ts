@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { ref } from 'vue'
 
 // mock getUserInfo（ReportsView 需要）
 vi.mock('@/utils/auth', () => ({
@@ -20,6 +21,26 @@ vi.mock('element-plus', async (orig) => {
   }
 })
 
+// URL 同步：useRoute/useRouter mock（hash router 不進 jsdom）
+const routeQuery = ref<Record<string, string>>({})
+const replaceMock = vi.fn()
+vi.mock('vue-router', () => ({
+  useRoute: () => ({ query: routeQuery.value }),
+  useRouter: () => ({ replace: replaceMock }),
+}))
+
+// 「資料截至」badge：ReportsView 自己呼叫 getFinanceSummary（panel 全 stub 所以只有這裡會打到）
+vi.mock('@/api/reports', () => ({
+  getFinanceSummary: vi.fn().mockResolvedValue({
+    data: {
+      monthly_trend: [
+        { month: 1, revenue: 100, refund: 0, expense: 50, net: 50 },
+        { month: 2, revenue: 100, refund: 0, expense: 50, net: 50 },
+      ],
+    },
+  }),
+}))
+
 // 把各 panel 換成輕量 stub，只讓 fixed-cost stub 能 emit update:dirty
 import ReportsView from '@/views/ReportsView.vue'
 
@@ -36,6 +57,8 @@ type ExposedVm = {
 
 beforeEach(() => {
   confirmMock.mockReset()
+  routeQuery.value = {}
+  replaceMock.mockReset()
 })
 
 function mountView() {
@@ -203,12 +226,60 @@ describe('ReportsView 固定費用未存攔截', () => {
   })
 })
 
-describe('ReportsView 頁籤正名（2026-07-05 owner 裁定①：月度損益表 → 月度現金收支表）', () => {
-  it('monthly-pnl 頁籤 label 已改為「月度現金收支表」', () => {
+describe('ReportsView 頁籤正名（2026-07-10 spec §3：tab 標籤簡化為「現金收支表」，面板內主標題維持全名）', () => {
+  it('monthly-pnl 頁籤 label 已簡化為「現金收支表」', () => {
     const w = mountView()
     const pane = w.findAllComponents({ name: 'ElTabPane' })
       .find(p => p.props('name') === 'monthly-pnl')
-    expect(pane?.props('label')).toBe('月度現金收支表')
+    expect(pane?.props('label')).toBe('現金收支表')
     expect(pane?.props('label')).not.toBe('月度損益表')
+    expect(pane?.props('label')).not.toBe('月度現金收支表')
+  })
+})
+
+describe('URL query 同步（spec §3）', () => {
+  it('query 有效值還原 tab 與 year', () => {
+    routeQuery.value = { tab: 'finance', year: '2025' }
+    const w = mountView()
+    const vm = w.vm as unknown as ExposedVm
+    expect(vm.activeTab).toBe('finance')
+    expect(vm.selectedYear).toBe(2025)
+  })
+  it('query 無效值 fallback 預設（overview / 當年）', () => {
+    routeQuery.value = { tab: 'bogus', year: 'abc' }
+    const w = mountView()
+    const vm = w.vm as unknown as ExposedVm
+    expect(vm.activeTab).toBe('overview')
+    expect(vm.selectedYear).toBe(new Date().getFullYear())
+  })
+  it('tab 切換以 router.replace 寫回 query（不塞 history）', async () => {
+    const w = mountView()
+    const vm = w.vm as unknown as ExposedVm
+    vm.activeTab = 'salary'
+    await flushPromises()
+    expect(replaceMock).toHaveBeenCalledWith(
+      expect.objectContaining({ query: expect.objectContaining({ tab: 'salary' }) }),
+    )
+  })
+})
+
+describe('tab 重組（spec §3）', () => {
+  it('tab 順序：overview → finance → monthly-pnl → attendance → salary → fixed-cost（登錄殿後）', () => {
+    const w = mountView()
+    const panes = w.findAllComponents({ name: 'ElTabPane' })
+    expect(panes.map(p => p.props('name'))).toEqual(
+      ['overview', 'finance', 'monthly-pnl', 'attendance', 'salary', 'fixed-cost'],
+    )
+    expect(panes[0].props('label')).toBe('經營總覽')
+    expect(panes[2].props('label')).toBe('現金收支表')
+  })
+})
+
+describe('資料截至 badge', () => {
+  it('檢視過去年顯示「全年」；有資料的今年顯示「資料截至 N 月」', async () => {
+    routeQuery.value = { year: '2020' } // 相對測試當下必為過去年
+    const w = mountView()
+    await flushPromises()
+    expect(w.find('[data-test="data-cutoff-badge"]').text()).toContain('全年')
   })
 })
